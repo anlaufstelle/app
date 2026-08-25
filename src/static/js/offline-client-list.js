@@ -113,9 +113,7 @@
                     // aus dem verschluesselten Store gelesen wird (sonst
                     // TRANSIENT-Decrypt im Kalt-Offline-Load). Spiegel von
                     // offline-create.js.
-                    if (window.crypto_session && window.crypto_session.ready) {
-                        await window.crypto_session.ready();
-                    }
+                    await window.crypto_session?.awaitReady?.();
                     const store = window.offlineStore;
                     const rows =
                         store && store.listOfflineClientsDetailed

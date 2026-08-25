@@ -123,9 +123,7 @@
                     // null → faelschlich der "nicht vorbereitet"-Edge-Fallback,
                     // obwohl das Bundle gecacht ist. Spiegel von
                     // offline-client-view.js `load()`.
-                    if (window.crypto_session && window.crypto_session.ready) {
-                        await window.crypto_session.ready();
-                    }
+                    await window.crypto_session?.awaitReady?.();
                     const store = window.offlineStore;
                     if (store && store.getOfflineFacility) {
                         this.facility = await store.getOfflineFacility();
@@ -305,9 +303,7 @@
                     // erst auf die Krypto-Hydration warten, dann lesen (sonst
                     // zeigt der Kalt-Offline-WorkItem-Shell-Load faelschlich den
                     // Unavailable-Fallback statt Form bzw. Assistenz-Gate).
-                    if (window.crypto_session && window.crypto_session.ready) {
-                        await window.crypto_session.ready();
-                    }
+                    await window.crypto_session?.awaitReady?.();
                     const store = window.offlineStore;
                     if (store && store.getOfflineFacility) {
                         this.facility = await store.getOfflineFacility();

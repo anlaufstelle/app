@@ -2312,9 +2312,7 @@
                 // frischen Seiten-Load ein falsches Negativ (initialLoad ist
                 // noch nicht durchgelaufen) und das Key-Gate greift faelschlich.
                 const cs = window.crypto_session;
-                if (cs && cs.ready) {
-                    await cs.ready();
-                }
+                await cs?.awaitReady?.();
                 const hasKey = cs && cs.hasSessionKey ? cs.hasSessionKey() : false;
                 // Refs #1352: ohne Schluessel keine Loeschentscheidung — das
                 // Gate umschliesst jetzt auch purgeExpired(), nicht nur die

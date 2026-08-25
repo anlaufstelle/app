@@ -439,9 +439,7 @@
         (async function () {
             try {
                 var cs = window.crypto_session;
-                if (cs && cs.ready) {
-                    await cs.ready();
-                }
+                await cs?.awaitReady?.();
                 // Refs #1352: ohne Schluessel keine Loeschentscheidung — nach
                 // Idle-Lock (#1324) oder vor dem ersten Re-Login waere jeder
                 // Decrypt-Fehler nur transient (NoSessionKeyError); der

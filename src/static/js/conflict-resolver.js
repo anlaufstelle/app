@@ -121,9 +121,7 @@
             async load() {
                 this.loading = true;
                 try {
-                    if (window.crypto_session && window.crypto_session.ready) {
-                        await window.crypto_session.ready();
-                    }
+                    await window.crypto_session?.awaitReady?.();
                     if (!window.offlineStore) {
                         this.error = "Offline-Speicher nicht verfuegbar.";
                         return;
