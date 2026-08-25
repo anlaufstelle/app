@@ -384,23 +384,30 @@ class TestServiceWorkerRuntimeCacheHygiene:
 
     def test_swr_branch_writes_to_runtime_cache_not_precache(self, client):
         """Der SWR-Revalidate-Put muss in den Runtime-Cache gehen, nicht in den
-        Precache. Der einzige ``caches.open(CACHE_NAME)`` darf im install-Handler
-        stehen (Precache), nicht mehr im fetch-/SWR-Zweig.
+        Precache. ``caches.open(CACHE_NAME)`` ist nur den kuratierten
+        Precache-Pflegern erlaubt: dem install-Precache (``cache.addAll``) und
+        — seit Refs #1948 — der Precache-Selbstheilung ``_healPrecache``, die
+        ausschliesslich fehlende APP_SHELL-Eintraege nachlaedt. Im
+        fetch-/SWR-Zweig darf der Precache NIE geoeffnet werden, sonst waechst
+        er ungebremst (Refs #1546).
         """
         body = client.get(reverse("service_worker")).content.decode()
         assert ".open(RUNTIME_CACHE_NAME)" in body, "SWR-Zweig schreibt nicht in den Runtime-Cache."
-        # CACHE_NAME wird nur noch beim Precache (install: cache.addAll) geoeffnet.
-        assert body.count("caches.open(CACHE_NAME)") == 1, (
-            "caches.open(CACHE_NAME) darf nur einmal (im install-Precache) vorkommen — "
-            "der SWR-Zweig muss RUNTIME_CACHE_NAME nutzen, sonst waechst der Precache ungebremst."
+        assert body.count("caches.open(CACHE_NAME)") == 2, (
+            "caches.open(CACHE_NAME) darf nur in den Precache-Pflegern vorkommen "
+            "(install-Precache + _healPrecache, Refs #1948) — der SWR-Zweig muss "
+            "RUNTIME_CACHE_NAME nutzen, sonst waechst der Precache ungebremst."
         )
-        # Der Precache-open steht im install-Handler; im fetch-/SWR-Zweig wird
-        # nur noch der Runtime-Cache geoeffnet (letztes ``.open(RUNTIME_...)``).
-        install_open = body.index("caches.open(CACHE_NAME)")
+        # Beide Precache-opens stehen VOR dem fetch-Handler (install-Handler
+        # bzw. _healPrecache); im fetch-/SWR-Zweig wird nur noch der
+        # Runtime-Cache geoeffnet (letztes ``.open(RUNTIME_...)``).
+        first_precache_open = body.index("caches.open(CACHE_NAME)")
+        last_precache_open = body.rindex("caches.open(CACHE_NAME)")
         install_handler = body.index('addEventListener("install"')
         fetch_handler = body.index('addEventListener("fetch"')
         swr_runtime_open = body.rindex(".open(RUNTIME_CACHE_NAME)")
-        assert install_handler < install_open < fetch_handler, "Precache-open muss im install-Handler bleiben."
+        assert install_handler < first_precache_open, "Precache-open muss im install-Handler bleiben."
+        assert last_precache_open < fetch_handler, "caches.open(CACHE_NAME) darf nicht im fetch-/SWR-Zweig stehen."
         assert swr_runtime_open > fetch_handler, "Runtime-open muss im fetch-/SWR-Zweig stehen."
 
     def test_swr_put_triggers_trim(self, client):
