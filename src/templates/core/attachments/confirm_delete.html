@@ -40,17 +40,6 @@
     </div>
     {% endif %}
 
-    {# Refs #2045: Art.-18-Sperrvermerk — derselbe Vertrag wie beim Legal Hold, #}
-    {# aber ein anderer Grund: der Hold schuetzt Beweismittel, die Einschraenkung #}
-    {# untersagt das Ausduennen einer Akte, deren Richtigkeit bestritten ist. #}
-    {% if restriction_blocked %}
-    <div class="bg-rose-50 border border-rose-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="attachment-purge-blocker-restriction">
-        <p class="text-[13px] text-rose-900">
-            {% trans "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt. Solange die Einschränkung besteht, kann diese Datei nicht einzeln vernichtet werden; die reguläre Löschung der Person bleibt davon unberührt." %}
-        </p>
-    </div>
-    {% endif %}
-
     <dl class="card p-5 mb-5 text-[13px] space-y-2">
         <div class="flex justify-between gap-4">
             <dt class="text-ink-muted">{% trans "Dateiname" %}</dt>
@@ -98,7 +87,7 @@
 
     <form method="post" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         {% csrf_token %}
-        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if hold_blocked or restriction_blocked %}disabled aria-disabled="true"{% endif %} data-testid="attachment-purge-confirm">
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if hold_blocked %}disabled aria-disabled="true"{% endif %} data-testid="attachment-purge-confirm">
             {% trans "Endgültig löschen" %}
         </button>
         <a href="{% url 'core:attachment_list' %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>

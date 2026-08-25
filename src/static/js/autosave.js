@@ -217,7 +217,9 @@
     async function init() {
         var form = document.querySelector("form[data-autosave]");
         if (!form) return;
-        await window.crypto_session?.awaitReady?.();
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
         if (!isOfflineReady()) {
             // No session key (e.g. unsupported browser or session expired).
             // Autosave is intentionally a no-op here; we never fall back to

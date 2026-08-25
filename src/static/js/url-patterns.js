@@ -95,18 +95,6 @@
         self.URL_PATTERNS.TALLY_INCREMENT,
         self.URL_PATTERNS.OFFLINE_AUDIT_NOTE_EXPORT,
     ];
-    // Refs #1828: Offline-API-Endpunkt-Literale zentral — vorher lagen die
-    // Bundle-URL byte-identisch in offline-client.js UND offline-store.js und
-    // der Audit-Endpunkt hartkodiert in conflict-list.js (neben der
-    // OFFLINE_AUDIT_NOTE_EXPORT-Regex oben, die denselben Pfad matchen muss).
-    self.URL_PATTERNS.ENDPOINTS = {
-        clientBundle: function (clientPk) {
-            return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
-        },
-        FACILITY_BUNDLE: "/api/v1/offline/bundle/facility/",
-        REVOCATIONS: "/api/v1/offline/revocations/",
-        AUDIT_NOTE_EXPORT: "/api/v1/offline/audit/note-export/",
-    };
     self.URL_PATTERNS.matchesPath = function (pattern, url) {
         try {
             return pattern.test(new URL(url, self.location.origin).pathname);

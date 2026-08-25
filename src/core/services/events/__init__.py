@@ -38,8 +38,6 @@ from core.services.events.crud import (
 )
 from core.services.events.deletion import (
     approve_deletion,
-    create_or_get_event_deletion_request,
-    get_pending_event_deletion_request,
     reject_deletion,
     request_deletion,
 )
@@ -143,12 +141,10 @@ __all__ = [
     "normalize_idempotency_key",
     "new_tally_idempotency_key",
     "payload_fingerprint",
-    "get_pending_event_deletion_request",
     "reject_deletion",
     "remember_idempotent_result",
     "resolve_idempotency_key",
     "remove_restricted_fields",
-    "create_or_get_event_deletion_request",
     "request_deletion",
     "resolve_default_document_type",
     "soft_delete_event",

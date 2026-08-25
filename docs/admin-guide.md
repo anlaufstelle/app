@@ -8,26 +8,25 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 1. [Installation (Docker Compose)](#1-installation-docker-compose)
 2. [Erstkonfiguration](#2-erstkonfiguration)
- - 2.2c [Einrichtung stilllegen: archivieren statt löschen](#22c-einrichtung-stilllegen-archivieren-statt-löschen)
- - 2.5 [Dokumentationstypen konfigurieren](#25-dokumentationstypen-konfigurieren)
- - 2.6 [Auswahloptionen verwalten](#26-auswahloptionen-verwalten-feldvorlagen)
- - 2.6b [Fuzzy-Suche (pg_trgm)](#26b-fuzzy-suche-pg_trgm)
- - 2.7 [Zwei-Faktor-Authentifizierung (2FA)](#27-zwei-faktor-authentifizierung-2fa)
- - 2.8 [Schnell-Vorlagen (Quick-Templates)](#28-schnell-vorlagen-quick-templates)
- - 2.9 [Encrypted File Vault & Virus-Scanning](#29-encrypted-file-vault--virus-scanning)
- - 2.10 [Offline-Modus & Streetwork (M6A)](#210-offline-modus--streetwork-m6a)
- - 2.11 [CSV-Import und -Export: Formelschutz](#211-csv-import-und--export-formelschutz)
+   - 2.5 [Dokumentationstypen konfigurieren](#25-dokumentationstypen-konfigurieren)
+   - 2.6 [Auswahloptionen verwalten](#26-auswahloptionen-verwalten-feldvorlagen)
+   - 2.6b [Fuzzy-Suche (pg_trgm)](#26b-fuzzy-suche-pg_trgm)
+   - 2.7 [Zwei-Faktor-Authentifizierung (2FA)](#27-zwei-faktor-authentifizierung-2fa)
+   - 2.8 [Schnell-Vorlagen (Quick-Templates)](#28-schnell-vorlagen-quick-templates)
+   - 2.9 [Encrypted File Vault & Virus-Scanning](#29-encrypted-file-vault--virus-scanning)
+   - 2.10 [Offline-Modus & Streetwork (M6A)](#210-offline-modus--streetwork-m6a)
+   - 2.11 [CSV-Import und -Export: Formelschutz](#211-csv-import-und--export-formelschutz)
 3. [Backup und Wiederherstellung](#3-backup-und-wiederherstellung)
 4. [Updates](#4-updates)
 5. [Monitoring](#5-monitoring)
- - 5.4 [CSP-Debugging](#54-csp-debugging)
- - 5.5 [Compliance-Dashboard](#55-compliance-dashboard)
- - 5.6 [Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung)
- - 5.7 [Breach-Detection-Scan](#57-breach-detection-scan)
+   - 5.4 [CSP-Debugging](#54-csp-debugging)
+   - 5.5 [Compliance-Dashboard](#55-compliance-dashboard)
+   - 5.6 [Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung)
+   - 5.7 [Breach-Detection-Scan](#57-breach-detection-scan)
 6. [Troubleshooting](#6-troubleshooting)
 7. [DSGVO-Hinweise](#7-dsgvo-hinweise)
- - 7.8 [Optimistic Locking](#78-optimistic-locking)
- - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
+   - 7.8 [Optimistic Locking](#78-optimistic-locking)
+   - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
 8. [Statistik-Snapshots & Materialized View](#8-statistik-snapshots--materialized-view)
 
 ---
@@ -223,7 +222,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Ablage verschlüsselter Dateianhänge (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
 | `FILE_UPLOAD_TEMP_DIR` | Django-Default (`tempfile.gettempdir()`) | Verzeichnis für den Klartext-Zwischenpuffer von Uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, bevor sie in den File-Vault verschlüsselt werden (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In den mitgelieferten Compose-Dateien fest auf `/tmp` (tmpfs/RAM) gesetzt — [Ops-Runbook § 5.7a](ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`) **aus Sicht des Containers**; Health-Endpoint und die Backup-Zeile im Systembereich lesen daraus das Backup-Alter. |
-| `BACKUP_HOST_DIR` | `./backups` | Host-Verzeichnis, das `docker-compose.prod.yml` read-only nach `BACKUP_DIR` mountet. Es muss auf dasselbe Host-Verzeichnis zeigen, in das `scripts/ops/backup.sh` über seine Variable `BACKUP_DIR` schreibt. Andernfalls meldet der Systembereich dauerhaft „Kein Backup gefunden“, obwohl der Backup-Cron läuft. |
+| `BACKUP_HOST_DIR` | `./backups` | Dasselbe Verzeichnis **auf dem Host** — dorthin schreibt `scripts/ops/backup.sh`. `docker-compose.prod.yml` mountet es read-only nach `BACKUP_DIR`. Passen die beiden Werte nicht zusammen, meldet der Systembereich dauerhaft „Kein Backup gefunden“, obwohl der Backup-Cron läuft. |
 | `APP_VERSION` | `dev` | Versions-String, den `/health/` im `version`-Detailfeld ausweist (nur für Token-/authentifizierte Caller). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
 
@@ -395,33 +394,6 @@ Hier können Sie verwalten:
 | Dokumentationstypen | Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
 | Zeitfenster | Core → Zeitfenster | Benannte Zeiträume für Auswertungen |
 | Audit-Log | Core → Audit-Logs | Unveränderliches Protokoll |
-
-### 2.2c Einrichtung stilllegen: archivieren statt löschen
-
-Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Löschen. Entfernen Sie unter **Core → Einrichtungen** den Haken bei **Aktiv** und speichern Sie. Nur `super_admin` darf das — die Einrichtungsverwaltung ist dieser Rolle vorbehalten.
-
-**Was das Archivieren bewirkt (ab #2067):**
-
-- Anmeldungen von Konten dieser Einrichtung werden mit der Meldung „Ihre Einrichtung ist archiviert" abgewiesen; im Audit-Log entsteht eine `LOGIN_FAILED`-Zeile mit `reason: facility_inactive`.
-- **Bereits laufende Sitzungen verlieren den Zugriff sofort** — nicht erst beim nächsten Anmelden. Betroffene sehen eine Sperrseite mit Abmelden-Knopf; jeder Fachpfad antwortet mit HTTP 403.
-- Auf Datenbankebene wird zusätzlich der Einrichtungs-Kontext (`app.current_facility_id`) geleert, sodass die Row-Level-Security-Regeln (siehe [§ 7.9](#79-row-level-security-rls)) auch dann keine Zeile liefern, wenn ein Pfad die Sperre umginge.
-- **Die Daten bleiben vollständig erhalten.** Aufbewahrungsfristen, Löschanträge und das Audit-Log laufen unverändert weiter; ein erneutes Setzen von **Aktiv** stellt den Zugang wieder her.
-- `super_admin` bleibt unbeschränkt — sonst wäre die Reaktivierung selbst gesperrt.
-
-> **Warum kein Hard-Delete? Was dabei wirklich passiert.**
-> Das endgültige Löschen einer Einrichtung ist **kein unterstützter Vorgang**. Es scheitert — und zwar zuverlässig:
->
-> - `Facility` kaskadiert auf nahezu alle Fachtabellen, auch auf `core_auditlog`. Auf dieser Tabelle liegt der DB-Trigger `auditlog_immutable`, der jedes `UPDATE`/`DELETE` abweist. Die Löschkaskade läuft also **mitten** in eine Ablehnung.
-> - **Der Abbruch ist sauber, nicht halbfertig.** Django umschließt die gesamte Kaskade — Signale, Fast-Deletes, Updates und alle Stapel — mit **einer** Transaktion. Das gilt auch aus `manage.py shell`: die Shell steht zwar im Autocommit, die Kaskade öffnet ihre Transaktion aber selbst. Der Triggerfehler rollt sie vollständig zurück. Sie sehen eine Fehlermeldung, es geht nichts verloren. Dasselbe gilt für ein einzelnes `DELETE` in `psql` — ein Statement ist eine Transaktion.
-> - Zusätzlich blockiert ein `pre_delete`-Guard das Löschen, solange ein aktiver **Legal Hold** an der Einrichtung hängt.
->
-> **Die eine Konstellation, in der doch Schaden entsteht:** ein selbst geschriebenes Aufräumskript, das die Fachtabellen **einzeln nacheinander** leert und dabei **zwischendurch committet** — etwa eine Schleife über mehrere `…objects.filter(facility=f).delete()`-Aufrufe in einer Shell ohne umschließende Transaktion. Dann sind die zuerst geleerten Tabellen bereits fest geschrieben, wenn der Lauf am Audit-Trigger stirbt: Ereignisse, Personen oder Anhänge sind weg, Protokoll und Einrichtung stehen noch. Diesen Zustand kann Ihnen niemand aus der Anwendung heraus reparieren; er braucht ein Backup ([§ 3.3](#33-wiederherstellung)). Schreiben Sie solche Skripte nicht — und wenn doch, dann in **eine** umschließende Transaktion.
->
-> Ein weiterer Grund, `psql` nicht für diesen Zweck zu verwenden: ein direktes `DELETE` führt Djangos Python-Kaskade gar nicht aus. Die `pre_delete`-Guards (Legal Hold) greifen dort nicht, und die Aufräumlogik der Anwendung bleibt aus.
->
-> Wollen Sie eine Einrichtung wirklich restlos entfernen, ist der Weg: archivieren, die Aufbewahrungsfristen ablaufen lassen (siehe [§ 7.3](#73-löschfristen-und-enforce_retention)) und anschließend ein Backup ziehen — nicht die Kaskade.
-
-**Nutzer-Offboarding.** Das Archivieren sperrt den *Zugang*, räumt aber die Identitätsdaten ausgeschiedener Mitarbeitender nicht ab (Vor-/Nachname, Anzeigename, E-Mail, Telefon). Diese zweite Hälfte des Lebenszyklus wird gesondert umgesetzt: [#2051 — Offboarding-Bereinigung für ausgeschiedene Mitarbeitende](https://github.com/anlaufstelle/app/issues/2051). Bis dahin deaktivieren Sie die betroffenen Konten unter **Verwaltung → Zugänge**; Benutzername und Kennung bleiben dabei bewusst erhalten, damit die Zuordnung im Audit-Log lesbar bleibt.
 
 ### 2.3 Einstellungen pro Einrichtung
 
@@ -887,8 +859,8 @@ Dateianhänge (Fotos, Scans, Dokumente) an **Ereignissen, Personen und Fällen**
 1. Fachkraft wählt Datei im Formular aus — Ereignis ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)), Person oder Fall ([`clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/clients.py)/[`cases.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/cases.py)).
 2. Server prüft Dateityp und Größe (siehe `allowed_file_types` und `max_file_size_mb` in den Einrichtungseinstellungen — Default **10 MB**).
 3. **ClamAV-Scan** vor Verschlüsselung:
- - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
- - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
+   - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
+   - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
 4. Inhalt wird chunk-weise mit Fernet (MultiFernet) verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
 5. Download erfolgt ausschließlich über die geschützte Django-View (kein direkter Webserver-Zugriff auf `MEDIA_ROOT`).
 
@@ -987,7 +959,7 @@ Seit #1945 greift der Schutz auch, wenn vor dem Formelzeichen **unsichtbare Zeic
 
 > **Wichtig — eigene Exporte sind nicht round-trip-fest:** Der CSV-Import entfernt das Schutz-Apostroph **nicht** wieder. Importieren Sie eine zuvor exportierte Datei erneut, wird aus dem Wert `=Text` dauerhaft `'=Text`. Das ist kein Fehler und keine Fehlermeldung im Importlauf, sondern eine bewusste Grenze: Die Import-Engine vergleicht die **rohe** Dateizeile mit ihren Fehlermeldungen, um zu verhindern, dass Zellinhalte (potenziell Klientendaten) im Ergebnisprotokoll eines Laufs landen. Würde sie vorher entapostrophieren, träfe dieser Abgleich nicht mehr und ein Zellwert könnte ins Protokoll durchrutschen — Datenschutz geht hier vor Bequemlichkeit.
 >
-> **Praxis:** Nutzen Sie den CSV-Import für die **Übernahme aus Fremdsystemen**, nicht als Sicherung-und-Rückspielweg für eigene Daten. Für Letzteres ist die verschlüsselte Datenbank- und Mediensicherung mit `backup.sh` (siehe [§ 3](#3-backup-und-wiederherstellung)) der richtige Weg. Müssen Sie einen exportierten Wert doch wieder einlesen, entfernen Sie das führende `'` vorher in der Tabellenkalkulation.
+> **Praxis:** Nutzen Sie den CSV-Import für die **Übernahme aus Fremdsystemen**, nicht als Sicherung-und-Rückspielweg für eigene Daten. Für Letzteres ist das Datenbank-Backup (siehe [§ 3](#3-backup-und-wiederherstellung)) der richtige Weg. Müssen Sie einen exportierten Wert doch wieder einlesen, entfernen Sie das führende `'` vorher in der Tabellenkalkulation.
 
 Die Berichts-Exporte in **JSON und XML** sanitisieren bewusst nicht — dort gibt es keinen Formel-Kontext, und CSV-Escapes würden die maschinenlesbaren Werte verfälschen.
 
@@ -997,72 +969,82 @@ Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anl
 
 ## 3. Backup und Wiederherstellung
 
-### 3.1 Verschlüsselte Datenbank- und Mediensicherung
+### 3.1 Datenbank-Backup
 
-Der kanonische Produktionsweg ist [`scripts/ops/backup.sh`](../scripts/ops/backup.sh). Führen Sie das Skript im Repository-Root aus:
+Die gesamte Anwendungsdaten liegen in PostgreSQL. Erstellen Sie regelmäßige Dumps:
 
 ```bash
-cd /opt/anlaufstelle
-./scripts/ops/backup.sh
+docker compose -f docker-compose.prod.yml exec db \
+  pg_dump -U anlaufstelle anlaufstelle \
+  > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
-Das Skript lädt die `.env`, sichert PostgreSQL **und** den verschlüsselten File-Vault (`MEDIA_ROOT`), komprimiert beide Archive, verschlüsselt sie mit AES-256-CBC und schreibt zu jedem Archiv einen HMAC-SHA256-Sidecar. Die Dateien landen unter `BACKUP_DIR` in `daily/`, `weekly/` und `monthly/`; die eingebaute Rotation bewahrt sie 7, 28 beziehungsweise 90 Tage auf.
+Mit Kompression (empfohlen):
 
-Voraussetzungen in `.env`:
+```bash
+docker compose -f docker-compose.prod.yml exec db \
+  pg_dump -U anlaufstelle -Fc anlaufstelle \
+  > backup_$(date +%Y%m%d_%H%M%S).dump
+```
 
-- `POSTGRES_DB` und `POSTGRES_USER` für die Datenbankverbindung,
-- `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` für den vollständigen Dump,
-- ein zufälliger, separat verwahrter `BACKUP_ENCRYPTION_KEY`,
-- ein Host-Ziel, bei dem `BACKUP_HOST_DIR` auf dasselbe Verzeichnis zeigt, in das das Skript über `BACKUP_DIR` schreibt (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)).
-
-> **RLS ist hier sicherheitskritisch:** `pg_dump` muss als `POSTGRES_ADMIN_USER` laufen. Die App-Rolle `POSTGRES_USER` ist `NOBYPASSRLS`; ein roher Dump mit dieser Rolle scheitert an `FORCE ROW LEVEL SECURITY` beziehungsweise wäre als Sicherung der einrichtungsbezogenen Daten nicht vollständig. Verwenden Sie deshalb weder einen eigenen `pg_dump -U anlaufstelle`-Befehl noch die App-Rolle als Ersatz für `backup.sh`.
-
-Bewahren Sie `.env` beziehungsweise mindestens `BACKUP_ENCRYPTION_KEY` und die vollständige Historie von `ENCRYPTION_KEYS` getrennt vom Produktivhost auf. Ohne den Backup-Schlüssel lässt sich das Archiv nicht entschlüsseln; ohne die Feld-/Vault-Schlüssel bleiben die darin enthaltenen verschlüsselten Inhalte unlesbar. Für Schutz gegen Host-Totalverlust konfigurieren Sie zusätzlich ein Off-Site-Ziel; Einzelheiten stehen im [Ops-Runbook § 6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738).
+> **Wichtig:** Sichern Sie die `.env`-Datei (insbesondere `ENCRYPTION_KEY`) separat und an einem anderen sicheren Ort. Ohne den Schlüssel sind verschlüsselte Felder nach einer Wiederherstellung nicht lesbar.
 
 ### 3.2 Automatisches Backup einrichten
 
-Empfohlenes Cron-Beispiel für tägliche Backups um 02:00 Uhr (auf dem Host, vor den Retention-Läufen):
+Empfohlenes Cron-Beispiel für tägliche Backups um 03:00 Uhr (auf dem Host):
 
 ```cron
-0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
+0 3 * * * cd /opt/anlaufstelle && \
+  docker compose -f docker-compose.prod.yml exec -T db \
+  pg_dump -U anlaufstelle -Fc anlaufstelle \
+  > /mnt/backup/anlaufstelle/backup_$(date +\%Y\%m\%d).dump
 ```
 
-Keinen zusätzlichen `find ... -delete`-Job einrichten: `backup.sh` rotiert Datenbank-, Medien- und HMAC-Dateien gemeinsam. Prüfen Sie regelmäßig das neueste Backup:
+Ältere Backups nach 30 Tagen löschen:
 
-```bash
-cd /opt/anlaufstelle
-./scripts/ops/backup.sh --verify
+```cron
+0 4 * * * find /mnt/backup/anlaufstelle/ -name "*.dump" -mtime +30 -delete
 ```
-
-Der Prüflauf validiert den HMAC vor dem Entschlüsseln, stellt den jüngsten Datenbank-Dump in einer temporären Datenbank wieder her, vergleicht kritische RLS-Tabellen mit der Live-Datenbank und prüft das jüngste Medienarchiv. Der ausführlichere quartalsweise Restore-Drill ist im [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) beschrieben.
 
 ### 3.3 Wiederherstellung
 
-[`scripts/ops/restore.sh`](../scripts/ops/restore.sh) ist ausschließlich für die von `backup.sh` erzeugten Plain-SQL-Archive (`*.sql.gz.enc`) samt direkt danebenliegendem `.hmac`-Sidecar bestimmt. Ein `pg_restore`-Archiv aus einem anderen Backup-Pfad ist damit nicht kompatibel.
-
-1. Planen Sie ein Wartungsfenster, sperren Sie den öffentlichen Zugriff und bereiten Sie eine leere Ziel-Datenbank mit denselben Rollen-Namen wie im gesicherten System vor. Die App-Rolle (`POSTGRES_USER`, `NOBYPASSRLS`) und die Admin-/Owner-Rolle (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) müssen vor dem Einspielen existieren. Die vollständige, destruktive Prozedur für einen neuen Host steht im [Disaster-Recovery-Leitfaden § 6](disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host).
-
-2. Stellen Sie sicher, dass DB- und Web-Container für den Datenbank- beziehungsweise Medien-Restore laufen, während Caddy und Cron gestoppt bleiben.
-
-3. Starten Sie den Restore im Repository-Root. Das zweite Argument ist optional, für eine vollständige Wiederherstellung mit Dateianhängen aber erforderlich:
+1. Stack stoppen:
 
 ```bash
-./scripts/ops/restore.sh \
-  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
-  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
+docker compose -f docker-compose.prod.yml down
 ```
 
-Das Skript verlangt die Eingabe `ja`, prüft jeweils zuerst den HMAC und entschlüsselt erst danach. Der SQL-Dump wird bewusst über den lokalen Bootstrap-Superuser (`POSTGRES_SUPERUSER`, Default `postgres`) eingespielt: Nur dieser kann die enthaltenen Owner-/`FORCE RLS`-Anweisungen und Datenkopien zuverlässig wiederherstellen. Beim Medien-Restore wird der bestehende Inhalt von `MEDIA_ROOT` vor dem Entpacken ersetzt.
-
-4. Führen Sie die Migrationen mit der Admin-Rolle aus und starten Sie anschließend den Stack:
+2. Datenbank-Volume löschen (Vorsicht: löscht alle Daten):
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm \
-  --entrypoint=/app/docker-migrate.sh maintenance
+docker volume rm anlaufstelle_pgdata
+```
+
+3. Stack neu starten (erstellt leere Datenbank):
+
+```bash
+docker compose -f docker-compose.prod.yml up -d db
+```
+
+4. Backup einspielen:
+
+```bash
+# SQL-Dump:
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U anlaufstelle anlaufstelle < backup_20260101_030000.sql
+
+# Oder komprimiertes Format:
+docker compose -f docker-compose.prod.yml exec -T db \
+  pg_restore -U anlaufstelle -d anlaufstelle backup_20260101.dump
+```
+
+5. Web-Dienst starten:
+
+```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-5. Prüfen Sie Datenbankrollen, Gesundheitszustand und Stichproben aus Datenbank **und** File-Vault. Siehe [Abschnitt 5](#5-monitoring), [Ops-Runbook § 9](ops-runbook.md#9-row-level-security-rls) und die [Smoke-Verifikation des Disaster-Recovery-Leitfadens](disaster-recovery.md#7-smoke-verifikation-nach-restore).
+6. Gesundheitscheck durchführen (siehe [Abschnitt 5](#5-monitoring)).
 
 ---
 
@@ -1092,7 +1074,7 @@ docker compose -f docker-compose.prod.yml logs web --tail=50
 
 ### 4.2 Vor einem Update
 
-- Erstellen und verifizieren Sie immer eine aktuelle Datenbank- und Mediensicherung (siehe [Abschnitte 3.1–3.2](#31-verschlüsselte-datenbank--und-mediensicherung)).
+- Erstellen Sie immer ein aktuelles Datenbank-Backup (siehe [Abschnitt 3.1](#31-datenbank-backup)).
 - Lesen Sie das Changelog zu Breaking Changes und erforderlichen Konfigurationsänderungen.
 
 ### 4.3 Rollback
@@ -1217,8 +1199,6 @@ Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird
 **Logs.** Die Server-Logs werden in **beiden** Formaten PII-gescrubbt — sowohl der Default `LOG_FORMAT=text` als auch `LOG_FORMAT=json` ziehen Messages, Tracebacks und die strukturierten Zusatzfelder durch denselben Scrubber (Mailadressen, Passwörter und Token-artige Werte werden zu Platzhaltern). **Nicht** gescrubbt werden zwei Felder, die technische Sicherheitsereignisse zuordenbar machen sollen und deshalb bewusst im Klartext stehen: die Client-IP (`remote_addr`) und der Browser-Kennstring (`user_agent`) einer CSP-Verstoßmeldung. Beide sind personenbeziehbar — wer eine kurze Log-Aufbewahrung braucht, plant sie dafür ein. Unverändert passieren außerdem die rein technischen Kennungen (`request_id`, `user_id`, `facility_id`, `user_pk`): Sie enthalten keinen Freitext, sondern verweisen nur auf einen Datensatz, der Scrubber hat dort nichts zu greifen. `user_pk` erscheint zum Beispiel in den Einladungs-Log-Zeilen, die bewusst weder Benutzernamen noch Mailadresse führen — ohne diese Kennung wäre der Eintrag keinem Konto mehr zuzuordnen. Für DSGVO-Kontexte mit Log-Aggregation empfiehlt sich weiterhin `LOG_FORMAT=json` (strukturiert, maschinenlesbar); die Datenminimierung ist aber nicht mehr an dieses Format gebunden.
 
 **Selbst gehosteter Tracker (GlitchTip).** GlitchTip akzeptiert Standard-Sentry-DSNs, und dieses Projekt nutzt nur Kern-SDK-Features (Error-Events plus optionales Trace-Sampling). Diese Kombination wurde empirisch geprüft: Mit `sentry-sdk[django]` `2.64.0` gegen GlitchTip `6.2.1` (Docker-Image `glitchtip/glitchtip:6`) werden Server-Error-Events übertragen, plausibel geparst (Stacktrace, Tags, Request-Kontext) und als Issues angezeigt; Performance-Transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) werden ebenfalls **angenommen** und als Transaction-Gruppen einsortiert — sie werden also weder still verworfen noch lösen sie einen Fehler aus. Der serverseitige `before_send`/`before_send_transaction`-Scrubber greift dabei unverändert (keine Frame-Locals, gestrippte Query-Strings/Cookies/Request-Bodies); die weiter oben beschriebenen regel- und schlüsselbasierten Grenzen bleiben bestehen. Andere Versionskombinationen sind nicht getestet, und ein Fremdprojekt bleibt naturgemäß außerhalb der Kontrolle dieses Projekts.
-
-**Gehosteter Sentry-Dienst.** Wer statt einer eigenen EU-/Self-Hosted-Instanz einen SaaS-Anbieter nutzt, muss vor Aktivierung Datenstandort, Aufbewahrungsfrist und mögliche Drittlandübermittlungen samt Garantien prüfen und einen AVV schließen. Anbieter und dessen Unterauftragnehmer gehören in § 6 der AVV-Vorlage im DSGVO-Paket.
 
 So binden Sie einen selbst gehosteten Tracker an:
 
@@ -1450,36 +1430,6 @@ Einzelne Datensätze können per **Legal Hold** vor automatischer Löschung gesc
 
 Legal Holds werden im Retention-Dashboard sowie im Django-Admin verwaltet (siehe [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)).
 
-> **Abgrenzung zu Art. 18 DSGVO (Refs #2045):** Ein Legal Hold ist **keine** Einschränkung der Verarbeitung im Sinne des Art. 18. Er blockiert die **Löschung** (Art. 17 Abs. 3) und lässt die tägliche Arbeit am Datensatz unberührt. Die Einschränkung nach Art. 18 ist der umgekehrte Fall: Die Daten bleiben gespeichert, aber die inhaltliche Arbeit an der Person ist gesperrt. Dafür gibt es den eigenen **Sperrvermerk** an der Personenakte (§ 7.6). Beide können unabhängig voneinander bestehen.
-
-#### Aufbewahrung der Ereignis-Historie
-
-Jede Speicherung eines Ereignisses schreibt eine **Historien-Fassung**: wer wann welche Felder mit welchen Werten geändert hat. Diese Fassungen hatten bis Version 0.89 **keine Frist** — sie überlebten die Löschfrist des Ereignisses selbst. Konkret: Ein Ereignis, dessen `retention_identified_days` abgelaufen sind, wird geleert, seine früheren Fassungen behielten aber jeden jemals gespeicherten Wort­laut. Die Frist war formal vollzogen und faktisch unterlaufen. Seit [ADR-050](adr/050-eventhistory-retention.md) schließt `enforce_retention` diese Lücke in zwei Stufen.
-
-**Stufe 1 — Redaktion.** Die Fassung bleibt bestehen, ihre *Werte* fallen weg. Was stehen bleibt: Zeitpunkt, handelnde Person, Aktion und die Namen der betroffenen Felder. Was verschwindet: die Inhalte. In der Ereignis-Detailansicht und in der Auskunft nach Art. 15 erscheint an ihrer Stelle „– (redigiert)". Zwei Auslöser:
-
-- **Das Ereignis ist gelöscht.** Sobald ein Ereignis als gelöscht markiert ist — durch die Frist oder von Hand, verlieren beim nächsten Lauf **alle** seine Fassungen ihre Werte. Das braucht keine Einstellung und lässt sich nicht abschalten: es ist die Durchsetzung der Frist, die für das Ereignis ohnehin schon gilt. Es erfasst auch Ereignisse ohne Person (anonyme Kontakte), für die es bisher überhaupt keinen Löschpfad der Historie gab.
-- **Die Fassung ist alt.** Bei noch **lebenden** Ereignissen werden Fassungen redigiert, die älter als `eventhistory_detail_months` sind.
-
-**Stufe 2 — Löschung der Chronologie.** Eine bereits redigierte Fassung wird endgültig gelöscht, wenn ihre Redaktion länger als `eventhistory_chronicle_months` zurückliegt. Gemessen wird ab dem Zeitpunkt der Redaktion, nicht ab der ursprünglichen Änderung — die Frage lautet „wie lange steht diese Zeile schon leer". Zu diesem Zeitpunkt fallen keine Inhalte mehr, nur noch die Chronologie selbst.
-
-| Einstellung in `Settings` | Standard | Wirkung |
-|---|---|---|
-| `eventhistory_detail_months` | 24 Monate | Wie lange die **Werte** alter Fassungen lebender Ereignisse lesbar bleiben. `0` = **deaktiviert** (die Werte bleiben unbefristet lesbar). Berührt den Zweig „gelöschtes Ereignis" nicht. |
-| `eventhistory_chronicle_months` | 24 Monate | Wie lange eine bereits redigierte Fassung danach noch aufbewahrt wird, bevor sie gelöscht wird. `0` = **deaktiviert**, dann wächst die Chronologie unbegrenzt — das ist eine Entscheidung für unbefristete Aufbewahrung und gehört dann ausdrücklich ins Verarbeitungsverzeichnis und ins Löschkonzept. |
-
-Beide Vorgabewerte entsprechen `auditlog_retention_months`: Historie und Audit-Log beantworten dieselbe Frage („wer hat wann etwas geändert") und sollen deshalb gemeinsam enden. Mit den Vorgabewerten ergibt sich für die Fassung eines lebenden Ereignisses eine Gesamtlebensdauer von 24 Monaten Werte plus 24 Monaten Chronologie; für die eines gelöschten 24 Monate Chronologie ab der Löschung.
-
-**Was Sie beim Ändern wissen sollten:**
-
-- **Die jüngste Fassung eines lebenden Ereignisses wird nie redigiert**, unabhängig von ihrem Alter. So bleibt auf der Detailseite immer mindestens eine lesbare letzte Änderung stehen — auch bei einer Akte, die seit Jahren unangetastet ist.
-- **Ein Legal Hold hält die Redaktion auf.** Steht das Ereignis (oder seine Person) unter Hold, bleiben seine Fassungen unverändert; der Lauf weist sie als zurückgestellt aus und holt sie nach, sobald der Hold aufgehoben oder abgelaufen ist.
-- **Redaktion ist endgültig.** Alte Wortlaute sind danach nur noch aus einem Backup-Stand rekonstruierbar. Wer einen Berichtigungsstreit über eine Jahre alte Formulierung führen können muss, setzt `eventhistory_detail_months` entsprechend höher.
-- **Nebeneffekt auf die Schlüsselrotation:** Redigierte Fassungen tragen keinen verschlüsselten Inhalt mehr und werden bei `reencrypt_fields` übersprungen. Die Dauer einer Schlüsselrotation richtet sich damit nach dem *unredigierten Fenster* statt nach der Gesamtgröße der Tabelle — sie bleibt konstant, statt jährlich zu wachsen.
-- **Jede Charge hinterlässt einen Nachweis** im Audit-Log (Aktion „Ereignis-Historie redigiert") mit Anzahl, Fristgrenze und Chargengrenzen. Dieser Nachweis ist von `auditlog_retention_months` **ausgenommen** und bleibt dauerhaft erhalten.
-
-Der erste Lauf nach dem Update kann länger dauern als gewohnt: Er arbeitet den Altbestand der Fassungen lebender Ereignisse ab. Die Fassungen bereits gelöschter Ereignisse hat die Migration schon erledigt.
-
 #### K-Anonymisierung statt Hard-Delete
 
 Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung** aktiviert werden (Refs #535).
@@ -1540,14 +1490,13 @@ Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrich
 |---|---|---|
 | `auditlog_retention_months` | 24 Monate | Bei jedem `enforce_retention`-Lauf werden Einträge gelöscht, die älter als diese Frist sind (kalendergenaue Monatsrechnung, keine 30-Tage-Näherung). `0` = **deaktiviert**, dann wächst das Log unbegrenzt. |
 
-Von dieser Frist **ausgenommen** sind fünf Klassen; sie bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Vier davon hängen an der Aktion (`PRUNE_EXEMPT_ACTIONS`):
+Von dieser Frist **ausgenommen** sind vier Klassen; sie bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Drei davon hängen an der Aktion (`PRUNE_EXEMPT_ACTIONS`):
 
 - `SECURITY_VIOLATION` — Forensik-Nachweise der Breach-Detection,
 - `RETENTION_RUN_COMPLETED` — der Marker, aus dem das Compliance-Dashboard den letzten erfolgreichen Retention-Lauf liest,
-- `AUDIT_PRUNE_CHECKPOINT` — der Tombstone des Prunings selbst,
-- `EVENT_HISTORY_REDACTED` — der Nachweis je Charge des Historien-Sweeps (siehe [§ 7.3 „Aufbewahrung der Ereignis-Historie"](#aufbewahrung-der-ereignis-historie)). Er belegt, dass die Unveränderlichkeit für genau diese Zeilen legitim geöffnet wurde; verschwände er vor den Zeilen, die er belegt, bliebe eine stille Änderung append-only-geschützter Daten zurück.
+- `AUDIT_PRUNE_CHECKPOINT` — der Tombstone des Prunings selbst.
 
-Hinzu kommt — **unabhängig von der Aktion** — die fünfte Klasse: Einträge über eine **herausgegebene Berichtsdatei mit Berichtszeitraum** (CSV/PDF/JSON/XML). Ohne diese Ausnahme täuschte die Freigabe-Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, die auslösende Person und die erfassten Empfänger-/Zweckangaben (ungeprüfter Freitext) und werden dauerhaft aufbewahrt. Reine Bildschirm-Ansichten des externen Berichts und Auskünfte ohne Berichtszeitraum laufen zwar unter derselben Audit-Aktion, bleiben aber der Frist unterworfen — die Abgrenzung steht in [§ 8 „Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
+Hinzu kommt — **unabhängig von der Aktion** — die vierte Klasse: Einträge über eine **herausgegebene Berichtsdatei mit Berichtszeitraum** (CSV/PDF/JSON/XML). Ohne diese Ausnahme täuschte die Freigabe-Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, die auslösende Person und die erfassten Empfänger-/Zweckangaben (ungeprüfter Freitext) und werden dauerhaft aufbewahrt. Reine Bildschirm-Ansichten des externen Berichts und Auskünfte ohne Berichtszeitraum laufen zwar unter derselben Audit-Aktion, bleiben aber der Frist unterworfen — die Abgrenzung steht in [§ 8 „Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 **Checkpoint-Mechanik:** Das Audit-Log ist über eine HMAC-Kette verkettet (jeder Eintrag verweist auf den vorherigen). Ein Pruning reißt diese Kette zwangsläufig auf. Damit die Integritätsprüfung diese Lücke nicht als Manipulation meldet, schreibt jeder Prune-Lauf einen `AUDIT_PRUNE_CHECKPOINT`-Eintrag, der die Kettengrenzen der gelöschten Einträge festhält und die Diskontinuität legitimiert. Die Kette selbst wird dabei **nie** umgeschrieben — das Log bleibt append-only.
 
@@ -1588,7 +1537,7 @@ Neben „Wiederherstellen" steht dort die Aktion **„Jetzt endgültig anonymisi
 |---|---|
 | **Wirkung** | **Unwiderruflich.** Pseudonym, Notizen, Zusatzfelder sowie Fall- und Ereignisinhalte werden entfernt; es bleibt ein anonymes Statistik-Aggregat. Eine Wiederherstellung ist danach **nicht** mehr möglich. Ein Bestätigungsdialog nennt das ausdrücklich. |
 | **Wozu** | (a) **Art.-17-Sofortlöschung**, wenn eine betroffene Person auf unverzüglicher Löschung besteht und 30 Tage Papierkorb nicht vertretbar sind. (b) **Auflösen von Konfigurations-Blockaden**: eine Person im Papierkorb behält ihren Dokumentationstyp und ihre Feldwerte und blockiert damit das Löschen dieses Typs bzw. der Feldvorlage. Bisher blieb nur Wiederherstellen (kurzzeitige Daten-Auferstehung) oder Warten. Die Blocker-Meldung der Konfigurations-Oberfläche weist den Papierkorb-Anteil jetzt aus und verlinkt dorthin. |
-| **Grenze: Aufbewahrungssperre** | Besteht ein **aktiver Legal Hold** auf der Person oder auf einem ihrer Ereignisse, wird die Aktion mit einer Fehlermeldung abgewiesen — genau wie der nächtliche Retention-Lauf (Refs #1066, #1756). Eine manuelle Aktion darf eine Aufbewahrungssperre nicht aushebeln. Erst Hold aufheben, dann anonymisieren. |
+| **Grenze: Aufbewahrungssperre** | Besteht ein **aktiver Legal Hold** auf der Person oder auf einem ihrer Ereignisse, wird die Aktion mit einer Fehlermeldung abgewiesen — genau wie der nächtliche Retention-Lauf (Refs #1066, #1756). Eine manuelle Aktion darf einen Sperrvermerk nicht aushebeln. Erst Hold aufheben, dann anonymisieren. |
 | **Grenze: nur im Papierkorb** | Die Aktion wirkt ausschließlich auf bereits soft-gelöschte Personen. Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — es gibt keinen Direktpfad an der Genehmigung vorbei. |
 | **Spur** | Audit-Eintrag `CLIENT_ANONYMIZED` mit `trigger="manual"`, unterscheidbar vom automatischen Lauf. |
 
@@ -1605,7 +1554,7 @@ Seit [ADR-044](adr/044-fall-loeschpfad.md) lässt sich ein **einzelner Fall** l�
 | **Welche Frist?** | **Keine eigene.** Es gilt `client_trash_days` (§ 2.3) — bewusst kein zweiter Fristbegriff, der in Datenschutzerklärung und Folgenabschätzung erklärt und gepflegt werden müsste. |
 | **Was passiert nach Fristablauf?** | Der Fall wird **redigiert, nicht hart gelöscht**: Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele, Meilensteine und die fall-eigenen Dateien (samt verschlüsselter Ablage) sind weg; die Fall-Zeile bleibt als anonymes Aggregat stehen. Ein Hard-Delete risse Episoden, Ziele und Meilensteine per Kaskade mit. |
 
-Den **Papierkorb** (`/cases/trash/`) öffnet die Anwendungsbetreuung über die Kopfzeile der Fallliste; er steht wie der Personen-Papierkorb in keiner Navigation. Dort stehen je Zeile **„Wiederherstellen"** (holt Episoden, Ziele und Anhänge vollständig zurück) und **„Jetzt endgültig anonymisieren"** — dieselbe Vorzieh-Aktion wie bei Personen, mit denselben Grenzen: nur aus dem Papierkorb heraus, nicht zweimal, und **nicht** bei einer aktiven Aufbewahrungssperre (Legal Hold auf dem Fall, auf einem seiner Ereignisse oder auf der Person). Ein bereits endgültig anonymisierter Fall ist als solcher ausgewiesen und bietet kein „Wiederherstellen" mehr an — es holte nur eine leere Hülle zurück.
+Den **Papierkorb** (`/cases/trash/`) öffnet die Anwendungsbetreuung über die Kopfzeile der Fallliste; er steht wie der Personen-Papierkorb in keiner Navigation. Dort stehen je Zeile **„Wiederherstellen"** (holt Episoden, Ziele und Anhänge vollständig zurück) und **„Jetzt endgültig anonymisieren"** — dieselbe Vorzieh-Aktion wie bei Personen, mit denselben Grenzen: nur aus dem Papierkorb heraus, nicht zweimal, und **nicht** bei einem aktiven Sperrvermerk (Legal Hold auf dem Fall, auf einem seiner Ereignisse oder auf der Person). Ein bereits endgültig anonymisierter Fall ist als solcher ausgewiesen und bietet kein „Wiederherstellen" mehr an — es holte nur eine leere Hülle zurück.
 
 Drei Punkte, die im Betrieb regelmäßig gefragt werden:
 
@@ -1635,26 +1584,7 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 | Auskunft (Art. 15) | Datenauskunft als JSON oder PDF über die Personenansicht ziehen (Leitung oder Anwendungsbetreuung, Re-Authentifizierung erforderlich) — Umfang siehe unten |
 | Berichtigung (Art. 16) | Felder als Anwendungsbetreuung im Admin-UI direkt bearbeiten |
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
-| Einschränkung (Art. 18) | **Sperrvermerk** an der Personenakte setzen — siehe unten |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
-
-#### Einschränkung der Verarbeitung: der Sperrvermerk (Art. 18 DSGVO, Refs #2045)
-
-Bestreitet eine begleitete Person die Richtigkeit ihrer Daten oder liegt einer der übrigen Tatbestände des Art. 18 Abs. 1 vor, setzen Sie in der Personenakte einen **Sperrvermerk**. Er wirkt so:
-
-| Frage | Antwort |
-|---|---|
-| **Was bleibt erlaubt?** | Die **Speicherung** (Art. 18 Abs. 2). Der Datensatz wird nicht gelöscht, nicht versteckt und bleibt in Auskunft und Statistik. |
-| **Was ist gesperrt?** | Die inhaltliche Arbeit: Die Person lässt sich nicht mehr bearbeiten und keinem neuen Kontakt, Fall oder keiner neuen Aufgabe zuordnen. |
-| **Was ist ausgenommen?** | Der **Berichtigungsworkflow** (Art. 16, § 7.6). Er ist der Weg, auf dem die bestrittene Richtigkeit geprüft wird — eine Sperre, die ihn mitblockierte, wäre eine Sackgasse. |
-| **Wer setzt?** | Fachkräfte und aufwärts, aus der Personenakte heraus. Beim Stellen eines Berichtigungsantrags wird der Vermerk zusätzlich **angeboten** (Opt-in, nicht vorbelegt). |
-| **Wer hebt auf?** | Eine **zweite** berechtigte Person oder die **Leitung**. Wer den Vermerk gesetzt hat, hebt ihn nicht allein wieder auf. |
-| **Sichtbarkeit** | Dauerhaftes Banner in der Personenakte mit Rechtsgrund, Zeitpunkt und setzender Person; in der Personenliste ein Kennzeichen „Eingeschränkt". |
-| **Spur** | Audit-Einträge `PROCESSING_RESTRICTED` und `PROCESSING_RESTRICTION_LIFTED`, jeweils mit dem Rechtsgrund — nie mit dem strittigen Sachverhalt. |
-
-**Nicht zu verwechseln mit dem Legal Hold** (§ 7.3): Der blockiert die *Löschung* (Art. 17 Abs. 3), der Sperrvermerk die *Nutzung*. Beide können unabhängig voneinander bestehen.
-
-**Organisatorisch zu leisten:** Die Unterrichtung der betroffenen Person **vor** dem Aufheben (Art. 18 Abs. 3) erzwingt die Software nicht — halten Sie sie in Ihrem Auskunftsprozess fest.
 
 #### Historien-Diff: Entschlüsselung für berechtigte Rollen
 
@@ -1680,13 +1610,12 @@ Enthalten sind (Refs #1752):
 | Änderungshistorie | Aktion, Zeitpunkt, bearbeitende Person **und die Inhalte vorher/nachher** — auch für gelöschte Ereignisse |
 | Löschanträge | Anträge auf Löschung von Ereignissen **und der Person selbst**, inkl. Begründung und 4-Augen-Prüfung |
 | Berichtigungsanträge | Art.-16-Anträge zur Person (Refs #1796, [ADR-041](adr/041-berichtigungsworkflow-intern.md)) in **allen** Status (offen, genehmigt, abgelehnt): betroffenes Feld, bisheriger und gewünschter Wert (entschlüsselt), Begründung, Prüfvermerk, beantragende und prüfende Person, Zeitpunkte |
-| Aufbewahrung | Aufbewahrungssperren (Legal Holds, Art. 17 Abs. 3 — **nicht** Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
-| Einschränkung der Verarbeitung | Sperrvermerk nach Art. 18 DSGVO (Refs #2045), sofern gesetzt: Rechtsgrund, Zeitpunkt und setzende Person |
+| Aufbewahrung | Sperrvermerke (Legal Holds, Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
 | Aufgaben | Titel, Beschreibung, Typ, Status, Priorität, Zuständigkeit, Fristen |
 | Aktivitäten | Zeitstrom-Einträge zur Person, ihren Fällen, Ereignissen und Aufgaben |
 | Merkliste | Zeitpunkte, zu denen die Personenakte aufgerufen bzw. als Favorit markiert wurde |
 | Zusammenführungen | Herkunft nach Duplikat-Merges (Refs #1876, [ADR-045](adr/045-personen-merge.md) §7): welche Akte wann in diese überführt wurde und ob sie schon endgültig anonymisiert ist; die Auskunft der aufgelösten Akte nennt umgekehrt „Zusammengeführt in" |
-| Zugriffsprotokoll | Audit-Einträge zur Person, ihren Fällen und ihren Ereignissen: Aktion, Zeitpunkt, Bezug — einschließlich der Schritte der Vier-Augen-Workflows (Refs #2048): Löschanträge erscheinen unter der Kategorie „Löschantrag“ (beantragt/genehmigt/abgelehnt, aus dem Personen-, Fall- und Zusammenführungs-Pfad), Berichtigungsanträge unter „Berichtigung“ |
+| Zugriffsprotokoll | Audit-Einträge zur Person und ihren Ereignissen: Aktion, Zeitpunkt, Bezug |
 | Dateianhänge | **Metadaten** je Anhang der Person, ihrer Fälle und ihrer Ereignisse (Refs #1738): Feldname und Feld-Slug, entschlüsselter Dateiname, Dateigröße, MIME-Typ, Zeitpunkt und hochladende Person, sowie der Zustand in der Versionskette (aktuell ja/nein, ersetzt am, entfernt am) — **vollständige Kette inklusive ersetzter und entfernter Glieder** |
 
 **Zur Struktur der Anhang-Angaben (JSON):** personen-eigene Anhänge stehen unter dem Top-Level-Schlüssel `attachments` — er ist **immer** vorhanden, ggf. als leere Liste. Fall- und Ereignis-Anhänge stehen als `attachments` **im jeweiligen Eintrag** unter `cases[i]` bzw. `events[i]` und erscheinen dort nur, wenn nicht leer (das Bestandsformat für Datensätze ohne Dateien bleibt damit unverändert); gelöschte Ereignisse (`deleted_events`) tragen sie ebenso. Lässt sich ein Dateiname nicht entschlüsseln, steht dort `[verschlüsselt]` — die Auskunft erfindet keinen Namen. Der MIME-Typ ist der beim Upload **verifizierte** Typ; nur für Bestandszeilen ohne Erkennung fällt er auf den vom Browser gemeldeten zurück. In den Zusatzfeldern selbst erscheint statt des technischen Datei-Markers der Platzhalter `[Dateianhang – Angaben unter „Dateianhänge"]`. **Im PDF** stehen die personen-eigenen Anhänge als eigener Abschnitt „Dateianhänge"; Fall- und Ereignis-Anhänge stehen als Spalte „Dateianhänge" in der jeweiligen Tabelle.
@@ -1724,7 +1653,7 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 - Jedes Formular rendert das aktuelle `updated_at` als Hidden-Field.
 - Beim Speichern prüft der Helper `check_version_conflict(instance, expected_updated_at)`, ob der Datensatz in der Zwischenzeit verändert wurde.
 - Bei Konflikt wird eine `ValidationError` geworfen; der View leitet den Nutzer zurück mit der Meldung:
- > *„Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."*
+  > *„Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."*
 
 **Administrative Hinweise:**
 - Es gibt keinen Admin-Schalter, um das Locking abzuschalten — der Schutz ist systemweit aktiv.

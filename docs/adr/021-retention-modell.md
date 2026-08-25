@@ -21,10 +21,10 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
 
 - **Fristen pro Entitaet, nicht global.** Events, Cases, Clients, WorkItems und AuditLog haben je eigene Fristen, die in den Einrichtungs-Settings konfigurierbar sind. Default-Werte sind mit den DSGVO-Templates (Verarbeitungs-Verzeichnis, Aufbewahrungs- und Loeschkonzept) abgeglichen — eine Aenderung im Code zwingt zu einem Abgleich der Templates.
 - **Vier Soft-Delete-Strategien** statt Hard-Delete:
- - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
- - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py));
- - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe vor Soft-Delete;
- - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist.
+  - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
+  - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py));
+  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe vor Soft-Delete;
+  - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist.
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
 - **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung.
 - **AuditLog-Pruning auf eigener, laengerer Frist** ([`prune_auditlog`](../../src/core/retention/audit_pruning.py)). Die Frist ist absichtlich laenger als alle Fach-Fristen, damit Forensik nach einem Vorfall noch Spuren findet, wenn die Sachdaten bereits anonymisiert sind. Pruning ist append-only-kompatibel — keine `UPDATE`s, nur `DELETE` strikt nach Frist.

@@ -19,137 +19,10 @@ nur eine Definition pro Regel gibt.
 from __future__ import annotations
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
-from django.utils.decorators import method_decorator
-from django.utils.translation import gettext_lazy as _
-from django_ratelimit.decorators import ratelimit
-from unfold.forms import AuthenticationForm as UnfoldAuthenticationForm
 from unfold.sites import UnfoldAdminSite
 
 from core.services.security import is_in_sudo
-
-
-def _admin_login_username_key(group, request):
-    """Ratelimit-Key aus dem Username des Admin-Logins (Refs #2020).
-
-    Wortgleich zu ``core.views.auth._login_username_key`` (bewusst dupliziert
-    statt importiert: ``core.admin_site`` wird sehr frueh geladen und darf
-    nicht am View-Modul haengen). Lowercased + gestrippt, damit 'Alice',
-    ' alice ' und 'alice' nicht als drei unabhaengige Eimer zaehlen.
-    """
-    del group  # ungenutzt: der Eimer wird ueber den Usernamen gebildet
-    return (request.POST.get("username") or "").lower().strip()
-
-
-class AdminLockoutAuthenticationForm(UnfoldAuthenticationForm):
-    """Login-Formular der Admin-Site mit Account-Lockout-Pruefung (Refs #2020).
-
-    Der App-Login prueft den Lockout in ``CustomLoginView.form_valid``
-    (``views/auth.py``); der Admin-Login fiel bis hierher auf Djangos
-    Stock-Auth zurueck — ein nach 10 Fehlversuchen gesperrter Account kam dort
-    mit korrektem Passwort weiterhin durch.
-
-    ``confirm_login_allowed`` ist dafuer der richtige Haken statt eines
-    View-Overrides: ``AuthenticationForm.clean()`` ruft ihn genau zwischen
-    ``authenticate()`` und ``auth_login()`` auf — dieselbe Stelle im Ablauf wie
-    der Check in ``form_valid``. Es existiert also noch keine gebundene
-    Session, die widerrufen werden muesste, und die ``is_staff``-Pruefung der
-    Django-/Unfold-Basisklasse bleibt ueber ``super()`` erhalten.
-
-    Die Wirkung spiegelt ``CustomLoginView`` bewusst vollstaendig — Widerruf
-    (Salt-Rotation + Session-Flush ueber die ACCOUNT_LOCKOUT-Wirkungsmatrix,
-    Refs #1965) und ``LOGIN_FAILED``-Zeile mit ``reason="locked"``. Eine
-    Sperre, die je nach Login-Formular andere Konsequenzen haette, waere genau
-    die Asymmetrie, die dieses Ticket schliesst.
-    """
-
-    def confirm_login_allowed(self, user):
-        super().confirm_login_allowed(user)
-
-        # Lazy: ``core.admin_site`` wird beim App-Start vor ``AppConfig.ready()``
-        # importiert (die ModelAdmins registrieren sich an dieser Site).
-        from core.models import AuditLog
-        from core.services.audit import log_audit_event
-        from core.services.security import RevocationReason, is_locked, revoke_credentials
-        from core.signals.audit import get_client_ip
-
-        # N9 (Refs #1446): Lockout je Quell-IP — fremde Falschpassworter sperren
-        # den Admin-Login des Opfers von dessen eigener IP nicht.
-        ip_address = get_client_ip(self.request)
-        if is_locked(user, ip_address=ip_address):
-            # R18 (Refs #1476/#1666): Der Zweig feuert NUR bei korrektem Passwort
-            # gegen einen gesperrten Account — nicht angreifer-getrieben.
-            revoke_credentials(user, reason=RevocationReason.ACCOUNT_LOCKOUT, request=self.request)
-            log_audit_event(
-                self.request,
-                AuditLog.Action.LOGIN_FAILED,
-                user=user,
-                facility=getattr(user, "facility", None),
-                detail={
-                    "message": "Login blockiert durch Account-Lockout",
-                    "username": user.username,
-                    "reason": "locked",
-                },
-            )
-            raise ValidationError(
-                _(
-                    "Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen "
-                    "temporär gesperrt. Bitte später erneut versuchen oder "
-                    "Administration kontaktieren."
-                ),
-                code="locked",
-            )
-
-        self._confirm_facility_active(user, log_audit_event, AuditLog.Action.LOGIN_FAILED)
-
-    def _confirm_facility_active(self, user, log_audit_event, login_failed_action):
-        """Refs #2067: archivierte Einrichtung sperrt AUCH diesen Login.
-
-        Bis hierher prueste nur ``CustomLoginView.form_valid`` das Flag. Ein
-        ``facility_admin`` einer archivierten Einrichtung konnte sich unter
-        ``/admin-mgmt/login/`` also authentifizieren und bekam eine Session;
-        geblockt wurde erst der Folgerequest durch die Middleware. Fachzugriff
-        entstand dadurch nicht, die geforderte Login-Verweigerung samt
-        Protokollzeile fehlte auf dieser zweiten Login-Oberflaeche aber.
-
-        Wirkung spiegelt ``CustomLoginView`` bewusst vollstaendig (Muster des
-        Lockout-Zweigs darueber): dieselbe Meldung, dieselbe ``LOGIN_FAILED``-
-        Zeile mit ``reason="facility_inactive"``, KEIN Credential-Widerruf —
-        Archivieren ist ein organisatorischer Vorgang, kein
-        Kompromittierungsverdacht. ``super_admin`` bleibt ausgenommen, weil die
-        Rolle der Reaktivierungspfad ist (``FacilityAdmin`` ist super-only, L1/
-        Refs #1375).
-
-        Die Pruefung ist bewusst dupliziert statt aus ``core.views.auth``
-        importiert — wie ``_admin_login_username_key`` oben: dieses Modul wird
-        sehr frueh geladen und darf nicht am View-Modul haengen. Gegen
-        Auseinanderlaufen sichert ein Paritaets-Test
-        (``test_facility_lifecycle.py``), nicht die Konvention.
-        """
-        facility = getattr(user, "facility", None)
-        if facility is None or facility.is_active or getattr(user, "is_super_admin", False):
-            return
-
-        log_audit_event(
-            self.request,
-            login_failed_action,
-            user=user,
-            facility=facility,
-            detail={
-                "message": "Login blockiert — Einrichtung archiviert",
-                "username": user.username,
-                "reason": "facility_inactive",
-            },
-        )
-        raise ValidationError(
-            _(
-                "Ihre Einrichtung ist archiviert. Eine Anmeldung ist "
-                "derzeit nicht möglich. Bitte wenden Sie sich an die "
-                "Systemverwaltung."
-            ),
-            code="facility_inactive",
-        )
 
 
 class AnlaufstelleAdminSite(UnfoldAdminSite):
@@ -162,10 +35,6 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
     site_header = "Anlaufstelle Verwaltung"
     site_title = "Anlaufstelle"
     index_title = "Datenverwaltung"
-    # Refs #2020: Lockout-Pruefung am Admin-Login. ``UnfoldAdminSite.__init__``
-    # setzt seine eigene Form nur, wenn hier ``None`` steht — die Unfold-
-    # Widget-Klassen erben wir ueber die Basisklasse.
-    login_form = AdminLockoutAuthenticationForm
 
     @staticmethod
     def _has_admin_role(user) -> bool:
@@ -226,30 +95,8 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
             return True
         return is_in_sudo(request)
 
-    @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
-    @method_decorator(ratelimit(key=_admin_login_username_key, rate="10/h", method="POST", block=True))
     def login(self, request, extra_context=None):
-        """Login-View: wenn User eingeloggt + Rolle OK, aber Sudo fehlt -> /sudo/.
-
-        Refs #2020: Zwei-Ebenen-Ratelimit auf dem POST, identisch zum App-Login
-        (``CustomLoginView``, Refs #598) — 5/m je IP gegen klassischen
-        Brute-Force, 10/h je Username gegen verteilte Versuche von rotierenden
-        IPs. Bis hierher delegierte diese Methode ungebremst an Djangos
-        Stock-Login; die nachgelagerten Gates (sofort pflichtige MFA,
-        Sudo-Mode) begrenzten den Schaden, aber Raten gegen dieses Formular war
-        gratis, und die Fehlversuche fuellen dieselben ``LOGIN_FAILED``-Zeilen,
-        aus denen Lockout und Breach-Detection ihre Signale ziehen.
-
-        ``block=True`` wirft ``Ratelimited``; ``handler403``
-        (``core/views/errors.py``) beantwortet das mit HTTP 429 (Refs #1354).
-        Die Eimer sind von denen des App-Logins getrennt (django-ratelimit
-        gruppiert je dekorierter Funktion) — jede der beiden Flaechen traegt
-        ihre eigene Schranke, statt dass ein Angriff auf die eine die andere
-        fuer legitime Anmeldungen zusperrt.
-
-        Der ``method="POST"``-Filter haelt die Login-SEITE erreichbar: ein GET
-        zaehlt nicht mit.
-        """
+        """Login-View: wenn User eingeloggt + Rolle OK, aber Sudo fehlt -> /sudo/."""
         if (
             self._has_admin_role(request.user)
             and getattr(settings, "SUDO_MODE_ENABLED", True)

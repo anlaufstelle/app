@@ -87,18 +87,21 @@ from __future__ import annotations
 import logging
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Activity, Attachment, AuditLog, Case, Client, DocumentType, Event, RecentClientVisit
+from core.models import Activity, Attachment, AuditLog, Case, Client, Event, RecentClientVisit
 from core.models.workitem import DeletionRequest, WorkItem
 from core.retention.legal_holds import client_has_active_hold
 from core.services.audit import audit_client_event, audit_event
-from core.services.client.main import get_pending_deletion_request, update_client_stage
+from core.services.client.main import (
+    _clean_client_dynamic_data,
+    get_pending_deletion_request,
+    update_client_stage,
+)
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import clean_dynamic_data
 
 logger = logging.getLogger(__name__)
 
@@ -141,22 +144,7 @@ def get_pending_merge_request(client):
 
 
 def request_client_merge(source, target, user, reason):
-    """Stellt einen Vier-Augen-Merge-Antrag — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_client_merge_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen.
-    """
-    return create_or_get_client_merge_request(source, target, user, reason)[0]
-
-
-@transaction.atomic
-def create_or_get_client_merge_request(source, target, user, reason):
-    """Wie :func:`request_client_merge`, aber ``(antrag, created)``.
-
-    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request`` —
-    ein paralleler Zweitantrag muss die Idempotenz-Antwort bekommen, nicht
-    eine Erfolgsmeldung fuer etwas, das nie passiert ist.
+    """Stellt einen Vier-Augen-Antrag, ``source`` in ``target`` zusammenzufuehren.
 
     Traeger ist ein ``DeletionRequest`` mit gesetztem ``merge_into`` — die
     Quelle ist ``target_id``, wie beim Loeschantrag (den sie faktisch enthaelt).
@@ -173,59 +161,18 @@ def create_or_get_client_merge_request(source, target, user, reason):
     strenger als der direkte (eine Zweitperson mit ``can_confirm_deletion``
     entscheidet) — er umgeht also kein Schutzniveau.
     """
-    # Art.-18-Gate (Refs #2045): der Merge-ANTRAG war bis zur Fix-Runde 2
-    # ungegatet. Anders als ein Art.-17-Loeschantrag ist die Zusammenfuehrung
-    # kein Betroffenenrecht, sondern eine Aktenfuehrungs-Entscheidung der
-    # Einrichtung — sie darf waehrend bestrittener Richtigkeit nicht einmal
-    # beantragt werden. Beide Seiten, wie beim Direkt-Merge.
-    #
-    # Re-Review 2: Die erste Fassung sperrte Quelle und Ziel EINZELN in
-    # semantischer Reihenfolge. Zwei invertierte Antraege (A->B und B->A)
-    # nahmen die beiden Client-Zeilen damit ueber Kreuz und konnten
-    # Client<->Client deadlocken. ``_locked_clients`` nimmt beide in EINEM
-    # ``select_for_update`` in PK-Reihenfolge — dieselbe Ordnung wie
-    # Direkt-Merge, Genehmigung und Unmerge — und gatet sie auf den frisch
-    # gesperrten Zeilen.
-    #
-    # Die ``atomic``-Klammer liegt am FUNKTIONSKOPF (Cross-Review-Runde 4).
-    # Eine Klammer nur um ``_locked_clients`` endete vor Lookup, Validierung,
-    # Create und Audit — beim Direktaufruf fielen die Sperren also VOR der
-    # Mutation. Damit war beides offen, was sie schuetzen sollen: die
-    # Einschraenkung konnte dazwischen gesetzt werden, und zwei parallele
-    # Aufrufe sahen beide ``existing=None``. Muster und Reihenfolge sind jetzt
-    # identisch zu ``create_or_get_client_deletion_request``: sperren, lesen,
-    # entscheiden, schreiben — alles in EINER Transaktion.
-    source, target = _locked_clients(source, target)
     existing = get_pending_merge_request(source)
     if existing is not None and existing.merge_into_id == target.pk:
-        return existing, False
+        return existing
     _validate_merge(source, target)
-    try:
-        # Savepoint um den Insert: in Postgres macht ein ``IntegrityError`` die
-        # UMSCHLIESSENDE Transaktion unbrauchbar, ohne ihn koennte der
-        # Re-Lookup unten nicht mehr laufen.
-        with transaction.atomic():
-            dr = DeletionRequest.objects.create(
-                facility=source.facility,
-                target_type=DeletionRequest.TargetType.CLIENT,
-                target_id=source.pk,
-                reason=reason,
-                requested_by=user,
-                merge_into=target,
-            )
-    except IntegrityError:
-        # Backstop hinter der Zeilensperre (Muster #2015): Der Verlierer eines
-        # echten Rennens wartet oben auf der Quell-Sperre und findet den
-        # Antrag regulaer beim Lookup — dieser Zweig sollte praktisch nie
-        # greifen. Er faengt, was die Sperre nicht deckt (etwa ein
-        # Loeschantrag, der denselben partiellen Unique belegt) und uebersetzt
-        # es in dieselbe idempotente Antwort statt in einen 500er. Passt der
-        # gefundene Antrag nicht zu DIESEM Ziel, ist es ein echter Konflikt und
-        # der Fehler bleibt.
-        existing = get_pending_merge_request(source)
-        if existing is None or existing.merge_into_id != target.pk:
-            raise
-        return existing, False
+    dr = DeletionRequest.objects.create(
+        facility=source.facility,
+        target_type=DeletionRequest.TargetType.CLIENT,
+        target_id=source.pk,
+        reason=reason,
+        requested_by=user,
+        merge_into=target,
+    )
     audit_event(
         action=AuditLog.Action.DELETION_REQUESTED,
         user=user,
@@ -236,7 +183,7 @@ def create_or_get_client_merge_request(source, target, user, reason):
         # DeletionRequest.reason (ueber target_id=dr.pk erreichbar).
         detail={"target_client": str(source.pk), "merge_into": str(target.pk)},
     )
-    return dr, True
+    return dr
 
 
 @transaction.atomic
@@ -348,29 +295,7 @@ def _locked_clients(source, target):
     Einzel-Locks); die Rueckgabe ersetzt die moeglicherweise stalen Instanzen
     der Aufruferin.
     """
-    from core.services.client.restriction import assert_processing_allowed
-
-    # Art.-18-Gate (Refs #2045) am gemeinsamen Chokepoint der drei
-    # Merge-Einstiege (Direkt-Merge, Antrags-Genehmigung, Unmerge). Ein Merge
-    # schreibt Faelle, Ereignisse und Anhaenge einer Person auf eine andere um
-    # — die weitreichendste inhaltliche Aenderung, die das System kennt, und
-    # damit das Gegenteil der blossen Speicherung nach Art. 18 Abs. 2.
-    #
-    # Geprueft werden BEIDE Seiten: eine eingeschraenkte Quelle darf nicht
-    # aufgeloest, eine eingeschraenkte Zielakte nicht befuellt werden.
-    #
-    # NICHT gegatet ist ``reject_client_merge``: eine Ablehnung bricht den
-    # Vorgang ab, statt Daten zu verarbeiten. Sie zu blockieren liesse einen
-    # offenen Antrag an einer eingeschraenkten Person unaufloesbar haengen.
-
-    # ``order_by("pk")`` ist Pflicht, nicht Kosmetik (Cross-Review-Runde 2):
-    # ohne deterministische Reihenfolge koennen zwei gleichzeitige Merges mit
-    # vertauschtem Quell-/Zielpaar dieselben zwei Zeilen ueber Kreuz sperren.
-    locked = {c.pk: c for c in Client.objects.select_for_update().filter(pk__in=[source.pk, target.pk]).order_by("pk")}
-    for client in locked.values():
-        # Auf der bereits gesperrten, frisch gelesenen Zeile — kein zweiter
-        # Lock noetig.
-        assert_processing_allowed(client.pk)
+    locked = {c.pk: c for c in Client.objects.select_for_update().filter(pk__in=[source.pk, target.pk])}
     try:
         return locked[source.pk], locked[target.pk]
     except KeyError:  # pragma: no cover — Personen-Zeilen werden redigiert, nie geloescht
@@ -451,9 +376,8 @@ def _merge_recent_visits(source, target) -> None:
     Hat dieselbe Nutzerin beide besucht, kollidierte ein blindes UPDATE:
     stattdessen gewinnt das juengste ``visited_at``, ``is_favorite`` per OR,
     und die Quell-Zeile faellt. Durchweg ``QuerySet.update()`` statt
-    ``save()`` — den ``visited_at``-Stempel setzt seit #2068 der throttelnde
-    Manager-Upsert; hier wandert der BESTEHENDE Stempel mit, denn niemand hat
-    die Person gerade besucht.
+    ``save()`` — ``visited_at`` ist ``auto_now`` und wuerde sonst auf „jetzt"
+    springen, obwohl niemand die Person besucht hat.
     """
     kept_by_user = {v.user_id: v for v in RecentClientVisit.objects.filter(client=target)}
     for visit in RecentClientVisit.objects.filter(client=source):
@@ -484,7 +408,7 @@ def _adopt_missing_data(source, target):
     Quelle-Werte fuellen ausschliesslich leere/fehlende Felder. Hat das Ziel
     keinen Dokumentationstyp, uebernimmt es den der Quelle (derselbe
     Leere-Felder-Grundsatz, auf den Typ angewandt). Alles laeuft durch
-    ``clean_dynamic_data`` — Slugs, die der effektive Typ nicht kennt,
+    ``_clean_client_dynamic_data`` — Slugs, die der effektive Typ nicht kennt,
     fallen weg (E11-Whitelist), verschluesselte Werte wandern als Token
     (gleiche Facility = gleicher Schluessel).
 
@@ -510,13 +434,7 @@ def _adopt_missing_data(source, target):
     }
     if not candidates and not document_type_adopted:
         return [], [], False
-    cleaned = clean_dynamic_data(
-        target.facility,
-        effective_type,
-        {**target_data, **candidates},
-        entity_type=DocumentType.EntityType.CLIENT,
-        entity_type_error=_("Der Dokumentationstyp ist nicht für Personen vorgesehen."),
-    )
+    cleaned = _clean_client_dynamic_data(target.facility, effective_type, {**target_data, **candidates})
     adopted = sorted(slug for slug in candidates if slug in cleaned)
     moved_attachment_ids: list[str] = []
     for slug in adopted:

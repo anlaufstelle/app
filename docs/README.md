@@ -12,7 +12,6 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
-| [architecture.md](architecture.md) | Architektur-Überblick als Wegweiser: Schichten (Views → Services → Models), Sicherheitsarchitektur in Kurzform, No-Code-Konfigurationskern, Offline-PWA, Test-Landschaft — mit Verweisen in die vertiefenden Dokumente (Refs #1062) | Neue Mitwirkende, Entwickler |
 | [fachkonzept-anlaufstelle.md](fachkonzept-anlaufstelle.md) | Domänenkonzept, Produktvision, Architekturentscheidungen, nicht-funktionale Anforderungen, DSGVO | Stakeholder, Architekten, Entwickler |
 | [sprachleitlinie.md](sprachleitlinie.md) | Sprachleitlinie für UI und Handbuch — _Klientel → Person_, Terminologie-Matrix, Refactor-Priorisierung (Refs #604) | Entwickler, Doku-Autoren, Designer |
 | [adr/](adr/) | Architecture Decision Records — warum die Architektur so aussieht, wie sie aussieht | Architekten, Entwickler |
@@ -39,7 +38,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
-| [dev-deployment.md](dev/dev-deployment.md) | Deployment der Dev-/Test-Umgebung | DevOps |
+| dev-deployment.md | Deployment der Dev-/Test-Umgebung | DevOps |
 | [coolify-deployment.md](coolify-deployment.md) | Coolify-Deployment (unterstützte Alternative; primär ist plain Docker Compose, siehe [ADR-017](adr/017-deployment-topology.md)) | DevOps |
 | `release-checklist.md` (dev-only) | Release-Prozess, Sanitize-Schritte, Hart-Ausschluss-Liste | Release-Manager |
 
@@ -83,7 +82,5 @@ Vorlagen für den Datenschutz in [`src/core/dsgvo_templates/`](../src/core/dsgvo
 | [av-vertrag.md](../src/core/dsgvo_templates/av-vertrag.md) | Auftragsverarbeitungsvertrag |
 | [dsfa.md](../src/core/dsgvo_templates/dsfa.md) | Datenschutz-Folgenabschätzung |
 | [informationspflichten.md](../src/core/dsgvo_templates/informationspflichten.md) | Informationspflichten nach Art. 13/14 DSGVO |
-| [loeschkonzept.md](../src/core/dsgvo_templates/loeschkonzept.md) | Löschkonzept mit Fristen für aktive Daten und Sicherungsstände |
-| [mitarbeiter_informationspflichten.md](../src/core/dsgvo_templates/mitarbeiter_informationspflichten.md) | Informationspflichten für Beschäftigte nach Art. 13/14 DSGVO und § 26 BDSG |
 | [toms.md](../src/core/dsgvo_templates/toms.md) | Technische und organisatorische Maßnahmen |
 | [verarbeitungsverzeichnis.md](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | Verzeichnis von Verarbeitungstätigkeiten |

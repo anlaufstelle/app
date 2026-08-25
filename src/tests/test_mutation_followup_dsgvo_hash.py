@@ -59,7 +59,7 @@ from core.services.client import _settings_hash
 
 
 def _make_stub(**overrides):
-    """Erzeugt ein Settings-ähnliches Stub-Objekt mit allen neun Feldern.
+    """Erzeugt ein Settings-ähnliches Stub-Objekt mit allen sieben Feldern.
 
     Defaults entsprechen den Defaults aus dem Settings-Modell, sodass das
     Stub-Ergebnis mit einem frisch angelegten ``Settings``-Datensatz
@@ -72,9 +72,6 @@ def _make_stub(**overrides):
         "retention_activities_days": 365,
         "client_trash_days": 30,
         "auditlog_retention_months": 24,
-        # Refs #2065 (ADR-050): beide Historien-Fristen fliessen in den Stempel.
-        "eventhistory_detail_months": 24,
-        "eventhistory_chronicle_months": 24,
         "facility_full_name": "Anlaufstelle Musterstadt",
     }
     base.update(overrides)
@@ -125,11 +122,6 @@ class TestSettingsHash:
             retention_activities_days=365,
             client_trash_days=30,
             auditlog_retention_months=24,
-            # Refs #2065 (ADR-050): die beiden Historien-Fristen sind Teil des
-            # Stempels — aendert eine Einrichtung sie, muss das Loeschkonzept
-            # einen neuen Hash tragen, sonst ist der Aktualitaetsnachweis unwahr.
-            eventhistory_detail_months=24,
-            eventhistory_chronicle_months=24,
             facility_full_name="Anlaufstelle Musterstadt",
         )
         expected_payload = {
@@ -139,9 +131,6 @@ class TestSettingsHash:
             "retention_activities_days": 365,
             "client_trash_days": 30,
             "auditlog_retention_months": 24,
-            "eventhistory_detail_months": 24,
-            "eventhistory_chronicle_months": 24,
-            "backup_retention_days": 90,
             "facility_full_name": "Anlaufstelle Musterstadt",
             "document_type_overrides": [],
         }
@@ -151,20 +140,6 @@ class TestSettingsHash:
     # ------------------------------------------------------------------
     # Field-Selection: jedes Feld muss in den Hash einfließen
     # ------------------------------------------------------------------
-
-    def test_changing_eventhistory_detail_months_changes_hash(self):
-        """Refs #2065: eine verkuerzte Historien-Frist ist eine inhaltliche
-        Aenderung des Loeschkonzepts und muss den Stempel bewegen."""
-        assert _settings_hash(_make_stub(eventhistory_detail_months=24)) != _settings_hash(
-            _make_stub(eventhistory_detail_months=12)
-        )
-
-    def test_changing_eventhistory_chronicle_months_changes_hash(self):
-        """Refs #2065: ``0`` ist die Entscheidung fuer unbefristete Aufbewahrung
-        der Chronologie — sie darf nicht denselben Stempel tragen wie 24."""
-        assert _settings_hash(_make_stub(eventhistory_chronicle_months=24)) != _settings_hash(
-            _make_stub(eventhistory_chronicle_months=0)
-        )
 
     def test_changing_retention_anonymous_days_changes_hash(self):
         """Mutation, die ``retention_anonymous_days`` aus Payload entfernt,

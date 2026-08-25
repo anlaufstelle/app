@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+from datetime import date
 from pathlib import Path
 
 from django.conf import settings as django_settings
@@ -21,7 +22,6 @@ logger = logging.getLogger(__name__)
 # Refs #959: dieses Modul ist jetzt unter ``services/client/`` — TEMPLATE_DIR
 # muss daher ``../../dsgvo_templates`` aufloesen, nicht ``../dsgvo_templates``.
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "dsgvo_templates"
-DEFAULT_BACKUP_RETENTION_DAYS = 90
 
 DOCUMENTS = {
     "verarbeitungsverzeichnis": {
@@ -33,11 +33,6 @@ DOCUMENTS = {
         "name": "Datenschutz-Folgenabschätzung",
         "article": "Art. 35 DSGVO",
         "filename": "dsfa.md",
-    },
-    "loeschkonzept": {
-        "name": "Löschkonzept",
-        "article": "Art. 5 Abs. 1 lit. e / Art. 17 DSGVO",
-        "filename": "loeschkonzept.md",
     },
     "av-vertrag": {
         "name": "Auftragsverarbeitungsvertrag",
@@ -53,11 +48,6 @@ DOCUMENTS = {
         "name": "Informationspflichten",
         "article": "Art. 13/14 DSGVO",
         "filename": "informationspflichten.md",
-    },
-    "mitarbeiter-informationspflichten": {
-        "name": "Informationspflichten für Beschäftigte",
-        "article": "Art. 13/14 DSGVO / § 26 BDSG",
-        "filename": "mitarbeiter_informationspflichten.md",
     },
 }
 
@@ -78,24 +68,7 @@ def _retention_values(settings_obj) -> dict[str, int]:
         "retention_activities_days": getattr(settings_obj, "retention_activities_days", 365),
         "client_trash_days": getattr(settings_obj, "client_trash_days", 30),
         "auditlog_retention_months": getattr(settings_obj, "auditlog_retention_months", 24),
-        # Refs #2065 (ADR-050): jede Friststellung zwingt zum Abgleich mit
-        # Verarbeitungsverzeichnis und Loeschkonzept (ADR-021) — die beiden
-        # Historien-Fristen gehoeren deshalb in die Vorlagen, nicht nur ins
-        # Admin-Handbuch.
-        "eventhistory_detail_months": getattr(settings_obj, "eventhistory_detail_months", 24),
-        "eventhistory_chronicle_months": getattr(settings_obj, "eventhistory_chronicle_months", 24),
     }
-
-
-def _backup_retention_days() -> int:
-    """Aeussere Backup-Frist fuer das Loeschkonzept (Refs #2050).
-
-    ``backup.sh`` rotiert den laengsten (monatlichen) Sicherungsstand nach 90
-    Tagen. Der Dokumentationswert bleibt deshalb an das ausgelieferte Skript
-    gepinnt. Eine abweichende betriebliche Rotation muss die Einrichtung im
-    freigegebenen Loeschkonzept organisatorisch dokumentieren.
-    """
-    return DEFAULT_BACKUP_RETENTION_DAYS
 
 
 def _settings_hash(settings_obj, document_type_overrides=()) -> str:
@@ -120,7 +93,6 @@ def _settings_hash(settings_obj, document_type_overrides=()) -> str:
     """
     payload = {
         **_retention_values(settings_obj),
-        "backup_retention_days": _backup_retention_days(),
         "facility_full_name": getattr(settings_obj, "facility_full_name", "") or "",
         "document_type_overrides": [list(pair) for pair in document_type_overrides],
     }
@@ -203,7 +175,7 @@ def render_document(slug, facility):
     retention = _retention_values(settings_obj)
     replacements = {
         "{{ facility_name }}": facility_name,
-        "{{ date }}": timezone.localdate().strftime("%d.%m.%Y"),
+        "{{ date }}": date.today().strftime("%d.%m.%Y"),
         "{{ retention_anonymous_days }}": str(retention["retention_anonymous_days"]),
         "{{ retention_identified_days }}": str(retention["retention_identified_days"]),
         "{{ retention_qualified_days }}": str(retention["retention_qualified_days"]),
@@ -212,10 +184,7 @@ def render_document(slug, facility):
         "{{ retention_activities_days }}": str(retention["retention_activities_days"]),
         "{{ client_trash_days }}": str(retention["client_trash_days"]),
         "{{ auditlog_retention_months }}": str(retention["auditlog_retention_months"]),
-        "{{ eventhistory_detail_months }}": str(retention["eventhistory_detail_months"]),
-        "{{ eventhistory_chronicle_months }}": str(retention["eventhistory_chronicle_months"]),
         "{{ retention_document_type_overrides }}": _format_document_type_overrides(document_type_overrides),
-        "{{ backup_retention_days }}": str(_backup_retention_days()),
     }
 
     for placeholder, value in replacements.items():

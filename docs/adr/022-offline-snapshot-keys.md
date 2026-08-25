@@ -5,7 +5,7 @@
 - **Deciders:** Tobias Nix
 - **Refs:** #572, #574, #786, #1100, #1109, #1110, #1111, #1355
 
-> **Accepted (2026-06-15, #1100) — mit eingegrenztem Scope.** Die in dieser ADR geforderte Security-Review + konzeptioneller Pen-Test gegen das Tablet-Diebstahl-Szenario ist erfolgt ([Befund-Doc](../archive/audits/2026-06-14-offline-snapshot-security-review.md)); die drei als Blocker eingestuften Befunde sind behoben und unit- + E2E-verifiziert: Sync-Konflikt-Token (F-07, #1109), Client-TTL-Durchsetzung + Server-Revalidierung (F-04/F-10, #1110) und Offline-Cache-Entzug bei Rechteentzug/Deaktivierung (F-03, #1110); dazu Idempotenz-Schutz beim Queue-Replay (F-09).
+> **Accepted (2026-06-15, #1100) — mit eingegrenztem Scope.** Die in dieser ADR geforderte Security-Review + konzeptioneller Pen-Test gegen das Tablet-Diebstahl-Szenario ist erfolgt (Befund-Doc); die drei als Blocker eingestuften Befunde sind behoben und unit- + E2E-verifiziert: Sync-Konflikt-Token (F-07, #1109), Client-TTL-Durchsetzung + Server-Revalidierung (F-04/F-10, #1110) und Offline-Cache-Entzug bei Rechteentzug/Deaktivierung (F-03, #1110); dazu Idempotenz-Schutz beim Queue-Replay (F-09).
 >
 > **Akzeptierter Scope:** Akzeptiert und erprobt ist das **Offline-Lesen** server-vorgefilterter Snapshot-Bundles (verschluesselter IndexedDB-Layer, Idle-Key-Wipe, TTL-Durchsetzung + Server-Revalidierung).
 >
@@ -65,7 +65,7 @@ Anlaufstelle baut **server-seitig vorgefilterte Snapshot-Bundles**, die client-s
 
 ## Akzeptierte Restrisiken
 
-Bei der Annahme (2026-06-15) bewusst akzeptierte Grenzen aus der Security-Review (Abschn. 4.3 und 7 im [Befund-Doc](../archive/audits/2026-06-14-offline-snapshot-security-review.md)); vor einem breiten Rollout erneut zu bewerten:
+Bei der Annahme (2026-06-15) bewusst akzeptierte Grenzen aus der Security-Review (Abschn. 4.3 und 7 im Befund-Doc); vor einem breiten Rollout erneut zu bewerten:
 
 - **Passwortstaerke als Single-Point (F-02):** Bei Geraetediebstahl liegen Salt und Chiffretext beide lokal vor; ein Offline-Brute-Force gegen PBKDF2 (600k Iterationen, SHA-256) ist bei schwachem Nutzerpasswort moeglich. Eine zweite Schluesselquelle (Geraete-Vault/WebAuthn) ist bewusst vertagt. Mitigation: organisatorische Passwortstaerke; Hardware-Key optional nachruestbar.
 - **Kein Offline-spezifisches Auto-Lock (F-01):** Der Key-Wipe haengt an der Session-Lebenszeit (Default 30 Min, Facility-konfigurierbar). Ein entsperrtes, gestohlenes Geraet bleibt bis zu dieser Grenze lesbar; es gibt kein kuerzeres Offline-Lock und keinen Wipe bei `pagehide` (bewusst, „Streetwork").

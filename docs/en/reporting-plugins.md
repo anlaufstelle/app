@@ -605,7 +605,7 @@ Examples from the activity report:
 - **The mapping is hard-coded.** The key → report row mapping (`CATEGORY_MAP`) lives in the backend module; there is **no** configuration field for it. Since #1849 only **which key** a type or field carries is configurable — not what a key maps to ([ADR-042](../adr/042-report-key-berichtszuordnung.md), German). That is a decision, not a transitional state ([ADR-038](../adr/038-reporting-plugin-backends.md), update of 2026-08-04): a config UI would make report figures movable by a click. Changing a mapping is therefore a code change with review — and `DocumentType.category` was never used for reporting and no longer exists ([ADR-040](../adr/040-documenttype-category-entfernt.md), German).
 - **The `system_type` value list is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03) — and reduced to **two** values as of #1850: `ban` and `crisis`, the two that carry application behaviour (ban logic, crisis highlight, `ban-overview`). **No new values** — an additional report category is no reason to extend a core data-model enum; that is what `report_key` is for. A freeze guard pins the list (`src/tests/test_system_type.py`).
 
- The full track from concept #1847 is thereby complete: declarative binding (#1824), visibility (#1848), the `report_key` introduction (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)) and the reduction (#1850). The report mapping no longer runs through `system_type`/`slug` at all. A package that still carries one of the seven former values remains loadable: the value is dropped with a warning in the load report.
+  The full track from concept #1847 is thereby complete: declarative binding (#1824), visibility (#1848), the `report_key` introduction (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)) and the reduction (#1850). The report mapping no longer runs through `system_type`/`slug` at all. A package that still carries one of the seven former values remains loadable: the value is dropped with a warning in the load report.
 
 
 ---
@@ -665,6 +665,6 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 - [packages.md](../packages.md) — configuration packages (source of the documentation types that reports evaluate)
 
 <!-- translation-source: docs/reporting-plugins.md -->
-<!-- translation-version: v0.89.0 -->
+<!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-24 -->
-<!-- source-hash: 7e36f552695224ae6eb47c54fa013c3b11f444e5 -->
+<!-- source-hash: 7458d0f8eecbb462f4703c0a4e03d4297e58fdd5 -->

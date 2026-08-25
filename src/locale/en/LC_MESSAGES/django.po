@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-29 12:54+0200\n"
+"POT-Creation-Date: 2026-08-25 00:38+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1075,14 +1075,6 @@ msgstr "Rectification approved"
 #: src/core/models/audit.py:145
 msgid "Berichtigung abgelehnt"
 msgstr "Rectification rejected"
-
-#: src/core/models/audit.py:212
-msgid "Verarbeitung eingeschränkt (Art. 18)"
-msgstr "Processing restricted (Art. 18)"
-
-#: src/core/models/audit.py:214
-msgid "Einschränkung der Verarbeitung aufgehoben"
-msgstr "Processing restriction lifted"
 
 #: src/core/models/audit.py:164 src/core/models/user.py:106
 #: src/core/models/user.py:107 src/templates/auth/_demo_credentials.html:23
@@ -2566,6 +2558,12 @@ msgstr "Shift end (e.g. 16:00). For night shifts: end after midnight possible"
 msgid "Standard"
 msgstr "Default"
 
+#: src/core/models/time_filter.py:35
+msgid ""
+"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
+"wird"
+msgstr "Pre-selected as default shift when no active shift is detected"
+
 #: src/core/models/time_filter.py:41 src/core/models/time_filter.py:42
 #: src/templates/components/_time_filter_dropdown.html:6
 msgid "Zeitfilter"
@@ -3663,16 +3661,15 @@ msgstr ""
 "Counseling documentation and case-duration management in low-threshold "
 "facilities. No real-name field — the primary identifier is a pseudonym."
 
-#: src/core/services/compliance/vvt.py:55
+#: src/core/services/compliance/vvt.py:49
 msgid ""
 "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
-"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
-"ergaenzen)."
+"Interesse) i.V.m. SGB VIII §13 (Jugendsozialarbeit) bzw. SGB XII (Hilfen in "
+"Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
 msgstr ""
-"GDPR Art. 6(1)(e) (performance of a task in the public interest). Facility-"
-"specific basis: applicable professional and social law of the facility (add "
-"the specific legal basis before approval)."
+"GDPR Art. 6(1)(e) (performance of a task in the public interest) in "
+"conjunction with SGB VIII §13 (youth social work) and SGB XII (assistance in "
+"life situations). Social data protection: SGB X §§67–85a."
 
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
@@ -3706,10 +3703,17 @@ msgstr ""
 msgid "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 msgstr "Application support of the facility (audit, GDPR package)"
 
-#: src/core/services/compliance/vvt.py:73
-#, python-brace-format
-msgid "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
-msgstr "Configurable by contact level and documentation type. Enforced default retention periods: Anonymous contacts: {anonymous_days} days; contacts at level “Pseudonym only”: {identified_days} days after the last contact; contacts at level “With additional details”: {qualified_days} days after the end of the case."
+#: src/core/services/compliance/vvt.py:65
+msgid ""
+"Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
+"Monate (danach Aggregation). Kontakte der Stufe „Nur Pseudonym“: 36 Monate "
+"nach letztem Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre nach "
+"Falllauf-Ende (SGB VIII §97)."
+msgstr ""
+"Configurable per contact stage and document type. Anonymous contacts: 12 "
+"months (aggregated afterwards). Contacts at stage „Pseudonym only“: 36 "
+"months after the last contact. Contacts at stage „With additional details“: "
+"10 years after the end of the case (SGB VIII §97)."
 
 #: src/core/services/compliance/vvt.py:73
 msgid "Pseudonymisierung by Design"
@@ -3759,17 +3763,15 @@ msgstr ""
 "Structuring related work into cases and episodes. Basis for impact "
 "measurement and reporting to funders."
 
-#: src/core/services/compliance/vvt.py:117
+#: src/core/services/compliance/vvt.py:92
 msgid ""
-"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
-"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
-"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
-"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
+"DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 (Sozialdaten in der "
+"Jugendhilfe), Art. 9 Abs. 2 lit. b/h fuer besondere Datenkategorien "
+"(Gesundheits-, Sozialdaten). § 203 StGB (Schweigepflicht)."
 msgstr ""
-"GDPR Art. 6(1)(e); Art. 9(2)(b/h) for special categories of data (health and "
-"social data). Facility-specific basis: applicable professional and social "
-"law of the facility (add the specific legal basis before approval). § 203 "
-"StGB, where applicable."
+"GDPR Art. 6(1)(e) in conjunction with SGB VIII §§ 61–65 (social data in "
+"youth welfare), Art. 9(2)(b/h) for special categories of data (health, "
+"social data). § 203 StGB (confidentiality)."
 
 #: src/core/services/compliance/vvt.py:98
 msgid "Ereignisbeschreibungen / Beratungsnotizen"
@@ -4099,19 +4101,14 @@ msgstr "GDPR access and rectification requests"
 
 #: src/core/services/compliance/vvt.py:250
 msgid ""
-"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
-"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
-"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
-"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
-"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
-"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
+"Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 (Auskunft, "
+"Berichtigung, Loeschung, Einschraenkung, Datenuebertragbarkeit, "
+"Widerspruch). Erstellung von Datenexport-Paketen und Dokumentation der "
+"Bearbeitung."
 msgstr ""
-"Technical support for implemented data subject rights under GDPR Arts. 15, "
-"16, 17 and 20 (access, rectification, erasure and data portability). Requests "
-"for restriction (Art. 18) or objection (Art. 21) are received outside the "
-"application through the facility's organizational process; the application "
-"provides no intake form for them. Creation of data export packages and "
-"documentation of processing."
+"Handling of data subject rights under GDPR Art. 15-22 (access, "
+"rectification, erasure, restriction, data portability, objection). Creation "
+"of data export packages and documentation of processing."
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""
@@ -5244,13 +5241,6 @@ msgstr "No proposals selected."
 #: src/core/views/retention.py:150
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No valid proposals found."
-
-#: src/core/views/retention.py:156
-#, python-format
-msgid "%(count)d Löschvorschlag aktualisiert."
-msgid_plural "%(count)d Löschvorschläge aktualisiert."
-msgstr[0] "%(count)d deletion proposal updated."
-msgstr[1] "%(count)d deletion proposals updated."
 
 #: src/core/views/statistics.py:662
 msgid "backend erforderlich"
@@ -7350,16 +7340,10 @@ msgstr[1] ""
 
 #: src/templates/core/config/document_types/confirm_delete.html:46
 #, python-format
-msgid "%(n)s Schnellvorlage verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
-msgid_plural "%(n)s Schnellvorlagen verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
-msgstr[0] "%(n)s quick template references this type — deletion is therefore not possible."
-msgstr[1] "%(n)s quick templates reference this type — deletion is therefore not possible."
-
-#, python-format
-msgid "%(n)d Schnellvorlage verweist auf diesen Dokumentationstyp und müsste zuerst gelöscht werden."
-msgid_plural "%(n)d Schnellvorlagen verweisen auf diesen Dokumentationstyp und müssten zuerst gelöscht werden."
-msgstr[0] "%(n)d quick template references this document type and would have to be deleted first."
-msgstr[1] "%(n)d quick templates reference this document type and would have to be deleted first."
+msgid "%(n)s Schnellvorlage wird beim Löschen mit entfernt."
+msgid_plural "%(n)s Schnellvorlagen werden beim Löschen mit entfernt."
+msgstr[0] "%(n)s quick template will be removed along with it."
+msgstr[1] "%(n)s quick templates will be removed along with it."
 
 #: src/templates/core/config/document_types/confirm_delete.html:55
 msgid ""
@@ -11254,10 +11238,6 @@ msgstr "Anonymized persons cannot be merged."
 msgid "Diese Person ist bereits zusammengeführt."
 msgstr "This person has already been merged."
 
-#: src/core/services/client/main.py:1115
-msgid "Diese Person liegt bereits im Papierkorb."
-msgstr "This person is already in the trash."
-
 #: src/core/services/client/merge.py:325
 msgid "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
 msgstr "One of the two persons is subject to a legal hold — merging is not possible."
@@ -11855,215 +11835,3 @@ msgstr "Access"
 
 msgid "ohne MFA"
 msgstr "without MFA"
-
-#: src/templates/partials/_nav_badge.html:28
-#, python-format
-msgid "%(n)s offene Aufgabe"
-msgid_plural "%(n)s offene Aufgaben"
-msgstr[0] "%(n)s open task"
-msgstr[1] "%(n)s open tasks"
-
-#: src/templates/partials/_nav_badge.html:29
-#, python-format
-msgid "%(n)s überfällige Aufgabe"
-msgid_plural "%(n)s überfällige Aufgaben"
-msgstr[0] "%(n)s overdue task"
-msgstr[1] "%(n)s overdue tasks"
-
-#: src/templates/partials/_nav_badge.html:30
-#, python-format
-msgid "%(n)s offener Löschantrag"
-msgid_plural "%(n)s offene Löschanträge"
-msgstr[0] "%(n)s open deletion request"
-msgstr[1] "%(n)s open deletion requests"
-
-#: src/templates/partials/_nav_badge.html:31
-#, python-format
-msgid "%(n)s offener Berichtigungsantrag"
-msgid_plural "%(n)s offene Berichtigungsanträge"
-msgstr[0] "%(n)s open rectification request"
-msgstr[1] "%(n)s open rectification requests"
-
-#: src/templates/partials/_nav_badge.html:32
-#, python-format
-msgid "%(n)s offener Prüfvorgang"
-msgid_plural "%(n)s offene Prüfvorgänge"
-msgstr[0] "%(n)s open review item"
-msgstr[1] "%(n)s open review items"
-
-#: src/templates/partials/_nav_badge.html:33
-#, python-format
-msgid "%(n)s offener Vorgang"
-msgid_plural "%(n)s offene Vorgänge"
-msgstr[0] "%(n)s open item"
-msgstr[1] "%(n)s open items"
-
-msgid "Einrichtung archiviert"
-msgstr "Facility archived"
-
-msgid "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht möglich. Bitte wenden Sie sich an die Systemverwaltung."
-msgstr "Your facility has been archived. Signing in is currently not possible. Please contact your system administration."
-
-msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
-msgstr "Your facility has been archived, so access to clients, events and reports is blocked. The data has not been deleted — your system administration can reactivate the facility."
-
-#: src/templates/core/clients/detail.html:102
-#, python-format
-msgid "%(grund)s — gesetzt am %(datum)s durch %(person)s. Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden."
-msgstr "%(grund)s — set on %(datum)s by %(person)s. The data remains stored, but may not be changed or used outside the rectification process."
-
-#: src/core/services/client/restriction.py:1
-msgid "Art. 18 DSGVO: Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht mehr geändert oder verwendet werden."
-msgstr "Art. 18 GDPR: The data remains stored, but may no longer be changed or used outside the rectification process."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Daten bleiben gespeichert, dürfen aber bis zur Entscheidung über diesen Antrag nicht mehr geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
-msgstr "The data remains stored, but may no longer be changed or used until this request has been decided. A manager or a second authorised person can lift the restriction."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Einschränkung der Verarbeitung wurde aufgehoben."
-msgstr "The restriction of processing has been lifted."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Einschränkung kann nicht von derselben Person aufgehoben werden, die sie gesetzt hat (Vier-Augen-Prinzip) — bitte die Leitung oder eine zweite berechtigte Person hinzuziehen."
-msgstr "The restriction cannot be lifted by the same person who set it (four-eyes principle) — please involve a manager or a second authorised person."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Verarbeitung dieser Person ist für die Dauer der Prüfung eingeschränkt."
-msgstr "Processing for this client is restricted for the duration of the review."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Verarbeitung dieser Person ist jetzt eingeschränkt (Art. 18 DSGVO)."
-msgstr "Processing for this client is now restricted (Art. 18 GDPR)."
-
-#: src/core/services/client/restriction.py:1
-msgid "Eingeschränkt"
-msgstr "Restricted"
-
-#: src/core/services/client/restriction.py:1
-msgid "Eingeschränkt am"
-msgstr "Restricted on"
-
-#: src/core/services/client/restriction.py:1
-msgid "Eingeschränkt durch"
-msgstr "Restricted by"
-
-#: src/core/services/client/restriction.py:1
-msgid "Einschränkung aufheben"
-msgstr "Lift restriction"
-
-#: src/core/services/client/restriction.py:1
-msgid "Für Rechtsansprüche weiter benötigt (lit. c)"
-msgstr "Still required for legal claims (lit. c)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
-msgstr "For this client, processing is restricted under Art. 18 GDPR — the data remains stored, but may not be changed or used outside the rectification process. A manager or a second authorised person can lift the restriction."
-
-#: src/core/services/client/restriction.py:1
-msgid "Für diese Person ist die Verarbeitung nicht eingeschränkt."
-msgstr "Processing is not restricted for this client."
-
-#: src/core/services/client/restriction.py:1
-msgid "Grund der Einschränkung"
-msgstr "Reason for the restriction"
-
-#: src/core/services/client/restriction.py:1
-msgid "Nur Fachkräfte dürfen die Einschränkung aufheben."
-msgstr "Only staff may lift the restriction."
-
-#: src/core/services/client/restriction.py:1
-msgid "Nur Fachkräfte dürfen die Verarbeitung einschränken."
-msgstr "Only staff may restrict processing."
-
-#: src/core/services/client/restriction.py:1
-msgid "Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)"
-msgstr "Accuracy contested (Art. 18(1)(a))"
-
-#: src/core/services/client/restriction.py:1
-msgid "Ungültiger Grund für die Einschränkung der Verarbeitung."
-msgstr "Invalid reason for restricting processing."
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung eingeschränkt"
-msgstr "Processing restricted"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung eingeschränkt (Art. 18 DSGVO)"
-msgstr "Processing restricted (Art. 18 GDPR)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung einschränken"
-msgstr "Restrict processing"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung für die Dauer der Prüfung einschränken (Art. 18 DSGVO)"
-msgstr "Restrict processing for the duration of the review (Art. 18 GDPR)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung nach Art. 18 DSGVO eingeschränkt"
-msgstr "Processing restricted under Art. 18 GDPR"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung unrechtmäßig, Löschung abgelehnt (lit. b)"
-msgstr "Processing unlawful, erasure refused (lit. b)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)"
-msgstr "Objection under review (Art. 18(1)(d))"
-
-#: src/templates/core/export/client_data_pdf.html:1
-msgid "Zeitpunkte der Ereignisse"
-msgstr "Event timestamps"
-
-#: src/templates/core/export/client_data_pdf.html:1
-msgid "Auf den Monat generalisiert — nach der Löschung (Art. 17 DSGVO) tragen die Ereignisse dieser Person nur noch den Monatsersten 00:00 Uhr als Zeitpunkt. Die genaue Uhrzeit wurde getilgt, weil sie eine Wiedererkennung über Außenwissen ermöglicht hätte."
-msgstr "Generalized to the month — following erasure (Art. 17 GDPR), the events of this client carry only the first of the month, 00:00, as their timestamp. The exact time was removed because it would have allowed re-identification through outside knowledge."
-
-#: src/templates/core/attachments/confirm_delete.html:1
-msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt. Solange die Einschränkung besteht, kann diese Datei nicht einzeln vernichtet werden; die reguläre Löschung der Person bleibt davon unberührt."
-msgstr "Processing is restricted for this client under Art. 18 GDPR. While the restriction is in force, this file cannot be destroyed individually; the regular erasure of the client remains unaffected."
-
-#: src/core/services/case/workitems.py:1
-msgid "Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."
-msgstr "The task's client assignment was changed in the meantime."
-
-#: src/core/services/case/workitems.py:1
-msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Datei darf nicht einzeln vernichtet werden."
-msgstr "Processing is restricted for this client under Art. 18 GDPR — the file may not be destroyed individually."
-
-#: src/core/models/event_history.py:1
-msgid "Ereignis-Historie redigiert"
-msgstr "Event history redacted"
-
-#: src/core/models/event_history.py:1
-msgid "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — es kann nicht gelöscht werden, solange die Sperre gilt."
-msgstr "This event is under a legal hold — it cannot be deleted while the hold is in force."
-
-#: src/core/models/event_history.py:1
-msgid "Hinweis: Die Inhalte früherer Fassungen dieses Ereignisses waren zum Zeitpunkt der Sperre bereits getilgt und sind nicht wiederherstellbar. Die Sperre gilt ab jetzt."
-msgstr "Note: the contents of earlier versions of this event had already been erased when the hold was placed and cannot be restored. The hold applies from now on."
-
-#: src/core/models/event_history.py:1
-msgid "Historien-Chronologie aufbewahren (Monate)"
-msgstr "Retain history chronology (months)"
-
-#: src/core/models/event_history.py:1
-msgid "Historien-Inhalte aufbewahren (Monate)"
-msgstr "Retain history contents (months)"
-
-#: src/core/models/event_history.py:1
-msgid "Redigiert am"
-msgstr "Redacted at"
-
-#: src/core/models/event_history.py:1
-msgid "Wie lange die Werte alter Ereignis-Fassungen lesbar bleiben, bevor enforce_retention sie redigiert. Die Fassung selbst (wer, wann, welche Felder) bleibt erhalten. Die jüngste Fassung eines lebenden Ereignisses wird nie redigiert. 0 = deaktiviert."
-msgstr "How long the values of earlier event versions stay readable before enforce_retention redacts them. The version itself (who, when, which fields) is kept. The most recent version of a live event is never redacted. 0 = disabled."
-
-#: src/core/models/event_history.py:1
-msgid "Wie lange eine bereits redigierte Historien-Fassung nach ihrer Redaktion noch aufbewahrt wird, bevor enforce_retention sie löscht. 0 = deaktiviert (unbegrenzte Aufbewahrung der Chronologie)."
-msgstr "How long an already redacted history version is retained after its redaction before enforce_retention deletes it. 0 = disabled (chronology retained indefinitely)."
-
-#: src/core/services/events/crud.py:1
-msgid "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — bitte erneut öffnen und die Löschung wiederholen."
-msgstr "This event's client assignment was changed in the meantime — please reopen it and repeat the deletion."

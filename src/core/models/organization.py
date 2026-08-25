@@ -32,16 +32,7 @@ class Facility(models.Model):
         related_name="facilities",
         verbose_name=_("Organisation"),
     )
-    # Refs #2068 (a): global eindeutig, nicht je Organisation. Vier
-    # Management-Kommandos adressieren die Einrichtung ueber ``--facility
-    # <name>`` und schlagen dabei ohne Organisations-Kontext nach:
-    # ``generate_dsgvo_package`` per ``.get(name=…)`` (waere bei einem
-    # Doppelnamen mit ``MultipleObjectsReturned`` abgestuerzt),
-    # ``enforce_retention``, ``detect_breaches`` und
-    # ``create_statistics_snapshots`` per ``.filter(name=…)`` — die haetten
-    # still ALLE Treffer verarbeitet, also auch die nicht gemeinte Einrichtung.
-    # Ein je-Organisation-UNIQUE heilte keines der vier.
-    name = models.CharField(max_length=200, unique=True, verbose_name=_("Name"))
+    name = models.CharField(max_length=200, verbose_name=_("Name"))
     description = models.TextField(blank=True, verbose_name=_("Beschreibung"))
     is_active = models.BooleanField(default=True, verbose_name=_("Aktiv"))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))

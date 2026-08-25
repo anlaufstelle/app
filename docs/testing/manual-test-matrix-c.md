@@ -1,6 +1,6 @@
 # Manuelle Test-Matrix — Sektion C
 
-> Teil der [Manual-Test-Matrix](manual-test-matrix.md) (Refs #1071 Block B). Setup-Block, Status-Legende, TC-ID-Schema, Browser-/Mobile-Konventionen und die Anhänge stehen im [Hub](manual-test-matrix.md); die Gesamtübersicht in [`test-matrix-index.md`](test-matrix-index.md).
+> Teil der [Manual-Test-Matrix](manual-test-matrix.md) (Refs #1071 Block B). Setup-Block, Status-Legende, TC-ID-Schema, Browser-/Mobile-Konventionen und die Anhänge stehen im [Hub](manual-test-matrix.md); die Gesamtübersicht in `test-matrix-index.md`.
 
 ---
 
@@ -128,10 +128,10 @@
 2. Klient:in aus Liste wählen, Detail öffnen.
 3. Auf **„Datenauskunft (JSON)"** klicken → Download startet.
 4. JSON öffnen und prüfen:
- - Alle Klient:innen-Stammdaten enthalten.
- - Alle Events mit Inhalten enthalten.
- - Alle Cases / Episoden / Goals enthalten.
- - Alle Anhänge (Metadaten, nicht Binary) enthalten.
+   - Alle Klient:innen-Stammdaten enthalten.
+   - Alle Events mit Inhalten enthalten.
+   - Alle Cases / Episoden / Goals enthalten.
+   - Alle Anhänge (Metadaten, nicht Binary) enthalten.
 5. AuditLog `/audit/` filtern auf `Action=EXPORT` → Eintrag für diesen Export sichtbar.
 
 **Erwartetes Ergebnis:**
@@ -431,12 +431,12 @@
 **Schritte:**
 1. `curl -I https://localhost:8443/login/` (oder vergleichbar gegen Prod-Mirror).
 2. Header prüfen:
- - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
- - `Content-Security-Policy: default-src 'self'; …` (kein `unsafe-eval`)
- - `X-Frame-Options: DENY`
- - `X-Content-Type-Options: nosniff`
- - `Referrer-Policy: strict-origin-when-cross-origin`
- - Cookies: `Secure; HttpOnly; SameSite=Strict` (CSRF) bzw. `SameSite=Lax` (Session)
+   - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+   - `Content-Security-Policy: default-src 'self'; …` (kein `unsafe-eval`)
+   - `X-Frame-Options: DENY`
+   - `X-Content-Type-Options: nosniff`
+   - `Referrer-Policy: strict-origin-when-cross-origin`
+   - Cookies: `Secure; HttpOnly; SameSite=Strict` (CSRF) bzw. `SameSite=Lax` (Session)
 
 **Erwartetes Ergebnis:** Alle Header gesetzt, Werte korrekt.
 
@@ -515,11 +515,11 @@
 **Schritte:**
 1. `/dsgvo/` öffnen, **„DSFA"** herunterladen.
 2. Template prüfen:
- - Beschreibung der Verarbeitung.
- - Notwendigkeit + Verhältnismäßigkeit.
- - Risiken für Betroffene (Re-Identifikation, Stigmatisierung).
- - Geplante Abhilfemaßnahmen (k-Anonymität, Sensitivity-Filter, RLS).
- - Vorab-Konsultation der Aufsichtsbehörde, falls Risiko nicht reduzierbar.
+   - Beschreibung der Verarbeitung.
+   - Notwendigkeit + Verhältnismäßigkeit.
+   - Risiken für Betroffene (Re-Identifikation, Stigmatisierung).
+   - Geplante Abhilfemaßnahmen (k-Anonymität, Sensitivity-Filter, RLS).
+   - Vorab-Konsultation der Aufsichtsbehörde, falls Risiko nicht reduzierbar.
 
 **Erwartetes Ergebnis:**
 - DSFA-Template ist vollständig, Facility-spezifische Werte eingesetzt.

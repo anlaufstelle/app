@@ -12,8 +12,8 @@ Sicherheitsupdates werden für die folgende Version bereitgestellt:
 
 | Version | Status |
 |-----------|------------------------------|
-| `0.89.x` | Unterstützt (Pre-Release) |
-| `< 0.89` | Nicht unterstützt |
+| `0.84.x` | Unterstützt (Pre-Release) |
+| `< 0.84` | Nicht unterstützt |
 
 ### Support- und End-of-Life-Regel
 
@@ -51,7 +51,7 @@ Bei Bedarf unterstützen wir bei einer koordinierten Offenlegung (Coordinated Di
 
 ## Bearbeitungs-SLA (Best Effort, Pre-Release)
 
-Anlaufstelle wird von einem Solo-Maintainer gepflegt — bewusster Entscheid, keine Vertretung zu benennen (Verantwortliche, Bus-Faktor und Begründung: [MAINTAINERS.md](MAINTAINERS.md); Entscheidungs-/Eskalationsmodell: [GOVERNANCE.md](GOVERNANCE.md)). Die folgenden Zeiten sind **Richtwerte als Best-Effort-Ziel**, keine vertraglich zugesicherten Reaktionszeiten — sobald `1.0` erreicht ist und ein Maintainer-Team etabliert ist, werden sie verbindlicher gefasst:
+Anlaufstelle wird derzeit von einem Solo-Maintainer gepflegt (Verantwortliche, Bus-Faktor und die noch offene Vertretungsfrage: [MAINTAINERS.md](MAINTAINERS.md); Entscheidungs-/Eskalationsmodell: [GOVERNANCE.md](GOVERNANCE.md)). Die folgenden Zeiten sind **Richtwerte als Best-Effort-Ziel**, keine vertraglich zugesicherten Reaktionszeiten — sobald `1.0` erreicht ist und ein Maintainer-Team etabliert ist, werden sie verbindlicher gefasst:
 
 | Schritt | Zielwert |
 |-------------------------------|--------------------------------|
@@ -67,7 +67,7 @@ Wenn ein Zielwert nicht eingehalten werden kann, kommunizieren wir das transpare
 
 Behobene Schwachstellen werden **koordiniert veröffentlicht**, nicht stillschweigend gepatcht:
 
-1. **Bewertung** durch den Maintainer (eine Vertretung ist **bewusst nicht vorgesehen** — Entscheid 2026-08-27, siehe [MAINTAINERS.md](MAINTAINERS.md); bei Ausfall der Hauptperson ruht die Bewertung) mit CVSS-v3.1-Basis-Score und Einstufung kritisch/hoch/mittel/niedrig — Ergebnis geht an die meldende Person.
+1. **Bewertung** durch den Maintainer (bei Ausfall: die benannte Vertretung, [MAINTAINERS.md](MAINTAINERS.md)) mit CVSS-v3.1-Basis-Score und Einstufung kritisch/hoch/mittel/niedrig — Ergebnis geht an die meldende Person.
 2. **Entwurf** eines GitHub Security Advisory (GHSA) im Repository [`anlaufstelle/app`](https://github.com/anlaufstelle/app/security/advisories) mit betroffenen und gepatchten Versionen; bei kritisch/hoch wird über GitHub eine CVE-ID angefordert.
 3. **Fix** als Patch-Release der aktuellen Minor-Reihe (siehe Support-Regel oben).
 4. **Veröffentlichung** des Advisory nach Auslieferung des Patches plus 7 Tagen Schonfrist (siehe SLA-Tabelle oben), zusammen mit einem `Security`-Eintrag in [CHANGELOG.md](CHANGELOG.md), der die GHSA-/CVE-Nummer nennt.
@@ -103,8 +103,8 @@ Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports
 
 | Version | Status |
 |-----------|------------------------------|
-| `0.89.x` | Supported (pre-release) |
-| `< 0.89` | Not supported |
+| `0.84.x` | Supported (pre-release) |
+| `< 0.84` | Not supported |
 
 ### Support and end-of-life rule
 
@@ -142,7 +142,7 @@ We support coordinated disclosure on request.
 
 ## Response SLA (best effort, pre-release)
 
-Anlaufstelle is maintained by a single person — a deliberate decision not to designate a deputy (maintainers, bus factor and rationale: [MAINTAINERS.md](MAINTAINERS.md); decision/escalation model: [GOVERNANCE.md](GOVERNANCE.md)). The targets below are **best-effort goals**, not contractually guaranteed response times — they will be tightened once `1.0` ships and a maintainer team is in place:
+Anlaufstelle is currently maintained by a single person (maintainers, bus factor and the still-open deputy question: [MAINTAINERS.md](MAINTAINERS.md); decision/escalation model: [GOVERNANCE.md](GOVERNANCE.md)). The targets below are **best-effort goals**, not contractually guaranteed response times — they will be tightened once `1.0` ships and a maintainer team is in place:
 
 | Step | Target |
 |-------------------------------|-------------------------------------------|
@@ -158,12 +158,12 @@ If a target cannot be met we will communicate transparently — critical finding
 
 Fixed vulnerabilities are **disclosed in a coordinated way**, not patched silently:
 
-1. **Assessment** by the maintainer (a deputy is **deliberately not designated** — decision of 2026-08-27, see [MAINTAINERS.md](MAINTAINERS.md); if the maintainer is unavailable, assessment is paused) with a CVSS v3.1 base score and a critical/high/medium/low rating — the result is sent to the reporter.
+1. **Assessment** by the maintainer (or, if unavailable, the designated deputy, [MAINTAINERS.md](MAINTAINERS.md)) with a CVSS v3.1 base score and a critical/high/medium/low rating — the result is sent to the reporter.
 2. **Draft** of a GitHub Security Advisory (GHSA) in the [`anlaufstelle/app`](https://github.com/anlaufstelle/app/security/advisories) repository listing affected and patched versions; for critical/high we request a CVE ID through GitHub.
 3. **Fix** as a patch release of the current minor series (see the support rule above).
 4. **Publication** of the advisory after the patch ships plus a 7-day grace period (see the SLA table above), together with a `Security` entry in [CHANGELOG.md](CHANGELOG.md) naming the GHSA/CVE ID.
 
-The operational procedure including responsibilities and the additional regulatory reporting deadlines for **actively exploited** vulnerabilities lives in [`docs/en/ops-runbook.md` § 6.5c](docs/en/ops-runbook.md) and [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md) (German).
+The operational procedure including responsibilities and the additional regulatory reporting deadlines for **actively exploited** vulnerabilities lives in [`docs/ops-runbook.md` § 6.5c](docs/ops-runbook.md) and [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md) (both German).
 
 ## Hall of Fame
 

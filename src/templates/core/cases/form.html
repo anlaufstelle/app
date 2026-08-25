@@ -26,7 +26,9 @@
     Downgrade die Voraussetzung dafür ist, dass der Service Worker einen reinen
     Text-Submit später überhaupt annehmen darf (Refs #1489).{% endcomment %}
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade
-          {% include "core/partials/_dynamic_loss_confirm_attrs.html" %}>
+          {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
+          data-original-document-type="{{ original_document_type_id|default_if_none:'' }}"
+          data-confirm-discard="{% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} Datei entfernt.{% plural %}Außerdem werden {{ f }} Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Datei wird beim Speichern entfernt und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Dateien werden beim Speichern entfernt und lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}"{% endif %}>
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
         {% if is_edit and case %}
@@ -62,8 +64,71 @@
                 {% endif %}
             </div>
             {% else %}
-            {# Person-Autocomplete (Refs #1836: gemeinsam mit der Kontakterfassung) #}
-            {% include "components/_client_autocomplete.html" with autocomplete_component="clientAutocomplete" client_form=form required_field=True %}
+            {# Person-Autocomplete #}
+            <div x-data="clientAutocomplete"
+                 data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
+                 data-initial-client-id="{{ client_id|default:'' }}"
+                 data-autocomplete-url="{% url 'core:client_autocomplete' %}">
+                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %} *</label>
+                <div class="relative">
+                    <input type="text"
+                           :value="query" @input="setQuery"
+                           @input.debounce.150ms="onInput"
+                           @focus="onFocus"
+                           @keydown.arrow-down.prevent="moveHighlightDown"
+                           @keydown.arrow-up.prevent="moveHighlightUp"
+                           @keydown.enter.prevent="confirmHighlight"
+                           @keydown.escape="hideResults"
+                           @click.away="hideResults"
+                           placeholder="{% trans 'Pseudonym eingeben...' %}"
+                           aria-label="{% trans 'Person suchen' %}"
+                           aria-required="true"
+                           {% if form.client.errors %}aria-invalid="true" aria-describedby="id_client-error"{% endif %}
+                           role="combobox"
+                           aria-expanded="false"
+                           :aria-expanded="ariaExpanded"
+                           aria-autocomplete="list"
+                           aria-controls="client-autocomplete-list"
+                           class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
+                           autocomplete="off">
+                    <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
+
+                    <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
+                        <template x-for="(c, idx) in enrichedResults" :key="c.id">
+                            <button type="button"
+                                    :data-idx="idx"
+                                    @mousedown.prevent="selectByEvent"
+                                    @mouseenter="highlightByEvent"
+                                    role="option"
+                                    :aria-selected="c.isHighlighted"
+                                    :class="c.highlightClass"
+                                    class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
+                                <span class="font-semibold" x-text="c.pseudonym"></span>
+                                <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
+                            </button>
+                        </template>
+                    </div>
+                    {% comment %}
+                    Refs #1803 (Konzept §3.8): Der Leerzustand liegt NEBEN der
+                    Listbox, nicht darin — ein Textabsatz und ein Link haben in
+                    einem ``role="listbox"`` nichts verloren. Ohne ihn blieb das
+                    Feld bei null Treffern schlicht stumm.
+                    {% endcomment %}
+                    <div x-show="noMatches" x-cloak data-testid="client-autocomplete-empty"
+                         class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg px-3 py-2 text-[13px] text-ink-muted">
+                        <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>
+                        {% if user.is_staff_or_above %}
+                        <a href="{% url 'core:client_create' %}" data-testid="client-autocomplete-create"
+                           class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if form.client.errors %}
+                <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
             {% endif %}
 
             {# Beschreibung #}
@@ -75,14 +140,19 @@
             {% comment %}M2/P8 (Refs #1058): Dokumentationstyp-Select. Fehlt das Feld,
             hat ``_lock_invisible_document_type`` es entfernt (Typ fuer diese Rolle
             unsichtbar) — dann darf hier auch kein Hinweis stehen.{% endcomment %}
+            {% if form.document_type %}
+            {% include "components/_form_field.html" with field=form.document_type %}
             {% comment %}E11: Ein Typwechsel — und ebenso das Entfernen des Typs — baut die
             Zusatzfelder neu auf; die Werte des alten Typs werden von
             ``merge_dynamic_data`` verworfen. Refs #1733: als Warnung gestaltet und nur
-            dort, wo wirklich etwas zu verlieren ist. Kasten gemeinsam mit dem
-            Personen-Formular (Refs #1836).{% endcomment %}
-            {% if form.document_type %}
-            {% include "components/_form_field.html" with field=form.document_type %}
-            {% include "core/partials/_dynamic_loss_warning.html" %}
+            dort, wo wirklich etwas zu verlieren ist.{% endcomment %}
+            {% if dynamic_values_at_risk %}
+            <div class="-mt-1 bg-amber-50 border border-amber-200 rounded-[10px] p-3" role="alert" data-testid="doc-type-switch-hint">
+                <p class="text-[13px] text-amber-800">
+                    {% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Achtung: Wird der Typ gewechselt oder entfernt, wird der gespeicherte Wert von {{ n }} Zusatzfeld verworfen — er lässt sich nicht wiederherstellen.{% plural %}Achtung: Wird der Typ gewechselt oder entfernt, werden die gespeicherten Werte von {{ n }} Zusatzfeldern verworfen — sie lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} hinterlegte Datei entfernt.{% plural %}Außerdem werden {{ f }} hinterlegte Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Achtung: Wird der Typ gewechselt oder entfernt, wird {{ f }} hinterlegte Datei entfernt — sie lässt sich nicht wiederherstellen.{% plural %}Achtung: Wird der Typ gewechselt oder entfernt, werden {{ f }} hinterlegte Dateien entfernt — sie lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}
+                </p>
+            </div>
+            {% endif %}
             {% endif %}
         </div>
 

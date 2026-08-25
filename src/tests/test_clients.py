@@ -1,15 +1,12 @@
 """Tests für Client-Management."""
 
-from datetime import timedelta
-
 import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
-from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, DeletionRequest, Episode, Event, WorkItem
+from core.models import AuditLog, Case, Client, Episode, WorkItem
 from core.models.activity import Activity
-from core.services.client import get_client_or_none, pending_deletion_client_ids, update_client
+from core.services.client import get_client_or_none, update_client
 
 
 @pytest.mark.django_db
@@ -68,34 +65,6 @@ class TestClientList:
         assert response.status_code == 200
         # Partial should not extend base.html
         assert "<!DOCTYPE html>" not in response.content.decode()
-
-    def test_client_list_last_contact_excludes_soft_deleted_events(
-        self,
-        client,
-        staff_user,
-        client_identified,
-        doc_type_contact,
-        sample_event,
-    ):
-        visible_at = timezone.now() - timedelta(days=2)
-        deleted_at = timezone.now() - timedelta(days=1)
-        sample_event.occurred_at = visible_at
-        sample_event.save(update_fields=["occurred_at"])
-        Event.objects.create(
-            facility=client_identified.facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=deleted_at,
-            data_json={},
-            created_by=staff_user,
-            is_deleted=True,
-        )
-        client.force_login(staff_user)
-
-        response = client.get(reverse("core:client_list"))
-
-        listed_client = next(item for item in response.context["clients"] if item.pk == client_identified.pk)
-        assert listed_client.last_contact == visible_at
 
 
 @pytest.mark.django_db
@@ -305,11 +274,10 @@ class TestUpdateClientService:
             staff_user,
             contact_stage=Client.ContactStage.QUALIFIED,
         )
-        audit = AuditLog.objects.get(
+        assert AuditLog.objects.filter(
             action=AuditLog.Action.STAGE_CHANGE,
             target_id=str(client_identified.pk),
-        )
-        assert audit.detail == {"old_stage": "identified", "new_stage": "qualified"}
+        ).exists()
 
     def test_qualification_logs_qualified_activity(self, client_identified, staff_user):
         update_client(
@@ -360,35 +328,6 @@ class TestUpdateClientService:
         refreshed = Client._base_manager.get(pk=client_identified.pk)
         assert refreshed.pseudonym == "Geloescht-a1b2c3"
         assert refreshed.age_cluster == Client.AgeCluster.AGE_18_26
-
-
-@pytest.mark.django_db
-class TestPendingDeletionClientIds:
-    def test_only_pending_requests_mark_clients(
-        self,
-        facility,
-        staff_user,
-        client_identified,
-        client_qualified,
-    ):
-        DeletionRequest.objects.create(
-            facility=facility,
-            target_type=DeletionRequest.TargetType.CLIENT,
-            target_id=client_identified.pk,
-            reason="Abgelehnter Antrag",
-            status=DeletionRequest.Status.REJECTED,
-            requested_by=staff_user,
-        )
-        DeletionRequest.objects.create(
-            facility=facility,
-            target_type=DeletionRequest.TargetType.CLIENT,
-            target_id=client_qualified.pk,
-            reason="Offener Antrag",
-            status=DeletionRequest.Status.PENDING,
-            requested_by=staff_user,
-        )
-
-        assert pending_deletion_client_ids(facility, [client_identified, client_qualified]) == {client_qualified.pk}
 
 
 @pytest.mark.django_db

@@ -54,18 +54,7 @@ class RectificationRequest(models.Model):
     )
     target_client = models.ForeignKey(
         "core.Client",
-        # Refs #2068 (c): PROTECT statt CASCADE, Praezedenz ``Client.merged_into``
-        # (PROTECT) und ``WorkItem``. Der Antrag ist der Vier-Augen-Nachweis
-        # einer Art.-16-Entscheidung — dass er verschwindet, sobald jemand die
-        # Person hart loescht, widerspricht derselben Doktrin, die
-        # ``requested_by``/``reviewed_by`` bewusst auf SET_NULL legt, damit der
-        # Beleg eine User-Loeschung ueberlebt.
-        # Der regulaere DSGVO-Pfad ist davon unberuehrt: Art.-17 laeuft ueber
-        # Soft-Delete + ``anonymize_client`` (UPDATE, kein DELETE) und redigiert
-        # die vier Klartext-Traeger dieser Zeile, waehrend Antrags-Meta stehen
-        # bleibt. Blockiert wird nur der harte Loeschweg — und zwar bewusst:
-        # ein offener Antrag ist ein laufendes Verfahren.
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="rectification_requests",
         verbose_name=_("Betroffene Person"),
     )

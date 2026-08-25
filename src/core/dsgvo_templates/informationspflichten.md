@@ -4,7 +4,7 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}
-**Version:** 1.1 (Softwarestand v0.89, 2026-08-28)
+**Version:** 1.0 (Softwarestand v0.10, 2026-04-19)
 
 ---
 
@@ -36,7 +36,7 @@ Wir verarbeiten Ihre Daten zu folgenden Zwecken:
 
 - Art. 6 Abs. 1 lit. e DSGVO (Wahrnehmung einer Aufgabe im öffentlichen Interesse)
 - Art. 9 Abs. 2 lit. g DSGVO (erhebliches öffentliches Interesse)
-- Einrichtungsspezifische Grundlage: einschlägiges Fach- und Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe ergänzen)
+- SGB VIII (Kinder- und Jugendhilfe)
 
 ---
 

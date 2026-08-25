@@ -90,12 +90,6 @@
             <div><span class="font-medium">{% trans "Läuft ab:" %}</span> {{ proposal.active_hold.expires_at|date:"DATE_FORMAT" }}</div>
             {% endif %}
             <div class="text-xs text-blue-600">{% trans "Erstellt von:" %} {{ proposal.active_hold.created_by.get_full_name|default:proposal.active_hold.created_by.username }} – {{ proposal.active_hold.created_at|date:"DATETIME_FORMAT" }}</div>
-            {% if proposal.active_hold.history_already_redacted %}
-            {# ADR-050 D2 (Refs #2065): Sperre gilt, kam aber zu spaet fuer die Inhalte frueherer Fassungen. #}
-            <div class="text-xs font-medium text-amber-700">
-                {% trans "Hinweis: Die Inhalte früherer Fassungen dieses Ereignisses waren zum Zeitpunkt der Sperre bereits getilgt und sind nicht wiederherstellbar. Die Sperre gilt ab jetzt." %}
-            </div>
-            {% endif %}
         </div>
     </div>
     <button hx-post="{% url 'core:retention_dismiss_hold' pk=proposal.active_hold.pk %}"

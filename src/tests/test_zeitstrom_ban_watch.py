@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
-from django.db import IntegrityError, connection
+from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -23,7 +23,6 @@ from core.models import BanRevision, DocumentType, DocumentTypeField, FieldTempl
 from core.services.client.main import anonymize_client, update_client
 from core.services.events import create_event, soft_delete_event, update_event
 from core.services.system.ban_revision import (
-    _banner_projection,
     ban_revision_projection,
     bump_ban_revision,
     bump_ban_revision_for_client_change,
@@ -64,13 +63,6 @@ def _make_ban_doc_type(facility, *, sensitivity=DocumentType.Sensitivity.ELEVATE
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft)
     return doc_type
-
-
-def _force_sensitivity(document_type, value):
-    """``choices`` sind Formular-Validierung, keine DB-Beschraenkung."""
-    DocumentType.objects.filter(pk=document_type.pk).update(sensitivity=value)
-    document_type.refresh_from_db()
-    return document_type
 
 
 @pytest.fixture
@@ -156,21 +148,6 @@ class TestBanRevisionEventDelta:
 
         assert _revisions(facility) == (0, 0, 0)
 
-    def test_expired_active_ban_projects_inactive_and_grund_edit_bumps_nothing(
-        self,
-        facility,
-        high_ban_doc_type,
-    ):
-        yesterday = (timezone.localdate() - timedelta(days=1)).isoformat()
-        before = {"grund": "Alter Grund", "bis": yesterday, "aktiv": True}
-        after = {"grund": "Neuer Grund", "bis": yesterday, "aktiv": True}
-
-        assert _banner_projection(before) == (False, None, "")
-
-        bump_ban_revision_for_event_change(facility, high_ban_doc_type, before, after)
-
-        assert _revisions(facility) == (0, 0, 0)
-
     def test_banner_foreign_field_change_bumps_nothing(self, facility, ban_doc_type):
         before = {"grund": "Gleich", "bis": FUTURE, "aktiv": True, "notiz": "alt"}
         after = {"grund": "Gleich", "bis": FUTURE, "aktiv": True, "notiz": "neu"}
@@ -205,35 +182,6 @@ class TestBanRevisionEventDelta:
 # ---------------------------------------------------------------------------
 # Validator-Stratifizierung (Seitenkanal-Kern)
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestBanRevisionPersistence:
-    def test_integrity_error_retries_update_for_same_facility(self, facility, monkeypatch):
-        revision = BanRevision.objects.create(facility=facility, revision_normal=7)
-        queryset_type = type(BanRevision.objects.for_facility(facility))
-        real_update = queryset_type.update
-        update_calls = 0
-
-        def first_update_misses(queryset, **increments):
-            nonlocal update_calls
-            if queryset.model is BanRevision:
-                update_calls += 1
-                if update_calls == 1:
-                    return 0
-            return real_update(queryset, **increments)
-
-        def create_loses_race(**_kwargs):
-            raise IntegrityError("simulierter verlorener INSERT-Wettlauf")
-
-        monkeypatch.setattr(queryset_type, "update", first_update_misses)
-        monkeypatch.setattr(BanRevision.objects, "create", create_loses_race)
-
-        bump_ban_revision(facility, [0])
-
-        revision.refresh_from_db()
-        assert update_calls == 2
-        assert revision.revision_normal == 8
 
 
 @pytest.mark.django_db
@@ -288,19 +236,6 @@ class TestBanValidatorStratification:
             second = ban_revision_projection(facility, assistant_user)
 
         assert first != second
-
-    def test_projection_for_unlisted_role_uses_rank_zero_prefix(self, facility, super_admin_user):
-        BanRevision.objects.create(
-            facility=facility,
-            revision_normal=3,
-            revision_elevated=4,
-            revision_high=5,
-        )
-
-        rank, prefix, _localdate = ban_revision_projection(facility, super_admin_user)
-
-        assert rank == 0
-        assert prefix == (3,)
 
 
 # ---------------------------------------------------------------------------
@@ -399,26 +334,6 @@ class TestDocTypeWriteBoundaries:
         )
 
         assert _revisions(facility) == (0, 1, 0)
-
-    def test_empty_previous_sensitivity_bumps_normal_stratum(self, facility, ban_doc_type):
-        bump_ban_revision_for_document_type_change(
-            ban_doc_type,
-            ["sensitivity"],
-            previous_sensitivity="",
-        )
-
-        assert _revisions(facility) == (1, 0, 0)
-
-    def test_unknown_new_sensitivity_bumps_normal_stratum(self, facility, ban_doc_type):
-        _force_sensitivity(ban_doc_type, "kritisch")
-
-        bump_ban_revision_for_document_type_change(
-            ban_doc_type,
-            ["sensitivity"],
-            previous_sensitivity=DocumentType.Sensitivity.ELEVATED,
-        )
-
-        assert _revisions(facility) == (1, 0, 0)
 
     def test_non_ban_doc_type_change_bumps_nothing(self, facility, doc_type_contact):
         bump_ban_revision_for_document_type_change(

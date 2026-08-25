@@ -61,7 +61,7 @@ Mit Einführung des 5-Rollen-Modells ([ADR-018](018-rollenmodell-superadmin.md))
 
 - Migration [`src/core/migrations/0085_rls_superadmin_bypass.py`](../../src/core/migrations/0085_rls_superadmin_bypass.py) erweitert jede `facility_isolation`-Policy um einen OR-Branch:
 
- ```sql
+  ```sql
   USING (
       facility_id::text = current_setting('app.current_facility_id', true)
       OR current_setting('app.is_super_admin', true) = 'true'

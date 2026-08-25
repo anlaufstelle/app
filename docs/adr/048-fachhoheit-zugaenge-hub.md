@@ -35,7 +35,7 @@ Konten der eigenen Einrichtung. Die Oberfläche deckt diese regulären Vorgänge
 ab:
 
 - Konto mit verpflichtender E-Mail-Adresse anlegen und per zeitlich begrenztem
- Setup-Link einladen,
+  Setup-Link einladen,
 - Benutzername, E-Mail-Adresse und Anzeigename ändern,
 - eine der vier einrichtungsgebundenen Rollen vergeben,
 - Zugang deaktivieren oder reaktivieren,
@@ -86,38 +86,38 @@ Endpoint dafür an.
 ### Positiv
 
 - Die Anwendungsbetreuung erledigt den vollständigen täglichen Zugangsprozess
- in derselben Fachnavigation wie Einstellungen und Formulare.
+  in derselben Fachnavigation wie Einstellungen und Formulare.
 - Die größte Schutzlücke der nicht per RLS gesicherten User-Tabelle wird durch
- einen einzigen, getesteten Facility-Scope und IDOR-Gegenproben begrenzt.
+  einen einzigen, getesteten Facility-Scope und IDOR-Gegenproben begrenzt.
 - Rollenvergabe, Deaktivierung, MFA-Vorgaben, Einladungen und Entsperren sind
- handelnden Personen zurechenbar.
+  handelnden Personen zurechenbar.
 - Die System-/Fachtrennung bleibt sichtbar; es gibt keinen impliziten
- Cross-Facility-Kontext für `super_admin`.
+  Cross-Facility-Kontext für `super_admin`.
 
 ### Negativ / bewusst akzeptiert
 
 - Systemadministration und technische Sonderfälle bleiben in einer zweiten
- Oberfläche.
+  Oberfläche.
 - Quick-Templates und Zeitfenster sind weiterhin nicht im Verwaltungs-Hub
- pflegbar.
+  pflegbar.
 - Eine Einrichtung ohne verfügbaren `facility_admin` braucht weiterhin einen
- technischen Recovery-Weg.
+  technischen Recovery-Weg.
 - Das fehlende RLS-Netz für `core_user` verlangt dauerhaft explizite
- Service- und IDOR-Tests für jeden neuen Benutzerverwaltungsweg.
+  Service- und IDOR-Tests für jeden neuen Benutzerverwaltungsweg.
 
 ## Alternatives considered
 
 - **Verwaltungs-Hub auch für `super_admin` öffnen:** wäre bequemer, benötigt
- aber eine sichere Einrichtungswahl und würde die Governance des gesamten
- Hubs ändern — eigenes Vorhaben, hier verworfen.
+  aber eine sichere Einrichtungswahl und würde die Governance des gesamten
+  Hubs ändern — eigenes Vorhaben, hier verworfen.
 - **Django-Admin als einzigen Weg behalten:** vermeidet neue Oberfläche,
- vermischt aber tägliche Fachadministration mit der technischen Notfall- und
- Bootstrap-Ebene — verworfen.
+  vermischt aber tägliche Fachadministration mit der technischen Notfall- und
+  Bootstrap-Ebene — verworfen.
 - **Nur UI-Filter, Service nimmt freie User-ID an:** weniger Code, aber ohne RLS
- ein direkter IDOR-Pfad — verworfen.
+  ein direkter IDOR-Pfad — verworfen.
 - **Konten endgültig löschen:** scheinbar vollständiges CRUD, aber mit
- unnötigem Referenz- und Nachweisrisiko gegenüber der reversiblen
- Deaktivierung — verworfen.
+  unnötigem Referenz- und Nachweisrisiko gegenüber der reversiblen
+  Deaktivierung — verworfen.
 
 ## References
 

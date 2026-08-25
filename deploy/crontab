@@ -14,15 +14,12 @@
 # ueber .env aenderbar). Ohne ``TZ`` liefe der Container in UTC und "02:00"
 # waere im Winter 03:00 Ortszeit — siehe docs/ops-runbook.md § 3.2.
 #
-# DB-Rolle: die facility-gescopten Kommandos hier brauchen die Admin-Rolle
-# (BYPASSRLS). Sie kommt NICHT aus dieser Datei, sondern aus der
-# ``environment:``-Sektion des ``cron``-Service
-# (POSTGRES_USER=${POSTGRES_ADMIN_USER}). Grund: ausserhalb eines HTTP-Requests
-# ist keine ``app.current_facility_id``-GUC gesetzt; als RLS-gefilterte
-# App-Rolle brechen enforce_retention / verify_audit_chain /
-# cleanup_orphan_storage_files fail-loud ab (Refs #1016 A1.1). Das
-# facility-unabhaengige clearsessions laeuft im selben Service unter der Rolle
-# mit, benoetigt den RLS-Bypass selbst aber nicht.
+# DB-Rolle: alle Kommandos hier brauchen die Admin-Rolle (BYPASSRLS). Sie
+# kommt NICHT aus dieser Datei, sondern aus der ``environment:``-Sektion des
+# ``cron``-Service (POSTGRES_USER=${POSTGRES_ADMIN_USER}). Grund: ausserhalb
+# eines HTTP-Requests ist keine ``app.current_facility_id``-GUC gesetzt; als
+# RLS-gefilterte App-Rolle brechen enforce_retention / verify_audit_chain /
+# cleanup_orphan_storage_files fail-loud ab (Refs #1016 A1.1).
 #
 # NICHT hier: ``backup.sh``. Das Backup faehrt ``docker compose exec``
 # (pg_dump im db-Container, tar im web-Container) und braeuchte dafuer den
@@ -47,10 +44,6 @@
 # Orphan-Storage-Cleanup — taeglich 04:30, nach den Snapshots. Entfernt
 # verwaiste .enc-Dateien ohne EventAttachment-Record (Refs #662/#1554).
 30 4 * * * python manage.py cleanup_orphan_storage_files
-
-# Abgelaufene Django-Sessions entfernen — taeglich 05:00, nachdem die
-# datenbezogenen Nachtlaeufe abgeschlossen sind (DSGVO Art. 5 Abs. 1 lit. e).
-0 5 * * * python manage.py clearsessions
 
 # Breach-Detection-Scan (DSGVO Art. 33) — stuendlich zur 30. Minute.
 30 * * * * python manage.py detect_breaches

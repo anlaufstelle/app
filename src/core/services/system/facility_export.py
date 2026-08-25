@@ -285,12 +285,10 @@ def _serialize_client(client: Client, facility, *, with_file_hashes: bool) -> di
         "data_json": _decrypt_data_json(client.data_json),
         "is_active": client.is_active,
         "k_anonymized": client.k_anonymized,
-        # Refs #1060-Plan (Delta 14): abgeleitet aus ``is_active=False`` — siehe
-        # ``core.services.client.main._redact_client_identity``. Refs #2013 gibt
-        # es seither zusaetzlich ``Client.anonymized_at``, das hier BEWUSST
-        # nicht die Quelle ist: den Stempel setzt nur die Art.-17-Tilgung,
-        # ``is_active=False`` setzt auch ``k_anonymize_client``. Ein Wechsel
-        # wuerde k-anonymisierte Personen still auf ``false`` drehen.
+        # Refs #1060-Plan (Delta 14): einzige gespeicherte Kennung fuer eine
+        # vollstaendige Art.-17-Anonymisierung ist ``is_active=False`` — siehe
+        # ``core.services.client.main._redact_client_identity``. Abgeleitet,
+        # kein eigenes Modellfeld.
         "is_anonymized": not client.is_active,
         "created_at": client.created_at.isoformat(),
         "updated_at": client.updated_at.isoformat(),

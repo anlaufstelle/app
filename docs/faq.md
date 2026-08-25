@@ -155,8 +155,8 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
-- [`src/core/services/events/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
-- [`src/core/services/case/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/handover.py) — `build_handover_summary()`
+- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
 
 ---
 
@@ -190,7 +190,7 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 | Schicht | Zeitraum | Besonderheit |
 |---------|----------|-------------|
-| Frühdienst | 08:00–16:00 ||
+| Frühdienst | 08:00–16:00 | Standard-Schicht |
 | Spätdienst | 16:00–22:00 ||
 | Nachtdienst | 22:00–08:00 | Mitternachts-Wraparound |
 
@@ -204,17 +204,16 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 | **Event-Aufschlüsselung** | Kontakte nach Dokumentationstyp mit farbigen Badges | Nur innerhalb der Schicht |
 
 **Automatisches Verhalten:**
-- Öffnet man die Übergabe **heute**, wird automatisch der **zuletzt abgeschlossene Dienst** mit seinem Schichtdatum vorausgewählt — auch nach Mitternacht und beim Wechsel vom Nachtdienst zum Frühdienst
+- Öffnet man die Übergabe **heute**, wird automatisch die **vorherige Schicht** vorausgewählt
 - Datums-Navigation (vor/zurück) + Tab-Wechsel zwischen Schichten und „Ganzer Tag"
 - Nachtschichten über Mitternacht werden korrekt via `covers_time()`-Logik behandelt
 - Kompakte Version erscheint auch im Zeitstrom, wenn ein Schichtfilter aktiv ist
 
 **Relevante Dateien:**
-- [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — Zeitstrom-View mit Übergabe-Modus
-- [`src/core/services/zeitstrom_filters.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/zeitstrom_filters.py) — Vorwahl von Dienst und Schichtdatum
-- [`src/core/services/case/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/handover.py) — `build_handover_summary()`
+- [`src/core/views/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/handover.py) — `HandoverView`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
 - [`src/core/models/time_filter.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/time_filter.py) — `TimeFilter` (Schichtdefinition)
-- [`src/templates/core/handover/partials/_summary_full.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/partials/_summary_full.html) — vollständige Übergabe-Zusammenfassung
+- [`src/templates/core/handover/index.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/index.html) — Haupttemplate
 
 ---
 
@@ -389,12 +388,12 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 Navigation und Aktions-Buttons passen sich automatisch der Rolle an:
 
 - **Sidebar/Navigation** (Ziel-IA seit #1813):
- - „Arbeitszentrale" ausschließlich für die Leitung (siehe [Frage 5a](#5a-was-zeigt-mir-die-arbeitszentrale-startseite-start))
- - „Fälle" erscheint erst ab Fachkraft
- - „Statistik" ab Leitung
- - Bereich „Datenschutz" (`/datenschutz/`) erscheint, sobald mindestens einer seiner Reiter sichtbar ist — „Löschanträge" ab Leitung, „Audit-Log" und „DSGVO-Paket" für die Anwendungsbetreuung
- - Bereich „Verwaltung" (`/verwaltung/`) für die Anwendungsbetreuung
- - „Systembereich" (`/system/`) und „Administration ↗" (Django-Admin) ausschließlich für die Systemadministration — die Anwendungsbetreuung erreicht den Django-Admin über eine eigens markierte Zeile auf der Verwaltungs-Übersicht
+  - „Arbeitszentrale" ausschließlich für die Leitung (siehe [Frage 5a](#5a-was-zeigt-mir-die-arbeitszentrale-startseite-start))
+  - „Fälle" erscheint erst ab Fachkraft
+  - „Statistik" ab Leitung
+  - Bereich „Datenschutz" (`/datenschutz/`) erscheint, sobald mindestens einer seiner Reiter sichtbar ist — „Löschanträge" ab Leitung, „Audit-Log" und „DSGVO-Paket" für die Anwendungsbetreuung
+  - Bereich „Verwaltung" (`/verwaltung/`) für die Anwendungsbetreuung
+  - „Systembereich" (`/system/`) und „Administration ↗" (Django-Admin) ausschließlich für die Systemadministration — die Anwendungsbetreuung erreicht den Django-Admin über eine eigens markierte Zeile auf der Verwaltungs-Übersicht
 - **Erstellen-Menü:** „Person anlegen", „Aufgabe erstellen" und „Fall anlegen" erst ab Fachkraft sichtbar
 - **Detail-Seiten:** „Bearbeiten"- und „Löschen"-Buttons je nach Rolle und Eigentümerschaft ein-/ausgeblendet
 - **Banner im `/system/`-Bereich:** Permanenter Hinweis auf facility-übergreifenden Zugriff und Audit-Protokollierung (`SYSTEM_VIEW`)
@@ -476,9 +475,9 @@ Sudo-Mode ergänzt damit die normale Session-Authentifizierung, ohne sie zu erse
 3. Redirect auf `/sudo/?next=/dsgvo/`
 4. Sudo-Form: einzelnes Passwort-Feld + Submit-Button
 5. POST → Server prüft Passwort via `authenticate(...)` → bei Erfolg:
- - Setzt `session['sudo_until'] = now + 900s`
- - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
- - Redirect zurück auf `/dsgvo/`
+   - Setzt `session['sudo_until'] = now + 900s`
+   - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
+   - Redirect zurück auf `/dsgvo/`
 6. Innerhalb von 15 Minuten kann der User beliebig viele DSGVO-Dokumente runterladen, ohne erneut prompten zu müssen
 7. Nach Ablauf: nächste sensible Aktion löst erneut den Re-Auth-Prompt aus
 
@@ -682,3 +681,4 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 ---
 
 *Konsolidiert aus #105, #429, #471, #506. Erstverifikation der Inhalte am 29.04.2026 gegen v0.10.2. v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1. Die Krypto-, Lockout- und Offline-Angaben wurden am 2026-07-13 im Doku-Review gegen den Code nachgeprüft (Refs #1551).*
+

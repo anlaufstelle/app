@@ -198,7 +198,7 @@
         let facilityRevalidation = "skipped";
         try {
             const cs = window.crypto_session;
-            await cs?.awaitReady?.();
+            if (cs && cs.ready) await cs.ready();
             const hasKey = cs && cs.hasSessionKey ? cs.hasSessionKey() : false;
             if (hasKey && st) {
                 if (st.purgeExpired) await st.purgeExpired(Date.now());
@@ -412,18 +412,4 @@
         _BOOT_REVOCATION_MIN_INTERVAL_MS: BOOT_REVOCATION_MIN_INTERVAL_MS,
         SYNC_FINISHED_EVENT: SYNC_FINISHED_EVENT,
     };
-
-    // Refs #1828: Vor dem Orchestrator geladene Module (base.html: crypto.js,
-    // offline-queue.js, offline-edit.js) koennen ihren Cross-Tab-Empfaenger
-    // beim Laden nicht direkt registrieren (window.syncOrchestrator existiert
-    // noch nicht) und legen ihn stattdessen in window.syncOrchestratorPending.
-    // Hier drainen — und die Liste durch ein Objekt ersetzen, dessen push
-    // sofort registriert, damit auch Nachzuegler ohne eigenes Retry-Geruest
-    // auskommen. Ersetzt die frueher dreifach duplizierten DOMContentLoaded/
-    // naechster-Tick-Retry-Bloecke der Konsumenten (Refs #1409-Muster).
-    const _pendingReceivers = window.syncOrchestratorPending;
-    window.syncOrchestratorPending = { push: onMessage };
-    if (Array.isArray(_pendingReceivers)) {
-        for (const receiver of _pendingReceivers) onMessage(receiver);
-    }
 })();

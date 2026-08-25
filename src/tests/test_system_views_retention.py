@@ -11,7 +11,6 @@ von den Tests in dieser Datei genutzt werden (Split aus ``test_system_views.py``
 
 import uuid
 from datetime import date, timedelta
-from unittest import mock
 
 import pytest
 from django.urls import reverse
@@ -125,25 +124,6 @@ class TestSystemRetentionAggregation:
         assert row["is_critical"] is True
         # next_due_date = min(deletion_due_at) der PENDING — der ueberfaellige.
         assert row["next_due_date"] == retention_proposal_pending_overdue.deletion_due_at
-
-    def test_overdue_uses_berlin_local_date(self, client, super_admin_user, facility):
-        berlin_date = date(2026, 6, 22)
-        RetentionProposal.objects.create(
-            facility=facility,
-            target_type=RetentionProposal.TargetType.EVENT,
-            target_id=uuid.uuid4(),
-            deletion_due_at=date(2026, 6, 21),
-            status=RetentionProposal.Status.PENDING,
-            retention_category="anonymous",
-        )
-        client.force_login(super_admin_user)
-
-        with mock.patch("core.views.system.retention.timezone", create=True) as mock_timezone:
-            mock_timezone.localdate.return_value = berlin_date
-            response = client.get(reverse("core:system_retention"))
-
-        row = next(r for r in response.context["rows"] if r["facility"].pk == facility.pk)
-        assert row["overdue_count"] == 1
 
     def test_status_counts_pivot(self, client, super_admin_user, facility, sample_event):
         """Verschiedene Status werden korrekt pivotiert."""

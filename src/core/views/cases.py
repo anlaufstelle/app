@@ -26,7 +26,6 @@ from core.services.attachments import (
     finalize_staged_files,
     preserve_file_markers,
     stage_attachment_uploads,
-    stage_uploads,
 )
 from core.services.case import (
     assign_event_to_case,
@@ -51,6 +50,7 @@ from core.services.dynamic_data import (
     remove_restricted_fields,
 )
 from core.services.events import split_file_and_text_data
+from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
 from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.mixins import (
@@ -351,31 +351,24 @@ class CaseCreateView(StaffRequiredMixin, View):
             else {}
         )
 
-        # Staging VOR der Transaktion + Cleanup-Garantie bei jedem
-        # Nicht-Commit-Ausgang: stage_uploads (Refs #1345/#1831; Muster
-        # ``EventCreateView.post``). Policy-/Virus-Reject (ValidationError aus
-        # dem Staging) landet als Non-Field-Error am Formular.
+        # Refs #1345: Scan + Verschluesselung VOR der Transaktion stagen, damit
+        # der AuditLog-Hashketten-Lock nicht ueber den ClamAV-Lauf gehalten wird
+        # (``owner=None`` — der Fall existiert noch nicht).
+        staged_all = []
+        staged_by_slug: dict[str, list] = {}
         try:
-            with stage_uploads(facility, request.user, file_fields) as staged:
-                with transaction.atomic():
-                    case = create_case(
-                        facility=facility,
-                        user=request.user,
-                        client=form.cleaned_data.get("client"),
-                        title=form.cleaned_data["title"],
-                        description=form.cleaned_data.get("description", ""),
-                        lead_user=form.cleaned_data.get("lead_user"),
-                        document_type=doc_type,
-                        data_json=data_json,
-                    )
-                    finalize_staged_files(case, request.user, staged.by_slug, doc_type)
-                staged.commit()
+            for slug, uploaded_list in file_fields.items():
+                prepared = []
+                for uploaded_file in uploaded_list or []:
+                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, owner=None)
+                    staged_all.append(staged)
+                    prepared.append(staged)
+                if prepared:
+                    staged_by_slug[slug] = prepared
         except ValidationError as e:
-            # Service-Fehler koennen als message_dict kommen (Randfall-Entscheid
-            # am Ticket): e.messages flacht feldfrei ab — kein dict-repr, kein
-            # add_error-Feld-Mapping auf Nicht-Formularfelder.
-            for message in e.messages:
-                form.add_error(None, message)
+            for staged in staged_all:
+                staged.output_path.unlink(missing_ok=True)
+            form.add_error(None, e.message if hasattr(e, "message") else str(e))
             context = {
                 "form": form,
                 "data_form": data_form,
@@ -384,6 +377,26 @@ class CaseCreateView(StaffRequiredMixin, View):
                 "client_pseudonym": "",
             }
             return render(request, "core/cases/form.html", context)
+
+        committed = False
+        try:
+            with transaction.atomic():
+                case = create_case(
+                    facility=facility,
+                    user=request.user,
+                    client=form.cleaned_data.get("client"),
+                    title=form.cleaned_data["title"],
+                    description=form.cleaned_data.get("description", ""),
+                    lead_user=form.cleaned_data.get("lead_user"),
+                    document_type=doc_type,
+                    data_json=data_json,
+                )
+                finalize_staged_files(case, request.user, staged_by_slug, doc_type)
+            committed = True
+        finally:
+            if not committed:
+                for staged in staged_all:
+                    staged.output_path.unlink(missing_ok=True)
 
         messages.success(request, _("Fall wurde erstellt."))
         return redirect("core:case_detail", pk=case.pk)
@@ -429,55 +442,6 @@ class CaseDetailView(StaffRequiredMixin, View):
 class CaseUpdateView(StaffRequiredMixin, View):
     """Edit a case."""
 
-    def _render_context(
-        self,
-        case,
-        form,
-        data_form,
-        *,
-        data_json,
-        original_document_type_id,
-        type_locked,
-        client_id,
-        client_pseudonym,
-    ):
-        """Render-Kontext des Bearbeiten-Formulars (Refs #1830).
-
-        Spiegel aus :meth:`core.views.clients.ClientUpdateView._render_context`:
-        reine Zusammenfassung der vormals drei wortgleichen Kontext-Bloecke
-        dieser View (GET, Re-Render bei ungueltigem Stammformular, Re-Render bei
-        ungueltigem Dynamik-Formular) — dieselben Schluessel, dieselben Werte,
-        verhaltensneutral.
-
-        Argumente statt Ableitung aus ``case``:
-
-        * ``data_json`` — der POST-Re-Render braucht den DB-Stand VOR der
-          ``ModelForm._post_clean``-Mutation (Refs #1613).
-        * Refs #1785 (Review): Baseline der Verlust-Rueckfrage ist der
-          gespeicherte Typ. Im GET unberuehrt; im POST-Re-Render darf
-          ``case.document_type_id`` NICHT gelesen werden (``_post_clean``) —
-          dort steht der vor ``is_valid()`` gesicherte ``old_doc_type_id``.
-        * ``client_id``/``client_pseudonym`` — im GET aus dem gepinnten
-          ``case.client``, im POST-Re-Render aus ``request.POST`` (die Person
-          ist dort kein Update-Feld mehr, Refs #1786).
-        """
-        return {
-            "form": form,
-            "data_form": data_form,
-            "case": case,
-            "is_edit": True,
-            # Refs #1786: gepinnte Person — das Template rendert sie read-only
-            # (ohne ``<input name="client">``) statt als Autocomplete.
-            "client_locked": bool(case.client),
-            "client_id": client_id,
-            "client_pseudonym": client_pseudonym,
-            "dynamic_values_at_risk": _values_at_risk(case, data_json, type_locked=type_locked),
-            "original_document_type_id": original_document_type_id,
-            # M24/AP4 (Refs #1738): in JEDEM Render-Zweig — sonst verschwinden
-            # bestehende Anhang-Zeilen beim Re-Render aus dem Formular.
-            "existing_attachments": build_attachment_context(case),
-        }
-
     def get(self, request, pk):
         facility = request.current_facility
         case = get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk)
@@ -494,16 +458,25 @@ class CaseUpdateView(StaffRequiredMixin, View):
             initial_data=decrypt_dynamic_text_data(case.data_json),
             existing_file_slugs=file_marker_slugs(case.data_json),
         )
-        context = self._render_context(
-            case,
-            form,
-            data_form,
-            data_json=case.data_json,
-            original_document_type_id=case.document_type_id,
-            type_locked=type_locked,
-            client_id=str(case.client.pk) if case.client else "",
-            client_pseudonym=case.client.pseudonym if case.client else "",
-        )
+        context = {
+            "form": form,
+            "data_form": data_form,
+            "case": case,
+            "is_edit": True,
+            # Refs #1786: gepinnte Person — das Template rendert sie read-only
+            # (ohne ``<input name="client">``) statt als Autocomplete.
+            "client_locked": bool(case.client),
+            "client_id": str(case.client.pk) if case.client else "",
+            "client_pseudonym": case.client.pseudonym if case.client else "",
+            "dynamic_values_at_risk": _values_at_risk(case, case.data_json, type_locked=type_locked),
+            # Refs #1785 (Review): Baseline der Verlust-Rueckfrage ist der
+            # gespeicherte Typ. Im GET unberuehrt; im POST-Re-Render darf
+            # ``case.document_type_id`` NICHT gelesen werden (``_post_clean``).
+            "original_document_type_id": case.document_type_id,
+            # M24/AP4 (Refs #1738): in JEDEM Render-Zweig — sonst verschwinden
+            # bestehende Anhang-Zeilen beim Re-Render aus dem Formular.
+            "existing_attachments": build_attachment_context(case),
+        }
         return render(request, "core/cases/form.html", context)
 
     def post(self, request, pk):
@@ -548,16 +521,20 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     existing_file_slugs=file_marker_slugs(old_data),
                 )
             )
-            context = self._render_context(
-                case,
-                form,
-                data_form,
-                data_json=old_data,
-                original_document_type_id=old_doc_type_id,
-                type_locked=type_locked,
-                client_id=request.POST.get("client", ""),
-                client_pseudonym="",
-            )
+            context = {
+                "form": form,
+                "data_form": data_form,
+                "case": case,
+                "is_edit": True,
+                "client_locked": bool(case.client),  # Refs #1786
+                "client_id": request.POST.get("client", ""),
+                "client_pseudonym": "",
+                "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
+                # Refs #1785: gespeicherter Typ (nicht der von ``_post_clean``
+                # mutierte ``case.document_type_id``).
+                "original_document_type_id": old_doc_type_id,
+                "existing_attachments": build_attachment_context(case),
+            }
             return render(request, "core/cases/form.html", context)
 
         fields = dict(form.cleaned_data)
@@ -589,16 +566,20 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 existing_file_slugs=file_marker_slugs(old_data),
             )
             if not data_form.is_valid():
-                context = self._render_context(
-                    case,
-                    form,
-                    data_form,
-                    data_json=old_data,
-                    original_document_type_id=old_doc_type_id,
-                    type_locked=type_locked,
-                    client_id=request.POST.get("client", ""),
-                    client_pseudonym="",
-                )
+                context = {
+                    "form": form,
+                    "data_form": data_form,
+                    "case": case,
+                    "is_edit": True,
+                    "client_locked": bool(case.client),  # Refs #1786
+                    "client_id": request.POST.get("client", ""),
+                    "client_pseudonym": "",
+                    "dynamic_values_at_risk": _values_at_risk(case, old_data, type_locked=type_locked),
+                    # Refs #1785: gespeicherter Typ (nicht der von ``_post_clean``
+                    # mutierte ``case.document_type_id``).
+                    "original_document_type_id": old_doc_type_id,
+                    "existing_attachments": build_attachment_context(case),
+                }
                 return render(request, "core/cases/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 

@@ -10,7 +10,7 @@
 > - **Sektion B** — Entwickler-Komplett (Tobias, alle Bereiche systematisch)
 > - **Sektion C** — Auditor-DSGVO/Security (Compliance, RLS-Penetration)
 >
-> **Welche TC-IDs gehören in welchen Testlauf?** Siehe [`release-test-profiles.md`](release-test-profiles.md) (PR-Smoke, RC-Smoke, Security-RC, Mobile-PWA-RC, Ops-RC, Major-Release). Lauf-Ergebnisse werden in [`runs/`](runs/) abgelegt, nicht hier.
+> **Welche TC-IDs gehören in welchen Testlauf?** Siehe `release-test-profiles.md` (PR-Smoke, RC-Smoke, Security-RC, Mobile-PWA-RC, Ops-RC, Major-Release). Lauf-Ergebnisse werden in `runs/` abgelegt, nicht hier.
 
 ---
 
@@ -21,10 +21,10 @@
 - [TC-ID-Schema](#tc-id-schema)
 - [Browser- & Mobile-Konventionen](#browser--und-mobile-konventionen)
 - **Sektionen** (ausgelagert, je eine Datei):
- - [SEKTION A — Anwender-Smoke](manual-test-matrix-a.md)
- - [SEKTION B — Anwender-Komplett (systematisch)](manual-test-matrix-b.md)
- - [SEKTION C — Auditor-DSGVO/Security](manual-test-matrix-c.md)
- - [SEKTION D — Entwickler-Probes (LOKAL/SSH)](manual-test-matrix-d.md)
+  - [SEKTION A — Anwender-Smoke](manual-test-matrix-a.md)
+  - [SEKTION B — Anwender-Komplett (systematisch)](manual-test-matrix-b.md)
+  - [SEKTION C — Auditor-DSGVO/Security](manual-test-matrix-c.md)
+  - [SEKTION D — Entwickler-Probes (LOKAL/SSH)](manual-test-matrix-d.md)
 - [Browser- und Mobile-Konventionen](#browser--und-mobile-konventionen)
 - [Anhang B — Bekannte Risiken und Test-Lücken](#anhang-b--bekannte-risiken-und-test-lücken)
 - [Anhang C — E2E-Coverage-Bilanz](#anhang-c--e2e-coverage-bilanz)
@@ -46,7 +46,7 @@ Tests laufen gegen eine erreichbare Test-/Demo-Instanz mit HTTPS, ClamAV, persis
 
 ### Test-Umgebung: lokal (nur für 🔧 LOKAL/SSH-Cases)
 
-Die Cases in **Sektion D** (LOKAL/SSH) benötigen **direkten Server-Zugriff** (z.B. `manage.py shell`, `psql`, Backdate-SQL, `enforce_retention`-Cron). Die jeweils aktuelle Zahl steht im generierten Index ([`test-matrix-index.md`](test-matrix-index.md)). Cases sind im Header mit `🔧 LOKAL/SSH` markiert und werden:
+Die Cases in **Sektion D** (LOKAL/SSH) benötigen **direkten Server-Zugriff** (z.B. `manage.py shell`, `psql`, Backdate-SQL, `enforce_retention`-Cron). Die jeweils aktuelle Zahl steht im generierten Index (`test-matrix-index.md`). Cases sind im Header mit `🔧 LOKAL/SSH` markiert und werden:
 
 - **lokal** auf Tobias' Maschine durchgeführt (Setup unten), oder
 - per **SSH auf dev-Server** (`ssh <ssh-user>@dev.anlaufstelle.app`, dann `docker compose exec web python manage.py …`)
@@ -80,7 +80,7 @@ Die Setup-Schritte oben gelten **implizit** und werden **nicht** pro Case wieder
 
 ## Status-Legende
 
-> **Wichtig:** Die `Status:`-Zeilen pro Case sind **Default-Werte** im Testkatalog und sollen im Repo immer `☐ Offen` bleiben. Echte Lauf-Status werden in einem separaten Run-Log unter [`runs/`](runs/) erfasst — Vorlage in [`run-template.md`](run-template.md). Direkt in der Matrix Status zu setzen würde den Katalog für jeden Lauf neu schreiben und Audit-Drift erzeugen (#898).
+> **Wichtig:** Die `Status:`-Zeilen pro Case sind **Default-Werte** im Testkatalog und sollen im Repo immer `☐ Offen` bleiben. Echte Lauf-Status werden in einem separaten Run-Log unter `runs/` erfasst — Vorlage in `run-template.md`. Direkt in der Matrix Status zu setzen würde den Katalog für jeden Lauf neu schreiben und Audit-Drift erzeugen (#898).
 
 Status-Symbole gelten gleichermassen im Run-Log:
 
@@ -152,7 +152,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ## Sektionen
 
-> Der Testkatalog ist nach Sektionen A–D in vier Dateien ausgelagert (Refs #1071 Block B) — die Datei war mit ~9.000 Zeilen zu groß für Review und Navigation. Front-matter (Setup, Legende, TC-ID-Schema, Konventionen) und die Anhänge bleiben hier im Hub. Die kompakte Gesamtübersicht steht in [`test-matrix-index.md`](test-matrix-index.md).
+> Der Testkatalog ist nach Sektionen A–D in vier Dateien ausgelagert (Refs #1071 Block B) — die Datei war mit ~9.000 Zeilen zu groß für Review und Navigation. Front-matter (Setup, Legende, TC-ID-Schema, Konventionen) und die Anhänge bleiben hier im Hub. Die kompakte Gesamtübersicht steht in `test-matrix-index.md`.
 
 | Sektion | Zielgruppe | Datei |
 |---------|-----------|-------|
@@ -252,7 +252,7 @@ Nach erfolgreichem Submit eines Forms: Browser-Back-Button drücken.
 
 ## Anhang C — E2E-Coverage-Bilanz
 
-> **Aktuelle Coverage-Bilanz:** Die Per-Bereich-Tabelle unten wird per `python scripts/build_test_matrix_index.py` aus dieser Matrix generiert (Refs #909). Sektionsweite Zahlen plus Listen für Manuell-only, LOKAL/SSH und Security/DSGVO-ohne-E2E stehen im [`test-matrix-index.md`](test-matrix-index.md).
+> **Aktuelle Coverage-Bilanz:** Die Per-Bereich-Tabelle unten wird per `python scripts/build_test_matrix_index.py` aus dieser Matrix generiert (Refs #909). Sektionsweite Zahlen plus Listen für Manuell-only, LOKAL/SSH und Security/DSGVO-ohne-E2E stehen im `test-matrix-index.md`.
 
 Methodik:
 
@@ -274,7 +274,7 @@ Methodik:
 | B | Auth | 11 | 10 | 1 | 91 % |
 | B | Berichtigungen | 8 | 5 | 3 | 62 % |
 | B | Compliance | 4 | 0 | 4 | 0 % |
-| B | DSGVO | 10 | 10 | 0 | 100 % |
+| B | DSGVO | 8 | 8 | 0 | 100 % |
 | B | Datenimport | 9 | 6 | 3 | 67 % |
 | B | DeletionRequests | 6 | 6 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
@@ -329,10 +329,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 261 | 192 | 69 | 74 % |
+| B | 259 | 190 | 69 | 73 % |
 | C | 38 | 8 | 30 | 21 % |
 | D | 46 | 14 | 32 | 30 % |
-| **Gesamt** | **357** | **226** | **131** | **63 %** |
+| **Gesamt** | **355** | **224** | **131** | **63 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
@@ -402,7 +402,7 @@ make seed
 
 ## Anhang E — Performance-Budgets
 
-> Refs #913 ( §4.8): Richtwerte, ab wann eine Seite als „zu langsam" gilt — auch wenn der Case funktional `✅ Pass` ist. Verletzungen werden im Run-Log unter „Performance-Beobachtungen" als `❌ Performance-Fail` mit Issue-Link festgehalten. Vorlage: [`run-template.md`](run-template.md) Abschnitt 4.
+> Refs #913 ( §4.8): Richtwerte, ab wann eine Seite als „zu langsam" gilt — auch wenn der Case funktional `✅ Pass` ist. Verletzungen werden im Run-Log unter „Performance-Beobachtungen" als `❌ Performance-Fail` mit Issue-Link festgehalten. Vorlage: `run-template.md` Abschnitt 4.
 
 ### Budget-Tabelle
 
@@ -434,14 +434,14 @@ Neue N+1-Verdachtsfälle bekommen einen analog gebauten Query-Count-Test in der 
 
 ### Run-Log-Status „Performance-Fail"
 
-Im Run-Template ([`run-template.md`](run-template.md) Abschnitt 4) ist eine eigene Performance-Tabelle. Wird ein Budget verletzt, vermerken:
+Im Run-Template (`run-template.md` Abschnitt 4) ist eine eigene Performance-Tabelle. Wird ein Budget verletzt, vermerken:
 
 - TC-ID + Budget-Eintrag
 - Gemessener Wert
 - Datenstand + Hardware (z.B. „Stage-Container, Hetzner CPX21")
 - Issue-Link (neu eröffnen mit Label `perf`)
 
-Im Profil **Major-Release** ([`release-test-profiles.md`](release-test-profiles.md) §6) ist die volle Budget-Tabelle Pflicht. In den anderen Profilen Stichprobe (z.B. Dashboard + Client-Detail).
+Im Profil **Major-Release** (`release-test-profiles.md` §6) ist die volle Budget-Tabelle Pflicht. In den anderen Profilen Stichprobe (z.B. Dashboard + Client-Detail).
 
 ---
 
@@ -485,7 +485,7 @@ Legende: ✅ erlaubt (200) · ⛔ Deny erwartet (403/redirect) · 🔒 Sudo-Redi
 | Audit-Log `/audit/` | ⛔ | ✅ | ⛔ | ⛔ | ⛔ | DE+EN | je facility-eigene Liste ✅ |
 | System `/system/*` | ✅ | ⛔ | ⛔ | ⛔ | ⛔ | DE+EN | facility-übergreifend (geloggt) |
 
-**Befund-Zusammenfassung der Live-Probe:** Rollen-Gating entspricht durchweg den Mixins; Cross-Facility-Isolation greift (Facility-2-User erhalten 404 auf alle Facility-1-Objekte); sensible Exporte sind sudo-gated. Offene Punkte: #974 (EN-i18n), #975 (super_admin `/account/`). Vollständige Zellen-Matrix im Run-Log [`runs/2026-05-25-major-release-v0.12.0.md`](runs/2026-05-25-major-release-v0.12.0.md) §3.X.
+**Befund-Zusammenfassung der Live-Probe:** Rollen-Gating entspricht durchweg den Mixins; Cross-Facility-Isolation greift (Facility-2-User erhalten 404 auf alle Facility-1-Objekte); sensible Exporte sind sudo-gated. Offene Punkte: #974 (EN-i18n), #975 (super_admin `/account/`). Vollständige Zellen-Matrix im Run-Log `runs/2026-05-25-major-release-v0.12.0.md` §3.X.
 
 ---
 
@@ -536,7 +536,7 @@ Deckt die Offline-Kernsuite (`test_pwa_offline`, `test_sync_orchestrator`, `test
 
 ### G.4 — Ergebnis festhalten
 
-Wie beim Rest der Matrix: der Lauf-Status wird **nicht** hier, sondern im Run-Log unter [`runs/`](runs/) erfasst (Vorlage [`run-template.md`](run-template.md)). Ein Fehlschlag wird `❌ Fail [#ISSUE]` mit Reproduktion + erwartetem vs. tatsächlichem Verhalten. Einordnung im Profil **Mobile-PWA-RC** ([`release-test-profiles.md`](release-test-profiles.md)).
+Wie beim Rest der Matrix: der Lauf-Status wird **nicht** hier, sondern im Run-Log unter `runs/` erfasst (Vorlage `run-template.md`). Ein Fehlschlag wird `❌ Fail [#ISSUE]` mit Reproduktion + erwartetem vs. tatsächlichem Verhalten. Einordnung im Profil **Mobile-PWA-RC** (`release-test-profiles.md`).
 
 ---
 

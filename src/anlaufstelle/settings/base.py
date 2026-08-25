@@ -208,7 +208,6 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.workitem_counts",
-                "core.context_processors.review_counts",
                 "core.context_processors.source_code",
                 "core.context_processors.demo",
                 "core.context_processors.mfa_setup_reminder",
@@ -326,13 +325,6 @@ BREACH_DELETE_THRESHOLD = env_int("BREACH_DELETE_THRESHOLD", 50)
 # durchrutschen. Default 24h.
 BREACH_DETECTION_LONG_WINDOW_MINUTES = env_int("BREACH_DETECTION_LONG_WINDOW_MINUTES", 1440)
 BREACH_FAILED_LOGIN_THRESHOLD_LONG = env_int("BREACH_FAILED_LOGIN_THRESHOLD_LONG", 60)
-# Fehlversuche am ZWEITEN Faktor (Refs #2033, Szenario A7): MFA_FAILED +
-# WEBAUTHN_FAILED je User. Bewusst niedriger als die Login-Schwellen — wer den
-# ersten Faktor bereits hat, steht in der ernsteren Position, und OTP-Fehler
-# sind per Design selten (eine hoehere Schwelle machte die Signatur im
-# Login-Rauschen unsichtbar).
-BREACH_MFA_FAILURE_THRESHOLD = env_int("BREACH_MFA_FAILURE_THRESHOLD", 10)
-BREACH_MFA_FAILURE_THRESHOLD_LONG = env_int("BREACH_MFA_FAILURE_THRESHOLD_LONG", 30)
 BREACH_EXPORT_THRESHOLD_LONG = env_int("BREACH_EXPORT_THRESHOLD_LONG", 30)
 BREACH_DELETE_THRESHOLD_LONG = env_int("BREACH_DELETE_THRESHOLD_LONG", 150)
 # Massen-Client-Destruktion facility-weit (Refs #1368): CLIENT_SOFT_DELETED /

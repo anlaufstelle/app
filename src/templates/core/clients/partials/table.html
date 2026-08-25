@@ -61,15 +61,6 @@
                                 {% trans "Löschung beantragt" %}
                             </span>
                             {% endif %}
-                            {# Refs #2045: Art.-18-Sperrvermerk. Das Flag steht an der #}
-                            {# Zeile selbst — keine zusaetzliche Query je Seite.       #}
-                            {% if client.processing_restricted %}
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-semibold bg-rose-100 text-rose-800 flex-shrink-0"
-                                  data-testid="client-row-processing-restricted-badge"
-                                  title="{% trans 'Verarbeitung nach Art. 18 DSGVO eingeschränkt' %}">
-                                {% trans "Eingeschränkt" %}
-                            </span>
-                            {% endif %}
                         </div>
                     </a>
                     {# Mobile-Only: Stufe + Alter + Datum inline unter dem Pseudonym #}

@@ -18,6 +18,7 @@ def time_filter_frueh(facility):
         label="Frühdienst",
         start_time="08:00",
         end_time="16:00",
+        is_default=True,
         sort_order=0,
     )
 

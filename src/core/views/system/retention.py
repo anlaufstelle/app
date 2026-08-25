@@ -1,7 +1,8 @@
 """Cross-Facility-Retention-Uebersicht fuer super_admin (Refs #875)."""
 
+from datetime import date
+
 from django.db.models import Count, Min, Q
-from django.utils import timezone
 from django.views.generic import TemplateView
 
 from core.models import Facility
@@ -31,7 +32,7 @@ class SystemRetentionView(SystemAuditMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        today = timezone.localdate()
+        today = date.today()
 
         # Eine GROUP-BY-Query pro Facility liefert Counts je Status,
         # plus min(deletion_due_at) ueber alle PENDING und Count der

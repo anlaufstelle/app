@@ -39,7 +39,6 @@ from __future__ import annotations
 from datetime import datetime
 
 from django.core.exceptions import ValidationError
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -59,8 +58,9 @@ def check_version_conflict(instance, expected_updated_at, *, require_token=False
     - ``"missing_token"``: ``require_token=True`` und ``expected_updated_at``
       ist ``None``/``""``.
     - ``"invalid_token"``: ``expected_updated_at`` ist ein String, der sich
-      nicht per ``datetime.fromisoformat`` parsen lässt, oder enthält keine
-      Zeitzoneninformation.
+      nicht per ``datetime.fromisoformat`` parsen lässt (statt eines
+      ungefangenen ``ValueError``, das dem Aufrufer als 500 durchschlagen
+      würde).
     - ``"version_conflict"``: der aktuelle DB-Wert weicht vom erwarteten
       Wert ab.
     """
@@ -95,11 +95,6 @@ def check_version_conflict(instance, expected_updated_at, *, require_token=False
             _("Der übermittelte Versions-Token ist ungültig."),
             code="invalid_token",
         ) from exc
-    if isinstance(expected, datetime) and timezone.is_naive(expected):
-        raise ValidationError(
-            _("Der übermittelte Versions-Token ist ungültig."),
-            code="invalid_token",
-        )
     if current != expected:
         raise ValidationError(
             _("Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."),

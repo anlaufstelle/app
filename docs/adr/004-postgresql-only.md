@@ -4,7 +4,7 @@
 - **Date:** 2026-03-19
 - **Deciders:** Tobias Nix
 - **Updated:** 2026-06-12 — Major-Version 16 → 18 (Refs #1039); die
- Entscheidung „nur PostgreSQL" ist versionsunabhängig und bleibt unverändert.
+  Entscheidung „nur PostgreSQL" ist versionsunabhängig und bleibt unverändert.
 
 ## Context
 

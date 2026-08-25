@@ -17,11 +17,6 @@ from django.urls import reverse
 from django.utils.functional import Promise
 
 from core.models import Activity, AuditLog, EventHistory
-from core.models.settings import (
-    DEFAULT_RETENTION_ANONYMOUS_DAYS,
-    DEFAULT_RETENTION_IDENTIFIED_DAYS,
-    DEFAULT_RETENTION_QUALIFIED_DAYS,
-)
 from core.services.compliance import (
     PROCESSING_ACTIVITIES,
     get_activity,
@@ -240,18 +235,6 @@ class TestProcessingActivitiesSchema:
                 value = entry[field]
                 assert isinstance(value, (str, Promise)), f"Feld {field!r} in {entry['id']} ist weder str noch lazy."
 
-    def test_professional_legal_bases_are_facility_neutral(self):
-        professional_entries = {
-            entry["id"]: str(entry["legal_basis"])
-            for entry in PROCESSING_ACTIVITIES
-            if entry["id"] in {"klienten_stammdaten", "falldaten"}
-        }
-
-        assert professional_entries.keys() == {"klienten_stammdaten", "falldaten"}
-        for legal_basis in professional_entries.values():
-            assert "SGB VIII" not in legal_basis
-            assert "einschlaegiges Fach- und Sozialrecht der Einrichtung" in legal_basis
-
     def test_list_fields_are_lists_of_translatable_strings(self):
         for entry in PROCESSING_ACTIVITIES:
             for field in ("data_categories", "recipients", "toms"):
@@ -276,28 +259,6 @@ class TestProcessingActivitiesCoverage:
         present_ids = {entry["id"] for entry in PROCESSING_ACTIVITIES}
         missing = REQUIRED_IDS - present_ids
         assert missing == set(), f"Fehlende Pflicht-IDs: {missing}"
-
-
-class TestProcessingActivitiesContent:
-    """Nutzersichtbare VVT-Angaben bleiben an der Implementierung gepinnt."""
-
-    def test_client_retention_period_uses_enforced_defaults(self):
-        retention = str(get_activity("klienten_stammdaten")["retention_period"])
-
-        assert f"{DEFAULT_RETENTION_ANONYMOUS_DAYS} Tage" in retention
-        assert f"{DEFAULT_RETENTION_IDENTIFIED_DAYS} Tage" in retention
-        assert f"{DEFAULT_RETENTION_QUALIFIED_DAYS} Tage" in retention
-        assert "12 Monate" not in retention
-        assert "36 Monate" not in retention
-
-    def test_data_subject_rights_match_implemented_paths(self):
-        purpose = str(get_activity("dsgvo_requests")["purpose"])
-
-        assert "Art. 15, 16, 17 und 20" in purpose
-        assert "Art. 15-22" not in purpose
-        assert "Art. 18" in purpose
-        assert "Art. 21" in purpose
-        assert "organisatorischen Prozess" in purpose
 
 
 class TestSearchStaysUnaudited:

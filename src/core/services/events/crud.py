@@ -25,7 +25,6 @@ from core.services.attachments import crud as attachments_crud
 from core.services.audit import audit_event, changed_data_json_slugs
 from core.services.compliance import user_can_see_document_type
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import check_document_type
 from core.services.events.fields import (
     _snapshot_field_metadata,
     _validate_data_json,
@@ -134,34 +133,20 @@ def create_event(
 ):
     """Create an event + EventHistory(CREATE).
 
-    Art.-18-Gate (Refs #2045): Ein neues Ereignis an einer eingeschraenkten
-    Person ist neue inhaltliche Verarbeitung — Art. 18 Abs. 2 erlaubt nur noch
-    die Speicherung des Bestands. Der Guard sitzt HIER und nicht (nur) im
-    Formular, weil ``create_event`` auch der CSV-Import und der
-    Offline-Replay durchlaufen; das Formular-Gate
-    (``resolve_writable_client``) ist die freundliche Vorabmeldung, dieses die
-    Grenze.
-
     ``idempotency_key`` und ``idempotency_payload_hash`` (Review R5/R6, #1909):
     Der normalisierte Schlüssel und der SHA-256-Fingerprint des Requests werden
     als persistenter DB-Backstop mitgeschrieben. Constraint und Hash fangen
     Duplikate sowie Payload-Kollisionen auch bei Cache-Ausfall ab.
     """
-    from core.services.client.restriction import assert_processing_allowed
-
-    assert_processing_allowed(client, lock=True)
+    if document_type.facility_id != facility.pk:
+        raise ValueError("DocumentType gehört nicht zur Facility")
     # Refs #1058 (Review-Haertung, Defense-in-Depth): analog zum Guard in
     # ``create_client``/``create_case`` (core.services.client.main /
     # core.services.case.cases). Alle heutigen Aufrufer (Views/Offline-Replay)
     # filtern bereits auf entity_type=event; dieser Guard schuetzt kuenftige
     # Direkt-Aufrufer, die den View-Filter umgehen wuerden.
-    document_type = check_document_type(
-        facility,
-        document_type,
-        entity_type=DocumentType.EntityType.EVENT,
-        entity_type_error=_("Der Dokumentationstyp ist nicht für Ereignisse vorgesehen."),
-        facility_error=ValueError("DocumentType gehört nicht zur Facility"),
-    )
+    if document_type.entity_type != DocumentType.EntityType.EVENT:
+        raise ValidationError(_("Der Dokumentationstyp ist nicht für Ereignisse vorgesehen."))
     if client and client.facility_id != facility.pk:
         raise ValueError("Client gehört nicht zur Facility")
     _validate_case_assignment(facility, case, client, is_anonymous)
@@ -241,15 +226,8 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     ``data_json``. Ein künftiges Update-Feld muss deshalb bewusst in
     ``allowed`` eingetragen werden, statt still durchzurutschen.
     """
-    from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
 
-    # Art.-18-Gate (Refs #2045): Das Bearbeiten eines bestehenden Ereignisses
-    # ist inhaltliche Aenderung. Der Guard liegt im Service und nicht nur in
-    # ``EventUpdateView.dispatch``, weil derselbe Weg den Offline-Replay und
-    # die Anhang-Aenderungen traegt. VOR dem Versions-Guard: die Rechtslage
-    # gilt unabhaengig davon, ob das Formular aktuell war.
-    assert_processing_allowed(event.client_id, lock=True)
     check_version_conflict(event, expected_updated_at, require_token=require_version_token)
     # Läuft ZUERST (Muster ``update_case``/``update_workitem``): die
     # Mass-Assignment-Prüfung darf weder vom Diff noch von der
@@ -374,138 +352,9 @@ def merge_update_payload(event, merged, restricted_keys, document_type):
     return merged
 
 
-#: Meldung des Legal-Hold-Gates am manuellen Loeschpfad (ADR-050 M-9).
-LEGAL_HOLD_BLOCKS_DELETE_MESSAGE = _(
-    "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — "
-    "es kann nicht gelöscht werden, solange die Sperre gilt."
-)
-
-
-def _lock_client_row(client_id):
-    """Sperrt die Personenzeile — erste Stufe der kanonischen Ordnung (ADR-050 D2).
-
-    Bis zum Re-Review entstand diese Sperre nur als **Nebenwirkung** von
-    ``assert_processing_allowed(lock=True)``. Der gepruefte Vier-Augen-Weg
-    laeuft aber im benannten Loeschworkflow-Kontext, in dem das Art.-18-Gate
-    sofort zurueckkehrt — Art. 17 gilt waehrend einer Art.-18-Einschraenkung
-    weiter. Mit dem Gate entfiel dort auch die Sperre, und der
-    Koordinationspunkt gegen einen parallelen Personen-Hold fehlte
-    ausgerechnet im gepruefen Loeschweg.
-
-    Sie wird deshalb hier eigenstaendig genommen: der Loeschpfad braucht sie als
-    Koordinationspunkt, unabhaengig davon, ob das Art.-18-Gate greift. Doppeltes
-    Sperren derselben Zeile in derselben Transaktion ist folgenlos.
-
-    ``client_id`` ist ``None`` bei personenlosen (anonymen) Ereignissen — dort
-    gibt es keine Personenzeile und nichts zu koordinieren.
-    """
-    if client_id is None:
-        return
-    Client.objects.filter(pk=client_id).select_for_update().only("pk").first()
-
-
-def _lock_event_row(event):
-    """Sperrt die Ereigniszeile — der Koordinationspunkt aus ADR-050 D2.
-
-    Muss VOR der Hold-Lesung stehen (Cross-Review Finding 3). Ohne sie war die
-    M-9-Pruefung gegenueber einer konkurrierenden Hold-Anlage TOCTOU-anfaellig:
-    ``assert_processing_allowed(lock=True)`` sperrt nur die **Client**-Zeile,
-    und die Sperre auf der Ereigniszeile entstand erst beim spaeteren
-    ``event.save()``. Dazwischen konnte eine Hold-Transaktion dieselbe Zeile
-    sperren, ihren Hold committen — und vom Loeschvorgang ueberholt werden, der
-    den Hold nie gesehen hat. ``transaction.atomic()`` allein schliesst dieses
-    Rennen nicht, weil ``READ COMMITTED`` jede Anweisung neu liest.
-
-    Es ist dieselbe Zeile, die ``create_hold_for_target`` und der
-    EventHistory-Sweep sperren; damit ist das Rennen in beide Richtungen
-    definiert entschieden. Kanonische Ordnung: ``core_client`` (Art.-18-Gate)
-    -> ``core_event`` -> Hold-Lesung.
-    """
-    Event.objects.filter(pk=event.pk).select_for_update().only("pk").first()
-
-
-#: Meldung, wenn ein paralleler Merge das Ereignis waehrend der Sperrwartezeit
-#: an eine andere Person gehaengt hat (ADR-050 D2).
-CLIENT_BINDING_CHANGED_MESSAGE = _(
-    "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — "
-    "bitte erneut öffnen und die Löschung wiederholen."
-)
-
-
-def _assert_current_client_binding(event):
-    """Revalidiert den Event->Client-Bezug NACH der Ereignissperre.
-
-    Der Aufrufer haelt das Ereignis womoeglich seit Minuten im Speicher (der
-    gepruefte Vier-Augen-Weg laedt es ungesperrt), und die Client-Sperre oben
-    galt genau diesem — moeglicherweise veralteten — Bezug. Gewinnt parallel
-    ein Merge und haengt das Ereignis an eine andere Person
-    (``services/client/merge.py``), dann haette der Loeschvorgang die Zeile der
-    NEUEN Person nie gesperrt und ihren Hold nie gesehen.
-
-    Bewusst **Abbruch statt Nachsperren**: die neue Personenzeile jetzt noch zu
-    sperren, waere eine Sperr-Inversion (``Client`` steht in der kanonischen
-    Ordnung vor ``Event``, und das Ereignis ist bereits gesperrt) — genau der
-    ABBA-Zyklus, den ADR-050 D5.5 ausschliesst. Der Vorgang bricht deshalb
-    sauber ab und ist wiederholbar; beim naechsten Versuch liest der Aufrufer
-    den neuen Bezug und sperrt in der richtigen Reihenfolge.
-    """
-    current_client_id = Event.objects.filter(pk=event.pk).values_list("client_id", flat=True).first()
-    if current_client_id != event.client_id:
-        raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
-
-
-def _assert_no_active_hold(event):
-    """M-9 (ADR-050 D2): Der manuelle Loeschpfad prueft den Hold — bisher gar nicht.
-
-    ``soft_delete_event`` leerte Payload und Anhaenge unmittelbar; **nur** die
-    Retention-Query schloss gehaltene Ereignisse aus. Ein Hold sichert
-    Beweismittel; ein Loeschweg, der ihn nicht kennt, ist die Hintertuer um
-    genau diese Sicherung (Spoliation, Muster Refs #1066).
-
-    Fail-loud statt stillem Ueberspringen: der manuelle Pfad hat eine
-    handelnde Person und eine Meldungs-Flaeche — sie muss erfahren, warum
-    nichts passiert ist.
-
-    Der Hold auf die **Person** zaehlt mit (Refs #1376, I10): er schuetzt
-    deren Ereignisse schon im Retention-Pfad, und ein manueller Klick darf
-    nicht mehr duerfen als der Cron.
-    """
-    from core.retention.legal_holds import has_active_hold
-
-    if has_active_hold(event.facility, "Event", event.pk):
-        raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
-    if event.client_id and has_active_hold(event.facility, "Client", event.client_id):
-        raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
-
-
 @transaction.atomic
 def soft_delete_event(event, user, *, source=None):
-    """Soft-Delete + EventHistory(DELETE) + AuditLog.
-
-    Art.-18-Gate (Refs #2045) — seit dem Re-Review IM Service statt ungesperrt
-    in der View davor: der Service ist direkt aufrufbar, und ein View-Check vor
-    einem atomaren Service ist ein TOCTOU-Fenster. Die Sperre auf der
-    Client-Zeile haelt hier bis zum Commit.
-
-    Der GEPRUEFTE Vier-Augen-Weg (``approve_event_deletion``) ruft denselben
-    Service und oeffnet dafuer den benannten Loeschworkflow-Kontext — Art. 17
-    gilt waehrend der Einschraenkung weiter. Blockiert bleibt die
-    Einzelentscheidung ohne zweite Person. Der Strichlisten-Undo passiert das
-    Gate ohne Kontext, weil seine Ereignisse anonym sind (``client`` ist
-    ``None``) und damit nie einen Personenbezug tragen.
-    """
-    from core.services.client.restriction import assert_processing_allowed
-
-    assert_processing_allowed(event.client_id, lock=True)
-    # Reihenfolge tragend (ADR-050 D2): erst Personen-, dann Ereigniszeile
-    # sperren, DANN den Hold lesen — sonst bleibt zwischen Lesung und Wirkung
-    # ein Fenster offen. Beide Sperren stehen hier eigenstaendig und nicht als
-    # Nebenwirkung des Art.-18-Gates, das der gepruefte Vier-Augen-Weg
-    # ueberspringt.
-    _lock_client_row(event.client_id)
-    _lock_event_row(event)
-    _assert_current_client_binding(event)
-    _assert_no_active_hold(event)
+    """Soft-Delete + EventHistory(DELETE) + AuditLog."""
     history_payload = build_redacted_delete_history(event)
     # Refs #1917: VOR dem Wipe bumpen — nur ein aktiver Ban erzeugt ein
     # Existenz-Delta; das Löschen eines schlafenden Hausverbots bleibt für
@@ -516,14 +365,7 @@ def soft_delete_event(event, user, *, source=None):
     event.is_deleted = True
     event.data_json = {}
     delete_attachments_for(event)
-    # ``update_fields`` statt eines vollen ``save()``: die Instanz stammt
-    # womoeglich aus einem aelteren Lesevorgang, und ein Voll-Save schriebe
-    # jedes Feld daraus zurueck — inklusive eines ``client_id``, den ein
-    # paralleler Merge inzwischen geaendert hat. ``search_text`` MUSS in der
-    # Liste stehen, sonst persistiert Django den vom ``pre_save``-Signal
-    # berechneten Leerwert nicht und der Klartext-PII bliebe im Suchindex
-    # stehen (Refs #1092) — dieselbe Liste wie im Retention-Loeschpfad.
-    event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
+    event.save()
     EventHistory.objects.create(
         event=event,
         changed_by=user,

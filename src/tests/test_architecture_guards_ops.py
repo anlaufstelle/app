@@ -492,15 +492,13 @@ class TestDeploymentDbSecretBoundary:
 
 
 class TestReadmeQuickStart:
-    """Refs #1894/#1977/#1062: Der Compose-Quick-Start muss wirklich funktionieren.
+    """Refs #1894/#1977: Der Compose-Quick-Start muss wirklich funktionieren.
 
-    Die lokale Compose mountet den Quellbaum nach ``/app``. Deshalb muss sie den
+    Die Dev-Compose mountet den Quellbaum nach ``/app``. Deshalb muss sie den
     dort verdeckten Image-Entrypoint neutralisieren, den versprochenen
     ``runserver`` selbst starten und das im Image gebaute CSS aus einem nicht
-    verdeckten Pfad in den Bind-Mount kopieren. Seit dem One-Command-Startup
-    (Refs #1062) uebernimmt der ``init``-Dienst Migration und Seed — der
-    Quick-Start darf sie darum weglassen, aber nur solange es diesen Dienst
-    wirklich gibt.
+    verdeckten Pfad in den Bind-Mount kopieren. Migration und Seed bleiben
+    ausdrueckliche Quick-Start-Schritte; kein Startpfad fuehrt sie implizit aus.
     """
 
     _READMES = (Path("README.md"), Path("README.en.md"))
@@ -538,86 +536,34 @@ class TestReadmeQuickStart:
     def _compose() -> dict:
         return yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
 
-    @classmethod
-    def _local_stack_bootstraps_itself(cls) -> bool:
-        """Uebernimmt der lokale Stack Migration und Seed selbst (Refs #1062)?
-
-        Genau dann, wenn es den einmaligen ``init``-Dienst gibt UND ``web``
-        auf dessen erfolgreiches Ende wartet. Ohne die Wartebedingung kaeme
-        der Webdienst vor dem Schema hoch — das Versprechen waere keins.
-        """
-        services = cls._compose()["services"]
-        wartet = services["web"].get("depends_on", {}).get("init", {})
-        return "init" in services and wartet.get("condition") == "service_completed_successfully"
-
-    def test_shared_entrypoint_never_migrates(self) -> None:
-        """Refs #802/#1062: Der Auto-Bootstrap gehoert in den lokalen
-        ``init``-Dienst, NICHT in den geteilten Image-Entrypoint.
-
-        Der Entrypoint laeuft in jeder Web-Replica jedes Stacks. Migrierte er,
-        wuerden parallele Replicas beim Deploy um den Migrate-Lock konkurrieren
-        und die Deploy-Gates aus ``docker-migrate.sh`` (Rollen-Posture,
-        Ownership) waeren umgangen.
-        """
+    def test_no_startup_path_migrates_implicitly(self) -> None:
+        """Praemisse der folgenden Guards — kippt sie (etwa mit dem
+        One-Command-Startup, Refs #1062), gehoert der README-Text mit umgestellt."""
         entrypoint = Path("docker-entrypoint.sh").read_text(encoding="utf-8")
         code = "\n".join(line for line in entrypoint.splitlines() if not line.lstrip().startswith("#"))
         assert not self._MIGRATE_CALL.search(code), (
-            "docker-entrypoint.sh migriert wieder — der Auto-Pfad gehoert ausschliesslich "
-            "in den lokalen init-Dienst (Refs #802/#1062)."
+            "docker-entrypoint.sh migriert wieder — dann darf der README-Quick-Start "
+            "den expliziten Migrate-Schritt verlieren (Refs #802/#1062)."
         )
         assert re.search(r"^exec gunicorn\b", code, re.MULTILINE), (
             "docker-entrypoint.sh startet nicht mehr gunicorn — Startpfad und README-Quick-Start pruefen (Refs #802)."
         )
-
-    def test_quickstart_matches_the_actual_startup_path(self) -> None:
-        """Der Quick-Start darf Migrate und Seed nur weglassen, solange der
-        lokale Stack sie selbst ausfuehrt. Faellt der ``init``-Dienst weg,
-        faellt dieser Guard — und der README-Text gehoert mit umgestellt
-        (Refs #1894/#1977/#1062)."""
-        bootstrappt = self._local_stack_bootstraps_itself()
-        for readme in self._READMES:
-            quickstart = self._quickstart(readme)
-            assert bootstrappt or self._MIGRATE_STEP.search(quickstart), (
-                f"{readme}: Ohne Auto-Bootstrap muss der Quick-Start den Migrate-Schritt "
-                "ausdruecklich nennen — sonst laeuft die Anwendung in einen "
-                "Datenbankfehler statt hochzukommen (Refs #1894)."
-            )
-            assert bootstrappt or self._SEED_STEP.search(quickstart), (
-                f"{readme}: Ohne Auto-Bootstrap muss der Quick-Start den Seed-Schritt "
-                "ausdruecklich nennen — er laeuft dann nicht implizit (Refs #1977)."
-            )
-
-    def test_local_startup_needs_no_prepared_environment(self) -> None:
-        """Positive Richtung, immer scharf (Refs #1062): ``docker compose up``
-        muss OHNE vorbereitete Umgebung durchlaufen.
-
-        Eine Pflicht-Interpolation (``${VAR:?…}``) bricht Compose ab, bevor
-        irgendetwas startet — sie waere ein Setup-Schritt vor dem ersten Start
-        und damit das Gegenteil eines Ein-Kommando-Starts.
-        """
         compose = Path("docker-compose.yml").read_text(encoding="utf-8")
-        pflichtvariablen = re.findall(r"\$\{([A-Z_][A-Z0-9_]*):\?", compose)
-        assert not pflichtvariablen, (
-            f"docker-compose.yml verlangt gesetzte Umgebungsvariablen {sorted(set(pflichtvariablen))} — "
-            "'docker compose up' muss auf einem frischen Klon ohne Vorbereitung laufen (Refs #1062)."
+        assert not self._MIGRATE_CALL.search(compose), (
+            "docker-compose.yml migriert wieder — README-Quick-Start pruefen (Refs #1062)."
         )
 
-    def test_quickstart_drops_the_manual_key_export_once_it_is_obsolete(self) -> None:
-        """Gegenstueck zur Lockerung oben (Refs #1062).
-
-        Solange der Quick-Start noch den manuellen Vor-#1062-Weg beschreibt
-        (Migrate-Schritt vorhanden), passt ein ``export ENCRYPTION_KEY`` dazu.
-        Sobald der Text auf den Ein-Kommando-Weg umgestellt ist, waere derselbe
-        ``export`` ein Pflichtschritt, den es nicht mehr gibt — dann faellt
-        dieser Guard. Ohne ihn koennte der Quick-Start beide Haelften verlieren
-        und trotzdem gruen bleiben.
-        """
+    def test_quickstart_names_an_explicit_migrate_step(self) -> None:
         for readme in self._READMES:
             quickstart = self._quickstart(readme)
-            beschreibt_alten_weg = bool(self._MIGRATE_STEP.search(quickstart))
-            assert beschreibt_alten_weg or "export ENCRYPTION_KEY" not in quickstart, (
-                f"{readme}: Der Quick-Start fuehrt kein 'export ENCRYPTION_KEY' mehr als "
-                "Pflichtschritt — der lokale Stack erzeugt den Schluessel selbst (Refs #1062)."
+            assert self._MIGRATE_STEP.search(quickstart), (
+                f"{readme}: Der Quick-Start muss den Migrate-Schritt ausdruecklich "
+                "nennen — kein Startpfad fuehrt ihn aus, und ohne Schema laeuft die "
+                "Anwendung in einen Datenbankfehler statt hochzukommen (Refs #1894)."
+            )
+            assert self._SEED_STEP.search(quickstart), (
+                f"{readme}: Der Compose-Quick-Start muss den Seed-Schritt ausdruecklich "
+                "nennen — er laeuft nicht implizit (Refs #1977)."
             )
 
     def test_quickstart_starts_the_web_service_of_the_dev_compose(self) -> None:
@@ -658,22 +604,12 @@ class TestReadmeQuickStart:
         )
         assert "./src:/app" in web.get("volumes", []), "Dev-web muss weiterhin den Quellbaum live mounten."
 
-    def test_dev_compose_ships_no_fixed_encryption_key(self) -> None:
-        """Refs #1977/#1062: Kein ausgeliefertes Fest-Geheimnis — aber auch
-        kein Setup-Schritt vor dem ersten Start.
-
-        Die Compose reicht ENCRYPTION_KEY nur durch; fehlt er, erzeugt das
-        Bootstrap-Skript einen zufaelligen Schluessel auf DIESER Maschine.
-        Ein in der Datei stehender Literal-Wert waere fuer alle Klone
-        derselbe und damit kein Geheimnis mehr.
-        """
-        services = self._compose()["services"]
-        for name in ("web", "init"):
-            value = services[name]["environment"]["ENCRYPTION_KEY"]
-            assert value == "${ENCRYPTION_KEY:-}", (
-                f"{name} muss ENCRYPTION_KEY unveraendert aus der Umgebung durchreichen "
-                f"(gefunden: {value!r}) — kein ausgelieferter Festschluessel (Refs #1977)."
-            )
+    def test_dev_compose_passes_the_encryption_key_without_a_default(self) -> None:
+        value = self._compose()["services"]["web"]["environment"]["ENCRYPTION_KEY"]
+        assert value.startswith("${ENCRYPTION_KEY:?") and value.endswith("}"), (
+            "Dev-web muss ENCRYPTION_KEY aus der Host-Umgebung fail-loud "
+            "durchreichen — kein ausgelieferter Festschluessel (Refs #1977)."
+        )
 
     def test_dev_compose_healthcheck_treats_http_200_as_liveness(self) -> None:
         """Refs #1982: Die Dev-DB wird mit der Bootstrap-Rolle initialisiert.
@@ -724,196 +660,6 @@ class TestReadmeQuickStart:
         assert all(call.endswith(" db") for call in calls), (
             "E2E startet seinen eigenen gunicorn: docker compose up -d darf dort "
             "nur den db-Dienst starten (Refs #1977)."
-        )
-
-
-class TestLocalOneCommandBootstrap:
-    """Refs #1062 (ADR-049): ``docker compose up`` genuegt — lokal und nur lokal.
-
-    Der einmalige ``init``-Dienst migriert und seedet den lokalen Stack. Genau
-    diese Bequemlichkeit waere auf einem Produktionssystem fatal: sie legt
-    Konten mit dokumentiertem Passwort an. Die Guards halten den Auto-Pfad
-    deshalb an der Grenze des lokalen ``docker-compose.yml`` fest.
-    """
-
-    _SCRIPT = Path("scripts/local/bootstrap.sh")
-    _MOUNT = "./scripts/local/bootstrap.sh:/opt/anlaufstelle/bin/bootstrap.sh:ro"
-    # Liegt im ``localstate``-Volume, das auf das Home des Container-Benutzers
-    # gemountet wird — siehe ``test_generated_key_survives_a_restart``.
-    _KEY_FILE = "/home/appuser/encryption.key"
-    # Die Stacks, die NIEMALS automatisch bootstrappen duerfen. ``staging`` und
-    # ``demo`` fehlen im Public-Snapshot und werden dort uebersprungen.
-    _DEPLOYMENT_COMPOSES = (
-        Path("docker-compose.prod.yml"),
-        Path("docker-compose.staging.yml"),
-        Path("docker-compose.dev.yml"),
-        Path("docker-compose.demo.yml"),
-    )
-
-    @staticmethod
-    def _compose() -> dict:
-        return yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
-
-    @classmethod
-    def _init(cls) -> dict:
-        services = cls._compose()["services"]
-        assert "init" in services, "Der lokale Bootstrap-Dienst 'init' fehlt (Refs #1062)."
-        return services["init"]
-
-    def test_init_waits_for_a_healthy_database(self) -> None:
-        assert self._init()["depends_on"]["db"]["condition"] == "service_healthy", (
-            "init muss auf eine bereite Datenbank warten — sonst scheitert die "
-            "erste Migration am noch startenden Postgres (Refs #1062)."
-        )
-
-    def test_init_is_a_one_shot(self) -> None:
-        """``service_completed_successfully`` setzt einen Container voraus, der
-        sich beendet. Eine Restart-Policy wuerde ihn endlos neu starten und
-        ``web`` warten lassen."""
-        assert self._init().get("restart") == "no", (
-            'init muss ausdruecklich als One-Shot markiert bleiben (restart: "no", Refs #1062).'
-        )
-
-    def test_web_starts_only_after_a_successful_bootstrap(self) -> None:
-        wartet = self._compose()["services"]["web"]["depends_on"]["init"]
-        assert wartet["condition"] == "service_completed_successfully", (
-            "web darf erst nach erfolgreichem Bootstrap starten — sonst zeigt die "
-            "versprochene Login-Seite einen Datenbankfehler (Refs #1062)."
-        )
-
-    def test_bootstrap_script_is_mounted_where_it_is_called(self) -> None:
-        """Der ``./src:/app``-Mount verdeckt alles unterhalb ``/app`` (Refs #1977).
-        Das Skript muss deshalb ausserhalb liegen — und beide Dienste, die es
-        aufrufen, muessen es auch wirklich hineinreichen."""
-        services = self._compose()["services"]
-        for name in ("init", "web"):
-            volumes = services[name].get("volumes", [])
-            assert self._MOUNT in volumes, f"{name}: Bind-Mount des Bootstrap-Skripts fehlt (Refs #1062)."
-            befehl = " ".join(services[name]["command"])
-            assert "/opt/anlaufstelle/bin/bootstrap.sh" in befehl, (
-                f"{name}: ruft das Bootstrap-Skript nicht auf (Refs #1062)."
-            )
-
-    def test_bootstrap_migrates_and_seeds_only_an_empty_database(self) -> None:
-        body = self._SCRIPT.read_text(encoding="utf-8")
-        assert "python manage.py migrate --noinput" in body, (
-            "Der lokale Bootstrap muss das Schema anlegen (Refs #1062)."
-        )
-        assert "manage.py seed --only-if-empty" in body, (
-            "Der lokale Bootstrap darf nur eine leere Datenbank seeden — sonst "
-            "ueberschriebe jedes 'docker compose up' die eigene Arbeit (Refs #1062)."
-        )
-        assert "--flush" not in body, (
-            "Der lokale Bootstrap darf niemals flushen: er laeuft bei JEDEM Start (Refs #1062)."
-        )
-
-    def test_bootstrap_generates_the_local_key_instead_of_shipping_one(self) -> None:
-        """Refs #1977: Ein in der Datei stehender Schluessel waere fuer jeden
-        Klon derselbe. Erzeugt wird er zufaellig, beim ersten Start."""
-        body = self._SCRIPT.read_text(encoding="utf-8")
-        assert "Fernet.generate_key()" in body, "Der lokale Schluessel muss zufaellig erzeugt werden (Refs #1977)."
-        assert not re.search(r"ENCRYPTION_KEY=[\"']?[A-Za-z0-9_-]{20,}", body), (
-            "Kein fest verdrahteter Schluessel im Bootstrap-Skript (Refs #1977)."
-        )
-
-    def test_every_process_in_the_container_sees_the_same_key(self) -> None:
-        """Refs #1062: ``docker compose exec``/``run`` erbt die Container-
-        KONFIGURATION, nicht die Umgebung von PID 1.
-
-        Ein nur in die Startshell exportierter Schluessel waere fuer jedes
-        spaetere ``manage.py``-Kommando unsichtbar: es liefe still im
-        Klartext-Modus von ``settings/dev.py``, schriebe Art.-9-Felder
-        unverschluesselt und braeche auf den Lesepfaden mit
-        ``EncryptionKeyMissing`` ab. Weitergereicht wird deshalb der PFAD, den
-        jeder Prozess selbst liest.
-        """
-        services = self._compose()["services"]
-        for name in ("init", "web"):
-            pfad = services[name]["environment"].get("LOCAL_ENCRYPTION_KEY_FILE")
-            assert pfad == self._KEY_FILE, (
-                f"{name}: LOCAL_ENCRYPTION_KEY_FILE fehlt oder zeigt woandershin ({pfad!r}) — "
-                "exec/run saehen den Schluessel dann nicht (Refs #1062)."
-            )
-            befehl = " ".join(services[name]["command"])
-            assert "export ENCRYPTION_KEY" not in befehl, (
-                f"{name}: Ein in die Startshell exportierter Schluessel erreicht nur PID 1 — "
-                "der Pfad in LOCAL_ENCRYPTION_KEY_FILE erreicht alle Prozesse (Refs #1062)."
-            )
-
-        dev_settings = Path("src/anlaufstelle/settings/dev.py").read_text(encoding="utf-8")
-        assert "LOCAL_ENCRYPTION_KEY_FILE" in dev_settings, (
-            "settings/dev.py liest den Datei-Schluessel nicht mehr — der lokale Stack liefe "
-            "in ``exec``/``run`` still im Klartext-Modus (Refs #1062)."
-        )
-
-    def test_init_and_web_share_one_image(self) -> None:
-        """Gleicher Build-Kontext, gleiches Tag: ohne ``image:`` legte Compose
-        zwei Tags an und baute denselben Kontext zweimal."""
-        services = self._compose()["services"]
-        tag = services["init"].get("image")
-        assert tag, "init braucht ein ausdrueckliches Image-Tag (Refs #1062)."
-        assert services["web"].get("image") == tag, (
-            "init und web muessen sich ein Image-Tag teilen — sonst baut Compose "
-            "denselben Kontext zweimal (Refs #1062)."
-        )
-
-    def test_generated_key_survives_a_restart(self) -> None:
-        """Ein bei jedem Start neu erzeugter Schluessel liesse bereits
-        verschluesselte Entwicklungsdaten unlesbar zurueck."""
-        services = self._compose()["services"]
-        volumes = self._compose().get("volumes", {})
-        assert "localstate" in volumes, "Benanntes Volume fuer den lokalen Schluessel fehlt (Refs #1062)."
-        for name in ("init", "web"):
-            assert "localstate:/home/appuser" in services[name].get("volumes", []), (
-                f"{name}: sieht den persistierten Schluessel nicht (Refs #1062)."
-            )
-
-    def test_local_stack_runs_settings_that_allow_seeding(self) -> None:
-        """Der Seed ist fail-closed ueber ``SEED_ALLOWED`` gesperrt (Refs #1040).
-        Der lokale Auto-Seed haengt also am gewaehlten Settings-Modul."""
-        services = self._compose()["services"]
-        for name in ("init", "web"):
-            assert services[name]["environment"]["DJANGO_SETTINGS_MODULE"] == "anlaufstelle.settings.dev"
-        dev_settings = Path("src/anlaufstelle/settings/dev.py").read_text(encoding="utf-8")
-        assert re.search(r"^SEED_ALLOWED = True$", dev_settings, re.MULTILINE), (
-            "settings/dev.py erlaubt kein Seeding mehr — der lokale Auto-Seed waere tot (Refs #1040/#1062)."
-        )
-
-    def test_production_settings_never_allow_seeding(self) -> None:
-        prod_settings = Path("src/anlaufstelle/settings/prod.py").read_text(encoding="utf-8")
-        assert "SEED_ALLOWED" not in prod_settings, (
-            "settings/prod.py fasst SEED_ALLOWED an — der Default aus base.py (False) "
-            "ist die einzige richtige Antwort fuer Produktion (Refs #1040)."
-        )
-
-    @pytest.mark.parametrize("compose_path", _DEPLOYMENT_COMPOSES)
-    def test_deployment_stacks_neither_seed_nor_auto_migrate(self, compose_path: Path) -> None:
-        """Der Auto-Pfad bleibt local-only: kein Deployment-Stack bekommt einen
-        Bootstrap-Dienst, ein ``SEED_ALLOWED``, einen Seed-Aufruf oder eine
-        Migration im Startpfad seiner Web-Replicas."""
-        if not compose_path.exists():
-            pytest.skip(f"{compose_path} nicht im Public-Snapshot — Guard nur im Dev-Repo relevant.")
-        body = compose_path.read_text(encoding="utf-8")
-        assert "SEED_ALLOWED" not in body, f"{compose_path}: SEED_ALLOWED gehoert nicht in einen Deployment-Stack."
-        assert "manage.py seed" not in body, f"{compose_path}: kein Auto-Seed in einem Deployment-Stack."
-        assert "bootstrap.sh" not in body, (
-            f"{compose_path}: das lokale Bootstrap-Skript gehoert nicht in einen Deployment-Stack (Refs #1062)."
-        )
-        services = yaml.safe_load(body)["services"]
-        assert "init" not in services, f"{compose_path}: kein Bootstrap-Dienst in einem Deployment-Stack (Refs #1062)."
-
-        # Der Migrate-One-Shot bleibt ein eigener, ausdruecklich gestarteter
-        # Job (``docker-migrate.sh`` im maintenance-Profil, Refs #802/#1962).
-        # Im Startpfad einer Web-Replica haette er nichts verloren: parallele
-        # Replicas konkurrierten um den Lock und die Deploy-Gates fielen weg.
-        web = services["web"]
-        startpfad = " ".join(
-            teil if isinstance(teil, str) else " ".join(teil)
-            for teil in (web.get("entrypoint", ""), web.get("command", ""))
-        )
-        assert "migrate" not in startpfad, (
-            f"{compose_path}: web migriert im Startpfad ({startpfad!r}) — Migrationen gehoeren "
-            "in den separaten One-Shot-Job (Refs #802/#1062)."
         )
 
 

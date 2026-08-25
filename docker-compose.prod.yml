@@ -126,7 +126,7 @@ services:
     # Image-Tag via APP_VERSION parametrisieren (Refs #800), Fallback auf
     # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
     # .env bleiben reproduzierbar.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.89.0}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.84.0}
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL (web laeuft als non-root appuser auf :8000, braucht keine
     # Caps). read_only-Root-FS mit definiertem Schreib-Scratch: /tmp
@@ -244,7 +244,7 @@ services:
     # Privilegierter, opt-in One-Shot-Pfad fuer Migrationen und Operator-
     # Kommandos (Refs #1962). Anders als ``web`` darf nur dieser Service die
     # vollstaendige .env und damit Admin-/Bootstrap-Zugangsdaten sehen.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.89.0}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.84.0}
     profiles: ["maintenance"]
     entrypoint: ["python", "manage.py"]
     security_opt:
@@ -296,7 +296,7 @@ services:
     # bereits eingerichtet hat, laesst die Jobs sonst DOPPELT laufen. Vor dem
     # ersten Start dieses Service die entsprechenden Host-Eintraege entfernen
     # (Backup ausgenommen, das bleibt Host-seitig) — docs/ops-runbook.md § 3.3.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.89.0}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.84.0}
     # Der Image-Entrypoint faehrt collectstatic + gunicorn hoch; hier soll
     # stattdessen nur supercronic laufen (im Image unter /usr/local/bin,
     # sha256-gepinnt gebaut — siehe Dockerfile).

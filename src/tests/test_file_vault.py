@@ -746,11 +746,8 @@ class TestAttachmentAtomicity:
         AuditLog-Advisory-Lock soll nicht über den Scan gehalten werden). Ein
         Virus-/Policy-Reject scheitert daher, BEVOR ``create_event`` läuft — es
         entsteht gar kein Event, das zurückgerollt werden müsste. Wir mocken
-        genau diese pre-tx Stufe (seit #1831 laeuft sie in ``stage_uploads``;
-        Patch-Ziel ist der Paket-Alias ``core.services.file_vault``, aus dem
-        der funktionslokale Import zur Aufrufzeit aufloest — Patch-Vertrag im
-        Modul-Docstring von ``services/attachments/crud.py``) mit einem
-        gültigen PDF-Upload, damit der Reject
+        genau diese pre-tx Stufe (unter dem Namen, unter dem der View sie
+        importiert) mit einem gültigen PDF-Upload, damit der Reject
         nachweislich aus dem Mock und nicht aus einer beiläufig fehlgeschlagenen
         Magic-Bytes-Prüfung stammt.
         """
@@ -764,7 +761,7 @@ class TestAttachmentAtomicity:
         attachments_before = Attachment.objects.count()
 
         with patch(
-            "core.services.file_vault.prepare_encrypted_upload",
+            "core.views.events.prepare_encrypted_upload",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(

@@ -97,16 +97,16 @@ sodass aus dem Aggregat niemand zurückverfolgt werden kann.
 **In Anlaufstelle:**
 
 - Der Schwellwert ist pro Einrichtung über das Setting
- [`k_anonymity_threshold`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py)
- konfigurierbar (**Default 5**).
+  [`k_anonymity_threshold`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py)
+  konfigurierbar (**Default 5**).
 - Datenschutzfreundliche externe Berichte
- ([`core/services/dashboard/external_report.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/external_report.py))
- wenden die Schwelle auf alle Aggregate an und entfernen Pseudonym-Rankings vollständig.
+  ([`core/services/dashboard/external_report.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/external_report.py))
+  wenden die Schwelle auf alle Aggregate an und entfernen Pseudonym-Rankings vollständig.
 - Optional ersetzt der Retention-Löschpfad den Hard-Delete durch
- K-Anonymisierung des Client-Records (Setting `retention_use_k_anonymization`).
- **Beide Pfade tilgen seit #1094 dieselbe Freitext-Kaskade** auf
- Fälle/Episoden/Aufgaben (im Retention-Bridge-Layer); die Primitive
- `k_anonymize_client` selbst bleibt client-only. Siehe **k-Anon-Retention** unten.
+  K-Anonymisierung des Client-Records (Setting `retention_use_k_anonymization`).
+  **Beide Pfade tilgen seit #1094 dieselbe Freitext-Kaskade** auf
+  Fälle/Episoden/Aufgaben (im Retention-Bridge-Layer); die Primitive
+  `k_anonymize_client` selbst bleibt client-only. Siehe **k-Anon-Retention** unten.
 
 Abgrenzung: **Pseudonymisierung** ersetzt direkte Identifikatoren durch ein Pseudonym
 (Einzeldatensatz bleibt bestehen); **K-Anonymität** schützt zusätzlich vor

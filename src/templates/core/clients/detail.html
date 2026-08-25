@@ -30,11 +30,6 @@
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
                       data-testid="{% if pending_deletion_request.merge_into_id %}client-merge-pending-badge{% else %}client-deletion-pending-badge{% endif %}">{% if pending_deletion_request.merge_into_id %}{% trans "Zusammenführung beantragt" %}{% else %}{% trans "Löschung beantragt" %}{% endif %}</span>
                 {% endif %}
-                {# Refs #2045: Art.-18-Sperrvermerk — Kennzeichnung am Kopf. #}
-                {% if client.processing_restricted %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-rose-100 text-rose-800 border border-rose-200"
-                      data-testid="client-processing-restricted-badge">{% trans "Verarbeitung eingeschränkt" %}</span>
-                {% endif %}
                 <span x-show="isOffline" x-cloak
                       class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-800"
                       data-testid="offline-available-badge">
@@ -88,30 +83,6 @@
 </div>
 {% endif %}
 
-{# Art.-18-Sperrvermerk (Refs #2045) — DAUERHAFTES Banner, bewusst vor dem  #}
-{# Löschantrag: es beschreibt keinen Wartezustand, sondern die aktuell       #}
-{# geltende Rechtslage an dieser Akte. Art. 18 ist NICHT der Legal Hold —    #}
-{# der blockiert die Löschung, dieser Vermerk die Nutzung.                   #}
-{% if client.processing_restricted %}
-<div class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 bg-rose-50 border border-rose-200 rounded-[10px] text-[13px] text-rose-900"
-     role="status"
-     data-testid="client-processing-restricted-banner">
-    <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-    <span class="font-semibold">{% trans "Verarbeitung eingeschränkt (Art. 18 DSGVO)" %}</span>
-    <span>
-        {% blocktrans with grund=client.get_processing_restriction_reason_display datum=client.processing_restricted_at|date:"DATETIME_FORMAT" person=client.processing_restricted_by.display_name|default:client.processing_restricted_by.username|default:"–" %}{{ grund }} — gesetzt am {{ datum }} durch {{ person }}. Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden.{% endblocktrans %}
-    </span>
-    {% if user.is_staff_or_above %}
-    <form method="post" action="{% url 'core:client_lift_processing_restriction' client.pk %}" class="ml-auto">
-        {% csrf_token %}
-        <button type="submit" class="font-semibold underline hover:no-underline" data-testid="client-processing-restriction-lift">
-            {% trans "Einschränkung aufheben" %}
-        </button>
-    </form>
-    {% endif %}
-</div>
-{% endif %}
-
 {# Löschantrag-Banner (Refs #1736, A): der Wartezustand war bisher nur in der #}
 {# entscheidenden Rolle sichtbar, nie am betroffenen Datensatz. #}
 {% if pending_deletion_request %}
@@ -155,21 +126,6 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
     <a href="{% url 'core:rectification_create' client.pk %}" class="font-semibold text-accent underline hover:no-underline" data-testid="client-rectification-create-link">
         {% trans "Berichtigung beantragen" %}
     </a>
-    {# Refs #2045: Einschränken ohne laufenden Antrag (Art. 18 Abs. 1 lit. b–d). #}
-    {% if not client.processing_restricted %}
-    <form method="post" action="{% url 'core:client_restrict_processing' client.pk %}" class="flex items-center gap-2">
-        {% csrf_token %}
-        <label class="sr-only" for="processing-restriction-reason">{% trans "Grund der Einschränkung" %}</label>
-        <select id="processing-restriction-reason" name="reason" class="text-[12px] border border-subtle rounded px-2 py-1 bg-surface">
-            {% for value, label in restriction_reasons %}
-            <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="font-semibold text-accent underline hover:no-underline" data-testid="client-processing-restrict-submit">
-            {% trans "Verarbeitung einschränken" %}
-        </button>
-    </form>
-    {% endif %}
     {% if user.is_lead_or_admin %}
     <a href="{% url 'core:rectification_list' %}" class="text-ink-muted underline hover:no-underline" data-testid="client-rectification-list-link">
         {% trans "Zu den Berichtigungsanträgen" %}
@@ -270,8 +226,5 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
 {% endblock %}
 
 {% block extra_js %}
-{# Refs #1828: offline-form-fields.js traegt die gemeinsamen Formatter und #}
-{# muss VOR dem Konsumenten laden. #}
-<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-client-badge.js' %}"></script>
 {% endblock %}

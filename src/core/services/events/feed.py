@@ -37,124 +37,111 @@ def get_time_range(target_date, time_filter=None):
     return start_dt, end_dt
 
 
-def _feed_events(facility, start_dt, end_dt, user, include_all):
-    """Event-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``).
-
-    Exclude bans when loading all types to avoid duplicates with bans feed.
-    """
-    events_qs = Event.objects.visible_to(user).filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__gte=start_dt,
-        occurred_at__lte=end_dt,
-    )
-    if include_all:
-        events_qs = events_qs.exclude(document_type__system_type="ban")
-    events = events_qs.select_related("document_type", "client", "created_by").order_by("-occurred_at")[
-        :FEED_MAX_PER_TYPE
-    ]
-    return [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events]
-
-
-def _feed_activities(facility, start_dt, end_dt, user, include_all):
-    """Activity-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
-    from core.services.dashboard.activity import activity_target_prefetch
-
-    activities_qs = Activity.objects.for_facility(facility).filter(occurred_at__gte=start_dt, occurred_at__lte=end_dt)
-    # In mixed feed: exclude 'created' activities (redundant with first-class object cards)
-    if include_all:
-        activities_qs = activities_qs.exclude(verb=Activity.Verb.CREATED)
-
-    # Filter out activities whose target is an Event the user may not see (#562)
-    if user is not None:
-        from django.contrib.contenttypes.models import ContentType
-
-        event_ct = ContentType.objects.get_for_model(Event)
-        visible_event_ids = Event.objects.visible_to(user).values_list("pk", flat=True)
-        activities_qs = activities_qs.exclude(
-            Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
-        )
-
-    # Faelle im Papierkorb aus dem Zeitstrom nehmen (Refs #1818, ADR-044 §7).
-    # ``close_case``/``reopen_case`` rendern den Falltitel aus dem Ziel. Der
-    # Papierkorb nimmt den Fall aus
-    # Liste, Detail, Episoden, Zielen und Ereignis-Select — der Zeitstrom
-    # bliebe sonst der eine Ort, an dem sein Titel weiterlaeuft, und zwar
-    # bis zur Frist (``retention_activities_days``, Default 365 gegen 30 Tage;
-    # der Befund aus #1751). Rollenunabhaengig, weil „geloescht" keine
-    # Sichtbarkeitsfrage ist.
-    #
-    # Auch die ``deleted``-Zeile („Fall in den Papierkorb verschoben",
-    # titelfrei) faellt mit raus — die Rechenschaft ueber die Loeschung
-    # traegt die ``CASE_SOFT_DELETED``-Zeile im append-only AuditLog, nicht
-    # der Zeitstrom. Sie ist trotzdem nicht umsonst geschrieben: nach
-    # ``restore_case`` erscheint der Fall wieder, und mit ihm die Spur, dass
-    # er zwischenzeitlich im Papierkorb lag.
-    from django.contrib.contenttypes.models import ContentType
-
-    case_ct = ContentType.objects.get_for_model(Case)
-    trashed_case_ids = Case.objects.for_facility(facility).filter(is_deleted=True).values_list("pk", flat=True)
-    activities_qs = activities_qs.exclude(Q(target_type=case_ct) & Q(target_id__in=trashed_case_ids))
-
-    activities = (
-        activities_qs.select_related("actor", "target_type")
-        .prefetch_related(activity_target_prefetch())
-        .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
-    )
-    return [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]
-
-
-def _feed_workitems(facility, start_dt, end_dt):
-    """WorkItem-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
-    workitems = (
-        WorkItem.objects.for_facility(facility)
-        .filter(created_at__gte=start_dt, created_at__lte=end_dt)
-        .select_related("client", "assigned_to")
-        .order_by("-created_at")[:FEED_MAX_PER_TYPE]
-    )
-    return [{"type": "workitem", "occurred_at": wi.created_at, "object": wi} for wi in workitems]
-
-
-def _feed_bans(facility, start_dt, end_dt, user):
-    """Ban-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
-    bans = (
-        Event.objects.visible_to(user)
-        .filter(
-            facility=facility,
-            is_deleted=False,
-            document_type__system_type="ban",
-            occurred_at__gte=start_dt,
-            occurred_at__lte=end_dt,
-        )
-        .select_related("document_type", "client", "created_by")
-        .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
-    )
-    return [{"type": "ban", "occurred_at": e.occurred_at, "object": e} for e in bans]
-
-
 def build_feed_items(facility, target_date, feed_type, time_filter=None, user=None):
     """Build a unified feed of events, activities, work items, and bans for a given date.
 
     *user* is required for sensitivity-based event visibility — without it the
     feed includes events whose existence the caller is not allowed to know
     about (#522). Callers must always pass ``request.user``.
-
-    Refs #1892: je Feed-Sorte ein eigener ``_feed_<sorte>``-Builder; hier
-    bleiben nur Zweig-Auswahl, Merge und Sortierung.
     """
     start_dt, end_dt = get_time_range(target_date, time_filter)
+
+    events_list = []
+    activities_list = []
+    workitems_list = []
+    bans_list = []
+
     include_all = feed_type == "" or feed_type == "all"
 
-    events_list = (
-        _feed_events(facility, start_dt, end_dt, user, include_all) if feed_type == "events" or include_all else []
-    )
-    activities_list = (
-        _feed_activities(facility, start_dt, end_dt, user, include_all)
-        if feed_type == "activities" or include_all
-        else []
-    )
-    workitems_list = _feed_workitems(facility, start_dt, end_dt) if feed_type == "workitems" or include_all else []
-    bans_list = _feed_bans(facility, start_dt, end_dt, user) if feed_type == "bans" or include_all else []
+    # Events (exclude bans when loading all types to avoid duplicates with bans feed)
+    if feed_type == "events" or include_all:
+        events_qs = Event.objects.visible_to(user).filter(
+            facility=facility,
+            is_deleted=False,
+            occurred_at__gte=start_dt,
+            occurred_at__lte=end_dt,
+        )
+        if include_all:
+            events_qs = events_qs.exclude(document_type__system_type="ban")
+        events = events_qs.select_related("document_type", "client", "created_by").order_by("-occurred_at")[
+            :FEED_MAX_PER_TYPE
+        ]
+        events_list = [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events]
+
+    # Activities
+    if feed_type == "activities" or include_all:
+        from core.services.dashboard.activity import activity_target_prefetch
+
+        activities_qs = Activity.objects.for_facility(facility).filter(
+            occurred_at__gte=start_dt, occurred_at__lte=end_dt
+        )
+        # In mixed feed: exclude 'created' activities (redundant with first-class object cards)
+        if include_all:
+            activities_qs = activities_qs.exclude(verb=Activity.Verb.CREATED)
+
+        # Filter out activities whose target is an Event the user may not see (#562)
+        if user is not None:
+            from django.contrib.contenttypes.models import ContentType
+
+            event_ct = ContentType.objects.get_for_model(Event)
+            visible_event_ids = Event.objects.visible_to(user).values_list("pk", flat=True)
+            activities_qs = activities_qs.exclude(
+                Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
+            )
+
+        # Faelle im Papierkorb aus dem Zeitstrom nehmen (Refs #1818, ADR-044 §7).
+        # ``close_case``/``reopen_case`` rendern den Falltitel aus dem Ziel. Der
+        # Papierkorb nimmt den Fall aus
+        # Liste, Detail, Episoden, Zielen und Ereignis-Select — der Zeitstrom
+        # bliebe sonst der eine Ort, an dem sein Titel weiterlaeuft, und zwar
+        # bis zur Frist (``retention_activities_days``, Default 365 gegen 30 Tage;
+        # der Befund aus #1751). Rollenunabhaengig, weil „geloescht" keine
+        # Sichtbarkeitsfrage ist.
+        #
+        # Auch die ``deleted``-Zeile („Fall in den Papierkorb verschoben",
+        # titelfrei) faellt mit raus — die Rechenschaft ueber die Loeschung
+        # traegt die ``CASE_SOFT_DELETED``-Zeile im append-only AuditLog, nicht
+        # der Zeitstrom. Sie ist trotzdem nicht umsonst geschrieben: nach
+        # ``restore_case`` erscheint der Fall wieder, und mit ihm die Spur, dass
+        # er zwischenzeitlich im Papierkorb lag.
+        from django.contrib.contenttypes.models import ContentType
+
+        case_ct = ContentType.objects.get_for_model(Case)
+        trashed_case_ids = Case.objects.for_facility(facility).filter(is_deleted=True).values_list("pk", flat=True)
+        activities_qs = activities_qs.exclude(Q(target_type=case_ct) & Q(target_id__in=trashed_case_ids))
+
+        activities = (
+            activities_qs.select_related("actor", "target_type")
+            .prefetch_related(activity_target_prefetch())
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        )
+        activities_list = [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]
+
+    # Work items
+    if feed_type == "workitems" or include_all:
+        workitems = (
+            WorkItem.objects.for_facility(facility)
+            .filter(created_at__gte=start_dt, created_at__lte=end_dt)
+            .select_related("client", "assigned_to")
+            .order_by("-created_at")[:FEED_MAX_PER_TYPE]
+        )
+        workitems_list = [{"type": "workitem", "occurred_at": wi.created_at, "object": wi} for wi in workitems]
+
+    # Bans
+    if feed_type == "bans" or include_all:
+        bans = (
+            Event.objects.visible_to(user)
+            .filter(
+                facility=facility,
+                is_deleted=False,
+                document_type__system_type="ban",
+                occurred_at__gte=start_dt,
+                occurred_at__lte=end_dt,
+            )
+            .select_related("document_type", "client", "created_by")
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        )
+        bans_list = [{"type": "ban", "occurred_at": e.occurred_at, "object": e} for e in bans]
 
     return sorted(
         events_list + activities_list + workitems_list + bans_list,

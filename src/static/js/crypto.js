@@ -508,34 +508,31 @@
 
         // Refs #1351/#1383: Cross-Tab-Empfaenger fuer key-cleared beim
         // Sync-Orchestrator registrieren. Der laedt in base.html NACH crypto.js
-        // (window-Globals existieren erst spaeter). Refs #1828: das frueher
-        // hier duplizierte DOMContentLoaded/naechster-Tick-Retry-Geruest ist
-        // durch die Pending-Liste ersetzt, die sync-orchestrator.js beim Laden
-        // draint (und danach als Sofort-Registrierung uebernimmt). Ist der
-        // Orchestrator bereits da (Test-Harness, abweichende Reihenfolge),
-        // wird direkt registriert. Auf Seiten ohne Orchestrator (Login/Shell)
-        // bleibt der Eintrag folgenlos liegen — das ist der dokumentierte
-        // "kein BroadcastChannel → skip"-Fallback.
-        if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
-            window.syncOrchestrator.onMessage(_onOrchestratorMessage);
-        } else {
-            (window.syncOrchestratorPending = window.syncOrchestratorPending || []).push(
-                _onOrchestratorMessage
-            );
+        // (window-Globals existieren erst spaeter) — daher lade-reihenfolge-
+        // tolerant: jetzt versuchen, sonst auf DOMContentLoaded/naechsten Tick.
+        // Auf Seiten ohne Orchestrator (Login/Shell) registriert sich nie einer;
+        // das ist der dokumentierte "kein BroadcastChannel → skip"-Fallback.
+        var _receiverRegistered = false;
+        function _registerOrchestratorReceiver() {
+            if (_receiverRegistered) return true;
+            if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+                window.syncOrchestrator.onMessage(_onOrchestratorMessage);
+                _receiverRegistered = true;
+                return true;
+            }
+            return false;
+        }
+        if (!_registerOrchestratorReceiver()) {
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", _registerOrchestratorReceiver);
+            } else {
+                window.setTimeout(_registerOrchestratorReceiver, 0);
+            }
         }
     }
 
     function ready() {
         return initialLoad || Promise.resolve();
-    }
-
-    // Refs #1828: gemeinsames Ready-Gate der Konsumenten. Ersetzt das 15-fach
-    // verstreute ``if (window.crypto_session && window.crypto_session.ready) {
-    // await window.crypto_session.ready(); }`` — Aufruf-Idiom ist
-    // ``await window.crypto_session?.awaitReady?.();`` (tolerant gegenueber
-    // Seiten ohne crypto.js und Test-Stubs ohne diese Methode).
-    async function awaitReady() {
-        await ready();
     }
 
     async function deriveSessionKey(password, saltB64Url) {
@@ -697,8 +694,6 @@
         enforceIdleWipe: enforceIdleWipe,
         hasSessionKey: hasSessionKey,
         ready: ready,
-        // Refs #1828: gemeinsames Ready-Gate (siehe awaitReady oben).
-        awaitReady: awaitReady,
         // Refs #1476 (R8): Einmal-Handshake fuer die Krypto-Primitive.
         _link: _link,
     };

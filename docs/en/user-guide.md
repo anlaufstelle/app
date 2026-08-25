@@ -12,10 +12,10 @@ This guide is intended for social workers, managers, and assistants working in d
 
 1. [Login and Password](#1-login-and-password)
 2. [Home -- Zeitstrom](#2-home--zeitstrom)
- - [Tally](#tally)
- - [Work Center](#2a-work-center)
+   - [Tally](#tally)
+   - [Work Center](#2a-work-center)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
- - [Files Overview](#3a-files-overview)
+   - [Files Overview](#3a-files-overview)
 4. [Managing Clients](#4-managing-clients)
 5. [Hints and Tasks (Work Items)](#5-hints-and-tasks-work-items)
 6. [Search](#6-search)
@@ -66,11 +66,11 @@ Anlaufstelle supports time-based one-time passwords (TOTP) as a second login fac
 1. Click your name in the top-right corner > **Two-Factor Authentication** (URL: `/mfa/settings/`).
 2. Click **Set up 2FA** -- a QR code is displayed.
 3. Install an authenticator app and scan the QR code. Tested apps:
- - **Google Authenticator** (Android/iOS)
- - **Microsoft Authenticator** (Android/iOS)
- - **Authy** (Android/iOS/Desktop)
- - **FreeOTP / FreeOTP+** (Android, open source)
- - **1Password**, **Bitwarden**, **Proton Pass** (as built-in authenticator)
+   - **Google Authenticator** (Android/iOS)
+   - **Microsoft Authenticator** (Android/iOS)
+   - **Authy** (Android/iOS/Desktop)
+   - **FreeOTP / FreeOTP+** (Android, open source)
+   - **1Password**, **Bitwarden**, **Proton Pass** (as built-in authenticator)
 4. Enter the 6-digit code shown by the app and click **Confirm & activate**.
 
 > **Tip:** If the QR code cannot be scanned, click **Enter secret manually** and copy the string into the app (field "Secret" / "Key" -- Base32, no spaces). In the app, pick type **TOTP / time-based**.
@@ -189,9 +189,9 @@ An **event** is a single documented contact -- for example, a counseling session
 3. **Fill in the fields:** After selecting the type, the corresponding input fields are loaded. Fill in all relevant fields.
 4. **Timestamp:** The "Timestamp" field is automatically set to the current time. You can adjust it if you are recording a contact retroactively.
 5. **Assign a client (optional):**
- - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No client will be linked.
- - For a **client with a pseudonym**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
- - If the client has not been registered yet, create them first under **Clients** (see [Section 4](#4-managing-clients)).
+   - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No client will be linked.
+   - For a **client with a pseudonym**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
+   - If the client has not been registered yet, create them first under **Clients** (see [Section 4](#4-managing-clients)).
 6. Click **Save**.
 
 You will be redirected to the detail view of the newly created entry. A success message confirms the save.
@@ -331,10 +331,10 @@ Each client has a **contact level**:
 
 1. Navigate to **Clients** (`/clients/`) and click **Create person** (or go directly to `/clients/new/`).
 2. Fill in the form:
- - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
- - **Contact level:** Select "Pseudonym only" or "With additional details".
- - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
- - **Notes:** Internal remarks about the client (optional).
+   - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
+   - **Contact level:** Select "Pseudonym only" or "With additional details".
+   - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
+   - **Notes:** Internal remarks about the client (optional).
 3. Click **Save**.
 
 ### Searching for Clients
@@ -376,8 +376,8 @@ If the duplicate already exists:
 1. Open the record of the client that is to be **dissolved** and choose **Merge with duplicate** in the **More actions** menu (⋮).
 2. Search for the target client -- the record that remains. The search also finds similar spellings.
 3. The confirmation page shows **both records side by side** (contact level, age group, creation date, last contact, number of events/cases/attachments) plus a statistics warning and the deadline note. The page itself tells you which of the two paths applies:
- - **Merge directly** -- if both clients are at "Pseudonym only"; only the **lead** may do this.
- - **Request with confirmation** -- as soon as one of the two clients carries "With additional details" (or a staff member takes this path). Enter a reason; confirmation happens under **Privacy → Deletion requests**, where the request appears as its own kind, **Merge**, with its target. Until then the record is flagged as "merge requested" and stays usable.
+   - **Merge directly** -- if both clients are at "Pseudonym only"; only the **lead** may do this.
+   - **Request with confirmation** -- as soon as one of the two clients carries "With additional details" (or a staff member takes this path). Enter a reason; confirmation happens under **Privacy → Deletion requests**, where the request appears as its own kind, **Merge**, with its target. Until then the record is flagged as "merge requested" and stays usable.
 
 What happens:
 
@@ -430,12 +430,12 @@ The list updates without a page reload.
 
 1. Click **Create task** in the inbox (or navigate to `/workitems/new/`).
 2. Fill in the form:
- - **Type:** "Task" or "Hint"
- - **Title:** A brief, concise description
- - **Description:** More detailed information (optional)
- - **Priority:** Normal, Important, or Urgent
- - **Assigned to:** A specific person from your facility (optional -- leave blank if the task applies to everyone)
- - **Client:** If the task concerns a specific client (optional)
+   - **Type:** "Task" or "Hint"
+   - **Title:** A brief, concise description
+   - **Description:** More detailed information (optional)
+   - **Priority:** Normal, Important, or Urgent
+   - **Assigned to:** A specific person from your facility (optional -- leave blank if the task applies to everyone)
+   - **Client:** If the task concerns a specific client (optional)
 3. Click **Save**.
 
 > **Tip:** If you create a new task from the client detail page, the client is already pre-filled.
@@ -530,13 +530,13 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
 
 1. Navigate to **Statistics** (`/statistics/`).
 2. Select a time period:
- - **Last 30 days** (default)
- - **Last 90 days**
- - **Last 180 days**
- - **Calendar year** (with year navigation, see below)
- - **Custom period:** Enter start and end dates manually.
+   - **Last 30 days** (default)
+   - **Last 90 days**
+   - **Last 180 days**
+   - **Calendar year** (with year navigation, see below)
+   - **Custom period:** Enter start and end dates manually.
 
- > The three "Last N days" windows are **rolling** and end today; both ends count, so "Last 30 days" spans exactly 30 days. Calendar words are reserved for calendar units -- which is why the calendar period is called "Calendar year" and the rolling windows are named after their length.
+   > The three "Last N days" windows are **rolling** and end today; both ends count, so "Last 30 days" spans exactly 30 days. Calendar words are reserved for calendar units -- which is why the calendar period is called "Calendar year" and the rolling windows are named after their length.
 3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and client groups.
 
 > **Note:** The "Overview" tab -- this dashboard -- counts events in the period **regardless of their report assignment**, including events whose documentation type is not assigned to a report or is explicitly excluded from reports. The report assignment (called "report key" in the configuration) affects the figures only on the "Dataset reports" tab. The two tabs may therefore show different figures for the same period; the "Dataset reports" section explains further reasons. The population evaluated by an individual table is stated below its heading: "Contacts by age group", for example, counts only events linked to a person.
@@ -787,10 +787,10 @@ A case is a **bracket** around thematically related contacts. Case management is
 
 1. Click **Create case** on the case list (or navigate to `/cases/new/`).
 2. Fill in the form:
- - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
- - **Client:** Start typing the pseudonym -- a suggestion list appears. Select the matching client. A case can also be created without a client.
- - **Description:** More detailed information about the case (optional).
- - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, leads, and administrators from your facility are available.
+   - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
+   - **Client:** Start typing the pseudonym -- a suggestion list appears. Select the matching client. A case can also be created without a client.
+   - **Description:** More detailed information about the case (optional).
+   - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, leads, and administrators from your facility are available.
 3. Click **Create case**.
 
 You will be redirected to the detail page of the new case.
@@ -844,8 +844,8 @@ A case created by mistake can be deleted. "Closing" is **not** the right tool fo
 1. Open the case detail page.
 2. In the **More actions** menu (⋮), click **Delete**.
 3. The next page tells you which of the two paths applies:
- - **Straight to the trash** — for clients at contact stage "Anonymous" or "Pseudonym only".
- - **Deletion request with confirmation** — for a client at stage "With additional details". Enter a reason; the page also names who can confirm the request. Confirmation happens under **Privacy → Deletion requests**, just like for clients and contacts. While the request is pending, the case stays fully usable and is flagged as "deletion requested".
+   - **Straight to the trash** — for clients at contact stage "Anonymous" or "Pseudonym only".
+   - **Deletion request with confirmation** — for a client at stage "With additional details". Enter a reason; the page also names who can confirm the request. Confirmation happens under **Privacy → Deletion requests**, just like for clients and contacts. While the request is pending, the case stays fully usable and is flagged as "deletion requested".
 4. Confirm.
 
 What happens:
@@ -881,10 +881,10 @@ An **episode** is a distinct phase within a case. For example, if a client enter
 
 1. On the case detail page (right column), click **New Episode**.
 2. Fill in the form:
- - **Title** (required): A label for the phase (e.g., "Crisis episode March 2026").
- - **Start** (required): The start date of the episode.
- - **Description:** Additional details (optional).
- - **End:** End date (optional -- leave blank if the episode is still ongoing).
+   - **Title** (required): A label for the phase (e.g., "Crisis episode March 2026").
+   - **Start** (required): The start date of the episode.
+   - **Description:** Additional details (optional).
+   - **End:** End date (optional -- leave blank if the episode is still ongoing).
 3. Click **Save**.
 
 > **Note:** Episodes can only be created for **open** cases.
@@ -948,6 +948,6 @@ Each episode shows its status:
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.89.0 -->
+<!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-24 -->
-<!-- source-hash: a75353ce740b44e390dd2fea1211576138605ed3 -->
+<!-- source-hash: 2487698e7fdd5bfac80b3713041ff58586d3c4eb -->

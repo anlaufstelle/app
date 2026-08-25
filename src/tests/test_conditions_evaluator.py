@@ -11,10 +11,6 @@ laufen laesst. Jede Semantikaenderung wird zuerst dort als Vektor ergaenzt
 import datetime
 import json
 from pathlib import Path
-from types import SimpleNamespace
-
-import pytest
-from django.core.exceptions import ValidationError
 
 from core.services.conditions import (
     OPERATORS_BY_FIELD_TYPE,
@@ -23,7 +19,6 @@ from core.services.conditions import (
     find_cycle,
     is_empty,
     normalize_value,
-    parse_condition_value,
 )
 
 _VECTORS_PATH = Path(__file__).parent / "data" / "condition_vectors.json"
@@ -77,25 +72,6 @@ def test_normalize_time_isoformat():
     assert normalize_value("time", None) is None
 
 
-def test_normalize_time_isoformat_falls_back_without_timespec():
-    calls = []
-
-    class IsoformatFallback:
-        def isoformat(self, *args, **kwargs):
-            calls.append((args, kwargs))
-            if not args and kwargs == {"timespec": "seconds"}:
-                raise TypeError
-            if not args and not kwargs:
-                return "fallback-sentinel"
-            raise AssertionError("Unerwarteter isoformat-Aufruf")
-
-    assert normalize_value("time", IsoformatFallback()) == "fallback-sentinel"
-    assert calls == [
-        ((), {"timespec": "seconds"}),
-        ((), {}),
-    ]
-
-
 def test_normalize_date_isoformat():
     """E11: date -> ``"YYYY-MM-DD"`` (Python ``date.isoformat``, unberuehrt von der time-Kappung)."""
     assert normalize_value("date", datetime.date(2026, 1, 5)) == "2026-01-05"
@@ -132,51 +108,6 @@ def test_normalize_number_boolean_and_multiselect():
     assert normalize_value("unbekannt", "x") == "x"
 
 
-def test_normalize_multiselect_tuple_becomes_list():
-    assert normalize_value("multi_select", ("a", "b")) == ["a", "b"]
-
-
-def test_normalize_boolean_uses_python_truthiness_for_strings():
-    assert normalize_value("boolean", "false") is True
-
-
-@pytest.mark.parametrize(
-    ("field_type", "raw", "expected"),
-    [
-        ("number", "42", 42),
-        ("number", "12.5", 12.5),
-        ("boolean", "ja", True),
-        ("boolean", "false", False),
-        ("date", "2026-08-25", "2026-08-25"),
-        ("time", "09:05", "09:05:00"),
-        ("select", "a", "a"),
-        ("multi_select", "b", "b"),
-        ("text", "Exakt", "Exakt"),
-        ("unbekannt", "Defensiv", "Defensiv"),
-    ],
-)
-def test_parse_condition_value(field_type, raw, expected):
-    template = SimpleNamespace(options_json=[{"slug": "a"}, {"slug": "b"}])
-    assert parse_condition_value(field_type, template, raw) == expected
-
-
-@pytest.mark.parametrize(
-    ("field_type", "raw", "message"),
-    [
-        ("number", "keine-zahl", "Bitte eine gültige Zahl eingeben."),
-        ("boolean", "vielleicht", "Bitte „wahr“ oder „falsch“ auswählen."),
-        ("date", "25.08.2026", "Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben."),
-        ("time", "25:61", "Bitte eine gültige Uhrzeit eingeben."),
-        ("select", "unbekannt", "Bitte eine gültige Option auswählen."),
-    ],
-)
-def test_parse_condition_value_rejects_invalid_literals(field_type, raw, message):
-    template = SimpleNamespace(options_json=[{"slug": "a"}])
-    with pytest.raises(ValidationError) as exc_info:
-        parse_condition_value(field_type, template, raw)
-    assert exc_info.value.messages == [message]
-
-
 def test_cascade_terminates_within_target_count():
     """E7: Fixpunkt-Iteration konvergiert; verstecktes Quellfeld = leer.
 
@@ -198,42 +129,12 @@ def test_cascade_terminates_within_target_count():
     assert a_empty == {"a"}
 
 
-def test_cascade_hidden_source_can_make_is_empty_dependent_visible():
-    fields = {"a": "text", "b": "text", "c": "text"}
-    conditions = [
-        {"target": "b", "source": "a", "operator": "is_not_empty", "value": None, "group": 0},
-        {"target": "c", "source": "b", "operator": "is_empty", "value": None, "group": 0},
-    ]
-
-    assert evaluate_conditions(fields, conditions, {"a": "", "b": "noch-gesetzt"}) == {"a", "c"}
-
-
 def test_dropped_condition_source_not_in_form():
     """E8/#774: Bedingung mit Quelle ausserhalb des Formulars wird verworfen."""
     fields = {"notiz": "textarea"}
     conditions = [{"target": "notiz", "source": "geheim", "operator": "equals", "value": "x", "group": 0}]
     # ``geheim`` ist nicht im Formular -> Bedingung faellt weg -> Ziel sichtbar.
     assert evaluate_conditions(fields, conditions, {}) == {"notiz"}
-
-
-def test_dropped_source_does_not_participate_in_and_group():
-    fields = {"quelle": "text", "ziel": "text"}
-    conditions = [
-        {"target": "ziel", "source": "quelle", "operator": "equals", "value": "ok", "group": 0},
-        {"target": "ziel", "source": "geheim", "operator": "equals", "value": "x", "group": 0},
-    ]
-
-    assert evaluate_conditions(fields, conditions, {"quelle": "ok", "geheim": "falsch"}) == {"quelle", "ziel"}
-
-
-def test_condition_without_group_defaults_to_zero():
-    fields = {"a": "text", "b": "text", "ziel": "text"}
-    conditions = [
-        {"target": "ziel", "source": "a", "operator": "equals", "value": "ok"},
-        {"target": "ziel", "source": "b", "operator": "equals", "value": "ok", "group": 0},
-    ]
-
-    assert evaluate_conditions(fields, conditions, {"a": "ok", "b": "falsch"}) == {"a", "b"}
 
 
 def test_find_cycle_detects_direct_and_transitive():

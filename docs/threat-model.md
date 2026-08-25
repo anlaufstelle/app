@@ -1,6 +1,6 @@
 # Threat Model — Anlaufstelle (STRIDE-Lite)
 
-**Version:** v0.89.x · **Letzte Revision:** 2026-08-29 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691), Offline-Grenze aus [ADR-022](adr/022-offline-snapshot-keys.md) (#1411)
+**Version:** v0.84.x · **Letzte Revision:** 2026-08-25 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691), Offline-Grenze aus [ADR-022](adr/022-offline-snapshot-keys.md) (#1411)
 
 Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen internen Code-Audits (dev-only) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
 
@@ -134,19 +134,19 @@ schützen die revisionssichere Historie gegen `UPDATE`/`DELETE`. Zwei Umgehungsw
 sind zu betrachten:
 
 1. **`session_replication_role = replica`** — ein Trigger im Default-Modus `ENABLE`
- (`tgenabled='O'`) feuert in diesem Modus nicht. Gegenmaßnahme: die Trigger stehen
- seit Migration [`0107`](../src/core/migrations/0107_append_only_triggers_enable_always.py)
- auf **`ENABLE ALWAYS`** (`tgenabled='A'`) und feuern damit auch im `replica`-Modus.
- Zusätzlich hat die Runtime-App-Rolle kein `GRANT SET ON PARAMETER
- session_replication_role` — sie kann `replica` gar nicht setzen.
+   (`tgenabled='O'`) feuert in diesem Modus nicht. Gegenmaßnahme: die Trigger stehen
+   seit Migration [`0107`](../src/core/migrations/0107_append_only_triggers_enable_always.py)
+   auf **`ENABLE ALWAYS`** (`tgenabled='A'`) und feuern damit auch im `replica`-Modus.
+   Zusätzlich hat die Runtime-App-Rolle kein `GRANT SET ON PARAMETER
+   session_replication_role` — sie kann `replica` gar nicht setzen.
 2. **Owner-DDL `ALTER TABLE … DISABLE TRIGGER`** — der **Table-Owner** darf jeden
- Trigger abschalten; `ENABLE ALWAYS` ändert daran nichts. Gegenmaßnahme: Die
- Web-Runtime-Rolle (`POSTGRES_USER`) ist **nicht** mehr DB-/Objekt-Owner, sondern
- hat nur DML-Rechte; Owner ist die BYPASSRLS-Wartungs-Rolle (`POSTGRES_ADMIN_USER`),
- die migrate/seed/Retention ohnehin fährt ([`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh),
- [ADR-033](adr/033-runtime-owner-role-separation.md)). Eine kompromittierte
- Runtime-Verbindung kann die Trigger daher weder DISABLE-n (kein Owner) noch per
- `replica` umgehen (kein GRANT).
+   Trigger abschalten; `ENABLE ALWAYS` ändert daran nichts. Gegenmaßnahme: Die
+   Web-Runtime-Rolle (`POSTGRES_USER`) ist **nicht** mehr DB-/Objekt-Owner, sondern
+   hat nur DML-Rechte; Owner ist die BYPASSRLS-Wartungs-Rolle (`POSTGRES_ADMIN_USER`),
+   die migrate/seed/Retention ohnehin fährt ([`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh),
+   [ADR-033](adr/033-runtime-owner-role-separation.md)). Eine kompromittierte
+   Runtime-Verbindung kann die Trigger daher weder DISABLE-n (kein Owner) noch per
+   `replica` umgehen (kein GRANT).
 
 Der legitime DSGVO-/Retention-Wartungspfad (`prune_auditlog`, `Client.anonymize()`,
 `backfill_audit_chain`, `reencrypt_fields`) umgeht die Trigger als Owner-Rolle
@@ -211,10 +211,10 @@ Ausdrücklich als Restrisiko akzeptiert und dokumentiert:
 
 - **Review-Kadenz:** mit jedem Major-/Minor-Release (≥ 1× pro Quartal); ad hoc nach jedem neuen Audit-Report
 - **Trigger für Update:**
- - neue Vertrauensgrenze (z.B. Worker, externer Webhook)
- - neuer Akteur (z.B. Maschinen-Account, externe API-Konsumenten)
- - neue Asset-Klasse (z.B. zusätzliche personenbezogene Daten)
- - Änderung an Defense-in-Depth-Schichten (z.B. RLS-Coverage, MFA-Pflicht)
+  - neue Vertrauensgrenze (z.B. Worker, externer Webhook)
+  - neuer Akteur (z.B. Maschinen-Account, externe API-Konsumenten)
+  - neue Asset-Klasse (z.B. zusätzliche personenbezogene Daten)
+  - Änderung an Defense-in-Depth-Schichten (z.B. RLS-Coverage, MFA-Pflicht)
 - **Pflegeverantwortung:** Solo-Maintainer ([SECURITY.md](../SECURITY.md))
 
 Letzte Revision: **2026-04-29** (initiale Fassung im Rahmen, Refs #691, #733).

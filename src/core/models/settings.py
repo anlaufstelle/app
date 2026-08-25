@@ -110,35 +110,6 @@ class Settings(models.Model):
             "(unbegrenzte Aufbewahrung)."
         ),
     )
-    # ADR-050 D3 / M-1 / M-5 (Refs #2065): eigene Frist fuer den INHALT alter
-    # Historienfassungen. Bewusst in Monaten und mit demselben Vorgabewert wie
-    # ``auditlog_retention_months`` — Betreiber sollen sich nur einen Zeitraum
-    # merken muessen. ``0`` = aus (kein ``MinValueValidator``, anders als bei
-    # den ``retention_*_days``: dort waere 0 eine Massen-Loeschung, hier ist es
-    # das Abschalten des Sweeps).
-    eventhistory_detail_months = models.PositiveIntegerField(
-        default=24,
-        verbose_name=_("Historien-Inhalte aufbewahren (Monate)"),
-        help_text=_(
-            "Wie lange die Werte alter Ereignis-Fassungen lesbar bleiben, bevor "
-            "enforce_retention sie redigiert. Die Fassung selbst (wer, wann, "
-            "welche Felder) bleibt erhalten. Die jüngste Fassung eines lebenden "
-            "Ereignisses wird nie redigiert. 0 = deaktiviert."
-        ),
-    )
-    # ADR-050 D8 / M-7 (Refs #2065): Stufe 2 — die bereits redigierte Zeile
-    # (Chronologie ohne Inhalte) wird geloescht, wenn ihre Redaktion so lange
-    # zurueckliegt. Gemessen ab ``EventHistory.redacted_at``, nicht ab
-    # ``changed_at``: die Frage lautet „wie lange steht die Zeile schon leer".
-    eventhistory_chronicle_months = models.PositiveIntegerField(
-        default=24,
-        verbose_name=_("Historien-Chronologie aufbewahren (Monate)"),
-        help_text=_(
-            "Wie lange eine bereits redigierte Historien-Fassung nach ihrer "
-            "Redaktion noch aufbewahrt wird, bevor enforce_retention sie löscht. "
-            "0 = deaktiviert (unbegrenzte Aufbewahrung der Chronologie)."
-        ),
-    )
     allowed_file_types = models.CharField(
         max_length=500,
         blank=True,

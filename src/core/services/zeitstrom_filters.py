@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from uuid import UUID
 
 from django.utils import timezone
 
 from core.models import TimeFilter
-from core.services.events.feed import get_time_range
 from core.services.events.tally import TallyLiveContext, current_tally_context
 
 ZEITSTROM_FILTER_KEYS = ("date", "time_filter", "type", "doc_type", "view")
@@ -87,31 +86,19 @@ def _handover_filter(
     target_date: date,
     today: date,
     now,
-) -> tuple[TimeFilter | None, date]:
+) -> TimeFilter | None:
     raw = params.get("time_filter")
     if raw and raw != "all":
         canonical = _canonical_uuid(raw)
-        selected = next((item for item in time_filters if str(item.pk) == canonical), None)
-        return selected, target_date
+        return next((item for item in time_filters if str(item.pk) == canonical), None)
     if raw == "all" or target_date != today:
-        return None, target_date
-
-    # Die automatische Übergabe zeigt das zuletzt abgeschlossene reale
-    # Schichtfenster. Das funktioniert auch in Dienstplan-Lücken und hängt
-    # nicht davon ab, ob der separat aufgelöste Live-Filter noch aktiv ist.
-    latest_completed = None
-    for shift_date in (today - timedelta(days=2), today - timedelta(days=1), today):
-        for item in time_filters:
-            _, window_end = get_time_range(shift_date, item)
-            if window_end > now:
-                continue
-            if latest_completed is None or window_end > latest_completed[0]:
-                latest_completed = (window_end, item, shift_date)
-
-    if latest_completed is None:
-        return None, target_date
-    _, selected, shift_date = latest_completed
-    return selected, shift_date
+        return None
+    previous = None
+    for item in time_filters:
+        if item.covers_time(now):
+            break
+        previous = item
+    return previous
 
 
 def resolve_zeitstrom_state(
@@ -139,7 +126,7 @@ def resolve_zeitstrom_state(
     view = raw_view if raw_view in {"feed", "uebergabe"} else ""
 
     if view == "uebergabe":
-        selected_filter, target_date = _handover_filter(params, filters, target_date, today, now)
+        selected_filter = _handover_filter(params, filters, target_date, today, now)
     else:
         raw_filter = params.get("time_filter")
         canonical_filter = _canonical_uuid(raw_filter) if raw_filter and raw_filter != "all" else ""

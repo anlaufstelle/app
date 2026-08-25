@@ -1,12 +1,12 @@
 # Manuelle Test-Matrix — Sektion D
 
-> Teil der [Manual-Test-Matrix](manual-test-matrix.md) (Refs #1071 Block B). Setup-Block, Status-Legende, TC-ID-Schema, Browser-/Mobile-Konventionen und die Anhänge stehen im [Hub](manual-test-matrix.md); die Gesamtübersicht in [`test-matrix-index.md`](test-matrix-index.md).
+> Teil der [Manual-Test-Matrix](manual-test-matrix.md) (Refs #1071 Block B). Setup-Block, Status-Legende, TC-ID-Schema, Browser-/Mobile-Konventionen und die Anhänge stehen im [Hub](manual-test-matrix.md); die Gesamtübersicht in `test-matrix-index.md`.
 
 ---
 
 ## SEKTION D — Entwickler-Probes (LOKAL/SSH)
 
-> **Zielgruppe:** Tobias / Server-Admin. Diese Tests erfordern direkten Zugriff auf den Server (`docker compose exec web python manage.py …`, `psql`, lokale `manage.py`-Befehle). Auf [`dev.anlaufstelle.app`](https://dev.anlaufstelle.app) nur durch Tobias oder per SSH durchführbar. Sie verifizieren Schema-Constraints (`on_delete`-Verhalten, RLS-Force, Encryption-at-Rest, Hash-Ketten) und Betriebsfähigkeit (DB-Rollen, Backup/Restore, Retention-Cron), die in Anwender-Tests nicht prüfbar sind. Aktuelle Fallzahl: siehe [`test-matrix-index.md`](test-matrix-index.md).
+> **Zielgruppe:** Tobias / Server-Admin. Diese Tests erfordern direkten Zugriff auf den Server (`docker compose exec web python manage.py …`, `psql`, lokale `manage.py`-Befehle). Auf [`dev.anlaufstelle.app`](https://dev.anlaufstelle.app) nur durch Tobias oder per SSH durchführbar. Sie verifizieren Schema-Constraints (`on_delete`-Verhalten, RLS-Force, Encryption-at-Rest, Hash-Ketten) und Betriebsfähigkeit (DB-Rollen, Backup/Restore, Retention-Cron), die in Anwender-Tests nicht prüfbar sind. Aktuelle Fallzahl: siehe `test-matrix-index.md`.
 
 ### D.CLIENT
 
@@ -119,9 +119,9 @@
 **Schritte:**
 1. `/audit/?action=delete` aufrufen (AuditLogListView).
 2. Suchen nach den Lifecycle-Events:
- - DEL-01 (Antrag): Aktuell schreibt `request_deletion` KEINEN dedizierten `deletion_requested`-AuditLog — der Code legt nur einen `DeletionRequest`-DB-Record an. Audit-Trail entsteht erst bei Approve/Reject.
- - DEL-03 (Approve → Soft-Delete): AuditLog `delete` mit `target_type=Event`, `detail={document_type, client_pseudonym, occurred_at}` (via `soft_delete_event`).
- - DEL-04 (Reject): KEIN AuditLog im Reject-Pfad — der Status-Change am DeletionRequest ist selbst der Audit-Trail (DeletionRequest-Tabelle ist append-only-artig).
+   - DEL-01 (Antrag): Aktuell schreibt `request_deletion` KEINEN dedizierten `deletion_requested`-AuditLog — der Code legt nur einen `DeletionRequest`-DB-Record an. Audit-Trail entsteht erst bei Approve/Reject.
+   - DEL-03 (Approve → Soft-Delete): AuditLog `delete` mit `target_type=Event`, `detail={document_type, client_pseudonym, occurred_at}` (via `soft_delete_event`).
+   - DEL-04 (Reject): KEIN AuditLog im Reject-Pfad — der Status-Change am DeletionRequest ist selbst der Audit-Trail (DeletionRequest-Tabelle ist append-only-artig).
 
 **Erwartetes Ergebnis:**
 - AuditLog für Approve = action `delete` (von `soft_delete_event`).
@@ -708,12 +708,12 @@
 2. Mit `admin` einloggen, Sudo-Mode betreten, `/dsgvo/` öffnen.
 3. **„Verarbeitungsverzeichnis"** herunterladen.
 4. Inhalt prüfen:
- - Verarbeitungszwecke benannt (Soziale Beratung, Falldokumentation).
- - Rechtsgrundlage (Art. 6 Abs. 1 lit. e — öffentliches Interesse).
- - Datenkategorien aufgeführt.
- - Empfänger benannt (intern/extern).
- - Speicherdauer aus `settings.retention_*_days`.
- - TOMs verlinkt (siehe Art. 32-Template).
+   - Verarbeitungszwecke benannt (Soziale Beratung, Falldokumentation).
+   - Rechtsgrundlage (Art. 6 Abs. 1 lit. e — öffentliches Interesse).
+   - Datenkategorien aufgeführt.
+   - Empfänger benannt (intern/extern).
+   - Speicherdauer aus `settings.retention_*_days`.
+   - TOMs verlinkt (siehe Art. 32-Template).
 
 **Erwartetes Ergebnis:**
 - Template ist vollständig, Facility-spezifisch gerendert.
@@ -833,7 +833,7 @@
 2. SQL: `SET app.current_facility_id TO '<facility-2-uuid>'; SELECT count(*) FROM core_client;`
 3. Erwartung: nur Klient:innen aus Facility 2 sichtbar — gemäß RLS-Policy (basierend auf Session-Variable).
 4. Test: Facility-1-Admin mit `SET app.current_facility_id TO '<facility-2-uuid>'` → kann er Facility-2-Daten sehen?
- - **Erwartung:** RLS-Policy sollte Owner-Check über `users.facility_id == app.current_facility_id` erzwingen — ggf. nicht direkt möglich, prüfen.
+   - **Erwartung:** RLS-Policy sollte Owner-Check über `users.facility_id == app.current_facility_id` erzwingen — ggf. nicht direkt möglich, prüfen.
 
 **Status:** ☐ Offen
 
@@ -1227,7 +1227,7 @@
 
 **Schritte:**
 1. `curl -s https://dev.anlaufstelle.app/health/` → JSON mit Status `ok`.
-2. ClamAV-Container stoppen: `docker compose stop clamav`. (Lokal läuft der Dienst seit #1062 nur mit Profil — erst `docker compose --profile clamav up -d clamav`, dann stoppen. Auf dev/prod ist er unverändert profillos.)
+2. ClamAV-Container stoppen: `docker compose stop clamav`.
 3. Health-Endpoint erneut → erwartet `degraded` (App läuft, aber ClamAV down).
 4. DB-Container stoppen: `docker compose stop db`.
 5. Health-Endpoint erneut → erwartet `critical` (App nicht funktionsfähig).

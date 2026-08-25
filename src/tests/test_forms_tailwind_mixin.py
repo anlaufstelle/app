@@ -164,8 +164,6 @@ EXPECTED = {
         "field_path": ("Select", True, {}),
         "new_value": ("Textarea", True, {"rows": 2, "cols": "40"}),
         "reason": ("Textarea", True, {"rows": 4, "cols": "40"}),
-        # Refs #2045: Art.-18-Opt-in im Antragsformular (unvorbelegt).
-        "restrict_processing": ("CheckboxInput", False, {}),
     },
     "UserAccessCreateForm": {
         "username": ("TextInput", True, {"maxlength": "150"}),

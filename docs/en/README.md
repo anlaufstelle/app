@@ -12,7 +12,6 @@
 | Document | Description | Audience |
 |----------|-------------|----------|
 | [admin-guide.md](admin-guide.md) | Operations manual: installation, backup/restore, monitoring, MFA, retention, GDPR | IT Admins |
-| [ops-runbook.md](ops-runbook.md) | Operations runbook: deployment, rollback, cron jobs, log analysis, troubleshooting, RLS, backup/restore, restore drill (Refs #1062) | IT Admins/DevOps |
 | [user-guide.md](user-guide.md) | User handbook: work center, timeline, persons, events, search, export, statistics, roles | End users |
 | [../screenshots.en.md](../screenshots.en.md) | Illustrated tour of the interface (demo data, pseudonymized) | Stakeholders, End users |
 | [domain-concept-summary.md](domain-concept-summary.md) | Summary of the domain concept (not a 1:1 translation) | Stakeholders, Developers |
@@ -41,16 +40,14 @@ Templates included:
 - **TOMs** — Technical and Organizational Measures (Art. 32 DSGVO)
 - **DSFA** — Data Protection Impact Assessment (Art. 35 DSGVO)
 - **Informationspflichten** — Data subject information (Arts. 13–14 DSGVO)
-- **Löschkonzept** — Retention and deletion concept for active data and backups
-- **Mitarbeiter-Informationspflichten** — Employee information (Arts. 13–14 DSGVO and § 26 BDSG)
 - **Verarbeitungsverzeichnis** — Processing register (Art. 30 DSGVO)
 
 ### Other German-only Documents
 
 | Document | Description |
 |----------|-------------|
-| [architecture.md](../architecture.md) | Architecture overview as a signpost: layers (views → services → models), security architecture in brief, no-code configuration core, offline PWA, test landscape — with pointers into the in-depth documents (Refs #1062) |
 | [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
+| [ops-runbook.md](../ops-runbook.md) | Operations runbook: monitoring, alerts, cron jobs, RLS, backup/restore, restore drill |
 | [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
@@ -59,7 +56,7 @@ Templates included:
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
 | [cra-einordnung.md](../compliance/cra-einordnung.md) | CRA classification (EU 2024/2847) — FOSS scope, gap check against Annex I, reporting-process sketch, review trigger (Refs #1077) |
 | `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
-| [dev-deployment.md](../dev/dev-deployment.md) | Dev/test environment deployment |
+| dev-deployment.md | Dev/test environment deployment |
 | [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
 | `release-checklist.md` (dev-only) | Release process, sanitize steps, hard-exclusion list |
 | [performance-budgets.md](../performance-budgets.md) | Performance targets and budgets |
@@ -71,6 +68,6 @@ Templates included:
 | `async-pdf-evaluation.md` (dev-only) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
-<!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: b0779f6ca1b37321c085f25df759b2f43084948e -->
+<!-- translation-version: v0.84.0 -->
+<!-- translation-date: 2026-08-09 -->
+<!-- source-hash: 6bdbbb857de243c3152efd64f1046bcc9afa734c -->

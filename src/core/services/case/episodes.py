@@ -39,9 +39,6 @@ _UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at"}
 def update_episode(episode, user, **fields):
     """Update mutable fields on an episode + AuditLog (nur bei echtem Diff).
 
-    Art.-18-Gate (Refs #2045): Episoden-Freitexte sind Inhalt der Fallakte —
-    ihre Bearbeitung ist fachliche Nutzung, nicht Speicherung.
-
     Gibt die Episode zurueck. Ohne ``fields`` ist der Aufruf ein No-Op; ein
     Aufruf, der nur bereits gespeicherte Werte setzt, schreibt keine
     Audit-Zeile (sonst waere "einfach immer auditieren" der billige Fix und
@@ -52,9 +49,6 @@ def update_episode(episode, user, **fields):
     for key in fields:
         if key not in _UPDATABLE_FIELDS:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
-    from core.services.client.restriction import assert_processing_allowed
-
-    assert_processing_allowed(episode.case.client_id, lock=True)
     if not fields:
         return episode
 
@@ -79,35 +73,3 @@ def update_episode(episode, user, **fields):
             detail={"case_id": str(episode.case_id), "changed_fields": changed_fields},
         )
     return episode
-
-
-@transaction.atomic
-def create_episode(case, user, *, title, description="", started_at=None):
-    """Episode anlegen — Service-Naht ueber ``Case.create_episode`` (Refs #2045).
-
-    Das Anlegen lag bisher als reine Modell-Methode vor und wurde von der View
-    direkt gerufen; damit gab es keinen Ort fuer das Art.-18-Gate ausser der
-    View selbst — und ein View-Check ist genau das, was der Re-Review an den
-    Loeschpfaden beanstandet hat. Diese duenne Naht gibt dem Gate den Platz im
-    Service, ohne die Modell-Methode (fremde Lane) anzufassen: Status-Guard und
-    Feldsemantik bleiben unveraendert dort.
-    """
-    from core.services.client.restriction import assert_processing_allowed
-
-    assert_processing_allowed(case.client_id, lock=True)
-    return case.create_episode(user=user, title=title, description=description, started_at=started_at)
-
-
-@transaction.atomic
-def close_episode(episode, user):
-    """Episode abschliessen — Service-Naht ueber ``Episode.close`` (Refs #2045).
-
-    Spiegel von :func:`create_episode`. ``user`` wird durchgereicht, obwohl die
-    Modell-Methode ihn nicht braucht: der Aufrufer soll den Vorgang wie jede
-    andere Mutation als Service-Aufruf mit Akteur schreiben, nicht als
-    stillen ORM-Zugriff.
-    """
-    from core.services.client.restriction import assert_processing_allowed
-
-    assert_processing_allowed(episode.case.client_id, lock=True)
-    return episode.close()

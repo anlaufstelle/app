@@ -89,17 +89,17 @@ Die Konfigurierbarkeit wird erst neu bewertet, wenn mindestens eine der
 folgenden Voraussetzungen erfüllt ist:
 
 1. Eine verbindliche fachliche oder externe Berichtsvorgabe verlangt andere
- Grenzen und lässt sich nicht als eigener, über `report_key` gebundener
- Bericht abbilden.
+   Grenzen und lässt sich nicht als eigener, über `report_key` gebundener
+   Bericht abbilden.
 2. Ein versioniertes Bucket-Set kann an jeden gespeicherten Personenwert und
- jeden Snapshot gebunden werden.
+   jeden Snapshot gebunden werden.
 3. Für Altwerte ist ausdrücklich entschieden, ob sie dauerhaft im alten Set
- bleiben, nur „ab jetzt“ gelten oder auf einer zulässigen Rohangabe neu
- berechnet werden; eine stillschweigende Neuzuordnung ist ausgeschlossen.
+   bleiben, nur „ab jetzt“ gelten oder auf einer zulässigen Rohangabe neu
+   berechnet werden; eine stillschweigende Neuzuordnung ist ausgeschlossen.
 4. Die Folgen für Kleinstfall-Unterdrückung und Retention sind anhand realer
- Mindestgrößen bewertet und fail-closed getestet.
+   Mindestgrößen bewertet und fail-closed getestet.
 5. Import-, Export-, Offline- und Plugin-Verträge können mehr als ein Bucket-Set
- eindeutig transportieren.
+   eindeutig transportieren.
 
 Bis dahin ist „andere Zielgruppe“ allein kein sicherer Migrationsplan.
 
@@ -108,43 +108,43 @@ Bis dahin ist „andere Zielgruppe“ allein kein sicherer Migrationsplan.
 ### Positiv
 
 - Bestands- und Neudaten behalten dieselbe Bedeutung; Snapshot-Zeiträume sind
- ohne zusätzliche Versionsdimension zusammenführbar.
+  ohne zusätzliche Versionsdimension zusammenführbar.
 - Die Datenminimierung bleibt erhalten: kein Geburtsdatum, kein exaktes Alter.
 - K-Anonymitätsgruppen und Berichtsvokabular ändern sich nicht durch lokale
- Administration.
+  Administration.
 - Dokumentation und Code sagen nun dieselbe Wahrheit; die zweite Labeltabelle
- im Beispielbericht entfällt.
+  im Beispielbericht entfällt.
 
 ### Negativ / bewusst akzeptiert
 
 - Seniorenarbeit, Jugendhilfe oder andere Fachgebiete können die Grenzen nicht
- an ihre Zielgruppe anpassen.
+  an ihre Zielgruppe anpassen.
 - `27+` ist für viele Einrichtungen sehr grob; ein erweitertes festes Set würde
- diese Lücke nur verschieben und Bestandswerte weiterhin nicht aufteilen.
+  diese Lücke nur verschieben und Bestandswerte weiterhin nicht aufteilen.
 - Eine künftige echte Konfigurierbarkeit wird größer, weil sie Versionierung und
- mehrere Datenpfade gemeinsam lösen muss.
+  mehrere Datenpfade gemeinsam lösen muss.
 
 ## Alternatives considered
 
 - **Frei pro Einrichtung konfigurieren:** fachlich flexibel, aber ohne
- Bucket-Set-Version und Rohalter nicht migrations- oder snapshotfähig;
- zusätzliche RLS-, UI-, Import-/Export- und K-Anonymitätsfläche — verworfen.
+  Bucket-Set-Version und Rohalter nicht migrations- oder snapshotfähig;
+  zusätzliche RLS-, UI-, Import-/Export- und K-Anonymitätsfläche — verworfen.
 - **Erweitertes festes Set:** vermeidet ein neues Modell, löst aber
- zielgruppenspezifische Schnitte nicht und kann `27+` im Bestand nicht
- nachträglich teilen — verworfen.
+  zielgruppenspezifische Schnitte nicht und kann `27+` im Bestand nicht
+  nachträglich teilen — verworfen.
 - **Presets über Konfigurationspakete:** passt zum No-Code-Werkzeug, benötigt
- aber trotzdem eine persistierte Set-Version und eine Semantik für
- Bestandswerte; Pakete allein lösen das Datenproblem nicht — verworfen.
+  aber trotzdem eine persistierte Set-Version und eine Semantik für
+  Bestandswerte; Pakete allein lösen das Datenproblem nicht — verworfen.
 - **Genaues Alter oder Geburtsdatum speichern:** würde eine Neuberechnung
- erlauben, vergrößert aber die personenbezogene Datenmenge erheblich und hat
- für diesen Wunsch keinen eigenständigen Zweck — verworfen.
+  erlauben, vergrößert aber die personenbezogene Datenmenge erheblich und hat
+  für diesen Wunsch keinen eigenständigen Zweck — verworfen.
 
 ## References
 
 - Modell: [`core/models/client.py`](../../src/core/models/client.py)
 - Statistik und Snapshot-Merge:
- [`dashboard/statistics.py`](../../src/core/services/dashboard/statistics.py),
- [`dashboard/snapshot.py`](../../src/core/services/dashboard/snapshot.py)
+  [`dashboard/statistics.py`](../../src/core/services/dashboard/statistics.py),
+  [`dashboard/snapshot.py`](../../src/core/services/dashboard/snapshot.py)
 - Bericht: [`reporting/backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py)
 - RFC/Entscheid: #1877,
- [#1941](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873)
+  [#1941](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873)

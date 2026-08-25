@@ -6,14 +6,11 @@ from io import StringIO
 from unittest import mock
 
 import pytest
-from django.contrib import messages
-from django.contrib.messages import get_messages
 from django.core.management import call_command
 from django.db import IntegrityError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.constants import RETENTION_URGENCY_RED_DAYS
 from core.models import AuditLog, Event, LegalHold, RetentionProposal, Settings
 from core.models.settings import (
     DEFAULT_RETENTION_ANONYMOUS_DAYS,
@@ -28,8 +25,6 @@ from core.retention.proposals import (
     _category_cards,
     _retention_settings_for,
     _status_counts,
-    annotate_urgency,
-    build_retention_dashboard_context,
 )
 from core.services.retention import (
     approve_proposal,
@@ -503,29 +498,6 @@ class TestEnforcementLocaldateBoundary:
 
 
 @pytest.mark.django_db
-class TestRetentionProposalLocaldateBoundary:
-    def test_urgency_uses_berlin_local_date(self, proposal):
-        proposal.deletion_due_at = _BERLIN_DATE + timedelta(days=RETENTION_URGENCY_RED_DAYS)
-
-        with mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone:
-            mock_timezone.localdate.return_value = _BERLIN_DATE
-            annotate_urgency(proposal)
-
-        assert proposal.urgency == "red"
-
-    def test_dashboard_context_uses_berlin_local_date(self, facility):
-        with (
-            mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
-            mock.patch("core.retention.proposals.get_dashboard_proposals", return_value={}),
-        ):
-            mock_timezone.localdate.return_value = _BERLIN_DATE
-            context = build_retention_dashboard_context(facility)
-
-        assert context["today"] == _BERLIN_DATE
-        assert context["soon_threshold"] == _BERLIN_DATE + timedelta(days=7)
-
-
-@pytest.mark.django_db
 class TestCleanupStaleProposals:
     def test_removes_proposals_for_deleted_events(self, facility, proposal, old_anonymous_event):
         old_anonymous_event.is_deleted = True
@@ -764,40 +736,6 @@ def two_pending_proposals(facility, doc_type_contact, staff_user):
 
 @pytest.mark.django_db
 class TestRetentionBulkViews:
-    @pytest.mark.parametrize(
-        "url_name",
-        [
-            "core:retention_bulk_approve",
-            "core:retention_bulk_defer",
-            "core:retention_bulk_reject",
-        ],
-    )
-    def test_bulk_action_reports_processed_count(self, client, lead_user, two_pending_proposals, url_name):
-        client.force_login(lead_user)
-        response = client.post(
-            reverse(url_name),
-            {"proposal_ids": [str(p.pk) for p in two_pending_proposals]},
-            headers={"HX-Request": "true"},
-        )
-
-        stored_messages = list(get_messages(response.wsgi_request))
-        assert [(message.level, str(message)) for message in stored_messages] == [
-            (messages.SUCCESS, "2 Löschvorschläge aktualisiert.")
-        ]
-
-    def test_bulk_action_uses_singular_message(self, client, lead_user, two_pending_proposals):
-        client.force_login(lead_user)
-        response = client.post(
-            reverse("core:retention_bulk_approve"),
-            {"proposal_ids": [str(two_pending_proposals[0].pk)]},
-            headers={"HX-Request": "true"},
-        )
-
-        stored_messages = list(get_messages(response.wsgi_request))
-        assert [(message.level, str(message)) for message in stored_messages] == [
-            (messages.SUCCESS, "1 Löschvorschlag aktualisiert.")
-        ]
-
     def test_bulk_approve_sets_all_selected_to_approved(self, client, lead_user, two_pending_proposals):
         client.force_login(lead_user)
         resp = client.post(

@@ -7,17 +7,6 @@ die Gates dort eager auswerten, inklusive ``can_access_deletion_requests``
 ``core/context_processors.py`` mit einem ``HX-Request``-Frühausstieg. Ein
 Inclusion-Tag wird nur ausgewertet, wo Navigation tatsächlich gerendert wird.
 
-Arbeitsteilung mit ``review_counts`` (Refs #1984): Die Nav-STRUKTUR (Items,
-Gates, Aktiv-Zustand) bleibt aus genau diesen Gründen Inclusion-Tag-Sache.
-Die Badge-ZÄHLER kommen dagegen bewusst aus einem Context-Processor —
-Desktop-Sidebar, mobiles Mehr-Menü und Subnav rendern dieselben Zahlen in
-EINEM Request, und nur ein Prozessor stellt sie allen drei Tags aus einer
-einzigen Berechnung bereit (die Tags reichen sie unten explizit in ihre
-Inclusion-Kontexte durch). Der Prozessor trägt denselben
-``HX-Request``-Frühausstieg wie ``workitem_counts`` und teilt sich das
-Löschantrags-Gate als ``cached_property`` mit ``is_visible`` (Refs #1755) —
-die Query-Sorge, die diesen Docstring begründet, gilt dort also weiterhin.
-
 Die Tags reichen **vorbereitete** :class:`RenderedItem`\\ s weiter, nie rohe
 ``NavItem``\\ s: ``href`` (inkl. optionalem Query) und ``is_active`` werden hier
 in Python berechnet. Die Templates enthalten damit weder Logik noch
@@ -187,20 +176,13 @@ def nav_sidebar(context):
         "items": _without_leading_divider(_rendered(nav.SIDEBAR, context)),
         "overdue_workitems_count": context.get("overdue_workitems_count"),
         "open_workitems_count": context.get("open_workitems_count"),
-        # Refs #1984: Summen-Badge am Datenschutz-Hub-Anker.
-        "datenschutz_review_count": context.get("datenschutz_review_count"),
     }
 
 
 @register.inclusion_tag("partials/_nav_mobile_more_items.html", takes_context=True)
 def nav_mobile_more(context):
     """Die Link-Einträge des mobilen „Mehr"-Menüs."""
-    return {
-        "items": _rendered(nav.MOBILE_MORE, context, mobile=True),
-        # Refs #1984: Summen-Badge an der Datenschutz-Hub-Zeile (Semantik
-        # identisch zur Desktop-Sidebar).
-        "datenschutz_review_count": context.get("datenschutz_review_count"),
-    }
+    return {"items": _rendered(nav.MOBILE_MORE, context, mobile=True)}
 
 
 @register.inclusion_tag("partials/_subnav.html", takes_context=True)
@@ -218,13 +200,7 @@ def subnav(context, key: str):
     ist Opt-in je Bereich, kein Nav-Default.
     """
     area = nav.section(key)
-    return {
-        "section": area,
-        "tabs": _rendered(area.tabs, context, carry=_carry_query(area, context)),
-        # Refs #1984: Einzel-Zaehler an den Datenschutz-Reitern.
-        "open_deletion_requests_count": context.get("open_deletion_requests_count"),
-        "open_rectification_requests_count": context.get("open_rectification_requests_count"),
-    }
+    return {"section": area, "tabs": _rendered(area.tabs, context, carry=_carry_query(area, context))}
 
 
 @register.inclusion_tag("components/_back_link.html", takes_context=True)

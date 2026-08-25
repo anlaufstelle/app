@@ -4,72 +4,20 @@ import secrets
 import string
 
 from django.contrib import admin, messages
-from django.contrib.admin.utils import unquote
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.core.exceptions import PermissionDenied
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
-from core.models import AuditLog, User
-from core.services.audit import audit_event
-from core.services.audit.chain import advisory_lock_id
+from core.models import User
 from core.services.security import is_locked as user_is_locked
 from core.services.security import send_invite_email
 from core.services.security import unlock as unlock_user
 
 _INITIAL_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 _INITIAL_PASSWORD_LENGTH = 12
-
-# Refs #2018: Grund-Slug der Audit-Zeile eines Admin-Resets. Bewusst KEIN
-# ``RevocationReason``-Member: die Enum in
-# ``core/services/security/credentials.py`` steuert ueber
-# ``REVOCATION_EFFECTS``, WAS ein Ausloeser bewirkt (Salt-Rotation,
-# Session-Flush, Zwangswechsel, Lockout-Aufhebung). Der Admin-Reset soll
-# genau nichts davon zusaetzlich ausloesen — das neue Passwort entwertet
-# Alt-Sessions ohnehin ueber den Session-Auth-Hash und den daraus
-# abgeleiteten Offline-Schluessel (Begruendung im Modul-Docstring von
-# ``credentials.py``), und ``clear_sudo`` traefe hier die falsche Session
-# (die des handelnden Admins, nicht die des Ziels). Was fehlte, war
-# ausschliesslich die Rechenschaftszeile.
-_ADMIN_PASSWORD_RESET_REASON = "admin_password_reset"  # noqa: S105 — Audit-Slug, kein Passwort
-
-
-class UserAddForm(UserCreationForm):
-    """Add-Form ohne Passwort-Eingabe (Refs #2073).
-
-    ``UserAdmin.save_model`` (s.u.) vergibt das Passwort beim Anlegen
-    IMMER selbst — entweder unusable + Einladungs-Link per E-Mail, oder als
-    generiertes Klartext-Initialpasswort im Fallback ohne E-Mail. Ein hier
-    eingetipptes Passwort würde von ``save_model`` also ohnehin überschrieben.
-
-    Entscheid (statt ``add_fieldsets`` um ``password1``/``password2``/
-    ``usable_password`` zu ergänzen, Djangos Standardmuster): die Felder ganz
-    entfernen. Ein Formular, das ein Passwort abfragt, dessen Eingabe
-    garantiert verworfen wird, ist irreführende UX — die Person tippt ein
-    Passwort ein, das nirgends landet. `add_fieldsets` bot diese Felder
-    ohnehin schon nicht an; der eigentliche Fehler war, dass sie trotzdem als
-    ``required`` in der Formularvalidierung standen (Djangos
-    ``SetPasswordMixin.validate_passwords()`` — genau das reparieren wir hier).
-
-    ``validate_passwords()`` ist der zentrale Hook, den ``SetPasswordMixin``
-    (Basisklasse von ``UserCreationForm``) für die Passwort-Pflicht aufruft;
-    er setzt ``cleaned_data["set_usable_password"]``, das ``_post_clean``
-    (Passwort-Validatoren) UND ``save()`` (Passwort setzen) auswerten. Diese
-    eine Override-Stelle reicht daher aus, um beide Folgeschritte sauber
-    abzuschalten, ohne ``_post_clean``/``save`` selbst zu duplizieren.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for field_name in ("password1", "password2", "usable_password"):
-            self.fields.pop(field_name, None)
-
-    def validate_passwords(self, *args, **kwargs):
-        del args, kwargs  # ungenutzt: es gibt keine Passwort-Felder mehr zu validieren.
-        self.cleaned_data["set_usable_password"] = False
 
 
 @admin.action(description="Account-Sperre aufheben (Login freigeben)")
@@ -103,111 +51,14 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
     ab (nur facility-übergreifende Fachtabellen), daher darf ein facility_admin
     über einen manipulierten Changelist-Request keine fremden Konten treffen —
     die Aktion filtert für Nicht-super_admins hart auf die eigene Einrichtung.
-
-    Refs #2019: Der frühere rohe ``queryset.update(mfa_required=True)`` war
-    schnell, feuerte aber keine Signale und lief an ``save()`` vorbei — die
-    Sammelaktion schwächte bzw. verschärfte den Login-Schutz fremder Konten
-    also spurlos, während Rollenwechsel/Deaktivierung längst
-    actor-attribuierte Zeilen schreiben (Refs #1369). Sie läuft jetzt je
-    Konto über ``save(update_fields=…)`` und schreibt **eine Zeile je
-    tatsächlich umgestelltem Konto**.
-
-    ``USER_ACCESS_UPDATED`` mit ``changed_fields=["mfa_required"]`` ist exakt
-    die Form, die die Fach-UI für dieselbe Änderung schreibt
-    (``services/user_access.update_user_access``, Refs #1871) — der technische
-    Admin-Fallback und der Fach-Weg bleiben unter /audit/ dieselbe Zeile, statt
-    zwei Vokabeln für einen Vorgang zu führen. Der Service selbst ist hier
-    nicht aufrufbar: er verlangt eine Einrichtung im Kontext, die Aktion muss
-    aber auch dem einrichtungslosen super_admin offenstehen.
-
-    Die Re-Filter-Logik (``mfa_required=False``) bleibt: ohne sie erzeugte
-    jeder Sammelklick eine Zeile je bereits pflichtigem Konto — Audit-Rauschen,
-    das die echten Änderungen zudeckt.
-
-    Fix-Runde 1 (Cross-Review) — **Transaktionsklammer + Zeilensperren**:
-    Django umschliesst Admin-Actions NICHT automatisch mit
-    ``transaction.atomic``. Ohne eigene Klammer blieb ein Flip bestehen, dessen
-    Audit-Zeile scheiterte, und bei mehreren Konten entstand ein partiell
-    angewandter Lauf. Ohne Sperre konnten zwei parallele Aktionen denselben
-    ``mfa_required=False``-Stand materialisieren, beide flippen und beide eine
-    Zeile schreiben — zwei Belege fuer EINE tatsaechliche Aenderung, was die
-    Zusage „eine Zeile je tatsaechlich umgestelltem Konto" bricht. Die Sperre
-    serialisiert den zweiten Klick; danach filtert sein Re-Filter die bereits
-    umgestellten Konten korrekt heraus.
-
-    Fix-Runde 2/3 (Re-Review) — **Ordnung nach dem tatsaechlichen
-    Advisory-Lock-Key**: Jeder Audit-Insert nimmt in
-    ``services/audit/chain.py`` einen **transaktionsweiten** Advisory-Lock PRO
-    FACILITY (``pg_advisory_xact_lock``), der bis zum Commit gehalten wird —
-    innerhalb dieser Klammer sammeln sich also die Facility-Locks aller
-    auditierten Konten an. Ein super_admin sieht einrichtungsuebergreifend
-    (``admin_site.scope_to_facility``), sein Lauf kann somit mehrere
-    Facility-Locks halten. Ohne feste Erwerbsreihenfolge deadlocken zwei
-    parallele Laeufe — sogar bei voellig disjunkten Kontomengen, wo die
-    Zeilensperren nichts serialisieren.
-
-    Nach ``facility_id`` zu ordnen reicht dafuer **nicht**: gesperrt wird
-    ``hashtext(name)``, und ``hashtext`` liefert nur 32 Bit, bildet UUIDs also
-    nicht injektiv ab. Bei einer Kollision ``h(A) = h(C) = X``, ``h(B) = Y`` mit
-    ``A < B < C`` naehme ein Lauf ueber ``{A, B}`` die Keys ``X -> Y``, ein Lauf
-    ueber ``{B, C}`` dagegen ``Y -> X`` — der Zyklus bliebe offen. Sortiert wird
-    deshalb nach ``(advisory_lock_id, facility_id)``: nach dem echten Lock-Key,
-    mit der facility_id als deterministischem Tie-Break bei Kollision. Gleiche
-    Keys liegen damit benachbart, der zweite Erwerb desselben xact-Locks ist
-    ohnehin ein No-op.
-
-    **Invariante fuer kuenftige Aenderungen:** Wer hier Audit-Zeilen ueber
-    mehrere Facilities schreibt, ordnet nach ``advisory_lock_id`` — nicht nach
-    facility_id und nicht nach pk. Die SQL-Ordnung ``(facility_id, pk)``
-    darunter bleibt fuer die ZEILENsperren zustaendig (Muster #1022 B2 aus
-    ``services/case/workitems.py``); Pythons stabile Sortierung erhaelt sie
-    innerhalb einer Facility.
     """
-    from core.signals.audit import get_client_ip
-
     if not getattr(request.user, "is_super_admin", False):
         current = getattr(request, "current_facility", None)
         if current is None:
             messages.error(request, "Keine Einrichtung im Kontext — Aktion abgebrochen.")
             return
         queryset = queryset.filter(facility=current)
-
-    actor = request.user
-    ip_address = get_client_ip(request)
-    updated = 0
-    with transaction.atomic():
-        # ``list()`` erzwingt, dass ALLE Zeilensperren stehen, bevor der erste
-        # Audit-Insert den ersten Facility-Lock nimmt — Sperrklassen bleiben so
-        # in fester Reihenfolge (erst Zeilen, dann Facilities).
-        betroffen = list(queryset.select_for_update().filter(mfa_required=False).order_by("facility_id", "pk"))
-        # Umsortieren auf die Lock-Key-Ordnung: je Facility EIN Lookup, nicht
-        # je Konto. ``None`` (Nicht-PostgreSQL) faellt auf 0 — dort nimmt
-        # ``assign_chain_fields`` gar keinen Lock, die Ordnung ist dann
-        # gleichgueltig und bleibt ueber den Tie-Break trotzdem deterministisch.
-        lock_ids = {fid: (advisory_lock_id(fid) or 0) for fid in {obj.facility_id for obj in betroffen}}
-        betroffen.sort(key=lambda obj: (lock_ids[obj.facility_id], str(obj.facility_id)))
-        for user in betroffen:
-            user.mfa_required = True
-            # Refs #1369: transienter Actor-Kontext für die Signal-Handler; das
-            # Feld selbst trägt keine eigene Signal-Action, die Zeile schreiben
-            # wir direkt darunter.
-            user._audit_actor = actor
-            user.save(update_fields=["mfa_required"])
-            audit_event(
-                AuditLog.Action.USER_ACCESS_UPDATED,
-                user=user,
-                facility=user.facility,
-                actor=actor,
-                target_obj=user,
-                detail={
-                    "changed_fields": ["mfa_required"],
-                    "username": user.username,
-                    "actor_id": actor.pk,
-                    "actor_username": actor.get_username(),
-                },
-                ip_address=ip_address,
-            )
-            updated += 1
+    updated = queryset.filter(mfa_required=False).update(mfa_required=True)
     if updated:
         messages.success(request, f"MFA für {updated} Nutzende verpflichtend gesetzt.")
     else:
@@ -217,7 +68,7 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
 @admin.register(User, site=anlaufstelle_admin_site)
 class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     form = UserChangeForm
-    add_form = UserAddForm
+    add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "display_name", "role", "facility", "is_active")
     list_filter = ("role", "facility", "is_active", "is_staff")
@@ -395,119 +246,6 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
                 f"Initialpasswort für {obj.username}: {password} — Bitte notieren, es wird nicht erneut angezeigt!",
                 extra_tags="password-display",
             )
-
-    def user_change_password(self, request, id, form_url=""):
-        """Admin-Reset eines FREMDEN Passworts auditieren (Refs #2018).
-
-        Djangos ``UserAdmin.user_change_password`` ruft ``form.save()`` direkt
-        auf und umgeht ``save_model()`` vollstaendig — der #1369-Actor-
-        Mechanismus (``obj._audit_actor``) greift hier also nicht, und der
-        ``post_save``-Diff in ``signals/audit.py`` verfolgt nur ``role``,
-        ``is_active`` und ``can_confirm_deletion``. Uebrig blieb Djangos
-        **mutierbares** ``admin.LogEntry``; im append-only, HMAC-verketteten
-        AuditLog stand nichts, obwohl ein Credential-Wechsel im Threat-Model
-        als Privilegien-Ereignis gilt (Rigor von ``USER_ROLE_CHANGED``, #1369).
-
-        Erkannt wird der Wechsel am **Passwort-Hash vorher/nachher**, nicht am
-        Response-Typ. Djangos View kennt zwei Erfolgspfade (neues Passwort und
-        „Passwort-Anmeldung deaktivieren") und zwei Redirect-Zweige, von denen
-        einer (widerspruechliche Formulardaten) gerade **kein** Wechsel ist —
-        der Hash-Vergleich trifft alle vier Faelle richtig und bleibt stabil,
-        wenn Django die Zweige umbaut. Der Hash wird ausschliesslich
-        verglichen; er landet nie im ``detail``.
-
-        Warum ``CREDENTIALS_REVOKED``: der Vorgang widerruft das bisherige
-        Passwort des Ziels samt allem, was daran hing — dieselbe Frage, die
-        die Aktion seit #1965 unter /audit/ beantwortet („wann wechselten hier
-        zuletzt Zugangsdaten"). Der Grund-Slug unterscheidet den Admin-Reset
-        von den drei Selbstbedienungs-Wegen. Kein neuer ``Action``-Wert und
-        damit keine Migration.
-
-        Fix-Runde 1 (Cross-Review) — **Transaktionsklammer + Zeilensperre**:
-        Diese Django-Sonder-View laeuft weder ueber ``changeform_view`` noch
-        unter ``ATOMIC_REQUESTS`` (im Repo nicht gesetzt). Ohne eigene Klammer
-        blieb ein Passwortwechsel bestehen, dessen Audit-Insert scheiterte —
-        also exakt die Nachweisluecke, die dieses Ticket schliessen soll. Und
-        ohne Sperre konnte zwischen dem Vorher- und dem Nachher-Read ein
-        paralleler Wechsel einlaufen und diesem Admin zugeschrieben werden,
-        sogar bei einem ungueltigen POST (der Hash haette sich ja geaendert).
-        Beides deckt jetzt ein ``transaction.atomic`` samt
-        ``select_for_update`` auf der Zielzeile ab: Passwortwechsel und
-        Audit-Zeile committen gemeinsam oder gar nicht.
-
-        Fix-Runde 2 (Re-Review), Deadlock-Betrachtung: Dieser Pfad ist vom
-        Cross-Facility-Deadlock der Bulk-Aktionen **nicht** betroffen. Er
-        behandelt genau EIN Zielkonto, schreibt also genau EINE Audit-Zeile und
-        nimmt damit genau EINEN Facility-Advisory-Lock
-        (``services/audit/chain.py``) — ein einzelner Lock kann keinen Zyklus
-        bilden. Er haelt zudem dieselbe Sperr-KLASSEN-Reihenfolge wie die
-        Bulk-Pfade ein (erst die Zeilensperre, dann der Facility-Lock), sodass
-        auch zwischen diesem Pfad und einem parallelen Bulk-Lauf kein Zyklus
-        entsteht. Diese Reihenfolge ist die Invariante — wer hier weitere
-        Audit-Zeilen ueber mehrere Facilities ergaenzt, muss sie nach
-        ``facility_id`` ordnen.
-        """
-        # Lazy wie in ``unlock_selected_users``: ``core.signals.audit`` wird
-        # erst nach ``AppConfig.ready()`` importierbar.
-        from core.signals.audit import get_client_ip
-
-        if request.method != "POST":
-            # GET rendert nur das Formular — nichts zu sperren, nichts zu
-            # auditieren. Eine Sperre haette hier nur Kosten und wuerde bis
-            # zum Rendern des TemplateResponse gehalten.
-            return super().user_change_password(request, id, form_url)
-
-        target_pk = unquote(id)
-        with transaction.atomic():
-            before = self._locked_user(request, target_pk)
-            old_hash = before.password if before is not None else None
-
-            response = super().user_change_password(request, id, form_url)
-
-            if old_hash is None:
-                return response
-            # Innerhalb der Sperre gelesen: der Hash kann sich seit dem
-            # Vorher-Read nur durch DIESEN Request geaendert haben.
-            target = self.get_object(request, target_pk)
-            if target is None or target.password == old_hash:
-                return response
-
-            actor = request.user
-            audit_event(
-                AuditLog.Action.CREDENTIALS_REVOKED,
-                user=target,
-                facility=getattr(target, "facility", None),
-                actor=actor,
-                target_obj=target,
-                # Nur Allowlist-Schluessel (Refs #1944) und keinerlei Passwort-
-                # Material: ``actor_username``/``username`` bleiben lesbar, auch
-                # wenn eines der beiden Konten spaeter geloescht wird (beide FKs
-                # sind SET_NULL) — Refs #1369.
-                detail={
-                    "reason": _ADMIN_PASSWORD_RESET_REASON,
-                    "username": target.username,
-                    "actor_id": actor.pk,
-                    "actor_username": actor.get_username(),
-                },
-                ip_address=get_client_ip(request),
-            )
-            return response
-
-    def _locked_user(self, request, object_id):
-        """Zielkonto per ``select_for_update`` fuer die laufende Transaktion sperren.
-
-        Spiegelt Djangos ``ModelAdmin.get_object`` (inkl. der Toleranz gegen
-        ungueltige IDs) und bleibt ueber ``get_queryset`` facility-gescopt —
-        nur eben mit Zeilensperre. ``None`` bedeutet „nicht vorhanden oder
-        nicht sichtbar"; der nachfolgende ``super()``-Aufruf beantwortet
-        diesen Fall selbst mit 404/403.
-        """
-        field = self.model._meta.pk
-        try:
-            pk = field.to_python(object_id)
-        except (ValidationError, ValueError):
-            return None
-        return self.get_queryset(request).select_for_update().filter(pk=pk).first()
 
     def response_add(self, request, obj, post_url_continue=None):
         response = super().response_add(request, obj, post_url_continue)

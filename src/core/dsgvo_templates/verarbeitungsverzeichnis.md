@@ -3,7 +3,7 @@
 **Verantwortlicher:** {{ facility_name }}
 **Datenschutzbeauftragte/r:** [Name und Kontakt eintragen]
 **Erstellt:** {{ date }}
-**Version:** 1.1 (Softwarestand v0.89, 2026-08-28)
+**Version:** 1.0 (Softwarestand v0.10, 2026-04-19)
 
 ---
 
@@ -27,12 +27,11 @@
 | Kontaktstufe | Nur Pseudonym, Mit Zusatzangaben | Nein |
 | Kontaktdaten | Dokumentation einzelner Kontakte | Teilweise |
 | Sensible Notizen | Freitextnotizen mit sensiblen Inhalten | Ja (AES/Fernet) |
-| Sperrvermerk (Art. 18) | Kennzeichen, Rechtsgrund (Art. 18 Abs. 1 lit. a–d), Zeitpunkt, setzende Person | Nein |
 
 ### 1.4 Rechtsgrundlage
 - Art. 6 Abs. 1 lit. e DSGVO (öffentliches Interesse)
 - Art. 9 Abs. 2 lit. g DSGVO (erhebliches öffentliches Interesse)
-- Einrichtungsspezifische Grundlage: einschlägiges Fach- und Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe ergänzen)
+- SGB VIII (Kinder- und Jugendhilfe)
 
 ### 1.5 Empfänger
 - Mitarbeitende der Einrichtung (je nach Rolle)
@@ -51,17 +50,6 @@ Keine.
 
 ### 1.8 Technische und organisatorische Maßnahmen
 Siehe separates TOM-Dokument.
-
-### 1.9 Einschränkung der Verarbeitung (Art. 18 DSGVO)
-Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 lit. a) oder liegt einer der übrigen Tatbestände des Art. 18 Abs. 1 vor, kann an der Person ein **Sperrvermerk** gesetzt werden. Wirkung in der Software:
-
-- Die Daten bleiben **gespeichert** (Art. 18 Abs. 2) — der Vermerk ist kein Löschsperrvermerk.
-- Inhaltliche Verarbeitung ist gesperrt: Die Person kann nicht mehr bearbeitet und keinem neuen Kontakt, Fall oder Aufgabe zugeordnet werden.
-- **Ausgenommen** ist der Berichtigungsworkflow (Art. 16) — er ist der Weg, auf dem die bestrittene Richtigkeit geprüft wird.
-- Gespeichert wird nur der Rechtsgrund als Werteliste, nicht der strittige Sachverhalt; dieser liegt verschlüsselt am Berichtigungsantrag.
-- Setzen und Aufheben werden protokolliert. Das Aufheben verlangt eine zweite berechtigte Person oder die Leitung; die Unterrichtungspflicht nach Art. 18 Abs. 3 (Hinweis an die betroffene Person vor dem Aufheben) ist **organisatorisch** zu erfüllen — die Software erzwingt sie nicht.
-
-**Abgrenzung:** Der Sperrvermerk ist **nicht** der Legal Hold. Der Legal Hold blockiert die *Löschung* (Art. 17 Abs. 3), der Sperrvermerk die *Nutzung*. Beide können unabhängig voneinander bestehen.
 
 ---
 
@@ -100,5 +88,4 @@ Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 li
 
 ### 3.4 Löschfristen
 - Aufbewahrung: {{ auditlog_retention_months }} Monate rollierend, danach automatische Löschung (`0` schaltet die Löschung **ab**)
-- Ebenfalls dauerhaft: der Nachweis je Charge der Historien-Redaktion (er belegt, dass die Unveränderlichkeit für bestimmte Zeilen legitim geöffnet wurde, und enthält Anzahl, Fristgrenze und Chargengrenzen — keine Inhalte)
 - Dauerhaft ausgenommen (wortgleich zur DSFA § 2.3, Frist 7): protokollierte Sicherheitsverstöße, System-Marker des Aufbewahrungslaufs und der Nachweis herausgegebener Berichtszeiträume. Letzterer enthält Zeitraum, Format und die auslösende Person; Empfänger und Zweck sind ungeprüfter Freitext (organisatorische Vorgabe: Organisation statt Ansprechperson eintragen)

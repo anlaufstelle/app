@@ -507,7 +507,7 @@ Der aktuelle Stand von Anlaufstelle umfasst:
 - PWA, Mobile-first, Docker-Deployment
 - Falllogik: Fälle eröffnen/schließen, Episoden, Zuständigkeiten
 - Wirkungsmessung: Ziele, Meilensteine und Outcomes pro Fall
-- DSGVO-Dokumentationspaket: Verarbeitungsverzeichnis, DSFA, AV-Vertrag, TOMs, Informationspflichten, Beschäftigten-Information und Löschkonzept als Vorlagen ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/))
+- DSGVO-Dokumentationspaket: Verarbeitungsverzeichnis, DSFA, AV-Vertrag, TOMs und Informationspflichten als Vorlagen ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/))
 
 Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md).
 
@@ -1202,7 +1202,7 @@ Das Hauptdokument beschreibt Datenschutz-Grundlagen im aktuellen Stand (Fundamen
 | Betroffenenrechte (Auskunft) | Manuelle Abfrage durch Anwendungsbetreuung (`facility_admin`) | Self-Service-Funktion für Lead-Rolle |
 | Betroffenenrechte (Löschung) | Manuell durch Anwendungsbetreuung (`facility_admin`) | ✓ 4-Augen-Freigabe via RetentionProposal ([ADR-021](adr/021-retention-modell.md)) |
 | Betroffenenrechte (Portabilität) | Nicht verfügbar | JSON/CSV-Export der personenbezogenen Daten (dedizierter Workflow offen) |
-| DSGVO-Dokumentation | Nicht mitgeliefert | ✓ Vorlagen mitgeliefert ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/): VVT, DSFA, AV-Vertrag, TOMs, Informationspflichten, Beschäftigten-Information, Löschkonzept) |
+| DSGVO-Dokumentation | Nicht mitgeliefert | ✓ Vorlagen mitgeliefert ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/): VVT, DSFA, AV-Vertrag, TOMs, Informationspflichten) |
 | Datenschutz-Folgenabschätzung | Nicht durchgeführt | ✓ Vorlage mitgeliefert (`dsfa.md`), auf Anlaufstelle zugeschnitten |
 
 Die Logik: Das Fundament stellt sicher, dass keine ungeschützten Daten im System liegen. Die Datenschutz-Reife stellt sicher, dass die Organisation ihre Compliance-Pflichten erfüllen kann, ohne externen Rechtsberater zu brauchen. **Stand v0.15:** Diese Reife-Maßnahmen sind weitgehend umgesetzt — Retention-Automatisierung ([ADR-021](adr/021-retention-modell.md)), K-Anonymisierung ([ADR-023](adr/023-k-anonymization-statistik.md)), 4-Augen-Löschung und die DSGVO-Vorlagen sind produktiv; offen bleiben v.a. dedizierte Portabilitäts-/Berichtigungs-Workflows (Art. 16/20).

@@ -22,30 +22,34 @@ from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION, WORKITEM_INBO
 from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
 from core.services.case import (
-    DEFAULT_ASSIGNED_SCOPE,
-    apply_workitem_default_scope,
-    apply_workitem_filters,
-    can_user_mutate_workitem,
     create_workitem,
     update_workitem,
     update_workitem_status,
 )
 from core.services.client import get_client_or_none
+from core.services.events import (
+    get_idempotent_result,
+    normalize_idempotency_key,
+    payload_fingerprint,
+    remember_idempotent_result,
+)
 from core.services.scoping import get_scoped_object
 from core.utils.formatting import isoformat_or_none
 from core.views._json_contracts import (
     _conflict_response,
+    _idempotency_mismatch_response,
     _invalid_form_response,
     _wants_json_response,
     _wants_raw_json_response,
 )
-from core.views.mixins import (
-    AssistantOrAboveRequiredMixin,
-    IdempotentCreateMixin,
-    StaffRequiredMixin,
-    is_idempotency_conflict,
-)
+from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
+from core.views.workitems import (
+    WorkItemInboxView,
+    apply_workitem_default_scope,
+    apply_workitem_filters,
+    can_user_mutate_workitem,
+)
 
 
 def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
@@ -109,8 +113,8 @@ def _build_recent_done_oob(request, workitem):
     if due == "overdue":
         return ""
 
-    raw_assigned_to = request.POST.get("assigned_to", DEFAULT_ASSIGNED_SCOPE)
-    default_scope = raw_assigned_to == DEFAULT_ASSIGNED_SCOPE
+    raw_assigned_to = request.POST.get("assigned_to", WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE)
+    default_scope = raw_assigned_to == WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE
     assigned_to = "" if default_scope else raw_assigned_to
 
     qs = apply_workitem_filters(
@@ -153,7 +157,7 @@ def _build_recent_done_oob(request, workitem):
     return empty_oob + count_html + f'<div hx-swap-oob="afterbegin:#recent-done-items">{card_html}</div>'
 
 
-class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View):
+class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
     """HTMX: update WorkItem status.
 
     Refs #1419: Teil des HTTP-Replay-Contracts (ADR-030), damit
@@ -167,16 +171,6 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
     Service Worker beim Queueing einfriert; ausgewertet wird es erst vom
     Replay (der ``Accept: application/json`` setzt, offline-queue.js).
     """
-
-    idempotency_scope = "workitem_status"
-
-    def on_idempotent_hit(self, request, hit):
-        # Replay einer bereits angewendeten Transition: der gecachte Erfolg
-        # wird als scoped Live-Lookup beantwortet, damit der Zweit-Replay
-        # exakt die Erfolgsform des Originals bekommt (inkl. zwischen-
-        # zeitlicher Folge-Transitionen).
-        workitem = get_scoped_object(WorkItem, request, pk=self.kwargs["pk"])
-        return self._success_response(request, workitem)
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, pk):
@@ -195,15 +189,21 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         # ZWISCHENZEITLICHEN Statuswechsel (z.B. Reopen durch Kollegin) als
         # 409-Konflikt melden, obwohl die Aktion längst angewendet ist — der
         # Cache-Hit liefert stattdessen die Erfolgsform des Originals.
-        # Sequenz + Mismatch-422: IdempotentCreateMixin (Refs #1831).
         # Kein DB-Backstop wie bei Create (R5): Transitionen haben keine
         # ``idempotency_key``-Spalte; nach Cache-Verlust fängt der
         # Versions-Token den Doppel-Replay als sichtbaren 409 ab (kein
         # stilles Überschreiben).
-        idem_key, idem_payload_hash = self.read_idempotency(request)
-        replay_response = self.check_replay(request, idem_key)
-        if replay_response is not None:
-            return replay_response
+        idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
+        idem_payload_hash = payload_fingerprint(request) if idem_key else None
+        if idem_key:
+            hit = get_idempotent_result("workitem_status", request.user.pk, idem_key)
+            if hit is not None:
+                # N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist eine
+                # Key-Kollision — kein gecachter Erfolg, sondern 422.
+                if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
+                    return _idempotency_mismatch_response()
+                workitem = get_scoped_object(WorkItem, request, pk=pk)
+                return self._success_response(request, workitem)
 
         # Permission-Check + Service-Call innerhalb derselben Transaktion,
         # damit das gelockte Objekt aus dem Service-Layer zurueckgegeben
@@ -242,7 +242,9 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
             messages.error(request, e.message if hasattr(e, "message") else str(e))
             return redirect("core:workitem_inbox")
 
-        self.remember_idempotency(request, idem_key, idem_payload_hash, workitem.pk)
+        remember_idempotent_result(
+            "workitem_status", request.user.pk, idem_key, workitem.pk, payload_hash=idem_payload_hash
+        )
         return self._success_response(request, workitem)
 
     def _success_response(self, request, workitem):
@@ -267,15 +269,8 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         return redirect("core:workitem_inbox")
 
 
-class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
+class WorkItemCreateView(StaffRequiredMixin, View):
     """Create a WorkItem."""
-
-    idempotency_scope = "workitem_create"
-
-    def on_idempotent_hit(self, request, hit):
-        # Replay trifft bereits angelegtes WorkItem → dasselbe Ziel wie beim
-        # Original-Erfolg (Inbox), statt ein Duplikat zu erzeugen.
-        return redirect("core:workitem_inbox")
 
     def get(self, request):
         facility = request.current_facility
@@ -307,13 +302,20 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
         # Queue-Zeile beim nächsten ``online``-Event erneut. Trägt sie den
         # ``X-Idempotency-Key`` eines bereits angelegten WorkItems, leiten
         # wir auf dasselbe Ziel um wie beim Original-Erfolg, statt ein
-        # Duplikat zu erzeugen. Sequenz + Mismatch-422: IdempotentCreateMixin
-        # (Refs #1831).
-        idem_key, idem_payload_hash = self.read_idempotency(request)
-        replay_response = self.check_replay(request, idem_key)
-        if replay_response is not None:
-            return replay_response
+        # Duplikat zu erzeugen.
+        idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
+        idem_payload_hash = payload_fingerprint(request) if idem_key else None
         if idem_key:
+            hit = get_idempotent_result("workitem_create", request.user.pk, idem_key)
+            if hit is not None:
+                # N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist eine
+                # Key-Kollision — kein gecachter Erfolg, sondern 422 (Dead-
+                # Letter-UI; Rationale 422 vs. 409 im Helper-Docstring).
+                # Legacy-Eintraege (payload_hash is None, Cache-Wert aus der
+                # Zeit vor N14) passieren ohne Hash-Pruefung.
+                if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
+                    return _idempotency_mismatch_response()
+                return redirect("core:workitem_inbox")
             # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
             # sonst legt der Replay nach Cache-Verlust ein Duplikat an. Die
             # DB-Spalte traegt bewusst KEINEN Payload-Hash (N14-Grenze, siehe
@@ -351,11 +353,14 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
                         idempotency_key=idem_key,
                     )
             except IntegrityError as exc:
-                # R6 (Refs #1443, Prädikat in views/mixins.py): NUR der
-                # Idempotenz-Unique-Constraint darf als Duplikat gelten —
-                # dann auf das Original umleiten statt 500, jeden anderen
-                # IntegrityError re-raisen.
-                if idem_key and is_idempotency_conflict(exc):
+                # R6: zwei parallele Replays desselben Keys passieren beide den
+                # Cache-Check (get-then-set-Fenster). NUR der Idempotenz-Unique-
+                # Constraint (workitem_idem_key_per_user_uniq) darf als Duplikat
+                # gelten — ein fachfremder IntegrityError im selben Replay-Request
+                # wuerde sonst faelschlich als Duplikat maskiert, sobald zufaellig
+                # eine passende Key-Zeile existiert (Refs #1443). Dann auf das
+                # Original umleiten statt 500; jeden anderen IntegrityError re-raisen.
+                if idem_key and "idem_key_per_user_uniq" in str(exc):
                     existing = (
                         WorkItem.objects.for_facility(facility)
                         .filter(created_by=request.user, idempotency_key=idem_key)
@@ -369,7 +374,9 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
             # statt ein zweites WorkItem zu erzeugen. Der Payload-Hash (N14)
             # macht eine Key-Kollision mit anderem Body erkennbar. No-op ohne
             # Schlüssel.
-            self.remember_idempotency(request, idem_key, idem_payload_hash, workitem.pk)
+            remember_idempotent_result(
+                "workitem_create", request.user.pk, idem_key, workitem.pk, payload_hash=idem_payload_hash
+            )
             messages.success(request, _("Aufgabe wurde erstellt."))
             return redirect("core:workitem_inbox")
 

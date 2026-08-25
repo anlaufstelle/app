@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Most recently synchronized on 2026-08-28 (§ 2.2c the hard-delete description corrected -- Django wraps the whole delete cascade in one transaction, so the trigger error rolls back completely; partial destruction only arises from hand-written scripts that commit between tables, #2067). Previously synchronized on 2026-08-28 (§ 2.2c archiving a facility now actually blocks access -- sign-in, running sessions and the RLS context -- plus the raw-shell hard-delete pitfall around the `auditlog_immutable` trigger and the cross-reference to user offboarding, #2067). Previously synchronized on 2026-08-28 (§ 5.6 the hosted-Sentry third-country/DPA check and the DPA-template subprocessor cross-reference, #2052). Previously synchronized on 2026-08-28 (§§ 1/2.11/3/4.2 the RLS-safe `backup.sh`/`restore.sh` path for database and media backups, verification, cron, and recovery, #2074). Previously synchronized on 2026-08-25 (§ 7.4 the seven audit actions for domain edits, case links and attachments, their data-minimized details and regular retention, #1860). Previously synchronized on 2026-08-24 (§§ 2.4/2.7 the facility-scoped Access UI, sudo requirement, invitation, role, MFA, deletion-confirmation, deactivation and unlock flows, #1871). Previously synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
+> Most recently synchronized on 2026-08-25 (§ 7.4 the seven audit actions for domain edits, case links and attachments, their data-minimized details and regular retention, #1860). Previously synchronized on 2026-08-24 (§§ 2.4/2.7 the facility-scoped Access UI, sudo requirement, invitation, role, MFA, deletion-confirmation, deactivation and unlock flows, #1871). Previously synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
 > The German version is the authoritative source. Most recently synced on 2026-08-22 (§ 2 the retention run does act on cases once they are deleted, § 7.5 case trash and the two deletion paths, § 7.6 the `deleted_cases` section of the Art. 15 access record, #1818). Previous content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793) 2026-08-01 (§ 5.6 GlitchTip verification wording decoupled from the moving SDK pin, #1701) 2026-08-03 (§ 7.6 scope of the Art. 15 access record and its deliberate exclusions, #1752) 2026-08-03 (§ 7.4 audit-log retention period, prune-exempt actions and checkpoint mechanics, #1753) and 2026-08-03 (§ 7.5 visibility of the deletion-requests menu entry and the trash action "Anonymize permanently now", #1736, #1737) and 2026-08-03 (§ 2 system-type roles, frozen value list and the `note` correction, #1748) and 2026-08-04 (§ 2 event-only fields are hidden for person/case entity types, #1757) and 2026-08-04 (§ 7.4 fourth prune-exempt class "released report files", § 7.9 RLS table count 22 → 25, § 8 release overview and the operational note on releasing reports, #1770, #1760) 2026-08-04 (§ 2.5 the "Category" field was removed, uniqueness is now `(facility, name)`, #1749) and 2026-08-04 (two gaps the 2026-07-14 re-sync had missed: the audience note in § 2.4 "Role Descriptions" and the `DJANGO_AUDIT_HASH_KEY` row in § 6 troubleshooting, #1785) and 2026-08-05 (§ 7.6 rectification requests (Art. 16) are part of the Art. 15 access record, #1796) and 2026-08-09 (§ 7.9 RLS table count 25 → 27 after `ImportJob`/`RectificationRequest`, #1806) and 2026-08-11 (§§ 2.3, 2.4, 2.5, 2.8, 7.2, 7.3: renamed contact levels "Pseudonym only"/"With additional details" and the "Document contact" page title, #1805) and 2026-08-13 (§ 2.3 new setting "Maximum session duration (hours)", #1868) and 2026-08-13 (§ 2.5 `inventory_report_bindings`, #1848; § 7.5 deletion-requests location now the Privacy area, #1813; § 7.6 "age group" label (translation-only fix; the wording dated from the #1752/#1796 syncs)) and 2026-08-15 (§ 2.5 tally opt-in and inline numeric capture, #1637, #1906) and 2026-08-18 (§ 5.6 which log fields are exempt from PII scrubbing, #1943) and 2026-08-18 (§ 2.6 numeric range bound guidance for facility admins after tightening `min_value`/`max_value`, #1930) and 2026-08-20 (§ 5.6 technical identifiers -- including the new `user_pk` log field -- pass the PII scrubber unchanged, #1949) and 2026-08-20 (§ 1 `BACKUP_DIR`/`BACKUP_HOST_DIR` ENV reference for the production Compose stack, #1872) and 2026-08-21 (§ 2.4 and § 7.7 the forced password change is cleared once the invitation setup or a password reset completes; § 2.4 step 3 the invitation setup link does not sign the user in, #1969).
 
 # Anlaufstelle -- Admin Guide
@@ -12,26 +12,25 @@ This guide is intended for IT administrators of social service facilities who in
 
 1. [Installation (Docker Compose)](#1-installation-docker-compose)
 2. [Initial Configuration](#2-initial-configuration)
- - 2.2c [Decommissioning a Facility: Archive Instead of Delete](#22c-decommissioning-a-facility-archive-instead-of-delete)
- - 2.5 [Configure Documentation Types](#25-configure-documentation-types)
- - 2.6 [Manage Selection Options (Field Templates)](#26-manage-selection-options-field-templates)
- - 2.6b [Fuzzy Search (pg_trgm)](#26b-fuzzy-search-pg_trgm)
- - 2.7 [Two-Factor Authentication (2FA)](#27-two-factor-authentication-2fa)
- - 2.8 [Quick Templates](#28-quick-templates)
- - 2.9 [Encrypted File Vault & Virus Scanning](#29-encrypted-file-vault--virus-scanning)
- - 2.10 [Offline Mode & Streetwork (M6A)](#210-offline-mode--streetwork-m6a)
- - 2.11 [CSV Import and Export: Formula Protection](#211-csv-import-and-export-formula-protection)
+   - 2.5 [Configure Documentation Types](#25-configure-documentation-types)
+   - 2.6 [Manage Selection Options (Field Templates)](#26-manage-selection-options-field-templates)
+   - 2.6b [Fuzzy Search (pg_trgm)](#26b-fuzzy-search-pg_trgm)
+   - 2.7 [Two-Factor Authentication (2FA)](#27-two-factor-authentication-2fa)
+   - 2.8 [Quick Templates](#28-quick-templates)
+   - 2.9 [Encrypted File Vault & Virus Scanning](#29-encrypted-file-vault--virus-scanning)
+   - 2.10 [Offline Mode & Streetwork (M6A)](#210-offline-mode--streetwork-m6a)
+   - 2.11 [CSV Import and Export: Formula Protection](#211-csv-import-and-export-formula-protection)
 3. [Backup and Recovery](#3-backup-and-recovery)
 4. [Updates](#4-updates)
 5. [Monitoring](#5-monitoring)
- - 5.4 [CSP Debugging](#54-csp-debugging)
- - 5.5 [Compliance Dashboard](#55-compliance-dashboard)
- - 5.6 [Error Tracking & Data Minimization](#56-error-tracking--data-minimization)
- - 5.7 [Breach Detection Scan](#57-breach-detection-scan)
+   - 5.4 [CSP Debugging](#54-csp-debugging)
+   - 5.5 [Compliance Dashboard](#55-compliance-dashboard)
+   - 5.6 [Error Tracking & Data Minimization](#56-error-tracking--data-minimization)
+   - 5.7 [Breach Detection Scan](#57-breach-detection-scan)
 6. [Troubleshooting](#6-troubleshooting)
 7. [GDPR Notes](#7-gdpr-notes)
- - 7.8 [Optimistic Locking](#78-optimistic-locking)
- - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
+   - 7.8 [Optimistic Locking](#78-optimistic-locking)
+   - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
 8. [Statistics Snapshots & Materialized View](#8-statistics-snapshots--materialized-view)
 
 ---
@@ -227,7 +226,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Storage location for encrypted file attachments (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
 | `FILE_UPLOAD_TEMP_DIR` | Django default (`tempfile.gettempdir()`) | Directory for the plaintext staging buffer of uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, before they are encrypted into the file vault (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). Pinned to `/tmp` (tmpfs/RAM) in the shipped Compose files -- [ops runbook § 5.7a](../ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Storage directory for the encrypted DB backups (`.sql.gz.enc`) **as seen from inside the container**; the health endpoint and the backup row in the system area read the backup age from it. |
-| `BACKUP_HOST_DIR` | `./backups` | Host directory that `docker-compose.prod.yml` mounts read-only onto `BACKUP_DIR`. It must point to the same host directory to which `scripts/ops/backup.sh` writes via its `BACKUP_DIR` variable. Otherwise, the system area permanently reports "no backup found" even though the backup cron is running. |
+| `BACKUP_HOST_DIR` | `./backups` | The same directory **on the host** -- this is where `scripts/ops/backup.sh` writes. `docker-compose.prod.yml` mounts it read-only onto `BACKUP_DIR`. If the two values do not match, the system area permanently reports "no backup found" even though the backup cron is running. |
 | `APP_VERSION` | `dev` | Version string that `/health/` exposes in the `version` detail field (token/authenticated callers only). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, GDPR export). |
 
@@ -399,33 +398,6 @@ Here you can manage:
 | Documentation types | Core > Documentation types | Technical fallback; maintained primarily under Administration > Documentation types |
 | Time filters | Core > Time filters | Named time periods for reports |
 | Audit log | Core > Audit logs | Immutable protocol |
-
-### 2.2c Decommissioning a Facility: Archive Instead of Delete
-
-When a location closes, **archiving** is the intended route -- not deletion. Under **Core > Facilities**, clear the **Active** checkbox and save. Only `super_admin` may do this; facility management is reserved for that role.
-
-**What archiving does (as of #2067):**
-
-- Sign-ins by accounts of that facility are rejected with the message "Your facility has been archived"; a `LOGIN_FAILED` entry with `reason: facility_inactive` is written to the audit log.
-- **Sessions already running lose access immediately** -- not only at the next sign-in. Affected users see a block page with a sign-out button; every domain path answers with HTTP 403.
-- At the database level the facility context (`app.current_facility_id`) is additionally cleared, so the row-level security policies (see [§ 7.9](#79-row-level-security-rls)) return no rows even if some path were to bypass the block.
-- **The data is fully preserved.** Retention periods, deletion requests, and the audit log continue unchanged; setting **Active** again restores access.
-- `super_admin` remains unrestricted -- otherwise reactivation itself would be blocked.
-
-> **Why no hard delete? What actually happens.**
-> Permanently deleting a facility is **not a supported operation**. It fails -- reliably:
->
-> - `Facility` cascades into nearly every domain table, including `core_auditlog`. That table carries the DB trigger `auditlog_immutable`, which rejects every `UPDATE`/`DELETE`. The delete cascade therefore runs **into** a rejection midway.
-> - **The abort is clean, not half-finished.** Django wraps the entire cascade -- signals, fast deletes, updates, and every batch -- in **one** transaction. This holds from `manage.py shell` as well: the shell itself is in autocommit, but the cascade opens its own transaction. The trigger error rolls it back completely. You see an error message and nothing is lost. The same applies to a single `DELETE` in `psql` -- one statement is one transaction.
-> - In addition, a `pre_delete` guard blocks deletion as long as an active **legal hold** is attached to the facility.
->
-> **The one constellation that does cause damage:** a hand-written cleanup script that empties the domain tables **one after another** and **commits in between** -- for example a loop over several `…objects.filter(facility=f).delete()` calls in a shell without an enclosing transaction. The tables emptied first are then already committed when the run dies at the audit trigger: events, clients, or attachments are gone while the log and the facility remain. No one can repair that state from within the application; it requires a backup ([§ 3.3](#33-recovery)). Do not write such scripts -- and if you must, wrap them in **one** transaction.
->
-> Another reason not to use `psql` for this purpose: a direct `DELETE` does not run Django's Python cascade at all. The `pre_delete` guards (legal hold) do not apply there, and the application's cleanup logic is skipped.
->
-> If you really want to remove a facility entirely, the route is: archive it, let the retention periods expire (see [§ 7.3](#73-retention-periods-and-enforce_retention)), and then take a backup -- not the cascade.
-
-**User offboarding.** Archiving blocks *access* but does not clear the identity data of departed staff (first/last name, display name, email, phone). That second half of the lifecycle is handled separately: [#2051 -- offboarding cleanup for departed staff](https://github.com/anlaufstelle/app/issues/2051). Until then, deactivate the affected accounts under **Administration > Access**; the username and identifier are deliberately retained so the attribution in the audit log stays readable.
 
 ### 2.3 Settings per Facility
 
@@ -740,7 +712,7 @@ Once a bound is tightened, the central validator checks **every** write -- inclu
 
 #### Safely Retracting a Bound
 
-If a bound turns out too tight, retract it at the same location: loosen or clear **Minimum Value**/**Maximum Value** on the field template. That takes effect immediately for future writes; previously blocked records become saveable again as soon as their stored value fits the (now wider) bound -- without anyone having to change a value after the fact. If the bound is instead maintained through a configuration package, a separate tri-state rule applies there (an omitted key leaves an existing bound untouched; only an explicit `null` removes it) -- see [docs/packages.md](packages.md).
+If a bound turns out too tight, retract it at the same location: loosen or clear **Minimum Value**/**Maximum Value** on the field template. That takes effect immediately for future writes; previously blocked records become saveable again as soon as their stored value fits the (now wider) bound -- without anyone having to change a value after the fact. If the bound is instead maintained through a configuration package, a separate tri-state rule applies there (an omitted key leaves an existing bound untouched; only an explicit `null` removes it) -- see docs/packages.md.
 
 ### 2.6b Fuzzy Search (pg_trgm)
 
@@ -891,8 +863,8 @@ File attachments (photos, scans, documents) on **events, clients and cases** ([A
 1. A staff member picks a file in the form -- event ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)), client or case ([`clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/clients.py)/[`cases.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/cases.py)).
 2. The server validates file type and size (see `allowed_file_types` and `max_file_size_mb` in the facility settings -- default **10 MB**).
 3. **ClamAV scan** before encryption:
- - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
- - Virus detected → the upload is discarded and an audit-log entry is written.
+   - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
+   - Virus detected → the upload is discarded and an audit-log entry is written.
 4. The payload is encrypted chunk-wise with Fernet (MultiFernet) (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
 5. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
 
@@ -991,7 +963,7 @@ Since #1945 the protection also applies when **invisible characters** precede th
 
 > **Important -- your own exports are not round-trip safe:** the CSV import does **not** strip the protective apostrophe again. Re-importing a previously exported file turns the value `=Text` permanently into `'=Text`. This is neither a bug nor an error reported by the import run, but a deliberate boundary: the import engine compares the **raw** file row against its error messages to keep cell contents (potentially client data) out of a run's result log. If it de-apostrophized first, that comparison would no longer match and a cell value could slip into the log -- data protection takes precedence over convenience here.
 >
-> **In practice:** use the CSV import to **migrate data from other systems**, not as a backup-and-restore path for your own data. For the latter, use the encrypted database and media backup provided by `backup.sh` (see [§ 3](#3-backup-and-recovery)). If you do need to re-import an exported value, remove the leading `'` in the spreadsheet beforehand.
+> **In practice:** use the CSV import to **migrate data from other systems**, not as a backup-and-restore path for your own data. For the latter, the database backup (see [§ 3](#3-backup-and-recovery)) is the right tool. If you do need to re-import an exported value, remove the leading `'` in the spreadsheet beforehand.
 
 The report exports in **JSON and XML** deliberately do not sanitize -- there is no formula context there, and CSV escapes would corrupt the machine-readable values.
 
@@ -1003,72 +975,82 @@ Relevant files: [`src/core/services/system/export.py`](https://github.com/anlauf
 
 ## 3. Backup and Recovery
 
-### 3.1 Encrypted Database and Media Backup
+### 3.1 Database Backup
 
-The canonical production path is [`scripts/ops/backup.sh`](../../scripts/ops/backup.sh). Run it from the repository root:
+All application data resides in PostgreSQL. Create regular dumps:
 
 ```bash
-cd /opt/anlaufstelle
-./scripts/ops/backup.sh
+docker compose -f docker-compose.prod.yml exec db \
+  pg_dump -U anlaufstelle anlaufstelle \
+  > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
-The script loads `.env`, backs up PostgreSQL **and** the encrypted file vault (`MEDIA_ROOT`), compresses both archives, encrypts them with AES-256-CBC, and writes an HMAC-SHA256 sidecar for each archive. Files are stored below `BACKUP_DIR` in `daily/`, `weekly/`, and `monthly/`; built-in rotation retains them for 7, 28, and 90 days respectively.
+With compression (recommended):
 
-Prerequisites in `.env`:
+```bash
+docker compose -f docker-compose.prod.yml exec db \
+  pg_dump -U anlaufstelle -Fc anlaufstelle \
+  > backup_$(date +%Y%m%d_%H%M%S).dump
+```
 
-- `POSTGRES_DB` and `POSTGRES_USER` for the database connection,
-- `POSTGRES_ADMIN_USER` and `POSTGRES_ADMIN_PASSWORD` for the complete dump,
-- a random, separately escrowed `BACKUP_ENCRYPTION_KEY`,
-- a host destination where `BACKUP_HOST_DIR` points to the same directory to which the script writes via `BACKUP_DIR` (see the [environment table](#complete-environment-variable-reference)).
-
-> **RLS is security-critical here:** `pg_dump` must run as `POSTGRES_ADMIN_USER`. The `POSTGRES_USER` application role is `NOBYPASSRLS`; a raw dump under that role fails at `FORCE ROW LEVEL SECURITY` or would not be a complete backup of facility-scoped data. Do not replace `backup.sh` with a custom `pg_dump -U anlaufstelle` command or the application role.
-
-Keep `.env`, or at least `BACKUP_ENCRYPTION_KEY` and the complete `ENCRYPTION_KEYS` history, separate from the production host. Without the backup key the archive cannot be decrypted; without the field/vault keys its encrypted contents remain unreadable. Configure an off-site destination as well to protect against complete host loss; details are in [Ops Runbook § 6.6a](../ops-runbook.md#66a-off-site-backup-sync-refs-738).
+> **Important:** Back up the `.env` file (especially `ENCRYPTION_KEY`) separately in a different secure location. Without the key, encrypted fields become unreadable after a restore.
 
 ### 3.2 Set Up Automated Backups
 
-Recommended cron example for a daily backup at 02:00 (on the host, before retention jobs):
+Recommended cron example for daily backups at 03:00 (on the host):
 
 ```cron
-0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
+0 3 * * * cd /opt/anlaufstelle && \
+  docker compose -f docker-compose.prod.yml exec -T db \
+  pg_dump -U anlaufstelle -Fc anlaufstelle \
+  > /mnt/backup/anlaufstelle/backup_$(date +\%Y\%m\%d).dump
 ```
 
-Do not add a separate `find ... -delete` job: `backup.sh` rotates database, media, and HMAC files together. Verify the latest backup regularly:
+Delete backups older than 30 days:
 
-```bash
-cd /opt/anlaufstelle
-./scripts/ops/backup.sh --verify
+```cron
+0 4 * * * find /mnt/backup/anlaufstelle/ -name "*.dump" -mtime +30 -delete
 ```
-
-The verification run validates the HMAC before decryption, restores the latest database dump into a temporary database, compares critical RLS tables with the live database, and checks the latest media archive. The more comprehensive quarterly restore drill is documented in [Ops Runbook § 6.6](../ops-runbook.md#66-backup-restore-drill-refs-720-739).
 
 ### 3.3 Recovery
 
-[`scripts/ops/restore.sh`](../../scripts/ops/restore.sh) is only for the plain-SQL archives (`*.sql.gz.enc`) created by `backup.sh`, with the `.hmac` sidecar directly beside each archive. A `pg_restore` archive from another backup path is not compatible.
-
-1. Schedule a maintenance window, block public access, and prepare an empty target database with the same role names as the backed-up system. The application role (`POSTGRES_USER`, `NOBYPASSRLS`) and the admin/owner role (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) must exist before data is loaded. The complete destructive procedure for a new host is in [Disaster Recovery § 6](../disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host).
-
-2. Ensure that the DB and web containers are running for the database and media restore while Caddy and cron remain stopped.
-
-3. Start the restore from the repository root. The second argument is optional, but required for a complete recovery including file attachments:
+1. Stop the stack:
 
 ```bash
-./scripts/ops/restore.sh \
-  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
-  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
+docker compose -f docker-compose.prod.yml down
 ```
 
-The script requires the literal confirmation `ja`, verifies each HMAC first, and only then decrypts. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. During a media restore, existing `MEDIA_ROOT` contents are replaced before extraction.
-
-4. Run migrations with the admin role, then start the stack:
+2. Delete the database volume (caution: this deletes all data):
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm \
-  --entrypoint=/app/docker-migrate.sh maintenance
+docker volume rm anlaufstelle_pgdata
+```
+
+3. Restart the stack (creates an empty database):
+
+```bash
+docker compose -f docker-compose.prod.yml up -d db
+```
+
+4. Restore the backup:
+
+```bash
+# SQL dump:
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U anlaufstelle anlaufstelle < backup_20260101_030000.sql
+
+# Or compressed format:
+docker compose -f docker-compose.prod.yml exec -T db \
+  pg_restore -U anlaufstelle -d anlaufstelle backup_20260101.dump
+```
+
+5. Start the web service:
+
+```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-5. Check database roles, health, and samples from both the database **and** file vault. See [Section 5](#5-monitoring), [Ops Runbook § 9](../ops-runbook.md#9-row-level-security-rls), and the [disaster-recovery smoke verification](../disaster-recovery.md#7-smoke-verifikation-nach-restore).
+6. Perform a health check (see [Section 5](#5-monitoring)).
 
 ---
 
@@ -1098,7 +1080,7 @@ docker compose -f docker-compose.prod.yml logs web --tail=50
 
 ### 4.2 Before an Update
 
-- Always create and verify a current database and media backup first (see [Sections 3.1–3.2](#31-encrypted-database-and-media-backup)).
+- Always create a current database backup first (see [Section 3.1](#31-database-backup)).
 - Read the changelog for breaking changes and required configuration updates.
 
 ### 4.3 Rollback
@@ -1223,8 +1205,6 @@ Error tracking (Sentry-compatible) is **fully opt-in**: the SDK is initialized o
 **Logs.** Server logs are PII-scrubbed in **both** formats -- the default `LOG_FORMAT=text` and `LOG_FORMAT=json` both run messages, tracebacks and the structured extra fields through the same scrubber (email addresses, passwords and token-like values become placeholders). Two fields are deliberately **not** scrubbed, because their purpose is to make technical security events attributable: the client IP (`remote_addr`) and the browser identification string (`user_agent`) of a CSP violation report. Both can identify a person -- if you need short log retention, plan for it on their account. The purely technical identifiers (`request_id`, `user_id`, `facility_id`, `user_pk`) also pass through unchanged: they contain no free text and merely reference a record, so there is nothing for the scrubber to catch. `user_pk` appears, for example, in the invitation log lines, which deliberately carry neither user name nor email address -- without that identifier the entry could no longer be attributed to an account. For GDPR contexts with log aggregation, `LOG_FORMAT=json` is still recommended (structured, machine-readable), but data minimization is no longer tied to that format.
 
 **Self-hosted tracker (GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). This combination was verified empirically: with `sentry-sdk[django]` `2.64.0` against GlitchTip `6.2.1` (Docker image `glitchtip/glitchtip:6`), server error events are transmitted, parsed plausibly (stack trace, tags, request context) and shown as issues; performance transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) are **accepted** as well and grouped into transaction groups -- they are neither silently dropped nor do they raise an error. The server-side `before_send`/`before_send_transaction` scrubber applies unchanged (no frame locals, stripped query strings/cookies/request bodies); the rule- and key-based limits described above still hold. Other version combinations are untested, and a third-party project naturally remains outside this project's control.
-
-**Hosted Sentry service.** Before enabling a SaaS provider instead of an EU-based or self-hosted instance, verify its data location, retention period, and any third-country transfers and safeguards, and conclude a data processing agreement. List the provider and its subprocessors in section 6 of the DPA template in the GDPR package.
 
 To connect a self-hosted tracker:
 
@@ -1456,36 +1436,6 @@ Individual records can be protected from automatic deletion via **Legal Hold** (
 
 Legal Holds are managed in the retention dashboard and in the Django admin (see [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)).
 
-> **Distinction from Art. 18 GDPR (Refs #2045):** A legal hold is **not** a restriction of processing under Art. 18. It blocks **erasure** (Art. 17(3)) and leaves day-to-day work on the record untouched. An Art. 18 restriction is the reverse: the data stays stored, but substantive work on the client record is blocked. That is what the separate **restriction marker** on the client record is for. The two are independent of each other.
-
-#### Retention of the Event History
-
-Every save of an event writes a **history version**: who changed which fields to which values, and when. Until version 0.89 these versions had **no retention period** — they outlived the deletion period of the event itself. Concretely: an event whose `retention_identified_days` have expired is emptied, but its earlier versions kept every wording ever stored. The period was formally enforced and factually undermined. Since [ADR-050](adr/050-eventhistory-retention.md), `enforce_retention` closes this gap in two stages.
-
-**Stage 1 — redaction.** The version remains, its *values* fall away. What stays: timestamp, acting person, action and the names of the affected fields. What disappears: the contents. In the event detail view and in the Art. 15 access record, "– (redacted)" appears in their place. Two triggers:
-
-- **The event is deleted.** As soon as an event is marked deleted — by the retention period or manually — **all** of its versions lose their values on the next run. This needs no setting and cannot be switched off: it enforces the period that already applies to the event itself. It also covers events without a person (anonymous contacts), for which no history deletion path existed at all until now.
-- **The version is old.** For events that are still **alive**, versions older than `eventhistory_detail_months` are redacted.
-
-**Stage 2 — deletion of the chronicle.** An already redacted version is permanently deleted once its redaction dates back more than `eventhistory_chronicle_months`. This is measured from the moment of redaction, not from the original change — the question is "how long has this row already been empty". At this point no contents fall any more, only the chronicle itself.
-
-| Setting in `Settings` | Default | Effect |
-|---|---|---|
-| `eventhistory_detail_months` | 24 months | How long the **values** of old versions of living events stay readable. `0` = **disabled** (the values stay readable indefinitely). Does not affect the "deleted event" branch. |
-| `eventhistory_chronicle_months` | 24 months | How long an already redacted version is kept afterwards before it is deleted. `0` = **disabled**, in which case the chronicle grows without bound — that is a decision for indefinite retention and then belongs explicitly in the record of processing activities and the deletion concept. |
-
-Both defaults match `auditlog_retention_months`: the history and the audit log answer the same question ("who changed something, and when") and should therefore end together. With the defaults, the version of a living event has a total lifetime of 24 months of values plus 24 months of chronicle; the version of a deleted event has 24 months of chronicle from the deletion.
-
-**What to know before changing these:**
-
-- **The most recent version of a living event is never redacted**, regardless of its age. The detail page therefore always keeps at least one readable last change — even for a record untouched for years.
-- **A legal hold stops the redaction.** While the event (or its person) is under a hold, its versions stay unchanged; the run reports them as deferred and catches up once the hold is lifted or expires.
-- **Redaction is final.** Old wordings can afterwards only be reconstructed from a backup. If you must be able to argue a rectification dispute about a years-old wording, set `eventhistory_detail_months` accordingly higher.
-- **Side effect on key rotation:** redacted versions no longer carry encrypted content and are skipped by `reencrypt_fields`. The duration of a key rotation thus scales with the *unredacted window* instead of the total table size — it stays constant instead of growing every year.
-- **Every batch leaves an audit trail entry** (action "Event history redacted") with count, cutoff and batch boundaries. This proof is **exempt** from `auditlog_retention_months` and is kept permanently.
-
-The first run after the update may take longer than usual: it works through the backlog of versions of living events. The versions of already deleted events were handled by the migration.
-
 #### K-Anonymization Instead of Hard Delete
 
 As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs #535).
@@ -1545,14 +1495,13 @@ Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, faci
 |---|---|---|
 | `auditlog_retention_months` | 24 months | Every `enforce_retention` run deletes entries older than this period (exact calendar-month arithmetic, not a 30-day approximation). `0` = **disabled**, the log then grows without bound. |
 
-Five classes are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Four of them depend on the action (`PRUNE_EXEMPT_ACTIONS`):
+Four classes are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Three of them depend on the action (`PRUNE_EXEMPT_ACTIONS`):
 
 - `SECURITY_VIOLATION` — forensic evidence from breach detection,
 - `RETENTION_RUN_COMPLETED` — the marker the compliance dashboard reads to show the last successful retention run,
-- `AUDIT_PRUNE_CHECKPOINT` — the tombstone of the pruning itself,
-- `EVENT_HISTORY_REDACTED` — the per-batch proof of the history sweep (see [§ 7.3 "Retention of the Event History"](#retention-of-the-event-history)). It documents that immutability was legitimately opened for exactly these rows; if it vanished before the rows it vouches for, a silent change to append-only-protected data would remain.
+- `AUDIT_PRUNE_CHECKPOINT` — the tombstone of the pruning itself.
 
-On top of that — **regardless of the action** — comes the fifth class: entries about a **released report file carrying a reporting period** (CSV/PDF/JSON/XML). Without that exemption the release overview would feign completeness. Such entries hold the period, the format, the acting person and the recorded recipient/purpose fields (unvalidated free text), and are kept indefinitely. Plain on-screen views of the external report and subject access requests without a reporting period run under the same audit action but stay subject to the period — the distinction is documented in [§ 8 "Releasing Reports"](#releasing-reports-what-you-need-to-know).
+On top of that — **regardless of the action** — comes the fourth class: entries about a **released report file carrying a reporting period** (CSV/PDF/JSON/XML). Without that exemption the release overview would feign completeness. Such entries hold the period, the format, the acting person and the recorded recipient/purpose fields (unvalidated free text), and are kept indefinitely. Plain on-screen views of the external report and subject access requests without a reporting period run under the same audit action but stay subject to the period — the distinction is documented in [§ 8 "Releasing Reports"](#releasing-reports-what-you-need-to-know).
 
 **Checkpoint mechanics:** the audit log is chained via HMAC (every entry references the previous one). Pruning necessarily tears that chain. So that the integrity check does not report the gap as tampering, every prune run writes an `AUDIT_PRUNE_CHECKPOINT` entry recording the chain boundaries of the deleted rows, which legitimises the discontinuity. The chain itself is **never** rewritten — the log stays append-only.
 
@@ -1640,26 +1589,7 @@ The following administrative capabilities are available for handling requests fr
 | Access (Art. 15) | Generate the data access record as JSON or PDF from the client view (lead or application manager, re-authentication required) -- scope see below |
 | Rectification (Art. 16) | Edit fields directly as application manager in the admin UI |
 | Erasure (Art. 17) | Submit a deletion request through the application (four-eyes principle) |
-| Restriction (Art. 18) | Set a **restriction marker** on the client record — see below |
 | Data portability (Art. 20) | Export function in the application |
-
-#### Restriction of processing: the restriction marker (Art. 18 GDPR, Refs #2045)
-
-Where a client contests the accuracy of their data, or where any other ground under Art. 18(1) applies, set a **restriction marker** on the client record. Its effect:
-
-| Question | Answer |
-|---|---|
-| **What remains permitted?** | **Storage** (Art. 18(2)). The record is not deleted, not hidden, and stays in the access record and in statistics. |
-| **What is blocked?** | Substantive work: the client can no longer be edited, nor assigned to a new contact, case or task. |
-| **What is exempt?** | The **rectification workflow** (Art. 16, § 7.6). It is the path on which the contested accuracy is examined — a restriction that blocked it too would be a dead end. |
-| **Who sets it?** | Staff and above, from the client record. When a rectification request is filed, the marker is additionally **offered** (opt-in, not pre-selected). |
-| **Who lifts it?** | A **second** authorised person or a **manager**. Whoever set the marker does not lift it alone. |
-| **Visibility** | A permanent banner on the client record showing legal ground, timestamp and the person who set it; a "restricted" marker in the client list. |
-| **Trail** | Audit entries `PROCESSING_RESTRICTED` and `PROCESSING_RESTRICTION_LIFTED`, each carrying the legal ground — never the contested matter itself. |
-
-**Not to be confused with the legal hold** (§ 7.3): that one blocks *erasure* (Art. 17(3)), the restriction marker blocks *use*. The two are independent of each other.
-
-**To be handled organisationally:** the software does not enforce the duty to inform the data subject **before** lifting the restriction (Art. 18(3)) — record it in your data subject request process.
 
 #### History Diff: Decryption for Authorized Roles
 
@@ -1685,13 +1615,12 @@ Included (Refs #1752):
 | Change history | Action, timestamp, editing user **and the before/after contents** -- including for deleted events |
 | Deletion requests | Requests targeting events **and the client record itself**, with reason and four-eyes review |
 | Rectification requests | Art. 16 requests concerning the client (Refs #1796, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in **all** states (pending, approved, rejected): the field concerned, previous and requested value (decrypted), reason, review note, requesting and reviewing user, timestamps |
-| Retention | Legal holds (Art. 17(3) — **not** Art. 18) and open deletion proposals with due date and category |
-| Restriction of processing | Art. 18 restriction marker (Refs #2045), where set: legal ground, timestamp and the person who set it |
+| Retention | Legal holds (Art. 18) and open deletion proposals with due date and category |
 | Tasks | Title, description, type, status, priority, assignment, dates |
 | Activities | Activity feed entries about the client, their cases, events and tasks |
 | Recently viewed | Timestamps at which the client record was opened or bookmarked |
 | Merges | Provenance after duplicate merges (Refs #1876, [ADR-045](../adr/045-personen-merge.md) §7): which record was merged into this one and when, and whether it has already been anonymized for good; the access record of the dissolved record conversely states "Merged into" |
-| Access log | Audit entries about the client, their cases and their events: action, timestamp, reference — including the steps of the four-eyes workflows (Refs #2048): deletion requests appear under the category “Löschantrag” (requested/approved/rejected, from the client, case and merge paths), rectification requests under “Berichtigung” |
+| Access log | Audit entries about the client and their events: action, timestamp, reference |
 | File attachments | **Metadata** for every attachment on the client, their cases and their events (Refs #1738): field name and field slug, decrypted filename, file size, MIME type, timestamp and uploading user, plus the state within the version chain (current yes/no, superseded at, removed at) -- **the complete chain including superseded and removed links** |
 
 **On the structure of the attachment data (JSON):** client-owned attachments live under the top-level key `attachments` -- it is **always** present, possibly as an empty list. Case- and event-owned attachments appear as `attachments` **inside the respective entry** under `cases[i]` or `events[i]`, and only when non-empty (so the existing format for records without files stays unchanged); deleted events (`deleted_events`) carry them too. If a filename cannot be decrypted, the value reads `[verschlüsselt]` -- the record does not invent a name. The MIME type is the type **verified** at upload time; only legacy rows without detection fall back to the browser-reported one. In the custom fields themselves, the technical file marker is replaced by the placeholder `[Dateianhang – Angaben unter „Dateianhänge"]`. **In the PDF**, client-owned attachments form their own section "Dateianhänge"; case- and event-owned attachments appear as a "Dateianhänge" column in the respective table.
@@ -1729,7 +1658,7 @@ To protect against **silent overwrites** when two users edit the same record in 
 - Every form renders the current `updated_at` as a hidden field.
 - On save, the helper `check_version_conflict(instance, expected_updated_at)` verifies whether the record has been modified in the meantime.
 - On conflict a `ValidationError` is raised; the view redirects the user with the message:
- > *"The record has been modified in the meantime. Please reload the page."*
+  > *"The record has been modified in the meantime. Please reload the page."*
 
 **Administrative notes:**
 - There is no admin toggle to disable locking -- the protection is system-wide.
@@ -1896,6 +1825,6 @@ The **release overview** (Statistics → "Releases" tab, role: lead/facility adm
 Snapshots are visible in the Django admin under **Statistics snapshots** (read-only). You can check which months have been captured and when the last update took place.
 
 <!-- translation-source: docs/admin-guide.md -->
-<!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: b1730dc41109f059392527d012ddfc6a1a22cd59 -->
+<!-- translation-version: v0.84.0 -->
+<!-- translation-date: 2026-08-24 -->
+<!-- source-hash: 0a6a69ec7fa99df0762dc5cece2d3bdc96d8afc1 -->

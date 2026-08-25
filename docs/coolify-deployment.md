@@ -2,7 +2,7 @@
 
 > ℹ️ **Alternative, kein primaerer Pfad.** Primaerer Deployment-Pfad ist
 > Plain Docker Compose ([ADR-017](adr/017-deployment-topology.md),
-> [docs/dev-deployment.md](dev/dev-deployment.md)) — verankert in
+> docs/dev-deployment.md) — verankert in
 > Fachkonzept §1009 (`docker compose up` als harte Anforderung).
 > Diese Coolify-Anleitung bleibt erhalten als **unterstuetzte Alternative**
 > fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige
@@ -129,25 +129,25 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 - `SENTRY_DSN` — für Error-Tracking
 - `LOG_FORMAT=json` — strukturiertes Logging
 - `CLAMAV_ENABLED=true` — Default. Zum aktiven Scannen muss zusätzlich ein
- ClamAV-Container erreichbar sein (siehe Hinweiskasten in Schritt 3). Nur
- deaktivieren, wenn bewusst kein ClamAV betrieben wird.
+  ClamAV-Container erreichbar sein (siehe Hinweiskasten in Schritt 3). Nur
+  deaktivieren, wenn bewusst kein ClamAV betrieben wird.
 - `CLAMAV_HOST` — default `clamav` (Service-Name aus `docker-compose.prod.yml`).
- Bei externem ClamAV auf dessen Hostname/IP setzen.
+  Bei externem ClamAV auf dessen Hostname/IP setzen.
 - `CLAMAV_PORT` — default `3310` (clamd TCP-Port).
 - `CLAMAV_TIMEOUT` — Timeout in Sekunden für Scan-Requests (optional).
 - `REDIS_URL` — nur setzen, um vom mitgelieferten `redis`-Service abzuweichen:
- eigener Endpunkt (`redis://host:6379/1`) oder **leer** fuer den
- `DatabaseCache`-Fallback (Refs #795).
+  eigener Endpunkt (`redis://host:6379/1`) oder **leer** fuer den
+  `DatabaseCache`-Fallback (Refs #795).
 - `TZ` — Zeitzone der Hintergrundjobs im `cron`-Sidecar (Default `Europe/Berlin`).
- Ohne passende Zeitzone verschieben sich die im Runbook zugesagten Laufzeiten
- (Refs #794).
+  Ohne passende Zeitzone verschieben sich die im Runbook zugesagten Laufzeiten
+  (Refs #794).
 
 ### 5. Ersten Deploy anstoßen
 
 Coolify zieht das Image automatisch aus `ghcr.io/anlaufstelle/app:${APP_VERSION}`
 ([`docker-compose.prod.yml`](../docker-compose.prod.yml)). Es gibt **kein**
 `:latest`-Tag — ausgeliefert wird immer die per `APP_VERSION` gepinnte
-Release-Version (Default `v0.89.0`, siehe [`docker-compose.prod.yml`](../docker-compose.prod.yml)).
+Release-Version (Default `v0.84.0`, siehe [`docker-compose.prod.yml`](../docker-compose.prod.yml)).
 
 ### 6. Initial-Setup
 
@@ -203,7 +203,7 @@ Dokumentationstypen und den ersten `facility_admin` in einer Transaktion an und
 Zugangsdaten; `web` sieht sie nicht. Andernfalls bricht der Command sofort mit
 einer Meldung ab, weil die Row-Level-Security den Schreibzugriff verweigert.
 Details: [ADR-018](adr/018-rollenmodell-superadmin.md),
-[docs/dev/dev-deployment.md § Production-Bootstrap](dev/dev-deployment.md),
+docs/dev/dev-deployment.md § Production-Bootstrap,
 [docs/admin-guide.md § 2.2](admin-guide.md).
 
 > **⚠️ PostgreSQL-Rolle: NOSUPERUSER ist Pflicht.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos.
@@ -238,12 +238,12 @@ und Edge-Versionen erfüllen das).
 **Admins sollten Mitarbeiter vor Rollout auf drei Punkte hinweisen:**
 
 1. **Vor Offline-Einsatz Personen-Cache füllen** — Onboarding-Schritt am Arbeitsplatz,
- damit die benötigten Datensätze lokal verschlüsselt verfügbar sind.
+   damit die benötigten Datensätze lokal verschlüsselt verfügbar sind.
 2. **Nach Rückkehr synchronisieren, bevor der Logout erfolgt** — sonst bleiben
- Änderungen nur lokal liegen und gehen beim Cache-Verlust verloren.
+   Änderungen nur lokal liegen und gehen beim Cache-Verlust verloren.
 3. **Passwort-Verlust = Datenverlust:** Bei vergessenem Passwort sind die offline
- gespeicherten, lokal verschlüsselten Daten **unrettbar** — Recovery-Flows für
- Offline-Daten sind nicht möglich.
+   gespeicherten, lokal verschlüsselten Daten **unrettbar** — Recovery-Flows für
+   Offline-Daten sind nicht möglich.
 
 ## Caddy-Konfiguration
 
@@ -284,16 +284,16 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 
 - Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",...}`
 - ClamAV-Verbindung prüfen: `curl https://anlaufstelle.app/health/` → `clamav: ok`
- (sonst Service-Logs von `clamav` in Coolify checken, Signatur-Download kann
- nach Kaltstart bis zu 5 Minuten dauern).
+  (sonst Service-Logs von `clamav` in Coolify checken, Signatur-Download kann
+  nach Kaltstart bis zu 5 Minuten dauern).
 - RLS aktiv prüfen: per `psql` in der App-DB
- `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
+  `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
 - RLS-Wirksamkeit prüfen: `docker compose exec web python manage.py check_db_roles` (Refs #902) — verifiziert App-Rolle = `NOSUPERUSER NOBYPASSRLS` und Admin-Rolle = `NOSUPERUSER BYPASSRLS`. Exit-Code 0 = ok.
 - **Compliance-Dashboard** (Refs #919): als `super_admin` `/system/compliance/` aufrufen. Aggregiert 11 Checks (DB-Rollen, Backup-Alter, Restore-Test, ClamAV-Erreichbarkeit + Signatur, Retention-Cron, MFA-Quote, Migrationen, Versionen, kritische Audit-Events der letzten 24h) mit `ok`/`warning`/`critical`/`unknown`-Status, Detail und Handlungsempfehlung. Pflichtcheck nach dem ersten Restore-Test (siehe unten).
 - Sentry-Events in den ersten 24h prüfen
 - Backup-Job erstmalig manuell triggern und restore auf Staging testen
 - **Restore-Test dokumentieren** (Refs #919): nach jedem erfolgreichen Restore-Test
- `docker compose exec web python manage.py mark_restore_verified --note "Restore aus YYYY-MM-DD-Backup gegen anlaufstelle_restore_test"` ausführen. Schreibt einen `RESTORE_VERIFIED`-AuditLog-Eintrag, den das Compliance-Dashboard als Alter-Indikator nutzt (ok ≤90 Tage, warning ≤180, critical älter).
+  `docker compose exec web python manage.py mark_restore_verified --note "Restore aus YYYY-MM-DD-Backup gegen anlaufstelle_restore_test"` ausführen. Schreibt einen `RESTORE_VERIFIED`-AuditLog-Eintrag, den das Compliance-Dashboard als Alter-Indikator nutzt (ok ≤90 Tage, warning ≤180, critical älter).
 - Monitoring-Alerts (Uptime + Disk + RAM) einrichten
 
 ## Referenzen

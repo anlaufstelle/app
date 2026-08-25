@@ -6,16 +6,9 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, DocumentType, Event, Facility, WorkItem
+from core.models import AuditLog, Case, Client, Event, Facility, WorkItem
 from core.models.episode import Episode
 from core.models.outcome import Milestone, OutcomeGoal
-
-
-def _foreign_doc_type(other_facility):
-    """Refs #2066: Der Composite-FK pinnt ``document_type`` an die Facility des
-    Events (DEFERRABLE — die Verletzung schlaegt erst beim Commit/Teardown zu).
-    Fremd-Facility-Events brauchen seither einen Doctype ihrer eigenen Facility."""
-    return DocumentType.objects.create(facility=other_facility, name="Kontakt (fremd)", report_key="contact")
 
 
 @pytest.mark.django_db
@@ -59,15 +52,10 @@ class TestEventDetailScope:
             pseudonym="Fremd-EV-01",
             created_by=staff_user,
         )
-        # Refs #2066: Der Composite-FK pinnt document_type an die Facility des
-        # Events — das Fremd-Event braucht einen Doctype seiner eigenen Facility.
-        other_doc_type = DocumentType.objects.create(
-            facility=other_facility, name="Kontakt (fremd)", report_key="contact"
-        )
         other_event = Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=other_doc_type,
+            document_type=doc_type_contact,
             occurred_at=timezone.now(),
             data_json={},
             created_by=staff_user,
@@ -120,7 +108,7 @@ class TestStatisticsScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=_foreign_doc_type(other_facility),
+            document_type=doc_type_contact,
             occurred_at=timezone.now(),
             data_json={},
             created_by=lead_user,
@@ -364,7 +352,7 @@ class TestHandoverScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=_foreign_doc_type(other_facility),
+            document_type=doc_type_contact,
             occurred_at=timezone.now(),
             data_json={},
             created_by=staff_user,
@@ -431,7 +419,7 @@ class TestCSVExportScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=_foreign_doc_type(other_facility),
+            document_type=doc_type_contact,
             occurred_at=timezone.now(),
             data_json={"notiz": "Geheimer Export"},
             created_by=lead_user,
@@ -460,7 +448,7 @@ class TestPDFExportScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=_foreign_doc_type(other_facility),
+            document_type=doc_type_contact,
             occurred_at=timezone.now(),
             data_json={},
             created_by=lead_user,

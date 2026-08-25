@@ -247,16 +247,6 @@ class TestCheckVersionConflictErrorCodes:
                 check_version_conflict(sample_workitem, "nicht-iso")
         assert exc_info.value.code == "invalid_token"
 
-    def test_naive_iso_token_raises_invalid_token_code(self, sample_workitem):
-        sample_workitem.refresh_from_db()
-        naive_token = sample_workitem.updated_at.replace(tzinfo=None).isoformat()
-
-        with transaction.atomic():
-            with pytest.raises(ValidationError) as exc_info:
-                check_version_conflict(sample_workitem, naive_token)
-
-        assert exc_info.value.code == "invalid_token"
-
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres

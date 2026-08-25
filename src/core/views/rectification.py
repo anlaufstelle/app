@@ -36,7 +36,6 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
-from core.services.client.restriction import restrict_processing
 from core.services.scoping import get_scoped_object
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
 from core.views.utils import object_back_link
@@ -118,26 +117,6 @@ class RectificationCreateView(StaffRequiredMixin, View):
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
-                # Refs #2045: Opt-in NACH dem erfolgreichen Antrag — die
-                # Einschraenkung haengt am laufenden Verfahren; scheitert der
-                # Antrag (Feld nicht berichtigungsfaehig, bereits ein offener
-                # Antrag), bleibt die Akte unangetastet. ``restrict_processing``
-                # ist idempotent, ein bereits gesetzter Vermerk ist also kein
-                # Fehler; nur ein echter Guard-Verstoss (Rolle) wird gemeldet.
-                if form.cleaned_data.get("restrict_processing"):
-                    try:
-                        restrict_processing(
-                            client,
-                            request.user,
-                            reason=Client.RestrictionReason.ACCURACY_DISPUTED,
-                        )
-                    except ValidationError as exc:
-                        messages.error(request, "; ".join(exc.messages))
-                    else:
-                        messages.info(
-                            request,
-                            _("Die Verarbeitung dieser Person ist für die Dauer der Prüfung eingeschränkt."),
-                        )
                 messages.success(
                     request,
                     _("Berichtigungsantrag gestellt — die Leitung prüft ihn (Vier-Augen-Prinzip)."),

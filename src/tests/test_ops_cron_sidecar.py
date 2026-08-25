@@ -69,7 +69,6 @@ EXPECTED_JOBS = {
     "verify_audit_chain": "30 3 * * *",
     "create_statistics_snapshots": "0 4 1 * *",
     "cleanup_orphan_storage_files": "30 4 * * *",
-    "clearsessions": "0 5 * * *",
     "detect_breaches": "30 * * * *",
     "refresh_statistics_view": "15 * * * *",
 }

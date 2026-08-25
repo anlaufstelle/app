@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-29 12:54+0200\n"
+"POT-Creation-Date: 2026-08-25 00:38+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1086,14 +1086,6 @@ msgstr "Berichtigung genehmigt"
 #: src/core/models/audit.py:145
 msgid "Berichtigung abgelehnt"
 msgstr "Berichtigung abgelehnt"
-
-#: src/core/models/audit.py:212
-msgid "Verarbeitung eingeschränkt (Art. 18)"
-msgstr "Verarbeitung eingeschränkt (Art. 18)"
-
-#: src/core/models/audit.py:214
-msgid "Einschränkung der Verarbeitung aufgehoben"
-msgstr "Einschränkung der Verarbeitung aufgehoben"
 
 #: src/core/models/audit.py:164 src/core/models/user.py:106
 #: src/core/models/user.py:107 src/templates/auth/_demo_credentials.html:23
@@ -2588,6 +2580,14 @@ msgstr ""
 msgid "Standard"
 msgstr "Standard"
 
+#: src/core/models/time_filter.py:35
+msgid ""
+"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
+"wird"
+msgstr ""
+"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
+"wird"
+
 #: src/core/models/time_filter.py:41 src/core/models/time_filter.py:42
 #: src/templates/components/_time_filter_dropdown.html:6
 msgid "Zeitfilter"
@@ -3698,17 +3698,15 @@ msgstr ""
 "Einrichtungen. Kein Klarname-Feld — der primaere Identifikator ist ein "
 "Pseudonym."
 
-#: src/core/services/compliance/vvt.py:55
+#: src/core/services/compliance/vvt.py:49
 msgid ""
 "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
-"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
-"ergaenzen)."
+"Interesse) i.V.m. SGB VIII §13 (Jugendsozialarbeit) bzw. SGB XII (Hilfen in "
+"Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
 msgstr ""
 "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
-"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
-"ergaenzen)."
+"Interesse) i.V.m. SGB VIII §13 (Jugendsozialarbeit) bzw. SGB XII (Hilfen in "
+"Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
 
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
@@ -3742,10 +3740,17 @@ msgstr ""
 msgid "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 msgstr "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 
-#: src/core/services/compliance/vvt.py:73
-#, python-brace-format
-msgid "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
-msgstr "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
+#: src/core/services/compliance/vvt.py:65
+msgid ""
+"Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
+"Monate (danach Aggregation). Kontakte der Stufe „Nur Pseudonym“: 36 Monate "
+"nach letztem Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre nach "
+"Falllauf-Ende (SGB VIII §97)."
+msgstr ""
+"Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
+"Monate (danach Aggregation). Kontakte der Stufe „Nur Pseudonym“: 36 Monate "
+"nach letztem Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre nach "
+"Falllauf-Ende (SGB VIII §97)."
 
 #: src/core/services/compliance/vvt.py:73
 msgid "Pseudonymisierung by Design"
@@ -3797,17 +3802,15 @@ msgstr ""
 "Episoden. Grundlage der Wirkungsmessung und Berichterstattung gegenueber "
 "Foerdermittelgebern."
 
-#: src/core/services/compliance/vvt.py:117
+#: src/core/services/compliance/vvt.py:92
 msgid ""
-"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
-"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
-"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
-"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
+"DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 (Sozialdaten in der "
+"Jugendhilfe), Art. 9 Abs. 2 lit. b/h fuer besondere Datenkategorien "
+"(Gesundheits-, Sozialdaten). § 203 StGB (Schweigepflicht)."
 msgstr ""
-"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
-"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
-"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
-"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
+"DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 (Sozialdaten in der "
+"Jugendhilfe), Art. 9 Abs. 2 lit. b/h fuer besondere Datenkategorien "
+"(Gesundheits-, Sozialdaten). § 203 StGB (Schweigepflicht)."
 
 #: src/core/services/compliance/vvt.py:98
 msgid "Ereignisbeschreibungen / Beratungsnotizen"
@@ -4139,19 +4142,15 @@ msgstr "DSGVO-Auskunfts- und Berichtigungsantraege"
 
 #: src/core/services/compliance/vvt.py:250
 msgid ""
-"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
-"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
-"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
-"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
-"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
-"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
+"Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 (Auskunft, "
+"Berichtigung, Loeschung, Einschraenkung, Datenuebertragbarkeit, "
+"Widerspruch). Erstellung von Datenexport-Paketen und Dokumentation der "
+"Bearbeitung."
 msgstr ""
-"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
-"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
-"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
-"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
-"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
-"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
+"Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 (Auskunft, "
+"Berichtigung, Loeschung, Einschraenkung, Datenuebertragbarkeit, "
+"Widerspruch). Erstellung von Datenexport-Paketen und Dokumentation der "
+"Bearbeitung."
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""
@@ -5288,13 +5287,6 @@ msgstr "Keine Vorschläge ausgewählt."
 #: src/core/views/retention.py:150
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "Keine gültigen Vorschläge gefunden."
-
-#: src/core/views/retention.py:156
-#, python-format
-msgid "%(count)d Löschvorschlag aktualisiert."
-msgid_plural "%(count)d Löschvorschläge aktualisiert."
-msgstr[0] "%(count)d Löschvorschlag aktualisiert."
-msgstr[1] "%(count)d Löschvorschläge aktualisiert."
 
 #: src/core/views/statistics.py:662
 msgid "backend erforderlich"
@@ -7418,16 +7410,10 @@ msgstr[1] ""
 
 #: src/templates/core/config/document_types/confirm_delete.html:46
 #, python-format
-msgid "%(n)s Schnellvorlage verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
-msgid_plural "%(n)s Schnellvorlagen verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
-msgstr[0] "%(n)s Schnellvorlage verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
-msgstr[1] "%(n)s Schnellvorlagen verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
-
-#, python-format
-msgid "%(n)d Schnellvorlage verweist auf diesen Dokumentationstyp und müsste zuerst gelöscht werden."
-msgid_plural "%(n)d Schnellvorlagen verweisen auf diesen Dokumentationstyp und müssten zuerst gelöscht werden."
-msgstr[0] "%(n)d Schnellvorlage verweist auf diesen Dokumentationstyp und müsste zuerst gelöscht werden."
-msgstr[1] "%(n)d Schnellvorlagen verweisen auf diesen Dokumentationstyp und müssten zuerst gelöscht werden."
+msgid "%(n)s Schnellvorlage wird beim Löschen mit entfernt."
+msgid_plural "%(n)s Schnellvorlagen werden beim Löschen mit entfernt."
+msgstr[0] "%(n)s Schnellvorlage wird beim Löschen mit entfernt."
+msgstr[1] "%(n)s Schnellvorlagen werden beim Löschen mit entfernt."
 
 #: src/templates/core/config/document_types/confirm_delete.html:55
 msgid ""
@@ -11351,10 +11337,6 @@ msgstr "Anonymisierte Personen können nicht zusammengeführt werden."
 msgid "Diese Person ist bereits zusammengeführt."
 msgstr "Diese Person ist bereits zusammengeführt."
 
-#: src/core/services/client/main.py:1115
-msgid "Diese Person liegt bereits im Papierkorb."
-msgstr "Diese Person liegt bereits im Papierkorb."
-
 #: src/core/services/client/merge.py:325
 msgid "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
 msgstr "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
@@ -11952,215 +11934,3 @@ msgstr "Zugänge"
 
 msgid "ohne MFA"
 msgstr "ohne MFA"
-
-#: src/templates/partials/_nav_badge.html:28
-#, python-format
-msgid "%(n)s offene Aufgabe"
-msgid_plural "%(n)s offene Aufgaben"
-msgstr[0] "%(n)s offene Aufgabe"
-msgstr[1] "%(n)s offene Aufgaben"
-
-#: src/templates/partials/_nav_badge.html:29
-#, python-format
-msgid "%(n)s überfällige Aufgabe"
-msgid_plural "%(n)s überfällige Aufgaben"
-msgstr[0] "%(n)s überfällige Aufgabe"
-msgstr[1] "%(n)s überfällige Aufgaben"
-
-#: src/templates/partials/_nav_badge.html:30
-#, python-format
-msgid "%(n)s offener Löschantrag"
-msgid_plural "%(n)s offene Löschanträge"
-msgstr[0] "%(n)s offener Löschantrag"
-msgstr[1] "%(n)s offene Löschanträge"
-
-#: src/templates/partials/_nav_badge.html:31
-#, python-format
-msgid "%(n)s offener Berichtigungsantrag"
-msgid_plural "%(n)s offene Berichtigungsanträge"
-msgstr[0] "%(n)s offener Berichtigungsantrag"
-msgstr[1] "%(n)s offene Berichtigungsanträge"
-
-#: src/templates/partials/_nav_badge.html:32
-#, python-format
-msgid "%(n)s offener Prüfvorgang"
-msgid_plural "%(n)s offene Prüfvorgänge"
-msgstr[0] "%(n)s offener Prüfvorgang"
-msgstr[1] "%(n)s offene Prüfvorgänge"
-
-#: src/templates/partials/_nav_badge.html:33
-#, python-format
-msgid "%(n)s offener Vorgang"
-msgid_plural "%(n)s offene Vorgänge"
-msgstr[0] "%(n)s offener Vorgang"
-msgstr[1] "%(n)s offene Vorgänge"
-
-msgid "Einrichtung archiviert"
-msgstr "Einrichtung archiviert"
-
-msgid "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht möglich. Bitte wenden Sie sich an die Systemverwaltung."
-msgstr "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht möglich. Bitte wenden Sie sich an die Systemverwaltung."
-
-msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
-msgstr "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
-
-#: src/templates/core/clients/detail.html:102
-#, python-format
-msgid "%(grund)s — gesetzt am %(datum)s durch %(person)s. Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden."
-msgstr "%(grund)s — gesetzt am %(datum)s durch %(person)s. Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden."
-
-#: src/core/services/client/restriction.py:1
-msgid "Art. 18 DSGVO: Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht mehr geändert oder verwendet werden."
-msgstr "Art. 18 DSGVO: Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht mehr geändert oder verwendet werden."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Daten bleiben gespeichert, dürfen aber bis zur Entscheidung über diesen Antrag nicht mehr geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
-msgstr "Die Daten bleiben gespeichert, dürfen aber bis zur Entscheidung über diesen Antrag nicht mehr geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Einschränkung der Verarbeitung wurde aufgehoben."
-msgstr "Die Einschränkung der Verarbeitung wurde aufgehoben."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Einschränkung kann nicht von derselben Person aufgehoben werden, die sie gesetzt hat (Vier-Augen-Prinzip) — bitte die Leitung oder eine zweite berechtigte Person hinzuziehen."
-msgstr "Die Einschränkung kann nicht von derselben Person aufgehoben werden, die sie gesetzt hat (Vier-Augen-Prinzip) — bitte die Leitung oder eine zweite berechtigte Person hinzuziehen."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Verarbeitung dieser Person ist für die Dauer der Prüfung eingeschränkt."
-msgstr "Die Verarbeitung dieser Person ist für die Dauer der Prüfung eingeschränkt."
-
-#: src/core/services/client/restriction.py:1
-msgid "Die Verarbeitung dieser Person ist jetzt eingeschränkt (Art. 18 DSGVO)."
-msgstr "Die Verarbeitung dieser Person ist jetzt eingeschränkt (Art. 18 DSGVO)."
-
-#: src/core/services/client/restriction.py:1
-msgid "Eingeschränkt"
-msgstr "Eingeschränkt"
-
-#: src/core/services/client/restriction.py:1
-msgid "Eingeschränkt am"
-msgstr "Eingeschränkt am"
-
-#: src/core/services/client/restriction.py:1
-msgid "Eingeschränkt durch"
-msgstr "Eingeschränkt durch"
-
-#: src/core/services/client/restriction.py:1
-msgid "Einschränkung aufheben"
-msgstr "Einschränkung aufheben"
-
-#: src/core/services/client/restriction.py:1
-msgid "Für Rechtsansprüche weiter benötigt (lit. c)"
-msgstr "Für Rechtsansprüche weiter benötigt (lit. c)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
-msgstr "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
-
-#: src/core/services/client/restriction.py:1
-msgid "Für diese Person ist die Verarbeitung nicht eingeschränkt."
-msgstr "Für diese Person ist die Verarbeitung nicht eingeschränkt."
-
-#: src/core/services/client/restriction.py:1
-msgid "Grund der Einschränkung"
-msgstr "Grund der Einschränkung"
-
-#: src/core/services/client/restriction.py:1
-msgid "Nur Fachkräfte dürfen die Einschränkung aufheben."
-msgstr "Nur Fachkräfte dürfen die Einschränkung aufheben."
-
-#: src/core/services/client/restriction.py:1
-msgid "Nur Fachkräfte dürfen die Verarbeitung einschränken."
-msgstr "Nur Fachkräfte dürfen die Verarbeitung einschränken."
-
-#: src/core/services/client/restriction.py:1
-msgid "Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)"
-msgstr "Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Ungültiger Grund für die Einschränkung der Verarbeitung."
-msgstr "Ungültiger Grund für die Einschränkung der Verarbeitung."
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung eingeschränkt"
-msgstr "Verarbeitung eingeschränkt"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung eingeschränkt (Art. 18 DSGVO)"
-msgstr "Verarbeitung eingeschränkt (Art. 18 DSGVO)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung einschränken"
-msgstr "Verarbeitung einschränken"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung für die Dauer der Prüfung einschränken (Art. 18 DSGVO)"
-msgstr "Verarbeitung für die Dauer der Prüfung einschränken (Art. 18 DSGVO)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung nach Art. 18 DSGVO eingeschränkt"
-msgstr "Verarbeitung nach Art. 18 DSGVO eingeschränkt"
-
-#: src/core/services/client/restriction.py:1
-msgid "Verarbeitung unrechtmäßig, Löschung abgelehnt (lit. b)"
-msgstr "Verarbeitung unrechtmäßig, Löschung abgelehnt (lit. b)"
-
-#: src/core/services/client/restriction.py:1
-msgid "Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)"
-msgstr "Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)"
-
-#: src/templates/core/export/client_data_pdf.html:1
-msgid "Zeitpunkte der Ereignisse"
-msgstr "Zeitpunkte der Ereignisse"
-
-#: src/templates/core/export/client_data_pdf.html:1
-msgid "Auf den Monat generalisiert — nach der Löschung (Art. 17 DSGVO) tragen die Ereignisse dieser Person nur noch den Monatsersten 00:00 Uhr als Zeitpunkt. Die genaue Uhrzeit wurde getilgt, weil sie eine Wiedererkennung über Außenwissen ermöglicht hätte."
-msgstr "Auf den Monat generalisiert — nach der Löschung (Art. 17 DSGVO) tragen die Ereignisse dieser Person nur noch den Monatsersten 00:00 Uhr als Zeitpunkt. Die genaue Uhrzeit wurde getilgt, weil sie eine Wiedererkennung über Außenwissen ermöglicht hätte."
-
-#: src/templates/core/attachments/confirm_delete.html:1
-msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt. Solange die Einschränkung besteht, kann diese Datei nicht einzeln vernichtet werden; die reguläre Löschung der Person bleibt davon unberührt."
-msgstr "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt. Solange die Einschränkung besteht, kann diese Datei nicht einzeln vernichtet werden; die reguläre Löschung der Person bleibt davon unberührt."
-
-#: src/core/services/case/workitems.py:1
-msgid "Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."
-msgstr "Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."
-
-#: src/core/services/case/workitems.py:1
-msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Datei darf nicht einzeln vernichtet werden."
-msgstr "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Datei darf nicht einzeln vernichtet werden."
-
-#: src/core/models/event_history.py:1
-msgid "Ereignis-Historie redigiert"
-msgstr "Ereignis-Historie redigiert"
-
-#: src/core/models/event_history.py:1
-msgid "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — es kann nicht gelöscht werden, solange die Sperre gilt."
-msgstr "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — es kann nicht gelöscht werden, solange die Sperre gilt."
-
-#: src/core/models/event_history.py:1
-msgid "Hinweis: Die Inhalte früherer Fassungen dieses Ereignisses waren zum Zeitpunkt der Sperre bereits getilgt und sind nicht wiederherstellbar. Die Sperre gilt ab jetzt."
-msgstr "Hinweis: Die Inhalte früherer Fassungen dieses Ereignisses waren zum Zeitpunkt der Sperre bereits getilgt und sind nicht wiederherstellbar. Die Sperre gilt ab jetzt."
-
-#: src/core/models/event_history.py:1
-msgid "Historien-Chronologie aufbewahren (Monate)"
-msgstr "Historien-Chronologie aufbewahren (Monate)"
-
-#: src/core/models/event_history.py:1
-msgid "Historien-Inhalte aufbewahren (Monate)"
-msgstr "Historien-Inhalte aufbewahren (Monate)"
-
-#: src/core/models/event_history.py:1
-msgid "Redigiert am"
-msgstr "Redigiert am"
-
-#: src/core/models/event_history.py:1
-msgid "Wie lange die Werte alter Ereignis-Fassungen lesbar bleiben, bevor enforce_retention sie redigiert. Die Fassung selbst (wer, wann, welche Felder) bleibt erhalten. Die jüngste Fassung eines lebenden Ereignisses wird nie redigiert. 0 = deaktiviert."
-msgstr "Wie lange die Werte alter Ereignis-Fassungen lesbar bleiben, bevor enforce_retention sie redigiert. Die Fassung selbst (wer, wann, welche Felder) bleibt erhalten. Die jüngste Fassung eines lebenden Ereignisses wird nie redigiert. 0 = deaktiviert."
-
-#: src/core/models/event_history.py:1
-msgid "Wie lange eine bereits redigierte Historien-Fassung nach ihrer Redaktion noch aufbewahrt wird, bevor enforce_retention sie löscht. 0 = deaktiviert (unbegrenzte Aufbewahrung der Chronologie)."
-msgstr "Wie lange eine bereits redigierte Historien-Fassung nach ihrer Redaktion noch aufbewahrt wird, bevor enforce_retention sie löscht. 0 = deaktiviert (unbegrenzte Aufbewahrung der Chronologie)."
-
-#: src/core/services/events/crud.py:1
-msgid "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — bitte erneut öffnen und die Löschung wiederholen."
-msgstr "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — bitte erneut öffnen und die Löschung wiederholen."

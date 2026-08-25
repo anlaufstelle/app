@@ -24,68 +24,13 @@ Willkommen! Diese Anleitung erklärt, wie du die Entwicklungsumgebung einrichtes
 
 ## Inhaltsverzeichnis
 
-1. [5-Minuten-Quick-Start (Docker)](#5-minuten-quick-start-docker)
-2. [Entwicklungsumgebung einrichten](#entwicklungsumgebung-einrichten)
-3. [Make-Targets](#make-targets)
-4. [Coding Conventions](#coding-conventions)
-5. [Plugin-Entwicklung](#plugin-entwicklung)
-6. [Tests](#tests)
-7. [Pull-Request-Prozess](#pull-request-prozess)
-8. [Lizenz von Beiträgen](#lizenz-von-beiträgen)
-9. [Architektur-Überblick](#architektur-überblick)
-
----
-
-## 5-Minuten-Quick-Start (Docker)
-
-Der schnellste Weg zu einer laufenden Anlaufstelle mit Beispieldaten — für den ersten Blick,
-für ein Bug-Repro und für den Einstieg vor dem ersten Pull Request. Voraussetzung ist
-ausschließlich **Docker mit Docker Compose**; Python, Node und PostgreSQL brauchst du dafür
-noch nicht.
-
-```bash
-git clone https://github.com/anlaufstelle/app.git
-cd app
-docker compose up      # ohne Docker-Gruppenrechte: sudo docker compose up
-```
-
-Das lokale Compose bringt Datenbank und Anwendung mit, wendet die Migrationen an und lädt beim
-**ersten** Start die Seed-Daten (nur in eine leere Datenbank — ein zweiter Start seedet nicht
-erneut). Der einmalige Image-Bau dauert etwa eine Minute; danach ist die Anmeldung binnen rund
-20 Sekunden unter **[http://localhost:8000/login/](http://localhost:8000/login/)** erreichbar.
-
-> **Keine Vorbereitung nötig.** Du legst weder eine `.env` an noch exportierst du einen
-> `ENCRYPTION_KEY` — das lokale Setup erzeugt sich seinen Schlüssel beim ersten Start selbst und
-> legt ihn in einem eigenen Volume ab, damit verschlüsselte Entwicklungsdaten über Neustarts
-> hinweg lesbar bleiben. Hintergrund und Abgrenzung zum Produktionspfad:
-> [ADR-049](docs/adr/049-one-command-local-bootstrap.md).
->
-> **Nur lokal erreichbar:** Der Webdienst bindet bewusst auf `127.0.0.1`, es gibt also keinen
-> Zugriff aus dem LAN. Das ist Absicht — die Seed-Konten haben ein öffentlich dokumentiertes
-> Passwort.
-
-**Anmelden.** Alle Seed-Konten teilen sich das Passwort `anlaufstelle2026`:
-
-| Login | Rolle | Wofür |
-|---|---|---|
-| `admin` | Anwendungsbetreuung (`facility_admin`) | Formular-Konfiguration, Zugänge, Einstellungen, Datenimport |
-| `emma` | Leitung (`lead`) | Statistik, Berichte, DSGVO-Workflows |
-| `miriam` | Fachkraft (`staff`) | Personen, Fälle, Dokumentation im Alltag |
-| `superadmin` | Systemadministration (`super_admin`) | `/system/`, installationsweite Sicht |
-
-Die vollständige Liste der sieben Logins und die Datenmengen je Profil stehen unter
-[Seed-Daten laden](#entwicklungsumgebung-einrichten). Der Seed ist fail-closed über
-`SEED_ALLOWED` abgesichert und läuft ausschließlich in lokalen/Demo-Settings; das
-Produktions-Compose seedet **nie** und kennt die Variable nicht — dort läuft die
-Ersteinrichtung über `manage.py create_super_admin`.
-
-**Aufräumen:** `docker compose down` stoppt den Stack, `docker compose down -v` wirft
-zusätzlich die Datenbank weg (der nächste Start seedet dann wieder frisch). Logs:
-`docker compose logs -f web`.
-
-**Danach.** Für echte Entwicklung — Tests, Linting, Tailwind-Watch, Debugger — brauchst du die
-lokale Toolchain aus dem nächsten Abschnitt. Wie das System aufgebaut ist:
-[docs/architecture.md](docs/architecture.md).
+1. [Entwicklungsumgebung einrichten](#entwicklungsumgebung-einrichten)
+2. [Make-Targets](#make-targets)
+3. [Coding Conventions](#coding-conventions)
+4. [Tests](#tests)
+5. [Pull-Request-Prozess](#pull-request-prozess)
+6. [Lizenz von Beiträgen](#lizenz-von-beiträgen)
+7. [Architektur-Überblick](#architektur-überblick)
 
 ---
 
@@ -222,15 +167,15 @@ Zwei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder
 es wird nichts angewendet, auch nicht für die übrigen Typen):
 
 * **Eigene Feldvorlage auf einem Katalog-Slug.** Hat eine Einrichtung z. B. `dauer` selbst
- als Textfeld angelegt, kollidiert das mit `field_type`/`is_encrypted` aus dem Paket
- beide sind nach dem Anlegen unveränderlich. Auflösung: die eigene Vorlage auf einen
- anderen Slug bringen (neu anlegen + Daten migrieren) oder den Katalog-Slug ändern.
+  als Textfeld angelegt, kollidiert das mit `field_type`/`is_encrypted` aus dem Paket
+  beide sind nach dem Anlegen unveränderlich. Auflösung: die eigene Vorlage auf einen
+  anderen Slug bringen (neu anlegen + Daten migrieren) oder den Katalog-Slug ändern.
 * **Namens-Kollision nach einer Umbenennung.** Wurde „Kontakt" per UI in „Erstkontakt"
- umbenannt und danach ein *neuer* Typ „Kontakt" angelegt (der bekommt den Slug
- `kontakt-2`), will der Seed den Typ mit dem Slug `kontakt` wieder in „Kontakt"
- zurückbenennen — das verletzt `UniqueConstraint(facility, name, category)`. Ab da
- scheitert **jeder** weitere Seed-Lauf, bis manuell aufgeräumt ist. Auflösung: den
- betreiber-eigenen Typ umbenennen oder den Namen im Katalog anpassen.
+  umbenannt und danach ein *neuer* Typ „Kontakt" angelegt (der bekommt den Slug
+  `kontakt-2`), will der Seed den Typ mit dem Slug `kontakt` wieder in „Kontakt"
+  zurückbenennen — das verletzt `UniqueConstraint(facility, name, category)`. Ab da
+  scheitert **jeder** weitere Seed-Lauf, bis manuell aufgeräumt ist. Auflösung: den
+  betreiber-eigenen Typ umbenennen oder den Namen im Katalog anpassen.
 
 **Scale-Profile im Überblick:**
 
@@ -375,14 +320,13 @@ pkill -f gunicorn
 Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abgesichert sein:
 
 1. **Django-Layer (erste Linie):**
- - `facility = models.ForeignKey(Facility, ...)` am Model
- - `objects = FacilityScopedManager()` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
- - Views/Services filtern via `.for_facility(request.current_facility)`
+   - `facility = models.ForeignKey(Facility, ...)` am Model
+   - `objects = FacilityScopedManager()` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
+   - Views/Services filtern via `.for_facility(request.current_facility)`
 2. **PostgreSQL-RLS (zweite Linie, Defense-in-Depth):**
- - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
- - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ist seit #1096 **ableitungsbasiert**: Tabellen mit direktem `facility`-FK (DIRECT) leitet die Test-Suite automatisch aus der Model-Registry ab — ein neues solches Model erscheint ohne Handgriff in `EXPECTED_TABLES`, und der RLS-Coverage-Guard (`TestRLSCoverageGuard`) failt, bis die RLS-Migration **und** die PII-Klassifikation existieren. Nur **JOIN-gescopte** Tabellen ohne direkten FK brauchen einen Hand-Eintrag in der `JOIN_SCOPED_TABLES`-Konstante; die Auth-Grenzen-Ausnahme (`core_user`) steht in `NOT_RLS_SCOPED`.
- - Der Architektur-Guard `TestRLSJoinScopeArchitectureGuard` (#2001) schließt die frühere Blindstelle: Referenziert ein Model ohne eigenen `facility`-FK per FK/O2O eine DIRECT-Tabelle, muss seine Tabelle in `JOIN_SCOPED_TABLES` stehen. Sonst failt `pytest -m architecture` mit dem Hinweis auf das Migrationsmuster `0047_postgres_rls_setup.py` — auch wenn weder Migration noch Liste die neue Tabelle bislang kennen. Die Ableitung ist bewusst auf die unmittelbare Kante zu einem DIRECT-Model begrenzt; bei tieferen Ketten (JOIN → JOIN → DIRECT) bleibt der Hand-Eintrag anhand der vollständigen Facility-Kette Pflicht.
- - Für die RLS-freien Tabellen (`core_user`, `core_facility`, `core_organization`) fehlt dieser zweite Backstop per Definition. Dort greift stattdessen der Architektur-Guard `TestTenantModelScopeGuard` in [`src/tests/test_architecture_guards_models.py`](src/tests/test_architecture_guards_models.py) (#1658): ein `User.objects`/`Facility.objects`/`Organization.objects`-Zugriff in `core/views/`, `core/forms/` oder `core/services/` ohne Facility-Scope failt die CI. Bewusst globale Zugriffe (Pre-Auth-Lookups, Super-Admin-Kennzahlen) gehören mit Begründung in die Allowlist der jeweiligen Scan-Sektion; Begründung der Guard-vs.-Manager-Entscheidung in [ADR-005](docs/adr/005-facility-scoping-and-rls.md).
+   - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
+   - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ist seit #1096 **ableitungsbasiert**: Tabellen mit direktem `facility`-FK (DIRECT) leitet die Test-Suite automatisch aus der Model-Registry ab — ein neues solches Model erscheint ohne Handgriff in `EXPECTED_TABLES`, und der RLS-Coverage-Guard (`TestRLSCoverageGuard`) failt, bis die RLS-Migration **und** die PII-Klassifikation existieren. Nur **JOIN-gescopte** Tabellen ohne direkten FK brauchen einen Hand-Eintrag in der `JOIN_SCOPED_TABLES`-Konstante; die Auth-Grenzen-Ausnahme (`core_user`) steht in `NOT_RLS_SCOPED`.
+   - Für die RLS-freien Tabellen (`core_user`, `core_facility`, `core_organization`) fehlt dieser zweite Backstop per Definition. Dort greift stattdessen der Architektur-Guard `TestTenantModelScopeGuard` in [`src/tests/test_architecture_guards_models.py`](src/tests/test_architecture_guards_models.py) (#1658): ein `User.objects`/`Facility.objects`/`Organization.objects`-Zugriff in `core/views/`, `core/forms/` oder `core/services/` ohne Facility-Scope failt die CI. Bewusst globale Zugriffe (Pre-Auth-Lookups, Super-Admin-Kennzahlen) gehören mit Begründung in die Allowlist der jeweiligen Scan-Sektion; Begründung der Guard-vs.-Manager-Entscheidung in [ADR-005](docs/adr/005-facility-scoping-and-rls.md).
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe `docs/dev/dev-deployment.md` (dev-only), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 
@@ -529,137 +473,6 @@ Refs #42
 ```
 
 Commits sind atomar: eine logische Änderung pro Commit. Direkt nach jeder Aufgabe zu pushen.
-
----
-
-## Plugin-Entwicklung
-
-Zwei Dinge lassen sich erweitern, **ohne** den Kern anzufassen: **Berichts-Backends** (Code,
-ein Modul) und **Konfigurationspakete** (Daten, eine YAML-Datei). Beide brauchen weder eine
-Migration noch eine neue URL, einen View oder einen Eintrag in der AuthZ-Matrix. Alles andere
-— Modelle, Views, Middleware — ist kein Plugin-System, sondern normale Kernentwicklung nach
-den Regeln oben.
-
-### Berichts-Backends (Reporting-Plugins)
-
-Ein Berichts-Backend kapselt die Fachlogik **eines** Berichtsstandards hinter einer festen
-Schnittstelle. Panel-Vorschau, CSV-/JSON-/XML-Export und die Snapshot-Speicherung sprechen nur
-diese Schnittstelle an und wissen nichts über den einzelnen Bericht. Praktische Folge: **ein
-neuer Bericht ist eine Datei.**
-
-Ein Modul unter [`src/core/reporting/backends/`](src/core/reporting/backends/) mit einer
-`DatasetBackend`-Unterklasse und dem `@register_backend`-Decorator erscheint automatisch als
-Karte auf dem Reiter „Datensatz-Berichte" und in allen drei Exportformaten:
-
-```python
-# src/core/reporting/backends/mein_bericht.py
-from django.utils.translation import gettext_lazy as _
-
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.registry import register_backend
-
-
-@register_backend("mein-bericht")           # Slug: ^[a-z0-9]+([-_][a-z0-9]+)*$, praktisch unveränderlich
-class MeinBackend(DatasetBackend):
-    name = _("Mein Bericht")                # Anzeigename — immer gettext_lazy
-    description = _("Was dieser Bericht zählt, in einem Satz.")
-    snapshot_enabled = False                # True = Roh-Aggregat wird monatlich persistiert
-
-    def get_field_specs(self) -> list[FieldSpec]:
-        return [FieldSpec("label", _("Merkmal")), FieldSpec("count", _("Anzahl"))]
-
-    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        ...                                 # liefert ROHE Zahlen
-
-    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        ...                                 # K-Anonymität, bevor irgendetwas das Haus verlässt
-```
-
-Fünf Punkte, an denen erfahrungsgemäß etwas schiefgeht:
-
-1. **`build_dataset()` ist roh, `prepare_export()` ist der Schutzwall.** Alles, was ausgeliefert
- wird — Download **und** Panel-Vorschau, läuft vorher durch `prepare_export()`. Wer Zahlen
- produziert, die extern zirkulieren, muss diesen Hook implementieren; die zentrale
- Suppressions-Maschinerie ist zu benutzen statt nachzubauen. Der Snapshot-Pfad ruft ihn
- bewusst **nicht** (interner Rohbestand) — `snapshot_enabled` ist damit ein
- Datenschutz-Vertrag, kein Feature-Schalter.
-2. **Labels sind `gettext_lazy`**, nie deutscher Klartext — sie landen als CSV-Kopfzeile und
- JSON-Label auch in der englischen Oberfläche.
-3. **Registrierung passiert zur Importzeit, ausschließlich über den Decorator.** Es gibt keine
- Konfigurationsliste. Discovery ist lazy (erst beim ersten `get_backends()`), damit die
- Importkette zyklusfrei bleibt; ein defektes Modul ist ein lauter `ImproperlyConfigured`,
- keine still unvollständige Registry.
-4. **Der Slug ist praktisch unveränderlich** — er steckt in Query-Parametern, Dateinamen und
- bei `snapshot_enabled` in den Schlüsseln von `StatisticsSnapshot.backend_data`.
-5. **Die Zuordnung läuft über `report_key`**, nie über eine Kategorie
- ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)). Genau **eine** dokumentierte
- Ausnahme: `ban-overview` bindet als hochsensibler Verhaltens-Bericht bewusst über
- `system_type` (`TypBindung(bindet="system_type")`) — Hausverbote sollen nicht über einen frei
- wählbaren Berichtsschlüssel in fremde Auswertungen geraten. Wer ausgerechnet dieses Modul als
- Vorlage kopiert, muss `bindet` auf `report_key` zurückstellen; die Registry-Auskunft
- („erscheint in …") und das Schlüssel-Vokabular ignorieren `system_type`-Bindungen sonst
- stillschweigend.
-
-**Als Vorlage kopieren, nicht von Null anfangen.** Unter
-[`src/core/reporting/backends/`](src/core/reporting/backends/) liegen neun mitgelieferte
-Backends — alle sind **Beispiele**, keine verbindlichen Berichtsstandards, und jedes zeigt
-einen anderen Zuschnitt: `example` (Minimalfall), `sample-report-1` (Vollfall mit Snapshot),
-`monthly-trend` (Zeitreihe), `client-metrics` (exakte Partition), `case-metrics` (unabhängige
-Skalare), `ban-overview` (hochsensibler Sonderfall), `needle-exchange-balance` (Summen über
-Feldwerte), `counseling-hours` (Kaskade Zeile → Gesamt), `service-distribution`
-(Mehrfachnennung). Such dir den Fall, der deinem am nächsten kommt, und kopiere **dieses**
-Modul.
-
-Sichtbarkeit prüfen:
-
-```bash
-python src/manage.py shell -c "from core.reporting.registry import get_backends; print([b.slug for b in get_backends()])"
-```
-
-**Vollständige Referenz** — `DatasetBackend`/`DatasetResult`/`FieldSpec`/`CompletenessIssue`,
-„Eigenes Backend in fünf Schritten", Discovery-Regeln, Snapshot-Vertrag, K-Anonymität,
-Exportformate und die Test-Checkliste für neue Backends:
-[docs/reporting-plugins.md](docs/reporting-plugins.md)
-(EN: [docs/en/reporting-plugins.md](docs/en/reporting-plugins.md)).
-Architektur-Entscheidungen: [ADR-038](docs/adr/038-reporting-plugin-backends.md),
-[ADR-042](docs/adr/042-report-key-berichtszuordnung.md),
-[ADR-023](docs/adr/023-k-anonymization-statistik.md).
-
-### Konfigurationspakete (YAML)
-
-Ein Konfigurationspaket beschreibt Feldvorlagen, Dokumentationstypen, Feldgruppen,
-Feldzuordnungen und Feldbedingungen einer Einrichtung **deklarativ**. Pakete machen
-Formular-Konfiguration teilbar: versionierbar, reviewbar, zwischen Trägern austauschbar — und
-**idempotent** einspielbar. Der mitgelieferte Standardkatalog
-[`src/core/packages/default.yaml`](src/core/packages/default.yaml) ist selbst ein Paket und
-läuft durch denselben Loader wie jedes fremde.
-
-```bash
-python src/manage.py load_package --file paket.yaml --facility <uuid> --dry-run
-python src/manage.py load_package --default --facility <uuid>      # Standardkatalog nachziehen
-```
-
-Vier Regeln, die im Alltag zählen:
-
-1. **Der Slug ist die Identität**, nicht der Name. Slugs sind nach dem Anlegen in Modell und
- DB-Trigger unveränderlich; ein geänderter Slug legt in **jeder** Bestands-Einrichtung ein
- Duplikat an, statt zu aktualisieren.
-2. **Unbekannte Schlüssel sind auf jeder Ebene ein Fehler** — ein Tippfehler wie `sort_oder`
- soll auffallen, statt still zu verpuffen. Doppelte YAML-Schlüssel ebenso.
-3. **Der Loader ist ein Rücksync, kein „anlegen, falls nicht vorhanden".** Er schreibt
- Paketwerte auf Bestandszeilen zurück; welche Felder das betrifft und welche er nie anfasst,
- steht in der Tabelle unter
- [Was der Loader-Seed einer Bestands-Einrichtung antut](#was-der-loader-seed-einer-bestands-einrichtung-antut).
- Deshalb: gegen Bestand **immer** erst `--dry-run`.
-4. **Alles-oder-nichts.** Ein Konflikt bricht den gesamten Lauf ab; es wird nichts angewendet.
-
-**Formatreferenz, Feld-für-Feld-Semantik, Loader-Buckets und die Pflegeregeln, die weh tun:**
-[docs/packages.md](docs/packages.md) · [ADR-037](docs/adr/037-konfigurationspakete-dynamische-felder.md)
-(Paketformat) · [ADR-036](docs/adr/036-globale-block-sequenz-feldordnung.md) (Feldordnung) ·
-[ADR-035](docs/adr/035-evaluator-semantik-bedingte-feldlogik.md) (Operatoren der Feldbedingungen).
-Die Gegenrichtung — eine bestehende Einrichtung vollständig als versioniertes JSON herausgeben
-(`manage.py export_facility`) — beschreibt
-[docs/facility-export-schema.md](docs/facility-export-schema.md).
 
 ---
 
@@ -815,7 +628,7 @@ Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `
 ## Pull-Request-Prozess
 
 1. **Branch erstellen** — von `main` branchen, sprechenden Branch-Namen verwenden:
- ```bash
+   ```bash
    git checkout -b feature/kurze-beschreibung
    # oder
    git checkout -b fix/was-repariert-wird
@@ -824,17 +637,17 @@ Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `
 2. **Entwickeln** — kleine, atomare Commits; Issue-Nummern referenzieren (`Refs #N`).
 
 3. **Lokal verifizieren:**
- ```bash
+   ```bash
    make ci          # Lint, Check, Tests
    make test-e2e    # E2E-Tests
    ```
- Außerdem manuell im Browser prüfen, dass die Änderung wie erwartet funktioniert.
+   Außerdem manuell im Browser prüfen, dass die Änderung wie erwartet funktioniert.
 
 4. **Pull Request öffnen:**
- - Titel im Conventional-Commits-Stil (`feat: ...`, `fix: ...`)
- - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
- - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
- - Verlinkung des zugehörigen GitHub-Issues
+   - Titel im Conventional-Commits-Stil (`feat: ...`, `fix: ...`)
+   - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
+   - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
+   - Verlinkung des zugehörigen GitHub-Issues
 
 ### Code of Conduct
 
@@ -853,9 +666,9 @@ Entwicklungswerkzeuge entfernt). Externe Pull Requests werden deshalb nicht dire
 
 1. Das Review findet ganz normal hier am PR statt.
 2. Nach Freigabe übernehmen wir deine Commits in den Entwicklungszweig — dein
- Git-Author-Feld (und damit deine Urheberschaft) bleibt erhalten.
+   Git-Author-Feld (und damit deine Urheberschaft) bleibt erhalten.
 3. Mit dem nächsten Release erscheint deine Änderung auf `main`; dein PR wird dann mit
- Verweis auf das Release geschlossen und im CHANGELOG genannt.
+   Verweis auf das Release geschlossen und im CHANGELOG genannt.
 
 Dass ein PR „geschlossen" statt „gemergt" angezeigt wird, ist also keine Ablehnung — es ist
 die Mechanik des Release-Spiegels.
@@ -880,7 +693,7 @@ stammt oder aus kompatibel lizenzierten Quellen mit intakten Lizenzhinweisen üb
 
 Dazu signierst du jeden Commit mit deinem Namen und einer gültigen E-Mail-Adresse:
 
- git commit -s
+    git commit -s
 
 Das fügt eine Zeile `Signed-off-by: Vorname Nachname <email@example.org>` an die
 Commit-Message an. Pull Requests ohne Sign-off können wir nicht übernehmen; ein vergessenes
@@ -904,12 +717,6 @@ genannt.
 ---
 
 ## Architektur-Überblick
-
-> **Ausführlicher Wegweiser:** [docs/architecture.md](docs/architecture.md) — Schichtung
-> (Views → Services → Models), Sicherheitsarchitektur, No-Code-Konfigurationskern,
-> Offline-PWA und Test-Landschaft, jeweils mit Verweis auf die zuständige ADR. Der Abschnitt
-> hier bleibt der Kurzeinstieg für Rollen, Verzeichnisstruktur und die Designentscheidungen,
-> die man beim ersten Pull Request kennen muss.
 
 ### Rollen
 

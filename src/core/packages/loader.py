@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
@@ -82,8 +82,6 @@ if TYPE_CHECKING:
     # (Stub-only-Alias), ``from __future__ import annotations`` macht den Import
     # ohnehin lazy.
     from django.utils.functional import _StrOrPromise
-
-_UNFETCHED = object()
 
 # ---------------------------------------------------------------------------
 # Report
@@ -219,37 +217,6 @@ def _apply_package(facility: Facility, package: PackageV1, report: PackageReport
         _apply_conditions(doc_type, doc_def, fields, report)
 
 
-def _upsert[ModelT: models.Model](
-    model: type[ModelT],
-    lookup: dict[str, Any],
-    desired: dict[str, Any],
-    section: ObjectReport,
-    report: PackageReport,
-    identifier: str,
-    *,
-    existing: ModelT | None | object = _UNFETCHED,
-) -> ModelT | None:
-    """Ein Objekt anlegen oder seinen deklarativen Diff anwenden.
-
-    ``existing`` kann nach objektspezifischen Vorprüfungen mitgegeben werden,
-    damit der Lookup nicht wiederholt wird. Ein fehlgeschlagenes Create liefert
-    ``None``; bei einem fehlgeschlagenen Update bleibt das Bestandsobjekt wie
-    bisher für abhängige Schritte verwendbar.
-    """
-    current = (
-        model._default_manager.filter(**lookup).first() if existing is _UNFETCHED else cast(ModelT | None, existing)
-    )
-    if current is None:
-        instance = model(**lookup, **desired)
-        if not _save(instance, report, identifier):
-            return None
-        section.created.append(identifier)
-        return instance
-
-    _apply_diff(current, desired, section, report, identifier)
-    return current
-
-
 def _apply_field_templates(facility: Facility, package: PackageV1, report: PackageReport) -> dict[str, FieldTemplate]:
     """Feldvorlagen upserten; liefert die verwendbaren Vorlagen je Slug."""
     templates: dict[str, FieldTemplate] = {}
@@ -257,36 +224,31 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
         identifier = template_def.slug
         _warn_on_normalized_report_keys(template_def, report, identifier)
         desired = _desired_template_values(template_def)
-        lookup = {"facility": facility, "slug": template_def.slug}
-        existing = FieldTemplate.objects.filter(**lookup).first()
+        existing = FieldTemplate.objects.filter(facility=facility, slug=template_def.slug).first()
 
-        if existing is not None:
-            _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
-            _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
-            _note_preserved_number_range(existing, template_def, report, identifier)
-            conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
-            conflicts += _report_key_conflicts(existing, template_def.report_key)
-            if conflicts:
-                # Haertung (Refs #1058, Review-Punkt 3): NICHT in die Erfolgs-Map
-                # eintragen — DocumentType-Muster (None + Kinder-Skip) gespiegelt.
-                # Abhaengige field_refs sehen ``templates.get(slug) is None`` und
-                # melden sich selbst als uebersprungen, statt faelschlich als
-                # "created" in den Report zu wandern (das rollt ohnehin zurueck,
-                # aber der Report soll nur zeigen, was ein Re-Lauf wirklich taete).
-                report.errors.extend((identifier, message) for message in conflicts)
-                continue
+        if existing is None:
+            template = FieldTemplate(facility=facility, slug=template_def.slug, **desired)
+            if _save(template, report, identifier):
+                report.field_templates.created.append(identifier)
+                templates[template_def.slug] = template
+            continue
 
-        template = _upsert(
-            FieldTemplate,
-            lookup,
-            desired,
-            report.field_templates,
-            report,
-            identifier,
-            existing=existing,
-        )
-        if template is not None:
-            templates[template_def.slug] = template
+        _warn_on_disappearing_options(existing, desired["options_json"], report, identifier)
+        _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
+        _note_preserved_number_range(existing, template_def, report, identifier)
+        conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
+        conflicts += _report_key_conflicts(existing, template_def.report_key)
+        if conflicts:
+            # Haertung (Refs #1058, Review-Punkt 3): NICHT in die Erfolgs-Map
+            # eintragen — DocumentType-Muster (None + Kinder-Skip) gespiegelt.
+            # Abhaengige field_refs sehen ``templates.get(slug) is None`` und
+            # melden sich selbst als uebersprungen, statt faelschlich als
+            # "created" in den Report zu wandern (das rollt ohnehin zurueck,
+            # aber der Report soll nur zeigen, was ein Re-Lauf wirklich taete).
+            report.errors.extend((identifier, message) for message in conflicts)
+            continue
+        templates[template_def.slug] = existing
+        _apply_diff(existing, desired, report.field_templates, report, identifier)
     return templates
 
 
@@ -318,33 +280,30 @@ def _apply_document_type(facility: Facility, doc_def: DocumentTypeDef, report: P
     # ``_report_key_conflicts``.
     if doc_def.report_key is not None:
         desired["report_key"] = doc_def.report_key
-    lookup = {"facility": facility, "slug": doc_def.slug}
-    existing = DocumentType.objects.filter(**lookup).first()
+    existing = DocumentType.objects.filter(facility=facility, slug=doc_def.slug).first()
 
-    if existing is not None:
-        conflicts = _immutable_conflicts(existing, desired, _DOCUMENT_TYPE_IMMUTABLES)
-        # ``system_type`` ist die Ausnahme von E13: ein Bestandstyp ohne Systemtyp
-        # darf einen bekommen (Kompatibilität mit vor-M2-Daten), ein gesetzter darf
-        # weder wechseln noch entfernt werden — genau wie ``DocumentType.save()``
-        # es selbst erzwingt.
-        if existing.system_type and existing.system_type != doc_def.system_type:
-            conflicts.append(_immutable_message(_("Systemtyp"), existing.system_type, doc_def.system_type))
-        conflicts += _report_key_conflicts(existing, doc_def.report_key)
-        if conflicts:
-            report.errors.extend((identifier, message) for message in conflicts)
+    if existing is None:
+        doc_type = DocumentType(facility=facility, slug=doc_def.slug, **desired)
+        if not _save(doc_type, report, identifier):
             return None
+        report.document_types.created.append(identifier)
+        return doc_type
 
-        _warn_on_doctype_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
+    conflicts = _immutable_conflicts(existing, desired, _DOCUMENT_TYPE_IMMUTABLES)
+    # ``system_type`` ist die Ausnahme von E13: ein Bestandstyp ohne Systemtyp
+    # darf einen bekommen (Kompatibilität mit vor-M2-Daten), ein gesetzter darf
+    # weder wechseln noch entfernt werden — genau wie ``DocumentType.save()``
+    # es selbst erzwingt.
+    if existing.system_type and existing.system_type != doc_def.system_type:
+        conflicts.append(_immutable_message(_("Systemtyp"), existing.system_type, doc_def.system_type))
+    conflicts += _report_key_conflicts(existing, doc_def.report_key)
+    if conflicts:
+        report.errors.extend((identifier, message) for message in conflicts)
+        return None
 
-    return _upsert(
-        DocumentType,
-        lookup,
-        desired,
-        report.document_types,
-        report,
-        identifier,
-        existing=existing,
-    )
+    _warn_on_doctype_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
+    _apply_diff(existing, desired, report.document_types, report, identifier)
+    return existing
 
 
 def _apply_groups(doc_type: DocumentType, doc_def: DocumentTypeDef, report: PackageReport) -> dict[str, FieldGroup]:
@@ -363,16 +322,15 @@ def _apply_groups(doc_type: DocumentType, doc_def: DocumentTypeDef, report: Pack
             "sort_order": group_def.sort_order,
             "is_collapsible": group_def.is_collapsible,
         }
-        group = _upsert(
-            FieldGroup,
-            {"document_type": doc_type, "slug": group_def.slug},
-            desired,
-            report.groups,
-            report,
-            identifier,
-        )
-        if group is not None:
-            groups[group_def.slug] = group
+        existing = FieldGroup.objects.filter(document_type=doc_type, slug=group_def.slug).first()
+        if existing is None:
+            group = FieldGroup(document_type=doc_type, slug=group_def.slug, **desired)
+            if _save(group, report, identifier):
+                report.groups.created.append(identifier)
+                groups[group_def.slug] = group
+            continue
+        groups[group_def.slug] = existing
+        _apply_diff(existing, desired, report.groups, report, identifier)
     return groups
 
 
@@ -437,16 +395,15 @@ def _apply_field_refs(
             continue
 
         desired: dict[str, Any] = {"field_group": group, "sort_order": ref_def.sort_order}
-        doc_type_field = _upsert(
-            DocumentTypeField,
-            {"document_type": doc_type, "field_template": template},
-            desired,
-            report.field_refs,
-            report,
-            identifier,
-        )
-        if doc_type_field is not None:
-            fields[ref_def.template_slug] = doc_type_field
+        existing = DocumentTypeField.objects.filter(document_type=doc_type, field_template=template).first()
+        if existing is None:
+            doc_type_field = DocumentTypeField(document_type=doc_type, field_template=template, **desired)
+            if _save(doc_type_field, report, identifier):
+                report.field_refs.created.append(identifier)
+                fields[ref_def.template_slug] = doc_type_field
+            continue
+        fields[ref_def.template_slug] = existing
+        _apply_diff(existing, desired, report.field_refs, report, identifier)
     return fields
 
 
@@ -798,12 +755,6 @@ def _warn_on_field_sensitivity_downgrade(
             effective_sensitivity(ts, new_field) < effective_sensitivity(ts, old_field) for ts in type_sensitivities
         )
     else:
-        # Refs #1991 (bewusste Abweichung): hier bleibt der Default 0 stehen,
-        # weil der Roh-Vergleich ohne Typ-Referenz genau die im Docstring
-        # festgehaltene Regel „``""`` ⇒ Rang 0" braucht. Es ist zudem kein
-        # Lese-Gate, sondern eine Warn-Heuristik fuer die Betreiber-Meldung;
-        # die fail-closed ``sensitivity_rank`` wuerde ``""`` zum „unbekannten"
-        # Hoechstrang machen und die Warnung ins Gegenteil verkehren.
         ranks: dict[str, int] = {str(level): rank for level, rank in SENSITIVITY_RANK.items()}
         downgraded = ranks.get(new_field, 0) < ranks.get(old_field, 0)
     if downgraded:

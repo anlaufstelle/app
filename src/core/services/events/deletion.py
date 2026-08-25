@@ -20,44 +20,11 @@ from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.audit import audit_event
-from core.services.client.restriction import _deletion_workflow_write
 from core.services.events.crud import soft_delete_event
 
 
-def get_pending_event_deletion_request(event):
-    """Der laufende (PENDING) Loeschantrag dieses Ereignisses — sonst ``None``.
-
-    Refs #2015: Muster ``get_pending_deletion_request`` (Personen-Pfad) und
-    ``get_pending_case_deletion_request`` (Fall-Pfad). Der Ereignis-Pfad hatte
-    als einziger keinen benannten Helfer, sondern eine Inline-Query in
-    :func:`request_deletion` — die View konnte den Gewinner eines
-    Antrags-Rennens deshalb gar nicht nachladen. Eine Quelle fuer beide
-    Aufrufer.
-    """
-    return (
-        DeletionRequest.objects.for_facility(event.facility)
-        .filter(target_type="Event", target_id=event.pk, status=DeletionRequest.Status.PENDING)
-        .first()
-    )
-
-
 def request_deletion(event, user, reason):
-    """Create a deletion request for qualified data — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_event_deletion_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen.
-    """
-    return create_or_get_event_deletion_request(event, user, reason)[0]
-
-
-def create_or_get_event_deletion_request(event, user, reason):
-    """Wie :func:`request_deletion`, aber ``(antrag, created)``.
-
-    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request``.
-    Der Ereignis-Pfad hat keinen Vorab-Check in der View — die Idempotenz
-    sitzt allein hier. Ein paralleler Zweit-POST landet deshalb regelmaessig
-    im Zweig unten und muss als solcher erkennbar sein.
+    """Create a deletion request for qualified data (four-eyes principle).
 
     Idempotent: if a PENDING DeletionRequest already exists for the same
     event, the existing record is returned instead of creating a duplicate
@@ -65,9 +32,13 @@ def create_or_get_event_deletion_request(event, user, reason):
     (Refs #932) — der DELETION_REQUESTED-Eintrag existiert bereits vom
     ersten Aufruf.
     """
-    existing = get_pending_event_deletion_request(event)
+    existing = (
+        DeletionRequest.objects.for_facility(event.facility)
+        .filter(target_type="Event", target_id=event.pk, status=DeletionRequest.Status.PENDING)
+        .first()
+    )
     if existing is not None:
-        return existing, False
+        return existing
     dr = DeletionRequest.objects.create(
         facility=event.facility,
         target_type="Event",
@@ -85,7 +56,7 @@ def create_or_get_event_deletion_request(event, user, reason):
         # DeletionRequest.reason (via target_id=dr.pk erreichbar).
         detail={"target_event": str(event.pk)},
     )
-    return dr, True
+    return dr
 
 
 @transaction.atomic
@@ -128,12 +99,7 @@ def approve_deletion(deletion_request, reviewer):
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
     event = Event.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
-    # Refs #2045: Der gepruefte Art.-17-Weg bleibt waehrend einer
-    # Art.-18-Einschraenkung offen — die Loeschung ist ein Betroffenenrecht.
-    # Der Ausstieg ist ein benannter, modul-privater Kontext (kein Argument von
-    # ``soft_delete_event``), damit er nicht zum Generalschluessel wird.
-    with _deletion_workflow_write():
-        soft_delete_event(event, reviewer)
+    soft_delete_event(event, reviewer)
     deletion_request.status = DeletionRequest.Status.APPROVED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()
@@ -155,22 +121,7 @@ def reject_deletion(deletion_request, reviewer):
     Refs #932: schreibt einen DELETION_REJECTED-Eintrag (DSGVO Art. 5(2)
     Rechenschaftspflicht ueber abgelehnte Loesch-Versuche). KEIN
     ``Action.DELETE``-Eintrag — nur Approve loescht das Event.
-
-    Refs #2012: derselbe Lock + PENDING-Re-Check wie in
-    :func:`approve_deletion` (und in ``reject_case_deletion`` /
-    ``reject_client_merge``). Ohne ihn dreht ein zeitgleicher Reject einen
-    bereits genehmigten Antrag auf REJECTED zurueck, waehrend das Event
-    geloescht bleibt — und weil beide Schritte auditiert werden, versiegelt
-    das append-only AuditLog den Widerspruch dauerhaft (DELETE, danach
-    DELETION_REJECTED).
     """
-    # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
-    # die Zeile bis zum Commit dieser Transaktion.
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
-    if deletion_request.status != DeletionRequest.Status.PENDING:
-        raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
     deletion_request.status = DeletionRequest.Status.REJECTED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()

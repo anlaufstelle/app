@@ -45,7 +45,7 @@ Dieses ADR hat den Enum eingeführt, seine **Werteliste** aber nie begründet. S
 - **Redaktionsregel: keine neuen `SystemType`-Werte ohne echte App-Logik.** Neue Berichts-Zuordnungen laufen über das Backend-Mapping, nicht über dieses Enum. Ein Freeze-Guard pinnt Werteliste und Rollenaufteilung (`src/tests/test_system_type.py`); eine Erweiterung braucht einen neuen RFC-Entscheid.
 - **Keine Reduktion.** Der naheliegende Rückbau auf `ban`/`crisis` (Bericht mappt dann über `slug`) ist **nicht** geplant: Das `system_type`-Dropdown ist heute der einzige Weg, mit dem eine Einrichtung einen eigenen Dokumentationstyp in den Sachbericht bekommt. Ein hartkodiertes Slug-Dict im Backend könnte das nicht ersetzen — die Option wird erst wieder bewertet, wenn der offene Produktentscheid zum Slug-Zweitschlüssel (#1741) auf ein **konfigurierbares** Mapping fällt. Sie wäre zudem eine kenntlich zu machende Abweichung von [ADR-038](038-reporting-plugin-backends.md) („Slug als *Ersatz* verworfen").
 
- > **Überholt seit 2026-08-12** — siehe das Update unten. Die Begründung („einziger Weg") ist mit `report_key` entfallen, die Reduktion ist beschlossen.
+  > **Überholt seit 2026-08-12** — siehe das Update unten. Die Begründung („einziger Weg") ist mit `report_key` entfallen, die Reduktion ist beschlossen.
 - **Capability-Flags** (`ban`/`crisis` als Fähigkeitsschalter) bleiben verworfen — wie schon unter „Alternatives considered": Die Bann-Logik hängt zusätzlich am Feld-Kontrakt (Aktiv/Bis/Grund), ein Flag allein reicht nicht.
 
 Der `help_text` des Feldes benennt die Rollentrennung jetzt selbst (Migration [`0125`](../../src/core/migrations/0125_systemtype_help_text_rollen.py)), der [Admin-Guide § Systemtyp](../admin-guide.md) ebenso.

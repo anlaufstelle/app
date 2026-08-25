@@ -40,7 +40,6 @@ from core.services.client import (
     _delete_owned_attachments_for_client,
     _delete_recent_visits,
     _event_ids_for_client,
-    _generalize_event_timestamps,
     _redact_activities,
     _redact_case_deletion_requests,
     _redact_case_goals,
@@ -104,20 +103,13 @@ def _k_anonymize_with_cascade(client, k):
         case_ids = _redact_cases_and_episodes(client)
         _redact_case_goals(case_ids)
         _redact_workitems(client)
-        # Refs #2047: die Zeitachse generalisiert der K-Anon-Pfad genauso.
-        # Anders als bei ``age_cluster``/``contact_stage`` gibt es hier keinen
-        # Grund zur Ausnahme: die k-Anonymitaet ruht auf den beiden
-        # niedrigdimensionalen Quasi-Identifikatoren, NICHT auf der Timeline —
-        # die exakten Zeitpunkte tragen nichts zur Aequivalenzklasse bei und
-        # sind genau der Single-out-Vektor, den k nicht abdeckt.
-        _generalize_event_timestamps(event_ids)
         _redact_event_history(event_ids)
         _redact_deletion_requests(event_ids)
         _redact_client_deletion_request(client)
         _redact_case_deletion_requests(case_ids)
         _redact_rectification_requests(client)
         _redact_retention_proposals(event_ids)
-        _redact_legal_holds(client, event_ids)
+        _redact_legal_holds(client, event_ids, case_ids)
         _redact_activities(client, event_ids)
         # Merge-Tombstones (ADR-045, Refs #1876) erreichen die Bridge nicht —
         # ihre Ereignisse sind zum Ziel gewandert, die Eintrittsbedingung

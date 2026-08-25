@@ -24,65 +24,13 @@ Welcome! This guide explains how to set up the development environment, how the 
 
 ## Table of Contents
 
-1. [5-Minute Quick Start (Docker)](#5-minute-quick-start-docker)
-2. [Development Environment Setup](#development-environment-setup)
-3. [Make Targets](#make-targets)
-4. [Coding Conventions](#coding-conventions)
-5. [Plugin Development](#plugin-development)
-6. [Tests](#tests)
-7. [Pull Request Process](#pull-request-process)
-8. [Licensing of Contributions](#licensing-of-contributions)
-9. [Architecture Overview](#architecture-overview)
-
----
-
-## 5-Minute Quick Start (Docker)
-
-The fastest way to a running Anlaufstelle with sample data — for a first look, for reproducing
-a bug, and as the entry point before your first pull request. The only prerequisite is
-**Docker with Docker Compose**; you do not need Python, Node or PostgreSQL yet.
-
-```bash
-git clone https://github.com/anlaufstelle/app.git
-cd app
-docker compose up      # without Docker group permissions: sudo docker compose up
-```
-
-The local compose file brings up the database and the application, applies the migrations, and
-loads the seed data on the **first** start (into an empty database only — a second start does
-not re-seed). The one-off image build takes about a minute; after that the login page is
-available within roughly 20 seconds at
-**[http://localhost:8000/login/](http://localhost:8000/login/)**.
-
-> **No preparation needed.** You neither create a `.env` nor export an `ENCRYPTION_KEY` — the
-> local setup generates its own key on the first start and keeps it in a dedicated volume so
-> that encrypted development data stays readable across restarts. Background and the boundary
-> to the production path: [ADR-049](docs/adr/049-one-command-local-bootstrap.md) (German).
->
-> **Local access only:** the web service deliberately binds to `127.0.0.1`, so there is no LAN
-> access. That is intentional — the seed accounts use a publicly documented password.
-
-**Signing in.** All seed accounts share the password `anlaufstelle2026`:
-
-| Login | Role | What for |
-|---|---|---|
-| `admin` | Application administration (`facility_admin`) | Form configuration, user access, settings, data import |
-| `emma` | Management (`lead`) | Statistics, reports, GDPR workflows |
-| `miriam` | Practitioner (`staff`) | Clients, cases, day-to-day documentation |
-| `superadmin` | System administration (`super_admin`) | `/system/`, installation-wide view |
-
-The full list of the seven logins and the data volumes per profile is under
-[Loading seed data](#development-environment-setup). The seed is fail-closed behind
-`SEED_ALLOWED` and only runs under local/demo settings; the production compose file **never**
-seeds and does not know the variable — initial setup there runs via
-`manage.py create_super_admin`.
-
-**Cleaning up:** `docker compose down` stops the stack, `docker compose down -v` also discards
-the database (the next start then seeds afresh). Logs: `docker compose logs -f web`.
-
-**Next.** For real development — tests, linting, Tailwind watch mode, a debugger — you need the
-local toolchain from the next section. How the system is put together:
-[docs/architecture.md](docs/architecture.md) (German).
+1. [Development Environment Setup](#development-environment-setup)
+2. [Make Targets](#make-targets)
+3. [Coding Conventions](#coding-conventions)
+4. [Tests](#tests)
+5. [Pull Request Process](#pull-request-process)
+6. [Licensing of Contributions](#licensing-of-contributions)
+7. [Architecture Overview](#architecture-overview)
 
 ---
 
@@ -218,16 +166,16 @@ Two conflicts abort the **entire** seed run (fail-loud, all-or-nothing — nothi
 applied, not even for the remaining types):
 
 * **A facility-owned field template on a catalogue slug.** If a facility created
- e.g. `dauer` itself as a text field, that collides with `field_type`/`is_encrypted`
- from the package — both are immutable after creation. Resolution: move the
- facility's own template to a different slug (create anew + migrate data) or change
- the catalogue slug.
+  e.g. `dauer` itself as a text field, that collides with `field_type`/`is_encrypted`
+  from the package — both are immutable after creation. Resolution: move the
+  facility's own template to a different slug (create anew + migrate data) or change
+  the catalogue slug.
 * **A name collision after a rename.** If "Kontakt" was renamed to "Erstkontakt"
- through the UI and a *new* type "Kontakt" was created afterwards (which gets the
- slug `kontakt-2`), the seed wants to rename the type with slug `kontakt` back to
- "Kontakt" — violating `UniqueConstraint(facility, name, category)`. From then on
- **every** further seed run fails until this is cleaned up manually. Resolution:
- rename the facility's own type or adjust the name in the catalogue.
+  through the UI and a *new* type "Kontakt" was created afterwards (which gets the
+  slug `kontakt-2`), the seed wants to rename the type with slug `kontakt` back to
+  "Kontakt" — violating `UniqueConstraint(facility, name, category)`. From then on
+  **every** further seed run fails until this is cleaned up manually. Resolution:
+  rename the facility's own type or adjust the name in the catalogue.
 
 **Scale profiles overview:**
 
@@ -372,14 +320,13 @@ pkill -f gunicorn
 Every new facility-scoped model must be protected on **both** defense lines:
 
 1. **Django layer (first line):**
- - `facility = models.ForeignKey(Facility, ...)` on the model
- - `objects = FacilityScopedManager()` (from [`src/core/models/managers.py`](src/core/models/managers.py))
- - Views/services filter via `.for_facility(request.current_facility)`
+   - `facility = models.ForeignKey(Facility, ...)` on the model
+   - `objects = FacilityScopedManager()` (from [`src/core/models/managers.py`](src/core/models/managers.py))
+   - Views/services filter via `.for_facility(request.current_facility)`
 2. **PostgreSQL RLS (second line, defense in depth):**
- - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
- - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) has been **derivation-based** since #1096: tables with a direct `facility` FK (DIRECT) are derived automatically from the model registry by the test suite — a new such model appears in `EXPECTED_TABLES` without any manual step, and the RLS coverage guard (`TestRLSCoverageGuard`) fails until the RLS migration **and** the PII classification exist. Only **JOIN-scoped** tables without a direct FK need a manual entry in the `JOIN_SCOPED_TABLES` constant; the auth-boundary exception (`core_user`) lives in `NOT_RLS_SCOPED`.
- - The architecture guard `TestRLSJoinScopeArchitectureGuard` (#2001) closes the previous blind spot: if a model without its own `facility` FK references a DIRECT table via FK/O2O, its table must be listed in `JOIN_SCOPED_TABLES`. Otherwise, `pytest -m architecture` fails with a reference to migration pattern `0047_postgres_rls_setup.py` — even if neither a migration nor the list knows about the new table yet. Derivation is deliberately limited to the immediate edge to a DIRECT model; for deeper chains (JOIN → JOIN → DIRECT), the manual entry based on the complete facility chain remains mandatory.
- - The RLS-free tables (`core_user`, `core_facility`, `core_organization`) lack this second backstop by definition. The architecture guard `TestTenantModelScopeGuard` in [`src/tests/test_architecture_guards_models.py`](src/tests/test_architecture_guards_models.py) (#1658) covers them instead: a `User.objects`/`Facility.objects`/`Organization.objects` access in `core/views/`, `core/forms/` or `core/services/` without a facility scope fails CI. Deliberately global accesses (pre-auth lookups, super-admin metrics) belong in the allowlist of the respective scan section, with a reason; the rationale for the guard-vs.-manager decision is in [ADR-005](docs/adr/005-facility-scoping-and-rls.md).
+   - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
+   - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) has been **derivation-based** since #1096: tables with a direct `facility` FK (DIRECT) are derived automatically from the model registry by the test suite — a new such model appears in `EXPECTED_TABLES` without any manual step, and the RLS coverage guard (`TestRLSCoverageGuard`) fails until the RLS migration **and** the PII classification exist. Only **JOIN-scoped** tables without a direct FK need a manual entry in the `JOIN_SCOPED_TABLES` constant; the auth-boundary exception (`core_user`) lives in `NOT_RLS_SCOPED`.
+   - The RLS-free tables (`core_user`, `core_facility`, `core_organization`) lack this second backstop by definition. The architecture guard `TestTenantModelScopeGuard` in [`src/tests/test_architecture_guards_models.py`](src/tests/test_architecture_guards_models.py) (#1658) covers them instead: a `User.objects`/`Facility.objects`/`Organization.objects` access in `core/views/`, `core/forms/` or `core/services/` without a facility scope fails CI. Deliberately global accesses (pre-auth lookups, super-admin metrics) belong in the allowlist of the respective scan section, with a reason; the rationale for the guard-vs.-manager decision is in [ADR-005](docs/adr/005-facility-scoping-and-rls.md).
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see `docs/dev/dev-deployment.md` (dev-only), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
 
@@ -526,133 +473,6 @@ Refs #42
 ```
 
 Commits are atomic: one logical change per commit. Push immediately after completing each task.
-
----
-
-## Plugin Development
-
-Two things can be extended **without** touching the core: **report backends** (code, one
-module) and **configuration packages** (data, one YAML file). Neither needs a migration, a new
-URL, a view, or an entry in the AuthZ matrix. Everything else — models, views, middleware — is
-not a plugin system but ordinary core development following the rules above.
-
-### Report backends (reporting plugins)
-
-A report backend encapsulates the domain logic of **one** reporting standard behind a fixed
-interface. The panel preview, the CSV/JSON/XML export, and snapshot storage only speak to that
-interface and know nothing about the individual report. Practical consequence: **a new report
-is a file.**
-
-A module under [`src/core/reporting/backends/`](src/core/reporting/backends/) with a
-`DatasetBackend` subclass and the `@register_backend` decorator automatically appears as a card
-on the "Datensatz-Berichte" (dataset reports) tab and in all three export formats:
-
-```python
-# src/core/reporting/backends/my_report.py
-from django.utils.translation import gettext_lazy as _
-
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.registry import register_backend
-
-
-@register_backend("my-report")              # slug: ^[a-z0-9]+([-_][a-z0-9]+)*$, effectively immutable
-class MyBackend(DatasetBackend):
-    name = _("My report")                   # display name — always gettext_lazy
-    description = _("What this report counts, in one sentence.")
-    snapshot_enabled = False                # True = raw aggregate is persisted monthly
-
-    def get_field_specs(self) -> list[FieldSpec]:
-        return [FieldSpec("label", _("Attribute")), FieldSpec("count", _("Count"))]
-
-    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        ...                                 # returns RAW numbers
-
-    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        ...                                 # k-anonymity, before anything leaves the house
-```
-
-Five points that experience shows tend to go wrong:
-
-1. **`build_dataset()` is raw, `prepare_export()` is the safeguard.** Everything that ships
- download **and** panel preview — passes through `prepare_export()` first. Anyone producing
- numbers that circulate externally must implement this hook, and must use the central
- suppression machinery instead of rebuilding it. The snapshot path deliberately does **not**
- call it (internal raw store) — which makes `snapshot_enabled` a data-protection contract,
- not a feature flag.
-2. **Labels are `gettext_lazy`**, never German plain text — they end up as CSV headers and JSON
- labels in the English interface too.
-3. **Registration happens at import time, exclusively via the decorator.** There is no
- configuration list. Discovery is lazy (only on the first `get_backends()`) so the import
- chain stays acyclic; a broken module raises a loud `ImproperlyConfigured` rather than
- leaving a silently incomplete registry.
-4. **A slug is effectively immutable** — it appears in query parameters, file names, and with
- `snapshot_enabled` in the keys of `StatisticsSnapshot.backend_data`.
-5. **Mapping runs through `report_key`**, never through a category
- ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)). There is exactly **one** documented
- exception: `ban-overview` deliberately binds through `system_type`
- (`TypBindung(bindet="system_type")`) because it is a highly sensitive behavioural report
- bans must not leak into unrelated analyses through a freely selectable report key. If you
- copy that particular module as your template, switch `bindet` back to `report_key`; otherwise
- the registry lookup ("appears in …") and the key vocabulary silently ignore `system_type`
- bindings.
-
-**Copy a template, do not start from scratch.** [`src/core/reporting/backends/`](src/core/reporting/backends/)
-ships nine backends — all of them **examples**, not binding reporting standards, and each with
-a different shape: `example` (minimal case), `sample-report-1` (full case with snapshot),
-`monthly-trend` (time series), `client-metrics` (exact partition), `case-metrics` (independent
-scalars), `ban-overview` (highly sensitive special case), `needle-exchange-balance` (sums over
-field values), `counseling-hours` (row → total cascade), `service-distribution` (multi-select).
-Find the case closest to yours and copy **that** module.
-
-Check visibility:
-
-```bash
-python src/manage.py shell -c "from core.reporting.registry import get_backends; print([b.slug for b in get_backends()])"
-```
-
-**Full reference** — `DatasetBackend`/`DatasetResult`/`FieldSpec`/`CompletenessIssue`, "your own
-backend in five steps", discovery rules, snapshot contract, k-anonymity, export formats and the
-test checklist for new backends: [docs/en/reporting-plugins.md](docs/en/reporting-plugins.md)
-(DE: [docs/reporting-plugins.md](docs/reporting-plugins.md)). Architecture decisions:
-[ADR-038](docs/adr/038-reporting-plugin-backends.md),
-[ADR-042](docs/adr/042-report-key-berichtszuordnung.md),
-[ADR-023](docs/adr/023-k-anonymization-statistik.md).
-
-### Configuration packages (YAML)
-
-A configuration package describes a facility's field templates, document types, field groups,
-field assignments and field conditions **declaratively**. Packages make form configuration
-shareable: versionable, reviewable, exchangeable between operators — and **idempotent** to
-apply. The bundled standard catalogue
-[`src/core/packages/default.yaml`](src/core/packages/default.yaml) is itself a package and goes
-through the same loader as any third-party one.
-
-```bash
-python src/manage.py load_package --file package.yaml --facility <uuid> --dry-run
-python src/manage.py load_package --default --facility <uuid>      # apply the standard catalogue
-```
-
-Four rules that matter in practice:
-
-1. **The slug is the identity**, not the name. Slugs are immutable after creation in both the
- model and a DB trigger; a changed slug creates a duplicate in **every** existing facility
- instead of updating.
-2. **Unknown keys are an error at every level** — a typo such as `sort_oder` should be noticed
- rather than silently ignored. Duplicate YAML keys likewise.
-3. **The loader is a re-sync, not a "create if missing".** It writes package values back onto
- existing rows; which fields that affects and which it never touches is listed under
- [What the loader-based seed does to an existing facility](#what-the-loader-based-seed-does-to-an-existing-facility).
- Therefore: against existing data **always** run `--dry-run` first.
-4. **All or nothing.** A conflict aborts the entire run; nothing is applied.
-
-**Format reference, field-by-field semantics, loader buckets and the maintenance rules that
-hurt:** [docs/packages.md](docs/packages.md) (German) ·
-[ADR-037](docs/adr/037-konfigurationspakete-dynamische-felder.md) (package format) ·
-[ADR-036](docs/adr/036-globale-block-sequenz-feldordnung.md) (field ordering) ·
-[ADR-035](docs/adr/035-evaluator-semantik-bedingte-feldlogik.md) (field-condition operators).
-The reverse direction — exporting an entire existing facility as versioned JSON
-(`manage.py export_facility`) — is described in
-[docs/facility-export-schema.md](docs/facility-export-schema.md) (German).
 
 ---
 
@@ -808,7 +628,7 @@ The watchdog detects stalled or dead master processes and restarts `make mutatio
 ## Pull Request Process
 
 1. **Create a branch** — branch off `main`, use a descriptive branch name:
- ```bash
+   ```bash
    git checkout -b feature/short-description
    # or
    git checkout -b fix/what-is-being-fixed
@@ -817,17 +637,17 @@ The watchdog detects stalled or dead master processes and restarts `make mutatio
 2. **Develop** — small, atomic commits; reference issue numbers (`Refs #N`).
 
 3. **Verify locally:**
- ```bash
+   ```bash
    make ci          # Lint, check, tests
    make test-e2e    # E2E tests
    ```
- Also manually verify in the browser that the change works as expected.
+   Also manually verify in the browser that the change works as expected.
 
 4. **Open a pull request:**
- - Title in Conventional Commits style (`feat: ...`, `fix: ...`)
- - Description: What was changed and why? Which issues are being closed?
- - Screenshot or demo if UI changes are included
- - Link to the associated GitHub issue
+   - Title in Conventional Commits style (`feat: ...`, `fix: ...`)
+   - Description: What was changed and why? Which issues are being closed?
+   - Screenshot or demo if UI changes are included
+   - Link to the associated GitHub issue
 
 ### Code of Conduct
 
@@ -845,9 +665,9 @@ removed). External pull requests are therefore not merged directly into `main`. 
 
 1. Review happens right here on the PR.
 2. Once approved, we take your commits over into the development branch — your Git author
- field (and with it your authorship) is preserved.
+   field (and with it your authorship) is preserved.
 3. Your change appears on `main` with the next release; your PR is then closed with a
- reference to that release and credited in the CHANGELOG.
+   reference to that release and credited in the CHANGELOG.
 
 A PR showing as "closed" rather than "merged" is not a rejection — it is how the release
 mirror works.
@@ -872,7 +692,7 @@ wrote it yourself or took it from compatibly licensed sources with license notic
 
 To do so, sign off every commit with your name and a valid email address:
 
- git commit -s
+    git commit -s
 
 This appends a line `Signed-off-by: First Last <email@example.org>` to the commit message.
 We cannot accept pull requests without a sign-off; a forgotten sign-off can be added with
@@ -895,12 +715,6 @@ external contributions are credited by name in the release's [CHANGELOG](CHANGEL
 ---
 
 ## Architecture Overview
-
-> **Detailed signpost:** [docs/architecture.md](docs/architecture.md) (German) — layering
-> (views → services → models), security architecture, no-code configuration core, offline PWA
-> and test landscape, each pointing to the ADR that owns the decision. The section here remains
-> the short introduction to roles, directory structure and the design decisions you need for
-> your first pull request.
 
 ### Roles
 
@@ -973,6 +787,6 @@ src/
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
 
 <!-- translation-source: CONTRIBUTING.md -->
-<!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: e348bb63ca601038fd0dc17c4d8998b7fa16c992 -->
+<!-- translation-version: v0.84.0 -->
+<!-- translation-date: 2026-08-22 -->
+<!-- source-hash: 627773a515cb42b2614fbcff94cdbcd35c2848d7 -->

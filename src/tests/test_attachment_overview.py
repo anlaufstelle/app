@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import re
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -23,7 +22,6 @@ from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.file_vault import store_encrypted_file
-from core.views.attachments import AttachmentListView
 
 pytestmark = pytest.mark.django_db
 
@@ -445,169 +443,6 @@ class TestOwnerGenericOverview:
     def test_cross_facility_attachment_is_never_listed(self, client, staff_user, foreign_client_attachment):
         client.force_login(staff_user)
         assert "authz.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
-
-
-class TestRawVisibilityQuerysetCharacterization:
-    """Pinnt die rohe Compliance-Menge vor dem Service-Umzug (Refs #1837)."""
-
-    @staticmethod
-    def _raw_rows(client, user, params=None):
-        client.force_login(user)
-        # DTO-Bau bewusst neutralisieren: die Assertions laufen auf den vom
-        # Queryset gelieferten Attachment-Instanzen samt Annotationen.
-        with patch.object(AttachmentListView, "_build_row", side_effect=lambda _user, attachment: attachment):
-            return client.get(reverse(LIST_URL_NAME), params or {}).context["attachments"]
-
-    def test_staff_raw_queryset_is_owner_scoped_and_sensitivity_filtered(
-        self,
-        client,
-        staff_user,
-        facility,
-        three_owner_attachments,
-        versioned_client_attachment,
-    ):
-        hidden_field = _file_template(
-            facility,
-            "Nur Leitung",
-            sensitivity=DocumentType.Sensitivity.HIGH,
-        )
-        hidden_type = _doc_type(
-            facility,
-            "Normale Person mit geheimem Feld",
-            DocumentType.EntityType.CLIENT,
-            file_field=hidden_field,
-        )
-        hidden_person = Client.objects.create(
-            facility=facility,
-            pseudonym="Verdeckte Datei",
-            document_type=hidden_type,
-            created_by=staff_user,
-        )
-        hidden_attachment = _attach(
-            facility,
-            hidden_person,
-            hidden_field,
-            staff_user,
-            "feld_high_verdeckt.pdf",
-        )
-        typeless_person = Client.objects.create(
-            facility=facility,
-            pseudonym="Ohne Dokumentationstyp",
-            created_by=staff_user,
-        )
-        typeless_attachment = _attach(
-            facility,
-            typeless_person,
-            _file_template(facility, "Typfreie Datei"),
-            staff_user,
-            "typfrei_verdeckt.pdf",
-        )
-        revoked_field = _file_template(facility, "Widerrufene Datei")
-        revoked_type = _doc_type(
-            facility,
-            "Widerrufener Personentyp",
-            DocumentType.EntityType.CLIENT,
-            file_field=revoked_field,
-        )
-        revoked_person = Client.objects.create(
-            facility=facility,
-            pseudonym="Widerrufen",
-            document_type=revoked_type,
-            created_by=staff_user,
-        )
-        revoked_attachment = _attach(
-            facility,
-            revoked_person,
-            revoked_field,
-            staff_user,
-            "widerrufen_verdeckt.pdf",
-        )
-        revoked_person.is_deleted = True
-        revoked_person.deleted_at = timezone.now()
-        revoked_person.save(update_fields=["is_deleted", "deleted_at"])
-
-        rows = self._raw_rows(client, staff_user)
-        visible_pks = {three_owner_attachments[owner_type][1].pk for owner_type in ("event", "client", "case")}
-        chain_head = versioned_client_attachment.versions[-1]
-        visible_pks.add(chain_head.pk)
-
-        raw_pks = {attachment.pk for attachment in rows}
-        assert raw_pks == visible_pks
-        assert {hidden_attachment.pk, typeless_attachment.pk, revoked_attachment.pk}.isdisjoint(raw_pks)
-        assert {attachment.owner_sensitivity for attachment in rows} == {DocumentType.Sensitivity.NORMAL}
-        assert {attachment.pk: attachment.version_count for attachment in rows} == {
-            **{three_owner_attachments[owner_type][1].pk: 1 for owner_type in ("event", "client", "case")},
-            chain_head.pk: 3,
-        }
-        assert all(attachment.is_current for attachment in rows)
-
-    def test_assistant_raw_queryset_excludes_case_owner(self, client, assistant_user, three_owner_attachments):
-        rows = self._raw_rows(client, assistant_user)
-
-        assert {attachment.pk for attachment in rows} == {
-            three_owner_attachments["event"][1].pk,
-            three_owner_attachments["client"][1].pk,
-        }
-
-    def test_removed_raw_queryset_preserves_all_visibility_boundaries(
-        self,
-        client,
-        lead_user,
-        staff_user,
-        facility,
-        versioned_client_attachment,
-    ):
-        removed_at = timezone.now()
-        versions = versioned_client_attachment.versions
-        type(versions[0]).objects.filter(entry_id=versions[-1].entry_id).update(deleted_at=removed_at)
-
-        typeless_person = Client.objects.create(
-            facility=facility,
-            pseudonym="Entfernt ohne Typ",
-            created_by=staff_user,
-        )
-        typeless_attachment = _attach(
-            facility,
-            typeless_person,
-            _file_template(facility, "Entfernt typfrei"),
-            staff_user,
-            "entfernt_typfrei.pdf",
-        )
-        type(typeless_attachment).objects.filter(pk=typeless_attachment.pk).update(deleted_at=removed_at)
-
-        revoked_field = _file_template(facility, "Entfernt widerrufen")
-        revoked_type = _doc_type(
-            facility,
-            "Entfernter widerrufener Typ",
-            DocumentType.EntityType.CLIENT,
-            file_field=revoked_field,
-        )
-        revoked_person = Client.objects.create(
-            facility=facility,
-            pseudonym="Entfernt widerrufen",
-            document_type=revoked_type,
-            created_by=staff_user,
-        )
-        revoked_attachment = _attach(
-            facility,
-            revoked_person,
-            revoked_field,
-            staff_user,
-            "entfernt_widerrufen.pdf",
-        )
-        type(revoked_attachment).objects.filter(pk=revoked_attachment.pk).update(deleted_at=removed_at)
-        revoked_person.is_active = False
-        revoked_person.save(update_fields=["is_active"])
-
-        rows = self._raw_rows(client, lead_user, {"removed": "1"})
-
-        assert [attachment.pk for attachment in rows] == [versions[-1].pk]
-        assert typeless_attachment.pk not in {attachment.pk for attachment in rows}
-        assert revoked_attachment.pk not in {attachment.pk for attachment in rows}
-        assert rows[0].deleted_at is not None
-        assert rows[0].is_current is True
-        assert rows[0].owner_sensitivity == DocumentType.Sensitivity.NORMAL
-        assert rows[0].version_count == 3
 
 
 # ---------------------------------------------------------------------------

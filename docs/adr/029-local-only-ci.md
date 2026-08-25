@@ -7,7 +7,7 @@
 
 ## Update 2026-07-13 — Dev-CI wieder deaktiviert
 
-`gh workflow list --all --repo anlaufstelle/app` zeigt am **2026-07-13** wieder **alle** Dev-Workflows auf `disabled_manually` — einzig aktiv ist `Dependabot Updates`. Die Reaktivierung vom 2026-07-11 ([Update unten](#update-2026-07-11--dev-ci-reaktiviert)) ist damit **nicht mehr wirksam**; der in dieser ADR beschriebene lokal-only-Zustand gilt wieder unverändert. Die Aktivierung bleibt reversibel ([docs/dev/ci-workflows.md § Reaktivierung](../dev/ci-workflows.md)).
+`gh workflow list --all --repo anlaufstelle/app` zeigt am **2026-07-13** wieder **alle** Dev-Workflows auf `disabled_manually` — einzig aktiv ist `Dependabot Updates`. Die Reaktivierung vom 2026-07-11 ([Update unten](#update-2026-07-11--dev-ci-reaktiviert)) ist damit **nicht mehr wirksam**; der in dieser ADR beschriebene lokal-only-Zustand gilt wieder unverändert. Die Aktivierung bleibt reversibel (docs/dev/ci-workflows.md § Reaktivierung).
 
 Der Release-Reproduzierbarkeits-Test `test_two_cold_builds_are_byte_identical` war während der 07-11-Reaktivierung auf dem Runner nichtdeterministisch (#1514, Signaturverdacht). Der Test ist inzwischen **gehärtet**: die harte Determinismus-Garantie läuft über den *strukturellen* Snapshot (Tree + vollständige Metadaten je Boundary) statt über die signaturhaltige HEAD-SHA; die SSH-Signatur wird separat und diagnostisch geprüft. Die **Root-Cause bleibt bis zu einem echten Runner-Lauf unbestätigt** — bei allen `disabled_manually` derzeit nicht verifizierbar, daher bleibt #1514 **offen**. Bis dahin ist `make ci` lokal das verbindliche Gate.
 

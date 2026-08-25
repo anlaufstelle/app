@@ -184,13 +184,6 @@ class AuditLog(models.Model):
         # HMAC-Kette wird nie umgeschrieben — der Checkpoint legitimiert die
         # Diskontinuitaet, die das Loeschen alter Zeilen hinterlaesst.
         AUDIT_PRUNE_CHECKPOINT = "audit_prune_checkpoint", _("Audit-Pruning-Checkpoint")
-        # Refs #2065 (ADR-050 D5.3/M-4): Nachweis je Charge des
-        # EventHistory-Sweeps. Er belegt, dass die Append-only-Garantie fuer
-        # genau diese Zeilen legitim geoeffnet wurde — und muss deshalb mit
-        # DERSELBEN Transaktion committen wie die Redaktion, die er belegt.
-        # Prune-exempt wie AUDIT_PRUNE_CHECKPOINT (M-4): ein Nachweis, der vor
-        # den von ihm belegten Zeilen verschwindet, belegt nichts mehr.
-        EVENT_HISTORY_REDACTED = "event_history_redacted", _("Ereignis-Historie redigiert")
         # Refs #1476 (R10): Export einer nicht uebertragbaren Offline-Notiz als
         # Klartext-Datei auf die Platte (entschluesselte Art.-9-PII verlaesst die
         # App). Der Client meldet diese bewusste Nutzeraktion offline-tauglich
@@ -223,18 +216,6 @@ class AuditLog(models.Model):
         RECTIFICATION_REQUESTED = "rectification_requested", _("Berichtigung beantragt")
         RECTIFICATION_APPROVED = "rectification_approved", _("Berichtigung genehmigt")
         RECTIFICATION_REJECTED = "rectification_rejected", _("Berichtigung abgelehnt")
-        # Refs #2045: Art.-18-Sperrvermerk. Bewusst KEINE Wiederverwendung von
-        # ``LEGAL_HOLD`` — der Hold ist das Gegenteil (er blockiert die
-        # Loeschung nach Art. 17 Abs. 3, die Einschraenkung die Nutzung), und
-        # genau diese Konflation war der Befund. Auch ``CLIENT_UPDATE`` taugt
-        # nicht: Setzen und Aufheben sind Betroffenenrechte-Vorgaenge mit
-        # eigener Rechtsfolge, die unter /audit/ als solche auffindbar sein
-        # muessen — Muster ``DELETION_*``/``RECTIFICATION_*``.
-        PROCESSING_RESTRICTED = "processing_restricted", _("Verarbeitung eingeschränkt (Art. 18)")
-        PROCESSING_RESTRICTION_LIFTED = (
-            "processing_restriction_lifted",
-            _("Einschränkung der Verarbeitung aufgehoben"),
-        )
 
     objects = FacilityScopedManager()
 

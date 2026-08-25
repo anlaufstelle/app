@@ -1,8 +1,6 @@
 """Tests for DSGVO documentation package."""
 
 import re
-from datetime import date
-from unittest import mock
 
 import pytest
 from django.test import Client as DjangoClient
@@ -84,17 +82,15 @@ def staff_user(facility):
 class TestDSGVOPackageService:
     """Service-level tests."""
 
-    def test_get_document_list_returns_7(self):
+    def test_get_document_list_returns_5(self):
         docs = get_document_list()
-        assert len(docs) == 7
+        assert len(docs) == 5
         slugs = [d["slug"] for d in docs]
         assert "verarbeitungsverzeichnis" in slugs
         assert "dsfa" in slugs
         assert "av-vertrag" in slugs
         assert "toms" in slugs
         assert "informationspflichten" in slugs
-        assert "loeschkonzept" in slugs
-        assert "mitarbeiter-informationspflichten" in slugs
 
     def test_render_replaces_facility_name(self, facility):
         content, filename = render_document("verarbeitungsverzeichnis", facility)
@@ -112,17 +108,6 @@ class TestDSGVOPackageService:
         content, _ = render_document("dsfa", facility)
         assert "{{ date }}" not in content
 
-    def test_render_uses_berlin_local_date(self, facility):
-        with (
-            mock.patch("core.services.client.dsgvo_package.date", create=True) as mock_date,
-            mock.patch("core.services.client.dsgvo_package.timezone.localdate", return_value=date(2026, 6, 22)),
-        ):
-            mock_date.today.return_value = date(2026, 6, 21)
-            content, _ = render_document("dsfa", facility)
-
-        assert "22.06.2026" in content
-        assert "21.06.2026" not in content
-
     def test_render_unknown_slug_raises(self, facility):
         with pytest.raises(ValueError, match="Unknown document"):
             render_document("nonexistent", facility)
@@ -132,131 +117,6 @@ class TestDSGVOPackageService:
             content, filename = render_document(doc["slug"], facility)
             assert len(content) > 100
             assert filename.endswith(".md")
-
-
-@pytest.mark.django_db
-class TestTemplateCurrentState:
-    """Refs #2075: Altvorlagen bilden Softwarestand und TOM-Ist-Stand ab."""
-
-    @pytest.mark.parametrize(
-        ("slug", "version"),
-        [
-            ("av-vertrag", "1.1"),
-            ("informationspflichten", "1.1"),
-            ("toms", "1.2"),
-            ("verarbeitungsverzeichnis", "1.1"),
-        ],
-    )
-    def test_stale_template_stamps_are_current(self, facility, slug, version):
-        content, _ = render_document(slug, facility)
-
-        assert f"**Version:** {version} (Softwarestand v0.89, 2026-08-28)" in content
-
-    def test_toms_describe_current_security_controls_and_limits(self, facility):
-        content, _ = render_document("toms", facility)
-
-        for control in (
-            "Row Level Security",
-            "File-Vault",
-            "MultiFernet",
-            "HMAC-SHA256",
-            "Passkeys",
-            "kein passwordless Login",
-        ):
-            assert control in content
-        assert "18 Facility-gescopte Tabellen" not in content
-
-    def test_toms_disclose_plaintext_free_text_residual_risk(self, facility):
-        content, _ = render_document("toms", facility)
-
-        assert "folgen **nicht** dem Sensitivity/Encryption/Retention-Modell" in content
-        for field_name in (
-            "Client.notes",
-            "Case.description",
-            "Episode.description",
-            "WorkItem.description",
-            "AuditLog.detail",
-        ):
-            assert field_name in content
-        assert "feldweise Verschlüsselung ist bis post-v1.0 vertagt" in content
-
-    @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
-    def test_legal_basis_is_facility_neutral(self, facility, slug):
-        content, _ = render_document(slug, facility)
-
-        assert "SGB VIII" not in content
-        assert "einschlägiges Fach- und Sozialrecht der Einrichtung" in content
-
-
-@pytest.mark.django_db
-class TestLoeschkonzept:
-    """Das eigenstaendige Loeschkonzept rendert Ist-Fristen und Backup-Grenze."""
-
-    def test_renders_all_configured_retention_values(self, facility):
-        settings_obj = facility.settings
-        settings_obj.retention_anonymous_days = 91
-        settings_obj.retention_identified_days = 366
-        settings_obj.retention_qualified_days = 3651
-        settings_obj.retention_activities_days = 201
-        settings_obj.client_trash_days = 46
-        settings_obj.auditlog_retention_months = 25
-        settings_obj.save()
-
-        content, filename = render_document("loeschkonzept", facility)
-
-        assert filename == "loeschkonzept.md"
-        for value in ("91 Tage", "366 Tage", "3651 Tage", "201 Tage", "46 Tage", "25 Monate"):
-            assert value in content
-        assert "{{ retention_" not in content
-
-    def test_renders_backup_retention_default(self, facility):
-        content, _ = render_document("loeschkonzept", facility)
-
-        assert "Backup-Sicherungsstände | 90 Tage" in content
-        assert "{{ backup_retention_days }}" not in content
-
-    def test_unwired_environment_does_not_override_backup_retention(self, facility, monkeypatch):
-        monkeypatch.setenv("BACKUP_RETENTION_DAYS", "120")
-
-        content, _ = render_document("loeschkonzept", facility)
-
-        assert "Backup-Sicherungsstände | 90 Tage" in content
-        assert "Backup-Sicherungsstände | 120 Tage" not in content
-
-    def test_explains_backup_deletion_boundary(self, facility):
-        content, _ = render_document("loeschkonzept", facility)
-
-        assert "unverzüglich ≠ Zerstörung integritätsgesicherter Sicherungsstände" in content
-        assert "HMAC" in content
-        assert "Legal Hold" in content
-        assert "BACKUP_RETENTION_DAYS" not in content
-
-
-@pytest.mark.django_db
-class TestMitarbeiterInformationspflichten:
-    """Beschaeftigte erhalten ein eigenes, kurzes Art.-13/14-Artefakt."""
-
-    def test_renders_employment_context_and_live_audit_retention(self, facility):
-        content, filename = render_document("mitarbeiter-informationspflichten", facility)
-
-        assert filename == "mitarbeiter_informationspflichten.md"
-        assert "§ 26 BDSG" in content
-        assert "Art. 6 Abs. 1 lit. b DSGVO" in content
-        assert "Benutzername, Anzeigename, E-Mail-Adresse und Rolle" in content
-        assert "24 Monate" in content
-        assert "{{" not in content
-
-
-@pytest.mark.django_db
-class TestAvvSubprocessors:
-    """AVV § 6 bietet konkrete Kategorien oder eine ausdrueckliche Keine-Wahl."""
-
-    def test_lists_examples_and_none_option(self, facility):
-        content, _ = render_document("av-vertrag", facility)
-
-        for category in ("Tracker-Host", "SMTP-Dienst", "Offsite-Backup-Speicher"):
-            assert category in content
-        assert "Keine Unterauftragnehmer" in content
 
 
 @pytest.mark.django_db
@@ -574,13 +434,3 @@ class TestPackageVersionStamp:
         h_before = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_before).group(1)
         h_after = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_after).group(1)
         assert h_before != h_after, "Dokumentationstyp-Override muss Fussnoten-Hash aendern (Refs #1762)."
-
-    def test_backup_retention_changes_footer_hash(self, facility, monkeypatch):
-        content_before, _ = render_document("loeschkonzept", facility)
-
-        monkeypatch.setattr("core.services.client.dsgvo_package.DEFAULT_BACKUP_RETENTION_DAYS", 120)
-        content_after, _ = render_document("loeschkonzept", facility)
-
-        h_before = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_before).group(1)
-        h_after = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_after).group(1)
-        assert h_before != h_after, "Backup-Frist muss Fussnoten-Hash aendern (Refs #2050)."

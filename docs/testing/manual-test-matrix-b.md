@@ -1,6 +1,6 @@
 # Manuelle Test-Matrix — Sektion B
 
-> Teil der [Manual-Test-Matrix](manual-test-matrix.md) (Refs #1071 Block B). Setup-Block, Status-Legende, TC-ID-Schema, Browser-/Mobile-Konventionen und die Anhänge stehen im [Hub](manual-test-matrix.md); die Gesamtübersicht in [`test-matrix-index.md`](test-matrix-index.md).
+> Teil der [Manual-Test-Matrix](manual-test-matrix.md) (Refs #1071 Block B). Setup-Block, Status-Legende, TC-ID-Schema, Browser-/Mobile-Konventionen und die Anhänge stehen im [Hub](manual-test-matrix.md); die Gesamtübersicht in `test-matrix-index.md`.
 
 ---
 
@@ -108,7 +108,7 @@
 **Erwartetes Ergebnis:**
 - Versuche 1–10: jeweils `LOGIN_FAILED`-AuditLog-Eintrag.
 - Versuch 11: trotz korrektem Passwort kein Login. Form-Fehler:
- `"Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. Bitte später erneut versuchen oder Administration kontaktieren."`
+  `"Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. Bitte später erneut versuchen oder Administration kontaktieren."`
 - Zusätzlicher AuditLog-Eintrag `LOGIN_FAILED` mit `detail.reason="locked"` und `detail.message="Login blockiert durch Account-Lockout"`.
 - Kein `LOGIN`-Erfolgs-Eintrag, kein Session-Cookie.
 - `is_locked(miriam)` gibt `True` zurück (Schwelle erreicht innerhalb 15-Minuten-Fenster).
@@ -265,9 +265,9 @@
 **Schritte:**
 1. `/password-change/` aufrufen.
 2. Test A — Validierung (negativ):
- - Altes Pwd: `anlaufstelle2026`
- - Neues Pwd: `kurz` (zu kurz, < 12 Zeichen)
- - Submit → Form-Fehler `"Dieses Passwort ist zu kurz."` (MinimumLengthValidator, min_length=12).
+   - Altes Pwd: `anlaufstelle2026`
+   - Neues Pwd: `kurz` (zu kurz, < 12 Zeichen)
+   - Submit → Form-Fehler `"Dieses Passwort ist zu kurz."` (MinimumLengthValidator, min_length=12).
 3. Test B — Validierung (negativ): neues Pwd `123456789012` (rein-numerisch) → `NumericPasswordValidator` schlägt an.
 4. Test C — Validierung (negativ): neues Pwd `password1234` (häufig) → `CommonPasswordValidator` schlägt an.
 5. Test D — Validierung (negativ): neues Pwd ähnlich wie Username/Email → `UserAttributeSimilarityValidator` greift.
@@ -277,9 +277,9 @@
 - A–D: HTTP 200, Form mit Validator-Fehlermeldung re-rendert.
 - E: HTTP 302 Redirect auf `/` (`success_url="/"`).
 - Nach E:
- - `user.must_change_password` ist auf `False` zurückgesetzt (siehe `CustomPasswordChangeView.form_valid`).
- - `user.offline_key_salt` ist auf `""` (leer) zurückgesetzt → wird beim nächsten `/auth/offline-key-salt/`-Aufruf neu generiert.
- - Session bleibt gültig (Django-Standard `update_session_auth_hash`).
+  - `user.must_change_password` ist auf `False` zurückgesetzt (siehe `CustomPasswordChangeView.form_valid`).
+  - `user.offline_key_salt` ist auf `""` (leer) zurückgesetzt → wird beim nächsten `/auth/offline-key-salt/`-Aufruf neu generiert.
+  - Session bleibt gültig (Django-Standard `update_session_auth_hash`).
 - Validatoren-Reihenfolge laut `AUTH_PASSWORD_VALIDATORS` in `base.py`.
 
 **DSGVO/Security-Note:**
@@ -369,8 +369,8 @@
 
 **Vorbereitung:**
 - Admin → Core → Einstellungen → eigene Einrichtung:
- - `Session-Timeout (Minuten)` auf **1** setzen (das Maximum muss größer sein als das Timeout, gerechnet in Minuten).
- - `Maximale Sitzungsdauer (Stunden)` auf **1** setzen → wirksames Cap 60 Min, Inaktivität 1 Min. Speichern.
+  - `Session-Timeout (Minuten)` auf **1** setzen (das Maximum muss größer sein als das Timeout, gerechnet in Minuten).
+  - `Maximale Sitzungsdauer (Stunden)` auf **1** setzen → wirksames Cap 60 Min, Inaktivität 1 Min. Speichern.
 - Gegenprobe der Validierung: `Maximale Sitzungsdauer (Stunden)` = 1 **bei** `Session-Timeout` = 60 speichern wollen.
 - Frisch als `miriam` einloggen (die Frist wird beim **Login** eingefroren — eine Settings-Änderung wirkt NICHT auf eine schon laufende Sitzung).
 - Für die schnellste Variante (60 s statt 60 min) stattdessen direkt in der Session-Zeile arbeiten: in der Django-Shell die eigene `django_session`-Zeile dekodieren und `_session_absolute_deadline` (Unix-Zeitstempel) auf `time.time() - 1` setzen und die Zeile speichern.
@@ -1032,12 +1032,12 @@
 
 **Erwartetes Ergebnis:**
 - Schritt 2: ein neuer Eintrag mit:
- - `action="sudo_mode_entered"`
- - `user=miriam`
- - `facility=miriam.facility`
- - `target_type="User"`, `target_id=str(miriam.pk)`
- - `detail={"next": "<safe redirect path>"}`
- - `timestamp` ~ jetzt
+  - `action="sudo_mode_entered"`
+  - `user=miriam`
+  - `facility=miriam.facility`
+  - `target_type="User"`, `target_id=str(miriam.pk)`
+  - `detail={"next": "<safe redirect path>"}`
+  - `timestamp` ~ jetzt
 - Schritt 3: `AuditLog.Action`-TextChoices enthält `SUDO_MODE_ENTERED`, **NICHT** `SUDO_MODE_EXIT`. Das ist eine bewusste Aktualisierung der Aufgabenstellung — der Code-Status ist Truth Source. `clear_sudo(request)` läuft still (z.B. beim Logout via Session-Pop), erzeugt **keinen** dedizierten Audit-Eintrag.
 
 **DSGVO/Security-Note:**
@@ -1094,11 +1094,11 @@
 - HTTP 200, MIME `application/manifest+json`.
 - Body parst als JSON ohne Fehler.
 - Pflichtfelder vorhanden:
- - `"name": "Anlaufstelle"`, `"short_name": "Anlaufstelle"`
- - `"id": "/"`, `"start_url": "/"`, `"scope": "/"`
- - `"display": "standalone"`
- - `"background_color": "#f9fafb"`, `"theme_color": "#4f46e5"`
- - `"icons"` mit ≥ 4 Einträgen, mind. ein 192×192 und ein 512×512 PNG.
+  - `"name": "Anlaufstelle"`, `"short_name": "Anlaufstelle"`
+  - `"id": "/"`, `"start_url": "/"`, `"scope": "/"`
+  - `"display": "standalone"`
+  - `"background_color": "#f9fafb"`, `"theme_color": "#4f46e5"`
+  - `"icons"` mit ≥ 4 Einträgen, mind. ein 192×192 und ein 512×512 PNG.
 - Datei wird mit `lru_cache(maxsize=1)` aus dem Filesystem gelesen — Performance-Test: 2. Aufruf ohne Disk-I/O.
 
 **DSGVO/Security-Note:**
@@ -1131,10 +1131,10 @@
 - Schritt 2: SW ist `activated and is running`, Scope `/`.
 - Schritt 3: HTTP 200, `Content-Type: application/javascript`, `Service-Worker-Allowed: /`.
 - Schritt 4: Cache `anlaufstelle-v9` enthält App-Shell aus `APP_SHELL`:
- - `/static/css/styles.css`
- - `/static/icons/icon-192.png`, `/static/icons/icon-512.png`
- - `/static/icons/icon-192.svg`, `/static/icons/icon-512.svg`
- - `/offline/`
+  - `/static/css/styles.css`
+  - `/static/icons/icon-192.png`, `/static/icons/icon-512.png`
+  - `/static/icons/icon-192.svg`, `/static/icons/icon-512.svg`
+  - `/offline/`
 - Schritt 5: zweiter Reload servert aus Cache (Cache-Hit), gleichzeitig Hintergrund-Fetch der neuen Version → Cache-Update (Refs #618).
 - Bei `caches.keys()`-Wechsel werden alte CACHE_NAMEs (v8 etc.) im `activate`-Event gelöscht.
 
@@ -1536,7 +1536,7 @@
 
 **Erwartetes Ergebnis:**
 - Erster Klick ohne Sudo → Redirect auf Sudo-Form.
-- Nach Re-Auth → Download startet, Filename-Pattern `datenauskunft_<YYYY-MM-DD>.json` ohne Pseudonym.
+- Nach Re-Auth → Download startet, Filename-Pattern `datenauskunft_<pseudonym>.json`.
 - JSON enthält `client`, `events`, `cases`, `episodes`, `goals`, `attachments_meta` (siehe `services/client_export.py`).
 - `AuditLog`-Eintrag `EXPORT` mit `detail.format=JSON`, `target_type=Client-JSON`.
 
@@ -1566,7 +1566,7 @@
 3. PDF in Reader öffnen.
 
 **Erwartetes Ergebnis:**
-- Filename `datenauskunft_<YYYY-MM-DD>.pdf` ohne Pseudonym, Mime `application/pdf`.
+- Filename `datenauskunft_<pseudonym>.pdf`, Mime `application/pdf`.
 - PDF enthält Kopf mit Einrichtungsname, Pseudonym, Erstellungsdatum.
 - Sektionen: Stammdaten, Kontakt-Chronik, Fälle/Episoden, Wirkungsziele.
 - Pseudonyme statt Klarnamen, keine Anhänge inline.
@@ -1928,10 +1928,10 @@
 **Schritte:**
 1. `/cases/` öffnen, ersten Fall klicken.
 2. Detail-Layout sichten:
- - Headline = Titel.
- - Status-Badge (Offen/Geschlossen).
- - Meta-Info „Fallverantwortlich", „Erstellt am", „Person".
- - Sektionen Episoden, Goals, Events (zugeordnet/nicht zugeordnet).
+   - Headline = Titel.
+   - Status-Badge (Offen/Geschlossen).
+   - Meta-Info „Fallverantwortlich", „Erstellt am", „Person".
+   - Sektionen Episoden, Goals, Events (zugeordnet/nicht zugeordnet).
 
 **Erwartetes Ergebnis:**
 - `select_related("client", "lead_user", "created_by")` in `CaseDetailView` — keine N+1-Queries (in Devtools-Performance-Profile sichtbar).
@@ -2901,7 +2901,7 @@
 **Services:** `src/core/services/file_vault/` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan` — alle owner-generisch), `src/core/services/attachments/` (`finalize_staged_files`, `apply_attachment_changes`, `discard_type_switch_file_chains`, `build_attachment_context`, `attachment_download_url`), `src/core/services/compliance` (`get_visible_attachment_for_owner_or_404`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet) 
 **Modell:** `Attachment` (bis M24 `EventAttachment`, Refs #1738) — eigene `facility_id`, genau **ein** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`), direkte RLS-Policy (Migrationen `0129`–`0131`, [ADR-039](../adr/039-owner-generische-dateianhaenge.md)) 
 **E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_attachments_client_case.py`, `test_file_vault.py`, `test_crypto_session.py` 
-**Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). Im **lokalen** Stack läuft der Dienst seit #1062 nur noch auf Anforderung: `docker compose --profile clamav up -d clamav` — ohne Profil zieht `docker compose up` ihn nicht mehr hoch. EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben — seit M24 auch an Typen mit `entity_type` **Person** oder **Fall** (der Seed liefert dort keine mit, Wegwerf-Typen anlegen; Konvention `E2E-M24-*`).
+**Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben — seit M24 auch an Typen mit `entity_type` **Person** oder **Fall** (der Seed liefert dort keine mit, Wegwerf-Typen anlegen; Konvention `E2E-M24-*`).
 
 ---
 
@@ -3758,8 +3758,8 @@
 
 **Erwartetes Ergebnis:**
 - `approve_deletion(dr, reviewer)` (atomar):
- - `soft_delete_event(event, reviewer)` → `event.is_deleted=True`, `event.data_json={}`, alle Attachments via `delete_attachments_for(event)` (Disk-Cleanup), `EventHistory(action=DELETE, data_before=<redacted>)`, AuditLog `delete`.
- - `dr.status=APPROVED`, `dr.reviewed_by=reviewer`, `dr.reviewed_at=now`.
+  - `soft_delete_event(event, reviewer)` → `event.is_deleted=True`, `event.data_json={}`, alle Attachments via `delete_attachments_for(event)` (Disk-Cleanup), `EventHistory(action=DELETE, data_before=<redacted>)`, AuditLog `delete`.
+  - `dr.status=APPROVED`, `dr.reviewed_by=reviewer`, `dr.reviewed_at=now`.
 - Flash „Löschantrag wurde genehmigt."
 - Redirect → `/` (Event) bzw. `/deletion-requests/` (Client).
 - Bei `target_type=Client`: `approve_client_deletion` (eigener Service-Pfad in `services/clients.py`).
@@ -5055,7 +5055,7 @@
 </details>
 
 <details open>
-<summary><strong>📜 DSGVO — DSGVO-Paket (10 Cases)</strong></summary>
+<summary><strong>📜 DSGVO — DSGVO-Paket (8 Cases)</strong></summary>
 
 **Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/` 
 **Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView) 
@@ -5080,12 +5080,12 @@
 
 **Schritte:**
 1. `/dsgvo/` aufrufen.
-2. Übersicht aller 7 Templates sichtbar: Art. 13/14, Art. 28, Art. 30, Art. 32, Art. 35, Beschäftigten-Information und Löschkonzept.
+2. Übersicht aller 5 Templates sichtbar: Art. 13/14, Art. 28, Art. 30, Art. 32, Art. 35.
 3. Pro Template: Titel, Kurzbeschreibung, Download-Button, letzter Generierungs-Timestamp.
 4. Footer-Hinweis: „Templates rechtlich geprüft, keine Rechtsberatung".
 
 **Erwartetes Ergebnis:**
-- Liste aller 7 DSGVO-Templates mit Download-Links.
+- Liste aller 5 DSGVO-Templates mit Download-Links.
 - Sudo-Indikator („Sudo aktiv, läuft ab um HH:MM") sichtbar.
 - Templates dynamisch generiert (nicht statisch im Repo, sondern aus Facility-Daten).
 
@@ -5145,11 +5145,11 @@
 1. Auf „Art. 30 — Verarbeitungsverzeichnis" Download klicken.
 2. Datei `verarbeitungsverzeichnis-art-30.md` (oder PDF) wird heruntergeladen.
 3. Datei öffnen — Markdown-Struktur:
- - Verantwortlicher (Facility-Name, Adresse, Email aus Facility-Settings)
- - Datenschutzbeauftragter (DPO aus Settings)
- - Verarbeitungstätigkeiten (Klientenverwaltung, Fallakte, …)
- - Kategorien betroffener Personen + Daten
- - Empfänger, Drittländer, Löschfristen, TOMs-Verweis
+   - Verantwortlicher (Facility-Name, Adresse, Email aus Facility-Settings)
+   - Datenschutzbeauftragter (DPO aus Settings)
+   - Verarbeitungstätigkeiten (Klientenverwaltung, Fallakte, …)
+   - Kategorien betroffener Personen + Daten
+   - Empfänger, Drittländer, Löschfristen, TOMs-Verweis
 4. Generierungs-Timestamp im Footer.
 
 **Erwartetes Ergebnis:**
@@ -5180,11 +5180,11 @@
 1. Auf „Art. 35 — DSFA (Datenschutz-Folgenabschätzung)" Download klicken.
 2. Datei `dsfa-art-35.md` herunterladen.
 3. Inhalt prüfen:
- - Beschreibung der Verarbeitung
- - Notwendigkeit + Verhältnismäßigkeit
- - Risiken für Betroffene (Diskriminierung, Identitätsdiebstahl, …)
- - Abhilfemaßnahmen (TOMs, Pseudonymisierung, RLS)
- - Bewertung (Risiko hoch/mittel/niedrig)
+   - Beschreibung der Verarbeitung
+   - Notwendigkeit + Verhältnismäßigkeit
+   - Risiken für Betroffene (Diskriminierung, Identitätsdiebstahl, …)
+   - Abhilfemaßnahmen (TOMs, Pseudonymisierung, RLS)
+   - Bewertung (Risiko hoch/mittel/niedrig)
 4. Verweis auf Art. 35 Abs. 7 (Pflichtfelder).
 
 **Erwartetes Ergebnis:**
@@ -5215,12 +5215,12 @@
 1. Auf „Art. 28 — AV-Vertrag (Auftragsverarbeitung)" klicken.
 2. Datei `av-vertrag-art-28.md` herunterladen.
 3. Inhalt prüfen:
- - Auftraggeber (Verantwortlicher) + Auftragsverarbeiter (z.B. Hosting-Provider)
- - Gegenstand, Dauer, Art der Verarbeitung
- - Pflichten des Auftragsverarbeiters (Art. 28 Abs. 3 a-h)
- - Subunternehmer-Klausel
- - Weisungsrecht
- - Haftung + Vertragsstrafen
+   - Auftraggeber (Verantwortlicher) + Auftragsverarbeiter (z.B. Hosting-Provider)
+   - Gegenstand, Dauer, Art der Verarbeitung
+   - Pflichten des Auftragsverarbeiters (Art. 28 Abs. 3 a-h)
+   - Subunternehmer-Klausel
+   - Weisungsrecht
+   - Haftung + Vertragsstrafen
 4. Unterschriftsfelder beider Parteien.
 
 **Erwartetes Ergebnis:**
@@ -5251,11 +5251,11 @@
 1. Auf „Art. 32 — Technische und organisatorische Maßnahmen (TOMs)" klicken.
 2. Datei `toms-art-32.md` herunterladen.
 3. Inhalt prüfen:
- - Vertraulichkeit (Zutritts-, Zugangs-, Zugriffskontrolle)
- - Integrität (Eingabe-, Weitergabekontrolle)
- - Verfügbarkeit (Verfügbarkeits-, Wiederherstellbarkeitskontrolle)
- - Belastbarkeit (Pen-Tests, Notfallplan)
- - Pseudonymisierung + Verschlüsselung (HMAC-Hash, AES-GCM, RLS)
+   - Vertraulichkeit (Zutritts-, Zugangs-, Zugriffskontrolle)
+   - Integrität (Eingabe-, Weitergabekontrolle)
+   - Verfügbarkeit (Verfügbarkeits-, Wiederherstellbarkeitskontrolle)
+   - Belastbarkeit (Pen-Tests, Notfallplan)
+   - Pseudonymisierung + Verschlüsselung (HMAC-Hash, AES-GCM, RLS)
 4. Konkrete App-Maßnahmen vorausgefüllt (Argon2id, MFA, Audit-Log, Backup-Verschlüsselung).
 
 **Erwartetes Ergebnis:**
@@ -5286,13 +5286,13 @@
 1. Auf „Art. 13/14 — Informationspflichten" klicken.
 2. Datei `informationspflichten-art-13-14.md` herunterladen.
 3. Inhalt prüfen:
- - Identität + Kontakt des Verantwortlichen
- - Kontaktdaten DPO
- - Zwecke der Verarbeitung + Rechtsgrundlage (z.B. SGB VIII § 61)
- - Empfänger / Empfängerkategorien
- - Drittlandtransfers (i.d.R. „nein")
- - Speicherdauer (Aktenführung-Fristen aus SGB)
- - Betroffenenrechte (Art. 15-22, Beschwerderecht Art. 77)
+   - Identität + Kontakt des Verantwortlichen
+   - Kontaktdaten DPO
+   - Zwecke der Verarbeitung + Rechtsgrundlage (z.B. SGB VIII § 61)
+   - Empfänger / Empfängerkategorien
+   - Drittlandtransfers (i.d.R. „nein")
+   - Speicherdauer (Aktenführung-Fristen aus SGB)
+   - Betroffenenrechte (Art. 15-22, Beschwerderecht Art. 77)
 4. Zwei Varianten: Erhebung beim Betroffenen (Art. 13) vs. Dritter (Art. 14).
 
 **Erwartetes Ergebnis:**
@@ -5308,63 +5308,7 @@
 
 ---
 
-### TC-ID: ENT-DSGVO-08 — Löschkonzept herunterladen
-
-| Bereich | Rolle | Browser | Mobile | E2E |
-|---------|-------|---------|--------|-----|
-| DSGVO | admin | C/F/S | ⚪ | `test_dsgvo_package.py` |
-
-**Voraussetzung:** ENT-DSGVO-01 erfolgreich.
-
-**Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
-
-**Schritte:**
-1. „Löschkonzept" herunterladen.
-2. Gerenderte Fristen für Kontakte, Aktivitäten, Papierkorb und Audit-Log mit den Einrichtungs-Einstellungen vergleichen.
-3. Backup-Frist, Legal-Hold-Grenze und Footer mit Settings-Hash prüfen.
-
-**Erwartetes Ergebnis:**
-- Kein `{{ ... }}`-Platzhalter bleibt im Dokument stehen.
-- Die sechs einrichtungsbezogenen Fristen entsprechen den aktuellen Einstellungen.
-- Die Backup-Frist entspricht der längsten Rotation des ausgelieferten `backup.sh`.
-
-**DSGVO/Security-Note:**
-- Das Dokument trennt die Löschung im aktiven System von der Rotation integritätsgesicherter Sicherungsstände.
-
-**Status:** ☐ Offen
-
----
-
-### TC-ID: ENT-DSGVO-09 — Beschäftigten-Informationspflichten herunterladen
-
-| Bereich | Rolle | Browser | Mobile | E2E |
-|---------|-------|---------|--------|-----|
-| DSGVO | admin | C/F/S | ⚪ | `test_dsgvo_package.py` |
-
-**Voraussetzung:** ENT-DSGVO-01 erfolgreich.
-
-**Vorbereitung:**
-- `/dsgvo/` mit aktivem Sudo geöffnet.
-
-**Schritte:**
-1. „Informationspflichten für Beschäftigte" herunterladen.
-2. Verantwortlichen, Zwecke, Datenkategorien und Rechtsgrundlagen prüfen.
-3. Gerenderte Audit-Log-Frist und Hinweise zu Betroffenenrechten kontrollieren.
-
-**Erwartetes Ergebnis:**
-- Das Dokument nennt Art. 13/14 DSGVO und § 26 BDSG.
-- Der Einrichtungsname und die aktuelle Audit-Log-Frist sind eingesetzt.
-- Kein `{{ ... }}`-Platzhalter bleibt im Dokument stehen.
-
-**DSGVO/Security-Note:**
-- Das Artefakt richtet sich an Beschäftigte und ist von den Informationspflichten für Klient*innen getrennt.
-
-**Status:** ☐ Offen
-
----
-
-### TC-ID: ENT-DSGVO-10 — AuditLog-Eintrag pro Download (Audit-Spur)
+### TC-ID: ENT-DSGVO-08 — AuditLog-Eintrag pro Download (Audit-Spur)
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -5373,22 +5317,22 @@
 **Voraussetzung:** mindestens ein DSGVO-Download durchgeführt.
 
 **Vorbereitung:**
-- Alle 7 verschiedenen DSGVO-Dokumente als admin herunterladen.
+- Mindestens 5 verschiedene DSGVO-Downloads (alle Templates) als admin.
 
 **Schritte:**
 1. `/audit/` aufrufen.
 2. Filter „Action-Type = EXPORT" oder „DSGVO_EXPORT" anwenden.
 3. Pro Download ein Audit-Eintrag mit:
- - User (admin-Username)
- - Action = `DSGVO_EXPORT`
- - Target = Slug (z.B. `verarbeitungsverzeichnis-art-30`)
- - Timestamp
- - IP + User-Agent
+   - User (admin-Username)
+   - Action = `DSGVO_EXPORT`
+   - Target = Slug (z.B. `verarbeitungsverzeichnis-art-30`)
+   - Timestamp
+   - IP + User-Agent
 4. Detail-View `/audit/<uuid>/` zeigt vollständige Metadaten.
 
 **Erwartetes Ergebnis:**
 - Pro Download genau 1 Audit-Eintrag.
-- Slug eindeutig pro Template (7 verschiedene Slugs für 7 Templates).
+- Slug eindeutig pro Template (5 verschiedene Slugs für 5 Templates).
 - Audit-Log auch für DSGVO-Doku-Aufruf selbst (Meta-Audit).
 
 **DSGVO/Security-Note:**
@@ -5459,12 +5403,12 @@
 1. `/api/offline/bundle/client/<uuid>/` direkt aufrufen.
 2. Response: `Content-Type: application/json`.
 3. JSON-Struktur prüfen:
- - `client`: Stammdaten (Name, Geburtsdatum, …)
- - `cases`: Liste der Fälle
- - `events`: Termine
- - `notes`: Notizen
- - `documents_meta`: Metadaten Dokumente (ohne Binärinhalt)
- - `_version`: Sync-Token / Timestamp
+   - `client`: Stammdaten (Name, Geburtsdatum, …)
+   - `cases`: Liste der Fälle
+   - `events`: Termine
+   - `notes`: Notizen
+   - `documents_meta`: Metadaten Dokumente (ohne Binärinhalt)
+   - `_version`: Sync-Token / Timestamp
 4. Versuch mit fremder UUID (nicht zugewiesen) → 404 oder 403.
 
 **Erwartetes Ergebnis:**
@@ -5825,9 +5769,9 @@
 **Schritte:**
 1. Logout-Button klicken.
 2. DevTools → IndexedDB nach Reload prüfen:
- - `clients`-Store leer.
- - `pending`-Store leer.
- - `meta.lease` gelöscht.
+   - `clients`-Store leer.
+   - `pending`-Store leer.
+   - `meta.lease` gelöscht.
 3. Cookies: Session-Cookie gelöscht (Clear-Site-Data-Header ENT-AUTH-06).
 4. Erneuter Login als anderer User → vorherige Klient-Daten nicht sichtbar.
 
@@ -5986,13 +5930,13 @@
 2. Response-Code `200`.
 3. `Content-Type: application/json`.
 4. JSON-Struktur prüfen:
- - `status: "healthy"`
- - `db: "ok"`
- - `redis: "ok"` oder `redis_status: "connected"`
- - `clamav: "ok"` oder `clamav_status: "running"`
- - `last_backup_age_hours: <number>` (z.B. 6)
- - `version: "0.9.1"`
- - `timestamp: ISO-8601`
+   - `status: "healthy"`
+   - `db: "ok"`
+   - `redis: "ok"` oder `redis_status: "connected"`
+   - `clamav: "ok"` oder `clamav_status: "running"`
+   - `last_backup_age_hours: <number>` (z.B. 6)
+   - `version: "0.9.1"`
+   - `timestamp: ISO-8601`
 5. `SECURE_REDIRECT_EXEMPT` prüfen — Endpoint erreichbar ohne HTTPS-Redirect.
 
 **Erwartetes Ergebnis:**
@@ -6054,14 +5998,14 @@
 1. `/robots.txt` aufrufen.
 2. Response-Code 200, `Content-Type: text/plain`.
 3. Inhalt prüfen — `Disallow:`-Einträge für:
- - `/admin/`
- - `/clients/`
- - `/cases/`
- - `/dsgvo/`
- - `/audit/`
- - `/api/`
- - `/sudo/`
- - `/login/` (optional)
+   - `/admin/`
+   - `/clients/`
+   - `/cases/`
+   - `/dsgvo/`
+   - `/audit/`
+   - `/api/`
+   - `/sudo/`
+   - `/login/` (optional)
 4. `Allow:` ggf. für `/`, `/about/`, `/impressum/`, `/datenschutzerklaerung/`.
 5. `Sitemap:`-Eintrag (falls vorhanden).
 
@@ -6241,9 +6185,9 @@
 1. Frisches Backup vorhanden → `/system/compliance/` Kategorie „Backup": Status `ok`, Detail enthält Pfad + Alter (z.B. „6h").
 2. Backup-Verzeichnis leeren (oder älter machen via `touch -t 202401010000 <file>`).
 3. Dashboard neu laden:
- - 36-48h Alter → Status `warning`, Action-Hint „Backup-Cron pruefen" (Schwellen aus `core/services/ops_thresholds.py`, Refs #1872).
- - >48h → Status `critical`.
- - Kein Backup → im Compliance-Dashboard Status `unknown` mit Hinweis auf `settings.BACKUP_DIR`; in der Betriebsansicht `/system/` dagegen `warning` (Refs #1872).
+   - 36-48h Alter → Status `warning`, Action-Hint „Backup-Cron pruefen" (Schwellen aus `core/services/ops_thresholds.py`, Refs #1872).
+   - >48h → Status `critical`.
+   - Kein Backup → im Compliance-Dashboard Status `unknown` mit Hinweis auf `settings.BACKUP_DIR`; in der Betriebsansicht `/system/` dagegen `warning` (Refs #1872).
 
 **Status:** ☐ Offen
 
@@ -6286,7 +6230,7 @@
 1. `docker compose exec web python manage.py enforce_retention` einmal ausführen.
 2. Dashboard neu laden → Kategorie „Retention": Status `ok`, Detail „Letzter Lauf vor 0 Tag(en)".
 3. **Warning-Pfad:** AuditLog-Eintrag älter als 7 Tage machen (LOKAL/SSH per `bypass_replication_triggers`):
- ```python
+   ```python
    from django.utils import timezone
    from datetime import timedelta
    from core.models import AuditLog
@@ -6325,7 +6269,7 @@
 
 ### A11Y — Accessibility (WCAG-Stichproben)
 
-> **🔒 WCAG-Audit-Pending:** Die A11Y-TCs `ENT-A11Y-01..08` sind gesperrt durch die [geplante WCAG-2.1-AA-Audit-Initiative](https://github.com/anlaufstelle/app/issues/470) (systematisches WCAG 2.1 AA mit axe-core / Pa11y / Screen-Reader-Tests). Die Cases bleiben hier **bewusst als Stichproben-Spezifikation dokumentiert** — sie sind der Startpunkt für die spätere axe-core-Integration und die systematischen Audits. Bis dahin laufen sie als manuelle Smoke-Tests vor Releases (siehe [`release-test-profiles.md`](release-test-profiles.md) Sektion KEEP-MANUAL).
+> **🔒 WCAG-Audit-Pending:** Die A11Y-TCs `ENT-A11Y-01..08` sind gesperrt durch die [geplante WCAG-2.1-AA-Audit-Initiative](https://github.com/anlaufstelle/app/issues/470) (systematisches WCAG 2.1 AA mit axe-core / Pa11y / Screen-Reader-Tests). Die Cases bleiben hier **bewusst als Stichproben-Spezifikation dokumentiert** — sie sind der Startpunkt für die spätere axe-core-Integration und die systematischen Audits. Bis dahin laufen sie als manuelle Smoke-Tests vor Releases (siehe `release-test-profiles.md` Sektion KEEP-MANUAL).
 >
 > **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit, kein axe-core / Pa11y. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
 

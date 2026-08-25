@@ -35,7 +35,6 @@ TRANSLATED_FILES = [
     "CONTRIBUTING.en.md",
     "docs/en/README.md",
     "docs/en/admin-guide.md",
-    "docs/en/ops-runbook.md",
     "docs/en/user-guide.md",
     "docs/en/domain-concept-summary.md",
     "docs/en/glossary.md",

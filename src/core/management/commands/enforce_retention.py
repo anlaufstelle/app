@@ -12,7 +12,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.models import AuditLog, Facility, Settings
-from core.retention.eventhistory import enforce_eventhistory_retention
 from core.services.audit import audit_event
 from core.services.dashboard import ensure_snapshots_for_months
 from core.services.import_engine import cleanup_stale_import_jobs
@@ -56,14 +55,6 @@ class _RetentionTotals:
     # Refs #1760: abgelaufene Offline-Widerrufe (klartext-frei, aber pseudonymer
     # Bezug auf bereits anonymisierte Personen -> Art. 5 Abs. 1 lit. e).
     offline_revocations_pruned: int = 0
-    # Refs #2065 (ADR-050): die Ereignis-Historie. ``history_deferred`` zaehlt
-    # die wegen Legal Hold zurueckgestellten und die per ``skip_locked``
-    # uebersprungenen Ereignisse — sie MUESSEN in der Zusammenfassung stehen,
-    # sonst entsteht still der Zustand „geloescht, aber unredigiert", den
-    # niemand mehr sieht (D2).
-    history_redacted: int = 0
-    history_deleted: int = 0
-    history_deferred: int = 0
 
 
 class Command(BaseCommand):
@@ -110,15 +101,9 @@ class Command(BaseCommand):
         facilities = Facility.objects.all()
         if facility_name:
             facilities = facilities.filter(name=facility_name)
-            # Refs #2068 (a) / Cross-Review Finding 4: CommandError statt
-            # stderr+return. Ein ``return`` beendete den Lauf mit Exit-Code 0 —
-            # ein Tippfehler im Cron-``--facility`` sah damit wie ein
-            # erfolgreicher Lauf aus, obwohl gar nichts verarbeitet wurde.
-            # Vorbild ist ``generate_dsgvo_package``, das das schon richtig
-            # macht. Mehrfach-Treffer sind seit dem UNIQUE auf
-            # ``Facility.name`` unmoeglich; bleibt genau dieser 0-Treffer-Fall.
             if not facilities.exists():
-                raise CommandError(f"Facility '{facility_name}' not found.")
+                self.stderr.write(self.style.ERROR(f"Facility '{facility_name}' not found."))
+                return
 
         if propose:
             self._handle_propose(facilities, now)
@@ -189,14 +174,6 @@ class Command(BaseCommand):
         from core.services.case.deletion import anonymize_eligible_soft_deleted_cases
 
         totals.trash_anonymized_cases += anonymize_eligible_soft_deleted_cases(facility, settings_obj, dry_run=dry_run)
-        # Refs #2065 (ADR-050): NACH ``process_facility_retention`` — die in
-        # diesem Lauf soft-geloeschten Ereignisse tragen ``is_deleted = True``
-        # und werden damit noch im selben Durchgang redigiert, statt ein
-        # Cron-Intervall lang vollstaendig lesbar zu bleiben.
-        history = enforce_eventhistory_retention(facility, settings_obj, now, dry_run)
-        totals.history_redacted += history["redacted"]
-        totals.history_deleted += history["deleted"]
-        totals.history_deferred += history["deferred"] + history["skipped"]
         totals.auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
         # Refs #1760: Widerrufe aelter als OFFLINE_REVOCATION_RETENTION_SECONDS
         # (2x Bundle-TTL) haben ihren Zweck erfuellt — kein Geraet im TTL-Fenster
@@ -245,15 +222,6 @@ class Command(BaseCommand):
                 )
             )
             self.stdout.write(
-                self.style.WARNING(f"[dry-run] Would redact {totals.history_redacted} event-history row(s) in total.")
-            )
-            self.stdout.write(
-                self.style.WARNING(f"[dry-run] Would delete {totals.history_deleted} redacted history row(s) in total.")
-            )
-            self.stdout.write(
-                self.style.WARNING(f"[dry-run] Would defer {totals.history_deferred} event(s) with held history.")
-            )
-            self.stdout.write(
                 self.style.WARNING(f"[dry-run] Would prune {totals.auditlog_pruned} audit-log entry/entries in total.")
             )
             return
@@ -265,9 +233,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(f"Anonymized {totals.trash_anonymized_cases} trash-expired case(s) in total.")
         )
-        self.stdout.write(self.style.SUCCESS(f"Redacted {totals.history_redacted} event-history row(s) in total."))
-        self.stdout.write(self.style.SUCCESS(f"Deleted {totals.history_deleted} redacted history row(s) in total."))
-        self.stdout.write(self.style.SUCCESS(f"Deferred {totals.history_deferred} event(s) with held/locked history."))
         self.stdout.write(self.style.SUCCESS(f"Pruned {totals.auditlog_pruned} audit-log entry/entries in total."))
         self.stdout.write(
             self.style.SUCCESS(f"Pruned {totals.offline_revocations_pruned} expired offline revocation(s) in total.")
@@ -288,9 +253,6 @@ class Command(BaseCommand):
                 "anonymized_clients": totals.anonymized,
                 "anonymized_trash_clients": totals.trash_anonymized,
                 "anonymized_trash_cases": totals.trash_anonymized_cases,
-                "redacted_history_rows": totals.history_redacted,
-                "deleted_history_rows": totals.history_deleted,
-                "deferred_history_events": totals.history_deferred,
                 "pruned_auditlog": totals.auditlog_pruned,
                 "pruned_offline_revocations": totals.offline_revocations_pruned,
             },

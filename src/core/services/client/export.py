@@ -1,6 +1,7 @@
 """Client data export for DSGVO Art. 15 (right of access) and Art. 20 (data portability)."""
 
 import weasyprint
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Prefetch, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -24,13 +25,6 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.models.attachment import owner_field_name
-from core.services.client.targets import (
-    client_activity_targets_q,
-    client_and_case_targets_q,
-    client_and_event_targets_q,
-    client_legal_hold_targets_q,
-)
-from core.services.events.history_diff import is_redaction_marker
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -344,23 +338,6 @@ def _gather_client_fields(client):
     # Zeile selbst.
     if client.merged_into_id:
         fields["merged_into"] = client.merged_into.pseudonym
-    # Refs #2047: Die Auskunft muss sagen, dass die Zeitpunkte der Ereignisse
-    # nach der Tilgung nur noch den Monat tragen — sonst liest sie sich, als
-    # haetten alle Kontakte am Monatsersten um Mitternacht stattgefunden.
-    # Nur am Tombstone gesetzt, damit das Bestandsformat aller uebrigen
-    # Personen bitgleich bleibt (Muster ``merged_into``). Die Bedingung deckt
-    # BEIDE Anonymisierungspfade ab: ``anonymized_at`` stempelt der Hard-Pfad,
-    # ``k_anonymized`` die K-Anon-Bridge (die ``anonymized_at`` bewusst nicht
-    # setzt) — an einer Bedingung allein fiele je ein Pfad still durch.
-    #
-    # Dass der Marker fuer BEIDE Sorten die Wahrheit sagt, ist keine Annahme,
-    # sondern hergestellt (Cross-Review-Befund 2): beide Pfade generalisieren
-    # seit Refs #2047 selbst, und Migration ``0171`` hat den Altbestand beider
-    # Sorten nachgezogen. Ohne diesen Backfill haette der Marker fuer jede vor
-    # dem Update anonymisierte Person eine Falschaussage getroffen — in einer
-    # Art.-15-Auskunft das schwerere Problem als die Luecke selbst.
-    if client.anonymized_at is not None or client.k_anonymized:
-        fields["event_timestamps_generalized"] = True
     return fields
 
 
@@ -553,19 +530,6 @@ def _serialize_history_payload(payload, field_metadata):
     return [{"slug": slug, "label": label(slug), "value": _history_value(payload[slug])} for slug in sorted(payload)]
 
 
-def _entry_is_redacted(entry):
-    """„Mindestens eine belegte Spalte ist redigiert" (ADR-050 D1.3, Refs #2065).
-
-    Abgeleitet wurde das Merkmal bisher **ausschliesslich** aus ``data_before``.
-    Fuer die Lösch-Historie stimmte das (dort steht der Marker genau dort); fuer
-    eine redigierte CREATE-Zeile nicht: ihr ``data_before`` ist ``NULL`` und
-    bleibt es (D1.1, nur belegte Spalten werden redigiert), der Marker steht in
-    ``data_after``. Die Auskunft haette also ausgerechnet fuer die Zeilen
-    ``redacted: false`` gemeldet, die der Alters-Sweep gerade geleert hat.
-    """
-    return any(is_redaction_marker(payload) for payload in (entry.data_before, entry.data_after))
-
-
 def _gather_event_history(event_ids):
     """Serialize EventHistory entries for the given event IDs.
 
@@ -590,7 +554,7 @@ def _gather_event_history(event_ids):
                 "occurred_at": entry.event.occurred_at.isoformat(),
                 "is_deleted": entry.event.is_deleted,
             },
-            "redacted": _entry_is_redacted(entry),
+            "redacted": bool((entry.data_before or {}).get("_redacted")),
             "data_before": _serialize_history_payload(entry.data_before, entry.field_metadata),
             "data_after": _serialize_history_payload(entry.data_after, entry.field_metadata),
         }
@@ -607,15 +571,6 @@ def _gather_deletion_requests(facility, client, event_ids):
     der eigenen Person fehlte damit ausgerechnet in der Auskunft, waehrend der
     PDF-Abschnitt „Loeschantraege" Vollstaendigkeit suggerierte.
 
-    Refs #2071: derselbe Befund eine Stufe weiter — ``request_case_deletion``
-    (``core.services.case.deletion``) schreibt seit ADR-044 Antraege mit
-    ``target_type="Case"``, und die Art.-17-Kaskade redigiert sie bereits
-    (``_redact_case_deletion_requests``). Die Auskunft zog nur Client- und
-    Event-Ziele; der Freitext ``reason`` eines Fall-Loeschantrags fiel damit
-    aus der Auskunft, obwohl er redigiert und also als Personendatum erkannt
-    war. Die Zielmenge kommt jetzt aus :func:`client_and_case_targets_q` —
-    derselben Quelle, die auch die Legal Holds benutzen.
-
     Facility-gescopt ueber den ``FacilityScopedManager`` (Defense-in-Depth
     zusaetzlich zu RLS) — ``target_id`` allein ist zwar UUID-eindeutig, das
     explizite Scoping macht die Absicht aber lesbar. (Andere Quertabellen wie
@@ -624,7 +579,10 @@ def _gather_deletion_requests(facility, client, event_ids):
     """
     deletion_requests = (
         DeletionRequest.objects.for_facility(facility)
-        .filter(client_and_case_targets_q(client, event_ids))
+        .filter(
+            Q(target_type=DeletionRequest.TargetType.EVENT, target_id__in=event_ids)
+            | Q(target_type=DeletionRequest.TargetType.CLIENT, target_id=client.pk)
+        )
         .select_related("requested_by", "reviewed_by")
         .order_by("-created_at", "pk")
     )
@@ -875,7 +833,15 @@ def _gather_activities(facility, client, event_ids):
     ``created_by``/``changed_by``; erst das vollstaendige Zugriffsprotokoll
     kippt in ein Bewegungsprofil der Beschaeftigten.
     """
-    targets = client_activity_targets_q(client, event_ids)
+    targets = Q(target_type=ContentType.objects.get_for_model(client.__class__), target_id=client.pk)
+    case_ids = list(client.cases.values_list("pk", flat=True))
+    if case_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(CaseModel), target_id__in=case_ids)
+    if event_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(Event), target_id__in=event_ids)
+    workitem_ids = list(client.work_items.values_list("pk", flat=True))
+    if workitem_ids:
+        targets |= Q(target_type=ContentType.objects.get_for_model(WorkItem), target_id__in=workitem_ids)
 
     from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
 
@@ -927,24 +893,10 @@ def _gather_legal_holds(facility, client, event_ids):
     Art.-18-Relevanz: ein Legal Hold erklaert der betroffenen Person, warum ihre
     Daten trotz abgelaufener Aufbewahrungsfrist noch existieren. Ohne diese
     Kategorie wirkt die Aufbewahrung willkuerlich.
-
-    Refs #1990: Die Zielmenge kommt aus :func:`client_legal_hold_targets_q` —
-    demselben Builder, den die Art.-17-Redaktion
-    (:func:`core.services.client.main._redact_legal_holds`) benutzt. Bis dahin
-    filterte die Auskunft nur ueber ``client_and_event_targets_q``; Holds mit
-    ``target_type="Case"`` (ADR-044) und ``target_type="Activity"``
-    (Aktivitaeten-Enforcement) fielen still heraus, obwohl ``reason``
-    bestimmungsgemaess Freitext mit Fall-/Klientenkontext ist.
-
-    Verbleibende bewusste Differenz zur Redaktionsseite: ``event_ids`` traegt
-    hier nur die fuer die aufrufende Rolle sichtbaren Ereignisse. Ein Hold auf
-    einem unsichtbaren Ereignis — oder auf einer Aktivitaet dazu — erscheint
-    deshalb nicht in DIESER Auskunft; die Redaktion arbeitet dagegen auf allen
-    Ereignissen der Person.
     """
     holds = (
         LegalHold.objects.for_facility(facility)
-        .filter(client_legal_hold_targets_q(client, event_ids))
+        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
         .select_related("created_by", "dismissed_by")
         .order_by("-created_at", "pk")
     )
@@ -977,7 +929,7 @@ def _gather_retention_proposals(facility, client, event_ids):
     """
     proposals = (
         RetentionProposal.objects.for_facility(facility)
-        .filter(client_and_event_targets_q(client, event_ids))
+        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
         .order_by("deletion_due_at", "pk")
     )
     return [
@@ -1020,11 +972,6 @@ AUDIT_CATEGORIES = (
     ("Event", "Ereignis"),
     ("Client", "Person"),
     ("RectificationRequest", "Berichtigung"),
-    # Refs #2048: Gegenstueck zur Berichtigung — ``DELETION_*``-Zeilen tragen
-    # ``target_type="DeletionRequest"``. Ohne Eintrag fielen sie in die
-    # Sammelkategorie, waehrend derselbe Vorgang als Antrag unter
-    # „Loeschantraege" eine eigene Ueberschrift hat.
-    ("DeletionRequest", "Löschantrag"),
     ("Episode", "Episode"),
     ("OutcomeGoal", "Wirkungsziel"),
 )
@@ -1107,12 +1054,7 @@ def _gather_audit_trail(facility, client, event_ids):
     (ADR-039 §5) — ein ``SECURITY_VIOLATION`` an einem fall-eigenen Upload
     traegt also die Fall-PK. Aus demselben Grund kommen seit Refs #1796 die
     **Berichtigungsantraege** dazu: ``RECTIFICATION_REQUESTED/APPROVED/REJECTED``
-    zeigen auf die Antrags-PK (ADR-041), die vorher keinen Zweig traf. Refs
-    #2048 zieht die **Loeschantraege** nach: ``DELETION_REQUESTED``/
-    ``APPROVED``/``REJECTED`` zeigen ebenfalls auf die Antrags-PK, und zwar
-    aus allen drei schreibenden Pfaden (Person, Fall, Zusammenfuehrung). Bis
-    dahin wies die Auskunft den Antrag aus, aber keine einzige Zeile darueber,
-    dass und wann ueber ihn entschieden wurde.
+    zeigen auf die Antrags-PK (ADR-041), die vorher keinen Zweig traf.
 
     Refs #1959 setzt die Reihe fort: ``EPISODE_UPDATE`` und ``GOAL_UPDATE``
     zeigen auf die **Episoden**- bzw. **Ziel**-PK. Beide haengen ueber ``case``
@@ -1151,29 +1093,6 @@ def _gather_audit_trail(facility, client, event_ids):
     ]
     if rectification_id_strings:
         targets |= Q(target_id__in=rectification_id_strings)
-    # Refs #2048: derselbe Befund am Loeschantrag. ``DELETION_REQUESTED``/
-    # ``APPROVED``/``REJECTED`` setzen ``target_id`` ebenfalls auf die
-    # ANTRAGS-PK (``core.services.client.main``, ``core.services.case.deletion``,
-    # ``core.services.client.merge``) und trafen bis dahin keinen Zweig: der
-    # gesamte Vier-Augen-Vorgang war im Zugriffsprotokoll der betroffenen
-    # Person unsichtbar, obwohl der Antrag selbst unter „Loeschantraege" steht
-    # — die Auskunft sagte also, DASS beantragt wurde, aber nicht, dass und
-    # wann darueber entschieden wurde.
-    #
-    # Die Zielmenge kommt aus demselben Builder wie
-    # :func:`_gather_deletion_requests` (``client_and_case_targets_q``, Refs
-    # #2071). Das ist kein Zufall, sondern die Bedingung dafuer, dass Antrag
-    # und zugehoerige Auditzeile nie auseinanderlaufen: exakt die Antraege, die
-    # die Auskunft auflistet, steuern hier die PKs bei. Ueber-Matching ist
-    # damit ausgeschlossen (plus ``for_facility`` + RLS).
-    deletion_request_id_strings = [
-        str(pk)
-        for pk in DeletionRequest.objects.for_facility(facility)
-        .filter(client_and_case_targets_q(client, event_ids))
-        .values_list("pk", flat=True)
-    ]
-    if deletion_request_id_strings:
-        targets |= Q(target_id__in=deletion_request_id_strings)
     if case_id_strings:
         # Refs #1738 (G4): Die Anhang-Domaene setzt ``target_id`` auf die
         # **Owner**-PK (ADR-039 §5, AP2) — bei fall-eigenen Uploads also auf den
@@ -1284,18 +1203,8 @@ def export_client_data(client, facility, user):
     }
 
 
-def render_client_export_html(client, facility, user) -> str:
-    """Die HTML-Stufe der Art.-15-PDF-Auskunft (Cross-Review-Befund 6).
-
-    Eigener Einstieg, damit Tests den tatsaechlich gerenderten INHALT pruefen
-    koennen. Vorher endeten die PDF-Tests bei ``%PDF`` und Mindestgroesse —
-    sie waeren auch gruen geblieben, wenn Antragsgrund oder
-    Transparenz-Hinweis vollstaendig gefehlt haetten. WeasyPrint komprimiert
-    seine Textstroeme, ein Byte-Grep im PDF traegt also nicht, und ein
-    PDF-Textextraktor waere eine neue Abhaengigkeit (in diesem Repo
-    ruecksprachepflichtig). Die HTML-Stufe ist ohnehin die Schicht, an der eine
-    Template-Regression entsteht — hier zu pruefen ist praeziser, nicht nur
-    billiger.
+def export_client_data_pdf(client, facility, user):
+    """Generate PDF from client data. Returns bytes.
 
     Refs #1752: Der Kontext wird aus :func:`export_client_data` **abgeleitet**
     statt Key fuer Key aufgezaehlt. Vorher konnte eine neue JSON-Kategorie
@@ -1306,10 +1215,5 @@ def render_client_export_html(client, facility, user) -> str:
     context = {key: value for key, value in data.items() if key != "export_meta"}
     context["facility_name"] = data["export_meta"]["facility_name"]
     context["generated_at"] = timezone.now()
-    return render_to_string("core/export/client_data_pdf.html", context)
-
-
-def export_client_data_pdf(client, facility, user):
-    """Generate PDF from client data. Returns bytes."""
-    html = render_client_export_html(client, facility, user)
+    html = render_to_string("core/export/client_data_pdf.html", context)
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

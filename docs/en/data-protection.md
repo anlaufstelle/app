@@ -24,7 +24,7 @@
 | Art. 15 Access | Per-person data export JSON/PDF ([`ClientDataExportJSONView`/`ClientDataExportPDFView`](../../src/core/views/clients.py)) · **authoritative for scope and the deliberate exclusions: [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)** · since #1738 it also contains **attachment metadata** for all three owners (filename, size, type, version chain; **no** binary contents) and since #1796 also **rectification requests** (Art. 16, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in all states · [FAQ §C](../faq.md#c-rollen--datenschutz) | [Operator] [Dev] |
 | Art. 16 Rectification | [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) — deliberately no self-service | [Auditor] [Dev] |
 | Art. 17 Erasure | [ADR-021](../adr/021-retention-modell.md) (soft-delete strategies, actual scope of the retention periods, k-anon retention incl. free-text cascade #1094) · [`core/retention/`](../../src/core/retention/) · **Attachments:** **three** physical deletion paths — (1) owner lifecycle: client- and case-owned files fall with the client anonymization (trash period `client_trash_days`), including the `.enc` file on **both** anonymization paths (`anonymize_client` and the k-anon bridge, parity guard); (2) event deletion/retention (`delete_attachments_for`); (3) since #1874 the **user-triggered permanent deletion** of a single version chain by managers/administration (`purge_attachment_chain`: rows + markers + `.enc`, blocked by an active legal hold) — the only path that removes a single mistakenly uploaded file at once, without taking the whole record with it. [ADR-039](../adr/039-owner-generische-dateianhaenge.md) · **residual risks:** the append-only audit log is not redacted — [security-notes.md § Audit-Log-Restdaten](../security-notes.md#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753); media backups survive the permanent deletion — [security-notes.md § Medien-Backups](../security-notes.md#medien-backups-überleben-das-ersatzlose-löschen-einer-datei-issue-1874) | [Auditor] [Dev] [Operator] |
-| Art. 18 Restriction | **Restriction marker on the client record** (#2045): flag `processing_restricted` + legal ground (Art. 18(1)(a)–(d)) + set by/at · write gate in [`services/client/restriction.py`](../../src/core/services/client/restriction.py), mirroring `resolve_writable_client` — storage remains permitted (Art. 18(2)), substantive use or modification is blocked, **except** the rectification workflow ([ADR-041](../adr/041-berichtigungsworkflow-intern.md)) · lifting requires a second authorised person or a manager and is audited (`PROCESSING_RESTRICTED`/`PROCESSING_RESTRICTION_LIFTED`) · **Not to be confused with the legal hold** ([`legal_holds.py`](../../src/core/retention/legal_holds.py)): that one blocks *erasure* (Art. 17(3)), this marker blocks *use*. The duty to inform before lifting (Art. 18(3)) remains organisational. | [Auditor] [Dev] [Operator] |
+| Art. 18 Restriction | Legal Hold — [ADR-021](../adr/021-retention-modell.md) · [`legal_holds.py`](../../src/core/retention/legal_holds.py) | [Auditor] [Dev] |
 | Art. 20 Portability | via the machine-readable per-person JSON export — **same data basis as Art. 15** (same export, same exclusions, [Admin Guide § 7.6](admin-guide.md#scope-of-the-access-record-art-15)); no dedicated portability workflow | [Operator] |
 
 ## C. Technical & organizational measures (Art. 25, 32 GDPR)
@@ -44,8 +44,6 @@
 | Art. 28 Data processing agreement | [Data processing agreement](../../src/core/dsgvo_templates/av-vertrag.md) | [Operator] |
 | Art. 30 Record of processing activities | [Processing register](../../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | [Operator] [Auditor] |
 | Art. 35 Data protection impact assessment | [DPIA](../../src/core/dsgvo_templates/dsfa.md) | [Operator] [Auditor] |
-| Art. 5(1)(e) / Art. 17 retention and deletion concept | [Deletion concept](../../src/core/dsgvo_templates/loeschkonzept.md) | [Operator] [Auditor] |
-| Arts. 13–14 / § 26 BDSG employee information | [Employee information](../../src/core/dsgvo_templates/mitarbeiter_informationspflichten.md) | [Operator] |
 | TOMs (overview) | [TOMs](../../src/core/dsgvo_templates/toms.md) | [Operator] [Auditor] |
 | App feature "GDPR package" (bundle download) | [`DSGVOPackageView`](../../src/core/views/dsgvo.py) · [`generate_dsgvo_package`](../../src/core/management/commands/generate_dsgvo_package.py) | [Operator] [Dev] |
 
@@ -66,6 +64,6 @@
 Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, storage limitation, soft-delete strategies) → [glossary.md](glossary.md).
 
 <!-- translation-source: docs/datenschutz.md -->
-<!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 25d836549bc33d26484dc7e7ca09b2b9c2041fd1 -->
+<!-- translation-version: v0.84.0 -->
+<!-- translation-date: 2026-08-22 -->
+<!-- source-hash: 0172c75a048142d26488a3e554224ca844a777df -->

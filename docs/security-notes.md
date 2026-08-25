@@ -299,11 +299,11 @@ Ein Backup ist per Konstruktion ein Stand **von vorher**. Nachträglich einzelne
 
 ## `Event.idempotency_payload_hash` überlebt die Klienten-Anonymisierung (Issue #1935)
 
-**Status:** Akzeptiertes Restrisiko — bewusste Beibehaltung der Spalte nach Bewertung, keine Löschung. Der darin ursprünglich enthaltene Enumerations-/Verschlüsselungs-Bypass-Restfall bei `DocumentType`s ohne Freitextfeld ist mit #1942 **geschlossen**: der Fingerprint ist seither ein HMAC-SHA-256 mit serverseitigem Pepper, nicht mehr ein nackter Digest des Klartext-Payloads (siehe „Härtung per HMAC-Pepper" weiter unten). Die Aufbewahrungs- und Export-Bewertung dieses Abschnitts bleibt davon unberührt und gilt unverändert.
+**Status:** Akzeptiertes Restrisiko — bewusste Beibehaltung nach Bewertung, keine Löschung. Bekannter Enumerations-/Verschlüsselungs-Bypass-Restfall bei `DocumentType`s ohne Freitextfeld (siehe Unlinkability-Bewertung); Härtung per HMAC-Pepper als Folgearbeit in #1942 vorgemerkt, nicht Teil dieser Festschreibung.
 
 ### Beobachtung
 
-`Event.idempotency_payload_hash` (`CharField(max_length=64)`; bis #1942 ein nackter SHA-256-Hexdigest, seither ein gepfeffertes HMAC-SHA-256 im Format `h1:<pepper-id>:<base64url>`) ist der seit #1909/N14 persistente DB-Backstop des Offline-Replay-Idempotenz-Schutzes (Review R5/R6, #1424): [`payload_fingerprint()`](../src/core/services/events/idempotency.py) hasht die kanonische Form des Request-Payloads (alle `POST`-Feldpaare außer CSRF-Token und Idempotenz-Schlüsselfeld, sortiert, plus Datei-Tripel), damit ein Replay mit demselben `X-Idempotency-Key`, aber abweichendem Body als Kollision erkannt wird (`has_idempotency_payload_mismatch()`) statt still den falschen gecachten Erfolg zurückzugeben.
+`Event.idempotency_payload_hash` (SHA-256-Hexdigest, `CharField(max_length=64)`) ist der seit #1909/N14 persistente DB-Backstop des Offline-Replay-Idempotenz-Schutzes (Review R5/R6, #1424): [`payload_fingerprint()`](../src/core/services/events/idempotency.py) hasht die kanonische Form des Request-Payloads (alle `POST`-Feldpaare außer CSRF-Token und Idempotenz-Schlüsselfeld, sortiert, plus Datei-Tripel), damit ein Replay mit demselben `X-Idempotency-Key`, aber abweichendem Body als Kollision erkannt wird (`has_idempotency_payload_mismatch()`) statt still den falschen gecachten Erfolg zurückzugeben.
 
 Bei der Klienten-Anonymisierung (`anonymize_client()`, [`client/main.py`](../src/core/services/client/main.py)) leert `_redact_live_events()` `Event.data_json`/`search_text` — `idempotency_key`/`idempotency_payload_hash` stehen bewusst **nicht** in deren `update_fields` und bleiben unverändert. Derselbe Befund gilt für den K-Anon-Bridge-Pfad ([`retention/anonymization.py`](../src/core/retention/anonymization.py)): der ruft `_redact_live_events` gar nicht auf (Eintrittsbedingung `active_events == 0`), und der vorgelagerte Soft-Delete (`soft_delete_event`) fasst die Spalte ebenfalls nicht an.
 
@@ -312,8 +312,6 @@ Bei der Klienten-Anonymisierung (`anonymize_client()`, [`client/main.py`](../src
 Der In-Memory-Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`) ist der Fast-Path; die Spalte ist die Ausfallsicherung dafür — sie greift genau dann, wenn der Cache nicht mehr da ist (Worker-Neustart, Eviction, R5) oder zwei parallele Replays das Get-then-Set-Fenster gleichzeitig passieren (R6). Ohne den persistierten Hash würde ein Cache-Verlust nach #1909 wieder in genau die Lücke zurückfallen, die N14/#1424 geschlossen hat: ein Replay mit demselben (client-frei wählbaren) Schlüssel, aber anderem Payload, würde still den falschen gecachten Treffer zurückliefern, statt als Kollision erkannt zu werden.
 
 ### Unlinkability-Bewertung
-
-> **Stand dieser Bewertung: der ungesalzene Digest vor #1942.** Sie bleibt als Herleitung stehen, weil sie begründet, *warum* der Pepper nötig war. Die beiden mit „real, nicht nur theoretisch" bzw. „Unterläuft die At-Rest-Verschlüsselung" bezeichneten Befunde treffen auf den heutigen Code **nicht mehr zu**: beide setzen voraus, dass sich der Digest ohne serverseitiges Geheimnis nachrechnen lässt (§ Härtung per HMAC-Pepper). Für Fingerprints, die noch aus der Zeit davor in der Datenbank liegen, gilt sie unverändert weiter, bis ihre `Event`-Zeile ausläuft.
 
 - **Einweg-Digest, kein Klartext.** Der Hash ist SHA-256 über den vollständigen Formular-Payload — er trägt denselben Informationsgehalt wie `data_json` zum Anlagezeitpunkt, aber nur als Digest. Ohne Kenntnis des exakten Original-Payloads ist er wegen Preimage-Resistenz nicht umkehrbar.
 - **Rekonstruktions-Orakel bei kleinem Wertebereich — real, nicht nur theoretisch.** Die Zeile behält nach der Anonymisierung `client_id`, `case_id`, `episode_id`, `occurred_at` und `document_type` im Klartext (siehe nächster Punkt) — einem Angreifer mit DB-Zugriff fehlen nach der Redaktion also ausschließlich die **Feldwerte** aus dem geleerten `data_json`. Trägt der `DocumentType` des Ereignisses ausschließlich strukturierte, nicht-freitextliche Felder (mit den heutigen `FieldTemplate.FieldType`-Optionen zulässig; der Tally-Zählpfad ist bereits durchgehend so aufgebaut), ist der Payload-Rateraum klein genug, um ihn vollständig gegen den gespeicherten Hash zu enumerieren. Ein Treffer **bestätigt dann nicht bloß eine Vermutung, sondern rekonstruiert exakt die redigierten Werte** — der Hash fungiert in diesem Fall als Rekonstruktions-Orakel für Inhalte, die `_redact_live_events()`/die K-Anon-Bridge eigentlich löschen sollten. Für Freitext-Felder (hohe Entropie) bleibt ein Wörterbuch-/Brute-Force-Angriff dagegen praktisch aussichtslos — das Risiko ist an die **Feld-Konfiguration** des jeweiligen `DocumentType` gekoppelt, nicht an eine hypothetische künftige Änderung von `payload_fingerprint()`.
@@ -331,18 +329,7 @@ Die Spalte hat **keine eigene Ablauffrist** — ihre Aufbewahrung ist 1:1 an die
 
 Ein zeitbasiertes Leeren (z. B. nach der 72-h-Cache-TTL oder einem sonst gewählten Fenster) würde den Zweck der Spalte gerade zunichtemachen: Sie existiert *ausdrücklich*, weil der Cache-Fast-Path zeitlich begrenzt und nicht garantiert überlebensfähig ist (Neustart/Eviction), während der partielle DB-Unique-Constraint `event_idem_key_per_user_uniq` selbst **keine** Zeitgrenze kennt — ein doppelt verwendeter Schlüssel mit abweichendem Payload muss auch nach Monaten noch als Kollision erkennbar sein. Ein TTL auf der Spalte würde also exakt die Lücke wieder öffnen, die #1909/N14 geschlossen hat, ohne einen Datenschutz-Gewinn zu erzielen (siehe Unlinkability-Bewertung).
 
-### Härtung per HMAC-Pepper (umgesetzt, #1942)
-
-Die zu #1935 nur vorgemerkte dritte Option ist umgesetzt: [`payload_fingerprint()`](../src/core/services/events/idempotency.py) bildet über die kanonische Payload-Form seither ein **HMAC-SHA-256 mit serverseitigem Pepper** statt eines nackten Digests. Der Idempotenz-Zweck bleibt vollständig erhalten — der Vergleich in `has_idempotency_payload_mismatch()` läuft ohnehin nur innerhalb derselben `(scope, user, idempotency_key)`-Kette, nie gegen fremde Payloads, aber die Enumerierbarkeit gegen einen reinen DB-Dump entfällt: ohne Kenntnis des Peppers ist ein Offline-Wörterbuchangriff auf den Hash nicht mehr möglich, auch nicht bei kleinem Feld-Wertebereich. Damit ist auch der Verschlüsselungs-Bypass geschlossen — der Hash trägt den Klartext eines `is_encrypted`-Feldes nicht mehr ungesalzen neben der Fernet-Spalte.
-
-Die getroffenen Entscheidungen:
-
-- **Pepper-Quelle: abgeleitet aus `ENCRYPTION_KEY`/`ENCRYPTION_KEYS`, kein neues Pflicht-ENV.** `sha256("anlaufstelle:idempotency-fingerprint:v1:" ‖ erster Schlüssel)` — dieselbe Schlüsselquelle wie `MultiFernet`, per Domain-Separation von jedem anderen Gebrauch getrennt, und aus dem Pepper ist der Fernet-Schlüssel nicht rückrechenbar. Ein eigenes Pflicht-Setting wäre für Selbsthoster ein zusätzlicher Weg, eine Installation fail-closed lahmzulegen, ohne Sicherheitsgewinn: wer den Pepper aus der Umgebung liest, liest dort auch `ENCRYPTION_KEY`. Fehlt der Schlüssel, bricht die Ableitung ab, statt auf einen ungepfefferten Digest zurückzufallen — ein solcher Rückfall wäre genau die Lücke, die dieses Ticket schließt (und eine Installation ohne `ENCRYPTION_KEY` kann ohnehin kein verschlüsseltes Feld schreiben).
-- **Format `h1:<pepper-id>:<base64url>`.** Das Schema-Präfix ist das einzige Unterscheidungsmerkmal gegenüber einem Legacy-Wert (beide wären sonst 64 Zeichen). Die Pepper-Kennung (8 Hex-Zeichen aus `sha256(pepper)`, kein Schlüsselmaterial) macht eine Schlüssel-Rotation als solche erkennbar. `base64url` ohne Padding hält die vollen 256 Bit in `CharField(max_length=64)` (55 statt 76 Zeichen in Hex) — die Spalte bleibt unverändert, es braucht keine Migration.
-- **Schlüsselrotation erhält den Kollisionsschutz vollständig.** `has_idempotency_payload_mismatch()` bekommt den **Request**, nicht einen vorberechneten Hash, und rechnet einen gespeicherten Fingerprint unter genau der Generation nach, unter der er entstand — dafür durchsucht sie alle in `ENCRYPTION_KEYS` konfigurierten Schlüssel (`_get_keys()`, dieselbe Quelle wie `MultiFernet`). Während einer Rotation stehen Alt- und Neuschlüssel dort ohnehin nebeneinander; der N14-Schutz bleibt über die gesamte Rotation hinweg wirksam. Neue Fingerprints entstehen dabei immer unter dem **ersten** Schlüssel.
-- **Zwei Fälle ohne Vergleichsgrundlage — graceful, kein 422.** Ein Legacy-Wert (nackter SHA-256 ohne Präfix) und ein Wert, dessen Schlüssel **nicht mehr** in `ENCRYPTION_KEYS` steht, sind keine Kollisions-*Beweise*, sondern fehlende Vergleichsgrundlage. Sie gelten deshalb wie das seit N14 dokumentierte `NULL` als **Treffer ohne Payload-Prüfung** — andernfalls liefe jeder solche Replay in einen falschen Kollisions-422 und landete als Dead Letter in der Offline-UI. Eine nachträgliche Datenmigration ist in beiden Fällen unmöglich: der Fingerprint deckt den ursprünglichen **Request-Payload** ab (inklusive Datei-Tripel), und der existiert nach der Anlage nirgends mehr — anders als bei `reencrypt_fields`, das gespeicherte Chiffrate umschlüsselt, gibt es hier kein Original zum Neuberechnen.
-- **Restrisiko — ehrlich: dauerhaft, nicht zeitlich begrenzt.** Für Zeilen einer Generation, deren Schlüssel entfernt wurde, entfällt die Payload-Kollisionsprüfung **für immer**. `Event`-Zeilen werden von der Retention nie hart gelöscht (siehe § Retention-Begründung oben), sie laufen also **nicht** aus; nur der 72-h-Cache-Eintrag tut das. Eine frühere Fassung dieses Abschnitts sprach von „zeitlich eng begrenzt" — das war falsch und steht im Widerspruch zur Retention-Begründung. Der Ausgang bleibt der Zustand *vor* N14 (Treffer statt 422), also kein Rückschritt hinter den historischen Stand, und er betrifft ausschließlich denselben `(scope, user, idempotency_key)`-Strang derselben Nutzerin.
- **Handlungsempfehlung für Betreiber:** Alt-Schlüssel nach einer Rotation in `ENCRYPTION_KEYS` **behalten** — er wird für Alt-Chiffrate ohnehin gebraucht, bis `reencrypt_fields` durchgelaufen ist. Wer ihn danach entfernt (der dokumentierte, richtige Weg für die Verschlüsselung), nimmt für die bis dahin angelegten Ereignisse bewusst diesen Prüfverlust in Kauf. Ein zusätzlicher Aufbewahrungsgrund für den Altschlüssel entsteht dadurch nicht: der Idempotenz-Schutz ist ein Duplikat-Guard, kein Schutzziel der Betroffenen.
+Eine dritte Option — **nicht Teil dieser Festschreibung**, sondern als Folgearbeit vorgemerkt — wäre der Wechsel von einem reinen SHA-256-Digest auf ein **HMAC-SHA-256 mit serverseitigem Pepper** (analog zu `ENCRYPTION_KEYS`, nicht in der DB gehalten): Der Idempotenz-Zweck bliebe vollständig erhalten (der Vergleich in `has_idempotency_payload_mismatch()` läuft ohnehin nur innerhalb derselben `(scope, user, idempotency_key)`-Kette, nie gegen fremde Payloads), aber die Enumerierbarkeit gegen einen reinen DB-Dump entfiele — ohne den Pepper ist ein Offline-Wörterbuchangriff auf den Hash nicht mehr möglich, auch nicht bei kleinem Feld-Wertebereich (siehe Unlinkability-Bewertung). Kosten: eine Migrationsstrategie für Bestandszeilen (Alt-Hashes ohne Pepper müssten wie der bestehende Legacy-Cache-Fall — `IdempotentHit.payload_hash is None` — als „Treffer ohne Prüfung" behandelt werden, bis sie ausgelaufen sind) und eine Pepper-Rotationsstrategie. Nachverfolgt in #1942 — hier bewusst **nicht implementiert** (Scope dieses Tickets ist die Festschreibung der Ist-Entscheidung, nicht die Härtung des Hash-Verfahrens).
 
 ### Exportausschluss (verifiziert)
 
@@ -356,7 +343,7 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 
 ### Trigger für Re-Evaluation
 
-- Ein Dokumentationstyp ohne Freitextfeld wird für klientenbezogene Ereignisse verwendet — das erlauben die heutigen `FieldTemplate.FieldType`-Optionen bereits, der Tally-Zählpfad ist schon rein numerisch. Das ist kein hypothetischer künftiger Code-Umbau von `payload_fingerprint()`, sondern eine heute per `DocumentType`-Konfiguration erreichbare Einstellung: sobald ein Träger einen solchen Typ tatsächlich klientenbezogen einsetzt, ist der Rekonstruktions-Orakel-Fall aus der Unlinkability-Bewertung kein abstraktes Risiko mehr, sondern eine konkrete, im Betrieb beobachtbare Konfiguration. **Erledigt** durch den HMAC-Pepper (#1942): eine solche Konfiguration ist kein Auslöser mehr. Der Trigger bleibt hier stehen für **Alt-Fingerprints** aus der Zeit vor der Härtung — wird ein solcher Typ eingesetzt und liegen noch Bestandszeilen ohne Schema-Präfix in der Tabelle, gilt die Bewertung für genau diese Zeilen weiter.
+- Ein Dokumentationstyp ohne Freitextfeld wird für klientenbezogene Ereignisse verwendet — das erlauben die heutigen `FieldTemplate.FieldType`-Optionen bereits, der Tally-Zählpfad ist schon rein numerisch. Das ist kein hypothetischer künftiger Code-Umbau von `payload_fingerprint()`, sondern eine heute per `DocumentType`-Konfiguration erreichbare Einstellung: sobald ein Träger einen solchen Typ tatsächlich klientenbezogen einsetzt, ist der Rekonstruktions-Orakel-Fall aus der Unlinkability-Bewertung kein abstraktes Risiko mehr, sondern eine konkrete, im Betrieb beobachtbare Konfiguration — das macht den HMAC-Pepper-Wechsel (#1942) vordringlich.
 - Ein Hard-Delete-/Purge-Pfad für `Event`-Zeilen wird eingeführt (dann braucht auch der Hash eine explizite Löschregel, statt implizit an der Zeilen-Lebensdauer zu hängen).
 - Ein externer Audit fordert eine kürzere technische Aufbewahrung für Idempotenz-Metadaten.
 
@@ -370,48 +357,6 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 - Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken-verweis-auf-audit-reports)
 
 ---
-
-## Restidentifizierbarkeit der Tombstone-Timeline: Monatsbucket statt exakter Zeitpunkte (Issue #2047)
-
-**Status:** Befund **mitigiert** — die Zeitachse anonymisierter Personen wird seit #2047 auf den Monatsersten 00:00 Uhr generalisiert. Ein Restrisiko bleibt und ist unten benannt.
-
-### Beobachtung
-
-Nach der Anonymisierung (`anonymize_client()` wie K-Anon-Bridge) bleibt die `Event`-Zeile bewusst stehen — sie ist das Statistik-Aggregat, das die Löschung überlebt. Bis #2047 behielt sie dabei ihren **exakten** `occurred_at`. Je Tombstone stand damit die vollständige, personenverknüpfte Timeline aus Zeitpunkt × `document_type` × Fallstruktur weiter in der Datenbank und im Art.-15-Export.
-
-Die k-Anonymitäts-Zusicherung deckte das nicht ab: `is_k_anonymous` attestiert die Äquivalenzklasse `(age_cluster, contact_stage)` — zwei niedrigdimensionale Merkmale. Die Timeline ist hochdimensional und wurde von *k* nie erfasst. Mit Außenwissen („Krisenintake am 3. Mai gegen halb drei") war ein Single-out bei realistischen Einrichtungsgrößen plausibel; der Datensatz war damit **pseudonymisiert, nicht anonym** — im Widerspruch zu der Zusage, die die Anwendung mit „anonymisiert" selbst gibt.
-
-Zusätzlich fiel eine Asymmetrie auf: Der Hard-Pfad setzte `age_cluster` auf `UNKNOWN`, ließ `contact_stage` aber stehen. Die im Code hinterlegte Begründung verwies analog auf `k_anonymize_client` — die Analogie trägt nicht, denn die K-Anon-Primitive lässt **beide** Felder stehen (sie braucht sie für die Äquivalenzklasse), während der Hard-Pfad gar keine k-Zusicherung gibt und deshalb auch keines von beiden braucht.
-
-### Entscheidung: Monat, nicht Tag
-
-Abgewogen wurden Tages- und Monatsgenauigkeit.
-
-- **Utility:** Die Auswertung aggregiert auf Monatsebene (`TruncMonth`). Der Informationsverlust des Monatsbuckets ist dort **null** — die Monatszahlen sind vor und nach der Anonymisierung identisch (gepinnt in `test_tombstone_timestamp_generalization.py::TestMonthlyAggregateUnchanged`).
-- **Schutz:** Ein Tagesbucket ließe pro Person weiterhin eine Sequenz von Kalendertagen stehen — bei mehreren Ereignissen ein nach wie vor stark unterscheidendes Muster. Der Monatsbucket kollabiert diese Sequenz auf die Monatszählung.
-
-Der Monatsbucket ist damit die Wahl, die den Schutz erhöht, ohne Utility zu kosten.
-
-**Bucket-Grenze im lokalen Kalender.** Generalisiert wird gegen `TIME_ZONE` (`Europe/Berlin`), nicht gegen UTC. Ein Ereignis am 1. März um 00:30 Ortszeit liegt in UTC noch im Februar; ein UTC-Bucket schöbe es in den Vormonat und verfälschte genau die Monatsstatistik, deren Erhalt die Abwägung trägt.
-
-**Beide Einstiege.** Der Helfer `_generalize_event_timestamps()` läuft im Hard-Pfad (`anonymize_client`, und damit auch im nächtlichen Trash-Expiry-Lauf und in „Jetzt endgültig anonymisieren") **und** in der K-Anon-Bridge. Für die Bridge gibt es hier — anders als bei `age_cluster`/`contact_stage` — keinen Ausnahmegrund: die k-Anonymität ruht auf den beiden niedrigdimensionalen Quasi-Identifikatoren, nicht auf der Timeline. Der ableitungsbasierte Paritäts-Guard (`TestKAnonBridgeRedactionParity`) erzwingt das strukturell.
-
-**Transparenz in der Auskunft.** Der Art.-15-Export weist die Generalisierung aus (`event_timestamps_generalized` im JSON, eigene Zeile im PDF). Ohne diesen Hinweis läse sich die Auskunft, als hätten sämtliche Kontakte am Monatsersten um Mitternacht stattgefunden — eine unzutreffende Aussage über den eigenen Hilfeverlauf.
-
-### Verbleibendes Restrisiko
-
-- **Die Monatszählung selbst bleibt ein Merkmal.** Wer weiß, dass eine bestimmte Person im Mai 2026 genau sieben Kontakte eines bestimmten Dokumentationstyps hatte, kann einen Tombstone mit exakt diesem Profil weiterhin herausgreifen. Der Monatsbucket senkt die Dimensionalität deutlich, er beseitigt sie nicht. Ein weitergehender Schritt (Zeitachse ganz entfernen, Ereigniszahlen gruppieren) wurde verworfen, weil er die Monatsstatistik zerstört — genau den Zweck, für den die Zeile überhaupt stehen bleibt.
-- **Nachbarspalten bleiben unangetastet.** `EventHistory.changed_at` und die Zeitstempel des Aktivitäts-Feeds tragen weiterhin exakte Zeitpunkte; ihr Inhalt ist redigiert, ihre Zeitachse nicht. Sie sind gegenüber `occurred_at` das schwächere Signal (Bearbeitungs-, nicht Kontaktzeitpunkt), aber kein Nullsignal.
-- **Backups.** Sicherungsstände, die vor der Anonymisierung entstanden sind, tragen die exakten Zeitpunkte bis zum Ablauf der Backup-Rotation weiter — dieselbe Grenze wie bei jeder anderen Redaktion (§ Medien-Backups).
-
-### Re-Evaluierungs-Trigger
-
-Diese Bewertung ist an die heutige Auswertungs-Granularität gebunden und **neu zu bewerten**, sobald einer dieser Punkte eintritt (Muster #1935):
-
-1. **Die Statistik wird feiner als monatlich.** Ein Wochen-, Tages- oder Uhrzeit-Bericht ließe sich aus generalisierten Tombstones nicht mehr bilden — dann steht die Abwägung „Utility gegen Single-out" neu an, und der Monatsbucket darf **nicht** stillschweigend gelockert werden, um den Bericht zu ermöglichen.
-2. **Ein Hard-Delete-Pfad für `Event`-Zeilen entsteht.** Werden Tombstone-Zeilen künftig physisch entfernt, ist die Generalisierung für diese Zeilen gegenstandslos — sie bliebe aber für alle noch nicht entfernten nötig.
-3. **Ein neuer Zeitstempel wird an der `Event`-Zeile aufbewahrt** (etwa ein fachlicher „gültig ab"-Wert). Er wäre ein neuer Kanal derselben Timeline und müsste in `_generalize_event_timestamps()` mitlaufen.
-4. **Die k-Anonymitäts-Äquivalenzklasse wird erweitert.** Kämen weitere Quasi-Identifikatoren hinzu, ist erneut zu prüfen, welche davon der Hard-Pfad zerstören muss und welche die Bridge für ihre Zusicherung braucht — die #2047 aufgelöste Asymmetrie darf nicht in neuer Form zurückkehren.
 
 ## Offline-Bundles nach Anonymisierung: Revoke-Liste + 48-h-TTL als letzte Linie (Issue #1760)
 
@@ -437,10 +382,10 @@ Drei Design-Entscheidungen mit Sicherheitsbezug:
 1. **Widerruf läuft vor dem Replay — als *best effort*, nicht als Sperre.** Er steht als erster Schritt der Sync-Sequenz *vor* `replayQueue`/`replayAllModifiedEvents`; läge er danach, spielte der Replay die gequeuten Schreibzugriffe zu der gerade anonymisierten Person garantiert noch aus. **Er ist aber keine Vorbedingung:** schlägt der Abruf fehl (kein Netz, `429`, Login-Redirect), wird der Fehler geschluckt und der Replay läuft trotzdem — sonst blockierte ein Netzproblem die gesamte Offline-Synchronisation. Die Reihenfolge verkleinert das Fenster, sie schließt es nicht. **Harte Grenze bleiben die serverseitige Anonymisierung und die Bundle-TTL**, nicht dieser Kanal (siehe Restrisiko unten).
 2. **Ungesyncte Arbeit wird verworfen, nicht als Dead-Letter erhalten** (fail-safe). Ein Dead-Letter behielte den entschlüsselbaren Klartext genau dort liegen, wo der Widerruf ihn entfernen soll; ein Replay träfe serverseitig ohnehin auf einen anonymisierten Datensatz. Es ist derselbe Löschgrund wie der Sicherheits-Purge bei Rechteentzug (F-10, #1110) und nutzt dieselbe Primitive (`removeOfflineClient(pk, {force: true})`) — kein zweiter Purge-Pfad. Betroffen sind Bundle-Spiegel, ungesyncte Ereignisse, Queue-Einträge und Entwürfe, **die die Personen-UUID in URL oder Payload tragen — oder die lokal einer widerrufenen Person zugeordnet werden können** (#1774). Das ist die Reichweite von `_mentionsRevoked`; sie ist keine Zusicherung über jeden Bestand mit Personenbezug, deckt seit #1774 aber die beiden zuvor hier ausgewiesenen realen Lücken ab:
 
- - **Gequeuter `POST /events/<event-uuid>/edit/`** (analog `/workitems/<uuid>/edit/`): Die URL trägt die Ereignis-/Aufgaben-, nicht die Personen-UUID, und der Body enthält nur CSRF, `expected_updated_at` und Feld-Slugs. `applyClientRevocations` löst die Zuordnung deshalb über die lokale `events`-Tabelle auf (`pk`/`clientPk` liegen dort als Plaintext-Indexfelder — kein Session-Key nötig) und nimmt die so gefundenen Record-UUIDs als zweiten Suchbegriff-Satz in den Queue-/Entwurfs-Purge auf. **Reihenfolge ist hier sicherheitskritisch:** die Auflösung läuft *vor* dem Bundle-Purge, denn `removeOfflineClient(pk, {force: true})` löscht genau die `events`-Zeilen, die die Zuordnung tragen. Ein gequeuter `POST /partials/workitems/<uuid>/status/` trägt in URL und Body ebenfalls keine Personen-UUID und wird über denselben Kanal **nur** erfasst, wenn die Aufgabe bereits einen `events`-Eintrag hat (`data.kind === "workitem"`) — also bereits einmal offline voll editiert wurde. Eine reine Bundle-Aufgabe, die nie offline editiert, sondern nur im Status umgeschaltet wurde, hat keine solche Zeile; für sie greift die Rest-Grenze unten.
- - **Autosave-Entwurf von `/events/new/`:** Der Storage-Key bildet weiterhin nur `user` + `pathname` — der Personenbezug steckt jetzt im *verschlüsselten Umschlag*: ein Formularfeld weist sich per `data-autosave-person` aus (das versteckte, Alpine-gebundene `client`-Feld), und `autosave.js` schreibt dessen Wert unter dem reservierten Schlüssel `__personPk` mit. Bewusst nicht als Plaintext-Row-Feld — das wären unverschlüsselte PII-Verknüpfungsmetadaten (dieselbe Begründung wie der `occurredAt`-Ausbau in #1476/R9). Der Bezug ist monoton: eine neue Auswahl überschreibt ihn, ein Wiederherstellen (bei dem die Alpine-Auswahl zurückgesetzt ist) verliert ihn nicht. Ein Entwurf **ohne** gewählte Person bleibt stehen — er hat keinen Personenbezug, den der Widerruf treffen könnte.
+   - **Gequeuter `POST /events/<event-uuid>/edit/`** (analog `/workitems/<uuid>/edit/`): Die URL trägt die Ereignis-/Aufgaben-, nicht die Personen-UUID, und der Body enthält nur CSRF, `expected_updated_at` und Feld-Slugs. `applyClientRevocations` löst die Zuordnung deshalb über die lokale `events`-Tabelle auf (`pk`/`clientPk` liegen dort als Plaintext-Indexfelder — kein Session-Key nötig) und nimmt die so gefundenen Record-UUIDs als zweiten Suchbegriff-Satz in den Queue-/Entwurfs-Purge auf. **Reihenfolge ist hier sicherheitskritisch:** die Auflösung läuft *vor* dem Bundle-Purge, denn `removeOfflineClient(pk, {force: true})` löscht genau die `events`-Zeilen, die die Zuordnung tragen. Ein gequeuter `POST /partials/workitems/<uuid>/status/` trägt in URL und Body ebenfalls keine Personen-UUID und wird über denselben Kanal **nur** erfasst, wenn die Aufgabe bereits einen `events`-Eintrag hat (`data.kind === "workitem"`) — also bereits einmal offline voll editiert wurde. Eine reine Bundle-Aufgabe, die nie offline editiert, sondern nur im Status umgeschaltet wurde, hat keine solche Zeile; für sie greift die Rest-Grenze unten.
+   - **Autosave-Entwurf von `/events/new/`:** Der Storage-Key bildet weiterhin nur `user` + `pathname` — der Personenbezug steckt jetzt im *verschlüsselten Umschlag*: ein Formularfeld weist sich per `data-autosave-person` aus (das versteckte, Alpine-gebundene `client`-Feld), und `autosave.js` schreibt dessen Wert unter dem reservierten Schlüssel `__personPk` mit. Bewusst nicht als Plaintext-Row-Feld — das wären unverschlüsselte PII-Verknüpfungsmetadaten (dieselbe Begründung wie der `occurredAt`-Ausbau in #1476/R9). Der Bezug ist monoton: eine neue Auswahl überschreibt ihn, ein Wiederherstellen (bei dem die Alpine-Auswahl zurückgesetzt ist) verliert ihn nicht. Ein Entwurf **ohne** gewählte Person bleibt stehen — er hat keinen Personenbezug, den der Widerruf treffen könnte.
 
- **Verbleibende Rest-Grenze** (präzisiert, siehe auch Restrisiko unten): ein gequeuter Edit-POST, dessen Ereignis lokal **nicht (mehr)** in der `events`-Tabelle steht *und* dessen Payload die Personen-UUID nicht trägt, bleibt bewusst liegen — ohne jeden Personenbezug wäre sein Verwurf ein Breitband-Löschen fremder Arbeit. Dieselbe Grenze gilt für einen `WORKITEM_STATUS`-POST einer reinen Bundle-Aufgabe (nie offline editiert, also ohne `events`-Zeile). Ebenso ein vor #1774 geschriebener Autosave-Entwurf, solange ihn kein Autosave-Tick neu geschrieben hat (Alt-Format wird tolerant gelesen, es gibt keine Migration; spätestens die 48-h-Draft-TTL räumt ihn ab). Für alle drei Fälle ist die serverseitige Ablehnung von Schreibzugriffen auf anonymisierte Personen (#1771) die zweite Linie.
+   **Verbleibende Rest-Grenze** (präzisiert, siehe auch Restrisiko unten): ein gequeuter Edit-POST, dessen Ereignis lokal **nicht (mehr)** in der `events`-Tabelle steht *und* dessen Payload die Personen-UUID nicht trägt, bleibt bewusst liegen — ohne jeden Personenbezug wäre sein Verwurf ein Breitband-Löschen fremder Arbeit. Dieselbe Grenze gilt für einen `WORKITEM_STATUS`-POST einer reinen Bundle-Aufgabe (nie offline editiert, also ohne `events`-Zeile). Ebenso ein vor #1774 geschriebener Autosave-Entwurf, solange ihn kein Autosave-Tick neu geschrieben hat (Alt-Format wird tolerant gelesen, es gibt keine Migration; spätestens die 48-h-Draft-TTL räumt ihn ab). Für alle drei Fälle ist die serverseitige Ablehnung von Schreibzugriffen auf anonymisierte Personen (#1771) die zweite Linie.
 3. **Der Abruf wird nicht auditiert.** Die Antwort ist PII-frei (opake UUIDs bereits anonymisierter Personen) und wird bei jedem Sync gepollt — ein Eintrag je Abruf würde das append-only Log fluten, ohne einen Datenabfluss zu dokumentieren. Dieselbe Abwägung wie beim audit-freien 304-Zweig der Bundle-Endpunkte. Die Widerrufs-*Erzeugung* hängt am bestehenden `CLIENT_ANONYMIZED`- bzw. Retention-Entscheidungs-Audit.
 
 **Aufbewahrung der Widerrufe:** `OFFLINE_REVOCATION_RETENTION_SECONDS` = 2 × Bundle-TTL (96 h), danach Prune im nächtlichen `enforce_retention`-Lauf. Begründung: ein Bundle ist höchstens 48 h gültig, ein Gerät kann aber exakt am Fristende wieder online gehen und muss den Eintrag dann noch sehen — der doppelte Abstand deckt diese Überlappung plus Uhren-Drift ab, ohne die Liste unbegrenzt wachsen zu lassen. Der Eintrag ist zwar klartextfrei, bleibt aber ein pseudonymer Bezug auf eine bereits gelöschte Person und darf nicht länger liegen, als er einen Zweck hat (Art. 5 Abs. 1 lit. e).
@@ -540,33 +485,33 @@ Aufwand L, post-v1.0** ein:
 
 **Wenn jetzt durchgezogen:**
 - Trigram-Fuzzy-Search bricht — entweder UX-Verlust oder HMAC-Bucket-
- Fuzzy mit n-gram HMACs (deutlich teurere Implementierung)
+  Fuzzy mit n-gram HMACs (deutlich teurere Implementierung)
 - Sortierung `ordering=["pseudonym"]` ([client.py:82](../src/core/models/client.py#L82))
- liefert auf encrypted Bytes keine sinnvolle Reihenfolge
+  liefert auf encrypted Bytes keine sinnvolle Reihenfolge
 - `unique_facility_pseudonym`-Constraint braucht HMAC-basierten Unique-Index
 - Sämtliche `pseudonym__icontains`-Filter quer durch Views/Forms/Tests
- müssen umgestellt werden
+  müssen umgestellt werden
 
 **Aktueller Schutz:**
 - Backup ist AES-256-CBC + PBKDF2-verschlüsselt mit `BACKUP_ENCRYPTION_KEY`
- ([`backup.sh`](../scripts/ops/backup.sh)) — Klartext-Pseudonyme nur bei
- Schlüssel-Kompromittierung exponiert
+  ([`backup.sh`](../scripts/ops/backup.sh)) — Klartext-Pseudonyme nur bei
+  Schlüssel-Kompromittierung exponiert
 - Off-Site-Hook (Refs #738)
- empfiehlt Object-Lock gegen Ransomware
+  empfiehlt Object-Lock gegen Ransomware
 - RLS + Role-Mixin verhindern Pseudonym-Leak via App-Schicht
 - Pseudonyme sind bereits Decoy-Namen, nicht Klarnamen — die Re-
- Identifikations-Hürde ist UX-abhängig (Mitarbeiter müsste den Namen
- in der Einrichtung wiedererkennen)
+  Identifikations-Hürde ist UX-abhängig (Mitarbeiter müsste den Namen
+  in der Einrichtung wiedererkennen)
 
 ### Trigger für Re-Evaluation (dann Item 51 angehen)
 
 - v1.1-Release-Planung erreicht — Item 51 ist explizit „post-v1.0"
 - Externe Compliance-Auditierung fordert Encryption-at-Rest auch für
- Pseudonyme (Art.-9-Bias-Argument verschärft sich)
+  Pseudonyme (Art.-9-Bias-Argument verschärft sich)
 - Backup-Storage wechselt zu einem System ohne starkes
- Object-Lock/Encryption-at-Rest
+  Object-Lock/Encryption-at-Rest
 - Realistisches Backup-Diebstahl-Szenario in einer Pilot-Einrichtung
- (Sicherheits-Vorfall reicht)
+  (Sicherheits-Vorfall reicht)
 
 ### Verifikation
 
@@ -788,8 +733,7 @@ begründet ausgenommen wird. Genau diese Drift hatte den Befund erzeugt: die Bri
 `DeletionRequest.reason` und `Activity.summary` (die Spalte wurde mit #1972 entfernt). Zwei Ausnahmen sind bewusst hinterlegt (`_redact_live_events` — die
 Eintrittsbedingung garantiert `active_events == 0`; `_redact_client_identity` — würde
 `age_cluster` löschen und damit den Quasi-Identifikator zerstören, auf dem die k-Anonymität
-beruht). Aufbewahrungssperren (Legal Hold — nicht zu verwechseln mit dem Art.-18-Sperrvermerk,
-siehe § Restidentifizierbarkeit der Tombstone-Timeline) blockieren seit #1756
+beruht). Sperrvermerke blockieren seit #1756
 **beide** Bulk-Einstiege; Begründung und Bucket-Entscheid in
 [ADR-023 Update 2026-08-03](adr/023-k-anonymization-statistik.md).
 
@@ -905,20 +849,20 @@ Berichtszeitraum**: `get_statistics` liefert `by_age_cluster[].persons` und
 bestehen — sie ist in Sonderfällen die schärfere Bedingung. Vier Eigenschaften tragen das Ergebnis:
 
 * **Zeitraum-skopiert und fail-safe.** `count_clients_in_bucket` bleibt wie angekündigt unbenutzt (kein
- Zeitraumfilter ⇒ fail-open); es behält seinen Verwender im Retention-Pfad und trägt jetzt eine
- Warnung. Der Berichtspfad zählt ausschließlich über die Ereignis-Grundgesamtheit des Zeitraums.
+  Zeitraumfilter ⇒ fail-open); es behält seinen Verwender im Retention-Pfad und trägt jetzt eine
+  Warnung. Der Berichtspfad zählt ausschließlich über die Ereignis-Grundgesamtheit des Zeitraums.
 * **Die Personenzahl verlässt die Suppression nie.** `_suppress_small` entfernt `persons` aus **jeder**
- Ausgabezeile — sichtbar wie unterdrückt. Bliebe sie stehen, wäre eine Zelle „27+: 30 Ereignisse,
- 6 Personen" selbst eine publizierte Kleinstfallzahl, die nie durch eine Regel gelaufen ist.
+  Ausgabezeile — sichtbar wie unterdrückt. Bliebe sie stehen, wäre eine Zelle „27+: 30 Ereignisse,
+  6 Personen" selbst eine publizierte Kleinstfallzahl, die nie durch eine Regel gelaufen ist.
 * **Unbekannt ⇒ unterdrückt.** Alt-Snapshots ohne `persons` und Monate, deren historische Personenzahl
- nach Ablauf der Löschfristen nicht mehr rekonstruierbar ist, tragen `None`. `require_person_counts`
- normalisiert jede `by_age_cluster`-Liste auf diesen Zustand, damit keine Zeile still auf das alte,
- ereignisbasierte Kriterium zurückfällt; die Backfill-Migration `0128` rät nicht, sondern markiert.
- Im Merge über Monatssegmente wird die Personenzahl **maximiert, nie summiert** (das Maximum ist eine
- gültige Untergrenze der wahren DISTINCT-Zahl; eine Summe wäre K4b in klein).
+  nach Ablauf der Löschfristen nicht mehr rekonstruierbar ist, tragen `None`. `require_person_counts`
+  normalisiert jede `by_age_cluster`-Liste auf diesen Zustand, damit keine Zeile still auf das alte,
+  ereignisbasierte Kriterium zurückfällt; die Backfill-Migration `0128` rät nicht, sondern markiert.
+  Im Merge über Monatssegmente wird die Personenzahl **maximiert, nie summiert** (das Maximum ist eine
+  gültige Untergrenze der wahren DISTINCT-Zahl; eine Summe wäre K4b in klein).
 * **Der Tabellen-Drop aus (a) bleibt.** Er ist keine Redundanz: das Zellkriterium nullt nur Werte, und
- eine genullte Alterszeile ist selbst noch die Aussage „in dieser Altersgruppe gibt es mindestens ein
- Ereignis". Nur `_drop_person_derived_breakdowns` entfernt den Key.
+  eine genullte Alterszeile ist selbst noch die Aussage „in dieser Altersgruppe gibt es mindestens ein
+  Ereignis". Nur `_drop_person_derived_breakdowns` entfernt den Key.
 
 Test-gepinnt in `test_external_report_service.py::TestPersonenbasiertesZellkriterium` und
 `::TestPersonenkriteriumInDenWrappern`, `test_statistics.py::TestPersonenzaehlungImZeitraum`,
@@ -950,27 +894,27 @@ mit exakt einer Person** sind zeilenscharf bestimmt. Die frühere Fassung dieses
 in derselben Umsetzungswelle wie K1/K2):
 
 1. **total-Doktrin auf die Personen-Randsumme ausgedehnt:** `unique_clients` **fällt**, sobald
- mindestens eine `by_age_cluster`-Zeile **personenbedingt** unterdrückt ist — analog zur
- bestehenden Randsummen-Regel R14 (`total < k` ⇒ Randsumme selbst unterdrücken) und zur
- Sekundär-Suppression A6.1. Ohne die publizierte Randsumme ist die Partition nicht mehr
- auflösbar. Umgesetzt als `drop_person_margin_on_person_suppression` in
- [`external_report.py`](../src/core/services/dashboard/external_report.py), aufgerufen von allen
- Wrappern; test-gepinnt in
- `test_external_report_service.py::TestPersonenkriteriumInDenWrappern::test_externer_bericht_unterdrueckt_zelle_einer_einzelnen_person`.
- Die Regel ist bewusst **schärfer** als der Fixpunkt-Guard: dessen Kriterium ist der exakte Pin,
- während hier schon die *Einengung* auf ein k-schmales Intervall genügt — in der Konstruktion oben
- hat jede Zelle noch zwei mögliche Werte (1 oder 2), und trotzdem steht fest, dass **jede**
- Altersgruppe weniger als *k* Personen umfasst. Der Guard ist die zweite Linie, nicht der Ersatz.
+   mindestens eine `by_age_cluster`-Zeile **personenbedingt** unterdrückt ist — analog zur
+   bestehenden Randsummen-Regel R14 (`total < k` ⇒ Randsumme selbst unterdrücken) und zur
+   Sekundär-Suppression A6.1. Ohne die publizierte Randsumme ist die Partition nicht mehr
+   auflösbar. Umgesetzt als `drop_person_margin_on_person_suppression` in
+   [`external_report.py`](../src/core/services/dashboard/external_report.py), aufgerufen von allen
+   Wrappern; test-gepinnt in
+   `test_external_report_service.py::TestPersonenkriteriumInDenWrappern::test_externer_bericht_unterdrueckt_zelle_einer_einzelnen_person`.
+   Die Regel ist bewusst **schärfer** als der Fixpunkt-Guard: dessen Kriterium ist der exakte Pin,
+   während hier schon die *Einengung* auf ein k-schmales Intervall genügt — in der Konstruktion oben
+   hat jede Zelle noch zwei mögliche Werte (1 oder 2), und trotzdem steht fest, dass **jede**
+   Altersgruppe weniger als *k* Personen umfasst. Der Guard ist die zweite Linie, nicht der Ersatz.
 2. **K1-Fixpunkt-Guard erweitert:** Die Identität Σ `persons` = `unique_clients` ist Teil seines
- Inferenzmodells — `apply_residual_guard` führt sie als eigene Partition (`by_age_cluster:persons`)
- mit, deren Zellen nie publiziert werden und deren einzige Eskalation deshalb das Fallenlassen von
- `unique_clients` ist. Die a-priori-Schranken folgen aus der Zeilen-Existenz (jede gelistete
- Altersgruppe trägt ≥ 1 Person) und dem Unterdrückungsgrund (personenbedingt ⇒ ≤ *k*−1, sonst ≥ *k*).
+   Inferenzmodells — `apply_residual_guard` führt sie als eigene Partition (`by_age_cluster:persons`)
+   mit, deren Zellen nie publiziert werden und deren einzige Eskalation deshalb das Fallenlassen von
+   `unique_clients` ist. Die a-priori-Schranken folgen aus der Zeilen-Existenz (jede gelistete
+   Altersgruppe trägt ≥ 1 Person) und dem Unterdrückungsgrund (personenbedingt ⇒ ≤ *k*−1, sonst ≥ *k*).
 3. **Restkanal Zeilen-Existenz** (bei der Übergabe ausgewiesen): dass ein Artefakt auch bei
- unterdrückten Zellen publiziert, **welche** Altersgruppen-Labels vorkommen, ist als Untergrenze
- `lo = 1` in beiden Inferenzstufen modelliert — bei Aufschlüsselungen mit **festen** Schlüsseln
- (`by_contact_stage`) dagegen `lo = 0`, denn dort wird auch eine Nullzeile emittiert und die bloße
- Existenz sagt nichts.
+   unterdrückten Zellen publiziert, **welche** Altersgruppen-Labels vorkommen, ist als Untergrenze
+   `lo = 1` in beiden Inferenzstufen modelliert — bei Aufschlüsselungen mit **festen** Schlüsseln
+   (`by_contact_stage`) dagegen `lo = 0`, denn dort wird auch eine Nullzeile emittiert und die bloße
+   Existenz sagt nichts.
 
 #### K5 — Zeilensortierung nach Anzahl als Rangkanal
 
@@ -1128,29 +1072,29 @@ statt der Zellenzahl: solange eine unterdrückte Zelle **exakt** zurückrechenba
 eine Brute-Force-Aufzählung nachgeprüft). Sechs Eigenschaften tragen das Ergebnis:
 
 * **Schwelle „Spanne ≥ 2" statt „≥ k−1".** Die strengere Variante unterdrückt in 13,5 % der Welten
- mehr Zellen, ohne im geprüften Raum weniger Leaks zu hinterlassen. „Spanne ≥ 2" heißt genau: kein
- exakter Pin.
+  mehr Zellen, ohne im geprüften Raum weniger Leaks zu hinterlassen. „Spanne ≥ 2" heißt genau: kein
+  exakter Pin.
 * **Es fällt die kleinste sichtbare Zelle** (User-Entscheid, Begründung und die daran gekoppelte
- Modellschranke im eigenen Unterabschnitt unten). Die Zusicherung „größte bleibt sichtbar" des
- Bestandstests `test_list_single_suppression_triggers_secondary` bleibt damit gültig.
+  Modellschranke im eigenen Unterabschnitt unten). Die Zusicherung „größte bleibt sichtbar" des
+  Bestandstests `test_list_single_suppression_triggers_secondary` bleibt damit gültig.
 * **Eine Funktion statt zweier Kopien.** `_suppress_stage_dict` trug eine zweite Fassung derselben
- Heuristik; sie ist ersatzlos entfallen und ruft dasselbe Audit. Der Architektur-Guard hält das offen
- nachprüfbar.
+  Heuristik; sie ist ersatzlos entfallen und ruft dasselbe Audit. Der Architektur-Guard hält das offen
+  nachprüfbar.
 * **Die alte Guard-Annahme ist ersetzt.** Nach K0-b gilt „unterdrückt ⇒ Wert ≤ *k*−1" **nicht** mehr
- (eine Zelle kann personenbedingt bei beliebig großer Ereigniszahl fallen). Das Audit bildet die
- tatsächliche Semantik ab: Wert < *k* ⇒ [1, *k*−1]; personenbedingt gefallen ⇒ [*k*, ∞);
- Sekundär-Opfer ⇒ [*k*, kleinste verbliebene sichtbare Zelle] (Bedingung X, s. u.).
+  (eine Zelle kann personenbedingt bei beliebig großer Ereigniszahl fallen). Das Audit bildet die
+  tatsächliche Semantik ab: Wert < *k* ⇒ [1, *k*−1]; personenbedingt gefallen ⇒ [*k*, ∞);
+  Sekundär-Opfer ⇒ [*k*, kleinste verbliebene sichtbare Zelle] (Bedingung X, s. u.).
 * **Randsumme ist ein Pflicht-Keyword.** Jede Aufrufstelle sagt, ob es eine publizierte Randsumme
- gibt, an der das Audit rechnen kann — der von der Analyse benannte **Restfall** (unterdrückte
- Randsumme ⇒ Audit läuft ins Leere) ist damit kein Sonderpfad, sondern der Normalfall
- `margin=None`. Dasselbe gilt für `by_age_cluster`: dort publiziert kein Artefakt eine
- Ereignis-Randsumme (siehe „Geprüft und nicht tragfähig"), das Audit läuft dort also nicht — der
- tragfähige Kanal dieser Tabelle ist die **Personen**-Randsumme (K0-b-Auflage 1).
+  gibt, an der das Audit rechnen kann — der von der Analyse benannte **Restfall** (unterdrückte
+  Randsumme ⇒ Audit läuft ins Leere) ist damit kein Sonderpfad, sondern der Normalfall
+  `margin=None`. Dasselbe gilt für `by_age_cluster`: dort publiziert kein Artefakt eine
+  Ereignis-Randsumme (siehe „Geprüft und nicht tragfähig"), das Audit läuft dort also nicht — der
+  tragfähige Kanal dieser Tabelle ist die **Personen**-Randsumme (K0-b-Auflage 1).
 * **Drei begründete Ausnahmen vom Befund-Kriterium** (in `disclosure.findings` dokumentiert): leeres
- Intervall (die Aufschlüsselung partitioniert ihre Randsumme nicht exakt — bei konsistenten Daten
- unmöglich), Pin auf 0 (ein leerer Bucket schützt niemanden) und Pin auf ≥ *k* **ohne**
- Personenkriterium (kein Kleinstwert, keine Personenlücke). Ohne die letzte Ausnahme würde der Guard
- ein Sekundär-Opfer mit 20 Ereignissen endlos nachunterdrücken.
+  Intervall (die Aufschlüsselung partitioniert ihre Randsumme nicht exakt — bei konsistenten Daten
+  unmöglich), Pin auf 0 (ein leerer Bucket schützt niemanden) und Pin auf ≥ *k* **ohne**
+  Personenkriterium (kein Kleinstwert, keine Personenlücke). Ohne die letzte Ausnahme würde der Guard
+  ein Sekundär-Opfer mit 20 Ereignissen endlos nachunterdrücken.
 
 Test-gepinnt in `test_external_report_service.py::TestSecondarySuppression`,
 `test_disclosure_inference.py` und `test_reporting_disclosure_regression.py`.
@@ -1189,11 +1133,11 @@ zwei Angreifermodelle, von denen mindestens eines nicht modelliert ist.
 Welcher Zweitschlüssel das konkret ist, hängt am Aufrufer — wertunabhängig sind beide:
 
 * **Zeilenpfad und Fixpunkt-Guard** (`_suppress_small` → `_order_tiebreak`) nehmen die kanonische
- K5-Ordnung; bei Wertgleichheit fällt die kanonisch **erste** Zelle.
+  K5-Ordnung; bei Wertgleichheit fällt die kanonisch **erste** Zelle.
 * **Stufenpfad** (`_suppress_stage_dict`, `by_contact_stage`) nimmt `(-index,)` über die **feste**
- Schlüsselordnung des Modells; bei Wertgleichheit fällt dort also die **letzte** Stufe. Die
- K5-Ordnung kommt hier gar nicht zum Einsatz — die Eingabeordnung ist selbst schon wertunabhängig
- (`ORDER_INPUT`), es gibt keinen Rang, den sie verraten könnte.
+  Schlüsselordnung des Modells; bei Wertgleichheit fällt dort also die **letzte** Stufe. Die
+  K5-Ordnung kommt hier gar nicht zum Einsatz — die Eingabeordnung ist selbst schon wertunabhängig
+  (`ORDER_INPUT`), es gibt keinen Rang, den sie verraten könnte.
 
 #### K1 — Struktur-Kollaps / Residuum bei publizierter Randsumme
 
@@ -1235,12 +1179,12 @@ läuft als **letzter** Schritt jeder Artefakt-Erzeugung, führt die Empfänger-I
 Sicht selbst aus und eskaliert deterministisch, bis kein Befund mehr bleibt:
 
 1. die **kleinste** sichtbare Zelle der betroffenen Aufschlüsselung fällt — dieselbe Opferregel und
- derselbe Zweitschlüssel wie im tabellenlokalen Audit (Auswahl bei Wertgleichheit über die
- kanonische K5-Ordnung, nie über die Eingabeordnung),
+   derselbe Zweitschlüssel wie im tabellenlokalen Audit (Auswahl bei Wertgleichheit über die
+   kanonische K5-Ordnung, nie über die Eingabeordnung),
 2. ist keine sichtbare Zelle mehr da, fällt die **Randsumme** — ohne sie gibt es keine Gleichung,
 3. hilft auch das nicht oder ist die harte Iterationsgrenze erreicht, fällt fail-safe die **ganze
- Aufschlüsselung** (Key weg, nicht nur Werte auf `None` — eine genullte Zeile wäre selbst noch die
- Aussage „hier gibt es mindestens einen Fall").
+   Aufschlüsselung** (Key weg, nicht nur Werte auf `None` — eine genullte Zeile wäre selbst noch die
+   Aussage „hier gibt es mindestens einen Fall").
 
 **Nichtirreführung auch im Fail-safe:** Fällt eine Aufschlüsselung ganz, weisen die Templates das
 **aus** („Angaben nach Dokumentationstyp unterdrückt (k-Anonymität).") statt in ihren
@@ -1269,14 +1213,14 @@ Drei Eigenschaften unterscheiden ihn vom tabellenlokalen Audit (K2) und sind der
 beide braucht:
 
 * **Er rechnet über Tabellen hinweg.** `by_document_type` und `by_contact_stage` teilen sich
- `total_contacts`; und eine *vollständig sichtbare* Aufschlüsselung stellt eine unterdrückte
- Randsumme wieder her (ihre Summe **ist** die Randsumme) — ohne diesen Schritt hielte der Guard das
- Fallenlassen der Randsumme für wirksam, während der Empfänger sie nebenan addiert.
+  `total_contacts`; und eine *vollständig sichtbare* Aufschlüsselung stellt eine unterdrückte
+  Randsumme wieder her (ihre Summe **ist** die Randsumme) — ohne diesen Schritt hielte der Guard das
+  Fallenlassen der Randsumme für wirksam, während der Empfänger sie nebenan addiert.
 * **Er kennt die Personen-Randsumme.** Σ `persons`(`by_age_cluster`) = `unique_clients` ist eine
- Partition wie jede andere (Auflage 2 aus K0-b).
+  Partition wie jede andere (Auflage 2 aus K0-b).
 * **Er rechnet nur mit publizierten Größen.** Innerhalb der Suppression ist die Herkunft jeder
- Unterdrückung bekannt und die Schranken sind entsprechend eng; hier zählt, was ein Empfänger sicher
- weiß, der Primär- und Sekundär-Unterdrückung nicht auseinanderhalten kann.
+  Unterdrückung bekannt und die Schranken sind entsprechend eng; hier zählt, was ein Empfänger sicher
+  weiß, der Primär- und Sekundär-Unterdrückung nicht auseinanderhalten kann.
 
 **Die Kopplungs-Warnung ist eingehalten:** K5 ist seit
 #1767 ausgeliefert, der Guard kommt danach.
@@ -1336,29 +1280,29 @@ die Zeile „Ohne Personenbezug" an `by_age_cluster` an — in `build_external_r
 sind einzeln verankert:
 
 1. **Immer emittiert, auch bei W = 0.** Datenunabhängige Existenz; W = 0 läuft als reguläre
- Kleinstzelle in die Suppression. Erschiene die Zeile nur bei W > 0, wäre ihre bloße Existenz die
- Aussage „W ≥ 1" — dieselbe datenabhängige Verzweigung, die K6 im Vollständigkeitsblock beseitigt hat.
+   Kleinstzelle in die Suppression. Erschiene die Zeile nur bei W > 0, wäre ihre bloße Existenz die
+   Aussage „W ≥ 1" — dieselbe datenabhängige Verzweigung, die K6 im Vollständigkeitsblock beseitigt hat.
 2. **Synthetisiert statt gespeichert.** Die Zeile entsteht **an der Artefaktgrenze** aus
- `total_contacts` − Σ und wird nie aus einem Snapshot übernommen. Damit ist die
- Snapshot-Merge-Auflage stärker erfüllt als gefordert: es gibt keinen Alt-/Neu-Snapshot-Split, weil
- kein Snapshot die Zeile je trägt (`_merge_stats` summiert `total_contacts` und die Alterszeilen
- ohnehin konsistent, die Differenz über den gemergten Gesamtzeitraum ist exakt). `with_no_person_row`
- ist idempotent — ein künftiger Lesepfad, der die Zeile mitbrächte, zählte W sonst doppelt.
+   `total_contacts` − Σ und wird nie aus einem Snapshot übernommen. Damit ist die
+   Snapshot-Merge-Auflage stärker erfüllt als gefordert: es gibt keinen Alt-/Neu-Snapshot-Split, weil
+   kein Snapshot die Zeile je trägt (`_merge_stats` summiert `total_contacts` und die Alterszeilen
+   ohnehin konsistent, die Differenz über den gemergten Gesamtzeitraum ist exakt). `with_no_person_row`
+   ist idempotent — ein künftiger Lesepfad, der die Zeile mitbrächte, zählte W sonst doppelt.
 3. **Die Alterstabelle fällt neu unter K1/K2.** Sie deklariert `margin="total_contacts"` (vorher
- `margin=None`, das Machbarkeits-Audit lief dort gar nicht) und steht mit derselben Randsumme in
- `_EXTERNAL_REPORT_BREAKDOWNS` wie `by_document_type`/`by_contact_stage`.
+   `margin=None`, das Machbarkeits-Audit lief dort gar nicht) und steht mit derselben Randsumme in
+   `_EXTERNAL_REPORT_BREAKDOWNS` wie `by_document_type`/`by_contact_stage`.
 
 Zwei Details, ohne die die Umsetzung fail-open wäre:
 
 * **Die Restzeile trägt kein `persons`.** Ihre Äquivalenzklasse ist keine Personenmenge, sondern die
- Menge der Ereignisse ohne Personen-FK — untereinander nicht verknüpfbar (dieselbe Begründung wie bei
- `persons_by_contact_stage['anonym']`). Sie bleibt damit aus der Personen-Randsumme Σ `persons` =
- `unique_clients` heraus, die sonst still bräche.
+  Menge der Ereignisse ohne Personen-FK — untereinander nicht verknüpfbar (dieselbe Begründung wie bei
+  `persons_by_contact_stage['anonym']`). Sie bleibt damit aus der Personen-Randsumme Σ `persons` =
+  `unique_clients` heraus, die sonst still bräche.
 * **Zeilen-Existenz-Untergrenze je Zelle** (`_row_min_value`): GROUP-BY-Zeilen tragen ≥ 1 Fall, die
- datenunabhängig emittierte Restzeile darf 0 sein. Eine pauschale `lo = 1` machte das Intervallmodell
- **unerfüllbar**, und ein leeres Intervall gilt in `disclosure.findings` als begründete Ausnahme — der
- Guard liefe fail-open, und zwar auch für die **Nachbarzellen**, deren Obergrenze über Σ `lo` der
- übrigen Zellen berechnet wird.
+  datenunabhängig emittierte Restzeile darf 0 sein. Eine pauschale `lo = 1` machte das Intervallmodell
+  **unerfüllbar**, und ein leeres Intervall gilt in `disclosure.findings` als begründete Ausnahme — der
+  Guard liefe fail-open, und zwar auch für die **Nachbarzellen**, deren Obergrenze über Σ `lo` der
+  übrigen Zellen berechnet wird.
 
 **Damit überholt:** der Eintrag unter „Geprüft und nicht tragfähig", `by_age_cluster` publiziere keine
 Ereignis-Randsumme — er hatte genau diese Umsetzung als seinen Auslöser benannt.
@@ -1382,11 +1326,11 @@ ergänzen will, kommt an ihnen nicht vorbei — die **naive** Form ist nachweisl
 gangbare Routen, und beide stehen weiterhin offen:
 
 1. **Umgestellte Randsumme** — `total` zählt alle Ereignisse statt nur der gemappten; die Zeilen
- summieren sich dann wieder exakt auf die publizierte Randsumme. Kosten: ein Produktentscheid über
- die Kernkennzahl „Gesamtkontakte" des Berichts.
+   summieren sich dann wieder exakt auf die publizierte Randsumme. Kosten: ein Produktentscheid über
+   die Kernkennzahl „Gesamtkontakte" des Berichts.
 2. **Teilmengenbewusste Sekundärsuppression** — die Suppression lernt, dass eine Aufschlüsselung ihre
- Randsumme nur *teilweise* partitioniert, und rechnet mit `Σ Zeilen ≤ Randsumme` statt `=`. Kosten:
- ein zweites Inferenzmodell neben dem bestehenden Partitions-Modell in `disclosure.py`.
+   Randsumme nur *teilweise* partitioniert, und rechnet mit `Σ Zeilen ≤ Randsumme` statt `=`. Kosten:
+   ein zweites Inferenzmodell neben dem bestehenden Partitions-Modell in `disclosure.py`.
 
 Nicht gangbar ist allein die **naive** Variante (Zeile bei unveränderter Randsumme): sie erzeugte
 485 von 840 durchgerechneten Kleinzell-Welten als pinnbar (heute 0), weil die Sekundärsuppression
@@ -1425,51 +1369,51 @@ Wissen über bereits herausgegebene Artefakte. Es gibt kein Freigabe-Ledger und 
 feste Zeitraum-Partition; `date_from`/`date_to` sind frei wählbar (nur Spannen-Cap 1096 Tage).
 
 - **K4a — Zeitraum-Differenz.** Alle Aggregate sind über disjunkte Segmente exakt additiv; für A ⊂ B
- gilt zellenweise B − A = (B\A), inklusive aller Zellen, die ein direkter Bericht über B\A
- unterdrücken würde. *Beleg (Regelfall des externen Berichtswesens):* 12 Monats-PDFs + 1 Jahres-PDF
- eine im März unterdrückte Zelle **inklusive Sekundär-Opfer** ergibt sich aus der Jahressumme minus
- den 11 sichtbaren Monatszellen. Verschärfung bei verschachtelten Zeiträumen (Jan–Mai und Jan–Jun,
- Juni = genau ein Ereignis): in **beiden** Artefakten ist keine einzige Zelle unterdrückt, und die
- Konsistenzklassen für den Juni schrumpfen über mehrere Freigaben auf **eine** — effektives k = 1 bei
- nominellem k = 5.
+  gilt zellenweise B − A = (B\A), inklusive aller Zellen, die ein direkter Bericht über B\A
+  unterdrücken würde. *Beleg (Regelfall des externen Berichtswesens):* 12 Monats-PDFs + 1 Jahres-PDF
+  eine im März unterdrückte Zelle **inklusive Sekundär-Opfer** ergibt sich aus der Jahressumme minus
+  den 11 sichtbaren Monatszellen. Verschärfung bei verschachtelten Zeiträumen (Jan–Mai und Jan–Jun,
+  Juni = genau ein Ereignis): in **beiden** Artefakten ist keine einzige Zelle unterdrückt, und die
+  Konsistenzklassen für den Juni schrumpfen über mehrere Freigaben auf **eine** — effektives k = 1 bei
+  nominellem k = 5.
 - **K4b — `unique_clients`-Inflation.** `unique_clients` ist als einziges Feld nicht additiv, wurde im
- Hybrid-Pfad aber summiert. Die k-Prüfung lief damit gegen eine aufgeblähte Zahl (Personen-Monate):
- 3 Personen × 6 Monate à 1 Kontakt ⇒ PDF publizierte „Einzigartige Personen: 18", während der
- Live-Export mit distinct = 3 < k unterdrückte. **Ursache ist die monatsweise Segmentierung**, nicht
- der Snapshot-Inhalt; der „ca."-Hinweis existierte nur im internen Dashboard, in **keinem**
- exportierten Artefakt.
+  Hybrid-Pfad aber summiert. Die k-Prüfung lief damit gegen eine aufgeblähte Zahl (Personen-Monate):
+  3 Personen × 6 Monate à 1 Kontakt ⇒ PDF publizierte „Einzigartige Personen: 18", während der
+  Live-Export mit distinct = 3 < k unterdrückte. **Ursache ist die monatsweise Segmentierung**, nicht
+  der Snapshot-Inhalt; der „ca."-Hinweis existierte nur im internen Dashboard, in **keinem**
+  exportierten Artefakt.
 
- *Status: **mitigiert*** (#1770).
- `_merge_stats`/`_merge_sample_report_1_stats` liefern **strukturell keine** Personenzahl mehr
- (`None` = unbekannt) — die Summe ist nicht abgeschaltet, sondern nicht mehr bildbar. Beide
- Hybrid-Pfade setzen stattdessen einen eigenen **Live-DISTINCT-Term über den Gesamtzeitraum** und
- weisen dessen Quelle getrennt aus (`unique_clients_data_source = live`, Fußnote am Wert in beiden
- PDFs — der Rest des Artefakts bleibt `snapshot_hybrid`; Muster aus
- #1743, Option c). Für retention-bereinigte
- Alt-Zeiträume fällt der Live-Wert niedriger aus als die Snapshot-Zeilen desselben PDF — bewusst
- akzeptiert und durch die Fußnote kenntlich; ein Rückfall auf die Summe wäre der Bypass. Der
- „ca."-Hinweis des internen Dashboards ist mit der Approximation entfallen (er beschrieb genau die
- Überzählung, die es nicht mehr gibt). Test-gepinnt in
- `test_statistics_hybrid.py::TestHybridPersonenzahlIstEigenerLiveTerm` und
- `::TestSachberichtPdfWeistDenLiveTermAus`.
+  *Status: **mitigiert*** (#1770).
+  `_merge_stats`/`_merge_sample_report_1_stats` liefern **strukturell keine** Personenzahl mehr
+  (`None` = unbekannt) — die Summe ist nicht abgeschaltet, sondern nicht mehr bildbar. Beide
+  Hybrid-Pfade setzen stattdessen einen eigenen **Live-DISTINCT-Term über den Gesamtzeitraum** und
+  weisen dessen Quelle getrennt aus (`unique_clients_data_source = live`, Fußnote am Wert in beiden
+  PDFs — der Rest des Artefakts bleibt `snapshot_hybrid`; Muster aus
+  #1743, Option c). Für retention-bereinigte
+  Alt-Zeiträume fällt der Live-Wert niedriger aus als die Snapshot-Zeilen desselben PDF — bewusst
+  akzeptiert und durch die Fußnote kenntlich; ein Rückfall auf die Summe wäre der Bypass. Der
+  „ca."-Hinweis des internen Dashboards ist mit der Approximation entfallen (er beschrieb genau die
+  Überzählung, die es nicht mehr gibt). Test-gepinnt in
+  `test_statistics_hybrid.py::TestHybridPersonenzahlIstEigenerLiveTerm` und
+  `::TestSachberichtPdfWeistDenLiveTermAus`.
 - **K4c — Lesequellen-Divergenz.** PDFs lesen Snapshot-Hybrid, externer Bericht und Export live;
- `enforce_retention` friert Snapshots bewusst **vor** dem Soft-Delete ein. PDF minus Export ist damit
- ein Fingerabdruck des Gelöschten (Brute-Force über 45 Einzel-Löschkandidaten: genau 2 konsistent,
- beide derselben Kategorie).
+  `enforce_retention` friert Snapshots bewusst **vor** dem Soft-Delete ein. PDF minus Export ist damit
+  ein Fingerabdruck des Gelöschten (Brute-Force über 45 Einzel-Löschkandidaten: genau 2 konsistent,
+  beide derselben Kategorie).
 
- *Status: **mitigiert** (im Rahmen der Abwertung)*
- (#1770). Die drei belastbaren Maßnahmen
- sind umgesetzt: **(i)** Quelle **und Stand** stehen in jedem extern zirkulierenden Artefakt.
- #1743 hatte die *Quelle* ausgewiesen, nicht
- aber ihren *Stand* — „Monats-Aggregate" beantwortet nicht, von wann sie sind. Der hybride Lesepfad
- führt jetzt `snapshot_as_of` mit (jüngster `updated_at` der **tatsächlich beitragenden** Snapshots;
- `None`, wenn kein Segment aus einem Aggregat kam — dann behauptet das Artefakt keine Herkunft, die es
- nicht gibt), beide PDFs und das Dashboard rendern ihn. **(ii)** Dass eingefrorene Aggregate die
- Löschung überleben, steht im Löschkonzept und im Admin-Handbuch. **(iii)** Der Betriebshinweis „PDF
- und Live-Export desselben Zeitraums nicht an denselben Empfänger" steht im Admin-Handbuch (DE+EN).
- **Unverändert:** die Lesequellen bleiben getrennt — eine Vereinheitlichung ist weiterhin nicht
- geplant, K4b bleibt ihre Voraussetzung. Test-gepinnt in
- `test_reporting_population_stamp.py::TestSnapshotStandStempel`.
+  *Status: **mitigiert** (im Rahmen der Abwertung)*
+  (#1770). Die drei belastbaren Maßnahmen
+  sind umgesetzt: **(i)** Quelle **und Stand** stehen in jedem extern zirkulierenden Artefakt.
+  #1743 hatte die *Quelle* ausgewiesen, nicht
+  aber ihren *Stand* — „Monats-Aggregate" beantwortet nicht, von wann sie sind. Der hybride Lesepfad
+  führt jetzt `snapshot_as_of` mit (jüngster `updated_at` der **tatsächlich beitragenden** Snapshots;
+  `None`, wenn kein Segment aus einem Aggregat kam — dann behauptet das Artefakt keine Herkunft, die es
+  nicht gibt), beide PDFs und das Dashboard rendern ihn. **(ii)** Dass eingefrorene Aggregate die
+  Löschung überleben, steht im Löschkonzept und im Admin-Handbuch. **(iii)** Der Betriebshinweis „PDF
+  und Live-Export desselben Zeitraums nicht an denselben Empfänger" steht im Admin-Handbuch (DE+EN).
+  **Unverändert:** die Lesequellen bleiben getrennt — eine Vereinheitlichung ist weiterhin nicht
+  geplant, K4b bleibt ihre Voraussetzung. Test-gepinnt in
+  `test_reporting_population_stamp.py::TestSnapshotStandStempel`.
 
 *Empfehlung (umgesetzt):* **K4b schließen (S–M, Priorität 1)** — in keinem extern zirkulierenden
 Artefakt darf eine über Monate summierte Personenzahl als „Einzigartige Personen" erscheinen, und die
@@ -1498,62 +1442,62 @@ schließen** — K4a bleibt die akzeptierte Definitionsgrenze, sie macht ihn sic
 der Analyse sind erfüllt:
 
 * **Empfänger-/Zweckfeld.** Beide Felder werden am Export optional erfasst und wandern in das
- bestehende `EXPORT`-Audit-`detail` (JSON, **keine** Schema-Migration auf dem append-only,
- hash-verketteten Log). Sie sind bewusst optional — ein Pflichtfeld erzwänge eine Angabe auch dort, wo
- der Export gar keine Herausgabe ist (Probelauf), und Pflichtfelder ohne Anlass werden mit „x"
- gefüllt. Freitext auf 200 Zeichen gekappt: der Log überlebt seit dieser Welle die Löschfristen und
- ist nachträglich nicht redigierbar.
+  bestehende `EXPORT`-Audit-`detail` (JSON, **keine** Schema-Migration auf dem append-only,
+  hash-verketteten Log). Sie sind bewusst optional — ein Pflichtfeld erzwänge eine Angabe auch dort, wo
+  der Export gar keine Herausgabe ist (Probelauf), und Pflichtfelder ohne Anlass werden mit „x"
+  gefüllt. Freitext auf 200 Zeichen gekappt: der Log überlebt seit dieser Welle die Löschfristen und
+  ist nachträglich nicht redigierbar.
 * **Historie nicht von `auditlog_retention_months` gekappt.** Die Ausnahme hängt **nicht** an der
- Aktion `EXPORT` — die ist eine Sammelklasse — sondern an `RELEASE_EXPORT_Q` in
- [`release_log.py`](../src/core/services/dashboard/release_log.py): Aktion `EXPORT` **und**
- Berichtszeitraum im `detail` **und** der Marker „ein Artefakt hat das Haus verlassen". Dieselbe eine
- Definition speist Übersicht und Retention-Ausnahme; zwei Kopien wären zwei Wahrheiten (eine Zeile,
- die die Übersicht führt, aber das Pruning löscht, macht die Übersicht still unvollständig).
+  Aktion `EXPORT` — die ist eine Sammelklasse — sondern an `RELEASE_EXPORT_Q` in
+  [`release_log.py`](../src/core/services/dashboard/release_log.py): Aktion `EXPORT` **und**
+  Berichtszeitraum im `detail` **und** der Marker „ein Artefakt hat das Haus verlassen". Dieselbe eine
+  Definition speist Übersicht und Retention-Ausnahme; zwei Kopien wären zwei Wahrheiten (eine Zeile,
+  die die Übersicht führt, aber das Pruning löscht, macht die Übersicht still unvollständig).
 
- Drei Klassen fallen damit ausdrücklich **nicht** unter die Ausnahme und bleiben der 24-Monats-Frist
- unterworfen: Art.-15-Datenauskünfte einzelner Personen, DSGVO-Dokument-Downloads (beide ohne
- Berichtszeitraum) und die **Bildschirm-Aufrufe** des externen Berichts (mit Zeitraum, aber ohne
- herausgegebenes Artefakt — sie werden bei jedem Reload auditiert und ließen den Log sonst unbegrenzt
- wachsen). *Implementierungsfalle, test-gepinnt:* der Marker wird per `has_key` geprüft, nicht per
- Wertvergleich — ein fehlender JSON-Schlüssel ergibt in SQL NULL, und `exclude(NULL)` hätte die
- markerlosen Zeilen aus der Löschmenge genommen statt sie hineinzunehmen.
+  Drei Klassen fallen damit ausdrücklich **nicht** unter die Ausnahme und bleiben der 24-Monats-Frist
+  unterworfen: Art.-15-Datenauskünfte einzelner Personen, DSGVO-Dokument-Downloads (beide ohne
+  Berichtszeitraum) und die **Bildschirm-Aufrufe** des externen Berichts (mit Zeitraum, aber ohne
+  herausgegebenes Artefakt — sie werden bei jedem Reload auditiert und ließen den Log sonst unbegrenzt
+  wachsen). *Implementierungsfalle, test-gepinnt:* der Marker wird per `has_key` geprüft, nicht per
+  Wertvergleich — ein fehlender JSON-Schlüssel ergibt in SQL NULL, und `exclude(NULL)` hätte die
+  markerlosen Zeilen aus der Löschmenge genommen statt sie hineinzunehmen.
 
- *Nachtrag (#1772, Punkt 2):
- `?format=json` **gehört zur Ansichts-Klasse**.* Die erste Fassung zählte den JSON-Abruf des externen
- Berichts zu den Freigaben („maschinenlesbares Artefakt"). Das trägt nicht: die Route ist dieselbe
- Bildschirmseite in einem anderen Serialisierungsformat — kein Empfänger-/Zweckformular, keine
- Download-Geste, und wie die HTML-Fassung wird sie bei **jedem** Aufruf auditiert. Genau die zwei
- Folgen, um derentwillen die HTML-Ansicht ausgenommen wurde (unbegrenztes prune-exemptes Wachstum,
- Verdrängung echter Downloads aus dem `RELEASE_LOG_LIMIT`-Fenster), galten damit unverändert. Wer den
- Datensatz als Datei herausgibt, nimmt den generischen Berichts-Download — der trägt die
- Freigabe-Felder und bleibt Freigabe, obwohl er ebenfalls JSON liefert.
+  *Nachtrag (#1772, Punkt 2):
+  `?format=json` **gehört zur Ansichts-Klasse**.* Die erste Fassung zählte den JSON-Abruf des externen
+  Berichts zu den Freigaben („maschinenlesbares Artefakt"). Das trägt nicht: die Route ist dieselbe
+  Bildschirmseite in einem anderen Serialisierungsformat — kein Empfänger-/Zweckformular, keine
+  Download-Geste, und wie die HTML-Fassung wird sie bei **jedem** Aufruf auditiert. Genau die zwei
+  Folgen, um derentwillen die HTML-Ansicht ausgenommen wurde (unbegrenztes prune-exemptes Wachstum,
+  Verdrängung echter Downloads aus dem `RELEASE_LOG_LIMIT`-Fenster), galten damit unverändert. Wer den
+  Datensatz als Datei herausgibt, nimmt den generischen Berichts-Download — der trägt die
+  Freigabe-Felder und bleibt Freigabe, obwohl er ebenfalls JSON liefert.
 
- **Alt-Zeilen ehrlich behandelt.** Zeilen aus der Zeit vor der Abwertung tragen den Marker; entfernen
- lässt er sich so wenig wie nachtragen (`detail` geht in den Ketten-Hash ein). Die Abwertung greift
- deshalb am **Lesepfad**: `_LEGACY_VIEW_Q` schließt die eindeutig erkennbare Gestalt dieser Zeilen aus
- (`target_type="ExternalReport"` **und** `detail.format="json"`), sodass die Übersicht künftig nur
- echte Freigaben zeigt und die Alt-Zeilen zugleich die Retention-Ausnahme verlieren — sie laufen wie
- jede andere Ansicht nach `auditlog_retention_months` aus, nichts wird vorzeitig gelöscht. Die
- Ausnahme hängt an **beidem**, Ziel und Format, sonst nähme sie die echten JSON-Downloads mit;
- `has_key` steht wieder vor dem Wertvergleich (dieselbe NULL-Falle wie oben). Test-gepinnt in
- `test_report_release_log.py::TestUeberlappungswarnung::test_json_ansicht_ist_keine_freigabe`,
- `::test_json_altzeilen_mit_marker_sind_nicht_mehr_gelistet`,
- `::test_json_export_der_backend_pipeline_bleibt_eine_freigabe` und
- `TestExportUeberlebtDieAuditRetention::test_json_ansicht_ist_nicht_prune_exempt`.
+  **Alt-Zeilen ehrlich behandelt.** Zeilen aus der Zeit vor der Abwertung tragen den Marker; entfernen
+  lässt er sich so wenig wie nachtragen (`detail` geht in den Ketten-Hash ein). Die Abwertung greift
+  deshalb am **Lesepfad**: `_LEGACY_VIEW_Q` schließt die eindeutig erkennbare Gestalt dieser Zeilen aus
+  (`target_type="ExternalReport"` **und** `detail.format="json"`), sodass die Übersicht künftig nur
+  echte Freigaben zeigt und die Alt-Zeilen zugleich die Retention-Ausnahme verlieren — sie laufen wie
+  jede andere Ansicht nach `auditlog_retention_months` aus, nichts wird vorzeitig gelöscht. Die
+  Ausnahme hängt an **beidem**, Ziel und Format, sonst nähme sie die echten JSON-Downloads mit;
+  `has_key` steht wieder vor dem Wertvergleich (dieselbe NULL-Falle wie oben). Test-gepinnt in
+  `test_report_release_log.py::TestUeberlappungswarnung::test_json_ansicht_ist_keine_freigabe`,
+  `::test_json_altzeilen_mit_marker_sind_nicht_mehr_gelistet`,
+  `::test_json_export_der_backend_pipeline_bleibt_eine_freigabe` und
+  `TestExportUeberlebtDieAuditRetention::test_json_ansicht_ist_nicht_prune_exempt`.
 
- Ohne die Ausnahme täuschte die Übersicht Vollständigkeit vor: eine im vierten Jahr herausgegebene
- Jahresauswertung überschnitte sich mit Monatsberichten, die der Log nicht mehr kennt, und die Warnung
- bliebe stumm — ein stiller falscher Negativ, schlechter als längere Aufbewahrung.
+  Ohne die Ausnahme täuschte die Übersicht Vollständigkeit vor: eine im vierten Jahr herausgegebene
+  Jahresauswertung überschnitte sich mit Monatsberichten, die der Log nicht mehr kennt, und die Warnung
+  bliebe stumm — ein stiller falscher Negativ, schlechter als längere Aufbewahrung.
 
- **DSGVO-Begründung (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2):** Zweck ist der Nachweis
- herausgegebener **Statistiken**, nicht die Beobachtung von Beschäftigten. Das `detail` dieser
- Teilmenge trägt Zeitraum, Format und die erfassten Empfänger-/Zweckangaben; die Artefakte selbst sind
- k-anonymisiert, es gibt dort keine Pseudonyme und keine Personenzeilen. **Was dauerhaft stehen
- bleibt, ist damit trotzdem nicht personenlos:** die auslösende Person steht wie in jedem
- Audit-Eintrag drin, und Empfänger/Zweck sind **ungeprüfter Freitext** — ihre Datenminimierung ist
- eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch: Organisation statt Ansprechperson),
- keine technische Zusicherung. Unter dieser Maßgabe folgt die Aufbewahrung derselben
- Rechenschaftslogik wie `SECURITY_VIOLATION`.
+  **DSGVO-Begründung (Zweckbindung, Art. 5 Abs. 1 lit. b + Abs. 2):** Zweck ist der Nachweis
+  herausgegebener **Statistiken**, nicht die Beobachtung von Beschäftigten. Das `detail` dieser
+  Teilmenge trägt Zeitraum, Format und die erfassten Empfänger-/Zweckangaben; die Artefakte selbst sind
+  k-anonymisiert, es gibt dort keine Pseudonyme und keine Personenzeilen. **Was dauerhaft stehen
+  bleibt, ist damit trotzdem nicht personenlos:** die auslösende Person steht wie in jedem
+  Audit-Eintrag drin, und Empfänger/Zweck sind **ungeprüfter Freitext** — ihre Datenminimierung ist
+  eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch: Organisation statt Ansprechperson),
+  keine technische Zusicherung. Unter dieser Maßgabe folgt die Aufbewahrung derselben
+  Rechenschaftslogik wie `SECURITY_VIOLATION`.
 
 **Rollout-Grenze, ehrlich ausgewiesen — und kein Backfill möglich.** Der Marker
 „herausgegebenes Artefakt" ist mit dieser Welle neu; **keine** vor dem Deploy geschriebene Zeile trägt
@@ -1595,23 +1539,23 @@ Drei Restkanäle sind **nicht** schließbar, ohne das Verfahren selbst aufzugebe
 akzeptiert und gehören in die Kommunikation gegenüber Empfängern:
 
 1. **Die Summe der unterdrückten Zellen ist exakt bekannt.** R = Randsumme − Σ sichtbare Zellen, und
- jede unterdrückte Zelle bleibt auf ein Teilintervall von [1, k−1] eingeschränkt. Das ist die
- Definition von Zell-Suppression: k-Anonymität schützt Merkmalskombinationen, nicht die
- Randsummen-Arithmetik. R zu eliminieren hieße, die Randsumme aufzugeben (in
- [ADR-023](adr/023-k-anonymization-statistik.md) aus Utility-Gründen verworfen) oder Rauschen/DP
- einzuführen (dort explizit vertagt). Ebenfalls untrennbar: der Ausweis „unterdrückt" verrät, dass es
- in dieser Aufschlüsselung eine Zelle < k gibt — und dieser Ausweis ist gewollt (Nichtirreführung).
+   jede unterdrückte Zelle bleibt auf ein Teilintervall von [1, k−1] eingeschränkt. Das ist die
+   Definition von Zell-Suppression: k-Anonymität schützt Merkmalskombinationen, nicht die
+   Randsummen-Arithmetik. R zu eliminieren hieße, die Randsumme aufzugeben (in
+   [ADR-023](adr/023-k-anonymization-statistik.md) aus Utility-Gründen verworfen) oder Rauschen/DP
+   einzuführen (dort explizit vertagt). Ebenfalls untrennbar: der Ausweis „unterdrückt" verrät, dass es
+   in dieser Aufschlüsselung eine Zelle < k gibt — und dieser Ausweis ist gewollt (Nichtirreführung).
 2. **Ungleichungen zwischen Personen- und Ereigniszählungen.** `unique_clients` zählt **Personen**, die
- Tabellen zählen **Ereignisse**; zwischen zwei Maßeinheiten gibt es keine gemeinsame
- Grundgesamtheit, an der eine Zell-Suppression ansetzen könnte. Wer das schließen will, braucht
- kontrolliertes Runden/Intervallausweis statt Suppression — ein anderes SDC-Verfahren mit
- erheblichem Nutzenverlust. **Nicht** von dieser Akzeptanz gedeckt: K4b (das ist ein Bug, keine
- Grenze) und die Lesequellen-Divergenz K4c.
+   Tabellen zählen **Ereignisse**; zwischen zwei Maßeinheiten gibt es keine gemeinsame
+   Grundgesamtheit, an der eine Zell-Suppression ansetzen könnte. Wer das schließen will, braucht
+   kontrolliertes Runden/Intervallausweis statt Suppression — ein anderes SDC-Verfahren mit
+   erheblichem Nutzenverlust. **Nicht** von dieser Akzeptanz gedeckt: K4b (das ist ein Bug, keine
+   Grenze) und die Lesequellen-Divergenz K4c.
 3. **Die Differenz mehrerer Freigaben über verschachtelte Zeiträume (K4a).** k-Anonymität ist eine
- Eigenschaft **einer** veröffentlichten Tabelle über **einer** Grundgesamtheit. Im Regelfall
- (Monatsberichte plus Jahresbericht) sind beide Artefakte für sich vollständig k-anonym — es gibt
- keine Zelle, an der eine artefakt-lokale Suppression ansetzen könnte. Der Kanal ist nicht durch M5
- entstanden, er ist der Familie inhärent, seit sie frei wählbare Zeiträume anbietet.
+   Eigenschaft **einer** veröffentlichten Tabelle über **einer** Grundgesamtheit. Im Regelfall
+   (Monatsberichte plus Jahresbericht) sind beide Artefakte für sich vollständig k-anonym — es gibt
+   keine Zelle, an der eine artefakt-lokale Suppression ansetzen könnte. Der Kanal ist nicht durch M5
+   entstanden, er ist der Familie inhärent, seit sie frei wählbare Zeiträume anbietet.
 
 Formulierung für die Empfänger-Kommunikation:
 
@@ -1628,29 +1572,29 @@ Betriebshinweis: Berichtszeiträume nicht unter einem Monat wählen.
 Damit diese Punkte nicht erneut untersucht werden:
 
 - **`by_age_cluster` als Residuum-Kanal (K1):** war widerlegt **für die Ereignis-Randsumme** — kein
- Artefakt publizierte eine Randsumme = Σ Altersgruppen (die Tabelle zählt nur Ereignisse *mit*
- Personenbezug, `total_contacts` alle), das Machbarkeits-Audit lief dort mit `margin=None`, also gar
- nicht. **Überholt seit K3-A1** (die Umsetzung, die dieser Eintrag selbst als Auslöser benannt hatte):
- mit der Restzeile „ohne Personenbezug" ist die Tabelle eine exakte Partition von `total_contacts`,
- deklariert diese Randsumme und läuft durch Audit und Fixpunkt-Guard. Der Eintrag steht nur noch als
- Historie hier — er beschreibt den Zustand vor
- #1770.
- **Nicht widerlegt ist die Personen-Randsumme:** seit K0-b gilt Σ `persons`(`by_age_cluster`) =
- `unique_clients`, und über *diese* Gleichung ist der Kanal tragfähig — geschlossen durch die
- total-Doktrin (`unique_clients` fällt bei der ersten personenbedingt unterdrückten Zeile) und
- zusätzlich im Inferenzmodell des Fixpunkt-Guards, siehe K0-b § Verbindliche Auflage. Der Eintrag
- hier bezieht sich also **ausschließlich** auf die Ereignis-Randsumme.
+  Artefakt publizierte eine Randsumme = Σ Altersgruppen (die Tabelle zählt nur Ereignisse *mit*
+  Personenbezug, `total_contacts` alle), das Machbarkeits-Audit lief dort mit `margin=None`, also gar
+  nicht. **Überholt seit K3-A1** (die Umsetzung, die dieser Eintrag selbst als Auslöser benannt hatte):
+  mit der Restzeile „ohne Personenbezug" ist die Tabelle eine exakte Partition von `total_contacts`,
+  deklariert diese Randsumme und läuft durch Audit und Fixpunkt-Guard. Der Eintrag steht nur noch als
+  Historie hier — er beschreibt den Zustand vor
+  #1770.
+  **Nicht widerlegt ist die Personen-Randsumme:** seit K0-b gilt Σ `persons`(`by_age_cluster`) =
+  `unique_clients`, und über *diese* Gleichung ist der Kanal tragfähig — geschlossen durch die
+  total-Doktrin (`unique_clients` fällt bei der ersten personenbedingt unterdrückten Zeile) und
+  zusätzlich im Inferenzmodell des Fixpunkt-Guards, siehe K0-b § Verbindliche Auflage. Der Eintrag
+  hier bezieht sich also **ausschließlich** auf die Ereignis-Randsumme.
 - **Primär/Sekundär allein an der Zeilenposition unterscheidbar (K5):** widerlegt in der generischen
- Form — in 40 % der Zwei-Zellen-Fälle sind beide primär; der Schluss braucht eine publizierte
- Untergrenze für die Summe.
+  Form — in 40 % der Zwei-Zellen-Fälle sind beide primär; der Schluss braucht eine publizierte
+  Untergrenze für die Summe.
 - **„Residual-Guard allein bringt 0 Pins" (K1):** widerlegt — 24/853 Sichten behalten einen exakten
- Pin; die Aussage war zirkulär validiert (Kopplungs-Warnung).
+  Pin; die Aussage war zirkulär validiert (Kopplungs-Warnung).
 - **„Machbarkeits-Audit kostet weniger Information als der Status quo" (K2):** widerlegt — es
- unterdrückt in keiner Welt weniger, in 13,5 % mehr Zellen.
+  unterdrückt in keiner Welt weniger, in 13,5 % mehr Zellen.
 - **CSV-Export** trägt K1, K3, K5 und K6 **nicht** (nur `records` + Metazeile); das
- **On-Screen-Panel** trägt K1 und K3 nicht, K6 **doch**.
+  **On-Screen-Panel** trägt K1 und K3 nicht, K6 **doch**.
 - Frühere Zwischenstände nannten Rest-Pins, die sich bei vollständiger Preimage-Auswertung auflösten.
- Verbindlich ist nur das Kriterium „publizierte Randsumme ≤ Enumerationsgrenze".
+  Verbindlich ist nur das Kriterium „publizierte Randsumme ≤ Enumerationsgrenze".
 
 #### Regressionsschutz
 
@@ -1665,20 +1609,20 @@ unterdrückte Zelle ist über das Preimage eindeutig bestimmt" — in
 zweiten Wrapper, dem Beispiel-Sachbericht). Präzisierungen, die die Umsetzung nötig gemacht hat:
 
 * **Auflage eingehalten:** gewertet werden nur Beobachtungen, deren publizierte Randsumme ≤
- **Enumerationsgrenze** ist. Geprüft werden **zwei** Welträume, beide exakt aufgezählt und nicht
- gestichprobt: `ENUMERATION_LIMIT = 14` bei drei nichtleeren Zeilen (364 Welten) und Σ ≤ 16 bei vier
- Zeilen (1820 Welten). Der zweite ist kein Luxus — die Sekundär-Suppression zeigt ihre
- Fixpunkt-Eigenschaft erst, wenn nach dem ersten Opfer noch mehr als eine sichtbare Zelle übrig ist.
- Ist die Randsumme unterdrückt, kennt der Empfänger sie nicht; dann sind auch Welten jenseits der
- Grenze konsistent, und ein hier „eindeutiges" Preimage wäre ein Artefakt der Aufzählung
- (Schein-Pin).
+  **Enumerationsgrenze** ist. Geprüft werden **zwei** Welträume, beide exakt aufgezählt und nicht
+  gestichprobt: `ENUMERATION_LIMIT = 14` bei drei nichtleeren Zeilen (364 Welten) und Σ ≤ 16 bei vier
+  Zeilen (1820 Welten). Der zweite ist kein Luxus — die Sekundär-Suppression zeigt ihre
+  Fixpunkt-Eigenschaft erst, wenn nach dem ersten Opfer noch mehr als eine sichtbare Zelle übrig ist.
+  Ist die Randsumme unterdrückt, kennt der Empfänger sie nicht; dann sind auch Welten jenseits der
+  Grenze konsistent, und ein hier „eindeutiges" Preimage wäre ein Artefakt der Aufzählung
+  (Schein-Pin).
 * **Die Invariante ist auf Kleinstfallzahlen geschärft:** ein exakt bestimmter Wert ≥ *k* ist kein
- Befund — das Sekundär-Opfer *darf* rückrechenbar sein, es wurde nur unterdrückt, um die Kleinstzelle
- zu schützen. Die Begründung steht bei den drei Ausnahmen in `disclosure.findings`.
+  Befund — das Sekundär-Opfer *darf* rückrechenbar sein, es wurde nur unterdrückt, um die Kleinstzelle
+  zu schützen. Die Begründung steht bei den drei Ausnahmen in `disclosure.findings`.
 * **Zwei Positiv-Kontrollen**, damit der Test seinen eigenen Trefferfall beweist: der K2-Stand vor
- #1770 erzeugt an derselben Aufzählung **54** gepinnte Kleinstzellen, derselbe *neue*
- Suppressionsstand mit count-sortierter Ausgabe (Stand vor #1767) **250** — letzteres ist der
- empirische Beleg der Kopplungs-Warnung.
+  #1770 erzeugt an derselben Aufzählung **54** gepinnte Kleinstzellen, derselbe *neue*
+  Suppressionsstand mit count-sortierter Ausgabe (Stand vor #1767) **250** — letzteres ist der
+  empirische Beleg der Kopplungs-Warnung.
 
 **(2) Ordnungstest** (zwei Welten mit vertauschten Zellwerten müssen dieselbe Ausgabe erzeugen) — auf
 Service-Ebene seit #1767
@@ -1731,27 +1675,27 @@ verschlüsselt Bestandsgeräte in place.
 ### Trade-offs / Grenzen
 
 - **Schutz nur *at rest*.** Ein Angreifer mit gültigem `ENCRYPTION_KEY(S)` **und**
- DB-Lesezugriff (z. B. kompromittierter App-Prozess) kann weiterhin
- entschlüsseln — wie bei allen Fernet-Feldern. Transparente
- DB-/Volume-Verschlüsselung bleibt eine **ergänzende** Operator-Kontrolle
- (threat-model TB2/TB3, TB5), kein Ersatz.
+  DB-Lesezugriff (z. B. kompromittierter App-Prozess) kann weiterhin
+  entschlüsseln — wie bei allen Fernet-Feldern. Transparente
+  DB-/Volume-Verschlüsselung bleibt eine **ergänzende** Operator-Kontrolle
+  (threat-model TB2/TB3, TB5), kein Ersatz.
 - **Spaltenbreite.** `otp_totp_totpdevice.key` wird per reversiblem `RunSQL` von
- `varchar(80)` auf `varchar(255)` geweitet (ein Fernet-Token ist ~120–140
- Zeichen). Die DB-Spalte ist damit breiter als die `max_length=80` des
- Fremd-Modells — bewusst und beim Schreiben folgenlos (kein `full_clean` auf
- dem Secret-Pfad). Wir kapern **keine** `otp_totp`-Migrationsdatei.
+  `varchar(80)` auf `varchar(255)` geweitet (ein Fernet-Token ist ~120–140
+  Zeichen). Die DB-Spalte ist damit breiter als die `max_length=80` des
+  Fremd-Modells — bewusst und beim Schreiben folgenlos (kein `full_clean` auf
+  dem Secret-Pfad). Wir kapern **keine** `otp_totp`-Migrationsdatei.
 - **Upgrade-Hazard bei `django-otp`-Bumps.** Ein künftiges `django-otp`-Release
- (Dependabot bumpt automatisch) könnte eine `otp_totp`-Migration mit
- `AlterField('key', max_length=80)` mitbringen. Django macht daraus
- `ALTER … TYPE varchar(80)`, das an den bereits gespeicherten ~140-Zeichen-
- Fernet-Tokens **hart scheitert** (`value too long for type character
- varying(80)`) und `migrate` blockiert — potenziell mitten im Deploy.
- **Gegenmaßnahme:** Beim `django-otp`-Bump die generierten Migrationen prüfen;
- bei einem `AlterField` auf `key` eine core-Nachfolge-Migration hinterhersetzen,
- die die Spalte (nach der `otp_totp`-Migration einsortiert) wieder auf
- `varchar(255)` weitet. Der Guard-Test `TestTotpKeyColumnWidthGuard` prüft die
- effektive Spaltenbreite und schlägt bei einer unbeabsichtigten Re-Verengung
- früh an. Siehe [ADR-031 § Consequences](adr/031-totp-secret-at-rest.md).
+  (Dependabot bumpt automatisch) könnte eine `otp_totp`-Migration mit
+  `AlterField('key', max_length=80)` mitbringen. Django macht daraus
+  `ALTER … TYPE varchar(80)`, das an den bereits gespeicherten ~140-Zeichen-
+  Fernet-Tokens **hart scheitert** (`value too long for type character
+  varying(80)`) und `migrate` blockiert — potenziell mitten im Deploy.
+  **Gegenmaßnahme:** Beim `django-otp`-Bump die generierten Migrationen prüfen;
+  bei einem `AlterField` auf `key` eine core-Nachfolge-Migration hinterhersetzen,
+  die die Spalte (nach der `otp_totp`-Migration einsortiert) wieder auf
+  `varchar(255)` weitet. Der Guard-Test `TestTotpKeyColumnWidthGuard` prüft die
+  effektive Spaltenbreite und schlägt bei einer unbeabsichtigten Re-Verengung
+  früh an. Siehe [ADR-031 § Consequences](adr/031-totp-secret-at-rest.md).
 
 ### Key-Rotation (MultiFernet)
 
@@ -1773,11 +1717,11 @@ einem meldungsfreien Lauf entfernen (der Lauf ist idempotent).
 ### Verifikation
 
 - [`src/tests/test_totp_secret_at_rest.py`](../src/tests/test_totp_secret_at_rest.py)
- Roh-DB-Wert ohne Klartext-Hex, Verify-Pfad vor/nach Migration, Migration
- idempotent + reversibel, MultiFernet-Rotation, kein Custom-Admin-Leak,
- Rewrap-Concurrency (Verify-`save()` lässt `key` unberührt; `reencrypt_fields`
- meldet Kontention) sowie ein Guard-Test zur effektiven Spaltenbreite
- (Upgrade-Hazard).
+  Roh-DB-Wert ohne Klartext-Hex, Verify-Pfad vor/nach Migration, Migration
+  idempotent + reversibel, MultiFernet-Rotation, kein Custom-Admin-Leak,
+  Rewrap-Concurrency (Verify-`save()` lässt `key` unberührt; `reencrypt_fields`
+  meldet Kontention) sowie ein Guard-Test zur effektiven Spaltenbreite
+  (Upgrade-Hazard).
 - CHANGELOG-`[Unreleased]`-Eintrag mit Issue-Referenz.
 
 ---
@@ -1824,7 +1768,7 @@ dem früheren Zustand deutlich entschärft:
 - **fixes 1h-Fenster**, **nicht** self-sustaining (läuft ohne weitere Angreifer-Aktion aus);
 - erzeugt **keinen** `is_locked`-Zustand (kein Account-Lockout, keine Admin-Entsperrung nötig);
 - **Recovery-Pfade bleiben frei**: Password-Reset und die übrigen Auth-Flows bucketen nicht auf
- denselben Username-Schlüssel und sind IP-basiert erreichbar.
+  denselben Username-Schlüssel und sind IP-basiert erreichbar.
 
 ### Monitoring statt hartem Fix
 
@@ -1839,17 +1783,17 @@ abgedeckt: kein hartes Blocking, aber eine forensische Spur plus optionaler Webh
 ### Trigger für Re-Evaluation
 
 - Reale Missbrauchsfälle des `10/h`-Username-Limits als gezielter Victim-DoS (statt nur als
- Anti-Botnet-Schranke).
+  Anti-Botnet-Schranke).
 - Wenn progressive Delays / Proof-of-Work als datensparsame, abhängigkeitsfreie Alternative zu
- einem flachen `429` reif sind (dann Backoff statt hartem Limit erwägen).
+  einem flachen `429` reif sind (dann Backoff statt hartem Limit erwägen).
 
 ### Verifikation
 
 - Threat-Model-Zeile „**S** Login-Brute-Force" in [`threat-model.md`](threat-model.md) verweist auf
- diese Notiz.
+  diese Notiz.
 - `detect_distributed_login_attack`-Tests in [`test_breach_detection.py`](../src/tests/test_breach_detection.py):
- Alarm über Schwelle, kein Alarm knapp darunter, viele Versuche von EINER IP sind kein
- Distributed-Signal, Dedup greift.
+  Alarm über Schwelle, kein Alarm knapp darunter, viele Versuche von EINER IP sind kein
+  Distributed-Signal, Dedup greift.
 
 ---
 
@@ -2111,7 +2055,7 @@ Die Maintainer-Freigabe vom 23.08.2026 umfasst ausdrücklich zwei Folgen: Art.-9
 ### Verifikation
 
 - [`test_history_diffs.py`](../src/tests/test_history_diffs.py) — vollständige Rollen-/Sensibilitätsmatrix, fail-closed ohne Nutzer, Datei-Marker, korrupter Token, fehlender Schlüssel, redigierter Delete und Fernet-Rauschunterdrückung.
-- Release-Handtest zu #1961 in [`dev/hand-checks.md`](dev/hand-checks.md) — sichtbare Rollen-Gegenprobe auf der Ereignis-Detailseite.
+- Release-Handtest zu #1961 in `dev/hand-checks.md` — sichtbare Rollen-Gegenprobe auf der Ereignis-Detailseite.
 - Serielle Browser-Abdeckung ist als Folge #1983 für `release-0.85` eingeplant; sie wird bewusst nicht parallel zu diesem Security-Commit gestartet.
 
 ---
@@ -2168,45 +2112,6 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 - [`test_offline_shell_neutrality.py`](../src/tests/test_offline_shell_neutrality.py) — Byte-Gleichheit anonym vs. angemeldet für alle acht Shells, Abwesenheit von Name/Rolle/Einrichtung/`data-user-id`/CSRF-Meta, Vollständigkeit der Skriptkette und ein ableitungsbasierter Vollständigkeits-Check gegen die View-Klassen.
 - [`test_pwa_views.py`](../src/tests/test_pwa_views.py) — Shell-Hash-Guard samt gepinntem `CACHE_NAME` (`anlaufstelle-v38`).
 - [`tests/js/sw-boot-purge-gate.test.mjs`](../tests/js/sw-boot-purge-gate.test.mjs) — der Boot-Purge läuft ohne `data-user-id` weiter und bleibt ohne Session-Key aus.
-
----
-
-## Facility-Archivierung: Lifecycle des Zugriffsentzugs (Issue #2067)
-
-**Ausgangslage.** `Facility.is_active` war bis 0.89 kosmetisch — weder Login noch Middleware werteten das Flag aus. Eine archivierte Einrichtung arbeitete unverändert weiter.
-
-**Serverseitige Sperre (zwei Ebenen).** Beide sind nötig, keine ersetzt die andere:
-
-1. **Login** — `CustomLoginView.form_valid` *und* `AdminLockoutAuthenticationForm.confirm_login_allowed` (zweite Login-Oberfläche unter `/admin-mgmt/login/`) weisen Konten archivierter Einrichtungen ab und schreiben `LOGIN_FAILED` mit `reason: facility_inactive`. Kein Credential-Widerruf: Archivieren ist ein organisatorischer Vorgang, kein Kompromittierungsverdacht.
-2. **`FacilityScopeMiddleware`** — beendet auch **bereits laufende** Sitzungen mit HTTP 403. Ohne diese Ebene wirkte Archivieren erst beim nächsten Anmelden. `request.current_facility` wird dabei auf `None` gesetzt, also bleibt `app.current_facility_id` leer und die `facility_isolation`-Policies liefern als zweite Linie ebenfalls nichts.
-
-**Freigestellt wird die Rolle, nicht der Pfad.** `super_admin` bleibt unbeschränkt, weil `FacilityAdmin` super-only ist (L1, #1375) und nur diese Rolle `is_active` zurücksetzen kann. Eine Pfad-Ausnahme für `/admin-mgmt/` ließe den `facility_admin` der archivierten Einrichtung weiter an Fachdaten, ohne dass er sie reaktivieren könnte. Die Pfad-Ausnahmen (`ARCHIVED_EXEMPT_URLS`) decken nur Sackgassen ab: Abmelden, Login, Statik, i18n, Health, `sw.js`, `manifest.json`.
-
-**Der Offline-Pfad braucht eine eigene Zustellung.** Serverseitig dicht zu sein genügt hier nicht: bereits heruntergeladene Client-/Facility-Bundles liegen verschlüsselt in IndexedDB (`anlaufstelle-offline`), der abgeleitete Sitzungsschlüssel in `anlaufstelle-crypto`. Beides überlebt eine serverseitige Sperre — die Nutzerin könnte nach dem 403 offline gehen und weiterlesen.
-
-Ein nacktes 403 darf dafür **nicht** als Purge-Signal dienen: seit #1354 ist 403 bewusst kein Invalidierungsgrund, weil echter Rechteentzug den Client als Login-Redirect erreicht und ein 403 sonst CSRF-/Rate-Limit-/Proxy-Rauschen ist — es würde den Außendienst-Cache bei jedem Schluckauf leeren.
-
-Die Archiv-403 trägt deshalb zwei Marker:
-
-| Mechanismus | Deckt ab | Grenze |
-|---|---|---|
-| Header `X-Facility-Archived: 1` | `revalidateCachedClient` / `revalidateCachedFacility` purgen gezielt darauf: `crypto_session.wipeOfflineState()` — CryptoKey **und** alle Dexie-Tabellen | greift nur, wenn der Offline-Verbund geladen ist und eine Revalidierung läuft |
-| `Clear-Site-Data: "storage", "cache"` | Navigations-Fall: der Browser räumt IndexedDB, Web Storage, Cache Storage und SW-Registrierungen selbst ab — derselbe Mechanismus wie beim Logout | von Safari nur unvollständig unterstützt; deshalb nie allein |
-
-`"cookies"` wird bewusst **nicht** gesetzt: die Sitzung soll leben, damit der Abmelden-Knopf auf der Sperrseite trägt.
-
-**Restrisiko.** Ungesynchronisierte lokale Änderungen fallen mit — bewusst, wie beim Rechteentzug (#1110/#1111): entschlüsselte PII darf einen Zugriffsentzug nicht überleben, und ein hängender Edit darf den Sicherheits-Purge nicht blockieren. **Ohne Serverkontakt greift keiner der drei Zustellwege.** Das Schadensbild ist dann differenzierter, als es zunächst scheint:
-
-- Der **Server-Spiegel** (Personen-, Fall- und Ereignis-Bundles) verfällt spätestens mit der 48-h-TTL — `purgeExpiredBundles` verwirft ihn ohne `force`.
-- **Ungesyncte Arbeit** (Queue-Zeilen, Events mit `localStatus` in *modified/new/conflict/dead*) überlebt das ausdrücklich: Weder der TTL-Purge (#1353) noch der Idle-Pfad löschen sie. Bei ungesyncten Daten verwirft der Idle-Wipe **nur den Schlüssel** und lässt den verschlüsselten Bestand stehen, damit ein Re-Login die Arbeit wieder abspielbar macht.
-- Wirksam bleibt damit F-01: ohne Schlüssel ist der Rest nicht lesbar. Ein Klartext-Leck entsteht nicht, aber die Aussage „nach 48 h ist alles weg" wäre falsch.
-
-Das ist dieselbe Grenze wie bei jedem anderen Widerrufspfad — die Zustellung setzt einen Serverkontakt voraus.
-
-**Hard-Delete bleibt kein Ausweg.** Er scheitert fail-loud am `auditlog_immutable`-Trigger und rollt vollständig zurück (Django umschließt die gesamte Kaskade mit einer Transaktion — auch aus `manage.py shell`). Partielle Zerstörung entsteht nur durch selbst geschriebene Skripte, die Fachtabellen einzeln mit Zwischencommits leeren. Details im [Administrationshandbuch § 2.2c](admin-guide.md).
-
-**Tests:** [`test_facility_lifecycle.py`](../src/tests/test_facility_lifecycle.py) (Login beider Oberflächen, laufende Sitzung, RLS-GUC, Rollen-Abgrenzung, Marker-Header, Sprache) und [`tests/js/facility-archived-purge.test.mjs`](../tests/js/facility-archived-purge.test.mjs) (Purge nur bei gesetztem Marker — beide Richtungen, damit der Fix keine #1354-Regression wird).
-
 
 ---
 

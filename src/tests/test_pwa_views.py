@@ -122,11 +122,6 @@ class TestOfflineFallbackView:
         # offline-home.js fuellt weiter die additiven Status-/Storage-Badges.
         assert "offline-home.js" in body
         assert "offline-store.js" in body
-        # Refs #1838: der komplette 4-Datei-Verbund muss precached sein — eine
-        # Mischgeneration haette weder Fassade noch internen Kanal.
-        assert "offline-db.js" in body
-        assert "offline-bundles.js" in body
-        assert "offline-revocations.js" in body
 
     def test_selfhelp_content_is_static_without_js(self, client):
         """Refs #1494: Der Selbsthilfe-Inhalt (Hinweistext + Navigations-Links)
@@ -155,12 +150,11 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v41"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v39"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1838: offline-store.js ist in den 4-Datei-Verbund offline-db/"
-            "offline-bundles/offline-revocations/offline-store gesplittet — "
-            "drei neue precachte Dateien + geaenderte Shell-Templates muessen "
-            "atomar erneuert werden; Re-Install + Re-Precache noetig)."
+            "(#1947: Manifest/Meta-Tags teilen die Markenfarbe, der Splash den "
+            "warmen Canvas-Hintergrund; geaenderte Offline-Shells und "
+            "offline-tally.js brauchen Re-Install + Re-Precache)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -201,20 +195,19 @@ class TestServiceWorkerCachesOfflineFallback:
         statt der echten Erfassungs-Shell.
         """
         body = client.get(reverse("service_worker")).content.decode()
-        # Refs #1828: Die Zweige leben als Eintraege der geordneten
-        # SHELL_ROUTES-Tabelle; deren Array-Reihenfolge ist die Semantik der
-        # frueheren if-Kaskade. Geprueft wird dieselbe Garantie am neuen Code:
-        # beide Create-Eintraege existieren, und die Fallback-Schleife laeuft
-        # VOR der generischen ``caches.match(request.url)``-Stufe (das LETZTE
-        # ``.match(request.url)`` — fruehere Vorkommen stehen nur in
-        # erklaerenden Kommentaren).
-        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, url)" in body
-        assert "shell: OFFLINE_EVENT_SHELL_URL" in body
-        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, url)" in body
-        assert "shell: OFFLINE_WORKITEM_SHELL_URL" in body
-        shell_loop = body.index("for (const route of SHELL_ROUTES)")
+        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)" in body
+        assert ".match(OFFLINE_EVENT_SHELL_URL)" in body
+        assert "self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)" in body
+        assert ".match(OFFLINE_WORKITEM_SHELL_URL)" in body
+        # Die Create-Shell-Zweige muessen VOR der generischen
+        # ``.match(request.url)``-Stufe stehen (sonst gewinnt /offline/). Die
+        # tatsaechliche generische Stufe ist das LETZTE ``.match(request.url)``
+        # (frueheres Vorkommen steht nur im erklaerenden Kommentar).
+        event_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.EVENT_NEW, request.url)")
+        workitem_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)")
         generic_match = body.rindex(".match(request.url)")
-        assert shell_loop < generic_match, "SHELL_ROUTES-Schleife muss vor dem generischen /offline/-Match stehen."
+        assert event_branch < generic_match, "EVENT_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
+        assert workitem_branch < generic_match, "WORKITEM_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
 
     def test_sw_caches_offline_tab_shells(self, client):
         """Refs #1543 (#1499): Die pk-losen Tab-Shells (Aufgaben
@@ -239,22 +232,19 @@ class TestServiceWorkerCachesOfflineFallback:
         dem WORKITEM_LIST-Zweig stehen (Kalt-Offline-Create-Pfad).
         """
         body = client.get(reverse("service_worker")).content.decode()
-        # Refs #1828: Zweige = SHELL_ROUTES-Eintraege (siehe
-        # test_sw_serves_create_shell_fallback_before_generic_offline); die
-        # WORKITEM_NEW-vor-WORKITEM_LIST-Garantie ist jetzt die
-        # Eintrags-Reihenfolge in der Tabelle.
-        assert "self.URL_PATTERNS.WORKITEM_LIST.test(url)" in body
-        assert "shell: OFFLINE_WORKITEM_LIST_SHELL_URL" in body
-        assert "self.URL_PATTERNS.isZeitstromRoot(url)" in body
-        assert "shell: OFFLINE_ZEITSTROM_SHELL_URL" in body
-        shell_loop = body.index("for (const route of SHELL_ROUTES)")
+        assert "self.URL_PATTERNS.WORKITEM_LIST.test(request.url)" in body
+        assert ".match(OFFLINE_WORKITEM_LIST_SHELL_URL)" in body
+        assert "self.URL_PATTERNS.isZeitstromRoot(request.url)" in body
+        assert ".match(OFFLINE_ZEITSTROM_SHELL_URL)" in body
+        workitem_list_branch = body.index("self.URL_PATTERNS.WORKITEM_LIST.test(request.url)")
+        zeitstrom_branch = body.index("self.URL_PATTERNS.isZeitstromRoot(request.url)")
         generic_match = body.rindex(".match(request.url)")
-        assert shell_loop < generic_match, "SHELL_ROUTES-Schleife muss vor dem generischen /offline/-Match stehen."
-        workitem_new_entry = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, url)")
-        workitem_list_entry = body.index("self.URL_PATTERNS.WORKITEM_LIST.test(url)")
-        assert workitem_new_entry < workitem_list_entry, (
-            "WORKITEM_NEW-Eintrag muss VOR dem WORKITEM_LIST-Eintrag stehen."
+        assert workitem_list_branch < generic_match, (
+            "WORKITEM_LIST-Zweig muss vor dem generischen /offline/-Match stehen."
         )
+        assert zeitstrom_branch < generic_match, "ZEITSTROM-Zweig muss vor dem generischen /offline/-Match stehen."
+        workitem_new_branch = body.index("self.URL_PATTERNS.matchesPath(self.URL_PATTERNS.WORKITEM_NEW, request.url)")
+        assert workitem_new_branch < workitem_list_branch, "WORKITEM_NEW-Zweig muss VOR dem WORKITEM_LIST-Zweig stehen."
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -389,30 +379,23 @@ class TestServiceWorkerRuntimeCacheHygiene:
 
     def test_swr_branch_writes_to_runtime_cache_not_precache(self, client):
         """Der SWR-Revalidate-Put muss in den Runtime-Cache gehen, nicht in den
-        Precache. ``caches.open(CACHE_NAME)`` ist nur den kuratierten
-        Precache-Pflegern erlaubt: dem install-Precache (``cache.addAll``) und
-        — seit Refs #1948 — der Precache-Selbstheilung ``_healPrecache``, die
-        ausschliesslich fehlende APP_SHELL-Eintraege nachlaedt. Im
-        fetch-/SWR-Zweig darf der Precache NIE geoeffnet werden, sonst waechst
-        er ungebremst (Refs #1546).
+        Precache. Der einzige ``caches.open(CACHE_NAME)`` darf im install-Handler
+        stehen (Precache), nicht mehr im fetch-/SWR-Zweig.
         """
         body = client.get(reverse("service_worker")).content.decode()
         assert ".open(RUNTIME_CACHE_NAME)" in body, "SWR-Zweig schreibt nicht in den Runtime-Cache."
-        assert body.count("caches.open(CACHE_NAME)") == 2, (
-            "caches.open(CACHE_NAME) darf nur in den Precache-Pflegern vorkommen "
-            "(install-Precache + _healPrecache, Refs #1948) — der SWR-Zweig muss "
-            "RUNTIME_CACHE_NAME nutzen, sonst waechst der Precache ungebremst."
+        # CACHE_NAME wird nur noch beim Precache (install: cache.addAll) geoeffnet.
+        assert body.count("caches.open(CACHE_NAME)") == 1, (
+            "caches.open(CACHE_NAME) darf nur einmal (im install-Precache) vorkommen — "
+            "der SWR-Zweig muss RUNTIME_CACHE_NAME nutzen, sonst waechst der Precache ungebremst."
         )
-        # Beide Precache-opens stehen VOR dem fetch-Handler (install-Handler
-        # bzw. _healPrecache); im fetch-/SWR-Zweig wird nur noch der
-        # Runtime-Cache geoeffnet (letztes ``.open(RUNTIME_...)``).
-        first_precache_open = body.index("caches.open(CACHE_NAME)")
-        last_precache_open = body.rindex("caches.open(CACHE_NAME)")
+        # Der Precache-open steht im install-Handler; im fetch-/SWR-Zweig wird
+        # nur noch der Runtime-Cache geoeffnet (letztes ``.open(RUNTIME_...)``).
+        install_open = body.index("caches.open(CACHE_NAME)")
         install_handler = body.index('addEventListener("install"')
         fetch_handler = body.index('addEventListener("fetch"')
         swr_runtime_open = body.rindex(".open(RUNTIME_CACHE_NAME)")
-        assert install_handler < first_precache_open, "Precache-open muss im install-Handler bleiben."
-        assert last_precache_open < fetch_handler, "caches.open(CACHE_NAME) darf nicht im fetch-/SWR-Zweig stehen."
+        assert install_handler < install_open < fetch_handler, "Precache-open muss im install-Handler bleiben."
         assert swr_runtime_open > fetch_handler, "Runtime-open muss im fetch-/SWR-Zweig stehen."
 
     def test_swr_put_triggers_trim(self, client):
@@ -466,18 +449,13 @@ class TestServiceWorkerCachesClientListShell:
         ``caches.match(request.url)``-Stufe (sonst gewinnt /offline/).
         """
         body = client.get(reverse("service_worker")).content.decode()
-        # Refs #1828: Der Zweig ist ein SHELL_ROUTES-Eintrag. Die
-        # HX-vor-Shells-Garantie liegt jetzt im Kontrollfluss des
-        # fetch-Handlers: der HX-Sonderfall returnt VOR der
-        # SHELL_ROUTES-Schleife; die Schleife laeuft VOR der generischen
-        # ``caches.match(request.url)``-Stufe.
-        assert "self.URL_PATTERNS.CLIENT_LIST.test(url)" in body
-        assert "shell: OFFLINE_CLIENT_LIST_SHELL_URL" in body
+        assert "self.URL_PATTERNS.CLIENT_LIST.test(request.url)" in body
+        assert ".match(OFFLINE_CLIENT_LIST_SHELL_URL)" in body
         hx_branch = body.index('request.headers.get("HX-Request") === "true"')
-        shell_loop = body.index("for (const route of SHELL_ROUTES)")
+        list_branch = body.index("self.URL_PATTERNS.CLIENT_LIST.test(request.url)")
         generic_match = body.rindex(".match(request.url)")
-        assert hx_branch < shell_loop, "HX-Request-Sonderfall muss VOR der SHELL_ROUTES-Schleife returnen."
-        assert shell_loop < generic_match, "SHELL_ROUTES-Schleife muss VOR dem generischen /offline/-Match stehen."
+        assert hx_branch < list_branch, "CLIENT_LIST-Zweig muss NACH dem HX-Request-Sonderfall stehen."
+        assert list_branch < generic_match, "CLIENT_LIST-Zweig muss VOR dem generischen /offline/-Match stehen."
 
 
 class TestClientListUrlPattern:
@@ -671,31 +649,8 @@ class TestPrecachedShellBumpGuard:
     # #1900 also MIT CACHE_NAME-Bump (v37 -> v38): Bestandsgeraete tragen genau
     # die personalisierte Shell im Precache, die der Fix entfernt, und
     # bekaemen sie ohne Bump nie ersetzt.
-    # Refs #1828: v39 -> v40 — Quick-Win-Welle Offline-JS. Sechs precachte
-    # Shell-Templates laden offline-form-fields.js neu per Script-Tag
-    # (gemeinsame Formatter/Spiegel-Helfer); zusammen mit den konsolidierten
-    # precachten JS-Modulen (ENDPOINTS in url-patterns.js, awaitReady in
-    # crypto.js, SHELL_ROUTES in sw.js) ist das eine echte Shell-/Modul-
-    # Aenderung im Feld => Bump + Hash gemeinsam nachgezogen (EIN Bump fuer
-    # die ganze Welle). Der Review-Nachtrag (offline.html laedt url-patterns.js
-    # wieder — ENDPOINTS-Konsument) zieht NUR den Hash nach, KEIN v41:
-    # anlaufstelle-v40 entstand im selben unveroeffentlichten Lauf und steht
-    # in keinem Tag und keinem Deploy — kein Geraet im Feld traegt v40, also
-    # gibt es keine Split-Brain-Generation, gegen die ein weiterer Bump
-    # schuetzen wuerde (Praezedenz: #1805).
-    # Refs #1838: v40 -> v41 — der offline-store-Verbund-Split: drei neue
-    # precachte Dateien (offline-db/-bundles/-revocations) + fuenf Templates
-    # mit den neuen Script-Tags (davon offline.html/offline_base.html im
-    # Shell-Hash) + erweiterter APP_SHELL-Block. Echte Shell-/Precache-
-    # Aenderung => Bump + Hash gemeinsam nachgezogen. Vor dem Bump repo-weit
-    # nach v40-Pins gegrept (Integrator-Auflage): test_pwa_views.py (2x) und
-    # test_offline_tally_contract.py — alle in diesem Commit nachgezogen.
-    _PINNED_CACHE_NAME = "anlaufstelle-v41"
-    # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
-    # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
-    # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
-    # kein weiterer Bump.
-    _PINNED_SHELL_HASH = "119004e973c25f69f0efe7e07cc232b6f702435d7fed4005e1945ebb8538c7a5"
+    _PINNED_CACHE_NAME = "anlaufstelle-v39"
+    _PINNED_SHELL_HASH = "77a0799b0406fac06091d921c3a076c9d2cf5cfee04ea4647d1be94700a70cc6"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -929,16 +884,7 @@ class TestServiceWorkerPrecacheHashedAssets:
             call_command("collectstatic", "--noinput", verbosity=0)
             body = client.get(reverse("offline_fallback")).content.decode()
 
-        for stem in (
-            "dexie.min",
-            "crypto",
-            # Refs #1838: der 4-Datei-Verbund laedt komplett auf /offline/.
-            "offline-db",
-            "offline-bundles",
-            "offline-revocations",
-            "offline-store",
-            "offline-home",
-        ):
+        for stem in ("dexie.min", "crypto", "offline-store", "offline-home"):
             assert not re.search(rf'src="/static/js/{re.escape(stem)}\.js"', body), (
                 f"/offline/ referenziert {stem}.js ungehasht — der gehashte Prod-Precache "
                 "(caches.match ist URL-exakt) verfehlt das Skript offline."
@@ -1053,12 +999,8 @@ class TestServiceWorkerRobustness:
         assert '"Content-Type": "text/html"' not in body, (
             "SW-Response ohne charset gefunden — text/html; charset=utf-8 verwenden (Mojibake, #1490)."
         )
-        # Refs #1828: Die drei Flash-Antworten teilen sich seit der
-        # Konsolidierung EIN Header-Vorkommen in _flashResponse; dazu kommt
-        # das eigenstaendige HX-Partial-Banner. Die eigentliche Garantie
-        # (KEIN charset-loses text/html) traegt die Assertion darueber.
-        assert body.count('"Content-Type": "text/html; charset=utf-8"') >= 2, (
-            "Erwarte die synthetischen SW-Antworten (Flash-Helfer + Partial-Banner) mit charset=utf-8."
+        assert body.count('"Content-Type": "text/html; charset=utf-8"') >= 4, (
+            "Erwarte mindestens die vier synthetischen SW-Antworten mit charset=utf-8."
         )
 
     def test_dead_sync_code_removed(self, client):

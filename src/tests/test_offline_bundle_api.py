@@ -74,9 +74,7 @@ class TestBuildClientOfflineBundleService:
 
     def test_bundle_schema_version_is_2(self, facility, client_identified, staff_user):
         """Refs #1529, #1499: Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
-        v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-db.js — seit
-        dem Verbund-Split #1838 liegt der Lesepfad dort, nicht mehr in
-        offline-store.js)."""
+        v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-store.js)."""
         assert BUNDLE_SCHEMA_VERSION == 2
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["schema_version"] == 2
@@ -143,12 +141,13 @@ class TestBuildClientOfflineBundleService:
         self, facility, client_identified, doc_type_contact, staff_user
     ):
         """exakte Semantik-Gleichheit mit der Online-Annotation aus
-        ``ClientListView`` — cutoff-FREI, aber ohne soft-geloeschte Events.
-        Das juengste Event ist bewusst geloescht UND es gibt ein >90d-Event;
-        nur der Loeschfilter darf den Online-/Offline-Wert veraendern."""
+        ``ClientListView`` (clients.py:57) — cutoff-FREI und OHNE
+        ``is_deleted``-Filter. Das juengste Event ist bewusst geloescht UND es
+        gibt ein >90d-Event; eine is_deleted- oder cutoff-gefilterte Berechnung
+        wuerde vom Online-Spaltenwert abweichen."""
         from datetime import timedelta
 
-        from django.db.models import Max, Q
+        from django.db.models import Max
 
         from core.models import Client
 
@@ -185,13 +184,15 @@ class TestBuildClientOfflineBundleService:
         online_value = (
             Client.objects.for_facility(facility)
             .filter(is_active=True, is_deleted=False)
-            .annotate(last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)))
+            .annotate(last_contact=Max("events__occurred_at"))
             .get(pk=client_identified.pk)
             .last_contact
         )
         expected = online_value.isoformat() if online_value else None
         assert bundle["client"]["last_contact"] == expected
-        assert bundle["client"]["last_contact"] != deleted_newest.occurred_at.isoformat()
+        # Beweis, dass die Semantik greift: das juengste (geloeschte) Event
+        # bestimmt den Wert — genau wie die filterlose Online-Spalte.
+        assert bundle["client"]["last_contact"] == deleted_newest.occurred_at.isoformat()
 
     def test_bundle_contains_only_visible_events(
         self, facility, client_identified, doc_type_contact, doc_type_high, staff_user
@@ -892,9 +893,9 @@ class TestOfflineClientBundleView:
         django-ratelimit's ``Ratelimited`` (a ``PermissionDenied`` subclass) is
         mapped to HTTP 429 by the custom ``handler403`` — not Django's default
         403 — weil der Offline-Client 403 als Rechteentzug deutet und lokale
-        verschlüsselte Bundles purgt (siehe ``offline-bundles.js``
-        ``INVALIDATION_STATUSES`` — seit dem Verbund-Split #1838 nicht mehr in
-        offline-store.js). Ein Rate-Limit-Treffer ist kein Rechteentzug.
+        verschlüsselte Bundles purgt (siehe ``offline-store.js``
+        ``INVALIDATION_STATUSES``). Ein Rate-Limit-Treffer ist kein
+        Rechteentzug.
 
         ``ratelimit_enabled`` (conftest) schaltet das Limit an, leert den Cache
         und haelt das Zaehlfenster fest (Refs #1900).

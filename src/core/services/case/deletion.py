@@ -93,23 +93,7 @@ def pending_deletion_case_ids(facility, cases) -> set:
 
 
 def request_case_deletion(case, user, reason):
-    """Stellt einen Vier-Augen-Loeschantrag fuer einen Fall — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_case_deletion_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen.
-    """
-    return create_or_get_case_deletion_request(case, user, reason)[0]
-
-
-def create_or_get_case_deletion_request(case, user, reason):
-    """Wie :func:`request_case_deletion`, aber ``(antrag, created)``.
-
-    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request``.
-    Zwischen dem Vorab-Check der View und diesem Aufruf kann ein paralleler
-    Request denselben Antrag anlegen; der Zweite faellt dann in den
-    Idempotenz-Zweig unten und braucht die Idempotenz-Antwort statt einer
-    Erfolgsmeldung fuer etwas, das nie passiert ist.
+    """Stellt einen Vier-Augen-Loeschantrag fuer einen Fall.
 
     Idempotent: laeuft bereits ein PENDING-Antrag, wird dieser zurueckgegeben
     und **kein** zweites Audit-Event geschrieben (Muster #932) — die
@@ -117,7 +101,7 @@ def create_or_get_case_deletion_request(case, user, reason):
     """
     existing = get_pending_case_deletion_request(case)
     if existing is not None:
-        return existing, False
+        return existing
     dr = DeletionRequest.objects.create(
         facility=case.facility,
         target_type=DeletionRequest.TargetType.CASE,
@@ -135,7 +119,7 @@ def create_or_get_case_deletion_request(case, user, reason):
         # DeletionRequest.reason (ueber target_id=dr.pk erreichbar).
         detail={"target_case": str(case.pk)},
     )
-    return dr, True
+    return dr
 
 
 # ---------------------------------------------------------------------------
@@ -175,21 +159,9 @@ def soft_delete_case(case, user):
     """Direkter Loeschweg ohne Vier-Augen-Antrag (P1c, nicht-qualifizierte Person).
 
     Der Aufrufer (View) entscheidet ueber :func:`case_requires_four_eyes`,
-    welcher der beiden Wege gilt; **beide** Guards liegen zusaetzlich hier, weil
-    der Service die Single Source of Truth ist — das gilt seit dem Re-Review
-    auch fuer den Art.-18-Sperrvermerk (Refs #2045), der zuvor nur ungesperrt in
-    der View stand und damit weder den Direktaufruf noch das TOCTOU-Fenster
-    abdeckte. Genau dieser Widerspruch zwischen SSoT-Zusage und tatsaechlicher
-    Guard-Lage war der Befund.
-
-    Ein Kontext-Ausstieg wie beim Ereignis ist hier NICHT noetig: der gepruefte
-    Weg laeuft ueber ``approve_case_deletion`` -> ``_move_case_to_trash`` und
-    beruehrt diese Funktion nie. Die Trennung ist also strukturell, nicht
-    parametrisch.
+    welcher der beiden Wege gilt; der Guard liegt zusaetzlich hier, weil der
+    Service die Single Source of Truth ist.
     """
-    from core.services.client.restriction import assert_processing_allowed
-
-    assert_processing_allowed(case.client_id, lock=True)
     if case_requires_four_eyes(case):
         raise ValidationError(_("Für Fälle einer Person mit Zusatzangaben ist ein Löschantrag mit Bestätigung nötig."))
     return _move_case_to_trash(case, user, trigger="direct")

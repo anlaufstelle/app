@@ -10,7 +10,6 @@ Cross-Field- und Datum-Range-Validierung in ``clean()`` (Refs #708 / #711).
 from __future__ import annotations
 
 from datetime import date, timedelta
-from unittest import mock
 
 import pytest
 
@@ -28,25 +27,6 @@ FUTURE = TODAY + timedelta(days=10)
 PAST = TODAY - timedelta(days=10)
 # Garantiert ueber ``max_workitem_date()`` (31.12. des Folgejahrs):
 FAR_FUTURE = date(date.today().year + 2, 6, 1)
-
-
-class _UtcBoundaryDate(date):
-    @classmethod
-    def today(cls):
-        return cls(2026, 12, 31)
-
-
-def test_workitem_date_bounds_use_berlin_local_date():
-    berlin_date = date(2027, 1, 1)
-
-    with (
-        mock.patch("core.forms.workitems.date", _UtcBoundaryDate),
-        mock.patch("core.forms.workitems.timezone", create=True) as mock_timezone,
-    ):
-        mock_timezone.localdate.return_value = berlin_date
-
-        assert min_workitem_date() == berlin_date
-        assert max_workitem_date() == date(2028, 12, 31)
 
 
 def _base_data(**overrides) -> dict[str, str]:

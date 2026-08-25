@@ -119,40 +119,6 @@ class CustomLoginView(auth_views.LoginView):
             )
             return self.form_invalid(form)
 
-        # Refs #2067: archivierte Einrichtung sperrt die Anmeldung. Muster wie
-        # der Lockout-Zweig darueber — VOR ``super().form_valid()``, es
-        # existiert also noch keine Session. ``AuthenticationForm`` hat nur
-        # ``User.is_active`` geprueft; ``Facility.is_active`` war bis hierher
-        # wirkungslos. Die Middleware faengt zusaetzlich die bereits laufenden
-        # Sitzungen ab — beide Ebenen zusammen ergeben „archiviert heisst
-        # gesperrt", nicht „gesperrt ab dem naechsten Login".
-        # ``super_admin`` ist ausgenommen: die Rolle IST der Reaktivierungspfad
-        # (``FacilityAdmin`` ist super-only, L1/Refs #1375). Kein
-        # Credential-Widerruf wie beim Lockout — Archivieren ist ein
-        # organisatorischer Vorgang, kein Kompromittierungsverdacht.
-        login_facility = getattr(user, "facility", None)
-        if login_facility is not None and not login_facility.is_active and not getattr(user, "is_super_admin", False):
-            log_audit_event(
-                self.request,
-                AuditLog.Action.LOGIN_FAILED,
-                user=user,
-                facility=login_facility,
-                detail={
-                    "message": "Login blockiert — Einrichtung archiviert",
-                    "username": user.username,
-                    "reason": "facility_inactive",
-                },
-            )
-            form.add_error(
-                None,
-                _(
-                    "Ihre Einrichtung ist archiviert. Eine Anmeldung ist "
-                    "derzeit nicht möglich. Bitte wenden Sie sich an die "
-                    "Systemverwaltung."
-                ),
-            )
-            return self.form_invalid(form)
-
         response = super().form_valid(form)
         # Load session timeout from facility settings
         facility = getattr(user, "facility", None)

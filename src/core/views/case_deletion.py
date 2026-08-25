@@ -27,7 +27,6 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -40,19 +39,14 @@ from core.services.case import (
     anonymize_case_now,
     case_requires_four_eyes,
     cases_with_live_client,
-    create_or_get_case_deletion_request,
     get_pending_case_deletion_request,
+    request_case_deletion,
     restore_case,
     soft_delete_case,
 )
-from core.services.client.restriction import assert_processing_allowed
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
-from core.views.mixins import (
-    FacilityAdminRequiredMixin,
-    StaffRequiredMixin,
-    is_pending_deletion_request_conflict,
-)
+from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
 from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
@@ -116,14 +110,6 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
         pending = get_pending_case_deletion_request(case)
 
         if not case_requires_four_eyes(case) and pending is None:
-            # Art.-18-Gate (Refs #2045), Spiegel des Ereignis-Pfads: der
-            # gepruefte Vier-Augen-Antrag bleibt waehrend einer Einschraenkung
-            # offen (Art. 17 gilt weiter), die Loeschung im Alleingang nicht.
-            try:
-                assert_processing_allowed(case.client_id)
-            except ValidationError as exc:
-                messages.error(request, "; ".join(exc.messages))
-                return redirect("core:case_detail", pk=case.pk)
             soft_delete_case(case, request.user)
             messages.success(
                 request,
@@ -152,40 +138,7 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
         if not reason:
             messages.error(request, _("Bitte eine Begruendung angeben."))
             return redirect("core:case_delete_request", pk=pk)
-        # Refs #2015: get-then-create — zwischen dem PENDING-Check oben und dem
-        # ``create`` kann ein Doppelklick/Doppel-POST denselben Antrag anlegen.
-        # Der partielle Unique-Index macht den Verlierer sicher; ohne dieses
-        # Netz endete er im 500 statt in der Meldung des Erstfunds.
-        try:
-            with transaction.atomic():
-                _dr, created = create_or_get_case_deletion_request(case, request.user, reason)
-        except IntegrityError as exc:
-            if not is_pending_deletion_request_conflict(exc):
-                raise
-            # Refs #2015: Gewinner nachladen, bevor wir seine Existenz
-            # behaupten (Muster ``EventCreateView``) — sonst waere die Meldung
-            # eine Vermutung.
-            if get_pending_case_deletion_request(case) is None:
-                raise
-            messages.info(
-                request,
-                _(
-                    "Für diesen Fall läuft bereits ein Löschantrag — er wartet auf Bestätigung. "
-                    "Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
-                ),
-            )
-            return redirect("core:case_detail", pk=pk)
-        if not created:
-            # Refs #2015 (Re-Review): bestehender Antrag vom Service — dieselbe
-            # Antwort wie beim Erstfund oben, keine falsche Erfolgsmeldung.
-            messages.info(
-                request,
-                _(
-                    "Für diesen Fall läuft bereits ein Löschantrag — er wartet auf Bestätigung. "
-                    "Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
-                ),
-            )
-            return redirect("core:case_detail", pk=pk)
+        request_case_deletion(case, request.user, reason)
         messages.success(
             request,
             _(

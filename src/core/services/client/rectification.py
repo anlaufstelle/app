@@ -144,7 +144,7 @@ def _encode_value(value: Any) -> Any:
 
     ``date``/``time`` werden vorher auf ISO-Strings normalisiert — dieselbe
     SSOT-Konvention (:func:`~core.services.events.fields._serialize_json_value`,
-    Refs #1073), die ``clean_dynamic_data`` beim Anwenden erzwingt. Sie
+    Refs #1073), die ``_clean_client_dynamic_data`` beim Anwenden erzwingt. Sie
     ist hier nicht Kosmetik, sondern Pflicht: das Antragsformular liefert fuer
     DATE-/TIME-Slugs echte ``datetime``-Objekte (``parse_default``), an denen
     ``json.dumps`` mit ``TypeError`` (Fehler 500 im Antragspfad) scheitert.
@@ -335,7 +335,6 @@ def _apply_rectification(client: Client, reviewer: Any, field_path: str, new_val
     dazwischenfunken.
     """
     from core.services.client.main import update_client
-    from core.services.client.restriction import _rectification_write
 
     slug = _dynamic_slug(field_path)
     if slug is None:
@@ -346,16 +345,7 @@ def _apply_rectification(client: Client, reviewer: Any, field_path: str, new_val
         fields = {"data_json": data}
 
     try:
-        # ``_rectification_write``: die EINE Ausnahme vom Art.-18-Gate
-        # (Refs #2045). Art. 18 Abs. 1 lit. a knuepft die Einschraenkung an das
-        # Bestreiten der Richtigkeit — Art. 16 ist der Weg, auf dem genau
-        # dieses Bestreiten geklaert wird. Ein Gate, das auch die genehmigte
-        # Berichtigung blockierte, machte die Einschraenkung zur Sackgasse.
-        #
-        # Der Ausstieg ist ein modul-privater Kontext und KEIN Argument von
-        # ``update_client`` (Cross-Review-Befund 4): er gilt fuer genau diesen
-        # Block, nicht fuer einen beliebigen Aufrufer.
-        with transaction.atomic(), _rectification_write():
+        with transaction.atomic():
             update_client(client, reviewer, expected_updated_at=client.updated_at, **fields)
     except IntegrityError as exc:
         # Haeufigster Fall: ``unique_facility_pseudonym`` — der Wunsch-Pseudonym

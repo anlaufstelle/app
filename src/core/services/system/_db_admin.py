@@ -37,41 +37,11 @@ def has_rls_bypass_context() -> bool:
 # A1.4 (Refs #1026): Die legitimen Wartungspfade umgehen GENAU diese drei
 # Append-Only-Trigger — kein pauschales ``session_replication_role = replica``
 # mehr, das auch FK-/Constraint-Trigger stillgelegt haette.
-#
-# Die REIHENFOLGE ist sicherheitsrelevant und kein Zufall (ADR-050 D5.5,
-# Refs #2065): ``ALTER TABLE ... DISABLE TRIGGER`` nimmt einen
-# ``SHARE ROW EXCLUSIVE``-Lock, der mit dem ``ROW EXCLUSIVE`` gewoehnlicher
-# Schreiber kollidiert. Bis 0.89 stand ``core_auditlog`` zuerst — der
-# Schreib-Reihenfolge der Anwendung genau entgegengesetzt: ``create_event``/
-# ``update_event`` schreiben erst die ``EventHistory``-Zeile und (ausdruecklich
-# als letzten Schritt, Refs #1345/#1956) den AuditLog-Eintrag. Das war ein
-# ABBA-Zyklus — Bypass haelt ``core_auditlog`` und wartet auf
-# ``core_eventhistory``, der Request haelt ``core_eventhistory`` und wartet auf
-# ``core_auditlog`` —, den PostgreSQL mit ``deadlock detected`` aufloest, indem
-# es EINE der beiden Seiten abbricht. Mit einem naechtlichen Historien-Sweep
-# wuerde das zur Routine. Die Ordnung folgt deshalb jetzt der Anwendung:
-# ``core_eventhistory`` vor ``core_auditlog``. Der Guard-Test dazu:
-# ``test_append_only_trigger_reihenfolge_ist_eventhistory_vor_auditlog``.
 _APPEND_ONLY_TRIGGERS = (
+    ("core_auditlog", "auditlog_immutable"),
     ("core_eventhistory", "eventhistory_no_update"),
     ("core_eventhistory", "eventhistory_no_delete"),
-    ("core_auditlog", "auditlog_immutable"),
 )
-
-
-def _selected_triggers(tables):
-    """Die zu oeffnenden Trigger — ``None`` heisst „alle" (Bestandsverhalten).
-
-    Die Auswahl ist bewusst **tabellen**- und nicht triggergenau (ADR-050 M-6):
-    die DDL-Sperre haengt an der Tabelle, nicht am einzelnen Trigger, und genau
-    sie ist das, was ein Aufrufer vermeiden will. Wer ``core_eventhistory``
-    oeffnet, braucht ohnehin beide dortigen Trigger.
-    """
-    if tables is None:
-        return list(_APPEND_ONLY_TRIGGERS)
-    wanted = set(tables)
-    return [entry for entry in _APPEND_ONLY_TRIGGERS if entry[0] in wanted]
-
 
 # ``pg_trigger.tgenabled`` -> passendes ENABLE-Statement, um den Vorzustand
 # exakt wiederherzustellen (``A`` = ENABLE ALWAYS ist der gehaertete Ruhezustand,
@@ -85,17 +55,8 @@ _TGENABLED_TO_ENABLE = {
 
 
 @contextmanager
-def bypass_replication_triggers(tables=None):
+def bypass_replication_triggers():
     """Umgeht die Append-Only-Trigger fuer den umschlossenen Block per Owner-DDL.
-
-    ``tables`` schraenkt ein, WELCHE Tabellen geoeffnet werden (ADR-050 M-6,
-    Refs #2065); ``None`` = alle drei Trigger, also das unveraenderte
-    Bestandsverhalten der vier Alt-Aufrufer. Der Sinn der Verengung ist nicht
-    Sparsamkeit, sondern der Deadlock-Pfad: wer nur ``core_eventhistory``
-    oeffnet, nimmt auf ``core_auditlog`` gar keine DDL-Sperre mehr, sondern nur
-    das ``ROW EXCLUSIVE`` seines eigenen Nachweis-Inserts — dieselbe Ordnung
-    wie jeder Request, kein Zyklus mehr moeglich. Nebeneffekt und fuer sich
-    schon richtig: ein Historien-Sweep oeffnet nicht mehr auch das AuditLog.
 
     A1.4 (Refs #1026): Frueher lief das ueber ``SET LOCAL
     session_replication_role = replica``. Das setzt aber (a) voraus, dass die
@@ -117,9 +78,7 @@ def bypass_replication_triggers(tables=None):
 
     Aufrufer (alle laufen als Owner-/Admin-Wartungsrolle): ``prune_auditlog``,
     ``Client.anonymize()`` (DSGVO Art. 17), ``backfill_audit_chain``,
-    ``reencrypt_fields`` — alle vier ohne ``tables`` und damit unveraendert —
-    sowie der EventHistory-Sweep aus ADR-050, der als einziger die Verengung
-    auf ``core_eventhistory`` nutzt.
+    ``reencrypt_fields``.
 
     No-op on non-PostgreSQL backends (test SQLite) — callers must
     accept that behaviour.
@@ -139,7 +98,7 @@ def bypass_replication_triggers(tables=None):
         # Checks jetzt und raeumt die Warteschlange, sodass das Owner-DDL greift.
         cur.execute("SET CONSTRAINTS ALL IMMEDIATE")
         restore: list[tuple[str, str, str]] = []
-        for table, trigger in _selected_triggers(tables):
+        for table, trigger in _APPEND_ONLY_TRIGGERS:
             cur.execute(
                 "SELECT tgenabled FROM pg_trigger WHERE tgname = %s AND tgrelid = %s::regclass",
                 [trigger, table],

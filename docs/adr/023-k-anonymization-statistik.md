@@ -24,11 +24,11 @@ Anlaufstelle implementiert **k-Anonymisierung mit Default-Schwelle `k=5`** in [`
 - **Schwelle pro Einrichtung konfigurierbar**, Default `k=5`. Settings-Eintrag erlaubt Anpassung; eine Senkung unter `k=3` wird im UI als Risiko markiert.
 - **Aequivalenzklasse fuer Klienten:** `(facility, age_cluster, contact_stage)`. `count_clients_in_bucket(facility, age_cluster, contact_stage)` liefert die Bucket-Groesse; `is_k_anonymous(client, k)` prueft die Schwelle vor Generalisierung.
 - **Generalisierungs-Regeln** in `k_anonymize_client(client, k)`:
- - `pseudonym` → `anon-<sha256(pk)[:12]>` (deterministisch, nicht reversibel)
- - `notes` → `""` (Freitext leakt Identitaet)
- - `age_cluster` bleibt (bereits gebucketed)
- - `contact_stage` bleibt (low-cardinality)
- - `is_active` → `False`, `k_anonymized` → `True` (Flag fuer Wiedererkennung in spaeteren Laeufen)
+  - `pseudonym` → `anon-<sha256(pk)[:12]>` (deterministisch, nicht reversibel)
+  - `notes` → `""` (Freitext leakt Identitaet)
+  - `age_cluster` bleibt (bereits gebucketed)
+  - `contact_stage` bleibt (low-cardinality)
+  - `is_active` → `False`, `k_anonymized` → `True` (Flag fuer Wiedererkennung in spaeteren Laeufen)
 - **Bericht-Aggregate (Statistik-Seite):** Buckets mit `count < k` werden als **„unterdrueckt"** ausgewiesen, **nicht** mit der echten Zahl. Das betrifft die Kennzahlen „Unterschiedliche Personen", „Nach Dokumentationstyp" und „Nach Altersgruppe" in `/statistics/external/` (siehe [`docs/user-guide.md` § Externe Berichte](../user-guide.md)).
 - **Datenschutzprofil-Kopf** im Bericht zeigt Einrichtung, Profil (`external`), Zeitraum, `k`-Schwelle und Erzeugungs-Zeitpunkt — damit der Empfaenger nachvollziehen kann, unter welcher Aggregations-Politik die Zahlen entstanden sind.
 - **Trennung von `Client.anonymize`:** `k_anonymize_client` ist *additiv* — sie aendert nur das Client-Record. Kaskadierende Loeschungen in Cases/Episodes/WorkItems bleiben Sache von `Client.anonymize` (Retention-Pipeline, [ADR-021](021-retention-modell.md)). *(Update 2026-06-14: Der Retention-Bridge-Layer ruft die Freitext-Kaskade seit #1094 auch im K-Anon-Pfad auf — siehe Abschnitt „Update" unten. Die Primitive selbst bleibt client-only.)*

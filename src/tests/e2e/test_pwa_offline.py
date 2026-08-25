@@ -142,7 +142,6 @@ def _wait_for_active_service_worker(page, base_url) -> None:
         page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
     """Offline + URL-encoded POST an /workitems/new/ → SW queuet & liefert Feedback.
 
@@ -218,7 +217,6 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_htmx_partial_get_shows_compact_banner(browser, base_url):
     """Refs #1416: Ein offline ausgeloester HTMX-Partial-GET darf NICHT den
     kompletten ``offline.html``-Block ins Swap-Target schwappen.
@@ -355,7 +353,6 @@ def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_clients_shell_lists_cached_clients(browser, base_url):
     """Refs #1533 (#1499): Offline rendert der SW die kanonische
     Personenliste ``/clients/`` IN-PLACE — die role=table-Liste der offline
@@ -416,7 +413,6 @@ def test_offline_clients_shell_lists_cached_clients(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
     """Refs #1534 (#1499): Die offline in-place gerenderte
     Personenliste an ``/clients/`` bietet client-seitige Suche; die Eingabe
@@ -495,7 +491,6 @@ def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_home_shows_storage_estimate(browser, base_url):
     """Refs #1412 (M17b): navigator.storage.estimate() wird gestubbt; der
     Offline-Arbeitsplatz zeigt die Belegung, die den gestubbten Werten
@@ -525,7 +520,6 @@ def test_offline_home_shows_storage_estimate(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 class TestOfflineHomePersistBadge:
     """Refs #1412 (M17b): der Persist-Status-Badge im Offline-Arbeitsplatz
     spiegelt den gecachten Grant (granted vs. denied) -- reiner Cache-Read,
@@ -571,7 +565,6 @@ class TestOfflineHomePersistBadge:
             context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_client_detail_renders_in_place(browser, base_url):
     """Refs #1322: Offline rendert ``/clients/<pk>/`` den Viewer IN-PLACE an der
     kanonischen URL (kein ``/offline/...``-Redirect). Der Service Worker
@@ -689,7 +682,6 @@ def _login_miriam(page, base_url):
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_conflict_list_renders_in_place(browser, base_url):
     """Refs #1396: Offline rendert ``/offline/conflicts/`` die Konflikt-/Dead-
     Verwaltung IN-PLACE aus der verschluesselten IndexedDB (KEIN Bounce auf
@@ -724,7 +716,6 @@ def test_offline_conflict_list_renders_in_place(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_conflict_review_renders_in_place(browser, base_url):
     """Refs #1396: Offline rendert ``/offline/conflicts/<pk>/`` den Resolver-
     Shell IN-PLACE an der kanonischen URL. Der Service Worker serviert den
@@ -754,7 +745,6 @@ def test_offline_conflict_review_renders_in_place(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_offline_discard_dead_event_updates_list(browser, base_url):
     """Refs #1396: Ein dead-Letter offline verwerfen (rein lokaler IDB-Write)
     aktualisiert die Liste ohne Netz."""
@@ -846,7 +836,6 @@ def test_bulk_take_offline_caches_multiple_clients(browser, base_url):
         context.close()
 
 
-@pytest.mark.webkit_transport_artifact
 def test_bulk_take_offline_aborts_on_ratelimited_bundle_fetch(browser, base_url):
     """Refs #1351/#1384 (M3-Handoff): `bulkOfflineTake` (client-row-offline.js)
     brach bislang bei einem 429 auf den Bundle-Fetch NICHT ab — die Schleife

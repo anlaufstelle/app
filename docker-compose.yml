@@ -1,19 +1,11 @@
-# Lokale Entwicklungs-Compose — niemals auf einem oeffentlichen Server starten.
-#
-# ``docker compose up`` ohne weitere Flags genuegt: der einmalige ``init``-Dienst
-# migriert das Schema und legt Demo-Daten an, solange die Datenbank noch leer ist
-# (Refs #1062, ADR-049). Danach steht http://localhost:8000/login/ mit den
-# Seed-Zugaengen bereit.
+# Dev-Compose — niemals auf einem oeffentlichen Server starten.
 #
 # Diese Datei nutzt triviale Default-Credentials (anlaufstelle/anlaufstelle/anlaufstelle)
-# und legt beim ersten Start Demo-Konten mit dokumentiertem Passwort an. Postgres und
-# Webdienst sind deshalb explizit auf 127.0.0.1 gebunden, sonst wuerde
-# ``docker compose up`` auf 0.0.0.0 lauschen und Datenbank wie Anwendung mit
-# bekannten Zugangsdaten aus dem Internet erreichbar machen (Refs #799/#1062).
+# und stellt Ports zur lokalen Entwicklung bereit. Postgres ist deshalb explizit auf
+# 127.0.0.1 gebunden, sonst wuerde ``docker compose up`` auf 0.0.0.0:5432 lauschen
+# und die DB mit Trivialpasswort aus dem Internet erreichbar machen (Refs #799).
 #
-# Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden — dort
-# gibt es weder Auto-Seed noch ``SEED_ALLOWED``; die Ersteinrichtung laeuft ueber
-# ``manage.py create_super_admin`` (docs/admin-guide.md § 1).
+# Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden.
 services:
   db:
     image: postgres:18-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa
@@ -36,60 +28,11 @@ services:
       timeout: 3s
       retries: 5
 
-  # Einmaliger Bootstrap des lokalen Setups (Refs #1062, ADR-049): Schema
-  # migrieren, danach Demo-Daten anlegen -- Letzteres nur, wenn die Datenbank
-  # noch kein Benutzerkonto hat. Der Dienst beendet sich; ``web`` startet erst
-  # danach. Es gibt ihn AUSSCHLIESSLICH hier: die Produktions-/Staging-/dev-/
-  # Demo-Stacks migrieren weiterhin ueber den getrennten One-Shot-Job
-  # ``docker-migrate.sh`` und seeden nie automatisch.
-  init:
-    build: .
-    # Gemeinsames Tag mit ``web``: derselbe Build-Kontext, dasselbe Image —
-    # ohne ``image:`` legte Compose zwei getrennte Tags an und baute zweimal.
-    image: anlaufstelle-local:latest
-    # Wie bei ``web``: ./src:/app verdeckt den Image-Entrypoint (Refs #1977).
-    entrypoint: []
-    command: ["/bin/sh", "/opt/anlaufstelle/bin/bootstrap.sh", "bootstrap"]
-    restart: "no"
-    volumes:
-      - ./src:/app
-      # Das Bootstrap-Skript liegt bewusst NICHT im Image: es ist reines
-      # Local-Onboarding und hat im Produktions-Artefakt nichts verloren.
-      - ./scripts/local/bootstrap.sh:/opt/anlaufstelle/bin/bootstrap.sh:ro
-      - localstate:/home/appuser
-    environment:
-      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.dev
-      POSTGRES_HOST: db
-      POSTGRES_DB: anlaufstelle
-      POSTGRES_USER: anlaufstelle
-      POSTGRES_PASSWORD: anlaufstelle
-      # Leer lassen ist der Normalfall: das Bootstrap-Skript erzeugt beim
-      # allerersten Start einen zufaelligen Schluessel in ``localstate``.
-      # Ein gesetzter Wert gewinnt (Refs #1977: kein ausgeliefertes
-      # Fest-Geheimnis, aber auch kein Setup-Schritt vor dem ersten Start).
-      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
-      # Der PFAD, nicht der Wert: ``settings/dev.py`` liest die Datei. Ein nur
-      # in die Startshell exportierter Schluessel waere fuer
-      # ``docker compose exec/run python manage.py …`` unsichtbar — diese
-      # Prozesse erben die Container-Konfiguration, nicht die Umgebung von
-      # PID 1, und liefen still im Klartext-Modus (Refs #1062).
-      LOCAL_ENCRYPTION_KEY_FILE: /home/appuser/encryption.key
-    depends_on:
-      db:
-        condition: service_healthy
-
   web:
     build: .
-    image: anlaufstelle-local:latest
     # ./src:/app verdeckt den Image-Entrypoint. Dev startet deshalb bewusst
     # ohne ihn und kopiert zuerst das im Image gebaute CSS aus dem nicht
     # gemounteten Pfad in den Quellbaum (Refs #1977).
-    #
-    # ``ensure-key`` legt die Schluesseldatei an, falls sie fehlt, und
-    # exportiert bewusst NICHTS: gelesen wird sie von ``settings/dev.py`` ueber
-    # ``LOCAL_ENCRYPTION_KEY_FILE``. Nur so sieht auch jedes spaetere
-    # ``docker compose exec/run python manage.py …`` denselben Schluessel
-    # (Refs #1062).
     entrypoint: []
     command:
       - /bin/sh
@@ -97,30 +40,23 @@ services:
       - |
         set -eu
         cp /opt/anlaufstelle/static/css/styles.css /app/static/css/styles.css
-        /bin/sh /opt/anlaufstelle/bin/bootstrap.sh ensure-key
         exec python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./src:/app
-      - ./scripts/local/bootstrap.sh:/opt/anlaufstelle/bin/bootstrap.sh:ro
-      - localstate:/home/appuser
     ports:
-      # Loopback-Binding — die Anwendung faehrt mit bekannten Seed-Zugaengen
-      # hoch und darf darum nicht auf 0.0.0.0 lauschen (Refs #799/#1062).
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.dev
       POSTGRES_HOST: db
       POSTGRES_DB: anlaufstelle
       POSTGRES_USER: anlaufstelle
       POSTGRES_PASSWORD: anlaufstelle
-      # Siehe ``init``: leer heisst "Schluessel aus ``localstate`` nehmen".
-      ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
-      LOCAL_ENCRYPTION_KEY_FILE: /home/appuser/encryption.key
+      # Kein Dev-Festschluessel: Compose bricht vor dem Start mit einer klaren
+      # Meldung ab, wenn der Aufrufer keinen Key bereitstellt (Refs #1977).
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?Set ENCRYPTION_KEY before running Docker Compose}"
     depends_on:
       db:
         condition: service_healthy
-      init:
-        condition: service_completed_successfully
     # Das Dev-Postgres initialisiert POSTGRES_USER als Bootstrap-Superuser.
     # /health/ meldet den erwarteten RLS-Bypass deshalb als "degraded"; fuer
     # den lokalen Stack pruefen wir reine Liveness. Das Image und die
@@ -147,14 +83,6 @@ services:
 
   clamav:
     image: clamav/clamav:stable@sha256:6f4a9e7d616ffc8d1070200fe35ac860735fdd522161a1043f94856e6ee13c28
-    # Opt-in per Profil (Refs #1062): ``CLAMAV_ENABLED`` ist im lokalen
-    # web-Dienst ungesetzt, der Scanner also ohnehin unbenutzt. Als
-    # profilloser Dienst lud ``docker compose up`` trotzdem ein ~1-GB-Image
-    # samt Signatur-Update — auf einem frischen Klon der mit Abstand
-    # groesste Posten am 60-Sekunden-Versprechen. Start bei Bedarf:
-    # ``docker compose --profile clamav up clamav``.
-    profiles:
-      - clamav
     volumes:
       - clamav-db:/var/lib/clamav
     # Port 3310 ist nur innerhalb des Compose-Netzwerks sichtbar — kein Host-Binding.
@@ -173,9 +101,3 @@ services:
 volumes:
   pgdata:
   clamav-db:
-  # Home des Container-Benutzers. Traegt den lokal erzeugten Fernet-Schluessel
-  # (``encryption.key``, Mode 0600) ueber Neustarts hinweg — ohne ihn waeren
-  # bereits verschluesselte Entwicklungsdaten nach dem naechsten ``up`` nicht
-  # mehr lesbar. Das Image legt /home/appuser als appuser-owned an, das
-  # Volume erbt diese Rechte beim ersten Mount (Refs #1062).
-  localstate:

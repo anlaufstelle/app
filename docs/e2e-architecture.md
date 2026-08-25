@@ -97,20 +97,20 @@ base.py → dev.py → e2e.py
 ### Session-scoped (einmal pro Test-Suite)
 
 1. **`base_url`** — Startet gunicorn-Server:
- - `migrate --run-syncdb`
- - `seed` (Testdaten laden)
- - `collectstatic --noinput`
- - gunicorn starten + Health-Check (`GET /login/`)
- - Am Ende: `SIGTERM` + `wait(timeout=10)`
+   - `migrate --run-syncdb`
+   - `seed` (Testdaten laden)
+   - `collectstatic --noinput`
+   - gunicorn starten + Health-Check (`GET /login/`)
+   - Am Ende: `SIGTERM` + `wait(timeout=10)`
 
 2. **Storage-States** — Login einmal pro Rolle, Session-Cookies cachen:
- - `_login_storage_state` → Admin (admin)
- - `_lead_storage_state` → Lead (emma)
- - `_staff_storage_state` → Staff (miriam)
- - `_assistant_storage_state` → Assistant (lena)
- - `_super_admin_storage_state` → Super-Admin (superadmin)
- - Passwort: `anlaufstelle2026` (Seed-Default)
- - Bauen sich ueber einen **kurzlebigen eigenen Browser** (`launch_browser`), nicht ueber die `browser`-Fixture — sonst ScopeMismatch (session haengt an module, siehe unten). Ein Storage-State ist reines Cookie-JSON und ueberlebt das Schliessen des Browsers; die Server-Session bleibt unabhaengig davon gueltig.
+   - `_login_storage_state` → Admin (admin)
+   - `_lead_storage_state` → Lead (emma)
+   - `_staff_storage_state` → Staff (miriam)
+   - `_assistant_storage_state` → Assistant (lena)
+   - `_super_admin_storage_state` → Super-Admin (superadmin)
+   - Passwort: `anlaufstelle2026` (Seed-Default)
+   - Bauen sich ueber einen **kurzlebigen eigenen Browser** (`launch_browser`), nicht ueber die `browser`-Fixture — sonst ScopeMismatch (session haengt an module, siehe unten). Ein Storage-State ist reines Cookie-JSON und ueberlebt das Schliessen des Browsers; die Server-Session bleibt unabhaengig davon gueltig.
 
 ### Modul-scoped (einmal pro Testdatei)
 
@@ -176,9 +176,9 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 
 1. **Serielle Ausfuehrung:** E2E-Tests laufen seriell (kein pytest-xdist). Playwright/Chromium braucht ~200-400 MB RAM pro Instanz. Auf CI-Runnern mit begrenztem RAM wuerde Parallelisierung zu OOM fuehren.
 
- **RAM-Decke auch seriell (Refs #1787):** Der volle serielle Lauf (~760 Tests, ~21 min) hat auf einem 7,5-GiB-Host ohne Swap den Chromium per OOM-Killer verloren. Zwei Stufen der Abhilfe, in dieser Reihenfolge:
- 1. **Browser-Recycling** (Default, kein Aufruf noetig): modul-scoped `browser`-Fixture, ein Chromium je Testdatei — kappt das monotone Speicherwachstum ueber die Session.
- 2. **`make test-e2e-halves`** — kanonischer Fallback, wenn der Voll-Lauf **trotz** Recycling ins OOM laeuft: zwei serielle pytest-Sessions ueber je eine Haelfte der Testdateien. Jede Haelfte startet Server + `seed --flush` neu und hat ihr eigenes Speicher-Budget; das Rezept laeuft als eine Shell mit `set -e`, ein Fehlschlag in Haelfte 1 bricht ab. Preis: doppelte Server-/Seed-Zeit und keine dateiuebergreifende Zustandskette — Tests muessen ohnehin dateiweise unabhaengig sein. Welche Datei in welche Haelfte faellt, entscheidet seit #1976 derselbe Splitter wie in der CI-Matrix (siehe [Scheiben-Schnitt](#scheiben-schnitt-ci-matrix-und-lokaler-fallback) unten) — die Liste bleibt dynamisch, kein Drift bei neuen Dateien.
+   **RAM-Decke auch seriell (Refs #1787):** Der volle serielle Lauf (~760 Tests, ~21 min) hat auf einem 7,5-GiB-Host ohne Swap den Chromium per OOM-Killer verloren. Zwei Stufen der Abhilfe, in dieser Reihenfolge:
+   1. **Browser-Recycling** (Default, kein Aufruf noetig): modul-scoped `browser`-Fixture, ein Chromium je Testdatei — kappt das monotone Speicherwachstum ueber die Session.
+   2. **`make test-e2e-halves`** — kanonischer Fallback, wenn der Voll-Lauf **trotz** Recycling ins OOM laeuft: zwei serielle pytest-Sessions ueber je eine Haelfte der Testdateien. Jede Haelfte startet Server + `seed --flush` neu und hat ihr eigenes Speicher-Budget; das Rezept laeuft als eine Shell mit `set -e`, ein Fehlschlag in Haelfte 1 bricht ab. Preis: doppelte Server-/Seed-Zeit und keine dateiuebergreifende Zustandskette — Tests muessen ohnehin dateiweise unabhaengig sein. Welche Datei in welche Haelfte faellt, entscheidet seit #1976 derselbe Splitter wie in der CI-Matrix (siehe [Scheiben-Schnitt](#scheiben-schnitt-ci-matrix-und-lokaler-fallback) unten) — die Liste bleibt dynamisch, kein Drift bei neuen Dateien.
 
 2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4().hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
 

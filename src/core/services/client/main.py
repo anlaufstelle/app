@@ -14,25 +14,38 @@ from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
 from core.retention.legal_holds import client_has_active_hold, exclude_clients_with_active_holds
-from core.services.audit import (
-    apply_allowlisted_update,
-    audit_client_event,
-    audit_event,
-    check_update_allowlist,
-)
-from core.services.client.restriction import assert_processing_allowed
-from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
+from core.services.audit import audit_client_event, audit_event
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import clean_dynamic_data
-from core.services.events.history_diff import build_anonymization_marker
+from core.services.dynamic_data import validate_data_json
 from core.services.security import check_version_conflict
 from core.services.system import bypass_replication_triggers
 
 logger = logging.getLogger(__name__)
 
 
-_REDACTED_HISTORY_MARKER = build_anonymization_marker()
-_CLIENT_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp ist nicht für Personen vorgesehen.")
+_REDACTED_HISTORY_MARKER = {"_redacted": True, "anonymized": True}
+
+
+def _check_client_document_type(facility, document_type):
+    """Prueft den Personen-``DocumentType`` (M2 P4b, Refs #1058).
+
+    Zwei Bedingungen, beide als deutsche ``ValidationError`` (der Aufrufer ist
+    ein Formular):
+
+    (a) **Facility-Scope** — ein Typ einer fremden Einrichtung waere ein
+        Cross-Tenant-Leck (der Slug-Satz stammte aus fremder Konfiguration).
+    (b) **Entitaetstyp** — nur ``entity_type=client``. Ein Ereignis-Typ traegt
+        Feldsemantik, die an einem Personen-Datensatz keine Bedeutung hat.
+
+    ``None`` (kein Typ) ist zulaessig und wird unveraendert durchgereicht.
+    """
+    if document_type is None:
+        return None
+    if document_type.facility_id != facility.pk:
+        raise ValidationError(_("Der Dokumentationstyp gehört nicht zu dieser Einrichtung."))
+    if document_type.entity_type != DocumentType.EntityType.CLIENT:
+        raise ValidationError(_("Der Dokumentationstyp ist nicht für Personen vorgesehen."))
+    return document_type
 
 
 def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
@@ -46,11 +59,11 @@ def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
     (FK/RLS/Verschluesselung) und ohne fachliche Meldung auf.
 
     Die ``*_id``-Variante wird daher hier aufgeloest und durch das Objekt
-    ersetzt, sodass :func:`~core.services.dynamic_data.clean_dynamic_data`
-    **genau einen** Pfad zu pruefen hat. Unbekannte oder syntaktisch ungueltige
-    PKs werden als ``ValidationError`` abgewiesen (fail-closed), ebenso das
-    gleichzeitige Setzen beider Schreibweisen — das waere mehrdeutig, weil die
-    Reihenfolge der ``kwargs`` entschiede, welcher Wert gewinnt.
+    ersetzt, sodass :func:`_check_client_document_type` **genau einen** Pfad zu
+    pruefen hat. Unbekannte oder syntaktisch ungueltige PKs werden als
+    ``ValidationError`` abgewiesen (fail-closed), ebenso das gleichzeitige
+    Setzen beider Schreibweisen — das waere mehrdeutig, weil die Reihenfolge
+    der ``kwargs`` entschiede, welcher Wert gewinnt.
     """
     if "document_type_id" not in data:
         return data.get("document_type")
@@ -73,6 +86,26 @@ def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
     return document_type
 
 
+def _clean_client_dynamic_data(facility, document_type, data_json) -> dict:
+    """Guard + Whitelist fuer die Dynamikdaten einer Person (M2 P4b, Refs #1058).
+
+    Prueft erst den Typ (:func:`_check_client_document_type`) und filtert dann
+    ``data_json`` mit :func:`~core.services.dynamic_data.validate_data_json`
+    gegen dessen Feld-Slugs. **Der Rueckgabewert ist verbindlich** — die
+    Whitelist verwirft fremde Keys, und nur wer das Ergebnis speichert,
+    verhindert Mass-Assignment ins JSONB.
+
+    Ohne Typ gibt es keine Whitelist: dann duerfen auch keine Dynamikdaten
+    gesetzt werden (statt sie still zu verschlucken).
+    """
+    document_type = _check_client_document_type(facility, document_type)
+    if document_type is None:
+        if data_json:
+            raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
+        return {}
+    return validate_data_json(document_type, data_json)
+
+
 def _redact_client_identity(client) -> None:
     """Ersetze Klartext-Felder am Client durch anonyme Marker.
 
@@ -81,38 +114,21 @@ def _redact_client_identity(client) -> None:
     faellt auf ``NULL`` zurueck, damit der ``PROTECT``-Verweis anonymisierte
     Bestaende nicht dauerhaft an einen Konfigurationstyp kettet (der Typ waere
     sonst nie loeschbar, obwohl die Daten weg sind).
-
-    Refs #2013: ``anonymized_at`` wird hier gesetzt und nicht erst in
-    :func:`anonymize_client` — Muster ``_redact_case_content``. Der Stempel
-    gehoert an den Ort, der den Inhalt tatsaechlich entfernt. Ein bereits
-    gesetzter Stempel bleibt stehen: er datiert die **erste** Tilgung, spaetere
-    Laeufe faenden ohnehin nichts mehr vor.
     """
     client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
     client.notes = ""
     client.age_cluster = client.AgeCluster.UNKNOWN
-    # Refs #2047: Symmetrie zu ``age_cluster``. Der Hard-Pfad zerstoerte
-    # bisher genau EINEN der beiden Quasi-Identifikatoren — eine Asymmetrie
-    # ohne Begruendung: die Analogie zu ``k_anonymize_client`` traegt sie
-    # nicht, denn die Primitive laesst BEIDE Felder stehen (sie braucht sie
-    # fuer die Aequivalenzklasse), waehrend der Hard-Pfad gar keine
-    # k-Zusicherung gibt und deshalb auch keinen der beiden braucht.
-    # ``IDENTIFIED`` ist der informationsaermste Wert der Werteliste.
-    client.contact_stage = client.ContactStage.IDENTIFIED
     client.is_active = False
     client.data_json = {}
     client.document_type = None
-    client.anonymized_at = client.anonymized_at or timezone.now()
     client.save(
         update_fields=[
             "pseudonym",
             "notes",
             "age_cluster",
-            "contact_stage",
             "is_active",
             "data_json",
             "document_type",
-            "anonymized_at",
         ]
     )
 
@@ -248,63 +264,6 @@ def _redact_live_events(client) -> None:
     for event in Event.objects.filter(client=client, is_deleted=False).iterator():
         event.data_json = {}
         event.save(update_fields=["data_json", "search_text", "updated_at"])
-
-
-#: Chunk-Groesse des Generalisierungs-Laufs. Bewusst klein gehalten: der Lauf
-#: sitzt in derselben Transaktion wie die uebrige Kaskade, ein einzelnes
-#: ``bulk_update`` ueber zehntausende Zeilen haelt sonst unnoetig lange Locks.
-_TIMESTAMP_BUCKET_CHUNK = 500
-
-
-def _generalize_event_timestamps(event_ids: list) -> None:
-    """Generalisiert ``Event.occurred_at`` auf den Monatsersten 00:00 (Refs #2047).
-
-    **Warum ueberhaupt.** Nach der Tilgung blieb je Tombstone die vollstaendige,
-    personenverknuepfte Timeline aus exakten Zeitpunkten × Dokumentationstyp ×
-    Fallstruktur stehen. Die k-Anonymitaets-Zusicherung deckt sie nicht ab: sie
-    attestiert ``(age_cluster, contact_stage)``, nicht das zeitlich
-    hochdimensionale Muster. Mit Aussenwissen („Krisenintake am 03.05. gegen
-    halb drei") bleibt ein Single-out bei Einrichtungsgroessen plausibel — der
-    Datensatz waere damit pseudonymisiert, nicht anonym.
-
-    **Warum Monat und nicht Tag.** Die Statistik aggregiert auf Monatsebene
-    (``TruncMonth``), der Informationsverlust ist dort also null; gegenueber
-    Tagesgenauigkeit ist der Monatsbucket zugleich deutlich robuster gegen
-    Single-out ueber Aussenwissen. Die Zeile selbst bleibt vollstaendig
-    erhalten — dies ist eine Generalisierung, keine Loeschung.
-
-    **Warum lokal und nicht in UTC.** Die Bucket-Grenze liegt im lokalen
-    Kalender (``TIME_ZONE``). Ein Ereignis am 1. Maerz um 00:30 Berliner Zeit
-    liegt in UTC noch im Februar; ein UTC-Bucket schoebe es in den Vormonat und
-    verfaelschte genau die Monatsstatistik, deren Erhalt die Abwaegung traegt.
-
-    **Warum ``bulk_update`` statt ``save()``.** ``Event.save()`` laeuft durch
-    das ``pre_save``-Signal, das ``search_text`` neu berechnet; ohne
-    ``search_text`` in ``update_fields`` persistierte der Neuwert nicht (die
-    #1092-Falle). Der Zeitstempel hat mit dem Suchtext nichts zu tun — ein
-    reines ``UPDATE`` auf die eine Spalte ist der praezisere Eingriff und
-    laesst ``updated_at`` bewusst unberuehrt: die inhaltliche Aenderung der
-    Zeile war die Redaktion, nicht dieser Bucket.
-
-    Idempotent: ein bereits gebucketeter Wert faellt aus der Aenderungsmenge.
-    """
-    from core.models.event import Event
-
-    pending: list = []
-    for event in Event.objects.filter(pk__in=event_ids).only("pk", "occurred_at").iterator():
-        if event.occurred_at is None:
-            continue
-        local = timezone.localtime(event.occurred_at)
-        bucket = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if bucket == local:
-            continue
-        event.occurred_at = bucket
-        pending.append(event)
-        if len(pending) >= _TIMESTAMP_BUCKET_CHUNK:
-            Event.objects.bulk_update(pending, ["occurred_at"])
-            pending.clear()
-    if pending:
-        Event.objects.bulk_update(pending, ["occurred_at"])
 
 
 def _redact_event_history(event_ids: list) -> None:
@@ -446,8 +405,8 @@ def _redact_retention_proposals(event_ids: list) -> None:
         proposal.save(update_fields=["details"])
 
 
-def _redact_legal_holds(client, event_ids: list) -> None:
-    """Redigiere ``LegalHold.reason`` fuer alle Hold-Ziele der Person (Refs #1751, #1818, #1990).
+def _redact_legal_holds(client, event_ids: list, case_ids: list | None = None) -> None:
+    """Redigiere ``LegalHold.reason`` fuer Client-, Event- und Fall-Ziele (Refs #1751, #1818).
 
     ``reason`` ist bestimmungsgemaess Freitext mit Fall-/Klientenkontext und
     kannte bisher **keinen** Redaktions- oder Pruning-Pfad: abgelaufene und
@@ -457,16 +416,12 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     Aufhebungs-Metadaten bleiben fuer den Nachweis-Trail erhalten (die Zeile
     belegt weiterhin, DASS eine Aufbewahrungspflicht bestand).
 
-    Die Zielmenge stammt seit #1990 aus
-    :func:`core.services.client.targets.client_legal_hold_targets_q` — demselben
-    Builder, den die Art.-15-Auskunft
-    (:func:`core.services.client.export._gather_legal_holds`) benutzt. Der
-    **Fall**-Zweig (``target_type="Case"``, ADR-044/Refs #1818) stand vorher nur
-    hier und wurde ueber ein eigenes ``case_ids``-Argument hereingereicht; die
-    Auskunft kannte ihn nicht. Der Parameter entfaellt deshalb: die Fall-IDs
-    leitet der Builder aus ``client.cases`` ab — dieselbe Menge, die
-    :func:`_redact_cases_and_episodes` zurueckgab, aber aus EINER Quelle fuer
-    beide Seiten. Der ``Activity``-Zweig kam mit demselben Ticket dazu.
+    Der **Fall**-Zweig (``target_type="Case"``, Refs #1818) kam mit ADR-044
+    dazu: seit ``create_hold_for_target`` einen Fall-Hold erzeugen kann, faellt
+    dessen ``reason`` sonst durch beide bisherigen Zweige und bliebe nach der
+    Personen-Anonymisierung dauerhaft im Klartext stehen — ``LegalHold.reason``
+    ist laut eigenem Docstring bestimmungsgemaess Freitext mit
+    Fall-/Klientenkontext und kennt keinen zweiten Pruning-Pfad.
 
     Hinweis zur Reichweite: ein **aktiver** Hold blockiert die Anonymisierung
     an beiden Retention-Einstiegen — ``anonymize_eligible_soft_deleted_clients``
@@ -476,9 +431,15 @@ def _redact_legal_holds(client, event_ids: list) -> None:
     vorhanden, waere bereits die Anonymisierung selbst der Fehler — nicht
     diese Redaktion.
     """
+    from django.db.models import Q
+
     from core.models.retention import LegalHold
 
-    targets = client_legal_hold_targets_q(client, event_ids)
+    targets = Q(target_type="Client", target_id=client.pk)
+    if event_ids:
+        targets |= Q(target_type="Event", target_id__in=event_ids)
+    if case_ids:
+        targets |= Q(target_type="Case", target_id__in=case_ids)
     LegalHold.objects.for_facility(client.facility).filter(targets).update(reason="[Anonymisiert]")
 
 
@@ -529,13 +490,40 @@ def _redact_activities(client, event_ids: list) -> None:
     kuenftiger Schema-Schritt doch Kontextwerte ergaenzen, ueberlebt davon nach
     der Anonymisierung nichts ausser Verb, Ziel-Referenz und Redaktionsmarker.
 
-    Der gemeinsame Ziel-Builder loest Fall- und WorkItem-IDs ueber den Client
-    auf. Damit bleibt die Signatur stabil und **beide** Anonymisierungspfade
-    profitieren ohne zusaetzliche Verdrahtung.
+    Die ``case_ids`` werden hier selbst aufgeloest (wie die
+    ``workitem_ids``), damit die Signatur stabil bleibt und **beide**
+    Anonymisierungspfade ohne zusaetzliche Verdrahtung profitieren.
 
     Refs #1067.
     """
-    targets = client_activity_targets_q(client, event_ids)
+    from django.contrib.contenttypes.models import ContentType
+    from django.db.models import Q
+
+    from core.models.case import Case
+    from core.models.event import Event
+    from core.models.workitem import WorkItem
+
+    targets = Q(
+        target_type=ContentType.objects.get_for_model(Client),
+        target_id=client.pk,
+    )
+    if event_ids:
+        targets |= Q(
+            target_type=ContentType.objects.get_for_model(Event),
+            target_id__in=event_ids,
+        )
+    workitem_ids = list(client.work_items.values_list("pk", flat=True))
+    if workitem_ids:
+        targets |= Q(
+            target_type=ContentType.objects.get_for_model(WorkItem),
+            target_id__in=workitem_ids,
+        )
+    case_ids = list(Case.objects.filter(client=client).values_list("pk", flat=True))
+    if case_ids:
+        targets |= Q(
+            target_type=ContentType.objects.get_for_model(Case),
+            target_id__in=case_ids,
+        )
     Activity.objects.for_facility(client.facility).filter(targets).update(
         context={"schema": 1, "action": Activity.Action.REDACTED.value}
     )
@@ -646,13 +634,7 @@ def anonymize_client(client, user=None):
     Anonymisierung erfasst alle Aggregat-Bestandteile, die sonst eine
     Re-Identifikation ermöglichen würden:
 
-    - ``Client``-Felder (pseudonym, notes, age_cluster, contact_stage,
-      is_active) — ``contact_stage`` seit Refs #2047 symmetrisch zu
-      ``age_cluster``
-    - ``Event.occurred_at`` aller Ereignisse der Person wird auf den
-      Monatsersten 00:00 im lokalen Kalender generalisiert (Refs #2047) —
-      die Timeline exakter Zeitpunkte war der letzte hochdimensionale
-      Quasi-Identifikator am Tombstone
+    - ``Client``-Felder (pseudonym, notes, age_cluster, is_active)
     - ``Case.title`` / ``Case.description`` / ``Case.data_json`` /
       ``Case.document_type`` (M2 P5, Refs #1058) aller verknüpften Fälle
     - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
@@ -679,12 +661,9 @@ def anonymize_client(client, user=None):
       ``review_note`` der Art.-16-Berichtigungsanträge dieser Person
       (Refs #1792) — dieselbe Trennung: Werte raus, Antrags-Meta bleibt.
     - ``RetentionProposal.details["pseudonym"]`` der Löschvorschläge dieser
-      Events und ``LegalHold.reason`` für Client-, Event-, Fall- und
-      Aktivitäts-Ziele (Refs #1751, #1818, #1990) — auch hier bleibt die
-      Nachweis-Metadatenspur unangetastet. Die Zielmenge kommt seit #1990 aus
-      demselben Builder wie die Art.-15-Auskunft
-      (``client_legal_hold_targets_q``); der ``Activity``-Zweig deckt Holds
-      auf den Aktivitäten dieser Person (Ziel-ID = ``Activity.pk``).
+      Events und ``LegalHold.reason`` für Client-, Event- und Fall-Ziele
+      (Refs #1751, #1818) — auch hier bleibt die Nachweis-Metadatenspur
+      unangetastet.
     - ``Activity.context`` für Client-, Event-, WorkItem- und Case-Targets —
       seit #1972 bereits PII-frei; der Reset auf den Redaktionsmarker bleibt
       als Defense-in-Depth für künftige Schema-Erweiterungen.
@@ -723,17 +702,13 @@ def anonymize_client(client, user=None):
     # steht am Ende dieser Funktion.
     event_ids = _event_ids_for_client(client)
     _redact_live_events(client)
-    # Refs #2047: die Zeitachse ist der letzte hochdimensionale Quasi-
-    # Identifikator am Tombstone. Nach der Inhalts-Redaktion, damit ein
-    # Fehlschlag dort nicht schon Zeitstempel verschoben hat.
-    _generalize_event_timestamps(event_ids)
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
     _redact_client_deletion_request(client)
     _redact_case_deletion_requests(case_ids)
     _redact_rectification_requests(client)
     _redact_retention_proposals(event_ids)
-    _redact_legal_holds(client, event_ids)
+    _redact_legal_holds(client, event_ids, case_ids)
     _redact_activities(client, event_ids)
     # Merge-Tombstones (ADR-045): die vier Schritte davor sammeln ueber die
     # QUELLE — nach der Wanderung 0 Zeilen. Die quell-bezogenen Metadaten der
@@ -780,20 +755,14 @@ def create_client(facility, user, **data):
     """Create a client with activity and audit logging.
 
     M2 P4b (Refs #1058): ``document_type``/``data_json`` laufen durch
-    :func:`~core.services.dynamic_data.clean_dynamic_data` — Facility-Scope,
-    ``entity_type=client`` und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
+    :func:`_clean_client_dynamic_data` — Facility-Scope, ``entity_type=client``
+    und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
     :func:`_normalize_document_type_kwarg` faengt dabei auch die
     ``document_type_id=<pk>``-Schreibweise ab, die sonst am Guard vorbei direkt
     an ``Client(...)`` durchgereicht wuerde.
     """
     document_type = _normalize_document_type_kwarg(data)
-    data["data_json"] = clean_dynamic_data(
-        facility,
-        document_type,
-        data.get("data_json"),
-        entity_type=DocumentType.EntityType.CLIENT,
-        entity_type_error=_CLIENT_DOCUMENT_TYPE_ERROR,
-    )
+    data["data_json"] = _clean_client_dynamic_data(facility, document_type, data.get("data_json"))
     client = Client(facility=facility, created_by=user, **data)
     client.save()
     log_activity(
@@ -821,15 +790,6 @@ def update_client_stage(client, old_stage, new_stage, user):
     )
 
 
-def _bump_ban_revision_before_client_save(client, changed_fields) -> None:
-    """Keep the ban projection write between assignment and client save."""
-    if "pseudonym" not in changed_fields:
-        return
-    from core.services.system.ban_revision import bump_ban_revision_for_client_change
-
-    bump_ban_revision_for_client_change(client)
-
-
 @transaction.atomic
 def update_client(client, user, *, old_stage=None, expected_updated_at=None, **fields):
     """Update a client with activity logging and stage-change auditing.
@@ -846,19 +806,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     expected_updated_at: Optional optimistic-locking guard (Refs #531). When set,
     the DB-side ``updated_at`` must match — otherwise a ``ValidationError`` is
     raised so the caller can surface a conflict message.
-
-    Das Art.-18-Gate (Refs #2045) steht VOR dem Versions-Guard: an einer
-    eingeschraenkten Person ist der Schreibzugriff unabhaengig davon
-    unzulaessig, ob das Formular aktuell war, und die Konfliktmeldung („bitte
-    neu laden") wuerde zu einem erneuten Versuch einladen, statt die Rechtslage
-    zu nennen. Es liest den Zustand unter ``select_for_update`` — die Sperre
-    haelt bis zum Commit dieser (atomaren) Funktion und schliesst damit das
-    Fenster zwischen Pruefung und Write; ``apply_allowlisted_update`` sperrt
-    dieselbe Zeile danach nur noch erneut. Den Ausstieg fuer den
-    Berichtigungs-Flow oeffnet ein modul-privater Kontext, kein Argument
-    dieser Funktion (Cross-Review-Befund 4).
     """
-    assert_processing_allowed(client, lock=True)
     check_version_conflict(client, expected_updated_at)
     if old_stage is None:
         old_stage = client.contact_stage
@@ -883,7 +831,9 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     # spiegelt die Felder von ``ClientForm`` wider. Läuft ZUERST — die
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     allowed = {"pseudonym", "contact_stage", "age_cluster", "notes", "document_type", "data_json"}
-    check_update_allowlist(fields, allowed)
+    for key in fields:
+        if key not in allowed:
+            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
 
     # M2 P4b (Refs #1058): Dynamikdaten gegen den *effektiven* Typ pruefen —
     # also gegen den neu uebergebenen, sonst gegen den bestehenden. Wird nur der
@@ -895,27 +845,32 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         # ``None`` zurueck — ein bewusstes Leeren des Typs bleibt also erhalten.
         effective_type = fields.get("document_type", client.document_type)
         raw_data = fields.get("data_json", client.data_json)
-        fields["data_json"] = clean_dynamic_data(
-            client.facility,
-            effective_type,
-            raw_data,
-            entity_type=DocumentType.EntityType.CLIENT,
-            entity_type_error=_CLIENT_DOCUMENT_TYPE_ERROR,
-        )
+        fields["data_json"] = _clean_client_dynamic_data(client.facility, effective_type, raw_data)
 
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``ClientForm(instance=client)`` hat die Instanz in ``_post_clean()``
     # bereits mutiert — ein ``getattr(client, key) != value`` sähe hier
     # ``neu == neu`` und schriebe nie ``CLIENT_UPDATE`` (TB6). Nur Feldnamen
     # ins Audit, keine PII-Werte.
-    # Refs #1917: Der optionale Hook bewahrt die bestehende Reihenfolge
-    # (setattr -> Ban-Revision -> save) fuer echte Pseudonym-Aenderungen.
-    changed_fields = apply_allowlisted_update(
-        client,
-        fields,
-        allowed_fields=allowed,
-        before_save=_bump_ban_revision_before_client_save,
-    )
+    from core.services.audit.diff import changed_fields_vs_db
+
+    changed_fields = changed_fields_vs_db(client, fields)
+    for key, value in fields.items():
+        setattr(client, key, value)
+    # Refs #1917: das Hausverbots-Banner zeigt das Pseudonym — eine echte
+    # Umbenennung einer Person MIT Ban-Events muss die Revision bumpen
+    # (EXISTS-Guard im Helfer; ohne Ban-Events kein Signal).
+    if "pseudonym" in changed_fields:
+        from core.services.system.ban_revision import bump_ban_revision_for_client_change
+
+        bump_ban_revision_for_client_change(client)
+    # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
+    # Save wuerde parallel committete, token-unsichtbare Writes (Soft-Delete,
+    # Redaktions-Kaskade — beide bumpen ``updated_at`` nicht) mit dem stalen
+    # Instanz-Stand ueberschreiben. ``updated_at`` explizit, da ``auto_now``
+    # bei ``update_fields`` sonst nicht schreibt.
+    client.save(update_fields=[*fields.keys(), "updated_at"])
+
     new_stage = client.contact_stage
     update_client_stage(client, old_stage, new_stage, user)
 
@@ -961,7 +916,7 @@ def resolve_writable_client(facility, client_id, *, missing_error):
     """Loest eine Personen-UUID fuer einen SCHREIBZUGRIFF auf (Refs #1771).
 
     Der gemeinsame Kern der drei ``clean_client``-Methoden (``EventMetaForm``,
-    ``CaseForm``, ``WorkItemForm``). Drei Grenzen, in dieser Reihenfolge:
+    ``CaseForm``, ``WorkItemForm``). Zwei Grenzen, in dieser Reihenfolge:
 
     1. **Facility-Scope** (Refs #819/#1423) — eine fremde oder unbekannte UUID
        ist von aussen ununterscheidbar „existiert nicht"; der Aufrufer liefert
@@ -991,11 +946,6 @@ def resolve_writable_client(facility, client_id, *, missing_error):
         raise ValidationError(missing_error) from exc
     if client.is_deleted or not client.is_active:
         raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
-    # 3. **Einschraenkung** (Art. 18 DSGVO, Refs #2045) — reversibel, deshalb
-    #    eine eigene Meldung und ein eigenes Gate. Eine eingeschraenkte Person
-    #    an ein neues Ereignis, einen Fall oder eine Aufgabe zu haengen ist
-    #    neue inhaltliche Verarbeitung, nicht blosse Speicherung.
-    assert_processing_allowed(client)
     return client
 
 
@@ -1124,29 +1074,7 @@ def pending_merge_client_ids(facility, clients) -> set:
 
 
 def request_client_deletion(client, user, reason):
-    """Stellt einen Vier-Augen-Löschantrag für eine Person — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_client_deletion_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen. Wer ihn braucht (die Views, Refs #2015), ruft direkt die
-    Tupel-Variante.
-    """
-    return create_or_get_client_deletion_request(client, user, reason)[0]
-
-
-@transaction.atomic
-def create_or_get_client_deletion_request(client, user, reason):
-    """Wie :func:`request_client_deletion`, aber ``(antrag, created)``.
-
-    Refs #2015 (Re-Review): Die Unterscheidung ist kein Komfort, sondern die
-    Bedingung dafuer, dass ein paralleler Zweitantrag die richtige Antwort
-    bekommt. Seit dem Zeilenlock (Refs #2017) laeuft der Verlierer eines
-    echten Rennens naemlich gar nicht mehr in den ``IntegrityError``: Er
-    wartet auf der Sperre und bekommt danach hier den bestehenden Antrag
-    **regulaer** zurueck. Ohne Flag meldete die View ihm „Loeschantrag
-    gestellt" — eine Erfolgsmeldung fuer etwas, das nie passiert ist.
-    ``created=False`` traegt dieselbe Aussage wie der ``IntegrityError``:
-    es gibt bereits einen laufenden Antrag.
+    """Stellt einen Vier-Augen-Löschantrag für eine Person.
 
     Idempotent: wenn bereits ein PENDING-Antrag existiert, wird dieser
     zurückgegeben (analog zu Event-Pfad in services/event.request_deletion).
@@ -1156,36 +1084,10 @@ def create_or_get_client_deletion_request(client, user, reason):
 
     Aufruf: Fachkraft+ aus dem UI. Genehmigung erfolgt durch Leitung
     via :func:`approve_client_deletion`.
-
-    Refs #2017: Ein Antrag entsteht nur gegen eine **lebende** Person. Die
-    beiden Ausschluesse spiegeln die Neuvalidierung in
-    :func:`approve_client_deletion`:
-
-    * ``merged_into`` gesetzt — ein Merge-Tombstone ist kein Antragsziel; die
-      leere Huelle liegt bereits im Papierkorb, und die Genehmigung wuerde ihr
-      ``deleted_at`` neu setzen, also die Frist und damit das Undo-Fenster der
-      Zusammenfuehrung still verschieben.
-    * ``is_deleted`` — dasselbe Argument ohne Merge: ein zweiter Weg in
-      denselben Papierkorb, der beim Genehmigen die Frist zurueckdreht.
-
-    Beides wird auf der **frisch gesperrten** Zeile geprueft (Cross-Review
-    Lane 2), nicht auf der uebergebenen Instanz: zwischen dem Lookup der View
-    und diesem Aufruf kann eine Zusammenfuehrung committen, und der Guard
-    liefe dann auf einem veralteten Objekt ins Leere. Der Lock ist derselbe
-    wie in ``approve_client_deletion``/``_locked_clients`` — Antrag,
-    Genehmigung und Merge serialisieren damit auf derselben Zeile.
-
-    Der View-Filter ``is_deleted=False`` ersetzt diesen Guard nicht: der
-    Service ist die SSoT, und er liest vor dem Rennen.
     """
-    client = Client.objects.select_for_update().get(pk=client.pk, facility=client.facility_id)
-    if client.merged_into_id is not None:
-        raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
-    if client.is_deleted:
-        raise ValidationError(_("Diese Person liegt bereits im Papierkorb."))
     existing = get_pending_deletion_request(client)
     if existing is not None:
-        return existing, False
+        return existing
     dr = DeletionRequest.objects.create(
         facility=client.facility,
         target_type=DeletionRequest.TargetType.CLIENT,
@@ -1203,7 +1105,7 @@ def create_or_get_client_deletion_request(client, user, reason):
         # DeletionRequest.reason (via target_id=dr.pk erreichbar).
         detail={"target_client": str(client.pk)},
     )
-    return dr, True
+    return dr
 
 
 @transaction.atomic
@@ -1244,18 +1146,7 @@ def approve_client_deletion(deletion_request, reviewer):
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
-    # Refs #2017: Der Zielzustand wird unter dem Lock NEU gelesen. Zwischen
-    # Antrag und Genehmigung koennen Minuten bis Tage liegen — genug Zeit fuer
-    # eine Zusammenfuehrung oder einen anderen Weg in den Papierkorb. Der Lock
-    # serialisiert diese Genehmigung zugleich gegen ``_locked_clients`` im
-    # Merge-Pfad: wer zuerst kommt, sieht der jeweils andere danach frisch.
-    client = Client.objects.select_for_update().get(pk=deletion_request.target_id, facility=deletion_request.facility)
-    if client.merged_into_id is not None:
-        raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
-    if client.is_deleted:
-        # Paritaet zu ``_move_case_to_trash``: ein zweiter Soft-Delete setzte
-        # ``deleted_at`` neu und verlaengerte die Aufbewahrung um eine volle Frist.
-        raise ValidationError(_("Diese Person liegt bereits im Papierkorb."))
+    client = Client.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
     client.soft_delete(user=reviewer)
 
     deletion_request.status = DeletionRequest.Status.APPROVED
@@ -1285,24 +1176,9 @@ def approve_client_deletion(deletion_request, reviewer):
 
 @transaction.atomic
 def reject_client_deletion(deletion_request, reviewer):
-    """Lehnt einen Client-Löschantrag ab — Status→REJECTED, kein Soft-Delete.
-
-    Refs #2012: derselbe Lock + PENDING-Re-Check wie in
-    :func:`approve_client_deletion` und in den Pendants
-    ``reject_case_deletion``/``reject_client_merge``. Ohne ihn ueberschreibt
-    ein zeitgleicher Reject einen bereits genehmigten Antrag auf REJECTED,
-    waehrend die Person im Papierkorb liegen bleibt. Anders als in jenen
-    beiden Pfaden entsteht dabei nicht einmal eine ``DELETION_REJECTED``-Zeile
-    (dieser Weg auditiert den Reject nicht) — der Widerspruch waere also eine
-    voellig spurlose Statuskorruption.
-    """
+    """Lehnt einen Client-Löschantrag ab — Status→REJECTED, kein Soft-Delete."""
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
-    # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
-    # die Zeile bis zum Commit dieser Transaktion.
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
     # Refs #1876: Merge-Antraege werden ueber ``reject_client_merge``
     # abgelehnt — jener Weg schreibt die ``DELETION_REJECTED``-Zeile mit
     # Merge-Kontext; hier fiele sie still unter den Tisch.
@@ -1310,8 +1186,6 @@ def reject_client_deletion(deletion_request, reviewer):
         raise ValidationError(
             _("Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden.")
         )
-    if deletion_request.status != DeletionRequest.Status.PENDING:
-        raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
     deletion_request.status = DeletionRequest.Status.REJECTED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()
@@ -1408,60 +1282,25 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     die K-Anon-Bridge (``anonymize_clients``) nutzt denselben Helfer, damit
     beide Anonymisierungs-Einstiege nicht erneut auseinanderlaufen.
 
-    Refs #2013: ``anonymized_at__isnull=True`` ist die Abbruchbedingung —
-    Muster ``anonymize_eligible_soft_deleted_cases``. ``anonymize_client``
-    aendert ``deleted_at`` nicht, der Tombstone erfuellt ``is_deleted=True,
-    deleted_at<cutoff`` also weiter. Ohne den Filter faende ihn JEDER
-    naechtliche Lauf erneut, redigierte den bereits leeren Rest noch einmal und
-    schriebe jedes Mal eine neue ``CLIENT_ANONYMIZED``-Zeile in das
-    append-only, HMAC-verkettete AuditLog — unbegrenztes Wachstum, dazu ein
-    dauerhaft von Null verschiedenes und damit wertloses „Anonymisiert
-    N"-Ops-Signal und Ban-Revision-Churn. Bei ueberlappenden Laeufen
-    duplizierten sich die Zeilen zusaetzlich.
-
     Returns: Anzahl anonymisierter Datensätze.
     """
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
     qs = exclude_clients_with_active_holds(
-        Client.objects.for_facility(facility).filter(
-            is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True
-        ),
+        Client.objects.for_facility(facility).filter(is_deleted=True, deleted_at__lt=cutoff),
         facility,
     )
     if dry_run:
         return qs.count()
 
-    # Refs #2013 (Cross-Review): Der Filter oben allein macht den Lauf nur
-    # gegen SPAETERE Laeufe idempotent, nicht gegen einen GLEICHZEITIGEN.
-    # Zwei ueberlappende ``enforce_retention``-Prozesse (Cron-Ueberlauf,
-    # manueller Lauf neben dem naechtlichen) lesen dieselbe Zeile, bevor der
-    # erste committet, und wuerden beide redigieren und beide eine
-    # ``CLIENT_ANONYMIZED``-Zeile schreiben — genau die Duplikate, die das
-    # Ticket nennt. Deshalb je Datensatz: eigene Transaktion, Zeilensperre,
-    # und der Marker-Check ein zweites Mal AUF DER GESPERRTEN Zeile. Der
-    # Verlierer sieht dann den bereits gesetzten Stempel und ueberspringt.
-    #
-    # Die PK-Liste wird vorab materialisiert: der Lauf veraendert genau die
-    # Spalte, nach der die Queryset-Bedingung filtert.
     count = 0
-    for client_pk in list(qs.values_list("pk", flat=True)):
-        with transaction.atomic():
-            client = (
-                Client.objects.select_for_update()
-                .filter(pk=client_pk, anonymized_at__isnull=True, is_deleted=True)
-                .first()
-            )
-            if client is None:
-                # Ein paralleler Lauf war schneller (oder die Person wurde
-                # zwischenzeitlich wiederhergestellt) — nichts zu tun.
-                continue
-            anonymize_client(client, user=None)
-            audit_client_event(
-                client,
-                None,
-                AuditLog.Action.CLIENT_ANONYMIZED,
-                trigger="trash_days_expired",
-                deleted_at=str(client.deleted_at),
-            )
-            count += 1
+    for client in qs:
+        anonymize_client(client, user=None)
+        audit_client_event(
+            client,
+            None,
+            AuditLog.Action.CLIENT_ANONYMIZED,
+            trigger="trash_days_expired",
+            deleted_at=str(client.deleted_at),
+        )
+        count += 1
     return count

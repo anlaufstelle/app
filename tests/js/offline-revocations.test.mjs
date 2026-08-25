@@ -9,8 +9,6 @@
 // Getestet gegen den ECHTEN offline-store.js (echtes Dexie, echte crypto.js) —
 // nur ``fetch`` ist gemockt. Genau die Schicht, in der ein Fehler ein
 // DSGVO-Leck waere.
-// Refs #1838: Modul-Liste des offline-store-Verbunds lebt an EINER Stelle.
-import { importOfflineStoreModules } from "./_offline_store_modules.mjs";
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import Dexie from "dexie";
 
@@ -27,12 +25,9 @@ const WI_A = "cccccccc-3333-4333-8333-cccccccccccc";
 beforeAll(async () => {
     window.Dexie = Dexie;
     globalThis.Dexie = Dexie;
-    // Refs #1828: Endpunkt-Literale leben in url-patterns.js (ENDPOINTS) —
-    // wie in base.html VOR offline-store.js laden.
-    await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
-    await importOfflineStoreModules();
+    await import("../../src/static/js/offline-store.js");
     store = window.offlineStore;
 });
 

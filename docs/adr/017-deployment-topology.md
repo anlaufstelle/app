@@ -13,10 +13,10 @@ Die Frage war nicht trivial:
 - Eine Recherche-Empfehlung aus [Issue #320](https://github.com/anlaufstelle/app/issues/320) (2026-03-23, geschlossen) hatte **Hetzner + Coolify Cloud** vorgeschlagen — wegen PR-Previews, Web-UI fuer Env-Vars und minimalem DevOps-Aufwand. [Issue #554](https://github.com/anlaufstelle/app/issues/554) sollte das umsetzen, wurde aber nie durchgezogen.
 - Das ADR-Backlog hat „Deployment-Target" explizit als offen gefuehrt, abhaengig von „Erfahrungen im ersten Pilot-Deployment". Das damalige Pilot-Deployment ist nicht zustande gekommen, die geplante ADR blieb offen.
 - Das **Fachkonzept** ist an mehreren Stellen klar gegenlaeufig:
- - §163: „Anlaufstelle muss mit `docker compose up` installierbar sein."
- - §247 (Persona Jonas): Trager-IT, kann Docker, kein Coolify.
- - §928: „Keine SaaS-Plattform … Cloud-Lock-in ist ein Anti-Pattern."
- - §1009: „Docker Compose als primaerer Deployment-Pfad. Das Versprechen `docker compose up` ist eine **harte Anforderung**."
+  - §163: „Anlaufstelle muss mit `docker compose up` installierbar sein."
+  - §247 (Persona Jonas): Trager-IT, kann Docker, kein Coolify.
+  - §928: „Keine SaaS-Plattform … Cloud-Lock-in ist ein Anti-Pattern."
+  - §1009: „Docker Compose als primaerer Deployment-Pfad. Das Versprechen `docker compose up` ist eine **harte Anforderung**."
 - Ein PaaS-Layer haette unser internes Live-Setup vom Self-Host-Pfad **entkoppelt**, den wir Tragern empfehlen — wir wuerden nicht mehr leben, was wir verkaufen.
 
 Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbarer Sicht. Eine Topologie, die heute fuer `dev` funktioniert und morgen fuer `stage`/Feature-Branches umgebaut werden muesste, waere falsch.
@@ -60,5 +60,5 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 
 - Fachkonzept: [`docs/fachkonzept-anlaufstelle.md`](../fachkonzept-anlaufstelle.md) §163, §247, §844, §928, §1009
 - Issues: #320 (Recherche), #554 (Coolify-Pivot, geschlossen mit diesem ADR), #671 (Plain-Compose-Pivot), #862 (Plan-Issue dieses ADRs)
-- Begleitende Doku: [`docs/dev-deployment.md`](../dev/dev-deployment.md), [`docs/coolify-deployment.md`](../coolify-deployment.md) (alternativer Pfad), [`docs/ops-runbook.md`](../ops-runbook.md)
+- Begleitende Doku: `docs/dev-deployment.md`, [`docs/coolify-deployment.md`](../coolify-deployment.md) (alternativer Pfad), [`docs/ops-runbook.md`](../ops-runbook.md)
 - Verwandte ADRs: [ADR-009](009-settings-inheritance.md) (Settings-Vererbung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Pipeline)

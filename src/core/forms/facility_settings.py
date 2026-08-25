@@ -29,11 +29,6 @@ _FIELD_GROUPS = (
             "retention_activities_days",
             "client_trash_days",
             "auditlog_retention_months",
-            # ADR-050 D3/D8 (Refs #2065): direkt hinter der Audit-Frist — beide
-            # beantworten dieselbe Frage („wie lange bleibt Rechenschaft
-            # lesbar") und teilen sich den Vorgabewert 24.
-            "eventhistory_detail_months",
-            "eventhistory_chronicle_months",
             "retention_auto_approve_after_defer",
             "retention_max_defer_count",
             "retention_use_k_anonymization",

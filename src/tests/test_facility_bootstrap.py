@@ -130,6 +130,7 @@ class TestEnsureDefaultTimeFilters:
         assert created is not None
         labels = list(TimeFilter.objects.for_facility(facility).order_by("sort_order").values_list("label", flat=True))
         assert labels == [item.label for item in DEFAULT_TIME_FILTERS]
+        assert TimeFilter.objects.for_facility(facility).filter(is_default=True).count() == 1
 
     def test_sort_order_follows_the_declaration(self, facility):
         from core.models import TimeFilter
@@ -153,6 +154,7 @@ class TestEnsureDefaultTimeFilters:
             label="Tagdienst 10-18",
             start_time=time(10, 0),
             end_time=time(18, 0),
+            is_default=True,
         )
 
         assert ensure_default_time_filters(facility) is None

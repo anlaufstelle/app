@@ -258,7 +258,6 @@ Spalte **Wo**: `Sidecar` = laeuft ab Werk im `cron`-Container ([§3.2](#32-cron-
 | `verify_audit_chain` | Taeglich 03:30 (nach Retention) | Sidecar | HMAC-Integritaetskette des AuditLog verifizieren; Exit-Code != 0 bei Tamper-Verdacht (Refs #1070). Ein vollstaendig gruener Lauf schreibt den Last-Run-Marker `AUDIT_CHAIN_VERIFIED` — sichtbar als Zeile „Audit-Ketten-Pruefung" unter `/system/` und im Compliance-Dashboard (Refs #1872). Ein Tamper-Fund schreibt **keinen** Marker, die Ampel laeuft also auf ueberfaellig |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Sidecar | Monats-Aggregate sichern bevor Events geloescht werden |
 | `cleanup_orphan_storage_files` | Taeglich 04:30 (nach Snapshots) | Sidecar | Verwaiste `.enc`-Dateien ohne `Attachment`- **und ohne offenen `ImportJob`-Record** loeschen (owner-unabhaengig: Ereignis-, Personen- und Fall-Anhaenge; CSV-Import-Uploads unter `<facility>/imports/` sind ueber `ImportJob.storage_filename` geschuetzt, solange der Lauf offen ist — `commit_import`/`abort_import` leeren das Feld, finale Laeufe schuetzen nicht); MUSS als Admin-DB-Rolle (BYPASSRLS) laufen, sonst Fail-Loud — ohne Bypass saehe der Lauf zudem 0 `ImportJob`-Zeilen und loeschte die offenen Uploads aller Einrichtungen (Refs #662, #1554, #1738, #1060) |
-| `clearsessions` | Taeglich 05:00 | Sidecar | Abgelaufene Zeilen aus `django_session` entfernen (Speicherbegrenzung nach Art. 5 Abs. 1 lit. e DSGVO) |
 | `detect_breaches` | Stuendlich:30 | Sidecar | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `refresh_statistics_view` | Stuendlich:15 | Sidecar | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Host | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)); reine `psql`-Abfrage, der App-Container hat keinen psql-Client |
@@ -273,7 +272,7 @@ Cron-Daemon **supercronic** und arbeitet die Job-Definitionen aus
 [`deploy/crontab`](https://github.com/anlaufstelle/app/blob/main/deploy/crontab)
 ab (read-only in den Container gemountet). Nach `docker compose up -d` laufen
 Retention, Audit-Ketten-Verifikation, Snapshots, Orphan-Cleanup,
-Session-Bereinigung, Breach-Detection und MV-Refresh ohne weitere Einrichtung.
+Breach-Detection und MV-Refresh ohne weitere Einrichtung.
 
 **Warum supercronic und nicht `cron`/`crond`:** klassische Cron-Daemons
 daemonisieren sich weg (Container haette keinen Vordergrundprozess), loggen nach
@@ -290,8 +289,6 @@ HTTP-Requests ist keine `app.current_facility_id`-GUC gesetzt; als
 RLS-gefilterte App-Rolle brechen `enforce_retention`, `verify_audit_chain` und
 `cleanup_orphan_storage_files` fail-loud ab (§9 DB-Rollenmodell). Deshalb
 braucht die `.env` zwingend `POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD`.
-Das facility-unabhaengige Django-Kommando `clearsessions` benoetigt den
-RLS-Bypass nicht, laeuft aber unter derselben Service-Rolle mit.
 
 **Zeitzone:** Der Service setzt `TZ` (Default `Europe/Berlin`, passend zu
 `settings.TIME_ZONE`). Ohne `TZ` liefe der Container in UTC und „03:00" waere je
@@ -311,15 +308,13 @@ docker compose -f docker-compose.prod.yml exec cron python manage.py refresh_sta
 ```
 
 **Ueberwachung:** supercronic hat keinen Health-Endpunkt — ein laufender
-Container beweist nicht, dass die Jobs *wirken*. Die instrumentierten
-Anwendungskommandos schreiben nach erfolgreichem Lauf einen
+Container beweist nicht, dass die Jobs *wirken*. Der Wirksamkeits-Nachweis
+kommt aus der App: jeder Job schreibt nach erfolgreichem Lauf einen
 `*_RUN_COMPLETED`-Marker ins AuditLog, den das Compliance-Dashboard
 (`/system/compliance/`, Kategorie „Hintergrundjobs") und `stale_jobs` im
-[`/health/`-Payload](monitoring-guide.md) auswerten. Djangos Standardkommando
-`clearsessions` schreibt keinen solchen Marker; sein Start und Exit-Code stehen
-nur im supercronic-Log. Das Host-Monitoring sollte deshalb auf Fehlschlaege in
-den `cron`-Logs alarmieren — insbesondere auf `verify_audit_chain`, das bei
-Tamper-Verdacht mit Exit-Code != 0 endet.
+[`/health/`-Payload](monitoring-guide.md) auswerten. Zusaetzlich sollte das
+Host-Monitoring auf Fehlschlaege in den `cron`-Logs alarmieren — insbesondere
+auf `verify_audit_chain`, das bei Tamper-Verdacht mit Exit-Code != 0 endet.
 
 **Aenderungen am Zeitplan** gehoeren in `deploy/crontab` (Repo, versioniert);
 danach `docker compose -f docker-compose.prod.yml restart cron`. Der Guard
@@ -331,11 +326,11 @@ synchron.
 Zwei Jobs bleiben Host-seitig, weil sie im Sidecar nicht laufen koennen:
 
 - **`backup.sh`** — braucht `docker compose exec` (pg_dump im db-Container, tar
- im web-Container) und damit den Docker-Socket. Ein Socket-Mount im Sidecar
- waere root-aequivalent auf dem Host.
+  im web-Container) und damit den Docker-Socket. Ein Socket-Mount im Sidecar
+  waere root-aequivalent auf dem Host.
 - **Invite-Token-Audit / Health-Check** — `psql`-Abfrage bzw. externer
- `curl`-Check; ersteres hat der App-Container nicht an Bord, letzteres soll
- bewusst *ausserhalb* des ueberwachten Stacks laufen.
+  `curl`-Check; ersteres hat der App-Container nicht an Bord, letzteres soll
+  bewusst *ausserhalb* des ueberwachten Stacks laufen.
 
 ```cron
 # Anlaufstelle – Host-Cron (Backup + Hygiene). Alles Weitere macht der
@@ -417,9 +412,6 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 # 0 registrierte Attachments und wuerde JEDE .enc-Datei als Orphan loeschen.
 30 4 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance cleanup_orphan_storage_files >> /var/log/anlaufstelle-orphan-cleanup.log 2>&1
 
-# Abgelaufene Django-Sitzungen bereinigen (taeglich 05:00)
-0 5 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance clearsessions >> /var/log/anlaufstelle-clearsessions.log 2>&1
-
 # Breach-Detection-Scan (stuendlich zur 30. Minute, Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
@@ -437,7 +429,7 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 
 </details>
 
-**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Audit-Ketten-Verifikation (03:30) → Snapshots (04:00, monatlich) → Orphan-Cleanup (04:30) → Session-Bereinigung (05:00) → Breach-Detection/MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Die Audit-Ketten-Verifikation laeuft nach der Retention, damit die von `prune_auditlog` frisch geschriebenen Checkpoint-Grenzen bereits in der Kette stehen. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht. Genau diese Reihenfolge bildet der Sidecar-Zeitplan in `deploy/crontab` ab — deshalb ist die `TZ`-Einstellung aus [§3.2](#32-cron-sidecar-standard) betriebsrelevant und nicht Kosmetik.
+**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Audit-Ketten-Verifikation (03:30) → Snapshots (04:00, monatlich) → Breach-Detection/MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Die Audit-Ketten-Verifikation laeuft nach der Retention, damit die von `prune_auditlog` frisch geschriebenen Checkpoint-Grenzen bereits in der Kette stehen. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht. Genau diese Reihenfolge bildet der Sidecar-Zeitplan in `deploy/crontab` ab — deshalb ist die `TZ`-Einstellung aus [§3.2](#32-cron-sidecar-standard) betriebsrelevant und nicht Kosmetik.
 
 ### 3.4 Dev (systemd-Timer)
 
@@ -482,27 +474,27 @@ Kategorie „Hintergrundjobs") — `unknown`/`warning`/`critical`, wenn ein Time
 ```bash
 # Retention Testlauf (kein Loeschen)
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py enforce_retention --dry-run
+  python manage.py enforce_retention --dry-run
 
 # Retention ausfuehren
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py enforce_retention
+  python manage.py enforce_retention
 
 # Nur eine Einrichtung
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py enforce_retention --facility "Beratungsstelle Nord"
+  python manage.py enforce_retention --facility "Beratungsstelle Nord"
 
 # Snapshots Testlauf
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py create_statistics_snapshots --dry-run
+  python manage.py create_statistics_snapshots --dry-run
 
 # Snapshots fuer alle vorhandenen Monate nachholen (Ersteinrichtung)
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py create_statistics_snapshots --backfill
+  python manage.py create_statistics_snapshots --backfill
 
 # Snapshot fuer bestimmten Monat
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py create_statistics_snapshots --year 2026 --month 3
+  python manage.py create_statistics_snapshots --year 2026 --month 3
 
 # Verwaiste dynamische Feldwerte bereinigen (Refs #1725)
 # Entfernt data_json-Keys, deren Slug nicht (mehr) am Dokumentationstyp haengt,
@@ -521,9 +513,9 @@ docker compose -f docker-compose.prod.yml exec web \
 # ueber diesen Command — die uebersprungene Zaehlung gilt also nicht als
 # erledigte Datei-Minimierung.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
- purge_orphan_field_data --dry-run # Vorschau
+  purge_orphan_field_data --dry-run # Vorschau
 docker compose -f docker-compose.prod.yml run --rm maintenance \
- purge_orphan_field_data # ausfuehren
+  purge_orphan_field_data # ausfuehren
 
 # Facility-Export (Refs #1060, M4 / DSGVO Art. 20): kompletter fachlicher
 # Datenbestand EINER Einrichtung als versioniertes JSON (Schema v1, Referenz
@@ -538,8 +530,8 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # ueberspringt das Hashing (sha256: null).
 mkdir -p./exports && chmod 700./exports
 docker compose -f docker-compose.prod.yml run --rm \
- -v "$PWD/exports:/exports" maintenance export_facility \
- --facility "Beratungsstelle Nord" --output /exports/facility-export.json --indent 2
+  -v "$PWD/exports:/exports" maintenance export_facility \
+  --facility "Beratungsstelle Nord" --output /exports/facility-export.json --indent 2
 
 # Inventar der Berichtszuordnung (Refs #1848): listet fuer EINE Einrichtung
 # auf, welcher Berichtsschluessel in welchem Berichts-Backend steckt (Typ- und
@@ -550,11 +542,11 @@ docker compose -f docker-compose.prod.yml run --rm \
 # ohne Facility-Kontext saehe ein leeres/gefiltertes Inventar wie eine
 # tadellos konfigurierte Einrichtung aus.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
- inventory_report_bindings \
- --facility "Beratungsstelle Nord" # Textreport auf stdout
+  inventory_report_bindings \
+  --facility "Beratungsstelle Nord" # Textreport auf stdout
 docker compose -f docker-compose.prod.yml run --rm \
- -v "$PWD/exports:/exports" maintenance inventory_report_bindings \
- --facility "Beratungsstelle Nord" --format json --output /exports/report-bindings.json
+  -v "$PWD/exports:/exports" maintenance inventory_report_bindings \
+  --facility "Beratungsstelle Nord" --format json --output /exports/report-bindings.json
 
 # Ersteinrichtung einer Einrichtung (Refs #1883): interaktiv Organisation,
 # Einrichtung, Einstellungen, Standardkatalog und ersten facility_admin anlegen.
@@ -579,7 +571,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 # docs/packages.md) — deshalb erst mit --dry-run ansehen. Wiederholbar,
 # gleiche Rollen-Voraussetzung.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
- load_package --default --facility <uuid> --dry-run
+  load_package --default --facility <uuid> --dry-run
 ```
 
 ---
@@ -611,15 +603,15 @@ Mit `LOG_FORMAT=json` in `.env` gibt Django strukturierte JSON-Logs aus:
 
 ```json
 {
- "ts": "2026-03-30T10:15:22.123456+00:00",
- "level": "INFO",
- "logger": "core",
- "module": "views",
- "message": "...",
- "request_id": "abc123",
- "user_id": 42,
- "facility_id": 1,
- "exception": "Traceback..."
+  "ts": "2026-03-30T10:15:22.123456+00:00",
+  "level": "INFO",
+  "logger": "core",
+  "module": "views",
+  "message": "...",
+  "request_id": "abc123",
+  "user_id": 42,
+  "facility_id": 1,
+  "exception": "Traceback..."
 }
 ```
 
@@ -657,15 +649,15 @@ betriebsrelevant:
 ```bash
 # Nur Fehler
 docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
- | grep '^{' | jq 'select(.level == "ERROR")'
+  | grep '^{' | jq 'select(.level == "ERROR")'
 
 # Fehler eines bestimmten Benutzers
 docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
- | grep '^{' | jq 'select(.user_id == 42)'
+  | grep '^{' | jq 'select(.user_id == 42)'
 
 # Letzte Exceptions
 docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
- | grep '^{' | jq 'select(.exception != null) | {ts, message, exception}'
+  | grep '^{' | jq 'select(.exception != null) | {ts, message, exception}'
 ```
 
 ### 4.3 Typische Fehlermuster
@@ -695,7 +687,7 @@ docker inspect $(docker compose -f docker-compose.prod.yml ps -q db) | grep -A5 
 
 # 3. Direkte Verbindung testen
 docker compose -f docker-compose.prod.yml exec db \
- pg_isready -U $POSTGRES_USER
+  pg_isready -U $POSTGRES_USER
 
 # 4. DB-Logs pruefen
 docker compose -f docker-compose.prod.yml logs db --tail=50
@@ -716,13 +708,13 @@ Der Entrypoint nutzt `pg_advisory_lock(1)` um parallele Migrationen zu verhinder
 ```bash
 # 1. Haengende Locks anzeigen
 docker compose -f docker-compose.prod.yml exec db \
- psql -U $POSTGRES_USER -d $POSTGRES_DB \
- -c "SELECT pid, granted, objid FROM pg_locks WHERE locktype = 'advisory';"
+  psql -U $POSTGRES_USER -d $POSTGRES_DB \
+  -c "SELECT pid, granted, objid FROM pg_locks WHERE locktype = 'advisory';"
 
 # 2. Lock manuell freigeben
 docker compose -f docker-compose.prod.yml exec db \
- psql -U $POSTGRES_USER -d $POSTGRES_DB \
- -c "SELECT pg_advisory_unlock(1);"
+  psql -U $POSTGRES_USER -d $POSTGRES_DB \
+  -c "SELECT pg_advisory_unlock(1);"
 
 # 3. Web-Container neu starten
 docker compose -f docker-compose.prod.yml restart web
@@ -748,7 +740,7 @@ curl -v http://$DOMAIN 2>&1 | head -20
 
 # 3. Caddy TLS-Daten zuruecksetzen (erzwingt Neubeantragung)
 docker compose -f docker-compose.prod.yml exec caddy \
- caddy reload --config /etc/caddy/Caddyfile
+  caddy reload --config /etc/caddy/Caddyfile
 ```
 
 ### 5.4 Gunicorn-Timeout
@@ -758,7 +750,7 @@ docker compose -f docker-compose.prod.yml exec caddy \
 ```bash
 # 1. Aktuelle Konfiguration pruefen
 docker compose -f docker-compose.prod.yml exec web \
- printenv | grep GUNICORN
+  printenv | grep GUNICORN
 
 # Defaults: GUNICORN_WORKERS=3, GUNICORN_TIMEOUT=30
 
@@ -805,7 +797,7 @@ docker compose -f docker-compose.prod.yml up -d --scale redis=0
 
 ```bash
 curl -sf -H "X-Health-Token: $HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/ \
- | python3 -c 'import json,sys; print(json.load(sys.stdin)["cache"])'
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["cache"])'
 # {'backend': 'django.core.cache.backends.redis.RedisCache', 'status': 'ok'}
 ```
 
@@ -846,7 +838,7 @@ docker compose -f docker-compose.prod.yml exec web printenv | sort
 
 # 4. Django-Check manuell ausfuehren
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py check --deploy
+  python manage.py check --deploy
 ```
 
 ### 5.7 Upload-Groessenlimit (Caddy `request_body`)
@@ -864,7 +856,7 @@ grep -A2 request_body Caddyfile*
 
 # 2. App-seitiges Limit pruefen (falls per Env ueberschrieben)
 docker compose -f docker-compose.prod.yml exec web \
- printenv | grep FILE_VAULT_MAX_UPLOAD
+  printenv | grep FILE_VAULT_MAX_UPLOAD
 ```
 
 Ein Test-Guard haelt beide Settings synchron zum statischen Caddy-Wert (Entwickler-Repo: `src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit`) — schlaegt fehl, sobald `FILE_VAULT_MAX_UPLOAD_BYTES`/`FILE_VAULT_MAX_UPLOAD_FILES` geaendert werden, ohne den Caddy-Cap nachzuziehen.
@@ -873,7 +865,7 @@ Ein Test-Guard haelt beide Settings synchron zum statischen Caddy-Wert (Entwickl
 
 ```bash
 docker compose -f docker-compose.prod.yml exec caddy \
- caddy reload --config /etc/caddy/Caddyfile
+  caddy reload --config /etc/caddy/Caddyfile
 ```
 
 **Rollout-Hinweis:** Diese Aenderung selbst braucht nach dem Deploy ebenfalls einen Caddy-Reload (obiger Befehl, Dateipfad je nach Compose-Variante anpassen) — ein reiner Web-Container-Neustart laedt keine neue Caddyfile-Config.
@@ -922,8 +914,8 @@ docker compose -f docker-compose.prod.yml stop web caddy
 ```bash
 # Schnelles Backup (unverschluesselt, fuer sofortige Wiederherstellung)
 docker compose -f docker-compose.prod.yml exec -T db \
- pg_dump -U $POSTGRES_USER -Fc $POSTGRES_DB \
- > /tmp/notfall_$(date +%Y%m%d_%H%M%S).dump
+  pg_dump -U $POSTGRES_USER -Fc $POSTGRES_DB \
+  > /tmp/notfall_$(date +%Y%m%d_%H%M%S).dump
 
 # Verschluesseltes Backup via Skript./scripts/ops/backup.sh
 ```
@@ -933,19 +925,19 @@ docker compose -f docker-compose.prod.yml exec -T db \
 ```bash
 # Interaktive psql-Shell
 docker compose -f docker-compose.prod.yml exec db \
- psql -U $POSTGRES_USER $POSTGRES_DB
+  psql -U $POSTGRES_USER $POSTGRES_DB
 
 # Einzel-Query ausfuehren
 docker compose -f docker-compose.prod.yml exec db \
- psql -U $POSTGRES_USER -d $POSTGRES_DB \
- -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"
+  psql -U $POSTGRES_USER -d $POSTGRES_DB \
+  -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"
 ```
 
 ### 6.4 Passwort zuruecksetzen
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py changepassword <benutzername>
+  python manage.py changepassword <benutzername>
 ```
 
 ### 6.5 Sentry (optionales Error-Tracking)
@@ -966,10 +958,8 @@ Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsic
    - `failed_login_burst` — > `BREACH_FAILED_LOGIN_THRESHOLD` (Default 20) Fehlversuche pro User in `BREACH_DETECTION_WINDOW_MINUTES` (Default 60 min)
    - `mass_export` — > `BREACH_EXPORT_THRESHOLD` (Default 10) Exports pro User im Fenster
    - `mass_delete` — > `BREACH_DELETE_THRESHOLD` (Default 50) Deletes facility-weit im Fenster
-   - `mfa_failure_burst` (Refs #2033) — `BREACH_MFA_FAILURE_THRESHOLD` (Default 10) fehlgeschlagene Zweitfaktor-Pruefungen pro User im Fenster; `MFA_FAILED` (TOTP) und `WEBAUTHN_FAILED` (Passkey) zaehlen **gemeinsam**, sonst liesse sich die Schwelle durch Wechsel des Verfahrens unterlaufen. Langzeitfenster: `BREACH_MFA_FAILURE_THRESHOLD_LONG` (Default 30). Die Schwelle liegt bewusst unter der von `failed_login_burst`: wer am zweiten Faktor scheitert, hat den ersten bereits — die ernstere Angreifer-Position, und OTP-Fehler sind per Design selten.
 3. **Optionaler Webhook** — `BREACH_NOTIFICATION_WEBHOOK_URL` env-Var; bekommt POST mit JSON-Payload (kind, count, threshold, audit_id) bei jedem neuen Finding.
 4. **Deduplikation** — innerhalb von 24h wird derselbe Tatbestand (kind + user) nur einmal in `AuditLog` gemeldet.
-5. **Die Detection warnt, sie sperrt nicht** — jede Heuristik ist Monitor-only: ein Treffer schreibt eine `SECURITY_VIOLATION`-Zeile und feuert ggf. den Webhook, er entzieht **keinen** Zugang und aendert kein Passwort. Deshalb sind False Positives eingeplant und tolerierbar: Eine Nutzerin mit einer Tippfehler-Serie am Authenticator oder ein Passkey, den der Browser wiederholt ablehnt, kann `mfa_failure_burst` ausloesen (die 10er-Schwelle liegt bewusst niedrig) — die Folge ist ein pruefbarer Eintrag, nie ein Aussperr-Effekt. Das harte Aussperren bleibt dem davon unabhaengigen Account-Lockout (10 Fehl-**logins** in 15 min, `manage.py unlock <username>`) und den Ratelimits vorbehalten. Praktisch heisst das bei der Triage in § „Manueller Prozess": zuerst pruefen, ob die Zeitreihe der Fehlversuche wie ein Mensch aussieht (wenige Minuten, eine Quell-IP, danach Erfolg) oder wie ein Automat (gleichmaessig ueber Stunden, kein Erfolg, ggf. mehrere IPs). Wer die Schwelle dauerhaft anhebt, verliert genau das Signal aus Szenario A7 (geduldiges Raten des zweiten Faktors mit gestohlener Passwort-Session) — Schwellen daher lieber pro Instanz nachjustieren als die Heuristik abschalten.
 
 #### Manueller Prozess bei SECURITY_VIOLATION
 
@@ -982,9 +972,9 @@ Cron-Eintrag (siehe § 3 Cron-Jobs):
 
 ```cron
 30 * * * * cd /opt/anlaufstelle && \
- .venv/bin/python src/manage.py detect_breaches \
- --settings=anlaufstelle.settings.prod \
- >> /var/log/anlaufstelle-breach-detection.log 2>&1
+    .venv/bin/python src/manage.py detect_breaches \
+    --settings=anlaufstelle.settings.prod \
+    >> /var/log/anlaufstelle-breach-detection.log 2>&1
 ```
 
 ### 6.5c Security Advisory — Meldung, Bewertung, Veroeffentlichung (Refs #1895)
@@ -1107,7 +1097,7 @@ Ohne je gelaufenen Drill bleibt das Dashboard auf `unknown`. Manuell nachziehen 
 
 ```bash
 docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
- python manage.py mark_restore_verified --note "Out-of-Band-Restore $(date +%Y-%m-%d)"
+    python manage.py mark_restore_verified --note "Out-of-Band-Restore $(date +%Y-%m-%d)"
 ```
 
 **Cron-Vorschlag:**
@@ -1117,8 +1107,8 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 # wird das Format auto-erkannt; auf einem Self-Hoster mit Prod-Backups explizit
 # --prod setzen, damit ein fehlendes Backup nicht still auf --dev zurueckfaellt:
 30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod \
- >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
- || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
+    >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
+    || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```
 
 #### Manueller Sentinel-Drill fuer Medien-Volume-Persistenz
@@ -1128,7 +1118,7 @@ Ergaenzt `restore-drill.sh` um den Container-Recreate-Aspekt:
 ```bash
 # 1. Sentinel-Datei in MEDIA_ROOT anlegen
 docker compose -f docker-compose.prod.yml exec web \
- sh -c 'echo "drill-$(date +%s)" > /data/media/.restore-drill'
+    sh -c 'echo "drill-$(date +%s)" > /data/media/.restore-drill'
 
 # 2. Stack neu erzeugen (Containers loeschen — Volume bleibt)
 docker compose -f docker-compose.prod.yml down
@@ -1136,7 +1126,7 @@ docker compose -f docker-compose.prod.yml up -d
 
 # 3. Sentinel ueberprueft Volume-Persistenz
 docker compose -f docker-compose.prod.yml exec web \
- cat /data/media/.restore-drill
+    cat /data/media/.restore-drill
 # -> erwarteter Output: drill-<timestamp>
 ```
 
@@ -1153,9 +1143,9 @@ startet den Scanner automatisch mit:
 
 ```yaml
 clamav:
- image: clamav/clamav:stable
- volumes:
- - clamav-db:/var/lib/clamav
+  image: clamav/clamav:stable
+  volumes:
+    - clamav-db:/var/lib/clamav
 ```
 
 ### 7.1 Konfiguration
@@ -1200,11 +1190,11 @@ benannten Volume `clamav-db`. Kein zusätzlicher Cron-Job notwendig.
 ```bash
 # Daemon erreichbar?
 docker compose -f docker-compose.prod.yml exec web \
- python -c "from core.services.virus_scan import ping; print(ping)"
+  python -c "from core.services.virus_scan import ping; print(ping)"
 
 # EICAR-Test gegen den laufenden Scanner (manuell, nur zur Verifikation):
 docker compose -f docker-compose.prod.yml exec clamav \
- sh -c 'echo "X5O!P%@AP[4\\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*" | clamdscan -'
+  sh -c 'echo "X5O!P%@AP[4\\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*" | clamdscan -'
 ```
 
 ---
@@ -1614,32 +1604,6 @@ Regression zugunsten der Sicherheit. Bei `Client.anonymize()` kommt ein
 **Lock-Upgrade-Deadlock-Risiko** hinzu (erst `RowExclusiveLock` durch die
 EventHistory-`INSERT`s, dann `ShareRowExclusiveLock` durch das `DISABLE`).
 
-**Seit 0.89 ist der naechtliche Retention-Lauf ein REGELMAESSIGER Bypass-Aufrufer**
-(ADR-050, Refs #2065):
-der EventHistory-Sweep redigiert abgelaufene Historien-Fassungen und loescht
-laengst redigierte. Drei Eigenschaften begrenzen die Wirkung auf das
-Wartungsfenster:
-
-- **Gebatcht.** Ein Bypass-Block je 500 Zeilen, nicht einer je Zeile wie in der
-  Key-Rotation — die Zahl der `ShareRowExclusiveLock`-Intervalle sinkt um
-  Groessenordnungen.
-- **Nur `core_eventhistory`.** Der Sweep oeffnet ausschliesslich die beiden
-  dortigen Trigger; auf `core_auditlog` nimmt er gar keine DDL-Sperre mehr,
-  sondern nur das `RowExclusiveLock` seines eigenen Nachweis-`INSERT`s.
-  Audit-`INSERT`s laufender Requests blockieren dadurch **nicht**.
-- **Kanonische Sperr-Reihenfolge** `core_client` → `core_event` →
-  `core_eventhistory` → `core_auditlog`, also genau die Ordnung, in der die
-  Anwendung ohnehin schreibt. `_APPEND_ONLY_TRIGGERS` fuehrte bis 0.89
-  `core_auditlog` zuerst — ein ABBA-Zyklus gegen jeden mutierenden Request.
-  Personen- und Ereigniszeilen einer Charge werden per
-  `SELECT … FOR UPDATE SKIP LOCKED` gesperrt, **bevor** der Trigger-Bypass
-  oeffnet: sonst hielte der Lauf die Tabellensperre und wartete auf eine fremde
-  Zeilensperre. Dieselben Zeilen sperrt die Legal-Hold-Anlage, bevor sie
-  schreibt — daher haelt ein Hold auf **Ereignis oder Person** den Sweep
-  zuverlaessig auf und wird nicht von ihm ueberholt. Bricht eine Charge dennoch mit
-  `deadlock detected` ab, wird sie idempotent mit Backoff wiederholt; der Lauf
-  faellt nicht aus.
-
 Betriebsregeln daraus:
 
 - Die Bypass-Commands `enforce_retention` (Retention-Cron, § 6),
@@ -1651,9 +1615,9 @@ Betriebsregeln daraus:
   sondern fail-loud abbricht und retry-bar bleibt:
 
   ```sql
- -- als Superuser (postgres): begrenzt die Lock-Wartezeit der Wartungsläufe.
- ALTER ROLE anlaufstelle_admin SET lock_timeout = '5s';
- ```
+  -- als Superuser (postgres): begrenzt die Lock-Wartezeit der Wartungsläufe.
+  ALTER ROLE anlaufstelle_admin SET lock_timeout = '5s';
+  ```
 
   Bewusst **nicht** im Bypass-Code hartkodiert (`SET LOCAL lock_timeout`): ein
   fester Wert würde ohne Betriebsprofil legitime, u. U. synchron im Request
@@ -1690,9 +1654,9 @@ REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin; -- Tabellen/Sequenzen/View
 -- 2. App-Rolle: Ownership weg, nur noch DML.
 GRANT USAGE ON SCHEMA public TO anlaufstelle;
 ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
- GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anlaufstelle;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anlaufstelle;
 ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
- GRANT USAGE, SELECT ON SEQUENCES TO anlaufstelle;
+    GRANT USAGE, SELECT ON SEQUENCES TO anlaufstelle;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anlaufstelle;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
 -- 3. Trigger haerten (macht sonst die Migration 0107 beim naechsten Deploy):
@@ -1751,8 +1715,8 @@ bleiben mit unusable Password liegen.
 SELECT id, username, email, date_joined, facility_id
 FROM core_user
 WHERE last_login IS NULL
- AND NOT (password LIKE 'pbkdf2_%') -- unusable = set_unusable_password
- AND date_joined < now - interval '7 days'
+  AND NOT (password LIKE 'pbkdf2_%') -- unusable = set_unusable_password
+  AND date_joined < now - interval '7 days'
 ORDER BY date_joined;
 ```
 
@@ -1771,7 +1735,7 @@ technische Versand als Fallback:
 ```bash
 # Django-Shell: neuen Invite-Link an einen bestehenden User senden
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py shell -c "
+  python manage.py shell -c "
 from core.models import User
 from core.services.security import send_invite_email
 send_invite_email(User.objects.get(username='<username>'))
@@ -1791,7 +1755,7 @@ mit der Einrichtungs-Leitung bleibt der technische Sonderweg:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py shell -c "
+  python manage.py shell -c "
 from core.models import User
 User.objects.filter(username='<username>').delete
 "
@@ -1818,11 +1782,11 @@ laufende Leser nicht blockiert werden
 ```bash
 # Concurrent Refresh (Default — non-blocking)
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py refresh_statistics_view
+  python manage.py refresh_statistics_view
 
 # Blocking Refresh erzwingen (fallback ohne UNIQUE-Index)
 docker compose -f docker-compose.prod.yml exec web \
- python manage.py refresh_statistics_view --no-concurrent
+  python manage.py refresh_statistics_view --no-concurrent
 ```
 
 Faellt `CONCURRENTLY` fehl (z.B. weil der UNIQUE-Index nach einer
@@ -1963,13 +1927,13 @@ docker compose -f docker-compose.prod.yml stop web
 # 1. Finales verschluesseltes Backup (§ 1.1) + unverschluesselter Arbeits-Dump.
 # Dump als Admin-Rolle (BYPASSRLS) ueber den Container-Socket — wie backup.sh../scripts/ops/backup.sh
 docker compose -f docker-compose.prod.yml exec -T db \
- sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
+    sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
 
 # 2. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen
 # (Volume-Name pruefen: docker volume ls | grep pgdata)
 docker compose -f docker-compose.prod.yml stop db
 docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
- tar czf /to/pgdata-pg16.tar.gz -C /from.
+    tar czf /to/pgdata-pg16.tar.gz -C /from.
 
 # 3. Alten DB-Container + Volume entfernen — erst NACH Schritt 1+2!
 docker compose -f docker-compose.prod.yml rm -f db
@@ -1986,12 +1950,12 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal' # 0
 # 6. Restore als Bootstrap-Superuser via Container-Socket (bypasst RLS/FORCE-RLS,
 # wie scripts/ops/restore-drill.sh; --clean/--if-exists ist re-run-sicher)
 docker compose -f docker-compose.prod.yml exec -T db \
- sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
 
 # 7. Verifizieren: Rollen-Gate, RLS aktiv, Stichproben
 docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles # Exit 0
 docker compose -f docker-compose.prod.yml exec -T db sh -c \
- 'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"' # > 0
+    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"' # > 0
 
 # 8. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
 docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
@@ -2017,7 +1981,7 @@ git checkout <vorheriger-stand> -- docker-compose.prod.yml
 docker compose -f docker-compose.prod.yml rm -f db
 docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
 docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
- tar xzf /from/pgdata-pg16.tar.gz -C /to
+    tar xzf /from/pgdata-pg16.tar.gz -C /to
 
 # 3. Stack hochfahren + Health
 docker compose -f docker-compose.prod.yml up -d

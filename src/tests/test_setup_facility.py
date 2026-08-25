@@ -437,6 +437,7 @@ class TestSetupFacilityBaseline:
 
         facility = Facility.objects.get(name="Stelle")
         assert TimeFilter.objects.filter(facility=facility).exists()
+        assert TimeFilter.objects.filter(facility=facility, is_default=True).count() == 1
         assert QuickTemplate.objects.filter(facility=facility).exists()
 
     def test_opt_out_skips_the_catalog_but_not_the_shifts(self):

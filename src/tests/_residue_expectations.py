@@ -49,17 +49,6 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     pii("core_client", "notes"),
     non_pii("core_client", "contact_stage", reason="Enum (identified/qualified), kein Freitext."),
     non_pii("core_client", "age_cluster", reason="Generalisierte Altersgruppe (Enum-Bucket), kein Identifikator."),
-    # Refs #2045: Art.-18-Sperrvermerk. Bewusst eine Werteliste (die vier
-    # Tatbestaende des Art. 18 Abs. 1 lit. a-d) statt eines Freitextfelds —
-    # der strittige Sachverhalt selbst lebt verschluesselt am
-    # Berichtigungsantrag. Nach der Anonymisierung ist der Vermerk
-    # gegenstandslos, aber auch ein stehengebliebener Wert traegt keinen
-    # Personenbezug.
-    non_pii(
-        "core_client",
-        "processing_restriction_reason",
-        reason="Enum (Art. 18 Abs. 1 lit. a-d) bzw. leer, kein Freitext.",
-    ),
     # M2 P4b (Refs #1058): dynamische Personen-Felder — exakt dieselbe Form wie
     # ``core_event.data_json`` (freie Feldwerte je DocumentType-Slug), daher
     # dieselbe Einordnung. Residue-Erwartung nach Anonymisierung: ``{}`` (siehe

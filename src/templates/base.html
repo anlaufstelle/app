@@ -168,17 +168,13 @@
 
     {% block extra_js %}{% endblock %}
 
-    {# Offline-Modul-Reihenfolge: csrf → csrf-utils → dexie → url-patterns → crypto → offline-db → offline-bundles → offline-revocations → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register. #}
-    {# Refs #1838: offline-store ist ein 4-Datei-Verbund mit EINER Fassade (window.offlineStore); Reihenfolge fix — offline-db legt Fassade + internen Einmal-Kanal an, offline-store (letzte) raeumt ihn ab. #}
+    {# Offline-Modul-Reihenfolge: csrf → csrf-utils → dexie → url-patterns → crypto → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register #}
     <script src="{% static 'js/csrf.js' %}"></script>
     {# Refs #1408: gemeinsames CSRF-Util (fromMeta/refresh) — VOR den Replay-Konsumenten (offline-queue/client/edit), damit window.csrfUtils bei deren Aufrufen existiert. #}
     <script src="{% static 'js/csrf-utils.js' %}"></script>
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
-    <script src="{% static 'js/offline-db.js' %}"></script>
-    <script src="{% static 'js/offline-bundles.js' %}"></script>
-    <script src="{% static 'js/offline-revocations.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
     <script src="{% static 'js/filter-persistence.js' %}" defer></script>
     <script src="{% static 'js/offline-queue.js' %}"></script>
@@ -191,10 +187,6 @@
     {# C3 (#1016): Doppel-Submit-Schutz — nach confirm-action.js (Capture-Reihenfolge). #}
     <script src="{% static 'js/double-submit.js' %}" defer></script>
     {# C2 (#1016): globaler htmx:responseError-Fehler-Toast. #}
-    {# Refs #2067: gemeinsame Purge-Routine fuer die Archiv-403 — muss VOR #}
-    {# htmx-errors.js stehen, das sie aufruft. Bewusst NICHT im APP_SHELL: #}
-    {# die Archiv-403 ist ein Online-Ereignis. #}
-    <script src="{% static 'js/facility-archived-purge.js' %}" defer></script>
     <script src="{% static 'js/htmx-errors.js' %}" defer></script>
     {# Refs #1339: globaler htmx:afterSwap-Fokus-Handler — setzt nach jedem #}
     {# Partial-Swap den Tastatur-/Screenreader-Fokus ins getauschte Fragment. #}
