@@ -290,3 +290,88 @@ class TestVisibleDataFields:
         )
         result = _visible_data_fields(staff_user, event)
         assert result["notiz"] == ["a", "b", "c"]
+
+
+@pytest.mark.django_db
+class TestVisibleDataFieldsGateMatrix:
+    """Refs #1891: Gate-Matrix-Pins VOR dem Extract-Method-Umbau.
+
+    ``_visible_data_fields`` ist die Leak-Grenze der Offline-Bundles — diese
+    Pins nageln das Sensitivity-Gate (Feld-Override, DocType-Vererbung) und
+    die Reihenfolge Gate-VOR-Wert-Transformation fest, damit der Umbau
+    (Gate-Praedikat getrennt von den drei Wert-Transformationen)
+    nachweisbar verhaltensneutral ist.
+    """
+
+    def test_field_override_escalates_above_doc_type(
+        self, facility, client_identified, staff_user, assistant_user, lead_user
+    ):
+        """Feld-Override HIGH eskaliert ueber den NORMAL-DocType
+        (effective = max(doc_type, field)): nur Lead+ sieht den Wert."""
+        dt = _make_doc_type(facility, name="Gate Normal", sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft = _make_field_template(facility, name="Heikles Feld", sensitivity=DocumentType.Sensitivity.HIGH)
+        _attach(dt, ft)
+        event = _make_event(facility, client_identified, dt, staff_user, data_json={ft.slug: "geheim"})
+
+        assert ft.slug not in _visible_data_fields(assistant_user, event)
+        assert ft.slug not in _visible_data_fields(staff_user, event)
+        assert _visible_data_fields(lead_user, event)[ft.slug] == "geheim"
+
+    def test_empty_field_sensitivity_inherits_doc_type(self, facility, client_identified, staff_user, assistant_user):
+        """Leere Feld-Sensitivity erbt die DocType-Stufe (ELEVATED):
+        Assistenz gestrippt, Staff sichtbar."""
+        dt = _make_doc_type(facility, name="Gate Erhoeht", sensitivity=DocumentType.Sensitivity.ELEVATED)
+        ft = _make_field_template(facility, name="Erbendes Feld", sensitivity="")
+        _attach(dt, ft)
+        event = _make_event(facility, client_identified, dt, staff_user, data_json={ft.slug: "wert"})
+
+        assert _visible_data_fields(staff_user, event)[ft.slug] == "wert"
+        assert ft.slug not in _visible_data_fields(assistant_user, event)
+
+    def test_encrypted_value_never_decrypted_for_stripped_field(
+        self, facility, client_identified, staff_user, assistant_user, monkeypatch
+    ):
+        """Leak-Grenze: fuer ein gestripptes Feld laeuft ``safe_decrypt`` NIE
+        (Gate VOR Wert-Transformation) — kein unnoetiges Entschluesseln von
+        Werten, die das Bundle gar nicht verlassen duerfen."""
+        dt = _make_doc_type(facility, name="Gate Krypt", sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft = _make_field_template(
+            facility,
+            name="Kryptfeld",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=True,
+        )
+        _attach(dt, ft)
+        event = _make_event(
+            facility,
+            client_identified,
+            dt,
+            staff_user,
+            data_json={ft.slug: {"__encrypted__": True, "value": "token"}},
+        )
+        calls: list = []
+        monkeypatch.setattr(
+            "core.services.system.offline.safe_decrypt",
+            lambda value: calls.append(value) or "KLARTEXT",
+        )
+
+        result = _visible_data_fields(assistant_user, event)
+
+        assert ft.slug not in result
+        assert calls == []
+
+    def test_file_marker_on_stripped_field_not_included(self, facility, client_identified, staff_user, assistant_user):
+        """Auch Datei-Marker (Metadaten) verlassen den Server nicht fuer
+        Felder, die das Gate strippt."""
+        dt = _make_doc_type(facility, name="Gate Datei", sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft = _make_field_template(facility, name="Dateifeld", sensitivity=DocumentType.Sensitivity.HIGH)
+        _attach(dt, ft)
+        event = _make_event(
+            facility,
+            client_identified,
+            dt,
+            staff_user,
+            data_json={ft.slug: {"__file__": True, "name": "bericht.pdf"}},
+        )
+
+        assert ft.slug not in _visible_data_fields(assistant_user, event)
