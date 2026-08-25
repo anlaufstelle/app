@@ -309,6 +309,14 @@ class TestApplyMapping:
         with pytest.raises(ValidationError):
             import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Gibtsnicht": "notes"})
 
+    def test_unknown_column_wins_over_unknown_target_and_missing_required(self, facility, admin_user, media_root):
+        job = self._job(facility, admin_user)
+
+        with pytest.raises(ValidationError) as exc_info:
+            import_engine.apply_mapping(job, {"Gibtsnicht": "facility"})
+
+        assert exc_info.value.messages == ["Die Spalte „Gibtsnicht“ gibt es in der Datei nicht."]
+
     def test_final_job_cannot_be_remapped(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
         job.status = ImportJob.Status.COMMITTED
@@ -887,6 +895,8 @@ class TestDatabaseErrorsBecomeRowErrors:
 
         assert result["summary"]["errors"] == 1
         assert result["summary"]["created"] == 1
+        assert result["summary"]["committed"] is False
+        assert not Client.objects.filter(pseudonym="DBE-OK").exists()
 
     def test_database_error_detail_never_reaches_the_report(self, facility, admin_user, media_root, monkeypatch):
         """``str(exc)`` traegt bei Postgres die DETAIL-Zeile inklusive Zellwert —
@@ -1176,13 +1186,24 @@ class TestPureHelpers:
     def test_sniffer_falls_back_to_semicolon(self):
         assert import_engine._sniff_delimiter("nur-eine-spalte\nwert\n") == ";"
 
-    def test_parse_csv_rejects_a_file_without_header(self):
-        with pytest.raises(ValidationError):
-            import_engine._parse_csv("", ";")
+    @pytest.mark.parametrize("text", ["", "\n", " ; ; \n"])
+    def test_parse_csv_rejects_a_file_without_header(self, text):
+        with pytest.raises(ValidationError) as exc_info:
+            import_engine._parse_csv(text, ";")
+
+        assert exc_info.value.messages == ["Die Datei enthält keine Kopfzeile."]
 
     def test_parse_csv_rejects_empty_column_names(self):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             import_engine._parse_csv("Pseudonym;;Notizen\nA;B;C\n", ";")
+
+        assert exc_info.value.messages == ["Jede Spalte der Kopfzeile braucht eine Überschrift."]
+
+    def test_parse_csv_strips_before_rejecting_duplicate_headers(self):
+        with pytest.raises(ValidationError) as exc_info:
+            import_engine._parse_csv("Pseudonym; Pseudonym \nA;B\n", ";")
+
+        assert exc_info.value.messages == ["Die Kopfzeile enthält doppelte Spaltenüberschriften."]
 
     def test_read_upload_enforces_the_byte_limit(self):
         stream = io.BytesIO(b"x" * (import_engine.MAX_BYTES + 1))
