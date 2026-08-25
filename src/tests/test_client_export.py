@@ -27,7 +27,12 @@ from core.models import (
     WorkItem,
 )
 from core.models import Case as CaseModel
-from core.services.client import client_activity_targets_q, client_and_event_targets_q, export_client_data
+from core.services.client import (
+    anonymize_client,
+    client_activity_targets_q,
+    client_and_event_targets_q,
+    export_client_data,
+)
 from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
 
 
@@ -252,6 +257,72 @@ class TestClientTargetQueries:
             "pk", flat=True
         )
         assert set(matches) == own
+
+    def test_article_15_and_17_legal_hold_sets_pin_deliberate_differences(
+        self,
+        facility,
+        admin_user,
+        assistant_user,
+        sample_client,
+        sample_event,
+        sample_case,
+    ):
+        """Art. 15 sieht nur sichtbare Events; Art. 17 redigiert auch Case/Hidden.
+
+        Refs #1751/#1833: Derselbe Client-/Event-Builder allein beweist keine
+        Mengengleichheit. Der Auskunftspfad uebergibt nur die durch
+        ``visible_to(assistant_user)`` gelangten Event-IDs. Der
+        Redaktionspfad arbeitet dagegen auf allen Ereignissen der Person und
+        erweitert die Menge bewusst um Fall-Holds (Refs #1818).
+        """
+        hidden_document_type = DocumentType.objects.create(
+            facility=facility,
+            name="Nicht sichtbarer Export-Typ",
+            report_key="hidden_export_type",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        hidden_event = Event.objects.create(
+            facility=facility,
+            client=sample_client,
+            document_type=hidden_document_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+
+        holds = {
+            reason: LegalHold.objects.create(
+                facility=facility,
+                target_type=target_type,
+                target_id=target_id,
+                reason=reason,
+                created_by=admin_user,
+                dismissed_at=timezone.now(),
+                dismissed_by=admin_user,
+            )
+            for reason, target_type, target_id in (
+                ("Client-Ziel", "Client", sample_client.pk),
+                ("Sichtbares Event-Ziel", "Event", sample_event.pk),
+                ("Unsichtbares Event-Ziel", "Event", hidden_event.pk),
+                ("Fall-Ziel", "Case", sample_case.pk),
+            )
+        }
+
+        exported_reasons = {
+            row["reason"] for row in export_client_data(sample_client, facility, assistant_user)["legal_holds"]
+        }
+        assert exported_reasons == {"Client-Ziel", "Sichtbares Event-Ziel"}
+
+        anonymize_client(sample_client, user=admin_user)
+        redacted_ids = set(LegalHold.objects.filter(reason="[Anonymisiert]").values_list("pk", flat=True))
+        assert redacted_ids == {hold.pk for hold in holds.values()}
+
+        exported_ids = {holds[reason].pk for reason in exported_reasons}
+        assert exported_ids <= redacted_ids
+        assert redacted_ids - exported_ids == {
+            holds["Unsichtbares Event-Ziel"].pk,
+            holds["Fall-Ziel"].pk,
+        }
 
 
 @pytest.mark.django_db

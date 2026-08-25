@@ -2,6 +2,7 @@
 
 import ast
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -440,22 +441,44 @@ class TestKAnonBridgeRedactionParity:
 
 
 class TestClientTargetQueryParity:
-    """Art.-15-Auskunft und Art.-17-Redaktion bauen Zielmengen zentral (#1833).
+    """Zielmengen ausserhalb von ``targets.py`` duerfen nicht inline driften.
 
-    Refs #1751: Eine neue Target-Sorte musste bislang an Export und
-    Anonymisierung einzeln nachgezogen werden. Der Guard verlangt deshalb nicht
-    nur passende Ergebnisbeispiele, sondern denselben Query-Builder an allen
-    fuenf Verbrauchsstellen. Ein spaeterer Inline-Eigenbau wuerde die
-    Code-Invariante wieder in unverknuepfte Prosa zurueckverwandeln.
+    Refs #1751/#1833: Eine neue Target-Sorte musste bislang an Auskunft und
+    Anonymisierung einzeln nachgezogen werden. Der Guard leitet seine
+    Verbraucher deshalb aus allen Python-Funktionen unter
+    ``core/services/client`` ab: jedes neue ``Q(target_type=...)`` ausserhalb
+    des zentralen Builder-Moduls wird ohne Pflege einer Verbraucher-Allowlist
+    sichtbar.
+
+    Die Ausnahme ist zaehlergenau. Ein zweiter, auch gleichlautender Case-Zweig
+    in ``_redact_legal_holds`` wuerde den Guard ebenfalls reissen.
     """
 
-    _CONSUMERS = {
-        Path("src/core/services/client/export.py"): {
+    _CLIENT_SERVICE_DIR = Path("src/core/services/client")
+    _TARGET_BUILDERS_MODULE = Path("targets.py")
+
+    # Refs #1818: Art. 17 redigiert bewusst auch Fall-Holds. Art. 15 exportiert
+    # sie derzeit nicht; bis diese vorbestehende Fachluecke separat entschieden
+    # ist, bleibt der lokale Case-Zweig eine explizite Erweiterung des
+    # Client-/Event-Builders. Counter statt set pinnt auch seine Anzahl.
+    _INLINE_TARGET_Q_EXEMPTIONS = Counter(
+        {
+            ("main.py", "_redact_legal_holds", "'Case'"): 1,
+        }
+    )
+
+    # Diese Liste entdeckt bewusst keine neuen Verbraucher; dafuer ist der
+    # ableitungsbasierte Inline-Scan zustaendig. Sie haelt lediglich fest, dass
+    # die heute bekannten Auskunfts-/Redaktionspfade ihre Builder-Aufrufe nicht
+    # ersatzlos verlieren.
+    _KNOWN_BUILDER_CONSUMERS = {
+        Path("export.py"): {
+            "_gather_deletion_requests": "client_and_event_targets_q",
             "_gather_legal_holds": "client_and_event_targets_q",
             "_gather_retention_proposals": "client_and_event_targets_q",
             "_gather_activities": "client_activity_targets_q",
         },
-        Path("src/core/services/client/main.py"): {
+        Path("main.py"): {
             "_redact_legal_holds": "client_and_event_targets_q",
             "_redact_activities": "client_activity_targets_q",
         },
@@ -469,9 +492,58 @@ class TestClientTargetQueryParity:
             if isinstance(child, ast.Call) and isinstance(child.func, (ast.Name, ast.Attribute))
         }
 
-    def test_all_consumers_call_the_shared_target_builders(self):
+    @classmethod
+    def _inline_target_q_calls(cls) -> Counter[tuple[str, str, str]]:
+        findings: Counter[tuple[str, str, str]] = Counter()
+
+        for module in sorted(cls._CLIENT_SERVICE_DIR.rglob("*.py")):
+            relative_module = module.relative_to(cls._CLIENT_SERVICE_DIR)
+            if relative_module == cls._TARGET_BUILDERS_MODULE:
+                continue
+
+            module_name = relative_module.as_posix()
+
+            class InlineTargetQVisitor(ast.NodeVisitor):
+                def __init__(self, source_module: str) -> None:
+                    self.source_module = source_module
+                    self.scope: list[str] = []
+
+                def visit_ClassDef(self, node: ast.ClassDef) -> None:
+                    self.scope.append(node.name)
+                    self.generic_visit(node)
+                    self.scope.pop()
+
+                def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+                    self.scope.append(node.name)
+                    self.generic_visit(node)
+                    self.scope.pop()
+
+                def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+                    self.scope.append(node.name)
+                    self.generic_visit(node)
+                    self.scope.pop()
+
+                def visit_Call(self, node: ast.Call) -> None:
+                    call_name = (
+                        node.func.id
+                        if isinstance(node.func, ast.Name)
+                        else node.func.attr
+                        if isinstance(node.func, ast.Attribute)
+                        else None
+                    )
+                    target_keyword = next((keyword for keyword in node.keywords if keyword.arg == "target_type"), None)
+                    if self.scope and call_name == "Q" and target_keyword is not None:
+                        findings[(self.source_module, ".".join(self.scope), ast.unparse(target_keyword.value))] += 1
+                    self.generic_visit(node)
+
+            InlineTargetQVisitor(module_name).visit(ast.parse(module.read_text(encoding="utf-8")))
+
+        return findings
+
+    def test_known_consumers_keep_calling_shared_builders(self):
         missing = []
-        for module, consumers in self._CONSUMERS.items():
+        for relative_module, consumers in self._KNOWN_BUILDER_CONSUMERS.items():
+            module = self._CLIENT_SERVICE_DIR / relative_module
             functions = {
                 node.name: node
                 for node in ast.parse(module.read_text(encoding="utf-8")).body
@@ -480,13 +552,28 @@ class TestClientTargetQueryParity:
             for consumer, helper in consumers.items():
                 function = functions.get(consumer)
                 if function is None:
-                    missing.append(f"{module}:{consumer} fehlt")
+                    missing.append(f"{relative_module}:{consumer} fehlt")
                 elif helper not in self._called_names(function):
-                    missing.append(f"{module}:{consumer} ruft {helper} nicht auf")
+                    missing.append(f"{relative_module}:{consumer} ruft {helper} nicht auf")
 
-        assert not missing, (
-            "Art.-15-Auskunft und Art.-17-Redaktion verwenden nicht dieselben "
-            "zentralen Ziel-Queries (Refs #1833):\n" + "\n".join(missing)
+        assert not missing, "Bekannte Art.-15/17-Verbraucher haben ihren zentralen Zielquery verloren:\n" + "\n".join(
+            missing
+        )
+
+    def test_no_inline_target_q_outside_builders_and_documented_extensions(self):
+        findings = self._inline_target_q_calls()
+        unexpected = findings - self._INLINE_TARGET_Q_EXEMPTIONS
+        stale_exemptions = self._INLINE_TARGET_Q_EXEMPTIONS - findings
+
+        assert not unexpected, (
+            "Diese Art.-15/17-Zielqueries werden ausserhalb von "
+            "core/services/client/targets.py inline gebaut (Refs #1833):\n"
+            + "\n".join(f"{key} ({count}x)" for key, count in sorted(unexpected.items()))
+        )
+        assert not stale_exemptions, (
+            "Veraltete Ausnahmen im Inline-Zielquery-Guard; entfernen oder an "
+            "der weiterhin bewussten Abweichung belegen:\n"
+            + "\n".join(f"{key} ({count}x)" for key, count in sorted(stale_exemptions.items()))
         )
 
 
