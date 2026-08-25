@@ -84,7 +84,6 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
             kwargs["initial"] = initial
         super().__init__(*args, **kwargs)
         self._facility = facility
-        self._user = user
         if facility:
             # M2 (Refs #1058): nur event-Typen anbieten — client-/case-Typen
             # gehoeren nicht in den Event-Pfad (Entscheid E21).
