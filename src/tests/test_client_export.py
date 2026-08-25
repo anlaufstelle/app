@@ -27,7 +27,7 @@ from core.models import (
     WorkItem,
 )
 from core.models import Case as CaseModel
-from core.services.client import export_client_data
+from core.services.client import client_activity_targets_q, client_and_event_targets_q, export_client_data
 from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
 
 
@@ -124,6 +124,134 @@ def sample_workitem(facility, admin_user, sample_client):
         title="Test-Aufgabe",
         description="Test-Beschreibung",
     )
+
+
+@pytest.mark.django_db
+class TestClientTargetQueries:
+    """Gemeinsame Art.-15-/Art.-17-Zielmengen (Refs #1833, #1751)."""
+
+    def test_client_and_event_targets_match_only_the_given_person_and_events(
+        self,
+        facility,
+        admin_user,
+        doc_type,
+        sample_client,
+        sample_event,
+    ):
+        other_client = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Target",
+            created_by=admin_user,
+        )
+        other_event = Event.objects.create(
+            facility=facility,
+            client=other_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+
+        client_hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=sample_client.pk,
+            reason="Eigene Person",
+            created_by=admin_user,
+        )
+        event_hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=sample_event.pk,
+            reason="Eigenes Ereignis",
+            created_by=admin_user,
+        )
+        for target_type, target_id in (
+            ("Client", other_client.pk),
+            ("Event", other_event.pk),
+            ("Case", sample_client.pk),
+        ):
+            LegalHold.objects.create(
+                facility=facility,
+                target_type=target_type,
+                target_id=target_id,
+                reason="Nicht Teil der Zielmenge",
+                created_by=admin_user,
+            )
+
+        matches = LegalHold.objects.filter(client_and_event_targets_q(sample_client, [sample_event.pk])).values_list(
+            "pk", flat=True
+        )
+        assert set(matches) == {client_hold.pk, event_hold.pk}
+
+        matches_without_events = LegalHold.objects.filter(client_and_event_targets_q(sample_client, [])).values_list(
+            "pk", flat=True
+        )
+        assert set(matches_without_events) == {client_hold.pk}
+
+    def test_activity_targets_cover_all_four_own_target_types_only(
+        self,
+        facility,
+        admin_user,
+        doc_type,
+        sample_client,
+        sample_event,
+        sample_case,
+        sample_workitem,
+    ):
+        from django.contrib.contenttypes.models import ContentType
+
+        other_client = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Activity",
+            created_by=admin_user,
+        )
+        other_event = Event.objects.create(
+            facility=facility,
+            client=other_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+        other_case = CaseModel.objects.create(
+            facility=facility,
+            client=other_client,
+            title="Fremdfall",
+            created_by=admin_user,
+        )
+        other_workitem = WorkItem.objects.create(
+            facility=facility,
+            client=other_client,
+            title="Fremdaufgabe",
+            created_by=admin_user,
+        )
+
+        def activity_for(target):
+            return Activity.objects.create(
+                facility=facility,
+                actor=admin_user,
+                verb=Activity.Verb.UPDATED,
+                target=target,
+                context={"schema": 1, "action": Activity.Action.REDACTED.value},
+            )
+
+        own = {activity_for(target).pk for target in (sample_client, sample_event, sample_workitem, sample_case)}
+        for target in (other_client, other_event, other_workitem, other_case):
+            activity_for(target)
+        Activity.objects.create(
+            facility=facility,
+            actor=admin_user,
+            verb=Activity.Verb.UPDATED,
+            target_type=ContentType.objects.get_for_model(CaseModel),
+            target_id=sample_client.pk,
+            context={"schema": 1, "action": Activity.Action.REDACTED.value},
+        )
+
+        matches = Activity.objects.filter(client_activity_targets_q(sample_client, [sample_event.pk])).values_list(
+            "pk", flat=True
+        )
+        assert set(matches) == own
 
 
 @pytest.mark.django_db
