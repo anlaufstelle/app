@@ -172,7 +172,8 @@
     </main>
 
     <!-- Offline-Home-Stack: Reihenfolge dexie → url-patterns → crypto →
-         offline-store → offline-home. Alle sind im Service-Worker-APP_SHELL
+         offline-db → offline-bundles → offline-revocations → offline-store
+         (Refs #1838: 4-Datei-Verbund, EINE Fassade) → offline-home. Alle sind im Service-Worker-APP_SHELL
          pre-cached (sw.js), damit die additiven Status-/Storage-Badges auch
          beim ersten Offline-Aufruf (PWA-Kaltstart) rendern. Refs #1486:
          static-Tag statt Literal-Pfaden — der Prod-Precache enthaelt NUR die
@@ -186,6 +187,9 @@
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-db.js' %}"></script>
+    <script src="{% static 'js/offline-bundles.js' %}"></script>
+    <script src="{% static 'js/offline-revocations.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
     <script src="{% static 'js/offline-home.js' %}"></script>
 </body>
