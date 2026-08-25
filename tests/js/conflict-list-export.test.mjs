@@ -94,3 +94,110 @@ describe("R10 — exportNote als bewusste, protokollierte Aktion", () => {
         expect(c.feedback).toBe("done");
     });
 });
+
+// Refs #1828: Verhaltens-Pin der fuenf Listen-Aktionen VOR der Konsolidierung
+// auf das gemeinsame _act-Skelett — nur "Verwerfen" ist confirm-pflichtig
+// (S1-Regel im Dateikopf), jede Aktion laedt danach neu, frischt die
+// Banner-Zaehler auf und meldet Erfolg/Fehler in der Feedback-Zeile.
+describe("#1828 — Aktions-Skelett retry/discard/reapply", () => {
+    let store;
+    let refreshQueueCount;
+    let refreshEditCounts;
+
+    function makeActionComponent() {
+        const c = factory();
+        c._confirmDiscardText = "wirklich?";
+        c._labelRetried = "retried";
+        c._labelDiscarded = "discarded";
+        c._labelActionFailed = "failed";
+        return c;
+    }
+
+    beforeEach(() => {
+        store = {
+            listConflicts: vi.fn(async () => []),
+            listDeadEvents: vi.fn(async () => []),
+            listQueueEntries: vi.fn(async () => []),
+            retryDeadEvent: vi.fn(async () => {}),
+            discardDeadEvent: vi.fn(async () => {}),
+            retryQueueEntry: vi.fn(async () => {}),
+            reapplyQueueEntryWithServerVersion: vi.fn(async () => {}),
+            discardQueueEntry: vi.fn(async () => {}),
+        };
+        window.offlineStore = store;
+        refreshQueueCount = vi.fn();
+        refreshEditCounts = vi.fn();
+        window.offlineQueue = { refreshCount: refreshQueueCount };
+        window.offlineEdit = { refreshCounts: refreshEditCounts };
+        delete window.syncOrchestrator;
+    });
+
+    afterEach(() => {
+        delete window.offlineStore;
+        delete window.offlineEdit;
+        delete window.syncOrchestrator;
+    });
+
+    it("retryDeadEvent: kein confirm, Erfolg -> reload + Zaehler + retried", async () => {
+        const confirmSpy = vi.spyOn(window, "confirm");
+        const c = makeActionComponent();
+        await c.retryDeadEvent("ev-1");
+
+        expect(confirmSpy).not.toHaveBeenCalled();
+        expect(store.retryDeadEvent).toHaveBeenCalledWith("ev-1");
+        expect(store.listConflicts).toHaveBeenCalled();
+        expect(refreshQueueCount).toHaveBeenCalled();
+        expect(refreshEditCounts).toHaveBeenCalled();
+        expect(c.feedback).toBe("retried");
+        expect(c.feedbackType).toBe("info");
+    });
+
+    it("discardDeadEvent: confirm-Abbruch tut nichts", async () => {
+        vi.spyOn(window, "confirm").mockReturnValue(false);
+        const c = makeActionComponent();
+        await c.discardDeadEvent("ev-1");
+
+        expect(store.discardDeadEvent).not.toHaveBeenCalled();
+        expect(c.feedback).toBe("");
+    });
+
+    it("discardQueueEntry: nach confirm -> discarded-Feedback", async () => {
+        vi.spyOn(window, "confirm").mockReturnValue(true);
+        const c = makeActionComponent();
+        await c.discardQueueEntry(7);
+
+        expect(store.discardQueueEntry).toHaveBeenCalledWith(7);
+        expect(c.feedback).toBe("discarded");
+        expect(c.feedbackType).toBe("info");
+    });
+
+    it("Fehler in der Aktion -> ActionFailed-Feedback (error)", async () => {
+        store.retryQueueEntry.mockRejectedValue(new Error("boom"));
+        const c = makeActionComponent();
+        await c.retryQueueEntry(7);
+
+        expect(c.feedback).toBe("failed");
+        expect(c.feedbackType).toBe("error");
+    });
+
+    it("reapplyQueueEntry: reaktiviert die Row und stoesst requestSync an", async () => {
+        const requestSync = vi.fn();
+        window.syncOrchestrator = { requestSync };
+        const c = makeActionComponent();
+        await c.reapplyQueueEntry(9);
+
+        expect(store.reapplyQueueEntryWithServerVersion).toHaveBeenCalledWith(9);
+        expect(requestSync).toHaveBeenCalled();
+        expect(c.feedback).toBe("retried");
+    });
+
+    it("reapplyQueueEntry ohne Orchestrator: faellt auf replayQueue zurueck", async () => {
+        const replayQueue = vi.fn(async () => {});
+        window.offlineQueue = { refreshCount: refreshQueueCount, replayQueue };
+        const c = makeActionComponent();
+        await c.reapplyQueueEntry(9);
+
+        expect(replayQueue).toHaveBeenCalled();
+        expect(c.feedback).toBe("retried");
+    });
+});
