@@ -125,6 +125,31 @@ class TestTrendReturnsPerSegmentData:
         assert result[0]["total_contacts"] == 1
 
     @pytest.mark.django_db
+    def test_document_type_filter_bypasses_eligible_snapshot(
+        self, facility, client_identified, doc_type_contact, staff_user
+    ):
+        """Ein Doktyp-Filter erzwingt auch fuer volle Altmonate den Live-Pfad."""
+        _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 15, 10, 0))
+        StatisticsSnapshot.objects.create(
+            facility=facility,
+            year=2025,
+            month=1,
+            data=_snapshot_data(total=99),
+        )
+
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
+            mock_tz.localdate.return_value = date(2025, 3, 15)
+            result = get_statistics_trend(
+                facility,
+                date(2025, 1, 1),
+                date(2025, 1, 31),
+                document_type=doc_type_contact,
+            )
+
+        assert result[0]["source"] == "live"
+        assert result[0]["total_contacts"] == 1
+
+    @pytest.mark.django_db
     def test_label_format(self, facility):
         with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 12, 15)
@@ -206,6 +231,39 @@ class TestChartDataView:
         data = resp.json()
         assert resp.status_code == 200
         assert len(data["labels"]) == 3
+
+    def test_aggregates_tables_across_trend_segments(self, client, admin_user):
+        """Doktyp- und Alterszeilen werden ueber alle Trendsegmente verdichtet."""
+        segments = [
+            {
+                "label": "2025-01",
+                "source": "snapshot",
+                "total_contacts": 2,
+                "by_contact_stage": {"anonym": 1, "identifiziert": 1, "qualifiziert": 0},
+                "persons_by_contact_stage": {"anonym": 1, "identifiziert": 1, "qualifiziert": 0},
+                "by_document_type": [{"name": "Kontakt", "count": 2}],
+                "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 2, "persons": 1}],
+                "unique_clients": 1,
+            },
+            {
+                "label": "2025-02",
+                "source": "live",
+                "total_contacts": 3,
+                "by_contact_stage": {"anonym": 0, "identifiziert": 2, "qualifiziert": 1},
+                "persons_by_contact_stage": {"anonym": 0, "identifiziert": 2, "qualifiziert": 1},
+                "by_document_type": [{"name": "Kontakt", "count": 3}],
+                "by_age_cluster": [{"cluster": "18_26", "label": "18–26", "count": 3, "persons": 2}],
+                "unique_clients": 2,
+            },
+        ]
+        client.force_login(admin_user)
+
+        with patch("core.views.statistics.get_statistics_trend", return_value=segments):
+            response = client.get(reverse("core:statistics_chart_data"))
+
+        payload = response.json()
+        assert payload["document_types"] == [{"name": "Kontakt", "count": 5}]
+        assert payload["age_clusters"] == [{"cluster": "18_26", "label": "18–26", "count": 5, "persons": 2}]
 
 
 # ---------------------------------------------------------------------------
