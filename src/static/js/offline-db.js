@@ -493,9 +493,17 @@
     // auf window liegen, wenn genau DIESE Datei nicht laedt):
     //   1. take() schliesst bei erschoepftem Budget selbst ab (loescht den
     //      window-Slot);
-    //   2. budget-unabhaengig loescht ein setTimeout(0)-Makrotask direkt nach
-    //      dem Anlegen — er laeuft garantiert NACH allen synchronen
-    //      Verbund-Script-Tags, also auch bei jeder Teil-Ladung;
+    //   2. budget-unabhaengig entwaffnet DOMContentLoaded (+ pagehide) —
+    //      der Parser feuert es erst, NACHDEM alle parser-blockierenden
+    //      <script src>-Tags ausgefuehrt sind. Ein setTimeout(0) traegt diese
+    //      Garantie NICHT: beim Warten auf ein noch nicht bereites
+    //      Schwester-Script spinnt der Parser das Event-Loop und fuehrt
+    //      faellige Timer AUS (WHATWG-HTML); unter dem cache-first-SW der
+    //      Offline-Seiten empirisch reproduziert — der 0ms-Disarm feuerte
+    //      ZWISCHEN den Tags und entwaffnete den Slot vor den Abholern
+    //      (Verify-Pass zu c6d451bd). Ausserhalb eines laufenden Parses
+    //      (readyState nicht "loading", z.B. Test-Harness via dynamic
+    //      import) bleibt der Makrotask-Fallback;
     //   3. offline-store.js loescht als letzte Datei zusaetzlich (Guertel +
     //      Hosentraeger, deckt exotische Timer-Unterdrueckung ab).
     // Ein spaeter injiziertes Skript findet weder den Slot noch die
@@ -539,5 +547,15 @@
             return handed;
         },
     };
-    window.setTimeout(_disarmInternals, 0);
+    if (document.readyState === "loading") {
+        // Browser-Pfad: siehe Punkt 2 der Entwaffnungs-Doku oben.
+        document.addEventListener("DOMContentLoaded", _disarmInternals, { once: true });
+        window.addEventListener("pagehide", _disarmInternals, { once: true });
+    } else {
+        // Nicht-Parser-Kontext (Test-Harness laedt per dynamic import bei
+        // readyState "complete"): Makrotask-Fallback — die Harnesse halten
+        // ihn mit Fake-Timern an, bis alle Module geladen sind (siehe
+        // tests/js/_offline_store_modules.mjs).
+        window.setTimeout(_disarmInternals, 0);
+    }
 })();
