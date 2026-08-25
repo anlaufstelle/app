@@ -1,0 +1,9 @@
+{% load i18n %}
+{% comment %}Refs #1836: gemeinsame Formular-Attribute der bedingten Rueckfrage vor
+dem Speichern (Personen- und Fall-Formular; Komponente ``confirmDynamicDataLoss``
+in ``static/js/alpine/forms.js``). Refs #1776: der Confirm haengt zusaetzlich
+daran, dass der Select-Wert beim Submit vom gespeicherten Ausgangstyp abweicht.
+Das Include steht IM oeffnenden <form>-Tag.{% endcomment %}
+{% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
+      data-original-document-type="{{ original_document_type_id|default_if_none:'' }}"
+      data-confirm-discard="{% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} Datei entfernt.{% plural %}Außerdem werden {{ f }} Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Datei wird beim Speichern entfernt und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Dateien werden beim Speichern entfernt und lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}"{% endif %}
