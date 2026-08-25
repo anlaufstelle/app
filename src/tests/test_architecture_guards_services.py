@@ -492,6 +492,17 @@ class TestClientTargetQueryParity:
             if isinstance(child, ast.Call) and isinstance(child.func, (ast.Name, ast.Attribute))
         }
 
+    @staticmethod
+    def _target_type_keyword(call: ast.Call) -> ast.keyword | None:
+        return next(
+            (
+                keyword
+                for keyword in call.keywords
+                if keyword.arg is not None and (keyword.arg == "target_type" or keyword.arg.startswith("target_type__"))
+            ),
+            None,
+        )
+
     @classmethod
     def _inline_target_q_calls(cls) -> Counter[tuple[str, str, str]]:
         findings: Counter[tuple[str, str, str]] = Counter()
@@ -531,7 +542,7 @@ class TestClientTargetQueryParity:
                         if isinstance(node.func, ast.Attribute)
                         else None
                     )
-                    target_keyword = next((keyword for keyword in node.keywords if keyword.arg == "target_type"), None)
+                    target_keyword = TestClientTargetQueryParity._target_type_keyword(node)
                     if self.scope and call_name == "Q" and target_keyword is not None:
                         findings[(self.source_module, ".".join(self.scope), ast.unparse(target_keyword.value))] += 1
                     self.generic_visit(node)
@@ -539,6 +550,21 @@ class TestClientTargetQueryParity:
             InlineTargetQVisitor(module_name).visit(ast.parse(module.read_text(encoding="utf-8")))
 
         return findings
+
+    @pytest.mark.parametrize(
+        ("source", "expected_value"),
+        [
+            ("Q(target_type='Client')", "'Client'"),
+            ("Q(target_type__in=['Client', 'Event'])", "['Client', 'Event']"),
+            ("Q(target_id=identifier)", None),
+        ],
+    )
+    def test_target_type_keyword_detection_covers_exact_and_lookup_forms(self, source, expected_value):
+        expression = ast.parse(source, mode="eval").body
+        assert isinstance(expression, ast.Call)
+
+        keyword = self._target_type_keyword(expression)
+        assert (ast.unparse(keyword.value) if keyword is not None else None) == expected_value
 
     def test_known_consumers_keep_calling_shared_builders(self):
         missing = []
