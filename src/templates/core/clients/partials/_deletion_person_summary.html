@@ -1,0 +1,26 @@
+{% load i18n %}
+{% comment %}Refs #1836: Objekt-Zusammenfassung der Person im gemeinsamen
+Loeschantrag-Rahmen (core/partials/_deletion_review.html).{% endcomment %}
+{# Person-Zusammenfassung #}
+<div class="card p-4 mb-5">
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffene Person" %}</h2>
+    <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+            <dt class="text-ink-muted">{% trans "Pseudonym" %}</dt>
+            <dd class="font-medium">{{ client.pseudonym }}</dd>
+        </div>
+        <div class="flex justify-between">
+            <dt class="text-ink-muted">{% trans "Kontaktstufe" %}</dt>
+            {# Refs #1805 (C3): erbt Farbe und erklaerenden title aus C2 statt #}
+            {# den Anzeigewert ein zweites Mal selbst zu rendern. #}
+            <dd>{% include "components/_client_badge.html" with client=client %}</dd>
+        </div>
+        <div class="flex justify-between">
+            <dt class="text-ink-muted">{% trans "Angelegt am" %}</dt>
+            <dd class="font-medium">{{ client.created_at|date:"DATE_FORMAT" }}</dd>
+        </div>
+    </dl>
+    <p class="text-xs text-ink-muted mt-3">
+        {% trans "Bei Genehmigung wird die Person in den Papierkorb verschoben. Nach Ablauf der Aufbewahrungsfrist wird sie automatisch anonymisiert; Statistik-Aggregate bleiben erhalten." %}
+    </p>
+</div>
