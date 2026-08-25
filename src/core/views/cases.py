@@ -26,6 +26,7 @@ from core.services.attachments import (
     finalize_staged_files,
     preserve_file_markers,
     stage_attachment_uploads,
+    stage_uploads,
 )
 from core.services.case import (
     assign_event_to_case,
@@ -50,7 +51,6 @@ from core.services.dynamic_data import (
     remove_restricted_fields,
 )
 from core.services.events import split_file_and_text_data
-from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
 from core.views._dynamic_errors import add_dynamic_service_errors
 from core.views.mixins import (
@@ -351,23 +351,26 @@ class CaseCreateView(StaffRequiredMixin, View):
             else {}
         )
 
-        # Refs #1345: Scan + Verschluesselung VOR der Transaktion stagen, damit
-        # der AuditLog-Hashketten-Lock nicht ueber den ClamAV-Lauf gehalten wird
-        # (``owner=None`` — der Fall existiert noch nicht).
-        staged_all = []
-        staged_by_slug: dict[str, list] = {}
+        # Staging VOR der Transaktion + Cleanup-Garantie bei jedem
+        # Nicht-Commit-Ausgang: stage_uploads (Refs #1345/#1831; Muster
+        # ``EventCreateView.post``). Policy-/Virus-Reject (ValidationError aus
+        # dem Staging) landet als Non-Field-Error am Formular.
         try:
-            for slug, uploaded_list in file_fields.items():
-                prepared = []
-                for uploaded_file in uploaded_list or []:
-                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, owner=None)
-                    staged_all.append(staged)
-                    prepared.append(staged)
-                if prepared:
-                    staged_by_slug[slug] = prepared
+            with stage_uploads(facility, request.user, file_fields) as staged:
+                with transaction.atomic():
+                    case = create_case(
+                        facility=facility,
+                        user=request.user,
+                        client=form.cleaned_data.get("client"),
+                        title=form.cleaned_data["title"],
+                        description=form.cleaned_data.get("description", ""),
+                        lead_user=form.cleaned_data.get("lead_user"),
+                        document_type=doc_type,
+                        data_json=data_json,
+                    )
+                    finalize_staged_files(case, request.user, staged.by_slug, doc_type)
+                staged.commit()
         except ValidationError as e:
-            for staged in staged_all:
-                staged.output_path.unlink(missing_ok=True)
             form.add_error(None, e.message if hasattr(e, "message") else str(e))
             context = {
                 "form": form,
@@ -377,26 +380,6 @@ class CaseCreateView(StaffRequiredMixin, View):
                 "client_pseudonym": "",
             }
             return render(request, "core/cases/form.html", context)
-
-        committed = False
-        try:
-            with transaction.atomic():
-                case = create_case(
-                    facility=facility,
-                    user=request.user,
-                    client=form.cleaned_data.get("client"),
-                    title=form.cleaned_data["title"],
-                    description=form.cleaned_data.get("description", ""),
-                    lead_user=form.cleaned_data.get("lead_user"),
-                    document_type=doc_type,
-                    data_json=data_json,
-                )
-                finalize_staged_files(case, request.user, staged_by_slug, doc_type)
-            committed = True
-        finally:
-            if not committed:
-                for staged in staged_all:
-                    staged.output_path.unlink(missing_ok=True)
 
         messages.success(request, _("Fall wurde erstellt."))
         return redirect("core:case_detail", pk=case.pk)
