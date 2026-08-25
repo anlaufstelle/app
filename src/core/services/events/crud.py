@@ -144,7 +144,7 @@ def create_event(
     # core.services.case.cases). Alle heutigen Aufrufer (Views/Offline-Replay)
     # filtern bereits auf entity_type=event; dieser Guard schuetzt kuenftige
     # Direkt-Aufrufer, die den View-Filter umgehen wuerden.
-    check_document_type(
+    document_type = check_document_type(
         facility,
         document_type,
         entity_type=DocumentType.EntityType.EVENT,
