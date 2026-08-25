@@ -1,0 +1,96 @@
+"""Service-Paket für die Formular-Konfiguration (Refs #1832).
+
+Alle Symbole des früheren Moduls core.services.config werden hier
+re-exportiert. Bestehende Aufrufer können dadurch unverändert aus
+core.services.config importieren.
+"""
+
+from core.services.config.block_order import (
+    _block_sort_key,
+    _compact_block_positions,
+    _move_field_into_group,
+    _move_field_to_top_level,
+    _next_block_position,
+    _validate_id_set,
+    block_ordered_dtf_queryset,
+    dtf_block_sort_key,
+    iter_blocks_in_order,
+    iter_fields_in_block_order,
+    move_field,
+    reorder_blocks,
+    reorder_fields,
+)
+from core.services.config.conditions import (
+    _condition_detail,
+    create_field_condition,
+    delete_field_condition,
+    update_field_condition,
+)
+from core.services.config.delete_blockers import (
+    ConfigDeleteBlocked,
+    _append_trash_share,
+    _trashed_case_ids_with_attachment,
+    _trashed_case_ids_with_slug,
+    _trashed_client_ids_with_attachment,
+    _trashed_client_ids_with_slug,
+    delete_document_type,
+    delete_field_group,
+    delete_field_template,
+    field_template_delete_blockers,
+    field_template_trashed_attachment_count,
+    field_template_trashed_case_count,
+    field_template_trashed_client_count,
+)
+from core.services.config.mutations import (
+    add_field_to_doctype,
+    conflicting_report_key_assignment,
+    conflicting_report_key_field,
+    count_field_removal_impact,
+    remove_field_from_doctype,
+    save_document_type,
+    save_field_group,
+    save_field_template,
+    set_field_template_active,
+)
+
+__all__ = [
+    "ConfigDeleteBlocked",
+    "_append_trash_share",
+    "_block_sort_key",
+    "_compact_block_positions",
+    "_condition_detail",
+    "_move_field_into_group",
+    "_move_field_to_top_level",
+    "_next_block_position",
+    "_trashed_case_ids_with_attachment",
+    "_trashed_case_ids_with_slug",
+    "_trashed_client_ids_with_attachment",
+    "_trashed_client_ids_with_slug",
+    "_validate_id_set",
+    "add_field_to_doctype",
+    "block_ordered_dtf_queryset",
+    "conflicting_report_key_assignment",
+    "conflicting_report_key_field",
+    "count_field_removal_impact",
+    "create_field_condition",
+    "delete_document_type",
+    "delete_field_condition",
+    "delete_field_group",
+    "delete_field_template",
+    "dtf_block_sort_key",
+    "field_template_delete_blockers",
+    "field_template_trashed_attachment_count",
+    "field_template_trashed_case_count",
+    "field_template_trashed_client_count",
+    "iter_blocks_in_order",
+    "iter_fields_in_block_order",
+    "move_field",
+    "remove_field_from_doctype",
+    "reorder_blocks",
+    "reorder_fields",
+    "save_document_type",
+    "save_field_group",
+    "save_field_template",
+    "set_field_template_active",
+    "update_field_condition",
+]
