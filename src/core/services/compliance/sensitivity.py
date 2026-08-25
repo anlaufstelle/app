@@ -13,9 +13,12 @@ from django.http import Http404
 from core.models import Attachment, DocumentType, Event
 from core.models.user import User
 
-#: Fail-closed sentinel fuer Attachment-Owner ohne Dokumentationstyp. Der Wert
-#: kommt in keiner Sensitivity-Liste vor und wird deshalb fuer jede Rolle aus
-#: der Uebersicht gefiltert (ADR-039 §12).
+#: Sentinel fuer „Owner ohne ``document_type``" in der Sensitivity-Coalesce
+#: (M24/AP4, Refs #1738). Bewusst ein Wert, der in KEINER Sensitivity-Liste
+#: vorkommt: die Zeile faellt damit fuer JEDE Rolle aus der Uebersicht — genau
+#: wie das Download-Gate, das ``document_type is None`` fail-closed mit 404
+#: beantwortet (ADR-039 §12). Ein Default auf „normal" waere die
+#: entgegengesetzte, offene Richtung.
 NO_DOC_TYPE_SENTINEL = "__kein_dokumentationstyp__"
 
 # Ordered sensitivity levels for comparison
@@ -77,18 +80,30 @@ def allowed_sensitivities_for_user(user):
 
 
 def _chain_version_counts(facility, *, removed=False):
-    """Aggregate the number of matching versions per attachment chain.
+    """Aggregat-Subquery: Anzahl noch vorhandener Versionen je ``entry_id``.
 
-    Active and removed overviews count only versions from their respective
-    state. The explicit facility scope keeps the result correct even when RLS
-    is bypassed by a super-admin connection.
+    B4 (Refs #1781). Gezaehlt werden die nicht soft-geloeschten Zeilen der
+    Kette — der Badge beziffert, was noch da ist, nicht, was es einmal gab.
+    Der Facility-Scope steht explizit hier, statt sich auf die RLS-Policy zu
+    verlassen: eine Auswertung, die nur unter RLS korrekt zaehlt, waere im
+    Superadmin-Kontext (Bypass-Branch) still falsch.
+
+    Refs #1874: In der Ansicht „Entfernte Dateien" zaehlt gespiegelt die
+    soft-geloeschte Menge — ein ``active()``-Zaehler lieferte dort konstant
+    ``0`` und der Badge verschwaende. Der Badge beziffert damit die
+    **entfernten** Versionen, nicht zwingend die Kettenlaenge; ein Purge
+    nimmt immer die ganze ``entry_id``. Praktisch faellt beides zusammen,
+    weil ``soft_delete_attachment_chain`` die Kette als Ganzes entfernt —
+    und die verbindliche Zahl nennt ohnehin erst die Bestaetigungsseite
+    (``AttachmentPurgeView._chain_size``, ohne ``deleted_at``-Filter).
     """
     base = Attachment.objects.for_facility(facility)
     return (
         (base.deleted() if removed else base.active())
         .filter(entry_id=OuterRef("entry_id"))
-        # ``order_by()`` removes ``Meta.ordering`` so ``created_at`` does not
-        # accidentally become part of the GROUP BY clause.
+        # ``order_by()`` loescht ``Meta.ordering`` — sonst landet
+        # ``created_at`` im GROUP BY und die Subquery liefert je Version
+        # eine eigene Zeile.
         .order_by()
         .values("entry_id")
         .annotate(total=Count("pk"))
@@ -100,15 +115,34 @@ def visible_attachments_for_user(facility, user, *, removed=False):
     """Return the lazy, facility-scoped attachment overview queryset.
 
     The queryset applies every owner-liveness and sensitivity boundary before
-    callers slice it. ``removed=True`` mirrors the active path for the
-    role-gated removal overview; deciding whether a user may request that view
-    remains the caller's responsibility and defaults fail-closed to ``False``.
+    callers slice it. ``removed=False`` liefert AUSSCHLIESSLICH aktive
+    Ketten-Spitzen, ``removed=True`` AUSSCHLIESSLICH entfernte Ketten-Spitzen.
+    Das Rollen-Gate fuer ``removed=True`` bleibt beim Aufrufer; der Service
+    prueft nur die gemeinsame Sichtbarkeitsgrenze und faellt standardmaessig
+    auf die aktive Ansicht zurueck.
     """
     allowed = allowed_sensitivities_for_user(user)
+    # B1 (Refs #1738): ``deleted_at`` blendet einen Anhang ueberall aus —
+    # ausser in der ausdruecklich angeforderten Entfernt-Ansicht.
     scoped = Attachment.objects.for_facility(facility)
     attachments = (
         (scoped.deleted() if removed else scoped.active())
+        # B4 (Refs #1781): nur Ketten-Spitzen. Unabhaengig vom
+        # Soft-Delete-Filter — eine Spitze kann soft-geloescht sein, eine
+        # Vorversion muss auch ohne ``deleted_at`` draussen bleiben.
         .filter(is_current=True)
+        # Owner im Papierkorb liefert keine Dateien mehr aus. Je Owner-Typ
+        # ``NULL``-tolerant formuliert: pro Zeile ist genau EIN Owner
+        # gesetzt (CheckConstraint), die beiden anderen Klauseln sind dann
+        # per ``isnull`` erfuellt.
+        #
+        # Refs #1777: Fuer Person und Fall verlaeuft die Loeschgrenze auch
+        # ueber die PERSON, nicht nur ueber ``is_deleted`` der Owner-Zeile —
+        # eine anonymisierte Person (``is_active=False``) liegt nicht
+        # zwingend im Papierkorb (K-Anon-Bridge). Der Fall-Zweig muss deshalb
+        # ueber ``case__client`` filtern, der Personen-Zweig zusaetzlich
+        # ``is_active`` pruefen — analog zum Ereignis-Zweig ueber
+        # ``event__client`` und konsistent mit ``cases_with_live_client()``.
         .filter(
             Q(event__isnull=True)
             | (
@@ -134,6 +168,12 @@ def visible_attachments_for_user(facility, user, *, removed=False):
             "created_by",
         )
         .annotate(
+            # Sensitivity des Owner-Typs, egal an welchem Owner die Zeile
+            # haengt. Der Default ist ein Sentinel, der in KEINER
+            # ``allowed``-Liste vorkommt: ein Owner ohne ``document_type``
+            # hat keine Bezugs-Sensitivitaet, die Zeile bleibt damit fuer
+            # jede Rolle unsichtbar — exakt wie das Download-Gate, das
+            # ``document_type is None`` mit 404 beantwortet (ADR-039 §12).
             owner_sensitivity=Coalesce(
                 "event__document_type__sensitivity",
                 "client__document_type__sensitivity",
@@ -141,18 +181,28 @@ def visible_attachments_for_user(facility, user, *, removed=False):
                 Value(NO_DOC_TYPE_SENTINEL),
                 output_field=CharField(),
             ),
+            # B4 (Refs #1781): Laenge der Versionskette als aggregierte
+            # Subquery — EINE korrelierte Unterabfrage im selben Statement
+            # statt einer Zaehl-Query je Zeile (kein N+1). ``Coalesce`` auf
+            # 1: die ausgewaehlte Ketten-Spitze zaehlt selbst immer mit; die
+            # Subquery darf deshalb weder in der aktiven noch in der
+            # entfernten Ansicht leer sein.
             version_count=Coalesce(
                 Subquery(_chain_version_counts(facility, removed=removed), output_field=IntegerField()),
                 Value(1),
             ),
         )
+        # Sensitivity-Filter VOR dem Slice: die effektive Sensitivitaet ist
+        # max(doc_type, field_template) — beide muessen in der Rollen-Sicht
+        # liegen.
         .filter(owner_sensitivity__in=allowed)
         .filter(Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed))
         .order_by("-created_at")
     )
 
-    # Fall-Dokumentation ist fuer Assistenz auch ueber die Datei-Uebersicht
-    # unsichtbar (ADR-039 §12).
+    # ADR-039 §12: Faelle sind fuer die Assistenz unsichtbar — fall-eigene
+    # Dateien folglich auch. Ohne diesen Filter waere die Uebersicht ein
+    # Nebeneingang in die Fall-Dokumentation.
     if not user.is_staff_or_above:
         attachments = attachments.filter(case__isnull=True)
     return attachments
@@ -205,15 +255,16 @@ def get_visible_attachment_for_owner_or_404(user, owner, attachment_pk, *, inclu
     Bezugs-Sensitivity fuer den Feldvergleich — dann wird 404 gehoben statt
     implizit auf NORMAL zurueckzufallen.
 
-    ``include_removed`` oeffnet Stufe 3 fuer entfernte (soft-geloeschte) Zeilen.
-    Ausschliesslich fuer das ersatzlose Loeschen (Refs #1874): eine irrtuemlich
-    hochgeladene Datei wird in der Praxis zuerst ueber die Checkbox „Entfernen"
-    aus der Dokumentation genommen, und ohne diesen Schalter waere sie danach
-    nie mehr physisch loeschbar — die ``.enc`` bliebe bis zur Anonymisierung der
-    Person liegen, also genau der Zustand, den der Loeschweg beseitigen soll.
-    Der Schalter lockert **nur** Stufe 3 und **nur** in Richtung Vernichtung;
-    jeder lesende Pfad (Download) laesst ihn auf ``False`` und bleibt bei L5
-    (Refs #1375). Die Stufen 1, 2 und 4 laufen unveraendert.
+    ``include_removed=True`` schliesst entfernte (soft-geloeschte) Zeilen
+    ZUSAETZLICH zu aktiven ein. Ausschliesslich fuer das ersatzlose Loeschen
+    (Refs #1874): eine irrtuemlich hochgeladene Datei wird in der Praxis zuerst
+    ueber die Checkbox „Entfernen" aus der Dokumentation genommen, und ohne
+    diesen Schalter waere sie danach nie mehr physisch loeschbar — die ``.enc``
+    bliebe bis zur Anonymisierung der Person liegen, also genau der Zustand, den
+    der Loeschweg beseitigen soll. Der Schalter lockert **nur** Stufe 3 und
+    **nur** in Richtung Vernichtung; jeder lesende Pfad (Download) laesst ihn
+    auf ``False`` und bleibt bei L5 (Refs #1375). Die Stufen 1, 2 und 4 laufen
+    unveraendert.
 
     Returns: die ``Attachment``-Instanz.
     """
