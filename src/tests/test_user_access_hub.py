@@ -464,7 +464,10 @@ class TestInviteAndUnlockActions:
         client.force_login(admin_user)
 
         with patch("core.services.user_access.send_invite_email", return_value=True) as send:
-            response = client.post(reverse("core:user_access_invite", args=[invited.pk]))
+            response = client.post(
+                reverse("core:user_access_invite", args=[invited.pk]),
+                REMOTE_ADDR="203.0.113.88",
+            )
 
         assert response.status_code == 302
         assert response.url == reverse("core:user_access_update", args=[invited.pk])
@@ -472,6 +475,7 @@ class TestInviteAndUnlockActions:
         row = AuditLog.objects.get(action=AuditLog.Action.USER_INVITE_SENT, user=invited)
         assert row.actor == admin_user
         assert row.detail["trigger"] == "invite_resend"
+        assert row.ip_address == "203.0.113.88"
 
     def test_established_account_cannot_receive_an_invite(self, client, admin_user, staff_user):
         client.force_login(admin_user)
@@ -509,12 +513,16 @@ class TestInviteAndUnlockActions:
             )
         client.force_login(admin_user)
 
-        response = client.post(reverse("core:user_access_unlock", args=[staff_user.pk]))
+        response = client.post(
+            reverse("core:user_access_unlock", args=[staff_user.pk]),
+            REMOTE_ADDR="203.0.113.89",
+        )
 
         assert response.status_code == 302
         row = AuditLog.objects.get(action=AuditLog.Action.LOGIN_UNLOCK, user=staff_user)
         assert row.actor == admin_user
         assert row.detail["unlocked_by"] == str(admin_user.pk)
+        assert row.ip_address == "203.0.113.89"
 
     def test_service_does_not_write_unlock_for_unlocked_account(self, facility, admin_user, staff_user):
         with (
@@ -524,3 +532,22 @@ class TestInviteAndUnlockActions:
             assert unlock_managed_user(staff_user, facility=facility, actor=admin_user) is False
 
         unlock.assert_not_called()
+
+    def test_service_forwards_actor_and_ip_for_locked_account(self, facility, admin_user, staff_user):
+        with (
+            patch("core.services.user_access.is_locked", return_value=True),
+            patch("core.services.user_access.unlock") as unlock,
+        ):
+            result = unlock_managed_user(
+                staff_user,
+                facility=facility,
+                actor=admin_user,
+                ip_address="203.0.113.90",
+            )
+
+        assert result is True
+        unlock.assert_called_once_with(
+            staff_user,
+            unlocked_by=admin_user,
+            ip_address="203.0.113.90",
+        )
