@@ -111,8 +111,62 @@ def _serialize_document_type(user, doc_type) -> dict[str, Any]:
     }
 
 
+def _field_gate_sensitivity(field_templates, orphan_templates, slug) -> str:
+    """Effektive Gate-Sensitivity eines Slugs (Refs #1891, Extraktion).
+
+    SICHERHEITSBEFUND (Refs #1725): verwaiste Slugs (Wert in ``data_json``,
+    aber nicht mehr am Typ) werden facility-weit aufgelöst und bei fehlendem
+    Template konservativ HIGH gegatet — sonst fiele ihre Sensitivity auf
+    ``""`` (=NORMAL) und ein einst als elevated/high eingestufter Wert
+    landete lesbar in IndexedDB.
+    """
+    ft = field_templates.get(slug)
+    if ft is not None:
+        return ft.sensitivity or ""
+    return orphan_gating_sensitivity(orphan_templates.get(slug))
+
+
+def _offline_field_value(value: Any) -> Any:
+    """Die drei sich ausschließenden Wert-Transformationen (Refs #1891).
+
+    Läuft NUR für Werte, die das Sensitivity-Gate bereits passiert haben —
+    insbesondere wird ``safe_decrypt`` nie für gestrippte Felder aufgerufen
+    (gepinnt in ``TestVisibleDataFieldsGateMatrix``).
+
+    - Attachment markers are metadata (filename, content-type) — keep them
+      so the offline UI can indicate "Datei vorhanden", but never ship the
+      file bytes offline. Refs #786 (C-18): Stage-B-Multifile (``__files__``)
+      wird genauso minimiert wie Stage-A — nur "Datei vorhanden" + Anzahl,
+      KEINE internen Attachment-IDs oder Sortier-Indizes.
+    - Encrypted fields (AES at rest on the server) are unusable offline
+      without the Fernet key. Decrypt here so the browser bundle is
+      readable — the bundle itself is re-encrypted client-side via
+      crypto_session before being written to IndexedDB.
+    """
+    if not isinstance(value, dict):
+        return value
+    if value.get("__file__"):
+        return {"__file__": True, "name": value.get("name", "")}
+    if value.get("__files__"):
+        return {"__files__": True, "count": _multifile_entry_count(value.get("entries") or [])}
+    if value.get("__encrypted__"):
+        return safe_decrypt(value)
+    return value
+
+
+def _multifile_entry_count(entries) -> int:
+    """Zählt nur valide Einträge (dict mit ``id``) eines Multifile-Markers."""
+    return sum(1 for e in entries if isinstance(e, dict) and e.get("id"))
+
+
 def _visible_data_fields(user, event) -> dict[str, Any]:
-    """Return the event's data_json restricted to fields the user may see."""
+    """Return the event's data_json restricted to fields the user may see.
+
+    Refs #1891: Gate-Prädikat (``_field_gate_sensitivity`` +
+    ``user_can_see_field``) und Wert-Transformation (``_offline_field_value``)
+    sind getrennt — das Gate entscheidet VOR jeder Transformation, ob ein
+    Wert das Bundle überhaupt verlassen darf (Leak-Grenze der Offline-Bundles).
+    """
     if not event.data_json:
         return {}
     doc_type = event.document_type
@@ -120,45 +174,17 @@ def _visible_data_fields(user, event) -> dict[str, Any]:
     field_templates = {
         dtf.field_template.slug: dtf.field_template for dtf in doc_type.fields.select_related("field_template")
     }
-    # SICHERHEITSBEFUND (Refs #1725): verwaiste Slugs (Wert in ``data_json``, aber
-    # nicht mehr am Typ) facility-weit auflösen und bei fehlendem Template
-    # konservativ HIGH gaten, BEVOR ein Wert entschlüsselt ins Offline-Bundle
-    # geschrieben wird — sonst fiele ihre Sensitivity auf ``""`` (=NORMAL) und ein
-    # einst als elevated/high eingestufter Wert landete lesbar in IndexedDB.
-    # Gleiche Auflösung wie ``build_event_detail_context`` und der Konflikt-Diff.
+    # Refs #1725: Auflösung der verwaisten Slugs — gleiche Auflösung wie
+    # ``build_event_detail_context`` und der Konflikt-Diff (Details am
+    # Gate-Helfer ``_field_gate_sensitivity``).
     orphan_slugs = [slug for slug in event.data_json if slug not in field_templates]
     orphan_templates = resolve_orphan_field_templates(doc_type, orphan_slugs)
     result: dict[str, Any] = {}
     for slug, value in event.data_json.items():
-        ft = field_templates.get(slug)
-        field_sensitivity = (
-            (ft.sensitivity or "") if ft is not None else orphan_gating_sensitivity(orphan_templates.get(slug))
-        )
+        field_sensitivity = _field_gate_sensitivity(field_templates, orphan_templates, slug)
         if not user_can_see_field(user, doc_type.sensitivity, field_sensitivity):
             continue
-        # Attachment markers are metadata (filename, content-type) — keep them
-        # so the offline UI can indicate "Datei vorhanden", but never ship the
-        # file bytes offline. Refs #786 (C-18): Stage-B-Multifile (``__files__``)
-        # wird genauso minimiert wie Stage-A — nur "Datei vorhanden" + Anzahl,
-        # KEINE internen Attachment-IDs oder Sortier-Indizes.
-        if isinstance(value, dict) and value.get("__file__"):
-            result[slug] = {"__file__": True, "name": value.get("name", "")}
-            continue
-        if isinstance(value, dict) and value.get("__files__"):
-            entries = value.get("entries") or []
-            result[slug] = {
-                "__files__": True,
-                "count": sum(1 for e in entries if isinstance(e, dict) and e.get("id")),
-            }
-            continue
-        # Encrypted fields (AES at rest on the server) are unusable offline
-        # without the Fernet key. Decrypt here so the browser bundle is
-        # readable — the bundle itself is re-encrypted client-side via
-        # crypto_session before being written to IndexedDB.
-        if isinstance(value, dict) and value.get("__encrypted__"):
-            result[slug] = safe_decrypt(value)
-        else:
-            result[slug] = value
+        result[slug] = _offline_field_value(value)
     return result
 
 
@@ -256,6 +282,51 @@ def _serialize_assignable_users(facility) -> list[dict[str, Any]]:
     return [{"pk": str(u.pk), "name": u.get_full_name() or u.username} for u in users]
 
 
+def _bundle_document_types(user, facility, events) -> list[DocumentType]:
+    """DocType-Katalog des Client-Bundles, fertig sortiert (Refs #1891, Extraktion).
+
+    Ship the full ACTIVE document-type catalogue so offline-create offers the
+    same choices as online (EventMetaForm: ``for_facility`` + ``is_active``),
+    PLUS any type referenced by the cached events even if since deactivated —
+    so existing event values still render offline (union). Refs #1397.
+
+    Refs #1525 (Review MEDIUM, wie #1518/Facility-Bundle): denselben DocType-
+    EBENEN-Sensitivity-Filter anwenden, den das Online-``EventMetaForm``
+    fuehrt (forms/events.py: ``sensitivity__in=allowed_sensitivities_for_user``).
+    Ohne ihn wuerde NAME/Metadaten eines HIGH/ELEVATED-DocType offline an
+    niedrigere Rollen leaken — Verstoss gegen die Bundle-ist-Derivat-
+    Invariante. Die per-Event referenzierten Typen bleiben ungefiltert:
+    ``events`` lief bereits durch ``Event.objects.visible_to(user)``
+    (dieselbe ``allowed_sensitivities_for_user``-Grenze), sodass die Union
+    keinen zusaetzlichen Leak oeffnen kann.
+
+    M2 (Refs #1058, Fix-Runde 1 F-1): zusaetzlich ``entity_type=EVENT`` —
+    ohne den Filter koennte ein client-/case-Typ im Offline-Create-Picker
+    auftauchen; ein darauf basierender Replay-POST auf ``event_create``
+    wuerde vom (bereits entity_type-gefilterten) ``EventMetaForm`` als
+    ungueltige Wahl verworfen (422/Dead-Letter) — dieselbe Bundle-ist-
+    Derivat-Verletzung wie ein fehlender Sensitivity-Filter, nur als
+    Correctness- statt Leak-Vektor. Die Event-Union bleibt bewusst
+    ungefiltert: Events tragen ohnehin nur event-Typen (P1-Invariante).
+
+    Refs #1498: das Union-Dict haengt referenzierte (ggf. inaktive) Typen
+    NACHTRAEGLICH ans Ende — deshalb explizit nach (sort_order, name)
+    sortieren, analog ``DocumentType.Meta.ordering`` und ``EventMetaForm``,
+    damit ein per Event nachgezogener Typ korrekt einsortiert wird.
+    """
+    doc_types = {
+        dt.pk: dt
+        for dt in DocumentType.objects.for_facility(facility)
+        .filter(is_active=True, entity_type=DocumentType.EntityType.EVENT)
+        .filter(sensitivity__in=allowed_sensitivities_for_user(user))
+        .order_by("sort_order", "name")
+    }
+    for ev in events:
+        if ev.document_type_id not in doc_types:
+            doc_types[ev.document_type_id] = ev.document_type
+    return sorted(doc_types.values(), key=lambda dt: (dt.sort_order, dt.name))
+
+
 def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     """Assemble a server-filtered snapshot of a single client.
 
@@ -275,37 +346,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     )
     events = list(events_qs)
 
-    # Ship the full ACTIVE document-type catalogue so offline-create offers the
-    # same choices as online (EventMetaForm: ``for_facility`` + ``is_active``),
-    # PLUS any type referenced by the cached events even if since deactivated —
-    # so existing event values still render offline (union). Refs #1397.
-    # Refs #1525 (Review MEDIUM, wie #1518/Facility-Bundle): denselben DocType-
-    # EBENEN-Sensitivity-Filter anwenden, den das Online-``EventMetaForm``
-    # fuehrt (forms/events.py: ``sensitivity__in=allowed_sensitivities_for_user``).
-    # Ohne ihn wuerde NAME/Metadaten eines HIGH/ELEVATED-DocType offline an
-    # niedrigere Rollen leaken — Verstoss gegen die Bundle-ist-Derivat-
-    # Invariante. Die per-Event referenzierten Typen unten bleiben ungefiltert:
-    # ``events_qs`` lief bereits durch ``Event.objects.visible_to(user)``
-    # (dieselbe ``allowed_sensitivities_for_user``-Grenze), sodass die Union
-    # keinen zusaetzlichen Leak oeffnen kann.
-    # M2 (Refs #1058, Fix-Runde 1 F-1): zusaetzlich ``entity_type=EVENT`` —
-    # ohne den Filter koennte ein client-/case-Typ im Offline-Create-Picker
-    # auftauchen; ein darauf basierender Replay-POST auf ``event_create``
-    # wuerde vom (bereits entity_type-gefilterten) ``EventMetaForm`` als
-    # ungueltige Wahl verworfen (422/Dead-Letter) — dieselbe Bundle-ist-
-    # Derivat-Verletzung wie ein fehlender Sensitivity-Filter, nur als
-    # Correctness- statt Leak-Vektor. Die Event-Union direkt darunter bleibt
-    # bewusst ungefiltert: Events tragen ohnehin nur event-Typen (P1-Invariante).
-    doc_types = {
-        dt.pk: dt
-        for dt in DocumentType.objects.for_facility(facility)
-        .filter(is_active=True, entity_type=DocumentType.EntityType.EVENT)
-        .filter(sensitivity__in=allowed_sensitivities_for_user(user))
-        .order_by("sort_order", "name")
-    }
-    for ev in events:
-        if ev.document_type_id not in doc_types:
-            doc_types[ev.document_type_id] = ev.document_type
+    doc_types = _bundle_document_types(user, facility, events)
 
     # Notes are a HIGH-sensitivity free-text field, and full case detail
     # (any status, description) is STAFF_PLUS-only online too
@@ -383,17 +424,9 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         # WorkItems an/weisen zu) — begrenzt die Roster-Exposition im Offline-Cache.
         "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
         "events": [_serialize_event(user, ev) for ev in events],
-        # Refs #1498: ``doc_types`` ist ein Dict (Insertion-Reihenfolge) — die
-        # Event-Vereinigung oben haengt referenzierte (ggf. inaktive) Typen
-        # NACHTRAEGLICH ans Ende. Explizit nach (sort_order, name) sortieren,
-        # analog zu ``DocumentType.Meta.ordering`` und ``EventMetaForm``, damit
-        # ein per Event nachgezogener Typ korrekt einsortiert wird statt am
-        # Ende zu landen — wie es ``build_facility_offline_bundle`` bereits per
-        # ``.order_by("sort_order", "name")`` tut (dort ohne Event-Union).
-        "document_types": [
-            _serialize_document_type(user, dt)
-            for dt in sorted(doc_types.values(), key=lambda dt: (dt.sort_order, dt.name))
-        ],
+        # ``doc_types`` kommt fertig sortiert aus ``_bundle_document_types``
+        # (Union + Sortier-Begruendung dort, Refs #1498).
+        "document_types": [_serialize_document_type(user, dt) for dt in doc_types],
     }
 
 
