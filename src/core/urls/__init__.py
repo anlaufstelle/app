@@ -123,6 +123,13 @@ from core.views.statistics import (
     SampleReport1ExportView,
     StatisticsView,
 )
+from core.views.user_access import (
+    UserAccessCreateView,
+    UserAccessInviteView,
+    UserAccessListView,
+    UserAccessUnlockView,
+    UserAccessUpdateView,
+)
 from core.views.workitem_actions import (
     WorkItemCreateView,
     WorkItemStatusUpdateView,
@@ -160,6 +167,19 @@ urlpatterns = [
     path("datenschutz/", DatenschutzUebersichtView.as_view(), name="datenschutz_uebersicht"),
     path("verwaltung/", VerwaltungUebersichtView.as_view(), name="verwaltung_uebersicht"),
     path("verwaltung/einstellungen/", FacilitySettingsView.as_view(), name="facility_settings"),
+    path("verwaltung/zugaenge/", UserAccessListView.as_view(), name="user_access_list"),
+    path("verwaltung/zugaenge/neu/", UserAccessCreateView.as_view(), name="user_access_create"),
+    path("verwaltung/zugaenge/<int:pk>/", UserAccessUpdateView.as_view(), name="user_access_update"),
+    path(
+        "verwaltung/zugaenge/<int:pk>/einladung/",
+        UserAccessInviteView.as_view(),
+        name="user_access_invite",
+    ),
+    path(
+        "verwaltung/zugaenge/<int:pk>/entsperren/",
+        UserAccessUnlockView.as_view(),
+        name="user_access_unlock",
+    ),
     # Übergabe → in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
     path("uebergabe/", RedirectView.as_view(url="/?view=uebergabe", permanent=True), name="handover"),
     # Redirects (alte URLs)

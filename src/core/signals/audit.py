@@ -251,7 +251,28 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
     korrekt, statt so zu lesen, als haette das Ziel sich selbst das Flag gesetzt.
     """
     if created:
-        return  # Neu-Anlage wird via Admin-Create-Flow separat auditiert.
+        # Refs #1871: request-getriebene Anlagen tragen ``_audit_actor`` aus
+        # dem zentralen Zugangs-Service bzw. dem Django-Admin. Seed,
+        # Bootstrap und Fixtures bleiben ohne Actor bewusst audit-frei.
+        actor, attribution = _resolve_audit_actor(instance)
+        if actor is not None:
+            AuditLog.objects.create(
+                facility=getattr(instance, "facility", None),
+                user=instance,
+                actor=actor,
+                action=AuditLog.Action.USER_CREATED,
+                target_type="User",
+                target_id=str(instance.pk),
+                detail=validate_audit_detail(
+                    {
+                        "new_role": instance.role,
+                        "username": instance.username,
+                        **attribution,
+                    },
+                    source="signals.USER_CREATED",
+                ),
+            )
+        return
     old_role = getattr(instance, "_audit_old_role", None)
     old_is_active = getattr(instance, "_audit_old_is_active", None)
 

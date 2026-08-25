@@ -129,12 +129,21 @@ def unlock(user, unlocked_by, ip_address=None, trigger: str = "admin") -> AuditL
     return audit_event(
         AuditLog.Action.LOGIN_UNLOCK,
         user=user,
+        actor=unlocked_by,
         facility=getattr(user, "facility", None),
         target_type="User",
         target_id=str(user.pk),
-        detail={
-            "unlocked_by": str(unlocked_by.pk) if unlocked_by else None,
-            "trigger": trigger,
-        },
+        # ``actor`` ist die kanonische Relation; die Kennung bleibt zusaetzlich
+        # in der unveraenderlichen Hash-Kette lesbar, falls der Actor spaeter
+        # geloescht und der FK per SET_NULL geloest wird (wie bei User-Audits).
+        detail=(
+            {
+                "unlocked_by": str(unlocked_by.pk),
+                "trigger": trigger,
+                "actor_username": unlocked_by.get_username(),
+            }
+            if unlocked_by is not None
+            else {"unlocked_by": None, "trigger": trigger}
+        ),
         ip_address=ip_address,
     )

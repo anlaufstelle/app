@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% trans "Zugänge" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Zugänge" %}</h1>
+        <p class="text-[13px] text-ink-muted mt-1">{% trans "Konten, Rollen und Sicherheitsvorgaben Ihrer Einrichtung." %}</p>
+    </div>
+    <a href="{% url 'core:user_access_create' %}" class="inline-flex items-center justify-center gap-1.5 btn-primary px-3.5 py-2" data-testid="user-access-create-link">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        {% trans "Zugang anlegen" %}
+    </a>
+</div>
+
+{% subnav "verwaltung" %}
+
+<div class="bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="user-access-list">
+    {% if access_rows %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-[13px]">
+            <thead class="bg-canvas text-[12px] uppercase tracking-wide text-ink-soft">
+                <tr>
+                    <th scope="col" class="px-4 py-3">{% trans "Person" %}</th>
+                    <th scope="col" class="px-4 py-3">{% trans "Rolle" %}</th>
+                    <th scope="col" class="px-4 py-3">{% trans "Status" %}</th>
+                    <th scope="col" class="px-4 py-3">{% trans "Sicherheit" %}</th>
+                    <th scope="col" class="px-4 py-3 text-right">{% trans "Aktion" %}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-subtle">
+                {% for row in access_rows %}
+                <tr data-user-id="{{ row.user.pk }}">
+                    <td class="px-4 py-3">
+                        <div class="font-semibold text-ink">{{ row.user.display_name|default:row.user.username }}</div>
+                        <div class="text-[12px] text-ink-muted">{{ row.user.username }}{% if row.user.email %} · {{ row.user.email }}{% endif %}</div>
+                    </td>
+                    <td class="px-4 py-3 text-ink">{{ row.user.get_role_display }}</td>
+                    <td class="px-4 py-3">
+                        {% if row.user.is_active %}<span class="badge badge-success">{% trans "Aktiv" %}</span>{% else %}<span class="badge">{% trans "Deaktiviert" %}</span>{% endif %}
+                        {% if row.is_locked %}<span class="badge badge-warning ml-1">{% trans "Gesperrt" %}</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-[12px] text-ink-soft">
+                        {% if row.user.mfa_required %}{% trans "2FA verpflichtend" %}{% else %}{% trans "2FA nicht zusätzlich erzwungen" %}{% endif %}
+                        {% if row.user.can_confirm_deletion %}<br>{% trans "Löschbestätigung erlaubt" %}{% endif %}
+                        {% if row.can_resend_invite %}<br>{% trans "Einrichtung ausstehend" %}{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <a href="{% url 'core:user_access_update' row.user.pk %}" class="inline-flex min-h-[44px] items-center font-medium text-accent hover:underline">{% trans "Verwalten" %}</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="p-6 text-[13px] text-ink-muted">{% trans "Noch keine Zugänge vorhanden." %}</p>
+    {% endif %}
+</div>
+
+<p class="mt-4 text-[12px] text-ink-muted">{% trans "Anlage und Änderungen erfordern zur Sicherheit eine erneute Bestätigung im Sudo-Modus." %}</p>
+{% endblock %}

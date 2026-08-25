@@ -102,6 +102,14 @@ class AuditLog(models.Model):
         ATTACHMENT_DELETE = "attachment_delete", _("Anhang gelöscht")
         WORKITEM_CREATE = "workitem_create", _("Aufgabe angelegt")
         WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
+        # Refs #1871: Die Fach-UI fuer Zugaenge schliesst die bisherige
+        # Audit-Luecke der Benutzeranlage und macht den Versand eines
+        # Setup-Links als eigenes Security-Ereignis sichtbar. Aenderungen,
+        # die nicht bereits eine schmalere Action besitzen (z.B. MFA-Pflicht
+        # oder Reaktivierung), laufen ueber USER_ACCESS_UPDATED.
+        USER_CREATED = "user_created", _("Benutzer angelegt")
+        USER_ACCESS_UPDATED = "user_access_updated", _("Benutzerzugang geändert")
+        USER_INVITE_SENT = "user_invite_sent", _("Einladung versendet")
         USER_ROLE_CHANGED = "user_role_changed", _("Benutzerrolle geändert")
         USER_DEACTIVATED = "user_deactivated", _("Benutzer deaktiviert")
         DELETION_CONFIRMER_CHANGED = "deletion_confirmer_changed", _("Recht Löschbestätigung geändert")

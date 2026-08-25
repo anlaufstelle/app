@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+
+{% block title %}{% if is_create %}{% trans "Zugang anlegen" %}{% else %}{% trans "Zugang verwalten" %}{% endif %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink">{% if is_create %}{% trans "Zugang anlegen" %}{% else %}{% trans "Zugang verwalten" %}{% endif %}</h1>
+    <p class="mt-1 mb-5 text-[13px] text-ink-muted">
+        {% if is_create %}{% trans "Die eingeladene Person setzt ihr Passwort selbst über einen zeitlich begrenzten Setup-Link." %}{% else %}{{ target_user.display_name|default:target_user.username }} · {{ target_user.username }}{% endif %}
+    </p>
+
+    <form method="post" class="space-y-4" novalidate data-testid="user-access-form">
+        {% csrf_token %}
+        {% include "core/_form_errors.html" %}
+        <div class="card p-5 space-y-4">
+            {% for field in form %}
+            {% include "components/_form_field.html" %}
+            {% endfor %}
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">
+                {% if is_create %}{% trans "Anlegen und einladen" %}{% else %}{% trans "Speichern" %}{% endif %}
+            </button>
+            <a href="{% url 'core:user_access_list' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
+        </div>
+    </form>
+
+    {% if not is_create %}
+    <section class="mt-6 card p-5" aria-labelledby="access-actions-heading">
+        <h2 id="access-actions-heading" class="text-[15px] font-semibold text-ink">{% trans "Sicherheitsaktionen" %}</h2>
+        <div class="mt-3 flex flex-col sm:flex-row gap-2.5">
+            {% if can_resend_invite %}
+            <form method="post" action="{% url 'core:user_access_invite' target_user.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-secondary" data-testid="user-access-resend-invite">{% trans "Einladung erneut senden" %}</button>
+            </form>
+            {% endif %}
+            {% if account_is_locked %}
+            <form method="post" action="{% url 'core:user_access_unlock' target_user.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-secondary" data-testid="user-access-unlock">{% trans "Account-Sperre aufheben" %}</button>
+            </form>
+            {% endif %}
+        </div>
+        {% if not can_resend_invite and not account_is_locked %}
+        <p class="mt-2 text-[13px] text-ink-muted">{% trans "Für diesen Zugang ist derzeit keine Sicherheitsaktion erforderlich." %}</p>
+        {% endif %}
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

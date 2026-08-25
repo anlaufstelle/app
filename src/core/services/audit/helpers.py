@@ -120,6 +120,7 @@ def audit_event(
     *,
     user,
     facility,
+    actor=None,
     target_obj: Any = None,
     target_type: str | None = None,
     target_id: str | UUID | None = None,
@@ -131,7 +132,8 @@ def audit_event(
     Refs #901: spiegelt :func:`log_audit_event` für Stellen ohne Request-
     Objekt — alle Felder müssen explizit übergeben werden, kein Fallback
     auf Middleware-Attribute. ``user=None`` und ``facility=None`` sind
-    legitim (Cron-Pfade, System-Events).
+    legitim (Cron-Pfade, System-Events). ``actor`` bezeichnet optional die
+    handelnde Person, wenn ``user`` das Ziel des Ereignisses ist.
 
     ``target_obj`` ist die kanonische Quelle für ``target_type`` /
     ``target_id``; explizite ``target_type`` / ``target_id`` überschreiben
@@ -148,6 +150,7 @@ def audit_event(
     return AuditLog.objects.create(
         facility=facility,
         user=user,
+        actor=actor,
         action=action,
         target_type=target_type or "",
         target_id=str(target_id) if target_id is not None else "",

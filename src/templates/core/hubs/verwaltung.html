@@ -48,11 +48,16 @@
         {% for metric in metrics %}
         {% include "core/hubs/_metric_row.html" %}
         {% endfor %}
-        {# Kein Reiter, sondern eine markierte Zeile: der Django-Admin ist eine eigene #}
-        {# Anwendungshülle mit eigener Navigation und Sudo-Modus (Konzept §3.1/§4.4). #}
         <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
             <span class="text-[13px] font-semibold text-ink min-w-[10rem]">{% trans "Benutzer &amp; Zugänge" %}</span>
-            <span class="text-[12px] text-ink-soft">{% trans "öffnet die technische Administration · erfordert Sudo-Modus" %}</span>
+            <span class="text-[12px] text-ink-soft">{{ users_total }} {% trans "Konten" %} · {{ users_without_mfa }} {% trans "ohne MFA" %}</span>
+            <a href="{% url 'core:user_access_list' %}" class="ml-auto inline-flex items-center min-h-[44px] text-[13px] font-medium text-accent hover:underline" data-testid="hub-link-user-access">{% trans "Öffnen" %}</a>
+        </li>
+        {# Der Django-Admin bleibt als technische Notfall-Ebene sichtbar, ist #}
+        {# aber nicht mehr der regulaere Weg fuer die Nutzerverwaltung. #}
+        <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+            <span class="text-[13px] font-semibold text-ink min-w-[10rem]">{% trans "Technische Administration" %}</span>
+            <span class="text-[12px] text-ink-soft">{% trans "Notausgang für technische Sonderfälle · erfordert Sudo-Modus" %}</span>
             <a href="/admin-mgmt/" target="_blank" rel="noopener" class="ml-auto inline-flex items-center min-h-[44px] text-[13px] font-medium text-accent hover:underline" data-testid="hub-link-admin-mgmt">{% trans "Öffnen" %} ↗</a>
         </li>
     </ul>

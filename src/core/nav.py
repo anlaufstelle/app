@@ -536,6 +536,23 @@ EINSTELLUNGEN = NavItem(
     testid="nav-facility-settings",
     icon="settings",
 )
+ZUGAENGE = NavItem(
+    key="user-access",
+    label=_("Zugänge"),
+    url_name="core:user_access_list",
+    family=frozenset(
+        {
+            "user_access_list",
+            "user_access_create",
+            "user_access_update",
+            "user_access_invite",
+            "user_access_unlock",
+        }
+    ),
+    gates=("is_facility_admin",),
+    testid="nav-user-access",
+    icon="admin",
+)
 
 DATENSCHUTZ = NavSection(
     key="datenschutz",
@@ -563,6 +580,7 @@ VERWALTUNG = NavSection(
     tabs=(
         VERWALTUNG_UEBERSICHT,
         EINSTELLUNGEN,
+        ZUGAENGE,
         KONFIGURATION,
         FELDVORLAGEN,
         DATENIMPORT,
@@ -841,6 +859,7 @@ BACKLINK_EXEMPT: frozenset[str] = frozenset(
         "rectification_list",
         "retention_dashboard",
         "audit_log",
+        "user_access_list",
         "config_doctype_list",
         "config_fieldtemplate_list",
         "import_list",
