@@ -8,5 +8,6 @@
 export async function importOfflineStoreModules() {
     await import("../../src/static/js/offline-db.js");
     await import("../../src/static/js/offline-bundles.js");
+    await import("../../src/static/js/offline-revocations.js");
     await import("../../src/static/js/offline-store.js");
 }

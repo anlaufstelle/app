@@ -491,7 +491,7 @@
     // findet weder den Slot noch die Primitive; die Fassade selbst traegt
     // NIE Krypto-Interna (vitest-Pin: offline-store-split.test.mjs).
     // _TAKE_BUDGET == Anzahl der Schwester-Module (Refs #1838-Schnittplan).
-    const _TAKE_BUDGET = 2;
+    const _TAKE_BUDGET = 3;
     let _takesLeft = _TAKE_BUDGET;
     let _internals = {
         db,
