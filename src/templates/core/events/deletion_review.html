@@ -9,58 +9,6 @@
     {% back_link %}
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Löschantrag prüfen" %}</h1>
 
-    {# Antrag-Info #}
-    <div class="card p-4 mb-4">
-        <dl class="space-y-2 text-sm">
-            <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Beantragt von" %}</dt>
-                <dd class="font-medium">{% if deletion_request.requested_by %}{{ deletion_request.requested_by.display_name|default:deletion_request.requested_by.username }}{% else %}–{% endif %}</dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Beantragt am" %}</dt>
-                <dd class="font-medium">{{ deletion_request.created_at|date:"DATETIME_FORMAT" }}</dd>
-            </div>
-            <div>
-                <dt class="text-ink-muted mb-1">{% trans "Begründung" %}</dt>
-                <dd class="font-medium">{{ deletion_request.reason }}</dd>
-            </div>
-        </dl>
-    </div>
-
-    {# Event-Zusammenfassung #}
-    <div class="card p-4 mb-5">
-        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffenes Ereignis" %}</h2>
-        <dl class="space-y-2 text-sm">
-            <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
-                <dd class="font-medium">{{ event.document_type.name }}</dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Zeitpunkt" %}</dt>
-                <dd class="font-medium">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</dd>
-            </div>
-            <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Person" %}</dt>
-                <dd class="font-medium">{% if event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}</dd>
-            </div>
-        </dl>
-    </div>
-
-    {% if deletion_request.requested_by == request.user %}
-    <p class="text-sm text-ink-muted italic" data-testid="deletion-own-request-hint">
-        {% trans "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)." %}
-    </p>
-    {% else %}
-    <form method="post" class="flex items-center space-x-3">
-        {% csrf_token %}
-        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
-        <button type="submit" name="action" value="approve" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
-            {% trans "Genehmigen" %}
-        </button>
-        <button type="submit" name="action" value="reject" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
-            {% trans "Ablehnen" %}
-        </button>
-    </form>
-    {% endif %}
+    {% include "core/partials/_deletion_review.html" with object_summary_include="core/events/partials/_deletion_event_summary.html" %}
 </div>
 {% endblock %}
