@@ -336,6 +336,34 @@ self.addEventListener("install", (event) => {
     event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
 });
 
+// Refs #1948: Precache-Selbstheilung. Raeumt der Browser unter Speicherdruck
+// die Cache Storage teilweise ab (auf iOS realistisch), laufen weder install
+// noch activate je wieder — das Geraet verloere still seine
+// Offline-Faehigkeit bis zum naechsten CACHE_NAME-Bump. sw-register.js
+// schickt deshalb einmal pro Seitenladen CHECK_PRECACHE; hier wird jeder
+// APP_SHELL-Eintrag per URL-genauem cache.match geprueft (der String-Match
+// umgeht den Vary-Mismatch der HTML-Shells, siehe den Fallback-Zweig unten)
+// und NUR das Fehlende nachgeladen. Vollstaendiger Cache => reiner
+// Match-Sweep ohne Netzzugriff. Fehler (z.B. offline waehrend der Heilung)
+// werden geschluckt — die naechste Navigation stoesst den Check erneut an.
+async function _healPrecache() {
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const missing = [];
+        for (const url of APP_SHELL) {
+            if (!(await cache.match(url))) {
+                missing.push(url);
+            }
+        }
+        if (missing.length > 0) {
+            await cache.addAll(missing);
+        }
+    } catch (_e) {
+        // still — Heilung ist best-effort, naechster Seitenaufruf probiert es
+        // erneut. Ein Teil-Erfolg ist ausgeschlossen (addAll ist atomar).
+    }
+}
+
 // Refs #1386: Update-Gate. Ein frisch installierter SW bleibt in
 // "waiting", bis die Seite explizit SKIP_WAITING schickt (Klick auf
 // "Neu laden" im Update-Toast, siehe sw-register.js). Ohne dieses Gate
@@ -345,6 +373,11 @@ self.addEventListener("install", (event) => {
 self.addEventListener("message", (event) => {
     if (event.data?.type === "SKIP_WAITING") {
         self.skipWaiting();
+    }
+    // Refs #1948: siehe _healPrecache oben. waitUntil haelt den SW waehrend
+    // des Match-Sweeps/Nachladens am Leben (er wird zwischen Events entladen).
+    if (event.data?.type === "CHECK_PRECACHE") {
+        event.waitUntil(_healPrecache());
     }
 });
 
