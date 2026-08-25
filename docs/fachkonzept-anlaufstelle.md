@@ -410,7 +410,7 @@ Datenschutz ist kein nachträgliches Feature, sondern strukturgebendes Element d
 
 - **Pseudonymisierung by Design.** Kein Klarname-Feld im System. Das Pseudonym ist der primäre Identifikator.
 - **Kontaktstufen als Zugriffssteuerung.** Wer welche Daten sehen darf, hängt von der Kontaktstufe der Person und der Rolle der Mitarbeitenden ab.
-- **Audit-Trail.** Jede Änderung an Person, Fall, Ereignis und Aufgabe wird protokolliert — wer hat wann was geändert oder gelöscht; seit #1959 auch das Bearbeiten von Episoden und Wirkungszielen und das Zuordnen eines Ereignisses zu einem Fall (Anlegen und Abschließen dieser Unterobjekte weiterhin nicht). Von Lesezugriffen protokolliert sind das Öffnen der Detailseite einer Person der Stufe „Mit Zusatzangaben", Auskunft und Export, Datei-Downloads, die Offline-Mitnahme und einrichtungsübergreifende Zugriffe; gewöhnliche Listen-, Detail- und Suchaufrufe erzeugen bewusst keinen Eintrag ([ADR-043](adr/043-suchraum-volltextsuche.md)).
+- **Audit-Trail.** Jede Änderung an Person, Fall, Ereignis und Aufgabe wird protokolliert — wer hat wann was geändert oder gelöscht; dazu gehören auch das Bearbeiten von Episoden und Wirkungszielen, das Zuordnen eines Ereignisses zu einem Fall sowie Upload und Löschung von Anhängen (Anlegen und Abschließen der Unterobjekte weiterhin nicht). Von Lesezugriffen protokolliert sind das Öffnen der Detailseite einer Person der Stufe „Mit Zusatzangaben", Auskunft und Export, Datei-Downloads, die Offline-Mitnahme und einrichtungsübergreifende Zugriffe; gewöhnliche Listen-, Detail- und Suchaufrufe erzeugen bewusst keinen Eintrag ([ADR-043](adr/043-suchraum-volltextsuche.md)).
 - **Löschfristen.** Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte werden nach 12 Monaten aggregiert (nur Zählung behalten, Einzeleinträge löschen). Identifizierte Kontakte nach konfigurierter Frist (z.B. 36 Monate nach letztem Kontakt). Qualifizierte Kontakte nach Beendigung plus Aufbewahrungsfrist.
 - **Verschlüsselung.** Besonders sensible Felder (Gesundheitsdaten, Beratungsinhalte) werden verschlüsselt gespeichert. Der Schlüssel liegt nicht in der Datenbank.
 - **Berechtigungsmodell.** Fünf Rollen (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz) mit kontextabhängigen Zugriffsrechten. Nur die Systemadministration arbeitet facility-übergreifend; alle anderen Rollen bleiben strikt auf ihre Einrichtung beschränkt. Löschung qualifizierter Daten nur mit 4-Augen-Prinzip.
@@ -623,7 +623,7 @@ Ein Milestone ist ein konkreter Schritt auf dem Weg zum Wirkungsziel: „Erstges
 
 #### AuditLog — Das Auditprotokoll
 
-Das AuditLog protokolliert alle sicherheitsrelevanten Aktionen: Zugriffe auf qualifizierte Daten, Änderungen, Löschungen, Login-Versuche, Export-Aktionen. Es ist unveränderlich (Append-Only) und getrennt von der fachlichen Dokumentation.
+Das AuditLog protokolliert alle sicherheitsrelevanten Aktionen: Zugriffe auf qualifizierte Daten, Änderungen, Löschungen, Login-Versuche, Export-Aktionen. Es ist unveränderlich (Append-Only) und getrennt von der fachlichen Dokumentation. Bei Ereignis-Bearbeitungen bestehen bewusst zwei Spuren mit verschiedenen Zwecken: `EventHistory` hält die Vorher-/Nachher-Stände für die Änderungshistorie am Ereignis, während `AuditLog.EVENT_UPDATE` einrichtungsweit nur Dokumentationstyp und geänderte Feldbezeichner nachweisbar macht — keine Feldwerte.
 
 ### Beziehungsdiagramm
 

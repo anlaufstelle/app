@@ -1455,6 +1455,20 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 | Stufenwechsel | Änderung des Kontaktstatus einer Person |
 | Einstellungen geändert | Änderungen an Einrichtungseinstellungen |
 | Datei-Download | Herunterladen eines Anhangs aus dem Dateitresor |
+| Ereignis aktualisiert | Inhaltliche Änderung eines Ereignisses; im Detail stehen nur Dokumentationstyp und geänderte Feldbezeichner |
+| Episode aktualisiert | Änderung von Titel, Beschreibung oder Zeitraum einer Episode |
+| Wirkungsziel aktualisiert | Änderung von Titel oder Beschreibung eines Wirkungsziels |
+| Ereignis dem Fall zugeordnet | Neue oder geänderte Zuordnung eines Ereignisses zu einem Fall |
+| Ereignis vom Fall gelöst | Entfernen der Zuordnung eines Ereignisses zu einem Fall |
+| Anhang hochgeladen | Erfolgreiches Hinzufügen oder Ersetzen einer Datei an Person, Fall oder Ereignis |
+| Anhang gelöscht | Erfolgreiches Löschen einer Anhang-Versionskette; beim Dokumentationstyp-Wechsel als eine Sammelzeile |
+
+Die sieben Bearbeitungs-, Zuordnungs- und Anhangaktionen speichern **keine
+Feldinhalte, Freitexte oder Klartext-Dateinamen**. Änderungszeilen nennen nur die
+betroffenen Feldbezeichner; Anhang-Uploads verwenden einen HMAC-Fingerprint plus
+sichere Endung und technische Metadaten. Sie gehören zur regulären Facharbeit und
+sind deshalb nicht von der Aufbewahrungsfrist ausgenommen — für sie gelten die
+unten beschriebenen standardmäßig 24 Monate.
 
 > **Was das Audit-Log bewusst _nicht_ protokolliert:** gewöhnliche Listen- und Detailaufrufe (Personenliste, Ereignis, Fall, Aufgabe) und **jede Suchanfrage** — weder den Suchbegriff noch einen Zähler oder Zeitpunkt. Das ist eine bewusste Abwägung: Der Suchbegriff ist selbst personenbezogen und würde im append-only Log jede Anonymisierung überleben. Begründung, verworfene Alternativen (Hash, Zähler) und das dabei benannte Restrisiko stehen in [ADR-043](adr/043-suchraum-volltextsuche.md); das Verarbeitungsverzeichnis unter `/system/vvt/` sagt dasselbe an seinen TOM-Einträgen.
 

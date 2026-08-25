@@ -75,3 +75,38 @@ Die in der vorigen Iteration als „nur über psql sichtbar" deklarierten NULL-F
 - **+** DSGVO-Rechenschaftspflicht über `SYSTEM_VIEW` durchgängig erfüllt.
 - **−** `super_admin` ist jetzt eine *aktive* Rolle mit eigener UI-Surface — Wartungsaufwand für `/system/`-Views steigt.
 - **−** Ein kompromittierter `super_admin`-Account hat direkten UI-Zugriff auf alle Audit-Daten der Installation. Mitigation: MFA-Pflicht auf `super_admin` durch [ADR-015](015-mfa-totp.md), Lockout-Recovery nur via CLI (`manage.py unlock`).
+
+## Update 2026-08-25: Fachliche Schreibpfade im Audit-Log (Refs #1860)
+
+Sieben zuvor nur teilweise oder ausschließlich in der objektnahen Historie sichtbare
+Schreibpfade sind jetzt als eigene `AuditLog.Action`-Werte eingeschrieben:
+
+- `EVENT_UPDATE`, `EPISODE_UPDATE`, `GOAL_UPDATE`
+- `CASE_EVENT_ASSIGNED`, `CASE_EVENT_REMOVED`
+- `ATTACHMENT_UPLOAD`, `ATTACHMENT_DELETE`
+
+Das Audit-Log und die Ereignishistorie erfüllen dabei zwei verschiedene Verträge:
+`EventHistory` bewahrt die Vorher-/Nachher-Stände eines einzelnen Ereignisses für
+die Änderungshistorie am Objekt. `AuditLog` beantwortet einrichtungsweit, **dass**
+eine sicherheitsrelevante Änderung stattgefunden hat. `EVENT_UPDATE` ersetzt die
+Historienzeile deshalb nicht; beide Zeilen werden im selben fachlichen Vorgang
+geschrieben. Im Audit-Detail stehen nur Dokumentationstyp und geänderte
+Feld-Slugs, niemals Vorher-/Nachher-Werte oder Freitext.
+
+Für Episoden und Wirkungsziele enthält `detail` nur `case_id` und
+`changed_fields`; für Fall-Zuordnungen nur die betroffenen UUIDs. Anhang-Aktionen
+werden an den zentralen File-Vault-Choke-Points protokolliert: erfolgreicher
+Upload/Replace bei `commit_staged_upload`, erfolgreiche Löschung einer
+Versionskette bei `soft_delete_attachment_chain`. Der Klartext-Dateiname wird
+nicht gespeichert; der Upload trägt nur HMAC-Fingerprint, sichere Dateiendung,
+Größe und erkannten MIME-Typ. Beim Dokumentationstyp-Wechsel werden mehrere
+gelöschte Ketten zu genau einer `ATTACHMENT_DELETE`-Zeile mit
+`bulk=true`, Anzahl und Grund zusammengefasst. Physischer Cleanup nach einem
+bereits auditierten Owner-Löschpfad erzeugt keine zweite Spur.
+
+Jeder Audit-Write nimmt den transaktionsgebundenen Advisory Lock der
+einrichtungsspezifischen HMAC-Kette. Virenscan und Verschlüsselungs-Staging liegen
+daher bei Anlage und Bearbeitung **vor** der schreibenden Transaktion; der Lock
+wird nicht über langsame Datei-I/O gehalten. Die sieben Routineaktionen sind
+nicht von der regulären Audit-Aufbewahrungsfrist ausgenommen: Für sie gilt
+`auditlog_retention_months` (Standard 24 Monate).
