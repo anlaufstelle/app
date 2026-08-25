@@ -751,11 +751,18 @@ class TestEventHistoryRoleVisibility:
         # gespeichert — KEINE Diff-Zeile.
         self._assert_no_update_row(section, "Geheim Basis")
         self._assert_no_update_row(section, "Anhang Historie")
-        # CREATE-Eintrag: Klartext für Berechtigte, Datei als [Anhang].
+        # CREATE-Eintrag: Klartext für Berechtigte.
         self._assert_create_value(section, "Geheim Basis", self.BASIS_V1)
         self._assert_create_value(section, "Geheim Stufe2", self.STUFE2_V1)
         self._assert_create_value(section, "Geheim Stufe3", self.STUFE3_V1)
-        self._assert_create_value(section, "Anhang Historie", _ATTACHMENT)
+        # Das Datei-Feld fehlt im CREATE-Eintrag BY DESIGN: create_event
+        # schreibt den Audit-Snapshot VOR finalize_staged_files; der
+        # __files__-Marker landet erst danach im data_json — bewusst ohne
+        # weiteren Audit-Eintrag (Hashchain-Advisory-Lock, Refs #1345).
+        # [Anhang] erscheint in der Historie nur, wenn ein Update die
+        # Datei-Einträge ÄNDERT (Placeholder-Rendering unit-getestet).
+        create_entry = self._create_entry(section)
+        expect(create_entry.locator("dt:text-is('Anhang Historie')")).to_have_count(0)
         # #1961-Kernbug: Berechtigte sahen ●●●●● — darf nicht mehr vorkommen;
         # Datei-Marker/-Interna gehören nie ins DOM.
         self._assert_section_free_of(section, [_ENCRYPTED_DOTS, "__file__", "__files__", _RESTRICTED])
@@ -768,7 +775,8 @@ class TestEventHistoryRoleVisibility:
         self._assert_create_value(section, "Geheim Basis", self.BASIS_V1)
         self._assert_create_value(section, "Geheim Stufe2", self.STUFE2_V1)
         self._assert_create_value(section, "Geheim Stufe3", _RESTRICTED)
-        self._assert_create_value(section, "Anhang Historie", _ATTACHMENT)
+        # Datei-Feld fehlt im CREATE-Eintrag by design (s. Leitung oben).
+        expect(self._create_entry(section).locator("dt:text-is('Anhang Historie')")).to_have_count(0)
         self._assert_section_free_of(
             section, [self.STUFE3_V1, self.STUFE3_V2, _ENCRYPTED_DOTS, "__file__", "__files__"]
         )
@@ -781,7 +789,8 @@ class TestEventHistoryRoleVisibility:
         self._assert_create_value(section, "Geheim Basis", self.BASIS_V1)
         self._assert_create_value(section, "Geheim Stufe2", _RESTRICTED)
         self._assert_create_value(section, "Geheim Stufe3", _RESTRICTED)
-        self._assert_create_value(section, "Anhang Historie", _ATTACHMENT)
+        # Datei-Feld fehlt im CREATE-Eintrag by design (s. Leitung oben).
+        expect(self._create_entry(section).locator("dt:text-is('Anhang Historie')")).to_have_count(0)
         self._assert_section_free_of(
             section,
             [
