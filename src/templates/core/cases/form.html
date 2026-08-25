@@ -26,9 +26,7 @@
     Downgrade die Voraussetzung dafür ist, dass der Service Worker einen reinen
     Text-Submit später überhaupt annehmen darf (Refs #1489).{% endcomment %}
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade
-          {% if dynamic_values_at_risk %}x-data="confirmDynamicDataLoss" @submit="confirmDiscard"
-          data-original-document-type="{{ original_document_type_id|default_if_none:'' }}"
-          data-confirm-discard="{% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Dokumentationstyp wechseln oder entfernen? Der gespeicherte Wert von {{ n }} Zusatzfeld wird beim Speichern verworfen und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? Die gespeicherten Werte von {{ n }} Zusatzfeldern werden beim Speichern verworfen und lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} Datei entfernt.{% plural %}Außerdem werden {{ f }} Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Datei wird beim Speichern entfernt und lässt sich nicht wiederherstellen.{% plural %}Dokumentationstyp wechseln oder entfernen? {{ f }} hinterlegte Dateien werden beim Speichern entfernt und lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}"{% endif %}>
+          {% include "core/partials/_dynamic_loss_confirm_attrs.html" %}>
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
         {% if is_edit and case %}
@@ -140,19 +138,14 @@
             {% comment %}M2/P8 (Refs #1058): Dokumentationstyp-Select. Fehlt das Feld,
             hat ``_lock_invisible_document_type`` es entfernt (Typ fuer diese Rolle
             unsichtbar) — dann darf hier auch kein Hinweis stehen.{% endcomment %}
-            {% if form.document_type %}
-            {% include "components/_form_field.html" with field=form.document_type %}
             {% comment %}E11: Ein Typwechsel — und ebenso das Entfernen des Typs — baut die
             Zusatzfelder neu auf; die Werte des alten Typs werden von
             ``merge_dynamic_data`` verworfen. Refs #1733: als Warnung gestaltet und nur
-            dort, wo wirklich etwas zu verlieren ist.{% endcomment %}
-            {% if dynamic_values_at_risk %}
-            <div class="-mt-1 bg-amber-50 border border-amber-200 rounded-[10px] p-3" role="alert" data-testid="doc-type-switch-hint">
-                <p class="text-[13px] text-amber-800">
-                    {% if dynamic_values_at_risk.field_values %}{% blocktrans count n=dynamic_values_at_risk.field_values %}Achtung: Wird der Typ gewechselt oder entfernt, wird der gespeicherte Wert von {{ n }} Zusatzfeld verworfen — er lässt sich nicht wiederherstellen.{% plural %}Achtung: Wird der Typ gewechselt oder entfernt, werden die gespeicherten Werte von {{ n }} Zusatzfeldern verworfen — sie lassen sich nicht wiederherstellen.{% endblocktrans %}{% if dynamic_values_at_risk.files %} {% blocktrans count f=dynamic_values_at_risk.files %}Außerdem wird {{ f }} hinterlegte Datei entfernt.{% plural %}Außerdem werden {{ f }} hinterlegte Dateien entfernt.{% endblocktrans %}{% endif %}{% elif dynamic_values_at_risk.files %}{% blocktrans count f=dynamic_values_at_risk.files %}Achtung: Wird der Typ gewechselt oder entfernt, wird {{ f }} hinterlegte Datei entfernt — sie lässt sich nicht wiederherstellen.{% plural %}Achtung: Wird der Typ gewechselt oder entfernt, werden {{ f }} hinterlegte Dateien entfernt — sie lassen sich nicht wiederherstellen.{% endblocktrans %}{% endif %}
-                </p>
-            </div>
-            {% endif %}
+            dort, wo wirklich etwas zu verlieren ist. Kasten gemeinsam mit dem
+            Personen-Formular (Refs #1836).{% endcomment %}
+            {% if form.document_type %}
+            {% include "components/_form_field.html" with field=form.document_type %}
+            {% include "core/partials/_dynamic_loss_warning.html" %}
             {% endif %}
         </div>
 
