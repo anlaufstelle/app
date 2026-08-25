@@ -397,6 +397,37 @@ class TestErrors:
         assert "übersprungen" in errors[1][1]
         assert _counts() == before
 
+    def test_failed_template_update_keeps_existing_template_available_for_field_refs(self, facility):
+        _load(facility, _raw())
+        FieldTemplate.objects.create(facility=facility, slug="kollision", name="Kollision", field_type="text")
+        raw = _raw()
+        raw["field_templates"][0]["name"] = "Kollision"
+
+        with pytest.raises(PackageLoadError) as excinfo:
+            _load(facility, raw)
+
+        report = excinfo.value.report
+        assert [identifier for identifier, _message in report.errors] == ["dauer"]
+        assert report.field_templates.updated == []
+        assert report.field_refs.unchanged == ["kontakt/dauer", "kontakt/notiz"]
+        assert FieldTemplate.objects.get(slug="dauer").name == "Dauer"
+
+    def test_failed_document_type_update_keeps_existing_type_available_for_children(self, facility):
+        _load(facility, _raw())
+        DocumentType.objects.create(facility=facility, slug="kollision", name="Kollision")
+        raw = _raw()
+        raw["document_types"][0]["name"] = "Kollision"
+
+        with pytest.raises(PackageLoadError) as excinfo:
+            _load(facility, raw)
+
+        report = excinfo.value.report
+        assert [identifier for identifier, _message in report.errors] == ["kontakt"]
+        assert report.document_types.updated == []
+        assert report.groups.unchanged == ["kontakt/basisdaten"]
+        assert report.field_refs.unchanged == ["kontakt/dauer", "kontakt/notiz"]
+        assert DocumentType.objects.get(slug="kontakt").name == "Kontakt"
+
 
 @pytest.mark.django_db
 class TestConditions:
