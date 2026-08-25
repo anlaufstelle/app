@@ -21,10 +21,8 @@
     // Zeitpunkt als Datum + Uhrzeit (de-DE) oder "–" bei fehlendem/unparsbarem
     // Wert. occurred_at ist ein ISO-String.
     function occurredAtLabel(value) {
-        if (!value) return "–";
-        var d = new Date(value);
-        if (Number.isNaN(d.getTime())) return "–";
-        return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+        // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
+        return window.offlineFormFields.formatTs(value) || "–";
     }
 
     // Rohzeile aus dem Store auf die Render-Zeile abbilden: Passthroughs plus die

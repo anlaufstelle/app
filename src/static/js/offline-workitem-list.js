@@ -23,10 +23,8 @@
     // Faelligkeit als Datum (de-DE, ohne Zeit) oder "–" bei fehlendem/unparsbarem
     // Datum. due_date ist ein Datums-String (Bundle- bzw. Formularfeld).
     function dueDateLabel(value) {
-        if (!value) return "–";
-        var d = new Date(value);
-        if (Number.isNaN(d.getTime())) return "–";
-        return d.toLocaleDateString("de-DE", { dateStyle: "short" });
+        // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
+        return window.offlineFormFields.formatDate(value) || "–";
     }
 
     // Rohzeile aus dem Store auf die Render-Zeile abbilden: Passthroughs plus die

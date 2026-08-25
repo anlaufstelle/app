@@ -227,9 +227,8 @@
                 }
             },
             formatTs(iso) {
-                if (!iso) return "";
-                const d = new Date(iso);
-                return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+                // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
+                return window.offlineFormFields.formatTs(iso);
             },
             isExpired(expiresAt) {
                 // True, wenn der vom Server gesetzte ISO-Zeitstempel echt in
@@ -240,12 +239,8 @@
                 return exp < Date.now();
             },
             formatFieldValue(v) {
-                if (v == null) return "";
-                if (typeof v === "object") {
-                    if (v.__file__) return "[Datei: " + (v.name || "") + "]";
-                    return JSON.stringify(v);
-                }
-                return String(v);
+                // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
+                return window.offlineFormFields.formatValue(v);
             },
             relativeTime(ts) {
                 if (!ts) return "";
@@ -260,10 +255,11 @@
             // Refs #1398: reines Datum (YYYY-MM-DD) lokalisiert formatieren.
             // Leerer/ungueltiger Wert -> leerer String (kein "Invalid Date").
             formatDate(v) {
-                if (!v) return "";
-                const d = new Date(this._dateOnly(v));
-                if (Number.isNaN(d.getTime())) return "";
-                return d.toLocaleDateString("de-DE", { dateStyle: "short" });
+                // Refs #1828: gemeinsamer Formatter — der bewusste
+                // 10-Zeichen-Schnitt (_dateOnly) bleibt HIER beim Aufrufer
+                // (offline-workitem-list.js parst dagegen den vollen Wert;
+                // Varianten absichtlich nicht vereinheitlicht).
+                return window.offlineFormFields.formatDate(this._dateOnly(v));
             },
             _dateOnly(v) {
                 return v ? String(v).slice(0, 10) : "";
