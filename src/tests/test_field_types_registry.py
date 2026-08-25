@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, time
+from types import SimpleNamespace
 
 import pytest
 from django import forms
@@ -24,6 +26,11 @@ class TestRegistryCompleteness:
         extra = registry_codes - enum_codes
         assert not missing, f"FieldType-Enum kennt {missing}, aber Registry nicht. Neuer Feldtyp ohne Registry-Eintrag?"
         assert not extra, f"Registry kennt {extra}, aber FieldType-Enum nicht. Veralteter Registry-Eintrag?"
+
+    @pytest.mark.parametrize("slot", ["coerce_import", "parse_literal", "format_display"])
+    def test_every_field_type_defines_all_dispatch_slots(self, slot):
+        missing = [spec.code for spec in FIELD_TYPE_REGISTRY.values() if not callable(getattr(spec, slot, None))]
+        assert not missing, f"Registry-Slot {slot!r} fehlt für Feldtypen: {missing}"
 
 
 class TestGetSpec:
@@ -161,3 +168,51 @@ class TestFieldTypeSpecImmutability:
     def test_spec_is_instance_of_fieldtypespec(self):
         for spec in FIELD_TYPE_REGISTRY.values():
             assert isinstance(spec, FieldTypeSpec)
+
+
+class TestRuntimeDispatch:
+    def test_import_coercion_uses_registry_slot(self, monkeypatch):
+        from core.services.import_engine import _coerce_field_value
+
+        sentinel = object()
+        spec = get_spec(field_types.TEXT)
+        monkeypatch.setitem(
+            FIELD_TYPE_REGISTRY,
+            field_types.TEXT,
+            replace(spec, coerce_import=lambda template, raw, column: sentinel),
+        )
+
+        template = SimpleNamespace(field_type=field_types.TEXT)
+        assert _coerce_field_value(template, "raw", "Spalte") is sentinel
+
+    def test_condition_parser_uses_registry_slot(self, monkeypatch):
+        from core.services.conditions import parse_condition_value
+
+        sentinel = object()
+        spec = get_spec(field_types.TEXT)
+        monkeypatch.setitem(
+            FIELD_TYPE_REGISTRY,
+            field_types.TEXT,
+            replace(spec, parse_literal=lambda template, raw: sentinel),
+        )
+
+        template = SimpleNamespace(options_json=[])
+        assert parse_condition_value(field_types.TEXT, template, "raw") is sentinel
+
+    def test_display_formatter_uses_registry_slot(self, monkeypatch):
+        from core.services.dynamic_data import format_dynamic_display_value
+
+        sentinel = object()
+        spec = get_spec(field_types.TEXT)
+        monkeypatch.setitem(
+            FIELD_TYPE_REGISTRY,
+            field_types.TEXT,
+            replace(spec, format_display=lambda value, template: sentinel),
+        )
+
+        template = SimpleNamespace(
+            field_type=field_types.TEXT,
+            FieldType=SimpleNamespace(BOOLEAN="boolean", SELECT="select", MULTI_SELECT="multi_select"),
+            options_json=[],
+        )
+        assert format_dynamic_display_value("raw", template) is sentinel

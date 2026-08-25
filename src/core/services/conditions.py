@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     # Nur fuer Typannotationen (PEP 563 macht sie ohnehin lazy) — kein
     # Laufzeit-Import, damit der Evaluator-Kern ohne Django-App-Registry
     # importierbar bleibt (Modulheader oben).
-    from core.models import DocumentType
+    from core.models import DocumentType, FieldTemplate
 
 # --- Operator-Strings -------------------------------------------------------
 # Identisch zu den ``FieldCondition.Operator``-Choices-Values (P2) und zu den
@@ -99,6 +99,19 @@ def is_empty(value: Any) -> bool:
     if isinstance(value, (list, tuple)):
         return len(value) == 0
     return False
+
+
+def parse_condition_value(field_type: str, template: FieldTemplate, raw: str) -> Any:
+    """Parse einen Editor-String strikt als Vergleichswert des Feldtyps.
+
+    Der Registry-Import bleibt funktionslokal, damit der DB- und Django-
+    unabhängige Evaluator-Kern dieses Moduls weiterhin isoliert importierbar
+    bleibt. Anders als :func:`normalize_value` lehnt dieser Editor-Pfad
+    ungültige Literale mit ``ValidationError`` ab.
+    """
+    from core.services.system.field_types import get_spec
+
+    return get_spec(field_type).parse_literal(template, raw)
 
 
 def normalize_value(field_type: str, value: Any) -> Any:
