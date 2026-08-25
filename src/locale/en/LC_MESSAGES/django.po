@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 23:29+0200\n"
+"POT-Creation-Date: 2026-08-25 00:38+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -8768,10 +8768,6 @@ msgstr "Facility setup at a glance"
 msgid "Benutzer &amp; Zugänge"
 msgstr "Users &amp; access"
 
-#: src/templates/core/hubs/verwaltung.html:54
-msgid "öffnet die technische Administration · erfordert Sudo-Modus"
-msgstr "opens the technical administration · requires sudo mode"
-
 #: src/templates/core/hubs/verwaltung.html:63
 msgid "Wie hängt die Konfiguration zusammen?"
 msgstr "How does the configuration fit together?"
@@ -11719,3 +11715,123 @@ msgstr "Lower numbers appear higher in selection lists and overviews."
 
 msgid "Technischer Icon-Name, zum Beispiel users, heart oder file-text. Leer verwendet den Standard."
 msgstr "Technical icon name, for example users, heart or file-text. Leave blank to use the default."
+
+msgid "2FA nicht zusätzlich erzwungen"
+msgstr "2FA not additionally enforced"
+
+msgid "2FA verpflichtend"
+msgstr "2FA required"
+
+msgid "Account-Sperre aufheben"
+msgstr "Unlock account"
+
+msgid "Account-Sperre wurde aufgehoben."
+msgstr "The account was unlocked."
+
+msgid "An diese Adresse wird der persönliche Setup-Link gesendet."
+msgstr "The personal setup link will be sent to this address."
+
+msgid "Anlage und Änderungen erfordern zur Sicherheit eine erneute Bestätigung im Sudo-Modus."
+msgstr "Creating and changing access requires confirmation in sudo mode."
+
+msgid "Anlegen und einladen"
+msgstr "Create and invite"
+
+msgid "Benutzer angelegt"
+msgstr "User created"
+
+msgid "Benutzerzugang geändert"
+msgstr "User access changed"
+
+msgid "Deaktiviert"
+msgstr "Deactivated"
+
+msgid "Der Zugang war nicht gesperrt."
+msgstr "The account was not locked."
+
+msgid "Der eigene Zugang kann hier nicht deaktiviert werden."
+msgstr "You cannot deactivate your own account here."
+
+msgid "Die Rolle Systemadministration kann hier nicht vergeben werden."
+msgstr "The system administration role cannot be assigned here."
+
+msgid "Die eigene Rolle kann hier nicht herabgestuft werden."
+msgstr "You cannot demote your own role here."
+
+msgid "Die eingeladene Person setzt ihr Passwort selbst über einen zeitlich begrenzten Setup-Link."
+msgstr "The invited person sets their password using a time-limited setup link."
+
+msgid "Ein Setup-Link kann nur für einen noch nicht eingerichteten Zugang versendet werden."
+msgstr "A setup link can only be sent for an account that has not yet been set up."
+
+msgid "Einladung erneut senden"
+msgstr "Resend invitation"
+
+msgid "Einladung konnte nicht versendet werden."
+msgstr "The invitation could not be sent."
+
+msgid "Einladung versendet"
+msgstr "Invitation sent"
+
+msgid "Einladung wurde erneut versendet."
+msgstr "The invitation was sent again."
+
+msgid "Einrichtung ausstehend"
+msgstr "Setup pending"
+
+msgid "Erzwingt die Einrichtung eines zweiten Faktors beim nächsten Zugang."
+msgstr "Requires setting up a second factor on the next access."
+
+msgid "Für den Einladungsversand ist eine E-Mail-Adresse erforderlich."
+msgstr "An email address is required to send an invitation."
+
+msgid "Für diesen Zugang ist derzeit keine Sicherheitsaktion erforderlich."
+msgstr "No security action is currently required for this account."
+
+msgid "Gesperrt"
+msgstr "Locked"
+
+msgid "Konten"
+msgstr "Accounts"
+
+msgid "Konten, Rollen und Sicherheitsvorgaben Ihrer Einrichtung."
+msgstr "Accounts, roles and security requirements for your facility."
+
+msgid "Löschbestätigung erlaubt"
+msgstr "Deletion confirmation allowed"
+
+msgid "Noch keine Zugänge vorhanden."
+msgstr "No accounts yet."
+
+msgid "Notausgang für technische Sonderfälle · erfordert Sudo-Modus"
+msgstr "Fallback for technical exceptions · requires sudo mode"
+
+msgid "Sicherheitsaktionen"
+msgstr "Security actions"
+
+msgid "Technische Administration"
+msgstr "Technical administration"
+
+msgid "Verwalten"
+msgstr "Manage"
+
+msgid "Zugang anlegen"
+msgstr "Create account"
+
+msgid "Zugang verwalten"
+msgstr "Manage account"
+
+msgid "Zugang wurde angelegt und die Einladung versendet."
+msgstr "The account was created and the invitation was sent."
+
+msgid "Zugang wurde angelegt, die Einladung konnte aber nicht versendet werden. Bitte erneut senden."
+msgstr "The account was created, but the invitation could not be sent. Please try again."
+
+msgid "Zugang wurde gespeichert."
+msgstr "The account was saved."
+
+msgid "Zugänge"
+msgstr "Access"
+
+msgid "ohne MFA"
+msgstr "without MFA"

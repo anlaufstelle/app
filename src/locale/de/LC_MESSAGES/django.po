@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-24 23:29+0200\n"
+"POT-Creation-Date: 2026-08-25 00:38+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -8850,10 +8850,6 @@ msgstr "Stand der Einrichtung"
 msgid "Benutzer &amp; Zugänge"
 msgstr "Benutzer &amp; Zugänge"
 
-#: src/templates/core/hubs/verwaltung.html:54
-msgid "öffnet die technische Administration · erfordert Sudo-Modus"
-msgstr "öffnet die technische Administration · erfordert Sudo-Modus"
-
 #: src/templates/core/hubs/verwaltung.html:63
 msgid "Wie hängt die Konfiguration zusammen?"
 msgstr "Wie hängt die Konfiguration zusammen?"
@@ -11818,3 +11814,123 @@ msgstr "Kleinere Zahlen erscheinen in Auswahllisten und Übersichten weiter oben
 
 msgid "Technischer Icon-Name, zum Beispiel users, heart oder file-text. Leer verwendet den Standard."
 msgstr "Technischer Icon-Name, zum Beispiel users, heart oder file-text. Leer verwendet den Standard."
+
+msgid "2FA nicht zusätzlich erzwungen"
+msgstr "2FA nicht zusätzlich erzwungen"
+
+msgid "2FA verpflichtend"
+msgstr "2FA verpflichtend"
+
+msgid "Account-Sperre aufheben"
+msgstr "Account-Sperre aufheben"
+
+msgid "Account-Sperre wurde aufgehoben."
+msgstr "Account-Sperre wurde aufgehoben."
+
+msgid "An diese Adresse wird der persönliche Setup-Link gesendet."
+msgstr "An diese Adresse wird der persönliche Setup-Link gesendet."
+
+msgid "Anlage und Änderungen erfordern zur Sicherheit eine erneute Bestätigung im Sudo-Modus."
+msgstr "Anlage und Änderungen erfordern zur Sicherheit eine erneute Bestätigung im Sudo-Modus."
+
+msgid "Anlegen und einladen"
+msgstr "Anlegen und einladen"
+
+msgid "Benutzer angelegt"
+msgstr "Benutzer angelegt"
+
+msgid "Benutzerzugang geändert"
+msgstr "Benutzerzugang geändert"
+
+msgid "Deaktiviert"
+msgstr "Deaktiviert"
+
+msgid "Der Zugang war nicht gesperrt."
+msgstr "Der Zugang war nicht gesperrt."
+
+msgid "Der eigene Zugang kann hier nicht deaktiviert werden."
+msgstr "Der eigene Zugang kann hier nicht deaktiviert werden."
+
+msgid "Die Rolle Systemadministration kann hier nicht vergeben werden."
+msgstr "Die Rolle Systemadministration kann hier nicht vergeben werden."
+
+msgid "Die eigene Rolle kann hier nicht herabgestuft werden."
+msgstr "Die eigene Rolle kann hier nicht herabgestuft werden."
+
+msgid "Die eingeladene Person setzt ihr Passwort selbst über einen zeitlich begrenzten Setup-Link."
+msgstr "Die eingeladene Person setzt ihr Passwort selbst über einen zeitlich begrenzten Setup-Link."
+
+msgid "Ein Setup-Link kann nur für einen noch nicht eingerichteten Zugang versendet werden."
+msgstr "Ein Setup-Link kann nur für einen noch nicht eingerichteten Zugang versendet werden."
+
+msgid "Einladung erneut senden"
+msgstr "Einladung erneut senden"
+
+msgid "Einladung konnte nicht versendet werden."
+msgstr "Einladung konnte nicht versendet werden."
+
+msgid "Einladung versendet"
+msgstr "Einladung versendet"
+
+msgid "Einladung wurde erneut versendet."
+msgstr "Einladung wurde erneut versendet."
+
+msgid "Einrichtung ausstehend"
+msgstr "Einrichtung ausstehend"
+
+msgid "Erzwingt die Einrichtung eines zweiten Faktors beim nächsten Zugang."
+msgstr "Erzwingt die Einrichtung eines zweiten Faktors beim nächsten Zugang."
+
+msgid "Für den Einladungsversand ist eine E-Mail-Adresse erforderlich."
+msgstr "Für den Einladungsversand ist eine E-Mail-Adresse erforderlich."
+
+msgid "Für diesen Zugang ist derzeit keine Sicherheitsaktion erforderlich."
+msgstr "Für diesen Zugang ist derzeit keine Sicherheitsaktion erforderlich."
+
+msgid "Gesperrt"
+msgstr "Gesperrt"
+
+msgid "Konten"
+msgstr "Konten"
+
+msgid "Konten, Rollen und Sicherheitsvorgaben Ihrer Einrichtung."
+msgstr "Konten, Rollen und Sicherheitsvorgaben Ihrer Einrichtung."
+
+msgid "Löschbestätigung erlaubt"
+msgstr "Löschbestätigung erlaubt"
+
+msgid "Noch keine Zugänge vorhanden."
+msgstr "Noch keine Zugänge vorhanden."
+
+msgid "Notausgang für technische Sonderfälle · erfordert Sudo-Modus"
+msgstr "Notausgang für technische Sonderfälle · erfordert Sudo-Modus"
+
+msgid "Sicherheitsaktionen"
+msgstr "Sicherheitsaktionen"
+
+msgid "Technische Administration"
+msgstr "Technische Administration"
+
+msgid "Verwalten"
+msgstr "Verwalten"
+
+msgid "Zugang anlegen"
+msgstr "Zugang anlegen"
+
+msgid "Zugang verwalten"
+msgstr "Zugang verwalten"
+
+msgid "Zugang wurde angelegt und die Einladung versendet."
+msgstr "Zugang wurde angelegt und die Einladung versendet."
+
+msgid "Zugang wurde angelegt, die Einladung konnte aber nicht versendet werden. Bitte erneut senden."
+msgstr "Zugang wurde angelegt, die Einladung konnte aber nicht versendet werden. Bitte erneut senden."
+
+msgid "Zugang wurde gespeichert."
+msgstr "Zugang wurde gespeichert."
+
+msgid "Zugänge"
+msgstr "Zugänge"
+
+msgid "ohne MFA"
+msgstr "ohne MFA"
