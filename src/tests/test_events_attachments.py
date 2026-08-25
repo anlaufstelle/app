@@ -91,6 +91,48 @@ class TestAttachmentAtomicity:
         assert Event.objects.count() == events_before
         assert EventHistory.objects.count() == history_before
 
+    def test_rollback_leaves_no_enc_file_on_disk(self, client, staff_user, facility, doc_type_with_file):
+        """Refs #1831 (DoD): Jeder Nicht-Commit-Ausgang des Create-POSTs räumt
+        die vor der Transaktion verschlüsselten ``.enc``-Dateien restlos auf —
+        ein Rollback (hier: simuliertes Scheitern des Attachment-DB-Inserts)
+        darf keine Waisen auf dem Disk lassen (#1345)."""
+        from pathlib import Path
+
+        from django.conf import settings
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client.force_login(staff_user)
+
+        pdf_bytes = (
+            b"%PDF-1.4\n"
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+            b"xref\n0 3\n0000000000 65535 f\n"
+            b"trailer<</Size 3/Root 1 0 R>>\n"
+            b"startxref\n9\n%%EOF\n"
+        )
+        uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
+
+        with (
+            patch(
+                "core.services.file_vault.commit_staged_upload",
+                side_effect=RuntimeError("Simulierter DB-Insert-Fail"),
+            ),
+            pytest.raises(RuntimeError, match="Simulierter DB-Insert-Fail"),
+        ):
+            client.post(
+                reverse("core:event_create"),
+                {
+                    "document_type": str(doc_type_with_file.pk),
+                    "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                    "anhang": uploaded,
+                },
+            )
+
+        facility_dir = Path(settings.MEDIA_ROOT) / str(facility.pk)
+        leftovers = list(facility_dir.glob("*.enc")) if facility_dir.exists() else []
+        assert leftovers == [], f"Rollback hinterließ .enc-Waisen: {leftovers}"
+
     def test_attachment_save_failure_rolls_back_event_creation(self, client, staff_user, facility, doc_type_with_file):
         """Alternative: Patch direkt auf ``Attachment.save`` — der Save
         läuft innerhalb von ``store_encrypted_file``. Erfordert allerdings,
