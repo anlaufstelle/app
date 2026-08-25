@@ -108,8 +108,9 @@ def report_bindings_context(doc_type, facility):
 def _count_sub(qs, group_field="document_type"):
     """Korrelierte Aggregat-Subquery: Anzahl der Zeilen von ``qs`` je Gruppe.
 
-    §F.2 (Refs #1813), Muster ``AttachmentListView._chain_version_counts``
-    (attachments.py:242). Ein Statement statt eines Joins pro Annotation —
+    §F.2 (Refs #1813), Muster
+    ``core.services.compliance.sensitivity._chain_version_counts``. Ein
+    Statement statt eines Joins pro Annotation —
     drei gleichzeitige ``Count(..., distinct=True)``-Joins (Feldgruppen ×
     Felder × Bedingungen) würden ein Kreuzprodukt aufspannen, das den
     bestehenden ``event_count`` mitverzerrt und auf großen Katalogen teuer
