@@ -12,7 +12,7 @@
 //
 // Echter Stack wie offline-store-aad.test.mjs: Dexie + echte WebCrypto.
 import Dexie from "dexie";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { importOfflineStoreModules } from "./_offline_store_modules.mjs";
 
@@ -127,5 +127,59 @@ describe("#1838 — Verbrauchs-Slot des offline-store-Verbunds", () => {
         expect(rows).toHaveLength(1);
         expect(rows[0].data).toEqual({ method: "POST", body: "split=1", headers: {} });
         await store.deleteRow("queue", id);
+    });
+
+    it("(d) online-Fallback treibt Widerruf + Revalidierung ueber die Fassade", async () => {
+        // Review-Befund (critical): Vor dem Fix riefen die beiden Aufrufe im
+        // Orchestrator-losen online-Listener freie Bezeichner aus fremden
+        // IIFE-Scopes — ReferenceError, vom try/catch STILL geschluckt; der
+        // Art.-17-Widerrufs-Purge waere auf login/password_change/offline.html
+        // bei jedem Reconnect tot gewesen. Dieser Pin treibt den Listener
+        // end-to-end und belegt beide Fassaden-Aufrufe.
+        delete window.syncOrchestrator;
+        const origApply = store.applyClientRevocations;
+        const origReval = store.revalidateCachedClients;
+        const applySpy = vi.fn(async () => ({ status: "ok" }));
+        const revalSpy = vi.fn(async () => {});
+        store.applyClientRevocations = applySpy;
+        store.revalidateCachedClients = revalSpy;
+        try {
+            window.dispatchEvent(new Event("online"));
+            await vi.waitFor(() => {
+                expect(applySpy).toHaveBeenCalledTimes(1);
+                expect(revalSpy).toHaveBeenCalledTimes(1);
+            });
+        } finally {
+            store.applyClientRevocations = origApply;
+            store.revalidateCachedClients = origReval;
+        }
+    });
+});
+
+describe("#1838 — Fail-loud bei Ausfall eines mittleren Moduls", () => {
+    it("meldet ein fehlendes offline-bundles.js hoerbar (Budget sieht es nicht)", async () => {
+        // Review-Befund (major): take() zaehlt Abholungen, nicht Abholer —
+        // faellt das MITTLERE Modul aus, laufen alle Guards still durch und
+        // die Fassade fehlt lautlos um dessen Exporte. offline-store.js
+        // prueft deshalb als letzte Datei je Schwester einen Anker-Export.
+        vi.resetModules();
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const prevStore = window.offlineStore;
+        try {
+            delete window.offlineStore;
+            delete window.__offlineStoreInternals;
+            await import("../../src/static/js/offline-db.js");
+            // offline-bundles.js faellt aus (nicht importiert).
+            await import("../../src/static/js/offline-revocations.js");
+            await import("../../src/static/js/offline-store.js");
+
+            expect(window.__offlineStoreInternals).toBeUndefined();
+            expect(window.offlineStore.saveClientBundle).toBeUndefined();
+            const messages = errorSpy.mock.calls.map((c) => String(c[0]));
+            expect(messages.some((m) => m.includes("offline-bundles.js"))).toBe(true);
+        } finally {
+            errorSpy.mockRestore();
+            window.offlineStore = prevStore;
+        }
     });
 });

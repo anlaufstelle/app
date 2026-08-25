@@ -13,8 +13,11 @@
 
     // Refs #1838: private Helfer aus offline-db.js — verbrauchbarer
     // Einmal-Kanal (Details + Sicherheitsbegruendung dort). Fail-closed:
-    // ohne Kanal (Ladereihenfolge verletzt / Injektionsversuch) bleibt das
-    // Modul inert, statt mit halber Fassade weiterzulaufen.
+    // ohne Kanal (offline-db.js fehlt / Ladereihenfolge verletzt /
+    // Injektionsversuch) bleibt das Modul inert. Der Ausfall eines
+    // MITTLEREN Moduls ist damit NICHT erkannt (das take()-Budget zaehlt
+    // Abholungen, nicht Abholer) — den macht der Vollstaendigkeits-Check
+    // am Dateiende fail-loud (Review-Befund #1838).
     const _internals = window.__offlineStoreInternals && window.__offlineStoreInternals.take();
     // Refs #1838: letzter Verbraucher — Slot IMMER abraeumen, auch im
     // Fail-closed-Fall darf nichts liegen bleiben.
@@ -746,8 +749,14 @@
                     // Widerrufe anwenden — sonst haette eine Offline-Shell
                     // (ohne base.html) keinen Zugang zum Signal und zeigte eine
                     // anonymisierte Person bis zum TTL-Ablauf weiter.
-                    await applyClientRevocations();
-                    await revalidateCachedClients();
+                    // Refs #1838 (Review-Befund, critical): beide Funktionen
+                    // leben seit dem Split in Schwester-Modulen — als freie
+                    // Bezeichner waeren sie hier ein ReferenceError, den der
+                    // try/catch STILL schluckte (Art.-17-Purge tot auf den
+                    // Seiten ohne Orchestrator). Aufloesung zur Callzeit ueber
+                    // die Fassade; gepinnt in offline-store-split.test.mjs.
+                    await window.offlineStore.applyClientRevocations();
+                    await window.offlineStore.revalidateCachedClients();
                 }
             } catch (_e) {
                 // eslint-disable-next-line no-console
@@ -775,5 +784,26 @@
                 // aus dem (dann noch bestehenden) Cache erneut nicht.
             });
         });
+    }
+
+    // Refs #1838 (Review-Befund, major): Faellt ein MITTLERES Modul des
+    // Verbunds aus (Einzel-Netzfehler, Blocker-Filter, korrupter
+    // Cache-Eintrag ausserhalb des SW-Precache), laufen take()-Budget und
+    // Fail-closed-Guards trotzdem still durch — die Fassade fehlte dann
+    // lautlos um dessen Exporte. Als letzte Datei der Kette prueft dieses
+    // Modul deshalb je Schwester einen Anker-Export und meldet den Ausfall
+    // HOERBAR (kein Abbruch: die uebrigen Teile bleiben nutzbar, aber die
+    // Ursache steht in der Konsole statt als spaeter TypeError irgendwo tief
+    // im Aufrufpfad).
+    for (const [sibling, probe] of [
+        ["offline-bundles.js", "saveClientBundle"],
+        ["offline-revocations.js", "applyClientRevocations"],
+    ]) {
+        if (typeof window.offlineStore[probe] !== "function") {
+            // eslint-disable-next-line no-console
+            console.error(
+                "[offline-store] " + sibling + " hat nicht geladen — Fassade unvollstaendig (Refs #1838)."
+            );
+        }
     }
 })();
