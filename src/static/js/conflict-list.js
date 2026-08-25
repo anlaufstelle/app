@@ -358,7 +358,9 @@
                     if (window.offlineQueue && window.offlineQueue.enqueueRequest) {
                         window.offlineQueue
                             .enqueueRequest(
-                                "/api/v1/offline/audit/note-export/",
+                                // Refs #1828: Endpunkt zentral in url-patterns.js
+                                // (ENDPOINTS, konsistent zur Allowlist-Regex).
+                                window.URL_PATTERNS.ENDPOINTS.AUDIT_NOTE_EXPORT,
                                 "POST",
                                 JSON.stringify({ event_pk: pk || "" }),
                                 { "content-type": "application/json", "hx-request": "true" }

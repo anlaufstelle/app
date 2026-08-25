@@ -28,6 +28,9 @@ const PK_B = "22222222-2222-4222-8222-222222222222";
 beforeAll(async () => {
     window.Dexie = Dexie;
     globalThis.Dexie = Dexie;
+    // Refs #1828: Endpunkt-Literale leben in url-patterns.js (ENDPOINTS) —
+    // wie in base.html VOR offline-store.js laden.
+    await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
     await import("../../src/static/js/offline-store.js");
