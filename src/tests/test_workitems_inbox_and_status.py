@@ -19,6 +19,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils.html import strip_tags
 
+from core.constants import WORKITEM_INBOX_CAP
 from core.models import AuditLog, WorkItem
 from core.services.case import update_workitem_status
 
@@ -93,6 +94,44 @@ class TestWorkItemInbox:
         open_items = list(response.context["open_items"])
         assert open_items[0] == workitem_urgent
         assert open_items[1] == workitem_open
+
+    def test_inbox_caps_all_sections_and_marks_additional_items(self, client, staff_user, facility):
+        items_per_status = WORKITEM_INBOX_CAP + 1
+        WorkItem.objects.bulk_create(
+            [
+                WorkItem(
+                    facility=facility,
+                    created_by=staff_user,
+                    title=f"{status} {index}",
+                    status=status,
+                )
+                for status in (
+                    WorkItem.Status.OPEN,
+                    WorkItem.Status.IN_PROGRESS,
+                    WorkItem.Status.DONE,
+                )
+                for index in range(items_per_status)
+            ]
+        )
+        client.force_login(staff_user)
+
+        context = client.get(reverse("core:workitem_inbox")).context
+
+        assert context["inbox_list_limit"] == WORKITEM_INBOX_CAP
+        assert context["open_has_more"] is True
+        assert len(context["open_items"]) == WORKITEM_INBOX_CAP
+        assert context["in_progress_has_more"] is True
+        assert len(context["in_progress_items"]) == WORKITEM_INBOX_CAP
+        assert context["done_has_more"] is True
+        assert len(context["done_items"]) == WORKITEM_INBOX_CAP
+
+        done_context = client.get(
+            reverse("core:workitem_inbox"),
+            {"status": "done", "done_period": "all"},
+        ).context
+
+        assert done_context["done_full_has_more"] is True
+        assert len(done_context["done_full_items"]) == WORKITEM_INBOX_CAP
 
     def test_inbox_facility_scoped(self, client, staff_user, facility, organization):
         from core.models import Facility
