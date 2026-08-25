@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -22,6 +23,7 @@ from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.file_vault import store_encrypted_file
+from core.views.attachments import AttachmentListView
 
 pytestmark = pytest.mark.django_db
 
@@ -443,6 +445,72 @@ class TestOwnerGenericOverview:
     def test_cross_facility_attachment_is_never_listed(self, client, staff_user, foreign_client_attachment):
         client.force_login(staff_user)
         assert "authz.pdf" not in client.get(reverse(LIST_URL_NAME)).content.decode()
+
+
+class TestRawVisibilityQuerysetCharacterization:
+    """Pinnt die rohe Compliance-Menge vor dem Service-Umzug (Refs #1837)."""
+
+    @staticmethod
+    def _raw_rows(client, user):
+        client.force_login(user)
+        # DTO-Bau bewusst neutralisieren: die Assertions laufen auf den vom
+        # Queryset gelieferten Attachment-Instanzen samt Annotationen.
+        with patch.object(AttachmentListView, "_build_row", side_effect=lambda _user, attachment: attachment):
+            return client.get(reverse(LIST_URL_NAME)).context["attachments"]
+
+    def test_staff_raw_queryset_is_owner_scoped_and_sensitivity_filtered(
+        self,
+        client,
+        staff_user,
+        facility,
+        three_owner_attachments,
+    ):
+        hidden_field = _file_template(
+            facility,
+            "Nur Leitung",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        hidden_type = _doc_type(
+            facility,
+            "Normale Person mit geheimem Feld",
+            DocumentType.EntityType.CLIENT,
+            file_field=hidden_field,
+        )
+        hidden_person = Client.objects.create(
+            facility=facility,
+            pseudonym="Verdeckte Datei",
+            document_type=hidden_type,
+            created_by=staff_user,
+        )
+        hidden_attachment = _attach(
+            facility,
+            hidden_person,
+            hidden_field,
+            staff_user,
+            "feld_high_verdeckt.pdf",
+        )
+
+        rows = self._raw_rows(client, staff_user)
+        visible_pks = {
+            three_owner_attachments[owner_type][1].pk
+            for owner_type in ("event", "client", "case")
+        }
+
+        raw_pks = {attachment.pk for attachment in rows}
+        assert raw_pks == visible_pks
+        assert hidden_attachment.pk not in raw_pks
+        assert {attachment.owner_sensitivity for attachment in rows} == {
+            DocumentType.Sensitivity.NORMAL
+        }
+        assert {attachment.version_count for attachment in rows} == {1}
+
+    def test_assistant_raw_queryset_excludes_case_owner(self, client, assistant_user, three_owner_attachments):
+        rows = self._raw_rows(client, assistant_user)
+
+        assert {attachment.pk for attachment in rows} == {
+            three_owner_attachments["event"][1].pk,
+            three_owner_attachments["client"][1].pk,
+        }
 
 
 # ---------------------------------------------------------------------------
