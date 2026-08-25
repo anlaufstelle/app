@@ -371,7 +371,11 @@ class CaseCreateView(StaffRequiredMixin, View):
                     finalize_staged_files(case, request.user, staged.by_slug, doc_type)
                 staged.commit()
         except ValidationError as e:
-            form.add_error(None, e.message if hasattr(e, "message") else str(e))
+            # Service-Fehler koennen als message_dict kommen (Randfall-Entscheid
+            # am Ticket): e.messages flacht feldfrei ab — kein dict-repr, kein
+            # add_error-Feld-Mapping auf Nicht-Formularfelder.
+            for message in e.messages:
+                form.add_error(None, message)
             context = {
                 "form": form,
                 "data_form": data_form,

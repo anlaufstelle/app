@@ -201,7 +201,8 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         # Versions-Token den Doppel-Replay als sichtbaren 409 ab (kein
         # stilles Überschreiben).
         idem_key, idem_payload_hash = self.read_idempotency(request)
-        if replay_response := self.check_replay(request, idem_key, idem_payload_hash):
+        replay_response = self.check_replay(request, idem_key, idem_payload_hash)
+        if replay_response is not None:
             return replay_response
 
         # Permission-Check + Service-Call innerhalb derselben Transaktion,
@@ -309,7 +310,8 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
         # Duplikat zu erzeugen. Sequenz + Mismatch-422: IdempotentCreateMixin
         # (Refs #1831).
         idem_key, idem_payload_hash = self.read_idempotency(request)
-        if replay_response := self.check_replay(request, idem_key, idem_payload_hash):
+        replay_response = self.check_replay(request, idem_key, idem_payload_hash)
+        if replay_response is not None:
             return replay_response
         if idem_key:
             # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
