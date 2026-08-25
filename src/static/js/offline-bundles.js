@@ -32,6 +32,7 @@
         FACILITY_ROW_KEY,
         FACILITY_BUNDLE_SCHEMA_VERSION,
         listDecrypted,
+        _UNSYNCED_EVENT_STATUS,
     } = _internals;
 
     /*
@@ -478,7 +479,10 @@
     }
 
     // Refs #1353: die vier "unsynced"-Status, die Bundle-Ablauf ueberleben.
-    const _UNSYNCED_STATUSES = ["modified", "new", "conflict", "dead"];
+    // Refs #1838 (Konsolidierung, Integrator-Auflage): identische Menge wie
+    // _UNSYNCED_EVENT_STATUS in offline-db.js — dort ist die eine Quelle,
+    // geteilt ueber den internen Kanal (vorher zwei driftfaehige Kopien).
+    const _UNSYNCED_STATUSES = _UNSYNCED_EVENT_STATUS;
 
     /*
      * W3-A (#1539/#1499): Chronologische "lokale Chronik" fuer die
