@@ -221,6 +221,48 @@ describe("#1838 — Fail-loud bei Ausfall eines mittleren Moduls", () => {
     });
 });
 
+describe("#1838 — Slot-Entwaffnung im Parser-Pfad (DOMContentLoaded)", () => {
+    it("laesst das Abhol-Fenster offen und entwaffnet erst bei DOMContentLoaded", async () => {
+        // Verify-Pass zu c6d451bd: Ein setTimeout(0)-Disarm feuerte im echten
+        // Browser (Parser spinnt das Event-Loop beim Warten auf parser-
+        // blockierende Schwester-Scripts, v.a. unter dem cache-first-SW)
+        // ZWISCHEN den Script-Tags und entwaffnete den Slot VOR den
+        // Abholern. Der Browser-Anker ist DOMContentLoaded — es feuert erst
+        // nach ALLEN parser-blockierenden Scripts. Dieser Pin simuliert den
+        // Parser-Pfad (readyState "loading"): der Slot muss ein take()
+        // beliebig spaet VOR DOMContentLoaded noch bedienen und danach weg
+        // sein.
+        const prevStore = window.offlineStore;
+        const readyStateDesc = Object.getOwnPropertyDescriptor(Document.prototype, "readyState");
+        Object.defineProperty(document, "readyState", { configurable: true, value: "loading" });
+        try {
+            delete window.offlineStore;
+            delete window.__offlineStoreInternals;
+            vi.resetModules();
+            await import("../../src/static/js/offline-db.js");
+
+            // Abhol-Fenster: auch nach echten Event-Loop-Luecken (Makrotasks,
+            // wie sie SW-Cache-Roundtrips zwischen Script-Tags erzeugen)
+            // bleibt der Slot bedienbar — genau hier starb die
+            // setTimeout(0)-Variante.
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            expect(window.__offlineStoreInternals).toBeDefined();
+            const handed = window.__offlineStoreInternals.take();
+            expect(handed).not.toBeNull();
+            expect(typeof handed.putEncrypted).toBe("function");
+
+            document.dispatchEvent(new Event("DOMContentLoaded"));
+            expect(window.__offlineStoreInternals).toBeUndefined();
+        } finally {
+            if (readyStateDesc) {
+                Object.defineProperty(document, "readyState", { configurable: true, value: undefined });
+                delete document.readyState;
+            }
+            window.offlineStore = prevStore;
+        }
+    });
+});
+
 describe("#1838 — Slot-Selbstentwaffnung ohne offline-store.js", () => {
     it("entwaffnet sich budget-unabhaengig, wenn die letzte Datei nicht laedt", async () => {
         // Integrationsfenster-Befund (PoC-belegt): Vor der Haertung lag das
