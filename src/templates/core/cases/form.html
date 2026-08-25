@@ -62,71 +62,8 @@
                 {% endif %}
             </div>
             {% else %}
-            {# Person-Autocomplete #}
-            <div x-data="clientAutocomplete"
-                 data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
-                 data-initial-client-id="{{ client_id|default:'' }}"
-                 data-autocomplete-url="{% url 'core:client_autocomplete' %}">
-                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %} *</label>
-                <div class="relative">
-                    <input type="text"
-                           :value="query" @input="setQuery"
-                           @input.debounce.150ms="onInput"
-                           @focus="onFocus"
-                           @keydown.arrow-down.prevent="moveHighlightDown"
-                           @keydown.arrow-up.prevent="moveHighlightUp"
-                           @keydown.enter.prevent="confirmHighlight"
-                           @keydown.escape="hideResults"
-                           @click.away="hideResults"
-                           placeholder="{% trans 'Pseudonym eingeben...' %}"
-                           aria-label="{% trans 'Person suchen' %}"
-                           aria-required="true"
-                           {% if form.client.errors %}aria-invalid="true" aria-describedby="id_client-error"{% endif %}
-                           role="combobox"
-                           aria-expanded="false"
-                           :aria-expanded="ariaExpanded"
-                           aria-autocomplete="list"
-                           aria-controls="client-autocomplete-list"
-                           class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
-                           autocomplete="off">
-                    <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
-
-                    <div x-show="hasVisibleResults" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
-                        <template x-for="(c, idx) in enrichedResults" :key="c.id">
-                            <button type="button"
-                                    :data-idx="idx"
-                                    @mousedown.prevent="selectByEvent"
-                                    @mouseenter="highlightByEvent"
-                                    role="option"
-                                    :aria-selected="c.isHighlighted"
-                                    :class="c.highlightClass"
-                                    class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
-                                <span class="font-semibold" x-text="c.pseudonym"></span>
-                                <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
-                            </button>
-                        </template>
-                    </div>
-                    {% comment %}
-                    Refs #1803 (Konzept §3.8): Der Leerzustand liegt NEBEN der
-                    Listbox, nicht darin — ein Textabsatz und ein Link haben in
-                    einem ``role="listbox"`` nichts verloren. Ohne ihn blieb das
-                    Feld bei null Treffern schlicht stumm.
-                    {% endcomment %}
-                    <div x-show="noMatches" x-cloak data-testid="client-autocomplete-empty"
-                         class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg px-3 py-2 text-[13px] text-ink-muted">
-                        <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>
-                        {% if user.is_staff_or_above %}
-                        <a href="{% url 'core:client_create' %}" data-testid="client-autocomplete-create"
-                           class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</a>
-                        {% endif %}
-                    </div>
-                </div>
-                {% if form.client.errors %}
-                <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {# Person-Autocomplete (Refs #1836: gemeinsam mit der Kontakterfassung) #}
+            {% include "components/_client_autocomplete.html" with autocomplete_component="clientAutocomplete" client_form=form required_field=True %}
             {% endif %}
 
             {# Beschreibung #}
