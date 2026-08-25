@@ -27,8 +27,13 @@ from django.views import View
 from core.forms.config import FieldConditionForm
 from core.models import DocumentType, DocumentTypeField, FieldCondition
 from core.services import config as config_service
-from core.services.conditions import OPERATORS_BY_FIELD_TYPE, VALUELESS_OPERATORS
-from core.services.dynamic_data import option_label_map
+from core.views.config._context import (
+    _operator_input_context,
+    _value_for_input,
+    _value_input_context,
+    condition_board_context,
+    operator_input_context_for_form,
+)
 from core.views.mixins import FacilityAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -37,94 +42,6 @@ BOARD_TEMPLATE = "core/config/document_types/partials/condition_board.html"
 FORM_TEMPLATE = "core/config/document_types/partials/condition_form.html"
 VALUE_INPUT_TEMPLATE = "core/config/document_types/partials/condition_value_input.html"
 OPERATOR_INPUT_TEMPLATE = "core/config/document_types/partials/condition_operator_input.html"
-
-
-# ---------------------------------------------------------------------------
-# Board-Kontext + Reswap-Helper
-# ---------------------------------------------------------------------------
-
-
-def _condition_display_value(condition):
-    """Menschenlesbarer Vergleichswert einer Bedingung fürs Board (#1714).
-
-    Löst den Roh-``value`` je **Quelltyp** auf, statt ihn roh anzuzeigen:
-
-    * ``boolean`` → ``Ja``/``Nein`` (übersetzbar, Muster
-      ``services/events/context.py:_format_field_display_value``);
-    * ``select``/``multi_select`` → Options-Label über eine ``label_map`` DIREKT
-      aus ``options_json`` (NICHT ``FieldTemplate.choices`` — das filtert
-      ``is_active`` und würde Bestandswerte mit inaktivem Slug nicht auflösen);
-      unbekannter Slug → Roh-Slug als Fallback;
-    * ``VALUELESS_OPERATORS`` (``is_empty``/``is_not_empty``) → ``None`` (kein Wert);
-    * sonst → ``str(value)``.
-
-    Rückgabe ``None`` bedeutet „kein Wert anzeigen" (das Template guardet mit
-    ``is not None``, damit auch ``0``/``False`` als Wert erscheinen).
-    """
-    if condition.operator in VALUELESS_OPERATORS:
-        return None
-    value = condition.value
-    if value is None:
-        return None
-    template = condition.depends_on_field.field_template
-    field_type = template.field_type
-    types = template.FieldType
-    if field_type == types.BOOLEAN:
-        return _("Ja") if value else _("Nein")
-    if field_type in (types.SELECT, types.MULTI_SELECT) and isinstance(value, str):
-        return option_label_map(template.options_json).get(value, value)
-    return str(value)
-
-
-def condition_board_context(doc_type, *, form=None):
-    """Baut den Kontext des Bedingungs-Boards.
-
-    ``condition_targets`` gruppiert die Bedingungen je **Zielfeld** und darunter
-    je ``group_index`` (OR-Gruppen; AND-Zeilen je Gruppe) — die Sortierung wird
-    hier (View/DB) vorbereitet, nicht im Template. ``condition_next_group_index``
-    ist ``max(group_index)+1`` (bzw. 0) und belegt das Neu-Formular als frische
-    ODER-Gruppe vor (E21/Board-„ODER-Gruppe hinzufügen").
-
-    Jede Condition-Instanz bekommt zusätzlich ``display_value`` (#1714) — den
-    aufgelösten Anzeigewert (Label/Ja-Nein) fürs Template.
-    """
-    conditions = list(
-        FieldCondition.objects.filter(target_field__document_type=doc_type)
-        .select_related("target_field__field_template", "target_field__field_group", "depends_on_field__field_template")
-        .order_by("group_index", "id")
-    )
-
-    by_target: dict = {}
-    for condition in conditions:
-        condition.display_value = _condition_display_value(condition)
-        entry = by_target.setdefault(
-            condition.target_field_id,
-            {"target": condition.target_field, "groups": {}},
-        )
-        entry["groups"].setdefault(condition.group_index, []).append(condition)
-
-    condition_targets = []
-    for entry in by_target.values():
-        groups = [{"index": index, "rows": rows} for index, rows in sorted(entry["groups"].items())]
-        condition_targets.append({"target": entry["target"], "groups": groups})
-    # #1713-Folge: Zielfeld-Blöcke in globaler Block-Reihenfolge (flaches
-    # sort_order hätte Positions-Ties zwischen Innen-Indizes und Globalpositionen).
-    condition_targets.sort(key=lambda item: config_service.dtf_block_sort_key(item["target"]))
-
-    next_group_index = max((condition.group_index for condition in conditions), default=-1) + 1
-    if form is None:
-        form = FieldConditionForm(document_type=doc_type, initial={"group_index": next_group_index})
-
-    return {
-        "doc_type": doc_type,
-        "condition_targets": condition_targets,
-        "condition_form": form,
-        "condition_next_group_index": next_group_index,
-        "condition_field_count": DocumentTypeField.objects.filter(document_type=doc_type).count(),
-        # #1715: Operator-Slot des eingebetteten Neu-Formulars (typgefiltert, falls
-        # die Quelle im Formularzustand bereits bekannt ist — sonst volle Liste).
-        **operator_input_context_for_form(form, doc_type),
-    }
 
 
 def condition_board_response(request, doc_type, *, form=None, retarget=False, message=None, error=None):
@@ -395,104 +312,3 @@ class ConditionOperatorInputView(FacilityAdminRequiredMixin, View):
             OPERATOR_INPUT_TEMPLATE,
             _operator_input_context(dtf.field_template, operator, doc_type, autoload=True),
         )
-
-
-def _value_input_context(field_template, operator, current_value) -> dict:
-    """Kontext für ``condition_value_input.html`` — je Quelltyp+Operator (E19).
-
-    Gemeinsam genutzt vom HTMX-Swap-Endpoint (``ConditionValueInputView``) und vom
-    Edit-Formular (``ConditionUpdateView.get``), damit der Prefill im Edit-Flow das
-    identische typisierte Input rendert wie der Live-Swap (Bug-Fix Runde 2, Minor 2).
-    """
-    return {
-        "field_type": field_template.field_type,
-        "operator": operator,
-        "valueless": operator in VALUELESS_OPERATORS,
-        "choices": field_template.choices,
-        "current_value": current_value,
-    }
-
-
-def _value_for_input(value):
-    """Stellt einen gespeicherten JSON-``value`` als String fürs Editor-Input dar."""
-    if value is None:
-        return ""
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    return str(value)
-
-
-def _operator_choices_for(field_template):
-    """``(value, label)``-Operatoren gefiltert auf den Quelltyp (#1715).
-
-    In der Reihenfolge von ``FieldCondition.Operator.choices`` (stabile UI-Ordnung).
-    ``field_template is None`` (keine Quelle bekannt) → volle Liste (Progressive
-    Enhancement; das Non-HTMX-Formular bleibt funktionsfähig, ``clean()``-Matrix
-    bleibt Server-Wahrheit).
-    """
-    if field_template is None:
-        return list(FieldCondition.Operator.choices)
-    allowed = OPERATORS_BY_FIELD_TYPE.get(field_template.field_type, frozenset())
-    return [(value, label) for value, label in FieldCondition.Operator.choices if value in allowed]
-
-
-def _operator_input_context(field_template, current_operator, doc_type, *, autoload) -> dict:
-    """Kontext für ``condition_operator_input.html`` — je Quelltyp (#1715).
-
-    Gemeinsam genutzt vom HTMX-Swap-Endpoint (``ConditionOperatorInputView``,
-    ``autoload=True``) und vom initialen Formular-Render (``autoload=False``). Die
-    aktuelle Auswahl bleibt erhalten, wenn sie im zulässigen Set liegt, sonst die
-    erste zulässige Option.
-    """
-    choices = _operator_choices_for(field_template)
-    allowed_values = {value for value, _label in choices}
-    if current_operator and current_operator in allowed_values:
-        selected = current_operator
-    else:
-        selected = choices[0][0] if choices else ""
-    return {
-        "operator_choices": choices,
-        "selected_operator": selected,
-        "doc_type": doc_type,
-        "operator_autoload": autoload,
-    }
-
-
-def _form_source_field_template(form):
-    """Ermittelt die (ggf.) bereits gewählte Quelle einer ``FieldConditionForm`` (#1715).
-
-    Reihenfolge: gebundene ``data`` (POST/Fehler-Rerender) → ``initial``
-    (Edit-Prefill) → ``None``. Die pk wird über das bereits gescopte
-    ``depends_on_field``-Queryset aufgelöst (Sicherheit); unauflösbar → ``None``
-    (volle Operatorliste als Fallback).
-    """
-    raw = None
-    if form.is_bound:
-        raw = form.data.get("depends_on_field")
-    if not raw:
-        raw = form.initial.get("depends_on_field")
-    if not raw:
-        return None
-    try:
-        dtf = form.fields["depends_on_field"].queryset.get(pk=raw)
-    except (DocumentTypeField.DoesNotExist, ValidationError, ValueError, TypeError):
-        return None
-    return dtf.field_template
-
-
-def operator_input_context_for_form(form, doc_type, *, autoload=False) -> dict:
-    """Baut den Operator-Slot-Kontext aus dem Formularzustand (#1715).
-
-    Zentral genutzt an allen Formular-Render-Pfaden (Board, Create-GET, Edit-GET,
-    Edit-Fehler-Rerender), damit ``condition_operator_input.html`` überall den
-    passenden — bei bekannter Quelle typgefilterten — Operator-Slot rendert.
-    """
-    field_template = _form_source_field_template(form)
-    current = ""
-    if form.is_bound:
-        current = form.data.get("operator", "") or ""
-    if not current:
-        current = form.initial.get("operator", "") or ""
-    return _operator_input_context(field_template, current, doc_type, autoload=autoload)
