@@ -12,6 +12,14 @@ import yaml
 pytestmark = pytest.mark.architecture
 
 
+def _deployment_compose_paths() -> tuple[Path, ...]:
+    """Return public stacks plus the private demo stack when it is present."""
+    prod = Path("docker-compose.prod.yml")
+    demo = Path("docker-compose.demo.yml")
+    dev = Path("docker-compose.dev.yml")
+    return (prod, demo, dev) if demo.exists() else (prod, dev)
+
+
 class TestRunAsAdminPullPolicy:
     """Refs #1047: ``run-as-admin.sh`` läuft via systemd als root — root hat
     keine GHCR-Credentials (``/root/.docker/config.json`` fehlt).
@@ -338,11 +346,7 @@ class TestDeploymentDbSecretBoundary:
     bereitstellen.
     """
 
-    _COMPOSES = (
-        Path("docker-compose.prod.yml"),
-        Path("docker-compose.demo.yml"),
-        Path("docker-compose.dev.yml"),
-    )
+    _COMPOSES = _deployment_compose_paths()
     _ENV_TEMPLATES = {
         Path("docker-compose.prod.yml"): Path(".env.example"),
         Path("docker-compose.demo.yml"): Path(".env.demo.example"),
@@ -361,6 +365,18 @@ class TestDeploymentDbSecretBoundary:
         "POSTGRES_ADMIN_PASSWORD",
         "POSTGRES_BOOTSTRAP_PASSWORD",
     }
+
+    def test_compose_selection_tolerates_private_stack_missing_from_public_snapshot(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        Path("docker-compose.prod.yml").touch()
+        Path("docker-compose.dev.yml").touch()
+
+        assert _deployment_compose_paths() == (
+            Path("docker-compose.prod.yml"),
+            Path("docker-compose.dev.yml"),
+        )
 
     @staticmethod
     def _services(path: Path) -> dict:
