@@ -439,6 +439,57 @@ class TestKAnonBridgeRedactionParity:
         )
 
 
+class TestClientTargetQueryParity:
+    """Art.-15-Auskunft und Art.-17-Redaktion bauen Zielmengen zentral (#1833).
+
+    Refs #1751: Eine neue Target-Sorte musste bislang an Export und
+    Anonymisierung einzeln nachgezogen werden. Der Guard verlangt deshalb nicht
+    nur passende Ergebnisbeispiele, sondern denselben Query-Builder an allen
+    fuenf Verbrauchsstellen. Ein spaeterer Inline-Eigenbau wuerde die
+    Code-Invariante wieder in unverknuepfte Prosa zurueckverwandeln.
+    """
+
+    _CONSUMERS = {
+        Path("src/core/services/client/export.py"): {
+            "_gather_legal_holds": "client_and_event_targets_q",
+            "_gather_retention_proposals": "client_and_event_targets_q",
+            "_gather_activities": "client_activity_targets_q",
+        },
+        Path("src/core/services/client/main.py"): {
+            "_redact_legal_holds": "client_and_event_targets_q",
+            "_redact_activities": "client_activity_targets_q",
+        },
+    }
+
+    @staticmethod
+    def _called_names(function: ast.FunctionDef) -> set[str]:
+        return {
+            child.func.id if isinstance(child.func, ast.Name) else child.func.attr
+            for child in ast.walk(function)
+            if isinstance(child, ast.Call) and isinstance(child.func, (ast.Name, ast.Attribute))
+        }
+
+    def test_all_consumers_call_the_shared_target_builders(self):
+        missing = []
+        for module, consumers in self._CONSUMERS.items():
+            functions = {
+                node.name: node
+                for node in ast.parse(module.read_text(encoding="utf-8")).body
+                if isinstance(node, ast.FunctionDef)
+            }
+            for consumer, helper in consumers.items():
+                function = functions.get(consumer)
+                if function is None:
+                    missing.append(f"{module}:{consumer} fehlt")
+                elif helper not in self._called_names(function):
+                    missing.append(f"{module}:{consumer} ruft {helper} nicht auf")
+
+        assert not missing, (
+            "Art.-15-Auskunft und Art.-17-Redaktion verwenden nicht dieselben "
+            "zentralen Ziel-Queries (Refs #1833):\n" + "\n".join(missing)
+        )
+
+
 class TestZentraleSuppressionsfunktion:
     """Jedes Berichts-Artefakt mit Randsumme + Aufschluesselung benutzt DIESELBE
     Suppressionsmaschinerie (K1/K2-Regressionsschutz, Refs #1770).

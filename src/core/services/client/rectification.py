@@ -144,7 +144,7 @@ def _encode_value(value: Any) -> Any:
 
     ``date``/``time`` werden vorher auf ISO-Strings normalisiert — dieselbe
     SSOT-Konvention (:func:`~core.services.events.fields._serialize_json_value`,
-    Refs #1073), die ``_clean_client_dynamic_data`` beim Anwenden erzwingt. Sie
+    Refs #1073), die ``clean_dynamic_data`` beim Anwenden erzwingt. Sie
     ist hier nicht Kosmetik, sondern Pflicht: das Antragsformular liefert fuer
     DATE-/TIME-Slugs echte ``datetime``-Objekte (``parse_default``), an denen
     ``json.dumps`` mit ``TypeError`` (Fehler 500 im Antragspfad) scheitert.

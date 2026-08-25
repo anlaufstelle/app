@@ -1,7 +1,6 @@
 """Client data export for DSGVO Art. 15 (right of access) and Art. 20 (data portability)."""
 
 import weasyprint
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import Prefetch, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -25,6 +24,7 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.models.attachment import owner_field_name
+from core.services.client.targets import client_activity_targets_q, client_and_event_targets_q
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -833,15 +833,7 @@ def _gather_activities(facility, client, event_ids):
     ``created_by``/``changed_by``; erst das vollstaendige Zugriffsprotokoll
     kippt in ein Bewegungsprofil der Beschaeftigten.
     """
-    targets = Q(target_type=ContentType.objects.get_for_model(client.__class__), target_id=client.pk)
-    case_ids = list(client.cases.values_list("pk", flat=True))
-    if case_ids:
-        targets |= Q(target_type=ContentType.objects.get_for_model(CaseModel), target_id__in=case_ids)
-    if event_ids:
-        targets |= Q(target_type=ContentType.objects.get_for_model(Event), target_id__in=event_ids)
-    workitem_ids = list(client.work_items.values_list("pk", flat=True))
-    if workitem_ids:
-        targets |= Q(target_type=ContentType.objects.get_for_model(WorkItem), target_id__in=workitem_ids)
+    targets = client_activity_targets_q(client, event_ids)
 
     from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
 
@@ -896,7 +888,7 @@ def _gather_legal_holds(facility, client, event_ids):
     """
     holds = (
         LegalHold.objects.for_facility(facility)
-        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
+        .filter(client_and_event_targets_q(client, event_ids))
         .select_related("created_by", "dismissed_by")
         .order_by("-created_at", "pk")
     )
@@ -929,7 +921,7 @@ def _gather_retention_proposals(facility, client, event_ids):
     """
     proposals = (
         RetentionProposal.objects.for_facility(facility)
-        .filter(Q(target_type="Client", target_id=client.pk) | Q(target_type="Event", target_id__in=event_ids))
+        .filter(client_and_event_targets_q(client, event_ids))
         .order_by("deletion_due_at", "pk")
     )
     return [

@@ -14,9 +14,15 @@ from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
 from core.retention.legal_holds import client_has_active_hold, exclude_clients_with_active_holds
-from core.services.audit import audit_client_event, audit_event
+from core.services.audit import (
+    apply_allowlisted_update,
+    audit_client_event,
+    audit_event,
+    check_update_allowlist,
+)
+from core.services.client.targets import client_activity_targets_q, client_and_event_targets_q
 from core.services.dashboard import log_activity
-from core.services.dynamic_data import validate_data_json
+from core.services.dynamic_data import clean_dynamic_data
 from core.services.security import check_version_conflict
 from core.services.system import bypass_replication_triggers
 
@@ -24,28 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 _REDACTED_HISTORY_MARKER = {"_redacted": True, "anonymized": True}
-
-
-def _check_client_document_type(facility, document_type):
-    """Prueft den Personen-``DocumentType`` (M2 P4b, Refs #1058).
-
-    Zwei Bedingungen, beide als deutsche ``ValidationError`` (der Aufrufer ist
-    ein Formular):
-
-    (a) **Facility-Scope** — ein Typ einer fremden Einrichtung waere ein
-        Cross-Tenant-Leck (der Slug-Satz stammte aus fremder Konfiguration).
-    (b) **Entitaetstyp** — nur ``entity_type=client``. Ein Ereignis-Typ traegt
-        Feldsemantik, die an einem Personen-Datensatz keine Bedeutung hat.
-
-    ``None`` (kein Typ) ist zulaessig und wird unveraendert durchgereicht.
-    """
-    if document_type is None:
-        return None
-    if document_type.facility_id != facility.pk:
-        raise ValidationError(_("Der Dokumentationstyp gehört nicht zu dieser Einrichtung."))
-    if document_type.entity_type != DocumentType.EntityType.CLIENT:
-        raise ValidationError(_("Der Dokumentationstyp ist nicht für Personen vorgesehen."))
-    return document_type
+_CLIENT_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp ist nicht für Personen vorgesehen.")
 
 
 def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
@@ -59,11 +44,11 @@ def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
     (FK/RLS/Verschluesselung) und ohne fachliche Meldung auf.
 
     Die ``*_id``-Variante wird daher hier aufgeloest und durch das Objekt
-    ersetzt, sodass :func:`_check_client_document_type` **genau einen** Pfad zu
-    pruefen hat. Unbekannte oder syntaktisch ungueltige PKs werden als
-    ``ValidationError`` abgewiesen (fail-closed), ebenso das gleichzeitige
-    Setzen beider Schreibweisen — das waere mehrdeutig, weil die Reihenfolge
-    der ``kwargs`` entschiede, welcher Wert gewinnt.
+    ersetzt, sodass :func:`~core.services.dynamic_data.clean_dynamic_data`
+    **genau einen** Pfad zu pruefen hat. Unbekannte oder syntaktisch ungueltige
+    PKs werden als ``ValidationError`` abgewiesen (fail-closed), ebenso das
+    gleichzeitige Setzen beider Schreibweisen — das waere mehrdeutig, weil die
+    Reihenfolge der ``kwargs`` entschiede, welcher Wert gewinnt.
     """
     if "document_type_id" not in data:
         return data.get("document_type")
@@ -84,26 +69,6 @@ def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
         raise ValidationError(_("Der Dokumentationstyp existiert nicht."))
     data["document_type"] = document_type
     return document_type
-
-
-def _clean_client_dynamic_data(facility, document_type, data_json) -> dict:
-    """Guard + Whitelist fuer die Dynamikdaten einer Person (M2 P4b, Refs #1058).
-
-    Prueft erst den Typ (:func:`_check_client_document_type`) und filtert dann
-    ``data_json`` mit :func:`~core.services.dynamic_data.validate_data_json`
-    gegen dessen Feld-Slugs. **Der Rueckgabewert ist verbindlich** — die
-    Whitelist verwirft fremde Keys, und nur wer das Ergebnis speichert,
-    verhindert Mass-Assignment ins JSONB.
-
-    Ohne Typ gibt es keine Whitelist: dann duerfen auch keine Dynamikdaten
-    gesetzt werden (statt sie still zu verschlucken).
-    """
-    document_type = _check_client_document_type(facility, document_type)
-    if document_type is None:
-        if data_json:
-            raise ValidationError(_("Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."))
-        return {}
-    return validate_data_json(document_type, data_json)
 
 
 def _redact_client_identity(client) -> None:
@@ -435,9 +400,7 @@ def _redact_legal_holds(client, event_ids: list, case_ids: list | None = None) -
 
     from core.models.retention import LegalHold
 
-    targets = Q(target_type="Client", target_id=client.pk)
-    if event_ids:
-        targets |= Q(target_type="Event", target_id__in=event_ids)
+    targets = client_and_event_targets_q(client, event_ids)
     if case_ids:
         targets |= Q(target_type="Case", target_id__in=case_ids)
     LegalHold.objects.for_facility(client.facility).filter(targets).update(reason="[Anonymisiert]")
@@ -496,34 +459,7 @@ def _redact_activities(client, event_ids: list) -> None:
 
     Refs #1067.
     """
-    from django.contrib.contenttypes.models import ContentType
-    from django.db.models import Q
-
-    from core.models.case import Case
-    from core.models.event import Event
-    from core.models.workitem import WorkItem
-
-    targets = Q(
-        target_type=ContentType.objects.get_for_model(Client),
-        target_id=client.pk,
-    )
-    if event_ids:
-        targets |= Q(
-            target_type=ContentType.objects.get_for_model(Event),
-            target_id__in=event_ids,
-        )
-    workitem_ids = list(client.work_items.values_list("pk", flat=True))
-    if workitem_ids:
-        targets |= Q(
-            target_type=ContentType.objects.get_for_model(WorkItem),
-            target_id__in=workitem_ids,
-        )
-    case_ids = list(Case.objects.filter(client=client).values_list("pk", flat=True))
-    if case_ids:
-        targets |= Q(
-            target_type=ContentType.objects.get_for_model(Case),
-            target_id__in=case_ids,
-        )
+    targets = client_activity_targets_q(client, event_ids)
     Activity.objects.for_facility(client.facility).filter(targets).update(
         context={"schema": 1, "action": Activity.Action.REDACTED.value}
     )
@@ -755,14 +691,20 @@ def create_client(facility, user, **data):
     """Create a client with activity and audit logging.
 
     M2 P4b (Refs #1058): ``document_type``/``data_json`` laufen durch
-    :func:`_clean_client_dynamic_data` — Facility-Scope, ``entity_type=client``
-    und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
+    :func:`~core.services.dynamic_data.clean_dynamic_data` — Facility-Scope,
+    ``entity_type=client`` und die Slug-Whitelist gelten schon beim Anlegen, nicht erst beim Update.
     :func:`_normalize_document_type_kwarg` faengt dabei auch die
     ``document_type_id=<pk>``-Schreibweise ab, die sonst am Guard vorbei direkt
     an ``Client(...)`` durchgereicht wuerde.
     """
     document_type = _normalize_document_type_kwarg(data)
-    data["data_json"] = _clean_client_dynamic_data(facility, document_type, data.get("data_json"))
+    data["data_json"] = clean_dynamic_data(
+        facility,
+        document_type,
+        data.get("data_json"),
+        entity_type=DocumentType.EntityType.CLIENT,
+        entity_type_error=_CLIENT_DOCUMENT_TYPE_ERROR,
+    )
     client = Client(facility=facility, created_by=user, **data)
     client.save()
     log_activity(
@@ -788,6 +730,15 @@ def update_client_stage(client, old_stage, new_stage, user):
         old_stage=old_stage,
         new_stage=new_stage,
     )
+
+
+def _bump_ban_revision_before_client_save(client, changed_fields) -> None:
+    """Keep the ban projection write between assignment and client save."""
+    if "pseudonym" not in changed_fields:
+        return
+    from core.services.system.ban_revision import bump_ban_revision_for_client_change
+
+    bump_ban_revision_for_client_change(client)
 
 
 @transaction.atomic
@@ -831,9 +782,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     # spiegelt die Felder von ``ClientForm`` wider. Läuft ZUERST — die
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     allowed = {"pseudonym", "contact_stage", "age_cluster", "notes", "document_type", "data_json"}
-    for key in fields:
-        if key not in allowed:
-            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+    check_update_allowlist(fields, allowed)
 
     # M2 P4b (Refs #1058): Dynamikdaten gegen den *effektiven* Typ pruefen —
     # also gegen den neu uebergebenen, sonst gegen den bestehenden. Wird nur der
@@ -845,32 +794,27 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         # ``None`` zurueck — ein bewusstes Leeren des Typs bleibt also erhalten.
         effective_type = fields.get("document_type", client.document_type)
         raw_data = fields.get("data_json", client.data_json)
-        fields["data_json"] = _clean_client_dynamic_data(client.facility, effective_type, raw_data)
+        fields["data_json"] = clean_dynamic_data(
+            client.facility,
+            effective_type,
+            raw_data,
+            entity_type=DocumentType.EntityType.CLIENT,
+            entity_type_error=_CLIENT_DOCUMENT_TYPE_ERROR,
+        )
 
     # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
     # ``ClientForm(instance=client)`` hat die Instanz in ``_post_clean()``
     # bereits mutiert — ein ``getattr(client, key) != value`` sähe hier
     # ``neu == neu`` und schriebe nie ``CLIENT_UPDATE`` (TB6). Nur Feldnamen
     # ins Audit, keine PII-Werte.
-    from core.services.audit.diff import changed_fields_vs_db
-
-    changed_fields = changed_fields_vs_db(client, fields)
-    for key, value in fields.items():
-        setattr(client, key, value)
-    # Refs #1917: das Hausverbots-Banner zeigt das Pseudonym — eine echte
-    # Umbenennung einer Person MIT Ban-Events muss die Revision bumpen
-    # (EXISTS-Guard im Helfer; ohne Ban-Events kein Signal).
-    if "pseudonym" in changed_fields:
-        from core.services.system.ban_revision import bump_ban_revision_for_client_change
-
-        bump_ban_revision_for_client_change(client)
-    # Nur die uebergebenen Spalten schreiben (Refs #1789-Folge): ein voller
-    # Save wuerde parallel committete, token-unsichtbare Writes (Soft-Delete,
-    # Redaktions-Kaskade — beide bumpen ``updated_at`` nicht) mit dem stalen
-    # Instanz-Stand ueberschreiben. ``updated_at`` explizit, da ``auto_now``
-    # bei ``update_fields`` sonst nicht schreibt.
-    client.save(update_fields=[*fields.keys(), "updated_at"])
-
+    # Refs #1917: Der optionale Hook bewahrt die bestehende Reihenfolge
+    # (setattr -> Ban-Revision -> save) fuer echte Pseudonym-Aenderungen.
+    changed_fields = apply_allowlisted_update(
+        client,
+        fields,
+        allowed_fields=allowed,
+        before_save=_bump_ban_revision_before_client_save,
+    )
     new_stage = client.contact_stage
     update_client_stage(client, old_stage, new_stage, user)
 
