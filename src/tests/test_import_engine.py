@@ -11,8 +11,9 @@ import io
 from datetime import timedelta
 
 import pytest
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import DatabaseError, IntegrityError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentTypeField, Event, FieldTemplate, ImportJob
@@ -65,6 +66,17 @@ def _profile_job(facility, admin_user, doc_type, content, mapping):
         document_type=doc_type,
     )
     import_engine.apply_mapping(job, mapping)
+    return job
+
+
+def _single_row_client_job(facility, admin_user, pseudonym="CHAR-PII"):
+    job = import_engine.store_import_upload(
+        facility,
+        admin_user,
+        _upload(f"Pseudonym\n{pseudonym}\n"),
+        target_type=ImportJob.TargetType.CLIENT,
+    )
+    import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
     return job
 
 
@@ -303,6 +315,138 @@ class TestApplyMapping:
         job.save(update_fields=["status"])
         with pytest.raises(ValidationError):
             import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+
+
+@pytest.mark.django_db
+class TestRunImportCharacterization:
+    def test_final_guard_runs_before_reading_the_source(self, client_job, admin_user, monkeypatch):
+        client_job.status = ImportJob.Status.COMMITTED
+
+        def _unexpected_read(_job):
+            pytest.fail("run_import darf für einen finalen Lauf die Quelldatei nicht lesen")
+
+        monkeypatch.setattr(import_engine, "read_rows", _unexpected_read)
+
+        with pytest.raises(ValidationError) as exc_info:
+            import_engine.run_import(client_job, admin_user, commit=False)
+
+        assert exc_info.value.messages == ["Der Importlauf ist bereits abgeschlossen."]
+
+    def test_empty_columns_map_guard_runs_before_row_processing(self, client_job, admin_user, monkeypatch):
+        client_job.mapping_json = {"columns": {}}
+
+        def _unexpected_row_values(*args, **kwargs):
+            pytest.fail("run_import darf ohne Spaltenzuordnung keine Zeile verarbeiten")
+
+        monkeypatch.setattr(import_engine, "_row_values", _unexpected_row_values)
+
+        with pytest.raises(ValidationError) as exc_info:
+            import_engine.run_import(client_job, admin_user, commit=False)
+
+        assert exc_info.value.messages == ["Für diesen Importlauf ist noch keine Spaltenzuordnung hinterlegt."]
+
+    @pytest.mark.parametrize(
+        ("exception_type", "source_message", "expected_code", "expected_message"),
+        [
+            pytest.param(
+                ValidationError,
+                ["Die fachliche Prüfung ist fehlgeschlagen.", "Bitte Eingabe prüfen."],
+                "validation",
+                "Die fachliche Prüfung ist fehlgeschlagen. Bitte Eingabe prüfen.",
+                id="validation-safe-message",
+            ),
+            pytest.param(
+                PermissionDenied,
+                "Die Rolle ist für diesen Vorgang gesperrt.",
+                "permission",
+                "Die Rolle ist für diesen Vorgang gesperrt.",
+                id="permission-safe-message",
+            ),
+            pytest.param(
+                ValueError,
+                "Der Wert kann nicht konvertiert werden.",
+                "invalid_value",
+                "Der Wert kann nicht konvertiert werden.",
+                id="value-safe-message",
+            ),
+            pytest.param(
+                ValidationError,
+                "Die fachliche Prüfung lehnt CHAR-PII ab.",
+                "validation",
+                "Die Zeile konnte nicht übernommen werden.",
+                id="validation-pii-message",
+            ),
+            pytest.param(
+                PermissionDenied,
+                "Für CHAR-PII fehlt die Berechtigung.",
+                "permission",
+                "Die Zeile konnte nicht übernommen werden.",
+                id="permission-pii-message",
+            ),
+            pytest.param(
+                ValueError,
+                "CHAR-PII kann nicht konvertiert werden.",
+                "invalid_value",
+                "Die Zeile konnte nicht übernommen werden.",
+                id="value-pii-message",
+            ),
+        ],
+    )
+    def test_service_exception_is_classified_and_its_message_is_filtered(
+        self,
+        facility,
+        admin_user,
+        media_root,
+        monkeypatch,
+        exception_type,
+        source_message,
+        expected_code,
+        expected_message,
+    ):
+        job = _single_row_client_job(facility, admin_user)
+
+        def _raise_service_exception(*args, **kwargs):
+            raise exception_type(source_message)
+
+        monkeypatch.setattr(import_engine, "create_client", _raise_service_exception)
+
+        result = import_engine.run_import(job, admin_user, commit=False)
+
+        assert result == {
+            "summary": {"rows": 1, "created": 0, "errors": 1, "committed": False},
+            "errors": [
+                {
+                    "row": 2,
+                    "column": "",
+                    "code": expected_code,
+                    "message": expected_message,
+                }
+            ],
+        }
+        job.refresh_from_db()
+        assert job.status == ImportJob.Status.VALIDATED
+        assert job.result_json == result
+
+    def test_integrity_error_is_classified_before_database_error(self, facility, admin_user, media_root, monkeypatch):
+        assert issubclass(IntegrityError, DatabaseError)
+        job = _single_row_client_job(facility, admin_user)
+
+        def _raise_integrity_error(*args, **kwargs):
+            raise IntegrityError("duplicate key DETAIL: CHAR-PII")
+
+        monkeypatch.setattr(import_engine, "create_client", _raise_integrity_error)
+
+        result = import_engine.run_import(job, admin_user, commit=False)
+
+        assert result["errors"] == [
+            {
+                "row": 2,
+                "column": "",
+                "code": "duplicate",
+                "message": "Die Zeile verletzt eine Eindeutigkeitsregel (z. B. bereits vergebenes Pseudonym).",
+            }
+        ]
+        assert "CHAR-PII" not in str(result)
 
 
 @pytest.mark.django_db
