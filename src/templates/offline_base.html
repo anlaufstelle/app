@@ -159,9 +159,11 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
     {% block extra_js %}{% endblock %}
 
     {# Offline-Modul-Reihenfolge 1:1 wie base.html: csrf → csrf-utils → dexie → #}
-    {# url-patterns → crypto → offline-store → offline-queue → offline-client → #}
-    {# offline-edit → sw-register. Die Kette wandert VOLLSTAENDIG mit — faellt #}
-    {# ein Glied weg, bricht der Kalt-Offline-Pfad erst im Browser ohne Netz. #}
+    {# url-patterns → crypto → offline-db → offline-bundles → offline-revocations #}
+    {# → offline-store (Refs #1838: 4-Datei-Verbund, EINE Fassade) → offline-queue #}
+    {# → offline-client → offline-edit → sw-register. Die Kette wandert #}
+    {# VOLLSTAENDIG mit — faellt ein Glied weg, bricht der Kalt-Offline-Pfad #}
+    {# erst im Browser ohne Netz. #}
     <script src="{% static 'js/csrf.js' %}"></script>
     <script src="{% static 'js/csrf-utils.js' %}"></script>
     <script src="{% static 'js/dexie.min.js' %}"></script>

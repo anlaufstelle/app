@@ -691,7 +691,11 @@ class TestPrecachedShellBumpGuard:
     # nach v40-Pins gegrept (Integrator-Auflage): test_pwa_views.py (2x) und
     # test_offline_tally_contract.py — alle in diesem Commit nachgezogen.
     _PINNED_CACHE_NAME = "anlaufstelle-v41"
-    _PINNED_SHELL_HASH = "0b35a6be4e9a262b96d9f60922fd9df4b08c1bbeaa39289de24e5fc8f712f45a"
+    # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
+    # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
+    # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
+    # kein weiterer Bump.
+    _PINNED_SHELL_HASH = "119004e973c25f69f0efe7e07cc232b6f702435d7fed4005e1945ebb8538c7a5"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

@@ -156,29 +156,87 @@ describe("#1838 — Verbrauchs-Slot des offline-store-Verbunds", () => {
     });
 });
 
+// Teil-Lade-Szenarien: eigene Import-Sequenzen mit derselben Fake-Timer-
+// Mechanik wie der Loader-Helper (Browser: Disarm-Makrotask laeuft nach den
+// synchronen Tags; Details in _offline_store_modules.mjs).
+async function loadPartial(files) {
+    vi.resetModules();
+    vi.useFakeTimers();
+    try {
+        for (const f of files) {
+            await import(/* @vite-ignore */ "../../src/static/js/" + f);
+        }
+        vi.runAllTimers();
+    } finally {
+        vi.useRealTimers();
+    }
+}
+
 describe("#1838 — Fail-loud bei Ausfall eines mittleren Moduls", () => {
+    let errorSpy;
+    let prevStore;
+
+    async function partialWithSpy(files) {
+        errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        prevStore = window.offlineStore;
+        delete window.offlineStore;
+        delete window.__offlineStoreInternals;
+        await loadPartial(files);
+        return errorSpy.mock.calls.map((c) => String(c[0]));
+    }
+
+    function restore() {
+        errorSpy.mockRestore();
+        window.offlineStore = prevStore;
+    }
+
     it("meldet ein fehlendes offline-bundles.js hoerbar (Budget sieht es nicht)", async () => {
         // Review-Befund (major): take() zaehlt Abholungen, nicht Abholer —
         // faellt das MITTLERE Modul aus, laufen alle Guards still durch und
         // die Fassade fehlt lautlos um dessen Exporte. offline-store.js
         // prueft deshalb als letzte Datei je Schwester einen Anker-Export.
-        vi.resetModules();
-        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const messages = await partialWithSpy([
+                "offline-db.js",
+                "offline-revocations.js",
+                "offline-store.js",
+            ]);
+            expect(window.__offlineStoreInternals).toBeUndefined();
+            expect(window.offlineStore.saveClientBundle).toBeUndefined();
+            expect(messages.some((m) => m.includes("offline-bundles.js"))).toBe(true);
+        } finally {
+            restore();
+        }
+    });
+
+    it("meldet ein fehlendes offline-revocations.js hoerbar", async () => {
+        try {
+            const messages = await partialWithSpy(["offline-db.js", "offline-bundles.js", "offline-store.js"]);
+            expect(window.__offlineStoreInternals).toBeUndefined();
+            expect(window.offlineStore.applyClientRevocations).toBeUndefined();
+            expect(messages.some((m) => m.includes("offline-revocations.js"))).toBe(true);
+        } finally {
+            restore();
+        }
+    });
+});
+
+describe("#1838 — Slot-Selbstentwaffnung ohne offline-store.js", () => {
+    it("entwaffnet sich budget-unabhaengig, wenn die letzte Datei nicht laedt", async () => {
+        // Integrationsfenster-Befund (PoC-belegt): Vor der Haertung lag das
+        // Abraeumen AUSSCHLIESSLICH in offline-store.js — fiel genau diese
+        // Datei aus, blieb der Slot samt _crypto (R8-Entschluesselungs-
+        // Orakel mit frei waehlbarem AAD) unbefristet auf window. Jetzt
+        // schliesst der setTimeout(0)-Makrotask aus offline-db.js die Luecke.
         const prevStore = window.offlineStore;
         try {
             delete window.offlineStore;
             delete window.__offlineStoreInternals;
-            await import("../../src/static/js/offline-db.js");
-            // offline-bundles.js faellt aus (nicht importiert).
-            await import("../../src/static/js/offline-revocations.js");
-            await import("../../src/static/js/offline-store.js");
+            await loadPartial(["offline-db.js", "offline-bundles.js", "offline-revocations.js"]);
 
             expect(window.__offlineStoreInternals).toBeUndefined();
-            expect(window.offlineStore.saveClientBundle).toBeUndefined();
-            const messages = errorSpy.mock.calls.map((c) => String(c[0]));
-            expect(messages.some((m) => m.includes("offline-bundles.js"))).toBe(true);
+            expect("__offlineStoreInternals" in window).toBe(false);
         } finally {
-            errorSpy.mockRestore();
             window.offlineStore = prevStore;
         }
     });
