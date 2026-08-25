@@ -228,6 +228,6 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
 {% block extra_js %}
 {# Refs #1828: offline-form-fields.js traegt die gemeinsamen Formatter und #}
 {# muss VOR dem Konsumenten laden. #}
-<script src="{%% static 'js/offline-form-fields.js' %%}"></script>
+<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-client-badge.js' %}"></script>
 {% endblock %}
