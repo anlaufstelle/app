@@ -77,6 +77,25 @@ def test_normalize_time_isoformat():
     assert normalize_value("time", None) is None
 
 
+def test_normalize_time_isoformat_falls_back_without_timespec():
+    calls = []
+
+    class IsoformatFallback:
+        def isoformat(self, *args, **kwargs):
+            calls.append((args, kwargs))
+            if not args and kwargs == {"timespec": "seconds"}:
+                raise TypeError
+            if not args and not kwargs:
+                return "fallback-sentinel"
+            raise AssertionError("Unerwarteter isoformat-Aufruf")
+
+    assert normalize_value("time", IsoformatFallback()) == "fallback-sentinel"
+    assert calls == [
+        ((), {"timespec": "seconds"}),
+        ((), {}),
+    ]
+
+
 def test_normalize_date_isoformat():
     """E11: date -> ``"YYYY-MM-DD"`` (Python ``date.isoformat``, unberuehrt von der time-Kappung)."""
     assert normalize_value("date", datetime.date(2026, 1, 5)) == "2026-01-05"
