@@ -119,6 +119,10 @@
             // dauerhaft auf der alten Version fest.
             _activateWaiting(registration);
 
+            // Refs #1948: Precache-Selbstheilung anstossen — einmal pro
+            // Seitenladen (siehe _requestPrecacheHeal unten).
+            _requestPrecacheHeal(registration);
+
             // Update waehrend der Sitzung: installing → installed → waiting.
             registration.addEventListener("updatefound", function () {
                 var newWorker = registration.installing;
@@ -162,6 +166,29 @@
             // "anlaufstelle-offline-mutex" + BroadcastChannel
             // "anlaufstelle-offline"), nicht mehr ueber den Service Worker.
         });
+    }
+
+    /**
+     * Refs #1948: Precache-Selbstheilung anstossen — CHECK_PRECACHE an den
+     * AKTIVEN Worker (sw.js prueft darauf jeden APP_SHELL-Eintrag per
+     * URL-genauem cache.match und laedt NUR Fehlendes nach). Vom Dokument aus
+     * angestossen, weil install/activate auf einem Bestandsgeraet nie wieder
+     * laufen, waehrend der Browser die Cache Storage unter Speicherdruck
+     * trotzdem (teil-)leeren darf — bisher verlor das Geraet dann still seine
+     * Offline-Faehigkeit bis zum naechsten CACHE_NAME-Bump.
+     *
+     * Beim Erst-Install ist ``registration.active`` noch null — bewusst kein
+     * Send: install hat den Precache gerade selbst befuellt. Best-effort;
+     * der naechste Seitenaufruf stoesst erneut an.
+     */
+    function _requestPrecacheHeal(registration) {
+        var worker = registration && registration.active;
+        if (!worker || typeof worker.postMessage !== "function") return;
+        try {
+            worker.postMessage({ type: "CHECK_PRECACHE" });
+        } catch (_e) {
+            // still — best-effort (s.o.).
+        }
     }
 
     /**
