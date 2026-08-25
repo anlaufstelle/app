@@ -135,3 +135,48 @@ describe("Feld-Helfer (Refs #1519, bisher nur indirekt abgedeckt)", () => {
         expect(helpers.buildFormData(fields, { notiz: "n", anhang: "x" })).toEqual({ notiz: "n" });
     });
 });
+
+// Refs #1828: gemeinsame Anzeige-Formatierung (de-DE) — vorher sieben
+// verstreute toLocaleString-/Datei-Marker-Varianten in sechs Dateien.
+// Leere und unparsbare Werte ergeben "" (die Aufrufer setzen ihren eigenen
+// Platzhalter wie "–" dahinter).
+describe("Formatter formatTs/formatDate/formatValue", () => {
+    it("formatTs: Datum + Uhrzeit im de-DE-Kurzformat", () => {
+        const out = helpers.formatTs("2026-08-05T09:04:00");
+        expect(out).toContain("05.08.26");
+        expect(out).toContain("09:04");
+    });
+
+    it("formatTs akzeptiert auch Date-Instanzen (Badge-Aufrufer)", () => {
+        const out = helpers.formatTs(new Date(2026, 7, 5, 9, 4));
+        expect(out).toContain("05.08.26");
+        expect(out).toContain("09:04");
+    });
+
+    it("formatTs: leer/ungueltig -> ''", () => {
+        expect(helpers.formatTs("")).toBe("");
+        expect(helpers.formatTs(null)).toBe("");
+        expect(helpers.formatTs(undefined)).toBe("");
+        expect(helpers.formatTs("garbage")).toBe("");
+    });
+
+    it("formatDate: nur das Datum im de-DE-Kurzformat", () => {
+        expect(helpers.formatDate("2026-08-05")).toBe("05.08.26");
+    });
+
+    it("formatDate: leer/ungueltig -> ''", () => {
+        expect(helpers.formatDate("")).toBe("");
+        expect(helpers.formatDate(null)).toBe("");
+        expect(helpers.formatDate("garbage")).toBe("");
+    });
+
+    it("formatValue: Datei-Marker, Objekte, null, Primitive", () => {
+        expect(helpers.formatValue({ __file__: true, name: "a.pdf" })).toBe("[Datei: a.pdf]");
+        expect(helpers.formatValue({ __file__: true })).toBe("[Datei: ]");
+        expect(helpers.formatValue({ k: 1 })).toBe('{"k":1}');
+        expect(helpers.formatValue(null)).toBe("");
+        expect(helpers.formatValue(undefined)).toBe("");
+        expect(helpers.formatValue(5)).toBe("5");
+        expect(helpers.formatValue("x")).toBe("x");
+    });
+});

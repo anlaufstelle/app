@@ -42,10 +42,8 @@
     // (kein Kontakt) und ein unparsbarer Wert fallen beide auf den En-Dash.
     function lastContactLabel(c) {
         var value = c && c.lastContact;
-        if (!value) return "–";
-        var d = new Date(value);
-        if (Number.isNaN(d.getTime())) return "–";
-        return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+        // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
+        return window.offlineFormFields.formatTs(value) || "–";
     }
 
     // Rohzeile aus dem Store auf die Render-Zeile abbilden: reine

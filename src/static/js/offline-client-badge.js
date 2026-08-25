@@ -66,10 +66,8 @@
                             this.isOffline = false;
                         } else if (cached.expiresAt) {
                             const exp = new Date(cached.expiresAt);
-                            this.expiresAtDisplay = exp.toLocaleString("de-DE", {
-                                dateStyle: "short",
-                                timeStyle: "short",
-                            });
+                            // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
+                            this.expiresAtDisplay = window.offlineFormFields.formatTs(exp);
                             const msLeft = exp.getTime() - Date.now();
                             this.expiryWarning = msLeft > 0 && msLeft <= 6 * 3600 * 1000;
                         }

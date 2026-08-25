@@ -153,6 +153,41 @@
         return "Keine Datei";
     }
 
+    // Refs #1828: gemeinsame Anzeige-Formatierung (de-DE) — vorher sieben
+    // verstreute toLocaleString-/Datei-Marker-Varianten in sechs Dateien.
+    // Leere und unparsbare Werte ergeben "" — Aufrufer setzen ihren eigenen
+    // Platzhalter (z.B. "–") dahinter.
+    function formatTs(value) {
+        if (!value) return "";
+        const d = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+    }
+
+    // Reines Datum (ohne Zeit). ACHTUNG: bewusst OHNE 10-Zeichen-Schnitt —
+    // offline-client-view.js schneidet ISO-Timestamps VOR dem Aufruf selbst
+    // aufs Datum (_dateOnly), offline-workitem-list.js parst den vollen Wert.
+    // Die beiden Varianten unterscheiden sich absichtlich (Zeitzonen-
+    // Verhalten von new Date("YYYY-MM-DD") vs. vollem Timestamp) und werden
+    // hier nicht vereinheitlicht.
+    function formatDate(value) {
+        if (!value) return "";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toLocaleDateString("de-DE", { dateStyle: "short" });
+    }
+
+    // Feldwert fuer die Anzeige: Datei-Marker als "[Datei: name]", sonstige
+    // Objekte als JSON, null/undefined leer, Primitive als String.
+    function formatValue(v) {
+        if (v === null || v === undefined) return "";
+        if (typeof v === "object") {
+            if (v.__file__) return "[Datei: " + (v.name || "") + "]";
+            return JSON.stringify(v);
+        }
+        return String(v);
+    }
+
     window.offlineFormFields = {
         fieldDescriptor: fieldDescriptor,
         initialValue: initialValue,
@@ -163,5 +198,8 @@
         emptyWorkItemValues: emptyWorkItemValues,
         workItemFormData: workItemFormData,
         fileNote: fileNote,
+        formatTs: formatTs,
+        formatDate: formatDate,
+        formatValue: formatValue,
     };
 })();

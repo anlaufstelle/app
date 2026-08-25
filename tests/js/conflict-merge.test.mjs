@@ -11,6 +11,9 @@ const server = { titel: "Server", note: "S-Note", nur_server: "Y" };
 const diffKeys = ["note", "nur_lokal", "nur_server", "titel"];
 
 beforeAll(async () => {
+    // Refs #1828: formatValue delegiert an offline-form-fields.js — wie im
+    // Template VOR conflict-resolver.js laden.
+    await import("../../src/static/js/offline-form-fields.js");
     await import("../../src/static/js/conflict-resolver.js");
     mergeByChoice = window.conflictResolverUtils.mergeByChoice;
 });
