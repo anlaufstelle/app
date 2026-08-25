@@ -27,6 +27,7 @@ import logging
 
 import pytest
 from django import forms
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from core.forms.cases import DynamicCaseDataForm
@@ -35,7 +36,13 @@ from core.forms.dynamic import DynamicDataForm
 from core.forms.events import DynamicEventDataForm, MultipleFileField
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
 from core.services.conditions import build_conditions_payload
-from core.services.dynamic_data import count_filled_dynamic_values, merge_dynamic_data, validate_data_json
+from core.services.dynamic_data import (
+    check_document_type,
+    clean_dynamic_data,
+    count_filled_dynamic_values,
+    merge_dynamic_data,
+    validate_data_json,
+)
 
 FieldType = FieldTemplate.FieldType
 Operator = FieldCondition.Operator
@@ -292,6 +299,93 @@ class TestValidateDataJson:
         from core.services.events.fields import _validate_data_json
 
         assert _validate_data_json is validate_data_json
+
+
+@pytest.mark.django_db
+class TestDocumentTypeGuards:
+    """Entity-, Facility- und Whitelist-Grenze als gemeinsame SSOT (Refs #1833)."""
+
+    def test_check_document_type_rejects_foreign_facility_with_exact_default_error(
+        self, facility, foreign_doc_type_client
+    ):
+        with pytest.raises(ValidationError) as exc_info:
+            check_document_type(
+                facility,
+                foreign_doc_type_client,
+                entity_type=DocumentType.EntityType.CLIENT,
+                entity_type_error="Falscher Entitaetstyp",
+            )
+
+        assert exc_info.value.messages == ["Der Dokumentationstyp gehört nicht zu dieser Einrichtung."]
+
+    def test_check_document_type_uses_exact_supplied_entity_error(self, facility, doc_type_contact):
+        with pytest.raises(ValidationError) as exc_info:
+            check_document_type(
+                facility,
+                doc_type_contact,
+                entity_type=DocumentType.EntityType.CLIENT,
+                entity_type_error="Der Dokumentationstyp ist nicht für Personen vorgesehen.",
+            )
+
+        assert exc_info.value.messages == ["Der Dokumentationstyp ist nicht für Personen vorgesehen."]
+
+    def test_check_document_type_preserves_custom_facility_exception(self, facility, foreign_doc_type_client):
+        with pytest.raises(ValueError) as exc_info:
+            check_document_type(
+                facility,
+                foreign_doc_type_client,
+                entity_type=DocumentType.EntityType.EVENT,
+                entity_type_error="Der Dokumentationstyp ist nicht für Ereignisse vorgesehen.",
+                facility_error=ValueError("DocumentType gehört nicht zur Facility"),
+            )
+
+        assert str(exc_info.value) == "DocumentType gehört nicht zur Facility"
+
+    def test_check_document_type_allows_none(self, facility):
+        assert (
+            check_document_type(
+                facility,
+                None,
+                entity_type=DocumentType.EntityType.CASE,
+                entity_type_error="Der Dokumentationstyp ist nicht für Fälle vorgesehen.",
+            )
+            is None
+        )
+
+    def test_clean_dynamic_data_rejects_payload_without_type_with_exact_error(self, facility):
+        with pytest.raises(ValidationError) as exc_info:
+            clean_dynamic_data(
+                facility,
+                None,
+                {"fremd": "Wert"},
+                entity_type=DocumentType.EntityType.CASE,
+                entity_type_error="Der Dokumentationstyp ist nicht für Fälle vorgesehen.",
+            )
+
+        assert exc_info.value.messages == ["Ohne Dokumentationstyp können keine dynamischen Daten gespeichert werden."]
+
+    def test_clean_dynamic_data_allows_empty_payload_without_type(self, facility):
+        assert (
+            clean_dynamic_data(
+                facility,
+                None,
+                {},
+                entity_type=DocumentType.EntityType.CLIENT,
+                entity_type_error="Der Dokumentationstyp ist nicht für Personen vorgesehen.",
+            )
+            == {}
+        )
+
+    def test_clean_dynamic_data_applies_slug_whitelist(self, facility, cond_doctype):
+        result = clean_dynamic_data(
+            facility,
+            cond_doctype,
+            {"dauer": 5, "fremd": "weg"},
+            entity_type=DocumentType.EntityType.EVENT,
+            entity_type_error="Der Dokumentationstyp ist nicht für Ereignisse vorgesehen.",
+        )
+
+        assert result == {"dauer": 5}
 
 
 # ---------------------------------------------------------------------------

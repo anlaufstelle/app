@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, WorkItem
-from core.services.audit import audit_event
+from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
 from core.services.dashboard import log_activity
 
 logger = logging.getLogger(__name__)
@@ -182,7 +182,6 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     sind Freitext und es gibt keinen nachgelagerten Prune, ein Umhängen
     schriebe also fremden Klartext an eine andere Person fest.
     """
-    from core.services.audit.diff import changed_fields_vs_db
     from core.services.security import check_version_conflict
 
     check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
@@ -204,9 +203,7 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
         "remind_at",
         "recurrence",
     }
-    for key in fields:
-        if key not in allowed:
-            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+    check_update_allowlist(fields, allowed)
 
     if "client" in fields:
         # Refs #1786 (TOCTOU): Der Pin-Zustand wird gegen den **DB-Stand unter
@@ -236,9 +233,6 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     # bereits mutiert — ein ``getattr(workitem, key) != value`` sähe hier
     # ``neu == neu`` und schriebe nie ``WORKITEM_UPDATE`` (TB6). Der Helper
     # liest die noch unveränderte DB-Zeile (FK-Vergleich über ``attname``).
-    changed_fields = changed_fields_vs_db(workitem, fields)
-    for key, value in fields.items():
-        setattr(workitem, key, value)
     # Refs #1789: NUR die genannten Spalten schreiben. Ein volles ``save()``
     # schriebe alle Felder der uebergebenen Instanz zurueck — und die stammt
     # aus einem frueheren Read. Alles ausserhalb dieser Allowlist (``status``/
@@ -250,7 +244,7 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     # ``fields`` enthaelt nach dem ``client``-Pop exakt die zu schreibenden
     # Spalten; Django akzeptiert dabei den Feldnamen (``assigned_to``) ebenso
     # wie den ``attname``.
-    workitem.save(update_fields=[*fields.keys(), "updated_at"])
+    changed_fields = apply_allowlisted_update(workitem, fields, allowed_fields=allowed)
 
     if changed_fields:
         audit_event(
