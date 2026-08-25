@@ -143,17 +143,9 @@
 
             _eventItem(r, isDead) {
                 const data = r.data || {};
-                let lastEditedAtFmt = "";
-                if (data.lastEditedAt) {
-                    try {
-                        lastEditedAtFmt = new Date(data.lastEditedAt).toLocaleString("de-DE", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                        });
-                    } catch (_e) {
-                        /* noop */
-                    }
-                }
+                // Refs #1828: gemeinsamer Formatter (offline-form-fields.js);
+                // leer/unparsbar -> "".
+                const lastEditedAtFmt = window.offlineFormFields.formatTs(data.lastEditedAt);
                 // Refs #1398 (P3): WorkItem-Records tragen keinen
                 // ``documentTypeName`` (kein DocumentType) — sonst faelschlich als
                 // „Ereignis" gelabelt. Der WorkItem-Titel aus dem Envelope ist die
@@ -203,14 +195,7 @@
                     item.canReapply = true;
                     item.missingToken = ci.conflictError === "missing-token";
                     item.label = ci.serverState.title || this._labelWorkItem;
-                    try {
-                        item.serverUpdatedAtFmt = new Date(ci.serverState.updated_at).toLocaleString("de-DE", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                        });
-                    } catch (_e) {
-                        /* noop */
-                    }
+                    item.serverUpdatedAtFmt = window.offlineFormFields.formatTs(ci.serverState.updated_at);
                     if (ci.isStatus) {
                         item.isStatusConflict = true;
                         item.yourStatusText =

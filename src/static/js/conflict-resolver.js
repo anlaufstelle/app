@@ -41,13 +41,11 @@
             .map((slug) => ({ slug: slug, value: dataJson[slug] }));
     }
 
+    // Refs #1828: gemeinsamer Formatter (offline-form-fields.js) — der
+    // Export auf window.conflictResolverUtils.formatValue bleibt als
+    // Contract fuer conflict-list.js (_buildNoteText) und Tests bestehen.
     function _formatValue(v) {
-        if (v === null || v === undefined) return "";
-        if (typeof v === "object") {
-            if (v.__file__) return "[Datei: " + (v.name || "") + "]";
-            return JSON.stringify(v);
-        }
-        return String(v);
+        return window.offlineFormFields.formatValue(v);
     }
 
     function _diffKeys(localData, serverData) {
