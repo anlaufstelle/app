@@ -23,13 +23,13 @@
     // Refs #1396: In-Place-Rendern an /offline/conflicts/<pk>/ ohne
     // Django-Kontext — die event-pk aus dem Pfad ziehen (der SW serviert dort
     // offline den pk-losen conflict-shell, dessen data-event-pk leer ist).
-    // Muster analog offline-client-view.js::_pkFromPath.
+    // Muster analog offline-client-view.js::_pkFromPath. Refs #1828: die
+    // UUID-Extraktion lebt zentral in url-patterns.js (extractConflictPk,
+    // vitest-gepinnt auch fuer nackte pathname-Eingaben) statt als Regex-Kopie.
     function _pkFromPath() {
         var path = (window.location && window.location.pathname) || "";
-        var m = path.match(
-            /\/offline\/conflicts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
-        );
-        return m ? m[1] : "";
+        var patterns = window.URL_PATTERNS;
+        return (patterns && patterns.extractConflictPk(path)) || "";
     }
 
     function _asList(dataJson) {

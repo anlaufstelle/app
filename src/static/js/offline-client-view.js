@@ -7,13 +7,13 @@
     "use strict";
 
     // Refs #1322: In-Place-Rendern an /clients/<pk>/ (oder /offline/clients/<pk>/)
-    // ohne Django-Kontext — die Klientel-pk aus dem Pfad ziehen.
+    // ohne Django-Kontext — die Klientel-pk aus dem Pfad ziehen. Refs #1828:
+    // die UUID-Extraktion lebt zentral in url-patterns.js (extractClientPk,
+    // vitest-gepinnt auch fuer nackte pathname-Eingaben) statt als Regex-Kopie.
     function _pkFromPath() {
         var path = (window.location && window.location.pathname) || "";
-        var m = path.match(
-            /\/clients\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
-        );
-        return m ? m[1] : "";
+        var patterns = window.URL_PATTERNS;
+        return (patterns && patterns.extractClientPk(path)) || "";
     }
 
     // Refs #1323: aktueller Zeitpunkt als datetime-local-Wert (YYYY-MM-DDTHH:MM).
