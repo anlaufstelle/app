@@ -160,6 +160,6 @@
 {# nimmt die Datei in den SW-Precache (APP_SHELL) auf.                       #}
 {# Refs #1828: offline-form-fields.js traegt die gemeinsamen Formatter und #}
 {# muss VOR dem Konsumenten laden. #}
-<script src="{%% static 'js/offline-form-fields.js' %%}"></script>
+<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-client-list.js' %}"></script>
 {% endblock %}
