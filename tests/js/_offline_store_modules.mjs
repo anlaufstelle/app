@@ -7,5 +7,6 @@
 // leiten zwischen crypto-Import und Store-Import erst den Session-Key ab).
 export async function importOfflineStoreModules() {
     await import("../../src/static/js/offline-db.js");
+    await import("../../src/static/js/offline-bundles.js");
     await import("../../src/static/js/offline-store.js");
 }
