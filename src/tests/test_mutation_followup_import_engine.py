@@ -419,3 +419,30 @@ class TestActingUserIsActuallyPersistedNotJustExistence:
         entry = AuditLog.objects.filter(action=AuditLog.Action.IMPORT_ABORTED).latest("timestamp")
         assert entry.user == staff_user
         assert entry.facility == facility
+
+
+# ---------------------------------------------------------------------------
+# Posten 9 — run_import: commit-Default ist False
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestRunImportCommitDefault:
+    def test_call_without_explicit_commit_kwarg_commits_nothing(self, facility, admin_user, media_root):
+        """Aufruf OHNE explizites ``commit``-Kwarg darf NICHTS committen
+        (sicherheitsrelevanter Default ``commit=False``, mutmut_1). Refs #1998.
+        """
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym\nDEFAULT-01\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+
+        result = import_engine.run_import(job, admin_user)  # kein commit-Kwarg
+
+        assert result["summary"]["committed"] is False
+        assert not Client.objects.filter(pseudonym="DEFAULT-01").exists()
+        job.refresh_from_db()
+        assert job.status == ImportJob.Status.VALIDATED
