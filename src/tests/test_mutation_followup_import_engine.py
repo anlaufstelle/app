@@ -125,3 +125,45 @@ class TestCoerceOption:
         """
         template = self._template([{"slug": "c-slug", "label": "Ganz anderer Anzeigename", "is_active": True}])
         assert import_engine._coerce_option(template, "c-slug", "Zugang") == "c-slug"
+
+
+# ---------------------------------------------------------------------------
+# Posten 3 — _collect_data_json: or/and-Vertauschung + continue-vs-break
+# ---------------------------------------------------------------------------
+
+
+class TestCollectDataJson:
+    def test_first_empty_target_is_skipped_and_second_value_is_kept(self, monkeypatch):
+        """Zwei optionale data_json-Ziele in einer Zeile — das ERSTE
+        (Spaltenreihenfolge) leer, das ZWEITE mit Wert. Ausserdem steht VOR
+        beiden ein Nicht-data_json-Ziel (``pseudonym``), damit ein
+        faelschliches ``break`` bei ``target.startswith(DATA_JSON_PREFIX)``
+        (mutmut_13) den kompletten Rest der Schleife verschluckt — nicht nur
+        das erste data_json-Ziel.
+
+        Ein ``or``->``and``-Tausch bei ``template is None or raw == ""``
+        (mutmut_9/_12) wuerde beim ersten (leeren) Ziel NICHT ueberspringen,
+        weil ``template is None`` dort False ist — die Koerzierung liefe mit
+        einem Leerstring und der Rueckgabewert triege einen zusaetzlichen,
+        falschen Schluessel. Refs #1998.
+        """
+        templates = {
+            "wohnsituation": SimpleNamespace(slug="wohnsituation", field_type=FieldTemplate.FieldType.TEXT),
+            "betrag": SimpleNamespace(slug="betrag", field_type=FieldTemplate.FieldType.NUMBER),
+        }
+        monkeypatch.setattr(import_engine, "_dynamic_templates", lambda job: templates)
+
+        values = {
+            "pseudonym": "P-1",
+            f"{DATA_JSON_PREFIX}wohnsituation": "",
+            f"{DATA_JSON_PREFIX}betrag": "12,50",
+        }
+        columns = {
+            "pseudonym": "Pseudonym",
+            f"{DATA_JSON_PREFIX}wohnsituation": "Wohnsituation",
+            f"{DATA_JSON_PREFIX}betrag": "Betrag",
+        }
+
+        data = import_engine._collect_data_json(job=object(), values=values, columns=columns)
+
+        assert data == {"betrag": 12.5}
