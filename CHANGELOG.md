@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Kontakterfassung: manipulierter Dokumentationstyp-Wert führt nicht mehr zu einem Serverfehler** (#1996) — Der HTML-Pfad der Ereignis-Erstellung fängt bei einem syntaktisch kaputten `document_type`-Wert (z. B. „keine-uuid") jetzt auch Djangos `ValidationError` und zeigt das Formular mit Fehlermeldung erneut, statt mit 500 zu antworten; der Raw-JSON-Replay-Pfad behält seine 422-Antwort (beide Verhalten per Regressionstest gepinnt). Nur mit manipuliertem POST erreichbar — das Formular selbst liefert stets gültige Werte. Im selben Zug wurde der bislang bewusst duplizierte JSON-Kurzschluss in den gemeinsamen Antwortpfad gefaltet.
+- **Release-Leak-Guard scannt keine gitignorierten Laufzeit-Artefakte mehr** (#1995) — Der Track-Code-Scan über `src/` traf zufällige Substrings in verschlüsselten Upload-Dateien unter `src/media/` (reine Laufzeit-Artefakte, die nie in einen Commit-Baum und damit nie in den Public-Spiegel gelangen) und machte lokale Prüfläufe zum Flake-Generator. `src/media/` ist jetzt wie `locale`/`staticfiles` vom Baum-Scan ausgenommen; Regressionstests pinnen beide Richtungen (Track-Code unter `src/media/` löst nicht aus, unter `src/core/` weiterhin schon).
 - **Offline-App-Shell heilt sich nach Browser-Speicherdruck selbst** (#1948) — Entfernt der Browser einzelne Dateien aus dem Offline-Cache (vor allem iOS unter Speicherdruck), prüft der Service Worker jetzt bei jedem Seitenaufbau die Vollständigkeit der App-Shell und lädt nur das Fehlende nach; bisher blieb die Offline-Ansicht bis zum nächsten App-Update still unvollständig.
 
 ## [0.84.0] - 2026-08-25
