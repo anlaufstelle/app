@@ -577,3 +577,717 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 ```
 
 ---
+
+## 4. Log Analysis
+
+### 4.1 Log Access
+
+```bash
+# All container logs (last 200 lines)
+docker compose -f docker-compose.prod.yml logs --tail=200
+
+# Follow web logs live
+docker compose -f docker-compose.prod.yml logs -f web
+
+# Caddy logs (reverse proxy / TLS)
+docker compose -f docker-compose.prod.yml logs -f caddy
+
+# Database logs
+docker compose -f docker-compose.prod.yml logs -f db
+
+# Logs since a specific point in time
+docker compose -f docker-compose.prod.yml logs --since="2026-03-30T08:00:00" web
+```
+
+### 4.2 JSON Logging Format
+
+With `LOG_FORMAT=json` in `.env`, Django emits structured JSON logs:
+
+```json
+{
+ "ts": "2026-03-30T10:15:22.123456+00:00",
+ "level": "INFO",
+ "logger": "core",
+ "module": "views",
+ "message": "...",
+ "request_id": "abc123",
+ "user_id": 42,
+ "facility_id": 1,
+ "exception": "Traceback..."
+}
+```
+
+| Field | Description |
+|------|-------------|
+| `ts` | ISO 8601 timestamp (UTC) |
+| `level` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `logger` | Logger name (`django`, `core`, `gunicorn.error`, `security.csp`) |
+| `module` | Python module |
+| `request_id` | Request ID (if available) |
+| `user_id` | Logged-in user (if available) |
+| `facility_id` | Active facility (if available) |
+| `exception` | Full traceback on errors |
+| `csp_violation` | CSP violation details as an object (`blocked-uri`, `document-uri`, `violated-directive`, …), only on `security.csp` |
+| `csp_violations_total` | Only on the `csp_violation_truncated` line: how many violations the report contained |
+| `csp_violations_dropped` | Only on the `csp_violation_truncated` line: how many of those were **not** logged (cap: 10 per request) |
+| `remote_addr` | Client IP of the report (proxy-aware via `TRUSTED_PROXY_HOPS`) |
+| `user_agent` | User agent of the report (control characters stripped, capped at 512 characters) |
+
+The last five fields come from the CSP report endpoint (`/csp-report/`,
+logger `security.csp`) and, since #1943,
+appear in **both** formats — including the default `LOG_FORMAT=text`, there as
+`field="value"` pairs after the message. Before that, only the
+bare `csp_violation` line was visible for each report. Two report types are
+operationally relevant here:
+
+- `csp_violation` — a single violation.
+- `csp_violation_truncated` — a request contained more than 10 violations;
+  the first 10 are logged, the rest dropped. If this line piles up,
+  it's either a badly broken CSP or a flooding attempt: check the
+  `remote_addr` against the rate limit (10 requests/min/IP).
+
+**Filtering JSON logs (with jq):**
+
+```bash
+# Errors only
+docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
+ | grep '^{' | jq 'select(.level == "ERROR")'
+
+# Errors for a specific user
+docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
+ | grep '^{' | jq 'select(.user_id == 42)'
+
+# Latest exceptions
+docker compose -f docker-compose.prod.yml logs web --no-log-prefix 2>&1 \
+ | grep '^{' | jq 'select(.exception != null) | {ts, message, exception}'
+```
+
+### 4.3 Typical Error Patterns
+
+| Log pattern | Meaning | Action |
+|------------|-----------|--------|
+| `OperationalError: could not connect to server` | DB unreachable | Check the DB container, see [5.1](#51-db-connection-failed) |
+| `ENCRYPTION_KEY must be set` | Env var missing | Check `.env` |
+| `relation "core_*" does not exist` | Migrations not run | `python manage.py migrate` |
+| `OSError: write error` | Disk full | Free up disk space, see [5.5](#55-disk-space-full) |
+| `[CRITICAL] WORKER TIMEOUT` | Gunicorn worker timeout | See [5.4](#54-gunicorn-timeout) |
+
+---
+
+## 5. Troubleshooting
+
+### 5.1 DB Connection Failed
+
+**Symptom:** `OperationalError: could not connect to server` or the health check reports `"database": "unavailable"`.
+
+```bash
+# 1. DB container status
+docker compose -f docker-compose.prod.yml ps db
+
+# 2. DB health check
+docker inspect $(docker compose -f docker-compose.prod.yml ps -q db) | grep -A5 Health
+
+# 3. Test a direct connection
+docker compose -f docker-compose.prod.yml exec db \
+ pg_isready -U $POSTGRES_USER
+
+# 4. Check DB logs
+docker compose -f docker-compose.prod.yml logs db --tail=50
+
+# 5. Restart the DB container
+docker compose -f docker-compose.prod.yml restart db
+
+# 6. Wait until healthy, then restart web
+docker compose -f docker-compose.prod.yml restart web
+```
+
+### 5.2 Migration Lock
+
+**Symptom:** The deploy hangs at `migrate`, no progress in the logs.
+
+The entrypoint uses `pg_advisory_lock(1)` to prevent parallel migrations. A lock stays stuck if a previous migrate process crashed.
+
+```bash
+# 1. Show pending locks
+docker compose -f docker-compose.prod.yml exec db \
+ psql -U $POSTGRES_USER -d $POSTGRES_DB \
+ -c "SELECT pid, granted, objid FROM pg_locks WHERE locktype = 'advisory';"
+
+# 2. Release the lock manually
+docker compose -f docker-compose.prod.yml exec db \
+ psql -U $POSTGRES_USER -d $POSTGRES_DB \
+ -c "SELECT pg_advisory_unlock(1);"
+
+# 3. Restart the web container
+docker compose -f docker-compose.prod.yml restart web
+```
+
+### 5.3 TLS Certificate
+
+**Symptom:** Browser shows a certificate error, HTTPS unreachable.
+
+```bash
+# 1. Check Caddy logs
+docker compose -f docker-compose.prod.yml logs caddy --tail=50
+
+# 2. Common causes:
+# - DNS does not point to the server IP:
+nslookup $DOMAIN
+
+# - Ports 80/443 blocked:
+curl -v http://$DOMAIN 2>&1 | head -20
+
+# - Let's Encrypt rate limit (max 5/week/domain):
+# → wait 1 week or use the staging CA
+
+# 3. Reset Caddy's TLS data (forces re-issuance)
+docker compose -f docker-compose.prod.yml exec caddy \
+ caddy reload --config /etc/caddy/Caddyfile
+```
+
+### 5.4 Gunicorn Timeout
+
+**Symptom:** `[CRITICAL] WORKER TIMEOUT (pid: NNN)` in the logs, requests abort with 502.
+
+```bash
+# 1. Check the current configuration
+docker compose -f docker-compose.prod.yml exec web \
+ printenv | grep GUNICORN
+
+# Defaults: GUNICORN_WORKERS=3, GUNICORN_TIMEOUT=30
+
+# 2. Increase the timeout (in .env)
+# GUNICORN_TIMEOUT=60
+
+# 3. Adjust the worker count (rule of thumb: 2 * CPU cores + 1)
+# GUNICORN_WORKERS=5
+
+# 4. Restart
+docker compose -f docker-compose.prod.yml restart web
+```
+
+**Finding the root cause:** Long-running requests point to slow DB queries. Use the Django Debug Toolbar (dev only) or `EXPLAIN ANALYZE`.
+
+### 5.4a Cache Backend / Multi-Worker (Refs #795)
+
+As soon as `GUNICORN_WORKERS > 1` is running (see [5.4](#54-gunicorn-timeout)), `django-ratelimit` (login/sudo/health brute-force protection) and the health detail caching need a **cross-process** cache. Otherwise (Django's default `LocMemCache`), each worker holds its own counter and the effective rate limits multiply by the worker count.
+
+**Default: the bundled `redis` service.**
+`docker-compose.prod.yml` starts a Redis on the internal network and sets `REDIS_URL=redis://redis:6379/1` for `web` and `cron`; `settings/prod.py` then switches to Django's built-in `RedisCache` (no `django-redis` needed). Properties of the service:
+
+- **No host port, no password.** The cache sits exclusively on the `internal` network; the network boundary is the access control. Anyone who does publish the port is running an open, unauthenticated Redis.
+- **No persistence** (`--save ""`, `--appendonly no`, no volume). The cache holds only regenerable data with a short TTL. Persistence would be a data-protection *minus* here: it would write rate-limit keys (including client IPs, user IDs) to disk, where no retention policy captures them. A Redis restart only costs a cold cache.
+- **Memory capped** (`--maxmemory 256mb`, `allkeys-lru`), so the container does not run into `mem_limit` OOM.
+
+**Fallback (unchanged): `DatabaseCache`.**
+If `REDIS_URL` is empty or unset, `prod.py` uses the shared `DatabaseCache`. The cache table `anlaufstelle_cache` is created via migration (`0092`) and comes up automatically as part of the normal one-shot migrate job (`docker-migrate.sh`, see [1.2](#12-deploy-steps)) — **no** separate `createcachetable` step needed. The fallback is functionally equivalent (also cross-process, `RATELIMIT_USE_CACHE=default`), but costs a DB round trip per rate-limit counter. **Redis is therefore a performance decision here, not a correctness one.**
+
+Deliberately turning Redis off (e.g. a very small deployment, where every MB of RAM counts):
+
+```bash
+# in .env - empty, not commented out:
+REDIS_URL=
+```
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --scale redis=0
+```
+
+**External Redis** instead of the bundled one: simply point `REDIS_URL` in `.env` at your own endpoint (`redis://redis.internal:6379/1`); the compose value is only a fallback for an unset variable. The bundled service can then be scaled to 0 as above.
+
+**Which backend is currently running?** The `/health/` endpoint reports it for internal/token callers:
+
+```bash
+curl -sf -H "X-Health-Token: $HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/ \
+ | python3 -c 'import json,sys; print(json.load(sys.stdin)["cache"])'
+# {'backend': 'django.core.cache.backends.redis.RedisCache', 'status': 'ok'}
+```
+
+This is not a cosmetic field: if `REDIS_URL` is set but the `redis` package is not present in the image (typical when an **older** `APP_VERSION` image is run with the new compose file), `prod.py` deliberately falls back to `DatabaseCache` and writes a warning to the container log — the stack stays operational, but runs slower. `cache.backend` makes this state visible. `cache.status = error` (backend configured but unreachable) sets the overall status to `degraded`, because the rate-limit protection is then also ineffective.
+
+**No separate `ratelimit` cache alias.** The original plan envisioned a second alias on Redis DB `/2`. It was not implemented: `django-ratelimit` hangs off `RATELIMIT_USE_CACHE`, and no code reads `caches["ratelimit"]` — the alias would be dead configuration and, in the `DatabaseCache` fallback, would additionally need a second cache table (i.e. another migration). DB index `/2` stays free for a later separation.
+
+### 5.5 Disk Space Full
+
+```bash
+# Docker disk usage
+docker system df
+
+# Largest volumes
+docker system df -v | grep -E 'VOLUME|pgdata|caddy'
+
+# Clean up old images and build cache
+docker system prune -f
+
+# Check old backup files
+du -sh /opt/anlaufstelle/backups/*/
+```
+
+### 5.6 Web Container Does Not Start (Restart Loop)
+
+```bash
+# 1. Exit code and logs
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs web --tail=100
+
+# 2. Common errors
+# "ImproperlyConfigured" → missing env vars in .env
+# "ENCRYPTION_KEY must be set" → ENCRYPTION_KEY missing in .env
+# "connection refused" → DB not ready yet
+
+# 3. Verify env vars
+docker compose -f docker-compose.prod.yml exec web printenv | sort
+
+# 4. Run the Django check manually
+docker compose -f docker-compose.prod.yml exec web \
+ python manage.py check --deploy
+```
+
+### 5.7 Upload Size Limit (Caddy `request_body`)
+
+**Symptom:** `413 Request Entity Too Large` on a file upload (attachments/replace), even though the upload is below the limit configured in the app.
+
+Refs #1363 (N10 + review follow-up): Caddy already rejects request bodies above `1100MiB` at the edge (defense-in-depth against disk fill/OOM, before Django/Gunicorn even sees the body). The app-side hard limit is `FILE_VAULT_MAX_UPLOAD_BYTES` (default 50 MiB, `settings/base.py`) — but file upload fields may contain **several files per field** per `FILE_VAULT_MAX_UPLOAD_FILES` (default 20, `MultipleFileInput`/Refs #622). The Caddy cap is therefore sized for the worst case of a full multi-file field: `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` (= 1000 MiB by default) + 10% margin for multipart overhead (boundaries, field headers, CSRF token, other form fields in the same request). A cap sized for only ONE file (the original `55MiB`) rejects legitimate, already-supported multi-file uploads at the edge, even though every single file would pass all app-side size/type checks.
+
+**Residual risk (deliberately documented, not fixed):** A `DocumentType` — configurable only by `facility_admin`/`super_admin` — can carry **several** FILE fields; each independently carries up to `FILE_VAULT_MAX_UPLOAD_FILES` files. The theoretical worst case per request then grows by another `FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES` for each additional FILE field. Deployments with multi-field file document types should scale the Caddy cap up accordingly (no automatic reconciliation).
+
+```bash
+# 1. Check the current Caddy value (all four variants: Caddyfile,
+# Caddyfile.dev, Caddyfile.demo, Caddyfile.staging)
+grep -A2 request_body Caddyfile*
+
+# 2. Check the app-side limit (if overridden via env)
+docker compose -f docker-compose.prod.yml exec web \
+ printenv | grep FILE_VAULT_MAX_UPLOAD
+```
+
+A test guard keeps both settings in sync with the static Caddy value (developer repo: `src/tests/test_architecture_guards_ops.py::TestCaddyUploadBodyLimit`) — it fails as soon as `FILE_VAULT_MAX_UPLOAD_BYTES`/`FILE_VAULT_MAX_UPLOAD_FILES` are changed without updating the Caddy cap to match.
+
+**IMPORTANT — maintainer handoff:** The Caddy value is statically stored in the Caddyfile and does **not** automatically follow when `FILE_VAULT_MAX_UPLOAD_BYTES` **or** `FILE_VAULT_MAX_UPLOAD_FILES` is overridden via env. When changing either of the two app limits (or for a deployment with multi-field file document types, see the residual risk above), update the value in the relevant Caddyfile manually and reload Caddy:
+
+```bash
+docker compose -f docker-compose.prod.yml exec caddy \
+ caddy reload --config /etc/caddy/Caddyfile
+```
+
+**Rollout note:** This change itself also needs a Caddy reload after the deploy (command above, adjust the file path depending on the compose variant) — a plain web container restart does not load a new Caddyfile config.
+
+### 5.7a Upload Temp Directory (Plaintext Staging Buffer, Refs #1661)
+
+**Background:** Django buffers uploads above `FILE_UPLOAD_MAX_MEMORY_SIZE` (default 2.5 MB) as a **plaintext temp file** on disk, before `core/services/file_vault/storage.py` scans and encrypts them. Without an explicit `FILE_UPLOAD_TEMP_DIR`, Django falls back to `tempfile.gettempdir()` (usually `/tmp`). This is only a short window, but unencrypted client content sits on disk for that moment.
+
+**Mitigation:** `docker-compose.prod.yml`/`staging.yml`/`demo.yml`/`dev.yml` already mount `/tmp` in the `web` container as **tmpfs** (RAM) — necessary because the container runs `read_only` (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` is set there explicitly in the `environment:` block of the respective compose file, and demonstrably pins Django's upload buffer to this tmpfs, instead of relying on Python's `TMPDIR` resolution order (a `TMPDIR` set accidentally later would otherwise silently redirect the implicit fallback away from tmpfs to a persistent volume). The temp file's content therefore only exists volatile in RAM, and is gone on container restart — no cleanup cron job needed.
+
+```bash
+# Verify that /tmp in the web container is actually a tmpfs
+docker compose -f docker-compose.prod.yml exec web mount | grep "on /tmp"
+# expected: "tmpfs on /tmp type tmpfs (rw,...)"
+
+# Check the currently set value
+docker compose -f docker-compose.prod.yml exec web printenv FILE_UPLOAD_TEMP_DIR
+```
+
+**Fallback without tmpfs:** On a bare-metal deploy or an individually orchestrated environment without a tmpfs mount (no Docker Compose, a custom Kubernetes manifest, etc.), `FILE_UPLOAD_TEMP_DIR` alone has no effect if the referenced path is not a tmpfs — the plaintext buffer then lands on the same storage as the rest of the filesystem. Options for operators without tmpfs:
+
+1. **Mount your own tmpfs** and point `FILE_UPLOAD_TEMP_DIR` at it (preferred) — e.g. `mount -t tmpfs -o size=512M,mode=1777 tmpfs /path/to/upload-tmp` and set `FILE_UPLOAD_TEMP_DIR=/path/to/upload-tmp`.
+2. **Use an encrypted volume** (LUKS/dm-crypt or similar) as the temp target, if RAM capacity is tight for large uploads.
+3. **Leave the variable unset** and deliberately accept the residual risk — the short plaintext window then stays on the regular (unencrypted) filesystem storage. `python manage.py check --deploy` warns in this case (`core.W002`) at startup, so the decision is made visibly instead of passing silently.
+
+A full RAM buffer instead of disk streaming (setting `FILE_UPLOAD_MAX_MEMORY_SIZE` very high) is **not** a substitute: that would keep large uploads entirely in process memory (DoS risk with several parallel uploads) instead of closing the time window.
+
+---
+
+## 6. Emergency Procedures
+
+### 6.1 Quick Stop (Entire Stack)
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+**Stop only web (DB keeps running):**
+
+```bash
+docker compose -f docker-compose.prod.yml stop web caddy
+```
+
+### 6.2 Immediate Backup Before a Critical Intervention
+
+```bash
+# Quick backup (unencrypted, for immediate restore)
+docker compose -f docker-compose.prod.yml exec -T db \
+ pg_dump -U $POSTGRES_USER -Fc $POSTGRES_DB \
+ > /tmp/emergency_$(date +%Y%m%d_%H%M%S).dump
+
+# Encrypted backup via script./scripts/ops/backup.sh
+```
+
+### 6.3 Emergency Database Access
+
+```bash
+# Interactive psql shell
+docker compose -f docker-compose.prod.yml exec db \
+ psql -U $POSTGRES_USER $POSTGRES_DB
+
+# Run a single query
+docker compose -f docker-compose.prod.yml exec db \
+ psql -U $POSTGRES_USER -d $POSTGRES_DB \
+ -c "SELECT count(*) FROM core_event WHERE is_deleted = false;"
+```
+
+### 6.4 Reset Password
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+ python manage.py changepassword <username>
+```
+
+### 6.5 Sentry (Optional Error Tracking)
+
+If `SENTRY_DSN` is configured in `.env`, unhandled exceptions are automatically reported to Sentry. Configuration:
+
+```dotenv
+SENTRY_DSN=https://...@sentry.io/...
+SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+### 6.5b GDPR Art. 33/34 — Breach Notification (Refs #685)
+
+Anlaufstelle must report data breaches to the supervisory authority within **72 hours** (Art. 33) and inform affected people directly when there is high risk (Art. 34). The code supports this through:
+
+1. **Detection** — `python manage.py detect_breaches` runs hourly (cron) and writes an `AuditLog.Action.SECURITY_VIOLATION` entry for every finding.
+2. **Heuristics** (all configurable via settings):
+   - `failed_login_burst` — > `BREACH_FAILED_LOGIN_THRESHOLD` (default 20) failed attempts per user within `BREACH_DETECTION_WINDOW_MINUTES` (default 60 min)
+   - `mass_export` — > `BREACH_EXPORT_THRESHOLD` (default 10) exports per user within the window
+   - `mass_delete` — > `BREACH_DELETE_THRESHOLD` (default 50) deletes facility-wide within the window
+3. **Optional webhook** — `BREACH_NOTIFICATION_WEBHOOK_URL` env var; receives a POST with a JSON payload (kind, count, threshold, audit_id) on every new finding.
+4. **Deduplication** — within 24h, the same finding (kind + user) is only reported once in the `AuditLog`.
+
+#### Manual Process on SECURITY_VIOLATION
+
+1. **T+0** — Check the `AuditLog` detail, identify affected users/data.
+2. **T+24h** — Escalate the matter to the [DPO/data protection officer](https://github.com/anlaufstelle/app/blob/main/SECURITY.md), produce a risk assessment. If the responsible primary person is unavailable, the designated **backup** takes over escalation and reporting ([MAINTAINERS.md](../../MAINTAINERS.md) (German), [GOVERNANCE.md § Escalation Path](../../GOVERNANCE.md) (German)) — the same backup who secures the CRA 24-hour early-warning deadline; as long as they are not named, this remains an open bus-factor-1 item.
+3. **T+72h** — Report to the supervisory authority (Bavaria: BayLDA; other German states analogously) + notify affected people if applicable.
+4. **Post-incident** — Lessons learned + adjust the heuristic thresholds.
+
+Cron entry (see § 3 Cron Jobs):
+
+```cron
+30 * * * * cd /opt/anlaufstelle && \
+ .venv/bin/python src/manage.py detect_breaches \
+ --settings=anlaufstelle.settings.prod \
+ >> /var/log/anlaufstelle-breach-detection.log 2>&1
+```
+
+### 6.5c Security Advisory — Report, Assessment, Publication (Refs #1895)
+
+Counterpart to § 6.5b: that section is about a **data breach in an operated instance** (GDPR Art. 33/34), this one is about a **vulnerability in the software itself**. The public commitment on this is in [SECURITY.md](../../SECURITY.md) (Meldewege, SLA, support rule — German); this section is the internal process behind it.
+
+**Precondition:** "Private vulnerability reporting" must be enabled on `anlaufstelle/app` (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, or `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). This setting only exists for **public** repositories — the non-public repositories of the release pipeline are therefore out of scope. As long as it's off, the GHSA form link in `SECURITY.md` leads nowhere and **only the email route works** — status check:
+
+```bash
+gh api repos/anlaufstelle/app/private-vulnerability-reporting # {"enabled": true} expected
+```
+
+| # | Step | Who | Target |
+|---|---------|-----|----------|
+| 1 | **Intake** — report via GHSA form or email; confirm receipt, request reproduction steps | Maintainer, or the backup if unavailable ([MAINTAINERS.md](../../MAINTAINERS.md) (German)) | ≤ 5 business days |
+| 2 | **Assessment** — reproduce, CVSS v3.1 base score, classify critical/high/medium/low, result to the reporter | Maintainer/backup | ≤ 10 business days |
+| 3 | Create a **GHSA draft** (*Security* → *Advisories* → *New draft security advisory* on `anlaufstelle/app`), enter affected + patched versions, credit as the reporter wishes; for critical/high, request a CVE ID via GitHub | Maintainer/backup | with step 2 |
+| 4 | **Fix** — failing test first, patch release of the **current** minor series (support rule in `SECURITY.md`: no backports), commit with a `sec:` prefix and a reference to the advisory | Maintainer/backup | critical/high: 14–30 days |
+| 5 | **Publication** — publish the advisory (patch + 7-day grace period), a `Security` entry in the [CHANGELOG](../../CHANGELOG.md) with the GHSA/CVE number, hall-of-fame credit | Maintainer/backup | patch + 7 days |
+| 6 | **No fix** — justify the rejection (out-of-scope list in `SECURITY.md`), close the matter cleanly with the reporter | Maintainer/backup | ≤ 10 business days |
+
+**Coupling to the CRA reporting duty:** If the vulnerability is **actively exploited**, the regulatory 24h/72h deadlines from [`docs/compliance/cra-einordnung.md` § 3](../compliance/cra-einordnung.md) (German) additionally apply — they don't replace the cadence above, but run in parallel and earlier. The trigger is therefore not "critical score" but "evidence of exploitation in the wild".
+
+**Boundary:** A GHSA describes a vulnerability **in the Anlaufstelle code**. For vulnerable dependencies, § 8.3 applies (`pip-audit`/Dependabot) — there, the upstream advisory already exists, and a dedicated GHSA would be a duplicate report. A dedicated advisory is only warranted if the application exposes the upstream gap and operators therefore need to act.
+
+### 6.5a Maintenance Mode (Refs #700)
+
+Before and during migrations/deploys, switch the stack to 503 so
+users see a consistent custom page instead of connection errors.
+
+```bash
+# Activate (creates a file flag)
+make maintenance-on
+
+# Run the deploy / migration
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+
+# Deactivate (removes the file flag)
+make maintenance-off
+```
+
+`make maintenance-on/off` uses `$MAINTENANCE_FLAG_FILE` (env var) or defaults to `/tmp/anlaufstelle.maintenance`. Whitelist:
+
+- `/health/` and `/static/...` stay reachable (load balancer / reverse proxy)
+- `MAINTENANCE_ALLOW_IPS` (comma-separated) allows ops access via `X-Forwarded-For` — e.g. for your own admin laptop during the maintenance window
+
+The `Retry-After` header (default 600s) helps browsers + load balancers react sensibly. The flag file is checked per worker at most every `MAINTENANCE_CACHE_TTL` seconds (default 5s) — per-request cost is practically zero when it's off.
+
+### 6.6a Off-Site Backup Sync (Refs #738)
+
+Local backups in `backups/daily/` survive container recreates, but not the complete loss of the prod host (hardware failure, ransomware, provider outage). `backup.sh` optionally syncs to an off-site target after every rotation.
+
+```bash
+# .env: configure the off-site target (one of three formats)
+BACKUP_OFFSITE_TARGET=rclone:hetzner-bucket:anlaufstelle/backups
+# or
+BACKUP_OFFSITE_TARGET=s3://anlaufstelle-backups/prod
+# or
+BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
+```
+
+**Recommended:** Enable object lock / write-once policy on the bucket — ransomware then cannot overwrite encrypted backups.
+
+**Failure mode** (Refs #797): If the off-site sync fails (network down, invalid credentials, disk full on the off-site host), `backup.sh` logs an `ERROR`. A **state file** `$BACKUP_STATE_DIR/.offsite_state` (default: next to the backups) counts consecutive failures. On the **second** consecutive failure, the script exits with exit code 1 — the cron/Coolify job turns red and the operator sees the incident immediately, without having to scan the logs. Successful runs reset the counter.
+
+**Sentry hook (optional):** If `SENTRY_DSN` AND a `BACKUP_SENTRY_HOOK` script are set, `backup.sh` calls the hook on every off-site failure (arguments: description, off-site target). The hook is a free operator choice — e.g. `sentry-cli send-event` or a custom `curl` script. Without a hook, it stays at log + exit code.
+
+### 6.6 Backup Restore Drill (Refs #720, #739)
+
+Verifies that the latest backup is fully restorable and that the lines of defense (RLS, AuditLog immutability trigger) are preserved. **Recommendation: quarterly via cron + alert email on failure.**
+
+Since OPS-05 (Refs #1336), the script covers **both** shipped backup formats. The choice is made via the `--dev`/`--prod` flag or `$DRILL_FORMAT`; without one, the format is auto-detected from the existing backup files (default `dev`, backward-compatible — the existing dev timer runs unchanged). If **both** formats are present at the same time, the drill aborts and requires an explicit choice:
+
+- **`--dev`** — `dev-ops/deploy/backup.sh`, which actually runs on `dev.anlaufstelle.app` (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, source `$BACKUP_DIR/dump-*.pgc.enc` (default `/var/backups/anl`), stack `docker-compose.dev.yml`.
+- **`--prod`** — `scripts/ops/backup.sh`, the canonical path shipped to self-hosters: plain SQL + `gzip` + A4.3 HMAC sidecar → `psql`, source `backups/daily/anlaufstelle_*.sql.gz.enc`, stack `docker-compose.prod.yml`. The HMAC sidecar is verified BEFORE decrypting.
+
+Both formats are restored as the Postgres superuser (`postgres`, via local socket trust in the db container) — needed for `CREATE DATABASE`, and it also bypasses RLS/FORCE-RLS during the restore.
+
+**Compatibility of backup format × restore path** — the two backup worlds are *not* interchangeable; a drill against the wrong format fails. But the drill picks the matching path for each format:
+
+| Backup source | Dump format | Encryption | File(s) | Restore tool | Restore drill |
+|---|---|---|---|---|---|
+| `dev-ops/deploy/backup.sh` (runs on `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (no HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh --dev` (glob `dump-*.pgc.enc`) |
+| `scripts/ops/backup.sh` (prod schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256** sidecar (Refs #1024) | `*.sql.gz.enc` + `.hmac` | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod` (HMAC check before decrypt, Refs #1336); `backup.sh --verify` remains a lightweight alternative |
+
+Why no cross-restore: The `--dev` branch searches by glob for `dump-*.pgc.enc` and pipes into `pg_restore` — a plain-SQL backup (`*.sql.gz.enc`) is simply not found this way and is also not a valid `pg_restore` archive. The `--prod` branch searches for `anlaufstelle_*.sql.gz.enc`, checks the `.hmac` sidecar, and restores via `gunzip | psql` — a `dump-*.pgc.enc` carries no sidecar (`backup_verify_hmac` aborts) and is binary format. A run against the wrong format therefore fails. Anyone who doesn't want to run a full drill uses `scripts/ops/backup.sh --verify` for the prod path (HMAC + probe decrypt + row comparison against the live DB).
+
+The backup files are `0600` and owned by root — therefore run **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`):
+
+```bash
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # auto-detect the format
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # force the prod format (*.sql.gz.enc)
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev format (dump-*.pgc.enc)
+```
+
+| Step | Check |
+|---|---|
+| 0 | Find the newest backup in the format-specific directory (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
+| 1 | Create a fresh throwaway DB (`anlaufstelle_drill_<pid>`) |
+| 2 | Decrypt + restore the backup — `--prod` first checks the HMAC sidecar, then `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
+| 3 | Spot-check per table (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — are counts queryable? |
+| 3b | **Completeness guard (fail-closed):** row comparison of the critical RLS tables (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) between the throwaway DB and the live DB (`$POSTGRES_DB`) — `Live>0` but `Restore=0` turns it red. Catches the incomplete `--prod` restore that the `psql` exit code (without `ON_ERROR_STOP`) swallows (Refs #1336) |
+| 4 | RLS policy check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` must yield `>= 18` (a conservative floor in the script; the actual count is higher, see section 9) |
+| 5 | `auditlog_immutable` trigger exists AND blocks a raw UPDATE |
+| 6 | Cleanup: drop the throwaway DB (via trap) |
+| 7 | **On full success (all steps including 3b):** `mark_restore_verified` in the web container → compliance marker |
+
+Output: one `OK` / `FAIL` entry per step. Exit code != 0 on any `FAIL`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
+
+> **Benign exception during the restore (step 2):** The dump contains a `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, which on restore fails against `FORCE ROW LEVEL SECURITY` on `core_event` (`--dev`: `pg_restore: errors ignored on restore: 1`). This only affects the statistics cache, not the payload data — the mv-refresh timer rebuilds it hourly. The `--dev` drill reports this as `OK … MV refresh skipped (benign)` and only fails on **other** errors. In the `--prod` branch, `psql` deliberately runs without `ON_ERROR_STOP` (the same MV refresh error is tolerated), which means the exit code alone does not prove completeness — the fail-closed proof is delivered by the row comparison in **step 3b**, before the restore is marked as verified.
+
+**Compliance marker** (Refs #919): On success, step 7 automatically writes a `RESTORE_VERIFIED` AuditLog entry (`manage.py mark_restore_verified`), which the compliance dashboard (`/system/compliance/`) uses as an age indicator:
+
+- ≤ 90 days → `ok`
+- ≤ 180 days → `warning`
+- older → `critical` (GDPR Art. 32(1)(c) violated — restorability no longer demonstrated).
+
+Without a drill ever having run, the dashboard stays at `unknown`. It can still be updated manually (e.g. after a documented out-of-band restore):
+
+```bash
+docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
+ python manage.py mark_restore_verified --note "Out-of-band restore $(date +%Y-%m-%d)"
+```
+
+**Cron suggestion:**
+
+```cron
+# Quarterly (1st month of the quarter, 03:30 after the 02:00 backup). Without a flag
+# the format is auto-detected; on a self-hoster with prod backups, set --prod
+# explicitly so a missing backup doesn't silently fall back to --dev:
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod \
+ >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
+ || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
+```
+
+#### Manual Sentinel Drill for Media Volume Persistence
+
+Complements `restore-drill.sh` with the container recreate aspect:
+
+```bash
+# 1. Create a sentinel file in MEDIA_ROOT
+docker compose -f docker-compose.prod.yml exec web \
+ sh -c 'echo "drill-$(date +%s)" > /data/media/.restore-drill'
+
+# 2. Recreate the stack (delete containers — volume stays)
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
+
+# 3. The sentinel verifies volume persistence
+docker compose -f docker-compose.prod.yml exec web \
+ cat /data/media/.restore-drill
+# -> expected output: drill-<timestamp>
+```
+
+Delete the sentinel afterwards: `rm /data/media/.restore-drill` in the container.
+
+---
+
+## 7. ClamAV Virus Scanning
+
+Every file upload into the Encrypted File Vault is scanned against a
+ClamAV daemon **before** encryption ([Issue #524](https://github.com/anlaufstelle/app/issues/524)).
+The production compose file [`docker-compose.prod.yml`](../../docker-compose.prod.yml)
+starts the scanner automatically with:
+
+```yaml
+clamav:
+ image: clamav/clamav:stable
+ volumes:
+ - clamav-db:/var/lib/clamav
+```
+
+### 7.1 Configuration
+
+Env vars (defaults, see [`src/anlaufstelle/settings/base.py`](../../src/anlaufstelle/settings/base.py)):
+
+```dotenv
+CLAMAV_ENABLED=true # default in prod.py
+CLAMAV_HOST=clamav # service name on the compose network
+CLAMAV_PORT=3310
+CLAMAV_TIMEOUT=15 # seconds; MUST be < GUNICORN_TIMEOUT (Refs #1283)
+```
+
+In development/test, the scan is disabled (`CLAMAV_ENABLED=false`), so
+no ClamAV instance is required.
+
+### 7.2 Fail-Closed
+
+If the scan is active and the daemon is unreachable, every upload is rejected with a
+`ValidationError`, and an `AuditLog` row is written with
+`Action.SECURITY_VIOLATION` (`reason=virus_scanner_unavailable`).
+Findings are logged with `reason=virus_detected` and the reported signature.
+
+### 7.3 Health Check
+
+`GET /health/` additionally reports `"virus_scanner": "connected"|"unavailable"|"disabled"`
+as well as the alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
+With an active scanner and an unreachable daemon, the overall status is set to
+`"degraded"`, the HTTP status stays 200 (the hard block happens
+on upload, not on the health check). The container healthcheck in the Dockerfile
+reads the JSON `status` and reports unhealthy on `degraded` — Coolify/k8s see
+the incident, but the load balancer does not pull the pod out.
+
+### 7.4 Database Updates (Signatures)
+
+The official `clamav/clamav:stable` image updates the signatures
+automatically via `freshclam` inside the container. Persistence happens in the
+named volume `clamav-db`. No additional cron job needed.
+
+### 7.5 Manual Check
+
+```bash
+# Is the daemon reachable?
+docker compose -f docker-compose.prod.yml exec web \
+ python -c "from core.services.virus_scan import ping; print(ping)"
+
+# EICAR test against the running scanner (manual, verification only):
+docker compose -f docker-compose.prod.yml exec clamav \
+ sh -c 'echo "X5O!P%@AP[4\\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*" | clamdscan -'
+```
+
+---
+
+## 8. Updating Dependencies
+
+For reproducible builds, the project uses [pip-tools](https://github.com/jazzband/pip-tools).
+The direct dependencies are in `requirements.in` / `requirements-dev.in`,
+the fully pinned lock files `requirements.txt` / `requirements-dev.txt`
+are generated from them and committed.
+
+### 8.1 Adding or Changing a Dependency
+
+```bash
+# 1. Add the dependency to requirements.in (runtime) or requirements-dev.in
+# (dev/test) - with an open range, e.g. "Django>=5.1,<5.2".
+
+# 2. Regenerate the lock files (pip-tools must be installed):
+make deps-lock
+
+# 3. Review the diff (which transitive packages were added, which versions were
+# bumped?), check for known breaking changes.
+git diff requirements.txt requirements-dev.txt
+
+# 4. Verify locally
+pip install -r requirements-dev.txt
+make ci
+
+# 5. Commit the .in and .txt files together (atomically).
+git add requirements.in requirements-dev.in requirements.txt requirements-dev.txt
+git commit -m "chore: bump <package> to <version>"
+```
+
+### 8.2 CI Drift Check
+
+The GitHub workflow [`test.yml`](../../.github/workflows/test.yml) contains a
+`lock-check` job that runs `pip-compile` for both lock files and fails on
+drift — so nobody can accidentally change `requirements.in`
+without updating the lock file to match.
+
+Local variant (without a commit):
+
+```bash
+make deps-check
+```
+
+### 8.3 Security Updates (pip-audit)
+
+The `audit` job in CI runs `pip-audit` against `requirements.txt`. If the
+job reports CVEs, follow this process:
+
+```bash
+# 1. requirements.in: raise the affected package to the minimum safe version
+# 2. make deps-lock
+# 3. make ci + manual verification
+# 4. Commit with a "security:" prefix, reference the advisory
+```
+
+### 8.4 SBOM (Software Bill of Materials)
+
+The `audit` job additionally generates an SBOM in CycloneDX JSON format
+(`sbom.json`) and uploads it as a workflow artifact. Retention: 90 days.
+
+The SBOM is needed for compliance requirements (public
+funding, public procurement, supplier audits) and lists all direct and
+transitive Python dependencies with versions, licenses, and CVE status at
+build time.
+
+**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days — for an older release, it was then no longer possible to prove which components it contained. But CRA Annex I Part II No. 1 requires exactly that. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. Until `1.0`, the artifact stays with the maintainer (there is no GitHub release page until then) and is available via the contact in [SECURITY.md](../../SECURITY.md); from `1.0` on, it is attached to the GitHub release.
+
+```bash
+# Download the SBOM from the last successful test workflow run
+gh run download --name sbom-cyclonedx --dir /tmp/sbom-latest
+
+# Inspect the content
+jq '.bomFormat, .specVersion, (.components | length)' /tmp/sbom-latest/sbom.json
+```
+
+Local generation (without CI):
+
+```bash
+pip install pip-audit
+pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
+```
+
+### 8.5 Troubleshooting
+
+| Problem | Cause | Solution |
+|---------|---------|--------|
+| `deps-check` fails even though nothing changed | Different pip-tools version between dev and CI | `pip install --upgrade pip-tools` and rerun `make deps-lock` |
+| `pip-compile` can't find a matching version | Range constraint too strict | Loosen the range in `.in`, e.g. `>=X,<Y+1` |
+| A transitive dependency pulls a vulnerable version | A direct dependency pins an old version | Add the direct dependency explicitly and bump it |
+
+---
