@@ -590,8 +590,14 @@ Fünf Punkte, an denen erfahrungsgemäß etwas schiefgeht:
    keine still unvollständige Registry.
 4. **Der Slug ist praktisch unveränderlich** — er steckt in Query-Parametern, Dateinamen und
    bei `snapshot_enabled` in den Schlüsseln von `StatisticsSnapshot.backend_data`.
-5. **Die Zuordnung läuft über `report_key`**, nie über `system_type` und nie über eine
-   Kategorie ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)).
+5. **Die Zuordnung läuft über `report_key`**, nie über eine Kategorie
+   ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)). Genau **eine** dokumentierte
+   Ausnahme: `ban-overview` bindet als hochsensibler Verhaltens-Bericht bewusst über
+   `system_type` (`TypBindung(bindet="system_type")`) — Hausverbote sollen nicht über einen frei
+   wählbaren Berichtsschlüssel in fremde Auswertungen geraten. Wer ausgerechnet dieses Modul als
+   Vorlage kopiert, muss `bindet` auf `report_key` zurückstellen; die Registry-Auskunft
+   („erscheint in …") und das Schlüssel-Vokabular ignorieren `system_type`-Bindungen sonst
+   stillschweigend.
 
 **Als Vorlage kopieren, nicht von Null anfangen.** Unter
 [`src/core/reporting/backends/`](src/core/reporting/backends/) liegen neun mitgelieferte
