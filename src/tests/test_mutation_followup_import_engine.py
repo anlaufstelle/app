@@ -167,3 +167,43 @@ class TestCollectDataJson:
         data = import_engine._collect_data_json(job=object(), values=values, columns=columns)
 
         assert data == {"betrag": 12.5}
+
+
+# ---------------------------------------------------------------------------
+# Posten 4 — apply_mapping und _row_values: continue-vs-break
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestApplyMappingAndRowValuesSkipUnmappedColumns:
+    def test_apply_mapping_keeps_a_later_target_after_an_unmapped_column(self, facility, admin_user, media_root):
+        """Die nicht zugeordnete Spalte 'Kontaktstufe' steht bewusst ZWISCHEN
+        zwei zugeordneten Spalten (nicht am Ende!) — ein ``break`` statt
+        ``continue`` bei leerem Zielwert (mutmut_17) wuerde die Zuordnung von
+        'Notizen' verschlucken, obwohl kein Fehler auftritt. Refs #1998.
+        """
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym;Kontaktstufe;Notizen\nMAP-01;irrelevant;Eine Notiz\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Kontaktstufe": "", "Notizen": "notes"})
+
+        job.refresh_from_db()
+        assert job.mapping_json["columns"] == {"Pseudonym": "pseudonym", "Notizen": "notes"}
+
+    def test_row_values_keeps_a_later_target_after_an_unmapped_column(self):
+        """Gleiches Muster fuer ``_row_values`` (mutmut_7, reiner Helfer ohne
+        DB): 'Kontaktstufe' ist NICHT in ``columns_map`` und steht vor
+        'Notizen'. Refs #1998.
+        """
+        header = ["Pseudonym", "Kontaktstufe", "Notizen"]
+        row = ["MAP-02", "wird-nicht-gemappt", "Zweite Notiz"]
+        columns_map = {"Pseudonym": "pseudonym", "Notizen": "notes"}
+
+        values, columns = import_engine._row_values(header, row, columns_map)
+
+        assert values == {"pseudonym": "MAP-02", "notes": "Zweite Notiz"}
+        assert columns == {"pseudonym": "Pseudonym", "notes": "Notizen"}
