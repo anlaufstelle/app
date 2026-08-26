@@ -553,9 +553,10 @@
         window.addEventListener("pagehide", _disarmInternals, { once: true });
     } else {
         // Nicht-Parser-Kontext (Test-Harness laedt per dynamic import bei
-        // readyState "complete"): Makrotask-Fallback — die Harnesse halten
-        // ihn mit Fake-Timern an, bis alle Module geladen sind (siehe
-        // tests/js/_offline_store_modules.mjs).
+        // readyState "complete"): Makrotask-Fallback. Seit #1994 erzwingt der
+        // Verbund-Harness tests/js/_offline_store_modules.mjs den echten
+        // DCL-Pfad (readyState "loading"); diesen Fallback nimmt nur noch
+        // loadPartial() in tests/js/offline-store-split.test.mjs.
         window.setTimeout(_disarmInternals, 0);
     }
 })();
