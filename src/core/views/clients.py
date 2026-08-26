@@ -479,6 +479,39 @@ class ClientUpdateView(StaffRequiredMixin, View):
     ``.enc`` auf Disk).
     """
 
+    def _render_context(self, client, form, data_form, *, data_json, original_document_type_id, type_locked):
+        """Render-Kontext des Bearbeiten-Formulars (Refs #1830).
+
+        Reine Zusammenfassung der vormals drei wortgleichen Kontext-Bloecke
+        dieser View (GET, Re-Render bei ungueltigem Stammformular, Re-Render bei
+        ungueltigem Dynamik-Formular) — dieselben Schluessel, dieselben Werte,
+        verhaltensneutral.
+
+        ``data_json`` und ``original_document_type_id`` kommen bewusst als
+        Argument statt aus ``client``:
+
+        * ``data_json`` — der POST-Re-Render braucht den DB-Stand VOR der
+          ``ModelForm._post_clean``-Mutation (Refs #1613).
+        * Refs #1785 (Review): Baseline der Verlust-Rueckfrage ist der
+          GESPEICHERTE Typ. Im GET ist ``client.document_type_id`` unberuehrt;
+          im POST-Re-Render darf er NICHT gelesen werden (``_post_clean`` hat
+          ihn dann auf den geposteten Wert mutiert) — dort steht der vor
+          ``is_valid()`` gesicherte ``old_doc_type_id``.
+        """
+        return {
+            "form": form,
+            "data_form": data_form,
+            "client": client,
+            "is_edit": True,
+            "dynamic_values_at_risk": _values_at_risk(client, data_json, type_locked=type_locked),
+            "original_document_type_id": original_document_type_id,
+            # M24/AP4 (Refs #1738): bestehende Anhaenge samt Ersetzen-/Entfernen-
+            # Steuerung. In JEDEM Render-Zweig noetig — sonst verschwinden die
+            # Zeilen beim Re-Render eines ungueltigen Formulars aus dem Formular
+            # (Refs #1056 P4, Event-Lehre).
+            "existing_attachments": build_attachment_context(client),
+        }
+
     def get(self, request, pk):
         client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
         form = ClientForm(instance=client, facility=request.current_facility, user=request.user)
@@ -491,24 +524,14 @@ class ClientUpdateView(StaffRequiredMixin, View):
             initial_data=decrypt_dynamic_text_data(client.data_json),
             existing_file_slugs=file_marker_slugs(client.data_json),
         )
-        context = {
-            "form": form,
-            "data_form": data_form,
-            "client": client,
-            "is_edit": True,
-            "dynamic_values_at_risk": _values_at_risk(client, client.data_json, type_locked=type_locked),
-            # Refs #1785 (Review): Baseline der Verlust-Rueckfrage ist der
-            # GESPEICHERTE Typ. Im GET ist ``client.document_type_id`` unberuehrt;
-            # im POST-Re-Render darf er NICHT gelesen werden (``_post_clean`` hat
-            # ihn dann auf den geposteten Wert mutiert) — dort steht der vor
-            # ``is_valid()`` gesicherte ``old_doc_type_id``.
-            "original_document_type_id": client.document_type_id,
-            # M24/AP4 (Refs #1738): bestehende Anhaenge samt Ersetzen-/Entfernen-
-            # Steuerung. In JEDEM Render-Zweig noetig — sonst verschwinden die
-            # Zeilen beim Re-Render eines ungueltigen Formulars aus dem Formular
-            # (Refs #1056 P4, Event-Lehre).
-            "existing_attachments": build_attachment_context(client),
-        }
+        context = self._render_context(
+            client,
+            form,
+            data_form,
+            data_json=client.data_json,
+            original_document_type_id=client.document_type_id,
+            type_locked=type_locked,
+        )
         return render(request, "core/clients/form.html", context)
 
     def post(self, request, pk):
@@ -542,17 +565,14 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     existing_file_slugs=file_marker_slugs(old_data),
                 )
             )
-            context = {
-                "form": form,
-                "data_form": data_form,
-                "client": client,
-                "is_edit": True,
-                "dynamic_values_at_risk": _values_at_risk(client, old_data, type_locked=type_locked),
-                # Refs #1785: gespeicherter Typ als Baseline — NICHT
-                # ``client.document_type_id`` (von ``_post_clean`` mutiert).
-                "original_document_type_id": old_doc_type_id,
-                "existing_attachments": build_attachment_context(client),
-            }
+            context = self._render_context(
+                client,
+                form,
+                data_form,
+                data_json=old_data,
+                original_document_type_id=old_doc_type_id,
+                type_locked=type_locked,
+            )
             return render(request, "core/clients/form.html", context)
 
         fields = dict(form.cleaned_data)
@@ -582,17 +602,14 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 existing_file_slugs=file_marker_slugs(old_data),
             )
             if not data_form.is_valid():
-                context = {
-                    "form": form,
-                    "data_form": data_form,
-                    "client": client,
-                    "is_edit": True,
-                    "dynamic_values_at_risk": _values_at_risk(client, old_data, type_locked=type_locked),
-                    # Refs #1785: gespeicherter Typ (nicht der von ``_post_clean``
-                    # mutierte ``client.document_type_id``).
-                    "original_document_type_id": old_doc_type_id,
-                    "existing_attachments": build_attachment_context(client),
-                }
+                context = self._render_context(
+                    client,
+                    form,
+                    data_form,
+                    data_json=old_data,
+                    original_document_type_id=old_doc_type_id,
+                    type_locked=type_locked,
+                )
                 return render(request, "core/clients/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 
