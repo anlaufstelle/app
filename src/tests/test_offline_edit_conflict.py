@@ -1017,7 +1017,7 @@ class TestEventCreateInvalid422:
         assert "document_type" in payload["errors"]
         assert not Event.objects.filter(created_by=staff_user).exists()
 
-    def test_event_create_invalid_document_type_uuid_html_stays_422_not_500(self, client, staff_user):
+    def test_event_create_invalid_document_type_uuid_html_redisplays_200_not_500(self, client, staff_user):
         """Gegenstück zum JSON-Pin oben, HTML-Pfad (Refs #1996).
 
         Ein normaler Browser-POST (kein Raw-JSON-Client) mit demselben

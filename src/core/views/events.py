@@ -345,7 +345,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             # separate Kurzschluss entfällt. Festgenagelt von
             # ``test_event_create_invalid_document_type_uuid_stays_422_json``
             # (JSON) und
-            # ``test_event_create_invalid_document_type_uuid_html_stays_422_not_500``
+            # ``test_event_create_invalid_document_type_uuid_html_redisplays_200_not_500``
             # (HTML). Änderungen am 422-Contract folglich HIER und in
             # ``_invalid_response`` nachziehen.
 
