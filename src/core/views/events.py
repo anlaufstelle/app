@@ -332,9 +332,22 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
         if not meta_form.is_valid():
-            # Frühzeitiger Return spart die weiter unten folgende Rekonstruktion
-            # von data_form/client_pseudonym, die nur fürs HTML-Re-Render
-            # gebraucht wird. Raw-JSON-Contract: _invalid_response (Refs #1831).
+            # Einziger Invalid-Zweig, der den Raw-JSON-Contract selbst
+            # kurzschließt, statt ihn über ``_invalid_response`` zu führen (die
+            # drei anderen Zweige tun das). Bewusst so, keine Copy-Paste-Drift
+            # (DoD-Audit Refs #1831): ``_invalid_response`` nimmt den
+            # HTML-Kontext als fertig gebautes Argument, dieser Kurzschluss
+            # liegt aber VOR dessen Rekonstruktion (data_form/client_pseudonym,
+            # nur fürs HTML-Re-Render gebraucht). Die Reihenfolge spart nicht
+            # bloß Arbeit, sie ist verhaltensrelevant: die Rekonstruktion unten
+            # löst ``document_type`` erneut gegen die DB auf und fängt dabei nur
+            # ``DoesNotExist``/``ValueError`` — bei einem syntaktisch kaputten
+            # UUID-Wert wirft Django eine ``ValidationError``, also 500
+            # (Nebenbefund des Audits, eigenes Ticket). Der Replay-Client behält
+            # hier deshalb seine 422; festgenagelt von
+            # ``test_event_create_invalid_document_type_uuid_stays_422_json``.
+            # Änderungen am 422-Contract folglich HIER und in
+            # ``_invalid_response`` nachziehen.
             if _wants_raw_json_response(request):
                 return _invalid_form_response(meta_form)
 
