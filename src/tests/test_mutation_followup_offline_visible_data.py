@@ -17,6 +17,7 @@ from core.models import (
     DocumentType,
     Event,
 )
+from core.services.compliance import SENSITIVITY_RANK
 from core.services.file_vault import encrypt_field
 from core.services.system import (
     _visible_data_fields,
@@ -327,6 +328,37 @@ class TestVisibleDataFieldsGateMatrix:
 
         assert _visible_data_fields(staff_user, event)[ft.slug] == "wert"
         assert ft.slug not in _visible_data_fields(assistant_user, event)
+
+    def test_field_override_never_lowers_doc_type(
+        self, facility, client_identified, staff_user, assistant_user, lead_user, admin_user
+    ):
+        """Refs #1998: Ein NIEDRIGERER Feld-Override senkt die DocType-Stufe
+        NICHT — ``effective_sensitivity`` ist ``max(Typ, Feld)``.
+
+        Die beiden Tests darueber decken nur die Eskalation (Feld > Typ) und
+        die Vererbung (Feld leer) ab. Beide belegen, DASS beide Argumente bei
+        ``user_can_see_field`` ankommen, nicht WIE sie verrechnet werden: die
+        Mutante ``user_can_see_field(user, field_sensitivity or
+        doc_type.sensitivity)`` ueberlebt sie und die gesamte Offline-Batterie.
+        Sie ist hier schwerer als im Schema-Serializer — gestrippt wird nicht
+        bloss die Feldbeschreibung, sondern der WERT: ein HIGH-Typ mit einem
+        ausdruecklich auf "normal" gesetzten Feld gaebe seinen Klartext an
+        STAFF und ASSISTENZ ins IndexedDB, wo er bis zum TTL-Ablauf liegt.
+        """
+        dt = _make_doc_type(facility, name="Gate Hoch", sensitivity=DocumentType.Sensitivity.HIGH)
+        ft = _make_field_template(facility, name="Scheinbar harmlos", sensitivity=DocumentType.Sensitivity.NORMAL)
+        _attach(dt, ft)
+        event = _make_event(facility, client_identified, dt, staff_user, data_json={ft.slug: "geheim"})
+        # Vorbedingung: der Override ist gesetzt UND echt niedriger als die
+        # Typ-Stufe — nur dann unterscheidet sich der Fall von der Vererbung.
+        assert ft.sensitivity == DocumentType.Sensitivity.NORMAL
+        assert SENSITIVITY_RANK[ft.sensitivity] < SENSITIVITY_RANK[dt.sensitivity]
+
+        assert ft.slug not in _visible_data_fields(assistant_user, event)
+        assert ft.slug not in _visible_data_fields(staff_user, event)
+        # Beide HIGH-faehigen Rollen sehen den Wert — haelt den Test nicht-vakuum.
+        assert _visible_data_fields(lead_user, event)[ft.slug] == "geheim"
+        assert _visible_data_fields(admin_user, event)[ft.slug] == "geheim"
 
     def test_encrypted_value_never_decrypted_for_stripped_field(
         self, facility, client_identified, staff_user, assistant_user, monkeypatch
