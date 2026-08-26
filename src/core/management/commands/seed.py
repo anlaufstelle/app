@@ -10,7 +10,7 @@ import random
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from core.models import Case, Client
+from core.models import Case, Client, User
 from core.seed.activities import seed_activities
 from core.seed.attachments import attach_files_to_client_and_case, attach_files_to_counseling_events
 from core.seed.cases import assign_events_to_cases, seed_cases, seed_episodes, seed_goals
@@ -43,16 +43,42 @@ class Command(BaseCommand):
             default=False,
             help="Delete existing seed data before generating",
         )
+        parser.add_argument(
+            "--only-if-empty",
+            action="store_true",
+            default=False,
+            help=(
+                "Nur seeden, wenn die Datenbank noch kein einziges Benutzerkonto hat. "
+                "Traegt die Idempotenz des lokalen One-Command-Bootstraps (Refs #1062)."
+            ),
+        )
 
     def handle(self, *args, **options):
         # Fail-closed: Demo-Logins/--flush sind nur in explizit
         # freigeschalteten Umgebungen zulaessig. Refs #1040 (S1).
+        # Bewusst VOR jeder anderen Auswertung: ``--only-if-empty`` darf den
+        # Guard nicht in ein stilles "nichts zu tun" verwandeln (Refs #1062).
         if not getattr(settings, "SEED_ALLOWED", False):
             raise CommandError(
                 "'seed' ist in dieser Umgebung gesperrt (SEED_ALLOWED=False). "
                 "Demo-Logins und --flush sind auf Produktionssystemen nicht "
                 "erlaubt — Ersteinrichtung über 'manage.py create_super_admin'."
             )
+
+        if options["only_if_empty"]:
+            if options["flush"]:
+                raise CommandError(
+                    "'--only-if-empty' und '--flush' schliessen sich aus: der eine "
+                    "Schalter schont den Bestand, der andere loescht ihn."
+                )
+            # "Leer" = noch kein einziges Benutzerkonto. Bewusst eine Tabellen-
+            # Probe statt eines Migrations-Markers: ein migriertes, aber
+            # ungefuelltes Schema ist genau der Zustand, den der lokale
+            # Bootstrap befuellen soll. ``core_user`` steht nicht unter RLS
+            # (Migration 0047) — die Probe sieht auch ohne Bypass alle Zeilen.
+            if User.objects.exists():
+                self.stdout.write("Datenbank ist bereits befüllt — Seed übersprungen (--only-if-empty).")
+                return
 
         scale = options["scale"]
         cfg = SCALE_CONFIG[scale]
