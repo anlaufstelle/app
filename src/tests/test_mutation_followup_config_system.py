@@ -24,6 +24,8 @@ from core.models import (
     FieldTemplate,
 )
 from core.services.config import (
+    _next_block_position,
+    _validate_id_set,
     add_field_to_doctype,
     conflicting_report_key_assignment,
     delete_field_group,
@@ -324,3 +326,39 @@ class TestTwoFieldGroupsBlockSequence:
         other_free.refresh_from_db()
         assert moved.field_group_id is None
         assert (moved.sort_order, grp_other.sort_order, grp_src.sort_order, other_free.sort_order) == (0, 1, 2, 3)
+
+
+# ---------------------------------------------------------------------------
+# Posten 8 — block_order._validate_id_set: gleiche Länge, andere Mitgliedsmenge
+# ---------------------------------------------------------------------------
+
+
+class TestValidateIdSetSameLengthDifferentMembership:
+    def test_same_length_but_different_membership_raises(self):
+        """Die bisherigen Aufrufer (``reorder_blocks``/``reorder_fields``-Tests)
+        deckten immer nur LÄNGEN-Abweichungen ab (fehlendes/fremdes Element ändert
+        auch die Länge). Der Fall „gleiche Länge, andere Menge"
+        (``ordered=[A,B]``, ``existing={A,C}``) prüft den ``set(requested) !=
+        existing``-Teil der Bedingung isoliert — ein Mutant, der ``or`` durch
+        ``and`` ersetzt, würde bei gleicher Länge NICHT mehr raisen."""
+        with pytest.raises(ValueError):
+            _validate_id_set(["A", "B"], {"A", "C"})
+
+
+# ---------------------------------------------------------------------------
+# Posten 9 — block_order._next_block_position: leerer DocumentType (Refs #1998)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestNextBlockPositionEmptyDocType:
+    def test_zero_for_first_element_when_doc_type_has_no_blocks(self, facility):
+        """Off-by-one-Basisfall: ein DocumentType OHNE jegliche Blöcke (weder
+        Gruppen noch ungruppierte Felder) muss ``0`` für das ERSTE Element
+        liefern. Bestehende Tests (``test_add_ungrouped_goes_to_end_of_global_
+        sequence``, ``test_new_group_appends_to_end_of_global_sequence``)
+        nutzen alle ``doc_type_contact`` MIT bereits vorhandenen Feldern —
+        der leere Basisfall (``candidates == []`` → ``return 0``) war
+        ungetestet."""
+        doc_type = DocumentType.objects.create(facility=facility, name="Leer")
+        assert _next_block_position(doc_type) == 0
