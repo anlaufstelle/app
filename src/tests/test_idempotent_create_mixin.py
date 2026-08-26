@@ -24,6 +24,38 @@ from core.services.events.idempotency import (
 from core.views._json_contracts import _idempotency_mismatch_response
 from core.views.mixins import IdempotentCreateMixin, is_idempotency_conflict
 
+CORE_DIR = Path(__file__).resolve().parents[1] / "core"
+
+CONSTRAINT_SUBSTRING = "idem_key_per_user_uniq"
+
+# Ein String-Literal, das den Constraint-Namen enthaelt. Beide
+# Anfuehrungszeichen-Varianten (der Vorgaenger-Guard sah nur ``"`` und haette
+# damit ausgerechnet die einfach gequoteten Migrations-Literale uebersehen)
+# und bewusst zeilengebunden (``\n`` in der negierten Klasse) — sonst laeuft
+# die Klasse ueber Zeilengrenzen zwischen zwei weit entfernten Quotes
+# zusammen und verschluckt Prosa-Erwaehnungen in Docstrings.
+_LITERAL_RE = re.compile(rf"""(['"])[^'"\n]*{CONSTRAINT_SUBSTRING}[^'"\n]*\1""")
+
+# Dasselbe Literal, direkt gegen ``str(...)`` geprueft — der Rueckfall, den
+# das Praedikat ``is_idempotency_conflict`` ueberfluessig macht.
+_PREDICATE_CHECK_RE = re.compile(_LITERAL_RE.pattern + r"\s+in\s+str\(")
+
+# Die EINE legitime Stelle: hier lebt der Name als Konstante, hier wird gegen
+# ``str(exc)`` geprueft.
+PREDICATE_HOME = "views/mixins.py"
+
+# Zaehlergenaue Ausnahmeliste: WO unter ``src/core/`` der Constraint-Name als
+# String-Literal stehen darf und WIE OFT. Eine neue Fundstelle (oder eine
+# zusaetzliche in einer bekannten Datei) muss hier bewusst eingetragen werden.
+ALLOWED_CONSTRAINT_LITERALS = {
+    # Praedikat-Heimat (s.o.).
+    PREDICATE_HOME: 1,
+    # Constraint-DEFINITIONEN: hier entsteht der Name, geprueft wird nichts.
+    "models/event.py": 1,
+    "models/workitem.py": 1,
+    "migrations/0098_event_idempotency_key_workitem_idempotency_key_and_more.py": 2,
+}
+
 
 class _RecordingView(IdempotentCreateMixin):
     """Minimaler Träger: Scope fix, Hit-Hook zeichnet auf."""
@@ -74,15 +106,46 @@ class TestIsIdempotencyConflict:
 
     def test_constraint_string_checked_only_in_predicate(self):
         """DoD: der Magic-String wird nur im Prädikat gegen ``str(exc)``
-        geprüft — keine View mehr hält ihn als Literal."""
-        views_dir = Path(__file__).resolve().parents[1] / "core" / "views"
+        geprüft — keine andere Stelle hält ihn als Literal-Prüfung.
+
+        Gehärtet (DoD-Audit Refs #1831): der Scan lief nur über
+        ``src/core/views/`` und nur auf doppelte Anführungszeichen. Ein
+        Rückfall in einem Service (``'…uniq' in str(exc)``) war damit doppelt
+        unsichtbar — falscher Ordner UND falsches Anführungszeichen. Jetzt
+        deckt er ``src/core/**`` mit beiden Quote-Varianten ab; ausgenommen
+        ist einzig die Prädikat-Heimat ``views/mixins.py``.
+        """
         offenders = []
-        for path in views_dir.rglob("*.py"):
+        for path in sorted(CORE_DIR.rglob("*.py")):
+            rel = path.relative_to(CORE_DIR).as_posix()
+            if rel == PREDICATE_HOME:
+                continue
             text = path.read_text(encoding="utf-8")
-            for match in re.finditer(r'"[^"]*idem_key_per_user_uniq[^"]*"\s+in\s+str\(', text):
+            for match in _PREDICATE_CHECK_RE.finditer(text):
                 line = text[: match.start()].count("\n") + 1
-                offenders.append(f"{path.name}:{line}")
+                offenders.append(f"{rel}:{line}")
         assert offenders == [], f"Direkte Constraint-String-Pruefung in: {offenders}"
+
+    def test_constraint_literal_sites_are_allowlisted_exactly(self):
+        """Zweite Linie: der Constraint-Name darf unter ``src/core/`` nur an
+        den begründeten Stellen als String-Literal stehen — zählergenau.
+
+        Der Prüf-Scan oben greift erst, wenn jemand das Literal auch schon
+        gegen ``str(...)`` hält. Diese Inventur schlägt eine Stufe früher an:
+        taucht der Name irgendwo neu auf, muss die Ausnahme hier bewusst
+        eingetragen (und damit begründet) werden. Erlaubt sind heute die
+        Prädikat-Konstante und die Constraint-DEFINITIONEN in Model und
+        Migration — Prosa-Erwähnungen in Docstrings/Kommentaren zählen nicht
+        mit, weil sie keine Anführungszeichen tragen.
+        """
+        found = {}
+        for path in sorted(CORE_DIR.rglob("*.py")):
+            count = len(_LITERAL_RE.findall(path.read_text(encoding="utf-8")))
+            if count:
+                found[path.relative_to(CORE_DIR).as_posix()] = count
+        assert found == ALLOWED_CONSTRAINT_LITERALS, (
+            f"Constraint-Literale weichen von der begruendeten Ausnahmeliste ab: {found}"
+        )
 
 
 class TestIdempotentCreateMixinReadIdempotency:
