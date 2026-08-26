@@ -52,7 +52,10 @@ soweit möglich, durch automatisierte Kontrollen statt durch ein zweites
 Augenpaar: verpflichtende CI-Gates (`make ci`), Test-First-Pflicht (TDD),
 Lint/Typecheck sowie die Sicherheits- und Drift-Guards des Repos. Mit einer
 zweiten aktiven Person wird auf **Vier-Augen-Review für sicherheitskritische
-Pfade** umgestellt.
+Pfade** umgestellt; die dafür nötigen Zeilen liegen in
+[.github/CODEOWNERS](.github/CODEOWNERS) bereits auskommentiert vor und werden
+mit der Benennung aktiviert
+([MAINTAINERS.md § Offene Entscheidungspunkte](MAINTAINERS.md#offene-entscheidungspunkte), E-3).
 
 ## Eskalationspfad
 
@@ -89,6 +92,34 @@ Es gibt hierfür bewusst **keinen Zeitplan und keine Zusage** — Aufnahme erfol
 anlassbezogen. Ein aufgenommener Maintainer wird in [MAINTAINERS.md](MAINTAINERS.md)
 und ggf. in [.github/CODEOWNERS](.github/CODEOWNERS) eingetragen; ausscheidende
 Maintainer werden dort ebenfalls nachgeführt.
+
+## Änderung dieser Governance
+
+Diese Datei beschreibt nicht nur die Regeln, sie unterliegt ihnen auch. Als
+**Governance-Artefakte** gelten diese Datei, [MAINTAINERS.md](MAINTAINERS.md),
+[.github/CODEOWNERS](.github/CODEOWNERS), [SECURITY.md](SECURITY.md),
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) und die Prozessteile von
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+| Art der Änderung | Weg |
+|------------------|-----|
+| **Wesentlich** — Entscheidungsmodell, Eskalationspfad, Review-Anforderungen, Aufnahme-/Abgangskriterien, Zuschnitt der Verantwortungsbereiche | **ADR** unter [`docs/adr/`](docs/adr/) mit Begründung und Alternativen, plus Pull Request, der die betroffenen Dateien nachzieht. Die ADR ist der Ort für das **Warum**, diese Datei bleibt die knappe geltende Fassung. |
+| **Nachführend** — eine benannte Vertretung eintragen, ausgeschiedene Maintainer entfernen, Verweise/Formulierungen korrigieren, einen erledigten offenen Punkt streichen | Regulärer Pull Request ohne ADR. Er bildet einen bereits getroffenen Beschluss ab und trifft ihn nicht. |
+
+Solange das Projekt im Solo-Betrieb ist, entscheidet der Lead-Maintainer nach dem
+Modell oben; die ADR-Pflicht für wesentliche Änderungen gilt **gerade dann**, weil
+sie den einzigen Nachweis liefert, dass eine Regel bewusst und nicht beiläufig
+geändert wurde. Mit mehreren Maintainern tritt an ihre Stelle die Zustimmung
+aller aktiven Maintainer zur ADR.
+
+Vorschläge von außen sind willkommen — als Issue oder Pull Request wie jeder
+andere Beitrag ([CONTRIBUTING.md](CONTRIBUTING.md)); über die Übernahme entscheidet
+der Lead-Maintainer.
+
+Diese Dateien sind Teil jedes veröffentlichten Release-Snapshots. Sie beschreiben
+den **tatsächlichen** Zustand des Projekts; offene Punkte werden ausgewiesen
+([MAINTAINERS.md § Offene Entscheidungspunkte](MAINTAINERS.md#offene-entscheidungspunkte))
+statt beschönigt.
 
 ## Verweise
 
