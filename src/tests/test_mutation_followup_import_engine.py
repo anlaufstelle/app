@@ -484,3 +484,34 @@ class TestCoerceNumberSpaceAsThousandsSeparator:
         sonst bricht ``float()`` an ``'1 234.56'``. Refs #1998.
         """
         assert import_engine._coerce_number("1 234,56", "Betrag") == 1234.56
+
+
+# ---------------------------------------------------------------------------
+# Posten 12 — store_import_upload: expliziter encoding-Override
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestStoreImportUploadExplicitEncodingOverride:
+    def test_explicit_cp1252_wins_even_though_the_bytes_also_decode_as_utf8(
+        self, facility, admin_user, media_root
+    ):
+        """``encoding='cp1252'`` ist ein EXPLIZITER Override, keine
+        Kandidatenliste. Die Rohbytes ``0xC3 0xA4`` sind ZUGLEICH gueltiges
+        UTF-8 (ergaebe faelschlich 'ä') — nur der erzwungene cp1252-Pfad muss
+        sie korrekt als 'Ã¤' lesen. Ein Auto-Detect-Fallback, der ``encoding``
+        ignoriert, wuerde 'utf-8-sig' zuerst probieren und stillschweigend das
+        falsche Encoding gewinnen lassen. Refs #1998.
+        """
+        raw = "Pseudonym;Notizen\n".encode("ascii") + b"CP-01;\xc3\xa4\n"
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            SimpleUploadedFile("import.csv", raw, content_type="text/csv"),
+            target_type=ImportJob.TargetType.CLIENT,
+            encoding="cp1252",
+        )
+
+        assert job.mapping_json["encoding"] == "cp1252"
+        _header, rows = import_engine.read_rows(job)
+        assert rows[0][1] == "Ã¤"
