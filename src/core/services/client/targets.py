@@ -49,6 +49,31 @@ def client_activity_targets_q(client: Client, event_ids: Collection[UUID]) -> Q:
     return targets
 
 
+def client_and_case_targets_q(client: Client, event_ids: Collection[UUID]) -> Q:
+    """Ziele einer Person, ihrer Ereignisse und ihrer **Faelle** (Refs #2071).
+
+    Erweiterung von :func:`client_and_event_targets_q` um den Fall-Zweig, den
+    ADR-044 (Refs #1818) eingefuehrt hat: seither koennen ``LegalHold`` und
+    ``DeletionRequest`` einen Fall als Ziel tragen (``target_type="Case"``,
+    ``target_id`` = ``Case.pk``).
+
+    Der Zweig gehoert hierher und nicht in die einzelnen Verbraucher, weil
+    Art.-15-Auskunft und Art.-17-Redaktion dieselbe Menge treffen muessen: hat
+    nur eine Seite den Fall-Zweig, ist entweder die Auskunft unvollstaendig
+    oder Klartext-Freitext ueberlebt die Anonymisierung. Genau so lief es bei
+    LegalHold (#1990) und bei DeletionRequest (#2071) auseinander.
+
+    Die Fall-IDs kommen aus ``client.cases`` — ohne Soft-Delete-Filter, wie
+    ``_redact_cases_and_episodes`` sie einsammelt: ein Fall im Papierkorb ist
+    weiterhin gespeicherte Information ueber die Person.
+    """
+    targets = client_and_event_targets_q(client, event_ids)
+    case_ids: list[UUID] = list(client.cases.values_list("pk", flat=True))
+    if case_ids:
+        targets |= Q(target_type="Case", target_id__in=case_ids)
+    return targets
+
+
 def client_legal_hold_targets_q(client: Client, event_ids: Collection[UUID]) -> Q:
     """Legal-Hold-Ziele einer Person (Refs #1990).
 
@@ -74,17 +99,14 @@ def client_legal_hold_targets_q(client: Client, event_ids: Collection[UUID]) -> 
     bleibt stehen. Genau diese Drift war #1990: Art. 17 hatte den
     Case-Zweig (Refs #1818), Art. 15 nicht.
 
-    Die ``Activity``-Ziele werden ueber :func:`client_activity_targets_q`
-    aufgeloest — dieselbe Menge, die auch der Zeitstrom der Auskunft
-    ausweist. ``for_facility`` ist Defense-in-Depth zusaetzlich zu RLS; die
-    IDs stammen ohnehin aus den Ereignissen, Aufgaben und Faellen dieser
-    Person.
+    Der Fall-Zweig kommt aus :func:`client_and_case_targets_q` (geteilt mit
+    den Loeschantraegen, Refs #2071); die ``Activity``-Ziele loest
+    :func:`client_activity_targets_q` auf — dieselbe Menge, die auch der
+    Zeitstrom der Auskunft ausweist. ``for_facility`` ist Defense-in-Depth
+    zusaetzlich zu RLS; die IDs stammen ohnehin aus den Ereignissen, Aufgaben
+    und Faellen dieser Person.
     """
-    targets = client_and_event_targets_q(client, event_ids)
-
-    case_ids: list[UUID] = list(client.cases.values_list("pk", flat=True))
-    if case_ids:
-        targets |= Q(target_type="Case", target_id__in=case_ids)
+    targets = client_and_case_targets_q(client, event_ids)
 
     activity_ids: list[UUID] = list(
         Activity.objects.for_facility(client.facility)
@@ -98,6 +120,7 @@ def client_legal_hold_targets_q(client: Client, event_ids: Collection[UUID]) -> 
 
 __all__ = [
     "client_activity_targets_q",
+    "client_and_case_targets_q",
     "client_and_event_targets_q",
     "client_legal_hold_targets_q",
 ]

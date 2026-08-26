@@ -436,6 +436,88 @@ class TestClientTargetQueries:
             holds["Aktivitaets-Ziel am unsichtbaren Ereignis"].pk,
         }
 
+    def test_deletion_request_targets_cover_every_target_type_of_the_person(
+        self,
+        facility,
+        admin_user,
+        lead_user,
+        sample_client,
+        sample_event,
+        sample_case,
+    ):
+        """Refs #2071: Auskunft und Redaktion muessen dieselben Antrags-Ziele fassen.
+
+        Dieselbe Drift wie #1990, hier aber **live**: ``request_case_deletion``
+        (``core/services/case/deletion.py``) legt seit ADR-044 Antraege mit
+        ``target_type="Case"`` an, die Art.-17-Kaskade redigiert sie
+        (``_redact_case_deletion_requests``) — die Art.-15-Auskunft zog nur
+        ``client_and_event_targets_q`` und liess sie weg. ``reason`` ist
+        bestimmungsgemaess Freitext („Fall doppelt angelegt, Betreuung laeuft
+        bei Frau Meier").
+
+        Die Ziel-Zuordnung wird gegen ``DeletionRequest.TargetType``
+        gegengeprueft: ein neuer Zieltyp reisst diesen Test, bis er in
+        Auskunft UND Redaktion nachgezogen ist — der Drift-Guard, der der
+        vorherigen Luecke gefehlt hat.
+        """
+        from core.services.client.export import _gather_deletion_requests
+
+        targets = {
+            DeletionRequest.TargetType.CLIENT: sample_client.pk,
+            DeletionRequest.TargetType.EVENT: sample_event.pk,
+            DeletionRequest.TargetType.CASE: sample_case.pk,
+        }
+        assert set(targets) == set(DeletionRequest.TargetType), (
+            "Neuer DeletionRequest-Zieltyp: hier ein Ziel der Person eintragen und "
+            "pruefen, dass ihn sowohl _gather_deletion_requests (Art. 15) als auch "
+            "die Redaktions-Kaskade in core/services/client/main.py (Art. 17) fassen."
+        )
+
+        requests = {
+            target_type: DeletionRequest.objects.create(
+                facility=facility,
+                target_type=target_type,
+                target_id=target_id,
+                reason=f"Antrag {target_type}",
+                requested_by=admin_user,
+                reviewed_by=lead_user,
+            )
+            for target_type, target_id in targets.items()
+        }
+
+        # Gegenprobe: fremde Ziele derselben Einrichtung bleiben draussen.
+        other_client = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Loeschantrag",
+            created_by=admin_user,
+        )
+        other_case = CaseModel.objects.create(
+            facility=facility,
+            client=other_client,
+            title="Fremdfall-Antrag",
+            created_by=admin_user,
+        )
+        for target_type, target_id in (
+            (DeletionRequest.TargetType.CLIENT, other_client.pk),
+            (DeletionRequest.TargetType.CASE, other_case.pk),
+            # Kreuzprobe: eigene Personen-ID unter dem Fall-Zieltyp.
+            (DeletionRequest.TargetType.CASE, sample_client.pk),
+        ):
+            DeletionRequest.objects.create(
+                facility=facility,
+                target_type=target_type,
+                target_id=target_id,
+                reason="Nicht Teil der Zielmenge",
+                requested_by=admin_user,
+            )
+
+        exported = {row["reason"] for row in _gather_deletion_requests(facility, sample_client, [sample_event.pk])}
+        assert exported == {f"Antrag {target_type}" for target_type in targets}
+
+        anonymize_client(sample_client, user=admin_user)
+        redacted_ids = set(DeletionRequest.objects.filter(reason="[Anonymisiert]").values_list("pk", flat=True))
+        assert redacted_ids == {dr.pk for dr in requests.values()}
+
 
 @pytest.mark.django_db
 class TestClientExportService:

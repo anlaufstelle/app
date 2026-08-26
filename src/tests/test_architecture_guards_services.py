@@ -470,7 +470,9 @@ class TestClientTargetQueryParity:
     # ersatzlos verlieren.
     _KNOWN_BUILDER_CONSUMERS = {
         Path("export.py"): {
-            "_gather_deletion_requests": "client_and_event_targets_q",
+            # Refs #2071: Loeschantraege ziehen ueber den Fall-Builder — die
+            # Art.-17-Kaskade redigiert ``TargetType.CASE`` seit ADR-044.
+            "_gather_deletion_requests": "client_and_case_targets_q",
             # Refs #1990: Legal Holds ziehen ueber den erweiterten Builder —
             # Client/Event PLUS Case- und Activity-Ziele.
             "_gather_legal_holds": "client_legal_hold_targets_q",

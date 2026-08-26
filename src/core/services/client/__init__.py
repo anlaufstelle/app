@@ -111,6 +111,7 @@ from core.services.client.rectification import (
 )
 from core.services.client.targets import (
     client_activity_targets_q,
+    client_and_case_targets_q,
     client_and_event_targets_q,
     client_legal_hold_targets_q,
 )
@@ -171,6 +172,7 @@ __all__ = [
     "approve_client_merge",
     "approve_rectification",
     "client_activity_targets_q",
+    "client_and_case_targets_q",
     "client_and_event_targets_q",
     "client_legal_hold_targets_q",
     "create_client",
