@@ -258,6 +258,92 @@ class TestClientTargetQueries:
         )
         assert set(matches) == own
 
+    def test_legal_hold_targets_cover_case_and_activity_and_exclude_foreign_rows(
+        self,
+        facility,
+        admin_user,
+        doc_type,
+        sample_client,
+        sample_event,
+        sample_case,
+    ):
+        """Refs #1990: Die Art.-15-Auskunft muss ALLE Hold-Zieltypen der Person tragen.
+
+        ``LegalHold.target_type`` ist ein freies ``CharField`` ohne
+        ``choices``. Real vorgesehen sind heute vier Zieltypen: ``Client`` und
+        ``Event`` (vorschlagsgebundener Weg, ``create_legal_hold``), ``Case``
+        (``create_hold_for_target``, ADR-044/Refs #1818) sowie ``Activity``
+        (verbraucht von ``get_active_hold_target_ids(facility, "Activity")``
+        in ``core/retention/enforcement.py``, Ziel-ID = ``Activity.pk``).
+        ``LegalHold.reason`` ist bestimmungsgemaess Freitext mit Fall-/
+        Klientenkontext — faellt ein Zieltyp aus der Sammlung, ist die
+        Auskunft unvollstaendig.
+
+        Die Gegenprobe pinnt zugleich, dass die Zielmenge NICHT ueber die ID
+        allein greift: fremde Ziele derselben Einrichtung und Kreuzproben aus
+        eigener ID unter fremdem Zieltyp bleiben draussen.
+        """
+        from core.services.client.export import _gather_legal_holds
+
+        other_client = Client.objects.create(
+            facility=facility,
+            pseudonym="Fremd-Hold-Ziel",
+            created_by=admin_user,
+        )
+        other_case = CaseModel.objects.create(
+            facility=facility,
+            client=other_client,
+            title="Fremdfall-Hold",
+            created_by=admin_user,
+        )
+
+        def activity_for(target):
+            return Activity.objects.create(
+                facility=facility,
+                actor=admin_user,
+                verb=Activity.Verb.UPDATED,
+                target=target,
+                context={"schema": 1, "action": Activity.Action.REDACTED.value},
+            )
+
+        own_activity = activity_for(sample_client)
+        own_case_activity = activity_for(sample_case)
+        foreign_activity = activity_for(other_client)
+
+        def hold(reason, target_type, target_id):
+            return LegalHold.objects.create(
+                facility=facility,
+                target_type=target_type,
+                target_id=target_id,
+                reason=reason,
+                created_by=admin_user,
+            )
+
+        for reason, target_type, target_id in (
+            ("Eigene Person", "Client", sample_client.pk),
+            ("Eigenes Ereignis", "Event", sample_event.pk),
+            ("Eigener Fall", "Case", sample_case.pk),
+            ("Eigene Aktivitaet", "Activity", own_activity.pk),
+            ("Aktivitaet am eigenen Fall", "Activity", own_case_activity.pk),
+            # Gegenprobe: fremde Ziele derselben Einrichtung.
+            ("Fremde Person", "Client", other_client.pk),
+            ("Fremder Fall", "Case", other_case.pk),
+            ("Fremde Aktivitaet", "Activity", foreign_activity.pk),
+            # Kreuzprobe: eigene ID unter dem falschen Zieltyp.
+            ("Eigene Fall-ID als Aktivitaet", "Activity", sample_case.pk),
+            ("Eigene Personen-ID als Fall", "Case", sample_client.pk),
+        ):
+            hold(reason, target_type, target_id)
+
+        exported = {row["reason"] for row in _gather_legal_holds(facility, sample_client, [sample_event.pk])}
+        assert exported == {
+            "Eigene Person",
+            "Eigenes Ereignis",
+            "Eigener Fall",
+            "Eigene Aktivitaet",
+            "Aktivitaet am eigenen Fall",
+        }
+
     def test_article_15_and_17_legal_hold_sets_pin_deliberate_differences(
         self,
         facility,
@@ -267,13 +353,20 @@ class TestClientTargetQueries:
         sample_event,
         sample_case,
     ):
-        """Art. 15 sieht nur sichtbare Events; Art. 17 redigiert auch Case/Hidden.
+        """Art. 15 sieht nur sichtbare Events; sonst ist die Menge deckungsgleich.
 
         Refs #1751/#1833: Derselbe Client-/Event-Builder allein beweist keine
         Mengengleichheit. Der Auskunftspfad uebergibt nur die durch
-        ``visible_to(assistant_user)`` gelangten Event-IDs. Der
-        Redaktionspfad arbeitet dagegen auf allen Ereignissen der Person und
-        erweitert die Menge bewusst um Fall-Holds (Refs #1818).
+        ``visible_to(assistant_user)`` gelangten Event-IDs, der Redaktionspfad
+        arbeitet auf allen Ereignissen der Person.
+
+        Refs #1990: Fall- und Aktivitaets-Holds gehoeren seither auf BEIDE
+        Seiten — sie kamen mit ADR-044 bzw. dem Activity-Enforcement dazu und
+        fielen bis dahin still aus der Auskunft. Uebrig bleibt als bewusste
+        Differenz ausschliesslich die Rollen-Sichtbarkeit der Ereignisse: ein
+        Hold auf einem fuer die Rolle unsichtbaren Ereignis — und ebenso ein
+        Hold auf einer Aktivitaet ZU diesem Ereignis — erscheint nicht in der
+        Auskunft dieser Rolle, wird aber redigiert.
         """
         hidden_document_type = DocumentType.objects.create(
             facility=facility,
@@ -290,6 +383,18 @@ class TestClientTargetQueries:
             created_by=admin_user,
         )
 
+        def activity_for(target):
+            return Activity.objects.create(
+                facility=facility,
+                actor=admin_user,
+                verb=Activity.Verb.UPDATED,
+                target=target,
+                context={"schema": 1, "action": Activity.Action.REDACTED.value},
+            )
+
+        client_activity = activity_for(sample_client)
+        hidden_event_activity = activity_for(hidden_event)
+
         holds = {
             reason: LegalHold.objects.create(
                 facility=facility,
@@ -305,13 +410,20 @@ class TestClientTargetQueries:
                 ("Sichtbares Event-Ziel", "Event", sample_event.pk),
                 ("Unsichtbares Event-Ziel", "Event", hidden_event.pk),
                 ("Fall-Ziel", "Case", sample_case.pk),
+                ("Aktivitaets-Ziel", "Activity", client_activity.pk),
+                ("Aktivitaets-Ziel am unsichtbaren Ereignis", "Activity", hidden_event_activity.pk),
             )
         }
 
         exported_reasons = {
             row["reason"] for row in export_client_data(sample_client, facility, assistant_user)["legal_holds"]
         }
-        assert exported_reasons == {"Client-Ziel", "Sichtbares Event-Ziel"}
+        assert exported_reasons == {
+            "Client-Ziel",
+            "Sichtbares Event-Ziel",
+            "Fall-Ziel",
+            "Aktivitaets-Ziel",
+        }
 
         anonymize_client(sample_client, user=admin_user)
         redacted_ids = set(LegalHold.objects.filter(reason="[Anonymisiert]").values_list("pk", flat=True))
@@ -321,7 +433,7 @@ class TestClientTargetQueries:
         assert exported_ids <= redacted_ids
         assert redacted_ids - exported_ids == {
             holds["Unsichtbares Event-Ziel"].pk,
-            holds["Fall-Ziel"].pk,
+            holds["Aktivitaets-Ziel am unsichtbaren Ereignis"].pk,
         }
 
 
