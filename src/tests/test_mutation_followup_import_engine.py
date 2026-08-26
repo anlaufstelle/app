@@ -446,3 +446,28 @@ class TestRunImportCommitDefault:
         assert not Client.objects.filter(pseudonym="DEFAULT-01").exists()
         job.refresh_from_db()
         assert job.status == ImportJob.Status.VALIDATED
+
+
+# ---------------------------------------------------------------------------
+# Posten 10 — _coerce_date / _coerce_datetime Negativpfad
+# ---------------------------------------------------------------------------
+
+
+class TestCoerceDateAndDatetimeNegativePath:
+    def test_invalid_date_carries_the_correct_code_and_column(self):
+        """``code == 'invalid_date'`` UND die korrekte ``column`` muessen
+        stimmen. Refs #1998.
+        """
+        with pytest.raises(import_engine._CellError) as exc_info:
+            import_engine._coerce_date("nicht-datum", "Aufnahme")
+        assert exc_info.value.code == "invalid_date"
+        assert exc_info.value.column == "Aufnahme"
+
+    def test_invalid_datetime_carries_the_correct_code_and_column(self):
+        """``code == 'invalid_datetime'`` UND die korrekte ``column`` muessen
+        stimmen. Refs #1998.
+        """
+        with pytest.raises(import_engine._CellError) as exc_info:
+            import_engine._coerce_datetime("nicht-zeitpunkt", "Zeitpunkt")
+        assert exc_info.value.code == "invalid_datetime"
+        assert exc_info.value.column == "Zeitpunkt"
