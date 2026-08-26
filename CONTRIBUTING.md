@@ -46,19 +46,23 @@ noch nicht.
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up
+docker compose up      # ohne Docker-Gruppenrechte: sudo docker compose up
 ```
 
 Das lokale Compose bringt Datenbank und Anwendung mit, wendet die Migrationen an und lädt beim
 **ersten** Start die Seed-Daten (nur in eine leere Datenbank — ein zweiter Start seedet nicht
-erneut). Nach rund einer Minute ist die Anmeldung unter
-**[http://localhost:8000/login/](http://localhost:8000/login/)** erreichbar.
+erneut). Der einmalige Image-Bau dauert etwa eine Minute; danach ist die Anmeldung binnen rund
+20 Sekunden unter **[http://localhost:8000/login/](http://localhost:8000/login/)** erreichbar.
 
-> Auf Systemen, auf denen der Docker-Daemon root gehört, `sudo docker compose up` verwenden.
-> Verlangt dein Setup einen `ENCRYPTION_KEY`, erzeuge ihn einmalig und exportiere ihn vor dem
-> Start:
-> `export ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"`
-> — bewahre den Wert auf, ein anderer Schlüssel kann bereits verschlüsselte Daten nicht lesen.
+> **Keine Vorbereitung nötig.** Du legst weder eine `.env` an noch exportierst du einen
+> `ENCRYPTION_KEY` — das lokale Setup erzeugt sich seinen Schlüssel beim ersten Start selbst und
+> legt ihn in einem eigenen Volume ab, damit verschlüsselte Entwicklungsdaten über Neustarts
+> hinweg lesbar bleiben. Hintergrund und Abgrenzung zum Produktionspfad:
+> [ADR-049](docs/adr/049-one-command-local-bootstrap.md).
+>
+> **Nur lokal erreichbar:** Der Webdienst bindet bewusst auf `127.0.0.1`, es gibt also keinen
+> Zugriff aus dem LAN. Das ist Absicht — die Seed-Konten haben ein öffentlich dokumentiertes
+> Passwort.
 
 **Anmelden.** Alle Seed-Konten teilen sich das Passwort `anlaufstelle2026`:
 
