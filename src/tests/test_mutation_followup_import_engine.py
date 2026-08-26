@@ -348,9 +348,7 @@ class TestActingUserIsActuallyPersistedNotJustExistence:
     ist, und prueft das konkrete Feld. Refs #1998.
     """
 
-    def test_run_import_client_row_attributes_to_the_passed_in_user(
-        self, facility, admin_user, staff_user, media_root
-    ):
+    def test_run_import_client_row_attributes_to_the_passed_in_user(self, facility, admin_user, staff_user, media_root):
         job = import_engine.store_import_upload(
             facility,
             admin_user,
@@ -493,9 +491,7 @@ class TestCoerceNumberSpaceAsThousandsSeparator:
 
 @pytest.mark.django_db
 class TestStoreImportUploadExplicitEncodingOverride:
-    def test_explicit_cp1252_wins_even_though_the_bytes_also_decode_as_utf8(
-        self, facility, admin_user, media_root
-    ):
+    def test_explicit_cp1252_wins_even_though_the_bytes_also_decode_as_utf8(self, facility, admin_user, media_root):
         """``encoding='cp1252'`` ist ein EXPLIZITER Override, keine
         Kandidatenliste. Die Rohbytes ``0xC3 0xA4`` sind ZUGLEICH gueltiges
         UTF-8 (ergaebe faelschlich 'ä') — nur der erzwungene cp1252-Pfad muss
