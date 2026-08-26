@@ -1227,7 +1227,7 @@
 
 **Schritte:**
 1. `curl -s https://dev.anlaufstelle.app/health/` → JSON mit Status `ok`.
-2. ClamAV-Container stoppen: `docker compose stop clamav`.
+2. ClamAV-Container stoppen: `docker compose stop clamav`. (Lokal läuft der Dienst seit #1062 nur mit Profil — erst `docker compose --profile clamav up -d clamav`, dann stoppen. Auf dev/prod ist er unverändert profillos.)
 3. Health-Endpoint erneut → erwartet `degraded` (App läuft, aber ClamAV down).
 4. DB-Container stoppen: `docker compose stop db`.
 5. Health-Endpoint erneut → erwartet `critical` (App nicht funktionsfähig).
