@@ -207,3 +207,55 @@ class TestApplyMappingAndRowValuesSkipUnmappedColumns:
 
         assert values == {"pseudonym": "MAP-02", "notes": "Zweite Notiz"}
         assert columns == {"pseudonym": "Pseudonym", "notes": "Notizen"}
+
+
+# ---------------------------------------------------------------------------
+# Posten 5 — _lock_job / commit_import / abort_import: pk-Filter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestLockJobScopesToTheGivenPrimaryKey:
+    @staticmethod
+    def _client_job(facility, admin_user, pseudonym):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload(f"Pseudonym\n{pseudonym}\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+        return job
+
+    def test_abort_targets_only_the_second_job_not_the_first(self, facility, admin_user, media_root):
+        """Zwei ImportJob-Zeilen in DERSELBEN Facility — ``abort_import`` auf
+        der ZWEITEN darf die ERSTE nicht anfassen (fehlender pk-Filter in
+        ``_lock_job``, mutmut_4). Bislang legte kein Test zwei Laeufe pro
+        Facility an. Refs #1998.
+        """
+        job_first = self._client_job(facility, admin_user, "LOCK-01")
+        job_second = self._client_job(facility, admin_user, "LOCK-02")
+
+        import_engine.abort_import(job_second, admin_user)
+
+        job_first.refresh_from_db()
+        job_second.refresh_from_db()
+        assert job_second.status == ImportJob.Status.ABORTED
+        assert job_first.status == ImportJob.Status.MAPPED
+
+    def test_commit_targets_only_the_second_job_not_the_first(self, facility, admin_user, media_root):
+        """Gleiches Muster fuer ``commit_import``: die ZWEITE Zeile wird
+        geprueft, gesperrt und uebernommen — die ERSTE bleibt unveraendert.
+        Refs #1998.
+        """
+        job_first = self._client_job(facility, admin_user, "LOCK-03")
+        job_second = self._client_job(facility, admin_user, "LOCK-04")
+        import_engine.run_import(job_second, admin_user, commit=False)
+
+        import_engine.commit_import(job_second, admin_user)
+
+        job_first.refresh_from_db()
+        job_second.refresh_from_db()
+        assert job_second.status == ImportJob.Status.COMMITTED
+        assert job_first.status == ImportJob.Status.MAPPED
+        assert Client.objects.filter(pseudonym="LOCK-04").exists()
