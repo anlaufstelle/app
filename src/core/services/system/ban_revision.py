@@ -108,6 +108,8 @@ def bump_ban_revision_for_event_change(facility, document_type, data_before, dat
     if before[:2] != after[:2]:
         ranks.append(0)
     if before[2] != after[2]:
+        # Default 0 statt fail-closed ``sensitivity_rank`` — Begruendung bei
+        # BAN_REVISION_STRATA oben (Index, kein Lese-Gate; Refs #1991).
         ranks.append(SENSITIVITY_RANK.get(document_type.sensitivity, 0))
     bump_ban_revision(facility, ranks)
 
@@ -126,6 +128,8 @@ def bump_ban_revision_for_document_type_change(document_type, changed_fields, *,
     if "is_active" in changed_fields:
         ranks.append(0)
     if "sensitivity" in changed_fields:
+        # Default 0 statt fail-closed ``sensitivity_rank`` — Begruendung bei
+        # BAN_REVISION_STRATA oben (Index, kein Lese-Gate; Refs #1991).
         old_rank = SENSITIVITY_RANK.get(previous_sensitivity, 0)
         new_rank = SENSITIVITY_RANK.get(document_type.sensitivity, 0)
         if old_rank != new_rank:
