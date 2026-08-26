@@ -192,10 +192,10 @@ Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up
+docker compose up      # without Docker group permissions: sudo docker compose up
 ```
 
-The local compose file brings up the database and the application, applies the migrations, and loads the demo facility on the first start. After about a minute the login page is available at [http://localhost:8000/login/](http://localhost:8000/login/); all seed accounts share the password `anlaufstelle2026` (`admin` = application support, `emma` = lead, `miriam` = staff, `superadmin` = system administration). Server output: `docker compose logs -f web`.
+The local compose file brings up the database and the application, applies the migrations, and loads the demo facility on the first start. Neither a `.env` file nor an `ENCRYPTION_KEY` needs preparing — the local setup generates the key itself ([ADR-049](docs/adr/049-one-command-local-bootstrap.md), German). After the one-off image build the login page is available within roughly 20 seconds at [http://localhost:8000/login/](http://localhost:8000/login/); all seed accounts share the password `anlaufstelle2026` (`admin` = application support, `emma` = lead, `miriam` = staff, `superadmin` = system administration). The web service deliberately binds to `127.0.0.1` only — no LAN access. Server output: `docker compose logs -f web`.
 
 For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local Python test runs, and the rest of the toolchain see [CONTRIBUTING.en.md § 5-Minute Quick Start](CONTRIBUTING.en.md#5-minute-quick-start-docker) and [§ Development Environment Setup](CONTRIBUTING.en.md#development-environment-setup). How the system is put together: [docs/architecture.md](docs/architecture.md) (German). The production stack (`docker-compose.prod.yml`) **never** seeds and follows the separate migration path in [docs/en/admin-guide.md § 1](docs/en/admin-guide.md).
 
@@ -217,4 +217,4 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-26 -->
-<!-- source-hash: 9866117f58e59abaa62a8bc7ff027c3b811c2bd0 -->
+<!-- source-hash: 72813e4bf673e43e5a219aa49856d489723bc345 -->

@@ -192,10 +192,10 @@ Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufste
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up
+docker compose up      # ohne Docker-Gruppenrechte: sudo docker compose up
 ```
 
-Das lokale Compose bringt Datenbank und Anwendung mit, wendet die Migrationen an und lädt beim ersten Start die Demo-Einrichtung. Nach rund einer Minute ist die Anmeldung unter [http://localhost:8000/login/](http://localhost:8000/login/) erreichbar; alle Seed-Konten teilen sich das Passwort `anlaufstelle2026` (`admin` = Anwendungsbetreuung, `emma` = Leitung, `miriam` = Fachkraft, `superadmin` = Systemadministration). Serverausgabe: `docker compose logs -f web`.
+Das lokale Compose bringt Datenbank und Anwendung mit, wendet die Migrationen an und lädt beim ersten Start die Demo-Einrichtung. Weder eine `.env` noch ein `ENCRYPTION_KEY` sind vorzubereiten — den Schlüssel erzeugt das lokale Setup selbst ([ADR-049](docs/adr/049-one-command-local-bootstrap.md)). Nach dem einmaligen Image-Bau ist die Anmeldung binnen rund 20 Sekunden unter [http://localhost:8000/login/](http://localhost:8000/login/) erreichbar; alle Seed-Konten teilen sich das Passwort `anlaufstelle2026` (`admin` = Anwendungsbetreuung, `emma` = Leitung, `miriam` = Fachkraft, `superadmin` = Systemadministration). Der Webdienst bindet dabei bewusst nur auf `127.0.0.1` — kein LAN-Zugriff. Serverausgabe: `docker compose logs -f web`.
 
 Für Tailwind im Watch-Modus (`docker compose --profile tailwind up tailwind`), den lokalen Python-Testlauf und den Rest der Werkzeugkette: [CONTRIBUTING.md § 5-Minuten-Quick-Start](CONTRIBUTING.md#5-minuten-quick-start-docker) und [§ Entwicklungsumgebung einrichten](CONTRIBUTING.md#entwicklungsumgebung-einrichten). Wie das System aufgebaut ist: [docs/architecture.md](docs/architecture.md). Der produktive Stack (`docker-compose.prod.yml`) seedet **nie** und folgt dem getrennten Migrationspfad aus [docs/admin-guide.md § 1](docs/admin-guide.md).
 
