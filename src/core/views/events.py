@@ -332,24 +332,22 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
         if not meta_form.is_valid():
-            # Einziger Invalid-Zweig, der den Raw-JSON-Contract selbst
-            # kurzschließt, statt ihn über ``_invalid_response`` zu führen (die
-            # drei anderen Zweige tun das). Bewusst so, keine Copy-Paste-Drift
-            # (DoD-Audit Refs #1831): ``_invalid_response`` nimmt den
-            # HTML-Kontext als fertig gebautes Argument, dieser Kurzschluss
-            # liegt aber VOR dessen Rekonstruktion (data_form/client_pseudonym,
-            # nur fürs HTML-Re-Render gebraucht). Die Reihenfolge spart nicht
-            # bloß Arbeit, sie ist verhaltensrelevant: die Rekonstruktion unten
-            # löst ``document_type`` erneut gegen die DB auf und fängt dabei nur
+            # Läuft wie die drei anderen Invalid-Zweige über
+            # ``_invalid_response`` (DoD-Audit Refs #1831, Fold Refs #1996).
+            # Bis #1996 schloss der Raw-JSON-Contract hier bewusst VOR der
+            # HTML-only-Rekonstruktion kurz: die Rekonstruktion löst
+            # ``document_type`` erneut gegen die DB auf und fing dabei nur
             # ``DoesNotExist``/``ValueError`` — bei einem syntaktisch kaputten
-            # UUID-Wert wirft Django eine ``ValidationError``, also 500
-            # (Nebenbefund des Audits, eigenes Ticket). Der Replay-Client behält
-            # hier deshalb seine 422; festgenagelt von
-            # ``test_event_create_invalid_document_type_uuid_stays_422_json``.
-            # Änderungen am 422-Contract folglich HIER und in
+            # UUID-Wert wirft Django aber eine ``ValidationError``, also 500
+            # statt der erwarteten 422 für den Replay-Client. Seit #1996 fängt
+            # die Rekonstruktion (unten) auch ``ValidationError`` mit, die
+            # Reihenfolge ist also nicht mehr verhaltensrelevant und der
+            # separate Kurzschluss entfällt. Festgenagelt von
+            # ``test_event_create_invalid_document_type_uuid_stays_422_json``
+            # (JSON) und
+            # ``test_event_create_invalid_document_type_uuid_html_stays_422_not_500``
+            # (HTML). Änderungen am 422-Contract folglich HIER und in
             # ``_invalid_response`` nachziehen.
-            if _wants_raw_json_response(request):
-                return _invalid_form_response(meta_form)
 
             # Preserve client selection on validation error
             client_id = request.POST.get("client", "")
@@ -374,7 +372,10 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                         is_active=True,
                         entity_type=DocumentType.EntityType.EVENT,
                     )
-                except (DocumentType.DoesNotExist, ValueError):
+                except (DocumentType.DoesNotExist, ValueError, ValidationError):
+                    # Django wirft bei syntaktisch kaputten UUID-Strings
+                    # ValidationError (nicht ValueError) — Refs #1996, analog
+                    # zu ``get_client_or_none``.
                     doc_type = None
                 if doc_type is not None and user_can_see_document_type(request.user, doc_type):
                     data_form = DynamicEventDataForm(
@@ -382,9 +383,9 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                     )
                     remove_restricted_fields(request.user, doc_type, data_form)
 
-            return render(
+            return self._invalid_response(
                 request,
-                "core/events/create.html",
+                meta_form,
                 {
                     "meta_form": meta_form,
                     "data_form": data_form,
