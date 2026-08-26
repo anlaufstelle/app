@@ -22,6 +22,14 @@ Person aus, steht das Projekt ohne handlungsfähige Zweitperson da.
 
 ## Vertretung: TBD — vor 2026-09-11 vom Maintainer zu benennen
 
+> ⚠️ **ENTSCHEID OFFEN: Vertretung bis 2026-09-11 benennen.** Dieser Punkt ist
+> nicht durch Dokumentation zu schließen. Er zerfällt in zwei **getrennt zu
+> entscheidende** Teile: (1) eine benannte, **meldefähige** Person und (2) die
+> **Trennung von Release-Signing-Key und Betriebs-Geheimnissen**, damit diese
+> Person im Ernstfall handeln kann. Beides ist unten ausgeführt; die gesammelte
+> Übersicht aller offenen Punkte steht in
+> [§ Offene Entscheidungspunkte](#offene-entscheidungspunkte).
+
 **Aktuell ist keine Vertretung benannt.** Es wird hier bewusst **keine** Person
 erfunden oder in Aussicht gestellt.
 
@@ -82,6 +90,18 @@ Die maschinenlesbare Zuordnung von Pfaden zu Reviewern steht in
 [.github/CODEOWNERS](.github/CODEOWNERS). Bei nur einer aktiven Person ist der
 Owner überall dieselbe Person; **Self-Review ist damit die dokumentierte Realität**
 und keine Politik-Wahl (siehe [GOVERNANCE.md § Review & Self-Review](GOVERNANCE.md#review--self-review)).
+
+## Offene Entscheidungspunkte
+
+Punkte, die **nur der Maintainer** entscheiden kann — hier gesammelt, damit sie
+nicht in der Prosa untergehen. Sie werden gestrichen, sobald sie entschieden sind.
+
+| # | Offener Punkt | Frist / Anlass | Stand und Folgearbeit im Repository |
+|---|---------------|----------------|--------------------------------------|
+| **E-1** | **Vertretung benennen** (meldefähige Zweitperson) | Wiedervorlage 11.09.2026 — selbst gesetzte Vorsichtsmarke, keine feststehende Rechtspflicht (siehe § Vertretung) | Tabelle „Eintrag bei Benennung" ausfüllen, Abschnittsüberschrift anpassen, [SECURITY.md](SECURITY.md) auf die benannte Person umstellen |
+| **E-2** | **Modell der Signing-Key-/Secret-Escrow-Trennung** wählen: hinterlegter Escrow-Zugang, getrennter Signing-Pfad oder Vier-Augen-Prinzip | zusammen mit E-1; unabhängig davon vor dem ersten Ernstfall | eigener, von E-1 unabhängiger Umsetzungsschritt; Checkliste `docs/dev/deputy-escrow-runbook.md` (dev-only) |
+| **E-3** | **Vier-Augen-Review für sicherheitskritische Pfade** aktivieren | sobald eine zweite Person Maintainer ist | vorbereitete, auskommentierte Zeilen in [.github/CODEOWNERS](.github/CODEOWNERS) einkommentieren; [GOVERNANCE.md § Review & Self-Review](GOVERNANCE.md#review--self-review) nachziehen |
+| **E-4** | **Eigene `AUTHORS`-/Copyright-Datei** — ja oder nein | ohne Frist | Heute bewusst **nicht** angelegt: Urheberschaft wird über Git-Historie, `Co-authored-by`-Trailer und die namentliche Nennung im Release-CHANGELOG geführt ([CONTRIBUTING.md § Namensnennung](CONTRIBUTING.md#namensnennung)). Eine eigene Datei setzt eine Copyright-/SPDX-Konvention voraus, die das Projekt bisher nicht hat — sie wäre sonst nur eine zweite, driftende Kopie der Historie. |
 
 ## Kontakt
 
