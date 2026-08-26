@@ -138,6 +138,61 @@ class TestValidateDefault:
             )
 
 
+@pytest.mark.django_db
+class TestValidDefaultDoesNotRaiseFullClean:
+    """Refs #1998: „gültiger Default-Wert löst ``full_clean()`` NICHT aus" für
+    BOOLEAN/DATE/TIME/MULTI_SELECT — analog ``test_valid_number_default``
+    (``test_fieldtemplate_default_value.py``) bzw. dem TEXT-„no raise"-Kommentar
+    oben in ``TestValidateDefault``. Bislang war für diese vier Typen nur die
+    INVALID-Seite getestet (``test_invalid_*_raises`` dort bzw.
+    ``test_multi_select_raises_when_any_value_unknown`` hier) — ein Mutant, der
+    einen Validator dazu bringt, IMMER zu raisen (statt nur bei ungültigem
+    Wert), überlebt eine reine Invalid-Suite unbemerkt, weil dort ohnehin ein
+    Raise erwartet wird. Deckt u. a. eine Logik-Inversion in
+    ``_validate_multi_select`` ab (``not in`` → ``in`` würde gültige,
+    aktive Slugs fälschlich ablehnen).
+    """
+
+    def test_valid_boolean_default(self, facility):
+        from core.models import FieldTemplate
+
+        ft = FieldTemplate.objects.create(
+            facility=facility, name="Aktiv-Valid", field_type=field_types.BOOLEAN, default_value="true"
+        )
+        ft.full_clean()  # no raise
+
+    def test_valid_date_default(self, facility):
+        from core.models import FieldTemplate
+
+        ft = FieldTemplate.objects.create(
+            facility=facility, name="Datum-Valid", field_type=field_types.DATE, default_value="2026-05-16"
+        )
+        ft.full_clean()  # no raise
+
+    def test_valid_time_default(self, facility):
+        from core.models import FieldTemplate
+
+        ft = FieldTemplate.objects.create(
+            facility=facility, name="Uhrzeit-Valid", field_type=field_types.TIME, default_value="13:45"
+        )
+        ft.full_clean()  # no raise
+
+    def test_valid_multi_select_default(self, facility):
+        from core.models import FieldTemplate
+
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Themen-Valid",
+            field_type=field_types.MULTI_SELECT,
+            options_json=[
+                {"slug": "a", "label": "A", "is_active": True},
+                {"slug": "b", "label": "B", "is_active": True},
+            ],
+            default_value="a,b",
+        )
+        ft.full_clean()  # no raise
+
+
 class TestAllowsDefault:
     def test_file_does_not_allow_default(self):
         assert get_spec(field_types.FILE).allows_default is False
