@@ -235,6 +235,23 @@ class TestAllowsDefault:
         assert get_spec(code).allows_default is True
 
 
+class TestParseLiteral:
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("1", True),
+            ("0", False),
+            ("nein", False),
+            ("ja", True),
+        ],
+    )
+    def test_boolean_alias_literals(self, raw, expected):
+        """Refs #1998: ``_parse_literal_boolean`` akzeptiert im Bedingungs-
+        Editor-Vergleichswert neben ``true``/``false`` auch die Alias-Literale
+        ``1``/``0``/``ja``/``nein`` — bislang ungetestet."""
+        assert get_spec(field_types.BOOLEAN).parse_literal(None, raw) is expected
+
+
 class TestFieldTypeSpecImmutability:
     def test_spec_is_frozen(self):
         spec = get_spec(field_types.TEXT)
