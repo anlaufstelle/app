@@ -69,3 +69,59 @@ class TestCoerceBooleanNegativePath:
             import_engine._coerce_boolean("vielleicht", "Einwilligung")
         assert exc_info.value.code == "invalid_boolean"
         assert exc_info.value.column == "Einwilligung"
+
+
+# ---------------------------------------------------------------------------
+# Posten 2 — _coerce_option: continue-vs-break + is_active-Default + Slug
+# ---------------------------------------------------------------------------
+
+
+class TestCoerceOption:
+    @staticmethod
+    def _template(options):
+        return SimpleNamespace(options_json=options)
+
+    def test_match_survives_a_preceding_inactive_option(self):
+        """options_json = [inaktiv 'a', aktiv 'b'] und Zellwert 'b' — muss
+        trotz vorangehender inaktiver Option matchen (continue-vs-break,
+        mutmut_11). Ein ``break`` an der ``is_active``-Pruefung wuerde den
+        Scan bei 'a' abbrechen und 'b' nie erreichen. Refs #1998.
+        """
+        template = self._template(
+            [
+                {"slug": "a", "is_active": False},
+                {"slug": "b", "label": "B", "is_active": True},
+            ]
+        )
+        assert import_engine._coerce_option(template, "b", "Zugang") == "b"
+
+    def test_inactive_option_is_rejected_even_by_its_exact_slug(self):
+        """Eine WIRKLICH inaktive Option darf nicht matchen, auch nicht per
+        exaktem Slug (is_active-Schluessel, mutmut_8/_9 — ``not`` an der
+        Aktiv-Pruefung entfernt wuerde Aktiv/Inaktiv vertauschen). Refs #1998.
+        """
+        template = self._template([{"slug": "d", "label": "D-Label", "is_active": False}])
+        with pytest.raises(import_engine._CellError) as exc_info:
+            import_engine._coerce_option(template, "d", "Zugang")
+        assert exc_info.value.code == "invalid_option"
+
+    def test_default_is_active_true_when_key_is_absent(self):
+        """Optionen ohne ``is_active``-Schluessel gelten als aktiv (Default
+        ``True``, mutmut_4). Reihenfolge gemischt: die schluessellose Option
+        steht NACH einer explizit aktiven, damit ein falscher Default nicht
+        zufaellig durch die erste Option verdeckt wird. Refs #1998.
+        """
+        template = self._template(
+            [
+                {"slug": "vorab", "is_active": True},
+                {"slug": "e"},
+            ]
+        )
+        assert import_engine._coerce_option(template, "e", "Zugang") == "e"
+
+    def test_exact_slug_matches_even_when_it_differs_from_the_label(self):
+        """Zellwert = exakter SLUG (nicht Label) muss matchen, auch wenn der
+        Slug ``casefold``-verschieden vom Label ist. Refs #1998.
+        """
+        template = self._template([{"slug": "c-slug", "label": "Ganz anderer Anzeigename", "is_active": True}])
+        assert import_engine._coerce_option(template, "c-slug", "Zugang") == "c-slug"
