@@ -1017,6 +1017,32 @@ class TestEventCreateInvalid422:
         assert "document_type" in payload["errors"]
         assert not Event.objects.filter(created_by=staff_user).exists()
 
+    def test_event_create_invalid_document_type_uuid_html_stays_422_not_500(self, client, staff_user):
+        """Gegenstück zum JSON-Pin oben, HTML-Pfad (Refs #1996).
+
+        Ein normaler Browser-POST (kein Raw-JSON-Client) mit demselben
+        syntaktisch kaputten ``document_type``-Wert löst den JSON-Kurzschluss
+        NICHT aus und läuft in die HTML-only-Rekonstruktion, die
+        ``document_type`` erneut gegen die DB auflöst. Die fängt bislang nur
+        ``DocumentType.DoesNotExist``/``ValueError`` — Djangos
+        ``UUIDField.to_python`` wirft bei einem kaputten UUID-String aber
+        ``ValidationError``, macht daraus einen ungefangenen 500. Erwartet
+        wird stattdessen das Formular-Redisplay (200) wie bei jedem anderen
+        ungueltigen ``meta_form``.
+        """
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": "keine-uuid",
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "notiz": "offline-create",
+            },
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
     def test_event_create_data_form_invalid_returns_422_json(
         self, client, staff_user, doc_type_contact, client_identified
     ):
