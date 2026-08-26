@@ -51,8 +51,7 @@ class TestOptionsJsonIsActiveAllowedKey:
                 name="Optionen Aktiv-Flag",
                 field_type=FieldTemplate.FieldType.SELECT,
                 options_json=(
-                    '[{"slug":"an","label":"An","is_active":true},'
-                    '{"slug":"aus","label":"Aus","is_active":false}]'
+                    '[{"slug":"an","label":"An","is_active":true},{"slug":"aus","label":"Aus","is_active":false}]'
                 ),
             ),
         )
@@ -289,9 +288,7 @@ class TestFieldGroupNameDuplicateGuard:
         self, client, admin_user, doc_type_contact, field_group
     ):
         client.force_login(admin_user)
-        url = reverse(
-            "core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk}
-        )
+        url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
         response = client.post(
             url,
             {
