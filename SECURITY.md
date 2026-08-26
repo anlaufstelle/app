@@ -67,7 +67,7 @@ Wenn ein Zielwert nicht eingehalten werden kann, kommunizieren wir das transpare
 
 Behobene Schwachstellen werden **koordiniert veröffentlicht**, nicht stillschweigend gepatcht:
 
-1. **Bewertung** durch den Maintainer (bei Ausfall: die benannte Vertretung, [MAINTAINERS.md](MAINTAINERS.md)) mit CVSS-v3.1-Basis-Score und Einstufung kritisch/hoch/mittel/niedrig — Ergebnis geht an die meldende Person.
+1. **Bewertung** durch den Maintainer (bei dessen Ausfall durch eine Vertretung — eine solche ist derzeit **nicht benannt**, siehe [MAINTAINERS.md](MAINTAINERS.md)) mit CVSS-v3.1-Basis-Score und Einstufung kritisch/hoch/mittel/niedrig — Ergebnis geht an die meldende Person.
 2. **Entwurf** eines GitHub Security Advisory (GHSA) im Repository [`anlaufstelle/app`](https://github.com/anlaufstelle/app/security/advisories) mit betroffenen und gepatchten Versionen; bei kritisch/hoch wird über GitHub eine CVE-ID angefordert.
 3. **Fix** als Patch-Release der aktuellen Minor-Reihe (siehe Support-Regel oben).
 4. **Veröffentlichung** des Advisory nach Auslieferung des Patches plus 7 Tagen Schonfrist (siehe SLA-Tabelle oben), zusammen mit einem `Security`-Eintrag in [CHANGELOG.md](CHANGELOG.md), der die GHSA-/CVE-Nummer nennt.
@@ -158,7 +158,7 @@ If a target cannot be met we will communicate transparently — critical finding
 
 Fixed vulnerabilities are **disclosed in a coordinated way**, not patched silently:
 
-1. **Assessment** by the maintainer (or, if unavailable, the designated deputy, [MAINTAINERS.md](MAINTAINERS.md)) with a CVSS v3.1 base score and a critical/high/medium/low rating — the result is sent to the reporter.
+1. **Assessment** by the maintainer (if unavailable, by a deputy — **none is currently designated**, see [MAINTAINERS.md](MAINTAINERS.md)) with a CVSS v3.1 base score and a critical/high/medium/low rating — the result is sent to the reporter.
 2. **Draft** of a GitHub Security Advisory (GHSA) in the [`anlaufstelle/app`](https://github.com/anlaufstelle/app/security/advisories) repository listing affected and patched versions; for critical/high we request a CVE ID through GitHub.
 3. **Fix** as a patch release of the current minor series (see the support rule above).
 4. **Publication** of the advisory after the patch ships plus a 7-day grace period (see the SLA table above), together with a `Security` entry in [CHANGELOG.md](CHANGELOG.md) naming the GHSA/CVE ID.
