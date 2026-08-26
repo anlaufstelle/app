@@ -606,6 +606,14 @@ class TestMoveField:
         assert (grp.sort_order, moved.sort_order, other_free.sort_order) == (0, 1, 2)
 
     def test_cross_doctype_group_raises(self, req, facility, doc_type_contact):
+        # Refs #1998: doc_type_contact braucht eine EIGENE FieldGroup, damit der
+        # Test den Ownership-Check auf ``pk=target_group_id`` pinnt. Ohne eigene
+        # Gruppe bestand dieser Test nur zufaellig: ein degenerierter Check
+        # („hat der Typ ueberhaupt irgendeine Gruppe?" statt „gehoert GENAU
+        # DIESE Gruppe zum Typ?") liefert fuer einen gruppenlosen Typ ebenfalls
+        # False und wirft ValueError — der eigentliche pk-Filter blieb
+        # ungetestet, ein Mutant, der ihn entfernt, ueberlebte unbemerkt.
+        FieldGroup.objects.create(document_type=doc_type_contact, name="Eigene Gruppe")
         other_dt = DocumentType.objects.create(facility=facility, name="Anderer")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremd")
         dtf = doc_type_contact.fields.first()
