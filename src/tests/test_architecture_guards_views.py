@@ -564,6 +564,15 @@ class TestClientCaseViewMirrorParity:
             'Fall verwirft ``fields.pop("client")``, weil ``update_case`` die Person nicht mehr '
             "umhaengt (Refs #1786), und nur ``update_client`` bekommt ``old_stage`` durchgereicht.",
         ),
+        "EntityUpdateView._render_context": (
+            2,
+            "Signatur und Kontext-Dict: Das Fall-Formular pinnt die Person und braucht dafuer die "
+            "drei Schluessel ``client_locked``/``client_id``/``client_pseudonym`` (Refs #1786), "
+            "deren Quelle sich zwischen GET (``case.client``) und POST-Re-Render "
+            "(``request.POST``) unterscheidet — daher zwei zusaetzliche Parameter. Die "
+            "Personen-Maske hat zu keinem davon ein Gegenstueck. Der uebrige Kontext ist "
+            "identisch, und genau darauf achtet die gezaehlte 2.",
+        ),
         "EntityFieldsPartialView._assigned_entity": (
             1,
             "Der Personen-Lookup filtert die beiden Widerrufs-Zustaende explizit "
