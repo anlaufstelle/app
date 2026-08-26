@@ -597,9 +597,12 @@ def anonymize_client(client, user=None):
       ``review_note`` der Art.-16-Berichtigungsanträge dieser Person
       (Refs #1792) — dieselbe Trennung: Werte raus, Antrags-Meta bleibt.
     - ``RetentionProposal.details["pseudonym"]`` der Löschvorschläge dieser
-      Events und ``LegalHold.reason`` für Client-, Event- und Fall-Ziele
-      (Refs #1751, #1818) — auch hier bleibt die Nachweis-Metadatenspur
-      unangetastet.
+      Events und ``LegalHold.reason`` für Client-, Event-, Fall- und
+      Aktivitäts-Ziele (Refs #1751, #1818, #1990) — auch hier bleibt die
+      Nachweis-Metadatenspur unangetastet. Die Zielmenge kommt seit #1990 aus
+      demselben Builder wie die Art.-15-Auskunft
+      (``client_legal_hold_targets_q``); der ``Activity``-Zweig deckt Holds
+      auf den Aktivitäten dieser Person (Ziel-ID = ``Activity.pk``).
     - ``Activity.context`` für Client-, Event-, WorkItem- und Case-Targets —
       seit #1972 bereits PII-frei; der Reset auf den Redaktionsmarker bleibt
       als Defense-in-Depth für künftige Schema-Erweiterungen.
