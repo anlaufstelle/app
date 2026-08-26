@@ -17,6 +17,7 @@ from core.models import (
     DocumentType,
     Episode,
     Event,
+    User,
     WorkItem,
 )
 from core.services.system import (
@@ -25,7 +26,13 @@ from core.services.system import (
     _serialize_event,
     _serialize_field_template,
     _serialize_workitem,
+    build_facility_offline_bundle,
 )
+
+# ``_serialize_assignable_users`` ist (anders als die uebrigen Helfer) nicht
+# ueber ``core.services.system`` re-exportiert — Direktimport aus dem Submodul,
+# wie ``test_field_template_ranges`` es fuer ``_serialize_field_template`` tut.
+from core.services.system.offline import _serialize_assignable_users
 from tests._mutation_followup_offline_helpers import (
     _attach,
     _make_doc_type,
@@ -590,11 +597,24 @@ class TestSerializeDocumentType:
         dt = _make_doc_type(facility, name="Empty")
         assert _serialize_document_type(lead_user, dt)["fields"] == []
 
-    def test_dt_fields_filtered_by_user_sensitivity(self, facility, staff_user, lead_user):
+    def test_dt_fields_filtered_by_user_sensitivity(self, facility, staff_user, assistant_user, lead_user):
         """Refs #1111: Ein HIGH-Feld in einem NORMAL-Typ darf nur in der
         Feld-Liste auftauchen, wenn der Nutzer es sehen darf. Staff (max
         ELEVATED) bekommt es NICHT, Lead schon — gleiche Grenze wie die
-        Wert-Filterung in ``_visible_data_fields``."""
+        Wert-Filterung in ``_visible_data_fields``.
+
+        Refs #1998 (Leak-Grenze): Der Test deckte bisher nur die Richtung
+        „Feld-Override HOEHER als der Typ" ab und liess damit das ERSTE
+        Argument von ``user_can_see_field(user, doc_type.sensitivity, ...)``
+        voellig ungepinnt. ``effective_sensitivity`` ist ``max(Typ, Feld)``:
+        ein Feld OHNE eigene Sensitivity erbt die Stufe des Typs. Faellt das
+        Typ-Argument weg (oder wird das Gate wahr), verliesse das komplette
+        Feldschema eines HIGH-Typs — Feldnamen, Hilfetexte, Auswahloptionen —
+        den Server Richtung IndexedDB an genau die Rollen, die den Typ online
+        nicht einmal sehen duerfen (Bundle-ist-Derivat-Invariante). Richtung B
+        unten pinnt diesen Fall.
+        """
+        # Richtung A (Refs #1111): Feld-Override HOEHER als der Typ.
         dt = _make_doc_type(facility, name="Gemischt", sensitivity=DocumentType.Sensitivity.NORMAL)
         ft_normal = _make_field_template(facility, name="Offen")
         ft_high = _make_field_template(facility, name="Vertraulich", sensitivity="high")
@@ -606,6 +626,106 @@ class TestSerializeDocumentType:
         assert ft_normal.slug in staff_slugs
         assert ft_high.slug not in staff_slugs
         assert {ft_normal.slug, ft_high.slug} <= lead_slugs
+
+        # Richtung B (Refs #1998): TYP-Stufe HIGH, Feld OHNE eigenen Override.
+        dt_high = _make_doc_type(facility, name="Streng", sensitivity=DocumentType.Sensitivity.HIGH)
+        ft_inherit = _make_field_template(facility, name="Geerbt")
+        _attach(dt_high, ft_inherit, sort_order=0)
+        # Vorbedingung explizit: das Feld traegt KEINE eigene Sensitivity, die
+        # Gate-Stufe kann also nur aus ``doc_type.sensitivity`` kommen. Ohne
+        # diese Zusicherung koennte der Test spaeter aus dem falschen Grund
+        # gruen bleiben (Feld-Override statt Typ-Vererbung).
+        assert ft_inherit.sensitivity == ""
+
+        # Staff (max ELEVATED) und Assistenz (max NORMAL) sehen das Schema NICHT …
+        assert _serialize_document_type(staff_user, dt_high)["fields"] == []
+        assert _serialize_document_type(assistant_user, dt_high)["fields"] == []
+        # … Lead (max HIGH) schon. Diese Zeile haelt den Test nicht-vakuum:
+        # ohne sie waere ein „Feld gar nicht verknuepft"-Fehler ununterscheidbar
+        # von der gepinnten Filterwirkung.
+        assert [f["slug"] for f in _serialize_document_type(lead_user, dt_high)["fields"]] == [ft_inherit.slug]
+
+
+# ---------------------------------------------------------------------------
+# _serialize_assignable_users — Mandantengrenze des Staff-Rosters
+# ---------------------------------------------------------------------------
+
+#: Rollen, die ``_serialize_assignable_users`` als zuweisbar fuehrt. Bewusst
+#: hier gespiegelt (nicht aus dem Service importiert): der Test soll auffallen,
+#: wenn die Produktivliste stillschweigend waechst.
+_ASSIGNABLE_ROLES = (
+    User.Role.FACILITY_ADMIN,
+    User.Role.LEAD,
+    User.Role.STAFF,
+    User.Role.ASSISTANT,
+)
+
+
+@pytest.mark.django_db
+class TestSerializeAssignableUsers:
+    """Refs #1998 (KRITISCH): ``assignable_users`` ist die einzige Liste im
+    Offline-Bundle, die *Personal* statt Klientel traegt — und damit die
+    Stelle, an der ein fehlender ``facility``-Filter Klarnamen fremder
+    Einrichtungen auf ein Endgeraet schreibt, wo sie bis zum TTL-Ablauf
+    liegen bleiben. Die Mandantengrenze war bislang nur implizit gepinnt
+    (alle bestehenden Tests legen ihre Nutzer:innen in EINER Facility an),
+    ein entfernter Filter waere also gruen durchgelaufen."""
+
+    def _make_foreign_users(self, second_facility) -> list[User]:
+        """Je Rolle ein AKTIVES Konto in der zweiten Einrichtung."""
+        return [
+            User.objects.create_user(
+                username=f"fremd-{role}",
+                role=role,
+                facility=second_facility,
+                is_active=True,
+            )
+            for role in _ASSIGNABLE_ROLES
+        ]
+
+    def test_roster_excludes_active_assignable_users_of_other_facility(
+        self, facility, second_facility, staff_user, lead_user
+    ):
+        foreign = self._make_foreign_users(second_facility)
+
+        # Vorbedingung 1: Die Fremd-Konten sind AKTIV und in zuweisbarer
+        # Rolle — sie wuerden also nicht schon vom ``is_active``- oder
+        # ``role__in``-Filter abgeraeumt. Ohne diese Zusicherung koennte der
+        # Test aus dem falschen Grund gruen sein.
+        assert all(u.is_active for u in foreign)
+        assert {u.role for u in foreign} == set(_ASSIGNABLE_ROLES)
+
+        # Vorbedingung 2 (Selbstschutz gegen einen vakuum-gruenen Test):
+        # ``user`` traegt KEINE RLS-Policy (nur facility-gebundene Fachtabellen
+        # haben eine). Ohne den ``facility=facility``-Filter im Service waeren
+        # die Fremd-Konten also tatsaechlich sichtbar — der Ausschluss unten
+        # misst den Filter und nicht eine zweite, unsichtbare Schranke.
+        reachable_without_facility_filter = set(
+            User.objects.filter(is_active=True, role__in=list(_ASSIGNABLE_ROLES)).values_list("pk", flat=True)
+        )
+        assert {u.pk for u in foreign} <= reachable_without_facility_filter
+
+        pks = {row["pk"] for row in _serialize_assignable_users(facility)}
+
+        for u in foreign:
+            assert str(u.pk) not in pks, f"Cross-Tenant-Leak: {u.username} ({u.role}) im Roster von {facility}"
+        # Exakte Menge statt blosser Nicht-Enthalten-Pruefung: so faellt auch
+        # ein Filter auf, der die Grenze nur teilweise zieht (etwa ueber die
+        # Organisation statt die Einrichtung).
+        assert pks == {str(staff_user.pk), str(lead_user.pk)}
+
+    def test_facility_bundle_roster_excludes_other_facility(self, facility, second_facility, staff_user, lead_user):
+        """Dieselbe Grenze end-to-end durch den Bundle-Bauer — der Helfer ist
+        privat, das Bundle ist das, was den Server verlaesst."""
+        foreign = self._make_foreign_users(second_facility)
+
+        bundle = build_facility_offline_bundle(staff_user, facility)
+        pks = {row["pk"] for row in bundle["assignable_users"]}
+
+        assert pks, "Roster darf fuer Staff+ nicht leer sein (sonst pinnt der Test nichts)"
+        for u in foreign:
+            assert str(u.pk) not in pks, f"Cross-Tenant-Leak im Facility-Bundle: {u.username}"
+        assert pks == {str(staff_user.pk), str(lead_user.pk)}
 
 
 class TestSerializeFieldTemplate:
