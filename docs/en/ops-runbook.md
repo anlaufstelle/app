@@ -1291,3 +1291,751 @@ pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
 | A transitive dependency pulls a vulnerable version | A direct dependency pins an old version | Add the direct dependency explicitly and bump it |
 
 ---
+
+## 9. Row Level Security (RLS)
+
+Since v0.10.0, PostgreSQL RLS on all facility-scoped tables (currently
+**25**, enforced test-derived —
+[`test_rls.py`](../../src/tests/test_rls.py)) protects
+against cross-facility leaks (defense-in-depth below the Django scoping
+layer). The set of tables grows with every new facility-scoped model; a fixed
+number here therefore goes stale regularly — the derivation in `test_rls.py` is
+the source of truth. Every policy compares `facility_id` against the session
+variable `app.current_facility_id`, which the
+[`FacilityScopeMiddleware`](../../src/core/middleware/facility_scope.py) sets per
+request via `set_config(..., is_local=false)`.
+
+**Fail-closed:** If the variable is unset or empty (`NULL`),
+the policies return **no rows** — not even for the table
+owner (`FORCE ROW LEVEL SECURITY`). Bypass only for superuser DB
+roles; the Django DB user must therefore **not** be a superuser in
+production.
+
+**Direct instead of join policy on `core_attachment` (Refs
+#1738,
+[ADR-039](../adr/039-owner-generische-dateianhaenge.md) (German)):** File attachments hung, until
+Milestone 24, off the event as `core_eventattachment` with no `facility_id` of their own;
+their policy was a join over `core_event`. Since migration `0131`,
+`core_attachment` carries its own `facility_id` and the usual **direct** policy
+(including the `is_super_admin` branch). Gain: an attachment row with no event was
+policy-**less** under the join policy; now the isolation applies regardless of the
+owner (event, person, or case). The set of tables does not change
+because of this — only the name and construction of the policy. Post-deploy check and
+the rollback restriction of the `0129`–`0131` chain: [§ 2.2](#22-roll-back-a-migration).
+
+**CI guarantee (Refs #718):**
+[`src/tests/test_rls_functional.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls_functional.py)
+loads a dedicated Postgres role ``rls_test_role`` (``NOSUPERUSER``)
+and verifies, via ``SET ROLE``, cross-tenant 0-rows for Client, Event,
+AuditLog, and Activity. This means the RLS protection has been functionally
+tested in CI since v0.11 — not just the existence of the policies. If the
+production DB user accidentally becomes a superuser, the cross-
+tenant test in CI does **not** fail (it uses the explicit test role),
+but the smoke query from § 9.2 below must return ``rolsuper =
+false`` for the Django DB user in prod.
+
+**Continuous monitoring instead of a one-off smoke query (Refs
+#793):** The
+health endpoint now runs exactly this check on **every** call, on the
+live connection (``SELECT rolsuper, rolbypassrls … WHERE rolname =
+current_user``). If the runtime role bypasses RLS, ``status`` falls permanently to
+``degraded`` (HTTP stays 200) and token callers see the fields
+``db_user_is_superuser``/``db_role_posture``; the detail additionally appears as a
+``WARNING`` in the log (logger ``core.views.health``). This means a
+misconfigured cluster shows up in monitoring without anyone having to run the
+smoke query manually — field reference:
+[docs/monitoring-guide.md](../monitoring-guide.md) (German). Boundary: ``check_db_roles``
+checks that the app/admin role **exist** in the catalog with the right
+attributes; the health endpoint checks **as whom** the application
+is actually connecting.
+
+### DB Role Model (Gold Standard)
+
+**This is the canonical description of the PostgreSQL role model** — other
+deployment documents point here instead of repeating it. The source of
+truth is the init script
+[`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh)
+(Refs #863,
+#902,
+[ADR-005](../adr/005-facility-scoping-and-rls.md) (German), [ADR-017](../adr/017-deployment-topology.md) (German)).
+
+The official `postgres:18` image automatically makes the bootstrap login created
+via the container's `POSTGRES_USER` a superuser. This login cannot strip its own
+privileges — that's why the container runs with `POSTGRES_USER=postgres` as the
+bootstrap, and the init script creates **two** unprivileged application roles:
+
+| Role (`.env` variable) | Example name | Attributes | What it's for |
+|---|---|---|---|
+| `postgres` (bootstrap, `POSTGRES_BOOTSTRAP_PASSWORD`) | `postgres` | SUPERUSER | Only DB init + emergency maintenance. **Not** for runtime/operator tasks. |
+| `POSTGRES_USER` (app) | `anlaufstelle` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB`, **not the owner** — only DML (`SELECT/INSERT/UPDATE/DELETE`) + sequence/schema `USAGE` | Django runtime. RLS policies apply strictly (`FORCE ROW LEVEL SECURITY`). |
+| `POSTGRES_ADMIN_USER` (admin/maintenance/**owner**) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, **DB/object owner** | `migrate`, `seed`, retention/anonymization cron, initial setup (`setup_facility`), and package import (`load_package`). As owner, maintenance bypasses the append-only triggers via DDL (A1.4, § 9.5). |
+
+Properties that the init script guarantees, verified in code:
+
+- Both roles are **NOSUPERUSER** — no path to privilege escalation.
+- The app role is **NOBYPASSRLS** and **not the owner** (A1.4, Refs
+  #1026); it can therefore neither
+  disable the append-only triggers via `ALTER TABLE … DISABLE TRIGGER`
+  nor — lacking a `SET PARAMETER` grant — bypass them via
+  `session_replication_role`. `FORCE ROW LEVEL SECURITY` also applies
+  on top (fail-closed, § 9 above).
+- The admin role is **BYPASSRLS** (for migrations/maintenance) and **owner** of
+  the database + all objects — needed for `DROP POLICY`/`ALTER TABLE` in
+  migrations (BYPASSRLS alone is not enough for DDL) and for the
+  append-only trigger bypass in the maintenance path. `ALTER DEFAULT PRIVILEGES FOR ROLE
+  admin … TO app` automatically grants the app DML rights to every migrated
+  table/sequence.
+
+Operator/maintenance tasks run exclusively in the opt-in `maintenance`
+service; only it loads the full `.env` and overrides
+`POSTGRES_USER`/`POSTGRES_PASSWORD` with the admin role there. `web`, by contrast,
+gets an explicit runtime allowlist and sees neither the admin nor the bootstrap
+secret (Refs #1962). The
+migrate job [`docker-migrate.sh`](../../docker-migrate.sh) runs in this service. The
+role gate `check_db_roles` checks the stable app role via
+`POSTGRES_APP_USER` (Refs #1017), so the env override doesn't confuse it.
+
+**Mandatory `.env` variables** (template [`.env.example`](../../.env.example)):
+`POSTGRES_BOOTSTRAP_PASSWORD`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`
+(in addition to the app variables). The pre-deploy check in § 1.1 verifies
+that they are set and no longer at `change-me-*`.
+
+**Verification** after the first startup — the gate checks both roles:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
+# expected: app role rolsuper=False, rolbypassrls=False
+# admin role rolsuper=False, rolbypassrls=True (exit code 0)
+```
+
+### DB Password Rotation (All Three Roles)
+
+Refs #1964. A change
+to `.env` alone rotates **no** password in an existing PostgreSQL
+cluster: [`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh)
+only runs when first initializing an empty volume, and creates missing
+roles. It stays deliberately init-only; an `ALTER ROLE` branch there would be a
+half-effective promise, because it gets skipped on every existing volume.
+
+The canonical, tested way is:
+
+```bash
+cd /opt/anlaufstelle./scripts/ops/rotate-db-passwords.sh
+
+# dev/demo use their own compose/env file:
+COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \./scripts/ops/rotate-db-passwords.sh
+```
+
+**Prerequisites:** announce a maintenance window; make sure no
+backup/restore job is currently running; have a current, verified backup
+state; `.env` must have mode `600` (or stricter). The script needs Docker
+access and `openssl`, but does **not** print any password to stdout/stderr or in
+process arguments. It generates three independent random values and
+internally, as the bootstrap superuser, issues a transaction following this
+pattern:
+
+The rotation is **not a deployment**: all `compose run`/`up` steps use
+`--pull never` and therefore exactly the already-verified local images. This way
+neither a moved tag can switch the code mid-maintenance-window, nor can a
+registry outage block rotation or rollback. Always deploy and verify a new
+image separately before the maintenance window.
+
+```sql
+BEGIN;
+ALTER ROLE "anlaufstelle" PASSWORD '<new app password>';
+ALTER ROLE "anlaufstelle_admin" PASSWORD '<new admin password>';
+ALTER ROLE "postgres" PASSWORD '<new bootstrap password>';
+COMMIT;
+```
+
+The placeholders are **not** something to copy-paste. Never write passwords
+into shell history, a ticket, or the runbook log; the script only passes SQL and
+login secrets via stdin. A manual emergency run must use the same order
+and a single transaction.
+
+#### Order and Full List of Consumers
+
+| Step/consumer | Role | What the rotation does |
+|---|---|---|
+| `web` | App (`POSTGRES_PASSWORD`) | Stop before the DB change; start with the new password after the env swap and wait for health. |
+| `cron` | Admin (`POSTGRES_ADMIN_PASSWORD`) | Stop/start together with `web`, so no retention/audit job reconnects with the old login. In dev/demo without `cron`, only this step is skipped. |
+| `maintenance` / [`docker-migrate.sh`](../../docker-migrate.sh) | Admin | Run after the DB recreate as a short-lived one-shot with the new env. This checks `check_db_roles`, migrations, and the ownership normalization from #1085. |
+| `db` | Bootstrap (`POSTGRES_BOOTSTRAP_PASSWORD`) | Change all three roles in one transaction; then **recreate** the container with the unchanged data volume, so its container env also no longer holds the old bootstrap secret. |
+| [`scripts/ops/backup.sh`](../../scripts/ops/backup.sh) | Admin | No daemon restart: the host script reads `.env` on every new run. Therefore do not start it in parallel during the rotation. |
+| Restore path (`restore.sh`, `restore-drill.sh`, [Disaster Recovery](../disaster-recovery.md) (German)) | Bootstrap/Admin | No persistent consumer; every later run reads the new `.env`. Escrow/emergency documents must be updated immediately. |
+
+The script first writes a mode-identical env file in the same directory,
+then stops the persistent consumers, rotates the DB, tests all **new**
+logins, swaps `.env` atomically, recreates `db`, runs the real migrate path,
+and starts `web`/`cron`. Only after that do three negative tests run over the
+compose network host `db`, and therefore PostgreSQL's SCRAM password
+authentication. The loopback path in the DB container is not suitable for
+this, because official PostgreSQL volumes may carry a `trust` rule there.
+Expected closing lines (role names may differ, secrets never appear):
+
+```text
+[db-password-rotation] Negative test green: old login for role anlaufstelle is rejected with an auth error.
+[db-password-rotation] Negative test green: old login for role anlaufstelle_admin is rejected with an auth error.
+[db-password-rotation] Negative test green: old login for role postgres is rejected with an auth error.
+[db-password-rotation] Rotation complete. Backup/restore jobs will read the new env file on their next run.
+```
+
+A plain "connection failed" doesn't count: the negative test only accepts
+PostgreSQL's `password authentication failed`; before that, the same three
+roles were successfully tested with the new passwords. If any
+step fails, the exit trap resets DB passwords and `.env` to the old values,
+recreates `db` if needed, and starts the previously stopped consumers.
+A warning **"Rollback was incomplete"** is a hard operational alert:
+do not trigger any further restart until the DB and `.env` have been reconciled manually.
+
+**Bootstrap decision:** `postgres` stays `LOGIN`, but gets rotated along with the
+others and stays outside `web`, `cron`, and normal operator jobs. `NOLOGIN` is
+deliberately **not** set: this same role is the only controlled path for
+a later rotation and the factory-fresh restore path. Without a second
+superuser, it could not be safely reactivated from within the application after
+`NOLOGIN`; that would shift the emergency risk rather than reduce it.
+
+**Immediate follow-up:** Replace the three new DB passwords in the separate
+password escrow and in the DR contact card, mark the old state as revoked,
+and only then close the maintenance window. An old escrow state
+would make backup/restore and emergency commands against the existing cluster
+fail precisely when the local `.env` is no longer reachable.
+
+### 9.1 Symptoms of an RLS Problem
+
+- The UI shows empty lists even though rows exist in the DB.
+- ORM queries suddenly return 0 rows.
+- No exceptions show up in the logs — RLS filters silently.
+- `audit` tables stay empty for new facility assignments.
+
+### 9.2 Diagnosis in `psql`
+
+```sql
+-- Check the current session variable (NULL = the middleware did not set it)
+SELECT current_setting('app.current_facility_id', true);
+
+-- List all RLS-enabled tables
+SELECT relname, relrowsecurity, relforcerowsecurity
+FROM pg_class
+WHERE relname LIKE 'core_%' AND relrowsecurity;
+
+-- Show a table's policies
+SELECT polname, polcmd, pg_get_expr(polqual, polrelid) AS using_clause
+FROM pg_policy
+WHERE polrelid = 'core_client'::regclass;
+```
+
+### 9.3 Manual Debug Queries with Facility Context
+
+Run individual debug queries against the DB **without** bypassing RLS —
+set only for the running transaction:
+
+```sql
+BEGIN;
+SET LOCAL app.current_facility_id = '<facility-uuid-or-pk>';
+SELECT count(*) FROM core_client;
+--... further queries...
+COMMIT; -- or ROLLBACK, SET LOCAL ends with the transaction
+```
+
+**Caution:** Never use `SET app.current_facility_id` (without `LOCAL`) in
+a shared admin connection — otherwise the value stays valid for
+subsequent queries in that session.
+
+### 9.4 Common Causes
+
+| Finding | Cause | Fix |
+|--------|---------|-----|
+| `current_setting(...)` returns `NULL` | The request came through with no auth user (e.g. a management command, cron) | Set it deliberately via `set_config` or `SET LOCAL` before the query |
+| The variable is set, but the list is empty anyway | The user is scoped to the wrong facility | Check `SELECT facility_id FROM core_user WHERE id=<user_id>` |
+| Migration `0047` not applied | `showmigrations core` shows `[ ]` | `python manage.py migrate core 0047` |
+| An admin query via `./manage.py shell` returns 0 rows | The shell session does not set the variable | Before queries: `connection.cursor().execute("SET app.current_facility_id = %s", [fid])` |
+
+Refs #542,
+#586.
+
+### 9.5 Append-Only Trigger Bypass via Owner DDL (A1.4)
+
+GDPR Art. 17 anonymization (`Client.anonymize`), audit pruning
+(`prune_auditlog`), and `backfill_audit_chain`/`reencrypt_fields` need to briefly
+bypass the append-only triggers (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
+for their legitimate writes. Since A1.4 (Refs
+#1026), this no longer
+goes through `session_replication_role = replica` (that no longer silently fires
+an `ENABLE ALWAYS` trigger); instead, `bypass_replication_triggers()`
+disables the triggers specifically via **owner DDL** `ALTER TABLE … DISABLE TRIGGER`
+and restores them via `ENABLE ALWAYS` — all inside **one**
+`transaction.atomic()` (SIGKILL-safe).
+
+Consequence for operations: The maintenance path needs **owner rights**. The
+management commands `enforce_retention`, `backfill_audit_chain`,
+`reencrypt_fields`, and `load_package` (M2, Refs
+#1058 — the RLS bypass guard
+otherwise aborts fail-loud) must therefore run as the **owner/admin role**
+(`POSTGRES_ADMIN_USER`) — this is already set up that way via the dedicated
+`maintenance` service (retention cron § 6). If such a
+command accidentally runs as the app role, the bypass aborts with `must be owner of
+table core_auditlog` — fail-loud, no silent audit loss.
+
+The same role prerequisite applies to **RunPython backfills on RLS tables**:
+they run under the migration role and, since
+#1746, are safeguarded as their
+first line by `assert_migration_role_bypasses_rls(schema_editor)`.
+The `facility_id` backfill of the attachment migration `0130`
+(#1738) uses this
+guard — if `migrate` accidentally runs as the app role, it aborts fail-loud,
+instead of silently backfilling **0 rows** and reporting the migration as
+successful. `docker-migrate.sh` therefore runs exclusively in the maintenance service.
+
+The former `GRANT SET ON PARAMETER session_replication_role` is **no longer
+needed** and has been removed from the init script. On existing DBs it can
+be revoked as a cleanup step (optional, least privilege):
+
+```sql
+-- as superuser (postgres), in the application DB, optional:
+REVOKE SET ON PARAMETER session_replication_role FROM anlaufstelle_admin;
+```
+
+**Lock behavior & maintenance window (important).** `ALTER TABLE … DISABLE/ENABLE
+TRIGGER` takes a `ShareRowExclusiveLock` on the table and **holds it until
+the commit** of the enclosing transaction. This lock conflicts with the
+`RowExclusiveLock` of ordinary `INSERT`s — while a bypass run is open,
+**parallel audit/EventHistory `INSERT`s block** (nearly every mutating
+request). The former `session_replication_role = replica` did not take this
+table lock; the owner-DDL switch (A1.4) is here a deliberate
+regression in favor of security. `Client.anonymize()` additionally has a
+**lock-upgrade deadlock risk** (first a `RowExclusiveLock` from the
+EventHistory `INSERT`s, then a `ShareRowExclusiveLock` from the `DISABLE`).
+
+Operational rules that follow from this:
+
+- Run the bypass commands `enforce_retention` (retention cron, § 6),
+  `backfill_audit_chain`, `reencrypt_fields`, and the GDPR anonymization
+  (`Client.anonymize()`) during **maintenance/off-peak hours** with low write
+  load — not during peak time.
+- Set a **`lock_timeout` as a role/session default** for the maintenance/owner
+  role, so that a blocked `ALTER TABLE` does not wait indefinitely,
+  but aborts fail-loud and stays retryable:
+
+  ```sql
+ -- as superuser (postgres): limits the lock wait time of maintenance runs.
+ ALTER ROLE anlaufstelle_admin SET lock_timeout = '5s';
+ ```
+
+  Deliberately **not** hardcoded in the bypass code (`SET LOCAL lock_timeout`): a
+  fixed value would, without an operational profile, turn legitimate `anonymize`
+  runs that may run synchronously in the request into spurious hard fails, and a
+  solid regression test would need two competing sessions (flaky in CI). The
+  timeout is therefore operationally adjustable (ADR-033 § Consequences).
+
+**Verification** (the app role CANNOT disable triggers, the owner role can):
+
+```sql
+-- App role (not the owner) -> must fail:
+SET ROLE anlaufstelle; -- POSTGRES_USER
+ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable; -- ERROR: must be owner
+RESET ROLE;
+-- Trigger dormant state -> 'A' (ENABLE ALWAYS):
+SELECT tgname, tgenabled FROM pg_trigger
+WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_delete');
+```
+
+### 9.6 Rolling Out the Runtime/Owner Role Split to Existing Installations (A1.4)
+
+**Fresh DBs** pick up the split automatically
+([`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh):
+admin becomes owner, app only gets DML). **Existing installations** (where the app is still
+the DB owner) need a **one-off, maintainer-led** ownership move —
+brief downtime recommended (no write requests during it). Procedure as the
+**bootstrap superuser** (`postgres`), in the application DB:
+
+```sql
+-- 0. Before: stop the web service / put it into maintenance (no app writes).
+-- 1. Transfer ownership of the database + all objects to the admin role.
+ALTER DATABASE anlaufstelle OWNER TO anlaufstelle_admin;
+REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin; -- tables/sequences/views
+-- 2. App role: ownership gone, only DML left.
+GRANT USAGE ON SCHEMA public TO anlaufstelle;
+ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
+ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anlaufstelle;
+ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
+ GRANT USAGE, SELECT ON SEQUENCES TO anlaufstelle;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anlaufstelle;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
+-- 3. Harden triggers (otherwise migration 0107 does it on the next deploy):
+-- can be skipped if docker-migrate.sh runs immediately afterward.
+```
+
+Then deploy as normal (`docker-migrate.sh` applies migration `0107`, if not
+already done) and verify with the § 9.5 verification.
+
+**Fail-loud gate (Refs #1026):**
+Since A1.4, `check_db_roles` **additionally checks ownership on top of the attribute check**.
+As long as the move above has not run yet (the app role is still the DB/table
+owner), the gate reports `FAIL … ownership move … § 9.6` and aborts with **exit 1**
+— `docker-migrate.sh` stops the deploy before new web replicas go live.
+This prevents the earlier silent fail-open, where the deploy went green despite
+still-app-owned tables (the attribute profile of app/admin alone stays the
+same through the ownership move). Once the move has been carried out (admin is
+the owner), the gate is green again.
+
+> **Order for existing installations with a pending move (Refs
+> #1738):** First run the
+> ownership move above, **then** deploy. The `0129`–`0131` attachment chain
+> needs both — owner rights for the DDL (`DROP`/`CREATE POLICY`, `ALTER TABLE`)
+> and BYPASSRLS for the `facility_id` backfill in `0130`. If `migrate` still
+> runs under the app role, `check_db_roles` already stops the deploy (exit 1); a
+> half-applied state between `0130` and `0131` therefore cannot occur.
+
+> **Note on `normalize_db_ownership`:** The one-shot migrate job still calls
+> `normalize_db_ownership` — a **no-op** in the new model, because `migrate` runs as
+> the admin, which equals the DB owner (`current_user == db_owner`). It remains as an
+> idempotent safety net.
+
+---
+
+## 10. Invite Token Hygiene
+
+The invite flow ([`src/core/services/security/invite.py`](../../src/core/services/security/invite.py))
+uses its own `invite_token_generator` — **no** persistent
+token table. The setup link uses the same confirmation view as the
+password reset, but is kept separate from it by its own `key_salt`, and is bound to
+`INVITE_TOKEN_TIMEOUT` (default: 3 days). After it expires, the token
+is silently rejected by the signer; there are **no** database rows that
+need cleaning up.
+
+**What does need cleaning up instead:** user accounts created via invite
+whose recipient never redeemed the link — these accounts
+stay around with an unusable password.
+
+### 10.1 Identifying Stale Invite Users
+
+```sql
+-- All user accounts that have never logged in and have not set a usable
+-- password, older than 7 days. A management command deliberately does
+-- not exist -- manual review before deletion is mandatory
+-- (GDPR Art. 6 / 17).
+SELECT id, username, email, date_joined, facility_id
+FROM core_user
+WHERE last_login IS NULL
+ AND NOT (password LIKE 'pbkdf2_%') -- unusable = set_unusable_password
+ AND date_joined < now - interval '7 days'
+ORDER BY date_joined;
+```
+
+### 10.2 Resending the Setup Link
+
+Regular way: as `facility_admin`, open **Administration > Access**, select the
+account, and under "Security actions" click **Resend invitation**. This path
+is limited to the manager's own facility, requires sudo
+re-authentication, and writes an attributed `USER_INVITE_SENT` audit entry. It is
+only available for an account that is not yet fully set up and has an email
+address.
+
+Only if the application UI is unreachable in an emergency does the direct
+technical dispatch remain as a fallback:
+
+```bash
+# Django shell: send a new invite link to an existing user
+docker compose -f docker-compose.prod.yml exec web \
+ python manage.py shell -c "
+from core.models import User
+from core.services.security import send_invite_email
+send_invite_email(User.objects.get(username='<username>'))
+"
+```
+
+The shell fallback has neither the facility/status guard nor the
+actor attribution of the application UI. Check the target account and facility
+beforehand and document the intervention separately.
+
+### 10.3 Deleting Orphaned Accounts
+
+In regular operation, an orphaned account is deactivated under
+**Administration > Access**. A permanent deletion is not a normal CRUD step,
+because of possible references and audit attribution. Only after review and
+consultation with facility leadership does the technical special path remain:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+ python manage.py shell -c "
+from core.models import User
+User.objects.filter(username='<username>').delete
+"
+```
+
+**Cron recommendation:** the weekly audit as a plain report query (see section
+[3.2](#32-cron-sidecar-standard)) — no automatic deletion, since an
+undelivered invite can also be a mail problem.
+
+Refs #528.
+
+---
+
+## 11. Statistics Materialized View
+
+Since v0.10.0, the materialized view `core_statistics_event_flat`
+pre-aggregates all event facts for the statistics dashboard. The refresh runs via a
+management command and uses `REFRESH MATERIALIZED VIEW CONCURRENTLY`, so
+running readers are not blocked
+([`refresh_statistics_view.py`](../../src/core/management/commands/refresh_statistics_view.py)).
+
+### 11.1 Manual Refresh
+
+```bash
+# Concurrent refresh (default - non-blocking)
+docker compose -f docker-compose.prod.yml exec web \
+ python manage.py refresh_statistics_view
+
+# Force a blocking refresh (fallback without the UNIQUE index)
+docker compose -f docker-compose.prod.yml exec web \
+ python manage.py refresh_statistics_view --no-concurrent
+```
+
+If `CONCURRENTLY` fails (e.g. because the UNIQUE index is missing after
+a schema migration), the command logs a warning and repeats
+the refresh without `CONCURRENTLY` — the view stays consistent, but
+readers block for the duration of the refresh.
+
+### 11.2 Cron Recommendation
+
+Hourly at minute 15 (see [3.2](#32-cron-sidecar-standard)). With high
+event frequency, this can be tightened to every 15 minutes; with low
+traffic, every 6 hours is also sufficient. The dashboard tolerates slight staleness.
+
+### 11.3 Distinction from Snapshots
+
+| Artifact | Purpose | Command | Frequency |
+|----------|-------|--------|----------|
+| `core_statistics_event_flat` (MV) | Current runtime aggregates for the dashboard | `refresh_statistics_view` | Hourly |
+| `core_statisticssnapshot` (table) | Persistent monthly aggregates (outlives event retention) | `create_statistics_snapshots` | Monthly |
+
+Both jobs are independent — snapshots stay correct even without the MV,
+and the MV can be refreshed even without snapshots.
+
+### 11.4 Health Check
+
+```sql
+-- Look up the last refresh time
+SELECT schemaname, matviewname, last_refresh
+FROM pg_stat_user_tables
+JOIN pg_matviews ON relname = matviewname
+WHERE matviewname = 'core_statistics_event_flat';
+
+-- Check the row count (should roughly match the core_event count)
+SELECT count(*) FROM core_statistics_event_flat;
+```
+
+Refs #544.
+
+---
+
+## 12. Trust Boundary (Refs #841)
+
+### 12.1 SECURE_PROXY_SSL_HEADER
+
+`settings/prod.py:48` sets:
+
+```python
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+```
+
+This lets Django recognize HTTPS even behind the Caddy proxy. Precondition: **Caddy strips any incoming `X-Forwarded-Proto` header from the client and sets it itself** to the actual connection state.
+
+**Important:** If the app is exposed **directly** (without a reverse proxy), this setting MUST be removed. Otherwise an attacker can set `X-Forwarded-Proto: https` themselves — `request.is_secure()` then returns `True` even though the connection is plaintext; HSTS/secure-cookie logic is defeated.
+
+In `Caddyfile` (and the variants `Caddyfile.dev`, `Caddyfile.demo`, `Caddyfile.staging`), `X-Forwarded-Proto` is **not set explicitly** — the bare directive is enough:
+
+```
+reverse_proxy web:8000
+```
+
+Caddy's `reverse_proxy` sets `X-Forwarded-Proto` (as well as `X-Forwarded-For`/`X-Forwarded-Host`) itself by default. `SECURE_PROXY_SSL_HEADER` therefore relies on this Caddy default behavior, **not** on an explicit `header_up` directive. (An additional `header_up X-Forwarded-Proto {scheme}` would be redundant.)
+
+**What "by default" depends on (Refs #1963):** Whether Caddy adopts an incoming `X-Forwarded-*` value or discards it is decided solely by the `trusted_proxies` list (§ 12.2). If the request comes from a peer that is **not** listed there — the normal case, Caddy is the edge — Caddy discards the supplied value and sets all three headers itself; `X-Forwarded-For` then contains exactly **one** entry, namely the actual peer IP. If the peer, on the other hand, is in `trusted_proxies`, Caddy keeps the existing value: for `X-Forwarded-For`, it **appends** the peer IP on the right; for `X-Forwarded-Proto`/`-Host`, it adopts the upstream value unchanged.
+
+For `SECURE_PROXY_SSL_HEADER`, this means: the assumption holds as long as no upstream proxy is listed in `trusted_proxies` — and otherwise only if that proxy correctly sets `X-Forwarded-Proto` in turn. Whoever populates the list thereby extends the chain of trust to that upstream proxy.
+
+### 12.2 TRUSTED_PROXY_HOPS and TRUSTED_PROXY_CIDRS
+
+In addition, `.env` sets (default `1`):
+
+```
+TRUSTED_PROXY_HOPS=1
+```
+
+Explained in `.env.example`. The value counts from the right: [`signals.audit.get_client_ip`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/audit.py) takes the `TRUSTED_PROXY_HOPS`-th `X-Forwarded-For` entry from the right, and falls back to `REMOTE_ADDR` if the header has fewer entries.
+
+**`hops > 1` has no effect without configured proxy trust** (Refs #1963). It follows from § 12.1: without an entry in `trusted_proxies`, the app **always** receives exactly **one** `X-Forwarded-For` entry. `TRUSTED_PROXY_HOPS=2` then finds no second entry and falls back to `REMOTE_ADDR` — which is Caddy's container IP, i.e. **a single value for every client**: one shared rate-limit bucket, one shared lockout axis (N9), one audit IP, and one maintenance-allowlist decision for the entire internet (the same class of bug as security finding N1). Conversely: if the hop count is higher than the number of proxies that Caddy actually trusts, the resolver picks a client-controlled entry — the spoofing case from #1375.
+
+The two values therefore belong together. In front of a CDN/load balancer:
+
+```
+# Ranges of the upstream proxy - space-separated, CIDR or a bare address
+TRUSTED_PROXY_CIDRS=203.0.113.0/24 2001:db8::/32
+TRUSTED_PROXY_HOPS=2
+```
+
+The same variable fills both the Caddy directive `trusted_proxies static` in the global `servers` block of the Caddyfiles (passed through in the `caddy` service of the compose files) **and** `settings.TRUSTED_PROXY_CIDRS`. This gives exactly one source; the edge and the application cannot drift apart.
+
+The combination is backed by two system checks in [`core/checks.py`](https://github.com/anlaufstelle/app/blob/main/src/core/checks.py):
+
+| ID | Trigger | Meaning |
+|----|-----------|-----------|
+| `core.E001` | `TRUSTED_PROXY_HOPS` negative/not an integer | Startup aborts |
+| `core.W001` | `hops >= 3` | Heuristic: more than CDN + Caddy is rarely real (unchanged since #1375) |
+| `core.W003` | `hops > 1`, but `TRUSTED_PROXY_CIDRS` empty | **new** — the hop count has no effect (see above) |
+| `core.E003` | An entry in `TRUSTED_PROXY_CIDRS` is not a valid IP range for Caddy | **new** — startup aborts; otherwise **Caddy** refuses to start, and only after the `web` container has already been reported healthy |
+
+`core.W001` keeps its meaning as published with #1375; the two checks added with #1963 get their own IDs, so an existing runbook table doesn't silently start showing something else.
+
+**Syntax (`core.E003`):** The value is parsed by **Caddy**, not by the application — the Caddyfile parser splits directive arguments only on spaces/tabs. A comma is therefore not a separator (`203.0.113.0/24,198.51.100.0/24` is, for Caddy, ONE unusable range), and Caddy does not understand netmasks (`192.168.0.0/255.255.255.0`). The check mirrors Caddy's parser exactly (Go's `netip.ParsePrefix`, including leading zeros like `/032`) — whatever passes here starts the reverse proxy; whatever fails here would have killed it.
+
+`trusted_proxies_strict` is additionally present in every global `servers` block: since Caddy 2.8, Caddy then reads the client IP headers from the **right** instead of the left, thereby taking the entry set by the proxy instead of the client-controlled one — the same reading direction that `get_client_ip` uses. The pinned image is `caddy:2-alpine` at version 2.11.4 (digest in `docker-compose.prod.yml`), and the directive is present there.
+
+### 12.3 EXTERNAL_ORIGIN (Refs #1967)
+
+The production check only forbids the match-all entry `*` in `ALLOWED_HOSTS`; subdomain patterns like `.example.org` remain explicitly allowed (§ `settings/prod.py`). If, in such a deployment, another allowed host points at the application, a token link would go out with **that** host — the request's `Host` header would then be part of the security boundary.
+
+The three productive link sources — the invitation setup link ([`services/security/invite.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py)), the password reset email ([`views/auth.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/auth.py)), and the unlock email ([`views/lockout_recovery.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/lockout_recovery.py)) — therefore no longer read the request. Scheme and host come exclusively from `EXTERNAL_ORIGIN` ([`services/security/origin.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/origin.py)):
+
+```
+EXTERNAL_ORIGIN=https://anlaufstelle.example.de
+```
+
+- **Format:** scheme (`http`/`https`) + host + optional port. No path, no trailing slash, no query. An invalid value aborts startup, instead of surfacing in an already-sent email.
+- **Derivation:** If `ALLOWED_HOSTS` carries exactly **one** public hostname, `https://<host>` is derived from it (the same pattern as `OTP_WEBAUTHN_RP_ID`) — the normal case of "one domain behind Caddy" does not need the variable.
+- **Loopback doesn't count:** `localhost`, `127.0.0.1`, and `::1` are in `ALLOWED_HOSTS` only so the container healthcheck (`http://localhost:8000/health/`) doesn't get a `DisallowedHost` 400 — the bundled deploy templates therefore list them alongside the domain. They are disregarded for the derivation; they would never be a candidate as the basis of a token link anyway.
+- **Fail-closed:** With several public hosts, a pure wildcard config, or only loopback entries, there is no unambiguous answer; prod then does not start, and names `EXTERNAL_ORIGIN` in the abort message. Deliberately no guessing: a wrongly guessed origin makes every token link unusable.
+- **The `ALLOWED_HOSTS` check itself was not tightened** — subdomain patterns remain allowed, they are now simply irrelevant for link construction.
+
+On a domain change, `EXTERNAL_ORIGIN` must be updated along with it: already-sent links keep pointing at the old address and expire after their validity period (`DJANGO_PASSWORD_RESET_TIMEOUT` or `DJANGO_INVITE_TOKEN_TIMEOUT`).
+
+---
+
+## 13. PostgreSQL Major Upgrade (16 → 18)
+
+Refs #1039. PostgreSQL major versions have **incompatible data directories** — starting the new image in place on the old volume is impossible. Chosen and locally rehearsed path: **dump → fresh PG18 cluster → restore**. (`pg_upgrade` was rejected: the Alpine image only contains one binary major version, and PG18's `initdb` enables data checksums by default — a 16-series cluster without checksums would first have to be converted for that.)
+
+**Changed image layout from 18 on:** `PGDATA` now lives under `/var/lib/postgresql/18/docker`, and the image declares `VOLUME /var/lib/postgresql`. Since #1039, the compose files therefore mount the parent directory (`…:/var/lib/postgresql` instead of `…/data`). If the new build is accidentally started against an old 16-series volume, the entrypoint aborts **in a controlled way, with no data loss** ("there appears to be PostgreSQL data in: /var/lib/postgresql" + a hint).
+
+### 13.1 Prod/Staging — Preserving Data (Maintenance Window)
+
+Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and the volume `*_pgdata_staging`. The order is safety-critical: **roles before data** — the init script creates the app/admin role in the fresh cluster before the restore re-establishes ownership/grants (ADR-020).
+
+```bash
+# 0. Activate maintenance mode (§ 6) + stop web - DB stays reachable for the dump
+docker compose -f docker-compose.prod.yml stop web
+
+# 1. Final encrypted backup (§ 1.1) + an unencrypted working dump.
+# Dump as the admin role (BYPASSRLS) over the container socket - like backup.sh../scripts/ops/backup.sh
+docker compose -f docker-compose.prod.yml exec -T db \
+ sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
+
+# 2. Stop the DB, pull a volume tarball as a byte-exact rollback anchor
+# (check the volume name: docker volume ls | grep pgdata)
+docker compose -f docker-compose.prod.yml stop db
+docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
+ tar czf /to/pgdata-pg16.tar.gz -C /from.
+
+# 3. Remove the old DB container + volume - only AFTER steps 1+2!
+docker compose -f docker-compose.prod.yml rm -f db
+docker volume rm anlaufstelle_pgdata
+
+# 4. Bring in the new release state (postgres:18-alpine + new mount)
+git pull # or the release package
+
+# 5. Bring up only the DB: a fresh initdb (PG 18, checksums on) + the init script
+# creates the app/admin role. The log must be error-free.
+docker compose -f docker-compose.prod.yml up -d db
+docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal' # 0
+
+# 6. Restore as the bootstrap superuser via the container socket (bypasses RLS/FORCE-RLS,
+# like scripts/ops/restore-drill.sh; --clean/--if-exists is safe to rerun)
+docker compose -f docker-compose.prod.yml exec -T db \
+ sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+
+# 7. Verify: role gate, RLS active, spot checks
+docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles # exit 0
+docker compose -f docker-compose.prod.yml exec -T db sh -c \
+ 'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"' # > 0
+
+# 8. Migrations as a one-shot (usually a no-op) + bring up the stack + health (§ 1.2/1.3)
+docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
+docker compose -f docker-compose.prod.yml up -d web caddy
+curl -sf https://$DOMAIN/health/ | python3 -m json.tool
+
+# 9. Turn off maintenance mode. The working dump contains PLAINTEXT data - delete
+# it immediately; discard the tarball after a grace period (e.g. 1 week).
+rm /tmp/upgrade-pg16.dump
+```
+
+If `pg_restore` reports a warning on `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, the data is still complete — afterwards, run the MV refresh once (§ 11).
+
+### 13.2 Rollback
+
+Primarily via the volume tarball (the exact 16-series byte state), alternatively the encrypted backup (§ 6):
+
+```bash
+# 1. Roll the compose state back: postgres:16-alpine + mount …:/var/lib/postgresql/data
+git checkout <previous-state> -- docker-compose.prod.yml
+
+# 2. Remove the 18-series volume, restore the 16-series bytes
+docker compose -f docker-compose.prod.yml rm -f db
+docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
+docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
+ tar xzf /from/pgdata-pg16.tar.gz -C /to
+
+# 3. Bring up the stack + health
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### 13.3 dev.anlaufstelle.app — Data Is Disposable
+
+`pgdata_dev` only holds demo seed data (Refs #1039): no restore needed.
+
+```bash
+cd /opt/anlaufstelle
+docker compose -f docker-compose.dev.yml --env-file .env.dev stop db web
+docker compose -f docker-compose.dev.yml --env-file .env.dev rm -f db
+docker volume rm anlaufstelle_pgdata_dev
+# Deploy the new state (make deploy-dev from the operator machine): fresh
+# 18-series cluster + roles via the init script, migrate job, stack start.
+# Afterward, demo data: make dev-seed SEED_ARGS="--flush --scale=medium"
+```
+
+The complete path (init roles before data, superuser restore, `check_db_roles` exit 0, FORCE-RLS active, app role without bypass, MV refresh, rollback to 16) was rehearsed locally in Docker as part of #1039.
+
+### 13.4 Future Major Upgrades (18 → 19 and Beyond) — Forward Reference
+
+> **Placeholder (Refs #1039).** The **dump → fresh cluster → restore** path described above is the **generic pattern for every** PostgreSQL major jump, not just 16→18. Future upgrades (18→19 etc.) follow the same steps from §13.1/§13.2; essentially only the version numbers, the `postgres:<N>-alpine` image, and possibly the `PGDATA` mount path need adjusting, should a new image layout move the directory again (as the move to `/var/lib/postgresql/18/docker` did for 18).
+
+Before the next major jump, check:
+
+- **Release notes of the target major** for incompatible changes (data format, removed functions, changed defaults — e.g. data checksums by default for 18).
+- **Image layout/`VOLUME` path** of the new `postgres:<N>-alpine` — if it changes, update the mounts in all compose files (`prod`/`staging`/`dev`), analogous to #1039.
+- **Availability of `pg_dump`/`pg_restore` of the target major** in the image (cross-version dump compatibility).
+
+This note is deliberately kept brief; the detailed, locally rehearsed procedure stays in §13.1–§13.3 and will be made concrete under a new issue when the next actual upgrade happens.
+
+---
+
+## Quick Reference
+
+```text
+Create backup./scripts/ops/backup.sh
+Restore backup./scripts/ops/restore.sh <file.sql.gz.enc>
+Health check curl -sf https://$DOMAIN/health/
+Container status docker compose -f docker-compose.prod.yml ps
+Live logs docker compose -f docker-compose.prod.yml logs -f web
+Migration status docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
+Django deploy check docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
+Retention dry run docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
+Snapshot dry run docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
+MV refresh docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
+Check RLS session var psql -c "SELECT current_setting('app.current_facility_id', true);"
+Stop the stack docker compose -f docker-compose.prod.yml down
+Start the stack docker compose -f docker-compose.prod.yml up -d
+Regenerate lock files make deps-lock
+Check for lock-file drift make deps-check
+```
