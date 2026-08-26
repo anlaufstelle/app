@@ -798,6 +798,12 @@ def _warn_on_field_sensitivity_downgrade(
             effective_sensitivity(ts, new_field) < effective_sensitivity(ts, old_field) for ts in type_sensitivities
         )
     else:
+        # Refs #1991 (bewusste Abweichung): hier bleibt der Default 0 stehen,
+        # weil der Roh-Vergleich ohne Typ-Referenz genau die im Docstring
+        # festgehaltene Regel „``""`` ⇒ Rang 0" braucht. Es ist zudem kein
+        # Lese-Gate, sondern eine Warn-Heuristik fuer die Betreiber-Meldung;
+        # die fail-closed ``sensitivity_rank`` wuerde ``""`` zum „unbekannten"
+        # Hoechstrang machen und die Warnung ins Gegenteil verkehren.
         ranks: dict[str, int] = {str(level): rank for level, rank in SENSITIVITY_RANK.items()}
         downgraded = ranks.get(new_field, 0) < ranks.get(old_field, 0)
     if downgraded:

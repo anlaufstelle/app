@@ -462,3 +462,89 @@ class TestHandoverHidesEventsBySensitivity:
         crisis_highlights = [h for h in summary["highlights"] if h["type"] == "crisis"]
         assert len(crisis_highlights) == 1
         assert summary["stats"]["events_total"] == 1
+
+
+@pytest.mark.django_db
+class TestUnbekannteSensitivityGates:
+    """Unbekannte Sensitivity-Werte gaten fail-closed (Refs #1991).
+
+    Die Listen-Wahrheit (``Event.objects.visible_to`` ueber
+    ``allowed_sensitivities_for_user``) war seit jeher fail-closed: ein Wert,
+    den ``SENSITIVITY_RANK`` nicht kennt, steht in KEINER ``allowed``-Liste und
+    faellt fuer jede Rolle heraus. Die Einzelfall-Wahrheit rechnete dagegen mit
+    ``SENSITIVITY_RANK.get(value, 0)`` — Rang 0 also, wie ``normal``, sichtbar
+    fuer alle. Ein neuer Sensitivity-Wert (Migration, Paket) oder eine korrupte
+    Zeile haette Datensaetze aus jeder Liste genommen und sie ueber
+    Detail-/Erfassungspfade trotzdem freigegeben.
+    """
+
+    UNBEKANNT = "kritisch"
+
+    @staticmethod
+    def _force_sensitivity(instance, value):
+        """``choices`` sind Formular-Validierung, keine DB-Beschraenkung."""
+        type(instance).objects.filter(pk=instance.pk).update(sensitivity=value)
+        instance.refresh_from_db()
+        return instance
+
+    def test_unbekannter_wert_versteckt_das_ereignis_in_liste_und_einzelpruefung(
+        self, facility, admin_user, staff_user, doc_type_elevated
+    ):
+        from core.services.compliance import user_can_see_document_type, user_can_see_event
+
+        event = Event.objects.create(
+            facility=facility,
+            document_type=doc_type_elevated,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        self._force_sensitivity(doc_type_elevated, self.UNBEKANNT)
+        event.refresh_from_db()
+
+        # Auch die hoechste Rolle sieht den Datensatz nicht — genau wie bei der
+        # Listen-Wahrheit, die den unbekannten Wert nie in ``allowed`` fuehrt.
+        assert event.pk not in set(Event.objects.visible_to(admin_user).values_list("pk", flat=True))
+        assert user_can_see_event(admin_user, event) is False
+        assert user_can_see_document_type(admin_user, doc_type_elevated) is False
+
+    def test_unbekannter_feldwert_versteckt_das_feld_fuer_jede_rolle(
+        self, admin_user, assistant_user, lead_user, staff_user
+    ):
+        from core.services.compliance import user_can_see_field
+
+        for user in (assistant_user, staff_user, lead_user, admin_user):
+            assert user_can_see_field(user, DocumentType.Sensitivity.NORMAL, self.UNBEKANNT) is False, (
+                f"{user.role} sieht ein Feld mit unbekannter Sensitivity"
+            )
+
+    def test_leerer_feldwert_erbt_weiterhin_vom_dokumentationstyp(self, assistant_user, lead_user):
+        """Gegenrichtung: ``""`` ist Vererbung, kein unbekannter Wert."""
+        from core.services.compliance import effective_sensitivity, user_can_see_field
+
+        assert effective_sensitivity(DocumentType.Sensitivity.NORMAL, "") == 0
+        assert effective_sensitivity(DocumentType.Sensitivity.ELEVATED, "") == 1
+        assert effective_sensitivity(DocumentType.Sensitivity.HIGH, "") == 2
+        assert user_can_see_field(assistant_user, DocumentType.Sensitivity.NORMAL, "") is True
+        assert user_can_see_field(assistant_user, DocumentType.Sensitivity.ELEVATED, "") is False
+        assert user_can_see_field(lead_user, DocumentType.Sensitivity.HIGH, "") is True
+
+    def test_unbekannter_rang_liegt_ueber_jedem_rollen_maximum(self):
+        """Der Ersatzrang muss JEDE Rolle ausschliessen, nicht nur die untersten.
+
+        ``max(SENSITIVITY_RANK.values())`` (also ``high``) waere zu niedrig:
+        Leitung und Anwendungsbetreuung duerfen ``high`` sehen und bekaemen den
+        unbekannten Wert weiterhin ausgeliefert. Die Listen-Query versteckt ihn
+        dagegen auch vor ihnen.
+        """
+        from core.services.compliance.sensitivity import (
+            ROLE_MAX_SENSITIVITY,
+            SENSITIVITY_RANK,
+            effective_sensitivity,
+        )
+
+        unbekannt = effective_sensitivity(self.UNBEKANNT)
+        assert unbekannt > max(SENSITIVITY_RANK.values())
+        assert unbekannt > max(ROLE_MAX_SENSITIVITY.values())
+        # Der Feld-Override zieht denselben Rang hoch, nicht nur der Typ.
+        assert effective_sensitivity(DocumentType.Sensitivity.NORMAL, self.UNBEKANNT) == unbekannt
