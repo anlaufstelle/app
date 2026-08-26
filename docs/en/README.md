@@ -46,6 +46,7 @@ Templates included:
 
 | Document | Description |
 |----------|-------------|
+| [architecture.md](../architecture.md) | Architecture overview as a signpost: layers (views → services → models), security architecture in brief, no-code configuration core, offline PWA, test landscape — with pointers into the in-depth documents (Refs #1062) |
 | [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
 | [ops-runbook.md](../ops-runbook.md) | Operations runbook: monitoring, alerts, cron jobs, RLS, backup/restore, restore drill |
 | [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
@@ -69,5 +70,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.84.0 -->
-<!-- translation-date: 2026-08-09 -->
-<!-- source-hash: 6bdbbb857de243c3152efd64f1046bcc9afa734c -->
+<!-- translation-date: 2026-08-26 -->
+<!-- source-hash: 369fd302060a22e79c67430263104f072008a2eb -->

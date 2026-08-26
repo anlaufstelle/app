@@ -12,6 +12,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
+| [architecture.md](architecture.md) | Architektur-Überblick als Wegweiser: Schichten (Views → Services → Models), Sicherheitsarchitektur in Kurzform, No-Code-Konfigurationskern, Offline-PWA, Test-Landschaft — mit Verweisen in die vertiefenden Dokumente (Refs #1062) | Neue Mitwirkende, Entwickler |
 | [fachkonzept-anlaufstelle.md](fachkonzept-anlaufstelle.md) | Domänenkonzept, Produktvision, Architekturentscheidungen, nicht-funktionale Anforderungen, DSGVO | Stakeholder, Architekten, Entwickler |
 | [sprachleitlinie.md](sprachleitlinie.md) | Sprachleitlinie für UI und Handbuch — _Klientel → Person_, Terminologie-Matrix, Refactor-Priorisierung (Refs #604) | Entwickler, Doku-Autoren, Designer |
 | [adr/](adr/) | Architecture Decision Records — warum die Architektur so aussieht, wie sie aussieht | Architekten, Entwickler |
