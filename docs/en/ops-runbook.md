@@ -335,8 +335,8 @@ Two jobs stay host-side because they cannot run in the sidecar:
  deliberately run *outside* the monitored stack.
 
 ```cron
-# Anlaufstelle - Host cron (backup + hygiene). Everything else is handled by the
-# cron sidecar from §3.2 - do NOT set these entries up twice!
+# Anlaufstelle – Host cron (backup + hygiene). Everything else is handled by the
+# cron sidecar from §3.2 — do NOT set these entries up twice!
 # Set up in /etc/crontab or via `crontab -e` on the host
 
 # Backup (daily 02:00, before retention in the sidecar at 03:00)
@@ -386,7 +386,7 @@ Relevant if the stack is run without `docker-compose.prod.yml` (e.g.
 Coolify, k8s) and therefore no `cron` service exists.
 
 ```cron
-# Anlaufstelle - Operational cron jobs (legacy: without the cron sidecar)
+# Anlaufstelle – Operational cron jobs (legacy: without the cron sidecar)
 # Set up in /etc/crontab or via `crontab -e` on the host
 
 # Backup (daily 02:00, before retention)
@@ -407,7 +407,7 @@ Coolify, k8s) and therefore no `cron` service exists.
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 
 # Orphan storage cleanup (daily 04:30, after the snapshots; remove orphaned
-# .enc files with no Attachment record - owner-independent, i.e.
+# .enc files with no Attachment record — owner-independent, i.e.
 # event, person, and case attachments, Refs #662/#1554/#1738)
 # MUST run with the admin DB role (BYPASSRLS), otherwise the command aborts
 # fail-loud (§9 DB role model): as an RLS-filtered app role, the run would see
@@ -507,12 +507,12 @@ docker compose -f docker-compose.prod.yml exec web \
 # Orphaned FILE markers are deliberately SKIPPED for ALL three entities
 # and reported separately as "file orphan(s) skipped", NOT deleted: the
 # data_json marker is the only bridge to the encrypted attachment
-# row. (Until M24 the rule effectively only affected events - file fields were
+# row. (Until M24 the rule effectively only affected events — file fields were
 # locked out of person/case types; since Refs #1738, persons and
 # cases can also carry FILE orphans and are spared in the same way.)
 # This file cleanup runs via the attachment deletion paths, or
 # cleanup_orphan_storage_files (after the attachment row is deleted), not
-# via this command - the skipped count therefore does not count as
+# via this command — the skipped count therefore does not count as
 # completed file minimization.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
  purge_orphan_field_data --dry-run # preview
@@ -522,10 +522,10 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # Facility export (Refs #1060, M4 / GDPR Art. 20): a facility's complete domain
 # data as a versioned JSON (schema v1, reference
 # docs/facility-export-schema.md). MUST run with the admin DB role
-# (BYPASSRLS) - otherwise fail-loud instead of silently empty lists.
+# (BYPASSRLS) — otherwise fail-loud instead of silently empty lists.
 #
 # DATA-PROTECTION WARNING: the output file contains DECRYPTED plaintext
-# values (including Art.-9 content) - treat it like a DB backup: only
+# values (including Art.-9 content) — treat it like a DB backup: only
 # write it to encrypted destinations, hand it over only to authorized people, then
 # delete it securely. Runtime scales with the number of attachments (SHA-256 is
 # streamed over the decrypted contents); --no-file-hashes
@@ -537,10 +537,10 @@ docker compose -f docker-compose.prod.yml run --rm \
 
 # Inventory of report bindings (Refs #1848): for ONE facility, lists
 # which report key sits in which report backend (type and
-# field level) and which document types and field templates carry it -
+# field level) and which document types and field templates carry it
 # or which carry none and therefore appear in no report. Pure
 # information, does not change any data. MUST run with the admin DB role
-# (BYPASSRLS) - otherwise fail-loud (§ 9 DB role model): under the app role
+# (BYPASSRLS) — otherwise fail-loud (§ 9 DB role model): under the app role
 # without a facility context, an empty/filtered inventory would look like a
 # flawlessly configured facility.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
@@ -552,7 +552,7 @@ docker compose -f docker-compose.prod.yml run --rm \
 
 # Initial facility setup (Refs #1883): interactively create the organization,
 # facility, settings, default catalog, and first facility_admin.
-# MUST run with the admin DB role (BYPASSRLS) - the command writes to
+# MUST run with the admin DB role (BYPASSRLS) — the command writes to
 # core_settings and (with the default catalog) to core_documenttype/-fieldtemplate/
 # -documenttypefield/-fieldgroup/-fieldcondition, all FORCE-RLS tables
 # with a USING-only policy that PostgreSQL also checks on INSERT. The
@@ -562,7 +562,7 @@ docker compose -f docker-compose.prod.yml run --rm \
 # --no-default-package leaves out the catalog (the facility starts without
 # document types and can only be documented on after load_package).
 # If the facility already carries document types or field templates, the
-# catalog stays UNTOUCHED - initial setup, not a catalog update (that's what
+# catalog stays UNTOUCHED — initial setup, not a catalog update (that's what
 # the next command is for).
 docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 
@@ -570,7 +570,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 # functionally identical to "load_package --file <…>/default.yaml", just without
 # the container path. Never deletes anything, but writes catalog properties of
 # existing rows back to the package state (resync table in
-# docs/packages.md) (German) - so review it first with --dry-run. Repeatable,
+# docs/packages.md) (German) — so review it first with --dry-run. Repeatable,
 # same role prerequisite.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
  load_package --default --facility <uuid> --dry-run
@@ -785,7 +785,7 @@ If `REDIS_URL` is empty or unset, `prod.py` uses the shared `DatabaseCache`. The
 Deliberately turning Redis off (e.g. a very small deployment, where every MB of RAM counts):
 
 ```bash
-# in .env - empty, not commented out:
+# in .env — empty, not commented out:
 REDIS_URL=
 ```
 
@@ -981,7 +981,7 @@ Cron entry (see § 3 Cron Jobs):
 
 ### 6.5c Security Advisory — Report, Assessment, Publication (Refs #1895)
 
-Counterpart to § 6.5b: that section is about a **data breach in an operated instance** (GDPR Art. 33/34), this one is about a **vulnerability in the software itself**. The public commitment on this is in [SECURITY.md](../../SECURITY.md) (Meldewege, SLA, support rule — German); this section is the internal process behind it.
+Counterpart to § 6.5b: that section is about a **data breach in an operated instance** (GDPR Art. 33/34), this one is about a **vulnerability in the software itself**. The public commitment on this is in [SECURITY.md](../../SECURITY.md) (reporting channels, SLA, support rule); this section is the internal process behind it.
 
 **Precondition:** "Private vulnerability reporting" must be enabled on `anlaufstelle/app` (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, or `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). This setting only exists for **public** repositories — the non-public repositories of the release pipeline are therefore out of scope. As long as it's off, the GHSA form link in `SECURITY.md` leads nowhere and **only the email route works** — status check:
 
@@ -1087,7 +1087,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev f
 
 Output: one `OK` / `FAIL` entry per step. Exit code != 0 on any `FAIL`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
 
-> **Benign exception during the restore (step 2):** The dump contains a `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, which on restore fails against `FORCE ROW LEVEL SECURITY` on `core_event` (`--dev`: `pg_restore: errors ignored on restore: 1`). This only affects the statistics cache, not the payload data — the mv-refresh timer rebuilds it hourly. The `--dev` drill reports this as `OK … MV refresh skipped (benign)` and only fails on **other** errors. In the `--prod` branch, `psql` deliberately runs without `ON_ERROR_STOP` (the same MV refresh error is tolerated), which means the exit code alone does not prove completeness — the fail-closed proof is delivered by the row comparison in **step 3b**, before the restore is marked as verified.
+> **Benign exception during the restore (step 2):** The dump contains a `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, which on restore fails against `FORCE ROW LEVEL SECURITY` on `core_event` (`--dev`: `pg_restore: errors ignored on restore: 1`). This only affects the statistics cache, not the payload data — the mv-refresh timer rebuilds it hourly. The `--dev` drill reports this as `OK … MV-Refresh übersprungen (benigne)` (German, from the script's own log output: "MV refresh skipped (benign)") and only fails on **other** errors. In the `--prod` branch, `psql` deliberately runs without `ON_ERROR_STOP` (the same MV refresh error is tolerated), which means the exit code alone does not prove completeness — the fail-closed proof is delivered by the row comparison in **step 3b**, before the restore is marked as verified.
 
 **Compliance marker** (Refs #919): On success, step 7 automatically writes a `RESTORE_VERIFIED` AuditLog entry (`manage.py mark_restore_verified`), which the compliance dashboard (`/system/compliance/`) uses as an age indicator:
 
@@ -1212,7 +1212,7 @@ are generated from them and committed.
 
 ```bash
 # 1. Add the dependency to requirements.in (runtime) or requirements-dev.in
-# (dev/test) - with an open range, e.g. "Django>=5.1,<5.2".
+# (dev/test) — with an open range, e.g. "Django>=5.1,<5.2".
 
 # 2. Regenerate the lock files (pip-tools must be installed):
 make deps-lock
@@ -1404,8 +1404,9 @@ that they are set and no longer at `change-me-*`.
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
-# expected: app role rolsuper=False, rolbypassrls=False
-# admin role rolsuper=False, rolbypassrls=True (exit code 0)
+# expected (role labels are German, from the command's own output):
+# App-Rolle rolsuper=False, rolbypassrls=False
+# Admin-Rolle rolsuper=False, rolbypassrls=True (exit code 0)
 ```
 
 ### DB Password Rotation (All Three Roles)
@@ -1471,14 +1472,16 @@ and starts `web`/`cron`. Only after that do three negative tests run over the
 compose network host `db`, and therefore PostgreSQL's SCRAM password
 authentication. The loopback path in the DB container is not suitable for
 this, because official PostgreSQL volumes may carry a `trust` rule there.
-Expected closing lines (role names may differ, secrets never appear):
+Expected closing lines (role names may differ, secrets never appear). The script's messages are German and not localized, so they are reproduced here verbatim — match your terminal output against these lines literally, not against a translation:
 
 ```text
-[db-password-rotation] Negative test green: old login for role anlaufstelle is rejected with an auth error.
-[db-password-rotation] Negative test green: old login for role anlaufstelle_admin is rejected with an auth error.
-[db-password-rotation] Negative test green: old login for role postgres is rejected with an auth error.
-[db-password-rotation] Rotation complete. Backup/restore jobs will read the new env file on their next run.
+[db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle wird mit Auth-Fehler abgewiesen.
+[db-password-rotation] Negativtest gruen: alter Login fuer Rolle anlaufstelle_admin wird mit Auth-Fehler abgewiesen.
+[db-password-rotation] Negativtest gruen: alter Login fuer Rolle postgres wird mit Auth-Fehler abgewiesen.
+[db-password-rotation] Rotation abgeschlossen. Backup-/Restore-Jobs lesen beim naechsten Lauf die neue Env-Datei.
 ```
+
+(English: "Negative test green: old login for role \<X> is rejected with an auth error." / "Rotation complete. Backup/restore jobs will read the new env file on their next run.")
 
 A plain "connection failed" doesn't count: the negative test only accepts
 PostgreSQL's `password authentication failed`; before that, the same three
@@ -1672,7 +1675,7 @@ already done) and verify with the § 9.5 verification.
 **Fail-loud gate (Refs #1026):**
 Since A1.4, `check_db_roles` **additionally checks ownership on top of the attribute check**.
 As long as the move above has not run yet (the app role is still the DB/table
-owner), the gate reports `FAIL … ownership move … § 9.6` and aborts with **exit 1**
+owner), the gate reports `FAIL … Ownership-Umzug … § 9.6` (German, from the check's own message: "ownership move … § 9.6") and aborts with **exit 1**
 — `docker-migrate.sh` stops the deploy before new web replicas go live.
 This prevents the earlier silent fail-open, where the deploy went green despite
 still-app-owned tables (the attribute profile of app/admin alone stays the
@@ -1713,7 +1716,7 @@ stay around with an unusable password.
 ```sql
 -- All user accounts that have never logged in and have not set a usable
 -- password, older than 7 days. A management command deliberately does
--- not exist -- manual review before deletion is mandatory
+-- not exist — manual review before deletion is mandatory
 -- (GDPR Art. 6 / 17).
 SELECT id, username, email, date_joined, facility_id
 FROM core_user
@@ -1783,7 +1786,7 @@ running readers are not blocked
 ### 11.1 Manual Refresh
 
 ```bash
-# Concurrent refresh (default - non-blocking)
+# Concurrent refresh (default — non-blocking)
 docker compose -f docker-compose.prod.yml exec web \
  python manage.py refresh_statistics_view
 
@@ -1871,7 +1874,7 @@ Explained in `.env.example`. The value counts from the right: [`signals.audit.ge
 The two values therefore belong together. In front of a CDN/load balancer:
 
 ```
-# Ranges of the upstream proxy - space-separated, CIDR or a bare address
+# Ranges of the upstream proxy — space-separated, CIDR or a bare address
 TRUSTED_PROXY_CIDRS=203.0.113.0/24 2001:db8::/32
 TRUSTED_PROXY_HOPS=2
 ```
@@ -1924,11 +1927,11 @@ Refs #1039. PostgreSQL major versions have **incompatible data directories** —
 Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and the volume `*_pgdata_staging`. The order is safety-critical: **roles before data** — the init script creates the app/admin role in the fresh cluster before the restore re-establishes ownership/grants (ADR-020).
 
 ```bash
-# 0. Activate maintenance mode (§ 6) + stop web - DB stays reachable for the dump
+# 0. Activate maintenance mode (§ 6) + stop web — DB stays reachable for the dump
 docker compose -f docker-compose.prod.yml stop web
 
 # 1. Final encrypted backup (§ 1.1) + an unencrypted working dump.
-# Dump as the admin role (BYPASSRLS) over the container socket - like backup.sh../scripts/ops/backup.sh
+# Dump as the admin role (BYPASSRLS) over the container socket — like backup.sh../scripts/ops/backup.sh
 docker compose -f docker-compose.prod.yml exec -T db \
  sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
 
@@ -1938,7 +1941,7 @@ docker compose -f docker-compose.prod.yml stop db
 docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
  tar czf /to/pgdata-pg16.tar.gz -C /from.
 
-# 3. Remove the old DB container + volume - only AFTER steps 1+2!
+# 3. Remove the old DB container + volume — only AFTER steps 1+2!
 docker compose -f docker-compose.prod.yml rm -f db
 docker volume rm anlaufstelle_pgdata
 
@@ -1965,7 +1968,7 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migr
 docker compose -f docker-compose.prod.yml up -d web caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
-# 9. Turn off maintenance mode. The working dump contains PLAINTEXT data - delete
+# 9. Turn off maintenance mode. The working dump contains PLAINTEXT data — delete
 # it immediately; discard the tarball after a grace period (e.g. 1 week).
 rm /tmp/upgrade-pg16.dump
 ```
@@ -2037,5 +2040,5 @@ Check RLS session var psql -c "SELECT current_setting('app.current_facility_id',
 Stop the stack docker compose -f docker-compose.prod.yml down
 Start the stack docker compose -f docker-compose.prod.yml up -d
 Regenerate lock files make deps-lock
-Check for lock-file drift make deps-check
+Check lock-file drift make deps-check
 ```
