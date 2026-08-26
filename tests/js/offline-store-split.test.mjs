@@ -81,13 +81,30 @@ const EXPECTED_FACADE_KEYS = [
     "FACILITY_BUNDLE_SCHEMA_VERSION",
 ];
 
+// Refs #1994: Beleg-Zaehler fuer den Harness-Selbsttest weiter unten. Sie
+// werden genau um den Harness-Aufruf herum erhoben — spaetere Registrierungen
+// (Teil-Lade-Szenarien, crypto.js) duerfen sie nicht verfaelschen.
+let harnessDclRegistrations;
+let harnessPagehideRegistrations;
+let readyStateAfterHarness;
+
 beforeAll(async () => {
     window.Dexie = Dexie;
     globalThis.Dexie = Dexie;
     await import("../../src/static/js/url-patterns.js");
     await import("../../src/static/js/crypto.js");
     await window.crypto_session.deriveSessionKey("correct horse battery", "c2FsdHNhbHRzYWx0");
-    await importOfflineStoreModules();
+    const docSpy = vi.spyOn(document, "addEventListener");
+    const winSpy = vi.spyOn(window, "addEventListener");
+    try {
+        await importOfflineStoreModules();
+        harnessDclRegistrations = docSpy.mock.calls.filter((c) => c[0] === "DOMContentLoaded").length;
+        harnessPagehideRegistrations = winSpy.mock.calls.filter((c) => c[0] === "pagehide").length;
+    } finally {
+        docSpy.mockRestore();
+        winSpy.mockRestore();
+    }
+    readyStateAfterHarness = document.readyState;
     store = window.offlineStore;
 });
 
@@ -156,9 +173,13 @@ describe("#1838 — Verbrauchs-Slot des offline-store-Verbunds", () => {
     });
 });
 
-// Teil-Lade-Szenarien: eigene Import-Sequenzen mit derselben Fake-Timer-
-// Mechanik wie der Loader-Helper (Browser: Disarm-Makrotask laeuft nach den
-// synchronen Tags; Details in _offline_store_modules.mjs).
+// Teil-Lade-Szenarien: eigene Import-Sequenzen, die BEWUSST den
+// Makrotask-Fallback von offline-db.js nehmen (readyState bleibt "complete").
+// Refs #1994: Der gemeinsame Loader-Helper laeuft seit dem Umbau ueber den
+// echten DOMContentLoaded-Pfad und braucht keine Fake-Timer mehr — hier
+// bleiben sie, weil genau dieser Fallback-Zweig gepinnt werden soll (die
+// Fake-Timer halten den 0ms-Disarm an, bis alle Dateien geladen sind, und
+// runAllTimers() feuert ihn danach).
 async function loadPartial(files) {
     vi.resetModules();
     vi.useFakeTimers();
@@ -218,6 +239,29 @@ describe("#1838 — Fail-loud bei Ausfall eines mittleren Moduls", () => {
         } finally {
             restore();
         }
+    });
+});
+
+describe("#1994 — der Harness durchlaeuft den echten DOMContentLoaded-Pfad", () => {
+    // Selbsttest des gemeinsamen Loaders (_offline_store_modules.mjs): Solange
+    // er den Verbund bei readyState "complete" importierte, lief JEDE Suite
+    // dieses Helfers ueber den Makrotask-Fallback von offline-db.js — der
+    // Browser-Zweig (DOMContentLoaded + pagehide) war in ~30 Suiten nie aktiv
+    // und nur hier im Einzel-Pin unten abgedeckt. Die Zaehler stammen aus
+    // beforeAll und belegen, welchen Zweig offline-db.js beim Laden GENOMMEN
+    // hat — nicht bloss, dass am Ende aufgeraeumt war (das gilt in beiden
+    // Welten und wuerde den Unterschied verschlucken).
+    it("offline-db.js registriert beim Laden die DCL- und pagehide-Entwaffnung", () => {
+        expect(harnessDclRegistrations).toBe(1);
+        expect(harnessPagehideRegistrations).toBe(1);
+    });
+
+    it("nimmt das erzwungene readyState nach dem Laden wieder zurueck", () => {
+        // Sonst saehen spaeter geladene Module (autosave.js, offline-tally.js
+        // — beide verzweigen selbst auf readyState) faelschlich einen
+        // laufenden Parse und wuerden ihre init() nie ausfuehren.
+        expect(readyStateAfterHarness).not.toBe("loading");
+        expect(document.readyState).not.toBe("loading");
     });
 });
 

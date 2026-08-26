@@ -15,7 +15,10 @@ Mechanismen an die relevante User-Mutation:
    Passwortwechsel, ``auth.py:203``). Der nächste Salt-Fetch generiert einen
    neuen Salt; der mit dem alten Salt abgeleitete Schlüssel kann den
    IndexedDB-Chiffretext nicht mehr entschlüsseln → Auto-Discard
-   (``offline-store.js:71-75``).
+   (``_isTransientDecryptError`` in ``offline-db.js``: ein PERMANENTER
+   Decrypt-Fehler verwirft die Zeile; seit dem Verbund-Split #1838 liegt
+   dieser Lesepfad dort, nicht mehr in ``offline-store.js``. Bewusst ohne
+   Zeilennummern — die veralten still).
 2. **Session-Flush** — alle DB-Sessions des Users werden gelöscht, damit die
    laufende Session den (alten) Schlüssel nicht weiter nutzen und keinen neuen
    Salt über den ``LoginRequiredMixin``-Endpoint nachladen kann.
