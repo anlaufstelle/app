@@ -42,9 +42,13 @@
 #
 # Aktivierung — drei Schritte, alle nötig:
 #   1. `@<vertretung>` durch das echte GitHub-Handle der Vertretung ersetzen.
-#      Ein Platzhalter-Handle ist für GitHub ein Syntaxfehler und macht die
-#      Datei unwirksam — nicht halb aktivieren.
-#   2. Das `# ` am Zeilenanfang entfernen.
+#      `@<vertretung>` ist kein gültiges Handle: GitHub meldet die Zeile als
+#      fehlerhaft und überspringt sie, wodurch die Zuordnung ganz oder
+#      teilweise unwirksam werden kann — also nicht halb aktivieren.
+#   2. Bei den acht Pfad-Zeilen unten das `# ` am Zeilenanfang entfernen —
+#      **nur bei diesen**. Die erläuternden Kommentarzeilen darüber bleiben
+#      auskommentiert; würden sie mit einkommentiert, entstünde genau der
+#      Fehlerfall aus Schritt 1.
 #   3. In den Branch-Protection-Regeln von `main` „Require review from Code
 #      Owners" einschalten; ohne diesen Schalter ist CODEOWNERS nur ein
 #      Vorschlag für Reviewer-Zuweisungen, keine Pflicht.
@@ -76,8 +80,12 @@
 # Request-Pfad: Sicherheits-Header, Session-/Facility-Kontext
 # /src/core/middleware/            @tobiasnix @<vertretung>
 
-# Release-Integrität: Build, Signierung, Leak-Verify, SBOM
-# (dev-only-Pfad — im veröffentlichten Release-Snapshot nicht enthalten)
+# Release-Integrität: Build, Signierung, Leak-Verify, SBOM.
+# Achtung — dieser Pfad existiert NUR im Entwicklungs-Repository; der
+# Release-Build strippt `dev-ops/` aus dem veröffentlichten Snapshot. Die Zeile
+# gehört trotzdem hierher: Pull Requests werden im Entwicklungs-Repository
+# gereviewt, und genau dort greift sie. In einer Kopie des Public-Snapshots
+# läuft sie schlicht ins Leere (kein Fehler, nur wirkungslos).
 # /dev-ops/release/                @tobiasnix @<vertretung>
 
 # Regulatorische Einordnungen (heute: CRA-Einordnung)

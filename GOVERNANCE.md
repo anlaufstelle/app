@@ -104,7 +104,7 @@ Diese Datei beschreibt nicht nur die Regeln, sie unterliegt ihnen auch. Als
 | Art der Änderung | Weg |
 |------------------|-----|
 | **Wesentlich** — Entscheidungsmodell, Eskalationspfad, Review-Anforderungen, Aufnahme-/Abgangskriterien, Zuschnitt der Verantwortungsbereiche | **ADR** unter [`docs/adr/`](docs/adr/) mit Begründung und Alternativen, plus Pull Request, der die betroffenen Dateien nachzieht. Die ADR ist der Ort für das **Warum**, diese Datei bleibt die knappe geltende Fassung. |
-| **Nachführend** — eine benannte Vertretung eintragen, ausgeschiedene Maintainer entfernen, Verweise/Formulierungen korrigieren, einen erledigten offenen Punkt streichen | Regulärer Pull Request ohne ADR. Er bildet einen bereits getroffenen Beschluss ab und trifft ihn nicht. |
+| **Nachführend** — eine benannte Vertretung eintragen, ausgeschiedene Maintainer entfernen, Verweise/Formulierungen korrigieren, einen erledigten offenen Punkt streichen sowie sonstige rein tatsachenfortschreibende Änderungen, etwa die Versionstabelle in [SECURITY.md](SECURITY.md) beim Release | Regulärer Pull Request ohne ADR. Er bildet einen bereits getroffenen Beschluss oder eine eingetretene Tatsache ab und trifft keine neue Entscheidung. |
 
 Solange das Projekt im Solo-Betrieb ist, entscheidet der Lead-Maintainer nach dem
 Modell oben; die ADR-Pflicht für wesentliche Änderungen gilt **gerade dann**, weil
