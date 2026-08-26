@@ -155,10 +155,15 @@
             {# als Personenbezug in seinen verschluesselten Umschlag, damit der    #}
             {# Offline-Widerruf (#1760) den Entwurf der Person zuordnen und        #}
             {# tilgen kann. #}
-            {% include "components/_client_autocomplete.html" with client_form=meta_form anonymous_mode=True min_stage_hint=True extra_hidden_attrs="data-autosave-person" %}
-            <p x-show="selectionCleared" x-cloak data-testid="client-selection-cleared" class="mt-1 text-[12px] text-yellow-700">
-                {% trans "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe." %}
-            </p>
+            {# Ein gemeinsamer Wrapper um Autocomplete UND die drei Hinweis-<p> — #}
+            {# so wie vor dem Partial-Umbau. Das Partial bringt nur noch seinen  #}
+            {# eigenen Wurzel-Container mit; ohne diesen Wrapper stuende sein    #}
+            {# Closer hier verwaist und schloesse die Karte vorzeitig. #}
+            <div>
+                {% include "components/_client_autocomplete.html" with client_form=meta_form anonymous_mode=True min_stage_hint=True extra_hidden_attrs="data-autosave-person" %}
+                <p x-show="selectionCleared" x-cloak data-testid="client-selection-cleared" class="mt-1 text-[12px] text-yellow-700">
+                    {% trans "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe." %}
+                </p>
                 <p x-show="notAnonymousAllowed" x-cloak class="mt-1 text-[12px] text-yellow-700">
                     {% trans "Dieser Dokumentationstyp erfordert eine zugeordnete Person." %}
                 </p>
