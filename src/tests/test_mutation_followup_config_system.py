@@ -146,3 +146,65 @@ class TestConflictingReportKeyAssignmentPaths:
         DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft_inactive, sort_order=5)
         notiz = FieldTemplate.objects.get(facility=facility, name="Notiz")
         assert conflicting_report_key_assignment(notiz, "dauer_minuten", is_active=True) is None
+
+
+# ---------------------------------------------------------------------------
+# Posten 5 — mutations.save_document_type: previous_sensitivity-Spy (Refs #1998)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestSaveDocumentTypeBanRevisionWiring:
+    def test_sensitivity_change_calls_bump_with_correct_previous_value(self, req, facility):
+        """``save_document_type`` berechnet ``previous_sensitivity`` VOR dem
+        ``form.save()`` (``form.initial.get("sensitivity", "")``) und reicht
+        genau diesen alten Wert an
+        ``bump_ban_revision_for_document_type_change`` weiter — bislang war
+        dieser Verdrahtungs-Pfad komplett ungetestet: die Admin-Fallback-Seite
+        (``test_zeitstrom_ban_watch.py::TestDocTypeAdminWriteBoundary``) läuft
+        ausdrücklich NICHT über ``save_document_type``, und sonst importiert
+        nur ``mutations.py`` selbst diese Funktion.
+
+        Spy als MODUL-Attribut-Stub (``core.services.system.ban_revision``),
+        NICHT über einen Proxy — ``save_document_type`` importiert die
+        Funktion lazy per ``from ... import ...`` bei jedem Aufruf, liest das
+        Modul-Attribut also zur Aufrufzeit neu ein.
+        """
+        from core.services.system import ban_revision as ban_revision_module
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Hausverbot Spy",
+            system_type=DocumentType.SystemType.BAN,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+        )
+        calls = []
+
+        def _spy(document_type, changed_fields, *, previous_sensitivity):
+            calls.append((document_type, changed_fields, previous_sensitivity))
+
+        monkeypatch_target = "bump_ban_revision_for_document_type_change"
+        original = getattr(ban_revision_module, monkeypatch_target)
+        setattr(ban_revision_module, monkeypatch_target, _spy)
+        try:
+            form_cls = modelform_factory(DocumentType, fields=["facility", "name", "sensitivity"])
+            form = form_cls(
+                instance=doc_type,
+                data={
+                    "facility": facility.pk,
+                    "name": doc_type.name,
+                    "sensitivity": DocumentType.Sensitivity.HIGH,
+                },
+            )
+            assert form.is_valid(), form.errors
+            save_document_type(req, form, creating=False)
+        finally:
+            setattr(ban_revision_module, monkeypatch_target, original)
+
+        assert len(calls) == 1
+        called_obj, called_changed_fields, called_previous = calls[0]
+        assert called_obj.pk == doc_type.pk
+        assert "sensitivity" in called_changed_fields
+        # Der VORHERIGE Wert (NORMAL), nicht der neue (HIGH) — genau die
+        # Unterscheidung, die ``form.initial`` VOR dem Save festhaelt.
+        assert called_previous == DocumentType.Sensitivity.NORMAL
