@@ -540,7 +540,9 @@ class TestUnbekannteSensitivityGates:
         from core.services.compliance.sensitivity import (
             ROLE_MAX_SENSITIVITY,
             SENSITIVITY_RANK,
+            UNKNOWN_SENSITIVITY_RANK,
             effective_sensitivity,
+            sensitivity_rank,
         )
 
         unbekannt = effective_sensitivity(self.UNBEKANNT)
@@ -548,3 +550,70 @@ class TestUnbekannteSensitivityGates:
         assert unbekannt > max(ROLE_MAX_SENSITIVITY.values())
         # Der Feld-Override zieht denselben Rang hoch, nicht nur der Typ.
         assert effective_sensitivity(DocumentType.Sensitivity.NORMAL, self.UNBEKANNT) == unbekannt
+        # ``sensitivity_rank`` selbst kennt KEINE Vererbungs-Semantik: ``""``
+        # ist auch dort ein unbekannter Wert. Die Sonderbehandlung liegt bei
+        # den Aufrufern (``effective_sensitivity``, ``compute_event_search_text``).
+        assert sensitivity_rank("") == UNKNOWN_SENSITIVITY_RANK
+        assert effective_sensitivity("") == UNKNOWN_SENSITIVITY_RANK
+
+    def test_unbekannte_feld_sensitivity_landet_nicht_im_suchindex(
+        self, facility, admin_user, assistant_user, lead_user, staff_user, client_identified
+    ):
+        """Dritte Sichtbarkeits-Wahrheit: der Suchindex (Refs #1991, Fix-Runde 1).
+
+        ``compute_event_search_text`` entscheidet ueber eine Mengen-
+        Zugehoerigkeit (``sensitivity in {elevated, high}``) statt ueber den
+        Rang — ein unbekannter Wert faellt durch beide Zweige und wird
+        indexiert. ``Event.search_text`` ist Klartext, und
+        ``event_search_queryset`` durchsucht ihn per ``icontains``; das
+        Doc-Type-Gate der Suche greift auf EREIGNIS-Ebene und schuetzt ein
+        einzelnes Feld nicht. Der Inhalt eines Felds, das
+        ``user_can_see_field`` fuer JEDE Rolle sperrt, waere damit als
+        Substring-Orakel samt Trefferkarte fuer jede Rolle lesbar.
+        """
+        from core.services.compliance import user_can_see_field
+        from core.services.dashboard.search import event_search_queryset
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Suchindex-Typ",
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+        )
+        ft_unbekannt = FieldTemplate.objects.create(
+            facility=facility,
+            name="Sonderfeld",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        ft_normal = FieldTemplate.objects.create(
+            facility=facility,
+            name="Normalfeld Suche",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_unbekannt, sort_order=0)
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_normal, sort_order=1)
+        self._force_sensitivity(ft_unbekannt, self.UNBEKANNT)
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={
+                ft_unbekannt.slug: "Geheimwort-Suchindex",
+                ft_normal.slug: "Fundwort-Suchindex",
+            },
+            created_by=staff_user,
+        )
+        event.refresh_from_db()
+
+        assert "Geheimwort-Suchindex" not in event.search_text
+        for user in (assistant_user, staff_user, lead_user, admin_user):
+            assert user_can_see_field(user, doc_type.sensitivity, ft_unbekannt.sensitivity) is False
+            assert not event_search_queryset(facility, user, "Geheimwort-Suchindex").exists(), (
+                f"{user.role} findet den Wert eines fuer niemanden sichtbaren Felds ueber die Suche"
+            )
+
+        # Gegenprobe (Verhaltensneutralitaet): das gewoehnliche Feld bleibt
+        # indexiert und auffindbar — der Fix schneidet nur Unbekanntes weg.
+        assert "Fundwort-Suchindex" in event.search_text
+        assert event_search_queryset(facility, assistant_user, "Fundwort-Suchindex").exists()

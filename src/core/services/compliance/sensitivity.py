@@ -60,10 +60,15 @@ def sensitivity_rank(value):
     Fuer alle **bekannten** Werte ist die Funktion verhaltensgleich zum
     bisherigen ``.get``-Zugriff.
 
-    ``""`` in der Feld-Position heisst „erbt vom Dokumentationstyp" und ist
-    KEIN unbekannter Wert; diese Bedeutung liegt bei
-    :func:`effective_sensitivity`, die den leeren Wert abfaengt, bevor er hier
-    ankommt.
+    ``""`` behandelt diese Funktion wie jeden anderen unbekannten Wert — der
+    Ersatzrang gilt auch fuer ihn. Die Sonderbedeutung „erbt vom
+    Dokumentationstyp" hat der leere String ausschliesslich in der
+    **Feld**-Position, und sie liegt bei den Aufrufern:
+    :func:`effective_sensitivity` faengt ihn dort ab, bevor er hier ankommt,
+    und ``compute_event_search_text`` prueft ihn getrennt. In der
+    **Doc-Type**-Position ist ``""`` kein gueltiger Wert (``DocumentType.
+    sensitivity`` ist ``blank=False`` mit Default ``normal``) und faellt
+    korrekt in den fail-closed-Zweig.
     """
     return SENSITIVITY_RANK.get(value, UNKNOWN_SENSITIVITY_RANK)
 
