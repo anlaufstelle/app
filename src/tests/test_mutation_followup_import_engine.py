@@ -471,3 +471,16 @@ class TestCoerceDateAndDatetimeNegativePath:
             import_engine._coerce_datetime("nicht-zeitpunkt", "Zeitpunkt")
         assert exc_info.value.code == "invalid_datetime"
         assert exc_info.value.column == "Zeitpunkt"
+
+
+# ---------------------------------------------------------------------------
+# Posten 11 — _coerce_number: Leerzeichen als Tausendertrenner
+# ---------------------------------------------------------------------------
+
+
+class TestCoerceNumberSpaceAsThousandsSeparator:
+    def test_space_grouped_number_is_accepted(self):
+        """Leerzeichen muessen VOR der Komma/Punkt-Logik entfernt werden —
+        sonst bricht ``float()`` an ``'1 234.56'``. Refs #1998.
+        """
+        assert import_engine._coerce_number("1 234,56", "Betrag") == 1234.56
