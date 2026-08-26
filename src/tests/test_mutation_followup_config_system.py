@@ -208,3 +208,119 @@ class TestSaveDocumentTypeBanRevisionWiring:
         # Der VORHERIGE Wert (NORMAL), nicht der neue (HIGH) — genau die
         # Unterscheidung, die ``form.initial`` VOR dem Save festhaelt.
         assert called_previous == DocumentType.Sensitivity.NORMAL
+
+
+# ---------------------------------------------------------------------------
+# Posten 7 — delete_field_group / _move_field_to_top_level / reorder_blocks:
+# ZWEI FieldGroups am selben DocumentType (Refs #1998)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestTwoFieldGroupsBlockSequence:
+    def test_delete_one_of_two_groups_keeps_other_groups_recompacted_position(
+        self, req, facility, doc_type_contact
+    ):
+        """``test_delete_group_places_inner_fields_at_group_position``
+        (test_config_service.py) hatte nur EINE FieldGroup im Bestand und
+        testete damit nie den Zweig, der eine ANDERE (nicht gelöschte) Gruppe
+        unangetastet in ``new_order`` übernimmt
+        (``elif block["kind"] == "group": new_order.append(...)``). Die
+        gelöschte Gruppe bekommt hier ZWEI Innen-Felder, damit die
+        verbleibende Gruppe nach dem Löschen eine ANDERE Position hat als
+        vorher (reine Passthrough-Kopie ihrer alten sort_order würde sonst
+        zufällig auch stimmen).
+
+        Layout vorher: Dauer (frei, 0), G1 (1, 2 Innen-Felder), G2 (2),
+        Notiz (frei, 3). Nach dem Löschen von G1: Dauer(0), Innen1(1),
+        Innen2(2), G2(3, VERSCHOBEN von 2), Notiz(4).
+        """
+        dauer = FieldTemplate.objects.get(facility=facility, name="Dauer")
+        notiz = FieldTemplate.objects.get(facility=facility, name="Notiz")
+        dauer_dtf = doc_type_contact.fields.get(field_template=dauer)
+        notiz_dtf = doc_type_contact.fields.get(field_template=notiz)
+        dauer_dtf.sort_order = 0
+        dauer_dtf.save(update_fields=["sort_order"])
+        notiz_dtf.sort_order = 3
+        notiz_dtf.save(update_fields=["sort_order"])
+
+        grp1 = FieldGroup.objects.create(document_type=doc_type_contact, name="G1", sort_order=1)
+        grp2 = FieldGroup.objects.create(document_type=doc_type_contact, name="G2", sort_order=2)
+        ft_i1 = FieldTemplate.objects.create(facility=facility, name="Innen 1", field_type="text")
+        ft_i2 = FieldTemplate.objects.create(facility=facility, name="Innen 2", field_type="text")
+        inner1 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft_i1, field_group=grp1, sort_order=0
+        )
+        inner2 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft_i2, field_group=grp1, sort_order=1
+        )
+
+        delete_field_group(req, grp1)
+
+        for obj in (dauer_dtf, inner1, inner2, grp2, notiz_dtf):
+            obj.refresh_from_db()
+        assert dauer_dtf.field_group_id is None and dauer_dtf.sort_order == 0
+        assert inner1.field_group_id is None and inner1.sort_order == 1
+        assert inner2.field_group_id is None and inner2.sort_order == 2
+        # G2 war vorher an Position 2 — durch die ZWEI Innen-Felder von G1
+        # rückt sie jetzt auf Position 3 (nicht bloß unverändert übernommen).
+        assert grp2.sort_order == 3
+        assert notiz_dtf.field_group_id is None and notiz_dtf.sort_order == 4
+
+    def test_reorder_blocks_with_two_groups_positions_both_independently(self, req, doc_type_contact):
+        """``test_reorder_mixed_blocks_renumbers_and_audits_once``
+        (test_config_service.py) hatte nur EINE Gruppe. Mit ZWEI Gruppen in
+        ``ordered_blocks`` muss jede unabhängig ihre eigene Zielposition
+        bekommen — nicht beide dieselbe (z. B. durch eine ID-Set-Prüfung, die
+        Gruppen nur als Menge, nicht positionsgenau behandelt)."""
+        grp1 = FieldGroup.objects.create(document_type=doc_type_contact, name="R1", sort_order=2)
+        grp2 = FieldGroup.objects.create(document_type=doc_type_contact, name="R2", sort_order=3)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+
+        reorder_blocks(
+            req,
+            doc_type_contact,
+            [("group", grp2.id), ("field", free[0].id), ("group", grp1.id), ("field", free[1].id)],
+        )
+
+        grp1.refresh_from_db()
+        grp2.refresh_from_db()
+        free[0].refresh_from_db()
+        free[1].refresh_from_db()
+        assert (grp2.sort_order, free[0].sort_order, grp1.sort_order, free[1].sort_order) == (0, 1, 2, 3)
+
+    def test_move_to_top_level_with_second_group_keeps_its_own_position(self, req, doc_type_contact):
+        """``test_move_to_top_level_position_persists`` (test_config_service.py)
+        hatte nur EINE Gruppe. Mit einer ZWEITEN Gruppe im Bestand muss
+        ``_move_field_to_top_level`` beide Gruppen-IDs korrekt gegen
+        ``existing_group_ids`` validieren UND beiden ihre je eigene Zielposition
+        aus ``ordered_blocks`` zuweisen."""
+        grp_src = FieldGroup.objects.create(document_type=doc_type_contact, name="Quelle", sort_order=0)
+        grp_other = FieldGroup.objects.create(document_type=doc_type_contact, name="Andere", sort_order=1)
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        moved = free[0]
+        moved.field_group = grp_src
+        moved.sort_order = 0
+        moved.save(update_fields=["field_group", "sort_order"])
+        other_free = free[1]
+
+        # Ziel-Top-Level-Reihenfolge: moved (frei), grp_other, grp_src, other_free.
+        move_field(
+            req,
+            doc_type_contact,
+            moved.id,
+            None,
+            ordered_blocks=[
+                ("field", moved.id),
+                ("group", grp_other.id),
+                ("group", grp_src.id),
+                ("field", other_free.id),
+            ],
+        )
+
+        moved.refresh_from_db()
+        grp_other.refresh_from_db()
+        grp_src.refresh_from_db()
+        other_free.refresh_from_db()
+        assert moved.field_group_id is None
+        assert (moved.sort_order, grp_other.sort_order, grp_src.sort_order, other_free.sort_order) == (0, 1, 2, 3)
