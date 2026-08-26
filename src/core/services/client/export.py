@@ -24,7 +24,11 @@ from core.models import (
 )
 from core.models import Case as CaseModel
 from core.models.attachment import owner_field_name
-from core.services.client.targets import client_activity_targets_q, client_and_event_targets_q
+from core.services.client.targets import (
+    client_activity_targets_q,
+    client_and_event_targets_q,
+    client_legal_hold_targets_q,
+)
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -882,10 +886,24 @@ def _gather_legal_holds(facility, client, event_ids):
     Art.-18-Relevanz: ein Legal Hold erklaert der betroffenen Person, warum ihre
     Daten trotz abgelaufener Aufbewahrungsfrist noch existieren. Ohne diese
     Kategorie wirkt die Aufbewahrung willkuerlich.
+
+    Refs #1990: Die Zielmenge kommt aus :func:`client_legal_hold_targets_q` —
+    demselben Builder, den die Art.-17-Redaktion
+    (:func:`core.services.client.main._redact_legal_holds`) benutzt. Bis dahin
+    filterte die Auskunft nur ueber ``client_and_event_targets_q``; Holds mit
+    ``target_type="Case"`` (ADR-044) und ``target_type="Activity"``
+    (Aktivitaeten-Enforcement) fielen still heraus, obwohl ``reason``
+    bestimmungsgemaess Freitext mit Fall-/Klientenkontext ist.
+
+    Verbleibende bewusste Differenz zur Redaktionsseite: ``event_ids`` traegt
+    hier nur die fuer die aufrufende Rolle sichtbaren Ereignisse. Ein Hold auf
+    einem unsichtbaren Ereignis — oder auf einer Aktivitaet dazu — erscheint
+    deshalb nicht in DIESER Auskunft; die Redaktion arbeitet dagegen auf allen
+    Ereignissen der Person.
     """
     holds = (
         LegalHold.objects.for_facility(facility)
-        .filter(client_and_event_targets_q(client, event_ids))
+        .filter(client_legal_hold_targets_q(client, event_ids))
         .select_related("created_by", "dismissed_by")
         .order_by("-created_at", "pk")
     )
