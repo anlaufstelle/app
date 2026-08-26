@@ -2,8 +2,10 @@
 Development settings for Anlaufstelle.
 """
 
+import contextlib
 import os
 import sys
+from pathlib import Path
 
 from .base import *  # noqa: F401, F403
 
@@ -60,6 +62,26 @@ WHITENOISE_USE_FINDERS = True
 #      analog zum prod-Fail-Closed.
 # Lokal (Default, Flag ungesetzt) bleibt der Start ohne Key bewusst möglich.
 REQUIRE_ENCRYPTION = os.environ.get("REQUIRE_ENCRYPTION", "").lower() in ("true", "1", "yes")
+
+# --- Lokaler One-Command-Stack: Schlüssel aus einer Datei (Refs #1062) ---
+# ``docker compose exec``/``run`` startet einen neuen Prozess mit der
+# Container-KONFIGURATION — nicht mit der Umgebung von PID 1. Ein Schlüssel,
+# den nur die Startshell des Webdienstes exportiert, wäre für jedes spätere
+# ``manage.py``-Kommando unsichtbar: es liefe still in den Klartext-Modus
+# unten und schriebe Art.-9-Felder unverschlüsselt, während die Lesepfade an
+# bereits verschlüsselten Daten mit ``EncryptionKeyMissing`` abbrechen.
+#
+# Das lokale Compose reicht deshalb einen PFAD durch statt eines Wertes; jeder
+# Prozess im Container liest denselben Schlüssel aus derselben Datei. Strikt
+# opt-in: ohne ``LOCAL_ENCRYPTION_KEY_FILE`` ändert sich nichts — auch nicht in
+# ``test.py``/``e2e.py``, die von hier erben. Ein gesetztes ``ENCRYPTION_KEY``
+# gewinnt weiterhin.
+_LOCAL_ENCRYPTION_KEY_FILE = os.environ.get("LOCAL_ENCRYPTION_KEY_FILE", "")
+if not ENCRYPTION_KEY and _LOCAL_ENCRYPTION_KEY_FILE:  # noqa: F405
+    # Fehlt die Datei oder ist sie unlesbar, geht es unverändert in den
+    # Klartext-/``REQUIRE_ENCRYPTION``-Pfad unten — laut statt still.
+    with contextlib.suppress(OSError):
+        ENCRYPTION_KEY = Path(_LOCAL_ENCRYPTION_KEY_FILE).read_text(encoding="utf-8").strip()
 
 if not ENCRYPTION_KEY:  # noqa: F405
     if REQUIRE_ENCRYPTION:
