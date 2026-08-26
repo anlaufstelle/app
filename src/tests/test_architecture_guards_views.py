@@ -483,15 +483,41 @@ class TestClientCaseViewMirrorParity:
       Eintrag (Paar existiert nicht mehr oder ist inzwischen identisch)
       ebenfalls.
 
-    **Was der Guard NICHT leistet:** Er sieht nur Abweichungen auf der Ebene
-    ganzer Anweisungen erster Ebene. Aendert sich etwas **innerhalb** einer
-    bereits als abweichend gezaehlten Anweisung (z.B. im grossen ``try``-Block
-    von ``EntityUpdateView.post``), bleibt die Zahl gleich und der Guard still.
-    Unpaarige Einheiten (``_get_case_event_context``, ``ClientAutocompleteView``,
-    ``CaseCloseView``, …) vergleicht er gar nicht — sie haben kein Gegenstueck.
-    Und er prueft Struktur, nicht Verhalten: dass die Kopien dasselbe TUN,
-    beweisen die Zwillings-Testdateien ``test_clients_dynamic_ui.py`` /
-    ``test_cases_dynamic_ui.py``, nicht dieser Guard.
+    **Was der Guard NICHT leistet:**
+
+    * (a) Er sieht nur Abweichungen auf der Ebene ganzer Anweisungen erster
+      Ebene. Aendert sich etwas **innerhalb** einer bereits als abweichend
+      gezaehlten Anweisung (z.B. im grossen ``try``-Block von
+      ``EntityUpdateView.post``), bleibt die Zahl gleich und der Guard still.
+      Deckt der Ausnahme-Eintrag **alle** Slots eines Paares ab — so bei
+      ``EntityUpdateView._render_context`` (Signatur plus die einzige
+      Top-Level-Anweisung ``return {...}``) —, dann vergleicht der Guard an
+      diesem Paar ueberhaupt nichts mehr. Fuer genau dieses Paar haengt die
+      Zusicherung deshalb an einem eigenen Test,
+      :meth:`test_render_context_key_sets_stay_congruent`.
+    * (b) Unpaarige Einheiten (``_get_case_event_context``,
+      ``ClientAutocompleteView``, ``CaseCloseView``, …) vergleicht er gar nicht
+      — sie haben kein Gegenstueck.
+    * (c) Die Entity-Normalisierung macht **vertauschte** Bezeichner
+      unsichtbar, und das reicht weit ueber Meldungstexte hinaus: Routen
+      (``core:client_detail`` und ``core:case_detail`` → beide
+      ``core:entity_detail``), Templates (``core/clients/form.html`` und
+      ``core/cases/form.html`` → beide ``core/entitys/form.html``) und Modelle
+      (``get_scoped_object(Client, …)`` und ``get_scoped_object(Case, …)`` →
+      beide ``get_scoped_object(Entity, …)``) fallen alle zusammen. Wuerde die
+      Personen-View auf die Fall-Route umleiten, das Fall-Template rendern
+      oder das Fall-Model laden, bliebe dieser Guard still — dagegen helfen
+      nur die Verhaltens-Tests aus (d).
+    * (d) Er prueft Struktur, nicht Verhalten: dass die Kopien dasselbe TUN,
+      beweisen die Zwillings-Testdateien ``test_clients_dynamic_ui.py`` /
+      ``test_cases_dynamic_ui.py``, nicht dieser Guard.
+
+    **Selbstsicherung gegen Uebernormalisierung:** Wuerde die Normalisierung
+    kaputt zu breit (ein Token-Paar, das echte Unterschiede wegbuegelt), dann
+    wuerden die ausgenommenen Paare identisch — ihre Divergenz-Zahl faellt auf
+    0, und :meth:`test_no_stale_expected_divergences` reisst mit „Paar ist
+    inzwischen identisch". Der Guard kann sich also nicht unbemerkt ins Leere
+    normalisieren, solange ueberhaupt Ausnahmen eingetragen sind.
     """
 
     _CLIENT_MODULE = Path("src/core/views/clients.py")
@@ -502,6 +528,14 @@ class TestClientCaseViewMirrorParity:
     # ueber die Teilstring-Ersetzung mit ab (``clients``/``cases`` → ``entitys``,
     # ``CaseModel`` → ``EntityModel``, ``cases_with_live_client`` →
     # ``entitys_with_live_entity``).
+    #
+    # Die Teilstring-Ersetzung trifft auch Fremdbezeichner: Djangos
+    # ``Case(When(...))``-Expression (``django.db.models.Case``, in
+    # ``ClientDetailView.get`` fuer die Aufgaben-Sortierung) wird samt
+    # Import-Alias zu ``Entity(When(...))`` mitnormalisiert. Harmlos, solange
+    # daraus keine Namenskollision entsteht — und genau die faengt der
+    # ``assert key not in units`` in :meth:`_units` laut ab, statt still eine
+    # Vergleichseinheit zu ueberschreiben.
     _ENTITY_TOKENS = (
         ("Client", "Entity"),
         ("Case", "Entity"),
@@ -566,12 +600,16 @@ class TestClientCaseViewMirrorParity:
         ),
         "EntityUpdateView._render_context": (
             2,
-            "Signatur und Kontext-Dict: Das Fall-Formular pinnt die Person und braucht dafuer die "
-            "drei Schluessel ``client_locked``/``client_id``/``client_pseudonym`` (Refs #1786), "
-            "deren Quelle sich zwischen GET (``case.client``) und POST-Re-Render "
-            "(``request.POST``) unterscheidet — daher zwei zusaetzliche Parameter. Die "
-            "Personen-Maske hat zu keinem davon ein Gegenstueck. Der uebrige Kontext ist "
-            "identisch, und genau darauf achtet die gezaehlte 2.",
+            "VOLLSTAENDIG ausgenommen — ehrlich gesagt: das Paar hat nur zwei Slots (Signatur "
+            "und die einzige Top-Level-Anweisung ``return {...}``), und beide weichen ab. Der "
+            "Struktur-Vergleich prueft an diesem Paar also nichts; die gezaehlte 2 ist eine "
+            "Bestandsangabe, keine Zusicherung ueber den Kontext-Inhalt. Sachgrund ist das "
+            "Personen-Pinning des Fall-Formulars: die drei Schluessel "
+            "``client_locked``/``client_id``/``client_pseudonym`` (Refs #1786), deren Quelle "
+            "sich zwischen GET (``case.client``) und POST-Re-Render (``request.POST``) "
+            "unterscheidet — daher zwei zusaetzliche Parameter in der Signatur. Die "
+            "Schluessel-Kongruenz des uebrigen Kontexts pinnt separat "
+            "``test_render_context_key_sets_stay_congruent``.",
         ),
         "EntityFieldsPartialView._assigned_entity": (
             1,
@@ -581,6 +619,12 @@ class TestClientCaseViewMirrorParity:
             "verschiedene Bauweise — die Grenze selbst ist in beiden Faellen hart.",
         ),
     }
+
+    # Die einzigen Kontext-Schluessel, die ``CaseUpdateView._render_context``
+    # mehr fuehren darf als das Personen-Gegenstueck: das Personen-Pinning des
+    # Fall-Formulars (Refs #1786). Jeder weitere Schluessel auf nur einer Seite
+    # ist Drift — vgl. :meth:`test_render_context_key_sets_stay_congruent`.
+    _RENDER_CONTEXT_CASE_ONLY_KEYS = ("client_locked", "client_id", "client_pseudonym")
 
     # ------------------------------------------------------------------ Ableitung
 
@@ -695,6 +739,35 @@ class TestClientCaseViewMirrorParity:
             key: count for key, (left, right) in cls._pairs().items() if (count := cls._divergence_count(left, right))
         }
 
+    @classmethod
+    def _render_context_keys(cls, module: Path) -> set[str]:
+        """Entity-normalisierte Schluessel des Dicts, das ``_render_context`` zurueckgibt.
+
+        Bewusst auf dem NORMALISIERTEN Baum: nur so faellt der Entity-Schluessel
+        selbst (``"client"`` vs. ``"case"``) als ``"entity"`` zusammen, statt als
+        Unterschied durchzuschlagen und die Aussage zu verwaessern.
+        """
+        tree = cls._normalizer().visit(ast.parse(module.read_text(encoding="utf-8")))
+        helpers = [
+            child
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            for child in node.body
+            if isinstance(child, ast.FunctionDef) and child.name == "_render_context"
+        ]
+        assert len(helpers) == 1, f"{module}: genau ein ``_render_context`` erwartet, gefunden {len(helpers)}"
+        returns = [
+            stmt for stmt in helpers[0].body if isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.Dict)
+        ]
+        assert len(returns) == 1, f"{module}: ``_render_context`` gibt kein einzelnes Dict-Literal zurueck"
+        keys = returns[0].value.keys
+        dynamic = [key for key in keys if not (isinstance(key, ast.Constant) and isinstance(key.value, str))]
+        assert not dynamic, (
+            f"{module}: ``_render_context`` baut Schluessel dynamisch (z.B. ``**extra``) — "
+            "der Kongruenz-Vergleich kann sie nicht mehr statisch lesen und wuerde still luecken."
+        )
+        return {key.value for key in keys}
+
     # ------------------------------------------------------------------- Tests
 
     def test_derivation_finds_the_mirrored_module_helpers(self):
@@ -714,6 +787,20 @@ class TestClientCaseViewMirrorParity:
         }
         assert expected <= pairs, f"AST-Ableitung unvollstaendig: {sorted(pairs)}"
 
+        # Bestandssicherung des Paar-Vorrats. Die Ableitung schneidet die
+        # Schluesselmengen beider Module (``client_units.keys() & case_units``),
+        # d.h. ein Spiegel-Paar, das kuenftig in NUR EINEM Modul entfernt oder
+        # umbenannt wird, faellt lautlos aus dem Vergleich — der Guard bliebe
+        # gruen, obwohl er weniger prueft. Diese Zahl macht so einen Schwund zum
+        # Testfehler. Beim bewussten Entfernen/Zusammenfuehren eines Paares hier
+        # mit anpassen (und pruefen, ob der Zwilling wirklich mit weg soll).
+        assert len(pairs) == 15, (
+            f"Der abgeleitete Paar-Vorrat hat sich geaendert: {len(pairs)} statt 15 Paare "
+            f"({sorted(pairs)}). Entweder ist ein Spiegel-Paar nur in einem der beiden "
+            "Module verschwunden/umbenannt — dann im Zwilling nachziehen —, oder die "
+            "Aenderung ist gewollt und die Zahl gehoert angepasst."
+        )
+
     def test_mirrored_pairs_stay_structurally_identical(self):
         divergences = self._divergences()
         unexpected = {
@@ -729,6 +816,42 @@ class TestClientCaseViewMirrorParity:
             )
             + "\nEntweder den Fix im Zwilling nachziehen oder die Abweichung in "
             "_EXPECTED_DIVERGENCES mit Anzahl und Begruendung eintragen."
+        )
+
+    def test_render_context_key_sets_stay_congruent(self):
+        """Beide ``_render_context``-Zwillinge liefern denselben Schluesselsatz (Refs #1830).
+
+        Warum als EIGENER Test: Der Ausnahme-Eintrag
+        ``EntityUpdateView._render_context`` deckt beide Slots des Paares ab
+        (Signatur + die einzige Anweisung ``return {...}``) — der
+        Struktur-Vergleich prueft an diesem Paar also nichts mehr (Grenze (a)
+        im Klassen-Docstring). Empirisch blieb er gruen, als testweise der
+        Schluessel ``original_document_type_id`` fehlte, ``existing_attachments``
+        fehlte und ``dynamic_values_at_risk`` auf ``None`` stand.
+
+        Dieser Test pinnt genau die motivierende Drift-Klasse aus [b27be80b]:
+        ein Kontext-Schluessel, der nur in EINEM der beiden Zwillinge steht — der
+        Fix wurde in der einen View gemacht und in der anderen vergessen. Werte
+        prueft er bewusst nicht (das tun ``test_clients_dynamic_ui.py`` /
+        ``test_cases_dynamic_ui.py``), nur den Bestand der Schluessel.
+        """
+        client_keys = self._render_context_keys(self._CLIENT_MODULE)
+        case_keys = self._render_context_keys(self._CASE_MODULE)
+        allowed_extras = {self._normalize_token(key) for key in self._RENDER_CONTEXT_CASE_ONLY_KEYS}
+
+        case_only = case_keys - client_keys
+        assert case_only == allowed_extras, (
+            "Der Fall-Kontext fuehrt andere Zusatz-Schluessel als zugesichert (Refs #1830):\n"
+            f"  nur im Fall: {sorted(case_only)}\n"
+            f"  zugesichert: {sorted(allowed_extras)}\n"
+            "Entweder den Schluessel im Personen-Zwilling nachziehen oder ihn in "
+            "_RENDER_CONTEXT_CASE_ONLY_KEYS mit Begruendung aufnehmen."
+        )
+
+        client_only = client_keys - case_keys
+        assert not client_only, (
+            "Diese Kontext-Schluessel gibt es nur in der Personen-View — im Fall-Zwilling "
+            f"nachziehen (Refs #1830): {sorted(client_only)}"
         )
 
     def test_no_stale_expected_divergences(self):
