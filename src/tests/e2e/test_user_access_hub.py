@@ -34,7 +34,47 @@ def _shell(e2e_env, code: str) -> str:
     return result.stdout.strip().splitlines()[-1]
 
 
-def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base_url, e2e_env):
+def _close_sudo_window(e2e_env) -> str:
+    """``sudo_until`` aus allen Server-Sessions des admin-Users entfernen."""
+    return _shell(
+        e2e_env,
+        "from django.contrib.sessions.backends.db import SessionStore; "
+        "from django.contrib.sessions.models import Session; "
+        "from core.models import User; "
+        "pk=str(User.objects.get(username='admin').pk); "
+        "keys=[s.session_key for s in Session.objects.all() "
+        "if str(s.get_decoded().get('_auth_user_id'))==pk and 'sudo_until' in s.get_decoded()]; "
+        "stores=[SessionStore(session_key=k) for k in keys]; "
+        "[(st.pop('sudo_until', None), st.save()) for st in stores]; "
+        "print(len(keys))",
+    )
+
+
+@pytest.fixture
+def closed_sudo_window(authenticated_page, e2e_env):
+    """Das Sudo-Fenster der geteilten admin-Session vor UND nach dem Test schliessen.
+
+    ``authenticated_page`` reicht allen Tests denselben session-weit gecachten
+    Storage-State und damit **dieselbe Server-Session** (Refs #1787).
+    ``sudo_until`` liegt in genau dieser Session und gilt
+    ``SUDO_MODE_TTL_SECONDS`` = 15 Minuten: Jeder Vorgaenger, der
+    ``enter_sudo_mode`` ruft — in derselben Scheibe z.B.
+    ``test_config_ui.py::TestFacilitySettingsHub`` —, laesst das Fenster fuer
+    alle nachfolgenden ``authenticated_page``-Tests offen. Dieser Test PRUEFT
+    aber, dass der Zugaenge-Hub hinter dem Sudo-Gate liegt; bei offenem Fenster
+    entfaellt der Redirect nach ``/sudo/`` ersatzlos und der Test wartet auf
+    eine Navigation, die nie kommt.
+
+    Deshalb ist der Nicht-Sudo-Zustand hier **Arrange, keine Annahme**. Das
+    ``yield``-Ende schliesst das Fenster erneut: die Journey oeffnet es selbst
+    und wuerde denselben Reihenfolge-Effekt sonst an ihre Nachfolger vererben.
+    """
+    _close_sudo_window(e2e_env)
+    yield
+    _close_sudo_window(e2e_env)
+
+
+def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base_url, e2e_env, closed_sudo_window):
     page = authenticated_page
     console_errors = track_console_errors(page)
     username = f"e2e_access_{uuid.uuid4().hex[:8]}"
@@ -45,6 +85,7 @@ def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base
 
     # Der Einstieg in jede Mutation fuehrt zuerst durch Sudo. Danach bleiben
     # alle weiteren Schritte derselben Journey innerhalb des 15-Minuten-Fensters.
+    # Dass das Fenster hier noch geschlossen ist, garantiert ``closed_sudo_window``.
     page.locator('[data-testid="user-access-create-link"]').click()
     page.wait_for_url(lambda url: "/sudo/" in url, timeout=30000, wait_until="domcontentloaded")
     page.fill('input[name="password"]', "anlaufstelle2026")
