@@ -81,6 +81,27 @@ def compute_event_search_text(data_json, document_type):
     aufgenommen — der Index soll keine Daten exponieren, die ein User
     ueber das normale Detail-View nicht sehen darf.
 
+    Refs #1991 (Fix-Runde 1): Der Sensitivity-Test laeuft ueber die zentrale
+    ``sensitivity_rank`` statt ueber eine Mengen-Zugehoerigkeit. Die alte
+    Formulierung (``ft.sensitivity in {elevated, high}``) fragte, ob der Wert
+    zu den bekannten HOHEN Stufen gehoert — ein Wert ausserhalb von
+    ``DocumentType.Sensitivity`` fiel durch beide Zweige und landete im
+    Klartext-Index, obwohl ``user_can_see_field`` ihn fuer JEDE Rolle sperrt.
+    ``Event.search_text`` wird von ``event_search_queryset`` per ``icontains``
+    durchsucht; dessen Doc-Type-Gate greift auf EREIGNIS-Ebene und schuetzt
+    kein einzelnes Feld — der Index waere damit ein Substring-Orakel samt
+    Trefferkarte auf einen fuer niemanden sichtbaren Inhalt gewesen. Der Index
+    ist die dritte Sichtbarkeits-Wahrheit neben Listen-Query und Detail-Gate
+    und zieht deshalb dieselbe fail-closed-Linie.
+
+    Indexiert wird genau in zwei Faellen:
+
+    * ``sensitivity == ""`` — „erbt vom Dokumentationstyp". Der Typ-Schutz
+      greift auf Ereignis-Ebene, das Feld braucht keinen eigenen.
+    * ``sensitivity_rank(...) == 0`` — ausdrueckliches ``normal``.
+
+    Alles andere (ELEVATED, HIGH und jeder unbekannte Wert) bleibt draussen.
+
     File-Marker (``__file__``/``__files__``) werden uebersprungen; ihr
     Klartext-Dateiname kommt nicht in den Suchindex (Refs #622).
     """
@@ -90,9 +111,8 @@ def compute_event_search_text(data_json, document_type):
         return ""
 
     # Field-Templates des DocumentType einmalig laden.
-    from core.models import DocumentType
+    from core.services.compliance.sensitivity import sensitivity_rank
 
-    elevated = {DocumentType.Sensitivity.ELEVATED, DocumentType.Sensitivity.HIGH}
     field_meta = {
         dtf.field_template.slug: dtf.field_template
         for dtf in document_type.fields.select_related("field_template").all()
@@ -105,7 +125,7 @@ def compute_event_search_text(data_json, document_type):
             continue
         if ft.is_encrypted:
             continue
-        if ft.sensitivity in elevated:
+        if ft.sensitivity != "" and sensitivity_rank(ft.sensitivity) != 0:
             continue
         if isinstance(value, dict):
             # File-Marker oder altes encrypted-Marker-Dict — nicht aufnehmen.
