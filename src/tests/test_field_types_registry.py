@@ -65,6 +65,18 @@ class TestWidgetFactory:
         spec = get_spec(field_types.MULTI_SELECT)
         assert isinstance(spec.widget_factory(), forms.CheckboxSelectMultiple)
 
+    def test_time_widget_is_timeinput(self):
+        """Refs #1998: analog test_widgets_are_fresh_instances (DATE) —
+        ``_widget_time`` war ungetestet. ``TimeInput.input_type`` kommt vom
+        WIDGET-KLASSEN-Attribut, nicht von ``attrs``; der Test bewacht also vor
+        allem, dass ``_widget_time`` überhaupt ``forms.TimeInput`` liefert
+        (nicht z. B. versehentlich ``forms.DateInput`` durch einen Copy-Paste-
+        Fehler analog zu ``_widget_date``)."""
+        spec = get_spec(field_types.TIME)
+        widget = spec.widget_factory()
+        assert isinstance(widget, forms.TimeInput)
+        assert widget.input_type == "time"
+
 
 class TestParseDefault:
     def test_number_parses_int(self):
@@ -106,6 +118,15 @@ class TestValidateDefault:
     def test_number_raises_on_non_int(self):
         with pytest.raises(ValidationError):
             get_spec(field_types.NUMBER).validate_default("abc", {})
+
+    def test_number_raises_when_default_exceeds_max_value(self):
+        """Refs #1998: analog ``test_model_rejects_default_outside_configured_range``
+        (``test_field_template_ranges.py``) — dort nur UNTERHALB ``min_value``
+        getestet. ``_validate_number`` prüft über ``validate_number_value``
+        auch die OBERE Grenze; ein Mutant, der ``value > max_value`` zu
+        ``value < max_value`` kippt, überlebte bislang unbemerkt."""
+        with pytest.raises(ValidationError):
+            get_spec(field_types.NUMBER).validate_default("11", {"max_value": 10})
 
     def test_date_raises_on_invalid_format(self):
         with pytest.raises(ValidationError):
