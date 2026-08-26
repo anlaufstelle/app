@@ -45,18 +45,22 @@ a bug, and as the entry point before your first pull request. The only prerequis
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-docker compose up
+docker compose up      # without Docker group permissions: sudo docker compose up
 ```
 
 The local compose file brings up the database and the application, applies the migrations, and
 loads the seed data on the **first** start (into an empty database only — a second start does
-not re-seed). After about a minute the login page is available at
+not re-seed). The one-off image build takes about a minute; after that the login page is
+available within roughly 20 seconds at
 **[http://localhost:8000/login/](http://localhost:8000/login/)**.
 
-> On systems where the Docker daemon is owned by root, use `sudo docker compose up`. If your
-> setup asks for an `ENCRYPTION_KEY`, generate it once and export it before starting:
-> `export ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"`
-> — keep the value; a different key cannot read data that is already encrypted.
+> **No preparation needed.** You neither create a `.env` nor export an `ENCRYPTION_KEY` — the
+> local setup generates its own key on the first start and keeps it in a dedicated volume so
+> that encrypted development data stays readable across restarts. Background and the boundary
+> to the production path: [ADR-049](docs/adr/049-one-command-local-bootstrap.md) (German).
+>
+> **Local access only:** the web service deliberately binds to `127.0.0.1`, so there is no LAN
+> access. That is intentional — the seed accounts use a publicly documented password.
 
 **Signing in.** All seed accounts share the password `anlaufstelle2026`:
 
@@ -964,4 +968,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-26 -->
-<!-- source-hash: dd1a793ad8cebda1806cb0db70640c51ab02743e -->
+<!-- source-hash: 1a6fbe0d981914dfaa27a5970178caae113f48e1 -->

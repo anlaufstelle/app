@@ -20,7 +20,9 @@ Frontend server-gerendert mit HTMX + Alpine.js + Tailwind statt SPA
 ([ADR-003](adr/003-htmx-alpine-tailwind.md)). Kein Task-Queue-Broker: PDFs entstehen synchron
 im Request ([ADR-010](adr/010-sync-pdf-generation.md)), Hintergrundarbeit läuft als
 `manage.py`-Kommando im Cron-Sidecar ([ops-runbook § 3](ops-runbook.md#3-cron-jobs)).
-Ausgeliefert wird als Docker Compose ([ADR-017](adr/017-deployment-topology.md)).
+Ausgeliefert wird als Docker Compose ([ADR-017](adr/017-deployment-topology.md)); der lokale
+Stack startet dabei mit einem Kommando und seedet sich selbst, der produktive **nie**
+([ADR-049](adr/049-one-command-local-bootstrap.md)).
 
 ---
 
