@@ -26,6 +26,7 @@ from core.models import Case as CaseModel
 from core.models.attachment import owner_field_name
 from core.services.client.targets import (
     client_activity_targets_q,
+    client_and_case_targets_q,
     client_and_event_targets_q,
     client_legal_hold_targets_q,
 )
@@ -575,6 +576,15 @@ def _gather_deletion_requests(facility, client, event_ids):
     der eigenen Person fehlte damit ausgerechnet in der Auskunft, waehrend der
     PDF-Abschnitt „Loeschantraege" Vollstaendigkeit suggerierte.
 
+    Refs #2071: derselbe Befund eine Stufe weiter — ``request_case_deletion``
+    (``core.services.case.deletion``) schreibt seit ADR-044 Antraege mit
+    ``target_type="Case"``, und die Art.-17-Kaskade redigiert sie bereits
+    (``_redact_case_deletion_requests``). Die Auskunft zog nur Client- und
+    Event-Ziele; der Freitext ``reason`` eines Fall-Loeschantrags fiel damit
+    aus der Auskunft, obwohl er redigiert und also als Personendatum erkannt
+    war. Die Zielmenge kommt jetzt aus :func:`client_and_case_targets_q` —
+    derselben Quelle, die auch die Legal Holds benutzen.
+
     Facility-gescopt ueber den ``FacilityScopedManager`` (Defense-in-Depth
     zusaetzlich zu RLS) — ``target_id`` allein ist zwar UUID-eindeutig, das
     explizite Scoping macht die Absicht aber lesbar. (Andere Quertabellen wie
@@ -583,7 +593,7 @@ def _gather_deletion_requests(facility, client, event_ids):
     """
     deletion_requests = (
         DeletionRequest.objects.for_facility(facility)
-        .filter(client_and_event_targets_q(client, event_ids))
+        .filter(client_and_case_targets_q(client, event_ids))
         .select_related("requested_by", "reviewed_by")
         .order_by("-created_at", "pk")
     )
