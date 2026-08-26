@@ -259,3 +259,35 @@ class TestLockJobScopesToTheGivenPrimaryKey:
         assert job_second.status == ImportJob.Status.COMMITTED
         assert job_first.status == ImportJob.Status.MAPPED
         assert Client.objects.filter(pseudonym="LOCK-04").exists()
+
+
+# ---------------------------------------------------------------------------
+# Posten 6 — _read_upload: kein Voll-Puffern bei Ueberlaenge
+# ---------------------------------------------------------------------------
+
+
+class TestReadUploadDoesNotBufferOversizedFiles:
+    class _RefusingRead:
+        """Fake-Upload: korrekte ``.size``, ``.read()`` darf NIE aufgerufen werden."""
+
+        def __init__(self, size):
+            self.size = size
+            self.read_called = False
+
+        def read(self, *args, **kwargs):
+            self.read_called = True
+            raise AssertionError("`.read()` haette wegen der Groessenpruefung nie aufgerufen werden duerfen")
+
+    def test_oversized_file_is_rejected_before_being_read_into_memory(self):
+        """Isolierter Spion-Test: der Memory-DoS-Schutz muss VOR dem
+        Voll-Puffern greifen — sonst kann er stillschweigend verschwinden,
+        ohne dass ein Test es merkt (bisherige Tests pruefen nur den
+        ValidationError, nicht ob ``.read()`` ueberhaupt vermieden wird).
+        Refs #1998.
+        """
+        fake = self._RefusingRead(size=import_engine.MAX_BYTES + 1)
+
+        with pytest.raises(ValidationError):
+            import_engine._read_upload(fake)
+
+        assert fake.read_called is False
