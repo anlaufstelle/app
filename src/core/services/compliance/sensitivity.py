@@ -36,6 +36,37 @@ ROLE_MAX_SENSITIVITY = {
     User.Role.FACILITY_ADMIN: 2,  # all
 }
 
+#: Rang fuer einen Sensitivity-Wert, den ``SENSITIVITY_RANK`` nicht kennt
+#: (Refs #1991). Bewusst OBERHALB jedes Rollen-Maximums aus
+#: ``ROLE_MAX_SENSITIVITY``, nicht bloss auf Hoehe von ``high``: ein
+#: unbekannter Wert faellt damit fuer JEDE Rolle aus der Sicht — dieselbe
+#: Wirkung wie ``NO_DOC_TYPE_SENTINEL`` in der Listen-Query (ADR-039 §12),
+#: der in keiner ``allowed``-Liste vorkommt. Auf ``high`` gedeckelt saehen
+#: Leitung und Anwendungsbetreuung den unbekannten Wert weiter, waehrend
+#: die Liste ihn versteckt — genau die Divergenz, die #1991 aufloest.
+UNKNOWN_SENSITIVITY_RANK = max(*SENSITIVITY_RANK.values(), *ROLE_MAX_SENSITIVITY.values()) + 1
+
+
+def sensitivity_rank(value):
+    """Numerischer Rang eines Sensitivity-Werts — **fail-closed** (Refs #1991).
+
+    EINE Stelle statt dreier verstreuter ``SENSITIVITY_RANK.get(value, 0)``:
+    der frueher genutzte Default 0 bedeutete „unbekannt == ``normal``" und
+    gab jeden nicht erkannten Wert fuer alle Rollen frei. Die Listen-Wahrheit
+    (``allowed_sensitivities_for_user`` und die Coalesce-Sentinel-Mechanik in
+    :func:`visible_attachments_for_user`) war schon immer fail-closed — der
+    Einzelfall-Pfad zog jetzt nach.
+
+    Fuer alle **bekannten** Werte ist die Funktion verhaltensgleich zum
+    bisherigen ``.get``-Zugriff.
+
+    ``""`` in der Feld-Position heisst „erbt vom Dokumentationstyp" und ist
+    KEIN unbekannter Wert; diese Bedeutung liegt bei
+    :func:`effective_sensitivity`, die den leeren Wert abfaengt, bevor er hier
+    ankommt.
+    """
+    return SENSITIVITY_RANK.get(value, UNKNOWN_SENSITIVITY_RANK)
+
 
 def effective_sensitivity(doc_type_sensitivity, field_sensitivity=""):
     """Return the numeric sensitivity rank for a field.
@@ -43,11 +74,15 @@ def effective_sensitivity(doc_type_sensitivity, field_sensitivity=""):
     The effective sensitivity is the *higher* of the document-type level and
     the field-level override. An empty field_sensitivity means "inherit from
     document type".
+
+    Refs #1991: Beide Raenge kommen aus :func:`sensitivity_rank` und sind damit
+    fail-closed. Der ``if field_sensitivity``-Zweig haelt die Vererbungs-
+    Semantik von ``""`` unveraendert — der leere Feld-Wert erreicht die
+    Rang-Funktion nicht.
     """
-    base = SENSITIVITY_RANK.get(doc_type_sensitivity, 0)
+    base = sensitivity_rank(doc_type_sensitivity)
     if field_sensitivity:
-        field_rank = SENSITIVITY_RANK.get(field_sensitivity, 0)
-        return max(base, field_rank)
+        return max(base, sensitivity_rank(field_sensitivity))
     return base
 
 
@@ -60,7 +95,7 @@ def user_can_see_field(user, doc_type_sensitivity, field_sensitivity=""):
 def user_can_see_event(user, event):
     """Return True if *user* may see the event based on its DocumentType sensitivity."""
     doc_type = event.document_type
-    return ROLE_MAX_SENSITIVITY.get(user.role, 0) >= SENSITIVITY_RANK.get(doc_type.sensitivity, 0)
+    return ROLE_MAX_SENSITIVITY.get(user.role, 0) >= sensitivity_rank(doc_type.sensitivity)
 
 
 def user_can_see_document_type(user, document_type):
@@ -70,11 +105,16 @@ def user_can_see_document_type(user, document_type):
     on the DocumentType directly so it can be used to filter form querysets and
     HTMX partial endpoints before any event exists.
     """
-    return ROLE_MAX_SENSITIVITY.get(user.role, 0) >= SENSITIVITY_RANK.get(document_type.sensitivity, 0)
+    return ROLE_MAX_SENSITIVITY.get(user.role, 0) >= sensitivity_rank(document_type.sensitivity)
 
 
 def allowed_sensitivities_for_user(user):
-    """Return list of DocumentType.Sensitivity values the user may access."""
+    """Return list of DocumentType.Sensitivity values the user may access.
+
+    Schon immer fail-closed und deshalb von #1991 unberuehrt: die Liste wird
+    aus ``SENSITIVITY_RANK`` AUFGEBAUT, ein unbekannter Wert steht also nie
+    darin und faellt aus jeder ``sensitivity__in``-Query heraus.
+    """
     max_rank = ROLE_MAX_SENSITIVITY.get(user.role, 0)
     return [s for s, rank in SENSITIVITY_RANK.items() if rank <= max_rank]
 
