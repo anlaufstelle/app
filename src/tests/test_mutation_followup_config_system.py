@@ -9,8 +9,6 @@ killt.
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 from django.core.exceptions import ValidationError
 from django.forms import modelform_factory
@@ -20,6 +18,7 @@ from core.models import (
     AuditLog,
     DocumentType,
     DocumentTypeField,
+    FieldCondition,
     FieldGroup,
     FieldTemplate,
 )
@@ -28,11 +27,18 @@ from core.services.config import (
     _validate_id_set,
     add_field_to_doctype,
     conflicting_report_key_assignment,
+    delete_document_type,
+    delete_field_condition,
     delete_field_group,
+    delete_field_template,
     move_field,
+    remove_field_from_doctype,
     reorder_blocks,
+    reorder_fields,
     save_document_type,
+    save_field_group,
     save_field_template,
+    update_field_condition,
 )
 
 
@@ -362,3 +368,180 @@ class TestNextBlockPositionEmptyDocType:
         ungetestet."""
         doc_type = DocumentType.objects.create(facility=facility, name="Leer")
         assert _next_block_position(doc_type) == 0
+
+
+# ---------------------------------------------------------------------------
+# Posten 12 — generischer Parametrized-Test: CONFIG_*-Audit trägt korrektes
+# target_type/detail (Refs #1998, ~35 Survivor über zwölf Funktionen)
+# ---------------------------------------------------------------------------
+#
+# Jeder Fall ruft die Mutation DIREKT auf der Service-Schicht auf (nicht über
+# den View/HTTP-Layer) und liefert ``(AuditLog-Eintrag, erwarteter target_type,
+# erwartete detail-Teilmenge)``. Die DELETE-Funktionen setzen ``target_type``
+# EXPLIZIT (das Objekt existiert nach ``.delete()`` nicht mehr, ``pk`` wird
+# genullt) — diese ``detail``-Inhalte waren in den bestehenden Suiten teils
+# gar nicht geprüft (nur die reine Existenz des Audit-Eintrags).
+
+
+def _case_add_field_to_doctype(req, facility, doc_type_contact):
+    ft = FieldTemplate.objects.create(facility=facility, name="Param-Add", field_type="text")
+    dtf = add_field_to_doctype(req, doc_type_contact, ft)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_CREATE, target_id=str(dtf.pk)).latest("timestamp")
+    return entry, "DocumentTypeField", {"name": "Param-Add", "changed_fields": []}
+
+
+def _case_delete_document_type(req, facility, doc_type_contact):
+    dt = DocumentType.objects.create(facility=facility, name="Param-Delete-DT")
+    pk = str(dt.pk)
+    delete_document_type(req, dt)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=pk).latest("timestamp")
+    return entry, "DocumentType", {"name": "Param-Delete-DT"}
+
+
+def _case_save_field_template(req, facility, doc_type_contact):
+    form = modelform_factory(FieldTemplate, fields=["name", "field_type"])(
+        data={"name": "Param-FT", "field_type": "text"}
+    )
+    assert form.is_valid(), form.errors
+    ft = save_field_template(req, form, creating=True, facility=facility)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_CREATE, target_id=str(ft.pk)).latest("timestamp")
+    return entry, "FieldTemplate", {"name": "Param-FT"}
+
+
+def _case_save_field_group(req, facility, doc_type_contact):
+    form = modelform_factory(FieldGroup, fields=["name"])(data={"name": "Param-Group"})
+    assert form.is_valid(), form.errors
+    grp = save_field_group(req, form, doc_type=doc_type_contact, creating=True)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_CREATE, target_id=str(grp.pk)).latest("timestamp")
+    return entry, "FieldGroup", {"name": "Param-Group"}
+
+
+def _case_delete_field_group(req, facility, doc_type_contact):
+    grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Param-Delete-Group")
+    pk = str(grp.pk)
+    delete_field_group(req, grp)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=pk).latest("timestamp")
+    return entry, "FieldGroup", {"name": "Param-Delete-Group"}
+
+
+def _case_remove_field_from_doctype(req, facility, doc_type_contact):
+    ft = FieldTemplate.objects.create(facility=facility, name="Param-Remove", field_type="text")
+    dtf = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft, sort_order=9)
+    pk = str(dtf.pk)
+    remove_field_from_doctype(req, dtf)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=pk).latest("timestamp")
+    return entry, "DocumentTypeField", {"name": "Param-Remove"}
+
+
+def _case_delete_field_template(req, facility, doc_type_contact):
+    ft = FieldTemplate.objects.create(facility=facility, name="Param-Delete-FT", field_type="text")
+    pk = str(ft.pk)
+    delete_field_template(req, ft)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=pk).latest("timestamp")
+    return entry, "FieldTemplate", {"name": "Param-Delete-FT"}
+
+
+def _case_reorder_blocks(req, facility, doc_type_contact):
+    free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+    reorder_blocks(req, doc_type_contact, [("field", free[1].id), ("field", free[0].id)])
+    entry = AuditLog.objects.filter(
+        action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)
+    ).latest("timestamp")
+    return entry, "DocumentType", {"operation": "block_order"}
+
+
+def _case_reorder_fields(req, facility, doc_type_contact):
+    grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Param-RF")
+    ft1 = FieldTemplate.objects.create(facility=facility, name="RF-P1", field_type="text")
+    ft2 = FieldTemplate.objects.create(facility=facility, name="RF-P2", field_type="text")
+    d1 = add_field_to_doctype(req, doc_type_contact, ft1, field_group=grp)
+    d2 = add_field_to_doctype(req, doc_type_contact, ft2, field_group=grp)
+    reorder_fields(req, doc_type_contact, grp.id, [d2.id, d1.id])
+    entry = AuditLog.objects.filter(
+        action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)
+    ).latest("timestamp")
+    return entry, "DocumentType", {"operation": "field_order"}
+
+
+def _case_move_field(req, facility, doc_type_contact):
+    grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Param-Move-Dst")
+    free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+    moved = free[0]
+    move_field(req, doc_type_contact, moved.id, grp.id, ordered_dtf_ids=[moved.id])
+    entry = AuditLog.objects.filter(
+        action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)
+    ).latest("timestamp")
+    return entry, "DocumentType", {"operation": "move_field"}
+
+
+def _case_update_field_condition(req, facility, doc_type_contact):
+    dauer = doc_type_contact.fields.get(field_template__slug="dauer")
+    notiz = doc_type_contact.fields.get(field_template__slug="notiz")
+    condition = FieldCondition.objects.create(
+        target_field=notiz,
+        depends_on_field=dauer,
+        operator=FieldCondition.Operator.GREATER_THAN,
+        value=10,
+        group_index=0,
+    )
+    update_field_condition(
+        req,
+        condition,
+        target_field=notiz,
+        depends_on_field=dauer,
+        operator=FieldCondition.Operator.LESS_THAN,
+        value=20,
+        group_index=0,
+    )
+    entry = AuditLog.objects.filter(
+        action=AuditLog.Action.CONFIG_UPDATE, target_id=str(condition.pk)
+    ).latest("timestamp")
+    return entry, "FieldCondition", {"operator": "less_than", "target_slug": "notiz", "source_slug": "dauer"}
+
+
+def _case_delete_field_condition(req, facility, doc_type_contact):
+    dauer = doc_type_contact.fields.get(field_template__slug="dauer")
+    notiz = doc_type_contact.fields.get(field_template__slug="notiz")
+    condition = FieldCondition.objects.create(
+        target_field=notiz,
+        depends_on_field=dauer,
+        operator=FieldCondition.Operator.GREATER_THAN,
+        value=10,
+        group_index=0,
+    )
+    pk = str(condition.pk)
+    delete_field_condition(req, condition)
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_DELETE, target_id=pk).latest("timestamp")
+    return entry, "FieldCondition", {"operator": "greater_than", "target_slug": "notiz", "source_slug": "dauer"}
+
+
+_CONFIG_AUDIT_CASES = {
+    "add_field_to_doctype": _case_add_field_to_doctype,
+    "delete_document_type": _case_delete_document_type,
+    "save_field_template": _case_save_field_template,
+    "save_field_group": _case_save_field_group,
+    "delete_field_group": _case_delete_field_group,
+    "remove_field_from_doctype": _case_remove_field_from_doctype,
+    "delete_field_template": _case_delete_field_template,
+    "reorder_blocks": _case_reorder_blocks,
+    "reorder_fields": _case_reorder_fields,
+    "move_field": _case_move_field,
+    "update_field_condition": _case_update_field_condition,
+    "delete_field_condition": _case_delete_field_condition,
+}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("case_name", sorted(_CONFIG_AUDIT_CASES))
+def test_config_audit_target_type_and_detail(case_name, req, facility, doc_type_contact):
+    """Generischer Test über zwölf Config-Mutationen: jede muss einen
+    Audit-Eintrag mit korrektem ``target_type`` UND inhaltlich korrektem
+    ``detail`` schreiben (Refs #1998). Ruft die Service-Funktion DIREKT auf
+    (nicht über den View/HTTP-Layer) — u. a. für die DELETE-Funktionen und
+    die ``FieldCondition``-Mutationen war der ``detail``-Inhalt bislang nicht
+    (oder nur über den View-Layer) geprüft.
+    """
+    entry, expected_target_type, expected_detail_subset = _CONFIG_AUDIT_CASES[case_name](req, facility, doc_type_contact)
+    assert entry.target_type == expected_target_type
+    for key, expected_value in expected_detail_subset.items():
+        assert entry.detail[key] == expected_value, f"{case_name}: detail[{key!r}] != {expected_value!r}"
