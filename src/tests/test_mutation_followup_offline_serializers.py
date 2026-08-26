@@ -20,6 +20,7 @@ from core.models import (
     User,
     WorkItem,
 )
+from core.services.compliance import SENSITIVITY_RANK
 from core.services.system import (
     _serialize_case,
     _serialize_document_type,
@@ -597,22 +598,35 @@ class TestSerializeDocumentType:
         dt = _make_doc_type(facility, name="Empty")
         assert _serialize_document_type(lead_user, dt)["fields"] == []
 
-    def test_dt_fields_filtered_by_user_sensitivity(self, facility, staff_user, assistant_user, lead_user):
+    def test_dt_fields_filtered_by_user_sensitivity(self, facility, staff_user, assistant_user, lead_user, admin_user):
         """Refs #1111: Ein HIGH-Feld in einem NORMAL-Typ darf nur in der
         Feld-Liste auftauchen, wenn der Nutzer es sehen darf. Staff (max
         ELEVATED) bekommt es NICHT, Lead schon — gleiche Grenze wie die
         Wert-Filterung in ``_visible_data_fields``.
 
-        Refs #1998 (Leak-Grenze): Der Test deckte bisher nur die Richtung
-        „Feld-Override HOEHER als der Typ" ab und liess damit das ERSTE
-        Argument von ``user_can_see_field(user, doc_type.sensitivity, ...)``
-        voellig ungepinnt. ``effective_sensitivity`` ist ``max(Typ, Feld)``:
-        ein Feld OHNE eigene Sensitivity erbt die Stufe des Typs. Faellt das
-        Typ-Argument weg (oder wird das Gate wahr), verliesse das komplette
-        Feldschema eines HIGH-Typs — Feldnamen, Hilfetexte, Auswahloptionen —
-        den Server Richtung IndexedDB an genau die Rollen, die den Typ online
-        nicht einmal sehen duerfen (Bundle-ist-Derivat-Invariante). Richtung B
-        unten pinnt diesen Fall.
+        Refs #1998 (Leak-Grenze): ``effective_sensitivity`` ist ``max(Typ,
+        Feld)``. Das sind DREI unterscheidbare Faelle, und ein Test, der nur
+        einen davon trifft, laesst die Grenze offen. Alle drei stehen deshalb
+        hier zusammen:
+
+        * **A — Feld-Override HOEHER als der Typ** (Refs #1111, bestand
+          bereits). Pinnt das ZWEITE Argument.
+        * **B — Feld OHNE eigenen Override, Typ HIGH.** Die Gate-Stufe kann
+          nur noch aus ``doc_type.sensitivity`` kommen; faellt das erste
+          Argument weg (oder wird das Gate wahr), verliesse das komplette
+          Feldschema eines HIGH-Typs — Feldnamen, Hilfetexte,
+          Auswahloptionen — den Server Richtung IndexedDB an Rollen, die den
+          Typ online nicht einmal sehen duerfen.
+        * **C — Feld-Override NIEDRIGER als der Typ** (Fix-Runde 1, vom
+          adversarialen Verify nachgereicht). A und B pinnen nur, DASS beide
+          Argumente ankommen, nicht WIE sie verrechnet werden: die Mutante
+          ``user_can_see_field(user, field.sensitivity or doc_type.sensitivity)``
+          — Override ERSETZT die Typ-Stufe statt ``max`` — ueberlebte A und B
+          und die gesamte Offline-Batterie. Real leakbar: ein HIGH-Typ mit
+          einem ausdruecklich auf "normal" gesetzten Feld liefe damit fuer
+          STAFF/ASSISTANT auf Stufe NORMAL statt HIGH und gaebe genau das
+          Feldschema heraus, das online verborgen ist. Ein Feld-Override kann
+          eine Stufe nur ANHEBEN, nie senken.
         """
         # Richtung A (Refs #1111): Feld-Override HOEHER als der Typ.
         dt = _make_doc_type(facility, name="Gemischt", sensitivity=DocumentType.Sensitivity.NORMAL)
@@ -644,6 +658,25 @@ class TestSerializeDocumentType:
         # ohne sie waere ein „Feld gar nicht verknuepft"-Fehler ununterscheidbar
         # von der gepinnten Filterwirkung.
         assert [f["slug"] for f in _serialize_document_type(lead_user, dt_high)["fields"]] == [ft_inherit.slug]
+
+        # Richtung C (Refs #1998, Fix-Runde 1): TYP-Stufe HIGH, Feld mit
+        # ausdruecklich NIEDRIGEREM Override. ``max`` gewinnt, der Override
+        # senkt NICHT — sonst waere „sensitivity=normal" am Feld ein
+        # Generalschluessel fuer das Schema eines HIGH-Typs.
+        dt_high_c = _make_doc_type(facility, name="Streng mit Ausnahme", sensitivity=DocumentType.Sensitivity.HIGH)
+        ft_lower = _make_field_template(facility, name="Scheinbar harmlos", sensitivity=DocumentType.Sensitivity.NORMAL)
+        _attach(dt_high_c, ft_lower, sort_order=0)
+        # Vorbedingung: der Override ist WIRKLICH gesetzt und WIRKLICH
+        # niedriger als die Typ-Stufe — nur dann unterscheidet sich dieser
+        # Fall ueberhaupt von Richtung B.
+        assert ft_lower.sensitivity == DocumentType.Sensitivity.NORMAL
+        assert SENSITIVITY_RANK[ft_lower.sensitivity] < SENSITIVITY_RANK[dt_high_c.sensitivity]
+
+        assert _serialize_document_type(staff_user, dt_high_c)["fields"] == []
+        assert _serialize_document_type(assistant_user, dt_high_c)["fields"] == []
+        # Beide HIGH-faehigen Rollen sehen es — haelt auch Richtung C nicht-vakuum.
+        assert [f["slug"] for f in _serialize_document_type(lead_user, dt_high_c)["fields"]] == [ft_lower.slug]
+        assert [f["slug"] for f in _serialize_document_type(admin_user, dt_high_c)["fields"]] == [ft_lower.slug]
 
 
 # ---------------------------------------------------------------------------
