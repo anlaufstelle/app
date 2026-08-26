@@ -586,8 +586,14 @@ Five points that experience shows tend to go wrong:
  leaving a silently incomplete registry.
 4. **A slug is effectively immutable** — it appears in query parameters, file names, and with
  `snapshot_enabled` in the keys of `StatisticsSnapshot.backend_data`.
-5. **Mapping runs through `report_key`**, never through `system_type` and never through a
- category ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)).
+5. **Mapping runs through `report_key`**, never through a category
+ ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)). There is exactly **one** documented
+ exception: `ban-overview` deliberately binds through `system_type`
+ (`TypBindung(bindet="system_type")`) because it is a highly sensitive behavioural report
+ bans must not leak into unrelated analyses through a freely selectable report key. If you
+ copy that particular module as your template, switch `bindet` back to `report_key`; otherwise
+ the registry lookup ("appears in …") and the key vocabulary silently ignore `system_type`
+ bindings.
 
 **Copy a template, do not start from scratch.** [`src/core/reporting/backends/`](src/core/reporting/backends/)
 ships nine backends — all of them **examples**, not binding reporting standards, and each with
@@ -968,4 +974,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.84.0 -->
 <!-- translation-date: 2026-08-26 -->
-<!-- source-hash: 6ee04b8e08241b3d2cfd527fa107a65603a22254 -->
+<!-- source-hash: a93d1bbee6bc8bc96a11cdff0636524193aa3786 -->
