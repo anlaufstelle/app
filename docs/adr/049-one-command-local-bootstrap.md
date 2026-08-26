@@ -84,6 +84,19 @@ Persistenz ist keine Bequemlichkeit, sondern Bedingung: ein bei jedem Start neu
 erzeugter Schlüssel ließe bereits verschlüsselte Entwicklungsdaten unlesbar
 zurück.
 
+**Weitergereicht wird der Pfad, nicht der Wert.** Die Container bekommen
+`LOCAL_ENCRYPTION_KEY_FILE`; `settings/dev.py` liest die Datei, wenn
+`ENCRYPTION_KEY` leer ist. Der naheliegende Weg — der Startbefehl exportiert
+den gelesenen Schlüssel in seine Shell — trägt nur bis PID 1:
+`docker compose exec`/`run` startet einen neuen Prozess aus der
+Container-**Konfiguration**, nicht aus der Umgebung von PID 1. Jedes
+`manage.py`-Kommando nach dem Start liefe dann still in den Klartext-Modus
+dieser Settings, schriebe Art.-9-Felder unverschlüsselt und bräche auf den
+Lesepfaden mit `EncryptionKeyMissing` ab. Über den Pfad sieht jeder Prozess im
+Container denselben Schlüssel. Der Rückfall ist strikt opt-in: ohne die
+Variable ändert sich nichts — auch nicht in `test.py`/`e2e.py`, die von `dev`
+erben.
+
 ### 5. Der lokale Webdienst bindet auf Loopback
 
 Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
@@ -94,8 +107,11 @@ Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
 
 - `git clone … && cd … && docker compose up` genügt. Gemessen auf dem
  Entwicklungshost (Image vorgebaut): Kaltstart bis HTTP 200 auf `/login/`
- 21,6 s, Warmstart 11,2 s — beides deutlich unter dem 60-Sekunden-Ziel aus
+ 21,2 s, Warmstart 10,9 s — beides deutlich unter dem 60-Sekunden-Ziel aus
  #1062.
+- `docker compose exec web python manage.py …` arbeitet mit demselben
+ Schlüssel wie der laufende Server; die Kommandos aus README, Ops-Runbook und
+ Handtest-Matrix bleiben damit uneingeschränkt gültig.
 - Der Quick-Start in README/README.en verliert seine Migrate- und
  Seed-Schritte. Der Architektur-Guard `TestReadmeQuickStart` koppelt beides:
  fällt der `init`-Dienst weg, verlangt er die Schritte im Text zurück.
@@ -130,6 +146,13 @@ Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
  lokale Compose, ihr Kopfkommentar sagt das seit #799.
 - **Fester Dev-Schlüssel in der Compose** — verworfen in #1977 und hier
  bestätigt: für alle Klone derselbe Wert ist kein Geheimnis.
+- **Schlüssel in eine `.env`/`env_file` schreiben, die Compose selbst
+ einliest** — verworfen: Compose wertet `env_file` beim Lesen der Datei aus,
+ also *bevor* der Bootstrap läuft. Der erste Start hätte keinen Schlüssel
+ (Henne-Ei), und die Datei landete im Klon-Verzeichnis statt in einem
+ Wegwerf-Volume.
+- **Den Schlüssel im Startbefehl in die Shell exportieren** — verworfen, weil
+ es nur bis PID 1 trägt: `exec`/`run` sehen ihn nicht (siehe Decision § 4).
 - **Seed-Entscheidung im Shell-Skript** (`psql`-Abfrage auf `core_user`)
  verworfen: ungetestet, außerhalb der Reichweite der Suite und mit einer
  zweiten Datenbankverbindung, die von der des Seeds abweichen kann.
