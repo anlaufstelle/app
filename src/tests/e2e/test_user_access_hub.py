@@ -46,10 +46,12 @@ def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base
     # Der Einstieg in jede Mutation fuehrt zuerst durch Sudo. Danach bleiben
     # alle weiteren Schritte derselben Journey innerhalb des 15-Minuten-Fensters.
     page.locator('[data-testid="user-access-create-link"]').click()
-    page.wait_for_url(lambda url: "/sudo/" in url, timeout=30000)
+    page.wait_for_url(lambda url: "/sudo/" in url, timeout=30000, wait_until="domcontentloaded")
     page.fill('input[name="password"]', "anlaufstelle2026")
     page.get_by_role("button", name="Bestätigen und fortfahren").click()
-    page.wait_for_url(lambda url: url.endswith("/verwaltung/zugaenge/neu/"), timeout=30000)
+    page.wait_for_url(
+        lambda url: url.endswith("/verwaltung/zugaenge/neu/"), timeout=30000, wait_until="domcontentloaded"
+    )
 
     role_values = page.locator('select[name="role"] option').evaluate_all("options => options.map(o => o.value)")
     assert "super_admin" not in role_values
@@ -60,7 +62,7 @@ def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base
     page.check('input[name="mfa_required"]')
     page.check('input[name="can_confirm_deletion"]')
     page.locator('[data-testid="user-access-form"] button[type="submit"]').click()
-    page.wait_for_url(_DETAIL_RE, timeout=30000)
+    page.wait_for_url(_DETAIL_RE, timeout=30000, wait_until="domcontentloaded")
     match = _DETAIL_RE.search(page.url)
     assert match
     user_pk = match.group(1)
