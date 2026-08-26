@@ -80,6 +80,8 @@ Sie können Zeiträume passend zu Ihrem Betrieb definieren — z. B. „Nachtdie
 
 Jede Einrichtung arbeitet anders. Anlaufstelle lässt sich an Ihre Dokumentationspraxis anpassen: Welche Kontaktarten gibt es? Welche Leistungen werden erfasst? Welche Felder braucht ein Eintrag?
 
+Das geht ohne Programmierung, direkt in der Oberfläche — für Ereignisse ebenso wie für Personen- und Fallformulare. Felder lassen sich zu Abschnitten gruppieren, sortieren und mit Bedingungen versehen („zeige das Feld nur, wenn …"). Eine Konfiguration lässt sich als YAML-Paket festhalten, versionieren und in einer weiteren Einrichtung wieder einspielen.
+
 Die Konfiguration bestimmt auch den Datenschutz:
 
 - **Sensibilitätsstufe** — welche Angaben besonders schützenswürdig sind
@@ -96,14 +98,19 @@ Die Konfiguration bestimmt auch den Datenschutz:
 - **Kontakte dokumentieren** — in 30 Sekunden, auch vom Smartphone
 - **Hinweise und Aufgaben** — Informationen zwischen Diensten weitergeben, Aufgaben nachverfolgen
 - **Personen-Register** — Pseudonyme, Kontaktstufen, Verlaufschronik
+- **Fälle und Verläufe** — längere Begleitungen mit Episoden, Zielen und Meilensteinen dokumentieren
+- **Dateianhänge** — Dokumente und Fotos an Ereignis, Person oder Fall; verschlüsselt abgelegt und vor der Ablage auf Viren geprüft
 - **Tippfehler-tolerante Suche** — schnell finden, was Sie suchen
 - **Offline-Modus für Streetwork** — Erfassung auch ohne Netz, lokal verschlüsselt
 - **Deutsch und Englisch** — Sprachumschaltung im System
 
 ### Für Leitung und Träger
 
-- **Statistiken und Berichte** — Auswertungen auf Knopfdruck, Export als CSV und PDF
+- **Statistiken und Berichte** — Auswertungen auf Knopfdruck, Export als CSV, PDF, JSON und XML
+- **Berichtsstandards als Bausteine** — mitgelieferte Auswertungen (Kontakte je Monat, Fallzahlen, Beratungszeiten, Spritzentausch-Bilanz …); weitere lassen sich ergänzen, ohne den Rest des Systems anzufassen
 - **Beispiel-Sachbericht** — strukturierte, anpassbare Vorlage (kein verbindlicher Behördennachweis)
+- **Datenübernahme per CSV-Import** — geführter Assistent mit Zuordnung, Probelauf und erst dann Übernahme
+- **Einrichtungs-Export** — vollständiger, versionierter Datenexport einer Einrichtung (Art. 20 DSGVO)
 - **5-Stufen-Rollenmodell** — Systemadministration (`super_admin`), Anwendungsbetreuung (`facility_admin`), Leitung, Fachkraft, Assistenz
 - **Einrichtungstrennung** — Daten sind vollständig getrennt, kein Datenmix zwischen Standorten
 
@@ -119,6 +126,8 @@ Anlaufstelle ist von Grund auf für den Umgang mit besonders schützenswerten Da
 - **Löschanträge mit 4-Augen-Prinzip** — Löschung nur nach Genehmigung durch Leitung/Admin
 - **Prüfprotokoll** — unveränderliches Audit-Log aller sicherheitsrelevanten Aktionen
 - **Betroffenenrechte** — Datenauskunft und -export für Personen (Art. 15, 20 DSGVO)
+- **Berichtigungen (Art. 16 DSGVO)** — als interner Antrag mit Prüfung durch Leitung/Admin, nicht als Self-Service
+- **K-Anonymität in Auswertungen** — Kleinstfallzahlen werden unterdrückt, bevor Zahlen die Einrichtung verlassen
 - **DSGVO-Vorlagen** — Muster für AV-Vertrag, DSFA, TOMs, Verarbeitungsverzeichnis und Informationspflichten mitgeliefert
 
 ---
@@ -178,25 +187,17 @@ Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufste
 
 ### Quick-Start
 
-**Voraussetzungen:** Docker mit Docker Compose und Python 3 zum Erzeugen eines lokalen Verschlüsselungsschlüssels
+**Voraussetzungen:** Docker mit Docker Compose
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
 cd app
-export ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
-docker compose up --build -d
+docker compose up
 ```
 
-Datenbank-Migrationen und Seed-Daten laufen bewusst nicht beim Serverstart mit. Lege das Schema deshalb ausdrücklich an und lade anschließend die Demo-Einrichtung:
+Das lokale Compose bringt Datenbank und Anwendung mit, wendet die Migrationen an und lädt beim ersten Start die Demo-Einrichtung. Nach rund einer Minute ist die Anmeldung unter [http://localhost:8000/login/](http://localhost:8000/login/) erreichbar; alle Seed-Konten teilen sich das Passwort `anlaufstelle2026` (`admin` = Anwendungsbetreuung, `emma` = Leitung, `miriam` = Fachkraft, `superadmin` = Systemadministration). Serverausgabe: `docker compose logs -f web`.
 
-```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed
-```
-
-Die gestylte Anmeldemaske ist danach unter [http://localhost:8000](http://localhost:8000) erreichbar. Bewahre `ENCRYPTION_KEY` für weitere Starts sicher auf; ein anderer Schlüssel kann bereits verschlüsselte Entwicklungsdaten nicht lesen. Serverausgabe: `docker compose logs -f web`.
-
-Für Tailwind im Watch-Modus (`docker compose --profile tailwind up tailwind`), den lokalen Python-Testlauf und den Rest der Werkzeugkette: [CONTRIBUTING.md § Entwicklungsumgebung einrichten](CONTRIBUTING.md#entwicklungsumgebung-einrichten). Der produktive Stack (`docker-compose.prod.yml`) folgt dem getrennten Migrationspfad aus [docs/admin-guide.md § 1](docs/admin-guide.md).
+Für Tailwind im Watch-Modus (`docker compose --profile tailwind up tailwind`), den lokalen Python-Testlauf und den Rest der Werkzeugkette: [CONTRIBUTING.md § 5-Minuten-Quick-Start](CONTRIBUTING.md#5-minuten-quick-start-docker) und [§ Entwicklungsumgebung einrichten](CONTRIBUTING.md#entwicklungsumgebung-einrichten). Wie das System aufgebaut ist: [docs/architecture.md](docs/architecture.md). Der produktive Stack (`docker-compose.prod.yml`) seedet **nie** und folgt dem getrennten Migrationspfad aus [docs/admin-guide.md § 1](docs/admin-guide.md).
 
 ### Tech-Stack
 
