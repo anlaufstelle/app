@@ -226,9 +226,7 @@ class TestSaveDocumentTypeBanRevisionWiring:
 
 @pytest.mark.django_db
 class TestTwoFieldGroupsBlockSequence:
-    def test_delete_one_of_two_groups_keeps_other_groups_recompacted_position(
-        self, req, facility, doc_type_contact
-    ):
+    def test_delete_one_of_two_groups_keeps_other_groups_recompacted_position(self, req, facility, doc_type_contact):
         """``test_delete_group_places_inner_fields_at_group_position``
         (test_config_service.py) hatte nur EINE FieldGroup im Bestand und
         testete damit nie den Zweig, der eine ANDERE (nicht gelöschte) Gruppe
@@ -444,9 +442,9 @@ def _case_delete_field_template(req, facility, doc_type_contact):
 def _case_reorder_blocks(req, facility, doc_type_contact):
     free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
     reorder_blocks(req, doc_type_contact, [("field", free[1].id), ("field", free[0].id)])
-    entry = AuditLog.objects.filter(
-        action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)
-    ).latest("timestamp")
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)).latest(
+        "timestamp"
+    )
     return entry, "DocumentType", {"operation": "block_order"}
 
 
@@ -457,9 +455,9 @@ def _case_reorder_fields(req, facility, doc_type_contact):
     d1 = add_field_to_doctype(req, doc_type_contact, ft1, field_group=grp)
     d2 = add_field_to_doctype(req, doc_type_contact, ft2, field_group=grp)
     reorder_fields(req, doc_type_contact, grp.id, [d2.id, d1.id])
-    entry = AuditLog.objects.filter(
-        action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)
-    ).latest("timestamp")
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)).latest(
+        "timestamp"
+    )
     return entry, "DocumentType", {"operation": "field_order"}
 
 
@@ -468,9 +466,9 @@ def _case_move_field(req, facility, doc_type_contact):
     free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
     moved = free[0]
     move_field(req, doc_type_contact, moved.id, grp.id, ordered_dtf_ids=[moved.id])
-    entry = AuditLog.objects.filter(
-        action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)
-    ).latest("timestamp")
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_REORDER, target_id=str(doc_type_contact.pk)).latest(
+        "timestamp"
+    )
     return entry, "DocumentType", {"operation": "move_field"}
 
 
@@ -493,9 +491,9 @@ def _case_update_field_condition(req, facility, doc_type_contact):
         value=20,
         group_index=0,
     )
-    entry = AuditLog.objects.filter(
-        action=AuditLog.Action.CONFIG_UPDATE, target_id=str(condition.pk)
-    ).latest("timestamp")
+    entry = AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(condition.pk)).latest(
+        "timestamp"
+    )
     return entry, "FieldCondition", {"operator": "less_than", "target_slug": "notiz", "source_slug": "dauer"}
 
 
@@ -541,7 +539,9 @@ def test_config_audit_target_type_and_detail(case_name, req, facility, doc_type_
     die ``FieldCondition``-Mutationen war der ``detail``-Inhalt bislang nicht
     (oder nur über den View-Layer) geprüft.
     """
-    entry, expected_target_type, expected_detail_subset = _CONFIG_AUDIT_CASES[case_name](req, facility, doc_type_contact)
+    entry, expected_target_type, expected_detail_subset = _CONFIG_AUDIT_CASES[case_name](
+        req, facility, doc_type_contact
+    )
     assert entry.target_type == expected_target_type
     for key, expected_value in expected_detail_subset.items():
         assert entry.detail[key] == expected_value, f"{case_name}: detail[{key!r}] != {expected_value!r}"
