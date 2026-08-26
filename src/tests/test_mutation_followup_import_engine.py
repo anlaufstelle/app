@@ -331,3 +331,91 @@ class TestCleanupStaleImportJobsReturnValue:
         job_b.refresh_from_db()
         assert job_a.status == ImportJob.Status.ABORTED
         assert job_b.status == ImportJob.Status.ABORTED
+
+
+# ---------------------------------------------------------------------------
+# Posten 8 — uebergebener User wird tatsaechlich persistiert
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestActingUserIsActuallyPersistedNotJustExistence:
+    """Bisherige Tests pruefen nach commit_import/abort_import/Zeilen-Import
+    nur Existenz bzw. Summen (z. B. ``AuditLog.objects.filter(...).exists()``).
+    Eine vertauschte Feldzuweisung — etwa ``user=job.created_by`` statt dem
+    tatsaechlich uebergebenen ``user`` — waere so nie aufgefallen. Jeder Test
+    hier ruft die Funktion mit einem User auf, der NICHT der Job-Ersteller
+    ist, und prueft das konkrete Feld. Refs #1998.
+    """
+
+    def test_run_import_client_row_attributes_to_the_passed_in_user(
+        self, facility, admin_user, staff_user, media_root
+    ):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym\nACT-01\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+
+        import_engine.run_import(job, staff_user, commit=True)
+
+        client = Client.objects.get(facility=facility, pseudonym="ACT-01")
+        assert client.created_by == staff_user
+        assert client.created_by != admin_user
+        entry = AuditLog.objects.get(action=AuditLog.Action.CLIENT_CREATE, target_id=str(client.pk))
+        assert entry.user == staff_user
+        assert entry.facility == facility
+
+    def test_run_import_event_row_attributes_to_the_passed_in_user(
+        self, facility, admin_user, staff_user, doc_type_contact, client_identified, media_root
+    ):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Datum;Person\n01.03.2026 09:30;Test-ID-01\n"),
+            target_type=ImportJob.TargetType.EVENT,
+            document_type=doc_type_contact,
+        )
+        import_engine.apply_mapping(job, {"Datum": "occurred_at", "Person": "client_pseudonym"})
+
+        import_engine.run_import(job, staff_user, commit=True)
+
+        event = Event.objects.get(client=client_identified, document_type=doc_type_contact)
+        assert event.created_by == staff_user
+        history = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
+        assert history.changed_by == staff_user
+        entry = AuditLog.objects.get(action=AuditLog.Action.EVENT_CREATE, target_id=str(event.pk))
+        assert entry.user == staff_user
+        assert entry.facility == facility
+
+    def test_commit_import_audit_entry_carries_the_passed_in_user(self, facility, admin_user, staff_user, media_root):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym\nACT-02\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+        import_engine.run_import(job, staff_user, commit=False)
+
+        import_engine.commit_import(job, staff_user)
+
+        entry = AuditLog.objects.filter(action=AuditLog.Action.IMPORT_COMMITTED).latest("timestamp")
+        assert entry.user == staff_user
+        assert entry.facility == facility
+
+    def test_abort_import_audit_entry_carries_the_passed_in_user(self, facility, admin_user, staff_user, media_root):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym\nACT-03\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+
+        import_engine.abort_import(job, staff_user)
+
+        entry = AuditLog.objects.filter(action=AuditLog.Action.IMPORT_ABORTED).latest("timestamp")
+        assert entry.user == staff_user
+        assert entry.facility == facility
