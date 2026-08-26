@@ -20,7 +20,7 @@ from core.services.audit import (
     audit_event,
     check_update_allowlist,
 )
-from core.services.client.targets import client_activity_targets_q, client_and_event_targets_q
+from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
 from core.services.security import check_version_conflict
@@ -370,8 +370,8 @@ def _redact_retention_proposals(event_ids: list) -> None:
         proposal.save(update_fields=["details"])
 
 
-def _redact_legal_holds(client, event_ids: list, case_ids: list | None = None) -> None:
-    """Redigiere ``LegalHold.reason`` fuer Client-, Event- und Fall-Ziele (Refs #1751, #1818).
+def _redact_legal_holds(client, event_ids: list) -> None:
+    """Redigiere ``LegalHold.reason`` fuer alle Hold-Ziele der Person (Refs #1751, #1818, #1990).
 
     ``reason`` ist bestimmungsgemaess Freitext mit Fall-/Klientenkontext und
     kannte bisher **keinen** Redaktions- oder Pruning-Pfad: abgelaufene und
@@ -381,12 +381,16 @@ def _redact_legal_holds(client, event_ids: list, case_ids: list | None = None) -
     Aufhebungs-Metadaten bleiben fuer den Nachweis-Trail erhalten (die Zeile
     belegt weiterhin, DASS eine Aufbewahrungspflicht bestand).
 
-    Der **Fall**-Zweig (``target_type="Case"``, Refs #1818) kam mit ADR-044
-    dazu: seit ``create_hold_for_target`` einen Fall-Hold erzeugen kann, faellt
-    dessen ``reason`` sonst durch beide bisherigen Zweige und bliebe nach der
-    Personen-Anonymisierung dauerhaft im Klartext stehen — ``LegalHold.reason``
-    ist laut eigenem Docstring bestimmungsgemaess Freitext mit
-    Fall-/Klientenkontext und kennt keinen zweiten Pruning-Pfad.
+    Die Zielmenge stammt seit #1990 aus
+    :func:`core.services.client.targets.client_legal_hold_targets_q` — demselben
+    Builder, den die Art.-15-Auskunft
+    (:func:`core.services.client.export._gather_legal_holds`) benutzt. Der
+    **Fall**-Zweig (``target_type="Case"``, ADR-044/Refs #1818) stand vorher nur
+    hier und wurde ueber ein eigenes ``case_ids``-Argument hereingereicht; die
+    Auskunft kannte ihn nicht. Der Parameter entfaellt deshalb: die Fall-IDs
+    leitet der Builder aus ``client.cases`` ab — dieselbe Menge, die
+    :func:`_redact_cases_and_episodes` zurueckgab, aber aus EINER Quelle fuer
+    beide Seiten. Der ``Activity``-Zweig kam mit demselben Ticket dazu.
 
     Hinweis zur Reichweite: ein **aktiver** Hold blockiert die Anonymisierung
     an beiden Retention-Einstiegen — ``anonymize_eligible_soft_deleted_clients``
@@ -396,13 +400,9 @@ def _redact_legal_holds(client, event_ids: list, case_ids: list | None = None) -
     vorhanden, waere bereits die Anonymisierung selbst der Fehler — nicht
     diese Redaktion.
     """
-    from django.db.models import Q
-
     from core.models.retention import LegalHold
 
-    targets = client_and_event_targets_q(client, event_ids)
-    if case_ids:
-        targets |= Q(target_type="Case", target_id__in=case_ids)
+    targets = client_legal_hold_targets_q(client, event_ids)
     LegalHold.objects.for_facility(client.facility).filter(targets).update(reason="[Anonymisiert]")
 
 
@@ -644,7 +644,7 @@ def anonymize_client(client, user=None):
     _redact_case_deletion_requests(case_ids)
     _redact_rectification_requests(client)
     _redact_retention_proposals(event_ids)
-    _redact_legal_holds(client, event_ids, case_ids)
+    _redact_legal_holds(client, event_ids)
     _redact_activities(client, event_ids)
     # Merge-Tombstones (ADR-045): die vier Schritte davor sammeln ueber die
     # QUELLE — nach der Wanderung 0 Zeilen. Die quell-bezogenen Metadaten der

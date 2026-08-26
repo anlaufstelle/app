@@ -450,22 +450,19 @@ class TestClientTargetQueryParity:
     des zentralen Builder-Moduls wird ohne Pflege einer Verbraucher-Allowlist
     sichtbar.
 
-    Die Ausnahme ist zaehlergenau. Ein zweiter, auch gleichlautender Case-Zweig
-    in ``_redact_legal_holds`` wuerde den Guard ebenfalls reissen.
+    Die Ausnahmeliste ist zaehlergenau — sie ist seit #1990 leer: jeder
+    inline gebaute Zielquery unter ``core/services/client`` reisst den Guard.
     """
 
     _CLIENT_SERVICE_DIR = Path("src/core/services/client")
     _TARGET_BUILDERS_MODULE = Path("targets.py")
 
-    # Refs #1818: Art. 17 redigiert bewusst auch Fall-Holds. Art. 15 exportiert
-    # sie derzeit nicht; bis diese vorbestehende Fachluecke separat entschieden
-    # ist, bleibt der lokale Case-Zweig eine explizite Erweiterung des
-    # Client-/Event-Builders. Counter statt set pinnt auch seine Anzahl.
-    _INLINE_TARGET_Q_EXEMPTIONS = Counter(
-        {
-            ("main.py", "_redact_legal_holds", "'Case'"): 1,
-        }
-    )
+    # Refs #1818/#1990: Der lokale Case-Zweig in ``_redact_legal_holds`` war die
+    # letzte Ausnahme — Art. 17 redigierte Fall-Holds, Art. 15 exportierte sie
+    # nicht. #1990 hat die Fachluecke entschieden (beide Seiten ziehen jetzt
+    # ueber ``client_legal_hold_targets_q``), die Ausnahme ist damit erledigt.
+    # Counter statt set: eine neue Ausnahme muesste auch ihre Anzahl belegen.
+    _INLINE_TARGET_Q_EXEMPTIONS: Counter[tuple[str, str, str]] = Counter()
 
     # Diese Liste entdeckt bewusst keine neuen Verbraucher; dafuer ist der
     # ableitungsbasierte Inline-Scan zustaendig. Sie haelt lediglich fest, dass
@@ -474,12 +471,14 @@ class TestClientTargetQueryParity:
     _KNOWN_BUILDER_CONSUMERS = {
         Path("export.py"): {
             "_gather_deletion_requests": "client_and_event_targets_q",
-            "_gather_legal_holds": "client_and_event_targets_q",
+            # Refs #1990: Legal Holds ziehen ueber den erweiterten Builder —
+            # Client/Event PLUS Case- und Activity-Ziele.
+            "_gather_legal_holds": "client_legal_hold_targets_q",
             "_gather_retention_proposals": "client_and_event_targets_q",
             "_gather_activities": "client_activity_targets_q",
         },
         Path("main.py"): {
-            "_redact_legal_holds": "client_and_event_targets_q",
+            "_redact_legal_holds": "client_legal_hold_targets_q",
             "_redact_activities": "client_activity_targets_q",
         },
     }
