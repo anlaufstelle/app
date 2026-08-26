@@ -44,6 +44,9 @@ services:
   # ``docker-migrate.sh`` und seeden nie automatisch.
   init:
     build: .
+    # Gemeinsames Tag mit ``web``: derselbe Build-Kontext, dasselbe Image —
+    # ohne ``image:`` legte Compose zwei getrennte Tags an und baute zweimal.
+    image: anlaufstelle-local:latest
     # Wie bei ``web``: ./src:/app verdeckt den Image-Entrypoint (Refs #1977).
     entrypoint: []
     command: ["/bin/sh", "/opt/anlaufstelle/bin/bootstrap.sh", "bootstrap"]
@@ -65,17 +68,28 @@ services:
       # Ein gesetzter Wert gewinnt (Refs #1977: kein ausgeliefertes
       # Fest-Geheimnis, aber auch kein Setup-Schritt vor dem ersten Start).
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
+      # Der PFAD, nicht der Wert: ``settings/dev.py`` liest die Datei. Ein nur
+      # in die Startshell exportierter Schluessel waere fuer
+      # ``docker compose exec/run python manage.py …`` unsichtbar — diese
+      # Prozesse erben die Container-Konfiguration, nicht die Umgebung von
+      # PID 1, und liefen still im Klartext-Modus (Refs #1062).
+      LOCAL_ENCRYPTION_KEY_FILE: /home/appuser/encryption.key
     depends_on:
       db:
         condition: service_healthy
 
   web:
     build: .
+    image: anlaufstelle-local:latest
     # ./src:/app verdeckt den Image-Entrypoint. Dev startet deshalb bewusst
     # ohne ihn und kopiert zuerst das im Image gebaute CSS aus dem nicht
-    # gemounteten Pfad in den Quellbaum (Refs #1977). ``$$`` ist das
-    # Compose-Escape fuer ein literales ``$`` — die Kommandosubstitution
-    # gehoert der Shell im Container, nicht der Compose-Interpolation.
+    # gemounteten Pfad in den Quellbaum (Refs #1977).
+    #
+    # ``ensure-key`` legt die Schluesseldatei an, falls sie fehlt, und
+    # exportiert bewusst NICHTS: gelesen wird sie von ``settings/dev.py`` ueber
+    # ``LOCAL_ENCRYPTION_KEY_FILE``. Nur so sieht auch jedes spaetere
+    # ``docker compose exec/run python manage.py …`` denselben Schluessel
+    # (Refs #1062).
     entrypoint: []
     command:
       - /bin/sh
@@ -83,8 +97,7 @@ services:
       - |
         set -eu
         cp /opt/anlaufstelle/static/css/styles.css /app/static/css/styles.css
-        ENCRYPTION_KEY="$$(/bin/sh /opt/anlaufstelle/bin/bootstrap.sh print-key)"
-        export ENCRYPTION_KEY
+        /bin/sh /opt/anlaufstelle/bin/bootstrap.sh ensure-key
         exec python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./src:/app
@@ -102,6 +115,7 @@ services:
       POSTGRES_PASSWORD: anlaufstelle
       # Siehe ``init``: leer heisst "Schluessel aus ``localstate`` nehmen".
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
+      LOCAL_ENCRYPTION_KEY_FILE: /home/appuser/encryption.key
     depends_on:
       db:
         condition: service_healthy

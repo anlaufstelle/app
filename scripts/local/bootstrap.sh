@@ -30,10 +30,13 @@
 #   bootstrap    Schluessel bereitstellen, Schema migrieren, Demo-Daten
 #                anlegen -- Letzteres nur, wenn die Datenbank noch kein
 #                Benutzerkonto hat (``seed --only-if-empty``).
-#   print-key    Den lokalen Fernet-Schluessel auf stdout ausgeben (und beim
-#                allerersten Aufruf erzeugen). Nur der Schluessel landet auf
-#                stdout, jede Meldung auf stderr -- der Aufrufer liest die
-#                Ausgabe per Kommandosubstitution.
+#   ensure-key   Nur die Schluesseldatei anlegen, falls sie fehlt. Der
+#                Schluessel wird bewusst NICHT ausgegeben und auch nicht in die
+#                Umgebung exportiert: gelesen wird er von ``settings/dev.py``
+#                ueber ``LOCAL_ENCRYPTION_KEY_FILE``. Nur so sehen auch
+#                ``docker compose exec``/``run``-Prozesse denselben Schluessel
+#                -- sie erben die Container-Konfiguration, nicht die Umgebung
+#                von PID 1 (Refs #1062).
 #
 # Env-Variablen (alle optional):
 #
@@ -45,7 +48,8 @@
 #                             lokalen Compose ein benanntes Volume, damit der
 #                             Schluessel Neustarts ueberlebt und bereits
 #                             verschluesselte Entwicklungsdaten lesbar
-#                             bleiben).
+#                             bleiben). Dieselbe Variable liest
+#                             ``settings/dev.py``.
 #   SEED_SCALE                Datenmenge des Erst-Seeds (Default: small).
 # ============================================================================
 set -eu
@@ -65,7 +69,6 @@ SEED_SCALE="${SEED_SCALE:-small}"
 # angelegte, aber noch leere Datei zu sehen).
 ensure_key() {
     if [ -n "${ENCRYPTION_KEY:-}" ]; then
-        printf '%s\n' "$ENCRYPTION_KEY"
         return 0
     fi
 
@@ -89,20 +92,22 @@ if not os.path.exists(pfad):
             # Ein parallel gestarteter Container war schneller — dessen
             # Schluessel gilt, unserer wird verworfen.
             pass
+        else:
+            sys.stderr.write(f"==> Lokalen Verschluesselungsschluessel erzeugt: {pfad}\n")
     finally:
         os.unlink(temp)
 
 with open(pfad, encoding="utf-8") as datei:
     schluessel = datei.read().strip()
 
+# Der Schluessel selbst bleibt in der Datei — ausgegeben wird nur, ob sie
+# brauchbar ist. settings/dev.py liest sie ueber LOCAL_ENCRYPTION_KEY_FILE.
 if not schluessel:
     sys.stderr.write(
         f"FEHLER: {pfad} ist leer — kein Verschluesselungsschluessel verfuegbar.\n"
         "Datei loeschen und den Stack neu starten, oder ENCRYPTION_KEY selbst setzen.\n"
     )
     raise SystemExit(1)
-
-print(schluessel)
 PY
 }
 
@@ -111,8 +116,7 @@ PY
 # ---------------------------------------------------------------------------
 
 bootstrap() {
-    ENCRYPTION_KEY="$(ensure_key)"
-    export ENCRYPTION_KEY
+    ensure_key
 
     printf '==> Schema migrieren\n' >&2
     python manage.py migrate --noinput
@@ -126,9 +130,9 @@ bootstrap() {
 
 case "${1:-bootstrap}" in
     bootstrap) bootstrap ;;
-    print-key) ensure_key ;;
+    ensure-key) ensure_key ;;
     *)
-        printf 'Aufruf: %s [bootstrap|print-key]\n' "$0" >&2
+        printf 'Aufruf: %s [bootstrap|ensure-key]\n' "$0" >&2
         exit 64
         ;;
 esac

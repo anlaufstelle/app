@@ -80,6 +80,75 @@ class TestDevPlaintextGuard:
         assert result.returncode == 0, result.stderr
 
 
+class TestLocalKeyFile:
+    """Refs #1062: ``LOCAL_ENCRYPTION_KEY_FILE`` — Schlüssel aus einer Datei.
+
+    Der lokale One-Command-Stack erzeugt seinen Fernet-Key beim ersten Start in
+    einem Volume. Ein nur in die Startshell exportierter Wert wäre für
+    ``docker compose exec/run python manage.py …`` unsichtbar: diese Prozesse
+    erben die Container-KONFIGURATION, nicht die Umgebung von PID 1. Sie liefen
+    dann still im Klartext-Modus. Über den Pfad sehen alle Prozesse im
+    Container denselben Schlüssel.
+    """
+
+    _EXPR = "import anlaufstelle.settings.dev as s;print(s.ENCRYPTION_KEY)"
+
+    def test_key_is_read_from_the_file(self, tmp_path):
+        key_file = tmp_path / "encryption.key"
+        # Mit abschliessendem Zeilenumbruch: ein ungetrimmter Wert waere als
+        # Fernet-Key unbrauchbar.
+        key_file.write_text(f"{_FERNET_KEY}\n", encoding="utf-8")
+
+        result = _run_dev_import({"LOCAL_ENCRYPTION_KEY_FILE": str(key_file)}, expr=self._EXPR)
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == _FERNET_KEY
+        assert _BANNER_MARKER not in result.stderr
+
+    def test_environment_wins_over_the_file(self, tmp_path):
+        key_file = tmp_path / "encryption.key"
+        key_file.write_text("DATEISCHLUESSEL_GEWINNT_NICHT", encoding="utf-8")
+
+        result = _run_dev_import(
+            {"LOCAL_ENCRYPTION_KEY_FILE": str(key_file), "ENCRYPTION_KEY": _FERNET_KEY},
+            expr=self._EXPR,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == _FERNET_KEY
+
+    def test_missing_file_falls_back_to_the_loud_plaintext_path(self, tmp_path):
+        """Kein stiller Abbruch und kein stilles Weitermachen: fehlt die Datei,
+        greift dieselbe laute Warnung wie ohne jeden Schlüssel."""
+        result = _run_dev_import(
+            {"LOCAL_ENCRYPTION_KEY_FILE": str(tmp_path / "gibt-es-nicht.key")},
+            expr=self._EXPR,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ""
+        assert _BANNER_MARKER in result.stderr
+
+    def test_missing_file_still_honours_require_encryption(self, tmp_path):
+        result = _run_dev_import(
+            {
+                "LOCAL_ENCRYPTION_KEY_FILE": str(tmp_path / "gibt-es-nicht.key"),
+                "REQUIRE_ENCRYPTION": "1",
+            }
+        )
+
+        assert result.returncode != 0
+        assert "ENCRYPTION_KEY" in result.stderr
+
+    def test_variable_unset_changes_nothing(self):
+        """Der Rückfall ist strikt opt-in — test.py und e2e.py erben von hier."""
+        result = _run_dev_import(expr=self._EXPR)
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ""
+        assert _BANNER_MARKER in result.stderr
+
+
 @pytest.mark.architecture
 class TestEnvExampleEntfuehrtDieLokalenLinks:
     """Refs #1967: ``.env.example`` darf ``EXTERNAL_ORIGIN`` nicht aktiv setzen.
