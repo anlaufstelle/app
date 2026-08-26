@@ -33,6 +33,16 @@ from core.services.compliance.sensitivity import ROLE_MAX_SENSITIVITY, SENSITIVI
 #: Spalten je Sichtbarkeits-Stratum; Index == Rollenrang aus ROLE_MAX_SENSITIVITY.
 BAN_REVISION_STRATA = ("revision_normal", "revision_elevated", "revision_high")
 
+# Refs #1991 (bewusste Abweichung): Dieses Modul benutzt weiter
+# ``SENSITIVITY_RANK.get(..., 0)`` statt der fail-closed
+# ``sensitivity_rank``. Der Rang ist hier kein Lese-Gate, sondern ein INDEX in
+# ``BAN_REVISION_STRATA`` — der Ersatzrang fuer Unbekanntes laege ausserhalb
+# des Tupels (IndexError). Stratum 0 ist zugleich die konservative Richtung:
+# es bumpt den Zaehler, den JEDE Rolle im Praefix liest, also refresht bei
+# einem unbekannten Wert lieber jeder zu viel als einer zu wenig. Verborgen
+# wird dadurch nichts — was eine Rolle sehen darf, entscheidet weiterhin das
+# Gate in ``core.services.system.bans``.
+
 
 def bump_ban_revision(facility, ranks) -> None:
     """Erhöht die Zähler der Strata *ranks* (Rollenränge 0/1/2) atomar.
