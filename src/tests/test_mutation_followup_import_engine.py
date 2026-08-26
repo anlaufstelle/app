@@ -291,3 +291,43 @@ class TestReadUploadDoesNotBufferOversizedFiles:
             import_engine._read_upload(fake)
 
         assert fake.read_called is False
+
+
+# ---------------------------------------------------------------------------
+# Posten 7 — cleanup_stale_import_jobs: Rueckgabewert = echte Anzahl
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestCleanupStaleImportJobsReturnValue:
+    @staticmethod
+    def _stale_job(facility, admin_user, pseudonym):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload(f"Pseudonym\n{pseudonym}\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
+        ImportJob.objects.filter(pk=job.pk).update(
+            created_at=timezone.now() - timedelta(days=import_engine.STALE_DAYS + 1)
+        )
+        job.refresh_from_db()
+        return job
+
+    def test_return_value_counts_every_cleaned_up_job_not_just_one(self, facility, admin_user, media_root):
+        """ZWEI veraltete ImportJobs in einem Facility-Lauf — Rueckgabewert
+        muss 2 sein (``count += 1`` vs. ``count = 1``). Bisherige Tests legten
+        je Lauf immer nur EINEN veralteten ImportJob an; ein ``count = 1``
+        waere dort nie aufgefallen. Refs #1998.
+        """
+        job_a = self._stale_job(facility, admin_user, "STALE-A")
+        job_b = self._stale_job(facility, admin_user, "STALE-B")
+
+        result = import_engine.cleanup_stale_import_jobs(facility)
+
+        assert result == 2
+        job_a.refresh_from_db()
+        job_b.refresh_from_db()
+        assert job_a.status == ImportJob.Status.ABORTED
+        assert job_b.status == ImportJob.Status.ABORTED
