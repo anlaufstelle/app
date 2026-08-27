@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Datenauskunft-Dateinamen enthalten kein Personen-Pseudonym mehr** (#2003) — JSON- und PDF-Downloads heißen jetzt nur noch `datenauskunft_<YYYY-MM-DD>`; damit gelangt die Zuordnung zur Person nicht mehr über den HTTP-Dateinamen in Proxy-, Browser- oder Mail-Logs.
 - **Sammelaktionen für Löschvorschläge bestätigen die Anzahl der bearbeiteten Einträge** (#2004) — Nach Genehmigen, Zurückstellen oder Verwerfen zeigt das Datenschutz-Dashboard jetzt eine Erfolgsmeldung mit Stückzahl, statt die ausgewählten Karten nach dem Redirect kommentarlos verschwinden zu lassen.
 
 ## [0.86.0] - 2026-08-27

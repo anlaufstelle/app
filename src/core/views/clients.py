@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -916,7 +917,7 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, V
         )
 
         return safe_download_response(
-            f"datenauskunft_{client.pseudonym}.json",
+            f"datenauskunft_{timezone.localdate().isoformat()}.json",
             "application/json; charset=utf-8",
             json.dumps(data, ensure_ascii=False, indent=2, default=str),
         )
@@ -946,7 +947,7 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, Vi
         )
 
         return safe_download_response(
-            f"datenauskunft_{client.pseudonym}.pdf",
+            f"datenauskunft_{timezone.localdate().isoformat()}.pdf",
             "application/pdf",
             pdf_bytes,
         )
