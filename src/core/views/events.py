@@ -44,12 +44,14 @@ from core.services.events import (
     build_event_detail_context,
     build_tally_summary,
     create_event,
+    create_or_get_event_deletion_request,
     current_tally_context,
     decrypt_event_text_data,
     evaluate_tally_eligibility,
     filtered_server_data_json,
     finalize_staged_files,
     get_idempotent_result,
+    get_pending_event_deletion_request,
     has_idempotency_payload_mismatch,
     merge_update_payload,
     mint_tally_undo_token,
@@ -58,7 +60,6 @@ from core.services.events import (
     payload_fingerprint,
     remember_idempotent_result,
     remove_restricted_fields,
-    request_deletion,
     resolve_default_document_type,
     resolve_idempotency_key,
     soft_delete_event,
@@ -84,6 +85,7 @@ from core.views.mixins import (
     IdempotentCreateMixin,
     StaffRequiredMixin,
     is_idempotency_conflict,
+    is_pending_deletion_request_conflict,
 )
 from core.views.utils import object_back_link, safe_redirect_path
 
@@ -314,7 +316,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         # auf dieses Event um, statt einen Duplikat-Datensatz zu erzeugen.
         # Sequenz + Mismatch-422: IdempotentCreateMixin (Refs #1831).
         idem_key, idem_payload_hash = self.read_idempotency(request)
-        replay_response = self.check_replay(request, idem_key, idem_payload_hash)
+        replay_response = self.check_replay(request, idem_key)
         if replay_response is not None:
             return replay_response
         if idem_key:
@@ -325,7 +327,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                 Event.objects.for_facility(facility).filter(created_by=request.user, idempotency_key=idem_key).first()
             )
             if existing:
-                if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, idem_payload_hash):
+                if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, request):
                     return _idempotency_mismatch_response()
                 return redirect("core:event_detail", pk=existing.pk)
 
@@ -460,7 +462,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                             .first()
                         )
                         if existing:
-                            if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, idem_payload_hash):
+                            if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, request):
                                 return _idempotency_mismatch_response()
                             return redirect("core:event_detail", pk=existing.pk)
                     raise
@@ -780,7 +782,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         payload_hash = payload_fingerprint(request)
         hit = get_idempotent_result(TALLY_IDEMPOTENCY_SCOPE, request.user.pk, idempotency_key)
         if hit is not None:
-            if has_idempotency_payload_mismatch(hit.payload_hash, payload_hash):
+            if has_idempotency_payload_mismatch(hit.payload_hash, request):
                 return _idempotency_mismatch_response()
             try:
                 event = (
@@ -792,7 +794,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 event = None
             if event is None:
                 return HttpResponseBadRequest(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."))
-            if has_idempotency_payload_mismatch(event.idempotency_payload_hash, payload_hash):
+            if has_idempotency_payload_mismatch(event.idempotency_payload_hash, request):
                 return _idempotency_mismatch_response()
             return self._success_response(request, facility, event, live_context, request_is_live=request_is_live)
         existing = (
@@ -801,7 +803,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             .first()
         )
         if existing is not None:
-            if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, payload_hash):
+            if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, request):
                 return _idempotency_mismatch_response()
             return self._success_response(request, facility, existing, live_context, request_is_live=request_is_live)
         if not request_is_live:
@@ -860,7 +862,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                     .first()
                 )
                 if existing is not None:
-                    if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, payload_hash):
+                    if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, request):
                         return _idempotency_mismatch_response()
                     return self._success_response(
                         request, facility, existing, live_context, request_is_live=request_is_live
@@ -1177,7 +1179,34 @@ class EventDeleteView(StaffRequiredMixin, View):
 
         # Four-eyes principle: qualified clients require a deletion request
         if event.client and event.client.contact_stage == Client.ContactStage.QUALIFIED:
-            request_deletion(event, request.user, reason)
+            # Refs #2015: ``request_deletion`` ist get-then-create (die
+            # Idempotenz sitzt im Service, diese View hat keinen Vorab-Check).
+            # Ein Doppelklick/Doppel-POST kann beide Aufrufe durch den Lookup
+            # bringen; der partielle Unique-Index macht den Verlierer sicher.
+            # Ohne dieses Netz endete er im 500 statt in derselben Meldung, die
+            # der Idempotenz-Treffer ausgibt.
+            # ``created`` wird hier bewusst NICHT ausgewertet (Refs #2015,
+            # Re-Review): Anders als bei Person, Fall und Zusammenfuehrung hat
+            # dieser Pfad keine getrennte „laeuft bereits"-Meldung — er gibt
+            # beim Erstfund dieselbe Zeile aus wie beim Anlegen. Erstantrag,
+            # Idempotenz-Treffer und Renn-Verlierer sind damit schon per
+            # Konstruktion ununterscheidbar; genau das ist die Zusage.
+            try:
+                with transaction.atomic():
+                    _dr, _created = create_or_get_event_deletion_request(event, request.user, reason)
+            except IntegrityError as exc:
+                if not is_pending_deletion_request_conflict(exc):
+                    raise
+                # Refs #2015: Gewinner nachladen, bevor wir seine Existenz
+                # behaupten (Muster ``EventCreateView`` weiter oben in dieser
+                # Datei) — sonst waere die Meldung eine Vermutung.
+                if get_pending_event_deletion_request(event) is None:
+                    raise
+                # Bewusst dieselbe Meldung wie im Erfolgsfall: genau die gibt
+                # der Service auch beim gewoehnlichen Idempotenz-Treffer aus
+                # (er liefert den bestehenden Antrag zurueck). Race und
+                # Nicht-Race fuehren damit zur identischen Antwort — das ist
+                # die Idempotenz-Zusage, und ein Antrag steht nach beiden Wegen.
             messages.info(request, _("Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."))
         else:
             soft_delete_event(event, request.user)

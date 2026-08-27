@@ -4,6 +4,7 @@ Testet die Service-Funktionen: request, approve, reject, restore, retention-
 getriggerte Anonymisierung nach Ablauf von ``client_trash_days``.
 """
 
+import threading
 from datetime import timedelta
 
 import pytest
@@ -43,6 +44,55 @@ class TestRequestClientDeletion:
         dr2 = request_client_deletion(client, staff_user, "Grund 2 (ignoriert)")
         assert dr1.pk == dr2.pk
         assert DeletionRequest.objects.filter(target_id=client.pk).count() == 1
+
+    def test_request_against_a_merge_tombstone_is_refused(self, facility, staff_user):
+        """Refs #2017: ein Merge-Tombstone ist kein Antragsziel.
+
+        Die leere Huelle liegt bereits im Papierkorb und traegt den Verweis auf
+        ihr Ziel; ein Loeschantrag auf sie waere ein zweiter Weg in denselben
+        Papierkorb — mit dem Nebeneffekt, dass die Genehmigung ``deleted_at``
+        neu setzt und damit die Papierkorb-Frist des Tombstones zurueckdreht.
+        """
+        target = _make_client(facility, "P-Ziel")
+        tombstone = _make_client(facility, "P-Quelle")
+        tombstone.merged_into = target
+        tombstone.save(update_fields=["merged_into"])
+        tombstone.soft_delete(user=staff_user)
+
+        with pytest.raises(ValidationError) as exc:
+            request_client_deletion(tombstone, staff_user, "Grund")
+        assert "zusammengeführt" in " ".join(exc.value.messages)
+        assert not DeletionRequest.objects.filter(target_id=tombstone.pk).exists()
+
+    def test_request_against_a_trashed_client_is_refused(self, facility, staff_user):
+        """Refs #2017 (Cross-Review): auch ohne Merge kein zweiter Weg in den
+        Papierkorb — die Genehmigung setzte sonst ``deleted_at`` neu."""
+        trashed = _make_client(facility, "P-Papierkorb")
+        trashed.soft_delete(user=staff_user)
+
+        with pytest.raises(ValidationError) as exc:
+            request_client_deletion(trashed, staff_user, "Grund")
+        assert "Papierkorb" in " ".join(exc.value.messages)
+        assert not DeletionRequest.objects.filter(target_id=trashed.pk).exists()
+
+    def test_request_sees_a_merge_that_committed_after_the_view_lookup(self, facility, staff_user):
+        """Refs #2017 (Cross-Review): der Guard laeuft auf der frisch
+        gesperrten Zeile, nicht auf der uebergebenen Instanz.
+
+        Genau die Race, die der View-Filter ``is_deleted=False`` nicht
+        abdeckt: die View hat die Person als lebend gelesen, danach committet
+        eine Zusammenfuehrung, und erst dann laeuft der Service.
+        """
+        target = _make_client(facility, "P-Ziel-Stale")
+        source = _make_client(facility, "P-Quelle-Stale")
+        stale = Client.objects.get(pk=source.pk)  # Sicht der View, vor dem Merge
+
+        Client.objects.filter(pk=source.pk).update(merged_into=target, is_deleted=True, deleted_at=timezone.now())
+        assert stale.merged_into_id is None and stale.is_deleted is False  # veraltete Instanz
+
+        with pytest.raises(ValidationError):
+            request_client_deletion(stale, staff_user, "Grund")
+        assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
 
 
 class TestApproveClientDeletion:
@@ -99,6 +149,54 @@ class TestApproveClientDeletion:
             == 1
         )
 
+    def test_approve_refuses_a_target_that_became_a_merge_tombstone(self, facility, staff_user, lead_user):
+        """Refs #2017: Zielzustand wird unter dem Lock neu validiert.
+
+        Zwischen Antrag und Genehmigung kann die Person Quelle einer
+        Zusammenfuehrung geworden sein. Die Genehmigung wuerde die leere Huelle
+        ein zweites Mal in den Papierkorb legen und dabei ``deleted_at``
+        ueberschreiben — die Papierkorb-Frist des Tombstones liefe neu an, und
+        das Undo-Fenster der Zusammenfuehrung verschoebe sich still.
+        """
+        target = _make_client(facility, "P-Ziel")
+        source = _make_client(facility, "P-Quelle")
+        dr = request_client_deletion(source, staff_user, "Grund")
+        # Rennen: die Zusammenfuehrung kommt zwischen Antrag und Genehmigung durch.
+        source.merged_into = target
+        source.save(update_fields=["merged_into"])
+        source.soft_delete(user=staff_user)
+        deleted_at_before = Client.objects.get(pk=source.pk).deleted_at
+
+        with pytest.raises(ValidationError) as exc:
+            approve_client_deletion(dr, lead_user)
+        assert "zusammengeführt" in " ".join(exc.value.messages)
+
+        dr.refresh_from_db()
+        source.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert source.deleted_at == deleted_at_before
+
+    def test_approve_refuses_a_target_already_in_the_trash(self, facility, staff_user, lead_user):
+        """Refs #2017: kein zweiter Soft-Delete auf denselben Datensatz.
+
+        Parität zum Fall-Pfad (``_move_case_to_trash``): ein erneuter
+        Soft-Delete setzt ``deleted_at`` neu und verlaengert damit die
+        Aufbewahrung im Papierkorb um eine volle Frist.
+        """
+        client = _make_client(facility)
+        dr = request_client_deletion(client, staff_user, "Grund")
+        client.soft_delete(user=staff_user)
+        deleted_at_before = Client.objects.get(pk=client.pk).deleted_at
+
+        with pytest.raises(ValidationError) as exc:
+            approve_client_deletion(dr, lead_user)
+        assert "Papierkorb" in " ".join(exc.value.messages)
+
+        dr.refresh_from_db()
+        client.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert client.deleted_at == deleted_at_before
+
 
 class TestRejectClientDeletion:
     def test_reject_sets_status_only(self, facility, staff_user, lead_user):
@@ -118,6 +216,29 @@ class TestRejectClientDeletion:
         dr = request_client_deletion(client, staff_user, "Grund")
         with pytest.raises(ValidationError):
             reject_client_deletion(dr, staff_user)
+
+    def test_reject_of_an_already_approved_request_is_refused(self, facility, staff_user, lead_user, admin_user):
+        """Refs #2012: kein Zurueckdrehen auf REJECTED nach der Genehmigung.
+
+        Ohne ``select_for_update``/PENDING-Recheck ueberschreibt ein
+        zeitgleicher Reject den APPROVED-Status, waehrend die Person im
+        Papierkorb liegen bleibt. Anders als im Fall-/Merge-Pfad schreibt
+        dieser Weg keine ``DELETION_REJECTED``-Zeile — der Schaden ist eine
+        stille Statuskorruption ganz ohne Spur.
+        """
+        client = _make_client(facility)
+        dr = request_client_deletion(client, staff_user, "Grund")
+        approve_client_deletion(dr, lead_user)
+
+        with pytest.raises(ValidationError) as exc:
+            reject_client_deletion(dr, admin_user)
+        assert "bereits bearbeitet" in " ".join(exc.value.messages)
+
+        dr.refresh_from_db()
+        client.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.APPROVED
+        assert dr.reviewed_by == lead_user
+        assert client.is_deleted is True
 
 
 class TestRestoreClient:
@@ -196,6 +317,42 @@ class TestRetentionTrashAnonymization:
         ).first()
         assert audit is not None
         assert audit.detail["trigger"] == "trash_days_expired"
+
+    def test_second_run_finds_nothing(self, facility, lead_user, staff_user):
+        """Refs #2013: Terminal-Marker gegen die naechtliche Tombstone-Reselektion.
+
+        ``anonymize_client`` aendert ``deleted_at`` nicht — der Tombstone
+        erfuellt ``is_deleted=True, deleted_at<cutoff`` also weiter. Ohne
+        ``anonymized_at`` selektierte JEDER Nachtlauf alle jemals
+        Anonymisierten erneut: pro Tombstone und Nacht eine neue,
+        HMAC-verkettete ``CLIENT_ANONYMIZED``-Zeile im append-only AuditLog
+        (unbegrenztes Wachstum), ein dauerhaft von Null verschiedenes und damit
+        wertloses „Anonymisiert N"-Ops-Signal und Ban-Revision-Churn.
+        Gegenstueck: ``anonymize_eligible_soft_deleted_cases``.
+        """
+        settings_obj = self._make_settings(facility, trash_days=30)
+        expired = self._make_expired_trash_client(facility, staff_user, lead_user, "P-Zweitlauf")
+
+        assert anonymize_eligible_soft_deleted_clients(facility, settings_obj) == 1
+        expired.refresh_from_db()
+        stamped_at = expired.anonymized_at
+        assert stamped_at is not None
+
+        # Zweiter (und dritter) Lauf: nichts mehr zu tun — auch nicht im Dry-Run,
+        # der dieselbe Menge zaehlt und deshalb denselben Filter braucht.
+        assert anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=True) == 0
+        assert anonymize_eligible_soft_deleted_clients(facility, settings_obj) == 0
+
+        expired.refresh_from_db()
+        # Der Stempel datiert die ERSTE Tilgung und wird nicht fortgeschrieben.
+        assert expired.anonymized_at == stamped_at
+        assert (
+            AuditLog.objects.filter(
+                action=AuditLog.Action.CLIENT_ANONYMIZED,
+                target_id=str(expired.pk),
+            ).count()
+            == 1
+        )
 
     def test_dry_run_returns_count_without_changes(self, facility, lead_user, staff_user):
         settings_obj = self._make_settings(facility, trash_days=30)
@@ -393,3 +550,72 @@ class TestClientTrashView:
         url = reverse("core:client_trash")
         response = client.get(url)
         assert client_identified not in list(response.context["clients"])
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRetentionTrashAnonymizationOverlappingRuns:
+    """Refs #2013 (Cross-Review): zwei GLEICHZEITIGE Nachtlaeufe.
+
+    Der ``anonymized_at``-Filter allein macht den Lauf nur gegen spaetere
+    Laeufe idempotent. Ueberlappen zwei ``enforce_retention``-Prozesse
+    (Cron-Ueberlauf, manueller Lauf neben dem naechtlichen), lesen beide
+    dieselbe Zeile, bevor der erste committet — ohne Zeilensperre und
+    Marker-Recheck redigierten beide und schrieben beide eine
+    ``CLIENT_ANONYMIZED``-Zeile. Das Ticket nennt genau diesen Fall
+    („Bei ueberlappenden Laeufen duplizieren sich Auditzeilen zusaetzlich").
+
+    Echt nebenlaeufig ueber einen zweiten Thread mit eigener DB-Verbindung
+    (Muster ``test_offline_sync_idempotency.py``), deshalb
+    ``transaction=True``.
+    """
+
+    def _make_settings(self, facility, trash_days=30):
+        from core.models.settings import Settings
+
+        settings_obj, _ = Settings.objects.get_or_create(
+            facility=facility,
+            defaults={"client_trash_days": trash_days},
+        )
+        if settings_obj.client_trash_days != trash_days:
+            settings_obj.client_trash_days = trash_days
+            settings_obj.save()
+        return settings_obj
+
+    def test_two_parallel_runs_anonymize_each_record_once(self, facility, staff_user):
+        from django.db import close_old_connections
+
+        settings_obj = self._make_settings(facility, trash_days=30)
+        expired = Client.objects.create(facility=facility, pseudonym="P-Parallel")
+        expired.soft_delete(user=staff_user)
+        Client.objects.filter(pk=expired.pk).update(deleted_at=timezone.now() - timedelta(days=31))
+
+        results = {}
+        barrier = threading.Barrier(2, timeout=10)
+
+        def _run(slot):
+            try:
+                # Beide Laeufe betreten die Selektion moeglichst zeitgleich.
+                barrier.wait()
+                results[slot] = anonymize_eligible_soft_deleted_clients(facility, settings_obj)
+            finally:
+                close_old_connections()
+
+        threads = [threading.Thread(target=_run, args=(slot,)) for slot in ("a", "b")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+        assert not any(t.is_alive() for t in threads), "Deadlock: ein Lauf haengt in der Zeilensperre"
+
+        # Genau einer der beiden hat den Datensatz verarbeitet.
+        assert sorted(results.values()) == [0, 1], results
+        expired.refresh_from_db()
+        assert expired.anonymized_at is not None
+        assert expired.pseudonym.startswith("Gelöscht-")
+        assert (
+            AuditLog.objects.filter(
+                action=AuditLog.Action.CLIENT_ANONYMIZED,
+                target_id=str(expired.pk),
+            ).count()
+            == 1
+        )

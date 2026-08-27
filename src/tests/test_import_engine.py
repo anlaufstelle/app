@@ -582,6 +582,53 @@ class TestCommitRun:
         assert result["errors"][0]["code"] == "unknown_client"
         assert result["errors"][0]["column"] == "Person"
 
+    def test_anonymized_client_is_a_row_error(self, facility, admin_user, doc_type_contact, media_root):
+        """Refs #2014: kein frischer Klartext an einen redigierten Menschen.
+
+        Die K-Anon-Bridge anonymisiert gezielt OHNE Papierkorb
+        (``is_active=False, is_deleted=False``). ``active()`` filtert nur
+        ``is_deleted`` — ohne die zweite Bedingung haengt ein Import-Commit
+        neue Ereignisse an eine bereits redigierte Person, deterministisch und
+        ohne Race. Der Zeilenfehler ist derselbe wie bei einem unbekannten
+        Pseudonym: fuer einen Schreibzugriff ist eine widerrufene Person nicht
+        adressierbar.
+        """
+        redacted = Client.objects.create(
+            facility=facility,
+            pseudonym="anon-abc123def456",
+            is_active=False,
+            is_deleted=False,
+        )
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload(f"Datum;Person\n01.03.2026;{redacted.pseudonym}\n"),
+            target_type=ImportJob.TargetType.EVENT,
+            document_type=doc_type_contact,
+        )
+        import_engine.apply_mapping(job, {"Datum": "occurred_at", "Person": "client_pseudonym"})
+        result = import_engine.run_import(job, admin_user, commit=True)
+
+        assert result["errors"][0]["code"] == "unknown_client"
+        assert not Event.objects.filter(client=redacted).exists()
+
+    def test_trashed_client_is_a_row_error(self, facility, admin_user, doc_type_contact, staff_user, media_root):
+        """Refs #2014: Gegenprobe — der Papierkorb blockte schon vorher."""
+        trashed = Client.objects.create(facility=facility, pseudonym="IMP-TRASH")
+        trashed.soft_delete(user=staff_user)
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Datum;Person\n01.03.2026;IMP-TRASH\n"),
+            target_type=ImportJob.TargetType.EVENT,
+            document_type=doc_type_contact,
+        )
+        import_engine.apply_mapping(job, {"Datum": "occurred_at", "Person": "client_pseudonym"})
+        result = import_engine.run_import(job, admin_user, commit=True)
+
+        assert result["errors"][0]["code"] == "unknown_client"
+        assert not Event.objects.filter(client=trashed).exists()
+
 
 @pytest.mark.django_db
 class TestValueCoercion:

@@ -13,6 +13,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -23,13 +24,17 @@ from core.constants import RATELIMIT_MUTATION
 from core.models import Client
 from core.services.client import (
     anonymize_client_now,
+    create_or_get_client_deletion_request,
     get_pending_deletion_request,
-    request_client_deletion,
     restore_client,
 )
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
-from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
+from core.views.mixins import (
+    FacilityAdminRequiredMixin,
+    StaffRequiredMixin,
+    is_pending_deletion_request_conflict,
+)
 from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
@@ -88,7 +93,46 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         if not reason:
             messages.error(request, _("Bitte eine Begruendung angeben."))
             return redirect("core:client_delete_request", pk=pk)
-        request_client_deletion(client, request.user, reason)
+        # Refs #2015: Der PENDING-Check oben ist get-then-create — zwischen ihm
+        # und dem ``create`` kann ein Doppelklick/Doppel-POST denselben Antrag
+        # anlegen. Der partielle Unique-Index macht den Verlierer sicher; ohne
+        # dieses Netz endete er im 500 statt in derselben Meldung, die der
+        # Erstfund oben ausgibt.
+        try:
+            with transaction.atomic():
+                _dr, created = create_or_get_client_deletion_request(client, request.user, reason)
+        except IntegrityError as exc:
+            if not is_pending_deletion_request_conflict(exc):
+                raise
+            # Refs #2015: den Gewinner des Rennens NEU LADEN, bevor wir seine
+            # Existenz behaupten — Muster ``EventCreateView`` (Idempotenz-
+            # Constraint → Original nachladen → sonst re-raisen). Ohne das
+            # waere die Meldung eine Vermutung: entschiede eine Leitung den
+            # Antrag im selben Moment, gaebe es gar keinen laufenden mehr.
+            if get_pending_deletion_request(client) is None:
+                raise
+            messages.info(
+                request,
+                _(
+                    "Für diese Person läuft bereits ein Löschantrag — er wartet auf Bestätigung. "
+                    "Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
+                ),
+            )
+            return redirect("core:client_detail", pk=pk)
+        if not created:
+            # Refs #2015 (Re-Review): Der Service hat den bestehenden Antrag
+            # zurueckgeliefert — seit dem Zeilenlock (Refs #2017) der REGELFALL
+            # fuer den Verlierer eines echten Rennens, der frueher im
+            # IntegrityError landete. Dieselbe Antwort wie beim Erstfund oben,
+            # nicht die Erfolgsmeldung fuer etwas, das nie passiert ist.
+            messages.info(
+                request,
+                _(
+                    "Für diese Person läuft bereits ein Löschantrag — er wartet auf Bestätigung. "
+                    "Es wurde kein neuer Antrag angelegt, die eingegebene Begründung wurde nicht übernommen."
+                ),
+            )
+            return redirect("core:client_detail", pk=pk)
         messages.success(
             request,
             _(

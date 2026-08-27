@@ -17,8 +17,11 @@ from django.core.cache import cache
 from django.db import IntegrityError
 from django.test import RequestFactory
 
+from core.models import Event
 from core.services.events.idempotency import (
+    FINGERPRINT_SCHEME,
     get_idempotent_result,
+    payload_fingerprint,
     remember_idempotent_result,
 )
 from core.views._json_contracts import _idempotency_mismatch_response
@@ -154,7 +157,12 @@ class TestIdempotentCreateMixinReadIdempotency:
         view = _RecordingView()
         idem_key, idem_payload_hash = view.read_idempotency(request)
         assert idem_key == "abc-123"
-        assert isinstance(idem_payload_hash, str) and len(idem_payload_hash) == 64
+        # Refs #1942: Der Fingerprint traegt seither das Schema-Praefix des
+        # gepfefferten HMAC (vorher: nackter SHA-256-Hex, exakt 64 Zeichen) und
+        # muss weiterhin in ``Event.idempotency_payload_hash`` passen.
+        assert isinstance(idem_payload_hash, str)
+        assert idem_payload_hash.startswith(f"{FINGERPRINT_SCHEME}:")
+        assert len(idem_payload_hash) <= Event._meta.get_field("idempotency_payload_hash").max_length
 
     def test_no_header_yields_none_pair(self, rf_post):
         view = _RecordingView()
@@ -169,26 +177,33 @@ class TestIdempotentCreateMixinReadIdempotency:
 class TestIdempotentCreateMixinCheckReplay:
     def test_without_key_returns_none(self, rf_post):
         view = _RecordingView()
-        assert view.check_replay(rf_post(), None, None) is None
+        assert view.check_replay(rf_post(), None) is None
 
     def test_without_cache_entry_returns_none(self, rf_post):
         request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
         view = _RecordingView()
-        assert view.check_replay(request, "k1", "h1") is None
+        assert view.check_replay(request, "k1") is None
 
     def test_cache_hit_calls_hook(self, rf_post):
-        remember_idempotent_result("event_create", 7, "k1", "evt-pk", payload_hash="h1")
+        # Fingerprint DES Replays — sonst greift der Payload-Vergleich.
+        remember_idempotent_result("event_create", 7, "k1", "evt-pk", payload_hash=payload_fingerprint(rf_post()))
         request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
         view = _RecordingView()
-        response = view.check_replay(request, "k1", "h1")
+        response = view.check_replay(request, "k1")
         assert view.hits and view.hits[0].pk == "evt-pk"
         assert response is not None and response.status_code == 200
 
     def test_payload_mismatch_returns_422(self, rf_post):
-        remember_idempotent_result("event_create", 7, "k1", "evt-pk", payload_hash="h-original")
+        # Refs #1942: gemerkt wird der Fingerprint eines ANDEREN Payloads —
+        # der Replay bringt denselben Key, aber einen abweichenden Body. Zwei
+        # Phantasie-Strings taugten dafuer nicht mehr: ohne Schema-Praefix
+        # gelten sie als Legacy-Werte und damit bewusst NICHT als Kollision.
+        anderer_body = payload_fingerprint(RequestFactory().post("/x/", {"title": "anders"}))
+        assert anderer_body != payload_fingerprint(rf_post())
+        remember_idempotent_result("event_create", 7, "k1", "evt-pk", payload_hash=anderer_body)
         request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
         view = _RecordingView()
-        response = view.check_replay(request, "k1", "h-anders")
+        response = view.check_replay(request, "k1")
         assert response.status_code == 422
         assert not view.hits
 
@@ -198,7 +213,7 @@ class TestIdempotentCreateMixinCheckReplay:
         cache.set("idem:event_create:7:k1", "legacy-pk", 60)
         request = rf_post(HTTP_X_IDEMPOTENCY_KEY="k1")
         view = _RecordingView()
-        response = view.check_replay(request, "k1", "h1")
+        response = view.check_replay(request, "k1")
         assert view.hits and view.hits[0].pk == "legacy-pk" and view.hits[0].payload_hash is None
         assert response.status_code == 200
 

@@ -11245,6 +11245,10 @@ msgstr "Anonymized persons cannot be merged."
 msgid "Diese Person ist bereits zusammengeführt."
 msgstr "This person has already been merged."
 
+#: src/core/services/client/main.py:1115
+msgid "Diese Person liegt bereits im Papierkorb."
+msgstr "This person is already in the trash."
+
 #: src/core/services/client/merge.py:325
 msgid "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
 msgstr "One of the two persons is subject to a legal hold — merging is not possible."

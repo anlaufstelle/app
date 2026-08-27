@@ -141,7 +141,21 @@ def get_pending_merge_request(client):
 
 
 def request_client_merge(source, target, user, reason):
-    """Stellt einen Vier-Augen-Antrag, ``source`` in ``target`` zusammenzufuehren.
+    """Stellt einen Vier-Augen-Merge-Antrag — nur der Antrag.
+
+    Duenne Huelle um :func:`create_or_get_client_merge_request` fuer alle
+    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
+    brauchen.
+    """
+    return create_or_get_client_merge_request(source, target, user, reason)[0]
+
+
+def create_or_get_client_merge_request(source, target, user, reason):
+    """Wie :func:`request_client_merge`, aber ``(antrag, created)``.
+
+    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request`` —
+    ein paralleler Zweitantrag muss die Idempotenz-Antwort bekommen, nicht
+    eine Erfolgsmeldung fuer etwas, das nie passiert ist.
 
     Traeger ist ein ``DeletionRequest`` mit gesetztem ``merge_into`` — die
     Quelle ist ``target_id``, wie beim Loeschantrag (den sie faktisch enthaelt).
@@ -160,7 +174,7 @@ def request_client_merge(source, target, user, reason):
     """
     existing = get_pending_merge_request(source)
     if existing is not None and existing.merge_into_id == target.pk:
-        return existing
+        return existing, False
     _validate_merge(source, target)
     dr = DeletionRequest.objects.create(
         facility=source.facility,
@@ -180,7 +194,7 @@ def request_client_merge(source, target, user, reason):
         # DeletionRequest.reason (ueber target_id=dr.pk erreichbar).
         detail={"target_client": str(source.pk), "merge_into": str(target.pk)},
     )
-    return dr
+    return dr, True
 
 
 @transaction.atomic

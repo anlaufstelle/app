@@ -201,7 +201,7 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         # Versions-Token den Doppel-Replay als sichtbaren 409 ab (kein
         # stilles Überschreiben).
         idem_key, idem_payload_hash = self.read_idempotency(request)
-        replay_response = self.check_replay(request, idem_key, idem_payload_hash)
+        replay_response = self.check_replay(request, idem_key)
         if replay_response is not None:
             return replay_response
 
@@ -310,7 +310,7 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
         # Duplikat zu erzeugen. Sequenz + Mismatch-422: IdempotentCreateMixin
         # (Refs #1831).
         idem_key, idem_payload_hash = self.read_idempotency(request)
-        replay_response = self.check_replay(request, idem_key, idem_payload_hash)
+        replay_response = self.check_replay(request, idem_key)
         if replay_response is not None:
             return replay_response
         if idem_key:

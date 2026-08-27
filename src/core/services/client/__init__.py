@@ -81,6 +81,7 @@ from core.services.client.main import (
     anonymize_eligible_soft_deleted_clients,
     approve_client_deletion,
     create_client,
+    create_or_get_client_deletion_request,
     get_client_or_none,
     get_pending_deletion_request,
     pending_deletion_client_ids,
@@ -94,6 +95,7 @@ from core.services.client.main import (
 )
 from core.services.client.merge import (
     approve_client_merge,
+    create_or_get_client_merge_request,
     get_pending_merge_request,
     merge_clients,
     merge_requires_four_eyes,
@@ -193,7 +195,9 @@ __all__ = [
     "reject_client_merge",
     "reject_rectification",
     "render_document",
+    "create_or_get_client_deletion_request",
     "request_client_deletion",
+    "create_or_get_client_merge_request",
     "request_client_merge",
     "request_rectification",
     "resolve_writable_client",
