@@ -1,7 +1,7 @@
 # Code Owners für Anlaufstelle
 #
 # Diese Datei ordnet Pfade automatisch angeforderten Reviewern zu (GitHub-Mechanik).
-# Kontext, Bus-Faktor und offene Vertretungsfrage: ../MAINTAINERS.md
+# Kontext, Bus-Faktor und Vertretungs-Entscheid (2026-08-27: bewusst keine): ../MAINTAINERS.md
 # Entscheidungs-/Review-Modell: ../GOVERNANCE.md
 #
 # HINWEIS — Self-Review ist die dokumentierte Realität: Bei aktuell nur einer
@@ -35,8 +35,9 @@
 # VORBEREITET — NICHT AKTIV: Vier-Augen-Review für sicherheitskritische Pfade
 #
 # Die folgenden Zeilen sind bewusst auskommentiert. Sie werden aktiviert, sobald
-# eine zweite Person Maintainer ist (offener Entscheid E-1/E-3 in
-# ../MAINTAINERS.md § Offene Entscheidungspunkte). Vorher haben sie keinen
+# eine zweite Person Maintainer ist (E-3 in MAINTAINERS.md; eine Vertretung ist
+# per Entscheid 2026-08-27 nicht geplant, die Zeilen bleiben als Vorlage stehen;
+# Übersicht in ../MAINTAINERS.md § Offene Entscheidungspunkte). Vorher haben sie keinen
 # Nutzen: Ein zweiter Owner, der dieselbe Person ist, erzwingt kein zweites
 # Augenpaar.
 #

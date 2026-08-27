@@ -67,11 +67,10 @@ mit der Benennung aktiviert
    vertraulichen Kanäle in [SECURITY.md](SECURITY.md).
 4. **Betriebs-/Vorfall-Eskalation** (inkl. DSGVO Art. 33/34 und der CRA-24/72-h-
    Fristen): folgt dem manuellen Prozess in
-   [docs/ops-runbook.md § 6.5b](docs/ops-runbook.md) und setzt eine
-   handlungsfähige **Vertretung** voraus, solange die Hauptperson ausfällt — der
-   dafür noch offene Punkt ist in
-   [MAINTAINERS.md § Vertretung](MAINTAINERS.md#vertretung-tbd--vor-2026-09-11-vom-maintainer-zu-benennen)
-   ausgewiesen.
+   [docs/ops-runbook.md § 6.5b](docs/ops-runbook.md). Bei Ausfall der
+   Hauptperson ruht die Eskalation: eine Vertretung ist **bewusst nicht
+   vorgesehen** (Entscheid 2026-08-27, Begründung und Reichweite in
+   [MAINTAINERS.md § Vertretung](MAINTAINERS.md#vertretung-keine--bewusster-entscheid-2026-08-27)).
 
 ## Aufnahme weiterer Maintainer
 
@@ -124,7 +123,7 @@ statt beschönigt.
 ## Verweise
 
 - [MAINTAINERS.md](MAINTAINERS.md) — wer aktuell verantwortlich ist, Bus-Faktor,
-  offene Vertretungsfrage.
+  Vertretungs-Entscheid (2026-08-27: bewusst keine).
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Beitragsprozess, DCO, Lizenz.
 - [SECURITY.md](SECURITY.md) — Sicherheitsmeldungen und SLA.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Verhaltensregeln.
