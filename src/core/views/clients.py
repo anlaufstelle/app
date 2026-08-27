@@ -265,7 +265,9 @@ class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, 
         qs = self.apply_search(qs, request)
         qs = self.apply_filters(qs, request)
 
-        qs = qs.annotate(last_contact=Max("events__occurred_at")).order_by("pseudonym")
+        qs = qs.annotate(
+            last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)),
+        ).order_by("pseudonym")
 
         clients = self.paginate(qs, request)
 
