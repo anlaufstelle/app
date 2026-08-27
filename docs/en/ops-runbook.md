@@ -2042,3 +2042,8 @@ Start the stack docker compose -f docker-compose.prod.yml up -d
 Regenerate lock files make deps-lock
 Check lock-file drift make deps-check
 ```
+
+<!-- translation-source: docs/ops-runbook.md -->
+<!-- translation-version: v0.84.0 -->
+<!-- translation-date: 2026-08-27 -->
+<!-- source-hash: f8e9c0c271587de6da5bd537e12fa1fef497042c -->
