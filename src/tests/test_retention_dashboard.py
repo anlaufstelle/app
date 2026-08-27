@@ -403,12 +403,6 @@ _BERLIN_DATE = date(2026, 6, 22)
 _EXPIRES_ON_UTC_DATE = _UTC_DATE
 
 
-class _UtcBoundaryDate(date):
-    @classmethod
-    def today(cls):
-        return _UTC_DATE
-
-
 def _assert_boundary_really_diverges():
     """Pin the chosen instant: UTC date and Berlin local date truly differ."""
     assert _BOUNDARY_INSTANT.date() == _UTC_DATE
@@ -513,10 +507,7 @@ class TestRetentionProposalLocaldateBoundary:
     def test_urgency_uses_berlin_local_date(self, proposal):
         proposal.deletion_due_at = _BERLIN_DATE + timedelta(days=RETENTION_URGENCY_RED_DAYS)
 
-        with (
-            mock.patch("core.retention.proposals.date", _UtcBoundaryDate, create=True),
-            mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
-        ):
+        with mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone:
             mock_timezone.localdate.return_value = _BERLIN_DATE
             annotate_urgency(proposal)
 
@@ -524,7 +515,6 @@ class TestRetentionProposalLocaldateBoundary:
 
     def test_dashboard_context_uses_berlin_local_date(self, facility):
         with (
-            mock.patch("core.retention.proposals.date", _UtcBoundaryDate, create=True),
             mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
             mock.patch("core.retention.proposals.get_dashboard_proposals", return_value={}),
         ):

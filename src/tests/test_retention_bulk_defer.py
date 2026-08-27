@@ -19,14 +19,7 @@ from core.services.retention import (
     reject_proposal,
 )
 
-_UTC_DATE = date(2026, 6, 21)
 _BERLIN_DATE = date(2026, 6, 22)
-
-
-class _UtcBoundaryDate(date):
-    @classmethod
-    def today(cls):
-        return _UTC_DATE
 
 
 def _make_proposal(facility, status=RetentionProposal.Status.PENDING, target_id=None):
@@ -70,10 +63,7 @@ class TestDeferFollowup:
     def test_defer_uses_berlin_local_date(self, facility, lead_user):
         p = _make_proposal(facility)
 
-        with (
-            mock.patch("core.retention.proposals.date", _UtcBoundaryDate, create=True),
-            mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
-        ):
+        with mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone:
             mock_timezone.localdate.return_value = _BERLIN_DATE
             defer_proposal(p, lead_user, days=7)
 
@@ -169,10 +159,7 @@ class TestDeferredExpiry:
         p.deferred_until = _BERLIN_DATE
         p.save(update_fields=["deferred_until"])
 
-        with (
-            mock.patch("core.retention.proposals.date", _UtcBoundaryDate, create=True),
-            mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
-        ):
+        with mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone:
             mock_timezone.localdate.return_value = _BERLIN_DATE
             reactivated, auto_approved = reactivate_deferred_proposals(facility)
 
