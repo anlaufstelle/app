@@ -8,6 +8,7 @@ from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAll
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
@@ -152,7 +153,12 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
 
         extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
         count = type(self).action_fn(proposals, request.user, **extra_kwargs)
-        messages.success(request, _("%(count)d Löschvorschläge aktualisiert.") % {"count": count})
+        message = ngettext(
+            "%(count)d Löschvorschlag aktualisiert.",
+            "%(count)d Löschvorschläge aktualisiert.",
+            count,
+        ) % {"count": count}
+        messages.success(request, message)
 
         if request.headers.get("HX-Request"):
             response = redirect("core:retention_dashboard")
