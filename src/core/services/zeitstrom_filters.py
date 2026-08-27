@@ -10,6 +10,7 @@ from uuid import UUID
 from django.utils import timezone
 
 from core.models import TimeFilter
+from core.services.events.feed import get_time_range
 from core.services.events.tally import TallyLiveContext, current_tally_context
 
 ZEITSTROM_FILTER_KEYS = ("date", "time_filter", "type", "doc_type", "view")
@@ -86,19 +87,31 @@ def _handover_filter(
     target_date: date,
     today: date,
     now,
-) -> TimeFilter | None:
+) -> tuple[TimeFilter | None, date]:
     raw = params.get("time_filter")
     if raw and raw != "all":
         canonical = _canonical_uuid(raw)
-        return next((item for item in time_filters if str(item.pk) == canonical), None)
+        selected = next((item for item in time_filters if str(item.pk) == canonical), None)
+        return selected, target_date
     if raw == "all" or target_date != today:
-        return None
-    previous = time_filters[-1] if time_filters else None
-    for item in time_filters:
-        if item.covers_time(now):
-            break
-        previous = item
-    return previous
+        return None, target_date
+
+    # Die automatische Übergabe zeigt das zuletzt abgeschlossene reale
+    # Schichtfenster. Das funktioniert auch in Dienstplan-Lücken und hängt
+    # nicht davon ab, ob der separat aufgelöste Live-Filter noch aktiv ist.
+    latest_completed = None
+    for shift_date in (today - timedelta(days=2), today - timedelta(days=1), today):
+        for item in time_filters:
+            _, window_end = get_time_range(shift_date, item)
+            if window_end > now:
+                continue
+            if latest_completed is None or window_end > latest_completed[0]:
+                latest_completed = (window_end, item, shift_date)
+
+    if latest_completed is None:
+        return None, target_date
+    _, selected, shift_date = latest_completed
+    return selected, shift_date
 
 
 def resolve_zeitstrom_state(
@@ -126,20 +139,7 @@ def resolve_zeitstrom_state(
     view = raw_view if raw_view in {"feed", "uebergabe"} else ""
 
     if view == "uebergabe":
-        selected_filter = _handover_filter(params, filters, target_date, today, now)
-        if selected_filter is not None and not params.get("time_filter") and target_date == today:
-            # Die automatische Übergabe gehört zum Business-Datum der
-            # laufenden Schicht. In den frühen Morgenstunden ist das bei
-            # einer Nachtschicht bereits der Vortag.
-            target_date = live_context.shift_date
-            current_filter = live_context.time_filter
-            if current_filter is not None:
-                current_index = filters.index(current_filter)
-                selected_index = filters.index(selected_filter)
-                # Frühdienst → vorheriger Nachtdienst wickelt in der
-                # Sortierreihenfolge nach hinten und begann am Vortag.
-                if selected_index >= current_index:
-                    target_date -= timedelta(days=1)
+        selected_filter, target_date = _handover_filter(params, filters, target_date, today, now)
     else:
         raw_filter = params.get("time_filter")
         canonical_filter = _canonical_uuid(raw_filter) if raw_filter and raw_filter != "all" else ""
