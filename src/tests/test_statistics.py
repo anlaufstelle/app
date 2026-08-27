@@ -574,6 +574,18 @@ class TestParseStatisticsPeriod:
         ps = self._parse(zeitraum="jahr", year="abc")
         assert ps.selected_year == 2026
 
+    @pytest.mark.parametrize(
+        "raw_year,expected_year",
+        [(-5, 1), (0, 1), (2027, 2026), (9999, 2026)],
+    )
+    def test_year_is_clamped_to_supported_range(self, raw_year, expected_year):
+        ps = self._parse(zeitraum="jahr", year=str(raw_year))
+
+        assert ps.selected_year == expected_year
+        assert ps.date_from == date(expected_year, 1, 1)
+        expected_to = self._today() if expected_year == self._today().year else date(expected_year, 12, 31)
+        assert ps.date_to == expected_to
+
     def test_custom_with_dates(self):
         ps = self._parse(zeitraum="frei", date_from="2026-03-01", date_to="2026-03-31")
         from datetime import date
