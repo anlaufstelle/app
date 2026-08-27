@@ -4,9 +4,9 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 
-from core.models import AuditLog, Case, Client, Episode, WorkItem
+from core.models import AuditLog, Case, Client, DeletionRequest, Episode, WorkItem
 from core.models.activity import Activity
-from core.services.client import get_client_or_none, update_client
+from core.services.client import get_client_or_none, pending_deletion_client_ids, update_client
 
 
 @pytest.mark.django_db
@@ -274,10 +274,11 @@ class TestUpdateClientService:
             staff_user,
             contact_stage=Client.ContactStage.QUALIFIED,
         )
-        assert AuditLog.objects.filter(
+        audit = AuditLog.objects.get(
             action=AuditLog.Action.STAGE_CHANGE,
             target_id=str(client_identified.pk),
-        ).exists()
+        )
+        assert audit.detail == {"old_stage": "identified", "new_stage": "qualified"}
 
     def test_qualification_logs_qualified_activity(self, client_identified, staff_user):
         update_client(
@@ -328,6 +329,35 @@ class TestUpdateClientService:
         refreshed = Client._base_manager.get(pk=client_identified.pk)
         assert refreshed.pseudonym == "Geloescht-a1b2c3"
         assert refreshed.age_cluster == Client.AgeCluster.AGE_18_26
+
+
+@pytest.mark.django_db
+class TestPendingDeletionClientIds:
+    def test_only_pending_requests_mark_clients(
+        self,
+        facility,
+        staff_user,
+        client_identified,
+        client_qualified,
+    ):
+        DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=client_identified.pk,
+            reason="Abgelehnter Antrag",
+            status=DeletionRequest.Status.REJECTED,
+            requested_by=staff_user,
+        )
+        DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=client_qualified.pk,
+            reason="Offener Antrag",
+            status=DeletionRequest.Status.PENDING,
+            requested_by=staff_user,
+        )
+
+        assert pending_deletion_client_ids(facility, [client_identified, client_qualified]) == {client_qualified.pk}
 
 
 @pytest.mark.django_db
