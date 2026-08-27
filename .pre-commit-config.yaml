@@ -52,16 +52,20 @@ repos:
       # damit gar nicht erst commit-bar werden — derselbe Drift, der v0.11.0
       # erst auf Stage-CI aufgefallen ist (django-stubs + mypy fehlten im
       # Lock-File).
+      # Flags exakt wie Makefile `deps-lock` (SSOT, insb. --generate-hashes /
+      # --allow-unsafe) — ohne sie zerschreibt der Hook beim ersten .in-Touch
+      # die gehashten Locks und der pre-push-fast-ci meldet Phantom-Drift
+      # (aufgefallen beim v0.86.0-Fix-Push, Stage-Run #129-Folge).
       - id: pip-compile
         name: pip-compile requirements*.txt
-        entry: .venv/bin/python -m piptools compile --quiet --no-strip-extras --resolver=backtracking --output-file=requirements.txt requirements.in
+        entry: .venv/bin/python -m piptools compile --generate-hashes --quiet --no-strip-extras --resolver=backtracking --output-file=requirements.txt requirements.in
         language: system
         pass_filenames: false
         files: ^requirements\.in$
 
       - id: pip-compile-dev
         name: pip-compile requirements-dev.txt
-        entry: .venv/bin/python -m piptools compile --quiet --no-strip-extras --resolver=backtracking --output-file=requirements-dev.txt requirements-dev.in
+        entry: .venv/bin/python -m piptools compile --generate-hashes --allow-unsafe --quiet --no-strip-extras --resolver=backtracking --output-file=requirements-dev.txt requirements-dev.in
         language: system
         pass_filenames: false
         files: ^requirements-dev\.in$
