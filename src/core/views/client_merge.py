@@ -33,6 +33,7 @@ import uuid
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import Max
 from django.http import Http404
 from django.shortcuts import redirect, render
@@ -44,16 +45,21 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Attachment, Case, Client, Event
 from core.services.client import (
+    create_or_get_client_merge_request,
     get_pending_deletion_request,
     merge_clients,
     merge_requires_four_eyes,
-    request_client_merge,
     unmerge_client,
 )
 from core.services.dashboard import client_search_queryset, search_similar_clients
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
-from core.views.mixins import FacilityAdminRequiredMixin, HTMXPartialMixin, StaffRequiredMixin
+from core.views.mixins import (
+    FacilityAdminRequiredMixin,
+    HTMXPartialMixin,
+    StaffRequiredMixin,
+    is_pending_deletion_request_conflict,
+)
 from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
@@ -211,10 +217,43 @@ class ClientMergeView(StaffRequiredMixin, HTMXPartialMixin, View):
             if not reason:
                 messages.error(request, _("Bitte eine Begruendung angeben."))
                 return redirect(f"{request.path}?target={target.pk}")
-            request_client_merge(source, target, request.user, reason)
+            with transaction.atomic():
+                _dr, created = create_or_get_client_merge_request(source, target, request.user, reason)
         except ValidationError as exc:
             messages.error(request, exc.messages[0] if exc.messages else str(exc))
             return redirect(f"{request.path}?target={target.pk}")
+        except IntegrityError as exc:
+            # Refs #2015: Der PENDING-Check oben ist get-then-create — ein
+            # Doppelklick/Doppel-POST kann denselben Antrag parallel anlegen.
+            # Der partielle Unique-Index macht den Verlierer sicher; ohne
+            # dieses Netz endete er im 500 statt in der Meldung des Erstfunds.
+            if not is_pending_deletion_request_conflict(exc):
+                raise
+            # Refs #2015: Gewinner nachladen, bevor wir seine Existenz
+            # behaupten (Muster ``EventCreateView``) — sonst waere die Meldung
+            # eine Vermutung.
+            if get_pending_deletion_request(source) is None:
+                raise
+            messages.info(
+                request,
+                _(
+                    "Für diese Person läuft bereits ein Lösch- oder Zusammenführungs-Antrag — "
+                    "er wartet auf Bestätigung. Es wurde nichts Neues angelegt."
+                ),
+            )
+            return redirect("core:client_detail", pk=pk)
+
+        if not created:
+            # Refs #2015 (Re-Review): bestehender Antrag vom Service — dieselbe
+            # Antwort wie beim Erstfund oben, keine falsche Erfolgsmeldung.
+            messages.info(
+                request,
+                _(
+                    "Für diese Person läuft bereits ein Lösch- oder Zusammenführungs-Antrag — "
+                    "er wartet auf Bestätigung. Es wurde nichts Neues angelegt."
+                ),
+            )
+            return redirect("core:client_detail", pk=pk)
 
         messages.success(
             request,

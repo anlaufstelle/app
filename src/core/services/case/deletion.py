@@ -93,7 +93,23 @@ def pending_deletion_case_ids(facility, cases) -> set:
 
 
 def request_case_deletion(case, user, reason):
-    """Stellt einen Vier-Augen-Loeschantrag fuer einen Fall.
+    """Stellt einen Vier-Augen-Loeschantrag fuer einen Fall — nur der Antrag.
+
+    Duenne Huelle um :func:`create_or_get_case_deletion_request` fuer alle
+    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
+    brauchen.
+    """
+    return create_or_get_case_deletion_request(case, user, reason)[0]
+
+
+def create_or_get_case_deletion_request(case, user, reason):
+    """Wie :func:`request_case_deletion`, aber ``(antrag, created)``.
+
+    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request``.
+    Zwischen dem Vorab-Check der View und diesem Aufruf kann ein paralleler
+    Request denselben Antrag anlegen; der Zweite faellt dann in den
+    Idempotenz-Zweig unten und braucht die Idempotenz-Antwort statt einer
+    Erfolgsmeldung fuer etwas, das nie passiert ist.
 
     Idempotent: laeuft bereits ein PENDING-Antrag, wird dieser zurueckgegeben
     und **kein** zweites Audit-Event geschrieben (Muster #932) — die
@@ -101,7 +117,7 @@ def request_case_deletion(case, user, reason):
     """
     existing = get_pending_case_deletion_request(case)
     if existing is not None:
-        return existing
+        return existing, False
     dr = DeletionRequest.objects.create(
         facility=case.facility,
         target_type=DeletionRequest.TargetType.CASE,
@@ -119,7 +135,7 @@ def request_case_deletion(case, user, reason):
         # DeletionRequest.reason (ueber target_id=dr.pk erreichbar).
         detail={"target_case": str(case.pk)},
     )
-    return dr
+    return dr, True
 
 
 # ---------------------------------------------------------------------------

@@ -36,6 +36,30 @@ def is_idempotency_conflict(exc) -> bool:
     return isinstance(exc, IntegrityError) and IDEMPOTENCY_UNIQUE_CONSTRAINT in str(exc)
 
 
+# Refs #2015: partieller Unique-Index auf PENDING-Loeschantraegen
+# (``models/workitem.py``, Refs #530). Der Name existiert genau HIER —
+# Pruefstellen nutzen ``is_pending_deletion_request_conflict``.
+PENDING_DELETION_REQUEST_UNIQUE_CONSTRAINT = "unique_pending_deletion_request"
+
+
+def is_pending_deletion_request_conflict(exc) -> bool:
+    """Ist dieser ``IntegrityError`` ein paralleler Loeschantrag (Refs #2015)?
+
+    Die vier ``request_*``-Creator sind get-then-create: zwischen dem
+    „laeuft schon einer?"-Lookup und dem ``create`` liegt ein Fenster, in dem
+    ein zweiter Request denselben Antrag anlegen kann. Der partielle
+    Unique-Index macht den Verlierer sicher — die View beantwortet ihn dann
+    idempotent statt mit 500.
+
+    Eng gefasst wie :func:`is_idempotency_conflict` und aus demselben Grund:
+    NUR dieser Constraint darf als Duplikat gelten, sonst verschwaende ein
+    fachfremder ``IntegrityError`` hinter einer „Antrag existiert bereits"-
+    Meldung. Die Typ-Pruefung haelt das Praedikat auch ausserhalb eines
+    ``except IntegrityError``-Blocks safe.
+    """
+    return isinstance(exc, IntegrityError) and PENDING_DELETION_REQUEST_UNIQUE_CONSTRAINT in str(exc)
+
+
 class IdempotentCreateMixin:
     """Gemeinsamer Idempotenz-Guard des Offline-Replay-Schreibpfads (F-09,
     Refs #1109/#1831).
@@ -70,7 +94,7 @@ class IdempotentCreateMixin:
         idem_payload_hash = payload_fingerprint(request) if idem_key else None
         return idem_key, idem_payload_hash
 
-    def check_replay(self, request, idem_key: str | None, idem_payload_hash: str | None):
+    def check_replay(self, request, idem_key: str | None):
         """Cache-Hit kurzschließen (Fast-Path des Guards).
 
         Liefert die fertige ``HttpResponse`` (Hook-Ergebnis bzw. 422 bei
@@ -78,13 +102,20 @@ class IdempotentCreateMixin:
         wenn kein Key mitkam oder der Schlüssel noch nicht erfolgreich
         verarbeitet wurde. Legacy-Cache-Einträge (nackter PK-String aus der
         Zeit vor N14) gelten als Treffer ohne Hash-Prüfung.
+
+        Refs #1942: Der Payload-Vergleich leitet sich seither aus dem
+        ``request`` selbst ab, damit auch ein Fingerprint einer frueheren
+        Schluessel-Generation nachrechenbar bleibt — ein vorberechneter Hash
+        als Parameter waere dafuer zu wenig. Der von
+        :meth:`read_idempotency` gelieferte Hash wird weiterhin gebraucht,
+        aber erst beim Merken des Ergebnisses.
         """
         if not idem_key:
             return None
         hit = get_idempotent_result(self.idempotency_scope, request.user.pk, idem_key)
         if hit is None:
             return None
-        if has_idempotency_payload_mismatch(hit.payload_hash, idem_payload_hash):
+        if has_idempotency_payload_mismatch(hit.payload_hash, request):
             return _idempotency_mismatch_response()
         return self.on_idempotent_hit(request, hit)
 

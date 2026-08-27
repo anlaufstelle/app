@@ -682,7 +682,20 @@ def _import_event_row(job: ImportJob, user, values: dict, columns: dict) -> None
     pseudonym = values.get("client_pseudonym", "")
     if not pseudonym:
         raise _CellError("required_missing", columns.get("client_pseudonym"))
-    client = Client.objects.for_facility(job.facility).active().filter(pseudonym=pseudonym).first()
+    # Refs #2014: dieselbe Schreib-Semantik wie
+    # :func:`core.services.client.main.resolve_writable_client` — Widerruf ist
+    # ``is_deleted=True`` (Papierkorb) ODER ``is_active=False`` (anonymisiert).
+    # ``active()`` filtert nur die erste Haelfte; die K-Anon-Bridge
+    # (:func:`core.retention.anonymization.anonymize_clients`) anonymisiert aber
+    # gezielt OHNE Papierkorb. Ohne die zweite Bedingung haengt ein
+    # Import-Commit frischen Klartext an einen bereits redigierten Menschen —
+    # deterministisch, ohne Race.
+    #
+    # Der Zeilenfehler bleibt bewusst ``unknown_client`` statt eines eigenen
+    # Codes: fuer einen Schreibzugriff ist eine widerrufene Person nicht
+    # adressierbar, und ein trennscharfer Code verriete der importierenden
+    # Person, dass es unter diesem Pseudonym eine geloeschte Akte GIBT.
+    client = Client.objects.for_facility(job.facility).active().filter(pseudonym=pseudonym, is_active=True).first()
     if client is None:
         raise _CellError("unknown_client", columns.get("client_pseudonym"))
 

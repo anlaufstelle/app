@@ -79,6 +79,12 @@ def _redact_client_identity(client) -> None:
     faellt auf ``NULL`` zurueck, damit der ``PROTECT``-Verweis anonymisierte
     Bestaende nicht dauerhaft an einen Konfigurationstyp kettet (der Typ waere
     sonst nie loeschbar, obwohl die Daten weg sind).
+
+    Refs #2013: ``anonymized_at`` wird hier gesetzt und nicht erst in
+    :func:`anonymize_client` — Muster ``_redact_case_content``. Der Stempel
+    gehoert an den Ort, der den Inhalt tatsaechlich entfernt. Ein bereits
+    gesetzter Stempel bleibt stehen: er datiert die **erste** Tilgung, spaetere
+    Laeufe faenden ohnehin nichts mehr vor.
     """
     client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
     client.notes = ""
@@ -86,6 +92,7 @@ def _redact_client_identity(client) -> None:
     client.is_active = False
     client.data_json = {}
     client.document_type = None
+    client.anonymized_at = client.anonymized_at or timezone.now()
     client.save(
         update_fields=[
             "pseudonym",
@@ -94,6 +101,7 @@ def _redact_client_identity(client) -> None:
             "is_active",
             "data_json",
             "document_type",
+            "anonymized_at",
         ]
     )
 
@@ -1021,7 +1029,29 @@ def pending_merge_client_ids(facility, clients) -> set:
 
 
 def request_client_deletion(client, user, reason):
-    """Stellt einen Vier-Augen-Löschantrag für eine Person.
+    """Stellt einen Vier-Augen-Löschantrag für eine Person — nur der Antrag.
+
+    Duenne Huelle um :func:`create_or_get_client_deletion_request` fuer alle
+    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
+    brauchen. Wer ihn braucht (die Views, Refs #2015), ruft direkt die
+    Tupel-Variante.
+    """
+    return create_or_get_client_deletion_request(client, user, reason)[0]
+
+
+@transaction.atomic
+def create_or_get_client_deletion_request(client, user, reason):
+    """Wie :func:`request_client_deletion`, aber ``(antrag, created)``.
+
+    Refs #2015 (Re-Review): Die Unterscheidung ist kein Komfort, sondern die
+    Bedingung dafuer, dass ein paralleler Zweitantrag die richtige Antwort
+    bekommt. Seit dem Zeilenlock (Refs #2017) laeuft der Verlierer eines
+    echten Rennens naemlich gar nicht mehr in den ``IntegrityError``: Er
+    wartet auf der Sperre und bekommt danach hier den bestehenden Antrag
+    **regulaer** zurueck. Ohne Flag meldete die View ihm „Loeschantrag
+    gestellt" — eine Erfolgsmeldung fuer etwas, das nie passiert ist.
+    ``created=False`` traegt dieselbe Aussage wie der ``IntegrityError``:
+    es gibt bereits einen laufenden Antrag.
 
     Idempotent: wenn bereits ein PENDING-Antrag existiert, wird dieser
     zurückgegeben (analog zu Event-Pfad in services/event.request_deletion).
@@ -1031,10 +1061,36 @@ def request_client_deletion(client, user, reason):
 
     Aufruf: Fachkraft+ aus dem UI. Genehmigung erfolgt durch Leitung
     via :func:`approve_client_deletion`.
+
+    Refs #2017: Ein Antrag entsteht nur gegen eine **lebende** Person. Die
+    beiden Ausschluesse spiegeln die Neuvalidierung in
+    :func:`approve_client_deletion`:
+
+    * ``merged_into`` gesetzt — ein Merge-Tombstone ist kein Antragsziel; die
+      leere Huelle liegt bereits im Papierkorb, und die Genehmigung wuerde ihr
+      ``deleted_at`` neu setzen, also die Frist und damit das Undo-Fenster der
+      Zusammenfuehrung still verschieben.
+    * ``is_deleted`` — dasselbe Argument ohne Merge: ein zweiter Weg in
+      denselben Papierkorb, der beim Genehmigen die Frist zurueckdreht.
+
+    Beides wird auf der **frisch gesperrten** Zeile geprueft (Cross-Review
+    Lane 2), nicht auf der uebergebenen Instanz: zwischen dem Lookup der View
+    und diesem Aufruf kann eine Zusammenfuehrung committen, und der Guard
+    liefe dann auf einem veralteten Objekt ins Leere. Der Lock ist derselbe
+    wie in ``approve_client_deletion``/``_locked_clients`` — Antrag,
+    Genehmigung und Merge serialisieren damit auf derselben Zeile.
+
+    Der View-Filter ``is_deleted=False`` ersetzt diesen Guard nicht: der
+    Service ist die SSoT, und er liest vor dem Rennen.
     """
+    client = Client.objects.select_for_update().get(pk=client.pk, facility=client.facility_id)
+    if client.merged_into_id is not None:
+        raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
+    if client.is_deleted:
+        raise ValidationError(_("Diese Person liegt bereits im Papierkorb."))
     existing = get_pending_deletion_request(client)
     if existing is not None:
-        return existing
+        return existing, False
     dr = DeletionRequest.objects.create(
         facility=client.facility,
         target_type=DeletionRequest.TargetType.CLIENT,
@@ -1052,7 +1108,7 @@ def request_client_deletion(client, user, reason):
         # DeletionRequest.reason (via target_id=dr.pk erreichbar).
         detail={"target_client": str(client.pk)},
     )
-    return dr
+    return dr, True
 
 
 @transaction.atomic
@@ -1093,7 +1149,18 @@ def approve_client_deletion(deletion_request, reviewer):
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
-    client = Client.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
+    # Refs #2017: Der Zielzustand wird unter dem Lock NEU gelesen. Zwischen
+    # Antrag und Genehmigung koennen Minuten bis Tage liegen — genug Zeit fuer
+    # eine Zusammenfuehrung oder einen anderen Weg in den Papierkorb. Der Lock
+    # serialisiert diese Genehmigung zugleich gegen ``_locked_clients`` im
+    # Merge-Pfad: wer zuerst kommt, sieht der jeweils andere danach frisch.
+    client = Client.objects.select_for_update().get(pk=deletion_request.target_id, facility=deletion_request.facility)
+    if client.merged_into_id is not None:
+        raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
+    if client.is_deleted:
+        # Paritaet zu ``_move_case_to_trash``: ein zweiter Soft-Delete setzte
+        # ``deleted_at`` neu und verlaengerte die Aufbewahrung um eine volle Frist.
+        raise ValidationError(_("Diese Person liegt bereits im Papierkorb."))
     client.soft_delete(user=reviewer)
 
     deletion_request.status = DeletionRequest.Status.APPROVED
@@ -1123,9 +1190,24 @@ def approve_client_deletion(deletion_request, reviewer):
 
 @transaction.atomic
 def reject_client_deletion(deletion_request, reviewer):
-    """Lehnt einen Client-Löschantrag ab — Status→REJECTED, kein Soft-Delete."""
+    """Lehnt einen Client-Löschantrag ab — Status→REJECTED, kein Soft-Delete.
+
+    Refs #2012: derselbe Lock + PENDING-Re-Check wie in
+    :func:`approve_client_deletion` und in den Pendants
+    ``reject_case_deletion``/``reject_client_merge``. Ohne ihn ueberschreibt
+    ein zeitgleicher Reject einen bereits genehmigten Antrag auf REJECTED,
+    waehrend die Person im Papierkorb liegen bleibt. Anders als in jenen
+    beiden Pfaden entsteht dabei nicht einmal eine ``DELETION_REJECTED``-Zeile
+    (dieser Weg auditiert den Reject nicht) — der Widerspruch waere also eine
+    voellig spurlose Statuskorruption.
+    """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
+    # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
+    # die Zeile bis zum Commit dieser Transaktion.
+    deletion_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
     # Refs #1876: Merge-Antraege werden ueber ``reject_client_merge``
     # abgelehnt — jener Weg schreibt die ``DELETION_REJECTED``-Zeile mit
     # Merge-Kontext; hier fiele sie still unter den Tisch.
@@ -1133,6 +1215,8 @@ def reject_client_deletion(deletion_request, reviewer):
         raise ValidationError(
             _("Dies ist ein Zusammenführungs-Antrag — er wird über den Zusammenführungs-Weg entschieden.")
         )
+    if deletion_request.status != DeletionRequest.Status.PENDING:
+        raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
     deletion_request.status = DeletionRequest.Status.REJECTED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()
@@ -1229,25 +1313,60 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     die K-Anon-Bridge (``anonymize_clients``) nutzt denselben Helfer, damit
     beide Anonymisierungs-Einstiege nicht erneut auseinanderlaufen.
 
+    Refs #2013: ``anonymized_at__isnull=True`` ist die Abbruchbedingung —
+    Muster ``anonymize_eligible_soft_deleted_cases``. ``anonymize_client``
+    aendert ``deleted_at`` nicht, der Tombstone erfuellt ``is_deleted=True,
+    deleted_at<cutoff`` also weiter. Ohne den Filter faende ihn JEDER
+    naechtliche Lauf erneut, redigierte den bereits leeren Rest noch einmal und
+    schriebe jedes Mal eine neue ``CLIENT_ANONYMIZED``-Zeile in das
+    append-only, HMAC-verkettete AuditLog — unbegrenztes Wachstum, dazu ein
+    dauerhaft von Null verschiedenes und damit wertloses „Anonymisiert
+    N"-Ops-Signal und Ban-Revision-Churn. Bei ueberlappenden Laeufen
+    duplizierten sich die Zeilen zusaetzlich.
+
     Returns: Anzahl anonymisierter Datensätze.
     """
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
     qs = exclude_clients_with_active_holds(
-        Client.objects.for_facility(facility).filter(is_deleted=True, deleted_at__lt=cutoff),
+        Client.objects.for_facility(facility).filter(
+            is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True
+        ),
         facility,
     )
     if dry_run:
         return qs.count()
 
+    # Refs #2013 (Cross-Review): Der Filter oben allein macht den Lauf nur
+    # gegen SPAETERE Laeufe idempotent, nicht gegen einen GLEICHZEITIGEN.
+    # Zwei ueberlappende ``enforce_retention``-Prozesse (Cron-Ueberlauf,
+    # manueller Lauf neben dem naechtlichen) lesen dieselbe Zeile, bevor der
+    # erste committet, und wuerden beide redigieren und beide eine
+    # ``CLIENT_ANONYMIZED``-Zeile schreiben — genau die Duplikate, die das
+    # Ticket nennt. Deshalb je Datensatz: eigene Transaktion, Zeilensperre,
+    # und der Marker-Check ein zweites Mal AUF DER GESPERRTEN Zeile. Der
+    # Verlierer sieht dann den bereits gesetzten Stempel und ueberspringt.
+    #
+    # Die PK-Liste wird vorab materialisiert: der Lauf veraendert genau die
+    # Spalte, nach der die Queryset-Bedingung filtert.
     count = 0
-    for client in qs:
-        anonymize_client(client, user=None)
-        audit_client_event(
-            client,
-            None,
-            AuditLog.Action.CLIENT_ANONYMIZED,
-            trigger="trash_days_expired",
-            deleted_at=str(client.deleted_at),
-        )
-        count += 1
+    for client_pk in list(qs.values_list("pk", flat=True)):
+        with transaction.atomic():
+            client = (
+                Client.objects.select_for_update()
+                .filter(pk=client_pk, anonymized_at__isnull=True, is_deleted=True)
+                .first()
+            )
+            if client is None:
+                # Ein paralleler Lauf war schneller (oder die Person wurde
+                # zwischenzeitlich wiederhergestellt) — nichts zu tun.
+                continue
+            anonymize_client(client, user=None)
+            audit_client_event(
+                client,
+                None,
+                AuditLog.Action.CLIENT_ANONYMIZED,
+                trigger="trash_days_expired",
+                deleted_at=str(client.deleted_at),
+            )
+            count += 1
     return count

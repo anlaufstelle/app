@@ -11344,6 +11344,10 @@ msgstr "Anonymisierte Personen können nicht zusammengeführt werden."
 msgid "Diese Person ist bereits zusammengeführt."
 msgstr "Diese Person ist bereits zusammengeführt."
 
+#: src/core/services/client/main.py:1115
+msgid "Diese Person liegt bereits im Papierkorb."
+msgstr "Diese Person liegt bereits im Papierkorb."
+
 #: src/core/services/client/merge.py:325
 msgid "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
 msgstr "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."

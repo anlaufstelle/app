@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
@@ -249,6 +250,32 @@ class TestRejectDeletion:
             action=AuditLog.Action.DELETE,
             target_type="Event",
             target_id=str(event_qualified.pk),
+        ).exists()
+
+    def test_reject_of_an_already_approved_request_is_refused(
+        self, pending_request, lead_user, admin_user, event_qualified
+    ):
+        """Refs #2012: kein Zurueckdrehen auf REJECTED nach der Genehmigung.
+
+        Race A-rejected-waehrend-B-approved: ohne ``select_for_update`` und
+        PENDING-Recheck ueberschreibt der spaete Reject den APPROVED-Status,
+        waehrend das Ereignis geloescht bleibt — und die zusaetzliche
+        ``DELETION_REJECTED``-Zeile versiegelt den Widerspruch dauerhaft im
+        append-only AuditLog (DELETE + spaeteres DELETION_REJECTED).
+        """
+        approve_deletion(pending_request, lead_user)
+
+        with pytest.raises(ValidationError) as exc:
+            reject_deletion(pending_request, admin_user)
+        assert "bereits bearbeitet" in " ".join(exc.value.messages)
+
+        pending_request.refresh_from_db()
+        event_qualified.refresh_from_db()
+        assert pending_request.status == DeletionRequest.Status.APPROVED
+        assert event_qualified.is_deleted is True
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(pending_request.pk),
         ).exists()
 
 

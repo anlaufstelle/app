@@ -114,6 +114,21 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         verbose_name=_("Zusammengeführt in"),
     )
     is_active = models.BooleanField(default=True, verbose_name=_("Aktiv"))
+    # Refs #2013: Terminal-Marker der Art.-17-Tilgung — Paritaet zu
+    # ``Case.anonymized_at``. ``anonymize_client`` aendert ``deleted_at``
+    # nicht, ein Tombstone erfuellt ``is_deleted=True, deleted_at<cutoff``
+    # also dauerhaft weiter. Ohne diesen Stempel selektierte der naechtliche
+    # ``anonymize_eligible_soft_deleted_clients`` alle jemals Anonymisierten in
+    # JEDEM Lauf erneut: pro Tombstone und Nacht eine weitere, HMAC-verkettete
+    # ``CLIENT_ANONYMIZED``-Zeile im append-only AuditLog (unbegrenztes
+    # Wachstum), ein dauerhaft von Null verschiedenes „Anonymisiert N"-Signal
+    # im Ops-Log und Ban-Revision-Churn. ``is_active=False`` taugt nicht als
+    # Ersatz: die K-Anon-Bridge setzt es OHNE Papierkorb, und es datiert nichts.
+    anonymized_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Anonymisiert am"),
+    )
     k_anonymized = models.BooleanField(
         default=False,
         verbose_name=_("K-anonymisiert"),
