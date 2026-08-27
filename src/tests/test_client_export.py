@@ -1,6 +1,7 @@
 """Tests for client data export (Art. 15/20 DSGVO)."""
 
-from datetime import timedelta
+from datetime import date, timedelta
+from unittest import mock
 
 import pytest
 from django.test import Client as DjangoClient
@@ -650,6 +651,18 @@ class TestClientExportJSONView:
         response = client.get(f"/clients/{sample_client.pk}/export/json/")
         assert response.status_code == 200
 
+    def test_download_filename_uses_local_date_without_pseudonym(self, admin_user, sample_client):
+        client = DjangoClient()
+        client.force_login(admin_user)
+
+        with mock.patch("core.views.clients.timezone", create=True) as mock_timezone:
+            mock_timezone.localdate.return_value = date(2026, 8, 27)
+            response = client.get(f"/clients/{sample_client.pk}/export/json/")
+
+        disposition = response["Content-Disposition"]
+        assert disposition == 'attachment; filename="datenauskunft_2026-08-27.json"'
+        assert sample_client.pseudonym not in disposition
+
     def test_staff_gets_403(self, staff_user, sample_client, facility):
         client = DjangoClient()
         client.force_login(staff_user)
@@ -684,6 +697,18 @@ class TestClientExportPDFView:
         assert response.status_code == 200
         assert response["Content-Type"] == "application/pdf"
         assert response.content[:4] == b"%PDF"
+
+    def test_download_filename_uses_local_date_without_pseudonym(self, admin_user, sample_client):
+        client = DjangoClient()
+        client.force_login(admin_user)
+
+        with mock.patch("core.views.clients.timezone", create=True) as mock_timezone:
+            mock_timezone.localdate.return_value = date(2026, 8, 27)
+            response = client.get(f"/clients/{sample_client.pk}/export/pdf/")
+
+        disposition = response["Content-Disposition"]
+        assert disposition == 'attachment; filename="datenauskunft_2026-08-27.pdf"'
+        assert sample_client.pseudonym not in disposition
 
     def test_staff_gets_403(self, staff_user, sample_client, facility):
         client = DjangoClient()
