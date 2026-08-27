@@ -162,7 +162,18 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-      - run: pip install pip-tools
+      # pip-tools UND click exakt auf die Versionen des Dev-Locks pinnen (SSOT:
+      # requirements-dev.txt). Ungepinnt zog der Schritt „latest“ — und click 8.5.0
+      # änderte die ParameterSource-Klassifikation von Flag-Paar-Defaults, worauf
+      # pip-tools 7.6.1 plötzlich `--no-index` in den Header schrieb und der
+      # Byte-Vergleich gegen die mit dem Lock-Stand erzeugten Dateien scheiterte
+      # (Stage-Run #129, v0.86.0). Die Pins wandern automatisch mit `make deps-lock` mit.
+      - name: pip-tools + click aus dem Dev-Lock installieren
+        run: |
+          PT=$(grep -oE '^pip-tools==[0-9.]+' requirements-dev.txt)
+          CK=$(grep -oE '^click==[0-9.]+' requirements-dev.txt)
+          test -n "$PT" && test -n "$CK" || { echo "::error::pip-tools/click-Pin nicht im Dev-Lock gefunden"; exit 1; }
+          pip install "$PT" "$CK"
       # Flags müssen exakt dem Makefile-Target `deps-lock` entsprechen (SSOT),
       # insb. --generate-hashes (Artefakt-Integrität, #1373) und --allow-unsafe
       # für die dev-Datei (pinnt pip/setuptools/wheel) — sonst meldet der Check
