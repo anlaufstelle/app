@@ -7,7 +7,7 @@ aus dem Code abgeleitet; im Zweifel gilt der Code (siehe AGENTS.md § Vor jeder
 Implementierung).
 
 - **Setup, Make-Targets, Coding Conventions, PR-Prozess:** [CONTRIBUTING.md](../CONTRIBUTING.md)
-- **Warum die Architektur so aussieht:** [docs/adr/](adr/) — 48 Architecture Decision Records
+- **Warum die Architektur so aussieht:** [docs/adr/](adr/) — 49 Architecture Decision Records
 - **Fachliches Domänenkonzept:** [fachkonzept-anlaufstelle.md](fachkonzept-anlaufstelle.md)
 - **Betrieb:** [ops-runbook.md](ops-runbook.md) · [admin-guide.md](admin-guide.md)
 

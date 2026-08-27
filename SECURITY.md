@@ -163,7 +163,7 @@ Fixed vulnerabilities are **disclosed in a coordinated way**, not patched silent
 3. **Fix** as a patch release of the current minor series (see the support rule above).
 4. **Publication** of the advisory after the patch ships plus a 7-day grace period (see the SLA table above), together with a `Security` entry in [CHANGELOG.md](CHANGELOG.md) naming the GHSA/CVE ID.
 
-The operational procedure including responsibilities and the additional regulatory reporting deadlines for **actively exploited** vulnerabilities lives in [`docs/ops-runbook.md` § 6.5c](docs/ops-runbook.md) and [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md) (both German).
+The operational procedure including responsibilities and the additional regulatory reporting deadlines for **actively exploited** vulnerabilities lives in [`docs/en/ops-runbook.md` § 6.5c](docs/en/ops-runbook.md) and [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md) (German).
 
 ## Hall of Fame
 
