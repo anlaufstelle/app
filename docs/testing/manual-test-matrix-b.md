@@ -1536,7 +1536,7 @@
 
 **Erwartetes Ergebnis:**
 - Erster Klick ohne Sudo → Redirect auf Sudo-Form.
-- Nach Re-Auth → Download startet, Filename-Pattern `datenauskunft_<pseudonym>.json`.
+- Nach Re-Auth → Download startet, Filename-Pattern `datenauskunft_<YYYY-MM-DD>.json` ohne Pseudonym.
 - JSON enthält `client`, `events`, `cases`, `episodes`, `goals`, `attachments_meta` (siehe `services/client_export.py`).
 - `AuditLog`-Eintrag `EXPORT` mit `detail.format=JSON`, `target_type=Client-JSON`.
 
@@ -1566,7 +1566,7 @@
 3. PDF in Reader öffnen.
 
 **Erwartetes Ergebnis:**
-- Filename `datenauskunft_<pseudonym>.pdf`, Mime `application/pdf`.
+- Filename `datenauskunft_<YYYY-MM-DD>.pdf` ohne Pseudonym, Mime `application/pdf`.
 - PDF enthält Kopf mit Einrichtungsname, Pseudonym, Erstellungsdatum.
 - Sektionen: Stammdaten, Kontakt-Chronik, Fälle/Episoden, Wirkungsziele.
 - Pseudonyme statt Klarnamen, keine Anhänge inline.
