@@ -1,10 +1,13 @@
 """Tests für Client-Management."""
 
+from datetime import timedelta
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, DeletionRequest, Episode, WorkItem
+from core.models import AuditLog, Case, Client, DeletionRequest, Episode, Event, WorkItem
 from core.models.activity import Activity
 from core.services.client import get_client_or_none, pending_deletion_client_ids, update_client
 
@@ -65,6 +68,34 @@ class TestClientList:
         assert response.status_code == 200
         # Partial should not extend base.html
         assert "<!DOCTYPE html>" not in response.content.decode()
+
+    def test_client_list_last_contact_excludes_soft_deleted_events(
+        self,
+        client,
+        staff_user,
+        client_identified,
+        doc_type_contact,
+        sample_event,
+    ):
+        visible_at = timezone.now() - timedelta(days=2)
+        deleted_at = timezone.now() - timedelta(days=1)
+        sample_event.occurred_at = visible_at
+        sample_event.save(update_fields=["occurred_at"])
+        Event.objects.create(
+            facility=client_identified.facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=deleted_at,
+            data_json={},
+            created_by=staff_user,
+            is_deleted=True,
+        )
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:client_list"))
+
+        listed_client = next(item for item in response.context["clients"] if item.pk == client_identified.pk)
+        assert listed_client.last_contact == visible_at
 
 
 @pytest.mark.django_db
