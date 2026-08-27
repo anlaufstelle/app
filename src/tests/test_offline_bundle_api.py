@@ -143,13 +143,12 @@ class TestBuildClientOfflineBundleService:
         self, facility, client_identified, doc_type_contact, staff_user
     ):
         """exakte Semantik-Gleichheit mit der Online-Annotation aus
-        ``ClientListView`` (clients.py:57) — cutoff-FREI und OHNE
-        ``is_deleted``-Filter. Das juengste Event ist bewusst geloescht UND es
-        gibt ein >90d-Event; eine is_deleted- oder cutoff-gefilterte Berechnung
-        wuerde vom Online-Spaltenwert abweichen."""
+        ``ClientListView`` — cutoff-FREI, aber ohne soft-geloeschte Events.
+        Das juengste Event ist bewusst geloescht UND es gibt ein >90d-Event;
+        nur der Loeschfilter darf den Online-/Offline-Wert veraendern."""
         from datetime import timedelta
 
-        from django.db.models import Max
+        from django.db.models import Max, Q
 
         from core.models import Client
 
@@ -186,15 +185,13 @@ class TestBuildClientOfflineBundleService:
         online_value = (
             Client.objects.for_facility(facility)
             .filter(is_active=True, is_deleted=False)
-            .annotate(last_contact=Max("events__occurred_at"))
+            .annotate(last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)))
             .get(pk=client_identified.pk)
             .last_contact
         )
         expected = online_value.isoformat() if online_value else None
         assert bundle["client"]["last_contact"] == expected
-        # Beweis, dass die Semantik greift: das juengste (geloeschte) Event
-        # bestimmt den Wert — genau wie die filterlose Online-Spalte.
-        assert bundle["client"]["last_contact"] == deleted_newest.occurred_at.isoformat()
+        assert bundle["client"]["last_contact"] != deleted_newest.occurred_at.isoformat()
 
     def test_bundle_contains_only_visible_events(
         self, facility, client_identified, doc_type_contact, doc_type_high, staff_user
