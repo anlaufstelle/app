@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Sammelaktionen für Löschvorschläge bestätigen die Anzahl der bearbeiteten Einträge** (#2004) — Nach Genehmigen, Zurückstellen oder Verwerfen zeigt das Datenschutz-Dashboard jetzt eine Erfolgsmeldung mit Stückzahl, statt die ausgewählten Karten nach dem Redirect kommentarlos verschwinden zu lassen.
+
 ## [0.86.0] - 2026-08-27
 
 ### Added

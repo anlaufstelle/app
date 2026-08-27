@@ -6,6 +6,8 @@ from io import StringIO
 from unittest import mock
 
 import pytest
+from django.contrib import messages
+from django.contrib.messages import get_messages
 from django.core.management import call_command
 from django.db import IntegrityError
 from django.urls import reverse
@@ -772,6 +774,27 @@ def two_pending_proposals(facility, doc_type_contact, staff_user):
 
 @pytest.mark.django_db
 class TestRetentionBulkViews:
+    @pytest.mark.parametrize(
+        "url_name",
+        [
+            "core:retention_bulk_approve",
+            "core:retention_bulk_defer",
+            "core:retention_bulk_reject",
+        ],
+    )
+    def test_bulk_action_reports_processed_count(self, client, lead_user, two_pending_proposals, url_name):
+        client.force_login(lead_user)
+        response = client.post(
+            reverse(url_name),
+            {"proposal_ids": [str(p.pk) for p in two_pending_proposals]},
+            headers={"HX-Request": "true"},
+        )
+
+        stored_messages = list(get_messages(response.wsgi_request))
+        assert [(message.level, str(message)) for message in stored_messages] == [
+            (messages.SUCCESS, "2 Löschvorschläge aktualisiert.")
+        ]
+
     def test_bulk_approve_sets_all_selected_to_approved(self, client, lead_user, two_pending_proposals):
         client.force_login(lead_user)
         resp = client.post(

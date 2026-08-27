@@ -2,6 +2,7 @@
 
 from datetime import date
 
+from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
@@ -151,6 +152,7 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
 
         extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
         count = type(self).action_fn(proposals, request.user, **extra_kwargs)
+        messages.success(request, _("%(count)d Löschvorschläge aktualisiert.") % {"count": count})
 
         if request.headers.get("HX-Request"):
             response = redirect("core:retention_dashboard")
