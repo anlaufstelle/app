@@ -162,9 +162,10 @@ def _parse_year(value, default: int) -> int:
     if not value:
         return default
     try:
-        return int(value)
+        year = int(value)
     except (ValueError, TypeError):
         return default
+    return max(1, min(year, default))
 
 
 def parse_statistics_period(query_params, today: date) -> PeriodState:
