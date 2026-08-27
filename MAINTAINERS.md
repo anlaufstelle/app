@@ -20,69 +20,35 @@ ist alleinige Ansprechperson für Sicherheitsmeldungen
 Das ist ein bewusst offen ausgewiesenes **Bus-Faktor-1-Risiko**: Fällt diese
 Person aus, steht das Projekt ohne handlungsfähige Zweitperson da.
 
-## Vertretung: TBD — vor 2026-09-11 vom Maintainer zu benennen
+## Vertretung: keine — bewusster Entscheid (2026-08-27)
 
-> ⚠️ **ENTSCHEID OFFEN: Vertretung bis 2026-09-11 benennen.** Dieser Punkt ist
-> nicht durch Dokumentation zu schließen. Er zerfällt in zwei **getrennt zu
-> entscheidende** Teile: (1) eine benannte, **meldefähige** Person und (2) die
-> **Trennung von Release-Signing-Key und Betriebs-Geheimnissen**, damit diese
-> Person im Ernstfall handeln kann. Beides ist unten ausgeführt; die gesammelte
-> Übersicht aller offenen Punkte steht in
-> [§ Offene Entscheidungspunkte](#offene-entscheidungspunkte).
+> **ENTSCHIEDEN (Maintainer, 2026-08-27): Es wird keine Vertretung benannt.**
+> Das Solo-Maintainer-Modell ist der gewollte Dauerzustand, nicht ein
+> Übergangszustand. Das damit verbundene **Bus-Faktor-1-Risiko ist bewusst
+> akzeptiert** und bleibt oben offen ausgewiesen.
 
-**Aktuell ist keine Vertretung benannt.** Es wird hier bewusst **keine** Person
-erfunden oder in Aussicht gestellt.
+Begründung und Reichweite:
 
-Die eigene CRA-Einordnung sieht **zum 11.09.2026** eine Wiedervorlage vor, zu der
-eine Vertretung benannt sein soll, damit die 24-Stunden-Frühwarnfrist auch bei
-Ausfall der Hauptperson eingehalten werden kann
-([docs/compliance/cra-einordnung.md § 3/§ 4](docs/compliance/cra-einordnung.md)).
-
-**Einordnung dieser Frist:** Nach der eigenen Scope-Einschätzung liegt das Projekt
-im heutigen Betriebsmodell (quelloffen, kostenlos, kein Hosting-/SaaS-Angebot)
-**außerhalb des CRA-Anwendungsbereichs**; einschlägig wären allenfalls die
-anteiligen Meldepflichten des Verwalter-Light-Regimes (Art. 24)
-([docs/compliance/cra-einordnung.md § 1.4](docs/compliance/cra-einordnung.md)).
-Die Frist ist damit **keine bereits feststehende Rechtspflicht**, sondern eine
-selbst gesetzte Vorsichtsmarke — sie wird verbindlich, sobald das Betriebsmodell
-wechselt (kostenpflichtiges Hosting/SaaS, Produktverkauf, kommerzialisierte Demo).
-Unabhängig von der CRA bleibt die Vertretung schon wegen des Bus-Faktors 1 sinnvoll.
-
-Die Benennung selbst ist eine **organisatorische Personalentscheidung** des
-Maintainers, keine rein dokumentarische Aufgabe — dieser Abschnitt kann sie nur
-sichtbar halten, nicht ersetzen.
-
-Zur Vertretung gehören mindestens:
-
-- **Meldefähigkeit:** Eine benannte Person kann die Frühwarnung/Meldung an das
- zuständige CSIRT und die Aufsichtsbehörde auslösen, wenn die Hauptperson
- ausfällt (Bezug: [docs/ops-runbook.md § 6.5b](docs/ops-runbook.md)).
-- **Signing-Key-/Secret-Escrow-Trennung (offene organisatorische Aufgabe):** Der
- Release-Signing-Key und die Betriebs-/Deploy-Geheimnisse liegen heute
- ausschließlich bei der Hauptperson. Ein tragfähiger Vertretungsweg erfordert
- eine **Trennung** — etwa einen hinterlegten (Escrow-)Zugang oder einen
- separaten Signing-Pfad für die Zweitperson, sodass die Vertretung im Ernstfall
- handlungsfähig ist, **ohne** dass beide Rollen dieselbe Person mit demselben
- Schlüsselbund sind. Wie genau (Escrow-Verwahrung, getrennte Schlüssel,
- Vier-Augen-Prinzip) ist noch zu entscheiden und hier absichtlich offen gelassen.
-
-### Eintrag bei Benennung (auszufüllen)
-
-Sobald eine Vertretung feststeht, hier eintragen; die übrige Prosa dieses
-Abschnitts bleibt bis zur Umsetzung der Escrow-Trennung (siehe unten) gültig:
-
-| Feld | Wert |
-|------|------|
-| Name | _TBD_ |
-| Kontakt | _TBD_ |
-
-Nach dem Ausfüllen die Überschrift dieses Abschnitts von „Vertretung: TBD
-vor 2026-09-11 vom Maintainer zu benennen" auf „Vertretung: <Name>" ändern.
-Die Signing-Key-/Secret-Escrow-Trennung ist ein zweiter, unabhängiger Schritt
-— Checkliste dazu: `docs/dev/deputy-escrow-runbook.md` (dev-only).
-
-Solange keine Vertretung eingerichtet ist, bleibt dieser Punkt der wichtigste
-offene Governance-Posten des Projekts.
+- Nach der eigenen Scope-Einschätzung liegt das Projekt im heutigen
+ Betriebsmodell (quelloffen, kostenlos, kein Hosting-/SaaS-Angebot)
+ **außerhalb des CRA-Anwendungsbereichs**; einschlägig wären allenfalls die
+ anteiligen Meldepflichten des Verwalter-Light-Regimes (Art. 24)
+ ([docs/compliance/cra-einordnung.md § 1.4](docs/compliance/cra-einordnung.md)).
+ Die früher hier geführte Frist 2026-09-11 war eine selbst gesetzte
+ Vorsichtsmarke, keine feststehende Rechtspflicht.
+- **Konsequenz im Ausfall der Hauptperson:** Es gibt keine meldefähige
+ Zweitperson; die 24-Stunden-Frühwarnfähigkeit ([docs/ops-runbook.md
+ § 6.5b](docs/ops-runbook.md)) besteht in diesem Fall nicht. Das ist Teil des
+ akzeptierten Risikos.
+- **Wiedervorlage-Trigger bleibt:** Wechselt das Betriebsmodell in den
+ CRA-Scope (kostenpflichtiges Hosting/SaaS, Produktverkauf, kommerzialisierte
+ Demo), ist dieser Entscheid **neu zu bewerten**
+ ([docs/compliance/cra-einordnung.md § 4](docs/compliance/cra-einordnung.md)).
+- Die Signing-Key-/Secret-Escrow-Trennung entfällt als eigenständige Aufgabe
+ sie war Voraussetzung eines Vertretungswegs. Die vorbereitete Checkliste
+ (`docs/dev/deputy-escrow-runbook.md`, dev-only) bleibt als Vorlage erhalten,
+ falls der Entscheid später revidiert wird; dasselbe gilt für die
+ auskommentierten Vier-Augen-Zeilen in [.github/CODEOWNERS](.github/CODEOWNERS).
 
 ## Verantwortungsbereiche (Code-Ownership)
 
@@ -98,8 +64,8 @@ nicht in der Prosa untergehen. Sie werden gestrichen, sobald sie entschieden sin
 
 | # | Offener Punkt | Frist / Anlass | Stand und Folgearbeit im Repository |
 |---|---------------|----------------|--------------------------------------|
-| **E-1** | **Vertretung benennen** (meldefähige Zweitperson) | Wiedervorlage 11.09.2026 — selbst gesetzte Vorsichtsmarke, keine feststehende Rechtspflicht (siehe § Vertretung) | Tabelle „Eintrag bei Benennung" ausfüllen, Abschnittsüberschrift anpassen, [SECURITY.md](SECURITY.md) auf die benannte Person umstellen |
-| **E-2** | **Modell der Signing-Key-/Secret-Escrow-Trennung** wählen: hinterlegter Escrow-Zugang, getrennter Signing-Pfad oder Vier-Augen-Prinzip | zusammen mit E-1; unabhängig davon vor dem ersten Ernstfall | eigener, von E-1 unabhängiger Umsetzungsschritt; Checkliste `docs/dev/deputy-escrow-runbook.md` (dev-only) |
+| ~~**E-1**~~ | ~~Vertretung benennen~~ — **entschieden 2026-08-27: keine Vertretung** (siehe [§ Vertretung](#vertretung-keine--bewusster-entscheid-2026-08-27)) | Wiedervorlage nur bei Wechsel des Betriebsmodells in den CRA-Scope | Bus-Faktor-1-Risiko bewusst akzeptiert; [SECURITY.md](SECURITY.md) entsprechend formuliert |
+| ~~**E-2**~~ | ~~Escrow-Trennung wählen~~ — **mit E-1 entfallen** (2026-08-27): ohne Vertretung gibt es keine Zweitperson, für die getrennte Zugänge einzurichten wären | Wiedervorlage zusammen mit E-1 | Checkliste `docs/dev/deputy-escrow-runbook.md` (dev-only) bleibt als Vorlage erhalten |
 | **E-3** | **Vier-Augen-Review für sicherheitskritische Pfade** aktivieren | sobald eine zweite Person Maintainer ist | vorbereitete, auskommentierte Zeilen in [.github/CODEOWNERS](.github/CODEOWNERS) einkommentieren; [GOVERNANCE.md § Review & Self-Review](GOVERNANCE.md#review--self-review) nachziehen |
 | **E-4** | **Eigene `AUTHORS`-/Copyright-Datei** — ja oder nein | ohne Frist | Heute bewusst **nicht** angelegt: Urheberschaft wird über Git-Historie, `Co-authored-by`-Trailer und die namentliche Nennung im Release-CHANGELOG geführt ([CONTRIBUTING.md § Namensnennung](CONTRIBUTING.md#namensnennung)). Eine eigene Datei setzt eine Copyright-/SPDX-Konvention voraus, die das Projekt bisher nicht hat — sie wäre sonst nur eine zweite, driftende Kopie der Historie. |
 
