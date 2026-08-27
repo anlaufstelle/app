@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from django.utils import timezone
@@ -93,7 +93,7 @@ def _handover_filter(
         return next((item for item in time_filters if str(item.pk) == canonical), None)
     if raw == "all" or target_date != today:
         return None
-    previous = None
+    previous = time_filters[-1] if time_filters else None
     for item in time_filters:
         if item.covers_time(now):
             break
@@ -127,6 +127,19 @@ def resolve_zeitstrom_state(
 
     if view == "uebergabe":
         selected_filter = _handover_filter(params, filters, target_date, today, now)
+        if selected_filter is not None and not params.get("time_filter") and target_date == today:
+            # Die automatische Übergabe gehört zum Business-Datum der
+            # laufenden Schicht. In den frühen Morgenstunden ist das bei
+            # einer Nachtschicht bereits der Vortag.
+            target_date = live_context.shift_date
+            current_filter = live_context.time_filter
+            if current_filter is not None:
+                current_index = filters.index(current_filter)
+                selected_index = filters.index(selected_filter)
+                # Frühdienst → vorheriger Nachtdienst wickelt in der
+                # Sortierreihenfolge nach hinten und begann am Vortag.
+                if selected_index >= current_index:
+                    target_date -= timedelta(days=1)
     else:
         raw_filter = params.get("time_filter")
         canonical_filter = _canonical_uuid(raw_filter) if raw_filter and raw_filter != "all" else ""

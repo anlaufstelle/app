@@ -22,6 +22,28 @@ def time_filter_frueh(facility):
     )
 
 
+@pytest.fixture
+def time_filter_spaet(facility):
+    return TimeFilter.objects.create(
+        facility=facility,
+        label="Spätdienst",
+        start_time="16:00",
+        end_time="22:00",
+        sort_order=1,
+    )
+
+
+@pytest.fixture
+def time_filter_nacht(facility):
+    return TimeFilter.objects.create(
+        facility=facility,
+        label="Nachtdienst",
+        start_time="22:00",
+        end_time="08:00",
+        sort_order=2,
+    )
+
+
 @pytest.mark.django_db
 class TestZeitstromDocTypeFilter:
     """Zeitstrom filtert Events nach Dokumentationstyp."""
@@ -167,3 +189,47 @@ class TestResolveZeitstromState:
         assert state.view == "feed"
         assert state.time_filter == time_filter_frueh
         assert state.is_handover is False
+
+    def test_handover_at_0432_uses_previous_shift_on_night_shift_business_date(
+        self,
+        facility,
+        time_filter_frueh,
+        time_filter_spaet,
+        time_filter_nacht,
+    ):
+        today = date(2025, 6, 15)
+        now = timezone.make_aware(datetime(2025, 6, 15, 4, 32))
+
+        state = resolve_zeitstrom_state(
+            {"view": "uebergabe"},
+            facility,
+            today=today,
+            now=now,
+        )
+
+        assert state.live_context.time_filter == time_filter_nacht
+        assert state.live_context.shift_date == date(2025, 6, 14)
+        assert state.time_filter == time_filter_spaet
+        assert state.target_date == date(2025, 6, 14)
+
+    def test_handover_at_0900_wraps_to_last_completed_night_shift(
+        self,
+        facility,
+        time_filter_frueh,
+        time_filter_spaet,
+        time_filter_nacht,
+    ):
+        today = date(2025, 6, 15)
+        now = timezone.make_aware(datetime(2025, 6, 15, 9, 0))
+
+        state = resolve_zeitstrom_state(
+            {"view": "uebergabe"},
+            facility,
+            today=today,
+            now=now,
+        )
+
+        assert state.live_context.time_filter == time_filter_frueh
+        assert state.live_context.shift_date == today
+        assert state.time_filter == time_filter_nacht
+        assert state.target_date == date(2025, 6, 14)
