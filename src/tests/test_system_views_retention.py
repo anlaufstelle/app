@@ -138,11 +138,7 @@ class TestSystemRetentionAggregation:
         )
         client.force_login(super_admin_user)
 
-        with (
-            mock.patch("core.views.system.retention.date", create=True) as mock_date,
-            mock.patch("core.views.system.retention.timezone", create=True) as mock_timezone,
-        ):
-            mock_date.today.return_value = date(2026, 6, 21)
+        with mock.patch("core.views.system.retention.timezone", create=True) as mock_timezone:
             mock_timezone.localdate.return_value = berlin_date
             response = client.get(reverse("core:system_retention"))
 
