@@ -3,7 +3,7 @@
 # Anlaufstelle — One-Command-Bootstrap fuer das LOKALE Setup (Refs #1062)
 #
 # Wird ausschliesslich vom lokalen ``docker-compose.yml`` benutzt: der
-# ``init``-Dienst ruft ``bootstrap`` auf, der ``web``-Dienst ``print-key``.
+# ``init``-Dienst ruft ``bootstrap`` auf, der ``web``-Dienst ``ensure-key``.
 # Produktion, Staging, dev.anlaufstelle.app und die Demo fassen dieses Skript
 # NICHT an — dort bleibt der getrennte Migrationspfad
 # (``docker-migrate.sh``, docs/ops-runbook.md § 1.2) und die Ersteinrichtung
