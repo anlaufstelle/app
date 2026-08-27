@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Event, TimeFilter
+from core.services.events.tally import TallyLiveContext
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
 
 
@@ -232,4 +233,53 @@ class TestResolveZeitstromState:
         assert state.live_context.time_filter == time_filter_frueh
         assert state.live_context.shift_date == today
         assert state.time_filter == time_filter_nacht
+        assert state.target_date == date(2025, 6, 14)
+
+    def test_handover_at_0300_without_night_shift_uses_previous_days_late_shift(
+        self,
+        facility,
+        time_filter_frueh,
+        time_filter_spaet,
+    ):
+        today = date(2025, 6, 15)
+        now = timezone.make_aware(datetime(2025, 6, 15, 3, 0))
+
+        state = resolve_zeitstrom_state(
+            {"view": "uebergabe"},
+            facility,
+            today=today,
+            now=now,
+        )
+
+        assert state.live_context.time_filter is None
+        assert state.time_filter == time_filter_spaet
+        assert state.target_date == date(2025, 6, 14)
+
+    def test_handover_tolerates_live_filter_missing_from_active_filters(
+        self,
+        facility,
+        time_filter_frueh,
+        time_filter_spaet,
+    ):
+        today = date(2025, 6, 15)
+        now = timezone.make_aware(datetime(2025, 6, 15, 10, 0))
+        stale_filter = TimeFilter.objects.create(
+            facility=facility,
+            label="Inzwischen deaktiviert",
+            start_time="08:00",
+            end_time="16:00",
+            sort_order=2,
+            is_active=False,
+        )
+        live_context = TallyLiveContext(stale_filter, today, now, now)
+
+        state = resolve_zeitstrom_state(
+            {"view": "uebergabe"},
+            facility,
+            today=today,
+            now=now,
+            live_context=live_context,
+        )
+
+        assert state.time_filter == time_filter_spaet
         assert state.target_date == date(2025, 6, 14)
