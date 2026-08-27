@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, timedelta
+from unittest import mock
 
 import pytest
 from django.core.management import call_command
@@ -17,6 +18,15 @@ from core.services.retention import (
     reactivate_deferred_proposals,
     reject_proposal,
 )
+
+_UTC_DATE = date(2026, 6, 21)
+_BERLIN_DATE = date(2026, 6, 22)
+
+
+class _UtcBoundaryDate(date):
+    @classmethod
+    def today(cls):
+        return _UTC_DATE
 
 
 def _make_proposal(facility, status=RetentionProposal.Status.PENDING, target_id=None):
@@ -57,6 +67,18 @@ class TestBulkActions:
 
 @pytest.mark.django_db
 class TestDeferFollowup:
+    def test_defer_uses_berlin_local_date(self, facility, lead_user):
+        p = _make_proposal(facility)
+
+        with (
+            mock.patch("core.retention.proposals.date", _UtcBoundaryDate, create=True),
+            mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
+        ):
+            mock_timezone.localdate.return_value = _BERLIN_DATE
+            defer_proposal(p, lead_user, days=7)
+
+        assert p.deferred_until == _BERLIN_DATE + timedelta(days=7)
+
     def test_defer_writes_audit_entry(self, facility, lead_user):
         p = _make_proposal(facility)
         defer_proposal(p, lead_user, days=7)
@@ -135,6 +157,27 @@ class TestDeferredExpiry:
         p.refresh_from_db()
         assert reactivated == 1
         assert auto_approved == 0
+        assert p.status == RetentionProposal.Status.PENDING
+
+    def test_reactivation_uses_berlin_local_date(self, facility):
+        Settings.objects.create(
+            facility=facility,
+            retention_auto_approve_after_defer=False,
+            retention_max_defer_count=2,
+        )
+        p = _make_proposal(facility, status=RetentionProposal.Status.DEFERRED)
+        p.deferred_until = _BERLIN_DATE
+        p.save(update_fields=["deferred_until"])
+
+        with (
+            mock.patch("core.retention.proposals.date", _UtcBoundaryDate, create=True),
+            mock.patch("core.retention.proposals.timezone", create=True) as mock_timezone,
+        ):
+            mock_timezone.localdate.return_value = _BERLIN_DATE
+            reactivated, auto_approved = reactivate_deferred_proposals(facility)
+
+        p.refresh_from_db()
+        assert (reactivated, auto_approved) == (1, 0)
         assert p.status == RetentionProposal.Status.PENDING
 
     def test_not_yet_expired_deferred_stays_deferred(self, facility, lead_user):

@@ -6,11 +6,12 @@ Stale-Cleanup, sowie die Pipeline ``create_proposals_for_facility``
 fuer den ``--propose``-Lauf des ``enforce_retention``-Commands.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import F
 from django.db.utils import IntegrityError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
@@ -54,7 +55,7 @@ def annotate_urgency(proposal, *, today=None):
     Returns the proposal for convenience. Used by the per-card view handlers
     to avoid duplicating the 7/30-day thresholds.
     """
-    today = today or date.today()
+    today = today or timezone.localdate()
     proposal.urgency = _urgency_for((proposal.deletion_due_at - today).days)
     return proposal
 
@@ -164,7 +165,7 @@ def build_retention_dashboard_context(facility, user=None):
     """
     del user  # currently unused; see docstring
     proposals_by_category = get_dashboard_proposals(facility)
-    today = date.today()
+    today = timezone.localdate()
 
     _attach_holds_and_urgency(facility, proposals_by_category, today)
     counts = _status_counts(proposals_by_category)
@@ -239,7 +240,7 @@ def approve_proposal(proposal, user):
 @transaction.atomic
 def defer_proposal(proposal, user, days=30):
     """Defer a retention proposal by `days` (default 30) — sets DEFERRED status."""
-    deferred_until = date.today() + timedelta(days=days)
+    deferred_until = timezone.localdate() + timedelta(days=days)
     proposal.status = RetentionProposal.Status.DEFERRED
     proposal.deferred_until = deferred_until
     # Refs #1022 (B2): DB-atomares Increment statt In-Memory-Read-Modify-
@@ -332,7 +333,7 @@ def reactivate_deferred_proposals(facility):
 
     Returns a tuple `(reactivated_count, auto_approved_count)`.
     """
-    today = date.today()
+    today = timezone.localdate()
     reactivated = 0
     auto_approved = 0
 

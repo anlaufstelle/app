@@ -3,7 +3,6 @@
 import hashlib
 import json
 import logging
-from datetime import date
 from pathlib import Path
 
 from django.conf import settings as django_settings
@@ -175,7 +174,7 @@ def render_document(slug, facility):
     retention = _retention_values(settings_obj)
     replacements = {
         "{{ facility_name }}": facility_name,
-        "{{ date }}": date.today().strftime("%d.%m.%Y"),
+        "{{ date }}": timezone.localdate().strftime("%d.%m.%Y"),
         "{{ retention_anonymous_days }}": str(retention["retention_anonymous_days"]),
         "{{ retention_identified_days }}": str(retention["retention_identified_days"]),
         "{{ retention_qualified_days }}": str(retention["retention_qualified_days"]),

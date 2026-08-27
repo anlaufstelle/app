@@ -1,6 +1,8 @@
 """Tests for DSGVO documentation package."""
 
 import re
+from datetime import date
+from unittest import mock
 
 import pytest
 from django.test import Client as DjangoClient
@@ -107,6 +109,17 @@ class TestDSGVOPackageService:
     def test_render_replaces_date(self, facility):
         content, _ = render_document("dsfa", facility)
         assert "{{ date }}" not in content
+
+    def test_render_uses_berlin_local_date(self, facility):
+        with (
+            mock.patch("core.services.client.dsgvo_package.date", create=True) as mock_date,
+            mock.patch("core.services.client.dsgvo_package.timezone.localdate", return_value=date(2026, 6, 22)),
+        ):
+            mock_date.today.return_value = date(2026, 6, 21)
+            content, _ = render_document("dsfa", facility)
+
+        assert "22.06.2026" in content
+        assert "21.06.2026" not in content
 
     def test_render_unknown_slug_raises(self, facility):
         with pytest.raises(ValueError, match="Unknown document"):
