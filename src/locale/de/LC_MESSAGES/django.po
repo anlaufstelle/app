@@ -5288,6 +5288,13 @@ msgstr "Keine Vorschläge ausgewählt."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "Keine gültigen Vorschläge gefunden."
 
+#: src/core/views/retention.py:156
+#, python-format
+msgid "%(count)d Löschvorschlag aktualisiert."
+msgid_plural "%(count)d Löschvorschläge aktualisiert."
+msgstr[0] "%(count)d Löschvorschlag aktualisiert."
+msgstr[1] "%(count)d Löschvorschläge aktualisiert."
+
 #: src/core/views/statistics.py:662
 msgid "backend erforderlich"
 msgstr "backend erforderlich"

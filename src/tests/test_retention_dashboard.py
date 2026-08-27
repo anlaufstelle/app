@@ -785,6 +785,19 @@ class TestRetentionBulkViews:
             (messages.SUCCESS, "2 Löschvorschläge aktualisiert.")
         ]
 
+    def test_bulk_action_uses_singular_message(self, client, lead_user, two_pending_proposals):
+        client.force_login(lead_user)
+        response = client.post(
+            reverse("core:retention_bulk_approve"),
+            {"proposal_ids": [str(two_pending_proposals[0].pk)]},
+            headers={"HX-Request": "true"},
+        )
+
+        stored_messages = list(get_messages(response.wsgi_request))
+        assert [(message.level, str(message)) for message in stored_messages] == [
+            (messages.SUCCESS, "1 Löschvorschlag aktualisiert.")
+        ]
+
     def test_bulk_approve_sets_all_selected_to_approved(self, client, lead_user, two_pending_proposals):
         client.force_login(lead_user)
         resp = client.post(

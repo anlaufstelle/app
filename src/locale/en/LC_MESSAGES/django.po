@@ -5242,6 +5242,13 @@ msgstr "No proposals selected."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No valid proposals found."
 
+#: src/core/views/retention.py:156
+#, python-format
+msgid "%(count)d Löschvorschlag aktualisiert."
+msgid_plural "%(count)d Löschvorschläge aktualisiert."
+msgstr[0] "%(count)d deletion proposal updated."
+msgstr[1] "%(count)d deletion proposals updated."
+
 #: src/core/views/statistics.py:662
 msgid "backend erforderlich"
 msgstr "backend required"
