@@ -155,8 +155,8 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
-- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
-- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+- [`src/core/services/events/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
+- [`src/core/services/case/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/handover.py) — `build_handover_summary()`
 
 ---
 
@@ -204,16 +204,17 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 | **Event-Aufschlüsselung** | Kontakte nach Dokumentationstyp mit farbigen Badges | Nur innerhalb der Schicht |
 
 **Automatisches Verhalten:**
-- Öffnet man die Übergabe **heute**, wird automatisch die **vorherige Schicht** vorausgewählt
+- Öffnet man die Übergabe **heute**, wird automatisch der **zuletzt abgeschlossene Dienst** mit seinem Schichtdatum vorausgewählt — auch nach Mitternacht und beim Wechsel vom Nachtdienst zum Frühdienst
 - Datums-Navigation (vor/zurück) + Tab-Wechsel zwischen Schichten und „Ganzer Tag"
 - Nachtschichten über Mitternacht werden korrekt via `covers_time()`-Logik behandelt
 - Kompakte Version erscheint auch im Zeitstrom, wenn ein Schichtfilter aktiv ist
 
 **Relevante Dateien:**
-- [`src/core/views/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/handover.py) — `HandoverView`
-- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+- [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — Zeitstrom-View mit Übergabe-Modus
+- [`src/core/services/zeitstrom_filters.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/zeitstrom_filters.py) — Vorwahl von Dienst und Schichtdatum
+- [`src/core/services/case/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/handover.py) — `build_handover_summary()`
 - [`src/core/models/time_filter.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/time_filter.py) — `TimeFilter` (Schichtdefinition)
-- [`src/templates/core/handover/index.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/index.html) — Haupttemplate
+- [`src/templates/core/handover/partials/_summary_full.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/partials/_summary_full.html) — vollständige Übergabe-Zusammenfassung
 
 ---
 
@@ -681,4 +682,3 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 ---
 
 *Konsolidiert aus #105, #429, #471, #506. Erstverifikation der Inhalte am 29.04.2026 gegen v0.10.2. v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1. Die Krypto-, Lockout- und Offline-Angaben wurden am 2026-07-13 im Doku-Review gegen den Code nachgeprüft (Refs #1551).*
-
