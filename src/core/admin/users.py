@@ -20,6 +20,41 @@ _INITIAL_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 _INITIAL_PASSWORD_LENGTH = 12
 
 
+class UserAddForm(UserCreationForm):
+    """Add-Form ohne Passwort-Eingabe (Refs #2073).
+
+    ``UserAdmin.save_model`` (s.u.) vergibt das Passwort beim Anlegen
+    IMMER selbst — entweder unusable + Einladungs-Link per E-Mail, oder als
+    generiertes Klartext-Initialpasswort im Fallback ohne E-Mail. Ein hier
+    eingetipptes Passwort würde von ``save_model`` also ohnehin überschrieben.
+
+    Entscheid (statt ``add_fieldsets`` um ``password1``/``password2``/
+    ``usable_password`` zu ergänzen, Djangos Standardmuster): die Felder ganz
+    entfernen. Ein Formular, das ein Passwort abfragt, dessen Eingabe
+    garantiert verworfen wird, ist irreführende UX — die Person tippt ein
+    Passwort ein, das nirgends landet. `add_fieldsets` bot diese Felder
+    ohnehin schon nicht an; der eigentliche Fehler war, dass sie trotzdem als
+    ``required`` in der Formularvalidierung standen (Djangos
+    ``SetPasswordMixin.validate_passwords()`` — genau das reparieren wir hier).
+
+    ``validate_passwords()`` ist der zentrale Hook, den ``SetPasswordMixin``
+    (Basisklasse von ``UserCreationForm``) für die Passwort-Pflicht aufruft;
+    er setzt ``cleaned_data["set_usable_password"]``, das ``_post_clean``
+    (Passwort-Validatoren) UND ``save()`` (Passwort setzen) auswerten. Diese
+    eine Override-Stelle reicht daher aus, um beide Folgeschritte sauber
+    abzuschalten, ohne ``_post_clean``/``save`` selbst zu duplizieren.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name in ("password1", "password2", "usable_password"):
+            self.fields.pop(field_name, None)
+
+    def validate_passwords(self, *args, **kwargs):
+        del args, kwargs  # ungenutzt: es gibt keine Passwort-Felder mehr zu validieren.
+        self.cleaned_data["set_usable_password"] = False
+
+
 @admin.action(description="Account-Sperre aufheben (Login freigeben)")
 def unlock_selected_users(modeladmin, request, queryset):
     """Admin-Action: LOGIN_UNLOCK-AuditLog schreiben, damit is_locked() künftig
@@ -68,7 +103,7 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
 @admin.register(User, site=anlaufstelle_admin_site)
 class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     form = UserChangeForm
-    add_form = UserCreationForm
+    add_form = UserAddForm
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "display_name", "role", "facility", "is_active")
     list_filter = ("role", "facility", "is_active", "is_staff")
