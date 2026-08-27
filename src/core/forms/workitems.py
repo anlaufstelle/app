@@ -3,6 +3,7 @@
 from datetime import date
 
 from django import forms
+from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
@@ -17,7 +18,7 @@ def max_workitem_date() -> date:
     sein (z. B. 05.05.3345 verschwindet praktisch vom Radar). Wiederkehrende
     Aufgaben decken längere Zeiträume bereits über ``recurrence`` ab.
     """
-    return date(date.today().year + 1, 12, 31)
+    return date(timezone.localdate().year + 1, 12, 31)
 
 
 def min_workitem_date() -> date:
@@ -28,7 +29,7 @@ def min_workitem_date() -> date:
     überfälligen Items prüfen wir nur, wenn das Datum tatsächlich geändert
     wurde (vgl. ``Form.changed_data``).
     """
-    return date.today()
+    return timezone.localdate()
 
 
 class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
