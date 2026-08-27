@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.86.0] - 2026-08-27
 
 ### Added
 
@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Doku-Ausbau für Einstieg und Betrieb** (#1062) — Neu: `docs/architecture.md` als verlinkender Architektur-Wegweiser für Contributor (Schichten, Sicherheitsarchitektur, Offline-PWA, Konfigurierbarkeits-Kern, Test-Landschaft) und die vollständige englische Übersetzung des Betriebs-Runbooks (`docs/en/ops-runbook.md`, literale Skript-Ausgaben bleiben im deutschen Original). Erweitert: CONTRIBUTING (DE+EN) um einen 5-Minuten-Quick-Start auf Basis des One-Command-Starts und einen Abschnitt Plugin-Entwicklung (Berichts-Backends, Konfigurationspakete); README (DE+EN) auf den Feature-Stand der Konfigurierbarkeits-Strecke gezogen.
-- **Governance-Artefakte beschlussreif** (#1477) — MAINTAINERS.md trägt jetzt einen sichtbaren Entscheidungsblock (E-1–E-4) für die CRA-Vertretung samt Frist-Einordnung, GOVERNANCE.md beschreibt den eigenen Änderungsprozess, `.github/CODEOWNERS` bereitet Vier-Augen-Zeilen für sicherheitskritische Pfade vor, und SECURITY.md behauptet keine (noch) nicht existierende Vertretung mehr.
+- **Governance vervollständigt, Vertretungs-Entscheid dokumentiert** (#1477) — MAINTAINERS.md hält den Maintainer-Entscheid vom 2026-08-27 fest: **bewusst keine Vertretung** — das Solo-Maintainer-Modell ist der gewollte Dauerzustand, das Bus-Faktor-1-Risiko ist akzeptiert und offen ausgewiesen (Wiedervorlage nur bei Wechsel des Betriebsmodells in den CRA-Anwendungsbereich). GOVERNANCE.md beschreibt jetzt den eigenen Änderungsprozess, `.github/CODEOWNERS` hält Vier-Augen-Zeilen für sicherheitskritische Pfade als Vorlage bereit, und SECURITY.md (DE+EN) beschreibt den Stand ehrlich statt eine Vertretung in Aussicht zu stellen.
 
 ## [0.84.0] - 2026-08-25
 
