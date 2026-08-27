@@ -579,6 +579,59 @@ class TestClientExportService:
         assert data["export_meta"]["facility_name"] == "Anlaufstelle Teststadt"
 
 
+def _capture_pdf_render(monkeypatch):
+    captured = {}
+
+    def fake_render_to_string(template_name, context):
+        captured["template_name"] = template_name
+        captured["context"] = context
+        captured["html"] = f"{context.get('facility_name', '')}|{context.get('generated_at', '')}"
+        return captured["html"]
+
+    class FakeHTML:
+        def __init__(self, *, string, url_fetcher):
+            captured["weasyprint_html"] = string
+            captured["url_fetcher"] = url_fetcher
+
+        def write_pdf(self):
+            return b"%PDF-test"
+
+    monkeypatch.setattr("core.services.client.export.render_to_string", fake_render_to_string)
+    monkeypatch.setattr("core.services.client.export.weasyprint.HTML", FakeHTML)
+    return captured
+
+
+@pytest.mark.django_db
+class TestClientExportPDFService:
+    def test_pdf_render_contains_facility_name(self, monkeypatch, sample_client, facility, admin_user):
+        from core.services.client import export_client_data_pdf
+
+        captured = _capture_pdf_render(monkeypatch)
+
+        assert export_client_data_pdf(sample_client, facility, admin_user) == b"%PDF-test"
+        assert captured["context"]["facility_name"] == "Anlaufstelle Teststadt"
+        assert "Anlaufstelle Teststadt" in captured["weasyprint_html"]
+
+    def test_pdf_render_contains_timezone_aware_generation_date(
+        self,
+        monkeypatch,
+        sample_client,
+        facility,
+        admin_user,
+    ):
+        from core.services.client import export_client_data_pdf
+
+        captured = _capture_pdf_render(monkeypatch)
+        before = timezone.now()
+
+        assert export_client_data_pdf(sample_client, facility, admin_user) == b"%PDF-test"
+
+        generated_at = captured["context"]["generated_at"]
+        assert timezone.is_aware(generated_at)
+        assert before <= generated_at <= timezone.now()
+        assert str(generated_at) in captured["weasyprint_html"]
+
+
 @pytest.mark.django_db
 class TestClientExportJSONView:
     """View-level tests for JSON export."""
@@ -1118,6 +1171,32 @@ class TestClientExportHistoryContents:
         entry = data["event_history"][0]
         assert entry["redacted"] is True
         assert entry["data_before"] == [{"slug": "notiz", "label": "Notiz", "value": None}]
+
+    def test_anonymized_client_history_without_fields_exports_empty_payloads(
+        self,
+        sample_client,
+        facility,
+        sample_event,
+        admin_user,
+    ):
+        history = EventHistory.objects.create(
+            event=sample_event,
+            changed_by=admin_user,
+            action=EventHistory.Action.UPDATE,
+            data_before={"notiz": "vorher"},
+            data_after={"notiz": "nachher"},
+            field_metadata=self._metadata(notiz=("Notiz", False)),
+        )
+
+        anonymize_client(sample_client, user=admin_user)
+
+        history.refresh_from_db()
+        assert history.data_before == {"_redacted": True, "anonymized": True}
+        assert history.data_after == {"_redacted": True, "anonymized": True}
+        entry = export_client_data(sample_client, facility, admin_user)["event_history"][0]
+        assert entry["data_before"] == []
+        assert entry["data_after"] == []
+        assert entry["redacted"] is True
 
 
 @pytest.mark.django_db
