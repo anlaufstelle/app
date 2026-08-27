@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Case, DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.models import Case, DocumentType, DocumentTypeField, Event, FieldTemplate, User
 
 
 @pytest.fixture
@@ -462,6 +462,60 @@ class TestHandoverHidesEventsBySensitivity:
         crisis_highlights = [h for h in summary["highlights"] if h["type"] == "crisis"]
         assert len(crisis_highlights) == 1
         assert summary["stats"]["events_total"] == 1
+
+
+@pytest.mark.django_db
+class TestEventVisibilityService:
+    @pytest.mark.parametrize(
+        ("user_fixture", "sensitivity", "expected"),
+        [
+            ("assistant_user", DocumentType.Sensitivity.NORMAL, True),
+            ("staff_user", DocumentType.Sensitivity.ELEVATED, True),
+            ("lead_user", DocumentType.Sensitivity.HIGH, True),
+            ("admin_user", DocumentType.Sensitivity.HIGH, True),
+            ("assistant_user", DocumentType.Sensitivity.ELEVATED, False),
+        ],
+        ids=[
+            "assistant-normal-boundary",
+            "staff-elevated-boundary",
+            "lead-high-boundary",
+            "facility-admin-high-boundary",
+            "assistant-elevated-counterexample",
+        ],
+    )
+    def test_event_and_document_type_visibility_at_role_boundary(
+        self,
+        request,
+        facility,
+        staff_user,
+        user_fixture,
+        sensitivity,
+        expected,
+    ):
+        from core.services.compliance import user_can_see_document_type, user_can_see_event
+
+        user = request.getfixturevalue(user_fixture)
+        document_type = DocumentType.objects.create(
+            facility=facility,
+            name=f"Sichtbarkeit {user_fixture} {sensitivity}",
+            sensitivity=sensitivity,
+        )
+        event = Event.objects.create(
+            facility=facility,
+            document_type=document_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+
+        assert user_can_see_event(user, event) is expected
+        assert user_can_see_document_type(user, document_type) is expected
+
+    def test_unlisted_role_fails_closed_for_elevated_event(self, super_admin_user, event_elevated):
+        from core.services.compliance import ROLE_MAX_SENSITIVITY, user_can_see_event
+
+        assert ROLE_MAX_SENSITIVITY.get(User.Role.SUPER_ADMIN, 0) == 0
+        assert user_can_see_event(super_admin_user, event_elevated) is False
 
 
 @pytest.mark.django_db
