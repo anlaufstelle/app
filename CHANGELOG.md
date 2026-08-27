@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Übergabe-Vorwahl zeigt auch zwischen Schichten den zuletzt abgeschlossenen Dienst** (#2054) — Die automatische Übergabe ordnet Nacht- und Dienstplanlücken jetzt dem tatsächlich zuletzt beendeten Schichtfenster mit dessen Schichtdatum zu, statt einen noch in der Zukunft liegenden Dienst anzuzeigen.
+- **„Letzter Kontakt“ ignoriert gelöschte Ereignisse online und offline** (#2030) — Personenliste, Suche und Offline-Bundle bestimmen den letzten Kontakt jetzt einheitlich nur aus sichtbaren Ereignissen; ein jüngerer Papierkorb-Eintrag verfälscht weder Wert noch Sortierung.
 - **Datenauskunft-Dateinamen enthalten kein Personen-Pseudonym mehr** (#2003) — JSON- und PDF-Downloads heißen jetzt nur noch `datenauskunft_<YYYY-MM-DD>`; damit gelangt die Zuordnung zur Person nicht mehr über den HTTP-Dateinamen in Proxy-, Browser- oder Mail-Logs.
 - **Sammelaktionen für Löschvorschläge bestätigen die Anzahl der bearbeiteten Einträge** (#2004) — Nach Genehmigen, Zurückstellen oder Verwerfen zeigt das Datenschutz-Dashboard jetzt eine Erfolgsmeldung mit Stückzahl, statt die ausgewählten Karten nach dem Redirect kommentarlos verschwinden zu lassen.
 

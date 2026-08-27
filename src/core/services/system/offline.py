@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.utils import timezone
 
 from core.models import Case as CaseModel
@@ -387,17 +387,15 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     )
 
     # Refs #1529, #1499: ``last_contact`` fuer die Offline-Personenliste —
-    # BEWUSST cutoff- UND is_deleted-FREI, exakt die Online-Spalten-Annotation
-    # aus ``ClientListView`` (views/clients.py: ``Max("events__occurred_at")``),
-    # damit der offline gezeigte Wert dem Online-Listenwert 1:1 entspricht.
+    # cutoff-frei und ohne soft-geloeschte Events, exakt wie die Annotation
+    # aus ``ClientListView``, damit Online- und Offline-Wert uebereinstimmen.
     # NICHT aus der oben gefilterten 90-Tage-``events``-Liste ableiten: die
-    # waere fuer >90d zurueckliegende oder geloeschte Kontakte falsch. Der
-    # ``Max``-Join ueber die reverse ``events``-Relation ignoriert jeden
-    # Manager-Filter (raw SQL join) — genau wie die Online-Annotation, die
-    # deshalb ebenfalls geloeschte Events einschliesst. ``None`` (kontaktloser
-    # Klient) bleibt JSON-clean ``None``, sonst ISO-8601-String.
+    # waere fuer >90d zurueckliegende Kontakte falsch. Der ``Max``-Join ueber
+    # die reverse ``events``-Relation braucht den Loeschfilter ausdruecklich,
+    # weil er Manager-Filter ignoriert. ``None`` (kontaktloser Klient) bleibt
+    # JSON-clean ``None``, sonst ISO-8601-String.
     last_contact = Client.objects.filter(pk=client.pk).aggregate(
-        last_contact=Max("events__occurred_at"),
+        last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)),
     )["last_contact"]
 
     generated_at = timezone.now()
