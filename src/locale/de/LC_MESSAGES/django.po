@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 20:47+0200\n"
+"POT-Creation-Date: 2026-08-28 09:05+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3698,15 +3698,17 @@ msgstr ""
 "Einrichtungen. Kein Klarname-Feld — der primaere Identifikator ist ein "
 "Pseudonym."
 
-#: src/core/services/compliance/vvt.py:49
+#: src/core/services/compliance/vvt.py:55
 msgid ""
 "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse) i.V.m. SGB VIII §13 (Jugendsozialarbeit) bzw. SGB XII (Hilfen in "
-"Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
+"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
+"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
+"ergaenzen)."
 msgstr ""
 "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse) i.V.m. SGB VIII §13 (Jugendsozialarbeit) bzw. SGB XII (Hilfen in "
-"Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
+"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
+"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
+"ergaenzen)."
 
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
@@ -3740,17 +3742,10 @@ msgstr ""
 msgid "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 msgstr "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 
-#: src/core/services/compliance/vvt.py:65
-msgid ""
-"Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
-"Monate (danach Aggregation). Kontakte der Stufe „Nur Pseudonym“: 36 Monate "
-"nach letztem Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre nach "
-"Falllauf-Ende (SGB VIII §97)."
-msgstr ""
-"Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
-"Monate (danach Aggregation). Kontakte der Stufe „Nur Pseudonym“: 36 Monate "
-"nach letztem Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre nach "
-"Falllauf-Ende (SGB VIII §97)."
+#: src/core/services/compliance/vvt.py:73
+#, python-brace-format
+msgid "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
+msgstr "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
 
 #: src/core/services/compliance/vvt.py:73
 msgid "Pseudonymisierung by Design"
@@ -3802,15 +3797,17 @@ msgstr ""
 "Episoden. Grundlage der Wirkungsmessung und Berichterstattung gegenueber "
 "Foerdermittelgebern."
 
-#: src/core/services/compliance/vvt.py:92
+#: src/core/services/compliance/vvt.py:117
 msgid ""
-"DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 (Sozialdaten in der "
-"Jugendhilfe), Art. 9 Abs. 2 lit. b/h fuer besondere Datenkategorien "
-"(Gesundheits-, Sozialdaten). § 203 StGB (Schweigepflicht)."
+"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
+"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
+"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
+"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
 msgstr ""
-"DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 (Sozialdaten in der "
-"Jugendhilfe), Art. 9 Abs. 2 lit. b/h fuer besondere Datenkategorien "
-"(Gesundheits-, Sozialdaten). § 203 StGB (Schweigepflicht)."
+"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
+"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
+"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
+"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
 
 #: src/core/services/compliance/vvt.py:98
 msgid "Ereignisbeschreibungen / Beratungsnotizen"
@@ -4142,15 +4139,19 @@ msgstr "DSGVO-Auskunfts- und Berichtigungsantraege"
 
 #: src/core/services/compliance/vvt.py:250
 msgid ""
-"Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 (Auskunft, "
-"Berichtigung, Loeschung, Einschraenkung, Datenuebertragbarkeit, "
-"Widerspruch). Erstellung von Datenexport-Paketen und Dokumentation der "
-"Bearbeitung."
+"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
+"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
+"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
+"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
+"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
+"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
 msgstr ""
-"Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 (Auskunft, "
-"Berichtigung, Loeschung, Einschraenkung, Datenuebertragbarkeit, "
-"Widerspruch). Erstellung von Datenexport-Paketen und Dokumentation der "
-"Bearbeitung."
+"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
+"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
+"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
+"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
+"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
+"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""

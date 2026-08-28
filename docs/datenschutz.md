@@ -44,6 +44,8 @@
 | Art. 28 Auftragsverarbeitungsvertrag | [AV-Vertrag](../src/core/dsgvo_templates/av-vertrag.md) | [Träger] |
 | Art. 30 Verzeichnis von Verarbeitungstätigkeiten | [VVT](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | [Träger] [Auditor] |
 | Art. 35 Datenschutz-Folgenabschätzung | [DSFA](../src/core/dsgvo_templates/dsfa.md) | [Träger] [Auditor] |
+| Art. 5(1)(e) / Art. 17 Löschkonzept | [Löschkonzept](../src/core/dsgvo_templates/loeschkonzept.md) | [Träger] [Auditor] |
+| Art. 13/14 / § 26 BDSG Beschäftigten-Information | [Beschäftigten-Information](../src/core/dsgvo_templates/mitarbeiter_informationspflichten.md) | [Träger] |
 | TOM (Gesamtübersicht) | [TOM](../src/core/dsgvo_templates/toms.md) | [Träger] [Auditor] |
 | App-Feature „DSGVO-Paket" (Bündel-Download) | [`DSGVOPackageView`](../src/core/views/dsgvo.py) · [`generate_dsgvo_package`](../src/core/management/commands/generate_dsgvo_package.py) | [Träger] [Dev] |
 

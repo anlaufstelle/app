@@ -258,6 +258,7 @@ Spalte **Wo**: `Sidecar` = laeuft ab Werk im `cron`-Container ([§3.2](#32-cron-
 | `verify_audit_chain` | Taeglich 03:30 (nach Retention) | Sidecar | HMAC-Integritaetskette des AuditLog verifizieren; Exit-Code != 0 bei Tamper-Verdacht (Refs #1070). Ein vollstaendig gruener Lauf schreibt den Last-Run-Marker `AUDIT_CHAIN_VERIFIED` — sichtbar als Zeile „Audit-Ketten-Pruefung" unter `/system/` und im Compliance-Dashboard (Refs #1872). Ein Tamper-Fund schreibt **keinen** Marker, die Ampel laeuft also auf ueberfaellig |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Sidecar | Monats-Aggregate sichern bevor Events geloescht werden |
 | `cleanup_orphan_storage_files` | Taeglich 04:30 (nach Snapshots) | Sidecar | Verwaiste `.enc`-Dateien ohne `Attachment`- **und ohne offenen `ImportJob`-Record** loeschen (owner-unabhaengig: Ereignis-, Personen- und Fall-Anhaenge; CSV-Import-Uploads unter `<facility>/imports/` sind ueber `ImportJob.storage_filename` geschuetzt, solange der Lauf offen ist — `commit_import`/`abort_import` leeren das Feld, finale Laeufe schuetzen nicht); MUSS als Admin-DB-Rolle (BYPASSRLS) laufen, sonst Fail-Loud — ohne Bypass saehe der Lauf zudem 0 `ImportJob`-Zeilen und loeschte die offenen Uploads aller Einrichtungen (Refs #662, #1554, #1738, #1060) |
+| `clearsessions` | Taeglich 05:00 | Sidecar | Abgelaufene Zeilen aus `django_session` entfernen (Speicherbegrenzung nach Art. 5 Abs. 1 lit. e DSGVO) |
 | `detect_breaches` | Stuendlich:30 | Sidecar | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `refresh_statistics_view` | Stuendlich:15 | Sidecar | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Host | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)); reine `psql`-Abfrage, der App-Container hat keinen psql-Client |
@@ -272,7 +273,7 @@ Cron-Daemon **supercronic** und arbeitet die Job-Definitionen aus
 [`deploy/crontab`](https://github.com/anlaufstelle/app/blob/main/deploy/crontab)
 ab (read-only in den Container gemountet). Nach `docker compose up -d` laufen
 Retention, Audit-Ketten-Verifikation, Snapshots, Orphan-Cleanup,
-Breach-Detection und MV-Refresh ohne weitere Einrichtung.
+Session-Bereinigung, Breach-Detection und MV-Refresh ohne weitere Einrichtung.
 
 **Warum supercronic und nicht `cron`/`crond`:** klassische Cron-Daemons
 daemonisieren sich weg (Container haette keinen Vordergrundprozess), loggen nach
@@ -289,6 +290,8 @@ HTTP-Requests ist keine `app.current_facility_id`-GUC gesetzt; als
 RLS-gefilterte App-Rolle brechen `enforce_retention`, `verify_audit_chain` und
 `cleanup_orphan_storage_files` fail-loud ab (§9 DB-Rollenmodell). Deshalb
 braucht die `.env` zwingend `POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD`.
+Das facility-unabhaengige Django-Kommando `clearsessions` benoetigt den
+RLS-Bypass nicht, laeuft aber unter derselben Service-Rolle mit.
 
 **Zeitzone:** Der Service setzt `TZ` (Default `Europe/Berlin`, passend zu
 `settings.TIME_ZONE`). Ohne `TZ` liefe der Container in UTC und „03:00" waere je
@@ -308,13 +311,15 @@ docker compose -f docker-compose.prod.yml exec cron python manage.py refresh_sta
 ```
 
 **Ueberwachung:** supercronic hat keinen Health-Endpunkt — ein laufender
-Container beweist nicht, dass die Jobs *wirken*. Der Wirksamkeits-Nachweis
-kommt aus der App: jeder Job schreibt nach erfolgreichem Lauf einen
+Container beweist nicht, dass die Jobs *wirken*. Die instrumentierten
+Anwendungskommandos schreiben nach erfolgreichem Lauf einen
 `*_RUN_COMPLETED`-Marker ins AuditLog, den das Compliance-Dashboard
 (`/system/compliance/`, Kategorie „Hintergrundjobs") und `stale_jobs` im
-[`/health/`-Payload](monitoring-guide.md) auswerten. Zusaetzlich sollte das
-Host-Monitoring auf Fehlschlaege in den `cron`-Logs alarmieren — insbesondere
-auf `verify_audit_chain`, das bei Tamper-Verdacht mit Exit-Code != 0 endet.
+[`/health/`-Payload](monitoring-guide.md) auswerten. Djangos Standardkommando
+`clearsessions` schreibt keinen solchen Marker; sein Start und Exit-Code stehen
+nur im supercronic-Log. Das Host-Monitoring sollte deshalb auf Fehlschlaege in
+den `cron`-Logs alarmieren — insbesondere auf `verify_audit_chain`, das bei
+Tamper-Verdacht mit Exit-Code != 0 endet.
 
 **Aenderungen am Zeitplan** gehoeren in `deploy/crontab` (Repo, versioniert);
 danach `docker compose -f docker-compose.prod.yml restart cron`. Der Guard
@@ -412,6 +417,9 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 # 0 registrierte Attachments und wuerde JEDE .enc-Datei als Orphan loeschen.
 30 4 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance cleanup_orphan_storage_files >> /var/log/anlaufstelle-orphan-cleanup.log 2>&1
 
+# Abgelaufene Django-Sitzungen bereinigen (taeglich 05:00)
+0 5 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance clearsessions >> /var/log/anlaufstelle-clearsessions.log 2>&1
+
 # Breach-Detection-Scan (stuendlich zur 30. Minute, Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
@@ -429,7 +437,7 @@ Coolify, k8s) und deshalb kein `cron`-Service existiert.
 
 </details>
 
-**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Audit-Ketten-Verifikation (03:30) → Snapshots (04:00, monatlich) → Breach-Detection/MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Die Audit-Ketten-Verifikation laeuft nach der Retention, damit die von `prune_auditlog` frisch geschriebenen Checkpoint-Grenzen bereits in der Kette stehen. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht. Genau diese Reihenfolge bildet der Sidecar-Zeitplan in `deploy/crontab` ab — deshalb ist die `TZ`-Einstellung aus [§3.2](#32-cron-sidecar-standard) betriebsrelevant und nicht Kosmetik.
+**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Audit-Ketten-Verifikation (03:30) → Snapshots (04:00, monatlich) → Orphan-Cleanup (04:30) → Session-Bereinigung (05:00) → Breach-Detection/MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Die Audit-Ketten-Verifikation laeuft nach der Retention, damit die von `prune_auditlog` frisch geschriebenen Checkpoint-Grenzen bereits in der Kette stehen. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht. Genau diese Reihenfolge bildet der Sidecar-Zeitplan in `deploy/crontab` ab — deshalb ist die `TZ`-Einstellung aus [§3.2](#32-cron-sidecar-standard) betriebsrelevant und nicht Kosmetik.
 
 ### 3.4 Dev (systemd-Timer)
 

@@ -222,7 +222,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Ablage verschlüsselter Dateianhänge (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
 | `FILE_UPLOAD_TEMP_DIR` | Django-Default (`tempfile.gettempdir()`) | Verzeichnis für den Klartext-Zwischenpuffer von Uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, bevor sie in den File-Vault verschlüsselt werden (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In den mitgelieferten Compose-Dateien fest auf `/tmp` (tmpfs/RAM) gesetzt — [Ops-Runbook § 5.7a](ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`) **aus Sicht des Containers**; Health-Endpoint und die Backup-Zeile im Systembereich lesen daraus das Backup-Alter. |
-| `BACKUP_HOST_DIR` | `./backups` | Dasselbe Verzeichnis **auf dem Host** — dorthin schreibt `scripts/ops/backup.sh`. `docker-compose.prod.yml` mountet es read-only nach `BACKUP_DIR`. Passen die beiden Werte nicht zusammen, meldet der Systembereich dauerhaft „Kein Backup gefunden“, obwohl der Backup-Cron läuft. |
+| `BACKUP_HOST_DIR` | `./backups` | Host-Verzeichnis, das `docker-compose.prod.yml` read-only nach `BACKUP_DIR` mountet. Es muss auf dasselbe Host-Verzeichnis zeigen, in das `scripts/ops/backup.sh` über seine Variable `BACKUP_DIR` schreibt. Andernfalls meldet der Systembereich dauerhaft „Kein Backup gefunden“, obwohl der Backup-Cron läuft. |
 | `APP_VERSION` | `dev` | Versions-String, den `/health/` im `version`-Detailfeld ausweist (nur für Token-/authentifizierte Caller). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
 
@@ -959,7 +959,7 @@ Seit #1945 greift der Schutz auch, wenn vor dem Formelzeichen **unsichtbare Zeic
 
 > **Wichtig — eigene Exporte sind nicht round-trip-fest:** Der CSV-Import entfernt das Schutz-Apostroph **nicht** wieder. Importieren Sie eine zuvor exportierte Datei erneut, wird aus dem Wert `=Text` dauerhaft `'=Text`. Das ist kein Fehler und keine Fehlermeldung im Importlauf, sondern eine bewusste Grenze: Die Import-Engine vergleicht die **rohe** Dateizeile mit ihren Fehlermeldungen, um zu verhindern, dass Zellinhalte (potenziell Klientendaten) im Ergebnisprotokoll eines Laufs landen. Würde sie vorher entapostrophieren, träfe dieser Abgleich nicht mehr und ein Zellwert könnte ins Protokoll durchrutschen — Datenschutz geht hier vor Bequemlichkeit.
 >
-> **Praxis:** Nutzen Sie den CSV-Import für die **Übernahme aus Fremdsystemen**, nicht als Sicherung-und-Rückspielweg für eigene Daten. Für Letzteres ist das Datenbank-Backup (siehe [§ 3](#3-backup-und-wiederherstellung)) der richtige Weg. Müssen Sie einen exportierten Wert doch wieder einlesen, entfernen Sie das führende `'` vorher in der Tabellenkalkulation.
+> **Praxis:** Nutzen Sie den CSV-Import für die **Übernahme aus Fremdsystemen**, nicht als Sicherung-und-Rückspielweg für eigene Daten. Für Letzteres ist die verschlüsselte Datenbank- und Mediensicherung mit `backup.sh` (siehe [§ 3](#3-backup-und-wiederherstellung)) der richtige Weg. Müssen Sie einen exportierten Wert doch wieder einlesen, entfernen Sie das führende `'` vorher in der Tabellenkalkulation.
 
 Die Berichts-Exporte in **JSON und XML** sanitisieren bewusst nicht — dort gibt es keinen Formel-Kontext, und CSV-Escapes würden die maschinenlesbaren Werte verfälschen.
 
@@ -969,82 +969,72 @@ Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anl
 
 ## 3. Backup und Wiederherstellung
 
-### 3.1 Datenbank-Backup
+### 3.1 Verschlüsselte Datenbank- und Mediensicherung
 
-Die gesamte Anwendungsdaten liegen in PostgreSQL. Erstellen Sie regelmäßige Dumps:
-
-```bash
-docker compose -f docker-compose.prod.yml exec db \
-  pg_dump -U anlaufstelle anlaufstelle \
-  > backup_$(date +%Y%m%d_%H%M%S).sql
-```
-
-Mit Kompression (empfohlen):
+Der kanonische Produktionsweg ist [`scripts/ops/backup.sh`](../scripts/ops/backup.sh). Führen Sie das Skript im Repository-Root aus:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec db \
-  pg_dump -U anlaufstelle -Fc anlaufstelle \
-  > backup_$(date +%Y%m%d_%H%M%S).dump
+cd /opt/anlaufstelle
+./scripts/ops/backup.sh
 ```
 
-> **Wichtig:** Sichern Sie die `.env`-Datei (insbesondere `ENCRYPTION_KEY`) separat und an einem anderen sicheren Ort. Ohne den Schlüssel sind verschlüsselte Felder nach einer Wiederherstellung nicht lesbar.
+Das Skript lädt die `.env`, sichert PostgreSQL **und** den verschlüsselten File-Vault (`MEDIA_ROOT`), komprimiert beide Archive, verschlüsselt sie mit AES-256-CBC und schreibt zu jedem Archiv einen HMAC-SHA256-Sidecar. Die Dateien landen unter `BACKUP_DIR` in `daily/`, `weekly/` und `monthly/`; die eingebaute Rotation bewahrt sie 7, 28 beziehungsweise 90 Tage auf.
+
+Voraussetzungen in `.env`:
+
+- `POSTGRES_DB` und `POSTGRES_USER` für die Datenbankverbindung,
+- `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` für den vollständigen Dump,
+- ein zufälliger, separat verwahrter `BACKUP_ENCRYPTION_KEY`,
+- ein Host-Ziel, bei dem `BACKUP_HOST_DIR` auf dasselbe Verzeichnis zeigt, in das das Skript über `BACKUP_DIR` schreibt (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)).
+
+> **RLS ist hier sicherheitskritisch:** `pg_dump` muss als `POSTGRES_ADMIN_USER` laufen. Die App-Rolle `POSTGRES_USER` ist `NOBYPASSRLS`; ein roher Dump mit dieser Rolle scheitert an `FORCE ROW LEVEL SECURITY` beziehungsweise wäre als Sicherung der einrichtungsbezogenen Daten nicht vollständig. Verwenden Sie deshalb weder einen eigenen `pg_dump -U anlaufstelle`-Befehl noch die App-Rolle als Ersatz für `backup.sh`.
+
+Bewahren Sie `.env` beziehungsweise mindestens `BACKUP_ENCRYPTION_KEY` und die vollständige Historie von `ENCRYPTION_KEYS` getrennt vom Produktivhost auf. Ohne den Backup-Schlüssel lässt sich das Archiv nicht entschlüsseln; ohne die Feld-/Vault-Schlüssel bleiben die darin enthaltenen verschlüsselten Inhalte unlesbar. Für Schutz gegen Host-Totalverlust konfigurieren Sie zusätzlich ein Off-Site-Ziel; Einzelheiten stehen im [Ops-Runbook § 6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738).
 
 ### 3.2 Automatisches Backup einrichten
 
-Empfohlenes Cron-Beispiel für tägliche Backups um 03:00 Uhr (auf dem Host):
+Empfohlenes Cron-Beispiel für tägliche Backups um 02:00 Uhr (auf dem Host, vor den Retention-Läufen):
 
 ```cron
-0 3 * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U anlaufstelle -Fc anlaufstelle \
-  > /mnt/backup/anlaufstelle/backup_$(date +\%Y\%m\%d).dump
+0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 ```
 
-Ältere Backups nach 30 Tagen löschen:
+Keinen zusätzlichen `find ... -delete`-Job einrichten: `backup.sh` rotiert Datenbank-, Medien- und HMAC-Dateien gemeinsam. Prüfen Sie regelmäßig das neueste Backup:
 
-```cron
-0 4 * * * find /mnt/backup/anlaufstelle/ -name "*.dump" -mtime +30 -delete
+```bash
+cd /opt/anlaufstelle
+./scripts/ops/backup.sh --verify
 ```
+
+Der Prüflauf validiert den HMAC vor dem Entschlüsseln, stellt den jüngsten Datenbank-Dump in einer temporären Datenbank wieder her, vergleicht kritische RLS-Tabellen mit der Live-Datenbank und prüft das jüngste Medienarchiv. Der ausführlichere quartalsweise Restore-Drill ist im [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) beschrieben.
 
 ### 3.3 Wiederherstellung
 
-1. Stack stoppen:
+[`scripts/ops/restore.sh`](../scripts/ops/restore.sh) ist ausschließlich für die von `backup.sh` erzeugten Plain-SQL-Archive (`*.sql.gz.enc`) samt direkt danebenliegendem `.hmac`-Sidecar bestimmt. Ein `pg_restore`-Archiv aus einem anderen Backup-Pfad ist damit nicht kompatibel.
+
+1. Planen Sie ein Wartungsfenster, sperren Sie den öffentlichen Zugriff und bereiten Sie eine leere Ziel-Datenbank mit denselben Rollen-Namen wie im gesicherten System vor. Die App-Rolle (`POSTGRES_USER`, `NOBYPASSRLS`) und die Admin-/Owner-Rolle (`POSTGRES_ADMIN_USER`, `BYPASSRLS`) müssen vor dem Einspielen existieren. Die vollständige, destruktive Prozedur für einen neuen Host steht im [Disaster-Recovery-Leitfaden § 6](disaster-recovery.md#6-wiederherstellung-auf-einem-fabrikfrischen-host).
+
+2. Stellen Sie sicher, dass DB- und Web-Container für den Datenbank- beziehungsweise Medien-Restore laufen, während Caddy und Cron gestoppt bleiben.
+
+3. Starten Sie den Restore im Repository-Root. Das zweite Argument ist optional, für eine vollständige Wiederherstellung mit Dateianhängen aber erforderlich:
 
 ```bash
-docker compose -f docker-compose.prod.yml down
+./scripts/ops/restore.sh \
+  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
+  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 ```
 
-2. Datenbank-Volume löschen (Vorsicht: löscht alle Daten):
+Das Skript verlangt die Eingabe `ja`, prüft jeweils zuerst den HMAC und entschlüsselt erst danach. Der SQL-Dump wird bewusst über den lokalen Bootstrap-Superuser (`POSTGRES_SUPERUSER`, Default `postgres`) eingespielt: Nur dieser kann die enthaltenen Owner-/`FORCE RLS`-Anweisungen und Datenkopien zuverlässig wiederherstellen. Beim Medien-Restore wird der bestehende Inhalt von `MEDIA_ROOT` vor dem Entpacken ersetzt.
+
+4. Führen Sie die Migrationen mit der Admin-Rolle aus und starten Sie anschließend den Stack:
 
 ```bash
-docker volume rm anlaufstelle_pgdata
-```
-
-3. Stack neu starten (erstellt leere Datenbank):
-
-```bash
-docker compose -f docker-compose.prod.yml up -d db
-```
-
-4. Backup einspielen:
-
-```bash
-# SQL-Dump:
-docker compose -f docker-compose.prod.yml exec -T db \
-  psql -U anlaufstelle anlaufstelle < backup_20260101_030000.sql
-
-# Oder komprimiertes Format:
-docker compose -f docker-compose.prod.yml exec -T db \
-  pg_restore -U anlaufstelle -d anlaufstelle backup_20260101.dump
-```
-
-5. Web-Dienst starten:
-
-```bash
+docker compose -f docker-compose.prod.yml run --rm \
+  --entrypoint=/app/docker-migrate.sh maintenance
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-6. Gesundheitscheck durchführen (siehe [Abschnitt 5](#5-monitoring)).
+5. Prüfen Sie Datenbankrollen, Gesundheitszustand und Stichproben aus Datenbank **und** File-Vault. Siehe [Abschnitt 5](#5-monitoring), [Ops-Runbook § 9](ops-runbook.md#9-row-level-security-rls) und die [Smoke-Verifikation des Disaster-Recovery-Leitfadens](disaster-recovery.md#7-smoke-verifikation-nach-restore).
 
 ---
 
@@ -1074,7 +1064,7 @@ docker compose -f docker-compose.prod.yml logs web --tail=50
 
 ### 4.2 Vor einem Update
 
-- Erstellen Sie immer ein aktuelles Datenbank-Backup (siehe [Abschnitt 3.1](#31-datenbank-backup)).
+- Erstellen und verifizieren Sie immer eine aktuelle Datenbank- und Mediensicherung (siehe [Abschnitte 3.1–3.2](#31-verschlüsselte-datenbank--und-mediensicherung)).
 - Lesen Sie das Changelog zu Breaking Changes und erforderlichen Konfigurationsänderungen.
 
 ### 4.3 Rollback
@@ -1199,6 +1189,8 @@ Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird
 **Logs.** Die Server-Logs werden in **beiden** Formaten PII-gescrubbt — sowohl der Default `LOG_FORMAT=text` als auch `LOG_FORMAT=json` ziehen Messages, Tracebacks und die strukturierten Zusatzfelder durch denselben Scrubber (Mailadressen, Passwörter und Token-artige Werte werden zu Platzhaltern). **Nicht** gescrubbt werden zwei Felder, die technische Sicherheitsereignisse zuordenbar machen sollen und deshalb bewusst im Klartext stehen: die Client-IP (`remote_addr`) und der Browser-Kennstring (`user_agent`) einer CSP-Verstoßmeldung. Beide sind personenbeziehbar — wer eine kurze Log-Aufbewahrung braucht, plant sie dafür ein. Unverändert passieren außerdem die rein technischen Kennungen (`request_id`, `user_id`, `facility_id`, `user_pk`): Sie enthalten keinen Freitext, sondern verweisen nur auf einen Datensatz, der Scrubber hat dort nichts zu greifen. `user_pk` erscheint zum Beispiel in den Einladungs-Log-Zeilen, die bewusst weder Benutzernamen noch Mailadresse führen — ohne diese Kennung wäre der Eintrag keinem Konto mehr zuzuordnen. Für DSGVO-Kontexte mit Log-Aggregation empfiehlt sich weiterhin `LOG_FORMAT=json` (strukturiert, maschinenlesbar); die Datenminimierung ist aber nicht mehr an dieses Format gebunden.
 
 **Selbst gehosteter Tracker (GlitchTip).** GlitchTip akzeptiert Standard-Sentry-DSNs, und dieses Projekt nutzt nur Kern-SDK-Features (Error-Events plus optionales Trace-Sampling). Diese Kombination wurde empirisch geprüft: Mit `sentry-sdk[django]` `2.64.0` gegen GlitchTip `6.2.1` (Docker-Image `glitchtip/glitchtip:6`) werden Server-Error-Events übertragen, plausibel geparst (Stacktrace, Tags, Request-Kontext) und als Issues angezeigt; Performance-Transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) werden ebenfalls **angenommen** und als Transaction-Gruppen einsortiert — sie werden also weder still verworfen noch lösen sie einen Fehler aus. Der serverseitige `before_send`/`before_send_transaction`-Scrubber greift dabei unverändert (keine Frame-Locals, gestrippte Query-Strings/Cookies/Request-Bodies); die weiter oben beschriebenen regel- und schlüsselbasierten Grenzen bleiben bestehen. Andere Versionskombinationen sind nicht getestet, und ein Fremdprojekt bleibt naturgemäß außerhalb der Kontrolle dieses Projekts.
+
+**Gehosteter Sentry-Dienst.** Wer statt einer eigenen EU-/Self-Hosted-Instanz einen SaaS-Anbieter nutzt, muss vor Aktivierung Datenstandort, Aufbewahrungsfrist und mögliche Drittlandübermittlungen samt Garantien prüfen und einen AVV schließen. Anbieter und dessen Unterauftragnehmer gehören in § 6 der AVV-Vorlage im DSGVO-Paket.
 
 So binden Sie einen selbst gehosteten Tracker an:
 

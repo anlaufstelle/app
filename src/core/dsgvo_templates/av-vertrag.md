@@ -4,7 +4,7 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Erstellt:** {{ date }}
-**Version:** 1.0 (Softwarestand v0.10, 2026-04-19)
+**Version:** 1.1 (Softwarestand v0.89, 2026-08-28)
 
 ---
 
@@ -86,7 +86,21 @@ Der Auftragsverarbeiter verpflichtet sich:
 
 ## § 6 Unterauftragsverarbeitung
 
-(1) Aktuelle Unterauftragnehmer: [Liste einfügen oder „keine"]
+(1) Zutreffendes auswählen und die Liste vor Unterzeichnung vervollständigen:
+
+- [ ] **Keine Unterauftragnehmer** werden eingesetzt.
+- [ ] Folgende Unterauftragnehmer werden eingesetzt:
+
+| Dienst/Kategorie | Anbieter und Anschrift | Leistung / betroffene Daten | Verarbeitungsort, Drittlandgarantie | AVV geprüft am |
+|------------------|-------------------------|------------------------------|--------------------------------------|----------------|
+| Tracker-Host (Sentry/GlitchTip) | [eintragen] | Fehler- und optional Performance-Telemetrie | [eintragen] | [Datum] |
+| SMTP-Dienst | [eintragen] | Einladungs- und Sicherheits-E-Mails | [eintragen] | [Datum] |
+| Offsite-Backup-Speicher | [eintragen] | Verschlüsselte Datenbank- und Medienarchive | [eintragen] | [Datum] |
+| Weitere | [eintragen] | [eintragen] | [eintragen] | [Datum] |
+
+Nicht eingesetzte Beispielzeilen sind zu streichen. Eine selbst betriebene
+Komponente ist nur dann als Unterauftragnehmer aufzuführen, wenn ein externer
+Dienstleister daran personenbezogene Daten im Auftrag verarbeitet.
 
 (2) Neue Unterauftragnehmer bedürfen der schriftlichen Genehmigung.
 

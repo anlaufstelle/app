@@ -5055,7 +5055,7 @@
 </details>
 
 <details open>
-<summary><strong>📜 DSGVO — DSGVO-Paket (8 Cases)</strong></summary>
+<summary><strong>📜 DSGVO — DSGVO-Paket (10 Cases)</strong></summary>
 
 **Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/` 
 **Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView) 
@@ -5080,12 +5080,12 @@
 
 **Schritte:**
 1. `/dsgvo/` aufrufen.
-2. Übersicht aller 5 Templates sichtbar: Art. 13/14, Art. 28, Art. 30, Art. 32, Art. 35.
+2. Übersicht aller 7 Templates sichtbar: Art. 13/14, Art. 28, Art. 30, Art. 32, Art. 35, Beschäftigten-Information und Löschkonzept.
 3. Pro Template: Titel, Kurzbeschreibung, Download-Button, letzter Generierungs-Timestamp.
 4. Footer-Hinweis: „Templates rechtlich geprüft, keine Rechtsberatung".
 
 **Erwartetes Ergebnis:**
-- Liste aller 5 DSGVO-Templates mit Download-Links.
+- Liste aller 7 DSGVO-Templates mit Download-Links.
 - Sudo-Indikator („Sudo aktiv, läuft ab um HH:MM") sichtbar.
 - Templates dynamisch generiert (nicht statisch im Repo, sondern aus Facility-Daten).
 
@@ -5308,7 +5308,63 @@
 
 ---
 
-### TC-ID: ENT-DSGVO-08 — AuditLog-Eintrag pro Download (Audit-Spur)
+### TC-ID: ENT-DSGVO-08 — Löschkonzept herunterladen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| DSGVO | admin | C/F/S | ⚪ | `test_dsgvo_package.py` |
+
+**Voraussetzung:** ENT-DSGVO-01 erfolgreich.
+
+**Vorbereitung:**
+- `/dsgvo/` mit aktivem Sudo geöffnet.
+
+**Schritte:**
+1. „Löschkonzept" herunterladen.
+2. Gerenderte Fristen für Kontakte, Aktivitäten, Papierkorb und Audit-Log mit den Einrichtungs-Einstellungen vergleichen.
+3. Backup-Frist, Legal-Hold-Grenze und Footer mit Settings-Hash prüfen.
+
+**Erwartetes Ergebnis:**
+- Kein `{{ ... }}`-Platzhalter bleibt im Dokument stehen.
+- Die sechs einrichtungsbezogenen Fristen entsprechen den aktuellen Einstellungen.
+- Die Backup-Frist entspricht der längsten Rotation des ausgelieferten `backup.sh`.
+
+**DSGVO/Security-Note:**
+- Das Dokument trennt die Löschung im aktiven System von der Rotation integritätsgesicherter Sicherungsstände.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-DSGVO-09 — Beschäftigten-Informationspflichten herunterladen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| DSGVO | admin | C/F/S | ⚪ | `test_dsgvo_package.py` |
+
+**Voraussetzung:** ENT-DSGVO-01 erfolgreich.
+
+**Vorbereitung:**
+- `/dsgvo/` mit aktivem Sudo geöffnet.
+
+**Schritte:**
+1. „Informationspflichten für Beschäftigte" herunterladen.
+2. Verantwortlichen, Zwecke, Datenkategorien und Rechtsgrundlagen prüfen.
+3. Gerenderte Audit-Log-Frist und Hinweise zu Betroffenenrechten kontrollieren.
+
+**Erwartetes Ergebnis:**
+- Das Dokument nennt Art. 13/14 DSGVO und § 26 BDSG.
+- Der Einrichtungsname und die aktuelle Audit-Log-Frist sind eingesetzt.
+- Kein `{{ ... }}`-Platzhalter bleibt im Dokument stehen.
+
+**DSGVO/Security-Note:**
+- Das Artefakt richtet sich an Beschäftigte und ist von den Informationspflichten für Klient*innen getrennt.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-DSGVO-10 — AuditLog-Eintrag pro Download (Audit-Spur)
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -5317,7 +5373,7 @@
 **Voraussetzung:** mindestens ein DSGVO-Download durchgeführt.
 
 **Vorbereitung:**
-- Mindestens 5 verschiedene DSGVO-Downloads (alle Templates) als admin.
+- Alle 7 verschiedenen DSGVO-Dokumente als admin herunterladen.
 
 **Schritte:**
 1. `/audit/` aufrufen.
@@ -5332,7 +5388,7 @@
 
 **Erwartetes Ergebnis:**
 - Pro Download genau 1 Audit-Eintrag.
-- Slug eindeutig pro Template (5 verschiedene Slugs für 5 Templates).
+- Slug eindeutig pro Template (7 verschiedene Slugs für 7 Templates).
 - Audit-Log auch für DSGVO-Doku-Aufruf selbst (Meta-Audit).
 
 **DSGVO/Security-Note:**

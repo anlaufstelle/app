@@ -131,6 +131,7 @@ class TestSettingsHash:
             "retention_activities_days": 365,
             "client_trash_days": 30,
             "auditlog_retention_months": 24,
+            "backup_retention_days": 90,
             "facility_full_name": "Anlaufstelle Musterstadt",
             "document_type_overrides": [],
         }

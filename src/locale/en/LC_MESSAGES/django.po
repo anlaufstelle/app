@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-25 20:47+0200\n"
+"POT-Creation-Date: 2026-08-28 09:05+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -3661,15 +3661,16 @@ msgstr ""
 "Counseling documentation and case-duration management in low-threshold "
 "facilities. No real-name field — the primary identifier is a pseudonym."
 
-#: src/core/services/compliance/vvt.py:49
+#: src/core/services/compliance/vvt.py:55
 msgid ""
 "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im oeffentlichen "
-"Interesse) i.V.m. SGB VIII §13 (Jugendsozialarbeit) bzw. SGB XII (Hilfen in "
-"Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
+"Interesse). Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
+"Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor Freigabe "
+"ergaenzen)."
 msgstr ""
-"GDPR Art. 6(1)(e) (performance of a task in the public interest) in "
-"conjunction with SGB VIII §13 (youth social work) and SGB XII (assistance in "
-"life situations). Social data protection: SGB X §§67–85a."
+"GDPR Art. 6(1)(e) (performance of a task in the public interest). Facility-"
+"specific basis: applicable professional and social law of the facility (add "
+"the specific legal basis before approval)."
 
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
@@ -3703,17 +3704,10 @@ msgstr ""
 msgid "Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"
 msgstr "Application support of the facility (audit, GDPR package)"
 
-#: src/core/services/compliance/vvt.py:65
-msgid ""
-"Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
-"Monate (danach Aggregation). Kontakte der Stufe „Nur Pseudonym“: 36 Monate "
-"nach letztem Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre nach "
-"Falllauf-Ende (SGB VIII §97)."
-msgstr ""
-"Configurable per contact stage and document type. Anonymous contacts: 12 "
-"months (aggregated afterwards). Contacts at stage „Pseudonym only“: 36 "
-"months after the last contact. Contacts at stage „With additional details“: "
-"10 years after the end of the case (SGB VIII §97)."
+#: src/core/services/compliance/vvt.py:73
+#, python-brace-format
+msgid "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Erzwungene Standardfristen: Anonyme Kontakte: {anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: {identified_days} Tage nach letztem Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach Falllauf-Ende."
+msgstr "Configurable by contact level and documentation type. Enforced default retention periods: Anonymous contacts: {anonymous_days} days; contacts at level “Pseudonym only”: {identified_days} days after the last contact; contacts at level “With additional details”: {qualified_days} days after the end of the case."
 
 #: src/core/services/compliance/vvt.py:73
 msgid "Pseudonymisierung by Design"
@@ -3763,15 +3757,17 @@ msgstr ""
 "Structuring related work into cases and episodes. Basis for impact "
 "measurement and reporting to funders."
 
-#: src/core/services/compliance/vvt.py:92
+#: src/core/services/compliance/vvt.py:117
 msgid ""
-"DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 (Sozialdaten in der "
-"Jugendhilfe), Art. 9 Abs. 2 lit. b/h fuer besondere Datenkategorien "
-"(Gesundheits-, Sozialdaten). § 203 StGB (Schweigepflicht)."
+"DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer besondere "
+"Datenkategorien (Gesundheits-, Sozialdaten). Einrichtungsspezifische "
+"Grundlage: einschlaegiges Fach- und Sozialrecht der Einrichtung (konkrete "
+"Rechtsgrundlage vor Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
 msgstr ""
-"GDPR Art. 6(1)(e) in conjunction with SGB VIII §§ 61–65 (social data in "
-"youth welfare), Art. 9(2)(b/h) for special categories of data (health, "
-"social data). § 203 StGB (confidentiality)."
+"GDPR Art. 6(1)(e); Art. 9(2)(b/h) for special categories of data (health and "
+"social data). Facility-specific basis: applicable professional and social "
+"law of the facility (add the specific legal basis before approval). § 203 "
+"StGB, where applicable."
 
 #: src/core/services/compliance/vvt.py:98
 msgid "Ereignisbeschreibungen / Beratungsnotizen"
@@ -4101,14 +4097,19 @@ msgstr "GDPR access and rectification requests"
 
 #: src/core/services/compliance/vvt.py:250
 msgid ""
-"Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 (Auskunft, "
-"Berichtigung, Loeschung, Einschraenkung, Datenuebertragbarkeit, "
-"Widerspruch). Erstellung von Datenexport-Paketen und Dokumentation der "
-"Bearbeitung."
+"Technische Unterstuetzung der implementierten Betroffenenrechte nach DSGVO "
+"Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, Loeschung und "
+"Datenuebertragbarkeit). Antraege auf Einschraenkung (Art. 18) oder Widerspruch "
+"(Art. 21) werden ausserhalb der Anwendung im organisatorischen Prozess der "
+"Einrichtung aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
+"bereit. Erstellung von Datenexport-Paketen und Dokumentation der Bearbeitung."
 msgstr ""
-"Handling of data subject rights under GDPR Art. 15-22 (access, "
-"rectification, erasure, restriction, data portability, objection). Creation "
-"of data export packages and documentation of processing."
+"Technical support for implemented data subject rights under GDPR Arts. 15, "
+"16, 17 and 20 (access, rectification, erasure and data portability). Requests "
+"for restriction (Art. 18) or objection (Art. 21) are received outside the "
+"application through the facility's organizational process; the application "
+"provides no intake form for them. Creation of data export packages and "
+"documentation of processing."
 
 #: src/core/services/compliance/vvt.py:256
 msgid ""
