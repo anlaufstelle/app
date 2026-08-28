@@ -76,11 +76,11 @@ class TestDSGVODocumentDownload:
         # Placeholder should be replaced
         assert "{{ facility_name }}" not in content
 
-    def test_page_shows_5_documents(self, authenticated_page, base_url):
-        """Seite zeigt 5 Dokumente."""
+    def test_page_shows_7_documents(self, authenticated_page, base_url):
+        """Seite zeigt 7 Dokumente (seit #2050/#2052: + Löschkonzept + Beschäftigten-Info)."""
         authenticated_page.goto(f"{base_url}/dsgvo/")
         rows = authenticated_page.locator("tbody tr")
-        assert rows.count() == 5
+        assert rows.count() == 7
 
 
 class TestDSGVOAccessControl:
