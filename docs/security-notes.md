@@ -2152,7 +2152,13 @@ Die Archiv-403 trägt deshalb zwei Marker:
 
 `"cookies"` wird bewusst **nicht** gesetzt: die Sitzung soll leben, damit der Abmelden-Knopf auf der Sperrseite trägt.
 
-**Restrisiko.** Ungesynchronisierte lokale Änderungen fallen mit — bewusst, wie beim Rechteentzug (#1110/#1111): entschlüsselte PII darf einen Zugriffsentzug nicht überleben, und ein hängender Edit darf den Sicherheits-Purge nicht blockieren. Ein Gerät, das nach der Archivierung **nie wieder online** geht, behält seinen Bestand bis zum TTL-Ablauf (48 h) bzw. bis zum Idle-Wipe — dieselbe Grenze wie bei jedem anderen Widerrufspfad; die Zustellung setzt einen Serverkontakt voraus.
+**Restrisiko.** Ungesynchronisierte lokale Änderungen fallen mit — bewusst, wie beim Rechteentzug (#1110/#1111): entschlüsselte PII darf einen Zugriffsentzug nicht überleben, und ein hängender Edit darf den Sicherheits-Purge nicht blockieren. **Ohne Serverkontakt greift keiner der drei Zustellwege.** Das Schadensbild ist dann differenzierter, als es zunächst scheint:
+
+- Der **Server-Spiegel** (Personen-, Fall- und Ereignis-Bundles) verfällt spätestens mit der 48-h-TTL — `purgeExpiredBundles` verwirft ihn ohne `force`.
+- **Ungesyncte Arbeit** (Queue-Zeilen, Events mit `localStatus` in *modified/new/conflict/dead*) überlebt das ausdrücklich: Weder der TTL-Purge (#1353) noch der Idle-Pfad löschen sie. Bei ungesyncten Daten verwirft der Idle-Wipe **nur den Schlüssel** und lässt den verschlüsselten Bestand stehen, damit ein Re-Login die Arbeit wieder abspielbar macht.
+- Wirksam bleibt damit F-01: ohne Schlüssel ist der Rest nicht lesbar. Ein Klartext-Leck entsteht nicht, aber die Aussage „nach 48 h ist alles weg" wäre falsch.
+
+Das ist dieselbe Grenze wie bei jedem anderen Widerrufspfad — die Zustellung setzt einen Serverkontakt voraus.
 
 **Hard-Delete bleibt kein Ausweg.** Er scheitert fail-loud am `auditlog_immutable`-Trigger und rollt vollständig zurück (Django umschließt die gesamte Kaskade mit einer Transaktion — auch aus `manage.py shell`). Partielle Zerstörung entsteht nur durch selbst geschriebene Skripte, die Fachtabellen einzeln mit Zwischencommits leeren. Details im [Administrationshandbuch § 2.2c](admin-guide.md).
 

@@ -191,6 +191,10 @@
     {# C3 (#1016): Doppel-Submit-Schutz — nach confirm-action.js (Capture-Reihenfolge). #}
     <script src="{% static 'js/double-submit.js' %}" defer></script>
     {# C2 (#1016): globaler htmx:responseError-Fehler-Toast. #}
+    {# Refs #2067: gemeinsame Purge-Routine fuer die Archiv-403 — muss VOR #}
+    {# htmx-errors.js stehen, das sie aufruft. Bewusst NICHT im APP_SHELL: #}
+    {# die Archiv-403 ist ein Online-Ereignis. #}
+    <script src="{% static 'js/facility-archived-purge.js' %}" defer></script>
     <script src="{% static 'js/htmx-errors.js' %}" defer></script>
     {# Refs #1339: globaler htmx:afterSwap-Fokus-Handler — setzt nach jedem #}
     {# Partial-Swap den Tastatur-/Screenreader-Fokus ins getauschte Fragment. #}
