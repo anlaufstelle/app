@@ -38,9 +38,20 @@ gevendorte django-unfold nicht: ``unfold/layouts/skeleton.html`` rendert einen
 statischer sha256-Hash ist damit prinzipiell unmöglich. Dazu kommen rund ein
 Dutzend ``style="…"``-Attribute in Unfold-Templates (Progress-Bars, Avatare,
 Sidebar). Ohne die Lockerung verlöre die Admin-UI ihr komplettes Farbschema.
-Der Trade-off ist derselbe wie bei ``unsafe-eval``: ``/admin-mgmt/`` ist auf
-``super_admin``/``facility_admin`` mit MFA- und Sudo-Mode-Pflicht beschränkt,
-rate-limited, auditiert und durch RLS gegen Cross-Facility-Leaks abgesichert.
+Der Trade-off ist derselbe wie bei ``unsafe-eval``. Präzise (Refs #2020, der
+Satz behauptete vorher pauschal „rate-limited" für die ganze Fläche):
+
+* **Hinter dem Login** ist ``/admin-mgmt/`` auf ``super_admin``/
+  ``facility_admin`` mit MFA- und Sudo-Mode-Pflicht beschränkt, auditiert und
+  durch RLS gegen Cross-Facility-Leaks abgesichert. Die Mutations-Ratelimits
+  liegen dabei auf den Fach-Views (``core/views/``, Guard
+  ``TestRateLimitOnAllMutations``), nicht auf den Admin-Change-Views selbst.
+* **Die Login-Seite selbst ist anonym erreichbar** — genau deshalb muss die
+  Lockerung unabhängig vom Auth-Status greifen (I3-Revert oben). Ihr
+  ``POST`` trägt seit #2020 dasselbe Zwei-Ebenen-Ratelimit wie der App-Login
+  (5/m je IP, 10/h je Username, ``AnlaufstelleAdminSite.login``) plus die
+  Account-Lockout-Prüfung; vorher war er ungebremst. Der ``GET`` auf die
+  Seite ist bewusst nicht limitiert.
 
 Die Middleware muss **nach** ``csp.middleware.CSPMiddleware`` registriert sein,
 damit der bereits gesetzte ``Content-Security-Policy``-Header umgeschrieben

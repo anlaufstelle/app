@@ -35,11 +35,17 @@ die Dedup sauber bleibt.
    von mehr als ``BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD`` distinkten Quell-IPs
    (Victim-Lockout-/Distributed-Bruteforce-Signatur, Monitor-only).
 
-6. **Anonymous-Login-Bursts** (Refs #1368, installationsweit) — Bursts gegen
+6. **MFA-Failure-Burst** (Refs #2033) — mehr als
+   ``BREACH_MFA_FAILURE_THRESHOLD`` ``MFA_FAILED``/``WEBAUTHN_FAILED``-Eintraege
+   fuer denselben (bekannten) User. Szenario A7: Wer bereits eine
+   Passwort-Session gestohlen hat, raet den zweiten Faktor — eine andere und
+   ernstere Angreifer-Position als (1), daher eigene, niedrigere Schwelle.
+
+7. **Anonymous-Login-Bursts** (Refs #1368, installationsweit) — Bursts gegen
    UNBEKANNTE Usernames (``user IS NULL``): pro Quell-IP
    (``BREACH_ANON_LOGIN_IP_THRESHOLD``) und Gesamtvolumen
    (``BREACH_ANON_LOGIN_TOTAL_THRESHOLD``). Diese Eintraege haben weder User-
-   noch Facility-Zuordnung und sind daher fuer (1)-(5) unsichtbar; sie werden
+   noch Facility-Zuordnung und sind daher fuer (1)-(6) unsichtbar; sie werden
    ueber ``run_system_detections`` erfasst und facility-los protokolliert.
 
 Deduplikation: Vor dem Anlegen eines neuen SECURITY_VIOLATION-Eintrags
@@ -152,14 +158,22 @@ def _detect_user_action_burst(facility, *, action, kind, short_threshold, long_t
     """Pro-(bekanntem-)User-Burst einer Action ueber zwei Fenster (kurz + Langzeit).
 
     Eine einzige Aggregat-Query zaehlt beide Fenster (bedingtes ``Count`` ueber
-    das kurze Fenster als Teilmenge des Langzeitfensters)."""
+    das kurze Fenster als Teilmenge des Langzeitfensters).
+
+    ``action`` ist ein einzelner Wert **oder** eine Menge von Werten, die
+    zusammen EINE Signatur bilden (Refs #2033: ``MFA_FAILED`` und
+    ``WEBAUTHN_FAILED`` sind derselbe Angriff auf den zweiten Faktor und
+    duerfen nicht in zwei Halb-Zaehler zerfallen, die beide unter der Schwelle
+    bleiben). ``AuditLog.Action``-Werte sind ``str``, daher genuegt die
+    ``isinstance``-Weiche."""
+    actions = (action,) if isinstance(action, str) else tuple(action)
     short_minutes = _get_threshold("BREACH_DETECTION_WINDOW_MINUTES", 60)
     long_minutes = _get_threshold("BREACH_DETECTION_LONG_WINDOW_MINUTES", 1440)
     short_cutoff = _window_cutoff(short_minutes)
     rows = (
         AuditLog.objects.filter(
             facility=facility,
-            action=action,
+            action__in=actions,
             timestamp__gte=_window_cutoff(long_minutes),
         )
         .values("user")
@@ -225,6 +239,44 @@ def detect_failed_login_burst(facility) -> list[dict]:
         kind="failed_login_burst",
         short_threshold=_get_threshold("BREACH_FAILED_LOGIN_THRESHOLD", 20),
         long_threshold=_get_threshold("BREACH_FAILED_LOGIN_THRESHOLD_LONG", 60),
+    )
+
+
+def detect_mfa_failure_burst(facility) -> list[dict]:
+    """Fehlversuche am ZWEITEN Faktor pro (bekanntem) User im Fenster (Refs #2033).
+
+    Szenario A7: Wer bereits eine Passwort-Session gestohlen hat, steht nicht
+    mehr vor dem Login-Formular, sondern vor der TOTP-/Passkey-Abfrage. Dort
+    schuetzte bisher nur der 5/m-Ratelimit — geduldiges Raten ueber Wochen
+    hinterliess ausschliesslich ``MFA_FAILED``-Zeilen, die keine der sechs
+    Heuristiken zaehlte; im Dashboard blieb es still.
+
+    Bewusst eine EIGENE Signatur statt einer Erweiterung von
+    ``detect_failed_login_burst``: jene beschreibt einen Angreifer *ohne*
+    gueltiges Passwort. Wer hier zaehlt, hat den ersten Faktor bereits — das
+    ist die deutlich ernstere Position und darf nicht unter derselben Schwelle
+    und demselben ``kind`` verschwinden.
+
+    ``MFA_FAILED`` und ``WEBAUTHN_FAILED`` zaehlen GEMEINSAM: beides ist ein
+    Fehlschlag am zweiten Faktor, und getrennte Zaehler liessen sich trivial
+    unterlaufen, indem ein Angreifer zwischen beiden Verfahren wechselt.
+
+    Die Schwelle liegt bewusst unter der der Login-Fehlversuche (Default 10
+    statt 20 im Stundenfenster): OTP-Fehler sind per Design selten — wer den
+    Code hat, tippt ihn nicht zehnmal falsch. Eine hoehere Schwelle machte die
+    Signatur im Login-Rauschen unsichtbar.
+
+    Monitor-only wie ``detect_distributed_login_attack``: der Treffer warnt
+    (``SECURITY_VIOLATION`` + optionaler Webhook), er sperrt nichts. Eine
+    Tippfehler-Serie einer echten Nutzerin erzeugt damit hoechstens einen
+    pruefbaren Alarm, nie einen Aussperr-Effekt — siehe ops-runbook § 6.5b.
+    """
+    return _detect_user_action_burst(
+        facility,
+        action=(AuditLog.Action.MFA_FAILED, AuditLog.Action.WEBAUTHN_FAILED),
+        kind="mfa_failure_burst",
+        short_threshold=_get_threshold("BREACH_MFA_FAILURE_THRESHOLD", 10),
+        long_threshold=_get_threshold("BREACH_MFA_FAILURE_THRESHOLD_LONG", 30),
     )
 
 
@@ -549,6 +601,7 @@ def run_all_detections(facility) -> list[AuditLog]:
     new_entries: list[AuditLog] = []
     for detector in (
         detect_failed_login_burst,
+        detect_mfa_failure_burst,
         detect_mass_export,
         detect_mass_delete,
         detect_mass_client_destruction,
