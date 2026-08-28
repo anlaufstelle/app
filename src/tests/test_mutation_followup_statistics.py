@@ -21,7 +21,7 @@ import pytest
 from django.db import connection
 from django.utils import timezone
 
-from core.models import Event
+from core.models import DocumentType, Event
 from core.services.dashboard.statistics import (
     STATISTICS_MAX_CUSTOM_RANGE_DAYS,
     InvalidStatisticsPeriodError,
@@ -89,8 +89,15 @@ class TestEventCountsByMonthFilters:
         ``facility=facility``-Filter → Cross-Tenant-Leck in der Statistik.
         """
         when = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
+        # Refs #2066: Der Composite-FK pinnt document_type an die Facility des
+        # Events — das Fremd-Event braucht seither einen eigenen Doctype seiner
+        # Facility (der alte Cross-Facility-Link ist genau das, was die DB
+        # jetzt abweist).
+        foreign_doc_type = DocumentType.objects.create(
+            facility=second_facility, name="Kontakt (fremd)", report_key="contact"
+        )
         Event.objects.create(facility=facility, document_type=doc_type_contact, occurred_at=when, data_json={})
-        Event.objects.create(facility=second_facility, document_type=doc_type_contact, occurred_at=when, data_json={})
+        Event.objects.create(facility=second_facility, document_type=foreign_doc_type, occurred_at=when, data_json={})
         assert self._total(facility, 2026) == 1
 
     def test_excludes_other_years(self, facility, doc_type_contact):
