@@ -77,30 +77,78 @@ class AdminLockoutAuthenticationForm(UnfoldAuthenticationForm):
         # N9 (Refs #1446): Lockout je Quell-IP — fremde Falschpassworter sperren
         # den Admin-Login des Opfers von dessen eigener IP nicht.
         ip_address = get_client_ip(self.request)
-        if not is_locked(user, ip_address=ip_address):
+        if is_locked(user, ip_address=ip_address):
+            # R18 (Refs #1476/#1666): Der Zweig feuert NUR bei korrektem Passwort
+            # gegen einen gesperrten Account — nicht angreifer-getrieben.
+            revoke_credentials(user, reason=RevocationReason.ACCOUNT_LOCKOUT, request=self.request)
+            log_audit_event(
+                self.request,
+                AuditLog.Action.LOGIN_FAILED,
+                user=user,
+                facility=getattr(user, "facility", None),
+                detail={
+                    "message": "Login blockiert durch Account-Lockout",
+                    "username": user.username,
+                    "reason": "locked",
+                },
+            )
+            raise ValidationError(
+                _(
+                    "Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen "
+                    "temporär gesperrt. Bitte später erneut versuchen oder "
+                    "Administration kontaktieren."
+                ),
+                code="locked",
+            )
+
+        self._confirm_facility_active(user, log_audit_event, AuditLog.Action.LOGIN_FAILED)
+
+    def _confirm_facility_active(self, user, log_audit_event, login_failed_action):
+        """Refs #2067: archivierte Einrichtung sperrt AUCH diesen Login.
+
+        Bis hierher prueste nur ``CustomLoginView.form_valid`` das Flag. Ein
+        ``facility_admin`` einer archivierten Einrichtung konnte sich unter
+        ``/admin-mgmt/login/`` also authentifizieren und bekam eine Session;
+        geblockt wurde erst der Folgerequest durch die Middleware. Fachzugriff
+        entstand dadurch nicht, die geforderte Login-Verweigerung samt
+        Protokollzeile fehlte auf dieser zweiten Login-Oberflaeche aber.
+
+        Wirkung spiegelt ``CustomLoginView`` bewusst vollstaendig (Muster des
+        Lockout-Zweigs darueber): dieselbe Meldung, dieselbe ``LOGIN_FAILED``-
+        Zeile mit ``reason="facility_inactive"``, KEIN Credential-Widerruf —
+        Archivieren ist ein organisatorischer Vorgang, kein
+        Kompromittierungsverdacht. ``super_admin`` bleibt ausgenommen, weil die
+        Rolle der Reaktivierungspfad ist (``FacilityAdmin`` ist super-only, L1/
+        Refs #1375).
+
+        Die Pruefung ist bewusst dupliziert statt aus ``core.views.auth``
+        importiert — wie ``_admin_login_username_key`` oben: dieses Modul wird
+        sehr frueh geladen und darf nicht am View-Modul haengen. Gegen
+        Auseinanderlaufen sichert ein Paritaets-Test
+        (``test_facility_lifecycle.py``), nicht die Konvention.
+        """
+        facility = getattr(user, "facility", None)
+        if facility is None or facility.is_active or getattr(user, "is_super_admin", False):
             return
 
-        # R18 (Refs #1476/#1666): Der Zweig feuert NUR bei korrektem Passwort
-        # gegen einen gesperrten Account — nicht angreifer-getrieben.
-        revoke_credentials(user, reason=RevocationReason.ACCOUNT_LOCKOUT, request=self.request)
         log_audit_event(
             self.request,
-            AuditLog.Action.LOGIN_FAILED,
+            login_failed_action,
             user=user,
-            facility=getattr(user, "facility", None),
+            facility=facility,
             detail={
-                "message": "Login blockiert durch Account-Lockout",
+                "message": "Login blockiert — Einrichtung archiviert",
                 "username": user.username,
-                "reason": "locked",
+                "reason": "facility_inactive",
             },
         )
         raise ValidationError(
             _(
-                "Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen "
-                "temporär gesperrt. Bitte später erneut versuchen oder "
-                "Administration kontaktieren."
+                "Ihre Einrichtung ist archiviert. Eine Anmeldung ist "
+                "derzeit nicht möglich. Bitte wenden Sie sich an die "
+                "Systemverwaltung."
             ),
-            code="locked",
+            code="facility_inactive",
         )
 
 

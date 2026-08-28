@@ -408,13 +408,16 @@ Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Lösc
 - **Die Daten bleiben vollständig erhalten.** Aufbewahrungsfristen, Löschanträge und das Audit-Log laufen unverändert weiter; ein erneutes Setzen von **Aktiv** stellt den Zugang wieder her.
 - `super_admin` bleibt unbeschränkt — sonst wäre die Reaktivierung selbst gesperrt.
 
-> **Warum kein Hard-Delete? Die Fußfalle im Detail.**
-> Das endgültige Löschen einer Einrichtung ist **kein unterstützter Vorgang**, und ein Versuch aus einer rohen Shell (`manage.py shell`, `psql`) kann Daten in einem halb zerstörten Zustand hinterlassen:
+> **Warum kein Hard-Delete? Was dabei wirklich passiert.**
+> Das endgültige Löschen einer Einrichtung ist **kein unterstützter Vorgang**. Es scheitert — und zwar zuverlässig:
 >
-> - `Facility` kaskadiert auf nahezu alle Fachtabellen — auch auf `core_auditlog`. Auf dieser Tabelle liegt der DB-Trigger `auditlog_immutable`, der jedes `UPDATE`/`DELETE` abweist. Djangos Löschkaskade läuft deshalb **mitten** in die Ablehnung.
-> - Steht die Kaskade in **einer** Transaktion (Django-Admin, `atomic`), rollt alles sauber zurück: Sie sehen einen Fehler, nichts ist verloren.
-> - Eine rohe ORM-Shell arbeitet dagegen im **Autocommit**, und die Kaskade schreibt in **Stapeln**. Die Stapel vor dem Trigger sind dann bereits fest geschrieben, der Rest nicht — Ereignisse, Personen oder Anhänge sind weg, das Protokoll und die Einrichtung selbst stehen noch. Diesen Zustand kann Ihnen niemand aus der Anwendung heraus reparieren; er braucht ein Backup ([§ 3.3](#33-wiederherstellung)).
+> - `Facility` kaskadiert auf nahezu alle Fachtabellen, auch auf `core_auditlog`. Auf dieser Tabelle liegt der DB-Trigger `auditlog_immutable`, der jedes `UPDATE`/`DELETE` abweist. Die Löschkaskade läuft also **mitten** in eine Ablehnung.
+> - **Der Abbruch ist sauber, nicht halbfertig.** Django umschließt die gesamte Kaskade — Signale, Fast-Deletes, Updates und alle Stapel — mit **einer** Transaktion. Das gilt auch aus `manage.py shell`: die Shell steht zwar im Autocommit, die Kaskade öffnet ihre Transaktion aber selbst. Der Triggerfehler rollt sie vollständig zurück. Sie sehen eine Fehlermeldung, es geht nichts verloren. Dasselbe gilt für ein einzelnes `DELETE` in `psql` — ein Statement ist eine Transaktion.
 > - Zusätzlich blockiert ein `pre_delete`-Guard das Löschen, solange ein aktiver **Legal Hold** an der Einrichtung hängt.
+>
+> **Die eine Konstellation, in der doch Schaden entsteht:** ein selbst geschriebenes Aufräumskript, das die Fachtabellen **einzeln nacheinander** leert und dabei **zwischendurch committet** — etwa eine Schleife über mehrere `…objects.filter(facility=f).delete()`-Aufrufe in einer Shell ohne umschließende Transaktion. Dann sind die zuerst geleerten Tabellen bereits fest geschrieben, wenn der Lauf am Audit-Trigger stirbt: Ereignisse, Personen oder Anhänge sind weg, Protokoll und Einrichtung stehen noch. Diesen Zustand kann Ihnen niemand aus der Anwendung heraus reparieren; er braucht ein Backup ([§ 3.3](#33-wiederherstellung)). Schreiben Sie solche Skripte nicht — und wenn doch, dann in **eine** umschließende Transaktion.
+>
+> Ein weiterer Grund, `psql` nicht für diesen Zweck zu verwenden: ein direktes `DELETE` führt Djangos Python-Kaskade gar nicht aus. Die `pre_delete`-Guards (Legal Hold) greifen dort nicht, und die Aufräumlogik der Anwendung bleibt aus.
 >
 > Wollen Sie eine Einrichtung wirklich restlos entfernen, ist der Weg: archivieren, die Aufbewahrungsfristen ablaufen lassen (siehe [§ 7.3](#73-löschfristen-und-enforce_retention)) und anschließend ein Backup ziehen — nicht die Kaskade.
 

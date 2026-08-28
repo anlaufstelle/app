@@ -2128,6 +2128,39 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 
 ---
 
+## Facility-Archivierung: Lifecycle des Zugriffsentzugs (Issue #2067)
+
+**Ausgangslage.** `Facility.is_active` war bis 0.89 kosmetisch — weder Login noch Middleware werteten das Flag aus. Eine archivierte Einrichtung arbeitete unverändert weiter.
+
+**Serverseitige Sperre (zwei Ebenen).** Beide sind nötig, keine ersetzt die andere:
+
+1. **Login** — `CustomLoginView.form_valid` *und* `AdminLockoutAuthenticationForm.confirm_login_allowed` (zweite Login-Oberfläche unter `/admin-mgmt/login/`) weisen Konten archivierter Einrichtungen ab und schreiben `LOGIN_FAILED` mit `reason: facility_inactive`. Kein Credential-Widerruf: Archivieren ist ein organisatorischer Vorgang, kein Kompromittierungsverdacht.
+2. **`FacilityScopeMiddleware`** — beendet auch **bereits laufende** Sitzungen mit HTTP 403. Ohne diese Ebene wirkte Archivieren erst beim nächsten Anmelden. `request.current_facility` wird dabei auf `None` gesetzt, also bleibt `app.current_facility_id` leer und die `facility_isolation`-Policies liefern als zweite Linie ebenfalls nichts.
+
+**Freigestellt wird die Rolle, nicht der Pfad.** `super_admin` bleibt unbeschränkt, weil `FacilityAdmin` super-only ist (L1, #1375) und nur diese Rolle `is_active` zurücksetzen kann. Eine Pfad-Ausnahme für `/admin-mgmt/` ließe den `facility_admin` der archivierten Einrichtung weiter an Fachdaten, ohne dass er sie reaktivieren könnte. Die Pfad-Ausnahmen (`ARCHIVED_EXEMPT_URLS`) decken nur Sackgassen ab: Abmelden, Login, Statik, i18n, Health, `sw.js`, `manifest.json`.
+
+**Der Offline-Pfad braucht eine eigene Zustellung.** Serverseitig dicht zu sein genügt hier nicht: bereits heruntergeladene Client-/Facility-Bundles liegen verschlüsselt in IndexedDB (`anlaufstelle-offline`), der abgeleitete Sitzungsschlüssel in `anlaufstelle-crypto`. Beides überlebt eine serverseitige Sperre — die Nutzerin könnte nach dem 403 offline gehen und weiterlesen.
+
+Ein nacktes 403 darf dafür **nicht** als Purge-Signal dienen: seit #1354 ist 403 bewusst kein Invalidierungsgrund, weil echter Rechteentzug den Client als Login-Redirect erreicht und ein 403 sonst CSRF-/Rate-Limit-/Proxy-Rauschen ist — es würde den Außendienst-Cache bei jedem Schluckauf leeren.
+
+Die Archiv-403 trägt deshalb zwei Marker:
+
+| Mechanismus | Deckt ab | Grenze |
+|---|---|---|
+| Header `X-Facility-Archived: 1` | `revalidateCachedClient` / `revalidateCachedFacility` purgen gezielt darauf: `crypto_session.wipeOfflineState()` — CryptoKey **und** alle Dexie-Tabellen | greift nur, wenn der Offline-Verbund geladen ist und eine Revalidierung läuft |
+| `Clear-Site-Data: "storage", "cache"` | Navigations-Fall: der Browser räumt IndexedDB, Web Storage, Cache Storage und SW-Registrierungen selbst ab — derselbe Mechanismus wie beim Logout | von Safari nur unvollständig unterstützt; deshalb nie allein |
+
+`"cookies"` wird bewusst **nicht** gesetzt: die Sitzung soll leben, damit der Abmelden-Knopf auf der Sperrseite trägt.
+
+**Restrisiko.** Ungesynchronisierte lokale Änderungen fallen mit — bewusst, wie beim Rechteentzug (#1110/#1111): entschlüsselte PII darf einen Zugriffsentzug nicht überleben, und ein hängender Edit darf den Sicherheits-Purge nicht blockieren. Ein Gerät, das nach der Archivierung **nie wieder online** geht, behält seinen Bestand bis zum TTL-Ablauf (48 h) bzw. bis zum Idle-Wipe — dieselbe Grenze wie bei jedem anderen Widerrufspfad; die Zustellung setzt einen Serverkontakt voraus.
+
+**Hard-Delete bleibt kein Ausweg.** Er scheitert fail-loud am `auditlog_immutable`-Trigger und rollt vollständig zurück (Django umschließt die gesamte Kaskade mit einer Transaktion — auch aus `manage.py shell`). Partielle Zerstörung entsteht nur durch selbst geschriebene Skripte, die Fachtabellen einzeln mit Zwischencommits leeren. Details im [Administrationshandbuch § 2.2c](admin-guide.md).
+
+**Tests:** [`test_facility_lifecycle.py`](../src/tests/test_facility_lifecycle.py) (Login beider Oberflächen, laufende Sitzung, RLS-GUC, Rollen-Abgrenzung, Marker-Header, Sprache) und [`tests/js/facility-archived-purge.test.mjs`](../tests/js/facility-archived-purge.test.mjs) (Purge nur bei gesetztem Marker — beide Richtungen, damit der Fix keine #1354-Regression wird).
+
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)
