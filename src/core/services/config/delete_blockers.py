@@ -19,6 +19,7 @@ from core.models import (
     Event,
     FieldGroup,
     FieldTemplate,
+    QuickTemplate,
 )
 from core.services.audit import log_audit_event
 from core.services.config.block_order import iter_blocks_in_order
@@ -239,6 +240,23 @@ def delete_document_type(request, doc_type: DocumentType) -> None:
                 Case.objects.filter(document_type=doc_type, is_deleted=True).count(),
                 of_cases=True,
             )
+        )
+
+    # Refs #2068 (b): ``QuickTemplate.document_type`` ist seit dem
+    # Hygiene-Buendel PROTECT statt CASCADE. Vorher fielen die Schnellvorlagen
+    # still mit — samt ihrer von Hand gepflegten ``prefilled_data``, die sich
+    # aus dem Dokumentationstyp allein nicht rekonstruieren lassen. Ohne
+    # diesen Zaehler liefe der Loeschversuch jetzt in die generische
+    # ``ProtectedError``-Auffangzeile unten, die nur „N Objekte" nennt.
+    quick_template_count = QuickTemplate.objects.filter(document_type=doc_type).count()
+    if quick_template_count:
+        reasons.append(
+            ngettext(
+                "%(n)d Schnellvorlage verweist auf diesen Dokumentationstyp und müsste zuerst gelöscht werden.",
+                "%(n)d Schnellvorlagen verweisen auf diesen Dokumentationstyp und müssten zuerst gelöscht werden.",
+                quick_template_count,
+            )
+            % {"n": quick_template_count}
         )
 
     if reasons:

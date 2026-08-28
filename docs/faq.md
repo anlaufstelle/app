@@ -190,7 +190,7 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 | Schicht | Zeitraum | Besonderheit |
 |---------|----------|-------------|
-| Frühdienst | 08:00–16:00 | Standard-Schicht |
+| Frühdienst | 08:00–16:00 ||
 | Spätdienst | 16:00–22:00 ||
 | Nachtdienst | 22:00–08:00 | Mitternachts-Wraparound |
 

@@ -857,8 +857,29 @@ class TestCommandEndToEnd:
         with pytest.raises(CommandError):
             call_command("export_facility", facility="Nichtvorhandene Stelle", output=str(output), stdout=StringIO())
 
+    @pytest.mark.postgres
     def test_ambiguous_facility_name_raises_command_error(self, organization, tmp_path):
+        from django.db import connection
+
         from core.models import Facility
+
+        # Refs #2068 (a): ``Facility.name`` ist seit dem Schema-Hygiene-Buendel
+        # UNIQUE — der Doppelname laesst sich regulaer nicht mehr herstellen.
+        # Der Mehrdeutigkeits-Zweig des Commands bleibt trotzdem stehen und
+        # wird hier weiter gepinnt: er ist Defense-in-Depth fuer Bestaende, die
+        # ohne den Constraint entstanden sind (eingespielter Altdump, per
+        # ``--fake`` uebersprungene Migration). Der Constraint faellt nur
+        # innerhalb der Testtransaktion — PostgreSQL faehrt DDL transaktional,
+        # der Rollback am Testende stellt ihn wieder her.
+        with connection.cursor() as cursor:
+            # Die Fixtures halten aufgeschobene FK-Trigger offen; ein ALTER
+            # TABLE lehnt Postgres dann mit "pending trigger events" ab.
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+            cursor.execute(
+                "SELECT conname FROM pg_constraint WHERE conrelid = 'core_facility'::regclass AND contype = 'u'"
+            )
+            for (conname,) in cursor.fetchall():
+                cursor.execute(f"ALTER TABLE core_facility DROP CONSTRAINT {conname}")
 
         Facility.objects.create(organization=organization, name="Doppelt")
         Facility.objects.create(organization=organization, name="Doppelt")
