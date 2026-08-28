@@ -34,12 +34,17 @@ describe("HTMX-Zustellweg", () => {
 
     beforeEach(async () => {
         vi.resetModules();
-        document.body.innerHTML = "";
+        // Frischer ``body``: htmx-errors.js haengt seinen Listener dort an,
+        // und jeder Re-Import wuerde einen weiteren dazulegen — der zweite
+        // Test saehe dann zwei Purges/Reloads.
+        document.body.remove();
+        document.documentElement.appendChild(document.createElement("body"));
         run = vi.fn(async () => {});
         window.facilityArchivedPurge = { run: run };
-        // ``reload`` ist in jsdom nicht schreibbar — die Navigation ist hier
-        // nicht das Pruefobjekt. Getestet wird, DASS gepurgt und KEIN Toast
-        // gezeigt wird; der Reload ist der Einzeiler dahinter.
+        // ``location`` wird ersetzt, damit ``reload`` beobachtbar ist. Seit
+        // Cross-Review NF1 ist der Reload ausdruecklich Pruefobjekt: er ist
+        // der Punkt, an dem die Nutzerin die gesperrte Oberflaeche verlaesst,
+        // und genau er fiel bei einem haengenden Purge aus.
         try {
             Object.defineProperty(window, "location", {
                 configurable: true,
@@ -55,11 +60,30 @@ describe("HTMX-Zustellweg", () => {
         delete window.facilityArchivedPurge;
     });
 
-    it("purgt bei markierter 403 und zeigt KEINEN Toast", async () => {
+    it("purgt bei markierter 403, zeigt KEINEN Toast und verlaesst die Oberflaeche", async () => {
         dispatchResponseError(fakeXhr({ status: 403, archived: true }));
 
         await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
         expect(document.getElementById("htmx-error-toast")).toBeNull();
+        // Cross-Review „Reload nicht unter Test": der Redirect ist der Punkt,
+        // an dem die Nutzerin die gesperrte Oberflaeche tatsaechlich verlaesst.
+        await vi.waitFor(() => expect(window.location.reload).toHaveBeenCalledTimes(1));
+    });
+
+    it("verlaesst die Oberflaeche auch bei NIE erfuelltem Purge-Promise", async () => {
+        // Cross-Review NF1 am Rueckfall-Pfad: ohne Deckel wartete der Handler
+        // dauerhaft vor ``location.reload()``.
+        vi.useFakeTimers();
+        try {
+            window.facilityArchivedPurge = { run: () => new Promise(() => {}) };
+
+            dispatchResponseError(fakeXhr({ status: 403, archived: true }));
+            await vi.advanceTimersByTimeAsync(3000);
+
+            expect(window.location.reload).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("purgt NICHT bei einer 403 ohne Marker und zeigt den Toast (Refs #1354)", async () => {
@@ -160,6 +184,57 @@ describe("Sperrseiten-Zustellweg (eigenstaendiges Modul)", () => {
 
         expect(wipeOfflineState).toHaveBeenCalledTimes(1);
         expect(deleted).toEqual(["anlaufstelle-offline", "anlaufstelle-crypto"]);
+    });
+
+    it("erreicht die Folgephasen auch bei NIE erfuelltem Wipe-Promise", async () => {
+        // Cross-Review NF1: der Deckel galt nur fuer ``deleteDatabase``; auf
+        // ``wipeOfflineState()`` wartete ``run()`` unbegrenzt. Ein haengender
+        // erster Promise liess DB-Loeschung, SW-Unregister UND den Reload des
+        // HTMX-Handlers ausfallen. Ein geworfener Fehler (Test darunter)
+        // deckt diesen Fall NICHT ab — ein nie erfuelltes Promise wirft nie.
+        vi.useFakeTimers();
+        try {
+            window.crypto_session = { wipeOfflineState: () => new Promise(() => {}) };
+            await import("../../src/static/js/facility-archived-purge.js");
+
+            let settled = false;
+            const running = window.facilityArchivedPurge.run().then(() => {
+                settled = true;
+            });
+            await vi.advanceTimersByTimeAsync(3000);
+            await running;
+
+            expect(settled).toBe(true);
+            expect(deleted).toEqual(["anlaufstelle-offline", "anlaufstelle-crypto"]);
+            expect(unregistered).toBe(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("haelt das Gesamtbudget ein, wenn MEHRERE Phasen haengen", async () => {
+        // Drei Phasen mit je eigenem Deckel summierten sich sonst auf das
+        // Dreifache. Das Budget gilt deshalb fuer den gesamten Lauf.
+        vi.useFakeTimers();
+        try {
+            window.crypto_session = { wipeOfflineState: () => new Promise(() => {}) };
+            Object.defineProperty(window.navigator, "serviceWorker", {
+                configurable: true,
+                value: { getRegistrations: () => new Promise(() => {}) },
+            });
+            await import("../../src/static/js/facility-archived-purge.js");
+
+            let settled = false;
+            const running = window.facilityArchivedPurge.run().then(() => {
+                settled = true;
+            });
+            await vi.runAllTimersAsync();
+            await running;
+
+            expect(settled).toBe(true);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("laeuft auch durch, wenn der gemeinsame Wipe-Pfad wirft", async () => {

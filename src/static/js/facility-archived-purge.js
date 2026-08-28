@@ -40,10 +40,45 @@
     var DATABASES = ["anlaufstelle-offline", "anlaufstelle-crypto"];
 
     //: Harter Deckel wie beim Logout-Wipe (sw-register.js, Refs #1476): eine
-    //: offene Verbindung laesst ``deleteDatabase`` auf ``blocked`` warten. Der
-    //: Nutzer darf davon nicht haengen bleiben — die Tabellen sind zu diesem
-    //: Zeitpunkt ueber ``purgeAll`` ohnehin schon leer.
-    var DELETE_TIMEOUT_MS = 3000;
+    //: blockierte IndexedDB oder ein klemmender Purge darf den Ablauf NIE
+    //: aufhalten. Das Budget gilt fuer den GESAMTEN ``run()`` — nicht je
+    //: Phase, sonst summierten sich drei Deckel auf das Dreifache.
+    var WIPE_BUDGET_MS = 3000;
+
+    function _sleep(ms) {
+        return new Promise(function (resolve) {
+            window.setTimeout(resolve, ms);
+        });
+    }
+
+    /*
+     * Fuehrt EINE Phase aus und gibt die Kontrolle spaetestens zum Ablauf des
+     * gemeinsamen Budgets zurueck (Refs #2067, Cross-Review NF1).
+     *
+     * Vorher deckelte der Timeout nur ``deleteDatabase``; auf
+     * ``wipeOfflineState()`` und die SW-Promises wartete ``run()``
+     * unbegrenzt. Ein haengender erster Promise liess damit DB-Loeschung,
+     * SW-Unregister UND den Reload des HTMX-Handlers ausfallen — die
+     * Nutzerin blieb auf einer Oberflaeche stehen, deren Zugang gerade
+     * entzogen wurde. Genau diesen Fall erkennt der Bestand beim Logout an
+     * (``Promise.race`` in sw-register.js).
+     *
+     * Semantik: Best-Effort-Wipe, garantiertes Verlassen. Die Phase wird
+     * IMMER GESTARTET (ihre Requests gehen also raus und laufen im
+     * Hintergrund weiter), nur das Warten darauf ist begrenzt. Ein Wurf —
+     * synchron wie asynchron — beendet die Phase still; der harte Weg der
+     * naechsten Phase raeumt ohnehin ab.
+     */
+    function _capped(deadline, startPhase) {
+        var running;
+        try {
+            running = Promise.resolve(startPhase());
+        } catch (_e) {
+            return Promise.resolve();
+        }
+        var remaining = Math.max(0, deadline - Date.now());
+        return Promise.race([running.catch(function () {}), _sleep(remaining)]);
+    }
 
     function _deleteDatabase(name) {
         return new Promise(function (resolve) {
@@ -54,14 +89,13 @@
                     resolve();
                 }
             }
-            window.setTimeout(done, DELETE_TIMEOUT_MS);
             try {
                 var request = window.indexedDB.deleteDatabase(name);
                 request.onsuccess = done;
                 request.onerror = done;
                 // ``onblocked`` NICHT aufloesen: der Delete laeuft weiter,
-                // sobald die letzte Verbindung faellt. Der Timeout oben gibt
-                // die Kontrolle trotzdem zurueck.
+                // sobald die letzte Verbindung faellt. Den Deckel setzt
+                // ``_capped`` — hier braucht es keinen zweiten Timer.
             } catch (_e) {
                 done();
             }
@@ -92,25 +126,37 @@
         }
     }
 
+    function _wipeViaOfflineStack() {
+        if (window.crypto_session && window.crypto_session.wipeOfflineState) {
+            return window.crypto_session.wipeOfflineState();
+        }
+        if (window.offlineStore && window.offlineStore.purgeAll) {
+            return window.offlineStore.purgeAll();
+        }
+        return Promise.resolve();
+    }
+
+    /*
+     * Drei Phasen, jede einzeln gegen dasselbe Budget gedeckelt: keine kann
+     * die naechste blockieren, und die Summe bleibt bei ``WIPE_BUDGET_MS``.
+     * ``run()`` erfuellt daher IMMER — darauf verlaesst sich der Reload im
+     * HTMX-Handler.
+     */
     async function run() {
+        var deadline = Date.now() + WIPE_BUDGET_MS;
+
         // 1. Gemeinsamer Wipe-Pfad, falls der Verbund geladen ist — nur er
         //    raeumt zusaetzlich den CryptoKey im Speicher dieser Seite ab.
-        try {
-            if (window.crypto_session && window.crypto_session.wipeOfflineState) {
-                await window.crypto_session.wipeOfflineState();
-            } else if (window.offlineStore && window.offlineStore.purgeAll) {
-                await window.offlineStore.purgeAll();
-            }
-        } catch (_e) {
-            // ignore — der harte Weg unten raeumt ohnehin ab.
-        }
+        await _capped(deadline, _wipeViaOfflineStack);
 
         // 2. Datenbanken ganz entfernen. Auf der Sperrseite ist das der
         //    einzige Schritt, der ueberhaupt etwas tun kann.
-        await Promise.all(DATABASES.map(_deleteDatabase));
+        await _capped(deadline, function () {
+            return Promise.all(DATABASES.map(_deleteDatabase));
+        });
 
         // 3. Service-Worker-Registrierungen loesen.
-        await _unregisterServiceWorkers();
+        await _capped(deadline, _unregisterServiceWorkers);
     }
 
     window.facilityArchivedPurge = { run: run, DATABASES: DATABASES.slice() };
