@@ -82,6 +82,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-048](048-fachhoheit-zugaenge-hub.md) | Fachhoheit und Sicherheitsgrenzen des Zugänge-Hubs | Accepted |
 | [ADR-049](049-one-command-local-bootstrap.md) | One-Command-Bootstrap für das lokale Setup (local-only, kein Prod-Auto-Seed) | Accepted |
 | [ADR-050](050-eventhistory-retention.md) | EventHistory-Retention — Redaktion nach Ereignis-Lebenszyklus statt Partitionierung | Proposed |
+| [ADR-051](051-berichte-konfigurierbarkeit-zielbild.md) | Berichte-Konfigurierbarkeit — Zielbild und Nicht-Ziele (K5, D1–D4) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
