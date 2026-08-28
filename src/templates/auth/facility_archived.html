@@ -1,6 +1,8 @@
 {% load i18n static %}
 <!DOCTYPE html>
-<html lang="de" class="h-full">
+{# Refs #2067: Sprache dynamisch — die Middleware aktiviert die Praeferenz #}
+{# der Nutzerin, bevor sie diese Seite rendert. #}
+<html lang="{{ page_language|default:'de' }}" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

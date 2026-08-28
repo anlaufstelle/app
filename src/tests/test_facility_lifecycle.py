@@ -98,6 +98,59 @@ class TestLoginWeistArchivierteEinrichtungAb:
         assert response.status_code == 302
 
 
+@pytest.mark.django_db
+class TestAdminLoginHatDieselbeSperre:
+    """Cross-Review Finding 3: ``/admin-mgmt/login/`` ist eine zweite,
+    ausdrücklich vorhandene Login-Oberfläche. Sie prüfte nur den
+    Account-Lockout — ein archivierter ``facility_admin`` bekam dort eine
+    Session, und erst der Folgerequest lief in die Middleware-Sperre.
+
+    Die Prüfung ist in ``admin_site.py`` bewusst dupliziert (das Modul lädt zu
+    früh, um am View-Modul zu hängen — wie ``_admin_login_username_key``).
+    Gegen Auseinanderlaufen sichert dieser Paritätstest.
+    """
+
+    def _form(self, rf, username, password="testpass123"):
+        from core.admin_site import AdminLockoutAuthenticationForm
+
+        request = rf.post("/admin-mgmt/login/")
+        request.session = {}
+        # Wie im echten Ablauf: ``AuthenticationMiddleware`` hat auf der
+        # Login-Seite bereits einen anonymen User gesetzt, den der
+        # Audit-Helper liest.
+        request.user = AnonymousUser()
+        return AdminLockoutAuthenticationForm(request=request, data={"username": username, "password": password})
+
+    def test_archivierter_admin_wird_abgewiesen(self, rf, admin_user):
+        _archive(admin_user.facility)
+
+        form = self._form(rf, admin_user.username)
+
+        assert not form.is_valid()
+        assert "archiviert" in " ".join(form.non_field_errors())
+
+    def test_abweisung_erzeugt_dieselbe_protokollzeile(self, rf, admin_user):
+        _archive(admin_user.facility)
+
+        self._form(rf, admin_user.username).is_valid()
+
+        entry = AuditLog.objects.filter(user=admin_user, action=AuditLog.Action.LOGIN_FAILED).first()
+        assert entry is not None
+        assert entry.detail.get("reason") == "facility_inactive"
+
+    def test_aktive_einrichtung_kommt_durch(self, rf, admin_user):
+        """Gegenprobe — die Sperre hängt am Flag, nicht am Formular-Umbau."""
+        assert self._form(rf, admin_user.username).is_valid()
+
+    def test_super_admin_bleibt_ausgenommen(self, rf, super_admin_user, facility):
+        """Der Reaktivierungspfad darf sich nicht selbst aussperren."""
+        super_admin_user.facility = facility
+        super_admin_user.save(update_fields=["facility"])
+        _archive(facility)
+
+        assert self._form(rf, super_admin_user.username).is_valid()
+
+
 # --- Ebene 2: Middleware -----------------------------------------------------
 
 
@@ -146,6 +199,32 @@ class TestMiddlewareFaelltFailClosed:
         assert response == "DURCHGELASSEN"
         assert request.current_facility == staff_user.facility
 
+    def test_sperr_403_traegt_den_offline_marker(self, rf, staff_user):
+        """Refs #2067 (Cross-Review Finding 1): ohne diesen Header käme die
+        Sperre beim Offline-Client nie an — ein nacktes 403 ist dort seit
+        #1354 bewusst
+        kein Purge-Grund."""
+        _archive(staff_user.facility)
+
+        _request, response = _run_middleware(rf, staff_user)
+
+        assert response["X-Facility-Archived"] == "1"
+
+    def test_sperr_403_raeumt_browser_speicher_ab(self, rf, staff_user):
+        """Zweitschlag für den Navigations-Fall, in dem kein Offline-JS läuft —
+        derselbe Mechanismus wie beim Logout. Cookies bleiben bewusst stehen,
+        sonst trüge der Abmelden-Knopf auf der Sperrseite nicht."""
+        _archive(staff_user.facility)
+
+        _request, response = _run_middleware(rf, staff_user)
+
+        assert response["Clear-Site-Data"] == '"storage", "cache"'
+        assert "cookies" not in response["Clear-Site-Data"]
+
+    def test_durchgelassener_request_traegt_die_marker_nicht(self, rf, staff_user):
+        _request, response = _run_middleware(rf, staff_user)
+        assert response == "DURCHGELASSEN"
+
     def test_anonymer_request_passiert(self, rf, db):
         request = rf.get("/")
         request.user = AnonymousUser()
@@ -171,6 +250,34 @@ class TestRlsVariableWirdGeleert:
         request, _response = _run_middleware(rf, staff_user)
 
         assert _current_facility_guc() == str(staff_user.facility.pk)
+
+
+@pytest.mark.django_db
+class TestSperrseiteSprichtDieNutzersprache:
+    """Refs #2067 (Cross-Review Finding 8): ``FacilityScopeMiddleware`` liegt
+    VOR ``UserLanguageMiddleware`` und antwortet, bevor die Präferenz aktiviert
+    wäre — die Seite läge sonst immer auf ``LANGUAGE_CODE``. Der User ist hier
+    schon bekannt, die Middleware aktiviert die Präferenz deshalb selbst."""
+
+    def test_englische_praeferenz_rendert_englisch(self, rf, staff_user):
+        staff_user.preferred_language = "en"
+        staff_user.save(update_fields=["preferred_language"])
+        _archive(staff_user.facility)
+
+        _request, response = _run_middleware(rf, staff_user)
+
+        body = response.content.decode()
+        assert 'lang="en"' in body
+        assert "Facility archived" in body
+
+    def test_ohne_praeferenz_bleibt_die_default_sprache(self, rf, staff_user):
+        _archive(staff_user.facility)
+
+        _request, response = _run_middleware(rf, staff_user)
+
+        body = response.content.decode()
+        assert 'lang="de"' in body
+        assert "Einrichtung archiviert" in body
 
 
 # --- Doku: Raw-Shell-Hard-Delete-Fussfalle -----------------------------------
@@ -201,3 +308,30 @@ class TestAdminGuideDokumentiertDieHardDeleteFussfalle:
         """Der Hard-Delete ist kein unterstuetzter Vorgang — der Abschnitt muss
         den gangbaren Weg nennen, nicht nur vor dem ungangbaren warnen."""
         assert "archivieren statt löschen" in self._admin_guide()
+
+    @pytest.mark.parametrize("relative", ["docs/admin-guide.md", "docs/en/admin-guide.md"])
+    def test_schadensbild_behauptet_keine_zwischencommits_der_kaskade(self, relative):
+        """Cross-Review Finding 6: die erste Fassung behauptete, Djangos
+        Collector committe im Autocommit-Betrieb einzelne Loeschstapel vor dem
+        Audit-Trigger. Tatsaechlich umschliesst Django die GESAMTE Kaskade mit
+        einer Transaktion (``deletion.py``: ``transaction.atomic(savepoint=
+        False)``) — der Triggerfehler rollt auch aus ``manage.py shell``
+        vollstaendig zurueck. Beide Sprachfassungen muessen das sagen."""
+        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        for behauptung in ("in **Stapeln**", "in **batches**"):
+            assert behauptung not in text, f"widerlegtes Schadensbild steht noch in {relative}"
+        assert "auditlog_immutable" in text
+
+    def test_echte_fussfalle_ist_das_skript_mit_zwischencommits(self):
+        """Die Fussfalle existiert — nur an anderer Stelle: ein selbst
+        geschriebenes Aufraeumskript, das Tabellen einzeln leert und dabei
+        zwischendurch committet."""
+        assert "committet" in self._admin_guide()
+
+    def test_security_notes_halten_den_archivierungs_lifecycle_fest(self):
+        """Review-Empfehlung zu B-8: nach dem Offline-Widerruf gehoert der
+        Lifecycle auch in die Security Notes."""
+        text = (REPO_ROOT / "docs" / "security-notes.md").read_text(encoding="utf-8")
+        assert "Facility-Archivierung: Lifecycle des Zugriffsentzugs" in text
+        assert "X-Facility-Archived" in text
+        assert "Clear-Site-Data" in text

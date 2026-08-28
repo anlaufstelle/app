@@ -13,10 +13,12 @@ gelesen wurde.
 Refs #542, #586, #733, #867, #2067.
 """
 
+from django.conf import settings
 from django.db import connection
 from django.http import HttpResponseForbidden
 from django.middleware.csrf import get_token
 from django.template.loader import render_to_string
+from django.utils import translation
 
 #: Pfade, die auch bei archivierter Einrichtung erreichbar bleiben — sonst
 #: sitzt die Nutzerin in einer Sackgasse (kein Abmelden) oder die Sperrseite
@@ -37,6 +39,25 @@ ARCHIVED_EXEMPT_URLS = (
 #: Facility-gescopte Zaehler, die dieser Request per Definition nicht mehr
 #: sehen darf.
 ARCHIVED_TEMPLATE = "auth/facility_archived.html"
+
+#: Maschinenlesbarer Marker auf JEDER Archiv-403 (Refs #2067, Cross-Review
+#: Finding 1). Ohne ihn kaeme die Sperre beim Offline-Client nie an: ein nacktes
+#: 403 ist dort seit Refs #1354 BEWUSST kein Invalidierungsgrund (echter
+#: Rechteentzug erreicht den Client als Login-Redirect; ein 403 ist sonst
+#: CSRF-/Rate-Limit-/Proxy-Rauschen und darf den Aussendienst-Cache nicht
+#: leeren). Dieser Header unterscheidet die beiden Faelle, statt 403 pauschal
+#: wieder zum Purge-Grund zu machen.
+FACILITY_ARCHIVED_HEADER = "X-Facility-Archived"
+
+#: Browser-nativer Zweitschlag (Refs #2067): raeumt IndexedDB (Krypto-Schluessel
+#: UND Bundle-Store), Web Storage, Cache Storage und SW-Registrierungen ab —
+#: genau der Mechanismus, den ``CustomLogoutView`` schon nutzt. Cookies bleiben
+#: bewusst stehen (``"cookies"`` NICHT gesetzt), damit die Sitzung lebt und der
+#: Abmelden-Knopf auf der Sperrseite traegt. Deckt den Navigations-Fall ab, in
+#: dem gar kein JS des Offline-Verbunds laeuft; der Header oben deckt den
+#: fetch-Fall ab. Beide zusammen, weil ``Clear-Site-Data`` nicht in jedem
+#: Browser (Safari) vollstaendig greift.
+CLEAR_SITE_DATA_VALUE = '"storage", "cache"'
 
 
 class FacilityScopeMiddleware:
@@ -106,7 +127,24 @@ class FacilityScopeMiddleware:
             # ``request.META``, die CsrfViewMiddleware setzt das Cookie
             # ausgangsseitig (sie liegt vor dieser Middleware in MIDDLEWARE,
             # laeuft also nach ihr zurueck).
-            return HttpResponseForbidden(render_to_string(ARCHIVED_TEMPLATE, {"csrf_token": get_token(request)}))
+            # Refs #2067 (Cross-Review Finding 8): diese Middleware liegt VOR
+            # ``UserLanguageMiddleware`` — die Sperrseite rendert also, bevor
+            # die Sprachpraeferenz aktiviert wurde, und laege sonst immer auf
+            # ``LANGUAGE_CODE``. Der User ist hier bereits bekannt, deshalb die
+            # Praeferenz mit derselben Regel wie dort selbst aktivieren.
+            lang = getattr(request.user, "preferred_language", "") or settings.LANGUAGE_CODE
+            with translation.override(lang):
+                body = render_to_string(ARCHIVED_TEMPLATE, {"csrf_token": get_token(request), "page_language": lang})
+            response = HttpResponseForbidden(body)
+            # Refs #2067 (Cross-Review Finding 1): die Sperre muss auch den
+            # OFFLINE-Pfad erreichen. Serverseitig sind API, HTMX, Exporte und
+            # Replay ab hier dicht — bereits entschluesselt im Browser liegende
+            # Bundles waren es nicht. Der Header laesst die Offline-
+            # Revalidierung gezielt purgen (nacktes 403 bleibt harmlos, Refs
+            # #1354), ``Clear-Site-Data`` raeumt zusaetzlich browser-nativ ab.
+            response[FACILITY_ARCHIVED_HEADER] = "1"
+            response["Clear-Site-Data"] = CLEAR_SITE_DATA_VALUE
+            return response
 
         return self.get_response(request)
 

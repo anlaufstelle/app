@@ -668,6 +668,47 @@
      */
     const INVALIDATION_STATUSES = [401, 404, 410];
 
+    /*
+     * Refs #2067 (Cross-Review Finding 1): Archivierung der EINRICHTUNG.
+     *
+     * Der Absatz darueber erklaert, warum ein nacktes 403 bewusst KEIN
+     * Invalidierungsgrund ist (CSRF-/Rate-Limit-/Proxy-Rauschen). Genau
+     * deshalb setzt die Middleware auf ihrer Sperr-403 einen eigenen Header:
+     * er unterscheidet "Rauschen" von "diese Einrichtung ist stillgelegt",
+     * ohne 403 pauschal wieder zum Purge-Grund zu machen.
+     *
+     * Rechtsfolge ist haerter als bei 401/404/410: dort faellt EIN Klient weg,
+     * hier der gesamte Zugang. Bundles allein zu loeschen genuegte nicht — der
+     * abgeleitete Sitzungsschluessel liegt in einer zweiten IndexedDB und
+     * entschluesselte, was ein spaeterer Fetch noch hereinholt. Gewipet wird
+     * deshalb ueber denselben Pfad wie Logout und Idle-Timeout:
+     * CryptoKey + Aktivitaetsstempel + alle Dexie-Tabellen.
+     */
+    const FACILITY_ARCHIVED_HEADER = "X-Facility-Archived";
+
+    function _isFacilityArchived(response) {
+        return response.status === 403 && response.headers.get(FACILITY_ARCHIVED_HEADER) === "1";
+    }
+
+    /*
+     * Wipe-Pfad wie in sw-register.js (Logout): crypto.js besitzt den
+     * gemeinsamen Ablauf, der Fallback greift nur, wenn crypto.js auf dieser
+     * Seite gar nicht geladen ist. Fehler werden geschluckt — ein klemmender
+     * Purge darf die Revalidierungs-Schleife nicht aufhalten; ohne Schluessel
+     * ist das zurueckbleibende Chiffrat ohnehin unlesbar (F-01).
+     */
+    async function _wipeAllOfflineState() {
+        try {
+            if (window.crypto_session && window.crypto_session.wipeOfflineState) {
+                await window.crypto_session.wipeOfflineState();
+            } else if (window.offlineStore && window.offlineStore.purgeAll) {
+                await window.offlineStore.purgeAll();
+            }
+        } catch (_e) {
+            // ignore — siehe oben.
+        }
+    }
+
     // Refs #1828: Endpunkt-Literal zentral in url-patterns.js (ENDPOINTS);
     // base.html/offline_base.html laden url-patterns.js vor diesem Modul.
     function _bundleUrl(clientPk) {
@@ -734,6 +775,14 @@
             return "error";
         }
 
+        // Refs #2067: VOR allen anderen Zweigen — die Archivierung der
+        // Einrichtung schlaegt jede feinere Unterscheidung, und sie betrifft
+        // nicht diesen einen Klienten, sondern den ganzen lokalen Bestand.
+        if (_isFacilityArchived(response)) {
+            await _wipeAllOfflineState();
+            return "archived";
+        }
+
         // Refs #1354: 429 (Rate-Limit) ist weder Rechteentzug noch eine
         // Aussage ueber den Klienten selbst -> eigenes Ergebnis, Cache
         // unangetastet. `revalidateCachedClients` bricht die Batch-Schleife
@@ -787,8 +836,16 @@
         let purged = 0;
         let refreshed = 0;
         let ratelimited = false;
+        let archived = false;
         for (const row of rows) {
             const result = await revalidateCachedClient(row.pk);
+            if (result === "archived") {
+                // Refs #2067: der erste Treffer hat den GESAMTEN lokalen
+                // Bestand gewiped — jede weitere Runde liefe gegen bereits
+                // geloeschte Zeilen und holte im schlimmsten Fall neue.
+                archived = true;
+                break;
+            }
             if (result === "purged") purged += 1;
             else if (result === "refreshed") refreshed += 1;
             else if (result === "ratelimited") {
@@ -799,7 +856,13 @@
                 break;
             }
         }
-        return { purged: purged, refreshed: refreshed, total: rows.length, ratelimited: ratelimited };
+        return {
+            purged: purged,
+            refreshed: refreshed,
+            total: rows.length,
+            ratelimited: ratelimited,
+            archived: archived,
+        };
     }
 
     /* ─── Refs #1520/#1499 — personenloses Facility-Meta-Bundle ───────────── */
@@ -945,6 +1008,13 @@
             return "error";
         }
 
+        // Refs #2067: wie in `revalidateCachedClient` — Archivierung der
+        // Einrichtung wipet den gesamten lokalen Bestand, nicht nur die
+        // Meta-Zeile.
+        if (_isFacilityArchived(response)) {
+            await _wipeAllOfflineState();
+            return "archived";
+        }
         if (response.status === 429) {
             return "ratelimited";
         }
