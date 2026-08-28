@@ -2,7 +2,7 @@
 
 import logging
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.models import AuditLog, Event, Facility, Settings
@@ -45,9 +45,15 @@ class Command(BaseCommand):
         facilities = Facility.objects.all()
         if facility_name:
             facilities = facilities.filter(name=facility_name)
+            # Refs #2068 (a) / Cross-Review Finding 4: CommandError statt
+            # stderr+return. Ein ``return`` beendete den Lauf mit Exit-Code 0 —
+            # ein Tippfehler im Cron-``--facility`` sah damit wie ein
+            # erfolgreicher Lauf aus, obwohl gar nichts verarbeitet wurde.
+            # Vorbild ist ``generate_dsgvo_package``, das das schon richtig
+            # macht. Mehrfach-Treffer sind seit dem UNIQUE auf
+            # ``Facility.name`` unmoeglich; bleibt genau dieser 0-Treffer-Fall.
             if not facilities.exists():
-                self.stderr.write(self.style.ERROR(f"Facility '{facility_name}' not found."))
-                return
+                raise CommandError(f"Facility '{facility_name}' not found.")
 
         today = timezone.localdate()
         total = 0

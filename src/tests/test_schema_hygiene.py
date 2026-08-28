@@ -31,6 +31,7 @@ Migration (``0167_schema_hygiene``) zusammenlaufen:
 """
 
 import importlib
+import threading
 from datetime import timedelta
 from io import StringIO
 
@@ -38,6 +39,8 @@ import pytest
 from django.core.management import CommandError, call_command
 from django.db import IntegrityError, connection, transaction
 from django.db.models import ProtectedError
+from django.db.models.signals import post_save
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.constants import RECENT_VISIT_TOUCH_THROTTLE_MINUTES
@@ -124,23 +127,25 @@ class TestFacilityNameGuard0167:
 @pytest.mark.django_db
 class TestKommandosMeldenUnbekannteEinrichtung:
     """Nach dem UNIQUE ist der Mehrfach-Treffer unmoeglich; bleibt der
-    0-Treffer-Fall. Alle vier Kommandos muessen ihn benennen, statt still
-    nichts zu tun (``.filter``) oder mit ``DoesNotExist`` abzustuerzen."""
+    0-Treffer-Fall. Alle vier Kommandos muessen ihn benennen UND fail-loud
+    abbrechen (Cross-Review Finding 4): ein ``return`` nach stderr beendete den
+    Lauf mit Exit-Code 0, ein Tippfehler im Cron-``--facility`` sah damit wie
+    ein erfolgreicher Lauf aus, obwohl Aufbewahrung, Breach-Erkennung bzw.
+    Snapshots vollstaendig ausblieben."""
 
     def test_enforce_retention(self, facility, settings_obj):
-        stderr = StringIO()
-        call_command("enforce_retention", "--facility", "gibts-nicht", stderr=stderr)
-        assert "gibts-nicht" in stderr.getvalue() and "not found" in stderr.getvalue()
+        with pytest.raises(CommandError, match="gibts-nicht"):
+            call_command("enforce_retention", "--facility", "gibts-nicht", stderr=StringIO())
 
     def test_detect_breaches(self, facility):
-        stderr = StringIO()
-        call_command("detect_breaches", "--facility=gibts-nicht", stdout=StringIO(), stderr=stderr)
-        assert "gibts-nicht" in stderr.getvalue() and "not found" in stderr.getvalue()
+        with pytest.raises(CommandError, match="gibts-nicht"):
+            call_command("detect_breaches", "--facility=gibts-nicht", stdout=StringIO(), stderr=StringIO())
 
     def test_create_statistics_snapshots(self, facility, settings_obj):
-        stderr = StringIO()
-        call_command("create_statistics_snapshots", "--facility", "gibts-nicht", stdout=StringIO(), stderr=stderr)
-        assert "gibts-nicht" in stderr.getvalue() and "not found" in stderr.getvalue()
+        with pytest.raises(CommandError, match="gibts-nicht"):
+            call_command(
+                "create_statistics_snapshots", "--facility", "gibts-nicht", stdout=StringIO(), stderr=StringIO()
+            )
 
     def test_generate_dsgvo_package(self, facility, tmp_path):
         with pytest.raises(CommandError, match="gibts-nicht"):
@@ -270,6 +275,88 @@ class TestRecentClientVisitThrottle:
 
         visit.refresh_from_db()
         assert visit.facility_id == other_facility.pk
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db
+class TestThrottleIstNebenlaeufigkeitssicher:
+    """Cross-Review Finding 2 zu (d).
+
+    Die Zusicherung „kein Rewrite unter fuenf Minuten" galt nur seriell: das
+    vorgelagerte ``.first()`` lief ausserhalb des Locks, zwei gleichzeitige
+    Aufrufe nach Fensterablauf sahen beide denselben alten Stempel und
+    schrieben nacheinander.
+    """
+
+    def test_bestandslesung_laeuft_unter_select_for_update(self, staff_user, client_identified, facility):
+        """Der Lock ist der Fix — ohne ihn ist der Rest Zufall."""
+        track_client_visit(staff_user, client_identified, facility)
+
+        with CaptureQueriesContext(connection) as ctx:
+            track_client_visit(staff_user, client_identified, facility)
+
+        visit_selects = [
+            q["sql"] for q in ctx.captured_queries if "core_recentclientvisit" in q["sql"] and "SELECT" in q["sql"]
+        ]
+        assert visit_selects, "keine Lesung der Besuchs-Tabelle beobachtet"
+        assert "FOR UPDATE" in visit_selects[0], f"die erste Lesung laeuft ohne Lock: {visit_selects[0]}"
+
+    def test_create_defaults_wird_durchgereicht(self, staff_user, client_identified, facility):
+        """Django-6-Signatur: landete ``create_defaults`` in ``**kwargs``,
+        deutete Django es als Lookup-Feld und schiede mit ``FieldError`` aus."""
+        visit, created = RecentClientVisit.objects.update_or_create(
+            user=staff_user,
+            client=client_identified,
+            defaults={"facility": facility},
+            create_defaults={"facility": facility, "is_favorite": True},
+        )
+        assert created is True
+        assert visit.is_favorite is True, "create_defaults wurde nicht angewandt"
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+class TestThrottleUnterEchterParallelitaet:
+    """Zwei gleichzeitige Besuche nach Fensterablauf duerfen die Zeile
+    zusammen genau EINMAL neu schreiben."""
+
+    def test_zwei_gleichzeitige_besuche_schreiben_genau_einmal(self, staff_user, client_identified, facility):
+        track_client_visit(staff_user, client_identified, facility)
+        visit = RecentClientVisit.objects.get(user=staff_user, client=client_identified)
+        stale = timezone.now() - timedelta(minutes=RECENT_VISIT_TOUCH_THROTTLE_MINUTES + 1)
+        RecentClientVisit.objects.filter(pk=visit.pk).update(visited_at=stale)
+
+        writes = []
+        writes_lock = threading.Lock()
+
+        def _count_write(sender, **kwargs):
+            with writes_lock:
+                writes.append(1)
+
+        post_save.connect(_count_write, sender=RecentClientVisit)
+        # Die Barriere erzwingt, dass beide Threads ihre Bestandslesung im
+        # selben Moment absetzen — ohne sie liefe der zweite womoeglich erst
+        # nach dem Commit des ersten und der Befund waere unsichtbar.
+        barrier = threading.Barrier(2)
+
+        def _visit():
+            try:
+                barrier.wait(timeout=10)
+                track_client_visit(staff_user, client_identified, facility)
+            finally:
+                connection.close()
+
+        threads = [threading.Thread(target=_visit) for _ in range(2)]
+        try:
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30)
+                assert not t.is_alive(), "Thread haengt — Deadlock am Zeilen-Lock?"
+        finally:
+            post_save.disconnect(_count_write, sender=RecentClientVisit)
+
+        assert len(writes) == 1, f"Zeile wurde {len(writes)}x geschrieben statt einmal"
 
 
 # --- (e) TimeFilter.is_default entfernt --------------------------------------
