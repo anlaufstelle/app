@@ -178,6 +178,45 @@ def _latest_link(facility_id):
     )
 
 
+def advisory_lock_name(facility_id) -> str:
+    """Der Ressourcen-NAME, aus dem der Advisory-Lock-Key abgeleitet wird.
+
+    Einzige Quelle dieser Zeichenkette — :func:`assign_chain_fields` und jeder
+    Aufrufer, der die Lock-Reihenfolge planen muss, gehen hier durch. Eine
+    zweite, kopierte Formatierung waere genau die Art stiller Drift, die einen
+    Deadlock-Vertrag unbemerkt bricht.
+    """
+    return f"audit_chain_{facility_id if facility_id is not None else 0}"
+
+
+def advisory_lock_id(facility_id) -> int | None:
+    """Der **tatsaechliche** Advisory-Lock-Key einer Facility (``hashtext``-Wert).
+
+    Refs #2019/#2023 (Re-Review Fix-Runde 3): Wer mehrere Facility-Locks in
+    einer Transaktion haelt, muss sie in global gleicher Reihenfolge erwerben.
+    Nach ``facility_id`` zu ordnen genuegt dafuer **nicht**: gesperrt wird
+    ``hashtext(name)``, und ``hashtext`` liefert nur 32 Bit, bildet UUIDs also
+    **nicht injektiv** ab. Bei einer Kollision ``h(A) = h(C) = X``, ``h(B) = Y``
+    mit ``A < B < C`` nimmt ein Lauf ueber ``{A, B}`` die Keys ``X -> Y``, ein
+    Lauf ueber ``{B, C}`` dagegen ``Y -> X`` — der Deadlock-Zyklus bliebe trotz
+    sortierter facility_ids offen. Geordnet werden muss deshalb nach diesem
+    Wert.
+
+    Die Berechnung laeuft bewusst in Postgres statt als Python-Nachbau: nur so
+    ist garantiert, dass hier derselbe Wert entsteht, den
+    ``pg_advisory_xact_lock`` spaeter tatsaechlich sperrt.
+
+    Gibt ``None`` auf Nicht-PostgreSQL zurueck — dort nimmt
+    :func:`assign_chain_fields` gar keinen Lock, es gibt also auch keine
+    Reihenfolge zu planen.
+    """
+    if connection.vendor != "postgresql":
+        return None
+    with connection.cursor() as cur:
+        cur.execute("SELECT hashtext(%s)", [advisory_lock_name(facility_id)])
+        return cur.fetchone()[0]
+
+
 def assign_chain_fields(instance) -> None:
     """Setzt ``prev_hash``/``entry_hash`` (und sichert streng monoton steigende
     Zeitstempel pro Facility) fuer eine neue ``AuditLog``-Zeile.
@@ -189,9 +228,10 @@ def assign_chain_fields(instance) -> None:
     deterministisch gebildet.
     """
     if connection.vendor == "postgresql":
-        lock_key = f"audit_chain_{instance.facility_id if instance.facility_id is not None else 0}"
+        # Name-Ableitung ausschliesslich ueber ``advisory_lock_name`` — dieselbe
+        # Funktion, ueber die Aufrufer ihre Lock-Reihenfolge planen (#2019/#2023).
         with connection.cursor() as cur:
-            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [lock_key])
+            cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [advisory_lock_name(instance.facility_id)])
 
     latest = _latest_link(instance.facility_id)
     prev_hash = (latest[1] if latest else "") or ""

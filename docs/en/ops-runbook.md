@@ -960,8 +960,10 @@ Anlaufstelle must report data breaches to the supervisory authority within **72 
    - `failed_login_burst` — > `BREACH_FAILED_LOGIN_THRESHOLD` (default 20) failed attempts per user within `BREACH_DETECTION_WINDOW_MINUTES` (default 60 min)
    - `mass_export` — > `BREACH_EXPORT_THRESHOLD` (default 10) exports per user within the window
    - `mass_delete` — > `BREACH_DELETE_THRESHOLD` (default 50) deletes facility-wide within the window
+   - `mfa_failure_burst` (Refs #2033) — `BREACH_MFA_FAILURE_THRESHOLD` (default 10) failed second-factor verifications per user within the window; `MFA_FAILED` (TOTP) and `WEBAUTHN_FAILED` (passkey) count **together**, otherwise the threshold could be evaded by switching methods. Long window: `BREACH_MFA_FAILURE_THRESHOLD_LONG` (default 30). The threshold is deliberately lower than the one for `failed_login_burst`: whoever fails at the second factor already has the first one — the more serious attacker position, and OTP errors are rare by design.
 3. **Optional webhook** — `BREACH_NOTIFICATION_WEBHOOK_URL` env var; receives a POST with a JSON payload (kind, count, threshold, audit_id) on every new finding.
 4. **Deduplication** — within 24h, the same finding (kind + user) is only reported once in the `AuditLog`.
+5. **Detection warns, it does not lock out** — every heuristic is monitor-only: a hit writes a `SECURITY_VIOLATION` entry and optionally fires the webhook; it revokes **no** access and changes no password. False positives are therefore planned for and tolerable: a user with a series of typos on the authenticator, or a passkey the browser keeps rejecting, can trigger `mfa_failure_burst` (the threshold of 10 is deliberately low) — the consequence is a reviewable entry, never a lockout. Hard lockout remains the job of the independent account lockout (10 failed **logins** in 15 min, `manage.py unlock <username>`) and of the rate limits. In practice this means during triage in § "Manual Process": first check whether the time series of failures looks human (a few minutes, one source IP, success afterwards) or automated (evenly spread over hours, no success, possibly several IPs). Whoever permanently raises the threshold loses exactly the signal from scenario A7 (patient guessing of the second factor with a stolen password session) — so prefer tuning thresholds per instance over disabling the heuristic.
 
 #### Manual Process on SECURITY_VIOLATION
 
@@ -2046,4 +2048,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.86.0 -->
 <!-- translation-date: 2026-08-27 -->
-<!-- source-hash: f8e9c0c271587de6da5bd537e12fa1fef497042c -->
+<!-- source-hash: c97db80570e33a8c07bb92c6eba59278dc9e235e -->
