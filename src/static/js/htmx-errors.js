@@ -116,22 +116,36 @@
         }
     }
 
+    // Refs #2067 (Cross-Review NF1): derselbe Deckel wie im Purge-Modul und
+    // beim Logout-Wipe (sw-register.js). Er sichert hier den RUECKFALL-Pfad —
+    // ``facilityArchivedPurge.run()`` deckelt sich selbst, ein direktes
+    // ``wipeOfflineState()`` nicht. Ohne ihn haengt der Reload unten an einem
+    // klemmenden Purge, und die Nutzerin bliebe auf einer Oberflaeche stehen,
+    // deren Zugang gerade entzogen wurde.
+    var PURGE_TIMEOUT_MS = 3000;
+
     function _purgeOfflineState() {
         // Regelfall: das gemeinsame Modul (facility-archived-purge.js) ist in
         // base.html vor dieser Datei geladen. Der Rueckfall greift auf
         // Layouts, die es nicht mitbringen — dort ist der Offline-Verbund
         // seinerseits vorhanden, also bleibt der Wipe wirksam.
+        var running;
         try {
             if (window.facilityArchivedPurge) {
-                return window.facilityArchivedPurge.run();
-            }
-            if (window.crypto_session && window.crypto_session.wipeOfflineState) {
-                return Promise.resolve(window.crypto_session.wipeOfflineState());
+                running = Promise.resolve(window.facilityArchivedPurge.run());
+            } else if (window.crypto_session && window.crypto_session.wipeOfflineState) {
+                running = Promise.resolve(window.crypto_session.wipeOfflineState());
+            } else {
+                return Promise.resolve();
             }
         } catch (_e) {
-            // ignore — der Redirect unten muss trotzdem stattfinden.
+            // synchroner Wurf — der Redirect unten muss trotzdem stattfinden.
+            return Promise.resolve();
         }
-        return Promise.resolve();
+        var timeout = new Promise(function (resolve) {
+            window.setTimeout(resolve, PURGE_TIMEOUT_MS);
+        });
+        return Promise.race([running.catch(function () {}), timeout]);
     }
 
     function _handleArchivedFacility() {
