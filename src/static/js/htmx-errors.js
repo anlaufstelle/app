@@ -90,11 +90,75 @@
         }, AUTO_DISMISS_MS);
     }
 
+    /*
+     * Refs #2067 (Cross-Review Finding 1): Archivierung der Einrichtung.
+     *
+     * HTMX-Antworten reicht der Service Worker direkt vom Netz weiter — bis
+     * hierher wertete auf diesem Weg niemand den Marker aus, und der
+     * Zugriffsentzug haette allein an ``Clear-Site-Data`` gehangen (in Safari
+     * unvollstaendig umgesetzt, siehe docs/security-notes.md).
+     *
+     * Geprueft wird ausdruecklich Status UND Marker-Header, nie der Status
+     * allein: ein nacktes 403 ist CSRF-/Rate-Limit-/Proxy-Rauschen und darf
+     * den Aussendienst-Cache nicht leeren (Refs #1354). Genau diese
+     * Unterscheidung pinnt die vitest-Suite in beide Richtungen.
+     */
+    var ARCHIVED_HEADER = "X-Facility-Archived";
+
+    function _isFacilityArchived(xhr) {
+        if (!xhr || xhr.status !== 403 || typeof xhr.getResponseHeader !== "function") {
+            return false;
+        }
+        try {
+            return xhr.getResponseHeader(ARCHIVED_HEADER) === "1";
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    function _purgeOfflineState() {
+        // Regelfall: das gemeinsame Modul (facility-archived-purge.js) ist in
+        // base.html vor dieser Datei geladen. Der Rueckfall greift auf
+        // Layouts, die es nicht mitbringen — dort ist der Offline-Verbund
+        // seinerseits vorhanden, also bleibt der Wipe wirksam.
+        try {
+            if (window.facilityArchivedPurge) {
+                return window.facilityArchivedPurge.run();
+            }
+            if (window.crypto_session && window.crypto_session.wipeOfflineState) {
+                return Promise.resolve(window.crypto_session.wipeOfflineState());
+            }
+        } catch (_e) {
+            // ignore — der Redirect unten muss trotzdem stattfinden.
+        }
+        return Promise.resolve();
+    }
+
+    function _handleArchivedFacility() {
+        // Neu laden statt Toast: JEDER Pfad antwortet ab jetzt mit der
+        // Sperrseite, der Reload landet also genau dort. Ein Toast neben einer
+        // weiterhin bedienbaren Oberflaeche waere die falsche Botschaft — der
+        // Zugang ist weg, nicht die eine Aktion fehlgeschlagen.
+        _purgeOfflineState()
+            .catch(function () {})
+            .then(function () {
+                try {
+                    window.location.reload();
+                } catch (_e) {
+                    // ignore — der naechste Klick landet ohnehin auf der Sperrseite.
+                }
+            });
+    }
+
     // htmx:responseError feuert bei 4xx/5xx-Serverantworten und bubbelt zum
     // body. (Netzwerk-/Sende-Fehler im Offline-Fall behandelt der Service
     // Worker + Offline-Banner separat — daher hier bewusst nur responseError.)
     document.body.addEventListener("htmx:responseError", function (event) {
         var xhr = event && event.detail ? event.detail.xhr : null;
+        if (_isFacilityArchived(xhr)) {
+            _handleArchivedFacility();
+            return;
+        }
         _showErrorToast(_messageFor(xhr));
     });
 })();

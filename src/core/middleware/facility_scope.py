@@ -136,6 +136,14 @@ class FacilityScopeMiddleware:
             with translation.override(lang):
                 body = render_to_string(ARCHIVED_TEMPLATE, {"csrf_token": get_token(request), "page_language": lang})
             response = HttpResponseForbidden(body)
+            # Refs #2067 (Cross-Review N1): ``translation.override`` endet mit
+            # dem Renderblock, und die aeussere ``LocaleMiddleware`` setzt
+            # ``Content-Language`` danach aus der WIEDERHERGESTELLTEN
+            # Request-Sprache — bei Praeferenz Englisch und ausgehandeltem
+            # Deutsch stuenden sonst englischer Body und ``Content-Language:
+            # de`` nebeneinander. Der Header wird deshalb explizit gesetzt;
+            # ``LocaleMiddleware`` nutzt ``setdefault`` und laesst ihn stehen.
+            response["Content-Language"] = lang
             # Refs #2067 (Cross-Review Finding 1): die Sperre muss auch den
             # OFFLINE-Pfad erreichen. Serverseitig sind API, HTMX, Exporte und
             # Replay ab hier dicht — bereits entschluesselt im Browser liegende

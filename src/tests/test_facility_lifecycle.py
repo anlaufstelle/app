@@ -221,6 +221,19 @@ class TestMiddlewareFaelltFailClosed:
         assert response["Clear-Site-Data"] == '"storage", "cache"'
         assert "cookies" not in response["Clear-Site-Data"]
 
+    def test_sperrseite_traegt_den_eigenstaendigen_purge(self, rf, staff_user):
+        """Cross-Review Finding 1 (Rest): der Navigationsfall darf sich nicht
+        allein auf ``Clear-Site-Data`` verlassen — Safari setzt den Header nur
+        unvollständig um. Die Seite räumt deshalb selbst auf; das Modul ist
+        abhängigkeitsfrei, weil hier kein ``base.html`` lädt."""
+        _archive(staff_user.facility)
+
+        _request, response = _run_middleware(rf, staff_user)
+
+        body = response.content.decode()
+        assert "data-facility-archived-purge" in body, "DOM-Marker fehlt — das Modul startet nicht"
+        assert "js/facility-archived-purge.js" in body, "Purge-Modul wird nicht geladen"
+
     def test_durchgelassener_request_traegt_die_marker_nicht(self, rf, staff_user):
         _request, response = _run_middleware(rf, staff_user)
         assert response == "DURCHGELASSEN"
@@ -269,6 +282,28 @@ class TestSperrseiteSprichtDieNutzersprache:
         body = response.content.decode()
         assert 'lang="en"' in body
         assert "Facility archived" in body
+        # Refs #2067 (Cross-Review N1): ``translation.override`` endet vor der
+        # Rueckgabe, die aeussere LocaleMiddleware setzte den Header sonst aus
+        # der wiederhergestellten Request-Sprache — englischer Body neben
+        # ``Content-Language: de``.
+        assert response["Content-Language"] == "en"
+
+    def test_content_language_ueberlebt_die_volle_middleware_kette(self, client, staff_user):
+        """Der eigentliche N1-Nachweis: ``LocaleMiddleware`` setzt den Header
+        ausgangsseitig aus der wiederhergestellten Request-Sprache. Sie nutzt
+        dafür ``setdefault`` — der explizit gesetzte Wert muss also stehen
+        bleiben. Nur ein Lauf durch die echte Kette zeigt das; der
+        RequestFactory-Test oben sieht die äußere Middleware nicht."""
+        staff_user.preferred_language = "en"
+        staff_user.save(update_fields=["preferred_language"])
+        assert client.login(username="teststaff", password="testpass123")
+        _archive(staff_user.facility)
+
+        response = client.get("/", headers={"accept-language": "de"})
+
+        assert response.status_code == 403
+        assert response["Content-Language"] == "en"
+        assert 'lang="en"' in response.content.decode()
 
     def test_ohne_praeferenz_bleibt_die_default_sprache(self, rf, staff_user):
         _archive(staff_user.facility)
@@ -278,6 +313,7 @@ class TestSperrseiteSprichtDieNutzersprache:
         body = response.content.decode()
         assert 'lang="de"' in body
         assert "Einrichtung archiviert" in body
+        assert response["Content-Language"] == "de"
 
 
 # --- Doku: Raw-Shell-Hard-Delete-Fussfalle -----------------------------------
@@ -286,9 +322,16 @@ class TestSperrseiteSprichtDieNutzersprache:
 @pytest.mark.architecture
 class TestAdminGuideDokumentiertDieHardDeleteFussfalle:
     """Der Hard-Delete einer Einrichtung stirbt mitten in der Kaskade am
-    ``auditlog_immutable``-Trigger. Aus einer rohen ORM-Shell laeuft er
-    autocommitted-gebatcht — die Zerstoerung bleibt dann partiell. Das gehoert
-    ins Administrationshandbuch, nicht in einen Code-Kommentar."""
+    ``auditlog_immutable``-Trigger — und rollt dabei VOLLSTAENDIG zurueck:
+    Django umschliesst den gesamten Collector mit einer Transaktion, auch aus
+    ``manage.py shell``. Partielle Zerstoerung entsteht nur durch ein eigenes
+    Skript, das Fachtabellen einzeln mit Zwischencommits leert.
+
+    (Der frueher hier stehende Satz „autocommitted-gebatcht" war genau die
+    Fehlannahme, die Cross-Review-Finding 6 widerlegt hat — die Guards unten
+    halten sie jetzt aus beiden Handbuch-Fassungen heraus. Refs #2067, N2.)
+
+    Das gehoert ins Administrationshandbuch, nicht in einen Code-Kommentar."""
 
     @staticmethod
     def _admin_guide(root: Path = REPO_ROOT) -> str:
@@ -335,3 +378,12 @@ class TestAdminGuideDokumentiertDieHardDeleteFussfalle:
         assert "Facility-Archivierung: Lifecycle des Zugriffsentzugs" in text
         assert "X-Facility-Archived" in text
         assert "Clear-Site-Data" in text
+
+    def test_restrisiko_ist_ehrlich_beschrieben(self):
+        """Cross-Review Fix-Runde 2: „nach 48 h ist alles weg" war zu
+        optimistisch. Die TTL verwirft nur den Server-Spiegel; ungesyncte
+        Arbeit überlebt bewusst, und der Idle-Wipe entfernt bei ihr allein den
+        Schlüssel (Refs #1353)."""
+        text = (REPO_ROOT / "docs" / "security-notes.md").read_text(encoding="utf-8")
+        assert "nur den Schlüssel" in text
+        assert "Server-Spiegel" in text
