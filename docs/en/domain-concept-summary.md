@@ -83,7 +83,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Breach detection.** Heuristic incident detection (GDPR Art. 33/34) flags mass deletions of person data, credential-stuffing bursts against unknown usernames, and distributed victim-lockout patterns, delivering SSRF-hardened webhook alerts. Error tracking stays off by default; when enabled, a scrubber strips PII before events leave the installation.
 - **Facility scoping.** Every query filters on `facility_id`, enforced by middleware. Since v0.10, PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
 - **Two-factor authentication.** Since v0.10, TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031); a WebAuthn passkey can additionally be registered as a phishing-resistant second factor (ADR-032, no passwordless login).
-- **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. GDPR documentation templates (processing register, DPIA, DPA, TOMs) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/), since #784).
+- **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. Seven GDPR documentation templates (processing register, DPIA, DPA, TOMs, data-subject information, employee information, and a deletion concept) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/), since #784).
 
 ## Role Model
 
@@ -254,5 +254,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.86.0 -->
-<!-- translation-date: 2026-08-24 -->
-<!-- source-hash: 91adff08bbd2acf538eb4414e81ac6c4b42dcd05 -->
+<!-- translation-date: 2026-08-28 -->
+<!-- source-hash: 19f61ad93ada6b0789df13d4ce6c8d90875665e2 -->

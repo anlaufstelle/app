@@ -83,5 +83,7 @@ Vorlagen für den Datenschutz in [`src/core/dsgvo_templates/`](../src/core/dsgvo
 | [av-vertrag.md](../src/core/dsgvo_templates/av-vertrag.md) | Auftragsverarbeitungsvertrag |
 | [dsfa.md](../src/core/dsgvo_templates/dsfa.md) | Datenschutz-Folgenabschätzung |
 | [informationspflichten.md](../src/core/dsgvo_templates/informationspflichten.md) | Informationspflichten nach Art. 13/14 DSGVO |
+| [loeschkonzept.md](../src/core/dsgvo_templates/loeschkonzept.md) | Löschkonzept mit Fristen für aktive Daten und Sicherungsstände |
+| [mitarbeiter_informationspflichten.md](../src/core/dsgvo_templates/mitarbeiter_informationspflichten.md) | Informationspflichten für Beschäftigte nach Art. 13/14 DSGVO und § 26 BDSG |
 | [toms.md](../src/core/dsgvo_templates/toms.md) | Technische und organisatorische Maßnahmen |
 | [verarbeitungsverzeichnis.md](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | Verzeichnis von Verarbeitungstätigkeiten |

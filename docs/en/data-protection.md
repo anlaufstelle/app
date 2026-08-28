@@ -44,6 +44,8 @@
 | Art. 28 Data processing agreement | [Data processing agreement](../../src/core/dsgvo_templates/av-vertrag.md) | [Operator] |
 | Art. 30 Record of processing activities | [Processing register](../../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | [Operator] [Auditor] |
 | Art. 35 Data protection impact assessment | [DPIA](../../src/core/dsgvo_templates/dsfa.md) | [Operator] [Auditor] |
+| Art. 5(1)(e) / Art. 17 retention and deletion concept | [Deletion concept](../../src/core/dsgvo_templates/loeschkonzept.md) | [Operator] [Auditor] |
+| Arts. 13–14 / § 26 BDSG employee information | [Employee information](../../src/core/dsgvo_templates/mitarbeiter_informationspflichten.md) | [Operator] |
 | TOMs (overview) | [TOMs](../../src/core/dsgvo_templates/toms.md) | [Operator] [Auditor] |
 | App feature "GDPR package" (bundle download) | [`DSGVOPackageView`](../../src/core/views/dsgvo.py) · [`generate_dsgvo_package`](../../src/core/management/commands/generate_dsgvo_package.py) | [Operator] [Dev] |
 
@@ -65,5 +67,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.86.0 -->
-<!-- translation-date: 2026-08-22 -->
-<!-- source-hash: 0172c75a048142d26488a3e554224ca844a777df -->
+<!-- translation-date: 2026-08-28 -->
+<!-- source-hash: eb3bcfe5d0ad673f1e2c0d5fc22dd737f43b3afa -->

@@ -378,6 +378,7 @@ Every new facility-scoped model must be protected on **both** defense lines:
 2. **PostgreSQL RLS (second line, defense in depth):**
    - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
    - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) has been **derivation-based** since #1096: tables with a direct `facility` FK (DIRECT) are derived automatically from the model registry by the test suite — a new such model appears in `EXPECTED_TABLES` without any manual step, and the RLS coverage guard (`TestRLSCoverageGuard`) fails until the RLS migration **and** the PII classification exist. Only **JOIN-scoped** tables without a direct FK need a manual entry in the `JOIN_SCOPED_TABLES` constant; the auth-boundary exception (`core_user`) lives in `NOT_RLS_SCOPED`.
+   - The architecture guard `TestRLSJoinScopeArchitectureGuard` (#2001) closes the previous blind spot: if a model without its own `facility` FK references a DIRECT table via FK/O2O, its table must be listed in `JOIN_SCOPED_TABLES`. Otherwise, `pytest -m architecture` fails with a reference to migration pattern `0047_postgres_rls_setup.py` — even if neither a migration nor the list knows about the new table yet. Derivation is deliberately limited to the immediate edge to a DIRECT model; for deeper chains (JOIN → JOIN → DIRECT), the manual entry based on the complete facility chain remains mandatory.
    - The RLS-free tables (`core_user`, `core_facility`, `core_organization`) lack this second backstop by definition. The architecture guard `TestTenantModelScopeGuard` in [`src/tests/test_architecture_guards_models.py`](src/tests/test_architecture_guards_models.py) (#1658) covers them instead: a `User.objects`/`Facility.objects`/`Organization.objects` access in `core/views/`, `core/forms/` or `core/services/` without a facility scope fails CI. Deliberately global accesses (pre-auth lookups, super-admin metrics) belong in the allowlist of the respective scan section, with a reason; the rationale for the guard-vs.-manager decision is in [ADR-005](docs/adr/005-facility-scoping-and-rls.md).
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see `docs/dev/dev-deployment.md` (dev-only), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
@@ -973,5 +974,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.86.0 -->
-<!-- translation-date: 2026-08-26 -->
-<!-- source-hash: 4f9d3a325bc006c0755f125a97f5718d54eeddfe -->
+<!-- translation-date: 2026-08-28 -->
+<!-- source-hash: e8db3d64512a49bd20af4675f2c2157ee09456af -->

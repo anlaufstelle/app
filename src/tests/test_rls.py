@@ -11,8 +11,9 @@ explizit kein Superuser sein darf (siehe docs/coolify-deployment.md).
 
 import pytest
 from django.apps import apps
-from django.db import connection
+from django.db import connection, models
 from django.db.models import ForeignKey, OneToOneField
+from django.test.utils import isolate_apps
 
 # Importiere Fixtures aus test_rls_functional.py, sodass
 # ``TestSuperAdminRLSBypass`` unten die Fixtures wiederverwenden kann.
@@ -69,11 +70,53 @@ def _has_direct_facility_fk(model) -> bool:
     return isinstance(field, (ForeignKey, OneToOneField)) and field.related_model._meta.db_table == "core_facility"
 
 
-def _direct_scoped_tables() -> set[str]:
+def _direct_scoped_tables(model_registry=None) -> set[str]:
     """Alle Tabellen mit direktem facility-FK, ohne die Auth-Grenzen-Allowlist."""
+    registered_models = apps.get_models() if model_registry is None else model_registry
     return {
-        m._meta.db_table for m in apps.get_models() if not m._meta.proxy and _has_direct_facility_fk(m)
+        model._meta.db_table for model in registered_models if not model._meta.proxy and _has_direct_facility_fk(model)
     } - NOT_RLS_SCOPED
+
+
+def _join_scoped_candidates(model_registry=None) -> dict[str, set[str]]:
+    """Nicht-DIRECT-Tabellen mit FK/O2O auf mindestens eine DIRECT-Tabelle.
+
+    ``model_registry`` ist absichtlich injizierbar: Der Gegenstands-Test nutzt
+    eine isolierte Django-App-Registry und registriert keine Probe im echten
+    Modellbaum. Im Guard selbst bleibt die globale App-Registry die SSOT.
+    """
+    registered_models = tuple(apps.get_models() if model_registry is None else model_registry)
+    direct_tables = _direct_scoped_tables(registered_models)
+    candidates: dict[str, set[str]] = {}
+    for model in registered_models:
+        table = model._meta.db_table
+        if model._meta.proxy or table in direct_tables or table in NOT_RLS_SCOPED:
+            continue
+        referenced_direct_tables = {
+            field.related_model._meta.db_table
+            for field in model._meta.fields
+            if isinstance(field, (ForeignKey, OneToOneField))
+            and field.related_model is not None
+            and field.related_model._meta.db_table in direct_tables
+        }
+        if referenced_direct_tables:
+            candidates[table] = referenced_direct_tables
+    return candidates
+
+
+def _assert_join_scoped_tables_declared(
+    *,
+    model_registry=None,
+    join_scoped_tables: frozenset[str] = JOIN_SCOPED_TABLES,
+) -> None:
+    candidates = _join_scoped_candidates(model_registry)
+    missing = sorted(set(candidates) - join_scoped_tables)
+    details = ", ".join(f"{table} (FK auf {', '.join(sorted(candidates[table]))})" for table in missing)
+    assert not missing, (
+        f"JOIN-gescopte Modelle ohne RLS-Deklaration: {details}. "
+        "Neue RLS-Migration nach dem Muster src/core/migrations/0047_postgres_rls_setup.py anlegen "
+        "und die Tabelle in JOIN_SCOPED_TABLES aufnehmen."
+    )
 
 
 # Reine Registry-Introspektion (kein DB-Zugriff) — importierbar ohne Postgres;
@@ -81,6 +124,41 @@ def _direct_scoped_tables() -> set[str]:
 # Nebenwirkung: ein neues DIRECT-Model landet hier automatisch und triggert
 # damit auch das Completeness-Gate des PII-Residue-Sweeps.
 EXPECTED_TABLES = sorted(_direct_scoped_tables() | JOIN_SCOPED_TABLES)
+
+
+@pytest.mark.architecture
+class TestRLSJoinScopeArchitectureGuard:
+    """Refs #2001: JOIN-Kandidaten duerfen nicht aus der RLS-SSOT fallen."""
+
+    def test_all_models_referencing_direct_scope_are_declared(self):
+        _assert_join_scoped_tables_declared()
+
+    @isolate_apps()
+    def test_fixture_model_without_join_declaration_is_reported(self):
+        class FixtureFacility(models.Model):
+            class Meta:
+                app_label = "rls_guard_fixture"
+                db_table = "core_facility"
+
+        class FixtureDirect(models.Model):
+            facility = models.ForeignKey(FixtureFacility, on_delete=models.CASCADE)
+
+            class Meta:
+                app_label = "rls_guard_fixture"
+                db_table = "fixture_direct"
+
+        class FixtureJoin(models.Model):
+            parent = models.ForeignKey(FixtureDirect, on_delete=models.CASCADE)
+
+            class Meta:
+                app_label = "rls_guard_fixture"
+                db_table = "fixture_join"
+
+        with pytest.raises(AssertionError, match=r"fixture_join.*0047_postgres_rls_setup\.py"):
+            _assert_join_scoped_tables_declared(
+                model_registry=(FixtureFacility, FixtureDirect, FixtureJoin),
+                join_scoped_tables=frozenset(),
+            )
 
 
 @pytest.mark.django_db

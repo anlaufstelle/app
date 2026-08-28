@@ -26,7 +26,14 @@ Strings sind via :func:`django.utils.translation.gettext_lazy` lazy
 uebersetzbar (Refs #878).
 """
 
+from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
+
+from core.models.settings import (
+    DEFAULT_RETENTION_ANONYMOUS_DAYS,
+    DEFAULT_RETENTION_IDENTIFIED_DAYS,
+    DEFAULT_RETENTION_QUALIFIED_DAYS,
+)
 
 # ---------------------------------------------------------------------------
 # Statische Konstante: Verarbeitungstaetigkeiten
@@ -47,9 +54,9 @@ PROCESSING_ACTIVITIES = [
         ),
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. e (Wahrnehmung einer Aufgabe im "
-            "oeffentlichen Interesse) i.V.m. SGB VIII §13 (Jugendsozial"
-            "arbeit) bzw. SGB XII (Hilfen in Lebenslagen). "
-            "Sozialdatenschutz: SGB X §§67–85a."
+            "oeffentlichen Interesse). Einrichtungsspezifische Grundlage: "
+            "einschlaegiges Fach- und Sozialrecht der Einrichtung "
+            "(konkrete Rechtsgrundlage vor Freigabe ergaenzen)."
         ),
         "data_categories": [
             _("Pseudonym (kein Klarname)"),
@@ -61,13 +68,18 @@ PROCESSING_ACTIVITIES = [
             _("Intern: Mitarbeiter:innen der jeweiligen Einrichtung (facility-gescopt, kein Cross-Facility-Zugriff)"),
             _("Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"),
         ],
-        "retention_period": _(
-            "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. "
-            "Anonyme Kontakte: 12 Monate (danach Aggregation). "
-            "Kontakte der Stufe „Nur Pseudonym“: 36 Monate nach letztem "
-            "Kontakt. Kontakte der Stufe „Mit Zusatzangaben“: 10 Jahre "
-            "nach Falllauf-Ende "
-            "(SGB VIII §97)."
+        "retention_period": format_lazy(
+            _(
+                "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. "
+                "Erzwungene Standardfristen: Anonyme Kontakte: "
+                "{anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: "
+                "{identified_days} Tage nach letztem Kontakt; Kontakte der "
+                "Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach "
+                "Falllauf-Ende."
+            ),
+            anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
+            identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,
+            qualified_days=DEFAULT_RETENTION_QUALIFIED_DAYS,
         ),
         "toms": [
             _("Pseudonymisierung by Design"),
@@ -103,10 +115,11 @@ PROCESSING_ACTIVITIES = [
             "gebern."
         ),
         "legal_basis": _(
-            "DSGVO Art. 6 Abs. 1 lit. e i.V.m. SGB VIII §§ 61–65 "
-            "(Sozialdaten in der Jugendhilfe), Art. 9 Abs. 2 lit. b/h "
-            "fuer besondere Datenkategorien (Gesundheits-, "
-            "Sozialdaten). § 203 StGB (Schweigepflicht)."
+            "DSGVO Art. 6 Abs. 1 lit. e; Art. 9 Abs. 2 lit. b/h fuer "
+            "besondere Datenkategorien (Gesundheits-, Sozialdaten). "
+            "Einrichtungsspezifische Grundlage: einschlaegiges Fach- und "
+            "Sozialrecht der Einrichtung (konkrete Rechtsgrundlage vor "
+            "Freigabe ergaenzen). § 203 StGB, soweit anwendbar."
         ),
         "data_categories": [
             _("Ereignisbeschreibungen / Beratungsnotizen"),
@@ -309,10 +322,14 @@ PROCESSING_ACTIVITIES = [
         "id": "dsgvo_requests",
         "title": _("DSGVO-Auskunfts- und Berichtigungsantraege"),
         "purpose": _(
-            "Bearbeitung der Betroffenenrechte nach DSGVO Art. 15-22 "
-            "(Auskunft, Berichtigung, Loeschung, Einschraenkung, "
-            "Datenuebertragbarkeit, Widerspruch). Erstellung von "
-            "Datenexport-Paketen und Dokumentation der Bearbeitung."
+            "Technische Unterstuetzung der implementierten Betroffenenrechte "
+            "nach DSGVO Art. 15, 16, 17 und 20 (Auskunft, Berichtigung, "
+            "Loeschung und Datenuebertragbarkeit). Antraege auf Einschraenkung "
+            "(Art. 18) oder Widerspruch (Art. 21) werden ausserhalb der "
+            "Anwendung im organisatorischen Prozess der Einrichtung "
+            "aufgenommen; die Anwendung stellt dafuer kein Intake-Formular "
+            "bereit. Erstellung von Datenexport-Paketen und Dokumentation der "
+            "Bearbeitung."
         ),
         "legal_basis": _(
             "DSGVO Art. 6 Abs. 1 lit. c (rechtliche Verpflichtung) "

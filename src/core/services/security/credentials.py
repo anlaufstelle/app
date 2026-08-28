@@ -273,7 +273,8 @@ def flush_user_sessions(user) -> None:
     Django-Default-Session-Backend ist DB-backed; eine Session bindet den User
     ueber ``_auth_user_id`` im dekodierten Payload. Wir scannen nur die noch
     nicht abgelaufenen Sessions (abgelaufene tragen ohnehin keinen lebenden
-    Schluessel mehr und werden vom Clearsessions-Housekeeping getilgt).
+    Schluessel mehr und werden vom taeglichen ``clearsessions``-Job des
+    Cron-Sidecars getilgt).
 
     R18 (Refs #1476/#1666): Der Scan ist begrenzt — nur die zwei benoetigten
     Spalten (``.only``), gestreamt (``.iterator``) statt materialisiert, und

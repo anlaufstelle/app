@@ -41,6 +41,8 @@ Templates included:
 - **TOMs** — Technical and Organizational Measures (Art. 32 DSGVO)
 - **DSFA** — Data Protection Impact Assessment (Art. 35 DSGVO)
 - **Informationspflichten** — Data subject information (Arts. 13–14 DSGVO)
+- **Löschkonzept** — Retention and deletion concept for active data and backups
+- **Mitarbeiter-Informationspflichten** — Employee information (Arts. 13–14 DSGVO and § 26 BDSG)
 - **Verarbeitungsverzeichnis** — Processing register (Art. 30 DSGVO)
 
 ### Other German-only Documents
@@ -70,5 +72,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.86.0 -->
-<!-- translation-date: 2026-08-27 -->
-<!-- source-hash: 369fd302060a22e79c67430263104f072008a2eb -->
+<!-- translation-date: 2026-08-28 -->
+<!-- source-hash: c8375032edbaf3175e5578ec695cdc7ffd928601 -->
