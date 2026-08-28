@@ -55,26 +55,27 @@ class TestDetectBreachesCommand:
             f"Erwartet Aufruf mit facility.pk={facility.pk}, erhalten: {called_facility.pk}"
         )
 
-    def test_unknown_facility_writes_to_stderr_without_crash(self, facility):
-        """Unbekannter Facility-Name: stderr-Meldung, kein Raise, kein Service-Call.
+    def test_unknown_facility_aborts_fail_loud(self, facility):
+        """Unbekannter Facility-Name: ``CommandError``, kein Service-Call.
 
-        Der Command soll defensiv reagieren — kein Crash, dafuer eine klare
-        Fehlermeldung auf stderr. Wir verifizieren zusaetzlich, dass der
-        Service in diesem Zweig NICHT aufgerufen wird.
+        Refs #2068 (a) / Cross-Review Finding 4: bis dahin schrieb der Command
+        nur nach stderr und kehrte mit Exit-Code 0 zurueck — ein Tippfehler im
+        Cron-``--facility`` sah damit wie ein erfolgreicher Scan aus, obwohl
+        keine einzige Einrichtung geprueft wurde. Die Meldung ist unveraendert,
+        nur der Exit-Status ist jetzt ehrlich. Wir verifizieren zusaetzlich,
+        dass der Service in diesem Zweig NICHT aufgerufen wird.
         """
         out = StringIO()
         err = StringIO()
         with patch(self.PATCH_TARGET, return_value=[]) as mock_run:
-            call_command(
-                "detect_breaches",
-                "--facility=NichtExistent",
-                stdout=out,
-                stderr=err,
-            )
+            with pytest.raises(CommandError, match="Facility 'NichtExistent' not found."):
+                call_command(
+                    "detect_breaches",
+                    "--facility=NichtExistent",
+                    stdout=out,
+                    stderr=err,
+                )
 
-        assert "Facility 'NichtExistent' not found." in err.getvalue(), (
-            f"Erwartet 'Facility 'NichtExistent' not found.' in stderr, erhalten: {err.getvalue()!r}"
-        )
         mock_run.assert_not_called()
 
     def test_iterates_over_all_facilities_without_filter(self, facility, second_facility):

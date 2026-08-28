@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, Event, Facility, LegalHold, Settings
@@ -290,10 +291,17 @@ def test_facility_filter_limits_scope(facility_with_settings, anon_event_expired
 
 
 @pytest.mark.django_db
-def test_facility_filter_nonexistent_warns(capsys):
-    """--facility with unknown name prints an error and does nothing."""
-    call_command("enforce_retention", facility="Nonexistent Facility")
-    # Should not raise, just warn
+def test_facility_filter_nonexistent_aborts_fail_loud():
+    """--facility with unknown name aborts with a non-zero exit status.
+
+    Refs #2068 (a) / Cross-Review Finding 4: bis dahin schrieb der Command nur
+    nach stderr und kehrte mit Exit-Code 0 zurueck — ein Tippfehler im
+    Cron-``--facility`` sah damit wie ein erfolgreicher Lauf aus, obwohl keine
+    einzige Frist durchgesetzt wurde. Die Anforderung hat sich geaendert, nicht
+    die Pruefung abgeschwaecht: erwartet wird jetzt der Abbruch.
+    """
+    with pytest.raises(CommandError, match="Nonexistent Facility"):
+        call_command("enforce_retention", facility="Nonexistent Facility")
 
 
 @pytest.mark.django_db

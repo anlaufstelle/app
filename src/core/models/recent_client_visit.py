@@ -4,7 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -41,21 +41,42 @@ class RecentClientVisitManager(models.Manager):
     #: Innerhalb dieses Fensters seit dem letzten Stempel: kein Rewrite.
     touch_throttle = timedelta(minutes=RECENT_VISIT_TOUCH_THROTTLE_MINUTES)
 
-    def update_or_create(self, defaults=None, **kwargs):
-        defaults = dict(defaults or {})
-        existing = self.filter(**kwargs).first()
-        if existing is not None:
-            now = timezone.now()
-            is_fresh = existing.visited_at is not None and now - existing.visited_at < self.touch_throttle
-            unchanged = all(getattr(existing, name) == value for name, value in defaults.items())
-            if is_fresh and unchanged:
-                return existing, False
-            # Ausserhalb des Fensters (oder bei echter Aenderung) faellt der
-            # Stempel bewusst hier, nicht per ``auto_now``: nur so landet
-            # ``visited_at`` in den ``update_fields``, die ``update_or_create``
-            # aus den ``defaults``-Schluesseln ableitet.
-            defaults["visited_at"] = now
-        return super().update_or_create(defaults=defaults, **kwargs)
+    def update_or_create(self, defaults=None, create_defaults=None, **kwargs):
+        """Refs #2068 (d); Nebenlaeufigkeit + Signatur aus dem Cross-Review.
+
+        ``create_defaults`` MUSS in der Signatur stehen (Django 6): landete es
+        in ``**kwargs``, wuerde Django es als Lookup-Feld deuten und mit
+        ``FieldError`` scheitern. Es wird unveraendert durchgereicht — beim
+        Anlegen stempelt der Feld-Default, die Drosselung hat nichts zu tun.
+
+        Die Bestandspruefung liegt INNERHALB derselben Transaktion wie der
+        Schreibvorgang und liest unter ``select_for_update()``. Ein vorgelagertes
+        ``.first()`` ausserhalb des Locks hielt die Zusicherung „kein Rewrite
+        unter fuenf Minuten" unter Parallelitaet nicht: zwei gleichzeitige
+        Aufrufe nach Fensterablauf saehen beide denselben alten Stempel und
+        schrieben nacheinander — der zweite Schreibvorgang laege dann innerhalb
+        des Fensters. Unter dem Lock wartet der zweite Aufruf, liest den frisch
+        gestempelten Wert und faellt in den Drosselungs-Zweig.
+
+        Existiert die Zeile noch nicht, gibt es nichts zu sperren; das Rennen
+        zweier Ersteinfuegungen faengt wie gehabt Djangos ``get_or_create``
+        ueber ``unique_together (user, client)`` ab.
+        """
+        update_defaults = dict(defaults or {})
+        with transaction.atomic(using=self.db):
+            existing = self.select_for_update().filter(**kwargs).first()
+            if existing is not None:
+                now = timezone.now()
+                is_fresh = existing.visited_at is not None and now - existing.visited_at < self.touch_throttle
+                unchanged = all(getattr(existing, name) == value for name, value in update_defaults.items())
+                if is_fresh and unchanged:
+                    return existing, False
+                # Ausserhalb des Fensters (oder bei echter Aenderung) faellt der
+                # Stempel bewusst hier, nicht per ``auto_now``: nur so landet
+                # ``visited_at`` in den ``update_fields``, die
+                # ``update_or_create`` aus den ``defaults``-Schluesseln ableitet.
+                update_defaults["visited_at"] = now
+            return super().update_or_create(defaults=update_defaults, create_defaults=create_defaults, **kwargs)
 
 
 class RecentClientVisit(models.Model):

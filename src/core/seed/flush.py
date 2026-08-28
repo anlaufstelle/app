@@ -54,9 +54,11 @@ def flush_seed_data() -> None:
         # weiter unten mit ``ProtectedError`` scheitern und macht damit den
         # kompletten ``seed --flush`` unbrauchbar — inklusive des
         # E2E-``base_url``-Fixtures, das genau darueber seinen Startzustand
-        # herstellt. ``RectificationRequest`` kaeme zwar ueber
-        # ``Client``-CASCADE mit, steht hier aber bewusst explizit: der Flush
-        # soll nicht davon abhaengen, an welcher Person ein Antrag haengt.
+        # herstellt. ``RectificationRequest`` MUSS hier stehen: seit Refs #2068
+        # (c) ist ``target_client`` PROTECT statt CASCADE — die Antraege kommen
+        # also nicht mehr ueber die Person mit, sondern blockieren deren
+        # Loeschung weiter unten. (Vor #2068 stand die Zeile bereits hier,
+        # damals als bewusste Unabhaengigkeit vom Kaskadenpfad.)
         RectificationRequest.objects.all().delete()
         ImportJob.objects.all().delete()
         # Refs #2068 (b): ``QuickTemplate.document_type`` ist seit dem

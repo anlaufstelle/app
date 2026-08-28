@@ -58,9 +58,12 @@ class TestCliArgumentValidation:
         assert "mutually exclusive" in stderr.getvalue()
 
     def test_unknown_facility_name_errors(self, facility, settings_obj):
-        stderr = StringIO()
-        call_command("enforce_retention", "--facility", "gibts-nicht", stderr=stderr)
-        assert "not found" in stderr.getvalue()
+        """Refs #2068 (a) / Cross-Review Finding 4: der Lauf bricht jetzt mit
+        ``CommandError`` ab statt mit Exit-Code 0 zurueckzukehren — ein
+        Tippfehler im Cron-``--facility`` sah sonst wie ein erfolgreicher Lauf
+        aus, obwohl keine Frist durchgesetzt wurde."""
+        with pytest.raises(CommandError, match="gibts-nicht"):
+            call_command("enforce_retention", "--facility", "gibts-nicht", stderr=StringIO())
 
     def test_facility_without_settings_is_skipped(self, facility):
         """Keine Settings → Command schreibt Warning und skipped die Facility."""

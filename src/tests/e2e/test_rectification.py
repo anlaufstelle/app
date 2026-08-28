@@ -89,12 +89,18 @@ def rect_run(e2e_env):
     }
     yield state
 
-    # Reihenfolge: Personen zuerst (``Client.document_type`` ist PROTECT),
-    # danach Zuordnung, Typ und Vorlage. Berichtigungsanträge hängen per
-    # CASCADE an der Person und verschwinden mit ihr.
+    # Reihenfolge (Refs #2068 (c) / Cross-Review Finding 5): Berichtigungs-
+    # anträge ZUERST. ``RectificationRequest.target_client`` ist seit dem
+    # Schema-Hygiene-Bündel PROTECT statt CASCADE — sie verschwinden also
+    # nicht mehr mit der Person, sondern blockieren deren Löschung mit
+    # ``ProtectedError``. Ohne diese Zeile riss das Teardown, sobald der Test
+    # einen Antrag angelegt hatte, und ließ Typ und Vorlage mit stehen.
+    # Danach wie gehabt: Personen (``Client.document_type`` ist PROTECT),
+    # Zuordnung, Typ, Vorlage.
     _shell(
         e2e_env,
-        "from core.models import Client, DocumentType, DocumentTypeField, FieldTemplate; "
+        "from core.models import Client, DocumentType, DocumentTypeField, FieldTemplate, RectificationRequest; "
+        f"RectificationRequest.objects.filter(target_client__pseudonym__startswith='{prefix}').delete(); "
         f"Client.objects.filter(pseudonym__startswith='{prefix}').delete(); "
         f"DocumentTypeField.objects.filter(document_type_id='{setup['doc_type']}').delete(); "
         f"DocumentType.objects.filter(pk='{setup['doc_type']}').delete(); "
