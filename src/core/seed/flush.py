@@ -21,6 +21,7 @@ from core.models import (
     Milestone,
     Organization,
     OutcomeGoal,
+    QuickTemplate,
     RectificationRequest,
     RetentionProposal,
     Settings,
@@ -58,6 +59,13 @@ def flush_seed_data() -> None:
         # soll nicht davon abhaengen, an welcher Person ein Antrag haengt.
         RectificationRequest.objects.all().delete()
         ImportJob.objects.all().delete()
+        # Refs #2068 (b): ``QuickTemplate.document_type`` ist seit dem
+        # Hygiene-Buendel PROTECT statt CASCADE — aus demselben Grund und mit
+        # derselben Folge wie bei ``ImportJob`` oben: ohne diese Zeile
+        # scheitert ``DocumentType.objects.all().delete()`` weiter unten mit
+        # ``ProtectedError``, und ``seed --flush`` waere unbrauchbar. Die
+        # Vorlagen kamen vorher still ueber die Kaskade mit.
+        QuickTemplate.objects.all().delete()
         WorkItem.objects.all().delete()
         Milestone.objects.all().delete()
         OutcomeGoal.objects.all().delete()

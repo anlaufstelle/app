@@ -262,8 +262,10 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
         # Papierkorb — mit demselben Sackgassen-Effekt (die Fallliste zeigt ihn
         # nicht mehr, das Detail antwortet 404).
         case_trashed_count = Case.objects.filter(document_type=doc_type, is_deleted=True).count()
-        # QuickTemplate.document_type ist FK CASCADE: zugehörige Schnellvorlagen
-        # werden beim Löschen still mitentfernt — die Kaskade im Dialog ausweisen.
+        # Refs #2068 (b): QuickTemplate.document_type ist jetzt PROTECT (vorher
+        # CASCADE — die Schnellvorlagen fielen samt prefilled_data still mit).
+        # Der Zähler ist damit ein echter Blocker wie die drei darüber und
+        # deaktiviert im Dialog den „Endgültig löschen"-Knopf.
         quick_template_count = QuickTemplate.objects.filter(document_type=doc_type).count()
         return render(
             request,

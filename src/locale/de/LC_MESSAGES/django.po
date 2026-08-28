@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 09:05+0200\n"
+"POT-Creation-Date: 2026-08-28 14:23+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -2579,14 +2579,6 @@ msgstr ""
 #: src/core/models/time_filter.py:34
 msgid "Standard"
 msgstr "Standard"
-
-#: src/core/models/time_filter.py:35
-msgid ""
-"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
-"wird"
-msgstr ""
-"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
-"wird"
 
 #: src/core/models/time_filter.py:41 src/core/models/time_filter.py:42
 #: src/templates/components/_time_filter_dropdown.html:6
@@ -7418,10 +7410,16 @@ msgstr[1] ""
 
 #: src/templates/core/config/document_types/confirm_delete.html:46
 #, python-format
-msgid "%(n)s Schnellvorlage wird beim Löschen mit entfernt."
-msgid_plural "%(n)s Schnellvorlagen werden beim Löschen mit entfernt."
-msgstr[0] "%(n)s Schnellvorlage wird beim Löschen mit entfernt."
-msgstr[1] "%(n)s Schnellvorlagen werden beim Löschen mit entfernt."
+msgid "%(n)s Schnellvorlage verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgid_plural "%(n)s Schnellvorlagen verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgstr[0] "%(n)s Schnellvorlage verweist auf diesen Typ — ein Löschen ist daher nicht möglich."
+msgstr[1] "%(n)s Schnellvorlagen verweisen auf diesen Typ — ein Löschen ist daher nicht möglich."
+
+#, python-format
+msgid "%(n)d Schnellvorlage verweist auf diesen Dokumentationstyp und müsste zuerst gelöscht werden."
+msgid_plural "%(n)d Schnellvorlagen verweisen auf diesen Dokumentationstyp und müssten zuerst gelöscht werden."
+msgstr[0] "%(n)d Schnellvorlage verweist auf diesen Dokumentationstyp und müsste zuerst gelöscht werden."
+msgstr[1] "%(n)d Schnellvorlagen verweisen auf diesen Dokumentationstyp und müssten zuerst gelöscht werden."
 
 #: src/templates/core/config/document_types/confirm_delete.html:55
 msgid ""

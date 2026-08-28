@@ -29,11 +29,15 @@ class TimeFilter(models.Model):
         verbose_name=_("Endzeit"),
         help_text=_("Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"),
     )
-    is_default = models.BooleanField(
-        default=False,
-        verbose_name=_("Standard"),
-        help_text=_("Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt wird"),
-    )
+    # Refs #2068 (e): ``is_default`` ist ersatzlos entfallen. Das Feld wurde
+    # ausschliesslich vom Startbestand geschrieben und an keiner Stelle
+    # gelesen; ``current_tally_context`` faellt ausserhalb jeder Schicht auf
+    # den vollen Tag zurueck, nicht auf die markierte Schicht. Der help_text
+    # („wird vorausgewählt, wenn keine aktive Schicht erkannt wird")
+    # versprach damit ein Verhalten, das es nie gab. Eine echte
+    # Default-Schicht-Schicht waere ein Feature und braucht einen eigenen
+    # Entwurf — sie hier stillschweigend nachzubauen hiesse, aus einer
+    # Bereinigung eine Verhaltensaenderung zu machen.
     is_active = models.BooleanField(default=True, verbose_name=_("Aktiv"))
     sort_order = models.IntegerField(default=0, verbose_name=_("Sortierung"))
 

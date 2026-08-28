@@ -91,7 +91,6 @@ class TimeFilterDef:
     label: str
     start_time: time
     end_time: time
-    is_default: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,11 +103,12 @@ class QuickTemplateDef:
 
 
 # Drei Standardschichten mit Mitternachts-Ueberlappung im Nachtdienst
-# (``TimeFilter.covers_time`` traegt den Fall). Genau EINE Vorauswahl:
+# (``TimeFilter.covers_time`` traegt den Fall). Ohne Vorauswahl:
 # ``current_tally_context`` faellt ausserhalb jeder Schicht auf den vollen Tag
-# zurueck, die ``is_default``-Zeile ist die Vorauswahl der Uebergabe-Ansicht.
+# zurueck — das frueher hier gesetzte ``is_default`` wurde nirgends gelesen und
+# ist mit Refs #2068 (e) entfallen.
 DEFAULT_TIME_FILTERS: tuple[TimeFilterDef, ...] = (
-    TimeFilterDef("Frühdienst", time(8, 0), time(16, 0), is_default=True),
+    TimeFilterDef("Frühdienst", time(8, 0), time(16, 0)),
     TimeFilterDef("Spätdienst", time(16, 0), time(22, 0)),
     TimeFilterDef("Nachtdienst", time(22, 0), time(8, 0)),
 )
@@ -215,7 +215,6 @@ def ensure_default_time_filters(facility: Facility) -> list[TimeFilter] | None:
             label=item.label,
             start_time=item.start_time,
             end_time=item.end_time,
-            is_default=item.is_default,
             sort_order=index,
         )
         for index, item in enumerate(DEFAULT_TIME_FILTERS)

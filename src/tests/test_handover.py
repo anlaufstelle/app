@@ -16,7 +16,6 @@ def time_filter_frueh(facility):
         label="Fruhdienst",
         start_time=time(0, 0),
         end_time=time(23, 59),
-        is_default=True,
         sort_order=0,
     )
 
@@ -143,7 +142,6 @@ class TestBuildHandoverSummary:
             label="Vormittag",
             start_time=time(9, 0),
             end_time=time(11, 0),
-            is_default=False,
             sort_order=1,
         )
         in_range = timezone.make_aware(timezone.datetime(today.year, today.month, today.day, 10, 0))

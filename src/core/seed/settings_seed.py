@@ -57,7 +57,6 @@ def seed_time_filters(facility: Facility) -> None:
             defaults={
                 "start_time": item.start_time,
                 "end_time": item.end_time,
-                "is_default": item.is_default,
                 "sort_order": sort_order,
             },
         )

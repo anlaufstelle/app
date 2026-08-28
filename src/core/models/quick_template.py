@@ -36,7 +36,15 @@ class QuickTemplate(models.Model):
     )
     document_type = models.ForeignKey(
         "core.DocumentType",
-        on_delete=models.CASCADE,
+        # Refs #2068 (b): PROTECT statt CASCADE. Alle uebrigen
+        # Konfigurations-Referenzen auf ``DocumentType`` (Event, Client, Case)
+        # sind PROTECT und erscheinen im Loeschdialog als Blocker mit Zaehler.
+        # Die Schnellvorlagen fielen als einzige still mit — inklusive ihrer
+        # von Hand gepflegten ``prefilled_data``, die sich aus dem
+        # Dokumentationstyp allein nicht rekonstruieren lassen.
+        # ``delete_document_type`` weist sie jetzt wie die anderen als Blocker
+        # aus; das Loeschen der Vorlage selbst bleibt ein Ein-Klick-Vorgang.
+        on_delete=models.PROTECT,
         related_name="quick_templates",
         verbose_name=_("Dokumentationstyp"),
     )

@@ -66,6 +66,15 @@ WORKITEM_RECENT_DONE_PREVIEW = 5
 RECENT_VISIT_MAX_PER_USER = 20
 RECENT_VISIT_MAX_AGE_DAYS = 90
 
+# Refs #2068 (d): Drosselung des Besuchs-Zeitstempels. ``visited_at`` war
+# ``auto_now`` — jeder Aufruf einer Personenakte schrieb die Zeile neu, auch
+# beim Neuladen im Sekundentakt. Fuer die einzige Leserin (Dashboard-Widget
+# „Zuletzt besucht", Sortierung nach Tag/Stunde) ist diese Aufloesung wertlos,
+# der Rewrite kostet aber je Seitenaufruf ein totes Tupel plus Index-Eintraege
+# in einer Tabelle, die pro Nutzer:in ohnehin nur RECENT_VISIT_MAX_PER_USER
+# Zeilen haelt. Innerhalb des Fensters bleibt der Stempel stehen.
+RECENT_VISIT_TOUCH_THROTTLE_MINUTES = 5
+
 # MFA-Setup-Grace-Frist (Refs #689): Fenster nach dem ersten Login, in dem ein
 # rollen-erzwungener Nutzer die 2FA einrichten kann, bevor der Zugang gesperrt
 # wird. Bewusst gesetzte Zwaenge (``mfa_required``/facility-weit) greifen ohne

@@ -350,5 +350,5 @@ class QuickTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
 
 @admin.register(TimeFilter, site=anlaufstelle_admin_site)
 class TimeFilterAdmin(FacilityScopedAdminMixin, ModelAdmin):
-    list_display = ("label", "start_time", "end_time", "is_default", "is_active", "facility")
-    list_filter = ("is_active", "is_default", "facility")
+    list_display = ("label", "start_time", "end_time", "is_active", "facility")
+    list_filter = ("is_active", "facility")
