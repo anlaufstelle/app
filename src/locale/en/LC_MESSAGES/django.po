@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 14:23+0200\n"
+"POT-Creation-Date: 2026-08-28 14:44+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11889,3 +11889,12 @@ msgid "%(n)s offener Vorgang"
 msgid_plural "%(n)s offene Vorgänge"
 msgstr[0] "%(n)s open item"
 msgstr[1] "%(n)s open items"
+
+msgid "Einrichtung archiviert"
+msgstr "Facility archived"
+
+msgid "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht möglich. Bitte wenden Sie sich an die Systemverwaltung."
+msgstr "Your facility has been archived. Signing in is currently not possible. Please contact your system administration."
+
+msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
+msgstr "Your facility has been archived, so access to clients, events and reports is blocked. The data has not been deleted — your system administration can reactivate the facility."

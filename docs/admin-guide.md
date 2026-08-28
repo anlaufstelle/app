@@ -8,6 +8,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 1. [Installation (Docker Compose)](#1-installation-docker-compose)
 2. [Erstkonfiguration](#2-erstkonfiguration)
+   - 2.2c [Einrichtung stilllegen: archivieren statt löschen](#22c-einrichtung-stilllegen-archivieren-statt-löschen)
    - 2.5 [Dokumentationstypen konfigurieren](#25-dokumentationstypen-konfigurieren)
    - 2.6 [Auswahloptionen verwalten](#26-auswahloptionen-verwalten-feldvorlagen)
    - 2.6b [Fuzzy-Suche (pg_trgm)](#26b-fuzzy-suche-pg_trgm)
@@ -394,6 +395,30 @@ Hier können Sie verwalten:
 | Dokumentationstypen | Core → Dokumentationstypen | Technischer Fallback; primäre Pflege unter Verwaltung → Dokumentationstypen |
 | Zeitfenster | Core → Zeitfenster | Benannte Zeiträume für Auswertungen |
 | Audit-Log | Core → Audit-Logs | Unveränderliches Protokoll |
+
+### 2.2c Einrichtung stilllegen: archivieren statt löschen
+
+Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Löschen. Entfernen Sie unter **Core → Einrichtungen** den Haken bei **Aktiv** und speichern Sie. Nur `super_admin` darf das — die Einrichtungsverwaltung ist dieser Rolle vorbehalten.
+
+**Was das Archivieren bewirkt (ab #2067):**
+
+- Anmeldungen von Konten dieser Einrichtung werden mit der Meldung „Ihre Einrichtung ist archiviert" abgewiesen; im Audit-Log entsteht eine `LOGIN_FAILED`-Zeile mit `reason: facility_inactive`.
+- **Bereits laufende Sitzungen verlieren den Zugriff sofort** — nicht erst beim nächsten Anmelden. Betroffene sehen eine Sperrseite mit Abmelden-Knopf; jeder Fachpfad antwortet mit HTTP 403.
+- Auf Datenbankebene wird zusätzlich der Einrichtungs-Kontext (`app.current_facility_id`) geleert, sodass die Row-Level-Security-Regeln (siehe [§ 7.9](#79-row-level-security-rls)) auch dann keine Zeile liefern, wenn ein Pfad die Sperre umginge.
+- **Die Daten bleiben vollständig erhalten.** Aufbewahrungsfristen, Löschanträge und das Audit-Log laufen unverändert weiter; ein erneutes Setzen von **Aktiv** stellt den Zugang wieder her.
+- `super_admin` bleibt unbeschränkt — sonst wäre die Reaktivierung selbst gesperrt.
+
+> **Warum kein Hard-Delete? Die Fußfalle im Detail.**
+> Das endgültige Löschen einer Einrichtung ist **kein unterstützter Vorgang**, und ein Versuch aus einer rohen Shell (`manage.py shell`, `psql`) kann Daten in einem halb zerstörten Zustand hinterlassen:
+>
+> - `Facility` kaskadiert auf nahezu alle Fachtabellen — auch auf `core_auditlog`. Auf dieser Tabelle liegt der DB-Trigger `auditlog_immutable`, der jedes `UPDATE`/`DELETE` abweist. Djangos Löschkaskade läuft deshalb **mitten** in die Ablehnung.
+> - Steht die Kaskade in **einer** Transaktion (Django-Admin, `atomic`), rollt alles sauber zurück: Sie sehen einen Fehler, nichts ist verloren.
+> - Eine rohe ORM-Shell arbeitet dagegen im **Autocommit**, und die Kaskade schreibt in **Stapeln**. Die Stapel vor dem Trigger sind dann bereits fest geschrieben, der Rest nicht — Ereignisse, Personen oder Anhänge sind weg, das Protokoll und die Einrichtung selbst stehen noch. Diesen Zustand kann Ihnen niemand aus der Anwendung heraus reparieren; er braucht ein Backup ([§ 3.3](#33-wiederherstellung)).
+> - Zusätzlich blockiert ein `pre_delete`-Guard das Löschen, solange ein aktiver **Legal Hold** an der Einrichtung hängt.
+>
+> Wollen Sie eine Einrichtung wirklich restlos entfernen, ist der Weg: archivieren, die Aufbewahrungsfristen ablaufen lassen (siehe [§ 7.3](#73-löschfristen-und-enforce_retention)) und anschließend ein Backup ziehen — nicht die Kaskade.
+
+**Nutzer-Offboarding.** Das Archivieren sperrt den *Zugang*, räumt aber die Identitätsdaten ausgeschiedener Mitarbeitender nicht ab (Vor-/Nachname, Anzeigename, E-Mail, Telefon). Diese zweite Hälfte des Lebenszyklus wird gesondert umgesetzt: [#2051 — Offboarding-Bereinigung für ausgeschiedene Mitarbeitende](https://github.com/anlaufstelle/app/issues/2051). Bis dahin deaktivieren Sie die betroffenen Konten unter **Verwaltung → Zugänge**; Benutzername und Kennung bleiben dabei bewusst erhalten, damit die Zuordnung im Audit-Log lesbar bleibt.
 
 ### 2.3 Einstellungen pro Einrichtung
 

@@ -6,10 +6,37 @@ eingerichteten Row-Level-Security-Policies (erweitert in 0085 um den
 Superadmin-Bypass) als zweite Verteidigungslinie unterhalb der
 Django-Facility-Scoping-Schicht.
 
-Refs #542, #586, #733, #867.
+Seit Refs #2067 setzt sie zusaetzlich ``Facility.is_active`` durch: eine
+archivierte Einrichtung arbeitete bis dahin voll weiter, weil das Flag nirgends
+gelesen wurde.
+
+Refs #542, #586, #733, #867, #2067.
 """
 
 from django.db import connection
+from django.http import HttpResponseForbidden
+from django.middleware.csrf import get_token
+from django.template.loader import render_to_string
+
+#: Pfade, die auch bei archivierter Einrichtung erreichbar bleiben — sonst
+#: sitzt die Nutzerin in einer Sackgasse (kein Abmelden) oder die Sperrseite
+#: rendert ohne Stylesheet. Bewusst KURZ: die Verwaltungspfade zum Reaktivieren
+#: stehen NICHT drin, sie sind ueber die Rolle freigestellt (siehe
+#: :meth:`FacilityScopeMiddleware._is_archived_blocked`).
+ARCHIVED_EXEMPT_URLS = (
+    "/login/",
+    "/logout/",
+    "/static/",
+    "/i18n/",
+    "/health/",
+    "/sw.js",
+    "/manifest.json",
+)
+
+#: Standalone-Seite ohne ``base.html``: die Navigation dort liest
+#: Facility-gescopte Zaehler, die dieser Request per Definition nicht mehr
+#: sehen darf.
+ARCHIVED_TEMPLATE = "auth/facility_archived.html"
 
 
 class FacilityScopeMiddleware:
@@ -42,10 +69,13 @@ class FacilityScopeMiddleware:
 
     def __call__(self, request):
         is_authenticated = hasattr(request, "user") and request.user.is_authenticated
-        if is_authenticated:
-            request.current_facility = getattr(request.user, "facility", None)
-        else:
-            request.current_facility = None
+        facility = getattr(request.user, "facility", None) if is_authenticated else None
+        # Refs #2067: fail-closed bei archivierter Einrichtung. Die Pruefung
+        # sitzt VOR der Zuweisung, damit ``current_facility`` (und damit die
+        # RLS-GUC unten) leer bleibt — selbst wenn ein Pfad die Sperre umginge,
+        # liefern die facility_isolation-Policies dann keine Zeile.
+        blocked = self._is_archived_blocked(request, facility)
+        request.current_facility = None if blocked else facility
 
         # Beide Variablen pro Request stets neu setzen — auch fuer
         # anonyme/non-super_admin User explizit auf '' leeren, damit
@@ -64,4 +94,41 @@ class FacilityScopeMiddleware:
                     [facility_id, is_super_admin],
                 )
 
+        if blocked:
+            # 403 statt Redirect: es gibt keinen Ort, an den die Nutzerin
+            # sinnvoll umgeleitet werden koennte — die Sperre ist ein Zustand
+            # ihrer Einrichtung, kein fehlender Schritt. Die Sitzung bleibt
+            # bewusst bestehen, damit der Abmelden-Link auf der Seite traegt.
+            # ``render_to_string`` ohne ``request``: die Context-Prozessoren
+            # (workitem_counts, review_counts) fragen Facility-Daten ab, die
+            # dieser Request gerade verloren hat. Das CSRF-Token fuer das
+            # Abmelden-Formular kommt deshalb von Hand — ``get_token`` stempelt
+            # ``request.META``, die CsrfViewMiddleware setzt das Cookie
+            # ausgangsseitig (sie liegt vor dieser Middleware in MIDDLEWARE,
+            # laeuft also nach ihr zurueck).
+            return HttpResponseForbidden(render_to_string(ARCHIVED_TEMPLATE, {"csrf_token": get_token(request)}))
+
         return self.get_response(request)
+
+    @staticmethod
+    def _is_archived_blocked(request, facility) -> bool:
+        """Sperrt Requests von Nutzerinnen archivierter Einrichtungen.
+
+        Drei Ausnahmen, jede mit eigenem Grund:
+
+        * **keine Einrichtung** — anonyme Requests und Konten ohne Facility
+          (typisch ``super_admin``) haben nichts, was archiviert sein koennte.
+        * **``super_admin``** — die Rolle IST der Reaktivierungspfad:
+          ``FacilityAdmin`` ist super-only (L1, Refs #1375), niemand sonst kann
+          ``is_active`` wieder setzen. Freigestellt wird deshalb die Rolle und
+          nicht der Pfad ``/admin-mgmt/``: eine Pfad-Ausnahme liesse den
+          ``facility_admin`` der archivierten Einrichtung weiter an ihre
+          Fachdaten, ohne dass er sie reaktivieren koennte.
+        * **Sackgassen-Pfade** — Abmelden, Login, Statik, Health
+          (:data:`ARCHIVED_EXEMPT_URLS`).
+        """
+        if facility is None or facility.is_active:
+            return False
+        if getattr(request.user, "is_super_admin", False):
+            return False
+        return not request.path.startswith(ARCHIVED_EXEMPT_URLS)

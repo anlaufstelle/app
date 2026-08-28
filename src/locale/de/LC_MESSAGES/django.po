@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 14:23+0200\n"
+"POT-Creation-Date: 2026-08-28 14:44+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11986,3 +11986,12 @@ msgid "%(n)s offener Vorgang"
 msgid_plural "%(n)s offene Vorgänge"
 msgstr[0] "%(n)s offener Vorgang"
 msgstr[1] "%(n)s offene Vorgänge"
+
+msgid "Einrichtung archiviert"
+msgstr "Einrichtung archiviert"
+
+msgid "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht möglich. Bitte wenden Sie sich an die Systemverwaltung."
+msgstr "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht möglich. Bitte wenden Sie sich an die Systemverwaltung."
+
+msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
+msgstr "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
