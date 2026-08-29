@@ -8,9 +8,10 @@ import uuid
 
 import pytest
 from django.utils import timezone
+from playwright.sync_api import expect
 
 from ._helpers import django_shell
-from ._selectors import action_bar, open_mobile_overflow, wait_for_settled
+from ._selectors import action_bar, open_mobile_overflow, open_mobile_search_overlay, wait_for_settled
 
 pytestmark = pytest.mark.e2e
 
@@ -290,11 +291,59 @@ class TestMobileNavigation:
         page.wait_for_load_state("domcontentloaded")
 
         # Suche liegt jetzt im Mehr-Dropdown (Design-Refresh: 5 Bottom-Nav-Slots).
-        page.locator("[data-testid='mobile-nav-more']").click()
-        page.locator("[data-testid='mobile-nav-search']").click()
-        overlay = page.locator("[data-testid='mobile-search-overlay']")
-        overlay.wait_for(state="visible", timeout=10000)
+        overlay = open_mobile_search_overlay(page)
         assert overlay.is_visible(), "Such-Overlay sollte sichtbar sein"
+
+    def test_mobile_search_overlay_closes_the_more_dropdown(self, mobile_page, base_url):
+        """Refs #1861 (Ursache 1): Das Dropdown darf beim Aufklappen der Suche
+        nicht offen stehen bleiben.
+
+        Es traegt ``@click.away="closeAll"``, und das Overlay ist sein
+        DOM-Geschwister, kein Kind — ein Tap ins Suchfeld liegt also
+        ausserhalb des Dropdowns und wuerde ``searchOpen`` mit zuruecksetzen.
+        """
+        page = mobile_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        open_mobile_search_overlay(page)
+
+        expect(page.locator("[data-testid='mobile-more-items']")).to_be_hidden()
+
+    def test_mobile_search_overlay_survives_a_real_tap_into_the_field(self, mobile_page, base_url):
+        """Refs #1861: die Geste, mit der das Overlay real unbenutzbar war.
+
+        Die beiden Bestandstests setzten nie einen echten Klick ins Feld ab
+        (Sichtbarkeitspruefung bzw. ``.fill()``, das den Wert ohne Maus-Event
+        schreibt) — ``click.away`` feuerte im Test deshalb nie, und beide
+        blieben gruen, waehrend die Flaeche nicht bedienbar war.
+        """
+        page = mobile_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        overlay = open_mobile_search_overlay(page)
+        search_input = page.locator("[data-testid='mobile-search-input']")
+        search_input.click()
+        search_input.type("Ste", delay=50)
+
+        expect(overlay).to_be_visible()
+        assert search_input.input_value() == "Ste", "Eingabe im Overlay ging verloren"
+
+    def test_mobile_search_overlay_focuses_the_field_on_open(self, mobile_page, base_url):
+        """Refs #1861 (Ursache 2): Der Fokus hing an ``init`` statt am Oeffnen.
+
+        ``init`` laeuft beim Seitenaufbau, waehrend das Overlay ``x-cloak``/
+        ``x-show``-versteckt ist; ``focus()`` auf ein ``display:none``-Element
+        ist wirkungslos, und ``x-show`` re-mountet nicht.
+        """
+        page = mobile_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        open_mobile_search_overlay(page)
+
+        expect(page.locator("[data-testid='mobile-search-input']")).to_be_focused(timeout=10000)
 
 
 class TestMobileZeitstrom:

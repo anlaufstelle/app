@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-29 12:54+0200\n"
+"POT-Creation-Date: 2026-08-29 14:10+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12114,3 +12114,19 @@ msgstr "Person %(pseudonym)s renamed"
 #: src/templates/core/clients/partials/_inline_create_modal.html:8
 msgid "Die neue Person wird direkt ausgewählt; Ihre Angaben im Kontaktformular bleiben erhalten."
 msgstr "The new person is selected immediately; your entries in the contact form are preserved."
+
+#: src/templates/core/events/create.html:1
+msgid "Entwurf wiederhergestellt"
+msgstr "Draft restored"
+
+#: src/templates/core/events/create.html:1
+msgid "Der Entwurf konnte nicht zwischengespeichert werden. Bitte den Text sichern und die Seite neu laden."
+msgstr "The draft could not be saved locally. Please back up your text and reload the page."
+
+#: src/templates/core/events/create.html:1
+msgid "Speicher voll — der Entwurf wird nicht mehr zwischengespeichert. Bitte lokalen Speicher freigeben."
+msgstr "Storage is full — the draft is no longer being saved locally. Please free up local storage."
+
+#: src/templates/base.html:1
+msgid "Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren."
+msgstr "The locally stored data comes from a newer program version. Please reload the page to update the application."

@@ -162,6 +162,16 @@ class TestExistingSelectorsSurviveTheRefactor:
         assert 'data-testid="global-search-input"' in layout
         assert 'data-testid="global-search-results"' in layout
 
+    def test_the_mobile_overlay_field_keeps_its_focus_anchor(self, layout):
+        """Refs #1861: Der Oeffnen-Fokus haengt an ``$refs.input``.
+
+        ``mobileSearchInput`` (``alpine/base-layout.js``) fokussiert das Feld
+        beim Aufklappen des Overlays ueber ``$refs.input``. Faellt das
+        ``x-ref`` aus dem Markup, laeuft der Watcher ins Leere — und zwar
+        still, weil die Suche ansonsten weiter funktioniert.
+        """
+        assert 'x-ref="input"' in _field_input(layout, "search-field-mobile")
+
     def test_super_admin_still_has_no_search_field(self, client, super_admin_user):
         """Refs #1735: das Suchfeld ist facility-scoped und bleibt fuer die
         Systemrolle unerreichbar — auch nach dem Partial-Umbau."""

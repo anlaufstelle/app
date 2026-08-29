@@ -135,6 +135,25 @@ def open_mobile_more(page: Page) -> Locator:
     return page.locator("[data-testid='mobile-more-items']")
 
 
+def open_mobile_search_overlay(page: Page) -> Locator:
+    """Oeffnet „Mehr" → „Suche" und gibt das sichtbare Such-Overlay zurueck.
+
+    Refs #1861: Der Weg ins Overlay fuehrt ueber zwei Klicks und war in jedem
+    Test einzeln ausgeschrieben. Er gehoert hierher — zumal er seit dem Fix
+    eine zweite Zusage traegt: das Mehr-Dropdown ist danach **zu** (sonst
+    faengt dessen ``@click.away="closeAll"`` den ersten Tap ins Suchfeld ab und
+    schliesst das Overlay wieder).
+
+    Template-Hooks: ``mobile-nav-more``, ``mobile-nav-search``,
+    ``mobile-search-overlay``, ``mobile-more-items``.
+    """
+    page.locator("[data-testid='mobile-nav-more']").click()
+    page.locator("[data-testid='mobile-nav-search']").click()
+    overlay = page.locator("[data-testid='mobile-search-overlay']")
+    overlay.wait_for(state="visible", timeout=10000)
+    return overlay
+
+
 def subnav_tab(page: Page, key: str) -> Locator:
     """Ein Reiter einer Bereichs-Reiterzeile (``NavItem.key`` der Section).
 

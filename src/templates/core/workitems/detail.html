@@ -42,21 +42,26 @@
         </div>
     </div>
 
+    {# Refs #2007: Die Abschnittsmarken waren gestylte <span>s — optisch          #}
+    {# Ueberschriften, im Accessibility-Tree nichts. Die Ueberschriften-Navigation #}
+    {# endete deshalb beim h1. Jetzt echte <h2> mit unveraenderter Pixelform;      #}
+    {# dieselbe Klassenkombination tragen die h2 in clients/detail.html und        #}
+    {# cases/detail.html. Guard: src/tests/test_workitem_detail_headings.py.       #}
     <div class="card p-4 space-y-4">
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</span>
+                <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</h2>
                 <p class="text-sm font-medium">{{ workitem.get_item_type_display }}</p>
             </div>
             <div>
-                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</span>
+                <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</h2>
                 <p class="text-sm font-medium">{{ workitem.get_status_display }}</p>
                 {% if workitem.completed_at %}
                 <p class="text-xs text-ink-muted mt-1">{% trans "Abgeschlossen am:" %} {{ workitem.completed_at|date:"DATETIME_FORMAT" }}</p>
                 {% endif %}
             </div>
             <div>
-                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Priorität" %}</span>
+                <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Priorität" %}</h2>
                 <p class="text-sm font-medium">
                     {% if workitem.priority == "urgent" %}
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">{% trans "Dringend" %}</span>
@@ -68,7 +73,7 @@
                 </p>
             </div>
             <div>
-                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zu erledigen bis" %}</span>
+                <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zu erledigen bis" %}</h2>
                 {% due_date_info workitem as ddi %}
                 {% if ddi %}
                 <p class="text-sm font-medium {{ ddi.css_class }}">{{ ddi.text }}</p>
@@ -83,7 +88,7 @@
                 {% endif %}
             </div>
             <div>
-                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Wiedervorlage am" %}</span>
+                <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Wiedervorlage am" %}</h2>
                 {% if workitem.remind_at %}
                 {% remind_at_info workitem as rai %}
                 {% if rai %}
@@ -95,13 +100,13 @@
                 {% endif %}
             </div>
             <div>
-                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</span>
+                <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</h2>
                 <p class="text-sm font-medium">{{ workitem.created_at|date:"DATETIME_FORMAT" }}</p>
             </div>
         </div>
 
         <div>
-            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</span>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</h2>
             {% if workitem.created_by %}
             <p class="text-sm font-medium">{{ workitem.created_by.get_full_name|default:workitem.created_by.username }}</p>
             {% else %}
@@ -111,14 +116,14 @@
 
         {% if workitem.assigned_to %}
         <div>
-            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zugewiesen an" %}</span>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zugewiesen an" %}</h2>
             <p class="text-sm font-medium">{{ workitem.assigned_to.get_full_name|default:workitem.assigned_to.username }}</p>
         </div>
         {% endif %}
 
         {% if workitem.description %}
         <div>
-            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</span>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</h2>
             <p class="text-sm text-ink-soft whitespace-pre-wrap">{{ workitem.description }}</p>
         </div>
         {% endif %}

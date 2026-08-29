@@ -16,6 +16,8 @@ am echten Netzwerkverkehr, nicht am Markup (das prüft
 import pytest
 from playwright.sync_api import expect
 
+from ._selectors import open_mobile_search_overlay
+
 pytestmark = pytest.mark.e2e
 
 
@@ -75,15 +77,23 @@ class TestEnterOpensTheFullSearch:
         assert live == [], f"Enter hat zusaetzlich den Live-Endpunkt gerufen: {live}"
 
     def test_enter_in_the_mobile_overlay_navigates_too(self, mobile_authenticated_page, base_url):
+        """Refs #1861: der Weg ins Feld geht jetzt ueber einen echten Klick.
+
+        ``.fill()`` setzt den Wert ohne Maus-Event — genau deshalb blieb dieser
+        Test gruen, waehrend ein Tap ins Feld das Overlay real wieder schloss
+        (das offene Mehr-Dropdown fing den Klick per ``click.away`` ab). Ohne
+        den Klick prueft der Test den Enter-Weg auf einer Flaeche, die
+        Nutzerinnen so nie erreichten.
+        """
         page = mobile_authenticated_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.locator("[data-testid='mobile-nav-more']").click()
-        page.locator("[data-testid='mobile-nav-search']").click()
-        page.locator("[data-testid='mobile-search-overlay']").wait_for(state="visible", timeout=10000)
+        overlay = open_mobile_search_overlay(page)
 
         search_input = page.locator("[data-testid='mobile-search-input']")
+        search_input.click()
+        expect(overlay).to_be_visible()
         search_input.fill("Stern")
         search_input.press("Enter")
 

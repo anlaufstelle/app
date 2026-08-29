@@ -27,6 +27,17 @@
 
     var INTERVAL_MS = 5000;
     var KEY_PREFIX = "autosave_";
+    /*
+     * Refs #2059: Backoff-Fenster nach einem gescheiterten Schreibversuch.
+     * Basis = das Speicherintervall selbst (der erste Wiederholversuch liegt
+     * also genau eine regulaere Runde spaeter), Verdopplung je Fehlversuch,
+     * Deckel bei 5 Minuten — damit ein voruebergehender Zustand (Speicher
+     * freigeraeumt, Tab wieder im Vordergrund) noch von allein heilt, statt
+     * bis zum Seitenwechsel gesperrt zu bleiben. Muster: ``_backoffFor`` in
+     * offline-queue.js.
+     */
+    var SAVE_BACKOFF_BASE_MS = INTERVAL_MS;
+    var SAVE_BACKOFF_MAX_MS = 300000;
     // Refs #1774: reserviert, kollidiert bewusst mit keinem Feldnamen —
     // ``restoreFormData`` iteriert ueber Formularelemente und laesst den
     // Schluessel damit unangetastet (er ist Purge-Metadatum, kein Formularwert).
@@ -136,7 +147,30 @@
         return restored;
     }
 
+    /*
+     * Refs #2010: Die Banner-Texte kommen aus dem Template, nicht aus dem
+     * JavaScript. ``data-autosave`` steht ausschliesslich an
+     * ``core/events/create.html`` — die Maske rendert immer aus einem
+     * Django-Template, es gibt also keinen Pfad, auf dem das Dataset fehlte
+     * (anders als bei ``htmx-errors.js``, wo die deutsche Literal-Ausnahme
+     * genau deshalb dokumentiert bleibt). Der Leerstring-Zweig ist derselbe
+     * Repo-Standard wie in ``client-row-offline.js``: lieber ein leeres Label
+     * als das Wort „undefined" im Banner.
+     */
+    function bannerLabels(form) {
+        var data = form.dataset;
+        return {
+            restored: data.i18nDraftRestored || "",
+            discard: data.i18nDiscard || "",
+            close: data.i18nClose || "",
+            // Refs #2059: gleicher Kanal, gleiche Mechanik.
+            saveFailed: data.i18nAutosaveFailed || "",
+            saveQuota: data.i18nAutosaveQuota || "",
+        };
+    }
+
     function showRestoredBanner(form, storageKey) {
+        var labels = bannerLabels(form);
         var banner = document.createElement("div");
         banner.id = "autosave-restored-banner";
         banner.setAttribute("role", "status");
@@ -144,7 +178,7 @@
             "mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800 " +
             "flex items-center justify-between";
         var textSpan = document.createElement("span");
-        textSpan.textContent = "Entwurf wiederhergestellt";
+        textSpan.textContent = labels.restored;
         banner.appendChild(textSpan);
 
         var actions = document.createElement("div");
@@ -153,7 +187,7 @@
         var discardBtn = document.createElement("button");
         discardBtn.type = "button";
         discardBtn.className = "text-red-600 hover:text-red-800 font-medium";
-        discardBtn.textContent = "Verwerfen";
+        discardBtn.textContent = labels.discard;
         discardBtn.setAttribute("data-testid", "autosave-discard");
         discardBtn.addEventListener("click", async function () {
             try {
@@ -169,7 +203,7 @@
         var closeBtn = document.createElement("button");
         closeBtn.type = "button";
         closeBtn.className = "text-blue-600 hover:text-blue-800 font-medium";
-        closeBtn.textContent = "Schließen";
+        closeBtn.textContent = labels.close;
         closeBtn.addEventListener("click", function () {
             banner.remove();
         });
@@ -177,6 +211,114 @@
 
         banner.appendChild(actions);
         form.parentElement.insertBefore(banner, form);
+    }
+
+    /*
+     * Refs #2059: True, wenn `e` ein QuotaExceededError ist. Bewusst eine
+     * lokale Kopie der Definition aus offline-db.js:459 — deren `_internals`-
+     * Kanal ist per Take-Budget auf die drei Schwester-Module des
+     * offline-store-Verbunds beschraenkt (Refs #1838) und traegt den Helfer
+     * absichtlich nicht auf der oeffentlichen Fassade. Die zwei Zeilen hier zu
+     * spiegeln ist billiger, als diesen Kanal fuer einen Fremdkonsumenten zu
+     * oeffnen. Dexie reicht den Fehler beim Transaktionsabbruch weiter; je
+     * nach Pfad steht der Name direkt auf `e` oder im gekapselten `e.inner`.
+     */
+    function isQuotaError(e) {
+        if (!e) return false;
+        if (e.name === "QuotaExceededError") return true;
+        return Boolean(e.inner && e.inner.name === "QuotaExceededError");
+    }
+
+    function saveBackoffFor(attempts) {
+        return Math.min(SAVE_BACKOFF_BASE_MS * Math.pow(2, attempts - 1), SAVE_BACKOFF_MAX_MS);
+    }
+
+    /*
+     * Refs #2059: EINMAL melden, nicht im 5-Sekunden-Takt. Der Zustand haengt
+     * am Modul, nicht am Banner-Knoten — sonst kaeme die Meldung nach dem
+     * Wegklicken sofort wieder und waere damit doch blockierend.
+     */
+    var saveErrorNotified = false;
+
+    function showSaveErrorBanner(form, quotaExceeded) {
+        if (saveErrorNotified) return;
+        saveErrorNotified = true;
+        var labels = bannerLabels(form);
+        var banner = document.createElement("div");
+        banner.id = "autosave-error-banner";
+        // ``alert`` statt ``status``: Der Entwurf steht still, waehrend die
+        // Nutzerin weitertippt — das muss vorgelesen werden, sobald es
+        // passiert. Blockierend ist es trotzdem nicht: kein Modal, kein
+        // Fokusraub, wegklickbar.
+        banner.setAttribute("role", "alert");
+        banner.setAttribute("data-testid", "autosave-error-banner");
+        banner.className =
+            "mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800 " +
+            "flex items-center justify-between";
+
+        var textSpan = document.createElement("span");
+        textSpan.textContent = quotaExceeded ? labels.saveQuota : labels.saveFailed;
+        banner.appendChild(textSpan);
+
+        var closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "text-red-600 hover:text-red-800 font-medium";
+        closeBtn.textContent = labels.close;
+        closeBtn.addEventListener("click", function () {
+            banner.remove();
+        });
+        banner.appendChild(closeBtn);
+
+        form.parentElement.insertBefore(banner, form);
+    }
+
+    /*
+     * Refs #2059: Der Zustand des Speicherlaufs an EINER Stelle — vorher lagen
+     * `lastSavedJson` und `lastKnownPersonPk` als Closure-Variablen um den
+     * Intervall herum, und der Fehlerpfad hatte gar keinen Zustand (er warf
+     * den Fehler weg). Mit einem expliziten Kontext ist der Lauf ohne
+     * Timer-Choreografie pruefbar.
+     */
+    function makeSaveContext(form, storageKey, lastSavedJson, personPk) {
+        return {
+            form: form,
+            storageKey: storageKey,
+            lastSavedJson: lastSavedJson || "",
+            personPk: personPk || "",
+            attempts: 0,
+            retryAfter: 0,
+        };
+    }
+
+    /*
+     * Ein Speicherversuch. Refs #2059: Der Block hier fing frueher JEDEN
+     * Fehler ab und verwarf ihn kommentarlos — bei vollem Speicher lief der
+     * 5-Sekunden-Takt endlos ins Leere, die Nutzerin tippte weiter, und beim
+     * Absturz fiel der Entwurf auf den letzten erfolgreichen Stand zurueck.
+     * Jetzt: einmal melden, dann mit wachsendem Abstand weiterversuchen.
+     */
+    async function attemptSave(ctx) {
+        if (!isOfflineReady()) return;
+        if (ctx.retryAfter && Date.now() < ctx.retryAfter) return;
+        try {
+            var currentData = buildDraftPayload(ctx.form, ctx.personPk);
+            if (currentData[PERSON_KEY]) ctx.personPk = currentData[PERSON_KEY];
+            var json = JSON.stringify(currentData);
+            if (json !== ctx.lastSavedJson) {
+                await window.offlineStore.putEncrypted("drafts", {
+                    formKey: ctx.storageKey,
+                    updatedAt: Date.now(),
+                    data: currentData,
+                });
+                ctx.lastSavedJson = json;
+            }
+            ctx.attempts = 0;
+            ctx.retryAfter = 0;
+        } catch (e) {
+            ctx.attempts += 1;
+            ctx.retryAfter = Date.now() + saveBackoffFor(ctx.attempts);
+            showSaveErrorBanner(ctx.form, isQuotaError(e));
+        }
     }
 
     function isOfflineReady() {
@@ -260,23 +402,11 @@
             }
         }
 
-        setInterval(async function () {
-            if (!isOfflineReady()) return;
-            try {
-                var currentData = buildDraftPayload(form, lastKnownPersonPk);
-                if (currentData[PERSON_KEY]) lastKnownPersonPk = currentData[PERSON_KEY];
-                var json = JSON.stringify(currentData);
-                if (json !== lastSavedJson) {
-                    await window.offlineStore.putEncrypted("drafts", {
-                        formKey: storageKey,
-                        updatedAt: Date.now(),
-                        data: currentData,
-                    });
-                    lastSavedJson = json;
-                }
-            } catch (_e) {
-                // ignore
-            }
+        // Refs #2059: Der Lauf traegt seinen Zustand jetzt in einem Kontext —
+        // inklusive Fehlerzaehler und Backoff-Fenster.
+        var saveContext = makeSaveContext(form, storageKey, lastSavedJson, lastKnownPersonPk);
+        setInterval(function () {
+            attemptSave(saveContext);
         }, INTERVAL_MS);
 
         form.addEventListener("submit", function () {
@@ -317,6 +447,19 @@
         _getFormData: getFormData,
         _getPersonPk: getPersonPk,
         _buildDraftPayload: buildDraftPayload,
+        // Refs #2010: der Banner rendert jetzt Template-Texte — pruefbar ohne
+        // Timer-/Store-Choreografie (tests/js/autosave-banner-i18n.test.mjs).
+        _showRestoredBanner: showRestoredBanner,
+        // Refs #2059: der Speicherlauf samt Fehler-/Backoff-Pfad — der einzige
+        // Silent-Loss-Pfad im Stack darf nicht nur ueber einen 5-Sekunden-Timer
+        // pruefbar sein (tests/js/autosave-save-errors.test.mjs).
+        _isQuotaError: isQuotaError,
+        _saveBackoffFor: saveBackoffFor,
+        _makeSaveContext: makeSaveContext,
+        _attemptSave: attemptSave,
+        _resetSaveErrorNotice: function () {
+            saveErrorNotified = false;
+        },
     };
 
     if (document.readyState === "loading") {

@@ -154,8 +154,20 @@ document.addEventListener("alpine:init", () => {
         toggleMore() {
             this.moreOpen = !this.moreOpen;
         },
+        /**
+         * Refs #1861: Das Overlay ist im DOM ein GESCHWISTER des Mehr-Dropdowns,
+         * kein Kind. Blieb ``moreOpen`` beim Aufklappen stehen, lag ein Tap ins
+         * Suchfeld ausserhalb des Dropdowns, feuerte dessen ``@click.away``
+         * (``closeAll``) — und das schloss das Overlay wieder. Wer die Suche
+         * benutzen wollte, schloss sie damit. Das Dropdown geht deshalb zu,
+         * sobald die Suche aufgeht; sein ``click.away`` kann dann nicht mehr
+         * greifen, und das halb verdeckte Dropdown verschwindet aus dem Bild.
+         */
         toggleSearch() {
             this.searchOpen = !this.searchOpen;
+            if (this.searchOpen) {
+                this.moreOpen = false;
+            }
         },
         closeAll() {
             this.moreOpen = false;
@@ -166,11 +178,26 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
-    /** Mobile-Search-Overlay-Inputfeld; fokussiert sich beim Mount. */
+    /**
+     * Mobile-Search-Overlay-Inputfeld; fokussiert sich beim OEFFNEN.
+     *
+     * Refs #1861: Der Fokus hing bis dahin an ``init`` — das laeuft einmal beim
+     * Seitenaufbau, waehrend das Overlay per ``x-show`` + ``x-cloak`` versteckt
+     * ist. ``focus()`` auf ein ``display:none``-Element ist wirkungslos, und
+     * ``x-show`` re-mountet die Komponente beim Oeffnen nicht (anders als
+     * ``x-if``); der Hook lief also genau einmal, und zwar zum falschen
+     * Zeitpunkt. ``$watch`` haengt ihn an den Zustandswechsel: ``searchOpen``
+     * kommt aus dem umschliessenden ``mobileMore``-Scope, das ``x-ref="input"``
+     * liegt unveraendert am Feld (``partials/_search_field_control.html``).
+     */
     Alpine.data("mobileSearchInput", () => {
         const state = searchFieldState();
         state.init = function () {
-            this.$nextTick(() => this.$refs.input.focus());
+            this.$watch("searchOpen", (open) => {
+                if (open) {
+                    this.$nextTick(() => this.$refs.input.focus());
+                }
+            });
         };
         return state;
     });

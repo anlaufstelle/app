@@ -39,7 +39,10 @@
 {# Refs #1496: login.html erbt nicht von base.html, bringt sw-register.js aber mit — die #}
 {# Toast-Texte muessen daher hier stehen, sonst rendert der Update-Toast textlos. #}
 <body class="min-h-screen flex items-center justify-center p-6"
-      data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}">
+      data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
+      {# Refs #2060: Diese Seite laedt offline-db.js (Verbund oben) — ohne das Attribut #}
+      {# faellt der Versionskonflikt-Hinweis hier auf den deutschen Rueckfall zurueck. #}
+      data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
     <div class="w-full max-w-[380px]">
         {# Logo + Org-Header (Design: als-screens.jsx LoginScreen) #}
         <div class="text-center mb-8">

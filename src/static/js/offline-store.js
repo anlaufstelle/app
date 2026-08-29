@@ -27,7 +27,8 @@
         console.error("[offline-store] interner Kanal fehlt — Ladereihenfolge pruefen (Refs #1838).");
         return;
     }
-    const { db, _crypto, _aad, _isTransientDecryptError, putEncrypted, getDecrypted, listDecrypted, purgeExpired } = _internals;
+    const { db, _crypto, _aad, _isTransientDecryptError, _isQuotaError, putEncrypted, getDecrypted, listDecrypted, purgeExpired } =
+        _internals;
 
 
     /* ─── Stage 3 (#575) — Local-Status-Tracking on events ───────────────── */
@@ -46,15 +47,34 @@
         const crypto = _crypto();
         if (!record || !record.pk) throw new Error("MalformedEdit");
         const { pk, clientPk, localStatus, data } = record;
-        await db.events.put({
-            pk: pk,
-            clientPk: clientPk || "",
-            // Refs #1476 (R9): occurredAt NICHT plaintext ablegen — der
-            // Zeitstempel liegt im verschluesselten `data`-Envelope
-            // (`data.occurredAt`) und wird von dort gerendert.
-            localStatus: localStatus || "modified",
-            data: await crypto.encryptPayload(data, _aad("events", pk)),
-        });
+        const envelope = await crypto.encryptPayload(data, _aad("events", pk));
+        try {
+            await db.events.put({
+                pk: pk,
+                clientPk: clientPk || "",
+                // Refs #1476 (R9): occurredAt NICHT plaintext ablegen — der
+                // Zeitstempel liegt im verschluesselten `data`-Envelope
+                // (`data.occurredAt`) und wird von dort gerendert.
+                localStatus: localStatus || "modified",
+                data: envelope,
+            });
+        } catch (e) {
+            // Refs #2060: Bis hierher stand das `put` NACKT da — ohne jedes
+            // try/catch, waehrend die Schwesterfunktion `saveClientBundle`
+            // (offline-bundles.js:150-158) Quota-Fehler laengst auf einen
+            // stabilen Vertrag normalisiert. Dieselbe Ursache — volle Platte —
+            // kam damit bei der Offline-Mitnahme als klare Meldung an und beim
+            // Speichern einer Offline-Bearbeitung als roher Dexie-Fehler, den
+            // die Aufrufer (offline-edit.js) ungeprueft weiterreichten. Der
+            // Vertrag ist hier gespiegelt; alles andere geht unveraendert
+            // durch.
+            if (_isQuotaError(e)) {
+                const quotaErr = new Error("OfflineQuotaExceeded");
+                quotaErr.name = "QuotaExceededError";
+                throw quotaErr;
+            }
+            throw e;
+        }
     }
 
     async function getOfflineEvent(pk) {

@@ -462,6 +462,125 @@
         return Boolean(e.inner && e.inner.name === "QuotaExceededError");
     }
 
+    /*
+     * Refs #2060: True, wenn `e` ein `VersionError` ist — IndexedDB antwortet
+     * damit auf den Versuch, eine Datenbank zu oeffnen, deren gespeicherte
+     * Version HOEHER ist als die im Code deklarierte. Praktischer Anlass: ein
+     * Rollback-Deploy (oder eine zweite, aeltere Instanz auf derselben
+     * Origin). Struktur wie bei `_isQuotaError` — je nach Pfad steht der Name
+     * direkt auf `e` oder im von Dexie gekapselten `e.inner`.
+     */
+    function _isVersionError(e) {
+        if (!e) return false;
+        if (e.name === "VersionError") return true;
+        return Boolean(e.inner && e.inner.name === "VersionError");
+    }
+
+    /*
+     * Refs #2060: Die Meldung fuer genau diesen Zustand. Ohne sie rejecten
+     * schlicht ALLE Store-Operationen, die Offline-Daten liegen unerreichbar
+     * auf dem Geraet, und die Nutzerin sieht je nach Aufrufer nichts oder
+     * etwas Kryptisches — obwohl der Zustand trivial heilbar ist (Update
+     * ziehen). Der Text kommt wie beim Service-Worker-Toast als
+     * `data-i18n-*`-Attribut vom `<body>` (base.html, Refs #1412); die Form
+     * ist bewusst dieselbe wie dort (fixierter Toast unten rechts,
+     * wegklickbar), damit zwei Update-Hinweise nicht wie zwei verschiedene
+     * Dinge aussehen. `role="alert"` statt `status`: hier ist die Anwendung
+     * offline unbrauchbar, das darf nicht bis zum naechsten Vorlesen warten.
+     */
+    const UPDATE_TOAST_ID = "offline-db-update-toast";
+    let _updateRequiredReported = false;
+
+    /*
+     * Refs #2060: Deutscher Rueckfall-Text — dokumentierte Ausnahme nach dem
+     * Muster von htmx-errors.js (`GENERIC`/`RATE_LIMITED`): eine statisch
+     * ausgelieferte Datei kennt die Sprache der Nutzerin nicht.
+     *
+     * Der Regelfall bleibt das uebersetzte Template-Label; es GEWINNT, wo es
+     * existiert — und das tut es in drei der fuenf Layouts, die offline-db.js
+     * laden: `base.html`, `auth/login.html`, `auth/password_change.html`.
+     *
+     * Ohne Label bleiben genau die beiden PRECACHTEN: der terminale
+     * Offline-Fallback (`offline.html`) und die In-Place-Shells
+     * (`offline_base.html`). Beide stehen im Shell-Hash-Guard (Refs
+     * #1575/#1845) — dort kostet ein Attribut einen CACHE_NAME-Bump, also eine
+     * release-weite Entscheidung. Bis dahin traegt der Rueckfall die Meldung.
+     *
+     * Genau dort ist die Meldung am noetigsten: Ein Versionskonflikt macht die
+     * Anwendung offline unbrauchbar, und der Zustand ist trivial heilbar —
+     * aber nur, wenn jemand es sagt. Schweigen war der Zustand VOR diesem Fix.
+     * Der Text hier ist wortgleich mit dem msgid in base.html; ein Guard
+     * (src/tests/test_i18n_offline_db_update.py) haelt beide zusammen.
+     */
+    const UPDATE_REQUIRED_FALLBACK =
+        "Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. " +
+        "Bitte die Seite neu laden, um die Anwendung zu aktualisieren.";
+    const DISMISS_FALLBACK = "Schließen";
+
+    function _showUpdateRequiredToast() {
+        if (!document.body || document.getElementById(UPDATE_TOAST_ID)) return;
+        const label = document.body.dataset.i18nDbUpdateRequired || UPDATE_REQUIRED_FALLBACK;
+        // Der Abweis-Text: eigener Schluessel zuerst, sonst der des
+        // Service-Worker-Toasts (gleicher msgid, auf den meisten Layouts schon
+        // da), sonst der Rueckfall. Der eigene Schluessel existiert fuer
+        // Layouts OHNE Worker-Toast — dort waere dessen Attributname falsch.
+        const dismissLabel =
+            document.body.dataset.i18nDbUpdateDismiss || document.body.dataset.i18nSwDismiss || DISMISS_FALLBACK;
+
+        const toast = document.createElement("div");
+        toast.id = UPDATE_TOAST_ID;
+        toast.setAttribute("role", "alert");
+        toast.className =
+            "fixed bottom-4 right-4 z-50 max-w-sm bg-red-600 text-white " +
+            "rounded-lg shadow-lg p-4 flex items-center gap-3";
+
+        const text = document.createElement("span");
+        text.className = "text-sm";
+        text.textContent = label;
+        toast.appendChild(text);
+
+        const dismissBtn = document.createElement("button");
+        dismissBtn.type = "button";
+        dismissBtn.className = "text-sm underline";
+        dismissBtn.textContent = dismissLabel;
+        dismissBtn.addEventListener("click", function () {
+            toast.remove();
+        });
+        toast.appendChild(dismissBtn);
+
+        document.body.appendChild(toast);
+    }
+
+    function _reportUpdateRequired() {
+        if (_updateRequiredReported) return;
+        _updateRequiredReported = true;
+        // eslint-disable-next-line no-console
+        console.error(
+            "[offline-store] Die lokale Datenbank ist neuer als dieser Programmstand " +
+                "(VersionError) — App-Update erforderlich."
+        );
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", _showUpdateRequiredToast, { once: true });
+        } else {
+            _showUpdateRequiredToast();
+        }
+        window.dispatchEvent(new CustomEvent("offline-db-update-required"));
+    }
+
+    /*
+     * Refs #2060: Das Oeffnen ist der EINE Ort, an dem der Versionskonflikt
+     * entsteht — hier abgefangen statt in acht Aufrufern erraten. Dexie
+     * oeffnet ohnehin lazy bei der ersten Operation, und die faellt auf jeder
+     * Seite an (sync-orchestrator.js prueft beim Start Zaehler); das
+     * vorgezogene `open()` legt also keine Datenbank an, die nicht ohnehin
+     * angelegt wuerde. Andere Oeffnungsfehler werden hier bewusst nur
+     * verschluckt, damit keine unbehandelte Rejection entsteht — sie
+     * erreichen ihre Aufrufer unveraendert ueber deren eigene Operation.
+     */
+    db.open().catch(function (e) {
+        if (_isVersionError(e)) _reportUpdateRequired();
+    });
+
     // Refs #1838: EINE Fassade — hier angelegt, die Schwester-Module haengen
     // ihre Exporte per Object.assign daran.
     window.offlineStore = Object.assign(window.offlineStore || {}, {
