@@ -1620,6 +1620,31 @@ regression in favor of security. `Client.anonymize()` additionally has a
 **lock-upgrade deadlock risk** (first a `RowExclusiveLock` from the
 EventHistory `INSERT`s, then a `ShareRowExclusiveLock` from the `DISABLE`).
 
+**Since 0.89 the nightly retention run is a REGULAR bypass caller**
+(ADR-050, Refs #2065):
+the EventHistory sweep redacts expired history versions and deletes
+long-redacted ones. Three properties confine the impact to the maintenance
+window:
+
+- **Batched.** One bypass block per 500 rows, not one per row as in the key
+  rotation — the number of `ShareRowExclusiveLock` intervals drops by orders
+  of magnitude.
+- **Only `core_eventhistory`.** The sweep opens exclusively the two triggers
+  on that table; on `core_auditlog` it no longer takes any DDL lock at all,
+  only the `RowExclusiveLock` of its own proof `INSERT`. Audit `INSERT`s of
+  running requests therefore do **not** block.
+- **Canonical lock order** `core_client` → `core_event` →
+  `core_eventhistory` → `core_auditlog`, which is exactly the order the
+  application writes in anyway. Until 0.89, `_APPEND_ONLY_TRIGGERS` listed
+  `core_auditlog` first — an ABBA cycle against every mutating request.
+  Person and event rows of a batch are locked with
+  `SELECT … FOR UPDATE SKIP LOCKED` **before** the trigger bypass opens:
+  otherwise the run would hold the table lock while waiting for a foreign row
+  lock. The legal-hold creation locks the same rows before it writes — which
+  is why a hold on an **event or person** reliably stops the sweep and is
+  never overtaken by it. If a batch still aborts with `deadlock detected`, it
+  is retried idempotently with backoff; the run does not fail.
+
 Operational rules that follow from this:
 
 - Run the bypass commands `enforce_retention` (retention cron, § 6),
