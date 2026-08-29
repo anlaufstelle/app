@@ -1458,6 +1458,34 @@ Legal Holds are managed in the retention dashboard and in the Django admin (see 
 
 > **Distinction from Art. 18 GDPR (Refs #2045):** A legal hold is **not** a restriction of processing under Art. 18. It blocks **erasure** (Art. 17(3)) and leaves day-to-day work on the record untouched. An Art. 18 restriction is the reverse: the data stays stored, but substantive work on the client record is blocked. That is what the separate **restriction marker** on the client record is for. The two are independent of each other.
 
+#### Retention of the Event History
+
+Every save of an event writes a **history version**: who changed which fields to which values, and when. Until version 0.89 these versions had **no retention period** — they outlived the deletion period of the event itself. Concretely: an event whose `retention_identified_days` have expired is emptied, but its earlier versions kept every wording ever stored. The period was formally enforced and factually undermined. Since [ADR-050](adr/050-eventhistory-retention.md), `enforce_retention` closes this gap in two stages.
+
+**Stage 1 — redaction.** The version remains, its *values* fall away. What stays: timestamp, acting person, action and the names of the affected fields. What disappears: the contents. In the event detail view and in the Art. 15 access record, "– (redacted)" appears in their place. Two triggers:
+
+- **The event is deleted.** As soon as an event is marked deleted — by the retention period or manually — **all** of its versions lose their values on the next run. This needs no setting and cannot be switched off: it enforces the period that already applies to the event itself. It also covers events without a person (anonymous contacts), for which no history deletion path existed at all until now.
+- **The version is old.** For events that are still **alive**, versions older than `eventhistory_detail_months` are redacted.
+
+**Stage 2 — deletion of the chronicle.** An already redacted version is permanently deleted once its redaction dates back more than `eventhistory_chronicle_months`. This is measured from the moment of redaction, not from the original change — the question is "how long has this row already been empty". At this point no contents fall any more, only the chronicle itself.
+
+| Setting in `Settings` | Default | Effect |
+|---|---|---|
+| `eventhistory_detail_months` | 24 months | How long the **values** of old versions of living events stay readable. `0` = **disabled** (the values stay readable indefinitely). Does not affect the "deleted event" branch. |
+| `eventhistory_chronicle_months` | 24 months | How long an already redacted version is kept afterwards before it is deleted. `0` = **disabled**, in which case the chronicle grows without bound — that is a decision for indefinite retention and then belongs explicitly in the record of processing activities and the deletion concept. |
+
+Both defaults match `auditlog_retention_months`: the history and the audit log answer the same question ("who changed something, and when") and should therefore end together. With the defaults, the version of a living event has a total lifetime of 24 months of values plus 24 months of chronicle; the version of a deleted event has 24 months of chronicle from the deletion.
+
+**What to know before changing these:**
+
+- **The most recent version of a living event is never redacted**, regardless of its age. The detail page therefore always keeps at least one readable last change — even for a record untouched for years.
+- **A legal hold stops the redaction.** While the event (or its person) is under a hold, its versions stay unchanged; the run reports them as deferred and catches up once the hold is lifted or expires.
+- **Redaction is final.** Old wordings can afterwards only be reconstructed from a backup. If you must be able to argue a rectification dispute about a years-old wording, set `eventhistory_detail_months` accordingly higher.
+- **Side effect on key rotation:** redacted versions no longer carry encrypted content and are skipped by `reencrypt_fields`. The duration of a key rotation thus scales with the *unredacted window* instead of the total table size — it stays constant instead of growing every year.
+- **Every batch leaves an audit trail entry** (action "Event history redacted") with count, cutoff and batch boundaries. This proof is **exempt** from `auditlog_retention_months` and is kept permanently.
+
+The first run after the update may take longer than usual: it works through the backlog of versions of living events. The versions of already deleted events were handled by the migration.
+
 #### K-Anonymization Instead of Hard Delete
 
 As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs #535).
@@ -1517,13 +1545,14 @@ Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, faci
 |---|---|---|
 | `auditlog_retention_months` | 24 months | Every `enforce_retention` run deletes entries older than this period (exact calendar-month arithmetic, not a 30-day approximation). `0` = **disabled**, the log then grows without bound. |
 
-Four classes are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Three of them depend on the action (`PRUNE_EXEMPT_ACTIONS`):
+Five classes are **exempt** from this period and are kept regardless of age (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Four of them depend on the action (`PRUNE_EXEMPT_ACTIONS`):
 
 - `SECURITY_VIOLATION` — forensic evidence from breach detection,
 - `RETENTION_RUN_COMPLETED` — the marker the compliance dashboard reads to show the last successful retention run,
-- `AUDIT_PRUNE_CHECKPOINT` — the tombstone of the pruning itself.
+- `AUDIT_PRUNE_CHECKPOINT` — the tombstone of the pruning itself,
+- `EVENT_HISTORY_REDACTED` — the per-batch proof of the history sweep (see [§ 7.3 "Retention of the Event History"](#retention-of-the-event-history)). It documents that immutability was legitimately opened for exactly these rows; if it vanished before the rows it vouches for, a silent change to append-only-protected data would remain.
 
-On top of that — **regardless of the action** — comes the fourth class: entries about a **released report file carrying a reporting period** (CSV/PDF/JSON/XML). Without that exemption the release overview would feign completeness. Such entries hold the period, the format, the acting person and the recorded recipient/purpose fields (unvalidated free text), and are kept indefinitely. Plain on-screen views of the external report and subject access requests without a reporting period run under the same audit action but stay subject to the period — the distinction is documented in [§ 8 "Releasing Reports"](#releasing-reports-what-you-need-to-know).
+On top of that — **regardless of the action** — comes the fifth class: entries about a **released report file carrying a reporting period** (CSV/PDF/JSON/XML). Without that exemption the release overview would feign completeness. Such entries hold the period, the format, the acting person and the recorded recipient/purpose fields (unvalidated free text), and are kept indefinitely. Plain on-screen views of the external report and subject access requests without a reporting period run under the same audit action but stay subject to the period — the distinction is documented in [§ 8 "Releasing Reports"](#releasing-reports-what-you-need-to-know).
 
 **Checkpoint mechanics:** the audit log is chained via HMAC (every entry references the previous one). Pruning necessarily tears that chain. So that the integrity check does not report the gap as tampering, every prune run writes an `AUDIT_PRUNE_CHECKPOINT` entry recording the chain boundaries of the deleted rows, which legitimises the discontinuity. The chain itself is **never** rewritten — the log stays append-only.
 
