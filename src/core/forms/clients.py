@@ -1,6 +1,6 @@
 """Forms for client management."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -79,7 +79,7 @@ class ClientInlineCreateForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, f
 
         raw_min_stage = None if min_stage is None else str(min_stage).strip()
         if raw_min_stage is None or (raw_min_stage and stage_index(raw_min_stage) < 0):
-            effective_min_stage = CONTACT_STAGE_ORDER[-1]
+            effective_min_stage = str(CONTACT_STAGE_ORDER[-1])
         else:
             effective_min_stage = raw_min_stage
 
@@ -87,9 +87,8 @@ class ClientInlineCreateForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, f
         required_index = stage_index(effective_min_stage)
         if effective_min_stage and required_index >= 0:
             allowed_stages = [stage for stage in CONTACT_STAGE_ORDER if stage_index(stage) >= required_index]
-            self.fields["contact_stage"].choices = [
-                (stage, Client.ContactStage(stage).label) for stage in allowed_stages
-            ]
+            contact_stage_field = cast(forms.ChoiceField, self.fields["contact_stage"])
+            contact_stage_field.choices = [(stage, Client.ContactStage(stage).label) for stage in allowed_stages]
             if stage_index(self.initial.get("contact_stage")) < required_index:
                 self.initial["contact_stage"] = effective_min_stage
 
