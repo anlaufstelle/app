@@ -24,10 +24,10 @@ class TestRateLimitOnAllMutations:
 
     _VIEWS_DIR = Path("src/core/views")
     _ALLOWLIST = {
-        # name format "<file>:<class>" — keep empty unless a handler is
-        # genuinely safe to leave unrestricted (e.g. internal-only HTMX
-        # partial that requires already-authenticated session and has its
-        # own per-record locking). Document the reason inline.
+        # Refs #2044: POST haelt das Pseudonym der read-only Warnprobe aus
+        # URL-/Access-Logs. Der Handler mutiert nichts und darf gerade nicht
+        # den 60/h-Eimer des eigentlichen Client-Updates verbrauchen.
+        "clients.py:ClientRenameWarningView",
     }
 
     def test_all_post_handlers_have_ratelimit(self):
@@ -626,6 +626,11 @@ class TestClientCaseViewMirrorParity:
     # ist Drift — vgl. :meth:`test_render_context_key_sets_stay_congruent`.
     _RENDER_CONTEXT_CASE_ONLY_KEYS = ("client_locked", "client_id", "client_pseudonym")
 
+    # Orchestrator-freigegebene Ausnahme (Refs #2044): Nur Personen besitzen
+    # ein Pseudonym und damit einen Rename-Warnzustand. Der Fall-Zwilling hat
+    # fachlich keinen entsprechenden Kontext-Schluessel.
+    _RENDER_CONTEXT_CLIENT_ONLY_KEYS = ("pseudonym_changed",)
+
     # ------------------------------------------------------------------ Ableitung
 
     @classmethod
@@ -837,21 +842,25 @@ class TestClientCaseViewMirrorParity:
         """
         client_keys = self._render_context_keys(self._CLIENT_MODULE)
         case_keys = self._render_context_keys(self._CASE_MODULE)
-        allowed_extras = {self._normalize_token(key) for key in self._RENDER_CONTEXT_CASE_ONLY_KEYS}
+        allowed_case_extras = {self._normalize_token(key) for key in self._RENDER_CONTEXT_CASE_ONLY_KEYS}
+        allowed_client_extras = {self._normalize_token(key) for key in self._RENDER_CONTEXT_CLIENT_ONLY_KEYS}
 
         case_only = case_keys - client_keys
-        assert case_only == allowed_extras, (
+        assert case_only == allowed_case_extras, (
             "Der Fall-Kontext fuehrt andere Zusatz-Schluessel als zugesichert (Refs #1830):\n"
             f"  nur im Fall: {sorted(case_only)}\n"
-            f"  zugesichert: {sorted(allowed_extras)}\n"
+            f"  zugesichert: {sorted(allowed_case_extras)}\n"
             "Entweder den Schluessel im Personen-Zwilling nachziehen oder ihn in "
             "_RENDER_CONTEXT_CASE_ONLY_KEYS mit Begruendung aufnehmen."
         )
 
         client_only = client_keys - case_keys
-        assert not client_only, (
-            "Diese Kontext-Schluessel gibt es nur in der Personen-View — im Fall-Zwilling "
-            f"nachziehen (Refs #1830): {sorted(client_only)}"
+        assert client_only == allowed_client_extras, (
+            "Der Personen-Kontext fuehrt andere Zusatz-Schluessel als zugesichert (Refs #1830):\n"
+            f"  nur in der Person: {sorted(client_only)}\n"
+            f"  zugesichert: {sorted(allowed_client_extras)}\n"
+            "Entweder den Schluessel im Fall-Zwilling nachziehen oder ihn in "
+            "_RENDER_CONTEXT_CLIENT_ONLY_KEYS mit Begruendung aufnehmen."
         )
 
     def test_no_stale_expected_divergences(self):

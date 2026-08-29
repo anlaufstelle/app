@@ -65,8 +65,10 @@ from core.views.clients import (
     ClientDataExportPDFView,
     ClientDetailView,
     ClientFieldsPartialView,
+    ClientInlineCreateView,
     ClientLiftProcessingRestrictionView,
     ClientListView,
+    ClientRenameWarningView,
     ClientRestrictProcessingView,
     ClientUpdateView,
 )
@@ -362,6 +364,8 @@ urlpatterns = [
     # HTMX-Fragmente unter /partials/<feature>/, JSON-APIs unter /api/v1/<feature>/ (Refs #848)
     path("partials/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
     path("partials/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),
+    path("partials/clients/inline-create/", ClientInlineCreateView.as_view(), name="client_inline_create"),
+    path("partials/clients/rename-warning/", ClientRenameWarningView.as_view(), name="client_rename_warning"),
     # Refs #1876: nicht-blockierender Duplikat-Hinweis im Personen-Anlagepfad.
     path("partials/clients/similar/", ClientSimilarHintView.as_view(), name="client_similar_hint"),
     path("partials/clients/fields/", ClientFieldsPartialView.as_view(), name="client_fields_partial"),

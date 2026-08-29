@@ -1,5 +1,7 @@
 """Forms for client management."""
 
+from typing import TYPE_CHECKING, Any
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -31,7 +33,77 @@ class DynamicClientDataForm(DynamicDataForm):
     """
 
 
-class ClientForm(TailwindFormMixin, forms.ModelForm):
+class _FacilityScopedPseudonymMixin:
+    """Shared facility-local uniqueness check for full and inline forms."""
+
+    if TYPE_CHECKING:
+        cleaned_data: dict[str, Any]
+        facility: Any
+        instance: Client
+
+    def clean_pseudonym(self):
+        pseudonym = self.cleaned_data["pseudonym"]
+        qs = Client.objects.for_facility(self.facility).filter(pseudonym=pseudonym)
+        if self.instance and self.instance.pk and not self.instance._state.adding:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError(_("Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."))
+        return pseudonym
+
+
+class ClientInlineCreateForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelForm):
+    """Minimal client form embedded in the event-create flow (Refs #2039)."""
+
+    min_stage = forms.ChoiceField(
+        choices=Client.ContactStage.choices,
+        required=False,
+        widget=forms.HiddenInput,
+    )
+
+    class Meta:
+        model = Client
+        fields = ["pseudonym", "contact_stage"]
+        widgets = {"pseudonym": forms.TextInput(attrs={"autofocus": True})}
+
+    def __init__(self, *args, facility=None, min_stage=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.facility = facility
+
+        # Refs #2039/#507: Die Beschneidung vertraut nie ``self.data``. Die
+        # View reicht den Suchkontext getrennt ein; fehlt er im POST oder ist
+        # er manipuliert, gilt fail-closed die hoechste bekannte Stufe. Ein
+        # ausdruecklicher Leerwert bleibt dagegen der regulaere Kontext eines
+        # Dokumentationstyps ohne Mindeststufe. Das versteckte ChoiceField
+        # validiert den uebermittelten Wert unabhaengig davon weiter.
+        from core.services.events import CONTACT_STAGE_ORDER, stage_index
+
+        raw_min_stage = None if min_stage is None else str(min_stage).strip()
+        if raw_min_stage is None or (raw_min_stage and stage_index(raw_min_stage) < 0):
+            effective_min_stage = CONTACT_STAGE_ORDER[-1]
+        else:
+            effective_min_stage = raw_min_stage
+
+        self.initial["min_stage"] = effective_min_stage
+        required_index = stage_index(effective_min_stage)
+        if effective_min_stage and required_index >= 0:
+            allowed_stages = [stage for stage in CONTACT_STAGE_ORDER if stage_index(stage) >= required_index]
+            self.fields["contact_stage"].choices = [
+                (stage, Client.ContactStage(stage).label) for stage in allowed_stages
+            ]
+            if stage_index(self.initial.get("contact_stage")) < required_index:
+                self.initial["contact_stage"] = effective_min_stage
+
+    def clean(self):
+        cleaned_data = super().clean()
+        # ``min_stage`` ist versteckt und sein Feldfehler waere im Modal nicht
+        # sichtbar. Als Non-Field-Error erreicht dieselbe Validierung den
+        # gemeinsamen Fehlerblock mit ``role=alert`` (Refs #2039).
+        for error in self.errors.as_data().get("min_stage", ()):
+            self.add_error(None, error)
+        return cleaned_data
+
+
+class ClientForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelForm):
     """Form for creating and editing clients."""
 
     class Meta:
@@ -109,12 +181,3 @@ class ClientForm(TailwindFormMixin, forms.ModelForm):
         if is_editing:
             partial_url = reverse("core:client_fields_partial")
             doc_type_field.widget.attrs["hx-get"] = f"{partial_url}?client={self.instance.pk}"
-
-    def clean_pseudonym(self):
-        pseudonym = self.cleaned_data["pseudonym"]
-        qs = Client.objects.for_facility(self.facility).filter(pseudonym=pseudonym)
-        if self.instance and self.instance.pk:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise ValidationError(_("Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."))
-        return pseudonym

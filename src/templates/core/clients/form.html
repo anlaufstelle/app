@@ -52,6 +52,18 @@
                  hx-target="this"
                  data-testid="client-similar-hint-region"></div>
             {% endif %}
+            {% if field.name == "pseudonym" and is_edit %}
+            <div class="-mt-1"
+                 hx-post="{% url 'core:client_rename_warning' %}"
+                 hx-trigger="keyup changed delay:400ms from:#id_pseudonym"
+                 hx-include="#id_pseudonym"
+                 hx-vals='{"rename_warning": "{{ client.pk }}"}'
+                 hx-params="rename_warning,pseudonym"
+                 hx-target="this"
+                 data-testid="client-rename-warning-region">
+                {% include "core/clients/partials/_rename_warning.html" %}
+            </div>
+            {% endif %}
             {% comment %}M2/P7 (Refs #1058, E11): Ein Typwechsel — und ebenso das
             Entfernen des Typs — baut die Zusatzfelder neu auf; die Werte des alten
             Typs haben im neuen Feldset keine Bedeutung und werden von

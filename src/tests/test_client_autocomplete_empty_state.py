@@ -42,13 +42,24 @@ class TestEmptyStateIsWiredOnEveryForm:
         assert EMPTY_BOX in content, f"{route} hat keinen Leerzustand fuer die Personensuche"
         assert NO_MATCH_TEXT in content, route
 
-    @pytest.mark.parametrize("route", FORM_ROUTES)
+    @pytest.mark.parametrize("route", ["core:workitem_create", "core:case_create"])
     def test_staff_gets_the_create_person_jump(self, client, staff_user, route):
         content = _page(client, staff_user, route)
         idx = content.index(CREATE_LINK)
         link = content[content.rindex("<a", 0, idx) : content.index(">", idx)]
 
         assert f'href="{reverse("core:client_create")}"' in link, link
+
+    def test_event_form_opens_inline_create_instead_of_leaving(self, client, staff_user):
+        content = _page(client, staff_user, "core:event_create")
+        idx = content.index(CREATE_LINK)
+        button = content[content.rindex("<button", 0, idx) : content.index(">", idx)]
+
+        assert f'hx-get="{reverse("core:client_inline_create")}"' in button
+        assert 'hx-target="#client-inline-create-modal"' in button
+        assert 'name="min_stage"' in button
+        assert ':value="minStage"' in button
+        assert f'href="{reverse("core:client_create")}"' not in button
 
     def test_assistant_never_sees_the_create_person_jump(self, client, assistant_user):
         """`core:client_create` ist STAFF_PLUS — ein Link dorthin waere fuer die

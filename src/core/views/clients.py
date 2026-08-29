@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -16,7 +16,7 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.forms.clients import ClientForm, DynamicClientDataForm
+from core.forms.clients import ClientForm, ClientInlineCreateForm, DynamicClientDataForm
 from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, RectificationRequest, WorkItem
 from core.models import Case as CaseModel
 from core.services.attachments import (
@@ -468,6 +468,90 @@ class ClientCreateView(StaffRequiredMixin, View):
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
 )
+class ClientInlineCreateView(StaffRequiredMixin, View):
+    """Create and select a minimal client without leaving the event form."""
+
+    template_name = "core/clients/partials/_inline_create_modal.html"
+
+    def get(self, request):
+        if request.GET.get("close") == "1":
+            return HttpResponse("")
+        form = ClientInlineCreateForm(
+            facility=request.current_facility,
+            min_stage=request.GET.get("min_stage", "").strip(),
+        )
+        return render(request, self.template_name, {"form": form})
+
+    def post(self, request):
+        form = ClientInlineCreateForm(
+            request.POST,
+            facility=request.current_facility,
+            min_stage=request.POST.get("min_stage"),
+        )
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form})
+
+        client = create_client(
+            facility=request.current_facility,
+            user=request.user,
+            pseudonym=form.cleaned_data["pseudonym"],
+            contact_stage=form.cleaned_data["contact_stage"],
+        )
+        response = HttpResponse("")
+        response["HX-Trigger-After-Swap"] = json.dumps(
+            {
+                "client-inline-created": {
+                    "id": str(client.pk),
+                    "pseudonym": client.pseudonym,
+                }
+            }
+        )
+        return response
+
+
+class ClientRenameWarningView(StaffRequiredMixin, View):
+    """Read-only HTMX probe for a pending pseudonym rename (Refs #2044)."""
+
+    template_name = "core/clients/partials/_rename_warning.html"
+
+    def post(self, request):
+        pseudonym_changed = False
+        client_id = request.POST.get("rename_warning")
+        if client_id:
+            try:
+                client = get_scoped_object(
+                    Client,
+                    request,
+                    pk=client_id,
+                    is_deleted=False,
+                    is_active=True,
+                )
+            except (Http404, ValidationError):
+                pass
+            else:
+                probe_form = ClientForm(
+                    instance=client,
+                    facility=request.current_facility,
+                    user=request.user,
+                )
+                try:
+                    submitted_pseudonym = probe_form.fields["pseudonym"].clean(request.POST.get("pseudonym"))
+                except ValidationError:
+                    pass
+                else:
+                    pseudonym_changed = submitted_pseudonym != client.pseudonym
+
+        return render(
+            request,
+            self.template_name,
+            {"pseudonym_changed": pseudonym_changed},
+        )
+
+
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class ClientUpdateView(StaffRequiredMixin, View):
     """Edit a client.
 
@@ -518,6 +602,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
             # Zeilen beim Re-Render eines ungueltigen Formulars aus dem Formular
             # (Refs #1056 P4, Event-Lehre).
             "existing_attachments": build_attachment_context(client),
+            "pseudonym_changed": form.is_bound and "pseudonym" in form.changed_data,
         }
 
     def get(self, request, pk):

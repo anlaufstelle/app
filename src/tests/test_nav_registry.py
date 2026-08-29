@@ -66,7 +66,11 @@ NAV_ROUTE_PREFIXES = (
 # Verlust-/Duplikat-Guard fuer alle nachfolgenden URLconf-Aenderungen.
 # #2045 (0.89-L1) fuegt die beiden Art.-18-Routen hinzu
 # (client_restrict_processing, client_lift_processing_restriction): 167 -> 169.
-_EXPECTED_TOTAL_PATTERNS = 169
+# #2039 fuegt client_inline_create fuer die Anlage aus dem Kontaktformular
+# hinzu: 169 -> 170.
+# #2044 zieht die read-only Rename-Warnprobe auf eine eigene Partial-Route:
+# 170 -> 171.
+_EXPECTED_TOTAL_PATTERNS = 171
 
 
 def _prefixed_route_names() -> dict[str, str]:

@@ -160,7 +160,7 @@
             {# eigenen Wurzel-Container mit; ohne diesen Wrapper stuende sein    #}
             {# Closer hier verwaist und schloesse die Karte vorzeitig. #}
             <div>
-                {% include "components/_client_autocomplete.html" with client_form=meta_form anonymous_mode=True min_stage_hint=True extra_hidden_attrs="data-autosave-person" %}
+                {% include "components/_client_autocomplete.html" with client_form=meta_form anonymous_mode=True min_stage_hint=True extra_hidden_attrs="data-autosave-person" inline_create=True %}
                 <p x-show="selectionCleared" x-cloak data-testid="client-selection-cleared" class="mt-1 text-[12px] text-yellow-700">
                     {% trans "Die Personenauswahl wurde zurückgesetzt: dieser Dokumentationstyp verlangt eine höhere Kontaktstufe." %}
                 </p>
@@ -225,7 +225,20 @@
             </button>
             <a href="{% url 'core:zeitstrom' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
         </div>
+        <p class="hidden md:block text-[12px] text-ink-muted" data-testid="event-shortcut-hint">
+            {% trans "Tastenkürzel:" %}
+            <kbd class="rounded border border-subtle bg-canvas px-1.5 py-0.5 font-mono">{% trans "Strg" %}</kbd> +
+            <kbd class="rounded border border-subtle bg-canvas px-1.5 py-0.5 font-mono">Enter</kbd>
+            {% trans "speichert." %}
+            <span x-show="anonymousAllowed" x-cloak data-testid="event-shortcut-next-hint">
+                <kbd class="rounded border border-subtle bg-canvas px-1.5 py-0.5 font-mono">{% trans "Strg" %}</kbd> +
+                <kbd class="rounded border border-subtle bg-canvas px-1.5 py-0.5 font-mono">{% trans "Umschalt" %}</kbd> +
+                <kbd class="rounded border border-subtle bg-canvas px-1.5 py-0.5 font-mono">Enter</kbd>
+                {% trans "speichert und öffnet den nächsten Kontakt." %}
+            </span>
+        </p>
     </form>
+    <div id="client-inline-create-modal"></div>
 </div>
 {% endblock %}
 

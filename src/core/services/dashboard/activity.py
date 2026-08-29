@@ -74,6 +74,10 @@ def render_activity_summary(activity) -> str:
             return _("Person qualifiziert")
         return _("%(pseudonym)s qualifiziert") % {"pseudonym": target.pseudonym}
     if action == Activity.Action.CLIENT_UPDATED:
+        if context.get("kind") == "renamed":
+            if target is None:
+                return _("Person umbenannt")
+            return _("Person %(pseudonym)s umbenannt") % {"pseudonym": target.pseudonym}
         if target is None:
             return _("Person aktualisiert")
         return _("Person %(pseudonym)s aktualisiert") % {"pseudonym": target.pseudonym}
@@ -144,18 +148,25 @@ def render_activity_summary(activity) -> str:
     return _generic_summary(activity)
 
 
-def log_activity(*, facility, actor, verb, target, action):
+def log_activity(*, facility, actor, verb, target, action, client_update_kind=None):
     """Create an Activity entry for a system action.
 
     ``action`` is validated against the closed, PII-free renderer vocabulary;
     no pre-rendered or user-entered string crosses this write boundary.
     """
     action = Activity.Action(action)
+    if client_update_kind not in (None, "renamed"):
+        raise ValueError("client_update_kind must be None or 'renamed'")
+    if client_update_kind is not None and action != Activity.Action.CLIENT_UPDATED:
+        raise ValueError("client_update_kind is only valid for CLIENT_UPDATED")
+    context = {"schema": ACTIVITY_CONTEXT_SCHEMA, "action": action.value}
+    if client_update_kind is not None:
+        context["kind"] = client_update_kind
     return Activity.objects.create(
         facility=facility,
         actor=actor,
         verb=verb,
         target_type=ContentType.objects.get_for_model(target),
         target_id=target.pk,
-        context={"schema": ACTIVITY_CONTEXT_SCHEMA, "action": action.value},
+        context=context,
     )

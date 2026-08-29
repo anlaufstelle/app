@@ -6,10 +6,11 @@ setzen, wenn der Alpine-Scope HIER liegen soll — die Kontakterfassung haengt
 denselben Scope liest), ``client_form`` (Fehlerquelle), ``required_field``
 (festes Pflicht-Sternchen + aria-required/aria-invalid), ``anonymous_mode``
 (Stern nur wenn nicht anonym erlaubt), ``min_stage_hint`` (Stufen-Erklärung
-im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person).
+im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person),
+``inline_create`` (HTMX-Modal aus dem Kontaktformular).
 Die gedriftete Fassung in workitems/form.html wird bewusst NICHT angefasst —
 ihre a11y-Angleichung ist Ticket #1989.{% endcomment %}
-<div{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
+<div{% if inline_create %} @client-inline-created.window="selectItem($event.detail)"{% endif %}{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
      data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
      data-initial-client-id="{{ client_id|default:'' }}"
      data-autocomplete-url="{% url 'core:client_autocomplete' %}"{% endif %}>
@@ -66,8 +67,19 @@ ihre a11y-Angleichung ist Ticket #1989.{% endcomment %}
             <p>{% trans "Keine Person mit diesem Pseudonym gefunden." %}</p>
             {% if min_stage_hint %}<p x-show="showMinStageHint" x-cloak x-text="minStageHint" class="mt-1"></p>{% endif %}
             {% if user.is_staff_or_above %}
+            {% if inline_create %}
+            <button type="button"
+                    name="min_stage"
+                    :value="minStage"
+                    hx-get="{% url 'core:client_inline_create' %}"
+                    hx-target="#client-inline-create-modal"
+                    hx-swap="innerHTML"
+                    data-testid="client-autocomplete-create"
+                    class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</button>
+            {% else %}
             <a href="{% url 'core:client_create' %}" data-testid="client-autocomplete-create"
                class="inline-flex items-center min-h-[44px] text-accent hover:underline">{% trans "Person anlegen" %}</a>
+            {% endif %}
             {% endif %}
         </div>
     </div>

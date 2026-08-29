@@ -154,12 +154,14 @@
                 hx-target="#feed-list"
                 hx-swap="innerHTML"
                 hx-trigger="change"
+                hx-indicator="#zeitstrom-doc-type-spinner"
             >
                 <option value="">{% trans "Alle Dokumentationstypen" %}</option>
                 {% for dt in document_types %}
                 <option value="{{ dt.pk }}" {% if selected_doc_type == dt.pk|stringformat:"s" %}selected{% endif %}>{{ dt.name }}</option>
                 {% endfor %}
             </select>
+            {% include "components/_htmx_spinner.html" with spinner_id="zeitstrom-doc-type-spinner" position_class="self-center" %}
             {% endif %}
         </div>
         {# Globale Auf-/Zuklapp-Steuerung (Refs #1588): setzt den Ausgangszustand #}

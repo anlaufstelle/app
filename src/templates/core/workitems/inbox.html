@@ -37,6 +37,7 @@ vollzuschreiben.
             hx-target="#inbox-content"
             hx-trigger="change"
             hx-replace-url="true"
+            hx-indicator="#workitem-filters-spinner"
             {% comment %}Refs #1145 (Reopen): Geschwister-Filter über ihre IDs einbinden, nicht über [name='…']. Die Bulk-Forms tragen eigene Selects name="assigned_to"/name="priority"; ein [name='…']-Include zog deren leeren Wert als zweiten Query-Parameter mit, der den echten Filter überschrieb (Anzeige „Mir & unzugewiesene" / „Mir zugewiesen", Liste aber „Alle").{% endcomment %}
             hx-include="#filter-priority,#filter-assigned-to,#filter-due"
         >
@@ -54,6 +55,7 @@ vollzuschreiben.
             hx-target="#inbox-content"
             hx-trigger="change"
             hx-replace-url="true"
+            hx-indicator="#workitem-filters-spinner"
             hx-include="#filter-item-type,#filter-assigned-to,#filter-due"
         >
             <option value="">{% trans "Alle" %}</option>
@@ -70,6 +72,7 @@ vollzuschreiben.
             hx-target="#inbox-content"
             hx-trigger="change"
             hx-replace-url="true"
+            hx-indicator="#workitem-filters-spinner"
             hx-include="#filter-item-type,#filter-priority,#filter-due"
         >
             {% comment %}Refs #1145: Eigene Default-Option, deren sichtbare Auswahl zur Default-Query (eigene + nicht zugewiesene Teamaufgaben) passt. „Mir zugewiesen" (value="me") bleibt der strikte Filter, der ausschließlich eigene Aufgaben zeigt.{% endcomment %}
@@ -89,6 +92,7 @@ vollzuschreiben.
             hx-target="#inbox-content"
             hx-trigger="change"
             hx-replace-url="true"
+            hx-indicator="#workitem-filters-spinner"
             hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-status,#filter-done-period"
         >
             <option value="">{% trans "Alle" %}</option>
@@ -106,6 +110,7 @@ vollzuschreiben.
             hx-target="#inbox-content"
             hx-trigger="change"
             hx-replace-url="true"
+            hx-indicator="#workitem-filters-spinner"
             hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due,#filter-done-period"
         >
             <option value="">{% trans "Alle Status" %}</option>
@@ -123,6 +128,7 @@ vollzuschreiben.
             hx-target="#inbox-content"
             hx-trigger="change"
             hx-replace-url="true"
+            hx-indicator="#workitem-filters-spinner"
             hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due,#filter-status"
         >
             {% for value, label in done_period_choices %}
@@ -130,6 +136,7 @@ vollzuschreiben.
             {% endfor %}
         </select>
     </div>
+    {% include "components/_htmx_spinner.html" with spinner_id="workitem-filters-spinner" position_class="self-center" %}
 </div>
 
 {# Bulk-Edit (Refs #267): Alpine-State für Auswahl und Aktions-Forms #}

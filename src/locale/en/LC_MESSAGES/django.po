@@ -12067,3 +12067,50 @@ msgstr "How long an already redacted history version is retained after its redac
 #: src/core/services/events/crud.py:1
 msgid "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — bitte erneut öffnen und die Löschung wiederholen."
 msgstr "This event's client assignment was changed in the meantime — please reopen it and repeat the deletion."
+
+#: src/templates/core/cases/list.html:41
+#: src/templates/core/clients/list.html:64
+msgid "Suchbegriff"
+msgstr "Search term"
+
+#: src/templates/core/events/create.html:231
+msgid "Tastenkürzel:"
+msgstr "Keyboard shortcuts:"
+
+#: src/templates/core/events/create.html:232
+#: src/templates/core/events/create.html:235
+msgid "Strg"
+msgstr "Ctrl"
+
+#: src/templates/core/events/create.html:234
+msgid "speichert."
+msgstr "saves."
+
+#: src/templates/core/events/create.html:236
+msgid "Umschalt"
+msgstr "Shift"
+
+#: src/templates/core/events/create.html:238
+msgid "speichert und öffnet den nächsten Kontakt."
+msgstr "saves and opens the next contact."
+
+#: src/templates/core/clients/partials/_rename_warning.html:4
+msgid "Pseudonym ändern?"
+msgstr "Rename pseudonym?"
+
+#: src/templates/core/clients/partials/_rename_warning.html:5
+msgid "Das alte Pseudonym ist danach nicht mehr durchsuchbar. Frühere Notizen oder Verweise können weiterhin das alte Kürzel enthalten. Bitte prüfen Sie die Änderung vor dem Speichern."
+msgstr "The old pseudonym will no longer be searchable. Earlier notes or references may still contain the old identifier. Please check the change before saving."
+
+#: src/core/services/dashboard/activity.py:79
+msgid "Person umbenannt"
+msgstr "Person renamed"
+
+#: src/core/services/dashboard/activity.py:80
+#, python-format
+msgid "Person %(pseudonym)s umbenannt"
+msgstr "Person %(pseudonym)s renamed"
+
+#: src/templates/core/clients/partials/_inline_create_modal.html:8
+msgid "Die neue Person wird direkt ausgewählt; Ihre Angaben im Kontaktformular bleiben erhalten."
+msgstr "The new person is selected immediately; your entries in the contact form are preserved."

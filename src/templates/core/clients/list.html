@@ -61,6 +61,7 @@
         {# Refs #787: Suchbegriff (Pseudonym) wird explizit nicht persistiert. #}
         <input type="text"
                name="q"
+               aria-label="{% trans 'Suchbegriff' %}"
                data-filter-persist-exclude
                value="{{ q }}"
                placeholder="{% trans 'Pseudonym suchen...' %}"

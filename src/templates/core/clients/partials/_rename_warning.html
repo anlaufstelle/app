@@ -1,0 +1,7 @@
+{% load i18n %}
+{% if pseudonym_changed %}
+<div class="rounded-[10px] border border-yellow-200 bg-yellow-50 p-3 text-[13px] text-yellow-800" role="status">
+    <p class="font-semibold">{% trans "Pseudonym ändern?" %}</p>
+    <p class="mt-1">{% trans "Das alte Pseudonym ist danach nicht mehr durchsuchbar. Frühere Notizen oder Verweise können weiterhin das alte Kürzel enthalten. Bitte prüfen Sie die Änderung vor dem Speichern." %}</p>
+</div>
+{% endif %}

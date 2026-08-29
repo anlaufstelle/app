@@ -808,6 +808,15 @@ EXPECTATIONS = (
         idor=(("pk", "foreign_workitem.pk"),),
     ),
     E("core:client_autocomplete", "partials-htmx", get=ASSISTANT_PLUS),
+    # Refs #2039: minimale Personen-Mutation aus dem Kontaktformular —
+    # identisches STAFF_PLUS-Gate wie ``client_create``. Ohne URL-Objekt gibt
+    # es keine zusaetzliche Foreign-Object-IDOR-Probe; der Eintrag speist die
+    # Rollen-/Methodenmatrix und die gemeinsamen IDOR-Deklarationsguards.
+    E("core:client_inline_create", "partials-htmx", get=STAFF_PLUS, post=STAFF_PLUS),
+    # Refs #2044: reine Warnprobe im Personen-Edit — POST haelt das Pseudonym
+    # aus URL-/Access-Logs, schreibt aber nichts und hat dasselbe STAFF_PLUS-
+    # Gate wie ``client_update``.
+    E("core:client_rename_warning", "partials-htmx", post=STAFF_PLUS),
     # Refs #1876: Duplikat-Hinweis im Anlage-Formular — dasselbe Gate wie
     # ``client_create`` (STAFF_PLUS), denn genau dort wird er nachgeladen.
     E("core:client_similar_hint", "partials-htmx", get=STAFF_PLUS),

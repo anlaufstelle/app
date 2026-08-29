@@ -942,6 +942,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         verb=Activity.Verb.UPDATED,
         target=client,
         action=Activity.Action.CLIENT_UPDATED,
+        client_update_kind="renamed" if "pseudonym" in changed_fields else None,
     )
 
     return client

@@ -6,8 +6,12 @@ Laufzeitverhalten selbst (Toast bei 4xx/5xx, Spinner-Sichtbarkeit, geblockter
 2. Submit) ist client-seitig und wird in den E2E-Tests abgedeckt (manuell-first).
 """
 
+from pathlib import Path
+
 import pytest
 from django.urls import reverse
+
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 
 
 @pytest.mark.django_db
@@ -52,3 +56,33 @@ class TestDoubleSubmitGuardWiring:
         client.force_login(staff_user)
         content = client.get(reverse("core:client_list")).content.decode()
         assert "js/double-submit.js" in content
+
+
+class TestFilterLoadingIndicatorTemplates:
+    """Refs #2005: Select-Filter verdrahten auf existierende Spinner."""
+
+    def test_workitem_inbox_filters_share_loading_indicator(self):
+        content = (TEMPLATES_DIR / "core/workitems/inbox.html").read_text()
+
+        assert 'spinner_id="workitem-filters-spinner"' in content
+        assert content.count('hx-indicator="#workitem-filters-spinner"') == 6
+
+    def test_zeitstrom_document_type_filter_has_loading_indicator(self):
+        content = (TEMPLATES_DIR / "core/zeitstrom/index.html").read_text()
+
+        assert 'spinner_id="zeitstrom-doc-type-spinner"' in content
+        assert 'hx-indicator="#zeitstrom-doc-type-spinner"' in content
+
+
+class TestListSearchAccessibilityTemplates:
+    """Refs #2006: Listen-Suchfelder haben einen zugänglichen Namen."""
+
+    @pytest.mark.parametrize(
+        "template_path",
+        ["core/clients/list.html", "core/cases/list.html"],
+    )
+    def test_search_input_has_accessible_label(self, template_path):
+        content = (TEMPLATES_DIR / template_path).read_text()
+
+        search_input = content[content.index('<input type="text"') :]
+        assert "aria-label=\"{% trans 'Suchbegriff' %}\"" in search_input.split(">", 1)[0]

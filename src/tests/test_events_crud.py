@@ -512,8 +512,17 @@ class TestEventCreateSerienerfassung:
         client.force_login(staff_user)
         response = client.get(reverse("core:event_create"))
         assert response.status_code == 200
-        assert 'name="_save_and_new"' in response.content.decode()
-        assert 'data-testid="event-submit-next"' in response.content.decode()
+        body = response.content.decode()
+        assert 'name="_save_and_new"' in body
+        assert 'data-testid="event-submit-next"' in body
+        assert 'data-testid="event-shortcut-hint"' in body
+        assert 'class="hidden md:block' in body
+        assert "Strg" in body
+        assert "Umschalt" in body
+        marker = body.index('data-testid="event-shortcut-next-hint"')
+        conditional_hint = body[body.rindex("<span", 0, marker) : body.index(">", marker)]
+        assert 'x-show="anonymousAllowed"' in conditional_hint
+        assert "x-cloak" in conditional_hint
 
     def test_get_prefill_document_type_preselects_and_renders_fields(self, client, staff_user, doc_type_contact):
         """?document_type=<pk> wählt den Typ vor und rendert dessen dynamische Felder."""
