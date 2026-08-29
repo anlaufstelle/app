@@ -124,8 +124,8 @@ class TestAuditLogCreationAllowlist:
             150: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
-            137: "update_settings-Body — Settings-Diff-Helper",
-            166: "log_settings_change-Body — zweite create-Stelle",
+            144: "update_settings-Body — Settings-Diff-Helper",
+            173: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {
@@ -235,6 +235,13 @@ class TestAuditDetailKeyInventory:
         "core/management/commands/export_facility.py": (1, "Zaehler-Dict aus export['entities']"),
         "core/management/commands/mark_restore_verified.py": (1, "detail-Variable (note) je nach CLI-Argument"),
         "core/retention/enforcement.py": (1, "**extra_detail des Retention-Laufs (document_type)"),
+        "core/retention/legal_holds.py": (
+            1,
+            "**detail der LEGAL_HOLD-Zeile — ``history_already_redacted`` steht "
+            "nur bei ``target_type='Event'`` darin (ADR-050 D2, Refs #2065). Alle "
+            "moeglichen Schluessel (reason, expires_at, hold_id, "
+            "history_already_redacted) sind in AUDIT_DETAIL_KEYS deklariert",
+        ),
         "core/services/case/deletion.py": (
             1,
             "**detail von _move_case_to_trash — der gemeinsame Kern beider "

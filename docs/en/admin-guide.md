@@ -1869,4 +1869,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.86.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 6a77165f7ce3630b127d1acd21d5221e4e8bdeea -->
+<!-- source-hash: b1730dc41109f059392527d012ddfc6a1a22cd59 -->

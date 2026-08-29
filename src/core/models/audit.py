@@ -184,6 +184,13 @@ class AuditLog(models.Model):
         # HMAC-Kette wird nie umgeschrieben — der Checkpoint legitimiert die
         # Diskontinuitaet, die das Loeschen alter Zeilen hinterlaesst.
         AUDIT_PRUNE_CHECKPOINT = "audit_prune_checkpoint", _("Audit-Pruning-Checkpoint")
+        # Refs #2065 (ADR-050 D5.3/M-4): Nachweis je Charge des
+        # EventHistory-Sweeps. Er belegt, dass die Append-only-Garantie fuer
+        # genau diese Zeilen legitim geoeffnet wurde — und muss deshalb mit
+        # DERSELBEN Transaktion committen wie die Redaktion, die er belegt.
+        # Prune-exempt wie AUDIT_PRUNE_CHECKPOINT (M-4): ein Nachweis, der vor
+        # den von ihm belegten Zeilen verschwindet, belegt nichts mehr.
+        EVENT_HISTORY_REDACTED = "event_history_redacted", _("Ereignis-Historie redigiert")
         # Refs #1476 (R10): Export einer nicht uebertragbaren Offline-Notiz als
         # Klartext-Datei auf die Platte (entschluesselte Art.-9-PII verlaesst die
         # App). Der Client meldet diese bewusste Nutzeraktion offline-tauglich

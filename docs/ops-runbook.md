@@ -1614,6 +1614,32 @@ Regression zugunsten der Sicherheit. Bei `Client.anonymize()` kommt ein
 **Lock-Upgrade-Deadlock-Risiko** hinzu (erst `RowExclusiveLock` durch die
 EventHistory-`INSERT`s, dann `ShareRowExclusiveLock` durch das `DISABLE`).
 
+**Seit 0.89 ist der naechtliche Retention-Lauf ein REGELMAESSIGER Bypass-Aufrufer**
+(ADR-050, Refs #2065):
+der EventHistory-Sweep redigiert abgelaufene Historien-Fassungen und loescht
+laengst redigierte. Drei Eigenschaften begrenzen die Wirkung auf das
+Wartungsfenster:
+
+- **Gebatcht.** Ein Bypass-Block je 500 Zeilen, nicht einer je Zeile wie in der
+  Key-Rotation — die Zahl der `ShareRowExclusiveLock`-Intervalle sinkt um
+  Groessenordnungen.
+- **Nur `core_eventhistory`.** Der Sweep oeffnet ausschliesslich die beiden
+  dortigen Trigger; auf `core_auditlog` nimmt er gar keine DDL-Sperre mehr,
+  sondern nur das `RowExclusiveLock` seines eigenen Nachweis-`INSERT`s.
+  Audit-`INSERT`s laufender Requests blockieren dadurch **nicht**.
+- **Kanonische Sperr-Reihenfolge** `core_client` → `core_event` →
+  `core_eventhistory` → `core_auditlog`, also genau die Ordnung, in der die
+  Anwendung ohnehin schreibt. `_APPEND_ONLY_TRIGGERS` fuehrte bis 0.89
+  `core_auditlog` zuerst — ein ABBA-Zyklus gegen jeden mutierenden Request.
+  Personen- und Ereigniszeilen einer Charge werden per
+  `SELECT … FOR UPDATE SKIP LOCKED` gesperrt, **bevor** der Trigger-Bypass
+  oeffnet: sonst hielte der Lauf die Tabellensperre und wartete auf eine fremde
+  Zeilensperre. Dieselben Zeilen sperrt die Legal-Hold-Anlage, bevor sie
+  schreibt — daher haelt ein Hold auf **Ereignis oder Person** den Sweep
+  zuverlaessig auf und wird nicht von ihm ueberholt. Bricht eine Charge dennoch mit
+  `deadlock detected` ab, wird sie idempotent mit Backoff wiederholt; der Lauf
+  faellt nicht aus.
+
 Betriebsregeln daraus:
 
 - Die Bypass-Commands `enforce_retention` (Retention-Cron, § 6),

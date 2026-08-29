@@ -24,13 +24,14 @@ from core.services.client.restriction import assert_processing_allowed
 from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
+from core.services.events.history_diff import build_anonymization_marker
 from core.services.security import check_version_conflict
 from core.services.system import bypass_replication_triggers
 
 logger = logging.getLogger(__name__)
 
 
-_REDACTED_HISTORY_MARKER = {"_redacted": True, "anonymized": True}
+_REDACTED_HISTORY_MARKER = build_anonymization_marker()
 _CLIENT_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp ist nicht für Personen vorgesehen.")
 
 

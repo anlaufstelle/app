@@ -29,6 +29,11 @@ _AUDIT_FIELDS = (
     # Retention-Workflow
     "client_trash_days",
     "auditlog_retention_months",
+    # ADR-050 D3/D8 (Refs #2065): eine Verkuerzung oder Abschaltung der
+    # Historien-Fristen entscheidet ueber die Tilgung von Beratungsinhalten —
+    # dieselbe Auditpflicht wie bei ``auditlog_retention_months``.
+    "eventhistory_detail_months",
+    "eventhistory_chronicle_months",
     "retention_auto_approve_after_defer",
     "retention_max_defer_count",
     # K-Anonymisierung
@@ -68,6 +73,8 @@ _AUDIT_VALUE_FIELDS = frozenset(
         "retention_activities_days",
         "client_trash_days",
         "auditlog_retention_months",
+        "eventhistory_detail_months",
+        "eventhistory_chronicle_months",
         "retention_auto_approve_after_defer",
         "retention_max_defer_count",
         "retention_use_k_anonymization",

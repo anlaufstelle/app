@@ -51,10 +51,34 @@ class EventHistory(models.Model):
         ),
     )
 
+    # ADR-050 D1.4 (Refs #2065): Wann wurde diese Zeile inhaltlich geleert?
+    # Traegt drei Aufgaben zugleich — Idempotenz-Filter des Sweeps, Praedikat
+    # des Teilindex (D6) und Fristanker der zweiten Stufe (D8/M-7). Aus
+    # ``changed_at`` laesst sich „wie lange steht die Zeile schon leer" nicht
+    # beantworten.
+    redacted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Redigiert am"),
+    )
+
     class Meta:
         verbose_name = _("Ereignis-Historie")
         verbose_name_plural = _("Ereignis-Historien")
         ordering = ["-changed_at"]
+        indexes = [
+            # ADR-050 D6: Teilindex fuer den altersbasierten Sweep. ``changed_at``
+            # hatte bisher gar keinen Index (Migration 0006 indiziert nur
+            # ``core_event``), jede Altersabfrage war ein Seq-Scan. Das
+            # ``redacted_at IS NULL``-Praedikat ist mit dem Zeitstempel aus D1.4
+            # unstrittig immutable; der Index schrumpft mit jedem Lauf, weil
+            # erledigte Zeilen herausfallen.
+            models.Index(
+                fields=["changed_at"],
+                condition=models.Q(redacted_at__isnull=True),
+                name="eventhistory_unredacted_age",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         """Prevent updates — only inserts are allowed."""
