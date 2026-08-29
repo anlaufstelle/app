@@ -144,7 +144,7 @@ importScripts("/static/js/url-patterns.js");
 // z.B. ein neues offline-client-view.js, das offlineFormFields.formatTs
 // erwartet, gegen ein altes offline-form-fields.js ohne Formatter. Der Bump
 // erzwingt Re-Install + Re-Precache und erneuert die Module atomar.
-const CACHE_NAME = "anlaufstelle-v41";
+const CACHE_NAME = "anlaufstelle-v42";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

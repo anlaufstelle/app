@@ -127,7 +127,8 @@
     }
 </style>
 </head>
-<body>
+<body data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}"
+      data-i18n-db-update-dismiss="{% trans 'Schließen' %}">
     <!-- Refs #1494 (#1544, #1499): Rueckbau der /offline/-Sonderseite
          auf einen reinen, STATISCHEN Fallback. Seit dem SW-Flip (CACHE v22)
          rendern /clients/, /workitems/ und / offline IN-PLACE ihre eigenen

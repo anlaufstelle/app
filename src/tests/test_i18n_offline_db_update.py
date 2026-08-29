@@ -58,28 +58,23 @@ class TestTheLayoutCarriesTheLabel:
 class TestNoLoadPathStaysSilent:
     """Fix-Runde 1: Die Meldung darf auf KEINEM Ladepfad ausfallen.
 
-    Vier der fuenf Layouts liefern kein Dataset-Label; ``offline_base.html``
-    bekommt es erst mit dem naechsten ``CACHE_NAME``-Bump (Shell-Hash-Guard,
-    Refs #1575/#1845 — release-weite Entscheidung). Bis dahin — und fuer
-    Anmeldung, Passwortwechsel und ``offline.html`` dauerhaft — traegt der
-    Rueckfall im Modul die Meldung.
+    Seit dem ``anlaufstelle-v42``-Bump (0.90-Merge-Punkt, O-1) liefern ALLE
+    fuenf Layouts das uebersetzte Dataset-Label; der Rueckfall im Modul bleibt
+    als Netz fuer kuenftige Ladepfade ohne Label bestehen.
     """
 
-    #: Layouts, die ``offline-db.js`` laden, aber (noch) kein Label liefern.
-    #: Beide sind **precached** und stehen im Shell-Hash-Guard — das Attribut
-    #: kommt dort erst mit dem naechsten ``CACHE_NAME``-Bump. Anmeldung und
-    #: Passwortwechsel sind nicht precached und liefern es seit der Nachrunde
-    #: selbst.
-    WITHOUT_LABEL = (
-        "offline_base.html",
-        "offline.html",
-    )
+    #: Layouts, die ``offline-db.js`` laden, aber kein Label liefern — seit dem
+    #: v42-Bump leer; die Konstante bleibt, damit ein kuenftiges labelloses
+    #: Layout hier bewusst eingetragen (und vom Rueckfall getragen) wird.
+    WITHOUT_LABEL = ()
 
     #: Layouts, die das uebersetzte Label liefern.
     WITH_LABEL = (
         "base.html",
         "auth/login.html",
         "auth/password_change.html",
+        "offline_base.html",
+        "offline.html",
     )
 
     def test_every_layout_loading_offline_db_is_accounted_for(self):

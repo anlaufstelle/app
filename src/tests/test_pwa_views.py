@@ -155,7 +155,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v41"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v42"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#1838: offline-store.js ist in den 4-Datei-Verbund offline-db/"
             "offline-bundles/offline-revocations/offline-store gesplittet — "
@@ -690,12 +690,12 @@ class TestPrecachedShellBumpGuard:
     # Aenderung => Bump + Hash gemeinsam nachgezogen. Vor dem Bump repo-weit
     # nach v40-Pins gegrept (Integrator-Auflage): test_pwa_views.py (2x) und
     # test_offline_tally_contract.py — alle in diesem Commit nachgezogen.
-    _PINNED_CACHE_NAME = "anlaufstelle-v41"
+    _PINNED_CACHE_NAME = "anlaufstelle-v42"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
     # kein weiterer Bump.
-    _PINNED_SHELL_HASH = "119004e973c25f69f0efe7e07cc232b6f702435d7fed4005e1945ebb8538c7a5"
+    _PINNED_SHELL_HASH = "2b697d1f44a5e82d3b64dfd77f54e86f0184db640c4adc15cab0375e81bb7eb4"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
