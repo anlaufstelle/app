@@ -30,7 +30,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
@@ -469,10 +469,21 @@ def purge_attachment_chain(owner, entry_id):
         geteilten Reverse-Accessor ``owner.attachments`` und ist damit
         owner-gescopt.
     :param entry_id: Kennung der Versionskette (nicht die Attachment-PK).
-    :raises AttachmentPurgeBlockedError: bei aktivem Legal Hold.
+    **Art.-18-Sperrvermerk** (Refs #2045) blockiert genauso — seit dem
+    Re-Review IM Service statt ungesperrt in der View davor. Bewusst derselbe
+    Fehlertyp wie beim Legal Hold: die View hat dafuer laengst einen Zweig, der
+    die Meldung ausgibt und die Bestaetigungsseite verlaesst; ein zweiter
+    Fehlerpfad haette dasselbe Ergebnis mit mehr Code erzeugt. Fachlich sind es
+    zwei verschiedene Gruende — der Hold schuetzt Beweismittel, die
+    Einschraenkung untersagt das Ausduennen einer bestrittenen Akte — deshalb
+    zwei getrennte Meldungen.
+
+    :raises AttachmentPurgeBlockedError: bei aktivem Legal Hold oder gesetztem
+        Art.-18-Sperrvermerk.
     :return: Zahl der physisch entfernten Versionen (0 = Kette existiert nicht).
     """
     from core.retention.legal_holds import owner_has_active_hold
+    from core.services.client.restriction import assert_processing_allowed
     from core.services.file_vault import delete_attachment_file
 
     chain = list(owner.attachments.filter(entry_id=entry_id))
@@ -482,11 +493,55 @@ def purge_attachment_chain(owner, entry_id):
         raise AttachmentPurgeBlockedError(
             _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")
         )
+    owner_client_id = owner.pk if owner.__class__.__name__ == "Client" else getattr(owner, "client_id", None)
 
-    _drop_purged_marker_entries(owner, {str(attachment.pk) for attachment in chain})
-    owner.attachments.filter(entry_id=entry_id).delete()
-    for attachment in chain:
-        delete_attachment_file(attachment)
+    # Art.-18-Gate unter der Client-ZEILENSPERRE, in derselben Transaktion wie
+    # die Loeschung (Re-Review 2): das ungesperrte Anzeigepraedikat liess ein
+    # TOCTOU-Fenster zwischen Pruefung und ``delete()``. ``assert_processing_allowed``
+    # ist die eine Autoritaet; ihr ``ValidationError`` wird hier in den
+    # etablierten Blocked-Fehlertyp uebersetzt, damit die View ihren
+    # bestehenden Zweig behaelt (Muster Legal Hold).
+    #
+    # Die eigene ``atomic``-Klammer macht den DIREKTEN Service-Aufruf genauso
+    # sicher wie den View-Weg: ``select_for_update`` braucht eine Transaktion,
+    # und der Lock muss bis nach dem ``delete()`` halten. Ruft die View schon
+    # in einem ``atomic``, ist dies ein Savepoint — kein zweiter Commit.
+    with transaction.atomic():
+        try:
+            assert_processing_allowed(owner_client_id, lock=True)
+        except ValidationError as exc:
+            raise AttachmentPurgeBlockedError(
+                _(
+                    "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — "
+                    "die Datei darf nicht einzeln vernichtet werden."
+                )
+            ) from exc
+
+        _drop_purged_marker_entries(owner, {str(attachment.pk) for attachment in chain})
+        owner.attachments.filter(entry_id=entry_id).delete()
+
+        # Der ``.enc``-Unlink laeuft NACH dem aeussersten Commit
+        # (Cross-Review-Runde 4). Vorher lag er in der Transaktion und war
+        # damit nicht rollback-bar: rollte eine aeussere Transaktion zurueck
+        # oder scheiterte der Commit, kehrten Marker und Attachment-Zeilen
+        # zurueck — die Dateien nicht. Die Zeile zeigte dann dauerhaft ins
+        # Leere und der Download antwortete 404.
+        #
+        # ``on_commit`` dreht die verbleibende Fehlerrichtung in die
+        # harmlosere: Bricht der Prozess zwischen Commit und Unlink ab, bleibt
+        # eine referenzlose ``.enc`` liegen — und die raeumt
+        # :func:`~core.services.file_vault.cleanup.cleanup_orphan_storage_files`
+        # ab. Eine Zeile ohne Datei raeumt dagegen kein Sweep je weg.
+        #
+        # Erste Verwendung von ``on_commit`` in diesem Projekt: der Bestand
+        # (``delete_attachments_for``) unlinkt weiterhin innerhalb der
+        # Transaktion. Das bleibt bewusst so — jener Helfer laeuft nur in
+        # Owner-Loesch-/Anonymisierungskaskaden, in denen der ganze Owner
+        # ohnehin verschwindet; ihn umzustellen waere ein eigener Eingriff in
+        # fremde Pfade. Der Purge ist der einzige Weg, der eine EINZELNE Datei
+        # aus einem sonst unveraenderten Datensatz nimmt — hier zaehlt die
+        # Rollback-Konsistenz.
+        transaction.on_commit(lambda rows=tuple(chain): [delete_attachment_file(row) for row in rows])
     return len(chain)
 
 

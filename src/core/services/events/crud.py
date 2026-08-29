@@ -134,11 +134,22 @@ def create_event(
 ):
     """Create an event + EventHistory(CREATE).
 
+    Art.-18-Gate (Refs #2045): Ein neues Ereignis an einer eingeschraenkten
+    Person ist neue inhaltliche Verarbeitung — Art. 18 Abs. 2 erlaubt nur noch
+    die Speicherung des Bestands. Der Guard sitzt HIER und nicht (nur) im
+    Formular, weil ``create_event`` auch der CSV-Import und der
+    Offline-Replay durchlaufen; das Formular-Gate
+    (``resolve_writable_client``) ist die freundliche Vorabmeldung, dieses die
+    Grenze.
+
     ``idempotency_key`` und ``idempotency_payload_hash`` (Review R5/R6, #1909):
     Der normalisierte Schlüssel und der SHA-256-Fingerprint des Requests werden
     als persistenter DB-Backstop mitgeschrieben. Constraint und Hash fangen
     Duplikate sowie Payload-Kollisionen auch bei Cache-Ausfall ab.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(client, lock=True)
     # Refs #1058 (Review-Haertung, Defense-in-Depth): analog zum Guard in
     # ``create_client``/``create_case`` (core.services.client.main /
     # core.services.case.cases). Alle heutigen Aufrufer (Views/Offline-Replay)
@@ -230,8 +241,15 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     ``data_json``. Ein künftiges Update-Feld muss deshalb bewusst in
     ``allowed`` eingetragen werden, statt still durchzurutschen.
     """
+    from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
 
+    # Art.-18-Gate (Refs #2045): Das Bearbeiten eines bestehenden Ereignisses
+    # ist inhaltliche Aenderung. Der Guard liegt im Service und nicht nur in
+    # ``EventUpdateView.dispatch``, weil derselbe Weg den Offline-Replay und
+    # die Anhang-Aenderungen traegt. VOR dem Versions-Guard: die Rechtslage
+    # gilt unabhaengig davon, ob das Formular aktuell war.
+    assert_processing_allowed(event.client_id, lock=True)
     check_version_conflict(event, expected_updated_at, require_token=require_version_token)
     # Läuft ZUERST (Muster ``update_case``/``update_workitem``): die
     # Mass-Assignment-Prüfung darf weder vom Diff noch von der
@@ -358,7 +376,23 @@ def merge_update_payload(event, merged, restricted_keys, document_type):
 
 @transaction.atomic
 def soft_delete_event(event, user, *, source=None):
-    """Soft-Delete + EventHistory(DELETE) + AuditLog."""
+    """Soft-Delete + EventHistory(DELETE) + AuditLog.
+
+    Art.-18-Gate (Refs #2045) — seit dem Re-Review IM Service statt ungesperrt
+    in der View davor: der Service ist direkt aufrufbar, und ein View-Check vor
+    einem atomaren Service ist ein TOCTOU-Fenster. Die Sperre auf der
+    Client-Zeile haelt hier bis zum Commit.
+
+    Der GEPRUEFTE Vier-Augen-Weg (``approve_event_deletion``) ruft denselben
+    Service und oeffnet dafuer den benannten Loeschworkflow-Kontext — Art. 17
+    gilt waehrend der Einschraenkung weiter. Blockiert bleibt die
+    Einzelentscheidung ohne zweite Person. Der Strichlisten-Undo passiert das
+    Gate ohne Kontext, weil seine Ereignisse anonym sind (``client`` ist
+    ``None``) und damit nie einen Personenbezug tragen.
+    """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(event.client_id, lock=True)
     history_payload = build_redacted_delete_history(event)
     # Refs #1917: VOR dem Wipe bumpen — nur ein aktiver Ban erzeugt ein
     # Existenz-Delta; das Löschen eines schlafenden Hausverbots bleibt für

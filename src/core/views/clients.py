@@ -35,8 +35,10 @@ from core.services.client import (
     export_client_data,
     export_client_data_pdf,
     get_pending_deletion_request,
+    lift_processing_restriction,
     pending_deletion_client_ids,
     pending_merge_client_ids,
+    restrict_processing,
     track_client_visit,
     update_client,
 )
@@ -358,6 +360,9 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
             # Datensatz bisher unsichtbar — Banner, Badge und die
             # umbeschriftete Aktion haengen an diesem einen Objekt.
             "pending_deletion_request": get_pending_deletion_request(client),
+            # Refs #2045: Wertliste des Art.-18-Grundes fuer das Setzen-Formular.
+            # Im Template wird nicht gerechnet — die Choices kommen aus dem Modell.
+            "restriction_reasons": Client.RestrictionReason.choices,
             # M4 (Refs #1060, ADR-041): laufende Art.-16-Antraege am Datensatz
             # sichtbar machen. Nur die Anzahl — Feldwerte liegen verschluesselt
             # am Antrag und gehoeren in die Pruef-Ansicht, nicht auf die
@@ -710,6 +715,61 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 for staged in staged_all:
                     staged.output_path.unlink(missing_ok=True)
         messages.success(request, _("Person wurde aktualisiert."))
+        return redirect("core:client_detail", pk=client.pk)
+
+
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
+class ClientRestrictProcessingView(StaffRequiredMixin, View):
+    """Art.-18-Sperrvermerk setzen (Refs #2045).
+
+    POST-only: die Einschraenkung wird aus dem Banner bzw. der Aktionsleiste der
+    Personenakte gesetzt, es gibt keine eigene Seite. Der Scope
+    (``is_deleted=False, is_active=True``) spiegelt ``ClientUpdateView`` — eine
+    widerrufene Person zu "einschraenken" waere ohne Gegenstand.
+
+    Rollen-Guard doppelt (Mixin an der HTTP-Grenze, Guard im Service als SSOT);
+    der Grund kommt als Werteliste aus ``Client.RestrictionReason`` und wird
+    ausschliesslich im Service validiert.
+    """
+
+    def post(self, request, pk):
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
+        try:
+            restrict_processing(client, request.user, reason=request.POST.get("reason") or "")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(
+                request,
+                _("Die Verarbeitung dieser Person ist jetzt eingeschränkt (Art. 18 DSGVO)."),
+            )
+        return redirect("core:client_detail", pk=client.pk)
+
+
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
+class ClientLiftProcessingRestrictionView(StaffRequiredMixin, View):
+    """Sperrvermerk aufheben — vier-aeugig ODER durch die Leitung (Refs #2045).
+
+    Das Gate selbst sitzt im Service; die View faengt seinen ``ValidationError``
+    als Meldung ab, statt 403 zu liefern: „Sie haben die Einschraenkung selbst
+    gesetzt" ist ein Fachhinweis mit einem Weg (Leitung hinzuziehen), keine
+    Berechtigungsgrenze der Rolle.
+    """
+
+    def post(self, request, pk):
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False, is_active=True)
+        try:
+            lift_processing_restriction(client, request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, _("Die Einschränkung der Verarbeitung wurde aufgehoben."))
         return redirect("core:client_detail", pk=client.pk)
 
 

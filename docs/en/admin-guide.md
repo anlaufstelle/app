@@ -1456,6 +1456,8 @@ Individual records can be protected from automatic deletion via **Legal Hold** (
 
 Legal Holds are managed in the retention dashboard and in the Django admin (see [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)).
 
+> **Distinction from Art. 18 GDPR (Refs #2045):** A legal hold is **not** a restriction of processing under Art. 18. It blocks **erasure** (Art. 17(3)) and leaves day-to-day work on the record untouched. An Art. 18 restriction is the reverse: the data stays stored, but substantive work on the client record is blocked. That is what the separate **restriction marker** on the client record is for. The two are independent of each other.
+
 #### K-Anonymization Instead of Hard Delete
 
 As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs #535).
@@ -1609,7 +1611,26 @@ The following administrative capabilities are available for handling requests fr
 | Access (Art. 15) | Generate the data access record as JSON or PDF from the client view (lead or application manager, re-authentication required) -- scope see below |
 | Rectification (Art. 16) | Edit fields directly as application manager in the admin UI |
 | Erasure (Art. 17) | Submit a deletion request through the application (four-eyes principle) |
+| Restriction (Art. 18) | Set a **restriction marker** on the client record — see below |
 | Data portability (Art. 20) | Export function in the application |
+
+#### Restriction of processing: the restriction marker (Art. 18 GDPR, Refs #2045)
+
+Where a client contests the accuracy of their data, or where any other ground under Art. 18(1) applies, set a **restriction marker** on the client record. Its effect:
+
+| Question | Answer |
+|---|---|
+| **What remains permitted?** | **Storage** (Art. 18(2)). The record is not deleted, not hidden, and stays in the access record and in statistics. |
+| **What is blocked?** | Substantive work: the client can no longer be edited, nor assigned to a new contact, case or task. |
+| **What is exempt?** | The **rectification workflow** (Art. 16, § 7.6). It is the path on which the contested accuracy is examined — a restriction that blocked it too would be a dead end. |
+| **Who sets it?** | Staff and above, from the client record. When a rectification request is filed, the marker is additionally **offered** (opt-in, not pre-selected). |
+| **Who lifts it?** | A **second** authorised person or a **manager**. Whoever set the marker does not lift it alone. |
+| **Visibility** | A permanent banner on the client record showing legal ground, timestamp and the person who set it; a "restricted" marker in the client list. |
+| **Trail** | Audit entries `PROCESSING_RESTRICTED` and `PROCESSING_RESTRICTION_LIFTED`, each carrying the legal ground — never the contested matter itself. |
+
+**Not to be confused with the legal hold** (§ 7.3): that one blocks *erasure* (Art. 17(3)), the restriction marker blocks *use*. The two are independent of each other.
+
+**To be handled organisationally:** the software does not enforce the duty to inform the data subject **before** lifting the restriction (Art. 18(3)) — record it in your data subject request process.
 
 #### History Diff: Decryption for Authorized Roles
 
@@ -1635,12 +1656,13 @@ Included (Refs #1752):
 | Change history | Action, timestamp, editing user **and the before/after contents** -- including for deleted events |
 | Deletion requests | Requests targeting events **and the client record itself**, with reason and four-eyes review |
 | Rectification requests | Art. 16 requests concerning the client (Refs #1796, [ADR-041](../adr/041-berichtigungsworkflow-intern.md)) in **all** states (pending, approved, rejected): the field concerned, previous and requested value (decrypted), reason, review note, requesting and reviewing user, timestamps |
-| Retention | Legal holds (Art. 18) and open deletion proposals with due date and category |
+| Retention | Legal holds (Art. 17(3) — **not** Art. 18) and open deletion proposals with due date and category |
+| Restriction of processing | Art. 18 restriction marker (Refs #2045), where set: legal ground, timestamp and the person who set it |
 | Tasks | Title, description, type, status, priority, assignment, dates |
 | Activities | Activity feed entries about the client, their cases, events and tasks |
 | Recently viewed | Timestamps at which the client record was opened or bookmarked |
 | Merges | Provenance after duplicate merges (Refs #1876, [ADR-045](../adr/045-personen-merge.md) §7): which record was merged into this one and when, and whether it has already been anonymized for good; the access record of the dissolved record conversely states "Merged into" |
-| Access log | Audit entries about the client and their events: action, timestamp, reference |
+| Access log | Audit entries about the client, their cases and their events: action, timestamp, reference — including the steps of the four-eyes workflows (Refs #2048): deletion requests appear under the category “Löschantrag” (requested/approved/rejected, from the client, case and merge paths), rectification requests under “Berichtigung” |
 | File attachments | **Metadata** for every attachment on the client, their cases and their events (Refs #1738): field name and field slug, decrypted filename, file size, MIME type, timestamp and uploading user, plus the state within the version chain (current yes/no, superseded at, removed at) -- **the complete chain including superseded and removed links** |
 
 **On the structure of the attachment data (JSON):** client-owned attachments live under the top-level key `attachments` -- it is **always** present, possibly as an empty list. Case- and event-owned attachments appear as `attachments` **inside the respective entry** under `cases[i]` or `events[i]`, and only when non-empty (so the existing format for records without files stays unchanged); deleted events (`deleted_events`) carry them too. If a filename cannot be decrypted, the value reads `[verschlüsselt]` -- the record does not invent a name. The MIME type is the type **verified** at upload time; only legacy rows without detection fall back to the browser-reported one. In the custom fields themselves, the technical file marker is replaced by the placeholder `[Dateianhang – Angaben unter „Dateianhänge"]`. **In the PDF**, client-owned attachments form their own section "Dateianhänge"; case- and event-owned attachments appear as a "Dateianhänge" column in the respective table.
@@ -1847,4 +1869,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.86.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 216826adeb5af28536eeadf773fc0cb65693c3c7 -->
+<!-- source-hash: 54c9d4377224ad752cfdfb069f1422b037da9fd1 -->

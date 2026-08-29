@@ -1450,6 +1450,8 @@ Einzelne Datensätze können per **Legal Hold** vor automatischer Löschung gesc
 
 Legal Holds werden im Retention-Dashboard sowie im Django-Admin verwaltet (siehe [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)).
 
+> **Abgrenzung zu Art. 18 DSGVO (Refs #2045):** Ein Legal Hold ist **keine** Einschränkung der Verarbeitung im Sinne des Art. 18. Er blockiert die **Löschung** (Art. 17 Abs. 3) und lässt die tägliche Arbeit am Datensatz unberührt. Die Einschränkung nach Art. 18 ist der umgekehrte Fall: Die Daten bleiben gespeichert, aber die inhaltliche Arbeit an der Person ist gesperrt. Dafür gibt es den eigenen **Sperrvermerk** an der Personenakte (§ 7.6). Beide können unabhängig voneinander bestehen.
+
 #### K-Anonymisierung statt Hard-Delete
 
 Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung** aktiviert werden (Refs #535).
@@ -1557,7 +1559,7 @@ Neben „Wiederherstellen" steht dort die Aktion **„Jetzt endgültig anonymisi
 |---|---|
 | **Wirkung** | **Unwiderruflich.** Pseudonym, Notizen, Zusatzfelder sowie Fall- und Ereignisinhalte werden entfernt; es bleibt ein anonymes Statistik-Aggregat. Eine Wiederherstellung ist danach **nicht** mehr möglich. Ein Bestätigungsdialog nennt das ausdrücklich. |
 | **Wozu** | (a) **Art.-17-Sofortlöschung**, wenn eine betroffene Person auf unverzüglicher Löschung besteht und 30 Tage Papierkorb nicht vertretbar sind. (b) **Auflösen von Konfigurations-Blockaden**: eine Person im Papierkorb behält ihren Dokumentationstyp und ihre Feldwerte und blockiert damit das Löschen dieses Typs bzw. der Feldvorlage. Bisher blieb nur Wiederherstellen (kurzzeitige Daten-Auferstehung) oder Warten. Die Blocker-Meldung der Konfigurations-Oberfläche weist den Papierkorb-Anteil jetzt aus und verlinkt dorthin. |
-| **Grenze: Aufbewahrungssperre** | Besteht ein **aktiver Legal Hold** auf der Person oder auf einem ihrer Ereignisse, wird die Aktion mit einer Fehlermeldung abgewiesen — genau wie der nächtliche Retention-Lauf (Refs #1066, #1756). Eine manuelle Aktion darf einen Sperrvermerk nicht aushebeln. Erst Hold aufheben, dann anonymisieren. |
+| **Grenze: Aufbewahrungssperre** | Besteht ein **aktiver Legal Hold** auf der Person oder auf einem ihrer Ereignisse, wird die Aktion mit einer Fehlermeldung abgewiesen — genau wie der nächtliche Retention-Lauf (Refs #1066, #1756). Eine manuelle Aktion darf eine Aufbewahrungssperre nicht aushebeln. Erst Hold aufheben, dann anonymisieren. |
 | **Grenze: nur im Papierkorb** | Die Aktion wirkt ausschließlich auf bereits soft-gelöschte Personen. Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — es gibt keinen Direktpfad an der Genehmigung vorbei. |
 | **Spur** | Audit-Eintrag `CLIENT_ANONYMIZED` mit `trigger="manual"`, unterscheidbar vom automatischen Lauf. |
 
@@ -1574,7 +1576,7 @@ Seit [ADR-044](adr/044-fall-loeschpfad.md) lässt sich ein **einzelner Fall** l�
 | **Welche Frist?** | **Keine eigene.** Es gilt `client_trash_days` (§ 2.3) — bewusst kein zweiter Fristbegriff, der in Datenschutzerklärung und Folgenabschätzung erklärt und gepflegt werden müsste. |
 | **Was passiert nach Fristablauf?** | Der Fall wird **redigiert, nicht hart gelöscht**: Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele, Meilensteine und die fall-eigenen Dateien (samt verschlüsselter Ablage) sind weg; die Fall-Zeile bleibt als anonymes Aggregat stehen. Ein Hard-Delete risse Episoden, Ziele und Meilensteine per Kaskade mit. |
 
-Den **Papierkorb** (`/cases/trash/`) öffnet die Anwendungsbetreuung über die Kopfzeile der Fallliste; er steht wie der Personen-Papierkorb in keiner Navigation. Dort stehen je Zeile **„Wiederherstellen"** (holt Episoden, Ziele und Anhänge vollständig zurück) und **„Jetzt endgültig anonymisieren"** — dieselbe Vorzieh-Aktion wie bei Personen, mit denselben Grenzen: nur aus dem Papierkorb heraus, nicht zweimal, und **nicht** bei einem aktiven Sperrvermerk (Legal Hold auf dem Fall, auf einem seiner Ereignisse oder auf der Person). Ein bereits endgültig anonymisierter Fall ist als solcher ausgewiesen und bietet kein „Wiederherstellen" mehr an — es holte nur eine leere Hülle zurück.
+Den **Papierkorb** (`/cases/trash/`) öffnet die Anwendungsbetreuung über die Kopfzeile der Fallliste; er steht wie der Personen-Papierkorb in keiner Navigation. Dort stehen je Zeile **„Wiederherstellen"** (holt Episoden, Ziele und Anhänge vollständig zurück) und **„Jetzt endgültig anonymisieren"** — dieselbe Vorzieh-Aktion wie bei Personen, mit denselben Grenzen: nur aus dem Papierkorb heraus, nicht zweimal, und **nicht** bei einer aktiven Aufbewahrungssperre (Legal Hold auf dem Fall, auf einem seiner Ereignisse oder auf der Person). Ein bereits endgültig anonymisierter Fall ist als solcher ausgewiesen und bietet kein „Wiederherstellen" mehr an — es holte nur eine leere Hülle zurück.
 
 Drei Punkte, die im Betrieb regelmäßig gefragt werden:
 
@@ -1604,7 +1606,26 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 | Auskunft (Art. 15) | Datenauskunft als JSON oder PDF über die Personenansicht ziehen (Leitung oder Anwendungsbetreuung, Re-Authentifizierung erforderlich) — Umfang siehe unten |
 | Berichtigung (Art. 16) | Felder als Anwendungsbetreuung im Admin-UI direkt bearbeiten |
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
+| Einschränkung (Art. 18) | **Sperrvermerk** an der Personenakte setzen — siehe unten |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
+
+#### Einschränkung der Verarbeitung: der Sperrvermerk (Art. 18 DSGVO, Refs #2045)
+
+Bestreitet eine begleitete Person die Richtigkeit ihrer Daten oder liegt einer der übrigen Tatbestände des Art. 18 Abs. 1 vor, setzen Sie in der Personenakte einen **Sperrvermerk**. Er wirkt so:
+
+| Frage | Antwort |
+|---|---|
+| **Was bleibt erlaubt?** | Die **Speicherung** (Art. 18 Abs. 2). Der Datensatz wird nicht gelöscht, nicht versteckt und bleibt in Auskunft und Statistik. |
+| **Was ist gesperrt?** | Die inhaltliche Arbeit: Die Person lässt sich nicht mehr bearbeiten und keinem neuen Kontakt, Fall oder keiner neuen Aufgabe zuordnen. |
+| **Was ist ausgenommen?** | Der **Berichtigungsworkflow** (Art. 16, § 7.6). Er ist der Weg, auf dem die bestrittene Richtigkeit geprüft wird — eine Sperre, die ihn mitblockierte, wäre eine Sackgasse. |
+| **Wer setzt?** | Fachkräfte und aufwärts, aus der Personenakte heraus. Beim Stellen eines Berichtigungsantrags wird der Vermerk zusätzlich **angeboten** (Opt-in, nicht vorbelegt). |
+| **Wer hebt auf?** | Eine **zweite** berechtigte Person oder die **Leitung**. Wer den Vermerk gesetzt hat, hebt ihn nicht allein wieder auf. |
+| **Sichtbarkeit** | Dauerhaftes Banner in der Personenakte mit Rechtsgrund, Zeitpunkt und setzender Person; in der Personenliste ein Kennzeichen „Eingeschränkt". |
+| **Spur** | Audit-Einträge `PROCESSING_RESTRICTED` und `PROCESSING_RESTRICTION_LIFTED`, jeweils mit dem Rechtsgrund — nie mit dem strittigen Sachverhalt. |
+
+**Nicht zu verwechseln mit dem Legal Hold** (§ 7.3): Der blockiert die *Löschung* (Art. 17 Abs. 3), der Sperrvermerk die *Nutzung*. Beide können unabhängig voneinander bestehen.
+
+**Organisatorisch zu leisten:** Die Unterrichtung der betroffenen Person **vor** dem Aufheben (Art. 18 Abs. 3) erzwingt die Software nicht — halten Sie sie in Ihrem Auskunftsprozess fest.
 
 #### Historien-Diff: Entschlüsselung für berechtigte Rollen
 
@@ -1630,12 +1651,13 @@ Enthalten sind (Refs #1752):
 | Änderungshistorie | Aktion, Zeitpunkt, bearbeitende Person **und die Inhalte vorher/nachher** — auch für gelöschte Ereignisse |
 | Löschanträge | Anträge auf Löschung von Ereignissen **und der Person selbst**, inkl. Begründung und 4-Augen-Prüfung |
 | Berichtigungsanträge | Art.-16-Anträge zur Person (Refs #1796, [ADR-041](adr/041-berichtigungsworkflow-intern.md)) in **allen** Status (offen, genehmigt, abgelehnt): betroffenes Feld, bisheriger und gewünschter Wert (entschlüsselt), Begründung, Prüfvermerk, beantragende und prüfende Person, Zeitpunkte |
-| Aufbewahrung | Sperrvermerke (Legal Holds, Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
+| Aufbewahrung | Aufbewahrungssperren (Legal Holds, Art. 17 Abs. 3 — **nicht** Art. 18) und offene Löschvorschläge samt Frist und Kategorie |
+| Einschränkung der Verarbeitung | Sperrvermerk nach Art. 18 DSGVO (Refs #2045), sofern gesetzt: Rechtsgrund, Zeitpunkt und setzende Person |
 | Aufgaben | Titel, Beschreibung, Typ, Status, Priorität, Zuständigkeit, Fristen |
 | Aktivitäten | Zeitstrom-Einträge zur Person, ihren Fällen, Ereignissen und Aufgaben |
 | Merkliste | Zeitpunkte, zu denen die Personenakte aufgerufen bzw. als Favorit markiert wurde |
 | Zusammenführungen | Herkunft nach Duplikat-Merges (Refs #1876, [ADR-045](adr/045-personen-merge.md) §7): welche Akte wann in diese überführt wurde und ob sie schon endgültig anonymisiert ist; die Auskunft der aufgelösten Akte nennt umgekehrt „Zusammengeführt in" |
-| Zugriffsprotokoll | Audit-Einträge zur Person und ihren Ereignissen: Aktion, Zeitpunkt, Bezug |
+| Zugriffsprotokoll | Audit-Einträge zur Person, ihren Fällen und ihren Ereignissen: Aktion, Zeitpunkt, Bezug — einschließlich der Schritte der Vier-Augen-Workflows (Refs #2048): Löschanträge erscheinen unter der Kategorie „Löschantrag“ (beantragt/genehmigt/abgelehnt, aus dem Personen-, Fall- und Zusammenführungs-Pfad), Berichtigungsanträge unter „Berichtigung“ |
 | Dateianhänge | **Metadaten** je Anhang der Person, ihrer Fälle und ihrer Ereignisse (Refs #1738): Feldname und Feld-Slug, entschlüsselter Dateiname, Dateigröße, MIME-Typ, Zeitpunkt und hochladende Person, sowie der Zustand in der Versionskette (aktuell ja/nein, ersetzt am, entfernt am) — **vollständige Kette inklusive ersetzter und entfernter Glieder** |
 
 **Zur Struktur der Anhang-Angaben (JSON):** personen-eigene Anhänge stehen unter dem Top-Level-Schlüssel `attachments` — er ist **immer** vorhanden, ggf. als leere Liste. Fall- und Ereignis-Anhänge stehen als `attachments` **im jeweiligen Eintrag** unter `cases[i]` bzw. `events[i]` und erscheinen dort nur, wenn nicht leer (das Bestandsformat für Datensätze ohne Dateien bleibt damit unverändert); gelöschte Ereignisse (`deleted_events`) tragen sie ebenso. Lässt sich ein Dateiname nicht entschlüsseln, steht dort `[verschlüsselt]` — die Auskunft erfindet keinen Namen. Der MIME-Typ ist der beim Upload **verifizierte** Typ; nur für Bestandszeilen ohne Erkennung fällt er auf den vom Browser gemeldeten zurück. In den Zusatzfeldern selbst erscheint statt des technischen Datei-Markers der Platzhalter `[Dateianhang – Angaben unter „Dateianhänge"]`. **Im PDF** stehen die personen-eigenen Anhänge als eigener Abschnitt „Dateianhänge"; Fall- und Ereignis-Anhänge stehen als Spalte „Dateianhänge" in der jeweiligen Tabelle.

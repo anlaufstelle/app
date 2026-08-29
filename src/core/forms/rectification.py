@@ -41,6 +41,22 @@ class RectificationRequestForm(TailwindFormMixin, forms.Form):
         widget=forms.Textarea(attrs={"rows": 4}),
         help_text=_("Woraus ergibt sich, dass der bisherige Eintrag unrichtig ist? Wird verschlüsselt gespeichert."),
     )
+    # Refs #2045: Auto-Vorschlag statt Automatik. Art. 18 Abs. 1 lit. a GIBT der
+    # betroffenen Person das Recht auf Einschraenkung fuer die Dauer der
+    # Pruefung — sie ist aber ein Recht, kein Automatismus: sie auszuueben ist
+    # eine Entscheidung, die die Fachkraft mit der Person trifft. Deshalb ein
+    # Opt-in im Antragsformular (unvorbelegt) statt einer stillen Kopplung an
+    # jeden Berichtigungsantrag, die auch offensichtliche Tippfehler-
+    # Korrekturen zur Vollsperre der Akte machte.
+    restrict_processing = forms.BooleanField(
+        required=False,
+        label=_("Verarbeitung für die Dauer der Prüfung einschränken (Art. 18 DSGVO)"),
+        help_text=_(
+            "Die Daten bleiben gespeichert, dürfen aber bis zur Entscheidung "
+            "über diesen Antrag nicht mehr geändert oder weiterverwendet werden. "
+            "Aufheben kann das die Leitung oder eine zweite berechtigte Person."
+        ),
+    )
 
     def __init__(self, *args: Any, client: Any = None, user: Any = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

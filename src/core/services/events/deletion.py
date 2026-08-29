@@ -20,6 +20,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.audit import audit_event
+from core.services.client.restriction import _deletion_workflow_write
 from core.services.events.crud import soft_delete_event
 
 
@@ -127,7 +128,12 @@ def approve_deletion(deletion_request, reviewer):
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
     event = Event.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
-    soft_delete_event(event, reviewer)
+    # Refs #2045: Der gepruefte Art.-17-Weg bleibt waehrend einer
+    # Art.-18-Einschraenkung offen — die Loeschung ist ein Betroffenenrecht.
+    # Der Ausstieg ist ein benannter, modul-privater Kontext (kein Argument von
+    # ``soft_delete_event``), damit er nicht zum Generalschluessel wird.
+    with _deletion_workflow_write():
+        soft_delete_event(event, reviewer)
     deletion_request.status = DeletionRequest.Status.APPROVED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()

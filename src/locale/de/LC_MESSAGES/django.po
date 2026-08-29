@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 15:21+0200\n"
+"POT-Creation-Date: 2026-08-28 16:05+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1086,6 +1086,14 @@ msgstr "Berichtigung genehmigt"
 #: src/core/models/audit.py:145
 msgid "Berichtigung abgelehnt"
 msgstr "Berichtigung abgelehnt"
+
+#: src/core/models/audit.py:212
+msgid "Verarbeitung eingeschränkt (Art. 18)"
+msgstr "Verarbeitung eingeschränkt (Art. 18)"
+
+#: src/core/models/audit.py:214
+msgid "Einschränkung der Verarbeitung aufgehoben"
+msgstr "Einschränkung der Verarbeitung aufgehoben"
 
 #: src/core/models/audit.py:164 src/core/models/user.py:106
 #: src/core/models/user.py:107 src/templates/auth/_demo_credentials.html:23
@@ -11995,3 +12003,128 @@ msgstr "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht mögli
 
 msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
 msgstr "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
+
+#: src/templates/core/clients/detail.html:102
+#, python-format
+msgid "%(grund)s — gesetzt am %(datum)s durch %(person)s. Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden."
+msgstr "%(grund)s — gesetzt am %(datum)s durch %(person)s. Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden."
+
+#: src/core/services/client/restriction.py:1
+msgid "Art. 18 DSGVO: Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht mehr geändert oder verwendet werden."
+msgstr "Art. 18 DSGVO: Die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht mehr geändert oder verwendet werden."
+
+#: src/core/services/client/restriction.py:1
+msgid "Die Daten bleiben gespeichert, dürfen aber bis zur Entscheidung über diesen Antrag nicht mehr geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
+msgstr "Die Daten bleiben gespeichert, dürfen aber bis zur Entscheidung über diesen Antrag nicht mehr geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
+
+#: src/core/services/client/restriction.py:1
+msgid "Die Einschränkung der Verarbeitung wurde aufgehoben."
+msgstr "Die Einschränkung der Verarbeitung wurde aufgehoben."
+
+#: src/core/services/client/restriction.py:1
+msgid "Die Einschränkung kann nicht von derselben Person aufgehoben werden, die sie gesetzt hat (Vier-Augen-Prinzip) — bitte die Leitung oder eine zweite berechtigte Person hinzuziehen."
+msgstr "Die Einschränkung kann nicht von derselben Person aufgehoben werden, die sie gesetzt hat (Vier-Augen-Prinzip) — bitte die Leitung oder eine zweite berechtigte Person hinzuziehen."
+
+#: src/core/services/client/restriction.py:1
+msgid "Die Verarbeitung dieser Person ist für die Dauer der Prüfung eingeschränkt."
+msgstr "Die Verarbeitung dieser Person ist für die Dauer der Prüfung eingeschränkt."
+
+#: src/core/services/client/restriction.py:1
+msgid "Die Verarbeitung dieser Person ist jetzt eingeschränkt (Art. 18 DSGVO)."
+msgstr "Die Verarbeitung dieser Person ist jetzt eingeschränkt (Art. 18 DSGVO)."
+
+#: src/core/services/client/restriction.py:1
+msgid "Eingeschränkt"
+msgstr "Eingeschränkt"
+
+#: src/core/services/client/restriction.py:1
+msgid "Eingeschränkt am"
+msgstr "Eingeschränkt am"
+
+#: src/core/services/client/restriction.py:1
+msgid "Eingeschränkt durch"
+msgstr "Eingeschränkt durch"
+
+#: src/core/services/client/restriction.py:1
+msgid "Einschränkung aufheben"
+msgstr "Einschränkung aufheben"
+
+#: src/core/services/client/restriction.py:1
+msgid "Für Rechtsansprüche weiter benötigt (lit. c)"
+msgstr "Für Rechtsansprüche weiter benötigt (lit. c)"
+
+#: src/core/services/client/restriction.py:1
+msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
+msgstr "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Daten bleiben gespeichert, dürfen aber außerhalb des Berichtigungsverfahrens nicht geändert oder weiterverwendet werden. Aufheben kann das die Leitung oder eine zweite berechtigte Person."
+
+#: src/core/services/client/restriction.py:1
+msgid "Für diese Person ist die Verarbeitung nicht eingeschränkt."
+msgstr "Für diese Person ist die Verarbeitung nicht eingeschränkt."
+
+#: src/core/services/client/restriction.py:1
+msgid "Grund der Einschränkung"
+msgstr "Grund der Einschränkung"
+
+#: src/core/services/client/restriction.py:1
+msgid "Nur Fachkräfte dürfen die Einschränkung aufheben."
+msgstr "Nur Fachkräfte dürfen die Einschränkung aufheben."
+
+#: src/core/services/client/restriction.py:1
+msgid "Nur Fachkräfte dürfen die Verarbeitung einschränken."
+msgstr "Nur Fachkräfte dürfen die Verarbeitung einschränken."
+
+#: src/core/services/client/restriction.py:1
+msgid "Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)"
+msgstr "Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)"
+
+#: src/core/services/client/restriction.py:1
+msgid "Ungültiger Grund für die Einschränkung der Verarbeitung."
+msgstr "Ungültiger Grund für die Einschränkung der Verarbeitung."
+
+#: src/core/services/client/restriction.py:1
+msgid "Verarbeitung eingeschränkt"
+msgstr "Verarbeitung eingeschränkt"
+
+#: src/core/services/client/restriction.py:1
+msgid "Verarbeitung eingeschränkt (Art. 18 DSGVO)"
+msgstr "Verarbeitung eingeschränkt (Art. 18 DSGVO)"
+
+#: src/core/services/client/restriction.py:1
+msgid "Verarbeitung einschränken"
+msgstr "Verarbeitung einschränken"
+
+#: src/core/services/client/restriction.py:1
+msgid "Verarbeitung für die Dauer der Prüfung einschränken (Art. 18 DSGVO)"
+msgstr "Verarbeitung für die Dauer der Prüfung einschränken (Art. 18 DSGVO)"
+
+#: src/core/services/client/restriction.py:1
+msgid "Verarbeitung nach Art. 18 DSGVO eingeschränkt"
+msgstr "Verarbeitung nach Art. 18 DSGVO eingeschränkt"
+
+#: src/core/services/client/restriction.py:1
+msgid "Verarbeitung unrechtmäßig, Löschung abgelehnt (lit. b)"
+msgstr "Verarbeitung unrechtmäßig, Löschung abgelehnt (lit. b)"
+
+#: src/core/services/client/restriction.py:1
+msgid "Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)"
+msgstr "Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)"
+
+#: src/templates/core/export/client_data_pdf.html:1
+msgid "Zeitpunkte der Ereignisse"
+msgstr "Zeitpunkte der Ereignisse"
+
+#: src/templates/core/export/client_data_pdf.html:1
+msgid "Auf den Monat generalisiert — nach der Löschung (Art. 17 DSGVO) tragen die Ereignisse dieser Person nur noch den Monatsersten 00:00 Uhr als Zeitpunkt. Die genaue Uhrzeit wurde getilgt, weil sie eine Wiedererkennung über Außenwissen ermöglicht hätte."
+msgstr "Auf den Monat generalisiert — nach der Löschung (Art. 17 DSGVO) tragen die Ereignisse dieser Person nur noch den Monatsersten 00:00 Uhr als Zeitpunkt. Die genaue Uhrzeit wurde getilgt, weil sie eine Wiedererkennung über Außenwissen ermöglicht hätte."
+
+#: src/templates/core/attachments/confirm_delete.html:1
+msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt. Solange die Einschränkung besteht, kann diese Datei nicht einzeln vernichtet werden; die reguläre Löschung der Person bleibt davon unberührt."
+msgstr "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt. Solange die Einschränkung besteht, kann diese Datei nicht einzeln vernichtet werden; die reguläre Löschung der Person bleibt davon unberührt."
+
+#: src/core/services/case/workitems.py:1
+msgid "Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."
+msgstr "Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."
+
+#: src/core/services/case/workitems.py:1
+msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Datei darf nicht einzeln vernichtet werden."
+msgstr "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Datei darf nicht einzeln vernichtet werden."

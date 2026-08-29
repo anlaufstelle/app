@@ -371,6 +371,48 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 
 ---
 
+## Restidentifizierbarkeit der Tombstone-Timeline: Monatsbucket statt exakter Zeitpunkte (Issue #2047)
+
+**Status:** Befund **mitigiert** — die Zeitachse anonymisierter Personen wird seit #2047 auf den Monatsersten 00:00 Uhr generalisiert. Ein Restrisiko bleibt und ist unten benannt.
+
+### Beobachtung
+
+Nach der Anonymisierung (`anonymize_client()` wie K-Anon-Bridge) bleibt die `Event`-Zeile bewusst stehen — sie ist das Statistik-Aggregat, das die Löschung überlebt. Bis #2047 behielt sie dabei ihren **exakten** `occurred_at`. Je Tombstone stand damit die vollständige, personenverknüpfte Timeline aus Zeitpunkt × `document_type` × Fallstruktur weiter in der Datenbank und im Art.-15-Export.
+
+Die k-Anonymitäts-Zusicherung deckte das nicht ab: `is_k_anonymous` attestiert die Äquivalenzklasse `(age_cluster, contact_stage)` — zwei niedrigdimensionale Merkmale. Die Timeline ist hochdimensional und wurde von *k* nie erfasst. Mit Außenwissen („Krisenintake am 3. Mai gegen halb drei") war ein Single-out bei realistischen Einrichtungsgrößen plausibel; der Datensatz war damit **pseudonymisiert, nicht anonym** — im Widerspruch zu der Zusage, die die Anwendung mit „anonymisiert" selbst gibt.
+
+Zusätzlich fiel eine Asymmetrie auf: Der Hard-Pfad setzte `age_cluster` auf `UNKNOWN`, ließ `contact_stage` aber stehen. Die im Code hinterlegte Begründung verwies analog auf `k_anonymize_client` — die Analogie trägt nicht, denn die K-Anon-Primitive lässt **beide** Felder stehen (sie braucht sie für die Äquivalenzklasse), während der Hard-Pfad gar keine k-Zusicherung gibt und deshalb auch keines von beiden braucht.
+
+### Entscheidung: Monat, nicht Tag
+
+Abgewogen wurden Tages- und Monatsgenauigkeit.
+
+- **Utility:** Die Auswertung aggregiert auf Monatsebene (`TruncMonth`). Der Informationsverlust des Monatsbuckets ist dort **null** — die Monatszahlen sind vor und nach der Anonymisierung identisch (gepinnt in `test_tombstone_timestamp_generalization.py::TestMonthlyAggregateUnchanged`).
+- **Schutz:** Ein Tagesbucket ließe pro Person weiterhin eine Sequenz von Kalendertagen stehen — bei mehreren Ereignissen ein nach wie vor stark unterscheidendes Muster. Der Monatsbucket kollabiert diese Sequenz auf die Monatszählung.
+
+Der Monatsbucket ist damit die Wahl, die den Schutz erhöht, ohne Utility zu kosten.
+
+**Bucket-Grenze im lokalen Kalender.** Generalisiert wird gegen `TIME_ZONE` (`Europe/Berlin`), nicht gegen UTC. Ein Ereignis am 1. März um 00:30 Ortszeit liegt in UTC noch im Februar; ein UTC-Bucket schöbe es in den Vormonat und verfälschte genau die Monatsstatistik, deren Erhalt die Abwägung trägt.
+
+**Beide Einstiege.** Der Helfer `_generalize_event_timestamps()` läuft im Hard-Pfad (`anonymize_client`, und damit auch im nächtlichen Trash-Expiry-Lauf und in „Jetzt endgültig anonymisieren") **und** in der K-Anon-Bridge. Für die Bridge gibt es hier — anders als bei `age_cluster`/`contact_stage` — keinen Ausnahmegrund: die k-Anonymität ruht auf den beiden niedrigdimensionalen Quasi-Identifikatoren, nicht auf der Timeline. Der ableitungsbasierte Paritäts-Guard (`TestKAnonBridgeRedactionParity`) erzwingt das strukturell.
+
+**Transparenz in der Auskunft.** Der Art.-15-Export weist die Generalisierung aus (`event_timestamps_generalized` im JSON, eigene Zeile im PDF). Ohne diesen Hinweis läse sich die Auskunft, als hätten sämtliche Kontakte am Monatsersten um Mitternacht stattgefunden — eine unzutreffende Aussage über den eigenen Hilfeverlauf.
+
+### Verbleibendes Restrisiko
+
+- **Die Monatszählung selbst bleibt ein Merkmal.** Wer weiß, dass eine bestimmte Person im Mai 2026 genau sieben Kontakte eines bestimmten Dokumentationstyps hatte, kann einen Tombstone mit exakt diesem Profil weiterhin herausgreifen. Der Monatsbucket senkt die Dimensionalität deutlich, er beseitigt sie nicht. Ein weitergehender Schritt (Zeitachse ganz entfernen, Ereigniszahlen gruppieren) wurde verworfen, weil er die Monatsstatistik zerstört — genau den Zweck, für den die Zeile überhaupt stehen bleibt.
+- **Nachbarspalten bleiben unangetastet.** `EventHistory.changed_at` und die Zeitstempel des Aktivitäts-Feeds tragen weiterhin exakte Zeitpunkte; ihr Inhalt ist redigiert, ihre Zeitachse nicht. Sie sind gegenüber `occurred_at` das schwächere Signal (Bearbeitungs-, nicht Kontaktzeitpunkt), aber kein Nullsignal.
+- **Backups.** Sicherungsstände, die vor der Anonymisierung entstanden sind, tragen die exakten Zeitpunkte bis zum Ablauf der Backup-Rotation weiter — dieselbe Grenze wie bei jeder anderen Redaktion (§ Medien-Backups).
+
+### Re-Evaluierungs-Trigger
+
+Diese Bewertung ist an die heutige Auswertungs-Granularität gebunden und **neu zu bewerten**, sobald einer dieser Punkte eintritt (Muster #1935):
+
+1. **Die Statistik wird feiner als monatlich.** Ein Wochen-, Tages- oder Uhrzeit-Bericht ließe sich aus generalisierten Tombstones nicht mehr bilden — dann steht die Abwägung „Utility gegen Single-out" neu an, und der Monatsbucket darf **nicht** stillschweigend gelockert werden, um den Bericht zu ermöglichen.
+2. **Ein Hard-Delete-Pfad für `Event`-Zeilen entsteht.** Werden Tombstone-Zeilen künftig physisch entfernt, ist die Generalisierung für diese Zeilen gegenstandslos — sie bliebe aber für alle noch nicht entfernten nötig.
+3. **Ein neuer Zeitstempel wird an der `Event`-Zeile aufbewahrt** (etwa ein fachlicher „gültig ab"-Wert). Er wäre ein neuer Kanal derselben Timeline und müsste in `_generalize_event_timestamps()` mitlaufen.
+4. **Die k-Anonymitäts-Äquivalenzklasse wird erweitert.** Kämen weitere Quasi-Identifikatoren hinzu, ist erneut zu prüfen, welche davon der Hard-Pfad zerstören muss und welche die Bridge für ihre Zusicherung braucht — die #2047 aufgelöste Asymmetrie darf nicht in neuer Form zurückkehren.
+
 ## Offline-Bundles nach Anonymisierung: Revoke-Liste + 48-h-TTL als letzte Linie (Issue #1760)
 
 **Status:** Aktiver Widerrufskanal seit #1760, Reichweite erweitert in #1774 (gequeute Event-Edit-POSTs + Autosave-Entwurf); das Restrisiko „dauerhaft offline gebliebenes Gerät" bleibt akzeptiert und ist durch die Bundle-TTL begrenzt.
@@ -746,7 +788,8 @@ begründet ausgenommen wird. Genau diese Drift hatte den Befund erzeugt: die Bri
 `DeletionRequest.reason` und `Activity.summary` (die Spalte wurde mit #1972 entfernt). Zwei Ausnahmen sind bewusst hinterlegt (`_redact_live_events` — die
 Eintrittsbedingung garantiert `active_events == 0`; `_redact_client_identity` — würde
 `age_cluster` löschen und damit den Quasi-Identifikator zerstören, auf dem die k-Anonymität
-beruht). Sperrvermerke blockieren seit #1756
+beruht). Aufbewahrungssperren (Legal Hold — nicht zu verwechseln mit dem Art.-18-Sperrvermerk,
+siehe § Restidentifizierbarkeit der Tombstone-Timeline) blockieren seit #1756
 **beide** Bulk-Einstiege; Begründung und Bucket-Entscheid in
 [ADR-023 Update 2026-08-03](adr/023-k-anonymization-statistik.md).
 

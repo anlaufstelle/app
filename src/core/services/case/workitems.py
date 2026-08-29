@@ -1,9 +1,26 @@
-"""Service layer for WorkItem-related business logic."""
+"""Service layer for WorkItem-related business logic.
+
+**Kanonische Sperr-Reihenfolge: Client VOR WorkItem** (Refs #2045,
+Cross-Review-Runde 2). Jeder Pfad, der beide Zeilenarten sperrt, nimmt sie in
+dieser Reihenfolge — der Merge-Pfad (``services/client/merge.py``) tat das
+bereits (``_locked_clients`` -> WorkItem-Umschreibung), die Aufgaben-Pfade
+sperrten umgekehrt. Aus beidem zusammen entstand ein realer Deadlock-Zyklus:
+Bulk hielt ein WorkItem und wartete auf dessen Client, waehrend der Merge den
+Client hielt und beim WorkItem wartete.
+
+Praktische Folge fuer diese Datei: Wo der Personenbezug erst aus der
+WorkItem-Zeile gelesen werden muss, geschieht das **ungesperrt** (nur zur
+Bestimmung der Lock-Reihenfolge); danach wird der Client gesperrt, danach das
+WorkItem, und ein Auseinanderlaufen beider Lesestaende wird als
+Nebenlaeufigkeits-Konflikt abgewiesen statt durch Umdrehen der Reihenfolge
+aufgeloest.
+"""
 
 import calendar
 import logging
 from datetime import date, timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
 from django.http import QueryDict
@@ -421,13 +438,60 @@ def _locked_workitems(workitems):
     (Refs #129/#733). Facility-/Tenant-Isolation greift ueber RLS (GUC im
     Request-Kontext) und die View-Vorfilterung.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
     pks = [w.pk for w in workitems]
-    return WorkItem.objects.select_for_update().filter(pk__in=pks).order_by("pk")
+    # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (Modul-Docstring).
+    # Die Personenbezuege werden dafuer UNGESPERRT vorgelesen — sie bestimmen
+    # nur, welche Client-Zeilen zu sperren sind. Dedupliziert (eine Sperre je
+    # Person statt einer je Aufgabe) und nach PK sortiert, damit zwei
+    # gleichzeitige Stapel mit ueberlappender Personenmenge dieselbe
+    # Reihenfolge nehmen und einander nicht ueber Kreuz blockieren.
+    client_ids = sorted(
+        {cid for cid in WorkItem.objects.filter(pk__in=pks).values_list("client_id", flat=True) if cid is not None}
+    )
+    # Art.-18-Gate (Refs #2045) am gemeinsamen Chokepoint der drei Bulk-Pfade
+    # (Status/Prioritaet/Zuweisung) — einmal hier statt dreimal kopiert.
+    # Fail-closed fuer den ganzen Stapel: ist auch nur eine Aufgabe einer
+    # eingeschraenkten Person dabei, wird die Sammelaktion abgewiesen statt
+    # teilweise ausgefuehrt — ein Teil-Erfolg waere fuer die ausloesende Person
+    # nicht nachvollziehbar. Die Sperre haelt bis zum Commit; die spaeter
+    # gelesenen ``client_id`` koennen sich also nicht mehr aendern.
+    for client_id in client_ids:
+        assert_processing_allowed(client_id, lock=True)
+
+    locked = list(WorkItem.objects.select_for_update().filter(pk__in=pks).order_by("pk"))
+
+    # REVALIDIERUNG (Re-Review 2): Zwischen dem ungesperrten Vorab-Lesen und
+    # dem Erhalt der WorkItem-Sperre kann eine Zuordnung gewechselt haben — die
+    # Sperre kann Wartezeit bedeuten. Eine Aufgabe, die jetzt auf eine Person
+    # zeigt, die NICHT in der gesperrten und gegateten Menge liegt, ist
+    # ungeprueft; sie wird uebersprungen statt bearbeitet. Fail-closed in die
+    # richtige Richtung: lieber eine Aufgabe zu wenig im Stapel als eine
+    # ungeprueft geaenderte an einer eingeschraenkten Person.
+    #
+    # ``client_id is None`` bleibt zulaessig: ohne Personenbezug gibt es nichts
+    # einzuschraenken.
+    checked = [item for item in locked if item.client_id is None or item.client_id in set(client_ids)]
+    skipped = len(locked) - len(checked)
+    if skipped:
+        logger.warning(
+            "bulk_workitem_reassigned_during_lock",
+            extra={"skipped": skipped, "requested": len(locked)},
+        )
+    return checked
 
 
 @transaction.atomic
 def create_workitem(facility, user, *, client=None, **data):
-    """Create a work item with activity and audit logging."""
+    """Create a work item with activity and audit logging.
+
+    Art.-18-Gate (Refs #2045): eine neue Aufgabe zu einer eingeschraenkten
+    Person ist neue inhaltliche Verarbeitung.
+    """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(client, lock=True)
     workitem = WorkItem(facility=facility, created_by=user, client=client, **data)
     workitem.save()
     log_activity(
@@ -471,8 +535,43 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     sind Freitext und es gibt keinen nachgelagerten Prune, ein Umhängen
     schriebe also fremden Klartext an eine andere Person fest.
     """
+    from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
 
+    # Art.-18-Gate (Refs #2045) VOR dem Versions-Guard und unabhaengig davon,
+    # WELCHE Felder das Update traegt.
+    #
+    # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (siehe Modul-Docstring).
+    # Deshalb erst ein UNGESPERRTER Lesestand des Personenbezugs — er dient nur
+    # der Lock-Reihenfolge, nicht der Entscheidung —, dann die Client-Sperre,
+    # dann die WorkItem-Sperre. Der Instanz-Wert taugt dafuer NICHT: bei einem
+    # ``ModelForm`` hat ``_post_clean()`` ``workitem.client_id`` bereits auf den
+    # geposteten Wert mutiert (Muster #1613).
+    current_client_id = type(workitem)._base_manager.filter(pk=workitem.pk).values_list("client_id", flat=True).first()
+    # BEIDE Personenbezuege gehoeren VOR die WorkItem-Sperre (Re-Review 2):
+    # der bisherige und — bei einer Zuordnung ``None -> Person`` — der neue.
+    # Die erste Fassung sperrte den neuen Client erst im ``client``-Zweig
+    # weiter unten, also NACH dem WorkItem, und riss damit genau die
+    # Reihenfolge auf, die dieser Umbau schliessen sollte. Der Wunsch-Client
+    # steht schon hier in ``fields`` — es gibt keinen Grund, ihn spaeter zu
+    # sperren.
+    #
+    # Sortiert nach PK: liegen zwei Client-Zeilen an, muessen zwei
+    # gleichzeitige Updates sie in derselben Ordnung nehmen (dieselbe Regel wie
+    # in ``_locked_clients``).
+    pending_client_ids = {current_client_id}
+    if "client" in fields:
+        pending_client_ids.add(getattr(fields["client"], "pk", fields["client"]))
+    for client_id in sorted(cid for cid in pending_client_ids if cid is not None):
+        assert_processing_allowed(client_id, lock=True)
+    # Erst jetzt die WorkItem-Zeile sperren. Ein Auseinanderlaufen zwischen dem
+    # ungesperrten Vorab-Lesen und dem gesperrten Stand ist ein echter
+    # Nebenlaeufigkeits-Konflikt: ihn hier abzuweisen ist billiger und
+    # ehrlicher, als die Sperr-Reihenfolge fuer den Randfall umzudrehen und ein
+    # Deadlock-Fenster zu oeffnen.
+    db_client_id = _locked_client_id(workitem)
+    if db_client_id != current_client_id:
+        raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
     check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
     # Allowlist (Refs #734-Muster, Refs #1786): bis hierher war
     # ``update_workitem`` eine von ZWEI der vier Update-Services ohne Allowlist —
@@ -502,10 +601,15 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
         # Requests lesen sonst „noch personenlos" und der zweite ueberschreibt
         # den ersten) oder bereits von ``_post_clean()`` mutiert (Muster #1613).
         # Der Lock haelt bis zum Commit dieser Transaktion, also auch ueber den
-        # Diff-Read und das ``save()`` unten.
-        db_client_id = _locked_client_id(workitem)
+        # Diff-Read und das ``save()`` unten. ``db_client_id`` stammt aus dem
+        # gesperrten Lesestand oben — kein zweiter Lookup (Re-Review:
+        # Doppel-Query-Redundanz).
         new_client = fields["client"]
         new_pk = getattr(new_client, "pk", new_client)
+        # Der neue Personenbezug ist bereits oben gesperrt und gegatet — eine
+        # personenlose Aufgabe einer eingeschraenkten Person ZUZUORDNEN ist
+        # neue inhaltliche Verarbeitung und genau der Fall, den das
+        # Ursprungs-Pinning offen laesst (``None -> X`` ist erlaubt).
         if db_client_id is not None:
             if new_pk != db_client_id:
                 raise ValueError("Personenzuordnung einer Aufgabe kann nicht geändert oder entfernt werden.")
@@ -559,6 +663,9 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
 def update_workitem_status(workitem, new_status, user, *, expected_updated_at=None, require_version_token=False):
     """Perform a status transition including auto-assign and completed_at management.
 
+    Art.-18-Gate (Refs #2045): ein Statuswechsel ist fachliche Arbeit an der
+    Aufgabe einer Person, nicht blosse Speicherung.
+
     - On IN_PROGRESS: auto-assign to the user if not yet assigned.
     - On DONE/DISMISSED: set completed_at.
     - On back-transition: reset completed_at.
@@ -584,11 +691,23 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
     sich mit dem Bulk-Pfad ueber ``_apply_status_transition`` und
     ``_maybe_duplicate_recurring``.
     """
+    from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
 
     # Innerhalb der Transaktion neu laden + locken — Facility-Filter
     # explizit, damit RLS- und Tenant-Isolation greifen.
+    # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (Modul-Docstring).
+    # Ungesperrtes Vorab-Lesen nur zur Bestimmung der Lock-Reihenfolge; die
+    # Entscheidung faellt gegen den gesperrten Stand darunter.
+    current_client_id = (
+        WorkItem.objects.filter(pk=workitem.pk, facility_id=workitem.facility_id)
+        .values_list("client_id", flat=True)
+        .first()
+    )
+    assert_processing_allowed(current_client_id, lock=True)
     locked = WorkItem.objects.select_for_update().get(pk=workitem.pk, facility_id=workitem.facility_id)
+    if locked.client_id != current_client_id:
+        raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
     check_version_conflict(locked, expected_updated_at, require_token=require_version_token)
     old_status = locked.status
 
@@ -649,6 +768,13 @@ def duplicate_recurring_workitem(workitem, user):
     Returns the newly created WorkItem, or ``None`` if ``recurrence`` is NONE
     or unknown, or if the source is already marked as duplicated.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    # Art.-18-Gate (Refs #2045): Die Folgeaufgabe wird mit DEMSELBEN
+    # Personenbezug neu angelegt — eine Neuanlage, kein Fortschreiben. Ohne
+    # Guard entstand an einer eingeschraenkten Person auf dem DONE-Uebergang
+    # (einzeln wie im Stapel) eine frische Aufgabe.
+    assert_processing_allowed(workitem.client_id, lock=True)
     if not workitem.recurrence or workitem.recurrence == WorkItem.Recurrence.NONE:
         return None
 

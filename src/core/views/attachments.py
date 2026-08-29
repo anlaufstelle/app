@@ -4,6 +4,7 @@ import logging
 import uuid
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.http import Http404
@@ -25,6 +26,7 @@ from core.services.attachments import (
 )
 from core.services.audit import log_audit_event
 from core.services.case import cases_with_live_client
+from core.services.client.restriction import assert_processing_allowed, is_processing_restricted
 from core.services.compliance import (
     allowed_sensitivities_for_user,
     get_visible_attachment_for_owner_or_404,
@@ -49,6 +51,18 @@ from core.views.mixins import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _owner_client_id(owner):
+    """Personenbezug eines Anhang-Owners (Refs #2045).
+
+    Die drei Owner-Sorten tragen ihn unterschiedlich: die Person IST der
+    Bezug, Fall und Ereignis verweisen ueber ``client_id``. Ein anonymes
+    Ereignis liefert ``None`` — kein Personenbezug, keine Einschraenkung.
+    """
+    if isinstance(owner, Client):
+        return owner.pk
+    return getattr(owner, "client_id", None)
 
 
 # MIME types that may be rendered inline in the browser without XSS risk
@@ -707,6 +721,11 @@ class AttachmentPurgeView(LeadOrAdminRequiredMixin, View):
                 # erst beim Absenden: wer eine Datei unter Legal Hold loeschen
                 # will, soll den Grund sehen, bevor er den roten Knopf sucht.
                 "hold_blocked": owner_has_active_hold(owner),
+                # Refs #2045: derselbe Vertrag wie beim Legal Hold — der
+                # Blocker steht auf der Bestaetigungsseite, nicht erst im
+                # POST. Wer eine Datei unter Art.-18-Einschraenkung loeschen
+                # will, soll den Grund sehen, bevor er den roten Knopf sucht.
+                "restriction_blocked": is_processing_restricted(_owner_client_id(owner)),
             },
         )
 
@@ -715,6 +734,19 @@ class AttachmentPurgeView(LeadOrAdminRequiredMixin, View):
         # Der Klartextname wird VOR dem Purge gelesen — danach gibt es die
         # Zeile mit dem verschluesselten Namensfeld nicht mehr. Ins Audit geht
         # er nie im Klartext (Refs #1751/#1755).
+        # Art.-18-Gate (Refs #2045): Das ersatzlose Loeschen einer
+        # Versionskette ist die einzige Anhang-Operation, die Daten
+        # unwiderruflich vernichtet — und sie laeuft NICHT ueber den
+        # Vier-Augen-Loeschworkflow, sondern als Einzelentscheidung. Waehrend
+        # die Richtigkeit der Akte bestritten ist, darf sie nicht im
+        # Alleingang ausgeduennt werden (Muster: direkte Ereignis-/
+        # Fall-Loeschung). Die Anhaenge einer Person fallen weiterhin mit der
+        # regulaeren Art.-17-Tilgung — dieser Weg bleibt offen.
+        try:
+            assert_processing_allowed(_owner_client_id(owner))
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("core:attachment_list")
         audit_names = filename_audit_fields(get_original_filename(attachment))
         try:
             with transaction.atomic():
