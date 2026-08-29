@@ -175,9 +175,21 @@ def soft_delete_case(case, user):
     """Direkter Loeschweg ohne Vier-Augen-Antrag (P1c, nicht-qualifizierte Person).
 
     Der Aufrufer (View) entscheidet ueber :func:`case_requires_four_eyes`,
-    welcher der beiden Wege gilt; der Guard liegt zusaetzlich hier, weil der
-    Service die Single Source of Truth ist.
+    welcher der beiden Wege gilt; **beide** Guards liegen zusaetzlich hier, weil
+    der Service die Single Source of Truth ist — das gilt seit dem Re-Review
+    auch fuer den Art.-18-Sperrvermerk (Refs #2045), der zuvor nur ungesperrt in
+    der View stand und damit weder den Direktaufruf noch das TOCTOU-Fenster
+    abdeckte. Genau dieser Widerspruch zwischen SSoT-Zusage und tatsaechlicher
+    Guard-Lage war der Befund.
+
+    Ein Kontext-Ausstieg wie beim Ereignis ist hier NICHT noetig: der gepruefte
+    Weg laeuft ueber ``approve_case_deletion`` -> ``_move_case_to_trash`` und
+    beruehrt diese Funktion nie. Die Trennung ist also strukturell, nicht
+    parametrisch.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(case.client_id, lock=True)
     if case_requires_four_eyes(case):
         raise ValidationError(_("Für Fälle einer Person mit Zusatzangaben ist ein Löschantrag mit Bestätigung nötig."))
     return _move_case_to_trash(case, user, trigger="direct")

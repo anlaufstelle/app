@@ -15,6 +15,7 @@ from core.forms.episodes import EpisodeForm
 from core.models import Case
 from core.models.episode import Episode
 from core.services.case import cases_with_live_client, update_episode
+from core.services.case.episodes import close_episode, create_episode
 from core.services.scoping import get_scoped_object
 from core.views.mixins import StaffRequiredMixin
 from core.views.utils import object_back_link
@@ -60,8 +61,9 @@ class EpisodeCreateView(StaffRequiredMixin, View):
 
         form = EpisodeForm(request.POST)
         if form.is_valid():
-            case.create_episode(
-                user=request.user,
+            create_episode(
+                case,
+                request.user,
                 title=form.cleaned_data["title"],
                 description=form.cleaned_data.get("description", ""),
                 started_at=form.cleaned_data["started_at"],
@@ -116,6 +118,6 @@ class EpisodeCloseView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        episode.close()
+        close_episode(episode, request.user)
         messages.success(request, _("Episode wurde abgeschlossen."))
         return redirect("core:case_detail", pk=case.pk)

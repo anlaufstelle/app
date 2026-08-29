@@ -54,6 +54,7 @@ from core.services.client.export import (
     _soft_delete_meta,
     export_client_data,
     export_client_data_pdf,
+    render_client_export_html,
 )
 from core.services.client.main import (
     CLIENT_WRITE_REVOKED_MESSAGE,
@@ -61,6 +62,7 @@ from core.services.client.main import (
     _delete_owned_attachments_for_client,
     _delete_recent_visits,
     _event_ids_for_client,
+    _generalize_event_timestamps,
     _redact_activities,
     _redact_case_deletion_requests,
     _redact_case_goals,
@@ -111,6 +113,12 @@ from core.services.client.rectification import (
     reject_rectification,
     request_rectification,
 )
+from core.services.client.restriction import (
+    PROCESSING_RESTRICTED_MESSAGE,
+    assert_processing_allowed,
+    lift_processing_restriction,
+    restrict_processing,
+)
 from core.services.client.targets import (
     client_activity_targets_q,
     client_and_case_targets_q,
@@ -120,6 +128,7 @@ from core.services.client.targets import (
 
 __all__ = [
     "CLIENT_WRITE_REVOKED_MESSAGE",
+    "PROCESSING_RESTRICTED_MESSAGE",
     "DOCUMENTS",
     "TEMPLATE_DIR",
     "_build_export_meta",
@@ -130,6 +139,7 @@ __all__ = [
     "_document_type_retention_overrides",
     "_event_ids_for_client",
     "_format_document_type_overrides",
+    "_generalize_event_timestamps",
     "_gather_activities",
     "_gather_attachments",
     "_gather_audit_trail",
@@ -173,6 +183,7 @@ __all__ = [
     "approve_client_deletion",
     "approve_client_merge",
     "approve_rectification",
+    "assert_processing_allowed",
     "client_activity_targets_q",
     "client_and_case_targets_q",
     "client_and_event_targets_q",
@@ -182,10 +193,12 @@ __all__ = [
     "decode_rectification_value",
     "export_client_data",
     "export_client_data_pdf",
+    "render_client_export_html",
     "get_client_or_none",
     "get_document_list",
     "get_pending_deletion_request",
     "get_pending_merge_request",
+    "lift_processing_restriction",
     "merge_clients",
     "merge_requires_four_eyes",
     "pending_deletion_client_ids",
@@ -201,6 +214,7 @@ __all__ = [
     "request_client_merge",
     "request_rectification",
     "resolve_writable_client",
+    "restrict_processing",
     "restore_client",
     "track_client_visit",
     "unmerge_client",

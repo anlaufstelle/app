@@ -45,6 +45,7 @@ from core.services.case import (
     restore_case,
     soft_delete_case,
 )
+from core.services.client.restriction import assert_processing_allowed
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
 from core.views.mixins import (
@@ -115,6 +116,14 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
         pending = get_pending_case_deletion_request(case)
 
         if not case_requires_four_eyes(case) and pending is None:
+            # Art.-18-Gate (Refs #2045), Spiegel des Ereignis-Pfads: der
+            # gepruefte Vier-Augen-Antrag bleibt waehrend einer Einschraenkung
+            # offen (Art. 17 gilt weiter), die Loeschung im Alleingang nicht.
+            try:
+                assert_processing_allowed(case.client_id)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+                return redirect("core:case_detail", pk=case.pk)
             soft_delete_case(case, request.user)
             messages.success(
                 request,

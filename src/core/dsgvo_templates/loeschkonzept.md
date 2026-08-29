@@ -45,8 +45,11 @@ den Wert im freigegebenen Löschkonzept organisatorisch anpassen.
 - Fälle haben keine zusätzliche eigene Aufbewahrungsfrist. Episoden,
  Wirkungsziele, Meilensteine und Aufgaben folgen dem Lebenszyklus ihres Falls
  beziehungsweise ihrer Person.
-- Aktive Sperrvermerke (Legal Hold) halten automatische Löschung und
- Anonymisierung bis zu ihrer Aufhebung an.
+- Aktive Aufbewahrungssperren (Legal Hold) halten automatische Löschung und
+ Anonymisierung bis zu ihrer Aufhebung an. Rechtsgrundlage ist Art. 17 Abs. 3
+ DSGVO (Ausnahme von der Löschpflicht) — **nicht** Art. 18. Der Sperrvermerk
+ nach Art. 18 ist das Gegenstück: Er lässt die Daten gespeichert, sperrt aber
+ ihre inhaltliche Nutzung und Änderung.
 
 ### 3.2 Dateien
 

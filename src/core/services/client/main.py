@@ -20,6 +20,7 @@ from core.services.audit import (
     audit_event,
     check_update_allowlist,
 )
+from core.services.client.restriction import assert_processing_allowed
 from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
@@ -89,6 +90,14 @@ def _redact_client_identity(client) -> None:
     client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
     client.notes = ""
     client.age_cluster = client.AgeCluster.UNKNOWN
+    # Refs #2047: Symmetrie zu ``age_cluster``. Der Hard-Pfad zerstoerte
+    # bisher genau EINEN der beiden Quasi-Identifikatoren — eine Asymmetrie
+    # ohne Begruendung: die Analogie zu ``k_anonymize_client`` traegt sie
+    # nicht, denn die Primitive laesst BEIDE Felder stehen (sie braucht sie
+    # fuer die Aequivalenzklasse), waehrend der Hard-Pfad gar keine
+    # k-Zusicherung gibt und deshalb auch keinen der beiden braucht.
+    # ``IDENTIFIED`` ist der informationsaermste Wert der Werteliste.
+    client.contact_stage = client.ContactStage.IDENTIFIED
     client.is_active = False
     client.data_json = {}
     client.document_type = None
@@ -98,6 +107,7 @@ def _redact_client_identity(client) -> None:
             "pseudonym",
             "notes",
             "age_cluster",
+            "contact_stage",
             "is_active",
             "data_json",
             "document_type",
@@ -237,6 +247,63 @@ def _redact_live_events(client) -> None:
     for event in Event.objects.filter(client=client, is_deleted=False).iterator():
         event.data_json = {}
         event.save(update_fields=["data_json", "search_text", "updated_at"])
+
+
+#: Chunk-Groesse des Generalisierungs-Laufs. Bewusst klein gehalten: der Lauf
+#: sitzt in derselben Transaktion wie die uebrige Kaskade, ein einzelnes
+#: ``bulk_update`` ueber zehntausende Zeilen haelt sonst unnoetig lange Locks.
+_TIMESTAMP_BUCKET_CHUNK = 500
+
+
+def _generalize_event_timestamps(event_ids: list) -> None:
+    """Generalisiert ``Event.occurred_at`` auf den Monatsersten 00:00 (Refs #2047).
+
+    **Warum ueberhaupt.** Nach der Tilgung blieb je Tombstone die vollstaendige,
+    personenverknuepfte Timeline aus exakten Zeitpunkten × Dokumentationstyp ×
+    Fallstruktur stehen. Die k-Anonymitaets-Zusicherung deckt sie nicht ab: sie
+    attestiert ``(age_cluster, contact_stage)``, nicht das zeitlich
+    hochdimensionale Muster. Mit Aussenwissen („Krisenintake am 03.05. gegen
+    halb drei") bleibt ein Single-out bei Einrichtungsgroessen plausibel — der
+    Datensatz waere damit pseudonymisiert, nicht anonym.
+
+    **Warum Monat und nicht Tag.** Die Statistik aggregiert auf Monatsebene
+    (``TruncMonth``), der Informationsverlust ist dort also null; gegenueber
+    Tagesgenauigkeit ist der Monatsbucket zugleich deutlich robuster gegen
+    Single-out ueber Aussenwissen. Die Zeile selbst bleibt vollstaendig
+    erhalten — dies ist eine Generalisierung, keine Loeschung.
+
+    **Warum lokal und nicht in UTC.** Die Bucket-Grenze liegt im lokalen
+    Kalender (``TIME_ZONE``). Ein Ereignis am 1. Maerz um 00:30 Berliner Zeit
+    liegt in UTC noch im Februar; ein UTC-Bucket schoebe es in den Vormonat und
+    verfaelschte genau die Monatsstatistik, deren Erhalt die Abwaegung traegt.
+
+    **Warum ``bulk_update`` statt ``save()``.** ``Event.save()`` laeuft durch
+    das ``pre_save``-Signal, das ``search_text`` neu berechnet; ohne
+    ``search_text`` in ``update_fields`` persistierte der Neuwert nicht (die
+    #1092-Falle). Der Zeitstempel hat mit dem Suchtext nichts zu tun — ein
+    reines ``UPDATE`` auf die eine Spalte ist der praezisere Eingriff und
+    laesst ``updated_at`` bewusst unberuehrt: die inhaltliche Aenderung der
+    Zeile war die Redaktion, nicht dieser Bucket.
+
+    Idempotent: ein bereits gebucketeter Wert faellt aus der Aenderungsmenge.
+    """
+    from core.models.event import Event
+
+    pending: list = []
+    for event in Event.objects.filter(pk__in=event_ids).only("pk", "occurred_at").iterator():
+        if event.occurred_at is None:
+            continue
+        local = timezone.localtime(event.occurred_at)
+        bucket = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if bucket == local:
+            continue
+        event.occurred_at = bucket
+        pending.append(event)
+        if len(pending) >= _TIMESTAMP_BUCKET_CHUNK:
+            Event.objects.bulk_update(pending, ["occurred_at"])
+            pending.clear()
+    if pending:
+        Event.objects.bulk_update(pending, ["occurred_at"])
 
 
 def _redact_event_history(event_ids: list) -> None:
@@ -578,7 +645,13 @@ def anonymize_client(client, user=None):
     Anonymisierung erfasst alle Aggregat-Bestandteile, die sonst eine
     Re-Identifikation ermöglichen würden:
 
-    - ``Client``-Felder (pseudonym, notes, age_cluster, is_active)
+    - ``Client``-Felder (pseudonym, notes, age_cluster, contact_stage,
+      is_active) — ``contact_stage`` seit Refs #2047 symmetrisch zu
+      ``age_cluster``
+    - ``Event.occurred_at`` aller Ereignisse der Person wird auf den
+      Monatsersten 00:00 im lokalen Kalender generalisiert (Refs #2047) —
+      die Timeline exakter Zeitpunkte war der letzte hochdimensionale
+      Quasi-Identifikator am Tombstone
     - ``Case.title`` / ``Case.description`` / ``Case.data_json`` /
       ``Case.document_type`` (M2 P5, Refs #1058) aller verknüpften Fälle
     - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
@@ -649,6 +722,10 @@ def anonymize_client(client, user=None):
     # steht am Ende dieser Funktion.
     event_ids = _event_ids_for_client(client)
     _redact_live_events(client)
+    # Refs #2047: die Zeitachse ist der letzte hochdimensionale Quasi-
+    # Identifikator am Tombstone. Nach der Inhalts-Redaktion, damit ein
+    # Fehlschlag dort nicht schon Zeitstempel verschoben hat.
+    _generalize_event_timestamps(event_ids)
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
     _redact_client_deletion_request(client)
@@ -768,7 +845,19 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     expected_updated_at: Optional optimistic-locking guard (Refs #531). When set,
     the DB-side ``updated_at`` must match — otherwise a ``ValidationError`` is
     raised so the caller can surface a conflict message.
+
+    Das Art.-18-Gate (Refs #2045) steht VOR dem Versions-Guard: an einer
+    eingeschraenkten Person ist der Schreibzugriff unabhaengig davon
+    unzulaessig, ob das Formular aktuell war, und die Konfliktmeldung („bitte
+    neu laden") wuerde zu einem erneuten Versuch einladen, statt die Rechtslage
+    zu nennen. Es liest den Zustand unter ``select_for_update`` — die Sperre
+    haelt bis zum Commit dieser (atomaren) Funktion und schliesst damit das
+    Fenster zwischen Pruefung und Write; ``apply_allowlisted_update`` sperrt
+    dieselbe Zeile danach nur noch erneut. Den Ausstieg fuer den
+    Berichtigungs-Flow oeffnet ein modul-privater Kontext, kein Argument
+    dieser Funktion (Cross-Review-Befund 4).
     """
+    assert_processing_allowed(client, lock=True)
     check_version_conflict(client, expected_updated_at)
     if old_stage is None:
         old_stage = client.contact_stage
@@ -871,7 +960,7 @@ def resolve_writable_client(facility, client_id, *, missing_error):
     """Loest eine Personen-UUID fuer einen SCHREIBZUGRIFF auf (Refs #1771).
 
     Der gemeinsame Kern der drei ``clean_client``-Methoden (``EventMetaForm``,
-    ``CaseForm``, ``WorkItemForm``). Zwei Grenzen, in dieser Reihenfolge:
+    ``CaseForm``, ``WorkItemForm``). Drei Grenzen, in dieser Reihenfolge:
 
     1. **Facility-Scope** (Refs #819/#1423) — eine fremde oder unbekannte UUID
        ist von aussen ununterscheidbar „existiert nicht"; der Aufrufer liefert
@@ -901,6 +990,11 @@ def resolve_writable_client(facility, client_id, *, missing_error):
         raise ValidationError(missing_error) from exc
     if client.is_deleted or not client.is_active:
         raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
+    # 3. **Einschraenkung** (Art. 18 DSGVO, Refs #2045) — reversibel, deshalb
+    #    eine eigene Meldung und ein eigenes Gate. Eine eingeschraenkte Person
+    #    an ein neues Ereignis, einen Fall oder eine Aufgabe zu haengen ist
+    #    neue inhaltliche Verarbeitung, nicht blosse Speicherung.
+    assert_processing_allowed(client)
     return client
 
 

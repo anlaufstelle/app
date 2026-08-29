@@ -95,6 +95,11 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
         raise ValidationError(_("Fälle müssen einer Person zugeordnet sein."))
     if client.facility_id != facility.pk:
         raise ValueError(_("Person gehört nicht zur Einrichtung."))
+    from core.services.client.restriction import assert_processing_allowed
+
+    # Art.-18-Gate (Refs #2045): ein neuer Fall ist neue inhaltliche
+    # Verarbeitung, nicht Speicherung des Bestands.
+    assert_processing_allowed(client, lock=True)
     if lead_user and lead_user.facility_id != facility.pk:
         raise ValueError(_("Fallverantwortlicher gehört nicht zur Einrichtung."))
 
@@ -145,6 +150,11 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
     Strikt: JEDER ``client``-Kwarg fliegt raus, auch der unveränderte Wert —
     die Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    # Art.-18-Gate (Refs #2045) VOR dem Versions-Guard: die Rechtslage gilt
+    # unabhaengig davon, ob das Formular aktuell war (Muster ``update_client``).
+    assert_processing_allowed(case.client_id, lock=True)
     check_version_conflict(case, expected_updated_at)
     # Allowlist (Refs #734, #1786): Verhindert Mass-Assignment durch
     # versehentlich durchgereichte Felder. Läuft ZUERST — die
@@ -197,7 +207,14 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
 
 @transaction.atomic
 def close_case(case, user):
-    """Close a case + AuditLog + Activity."""
+    """Close a case + AuditLog + Activity.
+
+    Art.-18-Gate (Refs #2045): Fall-Operationen sind fachliche Nutzung der
+    Personendaten, nicht blosse Speicherung.
+    """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(case.client_id, lock=True)
     case.status = Case.Status.CLOSED
     case.closed_at = timezone.now()
     case.save()
@@ -220,6 +237,10 @@ def close_case(case, user):
 @transaction.atomic
 def reopen_case(case, user):
     """Reopen a previously closed case + AuditLog + Activity."""
+    from core.services.client.restriction import assert_processing_allowed
+
+    # Art.-18-Gate (Refs #2045), Spiegel von ``close_case``.
+    assert_processing_allowed(case.client_id, lock=True)
     case.status = Case.Status.OPEN
     case.closed_at = None
     case.save()
@@ -259,6 +280,14 @@ def assign_event_to_case(case, event, user):
     zuordenbar. Ein erneutes Zuordnen desselben Falls ist ein No-Op und
     schreibt keine zweite Zeile.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    # Art.-18-Gate (Refs #2045): geprueft werden BEIDE Personenbezuege — der
+    # des Falls und der des Ereignisses. Sie koennen auseinanderfallen (etwa
+    # ein anonymes Ereignis an einem personenlosen Fall), und eine
+    # Einschraenkung auf einer der beiden Seiten verbietet die Zuordnung.
+    assert_processing_allowed(case.client_id, lock=True)
+    assert_processing_allowed(event.client_id, lock=True)
     if event.facility_id != case.facility_id:
         raise ValueError(_("Ereignis gehört nicht zur selben Einrichtung wie der Fall."))
     if user is not None and not user_can_see_event(user, event):
@@ -304,6 +333,11 @@ def remove_event_from_case(event, user):
     aus dem das Ereignis geloest wurde; ohne ihn waere nach dem Schreiben nicht
     mehr feststellbar, welche Akte betroffen war.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    # Art.-18-Gate (Refs #2045): das Loesen aendert den Fallzusammenhang eines
+    # Kontakts — inhaltliche Aenderung, nicht Speicherung.
+    assert_processing_allowed(event.client_id, lock=True)
     previous_case = event.case
     if previous_case is None:
         return event

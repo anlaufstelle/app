@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 
 @transaction.atomic
 def create_goal(case, user, title, description=""):
-    """Create a new OutcomeGoal for a case."""
+    """Create a new OutcomeGoal for a case.
+
+    Art.-18-Gate (Refs #2045): Wirkungsziele und Meilensteine sind Inhalt der
+    Fallakte — ihre Bearbeitung ist fachliche Nutzung, nicht Speicherung.
+    """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(case.client_id, lock=True)
     goal = OutcomeGoal(
         case=case,
         title=title,
@@ -46,6 +53,9 @@ def update_goal(goal, user, title=None, description=None):
     ``OutcomeGoal`` fuehrt kein ``updated_at``; es gibt hier folgerichtig
     keinen Versionskonflikt-Check.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(goal.case.client_id, lock=True)
     fields = {}
     if title is not None:
         fields["title"] = title
@@ -78,6 +88,9 @@ def update_goal(goal, user, title=None, description=None):
 @transaction.atomic
 def achieve_goal(goal):
     """Mark a goal as achieved. Idempotent — returns early if already achieved."""
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(goal.case.client_id, lock=True)
     if goal.is_achieved:
         return goal
     goal.is_achieved = True
@@ -89,6 +102,9 @@ def achieve_goal(goal):
 @transaction.atomic
 def unachieve_goal(goal):
     """Mark a goal as not achieved."""
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(goal.case.client_id, lock=True)
     goal.is_achieved = False
     goal.achieved_at = None
     goal.save()
@@ -98,6 +114,9 @@ def unachieve_goal(goal):
 @transaction.atomic
 def create_milestone(goal, title, sort_order=0):
     """Create a new Milestone for a goal."""
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(goal.case.client_id, lock=True)
     milestone = Milestone(
         goal=goal,
         title=title,
@@ -110,6 +129,9 @@ def create_milestone(goal, title, sort_order=0):
 @transaction.atomic
 def toggle_milestone(milestone):
     """Toggle milestone completion. Sets/clears completed_at accordingly."""
+    from core.services.client.restriction import assert_processing_allowed
+
+    assert_processing_allowed(milestone.goal.case.client_id, lock=True)
     if milestone.is_completed:
         milestone.is_completed = False
         milestone.completed_at = None
@@ -127,7 +149,10 @@ def delete_milestone(milestone, user):
     Milestones are lightweight, but the deletion is still a state-changing
     operation that must be auditable.
     """
+    from core.services.client.restriction import assert_processing_allowed
+
     case = milestone.goal.case
+    assert_processing_allowed(case.client_id, lock=True)
     facility = case.facility
     milestone_pk = str(milestone.pk)
     audit_event(

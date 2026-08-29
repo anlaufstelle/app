@@ -294,6 +294,26 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_trashed.pk"),),
         idor=(("pk", "foreign_client_trashed.pk"),),
     ),
+    # Art.-18-Sperrvermerk (Refs #2045): Setzen und Aufheben sind POST-only und
+    # an der HTTP-Grenze beide STAFF_PLUS — das Gefaelle (vier-aeugig ODER
+    # Leitung) zieht der Service, nicht die Rolle der Route. Der Matrix-POST
+    # traegt keinen ``reason`` bzw. trifft eine nicht eingeschraenkte Person:
+    # beide Male ValidationError -> Meldung + Redirect, nichts wird konsumiert,
+    # deshalb bewusst kein DESTRUCTIVE_RESET-Hook.
+    E(
+        "core:client_restrict_processing",
+        "facility-write",
+        post=STAFF_PLUS,
+        url_kwargs=(("pk", "client_identified.pk"),),
+        idor=(("pk", "foreign_client.pk"),),
+    ),
+    E(
+        "core:client_lift_processing_restriction",
+        "facility-write",
+        post=STAFF_PLUS,
+        url_kwargs=(("pk", "client_identified.pk"),),
+        idor=(("pk", "foreign_client.pk"),),
+    ),
     E("core:case_create", "facility-write", get=STAFF_PLUS, post=STAFF_PLUS),
     E(
         "core:case_update",

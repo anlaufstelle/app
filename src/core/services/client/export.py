@@ -343,6 +343,23 @@ def _gather_client_fields(client):
     # Zeile selbst.
     if client.merged_into_id:
         fields["merged_into"] = client.merged_into.pseudonym
+    # Refs #2047: Die Auskunft muss sagen, dass die Zeitpunkte der Ereignisse
+    # nach der Tilgung nur noch den Monat tragen — sonst liest sie sich, als
+    # haetten alle Kontakte am Monatsersten um Mitternacht stattgefunden.
+    # Nur am Tombstone gesetzt, damit das Bestandsformat aller uebrigen
+    # Personen bitgleich bleibt (Muster ``merged_into``). Die Bedingung deckt
+    # BEIDE Anonymisierungspfade ab: ``anonymized_at`` stempelt der Hard-Pfad,
+    # ``k_anonymized`` die K-Anon-Bridge (die ``anonymized_at`` bewusst nicht
+    # setzt) — an einer Bedingung allein fiele je ein Pfad still durch.
+    #
+    # Dass der Marker fuer BEIDE Sorten die Wahrheit sagt, ist keine Annahme,
+    # sondern hergestellt (Cross-Review-Befund 2): beide Pfade generalisieren
+    # seit Refs #2047 selbst, und Migration ``0171`` hat den Altbestand beider
+    # Sorten nachgezogen. Ohne diesen Backfill haette der Marker fuer jede vor
+    # dem Update anonymisierte Person eine Falschaussage getroffen — in einer
+    # Art.-15-Auskunft das schwerere Problem als die Luecke selbst.
+    if client.anonymized_at is not None or client.k_anonymized:
+        fields["event_timestamps_generalized"] = True
     return fields
 
 
@@ -989,6 +1006,11 @@ AUDIT_CATEGORIES = (
     ("Event", "Ereignis"),
     ("Client", "Person"),
     ("RectificationRequest", "Berichtigung"),
+    # Refs #2048: Gegenstueck zur Berichtigung — ``DELETION_*``-Zeilen tragen
+    # ``target_type="DeletionRequest"``. Ohne Eintrag fielen sie in die
+    # Sammelkategorie, waehrend derselbe Vorgang als Antrag unter
+    # „Loeschantraege" eine eigene Ueberschrift hat.
+    ("DeletionRequest", "Löschantrag"),
     ("Episode", "Episode"),
     ("OutcomeGoal", "Wirkungsziel"),
 )
@@ -1071,7 +1093,12 @@ def _gather_audit_trail(facility, client, event_ids):
     (ADR-039 §5) — ein ``SECURITY_VIOLATION`` an einem fall-eigenen Upload
     traegt also die Fall-PK. Aus demselben Grund kommen seit Refs #1796 die
     **Berichtigungsantraege** dazu: ``RECTIFICATION_REQUESTED/APPROVED/REJECTED``
-    zeigen auf die Antrags-PK (ADR-041), die vorher keinen Zweig traf.
+    zeigen auf die Antrags-PK (ADR-041), die vorher keinen Zweig traf. Refs
+    #2048 zieht die **Loeschantraege** nach: ``DELETION_REQUESTED``/
+    ``APPROVED``/``REJECTED`` zeigen ebenfalls auf die Antrags-PK, und zwar
+    aus allen drei schreibenden Pfaden (Person, Fall, Zusammenfuehrung). Bis
+    dahin wies die Auskunft den Antrag aus, aber keine einzige Zeile darueber,
+    dass und wann ueber ihn entschieden wurde.
 
     Refs #1959 setzt die Reihe fort: ``EPISODE_UPDATE`` und ``GOAL_UPDATE``
     zeigen auf die **Episoden**- bzw. **Ziel**-PK. Beide haengen ueber ``case``
@@ -1110,6 +1137,29 @@ def _gather_audit_trail(facility, client, event_ids):
     ]
     if rectification_id_strings:
         targets |= Q(target_id__in=rectification_id_strings)
+    # Refs #2048: derselbe Befund am Loeschantrag. ``DELETION_REQUESTED``/
+    # ``APPROVED``/``REJECTED`` setzen ``target_id`` ebenfalls auf die
+    # ANTRAGS-PK (``core.services.client.main``, ``core.services.case.deletion``,
+    # ``core.services.client.merge``) und trafen bis dahin keinen Zweig: der
+    # gesamte Vier-Augen-Vorgang war im Zugriffsprotokoll der betroffenen
+    # Person unsichtbar, obwohl der Antrag selbst unter „Loeschantraege" steht
+    # — die Auskunft sagte also, DASS beantragt wurde, aber nicht, dass und
+    # wann darueber entschieden wurde.
+    #
+    # Die Zielmenge kommt aus demselben Builder wie
+    # :func:`_gather_deletion_requests` (``client_and_case_targets_q``, Refs
+    # #2071). Das ist kein Zufall, sondern die Bedingung dafuer, dass Antrag
+    # und zugehoerige Auditzeile nie auseinanderlaufen: exakt die Antraege, die
+    # die Auskunft auflistet, steuern hier die PKs bei. Ueber-Matching ist
+    # damit ausgeschlossen (plus ``for_facility`` + RLS).
+    deletion_request_id_strings = [
+        str(pk)
+        for pk in DeletionRequest.objects.for_facility(facility)
+        .filter(client_and_case_targets_q(client, event_ids))
+        .values_list("pk", flat=True)
+    ]
+    if deletion_request_id_strings:
+        targets |= Q(target_id__in=deletion_request_id_strings)
     if case_id_strings:
         # Refs #1738 (G4): Die Anhang-Domaene setzt ``target_id`` auf die
         # **Owner**-PK (ADR-039 §5, AP2) — bei fall-eigenen Uploads also auf den
@@ -1220,8 +1270,18 @@ def export_client_data(client, facility, user):
     }
 
 
-def export_client_data_pdf(client, facility, user):
-    """Generate PDF from client data. Returns bytes.
+def render_client_export_html(client, facility, user) -> str:
+    """Die HTML-Stufe der Art.-15-PDF-Auskunft (Cross-Review-Befund 6).
+
+    Eigener Einstieg, damit Tests den tatsaechlich gerenderten INHALT pruefen
+    koennen. Vorher endeten die PDF-Tests bei ``%PDF`` und Mindestgroesse —
+    sie waeren auch gruen geblieben, wenn Antragsgrund oder
+    Transparenz-Hinweis vollstaendig gefehlt haetten. WeasyPrint komprimiert
+    seine Textstroeme, ein Byte-Grep im PDF traegt also nicht, und ein
+    PDF-Textextraktor waere eine neue Abhaengigkeit (in diesem Repo
+    ruecksprachepflichtig). Die HTML-Stufe ist ohnehin die Schicht, an der eine
+    Template-Regression entsteht — hier zu pruefen ist praeziser, nicht nur
+    billiger.
 
     Refs #1752: Der Kontext wird aus :func:`export_client_data` **abgeleitet**
     statt Key fuer Key aufgezaehlt. Vorher konnte eine neue JSON-Kategorie
@@ -1232,5 +1292,10 @@ def export_client_data_pdf(client, facility, user):
     context = {key: value for key, value in data.items() if key != "export_meta"}
     context["facility_name"] = data["export_meta"]["facility_name"]
     context["generated_at"] = timezone.now()
-    html = render_to_string("core/export/client_data_pdf.html", context)
+    return render_to_string("core/export/client_data_pdf.html", context)
+
+
+def export_client_data_pdf(client, facility, user):
+    """Generate PDF from client data. Returns bytes."""
+    html = render_client_export_html(client, facility, user)
     return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

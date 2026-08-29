@@ -65,7 +65,9 @@ from core.views.clients import (
     ClientDataExportPDFView,
     ClientDetailView,
     ClientFieldsPartialView,
+    ClientLiftProcessingRestrictionView,
     ClientListView,
+    ClientRestrictProcessingView,
     ClientUpdateView,
 )
 from core.views.dashboard import RoleDashboardView
@@ -206,6 +208,19 @@ urlpatterns = [
     path("clients/<uuid:pk>/anonymize/", ClientAnonymizeView.as_view(), name="client_anonymize"),
     # Duplikat-Merge (Refs #1876, ADR-045) — gestaffelter Einstieg wie der
     # Loeschantrag, Aufheben als Papierkorb-Pflege (Rollen-Gefaelle s. Views).
+    # Art.-18-Sperrvermerk (Refs #2045) — POST-only, Einstieg aus der Akte.
+    # Setzen ist staff+, Aufheben vier-aeugig ODER durch die Leitung; beide
+    # Grenzen zieht der Service, nicht die Route.
+    path(
+        "clients/<uuid:pk>/restrict-processing/",
+        ClientRestrictProcessingView.as_view(),
+        name="client_restrict_processing",
+    ),
+    path(
+        "clients/<uuid:pk>/lift-processing-restriction/",
+        ClientLiftProcessingRestrictionView.as_view(),
+        name="client_lift_processing_restriction",
+    ),
     path("clients/<uuid:pk>/merge/", ClientMergeView.as_view(), name="client_merge"),
     path("clients/<uuid:pk>/unmerge/", ClientUnmergeView.as_view(), name="client_unmerge"),
     # Cases

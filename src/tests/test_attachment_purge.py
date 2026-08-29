@@ -135,16 +135,42 @@ def event_chain(facility, staff_user, client_identified):
 
 
 class TestPurgeRemovesFilesRowsAndMarker:
-    def test_all_versions_of_the_chain_leave_disk_and_db(self, event_chain):
+    def test_all_versions_of_the_chain_leave_disk_and_db(self, event_chain, django_capture_on_commit_callbacks):
         event, head, old, _ft = event_chain
         paths = [get_attachment_path(head), get_attachment_path(old)]
         assert all(path.exists() for path in paths)
 
-        purged = purge_attachment_chain(event, head.entry_id)
+        # Refs #2045 (Cross-Review-Runde 4): Der ``.enc``-Unlink laeuft seit
+        # der Rollback-Haertung ueber ``transaction.on_commit`` — unter der
+        # Test-Transaktion committet nichts, die Callbacks muessen also
+        # ausdruecklich ausgefuehrt werden.
+        with django_capture_on_commit_callbacks(execute=True):
+            purged = purge_attachment_chain(event, head.entry_id)
 
         assert purged == 2
         assert not any(path.exists() for path in paths)
         assert not Attachment.objects.filter(pk__in=[head.pk, old.pk]).exists()
+
+    def test_rollback_keeps_files_and_rows_together(self, event_chain):
+        """Rollback-Konsistenz (Cross-Review-Runde 4).
+
+        Rollt eine aeussere Transaktion nach dem Purge zurueck, muessen Zeilen
+        UND Dateien zurueckkehren. Vorher lag der ``.enc``-Unlink in der
+        Transaktion und war nicht rollback-bar: die Zeilen kamen wieder, die
+        Dateien nicht — die Kette zeigte danach dauerhaft ins Leere und der
+        Download antwortete 404.
+        """
+        from django.db import transaction
+
+        event, head, old, _ft = event_chain
+        paths = [get_attachment_path(head), get_attachment_path(old)]
+
+        with pytest.raises(RuntimeError), transaction.atomic():
+            purge_attachment_chain(event, head.entry_id)
+            raise RuntimeError("Abbruch nach dem Purge")
+
+        assert all(path.exists() for path in paths), "Dateien wurden trotz Rollback entfernt"
+        assert Attachment.objects.filter(entry_id=head.entry_id).count() == 2
 
     def test_data_json_marker_loses_the_entry(self, event_chain):
         """Invariante I-M1 (ADR-039 §7): physischer Loeschpfad raeumt den Marker mit."""
@@ -164,12 +190,13 @@ class TestPurgeRemovesFilesRowsAndMarker:
         assert Attachment.objects.filter(pk=other.pk).exists()
         assert event.data_json[ft.slug]["entries"] == [{"id": str(other.pk), "sort": 1}]
 
-    def test_soft_deleted_chain_is_purged_too(self, event_chain):
+    def test_soft_deleted_chain_is_purged_too(self, event_chain, django_capture_on_commit_callbacks):
         """Der Soft-Delete-Bestand ist genau das Problem — er muss erfassbar sein."""
         event, head, old, _ft = event_chain
         Attachment.objects.filter(entry_id=head.entry_id).update(deleted_at=timezone.now())
 
-        assert purge_attachment_chain(event, head.entry_id) == 2
+        with django_capture_on_commit_callbacks(execute=True):
+            assert purge_attachment_chain(event, head.entry_id) == 2
         assert not get_attachment_path(old).exists()
 
     def test_unknown_entry_id_is_a_no_op(self, event_chain):
@@ -298,11 +325,14 @@ class TestPurgeRoute:
         assert "neu.pdf" in content
         assert response.context["version_count"] == 2
 
-    def test_lead_purge_removes_the_file_and_redirects_to_the_list(self, client, lead_user, event_chain):
+    def test_lead_purge_removes_the_file_and_redirects_to_the_list(
+        self, client, lead_user, event_chain, django_capture_on_commit_callbacks
+    ):
         _event, head, old, _ft = event_chain
         path = get_attachment_path(head)
         client.force_login(lead_user)
-        response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": head.pk}))
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": head.pk}))
         assert response.status_code == 302
         assert response.url == reverse(LIST_URL_NAME)
         assert not path.exists()
@@ -339,6 +369,87 @@ class TestPurgeRoute:
         assert get_attachment_path(head).exists()
         assert Attachment.objects.filter(entry_id=head.entry_id).count() == 2
         assert any("Legal Hold" in str(m) for m in response.context["messages"])
+
+    def test_restriction_blocks_the_service_and_keeps_the_file(self, event_chain, staff_user, client_identified):
+        """Art.-18-Sperrvermerk blockiert den Purge wie ein Legal Hold — aber
+        aus anderem Grund (Refs #2045).
+
+        Der Guard sitzt seit Cross-Review-Runde 2 IM Service unter dessen
+        eigener Sperre, nicht ungesperrt in der View davor; deshalb wird hier
+        der Service direkt geprueft.
+        """
+        from core.models import Client as ClientModel
+        from core.services.client.restriction import restrict_processing
+
+        event, head, _old, _ft = event_chain
+        restrict_processing(client_identified, staff_user, reason=ClientModel.RestrictionReason.ACCURACY_DISPUTED)
+        with pytest.raises(PermissionDenied):
+            purge_attachment_chain(event, head.entry_id)
+        assert get_attachment_path(head).exists()
+        assert Attachment.objects.filter(entry_id=head.entry_id).count() == 2
+
+    def test_restriction_blocks_the_route_and_keeps_the_file(
+        self, client, lead_user, staff_user, event_chain, client_identified
+    ):
+        """Der vollstaendige Weg: Anhang vorhanden, Purge-POST abgesetzt,
+        Refusal und Fortbestand von Datei und Kette."""
+        from core.models import Client as ClientModel
+        from core.services.client.restriction import restrict_processing
+
+        _event, head, _old, _ft = event_chain
+        restrict_processing(client_identified, staff_user, reason=ClientModel.RestrictionReason.ACCURACY_DISPUTED)
+        client.force_login(lead_user)
+        response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": head.pk}), follow=True)
+        assert get_attachment_path(head).exists()
+        assert Attachment.objects.filter(entry_id=head.entry_id).count() == 2
+        assert any("Art. 18" in str(m) for m in response.context["messages"])
+
+    def test_restriction_is_checked_under_a_client_row_lock(self, event_chain):
+        """Der Guard laeuft unter der Client-ZEILENSPERRE und vor dem Loeschen
+        (Re-Review 2).
+
+        Die Vorfassung nutzte das ungesperrte Anzeigepraedikat: zwischen
+        Pruefung und ``delete()`` konnte die Einschraenkung gesetzt werden und
+        der Purge lief trotzdem durch.
+
+        Geprueft wird das am ausgefuehrten SQL, nicht am Verhalten: die
+        Sperr-Eigenschaft ist einzelthreadig nicht beobachtbar (eine Transaktion
+        blockiert sich nicht selbst), aber das ``FOR UPDATE`` auf
+        ``core_client`` VOR dem ``DELETE`` auf den Anhaengen ist es. Dieselbe
+        Technik wie in ``test_restriction_lock_order``.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        event, head, _old, _ft = event_chain
+        with CaptureQueriesContext(connection) as captured:
+            purge_attachment_chain(event, head.entry_id)
+
+        client_lock_at = None
+        delete_at = None
+        for index, query in enumerate(captured.captured_queries):
+            sql = query["sql"].upper()
+            if client_lock_at is None and "CORE_CLIENT" in sql and "FOR UPDATE" in sql:
+                client_lock_at = index
+            if delete_at is None and sql.startswith('DELETE FROM "CORE_ATTACHMENT"'):
+                delete_at = index
+
+        assert client_lock_at is not None, "Client-Zeile wurde beim Purge nicht gesperrt"
+        assert delete_at is not None, "kein DELETE auf den Anhaengen gefunden"
+        assert client_lock_at < delete_at, "Sperre faellt erst nach dem Loeschen"
+
+    def test_confirmation_page_shows_the_restriction_blocker(
+        self, client, lead_user, staff_user, event_chain, client_identified
+    ):
+        from core.models import Client as ClientModel
+        from core.services.client.restriction import restrict_processing
+
+        _event, head, _old, _ft = event_chain
+        restrict_processing(client_identified, staff_user, reason=ClientModel.RestrictionReason.ACCURACY_DISPUTED)
+        client.force_login(lead_user)
+        response = client.get(reverse(DELETE_URL_NAME, kwargs={"pk": head.pk}))
+        assert response.status_code == 200
+        assert response.context["restriction_blocked"] is True
 
     def test_confirmation_page_shows_the_hold_blocker(self, client, facility, lead_user, event_chain):
         event, head, _old, _ft = event_chain
@@ -378,7 +489,7 @@ class TestPurgeRoute:
         assert response.status_code == 404
 
     def test_case_owned_attachment_is_purgeable_by_lead(
-        self, client, lead_user, facility, staff_user, client_identified
+        self, client, lead_user, facility, staff_user, client_identified, django_capture_on_commit_callbacks
     ):
         ft = _file_template(facility, "Fall-Datei")
         dt = _doc_type(facility, "Falltyp mit Datei", DocumentType.EntityType.CASE, file_field=ft)
@@ -393,7 +504,8 @@ class TestPurgeRoute:
         attachment = _attach(facility, case, ft, staff_user, "fall.pdf")
         path = get_attachment_path(attachment)
         client.force_login(lead_user)
-        response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": attachment.pk}))
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": attachment.pk}))
         assert response.status_code == 302
         assert not path.exists()
 
@@ -547,11 +659,12 @@ class TestRemovedChainsStayPurgeable:
         assert response.status_code == 200
         assert response.context["removed_at"] is not None
 
-    def test_removed_chain_is_purgeable(self, client, lead_user, event_chain):
+    def test_removed_chain_is_purgeable(self, client, lead_user, event_chain, django_capture_on_commit_callbacks):
         _event, head, old, _ft = event_chain
         Attachment.objects.filter(entry_id=head.entry_id).update(deleted_at=timezone.now())
         client.force_login(lead_user)
-        response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": head.pk}))
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.post(reverse(DELETE_URL_NAME, kwargs={"pk": head.pk}))
         assert response.status_code == 302
         assert not get_attachment_path(head).exists()
         assert not get_attachment_path(old).exists()
@@ -772,3 +885,28 @@ class TestPurgeEntryPointAtTheCase:
         client.force_login(lead_user)
         response = client.get(reverse("core:case_detail", kwargs={"pk": case_open.pk}))
         assert reverse(DELETE_URL_NAME, kwargs={"pk": attachment.pk}) in response.content.decode()
+
+
+@pytest.mark.django_db(transaction=True)
+class TestPurgeInAutocommit:
+    """Direktaufruf OHNE aeussere Transaktion (Cross-Review-Runde 4).
+
+    Der Default ``django_db`` wickelt jeden Test in eine Transaktion — ein
+    Test, der dort „laeuft ohne aeussere Transaktion" behauptet, beweist genau
+    das NICHT. Hier laeuft echter Autocommit: ``select_for_update`` scheitert
+    dort ohne eigene Klammer, und ``transaction.on_commit`` feuert wirklich
+    (kein ``django_capture_on_commit_callbacks`` noetig).
+
+    Bewusst langsamer — die Tabellen werden zwischen den Tests geleert statt
+    zurueckgerollt.
+    """
+
+    def test_purge_brings_its_own_transaction_and_unlinks_after_commit(self, event_chain):
+        event, head, old, _ft = event_chain
+        paths = [get_attachment_path(head), get_attachment_path(old)]
+        assert all(path.exists() for path in paths)
+
+        assert purge_attachment_chain(event, head.entry_id) == 2
+
+        assert not Attachment.objects.filter(entry_id=head.entry_id).exists()
+        assert not any(path.exists() for path in paths), "on_commit hat den Unlink nicht ausgefuehrt"

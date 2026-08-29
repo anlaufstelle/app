@@ -29,6 +29,24 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         AGE_27_PLUS = "27_plus", _("27+")
         UNKNOWN = "unknown", _("Unbekannt")
 
+    class RestrictionReason(models.TextChoices):
+        """Die vier Tatbestaende des Art. 18 Abs. 1 DSGVO — bewusst als
+        Werteliste statt als Freitext (Refs #2045).
+
+        Der Grund der Einschraenkung ist rechtlich abschliessend aufgezaehlt
+        (lit. a–d). Eine Werteliste haelt das Feld frei von Personenbezug (die
+        strittige *Sache* steht verschluesselt am Berichtigungsantrag, nicht
+        hier), macht die Einschraenkung filterbar und erspart dem Banner die
+        Entscheidung, wie viel Freitext es einer nur lesenden Rolle zeigen
+        darf. ``notes`` zeigt, wohin ein unverschluesseltes Freitextfeld an
+        diesem Modell fuehrt — dort steht deshalb eine ausdrueckliche Warnung.
+        """
+
+        ACCURACY_DISPUTED = "accuracy_disputed", _("Richtigkeit bestritten (Art. 18 Abs. 1 lit. a)")
+        UNLAWFUL_PROCESSING = "unlawful_processing", _("Verarbeitung unrechtmäßig, Löschung abgelehnt (lit. b)")
+        LEGAL_CLAIMS = "legal_claims", _("Für Rechtsansprüche weiter benötigt (lit. c)")
+        OBJECTION_PENDING = "objection_pending", _("Widerspruch in Prüfung (Art. 18 Abs. 1 lit. d)")
+
     objects = FacilityScopedManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -128,6 +146,47 @@ class Client(DynamicDataEncryptionMixin, SoftDeletableModel):
         null=True,
         blank=True,
         verbose_name=_("Anonymisiert am"),
+    )
+    # Refs #2045: Art.-18-Sperrvermerk. NICHT der Legal Hold — der blockiert die
+    # Loeschung (Art. 17 Abs. 3), dieses Flag blockiert die *Nutzung*: nach
+    # Art. 18 Abs. 2 duerfen eingeschraenkte Daten weiter GESPEICHERT werden,
+    # aber nicht mehr inhaltlich verarbeitet. Das Gate ist deshalb ein
+    # Schreib-, kein Loeschgate (:mod:`core.services.client.restriction`) und
+    # spiegelt ``resolve_writable_client``; einzige Ausnahme ist der
+    # Berichtigungsworkflow (ADR-041), ueber den die bestrittene Richtigkeit
+    # ueberhaupt erst geklaert wird.
+    processing_restricted = models.BooleanField(
+        default=False,
+        verbose_name=_("Verarbeitung eingeschränkt"),
+        help_text=_(
+            "Art. 18 DSGVO: Die Daten bleiben gespeichert, dürfen aber außerhalb "
+            "des Berichtigungsverfahrens nicht mehr geändert oder verwendet werden."
+        ),
+    )
+    processing_restriction_reason = models.CharField(
+        max_length=30,
+        choices=RestrictionReason.choices,
+        blank=True,
+        default="",
+        verbose_name=_("Grund der Einschränkung"),
+    )
+    processing_restricted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Eingeschränkt am"),
+    )
+    processing_restricted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        # SET_NULL wie ``created_by``: die Provenienz ist ein Nachweis, kein
+        # Grund, eine Nutzer-Loeschung zu blockieren. Faellt sie weg, greift die
+        # Vier-Augen-Regel der Aufhebung konservativ weiter — ``None`` ist nie
+        # gleich der aufhebenden Person, die Aufhebung durch eine einzelne
+        # Fachkraft bleibt also moeglich, und die Leitung kann ohnehin.
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restricted_clients",
+        verbose_name=_("Eingeschränkt durch"),
     )
     k_anonymized = models.BooleanField(
         default=False,

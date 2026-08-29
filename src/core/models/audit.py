@@ -216,6 +216,18 @@ class AuditLog(models.Model):
         RECTIFICATION_REQUESTED = "rectification_requested", _("Berichtigung beantragt")
         RECTIFICATION_APPROVED = "rectification_approved", _("Berichtigung genehmigt")
         RECTIFICATION_REJECTED = "rectification_rejected", _("Berichtigung abgelehnt")
+        # Refs #2045: Art.-18-Sperrvermerk. Bewusst KEINE Wiederverwendung von
+        # ``LEGAL_HOLD`` — der Hold ist das Gegenteil (er blockiert die
+        # Loeschung nach Art. 17 Abs. 3, die Einschraenkung die Nutzung), und
+        # genau diese Konflation war der Befund. Auch ``CLIENT_UPDATE`` taugt
+        # nicht: Setzen und Aufheben sind Betroffenenrechte-Vorgaenge mit
+        # eigener Rechtsfolge, die unter /audit/ als solche auffindbar sein
+        # muessen — Muster ``DELETION_*``/``RECTIFICATION_*``.
+        PROCESSING_RESTRICTED = "processing_restricted", _("Verarbeitung eingeschränkt (Art. 18)")
+        PROCESSING_RESTRICTION_LIFTED = (
+            "processing_restriction_lifted",
+            _("Einschränkung der Verarbeitung aufgehoben"),
+        )
 
     objects = FacilityScopedManager()
 

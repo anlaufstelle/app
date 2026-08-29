@@ -25,6 +25,7 @@ from core.models import Client, DocumentType, Event
 from core.services.attachments import stage_attachment_uploads, stage_uploads
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
+from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, assert_processing_allowed
 from core.services.compliance import (
     get_visible_event_or_404,
     user_can_see_document_type,
@@ -982,6 +983,23 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # HTML/Deep-Link: die Person ist fort — 404 wie an den uebrigen
             # Widerrufs-Flaechen (Personen-/Fall-Detail).
             raise Http404(CLIENT_WRITE_REVOKED_MESSAGE)
+        # Art.-18-Sperrvermerk (Refs #2045): bewusst NICHT 404. Anders als eine
+        # widerrufene Person existiert eine eingeschraenkte weiter und bleibt
+        # sichtbar — ihr Ereignis zu verstecken waere eine falsche Aussage ueber
+        # den Bestand. Der Replay-Vertrag ist derselbe wie beim Widerruf (422 =
+        # ``localStatus: "dead"``, kein Retry); der HTML-Weg bekommt die
+        # Meldung und landet auf der Ereignis-Detailseite.
+        #
+        # Die verbindliche Grenze zieht ``update_event`` unter Zeilensperre;
+        # dieser Zweig ist die freundliche Vorabmeldung, nicht das Gate.
+        if client is not None and client.processing_restricted:
+            if _wants_raw_json_response(request):
+                return JsonResponse(
+                    {"error": "invalid", "errors": {"client": [{"message": str(PROCESSING_RESTRICTED_MESSAGE)}]}},
+                    status=422,
+                )
+            messages.error(request, str(PROCESSING_RESTRICTED_MESSAGE))
+            return redirect("core:event_detail", pk=self.event.pk)
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
@@ -1209,6 +1227,25 @@ class EventDeleteView(StaffRequiredMixin, View):
                 # die Idempotenz-Zusage, und ein Antrag steht nach beiden Wegen.
             messages.info(request, _("Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."))
         else:
+            # Art.-18-Vorabpruefung (Refs #2045) — freundliche Meldung, NICHT
+            # das Gate. Die verbindliche Grenze zieht seit Fix-Runde 2
+            # ``soft_delete_event`` selbst, unter der Client-Zeilensperre und in
+            # derselben Transaktion wie die Loeschung; dieser Zweig erspart der
+            # Nutzerin nur die Fehlerseite. (Eine aeltere Fassung dieses
+            # Kommentars behauptete, der Guard KOENNE nicht im Service liegen,
+            # weil ihn die Vier-Augen-Genehmigung mitruft — geloest ist das
+            # inzwischen ueber den benannten Loeschworkflow-Kontext, den jene
+            # Genehmigung oeffnet.)
+            #
+            # Blockiert wird die Einzelentscheidung OHNE zweite Person:
+            # waehrend die Richtigkeit der Akte bestritten ist, darf sie nicht
+            # im Alleingang ausgeduennt werden. Der Weg bleibt der gepruefte
+            # Loeschantrag — Art. 17 gilt waehrend der Einschraenkung weiter.
+            try:
+                assert_processing_allowed(event.client_id)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+                return redirect("core:event_detail", pk=event.pk)
             soft_delete_event(event, request.user)
             messages.success(request, _("Ereignis wurde gelöscht."))
 
