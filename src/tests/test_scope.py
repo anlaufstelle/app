@@ -11,6 +11,13 @@ from core.models.episode import Episode
 from core.models.outcome import Milestone, OutcomeGoal
 
 
+def _foreign_doc_type(other_facility):
+    """Refs #2066: Der Composite-FK pinnt ``document_type`` an die Facility des
+    Events (DEFERRABLE — die Verletzung schlaegt erst beim Commit/Teardown zu).
+    Fremd-Facility-Events brauchen seither einen Doctype ihrer eigenen Facility."""
+    return DocumentType.objects.create(facility=other_facility, name="Kontakt (fremd)", report_key="contact")
+
+
 @pytest.mark.django_db
 class TestClientListScope:
     def test_client_list_other_facility_not_visible(self, client, staff_user, facility, organization):
@@ -113,7 +120,7 @@ class TestStatisticsScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=doc_type_contact,
+            document_type=_foreign_doc_type(other_facility),
             occurred_at=timezone.now(),
             data_json={},
             created_by=lead_user,
@@ -357,7 +364,7 @@ class TestHandoverScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=doc_type_contact,
+            document_type=_foreign_doc_type(other_facility),
             occurred_at=timezone.now(),
             data_json={},
             created_by=staff_user,
@@ -424,7 +431,7 @@ class TestCSVExportScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=doc_type_contact,
+            document_type=_foreign_doc_type(other_facility),
             occurred_at=timezone.now(),
             data_json={"notiz": "Geheimer Export"},
             created_by=lead_user,
@@ -453,7 +460,7 @@ class TestPDFExportScope:
         Event.objects.create(
             facility=other_facility,
             client=other_client,
-            document_type=doc_type_contact,
+            document_type=_foreign_doc_type(other_facility),
             occurred_at=timezone.now(),
             data_json={},
             created_by=lead_user,
