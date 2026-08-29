@@ -374,6 +374,110 @@ def merge_update_payload(event, merged, restricted_keys, document_type):
     return merged
 
 
+#: Meldung des Legal-Hold-Gates am manuellen Loeschpfad (ADR-050 M-9).
+LEGAL_HOLD_BLOCKS_DELETE_MESSAGE = _(
+    "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — "
+    "es kann nicht gelöscht werden, solange die Sperre gilt."
+)
+
+
+def _lock_client_row(client_id):
+    """Sperrt die Personenzeile — erste Stufe der kanonischen Ordnung (ADR-050 D2).
+
+    Bis zum Re-Review entstand diese Sperre nur als **Nebenwirkung** von
+    ``assert_processing_allowed(lock=True)``. Der gepruefte Vier-Augen-Weg
+    laeuft aber im benannten Loeschworkflow-Kontext, in dem das Art.-18-Gate
+    sofort zurueckkehrt — Art. 17 gilt waehrend einer Art.-18-Einschraenkung
+    weiter. Mit dem Gate entfiel dort auch die Sperre, und der
+    Koordinationspunkt gegen einen parallelen Personen-Hold fehlte
+    ausgerechnet im gepruefen Loeschweg.
+
+    Sie wird deshalb hier eigenstaendig genommen: der Loeschpfad braucht sie als
+    Koordinationspunkt, unabhaengig davon, ob das Art.-18-Gate greift. Doppeltes
+    Sperren derselben Zeile in derselben Transaktion ist folgenlos.
+
+    ``client_id`` ist ``None`` bei personenlosen (anonymen) Ereignissen — dort
+    gibt es keine Personenzeile und nichts zu koordinieren.
+    """
+    if client_id is None:
+        return
+    Client.objects.filter(pk=client_id).select_for_update().only("pk").first()
+
+
+def _lock_event_row(event):
+    """Sperrt die Ereigniszeile — der Koordinationspunkt aus ADR-050 D2.
+
+    Muss VOR der Hold-Lesung stehen (Cross-Review Finding 3). Ohne sie war die
+    M-9-Pruefung gegenueber einer konkurrierenden Hold-Anlage TOCTOU-anfaellig:
+    ``assert_processing_allowed(lock=True)`` sperrt nur die **Client**-Zeile,
+    und die Sperre auf der Ereigniszeile entstand erst beim spaeteren
+    ``event.save()``. Dazwischen konnte eine Hold-Transaktion dieselbe Zeile
+    sperren, ihren Hold committen — und vom Loeschvorgang ueberholt werden, der
+    den Hold nie gesehen hat. ``transaction.atomic()`` allein schliesst dieses
+    Rennen nicht, weil ``READ COMMITTED`` jede Anweisung neu liest.
+
+    Es ist dieselbe Zeile, die ``create_hold_for_target`` und der
+    EventHistory-Sweep sperren; damit ist das Rennen in beide Richtungen
+    definiert entschieden. Kanonische Ordnung: ``core_client`` (Art.-18-Gate)
+    -> ``core_event`` -> Hold-Lesung.
+    """
+    Event.objects.filter(pk=event.pk).select_for_update().only("pk").first()
+
+
+#: Meldung, wenn ein paralleler Merge das Ereignis waehrend der Sperrwartezeit
+#: an eine andere Person gehaengt hat (ADR-050 D2).
+CLIENT_BINDING_CHANGED_MESSAGE = _(
+    "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — "
+    "bitte erneut öffnen und die Löschung wiederholen."
+)
+
+
+def _assert_current_client_binding(event):
+    """Revalidiert den Event->Client-Bezug NACH der Ereignissperre.
+
+    Der Aufrufer haelt das Ereignis womoeglich seit Minuten im Speicher (der
+    gepruefte Vier-Augen-Weg laedt es ungesperrt), und die Client-Sperre oben
+    galt genau diesem — moeglicherweise veralteten — Bezug. Gewinnt parallel
+    ein Merge und haengt das Ereignis an eine andere Person
+    (``services/client/merge.py``), dann haette der Loeschvorgang die Zeile der
+    NEUEN Person nie gesperrt und ihren Hold nie gesehen.
+
+    Bewusst **Abbruch statt Nachsperren**: die neue Personenzeile jetzt noch zu
+    sperren, waere eine Sperr-Inversion (``Client`` steht in der kanonischen
+    Ordnung vor ``Event``, und das Ereignis ist bereits gesperrt) — genau der
+    ABBA-Zyklus, den ADR-050 D5.5 ausschliesst. Der Vorgang bricht deshalb
+    sauber ab und ist wiederholbar; beim naechsten Versuch liest der Aufrufer
+    den neuen Bezug und sperrt in der richtigen Reihenfolge.
+    """
+    current_client_id = Event.objects.filter(pk=event.pk).values_list("client_id", flat=True).first()
+    if current_client_id != event.client_id:
+        raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
+
+
+def _assert_no_active_hold(event):
+    """M-9 (ADR-050 D2): Der manuelle Loeschpfad prueft den Hold — bisher gar nicht.
+
+    ``soft_delete_event`` leerte Payload und Anhaenge unmittelbar; **nur** die
+    Retention-Query schloss gehaltene Ereignisse aus. Ein Hold sichert
+    Beweismittel; ein Loeschweg, der ihn nicht kennt, ist die Hintertuer um
+    genau diese Sicherung (Spoliation, Muster Refs #1066).
+
+    Fail-loud statt stillem Ueberspringen: der manuelle Pfad hat eine
+    handelnde Person und eine Meldungs-Flaeche — sie muss erfahren, warum
+    nichts passiert ist.
+
+    Der Hold auf die **Person** zaehlt mit (Refs #1376, I10): er schuetzt
+    deren Ereignisse schon im Retention-Pfad, und ein manueller Klick darf
+    nicht mehr duerfen als der Cron.
+    """
+    from core.retention.legal_holds import has_active_hold
+
+    if has_active_hold(event.facility, "Event", event.pk):
+        raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
+    if event.client_id and has_active_hold(event.facility, "Client", event.client_id):
+        raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
+
+
 @transaction.atomic
 def soft_delete_event(event, user, *, source=None):
     """Soft-Delete + EventHistory(DELETE) + AuditLog.
@@ -393,6 +497,15 @@ def soft_delete_event(event, user, *, source=None):
     from core.services.client.restriction import assert_processing_allowed
 
     assert_processing_allowed(event.client_id, lock=True)
+    # Reihenfolge tragend (ADR-050 D2): erst Personen-, dann Ereigniszeile
+    # sperren, DANN den Hold lesen — sonst bleibt zwischen Lesung und Wirkung
+    # ein Fenster offen. Beide Sperren stehen hier eigenstaendig und nicht als
+    # Nebenwirkung des Art.-18-Gates, das der gepruefte Vier-Augen-Weg
+    # ueberspringt.
+    _lock_client_row(event.client_id)
+    _lock_event_row(event)
+    _assert_current_client_binding(event)
+    _assert_no_active_hold(event)
     history_payload = build_redacted_delete_history(event)
     # Refs #1917: VOR dem Wipe bumpen — nur ein aktiver Ban erzeugt ein
     # Existenz-Delta; das Löschen eines schlafenden Hausverbots bleibt für
@@ -403,7 +516,14 @@ def soft_delete_event(event, user, *, source=None):
     event.is_deleted = True
     event.data_json = {}
     delete_attachments_for(event)
-    event.save()
+    # ``update_fields`` statt eines vollen ``save()``: die Instanz stammt
+    # womoeglich aus einem aelteren Lesevorgang, und ein Voll-Save schriebe
+    # jedes Feld daraus zurueck — inklusive eines ``client_id``, den ein
+    # paralleler Merge inzwischen geaendert hat. ``search_text`` MUSS in der
+    # Liste stehen, sonst persistiert Django den vom ``pre_save``-Signal
+    # berechneten Leerwert nicht und der Klartext-PII bliebe im Suchindex
+    # stehen (Refs #1092) — dieselbe Liste wie im Retention-Loeschpfad.
+    event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
     EventHistory.objects.create(
         event=event,
         changed_by=user,

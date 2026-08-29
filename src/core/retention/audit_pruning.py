@@ -64,10 +64,21 @@ from core.services.system import bypass_replication_triggers
 # ``auditlog_retention_months`` — eine dauerhafte Aufbewahrung waere gegenueber
 # den Beschaeftigten (§ 26 BDSG) und der Speicherbegrenzung (Art. 5 Abs. 1
 # lit. e DSGVO) nicht zu rechtfertigen.
+#
+# Refs #2065 (ADR-050 M-4): EVENT_HISTORY_REDACTED folgt derselben Logik wie
+# AUDIT_PRUNE_CHECKPOINT. Er ist der Beleg dafuer, dass die Append-only-
+# Garantie fuer eine bestimmte Charge legitim geoeffnet wurde — die einzige
+# Spur, aus der sich spaeter rekonstruieren laesst, WER wann welche
+# Historienzeilen geleert hat. Wuerde die Routine-Frist ihn kappen, bliebe die
+# redigierte Zeile (Stufe 2 laeuft ab ``redacted_at``, nicht ab dem Nachweis)
+# unter Umstaenden ohne jeden Beleg stehen: genau die stille Veraenderung
+# append-only-geschuetzter Daten, gegen die die Trigger da sind. Das Detail
+# traegt Mengen, Zeitgrenzen und Chargen-UUIDs — keine Klient-PII.
 PRUNE_EXEMPT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.RETENTION_RUN_COMPLETED,
     AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
+    AuditLog.Action.EVENT_HISTORY_REDACTED,
 )
 
 # Das vollstaendige Ausnahme-Praedikat: pauschale Aktionen ODER die eng gefasste

@@ -1452,6 +1452,34 @@ Legal Holds werden im Retention-Dashboard sowie im Django-Admin verwaltet (siehe
 
 > **Abgrenzung zu Art. 18 DSGVO (Refs #2045):** Ein Legal Hold ist **keine** Einschränkung der Verarbeitung im Sinne des Art. 18. Er blockiert die **Löschung** (Art. 17 Abs. 3) und lässt die tägliche Arbeit am Datensatz unberührt. Die Einschränkung nach Art. 18 ist der umgekehrte Fall: Die Daten bleiben gespeichert, aber die inhaltliche Arbeit an der Person ist gesperrt. Dafür gibt es den eigenen **Sperrvermerk** an der Personenakte (§ 7.6). Beide können unabhängig voneinander bestehen.
 
+#### Aufbewahrung der Ereignis-Historie
+
+Jede Speicherung eines Ereignisses schreibt eine **Historien-Fassung**: wer wann welche Felder mit welchen Werten geändert hat. Diese Fassungen hatten bis Version 0.89 **keine Frist** — sie überlebten die Löschfrist des Ereignisses selbst. Konkret: Ein Ereignis, dessen `retention_identified_days` abgelaufen sind, wird geleert, seine früheren Fassungen behielten aber jeden jemals gespeicherten Wort­laut. Die Frist war formal vollzogen und faktisch unterlaufen. Seit [ADR-050](adr/050-eventhistory-retention.md) schließt `enforce_retention` diese Lücke in zwei Stufen.
+
+**Stufe 1 — Redaktion.** Die Fassung bleibt bestehen, ihre *Werte* fallen weg. Was stehen bleibt: Zeitpunkt, handelnde Person, Aktion und die Namen der betroffenen Felder. Was verschwindet: die Inhalte. In der Ereignis-Detailansicht und in der Auskunft nach Art. 15 erscheint an ihrer Stelle „– (redigiert)". Zwei Auslöser:
+
+- **Das Ereignis ist gelöscht.** Sobald ein Ereignis als gelöscht markiert ist — durch die Frist oder von Hand, verlieren beim nächsten Lauf **alle** seine Fassungen ihre Werte. Das braucht keine Einstellung und lässt sich nicht abschalten: es ist die Durchsetzung der Frist, die für das Ereignis ohnehin schon gilt. Es erfasst auch Ereignisse ohne Person (anonyme Kontakte), für die es bisher überhaupt keinen Löschpfad der Historie gab.
+- **Die Fassung ist alt.** Bei noch **lebenden** Ereignissen werden Fassungen redigiert, die älter als `eventhistory_detail_months` sind.
+
+**Stufe 2 — Löschung der Chronologie.** Eine bereits redigierte Fassung wird endgültig gelöscht, wenn ihre Redaktion länger als `eventhistory_chronicle_months` zurückliegt. Gemessen wird ab dem Zeitpunkt der Redaktion, nicht ab der ursprünglichen Änderung — die Frage lautet „wie lange steht diese Zeile schon leer". Zu diesem Zeitpunkt fallen keine Inhalte mehr, nur noch die Chronologie selbst.
+
+| Einstellung in `Settings` | Standard | Wirkung |
+|---|---|---|
+| `eventhistory_detail_months` | 24 Monate | Wie lange die **Werte** alter Fassungen lebender Ereignisse lesbar bleiben. `0` = **deaktiviert** (die Werte bleiben unbefristet lesbar). Berührt den Zweig „gelöschtes Ereignis" nicht. |
+| `eventhistory_chronicle_months` | 24 Monate | Wie lange eine bereits redigierte Fassung danach noch aufbewahrt wird, bevor sie gelöscht wird. `0` = **deaktiviert**, dann wächst die Chronologie unbegrenzt — das ist eine Entscheidung für unbefristete Aufbewahrung und gehört dann ausdrücklich ins Verarbeitungsverzeichnis und ins Löschkonzept. |
+
+Beide Vorgabewerte entsprechen `auditlog_retention_months`: Historie und Audit-Log beantworten dieselbe Frage („wer hat wann etwas geändert") und sollen deshalb gemeinsam enden. Mit den Vorgabewerten ergibt sich für die Fassung eines lebenden Ereignisses eine Gesamtlebensdauer von 24 Monaten Werte plus 24 Monaten Chronologie; für die eines gelöschten 24 Monate Chronologie ab der Löschung.
+
+**Was Sie beim Ändern wissen sollten:**
+
+- **Die jüngste Fassung eines lebenden Ereignisses wird nie redigiert**, unabhängig von ihrem Alter. So bleibt auf der Detailseite immer mindestens eine lesbare letzte Änderung stehen — auch bei einer Akte, die seit Jahren unangetastet ist.
+- **Ein Legal Hold hält die Redaktion auf.** Steht das Ereignis (oder seine Person) unter Hold, bleiben seine Fassungen unverändert; der Lauf weist sie als zurückgestellt aus und holt sie nach, sobald der Hold aufgehoben oder abgelaufen ist.
+- **Redaktion ist endgültig.** Alte Wortlaute sind danach nur noch aus einem Backup-Stand rekonstruierbar. Wer einen Berichtigungsstreit über eine Jahre alte Formulierung führen können muss, setzt `eventhistory_detail_months` entsprechend höher.
+- **Nebeneffekt auf die Schlüsselrotation:** Redigierte Fassungen tragen keinen verschlüsselten Inhalt mehr und werden bei `reencrypt_fields` übersprungen. Die Dauer einer Schlüsselrotation richtet sich damit nach dem *unredigierten Fenster* statt nach der Gesamtgröße der Tabelle — sie bleibt konstant, statt jährlich zu wachsen.
+- **Jede Charge hinterlässt einen Nachweis** im Audit-Log (Aktion „Ereignis-Historie redigiert") mit Anzahl, Fristgrenze und Chargengrenzen. Dieser Nachweis ist von `auditlog_retention_months` **ausgenommen** und bleibt dauerhaft erhalten.
+
+Der erste Lauf nach dem Update kann länger dauern als gewohnt: Er arbeitet den Altbestand der Fassungen lebender Ereignisse ab. Die Fassungen bereits gelöschter Ereignisse hat die Migration schon erledigt.
+
 #### K-Anonymisierung statt Hard-Delete
 
 Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung** aktiviert werden (Refs #535).
@@ -1512,13 +1540,14 @@ Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrich
 |---|---|---|
 | `auditlog_retention_months` | 24 Monate | Bei jedem `enforce_retention`-Lauf werden Einträge gelöscht, die älter als diese Frist sind (kalendergenaue Monatsrechnung, keine 30-Tage-Näherung). `0` = **deaktiviert**, dann wächst das Log unbegrenzt. |
 
-Von dieser Frist **ausgenommen** sind vier Klassen; sie bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Drei davon hängen an der Aktion (`PRUNE_EXEMPT_ACTIONS`):
+Von dieser Frist **ausgenommen** sind fünf Klassen; sie bleiben unabhängig vom Alter erhalten (`PRUNE_EXEMPT_Q` in [`src/core/retention/audit_pruning.py`](https://github.com/anlaufstelle/app/blob/main/src/core/retention/audit_pruning.py)). Vier davon hängen an der Aktion (`PRUNE_EXEMPT_ACTIONS`):
 
 - `SECURITY_VIOLATION` — Forensik-Nachweise der Breach-Detection,
 - `RETENTION_RUN_COMPLETED` — der Marker, aus dem das Compliance-Dashboard den letzten erfolgreichen Retention-Lauf liest,
-- `AUDIT_PRUNE_CHECKPOINT` — der Tombstone des Prunings selbst.
+- `AUDIT_PRUNE_CHECKPOINT` — der Tombstone des Prunings selbst,
+- `EVENT_HISTORY_REDACTED` — der Nachweis je Charge des Historien-Sweeps (siehe [§ 7.3 „Aufbewahrung der Ereignis-Historie"](#aufbewahrung-der-ereignis-historie)). Er belegt, dass die Unveränderlichkeit für genau diese Zeilen legitim geöffnet wurde; verschwände er vor den Zeilen, die er belegt, bliebe eine stille Änderung append-only-geschützter Daten zurück.
 
-Hinzu kommt — **unabhängig von der Aktion** — die vierte Klasse: Einträge über eine **herausgegebene Berichtsdatei mit Berichtszeitraum** (CSV/PDF/JSON/XML). Ohne diese Ausnahme täuschte die Freigabe-Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, die auslösende Person und die erfassten Empfänger-/Zweckangaben (ungeprüfter Freitext) und werden dauerhaft aufbewahrt. Reine Bildschirm-Ansichten des externen Berichts und Auskünfte ohne Berichtszeitraum laufen zwar unter derselben Audit-Aktion, bleiben aber der Frist unterworfen — die Abgrenzung steht in [§ 8 „Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
+Hinzu kommt — **unabhängig von der Aktion** — die fünfte Klasse: Einträge über eine **herausgegebene Berichtsdatei mit Berichtszeitraum** (CSV/PDF/JSON/XML). Ohne diese Ausnahme täuschte die Freigabe-Übersicht Vollständigkeit vor. Sie enthalten Zeitraum, Format, die auslösende Person und die erfassten Empfänger-/Zweckangaben (ungeprüfter Freitext) und werden dauerhaft aufbewahrt. Reine Bildschirm-Ansichten des externen Berichts und Auskünfte ohne Berichtszeitraum laufen zwar unter derselben Audit-Aktion, bleiben aber der Frist unterworfen — die Abgrenzung steht in [§ 8 „Herausgabe von Berichten"](#herausgabe-von-berichten-was-sie-wissen-müssen).
 
 **Checkpoint-Mechanik:** Das Audit-Log ist über eine HMAC-Kette verkettet (jeder Eintrag verweist auf den vorherigen). Ein Pruning reißt diese Kette zwangsläufig auf. Damit die Integritätsprüfung diese Lücke nicht als Manipulation meldet, schreibt jeder Prune-Lauf einen `AUDIT_PRUNE_CHECKPOINT`-Eintrag, der die Kettengrenzen der gelöschten Einträge festhält und die Diskontinuität legitimiert. Die Kette selbst wird dabei **nie** umgeschrieben — das Log bleibt append-only.
 

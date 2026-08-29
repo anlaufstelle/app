@@ -30,6 +30,7 @@ from core.services.client.targets import (
     client_and_event_targets_q,
     client_legal_hold_targets_q,
 )
+from core.services.events.history_diff import is_redaction_marker
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
@@ -552,6 +553,19 @@ def _serialize_history_payload(payload, field_metadata):
     return [{"slug": slug, "label": label(slug), "value": _history_value(payload[slug])} for slug in sorted(payload)]
 
 
+def _entry_is_redacted(entry):
+    """„Mindestens eine belegte Spalte ist redigiert" (ADR-050 D1.3, Refs #2065).
+
+    Abgeleitet wurde das Merkmal bisher **ausschliesslich** aus ``data_before``.
+    Fuer die Lösch-Historie stimmte das (dort steht der Marker genau dort); fuer
+    eine redigierte CREATE-Zeile nicht: ihr ``data_before`` ist ``NULL`` und
+    bleibt es (D1.1, nur belegte Spalten werden redigiert), der Marker steht in
+    ``data_after``. Die Auskunft haette also ausgerechnet fuer die Zeilen
+    ``redacted: false`` gemeldet, die der Alters-Sweep gerade geleert hat.
+    """
+    return any(is_redaction_marker(payload) for payload in (entry.data_before, entry.data_after))
+
+
 def _gather_event_history(event_ids):
     """Serialize EventHistory entries for the given event IDs.
 
@@ -576,7 +590,7 @@ def _gather_event_history(event_ids):
                 "occurred_at": entry.event.occurred_at.isoformat(),
                 "is_deleted": entry.event.is_deleted,
             },
-            "redacted": bool((entry.data_before or {}).get("_redacted")),
+            "redacted": _entry_is_redacted(entry),
             "data_before": _serialize_history_payload(entry.data_before, entry.field_metadata),
             "data_after": _serialize_history_payload(entry.data_after, entry.field_metadata),
         }

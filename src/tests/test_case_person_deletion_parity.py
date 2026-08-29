@@ -113,10 +113,25 @@ class TestHoldHelperParity:
             )
 
     def test_target_ids_helper_is_the_only_active_boundary(self):
-        """Beide Helfer ziehen die Aktiv-Grenze ueber denselben Helfer (Refs #1192)."""
+        """Beide Helfer ziehen die Aktiv-Grenze ueber denselben Helfer (Refs #1192).
+
+        Refs #2065: Das Praedikat ist eine Ebene tiefer gewandert, weil neben
+        dem facility-gebundenen Einstieg ein facility-uebergreifender dazukam
+        (der EventHistory-Sweep partitioniert seine Chargen facility-agnostisch,
+        die Bestandsmigration laeuft installationsweit). Gepinnt wird deshalb
+        jetzt beides: dass die Grenze in genau EINEM Helfer steht — und dass
+        **alle** oeffentlichen Einstiege ihn benutzen, statt sie nachzubauen.
+        """
         for fn in (exclude_clients_with_active_holds, exclude_cases_with_active_holds):
             assert "get_active_hold_target_ids" in inspect.getsource(fn)
-        assert "timezone.localdate" in inspect.getsource(legal_holds.get_active_hold_target_ids)
+        assert "timezone.localdate" in inspect.getsource(legal_holds._active_hold_ids)
+        for fn in (
+            legal_holds.get_active_hold_target_ids,
+            legal_holds.get_active_hold_target_ids_for_facilities,
+        ):
+            quelle = inspect.getsource(fn)
+            assert "_active_hold_ids" in quelle, f"{fn.__name__} baut die Aktiv-Grenze nach"
+            assert "timezone.localdate" not in quelle, f"{fn.__name__} traegt eine zweite Aktiv-Grenze"
 
 
 class TestCaseFreetextDiesWithThePerson:

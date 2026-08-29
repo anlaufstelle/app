@@ -93,6 +93,10 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "deletion_due_at": "faelliger Loeschzeitpunkt eines Retention-Vorschlags",
     "deferred_until": "Wiedervorlage eines zurueckgestellten Retention-Vorschlags",
     "expires_at": "Ablauf eines Legal Hold",
+    # Refs #2065 (ADR-050 D2): Trifft ein Event-Hold auf eine bereits redigierte
+    # Historie, wird er nicht abgelehnt, aber als verspaetet gekennzeichnet —
+    # die Spoliationsfrage muss spaeter beantwortbar sein. Boolean.
+    "history_already_redacted": "ob die Ereignis-Historie bei der Hold-Anlage schon redigiert war",
     "days": "Zahl der Tage einer Zurueckstellung",
     "retention_days": "konfigurierte Aufbewahrungsfrist der Kategorie",
     "window_minutes": "Zeitfenster der Breach-Detection-Regel",
@@ -108,6 +112,19 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "defer_count": "wie oft ein Retention-Vorschlag bereits zurueckgestellt wurde",
     "max_defer_count": "konfiguriertes Maximum der Zurueckstellungen",
     "pruned_count": "Zahl der beim Audit-Pruning entfernten Zeilen",
+    # Refs #2065 (ADR-050 D5.3): Nachweis je Charge des EventHistory-Sweeps.
+    # Alles Mengen-/Zeit-/UUID-Angaben ueber die Charge selbst — keine
+    # Zeileninhalte, kein Personenbezug. ``batch_first``/``batch_last`` sind die
+    # Chargengrenzen in pk-Ordnung und machen die Charge in der Tabelle
+    # wiederauffindbar, ohne ihren Inhalt zu nennen.
+    "cutoff": "Fristgrenze eines Retention-Laufs — Zeitangabe",
+    "deferred": "Zahl der wegen Legal Hold zurueckgestellten Ereignisse einer Charge",
+    "skipped": "Zahl der wegen fremder Zeilensperre uebersprungenen Ereignisse einer Charge",
+    "batch_first": "erste Historien-UUID einer Redaktions-Charge — Chargengrenze",
+    "batch_last": "letzte Historien-UUID einer Redaktions-Charge — Chargengrenze",
+    "redacted_history_rows": "Zaehler des Retention-Laufs (ADR-050)",
+    "deleted_history_rows": "Zaehler des Retention-Laufs (ADR-050, Stufe 2)",
+    "deferred_history_events": "Zaehler zurueckgestellter Ereignisse des Retention-Laufs (ADR-050)",
     "snapshots": "Zahl erzeugter Statistik-Snapshots",
     "findings": "Zahl der Breach-Detection-Treffer eines Laufs",
     "threshold": "Schwellwert der Breach-Detection-Regel",

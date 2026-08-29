@@ -38,6 +38,7 @@ from core.services.dynamic_data import (
     remove_restricted_fields,
     validate_data_json,
 )
+from core.services.events.history_diff import build_field_redaction_marker
 
 # M2 (Refs #1058): Alt-Alias auf den jetzt oeffentlichen Namen. ``crud.py`` und
 # ``services/events/__init__.py`` importieren weiterhin ``_validate_data_json``;
@@ -185,10 +186,10 @@ def build_redacted_delete_history(event):
 
     Format: ``{"_redacted": True, "fields": [...slugs...]}`` — nur die
     Feld-Namen bleiben erhalten, damit der Audit nachvollziehen kann
-    *was* es gab, nicht *welche Werte*.
+    *was* es gab, nicht *welche Werte*. Gebaut wird er ueber die gemeinsame
+    Fabrik in ``history_diff``, damit Produzent und Erkenner nicht driften.
     """
-    field_names = list((event.data_json or {}).keys())
-    return {"_redacted": True, "fields": field_names}
+    return build_field_redaction_marker((event.data_json or {}).keys())
 
 
 def split_file_and_text_data(cleaned_data):

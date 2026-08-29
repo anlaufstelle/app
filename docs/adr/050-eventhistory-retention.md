@@ -1,8 +1,8 @@
 # ADR-050: EventHistory-Retention — Redaktion nach Ereignis-Lebenszyklus statt Partitionierung
 
-- **Status:** Proposed
-- **Date:** 2026-08-27
-- **Deciders:** Tobias Nix (offen — dieser Entwurf entscheidet nichts, er legt vor)
+- **Status:** Accepted
+- **Date:** 2026-08-27 (entschieden 2026-08-28)
+- **Deciders:** Tobias Nix, 2026-08-28
 - **Refs:** #2065 (dieses Design), #2000 (Sammel-Analyse,), [ADR-021](021-retention-modell.md) (Fristen, Legal Hold, AuditLog-Pruning), [ADR-007](007-auditlog-append-only.md) (Append-only-Politik), [ADR-033](033-runtime-owner-role-separation.md) (Runtime-/Owner-Trennung — begrenzt, wer redigieren darf), [ADR-044](044-fall-loeschpfad.md) §3 (Redaktion statt Hard-Delete als Hausmuster), #714 (redigierte Lösch-Historie), #905 (Art.-17-Redaktion der Historie), #1026 (`ENABLE ALWAYS`, Owner-DDL-Bypass), #783 (Key-Rotation der Historie)
 
 ## Context
@@ -141,9 +141,9 @@ Die Schleife läuft über **alle** Zeilen, öffnet den Bypass aber nur für die,
 
 **Technische Zusatzlasten**, falls (c) je gebaut wird: der Partitionsschlüssel muss in den Primärschlüssel (`id` → `(id, changed_at)`), was Djangos Ein-Spalten-PK-Annahme durchbricht; die RLS-Policy und die beiden Append-only-Trigger müssen auf der partitionierten Struktur neu etabliert und ihr `tgenabled = 'A'` je Partition geprüft werden; `bypass_replication_triggers` liest `pg_trigger` gezielt über `tgrelid = 'core_eventhistory'::regclass`, also nur den Elternteil — ob `ALTER TABLE … DISABLE TRIGGER` unter PostgreSQL 18 auf die Klon-Trigger der Partitionen durchgreift, wäre zu verifizieren und zu pinnen, sonst brechen Art.-17-Redaktion und Key-Rotation still. Immerhin: es gibt keinen eingehenden Fremdschlüssel auf die Tabelle, die Umstellung bliebe also lokal.
 
-## Decision (Vorschlag — Status Proposed)
+## Decision
 
-Empfohlen wird **(b), zugeschnitten auf den Ereignis-Lebenszyklus**, ausgeführt ausschließlich owner-seitig, mit (a) als reduziertem Schutzrand und (c) als ausdrücklich offengehaltener, später Skalierungsreserve.
+Entschieden wird **(b), zugeschnitten auf den Ereignis-Lebenszyklus**, ausgeführt ausschließlich owner-seitig, mit (a) als reduziertem Schutzrand und (c) als ausdrücklich offengehaltener, später Skalierungsreserve.
 
 ### D1 — Redaktion statt Löschung, spaltengenau
 
@@ -216,17 +216,17 @@ Die Trigger-Verengung ist damit nicht mehr Kür: **M-6 ist die empfohlene Lösun
 
 Keine Partitionierung, kein Cold Storage in 0.89. Der Auslöser für eine Neubewertung wird hier festgehalten, damit die Frage nicht beliebig oft neu aufgemacht wird: **wenn die Zahl der Zeilen selbst zum Problem wird** — Richtwert eine Million Zeilen je Einrichtung, bei der auch der redigierte Rest Index- und Vacuum-Kosten treibt. Das ist bei den Größen aus §2 frühestens jenseits von zwanzig Jahren der Fall. Redaktion und Partitionierung schließen einander nicht aus; (b) macht (c) nur unnötig.
 
-### D8 — Die Chronologie hat weiterhin keine Frist (entscheidungsreifer Vorschlag, bewusst nicht entschieden)
+### D8 — Die Chronologie bekommt eine eigene Frist (Stufe 2, mit M-7 angenommen)
 
 Die Redaktion schließt die **Inhalts**-Lücke, nicht die Retention-Lücke. Dauerhaft stehen bleiben: der Fremdschlüssel auf das Ereignis (und über dieses auf die Person), `changed_by`, `changed_at`, `action` sowie sämtliche Feldnamen, Sensitivitäten und Verschlüsselungsmerkmale aus `field_metadata`. Das sind personenbezogene Daten auf zwei Seiten — der beratenen Person **und** der Beschäftigten; für Letztere führt [`audit_pruning.py`](../../src/core/retention/audit_pruning.py) § 26 BDSG selbst als Grund an, warum das AuditLog nicht dauerhaft aufbewahrt wird. Dass die Historie dieselbe Chronologie unbefristet hält, während das AuditLog sie nach Vorgabefrist verliert, ist eine Entscheidung, die getroffen und begründet werden muss — nicht eine, die aus dem Schema folgen darf.
 
-Diese ADR **entscheidet das nicht** — die Frist ist eine Zweckentscheidung des Verantwortlichen, keine technische Ableitung, und bleibt dem Maintainer vorbehalten (M-7). Damit sie mit „ja" oder „nein" beantwortbar ist statt selbst entworfen werden zu müssen, liegt hier ein fertiger Vorschlag mit Vorgabewerten:
+Die Frist ist eine Zweckentscheidung des Verantwortlichen, keine technische Ableitung; sie war deshalb dem Maintainer vorbehalten (M-7). Damit sie mit „ja" oder „nein" beantwortbar war statt selbst entworfen werden zu müssen, lag hier ein fertiger Vorschlag mit Vorgabewerten vor — **er ist am 2026-08-28 angenommen worden** und gilt in genau dieser Form:
 
-> **Stufe 2 — Vorschlag zur Annahme.** Eine bereits redigierte Zeile wird **gelöscht**, wenn ihre Redaktion `eventhistory_chronicle_months` zurückliegt. Neue Einstellung `Settings.eventhistory_chronicle_months`, **Default 24**, `0` = aus. Gemessen ab `redacted_at` (D1.4), nicht ab `changed_at`: die Frage lautet „wie lange steht die Zeile schon leer", und nur so gilt derselbe Zeitraum für beide Auslöser — die Zeile eines gelöschten Ereignisses (D2, sofort redigiert) und die eines lebenden (D3, nach Ablauf der Detailfrist). Mechanik, Rolle, Chargen, Nachweis und Sperr-Reihenfolge exakt wie in D5; inhaltlich fällt zu diesem Zeitpunkt nichts mehr, nur noch Metadaten und der Zeitstempel.
+> **Stufe 2 — angenommen (M-7).** Eine bereits redigierte Zeile wird **gelöscht**, wenn ihre Redaktion `eventhistory_chronicle_months` zurückliegt. Neue Einstellung `Settings.eventhistory_chronicle_months`, **Default 24**, `0` = aus. Gemessen ab `redacted_at` (D1.4), nicht ab `changed_at`: die Frage lautet „wie lange steht die Zeile schon leer", und nur so gilt derselbe Zeitraum für beide Auslöser — die Zeile eines gelöschten Ereignisses (D2, sofort redigiert) und die eines lebenden (D3, nach Ablauf der Detailfrist). Mechanik, Rolle, Chargen, Nachweis und Sperr-Reihenfolge exakt wie in D5; inhaltlich fällt zu diesem Zeitpunkt nichts mehr, nur noch Metadaten und der Zeitstempel.
 >
 > **Begründung des Vorgabewerts:** 24 Monate ist der Default von `auditlog_retention_months`. Die Chronologie der Historie beantwortet dieselbe Frage wie das AuditLog („wer hat wann etwas geändert") und trägt dieselbe Doppelbetroffenheit; sie soll deshalb mit derselben Frist enden statt sie zu überleben. Mit den Vorschlagswerten aus D3 ergibt sich eine Gesamtlebensdauer von 24 Monaten Werte + 24 Monaten Chronologie für die Zeile eines lebenden Ereignisses und 24 Monaten Chronologie ab Löschung für die eines gelöschten.
 >
-> **Wer „nein" sagt**, entscheidet damit für die unbefristete Aufbewahrung der Chronologie — dann gehört diese Zweckbindung ausdrücklich in Verarbeitungsverzeichnis und Löschkonzept, nicht ins Schweigen. Beide Antworten sind vertretbar; unentschieden ist die einzige Variante, die es nicht ist.
+> **Ein „nein" wäre** eine Entscheidung für die unbefristete Aufbewahrung der Chronologie gewesen — dann hätte diese Zweckbindung ausdrücklich in Verarbeitungsverzeichnis und Löschkonzept gehört, nicht ins Schweigen. Beide Antworten waren vertretbar; unentschieden war die einzige Variante, die es nicht war. Dieselbe Pflicht trifft jetzt jeden Betreiber, der `eventhistory_chronicle_months` auf `0` stellt.
 
 ## Migrationsskizze (Umsetzung ist 0.89-Arbeit, nicht Teil dieser ADR)
 
@@ -240,7 +240,24 @@ Diese ADR **entscheidet das nicht** — die Frist ist eine Zweckentscheidung des
 8. **Doku:** [`docs/admin-guide.md`](../admin-guide.md) (neue Einstellung, Wirkung auf die Rotationsdauer), [`docs/ops-runbook.md`](../ops-runbook.md) § Retention, DSGVO-Vorlagen in [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/) — nach [ADR-021](021-retention-modell.md) zwingt jede Friständerung zum Abgleich mit Verarbeitungsverzeichnis und Löschkonzept.
 9. **Guards:** genau ein Redaktions-Schreiber; ein soft-gelöschtes Ereignis hinterlässt nach einem Lauf **keine** unredigierte Historienzeile (der §5-Befund als Regressionsnetz); ein soft-gelöschtes Ereignis **unter aktivem Hold** behält seine Zeilen und erscheint als zurückgestellt in der Zusammenfassung; ein Hold, der zwischen Chargen-Sperre und Commit angelegt wird, gewinnt oder verliert **definiert** — der Guard prüft beide Richtungen aus D2 (Hold zuerst → Ereignis zurückgestellt; Redaktion zuerst → Hold entsteht, trägt aber das Verspätungsmerkmal); eine redigierte Zeile löst in der Key-Rotation kein UPDATE mehr aus; der Nachweis-Eintrag liegt in derselben Transaktion wie seine Charge; `tgenabled` ist nach Migration und Lauf unverändert `'A'` (Ergänzung zum Bestandstest in `test_rls.py`); die Sperr-Reihenfolge in `_APPEND_ONLY_TRIGGERS` ist `core_eventhistory` vor `core_auditlog` und wird als Ableitung gepinnt (D5.5) — sie ist sonst genau die Art von Reihenfolge, die ein späteres Refactoring stillschweigend dreht.
 
-## Offene Maintainer-Entscheide
+## Maintainer-Entscheide — entschieden 2026-08-28
+
+Alle neun Empfehlungen wurden angenommen; die Umsetzung folgt #2065 (Entscheid-Kommentar am Issue).
+
+| | Frage | Entscheidung |
+|---|---|---|
+| **M-1** | Zuschnitt | **D2 + D3** |
+| **M-2** | Schutzrand | **N = 1** |
+| **M-3** | `field_metadata` mitredigieren | **nein** — der Snapshot bleibt vollständig (revisionsfeste Feld-Labels, #824) |
+| **M-4** | Nachweis | eigene Aktion `EVENT_HISTORY_REDACTED` je Charge, **prune-exempt** wie `AUDIT_PRUNE_CHECKPOINT` |
+| **M-5** | Vorgabewert `eventhistory_detail_months` | **24** |
+| **M-6** | Bypass-Verengung | **ja** — Trigger-Auswahl; der Sweep öffnet nur die beiden `core_eventhistory`-Trigger, und `_APPEND_ONLY_TRIGGERS` führt jetzt `core_eventhistory` vor `core_auditlog` |
+| **M-7** | Chronologie (D8) | **ja** — `eventhistory_chronicle_months`, Default 24, `0` = aus, gemessen ab `redacted_at` |
+| **M-8** | Synchronität | **nachgelagerter owner-seitiger Sweep** (keine `SECURITY DEFINER`-Funktion) |
+| **M-9** | Legal Hold am Löschpfad | **in 0.89 mitgezogen** |
+
+Die Fragestellungen, aus denen diese Entscheidungen hervorgingen, bleiben zur Nachvollziehbarkeit stehen:
+
 
 - **M-1 (Zuschnitt):** D2 allein (DSGVO-Korrektur, keine neue Einstellung) oder D2 + D3? D2 ist ohne Gegenrede; D3 fügt einen weiteren Betreiber-Regler hinzu — [ADR-044](044-fall-loeschpfad.md) §2 hat einen zweiten Fristbegriff bewusst **abgelehnt**, dort allerdings, weil er dieselbe Frage doppelt gestellt hätte. Hier ist die Frage eine andere („wie lange bleibt der *Inhalt* alter Fassungen lesbar").
 - **M-2 (Schutzrand):** N = 1 wie in D4, N = 3, oder kein Schutzrand?
@@ -258,12 +275,12 @@ Diese ADR **entscheidet das nicht** — die Frist ist eine Zweckentscheidung des
 - **+** Die Kosten der Schlüsselrotation werden proportional zum unredigierten Fenster statt zur Tabellengröße; das Wartungsfenster wird planbar, statt jährlich zu wachsen.
 - **+** Kein neuer Ablageort, keine neue Wiederherstellungs-Prozedur, keine Verlängerung des Betriebshandbuchs für Selbsthoster.
 - **+** Der Entwurf kommt ohne Trigger-Bypass im Request-Pfad aus und respektiert damit die Runtime-/Owner-Trennung aus [ADR-033](033-runtime-owner-role-separation.md) unverändert.
-- **−** Das nächtliche Retention-Kommando wird zu einem **regelmäßigen** Aufrufer des Trigger-Bypasses. Die Unveränderlichkeit von `core_eventhistory` (und, solange M-6 offen ist, von `core_auditlog`) setzt planmäßig aus statt nur bei seltenen Verwaltungsvorgängen; schreibende Zugriffe auf beide Tabellen warten währenddessen. Die Auflagen aus D5 sind kein Beiwerk, sondern die Bedingung, unter der diese Empfehlung gilt.
+- **−** Das nächtliche Retention-Kommando wird zu einem **regelmäßigen** Aufrufer des Trigger-Bypasses. Die Unveränderlichkeit von `core_eventhistory` setzt planmäßig aus (nicht die von `core_auditlog` — der Sweep öffnet nach M-6 nur die beiden Historien-Trigger) statt nur bei seltenen Verwaltungsvorgängen; schreibende Zugriffe auf beide Tabellen warten währenddessen. Die Auflagen aus D5 sind kein Beiwerk, sondern die Bedingung, unter der diese Empfehlung gilt.
 - **−** Der Sweep macht den **Deadlock-Pfad aus §3 zur Routine**: ohne die kanonische Sperr-Reihenfolge (D5.5) trifft ein Abbruch mit `deadlock detected` entweder die Charge — hinnehmbar, sie ist idempotent und wird wiederholt — oder eine Fachkraft mitten im Speichern eines Ereignisses. Der Befund besteht schon heute für `prune_auditlog` und `reencrypt_fields`; diese ADR erhöht seine Eintrittswahrscheinlichkeit und schuldet deshalb die Gegenmaßnahme.
 - **−** Zwischen Löschung und Redaktion liegt ein Fenster von bis zu einem Cron-Intervall (D2/M-8) — in dieser Zeit kann ein Legal Hold eintreffen. Der Sweep prüft ihn deshalb selbst und teilt sich mit der Hold-Anlage die Sperre auf der Ereigniszeile; das macht `create_hold_for_target` transaktional und sperrend, wo es heute weder das eine noch das andere ist (D2).
-- **−** Die Chronologie bleibt stehen, bis M-7 entschieden ist; die ADR legt dafür einen fertigen Vorschlag samt Vorgabewert vor (D8), trifft die Zweckentscheidung aber bewusst nicht selbst.
+- **−** Die Chronologie bleibt nach der Redaktion weitere `eventhistory_chronicle_months` stehen (D8/M-7, Vorgabe 24); wer die Frist auf `0` stellt, entscheidet sich für unbefristete Aufbewahrung und muss das in Verarbeitungsverzeichnis und Löschkonzept nachziehen.
 - **−** Alte Fassungen sind nach Fristablauf inhaltlich unwiederbringlich; ein Berichtigungsstreit über einen fünf Jahre alten Wortlaut lässt sich dann nicht mehr aus der Anwendung heraus rekonstruieren, sondern nur noch aus einem Backup-Stand.
-- **−** Ein weiterer Regler in den Einrichtungs-Einstellungen (falls M-1 für D3 entscheidet), mit Pflicht zum Abgleich von Verarbeitungsverzeichnis und Löschkonzept.
+- **−** Zwei weitere Regler in den Einrichtungs-Einstellungen (M-1 hat für D2 + D3 entschieden, M-7 für Stufe 2), mit Pflicht zum Abgleich von Verarbeitungsverzeichnis und Löschkonzept.
 - **−** Die Anzeige- und Auskunfts-Lücken aus D6 müssen vor dem ersten Sweep geschlossen sein; sie sind heute latent und werden durch diese Änderung akut.
 
 ## Alternatives considered

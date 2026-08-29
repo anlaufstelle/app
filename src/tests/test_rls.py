@@ -441,10 +441,16 @@ class TestAppendOnlyTriggerOwnership:
     ``transaction=True``: CREATE/DROP ROLE + SET ROLE brauchen echte Sessions.
     """
 
+    # Refs #2065 (ADR-050 D5.5): dieselbe Ordnung wie in ``_APPEND_ONLY_TRIGGERS``
+    # — ``core_eventhistory`` vor ``core_auditlog``. Die Kopie hier ist bewusst
+    # eine Kopie (der Test soll nicht dieselbe Konstante pruefen, die er
+    # absichert); ihre Reihenfolge wird von
+    # ``test_append_only_trigger_reihenfolge_ist_eventhistory_vor_auditlog``
+    # gegen das Original gepinnt.
     _APPEND_ONLY_TRIGGERS = (
-        ("core_auditlog", "auditlog_immutable"),
         ("core_eventhistory", "eventhistory_no_update"),
         ("core_eventhistory", "eventhistory_no_delete"),
+        ("core_auditlog", "auditlog_immutable"),
     )
 
     # Refs #1479 (TST-03): Worker-Suffix — Postgres-Rollen sind cluster-global,
@@ -493,6 +499,34 @@ class TestAppendOnlyTriggerOwnership:
                     cur.execute("RESET ROLE")
         finally:
             self._drop_role()
+
+    def test_append_only_triggers_are_enable_always_at_rest(self):
+        """Refs #2065 (ADR-050 D5.4): der Ruhezustand ist ``'A'`` = ENABLE ALWAYS.
+
+        Ergaenzung zum Ownership-Test oben: der prueft, dass eine fremde Rolle
+        die Trigger nicht abschalten KANN — dieser, dass die legitimen
+        Wartungspfade sie exakt so zuruecklassen, wie sie sie vorgefunden
+        haben. Seit dem naechtlichen EventHistory-Sweep laeuft
+        ``bypass_replication_triggers`` planmaessig und nicht mehr nur bei
+        seltenen Verwaltungsvorgaengen; ein einziger Pfad, der statt des
+        gelesenen ``tgenabled`` ein pauschales ``ENABLE TRIGGER`` schriebe,
+        degradierte den seit Migration 0107 gehaerteten Zustand still auf
+        Origin und oeffnete den ``replica``-Vektor aus Refs #1026 wieder — ohne
+        dass irgendetwas fehlschluege.
+        """
+        with connection.cursor() as cur:
+            cur.execute("RESET ROLE")
+            for table, trigger in self._APPEND_ONLY_TRIGGERS:
+                cur.execute(
+                    "SELECT tgenabled FROM pg_trigger WHERE tgname = %s AND tgrelid = %s::regclass",
+                    [trigger, table],
+                )
+                row = cur.fetchone()
+                assert row is not None, f"{trigger} auf {table} fehlt"
+                assert row[0] == "A", (
+                    f"{trigger} auf {table} steht auf tgenabled={row[0]!r} statt 'A' — "
+                    "ENABLE ALWAYS wurde still auf Origin degradiert (Refs #1026/#2065)."
+                )
 
 
 @pytest.mark.django_db(transaction=True)

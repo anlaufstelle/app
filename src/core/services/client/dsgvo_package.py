@@ -78,6 +78,12 @@ def _retention_values(settings_obj) -> dict[str, int]:
         "retention_activities_days": getattr(settings_obj, "retention_activities_days", 365),
         "client_trash_days": getattr(settings_obj, "client_trash_days", 30),
         "auditlog_retention_months": getattr(settings_obj, "auditlog_retention_months", 24),
+        # Refs #2065 (ADR-050): jede Friststellung zwingt zum Abgleich mit
+        # Verarbeitungsverzeichnis und Loeschkonzept (ADR-021) — die beiden
+        # Historien-Fristen gehoeren deshalb in die Vorlagen, nicht nur ins
+        # Admin-Handbuch.
+        "eventhistory_detail_months": getattr(settings_obj, "eventhistory_detail_months", 24),
+        "eventhistory_chronicle_months": getattr(settings_obj, "eventhistory_chronicle_months", 24),
     }
 
 
@@ -206,6 +212,8 @@ def render_document(slug, facility):
         "{{ retention_activities_days }}": str(retention["retention_activities_days"]),
         "{{ client_trash_days }}": str(retention["client_trash_days"]),
         "{{ auditlog_retention_months }}": str(retention["auditlog_retention_months"]),
+        "{{ eventhistory_detail_months }}": str(retention["eventhistory_detail_months"]),
+        "{{ eventhistory_chronicle_months }}": str(retention["eventhistory_chronicle_months"]),
         "{{ retention_document_type_overrides }}": _format_document_type_overrides(document_type_overrides),
         "{{ backup_retention_days }}": str(_backup_retention_days()),
     }

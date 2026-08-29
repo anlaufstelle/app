@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 16:05+0200\n"
+"POT-Creation-Date: 2026-08-29 12:54+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12031,3 +12031,39 @@ msgstr "The task's client assignment was changed in the meantime."
 #: src/core/services/case/workitems.py:1
 msgid "Für diese Person ist die Verarbeitung nach Art. 18 DSGVO eingeschränkt — die Datei darf nicht einzeln vernichtet werden."
 msgstr "Processing is restricted for this client under Art. 18 GDPR — the file may not be destroyed individually."
+
+#: src/core/models/event_history.py:1
+msgid "Ereignis-Historie redigiert"
+msgstr "Event history redacted"
+
+#: src/core/models/event_history.py:1
+msgid "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — es kann nicht gelöscht werden, solange die Sperre gilt."
+msgstr "This event is under a legal hold — it cannot be deleted while the hold is in force."
+
+#: src/core/models/event_history.py:1
+msgid "Hinweis: Die Inhalte früherer Fassungen dieses Ereignisses waren zum Zeitpunkt der Sperre bereits getilgt und sind nicht wiederherstellbar. Die Sperre gilt ab jetzt."
+msgstr "Note: the contents of earlier versions of this event had already been erased when the hold was placed and cannot be restored. The hold applies from now on."
+
+#: src/core/models/event_history.py:1
+msgid "Historien-Chronologie aufbewahren (Monate)"
+msgstr "Retain history chronology (months)"
+
+#: src/core/models/event_history.py:1
+msgid "Historien-Inhalte aufbewahren (Monate)"
+msgstr "Retain history contents (months)"
+
+#: src/core/models/event_history.py:1
+msgid "Redigiert am"
+msgstr "Redacted at"
+
+#: src/core/models/event_history.py:1
+msgid "Wie lange die Werte alter Ereignis-Fassungen lesbar bleiben, bevor enforce_retention sie redigiert. Die Fassung selbst (wer, wann, welche Felder) bleibt erhalten. Die jüngste Fassung eines lebenden Ereignisses wird nie redigiert. 0 = deaktiviert."
+msgstr "How long the values of earlier event versions stay readable before enforce_retention redacts them. The version itself (who, when, which fields) is kept. The most recent version of a live event is never redacted. 0 = disabled."
+
+#: src/core/models/event_history.py:1
+msgid "Wie lange eine bereits redigierte Historien-Fassung nach ihrer Redaktion noch aufbewahrt wird, bevor enforce_retention sie löscht. 0 = deaktiviert (unbegrenzte Aufbewahrung der Chronologie)."
+msgstr "How long an already redacted history version is retained after its redaction before enforce_retention deletes it. 0 = disabled (chronology retained indefinitely)."
+
+#: src/core/services/events/crud.py:1
+msgid "Die Personenzuordnung dieses Ereignisses wurde zwischenzeitlich geändert — bitte erneut öffnen und die Löschung wiederholen."
+msgstr "This event's client assignment was changed in the meantime — please reopen it and repeat the deletion."
