@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-30 19:30+0200\n"
+"POT-Creation-Date: 2026-08-30 21:31+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12210,6 +12210,7 @@ msgstr "Withdraw request"
 #: src/templates/core/partials/_deletion_withdrawn_notice.html:14
 msgid "Die antragstellende Person hat diesen Antrag zurückgezogen. Es ist nichts mehr zu entscheiden und es wurde nichts gelöscht."
 msgstr "The person who filed this request has withdrawn it. There is nothing left to decide and nothing was deleted."
+
 msgid "Aufgaben halten nächste Schritte, Zuständigkeiten und Fristen fest."
 msgstr "Tasks keep track of next steps, responsibilities, and deadlines."
 
