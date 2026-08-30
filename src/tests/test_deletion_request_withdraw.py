@@ -467,89 +467,169 @@ class TestWithdrawRepeatedPostMessage:
 
 @pytest.mark.django_db(transaction=True)
 class TestTrulyConcurrentWithdraw:
-    """Der Sperr-Kontrakt, empirisch statt konstruiert (Cross-Review Befund 4).
+    """Der Sperr-Kontrakt, deterministisch gepinnt (Cross-Review Befund 4).
 
     Die Idempotenz-Tests oben laufen strikt nacheinander: der erste Aufruf ist
     fertig, bevor der zweite beginnt. Sie blieben deshalb auch mit einem
     schlichten ``.get()`` statt ``select_for_update()`` gruen — der eigentliche
     Kontrakt (zwei echte Verbindungen, eine Zeile) war nicht gepinnt.
 
-    Hier laufen zwei Threads mit eigenen Verbindungen gegen dieselbe Zeile.
-    Synchronisiert wird nur der Einstieg: beide passieren den ungesperrten
-    Vorab-Lookup, bevor einer den gesperrten Abschnitt betritt. Danach
-    entscheidet allein Postgres. Muster:
+    **Warum hier keine ``threading.Barrier`` steht:** eine symmetrische
+    Barriere IM gesperrten Abschnitt kann den Lock nicht beweisen, sondern
+    widerlegt sich selbst — greift die Sperre, kommt der zweite Thread dort
+    nie an, und die Barriere laeuft zwangslaeufig in ihren Timeout. Eine
+    Barriere DAVOR (erste Fassung dieses Tests) beweist ebenfalls nichts:
+    danach darf Thread A komplett fertig werden, bevor B ueberhaupt liest —
+    B saehe dann den Endstatus und der Test bliebe auch ohne Lock gruen.
+
+    Stattdessen ein einseitiges Gate: Thread A oeffnet eine eigene Transaktion,
+    ruft den Service und **haelt die Transaktion offen**. Erst danach startet
+    Thread B. Damit ist die Reihenfolge in beiden Varianten deterministisch:
+
+    * **mit** ``select_for_update()``: B blockiert schon beim Lesen, sieht nach
+      dem Commit von A den Endstatus und wird sauber mit ``ValidationError``
+      abgewiesen — genau ein Audit-Eintrag.
+    * **ohne** den Lock: B liest die noch nicht committete Zeile unter READ
+      COMMITTED als ``PENDING``, laeuft durch und schreibt einen ZWEITEN
+      Audit-Eintrag. Der Test faellt — zuverlaessig, nicht nur meistens.
+
+    Verwandtes Muster (dort liegt der Treffpunkt legitim VOR der Sperre, weil
+    der Service dort erst spaeter sperrt):
     ``test_deletion_request_race_idempotency.TestTrulyConcurrentClientDeletionRequest``.
     """
 
-    def _run_parallel(self, targets):
-        """Startet die uebergebenen Callables gleichzeitig, gibt Ergebnisse zurueck."""
+    #: Wie lange der haltende Thread laengstens auf seine Freigabe wartet.
+    HOLD_TIMEOUT = 30
+    #: Wie lange der Haupt-Thread wartet, bis A im gesperrten Abschnitt steht.
+    ENTER_TIMEOUT = 20
+    #: Kurze Gnadenfrist, in der B nachweislich blockiert bleiben muss.
+    CONTENDER_GRACE = 1.0
+    #: Endgueltiger Join nach der Freigabe.
+    JOIN_TIMEOUT = 30
+
+    def _race_against_held_lock(self, hold_fn, contender_fn):
+        """Faehrt ``contender_fn`` gegen eine von ``hold_fn`` offen gehaltene Sperre.
+
+        Gibt ``{"hold": (kind, payload), "contender": (kind, payload)}`` zurueck.
+        ``kind`` ist ``"ok"`` oder ``"err"`` (fachliche ``ValidationError``);
+        jede andere Ausnahme wird als ``"boom"`` gemeldet, damit ein
+        Infrastrukturfehler (z. B. ``OperationalError``) den Test rot macht,
+        statt als fachliche Abweisung durchzugehen.
+        """
         import threading
 
-        from django.db import close_old_connections
+        from django.db import close_old_connections, transaction
 
-        entered = threading.Barrier(len(targets), timeout=20)
+        a_inside = threading.Event()
+        release_a = threading.Event()
+        contender_started = threading.Event()
         results = {}
 
-        def _wrapped(slot, fn):
+        def _record(slot, fn):
             try:
-                entered.wait()
-                try:
-                    results[slot] = ("ok", fn())
-                except Exception as exc:  # noqa: BLE001 — Ergebnis des Rennens
-                    results[slot] = ("err", type(exc).__name__)
+                results[slot] = ("ok", fn())
+            except ValidationError as exc:
+                results[slot] = ("err", type(exc).__name__)
+            except Exception as exc:  # noqa: BLE001 — Infrastrukturfehler sichtbar machen
+                results[slot] = ("boom", f"{type(exc).__name__}: {exc}")
+
+        def _hold():
+            try:
+                with transaction.atomic():
+                    try:
+                        _record("hold", hold_fn)
+                    finally:
+                        # Erst signalisieren, wenn der Service durch ist: ab
+                        # hier haelt DIESE Transaktion die Zeile gesperrt.
+                        a_inside.set()
+                    if not release_a.wait(timeout=self.HOLD_TIMEOUT):
+                        raise AssertionError("Freigabe des haltenden Threads blieb aus")
+            except AssertionError as exc:
+                results.setdefault("hold", ("boom", str(exc)))
+            finally:
+                # Auch im Fehlerfall darf der Haupt-Thread nicht haengen.
+                a_inside.set()
+                close_old_connections()
+
+        def _contend():
+            try:
+                contender_started.set()
+                _record("contender", contender_fn)
             finally:
                 close_old_connections()
 
-        threads = [threading.Thread(target=_wrapped, args=(slot, fn)) for slot, fn in targets.items()]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join(timeout=40)
-        assert not any(t.is_alive() for t in threads), "Deadlock im parallelen Rueckzug"
-        assert set(results) == set(targets), results
+        # daemon=True: bliebe ein Thread wider Erwarten auf der Sperre haengen,
+        # blockiert er weder DB-Teardown noch Prozessende — ein haengender Lauf
+        # haelt in diesem Repo den globalen CI-flock und damit alles Folgende.
+        hold_thread = threading.Thread(target=_hold, daemon=True)
+        contender_thread = threading.Thread(target=_contend, daemon=True)
+        try:
+            hold_thread.start()
+            assert a_inside.wait(timeout=self.ENTER_TIMEOUT), "Haltender Thread erreichte den Sperrpunkt nicht"
+            contender_thread.start()
+            assert contender_started.wait(timeout=self.ENTER_TIMEOUT), "Zweiter Thread startete nicht"
+            # B muss jetzt blockieren — mit Lock bereits beim Lesen, ohne Lock
+            # spaetestens beim Schreiben auf die von A gehaltene Zeile.
+            contender_thread.join(timeout=self.CONTENDER_GRACE)
+            assert contender_thread.is_alive(), "Zweiter Zugriff lief an der gehaltenen Sperre vorbei"
+        finally:
+            # Egal was oben schiefgeht: die Transaktion von A wird freigegeben,
+            # sonst bliebe die Zeile bis zum Timeout gesperrt.
+            release_a.set()
+
+        hold_thread.join(timeout=self.JOIN_TIMEOUT)
+        contender_thread.join(timeout=self.JOIN_TIMEOUT)
+        assert not hold_thread.is_alive(), "Haltender Thread kam nicht zurueck"
+        assert not contender_thread.is_alive(), "Deadlock im parallelen Rueckzug"
+        assert set(results) == {"hold", "contender"}, results
+        assert not [k for k, _p in results.values() if k == "boom"], results
         return results
+
+    def _pending_request(self, facility, client_qualified, doc_type_contact, staff_user, notiz):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_qualified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 20, "notiz": notiz},
+            created_by=staff_user,
+        )
+        return request_deletion(event, staff_user, f"{notiz} zurueckziehen")
 
     def test_two_parallel_withdraws_produce_exactly_one_audit_entry(
         self, facility, client_qualified, doc_type_contact, staff_user
     ):
-        event = Event.objects.create(
-            facility=facility,
-            client=client_qualified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={"dauer": 20, "notiz": "Parallel"},
-            created_by=staff_user,
-        )
-        dr = request_deletion(event, staff_user, "Parallel zurueckziehen")
+        dr = self._pending_request(facility, client_qualified, doc_type_contact, staff_user, "Parallel")
 
         def _withdraw():
-            fresh = DeletionRequest.objects.get(pk=dr.pk)
-            return withdraw_deletion_request(fresh, staff_user).status
+            return withdraw_deletion_request(DeletionRequest.objects.get(pk=dr.pk), staff_user).status
 
-        results = self._run_parallel({"a": _withdraw, "b": _withdraw})
+        results = self._race_against_held_lock(_withdraw, _withdraw)
 
         ausgaenge = [kind for kind, _payload in results.values()]
         assert sorted(ausgaenge) == ["err", "ok"], results
-        assert [p for k, p in results.values() if k == "err"] == ["ValidationError"], results
+        assert results["hold"][0] == "ok", results
+        assert results["contender"] == ("err", "ValidationError"), results
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.WITHDRAWN
+        # Der eigentliche Nachweis: ohne den Zeilenlock schriebe der zweite
+        # Durchlauf hier einen zweiten Eintrag.
         assert _withdraw_audits(dr).count() == 1
 
-    def test_approve_and_withdraw_in_parallel_leave_one_consistent_end_state(
+    def test_approve_against_held_withdraw_lock_loses_cleanly(
         self, facility, client_qualified, doc_type_contact, staff_user, lead_user
     ):
-        """Genau einer gewinnt — und der Endstatus passt zur Auditspur."""
+        """Die Genehmigung laeuft gegen den gehaltenen Rueckzug — und verliert sauber.
+
+        Was dieser Test pinnt, praezise: er haengt am ``select_for_update()``
+        in ``approve_deletion`` (Refs #1376), nicht an dem des Rueckzugs —
+        empirisch geprueft, er wird rot, sobald DIESER Lock faellt. Den Lock
+        des Rueckzugs pinnt der Test darueber. Zusammen decken beide die
+        Kreuzung ab: keiner der beiden Endstati kann den anderen ueberschreiben.
+        """
         from core.services.events import approve_deletion
 
-        event = Event.objects.create(
-            facility=facility,
-            client=client_qualified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={"dauer": 20, "notiz": "Rennen"},
-            created_by=staff_user,
-        )
-        dr = request_deletion(event, staff_user, "Rennen gegen die Genehmigung")
+        dr = self._pending_request(facility, client_qualified, doc_type_contact, staff_user, "Rennen")
 
         def _withdraw():
             return withdraw_deletion_request(DeletionRequest.objects.get(pk=dr.pk), staff_user).status
@@ -557,14 +637,17 @@ class TestTrulyConcurrentWithdraw:
         def _approve():
             return approve_deletion(DeletionRequest.objects.get(pk=dr.pk), lead_user)
 
-        results = self._run_parallel({"withdraw": _withdraw, "approve": _approve})
+        results = self._race_against_held_lock(_withdraw, _approve)
 
+        assert results["hold"][0] == "ok", results
+        assert results["contender"] == ("err", "ValidationError"), results
         dr.refresh_from_db()
-        assert dr.status in (DeletionRequest.Status.WITHDRAWN, DeletionRequest.Status.APPROVED)
-        # Der Rueckzug hinterlaesst genau dann eine Auditzeile, wenn er gewonnen hat.
-        gewonnen = dr.status == DeletionRequest.Status.WITHDRAWN
-        assert _withdraw_audits(dr).count() == (1 if gewonnen else 0), results
-        # Und der Verlierer ist sauber abgewiesen worden, nicht stillschweigend
-        # durchgelaufen: genau ein Ausgang ist ein Fehler.
-        ausgaenge = [kind for kind, _payload in results.values()]
-        assert sorted(ausgaenge) == ["err", "ok"], results
+        # Der Rueckzug haelt die Sperre, die Genehmigung sieht danach den
+        # Endstatus: genau ein Endzustand, genau eine Auditzeile.
+        assert dr.status == DeletionRequest.Status.WITHDRAWN
+        assert _withdraw_audits(dr).count() == 1
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_APPROVED,
+            target_type="DeletionRequest",
+            target_id=str(dr.pk),
+        ).exists(), "Die Genehmigung hat trotz gehaltener Sperre geschrieben"
