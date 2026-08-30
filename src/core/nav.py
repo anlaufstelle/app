@@ -392,6 +392,11 @@ LOESCHANTRAEGE = NavItem(
     key="deletion-requests",
     label=_("Löschanträge"),
     url_name="core:deletion_request_list",
+    # ``deletion_withdraw`` gehoert in die Familie, damit der Dialog seine
+    # Ortsmarkierung behaelt — seinen Rueckweg liefert die View aber selbst
+    # (``VIEW_PROVIDED_BACKLINK`` unten): der Familien-Rueckweg zeigte auf die
+    # gate-abhaengige Liste und endete fuer eine reine Antragstellerin im 403
+    # (Refs #2040/#1736 B).
     family=frozenset({"deletion_request_list", "deletion_review", "deletion_withdraw"}),
     gates=("can_access_deletion_requests",),
     testid="nav-deletion-requests",
@@ -915,6 +920,12 @@ VIEW_PROVIDED_BACKLINK: dict[str, str] = {
     "event_update": "Bearbeiten kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
     "event_delete": "Lösch-Bestätigung kehrt zum Ereignis zurück, nicht in den Zeitstrom.",
     "mfa_settings": "Konto-Ebene: Heimat ist das eigene Profil, kein Navigationsbereich.",
+    "deletion_withdraw": (
+        "Rückweg ist gate-abhängig: für eine reine Antragstellerin trägt "
+        "``can_access_deletion_requests`` nur der eigene offene Antrag (Refs #1736 B), "
+        "der mit dem Rückzug entfällt. Ein Familien-Rücklink auf die Liste endete "
+        "deshalb im 403 — die View berechnet das Ziel selbst (Refs #2040)."
+    ),
 }
 
 # Routen, die per GET zwar erreichbar sind, aber kein Anwendungsdokument

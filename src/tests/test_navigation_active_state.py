@@ -231,14 +231,21 @@ class TestSearchHasNoSidebarAnchor:
         assert "search" in nav.mobile_more_catalog()
 
 
-class TestWithdrawDialogKeepsItsPlace:
-    """Refs #2040: Der Rueckzugs-Dialog gehoert zur Loeschantrags-Familie.
+class TestWithdrawDialogKeepsItsPlaceWithoutAGatedBackLink:
+    """Refs #2040: Ortsmarkierung ja, Rueckweg in die gate-abhaengige Liste nein.
 
-    Die Withdraw-Route kam mit dem Selbst-Rueckzug hinzu, die Familie von
-    ``deletion-requests`` blieb aber bei Liste + Pruefseite stehen. Folge: auf
-    dem Bestaetigungsdialog verliert die Navigation ihre Ortsmarkierung — der
-    abgeleitete Datenschutz-Hub leuchtet nicht mehr, obwohl man mitten im
-    Loeschantrags-Vorgang steht.
+    Die Familie eines NavItems steuert im Repo zwei Dinge zugleich: die
+    Aktiv-Markierung UND ueber ``{% back_link %}`` den Rueckweg. Fuer den
+    Rueckzugs-Dialog gilt beides gegenlaeufig — er soll im Loeschantrags-
+    Vorgang verortet bleiben, darf aber nicht auf die Liste zurueckweisen:
+    fuer eine reine Antragstellerin traegt ``can_access_deletion_requests``
+    nur der eigene offene Antrag (Refs #1736 B), der mit dem Rueckzug
+    entfaellt. Aufgeloest ueber ``nav.VIEW_PROVIDED_BACKLINK`` — die View
+    setzt ``context["back_link"]`` auf dasselbe gate-abhaengige Ziel wie
+    „Abbrechen“.
+
+    Beide Aussagen gehoeren zusammen: faellt die zweite weg, kehrt der
+    403-Dead-End zurueck, den der Dialog gerade beseitigt hat.
     """
 
     def test_withdraw_is_a_member_of_the_deletion_family(self):
@@ -250,3 +257,10 @@ class TestWithdrawDialogKeepsItsPlace:
         content = client.get(reverse("core:deletion_withdraw", args=[deletion_request.pk])).content.decode()
 
         assert ACTIVE_MARKER in _opening_anchor(content, "nav-datenschutz")
+
+    def test_the_family_membership_does_not_leak_a_link_into_the_gated_list(self, client, staff_user, deletion_request):
+        """Der gerenderte Gegenbeleg zur Familienmitgliedschaft."""
+        client.force_login(staff_user)
+        content = client.get(reverse("core:deletion_withdraw", args=[deletion_request.pk])).content.decode()
+
+        assert f'href="{reverse("core:deletion_request_list")}"' not in content

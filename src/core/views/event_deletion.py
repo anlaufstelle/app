@@ -364,6 +364,12 @@ class DeletionRequestWithdrawView(LoginRequiredMixin, View):
                 "deletion_request": dr,
                 "is_merge_request": dr.merge_into_id is not None,
                 "cancel_url": self._cancel_url(request),
+                # Der Rücklink oben folgt demselben gate-abhängigen Ziel wie
+                # „Abbrechen“. Ohne diesen Override zöge ``{% back_link %}``
+                # den Familien-Rückweg aus ``nav.py`` — und der zeigt auf die
+                # Liste, die nach einer parallelen Entscheidung 403 liefert
+                # (Refs #2040, ``nav.VIEW_PROVIDED_BACKLINK``).
+                "back_link": {"url": self._cancel_url(request), "label": _("Zurück")},
             },
         )
 
