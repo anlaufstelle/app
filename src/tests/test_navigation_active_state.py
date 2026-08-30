@@ -229,3 +229,24 @@ class TestSearchHasNoSidebarAnchor:
         """Datenebene — faellt auch ohne gerenderte Seite."""
         assert "search" in nav.MOBILE_MORE_EXTRA_FAMILY
         assert "search" in nav.mobile_more_catalog()
+
+
+class TestWithdrawDialogKeepsItsPlace:
+    """Refs #2040: Der Rueckzugs-Dialog gehoert zur Loeschantrags-Familie.
+
+    Die Withdraw-Route kam mit dem Selbst-Rueckzug hinzu, die Familie von
+    ``deletion-requests`` blieb aber bei Liste + Pruefseite stehen. Folge: auf
+    dem Bestaetigungsdialog verliert die Navigation ihre Ortsmarkierung — der
+    abgeleitete Datenschutz-Hub leuchtet nicht mehr, obwohl man mitten im
+    Loeschantrags-Vorgang steht.
+    """
+
+    def test_withdraw_is_a_member_of_the_deletion_family(self):
+        """Datenebene — faellt auch ohne gerenderte Seite."""
+        assert "deletion_withdraw" in nav.item("deletion-requests").family
+
+    def test_deletion_hub_stays_active_on_the_withdraw_dialog(self, client, staff_user, deletion_request):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:deletion_withdraw", args=[deletion_request.pk])).content.decode()
+
+        assert ACTIVE_MARKER in _opening_anchor(content, "nav-datenschutz")
