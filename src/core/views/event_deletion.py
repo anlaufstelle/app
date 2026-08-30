@@ -12,6 +12,7 @@ Ort fuer dieselbe Entscheidung; die Loeschantragsliste ist eine Flaeche.
 import logging
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.shortcuts import redirect, render
@@ -30,13 +31,26 @@ from core.services.client import (
     reject_client_deletion,
     reject_client_merge,
 )
-from core.services.deletion import annotate_deletion_targets, eligible_deletion_confirmers
+from core.services.deletion import (
+    WITHDRAW_NOT_PENDING_MESSAGE,
+    annotate_deletion_targets,
+    eligible_deletion_confirmers,
+    withdraw_deletion_request,
+)
 from core.services.events import approve_deletion, reject_deletion
 from core.services.scoping import get_scoped_object
 from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
 from core.views.utils import safe_redirect_path
 
 logger = logging.getLogger(__name__)
+
+#: Meldung an eine:n Genehmiger:in, die/der eine alte Pruefseite offen hatte
+#: und auf einen inzwischen zurueckgezogenen Antrag postet. Bewusst ein
+#: Redirect mit Meldung statt 404: der Antrag existiert, er ist nur nicht mehr
+#: zu entscheiden (Refs #2040).
+REVIEW_WITHDRAWN_MESSAGE = _(
+    "Dieser Löschantrag wurde von der antragstellenden Person zurückgezogen und ist nicht mehr zu entscheiden."
+)
 
 
 class DeletionRequestListView(DeletionRequestListAccessMixin, View):
@@ -60,6 +74,11 @@ class DeletionRequestListView(DeletionRequestListAccessMixin, View):
         pending = list(all_requests.filter(status=DeletionRequest.Status.PENDING))
         approved = list(all_requests.filter(status=DeletionRequest.Status.APPROVED))
         rejected = list(all_requests.filter(status=DeletionRequest.Status.REJECTED))
+        # Refs #2040: vierter Endstatus. Bewusst eine eigene Sektion und nicht
+        # zu „Abgelehnt" geschlagen — abgelehnt hat hier niemand, und der
+        # Genehmiger-Pool muss sehen, warum ein Antrag aus seiner Liste
+        # verschwunden ist.
+        withdrawn = list(all_requests.filter(status=DeletionRequest.Status.WITHDRAWN))
 
         # Setup-Guard (Refs #1053): ein Antrag ohne möglichen Genehmiger
         # (kein aktiver Träger des Rechts „Löschbestätigung" außer der
@@ -69,13 +88,14 @@ class DeletionRequestListView(DeletionRequestListAccessMixin, View):
             dr.no_eligible_reviewer = not (confirmer_ids - {dr.requested_by_id})
 
         # Refs #1736 (E): Ziel mit Pseudonym/Titel + Link statt „Client"/„Event".
-        for bucket in (pending, approved, rejected):
+        for bucket in (pending, approved, rejected, withdrawn):
             annotate_deletion_targets(bucket, facility, request.user)
 
         context = {
             "pending_requests": pending,
             "approved_requests": approved,
             "rejected_requests": rejected,
+            "withdrawn_requests": withdrawn,
         }
         return render(request, "core/deletion_requests/list.html", context)
 
@@ -92,13 +112,25 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
     DB-Constraint ausgeschlossen.
     """
 
-    def get(self, request, pk):
-        dr = get_scoped_object(
+    #: Stati, unter denen die Prüfseite überhaupt erreichbar ist. ``PENDING``
+    #: ist der Regelfall; ``WITHDRAWN`` kommt mit Refs #2040 dazu, damit ein
+    #: Genehmiger mit offener Prüfseite den Endstatus sieht statt eines 404 —
+    #: entschieden (``APPROVED``/``REJECTED``) bleibt bewusst 404 (Bestand).
+    REVIEWABLE_STATUSES = (
+        DeletionRequest.Status.PENDING,
+        DeletionRequest.Status.WITHDRAWN,
+    )
+
+    def _load(self, request, pk):
+        return get_scoped_object(
             DeletionRequest,
             request,
             pk=pk,
-            status=DeletionRequest.Status.PENDING,
+            status__in=self.REVIEWABLE_STATUSES,
         )
+
+    def get(self, request, pk):
+        dr = self._load(request, pk)
 
         # Einstiegskontext für den Rücksprung nach Review (Refs #1119).
         # Nur als same-origin Pfad ins Template durchreichen; der eigentliche
@@ -192,12 +224,14 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        dr = get_scoped_object(
-            DeletionRequest,
-            request,
-            pk=pk,
-            status=DeletionRequest.Status.PENDING,
-        )
+        dr = self._load(request, pk)
+
+        # Refs #2040: der Antrag wurde zwischenzeitlich zurueckgezogen. Kein
+        # 404 (er existiert) und kein 500 (die Services wuerden hier mit
+        # ValidationError abbrechen) — die Meldung erklaert, was passiert ist.
+        if dr.status == DeletionRequest.Status.WITHDRAWN:
+            messages.error(request, REVIEW_WITHDRAWN_MESSAGE)
+            return redirect("core:deletion_request_list")
 
         # Reviewer must not be the requester
         if dr.requested_by == request.user:
@@ -264,3 +298,85 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
             return list_url
         safe = safe_redirect_path(raw_next)
         return safe if safe != "/" else list_url
+
+
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
+class DeletionRequestWithdrawView(LoginRequiredMixin, View):
+    """Rückzug des EIGENEN, noch offenen Löschantrags (Refs #2040).
+
+    **Kein Rollen-Gate.** Das Recht folgt hier nicht der Rolle, sondern der
+    Urheberschaft: wer den Antrag gestellt hat, darf ihn zurücknehmen — auch
+    eine Fachkraft ohne Zugang zur vollen Antragsliste. Der Filter
+    ``requested_by=request.user`` IST die Zugriffsgrenze und läuft zusätzlich
+    facility-gescopt über :func:`get_scoped_object`.
+
+    **Fremd → 404, nicht 403.** Ein 403 wäre ein Orakel: es bestätigte die
+    Existenz eines fremden Antrags unter der geratenen UUID. Ein nicht
+    existierender und ein fremder Antrag antworten deshalb gleich.
+
+    **GET zeigt nur den Dialog, POST führt aus** (CSRF) — ein Rückzug per
+    GET wäre über einen Bild-Tag auslösbar.
+    """
+
+    def _load_own_pending(self, request, pk):
+        """Der eigene Antrag — oder ``None``, wenn er nicht mehr offen ist.
+
+        ``Http404`` (fremd/unbekannt/andere Einrichtung) fliegt aus
+        :func:`get_scoped_object`; ``None`` bedeutet dagegen „eigener Antrag,
+        aber inzwischen entschieden" — der Race gegen eine parallele
+        Genehmigung, den der Aufrufer in eine Meldung übersetzt statt in ein
+        404, das der Antragstellerin nichts erklären würde.
+        """
+        dr = get_scoped_object(DeletionRequest, request, pk=pk, requested_by=request.user)
+        return dr if dr.status == DeletionRequest.Status.PENDING else None
+
+    def get(self, request, pk):
+        dr = self._load_own_pending(request, pk)
+        if dr is None:
+            messages.error(request, WITHDRAW_NOT_PENDING_MESSAGE)
+            return redirect(self._after_withdraw_redirect(request))
+        annotate_deletion_targets([dr], request.current_facility, request.user)
+        return render(
+            request,
+            "core/deletion_requests/withdraw_confirm.html",
+            {"deletion_request": dr, "is_merge_request": dr.merge_into_id is not None},
+        )
+
+    def post(self, request, pk):
+        dr = self._load_own_pending(request, pk)
+        if dr is None:
+            messages.error(request, WITHDRAW_NOT_PENDING_MESSAGE)
+            return redirect(self._after_withdraw_redirect(request))
+        try:
+            withdraw_deletion_request(dr, request.user)
+        except ValidationError as exc:
+            # Der Vorab-Check oben liest ohne Sperre; zwischen ihm und dem
+            # Service kann eine Genehmigung committen. Der Service prüft unter
+            # ``select_for_update`` erneut — dieser Zweig ist der Verlierer des
+            # Rennens und darf keinen zweiten Audit-Eintrag hinterlassen.
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            return redirect(self._after_withdraw_redirect(request))
+
+        messages.success(request, _("Löschantrag wurde zurückgezogen. Es wurde nichts gelöscht."))
+        return redirect(self._after_withdraw_redirect(request))
+
+    @staticmethod
+    def _after_withdraw_redirect(request) -> str:
+        """Liste — oder Startseite, wenn der Zugang gerade mit weggefallen ist.
+
+        ``can_access_deletion_requests`` trägt für eine Fachkraft ohne
+        Genehmiger-Recht ausschließlich der **eigene offene** Antrag (Refs
+        #1736 B). Mit dessen Rückzug fällt das Gate weg; ein blinder Redirect
+        auf die Liste wäre also ausgerechnet nach der eigenen, erfolgreichen
+        Aktion ein 403. ``has_open_deletion_requests`` ist eine
+        ``cached_property`` und wurde in diesem Request bereits ausgewertet —
+        der Cache muss vor der Frage fallen, sonst antwortet er mit dem Stand
+        von vor dem Rückzug.
+        """
+        request.user.__dict__.pop("has_open_deletion_requests", None)
+        if request.user.can_access_deletion_requests:
+            return reverse("core:deletion_request_list")
+        return reverse("core:dashboard")

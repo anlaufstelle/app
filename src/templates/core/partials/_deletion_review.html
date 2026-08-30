@@ -26,7 +26,9 @@ in den Seiten-Templates.{% endcomment %}
 
 {% include object_summary_include %}
 
-{% if deletion_request.requested_by == request.user %}
+{% if deletion_request.status == "withdrawn" %}
+{% include "core/partials/_deletion_withdrawn_notice.html" %}
+{% elif deletion_request.requested_by == request.user %}
 <p class="text-sm text-ink-muted italic" data-testid="deletion-own-request-hint">
     {% trans "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)." %}
 </p>

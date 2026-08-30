@@ -1,0 +1,19 @@
+{% load i18n %}
+{% comment %}Endstatus-Anzeige eines zurueckgezogenen Antrags (Refs #2040).
+
+Ersetzt die Genehmigen/Ablehnen-Schaltflaechen auf JEDER Pruefflaeche
+(``_deletion_review.html``, ``cases/deletion_review.html``,
+``clients/merge_review.html``). Ein Genehmiger, der die Seite offen hatte,
+soll den Grund sehen statt eines 404 — und der POST auf dieselbe URL wird in
+``DeletionRequestReviewView.post`` mit derselben Aussage abgewiesen. Ein Ort
+fuer den Wortlaut, damit die beiden Kanaele nicht auseinanderlaufen.
+{% endcomment %}
+<div class="bg-surface border border-subtle rounded-[10px] p-4" data-testid="deletion-withdrawn-notice">
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 mb-2">{% trans "Zurückgezogen" %}</span>
+    <p class="text-sm text-ink-muted">
+        {% trans "Die antragstellende Person hat diesen Antrag zurückgezogen. Es ist nichts mehr zu entscheiden und es wurde nichts gelöscht." %}
+        {% if deletion_request.reviewed_at %}
+        <span class="block mt-1 text-xs">{% trans "Zurückgezogen am:" %} {{ deletion_request.reviewed_at|date:"DATETIME_FORMAT" }}</span>
+        {% endif %}
+    </p>
+</div>

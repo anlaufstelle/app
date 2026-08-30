@@ -167,6 +167,14 @@ class AuditLog(models.Model):
         DELETION_REQUESTED = "deletion_requested", _("Löschung beantragt")
         DELETION_APPROVED = "deletion_approved", _("Löschung genehmigt")
         DELETION_REJECTED = "deletion_rejected", _("Löschung abgelehnt")
+        # Refs #2040: vierter Ausgang desselben Workflows — die
+        # Antragstellerin zieht ihren eigenen, noch nicht entschiedenen
+        # Antrag zurueck. Bewusst eine eigene Aktion statt einer
+        # ``DELETION_REJECTED``-Zeile ohne Reviewer: abgelehnt hat hier
+        # niemand, und die Rechenschaftsspur muss den Unterschied zwischen
+        # „Vier-Augen-Pruefung sagte nein" und „Antrag wurde zurueckgezogen"
+        # tragen koennen.
+        DELETION_WITHDRAWN = "deletion_withdrawn", _("Löschantrag zurückgezogen")
         # Refs #794 / #919: Last-Run-Marker für die per systemd-Timer
         # laufenden Cron-Jobs. Das Compliance-Dashboard liest den jüngsten
         # Eintrag je Action, um zu zeigen, ob der Job wirklich läuft.

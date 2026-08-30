@@ -23,11 +23,21 @@ class ApprovalStatus(models.TextChoices):
     **Nicht** hierher gehört ``RetentionProposal.Status``: fünf Werte,
     ``held``/``deferred`` als eigene Zustände und „Freigegeben" statt
     „Genehmigt" — dort ist die Namensgleichheit oberflächlich.
+
+    ``WITHDRAWN`` (Refs #2040) nutzt heute **nur** ``DeletionRequest``: der
+    Selbst-Rückzug der Antragstellerin. Der Wert steht trotzdem hier und nicht
+    als Sonderfall am Modell, weil das geteilte Enum sonst zerfiele; der
+    Art.-16-Pfad (``RectificationRequest``) schreibt und filtert ihn nicht und
+    verhält sich unverändert. Wer eine „alle Stati"-Schleife baut, muss das
+    daher bewusst entscheiden — die drei Bestandswerte bleiben die
+    Endzustände der Vier-Augen-*Entscheidung*, ``WITHDRAWN`` beendet den
+    Vorgang ohne Entscheidung.
     """
 
     PENDING = "pending", _("Ausstehend")
     APPROVED = "approved", _("Genehmigt")
     REJECTED = "rejected", _("Abgelehnt")
+    WITHDRAWN = "withdrawn", _("Zurückgezogen")
 
 
 # Pagination — Listenseiten (Klient*innen, Fälle, Aufgaben)

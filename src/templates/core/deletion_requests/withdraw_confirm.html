@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load i18n nav_tags %}
+{% comment %}Bestaetigungsdialog fuer den Selbst-Rueckzug (Refs #2040).
+
+Muster ``core/events/delete_confirm.html``: farblich abgesetzter Kasten mit dem
+KONSEQUENZTEXT vor dem Formular. Der Kasten ist hier bewusst amber und nicht
+rot — zurueckgezogen wird ein Antrag, geloescht wird nichts; ein rotes
+Gefahren-Signal waere irrefuehrend.{% endcomment %}
+
+{% block title %}{% trans "Löschantrag zurückziehen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg" data-testid="deletion-withdraw-confirm">
+    {% back_link %}
+    <h1 class="text-[22px] font-bold text-ink mb-6">
+        {% if is_merge_request %}{% trans "Zusammenführungs-Antrag zurückziehen" %}{% else %}{% trans "Löschantrag zurückziehen" %}{% endif %}
+    </h1>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-6">
+        <p class="text-sm text-amber-900 mb-2">
+            {% if is_merge_request %}
+            {% trans "Der Antrag entfällt und die Vier-Augen-Prüfung endet. Die beiden Akten bleiben getrennt bestehen; Sie können später jederzeit einen neuen Antrag stellen." %}
+            {% else %}
+            {% trans "Der Antrag entfällt und die Vier-Augen-Prüfung endet. Sie können später jederzeit einen neuen Löschantrag für dasselbe Ziel stellen." %}
+            {% endif %}
+        </p>
+        <p class="text-sm text-amber-900 font-medium">
+            {% if is_merge_request %}
+            {% trans "Es wird nichts gelöscht und nichts zusammengeführt — die Daten bleiben unverändert." %}
+            {% else %}
+            {% trans "Es wird nichts gelöscht — die Daten bleiben unverändert." %}
+            {% endif %}
+        </p>
+        <p class="text-[13px] text-amber-900 mt-2">
+            {% trans "Der Rückzug wird protokolliert: der Antrag bleibt als zurückgezogen nachvollziehbar." %}
+        </p>
+    </div>
+
+    {# Antrag-Zusammenfassung — dieselbe Zieldarstellung wie in der Liste. #}
+    <div class="card p-4 mb-5">
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between gap-3">
+                <dt class="text-ink-muted">{% trans "Ziel" %}</dt>
+                <dd class="flex items-center gap-2 flex-wrap justify-end">{% include "core/deletion_requests/partials/target.html" with dr=deletion_request %}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+                <dt class="text-ink-muted">{% trans "Beantragt am" %}</dt>
+                <dd class="font-medium">{{ deletion_request.created_at|date:"DATETIME_FORMAT" }}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted mb-1">{% trans "Begründung" %}</dt>
+                <dd class="font-medium">{{ deletion_request.reason }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <form method="post" class="flex items-center space-x-3">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700"
+                data-testid="deletion-withdraw-submit">
+            {% trans "Antrag zurückziehen" %}
+        </button>
+        <a href="{% url 'core:deletion_request_list' %}" class="px-4 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+    </form>
+</div>
+{% endblock %}

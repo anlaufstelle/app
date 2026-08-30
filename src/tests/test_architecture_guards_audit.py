@@ -255,6 +255,16 @@ class TestAuditDetailKeyInventory:
             "_move_case_to_trash, Refs #1876); alle uebrigen Schluessel stehen "
             "literal am Aufruf und sind in AUDIT_DETAIL_KEYS deklariert",
         ),
+        "core/services/deletion.py": (
+            1,
+            "DELETION_WITHDRAWN kennt EINEN Schluessel, aber dessen Name haengt "
+            "am Zieltyp: ``withdraw_deletion_request`` bedient alle drei "
+            "(Ereignis/Person/Fall) und schlaegt ihn in ``_WITHDRAW_DETAIL_KEY`` "
+            "nach — dieselben Namen, die die drei ``DELETION_REQUESTED``-"
+            "Schreiber literal setzen. Moegliche Schluessel sind genau "
+            "``target_event``/``target_client``/``target_case``, alle drei in "
+            "AUDIT_DETAIL_KEYS deklariert (Refs #2040)",
+        ),
         "core/services/config/conditions.py": (3, "**_condition_detail(...) der Feldbedingungen"),
         "core/services/events/crud.py": (1, "audit_detail-Variable mit optionalem source"),
         # ``log_attachment_violation`` bekommt sein ``**extra`` ueber die

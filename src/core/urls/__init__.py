@@ -74,7 +74,11 @@ from core.views.clients import (
 )
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
-from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
+from core.views.event_deletion import (
+    DeletionRequestListView,
+    DeletionRequestReviewView,
+    DeletionRequestWithdrawView,
+)
 from core.views.events import (
     EventCreateView,
     EventDeleteView,
@@ -281,6 +285,14 @@ urlpatterns = [
     # Deletion Requests
     path("deletion-requests/", DeletionRequestListView.as_view(), name="deletion_request_list"),
     path("deletion-requests/<uuid:pk>/review/", DeletionRequestReviewView.as_view(), name="deletion_review"),
+    # Refs #2040: Selbst-Rueckzug. Eigene Route statt eines ``action=withdraw``
+    # am Review-POST — die Pruefseite ist Genehmiger-gegated, der Rueckzug
+    # gehoert der Antragstellerin.
+    path(
+        "deletion-requests/<uuid:pk>/withdraw/",
+        DeletionRequestWithdrawView.as_view(),
+        name="deletion_withdraw",
+    ),
     # --- M4 Rectification (Refs #1060)
     path(
         "clients/<uuid:pk>/rectification/new/",

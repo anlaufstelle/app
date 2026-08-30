@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-29 14:10+0200\n"
+"POT-Creation-Date: 2026-08-30 13:28+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12130,3 +12130,79 @@ msgstr "Storage is full — the draft is no longer being saved locally. Please f
 #: src/templates/base.html:1
 msgid "Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren."
 msgstr "The locally stored data comes from a newer program version. Please reload the page to update the application."
+
+#: src/core/constants.py:40 src/templates/core/deletion_requests/list.html:116
+#: src/templates/core/deletion_requests/list.html:123
+#: src/templates/core/partials/_deletion_withdrawn_notice.html:12
+msgid "Zurückgezogen"
+msgstr "Withdrawn"
+
+#: src/core/models/audit.py:177
+msgid "Löschantrag zurückgezogen"
+msgstr "Deletion request withdrawn"
+
+#: src/core/services/deletion.py:23
+msgid "Dieser Löschantrag ist bereits entschieden und kann nicht mehr zurückgezogen werden."
+msgstr "This deletion request has already been decided and can no longer be withdrawn."
+
+#: src/core/services/deletion.py:74
+msgid "Nur die antragstellende Person kann einen Löschantrag zurückziehen."
+msgstr "Only the person who filed a deletion request can withdraw it."
+
+#: src/core/views/event_deletion.py:52
+msgid "Dieser Löschantrag wurde von der antragstellenden Person zurückgezogen und ist nicht mehr zu entscheiden."
+msgstr "This deletion request was withdrawn by the person who filed it and is no longer open for a decision."
+
+#: src/core/views/event_deletion.py:363
+msgid "Löschantrag wurde zurückgezogen. Es wurde nichts gelöscht."
+msgstr "Deletion request has been withdrawn. Nothing was deleted."
+
+#: src/templates/core/deletion_requests/list.html:35
+msgid "Zurückziehen"
+msgstr "Withdraw"
+
+#: src/templates/core/deletion_requests/list.html:127
+#: src/templates/core/partials/_deletion_withdrawn_notice.html:16
+msgid "Zurückgezogen am:"
+msgstr "Withdrawn on:"
+
+#: src/templates/core/deletion_requests/list.html:134
+msgid "Keine zurückgezogenen Löschanträge"
+msgstr "No withdrawn deletion requests"
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:11
+#: src/templates/core/deletion_requests/withdraw_confirm.html:17
+msgid "Löschantrag zurückziehen"
+msgstr "Withdraw deletion request"
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:17
+msgid "Zusammenführungs-Antrag zurückziehen"
+msgstr "Withdraw merge request"
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:23
+msgid "Der Antrag entfällt und die Vier-Augen-Prüfung endet. Die beiden Akten bleiben getrennt bestehen; Sie können später jederzeit einen neuen Antrag stellen."
+msgstr "The request is dropped and the four-eyes review ends. Both records stay separate; you can file a new request at any time."
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:25
+msgid "Der Antrag entfällt und die Vier-Augen-Prüfung endet. Sie können später jederzeit einen neuen Löschantrag für dasselbe Ziel stellen."
+msgstr "The request is dropped and the four-eyes review ends. You can file a new deletion request for the same target at any time."
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:30
+msgid "Es wird nichts gelöscht und nichts zusammengeführt — die Daten bleiben unverändert."
+msgstr "Nothing is deleted and nothing is merged — the data stays unchanged."
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:32
+msgid "Es wird nichts gelöscht — die Daten bleiben unverändert."
+msgstr "Nothing is deleted — the data stays unchanged."
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:36
+msgid "Der Rückzug wird protokolliert: der Antrag bleibt als zurückgezogen nachvollziehbar."
+msgstr "The withdrawal is logged: the request stays traceable as withdrawn."
+
+#: src/templates/core/deletion_requests/withdraw_confirm.html:62
+msgid "Antrag zurückziehen"
+msgstr "Withdraw request"
+
+#: src/templates/core/partials/_deletion_withdrawn_notice.html:14
+msgid "Die antragstellende Person hat diesen Antrag zurückgezogen. Es ist nichts mehr zu entscheiden und es wurde nichts gelöscht."
+msgstr "The person who filed this request has withdrawn it. There is nothing left to decide and nothing was deleted."

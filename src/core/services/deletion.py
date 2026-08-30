@@ -8,12 +8,85 @@ Flächen dieselbe Menge meinen, liegt die Abfrage hier statt zweimal in den
 Views.
 """
 
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Case, Client, DeletionRequest, Event, User
+from core.models import AuditLog, Case, Client, DeletionRequest, Event, User
+from core.services.audit import audit_event
+
+#: Meldung des Rennens „inzwischen entschieden" — die View macht daraus eine
+#: ``messages.error``-Zeile, statt sie als 404 zu verschlucken.
+WITHDRAW_NOT_PENDING_MESSAGE = _("Dieser Löschantrag ist bereits entschieden und kann nicht mehr zurückgezogen werden.")
+
+#: Der ``detail``-Schluessel je Zieltyp — exakt die Schluessel, die der
+#: ``DELETION_REQUESTED``-Schreiber des jeweiligen Pfades benutzt
+#: (``services/events/deletion.py``, ``services/client/main.py``,
+#: ``services/case/deletion.py``). Nur die Ziel-UUID, nie Pseudonym, Titel oder
+#: Begruendung — die stehen am ``DeletionRequest`` selbst (Refs #1093).
+_WITHDRAW_DETAIL_KEY = {
+    DeletionRequest.TargetType.EVENT: "target_event",
+    DeletionRequest.TargetType.CLIENT: "target_client",
+    DeletionRequest.TargetType.CASE: "target_case",
+}
+
+
+@transaction.atomic
+def withdraw_deletion_request(deletion_request, user):
+    """Zieht den EIGENEN, noch offenen Löschantrag zurück (Refs #2040).
+
+    Vorher war ein versehentlich gestellter Antrag eine Sackgasse: die
+    Antragstellerin sah ihn (Refs #1736 B), konnte ihn aber nicht selbst
+    beenden — er lief zwingend über den Genehmiger-Pool.
+
+    Zwei Invarianten, die den Zuschnitt erklären:
+
+    * **``reviewed_by`` bleibt NULL.** Der CHECK-Constraint
+      ``deletion_request_different_reviewer`` verbietet
+      ``reviewed_by == requested_by``; ein Rückzug ist ohnehin keine
+      Vier-Augen-Entscheidung. ``reviewed_at`` trägt den Zeitpunkt (im UI als
+      „zurückgezogen am" gelabelt) — kein zusätzliches Feld.
+    * **``WITHDRAWN`` ist ein Endstatus, kein Löschen der Zeile.** Der
+      Vorgang bleibt nach Art. 5 Abs. 2 DSGVO nachweisbar; der partielle
+      Unique-Index ``unique_pending_deletion_request`` greift bei WITHDRAWN
+      nicht mehr, ein neuer Antrag auf dasselbe Ziel ist also wieder möglich.
+
+    Sperr-Ordnung: es wird ausschließlich die ``DeletionRequest``-Zeile
+    gesperrt (``select_for_update`` + Status-Recheck, Muster
+    :func:`core.services.events.deletion.reject_deletion`) — keine neue
+    Kombination gegenüber den Bestandspfaden, und der ``AuditLog``-Schreibzugriff
+    steht als letzter Schritt der Transaktion (Schreibreihenfolge aus
+    ``services/system/_db_admin.py``).
+
+    Wirft ``ValidationError``, wenn der Antrag nicht (mehr) der eigene oder
+    nicht mehr ``PENDING`` ist. In beiden Fällen entsteht **kein**
+    Audit-Eintrag — zurückgezogen wurde ja nichts.
+    """
+    # Facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt die Zeile
+    # bis zum Commit dieser Transaktion.
+    dr = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility_id=deletion_request.facility_id
+    )
+    if dr.requested_by_id is None or dr.requested_by_id != user.pk:
+        raise ValidationError(_("Nur die antragstellende Person kann einen Löschantrag zurückziehen."))
+    if dr.status != DeletionRequest.Status.PENDING:
+        raise ValidationError(WITHDRAW_NOT_PENDING_MESSAGE)
+
+    dr.status = DeletionRequest.Status.WITHDRAWN
+    dr.reviewed_at = timezone.now()
+    dr.save(update_fields=["status", "reviewed_at"])
+    audit_event(
+        action=AuditLog.Action.DELETION_WITHDRAWN,
+        user=user,
+        facility=dr.facility,
+        target_type="DeletionRequest",
+        target_id=str(dr.pk),
+        detail={_WITHDRAW_DETAIL_KEY[dr.target_type]: str(dr.target_id)},
+    )
+    return dr
 
 
 def eligible_deletion_confirmers(facility, *, exclude_user=None):
