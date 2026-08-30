@@ -522,6 +522,26 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "deletion_request.pk"),),
         idor=(("pk", "foreign_deletion_request.pk"),),
     ),
+    # Refs #2040: Selbst-Rückzug. Bewusst OHNE Rollen-Gate — das Recht folgt
+    # der Urheberschaft, nicht der Rolle: wer den Antrag gestellt hat, darf ihn
+    # zurücknehmen, auch eine Fachkraft ohne Zugang zur vollen Antragsliste.
+    # Für JEDEN Akteur, der nicht die antragstellende Person ist, antwortet die
+    # Route 404 (nicht 403 — ein 403 bestätigte die Existenz eines fremden
+    # Antrags unter geratener UUID). Die Matrix modelliert Urheberschaft nicht,
+    # deshalb ``extra_ok=(404,)`` wie bei den Demo-Rechtstexten: kein Rollen-
+    # Soll, sondern „jede angemeldete Rolle darf anklopfen, die Eigentums-
+    # prüfung entscheidet". Das Eigentums-Gate selbst ist in
+    # ``test_deletion_request_withdraw.py`` gepinnt (fremd → 404, eigener
+    # PENDING → Dialog), inklusive facility-losem Akteur.
+    E(
+        "core:deletion_withdraw",
+        "deletion",
+        get=ALL_AUTH,
+        post=ALL_AUTH,
+        url_kwargs=(("pk", "deletion_request.pk"),),
+        idor=(("pk", "foreign_deletion_request.pk"),),
+        extra_ok=(404,),
+    ),
     # ---- facility-admin -----------------------------------------------------
     # Bereichs-Hub „Verwaltung" (Refs #1813, Konzept #1801 §4.1): dasselbe Gate
     # wie alle Reiter (Einstellungen, Dokumentationstypen, Feldvorlagen,

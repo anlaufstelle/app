@@ -265,6 +265,13 @@ class TestWithdrawUi:
         assert "deletion-withdraw-link" not in response.content.decode()
 
     def test_confirmer_sees_withdrawn_end_status_in_list(self, client, own_request, staff_user, lead_user):
+        """Der Nachweis haengt an der KARTE, nicht an Sektions-ID und Text.
+
+        Sektionsrahmen und Ueberschrift rendern auch bei leerem Bucket — ein
+        Test auf beides bliebe gruen, wenn die WITHDRAWN-Abfrage aus der View
+        verschwaende und gar keine Antragskarte mehr erschiene (Cross-Review
+        Runde 1, Befund 7).
+        """
         withdraw_deletion_request(own_request, staff_user)
         client.force_login(lead_user)
         response = client.get(reverse("core:deletion_request_list"))
@@ -272,6 +279,12 @@ class TestWithdrawUi:
 
         assert "deletion-withdrawn-section" in content
         assert "Zurückgezogen" in content
+        # Die konkrete Karte steht in der WITHDRAWN-Sektion …
+        withdrawn_section = content.split('data-testid="deletion-withdrawn-section"', 1)[1]
+        assert f'data-dr-pk="{own_request.pk}"' in withdrawn_section
+        # … und nicht mehr unter „Ausstehend".
+        pending_section = content.split('data-testid="deletion-withdrawn-section"', 1)[0]
+        assert f'data-dr-pk="{own_request.pk}"' not in pending_section
 
     def test_review_get_on_withdrawn_shows_end_status_without_buttons(self, client, own_request, staff_user, lead_user):
         withdraw_deletion_request(own_request, staff_user)
@@ -333,3 +346,225 @@ class TestSharedEnumDoesNotLeakIntoRectification:
             if "RectificationRequest.Status.WITHDRAWN" in zeile
         ]
         assert treffer == []
+
+
+# ---------------------------------------------------------------------------
+# 6. Cross-Review-Nachtrag Runde 1, Refs #2040)
+# ---------------------------------------------------------------------------
+
+
+class TestWithdrawWithoutFacility:
+    """Ein facility-loser Account darf 404 bekommen, niemals 500.
+
+    ``get_scoped_object`` wirft ``ValueError``, wenn ``request.current_facility``
+    fehlt — bewusst fail-loud gegen ungescopte Lookups (Refs #1346). Der
+    super_admin traegt ``facility=None`` (Refs #867), die Middleware leert
+    ``current_facility`` ausserdem bei archivierter Einrichtung (Refs #2067).
+    Beide erreichen die Withdraw-Route wie jede andere angemeldete Rolle; der
+    Rueckzug ist ohne Facility schlicht gegenstandslos.
+    """
+
+    def test_get_without_facility_is_404_not_500(self, client, own_request, super_admin_user):
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:deletion_withdraw", kwargs={"pk": own_request.pk}))
+
+        assert response.status_code == 404
+
+    def test_post_without_facility_is_404_and_leaves_request_untouched(self, client, own_request, super_admin_user):
+        client.force_login(super_admin_user)
+        response = client.post(reverse("core:deletion_withdraw", kwargs={"pk": own_request.pk}))
+
+        assert response.status_code == 404
+        own_request.refresh_from_db()
+        assert own_request.status == DeletionRequest.Status.PENDING
+        assert not _withdraw_audits(own_request).exists()
+
+
+class TestWithdrawDialogCancelTarget:
+    """„Abbrechen" muss auch nach einer parallelen Entscheidung erreichbar sein.
+
+    Fuer eine reine Antragstellerin traegt ``can_access_deletion_requests``
+    ausschliesslich der eigene offene Antrag (Refs #1736 B). Ein fest auf die
+    Liste verdrahteter Abbrechen-Link endet deshalb im 403, wenn zwischen
+    Dialog-Aufruf und Klick jemand anders entscheidet. Das Ziel folgt daher
+    dem rollenbasierten (zustandsunabhaengigen) Anteil des Gates.
+    """
+
+    def test_requester_only_cancels_to_a_gate_independent_page(self, client, own_request, staff_user):
+        assert staff_user.sees_all_deletion_requests is False
+        client.force_login(staff_user)
+        response = client.get(reverse("core:deletion_withdraw", kwargs={"pk": own_request.pk}))
+        content = response.content.decode()
+
+        # Auf das konkrete ``href`` prüfen, nicht auf den nackten Pfad: die
+        # Withdraw-URL selbst beginnt mit ``/deletion-requests/`` und stünde
+        # als Formular-Action in jeder Substring-Suche im Weg.
+        assert f'href="{reverse("core:dashboard")}"' in content
+        assert f'href="{reverse("core:deletion_request_list")}"' not in content
+
+    def test_confirmer_keeps_the_list_as_cancel_target(self, client, own_request, staff_user, lead_user):
+        """Wer die Liste rollenbasiert sieht, behaelt sie als Rueckweg."""
+        own_lead_request = own_request
+        own_lead_request.requested_by = lead_user
+        own_lead_request.save(update_fields=["requested_by"])
+        assert lead_user.sees_all_deletion_requests is True
+        client.force_login(lead_user)
+        response = client.get(reverse("core:deletion_withdraw", kwargs={"pk": own_lead_request.pk}))
+
+        assert reverse("core:deletion_request_list") in response.content.decode()
+
+
+class TestWithdrawMergeRequestAudit:
+    """Der Rueckzug eines Merge-Antrags nennt beide Seiten — wie der Antrag.
+
+    ``request_client_merge`` schreibt ``{"target_client", "merge_into"}``
+    (services/client/merge.py). Ohne ``merge_into`` benennt die Rueckzugszeile
+    nicht, WELCHE Zusammenfuehrung beendet wurde — beide UUIDs sind PII-frei.
+    """
+
+    def test_merge_withdraw_audit_names_both_sides(self, facility, staff_user, client_qualified, client_identified):
+        from core.services.client.merge import request_client_merge
+
+        dr = request_client_merge(client_qualified, client_identified, staff_user, reason="Doppelt angelegt")
+        withdraw_deletion_request(dr, staff_user)
+
+        entries = list(_withdraw_audits(dr))
+        assert len(entries) == 1
+        assert entries[0].detail == {
+            "target_client": str(client_qualified.pk),
+            "merge_into": str(client_identified.pk),
+        }
+
+
+class TestWithdrawRepeatedPostMessage:
+    """Ein wiederholter POST meldet den eigenen Rueckzug, nicht „entschieden".
+
+    Geht die Erfolgsantwort verloren und der Browser wiederholt den POST, ist
+    der Antrag bereits WITHDRAWN. „bereits entschieden" waere sachlich falsch —
+    entschieden hat hier niemand, zurueckgezogen hat sie selbst.
+    """
+
+    def test_second_post_reports_already_withdrawn(self, client, own_request, staff_user):
+        client.force_login(staff_user)
+        url = reverse("core:deletion_withdraw", kwargs={"pk": own_request.pk})
+        client.post(url)
+        response = client.post(url)
+
+        texte = [str(m) for m in _messages(response)]
+        assert any("zurückgezogen" in t for t in texte), texte
+        assert not any("entschieden" in t for t in texte), texte
+
+    def test_post_on_approved_still_reports_decided(self, client, own_request, staff_user, lead_user):
+        from core.services.events import approve_deletion
+
+        approve_deletion(own_request, lead_user)
+        client.force_login(staff_user)
+        response = client.post(reverse("core:deletion_withdraw", kwargs={"pk": own_request.pk}))
+
+        texte = [str(m) for m in _messages(response)]
+        assert any("entschieden" in t for t in texte), texte
+
+
+@pytest.mark.django_db(transaction=True)
+class TestTrulyConcurrentWithdraw:
+    """Der Sperr-Kontrakt, empirisch statt konstruiert (Cross-Review Befund 4).
+
+    Die Idempotenz-Tests oben laufen strikt nacheinander: der erste Aufruf ist
+    fertig, bevor der zweite beginnt. Sie blieben deshalb auch mit einem
+    schlichten ``.get()`` statt ``select_for_update()`` gruen — der eigentliche
+    Kontrakt (zwei echte Verbindungen, eine Zeile) war nicht gepinnt.
+
+    Hier laufen zwei Threads mit eigenen Verbindungen gegen dieselbe Zeile.
+    Synchronisiert wird nur der Einstieg: beide passieren den ungesperrten
+    Vorab-Lookup, bevor einer den gesperrten Abschnitt betritt. Danach
+    entscheidet allein Postgres. Muster:
+    ``test_deletion_request_race_idempotency.TestTrulyConcurrentClientDeletionRequest``.
+    """
+
+    def _run_parallel(self, targets):
+        """Startet die uebergebenen Callables gleichzeitig, gibt Ergebnisse zurueck."""
+        import threading
+
+        from django.db import close_old_connections
+
+        entered = threading.Barrier(len(targets), timeout=20)
+        results = {}
+
+        def _wrapped(slot, fn):
+            try:
+                entered.wait()
+                try:
+                    results[slot] = ("ok", fn())
+                except Exception as exc:  # noqa: BLE001 — Ergebnis des Rennens
+                    results[slot] = ("err", type(exc).__name__)
+            finally:
+                close_old_connections()
+
+        threads = [threading.Thread(target=_wrapped, args=(slot, fn)) for slot, fn in targets.items()]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=40)
+        assert not any(t.is_alive() for t in threads), "Deadlock im parallelen Rueckzug"
+        assert set(results) == set(targets), results
+        return results
+
+    def test_two_parallel_withdraws_produce_exactly_one_audit_entry(
+        self, facility, client_qualified, doc_type_contact, staff_user
+    ):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_qualified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 20, "notiz": "Parallel"},
+            created_by=staff_user,
+        )
+        dr = request_deletion(event, staff_user, "Parallel zurueckziehen")
+
+        def _withdraw():
+            fresh = DeletionRequest.objects.get(pk=dr.pk)
+            return withdraw_deletion_request(fresh, staff_user).status
+
+        results = self._run_parallel({"a": _withdraw, "b": _withdraw})
+
+        ausgaenge = [kind for kind, _payload in results.values()]
+        assert sorted(ausgaenge) == ["err", "ok"], results
+        assert [p for k, p in results.values() if k == "err"] == ["ValidationError"], results
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.WITHDRAWN
+        assert _withdraw_audits(dr).count() == 1
+
+    def test_approve_and_withdraw_in_parallel_leave_one_consistent_end_state(
+        self, facility, client_qualified, doc_type_contact, staff_user, lead_user
+    ):
+        """Genau einer gewinnt — und der Endstatus passt zur Auditspur."""
+        from core.services.events import approve_deletion
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_qualified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 20, "notiz": "Rennen"},
+            created_by=staff_user,
+        )
+        dr = request_deletion(event, staff_user, "Rennen gegen die Genehmigung")
+
+        def _withdraw():
+            return withdraw_deletion_request(DeletionRequest.objects.get(pk=dr.pk), staff_user).status
+
+        def _approve():
+            return approve_deletion(DeletionRequest.objects.get(pk=dr.pk), lead_user)
+
+        results = self._run_parallel({"withdraw": _withdraw, "approve": _approve})
+
+        dr.refresh_from_db()
+        assert dr.status in (DeletionRequest.Status.WITHDRAWN, DeletionRequest.Status.APPROVED)
+        # Der Rueckzug hinterlaesst genau dann eine Auditzeile, wenn er gewonnen hat.
+        gewonnen = dr.status == DeletionRequest.Status.WITHDRAWN
+        assert _withdraw_audits(dr).count() == (1 if gewonnen else 0), results
+        # Und der Verlierer ist sauber abgewiesen worden, nicht stillschweigend
+        # durchgelaufen: genau ein Ausgang ist ein Fehler.
+        ausgaenge = [kind for kind, _payload in results.values()]
+        assert sorted(ausgaenge) == ["err", "ok"], results
