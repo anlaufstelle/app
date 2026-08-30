@@ -1,8 +1,10 @@
 """Oeffentliche Rechtstexte fuer Demo und selbst gehostete Instanzen."""
 
 import logging
+import os
 import re
-from pathlib import Path
+import stat
+from functools import cache
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -13,7 +15,13 @@ from django.views.generic import TemplateView
 
 logger = logging.getLogger(__name__)
 
-_LINK_RE = re.compile(r"\[([^\]\n]+)\]\(([^)\n]+)\)")
+MAX_LEGAL_FILE_BYTES = 256 * 1024
+_MAX_LINK_LABEL_CHARS = 256
+_MAX_LINK_TARGET_CHARS = 2048
+_LINK_RE = re.compile(
+    rf"\[([^\]\n]{{1,{_MAX_LINK_LABEL_CHARS}}}+)\]"
+    rf"\(([^)\n]{{1,{_MAX_LINK_TARGET_CHARS}}}+)\)"
+)
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.+)$")
 _LIST_ITEM_RE = re.compile(r"^\s*[-*]\s+(.+)$")
 _ALLOWED_LINK_SCHEMES = frozenset({"http", "https", "mailto"})
@@ -106,16 +114,70 @@ def render_legal_markdown(source):
     return format_html_join("\n", "{}", ((block,) for block in blocks))
 
 
-def read_configured_legal_file(setting_name, *, warn=False):
-    """Return configured UTF-8 content or ``None`` when unavailable."""
+def _configured_legal_path(setting_name):
     configured_path = getattr(settings, setting_name, None)
     if not configured_path:
         return None
+    return configured_path
+
+
+def _valid_legal_file_stat(file_stat):
+    """Accept only bounded, non-empty regular files."""
+    return stat.S_ISREG(file_stat.st_mode) and 0 < file_stat.st_size <= MAX_LEGAL_FILE_BYTES
+
+
+def configured_legal_file_available(setting_name):
+    """Check link availability without opening or reading operator content."""
+    configured_path = _configured_legal_path(setting_name)
+    if configured_path is None:
+        return False
     try:
-        return Path(configured_path).read_text(encoding="utf-8")
-    except (OSError, TypeError, UnicodeError):
+        file_stat = os.stat(configured_path)
+        return _valid_legal_file_stat(file_stat) and os.access(configured_path, os.R_OK)
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _read_configured_bytes(configured_path):
+    """Read at most the documented limit without blocking on special files."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
+    file_descriptor = os.open(configured_path, flags)
+    try:
+        if not _valid_legal_file_stat(os.fstat(file_descriptor)):
+            return None
+        with os.fdopen(file_descriptor, "rb") as legal_file:
+            file_descriptor = None
+            content = legal_file.read(MAX_LEGAL_FILE_BYTES + 1)
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+    if not content or len(content) > MAX_LEGAL_FILE_BYTES:
+        return None
+    return content
+
+
+@cache
+def _warn_unavailable(setting_name, _configured_path):
+    """Warn once per process and configuration without logging its path."""
+    logger.warning("Configured legal file for %s could not be read", setting_name)
+
+
+def read_configured_legal_file(setting_name, *, warn=False):
+    """Return bounded UTF-8 content or ``None`` when unavailable."""
+    configured_path = _configured_legal_path(setting_name)
+    if configured_path is None:
+        return None
+    try:
+        content = _read_configured_bytes(configured_path)
+        if content is None:
+            raise ValueError("Legal file is not a non-empty regular file within the size limit")
+        decoded_content = content.decode("utf-8")
+        if not decoded_content.strip():
+            raise ValueError("Legal file does not contain visible text")
+        return decoded_content
+    except (MemoryError, OSError, TypeError, UnicodeError, ValueError):
         if warn:
-            logger.warning("Configured legal file for %s could not be read", setting_name)
+            _warn_unavailable(setting_name, configured_path)
         return None
 
 

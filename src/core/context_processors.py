@@ -59,15 +59,11 @@ def legal_pages(request):
             "legal_privacy_url": getattr(settings, "DEMO_LEGAL_PRIVACY_URL", ""),
         }
 
-    from core.views.legal import read_configured_legal_file
+    from core.views.legal import configured_legal_file_available
 
     return {
-        "legal_imprint_url": (
-            reverse("demo_imprint") if read_configured_legal_file("LEGAL_IMPRINT_FILE") is not None else ""
-        ),
-        "legal_privacy_url": (
-            reverse("demo_privacy") if read_configured_legal_file("LEGAL_PRIVACY_FILE") is not None else ""
-        ),
+        "legal_imprint_url": (reverse("demo_imprint") if configured_legal_file_available("LEGAL_IMPRINT_FILE") else ""),
+        "legal_privacy_url": (reverse("demo_privacy") if configured_legal_file_available("LEGAL_PRIVACY_FILE") else ""),
     }
 
 

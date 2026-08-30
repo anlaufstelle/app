@@ -335,9 +335,9 @@ Restart the web service with both Compose files afterward (and supply the same s
 docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web
 ```
 
-The files deliberately support only a small Markdown subset: headings from `#` through `###`, paragraphs and blank lines, unordered lists with `-` or `*`, and links in the form `[Text](URL)`. Link targets are limited to `http:`, `https:`, and `mailto:`; HTML and everything else are displayed as text. Legal text therefore cannot inject scripts or styles into the application.
+Each file must be a regular, non-empty UTF-8 file no larger than 256 KiB. The files deliberately support only a small Markdown subset: headings from `#` through `###`, paragraphs and blank lines, unordered lists with `-` or `*`, and links in the form `[Text](URL)`. Link text is limited to 256 characters and link targets to 2,048 characters; longer constructs are displayed as ordinary text. Link targets are limited to `http:`, `https:`, and `mailto:`; HTML and everything else are displayed as text as well. Legal text therefore cannot inject scripts or styles into the application.
 
-When a path is unset, or a file is missing, unreadable, or not valid UTF-8, the corresponding page responds with 404 and its link is omitted from login, password-reset, and application pages. The log warning names only the affected setting, not the configured file path. After changing a text or mount, check `/impressum/` and `/datenschutzerklaerung/` while signed out. The special demo mode continues to use its own legal templates and ignores these two files.
+When a path is unset, or a file is missing, not regular, empty, oversized, unreadable, or not valid UTF-8, the corresponding page responds with 404. File metadata is used to show the link only for regular, non-empty files within the size limit; the global page render never reads legal content for this check. The warning emitted at most once per broken configuration names only the affected setting, not the configured file path. After changing a text or mount, check `/impressum/` and `/datenschutzerklaerung/` while signed out. The special demo mode continues to use its own legal templates and ignores these two files.
 
 ### 2.1 Initial Installation: Create a Super-Admin (Bootstrap)
 
@@ -1932,4 +1932,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-08-30 -->
-<!-- source-hash: d0ce3188b43e7540af1321e53d287d9b2fad524d -->
+<!-- source-hash: d432a7801acf8431aabe6b0f8408d3d60317b834 -->

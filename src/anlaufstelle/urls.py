@@ -101,8 +101,8 @@ urlpatterns = [
         ),
         name="password_reset_complete",
     ),
-    # Rechtstexte der oeffentlichen Demo — nur bei DEMO_MODE aktiv (die Views
-    # geben ausserhalb der Demo 404), oeffentlich ohne Login. Refs #1641.
+    # Oeffentliche Rechtstexte: unveraenderte Demo-Templates oder konfigurierte
+    # Betreiberdateien; ohne beides 404. Refs #1641, #2076.
     path("impressum/", DemoImprintView.as_view(), name="demo_imprint"),
     path("datenschutzerklaerung/", DemoPrivacyView.as_view(), name="demo_privacy"),
     path("sw.js", ServiceWorkerView.as_view(), name="service_worker"),
