@@ -84,6 +84,9 @@
              class="bg-yellow-500 text-white text-center text-sm py-2"
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
+            {% url 'core:help_overview' as offline_help_url %}
+            {% trans "Offline verfügbare Daten bleiben verschlüsselt auf diesem Gerät. Änderungen werden nach dem Wiederverbinden übertragen; Konflikte müssen geprüft werden." as offline_help_text %}
+            {% include "components/_context_help.html" with help_id="offline" help_text=offline_help_text help_url=offline_help_url only %}
             {# Refs #1535 (#1499): verlinkt die kanonische Personenliste #}
             {# (core:client_list, /clients/) — rendert offline in-place die lokal    #}
             {# gecachten Personen statt der generischen offline_fallback- #}
@@ -146,6 +149,10 @@
             {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+            {% if user.is_authenticated %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{% url 'core:help_overview' %}" class="hover:underline" data-testid="footer-help">{% trans "Hilfe" %}</a>
+            {% endif %}
             {# Oeffentliche Rechtstexte der Demo oder der selbst gehosteten Instanz (Refs #2076). #}
             {% include "components/_legal_links.html" with legal_links_external=True %}
             {# Refs #1050: deployte Version nur fuer Eingeloggte (Login-Seite bleibt bewusst versionslos). #}

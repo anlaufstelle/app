@@ -418,4 +418,5 @@ urlpatterns = [
     ),
     # Offline (Streetwork Stage 2/3) + JSON-API — ausgelagert, Refs #1835.
     path("", include("core.urls._offline")),
+    path("", include("core.urls._help")),
 ]

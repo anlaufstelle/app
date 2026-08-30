@@ -21,3 +21,6 @@ Suchergebnis-Dropdown (kein Platz — dort greift C2).
 <p class="text-[12px] {{ legend_class|default:'text-ink-muted' }}" data-testid="contact-stage-legend">
     {% trans "Kontaktstufe: Nur Pseudonym = es ist nur das Pseudonym bekannt. Mit Zusatzangaben = zusätzliche persönliche Angaben sind hinterlegt, das Öffnen der Detailseite wird protokolliert." %}
 </p>
+{% url 'core:help_page' 'personen' as contact_stage_help_url %}
+{% trans "Die Kontaktstufe macht sichtbar, wie viele persönliche Angaben gespeichert sind. Bei Zusatzangaben wird das Öffnen der Personenakte protokolliert." as contact_stage_help_text %}
+{% include "components/_context_help.html" with help_id="contact-stage" help_text=contact_stage_help_text help_url=contact_stage_help_url only %}

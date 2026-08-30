@@ -509,6 +509,17 @@ ADMINISTRATION_SUPER = NavItem(
     icon="admin",
     external=True,
 )
+HILFE = NavItem(
+    key="help",
+    label=_("Hilfe"),
+    url_name="core:help_overview",
+    family=frozenset({"help_overview", "help_page"}),
+    gates=("is_authenticated",),
+    testid="nav-help",
+    mobile_testid="mobile-nav-help",
+    icon="dsgvo",
+    divider_before=True,
+)
 
 # ---------------------------------------------------------------------------
 # Bereichs-Hubs (Refs #1801 §4) — reines Navigations-Chrom
@@ -648,6 +659,7 @@ SIDEBAR: tuple[NavItem, ...] = (
     VERWALTUNG_HUB,
     SYSTEMBEREICH,
     ADMINISTRATION_SUPER,
+    HILFE,
 )
 
 
@@ -686,6 +698,7 @@ MOBILE_MORE: tuple[NavItem, ...] = (
     DATENSCHUTZ_HUB,
     VERWALTUNG_HUB,
     ADMINISTRATION_SUPER,
+    HILFE,
 )
 
 # Routen, die den „Mehr"-Button aktiv machen, ohne aus einem Listeneintrag zu

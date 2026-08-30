@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ nav_item.label }} – {% trans "Hilfe" %}{% endblock %}
+
+{% block content %}
+<article class="max-w-3xl mx-auto" data-help-slug="{{ help_page.slug }}">
+    <a href="{% url 'core:help_overview' %}" class="inline-flex items-center text-[13px] text-ink-muted hover:text-accent mb-4">← {% trans "Hilfe-Übersicht" %}</a>
+    <h1 class="text-[26px] font-bold text-ink mb-3">{{ nav_item.label }}</h1>
+    <p class="text-sm leading-6 text-ink-soft mb-5">{{ help_page.intro }}</p>
+    <ul class="space-y-3 mb-6">
+        {% for topic in help_page.topics %}
+        <li class="flex gap-3 text-sm leading-6 text-ink">
+            <span aria-hidden="true" class="text-accent font-bold">•</span>
+            <span>{{ topic }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% if show_area_link %}<a href="{% url nav_item.url_name %}" class="btn-primary inline-flex px-4 py-2 text-sm">{% blocktrans with area=nav_item.label %}Zu „{{ area }}“{% endblocktrans %}</a>{% endif %}
+</article>
+{% endblock %}

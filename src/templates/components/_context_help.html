@@ -1,0 +1,8 @@
+{% load i18n %}
+<details data-context-help="{{ help_id }}" class="inline-block text-left text-[12px]">
+    <summary class="cursor-pointer font-semibold text-accent underline hover:no-underline">{% trans "Was ist das?" %}</summary>
+    <div class="mt-2 max-w-md rounded-md border border-subtle bg-surface p-3 text-[13px] leading-5 text-ink shadow-xs">
+        <p>{{ help_text }}</p>
+        {% if help_url %}<a href="{{ help_url }}" class="mt-2 inline-block font-semibold text-accent underline hover:no-underline">{% trans "Mehr erfahren" %}</a>{% endif %}
+    </div>
+</details>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Hilfe" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-[26px] font-bold text-ink mb-2">{% trans "Hilfe" %}</h1>
+    <p class="text-sm text-ink-muted mb-6">{% trans "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind." %}</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="help-overview">
+        {% for entry in visible_help_pages %}
+        <a href="{% url 'core:help_page' slug=entry.page.slug %}" class="card p-4 hover:border-accent">
+            <h2 class="text-base font-semibold text-ink">{{ entry.nav_item.label }}</h2>
+            <p class="text-[13px] text-ink-muted mt-1">{{ entry.page.intro }}</p>
+        </a>
+        {% empty %}
+        <p class="text-sm text-ink-muted">{% trans "Für diese Rolle sind keine weiteren Hilfebereiche verfügbar." %}</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

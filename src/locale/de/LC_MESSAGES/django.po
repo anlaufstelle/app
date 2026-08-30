@@ -12307,3 +12307,129 @@ msgstr "Antrag zurückziehen"
 #: src/templates/core/partials/_deletion_withdrawn_notice.html:14
 msgid "Die antragstellende Person hat diesen Antrag zurückgezogen. Es ist nichts mehr zu entscheiden und es wurde nichts gelöscht."
 msgstr "Die antragstellende Person hat diesen Antrag zurückgezogen. Es ist nichts mehr zu entscheiden und es wurde nichts gelöscht."
+msgid "Aufgaben halten nächste Schritte, Zuständigkeiten und Fristen fest."
+msgstr "Aufgaben halten nächste Schritte, Zuständigkeiten und Fristen fest."
+
+msgid "Ausgewählte Personen können verschlüsselt für die befristete Offline-Arbeit mitgenommen werden."
+msgstr "Ausgewählte Personen können verschlüsselt für die befristete Offline-Arbeit mitgenommen werden."
+
+msgid "Bedingungen können Felder abhängig von bereits erfassten Angaben ein- oder ausblenden."
+msgstr "Bedingungen können Felder abhängig von bereits erfassten Angaben ein- oder ausblenden."
+
+msgid "Bedingungen steuern, wann ein Feld im Formular erscheint. Regeln derselben Gruppe gelten gemeinsam; mehrere Gruppen bieten alternative Wege."
+msgstr "Bedingungen steuern, wann ein Feld im Formular erscheint. Regeln derselben Gruppe gelten gemeinsam; mehrere Gruppen bieten alternative Wege."
+
+msgid "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Eine zweite berechtigte Person muss ihn prüfen, bevor gelöscht wird."
+msgstr "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Eine zweite berechtigte Person muss ihn prüfen, bevor gelöscht wird."
+
+msgid "Der Datenschutzbereich bündelt Betroffenenrechte, Löschfristen und Nachweise."
+msgstr "Der Datenschutzbereich bündelt Betroffenenrechte, Löschfristen und Nachweise."
+
+msgid "Der Systembereich zeigt installationsweite Betriebs- und Compliance-Informationen."
+msgstr "Der Systembereich zeigt installationsweite Betriebs- und Compliance-Informationen."
+
+msgid "Der Zeitstrom zeigt dokumentierte Kontakte in zeitlicher Reihenfolge."
+msgstr "Der Zeitstrom zeigt dokumentierte Kontakte in zeitlicher Reihenfolge."
+
+msgid "Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter."
+msgstr "Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter."
+
+msgid "Die Arbeitszentrale bündelt die wichtigsten offenen Punkte für die Leitung."
+msgstr "Die Arbeitszentrale bündelt die wichtigsten offenen Punkte für die Leitung."
+
+msgid "Die Dateiübersicht führt Anhänge aus Kontakten, Personenakten und Fällen zusammen."
+msgstr "Die Dateiübersicht führt Anhänge aus Kontakten, Personenakten und Fällen zusammen."
+
+msgid "Die Inbox trennt offene, laufende und erledigte Aufgaben."
+msgstr "Die Inbox trennt offene, laufende und erledigte Aufgaben."
+
+msgid "Die Kontaktstufe macht sichtbar, wie viele persönliche Angaben gespeichert sind. Bei Zusatzangaben wird das Öffnen der Personenakte protokolliert."
+msgstr "Die Kontaktstufe macht sichtbar, wie viele persönliche Angaben gespeichert sind. Bei Zusatzangaben wird das Öffnen der Personenakte protokolliert."
+
+msgid "Die Kontaktstufe zeigt, ob nur ein Pseudonym oder zusätzliche Angaben gespeichert sind."
+msgstr "Die Kontaktstufe zeigt, ob nur ein Pseudonym oder zusätzliche Angaben gespeichert sind."
+
+msgid "Die Statistik verdichtet dokumentierte Arbeit für Auswertung und Berichte."
+msgstr "Die Statistik verdichtet dokumentierte Arbeit für Auswertung und Berichte."
+
+msgid "Die Verwaltung passt die Anwendung an die Abläufe der Einrichtung an."
+msgstr "Die Verwaltung passt die Anwendung an die Abläufe der Einrichtung an."
+
+msgid "Die Zahlen sind Einstiege in die jeweilige Arbeitsliste, keine eigene Ablage."
+msgstr "Die Zahlen sind Einstiege in die jeweilige Arbeitsliste, keine eigene Ablage."
+
+msgid "Downloads und Löschungen bleiben an die Rechte des jeweiligen Bezugsobjekts gebunden."
+msgstr "Downloads und Löschungen bleiben an die Rechte des jeweiligen Bezugsobjekts gebunden."
+
+msgid "Ein Fall kann geschlossen und bei Bedarf wieder geöffnet werden."
+msgstr "Ein Fall kann geschlossen und bei Bedarf wieder geöffnet werden."
+
+msgid "Einrichtungen, Wartungszustand und technische Nachweise werden hier übergreifend geprüft."
+msgstr "Einrichtungen, Wartungszustand und technische Nachweise werden hier übergreifend geprüft."
+
+msgid "Er ist ausschließlich für die Systemadministration bestimmt."
+msgstr "Er ist ausschließlich für die Systemadministration bestimmt."
+
+msgid "Filter grenzen Zeitraum, Dokumentationstyp und Darstellungsform ein."
+msgstr "Filter grenzen Zeitraum, Dokumentationstyp und Darstellungsform ein."
+
+msgid "Filter helfen, Dateien nach ihrem fachlichen Bezug zu finden."
+msgstr "Filter helfen, Dateien nach ihrem fachlichen Bezug zu finden."
+
+msgid "Freigaben halten fest, welche Berichtsstände tatsächlich herausgegeben wurden."
+msgstr "Freigaben halten fest, welche Berichtsstände tatsächlich herausgegeben wurden."
+
+msgid "Fälle bündeln länger laufende Begleitungen und die zugehörigen Kontakte."
+msgstr "Fälle bündeln länger laufende Begleitungen und die zugehörigen Kontakte."
+
+msgid "Für diese Rolle sind keine weiteren Hilfebereiche verfügbar."
+msgstr "Für diese Rolle sind keine weiteren Hilfebereiche verfügbar."
+
+msgid "Hier werden Zugänge, Einstellungen, Dokumentationstypen und Feldvorlagen gepflegt."
+msgstr "Hier werden Zugänge, Einstellungen, Dokumentationstypen und Feldvorlagen gepflegt."
+
+msgid "Hilfe"
+msgstr "Hilfe"
+
+msgid "Hilfe-Übersicht"
+msgstr "Hilfe-Übersicht"
+
+msgid "Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."
+msgstr "Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."
+
+msgid "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind."
+msgstr "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind."
+
+msgid "Lösch- und Berichtigungsanträge werden nachvollziehbar geprüft."
+msgstr "Lösch- und Berichtigungsanträge werden nachvollziehbar geprüft."
+
+msgid "Löschfristen erzeugen prüfbare Vorschläge. Erst eine berechtigte Entscheidung gibt eine Löschung frei, stellt sie zurück oder verwirft sie."
+msgstr "Löschfristen erzeugen prüfbare Vorschläge. Erst eine berechtigte Entscheidung gibt eine Löschung frei, stellt sie zurück oder verwirft sie."
+
+msgid "Löschvorschläge, Audit-Log und DSGVO-Paket unterstützen die regelmäßige Kontrolle."
+msgstr "Löschvorschläge, Audit-Log und DSGVO-Paket unterstützen die regelmäßige Kontrolle."
+
+msgid "Mehr erfahren"
+msgstr "Mehr erfahren"
+
+msgid "Neue Kontakte werden über „Neu“ angelegt und erscheinen danach im Zeitstrom."
+msgstr "Neue Kontakte werden über „Neu“ angelegt und erscheinen danach im Zeitstrom."
+
+msgid "Offline verfügbare Daten bleiben verschlüsselt auf diesem Gerät. Änderungen werden nach dem Wiederverbinden übertragen; Konflikte müssen geprüft werden."
+msgstr "Offline verfügbare Daten bleiben verschlüsselt auf diesem Gerät. Änderungen werden nach dem Wiederverbinden übertragen; Konflikte müssen geprüft werden."
+
+msgid "Personenakten verbinden Pseudonym, Kontakte, Fälle, Aufgaben und Dateien."
+msgstr "Personenakten verbinden Pseudonym, Kontakte, Fälle, Aufgaben und Dateien."
+
+msgid "Was ist das?"
+msgstr "Was ist das?"
+
+msgid "Ziele, Meilensteine und Episoden strukturieren den Verlauf eines Falls."
+msgstr "Ziele, Meilensteine und Episoden strukturieren den Verlauf eines Falls."
+
+#, python-format
+msgid "Zu „%(area)s“"
+msgstr "Zu „%(area)s“"
+
+msgid "Überfällige Aufgaben werden in der Navigation zusätzlich hervorgehoben."
+msgstr "Überfällige Aufgaben werden in der Navigation zusätzlich hervorgehoben."

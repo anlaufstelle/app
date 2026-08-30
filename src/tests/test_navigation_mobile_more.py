@@ -37,6 +37,7 @@ SUCHE = "suche"  # Overlay-Button (kein href), deshalb kein Registry-Eintrag
 SPRACHE = "sprache"  # set_language-POST-Form
 ABMELDEN = "abmelden"  # logout-POST-Form
 PROFIL = "/account/"
+HILFE = "/hilfe/"
 
 
 def _more_menu(content: str) -> str:
@@ -100,12 +101,12 @@ class TestMoreMenuPerRole:
     def test_assistant(self, client, assistant_user):
         """Assistenz: Suche · Dateien ┊ Profil · DE/EN · Abmelden."""
         entries = _more_entries(_render(client, assistant_user))
-        assert entries == [SUCHE, "/attachments/", PROFIL, SPRACHE, ABMELDEN]
+        assert entries == [SUCHE, "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
 
     def test_staff(self, client, staff_user):
         """Fachkraft: zusätzlich Fälle — Datenschutz nur mit eigenem Antrag."""
         entries = _more_entries(_render(client, staff_user))
-        assert entries == [SUCHE, "/cases/", "/attachments/", PROFIL, SPRACHE, ABMELDEN]
+        assert entries == [SUCHE, "/cases/", "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
 
     def test_staff_with_own_pending_deletion_request(self, client, facility, staff_user):
         """Regel N2 mobil: der Hub taucht auf, sobald genau ein Reiter sichtbar ist."""
@@ -118,7 +119,16 @@ class TestMoreMenuPerRole:
             status=DeletionRequest.Status.PENDING,
         )
         entries = _more_entries(_render(client, staff_user))
-        assert entries == [SUCHE, "/cases/", "/attachments/", "/datenschutz/", PROFIL, SPRACHE, ABMELDEN]
+        assert entries == [
+            SUCHE,
+            "/cases/",
+            "/attachments/",
+            "/datenschutz/",
+            HILFE,
+            PROFIL,
+            SPRACHE,
+            ABMELDEN,
+        ]
 
     def test_lead(self, client, lead_user):
         """Leitung: mit Arbeitszentrale (die mobile Lücke aus Konzept §5.3) und Statistik."""
@@ -130,6 +140,7 @@ class TestMoreMenuPerRole:
             "/attachments/",
             "/statistics/",
             "/datenschutz/",
+            HILFE,
             PROFIL,
             SPRACHE,
             ABMELDEN,
@@ -150,6 +161,7 @@ class TestMoreMenuPerRole:
             "/statistics/",
             "/datenschutz/",
             "/verwaltung/",
+            HILFE,
             PROFIL,
             SPRACHE,
             ABMELDEN,
@@ -162,7 +174,7 @@ class TestMoreMenuPerRole:
         anzubieten — und beide Marker gleichzeitig leuchten zu lassen.
         """
         entries = _more_entries(_render(client, super_admin_user, "core:system_dashboard"))
-        assert entries == ["/admin-mgmt/", PROFIL, SPRACHE, ABMELDEN]
+        assert entries == ["/admin-mgmt/", HILFE, PROFIL, SPRACHE, ABMELDEN]
 
 
 @pytest.mark.django_db

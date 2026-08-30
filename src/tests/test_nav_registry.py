@@ -70,7 +70,8 @@ NAV_ROUTE_PREFIXES = (
 # hinzu: 169 -> 170.
 # #2044 zieht die read-only Rename-Warnprobe auf eine eigene Partial-Route:
 # 170 -> 171.
-_EXPECTED_TOTAL_PATTERNS = 171
+# #2043 ergänzt Hilfe-Übersicht und die Slug-Whitelist-Route: 171 -> 173.
+_EXPECTED_TOTAL_PATTERNS = 173
 
 
 def _prefixed_route_names() -> dict[str, str]:

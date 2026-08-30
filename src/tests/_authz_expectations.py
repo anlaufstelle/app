@@ -112,6 +112,14 @@ EXPECTATIONS = (
     # ---- auth-flow (eingeloggt, alle Rollen) ----------------------------
     E("logout", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
     E("password_change", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
+    E("core:help_overview", "auth-flow", get=ALL_AUTH),
+    E(
+        "core:help_page",
+        "auth-flow",
+        get=ALL_AUTH,
+        url_kwargs=(("slug", "personen"),),
+        idor_exempt="Feste Inhalts-Whitelist ohne Objektbezug",
+    ),
     E("offline_key_salt", "auth-flow", post=ALL_AUTH),
     # POST ohne korrektes Passwort antwortet 403 (Re-Auth-Form, sudo_mode.py) —
     # Authentifizierungs-, keine Autorisierungs-Semantik.

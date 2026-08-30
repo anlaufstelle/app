@@ -12210,3 +12210,129 @@ msgstr "Withdraw request"
 #: src/templates/core/partials/_deletion_withdrawn_notice.html:14
 msgid "Die antragstellende Person hat diesen Antrag zurückgezogen. Es ist nichts mehr zu entscheiden und es wurde nichts gelöscht."
 msgstr "The person who filed this request has withdrawn it. There is nothing left to decide and nothing was deleted."
+msgid "Aufgaben halten nächste Schritte, Zuständigkeiten und Fristen fest."
+msgstr "Tasks keep track of next steps, responsibilities, and deadlines."
+
+msgid "Ausgewählte Personen können verschlüsselt für die befristete Offline-Arbeit mitgenommen werden."
+msgstr "Selected person records can be stored encrypted for time-limited offline work."
+
+msgid "Bedingungen können Felder abhängig von bereits erfassten Angaben ein- oder ausblenden."
+msgstr "Conditions can show or hide fields based on information already entered."
+
+msgid "Bedingungen steuern, wann ein Feld im Formular erscheint. Regeln derselben Gruppe gelten gemeinsam; mehrere Gruppen bieten alternative Wege."
+msgstr "Conditions control when a field appears in the form. Rules in the same group apply together; multiple groups provide alternative paths."
+
+msgid "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Eine zweite berechtigte Person muss ihn prüfen, bevor gelöscht wird."
+msgstr "Under the four-eyes principle, a deletion request first creates an application. A second authorized person must review it before deletion."
+
+msgid "Der Datenschutzbereich bündelt Betroffenenrechte, Löschfristen und Nachweise."
+msgstr "The privacy area brings together data subject rights, deletion deadlines, and records."
+
+msgid "Der Systembereich zeigt installationsweite Betriebs- und Compliance-Informationen."
+msgstr "The system area shows installation-wide operational and compliance information."
+
+msgid "Der Zeitstrom zeigt dokumentierte Kontakte in zeitlicher Reihenfolge."
+msgstr "The timeline shows documented contacts in chronological order."
+
+msgid "Der gewählte Zeitraum gilt beim Wechsel zwischen den Statistik-Reitern weiter."
+msgstr "The selected period remains active when switching between statistics tabs."
+
+msgid "Die Arbeitszentrale bündelt die wichtigsten offenen Punkte für die Leitung."
+msgstr "The work center brings together the most important open items for management."
+
+msgid "Die Dateiübersicht führt Anhänge aus Kontakten, Personenakten und Fällen zusammen."
+msgstr "The file overview brings together attachments from contacts, person records, and cases."
+
+msgid "Die Inbox trennt offene, laufende und erledigte Aufgaben."
+msgstr "The inbox separates open, in-progress, and completed tasks."
+
+msgid "Die Kontaktstufe macht sichtbar, wie viele persönliche Angaben gespeichert sind. Bei Zusatzangaben wird das Öffnen der Personenakte protokolliert."
+msgstr "The contact level indicates how much personal information is stored. Opening a person record with additional details is logged."
+
+msgid "Die Kontaktstufe zeigt, ob nur ein Pseudonym oder zusätzliche Angaben gespeichert sind."
+msgstr "The contact level shows whether only a pseudonym or additional details are stored."
+
+msgid "Die Statistik verdichtet dokumentierte Arbeit für Auswertung und Berichte."
+msgstr "Statistics aggregate documented work for analysis and reporting."
+
+msgid "Die Verwaltung passt die Anwendung an die Abläufe der Einrichtung an."
+msgstr "Administration adapts the application to the facility's workflows."
+
+msgid "Die Zahlen sind Einstiege in die jeweilige Arbeitsliste, keine eigene Ablage."
+msgstr "The figures are entry points to the relevant work list, not a separate record."
+
+msgid "Downloads und Löschungen bleiben an die Rechte des jeweiligen Bezugsobjekts gebunden."
+msgstr "Downloads and deletions remain subject to the permissions of the related record."
+
+msgid "Ein Fall kann geschlossen und bei Bedarf wieder geöffnet werden."
+msgstr "A case can be closed and reopened when needed."
+
+msgid "Einrichtungen, Wartungszustand und technische Nachweise werden hier übergreifend geprüft."
+msgstr "Facilities, maintenance status, and technical records are reviewed across the installation here."
+
+msgid "Er ist ausschließlich für die Systemadministration bestimmt."
+msgstr "It is intended exclusively for system administration."
+
+msgid "Filter grenzen Zeitraum, Dokumentationstyp und Darstellungsform ein."
+msgstr "Filters narrow the period, documentation type, and display format."
+
+msgid "Filter helfen, Dateien nach ihrem fachlichen Bezug zu finden."
+msgstr "Filters help find files by their professional context."
+
+msgid "Freigaben halten fest, welche Berichtsstände tatsächlich herausgegeben wurden."
+msgstr "Releases record which report versions were actually shared."
+
+msgid "Fälle bündeln länger laufende Begleitungen und die zugehörigen Kontakte."
+msgstr "Cases group longer-term support and its related contacts."
+
+msgid "Für diese Rolle sind keine weiteren Hilfebereiche verfügbar."
+msgstr "No additional help areas are available for this role."
+
+msgid "Hier werden Zugänge, Einstellungen, Dokumentationstypen und Feldvorlagen gepflegt."
+msgstr "Access, settings, documentation types, and field templates are managed here."
+
+msgid "Hilfe"
+msgstr "Help"
+
+msgid "Hilfe-Übersicht"
+msgstr "Help overview"
+
+msgid "Karten führen direkt zu Aufgaben, Löschanträgen und fälligen Prüfungen."
+msgstr "Cards lead directly to tasks, deletion requests, and due reviews."
+
+msgid "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind."
+msgstr "Brief guidance on the areas available to your role."
+
+msgid "Lösch- und Berichtigungsanträge werden nachvollziehbar geprüft."
+msgstr "Deletion and rectification requests are reviewed transparently."
+
+msgid "Löschfristen erzeugen prüfbare Vorschläge. Erst eine berechtigte Entscheidung gibt eine Löschung frei, stellt sie zurück oder verwirft sie."
+msgstr "Deletion deadlines create reviewable proposals. Only an authorized decision approves, defers, or rejects a deletion."
+
+msgid "Löschvorschläge, Audit-Log und DSGVO-Paket unterstützen die regelmäßige Kontrolle."
+msgstr "Deletion proposals, the audit log, and the GDPR package support regular reviews."
+
+msgid "Mehr erfahren"
+msgstr "Learn more"
+
+msgid "Neue Kontakte werden über „Neu“ angelegt und erscheinen danach im Zeitstrom."
+msgstr "New contacts are created through “New” and then appear in the timeline."
+
+msgid "Offline verfügbare Daten bleiben verschlüsselt auf diesem Gerät. Änderungen werden nach dem Wiederverbinden übertragen; Konflikte müssen geprüft werden."
+msgstr "Offline data remains encrypted on this device. Changes are transmitted after reconnecting; conflicts must be reviewed."
+
+msgid "Personenakten verbinden Pseudonym, Kontakte, Fälle, Aufgaben und Dateien."
+msgstr "Person records connect a pseudonym with contacts, cases, tasks, and files."
+
+msgid "Was ist das?"
+msgstr "What is this?"
+
+msgid "Ziele, Meilensteine und Episoden strukturieren den Verlauf eines Falls."
+msgstr "Goals, milestones, and episodes structure the course of a case."
+
+#, python-format
+msgid "Zu „%(area)s“"
+msgstr "Go to “%(area)s”"
+
+msgid "Überfällige Aufgaben werden in der Navigation zusätzlich hervorgehoben."
+msgstr "Overdue tasks are additionally highlighted in the navigation."

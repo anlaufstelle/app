@@ -74,6 +74,10 @@
     </div>
 </div>
 
+{% url 'core:help_page' 'datenschutz' as four_eyes_help_url %}
+{% trans "Beim Vier-Augen-Prinzip führt ein Löschwunsch zunächst zu einem Antrag. Eine zweite berechtigte Person muss ihn prüfen, bevor gelöscht wird." as four_eyes_help_text %}
+<div class="mb-4">{% include "components/_context_help.html" with help_id="four-eyes" help_text=four_eyes_help_text help_url=four_eyes_help_url only %}</div>
+
 {# Hausverbot-Banner (Tokens) #}
 {% if active_bans %}
 <div class="mb-4 space-y-2">
