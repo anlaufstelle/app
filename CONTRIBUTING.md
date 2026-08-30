@@ -330,6 +330,8 @@ pre-commit run --all-files               # alle commit-stage Hooks gegen das Rep
 - **Commit-Stage:** Ruff lint+format, `makemigrations --check`, `mypy`, Translation-Version, `pip-compile` bei Lock-File-Drift. Läuft in unter 5 s.
 - **Pre-Push:** `make lint && make deps-check && make check` — der Solo-Maintainer-Ersatz für Required Status Checks. Branch Protection mit Required Status Checks greift bei direktem `git push` auf `main` nicht; der pre-push-Hook fängt deshalb genau das ab, was sonst rote CI nach Push produzieren würde (Lock-Drift, Format-Drift, Migrations-Drift). Läuft in ~10 s. Tests bleiben in CI.
 
+> **venv vor JEDEM Push aktivieren** (Lehre aus dem v0.89.0-Handoff): Der `pre-push`-Hook ruft `pre-commit` auf. Ohne aktiviertes venv bricht **jeder** Push mit `pre-commit not found. Did you forget to activate your virtualenv?` ab. Bei einem **Tag**-Push ist das besonders tückisch — git meldet danach nur `failed to push some refs`, der Tag bleibt still lokal, und auffallen kann das erst Schritte später am Tag-Push-Gate (`release-verify-tags.sh`). Also `. .venv/bin/activate` (oder einmalig `PATH="$PWD/.venv/bin:$PATH" git push …`) — **nicht** `--no-verify`, das umgeht die Schnell-CI.
+
 CI auf [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) ist die letztgültige Quelle der Wahrheit; der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach Push.
 
 ### Port-Übersicht und Prozess-Hygiene

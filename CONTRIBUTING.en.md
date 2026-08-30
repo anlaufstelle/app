@@ -327,6 +327,8 @@ pre-commit run --all-files               # run all commit-stage hooks against th
 - **Commit-stage:** Ruff lint+format, `makemigrations --check`, `mypy`, translation version, `pip-compile` on lock-file drift. Runs in under 5 s.
 - **Pre-push:** `make lint && make deps-check && make check` — the solo-maintainer replacement for required status checks. Branch protection with required status checks does not fire on a direct `git push` to `main`; the pre-push hook therefore catches exactly what would otherwise produce red CI after a push (lock drift, format drift, migration drift). Runs in ~10 s. Tests remain in CI.
 
+> **Activate the venv before EVERY push** (lesson from the v0.89.0 handoff): the `pre-push` hook invokes `pre-commit`. Without an activated venv **every** push aborts with `pre-commit not found. Did you forget to activate your virtualenv?`. On a **tag** push this is particularly treacherous — git then only reports `failed to push some refs`, the tag stays behind locally without a word, and it may not surface until several steps later at the tag-push gate (`release-verify-tags.sh`). So run `. .venv/bin/activate` (or a one-off `PATH="$PWD/.venv/bin:$PATH" git push …`) — **not** `--no-verify`, which bypasses the quick CI.
+
 CI on [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) is the definitive source of truth; the pre-push hook only reduces the likelihood of red CI after a push.
 
 ### Port Overview and Process Hygiene
@@ -975,4 +977,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: e8db3d64512a49bd20af4675f2c2157ee09456af -->
+<!-- source-hash: d8b97f0d7b390a4c7d159681791acdda4653fd98 -->
