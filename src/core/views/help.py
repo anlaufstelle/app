@@ -138,6 +138,9 @@ class HelpPageView(LoginRequiredMixin, TemplateView):
         page = HELP_PAGES.get(slug)
         if page is None:
             raise Http404
+        # Detailtexte bleiben bewusst fuer alle angemeldeten Rollen direkt
+        # erreichbar. Deshalb duerfen sie keine rolleninternen Informationen
+        # enthalten; nur der Sprung in einen Bereich folgt dessen Nav-Gate.
         nav_item = nav.item(page.nav_key)
         context.update(
             {

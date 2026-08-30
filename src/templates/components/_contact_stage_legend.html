@@ -23,4 +23,9 @@ Suchergebnis-Dropdown (kein Platz — dort greift C2).
 </p>
 {% url 'core:help_page' 'personen' as contact_stage_help_url %}
 {% trans "Die Kontaktstufe macht sichtbar, wie viele persönliche Angaben gespeichert sind. Bei Zusatzangaben wird das Öffnen der Personenakte protokolliert." as contact_stage_help_text %}
-{% include "components/_context_help.html" with help_id="contact-stage" help_text=contact_stage_help_text help_url=contact_stage_help_url only %}
+{% trans "Was bedeutet die Kontaktstufe?" as contact_stage_help_label %}
+{% if offline_shell %}
+{% include "components/_context_help.html" with help_id="contact-stage" help_text=contact_stage_help_text summary_label=contact_stage_help_label only %}
+{% else %}
+{% include "components/_context_help.html" with help_id="contact-stage" help_text=contact_stage_help_text help_url=contact_stage_help_url summary_label=contact_stage_help_label only %}
+{% endif %}

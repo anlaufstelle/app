@@ -155,12 +155,10 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v42"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v43"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1838: offline-store.js ist in den 4-Datei-Verbund offline-db/"
-            "offline-bundles/offline-revocations/offline-store gesplittet — "
-            "drei neue precachte Dateien + geaenderte Shell-Templates muessen "
-            "atomar erneuert werden; Re-Install + Re-Precache noetig)."
+            "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
+            "muss Bestandsgeraete per Re-Install + Re-Precache erreichen)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -690,12 +688,15 @@ class TestPrecachedShellBumpGuard:
     # Aenderung => Bump + Hash gemeinsam nachgezogen. Vor dem Bump repo-weit
     # nach v40-Pins gegrept (Integrator-Auflage): test_pwa_views.py (2x) und
     # test_offline_tally_contract.py — alle in diesem Commit nachgezogen.
-    _PINNED_CACHE_NAME = "anlaufstelle-v42"
+    # Refs #2043: _contact_stage_legend.html aendert gerendertes Markup in der
+    # precachten Offline-Personenliste; v43 und der Hash werden gemeinsam
+    # nachgezogen. Der online-only Hilfe-Link wird dort bewusst unterdrueckt.
+    _PINNED_CACHE_NAME = "anlaufstelle-v43"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
     # kein weiterer Bump.
-    _PINNED_SHELL_HASH = "2b697d1f44a5e82d3b64dfd77f54e86f0184db640c4adc15cab0375e81bb7eb4"
+    _PINNED_SHELL_HASH = "339d96aa562a512ac553525b826ebf0dd96f95ca414908c9d50f551f4c011a1d"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

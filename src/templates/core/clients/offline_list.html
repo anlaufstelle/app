@@ -58,7 +58,7 @@
     </div>
 
     <div x-show="hasCachedClients" x-cloak class="mb-4">
-        {% include "components/_contact_stage_legend.html" %}
+        {% include "components/_contact_stage_legend.html" with offline_shell=True %}
     </div>
 
     {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}

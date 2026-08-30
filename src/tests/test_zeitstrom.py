@@ -1,6 +1,7 @@
 """Tests für den Zeitstrom (unified activity stream)."""
 
 from datetime import date, datetime, time, timedelta
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 import pytest
@@ -9,6 +10,35 @@ from django.utils import timezone
 
 from core.models import Event, TimeFilter
 from core.services.events import get_time_range
+
+
+class _DetailsInTestIdBlock(HTMLParser):
+    """Find ``details`` only inside the element carrying one test id."""
+
+    def __init__(self, testid):
+        super().__init__()
+        self.testid = testid
+        self.depth = 0
+        self.has_details = False
+
+    def handle_starttag(self, tag, attrs):
+        if self.depth:
+            self.depth += 1
+            self.has_details |= tag == "details"
+            return
+        if dict(attrs).get("data-testid") == self.testid:
+            self.depth = 1
+            self.has_details = tag == "details"
+
+    def handle_endtag(self, tag):
+        if self.depth:
+            self.depth -= 1
+
+
+def _testid_block_has_details(content, testid):
+    parser = _DetailsInTestIdBlock(testid)
+    parser.feed(content)
+    return parser.has_details
 
 
 @pytest.fixture
@@ -433,7 +463,7 @@ class TestZeitstromCurrentShift:
         assert "Aktueller Dienst" in content
         # Kein aufklappbarer Bereich mehr für die Dienst-Übersicht.
         assert 'data-testid="handover-summary"' not in content
-        assert "<details" not in content
+        assert not _testid_block_has_details(content, "current-shift")
 
     def test_current_shift_summary_none_when_no_shift_running(self, client, staff_user, facility, time_filter_frueh):
         """Läuft gerade keine Schicht, bleibt die Box leer (kein Crash)."""

@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% load i18n %}
 
-{% block title %}{{ nav_item.label }} – {% trans "Hilfe" %}{% endblock %}
+{% block title %}{{ nav_item.label }} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <article class="max-w-3xl mx-auto" data-help-slug="{{ help_page.slug }}">
-    <a href="{% url 'core:help_overview' %}" class="inline-flex items-center text-[13px] text-ink-muted hover:text-accent mb-4">← {% trans "Hilfe-Übersicht" %}</a>
+    {% url 'core:help_overview' as help_back_url %}
+    {% trans "Hilfe-Übersicht" as help_back_label %}
+    {% include "components/_back_link.html" with url=help_back_url label=help_back_label only %}
     <h1 class="text-[26px] font-bold text-ink mb-3">{{ nav_item.label }}</h1>
     <p class="text-sm leading-6 text-ink-soft mb-5">{{ help_page.intro }}</p>
     <ul class="space-y-3 mb-6">

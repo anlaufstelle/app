@@ -12336,3 +12336,18 @@ msgstr "Go to “%(area)s”"
 
 msgid "Überfällige Aufgaben werden in der Navigation zusätzlich hervorgehoben."
 msgstr "Overdue tasks are additionally highlighted in the navigation."
+
+msgid "Was bedeutet die Kontaktstufe?"
+msgstr "What does the contact level mean?"
+
+msgid "Wie funktionieren Feldbedingungen?"
+msgstr "How do field conditions work?"
+
+msgid "Wie funktionieren Löschfristen?"
+msgstr "How do deletion periods work?"
+
+msgid "Wie funktioniert das Vier-Augen-Prinzip?"
+msgstr "How does the four-eyes principle work?"
+
+msgid "Wie funktioniert die Offline-Arbeit?"
+msgstr "How does offline work?"

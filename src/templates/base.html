@@ -86,7 +86,8 @@
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
             {% url 'core:help_overview' as offline_help_url %}
             {% trans "Offline verfügbare Daten bleiben verschlüsselt auf diesem Gerät. Änderungen werden nach dem Wiederverbinden übertragen; Konflikte müssen geprüft werden." as offline_help_text %}
-            {% include "components/_context_help.html" with help_id="offline" help_text=offline_help_text help_url=offline_help_url only %}
+            {% trans "Wie funktioniert die Offline-Arbeit?" as offline_help_label %}
+            {% include "components/_context_help.html" with help_id="offline" help_text=offline_help_text help_url=offline_help_url summary_label=offline_help_label only %}
             {# Refs #1535 (#1499): verlinkt die kanonische Personenliste #}
             {# (core:client_list, /clients/) — rendert offline in-place die lokal    #}
             {# gecachten Personen statt der generischen offline_fallback- #}

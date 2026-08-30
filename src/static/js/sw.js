@@ -144,7 +144,12 @@ importScripts("/static/js/url-patterns.js");
 // z.B. ein neues offline-client-view.js, das offlineFormFields.formatTs
 // erwartet, gegen ein altes offline-form-fields.js ohne Formatter. Der Bump
 // erzwingt Re-Install + Re-Precache und erneuert die Module atomar.
-const CACHE_NAME = "anlaufstelle-v42";
+// Refs #2043: v42 -> v43 -- die precachte Personenlisten-Shell bindet ueber
+// components/_contact_stage_legend.html die neue Kontexthilfe ein. Der
+// Online-Link zur angemeldeten Hilfeseite bleibt in dieser Offline-Shell
+// bewusst aus; das geaenderte Shell-Markup muss Bestandsgeraete trotzdem per
+// Re-Install + Re-Precache erreichen.
+const CACHE_NAME = "anlaufstelle-v43";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

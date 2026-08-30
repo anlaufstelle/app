@@ -29,7 +29,8 @@ Feld-Board mutiert wird. Akzeptiert: recoverable (erneut öffnen), der Gewinn
     </p>
     {% url 'core:help_page' 'verwaltung' as conditions_help_url %}
     {% trans "Bedingungen steuern, wann ein Feld im Formular erscheint. Regeln derselben Gruppe gelten gemeinsam; mehrere Gruppen bieten alternative Wege." as conditions_help_text %}
-    {% include "components/_context_help.html" with help_id="document-conditions" help_text=conditions_help_text help_url=conditions_help_url only %}
+    {% trans "Wie funktionieren Feldbedingungen?" as conditions_help_label %}
+    {% include "components/_context_help.html" with help_id="document-conditions" help_text=conditions_help_text help_url=conditions_help_url summary_label=conditions_help_label only %}
 
     {% if condition_field_count < 2 %}
     <div class="card p-4" data-testid="condition-board-empty">

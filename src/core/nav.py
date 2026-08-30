@@ -517,7 +517,7 @@ HILFE = NavItem(
     gates=("is_authenticated",),
     testid="nav-help",
     mobile_testid="mobile-nav-help",
-    icon="dsgvo",
+    icon="help",
     divider_before=True,
 )
 
@@ -655,11 +655,11 @@ SIDEBAR: tuple[NavItem, ...] = (
     FAELLE,
     DATEIEN,
     STATISTIK,
+    HILFE,
     DATENSCHUTZ_HUB,
     VERWALTUNG_HUB,
     SYSTEMBEREICH,
     ADMINISTRATION_SUPER,
-    HILFE,
 )
 
 

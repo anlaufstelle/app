@@ -5,6 +5,9 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
+    {% url 'core:zeitstrom' as help_back_url %}
+    {% trans "Zeitstrom" as help_back_label %}
+    {% include "components/_back_link.html" with url=help_back_url label=help_back_label only %}
     <h1 class="text-[26px] font-bold text-ink mb-2">{% trans "Hilfe" %}</h1>
     <p class="text-sm text-ink-muted mb-6">{% trans "Kurze Orientierung zu den Bereichen, die für Ihre Rolle verfügbar sind." %}</p>
 
