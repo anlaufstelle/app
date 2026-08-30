@@ -211,6 +211,7 @@ TEMPLATES = [
                 "core.context_processors.review_counts",
                 "core.context_processors.source_code",
                 "core.context_processors.demo",
+                "core.context_processors.legal_pages",
                 "core.context_processors.mfa_setup_reminder",
                 "core.context_processors.umami",
             ],
@@ -674,6 +675,12 @@ UMAMI_REQUIRE_CONSENT = False
 # Leer = kein Link. Nur die Demo setzt konkrete URLs (auf die Webseite). Refs #1604.
 DEMO_LEGAL_IMPRINT_URL = ""
 DEMO_LEGAL_PRIVACY_URL = ""
+
+# Oeffentliche Rechtstexte fuer selbst gehostete Instanzen (Refs #2076).
+# UTF-8-Dateien mit einem kleinen, sicher escapten Markdown-Subset; leer = 404.
+# DEMO_MODE verwendet weiterhin ausschliesslich die Demo-Templates oben.
+LEGAL_IMPRINT_FILE = os.environ.get("LEGAL_IMPRINT_FILE") or None
+LEGAL_PRIVACY_FILE = os.environ.get("LEGAL_PRIVACY_FILE") or None
 
 # --- Django Unfold ---
 

@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from django.conf import settings
 from django.db.models import Q
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import WorkItem
@@ -47,6 +48,26 @@ def source_code(request):
         "SOURCE_CODE_VERSION": settings.SOURCE_CODE_VERSION,
         "app_version": app_version,
         "app_build": app_build,
+    }
+
+
+def legal_pages(request):
+    """Expose only legal-page links whose targets are available (Refs #2076)."""
+    if getattr(settings, "DEMO_MODE", False):
+        return {
+            "legal_imprint_url": getattr(settings, "DEMO_LEGAL_IMPRINT_URL", ""),
+            "legal_privacy_url": getattr(settings, "DEMO_LEGAL_PRIVACY_URL", ""),
+        }
+
+    from core.views.legal import read_configured_legal_file
+
+    return {
+        "legal_imprint_url": (
+            reverse("demo_imprint") if read_configured_legal_file("LEGAL_IMPRINT_FILE") is not None else ""
+        ),
+        "legal_privacy_url": (
+            reverse("demo_privacy") if read_configured_legal_file("LEGAL_PRIVACY_FILE") is not None else ""
+        ),
     }
 
 

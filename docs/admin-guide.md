@@ -8,6 +8,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 1. [Installation (Docker Compose)](#1-installation-docker-compose)
 2. [Erstkonfiguration](#2-erstkonfiguration)
+   - [Pflichtangaben (Impressum/Datenschutz) einrichten](#pflichtangaben-impressumdatenschutz-einrichten)
    - 2.2c [Einrichtung stilllegen: archivieren statt löschen](#22c-einrichtung-stilllegen-archivieren-statt-löschen)
    - 2.5 [Dokumentationstypen konfigurieren](#25-dokumentationstypen-konfigurieren)
    - 2.6 [Auswahloptionen verwalten](#26-auswahloptionen-verwalten-feldvorlagen)
@@ -300,6 +301,39 @@ Erwartete (anonyme) Antwort — seit #1375 enthält sie **nur** das `status`-Fel
 ---
 
 ## 2. Erstkonfiguration
+
+### Pflichtangaben (Impressum/Datenschutz) einrichten
+
+Selbst gehostete, öffentlich erreichbare Instanzen benötigen eigene Angaben nach § 5 DDG und eigene Informationen nach Art. 13 DSGVO. Anlaufstelle liefert dafür bewusst keine allgemeinen Mustertexte aus: Verantwortliche Stelle, Kontaktwege, Zwecke, Rechtsgrundlagen, Empfänger und Fristen hängen von der jeweiligen Einrichtung und ihrem Betrieb ab.
+
+Legen Sie beide Texte als UTF-8-Dateien auf dem Host ab, zum Beispiel unter `./legal/impressum.md` und `./legal/datenschutz.md`. Setzen Sie anschließend die beiden Pfade aus Sicht des Web-Containers:
+
+```dotenv
+LEGAL_IMPRINT_FILE=/run/legal/impressum.md
+LEGAL_PRIVACY_FILE=/run/legal/datenschutz.md
+```
+
+Da `docker-compose.prod.yml` nur ausdrücklich freigegebene Laufzeitvariablen an den Web-Container weitergibt, ergänzen Sie dafür eine lokale `compose.legal.yml` neben der `.env`:
+
+```yaml
+services:
+  web:
+    environment:
+      LEGAL_IMPRINT_FILE: ${LEGAL_IMPRINT_FILE}
+      LEGAL_PRIVACY_FILE: ${LEGAL_PRIVACY_FILE}
+    volumes:
+      - ./legal:/run/legal:ro
+```
+
+Starten Sie den Webdienst danach mit beiden Compose-Dateien neu (und geben Sie bei späteren Compose-Aufrufen dieselbe zweite Datei an):
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web
+```
+
+Die Dateien unterstützen bewusst nur einen kleinen Markdown-Ausschnitt: Überschriften mit `#` bis `###`, Absätze und Leerzeilen, unsortierte Listen mit `-` oder `*` sowie Links der Form `[Text](URL)`. Linkziele sind ausschließlich mit `http:`, `https:` oder `mailto:` erlaubt; HTML und alles andere wird als Text ausgegeben. Damit können Rechtstexte keine Skripte oder Styles in die Anwendung einschleusen.
+
+Ohne gesetzten Pfad sowie bei einer fehlenden, unlesbaren oder ungültig kodierten Datei antwortet die jeweilige Seite mit 404 und ihr Link wird auf Login-, Passwort-Reset- und App-Seiten nicht angezeigt. Die Protokollwarnung nennt nur das betroffene Setting, nicht den konfigurierten Dateipfad. Prüfen Sie nach jeder Text- oder Mount-Änderung `/impressum/` und `/datenschutzerklaerung/` ohne Anmeldung. Der spezielle Demo-Modus verwendet unverändert seine eigenen Rechtstext-Templates und ignoriert diese beiden Dateien.
 
 ### 2.1 Erstinstallation: Super-Admin anlegen (Bootstrap)
 

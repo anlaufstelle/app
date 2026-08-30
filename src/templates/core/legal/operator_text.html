@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ legal_page_title }} — Anlaufstelle{% endblock %}
+
+{% block content %}
+<article class="max-w-3xl mx-auto space-y-4" data-testid="operator-legal-text">
+    {{ legal_content }}
+</article>
+{% endblock %}

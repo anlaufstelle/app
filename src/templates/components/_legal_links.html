@@ -1,0 +1,9 @@
+{% load i18n %}
+{% if legal_imprint_url %}
+<span aria-hidden="true" class="mx-1.5">·</span>
+<a href="{{ legal_imprint_url }}"{% if legal_links_external %} rel="noopener" target="_blank"{% endif %} class="hover:underline">{% trans "Impressum" %}</a>
+{% endif %}
+{% if legal_privacy_url %}
+<span aria-hidden="true" class="mx-1.5">·</span>
+<a href="{{ legal_privacy_url }}"{% if legal_links_external %} rel="noopener" target="_blank"{% endif %} class="hover:underline">{% trans "Datenschutz" %}</a>
+{% endif %}
