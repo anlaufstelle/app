@@ -22,6 +22,20 @@ from core.services.audit import audit_event
 #: ``messages.error``-Zeile, statt sie als 404 zu verschlucken.
 WITHDRAW_NOT_PENDING_MESSAGE = _("Dieser Löschantrag ist bereits entschieden und kann nicht mehr zurückgezogen werden.")
 
+#: Der Sonderfall „schon zurückgezogen" bekommt eine eigene Meldung: geht die
+#: Erfolgsantwort verloren und der Browser wiederholt den POST, hat NIEMAND
+#: entschieden — sie selbst hat zurückgezogen, und genau das ist eingetreten.
+#: „bereits entschieden" wäre dort sachlich falsch und beunruhigend.
+WITHDRAW_ALREADY_WITHDRAWN_MESSAGE = _("Dieser Löschantrag wurde bereits zurückgezogen.")
+
+
+def withdraw_blocked_message(status):
+    """Die passende Meldung für einen nicht (mehr) zurückziehbaren Antrag."""
+    if status == DeletionRequest.Status.WITHDRAWN:
+        return WITHDRAW_ALREADY_WITHDRAWN_MESSAGE
+    return WITHDRAW_NOT_PENDING_MESSAGE
+
+
 #: Der ``detail``-Schluessel je Zieltyp — exakt die Schluessel, die der
 #: ``DELETION_REQUESTED``-Schreiber des jeweiligen Pfades benutzt
 #: (``services/events/deletion.py``, ``services/client/main.py``,
@@ -73,18 +87,25 @@ def withdraw_deletion_request(deletion_request, user):
     if dr.requested_by_id is None or dr.requested_by_id != user.pk:
         raise ValidationError(_("Nur die antragstellende Person kann einen Löschantrag zurückziehen."))
     if dr.status != DeletionRequest.Status.PENDING:
-        raise ValidationError(WITHDRAW_NOT_PENDING_MESSAGE)
+        raise ValidationError(withdraw_blocked_message(dr.status))
 
     dr.status = DeletionRequest.Status.WITHDRAWN
     dr.reviewed_at = timezone.now()
     dr.save(update_fields=["status", "reviewed_at"])
+    detail = {_WITHDRAW_DETAIL_KEY[dr.target_type]: str(dr.target_id)}
+    if dr.merge_into_id is not None:
+        # Merge-Antraege (Refs #1876) nennen im ``DELETION_REQUESTED``-Eintrag
+        # beide Seiten (``services/client/merge.py``). Ohne ``merge_into``
+        # sagte die Rueckzugszeile nicht, WELCHE Zusammenfuehrung beendet
+        # wurde — beide Werte sind Client-UUIDs, also PII-frei.
+        detail["merge_into"] = str(dr.merge_into_id)
     audit_event(
         action=AuditLog.Action.DELETION_WITHDRAWN,
         user=user,
         facility=dr.facility,
         target_type="DeletionRequest",
         target_id=str(dr.pk),
-        detail={_WITHDRAW_DETAIL_KEY[dr.target_type]: str(dr.target_id)},
+        detail=detail,
     )
     return dr
 

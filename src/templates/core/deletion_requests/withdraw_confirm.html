@@ -60,7 +60,10 @@ Gefahren-Signal waere irrefuehrend.{% endcomment %}
                 data-testid="deletion-withdraw-submit">
             {% trans "Antrag zurückziehen" %}
         </button>
-        <a href="{% url 'core:deletion_request_list' %}" class="px-4 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+        {% comment %}Refs #2040: Ziel kommt aus der View (``_cancel_url``), nicht fest die
+        Liste — für eine reine Antragstellerin hängt der Listenzugang am eigenen offenen
+        Antrag, der zwischen Dialog-Aufruf und Klick entschieden werden kann.{% endcomment %}
+        <a href="{{ cancel_url }}" class="px-4 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
     </form>
 </div>
 {% endblock %}

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-30 13:28+0200\n"
+"POT-Creation-Date: 2026-08-30 19:30+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12241,6 +12241,10 @@ msgstr "Löschantrag zurückgezogen"
 #: src/core/services/deletion.py:23
 msgid "Dieser Löschantrag ist bereits entschieden und kann nicht mehr zurückgezogen werden."
 msgstr "Dieser Löschantrag ist bereits entschieden und kann nicht mehr zurückgezogen werden."
+
+#: src/core/services/deletion.py:29
+msgid "Dieser Löschantrag wurde bereits zurückgezogen."
+msgstr "Dieser Löschantrag wurde bereits zurückgezogen."
 
 #: src/core/services/deletion.py:74
 msgid "Nur die antragstellende Person kann einen Löschantrag zurückziehen."

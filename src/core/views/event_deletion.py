@@ -32,9 +32,9 @@ from core.services.client import (
     reject_client_merge,
 )
 from core.services.deletion import (
-    WITHDRAW_NOT_PENDING_MESSAGE,
     annotate_deletion_targets,
     eligible_deletion_confirmers,
+    withdraw_blocked_message,
     withdraw_deletion_request,
 )
 from core.services.events import approve_deletion, reject_deletion
@@ -329,27 +329,48 @@ class DeletionRequestWithdrawView(LoginRequiredMixin, View):
         aber inzwischen entschieden" — der Race gegen eine parallele
         Genehmigung, den der Aufrufer in eine Meldung übersetzt statt in ein
         404, das der Antragstellerin nichts erklären würde.
+
+        **Ohne ``current_facility`` gibt es hier nichts zu holen.**
+        ``get_scoped_object`` wirft in dem Fall bewusst ``ValueError`` gegen
+        ungescopte Lookups (Refs #1346) — das ist als Programmierfehler-Signal
+        richtig, wäre hier aber ein 500 auf einer regulär erreichbaren Route:
+        der super_admin trägt ``facility=None`` (Refs #867), und bei
+        archivierter Einrichtung leert die Middleware das Feld (Refs #2067).
+        Für beide ist ein Rückzug schlicht gegenstandslos → 404 wie bei jedem
+        anderen nicht auffindbaren Antrag.
         """
+        if not getattr(request, "current_facility", None):
+            raise Http404
         dr = get_scoped_object(DeletionRequest, request, pk=pk, requested_by=request.user)
         return dr if dr.status == DeletionRequest.Status.PENDING else None
+
+    def _blocked(self, request, pk):
+        """Meldung + Redirect für einen nicht mehr offenen eigenen Antrag."""
+        status = (
+            DeletionRequest.objects.filter(pk=pk, requested_by=request.user).values_list("status", flat=True).first()
+        )
+        messages.error(request, withdraw_blocked_message(status))
+        return redirect(self._after_withdraw_redirect(request))
 
     def get(self, request, pk):
         dr = self._load_own_pending(request, pk)
         if dr is None:
-            messages.error(request, WITHDRAW_NOT_PENDING_MESSAGE)
-            return redirect(self._after_withdraw_redirect(request))
+            return self._blocked(request, pk)
         annotate_deletion_targets([dr], request.current_facility, request.user)
         return render(
             request,
             "core/deletion_requests/withdraw_confirm.html",
-            {"deletion_request": dr, "is_merge_request": dr.merge_into_id is not None},
+            {
+                "deletion_request": dr,
+                "is_merge_request": dr.merge_into_id is not None,
+                "cancel_url": self._cancel_url(request),
+            },
         )
 
     def post(self, request, pk):
         dr = self._load_own_pending(request, pk)
         if dr is None:
-            messages.error(request, WITHDRAW_NOT_PENDING_MESSAGE)
-            return redirect(self._after_withdraw_redirect(request))
+            return self._blocked(request, pk)
         try:
             withdraw_deletion_request(dr, request.user)
         except ValidationError as exc:
@@ -362,6 +383,24 @@ class DeletionRequestWithdrawView(LoginRequiredMixin, View):
 
         messages.success(request, _("Löschantrag wurde zurückgezogen. Es wurde nichts gelöscht."))
         return redirect(self._after_withdraw_redirect(request))
+
+    @staticmethod
+    def _cancel_url(request) -> str:
+        """Ziel des „Abbrechen"-Links — bewusst zustandsUNabhängig.
+
+        ``can_access_deletion_requests`` trägt für eine reine Antragstellerin
+        nur der eigene **offene** Antrag (Refs #1736 B). Ein fest auf die Liste
+        verdrahteter Abbrechen-Link wäre deshalb ein 403, sobald zwischen
+        Dialog-Aufruf und Klick jemand anders entscheidet — ausgerechnet auf
+        dem Weg zurück aus einer Aktion, die sie gar nicht ausgeführt hat.
+        Maßgeblich ist daher der rollenbasierte Anteil des Gates
+        (``sees_all_deletion_requests``), der sich zwischenzeitlich nicht
+        ändern kann; alle anderen kehren auf die immer erreichbare Startseite
+        zurück.
+        """
+        if request.user.sees_all_deletion_requests:
+            return reverse("core:deletion_request_list")
+        return reverse("core:dashboard")
 
     @staticmethod
     def _after_withdraw_redirect(request) -> str:
