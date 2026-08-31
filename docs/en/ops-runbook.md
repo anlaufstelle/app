@@ -2472,6 +2472,7 @@ EXTERNAL_ORIGIN=https://anlaufstelle.example.de
 - **Format:** scheme (`http`/`https`) + host + optional port. No path, no trailing slash, no query. An invalid value aborts startup, instead of surfacing in an already-sent email.
 - **Derivation:** If `ALLOWED_HOSTS` carries exactly **one** public hostname, `https://<host>` is derived from it (the same pattern as `OTP_WEBAUTHN_RP_ID`) — the normal case of "one domain behind Caddy" does not need the variable.
 - **Loopback doesn't count:** `localhost`, `127.0.0.1`, and `::1` are in `ALLOWED_HOSTS` only so the container healthcheck (`http://localhost:8000/health/`) doesn't get a `DisallowedHost` 400 — the bundled deploy templates therefore list them alongside the domain. They are disregarded for the derivation; they would never be a candidate as the basis of a token link anyway.
+- **If `web` never becomes healthy, there are exactly two causes** (Refs #2077): either the loopback entry is missing from `ALLOWED_HOSTS` — the healthcheck then gets a `DisallowedHost` 400 — or `SECURE_REDIRECT_EXEMPT` is not in effect: otherwise `SECURE_SSL_REDIRECT=True` answers the healthcheck call `http://localhost:8000/health/` with a 301 to `https://`, and the healthcheck client cannot speak TLS locally. `web` then never turns healthy and `caddy` (`condition: service_healthy`) never starts at all. Both halves have been set in `settings/prod.py` and the `.env*.example` templates since #2077; on an older, hand-maintained `.env` they must be added. Quick check inside the container: `python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health/').status)"` must return `200`, not 301 or 400.
 - **Fail-closed:** With several public hosts, a pure wildcard config, or only loopback entries, there is no unambiguous answer; prod then does not start, and names `EXTERNAL_ORIGIN` in the abort message. Deliberately no guessing: a wrongly guessed origin makes every token link unusable.
 - **The `ALLOWED_HOSTS` check itself was not tightened** — subdomain patterns remain allowed, they are now simply irrelevant for link construction.
 
@@ -2609,4 +2610,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-08-31 -->
-<!-- source-hash: 4d260082e764501cd87bf983adda831c33e80f7a -->
+<!-- source-hash: 2195008e22a37e530f942a01dbf446396196bd14 -->
