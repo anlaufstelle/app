@@ -119,6 +119,11 @@ def check_db_ownership() -> list[str]:
     """A1.4 (Refs #1026): Verifiziert, dass die App-Runtime-Rolle NICHT Owner der
     Datenbank oder der Append-Only-Tabellen ist.
 
+    Geprueft wird beides: die App-Rolle darf **nicht** Owner sein, und die
+    Admin-Rolle **muss** es sein (Refs #2086 — vorher fiel ein Owner, der weder
+    App noch Admin ist, durch; genau das hinterlaesst ein unvollstaendiger
+    § 9.6-Umbau einer Bootstrap-Topologie).
+
     :func:`check_db_roles` prueft nur die Rollen-ATTRIBUTE (``rolsuper``/
     ``rolbypassrls``) — NICHT die Ownership. Auf einer **Bestands-DB** (die
     App-Rolle war vor A1.4 DB-Owner) laeuft Migration ``0107`` (``ENABLE
@@ -149,18 +154,42 @@ def check_db_ownership() -> list[str]:
         return []
 
     problems: list[str] = []
-    if _query_db_owner() == app_role:
-        problems.append(
-            f"Datenbank-Owner ist die App-Runtime-Rolle {app_role!r} — im "
-            f"Drei-Rollen-Modell (A1.4) muss die Admin-/Wartungs-Rolle {admin_role!r} "
-            "Owner sein."
-        )
+    # Refs #2086: Bis dahin wurde nur gegen die App-Rolle verglichen — das Gate
+    # bewies „App ist NICHT Owner", nicht „Admin IST Owner". Nach dem Umbau
+    # einer alten Bootstrap-Topologie (Runbook § 9.6 Fall C) gehoeren Altobjekte
+    # weiterhin der Bootstrap-Rolle: weder App noch Admin. Das war still gruen,
+    # obwohl die Admin-Rolle die Append-Only-Trigger dann gar nicht per
+    # Owner-DDL bedienen kann. ``None`` heisst „Objekt existiert noch nicht"
+    # (Erstinbetriebnahme vor dem ersten ``migrate``) und ist kein Fund —
+    # docker-migrate.sh fuehrt dieses Gate VOR dem Migrationslauf aus.
+    db_owner = _query_db_owner()
+    if db_owner is not None and db_owner != admin_role:
+        if db_owner == app_role:
+            problems.append(
+                f"Datenbank-Owner ist die App-Runtime-Rolle {app_role!r} — im "
+                f"Drei-Rollen-Modell (A1.4) muss die Admin-/Wartungs-Rolle {admin_role!r} "
+                "Owner sein."
+            )
+        else:
+            problems.append(
+                f"Datenbank-Owner ist {db_owner!r} — im Drei-Rollen-Modell (A1.4) "
+                f"muss die Admin-/Wartungs-Rolle {admin_role!r} Owner sein."
+            )
     for table in _APPEND_ONLY_TABLES:
-        if _query_table_owner(table) == app_role:
+        table_owner = _query_table_owner(table)
+        if table_owner is None or table_owner == admin_role:
+            continue
+        if table_owner == app_role:
             problems.append(
                 f"Append-Only-Tabelle {table!r} gehoert der App-Runtime-Rolle "
                 f"{app_role!r} — als Owner koennte sie die Immutability-Trigger per "
                 "'ALTER TABLE ... DISABLE TRIGGER' abschalten (A1.4)."
+            )
+        else:
+            problems.append(
+                f"Append-Only-Tabelle {table!r} gehoert {table_owner!r} — weder der "
+                f"App- noch der Admin-Rolle. Owner muss {admin_role!r} sein, sonst "
+                "kann der Wartungspfad die Immutability-Trigger nicht bedienen (A1.4)."
             )
     if problems:
         problems.append(

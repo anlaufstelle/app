@@ -61,6 +61,14 @@ Thumbs.db
 *.env.local
 .env.dev
 .env.deploy
+# Refs #2086: die uebrigen echten Deploy-Env-Dateien. Ihre Vorlagen
+# (.env*.example) bleiben versioniert, die ausgefuellten Dateien nie — sie
+# tragen DJANGO_SECRET_KEY, ENCRYPTION_KEY und die DB-Passwoerter. Ohne
+# fuehrenden Slash greifen die Muster auf jeder Ebene, also auch fuer
+# dev-ops/deploy/barbara/.env.barbara.
+.env.staging
+.env.demo
+.env.barbara
 *.pem
 *.key
 *.crt

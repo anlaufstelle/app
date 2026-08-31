@@ -430,3 +430,65 @@ class TestCheckDbOwnership:
         with pytest.raises(SystemExit) as exc:
             call_command("check_db_roles")
         assert exc.value.code == 1
+
+
+class TestOwnershipGateRequiresAdminOwner:
+    """Refs #2086: Das Gate bewies nur „App ist NICHT Owner“, nicht „Admin IST Owner“.
+
+    § 9.6 verlangt am Ende einen gruenen ``check_db_roles``, und der Runbook-Text
+    versprach damit, dass die Ownership wirklich bei der Admin-Rolle liegt. Die
+    Implementierung verglich aber ausschliesslich gegen die App-Rolle. Nach dem
+    Umbau einer alten Bootstrap-Topologie (Fall C) gehoeren Altobjekte weiterhin
+    der **Bootstrap**-Rolle — weder App noch Admin. Das Gate meldete dafuer
+    ``[]``: gruen, obwohl der Umbau unvollstaendig war und die Admin-Rolle die
+    Append-Only-Trigger gar nicht per Owner-DDL bedienen kann.
+
+    Mock-Muster wie ``TestCheckDbOwnership`` (kein Postgres-Roundtrip).
+    """
+
+    def _patch_owners(self, monkeypatch, *, db_owner, table_owner):
+        monkeypatch.setattr(db_roles, "_query_db_owner", lambda: db_owner)
+        monkeypatch.setattr(db_roles, "_query_table_owner", lambda table: table_owner)
+
+    def _three_role_env(self, monkeypatch, settings):
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+
+    def test_bootstrap_owned_tables_are_flagged(self, monkeypatch, settings):
+        """Der real reproduzierte Fall-C-Zwischenstand: DB umgezogen, Tabellen nicht."""
+        self._three_role_env(monkeypatch, settings)
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner="anlaufstelle")
+
+        problems = cmd.check_db_ownership()
+        assert problems, (
+            "Tabellen, die weder der App- noch der Admin-Rolle gehoeren, muessen "
+            "auffallen — sonst ist ein halb gefahrener § 9.6-Umbau gruen."
+        )
+        assert any("core_auditlog" in p for p in problems)
+        assert any("anlaufstelle_admin" in p for p in problems)
+        assert any("9.6" in p for p in problems)
+
+    def test_bootstrap_owned_database_is_flagged(self, monkeypatch, settings):
+        self._three_role_env(monkeypatch, settings)
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle", table_owner="anlaufstelle_admin")
+
+        problems = cmd.check_db_ownership()
+        assert any("Datenbank" in p and "anlaufstelle_admin" in p for p in problems)
+
+    def test_missing_table_is_not_a_finding(self, monkeypatch, settings):
+        """Vor dem ersten ``migrate`` gibt es die Append-Only-Tabellen noch nicht.
+
+        ``docker-migrate.sh`` fuehrt das Gate VOR dem Migrationslauf aus — ein
+        Fund auf ``None`` wuerde jede Erstinbetriebnahme fail-closed blockieren.
+        """
+        self._three_role_env(monkeypatch, settings)
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner=None)
+
+        assert cmd.check_db_ownership() == []
+
+    def test_clean_setup_stays_green(self, monkeypatch, settings):
+        self._three_role_env(monkeypatch, settings)
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner="anlaufstelle_admin")
+
+        assert cmd.check_db_ownership() == []

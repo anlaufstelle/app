@@ -63,6 +63,38 @@ if [ -z "$APP_DB_USER" ] || [ -z "$APP_DB_PASSWORD" ]; then
 	exit 1
 fi
 
+# --- Namensinvarianten (Refs #2086) ---------------------------------------
+# Bis #2086 prueften die Preflights nur Vorhandensein und Passwort-Entropie,
+# nicht die NAMEN. Das war fail-open: bei APP_DB_USER == Bootstrap-Rolle
+# (typisch "postgres") ueberspringt die "WHERE NOT EXISTS"-Klausel unten das
+# CREATE ROLE stillschweigend — die Runtime bleibt dann der SUPERUSER, den
+# dieses Script gerade abloesen soll, und kein Fehler weist darauf hin.
+# Bei APP == ADMIN faellt zusaetzlich die Runtime-/Owner-Trennung (A1.4) weg:
+# dieselbe Rolle waere Owner UND Django-Runtime und koennte die
+# Append-Only-Trigger per DDL abschalten.
+# Der Bootstrap-Name ist per Postgres-Image-Konvention "postgres"; wir pruefen
+# beides — den konfigurierten POSTGRES_USER und das Literal.
+_BOOTSTRAP_ROLE="${POSTGRES_USER:-postgres}"
+if [ "$APP_DB_USER" = "$_BOOTSTRAP_ROLE" ] || [ "$APP_DB_USER" = "postgres" ]; then
+	echo "01-app-role.sh: APP_DB_USER ('$APP_DB_USER') darf nicht die Bootstrap-Rolle sein — abort" >&2
+	echo "  Die Bootstrap-Rolle ist SUPERUSER und kann sich nicht selbst entrechten;" >&2
+	echo "  die App-Rolle muss ein eigener, getrennter Login sein (ADR-005/ADR-020)." >&2
+	exit 1
+fi
+if [ -n "${ADMIN_DB_USER:-}" ]; then
+	if [ "$ADMIN_DB_USER" = "$_BOOTSTRAP_ROLE" ] || [ "$ADMIN_DB_USER" = "postgres" ]; then
+		echo "01-app-role.sh: ADMIN_DB_USER ('$ADMIN_DB_USER') darf nicht die Bootstrap-Rolle sein — abort" >&2
+		exit 1
+	fi
+	if [ "$ADMIN_DB_USER" = "$APP_DB_USER" ]; then
+		echo "01-app-role.sh: ADMIN_DB_USER und APP_DB_USER sind identisch ('$APP_DB_USER') — abort" >&2
+		echo "  Damit gibt es keine Runtime-/Owner-Trennung: dieselbe Rolle waere" >&2
+		echo "  DB-Owner und Django-Runtime und koennte die Append-Only-Trigger" >&2
+		echo "  per 'ALTER TABLE ... DISABLE TRIGGER' abschalten (A1.4)." >&2
+		exit 1
+	fi
+fi
+
 # Refs #1962: Die ausgelieferten Deployment-Stacks setzen dieses Flag. Dort
 # ist das Drei-Rollen-Modell kein optionaler Legacy-Fallback, und die einzige
 # Stelle, die das Bootstrap-Secret sieht, muss Platzhalter/zu kurze Werte

@@ -2157,3 +2157,719 @@ class TestUfwDockerPinning:
             [bash, "-n", str(self._SCRIPT)], capture_output=True, text=True, check=False
         )
         assert result.returncode == 0, f"Shell-Syntaxfehler in {self._SCRIPT}:\n{result.stderr.strip()}"
+
+
+class TestStagingStackRoleSeparation:
+    """Refs #2086: Staging fuhr den Webprozess als Postgres-Bootstrap-Superuser.
+
+    ``docker-compose.staging.yml`` war der einzige Deployment-Stack, der das
+    Drei-Rollen-Modell (ADR-005/017/020, Refs #902/#1026) nie nachgezogen hat:
+    kein ``deploy/postgres-init``-Mount, ``db`` und ``web`` beide auf rohem
+    ``env_file``. Damit verband die Runtime als SUPERUSER mit BYPASSRLS —
+    ``FORCE ROW LEVEL SECURITY`` war auf Staging faktisch wirkungslos, und der
+    Stack validierte genau die Fehlerklasse nicht, fuer die es ihn gibt.
+
+    Der Nachweis kann nur statisch sein: es gibt keinen Laufzeit-Test, der die
+    echte Postgres-Rolle des Webprozesses prueft (die Unit-Tests laufen selbst
+    als Superuser). Dieser Guard plus der Hand-Check auf dem Server
+    (``check_db_roles``) sind der gesamte Beweis.
+    """
+
+    _STAGING_COMPOSE = Path("docker-compose.staging.yml")
+    _INITIAL_SETUP = Path("scripts/initial-setup.sh")
+    # Die drei Variablen, die ``settings/prod.py`` (Refs #1962) im
+    # Runtime-Prozess fail-closed abweist.
+    _PRIVILEGED = {
+        "POSTGRES_ADMIN_USER",
+        "POSTGRES_ADMIN_PASSWORD",
+        "POSTGRES_BOOTSTRAP_PASSWORD",
+    }
+    # Hardening-Stanzas, die beim Kopieren aus prod still verloren gehen
+    # koennen — ein halb kopierter Service laeuft einwandfrei (Refs #1374).
+    _HARDENING = ("security_opt", "cap_drop", "read_only", "pids_limit", "mem_limit")
+
+    @classmethod
+    def _services(cls) -> dict:
+        if not cls._STAGING_COMPOSE.exists():
+            pytest.skip(
+                "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)"
+            )
+        return yaml.safe_load(cls._STAGING_COMPOSE.read_text(encoding="utf-8"))["services"]
+
+    def test_db_bootstraps_via_postgres_init_not_via_env_file(self) -> None:
+        db = self._services()["db"]
+        assert "env_file" not in db, (
+            "staging-db darf .env.staging nicht roh laden — POSTGRES_USER waere "
+            "sonst die App-Rolle und damit der Bootstrap-Superuser (Refs #2086)."
+        )
+        environment = db.get("environment", {})
+        assert environment.get("POSTGRES_USER") == "postgres"
+        assert environment.get("REQUIRE_ADMIN_DB_ROLE") == "true", (
+            "Ohne REQUIRE_ADMIN_DB_ROLE faellt 01-app-role.sh auf den unsicheren "
+            "Legacy-Pfad zurueck (App-Rolle wird selbst Owner)."
+        )
+        assert environment.get("APP_DB_USER") == "${POSTGRES_USER}"
+        assert environment.get("ADMIN_DB_USER") == "${POSTGRES_ADMIN_USER}"
+        assert "./deploy/postgres-init:/docker-entrypoint-initdb.d:ro" in db.get("volumes", []), (
+            "Ohne den Init-Mount legt der Cluster App-/Admin-Rolle nie an (Refs #2086)."
+        )
+
+    def test_db_healthcheck_probes_the_bootstrap_role(self) -> None:
+        db = self._services()["db"]
+        test = " ".join(db["healthcheck"]["test"])
+        assert "pg_isready -U postgres" in test, (
+            f"Der Healthcheck muss die Bootstrap-Rolle literal pruefen, war: {test!r}. "
+            "$$POSTGRES_USER zeigte auf die alte, aus .env.staging geladene Rolle."
+        )
+
+    def test_web_runs_as_the_unprivileged_app_role(self) -> None:
+        web = self._services()["web"]
+        assert "env_file" not in web, (
+            "staging-web darf keine vollstaendige Env-Datei laden — sie fuehrt jetzt "
+            "Admin-/Bootstrap-Secrets, die prod.py im Runtime-Prozess fail-closed "
+            "abweist (Refs #1962/#2086)."
+        )
+        environment = web.get("environment", {})
+        leaked = self._PRIVILEGED.intersection(environment)
+        assert not leaked, f"privilegierte DB-Variablen in staging-web: {sorted(leaked)}"
+        assert environment.get("ANLAUFSTELLE_PROCESS_ROLE") == "runtime"
+        assert environment.get("POSTGRES_APP_USER") == "${POSTGRES_USER}", (
+            "check_db_roles und der konditionale Funktions-GRANT lesen den stabilen "
+            "App-Rollennamen aus POSTGRES_APP_USER (Refs #1017) — fehlt er, wird die "
+            "Pruefung bzw. der GRANT still uebersprungen."
+        )
+
+    def test_maintenance_service_exists_and_uses_the_admin_role(self) -> None:
+        maintenance = self._services().get("maintenance")
+        assert maintenance is not None, (
+            "Ohne maintenance-Service gibt es auf Staging keinen Migrate-/Operator-Pfad "
+            "— scripts/initial-setup.sh bricht mit 'service maintenance is not defined' ab."
+        )
+        assert "maintenance" in maintenance.get("profiles", [])
+        environment = maintenance.get("environment", {})
+        assert environment.get("ANLAUFSTELLE_PROCESS_ROLE") == "maintenance"
+        assert environment.get("POSTGRES_USER") == "${POSTGRES_ADMIN_USER}"
+        assert environment.get("POSTGRES_PASSWORD") == "${POSTGRES_ADMIN_PASSWORD}"
+        assert environment.get("POSTGRES_BOOTSTRAP_PASSWORD") == "${POSTGRES_BOOTSTRAP_PASSWORD}"
+        assert environment.get("POSTGRES_APP_USER") == "${POSTGRES_USER}"
+
+    def test_cron_sidecar_runs_jobs_as_the_admin_role(self) -> None:
+        cron = self._services().get("cron")
+        assert cron is not None, (
+            "Ohne cron-Sidecar laufen Retention/Breach/Audit-Verifikation auf Staging nie "
+            "— der Stack waere nicht prod-repraesentativ (Refs #794/#2086)."
+        )
+        environment = cron.get("environment", {})
+        assert environment.get("POSTGRES_USER") == "${POSTGRES_ADMIN_USER}"
+        assert environment.get("POSTGRES_PASSWORD") == "${POSTGRES_ADMIN_PASSWORD}"
+        assert environment.get("POSTGRES_APP_USER") == "${POSTGRES_USER}"
+        assert "./deploy/crontab:/etc/anlaufstelle/crontab:ro" in cron.get("volumes", [])
+
+    @pytest.mark.parametrize("service_name", ("maintenance", "cron"))
+    def test_new_services_carry_the_full_container_hardening(self, service_name: str) -> None:
+        service = self._services().get(service_name, {})
+        missing = [key for key in self._HARDENING if key not in service]
+        assert not missing, (
+            f"docker-compose.staging.yml: {service_name} fehlt Hardening {missing} — "
+            "ein halb aus prod kopierter Service laeuft, nur ungehaertet (Refs #1374)."
+        )
+        assert service.get("cap_drop") == ["ALL"]
+        assert service.get("read_only") is True
+
+    def test_initial_setup_passes_the_env_file_through(self) -> None:
+        body = self._INITIAL_SETUP.read_text(encoding="utf-8")
+        wrapper = re.search(r"^compose\(\)[^\n]*$", body, re.MULTILINE)
+        assert wrapper is not None, "compose()-Wrapper in scripts/initial-setup.sh nicht gefunden."
+        assert "--env-file" in wrapper.group(0), (
+            "Auf Staging kommen alle ${…}-Werte — inklusive der DB-Rollen-Secrets — ueber "
+            "Compose-Interpolation; ohne --env-file bricht das DB-Init an fehlendem "
+            "APP_DB_USER ab (Refs #1370/#2086)."
+        )
+
+
+class TestStagingStackFailClosedRolePosture:
+    """Refs #2086 (Fix-Runde 1): Die Rollentrennung muss fail-closed sein.
+
+    Der erste Wurf verdrahtete den Soll-Pfad korrekt, liess aber jede
+    Fehlkonfiguration durch: ``APP_DB_USER=postgres`` oder App-Rolle ==
+    Admin-Rolle wurden vom Init-Hook widerspruchslos akzeptiert (die
+    ``WHERE NOT EXISTS``-Klausel uebersprang dann einfach das ``CREATE ROLE``
+    und der bestehende Bootstrap-Superuser blieb), und der dokumentierte
+    Direktstart ``docker compose ... up -d`` fuehrte ueberhaupt kein
+    Rollen-Gate aus — das lebte nur im optionalen ``initial-setup.sh`` und im
+    Migrate-One-Shot.
+
+    Verschaerfend: der Postgres-Entrypoint legt ``PG_VERSION`` per ``initdb``
+    an, BEVOR er ``/docker-entrypoint-initdb.d/*`` abarbeitet. Scheitert der
+    Hook, bleibt ein initialisiertes PGDATA zurueck, ``restart:
+    unless-stopped`` startet den Bootstrap-only-Cluster neu, und die
+    Init-Skripte werden uebersprungen. Ein Gate, das nur beim ersten Init
+    greift, ist damit kein Gate.
+
+    Deshalb zwei unabhaengige Sicherungen, die dieser Guard pinnt:
+    Namensinvarianten im Init-Preflight, und eine Laufzeit-Posture-Probe im
+    ``web``-Healthcheck, die bei JEDEM Start (und danach dauerhaft) laeuft.
+    """
+
+    _STAGING_COMPOSE = Path("docker-compose.staging.yml")
+    _INIT_SCRIPT = Path("deploy/postgres-init/01-app-role.sh")
+    _INITIAL_SETUP = Path("scripts/initial-setup.sh")
+    _LONG = "x" * 40
+
+    @classmethod
+    def _services(cls) -> dict:
+        if not cls._STAGING_COMPOSE.exists():
+            pytest.skip(
+                "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)"
+            )
+        return yaml.safe_load(cls._STAGING_COMPOSE.read_text(encoding="utf-8"))["services"]
+
+    def _run_init(self, **overrides) -> subprocess.CompletedProcess:
+        """Init-Hook mit gueltiger Basiskonfiguration + gezielten Abweichungen.
+
+        ``PATH`` bleibt leer: erreicht der Lauf ``psql``, ist das ein
+        Preflight-Durchlasser (Exit 127 statt 1) — genau die Unterscheidung,
+        um die es hier geht.
+        """
+        env = {
+            "PATH": "",
+            "REQUIRE_ADMIN_DB_ROLE": "true",
+            "POSTGRES_USER": "postgres",
+            "POSTGRES_PASSWORD": self._LONG,
+            "POSTGRES_DB": "anlaufstelle",
+            "APP_DB_USER": "anlaufstelle",
+            "APP_DB_PASSWORD": self._LONG,
+            "ADMIN_DB_USER": "anlaufstelle_admin",
+            "ADMIN_DB_PASSWORD": self._LONG,
+        }
+        env.update(overrides)
+        return subprocess.run(
+            ["/bin/sh", str(self._INIT_SCRIPT)],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_init_rejects_app_role_named_like_the_bootstrap_superuser(self) -> None:
+        result = self._run_init(APP_DB_USER="postgres")
+        assert result.returncode == 1, (
+            "APP_DB_USER=postgres muss im Preflight fail-closed abbrechen. Exit "
+            f"{result.returncode} heisst: der Hook lief bis psql weiter, die "
+            "'WHERE NOT EXISTS'-Klausel haette das CREATE ROLE uebersprungen und "
+            f"der Bootstrap-Superuser waere die Runtime-Rolle geblieben.\n{result.stderr}"
+        )
+        assert "APP_DB_USER" in result.stderr
+
+    def test_init_rejects_app_role_equal_to_the_configured_bootstrap_role(self) -> None:
+        """Auch bei einem anderen Bootstrap-Namen als ``postgres``."""
+        result = self._run_init(POSTGRES_USER="bootstrap", APP_DB_USER="bootstrap")
+        assert result.returncode == 1, result.stderr
+
+    def test_init_rejects_identical_app_and_admin_roles(self) -> None:
+        result = self._run_init(APP_DB_USER="anlaufstelle", ADMIN_DB_USER="anlaufstelle")
+        assert result.returncode == 1, (
+            "App-Rolle == Admin-Rolle hebt die Runtime-/Owner-Trennung auf und muss "
+            f"abbrechen (Exit war {result.returncode}).\n{result.stderr}"
+        )
+        assert "ADMIN_DB_USER" in result.stderr
+
+    def test_init_rejects_admin_role_named_like_the_bootstrap_superuser(self) -> None:
+        result = self._run_init(ADMIN_DB_USER="postgres")
+        assert result.returncode == 1, result.stderr
+
+    def test_init_still_accepts_the_documented_configuration(self) -> None:
+        """Gegenprobe: die Soll-Konfiguration darf der Preflight nicht abweisen.
+
+        Ohne ``psql`` im leeren PATH endet sie bei 127 — also NACH dem
+        Preflight. Alles andere waere ein falsch-positiver Guard.
+        """
+        result = self._run_init()
+        assert result.returncode == 127, (
+            "Die dokumentierte Konfiguration darf den Preflight passieren, war Exit "
+            f"{result.returncode}: {result.stderr}"
+        )
+
+    def test_web_healthcheck_proves_the_runtime_role_posture(self) -> None:
+        """Der HTTP-Check allein ist blind fuer einen RLS-Bypass.
+
+        ``/health/`` meldet bei bypassender Rolle zwar ``degraded``, aber
+        weiterhin HTTP 200 — ``urlopen()`` sieht keinen Fehler. Das Detailfeld
+        ``db_role_posture`` steht nur im Token-/Session-Payload und taugt
+        deshalb nicht als Healthcheck-Kriterium.
+        """
+        healthcheck = self._services()["web"]["healthcheck"]
+        probe = " ".join(healthcheck["test"])
+        for fragment in ("rolsuper", "rolbypassrls", "current_user"):
+            assert fragment in probe, f"web-Healthcheck prueft die Laufzeit-Rolle nicht ({fragment!r} fehlt): {probe!r}"
+
+    def test_web_healthcheck_keeps_the_http_liveness_probe(self) -> None:
+        probe = " ".join(self._services()["web"]["healthcheck"]["test"])
+        assert "/health/" in probe, "Die HTTP-Liveness darf durch die Rollenprobe nicht ersetzt werden."
+
+
+class TestStagingEnvFileIsParametrisable:
+    """Refs #2086 (Fix-Runde 1): ``ENV_FILE`` war nur halb verdrahtet.
+
+    ``scripts/initial-setup.sh`` bewarb eine frei waehlbare Env-Datei und
+    reichte sie als ``--env-file`` durch — das steuert bei Compose aber nur
+    die **Interpolation**. ``maintenance`` und ``cron`` luden zusaetzlich per
+    service-level ``env_file:`` den harten Repo-Pfad ``.env.staging``. Mit
+    einer Env-Datei ausserhalb des Projektverzeichnisses brach ``docker
+    compose`` daher mit Exit 14 ab ("env file ... not found") — der alte
+    Guard sah nur das CLI-Flag und bemerkte die gebrochene Semantik nicht.
+    """
+
+    _STAGING_COMPOSE = Path("docker-compose.staging.yml")
+    _ENV_TEMPLATE = Path(".env.staging.example")
+    _INITIAL_SETUP = Path("scripts/initial-setup.sh")
+    _COMPOSE_VAR = "STAGING_ENV_FILE"
+
+    @classmethod
+    def _raw(cls) -> str:
+        if not cls._STAGING_COMPOSE.exists():
+            pytest.skip(
+                "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)"
+            )
+        return cls._STAGING_COMPOSE.read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("service_name", ("maintenance", "cron"))
+    def test_service_env_file_is_interpolated_with_a_default(self, service_name: str) -> None:
+        services = yaml.safe_load(self._raw())["services"]
+        env_file = services[service_name].get("env_file")
+        assert isinstance(env_file, str), f"{service_name}: env_file fehlt oder ist keine einzelne Datei."
+        assert env_file.startswith(f"${{{self._COMPOSE_VAR}"), (
+            f"{service_name}: env_file ist der harte Repo-Pfad {env_file!r} — "
+            f"'--env-file' steuert nur die Interpolation und ersetzt ihn NICHT."
+        )
+        assert ".env.staging" in env_file, f"{service_name}: der Default muss .env.staging bleiben, war {env_file!r}."
+
+    def test_initial_setup_exports_the_compose_variable(self) -> None:
+        body = self._INITIAL_SETUP.read_text(encoding="utf-8")
+        assert re.search(rf"^export {self._COMPOSE_VAR}=", body, re.MULTILINE), (
+            f"scripts/initial-setup.sh muss {self._COMPOSE_VAR} exportieren — sonst laedt der "
+            "service-level env_file weiter den Repo-Pfad, egal was ENV_FILE sagt."
+        )
+
+    def test_compose_resolves_an_absolute_env_file_outside_the_project(self, tmp_path: Path) -> None:
+        """Der echte Beweis: ``docker compose config`` mit Env-Datei in /tmp.
+
+        Genau dieser Aufruf brach vorher mit Exit 14 ab.
+        """
+        raw = self._raw()  # Skip-Gate
+        if not self._ENV_TEMPLATE.exists():
+            pytest.skip(".env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)")
+        docker = shutil.which("docker")
+        if docker is None:
+            pytest.skip("docker nicht verfuegbar — Compose-Aufloesung nicht pruefbar")
+        version = subprocess.run([docker, "compose", "version"], capture_output=True, text=True)
+        if version.returncode != 0:
+            pytest.skip("'docker compose' nicht nutzbar — Compose-Aufloesung nicht pruefbar")
+
+        env_file = tmp_path / ".env.staging"
+        env_file.write_text(self._ENV_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
+        assert "services:" in raw
+
+        result = subprocess.run(
+            [
+                docker,
+                "compose",
+                "-f",
+                str(self._STAGING_COMPOSE.resolve()),
+                "--env-file",
+                str(env_file),
+                "--profile",
+                "maintenance",
+                "config",
+                "-q",
+            ],
+            capture_output=True,
+            text=True,
+            env={**os.environ, self._COMPOSE_VAR: str(env_file)},
+        )
+        assert result.returncode == 0, (
+            "Compose kann eine Env-Datei ausserhalb des Projektverzeichnisses nicht aufloesen — "
+            f"Exit {result.returncode}: {result.stderr.strip()}"
+        )
+
+
+class TestStagingExposureIsGatedOnRolePosture:
+    """Refs #2086 (Fix-Runde 2): ``unhealthy`` allein sperrt keinen laufenden Caddy.
+
+    Die Runtime-Probe im ``web``-Healthcheck schliesst den **kalten** Start:
+    Caddy wartet dort ueber ``depends_on.condition: service_healthy``. Beim
+    Upgrade eines **laufenden** Stacks greift sie nicht — ``depends_on`` ist
+    Startreihenfolge, und ohne ``restart: true`` startet Compose den
+    Abhaengigen nach einem Dependency-Update nicht neu; Docker-Restart-Policies
+    reagieren auf Container-Exit, nicht auf den Healthstatus. Ein als
+    ``unhealthy`` markierter Bootstrap-Superuser-Webprozess bliebe also hinter
+    einem weiterlaufenden Caddy erreichbar.
+
+    Zwei Sperren, die dieser Guard pinnt:
+    1. ``restart: true`` an Caddys Abhaengigkeit — Compose startet Caddy nach
+       einem ``web``-Update neu und haelt ihn dabei erneut an
+       ``service_healthy`` auf.
+    2. Ein **aktiver** Upstream-Healthcheck in ``Caddyfile.staging``, der die
+       Rollen-Posture selbst auswertet. Ein blosser HTTP-Statuscheck taugt
+       dafuer nicht: ``/health/`` antwortet bei bypassender Rolle weiterhin
+       mit 200. Der anonyme Gesamtstatus taugt ebenfalls nicht — er ist auf
+       diesem Stack dauerhaft ``degraded``, weil bewusst kein clamav-Service
+       laeuft. Bleibt das Detailfeld ``db_role_posture`` hinter dem
+       Health-Token.
+    """
+
+    _STAGING_COMPOSE = Path("docker-compose.staging.yml")
+    _CADDYFILE = Path("Caddyfile.staging")
+    _TOKEN = "DJANGO_HEALTH_DETAIL_TOKEN"
+
+    @classmethod
+    def _services(cls) -> dict:
+        if not cls._STAGING_COMPOSE.exists():
+            pytest.skip(
+                "docker-compose.staging.yml / .env.staging.example nicht im Public-Snapshot (Refs #1137, #2086)"
+            )
+        return yaml.safe_load(cls._STAGING_COMPOSE.read_text(encoding="utf-8"))["services"]
+
+    def test_caddy_is_restarted_when_web_is_updated(self) -> None:
+        caddy = self._services()["caddy"]
+        dependency = caddy.get("depends_on", {}).get("web", {})
+        assert dependency.get("condition") == "service_healthy"
+        assert dependency.get("restart") is True, (
+            "Ohne 'restart: true' laesst Compose einen bereits laufenden Caddy nach einem "
+            "web-Update unberuehrt weiterrouten — der Healthstatus waere dann nur "
+            "Beobachtung, keine Sperre."
+        )
+
+    def test_health_token_reaches_web_and_caddy(self) -> None:
+        services = self._services()
+        assert self._TOKEN in services["web"].get("environment", {}), (
+            f"{self._TOKEN} fehlt in der web-Allowlist — ohne gesetztes Token liefert "
+            "/health/ das Feld db_role_posture ueberhaupt nicht aus."
+        )
+        assert self._TOKEN in services["caddy"].get("environment", []), (
+            f"{self._TOKEN} muss als Passthrough am caddy-Service stehen, sonst bleibt "
+            "der Platzhalter in Caddyfile.staging leer."
+        )
+
+    def test_caddy_actively_probes_the_role_posture(self) -> None:
+        if not self._CADDYFILE.exists():
+            pytest.skip("Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #2086)")
+        code = "\n".join(
+            line
+            for line in self._CADDYFILE.read_text(encoding="utf-8").splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert "health_uri" in code, "Caddy proxied blind — kein aktiver Upstream-Healthcheck."
+        assert "db_role_posture" in code, (
+            "Der aktive Healthcheck muss die Rollen-Posture auswerten. Ein reiner "
+            "Statuscheck sieht den Bypass nicht: /health/ bleibt dabei HTTP 200."
+        )
+        assert "health_headers" in code and self._TOKEN in code, (
+            "db_role_posture steht nur im Token-/Session-Payload — ohne einen "
+            f"health_headers-Block mit X-Health-Token {{${self._TOKEN}}} bekommt Caddy es nie zu sehen."
+        )
+        assert "health_request_header" not in code, (
+            "'health_request_header' gibt es in Caddy 2 nicht. Die Direktive laesst Caddy schon "
+            "beim Adaptieren der Konfiguration abbrechen — der Stack startet dann GAR NICHT."
+        )
+        # Die Probe entscheidet ueber die Exposition; sie muss den JSON-Key und den
+        # vollstaendigen Wert treffen. Eine lose Regex (db_role_posture[^a-z]+ok)
+        # matchte auch auf 'not_db_role_posture: "ok"' neben einem echten
+        # 'bypasses_rls' — und auf ein fremdes Feld, dessen INHALT so aussieht.
+        assert re.search(r"health_body\s+\S*\\x22db_role_posture\\x22", code), (
+            "health_body muss den JSON-Key feldgenau verankern (Anfuehrungszeichen als \\x22, "
+            f"damit die Caddyfile-Quotierung nicht zur Fehlerquelle wird): {code!r}"
+        )
+        assert "db_role_posture[^a-z]+ok" not in code, (
+            "Die lose Posture-Regex kann fail-open matchen und darf nicht zurueckkommen."
+        )
+
+
+class TestCaddyReverseProxySubdirectivesExist:
+    """Refs #2086 (Fix-Runde 3): eine erfundene ``reverse_proxy``-Subdirektive
+    verhindert den Caddy-Start, und kein Test der Suite sah das.
+
+    ``health_request_header`` klingt plausibel, existiert in Caddy 2 aber nicht.
+    Caddy bricht damit bereits beim **Adaptieren** der Caddyfile ab
+    (``unrecognized subdirective``) — der Container kommt gar nicht hoch. Das
+    ist die unangenehmste Fehlerklasse: nicht still falsch, sondern
+    startverhindernd, und weder Ruff noch ein YAML-Parser noch ein
+    Python-Test fassen sie an.
+
+    Dieser Guard ist bewusst **kein** Ersatz fuer ``caddy validate`` (das
+    braucht das Caddy-Binary bzw. den Container und gehoert ins Release-Gate).
+    Er prueft nur, dass jede Subdirektive innerhalb eines
+    ``reverse_proxy``-Blocks aus der dokumentierten Menge stammt — genau der
+    Fehler, der hier passiert ist.
+    """
+
+    # Subdirektiven, die der Parser des gepinnten Caddy 2.11.4 akzeptiert
+    # (modules/caddyhttp/reverseproxy/caddyfile.go). Kommt eine echte Direktive
+    # dazu, gehoert sie hier ergaenzt — der Fehlertext sagt das.
+    #
+    # Refs #2086, Fix-Runde 4: Die erste Fassung dieser Liste war in beide
+    # Richtungen falsch. Sie liess `buffer_requests`/`buffer_responses`/
+    # `max_buffer_size` durch (vom 2.11.4-Parser NICHT akzeptiert, in Caddy 2
+    # durch `request_buffers`/`response_buffers` ersetzt) und haette
+    # `health_path`, die drei `stream_*`-Direktiven und `verbose_logs`
+    # faelschlich als unbekannt gemeldet. Ein Guard, der gueltige Namen
+    # blockiert und ungueltige durchlaesst, ist schlimmer als keiner.
+    _KNOWN = frozenset(
+        {
+            "to",
+            "dynamic",
+            "lb_policy",
+            "lb_retries",
+            "lb_try_duration",
+            "lb_try_interval",
+            "lb_retry_match",
+            "health_uri",
+            "health_port",
+            "health_interval",
+            "health_passes",
+            "health_fails",
+            "health_timeout",
+            "health_status",
+            "health_body",
+            "health_method",
+            "health_request_body",
+            "health_headers",
+            "health_follow_redirects",
+            "health_upstream",
+            "fail_duration",
+            "max_fails",
+            "unhealthy_status",
+            "unhealthy_latency",
+            "unhealthy_request_count",
+            "health_path",
+            "flush_interval",
+            "request_buffers",
+            "response_buffers",
+            "stream_buffer_size",
+            "stream_timeout",
+            "stream_close_delay",
+            "verbose_logs",
+            "header_up",
+            "header_down",
+            "method",
+            "rewrite",
+            "trusted_proxies",
+            "transport",
+            "handle_response",
+            "replace_status",
+        }
+    )
+
+    _CADDYFILES = (
+        Path("Caddyfile"),
+        Path("Caddyfile.dev"),
+        Path("Caddyfile.demo"),
+        Path("Caddyfile.staging"),
+    )
+
+    @staticmethod
+    def _reverse_proxy_subdirectives(text: str) -> list[str]:
+        """Erste Ebene innerhalb jedes ``reverse_proxy { … }``-Blocks.
+
+        Verschachtelte Bloecke (z.B. ``health_headers { … }``) enthalten
+        Header-Namen, keine Subdirektiven — die bleiben aussen vor.
+        """
+        found: list[str] = []
+        depth = 0
+        for raw in text.splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            if depth == 0:
+                if re.match(r"^reverse_proxy\b.*\{$", line):
+                    depth = 1
+                continue
+            if depth == 1 and line == "}":
+                depth = 0
+                continue
+            if depth == 1:
+                token = line.split()[0]
+                # Inline definierte Response-Matcher (@name ...) sind keine
+                # Subdirektiven, sondern Matcher-Definitionen.
+                if not token.startswith("@"):
+                    found.append(token)
+            depth += line.count("{") - line.count("}")
+        return found
+
+    @pytest.mark.parametrize("path", _CADDYFILES, ids=str)
+    def test_only_documented_subdirectives_are_used(self, path: Path) -> None:
+        if not path.exists():  # Caddyfile.staging / Caddyfile.demo (Refs #1137)
+            pytest.skip(f"{path} nicht im Public-Snapshot (Refs #1047, #2086)")
+        unknown = sorted(set(self._reverse_proxy_subdirectives(path.read_text(encoding="utf-8"))) - self._KNOWN)
+        assert not unknown, (
+            f"{path}: unbekannte reverse_proxy-Subdirektive(n) {unknown}. Caddy bricht dann "
+            "schon beim Adaptieren der Konfiguration ab und der Container startet nicht. "
+            "Ist die Direktive echt, gehoert sie in _KNOWN — sonst korrigieren."
+        )
+
+    def test_guard_detects_an_invented_subdirective(self) -> None:
+        """Zaehne-Nachweis am genau hier passierten Fehler."""
+        probe = (
+            "site {\n    reverse_proxy web:8000 {\n        health_uri /health/\n"
+            "        health_request_header X-Y z\n    }\n}\n"
+        )
+        assert set(self._reverse_proxy_subdirectives(probe)) - self._KNOWN == {"health_request_header"}
+
+    def test_guard_ignores_nested_block_contents(self) -> None:
+        """Header-Namen in ``health_headers { … }`` sind keine Subdirektiven."""
+        probe = (
+            "site {\n    reverse_proxy web:8000 {\n        health_headers {\n"
+            '            X-Health-Token ["abc"]\n        }\n    }\n}\n'
+        )
+        assert set(self._reverse_proxy_subdirectives(probe)) - self._KNOWN == set()
+
+    def test_whitelist_matches_the_pinned_parser(self) -> None:
+        """Refs #2086, Fix-Runde 4: die Liste war in beide Richtungen falsch.
+
+        Die drei Caddy-1-Namen duerfen nicht mehr durchgehen, die fuenf
+        gueltigen 2.11.4-Namen nicht mehr als unbekannt gelten.
+        """
+        for veraltet in ("buffer_requests", "buffer_responses", "max_buffer_size"):
+            assert veraltet not in self._KNOWN, (
+                f"{veraltet!r} akzeptiert der 2.11.4-Parser nicht — der Guard darf es nicht freigeben."
+            )
+        for gueltig in ("health_path", "stream_buffer_size", "stream_timeout", "stream_close_delay", "verbose_logs"):
+            assert gueltig in self._KNOWN, f"{gueltig!r} ist gueltig und darf keinen Fehlalarm ausloesen."
+
+    def test_guard_ignores_inline_response_matchers(self) -> None:
+        probe = "site {\n    reverse_proxy web:8000 {\n        @err status 500\n        health_uri /health/\n    }\n}\n"
+        assert set(self._reverse_proxy_subdirectives(probe)) - self._KNOWN == set()
+
+
+class TestInitialSetupGuardsTheHealthToken:
+    """Refs #2086 (Fix-Runde 5): der Erstsetup faengt die eigene neue Falle ab.
+
+    Diese Lane hat einen Fehlermodus neu eingefuehrt: Caddy ersetzt
+    ``{$DJANGO_HEALTH_DETAIL_TOKEN}`` beim Adaptieren der Caddyfile. Ist der
+    Wert leer, bricht die Adaption ab und der Reverse-Proxy startet gar nicht
+    erst. Ohne Preflight sieht eine Operatorin davon nur einen Stack, der nicht
+    hochkommt — die Ursache steht dann ausschliesslich in ``docker compose logs
+    caddy``.
+
+    Der Preflight haengt bewusst nicht am Dateinamen des Stacks, sondern daran,
+    ob die Compose-Datei die Variable ueberhaupt verdrahtet. Fuer prod ist er
+    damit ein No-op, und ein spaeterer Stack mit demselben Muster ist
+    automatisch mitgeschuetzt.
+    """
+
+    _SCRIPT = Path("scripts/initial-setup.sh")
+    _TOKEN = "DJANGO_HEALTH_DETAIL_TOKEN"
+
+    def test_preflight_is_conditional_on_the_compose_file(self) -> None:
+        body = self._SCRIPT.read_text(encoding="utf-8")
+        assert self._TOKEN in body, f"scripts/initial-setup.sh prueft {self._TOKEN} nicht."
+        assert re.search(rf'grep -q [\'"]{self._TOKEN}[\'"] "\$COMPOSE_FILE"', body), (
+            "Der Preflight muss an der Compose-Datei haengen, nicht am Stack-Namen — "
+            "sonst schlaegt er auf prod falsch an."
+        )
+
+    @staticmethod
+    def _stub_docker(tmp_path: Path) -> tuple[Path, Path]:
+        """``docker``-Attrappe: protokolliert argv, startet nie etwas."""
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        log = tmp_path / "docker-argv.log"
+        stub = bindir / "docker"
+        stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\nexit 0\n', encoding="utf-8")
+        stub.chmod(0o755)
+        return bindir, log
+
+    def _run(self, tmp_path: Path, token_line: str) -> tuple[subprocess.CompletedProcess, Path]:
+        bindir, log = self._stub_docker(tmp_path)
+        compose = tmp_path / "docker-compose.probe.yml"
+        compose.write_text(f"services:\n  caddy:\n    environment:\n      - {self._TOKEN}\n", encoding="utf-8")
+        env_file = tmp_path / ".env.probe"
+        env_file.write_text(f"POSTGRES_USER=anlaufstelle\n{token_line}", encoding="utf-8")
+        result = subprocess.run(
+            ["/bin/bash", str(self._SCRIPT.resolve())],
+            capture_output=True,
+            text=True,
+            env={
+                "PATH": f"{bindir}:/usr/bin:/bin",
+                "COMPOSE_FILE": str(compose),
+                "ENV_FILE": str(env_file),
+                "SKIP_SUPER_ADMIN": "1",
+                # Ohne das wartet ``wait_for_service`` gegen die docker-Attrappe
+                # bis zum Default-Timeout (180 s) — der Test haenge sonst.
+                "WAIT_TIMEOUT": "0",
+            },
+            timeout=60,
+        )
+        return result, log
+
+    def test_empty_token_aborts_before_any_container_is_touched(self, tmp_path: Path) -> None:
+        result, log = self._run(tmp_path, f"{self._TOKEN}=\n")
+        assert result.returncode != 0, f"Leeres Token muss fail-loud abbrechen.\n{result.stdout}"
+        assert self._TOKEN in result.stderr
+        assert "adaptiert" in result.stderr, (
+            f"Die Meldung muss die Ursache benennen (Caddy adaptiert die Konfiguration nicht): {result.stderr!r}"
+        )
+        gestartet = log.read_text(encoding="utf-8") if log.exists() else ""
+        assert " up " not in f" {gestartet} ", (
+            f"Der Abbruch kam zu spaet — docker wurde schon zum Starten gerufen: {gestartet!r}"
+        )
+
+    def test_missing_token_line_aborts_as_well(self, tmp_path: Path) -> None:
+        result, _ = self._run(tmp_path, "")
+        assert result.returncode != 0
+        assert self._TOKEN in result.stderr
+
+    # Refs #2086, Fix-Runde 6: Die Schreibweisen sind NICHT aus dem Kopf
+    # gegriffen, sondern mit `docker compose config --format json` gegen eine
+    # Wegwerf-Compose gemessen. Links steht, was Compose dem caddy-Service
+    # tatsaechlich uebergibt.
+    #
+    # Compose liefert hier einen leeren (bzw. reinen Whitespace-) Wert — der
+    # Platzhalter in Caddyfile.staging bleibt damit ohne brauchbaren Inhalt und
+    # die Konfigurationsadaption scheitert. Der Preflight MUSS abbrechen.
+    _COMPOSE_LEER = (
+        pytest.param(f"{_TOKEN}=\n", id="kein-wert"),
+        pytest.param(f'{_TOKEN}=""\n', id="doppelte-quotes"),
+        pytest.param(f"{_TOKEN}=''\n", id="einfache-quotes"),
+        pytest.param(f"{_TOKEN}=   \n", id="nur-whitespace"),
+        pytest.param(f"{_TOKEN}=\t\n", id="tab"),
+        pytest.param(f"#{_TOKEN}=abc123\n{_TOKEN}=\n", id="kommentiert-dann-leer"),
+        pytest.param(f"export {_TOKEN}=\n", id="export-leer"),
+        pytest.param(f"{_TOKEN}=abc123\n{_TOKEN}=\n", id="gesetzt-dann-leer"),
+        pytest.param(f'{_TOKEN}="   "\n', id="quotes-mit-whitespace"),
+    )
+
+    # Compose liefert hier einen echten Wert. Der Preflight darf NICHT
+    # abbrechen — ein Fehlalarm blockiert eine gueltige Erstinbetriebnahme.
+    _COMPOSE_GESETZT = (
+        pytest.param(f"{_TOKEN}=abc123\n", id="schlicht"),
+        pytest.param(f"export {_TOKEN}=abc123\n", id="export-praefix"),
+        pytest.param(f'{_TOKEN}="abc123"\n', id="quotes-mit-wert"),
+        pytest.param(f"  {_TOKEN}=abc123\n", id="fuehrende-leerzeichen"),
+        pytest.param(f"{_TOKEN}=\n{_TOKEN}=abc123\n", id="leer-dann-gesetzt"),
+    )
+
+    @pytest.mark.parametrize("token_line", _COMPOSE_LEER)
+    def test_every_form_compose_reads_as_empty_is_rejected(self, tmp_path: Path, token_line: str) -> None:
+        result, log = self._run(tmp_path, token_line)
+        assert result.returncode != 0, (
+            f"Compose liefert fuer diese Schreibweise einen leeren Wert — der Preflight muss "
+            f"abbrechen, sonst startet caddy spaeter nicht.\n{result.stdout}"
+        )
+        assert self._TOKEN in result.stderr
+        gestartet = log.read_text(encoding="utf-8") if log.exists() else ""
+        assert " up " not in f" {gestartet} ", f"Abbruch kam zu spaet: {gestartet!r}"
+
+    @pytest.mark.parametrize("token_line", _COMPOSE_GESETZT)
+    def test_every_form_compose_reads_as_set_passes(self, tmp_path: Path, token_line: str) -> None:
+        result, log = self._run(tmp_path, token_line)
+        assert self._TOKEN not in result.stderr, (
+            f"Fehlalarm: Compose liefert hier einen echten Wert, der Preflight blockiert "
+            f"aber die Erstinbetriebnahme.\n{result.stderr}"
+        )
+        assert log.exists(), "Der Lauf haette den Preflight passieren muessen."
+
+    def test_set_token_passes_the_preflight(self, tmp_path: Path) -> None:
+        """Gegenprobe: ein gesetzter Wert darf den Preflight nicht aufhalten."""
+        result, log = self._run(tmp_path, f"{self._TOKEN}=abc123\n")
+        assert self._TOKEN not in result.stderr, f"Gesetztes Token darf keinen Abbruch ausloesen: {result.stderr!r}"
+        assert log.exists(), "Der Lauf haette den Preflight passieren und docker aufrufen muessen."

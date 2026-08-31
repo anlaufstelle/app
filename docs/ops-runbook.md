@@ -50,8 +50,11 @@ docker compose -f docker-compose.prod.yml images web
 # (deploy/postgres-init/01-app-role.sh). Fehlen sie oder stehen noch auf
 # change-me-*, schlagen DB-Init bzw. der Migrate-Job fehl.
 # Quelle: .env.example, docs/coolify-deployment.md.
+# Fuer den Staging-Stack gilt derselbe Check gegen .env.staging statt .env
+# (ENV_FILE=.env.staging, Vorlage .env.staging.example) — Refs #2086.
+ENV_FILE="${ENV_FILE:-.env}"
 for var in POSTGRES_BOOTSTRAP_PASSWORD POSTGRES_ADMIN_USER POSTGRES_ADMIN_PASSWORD; do
-    val=$(grep -E "^${var}=" .env | cut -d= -f2-)
+    val=$(grep -E "^${var}=" "$ENV_FILE" | cut -d= -f2-)
     case "$val" in
         ""|change-me*) echo "✗ $var fehlt oder steht noch auf Default"; ;;
         *)             echo "✓ $var gesetzt"; ;;
@@ -105,6 +108,29 @@ docker compose -f docker-compose.prod.yml exec web \
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py check --deploy
 ```
+
+### 1.4 Compose-Stack-Abgleich
+
+Refs #2086. Alle vier Deployment-Stacks fahren dasselbe Drei-Rollen-PostgreSQL-Modell (kanonische Beschreibung: [§ 9 „DB-Rollenmodell (Goldstandard)"](#db-rollenmodell-goldstandard)). Der Abgleich ist Soll **und** Ist — driftet ein Stack, faellt das Verhalten dort still auseinander, ohne dass ein Test es meldet:
+
+| Stack | `deploy/postgres-init` gemountet | `db` bootstrappt als | `web` verbindet als | `maintenance` | `cron` | Env-Vorlage |
+|---|---|---|---|---|---|---|
+| `docker-compose.prod.yml` | ja | `postgres` (Bootstrap-Superuser) | App-Rolle `${POSTGRES_USER}` (Allowlist) | ja | ja | `.env.example` |
+| `docker-compose.dev.yml` | ja | `postgres` | App-Rolle (Allowlist) | ja | nein (systemd-Timer, § 3.4) | `.env.dev.example` |
+| `docker-compose.demo.yml` | ja | `postgres` | App-Rolle (Allowlist) | ja | nein (stuendlicher Reset) | `.env.demo.example` |
+| `docker-compose.staging.yml` | ja (seit #2086) | `postgres` (seit #2086) | App-Rolle (Allowlist, seit #2086) | ja (seit #2086) | ja (seit #2086) | `.env.staging.example` (seit #2086) |
+
+Invarianten, die fuer **jeden** Stack gelten:
+
+- Der `db`-Service laedt **kein** `env_file`, sondern setzt seinen `environment:`-Block ueber Compose-Interpolation — sonst waere `POSTGRES_USER` die App-Rolle und damit der Bootstrap-Superuser.
+- Jeder Stack setzt `REQUIRE_ADMIN_DB_ROLE: "true"`; der Legacy-Pfad ohne separate Admin-Rolle (App-Rolle wird selbst Owner) ist damit ausgeschlossen.
+- Die App-Rolle ist nirgends Owner und nirgends `SUPERUSER`/`BYPASSRLS`.
+- `web` laedt **kein** `env_file`, sondern eine explizite Runtime-Allowlist (Refs #1962). Unter den **Anwendungsdiensten** sehen Admin-/Bootstrap-Secrets nur `maintenance` und `cron`; der `db`-Service bekommt sie zwangslaeufig ebenfalls (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — er legt die Rollen ja an. Er erhaelt aber ausschliesslich die dafuer noetigen Werte und keine Anwendungs-Secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
+
+- Auf **staging** verifiziert zusaetzlich der `web`-Healthcheck bei jedem Start und danach laufend die **tatsaechliche** Verbindungsrolle (`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`). Der reine HTTP-Check taugte dafuer nicht: `/health/` meldet bei bypassender Rolle zwar `degraded`, antwortet aber weiter mit HTTP 200, und das Detailfeld `db_role_posture` steht nur im Token-/Session-Payload. Refs #2086.
+- Auf **staging** ist daran auch die **Exposition** gebunden, nicht nur die Anzeige: `caddy` haengt mit `depends_on: {condition: service_healthy, restart: true}` an `web` (Compose >= v2.17 — ohne `restart: true` liesse Compose einen bereits laufenden Caddy nach einem `web`-Update unberuehrt weiterrouten), und `Caddyfile.staging` prueft den Upstream **aktiv** auf `db_role_posture` und schickt dafuer `X-Health-Token`. `DJANGO_HEALTH_DETAIL_TOKEN` ist auf diesem Stack deshalb Pflicht — und zwar haerter als "sonst 502": der `{$…}`-Platzhalter wird beim **Adaptieren** der Caddyfile ersetzt, ohne Wert bricht die Adaption ab und **`caddy` startet gar nicht** (verifiziert gegen `caddy:2-alpine` v2.11.4). Die Diagnose steht dann in `docker compose logs caddy`. **Betriebsregel:** nach jeder Aenderung an `web` den ganzen Stack anfassen (`docker compose ... up -d`), nicht nur `up -d web` — sonst wird Caddy nicht neu gestartet und das Gate greift nicht.
+
+Bis #2086 war `docker-compose.staging.yml` die einzige Ausnahme: ohne Init-Mount, mit `env_file` auf `db` **und** `web`. Der Webprozess verband dort als Bootstrap-Superuser, `FORCE ROW LEVEL SECURITY` war wirkungslos, und Staging validierte genau die Fehlerklasse nicht, fuer die es gedacht ist. Der Guard `TestStagingStackRoleSeparation` in `src/tests/test_architecture_guards_ops.py` pinnt den neuen Zustand.
 
 ---
 
@@ -1407,7 +1433,10 @@ tatsaechlich verbindet.
 ### DB-Rollenmodell (Goldstandard)
 
 **Dies ist die kanonische Beschreibung des PostgreSQL-Rollenmodells** — andere
-Deployment-Dokumente verweisen hierher, statt sie zu wiederholen. Quelle der
+Deployment-Dokumente verweisen hierher, statt sie zu wiederholen. Sie gilt fuer
+**alle** Deployment-Stacks (prod, dev, demo und — seit
+#2086 — auch staging);
+den Ist-Abgleich je Stack fuehrt [§ 1.4](#14-compose-stack-abgleich). Quelle der
 Wahrheit ist das Init-Script
 [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
 (Refs #863,
@@ -1455,12 +1484,56 @@ Rollen-Gate `check_db_roles` prueft die stabile App-Rolle ueber
 (zusaetzlich zu den App-Variablen). Der Pre-Deploy-Check in § 1.1 verifiziert,
 dass sie gesetzt und nicht mehr auf `change-me-*` stehen.
 
+**Namensvertrag — zwei Variablennamen fuer dieselbe Rolle.** Die App-Rolle wird
+unter **zwei** Namen adressiert, und beide muessen aus `${POSTGRES_USER}`
+gespeist werden:
+
+| Variable | Wo gesetzt | Wer liest sie |
+|---|---|---|
+| `APP_DB_USER` | `environment:` des **`db`**-Service | [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) — legt die Rolle unter diesem Namen **an** |
+| `POSTGRES_APP_USER` | `environment:` von **`web`**, **`maintenance`**, **`cron`** | `check_db_roles` bzw. `src/core/services/compliance/db_roles.py` — **prueft** unter diesem Namen; derselbe Name ist Adressat konditionaler `GRANT`s |
+
+Fehlt der zweite Name, faellt die Pruefung bzw. der `GRANT` still aus (kein
+Fehler, kein Log) — der Defekt zeigt sich erst Monate spaeter im Betrieb.
+
+**Bestandscluster: der Compose-Fix wirkt nicht rueckwirkend.** Das Init-Script
+ist **INIT-ONLY** und laeuft ausschliesslich beim Anlegen eines leeren `PGDATA`.
+Auf einem bereits existierenden Volume (z.B. `*_pgdata_staging`) legt es weder
+neue Rollen an noch gleicht es bestehende an die Env an. Zwei Wege:
+
+1. **Frisches Volume** — Dump/Restore nach
+   [§ 13.1](#131-prodstaging--daten-erhalten-wartungsfenster). Der einfachere,
+   bereits durchgespielte Weg; das Init-Script baut die Zielrollen dabei selbst auf.
+2. **In-Place-Umbau** nach
+   [§ 9.6](#96-rollout-der-runtime-owner-rollentrennung-auf-bestandsinstallationen-a14).
+   **Achtung — ein reiner Ownership-Umzug reicht dafuer nicht:** auf einem Cluster,
+   der ohne Init-Script hochkam, existiert gar keine Admin-Rolle, und die App-Rolle
+   ist dort die **Bootstrap-Rolle**, die sich nicht entrechten laesst
+   (`The bootstrap superuser must have the SUPERUSER attribute`). § 9.6
+   diagnostiziert die Ausgangslage und beschreibt je Fall den vollstaendigen Weg
+   inklusive Rollen-Neuanlage; die Passwortrotation allein
+   (`scripts/ops/rotate-db-passwords.sh`, § „DB-Passwortrotation" unten) legt
+   **keine** Rollen an.
+
+**Bis einer dieser beiden Wege gefahren ist, bleibt die alte Superuser-Situation
+auf einem laufenden Staging-Server live** — der Repo-Fix allein aendert daran
+nichts. Der `web`-Healthcheck macht es allerdings sichtbar: der Container wird
+dort nie `healthy`, und `caddy` gibt die Runtime nicht frei.
+
 **Verifikation** nach dem ersten Hochfahren — das Gate prueft beide Rollen:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
 # erwartet: App-Rolle rolsuper=False, rolbypassrls=False
 # Admin-Rolle rolsuper=False, rolbypassrls=True (Exit-Code 0)
+```
+
+Auf dem Staging-Stack ueber den `maintenance`-One-Shot (das Profil ist opt-in,
+`--env-file` ist dort Pflicht):
+
+```bash
+docker compose -f docker-compose.staging.yml --env-file .env.staging \
+    run --rm maintenance check_db_roles
 ```
 
 ### DB-Passwortrotation (alle drei Rollen)
@@ -1724,10 +1797,71 @@ WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_
 
 **Fresh DBs** ziehen die Trennung automatisch auf
 ([`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh):
-Admin wird Owner, App bekommt nur DML). **Bestandsinstallationen** (App ist noch
-DB-Owner) brauchen einen **einmaligen, Maintainer-geführten** Ownership-Umzug —
-kurze Downtime empfohlen (keine schreibenden Requests währenddessen). Ablauf als
-**Bootstrap-Superuser** (`postgres`), in der Anwendungs-DB:
+Admin wird Owner, App bekommt nur DML). **Bestandsinstallationen** brauchen einen
+**einmaligen, Maintainer-geführten** Umbau — kurze Downtime empfohlen (keine
+schreibenden Requests währenddessen).
+
+> **Die einfachere, bereits durchgespielte Alternative:** Dump → frisches Volume →
+> Restore nach [§ 13.1](#131-prodstaging--daten-erhalten-wartungsfenster). Dabei
+> baut das Init-Script die Zielrollen von selbst korrekt auf, und es gibt keinen
+> Sonderfall. Der In-Place-Umbau unten lohnt nur, wenn das Wartungsfenster für
+> Dump/Restore zu lang wäre. Refs
+> #2086.
+
+#### 9.6.0 Zuerst diagnostizieren — es gibt drei verschiedene Ausgangslagen
+
+Der Umbauweg hängt daran, **wer die Bootstrap-Rolle des Clusters ist**. Die
+Bootstrap-Rolle ist die von `initdb` angelegte Rolle (`pg_authid.oid = 10`); sie
+kann sich **nicht** selbst entrechten. Als Superuser in der Anwendungs-DB:
+
+Die Beispielnamen unten sind **Platzhalter** — setze die realen Werte aus
+`POSTGRES_USER` und `POSTGRES_ADMIN_USER` deiner Env-Datei ein.
+
+```sql
+-- Wer ist die Bootstrap-Rolle (kann NIE NOSUPERUSER werden)?
+SELECT rolname AS bootstrap_rolle FROM pg_authid WHERE oid = 10;
+-- Vollstaendiges Attributprofil der beteiligten Rollen.
+SELECT rolname, rolsuper, rolbypassrls, rolcanlogin, rolcreaterole, rolcreatedb
+  FROM pg_roles
+ WHERE rolname IN (current_user, 'anlaufstelle', 'anlaufstelle_admin');
+-- Wem gehoert die Datenbank?
+SELECT pg_get_userbyid(datdba) AS db_owner FROM pg_database WHERE datname = current_database;
+-- Welche Anwendungsobjekte gehoeren WEDER App noch Admin? (> 0 heisst:
+-- Umbau unvollstaendig — genau das uebersieht ein reiner Ownership-Umzug.)
+SELECT pg_get_userbyid(c.relowner) AS owner, count(*)
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname = 'public' AND c.relkind IN ('r','p','S','v','m','f')
+ GROUP BY 1 ORDER BY 2 DESC;
+```
+
+| Befund | Fall | Weg |
+|---|---|---|
+| App- **und** Admin-Rolle existieren mit korrektem Attributprofil, nur die Ownership liegt noch bei der App-Rolle | **A** | § 9.6.1 (nur Ownership-Umzug) |
+| Keine Admin-Rolle, App-Rolle ist privilegiert, aber **nicht** die Bootstrap-Rolle | **B** | § 9.6.2 |
+| Keine Admin-Rolle, und die App-Rolle **ist** die Bootstrap-Rolle (`oid = 10`) | **C** | § 9.6.3 — die App **muss** auf einen neuen Rollennamen umziehen |
+
+> **Teilzustände:** Die drei Fälle beschreiben saubere Ausgangslagen. Ein
+> abgebrochener früherer Umbau kann Mischformen hinterlassen („Admin existiert
+> schon, App ist noch privilegiert", „Objekte gehören noch der Bootstrap-Rolle").
+> Die Bausteine unten sind einzeln idempotent: die Rollenanlage legt nur an, was
+> fehlt, und normalisiert Attribute und Passwort danach unbedingt;
+> Ownership-Schleifen greifen nur noch nicht umgezogene Objekte; Grants sind
+> wiederholbar. Der Fall-C-Block ist als Ganzes wiederholbar — auch nach einem
+> Lauf, der mittendrin abgebrochen ist. Fahre in einem solchen Fall den Fall, der zum
+> **Bootstrap-Befund** passt (B oder C), und lass die bereits erledigten
+> Schritte einfach durchlaufen. Die letzte Query oben ist danach das Mass:
+> sie darf nur noch die Admin-Rolle zeigen.
+
+**Fall C ist der Normalfall für Bestands-Staging vor
+#2086:** Der Stack
+mountete kein Init-Script und lud auf `db` die volle `.env.staging`; das
+Postgres-Image legte damit `${POSTGRES_USER}` selbst per
+`initdb --username="$POSTGRES_USER"` an — die App-Rolle *ist* dort die
+Bootstrap-Rolle, und eine Admin-Rolle wurde nie erzeugt.
+
+#### 9.6.1 Fall A — nur der Ownership-Umzug
+
+Ablauf als **Bootstrap-Superuser**, in der Anwendungs-DB:
 
 ```sql
 -- 0. Vorher: web-Service stoppen / in Wartung (keine App-Schreibzugriffe).
@@ -1746,8 +1880,362 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
 -- kann entfallen, wenn direkt danach `docker-migrate.sh` laeuft.
 ```
 
-Danach normal deployen (`docker-migrate.sh` wendet Migration `0107` an, falls
-noch nicht geschehen) und mit § 9.5-Verifikation prüfen.
+Danach **zuerst § 9.6.4** fahren (grünes `check_db_roles`, bevor `web` wieder
+startet), dann normal deployen — `docker-migrate.sh` wendet Migration `0107` an,
+falls noch nicht geschehen — und mit § 9.5 verifizieren.
+
+#### 9.6.2 Fall B — Admin-Rolle fehlt, App-Rolle ist nicht die Bootstrap-Rolle
+
+Hier lässt sich die App-Rolle an Ort und Stelle entrechten. Als
+**Bootstrap-Superuser**, in der Anwendungs-DB (Beispielnamen wie in
+`.env.staging.example`):
+
+```sql
+-- 0. Vorher: web, cron und maintenance stoppen (keine App-Schreibzugriffe).
+-- Ein Passwortwechsel beendet BESTEHENDE Sessions nicht — verbliebene
+-- Verbindungen der Altrolle ausdruecklich kappen:
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+ WHERE datname = current_database AND usename = 'anlaufstelle' AND pid <> pg_backend_pid;
+BEGIN; -- alles Folgende ist transaktional; bei einem Fehler bleibt nichts halb stehen
+-- 1. Fehlende Admin-/Owner-Rolle anlegen. Passwort >= 32 Zeichen.
+CREATE ROLE anlaufstelle_admin WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB
+    PASSWORD '<neues-admin-passwort>';
+GRANT ALL ON SCHEMA public TO anlaufstelle_admin;
+-- 2. Ownership Datenbank + alle Objekte auf die Admin-Rolle uebertragen.
+ALTER DATABASE anlaufstelle OWNER TO anlaufstelle_admin;
+GRANT ALL PRIVILEGES ON DATABASE anlaufstelle TO anlaufstelle_admin;
+REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin;
+-- 3. App-Rolle entrechten — DAS ist der Schritt, den ein reiner
+-- Ownership-Umzug nicht leistet.
+ALTER ROLE anlaufstelle NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB;
+ALTER ROLE anlaufstelle PASSWORD '<neues-app-passwort>';
+-- 4. App-Rolle: nur noch DML.
+GRANT CONNECT ON DATABASE anlaufstelle TO anlaufstelle;
+GRANT USAGE ON SCHEMA public TO anlaufstelle;
+ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anlaufstelle;
+ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO anlaufstelle;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anlaufstelle;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
+COMMIT;
+```
+
+> **Falls `REASSIGN OWNED BY` auch hier abbricht** (die Rolle besitzt dann
+> Extension- oder Systemobjekte): die selektiven Ownership-Schleifen aus
+> § 9.6.3 Schritt 4 verwenden — sie funktionieren fuer jede Rolle.
+
+Danach in der Env-Datei setzen: `POSTGRES_PASSWORD` (neues App-Passwort),
+`POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD` (neue Admin-Rolle) **und
+`POSTGRES_BOOTSTRAP_PASSWORD`** — der neue Staging-Stack verlangt alle drei
+(`settings/prod.py` lehnt einen `maintenance`-Prozess ohne sie ab, und das
+Init-Script prüft sie). Alle drei ≥ 32 Zeichen, kein `change-me`-Präfix.
+Abschluss mit § 9.6.4.
+
+#### 9.6.3 Fall C — die App-Rolle ist die Bootstrap-Rolle
+
+**Die Bootstrap-Rolle kann nicht entrechtet werden.** PostgreSQL lehnt das
+ausdrücklich ab (verifiziert auf PostgreSQL 18.4):
+
+```text
+ALTER ROLE anlaufstelle NOSUPERUSER;
+ERROR: permission denied to alter role
+DETAIL: The bootstrap superuser must have the SUPERUSER attribute.
+```
+
+Ein `ALTER ROLE … NOSUPERUSER` auf die vorhandene App-Rolle ist hier also **kein
+gangbarer Weg** — die Anwendung muss auf einen **neuen Rollennamen** umziehen.
+Die alte Rolle bleibt Superuser und übernimmt genau die Position, die im
+Zielmodell `postgres` hat: Bootstrap und Notfall-Wartung, **nie** Runtime.
+
+> **`REASSIGN OWNED BY` ist hier NICHT einsetzbar.** Auf der Bootstrap-Rolle
+> bricht es ab, weil sie systemerforderliche Objekte besitzt — verifiziert auf
+> PostgreSQL 18.4 mit einem bootstrap-initialisierten Cluster und dem
+> Anlaufstelle-Objektbestand:
+>
+> ```text
+> REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin;
+> ERROR: cannot reassign ownership of objects owned by role anlaufstelle
+> because they are required by the database system
+> ```
+>
+> Der Umzug läuft deshalb **selektiv** über den Katalog: nur Anwendungsobjekte,
+> und ausdrücklich **ohne** Extension-eigene Objekte (`pg_depend.deptype = 'e'`
+> — z. B. der `gtrgm`-Typ aus `pg_trgm`). Ein pauschaler Umzug entfernt die
+> Extension-Mitgliedschaft zwar nicht, setzt aber ein von der Extension
+> verwaltetes Mitglied eigenmächtig auf einen abweichenden Owner; solche
+> Objekte gehören der Extension und nicht dem Umbau. Indexe brauchen keinen eigenen Schritt, sie folgen
+> ihrer Tabelle. Das folgende Skript ist mit `psql` zu fahren (`\gexec` ist
+> eine psql-Anweisung) und läuft vollständig in **einer Transaktion** — auch
+> `CREATE ROLE` und `ALTER DATABASE … OWNER TO` sind transaktional (geprüft).
+
+```sql
+-- 0. Vorher: web, cron und maintenance stoppen.
+-- Ein Passwortwechsel beendet BESTEHENDE Sessions nicht — verbliebene
+-- Verbindungen der alten Bootstrap-/App-Rolle ausdruecklich kappen:
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+ WHERE datname = current_database AND usename = 'anlaufstelle' AND pid <> pg_backend_pid;
+
+-- Variablen. ACHTUNG: hinter einem \set darf KEIN Kommentar stehen. psql
+-- fasst ihn nicht als Kommentar auf, sondern als weitere Argumente und haengt
+-- sie an den Wert an — aus "anlaufstelle -- alte Rolle" wird dann der
+-- Rollenname "anlaufstelle--alteRolle", und JEDE Ownership-Schleife unten
+-- findet null Objekte, ohne dass irgendetwas fehlschlaegt.
+\set ON_ERROR_STOP on
+\set old_role anlaufstelle
+\set app_role anlaufstelle_app
+\set admin_role anlaufstelle_admin
+\set dbname anlaufstelle_staging
+
+-- Kontrollausgabe VOR dem Umbau: hier muessen exakt die vier Namen stehen,
+-- ohne angehaengten Text. Stimmt etwas nicht, abbrechen.
+\echo 'old_role =[':old_role']'
+\echo 'app_role =[':app_role']'
+\echo 'admin_role=[':admin_role']'
+\echo 'dbname =[':dbname']'
+
+BEGIN;
+
+-- 1. App-Rolle anlegen, falls sie fehlt, und danach Attribute + Passwort
+-- unbedingt setzen. Diese Form ist idempotent: sie laeuft auch nach einem
+-- abgebrochenen frueheren Versuch durch, bei dem die Rolle schon existiert.
+SELECT format('CREATE ROLE %I',:'app_role')
+ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname =:'app_role')
+\gexec
+ALTER ROLE:"app_role" WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB
+    PASSWORD '<neues-app-passwort>';
+
+-- 2. Admin-/Owner-Rolle, gleiches Muster.
+SELECT format('CREATE ROLE %I',:'admin_role')
+ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname =:'admin_role')
+\gexec
+ALTER ROLE:"admin_role" WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB
+    PASSWORD '<neues-admin-passwort>';
+GRANT ALL ON SCHEMA public TO:"admin_role";
+
+-- 3. Datenbank-Ownership.
+ALTER DATABASE:"dbname" OWNER TO:"admin_role";
+GRANT ALL PRIVILEGES ON DATABASE:"dbname" TO:"admin_role";
+
+-- 4. Objekt-Ownership selektiv umziehen (Ersatz fuer REASSIGN OWNED BY).
+-- 4a) Relationen: Tabellen, Sequenzen, Views, Materialized Views, Foreign Tables.
+SELECT format('ALTER %s %I.%I OWNER TO %I',
+              CASE c.relkind WHEN 'S' THEN 'SEQUENCE'
+                             WHEN 'v' THEN 'VIEW'
+                             WHEN 'm' THEN 'MATERIALIZED VIEW'
+                             WHEN 'f' THEN 'FOREIGN TABLE'
+                             ELSE 'TABLE' END,
+              n.nspname, c.relname,:'admin_role')
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE c.relowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND c.relkind IN ('r','p','S','v','m','f')
+   AND n.nspname NOT IN ('pg_catalog','information_schema')
+   AND n.nspname NOT LIKE 'pg\_toast%'
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                    WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
+ ORDER BY c.relkind DESC
+\gexec
+-- 4b) Routinen (Funktionen, Prozeduren, Aggregate).
+SELECT format('ALTER ROUTINE %I.%I(%s) OWNER TO %I',
+              n.nspname, p.proname, pg_get_function_identity_arguments(p.oid),:'admin_role')
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE p.proowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND n.nspname NOT IN ('pg_catalog','information_schema')
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                    WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+\gexec
+-- 4c) Eigene Typen und Domains (Tabellen-Rowtypes folgen ihrer Tabelle).
+SELECT format('ALTER %s %I.%I OWNER TO %I',
+              CASE t.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END,
+              n.nspname, t.typname,:'admin_role')
+  FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+ WHERE t.typowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND t.typtype IN ('e','d','c','r','b') AND t.typrelid = 0 AND t.typelem = 0
+   AND n.nspname NOT IN ('pg_catalog','information_schema')
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                    WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')
+\gexec
+-- 4d) Eigene Schemata. 'public' gehoert ab PG15 pg_database_owner und folgt
+-- damit automatisch dem neuen DB-Owner — dann faellt hier nichts an.
+SELECT format('ALTER SCHEMA %I OWNER TO %I', n.nspname,:'admin_role')
+  FROM pg_namespace n
+ WHERE n.nspowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
+\gexec
+
+-- 5. Neue App-Rolle: nur DML.
+GRANT CONNECT ON DATABASE:"dbname" TO:"app_role";
+GRANT USAGE ON SCHEMA public TO:"app_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE:"admin_role" IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO:"app_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE:"admin_role" IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO:"app_role";
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO:"app_role";
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO:"app_role";
+
+-- 6. Die alte Bootstrap-Rolle ist ab jetzt reine Bootstrap-/Notfallrolle:
+-- frisches, langes Passwort setzen und nirgends mehr als Runtime nutzen.
+ALTER ROLE:"old_role" PASSWORD '<neues-bootstrap-passwort>';
+COMMIT;
+```
+
+**Abschlussinventur direkt danach — über alle vier umgezogenen Klassen**, nicht
+nur über Relationen. Für die vier Umzugsklassen wird `0` erwartet. Die fünfte
+Zeile weist die **Extension-Mitglieder** aus, die der Umbau bewusst nicht
+anfasst: dort ist ein Wert **> 0 der Normalfall** und kein Fehler.
+
+```sql
+SELECT 'relationen' AS klasse, count(*) AS bei_alter_rolle
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+ WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+   AND n.nspname NOT LIKE 'pg\_toast%'
+   AND c.relkind IN ('r','p','S','v','m','f')
+   AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                    WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
+UNION ALL
+SELECT 'routinen', count(*)
+  FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+ WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+   AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                    WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+UNION ALL
+SELECT 'typen', count(*)
+  FROM pg_type ty JOIN pg_namespace n ON n.oid = ty.typnamespace
+ WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+   AND ty.typtype IN ('e','d','c','r','b') AND ty.typrelid = 0 AND ty.typelem = 0
+   AND ty.typowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                    WHERE d.classid = 'pg_type'::regclass AND d.objid = ty.oid AND d.deptype = 'e')
+UNION ALL
+SELECT 'schemata', count(*)
+  FROM pg_namespace n
+ WHERE n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
+   AND n.nspowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+UNION ALL
+-- Extension-Mitglieder werden vom Umbau BEWUSST nicht angefasst (s.o.). Sie
+-- stehen hier getrennt, damit die Inventur nicht faelschlich "alles bei der
+-- Admin-Rolle" meldet: dieser Wert ist erwartungsgemaess > 0.
+SELECT 'extension-objekte (by design)', count(*)
+  FROM pg_depend d
+  LEFT JOIN pg_class c ON d.classid = 'pg_class'::regclass AND c.oid = d.objid
+  LEFT JOIN pg_proc p ON d.classid = 'pg_proc'::regclass AND p.oid = d.objid
+  LEFT JOIN pg_type ty ON d.classid = 'pg_type'::regclass AND ty.oid = d.objid
+ WHERE d.deptype = 'e'
+   AND COALESCE(c.relowner, p.proowner, ty.typowner) = (SELECT oid FROM pg_roles WHERE rolname =:'old_role');
+```
+
+> **Was die Extension-Zeile für die Wartung bedeutet.** Die Extension und alle
+> ihre Objekte bleiben Eigentum der **alten Bootstrap-Rolle** — `pg_extension`
+> führt sie weiter dort. Gemessen auf PostgreSQL 18.4 nach einem Fall-C-Umbau:
+> `extension_owner = anlaufstelle`, 34 Extension-Objekte weiterhin bei dieser
+> Rolle, alle Anwendungsobjekte bei der Admin-Rolle. Folge: Die Admin-Rolle
+> (`NOSUPERUSER BYPASSRLS`) kann **keine Extension-Wartung** — `ALTER EXTENSION
+> pg_trgm SET SCHEMA …` und `DROP EXTENSION pg_trgm` scheitern beide mit
+> `must be owner of extension pg_trgm`. Ein `ALTER EXTENSION … OWNER TO` gibt es
+> in PostgreSQL **nicht** (Syntaxfehler), der Besitz lässt sich also nicht
+> nachträglich sauber übertragen.
+>
+> **Praktisch heisst das:** Für ein späteres `ALTER EXTENSION … UPDATE` (etwa
+> nach einem Major-Upgrade) braucht es einen **Superuser** — die alte
+> Bootstrap-Rolle oder die in § 9.6.3 angelegte Rolle `postgres`. Beide bleiben
+> ohnehin erhalten; ihr Passwort gehört deshalb dokumentiert und darf nicht
+> verlorengehen. Als Superuser läuft der Befehl durch (verifiziert). Für den
+> laufenden Betrieb ändert sich nichts: Die App-Rolle nutzt die Extension
+> weiter (`similarity()` geprüft), nur die Verwaltung der Extension bleibt beim
+> Superuser.
+> **Vorbedingung, die technisch nicht erzwungen wird:** Die vier Schleifen
+> arbeiten auf dem Snapshot ihrer jeweiligen `SELECT`-Abfrage. Ein Objekt, das
+> eine **parallele** Session unter der alten Rolle *nach* der Erhebung anlegt,
+> steht nicht in der Befehlsliste und bleibt bei der alten Rolle. Das Stoppen
+> der Dienste und `pg_terminate_backend` oben verhindern ein **Reconnect**
+> nicht. Für das Wartungsfenster gilt deshalb: **kein konkurrierendes DDL.**
+> Wer das erzwingen will, sperrt die alte Rolle vorher in einer **eigenen,
+> committeten** Transaktion — innerhalb des Hauptblocks wirkt es nicht, weil
+> andere Sessions die Änderung erst nach dem `COMMIT` sehen:
+>
+> ```sql
+> ALTER ROLE anlaufstelle NOLOGIN; -- vor dem Hauptblock, eigene Transaktion
+> --... Hauptblock...
+> ALTER ROLE anlaufstelle LOGIN; -- danach wieder freigeben
+> ```
+>
+> Die Inventur oben ist in jedem Fall das letzte Wort: zeigt sie irgendwo
+> `> 0`, den Hauptblock einfach erneut fahren — er ist idempotent.
+
+Danach die Env-Datei umstellen — das ist der Teil, den man leicht vergisst:
+
+| Variable | neuer Wert |
+|---|---|
+| `POSTGRES_USER` | `anlaufstelle_app` (**geändert**) |
+| `POSTGRES_PASSWORD` | `<neues-app-passwort>` |
+| `POSTGRES_ADMIN_USER` | `anlaufstelle_admin` |
+| `POSTGRES_ADMIN_PASSWORD` | `<neues-admin-passwort>` |
+| `POSTGRES_BOOTSTRAP_PASSWORD` | `<neues-bootstrap-passwort>` (Passwort der **alten** Rolle) |
+
+> **Warum nicht einfach den alten Namen behalten?** Weil genau dieser Name die
+> Bootstrap-Rolle ist und dauerhaft `SUPERUSER` bleibt. Liefe die Runtime weiter
+> unter ihm, wäre der Fix wirkungslos — `FORCE ROW LEVEL SECURITY` greift für
+> Superuser nicht. Der `web`-Healthcheck des Staging-Stacks würde das ab
+> #2086 auch bemerken
+> und den Container nie `healthy` melden.
+
+> **Die Rolle `postgres` ist nach Fall C nicht optional.** In einem so
+> entstandenen Cluster gibt es keine Rolle dieses Namens. Für den
+> `pg_isready`-Aufruf im `db`-Healthcheck wäre das egal (er authentifiziert
+> nicht) — aber das ausgelieferte Rotationswerkzeug
+> [`scripts/ops/rotate-db-passwords.sh`](../scripts/ops/rotate-db-passwords.sh)
+> verbindet fest als `-U postgres` und rotiert fest `ALTER ROLE "postgres"`.
+> Ohne die Rolle scheitert es an der Verbindung; legt man sie nur pro forma an,
+> rotiert es das Passwort einer Rolle, die niemand benutzt — und **nicht** das
+> der alten Bootstrap-Rolle, auf die die Env-Tabelle oben zeigt.
+>
+> Deshalb im Anschluss an Fall C:
+>
+> ```sql
+> CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD '<neues-bootstrap-passwort>';
+> ```
+>
+> und **dasselbe** Passwort wie bei der alten Bootstrap-Rolle setzen, damit
+> `POSTGRES_BOOTSTRAP_PASSWORD` für beide stimmt. Das Rotationswerkzeug rotiert
+> dann `postgres`; das Passwort der alten Bootstrap-Rolle bleibt davon
+> unberührt und muss bei jeder Rotation **von Hand** mitgezogen werden:
+>
+> ```sql
+> ALTER ROLE anlaufstelle PASSWORD '<neues-bootstrap-passwort>';
+> ```
+>
+> Ein Umbau des Werkzeugs auf einen konfigurierbaren Bootstrap-Rollennamen ist
+> bewusst nicht Teil von
+> #2086 — dafür gibt es
+> ein Folge-Ticket. Der saubere Ausweg bleibt Dump/Restore in ein frisches
+> Volume: dort heisst die Bootstrap-Rolle wieder `postgres`.
+
+#### 9.6.4 Abschluss (für alle Fälle verbindlich)
+
+Der Umbau gilt erst als abgeschlossen, wenn das Rollen-Gate grün ist —
+**vor** dem Wiederanlauf von `web`:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
+# bzw. staging:
+docker compose -f docker-compose.staging.yml --env-file .env.staging \
+    run --rm maintenance check_db_roles
+# erwartet: App-Rolle rolsuper=False, rolbypassrls=False
+# Admin-Rolle rolsuper=False, rolbypassrls=True (Exit-Code 0)
+```
+
+Exit ≠ 0 heisst: der Umbau ist unvollständig — `web` **nicht** starten, sondern
+die Meldung abarbeiten. Erst danach deployen; der Migrate-One-Shot führt dasselbe
+Gate erneut aus, und auf staging verifiziert zusätzlich der `web`-Healthcheck
+laufend die tatsächliche Verbindungs-Rolle.
+
+Das Gate prüft seit #2086
+nicht mehr nur, dass die App-Rolle **nicht** Owner ist, sondern dass die
+Admin-Rolle es **ist**. Ein Objekt, das nach einem halb gefahrenen Umbau noch der
+alten Bootstrap-Rolle gehört, fällt damit auf — vorher lief genau dieser Zustand
+grün durch.
 
 **Fail-loud-Gate (Refs #1026):**
 `check_db_roles` prüft seit A1.4 **zusätzlich zur Attribut-Prüfung die Ownership**.
@@ -2001,7 +2489,7 @@ Refs #1039. PostgreSQL-Major-Versionen haben **inkompatible Datenverzeichnisse**
 
 ### 13.1 Prod/Staging — Daten erhalten (Wartungsfenster)
 
-Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020).
+Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020). Fuer Staging gilt das erst ab #2086: davor mountete der Stack `deploy/postgres-init` gar nicht (§ 1.4).
 
 ```bash
 # 0. Maintenance-Mode aktivieren (§ 6) + Web stoppen — DB bleibt fuer den Dump erreichbar
