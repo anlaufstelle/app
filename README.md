@@ -148,6 +148,12 @@ Anlaufstelle ist Open Source und kostenlos nutzbar. Wenn Sie Hilfe bei der Einf�
 
 Benutzerhandbuch, Admin-Handbuch und Fachkonzept finden Sie im [docs/](docs/)-Verzeichnis.
 
+### Produktiv installieren
+
+Kurzfassung: `.env.example` nach `.env` kopieren, die Pflichtwerte darin setzen (Schlüssel, Datenbank-Rollen, `ALLOWED_HOSTS` samt `localhost,127.0.0.1` für den Container-Healthcheck) und den Stack mit `docker compose -f docker-compose.prod.yml up -d` starten. Den maßgeblichen Schritt-für-Schritt-Weg — Migrationspfad, Erstanmeldung über `create_super_admin`, Backup und Betrieb — beschreibt [docs/admin-guide.md § 1](docs/admin-guide.md#1-installation-docker-compose).
+
+Der Quick-Start weiter unten ist **kein** Produktionsweg: Er lädt Demodaten und bindet bewusst nur auf `127.0.0.1`.
+
 ---
 
 ## Lizenz

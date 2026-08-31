@@ -148,6 +148,12 @@ Anlaufstelle is open source and free to use. If you need help introducing the sy
 
 User manual, admin manual, and domain concept are available in the [docs/](docs/) directory.
 
+### Production installation
+
+In short: copy `.env.example` to `.env`, fill in the mandatory values (keys, database roles, `ALLOWED_HOSTS` including `localhost,127.0.0.1` for the container health check) and start the stack with `docker compose -f docker-compose.prod.yml up -d`. The authoritative step-by-step guide — migration path, first sign-in via `create_super_admin`, backups and operations — is [docs/en/admin-guide.md § 1](docs/en/admin-guide.md#1-installation-docker-compose).
+
+The quick start further down is **not** a production path: it loads demo data and deliberately binds to `127.0.0.1` only.
+
 ---
 
 ## License
@@ -216,5 +222,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-26 -->
-<!-- source-hash: 2a3d39541e3776d5e5b29a3013c4b69c1ac2ef0a -->
+<!-- translation-date: 2026-08-31 -->
+<!-- source-hash: 21b239cf1fed0d10669fc118aeff8efdf026550e -->

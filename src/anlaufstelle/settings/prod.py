@@ -146,6 +146,13 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 SECURE_SSL_REDIRECT = True
+# /health/ vom HTTPS-Redirect ausnehmen: der Container-Healthcheck ruft
+# http://localhost:8000/health/ ohne X-Forwarded-Proto auf. Ohne Exempt
+# antwortet SecurityMiddleware mit 301 auf https://, und der Healthcheck-Client
+# kann lokal kein TLS -> web wird nie healthy, caddy (condition:
+# service_healthy) startet nie. Gehoert hierher und nicht nur in die Overlays:
+# docker-compose.staging.yml pinnt anlaufstelle.settings.prod direkt. Refs #2077.
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 SESSION_COOKIE_SECURE = True
 # SESSION-Cookie "Lax" (= Django-Default) explizit: Top-Level-Navigationen
 # (Bookmarks, E-Mail-Links) sollen die Session mitschicken — sonst

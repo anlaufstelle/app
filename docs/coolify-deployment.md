@@ -117,7 +117,7 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
 - `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` — Drei-Rollen-Modell (Refs #902, #1026); der `cron`-Sidecar faehrt seine Jobs als Admin-Rolle
 - `ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` — Fernet-Key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
-- `ALLOWED_HOSTS=anlaufstelle.app,www.anlaufstelle.app`
+- `ALLOWED_HOSTS=anlaufstelle.app,www.anlaufstelle.app,localhost,127.0.0.1` — `localhost`/`127.0.0.1` gehören zwingend dazu, sonst beantwortet die Anwendung den Container-Healthcheck (`http://localhost:8000/health/`) mit einem `DisallowedHost`-400 und der Container wird nie `healthy` (#2077)
 - `EXTERNAL_ORIGIN=https://anlaufstelle.app` — feste Basis der Einladungs-, Passwort-Reset- und Entsperr-Links (Refs #1967). Entfällt, solange `ALLOWED_HOSTS` genau **einen** öffentlichen Hostnamen führt — dann leitet die App `https://<host>` selbst ab (`localhost`/`127.0.0.1`/`::1` zählen nicht mit, sie stehen dort nur für den Container-Healthcheck). Bei mehreren öffentlichen Hosts (wie hier) oder reinen Subdomain-Mustern (`.anlaufstelle.app`) ist die Variable Pflicht, sonst startet die Anwendung nicht.
 - `DOMAIN=anlaufstelle.app`
 - `BACKUP_ENCRYPTION_KEY` — separater Fernet-Key für Backups

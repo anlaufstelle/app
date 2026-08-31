@@ -15,6 +15,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from django.http import HttpResponse
+from django.middleware.security import SecurityMiddleware
+from django.test import RequestFactory, override_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
@@ -714,3 +717,118 @@ class TestProdFileUploadTempDir:
         """Eine leer gesetzte Variable (z. B. `FILE_UPLOAD_TEMP_DIR=` in .env)
         darf nicht als expliziter Leerstring-Pfad durchgereicht werden."""
         assert self._resolved({"FILE_UPLOAD_TEMP_DIR": ""})["temp_dir"] is None
+
+
+class TestProdHealthcheckRedirectExempt:
+    """Refs #2077: ``/health/`` muss in prod vom HTTPS-Redirect ausgenommen sein.
+
+    ``prod.py`` setzt ``SECURE_SSL_REDIRECT = True``. Die Container-Healthchecks
+    (``Dockerfile``, ``docker-compose.prod.yml``, ``docker-compose.staging.yml``)
+    rufen ``http://localhost:8000/health/`` ohne ``X-Forwarded-Proto`` auf — ohne
+    Exempt antwortet ``SecurityMiddleware`` (erste Middleware) mit 301 auf
+    ``https://``, der Healthcheck-Client kann lokal aber kein TLS. Folge: ``web``
+    wird nie ``healthy``, und ``caddy`` (``condition: service_healthy``) startet
+    nie. Der Exempt gehoert deshalb an die Wurzel ``prod.py`` und nicht (nur) in
+    die Overlays ``devlive.py``/``barbara_settings.py``, die ihn je einzeln
+    nachgezogen haben — ``docker-compose.staging.yml`` pinnt ``settings.prod``
+    direkt.
+    """
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ALLOWED_HOSTS": "example.org",
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    _READBACK = (
+        "import json, anlaufstelle.settings.prod as p; "
+        "print(json.dumps({'redirect': p.SECURE_SSL_REDIRECT, "
+        "'exempt': list(getattr(p, 'SECURE_REDIRECT_EXEMPT', []))}))"
+    )
+
+    def _resolved(self):
+        result = _run_prod_import(self._VALID_ENV, code=self._READBACK)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        return json.loads(result.stdout.strip().splitlines()[-1])
+
+    def test_health_pfad_ist_vom_ssl_redirect_ausgenommen(self):
+        werte = self._resolved()
+        assert werte["redirect"] is True, "prod.py muss HTTPS weiterhin erzwingen"
+        treffer = [muster for muster in werte["exempt"] if re.search(muster, "health/")]
+        assert treffer, (
+            "prod.py fuehrt kein SECURE_REDIRECT_EXEMPT-Muster, das 'health/' trifft — "
+            "der Container-Healthcheck laeuft in einen 301 auf https://, kann lokal kein "
+            "TLS und web wird nie healthy (Refs #2077)."
+        )
+
+    def test_middleware_laesst_health_durch_und_leitet_sonst_um(self):
+        """Roundtrip gegen die echte ``SecurityMiddleware`` mit den aus ``prod.py``
+        gelesenen Werten — inklusive Gegenprobe: ``process_request()`` gibt auch
+        dann ``None`` zurueck, wenn der Redirect komplett abgeschaltet waere. Ohne
+        den 301-Nachweis auf einem nicht ausgenommenen Pfad bliebe dieser Guard
+        also gruen, waehrend die HTTPS-Erzwingung wegfiele."""
+        werte = self._resolved()
+        with override_settings(
+            SECURE_SSL_REDIRECT=werte["redirect"],
+            SECURE_REDIRECT_EXEMPT=werte["exempt"],
+            SECURE_SSL_HOST=None,
+        ):
+            # Die Regexes werden in __init__ kompiliert — die Instanz muss deshalb
+            # INNERHALB des override_settings-Blocks entstehen.
+            middleware = SecurityMiddleware(lambda request: HttpResponse())
+            factory = RequestFactory()
+
+            assert middleware.process_request(factory.get("/health/")) is None, (
+                "SecurityMiddleware leitet /health/ trotz Exempt auf https:// um (Refs #2077)."
+            )
+
+            umleitung = middleware.process_request(factory.get("/clients/"))
+            assert umleitung is not None, (
+                "Gegenprobe: ein nicht ausgenommener Pfad MUSS ueber http weiterhin "
+                "umgeleitet werden — sonst waere der Exempt-Nachweis auch bei "
+                "abgeschaltetem SECURE_SSL_REDIRECT gruen (Sicherheitsregression)."
+            )
+            assert umleitung.status_code == 301
+            assert umleitung["Location"].startswith("https://")
+
+
+@pytest.mark.architecture
+class TestVorlagenFuehrenLoopbackHostsFuerDenHealthcheck:
+    """Refs #2077: Prod-Vorlage und Coolify-Anleitung muessen ``localhost`` und
+    ``127.0.0.1`` in ``ALLOWED_HOSTS`` fuehren.
+
+    Zweite, vom Redirect-Exempt unabhaengige Haelfte des Deadlocks: Django prueft
+    ``ALLOWED_HOSTS`` in ``django.http.request``, lange bevor
+    ``SECURE_REDIRECT_EXEMPT`` ueberhaupt zur Anwendung kommt. Fehlen die
+    Loopback-Namen, beantwortet eine nach Vorlage konfigurierte Instanz den
+    Container-Healthcheck (``http://localhost:8000/health/``) mit einem
+    DisallowedHost-400 — aus 301 wird 400, der Healthcheck bleibt rot.
+
+    ``architecture``-Marker wie bei den ``.env``-Guards oben: die gelesenen
+    Dateien liegen ausserhalb von ``src/`` und fehlen in mutmuts
+    ``mutants/``-Arbeitskopie; der Dateizugriff steht deshalb IN der Testmethode
+    (in ``make ci`` laeuft der Guard weiterhin).
+    """
+
+    _PFLICHT = {"localhost", "127.0.0.1"}
+
+    def test_env_example_fuehrt_die_loopback_hosts(self):
+        werte = _active_env_assignments(REPO_ROOT / ".env.example")
+        hosts = {h.strip() for h in werte.get("ALLOWED_HOSTS", "").split(",")}
+        assert hosts >= self._PFLICHT, (
+            ".env.example fuehrt ALLOWED_HOSTS ohne localhost/127.0.0.1 — jede frische "
+            f"Installation nach Vorlage bekommt am Container-Healthcheck einen "
+            f"DisallowedHost-400 und wird nie healthy (Refs #2077). Gefunden: {sorted(hosts)}"
+        )
+
+    def test_coolify_anleitung_fuehrt_die_loopback_hosts(self):
+        inhalt = (REPO_ROOT / "docs/coolify-deployment.md").read_text(encoding="utf-8")
+        treffer = re.search(r"^-\s*`ALLOWED_HOSTS=([^`]*)`", inhalt, re.MULTILINE)
+        assert treffer is not None, "docs/coolify-deployment.md nennt keine ALLOWED_HOSTS-Zeile"
+        hosts = {h.strip() for h in treffer.group(1).split(",")}
+        assert hosts >= self._PFLICHT, (
+            "docs/coolify-deployment.md nennt ALLOWED_HOSTS ohne localhost/127.0.0.1 — die "
+            "Anleitung fuehrt ihren eigenen Wert, unabhaengig von .env.example, und liefe "
+            f"in denselben DisallowedHost-400 am Healthcheck (Refs #2077). Gefunden: {sorted(hosts)}"
+        )
