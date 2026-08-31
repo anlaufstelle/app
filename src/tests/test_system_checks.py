@@ -27,6 +27,7 @@ from anlaufstelle.settings._env import env_tokens
 from core.checks import (
     check_file_upload_temp_dir_configured,
     check_media_root_persistent,
+    check_redis_cache_requires_password,
     check_trusted_proxy_cidrs,
     check_trusted_proxy_hops,
 )
@@ -262,3 +263,74 @@ class TestFileUploadTempDirCheck:
     def test_blank_warns(self):
         messages = check_file_upload_temp_dir_configured(None)
         assert "core.W002" in _ids(messages)
+
+
+class TestRedisCachePasswordCheck:
+    @override_settings(
+        DEBUG=True,
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": "redis://redis:6379/1",
+            }
+        },
+    )
+    def test_debug_skips_check(self):
+        assert check_redis_cache_requires_password(None) == []
+
+    @override_settings(
+        DEBUG=False,
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": "redis://redis:6379/1",
+            }
+        },
+    )
+    def test_redis_without_password_warns(self):
+        messages = check_redis_cache_requires_password(None)
+        assert "core.W004" in _ids(messages)
+
+    @override_settings(
+        DEBUG=False,
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": "redis://:geheim@redis:6379/1",
+            }
+        },
+    )
+    def test_redis_with_password_is_clean(self):
+        assert check_redis_cache_requires_password(None) == []
+
+    @override_settings(
+        DEBUG=False,
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+                "LOCATION": "anlaufstelle_cache",
+            }
+        },
+    )
+    def test_database_cache_is_clean(self):
+        assert check_redis_cache_requires_password(None) == []
+
+    @override_settings(
+        DEBUG=False,
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}},
+    )
+    def test_locmem_without_location_is_clean(self):
+        assert check_redis_cache_requires_password(None) == []
+
+    @override_settings(
+        DEBUG=False,
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": ["redis://:pw@a:6379/1", "redis://b:6379/1"],
+            }
+        },
+    )
+    def test_location_list_with_unprotected_entry_warns(self):
+        messages = check_redis_cache_requires_password(None)
+        assert "core.W004" in _ids(messages)

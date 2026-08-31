@@ -89,6 +89,13 @@ services:
       - 256mb
       - --maxmemory-policy
       - allkeys-lru
+      # Defense-in-Depth (Refs #2002): requirepass zusaetzlich zur Netzgrenze.
+      # Einfaches ``-``: ein leer gesetztes REDIS_PASSWORD= schaltet die
+      # Authentifizierung wirklich ab (``--requirepass ""`` startet sauber),
+      # statt den Default wieder hereinzuholen — dieselbe Semantik wie bei
+      # REDIS_URL unten und bei ``--save ""`` oben.
+      - --requirepass
+      - ${REDIS_PASSWORD-}
     # Container-Runtime-Hardening (Refs #1374). ``user: redis`` umgeht den
     # root+gosu-Pfad des offiziellen Entrypoints — damit kommt der Service
     # ohne SETUID/SETGID/CHOWN aus (anders als db/clamav) und laeuft mit
@@ -107,10 +114,15 @@ services:
     mem_limit: 512m
     # KEIN env_file: .env — Redis braucht keine App-/DB-/Krypto-Secrets
     # (Blast-Radius, analog caddy). KEIN ports: — der Cache ist nur im
-    # internal-Netz erreichbar und darf nie am Host haengen (Redis hat hier
-    # bewusst kein requirepass; die Netzgrenze ist die Zugriffskontrolle).
+    # internal-Netz erreichbar und darf nie am Host haengen. Die Netzgrenze
+    # bleibt die erste Schranke; requirepass ist seit #2002 die zweite,
+    # unabhaengige Schranke fuer Rate-Limit-Schluessel mit Client-IPs.
+    # KEIN env_file (siehe oben) — nur diese EINE Variable, und nur, damit der
+    # Healthcheck sich authentifizieren kann. Refs #2002.
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD-}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi | grep -q PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -208,7 +220,9 @@ services:
       # ist nur der Fallback. Leert man REDIS_URL bewusst (REDIS_URL= in der
       # .env), faellt prod.py auf den DatabaseCache zurueck; dann kann der
       # redis-Service entfallen (docker compose up --scale redis=0).
-      REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
+      # Ohne REDIS_PASSWORD bleibt dieser Default byte-identisch. Mit Passwort
+      # werden die Credentials eingebettet, wie RedisCache sie als LOCATION erwartet.
+      REDIS_URL: ${REDIS_URL-redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1}
       # Refs #1872: Ablage der Host-Backups im Container. Der Settings-Default
       # (BASE_DIR.parent/backups) existiert im read_only-Image nicht, deshalb
       # meldete der Prod-Stack dauerhaft "Kein Backup gefunden" — unabhaengig
@@ -272,7 +286,7 @@ services:
       POSTGRES_BOOTSTRAP_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}
       CLAMAV_HOST: clamav
       FILE_UPLOAD_TEMP_DIR: /tmp
-      REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
+      REDIS_URL: ${REDIS_URL-redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1}
     volumes:
       - media:/data
       - ${BACKUP_HOST_DIR:-./backups}:${BACKUP_DIR:-/backups}:ro
@@ -327,7 +341,7 @@ services:
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav
       FILE_UPLOAD_TEMP_DIR: /tmp
-      REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
+      REDIS_URL: ${REDIS_URL-redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1}
       POSTGRES_APP_USER: ${POSTGRES_USER}
       # Alle Jobs hier laufen als Admin-DB-Rolle (BYPASSRLS) — NICHT als die
       # RLS-gefilterte App-Rolle aus der .env. Ausserhalb eines HTTP-Requests

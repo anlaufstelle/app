@@ -832,3 +832,28 @@ class TestVorlagenFuehrenLoopbackHostsFuerDenHealthcheck:
             "Anleitung fuehrt ihren eigenen Wert, unabhaengig von .env.example, und liefe "
             f"in denselben DisallowedHost-400 am Healthcheck (Refs #2077). Gefunden: {sorted(hosts)}"
         )
+
+
+class TestProdRedisPasswordUrl:
+    """Refs #2002: Redis-Zugangsdaten bleiben Teil der LOCATION."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ALLOWED_HOSTS": "example.org",
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    def test_password_url_switches_to_redis_cache_unchanged(self):
+        code = (
+            "import json, anlaufstelle.settings.prod as p; "
+            "print(json.dumps({"
+            "'backend': p.CACHES['default']['BACKEND'], "
+            "'location': p.CACHES['default']['LOCATION']}))"
+        )
+        redis_url = "redis://:geheim@redis:6379/1"
+        result = _run_prod_import({**self._VALID_ENV, "REDIS_URL": redis_url}, code=code)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        assert data["backend"] == "django.core.cache.backends.redis.RedisCache"
+        assert data["location"] == redis_url

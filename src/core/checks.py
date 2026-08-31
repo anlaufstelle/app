@@ -22,6 +22,7 @@ Werte ab, an denen Caddy scheitern würde.
 stehen, eine Umwidmung würde dort still etwas anderes anzeigen. Die mit #1963
 hinzugekommene Kopplung ``hops > 1`` ohne Proxy-Vertrauen bekommt darum die
 neue ID ``core.W003``, der unbrauchbare Bereich die neue ID ``core.E003``.
+``core.W004`` bezeichnet seit #2002 einen Redis-Cache ohne Passwort.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import re
 import sys
 from ipaddress import ip_network
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.checks import Error, Warning, register
@@ -261,4 +263,42 @@ def check_file_upload_temp_dir_configured(app_configs, **kwargs):
             )
         )
 
+    return messages
+
+
+def _redis_location_hat_passwort(location: str) -> bool:
+    parsed = urlsplit(location)
+    # unix://-Sockets und andere Backends kennen diese Redis-URL-Zusage nicht.
+    if parsed.scheme.lower() not in {"redis", "rediss"}:
+        return True
+    return bool(parsed.password)
+
+
+@register()
+def check_redis_cache_requires_password(app_configs, **kwargs):
+    """Warnt bei einem Redis-Cache ohne Passwort (Refs #2002)."""
+    messages = []
+    if settings.DEBUG or "collectstatic" in sys.argv:
+        return messages
+
+    default = settings.CACHES.get("default") or {}
+    if "redis" not in default.get("BACKEND", "").lower():
+        return messages
+
+    locations = default.get("LOCATION") or ""
+    if isinstance(locations, str):
+        locations = [locations]
+    ohne_passwort = [location for location in locations if not _redis_location_hat_passwort(location)]
+    if ohne_passwort:
+        messages.append(
+            Warning(
+                "Der Redis-Cache ist ohne Passwort konfiguriert.",
+                hint=(
+                    "Setze REDIS_PASSWORD in der .env; Details: docs/ops-runbook.md § 5.4a. "
+                    "Der Cache hält die Rate-Limit-Zähler einschließlich Client-IPs — ohne "
+                    "Passwort bleibt allein die Docker-Netzgrenze als Zugriffsschutz."
+                ),
+                id="core.W004",
+            )
+        )
     return messages

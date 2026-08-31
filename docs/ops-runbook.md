@@ -800,16 +800,22 @@ docker compose -f docker-compose.prod.yml restart web
 
 **Root Cause suchen:** Lang laufende Requests deuten auf langsame DB-Queries. Django Debug Toolbar (nur Dev) oder `EXPLAIN ANALYZE` nutzen.
 
-### 5.4a Cache-Backend / Multi-Worker (Refs #795)
+### 5.4a Cache-Backend / Multi-Worker (Refs #795, #2002)
 
 Sobald `GUNICORN_WORKERS > 1` läuft (siehe [5.4](#54-gunicorn-timeout)), brauchen `django-ratelimit` (Login/Sudo/Health-Bruteforce-Schutz) und das Health-Detail-Caching einen **prozessübergreifenden** Cache. Andernfalls (Django-Default `LocMemCache`) hält jeder Worker seinen eigenen Zähler und die effektiven Rate-Limits ver-N-fachen sich mit der Worker-Zahl.
 
 **Standard: der mitgelieferte `redis`-Service.**
-`docker-compose.prod.yml` startet einen Redis im internen Netz und setzt für `web` und `cron` `REDIS_URL=redis://redis:6379/1`; `settings/prod.py` schaltet damit auf Djangos eingebautes `RedisCache` um (kein `django-redis` nötig). Eigenschaften des Service:
+`docker-compose.prod.yml` startet einen Redis im internen Netz und setzt für `web`, `maintenance` und `cron` `REDIS_URL=redis://redis:6379/1`; `settings/prod.py` schaltet damit auf Djangos eingebautes `RedisCache` um (kein `django-redis` nötig). Eigenschaften des Service:
 
-- **Kein Host-Port, kein Passwort.** Der Cache hängt ausschließlich im `internal`-Netz; die Netzgrenze ist die Zugriffskontrolle. Wer den Port doch veröffentlicht, betreibt einen offenen, unauthentifizierten Redis.
+- **Kein Host-Port, optionales `requirepass` als zweite Schranke** (Refs #2002). Das `internal`-Netz bleibt die erste Zugriffskontrolle. Setzt man `REDIS_PASSWORD` in der `.env`, startet Compose den Service mit `--requirepass` und bettet die Credentials automatisch in die drei `REDIS_URL`-Defaults ein; in der `.env` ist nur `REDIS_PASSWORD` zu setzen. Bleibt die Variable leer oder ungesetzt, laufen Redis und die bisherige Default-URL unverändert ohne Passwort weiter, und der Start-Check `core.W004` weist darauf hin. Die zweite Schranke ist relevant, weil der Cache Rate-Limit-Schlüssel einschließlich Client-IPs hält.
 - **Keine Persistenz** (`--save ""`, `--appendonly no`, kein Volume). Im Cache liegen nur regenerierbare Daten mit kurzer TTL. Persistenz wäre hier ein Datenschutz-*Minus*: sie schriebe Rate-Limit-Schlüssel (u. a. Client-IPs, User-IDs) auf die Platte, wo keine Retention sie erfasst. Ein Redis-Neustart kostet nur einen kalten Cache.
 - **Speicher gedeckelt** (`--maxmemory 256mb`, `allkeys-lru`), damit der Container nicht ins `mem_limit`-OOM läuft.
+
+Für `REDIS_PASSWORD` nur URL-sichere Zeichen verwenden: `@`, `:`, `/` und `#` zerlegen sonst die eingebettete URL. Ein passender Wert entsteht zum Beispiel mit `openssl rand -hex 32`. Zum Passwortwechsel den Wert ändern und Cache plus Konsumenten neu erzeugen; der Cache enthält nur regenerierbare Daten:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d redis web cron
+```
 
 **Fallback (unverändert): `DatabaseCache`.**
 Ist `REDIS_URL` leer oder nicht gesetzt, nutzt `prod.py` den shared `DatabaseCache`. Die Cache-Tabelle `anlaufstelle_cache` wird per Migration (`0092`) angelegt und läuft im normalen One-Shot-Migrate-Job (`docker-migrate.sh`, siehe [1.2](#12-deploy-schritte)) automatisch mit hoch — **kein** separater `createcachetable`-Schritt nötig. Der Fallback ist funktional gleichwertig (ebenfalls prozessübergreifend, `RATELIMIT_USE_CACHE=default`), kostet aber pro Rate-Limit-Zähler einen DB-Roundtrip. **Redis ist hier also eine Performance-, keine Korrektheits-Entscheidung.**
@@ -825,7 +831,7 @@ REDIS_URL=
 docker compose -f docker-compose.prod.yml up -d --scale redis=0
 ```
 
-**Externes Redis** statt des mitgelieferten: einfach `REDIS_URL` in der `.env` auf den eigenen Endpunkt zeigen lassen (`redis://redis.internal:6379/1`); der Compose-Wert ist nur ein Fallback für nicht gesetzte Variablen. Der mitgelieferte Service kann dann wie oben auf 0 skaliert werden.
+**Externes Redis** statt des mitgelieferten: `REDIS_URL` in der `.env` auf den eigenen Endpunkt zeigen lassen (`redis://:passwort@redis.internal:6379/1`) und dessen Credentials selbst in diese URL eintragen. Ein gesetztes `REDIS_PASSWORD` wirkt bei expliziter `REDIS_URL` nur noch auf den ungenutzten mitgelieferten Service. Der Compose-Wert ist nur ein Fallback für nicht gesetzte Variablen; der mitgelieferte Service kann dann wie oben auf 0 skaliert werden.
 
 **Welches Backend läuft gerade?** Der `/health/`-Endpoint gibt es für interne/Token-Caller aus:
 
@@ -835,7 +841,7 @@ curl -sf -H "X-Health-Token: $HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/ \
 # {'backend': 'django.core.cache.backends.redis.RedisCache', 'status': 'ok'}
 ```
 
-Das ist kein Kosmetik-Feld: Ist `REDIS_URL` gesetzt, im Image aber kein `redis`-Paket vorhanden (typisch, wenn ein **älteres** `APP_VERSION`-Image mit dem neuen Compose-File gefahren wird), fällt `prod.py` absichtlich auf den `DatabaseCache` zurück und schreibt eine Warnung ins Container-Log — der Stack bleibt lauffähig, läuft aber langsamer. `cache.backend` macht diesen Zustand sichtbar. `cache.status = error` (Backend konfiguriert, aber nicht erreichbar) setzt den Gesamtstatus auf `degraded`, weil dann auch der Rate-Limit-Schutz wirkungslos ist.
+Das ist kein Kosmetik-Feld: Ist `REDIS_URL` gesetzt, im Image aber kein `redis`-Paket vorhanden (typisch, wenn ein **älteres** `APP_VERSION`-Image mit dem neuen Compose-File gefahren wird), fällt `prod.py` absichtlich auf den `DatabaseCache` zurück und schreibt eine Warnung ins Container-Log — der Stack bleibt lauffähig, läuft aber langsamer. `cache.backend` macht diesen Zustand sichtbar; der Payload zeigt nie die `LOCATION` und damit auch kein eingebettetes Passwort. `cache.status = error` (Backend konfiguriert, aber nicht erreichbar) setzt den Gesamtstatus auf `degraded`, weil dann auch der Rate-Limit-Schutz wirkungslos ist.
 
 **Kein separater `ratelimit`-Cache-Alias.** Die ursprüngliche Planung sah einen zweiten Alias auf Redis-DB `/2` vor. Umgesetzt ist er nicht: `django-ratelimit` hängt an `RATELIMIT_USE_CACHE`, und kein Code liest `caches["ratelimit"]` — der Alias wäre tote Konfiguration und müsste im `DatabaseCache`-Fallback zusätzlich eine zweite Cache-Tabelle (also eine weitere Migration) tragen. DB-Index `/2` bleibt für eine spätere Trennung frei.
 

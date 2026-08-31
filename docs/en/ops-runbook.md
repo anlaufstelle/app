@@ -801,16 +801,22 @@ docker compose -f docker-compose.prod.yml restart web
 
 **Finding the root cause:** Long-running requests point to slow DB queries. Use the Django Debug Toolbar (dev only) or `EXPLAIN ANALYZE`.
 
-### 5.4a Cache Backend / Multi-Worker (Refs #795)
+### 5.4a Cache Backend / Multi-Worker (Refs #795, #2002)
 
 As soon as `GUNICORN_WORKERS > 1` is running (see [5.4](#54-gunicorn-timeout)), `django-ratelimit` (login/sudo/health brute-force protection) and the health detail caching need a **cross-process** cache. Otherwise (Django's default `LocMemCache`), each worker holds its own counter and the effective rate limits multiply by the worker count.
 
 **Default: the bundled `redis` service.**
-`docker-compose.prod.yml` starts a Redis on the internal network and sets `REDIS_URL=redis://redis:6379/1` for `web` and `cron`; `settings/prod.py` then switches to Django's built-in `RedisCache` (no `django-redis` needed). Properties of the service:
+`docker-compose.prod.yml` starts a Redis on the internal network and sets `REDIS_URL=redis://redis:6379/1` for `web`, `maintenance`, and `cron`; `settings/prod.py` then switches to Django's built-in `RedisCache` (no `django-redis` needed). Properties of the service:
 
-- **No host port, no password.** The cache sits exclusively on the `internal` network; the network boundary is the access control. Anyone who does publish the port is running an open, unauthenticated Redis.
+- **No host port, optional `requirepass` as a second barrier** (Refs #2002). The `internal` network remains the first access control. When `REDIS_PASSWORD` is set in `.env`, Compose starts the service with `--requirepass` and automatically embeds the credentials in all three `REDIS_URL` defaults; only `REDIS_PASSWORD` needs to be set in `.env`. If the variable is empty or unset, Redis and the previous default URL continue unchanged without a password, and the `core.W004` startup check points this out. The second barrier matters because the cache holds rate-limit keys, including client IPs.
 - **No persistence** (`--save ""`, `--appendonly no`, no volume). The cache holds only regenerable data with a short TTL. Persistence would be a data-protection *minus* here: it would write rate-limit keys (including client IPs, user IDs) to disk, where no retention policy captures them. A Redis restart only costs a cold cache.
 - **Memory capped** (`--maxmemory 256mb`, `allkeys-lru`), so the container does not run into `mem_limit` OOM.
+
+Use only URL-safe characters for `REDIS_PASSWORD`: `@`, `:`, `/`, and `#` would otherwise break the embedded URL. A suitable value can be generated with `openssl rand -hex 32`. To rotate the password, change the value and recreate the cache and its consumers; the cache contains only regenerable data:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d redis web cron
+```
 
 **Fallback (unchanged): `DatabaseCache`.**
 If `REDIS_URL` is empty or unset, `prod.py` uses the shared `DatabaseCache`. The cache table `anlaufstelle_cache` is created via migration (`0092`) and comes up automatically as part of the normal one-shot migrate job (`docker-migrate.sh`, see [1.2](#12-deploy-steps)) — **no** separate `createcachetable` step needed. The fallback is functionally equivalent (also cross-process, `RATELIMIT_USE_CACHE=default`), but costs a DB round trip per rate-limit counter. **Redis is therefore a performance decision here, not a correctness one.**
@@ -826,7 +832,7 @@ REDIS_URL=
 docker compose -f docker-compose.prod.yml up -d --scale redis=0
 ```
 
-**External Redis** instead of the bundled one: simply point `REDIS_URL` in `.env` at your own endpoint (`redis://redis.internal:6379/1`); the compose value is only a fallback for an unset variable. The bundled service can then be scaled to 0 as above.
+**External Redis** instead of the bundled one: point `REDIS_URL` in `.env` at your own endpoint (`redis://:password@redis.internal:6379/1`) and include that endpoint's credentials in the URL yourself. When `REDIS_URL` is set explicitly, `REDIS_PASSWORD` only affects the now-unused bundled service. The Compose value is only a fallback for an unset variable; the bundled service can then be scaled to 0 as above.
 
 **Which backend is currently running?** The `/health/` endpoint reports it for internal/token callers:
 
@@ -836,7 +842,7 @@ curl -sf -H "X-Health-Token: $HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/ \
 # {'backend': 'django.core.cache.backends.redis.RedisCache', 'status': 'ok'}
 ```
 
-This is not a cosmetic field: if `REDIS_URL` is set but the `redis` package is not present in the image (typical when an **older** `APP_VERSION` image is run with the new compose file), `prod.py` deliberately falls back to `DatabaseCache` and writes a warning to the container log — the stack stays operational, but runs slower. `cache.backend` makes this state visible. `cache.status = error` (backend configured but unreachable) sets the overall status to `degraded`, because the rate-limit protection is then also ineffective.
+This is not a cosmetic field: if `REDIS_URL` is set but the `redis` package is not present in the image (typical when an **older** `APP_VERSION` image is run with the new compose file), `prod.py` deliberately falls back to `DatabaseCache` and writes a warning to the container log — the stack stays operational, but runs slower. `cache.backend` makes this state visible; the payload never shows `LOCATION` and therefore never exposes an embedded password. `cache.status = error` (backend configured but unreachable) sets the overall status to `degraded`, because the rate-limit protection is then also ineffective.
 
 **No separate `ratelimit` cache alias.** The original plan envisioned a second alias on Redis DB `/2`. It was not implemented: `django-ratelimit` hangs off `RATELIMIT_USE_CACHE`, and no code reads `caches["ratelimit"]` — the alias would be dead configuration and, in the `DatabaseCache` fallback, would additionally need a second cache table (i.e. another migration). DB index `/2` stays free for a later separation.
 
@@ -2610,4 +2616,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-08-31 -->
-<!-- source-hash: 2195008e22a37e530f942a01dbf446396196bd14 -->
+<!-- source-hash: PENDING -->

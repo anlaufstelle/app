@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **ufw-docker wird beim Server-Bootstrap integritätsgeprüft** (#2062) — Das als root ausgeführte Hilfsskript kommt jetzt von einem festen Upstream-Commit und wird vor der Installation sowie bei jedem erneuten Bootstrap gegen eine fest hinterlegte SHA-256-Prüfsumme geprüft.
 - **Berichte gehen nur noch mit ausgewiesener Unterdrückungsschwelle heraus** (#2069) — Die Pflicht, Kleinstfallzahlen in jedem Berichts-Artefakt zu unterdrücken, war bisher nur eine Verabredung unter Entwickler:innen: Ein neuer Bericht, dessen Unterdrückung schlicht vergessen wurde, hätte Rohzahlen als CSV, JSON oder XML ausgeliefert, ohne dass irgendetwas Alarm schlägt. Berichts-Download und Berichtsvorschau brechen jetzt mit einem Fehler ab, statt Zahlen ohne die Angabe auszugeben, ab welcher Gruppengröße unterdrückt wurde; ein Protokolleintrag über einen nie erzeugten Export entsteht dabei nicht. Geprüft wird damit, **dass** ein Bericht unterdrückt — dass er es fachlich richtig tut, sichern wie bisher die Tests des jeweiligen Berichts.
+- **Redis kann zusätzlich zur Netzgrenze mit einem Passwort geschützt werden** (#2002) — Der Cache hält Rate-Limit-Zähler samt Client-IPs und war bisher allein durch das interne Netz geschützt; mit `REDIS_PASSWORD` aktiviert der mitgelieferte Service jetzt `requirepass` und verteilt die Credentials automatisch, während ein leerer Wert den bisherigen Betrieb erhält und beim Start `core.W004` ausgibt.
 
 ### Fixed
 

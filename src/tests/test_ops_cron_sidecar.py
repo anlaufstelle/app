@@ -205,9 +205,8 @@ class TestRedisCacheService:
         )
 
     def test_has_no_host_port(self) -> None:
-        """Der Cache haengt nur im ``internal``-Netz und hat bewusst kein
-        ``requirepass`` — ein Host-Port waere damit ein offener,
-        unauthentifizierter Redis."""
+        """Der Cache haengt nur im ``internal``-Netz; ``requirepass`` ist eine
+        zweite Schranke und kein Grund, den Dienst am Host zu veroeffentlichen."""
         block = _service_block(COMPOSE_PROD.read_text(encoding="utf-8"), "redis")
         assert "ports:" not in block
 
@@ -228,14 +227,50 @@ class TestRedisCacheService:
         assert "read_only: true" in block
         assert "user: redis" in block
 
-    @pytest.mark.parametrize("service", ["web", "cron"])
+    def test_requirepass_is_wired_from_env(self) -> None:
+        """Das einfache ``-`` laesst ein leeres ``REDIS_PASSWORD=`` die
+        Authentifizierung wirklich abschalten, analog zu ``--save ""``."""
+        block = _service_block(COMPOSE_PROD.read_text(encoding="utf-8"), "redis")
+        assert "- --requirepass\n      - ${REDIS_PASSWORD-}" in block
+
+    def test_healthcheck_authenticates(self) -> None:
+        """``redis-cli ping`` endet bei NOAUTH mit Exit 0. Ohne ``grep -q
+        PONG`` waere der Healthcheck mit requirepass falsch gruen und ``web``
+        startete gegen einen nicht erreichbaren Cache."""
+        block = _service_block(COMPOSE_PROD.read_text(encoding="utf-8"), "redis")
+        assert "--no-auth-warning" in block
+        assert "grep -q PONG" in block
+
+    def test_redis_password_reaches_only_the_redis_service(self) -> None:
+        """Die App erhaelt das Passwort nur eingebettet in ``REDIS_URL``.
+
+        Ein eigener Environment-Key in den App-Services waere unnoetige
+        Angriffsoberflaeche und koppelte den Allowlist-Guard an eine zweite
+        Bedingung.
+        """
+        text = COMPOSE_PROD.read_text(encoding="utf-8")
+        redis = _service_block(text, "redis")
+        assert re.search(r"^\s+REDIS_PASSWORD:", redis, re.MULTILINE)
+        for service in ("web", "maintenance", "cron"):
+            block = _service_block(text, service)
+            assert not re.search(r"^\s+REDIS_PASSWORD:", block, re.MULTILINE)
+
+    def test_env_example_documents_redis_password(self) -> None:
+        """Der Kommentar dokumentiert das Secret, ohne es zum aktiven
+        Runtime-Key der Web-Allowlist zu machen."""
+        text = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
+        assert "REDIS_PASSWORD" in text
+        assert not re.search(r"^REDIS_PASSWORD=", text, re.MULTILINE)
+
+    @pytest.mark.parametrize("service", ["web", "maintenance", "cron"])
     def test_app_services_point_at_the_shipped_redis(self, service: str) -> None:
         """``${REDIS_URL-...}`` (EIN Bindestrich) statt ``:-``: so bleibt ein
         bewusst LEER gesetztes REDIS_URL leer und ``prod.py`` faellt auf den
         DatabaseCache zurueck. Mit ``:-`` wuerde der Default auch die
-        Abschaltung ueberschreiben."""
+        Abschaltung ueberschreiben. ``:+`` setzt das Credential-Segment nur
+        mit Passwort, sodass der Default sonst byte-identisch bleibt."""
         block = _service_block(COMPOSE_PROD.read_text(encoding="utf-8"), service)
-        assert "REDIS_URL: ${REDIS_URL-redis://redis:6379/1}" in block
+        assert "REDIS_URL: ${REDIS_URL-redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/1}" in block
 
 
 class TestSupercronicPinning:
