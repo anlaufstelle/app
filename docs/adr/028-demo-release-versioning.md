@@ -23,7 +23,7 @@ Offen blieb, **welchen Stand** die Demo fährt. Der Status quo widerspricht der 
 - **Aktualisierung nur im Release-Zug.** Die Demo wird nach einem Release auf den frischen Tag gehoben (Post-Release-Schritt der Release-Checkliste). Zwischen Releases ist sie auf dem letzten Tag eingefroren.
 - **Eindeutige Versionsanzeige.** Mit `APP_VERSION=vX.Y.Z` unterdrückt [`src/core/context_processors.py`](../../src/core/context_processors.py) den Build-Suffix; der Footer zeigt das saubere `vX.Y.Z` — wie in Produktion.
 
-**Umsetzungs-Hinweis (noch ausstehend, #1062):** Ziel-Mechanik ist, dass die Demo das **publizierte Release-Image zieht** (`ghcr.io/anlaufstelle/app:${APP_VERSION}`, wie Produktion), statt on-server zu bauen — ein fixer Tag hebt den heutigen Lokal-Build-Grund („`:main` driftet/ist stale") ohnehin auf. Bis die Mechanik darauf umgestellt ist, gilt die Policy **disziplinär**: bei jedem Demo-Deploy `APP_VERSION` explizit auf den Release-Tag setzen und aus dem getaggten Stand deployen.
+**Umsetzungs-Hinweis (umgesetzt, Refs #2064):** `deploy-demo.sh` zieht das **publizierte Release-Image** `${DEMO_IMAGE}:${APP_VERSION}` (`DEMO_IMAGE` defaultet auf `ghcr.io/anlaufstelle/app`) und taggt es lokal auf `anlaufstelle:demo` um. Ein Format-Guard im Skript und der erste Step in `release.yml` erzwingen die Release-Tag-Policy jetzt technisch statt nur disziplinär.
 
 ## Consequences
 
@@ -33,7 +33,7 @@ Offen blieb, **welchen Stand** die Demo fährt. Der Status quo widerspricht der 
 - **+** Das Release-Gate (Akzeptanztest, CHANGELOG, Sanitizing, signierter Tag) schützt öffentliche Besucher vor halbfertigem Stand.
 - **−** Die Demo hinkt `main` um bis zu ein Release hinterher — gewollt, aber neue Features sind erst nach Release sichtbar.
 - **−** Ein demo-spezifischer Fix erfordert ein (Patch-)Release statt eines Hot-Patch auf dem Host.
-- **−** Solange die Mechanik-Umstellung aussteht, ist die Policy nicht durch Code erzwungen, sondern Disziplin (siehe Umsetzungs-Hinweis) — das Risiko eines versehentlichen Ad-hoc-Deploys bleibt bis dahin.
+- **−** Der Demo-Deploy setzt voraus, dass das Image für den gewählten Release-Tag bereits publiziert und für den Demo-Host abrufbar ist.
 
 ## Alternatives considered
 

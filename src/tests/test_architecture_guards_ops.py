@@ -1967,3 +1967,67 @@ class TestReleaseWorkflowSupplyChain:
                 f"{path} muss APP_IMAGE_DIGEST erklaeren — eine undokumentierte Compose-Variable ist fuer Betreiber "
                 "nicht nutzbar (Refs #2061)."
             )
+
+
+class TestDemoDeployPullsTaggedRelease:
+    """Refs #2064: Demo-Deploys verwenden ausschliesslich Release-Images."""
+
+    _WORKFLOW = Path(".github/workflows/release.yml")
+    _SCRIPT = Path("dev-ops/deploy/deploy-demo.sh")
+
+    def _flat(self) -> str:
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)")
+        return _flat_script(self._SCRIPT)
+
+    def test_release_workflow_rejects_non_semver_before_checkout(self) -> None:
+        workflow = yaml.safe_load(self._WORKFLOW.read_text(encoding="utf-8"))
+        first = workflow["jobs"]["build-and-push"]["steps"][0]
+        assert first.get("name") == "Validate semver tag", (
+            "Der Semver-Guard muss vor Checkout/Build laufen; spaeter waere er wirkungslos (Refs #2064)."
+        )
+        assert "github.ref_name" in str(first), "Der Semver-Guard muss den ausloesenden Tag pruefen (Refs #2064)."
+        assert r"^v[0-9]+\.[0-9]+\.[0-9]+$" in str(first.get("run", "")), (
+            "Der Release-Workflow muss ausschliesslich exakte vX.Y.Z-Tags akzeptieren (Refs #2064)."
+        )
+
+    def test_demo_has_no_ad_hoc_version_default_or_server_build(self) -> None:
+        flat = self._flat()
+        assert "demo-$(git rev-parse" not in flat, (
+            "Der Demo-Deploy darf nicht still auf einen demo-<sha>-Stand ausweichen (Refs #2064)."
+        )
+        assert "docker build" not in flat, (
+            "Die Demo muss das publizierte Image ziehen statt es auf dem Server zu bauen (Refs #2064)."
+        )
+
+    def test_demo_pulls_release_and_updates_the_compose_local_tag(self) -> None:
+        flat = self._flat()
+        assert 'docker pull "${DEMO_IMAGE}:${APP_VERSION}"' in flat, (
+            "Der Demo-Deploy muss das durch APP_VERSION bestimmte Release-Image ziehen (Refs #2064)."
+        )
+        assert re.search(
+            r'docker tag\s+"\$\{DEMO_IMAGE\}:\$\{APP_VERSION\}"\s+anlaufstelle:demo',
+            flat,
+        ), "Ohne lokales Tag anlaufstelle:demo startet Compose den alten Stand (Refs #2064)."
+
+    def test_demo_semver_guard_runs_before_rsync(self) -> None:
+        flat = self._flat()
+        semver = flat.find(r"^v[0-9]+\.[0-9]+\.[0-9]+")
+        rsync = flat.find("rsync -a --delete")
+        assert semver != -1, "Dem Demo-Deploy fehlt der APP_VERSION-Format-Guard (Refs #2064)"
+        assert rsync != -1 and semver < rsync, (
+            "Der APP_VERSION-Guard muss vor rsync abbrechen; sonst wird ungueltiger Stand synchronisiert (Refs #2064)."
+        )
+
+    def test_ghcr_login_uses_stdin_without_ssh_argument_assignment(self) -> None:
+        flat = self._flat()
+        login = next(
+            (line for line in flat.splitlines() if "docker login ghcr.io" in line and "--password-stdin" in line),
+            None,
+        )
+        assert login is not None and "GHCR_TOKEN" in login and "| ssh" in login, (
+            "Der optionale GHCR-Login muss das Token ausschliesslich per stdin uebertragen (Refs #2064)."
+        )
+        assert re.search(r"\bssh\b[^\n]*\bGHCR_(?:TOKEN|USER)=", flat) is None, (
+            "GHCR-Zugangsdaten duerfen nie als ssh-Zuweisung in der Server-Prozessliste erscheinen (Refs #2064)."
+        )
