@@ -1898,8 +1898,8 @@ class TestReleaseWorkflowSupplyChain:
     """Refs #2061: Release-Images bleiben bis zum Digest nachweisbar."""
 
     _WORKFLOW = Path(".github/workflows/release.yml")
-    _COMPOSE = Path("docker-compose.prod.yml")
-    _OPERATOR_DOCS = (Path("docs/ops-runbook.md"), Path("docs/en/ops-runbook.md"))
+    _PROD_COMPOSE = Path("docker-compose.prod.yml")
+    _RUNBOOKS = (Path("docs/ops-runbook.md"), Path("docs/en/ops-runbook.md"))
 
     @classmethod
     def _steps(cls) -> list[dict[str, object]]:
@@ -1947,7 +1947,7 @@ class TestReleaseWorkflowSupplyChain:
     def test_all_app_services_support_the_same_optional_digest_pin(self) -> None:
         image_lines = [
             line.strip()
-            for line in self._COMPOSE.read_text(encoding="utf-8").splitlines()
+            for line in self._PROD_COMPOSE.read_text(encoding="utf-8").splitlines()
             if line.strip().startswith("image: ghcr.io/anlaufstelle/app:")
         ]
         assert len(image_lines) == 3, (
@@ -1962,7 +1962,7 @@ class TestReleaseWorkflowSupplyChain:
         )
 
     def test_digest_variable_is_documented_for_operators_in_both_languages(self) -> None:
-        for path in self._OPERATOR_DOCS:
+        for path in self._RUNBOOKS:
             assert "APP_IMAGE_DIGEST" in path.read_text(encoding="utf-8"), (
                 f"{path} muss APP_IMAGE_DIGEST erklaeren — eine undokumentierte Compose-Variable ist fuer Betreiber "
                 "nicht nutzbar (Refs #2061)."
@@ -1979,6 +1979,35 @@ class TestDemoDeployPullsTaggedRelease:
         if not self._SCRIPT.exists():
             pytest.skip("dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)")
         return _flat_script(self._SCRIPT)
+
+    def _run_stubbed(
+        self,
+        tmp_path: Path,
+        remote_dir: str | None,
+        *,
+        sync_only: str | None,
+        without_app_version: bool = False,
+        extra_env: dict[str, str] | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], Path]:
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/deploy/deploy-demo.sh nicht im Public-Snapshot (Refs #2064)")
+        bash = shutil.which("bash")
+        if bash is None:
+            pytest.skip("bash nicht verfuegbar — Verhaltens-Guard nicht ausfuehrbar")
+        env, argv_log = TestDemoDeployTreeSync._stub_env(tmp_path, remote_dir, sync_only)
+        if without_app_version:
+            env.pop("APP_VERSION")
+        if extra_env is not None:
+            env.update(extra_env)
+        result = subprocess.run(  # noqa: S603 — fester bash-Pfad, Repo-Skript, Netzwerk-Kommandos gestubbt
+            [bash, str(self._SCRIPT.resolve())],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        return result, argv_log
 
     def test_release_workflow_rejects_non_semver_before_checkout(self) -> None:
         workflow = yaml.safe_load(self._WORKFLOW.read_text(encoding="utf-8"))
@@ -2018,6 +2047,34 @@ class TestDemoDeployPullsTaggedRelease:
         assert rsync != -1 and semver < rsync, (
             "Der APP_VERSION-Guard muss vor rsync abbrechen; sonst wird ungueltiger Stand synchronisiert (Refs #2064)."
         )
+
+    def test_sync_only_does_not_require_app_version(self, tmp_path: Path) -> None:
+        result, argv_log = self._run_stubbed(
+            tmp_path,
+            "/home/anlaufstelle/deploy-selftest",
+            sync_only="1",
+            without_app_version=True,
+        )
+        assert result.returncode == 0, (
+            "Ein reiner Sync braucht kein Release-Image und darf deshalb APP_VERSION nicht verlangen (Refs #2064): "
+            f"{result.stderr!r}"
+        )
+        assert argv_log.exists(), "Der dokumentierte Sync-Only-Selbsttest muss den Build-Kontext synchronisieren"
+        assert not any("bash -se" in call for call in TestDemoDeployTreeSync._ssh_calls(tmp_path)), (
+            "Sync-Only ohne APP_VERSION darf den Stack-Teil nicht ausloesen"
+        )
+
+    def test_ghcr_login_rejects_shell_unsafe_username(self, tmp_path: Path) -> None:
+        result, _ = self._run_stubbed(
+            tmp_path,
+            None,
+            sync_only=None,
+            extra_env={"GHCR_USER": "bad'user", "GHCR_TOKEN": "guard-secret"},
+        )
+        assert result.returncode != 0, (
+            "Ein shell-unsauberer GHCR_USER muss vor docker login abgewiesen werden (Refs #2064)"
+        )
+        assert "GHCR_USER" in result.stderr, f"Die Fehlermeldung muss GHCR_USER nennen, war: {result.stderr!r}"
 
     def test_ghcr_login_uses_stdin_without_ssh_argument_assignment(self) -> None:
         flat = self._flat()

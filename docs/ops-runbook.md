@@ -1292,31 +1292,31 @@ pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
 
 ### 8.4a Image-Signatur, Provenance und Digest-Pinning
 
-Der Release-Push haengt an das Image-Manifest eine SBOM-Attestation und eine
+Der Release-Push hängt an das Image-Manifest eine SBOM-Attestation und eine
 Provenance-Attestation (`mode=max`) und signiert den Image-Digest mit Cosign
 keyless. Die Signatur wird im Sigstore-Transparenzlog protokolliert; langlebige
-Signaturschluessel sind nicht erforderlich.
+Signaturschlüssel sind nicht erforderlich.
 
-Das Projekt erzeugt damit drei unterschiedliche, einander ergaenzende SBOMs:
+Das Projekt erzeugt damit drei unterschiedliche, einander ergänzende SBOMs:
 
 | SBOM | Umfang und Aufbewahrung |
 |------|-------------------------|
-| CI-Artefakt aus dem `audit`-Job | Python-Abhaengigkeiten; 90 Tage |
-| Dauerhafte Release-SBOM `sbom-vX.Y.Z.json` | Python- und npm-Abhaengigkeiten aus den Lock-Files; dauerhafter Nachweis nach CRA Anhang I Teil II Nr. 1 |
-| Image-SBOM als Attestation | Zusaetzlich Basis-Image-Layer und Systempakete am Image-Manifest |
+| CI-Artefakt aus dem `audit`-Job | Python-Abhängigkeiten; 90 Tage |
+| Dauerhafte Release-SBOM `sbom-vX.Y.Z.json` | Python- und npm-Abhängigkeiten aus den Lock-Files; dauerhafter Nachweis nach CRA Anhang I Teil II Nr. 1 |
+| Image-SBOM als Attestation | Zusätzlich Basis-Image-Layer und Systempakete am Image-Manifest |
 
 Die Image-SBOM ersetzt die dauerhafte Release-SBOM nicht. Der
-Multi-Platform-Push mit `docker/build-push-action@v7` erzeugte ueber den
+Multi-Platform-Push mit `docker/build-push-action@v7` erzeugte über den
 Buildx-Container-Treiber bereits Mindest-Provenance (`mode=min`); der
-Release-Workflow hebt sie auf `mode=max` an und ergaenzt die SBOM-Attestation.
+Release-Workflow hebt sie auf `mode=max` an und ergänzt die SBOM-Attestation.
 
-Betreiber koennen Digest, Keyless-Signatur und Attestationsdaten ohne Zugriff
-auf das Quell-Repository pruefen:
+Betreiber können Digest, Keyless-Signatur und Attestationsdaten ohne Zugriff
+auf das Quell-Repository prüfen:
 
 ```bash
-# Digest des Tags aufloesen
+# Digest des Tags auflösen
 docker buildx imagetools inspect ghcr.io/anlaufstelle/app:vX.Y.Z --format '{{ .Manifest.Digest }}'
-# Signatur pruefen (keyless)
+# Signatur prüfen (keyless)
 cosign verify ghcr.io/anlaufstelle/app@sha256:… \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/anlaufstelle/app/\.github/workflows/release\.yml@refs/tags/v'
@@ -1326,16 +1326,16 @@ docker buildx imagetools inspect ghcr.io/anlaufstelle/app:vX.Y.Z --format '{{ js
 
 `APP_VERSION=vX.Y.Z` bleibt der lesbare Release-Tag. Mit
 `APP_IMAGE_DIGEST=@sha256:…` bindet `docker-compose.prod.yml` das App-Image
-zusaetzlich unveraenderlich an den geprueften Digest. PostgreSQL, Redis, ClamAV
+zusätzlich unveränderlich an den geprüften Digest. PostgreSQL, Redis, ClamAV
 und Caddy sind dort bereits per `@sha256` gepinnt; das App-Image war die einzige
-Luecke. Bei jedem Versionswechsel muessen `APP_VERSION` und
+Lücke. Bei jedem Versionswechsel müssen `APP_VERSION` und
 `APP_IMAGE_DIGEST` gemeinsam aktualisiert werden, sonst startet der Stack trotz
 neuem Tag weiterhin den alten Digest.
 
-Ist das GHCR-Paket privat, benoetigt der Demo-Host eine Anmeldung mit
+Ist das GHCR-Paket privat, benötigt der Demo-Host eine Anmeldung mit
 `docker login ghcr.io`. Docker speichert diese Zugangsdaten dauerhaft in
 `~/.docker/config.json` des Demo-Host-Benutzers; Dateirechte und Token-Scope
-muessen entsprechend restriktiv sein.
+müssen entsprechend restriktiv sein.
 
 ### 8.5 Troubleshooting
 

@@ -1316,13 +1316,13 @@ Operators can verify the digest, keyless signature, and attestation data
 without access to the source repository:
 
 ```bash
-# Digest des Tags aufloesen
+# Resolve the tag digest
 docker buildx imagetools inspect ghcr.io/anlaufstelle/app:vX.Y.Z --format '{{ .Manifest.Digest }}'
-# Signatur pruefen (keyless)
+# Verify the keyless signature
 cosign verify ghcr.io/anlaufstelle/app@sha256:… \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/anlaufstelle/app/\.github/workflows/release\.yml@refs/tags/v'
-# Attestations (SBOM/Provenance) am Manifest
+# Attestations (SBOM/provenance) on the manifest
 docker buildx imagetools inspect ghcr.io/anlaufstelle/app:vX.Y.Z --format '{{ json .SBOM }}'
 ```
 
@@ -2128,4 +2128,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: b23f12f5fde917183c941dcc97046fae329221f7 -->
+<!-- source-hash: b5179935814808fe3be34e431f4d95fd2886dcdf -->
