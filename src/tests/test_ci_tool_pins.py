@@ -10,7 +10,8 @@ import pytest
 
 pytestmark = pytest.mark.architecture
 
-WORKFLOW_ROOT = Path(".github/workflows")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOW_ROOT = REPO_ROOT / ".github/workflows"
 LOCK_FILES = {"requirements.txt", "requirements-dev.txt"}
 DEV_LOCK_TOOLS = {
     "click",
@@ -21,12 +22,35 @@ DEV_LOCK_TOOLS = {
     "pip-tools",
 }
 _RUN_KEY = re.compile(r"^(?P<indent>\s*)(?:-\s+)?run:\s*(?P<body>.*)$")
-_INSTALL = re.compile(r"\b(?:(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pip|pipx|uv\s+pip)\s+install\b")
+_INSTALL = re.compile(
+    r"\b(?:(?:python(?:3(?:\.\d+)?)?\s+-m\s+)?pip(?:[0-9]+(?:\.[0-9]+)*)?"
+    r"|pipx|uv\s+(?:pip|tool))\s+install\b"
+)
 _SHELL_VARIABLE = re.compile(r"^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})$")
 _PACKAGE = re.compile(
     r"^(?P<name>[A-Za-z0-9_.-]+)(?:\[[^]]+\])?"
     r"(?P<specifier>===|==|~=|!=|<=|>=|<|>)?.*$"
 )
+_SHELL_SEPARATORS = frozenset(";&|")
+
+
+def _join_continuations(numbered_lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Verbinde Shell-Zeilen mit abschliessendem Backslash."""
+    logical_lines: list[tuple[int, str]] = []
+    parts: list[str] = []
+    start_line = 0
+    for line_number, line in numbered_lines:
+        if not parts:
+            start_line = line_number
+        if line.endswith("\\"):
+            parts.append(line[:-1].rstrip())
+            continue
+        parts.append(line)
+        logical_lines.append((start_line, " ".join(parts)))
+        parts = []
+    if parts:
+        logical_lines.append((start_line, " ".join(parts)))
+    return logical_lines
 
 
 def _run_blocks(text: str) -> list[tuple[str, list[tuple[int, str]]]]:
@@ -55,25 +79,108 @@ def _run_blocks(text: str) -> list[tuple[str, list[tuple[int, str]]]]:
                 numbered_lines.append((index + 1, line.strip()))
                 index += 1
 
-        blocks.append(("\n".join(line for _, line in numbered_lines), numbered_lines))
+        blocks.append(
+            (
+                "\n".join(line for _, line in numbered_lines),
+                _join_continuations(numbered_lines),
+            )
+        )
     return blocks
 
 
-def _install_arguments(line: str) -> tuple[str, list[str]] | None:
-    match = _INSTALL.search(line)
-    if match is None:
-        return None
-
-    command = line[match.start() :].strip()
+def _installations(line: str) -> list[tuple[str, list[str]]]:
+    """Liefere jede Installation aus allen Shell-Segmenten einer Zeile."""
+    if line.lstrip().startswith("#"):
+        return []
     try:
-        arguments = shlex.split(line[match.end() :], comments=True, posix=True)
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        lexer.commenters = "#"
+        tokens = list(lexer)
     except ValueError:
-        arguments = line[match.end() :].split()
-    for position, argument in enumerate(arguments):
-        if argument in {"&&", "||", ";", "|"}:
-            arguments = arguments[:position]
-            break
-    return command, arguments
+        tokens = line.split()
+
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if token and set(token) <= _SHELL_SEPARATORS:
+            if segments[-1]:
+                segments.append([])
+            continue
+        segments[-1].append(token)
+
+    installations: list[tuple[str, list[str]]] = []
+    for segment in segments:
+        command_text = " ".join(segment)
+        match = _INSTALL.search(command_text)
+        if match is not None:
+            installations.append(
+                (
+                    command_text[match.start() :].strip(),
+                    command_text[match.end() :].split(),
+                )
+            )
+    return installations
+
+
+def _install_parts(
+    arguments: list[str],
+) -> tuple[list[str], list[str], list[str], list[str], set[str]]:
+    """Teile Install-Argumente in Locks, Constraints, Editables, Pakete und Flags."""
+    requirements: list[str] = []
+    constraints: list[str] = []
+    editables: list[str] = []
+    packages: list[str] = []
+    flags: set[str] = set()
+    value_flags = {
+        "-r": requirements,
+        "--requirement": requirements,
+        "-c": constraints,
+        "--constraint": constraints,
+        "-e": editables,
+        "--editable": editables,
+    }
+
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in value_flags:
+            if index + 1 < len(arguments):
+                value_flags[argument].append(arguments[index + 1])
+                index += 2
+                continue
+            flags.add(argument)
+        elif argument.startswith("--requirement="):
+            requirements.append(argument.split("=", 1)[1])
+        elif argument.startswith("--constraint="):
+            constraints.append(argument.split("=", 1)[1])
+        elif argument.startswith("--editable="):
+            editables.append(argument.split("=", 1)[1])
+        elif argument.startswith("-"):
+            flags.add(argument)
+        else:
+            packages.append(argument)
+        index += 1
+    return requirements, constraints, editables, packages, flags
+
+
+def _packages_are_pinned(packages: list[str], block_text: str) -> bool:
+    return all(
+        "==" in package or ("requirements-dev.txt" in block_text and _SHELL_VARIABLE.fullmatch(package) is not None)
+        for package in packages
+    )
+
+
+def _allowed_install(arguments: list[str], block_text: str) -> bool:
+    requirements, _constraints, editables, packages, flags = _install_parts(arguments)
+    pinned_packages = _packages_are_pinned(packages, block_text)
+    local_editables = all(target == "." or target.startswith("./") for target in editables)
+    if requirements:
+        return all(requirement in LOCK_FILES for requirement in requirements) and local_editables and pinned_packages
+    if editables:
+        return local_editables and pinned_packages
+    if "--upgrade" in flags and packages == ["pip"]:
+        return True
+    return bool(packages) and pinned_packages
 
 
 def ungepinnte_installs(text: str) -> list[str]:
@@ -81,21 +188,9 @@ def ungepinnte_installs(text: str) -> list[str]:
     findings: list[str] = []
     for block_text, numbered_lines in _run_blocks(text):
         for line_number, line in numbered_lines:
-            installation = _install_arguments(line)
-            if installation is None:
-                continue
-            command, arguments = installation
-
-            lock_install = len(arguments) == 2 and arguments[0] == "-r" and arguments[1] in LOCK_FILES
-            package_arguments = [argument for argument in arguments if not argument.startswith("-")]
-            exact_pins = bool(package_arguments) and all("==" in argument for argument in package_arguments)
-            lock_variables = (
-                "requirements-dev.txt" in block_text
-                and bool(package_arguments)
-                and all(_SHELL_VARIABLE.fullmatch(argument) for argument in package_arguments)
-            )
-            if not (lock_install or exact_pins or lock_variables):
-                findings.append(f"Zeile {line_number}: {command}")
+            for command, arguments in _installations(line):
+                if not _allowed_install(arguments, block_text):
+                    findings.append(f"Zeile {line_number}: {command}")
     return findings
 
 
@@ -104,19 +199,17 @@ def lock_bindungsfehler(text: str) -> list[str]:
     findings: list[str] = []
     for block_text, numbered_lines in _run_blocks(text):
         for line_number, line in numbered_lines:
-            installation = _install_arguments(line)
-            if installation is None:
-                continue
-            _, arguments = installation
-            for argument in arguments:
-                package = _PACKAGE.fullmatch(argument)
-                if package is None or package.group("name").lower() not in DEV_LOCK_TOOLS:
-                    continue
-                name = package.group("name").lower()
-                if package.group("specifier") is not None:
-                    findings.append(f"Zeile {line_number}: {name} hat eine hartkodierte Versionsangabe")
-                if "requirements-dev.txt" not in block_text:
-                    findings.append(f"Zeile {line_number}: {name} ist nicht an den Dev-Lock gebunden")
+            for _, arguments in _installations(line):
+                _, _, _, packages, _ = _install_parts(arguments)
+                for argument in packages:
+                    package = _PACKAGE.fullmatch(argument)
+                    if package is None or package.group("name").lower() not in DEV_LOCK_TOOLS:
+                        continue
+                    name = package.group("name").lower()
+                    if package.group("specifier") is not None:
+                        findings.append(f"Zeile {line_number}: {name} hat eine hartkodierte Versionsangabe")
+                    if "requirements-dev.txt" not in block_text:
+                        findings.append(f"Zeile {line_number}: {name} ist nicht an den Dev-Lock gebunden")
     return findings
 
 
@@ -149,15 +242,83 @@ def test_ungepinnte_installs_und_lock_drift_werden_gemeldet() -> None:
     ]
 
 
+def test_ungepinnte_installs_prueft_jeden_verketteten_befehl() -> None:
+    probes = {
+        "exakter Pin vor ungepinnter Installation": ("- run: pip install ruff==0.1.0 && pip install evil"),
+        "Lock vor ungepinnter Installation": ("- run: pip install -r requirements.txt && pip install evil"),
+        "Oder-Kette": "- run: pip install ruff==0.1.0 || pip install evil",
+        "Semikolon-Kette": "- run: pip install ruff==0.1.0; pip install evil",
+        "Pipe-Kette": "- run: pip install ruff==0.1.0 | pip install evil",
+    }
+
+    assert {name: ungepinnte_installs(text) for name, text in probes.items()} == {
+        "exakter Pin vor ungepinnter Installation": ["Zeile 1: pip install evil"],
+        "Lock vor ungepinnter Installation": ["Zeile 1: pip install evil"],
+        "Oder-Kette": ["Zeile 1: pip install evil"],
+        "Semikolon-Kette": ["Zeile 1: pip install evil"],
+        "Pipe-Kette": ["Zeile 1: pip install evil"],
+    }
+
+
+def test_ungepinnte_installs_erlaubt_legitime_flags_und_shell_syntax() -> None:
+    probes = {
+        "Hash-Pruefung": "- run: pip install --require-hashes -r requirements.txt",
+        "ohne Abhaengigkeiten": "- run: pip install -r requirements.txt --no-deps",
+        "Constraint": "- run: pip install -r requirements.txt -c constraints.txt",
+        "langes Constraint-Flag": ("- run: pip install --requirement requirements.txt --constraint constraints.txt"),
+        "lokal editierbar": "- run: pip install -e .",
+        "langes Editable-Flag": "- run: pip install --editable=./src",
+        "pip-Selbstupdate": "- run: pip install --upgrade pip",
+        "Fortsetzungszeile": "- run: |\n    pip install \\\n      ruff==0.15.22",
+        "Shell-Kommentar": "- run: |\n    # pip install pip-audit",
+    }
+
+    assert {name: (ungepinnte_installs(text), lock_bindungsfehler(text)) for name, text in probes.items()} == {
+        name: ([], []) for name in probes
+    }
+
+
+def test_legitime_flags_verdecken_keine_ungepinnte_zusatzquelle() -> None:
+    text = """\
+      - run: pip install -r requirements.txt -c constraints.txt evil
+      - run: pip install -r requirements.txt -e git+https://example.invalid/repo.git
+      - run: pip install --upgrade evil
+    """
+
+    assert ungepinnte_installs(text) == [
+        "Zeile 1: pip install -r requirements.txt -c constraints.txt evil",
+        "Zeile 2: pip install -r requirements.txt -e git+https://example.invalid/repo.git",
+        "Zeile 3: pip install --upgrade evil",
+    ]
+
+
+def test_ungepinnte_installs_erkennt_pip3_und_uv_tool() -> None:
+    text = """\
+      - run: pip3 install evil
+      - run: uv tool install evil
+    """
+
+    assert ungepinnte_installs(text) == [
+        "Zeile 1: pip3 install evil",
+        "Zeile 2: uv tool install evil",
+    ]
+
+
+def test_workflow_scan_ist_unabhaengig_vom_cwd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert sorted(WORKFLOW_ROOT.glob("*.yml")), "Workflow-Scan haengt vom aktuellen cwd ab"
+
+
 def test_workflows_installieren_ci_tools_nur_aus_pins() -> None:
     workflows = sorted(WORKFLOW_ROOT.glob("*.yml"))
-    if not workflows:
-        pytest.skip("Kein Workflow-Verzeichnis oder keine Workflow-Dateien vorhanden")
+    assert workflows, f"Keine Workflow-Dateien unter {WORKFLOW_ROOT} gefunden"
 
     findings: list[str] = []
     for workflow in workflows:
         text = workflow.read_text(encoding="utf-8")
-        findings.extend(f"{workflow}:{finding}" for finding in ungepinnte_installs(text))
-        findings.extend(f"{workflow}:{finding}" for finding in lock_bindungsfehler(text))
+        workflow_name = workflow.relative_to(REPO_ROOT)
+        findings.extend(f"{workflow_name}:{finding}" for finding in ungepinnte_installs(text))
+        findings.extend(f"{workflow_name}:{finding}" for finding in lock_bindungsfehler(text))
 
     assert not findings, "Ungepinnte oder driftende CI-Tool-Installation (Refs #2063):\n" + "\n".join(findings)
