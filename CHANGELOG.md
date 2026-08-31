@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Selbsthoster können Impressum und Datenschutz sicher einbinden** (#2076) — Zwei konfigurierbare, auf 256 KiB begrenzte UTF-8-Dateien liefern öffentliche Rechtstextseiten mit linearem, sicherem Markdown-Subset und erscheinen nur für reguläre, nicht leere Dateien auf Login-, Passwort-Reset- und App-Seiten; die Demo-Texte bleiben unverändert.
 - **Personen lassen sich direkt im Kontaktformular anlegen** (#2039) — Fachkräfte können bei einer erfolglosen Personensuche ein minimales Formular für Pseudonym und Kontaktstufe im Modal öffnen; nach der Anlage ist die Person ausgewählt, ohne den Zustand des Kontaktformulars zu verlieren.
 
+### Security
+
+- **ufw-docker wird beim Server-Bootstrap integritätsgeprüft** (#2062) — Das als root ausgeführte Hilfsskript kommt jetzt von einem festen Upstream-Commit und wird vor der Installation sowie bei jedem erneuten Bootstrap gegen eine fest hinterlegte SHA-256-Prüfsumme geprüft.
+
 ### Fixed
 
 - **Dev-Deploy hält Quellcodeversion in Datei und Container synchron** (#1999) — Ein aus `.env.dev` exportierter Vorgängerwert konnte beim Neustart die gerade aktualisierte `SOURCE_CODE_VERSION` überschreiben. Der Deploy übernimmt nun den neuen Wert ausdrücklich in die Compose-Umgebung und bricht ab, falls der danach gestartete Web-Container von `.env.dev` abweicht.

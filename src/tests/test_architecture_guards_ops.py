@@ -2088,3 +2088,72 @@ class TestDemoDeployPullsTaggedRelease:
         assert re.search(r"\bssh\b[^\n]*\bGHCR_(?:TOKEN|USER)=", flat) is None, (
             "GHCR-Zugangsdaten duerfen nie als ssh-Zuweisung in der Server-Prozessliste erscheinen (Refs #2064)."
         )
+
+
+class TestUfwDockerPinning:
+    """Refs #2062: Das Bootstrap fuehrt ufw-docker als root aus; der Download
+    muss deshalb unbeweglich gepinnt und vor der Installation verifiziert sein.
+    """
+
+    _SCRIPT = Path("dev-ops/deploy/bootstrap.sh")
+
+    def _flat(self) -> str:
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)")
+        return _flat_script(self._SCRIPT)
+
+    def test_no_moving_ref_in_ufw_docker_source(self) -> None:
+        flat = self._flat()
+        for moving_ref in ("/raw/master/", "/master/ufw-docker", "refs/heads/"):
+            assert moving_ref not in flat, f"ufw-docker nutzt beweglichen Ref {moving_ref!r} (Refs #2062)"
+
+    def test_pin_constants_are_wellformed(self) -> None:
+        flat = self._flat()
+        commit_match = re.search(r'^UFW_DOCKER_COMMIT="([^"]+)"$', flat, re.MULTILINE)
+        checksum_match = re.search(r'^UFW_DOCKER_SHA256="([^"]+)"$', flat, re.MULTILINE)
+        assert commit_match is not None, "UFW_DOCKER_COMMIT fehlt im Bootstrap (Refs #2062)"
+        assert checksum_match is not None, "UFW_DOCKER_SHA256 fehlt im Bootstrap (Refs #2062)"
+        assert re.fullmatch(r"[0-9a-f]{40}", commit_match.group(1)), "Commit-Pin muss 40 Hex-Zeichen haben"
+        assert re.fullmatch(r"[0-9a-f]{64}", checksum_match.group(1)), "sha256-Pin muss 64 Hex-Zeichen haben"
+
+    def test_checksum_is_verified_before_install(self) -> None:
+        flat = self._flat()
+        checksum_index = flat.index('sha256sum "$ufw_docker_tmp"')
+        install_index = flat.index('install -m 0755 "$ufw_docker_tmp" /usr/local/bin/ufw-docker')
+        assert checksum_index < install_index, "ufw-docker muss vor der Installation verifiziert werden (Refs #2062)"
+
+    def test_mismatch_aborts_and_never_writes_the_target_directly(self) -> None:
+        flat = self._flat()
+        mismatch = re.search(
+            r'if \[ "\$ufw_docker_actual" != "\$UFW_DOCKER_SHA256" \]; then(?P<body>.*?)\nfi',
+            flat,
+            re.DOTALL,
+        )
+        assert mismatch is not None, "expliziter sha256-Mismatch-Zweig fehlt (Refs #2062)"
+        assert "exit 1" in mismatch.group("body"), "sha256-Mismatch muss fail-loud abbrechen (Refs #2062)"
+        assert not re.search(r"curl\b[^\n]*-o\s+/usr/local/bin/ufw-docker", flat), (
+            "curl darf nie direkt in den root-Ausfuehrungspfad schreiben (Refs #2062)"
+        )
+
+    def test_existing_binary_is_revalidated_against_the_pin(self) -> None:
+        flat = self._flat()
+        assert "if ! command -v ufw-docker" not in flat, (
+            "eine vorhandene ungepinnte Kopie darf nicht blind uebersprungen werden (Refs #2062)"
+        )
+        assert 'sha256sum "$ufw_docker_target"' in flat, (
+            "eine vorhandene ufw-docker-Datei muss gegen den Pin geprueft werden (Refs #2062)"
+        )
+        assert '"$ufw_docker_installed_sha256" = "$UFW_DOCKER_SHA256"' in flat, (
+            "die Bestandspruefung muss den gemessenen Hash mit dem Pin vergleichen (Refs #2062)"
+        )
+
+    def test_bootstrap_parses_with_bash_n(self) -> None:
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/deploy/bootstrap.sh nicht im Public-Snapshot (Refs #2062)")
+        bash = shutil.which("bash")
+        if bash is None:
+            pytest.skip("bash nicht verfuegbar — Syntax-Guard nicht ausfuehrbar")
+        result = subprocess.run(  # noqa: S603 — fester bash-Pfad, Repo-eigene Datei
+            [bash, "-n", str(self._SCRIPT)], capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, f"Shell-Syntaxfehler in {self._SCRIPT}:\n{result.stderr.strip()}"
