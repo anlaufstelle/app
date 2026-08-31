@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Dev-Deploy hält Quellcodeversion in Datei und Container synchron** (#1999) — Ein aus `.env.dev` exportierter Vorgängerwert konnte beim Neustart die gerade aktualisierte `SOURCE_CODE_VERSION` überschreiben. Der Deploy übernimmt nun den neuen Wert ausdrücklich in die Compose-Umgebung und bricht ab, falls der danach gestartete Web-Container von `.env.dev` abweicht.
 - **Dev-Deploy prüft die Version des Web-Images fail-closed** (#1987) — Die Provenienzprüfung ermittelt jetzt eindeutig `services.web.image`, statt auf älteren Compose-Versionen versehentlich das erste Image des gesamten Stacks zu prüfen. Fehlt im Web-Image eine prüfbare Version, bricht der Deploy ab, statt eine ungeprüfte Version zu behaupten; nur die bewusst gesetzte und sichtbar protokollierte Ausnahme `DEPLOY_ALLOW_UNVERIFIED_IMAGE=1` lässt ihn weiterlaufen.
 - **Pseudonym-Umbenennungen werden vorab gewarnt und im Verlauf kenntlich** (#2044) — Beim Bearbeiten erscheint nur für eine tatsächliche Änderung ein Hinweis; der Zeitstrom nennt die erfolgreiche Umbenennung, während Auditdetail und Aktivitätskontext keine Alt-/Neuwerte speichern und bewusst kein Suchalias entsteht.
 - **Kontaktformular erklärt seine Tastenkürzel** (#2009) — Ein dezenter Desktop-Hinweis macht Speichern mit Strg+Enter und die Serienerfassung mit Strg+Umschalt+Enter auffindbar.

@@ -54,6 +54,8 @@ def _stub_env(
     *,
     image_version: str,
     allow_unverified: bool,
+    inherited_source_code_version: str | None,
+    container_source_code_version: str | None,
 ) -> tuple[dict[str, str], Path, Path]:
     stack_dir = tmp_path / "stack"
     stack_dir.mkdir()
@@ -134,6 +136,16 @@ if [[ "$1" == inspect && "$2" == anlaufstelle-web-1 && "$*" == *"{{.Image}}"* ]]
   exit 0
 fi
 
+if [[ "$1" == inspect && "$2" == anlaufstelle-web-1 && "$*" == *".Config.Env"* ]]; then
+  if [[ -n "${DEPLOY_TEST_CONTAINER_SOURCE_CODE_VERSION+x}" ]]; then
+    source_code_version="$DEPLOY_TEST_CONTAINER_SOURCE_CODE_VERSION"
+  else
+    source_code_version="$(<"$DEPLOY_TEST_STATE/up-source-code-version")"
+  fi
+  printf 'PATH=/usr/local/bin\nSOURCE_CODE_VERSION=%s\n' "$source_code_version"
+  exit 0
+fi
+
 if [[ "$1" == compose && "$*" == *" up "* ]]; then
   printf '%s\n' "${SOURCE_CODE_VERSION-}" > "$DEPLOY_TEST_STATE/up-source-code-version"
 fi
@@ -155,6 +167,10 @@ exit 0
     }
     if allow_unverified:
         env["DEPLOY_ALLOW_UNVERIFIED_IMAGE"] = "1"
+    if inherited_source_code_version is not None:
+        env["SOURCE_CODE_VERSION"] = inherited_source_code_version
+    if container_source_code_version is not None:
+        env["DEPLOY_TEST_CONTAINER_SOURCE_CODE_VERSION"] = container_source_code_version
     return env, env_file, docker_log
 
 
@@ -163,6 +179,8 @@ def _run_remote(
     *,
     image_version: str = "main-neu",
     allow_unverified: bool = False,
+    inherited_source_code_version: str | None = None,
+    container_source_code_version: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     bash = shutil.which("bash")
     if bash is None:
@@ -171,6 +189,8 @@ def _run_remote(
         tmp_path,
         image_version=image_version,
         allow_unverified=allow_unverified,
+        inherited_source_code_version=inherited_source_code_version,
+        container_source_code_version=container_source_code_version,
     )
     result = subprocess.run(  # noqa: S603 — fester bash-Pfad, docker/sudo sind gestubbt
         [bash, "-s"],
@@ -229,6 +249,44 @@ def test_ausnahme_ist_explizit_und_sichtbar(tmp_path: Path) -> None:
 def test_lokaler_teil_reicht_die_ausnahme_durch() -> None:
     ssh_line = next(line for line in _flat_script().splitlines() if line.startswith('ssh "$DEV_HOST" DEPLOY_PULL='))
     assert "DEPLOY_ALLOW_UNVERIFIED_IMAGE" in ssh_line
+
+
+def test_up_sieht_die_frisch_gepatchte_source_code_version(tmp_path: Path) -> None:
+    result, _, log_file = _run_remote(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    up_calls = [call for call in _docker_calls(log_file) if " up " in call]
+    assert len(up_calls) == 1, up_calls
+    assert up_calls[0].endswith("|SCV:main-neu"), up_calls[0]
+
+
+def test_kein_stale_wert_aus_der_ssh_umgebung(tmp_path: Path) -> None:
+    result, _, log_file = _run_remote(
+        tmp_path,
+        inherited_source_code_version="v0.80.0",
+    )
+
+    assert result.returncode == 0, result.stderr
+    up_calls = [call for call in _docker_calls(log_file) if " up " in call]
+    assert len(up_calls) == 1, up_calls
+    assert up_calls[0].endswith("|SCV:main-neu"), up_calls[0]
+
+
+def test_env_datei_und_container_werden_nach_dem_up_abgeglichen(tmp_path: Path) -> None:
+    result, _, _ = _run_remote(
+        tmp_path,
+        container_source_code_version="container-alt",
+    )
+
+    assert result.returncode != 0
+    assert "container-alt" in result.stderr
+    assert "main-neu" in result.stderr
+
+
+def test_env_dev_wird_nicht_mehr_vollstaendig_exportiert() -> None:
+    flat = _flat_script()
+    assert "set -a" not in flat
+    assert ". ./.env.dev" not in flat
 
 
 def test_deploy_script_hat_gueltige_bash_syntax() -> None:
