@@ -53,24 +53,21 @@ def _stub_env(
     tmp_path: Path,
     *,
     image_version: str,
-    allow_unverified: bool,
+    allow_unverified: str | None,
     inherited_source_code_version: str | None,
     container_source_code_version: str | None,
+    source_code_version_lines: int,
 ) -> tuple[dict[str, str], Path, Path]:
     stack_dir = tmp_path / "stack"
     stack_dir.mkdir()
     env_file = stack_dir / ".env.dev"
-    env_file.write_text(
-        "\n".join(
-            (
-                "POSTGRES_ADMIN_USER=anlaufstelle_admin",
-                "POSTGRES_ADMIN_PASSWORD=dummy",
-                "SOURCE_CODE_VERSION=v0.84.0",
-                "",
-            )
-        ),
-        encoding="utf-8",
-    )
+    env_lines = [
+        "POSTGRES_ADMIN_USER=anlaufstelle_admin",
+        "POSTGRES_ADMIN_PASSWORD=dummy",
+        *(["SOURCE_CODE_VERSION=v0.84.0"] * source_code_version_lines),
+        "",
+    ]
+    env_file.write_text("\n".join(env_lines), encoding="utf-8")
     (stack_dir / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8")
 
     bin_dir = tmp_path / "bin"
@@ -165,8 +162,8 @@ exit 0
         "DEPLOY_PULL": "never",
         "APP_VERSION": "main-durchgereicht",
     }
-    if allow_unverified:
-        env["DEPLOY_ALLOW_UNVERIFIED_IMAGE"] = "1"
+    if allow_unverified is not None:
+        env["DEPLOY_ALLOW_UNVERIFIED_IMAGE"] = allow_unverified
     if inherited_source_code_version is not None:
         env["SOURCE_CODE_VERSION"] = inherited_source_code_version
     if container_source_code_version is not None:
@@ -178,9 +175,10 @@ def _run_remote(
     tmp_path: Path,
     *,
     image_version: str = "main-neu",
-    allow_unverified: bool = False,
+    allow_unverified: str | None = None,
     inherited_source_code_version: str | None = None,
     container_source_code_version: str | None = None,
+    source_code_version_lines: int = 1,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     bash = shutil.which("bash")
     if bash is None:
@@ -191,6 +189,7 @@ def _run_remote(
         allow_unverified=allow_unverified,
         inherited_source_code_version=inherited_source_code_version,
         container_source_code_version=container_source_code_version,
+        source_code_version_lines=source_code_version_lines,
     )
     result = subprocess.run(  # noqa: S603 — fester bash-Pfad, docker/sudo sind gestubbt
         [bash, "-s"],
@@ -237,13 +236,26 @@ def test_ausnahme_ist_explizit_und_sichtbar(tmp_path: Path) -> None:
     result, _, log_file = _run_remote(
         tmp_path,
         image_version="",
-        allow_unverified=True,
+        allow_unverified="1",
     )
 
     assert result.returncode == 0, result.stderr
     assert any(" up " in call for call in _docker_calls(log_file))
     assert "UNGEPRUEFT" in result.stderr
     assert "DEPLOY_ALLOW_UNVERIFIED_IMAGE" in result.stderr
+
+
+def test_ausnahme_akzeptiert_nur_explizite_eins(tmp_path: Path) -> None:
+    result, env_file, log_file = _run_remote(
+        tmp_path,
+        image_version="",
+        allow_unverified="0",
+    )
+
+    assert result.returncode != 0
+    assert "SOURCE_CODE_VERSION=v0.84.0" in env_file.read_text(encoding="utf-8")
+    assert not any(" up " in call for call in _docker_calls(log_file))
+    assert "AUSNAHME AKTIV" not in result.stderr
 
 
 def test_lokaler_teil_reicht_die_ausnahme_durch() -> None:
@@ -289,6 +301,15 @@ def test_env_dev_wird_nicht_mehr_vollstaendig_exportiert() -> None:
     assert ". ./.env.dev" not in flat
 
 
+def test_doppelte_source_code_version_zeilen_loesen_keinen_sigpipe_abbruch_aus(tmp_path: Path) -> None:
+    result, _, _ = _run_remote(
+        tmp_path,
+        source_code_version_lines=100_000,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_dev_env_dokumentiert_loopback_hosts_fuer_container_healthcheck() -> None:
     env_text = (REPO_ROOT / ".env.dev.example").read_text(encoding="utf-8")
     hosts_line = next(line for line in env_text.splitlines() if line.startswith("ALLOWED_HOSTS="))
@@ -304,6 +325,17 @@ def test_health_detail_token_steht_in_dev_env_und_web_allowlist() -> None:
 
     assert re.search(r"^DJANGO_HEALTH_DETAIL_TOKEN=$", env_text, re.MULTILINE)
     assert "DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}" in web_block
+
+
+def test_release_checkliste_nennt_offline_key_salt_endpoint() -> None:
+    checklist = REPO_ROOT / "docs/dev/release-checklist.md"
+    if not checklist.exists():
+        pytest.skip("docs/dev/release-checklist.md nicht im Public-Snapshot (Refs #2081)")
+    text = checklist.read_text(encoding="utf-8")
+    line = next(line for line in text.splitlines() if "Offline-Key-Salt-Endpoint" in line)
+
+    assert "`/auth/offline-key-salt/`" in line
+    assert "POST-only" in line
 
 
 def test_deploy_script_hat_gueltige_bash_syntax() -> None:
