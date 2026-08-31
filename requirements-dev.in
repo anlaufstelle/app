@@ -1,6 +1,10 @@
 -r requirements.in
 ruff>=0.15.22
 pip-tools>=7.6.1
+# Abhaengigkeits-Audit im schlanken CI-Audit-Job (Refs #2063).
+pip-audit>=2.10.1
+# Lizenzinventar des ausgelieferten Prod-Stacks im CI-Job (Refs #2063).
+pip-licenses>=5.5.5
 # Dev-only Constraints (nur CI/Toolchain, nicht deployt) wegen CVEs, Refs #1596.
 # click zieht mutmut/pip-tools ein (CVE-2026-7246, Command-Injection in
 # click.edit()); idna kommt transitiv ueber requests (CVE-2026-45409, ReDoS in

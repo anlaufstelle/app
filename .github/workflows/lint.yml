@@ -39,7 +39,12 @@ jobs:
           python-version: "3.14"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: pip install pip-licenses
+      # Nur pip-licenses aus dem Dev-Lock ziehen; geprueft wird der Prod-Stack (Refs #2063).
+      - name: pip-licenses aus dem Dev-Lock installieren
+        run: |
+          PL=$(grep -oE '^pip-licenses==[0-9.]+' requirements-dev.txt)
+          test -n "$PL" || { echo "::error::pip-licenses-Pin nicht im Dev-Lock gefunden"; exit 1; }
+          pip install "$PL"
       - run: python scripts/check_licenses.py
       - run: pip-licenses --format=markdown --with-system --with-urls > thirdparty-licenses.md
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -85,5 +90,11 @@ jobs:
           python-version: "3.14"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: pip install "mypy>=1.20" "django-stubs[compatible-mypy]>=6.0"
+      # mypy und django-stubs gemeinsam an den Dev-Lock binden (Refs #2063).
+      - name: Typecheck-Werkzeuge aus dem Dev-Lock installieren
+        run: |
+          MY=$(grep -oE '^mypy==[0-9.]+' requirements-dev.txt)
+          DS=$(grep -oE '^django-stubs\[compatible-mypy\]==[0-9.]+' requirements-dev.txt)
+          test -n "$MY" && test -n "$DS" || { echo "::error::mypy/django-stubs-Pin nicht im Dev-Lock gefunden"; exit 1; }
+          pip install "$MY" "$DS"
       - run: mypy src/core/services src/core/forms src/core/packages src/core/management/commands

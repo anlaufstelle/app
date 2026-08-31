@@ -131,7 +131,12 @@ jobs:
         with:
           python-version: "3.14"
           cache: pip
-      - run: pip install pip-audit
+      # pip-audit aus dem Dev-Lock ziehen, damit CI und Lock nicht driften (Refs #2063).
+      - name: pip-audit aus dem Dev-Lock installieren
+        run: |
+          PA=$(grep -oE '^pip-audit==[0-9.]+' requirements-dev.txt)
+          test -n "$PA" || { echo "::error::pip-audit-Pin nicht im Dev-Lock gefunden"; exit 1; }
+          pip install "$PA"
       - run: pip-audit -r requirements.txt
       # JavaScript-Advisories (Refs #1968). ``npm audit`` liest nur
       # package-lock.json — kein ``npm ci`` noetig. Schwelle und Begruendung
