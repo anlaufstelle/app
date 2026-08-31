@@ -849,3 +849,123 @@ class TestZentraleSuppressionsfunktion:
             for function in self._SUPPRESSION_CALLS
         )
         assert total >= 6, f"nur {total} Aufrufstellen gefunden — AST-Suche pruefen"
+
+
+class TestJedesBackendUeberschreibtPrepareExport:
+    """Jedes Reporting-Backend definiert ``prepare_export`` — statisch geprueft
+    (Refs #2069).
+
+    **Warum eine zweite Klasse und nicht eine Erweiterung von
+    ``TestZentraleSuppressionsfunktion``?** Der dortige Residual-Guard
+    (``test_jedes_backend_mit_randsumme_ruft_den_residual_guard``) filtert seine
+    Kandidaten ueber ``isinstance(node, ast.FunctionDef) and node.name ==
+    "prepare_export"``. Ein Backend **ohne** Override erzeugt diesen Knoten gar
+    nicht erst — es gibt nichts zu pruefen, also entsteht kein Violation-Eintrag
+    und der Guard bleibt gruen. Das ist keine Nachlaessigkeit, sondern eine
+    prinzipielle Blindstelle: er beantwortet „wer suppressiert, tut es richtig",
+    nie „wer suppressiert ueberhaupt". Die **Existenzfrage** ist eine andere
+    Frage als die **Korrektheitsfrage**; beide an dieselbe Schleife zu haengen
+    machte sie unleserlich.
+
+    Der Guard ist die Ergaenzung zur Laufzeitpruefung
+    ``core.reporting.export.enforce_suppression_contract``: der statische Guard
+    greift beim **Entwickeln**, der Runtime-Check beim **Export**. Zwei Regeln
+    statt einer sind hier gerechtfertigt, weil sie an verschiedenen Zeitpunkten
+    wirken.
+
+    **Bekannter blinder Fleck (bewusst):** eine Klasse, die von einer *anderen*
+    Backend-Klasse erbt statt direkt von ``DatasetBackend``, ist fuer diesen
+    Guard kein Kandidat — sie koennte den Override der Basisklasse erben (dann
+    ist alles gut) oder ihn wegkonfigurieren (dann sieht der Guard es nicht).
+    Genau diesen Rest deckt der Laufzeit-Check ab, der auf dem **Objekt**
+    arbeitet statt auf dem Syntaxbaum.
+    """
+
+    # Bewusst eine EIGENE Konstante: die gleichnamige in
+    # ``TestZentraleSuppressionsfunktion`` gehoert zum Bestand und bleibt
+    # unangetastet.
+    _BACKENDS_DIR = Path("src/core/reporting/backends")
+
+    @classmethod
+    def _backends_ohne_override(cls, modules) -> list[str]:
+        """Guard-Logik — von der Regel UND der Positiv-Kontrolle aufgerufen.
+
+        Refs #1775 (Lehre der Nachbarklasse): eine Kontrolle, die einen eigenen
+        AST-Schnipsel parst, belegt nur, dass ``ast`` funktioniert. Deshalb
+        laeuft in der Kontrolle unten dieselbe Methode wie im Guard.
+        """
+        violations = []
+        for module in modules:
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                basen = {ast.unparse(base) for base in node.bases}
+                if "DatasetBackend" not in basen:
+                    continue
+                methoden = {
+                    child.name for child in node.body if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
+                }
+                if "prepare_export" not in methoden:
+                    violations.append(f"{module}:{node.lineno} {node.name} ohne prepare_export")
+        return violations
+
+    @classmethod
+    def _kandidaten(cls, modules) -> list[str]:
+        namen = []
+        for module in modules:
+            tree = ast.parse(module.read_text(encoding="utf-8"))
+            namen += [
+                node.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ClassDef) and "DatasetBackend" in {ast.unparse(base) for base in node.bases}
+            ]
+        return namen
+
+    def _module(self) -> list[Path]:
+        return sorted(self._BACKENDS_DIR.glob("*.py"))
+
+    def test_kein_backend_bleibt_am_identity_default(self):
+        violations = self._backends_ohne_override(self._module())
+        assert not violations, (
+            "Diese Backends stehen am Identity-Default von ``DatasetBackend.prepare_export`` "
+            "und exportierten damit unsuppressierte Zahlen. Jedes extern zirkulierende "
+            "Berichts-Artefakt unterdrueckt Kleinstfallzahlen (ADR-038 § 5, Refs #1278/T1, "
+            "Security R4+R14):\n" + "\n".join(violations)
+        )
+
+    def test_synthetisches_backend_ohne_override_wird_erkannt(self, tmp_path):
+        """Positiv-Kontrolle: DIESELBE Guard-Methode gegen ein synthetisches Modul.
+
+        Nie eine Probe in den echten Baum schreiben — ein paralleler Testlauf
+        sieht sie sonst als echten Verstoss (xdist-Race).
+        """
+        modul = tmp_path / "synthetisches_backend.py"
+        modul.write_text(
+            "class OhneOverrideBackend(DatasetBackend):\n"
+            "    slug = 'ohne-override'\n"
+            "\n"
+            "    def build_dataset(self, facility, date_from, date_to):\n"
+            "        return None\n"
+            "\n"
+            "\n"
+            "class MitOverrideBackend(DatasetBackend):\n"
+            "    def prepare_export(self, facility, result):\n"
+            "        return result\n",
+            encoding="utf-8",
+        )
+
+        violations = self._backends_ohne_override([modul])
+
+        assert len(violations) == 1, violations
+        assert "OhneOverrideBackend ohne prepare_export" in violations[0]
+
+    def test_die_suche_findet_die_ausgelieferten_backends(self):
+        """Zweiter Anker: die Kandidatenmenge darf nicht still auf null schrumpfen.
+
+        Faengt insbesondere den Fall ab, dass pytest nicht aus dem Repo-Root
+        laeuft — ``Path("src/core/...")`` zeigte dann ins Leere und der Guard
+        waere gruen ueber einem leeren Verzeichnis.
+        """
+        kandidaten = self._kandidaten(self._module())
+        assert len(kandidaten) >= 9, f"nur {len(kandidaten)} Backend-Klassen gefunden — AST-Suche pruefen"

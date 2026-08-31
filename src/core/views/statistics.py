@@ -24,7 +24,7 @@ from core.reporting.data_source import (
     SNAPSHOT_HYBRID,
     table_note,
 )
-from core.reporting.export import SUPPORTED_FORMATS, export_dataset
+from core.reporting.export import SUPPORTED_FORMATS, enforce_suppression_contract, export_dataset
 from core.reporting.registry import get_available_backends, get_backend_or_404
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
@@ -113,10 +113,16 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
 
     Sicherheitskritisch (K-Anon, Refs #1278/T1): niemals ``build_dataset()``
     allein rendern — ``prepare_export()`` ist die export-paritaetische Sicht.
+
+    Refs #2069: die Paritaet ist seitdem erzwungen. ADR-038 § 5 stellt Panel und
+    Download ausdruecklich gleich — ein Fail-Closed-Check nur im Download hiesse:
+    ein Backend ohne Suppression scheitert beim Herunterladen hart und zeigt in
+    der Vorschau Rohzahlen.
     """
     result = backend.prepare_export(
         facility, backend.build_dataset(facility, period_state.date_from, period_state.date_to)
     )
+    result = enforce_suppression_contract(backend, result)
 
     field_specs = backend.get_field_specs()
     preview_records = result.records if result.mode == "aggregate" else result.records[:10]

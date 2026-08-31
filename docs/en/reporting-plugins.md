@@ -82,7 +82,7 @@ class DatasetBackend(ABC):
 | `get_field_specs()` | **yes** | Column definition of the tabular projection. The order is the column order in the CSV. |
 | `build_dataset(facility, date_from, date_to)` | **yes** | Builds the dataset for the **inclusive** period `[date_from, date_to]`. The result is **raw** (unsuppressed). |
 | `validate_completeness(facility, date_from, date_to)` | no | Defaults to `[]`. Data-quality checks — see [§ 8](#8-completeness--what-the-report-does-not-show). |
-| `prepare_export(facility, result)` | no | Defaults to returning the result unchanged. Transformation applied before export **and** before the panel display — see [§ 6](#6-k-anonymity--the-prepare_export-hook). |
+| `prepare_export(facility, result)` | **in practice yes** | The default returns the result unchanged, but that is no longer sufficient: transformation applied before export **and** before the panel display. Without a declared threshold (`summary["k_anonymity_threshold"]`), both the download **and** the panel fail closed (#2069) — see [§ 6](#6-k-anonymity--the-prepare_export-hook). |
 
 > **Backends are process-wide singletons — no instance state.**
 >
@@ -427,8 +427,8 @@ Unifying the paths later remains possible but is not planned; it would additiona
 
 | Path | `prepare_export`? | View |
 |---|---|---|
-| Download CSV / JSON / XML | **yes** — `export_dataset()` calls it before *every* renderer | suppressed |
-| Reports panel (HTMX preview) | **yes** — the view calls `prepare_export(facility, build_dataset(...))` | suppressed (parity with the download) |
+| Download CSV / JSON / XML | **yes** — `export_dataset()` calls it before *every* renderer and then **enforces** the declared threshold | suppressed |
+| Reports panel (HTMX preview) | **yes** — the view calls `prepare_export(facility, build_dataset(...))` and **enforces** the threshold in the same way | suppressed (parity with the download) |
 | Snapshot | no — `build_dataset` directly | raw |
 | Activity report PDF | no — separate path, suppressed in its own right since #1278 | suppressed |
 
@@ -436,7 +436,9 @@ The "View" column says nothing about the **source**: panel and download read liv
 
 ### Do I need my own override?
 
-**Yes, as soon as your backend produces numbers that leave the building** — and they do as soon as the backend is registered, because download and panel then become available automatically. The default (`return result`) is only defensible for backends whose cells cannot be small counts by construction.
+**Yes — and since #2069 this is enforced, no longer merely agreed.** As soon as the backend is registered, download and panel become available automatically; both pass the dataset through `enforce_suppression_contract()` and reject it **fail-closed** if `summary["k_anonymity_threshold"]` is missing, is not an integer (`bool` does not count) or is smaller than 1. The default `return result` is therefore no longer defensible for **any** exporting backend — not even for one whose cells cannot be small counts by construction: such a backend simply declares the threshold without suppressing anything.
+
+The reason for the runtime check: the AST guard `test_jedes_backend_mit_randsumme_ruft_den_residual_guard` cannot see a backend **without** an override at all — it produces no `prepare_export` node for the guard to inspect. In addition, `TestJedesBackendUeberschreibtPrepareExport` statically verifies that every class under `core/reporting/backends/` with a direct `DatasetBackend` base defines the method.
 
 The threshold *k* comes per facility from `Settings.k_anonymity_threshold` (default 5) and is read via `_get_threshold(facility)` from [`core.services.dashboard.external_report`](../../src/core/services/dashboard/external_report.py) — the same module that provides `_suppress_small` and `suppress_sample_report_1_stats` for the PDF path and the external report. `_suppress_small` additionally establishes a **value-independent output order** (#1767): suppressed rows move to the end of the list as a block in canonical order, so that the position does not reveal which cell is the smallest. Set `summary["k_anonymity_threshold"] = threshold` if your backend suppresses: the CSV renderer then appends a note to the metadata line, and the panel shows the suppression notice.
 
@@ -521,7 +523,7 @@ Category,Count
 Kontakte,42
 ```
 
-- The metadata line carries the k-anonymity note only if `summary["k_anonymity_threshold"]` is set. Without it the recipient would see empty cells with no explanation — unlike JSON, XML and the panel, the CSV carries no completeness notices.
+- The metadata line **always** carries the k-anonymity note: since #2069 `summary["k_anonymity_threshold"]` is a precondition for exporting at all, and the former `is not None` branch is gone. Without it the recipient would see empty cells with no explanation — unlike JSON, XML and the panel, the CSV carries no completeness notices.
 - Refs #1765: the `data_source: live` segment is the stable, language-independent code (parity with JSON/XML) — a parser should match on it, never on the translated label `Datenquelle: …`. Under the EN locale that reads `data_source: live | Data source: Live query at the time of creation`.
 - Refs #1770 (K3-A3): the same pattern for the **population** — `population: <code>` is the stable code from `DatasetBackend.population`, `Grundgesamtheit: …` the translated label. A report that does not say *what* it counts is not only leaky but misleading: several tables over different base sets add up to different numbers.
 - **Every** cell, including metadata and header, passes through `_sanitize_csv_cell`, the existing formula-injection guard from `core.services.system.export` (OWASP CSV injection, #719). Deliberate reuse instead of a second implementation.
@@ -639,6 +641,7 @@ If you want the expected values to be independent of how many backends are reall
 | Foreign facility → no rows | Facility filter in the queryset |
 | Soft-deleted events are not counted | `is_deleted` filter |
 | **Suppression:** cell `< k` → `None`; marginal total dropped per the backend's rule | K-anonymity invariant |
+| **Fail-closed:** a dataset without `summary["k_anonymity_threshold"]` raises `SuppressionContractError` in both export **and** panel | Enforced k-anonymity invariant (#2069) |
 | **Secondary suppression:** exactly one suppressed cell → a second one is dropped | A6.1 back-calculation |
 | **No internal flag in the export** (`suppressed`, `count`) | Confirms the projection onto `FieldSpec` keys |
 | `export_dataset` in all three formats: 200, content type, file name | Format dispatch |
@@ -666,5 +669,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-24 -->
-<!-- source-hash: 7458d0f8eecbb462f4703c0a4e03d4297e58fdd5 -->
+<!-- translation-date: 2026-08-31 -->
+<!-- source-hash: c200a4eb8f11e06c1f63c1529fe2946f2d765b18 -->

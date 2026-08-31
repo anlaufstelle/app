@@ -79,7 +79,7 @@ class DatasetBackend(ABC):
 | `get_field_specs()` | **ja** | Spaltendefinition der tabellarischen Projektion. Reihenfolge = Spaltenreihenfolge im CSV. |
 | `build_dataset(facility, date_from, date_to)` | **ja** | Baut den Datensatz für den **inklusiven** Zeitraum `[date_from, date_to]`. Ergebnis ist **roh** (unsuppressiert). |
 | `validate_completeness(facility, date_from, date_to)` | nein | Default `[]`. Datenqualitäts-Checks — siehe [§ 8](#8-completeness--was-der-bericht-nicht-zeigt). |
-| `prepare_export(facility, result)` | nein | Default: unverändert. Transformation vor Export **und** Panel-Anzeige — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook). |
+| `prepare_export(facility, result)` | **faktisch ja** | Der Default ist die Identität, reicht aber nicht mehr aus: Transformation vor Export **und** Panel-Anzeige. Ohne ausgewiesene Schwelle (`summary["k_anonymity_threshold"]`) scheitern Download **und** Panel fail-closed (#2069) — siehe [§ 6](#6-k-anonymität--der-prepare_export-hook). |
 
 > **Backends sind prozessweite Singletons — kein Instanz-Zustand.**
 >
@@ -428,8 +428,8 @@ Eine spätere Vereinheitlichung bleibt möglich, ist aber nicht geplant; sie br�
 
 | Pfad | `prepare_export`? | Sicht |
 |---|---|---|
-| Download CSV / JSON / XML | **ja** — `export_dataset()` ruft ihn vor *jedem* Renderer | suppressiert |
-| Berichts-Panel (HTMX-Vorschau) | **ja** — die View ruft `prepare_export(facility, build_dataset(...))` | suppressiert (Parität zum Download) |
+| Download CSV / JSON / XML | **ja** — `export_dataset()` ruft ihn vor *jedem* Renderer und **erzwingt** danach die ausgewiesene Schwelle | suppressiert |
+| Berichts-Panel (HTMX-Vorschau) | **ja** — die View ruft `prepare_export(facility, build_dataset(...))` und **erzwingt** die Schwelle genauso | suppressiert (Parität zum Download) |
 | Snapshot | nein — `build_dataset` direkt | roh |
 | Sachbericht-PDF | nein — eigener Pfad, suppressiert seit #1278 selbst | suppressiert |
 
@@ -437,7 +437,9 @@ Die Spalte „Sicht" sagt nichts über die **Quelle**: Panel und Download lesen 
 
 ### Brauche ich einen eigenen Override?
 
-**Ja, sobald dein Backend Zahlen liefert, die das Haus verlassen** — und das tun sie, sobald das Backend registriert ist, denn Download und Panel stehen dann automatisch zur Verfügung. Der Default (`return result`) ist nur für Backends vertretbar, deren Zellen konstruktionsbedingt keine Kleinstfallzahlen sein können.
+**Ja — und seit #2069 ist das erzwungen, nicht mehr nur verabredet.** Sobald das Backend registriert ist, stehen Download und Panel automatisch zur Verfügung; beide reichen den Datensatz durch `enforce_suppression_contract()` und weisen ihn **fail-closed** ab, wenn `summary["k_anonymity_threshold"]` fehlt, keine ganze Zahl (`bool` zählt nicht) oder kleiner als 1 ist. Der Default `return result` ist damit für **kein** exportierendes Backend mehr vertretbar — auch nicht für eines, dessen Zellen konstruktionsbedingt keine Kleinstfallzahlen sein können: es weist die Schwelle dann eben aus, ohne etwas zu unterdrücken.
+
+Der Grund für die Laufzeitprüfung: der AST-Guard `test_jedes_backend_mit_randsumme_ruft_den_residual_guard` kann ein Backend **ohne** Override prinzipiell nicht sehen — es erzeugt keinen `prepare_export`-Knoten, an dem der Guard ansetzen könnte. Ergänzend prüft `TestJedesBackendUeberschreibtPrepareExport` statisch, dass jede Klasse unter `core/reporting/backends/` mit direkter `DatasetBackend`-Basis die Methode definiert.
 
 Die Schwelle *k* kommt je Einrichtung aus `Settings.k_anonymity_threshold` (Default 5) und wird über `_get_threshold(facility)` aus [`core.services.dashboard.external_report`](../src/core/services/dashboard/external_report.py) gelesen — demselben Modul, das auch `_suppress_small` und `suppress_sample_report_1_stats` für den PDF- und den externen Berichtspfad bereitstellt. `_suppress_small` stellt dabei zusätzlich eine **wertunabhängige Ausgabereihenfolge** her (#1767): unterdrückte Zeilen wandern als Block in kanonischer Ordnung ans Listenende, damit die Position nicht verrät, welche Zelle die kleinste ist. Setze `summary["k_anonymity_threshold"] = threshold`, wenn dein Backend suppressiert: Der CSV-Renderer hängt daraufhin einen Hinweis an die Metadatenzeile, und das Panel blendet den Suppressions-Hinweis ein.
 
@@ -522,7 +524,7 @@ Kategorie,Anzahl
 Kontakte,42
 ```
 
-- Die Metadatenzeile trägt den k-Anon-Hinweis nur, wenn `summary["k_anonymity_threshold"]` gesetzt ist. Ohne den Zusatz sähe der Empfänger leere Zellen ohne Erklärung — das CSV trägt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
+- Die Metadatenzeile trägt den k-Anon-Hinweis **immer**: `summary["k_anonymity_threshold"]` ist seit #2069 Voraussetzung für den Export überhaupt, der frühere `is not None`-Zweig ist entfallen. Ohne den Zusatz sähe der Empfänger leere Zellen ohne Erklärung — das CSV trägt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
 - Refs #1765: das Segment `data_source: live` ist der stabile, sprachunabhängige Code (Parität zu JSON/XML) — ein Parser matcht darauf, nie auf das übersetzte Label `Datenquelle: …`. Unter EN-Locale steht dort `data_source: live | Data source: Live query at the time of creation`.
 - Refs #1770 (K3-A3): dasselbe Muster für die **Grundgesamtheit** — `population: <code>` ist der stabile Code aus `DatasetBackend.population`, `Grundgesamtheit: …` das übersetzte Label. Ein Bericht, der nicht sagt, *worüber* er zählt, ist nicht nur undicht, sondern irreführend: mehrere Tabellen über verschiedenen Basismengen summieren sich zu verschiedenen Zahlen.
 - **Jede** Zelle, auch Metadaten und Header, läuft durch `_sanitize_csv_cell` — den bestehenden Formula-Injection-Schutz aus `core.services.system.export` (OWASP CSV-Injection, #719). Bewusste Wiederverwendung statt Zweitimplementierung.
@@ -640,6 +642,7 @@ Wer die Erwartungswerte unabhängig von der Menge real registrierter Backends ha
 | Fremde Einrichtung → keine Zeilen | Facility-Filter im Queryset |
 | Soft-gelöschte Ereignisse zählen nicht mit | `is_deleted`-Filter |
 | **Suppression:** Zelle `< k` → `None`; Randsumme fällt gemäß Backend-Regel | K-Anon-Invariante |
+| **Fail-closed:** ein Datensatz ohne `summary["k_anonymity_threshold"]` löst in Export **und** Panel `SuppressionContractError` aus | Erzwungene K-Anon-Invariante (#2069) |
 | **Sekundär-Suppression:** genau eine unterdrückte Zelle → zweite fällt | A6.1-Rückrechnung |
 | **Kein internes Flag im Export** (`suppressed`, `count`) | Projektion auf `FieldSpec`-Keys greift |
 | `export_dataset` in allen drei Formaten: 200, Content-Type, Dateiname | Format-Dispatch |

@@ -17,8 +17,14 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import override
 
-from core.reporting.base import CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
-from core.reporting.export import export_dataset
+from core.reporting.base import (
+    CompletenessIssue,
+    DatasetBackend,
+    DatasetResult,
+    FieldSpec,
+    stamp_threshold,
+)
+from core.reporting.export import SuppressionContractError, export_dataset
 
 
 class _Facility:
@@ -31,7 +37,27 @@ class _Facility:
         return self.name
 
 
-class _RowsBackend(DatasetBackend):
+class _StempeltSchwelle:
+    """Mixin: weist die k-Anon-Schwelle aus, wie es alle neun Produktions-Backends tun.
+
+    Refs #2069: seit
+    ``export_dataset`` die Suppressionsinvariante fail-closed erzwingt, ist ein
+    Datensatz ohne ausgewiesene Schwelle kein exportierbarer Datensatz mehr —
+    auch nicht in einem Renderer-Test. Die Dummys stempeln deshalb ueber den
+    **echten** Produktionshelfer ``stamp_threshold`` (statt eines
+    handgeschriebenen Dicts) und ueben damit denselben Vertragspfad wie die
+    ausgelieferten Backends.
+
+    Gestempelt wird ausschliesslich in ``prepare_export``, **nie** in
+    ``build_dataset``: ``test_hook_wird_mit_facility_und_ergebnis_aufgerufen``
+    assertiert den **rohen** ``build_dataset``-Payload.
+    """
+
+    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+        return dataclasses.replace(result, summary=stamp_threshold(result.summary, 5))
+
+
+class _RowsBackend(_StempeltSchwelle, DatasetBackend):
     """Dummy-Backend im Modus ``rows`` — Records inkl. CSV-Injection-Payload.
 
     ``name`` ist bewusst ``gettext_lazy`` (wie echte Backends es taeten), um
@@ -70,7 +96,7 @@ class _UnicodeSlugBackend(_RowsBackend):
     slug = "café"
 
 
-class _AggregateBackend(DatasetBackend):
+class _AggregateBackend(_StempeltSchwelle, DatasetBackend):
     """Dummy-Backend im Modus ``aggregate`` — verschachteltes summary (dict + Liste)."""
 
     slug = "dummy_aggregate"
@@ -112,9 +138,31 @@ class _PreparingBackend(_RowsBackend):
         return dataclasses.replace(
             result,
             records=[{"datum": "unterdrückt", "formel": None}],
-            summary={"total": None},
+            # Refs #2069: die Schwelle gehoert in JEDES suppressierte Ergebnis —
+            # ``stamp_threshold`` ist derselbe Helfer, den die neun
+            # Produktions-Backends benutzen.
+            summary=stamp_threshold({"total": None}, 5),
             completeness=[CompletenessIssue(code="unmapped", message="Anzahl unterdrückt.", severity="info")],
         )
+
+
+class _OhneSuppressionBackend(DatasetBackend):
+    """Backend am Framework-Default: **kein** ``prepare_export``, kein Stempel.
+
+    Bewusst NICHT von ``_RowsBackend`` abgeleitet — das traegt seit
+    #2069 den
+    stempelnden Mixin. Dieses Backend ist genau das Fehlerbild, gegen das die
+    Laufzeitinvariante schuetzt: ein Autor, der den Override vergisst.
+    """
+
+    slug = "dummy_ohne_suppression"
+    name = "Dummy ohne Suppression"
+
+    def get_field_specs(self) -> list[FieldSpec]:
+        return [FieldSpec(key="datum", label="Datum")]
+
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+        return DatasetResult(mode="rows", records=[{"datum": "2026-01-05"}], summary={"total": 2}, completeness=[])
 
 
 class _ThresholdBackend(_RowsBackend):
@@ -154,7 +202,7 @@ class _RandfallZellenBackend(_RowsBackend):
         )
 
 
-class _NichtIdentifierKeyBackend(DatasetBackend):
+class _NichtIdentifierKeyBackend(_StempeltSchwelle, DatasetBackend):
     """Dummy-Backend mit einem FieldSpec-Key, der kein gueltiger XML-Elementname
     ist (Ziffern-initial) — muss im XML als ``<entry key="…">`` erscheinen statt
     als still unparsbares ``<1monat>``.
@@ -170,7 +218,7 @@ class _NichtIdentifierKeyBackend(DatasetBackend):
         return DatasetResult(mode="rows", records=[{"1monat": 5}], summary={}, completeness=[])
 
 
-class _ZeilenumbruchKeyBackend(DatasetBackend):
+class _ZeilenumbruchKeyBackend(_StempeltSchwelle, DatasetBackend):
     """Key mit abschliessendem ``\\n`` — ``$`` matcht in Python VOR einem finalen
     Zeilenumbruch, ein ``.match()``-Guard laesst ihn also durch und der Renderer
     baute daraus ein Element ``<total\\n>``, das der Parser still zu ``<total>``
@@ -192,7 +240,7 @@ class _ZeilenumbruchKeyBackend(DatasetBackend):
         )
 
 
-class _SteuerzeichenBackend(DatasetBackend):
+class _SteuerzeichenBackend(_StempeltSchwelle, DatasetBackend):
     """Freitexte mit XML-1.0-verbotenen Steuerzeichen an jeder Textsenke.
 
     Erreichbar in Produktion ueber jedes Backend, das Benutzertexte in Records
@@ -266,13 +314,26 @@ class TestCsvExport:
         response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
         assert response["Content-Type"] == "text/csv; charset=utf-8"
 
-    def test_metadatenzeile_ohne_schwelle_ohne_hinweis(self, facility, date_range):
-        """Ohne ``k_anonymity_threshold`` im summary bleibt die Zeile wie bisher."""
+    def test_export_ohne_schwelle_wird_fail_closed_abgewiesen(self, facility, date_range):
+        """Ersetzt ``test_metadatenzeile_ohne_schwelle_ohne_hinweis`` (Refs #2069).
+
+        Der Vorgaengertest prueft exakt den Zustand, den die Invariante seit
+        #2069 verbietet:
+        ein Export ohne ausgewiesene Schwelle. Er ist damit nicht „anpassbar",
+        sondern durch die staerkere Aussage ersetzt — statt „dann fehlt der
+        Hinweistext" gilt jetzt „dann gibt es kein Artefakt".
+        """
+        date_from, date_to = date_range
+        with pytest.raises(SuppressionContractError):
+            export_dataset(_OhneSuppressionBackend(), facility, date_from, date_to, format="csv")
+
+    def test_metadatenzeile_traegt_den_hinweis_unbedingt(self, facility, date_range):
+        """Gegenstueck: die Schwelle ist garantiert da, der Hinweis also immer."""
         date_from, date_to = date_range
         response = export_dataset(_RowsBackend(), facility, date_from, date_to, format="csv")
         erste_zeile = b"".join(response.streaming_content).decode("utf-8").splitlines()[0]
 
-        assert "k-Anonymität" not in erste_zeile
+        assert erste_zeile.endswith(" | k-Anonymität: Zellen < 5 unterdrückt")
 
     def test_metadatenzeile_mit_schwelle_weist_suppression_aus(self, facility, date_range):
         """Sonst sieht der Empfaenger nur leere Zellen ohne Erklaerung."""
@@ -310,7 +371,9 @@ class TestJsonExport:
             {"key": "datum", "label": "Datum"},
             {"key": "formel", "label": "Formel-Feld"},
         ]
-        assert payload["summary"] == {"total": 2}
+        # Refs #2069: erweitert um den Stempel, den ``_RowsBackend`` seit der
+        # Laufzeitinvariante ausweist (ohne ihn gaebe es kein Artefakt).
+        assert payload["summary"] == {"total": 2, "k_anonymity_threshold": 5}
         # Kein CSV-Sanitizing im JSON — Rohwert bleibt erhalten.
         assert payload["records"] == [
             {"formel": "=SUM(A1:A9)", "datum": "2026-01-05"},
@@ -425,7 +488,10 @@ class TestPrepareExportHook:
         response = export_dataset(_PreparingBackend(), facility, date_from, date_to, format="json")
 
         payload = json.loads(response.content)
-        assert payload["summary"] == {"total": None}
+        # Refs #2069: erweitert um den Stempel, den ``_PreparingBackend.prepare_export``
+        # jetzt selbst setzt — keine Abschwaechung, die Aussage bleibt „das
+        # TRANSFORMIERTE Ergebnis wird gerendert".
+        assert payload["summary"] == {"total": None, "k_anonymity_threshold": 5}
         assert payload["records"] == [{"datum": "unterdrückt", "formel": None}]
         assert payload["completeness"] == [{"code": "unmapped", "message": "Anzahl unterdrückt.", "severity": "info"}]
 
@@ -456,16 +522,22 @@ class TestPrepareExportHook:
         assert not root.find("summary").find("total").text
         assert b"None" not in response.content
 
-    def test_backend_ohne_override_bleibt_unveraendert(self, facility, date_range):
-        """Default-Hook = Identitaet: Roh-Datensatz kommt unveraendert im Export an."""
+    def test_backend_ohne_override_wird_abgewiesen(self, facility, date_range):
+        """Ersetzt ``test_backend_ohne_override_bleibt_unveraendert`` (Refs #2069).
+
+        Die alte Aussage („Default-Hook = Identitaet, der Roh-Datensatz kommt
+        unveraendert im Export an") ist **an der Exportgrenze** falsch geworden:
+        dort steht seit #2069
+        das Fail-Closed-Gate.
+
+        Die Identitaets-Semantik des Defaults **selbst** ist damit nicht
+        verloren — sie bleibt unveraendert gepinnt von
+        ``test_reporting_base.py::test_prepare_export_default_gibt_dasselbe_objekt_zurueck``.
+        Hier geht es ausschliesslich um die Grenze, nicht um den Vertrag.
+        """
         date_from, date_to = date_range
-        backend = _RowsBackend()
-        raw = backend.build_dataset(facility, date_from, date_to)
-
-        payload = json.loads(export_dataset(backend, facility, date_from, date_to, format="json").content)
-
-        assert payload["summary"] == raw.summary
-        assert payload["records"] == raw.records
+        with pytest.raises(SuppressionContractError):
+            export_dataset(_OhneSuppressionBackend(), facility, date_from, date_to, format="json")
 
 
 class TestRandfaelle:
@@ -661,7 +733,7 @@ class TestQuellenausweis:
         assert root.attrib["data_source_note"] == "Live-Abfrage zum Erstellungszeitpunkt"
 
 
-class _LazyBackend(DatasetBackend):
+class _LazyBackend(_StempeltSchwelle, DatasetBackend):
     """Backend, dessen FieldSpec-Labels UND Completeness-Meldung lazy sind.
 
     Genau die Bauform, die #1744

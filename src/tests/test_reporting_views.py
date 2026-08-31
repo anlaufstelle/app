@@ -6,6 +6,7 @@ sowie die Berichte-Sektion in ``StatisticsView``. AuthZ-Zellen und der 5xx-Guard
 laufen ueber ``test_authz_matrix.py`` (Eintraege in ``_authz_expectations.py``).
 """
 
+import dataclasses
 import re
 from datetime import date, timedelta
 
@@ -16,7 +17,7 @@ from django.utils.formats import date_format
 
 from core.models import AuditLog
 from core.reporting import registry
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.registry import register_backend
 from tests.conftest import isolate_reporting_registry
 
@@ -210,6 +211,12 @@ class TestDatasetReportPanelView:
             def build_dataset(self, facility, date_from, date_to):
                 records = [{"nr": index} for index in range(15)]
                 return DatasetResult(mode="rows", records=records, summary={}, completeness=[])
+
+            def prepare_export(self, facility, result):
+                # Refs #2069: der Panel-Pfad weist einen Datensatz ohne
+                # ausgewiesene k-Anon-Schwelle fail-closed ab. Die Aussage
+                # dieses Tests (10 von 15) bleibt davon unberuehrt.
+                return dataclasses.replace(result, summary=stamp_threshold(result.summary, 5))
 
         register_backend("viele_zeilen")(_VieleZeilenBackend)
         client.force_login(lead_user)
@@ -639,7 +646,9 @@ class TestPrepareExportRuftGenauEinmalAuf:
 
             def prepare_export(self, facility, result):
                 self.calls += 1
-                return result
+                # Refs #2069: stempeln, damit der Fail-Closed-Check passiert —
+                # der Zaehl-Charakter des Doubles bleibt unveraendert.
+                return dataclasses.replace(result, summary=stamp_threshold(result.summary, 5))
 
         register_backend("zaehler_panel")(_ZaehlBackend)
         client.force_login(lead_user)
@@ -664,7 +673,9 @@ class TestPrepareExportRuftGenauEinmalAuf:
 
             def prepare_export(self, facility, result):
                 self.calls += 1
-                return result
+                # Refs #2069: stempeln, damit der Fail-Closed-Check passiert —
+                # der Zaehl-Charakter des Doubles bleibt unveraendert.
+                return dataclasses.replace(result, summary=stamp_threshold(result.summary, 5))
 
         register_backend("zaehler_export")(_ZaehlBackend)
         client.force_login(admin_user)

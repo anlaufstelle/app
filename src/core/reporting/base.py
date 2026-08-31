@@ -638,7 +638,18 @@ class DatasetBackend(ABC):
         """Transformation vor Export/Panel-Anzeige (z. B. K-Anon-Suppression).
 
         Wird von ``export_dataset()`` und der Panel-Vorschau aufgerufen. Snapshots
-        nutzen ``build_dataset()`` direkt (Roh-Payload). Default: unveraendert.
+        nutzen ``build_dataset()`` direkt (Roh-Payload) und umgehen den Hook
+        bewusst.
+
+        Der Default ist die **Identitaet** — aber er reicht nicht mehr aus, um
+        ein Backend auszuliefern (Refs #2069): ``export_dataset()`` **und** die
+        Panel-Vorschau weisen einen Datensatz ohne
+        ``summary["k_anonymity_threshold"]`` fail-closed ab
+        (``core.reporting.export.enforce_suppression_contract``). Wer Zahlen
+        liefert, die das Haus verlassen, ueberschreibt diese Methode und weist
+        die Schwelle ueber :func:`stamp_threshold` bzw.
+        ``suppress_single_margin`` aus. Siehe ADR-038 § 5 und
+        ``docs/reporting-plugins.md`` § 6.
         """
         return result
 

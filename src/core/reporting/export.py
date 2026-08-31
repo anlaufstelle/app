@@ -21,6 +21,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterator
 from typing import Any
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import timezone
@@ -63,6 +64,54 @@ _XML_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _XML_ILLEGAL_RE = re.compile(r"[^\x09\x0a\x0d\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
+class SuppressionContractError(ImproperlyConfigured):
+    """Ein Backend liefert einen Datensatz ohne ausgewiesene k-Anon-Schwelle.
+
+    Erbt von ``ImproperlyConfigured``, weil genau das vorliegt: eine
+    Fehlkonfiguration des Systems (ein Backend, das seinen Vertrag nicht
+    erfuellt), kein Benutzerfehler. Der eigene Name macht den Fall in
+    Log/Fehler-Tracking unterscheidbar und spaeter gezielt fangbar, ohne das
+    bestehende Verhalten gegenueber ``ImproperlyConfigured`` zu aendern.
+    """
+
+
+def enforce_suppression_contract(backend: DatasetBackend, result: DatasetResult) -> DatasetResult:
+    """Fail-Closed-Gate der K-Anon-Invariante (Refs #2069).
+
+    Bis #2069 war die
+    Suppressionspflicht eine Konvention: ``DatasetBackend.prepare_export`` ist
+    ein Identity-Passthrough, und der AST-Guard kann ein Backend **ohne**
+    Override prinzipiell nicht sehen — es erzeugt keinen ``FunctionDef``-Knoten
+    und rutscht lautlos durch. Ein vergessener Override exportierte damit
+    Kleinstfallzahlen, ohne dass ein Test rot wird.
+
+    Geprueft wird die **Praesenz und der Typ** der ausgewiesenen Schwelle, nicht
+    ihr Wert: ein Vergleich gegen ``_get_threshold(facility)`` braeuchte hier
+    eine Datenbankabfrage und machte die gesamte DB-freie Renderer-Pipeline
+    DB-pflichtig. Der Wertvergleich laeuft deshalb im DB-gestuetzten Vertragstest
+    ``tests/test_reporting_suppression_contract.py``.
+
+    ``bool`` wird ausdruecklich ausgeschlossen: es ist ein Subtyp von ``int``,
+    ein versehentlich gestempeltes ``True`` ginge sonst als Schwelle 1 durch —
+    und Schwelle 1 unterdrueckt nichts. ``0`` ebenso: das waere ein Fail-Open
+    mit gesetztem Schluessel.
+
+    ``raise``, nie ``assert``: eine Sicherheitsinvariante, die sich mit
+    ``python -O`` abschalten laesst, ist keine.
+    """
+    threshold = result.summary.get("k_anonymity_threshold")
+    if isinstance(threshold, bool) or not isinstance(threshold, int) or threshold < 1:
+        raise SuppressionContractError(
+            f"Reporting-Backend {backend.slug!r} ({type(backend).__name__}) liefert einen Datensatz ohne "
+            f"ausgewiesene k-Anonymitäts-Schwelle (summary['k_anonymity_threshold'] = {threshold!r}). "
+            "Jedes extern zirkulierende Berichts-Artefakt unterdrückt Kleinstfallzahlen (ADR-038 § 5, "
+            "docs/reporting-plugins.md § 6, Refs #1278/T1, Security R4+R14) — Download und Panel weisen "
+            "einen unsuppressierten Datensatz deshalb fail-closed ab. Überschreibe `prepare_export` und "
+            "weise die Schwelle über `stamp_threshold(...)` bzw. `suppress_single_margin(...)` aus."
+        )
+    return result
+
+
 def export_dataset(
     backend: DatasetBackend,
     facility,
@@ -86,7 +135,12 @@ def export_dataset(
     # Formatwechsel (CSV/JSON/XML statt PDF) darf diese Haertung nie
     # aushebeln — der Hook laeuft deshalb vor *jedem* Renderer. Snapshots
     # umgehen ihn bewusst: sie rufen ``build_dataset`` direkt (Roh-Payload).
+    #
+    # Refs #2069: die Invariante ist seitdem **erzwungen**, nicht mehr nur
+    # beschrieben — ein Backend ohne ausgewiesene Schwelle scheitert hier
+    # fail-closed, statt Rohzahlen an einen Renderer weiterzureichen.
     result = backend.prepare_export(facility, result)
+    result = enforce_suppression_contract(backend, result)
     generated_at = timezone.now()
     filename = f"{backend.slug}_{date_from}_{date_to}.{format}"
 
@@ -158,16 +212,18 @@ def _render_csv(
     metadata += f" | population: {backend.population} | {population_label}: {POPULATION_NOTES[backend.population]}"
     # Ohne diesen Zusatz saehe der Empfaenger nur leere Zellen ohne Erklaerung —
     # das CSV traegt (anders als JSON/XML/Panel) keine Completeness-Hinweise.
-    # Nur wenn das Backend ueberhaupt suppressiert, also eine Schwelle ausweist.
+    # Refs #2069: die Praesenz des Schluessels garantiert
+    # ``enforce_suppression_contract`` — ein defensiver ``is not None``-Zweig
+    # stuende hier nur noch tot und verschleierte die Zusage, statt sie zu
+    # tragen.
     #
     # Refs #1766: als EIN msgid mit Platzhalter statt „Label + Wert" wie bei den
     # Nachbarsegmenten — hier gibt es keinen sprachunabhaengigen Code, an dem
     # sich das Segment trennen liesse, und ein halb uebersetztes Segment waere
     # genau der DE/EN-Mischtext, den #1765 fuer die Nachbarn beseitigt hat.
     # Die Schwelle selbst ist bewusst publiziert (Transparenz), nicht redigiert.
-    threshold = result.summary.get("k_anonymity_threshold")
-    if threshold is not None:
-        metadata += " | " + gettext("k-Anonymität: Zellen < %(threshold)s unterdrückt") % {"threshold": threshold}
+    threshold = result.summary["k_anonymity_threshold"]
+    metadata += " | " + gettext("k-Anonymität: Zellen < %(threshold)s unterdrückt") % {"threshold": threshold}
     yield _flush([_sanitize_csv_cell(metadata)])
     yield _flush([_sanitize_csv_cell(spec.label) for spec in field_specs])
     for record in result.records:
