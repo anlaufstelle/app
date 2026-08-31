@@ -80,7 +80,10 @@ DOMAIN=anlaufstelle.meine-einrichtung.de
 DJANGO_SECRET_KEY=<long-random-string>
 DJANGO_AUDIT_HASH_KEY=<separate-long-random-string>
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod
-ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de
+# localhost/127.0.0.1 are required for the container health check
+# (http://localhost:8000/health/) — prod.py derives ALLOWED_HOSTS solely from
+# this variable; without localhost /health/ raises a DisallowedHost 400.
+ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de,localhost,127.0.0.1
 
 # Database (three-role model, Refs #902)
 POSTGRES_DB=anlaufstelle
@@ -1931,5 +1934,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-30 -->
-<!-- source-hash: d432a7801acf8431aabe6b0f8408d3d60317b834 -->
+<!-- translation-date: 2026-08-31 -->
+<!-- source-hash: 8a033035de750f9b217e56908a7cd6b9e1a42647 -->

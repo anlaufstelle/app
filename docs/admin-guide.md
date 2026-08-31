@@ -76,7 +76,10 @@ DOMAIN=anlaufstelle.meine-einrichtung.de
 DJANGO_SECRET_KEY=<langer-zufaelliger-string>
 DJANGO_AUDIT_HASH_KEY=<separater-langer-zufaelliger-string>
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod
-ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de
+# localhost/127.0.0.1 noetig fuer den Container-Healthcheck
+# (http://localhost:8000/health/) — prod.py baut ALLOWED_HOSTS rein aus dieser
+# Variable, ohne localhost wirft /health/ einen DisallowedHost-400.
+ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de,localhost,127.0.0.1
 
 # Datenbank (Drei-Rollen-Modell, Refs #902)
 POSTGRES_DB=anlaufstelle
