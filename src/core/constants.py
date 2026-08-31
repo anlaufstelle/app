@@ -59,6 +59,14 @@ FEED_MAX_PER_TYPE = 200
 # "weitere ueber Filter/Detailsuche"-Hinweis.
 WORKITEM_INBOX_CAP = 50
 
+# Refs #2035: Obergrenze der IDs pro Bulk-Submit. Die Inbox zeigt je Statuskorb
+# WORKITEM_INBOX_CAP Eintraege und rendert bis zu drei Koerbe gleichzeitig — ein
+# legitimes "alle sichtbaren auswaehlen" umfasst damit hoechstens 150 Aufgaben.
+# 200 laesst Luft und deckelt zugleich die IN-Liste, die sonst nur von Djangos
+# DATA_UPLOAD_MAX_NUMBER_FIELDS (1000) begrenzt wird; das Ratelimit begrenzt nur
+# die Frequenz, nicht die Payload.
+WORKITEM_BULK_MAX_IDS = 200
+
 # Refs #1149: Im aufklappbaren Bereich "Kürzlich erledigt" (letzte 7 Tage)
 # zeigt die Inbox standardmaessig nur die letzten N Eintraege; der Rest wird
 # erst auf Wunsch eingeblendet. Haelt den Rueckblick visuell schlank, ohne den

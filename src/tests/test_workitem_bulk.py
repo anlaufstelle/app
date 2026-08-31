@@ -1,11 +1,13 @@
 """Tests für Bulk-Edit von WorkItems (Refs #267)."""
 
+import uuid
 from datetime import date
 
 import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
+from core.constants import WORKITEM_BULK_MAX_IDS
 from core.models import AuditLog, WorkItem
 from core.services.case import (
     bulk_assign_workitems,
@@ -1077,3 +1079,84 @@ class TestBulkForbiddenPreservesSelection:
         assert "data-forbidden-id=" not in html
         assert response.context["forbidden_ids"] == set()
         assert str(own.pk) in html  # Liste rendert normal
+
+
+@pytest.mark.django_db
+class TestBulkSelectionCap:
+    """Refs #2035: Obergrenze der IDs pro Bulk-Submit.
+
+    Die Auswahl kam bis dahin ungecappt aus ``request.POST.getlist`` und landete
+    roh in ``filter(pk__in=...)``. Das Ratelimit (30/h) begrenzt die Frequenz,
+    nicht die Payload — die einzige faktische Schranke war Djangos
+    ``DATA_UPLOAD_MAX_NUMBER_FIELDS`` (Default 1000, im Repo nicht gesetzt).
+    Zusaetzlich schlug ein nicht parsbarer Wert als 500 durch, weil
+    ``UUIDField`` beim Query-Aufbau eine ``ValidationError`` wirft — die ist
+    **keine** ``ValueError``-Unterklasse und wurde nirgends gefangen.
+    """
+
+    # Zusatzfeld je Endpunkt, damit ``perform_action`` nicht schon an der
+    # eigenen Eingabevalidierung (BulkValidationError → 400) haengenbleibt und
+    # der Test wirklich den Cap misst.
+    ENDPOINTS = [
+        ("core:workitem_bulk_status", {"status": "done"}),
+        ("core:workitem_bulk_priority", {"priority": "urgent"}),
+        ("core:workitem_bulk_assign", {"assigned_to": ""}),
+    ]
+
+    @pytest.mark.parametrize(("url_name", "extra"), ENDPOINTS)
+    def test_oversize_selection_returns_400_and_mutates_nothing(
+        self, client, staff_user, workitems_open, url_name, extra
+    ):
+        """Auswahl > Cap → 400 mit der eigenen Meldung, ohne jede Mutation.
+
+        Die drei **echten** IDs muessen mit in der Liste stehen: ohne sie fiele
+        der Request schon heute in den bestehenden 400-Pfad ``"Keine gueltigen
+        Aufgaben gefunden."`` und der Test waere vor wie nach dem Fix gruen.
+        """
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open] + [str(uuid.uuid4()) for _ in range(WORKITEM_BULK_MAX_IDS)]
+        assert len(ids) > WORKITEM_BULK_MAX_IDS
+
+        response = client.post(reverse(url_name), {"workitem_ids": ids, **extra})
+
+        assert response.status_code == 400
+        assert "Zu viele" in response.content.decode()
+        for wi in workitems_open:
+            wi.refresh_from_db()
+            assert wi.status == WorkItem.Status.OPEN
+            assert wi.priority == WorkItem.Priority.NORMAL
+            assert wi.assigned_to is None
+
+    def test_selection_of_exactly_cap_is_allowed(self, client, staff_user, workitems_open):
+        """Grenze ist ``>``, nicht ``>=`` — genau ``WORKITEM_BULK_MAX_IDS`` IDs
+        laufen durch (sonst beschnitte der Cap still den legitimen Fluss von
+        bis zu 150 sichtbaren Aufgaben)."""
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open] + [
+            str(uuid.uuid4()) for _ in range(WORKITEM_BULK_MAX_IDS - len(workitems_open))
+        ]
+        assert len(ids) == WORKITEM_BULK_MAX_IDS
+
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": ids, "status": "done"},
+        )
+
+        assert response.status_code == 302
+        for wi in workitems_open:
+            wi.refresh_from_db()
+            assert wi.status == WorkItem.Status.DONE
+
+    def test_malformed_uuid_returns_400_not_500(self, client, staff_user, workitems_open):
+        """Ein kaputter ID-Wert → 400 statt 500, und nichts wird veraendert."""
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(workitems_open[0].pk), "nicht-eine-uuid"], "status": "done"},
+        )
+
+        assert response.status_code == 400
+        assert "Ungültige ID im Payload." in response.content.decode()
+        workitems_open[0].refresh_from_db()
+        assert workitems_open[0].status == WorkItem.Status.OPEN

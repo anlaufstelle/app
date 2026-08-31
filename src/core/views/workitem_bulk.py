@@ -7,6 +7,7 @@ und bleibt hier zentral — ein Bulk-Endpoint darf nicht feiner erlauben
 als die Single-Route.
 """
 
+import uuid
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -19,7 +20,7 @@ from django.utils.translation import ngettext
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import RATELIMIT_BULK_ACTION
+from core.constants import RATELIMIT_BULK_ACTION, WORKITEM_BULK_MAX_IDS
 from core.models import WorkItem
 from core.models.user import User
 from core.services.case import (
@@ -40,6 +41,19 @@ class BulkValidationError(Exception):
     Antwort (Refs #1011, CodeQL py/stack-trace-exposure). Unerwartete
     Exceptions werden nicht gefangen und propagieren als 500.
     """
+
+
+def _parse_workitem_ids(raw_values) -> list[uuid.UUID]:
+    """POST-Liste von ID-Strings → Liste von ``uuid.UUID``.
+
+    Ein kaputter Wert wirft ``ValueError`` (``post()`` macht daraus HTTP 400).
+    Ohne diese Vorvalidierung landet der Rohstring in ``filter(pk__in=…)`` und
+    ``UUIDField`` wirft dort eine ``ValidationError`` — die faengt niemand, sie
+    schlaegt als 500 durch (``ValidationError`` ist **keine**
+    ``ValueError``-Unterklasse). Dasselbe Muster wie
+    ``core.views.config.reorder._parse_uuids`` (Refs #2035).
+    """
+    return [uuid.UUID(str(value)) for value in raw_values]
 
 
 @method_decorator(
@@ -146,6 +160,35 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         ids = self._get_workitem_ids(request)
         if not ids:
             return HttpResponseBadRequest(_("Keine Aufgaben ausgewählt."))
+
+        # Refs #2035: Die Auswahl kam ungecappt aus dem POST und ging roh in
+        # ``filter(pk__in=…)`` — die IN-Liste war allein durch Djangos
+        # DATA_UPLOAD_MAX_NUMBER_FIELDS (Default 1000) begrenzt, also ~990 IDs
+        # je Request. Das Ratelimit (30/h) deckelt die Frequenz, nicht die
+        # Payload: 30 solcher Requests pro Stunde waren erlaubt. Der Cap sitzt
+        # zentral hier im Mixin, weil alle drei Bulk-Endpunkte (Status,
+        # Prioritaet, Zuweisung) dieses ``post()`` erben und nur
+        # ``perform_action`` ueberschreiben — je Subklasse geprueft, waere die
+        # erste vergessene Kopie das Loch, und die Pruefung liefe erst nach der
+        # teuren Query. Gezaehlt wird die rohe Liste (nicht dedupliziert): die
+        # Payload ist die Kostenstelle. 200 statt 150, weil ein legitimes "alle
+        # sichtbaren auswaehlen" hoechstens drei Statuskoerbe à
+        # WORKITEM_INBOX_CAP umfasst (Begruendung an der Konstante).
+        if len(ids) > WORKITEM_BULK_MAX_IDS:
+            return HttpResponseBadRequest(
+                _("Zu viele Aufgaben ausgewählt (maximal %(max)d).") % {"max": WORKITEM_BULK_MAX_IDS}
+            )
+
+        # Vorvalidierung VOR dem ORM-Zugriff (Muster aus
+        # ``core.views.config.reorder``): ein kaputter Wert wuerde in
+        # ``filter(pk__in=…)`` eine ``ValidationError`` ausloesen, die niemand
+        # faengt und die als 500 durchschlaegt. Das ``except`` umschliesst
+        # bewusst nur den Parse-Aufruf — unerwartete Fehler aus
+        # ``perform_action`` muessen weiterhin als 500 propagieren (Refs #1011).
+        try:
+            ids = _parse_workitem_ids(ids)
+        except ValueError:
+            return HttpResponseBadRequest(_("Ungültige ID im Payload."))
 
         workitems = self._load_workitems(request, ids)
         if not workitems:
