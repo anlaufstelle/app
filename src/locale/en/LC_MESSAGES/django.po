@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-30 21:31+0200\n"
+"POT-Creation-Date: 2026-08-31 22:20+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5342,6 +5342,11 @@ msgstr "Invalid input."
 #: src/core/views/workitem_bulk.py:148
 msgid "Keine Aufgaben ausgewählt."
 msgstr "No tasks selected."
+
+#: src/core/views/workitem_bulk.py:179
+#, python-format
+msgid "Zu viele Aufgaben ausgewählt (maximal %(max)d)."
+msgstr "Too many tasks selected (maximum %(max)d)."
 
 #: src/core/views/workitem_bulk.py:152
 #: src/tests/test_i18n_de_msgstr_drift.py:37
