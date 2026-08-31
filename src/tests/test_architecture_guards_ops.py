@@ -1892,3 +1892,78 @@ class TestBootstrapInstallsSyncDependency:
             "die Deploy-Skripte syncen den Build-Kontext ausschliesslich damit, "
             "und ein frisch aufgesetzter Server hat es nicht."
         )
+
+
+class TestReleaseWorkflowSupplyChain:
+    """Refs #2061: Release-Images bleiben bis zum Digest nachweisbar."""
+
+    _WORKFLOW = Path(".github/workflows/release.yml")
+    _COMPOSE = Path("docker-compose.prod.yml")
+    _OPERATOR_DOCS = (Path("docs/ops-runbook.md"), Path("docs/en/ops-runbook.md"))
+
+    @classmethod
+    def _steps(cls) -> list[dict[str, object]]:
+        workflow = yaml.safe_load(cls._WORKFLOW.read_text(encoding="utf-8"))
+        return workflow["jobs"]["build-and-push"]["steps"]
+
+    def test_keyless_signature_uses_oidc_and_build_digest(self) -> None:
+        workflow = yaml.safe_load(self._WORKFLOW.read_text(encoding="utf-8"))
+        job = workflow["jobs"]["build-and-push"]
+        assert job["permissions"].get("id-token") == "write", (
+            "Der Release-Job braucht 'id-token: write' — ohne OIDC-Token schlaegt Cosign-Keyless fehl (Refs #2061)."
+        )
+
+        build = next(
+            (step for step in job["steps"] if str(step.get("uses", "")).startswith("docker/build-push-action@")),
+            None,
+        )
+        assert build is not None, "docker/build-push-action fehlt im Release-Job (Refs #2061)"
+        assert build.get("id") == "build", (
+            "Der Build-Step braucht die ID 'build'; sonst fehlt Cosign der Digest-Output (Refs #2061)."
+        )
+        assert "max" in str(build["with"].get("provenance", "")), (
+            "Der Image-Build muss maximale Provenance attestieren (Refs #2061)."
+        )
+        assert build["with"].get("sbom") is True, "Der Image-Build muss eine SBOM-Attestation erzeugen (Refs #2061)."
+
+        sign = next((step for step in job["steps"] if "cosign sign" in str(step.get("run", ""))), None)
+        assert sign is not None, "Dem Release-Job fehlt die Cosign-Signatur (Refs #2061)"
+        sign_call = next(line for line in str(sign["run"]).splitlines() if "cosign sign" in line)
+        assert "steps.build.outputs.digest" in str(sign), (
+            "Cosign muss den Digest-Output des Build-Steps signieren (Refs #2061)."
+        )
+        assert ":${{ github.ref_name }}" not in sign_call and ":latest" not in sign_call, (
+            "Cosign muss den unveraenderlichen Digest statt eines beweglichen Tags signieren (Refs #2061)."
+        )
+
+    def test_all_actions_are_commit_sha_pinned(self) -> None:
+        for step in self._steps():
+            uses = step.get("uses")
+            if uses is not None:
+                assert re.search(r"@[0-9a-f]{40}$", str(uses)), (
+                    f"Action {uses!r} ist nicht auf einen 40-stelligen Commit-SHA gepinnt (Refs #2061)."
+                )
+
+    def test_all_app_services_support_the_same_optional_digest_pin(self) -> None:
+        image_lines = [
+            line.strip()
+            for line in self._COMPOSE.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("image: ghcr.io/anlaufstelle/app:")
+        ]
+        assert len(image_lines) == 3, (
+            "Prod-Compose muss genau web, maintenance und cron auf das Release-Image setzen (Refs #2061)."
+        )
+        assert len(set(image_lines)) == 1, (
+            "web, maintenance und cron muessen wortgleich auf dasselbe Image zeigen — sonst migriert maintenance "
+            "gegen anderen Code, als web ausliefert (Refs #2061)."
+        )
+        assert "${APP_VERSION" in image_lines[0] and "${APP_IMAGE_DIGEST" in image_lines[0], (
+            "Das App-Image muss APP_VERSION und das optionale APP_IMAGE_DIGEST kombinieren (Refs #2061)."
+        )
+
+    def test_digest_variable_is_documented_for_operators_in_both_languages(self) -> None:
+        for path in self._OPERATOR_DOCS:
+            assert "APP_IMAGE_DIGEST" in path.read_text(encoding="utf-8"), (
+                f"{path} muss APP_IMAGE_DIGEST erklaeren — eine undokumentierte Compose-Variable ist fuer Betreiber "
+                "nicht nutzbar (Refs #2061)."
+            )

@@ -1292,6 +1292,53 @@ pip install pip-audit
 pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
 ```
 
+### 8.4a Image Signature, Provenance, and Digest Pinning
+
+The release push attaches an SBOM attestation and a provenance attestation
+(`mode=max`) to the image manifest and signs the image digest with keyless
+Cosign. The signature is recorded in the Sigstore transparency log; no
+long-lived signing keys are required.
+
+The project therefore creates three distinct, complementary SBOMs:
+
+| SBOM | Scope and retention |
+|------|---------------------|
+| CI artifact from the `audit` job | Python dependencies; 90 days |
+| Durable release SBOM `sbom-vX.Y.Z.json` | Python and npm dependencies from the lock files; durable evidence under CRA Annex I Part II No. 1 |
+| Image SBOM as an attestation | Additionally covers base-image layers and system packages on the image manifest |
+
+The image SBOM does not replace the durable release SBOM. Multi-platform
+pushes with `docker/build-push-action@v7` through the Buildx container driver
+already produced minimum provenance (`mode=min`); the release workflow raises
+it to `mode=max` and adds the SBOM attestation.
+
+Operators can verify the digest, keyless signature, and attestation data
+without access to the source repository:
+
+```bash
+# Digest des Tags aufloesen
+docker buildx imagetools inspect ghcr.io/anlaufstelle/app:vX.Y.Z --format '{{ .Manifest.Digest }}'
+# Signatur pruefen (keyless)
+cosign verify ghcr.io/anlaufstelle/app@sha256:… \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/anlaufstelle/app/\.github/workflows/release\.yml@refs/tags/v'
+# Attestations (SBOM/Provenance) am Manifest
+docker buildx imagetools inspect ghcr.io/anlaufstelle/app:vX.Y.Z --format '{{ json .SBOM }}'
+```
+
+`APP_VERSION=vX.Y.Z` remains the readable release tag. Setting
+`APP_IMAGE_DIGEST=@sha256:…` additionally and immutably binds the app image in
+`docker-compose.prod.yml` to the verified digest. PostgreSQL, Redis, ClamAV,
+and Caddy are already pinned there with `@sha256`; the app image was the only
+gap. On every version change, `APP_VERSION` and `APP_IMAGE_DIGEST` must be
+updated together, or the stack will continue to start the old digest despite
+the new tag.
+
+If the GHCR package is private, the demo host needs authentication using
+`docker login ghcr.io`. Docker stores these credentials persistently in
+`~/.docker/config.json` for the demo-host user; file permissions and token
+scope must therefore be restricted accordingly.
+
 ### 8.5 Troubleshooting
 
 | Problem | Cause | Solution |
@@ -2081,4 +2128,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: a2a63525a5fa1a5d8332b936e53b68dfe6682dd1 -->
+<!-- source-hash: b23f12f5fde917183c941dcc97046fae329221f7 -->

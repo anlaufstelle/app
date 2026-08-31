@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+      id-token: write
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -25,9 +26,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
+        id: build
         with:
           context: .
           push: true
+          provenance: mode=max
+          sbom: true
           # Multi-Arch: amd64 (Server) + arm64 (Raspberry, Apple Silicon)
           platforms: linux/amd64,linux/arm64
           # GitHub Actions Cache spart Layer-Rebuilds zwischen Releases
@@ -39,6 +43,12 @@ jobs:
           build-args: |
             DJANGO_SECRET_KEY=build-only-collectstatic
             APP_VERSION=${{ github.ref_name }}
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - name: Sign the pushed image (cosign keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
       # Refs #886: GHCR-Pakete sind by-default privat, auch wenn das Source-Repo
       # public ist. Dieser Step setzt die Package-Visibility nach jedem Push
       # idempotent auf public — aber nur, wenn das Repo selbst public ist
