@@ -1,4 +1,4 @@
-"""Regressionsguards fuer den dev-Deploy-Remote-Block (Refs #1987, #1999)."""
+"""Regressionsguards fuer den dev-Deploy-Pfad (Refs #1987, #1999, #2081)."""
 
 from __future__ import annotations
 
@@ -289,7 +289,26 @@ def test_env_dev_wird_nicht_mehr_vollstaendig_exportiert() -> None:
     assert ". ./.env.dev" not in flat
 
 
+def test_dev_env_dokumentiert_loopback_hosts_fuer_container_healthcheck() -> None:
+    env_text = (REPO_ROOT / ".env.dev.example").read_text(encoding="utf-8")
+    hosts_line = next(line for line in env_text.splitlines() if line.startswith("ALLOWED_HOSTS="))
+    hosts = {host.strip() for host in hosts_line.partition("=")[2].split(",")}
+
+    assert {"localhost", "127.0.0.1"} <= hosts
+
+
+def test_health_detail_token_steht_in_dev_env_und_web_allowlist() -> None:
+    env_text = (REPO_ROOT / ".env.dev.example").read_text(encoding="utf-8")
+    compose_text = (REPO_ROOT / "docker-compose.dev.yml").read_text(encoding="utf-8")
+    web_block = compose_text.split("\n  web:\n", 1)[1].split("\n  maintenance:\n", 1)[0]
+
+    assert re.search(r"^DJANGO_HEALTH_DETAIL_TOKEN=$", env_text, re.MULTILINE)
+    assert "DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}" in web_block
+
+
 def test_deploy_script_hat_gueltige_bash_syntax() -> None:
+    if not SCRIPT.exists():
+        pytest.skip("dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)")
     bash = shutil.which("bash")
     if bash is None:
         pytest.skip("bash nicht verfuegbar — Syntax-Guard nicht ausfuehrbar")
