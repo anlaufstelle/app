@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 22:20+0200\n"
+"POT-Creation-Date: 2026-09-01 09:18+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -11911,6 +11911,12 @@ msgstr "Your facility has been archived. Signing in is currently not possible. P
 
 msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
 msgstr "Your facility has been archived, so access to clients, events and reports is blocked. The data has not been deleted — your system administration can reactivate the facility."
+
+msgid "Keine Einrichtung zugeordnet"
+msgstr "No facility assigned"
+
+msgid "Ihr Konto ist keiner Einrichtung zugeordnet. Ohne diese Zuordnung können Personen-, Fall- und Auswertungsdaten nicht angezeigt werden. Die Systemverwaltung kann Ihr Konto einer Einrichtung zuordnen."
+msgstr "Your account is not assigned to a facility. Without that assignment, client, case and report data cannot be displayed. Your system administration can assign your account to a facility."
 
 #: src/templates/core/clients/detail.html:102
 #, python-format

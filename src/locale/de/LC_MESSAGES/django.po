@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 22:20+0200\n"
+"POT-Creation-Date: 2026-09-01 09:18+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12008,6 +12008,12 @@ msgstr "Ihre Einrichtung ist archiviert. Eine Anmeldung ist derzeit nicht mögli
 
 msgid "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
 msgstr "Ihre Einrichtung wurde archiviert. Der Zugriff auf Personen, Ereignisse und Auswertungen ist deshalb gesperrt. Die Daten sind nicht gelöscht — die Systemverwaltung kann die Einrichtung wieder aktivieren."
+
+msgid "Keine Einrichtung zugeordnet"
+msgstr "Keine Einrichtung zugeordnet"
+
+msgid "Ihr Konto ist keiner Einrichtung zugeordnet. Ohne diese Zuordnung können Personen-, Fall- und Auswertungsdaten nicht angezeigt werden. Die Systemverwaltung kann Ihr Konto einer Einrichtung zuordnen."
+msgstr "Ihr Konto ist keiner Einrichtung zugeordnet. Ohne diese Zuordnung können Personen-, Fall- und Auswertungsdaten nicht angezeigt werden. Die Systemverwaltung kann Ihr Konto einer Einrichtung zuordnen."
 
 #: src/templates/core/clients/detail.html:102
 #, python-format
