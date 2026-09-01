@@ -2208,6 +2208,36 @@ Das ist dieselbe Grenze wie bei jedem anderen Widerrufspfad — die Zustellung s
 **Tests:** [`test_facility_lifecycle.py`](../src/tests/test_facility_lifecycle.py) (Login beider Oberflächen, laufende Sitzung, RLS-GUC, Rollen-Abgrenzung, Marker-Header, Sprache) und [`tests/js/facility-archived-purge.test.mjs`](../tests/js/facility-archived-purge.test.mjs) (Purge nur bei gesetztem Marker — beide Richtungen, damit der Fix keine #1354-Regression wird).
 
 
+## Konten ohne Einrichtung: Wurzel-Guard statt 66 Einzelstellen (Issue #2090)
+
+**Der Zustand ist legitim, nicht verboten.** `User.facility` ist `null=True` ([`user.py`](../src/core/models/user.py)): `super_admin` trägt die Bindung **per Design** nicht (so legt sie `manage.py create_super_admin` an, so steht sie im Seed), und die Benutzerverwaltung kann sie jedem Konto entziehen. Ihn wegzudefinieren (`null=False`) wäre keine Härtung, sondern bräche die Ersteinrichtung.
+
+**Der Befund.** Für jede **andere** Rolle war der Zustand bis 0.91 ein Minenfeld. `FacilityScopeMiddleware` setzte `request.current_facility = None` und ließ den Request weiterlaufen; danach zerfiel die Anwendung in zwei Fehlerklassen:
+
+- `get_scoped_object()` wirft ohne Facility-Kontext **mit Absicht** `ValueError` — der Lookup wäre sonst ein Cross-Facility-IDOR ([`scoping.py`](../src/core/services/scoping.py)). **66 Aufrufstellen in 17 View-Modulen**, jede davon ein HTTP 500.
+- Rund ein Dutzend Service-Funktionen dereferenzieren `facility.settings` bzw. `facility.pk` ungeprüft — diese Klasse ist die gefährlichere, weil sie **ohne pk in der URL** erreichbar ist: `/` (Zeitstrom), `/verwaltung/`, `/retention/`, `/events/new/`.
+
+Weil `LOGIN_REDIRECT_URL = "/"` ist, sah so ein Konto den Serverfehler **direkt nach dem Login**, ohne je eine bedienbare Seite gesehen zu haben. Die Messung über die AuthZ-Tabelle: **71 der 257 Methodenzeilen** antworteten mit 5xx.
+
+**Die Antwort ist ein Guard an der Wurzel, nicht 66 Einzelfixes.** Er sitzt in derselben Middleware wie die Archiv-Sperre — beide Zustände enden in „kein nutzbarer Einrichtungskontext", und die Render-Mechanik (Standalone-Template ohne `base.html`, `render_to_string` **ohne** `request`, CSRF-Token von Hand, `translation.override` plus explizites `Content-Language`) ist dieselbe und wird über `_render_block` geteilt. `get_scoped_object` behält seine `ValueError`-Semantik unverändert: sie ist das IDOR-Signal und bleibt test-gepinnt; der Guard macht sie nur unerreichbar.
+
+**Antwortform: 403 mit erklärender Seite, ohne eigene Route.** Die Middleware rendert direkt (Muster von Djangos `permission_denied`). Eine eigene Route hätte eine Kaskade ausgelöst — harte Routenzahl, Backlink-Registry, Nav-Klassifizierung und 257 neue AuthZ-Matrix-Zellen — ohne einen einzigen Sicherheitsgewinn.
+
+**Freigestellt wird die Rolle, nicht der Systempfad.** Dieselbe Doktrin wie bei der Archivierung: `super_admin` passiert den Guard; `/system/` und `/admin-mgmt/` stehen **nicht** auf der Pfad-Whitelist. Eine Pfad-Ausnahme ließe einen einrichtungslosen `facility_admin` in den Systembereich — die Rollen-Ausnahme nicht. Für ihn antwortet dort ohnehin `SuperAdminRequiredMixin` mit 403; es ändert sich nur die Quelle der Antwort.
+
+**Die Pfad-Whitelist ist hergeleitet, nicht gewählt.** Freigestellt sind exakt die AuthZ-Kategorien `public` (anonym erreichbar) und `auth-flow` (jede angemeldete Rolle, inklusive des einrichtungslosen `super_admin`) aus [`_authz_expectations.py`](../src/tests/_authz_expectations.py). Die Regel dahinter: wer anonym auf eine Seite darf, darf angemeldet nicht schlechter gestellt sein — und was jede Rolle sehen darf, hängt nicht an der Einrichtung. Ohne die Liste sperrte der Guard Login, Abmelden, die MFA- und Passwortketten, Sudo, `/hilfe/`, `/account/` samt Lockout-Selbsthilfe, `/start/`, die Offline-Shells und `/health/` aus. Beide Richtungen hält [`test_facility_less_account.py`](../src/tests/test_facility_less_account.py) fest — sie sind der Grund, warum die Liste nicht zur Wunschliste wird.
+
+Zwei Formen sind nötig: Präfixe für ganze Teilbäume (`/mfa/`, `/webauthn/`, `/account/`, …) und **exakte Pfade** für den `/offline/`-Baum. Dort teilen sich zwei Kategorien dieselbe Wurzel: neun PII-freie Shells (`public`, vom Service Worker precacht) und zwei facility-gebundene pk-Routen (`core:offline_client_detail`, `core:offline_conflict_review`, beide `offline-api`). Ein Präfix `/offline/` hätte die beiden mit durchgelassen.
+
+**Kein Purge-Signal an den Offline-Client.** Die neue 403 trägt **weder** `X-Facility-Archived` **noch** `Clear-Site-Data` — und bekommt auch keinen eigenen Marker. Seit #1354 ist ein nacktes 403 bewusst kein Invalidierungsgrund, und das ist hier genau richtig: bei der Archivierung endet der Zugriff auf Fachdaten **dauerhaft**, hier ist der Zustand typischerweise eine Fehlkonfiguration, die zurückgenommen wird. Ein Purge löschte Außendienst-Caches und die IndexedDB-Kryptoschlüssel — nicht reversibel. Ein zweiter Marker-Header wäre außerdem eine Einladung, ihn später mit derselben Purge-Semantik zu verdrahten.
+
+**Beabsichtigte Verhaltensänderung.** Die Offline-APIs `core:offline_facility_bundle` und `core:offline_revocations` lieferten einem einrichtungslosen Konto bisher still ein **leeres** Bundle (`for_facility(None)`); jetzt antworten sie 403. Das ist die ehrlichere Antwort — ein leeres Bundle ist von „diese Einrichtung hat keine Daten" nicht unterscheidbar.
+
+**Grenze.** Der Guard fängt den Zustand ab; er verhindert nicht, dass er entsteht. Die Anlage-Lücke im Django-Admin (`facility` ist dort `blank=True`, erzwungen wird sie nur für Nicht-`super_admin`s) bleibt offen und ist als Folge-Ticket zu führen. Ebenso bleibt die Navigation auf den Whitelist-Seiten vollständig sichtbar — jeder Link führt in die 403 statt zu verschwinden. Beides ist Kosmetik bzw. Prävention, keine Lücke im Guard.
+
+**Tests:** [`test_facility_less_account.py`](../src/tests/test_facility_less_account.py) (Reproduktion beider Fehlerklassen, Sperrseite, RLS-GUC, Abgrenzung zur Archiv-Sperre, Sprache durch die volle Kette, Whitelist-Herleitung in beide Richtungen) und [`test_authz_facility_less.py`](../src/tests/test_authz_facility_less.py) — der systematische Sweep über **alle 257** Methodenzeilen der AuthZ-Tabelle. Weil das Vollständigkeits-Gate `test_every_named_pattern_is_declared` für jeden neuen benannten URL-Pattern einen Eintrag dort erzwingt, wird ein neuer View **automatisch** mitgeprüft, ohne dass eine zweite Liste zu pflegen wäre.
+
+
 ---
 
 ## Weitere Einstiegspunkte
