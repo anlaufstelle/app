@@ -1042,12 +1042,21 @@ class TestDoktypFilter:
 
         kontakt, _ = zwei_typen
         today = date.today()
+        start = today - timedelta(days=1)
 
-        with django_assert_num_queries(6):
-            segmente = get_statistics_trend(facility, today - timedelta(days=1), today, document_type=kontakt)
-        assert len(segmente) == 1
-        assert segmente[0]["source"] == "live"
-        assert segmente[0]["total_contacts"] == 2
+        # Der Vertrag ist "sechs Abfragen JE SEGMENT", nicht "sechs Abfragen":
+        # get_statistics_trend segmentiert nach Monat, und am Monatsersten faellt
+        # das Zwei-Tage-Fenster in zwei Segmente. Eine feste 6 war deshalb an 11
+        # von 12 Monatsanfaengen gruen und am zwoelften rot (Refs #2069).
+        segmente_erwartet = 1 if start.month == today.month else 2
+
+        with django_assert_num_queries(6 * segmente_erwartet):
+            segmente = get_statistics_trend(facility, start, today, document_type=kontakt)
+        assert len(segmente) == segmente_erwartet
+        assert all(segment["source"] == "live" for segment in segmente)
+        # Alle Ereignisse der Fixture liegen auf ``today``; ueber die Segmente
+        # summiert bleibt die Zahl daher unabhaengig vom Kalender.
+        assert sum(segment["total_contacts"] for segment in segmente) == 2
 
 
 # ---------------------------------------------------------------------------
