@@ -37,7 +37,11 @@ def _audit(facility, user, action, *, hours_ago=0):
             try:
                 cur.execute("UPDATE core_auditlog SET timestamp = %s WHERE id = %s", [ts, str(log.pk)])
             finally:
-                cur.execute("ALTER TABLE core_auditlog ENABLE TRIGGER auditlog_immutable")
+                # ENABLE ALWAYS, nicht ENABLE: Migration 0107 setzt den Trigger auf
+                # ALWAYS, damit er auch unter session_replication_role=replica
+                # feuert. Ein blosses ENABLE degradiert ihn dauerhaft auf
+                # tgenabled='O' (Refs #2087, Fehlerklasse wie 9952b007).
+                cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
     return log
 
 
