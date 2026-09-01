@@ -879,6 +879,23 @@ class TestJedesBackendUeberschreibtPrepareExport:
     ist alles gut) oder ihn wegkonfigurieren (dann sieht der Guard es nicht).
     Genau diesen Rest deckt der Laufzeit-Check ab, der auf dem **Objekt**
     arbeitet statt auf dem Syntaxbaum.
+
+    **Erzwungene Konvention (bewusst, nicht verfeinert):** der Guard akzeptiert
+    ``prepare_export`` nur im **eigenen Klassenkoerper**. Zwei an sich legitime
+    Bauformen meldet er deshalb als Verstoss — eine abstrakte Zwischenbasis mit
+    direkter ``DatasetBackend``-Ableitung und eine konkrete Klasse, die den
+    Override aus einem Mixin erbt. Beides kommt unter
+    ``src/core/reporting/backends/`` heute nicht vor (9 von 9 Klassen sind
+    konkret und tragen einen lokalen Override), und beides soll dort auch nicht
+    entstehen: bei einem sicherheitsrelevanten Hook ist es ein Wert an sich,
+    dass die Suppression **in der Datei sichtbar ist, die den Bericht baut**,
+    statt am Ende einer MRO-Kette. Die Alternative — ein AST-Aufloeser fuer
+    Basisklassen und Mixins — waere genau die Cleverness, die den Positiv-
+    Kontrollen dieser Datei schon einmal die Aussagekraft genommen hat
+    (Refs #1775); sie braeuchte selbst Tests, um vertrauenswuerdig zu sein.
+    Der Guard irrt hier also **in die sichere Richtung**: er kann nie eine echte
+    Luecke durchlassen, nur eine unerwuenschte Bauform zu frueh anhalten — mit
+    einer Meldung, die sagt, was zu tun ist.
     """
 
     # Bewusst eine EIGENE Konstante: die gleichnamige in
@@ -931,7 +948,11 @@ class TestJedesBackendUeberschreibtPrepareExport:
             "Diese Backends stehen am Identity-Default von ``DatasetBackend.prepare_export`` "
             "und exportierten damit unsuppressierte Zahlen. Jedes extern zirkulierende "
             "Berichts-Artefakt unterdrueckt Kleinstfallzahlen (ADR-038 § 5, Refs #1278/T1, "
-            "Security R4+R14):\n" + "\n".join(violations)
+            "Security R4+R14). Erbst du den Override bewusst aus einer Mixin- oder "
+            "Zwischenklasse, oder ist die gemeldete Klasse eine abstrakte Basis: dieser Guard "
+            "verlangt den Override per Konvention im EIGENEN Klassenkoerper (Begruendung im "
+            "Klassen-Docstring). Zieh die Methode in die Backend-Klasse — oder aendere die "
+            "Konvention hier bewusst und begruende es:\n" + "\n".join(violations)
         )
 
     def test_synthetisches_backend_ohne_override_wird_erkannt(self, tmp_path):

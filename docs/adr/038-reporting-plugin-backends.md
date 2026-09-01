@@ -252,7 +252,7 @@ Die Disclosure-Analyse #1742 hat mehrere Kanäle in der oben beschriebenen Suppr
 - Issue #1061 — M5-Planung (Entscheide E1–E14)
 - Issue #1278 — k-Anon-Suppression im Sachbericht (Ursprung der Export-Invariante)
 
-## Update 2026-08-31: Die K-Anon-Invariante ist erzwungen, nicht mehr nur beschrieben (Refs #2069)
+## Update 2026-08-31: Die Suppressions-Deklaration ist erzwungen, nicht mehr nur erwartet (Refs #2069)
 
 § 5 beschrieb die Suppressionspflicht als Konvention: „Der Default ist die Identität; wer Zahlen liefert, die das Haus verlassen, überschreibt ihn." (Z. 87) Der Satz bleibt richtig — er war nur **nirgends durchgesetzt**. Drei Beobachtungen zusammen ergaben ein stilles Fail-Open:
 
@@ -261,6 +261,10 @@ Die Disclosure-Analyse #1742 hat mehrere Kanäle in der oben beschriebenen Suppr
 3. Der Architektur-Guard konnte den gefährlichsten Fall **prinzipiell nicht sehen**.
 
 **Was sich ändert.** `core.reporting.export.enforce_suppression_contract(backend, result)` prüft nach `prepare_export` und **vor** jedem Renderer, dass `summary["k_anonymity_threshold"]` vorhanden, eine echte ganze Zahl (`bool` ist ausgeschlossen — es ist ein `int`-Subtyp, `True` ginge sonst als Schwelle 1 durch) und `>= 1` ist. Andernfalls wirft er `SuppressionContractError` (Unterklasse von `ImproperlyConfigured`). Der Fehler ist bewusst ein HTTP 500: es ist ein Konfigurationsfehler des Betreibers, kein Benutzerfehler — und weil `log_export(...)` in der View **nach** dem Export läuft, entsteht kein EXPORT-Audit-Eintrag für ein Artefakt, das nie herausging. Fail-closed im Wortsinn. Der `if threshold is not None`-Zweig im CSV-Renderer ist damit ersatzlos entfallen; die Präsenz ist garantiert.
+
+**Was der Check ausdrücklich NICHT leistet — und warum das hier steht.** Er erzwingt die *Erklärung* des Backends, es habe suppressiert, nicht die *Wirkung*. Ein Backend, das `stamp_threshold(summary, 5)` setzt und trotzdem eine Zelle mit dem Wert 1 ausliefert, passiert das Gate mit HTTP 200 — im Cross-Review zu #2069 an einem synthetischen Backend reproduziert. Das ist keine Nachlässigkeit, sondern eine Grenze der Bauform: `records` und `summary` sind je Backend anders geschnitten (Zeilen- vs. Aggregatmodus, verschachtelte Teilaggregate, bewusst publizierte Randsummen), ein generischer Kleinzahl-Scan an der Exportgrenze hätte keinen belastbaren Ansatzpunkt und wäre je nach Schema falsch-positiv oder falsch-negativ. **Die fachliche Suppressionswirkung bleibt deshalb unverändert Gegenstand der backend-spezifischen Tests** (`tests/test_reporting_<backend>.py`, `tests/test_reporting_disclosure_regression.py`) und der zentralen Suppressionsmaschinerie in [`core.services.dashboard.external_report`](../../src/core/services/dashboard/external_report.py), deren Benutzung `TestZentraleSuppressionsfunktion` erzwingt. Dieser Update-Block schließt genau eine Lücke, nämlich das **stille Fehlen** jeder Suppression — er ersetzt keinen einzigen dieser Tests. Wer den Runtime-Check als vollständige Absicherung liest, spart sich die falschen Tests ein.
+
+Der Rest des Vertrauensmodells bleibt, wie er war: Backends sind In-Repo-Code, der Review und Guards durchläuft, kein fremdes Plugin (ADR-038 „Alternatives considered": keine Entry-Points). Gegen ein *böswilliges* Backend schützt weder dieser Check noch ein Kleinzahl-Scan — gegen ein *vergessenes* schützt er ab sofort.
 
 **Der Check trifft auch das Panel.** § 5 stellt Berichts-Panel und Download ausdrücklich gleich („suppressiert — Parität zum Download"), und der Panel-Pfad ruft `prepare_export` **selbst**, ohne `export_dataset` zu berühren. Eine Prüfung nur im Download hätte bedeutet: ein neues Backend ohne Override scheitert beim Herunterladen hart und zeigt in der HTMX-Vorschau Rohzahlen — genau die halbe Härtung, gegen die #1278 angetreten ist. `build_report_panel_context` ruft den Check deshalb ebenfalls.
 

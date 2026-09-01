@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **ufw-docker wird beim Server-Bootstrap integritätsgeprüft** (#2062) — Das als root ausgeführte Hilfsskript kommt jetzt von einem festen Upstream-Commit und wird vor der Installation sowie bei jedem erneuten Bootstrap gegen eine fest hinterlegte SHA-256-Prüfsumme geprüft.
-- **Berichte gehen nur noch mit nachgewiesener Kleinstfallzahl-Unterdrückung heraus** (#2069) — Die Pflicht, Kleinstfallzahlen in jedem Berichts-Artefakt zu unterdrücken, war bisher nur eine Verabredung unter Entwickler:innen: Ein neuer Bericht, dessen Unterdrückung schlicht vergessen wurde, hätte Rohzahlen als CSV, JSON oder XML ausgeliefert, ohne dass irgendetwas Alarm schlägt. Berichts-Download und Berichtsvorschau brechen jetzt mit einem Fehler ab, statt Zahlen ohne ausgewiesene Unterdrückungsschwelle auszugeben; ein Protokolleintrag über einen nie erzeugten Export entsteht dabei nicht.
+- **Berichte gehen nur noch mit ausgewiesener Unterdrückungsschwelle heraus** (#2069) — Die Pflicht, Kleinstfallzahlen in jedem Berichts-Artefakt zu unterdrücken, war bisher nur eine Verabredung unter Entwickler:innen: Ein neuer Bericht, dessen Unterdrückung schlicht vergessen wurde, hätte Rohzahlen als CSV, JSON oder XML ausgeliefert, ohne dass irgendetwas Alarm schlägt. Berichts-Download und Berichtsvorschau brechen jetzt mit einem Fehler ab, statt Zahlen ohne die Angabe auszugeben, ab welcher Gruppengröße unterdrückt wurde; ein Protokolleintrag über einen nie erzeugten Export entsteht dabei nicht. Geprüft wird damit, **dass** ein Bericht unterdrückt — dass er es fachlich richtig tut, sichern wie bisher die Tests des jeweiligen Berichts.
 
 ### Fixed
 

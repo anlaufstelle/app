@@ -76,7 +76,7 @@ class SuppressionContractError(ImproperlyConfigured):
 
 
 def enforce_suppression_contract(backend: DatasetBackend, result: DatasetResult) -> DatasetResult:
-    """Fail-Closed-Gate der K-Anon-Invariante (Refs #2069).
+    """Fail-Closed-Gate fuer die ausgewiesene k-Anon-Schwelle (Refs #2069).
 
     Bis #2069 war die
     Suppressionspflicht eine Konvention: ``DatasetBackend.prepare_export`` ist
@@ -85,10 +85,26 @@ def enforce_suppression_contract(backend: DatasetBackend, result: DatasetResult)
     und rutscht lautlos durch. Ein vergessener Override exportierte damit
     Kleinstfallzahlen, ohne dass ein Test rot wird.
 
-    Geprueft wird die **Praesenz und der Typ** der ausgewiesenen Schwelle, nicht
-    ihr Wert: ein Vergleich gegen ``_get_threshold(facility)`` braeuchte hier
-    eine Datenbankabfrage und machte die gesamte DB-freie Renderer-Pipeline
-    DB-pflichtig. Der Wertvergleich laeuft deshalb im DB-gestuetzten Vertragstest
+    **Was dieser Check leistet — und was nicht.** Er erzwingt die *Erklaerung*
+    des Backends, es habe suppressiert: dass ``summary["k_anonymity_threshold"]``
+    vorhanden, eine echte ganze Zahl und ``>= 1`` ist. Er erzwingt **nicht** die
+    fachliche Suppressionswirkung — ein Backend, das die Schwelle stempelt und
+    trotzdem eine Zelle unterhalb davon ausliefert, passiert dieses Gate. Das
+    ist keine Nachlaessigkeit, sondern eine Grenze der Bauform: ``records`` und
+    ``summary`` sind je Backend anders geschnitten, ein generischer Kleinzahl-
+    Scan haette hier keinen belastbaren Ansatzpunkt und wuerde je nach Schema
+    falsch-positiv oder falsch-negativ. **Die Wirkung selbst bleibt Sache der
+    backend-spezifischen Tests** (``tests/test_reporting_<backend>.py``,
+    ``tests/test_reporting_disclosure_regression.py``) und der zentralen
+    Suppressionsmaschinerie in
+    :mod:`core.services.dashboard.external_report`, die die
+    Architektur-Guards erzwingen. Dieses Gate schliesst genau eine Luecke: das
+    **stille Fehlen** jeder Suppression.
+
+    Auch der **Wert** wird hier nicht geprueft: ein Vergleich gegen
+    ``_get_threshold(facility)`` braeuchte eine Datenbankabfrage und machte die
+    gesamte DB-freie Renderer-Pipeline DB-pflichtig. Der Wertvergleich laeuft
+    deshalb im DB-gestuetzten Vertragstest
     ``tests/test_reporting_suppression_contract.py``.
 
     ``bool`` wird ausdruecklich ausgeschlossen: es ist ein Subtyp von ``int``,
@@ -106,8 +122,11 @@ def enforce_suppression_contract(backend: DatasetBackend, result: DatasetResult)
             f"ausgewiesene k-Anonymitäts-Schwelle (summary['k_anonymity_threshold'] = {threshold!r}). "
             "Jedes extern zirkulierende Berichts-Artefakt unterdrückt Kleinstfallzahlen (ADR-038 § 5, "
             "docs/reporting-plugins.md § 6, Refs #1278/T1, Security R4+R14) — Download und Panel weisen "
-            "einen unsuppressierten Datensatz deshalb fail-closed ab. Überschreibe `prepare_export` und "
-            "weise die Schwelle über `stamp_threshold(...)` bzw. `suppress_single_margin(...)` aus."
+            "einen Datensatz ohne diese Angabe deshalb fail-closed ab. Überschreibe `prepare_export`, "
+            "suppressiere über `suppress_single_margin(...)` bzw. die zentrale Maschinerie in "
+            "core.services.dashboard.external_report und weise die Schwelle mit `stamp_threshold(...)` "
+            "aus. Der Stempel allein genügt nicht: er ist die Erklärung, nicht die Wirkung — die "
+            "prüfen die backend-eigenen Tests."
         )
     return result
 
