@@ -89,11 +89,26 @@ def xdist_role_suffix() -> str:
 
     Seriell (kein xdist, ``PYTEST_XDIST_WORKER`` leer oder ``master``): leerer
     Suffix, damit die Rollennamen unveraendert bleiben.
+
+    Mutationslauf (Refs #2097): mutmut faehrt KEIN xdist (``-x -q -p
+    no:randomly`` ohne ``-n``), forkt aber bis ``max_children`` pytest-
+    Prozesse gleichzeitig. Seit #2097 hat jeder davon eine eigene Test-DB
+    (``MUTMUT_DB_SLOT`` → ``test_<POSTGRES_DB>_mut<N>``) — getrennte
+    DATENBANKEN loesen die Rollenkollision aber NICHT, weil Rollen
+    clusterweit sind. Ohne Slot-Suffix liefen alle Forks in dasselbe
+    ``CREATE ROLE``/``DROP ROLE`` und produzierten ``role already exists``
+    bzw. ``cannot drop role`` — denselben Fremdfehler-Kanal und damit
+    denselben Bias nach oben, den #2097 beseitigt. Darum haengt der Suffix
+    hier auch an der Slot-Nummer.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "")
-    if not worker or worker == "master":
+    if worker and worker != "master":
+        return f"_{worker}"
+    try:
+        slot = int(os.environ.get("MUTMUT_DB_SLOT", "").strip())
+    except ValueError:
         return ""
-    return f"_{worker}"
+    return f"_mut{slot}" if slot >= 0 else ""
 
 
 @pytest.fixture

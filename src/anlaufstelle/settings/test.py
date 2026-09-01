@@ -1,6 +1,47 @@
 """Test-spezifische Settings — optimiert für schnelle Test-Läufe."""
 
+import os
+
 from .dev import *  # noqa: F401, F403
+
+# Per-Fork-Test-DB fuer den Mutationslauf (Refs #2097).
+#
+# mutmut forkt EIN Kind pro Mutant und laesst bis ``max_children`` davon
+# gleichzeitig laufen. Bis #2097 liefen alle diese pytest-Prozesse gegen
+# dieselbe Test-DB (``addopts = "--reuse-db"``); ``transaction=True``-Tests
+# committen, die Nachbarprozesse laufen in deren Zeilen und scheitern mit
+# ``IntegrityError: duplicate key … (name)=(Teststelle)``. Weil mutmut die
+# pytest-Exit-Codes 1 UND 3 auf ``killed`` mappt und ``-x`` die Session schon
+# beim Setup-ERROR abbricht, kippt so ein Fremdfehler einen Mutanten immer nur
+# von *survived* nach *killed* — der Score war strikt nach oben verzerrt.
+#
+# ``scripts/dev/run_mutmut.py`` vergibt je gleichzeitig laufendem Fork einen
+# Slot und reicht ihn als ``MUTMUT_DB_SLOT`` durch; daraus wird hier
+# ``test_<POSTGRES_DB>_mut<N>``. Der Suffix ist bewusst ``_mut`` und nicht
+# ``_gw``: ``_gw<N>`` gehoert ``make test-parallel`` (pytest-xdist), und der
+# Mutationslauf haelt keinen CI-Lock.
+#
+# Ohne die Variable (normaler ``pytest``-Lauf, ``make ci``, die in-process
+# laufende Stats-Phase von mutmut) bleibt alles unveraendert — Django leitet
+# den Namen dann wie bisher als ``test_<POSTGRES_DB>`` ab.
+#
+# Die Formel ist bewusst dupliziert (Gegenstueck:
+# ``run_mutmut.py::slot_test_db_name``): dieses Modul laeuft im
+# ``mutants/``-Tree und darf nichts aus ``scripts/`` importieren — ein
+# Import-Fehler dort bricht das Test-Listing und der Lauf zaehlt null
+# Mutanten (Refs #1600).
+try:
+    _mutmut_db_slot = int(os.environ.get("MUTMUT_DB_SLOT", "").strip())
+except ValueError:
+    _mutmut_db_slot = -1
+if _mutmut_db_slot >= 0:
+    DATABASES["default"] = {  # noqa: F405
+        **DATABASES["default"],  # noqa: F405
+        "TEST": {
+            **DATABASES["default"].get("TEST", {}),  # noqa: F405
+            "NAME": f"test_{DATABASES['default']['NAME']}_mut{_mutmut_db_slot}",  # noqa: F405
+        },
+    }
 
 # SudoMode (Refs #683) ist in Tests deaktiviert, damit bestehende RBAC-/
 # Scope-Tests ohne explizite Sudo-Session durchlaufen. Tests, die das
