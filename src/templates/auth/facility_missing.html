@@ -1,0 +1,33 @@
+{% load i18n static %}
+<!DOCTYPE html>
+{# Refs #2090: Sprache dynamisch — die Middleware aktiviert die Praeferenz #}
+{# der Nutzerin, bevor sie diese Seite rendert. #}
+<html lang="{{ page_language|default:'de' }}" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% trans "Keine Einrichtung zugeordnet" %} — Anlaufstelle</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+{# Refs #2090: standalone, ohne base.html — die Navigation dort liest #}
+{# Facility-gescopte Zaehler, die dieser Request per Definition nicht hat. #}
+<body class="min-h-screen bg-canvas flex items-center justify-center p-6">
+    {# Refs #2090: KEIN Purge-Marker und KEIN Purge-Skript (anders als die #}
+    {# Archiv-Sperrseite). Der Zustand ist typischerweise eine Fehlkonfiguration, #}
+    {# die zurueckgenommen wird — ein Purge loeschte Offline-Caches und die #}
+    {# IndexedDB-Kryptoschluessel unwiederbringlich (Refs #1354). #}
+    <div class="w-full max-w-[420px] bg-surface border border-subtle rounded-[10px] p-7"
+         data-testid="facility-missing">
+        <h1 class="text-2xl font-bold text-ink mb-2">{% trans "Keine Einrichtung zugeordnet" %}</h1>
+        <p class="text-sm text-ink-muted mb-6">
+            {% blocktrans %}Ihr Konto ist keiner Einrichtung zugeordnet. Ohne diese Zuordnung können Personen-, Fall- und Auswertungsdaten nicht angezeigt werden. Die Systemverwaltung kann Ihr Konto einer Einrichtung zuordnen.{% endblocktrans %}
+        </p>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="px-4 py-2 btn-primary text-sm font-medium" data-testid="facility-missing-logout">
+                {% trans "Abmelden" %}
+            </button>
+        </form>
+    </div>
+</body>
+</html>

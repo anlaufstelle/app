@@ -184,6 +184,33 @@ def super_admin_user(db):
 
 
 @pytest.fixture
+def facility_less_admin(db):
+    """Refs #2090: angemeldetes Konto OHNE Einrichtung, das nicht super_admin ist.
+
+    Rolle ``facility_admin``, weil sie jedes Rollen-Gate ausser ``SUPER_ONLY``
+    passiert — dieser Akteur erreicht also die tiefste Stelle jeder Route und
+    ist damit die schaerfste Einzelsonde auf den Zustand „kein nutzbarer
+    Einrichtungskontext".
+
+    ``facility=None`` wird DIREKT gesetzt: ueber ``Facility.delete()`` und das
+    ``on_delete=SET_NULL`` des FK ist der Zustand praktisch nicht erzeugbar —
+    ein Facility-Hard-Delete laeuft in den ``auditlog_immutable``-Trigger und
+    rollt vollstaendig zurueck (docs/admin-guide.md § 2.2c). Produktiv entsteht
+    er ueber die Benutzerverwaltung, nicht ueber eine Loeschkaskade.
+    """
+    user = User.objects.create_user(
+        username="testfacilityless",
+        role=User.Role.FACILITY_ADMIN,
+        facility=None,
+        is_staff=True,
+        can_confirm_deletion=True,
+    )
+    user.set_password("testpass123")
+    user.save()
+    return user
+
+
+@pytest.fixture
 def client_identified(facility, staff_user):
     return Client.objects.create(
         facility=facility,
