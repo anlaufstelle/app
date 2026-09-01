@@ -1629,12 +1629,13 @@ Next to "Restore", that page offers the action **"Anonymize permanently now"**, 
 | Aspect | Behaviour |
 |---|---|
 | **Effect** | **Irreversible.** Pseudonym, notes, custom fields as well as case and event content are removed; what remains is an anonymous statistical aggregate. Restoring is **no longer** possible afterwards. A confirmation dialog states this explicitly. |
+| **What happens immediately — and what with the nightly run** (Refs #2085) | **Immediately:** pseudonym, notes, custom fields, case and episode content, the content of the events themselves, the timestamp generalization and the file attachments. The person carries no personal data afterwards. **With the next retention run** (`enforce_retention`, 03:00 at night by default): the **earlier versions** of the event documentation — the version history that every save of an event creates. The reason is the database role split: those versions are write-protected, and the web process deliberately does **not** hold the required privileges (see `ops-runbook.md` § 9.5). The success message and the confirmation dialog say so explicitly. If an erasure has to be completed immediately, the system operators run the retention run once by hand. A **legal hold** that arrives within this window defers the versions — they are then kept in full. |
 | **Purpose** | (a) **Immediate erasure under Art. 17** when a data subject insists on erasure without delay and 30 days of trash are not defensible. (b) **Resolving configuration blockers**: a person in the trash keeps their document type and field values and thereby blocks deleting that type or field template. Previously the only options were restoring (a short-lived data resurrection) or waiting. The blocker message in the configuration UI now names the trash share and links there. |
 | **Limit: legal hold** | If an **active legal hold** exists on the person or on one of their events, the action is rejected with an error message — exactly like the nightly retention run (Refs #1066, #1756). A manual action must not override a hold. Lift the hold first, then anonymize. |
 | **Limit: trash only** | The action applies exclusively to records that are already soft-deleted. The four-eyes request path remains the only way **into** the trash — there is no shortcut around approval. |
 | **Trail** | Audit entry `CLIENT_ANONYMIZED` with `trigger="manual"`, distinguishable from the automatic run. |
 
-The record stays soft-deleted afterwards (anonymized, not restored) and does not vanish from the trash listing — it simply no longer carries personal data. Since #1737, people in the trash can also no longer be edited via a direct URL (`/clients/<id>/edit/` returns 404, like the detail view).
+The record stays soft-deleted afterwards (anonymized, not restored) and does not vanish from the trash listing — it simply no longer carries personal data. **"Restore" is no longer offered for that row afterwards** — the confirmation dialog's promise holds literally: the button disappears, and calling the restore URL directly is rejected with a message (Refs #2085). The person action now behaves like the case action, which has had this guard since [ADR-044](../adr/044-fall-loeschpfad.md). The success message therefore reads "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt." — it deliberately does not claim that everything is already gone at that moment. Since #1737, people in the trash can also no longer be edited via a direct URL (`/clients/<id>/edit/` returns 404, like the detail view).
 
 #### Case trash and the two deletion paths (Refs #1818)
 
@@ -1934,5 +1935,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-31 -->
-<!-- source-hash: 8a033035de750f9b217e56908a7cd6b9e1a42647 -->
+<!-- translation-date: 2026-09-01 -->
+<!-- source-hash: e76c147302ebea4558d85180a03c7b74149546e4 -->

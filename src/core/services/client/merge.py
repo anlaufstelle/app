@@ -419,7 +419,7 @@ def _validate_merge(source, target, *, ignore_request=None):
     # mit seinen Inventar-Updates (Filter ``client=target``) 0 Zeilen, weil
     # die Daten laengst bei C liegen, und A kaeme als leeres, aktives Duplikat
     # zurueck. Erst aufheben oder die Redaktion des Tombstones abwarten
-    # (``is_active=False`` — dessen Undo ist dann ohnehin abgewiesen, die
+    # (``anonymized_at`` gesetzt — dessen Undo ist dann ohnehin abgewiesen, die
     # Kette darf weiterwachsen). Das ZIEL darf Tombstones tragen: deren
     # Inventar bleibt beim Ziel, LIFO-Undo traegt (Testbeleg
     # ``TestChainMerge``).
@@ -686,7 +686,17 @@ def unmerge_client(source, user):
     source, target = _locked_clients(source, target)
     if source.merged_into_id != target.pk:
         raise ValidationError(_("Diese Person ist nicht zusammengeführt."))
-    if not source.is_active:
+    # Refs #2085: Gefragt wird der terminale Stempel, nicht das Anzeigefeld.
+    # Bis dahin stand hier ``if not source.is_active`` — das trug nur, weil
+    # ``_redact_client_identity`` beide Felder in derselben Transaktion setzt.
+    # Ein terminaler Zustand, dessen Schutz an einem nebenbei mitgesetzten
+    # Anzeigefeld haengt, ist genau die implizite Kopplung, die spaeter bricht.
+    # ``restore_client`` und ``restore_case`` fragen dasselbe Praedikat.
+    # Der K-Anon-Pfad setzt zwar ebenfalls ``is_active=False``, ohne
+    # ``anonymized_at`` zu stempeln — er erreicht Merge-Tombstones aber nicht
+    # (Eintrittsbedingung ``total_events > 0``, ``retention/anonymization.py``),
+    # die Verengung schliesst hier also keine Luecke auf.
+    if source.anonymized_at is not None:
         raise ValidationError(
             _("Die Quelle wurde bereits endgültig anonymisiert — die Zusammenführung ist nicht mehr umkehrbar.")
         )

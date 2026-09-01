@@ -269,6 +269,14 @@ Die Fragestellungen, aus denen diese Entscheidungen hervorgingen, bleiben zur Na
 - **M-8 (Synchronität):** nachgelagerter owner-seitiger Sweep (Empfehlung, Verzögerung bis zu einem Cron-Intervall) oder eng gefasste `SECURITY DEFINER`-Funktion für die synchrone Redaktion im Löschpfad?
 - **M-9 (Legal Hold am Löschpfad):** die Hold-Prüfung am manuellen Ereignis-Löschpfad in 0.89 mitziehen oder als eigenes Ticket führen? Sie ist heute nicht vorhanden. **Nicht** Teil dieses Entscheids sind die beiden anderen Stufen aus D2 — die Hold-Prüfung im Sweep und der gemeinsame Koordinationspunkt in `create_hold_for_target`: sie decken das Zeitfenster nach der Löschung ab, das eine Prüfung am Einstieg prinzipiell nicht erreicht, und sind deshalb gesetzt.
 
+### Nachtrag zu M-8 — empirisch bestätigt (2026-09-01)
+
+Die in M-8 verworfene Alternative — eine eng gefasste `SECURITY DEFINER`-Funktion mit `GRANT EXECUTE` an die App-Rolle — wurde im Rahmen von #2085 tatsächlich gebaut und im Cross-Review missbraucht. Zwei Wege, beide gegen echtes PostgreSQL reproduziert: Die Zulässigkeitsprüfung im Funktionsrumpf muss die Einrichtung aus `app.current_facility_id` lesen — eine Custom-GUC, die genau die App-Rolle, der `EXECUTE` gewährt ist, per `set_config()` selbst setzen kann; damit war die Historie **jeder** Einrichtung tilgbar, und `FORCE ROW LEVEL SECURITY` greift im Definer-Kontext wegen des `rolbypassrls` des Owners nicht. Und der privilegierte Rumpf umging den Legal-Hold-Schutz, den der Service-Pfad (`anonymize_client_now`) als Spoliation ausdrücklich verbietet.
+
+Ausschlaggebend war dabei nicht die fälschbare GUC an sich — RLS stützt sich auf dieselbe, sondern dass die App-Rolle die **append-only**-Historie überhaupt hätte zerstören können; genau das verhindert die Runtime-/Owner-Trennung aus [ADR-033](033-runtime-owner-role-separation.md) sonst vollständig. **M-8 bleibt damit unverändert gültig, jetzt mit Beleg statt Abwägung**; die Formulierung „Bleibt als `SECURITY DEFINER`-Variante offen (M-8)" unter § Alternatives considered ist damit beantwortet und geschlossen. Der Art.-17-Sofortpfad nutzt seit #2085 denselben nachgelagerten owner-seitigen Sweep (Kandidatenmenge `_anonymized_client_rows`, Nachweiskategorie `eventhistory_anonymized_client`).
+
+Gegen einen erneuten Anlauf ohne eigenen Entscheid steht ein Guard: `TestSecurityDefinerInventory` in [`src/tests/test_rls.py`](../../src/tests/test_rls.py) pinnt, dass es im Repo **keine** `SECURITY DEFINER`-Funktion gibt und dass `01-app-role.sh` der App-Rolle keine Ausführungsrechte auf Funktionen erteilt; sein Docstring führt beide Missbrauchswege.
+
 ## Consequences
 
 - **+** Die Frist eines Ereignisses wirkt endlich auch auf seine Historie; die in §5 belegte Lücke — Inhalte überleben die eigene Löschfrist, bei personenlosen Ereignissen dauerhaft — schließt sich, für Bestand und Neuzugang.

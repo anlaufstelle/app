@@ -185,7 +185,22 @@ class ClientAnonymizeView(FacilityAdminRequiredMixin, View):
         except ValidationError as exc:
             messages.error(request, exc.messages[0] if exc.messages else str(exc))
             return redirect("core:client_trash")
-        messages.success(request, _("Person wurde endgültig anonymisiert."))
+        # Refs #2085: Die Meldung darf nicht mehr behaupten, alles sei bereits
+        # getilgt. Die Person ist es — Pseudonym, Notizen, Zusatzfelder, Fall-
+        # und Live-Ereignisinhalte fallen im Request. Die frueheren Fassungen
+        # der Ereignis-Dokumentation liegen dagegen hinter dem Append-only-
+        # Trigger und brauchen Owner-Rechte, die der Webprozess unter dem
+        # Drei-Rollen-Modell bewusst nicht hat; sie holt der naechtliche
+        # Aufbewahrungslauf nach (ADR-050 M-8). „Spaetestens", weil im
+        # Einzelrollen-Modell (Dev) dieselbe Verbindung Owner ist und die
+        # Redaktion schon im Request passiert — die Meldung stimmt dann auch.
+        messages.success(
+            request,
+            _(
+                "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation "
+                "werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt."
+            ),
+        )
         return redirect("core:client_trash")
 
 

@@ -148,6 +148,36 @@ sind zu betrachten:
    Runtime-Verbindung kann die Trigger daher weder DISABLE-n (kein Owner) noch per
    `replica` umgehen (kein GRANT).
 
+**Die Trennung gilt ausnahmslos — auch für den Art.-17-Sofortpfad** (Refs
+#2085). Die
+Papierkorb-Aktion „Jetzt endgültig anonymisieren" läuft im Webprozess unter der
+App-Rolle und brach deshalb an genau dieser Grenze ab (HTTP 500, Löschverlangen
+unerfüllt). Der naheliegende Ausweg — eine eng gefasste
+`SECURITY DEFINER`-Funktion mit `GRANT EXECUTE` an die App-Rolle — wurde gebaut
+und nach zwei gegen PostgreSQL reproduzierten Missbrauchswegen **verworfen**:
+
+1. Der Funktionsrumpf musste die Einrichtung aus `app.current_facility_id`
+   lesen. Diese Custom-GUC kann genau die Rolle setzen, die `EXECUTE` bekommt
+   damit war die Historie **jeder** Einrichtung tilgbar. Im Definer-Kontext gilt
+   zudem das `rolbypassrls` des Owners; RLS hätte den Fehlgriff nicht abgefangen.
+2. Der Rumpf kannte den Spoliationsschutz aus `anonymize_client_now` nicht und
+   tilgte Beweisinhalte trotz **aktivem Legal Hold**.
+
+Ausschlaggebend war nicht die fälschbare GUC an sich (RLS nutzt dieselbe),
+sondern dass die App-Rolle die **append-only**-Historie überhaupt hätte
+zerstören können — genau das verhindert die Ownership-Trennung sonst
+vollständig. Der Sofortpfad tilgt deshalb im Request nur, was gewöhnliches DML
+ist, und überlässt die früheren Fassungen dem owner-seitigen Sweep
+([ADR-050](adr/050-eventhistory-retention.md), Menge
+`_anonymized_client_rows`). **Restrisiko, ausdrücklich benannt:** zwischen
+Aktion und nächtlichem Lauf stehen diese Fassungen noch mit ihren Werten in der
+Datenbank — höchstens bis zum nächsten Lauf, in der Voreinstellung 03:00 Uhr.
+Oberfläche und Handbuch sagen das; wer sofort abschließen muss, fährt
+`enforce_retention` von Hand (`ops-runbook.md` § 9.5). Guard gegen einen
+stillen Rückfall: `test_rls.py::TestSecurityDefinerInventory` pinnt, dass es im
+Repo **keine** `SECURITY DEFINER`-Funktion gibt und das Init-Skript der
+App-Rolle keine Ausführungsrechte auf Funktionen erteilt.
+
 Der legitime DSGVO-/Retention-Wartungspfad (`prune_auditlog`, `Client.anonymize()`,
 `backfill_audit_chain`, `reencrypt_fields`) umgeht die Trigger als Owner-Rolle
 transaktional per `ALTER TABLE … DISABLE TRIGGER` + Re-`ENABLE ALWAYS` in **einem**

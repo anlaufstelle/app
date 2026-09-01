@@ -75,6 +75,11 @@ RETRY_BACKOFF_SECONDS = 0.2
 CATEGORY_DELETED_EVENT = "eventhistory_deleted_event"
 CATEGORY_DETAIL_EXPIRED = "eventhistory_detail_expired"
 CATEGORY_CHRONICLE_EXPIRED = "eventhistory_chronicle_expired"
+# Refs #2085: der nachgelagerte Art.-17-Pfad. Eigene Kategorie, weil eine
+# Nachtilgung auf Verlangen einer betroffenen Person betrieblich etwas
+# anderes ist als der Ablauf einer Frist — im Nachweis muss das unterscheidbar
+# bleiben.
+CATEGORY_ANONYMIZED_CLIENT = "eventhistory_anonymized_client"
 
 
 class OwnerContextMissingError(RuntimeError):
@@ -402,6 +407,50 @@ def _deleted_event_rows(facility):
     )
 
 
+def _anonymized_client_rows(facility):
+    """Refs #2085: Zeilen von Ereignissen einer bereits anonymisierten Person.
+
+    Die vierte Menge, und die einzige ohne Frist — sie ist wie D2 eine
+    Korrektur, keine Wachstumsmassnahme.
+
+    **Warum sie noetig ist.** Die Art.-17-Sofortaktion
+    (``anonymize_client_now``) laeuft im Webprozess unter der App-Rolle, die
+    ausdruecklich **kein** Table-Owner ist (ADR-033). Der Trigger-Bypass ist
+    Owner-DDL; der Request kann die Historie also gar nicht anfassen, ohne der
+    App-Rolle ein neues Recht zu geben — und genau das ist verworfen
+    (Missbrauchswege s. ``test_rls.py::TestSecurityDefinerInventory``). Die
+    Aktion tilgt deshalb sofort alles, was gewoehnliches DML ist, und
+    hinterlaesst die Historie diesem Lauf. Damit gilt fuer sie dieselbe
+    Zusicherung wie fuer den Rest von ADR-050: hold-aware, idempotent,
+    gebatcht, mit Nachweis.
+
+    **Warum keine der drei Bestandsmengen reicht.** ``anonymize_client``
+    soft-loescht die Ereignisse **nicht** — sie bleiben als Statistik-Aggregat
+    stehen (``services/client/main.py::_redact_live_events``), also greift D2
+    (``event__is_deleted``) nie. Und D3 greift erst nach Ablauf der Detailfrist
+    (Vorgabe 24 Monate). Ohne diese Menge staende die Historie einer getilgten
+    Person bis zu zwei Jahre im Klartext.
+
+    **Warum ``Client.anonymized_at`` der richtige Anker ist.** Der Stempel wird
+    von ``_redact_client_identity`` gesetzt (Refs #2013) und datiert die erste
+    Tilgung. Er ist damit bereits die Markierung, die der Sofortpfad
+    hinterlaesst — die View muss nichts zusaetzlich schreiben, und es gibt
+    keinen zweiten Zustand, der mit der Wirklichkeit driften koennte. Am
+    Papierkorb (``is_deleted``) haengt die Menge bewusst **nicht**: eine
+    soft-geloeschte, noch nicht anonymisierte Person ist wiederherstellbar und
+    behaelt ihre Historie.
+
+    Deckt zugleich den Altbestand ab: Personen, die vor #2085 anonymisiert
+    wurden, tragen den Stempel (Migration 0165 hat ihn nachgezogen) und ihre
+    Historienzeilen ``redacted_at IS NULL`` — der erste Lauf holt sie nach.
+    """
+    return EventHistory.objects.filter(
+        event__facility=facility,
+        event__client__anonymized_at__isnull=False,
+        redacted_at__isnull=True,
+    )
+
+
 def _aged_living_event_rows(facility, months, now):
     """D3 + D4: Zeilen lebender Ereignisse aelter als die Detailfrist — ohne die juengste.
 
@@ -472,20 +521,36 @@ def _count_without_held(facility, *rows_querysets):
     redact" — und die Betreiberin plante eine Tilgung ein, die der Lauf
     anschliessend (richtigerweise) zurueckstellt.
 
+    **Er darf auch nicht MEHR zaehlen als der echte Lauf** (Refs #2085,
+    Cross-Review Runde 2). Die Kandidatenmengen sind bewusst nicht disjunkt:
+    dieselbe Historienzeile kann zugleich zu einem soft-geloeschten Ereignis
+    (D2) und zu einer anonymisierten Person gehoeren, und eine alte lebende
+    Zeile kann zugleich Art.-17- und Alterskandidat sein. Der echte Lauf
+    verarbeitet sie trotzdem nur einmal — die spaetere Menge findet
+    ``redacted_at`` bereits gesetzt und faellt in ``_run_batch`` heraus.
+    Deshalb zaehlt der Dry-run ueber die **Menge der Historien-PKs**, nicht
+    ueber die Summe der Querysets.
+
+    ``held`` war nie betroffen: es ist eine Menge von Ereignis-PKs und wird
+    ueber alle Querysets vereinigt.
+
     Bewusst **ohne** ``select_for_update``: der Dry-run aendert nichts, es gibt
     also kein Rennen zu schliessen, und ein lesender Vorschau-Lauf soll keine
     Zeilensperren auf produktive Ereignisse legen.
     """
     held: set = set()
-    would = 0
+    would_pks: set = set()
     for rows in rows_querysets:
         pairs = list(rows.values_list("pk", "event_id"))
         if not pairs:
             continue
         batch_held = _held_event_ids_unlocked(facility, {event_id for _pk, event_id in pairs})
         held |= batch_held
-        would += sum(1 for _pk, event_id in pairs if event_id not in batch_held)
-    return would, held
+        would_pks |= {pk for pk, event_id in pairs if event_id not in batch_held}
+    # Keine zweite Runde noetig: der Hold haengt am Ereignis, nicht an der
+    # Menge — ein gehaltenes Ereignis ist in JEDER Menge gehalten, seine Zeilen
+    # kommen also gar nicht erst in ``would_pks``.
+    return len(would_pks), held
 
 
 def enforce_eventhistory_retention(facility, settings_obj, now, dry_run):
@@ -505,11 +570,12 @@ def enforce_eventhistory_retention(facility, settings_obj, now, dry_run):
     chronicle_months = getattr(settings_obj, "eventhistory_chronicle_months", 0) or 0
 
     deleted_rows = _deleted_event_rows(facility)
+    anonymized_rows = _anonymized_client_rows(facility)
     aged_rows = _aged_living_event_rows(facility, detail_months, now)
     chronicle_rows = _expired_chronicle_rows(facility, chronicle_months, now)
 
     if dry_run:
-        would_redact, redact_held = _count_without_held(facility, deleted_rows, aged_rows)
+        would_redact, redact_held = _count_without_held(facility, deleted_rows, anonymized_rows, aged_rows)
         would_delete, delete_held = _count_without_held(facility, chronicle_rows)
         return {
             "redacted": would_redact,
@@ -527,6 +593,17 @@ def enforce_eventhistory_retention(facility, settings_obj, now, dry_run):
             facility,
             list(deleted_rows.values_list("pk", flat=True)),
             category=CATEGORY_DELETED_EVENT,
+        )
+    )
+    # Vor der Altersmenge: eine Zeile, die beide Bedingungen erfuellt, soll den
+    # Art.-17-Nachweis tragen und nicht den Fristablauf-Nachweis. Doppelt
+    # verarbeitet wird sie nicht — ``_run_batch`` filtert auf
+    # ``redacted_at IS NULL``.
+    totals.merge(
+        redact_event_history_rows(
+            facility,
+            list(anonymized_rows.values_list("pk", flat=True)),
+            category=CATEGORY_ANONYMIZED_CLIENT,
         )
     )
     detail_cutoff = _months_before(now, detail_months) if detail_months > 0 else None

@@ -1716,7 +1716,56 @@ otherwise aborts fail-loud) must therefore run as the **owner/admin role**
 (`POSTGRES_ADMIN_USER`) — this is already set up that way via the dedicated
 `maintenance` service (retention cron § 6). If such a
 command accidentally runs as the app role, the bypass aborts with `must be owner of
-table core_auditlog` — fail-loud, no silent audit loss.
+table core_eventhistory` (since the ordering reversal in
+#2065,
+`core_eventhistory` comes first in `_APPEND_ONLY_TRIGGERS`) — fail-loud, no
+silent audit loss.
+
+**The Art. 17 immediate action is not a maintenance path** (Refs
+#2085). The trash
+action "Anonymize permanently now" runs **interactively in the web process**
+and therefore as the app role — there is no owner DDL path and no maintenance
+window there. Until 0.90 it ran straight into the bypass: the first
+`ALTER TABLE … DISABLE TRIGGER` failed, the `@transaction.atomic` bracket rolled
+back the **entire** anonymization including its audit entry, and the user saw an
+**HTTP 500** — the person stayed untouched and the erasure request went
+unfulfilled. This never showed on development or test systems, because they run
+the single-role model where the same connection is the owner.
+
+Since #2085 the path is **split in two**, and the app role gets **no** new
+privilege:
+
+| What | When | Who |
+|---|---|---|
+| Pseudonym, notes, custom fields, case/episode/live event content, timestamp generalization, attachments | **immediately, in the request** | app role (ordinary DML) |
+| **Earlier versions of the event documentation** (`core_eventhistory`) | **with the next `enforce_retention` run** (cron, 03:00) | admin/owner role in the `maintenance` service |
+
+The follow-up is the fourth candidate set of the event-history sweep from
+[ADR-050](../adr/050-eventhistory-retention.md) (proof category
+`eventhistory_anonymized_client`). It finds the rows via the `Client.anonymized_at`
+stamp that the anonymization itself sets — so there is no second piece of state
+that could drift from reality. It therefore inherits everything the sweep
+already provides: **hold-aware** (a legal hold arriving after the anonymization
+defers the history), **idempotent** (`redacted_at IS NULL` as the condition),
+batched, and with a proof row per batch.
+
+> **Operationally relevant:** Between the action and the nightly run, the
+> **earlier versions** of that person's event documentation are still in the
+> database with their values — at most until the next run, i.e. 03:00 by
+> default. The user interface and the handbook say so explicitly. If an Art. 17
+> erasure has to be completed immediately, run once by hand afterwards:
+>
+> ```bash
+> docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention
+> ```
+>
+> A `SECURITY DEFINER` function that would open the bypass to the app role for
+> exactly this step was built in #2085 and **rejected again**: its body had to
+> read the facility from `app.current_facility_id` — a custom GUC the calling
+> role can set itself — and it did not know the spoliation guard from
+> `anonymize_client_now`. Both paths were reproduced against PostgreSQL.
+> [ADR-033](../adr/033-runtime-owner-role-separation.md) and ADR-050 M-8
+> therefore remain in force unchanged.
 
 The same role prerequisite applies to **RunPython backfills on RLS tables**:
 they run under the migration role and, since
@@ -1776,9 +1825,10 @@ window:
 Operational rules that follow from this:
 
 - Run the bypass commands `enforce_retention` (retention cron, § 6),
-  `backfill_audit_chain`, `reencrypt_fields`, and the GDPR anonymization
-  (`Client.anonymize()`) during **maintenance/off-peak hours** with low write
-  load — not during peak time.
+  `backfill_audit_chain`, and `reencrypt_fields` during **maintenance/off-peak
+  hours** with low write load — not during peak time. This does not apply to the
+  **interactive** Art. 17 action: it no longer takes any DDL lock in the web
+  process (see above); its history redaction rides along with the nightly run.
 - Set a **`lock_timeout` as a role/session default** for the maintenance/owner
   role, so that a blocked `ALTER TABLE` does not wait indefinitely,
   but aborts fail-loud and stays retryable:
@@ -2620,4 +2670,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.89.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: c4aea242d18b1543d85ff98e1f67c3e76fbdfd99 -->
+<!-- source-hash: f7dc2c87236e04d5e158b0cd26f3dc039f96df5e -->

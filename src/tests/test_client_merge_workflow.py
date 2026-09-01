@@ -667,6 +667,31 @@ class TestUnmerge:
         with pytest.raises(ValidationError):
             unmerge_client(source, lead_user)
 
+    def test_unmerge_refuses_source_with_anonymized_at_even_if_active(self, source, target, lead_user):
+        """Refs #2085: der Guard haengt am terminalen Stempel, nicht an ``is_active``.
+
+        Bis dahin fragte ``unmerge_client`` ``if not source.is_active`` — und das
+        trug nur, weil ``_redact_client_identity`` beide Felder in derselben
+        Transaktion setzt. Ein terminaler Zustand, dessen Schutz an einem
+        nebenbei mitgesetzten Anzeigefeld haengt, ist genau die implizite
+        Kopplung, die spaeter bricht. Dieser Test stellt den entkoppelten
+        Zustand her (``anonymized_at`` gesetzt, ``is_active`` wieder ``True``)
+        und pinnt damit die Angleichung an ``restore_client`` und
+        ``restore_case``.
+        """
+        merge_clients(source, target, lead_user)
+        Client.objects.filter(pk=source.pk).update(anonymized_at=timezone.now(), is_active=True)
+        source.refresh_from_db()
+        assert source.anonymized_at is not None
+        assert source.is_active is True
+
+        with pytest.raises(ValidationError) as exc:
+            unmerge_client(source, lead_user)
+
+        assert "anonymisiert" in " ".join(exc.value.messages).lower()
+        source.refresh_from_db()
+        assert source.merged_into_id == target.pk, "Die Zusammenfuehrung wurde trotz Abweisung aufgehoben"
+
     def test_unmerge_returns_adopted_file_attachments(
         self, facility, source, target, doc_type_client_profile, staff_user, lead_user
     ):

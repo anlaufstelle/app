@@ -712,16 +712,33 @@ class TestGuards:
     def test_genau_ein_redaktions_schreiber(self):
         """Beide Ausloeser rufen denselben Service. Eine zweite Implementierung
         waere genau die Drift, die ADR-044 §3 benennt — der Guard sucht deshalb
-        jede Stelle, die ``redacted_at`` schreibt."""
+        jede Stelle, die ``redacted_at`` schreibt.
+
+        Refs #2085: Die Suche ist **whitespace-tolerant**. Vorher fand sie nur
+        den exakten String ``redacted_at=``; ein Schreiber mit Leerzeichen
+        (``redacted_at = ...``) rutschte lautlos durch — im Cross-Review an
+        einer real gebauten Migration nachgewiesen. Ein Kommentar an der
+        Fundstelle schuetzt davor nicht: schon ein Formatlauf oder eine
+        Handaenderung kippt die Schreibweise in beide Richtungen. Der Guard
+        darf sein eigenes Versprechen nicht von einer Leerzeichenkonvention
+        abhaengig machen.
+        """
+        import re
         from pathlib import Path
 
         core = Path("src/core")
         allowed = {
             "src/core/retention/eventhistory.py",
             "src/core/migrations/0174_redact_deleted_event_history_backlog.py",
+            # Die Felddeklaration selbst — kein Schreiber, aber sie traegt den
+            # Namen. Ausdruecklich gelistet statt aus dem Muster ausgenommen:
+            # eine Ausnahme im Regex verstecken hiesse, die naechste
+            # Deklarations-aehnliche Fundstelle ebenfalls zu uebersehen.
+            "src/core/models/event_history.py",
         }
+        muster = re.compile(r"redacted_at\s*=")
         writers = sorted(
-            path.as_posix() for path in core.rglob("*.py") if "redacted_at=" in path.read_text(encoding="utf-8")
+            path.as_posix() for path in core.rglob("*.py") if muster.search(path.read_text(encoding="utf-8"))
         )
         assert set(writers) <= allowed, writers
 
@@ -1948,3 +1965,289 @@ class TestRedactionMarkerInventory:
         # Und die Gegenprobe: Nutzdaten mit gleichnamigen Schluesseln sind kein Marker.
         assert not is_redaction_marker({"anonymized": True})
         assert not is_redaction_marker({"fields": ["dauer"]})
+
+
+@pytest.mark.django_db
+class TestAnonymisierteFallenInDenSweep:
+    """Refs #2085: die vierte Kandidatenmenge — Historie anonymisierter Personen.
+
+    Der Art.-17-Sofortpfad laeuft im Webprozess unter der App-Rolle und hat
+    dort keinen Owner-DDL-Weg. Statt der App-Rolle ein neues Recht zu geben
+    (verworfen, s. ``test_rls.py::TestSecurityDefinerInventory``), uebernimmt
+    der owner-seitige Sweep die Historie — mit allen vier Eigenschaften, die
+    einer Definer-Funktion strukturell fehlten: hold-aware, idempotent,
+    gebatcht, mit Nachweis je Charge.
+
+    Warum es eine EIGENE Menge braucht und die drei bestehenden nicht reichen:
+    ``anonymize_client`` soft-loescht die Ereignisse **nicht** (sie bleiben als
+    Statistik-Aggregat stehen, ``_redact_live_events``), also greift D2 nicht;
+    und D3 greift erst nach Ablauf der Detailfrist (Vorgabe 24 Monate). Ohne
+    diese Menge staende die Historie einer getilgten Person bis zu zwei Jahre
+    im Klartext.
+    """
+
+    def _anonymisierte_person(self, facility, staff_user, doc_type_contact, admin_user, pseudonym):
+        """Der Zustand, den der Request unter der App-Rolle hinterlaesst.
+
+        Bewusst **ohne** ``anonymize_client_now``: der Testrunner verbindet als
+        Owner, dort nimmt die Weiche in ``_redact_event_history`` den Direktweg
+        und redigiert die Historie sofort — der Zustand „anonymisiert, Historie
+        steht noch aus" entstuende gar nicht. Diese Klasse prueft die
+        Sweep-Mechanik; die Kopplung Request -> Nachlauf unter einer echten
+        Nicht-Owner-Rolle prueft
+        ``test_client_anonymize_now.py::TestAnonymizeClientNowUnterDerAppRolle``.
+
+        Der Stempel wird genau so gesetzt, wie ``_redact_client_identity`` ihn
+        setzt (Refs #2013).
+        """
+        from core.models import Client
+
+        person = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym=pseudonym,
+            created_by=staff_user,
+        )
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15, "notiz": "Klartext-Notiz"},
+            client=person,
+        )
+        assert EventHistory.objects.filter(event=event).exists()
+        person.soft_delete(user=admin_user)
+        person.anonymized_at = timezone.now()
+        person.save(update_fields=["anonymized_at"])
+        return person, event
+
+    def test_historie_einer_anonymisierten_person_wird_erfasst(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user
+    ):
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        _person, event = self._anonymisierte_person(facility, staff_user, doc_type_contact, admin_user, "Art17-Sweep")
+        # Vorbedingung: das Ereignis lebt weiter (Statistik-Aggregat), die
+        # Detailfrist ist nicht abgelaufen — keine der drei Bestandsmengen
+        # wuerde greifen.
+        event.refresh_from_db()
+        assert event.is_deleted is False
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["redacted"] >= 1
+        rows = list(EventHistory.objects.filter(event=event))
+        assert rows
+        for row in rows:
+            assert row.redacted_at is not None
+            for payload in (row.data_before, row.data_after):
+                assert payload is None or payload.get("_redacted") is True
+
+    def test_zweiter_lauf_faellt_auf_null_und_verschiebt_den_fristanker_nicht(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user
+    ):
+        """Idempotenz (ADR-050 D1.4) — genau die Eigenschaft, die dem
+        Definer-Rumpf fehlte: er schrieb bei jedem Aufruf ``redacted_at``
+        erneut und schob damit die M-7-Frist beliebig weit hinaus."""
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        _person, event = self._anonymisierte_person(facility, staff_user, doc_type_contact, admin_user, "Art17-Idem")
+        enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+        anker = sorted(EventHistory.objects.filter(event=event).values_list("redacted_at", flat=True))
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["redacted"] == 0
+        assert sorted(EventHistory.objects.filter(event=event).values_list("redacted_at", flat=True)) == anker
+
+    def test_legal_hold_stellt_die_historie_zurueck(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user, lead_user
+    ):
+        """Der Schutz, den die Definer-Funktion umging: ein Hold, der NACH der
+        Anonymisierung eintrifft, haelt die Historie auf. ``anonymize_client_now``
+        selbst weist eine Anonymisierung unter Hold weiterhin ab — dieser Test
+        deckt das Fenster danach."""
+        from core.models import LegalHold
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        person, event = self._anonymisierte_person(facility, staff_user, doc_type_contact, admin_user, "Art17-Hold")
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=person.pk,
+            reason="Ermittlungsverfahren",
+            created_by=lead_user,
+        )
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["redacted"] == 0
+        assert result["deferred"] == 1
+        for row in EventHistory.objects.filter(event=event):
+            assert row.redacted_at is None
+            assert row.data_after == {"dauer": 15, "notiz": "Klartext-Notiz"}
+
+    def test_nicht_anonymisierte_person_bleibt_unberuehrt(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user
+    ):
+        """Die Menge haengt am Stempel ``Client.anonymized_at``, nicht am
+        Papierkorb: eine soft-geloeschte, aber noch nicht anonymisierte Person
+        ist wiederherstellbar und behaelt ihre Historie."""
+        from core.models import Client
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        person = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Nur-Papierkorb",
+            created_by=staff_user,
+        )
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15, "notiz": "bleibt"},
+            client=person,
+        )
+        person.soft_delete(user=admin_user)
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["redacted"] == 0
+        for row in EventHistory.objects.filter(event=event):
+            assert row.redacted_at is None
+            assert row.data_after == {"dauer": 15, "notiz": "bleibt"}
+
+    def test_dry_run_weist_die_menge_aus(self, facility, settings_obj, staff_user, doc_type_contact, admin_user):
+        """Der Dry-run darf nicht weniger versprechen als der echte Lauf —
+        sonst plant die Betreiberin eine Tilgung nicht ein, die dann doch
+        stattfindet."""
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        _person, event = self._anonymisierte_person(facility, staff_user, doc_type_contact, admin_user, "Art17-Dry")
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=True)
+
+        assert result["redacted"] >= 1
+        assert not EventHistory.objects.filter(event=event, redacted_at__isnull=False).exists()
+
+    def test_nachweiszeile_nennt_die_eigene_kategorie(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user
+    ):
+        """Die Charge braucht einen unterscheidbaren Nachweis: eine
+        Art.-17-Nachtilgung ist betrieblich etwas anderes als der Ablauf einer
+        Detailfrist."""
+        from core.models import AuditLog
+        from core.retention.eventhistory import CATEGORY_ANONYMIZED_CLIENT, enforce_eventhistory_retention
+
+        self._anonymisierte_person(facility, staff_user, doc_type_contact, admin_user, "Art17-Nachweis")
+
+        enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        eintraege = [
+            entry
+            for entry in AuditLog.objects.filter(action=AuditLog.Action.EVENT_HISTORY_REDACTED)
+            if entry.detail.get("category") == CATEGORY_ANONYMIZED_CLIENT
+        ]
+        assert len(eintraege) == 1
+        assert eintraege[0].detail["count"] >= 1
+
+
+@pytest.mark.django_db
+class TestDryRunZaehltJedeZeileEinmal:
+    """Refs #2085 (Cross-Review Runde 2, MEDIUM 1): der Dry-run darf nicht
+    ueberzeichnen.
+
+    Die vier Kandidatenmengen sind **absichtlich nicht disjunkt** — eine
+    Historienzeile kann zugleich zu einem soft-geloeschten Ereignis und zu einer
+    anonymisierten Person gehoeren, und eine alte lebende Zeile kann zugleich
+    Art.-17- und Alterskandidat sein. Im echten Lauf verhindert die Reihenfolge
+    zusammen mit ``redacted_at IS NULL`` die Doppelverarbeitung; der Dry-run
+    aendert dagegen nichts und muss deshalb selbst zaehlen, wie viele
+    **verschiedene** Zeilen fallen wuerden.
+
+    Warum das mehr als Kosmetik ist: der Dry-run ist genau das, was eine
+    Betreiberin ansieht, **bevor** sie den Lauf freigibt. Eine zu hohe Zahl
+    kostet Vertrauen oder fuehrt zu falschen Schluessen ueber den Bestand — und
+    sie widerspricht der Zusage im Docstring von ``_count_without_held``, der
+    Dry-run duerfe „nicht mehr versprechen als der echte Lauf".
+    """
+
+    def _ueberlappende_zeile(self, facility, staff_user, doc_type_contact, admin_user):
+        """Eine Zeile, die in ZWEI Mengen faellt: geloeschtes Ereignis (D2) und
+        anonymisierte Person (Refs #2085)."""
+        from core.models import Client
+        from core.services.events import soft_delete_event
+
+        person = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Overlap-01",
+            created_by=staff_user,
+        )
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15, "notiz": "Klartext"},
+            client=person,
+        )
+        person.soft_delete(user=admin_user)
+        person.anonymized_at = timezone.now()
+        person.save(update_fields=["anonymized_at"])
+        soft_delete_event(event, staff_user)
+        return person, event
+
+    def test_ueberlappende_zeile_wird_einmal_gezaehlt(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user
+    ):
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        _person, event = self._ueberlappende_zeile(facility, staff_user, doc_type_contact, admin_user)
+        eindeutige_zeilen = EventHistory.objects.filter(event=event, redacted_at__isnull=True).count()
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=True)
+
+        assert result["redacted"] == eindeutige_zeilen, (
+            f"Dry-run meldet {result['redacted']} statt {eindeutige_zeilen} — "
+            "ueberlappende Kandidaten werden doppelt gezaehlt."
+        )
+
+    def test_dry_run_stimmt_mit_dem_echten_lauf_ueberein(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user
+    ):
+        """Die schaerfste Form der Zusage: Vorschau und Lauf nennen dieselbe Zahl."""
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        self._ueberlappende_zeile(facility, staff_user, doc_type_contact, admin_user)
+
+        vorschau = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=True)
+        echt = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert vorschau["redacted"] == echt["redacted"]
+
+    def test_zurueckgestellte_ereignisse_werden_ebenfalls_nur_einmal_gezaehlt(
+        self, facility, settings_obj, staff_user, doc_type_contact, admin_user, lead_user
+    ):
+        """``deferred`` zaehlt Ereignisse, nicht Zeilen, und lief schon vorher
+        ueber eine Menge — der Test nagelt das fuer die Ueberlappung fest, damit
+        die Deduplizierung der Zeilen sie nicht versehentlich aufweicht."""
+        from core.models import LegalHold
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        person, _event = self._ueberlappende_zeile(facility, staff_user, doc_type_contact, admin_user)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=person.pk,
+            reason="Ermittlungsverfahren",
+            created_by=lead_user,
+        )
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=True)
+
+        assert result["deferred"] == 1
+        assert result["redacted"] == 0

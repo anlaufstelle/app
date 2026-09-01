@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 09:18+0200\n"
+"POT-Creation-Date: 2026-09-01 12:12+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -4919,10 +4919,6 @@ msgstr ""
 msgid "Person wiederhergestellt."
 msgstr "Person wiederhergestellt."
 
-#: src/core/views/client_deletion.py:136
-msgid "Person wurde endgültig anonymisiert."
-msgstr "Person wurde endgültig anonymisiert."
-
 #: src/core/views/clients.py:468
 msgid "Person wurde angelegt."
 msgstr "Person wurde angelegt."
@@ -7351,19 +7347,6 @@ msgstr ""
 #: src/templates/core/clients/trash.html:35
 msgid "Wiederherstellen"
 msgstr "Wiederherstellen"
-
-#: src/templates/core/clients/trash.html:43
-#, python-format
-msgid ""
-"„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, "
-"Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich "
-"entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat "
-"bestehen. Eine Wiederherstellung ist danach nicht mehr möglich."
-msgstr ""
-"„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, "
-"Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich "
-"entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat "
-"bestehen. Eine Wiederherstellung ist danach nicht mehr möglich."
 
 #: src/templates/core/clients/trash.html:46
 msgid "Jetzt endgültig anonymisieren"
@@ -12460,3 +12443,13 @@ msgstr "Wie funktioniert das Vier-Augen-Prinzip?"
 
 msgid "Wie funktioniert die Offline-Arbeit?"
 msgstr "Wie funktioniert die Offline-Arbeit?"
+
+msgid "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt."
+msgstr "Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt."
+
+#, python-format
+msgid "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen spätestens mit dem nächtlichen Aufbewahrungslauf."
+msgstr "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, Zusatzfelder und Fall-/Ereignisinhalte dieser Person werden unwiderruflich entfernt; der Datensatz bleibt nur noch als anonymes Statistik-Aggregat bestehen. Eine Wiederherstellung ist danach nicht mehr möglich. Frühere Fassungen der Ereignis-Dokumentation folgen spätestens mit dem nächtlichen Aufbewahrungslauf."
+
+msgid "Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."
+msgstr "Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."

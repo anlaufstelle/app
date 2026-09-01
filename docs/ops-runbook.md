@@ -1712,7 +1712,59 @@ bricht sonst fail-loud ab) müssen daher als **Owner-/Admin-Rolle**
 (`POSTGRES_ADMIN_USER`) laufen — das ist ueber den dedizierten
 `maintenance`-Service bereits so eingerichtet (Retention-Cron § 6). Läuft ein solcher
 Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
-table core_auditlog` ab — Fail-loud, kein stiller Audit-Verlust.
+table core_eventhistory` ab (seit der Reihenfolge-Umkehr in
+#2065 steht
+`core_eventhistory` in `_APPEND_ONLY_TRIGGERS` vorn) — Fail-loud, kein stiller
+Audit-Verlust.
+
+**Die Art.-17-Sofortaktion ist kein Wartungspfad** (Refs
+#2085). Die
+Papierkorb-Aktion „Jetzt endgültig anonymisieren" läuft **interaktiv im
+Webprozess** und damit unter der App-Rolle — dort gibt es keinen
+Owner-DDL-Weg und kein Wartungsfenster. Bis 0.90 lief sie ungebremst in den
+Bypass: das erste `ALTER TABLE … DISABLE TRIGGER` scheiterte, die
+`@transaction.atomic`-Klammer riss die **gesamte** Anonymisierung samt
+Nachweiseintrag zurück, und die Nutzerin sah einen **HTTP 500** — die Person
+blieb unverändert stehen, das Löschverlangen unerfüllt. Auf Entwicklungs- und
+Testsystemen fiel das nie auf, weil dort das Einzelrollen-Modell läuft und
+dieselbe Verbindung Owner ist.
+
+Seit #2085 ist der Pfad **zweigeteilt**, und die App-Rolle bekommt **kein**
+neues Recht:
+
+| Was | Wann | Wer |
+|---|---|---|
+| Pseudonym, Notizen, Zusatzfelder, Fall-, Episoden- und Live-Ereignisinhalte, Zeitstempel-Generalisierung, Anhänge | **sofort im Request** | App-Rolle (gewöhnliches DML) |
+| **Frühere Fassungen der Ereignis-Dokumentation** (`core_eventhistory`) | **mit dem nächsten `enforce_retention`-Lauf** (Cron, 03:00) | Admin-/Owner-Rolle im `maintenance`-Service |
+
+Der Nachlauf ist die vierte Kandidatenmenge des EventHistory-Sweeps aus
+[ADR-050](adr/050-eventhistory-retention.md) (Nachweiskategorie
+`eventhistory_anonymized_client`). Er findet die Zeilen am Stempel
+`Client.anonymized_at`, den die Anonymisierung selbst setzt — es gibt also
+keinen zweiten Zustand, der mit der Wirklichkeit driften könnte. Er erbt damit
+alles, was der Sweep ohnehin leistet: **hold-aware** (ein nach der
+Anonymisierung eintreffender Legal Hold stellt die Historie zurück),
+**idempotent** (`redacted_at IS NULL` als Bedingung), gebatcht und mit
+Nachweiszeile je Charge.
+
+> **Betrieblich relevant:** Zwischen der Aktion und dem nächtlichen Lauf stehen
+> die **früheren Fassungen** der Ereignis-Dokumentation dieser Person noch mit
+> ihren Werten in der Datenbank — höchstens bis zum nächsten Lauf, in der
+> Voreinstellung also bis 03:00 Uhr. Oberfläche und Handbuch sagen das
+> ausdrücklich. Wer eine Art.-17-Tilgung sofort vollständig abschließen muss,
+> fährt danach einmal von Hand:
+>
+> ```bash
+> docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention
+> ```
+>
+> Eine `SECURITY DEFINER`-Funktion, die der App-Rolle den Bypass für genau
+> diesen Schritt öffnet, wurde in #2085 gebaut und wieder **verworfen**: Der
+> Funktionsrumpf musste die Einrichtung aus `app.current_facility_id` lesen —
+> eine Custom-GUC, die genau die aufrufende Rolle selbst setzen kann —, und er
+> kannte den Spoliationsschutz aus `anonymize_client_now` nicht. Beide Wege
+> wurden gegen PostgreSQL reproduziert. [ADR-033](adr/033-runtime-owner-role-separation.md)
+> und ADR-050 M-8 bleiben damit unverändert in Kraft.
 
 Dieselbe Rollen-Voraussetzung gilt fuer **RunPython-Backfills auf RLS-Tabellen**:
 sie laufen unter der Migrationsrolle und werden seit
@@ -1773,9 +1825,10 @@ Wartungsfenster:
 Betriebsregeln daraus:
 
 - Die Bypass-Commands `enforce_retention` (Retention-Cron, § 6),
-  `backfill_audit_chain`, `reencrypt_fields` und die DSGVO-Anonymisierung
-  (`Client.anonymize()`) in **Wartungs-/Nebenzeiten** mit geringer Schreiblast
-  fahren — nicht zur Stoßzeit.
+  `backfill_audit_chain` und `reencrypt_fields` in **Wartungs-/Nebenzeiten** mit
+  geringer Schreiblast fahren — nicht zur Stoßzeit. Für die **interaktive**
+  Art.-17-Aktion gilt das nicht: sie nimmt im Webprozess gar keine DDL-Sperre
+  mehr (s. o.), ihre Historien-Redaktion läuft im nächtlichen Lauf mit.
 - Einen **`lock_timeout` als Rollen-/Session-Default** für die Wartungs-/Owner-
   Rolle setzen, damit ein blockiertes `ALTER TABLE` nicht unbegrenzt wartet,
   sondern fail-loud abbricht und retry-bar bleibt:

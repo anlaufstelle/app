@@ -1047,7 +1047,7 @@ def _gather_merged_sources(client):
     Auskunft exakt so lange wie im Papierkorb selbst, keinen Tag laenger.
 
     ``anonymized`` unterscheidet die beiden Zustaende (Redaktions-Marker ist
-    ``is_active=False``, wie in ``unmerge_client``): bis dahin ist die
+    ``anonymized_at``, dasselbe Praedikat wie in ``unmerge_client``): bis dahin ist die
     Zusammenfuehrung aufhebbar, danach endgueltig. ``merged_at`` ist das
     ``deleted_at`` des Tombstones — Soft-Delete und ``merged_into``-Verweis
     entstehen in derselben Transaktion (ADR-045 §2).

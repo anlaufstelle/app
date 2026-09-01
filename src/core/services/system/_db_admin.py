@@ -197,3 +197,34 @@ def rls_bypass_for_read():
             yield
         finally:
             cur.execute("SELECT set_config('app.is_super_admin', %s, true)", [previous])
+
+
+def current_connection_owns(table: str) -> bool:
+    """Darf die AKTUELLE Verbindungsrolle ``ALTER TABLE`` auf *table* fahren?
+
+    Refs #2085. Katalogbasiert, nie env-basiert:
+    ``pg_has_role(current_user, relowner, 'USAGE')`` ist exakt die Bedingung,
+    die PostgreSQL fuer Owner-DDL stellt (Owner **oder** Mitglied der
+    Owner-Rolle; ein Superuser ist Mitglied von allem).
+
+    Warum nicht ``POSTGRES_ADMIN_USER`` vergleichen: ``settings/prod.py``
+    verbietet dem Runtime-Prozess hart (``ImproperlyConfigured``), die
+    Admin-/Bootstrap-Zugangsdaten ueberhaupt zu **sehen** (Refs #1962) — ein
+    env-basierter Check waere im Webprozess strukturell blind. Und ein
+    Vergleich gegen ``settings.DATABASES['default']['USER']`` beantwortete die
+    falsche Frage: der Rollenname sagt nichts ueber Ownership.
+
+    No-op (``True``) auf Nicht-PostgreSQL: dort ist auch
+    :func:`bypass_replication_triggers` ein No-op, der Direktweg also immer
+    gangbar.
+    """
+    if connection.vendor != "postgresql":
+        return True
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT pg_catalog.pg_has_role(current_user, c.relowner, 'USAGE') "
+            "FROM pg_catalog.pg_class c WHERE c.oid = %s::regclass",
+            [table],
+        )
+        row = cur.fetchone()
+    return bool(row and row[0])

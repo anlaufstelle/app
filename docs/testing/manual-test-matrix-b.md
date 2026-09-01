@@ -1777,7 +1777,7 @@
 
 **Code-Referenz:** `anonymize_client_now` in [src/core/services/client/main.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/main.py), `ClientAnonymizeView` in [src/core/views/client_deletion.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/client_deletion.py) (Refs #1737, #1756)
 
-**Voraussetzung:** Eine Person mit Notizen und mindestens einem Fall, deren Löschung im Vier-Augen-Prinzip **bestätigt** wurde (also im Papierkorb liegt) — z. B. Ergebnis von ENT-CLIENT-10.
+**Voraussetzung:** Eine Person mit Notizen, mindestens einem Fall **und mindestens einem dokumentierten Ereignis** (sonst greift die Historien-Redaktion strukturell nicht — ohne Ereignis-Historie steigt der Anonymisierungspfad vor dem Trigger-Bypass aus und der Fall aus #2085 wird gar nicht erst erreicht), deren Löschung im Vier-Augen-Prinzip **bestätigt** wurde (also im Papierkorb liegt) — z. B. Ergebnis von ENT-CLIENT-10.
 
 **Vorbereitung:**
 - Mit `admin` einloggen, Pseudonym der Test-Person notieren.
@@ -1789,14 +1789,17 @@
 4. Papierkorb-Liste erneut sichten.
 5. Gegenprobe Legal Hold: eine zweite Person im Papierkorb mit aktivem Sperrvermerk (auf der Person oder einem ihrer Ereignisse) versehen und die Aktion dort auslösen.
 6. Gegenprobe Deep-Link: `/clients/<uuid>/edit/` einer Person im Papierkorb direkt aufrufen.
+7. Gegenprobe Terminalität: bei der soeben anonymisierten Person erneut `/clients/trash/` sichten und anschließend `/clients/<uuid>/restore/` direkt per POST aufrufen.
 
 **Erwartetes Ergebnis:**
 - Der Dialog nennt Pseudonym und Wirkung ausdrücklich als **unwiderruflich** („Eine Wiederherstellung ist danach nicht mehr möglich").
 - Nach **Abbrechen**: nichts passiert, der Datensatz bleibt unverändert im Papierkorb.
-- Nach **OK**: Redirect auf `/clients/trash/` mit Toast „Person wurde endgültig anonymisiert."; Pseudonym, Notizen, Zusatzfelder sowie Fall-/Ereignisinhalte sind getilgt, der Datensatz bleibt soft-gelöscht (keine Auferstehung).
+- Nach **OK**: Redirect auf `/clients/trash/` mit Toast „Person wurde anonymisiert. Frühere Fassungen ihrer Ereignis-Dokumentation werden spätestens mit dem nächtlichen Aufbewahrungslauf getilgt."; Pseudonym, Notizen, Zusatzfelder sowie Fall-/Ereignisinhalte sind getilgt, der Datensatz bleibt soft-gelöscht (keine Auferstehung). **Kein Serverfehler** — unter dem Drei-Rollen-Modell endete die Aktion bis 0.90 mit HTTP 500 (#2085).
+- Die **Ereignis-Historie** (`/events/<id>/`) zeigt unmittelbar danach noch ihre Werte — das ist erwartet. Erst nach einem `enforce_retention`-Lauf steht dort überall „– (redigiert)". Auf einem Einzelrollen-Setup (lokal/Dev) ist sie dagegen sofort redigiert; beide Ausgänge sind korrekt, die Meldung sagt „spätestens".
 - `AuditLog` `CLIENT_ANONYMIZED` mit `detail.trigger="manual"` — unterscheidbar vom nächtlichen `enforce_retention`-Lauf.
 - Bei aktivem Legal Hold: Fehlermeldung „Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.", der Datensatz bleibt unverändert.
 - `/clients/<uuid>/edit/` einer Person im Papierkorb → **404** (wie die Detailansicht); ein POST darauf schreibt nichts fort.
+- Bei der anonymisierten Person fehlt „Wiederherstellen“ in der Zeile; der Direkt-POST auf `/clients/<uuid>/restore/` endet mit der Meldung „Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden.“ und der Datensatz bleibt im Papierkorb (#2085).
 - Gegenprobe Rolle: `fachkraft` und `leitung` erhalten auf `/clients/<uuid>/anonymize/` 403 (`FacilityAdminRequiredMixin`).
 
 **DSGVO/Security-Note:**

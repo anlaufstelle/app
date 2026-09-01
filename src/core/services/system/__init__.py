@@ -17,6 +17,7 @@ Module:
 
 from core.services.system._db_admin import (
     bypass_replication_triggers,
+    current_connection_owns,
     has_rls_bypass_context,
     rls_bypass_for_read,
 )
@@ -106,6 +107,7 @@ __all__ = [
     "build_client_offline_bundle",
     "build_facility_offline_bundle",
     "bypass_replication_triggers",
+    "current_connection_owns",
     "export_events_csv",
     "generate_sample_report_1_pdf",
     "generate_report_pdf",

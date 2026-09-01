@@ -862,3 +862,65 @@ class TestDeletionRequestRLSIsolation:
         assert dr_a.pk not in ids_b, (
             f"Cross-Tenant-Leak: Facility B sieht DeletionRequest aus Facility A. Sichtbare IDs: {ids_b}."
         )
+
+
+@pytest.mark.architecture
+class TestSecurityDefinerInventory:
+    """Refs #2085: im Repo gibt es KEINE ``SECURITY DEFINER``-Funktion.
+
+    ADR-033 § „Alternatives considered" und ADR-050 M-8 lehnen sie beide ab.
+    Fuer den Art.-17-Sofortpfad wurde die Ausnahme in #2085 gebaut, gegen
+    echtes PostgreSQL missbraucht und daraufhin **verworfen**. Der Preis war
+    hoeher als gedacht, und beide Wege liessen sich aus dem Funktionsrumpf
+    heraus prinzipiell nicht schliessen:
+
+    1. **Die Facility-Pruefung ist vom Grantee selbst faelschbar.** Der Rumpf
+       las ``app.current_facility_id``; genau die Rolle, die ``EXECUTE``
+       bekam, kann diese Custom-GUC per ``set_config(..., false)`` beliebig
+       setzen. Damit war die Historie **jeder** Einrichtung tilgbar. Im
+       Definer-Kontext gilt zudem das ``rolbypassrls`` des Owners — RLS haette
+       den Fehlgriff nicht abgefangen.
+    2. **Aktive Legal Holds wurden umgangen.** ``anonymize_client_now``
+       verbietet die Anonymisierung bei Hold ausdruecklich als Spoliation; die
+       DB-Primitive kannte diesen Schutz nicht und tilgte Beweisinhalte trotz
+       Sperre.
+
+    Entscheidend ist nicht, dass eine GUC faelschbar ist (RLS nutzt dieselbe),
+    sondern dass die App-Rolle die **append-only**-Historie ueberhaupt
+    zerstoeren konnte — das verhindert die Ownership-Trennung sonst
+    vollstaendig. Der Sofortpfad laeuft deshalb nachgelagert ueber den
+    owner-seitigen Sweep (ADR-050), und die App-Rolle bekommt **kein** neues
+    Recht.
+
+    Dateizugriff bewusst IN der Testmethode (nicht auf Modulebene): ein
+    Import-Zeit-Lesen risse ``test_architecture_guards_mutation_isolation``.
+    """
+
+    def test_keine_security_definer_funktion_in_den_migrationen(self):
+        from pathlib import Path
+
+        treffer = sorted(
+            path.name
+            for path in Path("src/core/migrations").glob("*.py")
+            if "SECURITY DEFINER" in path.read_text(encoding="utf-8")
+        )
+        assert treffer == [], (
+            "Eine SECURITY-DEFINER-Funktion umgeht die Runtime-/Owner-Trennung aus "
+            f"ADR-033. Gefunden: {treffer}. In #2085 wurde genau das gebaut und nach "
+            "zwei reproduzierten Missbrauchswegen (faelschbare Facility-GUC, "
+            "umgangener Legal Hold) wieder verworfen — ein neuer Anlauf braucht "
+            "einen eigenen ADR-Entscheid, keinen stillen Commit."
+        )
+
+    def test_die_app_rolle_bekommt_kein_execute_recht_im_init_skript(self):
+        """Gegenstueck zum Guard oben: ohne Definer-Funktion darf auch die
+        Sammelzuweisung ``GRANT EXECUTE ON FUNCTIONS`` nicht wieder auftauchen.
+        Sie war der Weg, auf dem eine spaetere zweite Definer-Funktion
+        automatisch fuer die Runtime aufrufbar geworden waere."""
+        from pathlib import Path
+
+        skript = Path("deploy/postgres-init/01-app-role.sh").read_text(encoding="utf-8")
+        assert "ON FUNCTIONS" not in skript, (
+            "01-app-role.sh grantet der App-Rolle Ausfuehrungsrechte auf Funktionen. "
+            "Das ist seit #2085 ausdruecklich nicht mehr vorgesehen."
+        )

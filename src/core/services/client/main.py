@@ -26,7 +26,7 @@ from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
 from core.services.events.history_diff import build_anonymization_marker
 from core.services.security import check_version_conflict
-from core.services.system import bypass_replication_triggers
+from core.services.system import bypass_replication_triggers, current_connection_owns
 
 logger = logging.getLogger(__name__)
 
@@ -308,11 +308,39 @@ def _generalize_event_timestamps(event_ids: list) -> None:
 
 
 def _redact_event_history(event_ids: list) -> None:
-    """Anonymisiere EventHistory-Eintraege per Trigger-Bypass.
+    """Anonymisiere EventHistory-Eintraege per Trigger-Bypass — wenn wir duerfen.
 
     Refs #905: ``EventHistory`` ist append-only via Migration 0012 — ein
     direktes ``UPDATE`` wuerde blocken. ``bypass_replication_triggers``
     deaktiviert den Trigger nur fuer die Dauer dieses Aufrufs.
+
+    Refs #2085: Der Bypass ist **Owner-DDL**. Die Wartungspfade
+    (``enforce_retention``, K-Anon-Bridge) laufen im maintenance-Service als
+    Owner und nehmen ihn unveraendert. Die Art.-17-Sofortaktion laeuft dagegen
+    interaktiv im Webprozess unter der App-Rolle, die ausdruecklich **kein**
+    Owner ist (ADR-033) — dort scheiterte schon das erste
+    ``ALTER TABLE ... DISABLE TRIGGER`` mit ``must be owner of table
+    core_eventhistory``, und die ``@transaction.atomic``-Klammer riss die
+    gesamte Anonymisierung samt Nachweiseintrag zurueck: HTTP 500, Person
+    unveraendert, Loeschverlangen unerfuellt.
+
+    Der Ausweg ist **nicht**, der App-Rolle ein Recht zu geben. Eine eng
+    gefasste ``SECURITY DEFINER``-Funktion wurde gebaut und nach zwei gegen
+    PostgreSQL reproduzierten Missbrauchswegen verworfen (faelschbare
+    Facility-GUC, umgangener Legal Hold; ADR-033 und ADR-050 M-8 bleiben
+    unangetastet). Stattdessen **ueberspringt** der Request diesen Schritt: die
+    Person ist sofort anonymisiert — Pseudonym, Notizen, Zusatzfelder, Fall-
+    und Live-Ereignisinhalte sind gewoehnliches DML und fallen im Request —,
+    und die frueheren Fassungen holt der owner-seitige Lauf nach
+    (``core.retention.eventhistory``, Menge ``_anonymized_client_rows``). Er
+    findet sie am Stempel ``Client.anonymized_at``, den
+    :func:`_redact_client_identity` in derselben Transaktion setzt; hier ist
+    also **keine** zusaetzliche Markierung noetig, die driften koennte.
+
+    Der Nachlauf ist dem Direktweg fachlich sogar ueberlegen: er ist
+    idempotent, hold-aware, gebatcht und schreibt je Charge einen Nachweis.
+    Der Preis ist die Verzoegerung um bis zu ein Cron-Intervall — genau die
+    Abwaegung aus ADR-050 M-8.
     """
     from core.models.event_history import EventHistory
 
@@ -320,6 +348,12 @@ def _redact_event_history(event_ids: list) -> None:
         return
     history_qs = EventHistory.objects.filter(event_id__in=event_ids)
     if not history_qs.exists():
+        return
+    if not current_connection_owns("core_eventhistory"):
+        logger.info(
+            "eventhistory_redaction_deferred rows=%s reason=connection_is_not_table_owner",
+            history_qs.count(),
+        )
         return
     with bypass_replication_triggers():
         history_qs.update(
@@ -1327,6 +1361,16 @@ def restore_client(client, user):
     ausgeschlossen — ein blosses Restore liesse die Quelle ohne ihre
     gewanderten Fälle/Ereignisse auferstehen (Duplikat UND Datenverlust in
     einem). Der konsistente Rückweg ist ``unmerge_client``.
+
+    Refs #2085: ``anonymized_at`` ist **terminal**. Der Bestätigungsdialog der
+    Papierkorb-Aktion sagt „Eine Wiederherstellung ist danach nicht mehr
+    möglich" zu — bis hierher war das unwahr: geprüft wurden nur
+    ``merged_into`` und ``is_deleted``. Ein Restore holte eine inhaltsleere
+    Hülle zurück in den aktiven Bestand, und der nachgelagerte Sweep redigierte
+    ihre Historie anschliessend an einem **aktiven** Datensatz. Denselben Guard
+    hat der Fall-Pfad seit ADR-044 (``restore_case``); dort stand als Begründung
+    für die Auslassung hier, die Person habe ihr ``is_active=False`` als
+    Backstop — das ist ein Anzeigefilter, keine Invariante.
     """
     if client.merged_into_id is not None:
         raise ValidationError(
@@ -1337,6 +1381,8 @@ def restore_client(client, user):
         )
     if not client.is_deleted:
         raise ValidationError("Person ist nicht im Papierkorb.")
+    if client.anonymized_at is not None:
+        raise ValidationError(_("Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."))
     client.restore()
     # Refs #1093: kein Pseudonym ins detail (= target_id-Dublette).
     audit_client_event(
