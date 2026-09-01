@@ -812,7 +812,11 @@ As soon as `GUNICORN_WORKERS > 1` is running (see [5.4](#54-gunicorn-timeout)), 
 - **No persistence** (`--save ""`, `--appendonly no`, no volume). The cache holds only regenerable data with a short TTL. Persistence would be a data-protection *minus* here: it would write rate-limit keys (including client IPs, user IDs) to disk, where no retention policy captures them. A Redis restart only costs a cold cache.
 - **Memory capped** (`--maxmemory 256mb`, `allkeys-lru`), so the container does not run into `mem_limit` OOM.
 
-Use only URL-safe characters for `REDIS_PASSWORD`: `@`, `:`, `/`, and `#` would otherwise break the embedded URL. A suitable value can be generated with `openssl rand -hex 32`. To rotate the password, change the value and recreate the cache and its consumers; the cache contains only regenerable data:
+Use only URL-safe characters for `REDIS_PASSWORD`: `@`, `:`, `/`, and `#` would otherwise break the embedded URL. A suitable value can be generated with `openssl rand -hex 32`. A syntactically invalid Redis URL aborts startup with `core.E004` and a clear hint; the message does not print the URL because it may contain a password.
+
+The environment-variable route is not a Docker secret: in the `redis` container, the password appears as `--requirepass` in the process command line and therefore under `/proc`; in the consumers' Docker container configuration it is part of `REDIS_URL`. Both are visible through `docker inspect` or to people with Docker daemon access. Docker access is root-equivalent anyway and must be restricted accordingly.
+
+To rotate the password, change the value and recreate Redis plus the continuously running consumers; the cache contains only regenerable data. `maintenance` is profile-bound and picks up the new value on its next ad-hoc start:
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d redis web cron
@@ -2615,5 +2619,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.89.0 -->
-<!-- translation-date: 2026-08-31 -->
-<!-- source-hash: PENDING -->
+<!-- translation-date: 2026-09-01 -->
+<!-- source-hash: c4aea242d18b1543d85ff98e1f67c3e76fbdfd99 -->

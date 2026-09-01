@@ -23,6 +23,7 @@ stehen, eine Umwidmung würde dort still etwas anderes anzeigen. Die mit #1963
 hinzugekommene Kopplung ``hops > 1`` ohne Proxy-Vertrauen bekommt darum die
 neue ID ``core.W003``, der unbrauchbare Bereich die neue ID ``core.E003``.
 ``core.W004`` bezeichnet seit #2002 einen Redis-Cache ohne Passwort.
+``core.E004`` bezeichnet seit #2002 eine syntaktisch ungültige Redis-Cache-URL.
 """
 
 from __future__ import annotations
@@ -288,7 +289,21 @@ def check_redis_cache_requires_password(app_configs, **kwargs):
     locations = default.get("LOCATION") or ""
     if isinstance(locations, str):
         locations = [locations]
-    ohne_passwort = [location for location in locations if not _redis_location_hat_passwort(location)]
+    try:
+        ohne_passwort = [location for location in locations if not _redis_location_hat_passwort(location)]
+    except ValueError:
+        messages.append(
+            Error(
+                "Eine Redis-Cache-URL ist syntaktisch ungültig.",
+                hint=(
+                    "Prüfe REDIS_URL in der .env, insbesondere Schema und IPv6-Klammern "
+                    "(z. B. redis://:passwort@[::1]:6379/1). Die konfigurierte URL wird "
+                    "hier nicht ausgegeben, weil sie ein Passwort enthalten kann."
+                ),
+                id="core.E004",
+            )
+        )
+        return messages
     if ohne_passwort:
         messages.append(
             Warning(

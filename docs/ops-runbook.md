@@ -811,7 +811,11 @@ Sobald `GUNICORN_WORKERS > 1` läuft (siehe [5.4](#54-gunicorn-timeout)), brauch
 - **Keine Persistenz** (`--save ""`, `--appendonly no`, kein Volume). Im Cache liegen nur regenerierbare Daten mit kurzer TTL. Persistenz wäre hier ein Datenschutz-*Minus*: sie schriebe Rate-Limit-Schlüssel (u. a. Client-IPs, User-IDs) auf die Platte, wo keine Retention sie erfasst. Ein Redis-Neustart kostet nur einen kalten Cache.
 - **Speicher gedeckelt** (`--maxmemory 256mb`, `allkeys-lru`), damit der Container nicht ins `mem_limit`-OOM läuft.
 
-Für `REDIS_PASSWORD` nur URL-sichere Zeichen verwenden: `@`, `:`, `/` und `#` zerlegen sonst die eingebettete URL. Ein passender Wert entsteht zum Beispiel mit `openssl rand -hex 32`. Zum Passwortwechsel den Wert ändern und Cache plus Konsumenten neu erzeugen; der Cache enthält nur regenerierbare Daten:
+Für `REDIS_PASSWORD` nur URL-sichere Zeichen verwenden: `@`, `:`, `/` und `#` zerlegen sonst die eingebettete URL. Ein passender Wert entsteht zum Beispiel mit `openssl rand -hex 32`. Eine syntaktisch ungültige Redis-URL bricht den Start mit `core.E004` und einem verständlichen Hinweis ab; die Meldung gibt die URL nicht aus, weil sie ein Passwort enthalten kann.
+
+Der Env-Weg ist kein Docker-Secret: Im `redis`-Container steht das Passwort als `--requirepass` in der Prozess-Kommandozeile und damit unter `/proc`; in der Docker-Containerkonfiguration der Konsumenten ist es Teil von `REDIS_URL`. Beides ist über `docker inspect` bzw. für Personen mit Docker-Daemon-Zugriff sichtbar. Docker-Zugriff ist ohnehin root-äquivalent und muss entsprechend eng begrenzt werden.
+
+Zum Passwortwechsel den Wert ändern und Redis plus die dauerhaft laufenden Konsumenten neu erzeugen; der Cache enthält nur regenerierbare Daten. `maintenance` ist profilgebunden und übernimmt den neuen Wert bei seinem nächsten Ad-hoc-Start:
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d redis web cron

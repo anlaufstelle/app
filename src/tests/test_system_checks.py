@@ -334,3 +334,20 @@ class TestRedisCachePasswordCheck:
     def test_location_list_with_unprotected_entry_warns(self):
         messages = check_redis_cache_requires_password(None)
         assert "core.W004" in _ids(messages)
+
+    @override_settings(
+        DEBUG=False,
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": "redis://:supergeheim@[::1:6379/1",
+            }
+        },
+    )
+    def test_invalid_redis_url_is_reported_without_leaking_secret(self):
+        messages = check_redis_cache_requires_password(None)
+        assert _ids(messages) == {"core.E004"}
+        (message,) = messages
+        assert message.msg == "Eine Redis-Cache-URL ist syntaktisch ungültig."
+        assert "REDIS_URL" in message.hint
+        assert "supergeheim" not in f"{message.msg} {message.hint}"
