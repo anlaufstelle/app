@@ -1123,6 +1123,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzw
 | 0 | Neuestes Backup im format-spezifischen Verzeichnis finden (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
+| 2b | Nur `--prod`: neueste `audit_hwm-*.json` in den Drill-Container kopieren und die HMAC-Signatur laden; fehlend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
 | 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts abfragbar? |
 | 3b | **Vollstaendigkeits-Guard (fail-closed):** Zeilenabgleich der kritischen RLS-Tabellen (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Faengt den unvollstaendigen `--prod`-Restore ab, den der `psql`-Exit-Code (ohne `ON_ERROR_STOP`) verschluckt (Refs #1336) |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
@@ -1178,6 +1179,22 @@ docker compose -f docker-compose.prod.yml exec web \
 ```
 
 Sentinel danach loeschen: `rm /data/media/.restore-drill` im Container.
+
+---
+
+### 6.7 Audit-High-Water-Mark sichern und pruefen (Refs #2022)
+
+Die Audit-Kettenpruefung kann Tail-Truncation und eine komplett geleerte Kette nur erkennen, wenn ihr letzter gruener Stand ausserhalb der Datenbank verankert bleibt. Dafuer in `.env` den empfohlenen Pfad im persistenten `/data`-Volume setzen:
+
+```dotenv
+DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json
+```
+
+Der Pfad liegt bewusst neben `MEDIA_ROOT=/data/media`: Er ist damit fuer `cron`/`maintenance` unter dem schreibgeschuetzten Container-Dateisystem persistent beschreibbar, wird aber nicht mit Nutzer-Uploads vermischt. Der `web`-Dienst liest die Datei nicht und braucht die Variable nicht in seiner expliziten Env-Allowlist.
+
+Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je Kette. Die Datei ist mit `DJANGO_AUDIT_HASH_KEY` HMAC-signiert und enthaelt keine Klartext-Falldaten; eine zusaetzliche Verschluesselung ist deshalb nicht noetig. `scripts/ops/backup.sh` exportiert sie per `docker compose exec -T cron cat …` als `backups/daily/audit_hwm-<Zeitstempel>.json`, rotiert sie mit DB-/Medienbackups und nimmt sie in alle drei Off-Site-Wege (rclone, S3, SCP) auf. Ist der Pfad nicht gesetzt oder die Datei noch nicht vorhanden, bleibt das DB-/Medienbackup gueltig, aber das Skript protokolliert den fehlenden HWM-Anker.
+
+`scripts/ops/restore-drill.sh --prod` kopiert die neueste HWM-Datei nach `/tmp` des Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine fehlende Datei oder ungueltige Signatur erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird.
 
 ---
 

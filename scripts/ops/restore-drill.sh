@@ -116,6 +116,8 @@ backup_require_real_key
 SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 
 DRILL_FAILED=0
+HWM_COPIED=0
+HWM_DRILL_CONTAINER_PATH="/tmp/audit_hwm-drill-$$.json"
 ok() { echo "OK   - $*"; }
 fail() {
     echo "FAIL - $*"
@@ -137,6 +139,9 @@ echo "Drill gegen DB-Backup: $LATEST_DB"
 # Schritt 1: Wegwerf-DB anlegen
 DRILL_DB="anlaufstelle_drill_$$"
 cleanup() {
+    if [[ "$HWM_COPIED" -eq 1 ]]; then
+        dc exec -T web rm -f "$HWM_DRILL_CONTAINER_PATH" >/dev/null 2>&1 || true
+    fi
     psql_su -d postgres -c "DROP DATABASE IF EXISTS \"${DRILL_DB}\";" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -225,6 +230,28 @@ else
     fi
 fi
 rm -f "$RESTORE_ERR"
+
+# Schritt 2b: Offsite-verankerten Audit-HWM im Prod-Pfad pruefen (Refs #2022).
+# Die Datei wird in das beschreibbare /tmp des Web-Containers kopiert und dort
+# ueber dieselbe HighWaterMarkStore.load()-API geladen wie im regulaeren
+# verify_audit_chain-Pfad. Eine fehlende/manipulierte HWM faerbt den Drill rot,
+# bricht die folgenden Restore-Pruefungen aber bewusst nicht hart ab.
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    LATEST_HWM=$(find "$BACKUP_DIR" -maxdepth 1 -name 'audit_hwm-*.json' -type f 2>/dev/null | sort -r | head -n1)
+    if [[ -z "$LATEST_HWM" ]]; then
+        fail "Schritt 2b: Kein Audit-HWM-Backup (audit_hwm-*.json) in ${BACKUP_DIR} gefunden"
+    elif dc cp "$LATEST_HWM" "web:${HWM_DRILL_CONTAINER_PATH}" >/dev/null 2>&1; then
+        HWM_COPIED=1
+        HWM_VERIFY_CODE="from core.services.audit.hwm import HighWaterMarkStore; HighWaterMarkStore.load('${HWM_DRILL_CONTAINER_PATH}')"
+        if dc exec -T web python manage.py shell -c "$HWM_VERIFY_CODE" >/dev/null 2>&1; then
+            ok "Schritt 2b: Audit-HWM-Signatur verifiziert (${LATEST_HWM##*/})"
+        else
+            fail "Schritt 2b: Audit-HWM-Signaturpruefung fehlgeschlagen — Datei manipuliert oder AUDIT_HASH_KEY falsch"
+        fi
+    else
+        fail "Schritt 2b: Audit-HWM konnte nicht in den Drill-Container kopiert werden"
+    fi
+fi
 
 # Schritt 3: Stichproben pro Tabelle
 EXPECTED_TABLES=("core_facility" "core_client" "core_event" "core_auditlog" "core_workitem")

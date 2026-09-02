@@ -2900,3 +2900,25 @@ class TestHealthBackupRequiredWiring:
         )
         env_example = Path(".env.example").read_text(encoding="utf-8")
         assert "# DJANGO_HEALTH_BACKUP_REQUIRED=true" in env_example
+
+
+@pytest.mark.architecture
+class TestAuditHwmBackupAndDrillWiring:
+    """Refs #2022: HWM folgt dem Offsite-Pfad und wird im Drill signaturgeprueft."""
+
+    _BACKUP = Path("scripts/ops/backup.sh")
+    _DRILL = Path("scripts/ops/restore-drill.sh")
+
+    def test_backup_exports_hwm_from_cron_and_includes_it_offsite(self) -> None:
+        body = self._BACKUP.read_text(encoding="utf-8")
+        assert "DJANGO_AUDIT_HWM_PATH" in body
+        assert 'exec -T cron cat "$DJANGO_AUDIT_HWM_PATH"' in body
+        assert "audit_hwm-${TIMESTAMP}.json" in body
+        assert "audit_hwm-*.json" in body
+
+    def test_restore_drill_loads_latest_hwm_before_marking_success(self) -> None:
+        body = _flat_script(self._DRILL)
+        assert "audit_hwm-*.json" in body
+        assert "HighWaterMarkStore.load" in body
+        assert "Audit-HWM-Signaturpruefung fehlgeschlagen" in body
+        assert body.index("HighWaterMarkStore.load") < body.index("mark_restore_verified")

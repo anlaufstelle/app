@@ -213,6 +213,31 @@ backup_write_hmac "$MEDIA_FILE"
 
 echo "Medien-Backup erstellt: $(du -h "$MEDIA_FILE" | cut -f1)"
 
+# Audit-High-Water-Mark (Refs #2022): Die signierte JSON-Datei liegt im
+# persistenten /data-Volume des cron-Containers. Der Host kann das Named Volume
+# nicht direkt lesen, deshalb wird sie ueber den Container exportiert. Fehlende
+# Konfiguration/Datei macht das regulaere DB-/Medien-Backup nicht unbrauchbar,
+# wird aber sichtbar geloggt.
+HWM_FILE=""
+if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
+    HWM_FILE="${DAILY_DIR}/audit_hwm-${TIMESTAMP}.json"
+    if docker compose -f "$COMPOSE_FILE" exec -T cron cat "$DJANGO_AUDIT_HWM_PATH" > "$HWM_FILE"; then
+        if [[ -s "$HWM_FILE" ]]; then
+            echo "Audit-HWM gesichert: ${HWM_FILE}"
+        else
+            echo "INFO: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} ist leer — kein HWM-Artefakt gesichert."
+            rm -f "$HWM_FILE"
+            HWM_FILE=""
+        fi
+    else
+        echo "INFO: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} fehlt oder ist nicht lesbar — DB-/Medien-Backup bleibt gueltig."
+        rm -f "$HWM_FILE"
+        HWM_FILE=""
+    fi
+else
+    echo "INFO: DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — kein Audit-HWM-Artefakt gesichert."
+fi
+
 # Rotation
 DOW=$(date +%u)  # 1=Montag, 7=Sonntag
 DOM=$(date +%d)  # Tag des Monats
@@ -220,12 +245,18 @@ DOM=$(date +%d)  # Tag des Monats
 # Sonntags → Weekly kopieren (DB + Medien + HMAC-Sidecars)
 if [[ "$DOW" -eq 7 ]]; then
     cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "$WEEKLY_DIR/"
+    if [[ -n "$HWM_FILE" ]]; then
+        cp "$HWM_FILE" "$WEEKLY_DIR/"
+    fi
     echo "Weekly-Backup kopiert."
 fi
 
 # Am 1. des Monats → Monthly kopieren (DB + Medien + HMAC-Sidecars)
 if [[ "$DOM" -eq "01" ]]; then
     cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "$MONTHLY_DIR/"
+    if [[ -n "$HWM_FILE" ]]; then
+        cp "$HWM_FILE" "$MONTHLY_DIR/"
+    fi
     echo "Monthly-Backup kopiert."
 fi
 
@@ -236,6 +267,9 @@ find "$WEEKLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtim
 find "$WEEKLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +28 -delete
 find "$MONTHLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +90 -delete
 find "$MONTHLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +90 -delete
+find "$DAILY_DIR" -name "audit_hwm-*.json" -mtime +7 -delete
+find "$WEEKLY_DIR" -name "audit_hwm-*.json" -mtime +28 -delete
+find "$MONTHLY_DIR" -name "audit_hwm-*.json" -mtime +90 -delete
 
 echo "Rotation abgeschlossen."
 
@@ -256,7 +290,7 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
         rclone:*)
             REMOTE="${BACKUP_OFFSITE_TARGET#rclone:}"
             rclone copy "$DAILY_DIR" "$REMOTE/daily" \
-                --include "*.enc" --include "*.hmac" --transfers 2 \
+                --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json" --transfers 2 \
                 || { echo "ERROR: rclone copy fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             ;;
         s3://*)
@@ -264,13 +298,17 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
                 echo "ERROR: aws-CLI nicht installiert — Off-Site (S3) nicht moeglich."; OFFSITE_OK=false; }
             if [[ "$OFFSITE_OK" == true ]]; then
                 aws s3 sync "$DAILY_DIR" "${BACKUP_OFFSITE_TARGET}/daily" \
-                    --exclude "*" --include "*.enc" --include "*.hmac" \
+                    --exclude "*" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json" \
                     || { echo "ERROR: aws s3 sync fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             fi
             ;;
         *@*:*)
             # SCP-Target — kompatibel mit OpenSSH ssh/scp inkl. Schluessel-Auth via SSH-Agent.
-            scp -q -B "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "${BACKUP_OFFSITE_TARGET%/}/" \
+            OFFSITE_FILES=("$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac")
+            if [[ -n "$HWM_FILE" ]]; then
+                OFFSITE_FILES+=("$HWM_FILE")
+            fi
+            scp -q -B "${OFFSITE_FILES[@]}" "${BACKUP_OFFSITE_TARGET%/}/" \
                 || { echo "ERROR: scp fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             ;;
         *)
