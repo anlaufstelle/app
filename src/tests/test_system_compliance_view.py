@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from django.urls import reverse
 
+from core.models import Settings
 from core.services.compliance import ComplianceCheck, ComplianceStatus
 
 
@@ -150,3 +151,20 @@ class TestSystemComplianceRender:
         assert after == before + 1
         entry = AuditLog.objects.filter(action=AuditLog.Action.SYSTEM_VIEW).latest("timestamp")
         assert entry.target_type == "SystemComplianceView"
+
+    def test_renders_unlimited_audit_retention_warning(
+        self,
+        client,
+        super_admin_user,
+        facility,
+    ):
+        Settings.objects.create(facility=facility, auditlog_retention_months=0)
+        client.force_login(super_admin_user)
+
+        response = client.get(reverse("core:system_compliance"))
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "Audit-Log unbegrenzt" in content
+        assert facility.name in content
+        assert 'data-status="warning"' in content

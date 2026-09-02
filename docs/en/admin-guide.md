@@ -1237,6 +1237,8 @@ If CSP errors appear after an update: check the browser console for the **specif
 
 The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), backup age, restore-verified age, ClamAV ping and signature age, retention run age, background job freshness (statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
 
+If AuditLog retention is set to `0` months in one or more facilities, the **Retention** category shows one aggregated warning with the affected facility names; resolve it under **Core → Settings → Retention**.
+
 Each check returns a status of `ok` / `warning` / `critical` / `unknown`; a single failing check does not bring down the whole dashboard. The area is **super-admin only** (`facility_admin` receives a `403`). The freshness thresholds for background jobs and the restore marker are documented in the [Ops Runbook](../ops-runbook.md).
 
 ### 5.6 Error Tracking & Data Minimization
@@ -1936,4 +1938,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: e76c147302ebea4558d85180a03c7b74149546e4 -->
+<!-- source-hash: 5d52bad265b3a8eac7e290b18575937d570e5413 -->

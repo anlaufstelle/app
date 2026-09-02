@@ -67,7 +67,7 @@ from core.services.compliance.k_anonymization import (
     k_anonymize_client,
 )
 from core.services.compliance.mfa import _mfa_checks
-from core.services.compliance.retention import _retention_checks
+from core.services.compliance.retention import _retention_checks, _retention_config_checks
 from core.services.compliance.sensitivity import (
     ROLE_MAX_SENSITIVITY,
     SENSITIVITY_RANK,
@@ -146,6 +146,7 @@ def aggregate_checks() -> list[ComplianceCheck]:
             _backup_checks,
             _clamav_checks,
             _retention_checks,
+            _retention_config_checks,
             _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,
@@ -164,7 +165,7 @@ def cron_job_checks() -> list[ComplianceCheck]:
 
     Teilmenge von :func:`aggregate_checks` — die sechs per Cron laufenden
     Jobs (Backup, Retention, Audit-Ketten-Pruefung, Snapshots, Breach-Scan,
-    MV-Refresh). Der Restore-Test bleibt bewusst aussen vor: er ist ein
+    MV-Refresh) plus die Retention-Konfigurationswarnung. Der Restore-Test bleibt bewusst aussen vor: er ist ein
     manueller Operator-Workflow, kein Cron-Job, und gehoert aufs
     Compliance-Dashboard.
 
@@ -182,6 +183,7 @@ def cron_job_checks() -> list[ComplianceCheck]:
         (
             _backup_checks,
             _retention_checks,
+            _retention_config_checks,
             _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,
@@ -239,6 +241,7 @@ __all__ = [
     "_migration_checks",
     "_restore_checks",
     "_retention_checks",
+    "_retention_config_checks",
     "_snapshot_checks",
     "_validate_webhook_url",
     "_version_checks",

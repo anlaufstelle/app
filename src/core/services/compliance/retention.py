@@ -6,10 +6,48 @@ Letzter ``RETENTION_RUN_COMPLETED``-Audit-Log-Eintrag, geschrieben vom
 
 from __future__ import annotations
 
-from core.models import AuditLog
+from core.models import AuditLog, Facility
 from core.services import ops_thresholds
 from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+
+
+def _retention_config_checks() -> list[ComplianceCheck]:
+    """Warnt aggregiert vor unbegrenzter AuditLog-Aufbewahrung (Refs #2053)."""
+    # Lokaler Import vermeidet den bestehenden Zyklus
+    # compliance -> system.bans -> compliance beim Django-Start.
+    from core.services.system import rls_bypass_for_read
+
+    # Der Compliance-Service laeuft auch aus Cron-/Command-Kontexten ohne
+    # Super-Admin-GUC. Facility und Settings sind RLS-geschuetzt; ohne den
+    # expliziten lesenden Bypass waere die Installationssicht dort leer.
+    with rls_bypass_for_read():
+        facilities = list(
+            Facility.objects.order_by("name").values_list(
+                "name",
+                "settings__auditlog_retention_months",
+            )
+        )
+
+    unlimited = [name for name, months in facilities if months == 0]
+    if not unlimited:
+        return []
+
+    count = len(unlimited)
+    total = len(facilities)
+    names = ", ".join(unlimited)
+    message = f"{count} von {total} Einrichtungen speichern das Audit-Log unbegrenzt (Aufbewahrung 0 Monate): {names}"  # noqa: E501
+    action_hint = "Core → Einstellungen oeffnen und unter Aufbewahrung eine begrenzte AuditLog-Frist festlegen."  # noqa: E501
+    return [
+        ComplianceCheck(
+            key="auditlog_retention_unlimited",
+            label="Audit-Log-Aufbewahrung",  # pragma: no mutate
+            category="Retention",  # pragma: no mutate
+            status=ComplianceStatus.WARNING,
+            message=message,
+            action_hint=action_hint,
+        )
+    ]
 
 
 def _retention_checks() -> list[ComplianceCheck]:

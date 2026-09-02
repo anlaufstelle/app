@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from core.models import AuditLog
+from core.models import AuditLog, Facility, Settings
 from core.models.user import User
 from core.services import compliance
 
@@ -428,6 +428,71 @@ class TestRetentionChecks:
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=60))
         checks = compliance._retention_checks()
         assert checks[0].status == compliance.ComplianceStatus.CRITICAL
+
+
+@pytest.mark.django_db
+class TestRetentionConfigurationChecks:
+    """Refs #2053: unbegrenzte Audit-Aufbewahrung wird installationsweit sichtbar."""
+
+    @staticmethod
+    def _warning():
+        return next(
+            (check for check in compliance._retention_config_checks() if check.key == "auditlog_retention_unlimited"),
+            None,
+        )
+
+    def test_zero_months_warns_with_facility_name(self, facility, settings_obj):
+        settings_obj.auditlog_retention_months = 0
+        settings_obj.save(update_fields=["auditlog_retention_months"])
+
+        warning = self._warning()
+
+        assert warning is not None
+        assert warning.status == compliance.ComplianceStatus.WARNING
+        assert warning.category == "Retention"
+        assert "1 von 1 Einrichtungen" in warning.message
+        assert facility.name in warning.message
+        assert "Einstellungen" in (warning.action_hint or "")
+        assert "Aufbewahrung" in (warning.action_hint or "")
+
+    def test_24_months_adds_no_warning(self, settings_obj):
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save(update_fields=["auditlog_retention_months"])
+
+        assert self._warning() is None
+
+    def test_mixed_facilities_are_aggregated(self, organization, facility, settings_obj):
+        settings_obj.auditlog_retention_months = 0
+        settings_obj.save(update_fields=["auditlog_retention_months"])
+        finite = Facility.objects.create(organization=organization, name="Befristete Stelle")
+        Settings.objects.create(facility=finite, auditlog_retention_months=24)
+
+        warning = self._warning()
+
+        assert warning is not None
+        assert "1 von 2 Einrichtungen" in warning.message
+        assert facility.name in warning.message
+        assert finite.name not in warning.message
+
+    def test_cross_facility_query_uses_rls_bypass(self, settings_obj):
+        from core.services import system
+
+        with patch.object(
+            system,
+            "rls_bypass_for_read",
+            wraps=system.rls_bypass_for_read,
+        ) as bypass:
+            compliance._retention_config_checks()
+
+        bypass.assert_called_once_with()
+
+    def test_cron_job_checks_include_the_warning(self, settings_obj):
+        settings_obj.auditlog_retention_months = 0
+        settings_obj.save(update_fields=["auditlog_retention_months"])
+
+        checks = compliance.cron_job_checks()
+
+        assert any(check.key == "auditlog_retention_unlimited" for check in checks)
 
 
 @pytest.mark.django_db

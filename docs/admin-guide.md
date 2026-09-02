@@ -1231,6 +1231,8 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 
 Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Frische der Hintergrundjobs (Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
+Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Monate, zeigt die Kategorie **Retention** eine aggregierte Warnung mit den betroffenen Einrichtungsnamen; beheben lässt sie sich unter **Core → Einstellungen → Aufbewahrung**.
+
 Jeder Check liefert einen Status `ok` / `warning` / `critical` / `unknown`; ein einzelner Check-Fehler kippt das Dashboard nicht. Der Bereich ist **Super-Admins** vorbehalten (`facility_admin` erhält `403`). Die Frische-Schwellen der Hintergrundjobs und des Restore-Markers sind im [Ops-Runbook](ops-runbook.md) dokumentiert.
 
 ### 5.6 Error-Tracking & Datenminimierung

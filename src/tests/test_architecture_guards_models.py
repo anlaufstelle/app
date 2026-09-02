@@ -473,6 +473,11 @@ class TestTenantModelScopeGuard:
             "Compliance-Check auf DB-Superuser — deploymentweit per Definition; "
             "gerendert nur im Super-Admin-Bereich (views/system/compliance.py)."
         ),
+        "compliance/retention.py:_retention_config_checks:Facility": (
+            "Aggregierte Warnung fuer explizit unbegrenzte Audit-Aufbewahrung — "
+            "deploymentweit per Definition, vollstaendig in rls_bypass_for_read gekapselt "
+            "und nur im Super-Admin-Compliance-Bereich gerendert (Refs #2053)."
+        ),
         "compliance/mfa.py:_mfa_checks:User": (
             "MFA-Quote ueber alle MFA-pflichtigen Rollen — deploymentweite Kennzahl "
             "des Compliance-Dashboards, nicht facility-bezogen."
