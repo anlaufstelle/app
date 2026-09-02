@@ -379,6 +379,13 @@ Zwei Jobs bleiben Host-seitig, weil sie im Sidecar nicht laufen koennen:
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
 ```
 
+Die Host-Cron-Eintraege oben laufen in der **Systemzeitzone des Hosts** (nicht
+in der Sidecar-`TZ`-Variable aus [§3.2](#32-cron-sidecar-standard)) — weicht sie
+von `Europe/Berlin` ab (z. B. UTC-Hosts), kann die
+Backup-vor-Retention-Reihenfolge kippen oder `0 2 * * *` am Rueckfalltag
+doppelt zuenden; Host-TZ auf `Europe/Berlin` setzen oder die Host-Cron-Zeit
+entsprechend verschieben.
+
 #### Migration von der alten Host-Crontab (Betreiber-Aktion)
 
 Installationen vor Release 0.23 haben alle Jobs im Host-Cron. Nach dem Update

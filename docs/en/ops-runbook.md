@@ -380,6 +380,13 @@ Two jobs stay host-side because they cannot run in the sidecar:
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
 ```
 
+The host cron entries above run in the **host's system time zone** (not in the
+sidecar `TZ` variable from [§3.2](#32-cron-sidecar-standard)). If it differs
+from `Europe/Berlin` (for example, on UTC hosts), the backup-before-retention
+ordering can flip or `0 2 * * *` can fire twice on the autumn clock-change
+day. Set the host time zone to `Europe/Berlin` or shift the host cron time
+accordingly.
+
 #### Migrating from the Old Host Crontab (Operator Action)
 
 Installations from before release 0.23 have all jobs in the host cron. After the update,
@@ -2688,4 +2695,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: d550d5a96281d8af73f739547c0e00a4e4e717f5 -->
+<!-- source-hash: a4cef2d0346e401461c279a3da40f0cf061b757e -->
