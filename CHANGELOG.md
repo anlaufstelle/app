@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Fehlende Backup-Signale degradieren den Health-Status** (#2021) — Produktion meldet ohne Welt-B-Backup `backup=missing` und `status=degraded`, während ein expliziter Schalter andere Backup-Welten ausnimmt und das Erstsetup vor einem fehlenden Host-Cron warnt.
 
+### Docs
+
+- **SMTP-E2E-Nachweis beschreibt die echten Mail-Auslöser** (#2089) — Ein ausführbares Drehbuch, Admin-Hilfe und Operations-Runbook dokumentieren SMTP-Vorprüfung, Einladungs- und Reset-Wege, Header-Nachweis, Fehlerdiagnose und den Initialpasswort-Fallback, ohne `setup_facility` fälschlich als Mail-Auslöser zu nennen.
+
 ## [0.91.0] - 2026-09-02
 
 ### Added

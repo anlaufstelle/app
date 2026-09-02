@@ -517,6 +517,23 @@ Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-To
 
 **Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht.
 
+**SMTP-Voraussetzungen und Fehlersuche:** Für den Versand müssen Betreiber
+`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` und `DEFAULT_FROM_EMAIL` passend zum
+SMTP-Relay setzen; verlangt der Relay eine Anmeldung, sind zusätzlich
+`EMAIL_HOST_USER` und `EMAIL_HOST_PASSWORD` Pflicht. `DEFAULT_FROM_EMAIL` muss
+eine für SPF, DKIM und DMARC autorisierte Absenderdomain verwenden. Damit die
+Links in Einladungs- und Reset-Mails auf die richtige öffentliche Instanz
+zeigen, muss außerdem `EXTERNAL_ORIGIN` stimmen. Das
+[Operations-Runbook § 5.8](ops-runbook.md#58-smtp-versand-pruefen) enthält den
+Testbefehl und den Log-Zugriff.
+
+Erscheint beim Anlegen oder erneuten Senden die Meldung, dass die Einladung
+nicht versendet werden konnte, SMTP-Werte und Web-Logs prüfen und danach
+**Einladung erneut senden**. Eine Erfolgsmeldung belegt nur die Übergabe an das
+Mail-Backend: Bleibt die Mail aus, zusätzlich Spam-Ordner, Quarantäne und beim
+Provider die SPF-/DKIM-/DMARC-Ausrichtung prüfen. Bis zur Behebung steht der
+folgende Initialpasswort-Weg als technischer Notfall-Fallback zur Verfügung.
+
 **Technischer Legacy-Fallback ohne E-Mail:** Die Fach-UI verlangt immer eine E-Mail-Adresse. Nur der Django-Admin kann zur Abwärtskompatibilität noch einen Nutzer **ohne** E-Mail-Adresse anlegen und zeigt dann einmalig ein Klartext-Initialpasswort. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
 
 > **Hinweis:** `must_change_password` wird bei **jeder** Neuanlage im Admin gesetzt. Schließt der Nutzer den Setup-Schritt der Einladung ab — oder später einen Passwort-Reset, wird das Flag dabei automatisch wieder gelöscht (#1969); er hat sein Passwort in diesem Schritt ja selbst gewählt und muss es beim ersten Login nicht sofort erneut ändern. Erzwungen bleibt der Wechsel damit genau dort, wo er gebraucht wird: beim Fallback ohne E-Mail-Adresse, bei dem der Admin das Initialpasswort kennt.

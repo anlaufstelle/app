@@ -521,6 +521,22 @@ Both generators are additionally separated by their own `key_salt` (a reset toke
 
 **Resend the setup link:** If the email did not arrive or the token has expired, the application manager can issue a fresh token from the access detail view via **Resend invitation**. The button is only shown while account setup is still pending.
 
+**SMTP requirements and troubleshooting:** To send mail, operators must set
+`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, and `DEFAULT_FROM_EMAIL` to match
+the SMTP relay. If the relay requires authentication, `EMAIL_HOST_USER` and
+`EMAIL_HOST_PASSWORD` are required as well. `DEFAULT_FROM_EMAIL` must use a
+sender domain authorized for SPF, DKIM, and DMARC. `EXTERNAL_ORIGIN` must also
+be correct so that invitation and reset links point to the right public
+instance. [Operations Runbook § 5.8](ops-runbook.md#58-checking-smtp-delivery)
+contains the test command and log access.
+
+If account creation or resending reports that the invitation could not be
+sent, check the SMTP values and web logs, then use **Resend invitation**. A
+success message only proves handoff to the mail backend. If the message still
+does not arrive, also check the spam folder, quarantine, and the provider's
+SPF/DKIM/DMARC alignment. Until this is fixed, the initial-password route below
+is available as a technical emergency fallback.
+
 **Technical legacy fallback without email:** The product UI always requires an email address. For backwards compatibility, only the Django admin can still create a user **without** an email address and then displays a one-time clear-text initial password. This path is **insecure** and should only be used as a last resort -- better: add the email address and resend the invitation.
 
 > **Note:** `must_change_password` is set on **every** account created in the admin. Once the user completes the invitation setup step -- or a password reset later on -- the flag is cleared automatically (#1969); they chose the password themselves in that step and are not asked to replace it again right at their first login. The forced change therefore remains exactly where it is needed: for the fallback without an email address, where the admin knows the initial password.
@@ -1938,4 +1954,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 5d52bad265b3a8eac7e290b18575937d570e5413 -->
+<!-- source-hash: 359be9ab49bde4d5ad1c3fc1ec6c3a9f28318341 -->

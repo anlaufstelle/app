@@ -946,6 +946,40 @@ docker compose -f docker-compose.prod.yml exec web printenv FILE_UPLOAD_TEMP_DIR
 
 A full RAM buffer instead of disk streaming (setting `FILE_UPLOAD_MAX_MEMORY_SIZE` very high) is **not** a substitute: that would keep large uploads entirely in process memory (DoS risk with several parallel uploads) instead of closing the time window.
 
+### 5.8 Checking SMTP Delivery
+
+Production uses Django's SMTP backend. In `.env`, `EMAIL_HOST`, `EMAIL_PORT`,
+`EMAIL_USE_TLS`, and `DEFAULT_FROM_EMAIL` must match the relay. If it requires
+authentication, `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` are required too.
+`EXTERNAL_ORIGIN` must also contain the public base URL so that invitation and
+reset links are valid. The sender should be authorized for SPF, DKIM, and
+DMARC.
+
+Before the first onboarding, replace the example address and send Django's
+standard test message from the running web container:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T web \
+  python manage.py sendtestemail test-address@example.org
+```
+
+Exit code 0 proves handoff to the SMTP backend, not delivery. Also check the
+inbox, spam/quarantine, and the raw header for `spf=pass`, `dkim=pass`, and
+`dmarc=pass`. If an exception occurs or the exit code is non-zero, correct the
+configuration and inspect the web logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs web --tail=100
+```
+
+Under **Administration > Access**, a backend error produces the literal German
+warning “Zugang wurde angelegt, die Einladung konnte aber nicht versendet
+werden” or “Einladung konnte nicht versendet werden”. The invitation can then
+be retried with **Resend invitation**. If no message arrives despite a success
+message, investigate the SMTP provider or recipient. As a technical emergency
+fallback, the Django admin can create an account without an email address and
+display a one-time initial password.
+
 ---
 
 ## 6. Emergency Procedures
@@ -2695,4 +2729,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: a4cef2d0346e401461c279a3da40f0cf061b757e -->
+<!-- source-hash: 51c0517a1f59f883aecfc2903e77fb7a1aa970b4 -->

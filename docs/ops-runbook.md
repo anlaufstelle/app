@@ -945,6 +945,40 @@ docker compose -f docker-compose.prod.yml exec web printenv FILE_UPLOAD_TEMP_DIR
 
 Ein voller RAM-Buffer statt Disk-Streaming (`FILE_UPLOAD_MAX_MEMORY_SIZE` sehr hoch setzen) ist **kein** Ersatz: das wuerde grosse Uploads komplett im Prozessspeicher halten (DoS-Risiko bei mehreren parallelen Uploads) statt das Zeitfenster zu schliessen.
 
+### 5.8 SMTP-Versand pruefen
+
+Der Produktionsbetrieb nutzt Djangos SMTP-Backend. In `.env` muessen
+`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` und `DEFAULT_FROM_EMAIL` zum Relay
+passen; verlangt er Authentifizierung, sind auch `EMAIL_HOST_USER` und
+`EMAIL_HOST_PASSWORD` Pflicht. Fuer gueltige Einladungs- und Reset-Links muss
+ausserdem `EXTERNAL_ORIGIN` die oeffentliche Basis-URL enthalten. Der Absender
+soll fuer SPF, DKIM und DMARC autorisiert sein.
+
+Vor dem ersten Onboarding die Beispieladresse ersetzen und Djangos
+Standard-Testmail aus dem laufenden Web-Container senden:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T web \
+  python manage.py sendtestemail pruefadresse@example.org
+```
+
+Exit-Code 0 belegt die Uebergabe an das SMTP-Backend, nicht die Zustellung.
+Zusaetzlich Eingang, Spam/Quarantaene und im Roh-Header `spf=pass`, `dkim=pass`
+sowie `dmarc=pass` pruefen. Bei einer Exception oder einem Exit-Code ungleich 0
+die Konfiguration korrigieren und die Web-Logs lesen:
+
+```bash
+docker compose -f docker-compose.prod.yml logs web --tail=100
+```
+
+In **Verwaltung → Zugaenge** erscheinen bei einem Backend-Fehler die Warnung
+„Zugang wurde angelegt, die Einladung konnte aber nicht versendet werden“ oder
+„Einladung konnte nicht versendet werden“. Der Zugang kann danach ueber
+**Einladung erneut senden** erneut angestossen werden. Eine ausbleibende Mail
+trotz Erfolgsmeldung ist beim SMTP-Provider beziehungsweise Empfaenger zu
+untersuchen; als technischer Notfall-Fallback kann der Django-Admin ein Konto
+ohne E-Mail mit einmalig angezeigtem Initialpasswort anlegen.
+
 ---
 
 ## 6. Notfall-Prozeduren
