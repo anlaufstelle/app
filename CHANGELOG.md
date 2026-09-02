@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Performance
 
 - **Audit-Listen filtern per Range-Prädikat auf den Zeitstempel** (#2029) — ``timestamp__date__gte/lte`` wurde durch ``timestamp__gte``/``timestamp__lt`` auf Tagesgrenzen ersetzt, damit der Zeitstempel-Index sargable genutzt wird.
-- **Personensuche nutzt ILIKE statt UPPER(LIKE) für GIN-Index-Tauglichkeit** (#2027) — Suchpfade in Klientenliste, Autocomplete und Dashboard-Suche verwenden den neuen Postgres-Lookup ``__ilike``, der gleichwertig case-insensitiv sucht und die trigram-GIN-Indizes auf den nackten Spalten nutzbar macht.
+- **Personensuche nutzt ILIKE statt UPPER(LIKE) für GIN-Index-Tauglichkeit** (#2027) — Suchpfade in Klientenliste, Autocomplete und Dashboard-Suche verwenden den neuen Lookup ``__ilike``, der auf PostgreSQL case-insensitiv nach Datenbank-Collation sucht und die trigram-GIN-Indizes auf den nackten Spalten nutzbar macht. Einrichtungs-gescopt verknüpft die Datenbank damit Trigramm- und Einrichtungs-Index, statt die Nicht-Treffer der Einrichtung nachträglich wegzufiltern; messbar schneller ist die Suche in beiden Fällen, spürbar wird der Unterschied in der globalen Systemsuche und mit wachsender Personenzahl.
 
 ## [0.91.0] - 2026-09-02
 

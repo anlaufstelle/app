@@ -1,8 +1,10 @@
-"""Custom Postgres-only lookup: ``__ilike``.
+"""Custom lookup ``__ilike`` — Postgres-optimiert, sonst ``icontains``.
 
 ``__ilike`` behaves like ``__icontains`` (case-insensitive substring match),
-but compiles to ``ILIKE '%...%'`` instead of ``UPPER(col) LIKE UPPER('%...%')``.
-This lets Postgres use trigram GIN indexes on the raw column.
+but on PostgreSQL it compiles to ``ILIKE '%...%'`` instead of
+``UPPER(col) LIKE UPPER('%...%')``. This lets Postgres use trigram GIN indexes
+on the raw column. On every other backend ``as_sql`` delegates to Django's
+``IContains``, so the lookup stays usable there (see ``as_sql`` below).
 
 Refs https://github.com/anlaufstelle/app/issues/2027
 """
@@ -20,10 +22,11 @@ class ILikeLookup(PatternLookup):
         # so the operator is a plain ILIKE placeholder.
         if self.rhs_is_direct_value() and not self.bilateral_transforms:
             return "ILIKE %s"
-        # Expression / column reference: build the pattern on the SQL side,
-        # mirroring the contains pattern_ops shape, but case-insensitive via
-        # the ILIKE operator itself.
-        return f"ILIKE '%%' || {rhs} || '%%'"
+        # Expression / column reference: build the pattern on the SQL side
+        # and escape wildcard characters exactly like Django's icontains
+        # pattern_ops for PostgreSQL.
+        escaped_rhs = connection.pattern_esc.format(rhs)
+        return f"ILIKE '%%' || {escaped_rhs} || '%%'"
 
     def as_sql(self, compiler, connection):
         if connection.vendor == "postgresql":

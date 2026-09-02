@@ -150,7 +150,7 @@ class TestFilteredPaginatedListMixin:
 
     # --- Suche -----------------------------------------------------------
 
-    def test_apply_search_builds_icontains_for_single_field(self):
+    def test_apply_search_builds_ilike_for_single_field(self):
         from django.db.models import Q
 
         view = self._view(search_fields=["pseudonym"])

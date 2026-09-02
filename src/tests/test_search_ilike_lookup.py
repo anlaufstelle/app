@@ -3,19 +3,22 @@
 Refs https://github.com/anlaufstelle/app/issues/2027
 """
 
+import json
 from unittest import mock
 
 import pytest
 from django.core.exceptions import FieldError
+from django.db import connection
 from django.db.models import F, Q, Value
+from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 
-from core.models import Client, Facility, Organization
+from core.models import Client, Facility, Organization, User
 from core.services.dashboard.search import (
     client_search_queryset,
     event_search_queryset,
     search_similar_clients,
 )
-from core.views.clients import ClientAutocompleteView
 
 pytestmark = [pytest.mark.django_db]
 
@@ -37,7 +40,7 @@ def _request_with_q(q):
     return request
 
 
-def test_apply_search_uses_ilike_not_icontains():
+def test_apply_search_builds_ilike_for_single_field():
     from core.views.mixins import FilteredPaginatedListMixin
 
     class _View(FilteredPaginatedListMixin):
@@ -49,6 +52,18 @@ def test_apply_search_uses_ilike_not_icontains():
 
     assert len(qs.q_args) == 1
     assert qs.q_args[0] == Q(pseudonym__ilike="Falke")
+
+
+def test_apply_search_builds_ilike_for_multiple_fields():
+    from core.views.mixins import FilteredPaginatedListMixin
+
+    view = FilteredPaginatedListMixin()
+    view.search_fields = ["title", "pseudonym"]
+    qs = _RecordingQuerySet()
+    view.apply_search(qs, _request_with_q("abc"))
+
+    expected = Q(title__ilike="abc") | Q(pseudonym__ilike="abc")
+    assert qs.q_args == [expected]
 
 
 def _sql_has_ilike_no_upper(qs):
@@ -72,12 +87,60 @@ def test_client_search_queryset_uses_ilike():
 
 
 def test_event_search_queryset_uses_ilike():
-    from core.models import User
-
     facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
     user = User.objects.create_user(username="u", password="x", facility=facility, role=User.Role.FACILITY_ADMIN)
     qs = event_search_queryset(facility, user, "abc")
     _sql_has_ilike_no_upper(qs)
+
+
+def _captured_client_sql(ctx):
+    """SQL of the captured statements that actually read ``core_client``.
+
+    Refs #2027, Fix-Runde 2: Die beiden folgenden Tests haben frueher auf einem
+    HANDGEBAUTEN Queryset assertiert — ein Revert der Produktionsstelle auf
+    ``__icontains`` blieb dabei gruen. Jetzt laeuft der echte Code, und gepinnt
+    wird die SQL, die er tatsaechlich absetzt.
+    """
+    statements = [q.get("sql", "") for q in ctx.captured_queries if 'FROM "core_client"' in q.get("sql", "")]
+    assert statements, [q.get("sql", "") for q in ctx.captured_queries]
+    return "\n".join(statements)
+
+
+def test_search_similar_clients_exclude_uses_ilike():
+    """The exclude inside ``search_similar_clients`` compiles to NOT (... ILIKE ...).
+
+    A revert of ``src/core/services/dashboard/search.py`` to
+    ``pseudonym__icontains`` turns the exclude into
+    ``NOT (UPPER("core_client"."pseudonym"::text) LIKE ...)`` and makes this red.
+    """
+    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
+    Client.objects.create(facility=facility, pseudonym="Abcdef")
+    with CaptureQueriesContext(connection) as ctx:
+        search_similar_clients(facility, "abc", threshold=0.1)
+    sql = _captured_client_sql(ctx)
+    assert 'NOT ("core_client"."pseudonym" ILIKE ' in sql, sql
+    assert 'UPPER("core_client"."pseudonym"' not in sql, sql
+
+
+def test_client_autocomplete_view_uses_ilike(client):
+    """The autocomplete endpoint searches with ILIKE — driven through the real URL.
+
+    Logged-in user, ``?q=`` on ``core:client_autocomplete``; the JSON payload
+    proves the filter actually matched, the SQL pin proves how.
+    """
+    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
+    user = User.objects.create_user(
+        username="autocomplete-user", password="x", facility=facility, role=User.Role.ASSISTANT
+    )
+    Client.objects.create(facility=facility, pseudonym="Abcdef")
+    client.force_login(user)
+    with CaptureQueriesContext(connection) as ctx:
+        response = client.get(reverse("core:client_autocomplete"), {"q": "abc"})
+    assert response.status_code == 200
+    assert [row["pseudonym"] for row in json.loads(response.content)] == ["Abcdef"]
+    sql = _captured_client_sql(ctx)
+    assert '"core_client"."pseudonym" ILIKE ' in sql, sql
+    assert 'UPPER("core_client"."pseudonym"' not in sql, sql
 
 
 def test_ilike_lookup_only_on_text_fields():
@@ -88,17 +151,30 @@ def test_ilike_lookup_only_on_text_fields():
         str(Client.objects.filter(created_at__ilike="2026").query)
 
 
-def test_ilike_expression_rhs_has_wildcards():
-    """F()/Value() rhs must still wrap the expression in % wildcards."""
+def test_ilike_expression_rhs_has_wildcards_and_escapes():
+    """F()/Value() rhs must still wrap the expression in % wildcards AND escape %/_."""
     qs = Client.objects.filter(pseudonym__ilike=F("pseudonym"))
     sql = str(qs.query)
     assert "ILIKE '%' ||" in sql, sql
     assert "|| '%'" in sql, sql
+    # Django's PostgreSQL pattern_esc must be applied to the rhs.
+    assert "REPLACE(REPLACE(REPLACE(" in sql, sql
 
-    qs2 = Client.objects.filter(pseudonym__ilike=Value("abc"))
+    qs2 = Client.objects.filter(pseudonym__ilike=Value("a%b"))
     sql2, params = qs2.query.sql_with_params()
-    assert "ILIKE '%%' || %s || '%%'" in sql2, sql2
-    assert params == ("abc",)
+    assert "ILIKE '%%' || REPLACE(REPLACE(REPLACE(%s" in sql2, sql2
+    assert params == ("a%b",)
+
+
+def test_ilike_value_rhs_escapes_wildcards_in_expression_mode():
+    """A Value('%') rhs must be treated as a literal percent, not a wildcard."""
+    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
+    Client.objects.create(facility=facility, pseudonym="xa%by")
+    Client.objects.create(facility=facility, pseudonym="aXXXb")
+    # Value("a%b") should match 'xa%by' (literal percent) but NOT 'aXXXb'.
+    qs = Client.objects.filter(facility=facility, pseudonym__ilike=Value("a%b"))
+    assert qs.count() == 1
+    assert qs.first().pseudonym == "xa%by"
 
 
 @pytest.mark.parametrize(
@@ -115,7 +191,7 @@ def test_ilike_case_and_umlaut_insensitive(term, expected):
     assert Client.objects.filter(facility=facility, pseudonym__ilike=term).exists()
 
 
-def test_ilike_escapes_wildcards():
+def test_ilike_escapes_wildcards_for_direct_values():
     """% and _ in the search term are treated as literals, not wildcards."""
     facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
     Client.objects.create(facility=facility, pseudonym="50% discount")
@@ -145,37 +221,3 @@ def test_ilike_plan_uses_trgm_index():
         qs = Client.objects.filter(pseudonym__ilike="person")
         plan = qs.explain()
         assert "client_pseudonym_trgm_idx" in plan, plan
-
-
-def test_client_autocomplete_view_sql_uses_ilike():
-    """The autocomplete get() path builds a queryset with ILIKE on pseudonym."""
-    from django.test import RequestFactory
-
-    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
-    from core.models import User
-
-    user = User.objects.create_user(
-        username="autocomplete-user", password="x", facility=facility, role=User.Role.ASSISTANT
-    )
-    request = RequestFactory().get("/clients/autocomplete/?q=abc")
-    request.current_facility = facility
-    request.user = user
-    response = ClientAutocompleteView.as_view()(request)
-    assert response.status_code == 200
-    # The JsonResponse itself is enough to prove the view built a working
-    # queryset; the SQL pin is on the queryset built inside the view.
-    qs = Client.objects.for_facility(facility).filter(is_active=True, is_deleted=False, pseudonym__ilike="abc")
-    _sql_has_ilike_no_upper(qs)
-
-
-def test_search_similar_clients_exclude_uses_ilike():
-    """search_similar_clients uses .exclude(pseudonym__ilike=...) internally."""
-
-    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
-    search_similar_clients(facility, "abc")  # sanity-check: no crash
-    # The function returns a list; build the corresponding queryset manually
-    # to pin the SQL generated by the exclude clause.
-    inner_qs = (
-        Client.objects.for_facility(facility).filter(is_active=True, is_deleted=False).exclude(pseudonym__ilike="abc")
-    )
-    _sql_has_ilike_no_upper(inner_qs)
