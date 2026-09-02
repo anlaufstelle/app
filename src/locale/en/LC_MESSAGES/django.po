@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-01 12:12+0200\n"
+"POT-Creation-Date: 2026-09-02 21:06+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -9530,6 +9530,30 @@ msgstr "Info"
 #: src/templates/core/statistics/partials/report_panel.html:29
 msgid "Keine Vollständigkeitsprobleme erkannt"
 msgstr "No completeness issues detected"
+
+#: src/core/views/statistics.py:862
+msgid ""
+"Der Bericht konnte nicht erstellt werden. Bitte versuchen Sie es später "
+"erneut."
+msgstr "The report could not be generated. Please try again later."
+
+#: src/templates/core/statistics/partials/report_panel_error.html:23
+msgid "Dieser Bericht konnte nicht erstellt werden."
+msgstr "This report could not be generated."
+
+#: src/templates/core/statistics/partials/report_panel_error.html:25
+msgid ""
+"Die Auswertung ist mit einem Fehler abgebrochen. Es werden bewusst keine "
+"Teilergebnisse angezeigt. Bitte versuchen Sie es später erneut — bleibt der "
+"Fehler bestehen, wenden Sie sich an die Administration."
+msgstr ""
+"The evaluation aborted with an error. Partial results are deliberately not "
+"shown. Please try again later — if the error persists, contact your "
+"administrator."
+
+#: src/templates/core/statistics/partials/report_panel_error.html:28
+msgid "Die übrigen Berichte und die Statistik-Übersicht sind davon nicht betroffen."
+msgstr "The other reports and the statistics overview are not affected."
 
 #: src/templates/core/statistics/partials/report_panel.html:62
 #, python-format

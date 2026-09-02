@@ -393,7 +393,11 @@ The loop iterates over `get_backends()`, **not** over `get_available_backends(fa
 
 **Merge boundary.** The hybrid read path assembles periods from monthly snapshots and therefore has to merge the monthly aggregates. That merge is **specific to the activity report** (`_merge_sample_report_1_stats`) and knows exactly its structure. For a second snapshot-capable backend there is **no** generic merge today: without per-field merge semantics (sum? maximum? set union?) it cannot be defined. Anyone who wants to make a second aggregate backend snapshot-capable must plan the merge as work of its own — until then it reads live via `build_dataset`.
 
-**Fail loud.** The snapshot run iterates over the backends without error isolation: if a backend raises, the **entire** snapshot run for that facility fails. This is intentional — a silently incomplete snapshot would be a quiet data hole that only surfaces months later.
+**A broken backend is skipped — and loudly marked** (#2070). The snapshot run isolates every backend call: if a backend raises, its slug lands together with the name of the exception class in the reserved key `backend_data["_errors"]` (`{slug: "OperationalError"}`), the error is logged with a full traceback (and thereby reported to error tracking), and the remaining backends plus the already computed dashboard aggregates are stored normally. The key only appears in the error case and cannot collide with any slug — `registry._SLUG_RE` forbids a leading underscore. No model field, no migration: `backend_data` is a free `JSONField`.
+
+> **Why this replaces the earlier fail-loud policy rather than breaking it.** Until #2070 a single raising backend aborted the whole run; the reasoning was that a silently incomplete snapshot would be a quiet data hole that only surfaces months later. The concern was right, the remedy too coarse: the abort hit not only the broken backend but the already computed aggregates of that facility, **all following months** (`ensure_snapshots_for_months`) and, in the cron command, **all following facilities** — including the last-run marker, which was then never written at all. Because the cron runs monthly while event retention keeps running, that was a data-loss window and not merely a delay. Today the data hole is **no longer quiet**: a marker in the snapshot row plus a log/Sentry entry. For the other maintenance jobs (`enforce_retention`, `verify_audit_chain`, `cleanup_orphan_storage_files`) fail-loud remains the house rule unchanged — this job is the reasoned exception, not a precedent.
+
+**Query cap.** Every backend call of the snapshot run happens under a transaction-local `statement_timeout` — see [§ 9](#9-boundaries).
 
 **Live read path vs. hybrid read path.** The panel preview and the generic export **always** call `build_dataset(facility, date_from, date_to)` — the live query against the events. The activity report **PDF**, by contrast, reads the same report as a hybrid via the monthly snapshots (`get_sample_report_1_statistics_hybrid`). Two artifacts of the same report over the same period can therefore differ systematically:
 
@@ -498,6 +502,7 @@ This is an **accepted definitional boundary, not an omission**: there is no cell
 - **An empty period looks like suppression.** `0 < k`, so an honest zero is suppressed as well. That is the behaviour of the shared suppression function and the safe direction, but it can confuse recipients.
 - **Over-suppression is priced in.** The completeness notices stand there unquantified even when there is no gap at all, and the age distribution disappears completely for just a few persons — both are intended (the alternative would be a data-dependent branch, i.e. exactly the channel that was closed). The direction is safe, the loss of informative value is real.
 - **Suppression never belongs in `build_dataset`.** Otherwise snapshots would be trimmed too — and with them the basis of every later analysis and of the unchanged PDF path.
+- **The error path shows nothing, not "something".** The chain `build_dataset` → `prepare_export` → `enforce_suppression_contract` is **atomic**: either it runs completely and delivers the suppressed view, or there is an error card or an error response **without a single data row** (#2070). `SuppressionContractError` is explicitly **not** a special case here — it is handled like any other backend error. An intermediate state (rendering the raw `build_dataset` result because `prepare_export` failed) would be exactly the regression that [ADR-038 § 5](../adr/038-reporting-plugin-backends.md) rules out.
 
 ---
 
@@ -599,6 +604,17 @@ Examples from the activity report:
 ## 9. Boundaries
 
 - **No generic monthly merge** for snapshot-capable aggregate backends (see [§ 5](#5-snapshot-integration)).
+- **Error isolation per path, not per backend set** (#2070). A broken backend only takes itself out of service. What that means per path:
+
+  | Path | Behaviour with a raising backend |
+  |---|---|
+  | Statistics overview (KPIs, charts) | loads unchanged; a backend whose `is_available` raises counts as **not available** and disappears from the card list (fail-closed) |
+  | Report panel (tab **and** HTMX partial) | HTTP **200** with an error card instead of the preview — 200, because HTMX only swaps 2xx; a 5xx response would leave the old preview in place |
+  | Download CSV / JSON / XML | HTTP **502**, terse text, **no** `Content-Disposition`, not a single byte of the dataset — and **no** `EXPORT` audit entry: a failed export must not appear as a release in the append-only audit |
+  | Snapshot run | backend skipped, marker in `backend_data["_errors"]`, the rest is stored (see [§ 5](#5-snapshot-integration)) |
+
+  Every caught case is logged via `logger.exception` including the traceback and reaches error tracking (GlitchTip/Sentry) that way. The error card names the affected report but no exception details. For the export catch to actually take effect, **all** backend-owned calls run eagerly — including `get_field_specs()`, which the CSV renderer would otherwise only call while streaming: raised there, the error would arrive after the 200 response including `Content-Disposition` had already been built.
+- **Query cap per backend call.** Panel, export and snapshot run wrap the backend call in `core.reporting.db_guard.reporting_statement_timeout` — a transaction-local `SET LOCAL statement_timeout` (`set_config(..., is_local=true)`, a no-op outside PostgreSQL). The value comes from the setting `REPORTING_BACKEND_STATEMENT_TIMEOUT_MS` (default `10000` ms, overridable via the env var of the same name, `0` disables it). Deliberately **transaction**-local and not session-wide: with `CONN_MAX_AGE > 0` Django hands connections on between requests, so a session-wide `SET` would stay on the reused connection. The cancelled statement reaches the callers as `django.db.utils.OperationalError` and is isolated like any other backend error — no special case. The cap bounds the runtime of **one statement**, not the total duration of a backend call made up of many small queries.
 - **JSON and XML are not streamed.** Aggregate payloads are small; a `rows` backend with mass data (tens of thousands of records) would build both renderers entirely in memory. That is the documented limit of the current pipeline — such a backend would need streaming renderers analogous to the CSV path, or it has to restrict its period.
 - **No external plugin packages.** Discovery scans `core/reporting/backends/` only; `entry_points` from third-party packages are not provided for. A foreign package with read access to social-services data is a trust decision of its own kind (signing, approval, sandboxing) — conceivable as a later extension, and then with a security concept of its own.
 - **No generic PDF pipeline.** The pipeline formats are CSV, JSON and XML; the activity report PDF remains a separate, unchanged path.
@@ -670,4 +686,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 4d5c222be5b4aa9bdad0a61edaa804f96b5f6f14 -->
+<!-- source-hash: 51adb09d859ffcf5dbd8f80a3d7ff658ffdd3996 -->

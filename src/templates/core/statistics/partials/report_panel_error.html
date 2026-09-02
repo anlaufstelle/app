@@ -1,0 +1,30 @@
+{% load i18n %}
+
+{% comment %}
+Fehlerkarte des Berichts-Panels (Refs #2070).
+
+Ersetzt ``report_panel.html`` vollständig, wenn die Kette
+``build_dataset`` → ``prepare_export`` → ``enforce_suppression_contract``
+gescheitert ist. Der Kontext dieser Karte trägt bewusst **keine** Daten-
+Variablen (``result``, ``preview_rows``, ``field_specs``,
+``k_anonymity_threshold``) — es gibt hier strukturell nichts zu rendern, auch
+nicht versehentlich. Genau das ist die Zusage: entweder die vollständige,
+k-anon-suppressierte Sicht oder gar keine.
+
+Der Backend-Name steht drin (die Nutzerin muss wissen, welcher Bericht
+betroffen ist), Exception-Details ausdrücklich nicht — die stehen im Log und im
+Fehler-Tracking.
+{% endcomment %}
+
+<h3 class="text-[15px] font-bold text-ink mb-1">{{ backend.name }}</h3>
+
+<div data-testid="report-panel-error" role="alert"
+     class="bg-red-50 border border-red-200 rounded-[10px] p-4">
+    <p class="text-[13px] font-bold text-red-800 mb-1">{% trans "Dieser Bericht konnte nicht erstellt werden." %}</p>
+    <p class="text-[13px] text-red-700">
+        {% blocktrans %}Die Auswertung ist mit einem Fehler abgebrochen. Es werden bewusst keine Teilergebnisse angezeigt. Bitte versuchen Sie es später erneut — bleibt der Fehler bestehen, wenden Sie sich an die Administration.{% endblocktrans %}
+    </p>
+    <p class="text-[12px] text-ink-muted mt-2">
+        {% trans "Die übrigen Berichte und die Statistik-Übersicht sind davon nicht betroffen." %}
+    </p>
+</div>

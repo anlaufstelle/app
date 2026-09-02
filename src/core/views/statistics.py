@@ -4,7 +4,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
@@ -24,8 +24,9 @@ from core.reporting.data_source import (
     SNAPSHOT_HYBRID,
     table_note,
 )
+from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.export import SUPPORTED_FORMATS, enforce_suppression_contract, export_dataset
-from core.reporting.registry import get_available_backends, get_backend_or_404
+from core.reporting.registry import get_backend_or_404, get_backends
 from core.services.audit import log_audit_event
 from core.services.dashboard import (
     EXTERNAL_REPORT_TARGET,
@@ -85,6 +86,57 @@ def resolve_document_type_filter(facility, query_params):
         return None
 
 
+def backend_is_available(backend, facility) -> bool:
+    """``backend.is_available(facility)`` mit Fehlerisolation (Refs #2070).
+
+    ``is_available`` ist kein reiner Praedikat-Getter: die Default-Ableitung aus
+    :attr:`DatasetBackend.verfuegbarkeit` setzt eine echte DB-Query ab
+    (``Anforderung.erfuellt``). Sie laeuft ueber ``get_available_backends`` auf
+    **jeder** Statistik-Seite und fuer **jedes** registrierte Backend — ein
+    einziges werfendes Backend riss damit die gesamte Uebersicht ab, nicht nur
+    seine eigene Karte.
+
+    Ein Wurf bedeutet hier „nicht verfuegbar": dasselbe Ergebnis wie ein falsy
+    Rueckgabewert, damit Sichtbarkeit (Liste) und Erreichbarkeit (Panel/Export
+    → 404) nicht auseinanderlaufen. Fail-closed ist auch die sichere Richtung —
+    ein Bericht, dessen Verfuegbarkeitspruefung nicht laeuft, ist nicht
+    nachweislich freigegeben.
+    """
+    try:
+        return bool(backend.is_available(facility))
+    except Exception:
+        logger.exception("statistics: is_available des Berichts-Backends %r ist gescheitert", backend.slug)
+        return False
+
+
+def available_report_backends(facility):
+    """``get_available_backends`` mit Fehlerisolation je Backend (Refs #2070).
+
+    Bewusst hier statt in der Registry: die Registry bleibt die schmale,
+    webframework-freie Auskunft, die Fehlerbehandlung gehoert an den Rand
+    (View-Schicht). Praedikat und Reihenfolge sind identisch zu
+    :func:`core.reporting.registry.get_available_backends`.
+    """
+    return [backend for backend in get_backends() if backend_is_available(backend, facility)]
+
+
+def get_backend_or_404_isolated(facility, slug):
+    """``get_backend_or_404`` mit derselben Isolation wie die Liste (Refs #2070).
+
+    ``get_backend_or_404`` ruft intern ``is_available`` — ein werfendes Backend
+    ergaebe hier einen 500er, waehrend dasselbe Backend in der Liste still
+    verschwindet. ``Http404`` muss dabei **vor** dem breiten Fang stehen: sie
+    ist selbst eine ``Exception`` und die regulaere Antwort dieser Funktion.
+    """
+    try:
+        return get_backend_or_404(facility, slug)
+    except Http404:
+        raise
+    except Exception:
+        logger.exception("statistics: Aufloesung des Berichts-Backends %r ist gescheitert", slug)
+        raise Http404(_("Bericht für diese Einrichtung nicht verfügbar.")) from None
+
+
 def resolve_report_backend(facility, query_params):
     """``?bericht=<slug>`` → verfuegbares Backend dieser Einrichtung oder ``None``.
 
@@ -93,14 +145,14 @@ def resolve_report_backend(facility, query_params):
     ``?backend=`` bleibt als Alias lesbar: das ist der Name, den das
     GET-Formular der Export-Schaltflaechen ohnehin traegt.
 
-    Aufgeloest wird gegen ``get_available_backends`` (nicht ``get_backend``):
+    Aufgeloest wird gegen ``available_report_backends`` (nicht ``get_backend``):
     ein fuer diese Einrichtung nicht verfuegbares Backend darf ueber einen
     Deep-Link so wenig erreichbar sein wie ueber die Liste.
     """
     slug = (query_params.get("bericht") or query_params.get("backend") or "").strip()
     if not slug:
         return None
-    return next((backend for backend in get_available_backends(facility) if backend.slug == slug), None)
+    return next((backend for backend in available_report_backends(facility) if backend.slug == slug), None)
 
 
 def build_report_panel_context(facility, backend, period_state) -> dict:
@@ -151,6 +203,42 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
         # im append-only EXPORT-Audit. Das Panel liegt im GET-Formular der
         # Berichte-Sektion, dessen Submit die Felder selbst serialisiert.
     }
+
+
+REPORT_PANEL_ERROR_TEMPLATE = "core/statistics/partials/report_panel_error.html"
+
+
+def build_report_panel_context_isolated(facility, backend, period_state) -> dict:
+    """Panel-Kontext — oder ein **datenfreier** Fehlerkontext (Refs #2070).
+
+    Die Isolation sitzt bewusst hier und nicht in
+    :func:`build_report_panel_context`: diese traegt die Sicherheitszusage der
+    atomaren Kette und **muss** weiter werfen (gepinnt in
+    ``tests/test_reporting_suppression_contract.py::TestPanelPfad``). Ein Fang
+    dort hiesse, dass ein Backend ohne ausgewiesene k-Anon-Schwelle nicht mehr
+    fail-closed scheitert.
+
+    **Kein Zwischenzustand.** Der Fehlerkontext enthaelt weder ``result`` noch
+    ``preview_rows``, ``field_specs`` oder ``k_anonymity_threshold`` — es gibt
+    also strukturell nichts, woraus ein Template eine Datenzeile bauen koennte,
+    auch nicht versehentlich. Das ist die Umsetzung der Zusage „entweder die
+    komplette, suppressierte Sicht oder gar keine".
+
+    **``SuppressionContractError`` ist kein Sonderfall.** Sie faellt in
+    denselben ``except Exception`` wie jeder Backend-Fehler: in JEDEM Fangfall
+    folgt dieselbe Handlung — nichts rendern, Fehlerkarte zeigen, loggen. Eine
+    Sonderbehandlung („bei diesem Fehler doch etwas anzeigen") waere die
+    Sicherheitsregression, die ADR-038 § 5 ausschliesst.
+    """
+    try:
+        with reporting_statement_timeout():
+            return build_report_panel_context(facility, backend, period_state)
+    except Exception:
+        # ``logger.exception`` (nicht ``warning``): der Traceback gehoert ins
+        # Log und — ueber die Sentry/GlitchTip-LoggingIntegration — ins
+        # Fehler-Tracking. Ein defektes Backend darf nicht lautlos degradieren.
+        logger.exception("statistics: Berichts-Panel des Backends %r ist gescheitert", backend.slug)
+        return {"backend": backend, "report_error": True}
 
 
 def statistics_state_params(period_state, document_type=None) -> dict[str, str]:
@@ -241,8 +329,10 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
         # gebaut: ``build_dataset`` ist teuer und hat auf der Uebersicht nichts
         # zu suchen.
         selected_backend = resolve_report_backend(facility, request.GET) if view_mode else None
+        # Refs #2070: fehlerisoliert — ein defektes Backend kostet seine eigene
+        # Vorschau, nicht die ganze Seite (Kennzahlen, Diagramme, Kartenliste).
         report_panel = (
-            build_report_panel_context(facility, selected_backend, period_state)
+            build_report_panel_context_isolated(facility, selected_backend, period_state)
             if selected_backend is not None
             else None
         )
@@ -285,7 +375,9 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
             "document_types": event_document_types(facility),
             # M5 P5 (Refs #1061): Berichts-Plugins (z. B. "Beispiel-Sachbericht")
             # fuer die Berichtsliste — nur fuer diese Facility verfuegbare.
-            "report_backends": get_available_backends(facility),
+            # Refs #2070: fehlerisoliert je Backend, weil dieser Aufruf auf
+            # JEDER Statistik-Seite laeuft (auch der reinen KPI-Uebersicht).
+            "report_backends": available_report_backends(facility),
             "selected_backend": selected_backend,
             # Refs #1804: Der Zeitraum reist an den Karten-Links mit — sonst
             # faellt er beim ersten Berichtswechsel auf die Vorgabe zurueck.
@@ -669,7 +761,7 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
         # Dropdown-Filter in ``registry.get_available_backends`` — sonst wuerde
         # ein falsy Nicht-``False``-Rueckgabewert (z. B. ``None`` aus einem
         # nullable BooleanField) das Backend nur verstecken, nicht sperren.
-        backend = get_backend_or_404(facility, slug)
+        backend = get_backend_or_404_isolated(facility, slug)
 
         today = timezone.localdate()
         try:
@@ -677,7 +769,13 @@ class DatasetReportPanelView(LeadOrAdminRequiredMixin, View):
         except InvalidStatisticsPeriodError as exc:
             return HttpResponse(str(exc), status=400)
 
-        return render(request, self.template_name, build_report_panel_context(facility, backend, period_state))
+        # Refs #2070: Fehlerkarte statt 500 — mit HTTP **200**, weil HTMX nur
+        # 2xx-Antworten einswappt. Eine 5xx-Antwort liesse das zuletzt
+        # gerenderte Panel stehen: der Fehler waere unsichtbar und die alte
+        # Vorschau sieht aus, als gehoerte sie zum neuen Zeitraum.
+        context = build_report_panel_context_isolated(facility, backend, period_state)
+        template = REPORT_PANEL_ERROR_TEMPLATE if context.get("report_error") else self.template_name
+        return render(request, template, context)
 
 
 class ReportReleaseLogView(LeadOrAdminRequiredMixin, View):
@@ -742,14 +840,32 @@ class DatasetExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
 
         slug = request.GET.get("backend", "").strip()
         # Truthiness wie im Panel/in der Registry — siehe DatasetReportPanelView.
-        backend = get_backend_or_404(facility, slug)
+        backend = get_backend_or_404_isolated(facility, slug)
 
         fmt = request.GET.get("format", "")
         if fmt not in SUPPORTED_FORMATS:
             return HttpResponse(_("Unbekanntes Export-Format."), status=400)
 
-        response = export_dataset(backend, facility, date_from, date_to, format=fmt)
+        # Refs #2070: Ein Export kann nicht degradieren — er muss sauber
+        # scheitern. HTTP 502 (nicht 4xx: der Client hat nichts falsch gemacht;
+        # nicht 500: der Fehler liegt im nachgelagerten Backend), knapper Text,
+        # KEIN Attachment-Header und kein Byte des Datensatzes. Der Fang
+        # umschliesst die vollstaendige Kette ``build_dataset`` ->
+        # ``prepare_export`` -> ``enforce_suppression_contract`` in
+        # ``export_dataset``; ein Teilergebnis verlaesst sie nie.
+        try:
+            with reporting_statement_timeout():
+                response = export_dataset(backend, facility, date_from, date_to, format=fmt)
+        except Exception:
+            logger.exception("statistics: Export des Berichts-Backends %r ist gescheitert", slug)
+            return HttpResponse(
+                _("Der Bericht konnte nicht erstellt werden. Bitte versuchen Sie es später erneut."),
+                status=502,
+                content_type="text/plain; charset=utf-8",
+            )
 
+        # Erst nach dem erfolgreichen Bau: ein gescheiterter Export darf im
+        # append-only Audit nicht als Herausgabe stehen.
         log_export(request, "DatasetExport", format=fmt, date_from=date_from, date_to=date_to, extra={"backend": slug})
 
         return response

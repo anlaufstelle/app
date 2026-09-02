@@ -14,12 +14,19 @@ from core.reporting.data_source import LIVE
 # Zyklusfrei: ``core.reporting.registry`` importiert nur ``core.reporting.base``
 # (keine Services, keine Models) und laedt das ``backends``-Package erst lazy
 # beim ersten ``get_*``-Aufruf.
+from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.registry import get_backend, get_backends
 from core.services.dashboard.statistics import PERSONS_KEY, count_unique_clients, get_statistics
 
 logger = logging.getLogger(__name__)
 
 _STAGE_KEYS = ("anonym", "identifiziert", "qualifiziert")
+
+# Refs #2070: Reservierter Schluessel in ``StatisticsSnapshot.backend_data`` fuer
+# uebersprungene Backends (``{slug: Exception-Klassenname}``). Kein Slug kann ihn
+# treffen — ``registry._SLUG_RE`` verlangt ein fuehrendes ``[a-z0-9]``. Kein
+# Modellfeld, keine Migration: ``backend_data`` ist ein freies ``JSONField``.
+SNAPSHOT_BACKEND_ERRORS_KEY = "_errors"
 
 
 def _merge_person_count(current: int | None, value: int | None) -> int | None:
@@ -54,11 +61,36 @@ def create_or_update_snapshot(facility, year, month):
     # statt eines hart verdrahteten Sachbericht-Aufrufs. Bewusst ``build_dataset``
     # und NICHT ``prepare_export``: der Snapshot ist der interne Rohbestand, die
     # k-Anon-Suppression gehoert allein in den Export-/Panel-Pfad.
-    payloads = {
-        backend.slug: backend.build_dataset(facility, date_from, date_to).summary
-        for backend in get_backends()
-        if backend.snapshot_enabled
-    }
+    #
+    # Refs #2070: je Backend isoliert und mit Query-Deckel. Bis hierher riss ein
+    # einziges werfendes Backend den kompletten Lauf ab — inklusive der bereits
+    # berechneten ``stats`` dieser Einrichtung, aller Folgemonate
+    # (``ensure_snapshots_for_months``) und aller Folge-Einrichtungen im
+    # Cron-Command. Der Preis dafuer war ein Datenverlust-Fenster: der Cron
+    # laeuft monatlich, die Event-Retention laeuft weiter.
+    payloads = {}
+    backend_errors = {}
+    for backend in get_backends():
+        if not backend.snapshot_enabled:
+            continue
+        try:
+            with reporting_statement_timeout():
+                payloads[backend.slug] = backend.build_dataset(facility, date_from, date_to).summary
+        except Exception as exc:
+            # Nur der Klassenname, nie ``str(exc)``: ``backend_data`` ist im
+            # PII-Residue-Sweep pauschal als non-PII klassifiziert
+            # (``src/tests/_residue_expectations.py``) — eine roh uebernommene
+            # Fehlermeldung koennte Query-Parameter und damit Personenbezug
+            # tragen. Der vollstaendige Traceback steht im Log (und via
+            # Sentry-LoggingIntegration im Fehler-Tracking).
+            backend_errors[backend.slug] = type(exc).__name__
+            logger.exception(
+                "create_or_update_snapshot: Backend %s uebersprungen (facility=%s year=%d month=%d)",
+                backend.slug,
+                facility.name,
+                year,
+                month,
+            )
 
     # Remove top_clients (not snapshot-safe due to anonymization)
     stats.pop("top_clients", None)
@@ -82,6 +114,15 @@ def create_or_update_snapshot(facility, year, month):
     # Force-convert lazy translation strings to plain strings for JSON storage
     stats = json.loads(json.dumps(stats, cls=DjangoJSONEncoder))
     payloads = json.loads(json.dumps(payloads, cls=DjangoJSONEncoder))
+
+    # Refs #2070: der Ausfall wird **laut** markiert, nicht verschwiegen — genau
+    # das war die Sorge hinter der frueheren Fail-loud-Politik (ein leises
+    # Datenloch, das erst Monate spaeter auffaellt). Der Schluessel kann mit
+    # keinem Slug kollidieren: ``registry._SLUG_RE`` verbietet den fuehrenden
+    # Unterstrich. Er entsteht nur im Fehlerfall — ein immer vorhandener,
+    # meist leerer Marker waere Rauschen in jeder Snapshot-Zeile.
+    if backend_errors:
+        payloads[SNAPSHOT_BACKEND_ERRORS_KEY] = backend_errors
 
     StatisticsSnapshot.objects.update_or_create(
         facility=facility,

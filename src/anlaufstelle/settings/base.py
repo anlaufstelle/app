@@ -389,6 +389,16 @@ SESSION_SAVE_EVERY_REQUEST = False
 # Default weit ueber realistischem Bestand; bei Ueberschreitung wird laut geloggt.
 OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = env_int("OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", 10000)
 
+# Refs #2070: Query-Deckel je Reporting-Backend-Aufruf (Panel, Export,
+# Snapshot-Lauf). Ein Backend fuehrt backend-eigene Queries aus; ohne
+# Obergrenze haelt eine entgleiste Query einen Worker beliebig lange fest.
+# Wird als transaktionslokaler ``statement_timeout`` gesetzt
+# (``core.reporting.db_guard.reporting_statement_timeout``); der resultierende
+# ``QueryCanceled`` wird wie jeder andere Backend-Fehler isoliert.
+# Deutlich ueber jeder realistischen Berichtsabfrage, deutlich unter dem
+# Gunicorn-Worker-Timeout. ``0`` schaltet den Deckel ab.
+REPORTING_BACKEND_STATEMENT_TIMEOUT_MS = env_int("REPORTING_BACKEND_STATEMENT_TIMEOUT_MS", 10000)
+
 # --- Trusted Proxy Hops (Client-IP-Ermittlung) ---
 # Anzahl der vertrauenswürdigen Proxy-Hops vor der Django-App. Bestimmt, welcher
 # Eintrag aus X-Forwarded-For als echte Client-IP interpretiert wird.

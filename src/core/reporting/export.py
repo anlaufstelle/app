@@ -27,7 +27,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext
 
-from core.reporting.base import DatasetBackend, DatasetResult
+from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE, POPULATION_NOTES
 
 # Bewusste Wiederverwendung des Formula-Injection-Schutzes (OWASP CSV-
@@ -182,13 +182,37 @@ def _render_csv(
     result: DatasetResult,
     generated_at,
 ) -> Iterator[str]:
-    """CSV-Generator: Metadaten-Kommentar, Header aus FieldSpec-Labels, dann Records.
+    """CSV-Renderer: Metadaten-Kommentar, Header aus FieldSpec-Labels, dann Records.
 
     Jede Zelle (auch Metadaten und Header) laeuft durch ``_sanitize_csv_cell``.
     Completeness-Issues erscheinen bewusst nicht im CSV — es bleibt
     maschinenlesbar; sie stehen in JSON/XML/Panel.
+
+    **Der letzte backend-eigene Aufruf laeuft eager, nicht im Generator**
+    (Refs #2070, gleiche Begruendung wie
+    ``test_reporting_suppression_contract.py::test_streaming_bricht_nicht_erst_beim_konsumieren``):
+    ``get_field_specs()`` ist Backend-Code und kann werfen. Im Generator faellt
+    der Fehler erst beim Auslesen von ``streaming_content`` — die View hat dann
+    bereits eine 200-Response mit Download-Headern gebaut und der Empfaenger
+    bekaeme eine abgebrochene Datei statt eines klaren Fehlers. Eager gerufen
+    landet er im Fehlerfang der Export-View (HTTP 502). Ab hier ist nichts mehr
+    backend-eigen: die Zeilenschleife arbeitet nur noch auf dem bereits
+    suppressierten ``result``.
     """
     field_specs = backend.get_field_specs()
+    return _csv_rows(backend, facility, date_from, date_to, result, generated_at, field_specs)
+
+
+def _csv_rows(
+    backend: DatasetBackend,
+    facility,
+    date_from,
+    date_to,
+    result: DatasetResult,
+    generated_at,
+    field_specs: list[FieldSpec],
+) -> Iterator[str]:
+    """Die eigentliche Zeilenausgabe — bewusst lazy (Streaming, siehe :func:`_render_csv`)."""
     output = io.StringIO()
     writer = csv.writer(output, dialect="excel")
 

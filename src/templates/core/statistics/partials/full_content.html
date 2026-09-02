@@ -124,7 +124,13 @@ nur rendern, wenn mindestens ein Berichts-Backend registriert/verfügbar ist.
     </div>
     {% endif %}
     <div id="report-panel">
-        {% if selected_backend %}{% include "core/statistics/partials/report_panel.html" %}{% else %}<p class="text-[13px] text-ink-muted">{% trans "Wählen Sie oben einen Bericht, um Vorschau und Export zu sehen." %}</p>{% endif %}
+        {% comment %}
+        Refs #2070: ``report_error`` kommt aus dem fehlerisolierten Panel-Kontext
+        (``build_report_panel_context_isolated``) und wird VOR dem Panel geprüft.
+        Dieser Kontext trägt dann keine Daten-Variablen — die Verzweigung hier ist
+        die Anzeigeform, nicht die Absicherung.
+        {% endcomment %}
+        {% if report_error %}{% include "core/statistics/partials/report_panel_error.html" %}{% elif selected_backend %}{% include "core/statistics/partials/report_panel.html" %}{% else %}<p class="text-[13px] text-ink-muted">{% trans "Wählen Sie oben einen Bericht, um Vorschau und Export zu sehen." %}</p>{% endif %}
     </div>
     </form>
 </section>
