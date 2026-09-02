@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from uuid import UUID
 
 from django.utils import timezone
@@ -99,14 +99,22 @@ def _handover_filter(
     # Die automatische Übergabe zeigt das zuletzt abgeschlossene reale
     # Schichtfenster. Das funktioniert auch in Dienstplan-Lücken und hängt
     # nicht davon ab, ob der separat aufgelöste Live-Filter noch aktiv ist.
+    # Refs #2057: Der Vergleich laeuft ueber UTC. Tragen zwei aware Datetimes
+    # dasselbe ``tzinfo``-Objekt — und das tun ``window_end`` und ``now`` hier
+    # beide (``ZoneInfo("Europe/Berlin")``) — vergleicht Python ihre
+    # Wanduhrfelder und ignoriert die UTC-Offsets. Am Rueckfalltag galt eine
+    # noch laufende Nachtschicht dadurch um 02:50 der ersten Okkurrenz bereits
+    # als abgeschlossen (02:45 < 02:50 auf der Wanduhr, aber 01:45Z > 00:50Z).
+    now_utc = now.astimezone(UTC)
     latest_completed = None
     for shift_date in (today - timedelta(days=2), today - timedelta(days=1), today):
         for item in time_filters:
             _, window_end = get_time_range(shift_date, item)
-            if window_end > now:
+            window_end_utc = window_end.astimezone(UTC)
+            if window_end_utc > now_utc:
                 continue
-            if latest_completed is None or window_end > latest_completed[0]:
-                latest_completed = (window_end, item, shift_date)
+            if latest_completed is None or window_end_utc > latest_completed[0]:
+                latest_completed = (window_end_utc, item, shift_date)
 
     if latest_completed is None:
         return None, target_date

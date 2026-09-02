@@ -23,6 +23,8 @@ from django.utils import timezone
 
 from core.models import Event, TimeFilter
 from core.services.events import build_feed_items, get_time_range
+from core.services.events.tally import current_tally_context
+from core.services.zeitstrom_filters import resolve_zeitstrom_state
 
 BERLIN = ZoneInfo("Europe/Berlin")
 UTC = dt.UTC
@@ -275,6 +277,17 @@ class TestShiftWindowDstSpringForward:
         start_dt, end_dt = get_time_range(dt.date(2026, 3, 28), _time_filter(NIGHT_SHIFT))
         assert _real_duration(start_dt, end_dt) == dt.timedelta(hours=6, minutes=45)
 
+    def test_end_is_normalised_to_an_existing_wall_clock_time(self):
+        """Der Rueckgabewert selbst darf keine Uhrzeit tragen, die es nie gab.
+
+        Dauer-ab-Start auf der Wanduhr-Achse ergaebe ``02:45+01:00`` — den
+        richtigen Instant unter einer lokalen Zeit, die am 29.03. nicht
+        existiert. ``case.handover`` rendert ``end_dt`` direkt per
+        ``strftime``, die Fachkraft saehe also "02:45".
+        """
+        _start_dt, end_dt = get_time_range(dt.date(2026, 3, 28), _time_filter(NIGHT_SHIFT))
+        assert end_dt.isoformat() == "2026-03-29T03:45:00+02:00"
+
     def test_end_is_not_the_post_gap_offset(self):
         """Gegenprobe: ``fold=1`` waere in der Luecke 00:45 UTC — das darf nicht passieren."""
         _start_dt, end_dt = get_time_range(dt.date(2026, 3, 28), _time_filter(NIGHT_SHIFT))
@@ -304,6 +317,25 @@ class TestShiftWindowDstNoTransition:
     def test_day_shift_on_ordinary_winter_day(self):
         start_dt, end_dt = get_time_range(dt.date(2026, 1, 15), _time_filter((dt.time(8, 0), dt.time(16, 0))))
         assert _real_duration(start_dt, end_dt) == dt.timedelta(hours=8)
+
+    def test_unambiguous_end_keeps_fold_zero(self):
+        """``fold=1`` gehoert nur an ein tatsaechlich mehrdeutiges Ende.
+
+        Sonst aendert sich an jedem normalen Tag die Objektdarstellung
+        (Pickle, Vergleich per ``==`` mit einem frisch gebauten Wert), ohne
+        dass sich der Instant unterscheidet.
+        """
+        _start_dt, end_dt = get_time_range(dt.date(2026, 6, 14), _time_filter(NIGHT_SHIFT))
+        assert end_dt.fold == 0
+
+    def test_unambiguous_full_day_end_keeps_fold_zero(self):
+        _start_dt, end_dt = get_time_range(dt.date(2026, 6, 14))
+        assert end_dt.fold == 0
+
+    def test_ambiguous_end_uses_fold_one(self):
+        """Gegenprobe: nur am Rueckfalltag darf ``fold`` umschlagen."""
+        _start_dt, end_dt = get_time_range(dt.date(2026, 10, 24), _time_filter(NIGHT_SHIFT))
+        assert end_dt.fold == 1
 
     def test_full_day_on_ordinary_day_spans_twenty_four_hours(self):
         start_dt, end_dt = get_time_range(dt.date(2026, 6, 14))
@@ -338,3 +370,111 @@ class TestShiftWindowDstFeedResult:
         assert first_hour.pk in pks
         assert second_hour.pk in pks, "Die zweite (duplizierte) 02:xx-Stunde faellt aus dem Schichtfenster (#2057)"
         assert after_shift.pk not in pks, "Das Fenster darf nicht ueber das Schichtende hinaus aufgehen"
+
+
+@pytest.mark.django_db
+class TestShiftWindowDstLiveSelection:
+    """Die automatischen Schicht-Auswahlen folgen der Fold-Semantik (Refs #2057).
+
+    ``get_time_range`` liefert das richtige Fenster — aber wer die *laufende*
+    bzw. *zuletzt abgeschlossene* Schicht ueber Wanduhrzeiten bestimmt,
+    verlaesst dieses Fenster wieder. In der ersten 02:xx-Stunde des
+    Rueckfalltags galt die Nachtschicht 20:00-02:45 dadurch ab 02:45
+    Wanduhrzeit als beendet, obwohl sie real noch eine Stunde laeuft.
+    """
+
+    @pytest.fixture
+    def night_shift(self, facility):
+        return TimeFilter.objects.create(
+            facility=facility, label="Nachtschicht", start_time=dt.time(20, 0), end_time=dt.time(2, 45)
+        )
+
+    # 02:50 der ERSTEN Okkurrenz (CEST, +02:00) — die Schicht laeuft noch.
+    FIRST_OCCURRENCE = dt.datetime(2026, 10, 25, 2, 50, tzinfo=BERLIN, fold=0)
+    # 02:50 der ZWEITEN Okkurrenz (CET, +01:00) — die Schicht ist vorbei.
+    SECOND_OCCURRENCE = dt.datetime(2026, 10, 25, 2, 50, tzinfo=BERLIN, fold=1)
+
+    def test_live_context_still_in_shift_during_first_occurrence(self, facility, night_shift):
+        context = current_tally_context(facility, now=self.FIRST_OCCURRENCE)
+        assert context.time_filter == night_shift, (
+            "Die Nachtschicht gilt in der ersten 02:xx-Stunde faelschlich als beendet (#2057)"
+        )
+        assert context.shift_date == dt.date(2026, 10, 24)
+        assert context.window_end.astimezone(UTC) == dt.datetime(2026, 10, 25, 1, 45, tzinfo=UTC)
+
+    def test_live_context_shift_over_during_second_occurrence(self, facility, night_shift):
+        """Gegenprobe: eine Stunde spaeter (CET) ist die Schicht wirklich vorbei."""
+        context = current_tally_context(facility, now=self.SECOND_OCCURRENCE)
+        assert context.time_filter is None
+        assert context.shift_date == dt.date(2026, 10, 25)
+
+    def test_auto_selection_keeps_the_shift_during_first_occurrence(self, facility, night_shift):
+        state = resolve_zeitstrom_state({}, facility, today=dt.date(2026, 10, 25), now=self.FIRST_OCCURRENCE)
+        assert state.time_filter == night_shift
+        assert state.target_date == dt.date(2026, 10, 24)
+
+    def test_auto_selection_releases_the_shift_during_second_occurrence(self, facility, night_shift):
+        state = resolve_zeitstrom_state({}, facility, today=dt.date(2026, 10, 25), now=self.SECOND_OCCURRENCE)
+        assert state.time_filter is None
+        assert state.target_date == dt.date(2026, 10, 25)
+
+    def test_handover_does_not_close_the_running_shift(self, facility, night_shift):
+        """Die laufende Schicht ist nicht die "zuletzt abgeschlossene"."""
+        state = resolve_zeitstrom_state(
+            {"view": "uebergabe"}, facility, today=dt.date(2026, 10, 25), now=self.FIRST_OCCURRENCE
+        )
+        assert state.time_filter == night_shift
+        assert state.target_date == dt.date(2026, 10, 23), (
+            "Die noch laufende Schicht vom 24.10. wird als abgeschlossen ausgewiesen (#2057)"
+        )
+
+    def test_handover_closes_the_shift_after_the_second_occurrence(self, facility, night_shift):
+        state = resolve_zeitstrom_state(
+            {"view": "uebergabe"}, facility, today=dt.date(2026, 10, 25), now=self.SECOND_OCCURRENCE
+        )
+        assert state.time_filter == night_shift
+        assert state.target_date == dt.date(2026, 10, 24)
+
+    def test_ordinary_day_shift_still_running_before_the_end(self, facility, night_shift):
+        context = current_tally_context(facility, now=dt.datetime(2026, 6, 15, 2, 30, tzinfo=BERLIN))
+        assert context.time_filter == night_shift
+        assert context.shift_date == dt.date(2026, 6, 14)
+
+    def test_ordinary_day_shift_over_after_the_end(self, facility, night_shift):
+        context = current_tally_context(facility, now=dt.datetime(2026, 6, 15, 2, 50, tzinfo=BERLIN))
+        assert context.time_filter is None
+        assert context.shift_date == dt.date(2026, 6, 15)
+
+    def test_ordinary_day_shift_running_in_the_evening(self, facility, night_shift):
+        context = current_tally_context(facility, now=dt.datetime(2026, 6, 14, 22, 0, tzinfo=BERLIN))
+        assert context.time_filter == night_shift
+        assert context.shift_date == dt.date(2026, 6, 14)
+
+    def test_shift_end_instant_still_belongs_to_the_ending_shift(self, facility, night_shift):
+        """Das Fenster ist an beiden Enden geschlossen (Refs #1910).
+
+        Genau auf dem End-Instant laeuft die Schicht noch. Ein halboffenes
+        ``[start, end)`` haette den Grenzfall aus
+        ``test_tally_live_context.py`` gekippt, in dem ein endender
+        Nachtdienst gegen einen beginnenden Fruehdienst gewinnt.
+        """
+        context = current_tally_context(facility, now=dt.datetime(2026, 6, 15, 2, 45, tzinfo=BERLIN))
+        assert context.time_filter == night_shift
+        assert context.shift_date == dt.date(2026, 6, 14)
+
+    def test_shift_start_instant_already_belongs_to_the_shift(self, facility, night_shift):
+        context = current_tally_context(facility, now=dt.datetime(2026, 6, 14, 20, 0, tzinfo=BERLIN))
+        assert context.time_filter == night_shift
+        assert context.shift_date == dt.date(2026, 6, 14)
+
+    def test_fall_back_shift_end_instant_is_the_second_occurrence(self, facility, night_shift):
+        """Der End-Instant am Rueckfalltag ist 02:45 CET, nicht 02:45 CEST."""
+        still_running = current_tally_context(facility, now=dt.datetime(2026, 10, 25, 2, 45, tzinfo=BERLIN, fold=0))
+        assert still_running.time_filter == night_shift
+
+        on_the_end = current_tally_context(facility, now=dt.datetime(2026, 10, 25, 2, 45, tzinfo=BERLIN, fold=1))
+        assert on_the_end.time_filter == night_shift
+        assert on_the_end.shift_date == dt.date(2026, 10, 24)
+
+        just_after = current_tally_context(facility, now=dt.datetime(2026, 10, 25, 2, 46, tzinfo=BERLIN, fold=1))
+        assert just_after.time_filter is None

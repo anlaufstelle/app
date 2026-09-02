@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldCondition, FieldTemplate, TimeFilter
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_document_type, user_can_see_field
-from core.services.events.feed import get_time_range
+from core.services.events.feed import get_time_range, shift_window_covers
 from core.services.events.idempotency import normalize_idempotency_key
 
 TALLY_IDEMPOTENCY_SCOPE = "tally_increment"
@@ -246,15 +246,21 @@ def current_tally_context(facility, *, time_filters=None, now=None) -> TallyLive
     now = now or timezone.localtime()
     if time_filters is None:
         time_filters = TimeFilter.objects.for_facility(facility).filter(is_active=True).order_by("sort_order", "pk")
+    # Refs #2057: Die laufende Schicht wird ueber die Instants des Fensters
+    # bestimmt, das ``get_time_range`` liefert — nicht ueber
+    # ``TimeFilter.covers_time``, das ``now`` auf ``dt.time()`` reduziert.
+    # Ein reiner Wanduhr-Vergleich verlaesst die Fold-Semantik wieder: in der
+    # ERSTEN 02:xx-Stunde des Rueckfalltags gilt eine Nachtschicht 20:00-02:45
+    # ab 02:45 Wanduhrzeit als beendet, obwohl ihr Fenster bis 02:45 der
+    # zweiten Okkurrenz laeuft. Geprueft werden das heutige und das gestrige
+    # Fenster — bei Mitternachtsueberlauf gehoert der Zeitpunkt zum Vortag.
+    today = now.date()
     for tf in time_filters:
-        if not tf.covers_time(now):
-            continue
-        shift_date = now.date()
-        if tf.start_time > tf.end_time and now.time() <= tf.end_time:
-            shift_date = shift_date - timedelta(days=1)
-        window_start, window_end = get_time_range(shift_date, tf)
-        return TallyLiveContext(tf, shift_date, window_start, window_end)
-    shift_date = now.date()
+        for shift_date in (today, today - timedelta(days=1)):
+            window_start, window_end = get_time_range(shift_date, tf)
+            if shift_window_covers(window_start, window_end, now):
+                return TallyLiveContext(tf, shift_date, window_start, window_end)
+    shift_date = today
     window_start, window_end = get_time_range(shift_date, None)
     return TallyLiveContext(None, shift_date, window_start, window_end)
 

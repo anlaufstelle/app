@@ -27,6 +27,19 @@ def _is_imaginary(naive_dt, tzinfo):
     return aware.astimezone(UTC).astimezone(tzinfo).replace(tzinfo=None) != naive_dt
 
 
+def _is_ambiguous(naive_dt, tzinfo):
+    """True, wenn diese Wanduhrzeit in dieser Zone zweimal auftritt (Refs #2057).
+
+    Am Rueckfalltag laeuft die Uhr zurueck (Europe/Berlin: 2026-10-25
+    03:00 -> 02:00); dieselbe Wanduhrzeit steht dann fuer zwei Instants, die
+    sich im UTC-Offset unterscheiden. Nur fuer solche Zeiten hat ``fold``
+    ueberhaupt eine Wirkung. Voraussetzung: ``naive_dt`` ist nicht imaginaer
+    (in der Luecke unterscheiden sich die Offsets ebenfalls) — die Aufrufer
+    pruefen ``_is_imaginary`` zuerst.
+    """
+    return naive_dt.replace(tzinfo=tzinfo, fold=0).utcoffset() != naive_dt.replace(tzinfo=tzinfo, fold=1).utcoffset()
+
+
 def _resolve_window_end(naive_start, naive_end, start_dt):
     """Fensterende nach der DST-Semantik aus #2057 auf einen Instant aufloesen."""
     tzinfo = timezone.get_current_timezone()
@@ -34,11 +47,50 @@ def _resolve_window_end(naive_start, naive_end, start_dt):
         # Vorstelltag: die Wanduhrzeit gibt es nicht -> Dauer-ab-Start. Die
         # nominale Dauer ist die Differenz der beiden naiven Wanduhrzeiten,
         # also die Dauer an einem DST-freien Referenztag.
-        return start_dt + (naive_end - naive_start)
-    # Rueckfalltag: ``fold=1`` waehlt die ZWEITE Okkurrenz der doppelten
-    # Stunde. Fuer eindeutige Zeiten ist ``fold`` wirkungslos — derselbe
-    # Instant wie bisher.
-    return timezone.make_aware(naive_end.replace(fold=1))
+        #
+        # Addiert wird auf der UTC-Achse und danach zurueck normalisiert:
+        # ``aware + timedelta`` rechnet in lokaler Wanduhrarithmetik und
+        # lieferte sonst ``02:45+01:00`` — den richtigen Instant unter einer
+        # lokalen Zeit, die an diesem Tag nicht existiert. ``case.handover``
+        # rendert ``end_dt`` direkt per ``strftime``; die Fachkraft saehe
+        # dann eine Uhrzeit, die die Uhr nie angezeigt hat.
+        return (start_dt.astimezone(UTC) + (naive_end - naive_start)).astimezone(tzinfo)
+    if _is_ambiguous(naive_end, tzinfo):
+        # Rueckfalltag: ``fold=1`` waehlt die ZWEITE Okkurrenz der doppelten
+        # Stunde.
+        return timezone.make_aware(naive_end.replace(fold=1))
+    # Eindeutige Zeit: unveraendert wie vor #2057. ``fold=1`` waere zwar
+    # instantgleich, aendert aber die Objektdarstellung (Pickle, ``==``
+    # gegen einen frisch gebauten Wert) an jedem normalen Tag.
+    return timezone.make_aware(naive_end)
+
+
+def shift_window_covers(start_dt, end_dt, moment):
+    """True, wenn ``moment`` im Fenster ``[start_dt, end_dt]`` liegt.
+
+    Refs #2057. Der Vergleich laeuft ausdruecklich ueber UTC: tragen zwei
+    aware Datetimes dasselbe ``tzinfo``-Objekt, vergleicht Python ihre
+    Wanduhrfelder und ignoriert die UTC-Offsets (CPython-Doku zu
+    ``datetime``). Genau die doppelte Stunde des Rueckfalltags faellt damit
+    unter den Tisch — 02:45 der zweiten Okkurrenz gilt dann als "vor"
+    02:50 der ersten.
+
+    Wer die laufende oder zuletzt abgeschlossene Schicht bestimmt, muss
+    diesen Weg nehmen statt Wanduhrzeiten zu vergleichen; sonst weicht die
+    Auswahl von dem Fenster ab, das ``get_time_range`` liefert.
+
+    Das Fenster ist an **beiden** Enden geschlossen — wie das abgeloeste
+    ``TimeFilter.covers_time`` (``t >= start or t <= end``). Der Grenzfall ist
+    festgeschrieben (Refs #1910,
+    ``test_tally_live_context.py::test_auto_selection_uses_the_same_tie_breaker_as_the_live_tally_context``):
+    Treffen um Punkt 08:00 ein endender Nachtdienst 22:00-08:00 und ein
+    beginnender Fruehdienst 08:00-16:00 aufeinander, gewinnt der **endende**
+    Dienst. Ein halboffenes ``[start, end)`` wuerde diese Zuordnung kippen —
+    die Erfassung spraenge am Schichtwechsel eine Sekunde zu frueh in die
+    neue Schicht.
+    """
+    moment_utc = moment.astimezone(UTC)
+    return start_dt.astimezone(UTC) <= moment_utc <= end_dt.astimezone(UTC)
 
 
 def get_time_range(target_date, time_filter=None):
@@ -67,15 +119,25 @@ def get_time_range(target_date, time_filter=None):
       Stunde dokumentierten Ereignisse aus Feed, Uebergabe und Strichliste.
     * **Vorstelltag** (Fruehjahr, z. B. 2026-03-29): die Stunde 02:00-03:00
       existiert nicht. Eine zweite Okkurrenz gibt es hier nicht, also gilt
-      **Dauer-ab-Start**: ``end = start + nominale Dauer``. Die Schicht
-      verkuerzt sich real um die uebersprungene Stunde, ohne dass eine nie
-      existierte Uhrzeit erfunden wird. Auf Europe/Berlin faellt das mit der
-      frueheren ``fold=0``-Aufloesung zusammen (gleicher Pre-Gap-Offset wie
-      am Schichtbeginn) — die Regel steht trotzdem ausdruecklich da, statt
-      sich auf diesen Zufall zu verlassen.
+      **Dauer-ab-Start**: ``end = start + nominale Dauer``, auf der UTC-Achse
+      addiert und in die lokale Zone zurueck normalisiert. Die Schicht dauert
+      damit real genauso lang wie an jedem anderen Tag (20:00-02:45 = 6 h 45);
+      die **Wanduhr** am Schichtende steht eine Stunde spaeter, weil sie
+      waehrend der Schicht vorgesprungen ist — aus 02:45 wird 03:45 CEST.
+      Erfunden wird dabei keine Uhrzeit: 02:45 hat es an diesem Tag nie
+      gegeben, 03:45 schon. Der UTC-Instant ist derselbe, den die fruehere
+      ``fold=0``-Aufloesung traf (gleicher Pre-Gap-Offset wie am
+      Schichtbeginn) — die Regel steht trotzdem ausdruecklich da, statt sich
+      auf diesen Zufall zu verlassen.
     * Der **Schichtbeginn** bleibt auf der ersten Okkurrenz (``fold=0``).
       Zusammen mit dem Ende auf der zweiten ist das Fenster die weiteste
       wanduhrtreue Auslegung — es verliert nie ein dokumentiertes Ereignis.
+    * Wer die **laufende** oder **zuletzt abgeschlossene** Schicht bestimmt
+      (``events.tally.current_tally_context``,
+      ``zeitstrom_filters._handover_filter``), muss dafuer die Instants
+      dieses Fensters heranziehen — ``shift_window_covers`` unten. Ein
+      Vergleich von Wanduhrzeiten (``TimeFilter.covers_time``) verlaesst die
+      hier festgelegte Semantik wieder.
     * **Ganztags-Fenster** aendern sich nicht: 00:00 und 23:59:59.999999 sind
       an keiner EU-Transition mehrdeutig. Der Rueckfalltag umfasst weiterhin
       25 Stunden, der Vorstelltag 23.
