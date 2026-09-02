@@ -1,6 +1,6 @@
 """Service for building unified activity feeds."""
 
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 from django.db.models import Q
 from django.utils import timezone
@@ -15,6 +15,32 @@ from core.services.dynamic_data import option_label_map
 from core.services.file_vault import safe_decrypt
 
 
+def _is_imaginary(naive_dt, tzinfo):
+    """True, wenn diese Wanduhrzeit in dieser Zone nicht existiert (Refs #2057).
+
+    Am Vorstelltag springt die Uhr (Europe/Berlin: 2026-03-29 02:00 -> 03:00);
+    die uebersprungene Stunde ist eine Luecke. Der kanonische Test dafuer
+    (PEP 495) ist die Rundreise ueber UTC: existiert die Wanduhrzeit nicht,
+    kommt eine andere zurueck.
+    """
+    aware = naive_dt.replace(tzinfo=tzinfo)
+    return aware.astimezone(UTC).astimezone(tzinfo).replace(tzinfo=None) != naive_dt
+
+
+def _resolve_window_end(naive_start, naive_end, start_dt):
+    """Fensterende nach der DST-Semantik aus #2057 auf einen Instant aufloesen."""
+    tzinfo = timezone.get_current_timezone()
+    if _is_imaginary(naive_end, tzinfo):
+        # Vorstelltag: die Wanduhrzeit gibt es nicht -> Dauer-ab-Start. Die
+        # nominale Dauer ist die Differenz der beiden naiven Wanduhrzeiten,
+        # also die Dauer an einem DST-freien Referenztag.
+        return start_dt + (naive_end - naive_start)
+    # Rueckfalltag: ``fold=1`` waehlt die ZWEITE Okkurrenz der doppelten
+    # Stunde. Fuer eindeutige Zeiten ist ``fold`` wirkungslos — derselbe
+    # Instant wie bisher.
+    return timezone.make_aware(naive_end.replace(fold=1))
+
+
 def get_time_range(target_date, time_filter=None):
     """Return (start_dt, end_dt) for a given date, optionally scoped by a TimeFilter.
 
@@ -23,18 +49,54 @@ def get_time_range(target_date, time_filter=None):
       - Normal range (start <= end): same day from start_time to end_time.
       - Midnight overlap (start > end, e.g. 22:00-08:00): start on target_date,
         end on target_date + 1 day.
+
+    DST-Semantik des Fensterendes (Refs #2057, Maintainer-Entscheid Welle E)
+    =======================================================================
+    Zwei Tage im Jahr ist eine Wanduhrzeit nicht eindeutig. Die Regel dafuer
+    steht hier zentral, weil fuenf Aufrufer sie teilen: Zeitstrom-Feed,
+    Live-Watch (``zeitstrom_watch``), Strichliste (``events.tally``),
+    Schichtuebergabe (``case.handover``) und die Schichtfilter-Tabs
+    (``zeitstrom_filters``).
+
+    * **Rueckfalltag** (Herbst, z. B. 2026-10-25): die Stunde 02:00-03:00
+      laeuft zweimal. Das Fensterende nimmt die **zweite** Okkurrenz
+      (``fold=1``). Eine Nachtschicht 20:00-02:45 dauert an diesem Tag real
+      **7 h 45** und enthaelt beide 02:xx-Stunden — genau das, was die
+      Fachkraft erlebt, die eine Stunde laenger im Dienst ist. Wuerde das
+      Fenster auf der ersten Okkurrenz enden, fielen alle in der zweiten
+      Stunde dokumentierten Ereignisse aus Feed, Uebergabe und Strichliste.
+    * **Vorstelltag** (Fruehjahr, z. B. 2026-03-29): die Stunde 02:00-03:00
+      existiert nicht. Eine zweite Okkurrenz gibt es hier nicht, also gilt
+      **Dauer-ab-Start**: ``end = start + nominale Dauer``. Die Schicht
+      verkuerzt sich real um die uebersprungene Stunde, ohne dass eine nie
+      existierte Uhrzeit erfunden wird. Auf Europe/Berlin faellt das mit der
+      frueheren ``fold=0``-Aufloesung zusammen (gleicher Pre-Gap-Offset wie
+      am Schichtbeginn) — die Regel steht trotzdem ausdruecklich da, statt
+      sich auf diesen Zufall zu verlassen.
+    * Der **Schichtbeginn** bleibt auf der ersten Okkurrenz (``fold=0``).
+      Zusammen mit dem Ende auf der zweiten ist das Fenster die weiteste
+      wanduhrtreue Auslegung — es verliert nie ein dokumentiertes Ereignis.
+    * **Ganztags-Fenster** aendern sich nicht: 00:00 und 23:59:59.999999 sind
+      an keiner EU-Transition mehrdeutig. Der Rueckfalltag umfasst weiterhin
+      25 Stunden, der Vorstelltag 23.
+
+    Nicht Teil dieser Regel ist die **Eingabe** von ``occurred_at``: Django
+    weist eine mehrdeutige oder nicht existente Eingabezeit im Formular mit
+    einer ``ValidationError`` ab (``forms.utils.from_current_timezone``), sie
+    wird also nirgends still auf eine Okkurrenz gepinnt.
     """
     if time_filter is not None:
-        start_dt = timezone.make_aware(datetime.combine(target_date, time_filter.start_time))
+        naive_start = datetime.combine(target_date, time_filter.start_time)
         if time_filter.start_time <= time_filter.end_time:
-            end_dt = timezone.make_aware(datetime.combine(target_date, time_filter.end_time))
+            naive_end = datetime.combine(target_date, time_filter.end_time)
         else:
-            end_dt = timezone.make_aware(datetime.combine(target_date + timedelta(days=1), time_filter.end_time))
-        return start_dt, end_dt
+            naive_end = datetime.combine(target_date + timedelta(days=1), time_filter.end_time)
+    else:
+        naive_start = datetime.combine(target_date, time.min)
+        naive_end = datetime.combine(target_date, time.max)
 
-    start_dt = timezone.make_aware(datetime.combine(target_date, time.min))
-    end_dt = timezone.make_aware(datetime.combine(target_date, time.max))
-    return start_dt, end_dt
+    start_dt = timezone.make_aware(naive_start)
+    return start_dt, _resolve_window_end(naive_start, naive_end, start_dt)
 
 
 def _feed_events(facility, start_dt, end_dt, user, include_all):

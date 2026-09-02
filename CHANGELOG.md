@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Selbst-Rückzug des Löschantrags im Handbuch beschrieben** (#2092) — Das Nutzerhandbuch (DE+EN) erklärt jetzt, wie eine antragstellende Person einen eigenen ausstehenden Löschantrag selbst zurückziehen kann, und macht dabei deutlich, dass nichts gelöscht wird und danach jederzeit ein neuer Antrag möglich ist.
+### Fixed
+
+- **Die Nachtschicht an der Zeitumstellung verliert ihre zusätzliche Stunde nicht mehr** (#2057) — In der Nacht zur Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal, und eine Schicht mit einem Ende in dieser Stunde — etwa 20:00 bis 02:45 — endete bisher schon beim ersten Durchlauf: Alles, was die Fachkraft in der zweiten, real gearbeiteten Stunde dokumentierte, fehlte anschließend in Zeitstrom, Schichtübergabe, Strichliste, Live-Ansicht und Schichtfilter-Tabs, obwohl die Einträge gespeichert waren. Das Schichtende meint jetzt ausdrücklich den **zweiten** Durchlauf der Uhrzeit, die Schicht dauert an diesem Tag also real 7 Stunden 45 statt 6 Stunden 45; in der Nacht zur Sommerzeit, in der die Stunde 02:00 bis 03:00 gar nicht stattfindet, gilt die vereinbarte Dauer ab Schichtbeginn, statt eine nie existierte Uhrzeit zu erfinden. Ganztagsansichten bleiben unverändert — der Umstellungstag im Herbst umfasst weiterhin 25 Stunden.
+
 ### Performance
 
 - **Der Zeitstrom prüft die Ereignis-Sichtbarkeit nur noch in der eigenen Einrichtung** (#2028) — Der Aktivitäten-Zweig blendet Einträge aus, deren zugehöriges Ereignis für die angemeldete Person nicht sichtbar ist, und stellte diese Prüfung bisher gegen die Ereignisse **aller** Einrichtungen einer Installation an; auf einem Messbestand mit fünf Einrichtungen und 50 000 Ereignissen schrumpft die Prüfmenge damit von 44 988 auf 9 011 Ereignisse und die Abfrage von 21,7 ms auf 6,1 ms, während die angezeigte Liste unverändert bleibt.
