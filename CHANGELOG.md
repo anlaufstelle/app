@@ -20,8 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Der Zeitstrom prüft die Ereignis-Sichtbarkeit nur noch in der eigenen Einrichtung** (#2028) — Der Aktivitäten-Zweig blendet Einträge aus, deren zugehöriges Ereignis für die angemeldete Person nicht sichtbar ist, und stellte diese Prüfung bisher gegen die Ereignisse **aller** Einrichtungen einer Installation an; auf einem Messbestand mit fünf Einrichtungen und 50 000 Ereignissen schrumpft die Prüfmenge damit von 44 988 auf 9 011 Ereignisse und die Abfrage von 21,7 ms auf 6,1 ms, während die angezeigte Liste unverändert bleibt.
 ### Performance
 
-- **Audit-Listen filtern per Range-Prädikat auf den Zeitstempel** (#2029) — ``timestamp__date__gte/lte`` wurde durch ``timestamp__gte``/``timestamp__lt`` auf Tagesgrenzen ersetzt, damit der btree-Index ``(facility_id, -timestamp)`` sargable genutzt wird.
-- **Personensuche nutzt ILIKE statt UPPER(LIKE) für GIN-Index-Tauglichkeit** (#2027) — Suchpfade in Klientenliste, Autocomplete und Dashboard-Suche verwenden den neuen Postgres-Lookup ``__ilike``, der identisch case-insensitiv sucht, aber die trigram-GIN-Indizes auf den nackten Spalten nutzen kann.
+- **Audit-Listen filtern per Range-Prädikat auf den Zeitstempel** (#2029) — ``timestamp__date__gte/lte`` wurde durch ``timestamp__gte``/``timestamp__lt`` auf Tagesgrenzen ersetzt, damit der Zeitstempel-Index sargable genutzt wird.
+- **Personensuche nutzt ILIKE statt UPPER(LIKE) für GIN-Index-Tauglichkeit** (#2027) — Suchpfade in Klientenliste, Autocomplete und Dashboard-Suche verwenden den neuen Postgres-Lookup ``__ilike``, der gleichwertig case-insensitiv sucht und die trigram-GIN-Indizes auf den nackten Spalten nutzbar macht.
 
 ## [0.91.0] - 2026-09-02
 
