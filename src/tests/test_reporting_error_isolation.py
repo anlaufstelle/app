@@ -450,3 +450,200 @@ class TestStatementTimeout:
         response = client.get(reverse("core:statistics_report_export"), _export_params("langsam"))
 
         assert response.status_code == 502
+
+
+class TestExportBrichtNieNachDenHeadernAb:
+    """Fix-Runde 1 / H1: der CSV-Renderer streamt — nichts Backend-Eigenes darf mitstreamen.
+
+    Cross-Review zu Refs #2070  + kimi-k3) hat reproduziert, dass ein
+    Backend, das den ``DatasetResult``-Vertrag bricht, **mid-stream** wirft:
+    ``safe_download_response`` hatte da bereits HTTP 200 und
+    ``Content-Disposition`` gesetzt, Metadaten- und Kopfzeile waren schon im
+    Body. Ergebnis war eine abgeschnittene Datei statt eines klaren Fehlers —
+    kein k-Anon-Leck (die Suppression ist zu dem Zeitpunkt gelaufen), aber ein
+    Bruch der zugesagten Semantik „502, keine halbe Datei".
+
+    Der Schnitt liegt deshalb bei „backend-eigen": ``records``, die Projektion
+    ``record.get(spec.key)`` und die ``FieldSpec``-Werte werden **vor** dem
+    Response-Bau ausgewertet; lazy bleibt nur noch das Chunking durch den
+    ``csv.writer`` ueber repo-eigene Strings.
+    """
+
+    @pytest.fixture
+    def lazy_records_backend(self):
+        """``records`` ist ein Generator, der erst nach zwei Zeilen wirft."""
+
+        class _LazyRecordsBackend(_BasisBackend):
+            name = "Lazy-Records-Backend"
+
+            def build_dataset(self, facility, date_from, date_to):
+                def _records():
+                    yield {"wert": 100}
+                    yield {"wert": 200}
+                    raise RuntimeError("records kaputt")
+
+                return DatasetResult(mode="rows", records=_records(), summary={}, completeness=[])
+
+        return register_backend("lazy_records")(_LazyRecordsBackend)
+
+    @pytest.fixture
+    def kein_dict_record_backend(self):
+        """Ein Record ist kein Mapping — ``record.get`` existiert gar nicht."""
+
+        class _KeinDictRecordBackend(_BasisBackend):
+            name = "Kein-Dict-Backend"
+
+            def build_dataset(self, facility, date_from, date_to):
+                return DatasetResult(mode="rows", records=[f"KEIN-DICT-{_ROHWERT}"], summary={}, completeness=[])
+
+        return register_backend("kein_dict")(_KeinDictRecordBackend)
+
+    @pytest.fixture
+    def werfendes_record_get_backend(self):
+        """Vertragskonformer ``dict``-Untertyp, dessen ``get()`` wirft Reproduktion)."""
+
+        class _RaisingRecord(dict):
+            def get(self, key, default=None):
+                raise RuntimeError("record.get kaputt")
+
+        class _WerfendesRecordGetBackend(_BasisBackend):
+            name = "Werfendes-Record-Backend"
+
+            def build_dataset(self, facility, date_from, date_to):
+                return DatasetResult(mode="rows", records=[_RaisingRecord(wert=_ROHWERT)], summary={}, completeness=[])
+
+        return register_backend("werfendes_record")(_WerfendesRecordGetBackend)
+
+    @pytest.fixture
+    def werfendes_label_backend(self):
+        """``FieldSpec.label`` wirft beim Zugriff — die Kopfzeile lag bisher im Generator."""
+
+        class _WerfendesLabel:
+            key = "wert"
+
+            @property
+            def label(self):
+                raise RuntimeError("label kaputt")
+
+        class _WerfendesLabelBackend(_BasisBackend):
+            name = "Werfendes-Label-Backend"
+
+            def get_field_specs(self):
+                return [_WerfendesLabel()]
+
+        return register_backend("werfendes_label")(_WerfendesLabelBackend)
+
+    @pytest.fixture
+    def unbekannte_population_backend(self):
+        """``population`` ausserhalb von ``POPULATION_NOTES`` — KeyError in der Metadatenzeile."""
+
+        class _UnbekanntePopulationBackend(_BasisBackend):
+            name = "Unbekannte-Population-Backend"
+            population = "gibt-es-nicht"
+
+        return register_backend("unbekannte_population")(_UnbekanntePopulationBackend)
+
+    @pytest.mark.parametrize(
+        "slug",
+        ["lazy_records", "kein_dict", "werfendes_record", "werfendes_label", "unbekannte_population"],
+    )
+    def test_csv_antwortet_502_statt_abgeschnittener_datei(
+        self,
+        client,
+        admin_user,
+        slug,
+        lazy_records_backend,
+        kein_dict_record_backend,
+        werfendes_record_get_backend,
+        werfendes_label_backend,
+        unbekannte_population_backend,
+    ):
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_report_export"), _export_params(slug, fmt="csv"))
+
+        assert response.status_code == 502
+        assert "Content-Disposition" not in response
+        # Kein Streaming-Rest: die Antwort ist eine gewoehnliche HttpResponse.
+        assert not response.streaming
+        assert str(_ROHWERT).encode() not in response.content
+
+    @pytest.mark.parametrize("fmt", ["json", "xml"])
+    def test_json_und_xml_verhalten_sich_gleich(self, client, admin_user, fmt, lazy_records_backend):
+        """Paritaet der Formate: auch die eager Renderer duerfen keinen Header setzen."""
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_report_export"), _export_params("lazy_records", fmt=fmt))
+
+        assert response.status_code == 502
+        assert "Content-Disposition" not in response
+
+    def test_intakter_csv_export_bleibt_ein_stream(self, client, admin_user, doc_type_contact, sample_event):
+        """Regression: der Erfolgspfad streamt weiter (keine Voll-Materialisierung der Datei)."""
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_report_export"), _export_params("sample-report-1", fmt="csv"))
+
+        assert response.status_code == 200
+        assert response.streaming
+        assert "Content-Disposition" in response
+        assert b"sample-report-1" in b"".join(response.streaming_content)
+
+
+class TestSachberichtPdfIsoliert:
+    """Fix-Runde 1 / M1: der hybride Sachbericht-PDF-Pfad ruft ``build_dataset`` selbst.
+
+    ``SampleReport1ExportView`` geht nicht ueber ``export_dataset``, sondern
+    ueber ``generate_sample_report_1_pdf`` →
+    ``get_sample_report_1_statistics_hybrid`` → im Live-Fallback
+    ``get_backend("sample-report-1").build_dataset(...)``. Dieser Pfad war
+    weder gefangen noch gedeckelt und lieferte reproduzierbar HTTP 500
+    (Cross-Review Befund M1). Die Suppression laeuft dort unveraendert ueber
+    ``suppress_sample_report_1_stats`` — die Isolation aendert daran nichts.
+    """
+
+    @pytest.fixture
+    def kaputter_sachbericht(self, monkeypatch):
+        """Ersetzt ``sample-report-1`` in der isolierten Registry durch ein werfendes Backend.
+
+        Kein ``register_backend``: der Slug ist bereits vergeben, eine zweite
+        Registrierung waere ``ImproperlyConfigured``. Der PDF-Pfad loest das
+        Backend ueber ``get_backend("sample-report-1")`` auf, also genuegt der
+        Austausch des Registry-Eintrags.
+        """
+        from core.reporting import registry
+
+        class _KaputterSachbericht(_BasisBackend):
+            slug = "sample-report-1"
+            name = "Kaputter Sachbericht"
+            snapshot_enabled = True
+
+            def build_dataset(self, facility, date_from, date_to):
+                raise RuntimeError("sachbericht kaputt")
+
+        monkeypatch.setitem(registry._REGISTRY, "sample-report-1", _KaputterSachbericht())
+
+    def test_pdf_antwortet_502_statt_500(self, client, admin_user, kaputter_sachbericht):
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_sample_report_1_export"), _export_params("sample-report-1"))
+
+        assert response.status_code == 502
+        assert "Content-Disposition" not in response
+
+    def test_kein_export_audit_eintrag(self, client, admin_user, facility, kaputter_sachbericht):
+        client.force_login(admin_user)
+
+        client.get(reverse("core:statistics_sample_report_1_export"), _export_params("sample-report-1"))
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.EXPORT, target_type="Sachbericht-PDF").exists()
+
+    def test_intaktes_pdf_bleibt_ein_download(self, client, admin_user, doc_type_contact, sample_event):
+        """Regression: der Erfolgspfad liefert weiter das PDF."""
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:statistics_sample_report_1_export"), _export_params("sample-report-1"))
+
+        assert response.status_code == 200
+        assert "Content-Disposition" in response
+        assert response.content.startswith(b"%PDF")

@@ -208,6 +208,28 @@ def build_report_panel_context(facility, backend, period_state) -> dict:
 REPORT_PANEL_ERROR_TEMPLATE = "core/statistics/partials/report_panel_error.html"
 
 
+def backend_export_failed_response(beschreibung: str) -> HttpResponse:
+    """Einheitliche 502-Antwort fuer einen gescheiterten Berichts-Download (Refs #2070).
+
+    **Nur aus einem ``except``-Block aufrufen:** ``logger.exception`` liest die
+    laufende Exception aus dem Kontext und legt den Traceback ins Log (und ueber
+    die Sentry-LoggingIntegration ins Fehler-Tracking).
+
+    HTTP 502, nicht 4xx (der Client hat nichts falsch gemacht) und nicht 500
+    (der Fehler liegt im nachgelagerten Berichts-Backend). Bewusst eine nackte
+    Textantwort: kein ``safe_download_response``, also **kein**
+    ``Content-Disposition`` und kein Byte des Datensatzes. Der Aufrufer setzt
+    seinen ``log_export``-Aufruf hinter den Fang — ein gescheiterter Export darf
+    im append-only Audit nicht als Herausgabe stehen.
+    """
+    logger.exception("statistics: %s ist gescheitert", beschreibung)
+    return HttpResponse(
+        _("Der Bericht konnte nicht erstellt werden. Bitte versuchen Sie es später erneut."),
+        status=502,
+        content_type="text/plain; charset=utf-8",
+    )
+
+
 def build_report_panel_context_isolated(facility, backend, period_state) -> dict:
     """Panel-Kontext — oder ein **datenfreier** Fehlerkontext (Refs #2070).
 
@@ -619,7 +641,20 @@ class SampleReport1ExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
             return range_result
         date_from, date_to = range_result
 
-        pdf_bytes = generate_sample_report_1_pdf(facility, date_from, date_to)
+        # Refs #2070 (Cross-Review-Befund M1): Dieser Download geht NICHT ueber
+        # ``export_dataset``, sondern ueber den hybriden Lesepfad
+        # ``generate_sample_report_1_pdf`` -> ``get_sample_report_1_statistics_hybrid``,
+        # der im Live-Fallback ``get_backend("sample-report-1").build_dataset(...)``
+        # ruft. Er war deshalb weder gefangen noch gedeckelt und lieferte bei
+        # einem defekten Backend einen nackten 500er — waehrend der generische
+        # Export daneben sauber mit 502 antwortete. Die k-Anon-Suppression
+        # laeuft in diesem Pfad unveraendert ueber ``suppress_sample_report_1_stats``;
+        # die Isolation aendert daran nichts, sie ergaenzt nur den Fehlerfall.
+        try:
+            with reporting_statement_timeout():
+                pdf_bytes = generate_sample_report_1_pdf(facility, date_from, date_to)
+        except Exception:
+            return backend_export_failed_response("Sachbericht-PDF des Backends 'sample-report-1'")
 
         response = safe_download_response(
             f"sample-report-1_{date_from}_{date_to}.pdf",
@@ -857,12 +892,7 @@ class DatasetExportView(LeadOrAdminRequiredMixin, ExportRangeMixin, View):
             with reporting_statement_timeout():
                 response = export_dataset(backend, facility, date_from, date_to, format=fmt)
         except Exception:
-            logger.exception("statistics: Export des Berichts-Backends %r ist gescheitert", slug)
-            return HttpResponse(
-                _("Der Bericht konnte nicht erstellt werden. Bitte versuchen Sie es später erneut."),
-                status=502,
-                content_type="text/plain; charset=utf-8",
-            )
+            return backend_export_failed_response(f"Export des Berichts-Backends {slug!r}")
 
         # Erst nach dem erfolgreichen Bau: ein gescheiterter Export darf im
         # append-only Audit nicht als Herausgabe stehen.

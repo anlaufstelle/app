@@ -14,11 +14,12 @@ Aggregat-Payloads und werden als einzelne Bytes-Antwort gebaut.
 """
 
 import csv
+import dataclasses
 import io
 import json
 import re
 import xml.etree.ElementTree as ET
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -27,7 +28,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext
 
-from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
+from core.reporting.base import DatasetBackend, DatasetResult
 from core.reporting.data_source import DATA_SOURCE_NOTES, LIVE, POPULATION_NOTES
 
 # Bewusste Wiederverwendung des Formula-Injection-Schutzes (OWASP CSV-
@@ -131,6 +132,42 @@ def enforce_suppression_contract(backend: DatasetBackend, result: DatasetResult)
     return result
 
 
+def _materialize_records(backend: DatasetBackend, result: DatasetResult) -> DatasetResult:
+    """Loest ``records`` eager auf und prueft den Mapping-Vertrag (Refs #2070).
+
+    ``DatasetResult.records`` ist als ``list[dict]`` deklariert, aber nichts
+    erzwang das: ein Backend konnte einen **Generator** liefern oder Eintraege,
+    die keine Mappings sind. Beides fiel erst im CSV-Renderer auf — und der
+    laeuft als Generator, also **nachdem** ``safe_download_response`` HTTP 200
+    und ``Content-Disposition`` gesetzt hat. Der Empfaenger bekam eine
+    abgeschnittene Datei statt eines klaren Fehlers (Cross-Review zu #2070,
+    reproduziert mit einem lazy werfenden ``records``-Generator und mit einem
+    Record ohne ``get``).
+
+    Kein k-Anon-Problem — die Kette ``build_dataset`` -> ``prepare_export`` ->
+    ``enforce_suppression_contract`` ist an dieser Stelle vollstaendig
+    gelaufen, es koennen also nur suppressierte Zeilen betroffen sein. Aber ein
+    Bruch der Zusage „Rendererfehler ⇒ 502, keine halbe Datei". Deshalb steht
+    die Aufloesung **hier**, direkt hinter der Suppressions-Klammer und vor
+    jedem Renderer: der Fehler landet damit im Fang der Export-View.
+
+    Kostenlos in der Datenmenge: ``build_dataset`` baut die Records ohnehin
+    vollstaendig: der Streaming-Gewinn des CSV-Pfads sitzt in der
+    Chunk-Ausgabe, nicht in einer lazy Eingabe.
+    """
+    records = list(result.records)
+    for position, record in enumerate(records):
+        if not isinstance(record, Mapping):
+            raise TypeError(
+                f"Reporting-Backend {backend.slug!r} ({type(backend).__name__}) liefert in "
+                f"`DatasetResult.records` an Position {position} kein Mapping, sondern "
+                f"{type(record).__name__!r}. Die Renderer projizieren ueber `record.get(key)` — "
+                "ein Vertragsbruch faellt sonst erst mitten im Download auf, nachdem Status und "
+                "Download-Header bereits gesendet wurden."
+            )
+    return dataclasses.replace(result, records=records)
+
+
 def export_dataset(
     backend: DatasetBackend,
     facility,
@@ -160,6 +197,7 @@ def export_dataset(
     # fail-closed, statt Rohzahlen an einen Renderer weiterzureichen.
     result = backend.prepare_export(facility, result)
     result = enforce_suppression_contract(backend, result)
+    result = _materialize_records(backend, result)
     generated_at = timezone.now()
     filename = f"{backend.slug}_{date_from}_{date_to}.{format}"
 
@@ -188,41 +226,41 @@ def _render_csv(
     Completeness-Issues erscheinen bewusst nicht im CSV — es bleibt
     maschinenlesbar; sie stehen in JSON/XML/Panel.
 
-    **Der letzte backend-eigene Aufruf laeuft eager, nicht im Generator**
-    (Refs #2070, gleiche Begruendung wie
-    ``test_reporting_suppression_contract.py::test_streaming_bricht_nicht_erst_beim_konsumieren``):
-    ``get_field_specs()`` ist Backend-Code und kann werfen. Im Generator faellt
-    der Fehler erst beim Auslesen von ``streaming_content`` — die View hat dann
-    bereits eine 200-Response mit Download-Headern gebaut und der Empfaenger
-    bekaeme eine abgebrochene Datei statt eines klaren Fehlers. Eager gerufen
-    landet er im Fehlerfang der Export-View (HTTP 502). Ab hier ist nichts mehr
-    backend-eigen: die Zeilenschleife arbeitet nur noch auf dem bereits
-    suppressierten ``result``.
+    **Alles Backend-Eigene wird hier eager ausgewertet, nichts davon streamt
+    mit** (Refs #2070, Cross-Review-Befund H1; gleiche Begruendung wie
+    ``test_reporting_suppression_contract.py::test_streaming_bricht_nicht_erst_beim_konsumieren``).
+    Der Rueckgabewert ist ein Generator: sein Koerper laeuft erst beim Konsum
+    von ``streaming_content``, also **nachdem** ``safe_download_response``
+    Status 200 und ``Content-Disposition`` gesetzt hat. Alles, was dort noch
+    werfen koennte, ergaebe eine abgeschnittene Datei statt eines klaren
+    Fehlers. Backend-eigen sind: ``get_field_specs()``, die ``FieldSpec``-Werte
+    ``label``/``key``, ``backend.slug``/``backend.population`` in der
+    Metadatenzeile (``POPULATION_NOTES`` ist ein Dict-Zugriff auf einen vom
+    Backend deklarierten Schluessel) und die Projektion ``record.get(key)``.
+    Sie alle stehen deshalb **vor** dem ``return`` und landen im Fehlerfang der
+    Export-View (HTTP 502). ``records`` selbst ist schon durch
+    :func:`_materialize_records` aufgeloest und vertraglich geprueft.
+
+    Lazy bleibt genau das, wofuer das Streaming da ist: das Formatieren der
+    fertigen Zeilen durch den ``csv.writer``, Chunk fuer Chunk — ueber
+    repo-eigene Strings, nicht mehr ueber Backend-Code.
     """
     field_specs = backend.get_field_specs()
-    return _csv_rows(backend, facility, date_from, date_to, result, generated_at, field_specs)
+    metadata = _csv_metadata_line(backend, facility, date_from, date_to, result, generated_at)
+    zeilen = [[_sanitize_csv_cell(metadata)], [_sanitize_csv_cell(spec.label) for spec in field_specs]]
+    zeilen += [[_sanitize_csv_cell(record.get(spec.key)) for spec in field_specs] for record in result.records]
+    return _csv_chunks(zeilen)
 
 
-def _csv_rows(
+def _csv_metadata_line(
     backend: DatasetBackend,
     facility,
     date_from,
     date_to,
     result: DatasetResult,
     generated_at,
-    field_specs: list[FieldSpec],
-) -> Iterator[str]:
-    """Die eigentliche Zeilenausgabe — bewusst lazy (Streaming, siehe :func:`_render_csv`)."""
-    output = io.StringIO()
-    writer = csv.writer(output, dialect="excel")
-
-    def _flush(row: list[str]) -> str:
-        writer.writerow(row)
-        chunk = output.getvalue()
-        output.seek(0)
-        output.truncate(0)
-        return chunk
-
+) -> str:
+    """Die fuehrende ``#``-Kommentarzeile des CSV — Herkunft, Quelle, Schwelle."""
     # Refs #1933: die drei Labels werden bewusst VOR den f-Strings aufgeloest.
     # In einem f-String-Ausdruck extrahieren nur neuere xgettext-Versionen den
     # Aufruf (gemessen: 0.23.1 ja, 0.21 nein); die CI-Toolchain
@@ -267,10 +305,25 @@ def _csv_rows(
     # Die Schwelle selbst ist bewusst publiziert (Transparenz), nicht redigiert.
     threshold = result.summary["k_anonymity_threshold"]
     metadata += " | " + gettext("k-Anonymität: Zellen < %(threshold)s unterdrückt") % {"threshold": threshold}
-    yield _flush([_sanitize_csv_cell(metadata)])
-    yield _flush([_sanitize_csv_cell(spec.label) for spec in field_specs])
-    for record in result.records:
-        yield _flush([_sanitize_csv_cell(record.get(spec.key)) for spec in field_specs])
+    return metadata
+
+
+def _csv_chunks(zeilen: list[list[str]]) -> Iterator[str]:
+    """Formatiert fertige Zeilen lazy zu CSV-Chunks (siehe :func:`_render_csv`).
+
+    Ab hier ist nichts mehr backend-eigen: ``zeilen`` traegt nur noch
+    repo-eigene, bereits sanitisierte Strings. Ein Fehler waere ein Fehler
+    dieses Moduls, nicht der eines Plugins.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output, dialect="excel")
+
+    for zeile in zeilen:
+        writer.writerow(zeile)
+        chunk = output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+        yield chunk
 
 
 def _render_json(
