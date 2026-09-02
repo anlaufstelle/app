@@ -29,7 +29,22 @@ from core.services.events import build_feed_items
 # ``core_event`` nur im Subselect erwaehnt.
 ACTIVITY_QUERY_MARKER = 'FROM "core_activity"'
 EVENT_TABLE_MARKER = 'FROM "core_event"'
-FACILITY_PREDICATE_RE = re.compile(r'"facility_id"\s*=\s*\'([0-9a-fA-F-]+)\'')
+# Django aliast die Subselect-Tabelle (``FROM "core_event" U0``). Das Praedikat
+# muss auf GENAU diesem Alias sitzen: nur dann kann es den Index auf
+# ``core_event.facility_id`` bedienen. Ein ``facility_id`` auf der gejointen
+# ``core_documenttype`` (Alias ``U1``) waere wirkungslos und darf hier nicht
+# durchgehen.
+EVENT_ALIAS_RE = re.compile(r'FROM "core_event" (\w+)')
+
+
+def _facility_predicate_uuid(subselect):
+    """UUID des ``facility_id``-Praedikats auf dem core_event-Alias, sonst ``None``."""
+    alias_match = EVENT_ALIAS_RE.search(subselect)
+    if alias_match is None:
+        return None
+    alias = re.escape(alias_match.group(1))
+    match = re.search(rf'\b{alias}\."facility_id"\s*=\s*\'([0-9a-fA-F-]+)\'', subselect)
+    return uuid.UUID(match.group(1)) if match else None
 
 
 def _balanced_subselects(sql):
@@ -104,9 +119,10 @@ class TestActivityVisibilitySubqueryFacilityScope:
 
         subselect = _event_visibility_subselect(_activity_feed_sql(facility, today, staff_user))
 
-        assert FACILITY_PREDICATE_RE.search(subselect), (
+        assert _facility_predicate_uuid(subselect) is not None, (
             "Die Sichtbarkeits-Subquery auf core_event laeuft ohne facility-Praedikat "
-            "und damit ueber die Events aller Einrichtungen (#2028). Subselect: " + subselect
+            "auf der Event-Tabelle und damit ueber die Events aller Einrichtungen "
+            "(#2028). Subselect: " + subselect
         )
 
     def test_subquery_binds_the_current_facility_id(self, facility, staff_user, doc_type_contact, second_facility):
@@ -117,10 +133,29 @@ class TestActivityVisibilitySubqueryFacilityScope:
 
         subselect = _event_visibility_subselect(_activity_feed_sql(facility, today, staff_user))
 
-        match = FACILITY_PREDICATE_RE.search(subselect)
-        assert match, f"Kein gebundenes facility_id-Praedikat im Subselect: {subselect}"
-        assert uuid.UUID(match.group(1)) == facility.pk
+        bound = _facility_predicate_uuid(subselect)
+        assert bound is not None, f"Kein gebundenes facility_id-Praedikat auf core_event: {subselect}"
+        assert bound == facility.pk
         assert facility.pk != second_facility.pk
+
+    def test_matcher_rejects_a_predicate_on_the_joined_table(self):
+        """Absicherung des Pruefwerkzeugs selbst.
+
+        Der Subselect joint ``core_documenttype``. Ein ``facility_id`` auf
+        dessen Alias wuerde den Event-Index nicht bedienen — die Extraktion
+        darf ihn deshalb nicht als Treffer zaehlen, sonst pinnt der Test oben
+        die falsche Tabelle.
+        """
+        fake = (
+            '(SELECT U0."id" AS "pk" FROM "core_event" U0 '
+            'INNER JOIN "core_documenttype" U1 ON (U0."document_type_id" = U1."id") '
+            "WHERE (U1.\"facility_id\" = '11111111-1111-1111-1111-111111111111' "
+            "AND U1.\"sensitivity\" IN ('normal', 'elevated')))"
+        )
+        assert _facility_predicate_uuid(fake) is None
+
+        real = fake.replace('U1."facility_id"', 'U0."facility_id"')
+        assert _facility_predicate_uuid(real) == uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
 @pytest.mark.django_db
