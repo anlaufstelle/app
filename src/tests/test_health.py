@@ -268,6 +268,28 @@ class TestHealthDetail:
         assert data["last_backup_age_hours"] > 48
         assert data["status"] == "degraded"
 
+    def test_missing_backup_degrades_when_required(self, detail_token, tmp_path, settings):
+        settings.BACKUP_DIR = tmp_path
+        settings.HEALTH_BACKUP_REQUIRED = True
+
+        data = _detail_get().json()
+
+        assert data["last_backup_age_hours"] is None
+        assert data["backup"] == "missing"
+        assert data["backup_required"] is True
+        assert data["status"] == "degraded"
+
+    def test_missing_backup_stays_ok_when_not_required(self, detail_token, tmp_path, settings):
+        settings.BACKUP_DIR = tmp_path
+        settings.HEALTH_BACKUP_REQUIRED = False
+
+        data = _detail_get().json()
+
+        assert data["last_backup_age_hours"] is None
+        assert data["backup"] == "missing"
+        assert data["backup_required"] is False
+        assert data["status"] == "ok"
+
     def test_disk_free_pct_field_populated(self, detail_token, tmp_path, settings):
         settings.MEDIA_ROOT = str(tmp_path)
         data = _detail_get().json()

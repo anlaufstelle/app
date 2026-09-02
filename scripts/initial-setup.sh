@@ -306,6 +306,22 @@ super_admin_exists() {
     [[ "$probe" == "yes" ]]
 }
 
+# Refs #2021: Backup bleibt ein Host-Job. Das Erstsetup sieht deshalb sowohl
+# in der Crontab des aufrufenden Users als auch — soweit ohne Passwortabfrage
+# erreichbar — in der Root-Crontab nach. Fehler/fehlende Rechte sind ein
+# Warnsignal, aber kein Grund, die ansonsten erfolgreiche Einrichtung
+# nachtraeglich abzubrechen.
+backup_cron_installed() {
+    local user_crontab="" root_crontab=""
+    if command -v crontab >/dev/null 2>&1; then
+        user_crontab="$(crontab -l 2>/dev/null || true)"
+    fi
+    if command -v sudo >/dev/null 2>&1; then
+        root_crontab="$(sudo -n crontab -l -u root 2>/dev/null || true)"
+    fi
+    printf '%s\n%s\n' "$user_crontab" "$root_crontab" | grep -q 'backup\.sh'
+}
+
 step "6/6  Super-Admin anlegen (Bootstrap, ADR-018)"
 if [[ "${SKIP_SUPER_ADMIN:-0}" == "1" ]]; then
     info "Uebersprungen (SKIP_SUPER_ADMIN=1)."
@@ -363,6 +379,16 @@ Naechste Schritte:
 
   3. Backups einrichten und einen Restore-Test fahren:
      docs/admin-guide.md § 3, scripts/ops/backup.sh.
+
+EOF
+
+if backup_cron_installed; then
+    info "Host-Cron-Eintrag fuer backup.sh gefunden."
+else
+    warn "Kein Host-Cron-Eintrag fuer backup.sh gefunden — Backups nach docs/ops-runbook.md § 3.3 einrichten."
+fi
+
+cat <<EOF
 
   4. Betriebszustand pruefen:
        curl -fsS https://<domain>/health/            -> {"status":"ok"}

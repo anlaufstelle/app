@@ -266,7 +266,8 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 > Host und wuerde die Runtime-Haertung des gesamten Stacks (`cap_drop: ALL`,
 > `no-new-privileges`, `read_only`) entwerten. Backup bleibt daher **ein**
 > Host-Crontab-Eintrag, siehe [§3.3](#33-host-cron-backup--restliche-host-jobs).
-> Ohne ihn hat eine Installation **kein Backup** — ohne Fehlermeldung, nur Stille.
+> Ohne ihn hat eine Installation **kein Backup** — ohne Fehlermeldung, nur Stille;
+> `initial-setup.sh` warnt seit 0.92, wenn es keinen solchen Eintrag findet.
 > Den Lauf-Status je Job zeigt das Compliance-Dashboard
 > ([`/system/compliance/`](admin-guide.md), Kategorie „Hintergrundjobs", nur
 > Super-Admins) — grob aggregiert auch der [`/health/`-Endpoint](monitoring-guide.md)

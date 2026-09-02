@@ -857,3 +857,29 @@ class TestProdRedisPasswordUrl:
         data = json.loads(result.stdout.strip().splitlines()[-1])
         assert data["backend"] == "django.core.cache.backends.redis.RedisCache"
         assert data["location"] == redis_url
+
+
+class TestProdHealthBackupRequired:
+    """Refs #2021: Produktion verlangt standardmaessig ein Backup-Signal."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ALLOWED_HOSTS": "example.org",
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+    _READBACK = "import anlaufstelle.settings.prod as p; print(p.HEALTH_BACKUP_REQUIRED)"
+
+    def _resolved(self, value: str | None = None) -> str:
+        env = dict(self._VALID_ENV)
+        if value is not None:
+            env["DJANGO_HEALTH_BACKUP_REQUIRED"] = value
+        result = _run_prod_import(env, code=self._READBACK)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        return result.stdout.strip().splitlines()[-1]
+
+    def test_defaults_to_required(self):
+        assert self._resolved() == "True"
+
+    def test_env_can_disable_requirement(self):
+        assert self._resolved("false") == "False"

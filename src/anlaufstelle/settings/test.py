@@ -55,6 +55,9 @@ SUDO_MODE_ENABLED = False
 # eine ERROR-Zeile erzeugen.
 AUDIT_DETAIL_STRICT = True
 
+# Unit-Tests erzeugen nur in den gezielten Health-Tests Backup-Artefakte.
+HEALTH_BACKUP_REQUIRED = False
+
 # Schneller Passwort-Hasher für Tests (PBKDF2 mit 870k Iterationen → MD5).
 # Django's eigene Test-Suite nutzt die gleiche Strategie.
 # PBKDF2 bleibt als Fallback, damit bestehende Hashes in der Dev-DB verifiziert werden können.

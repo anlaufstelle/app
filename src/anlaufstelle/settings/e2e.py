@@ -23,6 +23,9 @@ if not os.environ.get("EXTERNAL_ORIGIN"):
 # Rate-Limiting deaktivieren (E2E-Tests machen viele Logins auf einer IP)
 RATELIMIT_ENABLE = False
 
+# Der E2E-Stack besitzt keinen Host-Backup-Cron (Refs #2021).
+HEALTH_BACKUP_REQUIRED = False
+
 # Session-Save-Verhalten (kein Write bei jedem Request) erbt unveraendert von
 # base.py — dort bereits SESSION_SAVE_EVERY_REQUEST = False (Refs #1827: war
 # hier redundant wiederholt).

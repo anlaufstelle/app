@@ -228,6 +228,7 @@ services:
       # meldete der Prod-Stack dauerhaft "Kein Backup gefunden" — unabhaengig
       # davon, ob der Host-Cron laeuft. Muss identisch zum Mount-Ziel unten sein.
       BACKUP_DIR: ${BACKUP_DIR:-/backups}
+      DJANGO_HEALTH_BACKUP_REQUIRED: ${DJANGO_HEALTH_BACKUP_REQUIRED:-true}
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.

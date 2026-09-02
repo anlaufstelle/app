@@ -2873,3 +2873,30 @@ class TestInitialSetupGuardsTheHealthToken:
         result, log = self._run(tmp_path, f"{self._TOKEN}=abc123\n")
         assert self._TOKEN not in result.stderr, f"Gesetztes Token darf keinen Abbruch ausloesen: {result.stderr!r}"
         assert log.exists(), "Der Lauf haette den Preflight passieren und docker aufrufen muessen."
+
+
+@pytest.mark.architecture
+class TestInitialSetupChecksBackupCron:
+    """Refs #2021: Erstsetup erkennt einen fehlenden Host-Backup-Cron."""
+
+    _SCRIPT = Path("scripts/initial-setup.sh")
+
+    def test_checks_current_and_root_crontab_without_blocking(self) -> None:
+        body = self._SCRIPT.read_text(encoding="utf-8")
+        assert "crontab -l" in body
+        assert "sudo -n crontab -l -u root" in body
+        assert "docs/ops-runbook.md § 3.3" in body
+        assert "backup.sh" in body
+
+
+@pytest.mark.architecture
+class TestHealthBackupRequiredWiring:
+    """Refs #2021: der Prod-Stack reicht den Schalter explizit an web durch."""
+
+    def test_prod_compose_and_env_example_document_the_switch(self) -> None:
+        services = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))["services"]
+        assert services["web"]["environment"].get("DJANGO_HEALTH_BACKUP_REQUIRED") == (
+            "${DJANGO_HEALTH_BACKUP_REQUIRED:-true}"
+        )
+        env_example = Path(".env.example").read_text(encoding="utf-8")
+        assert "# DJANGO_HEALTH_BACKUP_REQUIRED=true" in env_example

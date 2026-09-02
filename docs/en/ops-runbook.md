@@ -268,7 +268,8 @@ valid — then no media restore is needed.
 > host and would undo the runtime hardening of the entire stack (`cap_drop: ALL`,
 > `no-new-privileges`, `read_only`). The backup therefore stays **one**
 > host crontab entry, see [§3.3](#33-host-cron-backup--remaining-host-jobs).
-> Without it, an installation has **no backup** — with no error message, just silence.
+> Without it, an installation has **no backup** — with no error message, just silence;
+> since 0.92, `initial-setup.sh` warns when it cannot find such an entry.
 > The compliance dashboard shows the run status per job
 > ([`/system/compliance/`](admin-guide.md), category "Background jobs", super admins
 > only) — the [`/health/` endpoint](../monitoring-guide.md) (German) also aggregates it roughly
@@ -2670,4 +2671,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: f7dc2c87236e04d5e158b0cd26f3dc039f96df5e -->
+<!-- source-hash: 0edb405e2f9f56ba06e93a67731c2e551ca93268 -->

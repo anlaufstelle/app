@@ -31,6 +31,9 @@ DEBUG = True
 # test.py und e2e.py). Im Betrieb bleibt der Guard meldend, siehe base.py.
 AUDIT_DETAIL_STRICT = env_bool("DJANGO_AUDIT_DETAIL_STRICT", default=True)  # noqa: F405
 
+# Lokale Entwicklung laeuft ohne Host-Backup-Cron (Refs #2021).
+HEALTH_BACKUP_REQUIRED = False
+
 ALLOWED_HOSTS = ["*"]
 
 # Sicherheitsrelevante Links (Einladung, Passwort-Reset, Entsperrung) zeigen

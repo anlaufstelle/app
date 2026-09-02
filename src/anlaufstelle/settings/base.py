@@ -64,6 +64,12 @@ AUDIT_DETAIL_STRICT = env_bool("DJANGO_AUDIT_DETAIL_STRICT", default=False)
 # Caller bekommen keine Recon-Details. Header: ``X-Health-Token``.
 HEALTH_DETAIL_TOKEN = os.environ.get("DJANGO_HEALTH_DETAIL_TOKEN", "")
 
+# Refs #2021: Ein fehlendes Backup-Signal ist in Produktion kein neutraler
+# Zustand. Entwicklungs-/Test-Settings schalten die Pflicht explizit aus, weil
+# dort kein Host-Backup-Cron laeuft bzw. dev.anlaufstelle.app Welt-A-Dumps in
+# einem anderen Format erzeugt.
+HEALTH_BACKUP_REQUIRED = env_bool("DJANGO_HEALTH_BACKUP_REQUIRED", default=True)
+
 # L4 (Refs #1375): Passwort-Reset-Tokens kurzlebig halten. Der Django-Default
 # ist 3 Tage (259200 s) — fuer einen Reset-Link (starkes Recovery-Primitiv) zu
 # lang. Default hier 2 h; per ENV anpassbar. Invites sind davon ENTKOPPELT

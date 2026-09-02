@@ -375,7 +375,19 @@ class HealthView(View):
             # Backup-Alter (Refs #796), gecacht (A7.2).
             backup_age = _cached_detail("health:backup_age", _check_backup_age, cache_alive=cache_alive)
             payload["last_backup_age_hours"] = backup_age
-            status = _degrade(status, backup_age is not None and backup_age > BACKUP_WARN_HOURS)
+            backup_required = bool(getattr(settings, "HEALTH_BACKUP_REQUIRED", True))
+            payload["backup_required"] = backup_required
+            if backup_age is None:
+                backup_status = "missing"
+            elif backup_age > BACKUP_WARN_HOURS:
+                backup_status = "stale"
+            else:
+                backup_status = "ok"
+            payload["backup"] = backup_status
+            status = _degrade(
+                status,
+                (backup_required and backup_status == "missing") or backup_status == "stale",
+            )
 
             # Disk-Frei (Refs #796), gecacht (A7.2).
             disk_pct = _cached_detail("health:disk_free_pct", _check_disk_free_pct, cache_alive=cache_alive)
