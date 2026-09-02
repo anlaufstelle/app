@@ -19,6 +19,7 @@ from core.constants import AUDIT_PAGE_SIZE, RATELIMIT_BULK_ACTION
 from core.models import AuditLog, Facility
 from core.models.user import User
 from core.services.audit import audit_system_view
+from core.services.audit.filters import day_bounds
 from core.services.security import RequireSudoModeMixin
 from core.services.system import _sanitize_csv_cell
 from core.signals.audit import _set_session_vars
@@ -136,12 +137,14 @@ def _apply_auditlog_filters(request) -> tuple:
 
     date_from = parse_date(raw["date_from"])
     if date_from:
-        queryset = queryset.filter(timestamp__date__gte=date_from)
+        start, _ = day_bounds(date_from)
+        queryset = queryset.filter(timestamp__gte=start)
         applied["date_from"] = str(date_from)
 
     date_to = parse_date(raw["date_to"])
     if date_to:
-        queryset = queryset.filter(timestamp__date__lte=date_to)
+        _, end = day_bounds(date_to)
+        queryset = queryset.filter(timestamp__lt=end)
         applied["date_to"] = str(date_to)
 
     return queryset, raw, applied

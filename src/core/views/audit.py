@@ -8,6 +8,7 @@ from django.views import View
 from core.constants import AUDIT_PAGE_SIZE
 from core.models import AuditLog
 from core.models.user import User
+from core.services.audit.filters import day_bounds
 from core.services.scoping import get_scoped_object
 from core.utils.formatting import parse_date
 from core.views.mixins import FacilityAdminRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin
@@ -39,12 +40,14 @@ class AuditLogListView(FacilityAdminRequiredMixin, FilteredPaginatedListMixin, H
         date_from_str = request.GET.get("date_from", "")
         date_from = parse_date(date_from_str)
         if date_from:
-            queryset = queryset.filter(timestamp__date__gte=date_from)
+            start, _ = day_bounds(date_from)
+            queryset = queryset.filter(timestamp__gte=start)
 
         date_to_str = request.GET.get("date_to", "")
         date_to = parse_date(date_to_str)
         if date_to:
-            queryset = queryset.filter(timestamp__date__lte=date_to)
+            _, end = day_bounds(date_to)
+            queryset = queryset.filter(timestamp__lt=end)
 
         page = self.paginate(queryset, request)
 
