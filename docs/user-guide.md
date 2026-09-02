@@ -139,6 +139,8 @@ Wenn die Verwaltung geeignete Dokumentationstypen freigegeben hat, steht im Zeit
 
 Unter der Datumsnavigation stehen **TimeFilter-Tabs** (z. B. „Frühdienst", „Spätdienst", „Nachtdienst" — konfigurierbar durch die Administration). Beim Öffnen des Zeitstroms wird die Schicht, die zur aktuellen Uhrzeit passt, automatisch vorausgewählt; Nachtschichten mit Mitternachts-Überlappung werden korrekt behandelt.
 
+**Zeitumstellung.** An den beiden Umstellungswochenenden ist eine Uhrzeit nicht eindeutig, und der Schichtfilter legt das ausdrücklich fest. In der Nacht zur Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal; eine Schicht, die in dieser Stunde endet, endet beim **zweiten** Mal — eine Nachtschicht von 20:00 bis 02:45 dauert an diesem Tag also real 7 Stunden 45, und alles, was in der zusätzlichen Stunde dokumentiert wurde, bleibt in Zeitstrom, Übergabe und Strichliste sichtbar. In der Nacht zur Sommerzeit fällt die Stunde von 02:00 bis 03:00 aus; eine Schicht, die dort enden würde, endet stattdessen nach der vereinbarten Dauer ab Schichtbeginn und ist real eine Stunde kürzer. Ganztagsansichten sind davon nicht betroffen — der Umstellungstag im Herbst umfasst weiterhin 25 Stunden, der im Frühjahr 23.
+
 Wenn ein Schichtfilter aktiv ist, erscheint oberhalb des Feeds ein aufklappbarer **Schichtübergabe-Block** mit Statistiken (Anzahl Kontakte, neue Aufgaben, neue Personen) und Highlights (Krisen-Ereignisse, neue Hausverbote, dringende Aufgaben).
 
 ### Feed filtern
