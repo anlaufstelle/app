@@ -124,6 +124,7 @@ def test_htmx_filter(self, authenticated_page, base_url):
 ```python
 from playwright.sync_api import expect
 
+
 def test_autocomplete(self, authenticated_page, base_url):
     page = authenticated_page
     page.goto(f"{base_url}/events/new/")
@@ -212,7 +213,7 @@ Die ersten drei sind im seriellen Lauf meist grün und fallen unter `make test-e
 # ✗ Race
 with page.expect_response(...):
     page.locator("button").click()
-text = locator.inner_text()         # evtl. Pre-Swap-Wert
+text = locator.inner_text()  # evtl. Pre-Swap-Wert
 assert "Neu" in text
 
 # ✓ Auto-wartendes expect()

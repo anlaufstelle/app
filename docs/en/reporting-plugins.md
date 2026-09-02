@@ -58,9 +58,9 @@ The practical consequence: **a new report is a single file.** A module under [`s
 
 ```python
 class DatasetBackend(ABC):
-    slug: str = ""                  # set and validated by @register_backend
-    name: str = ""                  # display name on the report card (gettext_lazy-capable)
-    description: str = ""           # one sentence "what this report counts" (gettext_lazy-capable)
+    slug: str = ""  # set and validated by @register_backend
+    name: str = ""  # display name on the report card (gettext_lazy-capable)
+    description: str = ""  # one sentence "what this report counts" (gettext_lazy-capable)
     snapshot_enabled: bool = False  # True → summary is stored in StatisticsSnapshot.backend_data
 
     def is_available(self, facility) -> bool: ...
@@ -96,8 +96,8 @@ class DatasetBackend(ABC):
 @dataclass(frozen=True)
 class DatasetResult:
     mode: Literal["rows", "aggregate"]
-    records: list[dict]                   # tabular projection; keys == FieldSpec.key
-    summary: dict                         # complete aggregate; snapshot payload
+    records: list[dict]  # tabular projection; keys == FieldSpec.key
+    summary: dict  # complete aggregate; snapshot payload
     completeness: list[CompletenessIssue]
 ```
 
@@ -117,7 +117,7 @@ The dataclass is `frozen`. Changes go through `dataclasses.replace(result, recor
 ```python
 @dataclass(frozen=True)
 class FieldSpec:
-    key: str    # stable column/record key, ^[a-z0-9_]+$
+    key: str  # stable column/record key, ^[a-z0-9_]+$
     label: str  # display name
 ```
 
@@ -136,10 +136,10 @@ class FieldSpec:
 ```python
 @dataclass(frozen=True)
 class CompletenessIssue:
-    code: str                                        # machine-readable, e.g. "unmapped_system_types"
-    message: str                                     # human-readable (German)
+    code: str  # machine-readable, e.g. "unmapped_system_types"
+    message: str  # human-readable (German)
     severity: Literal["info", "warning"] = "warning"
-    count: int | None = None                         # raw value behind ``message``; never serialized
+    count: int | None = None  # raw value behind ``message``; never serialized
 ```
 
 | Field | Usage |
@@ -206,35 +206,34 @@ The order is the column order in the CSV and in the panel. The labels are `gette
 Imports as in step 1 (`Event`, `Count`):
 
 ```python
-    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        rows = (
-            Event.objects.filter(
-                facility=facility,
-                is_deleted=False,
-                occurred_at__date__gte=date_from,
-                occurred_at__date__lte=date_to,
-            )
-            .values("document_type_id", "document_type__name",
-                    "document_type__system_type")
-            .annotate(count=Count("id"))
-            .order_by("document_type__name")
+def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+    rows = (
+        Event.objects.filter(
+            facility=facility,
+            is_deleted=False,
+            occurred_at__date__gte=date_from,
+            occurred_at__date__lte=date_to,
         )
+        .values("document_type_id", "document_type__name", "document_type__system_type")
+        .annotate(count=Count("id"))
+        .order_by("document_type__name")
+    )
 
-        records = [
-            {
-                "document_type": row["document_type__name"],
-                "system_type": row["document_type__system_type"] or "",
-                "count": row["count"],
-            }
-            for row in rows
-        ]
+    records = [
+        {
+            "document_type": row["document_type__name"],
+            "system_type": row["document_type__system_type"] or "",
+            "count": row["count"],
+        }
+        for row in rows
+    ]
 
-        return DatasetResult(
-            mode="rows",
-            records=records,
-            summary={"total": sum(row["count"] for row in records)},
-            completeness=[],
-        )
+    return DatasetResult(
+        mode="rows",
+        records=records,
+        summary={"total": sum(row["count"] for row in records)},
+        completeness=[],
+    )
 ```
 
 Three points that are easy to miss:
@@ -306,32 +305,31 @@ Consumers that want to answer "does this type/field template appear in a report?
 As soon as the report can be downloaded, `prepare_export` is **required reading**, not an optional extra. Details in [§ 6](#6-k-anonymity--the-prepare_export-hook); the minimal case from `example.py` (imports as in step 1):
 
 ```python
-    # Declaration for the central residual guard: ``total`` is the sum of all
-    # row ``count``s, so ``records`` is the exact partition of that marginal
-    # total. ``ORDER_INPUT``: the query sorts by ``document_type__name`` — the
-    # row position is already value-independent (K5).
-    _EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
+# Declaration for the central residual guard: ``total`` is the sum of all
+# row ``count``s, so ``records`` is the exact partition of that marginal
+# total. ``ORDER_INPUT``: the query sorts by ``document_type__name`` — the
+# row position is already value-independent (K5).
+_EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
 
-    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        threshold = _get_threshold(facility)
-        total = result.summary["total"]
-        # R14: a marginal total < k is itself a small cell.
-        published_total = None if total < threshold else total
-        view = {
-            "total": published_total,
-            "records": _suppress_small(
-                result.records, threshold, margin=published_total, order=ORDER_INPUT
-            ),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
 
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+    threshold = _get_threshold(facility)
+    total = result.summary["total"]
+    # R14: a marginal total < k is itself a small cell.
+    published_total = None if total < threshold else total
+    view = {
+        "total": published_total,
+        "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
+    }
+    apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
 
-        summary = dict(result.summary)
-        summary["total"] = view["total"]
-        summary["k_anonymity_threshold"] = threshold
-        return dataclasses.replace(result, records=records, summary=summary)
+    field_keys = [spec.key for spec in self.get_field_specs()]
+    records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+
+    summary = dict(result.summary)
+    summary["total"] = view["total"]
+    summary["k_anonymity_threshold"] = threshold
+    return dataclasses.replace(result, records=records, summary=summary)
 ```
 
 `margin` and `order` are **keyword-only and have no default** — a call without them raises `TypeError` (fail-closed): `margin` states whether a published marginal total exists for the feasibility audit to work against, `order` names the canonical output order of suppressed rows.
@@ -623,7 +621,7 @@ Test files follow the pattern `src/tests/test_reporting_<slug>.py`. The existing
 ```python
 @pytest.fixture(autouse=True)
 def _isolated_registry(monkeypatch):
-    registry._discover()                                              # real discovery ONCE beforehand
+    registry._discover()  # real discovery ONCE beforehand
     monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
     monkeypatch.setattr(registry, "_discovered", True)
 ```
@@ -672,4 +670,4 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 48d971d88850712068d0691f63f82cb9fcce1938 -->
+<!-- source-hash: 4d5c222be5b4aa9bdad0a61edaa804f96b5f6f14 -->

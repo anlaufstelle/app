@@ -55,9 +55,9 @@ Praktische Folge: **ein neuer Bericht ist eine Datei.** Ein Modul unter [`src/co
 
 ```python
 class DatasetBackend(ABC):
-    slug: str = ""                  # von @register_backend gesetzt/validiert
-    name: str = ""                  # Anzeigename auf der Berichtskarte (gettext_lazy-fähig)
-    description: str = ""           # ein Satz „was dieser Bericht zählt“ (gettext_lazy-fähig)
+    slug: str = ""  # von @register_backend gesetzt/validiert
+    name: str = ""  # Anzeigename auf der Berichtskarte (gettext_lazy-fähig)
+    description: str = ""  # ein Satz „was dieser Bericht zählt“ (gettext_lazy-fähig)
     snapshot_enabled: bool = False  # True → summary landet in StatisticsSnapshot.backend_data
 
     def is_available(self, facility) -> bool: ...
@@ -93,8 +93,8 @@ class DatasetBackend(ABC):
 @dataclass(frozen=True)
 class DatasetResult:
     mode: Literal["rows", "aggregate"]
-    records: list[dict]                   # tabellarische Projektion; Keys == FieldSpec.key
-    summary: dict                         # vollständiges Aggregat; Snapshot-Payload
+    records: list[dict]  # tabellarische Projektion; Keys == FieldSpec.key
+    summary: dict  # vollständiges Aggregat; Snapshot-Payload
     completeness: list[CompletenessIssue]
 ```
 
@@ -114,7 +114,7 @@ Das Dataclass ist `frozen`. Änderungen laufen über `dataclasses.replace(result
 ```python
 @dataclass(frozen=True)
 class FieldSpec:
-    key: str    # stabiler Spalten-/Record-Schlüssel, ^[a-z0-9_]+$
+    key: str  # stabiler Spalten-/Record-Schlüssel, ^[a-z0-9_]+$
     label: str  # Anzeigename
 ```
 
@@ -133,10 +133,10 @@ class FieldSpec:
 ```python
 @dataclass(frozen=True)
 class CompletenessIssue:
-    code: str                                        # maschinenlesbar, z. B. "unmapped_system_types"
-    message: str                                     # menschenlesbar (deutsch)
+    code: str  # maschinenlesbar, z. B. "unmapped_system_types"
+    message: str  # menschenlesbar (deutsch)
     severity: Literal["info", "warning"] = "warning"
-    count: int | None = None                         # Rohwert hinter ``message``; nie serialisiert
+    count: int | None = None  # Rohwert hinter ``message``; nie serialisiert
 ```
 
 | Feld | Verwendung |
@@ -203,35 +203,34 @@ Die Reihenfolge ist die Spaltenreihenfolge im CSV und im Panel. Die Labels sind 
 Imports wie in Schritt 1 (`Event`, `Count`):
 
 ```python
-    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        rows = (
-            Event.objects.filter(
-                facility=facility,
-                is_deleted=False,
-                occurred_at__date__gte=date_from,
-                occurred_at__date__lte=date_to,
-            )
-            .values("document_type_id", "document_type__name",
-                    "document_type__system_type")
-            .annotate(count=Count("id"))
-            .order_by("document_type__name")
+def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
+    rows = (
+        Event.objects.filter(
+            facility=facility,
+            is_deleted=False,
+            occurred_at__date__gte=date_from,
+            occurred_at__date__lte=date_to,
         )
+        .values("document_type_id", "document_type__name", "document_type__system_type")
+        .annotate(count=Count("id"))
+        .order_by("document_type__name")
+    )
 
-        records = [
-            {
-                "document_type": row["document_type__name"],
-                "system_type": row["document_type__system_type"] or "",
-                "count": row["count"],
-            }
-            for row in rows
-        ]
+    records = [
+        {
+            "document_type": row["document_type__name"],
+            "system_type": row["document_type__system_type"] or "",
+            "count": row["count"],
+        }
+        for row in rows
+    ]
 
-        return DatasetResult(
-            mode="rows",
-            records=records,
-            summary={"total": sum(row["count"] for row in records)},
-            completeness=[],
-        )
+    return DatasetResult(
+        mode="rows",
+        records=records,
+        summary={"total": sum(row["count"] for row in records)},
+        completeness=[],
+    )
 ```
 
 Drei Punkte, die leicht untergehen:
@@ -256,9 +255,7 @@ TYP_BINDUNG = TypBindung(
 # Optional, wenn dein Bericht Feldwerte liest. ``slugs`` ist hier die
 # Herkunftsangabe (welcher Paket-Slug diesen Schlüssel per Backfill bekam) und
 # der Rückweg für "erscheint in …" — gebunden wird über ``bindet``.
-FELD_DAUER = FeldBindung(
-    (BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),), bindet="report_key"
-)
+FELD_DAUER = FeldBindung((BindungsEintrag("dauer_minuten", _("Minuten"), slugs=("dauer",)),), bindet="report_key")
 
 
 @register_backend("mein-bericht")
@@ -307,32 +304,31 @@ Konsumenten, die „erscheint dieser Typ/diese Feldvorlage in einem Bericht?" be
 Sobald der Bericht heruntergeladen werden kann, ist `prepare_export` **Pflichtlektüre**, nicht Kür. Details in [§ 6](#6-k-anonymität--der-prepare_export-hook); der Minimalfall aus `example.py` (Imports wie in Schritt 1):
 
 ```python
-    # Deklaration für den zentralen Residual-Guard: ``total`` ist die Summe
-    # aller Zeilen-``count``s, ``records`` also die exakte Partition dieser
-    # Randsumme. ``ORDER_INPUT``: die Query sortiert nach ``document_type__name``
-    # — die Zeilenposition ist bereits wertunabhängig (K5).
-    _EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
+# Deklaration für den zentralen Residual-Guard: ``total`` ist die Summe
+# aller Zeilen-``count``s, ``records`` also die exakte Partition dieser
+# Randsumme. ``ORDER_INPUT``: die Query sortiert nach ``document_type__name``
+# — die Zeilenposition ist bereits wertunabhängig (K5).
+_EXPORT_BREAKDOWN = _Breakdown("records", "total", ORDER_INPUT)
 
-    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        threshold = _get_threshold(facility)
-        total = result.summary["total"]
-        # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl.
-        published_total = None if total < threshold else total
-        view = {
-            "total": published_total,
-            "records": _suppress_small(
-                result.records, threshold, margin=published_total, order=ORDER_INPUT
-            ),
-        }
-        apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
 
-        field_keys = [spec.key for spec in self.get_field_specs()]
-        records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
+    threshold = _get_threshold(facility)
+    total = result.summary["total"]
+    # R14: eine Randsumme < k ist selbst eine Kleinstfallzahl.
+    published_total = None if total < threshold else total
+    view = {
+        "total": published_total,
+        "records": _suppress_small(result.records, threshold, margin=published_total, order=ORDER_INPUT),
+    }
+    apply_residual_guard(view, threshold, (self._EXPORT_BREAKDOWN,))
 
-        summary = dict(result.summary)
-        summary["total"] = view["total"]
-        summary["k_anonymity_threshold"] = threshold
-        return dataclasses.replace(result, records=records, summary=summary)
+    field_keys = [spec.key for spec in self.get_field_specs()]
+    records = [{key: row[key] for key in field_keys} for row in view.get("records", [])]
+
+    summary = dict(result.summary)
+    summary["total"] = view["total"]
+    summary["k_anonymity_threshold"] = threshold
+    return dataclasses.replace(result, records=records, summary=summary)
 ```
 
 `margin` und `order` sind **Keyword-only und ohne Default** — ein Aufruf ohne sie ist ein `TypeError` (fail-closed): `margin` sagt, ob es eine publizierte Randsumme gibt, an der das Machbarkeits-Audit rechnen kann, `order` benennt die kanonische Ausgabeordnung unterdrückter Zeilen.
@@ -624,7 +620,7 @@ Testdateien folgen dem Muster `src/tests/test_reporting_<slug>.py`. Die bestehen
 ```python
 @pytest.fixture(autouse=True)
 def _isolated_registry(monkeypatch):
-    registry._discover()                                              # echte Discovery EINMAL vorher
+    registry._discover()  # echte Discovery EINMAL vorher
     monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
     monkeypatch.setattr(registry, "_discovered", True)
 ```

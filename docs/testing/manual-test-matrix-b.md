@@ -6294,7 +6294,8 @@
    from datetime import timedelta
    from core.models import AuditLog
    from core.services._db_admin import bypass_replication_triggers
-   entry = AuditLog.objects.filter(action='retention_run_completed').latest('timestamp')
+
+   entry = AuditLog.objects.filter(action="retention_run_completed").latest("timestamp")
    with bypass_replication_triggers():
        AuditLog.objects.filter(pk=entry.pk).update(timestamp=timezone.now() - timedelta(days=10))
    ```

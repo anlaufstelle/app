@@ -557,20 +557,20 @@ from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.registry import register_backend
 
 
-@register_backend("my-report")              # slug: ^[a-z0-9]+([-_][a-z0-9]+)*$, effectively immutable
+@register_backend("my-report")  # slug: ^[a-z0-9]+([-_][a-z0-9]+)*$, effectively immutable
 class MyBackend(DatasetBackend):
-    name = _("My report")                   # display name — always gettext_lazy
+    name = _("My report")  # display name — always gettext_lazy
     description = _("What this report counts, in one sentence.")
-    snapshot_enabled = False                # True = raw aggregate is persisted monthly
+    snapshot_enabled = False  # True = raw aggregate is persisted monthly
 
     def get_field_specs(self) -> list[FieldSpec]:
         return [FieldSpec("label", _("Attribute")), FieldSpec("count", _("Count"))]
 
-    def build_dataset(self, facility, date_from, date_to) -> DatasetResult:
-        ...                                 # returns RAW numbers
+    def build_dataset(self, facility, date_from, date_to) -> DatasetResult: ...  # returns RAW numbers
 
-    def prepare_export(self, facility, result: DatasetResult) -> DatasetResult:
-        ...                                 # k-anonymity, before anything leaves the house
+    def prepare_export(
+        self, facility, result: DatasetResult
+    ) -> DatasetResult: ...  # k-anonymity, before anything leaves the house
 ```
 
 Five points that experience shows tend to go wrong:
@@ -676,9 +676,11 @@ Example (service layer, pseudonym hashing from [Issue #844](https://github.com/a
 # Red — src/tests/test_pseudonym_hashing.py
 def test_client_pseudonym_hash_is_stable():
     from django.conf import settings
+
     settings.PSEUDONYM_HMAC_KEY = "test-key"
 
     from core.services.audit_hash import hmac_pseudonym
+
     assert hmac_pseudonym("anlauf-2026-0001") == hmac_pseudonym("anlauf-2026-0001")
     assert hmac_pseudonym("anlauf-2026-0001") != hmac_pseudonym("anlauf-2026-0002")
 ```
@@ -692,6 +694,7 @@ pytest src/tests/test_pseudonym_hashing.py -x
 # Green — src/core/services/audit_hash.py
 import hmac, hashlib
 from django.conf import settings
+
 
 def hmac_pseudonym(pseudonym: str) -> str:
     key = settings.PSEUDONYM_HMAC_KEY.encode()
@@ -977,4 +980,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: d8b97f0d7b390a4c7d159681791acdda4653fd98 -->
+<!-- source-hash: 49f049195e39f81e65c415d16013b2d64f45a644 -->
