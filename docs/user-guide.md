@@ -631,6 +631,8 @@ Wenn eine Fachkraft oder Assistenz einen Kontakt einer Person der Kontaktstufe �
 
 > **Wichtig:** Sie können Ihren eigenen Löschantrag nicht selbst genehmigen (4-Augen-Prinzip).
 
+Unabhängig von Ihrer Rolle: Als antragstellende Person können Sie Ihren eigenen Löschantrag selbst zurückziehen, solange er noch **ausstehend** ist. Unter `/deletion-requests/` erscheint an Ihrem eigenen ausstehenden Antrag neben dem Vier-Augen-Hinweis der Link **Zurückziehen**. Der Bestätigungsdialog sagt ausdrücklich: **Es wird nichts gelöscht — die Daten bleiben unverändert.** Danach ist jederzeit ein neuer Löschantrag für dasselbe Ziel möglich. Der Antrag bleibt für den Genehmiger-Pool in der Sektion **Zurückgezogen** sichtbar und der Rückzug wird mit dem Endstatus **Zurückgezogen** protokolliert.
+
 ---
 
 ## 8. PWA installieren und Offline arbeiten

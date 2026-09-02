@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+
+- **Selbst-Rückzug des Löschantrags im Handbuch beschrieben** (#2092) — Das Nutzerhandbuch (DE+EN) erklärt jetzt, wie eine antragstellende Person einen eigenen ausstehenden Löschantrag selbst zurückziehen kann, und macht dabei deutlich, dass nichts gelöscht wird und danach jederzeit ein neuer Antrag möglich ist.
+
 ## [0.91.0] - 2026-09-02
 
 ### Added

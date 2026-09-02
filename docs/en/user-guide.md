@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> Most recently synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
+> Most recently synchronized on 2026-09-02 (§ 7 self-withdrawal of a deletion request, #2092). Previously synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
@@ -635,6 +635,8 @@ When a social worker or assistant wants to delete a contact belonging to a clien
 
 > **Important:** You cannot approve your own deletion request (four-eyes principle).
 
+Regardless of your role: As the requesting person, you can withdraw your own deletion request yourself as long as it is still **pending**. At `/deletion-requests/`, your own pending request shows the **Withdraw** link next to the four-eyes notice. The confirmation dialog explicitly says: **Nothing is deleted — the data remains unchanged.** Afterwards, a new deletion request for the same target is possible at any time. The request remains visible to the approver pool in the **Withdrawn** section, and the withdrawal is logged with the final status **Withdrawn**.
+
 ---
 
 ## 8. Installing the PWA and Working Offline
@@ -949,5 +951,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.91.0 -->
-<!-- translation-date: 2026-08-24 -->
-<!-- source-hash: 2487698e7fdd5bfac80b3713041ff58586d3c4eb -->
+<!-- translation-date: 2026-09-02 -->
+<!-- source-hash: f254cbf3d86e6ef12485064905da4cab1dedb549 -->
