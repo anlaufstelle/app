@@ -70,7 +70,13 @@ def _feed_activities(facility, start_dt, end_dt, user, include_all):
         from django.contrib.contenttypes.models import ContentType
 
         event_ct = ContentType.objects.get_for_model(Event)
-        visible_event_ids = Event.objects.visible_to(user).values_list("pk", flat=True)
+        # ``facility`` gehoert mit in den Subselect (Refs #2028): ohne das
+        # Praedikat laeuft der NOT-IN ueber ``core_event`` aller Einrichtungen
+        # und waechst damit mit der Gesamtinstallation statt mit der eigenen
+        # Einrichtung. Das Ergebnis aendert sich nicht — Event-PKs sind global
+        # eindeutig, ein ``target_id`` dieser Facility zeigt nie auf ein Event
+        # einer anderen; es ist reine Queryform (Muster wie ``_feed_events``).
+        visible_event_ids = Event.objects.visible_to(user).filter(facility=facility).values_list("pk", flat=True)
         activities_qs = activities_qs.exclude(
             Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
         )

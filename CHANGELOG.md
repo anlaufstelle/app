@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Selbst-Rückzug des Löschantrags im Handbuch beschrieben** (#2092) — Das Nutzerhandbuch (DE+EN) erklärt jetzt, wie eine antragstellende Person einen eigenen ausstehenden Löschantrag selbst zurückziehen kann, und macht dabei deutlich, dass nichts gelöscht wird und danach jederzeit ein neuer Antrag möglich ist.
+### Performance
+
+- **Der Zeitstrom prüft die Ereignis-Sichtbarkeit nur noch in der eigenen Einrichtung** (#2028) — Der Aktivitäten-Zweig blendet Einträge aus, deren zugehöriges Ereignis für die angemeldete Person nicht sichtbar ist, und stellte diese Prüfung bisher gegen die Ereignisse **aller** Einrichtungen einer Installation an; auf einem Messbestand mit fünf Einrichtungen und 50 000 Ereignissen schrumpft die Prüfmenge damit von 44 988 auf 9 011 Ereignisse und die Abfrage von 21,7 ms auf 6,1 ms, während die angezeigte Liste unverändert bleibt.
 
 ## [0.91.0] - 2026-09-02
 
