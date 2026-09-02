@@ -6,6 +6,7 @@ Refs https://github.com/anlaufstelle/app/issues/2029
 from datetime import UTC, date, datetime, time, timedelta
 
 import pytest
+from django.test import RequestFactory
 from django.utils import timezone
 
 from core.models import AuditLog, Facility, Organization, User
@@ -71,31 +72,83 @@ def _make_user(facility):
 
 
 @pytest.mark.django_db
-def test_audit_view_date_filter_matches_day_boundary_entries(client):
-    """Range filter returns the same entries as the old __date filter.
-
-    An entry at 23:59:59 on the day belongs; one at 00:00:00 the next day
-    does not.
-    """
+def test_range_filter_matches_date_lookup_at_day_boundaries():
+    """The new range filter returns exactly the same rows as timestamp__date."""
     facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
     user = _make_user(facility)
     day = date(2026, 6, 15)
     start, end = day_bounds(day)
-    # Just before the end -> included
+    timestamps = [
+        start - timedelta(seconds=1),  # excluded
+        start + timedelta(seconds=1),  # included
+        end - timedelta(seconds=1),  # included
+        end,  # excluded
+    ]
+    entries = [
+        AuditLog.objects.create(
+            facility=facility,
+            user=user,
+            action=AuditLog.Action.LOGIN,
+            timestamp=ts,
+        )
+        for ts in timestamps
+    ]
+    old_qs = AuditLog.objects.filter(facility=facility, timestamp__date__gte=day, timestamp__date__lte=day)
+    new_qs = AuditLog.objects.filter(facility=facility, timestamp__gte=start, timestamp__lt=end)
+    assert set(old_qs) == set(new_qs)
+    assert set(new_qs) == {entries[1], entries[2]}
+
+
+@pytest.mark.django_db
+def test_system_audit_filters_match_date_lookup_at_boundaries():
+    """System audit list/export shared filter matches __date semantics."""
+    from core.views.system.audit import _apply_auditlog_filters
+
+    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
+    user = _make_user(facility)
+    day = date(2026, 6, 15)
+    start, end = day_bounds(day)
+    timestamps = [
+        start - timedelta(seconds=1),
+        start + timedelta(seconds=1),
+        end - timedelta(seconds=1),
+        end,
+    ]
+    for ts in timestamps:
+        AuditLog.objects.create(
+            facility=facility,
+            user=user,
+            action=AuditLog.Action.LOGIN,
+            timestamp=ts,
+        )
+
+    request = RequestFactory().get(f"/system/audit/?date_from={day.isoformat()}&date_to={day.isoformat()}")
+    qs, _raw, _applied = _apply_auditlog_filters(request)
+    old_qs = qs.filter(timestamp__date__gte=day, timestamp__date__lte=day)
+    new_qs = qs.filter(timestamp__gte=start, timestamp__lt=end)
+    assert set(old_qs) == set(new_qs)
+    assert set(new_qs) == set(AuditLog.objects.filter(timestamp__gte=start, timestamp__lt=end))
+
+
+@pytest.mark.django_db
+def test_audit_view_date_filter_matches_day_boundary_entries(client):
+    """The /audit/ view returns exactly one entry at the day boundary."""
+    facility = Facility.objects.create(organization=Organization.objects.create(name="Org"), name="Stelle")
+    user = _make_user(facility)
+    day = date(2026, 6, 15)
+    start, end = day_bounds(day)
     AuditLog.objects.create(
         facility=facility,
         user=user,
         action=AuditLog.Action.LOGIN,
         timestamp=end - timedelta(seconds=1),
     )
-    # Exactly at end -> excluded
     AuditLog.objects.create(
         facility=facility,
         user=user,
         action=AuditLog.Action.LOGIN,
         timestamp=end,
     )
-    # Before start -> excluded
     AuditLog.objects.create(
         facility=facility,
         user=user,
