@@ -1012,7 +1012,7 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
         # geloeschten Person.
         qs = Client.objects.for_facility(request.current_facility).filter(is_active=True, is_deleted=False)
         if q:
-            qs = qs.filter(pseudonym__icontains=q)
+            qs = qs.filter(pseudonym__ilike=q)
 
         # Issue #507: filter by min_contact_stage from the selected DocumentType.
         # Frontend passes data-min-stage from the DocumentType <option>; we drop

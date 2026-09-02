@@ -240,7 +240,7 @@ class FilteredPaginatedListMixin(PaginatedListMixin):
     der Mixin uebernimmt nur das wiederholte Muster:
 
     * ``search_fields`` — Liste von Modellfeld-Lookups (z. B.
-      ``["pseudonym"]``). ``apply_search`` filtert per ``__icontains``-
+      ``["pseudonym"]``). ``apply_search`` filtert per ``__ilike``-
       OR ueber alle Felder, wenn ``?q=`` (getrimmt) nicht leer ist.
     * ``filter_fields`` — Mapping ``GET-Param -> Modellfeld`` (z. B.
       ``{"stage": "contact_stage"}``). ``apply_filters`` haengt fuer
@@ -263,14 +263,14 @@ class FilteredPaginatedListMixin(PaginatedListMixin):
         return request.GET.get("q", "").strip()
 
     def apply_search(self, queryset, request):
-        """``__icontains``-OR ueber ``search_fields``, falls ``?q=`` gesetzt."""
+        """``__ilike``-OR ueber ``search_fields``, falls ``?q=`` gesetzt."""
         q = self.get_search_term(request)
         if q and self.search_fields:
             from django.db.models import Q
 
             condition = Q()
             for field in self.search_fields:
-                condition |= Q(**{f"{field}__icontains": q})
+                condition |= Q(**{f"{field}__ilike": q})
             queryset = queryset.filter(condition)
         return queryset
 

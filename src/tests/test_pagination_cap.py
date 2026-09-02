@@ -158,7 +158,7 @@ class TestFilteredPaginatedListMixin:
         view.apply_search(qs, self._request("q=Falke"))
 
         assert len(qs.q_args) == 1
-        assert qs.q_args[0] == Q(pseudonym__icontains="Falke")
+        assert qs.q_args[0] == Q(pseudonym__ilike="Falke")
 
     def test_apply_search_ors_multiple_fields(self):
         from django.db.models import Q
@@ -167,7 +167,7 @@ class TestFilteredPaginatedListMixin:
         qs = _RecordingQuerySet()
         view.apply_search(qs, self._request("q=abc"))
 
-        expected = Q(title__icontains="abc") | Q(pseudonym__icontains="abc")
+        expected = Q(title__ilike="abc") | Q(pseudonym__ilike="abc")
         assert qs.q_args == [expected]
 
     def test_apply_search_noop_for_empty_query(self):
