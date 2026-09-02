@@ -261,7 +261,16 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Cross-facility links are impossible at the database level**: composite foreign keys pin an event's client, case and document type to the event's own facility, closing the last gap that service-layer checks alone could not close against bulk or maintenance paths.
 - **Schema and workflow hygiene**: facility names are unique (four maintenance commands can no longer silently act on the wrong facility — unknown names now fail loudly), rectification requests and quick templates protect their targets from cascading deletion, repeated visit tracking no longer rewrites rows within five minutes, and deletion, merge and bulk task paths share one canonical lock order backed by tests.
 
+### v0.91.0 (2026-09-02)
+
+- **A deletion request is no longer a one-way street**: the person who filed it can withdraw it while it is still pending — after a confirmation dialog that states nothing gets deleted. The request stays in the list with its own terminal state "Withdrawn" (so four-eyes approvers can still see why it left "Pending"), the withdrawal is audited, and foreign requests are unreachable on this path.
+- **The application explains itself**: signed-in users reach role-relevant short help pages from the footer and both navigations, native context helpers cover contact stages, form conditions, retention periods, four-eyes review and offline work — all without JavaScript. Self-hosters can additionally mount their own legal pages (imprint, privacy policy) as size-capped UTF-8 files rendered through a linear, safe Markdown subset. Clients can now also be created inline from the contact form when a search comes up empty, without losing the form's state.
+- **Reports only leave the building with their suppression threshold declared**: the k-anonymity minimum is enforced at runtime and stated on the export, instead of being an implicit convention.
+- **Operations hardening**: the staging web process no longer runs as a database superuser; immediate anonymisation from the trash works again under the three-role model; ufw-docker is integrity-checked at server bootstrap; Redis accepts an optional password on top of the network boundary; bulk task actions are capped at 200 items; the production compose template starts again as shipped; dev deploys verify image versions fail-closed; and accounts without a facility see an explanation instead of a server error.
+- **Accessibility and offline resilience**: the mobile search is usable again, screen readers announce where you are, list search fields carry accessible names, filters show their loading state, a full device storage no longer silently stops draft saving, a rolled-back server explains why offline data is unreachable, and pseudonym renames are warned about and marked in the history.
+- **The mutation gate measures again what it should**: every parallel mutmut fork now gets its own test database — before this fix, a foreign failure could only flip a mutant towards "killed", so all earlier scores were upper bounds. The structurally unmeasured share (decorated functions) is now quantified alongside every score, and the v0.91.0 delta ran with a full survivor triage whose priority-1 gaps are pinned by dedicated tests.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.89.0 -->
+<!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-08-28 -->
 <!-- source-hash: 19f61ad93ada6b0789df13d4ce6c8d90875665e2 -->
