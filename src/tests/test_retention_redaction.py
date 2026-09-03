@@ -13,8 +13,9 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from core.models import Attachment, DocumentType, Event, EventHistory, FieldTemplate
+from core.models import Attachment, AuditLog, DocumentType, Event, EventHistory, FieldTemplate
 from core.retention import enforcement as enforcement_mod
+from core.retention.legal_holds import create_hold_for_target
 from core.services.events import build_redacted_delete_history, soft_delete_event
 from core.services.file_vault import store_encrypted_file
 from core.services.file_vault.storage import get_attachment_path
@@ -345,3 +346,165 @@ class TestRetentionSaveHistoryAtomic:
         assert event_with_pii.is_deleted is False
         assert event_with_pii.data_json == original
         assert EventHistory.objects.filter(event=event_with_pii, action=EventHistory.Action.DELETE).count() == 0
+
+
+@pytest.mark.django_db
+class TestRetentionSoftDeleteHoldRace:
+    """Refs #2107 (Red-Team B-5): Der Batch-Schreibloop muss den Legal Hold
+    UNTER der Zeilensperre erneut lesen.
+
+    Die sechs Sammelstellen lesen ``held_ids``/``held_client_ids`` genau einmal
+    zu Strategiebeginn. Ein Hold, der WAEHREND des Laufs entsteht (Behoerden-
+    anordnung mitten im naechtlichen Batch), erreichte die bereits
+    eingesammelten Ereignisse nicht mehr — sie wurden trotz zum
+    Loeschzeitpunkt aktivem Hold irreversibel redigiert (Spoliation).
+
+    Der Anker existiert seit ADR-050 D2 zweimal im Repo
+    (``create_hold_for_target`` sperrt die Ziel-Zeile,
+    ``soft_delete_event`` sperrt Client -> Event und liest den Hold DANACH);
+    diese Tests pinnen ihn fuer den Batch-Pfad.
+    """
+
+    def _stale_event(self, facility, doc_type, admin_user, person, days=400):
+        return Event.objects.create(
+            facility=facility,
+            document_type=doc_type,
+            client=person,
+            occurred_at=timezone.now() - timedelta(days=days),
+            data_json={"freitext": "sensibler Klartext", "ort": "Ort X"},
+            created_by=admin_user,
+        )
+
+    def test_client_hold_after_collection_defers_the_event(
+        self, facility, normal_doc_type, admin_user, client_identified
+    ):
+        """PoC-Muster ``h9_b4_b5_retention_hold_race.py`` Teil B: Selektion zu t0,
+        Hold danach, Schreibloop mit der stalen Selektion."""
+        event = self._stale_event(facility, normal_doc_type, admin_user, client_identified)
+        qs_t0 = Event.objects.filter(pk=event.pk)
+
+        create_hold_for_target(
+            facility,
+            target_type="Client",
+            target_id=client_identified.pk,
+            user=admin_user,
+            reason="Behoerdenanordnung mitten im Lauf",
+        )
+
+        count, deleted_ids = _soft_delete_events(qs_t0, facility, category="identified", retention_days=3650)
+
+        event.refresh_from_db()
+        assert event.is_deleted is False, "Event unter aktivem Personen-Hold wurde redigiert (Spoliation)"
+        assert event.data_json == {"freitext": "sensibler Klartext", "ort": "Ort X"}
+        assert count == 0
+        assert deleted_ids == []
+        assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).count() == 0
+
+    def test_event_hold_after_collection_defers_the_event(
+        self, facility, normal_doc_type, admin_user, client_identified
+    ):
+        event = self._stale_event(facility, normal_doc_type, admin_user, client_identified)
+        qs_t0 = Event.objects.filter(pk=event.pk)
+
+        create_hold_for_target(
+            facility,
+            target_type="Event",
+            target_id=event.pk,
+            user=admin_user,
+            reason="Direkter Ereignis-Hold mitten im Lauf",
+        )
+
+        count, deleted_ids = _soft_delete_events(qs_t0, facility, category="identified", retention_days=3650)
+
+        event.refresh_from_db()
+        assert event.is_deleted is False, "Event unter aktivem Ereignis-Hold wurde redigiert (Spoliation)"
+        assert count == 0
+        assert deleted_ids == []
+
+    def test_hold_created_mid_loop_protects_the_still_unwritten_event(
+        self, facility, normal_doc_type, admin_user, client_identified, client_qualified
+    ):
+        """Der Re-Check muss PRO Ereignis laufen, nicht einmal vor der Schleife.
+
+        Der Hold entsteht hier waehrend der Verarbeitung des ERSTEN Ereignisses
+        — exakt das Fenster, das ein einmaliger Vorab-Check offen laesst.
+        """
+        now = timezone.now()
+        first = self._stale_event(facility, normal_doc_type, admin_user, client_identified, days=500)
+        second = self._stale_event(facility, normal_doc_type, admin_user, client_qualified, days=400)
+        assert first.occurred_at < second.occurred_at < now
+
+        qs = Event.objects.filter(pk__in=[first.pk, second.pk]).order_by("occurred_at")
+        real_builder = enforcement_mod.build_redacted_delete_history
+        state = {"first": True}
+
+        def _hold_between(event):
+            if state["first"]:
+                state["first"] = False
+                create_hold_for_target(
+                    facility,
+                    target_type="Client",
+                    target_id=client_qualified.pk,
+                    user=admin_user,
+                    reason="Behoerdenanordnung zwischen zwei Ereignissen",
+                )
+            return real_builder(event)
+
+        with patch.object(enforcement_mod, "build_redacted_delete_history", side_effect=_hold_between):
+            count, deleted_ids = _soft_delete_events(qs, facility, category="identified", retention_days=3650)
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        assert first.is_deleted is True, "Das erste, ungehaltene Ereignis muss regulaer geleert werden"
+        assert second.is_deleted is False, "Der mitten im Lauf entstandene Hold wurde nicht gesehen"
+        assert deleted_ids == [first.pk]
+        assert count == 1
+
+    def test_audit_count_excludes_deferred_events_and_reports_them(
+        self, facility, normal_doc_type, admin_user, client_identified, client_qualified
+    ):
+        """Refs #1344 bleibt intakt: ``count`` zaehlt nur tatsaechlich Geleertes;
+        die zurueckgestellten erscheinen als eigene Zahl im ``detail``."""
+        held = self._stale_event(facility, normal_doc_type, admin_user, client_identified, days=500)
+        free = self._stale_event(facility, normal_doc_type, admin_user, client_qualified, days=400)
+        qs_t0 = Event.objects.filter(pk__in=[held.pk, free.pk])
+
+        create_hold_for_target(
+            facility,
+            target_type="Client",
+            target_id=client_identified.pk,
+            user=admin_user,
+            reason="Behoerdenanordnung",
+        )
+
+        count, deleted_ids = _soft_delete_events(qs_t0, facility, category="identified", retention_days=3650)
+
+        assert count == 1
+        assert deleted_ids == [free.pk]
+        entry = (
+            AuditLog.objects.filter(
+                facility=facility,
+                target_type="Event",
+                detail__category="identified",
+            )
+            .order_by("-timestamp")
+            .first()
+        )
+        assert entry is not None
+        assert entry.detail["count"] == 1
+        assert entry.detail["deferred"] == 1
+
+    def test_event_deleted_between_collection_and_write_is_skipped(
+        self, facility, normal_doc_type, admin_user, client_identified
+    ):
+        """Der ``is_deleted``-Re-Check, den der Loop bisher gar nicht hatte."""
+        event = self._stale_event(facility, normal_doc_type, admin_user, client_identified)
+        qs_t0 = Event.objects.filter(pk=event.pk)
+
+        Event.objects.filter(pk=event.pk).update(is_deleted=True)
+
+        count, deleted_ids = _soft_delete_events(qs_t0, facility, category="identified", retention_days=3650)
+
+        assert count == 0
+        assert deleted_ids == []
+        assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).count() == 0

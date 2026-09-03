@@ -18,7 +18,7 @@ from django.db import transaction
 # in #744/#778 entstehen keine Zirkular-Imports mehr; die fruheren Workarounds
 # in den Funktionsruempfen sind dafur ueberfluessig.
 from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, EventHistory, RetentionProposal
-from core.retention.legal_holds import get_active_hold_target_ids
+from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
@@ -43,6 +43,78 @@ def collect_doomed_events(facility, settings_obj, now):
     return combined.exclude(pk__in=held_ids).exclude(client_id__in=held_client_ids).distinct()
 
 
+def _lock_event_and_recheck_hold(facility, pk):
+    """Sperrt Personen- und Ereigniszeile und liest den Hold DANACH (ADR-050 D2).
+
+    Refs #2107 (Red-Team B-5): Die sechs Sammelstellen lesen ihre Hold-Mengen
+    genau einmal zu Strategiebeginn. Zwischen dieser Lesung und dem Schreiben
+    liegt beim naechtlichen Batch ueber tausende Ereignisse ein Fenster von
+    Minuten — ein in dieser Zeit angelegter Hold (Behoerdenanordnung) erreichte
+    die bereits eingesammelten Ereignisse nicht mehr, sie wurden irreversibel
+    redigiert. Spoliation trotz aktivem Hold.
+
+    Der Koordinationspunkt existiert bereits zweimal im Repo und wird hier nur
+    uebernommen: :func:`core.retention.legal_holds.create_hold_for_target`
+    sperrt die Ziel-Zeile, BEVOR die ``LegalHold``-Zeile committet, und
+    ``core.services.events.crud.soft_delete_event`` sperrt am manuellen
+    Loeschweg ``Client`` -> ``Event`` und prueft den Hold erst danach (M-9).
+    Dieselbe kanonische Ordnung gilt hier: ``core_client`` -> ``core_event``
+    -> Hold-Lesung. Eine umgekehrte Reihenfolge waere der ABBA-Zyklus, den
+    ADR-050 D5.5 ausschliesst.
+
+    Rueckgabe: das gesperrte, frisch geladene ``Event`` oder ``None``, wenn es
+    nicht (mehr) zu leeren ist. ``None`` heisst immer „ueberspringen"; ob das
+    an einem Hold lag, sagt ``deferred``.
+
+    Der Aufrufer muss innerhalb einer ``transaction.atomic()`` stehen — sonst
+    faellt die Sperre mit dem impliziten Commit des ``SELECT`` sofort wieder.
+    """
+    # Personenbezug ungesperrt vorlesen: die Personenzeile ist die erste Stufe
+    # der kanonischen Ordnung und muss VOR der Ereigniszeile gesperrt werden,
+    # ihre pk steht aber nur am Ereignis.
+    row = Event.objects.filter(pk=pk).values("client_id").first()
+    if row is None:
+        # Zeile hart entfernt — nichts zu leeren, nichts zurueckzustellen.
+        return None, False
+    client_id = row["client_id"]
+    if client_id is not None:
+        # ``client_id`` ist ``None`` bei anonymen Ereignissen — dort gibt es
+        # keine Personenzeile und nichts zu koordinieren (Muster
+        # ``crud._lock_client_row``).
+        Client.objects.filter(pk=client_id).select_for_update().only("pk").first()
+    # Ereigniszeile sperren, DANN erst voll laden: ``select_for_update`` mit
+    # ``select_related`` sperrte sonst zusaetzlich die ``core_documenttype``-
+    # Zeile — ein Sperrobjekt ausserhalb der kanonischen Ordnung.
+    Event.objects.filter(pk=pk).select_for_update().only("pk").first()
+    event = Event.objects.select_related("document_type").filter(pk=pk).first()
+    if event is None:
+        return None, False
+    # Der ``is_deleted``-Re-Check, den der Loop bisher gar nicht hatte: der
+    # Docstring versprach ihn („zwischenzeitlich bereits geloeschte Events
+    # werden defensiv uebersprungen"), tatsaechlich filterte nur die
+    # Sammel-Query beim NAECHSTEN Lauf. Ein zweiter, ueberlappender Lauf
+    # schrieb sonst eine zweite ``EventHistory(DELETE)``-Zeile in eine
+    # append-only Tabelle.
+    if event.is_deleted:
+        return None, False
+    if event.client_id != client_id:
+        # Ein paralleler Merge hat das Ereignis waehrend der Sperrwartezeit an
+        # eine andere Person gehaengt — deren Zeile haben wir nie gesperrt und
+        # ihren Hold damit nie verlaesslich gesehen. Bewusst Abbruch statt
+        # Nachsperren (Sperr-Inversion, Muster ``_assert_current_client_binding``);
+        # der naechste Lauf liest den neuen Bezug und sperrt in der richtigen
+        # Reihenfolge.
+        return None, False
+    if has_active_hold(facility, "Event", event.pk):
+        return None, True
+    # Refs #1376 (I10): Der Hold auf die PERSON schuetzt deren Ereignisse
+    # ebenso — dieselbe Doppelpruefung wie an den Sammelstellen und in
+    # ``crud._assert_no_active_hold``.
+    if event.client_id and has_active_hold(facility, "Client", event.client_id):
+        return None, True
+    return event, False
+
+
 def _soft_delete_events(qs, facility, category, retention_days, extra_detail=None):
     """Soft-delete every event in ``qs``, write ``EventHistory`` + ``AuditLog``,
     and clean up approved proposals. Returns ``(count, deleted_ids)``.
@@ -56,6 +128,17 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     Nachweis, keine verwaiste ``.enc``-Residue). ``count`` im ``AuditLog``
     zaehlt daher nur tatsaechlich committete Events; zwischenzeitlich bereits
     geloeschte Events werden defensiv uebersprungen.
+
+    Refs #2107: Der Legal Hold wird je Ereignis UNTER der Zeilensperre erneut
+    gelesen (:func:`_lock_event_and_recheck_hold`) — die Hold-Mengen der
+    Sammelstellen sind zum Schreibzeitpunkt womoeglich Minuten alt. Ein
+    gehaltenes Ereignis wird **zurueckgestellt**, nicht redigiert: der Batch
+    hat keine Meldungsflaeche, und ein spaeterer Lauf holt die Loeschung nach,
+    sobald der Hold aufgehoben oder abgelaufen ist (dieselbe Antwort wie am
+    EventHistory-Sweep, ADR-050 D2 Punkt 5). Es zaehlt nicht in ``count``,
+    erscheint aber als ``deferred`` im ``detail`` — „nicht geloescht" und
+    „nicht angeschaut" muessen fuer die Spoliationsfrage unterscheidbar
+    bleiben.
     """
 
     # Refs #1344: DSGVO-Nachweiskette — jedes Event MUSS atomar mit seiner
@@ -68,19 +151,23 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     # Muster: ``core.retention.audit_pruning`` (atomic pro Loesch-Schnitt).
     event_pks = list(qs.values_list("pk", flat=True))
     deleted_event_ids = []
+    deferred_count = 0
     for pk in event_pks:
-        # Frisch laden (kein Server-Cursor ueber committete Transaktionen hinweg);
-        # zwischenzeitlich geloeschte Events defensiv ueberspringen.
-        event = Event.objects.select_related("document_type").filter(pk=pk).first()
-        if event is None:
-            continue
-        # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein — frueher
-        # kopierte Retention den Klartext in EventHistory und die append-only-
-        # Trigger machten ihn unloeschbar (DSGVO-Blocker). Payload + Metadaten
-        # VOR der Mutation lesen (danach ist ``data_json`` leer).
-        history_payload = build_redacted_delete_history(event)
-        field_metadata = _snapshot_field_metadata(event.document_type)
         with transaction.atomic():
+            # Refs #2107: Sperre und Hold-Lesung liegen INNERHALB derselben
+            # Transaktion wie die Mutation — eine Pruefung davor waere wieder
+            # nur eine Momentaufnahme.
+            event, deferred = _lock_event_and_recheck_hold(facility, pk)
+            if deferred:
+                deferred_count += 1
+            if event is None:
+                continue
+            # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein — frueher
+            # kopierte Retention den Klartext in EventHistory und die append-only-
+            # Trigger machten ihn unloeschbar (DSGVO-Blocker). Payload + Metadaten
+            # VOR der Mutation lesen (danach ist ``data_json`` leer).
+            history_payload = build_redacted_delete_history(event)
+            field_metadata = _snapshot_field_metadata(event.document_type)
             # Refs #1917: dieser Pfad läuft bewusst an ``soft_delete_event``
             # vorbei — die Hausverbots-Revision muss deshalb hier ebenso VOR
             # dem Wipe bumpen (nur aktive Bans erzeugen ein Existenz-Delta).
@@ -117,6 +204,11 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
         deleted_event_ids.append(pk)
 
     extra = dict(extra_detail) if extra_detail else {}
+    if deferred_count:
+        # Refs #2107: Nur setzen, wenn es etwas zu melden gibt — ein
+        # ``deferred: 0`` an jeder Zeile des naechtlichen Laufs waere Rauschen.
+        # Dieselbe Zaehl-Semantik wie am EventHistory-Sweep (ADR-050 D5.3).
+        extra["deferred"] = deferred_count
     audit_retention_decision(
         facility,
         target_type="Event",
