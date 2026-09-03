@@ -9,17 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Selbst-Rückzug des Löschantrags im Handbuch beschrieben** (#2092) — Das Nutzerhandbuch (DE+EN) erklärt jetzt, wie eine antragstellende Person einen eigenen ausstehenden Löschantrag selbst zurückziehen kann, und macht dabei deutlich, dass nichts gelöscht wird und danach jederzeit ein neuer Antrag möglich ist.
+- **SMTP-E2E-Nachweis beschreibt die echten Mail-Auslöser** (#2089) — Ein ausführbares Drehbuch, Admin-Hilfe und Operations-Runbook dokumentieren SMTP-Vorprüfung, Einladungs- und Reset-Wege, Header-Nachweis, Fehlerdiagnose und den Initialpasswort-Fallback, ohne `setup_facility` fälschlich als Mail-Auslöser zu nennen.
 
 ### Fixed
 
 - **Die Nachtschicht an der Zeitumstellung verliert ihre zusätzliche Stunde nicht mehr** (#2057) — In der Nacht zur Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal, und eine Schicht mit einem Ende in dieser Stunde — etwa 20:00 bis 02:45 — endete bisher schon beim ersten Durchlauf: Alles, was die Fachkraft in der zweiten, real gearbeiteten Stunde dokumentierte, fehlte anschließend in Zeitstrom, Schichtübergabe, Strichliste, Live-Ansicht und Schichtfilter-Tabs, obwohl die Einträge gespeichert waren. Das Schichtende meint jetzt ausdrücklich den **zweiten** Durchlauf der Uhrzeit, die Schicht dauert an diesem Tag also real 7 Stunden 45 statt 6 Stunden 45; in der Nacht zur Sommerzeit, in der die Stunde 02:00 bis 03:00 gar nicht stattfindet, gilt die vereinbarte Dauer ab Schichtbeginn, statt eine nie existierte Uhrzeit zu erfinden. Ganztagsansichten bleiben unverändert — der Umstellungstag im Herbst umfasst weiterhin 25 Stunden.
 - **Ein defektes Berichts-Backend legt nicht mehr die Statistik, den Export und den Monats-Snapshot lahm** (#2070) — Bisher hing an jedem Berichts-Plugin die ganze Umgebung: Ein Bericht, dessen Auswertung mit einem Fehler abbrach, beantwortete die Statistik-Seite und die Berichtsvorschau mit einem nackten Serverfehler, und im monatlichen Snapshot-Lauf riss er nicht nur seinen eigenen Wert mit, sondern den kompletten Lauf — alle bereits berechneten Zahlen dieser Einrichtung, alle Folgemonate und alle folgenden Einrichtungen. Weil der Lauf nur einmal im Monat stattfindet, die Aufbewahrungsfristen aber weiterlaufen, konnte daraus ein echter Datenverlust werden statt einer Verzögerung. Jetzt trägt jeder Weg seinen Fehler allein: Die Übersicht mit Kennzahlen und Diagrammen lädt weiter, die übrigen Berichte bleiben nutzbar, der defekte Bericht zeigt an seiner Stelle eine Fehlermeldung, und der Monats-Snapshot speichert alle übrigen Zahlen und vermerkt den Ausfall sichtbar in der gespeicherten Zeile. Ein Download eines defekten Berichts kann nicht teilweise gelingen: Er bricht sauber mit einer Fehlerseite ab — ohne Datei, ohne eine einzige Zeile des Datensatzes und ohne Protokolleintrag über eine Herausgabe, die nie stattfand. Das gilt für alle vier Wege gleichermaßen, also auch für das Sachbericht-PDF und selbst dann, wenn ein Bericht erst mitten beim Schreiben der Datei ausfällt — bisher wäre in diesem Fall eine abgeschnittene Datei beim Empfänger gelandet, die wie eine vollständige aussieht. Zusätzlich hat jede Berichtsabfrage jetzt eine Zeitobergrenze (Vorgabe 10 Sekunden, per `REPORTING_BACKEND_STATEMENT_TIMEOUT_MS` einstellbar), damit eine entgleiste Abfrage keinen Arbeitsprozess mehr dauerhaft blockiert.
+- **Host-Skripte verwenden den Host- statt des Container-Backup-Pfads** (#2022, #2021) — Backup und Restore-Drill lösen `BACKUP_HOST_DIR` gemeinsam gegen den Projektpfad auf und ignorieren das nur im Container gültige `BACKUP_DIR`, sodass Sicherungen für Drill und Health-Signal am gemounteten Ort landen. Bei `.env.example`-konformen Installationen wandert `.offsite_state` dadurch einmalig von `/backups/` nach `<Repo>/backups/`; der Zähler aufeinanderfolgender Offsite-Fehler startet dort bei 0.
 
 ### Performance
 
 - **Der Zeitstrom prüft die Ereignis-Sichtbarkeit nur noch in der eigenen Einrichtung** (#2028) — Der Aktivitäten-Zweig blendet Einträge aus, deren zugehöriges Ereignis für die angemeldete Person nicht sichtbar ist, und stellte diese Prüfung bisher gegen die Ereignisse **aller** Einrichtungen einer Installation an; auf einem Messbestand mit fünf Einrichtungen und 50 000 Ereignissen schrumpft die Prüfmenge damit von 44 988 auf 9 011 Ereignisse und die Abfrage von 21,7 ms auf 6,1 ms, während die angezeigte Liste unverändert bleibt.
 - **Audit-Listen filtern per Range-Prädikat auf den Zeitstempel** (#2029) — ``timestamp__date__gte/lte`` wurde durch ``timestamp__gte``/``timestamp__lt`` auf Tagesgrenzen ersetzt, damit der Zeitstempel-Index sargable genutzt wird.
 - **Personensuche nutzt ILIKE statt UPPER(LIKE) für GIN-Index-Tauglichkeit** (#2027) — Suchpfade in Klientenliste, Autocomplete und Dashboard-Suche verwenden den neuen Lookup ``__ilike``, der auf PostgreSQL case-insensitiv nach Datenbank-Collation sucht und die trigram-GIN-Indizes auf den nackten Spalten nutzbar macht. Einrichtungs-gescopt verknüpft die Datenbank damit Trigramm- und Einrichtungs-Index, statt die Nicht-Treffer der Einrichtung nachträglich wegzufiltern; messbar schneller ist die Suche in beiden Fällen, spürbar wird der Unterschied in der globalen Systemsuche und mit wachsender Personenzahl.
+
 ### Added
 
 - **Compliance warnt vor unbegrenzter Audit-Aufbewahrung** (#2053) — Das installationsweite Dashboard fasst Einrichtungen mit einer AuditLog-Aufbewahrung von 0 Monaten in einer Retention-Warnzeile zusammen und nennt die betroffenen Namen.
@@ -31,14 +34,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Fehlende Backup-Signale degradieren den Health-Status** (#2021) — Produktion meldet ohne Welt-B-Backup `backup=missing` und `status=degraded`, während ein expliziter Schalter andere Backup-Welten ausnimmt und das Erstsetup vor einem fehlenden Host-Cron warnt.
-
-### Fixed
-
-- **Host-Skripte verwenden den Host- statt des Container-Backup-Pfads** (#2022, #2021) — Backup und Restore-Drill lösen `BACKUP_HOST_DIR` gemeinsam gegen den Projektpfad auf und ignorieren das nur im Container gültige `BACKUP_DIR`, sodass Sicherungen für Drill und Health-Signal am gemounteten Ort landen. Bei `.env.example`-konformen Installationen wandert `.offsite_state` dadurch einmalig von `/backups/` nach `<Repo>/backups/`; der Zähler aufeinanderfolgender Offsite-Fehler startet dort bei 0.
-
-### Docs
-
-- **SMTP-E2E-Nachweis beschreibt die echten Mail-Auslöser** (#2089) — Ein ausführbares Drehbuch, Admin-Hilfe und Operations-Runbook dokumentieren SMTP-Vorprüfung, Einladungs- und Reset-Wege, Header-Nachweis, Fehlerdiagnose und den Initialpasswort-Fallback, ohne `setup_facility` fälschlich als Mail-Auslöser zu nennen.
 
 ## [0.91.0] - 2026-09-02
 
