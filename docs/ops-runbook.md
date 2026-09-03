@@ -381,10 +381,10 @@ Zwei Jobs bleiben Host-seitig, weil sie im Sidecar nicht laufen koennen:
 
 Die Host-Cron-Eintraege oben laufen in der **Systemzeitzone des Hosts** (nicht
 in der Sidecar-`TZ`-Variable aus [§3.2](#32-cron-sidecar-standard)) — weicht sie
-von `Europe/Berlin` ab (z. B. UTC-Hosts), kann die
-Backup-vor-Retention-Reihenfolge kippen oder `0 2 * * *` am Rueckfalltag
-doppelt zuenden; Host-TZ auf `Europe/Berlin` setzen oder die Host-Cron-Zeit
-entsprechend verschieben.
+von `Europe/Berlin` ab (z. B. UTC-Hosts), faellt `0 2 * * *` je nach Jahreszeit
+auf 03:00 oder 04:00 Ortszeit und die zugesagte Reihenfolge „Backup vor
+Retention (03:00)" kippt oder wird zum Gleichstand; Host-TZ auf `Europe/Berlin`
+setzen oder die Host-Cron-Zeit entsprechend vorziehen.
 
 #### Migration von der alten Host-Crontab (Betreiber-Aktion)
 

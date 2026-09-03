@@ -382,10 +382,10 @@ Two jobs stay host-side because they cannot run in the sidecar:
 
 The host cron entries above run in the **host's system time zone** (not in the
 sidecar `TZ` variable from [§3.2](#32-cron-sidecar-standard)). If it differs
-from `Europe/Berlin` (for example, on UTC hosts), the backup-before-retention
-ordering can flip or `0 2 * * *` can fire twice on the autumn clock-change
-day. Set the host time zone to `Europe/Berlin` or shift the host cron time
-accordingly.
+from `Europe/Berlin` (for example, on UTC hosts), `0 2 * * *` lands at 03:00 or
+04:00 local time depending on the season, so the promised "backup before
+retention (03:00)" ordering flips or degenerates into a tie. Set the host time
+zone to `Europe/Berlin` or move the host cron time earlier accordingly.
 
 #### Migrating from the Old Host Crontab (Operator Action)
 
@@ -2729,4 +2729,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 5aff2d348c7a7801841d11bd0ec78f475a5779d6 -->
+<!-- source-hash: 73c5c010d56d938cfac92847ca05f2a709dfac59 -->
