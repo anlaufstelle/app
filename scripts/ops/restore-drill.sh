@@ -236,7 +236,7 @@ rm -f "$RESTORE_ERR"
 # ueber dieselbe HighWaterMarkStore.load()-API geladen wie im regulaeren
 # verify_audit_chain-Pfad. Eine fehlende/manipulierte HWM faerbt den Drill rot,
 # bricht die folgenden Restore-Pruefungen aber bewusst nicht hart ab.
-if [[ "$DRILL_FORMAT" == "prod" ]]; then
+if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
     LATEST_HWM=$(find "$BACKUP_DIR" -maxdepth 1 -name 'audit_hwm-*.json' -type f 2>/dev/null | sort -r | head -n1)
     if [[ -z "$LATEST_HWM" ]]; then
         fail "Schritt 2b: Kein Audit-HWM-Backup (audit_hwm-*.json) in ${BACKUP_DIR} gefunden"
@@ -251,6 +251,8 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
     else
         fail "Schritt 2b: Audit-HWM konnte nicht in den Drill-Container kopiert werden"
     fi
+elif [[ "$DRILL_FORMAT" == "prod" ]]; then
+    echo "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen (DJANGO_AUDIT_HWM_PATH nicht gesetzt)"
 fi
 
 # Schritt 3: Stichproben pro Tabelle

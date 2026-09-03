@@ -118,16 +118,25 @@ def _write_prod_backup(backup_dir: Path) -> None:
     backup_file.with_name(f"{backup_file.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
 
 
-def _restore_sandbox(tmp_path: Path, *, hwm_payload: str | None) -> tuple[Path, Path, subprocess.CompletedProcess]:
+def _restore_sandbox(
+    tmp_path: Path,
+    *,
+    hwm_payload: str | None,
+    hwm_configured: bool = True,
+) -> tuple[Path, Path, subprocess.CompletedProcess]:
     compose_dir = tmp_path / "restore-root"
     backup_dir = compose_dir / "backups" / "daily"
     _write_prod_backup(backup_dir)
     if hwm_payload is not None:
         (backup_dir / "audit_hwm-2026-09-02_020000.json").write_text(hwm_payload, encoding="utf-8")
-    (compose_dir / ".env").write_text(
-        f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}\nPOSTGRES_DB=anlaufstelle\nDJANGO_AUDIT_HASH_KEY={AUDIT_KEY}\n",
-        encoding="utf-8",
-    )
+    env_lines = [
+        f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}",
+        "POSTGRES_DB=anlaufstelle",
+        f"DJANGO_AUDIT_HASH_KEY={AUDIT_KEY}",
+    ]
+    if hwm_configured:
+        env_lines.append("DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json")
+    (compose_dir / ".env").write_text("\n".join(env_lines) + "\n", encoding="utf-8")
 
     bindir = tmp_path / "restore-bin"
     bindir.mkdir()
@@ -172,6 +181,8 @@ exit 0
     )
     docker_log.write_text("", encoding="utf-8")
     env = dict(os.environ)
+    if not hwm_configured:
+        env.pop("DJANGO_AUDIT_HWM_PATH", None)
     env.update(
         {
             "PATH": f"{bindir}:{env['PATH']}",
@@ -212,6 +223,19 @@ def test_restore_drill_reports_fail_for_missing_hwm_and_continues(tmp_path: Path
     assert result.returncode == 1, result.stdout
     assert "FAIL - Schritt 2b: Kein Audit-HWM-Backup" in result.stdout
     assert "Schritt 3: Tabellen-Stichproben erfolgreich" in result.stdout
+
+
+def test_restore_drill_skips_hwm_when_not_configured_and_marks_restore(tmp_path: Path) -> None:
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=None,
+        hwm_configured=False,
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen" in result.stdout
+    assert "Schritt 7: Restore-Test im AuditLog dokumentiert" in result.stdout
+    assert "mark_restore_verified" in docker_log.read_text(encoding="utf-8")
 
 
 def test_restore_drill_accepts_valid_hwm_signature(tmp_path: Path) -> None:
