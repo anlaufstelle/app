@@ -19,7 +19,9 @@ Status erneut prüfen, sonst ``ValidationError``.
 """
 
 import threading
+import time
 from datetime import date, timedelta
+from unittest import mock
 
 import pytest
 from django.contrib import messages
@@ -39,6 +41,7 @@ from core.models import (
     Settings,
     User,
 )
+from core.retention import proposals as proposals_mod
 from core.retention.legal_holds import create_hold_for_target
 from core.retention.proposals import approve_proposal, bulk_approve_proposals
 
@@ -312,3 +315,252 @@ class TestZweiParalleleApproves:
         assert _approved_audit_rows(proposal).count() == 1, "Zwei Audit-Zeilen fuer einen Vorgang"
         proposal.refresh_from_db()
         assert proposal.status == RetentionProposal.Status.APPROVED
+
+
+def _committet_innerhalb(beobachtet, sekunden=1.0):
+    """Meldet, ob der Gegenspieler-Faden sein COMMIT im Fenster geschafft hat."""
+    ende = time.monotonic() + sekunden
+    while time.monotonic() < ende:
+        if beobachtet.get("committed") or beobachtet.get("fehler"):
+            return True
+        time.sleep(0.02)
+    return False
+
+
+@pytest.mark.django_db(transaction=True)
+class TestApproveKoordiniertMitDerHoldAnlage:
+    """Cross-Review Runde 1 (BLOCKER): Der Hold-Check braucht den gemeinsamen Anker.
+
+    Die erste Fassung sperrte nur ``core_retentionproposal`` und las die Holds
+    danach ungesperrt. ``create_hold_for_target`` koordiniert aber über die
+    **Zielzeile** — Ereignis-Holds auf ``core_event``, Personen-Holds auf
+    ``core_client`` (ADR-050 D2). Ein Hold konnte deshalb nach dem Check
+    committen und vor dem ``save()`` aktiv sein: APPROVED unter laufender
+    Sperre, und der Audit-Trail behauptete eine unzulässige Genehmigung.
+    """
+
+    @pytest.fixture
+    def bestand(self, django_db_setup):
+        org = Organization.objects.create(name="Approve-Anker-Org")
+        facility = org.facilities.create(name="Approve-Anker-Stelle")
+        Settings.objects.get_or_create(facility=facility)
+        lead = User.objects.create_user(
+            username="approve-anker-lead",
+            password="x" * 40,
+            facility=facility,
+            role=User.Role.LEAD,
+        )
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Kontakt (Approve-Anker)",
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Approve-Anker-Person",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+        ereignis = Event.objects.create(
+            facility=facility,
+            client=person,
+            document_type=doc_type,
+            occurred_at=timezone.now() - timedelta(days=400),
+            data_json={"freitext": "Beweis"},
+        )
+        yield facility, lead, person, ereignis, _proposal_for(facility, ereignis)
+        connections.close_all()
+
+    @pytest.mark.parametrize("hold_ziel", ["Event", "Client"])
+    def test_hold_der_vor_der_zielsperre_committet_verhindert_das_approve(self, bestand, monkeypatch, hold_ziel):
+        """Injektion am Sperrpunkt: der Hold committet, während der Approve noch
+        VOR seiner Zielsperre steht — genau der Zustand nach einer Sperrwartezeit.
+
+        Deadlock-frei, weil zu diesem Zeitpunkt noch keine Sperre gehalten wird.
+        """
+        facility, lead, person, ereignis, proposal = bestand
+        ziel_id = ereignis.pk if hold_ziel == "Event" else person.pk
+        fehler = {}
+        fertig = threading.Event()
+
+        def _hold_anlegen():
+            connection.close()
+            try:
+                create_hold_for_target(
+                    facility,
+                    target_type=hold_ziel,
+                    target_id=ziel_id,
+                    user=lead,
+                    reason=f"{hold_ziel}-Hold waehrend der Sperrwartezeit",
+                )
+            except Exception as exc:  # noqa: BLE001
+                fehler["hold"] = exc
+            finally:
+                fertig.set()
+                connections.close_all()
+
+        echt = proposals_mod._lock_target_rows_for_approval
+
+        def _vor_der_sperre_den_hold_zulassen(zu_sperren):
+            faden = threading.Thread(target=_hold_anlegen, name="hold")
+            faden.start()
+            faden.join(timeout=_JOIN_TIMEOUT)
+            assert not faden.is_alive(), "Hold-Anlage haengt, obwohl noch keine Sperre gehalten wird"
+            return echt(zu_sperren)
+
+        monkeypatch.setattr(proposals_mod, "_lock_target_rows_for_approval", _vor_der_sperre_den_hold_zulassen)
+
+        with pytest.raises(ValidationError) as exc:
+            approve_proposal(proposal, lead)
+
+        assert not fehler, fehler
+        assert "Aufbewahrungssperre" in str(exc.value)
+        proposal.refresh_from_db()
+        assert proposal.status == RetentionProposal.Status.PENDING
+        assert not _approved_audit_rows(proposal).exists()
+
+    @pytest.mark.parametrize("hold_ziel", ["Event", "Client"])
+    def test_hold_kann_im_gesperrten_fenster_nicht_committen(self, bestand, monkeypatch, hold_ziel):
+        """Die Gegenrichtung: sobald der Approve seine Zielzeilen hält, kommt die
+        Hold-Anlage nicht mehr durch — sie wartet, statt neben ihm her zu committen.
+
+        Genau diese Aussage konnte der Reviewer-Guard nicht formulieren: er
+        ``assert``-et im gesperrten Abschnitt auf ein COMMIT, das nach dem Fix
+        korrekterweise nicht mehr stattfindet. Hier wird deshalb mit endlicher
+        Wartezeit **beobachtet** statt blockierend erwartet.
+        """
+        facility, lead, person, ereignis, proposal = bestand
+        ziel_id = ereignis.pk if hold_ziel == "Event" else person.pk
+        beobachtet = {}
+        im_fenster = threading.Event()
+
+        def _hold_anlegen():
+            connection.close()
+            try:
+                im_fenster.wait(timeout=_JOIN_TIMEOUT)
+                create_hold_for_target(
+                    facility,
+                    target_type=hold_ziel,
+                    target_id=ziel_id,
+                    user=lead,
+                    reason=f"{hold_ziel}-Hold neben der Zielsperre",
+                )
+                beobachtet["committed"] = True
+            except Exception as exc:  # noqa: BLE001
+                beobachtet["fehler"] = exc
+            finally:
+                connections.close_all()
+
+        echt = proposals_mod._assert_target_has_no_active_hold
+
+        def _nach_der_hold_lesung_warten(geprueft, client_id):
+            ergebnis = echt(geprueft, client_id)
+            im_fenster.set()
+            beobachtet["im_fenster"] = _committet_innerhalb(beobachtet)
+            return ergebnis
+
+        monkeypatch.setattr(proposals_mod, "_assert_target_has_no_active_hold", _nach_der_hold_lesung_warten)
+
+        faden = threading.Thread(target=_hold_anlegen, name="hold")
+        faden.start()
+        try:
+            approve_proposal(proposal, lead)
+        finally:
+            connections.close_all()
+            faden.join(timeout=_JOIN_TIMEOUT)
+
+        assert not faden.is_alive(), "Verklemmung zwischen Hold-Anlage und Approve"
+        assert not beobachtet.get("fehler"), beobachtet["fehler"]
+        assert beobachtet["im_fenster"] is False, (
+            f"Der {hold_ziel}-Hold committete zwischen Hold-Lesung und Schreiben — "
+            "die Zielzeile ist kein gemeinsamer Sperr-Anker"
+        )
+        assert beobachtet["committed"] is True, "Der Hold entsteht danach"
+        proposal.refresh_from_db()
+        assert proposal.status == RetentionProposal.Status.APPROVED
+        assert _approved_audit_rows(proposal).count() == 1
+
+    def test_paralleles_approve_und_hold_enden_konsistent_ohne_verklemmung(self, bestand):
+        """Deadlock-freie Gegenprobe ohne Injektion: beide Ausgänge sind zulässig,
+        aber nie „APPROVED **und** Hold war vorher aktiv"."""
+        facility, lead, person, ereignis, proposal = bestand
+        am_start = threading.Barrier(2, timeout=_JOIN_TIMEOUT)
+        ergebnis = {}
+        fehler = {}
+
+        def _approve():
+            connection.close()
+            try:
+                frisch = RetentionProposal.objects.get(pk=proposal.pk)
+                am_start.wait()
+                approve_proposal(frisch, lead)
+                ergebnis["approve"] = "ok"
+            except ValidationError as exc:
+                ergebnis["approve"] = exc
+            except Exception as exc:  # noqa: BLE001
+                fehler["approve"] = exc
+            finally:
+                connections.close_all()
+
+        def _hold():
+            connection.close()
+            try:
+                am_start.wait()
+                create_hold_for_target(
+                    facility,
+                    target_type="Event",
+                    target_id=ereignis.pk,
+                    user=lead,
+                    reason="Paralleler Ereignis-Hold",
+                )
+                ergebnis["hold"] = "ok"
+            except Exception as exc:  # noqa: BLE001
+                fehler["hold"] = exc
+            finally:
+                connections.close_all()
+
+        faeden = [threading.Thread(target=_approve), threading.Thread(target=_hold)]
+        for faden in faeden:
+            faden.start()
+        for faden in faeden:
+            faden.join(timeout=_JOIN_TIMEOUT)
+
+        assert not any(f.is_alive() for f in faeden), "Verklemmung (ABBA) zwischen Approve und Hold-Anlage"
+        assert not fehler, fehler
+        assert ergebnis["hold"] == "ok", "Die Hold-Anlage muss in jedem Fall durchkommen"
+        proposal.refresh_from_db()
+        if isinstance(ergebnis["approve"], ValidationError):
+            assert proposal.status == RetentionProposal.Status.PENDING
+            assert not _approved_audit_rows(proposal).exists()
+        else:
+            # Der Approve war zuerst da: genau eine Genehmigung, der Hold kam danach.
+            assert proposal.status == RetentionProposal.Status.APPROVED
+            assert _approved_audit_rows(proposal).count() == 1
+
+    def test_merge_waehrend_der_sperrwartezeit_bricht_sauber_ab(self, bestand):
+        """Die Bindungs-Revalidierung: hängt ein Merge das Ereignis zwischen
+        Vorlesung und Ereignissperre an eine andere Person, ist die gesperrte
+        Personenzeile die falsche — dann wird abgebrochen statt nachgesperrt
+        (Sperr-Inversion, ADR-050 D5.5)."""
+        facility, lead, person, ereignis, proposal = bestand
+        andere = Client.objects.create(
+            facility=facility,
+            pseudonym="Approve-Anker-Zweite",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+        echt_filter = Client.objects.filter
+
+        def _merge_gewinnt(*args, **kwargs):
+            # Genau zwischen der ungesperrten Vorlesung der Bindung und der
+            # Revalidierung nach der Ereignissperre: der einzige
+            # ``Client.objects.filter``-Aufruf des Pfads ist die Personensperre.
+            Event.objects.filter(pk=ereignis.pk).update(client=andere)
+            return echt_filter(*args, **kwargs)
+
+        with mock.patch.object(Client.objects, "filter", side_effect=_merge_gewinnt):
+            with pytest.raises(ValidationError) as exc:
+                approve_proposal(proposal, lead)
+
+        assert "Personenzuordnung" in str(exc.value)
+        proposal.refresh_from_db()
+        assert proposal.status == RetentionProposal.Status.PENDING
+        assert not _approved_audit_rows(proposal).exists()

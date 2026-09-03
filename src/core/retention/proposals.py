@@ -18,7 +18,7 @@ from django.utils.translation import gettext_lazy as _
 from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
-from core.models import AuditLog, Event, LegalHold, RetentionProposal
+from core.models import AuditLog, Client, Event, LegalHold, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
@@ -237,6 +237,14 @@ PROPOSAL_ALREADY_DECIDED_MESSAGE = _(
     "Dieser Löschvorschlag wurde zwischenzeitlich bereits bearbeitet — bitte die Übersicht neu laden."
 )
 
+#: Meldung, wenn ein paralleler Merge das Ziel-Ereignis waehrend der
+#: Sperrwartezeit an eine andere Person gehaengt hat (Muster
+#: ``CLIENT_BINDING_CHANGED_MESSAGE`` am manuellen Loeschweg).
+TARGET_BINDING_CHANGED_MESSAGE = _(
+    "Die Personenzuordnung des vorgeschlagenen Ereignisses wurde zwischenzeitlich geändert — "
+    "bitte die Übersicht neu laden."
+)
+
 #: Die noch offenen, nicht entschiedenen Stati. Deckungsgleich mit
 #: ``_BulkActionMixin.allowed_statuses`` in ``core/views/retention.py``: die
 #: Oberflaeche laesst PENDING **und** DEFERRED genehmigen, der Re-Check darf
@@ -247,7 +255,59 @@ _APPROVABLE_STATUSES = (
 )
 
 
-def _assert_target_has_no_active_hold(proposal):
+def _lock_target_rows_for_approval(proposal):
+    """Sperrt Ziel-Person und Ziel-Ereignis — der gemeinsame Anker mit der Hold-Anlage.
+
+    Cross-Review Runde 1 (BLOCKER): Die erste Fassung sperrte nur
+    ``core_retentionproposal`` und las die Holds danach ungesperrt.
+    ``create_hold_for_target`` koordiniert aber ueber die ZIELZEILE — Ereignis-
+    Holds auf ``core_event``, Personen-Holds auf ``core_client`` (ADR-050 D2).
+    Ein Hold konnte deshalb nach der Lesung committen und vor dem ``save()``
+    aktiv sein: der Vorschlag wurde trotzdem APPROVED, und der Audit-Trail
+    behauptete eine Genehmigung unter laufender Sperre.
+
+    Reihenfolge ist hier in zwei Richtungen tragend:
+
+    * ``core_client`` vor ``core_event`` — die kanonische Ordnung des Repos
+      (``retention/eventhistory.py``), dieselbe, die ``soft_delete_event`` und
+      der Enforcement-Batch (Refs #2107) nehmen.
+    * ``core_event`` vor ``core_retentionproposal`` — ``create_legal_hold``
+      sperrt erst die Ereigniszeile (ueber ``create_hold_for_target``) und
+      schreibt DANACH den Vorschlag auf ``HELD``. Die Gegenordnung waere der
+      ABBA-Zyklus, den ADR-050 D5.5 ausschliesst; die Vorschlagszeile darf
+      deshalb NICHT vor der Ereigniszeile gesperrt werden.
+
+    Rueckgabe: die unter der Sperre revalidierte ``client_id`` der Bindung
+    (``None`` bei anonymem oder hart entferntem Ereignis).
+    """
+    # Bindung ungesperrt vorlesen: die Personenzeile steht in der kanonischen
+    # Ordnung vor der Ereigniszeile, ihre pk steht aber nur am Ereignis.
+    row = Event.objects.filter(pk=proposal.target_id, facility=proposal.facility_id).values("client_id").first()
+    if row is None:
+        # Kein Ereignis dieser Einrichtung (hart entfernt) — es gibt keine
+        # Zielzeile zu sperren. Der Ereignis-Hold wird trotzdem gelesen:
+        # ``LegalHold.target_id`` ist ein freies Feld ohne Fremdschluessel.
+        return None
+    client_id = row["client_id"]
+    if client_id is not None:
+        Client.objects.filter(pk=client_id).select_for_update().only("pk").first()
+    Event.objects.filter(pk=proposal.target_id, facility=proposal.facility_id).select_for_update().only("pk").first()
+    # Bindung NACH der Ereignissperre revalidieren: gewinnt parallel ein Merge
+    # und haengt das Ereignis an eine andere Person, haetten wir deren Zeile nie
+    # gesperrt und ihren Hold nie verlaesslich gesehen. Bewusst Abbruch statt
+    # Nachsperren — das waere eine Sperr-Inversion (Muster
+    # ``_assert_current_client_binding``, ADR-050 D5.5).
+    current_client_id = (
+        Event.objects.filter(pk=proposal.target_id, facility=proposal.facility_id)
+        .values_list("client_id", flat=True)
+        .first()
+    )
+    if current_client_id != client_id:
+        raise ValidationError(TARGET_BINDING_CHANGED_MESSAGE)
+    return client_id
+
+
+def _assert_target_has_no_active_hold(proposal, client_id):
     """Ein Vorschlag unter aktivem Hold ist nicht genehmigungsfaehig (Refs #2109).
 
     Geloescht wurde dadurch nie etwas — das Enforcement schliesst gehaltene
@@ -258,12 +318,14 @@ def _assert_target_has_no_active_hold(proposal):
 
     ``RetentionProposal.TargetType`` kennt nur ``EVENT``; geprueft wird deshalb
     der Ereignis-Hold und — Refs #1376 (I10), wie ueberall sonst — der Hold auf
-    die zugehoerige Person. Ist die Ereigniszeile hart entfernt, bleibt es beim
-    Ereignis-Hold; ein Personenbezug ist dann nicht mehr feststellbar.
+    die zugehoerige Person. ``client_id`` stammt aus
+    :func:`_lock_target_rows_for_approval` und ist damit die unter der Sperre
+    revalidierte Bindung, nicht eine zweite, moeglicherweise juengere Lesung.
+    Ist die Ereigniszeile hart entfernt, ist ``client_id`` ``None`` und es
+    bleibt beim Ereignis-Hold.
     """
     if has_active_hold(proposal.facility, "Event", proposal.target_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
-    client_id = Event.objects.filter(pk=proposal.target_id).values_list("client_id", flat=True).first()
     if client_id and has_active_hold(proposal.facility, "Client", client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
 
@@ -292,10 +354,15 @@ def approve_proposal(proposal, user):
     Menge) einen spaeteren, legitimen Vorschlag fuer dasselbe Ziel blockieren
     wuerde.
     """
+    # Reihenfolge tragend (s. ``_lock_target_rows_for_approval``): erst die
+    # Zielzeilen — der gemeinsame Anker mit ``create_hold_for_target`` —, dann
+    # die Vorschlagszeile. Umgekehrt entstuende ein ABBA-Zyklus mit
+    # ``create_legal_hold``, das Ereignis vor Vorschlag sperrt.
+    client_id = _lock_target_rows_for_approval(proposal)
     locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
     if locked is None or locked.status not in _APPROVABLE_STATUSES:
         raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
-    _assert_target_has_no_active_hold(locked)
+    _assert_target_has_no_active_hold(locked, client_id)
 
     locked.status = RetentionProposal.Status.APPROVED
     locked.save(update_fields=["status"])
