@@ -20,8 +20,10 @@ from __future__ import annotations
 import uuid
 
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
+from django.db import transaction
 
 from core.models import AuditLog, User
+from core.services.security.login_lockout import unlock
 
 _SALT = "lockout-recovery.v1"
 _MAX_AGE_SECONDS = 30 * 60  # 30 Minuten
@@ -111,3 +113,33 @@ def verify_recovery_token(token: str) -> User | None:
     if last_unlock_ts is not None and (anchor_ts is None or last_unlock_ts > anchor_ts):
         return None
     return user
+
+
+@transaction.atomic
+def consume_recovery_token(token: str, *, ip_address: str | None) -> User | None:
+    """Validiert und verbraucht einen Recovery-Token unter dem User-Lock.
+
+    Der erste Check loest die signierte User-PK auf. Nach dem Zeilenlock wird
+    die Einmal-Nutzung erneut geprueft, damit ein wartender paralleler Aufruf
+    den LOGIN_UNLOCK des Gewinners sieht und keinen zweiten Audit-Eintrag
+    erzeugt (Refs #2111).
+    """
+    user = verify_recovery_token(token)
+    if user is None:
+        return None
+
+    try:
+        locked_user = User.objects.select_for_update().get(pk=user.pk, facility=user.facility)
+    except User.DoesNotExist:
+        return None
+
+    if verify_recovery_token(token) is None:
+        return None
+
+    unlock(
+        locked_user,
+        unlocked_by=None,
+        ip_address=ip_address,
+        trigger="recovery_token",
+    )
+    return locked_user

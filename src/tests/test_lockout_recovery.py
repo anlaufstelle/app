@@ -8,9 +8,14 @@ Drei Pfade jenseits CLI/Admin-Action:
 
 from __future__ import annotations
 
+import threading
+from unittest import mock
+
 import pytest
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.db import close_old_connections, connection
+from django.test import Client as DjangoTestClient
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -146,13 +151,17 @@ class TestRecoveryTokenFlow:
         _lock_account(staff_user)
         token = build_recovery_token(staff_user)
 
-        response = client.post(reverse("core:lockout_recovery_confirm", kwargs={"token": token}))
+        response = client.post(
+            reverse("core:lockout_recovery_confirm", kwargs={"token": token}),
+            REMOTE_ADDR="203.0.113.211",
+        )
         assert response.status_code == 302
         assert response.url.endswith("/login/?recovered=1")
         assert is_locked(staff_user) is False
         unlock_entry = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK).first()
         assert unlock_entry is not None
         assert unlock_entry.detail.get("trigger") == "recovery_token"
+        assert unlock_entry.ip_address == "203.0.113.211"
 
     def test_recovery_token_is_single_use(self, client, staff_user):
         """Replay desselben Tokens im 30-Min-Fenster wird abgewiesen (Refs #1273)."""
@@ -237,6 +246,7 @@ class TestBackupCodeRecovery:
         response = client.post(
             reverse("core:lockout_recovery_backup_code"),
             {"username": staff_user.username, "backup_code": codes[0]},
+            REMOTE_ADDR="203.0.113.212",
         )
         assert response.status_code == 302
         assert response.url.endswith("/login/?recovered=1")
@@ -246,6 +256,8 @@ class TestBackupCodeRecovery:
         actions = list(AuditLog.objects.filter(user=staff_user).values_list("action", flat=True))
         assert AuditLog.Action.LOGIN_UNLOCK in actions
         assert AuditLog.Action.BACKUP_CODES_USED in actions
+        unlock_entry = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK)
+        assert unlock_entry.ip_address == "203.0.113.212"
 
     def test_invalid_backup_code_keeps_lockout(self, client, staff_user):
         generate_backup_codes(staff_user)
@@ -267,3 +279,55 @@ class TestBackupCodeRecovery:
         )
         assert response.status_code == 200
         assert b"Code ung" in response.content
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestRecoveryTokenConsumptionRace:
+    """Refs #2111: Derselbe Recovery-Token hat parallel genau einen Gewinner."""
+
+    def test_concurrent_posts_create_one_unlock_and_reject_loser(self, staff_user):
+        from core.services.security import build_recovery_token
+        from core.services.security.lockout_recovery import verify_recovery_token as real_verify
+
+        _lock_account(staff_user)
+        token = build_recovery_token(staff_user)
+        url = reverse("core:lockout_recovery_confirm", kwargs={"token": token})
+        ready = threading.Barrier(2, timeout=20)
+        both_verified = threading.Barrier(2, timeout=20)
+        statuses = [None, None]
+        errors = []
+
+        def synchronized_verify(candidate):
+            user = real_verify(candidate)
+            if user is not None:
+                # Im alten View-Pfad muessen beide Checks abgeschlossen sein,
+                # bevor einer den zustandsaendernden Unlock erreicht.
+                both_verified.wait(timeout=20)
+            return user
+
+        def worker(slot):
+            try:
+                connection.close()
+                ready.wait(timeout=20)
+                http = DjangoTestClient()
+                response = http.post(url, REMOTE_ADDR=f"203.0.113.21{slot}")
+                statuses[slot] = response.status_code
+            except Exception as exc:  # pragma: no cover - Sammelassertion
+                errors.append(exc)
+            finally:
+                close_old_connections()
+
+        with mock.patch("core.views.lockout_recovery.verify_recovery_token", side_effect=synchronized_verify):
+            threads = [threading.Thread(target=worker, args=(slot,)) for slot in (0, 1)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=30)
+
+        assert not any(thread.is_alive() for thread in threads), "Deadlock beim parallelen Recovery-Token-Consume"
+        assert not errors, f"Worker-Fehler: {errors!r}"
+        assert sorted(statuses) == [302, 400], statuses
+        unlocks = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK)
+        assert unlocks.count() == 1
+        assert unlocks.get().ip_address in {"203.0.113.210", "203.0.113.211"}

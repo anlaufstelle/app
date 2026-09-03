@@ -872,7 +872,7 @@ Der Befehl ist auf alle Rollen anwendbar (`super_admin`, `facility_admin`, `lead
 
 **Pfad D — Self-Service per MFA-Backup-Code:** Hat der User 2FA aktiviert und einen seiner Backup-Codes notiert, kann er sich unter `/account/recovery/backup-code/` mit Username + Code entsperren. Audit-Trail: `LOGIN_UNLOCK` (Trigger `backup_code`) + `BACKUP_CODES_USED` (Flow `lockout_recovery`). Jeder Code ist einmalig — der nächste Recovery-Vorgang verbraucht den nächsten Code.
 
-Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Admin-Action), `cli` (CLI-Command), `password_reset` (Pfad C via Standard-Reset), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D).
+Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Admin-Action), `cli` (CLI-Command), `password_reset` (Pfad C via Standard-Reset), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D); Entsperrungen per Recovery-Token oder Backup-Code tragen außerdem die Quell-IP am Audit-Eintrag.
 
 #### Audit-Spur
 

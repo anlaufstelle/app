@@ -27,9 +27,15 @@ from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
 from core.services.audit import log_audit_event
-from core.services.security import build_recovery_token, verify_backup_code, verify_recovery_token
+from core.services.security import (
+    build_recovery_token,
+    verify_backup_code,
+    verify_recovery_token,
+)
 from core.services.security import unlock as unlock_user
+from core.services.security.lockout_recovery import consume_recovery_token
 from core.services.security.origin import build_external_url
+from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -120,10 +126,9 @@ class LockoutRecoveryConfirmView(View):
 
     @method_decorator(ratelimit(key="ip", rate="10/m", method="POST", block=True))
     def post(self, request: HttpRequest, token: str, *args, **kwargs) -> HttpResponse:
-        user = verify_recovery_token(token)
+        user = consume_recovery_token(token, ip_address=get_client_ip(request))
         if user is None:
             return self._invalid(request)
-        unlock_user(user, unlocked_by=None, ip_address=None, trigger="recovery_token")
         messages.success(request, _("Konto entsperrt. Sie koennen sich jetzt anmelden."))
         return HttpResponseRedirect("/login/?recovered=1")
 
@@ -175,7 +180,12 @@ class LockoutRecoveryBackupCodeView(FormView):
         code = form.cleaned_data["backup_code"]
         user = User.objects.filter(username=username, is_active=True).first()
         if user is not None and verify_backup_code(user, code):
-            unlock_user(user, unlocked_by=None, ip_address=None, trigger="backup_code")
+            unlock_user(
+                user,
+                unlocked_by=None,
+                ip_address=get_client_ip(self.request),
+                trigger="backup_code",
+            )
             log_audit_event(
                 self.request,
                 AuditLog.Action.BACKUP_CODES_USED,

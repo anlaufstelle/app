@@ -875,7 +875,7 @@ The command works for all roles (`super_admin`, `facility_admin`, `lead`, `staff
 
 **Path D -- Self-service via MFA backup code:** If the user has 2FA enabled and has noted one of their backup codes, they can unlock themselves at `/account/recovery/backup-code/` using their username and code. Audit trail: `LOGIN_UNLOCK` (trigger `backup_code`) + `BACKUP_CODES_USED` (flow `lockout_recovery`). Each code is single-use -- the next recovery event consumes the next code.
 
-Lock, unlock, and any attempts during the lock window are all written to the AuditLog -- use the "Login failed" / "Account unlocked" filter for retrospective analysis. The `LOGIN_UNLOCK` detail block contains a `trigger` field: `admin` (admin action), `cli` (CLI command), `password_reset` (Path C via standard reset), `recovery_token` (Path C via dedicated link), `backup_code` (Path D).
+Lock, unlock, and any attempts during the lock window are all written to the AuditLog -- use the "Login failed" / "Account unlocked" filter for retrospective analysis. The `LOGIN_UNLOCK` detail block contains a `trigger` field: `admin` (admin action), `cli` (CLI command), `password_reset` (Path C via standard reset), `recovery_token` (Path C via dedicated link), `backup_code` (Path D); unlocks via recovery token or backup code also record the source IP on the audit entry.
 
 #### Audit Trail
 
@@ -1953,5 +1953,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.91.0 -->
-<!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 359be9ab49bde4d5ad1c3fc1ec6c3a9f28318341 -->
+<!-- translation-date: 2026-09-03 -->
+<!-- source-hash: 99b47f9f2394a6c52ed377784af2084b276dd25b -->
