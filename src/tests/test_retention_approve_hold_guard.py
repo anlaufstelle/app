@@ -27,7 +27,7 @@ import pytest
 from django.contrib import messages
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
-from django.db import connection, connections
+from django.db import connection, connections, transaction
 from django.urls import reverse
 from django.utils import timezone
 
@@ -41,11 +41,16 @@ from core.models import (
     Settings,
     User,
 )
+from core.retention import legal_holds as legal_holds_mod
 from core.retention import proposals as proposals_mod
-from core.retention.legal_holds import create_hold_for_target
+from core.retention.legal_holds import create_hold_for_target, create_legal_hold
 from core.retention.proposals import approve_proposal, bulk_approve_proposals
 
 _JOIN_TIMEOUT = 30
+#: Wie lange die Hold-Anlage ihre Ereignissperre haelt, nachdem der Approve
+#: gestartet ist. Reine Untergrenze: laeuft der Approve langsamer an, haette
+#: er die Sperre erst recht nicht ueberholt.
+_SPERRFENSTER_SEKUNDEN = 0.75
 
 
 def _proposal_for(facility, event, status=RetentionProposal.Status.PENDING):
@@ -479,10 +484,106 @@ class TestApproveKoordiniertMitDerHoldAnlage:
         assert proposal.status == RetentionProposal.Status.APPROVED
         assert _approved_audit_rows(proposal).count() == 1
 
-    def test_paralleles_approve_und_hold_enden_konsistent_ohne_verklemmung(self, bestand):
-        """Deadlock-freie Gegenprobe ohne Injektion: beide Ausgänge sind zulässig,
-        aber nie „APPROVED **und** Hold war vorher aktiv"."""
-        facility, lead, person, ereignis, proposal = bestand
+    def test_hold_anlage_ueber_create_legal_hold_gewinnt_und_verhindert_das_approve(self, bestand, monkeypatch):
+        """Die Gegenprobe gegen den PROPOSAL-gebundenen Hold-Pfad (Re-Review 1).
+
+        ``RetentionHoldView`` nimmt nicht ``create_hold_for_target``, sondern
+        ``create_legal_hold`` — und zwar in **einer** ``transaction.atomic()``.
+        Dieser Pfad sperrt also ``core_event`` (über ``create_hold_for_target``)
+        und schreibt DANACH ``core_retentionproposal`` auf ``HELD``: genau die
+        Ordnung, gegen die die Sperrreihenfolge von ``approve_proposal``
+        verteidigt werden muss. Eine Gegenprobe, die nur
+        ``create_hold_for_target`` ruft, nimmt den Vorschlags-Lock nie und kann
+        eine Regression auf die Gegenordnung ``core_retentionproposal ->
+        core_event`` nicht sehen.
+
+        Aufbau: Die Hold-Anlage hält die Ereigniszeile (und ihre noch nicht
+        committete ``LegalHold``-Zeile) und parkt VOR ``proposal.save()``. Erst
+        dann startet der Approve. Damit steht fest, wer zuerst da war — der
+        Approve darf nicht durchkommen.
+
+        Vor dem Fix sperrte ``approve_proposal`` als Erstes den Vorschlag, las
+        die Holds ungesperrt (die fremde, noch offene Transaktion ist unsichtbar)
+        und genehmigte: eine Genehmigt-Zeile im Audit, während die Hold-Anlage
+        bereits lief. Nach dem Fix wartet der Approve an ``core_event``, sieht
+        anschließend ``HELD`` und bricht ab.
+        """
+        facility, lead, _person, ereignis, proposal = bestand
+        ereignis_gesperrt = threading.Event()
+        approve_laeuft = threading.Event()
+        ergebnis = {}
+        fehler = {}
+
+        echt_create_hold = legal_holds_mod.create_hold_for_target
+
+        def _nach_der_ereignissperre_parken(*args, **kwargs):
+            hold = echt_create_hold(*args, **kwargs)
+            ereignis_gesperrt.set()
+            # Bewusst endlich und ohne Bezug auf den Abschluss des Approve:
+            # nach dem Fix haengt der Approve an genau dieser Ereigniszeile,
+            # ein Warten auf ihn waere die Verklemmung.
+            approve_laeuft.wait(timeout=_JOIN_TIMEOUT)
+            time.sleep(_SPERRFENSTER_SEKUNDEN)
+            return hold
+
+        monkeypatch.setattr(legal_holds_mod, "create_hold_for_target", _nach_der_ereignissperre_parken)
+
+        def _hold_ueber_den_view_pfad():
+            connection.close()
+            try:
+                frisch = RetentionProposal.objects.get(pk=proposal.pk)
+                # Exakt die Klammer aus ``RetentionHoldView.post``.
+                with transaction.atomic():
+                    create_legal_hold(frisch, lead, "Behoerdenanordnung ueber die Oberflaeche")
+                ergebnis["hold"] = "ok"
+            except Exception as exc:  # noqa: BLE001 — in den Bericht, nicht verschlucken
+                fehler["hold"] = exc
+            finally:
+                connections.close_all()
+
+        def _approve():
+            connection.close()
+            try:
+                assert ereignis_gesperrt.wait(timeout=_JOIN_TIMEOUT), "Hold-Anlage erreichte die Ereignissperre nicht"
+                frisch = RetentionProposal.objects.get(pk=proposal.pk)
+                approve_laeuft.set()
+                approve_proposal(frisch, lead)
+                ergebnis["approve"] = "ok"
+            except ValidationError as exc:
+                ergebnis["approve"] = exc
+            except Exception as exc:  # noqa: BLE001
+                fehler["approve"] = exc
+            finally:
+                connections.close_all()
+
+        faden_hold = threading.Thread(target=_hold_ueber_den_view_pfad, name="legal-hold")
+        faden_approve = threading.Thread(target=_approve, name="approve")
+        faden_hold.start()
+        faden_approve.start()
+        for faden in (faden_hold, faden_approve):
+            faden.join(timeout=_JOIN_TIMEOUT)
+
+        assert not faden_hold.is_alive() and not faden_approve.is_alive(), (
+            "Verklemmung zwischen create_legal_hold (Event -> Proposal) und approve_proposal"
+        )
+        assert not fehler, fehler
+        assert ergebnis["hold"] == "ok", "Die Hold-Anlage muss durchkommen — sie war zuerst da"
+        proposal.refresh_from_db()
+        assert isinstance(ergebnis["approve"], ValidationError), (
+            "Der Approve lief durch, obwohl die Hold-Anlage die Ereigniszeile bereits hielt "
+            f"(Ergebnis: {ergebnis['approve']!r}, Status: {proposal.status})"
+        )
+        assert proposal.status == RetentionProposal.Status.HELD
+        assert not _approved_audit_rows(proposal).exists(), (
+            "Genehmigt-Zeile im Audit, obwohl die Aufbewahrungssperre bereits angelegt wurde"
+        )
+
+    def test_paralleles_approve_und_create_legal_hold_enden_konsistent_ohne_verklemmung(self, bestand):
+        """Liveness in beide Richtungen, ohne Injektion: ``create_legal_hold``
+        nimmt ``core_event`` vor ``core_retentionproposal``, ``approve_proposal``
+        ``core_client -> core_event -> core_retentionproposal``. Beide Ausgänge
+        sind zulässig, eine Verklemmung ist es nicht."""
+        facility, lead, _person, _ereignis, proposal = bestand
         am_start = threading.Barrier(2, timeout=_JOIN_TIMEOUT)
         ergebnis = {}
         fehler = {}
@@ -504,14 +605,10 @@ class TestApproveKoordiniertMitDerHoldAnlage:
         def _hold():
             connection.close()
             try:
+                frisch = RetentionProposal.objects.get(pk=proposal.pk)
                 am_start.wait()
-                create_hold_for_target(
-                    facility,
-                    target_type="Event",
-                    target_id=ereignis.pk,
-                    user=lead,
-                    reason="Paralleler Ereignis-Hold",
-                )
+                with transaction.atomic():
+                    create_legal_hold(frisch, lead, "Paralleler Hold ueber die Oberflaeche")
                 ergebnis["hold"] = "ok"
             except Exception as exc:  # noqa: BLE001
                 fehler["hold"] = exc
@@ -524,16 +621,18 @@ class TestApproveKoordiniertMitDerHoldAnlage:
         for faden in faeden:
             faden.join(timeout=_JOIN_TIMEOUT)
 
-        assert not any(f.is_alive() for f in faeden), "Verklemmung (ABBA) zwischen Approve und Hold-Anlage"
+        assert not any(f.is_alive() for f in faeden), "Verklemmung (ABBA) zwischen Approve und create_legal_hold"
         assert not fehler, fehler
         assert ergebnis["hold"] == "ok", "Die Hold-Anlage muss in jedem Fall durchkommen"
         proposal.refresh_from_db()
         if isinstance(ergebnis["approve"], ValidationError):
-            assert proposal.status == RetentionProposal.Status.PENDING
+            # Die Hold-Anlage war zuerst: keine Genehmigt-Zeile im Audit.
+            assert proposal.status == RetentionProposal.Status.HELD
             assert not _approved_audit_rows(proposal).exists()
         else:
-            # Der Approve war zuerst da: genau eine Genehmigung, der Hold kam danach.
-            assert proposal.status == RetentionProposal.Status.APPROVED
+            # Der Approve war zuerst da; die Hold-Anlage hat danach auf HELD
+            # gesetzt. Genau eine Genehmigung, keine zweite.
+            assert proposal.status == RetentionProposal.Status.HELD
             assert _approved_audit_rows(proposal).count() == 1
 
     def test_merge_waehrend_der_sperrwartezeit_bricht_sauber_ab(self, bestand):
