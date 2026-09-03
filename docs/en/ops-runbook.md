@@ -1203,7 +1203,9 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 **Host cron suggestion (not installed automatically):** The backup files are
 mode `0600` and owned by root. Therefore, put this one-liner in the **host's
 root crontab**, not in the `cron` sidecar or an unprivileged user's crontab. It
-runs at 03:30 on the first day of each quarter, after the 02:00 backup. Replace
+runs at 03:30 on the first day of each quarter, after the 02:00 backup. Keep
+the `--prod` flag: without it the script auto-detects the format and would
+silently fall back to `--dev` if no prod backup is present. Replace
 `ops@example.com` and first make sure that the host command `mail` can deliver
 to the operations mailbox.
 
@@ -2739,4 +2741,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 613f83927c00a628efc5b3e5dc3f51180c52288c -->
+<!-- source-hash: 0b95ae2b6cb5c609aa6e4768e983ef8c6708ea9a -->

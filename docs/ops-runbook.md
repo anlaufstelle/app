@@ -1203,7 +1203,9 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 sind `0600` und gehoeren root; den Einzeiler deshalb in der **Root-Crontab des
 Hosts** eintragen, nicht im `cron`-Sidecar und nicht in einer unprivilegierten
 Benutzer-Crontab. Er laeuft am ersten Tag jedes Quartals um 03:30 Uhr nach dem
-02:00-Uhr-Backup. `ops@example.com` ersetzen und vorab sicherstellen, dass der
+02:00-Uhr-Backup. Das Flag `--prod` bleibt gesetzt: ohne Angabe erkennt das
+Skript das Format automatisch und fiele bei fehlendem Prod-Backup still auf
+`--dev` zurueck. `ops@example.com` ersetzen und vorab sicherstellen, dass der
 Host-Befehl `mail` an das Betriebs-Postfach zustellen kann.
 
 ```cron

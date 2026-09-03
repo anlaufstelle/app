@@ -288,6 +288,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   `docker-compose.prod.yml`, `deploy/postgres-init/` und `scripts/ops/` liegt
   vor. Die Host-Härtung und Installation aus [§6 Schritt 1](#schritt-1--host-härten--docker-installieren)
   können von einem dafür berechtigten System ausgeführt werden.
+  `dev-ops/deploy/bootstrap.sh` und `dev-ops/deploy/install-timers.sh` sind
+  dev-only und im Release-Tarball nicht enthalten
+  (`scripts/verify_release_test_guard.py`); sie müssen für den Drill separat
+  aus dem Repository bereitgestellt werden. Ist das nicht möglich, werden
+  Host-Härtung und Timer-Installation im Protokoll als NICHT PRÜFBAR vermerkt.
 - `BACKUP_OFFSITE_TARGET` war auf der Quellinstallation gesetzt, der Zugang zum
   Off-Site-Ziel funktioniert ohne den verlorenen Prod-Host, und ein
   zusammengehöriger Welt-B-Satz ist vorhanden: DB-`*.sql.gz.enc` samt `.hmac`,
@@ -295,11 +300,16 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   `audit_hwm-*.json`.
 - Die vom Maintainer verwahrte, host-getrennte `.env`-Kopie enthält mindestens
   die in [§4](#4-schlüssel--und-secret-wiederbeschaffung) genannten Schlüssel,
-  die unveränderten DB-Rollennamen und Zugangsdaten. Es gibt bewusst **kein**
-  personell getrenntes Escrow: #1477
-  ist als Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen.
-  Im Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie",
-  nicht „Escrow“.
+  die unveränderten DB-Rollennamen und Zugangsdaten. Die rekonstruierte `.env`
+  trennt außerdem die Host- und Container-Sicht wie `.env.example`:
+  `BACKUP_HOST_DIR=./backups` bezeichnet auf dem Host `<Repo>/backups`,
+  `BACKUP_DIR=/backups` ausschließlich das read-only Mount-Ziel im Container.
+  Bei einem abweichenden Host-Pfad muss `BACKUP_HOST_DIR` den tatsächlich
+  bereitgestellten Ort nennen. Es gibt bewusst **kein** personell getrenntes
+  Escrow: #1477 ist als
+  Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen. Im
+  Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie", nicht
+  „Escrow".
 - Für den HWM-Nachweis war `DJANGO_AUDIT_HWM_PATH` bereits **vor Erstellung des
   Quellbackups** gesetzt (empfohlen: `/data/audit_hwm.json`), sodass
   `scripts/ops/backup.sh` die signierte Datei tatsächlich offsite übertragen
@@ -307,7 +317,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   `DJANGO_AUDIT_HASH_KEY`. Ohne gesetzten HWM-Pfad gibt es kein HWM-Artefakt;
   Schritt 2b des Prod-Drills wird dann nicht ausgeführt. Das ist kein
   Signaturnachweis, und dieser Drill darf nicht als vollständig grün
-  protokolliert werden.
+  protokolliert werden. Fehlt `DJANGO_AUDIT_HWM_PATH` in der
+  **rekonstruierten** `.env`, wird Schritt 2b lediglich mit `INFO` übersprungen;
+  für diesen Drill die Variable deshalb setzen, damit die Signaturprüfung
+  wirklich läuft. Andernfalls gilt der HWM-Nachweis als NICHT PRÜFBAR, nicht
+  als bestanden.
 - Eine gültige Health-Detail-Autorisierung und ein Browser-Testkonto sind
   verfügbar. Secrets, Passwörter, vollständige `.env`-Inhalte und
   personenbezogene Stichprobendaten werden nie ins Drill-Protokoll kopiert.
@@ -324,31 +338,38 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    Schlüsselwerte in die Shell-History oder das Protokoll kopieren.
 3. Für die Off-Site-Rückholung genau **eine** der drei aus [§5](#5-off-site-backup-beschaffen)
    abgeleiteten Varianten verwenden. Den Beispiel-Remote durch das gesetzte
-   `BACKUP_OFFSITE_TARGET` ersetzen. Das lokale Ziel ist bewusst
-   `backups/daily/`, damit `restore-drill.sh --prod` anschließend seinen im
-   Skript gesetzten Default-Pfad nutzt:
+   `BACKUP_OFFSITE_TARGET` ersetzen. Host-Backup und Prod-Drill verwenden
+   denselben Ort `${BACKUP_HOST_DIR:-./backups}/daily`; `BACKUP_DIR` bezeichnet
+   nur das Container-Ziel und wird von beiden Host-Skripten ignoriert. Die
+   folgenden Befehle laden `BACKUP_HOST_DIR` aus der rekonstruierten `.env` und
+   setzen den dokumentierten Default. Genau eine Rückholvariante anschließend
+   in derselben Shell ausführen:
 
    ```bash
    cd /opt/anlaufstelle
-   mkdir -p backups/daily
+   set -a
+   source .env
+   set +a
+   BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
+   mkdir -p "$BACKUP_HOST_DIR/daily"
    ```
 
    Variante rclone:
 
    ```bash
-   rclone copy remote:bucket/path/daily ./backups/daily --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json"
+   rclone copy remote:bucket/path/daily "$BACKUP_HOST_DIR/daily" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json"
    ```
 
    Variante S3:
 
    ```bash
-   aws s3 sync s3://bucket/path/daily ./backups/daily --exclude "*" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json"
+   aws s3 sync s3://bucket/path/daily "$BACKUP_HOST_DIR/daily" --exclude "*" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json"
    ```
 
    Variante scp:
 
    ```bash
-   scp "user@host:/path/*.enc" "user@host:/path/*.hmac" "user@host:/path/audit_hwm-*.json" ./backups/daily/
+   scp "user@host:/path/*.enc" "user@host:/path/*.hmac" "user@host:/path/audit_hwm-*.json" "$BACKUP_HOST_DIR/daily/"
    ```
 
    DB-/Medien-Dateien und ihre `.hmac`-Sidecars müssen denselben
@@ -365,13 +386,17 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    docker compose -f docker-compose.prod.yml up -d web
    ```
 
+   `web` wartet über `depends_on` auf einen gesunden `clamav`; dessen erster
+   Signatur-Download kann auf einem frischen Host mehrere Minuten dauern und
+   zählt zur gemessenen RTO.
+
    Danach den Restore ausführen. Den Platzhalter durch den in Schritt 3
    geprüften gemeinsamen Zeitstempel ersetzen (die folgende Zeit ist nur ein
    kopierbares Formatbeispiel):
 
    ```bash
-   ./scripts/ops/restore.sh ./backups/daily/anlaufstelle_2026-09-03_020000.sql.gz.enc \
-                            ./backups/daily/anlaufstelle_2026-09-03_020000_media.tar.gz.enc
+   ./scripts/ops/restore.sh "$BACKUP_HOST_DIR/daily/anlaufstelle_2026-09-03_020000.sql.gz.enc" \
+                            "$BACKUP_HOST_DIR/daily/anlaufstelle_2026-09-03_020000_media.tar.gz.enc"
    ```
 
 5. Die fünf Infrastruktur- und Datenprüfungen aus
@@ -382,15 +407,19 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    lesbaren Klartext bestätigen, ohne ihn im Protokoll wiederzugeben.
 6. Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
    als Root gegen das Prod-Format fahren. Dieser Aufruf ist unverändert aus dem
-   Skript-Header und dem Operations-Runbook übernommen:
+   Skript-Header und dem Operations-Runbook übernommen. Der Drill liest die
+   rekonstruierte `.env`, löst denselben Host-Pfad
+   `${BACKUP_HOST_DIR:-./backups}/daily` auf und ignoriert das Container-Ziel
+   `BACKUP_DIR`. Seine Banner-Zeile muss deshalb das in Schritt 3 befüllte
+   Host-Verzeichnis nennen:
 
    ```bash
    sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod
    ```
 
    Der Lauf muss neben HMAC, Tabellen-Stichproben, Vollständigkeitsvergleich,
-   RLS und `auditlog_immutable` ausdrücklich `OK - Schritt 2b:
-   Audit-HWM-Signatur verifiziert (...)` melden. Schritt 2b lädt die jüngste
+   RLS und `auditlog_immutable` ausdrücklich
+   `Schritt 2b: Audit-HWM-Signatur verifiziert` melden. Schritt 2b lädt die jüngste
    `audit_hwm-*.json` über `HighWaterMarkStore.load()`; eine fehlende Datei,
    eine manipulierte Signatur oder ein falscher `DJANGO_AUDIT_HASH_KEY` ist ein
    `FAIL`. Der HWM-Schritt wird nur bei konfiguriertem
@@ -399,20 +428,22 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    ersetzt werden.
 7. Endzeit, Exit-Code, jede `OK`-/`FAIL`-Zeile und Abweichungen protokollieren.
    Bei einem `FAIL` bleibt das Gesamtergebnis **OFFEN**; keine einzelne
-   erfolgreiche Stichprobe in „grün“ umdeuten.
+   erfolgreiche Stichprobe in „grün" umdeuten.
 
 #### Erfolgskriterien
 
 Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind:
 
 - Off-Site-Rückholung gelang ohne Zugriff auf den ursprünglichen Prod-Host;
-  DB, Medien, beide HMAC-Sidecars und Audit-HWM kamen vollständig an.
+  DB, Medien, beide HMAC-Sidecars und Audit-HWM kamen vollständig unter dem
+  Host-Pfad `${BACKUP_HOST_DIR:-./backups}/daily` an.
 - `restore.sh`, Migrationen und Stack-Start endeten erfolgreich; DB-Rollen und
   RLS entsprechen [§7](#7-smoke-verifikation-nach-restore).
 - Health meldet `status: ok` und `encryption_key: ok`; eine verschlüsselte
   Datenstichprobe ist im Browser lesbar und die erwartete Facility-Anzahl ist
   vorhanden.
 - `restore-drill.sh --prod` endet mit Exit-Code 0, meldet keine `FAIL`-Zeile und
+  nennt in seiner Banner-Zeile dasselbe Host-Verzeichnis wie Schritt 3. Er
   bestätigt insbesondere Schritt 2b (HWM-Signatur), Schritt 3b
   (Vollständigkeit), Schritt 4 (RLS), Schritt 5 (`auditlog_immutable`) und
   Schritt 7 (`mark_restore_verified`).
@@ -455,6 +486,7 @@ DB + DB-HMAC vorhanden: JA / NEIN
 Medien + Medien-HMAC vorhanden: JA / NEIN
 Audit-HWM vorhanden: JA / NEIN
 DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
+DJANGO_AUDIT_HWM_PATH in rekonstruierter .env gesetzt: JA / NEIN
 Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
 
 §6 Schritt 1 Host-Härtung: OK / FAIL — Notiz:
@@ -469,7 +501,9 @@ Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
 §7 offene Migrationen: OK / FAIL — Anzahl:
 §7 Daten-/Verschlüsselungsstichprobe: OK / FAIL — keine Inhalte notieren
 
+Vom Drill gemeldetes BACKUP_HOST_DIR/daily:
 restore-drill.sh --prod Exit-Code:
+Schritt 1 Wegwerf-DB angelegt: OK / FAIL
 Schritt 2 HMAC/Restore: OK / FAIL
 Schritt 2b Audit-HWM-Signatur: OK / FAIL / NICHT PRÜFBAR
 Schritt 3 Tabellen-Stichproben: OK / FAIL
