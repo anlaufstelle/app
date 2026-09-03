@@ -87,7 +87,8 @@ def test_current_user_backup_cron_suppresses_warning(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "kein Host-Cron-Eintrag" not in result.stderr
+    assert "Kein Host-Cron-Eintrag" not in result.stderr
+    assert "Host-Cron-Eintrag fuer backup.sh gefunden." in result.stdout
 
 
 def test_root_backup_cron_suppresses_warning(tmp_path: Path) -> None:
@@ -97,5 +98,17 @@ def test_root_backup_cron_suppresses_warning(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert "kein Host-Cron-Eintrag" not in result.stderr
+    assert "Kein Host-Cron-Eintrag" not in result.stderr
+    assert "Host-Cron-Eintrag fuer backup.sh gefunden." in result.stdout
     assert sudo_log.read_text(encoding="utf-8").strip() == "-n crontab -l -u root"
+
+
+def test_commented_backup_cron_warns_without_failing(tmp_path: Path) -> None:
+    result, _ = _run_setup(
+        tmp_path,
+        current_crontab="# 0 2 * * * /opt/anlaufstelle/scripts/ops/backup.sh  (deaktiviert)\n",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Kein Host-Cron-Eintrag fuer backup.sh gefunden" in result.stderr
+    assert "Host-Cron-Eintrag fuer backup.sh gefunden." not in result.stdout

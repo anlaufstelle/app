@@ -312,14 +312,15 @@ super_admin_exists() {
 # Warnsignal, aber kein Grund, die ansonsten erfolgreiche Einrichtung
 # nachtraeglich abzubrechen.
 backup_cron_installed() {
-    local user_crontab="" root_crontab=""
+    local user_crontab="" root_crontab="" active_crontab=""
     if command -v crontab >/dev/null 2>&1; then
         user_crontab="$(crontab -l 2>/dev/null || true)"
     fi
     if command -v sudo >/dev/null 2>&1; then
         root_crontab="$(sudo -n crontab -l -u root 2>/dev/null || true)"
     fi
-    printf '%s\n%s\n' "$user_crontab" "$root_crontab" | grep -q 'backup\.sh'
+    active_crontab="$(printf '%s\n%s\n' "$user_crontab" "$root_crontab" | grep -v '^[[:space:]]*#' || true)"
+    grep -q 'backup\.sh' <<<"$active_crontab"
 }
 
 step "6/6  Super-Admin anlegen (Bootstrap, ADR-018)"
