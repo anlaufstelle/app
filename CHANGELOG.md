@@ -29,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Backup-Codes bleiben auch bei paralleler Einlösung einmalig** (#2110) — Der Verbrauch erfolgt jetzt als atomare Datenbankoperation, sodass derselbe Code nicht mehr zwei gleichzeitige Verifikationen bestehen kann; ein Fehlversuch erhöht den bestehenden Drosselzähler weiterhin genau einmal.
 - **Audit-High-Water-Marks werden offsite verankert und im Restore-Drill geprüft** (#2022) — Das Self-Hoster-Backup rotiert und synchronisiert die signierte HWM-Datei gemeinsam mit Datenbank und Medien; fehlende oder manipulierte Anker färben den Drill rot.
 
 ### Changed

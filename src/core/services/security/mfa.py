@@ -113,13 +113,15 @@ def verify_backup_code(user, token: str) -> bool:
         return False
 
     hashed = _hash_code(token)
-    # Match in EINER Query — gegen Hash (neue Codes ab #790) ODER Cleartext (Legacy).
-    match = device.token_set.filter(token__in=[hashed, token]).first()
-    if match is None:
+    # Atomarer Consume (Refs #2110): Der DELETE selbst entscheidet, welcher
+    # parallele Aufruf gewinnt. ``generate_backup_codes`` ersetzt das Set
+    # vollstaendig, daher mischt ein Device nie Hash- und Legacy-Cleartext-
+    # Zeilen desselben Codes; der Filter kann hoechstens einen Treffer loeschen.
+    deleted, _ = device.token_set.filter(token__in=[hashed, token]).delete()
+    if deleted == 0:
         device.throttle_increment()
         return False
 
-    match.delete()
     device.throttle_reset(commit=False)
     device.set_last_used_timestamp(commit=False)
     device.save()

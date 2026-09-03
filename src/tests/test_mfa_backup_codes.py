@@ -1,13 +1,16 @@
 """Tests für 2FA-Backup-Codes (Refs #588)."""
 
 import re
+import threading
+from unittest import mock
 
 import pytest
+from django.db import close_old_connections, connection
 from django_otp.oath import totp as oath_totp
-from django_otp.plugins.otp_static.models import StaticDevice
+from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
-from core.models import AuditLog
+from core.models import AuditLog, User
 from core.services.security import (
     BACKUP_CODES_COUNT,
     generate_backup_codes,
@@ -100,8 +103,61 @@ class TestBackupCodesService:
         assert verify_backup_code(staff_user, "") is False
         assert verify_backup_code(staff_user, None) is False
 
+    def test_unknown_code_increments_throttle_exactly_once(self, staff_user):
+        """Refs #790: Hash- und Legacy-Lookup zaehlen zusammen als ein Miss."""
+        generate_backup_codes(staff_user)
+        device = StaticDevice.objects.get(user=staff_user, name="backup")
+
+        assert verify_backup_code(staff_user, "0000-0000") is False
+
+        device.refresh_from_db()
+        assert device.throttling_failure_count == 1
+
     def test_verify_without_device_returns_false(self, staff_user):
         assert verify_backup_code(staff_user, "abcd-ef01") is False
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestBackupCodeConsumptionRace:
+    """Refs #2110: Ein Backup-Code darf auch parallel nur einmal gelingen."""
+
+    def test_concurrent_verification_has_exactly_one_winner(self, staff_user):
+        code = generate_backup_codes(staff_user)[0]
+        ready = threading.Barrier(2, timeout=20)
+        both_matched = threading.Barrier(2, timeout=20)
+        results = [None, None]
+        errors = []
+        real_delete = StaticToken.delete
+
+        def synchronized_delete(token, *args, **kwargs):
+            # Erzwingt beim alten Check-then-delete, dass beide Threads denselben
+            # Token gelesen haben, bevor einer ihn loescht.
+            both_matched.wait(timeout=20)
+            return real_delete(token, *args, **kwargs)
+
+        def worker(slot):
+            try:
+                connection.close()
+                ready.wait(timeout=20)
+                user = User.objects.get(pk=staff_user.pk)
+                results[slot] = verify_backup_code(user, code)
+            except Exception as exc:  # pragma: no cover - Sammelassertion
+                errors.append(exc)
+            finally:
+                close_old_connections()
+
+        with mock.patch.object(StaticToken, "delete", synchronized_delete):
+            threads = [threading.Thread(target=worker, args=(slot,)) for slot in (0, 1)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=30)
+
+        assert not any(thread.is_alive() for thread in threads), "Deadlock beim parallelen Backup-Code-Consume"
+        assert not errors, f"Worker-Fehler: {errors!r}"
+        assert results.count(True) == 1, results
+        assert remaining_backup_codes(staff_user) == BACKUP_CODES_COUNT - 1
 
 
 @pytest.mark.django_db
