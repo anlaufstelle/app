@@ -120,7 +120,12 @@ class TestBackupCodesService:
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
 class TestBackupCodeConsumptionRace:
-    """Refs #2110: Ein Backup-Code darf auch parallel nur einmal gelingen."""
+    """Refs #2110: Ein Backup-Code darf auch parallel nur einmal gelingen.
+
+    Die Barrier erzwingt den Vorzustand deterministisch. Nach dem Fix laeuft
+    der Guard als Naturrennen; seine Schutzwirkung ist zusaetzlich durch die
+    Mutantensonde ohne ausgewerteten DELETE-Rowcount belegt.
+    """
 
     def test_concurrent_verification_has_exactly_one_winner(self, staff_user):
         code = generate_backup_codes(staff_user)[0]

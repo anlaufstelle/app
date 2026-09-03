@@ -29,7 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- **Recovery-Links bleiben unter Parallelzugriff einmalig und protokollieren die Quell-IP** (#2111) — Verifikation und Entsperrung laufen jetzt unter derselben User-Zeilensperre mit erneutem Verbrauchscheck; Entsperrungen per Recovery-Token oder Backup-Code schreiben zudem die vertrauenswürdig aufgelöste Client-IP ins AuditLog.
+- **Recovery-Links bleiben unter Parallelzugriff einmalig und protokollieren die Quell-IP** (#2111) — Verifikation und Entsperrung laufen jetzt unter derselben User-Zeilensperre mit erneutem Verbrauchscheck; Entsperrungen per Recovery-Token oder Backup-Code schreiben zudem die vertrauenswürdig aufgelöste Client-IP ins AuditLog und synchronisieren vor Anker-Read und Unlock den RLS-Zielkontext, damit die anonymen Recovery-Pfade auch unter der eingeschränkten Produktionsrolle funktionieren.
 - **Backup-Codes bleiben auch bei paralleler Einlösung einmalig** (#2110) — Der Verbrauch erfolgt jetzt als atomare Datenbankoperation, sodass derselbe Code nicht mehr zwei gleichzeitige Verifikationen bestehen kann; ein Fehlversuch erhöht den bestehenden Drosselzähler weiterhin genau einmal.
 - **Audit-High-Water-Marks werden offsite verankert und im Restore-Drill geprüft** (#2022) — Das Self-Hoster-Backup rotiert und synchronisiert die signierte HWM-Datei gemeinsam mit Datenbank und Medien; fehlende oder manipulierte Anker färben den Drill rot.
 

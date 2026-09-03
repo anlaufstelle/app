@@ -24,6 +24,7 @@ from django.db import transaction
 
 from core.models import AuditLog, User
 from core.services.security.login_lockout import unlock
+from core.signals.audit import _set_session_vars
 
 _SALT = "lockout-recovery.v1"
 _MAX_AGE_SECONDS = 30 * 60  # 30 Minuten
@@ -85,6 +86,10 @@ def verify_recovery_token(token: str) -> User | None:
     except (User.DoesNotExist, ValueError):
         return None
 
+    # Anonyme Recovery-Requests starten mit leeren Facility-GUCs. ``core_user``
+    # ist RLS-frei, der folgende AuditLog-Anker-Read aber nicht (Refs #2111).
+    _set_session_vars(getattr(user, "facility", None), is_super_admin=False)
+
     anchor_ts = None
     # Leer = kein Anker; "0" = Legacy-Token (alte int-Kodierung) -> als kein
     # vertrauenswuerdiger Anker behandeln und ueber den LOGIN_UNLOCK-Check
@@ -133,6 +138,9 @@ def consume_recovery_token(token: str, *, ip_address: str | None) -> User | None
     except User.DoesNotExist:
         return None
 
+    # Nach dem Lock den Zielkontext explizit erneut setzen, bevor der Anker
+    # unter der Sperre re-validiert und anschließend der Unlock geschrieben wird.
+    _set_session_vars(getattr(locked_user, "facility", None), is_super_admin=False)
     if verify_recovery_token(token) is None:
         return None
 

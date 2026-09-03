@@ -35,7 +35,7 @@ from core.services.security import (
 from core.services.security import unlock as unlock_user
 from core.services.security.lockout_recovery import consume_recovery_token
 from core.services.security.origin import build_external_url
-from core.signals.audit import get_client_ip
+from core.signals.audit import _set_session_vars, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +180,7 @@ class LockoutRecoveryBackupCodeView(FormView):
         code = form.cleaned_data["backup_code"]
         user = User.objects.filter(username=username, is_active=True).first()
         if user is not None and verify_backup_code(user, code):
+            _set_session_vars(getattr(user, "facility", None), is_super_admin=False)
             unlock_user(
                 user,
                 unlocked_by=None,

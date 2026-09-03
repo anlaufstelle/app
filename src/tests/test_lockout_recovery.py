@@ -284,7 +284,12 @@ class TestBackupCodeRecovery:
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
 class TestRecoveryTokenConsumptionRace:
-    """Refs #2111: Derselbe Recovery-Token hat parallel genau einen Gewinner."""
+    """Refs #2111: Derselbe Recovery-Token hat parallel genau einen Gewinner.
+
+    Die Barrier erzwingt den Vorzustand deterministisch. Nach dem Fix laeuft
+    der Guard als Naturrennen; seine Schutzwirkung ist zusaetzlich durch die
+    Mutantensonde ohne Anker-Re-Check unter dem User-Lock belegt.
+    """
 
     def test_concurrent_posts_create_one_unlock_and_reject_loser(self, staff_user):
         from core.services.security import build_recovery_token
