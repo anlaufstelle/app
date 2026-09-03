@@ -55,9 +55,26 @@ cd "$COMPOSE_DIR" || {
     exit 1
 }
 
-# Kandidaten-Verzeichnisse je Format (fuer Auto-Erkennung + Default).
+# Kandidaten-Verzeichnisse je Format (fuer Auto-Erkennung + Default). Der
+# Prod-Pfad kommt aus der Host-Sicht BACKUP_HOST_DIR; BACKUP_DIR aus .env ist
+# dagegen das Mount-Ziel im Container und wird bewusst ignoriert.
 DEV_BACKUP_DIR="${DEV_BACKUP_DIR:-/var/backups/anl}"
-PROD_BACKUP_DIR="${PROD_BACKUP_DIR:-$COMPOSE_DIR/backups/daily}"
+resolve_prod_backup_dir() (
+    local env_file="$1" host_dir
+    if [[ -r "$env_file" ]]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$env_file"
+        set +a
+    fi
+    host_dir="${BACKUP_HOST_DIR:-$COMPOSE_DIR/backups}"
+    if [[ "$host_dir" != /* ]]; then
+        host_dir="${COMPOSE_DIR}/${host_dir#./}"
+    fi
+    printf '%s/daily\n' "$host_dir"
+)
+PROD_ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
+PROD_BACKUP_DIR="$(resolve_prod_backup_dir "$PROD_ENV_FILE")"
 if [[ -z "$DRILL_FORMAT" ]]; then
     _dev_hit=$(find "$DEV_BACKUP_DIR" -maxdepth 1 -name 'dump-*.pgc.enc' -type f 2>/dev/null | head -n1)
     _prod_hit=$(find "$PROD_BACKUP_DIR" -maxdepth 1 -name 'anlaufstelle_*.sql.gz.enc' -type f 2>/dev/null | head -n1)
@@ -72,20 +89,16 @@ if [[ -z "$DRILL_FORMAT" ]]; then
     fi
 fi
 
-# Format-spezifische Konfiguration: Env-Datei, Backup-Verzeichnis + -Glob,
-# Compose-Stack. Alle per gleichnamiger Env-Variable ueberschreibbar.
+# Format-spezifische Konfiguration: Env-Datei, Backup-Glob und Compose-Stack.
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
-    ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
-    BACKUP_DIR="${BACKUP_DIR:-$PROD_BACKUP_DIR}"
+    ENV_FILE="$PROD_ENV_FILE"
     BACKUP_GLOB='anlaufstelle_*.sql.gz.enc'
     COMPOSE=(docker compose -f docker-compose.prod.yml)
 else
     ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env.dev}"
-    BACKUP_DIR="${BACKUP_DIR:-$DEV_BACKUP_DIR}"
     BACKUP_GLOB='dump-*.pgc.enc'
     COMPOSE=(docker compose -f docker-compose.dev.yml --env-file .env.dev)
 fi
-echo "Restore-Drill — Format: ${DRILL_FORMAT}, Backups: ${BACKUP_DIR}"
 
 # Env laden (nur Variablen) — liefert POSTGRES_*, BACKUP_ENCRYPTION_KEY.
 if [[ -r "$ENV_FILE" ]]; then
@@ -94,6 +107,19 @@ if [[ -r "$ENV_FILE" ]]; then
     source "$ENV_FILE"
     set +a
 fi
+
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-$COMPOSE_DIR/backups}"
+    if [[ "$BACKUP_HOST_DIR" != /* ]]; then
+        BACKUP_HOST_DIR="${COMPOSE_DIR}/${BACKUP_HOST_DIR#./}"
+    fi
+    BACKUP_DIR="${BACKUP_HOST_DIR}/daily"
+else
+    # Welt A nutzt DEV_BACKUP_DIR als Host-Pfad; auch hier darf das
+    # Container-Ziel BACKUP_DIR aus einer Env-Datei nicht gewinnen.
+    BACKUP_DIR="$DEV_BACKUP_DIR"
+fi
+echo "Restore-Drill — Format: ${DRILL_FORMAT}, Backups: ${BACKUP_DIR}"
 
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt (aus $ENV_FILE)}"
 # Ein mit dem oeffentlich bekannten Platzhalter "verschluesseltes" Backup ist

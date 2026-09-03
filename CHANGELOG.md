@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Fehlende Backup-Signale degradieren den Health-Status** (#2021) — Produktion meldet ohne Welt-B-Backup `backup=missing` und `status=degraded`, während ein expliziter Schalter andere Backup-Welten ausnimmt und das Erstsetup vor einem fehlenden Host-Cron warnt.
 
+### Fixed
+
+- **Host-Skripte verwenden den Host- statt des Container-Backup-Pfads** (#2022, #2021) — Backup und Restore-Drill lösen `BACKUP_HOST_DIR` gemeinsam gegen den Projektpfad auf und ignorieren das nur im Container gültige `BACKUP_DIR`, sodass Sicherungen für Drill und Health-Signal am gemounteten Ort landen.
+
 ### Docs
 
 - **SMTP-E2E-Nachweis beschreibt die echten Mail-Auslöser** (#2089) — Ein ausführbares Drehbuch, Admin-Hilfe und Operations-Runbook dokumentieren SMTP-Vorprüfung, Einladungs- und Reset-Wege, Header-Nachweis, Fehlerdiagnose und den Initialpasswort-Fallback, ohne `setup_facility` fälschlich als Mail-Auslöser zu nennen.

@@ -21,7 +21,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ``dirname "$SCRIPT_DIR"`` nur auf <repo>/scripts auf, wodurch COMPOSE_FILE ins
 # Leere zeigte und jedes Backup sofort scheiterte (Refs #1336).
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-BACKUP_DIR="${PROJECT_DIR}/backups"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
 
 # Fruehzeitiger, klarer Abbruch statt kryptischem docker-Fehler, falls die
@@ -41,6 +40,15 @@ if [[ -f "${PROJECT_DIR}/.env" ]]; then
     set -a
     source "${PROJECT_DIR}/.env"
     set +a
+fi
+
+# Host- und Container-Sicht sind absichtlich getrennt: BACKUP_DIR aus .env
+# bezeichnet das read-only Mount-Ziel im Container. Dieses Host-Skript nutzt
+# ausschliesslich BACKUP_HOST_DIR; relative Werte beziehen sich auf den
+# Repo-/Compose-Root (Refs #2021, #2022).
+BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-${PROJECT_DIR}/backups}"
+if [[ "$BACKUP_HOST_DIR" != /* ]]; then
+    BACKUP_HOST_DIR="${PROJECT_DIR}/${BACKUP_HOST_DIR#./}"
 fi
 
 # Pflichtfelder prüfen
@@ -64,7 +72,7 @@ SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 
 # --verify: Letztes Backup in temporaere Datenbank wiederherstellen und pruefen
 if [[ "${1:-}" == "--verify" ]]; then
-    DAILY_DIR="${BACKUP_DIR}/daily"
+    DAILY_DIR="${BACKUP_HOST_DIR}/daily"
 
     # Neuestes DB-Backup finden
     LATEST_BACKUP=$(find "$DAILY_DIR" -name "*.sql.gz.enc" -type f 2>/dev/null \
@@ -162,9 +170,9 @@ if [[ "${1:-}" == "--verify" ]]; then
 fi
 
 TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
-DAILY_DIR="${BACKUP_DIR}/daily"
-WEEKLY_DIR="${BACKUP_DIR}/weekly"
-MONTHLY_DIR="${BACKUP_DIR}/monthly"
+DAILY_DIR="${BACKUP_HOST_DIR}/daily"
+WEEKLY_DIR="${BACKUP_HOST_DIR}/weekly"
+MONTHLY_DIR="${BACKUP_HOST_DIR}/monthly"
 
 mkdir -p "$DAILY_DIR" "$WEEKLY_DIR" "$MONTHLY_DIR"
 
@@ -319,9 +327,9 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
     esac
 
     # State-File: Counter aufeinanderfolgender Fehler. Default-Pfad liegt
-    # neben den Backups (BACKUP_DIR), kann aber per BACKUP_STATE_DIR
+    # neben den Host-Backups (BACKUP_HOST_DIR), kann aber per BACKUP_STATE_DIR
     # ueberschrieben werden (z.B. /var/lib/anlaufstelle).
-    OFFSITE_STATE_FILE="${BACKUP_STATE_DIR:-$BACKUP_DIR}/.offsite_state"
+    OFFSITE_STATE_FILE="${BACKUP_STATE_DIR:-$BACKUP_HOST_DIR}/.offsite_state"
     mkdir -p "$(dirname "$OFFSITE_STATE_FILE")"
     PREV_FAIL_COUNT=0
     if [[ -f "$OFFSITE_STATE_FILE" ]]; then

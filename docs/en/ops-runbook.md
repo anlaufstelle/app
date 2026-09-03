@@ -365,6 +365,16 @@ Two jobs stay host-side because they cannot run in the sidecar:
   `curl` check, respectively; the app container doesn't carry the former, and the latter should
   deliberately run *outside* the monitored stack.
 
+**Backup paths:** `BACKUP_HOST_DIR` is the base directory on the host
+(default: `<repo>/backups`; relative values such as `./backups` are
+resolved against the repository root). `scripts/ops/backup.sh` writes to
+its `daily/`, `weekly/`, and `monthly/` subdirectories; the prod
+branch of `restore-drill.sh` reads from the same `daily/` directory.
+`BACKUP_DIR` is exclusively the read-only mount target inside the
+`web` container (default: `/backups`) and is deliberately ignored by
+both host scripts. Compose mounts `BACKUP_HOST_DIR` at `BACKUP_DIR` so
+that `/health/` sees the same files.
+
 ```cron
 # Anlaufstelle – Host cron (backup + hygiene). Everything else is handled by the
 # cron sidecar from §3.2 — do NOT set these entries up twice!
@@ -1139,7 +1149,7 @@ Verifies that the latest backup is fully restorable and that the lines of defens
 Since OPS-05 (Refs #1336), the script covers **both** shipped backup formats. The choice is made via the `--dev`/`--prod` flag or `$DRILL_FORMAT`; without one, the format is auto-detected from the existing backup files (default `dev`, backward-compatible — the existing dev timer runs unchanged). If **both** formats are present at the same time, the drill aborts and requires an explicit choice:
 
 - **`--dev`** — `dev-ops/deploy/backup.sh`, which actually runs on `dev.anlaufstelle.app` (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, source `$BACKUP_DIR/dump-*.pgc.enc` (default `/var/backups/anl`), stack `docker-compose.dev.yml`.
-- **`--prod`** — `scripts/ops/backup.sh`, the canonical path shipped to self-hosters: plain SQL + `gzip` + A4.3 HMAC sidecar → `psql`, source `backups/daily/anlaufstelle_*.sql.gz.enc`, stack `docker-compose.prod.yml`. The HMAC sidecar is verified BEFORE decrypting.
+- **`--prod`** — `scripts/ops/backup.sh`, the canonical path shipped to self-hosters: plain SQL + `gzip` + A4.3 HMAC sidecar → `psql`, source `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (default: `<repo>/backups/daily`), stack `docker-compose.prod.yml`. The HMAC sidecar is verified BEFORE decrypting.
 
 Both formats are restored as the Postgres superuser (`postgres`, via local socket trust in the db container) — needed for `CREATE DATABASE`, and it also bypasses RLS/FORCE-RLS during the restore.
 
@@ -1165,7 +1175,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev f
 | 0 | Find the newest backup in the format-specific directory (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
 | 1 | Create a fresh throwaway DB (`anlaufstelle_drill_<pid>`) |
 | 2 | Decrypt + restore the backup — `--prod` first checks the HMAC sidecar, then `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
-| 2b | `--prod` only: copy the newest `audit_hwm-*.json` into the drill container and load its HMAC signature; missing or manipulated → `FAIL`, while the remaining restore checks continue ([§6.7](#67-back-up-and-verify-the-audit-high-water-mark-refs-2022)) |
+| 2b | `--prod` only and when `DJANGO_AUDIT_HWM_PATH` is set: copy the newest `audit_hwm-*.json` into the drill container and load its HMAC signature; missing or manipulated → `FAIL`, while the remaining restore checks continue. If the variable is unset, step 2b is skipped with `INFO` and the drill can still exit with code 0 ([§6.7](#67-back-up-and-verify-the-audit-high-water-mark-refs-2022)) |
 | 3 | Spot-check per table (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — are counts queryable? |
 | 3b | **Completeness guard (fail-closed):** row comparison of the critical RLS tables (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) between the throwaway DB and the live DB (`$POSTGRES_DB`) — `Live>0` but `Restore=0` turns it red. Catches the incomplete `--prod` restore that the `psql` exit code (without `ON_ERROR_STOP`) swallows (Refs #1336) |
 | 4 | RLS policy check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` must yield `>= 18` (a conservative floor in the script; the actual count is higher, see section 9) |
@@ -1236,7 +1246,7 @@ The path deliberately sits next to `MEDIA_ROOT=/data/media`: this makes it persi
 
 A green `verify_audit_chain` run writes the count and last hash for each chain there. The file is HMAC-signed with `DJANGO_AUDIT_HASH_KEY` and contains no plaintext case data, so additional encryption is unnecessary. `scripts/ops/backup.sh` exports it through `docker compose exec -T cron cat …` as `backups/daily/audit_hwm-<timestamp>.json`, rotates it with the database/media backups, and includes it in all three off-site paths (rclone, S3, SCP). If the path is unset or the file does not exist yet, the database/media backup remains valid, but the script logs the missing HWM anchor.
 
-`scripts/ops/restore-drill.sh --prod` copies the newest HWM file into the drill container's `/tmp` and loads it through `HighWaterMarkStore.load()`. A missing file or invalid signature produces `FAIL` and therefore exit code 1; the drill still runs the remaining restore, RLS, and trigger checks so a second failure is not hidden.
+When `DJANGO_AUDIT_HWM_PATH` is set, `scripts/ops/restore-drill.sh --prod` copies the newest HWM file into the drill container's `/tmp` and loads it through `HighWaterMarkStore.load()`. A then-missing file or invalid signature produces `FAIL` and therefore exit code 1; the drill still runs the remaining restore, RLS, and trigger checks so a second failure is not hidden. If the variable is unset, the drill skips step 2b with an `INFO` line; that alone does not prevent exit code 0 or the restore marker.
 
 ---
 
@@ -2729,4 +2739,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 73c5c010d56d938cfac92847ca05f2a709dfac59 -->
+<!-- source-hash: 613f83927c00a628efc5b3e5dc3f51180c52288c -->

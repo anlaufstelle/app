@@ -364,6 +364,16 @@ Zwei Jobs bleiben Host-seitig, weil sie im Sidecar nicht laufen koennen:
   `curl`-Check; ersteres hat der App-Container nicht an Bord, letzteres soll
   bewusst *ausserhalb* des ueberwachten Stacks laufen.
 
+**Backup-Pfade:** `BACKUP_HOST_DIR` bezeichnet das Basisverzeichnis auf dem
+Host (Default `<Repo>/backups`; relative Werte wie `./backups` werden
+gegen den Repo-Root aufgeloest). `scripts/ops/backup.sh` schreibt darunter
+nach `daily/`, `weekly/` und `monthly/`; der Prod-Zweig von
+`restore-drill.sh` liest aus demselben `daily/`-Verzeichnis.
+`BACKUP_DIR` ist ausschließlich das read-only Mount-Ziel im
+`web`-Container (Default `/backups`) und wird von beiden Host-Skripten
+bewusst ignoriert. Compose mountet `BACKUP_HOST_DIR` nach `BACKUP_DIR`,
+damit `/health/` dieselben Dateien sieht.
+
 ```cron
 # Anlaufstelle – Host-Cron (Backup + Hygiene). Alles Weitere macht der
 # cron-Sidecar aus §3.2 — diese Eintraege NICHT dupliziert einrichten!
@@ -1138,7 +1148,7 @@ Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und d
 Das Skript deckt seit OPS-05 (Refs #1336) **beide** ausgelieferten Backup-Formate ab. Die Wahl erfolgt per Flag `--dev`/`--prod` oder `$DRILL_FORMAT`; ohne Angabe wird das Format anhand der vorhandenen Backup-Dateien auto-erkannt (Default `dev`, rueckwaerts-kompatibel — der bestehende dev-Timer laeuft unveraendert). Liegen **beide** Formate gleichzeitig vor, bricht der Drill ab und verlangt eine explizite Wahl:
 
 - **`--dev`** — `dev-ops/deploy/backup.sh`, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`.
-- **`--prod`** — `scripts/ops/backup.sh`, der an Self-Hoster ausgelieferte kanonische Pfad: plain SQL + `gzip` + A4.3-HMAC-Sidecar → `psql`, Quelle `backups/daily/anlaufstelle_*.sql.gz.enc`, Stack `docker-compose.prod.yml`. Der HMAC-Sidecar wird VOR dem Entschluesseln geprueft.
+- **`--prod`** — `scripts/ops/backup.sh`, der an Self-Hoster ausgelieferte kanonische Pfad: plain SQL + `gzip` + A4.3-HMAC-Sidecar → `psql`, Quelle `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (Default `<Repo>/backups/daily`), Stack `docker-compose.prod.yml`. Der HMAC-Sidecar wird VOR dem Entschluesseln geprueft.
 
 Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container) ein — noetig fuer `CREATE DATABASE`, bypassed zugleich RLS/FORCE-RLS beim Restore.
 
@@ -1164,7 +1174,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzw
 | 0 | Neuestes Backup im format-spezifischen Verzeichnis finden (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
-| 2b | Nur `--prod`: neueste `audit_hwm-*.json` in den Drill-Container kopieren und die HMAC-Signatur laden; fehlend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
+| 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: neueste `audit_hwm-*.json` in den Drill-Container kopieren und die HMAC-Signatur laden; fehlend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Ist die Variable nicht gesetzt, wird Schritt 2b mit `INFO` uebersprungen und der Drill kann mit Exit-Code 0 enden ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
 | 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts abfragbar? |
 | 3b | **Vollstaendigkeits-Guard (fail-closed):** Zeilenabgleich der kritischen RLS-Tabellen (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Faengt den unvollstaendigen `--prod`-Restore ab, den der `psql`-Exit-Code (ohne `ON_ERROR_STOP`) verschluckt (Refs #1336) |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
@@ -1235,7 +1245,7 @@ Der Pfad liegt bewusst neben `MEDIA_ROOT=/data/media`: Er ist damit fuer `cron`/
 
 Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je Kette. Die Datei ist mit `DJANGO_AUDIT_HASH_KEY` HMAC-signiert und enthaelt keine Klartext-Falldaten; eine zusaetzliche Verschluesselung ist deshalb nicht noetig. `scripts/ops/backup.sh` exportiert sie per `docker compose exec -T cron cat …` als `backups/daily/audit_hwm-<Zeitstempel>.json`, rotiert sie mit DB-/Medienbackups und nimmt sie in alle drei Off-Site-Wege (rclone, S3, SCP) auf. Ist der Pfad nicht gesetzt oder die Datei noch nicht vorhanden, bleibt das DB-/Medienbackup gueltig, aber das Skript protokolliert den fehlenden HWM-Anker.
 
-`scripts/ops/restore-drill.sh --prod` kopiert die neueste HWM-Datei nach `/tmp` des Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine fehlende Datei oder ungueltige Signatur erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird.
+Ist `DJANGO_AUDIT_HWM_PATH` gesetzt, kopiert `scripts/ops/restore-drill.sh --prod` die neueste HWM-Datei nach `/tmp` des Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine dann fehlende Datei oder ungueltige Signatur erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird. Ist die Variable nicht gesetzt, ueberspringt der Drill Schritt 2b mit einer `INFO`-Zeile; das allein laesst Exit-Code 0 und den Restore-Marker weiterhin zu.
 
 ---
 

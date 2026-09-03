@@ -35,15 +35,22 @@ OPS_DIR = REPO_ROOT / "scripts" / "ops"
 
 _FAKE_DOCKER = """#!/usr/bin/env bash
 # Stub-docker fuer den Pfadaufloesungs-Test: Argumente protokollieren und fuer
-# jeden 'exec'-Aufruf ein paar Bytes ausgeben, damit die Backup-Pipeline
-# (gzip | openssl enc) eine nicht-leere Datei erzeugt.
+# Backup-Pipelines Bytes liefern. Restore-Abfragen erhalten plausible Werte.
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
-for a in "$@"; do
-  if [[ "$a" == "exec" ]]; then
+if [[ "$*" == *"relrowsecurity"* ]]; then
+    printf '20\\n'
+elif [[ "$*" == *"FROM pg_trigger"* ]]; then
+    printf '1\\n'
+elif [[ "$*" == *"UPDATE core_auditlog"* ]]; then
+    printf 'auditlog is immutable\\n' >&2
+    exit 1
+elif [[ "$*" == *"SELECT COUNT(*)"* ]]; then
+    printf '1\\n'
+elif [[ "$*" == *" pg_dump "* || "$*" == *" tar -C "* ]]; then
     printf 'FAKE-CONTAINER-OUTPUT\\n'
-    exit 0
-  fi
-done
+elif [[ "$*" == *" psql "* ]]; then
+    cat >/dev/null
+fi
 exit 0
 """
 
@@ -57,18 +64,18 @@ _ENV = (
 )
 
 
-def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
+def _make_sandbox(tmp_path: Path, *, backup_env: str = "") -> tuple[Path, Path, Path]:
     """Baue die Sandbox. Returns (root, docker_log, fake_bin)."""
     root = tmp_path / "root"
     ops = root / "scripts" / "ops"
     ops.mkdir(parents=True)
-    for name in ("backup.sh", "_backup_common.sh"):
+    for name in ("backup.sh", "restore-drill.sh", "_backup_common.sh"):
         shutil.copy(OPS_DIR / name, ops / name)
-    (ops / "backup.sh").chmod(0o755)
+        (ops / name).chmod(0o755)
 
     # Stub-Compose im Repo-Root — muss existieren, sonst greift der COMPOSE_FILE-Guard.
     (root / "docker-compose.prod.yml").write_text("# stub\n", encoding="utf-8")
-    (root / ".env").write_text(_ENV, encoding="utf-8")
+    (root / ".env").write_text(_ENV + backup_env, encoding="utf-8")
 
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -76,9 +83,106 @@ def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
     fake_docker.write_text(_FAKE_DOCKER, encoding="utf-8")
     fake_docker.chmod(0o755)
 
+    # Die rote Reproduktion darf den aus .env.example stammenden Container-
+    # Pfad /backups weder anlegen noch durchsuchen. Beide Kommandos bleiben
+    # vollstaendig in tmp_path; korrekte Host-Pfade gehen an die Systemtools.
+    fake_mkdir = fake_bin / "mkdir"
+    fake_mkdir.write_text(
+        """#!/usr/bin/env bash
+for arg in "$@"; do
+    if [[ "$arg" == "/backups" || "$arg" == /backups/* ]]; then
+        exit 97
+    fi
+done
+exec /bin/mkdir "$@"
+""",
+        encoding="utf-8",
+    )
+    fake_mkdir.chmod(0o755)
+    fake_find = fake_bin / "find"
+    fake_find.write_text(
+        """#!/usr/bin/env bash
+if [[ "${1:-}" == "/backups" || "${1:-}" == /backups/* ]]; then
+    exit 0
+fi
+exec /usr/bin/find "$@"
+""",
+        encoding="utf-8",
+    )
+    fake_find.chmod(0o755)
+
     docker_log = tmp_path / "docker.log"
     docker_log.write_text("", encoding="utf-8")
     return root, docker_log, fake_bin
+
+
+def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bin: Path, daily_dir: Path) -> None:
+    env = dict(os.environ)
+    for variable in (
+        "BACKUP_DIR",
+        "BACKUP_HOST_DIR",
+        "DJANGO_AUDIT_HWM_PATH",
+        "PROD_BACKUP_DIR",
+    ):
+        env.pop(variable, None)
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
+    env["DOCKER_LOG"] = str(docker_log)
+
+    backup_result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "backup.sh")],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(root),
+    )
+    restore_result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        capture_output=True,
+        text=True,
+        env={
+            **env,
+            "COMPOSE_DIR": str(root),
+            "ENV_FILE": str(root / ".env"),
+        },
+        cwd=str(root),
+    )
+
+    assert backup_result.returncode == 0, (
+        f"backup.sh scheiterte (rc={backup_result.returncode}).\n"
+        f"STDOUT:\n{backup_result.stdout}\nSTDERR:\n{backup_result.stderr}"
+    )
+    db_backups = sorted(daily_dir.glob("anlaufstelle_*.sql.gz.enc"))
+    assert len(db_backups) == 1
+    assert restore_result.returncode == 0, (
+        f"restore-drill.sh scheiterte (rc={restore_result.returncode}).\n"
+        f"STDOUT:\n{restore_result.stdout}\nSTDERR:\n{restore_result.stderr}"
+    )
+    assert f"Drill gegen DB-Backup: {db_backups[0]}" in restore_result.stdout
+
+
+def test_env_example_paths_use_project_host_directory(tmp_path: Path) -> None:
+    root, docker_log, fake_bin = _make_sandbox(
+        tmp_path,
+        backup_env="BACKUP_DIR=/backups\nBACKUP_HOST_DIR=./backups\n",
+    )
+
+    _assert_backup_and_drill_use_daily_dir(root, docker_log, fake_bin, root / "backups" / "daily")
+
+
+def test_absolute_backup_host_directory_is_shared_by_backup_and_drill(tmp_path: Path) -> None:
+    absolute_host_dir = tmp_path / "absolute-host-backups"
+    root, docker_log, fake_bin = _make_sandbox(
+        tmp_path,
+        backup_env=f"BACKUP_DIR=/backups\nBACKUP_HOST_DIR={absolute_host_dir}\n",
+    )
+
+    _assert_backup_and_drill_use_daily_dir(root, docker_log, fake_bin, absolute_host_dir / "daily")
+
+
+def test_backup_host_directory_defaults_to_project_backups(tmp_path: Path) -> None:
+    root, docker_log, fake_bin = _make_sandbox(tmp_path)
+
+    _assert_backup_and_drill_use_daily_dir(root, docker_log, fake_bin, root / "backups" / "daily")
 
 
 def test_backup_resolves_compose_file_to_repo_root(tmp_path):
