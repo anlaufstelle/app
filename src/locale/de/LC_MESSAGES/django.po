@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 15:18+0200\n"
+"POT-Creation-Date: 2026-09-03 17:49+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5314,6 +5314,18 @@ msgid ""
 msgstr ""
 "Dieser Löschvorschlag wurde zwischenzeitlich bereits bearbeitet — bitte die "
 "Übersicht neu laden."
+
+#: src/core/services/client/main.py:1497
+msgid "Diese Person wurde bereits endgültig anonymisiert."
+msgstr "Diese Person wurde bereits endgültig anonymisiert."
+
+#: src/core/retention/proposals.py:243
+msgid ""
+"Die Personenzuordnung des vorgeschlagenen Ereignisses wurde zwischenzeitlich "
+"geändert — bitte die Übersicht neu laden."
+msgstr ""
+"Die Personenzuordnung des vorgeschlagenen Ereignisses wurde zwischenzeitlich "
+"geändert — bitte die Übersicht neu laden."
 
 #: src/core/views/statistics.py:662
 msgid "backend erforderlich"

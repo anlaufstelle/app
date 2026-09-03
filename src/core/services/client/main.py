@@ -1392,6 +1392,42 @@ def restore_client(client, user):
     )
 
 
+def _lock_client_event_rows(client):
+    """Sperrt die Ereigniszeilen der Person — zweite Stufe der kanonischen Ordnung.
+
+    Refs #2108 (Cross-Review Runde 1): ``client_has_active_hold`` zaehlt einen
+    Hold auf IRGENDEIN Ereignis der Person mit (Refs #1066/#1756), und
+    ``create_hold_for_target`` koordiniert einen Ereignis-Hold ueber
+    ``core_event`` — nicht ueber ``core_client``. Die Personensperre allein
+    haelt einen parallel entstehenden EREIGNIS-Hold also gar nicht auf: er
+    committet neben ihr her, und die Anonymisierung redigiert genau das
+    Ereignis, das er sichern soll.
+
+    Deshalb wandern die Ereigniszeilen unter dieselbe Sperre — nach der
+    Personenzeile, in ``pk``-Ordnung (deterministisch gegenueber einem zweiten
+    Sperrer derselben Menge). Es sind exakt die Zeilen, die
+    ``_redact_live_events`` gleich ohnehin schreibt; vorgezogen wird nur der
+    Zeitpunkt.
+
+    Nicht abgedeckt bleibt der **Fall**-Hold: ``create_hold_for_target`` nimmt
+    fuer ``target_type="Case"`` gar keine Sperre (``legal_holds.py``, nur die
+    Zweige ``Event``/``Client`` sperren), es gibt dort also keinen gemeinsamen
+    Anker, den dieser Pfad mitnehmen koennte.
+    """
+    # Lokaler Import wie an den uebrigen Ereignis-Stellen dieses Moduls
+    # (``_redact_live_events`` u. a.) — der Modulkopf haelt ``Event`` bewusst
+    # nicht.
+    from core.models.event import Event
+
+    list(
+        Event.objects.for_facility(client.facility_id)
+        .filter(client_id=client.pk)
+        .order_by("pk")
+        .select_for_update()
+        .only("pk")
+    )
+
+
 @transaction.atomic
 def anonymize_client_now(client, user):
     """Anonymisiert eine Person im Papierkorb sofort — auf Admin-Anforderung.
@@ -1431,35 +1467,52 @@ def anonymize_client_now(client, user):
     in der schon vorhandenen Gesamttransaktion. Ein Hold, der waehrend der
     Sperrwartezeit committet, wird damit gesehen; ein Hold, der danach kommt,
     wartet auf die Zeile und entsteht dokumentiert verspaetet
-    (``history_already_redacted``). Eine Pro-Ereignis-Sperre ist hier nicht
-    noetig — anders als im Batch (Refs #2107) liegt die ganze Kaskade in EINER
-    Transaktion und rollt bei der ``ValidationError`` vollstaendig zurueck.
-    """
-    if not client.is_deleted:
-        raise ValidationError(_("Nur Personen im Papierkorb können anonymisiert werden."))
+    (``history_already_redacted``).
 
+    Cross-Review Runde 1: **Jede** Vorbedingung wird auf der GESPERRTEN Zeile
+    gelesen, und die Kaskade laeuft auf ihr weiter. Die uebergebene Instanz
+    stammt womoeglich aus einem Lesevorgang von vor der Sperrwartezeit — wurde
+    die Person in dieser Zeit wiederhergestellt, haette der Sofortpfad einen
+    AKTIVEN Datensatz anonymisiert und damit genau die Papierkorb-Vorbedingung
+    unterlaufen, die er zusichert (Refs #1737). Mitgeprueft wird deshalb auch
+    der terminale Stempel ``anonymized_at``: eine zweite Tilgung derselben
+    Person waere ein zweiter ``CLIENT_ANONYMIZED``-Eintrag in einem append-only,
+    HMAC-verketteten AuditLog fuer einen Vorgang, der laengst passiert ist
+    (dieselbe Abbruchbedingung, die der Nacht-Sweep seit Refs #2013 fuehrt).
+    """
     # Refs #2108: Der gemeinsame Koordinationspunkt mit ``create_hold_for_target``.
     # ``core_client`` ist zugleich die erste Stufe der kanonischen Ordnung
     # ``Client -> Event -> EventHistory -> AuditLog``, die auch der manuelle
     # Ereignis-Loeschweg nimmt — die Sperre haelt bis zum Commit dieser
-    # Transaktion. Die Hold-Lesung liegt bewusst DANACH: erst dann ist
-    # „kein Hold" eine stabile Aussage und nicht der Stand von vorhin.
-    Client.objects.filter(pk=client.pk).select_for_update().only("pk").first()
+    # Transaktion. ALLE Lesungen liegen bewusst DANACH: erst dann sind
+    # „im Papierkorb", „noch nicht getilgt" und „kein Hold" stabile Aussagen
+    # und nicht der Stand von vorhin.
+    locked = Client.objects.select_for_update().filter(pk=client.pk, facility=client.facility_id).first()
+    if locked is None:
+        # Die Zeile ist verschwunden (harte Loeschung, fremde Einrichtung) —
+        # dieselbe Antwort wie fuer eine Person ausserhalb des Papierkorbs.
+        raise ValidationError(_("Nur Personen im Papierkorb können anonymisiert werden."))
+    if not locked.is_deleted:
+        raise ValidationError(_("Nur Personen im Papierkorb können anonymisiert werden."))
+    if locked.anonymized_at is not None:
+        raise ValidationError(_("Diese Person wurde bereits endgültig anonymisiert."))
 
-    if client_has_active_hold(client):
+    _lock_client_event_rows(locked)
+
+    if client_has_active_hold(locked):
         raise ValidationError(
             _("Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
         )
 
-    anonymize_client(client, user=user)
+    anonymize_client(locked, user=user)
     audit_client_event(
-        client,
+        locked,
         user,
         AuditLog.Action.CLIENT_ANONYMIZED,
         trigger="manual",
-        deleted_at=str(client.deleted_at),
+        deleted_at=str(locked.deleted_at),
     )
-    return client
+    return locked
 
 
 def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=False):
@@ -1534,7 +1587,10 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
             # angeordneter Hold erreichte die bereits gesammelten Personen
             # nicht mehr. Dieselbe Regel wie beim Sammeln, nur jetzt auf der
             # gesperrten Zeile; die Anonymisierung wird bloss aufgeschoben,
-            # ein spaeterer Lauf holt sie nach.
+            # ein spaeterer Lauf holt sie nach. Die Ereigniszeilen kommen
+            # (Cross-Review Runde 1) mit unter die Sperre — ein Ereignis-Hold
+            # koordiniert ueber ``core_event``, nicht ueber ``core_client``.
+            _lock_client_event_rows(client)
             if client_has_active_hold(client):
                 continue
             anonymize_client(client, user=None)

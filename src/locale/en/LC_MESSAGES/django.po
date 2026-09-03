@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 15:18+0200\n"
+"POT-Creation-Date: 2026-09-03 17:49+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5269,6 +5269,18 @@ msgid ""
 "Übersicht neu laden."
 msgstr ""
 "This deletion proposal has already been processed in the meantime — please "
+"reload the overview."
+
+#: src/core/services/client/main.py:1497
+msgid "Diese Person wurde bereits endgültig anonymisiert."
+msgstr "This person has already been permanently anonymized."
+
+#: src/core/retention/proposals.py:243
+msgid ""
+"Die Personenzuordnung des vorgeschlagenen Ereignisses wurde zwischenzeitlich "
+"geändert — bitte die Übersicht neu laden."
+msgstr ""
+"The person this event is linked to has changed in the meantime — please "
 "reload the overview."
 
 #: src/core/views/statistics.py:662
