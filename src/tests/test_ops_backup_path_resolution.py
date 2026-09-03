@@ -122,7 +122,6 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
         "BACKUP_DIR",
         "BACKUP_HOST_DIR",
         "DJANGO_AUDIT_HWM_PATH",
-        "PROD_BACKUP_DIR",
     ):
         env.pop(variable, None)
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
@@ -134,6 +133,7 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
         text=True,
         env=env,
         cwd=str(root),
+        timeout=60,
     )
     restore_result = subprocess.run(
         ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
@@ -145,6 +145,7 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
             "ENV_FILE": str(root / ".env"),
         },
         cwd=str(root),
+        timeout=60,
     )
 
     assert backup_result.returncode == 0, (
@@ -197,6 +198,7 @@ def test_backup_resolves_compose_file_to_repo_root(tmp_path):
         text=True,
         env=env,
         cwd=str(tmp_path),
+        timeout=60,
     )
 
     assert result.returncode == 0, (

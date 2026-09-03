@@ -1147,7 +1147,7 @@ Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und d
 
 Das Skript deckt seit OPS-05 (Refs #1336) **beide** ausgelieferten Backup-Formate ab. Die Wahl erfolgt per Flag `--dev`/`--prod` oder `$DRILL_FORMAT`; ohne Angabe wird das Format anhand der vorhandenen Backup-Dateien auto-erkannt (Default `dev`, rueckwaerts-kompatibel — der bestehende dev-Timer laeuft unveraendert). Liegen **beide** Formate gleichzeitig vor, bricht der Drill ab und verlangt eine explizite Wahl:
 
-- **`--dev`** — `dev-ops/deploy/backup.sh`, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`.
+- **`--dev`** — `dev-ops/deploy/backup.sh`, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$DEV_BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`.
 - **`--prod`** — `scripts/ops/backup.sh`, der an Self-Hoster ausgelieferte kanonische Pfad: plain SQL + `gzip` + A4.3-HMAC-Sidecar → `psql`, Quelle `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (Default `<Repo>/backups/daily`), Stack `docker-compose.prod.yml`. Der HMAC-Sidecar wird VOR dem Entschluesseln geprueft.
 
 Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container) ein — noetig fuer `CREATE DATABASE`, bypassed zugleich RLS/FORCE-RLS beim Restore.

@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Host-Skripte verwenden den Host- statt des Container-Backup-Pfads** (#2022, #2021) — Backup und Restore-Drill lösen `BACKUP_HOST_DIR` gemeinsam gegen den Projektpfad auf und ignorieren das nur im Container gültige `BACKUP_DIR`, sodass Sicherungen für Drill und Health-Signal am gemounteten Ort landen.
+- **Host-Skripte verwenden den Host- statt des Container-Backup-Pfads** (#2022, #2021) — Backup und Restore-Drill lösen `BACKUP_HOST_DIR` gemeinsam gegen den Projektpfad auf und ignorieren das nur im Container gültige `BACKUP_DIR`, sodass Sicherungen für Drill und Health-Signal am gemounteten Ort landen. Bei `.env.example`-konformen Installationen wandert `.offsite_state` dadurch einmalig von `/backups/` nach `<Repo>/backups/`; der Zähler aufeinanderfolgender Offsite-Fehler startet dort bei 0.
 
 ### Docs
 

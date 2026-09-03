@@ -26,9 +26,9 @@ def _run_offsite_logic(state_dir: Path, *, succeed: bool) -> tuple[int, Path]:
         f"""
         set -euo pipefail
         BACKUP_STATE_DIR={state_dir}
-        BACKUP_DIR={state_dir}
+        BACKUP_HOST_DIR={state_dir}
         OFFSITE_OK={"true" if succeed else "false"}
-        OFFSITE_STATE_FILE="${{BACKUP_STATE_DIR:-$BACKUP_DIR}}/.offsite_state"
+        OFFSITE_STATE_FILE="${{BACKUP_STATE_DIR:-$BACKUP_HOST_DIR}}/.offsite_state"
         mkdir -p "$(dirname "$OFFSITE_STATE_FILE")"
         PREV_FAIL_COUNT=0
         if [[ -f "$OFFSITE_STATE_FILE" ]]; then
@@ -47,7 +47,7 @@ def _run_offsite_logic(state_dir: Path, *, succeed: bool) -> tuple[int, Path]:
         fi
         """
     )
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
     return result.returncode, state_file
 
 

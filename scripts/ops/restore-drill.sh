@@ -14,11 +14,11 @@ set -uo pipefail
 # ohne Angabe wird anhand der vorhandenen Backup-Dateien auto-erkannt.
 #
 #   dev  : dev-ops/deploy/backup.sh (dev.anlaufstelle.app)
-#          - Quelle:  $BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
+#          - Quelle:  $DEV_BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
 #          - Format:  pg_dump --format=custom -> pg_restore (NICHT psql)
 #          - Stack:   docker-compose.dev.yml --env-file .env.dev
 #   prod : scripts/ops/backup.sh (der an Self-Hoster ausgelieferte Pfad)
-#          - Quelle:  backups/daily/anlaufstelle_*.sql.gz.enc
+#          - Quelle:  $BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc
 #          - Format:  plain SQL + gzip + A4.3-HMAC-Sidecar -> psql
 #          - Stack:   docker-compose.prod.yml
 #
@@ -74,12 +74,12 @@ resolve_prod_backup_dir() (
     printf '%s/daily\n' "$host_dir"
 )
 PROD_ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
-PROD_BACKUP_DIR="$(resolve_prod_backup_dir "$PROD_ENV_FILE")"
+_prod_backup_dir="$(resolve_prod_backup_dir "$PROD_ENV_FILE")"
 if [[ -z "$DRILL_FORMAT" ]]; then
     _dev_hit=$(find "$DEV_BACKUP_DIR" -maxdepth 1 -name 'dump-*.pgc.enc' -type f 2>/dev/null | head -n1)
-    _prod_hit=$(find "$PROD_BACKUP_DIR" -maxdepth 1 -name 'anlaufstelle_*.sql.gz.enc' -type f 2>/dev/null | head -n1)
+    _prod_hit=$(find "$_prod_backup_dir" -maxdepth 1 -name 'anlaufstelle_*.sql.gz.enc' -type f 2>/dev/null | head -n1)
     if [[ -n "$_dev_hit" && -n "$_prod_hit" ]]; then
-        echo "FAIL - beide Backup-Formate gefunden (dev: $DEV_BACKUP_DIR, prod: $PROD_BACKUP_DIR)." >&2
+        echo "FAIL - beide Backup-Formate gefunden (dev: $DEV_BACKUP_DIR, prod: $_prod_backup_dir)." >&2
         echo "       Format explizit waehlen: restore-drill.sh --dev | --prod" >&2
         exit 2
     elif [[ -n "$_prod_hit" ]]; then

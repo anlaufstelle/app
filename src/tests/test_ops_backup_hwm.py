@@ -111,6 +111,7 @@ def _write_prod_backup(backup_dir: Path) -> None:
         input=gzip.compress(b"SELECT 1;\n"),
         capture_output=True,
         check=True,
+        timeout=60,
     ).stdout
     backup_file.write_bytes(encrypted)
     derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
@@ -133,6 +134,7 @@ def _restore_sandbox(
         f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}",
         "POSTGRES_DB=anlaufstelle",
         f"DJANGO_AUDIT_HASH_KEY={AUDIT_KEY}",
+        f"BACKUP_HOST_DIR={backup_dir.parent}",
     ]
     if hwm_configured:
         env_lines.append("DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json")
@@ -187,7 +189,6 @@ exit 0
         {
             "PATH": f"{bindir}:{env['PATH']}",
             "COMPOSE_DIR": str(compose_dir),
-            "PROD_BACKUP_DIR": str(backup_dir),
             "ENV_FILE": str(compose_dir / ".env"),
             "DOCKER_LOG": str(docker_log),
             "REAL_SRC": str(REPO_ROOT / "src"),

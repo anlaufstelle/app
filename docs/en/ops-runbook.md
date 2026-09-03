@@ -1148,7 +1148,7 @@ Verifies that the latest backup is fully restorable and that the lines of defens
 
 Since OPS-05 (Refs #1336), the script covers **both** shipped backup formats. The choice is made via the `--dev`/`--prod` flag or `$DRILL_FORMAT`; without one, the format is auto-detected from the existing backup files (default `dev`, backward-compatible — the existing dev timer runs unchanged). If **both** formats are present at the same time, the drill aborts and requires an explicit choice:
 
-- **`--dev`** — `dev-ops/deploy/backup.sh`, which actually runs on `dev.anlaufstelle.app` (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, source `$BACKUP_DIR/dump-*.pgc.enc` (default `/var/backups/anl`), stack `docker-compose.dev.yml`.
+- **`--dev`** — `dev-ops/deploy/backup.sh`, which actually runs on `dev.anlaufstelle.app` (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, source `$DEV_BACKUP_DIR/dump-*.pgc.enc` (default `/var/backups/anl`), stack `docker-compose.dev.yml`.
 - **`--prod`** — `scripts/ops/backup.sh`, the canonical path shipped to self-hosters: plain SQL + `gzip` + A4.3 HMAC sidecar → `psql`, source `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (default: `<repo>/backups/daily`), stack `docker-compose.prod.yml`. The HMAC sidecar is verified BEFORE decrypting.
 
 Both formats are restored as the Postgres superuser (`postgres`, via local socket trust in the db container) — needed for `CREATE DATABASE`, and it also bypasses RLS/FORCE-RLS during the restore.
@@ -2741,4 +2741,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 0b95ae2b6cb5c609aa6e4768e983ef8c6708ea9a -->
+<!-- source-hash: 38aef32d649f7e793f8a6fac13b1256e1bb70cbc -->
