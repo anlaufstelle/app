@@ -165,8 +165,8 @@ def cron_job_checks() -> list[ComplianceCheck]:
 
     Teilmenge von :func:`aggregate_checks` — die sechs per Cron laufenden
     Jobs (Backup, Retention, Audit-Ketten-Pruefung, Snapshots, Breach-Scan,
-    MV-Refresh) plus die Retention-Konfigurationswarnung. Der Restore-Test bleibt bewusst aussen vor: er ist ein
-    manueller Operator-Workflow, kein Cron-Job, und gehoert aufs
+    MV-Refresh). Der Restore-Test und reine Konfigurationswarnungen bleiben
+    bewusst aussen vor: Sie sind keine Cron-Jobs und gehoeren aufs
     Compliance-Dashboard.
 
     Das ist die **Monitoring-Sicht**: sie liefert die Status unveraendert,
@@ -183,7 +183,6 @@ def cron_job_checks() -> list[ComplianceCheck]:
         (
             _backup_checks,
             _retention_checks,
-            _retention_config_checks,
             _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,

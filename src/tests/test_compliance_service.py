@@ -486,13 +486,15 @@ class TestRetentionConfigurationChecks:
 
         bypass.assert_called_once_with()
 
-    def test_cron_job_checks_include_the_warning(self, settings_obj):
+    def test_background_job_checks_exclude_configuration_warning(self, settings_obj):
         settings_obj.auditlog_retention_months = 0
         settings_obj.save(update_fields=["auditlog_retention_months"])
 
-        checks = compliance.cron_job_checks()
+        cron_keys = {check.key for check in compliance.cron_job_checks()}
+        operations_keys = {check.key for check in compliance.operations_job_checks()}
 
-        assert any(check.key == "auditlog_retention_unlimited" for check in checks)
+        assert "auditlog_retention_unlimited" not in cron_keys
+        assert "auditlog_retention_unlimited" not in operations_keys
 
 
 @pytest.mark.django_db
