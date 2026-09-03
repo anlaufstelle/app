@@ -3,6 +3,7 @@
 from datetime import date
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
@@ -48,7 +49,16 @@ class RetentionApproveView(LeadOrAdminRequiredMixin, View):
 
     def post(self, request, pk):
         proposal = get_scoped_object(RetentionProposal, request, pk=pk)
-        approve_proposal(proposal, request.user)
+        try:
+            approve_proposal(proposal, request.user)
+        except ValidationError as exc:
+            # Refs #2109: Aufbewahrungssperre oder zwischenzeitlich entschieden.
+            # Antwortmuster wie beim doppelten Hold in ``RetentionHoldView``
+            # unten: 409 mit kurzem Klartext. htmx swappt bei 4xx bewusst nicht
+            # (die veraltete Karte bleibt stehen), und der globale
+            # ``htmx:responseError``-Toast (``static/js/htmx-errors.js``) zeigt
+            # den Antworttext, solange er kurz und markup-frei ist.
+            return HttpResponse(exc.messages[0] if exc.messages else str(exc), status=409)
 
         annotate_urgency(proposal)
         proposal.active_hold = None
@@ -152,13 +162,30 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
             return HttpResponseBadRequest(_("Keine gültigen Vorschläge gefunden."))
 
         extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
-        count = type(self).action_fn(proposals, request.user, **extra_kwargs)
+        result = type(self).action_fn(proposals, request.user, **extra_kwargs)
+        # Refs #2109: ``bulk_approve_proposals`` liefert seit dem Hold-/Status-
+        # Re-Check ``(verarbeitet, uebersprungen)``; Defer und Reject koennen
+        # nicht scheitern und bleiben bei einer blanken Zahl.
+        count, skipped = result if isinstance(result, tuple) else (result, 0)
         message = ngettext(
             "%(count)d Löschvorschlag aktualisiert.",
             "%(count)d Löschvorschläge aktualisiert.",
             count,
         ) % {"count": count}
         messages.success(request, message)
+        if skipped:
+            # Eine eigene Warnzeile statt einer Sammelmeldung: die Erfolgszahl
+            # bleibt genau das, was sie vorher war, und die uebersprungenen
+            # gehen nicht in ihr unter.
+            messages.warning(
+                request,
+                ngettext(
+                    "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre oder Status).",
+                    "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre oder Status).",
+                    skipped,
+                )
+                % {"count": skipped},
+            )
 
         if request.headers.get("HX-Request"):
             response = redirect("core:retention_dashboard")

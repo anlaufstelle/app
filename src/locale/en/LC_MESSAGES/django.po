@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 21:06+0200\n"
+"POT-Creation-Date: 2026-09-03 15:18+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5247,6 +5247,29 @@ msgid "%(count)d Löschvorschlag aktualisiert."
 msgid_plural "%(count)d Löschvorschläge aktualisiert."
 msgstr[0] "%(count)d deletion proposal updated."
 msgstr[1] "%(count)d deletion proposals updated."
+
+#: src/core/views/retention.py:183
+#, python-format
+msgid "%(count)d Löschvorschlag übersprungen (Aufbewahrungssperre oder Status)."
+msgid_plural "%(count)d Löschvorschläge übersprungen (Aufbewahrungssperre oder Status)."
+msgstr[0] "%(count)d deletion proposal skipped (legal hold or status)."
+msgstr[1] "%(count)d deletion proposals skipped (legal hold or status)."
+
+#: src/core/retention/proposals.py:229
+msgid ""
+"Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — der "
+"Löschvorschlag kann nicht genehmigt werden, solange die Sperre gilt."
+msgstr ""
+"This event is under a legal hold — the deletion proposal cannot be approved "
+"while the hold is in force."
+
+#: src/core/retention/proposals.py:236
+msgid ""
+"Dieser Löschvorschlag wurde zwischenzeitlich bereits bearbeitet — bitte die "
+"Übersicht neu laden."
+msgstr ""
+"This deletion proposal has already been processed in the meantime — please "
+"reload the overview."
 
 #: src/core/views/statistics.py:662
 msgid "backend erforderlich"

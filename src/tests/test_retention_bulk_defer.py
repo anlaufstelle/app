@@ -37,8 +37,10 @@ def _make_proposal(facility, status=RetentionProposal.Status.PENDING, target_id=
 class TestBulkActions:
     def test_bulk_approve_processes_all(self, facility, lead_user):
         ps = [_make_proposal(facility) for _ in range(3)]
-        count = bulk_approve_proposals(ps, lead_user)
-        assert count == 3
+        # Refs #2109: liefert seit dem Hold-/Status-Re-Check ``(verarbeitet,
+        # uebersprungen)`` — ohne Sperre bleibt die zweite Zahl null.
+        count, skipped = bulk_approve_proposals(ps, lead_user)
+        assert (count, skipped) == (3, 0)
         for p in ps:
             p.refresh_from_db()
             assert p.status == RetentionProposal.Status.APPROVED

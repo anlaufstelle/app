@@ -8,6 +8,7 @@ fuer den ``--propose``-Lauf des ``enforce_retention``-Commands.
 
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
 from django.db.utils import IntegrityError
@@ -18,7 +19,7 @@ from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Event, LegalHold, RetentionProposal
-from core.retention.legal_holds import get_active_hold_target_ids
+from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
 
@@ -219,11 +220,89 @@ def create_proposal(facility, target_type, target_id, deletion_due_at, details, 
         return proposal, False
 
 
+#: Meldung, wenn ein Loeschvorschlag unter aktiver Aufbewahrungssperre
+#: genehmigt werden soll (Refs #2109). Bewusst kurz und markup-frei: der
+#: globale htmx-Fehler-Toast (``static/js/htmx-errors.js``) zeigt den
+#: Antworttext nur, wenn er hoechstens 200 Zeichen hat und kein ``<`` enthaelt.
+#: Wortlaut angelehnt an ``LEGAL_HOLD_BLOCKS_DELETE_MESSAGE`` am manuellen
+#: Loeschweg — dieselbe Regel, dieselbe Sprache.
+LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE = _(
+    "Für dieses Ereignis besteht eine Aufbewahrungssperre (Legal Hold) — "
+    "der Löschvorschlag kann nicht genehmigt werden, solange die Sperre gilt."
+)
+
+#: Meldung, wenn die Vorschlagszeile waehrend der Sperrwartezeit schon
+#: entschieden wurde (Muster ``reject_client_merge``).
+PROPOSAL_ALREADY_DECIDED_MESSAGE = _(
+    "Dieser Löschvorschlag wurde zwischenzeitlich bereits bearbeitet — bitte die Übersicht neu laden."
+)
+
+#: Die noch offenen, nicht entschiedenen Stati. Deckungsgleich mit
+#: ``_BulkActionMixin.allowed_statuses`` in ``core/views/retention.py``: die
+#: Oberflaeche laesst PENDING **und** DEFERRED genehmigen, der Re-Check darf
+#: das nicht verengen.
+_APPROVABLE_STATUSES = (
+    RetentionProposal.Status.PENDING,
+    RetentionProposal.Status.DEFERRED,
+)
+
+
+def _assert_target_has_no_active_hold(proposal):
+    """Ein Vorschlag unter aktivem Hold ist nicht genehmigungsfaehig (Refs #2109).
+
+    Geloescht wurde dadurch nie etwas — das Enforcement schliesst gehaltene
+    Ziele aus. Die Oberflaeche erzeugte aber APPROVED-Zeilen unter laufender
+    Sperre, und der Audit-Trail behauptete damit eine Genehmigung, die so nicht
+    haette ergehen duerfen. Bei einer behoerdlichen Pruefung („genehmigt unter
+    laufendem Hold?") ist das die falsche Aussage.
+
+    ``RetentionProposal.TargetType`` kennt nur ``EVENT``; geprueft wird deshalb
+    der Ereignis-Hold und — Refs #1376 (I10), wie ueberall sonst — der Hold auf
+    die zugehoerige Person. Ist die Ereigniszeile hart entfernt, bleibt es beim
+    Ereignis-Hold; ein Personenbezug ist dann nicht mehr feststellbar.
+    """
+    if has_active_hold(proposal.facility, "Event", proposal.target_id):
+        raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
+    client_id = Event.objects.filter(pk=proposal.target_id).values_list("client_id", flat=True).first()
+    if client_id and has_active_hold(proposal.facility, "Client", client_id):
+        raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
+
+
 @transaction.atomic
 def approve_proposal(proposal, user):
-    """Approve a retention proposal for deletion on next enforce_retention run."""
-    proposal.status = RetentionProposal.Status.APPROVED
-    proposal.save(update_fields=["status"])
+    """Approve a retention proposal for deletion on next enforce_retention run.
+
+    Refs #2109 (Red-Team B-4): Bis hierher setzte die Funktion den Status und
+    schrieb die Audit-Zeile — ohne Sperre, ohne Status-Re-Check, ohne
+    Hold-Pruefung. Der Aufrufer haelt die Zeile womoeglich seit Minuten im
+    Speicher (die Karte im Loeschfristen-Dashboard aktualisiert sich nicht von
+    selbst), und zwei gleichzeitige Genehmigungen schrieben zwei Audit-Zeilen
+    fuer einen Vorgang.
+
+    Muster ``approve_client_merge``/``reject_client_merge``
+    (``services/client/merge.py``): Zeile per ``select_for_update`` NEU laden,
+    Status unter der Sperre erneut lesen, dann erst entscheiden. Der Hold wird
+    ebenfalls erst unter der Sperre gelesen — davor waere er nur eine
+    Momentaufnahme (dieselbe Wurzel wie Refs #2107/#2108).
+
+    Wirft ``ValidationError``, wenn der Vorschlag nicht (mehr) offen ist oder
+    das Ziel unter einem aktiven Hold steht. Der Status bleibt in beiden Faellen
+    unveraendert — insbesondere kippt er nicht nach ``APPROVED``, was wegen
+    ``unique_active_retention_proposal`` (``APPROVED`` ist NICHT in der aktiven
+    Menge) einen spaeteren, legitimen Vorschlag fuer dasselbe Ziel blockieren
+    wuerde.
+    """
+    locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
+    if locked is None or locked.status not in _APPROVABLE_STATUSES:
+        raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+    _assert_target_has_no_active_hold(locked)
+
+    locked.status = RetentionProposal.Status.APPROVED
+    locked.save(update_fields=["status"])
+    # Die Instanz des Aufrufers mitziehen: die View rendert sie unmittelbar
+    # danach als Karte, und ein Refetch waere eine zweite Abfrage fuer eine
+    # Aussage, die hier schon feststeht.
+    proposal.status = locked.status
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,
@@ -285,15 +364,30 @@ def reject_proposal(proposal, user):
 
 @transaction.atomic
 def bulk_approve_proposals(proposals, user):
-    """Approve multiple proposals in a single transaction.
+    """Approve multiple proposals — je Zeile ein Savepoint.
 
-    Returns count of processed proposals.
+    Returns ``(count, skipped)``: genehmigte und uebersprungene Vorschlaege.
+
+    Refs #2109: Seit ``approve_proposal`` eine ``ValidationError`` werfen kann,
+    haette EIN gehaltener Vorschlag in einer Sammel-Auswahl die ganze
+    Genehmigung zurueckgerollt — auch die bereits verarbeiteten. Deshalb
+    umschliesst jede Zeile ein eigener Savepoint: der Treffer rollt nur sich
+    selbst zurueck, der Rest committet, und der Aufrufer meldet die
+    uebersprungenen als eigene Zahl. Die Schwestern ``bulk_defer_proposals``/
+    ``bulk_reject_proposals`` bleiben bei ``int`` — ihre Einzelaktionen koennen
+    nicht scheitern.
     """
     count = 0
+    skipped = 0
     for proposal in proposals:
-        approve_proposal(proposal, user)
+        try:
+            with transaction.atomic():
+                approve_proposal(proposal, user)
+        except ValidationError:
+            skipped += 1
+            continue
         count += 1
-    return count
+    return count, skipped
 
 
 @transaction.atomic
