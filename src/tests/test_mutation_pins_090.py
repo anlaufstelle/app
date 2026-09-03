@@ -758,13 +758,20 @@ class TestRetentionAnonymizationKeepsItsTrashGate:
         """Haelt die Zusicherung als Ganzes fest (Auswahl-Gate + Sperr-Gate).
 
         Der Mutant ``x_anonymize_eligible_soft_deleted_clients__mutmut_13``
-        (``is_deleted=True`` aus der AUSWAHL-Query gestrichen) ist nach dem
-        Hand-Nachweis ÄQUIVALENT: das zweite Gate auf der gesperrten Zeile
-        faengt die Zeile weiterhin ab, beobachtbar aendert sich nur der
-        Sperrumfang. Der Test bleibt trotzdem stehen — er ist die einzige
-        Zusicherung, dass eine Zeile mit ``is_deleted=False`` und
-        abgelaufenem ``deleted_at`` die irreversible Tilgung NICHT
-        ausloest, und er faellt, sobald jemand BEIDE Gates anfasst.
+        (``is_deleted=True`` aus der AUSWAHL-Query gestrichen) galt hier als
+        ÄQUIVALENT (Hand-Nachweis: das zweite Gate auf der gesperrten Zeile
+        faenge die Zeile weiterhin ab). Das ist WIDERLEGT: der ``dry_run``-Zweig
+        gibt ``qs.count()`` zurueck, BEVOR die Schleife und damit das zweite
+        ``is_deleted``-Gate der gesperrten Zeile ueberhaupt erreicht wird — der
+        Mutant ist ueber ``dry_run=True`` killbar (Rueckgabewert ``1`` statt
+        ``0``). Siehe den Pin
+        ``test_mutation_pins_092_nachlauf.py::TestTrashSweepGatesAndDefers::
+        test_the_dry_run_preview_also_honours_the_trash_gate``.
+
+        Dieser Test bleibt trotzdem stehen — er ist (fuer den Echt-Lauf-Zweig)
+        die einzige Zusicherung, dass eine Zeile mit ``is_deleted=False`` und
+        abgelaufenem ``deleted_at`` die irreversible Tilgung NICHT ausloest,
+        und er faellt, sobald jemand BEIDE Gates anfasst.
         """
         client = Client.objects.create(
             facility=facility,
