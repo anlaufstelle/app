@@ -1417,9 +1417,34 @@ def anonymize_client_now(client, user):
         eigenen Kopie der Regel.
 
     Der Datensatz bleibt danach soft-geloescht — anonymisiert, nicht auferstanden.
+
+    Refs #2108 (Red-Team B-9): Die Hold-Pruefung (b) lag frueher VOR jeder
+    Sperre, und die anschliessende Redaktion nahm gar keine. Bei einer Person
+    mit vielen Ereignissen dauert sie Sekunden (``_redact_live_events`` speichert
+    jedes Ereignis einzeln) — ein in dieser Zeit angeordneter Hold kam zu spaet,
+    die Person war schon irreversibel redigiert. Spoliation trotz aktivem Hold.
+    Der Anker dagegen existierte bereits einseitig:
+    :func:`core.retention.legal_holds.create_hold_for_target` sperrt fuer
+    Personen-Holds die Personenzeile, BEVOR die ``LegalHold``-Zeile committet
+    (``_lock_client_and_check_history``, ADR-050 D2). Dieser Weg nimmt jetzt
+    denselben Anker: erst sperren, dann den Hold lesen, dann redigieren — alles
+    in der schon vorhandenen Gesamttransaktion. Ein Hold, der waehrend der
+    Sperrwartezeit committet, wird damit gesehen; ein Hold, der danach kommt,
+    wartet auf die Zeile und entsteht dokumentiert verspaetet
+    (``history_already_redacted``). Eine Pro-Ereignis-Sperre ist hier nicht
+    noetig — anders als im Batch (Refs #2107) liegt die ganze Kaskade in EINER
+    Transaktion und rollt bei der ``ValidationError`` vollstaendig zurueck.
     """
     if not client.is_deleted:
         raise ValidationError(_("Nur Personen im Papierkorb können anonymisiert werden."))
+
+    # Refs #2108: Der gemeinsame Koordinationspunkt mit ``create_hold_for_target``.
+    # ``core_client`` ist zugleich die erste Stufe der kanonischen Ordnung
+    # ``Client -> Event -> EventHistory -> AuditLog``, die auch der manuelle
+    # Ereignis-Loeschweg nimmt — die Sperre haelt bis zum Commit dieser
+    # Transaktion. Die Hold-Lesung liegt bewusst DANACH: erst dann ist
+    # „kein Hold" eine stabile Aussage und nicht der Stand von vorhin.
+    Client.objects.filter(pk=client.pk).select_for_update().only("pk").first()
 
     if client_has_active_hold(client):
         raise ValidationError(
@@ -1501,6 +1526,16 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
             if client is None:
                 # Ein paralleler Lauf war schneller (oder die Person wurde
                 # zwischenzeitlich wiederhergestellt) — nichts zu tun.
+                continue
+            # Refs #2108 (Sweep-Fund, gleiche Wurzel wie der Sofortpfad): Der
+            # Hold-Ausschluss oben lief EINMAL beim Queryset-Bau, vor der
+            # pk-Materialisierung. Die Sperre war seit #2013 da, der
+            # Hold-Recheck unter ihr fehlte — ein waehrend des Laufs
+            # angeordneter Hold erreichte die bereits gesammelten Personen
+            # nicht mehr. Dieselbe Regel wie beim Sammeln, nur jetzt auf der
+            # gesperrten Zeile; die Anonymisierung wird bloss aufgeschoben,
+            # ein spaeterer Lauf holt sie nach.
+            if client_has_active_hold(client):
                 continue
             anonymize_client(client, user=None)
             audit_client_event(
