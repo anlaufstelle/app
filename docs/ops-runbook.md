@@ -1133,7 +1133,7 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 ### 6.6 Backup-Restore-Drill (Refs #720, #739)
 
-Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
+Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. Die konkrete quartalsweise Host-Cron-Empfehlung steht unten.
 
 Das Skript deckt seit OPS-05 (Refs #1336) **beide** ausgelieferten Backup-Formate ab. Die Wahl erfolgt per Flag `--dev`/`--prod` oder `$DRILL_FORMAT`; ohne Angabe wird das Format anhand der vorhandenen Backup-Dateien auto-erkannt (Default `dev`, rueckwaerts-kompatibel — der bestehende dev-Timer laeuft unveraendert). Liegen **beide** Formate gleichzeitig vor, bricht der Drill ab und verlangt eine explizite Wahl:
 
@@ -1189,15 +1189,15 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
     python manage.py mark_restore_verified --note "Out-of-Band-Restore $(date +%Y-%m-%d)"
 ```
 
-**Cron-Vorschlag:**
+**Host-Cron-Vorschlag (keine automatische Installation):** Die Backup-Dateien
+sind `0600` und gehoeren root; den Einzeiler deshalb in der **Root-Crontab des
+Hosts** eintragen, nicht im `cron`-Sidecar und nicht in einer unprivilegierten
+Benutzer-Crontab. Er laeuft am ersten Tag jedes Quartals um 03:30 Uhr nach dem
+02:00-Uhr-Backup. `ops@example.com` ersetzen und vorab sicherstellen, dass der
+Host-Befehl `mail` an das Betriebs-Postfach zustellen kann.
 
 ```cron
-# Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00). Ohne Flag
-# wird das Format auto-erkannt; auf einem Self-Hoster mit Prod-Backups explizit
-# --prod setzen, damit ein fehlendes Backup nicht still auf --dev zurueckfaellt:
-30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod \
-    >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
-    || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod >> /var/log/anlaufstelle-restore-drill.log 2>&1 || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```
 
 #### Manueller Sentinel-Drill fuer Medien-Volume-Persistenz

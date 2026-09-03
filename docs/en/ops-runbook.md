@@ -1134,7 +1134,7 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 ### 6.6 Backup Restore Drill (Refs #720, #739)
 
-Verifies that the latest backup is fully restorable and that the lines of defense (RLS, AuditLog immutability trigger) are preserved. **Recommendation: quarterly via cron + alert email on failure.**
+Verifies that the latest backup is fully restorable and that the lines of defense (RLS, AuditLog immutability trigger) are preserved. The concrete quarterly host-cron recommendation is below.
 
 Since OPS-05 (Refs #1336), the script covers **both** shipped backup formats. The choice is made via the `--dev`/`--prod` flag or `$DRILL_FORMAT`; without one, the format is auto-detected from the existing backup files (default `dev`, backward-compatible — the existing dev timer runs unchanged). If **both** formats are present at the same time, the drill aborts and requires an explicit choice:
 
@@ -1190,15 +1190,15 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
     python manage.py mark_restore_verified --note "Out-of-band restore $(date +%Y-%m-%d)"
 ```
 
-**Cron suggestion:**
+**Host cron suggestion (not installed automatically):** The backup files are
+mode `0600` and owned by root. Therefore, put this one-liner in the **host's
+root crontab**, not in the `cron` sidecar or an unprivileged user's crontab. It
+runs at 03:30 on the first day of each quarter, after the 02:00 backup. Replace
+`ops@example.com` and first make sure that the host command `mail` can deliver
+to the operations mailbox.
 
 ```cron
-# Quarterly (1st month of the quarter, 03:30 after the 02:00 backup). Without a flag
-# the format is auto-detected; on a self-hoster with prod backups, set --prod
-# explicitly so a missing backup doesn't silently fall back to --dev:
-30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod \
-    >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
-    || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod >> /var/log/anlaufstelle-restore-drill.log 2>&1 || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```
 
 #### Manual Sentinel Drill for Media Volume Persistence
@@ -2729,4 +2729,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 51c0517a1f59f883aecfc2903e77fb7a1aa970b4 -->
+<!-- source-hash: 5aff2d348c7a7801841d11bd0ec78f475a5779d6 -->
