@@ -3,6 +3,16 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
+# Fuehrt das echte ``scripts/initial-setup.sh`` aus dem Repo-Tree aus — mutmut
+# kopiert ``scripts/`` NICHT nach ``mutants/`` (nur ``src/``), sonst schlaegt
+# der Baseline-Stats-Lauf mit "No such file or directory" (Exit 127) fehl. Wie
+# die ``test_architecture_guards_*``-Files daher als ``architecture`` markiert
+# und in Mutmut-Runs deselektiert (#930/#1388); in ``make ci``/CI laeuft der
+# Test regulaer (nur ``e2e`` wird dort ausgeschlossen).
+pytestmark = pytest.mark.architecture
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "initial-setup.sh"
 
