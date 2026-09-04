@@ -161,6 +161,15 @@ class TestStoreImportUpload:
                 target_type=ImportJob.TargetType.CLIENT,
             )
 
+    def test_rejects_cr_only_csv_as_header_validation_error(self, facility, admin_user, media_root):
+        with pytest.raises(ValidationError, match="Fehler in Zeile 1"):
+            import_engine.store_import_upload(
+                facility,
+                admin_user,
+                _upload(b"Pseudonym\rA\rB\r"),
+                target_type=ImportJob.TargetType.CLIENT,
+            )
+
     def test_event_job_without_document_type_is_rejected(self, facility, admin_user, media_root):
         with pytest.raises(ValidationError):
             import_engine.store_import_upload(
