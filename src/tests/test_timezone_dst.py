@@ -19,8 +19,9 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 import pytest
-from django.utils import timezone
+from django.utils import timezone, translation
 
+from core.forms.events import EventMetaForm
 from core.models import Event, TimeFilter
 from core.services.events import build_feed_items, get_time_range
 from core.services.events.tally import current_tally_context
@@ -478,3 +479,115 @@ class TestShiftWindowDstLiveSelection:
 
         just_after = current_tally_context(facility, now=dt.datetime(2026, 10, 25, 2, 46, tzinfo=BERLIN, fold=1))
         assert just_after.time_filter is None
+
+
+@pytest.mark.django_db
+class TestEventFormDstInput:
+    """Das Ereignis-Formular erklärt die beiden DST-Grenzfälle (Refs #2117).
+
+    Django lehnt mehrdeutige (Rückfalltag) und nicht existierende
+    (Vorstelltag) Wanduhrzeiten in ``forms.DateTimeField`` ab — mit **einer**
+    generischen Meldung für beide Fälle. Eine Fachkraft um 02:30 in der
+    Nachtschicht erfährt daraus weder, welcher der beiden Fälle vorliegt, noch
+    was sie stattdessen eintragen soll. Diese Tests pinnen zwei
+    unterscheidbare Texte mit Handlungsanweisung — und dass die regulären
+    Nachbarstunden beider Grenztage unverändert gültig bleiben.
+    """
+
+    @staticmethod
+    def _form(facility, staff_user, doc_type_contact, occurred_at):
+        return EventMetaForm(
+            data={
+                "document_type": str(doc_type_contact.pk),
+                "occurred_at": occurred_at,
+                "client": "",
+            },
+            facility=facility,
+            user=staff_user,
+        )
+
+    @staticmethod
+    def _occurred_at_errors(form):
+        assert not form.is_valid()
+        assert "occurred_at" in form.errors
+        codes = [error.code for error in form.errors.as_data()["occurred_at"]]
+        return codes, " ".join(form.errors["occurred_at"])
+
+    # ---------------------------------------------------------------
+    # Rückfalltag 2026-10-25 — 02:00–02:59 gibt es zweimal
+    # ---------------------------------------------------------------
+
+    def test_ambiguous_time_gets_own_message_with_instruction(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        codes, text = self._occurred_at_errors(form)
+        assert codes == ["dst_ambiguous"], f"Erwartet der eigene Code, bekommen: {codes}"
+        assert "zweimal" in text, text
+        assert "vor 02:00 oder ab 03:00" in text, text
+
+    def test_ambiguous_message_is_not_the_generic_django_text(self, facility, staff_user, doc_type_contact):
+        """Gegenprobe: der Django-Standardtext nennt die Zeitzone technisch."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        _codes, text = self._occurred_at_errors(form)
+        assert "Europe/Berlin" not in text, text
+        assert "Zeitzone" not in text, text
+
+    def test_hour_before_fall_back_stays_valid_in_summer_time(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T01:30")
+        assert form.is_valid(), form.errors
+        value = form.cleaned_data["occurred_at"]
+        assert timezone.is_aware(value)
+        assert value.utcoffset() == dt.timedelta(hours=2)
+
+    def test_hour_after_fall_back_stays_valid_in_winter_time(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T03:30")
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["occurred_at"].utcoffset() == dt.timedelta(hours=1)
+
+    # ---------------------------------------------------------------
+    # Vorstelltag 2026-03-29 — 02:00–02:59 gibt es nicht
+    # ---------------------------------------------------------------
+
+    def test_nonexistent_time_gets_own_message_with_instruction(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-03-29T02:30")
+        codes, text = self._occurred_at_errors(form)
+        assert codes == ["dst_nonexistent"], f"Erwartet der eigene Code, bekommen: {codes}"
+        assert "springt von 02:00 direkt auf 03:00" in text, text
+        assert "zweimal" not in text, text
+
+    def test_hour_after_spring_forward_stays_valid(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-03-29T03:00")
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["occurred_at"].utcoffset() == dt.timedelta(hours=2)
+
+    def test_hour_before_spring_forward_stays_valid(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-03-29T01:30")
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["occurred_at"].utcoffset() == dt.timedelta(hours=1)
+
+    # ---------------------------------------------------------------
+    # Normaltag + unveränderte Fehlerklassen
+    # ---------------------------------------------------------------
+
+    def test_ordinary_day_stays_valid(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-05-16T10:00")
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["occurred_at"].utcoffset() == dt.timedelta(hours=2)
+
+    def test_unparsable_input_keeps_the_invalid_code(self, facility, staff_user, doc_type_contact):
+        """Alle anderen Fehlercodes bleiben unverändert — kein Fang zu viel."""
+        form = self._form(facility, staff_user, doc_type_contact, "kein Datum")
+        codes, _text = self._occurred_at_errors(form)
+        assert codes == ["invalid"], codes
+
+    # ---------------------------------------------------------------
+    # Katalog: beide Texte sind übersetzt
+    # ---------------------------------------------------------------
+
+    def test_messages_are_translated_to_english(self, facility, staff_user, doc_type_contact):
+        with translation.override("en"):
+            ambiguous = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+            _codes, ambiguous_text = self._occurred_at_errors(ambiguous)
+            nonexistent = self._form(facility, staff_user, doc_type_contact, "2026-03-29T02:30")
+            _codes, nonexistent_text = self._occurred_at_errors(nonexistent)
+        assert "twice" in ambiguous_text, ambiguous_text
+        assert "does not exist" in nonexistent_text, nonexistent_text

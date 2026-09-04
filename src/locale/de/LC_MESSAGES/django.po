@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 17:49+0200\n"
+"POT-Creation-Date: 2026-09-04 19:23+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12514,3 +12514,9 @@ msgstr "„%(pseudonym)s“ jetzt endgültig anonymisieren? Pseudonym, Notizen, 
 
 msgid "Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."
 msgstr "Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."
+
+msgid "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal (Sommer- und Winterzeit) und kann nicht eindeutig gespeichert werden. Bitte eine Uhrzeit vor 02:00 oder ab 03:00 Uhr eintragen und die genaue Zeit bei Bedarf im Text vermerken."
+msgstr "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal (Sommer- und Winterzeit) und kann nicht eindeutig gespeichert werden. Bitte eine Uhrzeit vor 02:00 oder ab 03:00 Uhr eintragen und die genaue Zeit bei Bedarf im Text vermerken."
+
+msgid "Diese Uhrzeit gibt es am Tag der Zeitumstellung nicht — die Uhr springt von 02:00 direkt auf 03:00 Uhr. Bitte eine Uhrzeit ab 03:00 Uhr eintragen."
+msgstr "Diese Uhrzeit gibt es am Tag der Zeitumstellung nicht — die Uhr springt von 02:00 direkt auf 03:00 Uhr. Bitte eine Uhrzeit ab 03:00 Uhr eintragen."

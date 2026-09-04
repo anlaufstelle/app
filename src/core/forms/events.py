@@ -32,6 +32,7 @@ from core.forms.dynamic import (  # noqa: F401 — Re-Export, Importpfad-Stabili
     _resolve_upload_constraints,
     _select_choices,
 )
+from core.forms.fields import DstAwareDateTimeField
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType
 
@@ -61,7 +62,7 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
         label=_("Person"),  # pragma: no mutate
         widget=forms.HiddenInput(),
     )
-    occurred_at = forms.DateTimeField(
+    occurred_at = DstAwareDateTimeField(
         label=_("Zeitpunkt"),  # pragma: no mutate
         widget=forms.DateTimeInput(
             attrs={
