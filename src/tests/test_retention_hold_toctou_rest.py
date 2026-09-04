@@ -378,10 +378,12 @@ class TestCaseHoldLockOrder:
         assert sequence.index("core_client") < sequence.index("core_case"), (
             f"kanonische Ordnung verdreht (core_client vor core_case): {sequence}"
         )
-        if "core_event" in sequence:
-            assert sequence.index("core_case") < sequence.index("core_event"), (
-                f"kanonische Ordnung verdreht (core_case vor core_event): {sequence}"
-            )
+        # Die Ereignissperre wird auch ohne Ereignisse abgesetzt (SELECT ... FOR UPDATE
+        # auf core_event) — sie muss also immer in der Sequenz stehen (kimi-k3 B-6).
+        assert "core_event" in sequence, f"Fall-Hold sperrte die Ereigniszeilen nicht: {sequence}"
+        assert sequence.index("core_case") < sequence.index("core_event"), (
+            f"kanonische Ordnung verdreht (core_case vor core_event): {sequence}"
+        )
 
     def test_hold_auf_fall_fremder_einrichtung_bleibt_zulaessig(self, facility, other_facility, lead_user, staff_user):
         """``target_id`` ist ein freies Feld — ein unbekannter Fall darf nicht knallen."""
