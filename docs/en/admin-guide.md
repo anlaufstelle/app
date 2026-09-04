@@ -230,8 +230,8 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Storage location for encrypted file attachments (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
 | `FILE_UPLOAD_TEMP_DIR` | Django default (`tempfile.gettempdir()`) | Directory for the plaintext staging buffer of uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, before they are encrypted into the file vault (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). Pinned to `/tmp` (tmpfs/RAM) in the shipped Compose files -- [ops runbook § 5.7a](../ops-runbook.md). |
-| `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Storage directory for the encrypted DB backups (`.sql.gz.enc`) **as seen from inside the container**; the health endpoint and the backup row in the system area read the backup age from it. |
-| `BACKUP_HOST_DIR` | `./backups` | Host directory that `docker-compose.prod.yml` mounts read-only onto `BACKUP_DIR`. It must point to the same host directory to which `scripts/ops/backup.sh` writes via its `BACKUP_DIR` variable. Otherwise, the system area permanently reports "no backup found" even though the backup cron is running. |
+| `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Read-only mount target inside the container; the health endpoint and the backup row in the system area read the backup age from it. The host scripts ignore this variable. |
+| `BACKUP_HOST_DIR` | `./backups` | Base directory on the host; relative values are resolved against the repository root. `backup.sh` writes to `daily/`, `weekly/`, and `monthly/` below it; `restore-drill.sh` reads from `daily/`. Compose mounts this directory read-only onto `BACKUP_DIR`, so the container sees the same files. |
 | `APP_VERSION` | `dev` | Version string that `/health/` exposes in the `version` detail field (token/authenticated callers only). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, GDPR export). |
 
@@ -1065,14 +1065,14 @@ cd /opt/anlaufstelle
 ./scripts/ops/backup.sh
 ```
 
-The script loads `.env`, backs up PostgreSQL **and** the encrypted file vault (`MEDIA_ROOT`), compresses both archives, encrypts them with AES-256-CBC, and writes an HMAC-SHA256 sidecar for each archive. Files are stored below `BACKUP_DIR` in `daily/`, `weekly/`, and `monthly/`; built-in rotation retains them for 7, 28, and 90 days respectively.
+The script loads `.env`, backs up PostgreSQL **and** the encrypted file vault (`MEDIA_ROOT`), compresses both archives, encrypts them with AES-256-CBC, and writes an HMAC-SHA256 sidecar for each archive. Files are stored below `BACKUP_HOST_DIR` in `daily/`, `weekly/`, and `monthly/`; built-in rotation retains them for 7, 28, and 90 days respectively.
 
 Prerequisites in `.env`:
 
 - `POSTGRES_DB` and `POSTGRES_USER` for the database connection,
 - `POSTGRES_ADMIN_USER` and `POSTGRES_ADMIN_PASSWORD` for the complete dump,
 - a random, separately escrowed `BACKUP_ENCRYPTION_KEY`,
-- a host destination where `BACKUP_HOST_DIR` points to the same directory to which the script writes via `BACKUP_DIR` (see the [environment table](#complete-environment-variable-reference)).
+- `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#complete-environment-variable-reference)).
 
 > **RLS is security-critical here:** `pg_dump` must run as `POSTGRES_ADMIN_USER`. The `POSTGRES_USER` application role is `NOBYPASSRLS`; a raw dump under that role fails at `FORCE ROW LEVEL SECURITY` or would not be a complete backup of facility-scoped data. Do not replace `backup.sh` with a custom `pg_dump -U anlaufstelle` command or the application role.
 
@@ -1953,5 +1953,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.91.0 -->
-<!-- translation-date: 2026-09-03 -->
-<!-- source-hash: 99b47f9f2394a6c52ed377784af2084b276dd25b -->
+<!-- translation-date: 2026-09-04 -->
+<!-- source-hash: 52c969a606fff9e7cf291aa13d996b5c6be07ae3 -->

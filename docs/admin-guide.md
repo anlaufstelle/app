@@ -226,8 +226,8 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Ablage verschlüsselter Dateianhänge (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
 | `FILE_UPLOAD_TEMP_DIR` | Django-Default (`tempfile.gettempdir()`) | Verzeichnis für den Klartext-Zwischenpuffer von Uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, bevor sie in den File-Vault verschlüsselt werden (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In den mitgelieferten Compose-Dateien fest auf `/tmp` (tmpfs/RAM) gesetzt — [Ops-Runbook § 5.7a](ops-runbook.md). |
-| `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`) **aus Sicht des Containers**; Health-Endpoint und die Backup-Zeile im Systembereich lesen daraus das Backup-Alter. |
-| `BACKUP_HOST_DIR` | `./backups` | Host-Verzeichnis, das `docker-compose.prod.yml` read-only nach `BACKUP_DIR` mountet. Es muss auf dasselbe Host-Verzeichnis zeigen, in das `scripts/ops/backup.sh` über seine Variable `BACKUP_DIR` schreibt. Andernfalls meldet der Systembereich dauerhaft „Kein Backup gefunden“, obwohl der Backup-Cron läuft. |
+| `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Read-only Mount-Ziel im Container; Health-Endpoint und Backup-Zeile im Systembereich lesen daraus das Backup-Alter. Die Host-Skripte ignorieren diese Variable. |
+| `BACKUP_HOST_DIR` | `./backups` | Basisverzeichnis auf dem Host; relative Werte werden gegen den Repository-Root aufgelöst. `backup.sh` schreibt darunter nach `daily/`, `weekly/` und `monthly/`; `restore-drill.sh` liest aus `daily/`. Compose mountet dieses Verzeichnis read-only nach `BACKUP_DIR`, damit der Container dieselben Dateien sieht. |
 | `APP_VERSION` | `dev` | Versions-String, den `/health/` im `version`-Detailfeld ausweist (nur für Token-/authentifizierte Caller). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
 
@@ -1060,14 +1060,14 @@ cd /opt/anlaufstelle
 ./scripts/ops/backup.sh
 ```
 
-Das Skript lädt die `.env`, sichert PostgreSQL **und** den verschlüsselten File-Vault (`MEDIA_ROOT`), komprimiert beide Archive, verschlüsselt sie mit AES-256-CBC und schreibt zu jedem Archiv einen HMAC-SHA256-Sidecar. Die Dateien landen unter `BACKUP_DIR` in `daily/`, `weekly/` und `monthly/`; die eingebaute Rotation bewahrt sie 7, 28 beziehungsweise 90 Tage auf.
+Das Skript lädt die `.env`, sichert PostgreSQL **und** den verschlüsselten File-Vault (`MEDIA_ROOT`), komprimiert beide Archive, verschlüsselt sie mit AES-256-CBC und schreibt zu jedem Archiv einen HMAC-SHA256-Sidecar. Die Dateien landen unter `BACKUP_HOST_DIR` in `daily/`, `weekly/` und `monthly/`; die eingebaute Rotation bewahrt sie 7, 28 beziehungsweise 90 Tage auf.
 
 Voraussetzungen in `.env`:
 
 - `POSTGRES_DB` und `POSTGRES_USER` für die Datenbankverbindung,
 - `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` für den vollständigen Dump,
 - ein zufälliger, separat verwahrter `BACKUP_ENCRYPTION_KEY`,
-- ein Host-Ziel, bei dem `BACKUP_HOST_DIR` auf dasselbe Verzeichnis zeigt, in das das Skript über `BACKUP_DIR` schreibt (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)).
+- `BACKUP_HOST_DIR` als Basisverzeichnis auf dem Host; das Skript schreibt ausschließlich dorthin und ignoriert das nur als Container-Mount-Ziel verwendete `BACKUP_DIR` (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)).
 
 > **RLS ist hier sicherheitskritisch:** `pg_dump` muss als `POSTGRES_ADMIN_USER` laufen. Die App-Rolle `POSTGRES_USER` ist `NOBYPASSRLS`; ein roher Dump mit dieser Rolle scheitert an `FORCE ROW LEVEL SECURITY` beziehungsweise wäre als Sicherung der einrichtungsbezogenen Daten nicht vollständig. Verwenden Sie deshalb weder einen eigenen `pg_dump -U anlaufstelle`-Befehl noch die App-Rolle als Ersatz für `backup.sh`.
 
