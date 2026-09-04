@@ -883,3 +883,24 @@ class TestProdHealthBackupRequired:
 
     def test_env_can_disable_requirement(self):
         assert self._resolved("false") == "False"
+
+
+class TestProdHealthDiskRequired:
+    """Refs #2119: Produktion verlangt standardmaessig einen messbaren Speicherplatz."""
+
+    _VALID_ENV = TestProdHealthBackupRequired._VALID_ENV
+    _READBACK = "import anlaufstelle.settings.prod as p; print(p.HEALTH_DISK_REQUIRED)"
+
+    def _resolved(self, value: str | None = None) -> str:
+        env = dict(self._VALID_ENV)
+        if value is not None:
+            env["DJANGO_HEALTH_DISK_REQUIRED"] = value
+        result = _run_prod_import(env, code=self._READBACK)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        return result.stdout.strip().splitlines()[-1]
+
+    def test_defaults_to_required(self):
+        assert self._resolved() == "True"
+
+    def test_env_can_disable_requirement(self):
+        assert self._resolved("false") == "False"

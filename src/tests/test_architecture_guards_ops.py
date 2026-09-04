@@ -2903,6 +2903,19 @@ class TestHealthBackupRequiredWiring:
 
 
 @pytest.mark.architecture
+class TestHealthDiskRequiredWiring:
+    """Refs #2119: der Prod-Stack reicht den Disk-Schalter explizit an web durch."""
+
+    def test_prod_compose_and_env_example_document_the_switch(self) -> None:
+        services = yaml.safe_load(Path("docker-compose.prod.yml").read_text(encoding="utf-8"))["services"]
+        assert services["web"]["environment"].get("DJANGO_HEALTH_DISK_REQUIRED") == (
+            "${DJANGO_HEALTH_DISK_REQUIRED:-true}"
+        )
+        env_example = Path(".env.example").read_text(encoding="utf-8")
+        assert "# DJANGO_HEALTH_DISK_REQUIRED=true" in env_example
+
+
+@pytest.mark.architecture
 class TestAuditHwmBackupAndDrillWiring:
     """Refs #2022: HWM folgt dem Offsite-Pfad und wird im Drill signaturgeprueft."""
 
