@@ -647,3 +647,212 @@ class TestSachberichtPdfIsoliert:
         assert response.status_code == 200
         assert "Content-Disposition" in response
         assert response.content.startswith(b"%PDF")
+
+
+# ===================================================================
+# Refs #2118 — dieselbe Isolation ausserhalb der Statistik-Views.
+#
+# ``is_available`` laeuft nicht nur auf dem Dashboard: die Registry ruft es in
+# ``get_available_backends``/``get_backend_or_404`` und damit mittelbar in
+# ``describe_type_bindings``/``describe_field_bindings`` — also auf zwei
+# Konfigurationsseiten und in einem Wartungskommando. Dort war es bis #2118
+# ungeschuetzt. Die Isolation sitzt seitdem in der Registry, nicht in den vier
+# Aufrufern.
+# ===================================================================
+
+
+class TestRegistryVerfuegbarkeitIsoliert:
+    """Die Registry selbst behandelt ein werfendes Backend als „nicht verfuegbar"."""
+
+    def test_get_available_backends_laesst_das_defekte_backend_weg(self, facility, kaputte_verfuegbarkeit_backend):
+        from core.reporting.registry import get_available_backends, get_backends
+
+        slugs = {backend.slug for backend in get_available_backends(facility)}
+
+        assert "kaputt_verfuegbar" not in slugs
+        assert "kaputt_verfuegbar" in {backend.slug for backend in get_backends()}, (
+            "Das Testdouble muss registriert sein, sonst ist der Test tautologisch"
+        )
+
+    def test_get_available_backends_meldet_den_fehler_an_den_aufrufer(self, facility, kaputte_verfuegbarkeit_backend):
+        """``on_error`` ist der Weg, auf dem ein Kommando den Ausfall sichtbar macht."""
+        from core.reporting.registry import get_available_backends
+
+        gemeldet = []
+        get_available_backends(facility, on_error=lambda backend: gemeldet.append(backend.slug))
+
+        assert gemeldet == ["kaputt_verfuegbar"]
+
+    def test_get_backend_or_404_antwortet_404_statt_500(self, facility, kaputte_verfuegbarkeit_backend):
+        from django.http import Http404
+
+        from core.reporting.registry import get_backend_or_404
+
+        with pytest.raises(Http404):
+            get_backend_or_404(facility, "kaputt_verfuegbar")
+
+    def test_intaktes_backend_bleibt_erreichbar(self, facility, kaputte_verfuegbarkeit_backend):
+        """Gegenprobe: der Fang nimmt nicht die uebrigen Backends mit."""
+        from core.reporting.registry import get_backend_or_404
+
+        assert get_backend_or_404(facility, "sample-report-1").slug == "sample-report-1"
+
+
+class TestKonfigSeitenIsoliert:
+    """``describe_*_bindings`` steht auf zwei Konfigurationsseiten (Refs #2118)."""
+
+    def test_dokumenttyp_detail_laedt_trotz_kaputter_verfuegbarkeit(
+        self, client, admin_user, facility, kaputte_verfuegbarkeit_backend
+    ):
+        doc_type = DocumentType.objects.create(
+            facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange"
+        )
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type.pk}))
+
+        assert response.status_code == 200
+        assert "Kaputte Verfuegbarkeit" not in response.content.decode()
+
+    def test_dokumenttyp_formular_laedt_und_zeigt_die_intakten_bindungen(
+        self, client, admin_user, facility, kaputte_verfuegbarkeit_backend
+    ):
+        doc_type = DocumentType.objects.create(
+            facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange"
+        )
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:config_doctype_update", kwargs={"pk": doc_type.pk}))
+
+        assert response.status_code == 200
+        # Der intakte Bestandsbericht bleibt in der Auskunft — nur das defekte
+        # Backend faellt heraus (kein Totalausfall der Bindungsliste).
+        assert "Beispiel-Sachbericht (Spritzentausch)" in response.content.decode()
+
+    def test_feldvorlagen_formular_laedt_trotz_kaputter_verfuegbarkeit(
+        self, client, admin_user, facility, kaputte_verfuegbarkeit_backend
+    ):
+        from core.models import FieldTemplate
+
+        field_template = FieldTemplate.objects.create(facility=facility, name="Sonstiges Feld", field_type="text")
+        client.force_login(admin_user)
+
+        response = client.get(reverse("core:config_fieldtemplate_update", kwargs={"pk": field_template.pk}))
+
+        assert response.status_code == 200
+
+    def test_feldvorlagen_post_fehlerpfad_laedt_trotz_kaputter_verfuegbarkeit(
+        self, client, admin_user, facility, kaputte_verfuegbarkeit_backend
+    ):
+        """Der zweite ``describe_field_bindings``-Aufruf sitzt im POST-Fehlerpfad."""
+        from core.models import FieldTemplate
+
+        field_template = FieldTemplate.objects.create(facility=facility, name="Sonstiges Feld", field_type="text")
+        client.force_login(admin_user)
+
+        response = client.post(
+            reverse("core:config_fieldtemplate_update", kwargs={"pk": field_template.pk}),
+            {"name": "", "field_type": "text", "options_json": "[]", "is_active": "on"},
+        )
+
+        assert response.status_code == 200
+        assert response.context["form"].errors
+
+
+class TestInventarKommandoIsoliert:
+    """``inventory_report_bindings`` laeuft durch und benennt den Ausfall (Refs #2118)."""
+
+    def test_lauf_geht_durch_und_warnt_auf_stderr(self, facility, kaputte_verfuegbarkeit_backend):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out, err = StringIO(), StringIO()
+        call_command("inventory_report_bindings", "--facility", str(facility.pk), stdout=out, stderr=err)
+
+        assert facility.name in out.getvalue()
+        warnung = err.getvalue()
+        assert "kaputt_verfuegbar" in warnung, warnung
+        assert facility.name in warnung, warnung
+
+
+class TestSnapshotKommandoIsoliertJeEinrichtung:
+    """Ein Fehler in EINER Einrichtung darf die folgenden nicht mitreissen (Refs #2118)."""
+
+    @pytest.fixture
+    def zwei_einrichtungen_mit_settings(self, facility, second_facility):
+        from core.models import Settings
+
+        for einrichtung in (facility, second_facility):
+            Settings.objects.get_or_create(
+                facility=einrichtung,
+                defaults={
+                    "retention_anonymous_days": 90,
+                    "retention_identified_days": 365,
+                    "retention_qualified_days": 3650,
+                },
+            )
+        return facility, second_facility
+
+    @staticmethod
+    def _nur_diese_einrichtung_wirft(monkeypatch, kaputte_facility):
+        from core.management.commands import create_statistics_snapshots as cmd
+
+        echt = cmd.create_or_update_snapshot
+
+        def _fake(einrichtung, year, month):
+            if einrichtung.pk == kaputte_facility.pk:
+                raise RuntimeError("get_statistics kaputt")
+            return echt(einrichtung, year, month)
+
+        monkeypatch.setattr(cmd, "create_or_update_snapshot", _fake)
+
+    def test_folge_einrichtung_bekommt_ihren_snapshot(self, zwei_einrichtungen_mit_settings, monkeypatch):
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        kaputt, heil = zwei_einrichtungen_mit_settings
+        self._nur_diese_einrichtung_wirft(monkeypatch, kaputt)
+
+        err = StringIO()
+        with pytest.raises(CommandError) as fehler:
+            call_command(
+                "create_statistics_snapshots", year=2025, month=1, stdout=StringIO(), stderr=err, skip_checks=True
+            )
+
+        assert StatisticsSnapshot.objects.filter(facility=heil, year=2025, month=1).exists(), (
+            "Die zweite Einrichtung wurde vom Fehler der ersten mitgerissen (#2118)"
+        )
+        assert not StatisticsSnapshot.objects.filter(facility=kaputt).exists()
+        assert kaputt.name in str(fehler.value), str(fehler.value)
+        assert "1" in str(fehler.value)
+        assert kaputt.name in err.getvalue()
+
+    def test_lauf_ohne_fehler_bleibt_erfolgreich(self, zwei_einrichtungen_mit_settings):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        kaputt, heil = zwei_einrichtungen_mit_settings
+
+        call_command("create_statistics_snapshots", year=2025, month=1, stdout=StringIO(), stderr=StringIO())
+
+        assert StatisticsSnapshot.objects.filter(year=2025, month=1).count() == 2
+        assert AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).exists()
+
+    def test_dry_run_bleibt_unveraendert(self, zwei_einrichtungen_mit_settings, monkeypatch):
+        """``--dry-run`` ruft ``create_or_update_snapshot`` gar nicht auf."""
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        kaputt, _heil = zwei_einrichtungen_mit_settings
+        self._nur_diese_einrichtung_wirft(monkeypatch, kaputt)
+
+        call_command(
+            "create_statistics_snapshots", year=2025, month=1, dry_run=True, stdout=StringIO(), stderr=StringIO()
+        )
+
+        assert StatisticsSnapshot.objects.count() == 0

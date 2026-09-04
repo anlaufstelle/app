@@ -19,6 +19,7 @@ Modul-Flag ``_discovered`` idempotent) — nie zur Modul-Importzeit.
 """
 
 import importlib
+import logging
 import pkgutil
 import re
 from collections.abc import Callable
@@ -26,6 +27,8 @@ from collections.abc import Callable
 from django.core.exceptions import ImproperlyConfigured
 
 from core.reporting.base import EXCLUDED_KEY, DatasetBackend, feld_bindungen, typ_bindungen
+
+logger = logging.getLogger(__name__)
 
 # Kleinbuchstaben/Ziffern, getrennt durch einzelne ``-``/``_`` (Refs #1739:
 # ``sample-report-1`` braucht den Bindestrich). Trennzeichen am Rand oder
@@ -209,18 +212,60 @@ def get_backend(slug: str) -> DatasetBackend:
     return _REGISTRY[slug]
 
 
-def get_available_backends(facility: object) -> list[DatasetBackend]:
+def backend_is_available(backend: DatasetBackend, facility: object, *, on_error: Callable | None = None) -> bool:
+    """``backend.is_available(facility)`` mit Fehlerisolation (Refs #2070, #2118).
+
+    ``is_available`` ist kein reiner Praedikat-Getter: die Default-Ableitung aus
+    :attr:`DatasetBackend.verfuegbarkeit` setzt eine echte DB-Query ab
+    (``Anforderung.erfuellt``). Ein einziges werfendes Backend riss damit jeden
+    Aufrufer mit — bis #2070 die Statistik-Views, danach weiterhin die beiden
+    Konfigurationsseiten und das Bindungs-Inventar, die ueber
+    :func:`describe_type_bindings`/:func:`describe_field_bindings` hier
+    hereinkommen.
+
+    Ein Wurf bedeutet „nicht verfuegbar": dasselbe Ergebnis wie ein falsy
+    Rueckgabewert, damit Sichtbarkeit (Liste) und Erreichbarkeit (Panel/Export
+    → 404) nicht auseinanderlaufen. Fail-closed ist auch die sichere Richtung —
+    ein Bericht, dessen Verfuegbarkeitspruefung nicht laeuft, ist nicht
+    nachweislich freigegeben.
+
+    **Die Isolation sitzt bewusst hier und nicht in den Aufrufern** (Revision
+    der #2070-Begruendung): vier ungeschuetzte Aufrufer in drei Schichten
+    (Views, Management-Command) haetten sonst dieselbe ``try/except``-Klammer
+    viermal wiederholt, und der fuenfte neue Aufrufer haette sie wieder
+    vergessen. ``logging`` macht dieses Modul nicht webframework-abhaengig; die
+    ``django.http``-Importe in :func:`get_backend_or_404` bleiben lazy.
+
+    ``on_error`` ist der Weg fuer Aufrufer, die den Ausfall zusaetzlich
+    **sichtbar** machen muessen (Kommando-``stderr``), ohne die
+    Fail-closed-Semantik zu aendern.
+    """
+    try:
+        return bool(backend.is_available(facility))
+    except Exception:
+        logger.exception("reporting: is_available des Berichts-Backends %r ist gescheitert", backend.slug)
+        if on_error is not None:
+            on_error(backend)
+        return False
+
+
+def get_available_backends(facility: object, *, on_error: Callable | None = None) -> list[DatasetBackend]:
     """``get_backends()``, gefiltert auf ein **truthy** ``is_available(facility)``.
 
     Panel- und Export-View verwenden dasselbe Praedikat (``not
     backend.is_available(facility)`` → HTTP 404), damit Sichtbarkeit und
-    Erreichbarkeit nicht auseinanderlaufen.
+    Erreichbarkeit nicht auseinanderlaufen. Ein werfendes Backend gilt als
+    nicht verfuegbar (:func:`backend_is_available`, Refs #2118).
     """
-    return [backend for backend in get_backends() if backend.is_available(facility)]
+    return [backend for backend in get_backends() if backend_is_available(backend, facility, on_error=on_error)]
 
 
 def get_backend_or_404(facility: object, slug: str) -> DatasetBackend:
     """``slug`` → verfuegbares Backend dieser Facility, sonst ``Http404``.
+
+    Ein werfendes ``is_available`` wird wie „nicht verfuegbar" behandelt
+    (Refs #2118) — sonst antwortete derselbe Defekt in der Liste mit stillem
+    Verschwinden und hier mit einem 500er.
 
     Refs #1827: Panel- und Export-View loesten das Backend bislang mit
     identischem ``try/except KeyError`` + ``is_available``-Guard auf (siehe
@@ -236,7 +281,7 @@ def get_backend_or_404(facility: object, slug: str) -> DatasetBackend:
         backend = get_backend(slug)
     except KeyError:
         raise Http404(_("Unbekanntes Berichts-Backend.")) from None
-    if not backend.is_available(facility):
+    if not backend_is_available(backend, facility):
         raise Http404(_("Bericht für diese Einrichtung nicht verfügbar."))
     return backend
 

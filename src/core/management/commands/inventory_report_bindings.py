@@ -51,6 +51,7 @@ from core.reporting.registry import (
     describe_field_bindings,
     describe_type_bindings,
     feld_bindungen,
+    get_available_backends,
     get_backends,
     get_report_key_vocabulary,
     typ_bindungen,
@@ -242,6 +243,20 @@ class Command(BaseCommand):
                 "der Admin-Rolle aufrufen (docs/ops-runbook.md § 3.5 / § 9 DB-Rollenmodell)."
             )
         facility = self._resolve_facility(options["facility"])
+        # Refs #2118: seit die Registry ein werfendes ``is_available`` als
+        # „nicht verfuegbar" behandelt, faellt ein defektes Backend aus
+        # ``describe_*_bindings`` still heraus — im Inventar saehe das aus wie
+        # ein Backend, das diesen Typ schlicht nicht bindet. Genau hier waere
+        # das Falsch-Gruen, gegen das der RLS-Guard oben steht. Der Lauf laeuft
+        # deshalb durch (Exit-Code unveraendert), benennt den Ausfall aber auf
+        # stderr, damit er im Cron-Protokoll steht.
+        for slug in self._defekte_backends(facility):
+            self.stderr.write(
+                self.style.WARNING(
+                    f"Berichts-Backend '{slug}': Verfuegbarkeitspruefung fuer '{facility.name}' ist "
+                    "gescheitert — es fehlt in diesem Inventar. Details im Anwendungs-Log."
+                )
+            )
         data: dict[str, Any] = {
             "facility": {"id": str(facility.id), "name": facility.name},
             "backends": _backend_catalog(),
@@ -280,6 +295,19 @@ class Command(BaseCommand):
                         "Jeder Dokumentationstyp trägt eine Aussage — zugeordnet oder ausdrücklich ausgeschlossen."
                     )
                 )
+
+    @staticmethod
+    def _defekte_backends(facility: Facility) -> list[str]:
+        """Slugs der Backends, deren ``is_available`` fuer diese Einrichtung wirft.
+
+        Bewusst ein eigener, expliziter Durchlauf: ``describe_*_bindings``
+        liefert nur noch das Ergebnis, nicht den Grund. Die Zusatzkosten sind
+        ein Verfuegbarkeits-Check je Backend und Einrichtung — der Lauf macht
+        ohnehin einen pro Dokumentationstyp.
+        """
+        defekt: list[str] = []
+        get_available_backends(facility, on_error=lambda backend: defekt.append(backend.slug))
+        return defekt
 
     def _resolve_facility(self, raw: str) -> Facility:
         """Facility über UUID-Parse-Versuch, sonst Namens-Lookup (Muster ``export_facility``).
