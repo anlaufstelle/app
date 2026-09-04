@@ -29,18 +29,21 @@ Die Paritaet beider Helfer-Mengen ist ableitungsbasiert abgesichert
 nicht erneut unbemerkt fehlt.
 """
 
+import logging
+
 from django.db import transaction
 from django.db.models import Count, Q
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client, Settings
-from core.retention.legal_holds import exclude_clients_with_active_holds
+from core.retention.legal_holds import client_has_active_hold, exclude_clients_with_active_holds
 from core.services.audit import audit_retention_decision
 from core.services.client import (
     _delete_owned_attachments_for_client,
     _delete_recent_visits,
     _event_ids_for_client,
     _generalize_event_timestamps,
+    _lock_client_event_rows,
     _redact_activities,
     _redact_case_deletion_requests,
     _redact_case_goals,
@@ -56,6 +59,8 @@ from core.services.client import (
     _revoke_offline_bundles,
 )
 from core.services.compliance import is_k_anonymous, k_anonymize_client
+
+logger = logging.getLogger(__name__)
 
 
 def _k_anonymize_with_cascade(client, k):
@@ -166,7 +171,23 @@ def anonymize_clients(facility, dry_run):
     path (Security-Review N5). Mixed runs audit both categories separately
     (``client_k_anonymized`` / ``client_anonymized``).
 
-    Returns ``{"count": N}`` (total, both paths combined).
+    Refs #2122 (Red-Team-Sweep, gleiche Wurzel wie #2107/#2108): Der
+    Hold-Ausschluss oben lief EINMAL beim Queryset-Bau. Zwischen dieser Lesung
+    und dem Schreiben liegt bei einem Lauf ueber viele Personen ein Fenster von
+    Minuten — ein in dieser Zeit angeordneter Hold erreichte die bereits
+    eingesammelten Personen nicht mehr, sie wurden trotzdem irreversibel
+    redigiert (Spoliation). Deshalb je Person: eigene Transaktion, Zeilensperre
+    auf ``core_client``, Ereigniszeilen darunter (``_lock_client_event_rows`` —
+    ein Ereignis-Hold koordiniert ueber ``core_event``, nicht ueber
+    ``core_client``), und ALLE Vorbedingungen erneut auf der gesperrten Zeile.
+    Exakt die Sequenz des Nacht-Pendants
+    :func:`core.services.client.anonymize_eligible_soft_deleted_clients`.
+
+    Returns ``{"count": N, "skipped_holds": M}``: ``count`` zaehlt die
+    tatsaechlich anonymisierten Personen (im ``dry_run`` die Kandidaten),
+    ``skipped_holds`` die wegen eines waehrend des Laufs entstandenen Holds
+    zurueckgestellten. „Nicht geloescht" und „nicht angeschaut" muessen fuer
+    die Spoliationsfrage unterscheidbar bleiben (Muster ADR-050 D5.3).
     """
     candidates = (
         exclude_clients_with_active_holds(Client.objects.filter(facility=facility), facility)
@@ -178,49 +199,89 @@ def anonymize_clients(facility, dry_run):
         .filter(total_events__gt=0, active_events=0)
     )
 
-    count = candidates.count()
-    if count and not dry_run:
-        try:
-            settings_obj = facility.settings
-        except Settings.DoesNotExist:
-            settings_obj = None
-        use_k_anon = bool(settings_obj and settings_obj.retention_use_k_anonymization)
-        k = (settings_obj.k_anonymity_threshold if settings_obj else 5) or 5
+    if dry_run:
+        return {"count": candidates.count(), "skipped_holds": 0}
 
-        k_count = 0
-        hard_count = 0
-        for client in candidates.iterator():
+    # Die pk-Liste wird vorab materialisiert: der Lauf veraendert genau die
+    # Spalten, nach denen die Kandidatenbedingung filtert (Muster
+    # ``anonymize_eligible_soft_deleted_clients``).
+    candidate_pks = list(candidates.values_list("pk", flat=True))
+    if not candidate_pks:
+        return {"count": 0, "skipped_holds": 0}
+
+    try:
+        settings_obj = facility.settings
+    except Settings.DoesNotExist:
+        settings_obj = None
+    use_k_anon = bool(settings_obj and settings_obj.retention_use_k_anonymization)
+    k = (settings_obj.k_anonymity_threshold if settings_obj else 5) or 5
+
+    k_count = 0
+    hard_count = 0
+    skipped_holds = 0
+    for client_pk in candidate_pks:
+        with transaction.atomic():
+            # ``core_client`` ist die erste Stufe der kanonischen Ordnung und
+            # der gemeinsame Koordinationspunkt mit ``create_hold_for_target``.
+            # ALLE Lesungen liegen bewusst DANACH — erst dann sind sie stabile
+            # Aussagen und nicht der Stand von vorhin.
+            locked = Client.objects.select_for_update().filter(pk=client_pk, facility=facility).first()
+            if locked is None:
+                # Zeile verschwunden oder in eine andere Einrichtung gewandert.
+                continue
+            if locked.k_anonymized or locked.anonymized_at is not None:
+                # Ein paralleler Lauf war schneller.
+                continue
+            if locked.pseudonym.startswith("Gelöscht-"):
+                continue
+            _lock_client_event_rows(locked)
+            # Die Eintrittsbedingung des Querysets unter der Sperre erneut
+            # pruefen: ein waehrend des Laufs angelegtes oder wiederhergestelltes
+            # Ereignis macht die Person zum Nicht-Kandidaten, und die Bridge
+            # redigierte sonst eine Person mit lebender Dokumentation.
+            events = locked.events.all()
+            if not events.exists() or events.filter(is_deleted=False).exists():
+                continue
+            if client_has_active_hold(locked):
+                # Nur aufgeschoben — ein spaeterer Lauf holt es nach, sobald der
+                # Hold aufgehoben oder abgelaufen ist. Kein Abbruch des Laufs.
+                skipped_holds += 1
+                logger.warning(
+                    "K-Anon-Bridge: Person %s wegen aktivem Legal Hold zurueckgestellt (Refs #2122)",
+                    client_pk,
+                )
+                continue
             # Security N5: k wird erzwungen. Nur wenn die Aequivalenzklasse
             # (age_cluster, contact_stage) mindestens k Mitglieder hat, ist
             # "k-anonymisiert" eine ehrliche Zusicherung. Unterbesetzte
             # Buckets fallen fail-safe auf Hard-Anonymize zurueck — die
             # Retention-Zusage (PII weg) gilt in beiden Faellen.
-            if use_k_anon and is_k_anonymous(client, k=k):
+            if use_k_anon and is_k_anonymous(locked, k=k):
                 # Die Primitive bleibt unangetastet — die Kaskade, die den
                 # K-Anon-Modus auf dieselbe PII-Tilgung wie den Hard-Pfad hebt,
                 # liegt im Bridge-Layer (Refs #1094, #1750).
-                _k_anonymize_with_cascade(client, k)
+                _k_anonymize_with_cascade(locked, k)
                 k_count += 1
             else:
-                client.anonymize()
+                locked.anonymize()
                 hard_count += 1
 
-        if k_count:
-            audit_retention_decision(
-                facility,
-                target_type="Client",
-                action=AuditLog.Action.DELETE,
-                category="client_k_anonymized",
-                command="enforce_retention",
-                count=k_count,
-            )
-        if hard_count:
-            audit_retention_decision(
-                facility,
-                target_type="Client",
-                action=AuditLog.Action.DELETE,
-                category="client_anonymized",
-                command="enforce_retention",
-                count=hard_count,
-            )
-    return {"count": count}
+    if k_count:
+        audit_retention_decision(
+            facility,
+            target_type="Client",
+            action=AuditLog.Action.DELETE,
+            category="client_k_anonymized",
+            command="enforce_retention",
+            count=k_count,
+        )
+    if hard_count:
+        audit_retention_decision(
+            facility,
+            target_type="Client",
+            action=AuditLog.Action.DELETE,
+            category="client_anonymized",
+            command="enforce_retention",
+            count=hard_count,
+        )
+    return {"count": k_count + hard_count, "skipped_holds": skipped_holds}

@@ -112,6 +112,19 @@ def _lock_event_and_recheck_hold(facility, pk):
     # ``crud._assert_no_active_hold``.
     if event.client_id and has_active_hold(facility, "Client", event.client_id):
         return None, True
+    # Refs #2122: Und der Hold auf den FALL schuetzt die Ereignisse dieses
+    # Falls. ``exclude_cases_with_active_holds`` zieht diese Linie bereits in
+    # der Gegenrichtung (ein gehaltenes Ereignis sperrt seinen Fall); ohne
+    # diese Haelfte waere der Fristablauf des Ereignisses die Hintertuer um den
+    # Fall-Hold — der Rahmen bliebe stehen, sein Inhalt nicht (Spoliation,
+    # Muster #1066). Die Pruefung liegt bewusst NUR hier unter der Sperre und
+    # nicht zusaetzlich an den sechs Sammelstellen: der Re-Check ist der
+    # verbindliche Halt, die Sammelstellen sind nur der Vorfilter. Das gehaltene
+    # Ereignis erscheint dadurch als ``deferred`` im Lauf-Protokoll, statt still
+    # zu fehlen. Der gemeinsame Anker ist ``core_client``, das der Fall-Hold
+    # seit #2122 als erste Stufe sperrt.
+    if event.case_id and has_active_hold(facility, "Case", event.case_id):
+        return None, True
     return event, False
 
 

@@ -126,6 +126,48 @@ def _lock_client_and_check_history(facility, target_id):
     return _client_history_is_incomplete(facility, target_id)
 
 
+def _lock_case_and_check_history(facility, target_id):
+    """Sperrt Person, Fall und Ereigniszeilen — der Anker des Fall-Holds (Refs #2122).
+
+    Bis hierher nahm ``create_hold_for_target`` fuer ``target_type="Case"``
+    **gar keine** Sperre (``else: already_redacted = False``). Ein Fall-Hold
+    zaehlt aber in :func:`client_has_active_hold` mit und blockiert damit alle
+    drei Anonymisierungs-Einstiege — ohne gemeinsames Sperrobjekt konnte er
+    neben einer laufenden Anonymisierung her committen und kam zu spaet, genau
+    die Luecke, die #2108 fuer Personen- und #2107 fuer Ereignis-Holds
+    geschlossen hat (Befund im Docstring von ``_lock_client_event_rows``).
+
+    **Kanonische Ordnung** ``core_client`` -> ``core_case`` -> ``core_event``:
+    Die Personenzeile zuerst, weil sie die erste Stufe der repo-weiten Ordnung
+    ist und weil genau sie der Sofortpfad, der Nacht-Batch, die K-Anon-Bridge
+    und der Ereignis-Sweep als Erstes nehmen — sie ist der gemeinsame
+    Koordinationspunkt. Der Fall danach (er haengt an der Person), die
+    Ereigniszeilen zuletzt, in ``pk``-Ordnung wie in
+    ``_lock_client_event_rows``. Die Gegenordnung waere der ABBA-Zyklus, den
+    ADR-050 D5.5 ausschliesst.
+
+    ``target_id`` ist ein freies Feld ohne Fremdschluessel: ein Fall, den diese
+    Einrichtung nicht kennt, ist kein Fehler — es gibt dann nur nichts zu
+    koordinieren (Muster :func:`_lock_event_and_check_redaction`).
+
+    Rueckgabe: ob die Historie der Person schon unvollstaendig ist — dieselbe
+    Aussage wie beim Personen-Hold, denn ein Fall-Hold sichert ueber
+    ``_redact_cases_and_episodes``/``_delete_owned_attachments_for_client``
+    genau das, was die Personen-Anonymisierung tilgt.
+    """
+    case = Case.objects.filter(facility=facility, pk=target_id).values("client_id").first()
+    if case is None:
+        return False
+    client_id = case["client_id"]
+    Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk").first()
+    Case.objects.filter(facility=facility, pk=target_id).select_for_update().only("pk").first()
+    # Die Ereigniszeilen der Person mit unter dieselbe Sperre: ein
+    # Ereignis-Hold koordiniert ueber ``core_event``, und der Sofortpfad haelt
+    # beide Stufen (``_lock_client_event_rows``).
+    list(Event.objects.filter(facility=facility, client_id=client_id).order_by("pk").select_for_update().only("pk"))
+    return _client_history_is_incomplete(facility, client_id)
+
+
 def _lock_event_and_check_redaction(facility, target_id):
     """Sperrt die Ereigniszeile und meldet, ob ihre Historie schon leer ist (ADR-050 D2).
 
@@ -171,8 +213,11 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
 
     **Transaktional und sperrend seit ADR-050 D2** (Refs #2065). Fuer
     ``target_type="Event"`` wird die Ereigniszeile gesperrt, fuer
-    ``target_type="Client"`` die Personenzeile, BEVOR die ``LegalHold``-Zeile
-    entsteht — beides sind die gemeinsamen Koordinationspunkte mit dem
+    ``target_type="Client"`` die Personenzeile und — seit Refs #2122 — fuer
+    ``target_type="Case"`` Person, Fall und Ereigniszeilen in der kanonischen
+    Ordnung ``core_client`` -> ``core_case`` -> ``core_event``, BEVOR die
+    ``LegalHold``-Zeile entsteht — es sind die gemeinsamen
+    Koordinationspunkte mit dem
     EventHistory-Sweep, der je Charge dieselben Zeilen in derselben Ordnung
     sperrt. Trifft der Hold auf eine bereits redigierte
     Historie, wird er **nicht abgelehnt**: er bindet weiterhin Ereigniszeile,
@@ -184,14 +229,20 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
     spaeter beantwortbar sein.
     """
     with transaction.atomic():
-        # Beide Hold-Ziele mit Historien-Bezug bekommen denselben
+        # Alle Hold-Ziele mit Historien-Bezug bekommen denselben
         # Koordinationspunkt und dasselbe Verspaetungsmerkmal (Cross-Review
-        # Finding 5). ``Case``/``Activity`` haben keine Ereignis-Historie —
-        # dort gibt es nichts zu koordinieren und nichts zu melden.
+        # Finding 5). Refs #2122: ``Case`` gehoert dazu — der Fall-Hold
+        # blockiert ueber ``exclude_clients_with_active_holds`` dieselbe
+        # Personen-Anonymisierung wie ein Personen-Hold und braucht deshalb
+        # denselben Anker. ``Activity`` bleibt ohne: Aktivitaeten haben keine
+        # Ereignis-Historie, und der Aktivitaeten-Sweep hat bis heute keinen
+        # gemeinsamen Anker (Folge-Befund, s. Bericht zu Refs #2122).
         if target_type == "Event":
             already_redacted = _lock_event_and_check_redaction(facility, target_id)
         elif target_type == "Client":
             already_redacted = _lock_client_and_check_history(facility, target_id)
+        elif target_type == "Case":
+            already_redacted = _lock_case_and_check_history(facility, target_id)
         else:
             already_redacted = False
         hold = LegalHold.objects.create(
@@ -207,7 +258,7 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
             "expires_at": str(expires_at) if expires_at else None,
             "hold_id": str(hold.pk),
         }
-        if target_type in ("Event", "Client"):
+        if target_type in ("Event", "Client", "Case"):
             # Immer gesetzt, nicht nur im Verspaetungsfall: die Abwesenheit
             # eines Schluessels waere mehrdeutig — „nicht redigiert" oder „nicht
             # geprueft"? Fuer die Spoliationsfrage ist das der Unterschied.

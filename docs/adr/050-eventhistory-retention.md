@@ -277,6 +277,18 @@ Ausschlaggebend war dabei nicht die fälschbare GUC an sich — RLS stützt sich
 
 Gegen einen erneuten Anlauf ohne eigenen Entscheid steht ein Guard: `TestSecurityDefinerInventory` in [`src/tests/test_rls.py`](../../src/tests/test_rls.py) pinnt, dass es im Repo **keine** `SECURITY DEFINER`-Funktion gibt und dass `01-app-role.sh` der App-Rolle keine Ausführungsrechte auf Funktionen erteilt; sein Docstring führt beide Missbrauchswege.
 
+### Nachtrag zu D5.5 — `core_case` in der kanonischen Sperr-Reihenfolge (2026-09-04)
+
+D5.5 legt die Reihenfolge `core_event` → `core_eventhistory` → `core_auditlog` fest und benennt `core_client` als vorgelagerte erste Stufe (D2). Nicht erfasst war `core_case`: `create_hold_for_target` nahm für `target_type="Case"` **gar keine** Sperre, obwohl ein Fall-Hold über `exclude_clients_with_active_holds` dieselbe Personen-Anonymisierung blockiert wie ein Personen-Hold. Es gab damit keinen gemeinsamen Koordinationspunkt zwischen Fall-Hold-Anlage und Sofortpfad, Nacht-Batch, K-Anon-Bridge, Ereignis-Sweep und Approve — der Hold konnte neben einer laufenden Anonymisierung her committen (#2122).
+
+Die kanonische Ordnung lautet damit vollständig:
+
+> **`core_client` → `core_case` → `core_event` → `core_retentionproposal` → `core_eventhistory` → `core_auditlog`**
+
+`core_case` steht **nach** der Person (jeder Fall hängt an genau einer Person, `Case.client` ist Pflichtfeld) und **vor** dem Ereignis (der Fall rahmt Ereignisse, nicht umgekehrt). Der Fall-Hold sperrt seither `core_client` → `core_case` → die Ereigniszeilen der Person (`_lock_case_and_check_history`) und trägt — wie Ereignis- und Personen-Hold — das Verspätungsmerkmal `history_already_redacted`. Gepinnt wird die Ordnung am ausgeführten SQL in `TestCaseHoldLockOrder` ([`src/tests/test_retention_hold_toctou_rest.py`](../../src/tests/test_retention_hold_toctou_rest.py)), nach dem Muster von [`test_restriction_lock_order.py`](../../src/tests/test_restriction_lock_order.py).
+
+`core_activity` ist bewusst **nicht** aufgenommen: Aktivitäts-Holds (`target_type="Activity"`) sind über keine Oberfläche und keinen In-App-Aufrufer anlegbar, und der Aktivitäten-Sweep (`enforce_activities`) löscht als Bulk-`DELETE` ohne Zeilensperre. Beides zusammen ist ein eigener Entscheid und bleibt einem Folge-Ticket vorbehalten.
+
 ## Consequences
 
 - **+** Die Frist eines Ereignisses wirkt endlich auch auf seine Historie; die in §5 belegte Lücke — Inhalte überleben die eigene Löschfrist, bei personenlosen Ereignissen dauerhaft — schließt sich, für Bestand und Neuzugang.

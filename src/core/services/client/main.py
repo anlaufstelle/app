@@ -1409,10 +1409,11 @@ def _lock_client_event_rows(client):
     ``_redact_live_events`` gleich ohnehin schreibt; vorgezogen wird nur der
     Zeitpunkt.
 
-    Nicht abgedeckt bleibt der **Fall**-Hold: ``create_hold_for_target`` nimmt
-    fuer ``target_type="Case"`` gar keine Sperre (``legal_holds.py``, nur die
-    Zweige ``Event``/``Client`` sperren), es gibt dort also keinen gemeinsamen
-    Anker, den dieser Pfad mitnehmen koennte.
+    Refs #2122: Der **Fall**-Hold ist seither mit abgedeckt.
+    ``create_hold_for_target`` nahm fuer ``target_type="Case"`` frueher gar
+    keine Sperre; er sperrt jetzt ``core_client`` -> ``core_case`` ->
+    ``core_event`` und trifft damit genau die beiden Zeilen(-mengen), die
+    dieser Helfer und sein Aufrufer halten.
     """
     # Lokaler Import wie an den uebrigen Ereignis-Stellen dieses Moduls
     # (``_redact_live_events`` u. a.) — der Modulkopf haelt ``Event`` bewusst

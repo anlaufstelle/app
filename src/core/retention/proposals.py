@@ -6,6 +6,7 @@ Stale-Cleanup, sowie die Pipeline ``create_proposals_for_facility``
 fuer den ``--propose``-Lauf des ``enforce_retention``-Commands.
 """
 
+import logging
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -22,6 +23,8 @@ from core.models import AuditLog, Client, Event, LegalHold, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
+
+logger = logging.getLogger(__name__)
 
 # Category labels for the dashboard grouping. Lives next to the service
 # (not the view) because the context-builder needs them.
@@ -330,6 +333,38 @@ def _assert_target_has_no_active_hold(proposal, client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_APPROVE_MESSAGE)
 
 
+def _lock_check_and_mark_approved(proposal):
+    """Die Sperr-/Check-/Schreib-Sequenz der Genehmigung — die EINE Stelle.
+
+    Refs #2122: Der Auto-Approve-Zweig in
+    :func:`reactivate_deferred_proposals` setzte ``APPROVED`` frueher direkt
+    und umging damit die komplette Sequenz, die #2109 hier eingezogen hat —
+    dieselbe Wurzel, nur ohne Oberflaeche davor. Beide Wege fahren jetzt
+    diesen Helfer; eine zweite Implementierung waere genau die Drift, die
+    #1756 fuer die Anonymisierungs-Einstiege gezeigt hat.
+
+    Reihenfolge tragend (s. :func:`_lock_target_rows_for_approval`): erst die
+    Zielzeilen — der gemeinsame Anker mit ``create_hold_for_target`` —, dann
+    die Vorschlagszeile. Umgekehrt entstuende ein ABBA-Zyklus mit
+    ``create_legal_hold``, das Ereignis vor Vorschlag sperrt.
+
+    Wirft ``ValidationError``, wenn der Vorschlag nicht (mehr) offen ist oder
+    das Ziel unter einem aktiven Hold steht; der Status bleibt dann
+    unveraendert. Der Aufrufer muss innerhalb einer ``transaction.atomic()``
+    stehen — sonst faellt die Sperre mit dem impliziten Commit des ``SELECT``
+    sofort wieder.
+    """
+    client_id = _lock_target_rows_for_approval(proposal)
+    locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
+    if locked is None or locked.status not in _APPROVABLE_STATUSES:
+        raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+    _assert_target_has_no_active_hold(locked, client_id)
+
+    locked.status = RetentionProposal.Status.APPROVED
+    locked.save(update_fields=["status"])
+    return locked
+
+
 @transaction.atomic
 def approve_proposal(proposal, user):
     """Approve a retention proposal for deletion on next enforce_retention run.
@@ -354,18 +389,9 @@ def approve_proposal(proposal, user):
     Menge) einen spaeteren, legitimen Vorschlag fuer dasselbe Ziel blockieren
     wuerde.
     """
-    # Reihenfolge tragend (s. ``_lock_target_rows_for_approval``): erst die
-    # Zielzeilen — der gemeinsame Anker mit ``create_hold_for_target`` —, dann
-    # die Vorschlagszeile. Umgekehrt entstuende ein ABBA-Zyklus mit
-    # ``create_legal_hold``, das Ereignis vor Vorschlag sperrt.
-    client_id = _lock_target_rows_for_approval(proposal)
-    locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
-    if locked is None or locked.status not in _APPROVABLE_STATUSES:
-        raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
-    _assert_target_has_no_active_hold(locked, client_id)
-
-    locked.status = RetentionProposal.Status.APPROVED
-    locked.save(update_fields=["status"])
+    # Refs #2122: Sperre, Re-Checks und der Statuswechsel liegen im gemeinsamen
+    # Helfer — der Auto-Approve-Zweig fuhr sie frueher gar nicht.
+    locked = _lock_check_and_mark_approved(proposal)
     # Die Instanz des Aufrufers mitziehen: die View rendert sie unmittelbar
     # danach als Karte, und ein Refetch waere eine zweite Abfrage fuer eine
     # Aussage, die hier schon feststeht.
@@ -492,11 +518,26 @@ def reactivate_deferred_proposals(facility):
       `retention_max_defer_count`: proposal is auto-approved.
     - Otherwise: proposal reverts to PENDING for a new manual decision.
 
-    Returns a tuple `(reactivated_count, auto_approved_count)`.
+    Refs #2122: Der Auto-Approve-Zweig setzte ``APPROVED`` frueher direkt und
+    umging damit die Sperr-/Status-/Hold-Sequenz, die #2109 fuer
+    :func:`approve_proposal` eingezogen hat — ein Vorschlag konnte auf diesem
+    Weg unter laufender Aufbewahrungssperre genehmigt werden, und der
+    Audit-Trail behauptete das auch. Er fuehrt jetzt ueber denselben Helfer
+    :func:`_lock_check_and_mark_approved`, je Vorschlag in einem eigenen
+    Savepoint (Muster :func:`bulk_approve_proposals`): ein gehaltener Vorschlag
+    bleibt ``DEFERRED`` und reisst die uebrigen nicht mit.
+
+    Returns a tuple `(reactivated_count, auto_approved_count)`. Die Zahl der
+    zurueckgestellten Auto-Genehmigungen kommt **nicht** als dritter Wert dazu:
+    ``core.management.commands.enforce_retention`` entpackt die Rueckgabe an
+    zwei Stellen als Paar. Sie steht stattdessen je Vorschlag als
+    ``retention_proposal_auto_approve_skipped``-Audit-Zeile und als
+    Lauf-Summe im Log.
     """
     today = timezone.localdate()
     reactivated = 0
     auto_approved = 0
+    auto_approve_skipped = 0
 
     try:
         settings_obj = facility.settings
@@ -516,8 +557,34 @@ def reactivate_deferred_proposals(facility):
 
     for proposal in due_proposals:
         if auto_approve and proposal.defer_count >= max_defer_count:
-            proposal.status = RetentionProposal.Status.APPROVED
-            proposal.save(update_fields=["status"])
+            # Refs #2122: Eigener Savepoint je Vorschlag (Muster
+            # ``bulk_approve_proposals``) — ein gehaltener Vorschlag darf den
+            # Rest des Laufs nicht zurueckrollen.
+            try:
+                with transaction.atomic():
+                    _lock_check_and_mark_approved(proposal)
+            except ValidationError:
+                # Der Vorschlag bleibt DEFERRED (Status unveraendert, keine
+                # Approve-Audit-Zeile) und wird beim naechsten Lauf erneut
+                # geprueft. Die Zurueckstellung bekommt einen eigenen Nachweis:
+                # „nicht genehmigt" und „nicht angeschaut" muessen fuer die
+                # Spoliationsfrage unterscheidbar bleiben (ADR-050 D5.3).
+                auto_approve_skipped += 1
+                logger.warning(
+                    "Auto-Approve: Vorschlag %s zurueckgestellt (Aufbewahrungssperre oder Status, Refs #2122)",
+                    proposal.pk,
+                )
+                audit_retention_decision(
+                    proposal.facility,
+                    target_type=proposal.target_type,
+                    target_id=proposal.target_id,
+                    action=AuditLog.Action.DELETE,
+                    category="retention_proposal_auto_approve_skipped",
+                    retention_category=proposal.retention_category,
+                    defer_count=proposal.defer_count,
+                    max_defer_count=max_defer_count,
+                )
+                continue
             audit_retention_decision(
                 proposal.facility,
                 target_type=proposal.target_type,
@@ -542,6 +609,14 @@ def reactivate_deferred_proposals(facility):
                 defer_count=proposal.defer_count,
             )
             reactivated += 1
+
+    if auto_approve_skipped:
+        # Refs #2122: Die Lauf-Summe gehoert ins Protokoll des Cron-Laufs — die
+        # Rueckgabe bleibt bewusst zweistellig (s. Docstring).
+        logger.warning(
+            "Auto-Approve: %d Loeschvorschlag/-vorschlaege zurueckgestellt (Aufbewahrungssperre oder Status)",
+            auto_approve_skipped,
+        )
 
     return reactivated, auto_approved
 
