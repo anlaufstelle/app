@@ -5,7 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>503 – {% trans "Wartungsmodus" %}</title>
-    {% include "components/_document_head.html" %}
+    {# Refs #2102: feste Pfade statt {% static %} — diese Seite muss auch mit #}
+    {# kaputtem Static-Manifest rendern (manifest_strict, Refs #700). #}
+    {% include "components/_document_head.html" with head_fixed_paths=True %}
     <style>
         /* Inline-CSS, weil im Wartungsmodus Static-Assets / DB ggf.
            nicht erreichbar sind. Refs #700. */

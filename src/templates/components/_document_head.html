@@ -12,10 +12,30 @@
 {# 503.html/offline.html duerfen ihren per sha256 gepinnten Inline-<style>      #}
 {# nicht durch einen Stylesheet-Link ersetzt bekommen (CSP, settings/base.py).  #}
 {# Alle vier Assets liegen im APP_SHELL des Service-Workers (static/js/sw.js).  #}
+{#                                                                              #}
+{# SCHALTER head_fixed_paths (Default aus): gibt die Icon-Pfade als feste       #}
+{# Literale statt ueber {% static %} aus. Nur 500.html und 503.html setzen ihn. #}
+{# Grund: Produktion faehrt CompressedManifestStaticFilesStorage, und Djangos   #}
+{# ManifestFilesMixin ist manifest_strict — ein fehlender Manifest-Eintrag      #}
+{# wirft beim Rendern einen ValueError. Genau die beiden Seiten, die einen      #}
+{# kaputten Server ueberleben muessen (Refs #700), haetten damit am Static-     #}
+{# Bestand gehangen, den sie gerade NICHT voraussetzen duerfen. Ein nicht       #}
+{# ladbares Icon ist hinnehmbar, eine Fehlerseite, die selbst mit einem Fehler  #}
+{# abbricht, nicht. Der Literalpfad folgt dem Default STATIC_URL="static/";     #}
+{# eine abweichende Installation verliert dadurch das Icon, nie die Seite.      #}
+{# offline.html bleibt bewusst bei {% static %}: es wird zur Precache-Zeit vom  #}
+{# laufenden Server mit intaktem Manifest gerendert und danach aus dem          #}
+{# Service-Worker-Cache ausgeliefert — dort ist die gehashte URL sogar noetig,  #}
+{# weil genau sie im APP_SHELL steht.                                           #}
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#006547">
+{% if head_fixed_paths %}
+<link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+{% else %}
 <link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+{% endif %}
 {# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">

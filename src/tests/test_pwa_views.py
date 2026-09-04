@@ -710,7 +710,22 @@ class TestPrecachedShellBumpGuard:
     # Integrationscommit des Orchestrators (Welle F): CACHE_NAME in
     # src/static/js/sw.js von "anlaufstelle-v43" auf "anlaufstelle-v44" gebumpt
     # und _PINNED_CACHE_NAME oben mitgezogen (sw.js war fuer die Lane L3c TABU).
-    _PINNED_SHELL_HASH = "51ab687a195af93ea046cf649f24ecbfad0fa565dc3143b209125351541a6218"
+    #
+    # Refs #2102 (Fix-Runde 2, R-L3c-12): components/_document_head.html hat den
+    # Schalter head_fixed_paths bekommen, damit 500/503 ohne Static-Manifest
+    # rendern. NUR der Hash wird nachgezogen, KEIN v45 — aus zwei Gruenden,
+    # beide belegt statt behauptet:
+    #   (1) Fuer die Shells aendert sich am ausgelieferten Inhalt NICHTS. Sie
+    #       setzen head_fixed_paths nicht, nehmen also den {% else %}-Zweig mit
+    #       exakt denselben {% static %}-URLs. Ein Vorher/Nachher-Rendering von
+    #       offline.html und core/clients/offline_list.html unterschied sich in
+    #       17 Leerzeilen (die neuen {# … #}-Kommentare und die if/else/endif-
+    #       Tags); whitespace-bereinigt sind beide Antworten byte-gleich.
+    #   (2) anlaufstelle-v44 ist im selben unveroeffentlichten Lauf entstanden
+    #       (Welle F) und steht in keinem Tag und keinem Deploy — kein Geraet im
+    #       Feld traegt v44, es gibt also keine Split-Brain-Generation, gegen die
+    #       ein weiterer Bump schuetzen wuerde. Praezedenz: #1805, #1828.
+    _PINNED_SHELL_HASH = "b3785a43113907dd5576d8c835e2110ab393d5200195b27fddd3294d36612c3d"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -1598,3 +1613,60 @@ class TestOfflineShellLegalLinks:
         body = response.content.decode()
         assert "Impressum" not in body
         assert "Datenschutz" not in body
+
+
+class TestEmergencyPagesSurviveBrokenStaticManifest:
+    """Refs #2102: ``500.html``/``503.html`` duerfen nicht am Static-Manifest haengen.
+
+    Produktion nutzt ``CompressedManifestStaticFilesStorage``
+    (``settings/base.py``); Djangos ``ManifestFilesMixin`` ist per Default
+    ``manifest_strict=True`` und wirft in ``stored_name()`` einen
+    ``ValueError``, sobald ein Asset im Manifest fehlt. Genau das machte den
+    Head-Include zum Risiko: Die Serverfehler- und die Wartungsseite muessen
+    **auch dann** rendern, wenn der Static-Bestand kaputt ist — das ist ihr
+    einziger Daseinszweck (Refs #700). Ein fehlendes Icon ist hinnehmbar, eine
+    Fehlerseite, die selbst mit einem Fehler abbricht, nicht.
+
+    Der Cross-Review hat den Absturz mit leerem Manifest reproduziert; dieser
+    Test haelt den Fix fest.
+    """
+
+    _EMERGENCY_TEMPLATES = ("500.html", "503.html")
+
+    @staticmethod
+    def _broken_manifest_storage():
+        from whitenoise.storage import CompressedManifestStaticFilesStorage
+
+        storage = CompressedManifestStaticFilesStorage()
+        # Leeres Manifest = jeder {% static %}-Aufruf wirft ValueError.
+        storage.hashed_files = {}
+        return storage
+
+    def test_manifest_probe_is_actually_broken(self, monkeypatch):
+        """Selbsttest der Sonde: ohne ihn koennte der Test unten gruen sein,
+        weil die Sonde nichts kaputt macht."""
+        from django.templatetags.static import static
+
+        monkeypatch.setattr(
+            "django.contrib.staticfiles.storage.staticfiles_storage",
+            self._broken_manifest_storage(),
+        )
+        with override_settings(DEBUG=False):
+            with pytest.raises(ValueError, match="Missing staticfiles manifest entry"):
+                static("icons/favicon.svg")
+
+    @pytest.mark.parametrize("template", _EMERGENCY_TEMPLATES)
+    def test_emergency_page_renders_with_empty_manifest(self, monkeypatch, template):
+        from django.template.loader import render_to_string
+
+        monkeypatch.setattr(
+            "django.contrib.staticfiles.storage.staticfiles_storage",
+            self._broken_manifest_storage(),
+        )
+        with override_settings(DEBUG=False):
+            body = render_to_string(template)
+
+        assert 'rel="icon"' in body, f"{template}: Favicon-Link fehlt trotz fester Pfade"
+        assert 'rel="manifest"' in body
+        assert "/static/icons/favicon.svg" in body, f"{template}: erwartet den festen Pfad, kein {{% static %}}"
+        assert "/static/icons/icon-192.png" in body

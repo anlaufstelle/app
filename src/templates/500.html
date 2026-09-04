@@ -5,7 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>500 – {% trans "Serverfehler" %}</title>
-    {% include "components/_document_head.html" %}
+    {# Refs #2102: feste Pfade statt {% static %} — diese Seite muss auch mit #}
+    {# kaputtem Static-Manifest rendern (manifest_strict, Refs #700). #}
+    {% include "components/_document_head.html" with head_fixed_paths=True %}
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
