@@ -167,8 +167,12 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                         "deletion_request": dr,
                         "client": client,
                         "merge_target": merge_target,
-                        "source_facts": merge_facts(client) if may_see else None,
-                        "target_facts": merge_facts(merge_target) if may_see else None,
+                        # Refs #2112: dieselbe Sichtbarkeitsgrenze wie auf der
+                        # Bestaetigungsseite — die Vier-Augen-Pruefseite ist die
+                        # zweite Leseflaeche derselben Zahlen und haette sonst
+                        # genau das Leck behalten, das dort geschlossen wurde.
+                        "source_facts": merge_facts(client, request.user) if may_see else None,
+                        "target_facts": merge_facts(merge_target, request.user) if may_see else None,
                         "may_see_inventory": may_see,
                         "stage_upgraded": merge_target.contact_stage != Client.ContactStage.QUALIFIED
                         and client.contact_stage == Client.ContactStage.QUALIFIED,

@@ -17,11 +17,13 @@ Geprueft werden die Oberflaechen ueber dem Merge-Service
 * Praeventiver Duplikat-Hinweis im Anlagepfad (``ClientSimilarHintView``).
 """
 
+from datetime import timedelta
+
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Case, Client, Event, LegalHold
+from core.models import Case, Client, DocumentType, Event, LegalHold
 from core.models.workitem import DeletionRequest
 from core.services.client.merge import merge_clients, request_client_merge
 
@@ -411,3 +413,145 @@ class TestTombstoneInvisibility:
         assert (
             "Merge-Quelle" not in client.get(f"{reverse('core:client_similar_hint')}?q=Merge-Quelle").content.decode()
         )
+
+
+class TestMergeFactsSensitivity:
+    """Refs #2112 (Red-Team B-1): Die Bestandszahlen enden an der Sichtbarkeitsgrenze.
+
+    ``merge_facts`` zaehlte Ereignisse, Anhaenge und den letzten Kontakt ohne
+    ``visible_to(user)`` — anders als Personenakte, Zeitstrom und
+    Anhang-Uebersicht. Eine Fachkraft (Hoechstsensitivitaet ``erhoeht``) las auf
+    der Bestaetigungsseite die Gesamtzahl inklusive ``hochvertraulich``-Doku
+    **und** den Zeitpunkt des letzten Kontakts, obwohl das ausloesende Ereignis
+    fuer sie hinter 404 liegt (``get_visible_event_or_404``).
+    """
+
+    @pytest.fixture
+    def profil_typ(self, facility):
+        """Personen-Dokumentationstyp ``erhoeht`` — traegt die Owner-Sensitivitaet
+        der personeneigenen Anhaenge (``owner_sensitivity``, ADR-039 §12)."""
+        return DocumentType.objects.create(
+            facility=facility,
+            entity_type=DocumentType.EntityType.CLIENT,
+            sensitivity=DocumentType.Sensitivity.ELEVATED,
+            name="Personenprofil (erhoeht)",
+        )
+
+    @pytest.fixture
+    def typ_erhoeht(self, facility):
+        return DocumentType.objects.create(
+            facility=facility,
+            sensitivity=DocumentType.Sensitivity.ELEVATED,
+            name="Kontakt (erhoeht)",
+        )
+
+    @pytest.fixture
+    def typ_hoch(self, facility):
+        return DocumentType.objects.create(
+            facility=facility,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            name="Kontakt (hochvertraulich)",
+        )
+
+    @pytest.fixture
+    def person(self, facility, staff_user, profil_typ, typ_erhoeht, typ_hoch):
+        """Person mit einem sichtbaren und einem unsichtbaren Ereignis + Anhang.
+
+        Das HIGH-Ereignis ist bewusst das **juengere**: sonst bliebe der Fehler
+        am ``last_contact`` unsichtbar.
+        """
+        p = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Sensitiv-Quelle",
+            document_type=profil_typ,
+            created_by=staff_user,
+        )
+        p.erhoeht_am = timezone.now() - timedelta(days=5)
+        Event.objects.create(
+            facility=facility,
+            client=p,
+            document_type=typ_erhoeht,
+            occurred_at=p.erhoeht_am,
+            data_json={},
+            created_by=staff_user,
+        )
+        p.hoch_am = timezone.now() - timedelta(days=1)
+        Event.objects.create(
+            facility=facility,
+            client=p,
+            document_type=typ_hoch,
+            occurred_at=p.hoch_am,
+            data_json={},
+            created_by=staff_user,
+        )
+        return p
+
+    @pytest.fixture
+    def person_mit_anhaengen(self, facility, staff_user, person):
+        """Zwei personeneigene Anhaenge: einer ueber eine normale, einer ueber
+        eine ``hochvertraulich``-Feldvorlage (``field_template__sensitivity``)."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from core.models import FieldTemplate
+        from core.services.file_vault import store_encrypted_file
+        from tests.conftest import PDF_MINIMAL
+
+        for name, sensitivity in (("Ausweis (normal)", ""), ("Gutachten (hoch)", "high")):
+            ft = FieldTemplate.objects.create(
+                facility=facility,
+                name=name,
+                field_type=FieldTemplate.FieldType.FILE,
+                sensitivity=sensitivity,
+            )
+            store_encrypted_file(
+                facility,
+                SimpleUploadedFile("probe.pdf", PDF_MINIMAL, content_type="application/pdf"),
+                ft,
+                person,
+                staff_user,
+            )
+        return person
+
+    def test_merge_facts_respect_sensitivity(self, person_mit_anhaengen, staff_user, lead_user):
+        from core.views.client_merge import merge_facts
+
+        person = person_mit_anhaengen
+
+        fuer_fachkraft = merge_facts(person, staff_user)
+        assert fuer_fachkraft["events"] == 1, "hochvertrauliches Ereignis zaehlt fuer die Fachkraft mit"
+        assert fuer_fachkraft["attachments"] == 1, "hochvertraulicher Anhang zaehlt fuer die Fachkraft mit"
+        assert fuer_fachkraft["last_contact"] == person.erhoeht_am, (
+            "der letzte Kontakt verraet den Zeitpunkt eines fuer die Rolle unsichtbaren Ereignisses"
+        )
+
+        fuer_leitung = merge_facts(person, lead_user)
+        assert fuer_leitung["events"] == 2
+        assert fuer_leitung["attachments"] == 2
+        assert fuer_leitung["last_contact"] == person.hoch_am
+
+    def test_cases_stay_unfiltered_because_there_is_no_case_sensitivity(
+        self, person_mit_anhaengen, facility, staff_user, lead_user
+    ):
+        """Bewusste Nicht-Filterung (ADR-039 §12): Faelle sind rollen-, nicht
+        sensitivitaetsgegatet, und diese Seite erreicht nur ``is_staff_or_above``."""
+        from core.views.client_merge import merge_facts
+
+        Case.objects.create(
+            facility=facility,
+            client=person_mit_anhaengen,
+            title="Fall",
+            created_by=staff_user,
+        )
+        assert merge_facts(person_mit_anhaengen, staff_user)["cases"] == 1
+        assert merge_facts(person_mit_anhaengen, lead_user)["cases"] == 1
+
+    def test_confirmation_page_shows_the_filtered_numbers(self, client, staff_user, lead_user, person, target):
+        """Die Seite selbst — nicht nur der Helfer — muss die gefilterte Zahl zeigen."""
+        client.force_login(staff_user)
+        body = client.get(_merge_url(person, target)).content.decode()
+        assert '<td class="py-1.5 pr-2" data-testid="merge-source-events">1</td>' in body, body[:0] or "Fachkraft"
+
+        client.force_login(lead_user)
+        body = client.get(_merge_url(person, target)).content.decode()
+        assert '<td class="py-1.5 pr-2" data-testid="merge-source-events">2</td>' in body

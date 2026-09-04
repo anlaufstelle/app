@@ -43,7 +43,7 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.models import Attachment, Case, Client, Event
+from core.models import Case, Client, Event
 from core.services.client import (
     create_or_get_client_merge_request,
     get_pending_deletion_request,
@@ -51,6 +51,7 @@ from core.services.client import (
     merge_requires_four_eyes,
     unmerge_client,
 )
+from core.services.compliance import visible_attachments_for_user
 from core.services.dashboard import client_search_queryset, search_similar_clients
 from core.services.deletion import eligible_deletion_confirmers
 from core.services.scoping import get_scoped_object
@@ -77,7 +78,7 @@ def _parse_uuid(raw):
         return None
 
 
-def merge_facts(person):
+def merge_facts(person, user):
     """Bestandszahlen und Unterscheidungsmerkmale einer Person (Lehre #1874).
 
     Die Bestaetigungsseite traegt die Beweislast: zwei aehnlich benannte
@@ -86,15 +87,40 @@ def merge_facts(person):
     zwar auch Papierkorb-Ereignisse mit, aber die Entscheidung faellt ueber
     das, was die Fachkraft kennt; eine Zahl, die groesser ist als jede
     sichtbare Liste, wuerde eher verwirren als unterscheiden.
+
+    Refs #2112 (Red-Team B-1): „was die Fachkraft kennt" endet an der
+    **Sensitivitaetsgrenze**, nicht erst am Papierkorb. Die Zahlen liefen
+    vorher ungefiltert und verrieten damit genau die Metadaten, die die
+    Anwendung sonst hinter 404 verbirgt (``get_visible_event_or_404``): eine
+    Fachkraft mit Hoechstsensitivitaet ``erhoeht`` las hier die Gesamtzahl
+    inklusive ``hochvertraulich``-Dokumentation und — schwerer — den
+    **Zeitpunkt des letzten Kontakts**, obwohl das ausloesende Ereignis fuer
+    sie nicht existiert. Ereignisse laufen deshalb ueber
+    ``Event.objects.visible_to(user)`` (dieselbe Grenze wie Personenakte und
+    Zeitstrom), Anhaenge ueber
+    :func:`core.services.compliance.visible_attachments_for_user` (dieselbe
+    Grenze wie die Anhang-Uebersicht und das Download-Gate). Das Argument
+    verschiebt die Zahlen nach unten, nie nach oben — der Merge selbst nimmt
+    unveraendert **alles** mit; das sagt der Fliesstext der Bestaetigungsseite
+    ausdruecklich.
+
+    **Faelle bleiben ungefiltert**, und zwar bewusst: es gibt keine
+    Fall-Sensitivitaet (``Case`` hat kein ``visible_to``), die Abgrenzung
+    verlaeuft dort ueber die Rolle — die Assistenz sieht Faelle gar nicht
+    (ADR-039 §12). Diese Seite haengt an ``StaffRequiredMixin``
+    (``is_staff_or_above``), die Assistenz erreicht sie also nie; fuer jede
+    Rolle, die sie erreicht, ist die volle Fallzahl die richtige Zahl. Ein
+    Filter waere hier eine Grenze, die es nicht gibt.
     """
+    visible_events = Event.objects.visible_to(user).filter(client=person, is_deleted=False)
     return {
         "person": person,
-        "events": Event.objects.filter(client=person, is_deleted=False).count(),
+        "events": visible_events.count(),
         "cases": Case.objects.filter(client=person, is_deleted=False).count(),
-        "attachments": Attachment.objects.filter(client=person, is_current=True).count(),
-        "last_contact": Event.objects.filter(client=person, is_deleted=False).aggregate(last=Max("occurred_at"))[
-            "last"
-        ],
+        "attachments": visible_attachments_for_user(person.facility, user)
+        .filter(client=person, is_current=True)
+        .count(),
+        "last_contact": visible_events.aggregate(last=Max("occurred_at"))["last"],
     }
 
 
@@ -165,8 +191,8 @@ class ClientMergeView(StaffRequiredMixin, HTMXPartialMixin, View):
             context.update(
                 {
                     "target": target,
-                    "source_facts": merge_facts(source),
-                    "target_facts": merge_facts(target),
+                    "source_facts": merge_facts(source, request.user),
+                    "target_facts": merge_facts(target, request.user),
                     "requires_four_eyes": four_eyes,
                     "direct_allowed": direct,
                     "stage_upgraded": target.contact_stage != Client.ContactStage.QUALIFIED
