@@ -35,7 +35,7 @@ Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängi
 | Aufrufer | Bekommt | Warum |
 |---|---|---|
 | **Anonym** (Default für externes Monitoring) | **Nur** `status` (+ HTTP-Code). **Keine** Subsystem- oder Detailfelder. | Recon-Härtung: Subsystem-Status (`database`, `virus_scanner`/`clamav`, `encryption_key`) und Infrastruktur-Details (`version`, `disk_free_pct` …) verraten Angreifern unauthentifiziert den Betriebszustand einzelner Komponenten (L9/N13, Refs #1375). Für Uptime bleibt `status` + HTTP-Code aussagekräftig. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
-| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`). | Operatives Monitoring will die Details. |
+| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `disk`, `disk_required`, `stale_jobs`). | Operatives Monitoring will die Details. |
 
 > **Änderung ggü. #1024 A7.1 (L9/N13, Refs #1375):** `database`, `virus_scanner`/`clamav` und `encryption_key` waren bis dahin auch im anonymen Payload enthalten. Sie liegen jetzt hinter dem Token-Gate. Der **kritische** Effekt eines DB-/Encryption-Key-Ausfalls (HTTP 503) und eines Scanner-Ausfalls (`status: degraded`) bleibt auch anonym sichtbar — nur die Subsystem-*Feldnamen* selbst sind Token-only.
 
@@ -115,7 +115,9 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 | `last_backup_age_hours` | float \| null | z. B. `12.4` / `null` | Alter des jüngsten `*.sql.gz.enc` in `BACKUP_DIR` ([`_check_backup_age`](../src/core/views/health.py)). `null` = kein Backup gefunden / `BACKUP_DIR` fehlt. Im Compose-Stack wird die Host-Ablage read-only nach `BACKUP_DIR` gemountet (`BACKUP_HOST_DIR`, Refs #1872) — ohne diesen Mount bleibt der Wert dauerhaft `null`. | `> 48` → **`degraded`** (`BACKUP_CRITICAL_HOURS` in [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py)); `null` degradiert bei `backup_required=true` |
 | `backup` | string | `ok` / `stale` / `missing` | Zusammenfassung des Backup-Signals: jung, älter als 48 Stunden oder nicht vorhanden. | `stale` immer, `missing` bei `backup_required=true` → **`degraded`** |
 | `backup_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_BACKUP_REQUIRED`; Produktion ist standardmäßig `true`, lokale/E2E- und Welt-A-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `backup=missing` |
-| `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py) L137–145). `null` = Pfad fehlt. | `< 10` → **`degraded`** |
+| `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py)). `null` = Messung nicht möglich (Pfad fehlt oder ist nicht lesbar) und wird als `disk=unknown` zusammengefasst. | `< 10` → `disk=low`; `null` → `disk=unknown` |
+| `disk` | string | `ok` / `low` / `unknown` | Zusammenfassung der Speicherplatzmessung: mindestens 10 % frei, unter 10 % frei oder nicht messbar. | `low` immer, `unknown` bei `disk_required=true` → **`degraded`** |
+| `disk_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_DISK_REQUIRED` (`DJANGO_HEALTH_DISK_REQUIRED`); standardmäßig `true`. | steuert die Degradierung bei `disk=unknown` |
 | `stale_jobs` | array\<string\> | z. B. `[]` / `["breach_scan_last_run"]` | Keys der Hintergrundjobs (Backup, Retention, Audit-Ketten-Prüfung, Snapshots, Breach-Scan, MV-Refresh) mit Status `critical` laut [`cron_job_checks`](../src/core/services/compliance/__init__.py) ([`_check_stale_jobs`](../src/core/views/health.py)). Refs #1335. | nicht-leer → **`degraded`** |
 
 > **Zwei Sichten, bewusst getrennt (Refs #1872):** „Kein Backup gefunden" bleibt im Detailwert `last_backup_age_hours` als `null` erkennbar; in Produktion macht `backup=missing` den Gesamtstatus für Token-/interne Aufrufer jetzt zugleich `degraded`, während der anonyme Liveness-Payload unverändert bleibt. Die **Betriebsansicht** `/system/` bleibt ausführlicher und zeigt denselben Zustand als eigene Warnung mit Handlungshinweis ([`operations_job_checks`](../src/core/services/compliance/__init__.py)).
@@ -156,6 +158,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
   "disk_free_pct": 41.3,
+  "disk": "ok",
+  "disk_required": true,
   "stale_jobs": []
 }
 ```
@@ -176,6 +180,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "smtp": {"status": "unreachable"},
   "last_backup_age_hours": 73.2,
   "disk_free_pct": 38.0,
+  "disk": "ok",
+  "disk_required": true,
   "stale_jobs": []
 }
 ```
@@ -196,6 +202,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
   "disk_free_pct": 41.3,
+  "disk": "ok",
+  "disk_required": true,
   "stale_jobs": ["backup_age", "breach_scan_last_run"]
 }
 ```
@@ -277,7 +285,7 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 | Rate-Limit | **120 GET/min pro IP**, `block=True` (überschüssige Requests → HTTP 429) | [`health.py`](../src/core/views/health.py) L148 (`ratelimit` Decorator) |
 | Detail-Cache-TTL | **15 s** — SMTP-CONNECT, Disk-Scan, Backup-Scan, Stale-Jobs-Scan werden gecacht, damit häufiges Polling nicht jedes Mal einen SMTP-Handshake + Filesystem-/DB-Scan auslöst | L36 (`_DETAIL_CACHE_TTL_SECONDS`) |
 | Backup-Warn-Schwelle | **48 h** → `degraded` (unverändert; entspricht `BACKUP_CRITICAL_HOURS`) | [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py) (Refs #1872) |
-| Disk-Warn-Schwelle | **< 10 %** frei → `degraded` | L30 (`DISK_WARN_PCT`) |
+| Disk-Warn-Schwelle | **< 10 %** frei → `low` → `degraded`; Messung nicht möglich → `unknown` → `degraded`, wenn `HEALTH_DISK_REQUIRED=true` | `DISK_WARN_PCT` und `_check_disk_free_pct` (Refs #2119) |
 | SMTP-Timeout | **2 s** CONNECT | L31 (`SMTP_TIMEOUT_SECONDS`) |
 | Stale-Jobs-Schwelle | jeder Job mit `critical` → `degraded`. Die drei täglichen Jobs (Backup, Retention, Audit-Ketten-Prüfung) teilen seit Refs #1872 **eine** Regel: WARNING > 36 h, CRITICAL > 48 h (= 1,5 × / 2 × Laufintervall, [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py)); die stündlichen/monatlichen Jobs behalten ihre eigenen Schwellen in [`services/compliance/cron.py`](../src/core/services/compliance/cron.py) | `_check_stale_jobs` (Refs #1335) |
 | DB-Rollen-Posture | `rolsuper` **oder** `rolbypassrls` auf `current_user` → `degraded`; **ungecacht** (ein indizierter Katalog-Lookup, billiger als der Cache-Table-Read) | `_query_runtime_role_posture` (Refs #793) |

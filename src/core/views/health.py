@@ -242,12 +242,20 @@ def _cached_detail(key: str, producer, *, cache_alive: bool):
 
 
 def _check_disk_free_pct() -> float | None:
-    """Freier Speicher (in %) auf MEDIA_ROOT; ``None`` falls Pfad fehlt."""
+    """Freier Speicher (in %) auf MEDIA_ROOT; ``None`` falls nicht messbar."""
     media_root = getattr(settings, "MEDIA_ROOT", "")
-    if not media_root or not Path(media_root).exists():
+    if not media_root:
         return None
-    total, _used, free = shutil.disk_usage(media_root)
+    path = Path(media_root)
+    try:
+        if not path.exists():
+            return None
+        total, _used, free = shutil.disk_usage(path)
+    except (OSError, ValueError):
+        logger.warning("health: disk usage check failed for MEDIA_ROOT=%s", path, exc_info=True)
+        return None
     if total <= 0:
+        logger.warning("health: disk usage check returned invalid total for MEDIA_ROOT=%s", path)
         return None
     return round(free / total * 100, 1)
 
@@ -392,7 +400,14 @@ class HealthView(View):
             # Disk-Frei (Refs #796), gecacht (A7.2).
             disk_pct = _cached_detail("health:disk_free_pct", _check_disk_free_pct, cache_alive=cache_alive)
             payload["disk_free_pct"] = disk_pct
-            status = _degrade(status, disk_pct is not None and disk_pct < DISK_WARN_PCT)
+            disk_required = bool(getattr(settings, "HEALTH_DISK_REQUIRED", True))
+            payload["disk_required"] = disk_required
+            disk_status = "unknown" if disk_pct is None else ("low" if disk_pct < DISK_WARN_PCT else "ok")
+            payload["disk"] = disk_status
+            status = _degrade(
+                status,
+                (disk_required and disk_status == "unknown") or disk_status == "low",
+            )
 
             # Scheduler-Staleness (Refs #1335), gecacht (A7.2). ``unknown`` degradet
             # bewusst nicht (frische Installation), nur bestaetigtes ``critical``.

@@ -47,6 +47,12 @@ def _clear_health_cache():
 
 
 @pytest.fixture(autouse=True)
+def _measurable_media_root(settings, tmp_path):
+    """Health-Tests messen Disk auf einem existierenden, isolierten Pfad."""
+    settings.MEDIA_ROOT = tmp_path
+
+
+@pytest.fixture(autouse=True)
 def _runtime_role_posture_secure():
     """C-25 (Refs #793): Für alle Tests eine RLS-treue Runtime-Rolle vortäuschen.
 
@@ -125,6 +131,8 @@ class TestHealthLiveness:
             "smtp",
             "last_backup_age_hours",
             "disk_free_pct",
+            "disk",
+            "disk_required",
             "database",
             "virus_scanner",
             "clamav",
@@ -295,6 +303,71 @@ class TestHealthDetail:
         data = _detail_get().json()
         assert data["disk_free_pct"] is not None
         assert 0 <= data["disk_free_pct"] <= 100
+
+    def test_disk_measurement_error_degrades_when_required(self, detail_token, tmp_path, settings, monkeypatch):
+        def _raise_disk_error(_path):
+            raise OSError("disk unavailable")
+
+        settings.MEDIA_ROOT = tmp_path
+        settings.HEALTH_DISK_REQUIRED = True
+        monkeypatch.setattr("core.views.health.shutil.disk_usage", _raise_disk_error)
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "unknown"
+        assert data["disk_free_pct"] is None
+        assert data["disk_required"] is True
+        assert data["status"] == "degraded"
+
+    def test_disk_measurement_error_stays_ok_when_not_required(self, detail_token, tmp_path, settings, monkeypatch):
+        def _raise_disk_error(_path):
+            raise OSError("disk unavailable")
+
+        settings.MEDIA_ROOT = tmp_path
+        settings.HEALTH_DISK_REQUIRED = False
+        monkeypatch.setattr("core.views.health.shutil.disk_usage", _raise_disk_error)
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "unknown"
+        assert data["disk_free_pct"] is None
+        assert data["disk_required"] is False
+        assert data["status"] == "ok"
+
+    def test_missing_media_root_degrades_when_required(self, detail_token, tmp_path, settings):
+        settings.MEDIA_ROOT = tmp_path / "missing"
+        settings.HEALTH_DISK_REQUIRED = True
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "unknown"
+        assert data["disk_free_pct"] is None
+        assert data["disk_required"] is True
+        assert data["status"] == "degraded"
+
+    def test_low_disk_space_degrades(self, detail_token, tmp_path, settings, monkeypatch):
+        settings.MEDIA_ROOT = tmp_path
+        settings.HEALTH_DISK_REQUIRED = True
+        monkeypatch.setattr("core.views.health.shutil.disk_usage", lambda _path: (100, 95, 5))
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "low"
+        assert data["disk_free_pct"] == 5.0
+        assert data["disk_required"] is True
+        assert data["status"] == "degraded"
+
+    def test_normal_disk_space_is_ok(self, detail_token, tmp_path, settings, monkeypatch):
+        settings.MEDIA_ROOT = tmp_path
+        settings.HEALTH_DISK_REQUIRED = True
+        monkeypatch.setattr("core.views.health.shutil.disk_usage", lambda _path: (100, 50, 50))
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "ok"
+        assert data["disk_free_pct"] == 50.0
+        assert data["disk_required"] is True
+        assert data["status"] == "ok"
 
     def test_stale_jobs_empty_when_all_ok(self, detail_token):
         """Refs #1335: frische/gruene Cron-Marker -> leere stale_jobs-Liste, status ok."""

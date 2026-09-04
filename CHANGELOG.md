@@ -49,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Ein nicht messbarer Speicherplatz degradiert den Health-Status** (#2119) — `/health/` weist eine fehlgeschlagene Messung jetzt als `disk=unknown` aus und degradiert standardmäßig, während Betreiber dies für Instanzen ohne messbaren `MEDIA_ROOT` mit `DJANGO_HEALTH_DISK_REQUIRED=false` bewusst abschalten können.
 - **Fehlende Backup-Signale degradieren den Health-Status** (#2021) — Produktion meldet ohne Welt-B-Backup `backup=missing` und `status=degraded`, während ein expliziter Schalter andere Backup-Welten ausnimmt und das Erstsetup vor einem fehlenden Host-Cron warnt.
 
 ## [0.91.0] - 2026-09-02

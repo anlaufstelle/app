@@ -70,6 +70,11 @@ HEALTH_DETAIL_TOKEN = os.environ.get("DJANGO_HEALTH_DETAIL_TOKEN", "")
 # einem anderen Format erzeugt.
 HEALTH_BACKUP_REQUIRED = env_bool("DJANGO_HEALTH_BACKUP_REQUIRED", default=True)
 
+# Refs #2119: Ist der freie Speicher auf MEDIA_ROOT nicht messbar, darf das
+# Monitoring in Produktion nicht still "ok" melden. Instanzen, die bewusst
+# ohne messbaren MEDIA_ROOT laufen, koennen die Degradierung explizit abschalten.
+HEALTH_DISK_REQUIRED = env_bool("DJANGO_HEALTH_DISK_REQUIRED", default=True)
+
 # L4 (Refs #1375): Passwort-Reset-Tokens kurzlebig halten. Der Django-Default
 # ist 3 Tage (259200 s) — fuer einen Reset-Link (starkes Recovery-Primitiv) zu
 # lang. Default hier 2 h; per ENV anpassbar. Invites sind davon ENTKOPPELT
