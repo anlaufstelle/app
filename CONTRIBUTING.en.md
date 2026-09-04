@@ -408,7 +408,7 @@ class Migration(migrations.Migration):
 
 **Why:** per [ADR-020](docs/adr/020-three-role-postgres-model.md) migrations run as the admin role (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS`), where the `facility_isolation` policy does not apply. If a misconfiguration makes a migration run under the NOBYPASSRLS application role instead, it hits **0 rows silently** without `app.current_facility_id` set: the migration counts as successful, the backfill never happened. The guard turns that into a hard abort (`MigrationRoleError`) including the role name and a fix hint. No `SET ROLE`/GUC juggling inside the migration — the session GUC `app.is_super_admin` is **not** an accepted substitute (a deliberate distinction from `has_rls_bypass_context`, which does allow it for maintenance/cron paths).
 
-The guard complements the deployment gate `current_connection_bypasses_rls` in [`docker-migrate.sh`](docker-migrate.sh) (#1375): that one checks the migrate **job** once up front and only inside the container deployment, this one sits **inside** the migration and protects every invocation path (manual `manage.py migrate`, restore drill, self-hosting without the script). Existing migrations are **not** retrofitted — the inventory of which ones would have been affected is in the module docstring of `migration_guards.py`. Tests: [`src/tests/test_migration_rls_guard.py`](src/tests/test_migration_rls_guard.py).
+The guard complements the deployment gate `current_connection_bypasses_rls` in [`docker-migrate.sh`](docker-migrate.sh) (#1375): that one checks the migrate **job** once up front and only inside the container deployment, this one sits **inside** the migration and protects every invocation path (manual `manage.py migrate`, restore drill, self-hosting without the script). The guard is present in **every** `RunPython` function that writes to an RLS table — including the pre-existing migrations since #2114. Which functions those are is derived at runtime from `pg_class.relrowsecurity` by the architecture test [`src/tests/test_migration_rls_guard_coverage.py`](src/tests/test_migration_rls_guard_coverage.py), which enforces this for every new data migration; exceptions require a rationale in the test's exception list. Tests: [`src/tests/test_migration_rls_guard.py`](src/tests/test_migration_rls_guard.py) (effect), `test_migration_rls_guard_coverage.py` (coverage).
 
 ### Linting and Formatting
 
@@ -979,5 +979,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.91.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 49f049195e39f81e65c415d16013b2d64f45a644 -->
+<!-- translation-date: 2026-09-04 -->
+<!-- source-hash: eec2ecd5c4cb2d4a9de95ede4b279d3d782c5653 -->
