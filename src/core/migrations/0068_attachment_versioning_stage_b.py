@@ -8,9 +8,12 @@ import uuid
 
 from django.db import migrations, models
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def unify_entry_ids_per_chain(apps, schema_editor):
     """Jeder Kette (is_current + Vorgänger) wird eine einzige entry_id zugewiesen."""
+    assert_migration_role_bypasses_rls(schema_editor)
     EventAttachment = apps.get_model("core", "EventAttachment")
 
     # Starte bei jeder aktuellen (head-of-chain) Attachment; walk rückwärts

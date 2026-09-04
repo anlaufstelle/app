@@ -15,8 +15,11 @@ auf ``is_encrypted=False`` zurueck, da das den vorherigen Zustand
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def heal_high_sensitivity_fields(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     FieldTemplate = apps.get_model("core", "FieldTemplate")
     FieldTemplate.objects.filter(sensitivity="high", is_encrypted=False).update(is_encrypted=True)
 

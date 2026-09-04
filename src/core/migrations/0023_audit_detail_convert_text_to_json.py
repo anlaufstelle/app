@@ -2,6 +2,8 @@
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def convert_text_to_json(apps, schema_editor):
     """Convert existing text detail values to JSON dicts.
@@ -9,6 +11,7 @@ def convert_text_to_json(apps, schema_editor):
     - Empty string / None -> {} (already handled by JSONField default)
     - Non-empty string -> {"text": "<old_value>"}
     """
+    assert_migration_role_bypasses_rls(schema_editor)
     AuditLog = apps.get_model("core", "AuditLog")
     for entry in AuditLog.objects.all().iterator():
         if isinstance(entry.detail, str):
@@ -21,6 +24,7 @@ def convert_text_to_json(apps, schema_editor):
 
 def revert_json_to_text(apps, schema_editor):
     """Revert JSON dicts back to text for reverse migration."""
+    assert_migration_role_bypasses_rls(schema_editor)
     AuditLog = apps.get_model("core", "AuditLog")
     for entry in AuditLog.objects.all().iterator():
         if isinstance(entry.detail, dict):

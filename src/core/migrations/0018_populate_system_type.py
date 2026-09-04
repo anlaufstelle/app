@@ -2,8 +2,11 @@
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def populate_system_type(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     DocumentType = apps.get_model("core", "DocumentType")
     mapping = {
         "Hausverbot": "ban",

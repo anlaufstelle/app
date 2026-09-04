@@ -16,8 +16,11 @@ Migrationspfad für bestehende NULL-Fälle:
 
 from django.db import migrations, models
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def delete_orphan_cases(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     Case = apps.get_model("core", "Case")
     qs = Case.objects.filter(client__isnull=True)
     count = qs.count()

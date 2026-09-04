@@ -2,8 +2,11 @@
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def forward(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     FieldTemplate = apps.get_model("core", "FieldTemplate")
     updated = FieldTemplate.objects.filter(is_encrypted=True, sensitivity="").update(sensitivity="high")
     if updated:
@@ -11,6 +14,7 @@ def forward(apps, schema_editor):
 
 
 def backward(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     FieldTemplate = apps.get_model("core", "FieldTemplate")
     FieldTemplate.objects.filter(is_encrypted=True, sensitivity="high").update(sensitivity="")
 

@@ -49,6 +49,8 @@ from collections import defaultdict
 from django.db import migrations
 from django.utils.text import slugify
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 _UMLAUT_MAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 _MAX_LEN = 120
 
@@ -104,6 +106,7 @@ def _rewrite_json_keys(model, json_field: str, renames_by_facility: dict) -> Non
 
 
 def normalize_underscore_fieldtemplate_slugs(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     FieldTemplate = apps.get_model("core", "FieldTemplate")
     Event = apps.get_model("core", "Event")
     Client = apps.get_model("core", "Client")

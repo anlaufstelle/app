@@ -3,6 +3,8 @@
 import django.core.validators
 from django.db import migrations, models
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def _clamp_invalid_values(apps, schema_editor):
     """Bestandsdaten unter die neue Untergrenze klemmen (Security N8, Refs #1445).
@@ -11,6 +13,7 @@ def _clamp_invalid_values(apps, schema_editor):
     anschliessende CheckConstraint-Add auf Alt-Instanzen mit bereits gesetzten
     0/negativen Fristen.
     """
+    assert_migration_role_bypasses_rls(schema_editor)
     Settings = apps.get_model("core", "Settings")
     defaults = {
         "session_timeout_minutes": 30,

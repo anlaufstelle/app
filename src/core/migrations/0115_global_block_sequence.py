@@ -17,6 +17,8 @@ damit die Slug-Immutabilität aus M2 nie berührt wird).
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def _renumber(apps, *, ungrouped_after_groups):
     DocumentType = apps.get_model("core", "DocumentType")
@@ -43,11 +45,13 @@ def _renumber(apps, *, ungrouped_after_groups):
 
 def forward(apps, schema_editor):
     # Gruppen 0..k-1, ungruppierte Felder k..k+m-1 (globale Sequenz).
+    assert_migration_role_bypasses_rls(schema_editor)
     _renumber(apps, ungrouped_after_groups=True)
 
 
 def backward(apps, schema_editor):
     # Gruppen 0..k-1, ungruppierte Felder wieder als eigene Sequenz 0..m-1.
+    assert_migration_role_bypasses_rls(schema_editor)
     _renumber(apps, ungrouped_after_groups=False)
 
 

@@ -2,8 +2,11 @@
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def fix_anonymous_events(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     Event = apps.get_model("core", "Event")
     Event.objects.filter(client__isnull=True, is_anonymous=False).update(is_anonymous=True)
 

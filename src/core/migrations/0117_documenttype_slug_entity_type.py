@@ -38,6 +38,8 @@ import re
 from django.db import migrations, models
 from django.utils.text import slugify
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 _UMLAUT_MAP = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 _MAX_LEN = 120
 
@@ -70,6 +72,7 @@ def _next_free_slug(base: str, used: set) -> str:
 
 
 def backfill_document_type_slugs(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     DocumentType = apps.get_model("core", "DocumentType")
 
     used_by_facility: dict = {}

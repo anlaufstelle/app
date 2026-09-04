@@ -25,8 +25,11 @@ wiederher (wuerde DSGVO-Verstoss reaktivieren).
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def redact_legacy_delete_history(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     EventHistory = apps.get_model("core", "EventHistory")
 
     qs = EventHistory.objects.filter(action="delete")

@@ -2,8 +2,11 @@
 
 from django.db import migrations, models
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def redact_legacy_summaries(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     Activity = apps.get_model("core", "Activity")
     Activity.objects.all().update(
         summary="",

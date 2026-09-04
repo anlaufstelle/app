@@ -40,44 +40,27 @@ Abgrenzung zu den bestehenden Pruefungen:
   richtig, fuer Migrationen bewusst **nicht**: ADR-020 legt die Migrationsrolle
   auf ``POSTGRES_ADMIN_USER`` fest, und kein Migrationspfad setzt diese GUC.
 
-**Bestandsaufnahme (Refs #1746, Stand 0122 — reine Doku, kein Rueckwirken).**
-Datenmigrationen *nach* ``0047`` (RLS-Setup), die RLS-Tabellen anfassen und
-damit vom Fehllauf betroffen gewesen waeren:
+**Abdeckung ist abgeleitet, nicht aufgezaehlt (Refs #2114).** Hier stand
+frueher eine handgepflegte Bestandsaufnahme (Stand ``0122``) samt der
+Begruendung, warum die Alt-Migrationen den Guard *nicht* nachtraeglich
+bekommen. Beides ist ueberholt: die Liste war schon bei ihrer Niederschrift
+unvollstaendig, und die Begruendung („laengst angewandt" / „transitiv durch
+``0123`` geschuetzt") traegt genau den Fall nicht, um den es geht — die
+**Neuinstallation oder den Restore**, bei dem ``0001``..``HEAD`` in einem Lauf
+und moeglicherweise unter der falschen Rolle durchlaufen (Red-Team B-7).
 
-===========  ==========================================================
-Migration    Beruehrte RLS-Tabellen
-===========  ==========================================================
-``0068``     ``core_attachment`` (JOIN-Policy)
-``0071``     ``core_fieldtemplate``
-``0074``     ``core_eventhistory`` (JOIN-Policy)
-``0080``     ``core_case``
-``0081``     ``core_event``, ``core_documenttypefield``
-``0099``     ``core_documenttype``, ``core_settings``
-``0115``     ``core_documenttype``, ``core_documenttypefield``, ``core_fieldgroup``
-``0117``     ``core_documenttype``
-``0120``     ``core_fieldtemplate``, ``core_client``, ``core_case``, ``core_event``, ``core_quicktemplate``
-``0122``     ``core_statisticssnapshot``
-===========  ==========================================================
+Der Guard steht deshalb jetzt in **jeder** ``RunPython``-Funktion, die eine
+RLS-Tabelle schreibt — auch in den Vor-``0047``-Migrationen, weil die Regel
+dann ordnungsunabhaengig bleibt. Welche Funktionen das sind, sagt kein Text
+mehr, sondern der Architektur-Guard
+``src/tests/test_migration_rls_guard_coverage.py``: er findet die
+``RunPython``-Einstiege per AST, sammelt ihre Modelle transitiv, loest sie zur
+Laufzeit gegen ``pg_class.relrowsecurity`` auf und wird rot, wenn eine
+guard-lose Fundstelle dazukommt. Bewusst ohne Guard bleiben nur Funktionen,
+deren Tabellen gar keine RLS tragen (``0049`` Materialized View, ``0084``/
+``0094`` ``core_user``, ``0102`` ``otp_totp_totpdevice``) — sie fallen aus der
+Ableitung heraus, statt als Hand-Ausnahme gefuehrt zu werden.
 
-Nicht betroffen: ``0018``/``0023``/``0035``/``0037`` (liefen *vor* ``0047``, RLS
-existierte zur Laufzeit noch nicht), ``0084``/``0094`` (``core_user`` —
-Auth-Grenze, bewusst ohne RLS), ``0093`` (Cache-Tabelle), ``0102``
-(``otp_totp_totpdevice``), ``0049`` (Materialized View, bewusst ohne RLS).
-
-Diese Migrationen werden **nicht** nachtraeglich mit dem Guard versehen. Zwei
-Klassen mit unterschiedlicher Begruendung:
-
-* ``0068``–``0099`` sind Bestandteil von ``v0.23.0`` (Snapshot endet bei
-  ``0109``) und auf allen Instanzen laengst angewandt — ein nachtraeglicher
-  Guard liefe dort nie und schriebe nur die Migrationshistorie um.
-* ``0115``/``0117``/``0120``/``0122`` liegen zwischen dem ``v0.23.0``-Snapshot
-  (endet bei ``0109``) und ``0123``; beim Update einer Instanz laufen sie im
-  selben ``migrate``-Aufruf wie ``0123``. Da ``0123`` den Guard traegt und bei
-  falscher Rolle fail-loud abbricht, *bevor* die Batch committet, ist der ganze
-  Lauf transitiv geschuetzt. Ein Retrofit auf diese vier bliebe moeglich, wurde
-  aber bewusst unterlassen, um releasefertige Migrationsdateien nicht erneut
-  anzufassen — der Guard ist ab ``0123`` die Konvention fuer *neue*
-  Datenmigrationen.
 """
 
 from __future__ import annotations

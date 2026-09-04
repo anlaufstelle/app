@@ -10,8 +10,11 @@ laeuft fuer bestehende Events.
 from django.contrib.postgres.operations import TrigramExtension
 from django.db import migrations, models
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 
 def _backfill_search_text(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     Event = apps.get_model("core", "Event")
     DocumentTypeField = apps.get_model("core", "DocumentTypeField")
 

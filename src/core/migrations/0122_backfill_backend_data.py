@@ -37,6 +37,8 @@ from itertools import batched
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 # Batch-Groesse fuer Lesen (Server-Cursor) und Schreiben. Snapshots sind je
 # Einrichtung monatlich — ein Vollbestand passt praktisch immer in den Speicher,
 # die Batches halten den Lauf trotzdem auch bei Mehrmandanten-Instanzen flach.
@@ -58,6 +60,7 @@ def _candidates(StatisticsSnapshot):
 
 
 def backfill_backend_data(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     StatisticsSnapshot = apps.get_model("core", "StatisticsSnapshot")
     for batch in batched(_candidates(StatisticsSnapshot), _BATCH_SIZE):
         StatisticsSnapshot.objects.bulk_update(batch, ["backend_data"])
