@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentTypeField, Event, FieldTemplate, ImportJob
 from core.services import import_engine
-from core.services.file_vault import decrypt_field
+from core.services.file_vault import decrypt_field, encrypt_file
 
 PSEUDONYM_HEADER = "Pseudonym;Kontaktstufe;Altersgruppe;Notizen\n"
 
@@ -152,6 +152,15 @@ class TestStoreImportUpload:
                 target_type=ImportJob.TargetType.CLIENT,
             )
 
+    def test_rejects_malformed_csv_as_validation_error(self, facility, admin_user, media_root):
+        with pytest.raises(ValidationError, match="Fehler in Zeile 2"):
+            import_engine.store_import_upload(
+                facility,
+                admin_user,
+                _upload(b"Pseudonym\r\na\rb\r\n"),
+                target_type=ImportJob.TargetType.CLIENT,
+            )
+
     def test_event_job_without_document_type_is_rejected(self, facility, admin_user, media_root):
         with pytest.raises(ValidationError):
             import_engine.store_import_upload(
@@ -213,6 +222,23 @@ class TestParsing:
         )
         _header, rows = import_engine.read_rows(job)
         assert len(rows) == 2
+
+    def test_preview_rejects_malformed_stored_csv_as_validation_error(self, facility, admin_user, media_root):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym\nA\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+            delimiter=";",
+        )
+        encrypt_file(
+            io.BytesIO(b"Pseudonym\r\na\rb\r\n"),
+            import_engine.import_file_path(job),
+            file_id=job.storage_filename,
+        )
+
+        with pytest.raises(ValidationError, match="Fehler in Zeile 2"):
+            import_engine.parse_preview(job)
 
 
 @pytest.mark.django_db

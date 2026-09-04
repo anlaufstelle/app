@@ -267,7 +267,16 @@ def _parse_csv_rows(reader: Iterator[list[str]]) -> list[list[str]]:
 def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
     """Kopfzeile + Datenzeilen; leere Zeilen fallen raus, Limits greifen hart."""
     reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-    return _parse_csv_header(reader), _parse_csv_rows(reader)
+    try:
+        return _parse_csv_header(reader), _parse_csv_rows(reader)
+    except csv.Error as exc:
+        raise ValidationError(
+            _(
+                "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). "
+                "Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
+            )
+            % {"line": reader.line_num}
+        ) from exc
 
 
 # ---------------------------------------------------------------------------

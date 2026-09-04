@@ -165,6 +165,25 @@ class TestWizardRoundtrip:
         assert response.status_code == 200
         assert ImportJob.objects.for_facility(facility).count() == 0
 
+    def test_upload_renders_malformed_csv_as_form_error(self, admin_client_logged_in, facility, media_root):
+        response = admin_client_logged_in.post(
+            reverse("core:import_create"),
+            {
+                "target_type": ImportJob.TargetType.CLIENT,
+                "source_file": SimpleUploadedFile(
+                    "import.csv",
+                    b"Pseudonym\r\na\rb\r\n",
+                    content_type="text/csv",
+                ),
+                "delimiter": "",
+                "encoding": "",
+            },
+        )
+
+        assert response.status_code == 200
+        assert "Die Datei konnte nicht als CSV gelesen werden" in response.content.decode()
+        assert ImportJob.objects.for_facility(facility).count() == 0
+
     def test_upload_rejects_a_foreign_document_type(
         self, admin_client_logged_in, facility, foreign_doc_type, media_root
     ):
