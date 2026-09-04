@@ -198,7 +198,9 @@ class TestBackfillFunction:
     def _run_backfill(self):
         from django.apps import apps as real_apps
 
-        _migration.backfill_document_type_slugs(real_apps, None)
+        # Refs #2114: der RLS-Rollen-Guard liest die Verbindung des Schema-Editors.
+        with connection.schema_editor() as schema_editor:
+            _migration.backfill_document_type_slugs(real_apps, schema_editor)
 
     @pytest.mark.django_db
     def test_backfill_deterministic_and_unique(self, facility, other_facility):
@@ -421,7 +423,9 @@ class TestBackfillSlugNormalization:
     def _run_backfill(self):
         from django.apps import apps as real_apps
 
-        _migration.backfill_document_type_slugs(real_apps, None)
+        # Refs #2114: der RLS-Rollen-Guard liest die Verbindung des Schema-Editors.
+        with connection.schema_editor() as schema_editor:
+            _migration.backfill_document_type_slugs(real_apps, schema_editor)
 
     @pytest.mark.django_db
     def test_backfill_normalizes_underscores(self, facility):
