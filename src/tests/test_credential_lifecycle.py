@@ -52,13 +52,19 @@ def _db_session_for(user) -> str:
     return store.session_key
 
 
+#: Quell-IP der Testrequests. Refs #2121: ``TRUSTED_PROXY_HOPS`` ist im
+#: Testprofil >= 1, ohne ``X-Forwarded-For`` faellt ``get_client_ip`` auf
+#: ``REMOTE_ADDR`` zurueck — genau diesen Wert muss die Audit-Zeile tragen.
+TEST_CLIENT_IP = "203.0.113.42"
+
+
 def _request_mit_session(rf, user=None):
     """Request wie ihn die Middleware-Kette liefert: mit Session und ``user``.
 
     Reset und Invite laufen anonym (``AnonymousUser``) — genau der Fall, in dem
     der Audit-Helper die RLS-Session-GUCs auf den Ziel-Kontext syncen muss.
     """
-    request = rf.post("/")
+    request = rf.post("/", REMOTE_ADDR=TEST_CLIENT_IP)
     request.session = SessionStore()
     request.user = user if user is not None else AnonymousUser()
     return request
@@ -126,10 +132,14 @@ class TestWirkungsMatrix:
         if sudo:
             sudo_call.assert_called_once_with(request)
         if unlock:
+            # Refs #2121: Der Pin stand frueher auf ``ip_address=None``. Die
+            # ANFORDERUNG hat sich geaendert — der LOGIN_UNLOCK-Eintrag muss die
+            # forensisch relevante Quell-IP tragen, wie seit #2111 an den
+            # Recovery-Token- und Backup-Code-Wegen.
             unlock_call.assert_called_once_with(
                 staff_user,
                 unlocked_by=None,
-                ip_address=None,
+                ip_address=TEST_CLIENT_IP,
                 trigger=str(grund),
             )
         if audit:
@@ -198,6 +208,57 @@ class TestWirkungsMatrix:
         )
         assert eintrag is not None
         assert eintrag.detail["trigger"] == "invite_setup"
+
+    @pytest.mark.parametrize(
+        "grund",
+        (RevocationReason.PASSWORD_RESET, RevocationReason.INVITE_SETUP),
+    )
+    def test_unlock_traegt_die_quell_ip_im_auditlog(self, rf, staff_user, grund):
+        """Refs #2121: Die LOGIN_UNLOCK-Zeile verlor bisher die Quell-IP.
+
+        ``revoke_credentials`` rief ``unlock(..., ip_address=None)``, obwohl ein
+        ``request`` vorliegt — dieselbe Luecke, die #2111 an den Recovery-Wegen
+        geschlossen hat. Ohne die IP ist der Eintrag fuer die Frage „von wo kam
+        die Entsperrung" wertlos.
+        """
+        revoke_credentials(staff_user, reason=grund, request=_request_mit_session(rf))
+
+        eintrag = (
+            AuditLog.objects.filter(action=AuditLog.Action.LOGIN_UNLOCK, user=staff_user).order_by("-timestamp").first()
+        )
+        assert eintrag is not None
+        assert eintrag.ip_address == TEST_CLIENT_IP
+
+    def test_unlock_ohne_request_bleibt_ohne_ip(self, staff_user):
+        """Kein Request, keine IP — und trotzdem kein Absturz.
+
+        Der Service-/CLI-Kontext ruft ``revoke_credentials`` ohne ``request``;
+        ``get_client_ip(None)`` liefert ``None``, die Zeile entsteht regulaer.
+        """
+        revoke_credentials(staff_user, reason=RevocationReason.PASSWORD_RESET)
+
+        eintrag = (
+            AuditLog.objects.filter(action=AuditLog.Action.LOGIN_UNLOCK, user=staff_user).order_by("-timestamp").first()
+        )
+        assert eintrag is not None
+        assert eintrag.ip_address is None
+
+    def test_unlock_respektiert_trusted_proxy_hops(self, rf, staff_user, settings):
+        """Die IP kommt ueber ``get_client_ip``, nicht ueber ``REMOTE_ADDR`` roh.
+
+        Damit ist sie spoofing-resistent nach ``TRUSTED_PROXY_HOPS`` — ein
+        client-gesetzter ``X-Forwarded-For`` allein bestimmt sie nicht.
+        """
+        settings.TRUSTED_PROXY_HOPS = 1
+        request = _request_mit_session(rf)
+        request.META["HTTP_X_FORWARDED_FOR"] = "198.51.100.7, 192.0.2.9"
+
+        revoke_credentials(staff_user, reason=RevocationReason.PASSWORD_RESET, request=request)
+
+        eintrag = (
+            AuditLog.objects.filter(action=AuditLog.Action.LOGIN_UNLOCK, user=staff_user).order_by("-timestamp").first()
+        )
+        assert eintrag.ip_address == "192.0.2.9"
 
     def test_sudo_fenster_wird_in_allen_passwort_pfaden_geleert(self, rf, staff_user):
         for grund in (

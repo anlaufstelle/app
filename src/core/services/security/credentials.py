@@ -69,6 +69,7 @@ from core.models import AuditLog, User
 from core.services.audit import audit_event, log_audit_event
 from core.services.security.login_lockout import unlock
 from core.services.security.sudo_mode import clear_sudo
+from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +212,15 @@ def revoke_credentials(user, *, reason, request=None) -> None:
         # (bewiesene E-Mail-Kontrolle + selbst gewaehltes Passwort) und hebt
         # einen aktiven Lockout auf. Der Slug haelt fest, ueber welchen der
         # beiden Token-Wege das geschah.
-        unlock(user, unlocked_by=None, ip_address=None, trigger=str(grund))
+        #
+        # Refs #2121: Die Quell-IP stand hier fest auf ``None``, obwohl der
+        # ``request`` vorliegt — dieselbe Luecke, die #2111 an den
+        # Recovery-Token- und Backup-Code-Wegen geschlossen hat. Der
+        # LOGIN_UNLOCK-Eintrag verlor damit genau das Merkmal, das die Frage
+        # „von wo kam die Entsperrung" beantwortet. ``get_client_ip`` loest sie
+        # spoofing-resistent ueber ``TRUSTED_PROXY_HOPS`` auf und liefert fuer
+        # den request-losen Service-/CLI-Kontext weiterhin ``None``.
+        unlock(user, unlocked_by=None, ip_address=get_client_ip(request), trigger=str(grund))
     if effects.write_audit:
         _write_audit(user, grund, request)
 
