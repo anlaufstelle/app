@@ -1052,9 +1052,42 @@ class TestStandaloneDocumentGuard:
     _HTML_TAG = re.compile(r"<html\b", re.IGNORECASE)
     _HARDCODED_LANG = re.compile(r"""<html\b[^>]*\slang\s*=\s*["']de["']""", re.IGNORECASE)
 
+    # Echte ``{% include "…" %}``-Tags, whitespace-tolerant und mit beliebigen
+    # ``with``-Parametern dahinter. Refs #2102 (Cross-Review-Befund F): ein
+    # blosser Substring-Test auf den Dateinamen war gruen, sobald der Name nur
+    # in einem Kommentar stand — genau der Fall, den dieser Guard verhindern
+    # soll (erklaerender Kommentar statt echter Einbindung).
+    _HEAD_INCLUDE_TAG = re.compile(r"""{%\s*include\s+(["'])components/_document_head\.html\1""")
+    _FOOTER_INCLUDE_TAG = re.compile(r"""{%\s*include\s+(["'])components/_public_footer\.html\1""")
+
+    # Kommentarformen, die im gerenderten Dokument NICHT ankommen bzw. keine
+    # Wirkung haben. Reihenfolge zaehlt: ``{% comment %}``-Bloecke koennen
+    # ``{# … #}`` enthalten, HTML-Kommentare koennen beides enthalten.
+    _COMMENT_PATTERNS = (
+        re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", re.DOTALL | re.IGNORECASE),
+        re.compile(r"{#.*?#}", re.DOTALL),
+        re.compile(r"<!--.*?-->", re.DOTALL),
+    )
+
+    @classmethod
+    def _strip_comments(cls, source: str) -> str:
+        """Entfernt Django- und HTML-Kommentare aus einer Template-Quelle.
+
+        Der Guard bewertet ausschliesslich Markup, das tatsaechlich wirkt:
+        weder ein ``{# … #}``-Hinweis auf den Baustein noch ein auskommentiertes
+        ``<html lang="de">`` sagen etwas ueber die ausgelieferte Seite aus.
+        """
+        for pattern in cls._COMMENT_PATTERNS:
+            source = pattern.sub("", source)
+        return source
+
     @classmethod
     def _standalone_documents(cls, root=None):
         """Alle Templates unterhalb ``root`` mit eigenem ``<html>``-Element.
+
+        Geliefert wird die **kommentarbefreite** Quelle — alle Pruefungen unten
+        arbeiten darauf, damit weder Erklaertexte noch auskommentiertes Markup
+        das Urteil verfaelschen.
 
         ``root`` ist parametrisiert, damit der Negativtest gegen ``tmp_path``
         laufen kann, statt eine Probe in den echten Template-Baum zu legen
@@ -1065,7 +1098,7 @@ class TestStandaloneDocumentGuard:
             rel = template_file.relative_to(root).as_posix()
             if rel.startswith(cls._PDF_TEMPLATE_PREFIX):
                 continue
-            source = template_file.read_text(errors="ignore")
+            source = cls._strip_comments(template_file.read_text(errors="ignore"))
             if not cls._HTML_TAG.search(source):
                 continue
             yield rel, source
@@ -1075,7 +1108,7 @@ class TestStandaloneDocumentGuard:
             pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
         documents = list(self._standalone_documents())
         assert documents, "Kein Standalone-Template gefunden — Scanner defekt."
-        violations = [rel for rel, source in documents if self._HEAD_INCLUDE not in source]
+        violations = [rel for rel, source in documents if not self._HEAD_INCLUDE_TAG.search(source)]
         assert not violations, (
             "Diese eigenstaendigen HTML-Dokumente binden den gemeinsamen "
             f'Kopfbaustein nicht ein: {{% include "{self._HEAD_INCLUDE}" %}}. '
@@ -1090,7 +1123,7 @@ class TestStandaloneDocumentGuard:
         violations = [
             rel
             for rel, source in self._standalone_documents()
-            if rel not in self._FOOTERLESS_TEMPLATES and self._FOOTER_INCLUDE not in source
+            if rel not in self._FOOTERLESS_TEMPLATES and not self._FOOTER_INCLUDE_TAG.search(source)
         ]
         assert not violations, (
             "Diese eigenstaendigen HTML-Dokumente binden den gemeinsamen "
@@ -1135,9 +1168,72 @@ class TestStandaloneDocumentGuard:
 
         assert list(found) == ["kaputt.html"], "Scanner darf nur echte Browser-Dokumente melden."
         source = found["kaputt.html"]
-        assert self._HEAD_INCLUDE not in source
-        assert self._FOOTER_INCLUDE not in source
+        assert not self._HEAD_INCLUDE_TAG.search(source)
+        assert not self._FOOTER_INCLUDE_TAG.search(source)
         assert self._HARDCODED_LANG.search(source)
+
+    def test_scanner_rejects_comment_only_mentions(self, tmp_path):
+        """Refs #2102 (Cross-Review-Befund F): ein Baustein-NAME im Kommentar
+        ist keine Einbindung.
+
+        Der Guard hat den Substring bis zu dieser Runde woertlich gesucht. Ein
+        Dokument, das die beiden Bausteine nur in einem ``{# … #}``-Hinweis,
+        einem ``{% comment %}``-Block oder einem HTML-Kommentar erwaehnt —
+        etwa "TODO: components/_public_footer.html einbinden" — kam damit
+        durch, obwohl auf der ausgelieferten Seite weder Favicon noch
+        AGPL-§13-Link stehen. Dasselbe gilt fuer ein auskommentiertes
+        ``<html lang="de">``: die Sprachpruefung darf sich davon weder
+        beruhigen noch taeuschen lassen.
+        """
+        (tmp_path / "kommentar_only.html").write_text(
+            "<!DOCTYPE html>\n"
+            '<html lang="de">\n'
+            "<head>{# TODO: components/_document_head.html einbinden #}</head>\n"
+            "<body>\n"
+            "<!-- components/_public_footer.html kommt noch -->\n"
+            "{% comment %}components/_public_footer.html{% endcomment %}\n"
+            "</body>\n"
+            "</html>\n",
+            encoding="utf-8",
+        )
+        found = dict(self._standalone_documents(root=tmp_path))
+
+        assert list(found) == ["kommentar_only.html"]
+        source = found["kommentar_only.html"]
+        assert not self._HEAD_INCLUDE_TAG.search(source), "Kommentar ist keine Einbindung."
+        assert not self._FOOTER_INCLUDE_TAG.search(source), "Kommentar ist keine Einbindung."
+        assert self._HARDCODED_LANG.search(source), 'Das echte lang="de" steht ausserhalb der Kommentare.'
+
+    def test_scanner_ignores_documents_that_exist_only_in_comments(self, tmp_path):
+        """Gegen-Check zur Kommentar-Entfernung: ein ``<html>`` im Kommentar
+        macht aus einem Partial kein eigenstaendiges Dokument — sonst meldete
+        der Guard Partials, die nie einen ``<head>`` tragen."""
+        (tmp_path / "partial_mit_beispiel.html").write_text(
+            '{# Beispielaufruf: <html lang="de"> … </html> #}\n<div class="x">Partial</div>\n',
+            encoding="utf-8",
+        )
+
+        assert list(dict(self._standalone_documents(root=tmp_path))) == []
+
+    def test_scanner_accepts_real_include_tags_in_any_spelling(self, tmp_path):
+        """Positiv-Gegenprobe: die Regex akzeptiert Whitespace-Varianten,
+        einfache Anfuehrungszeichen und ``with``-Parameter — sonst haette der
+        schaerfere Guard die bestehenden Aufrufe (z. B. ``base.html`` mit
+        ``footer_authenticated=True``) faelschlich als Verstoss gemeldet."""
+        (tmp_path / "ok.html").write_text(
+            "<!DOCTYPE html>\n"
+            "<html lang=\"{{ LANGUAGE_CODE|default:'de' }}\">\n"
+            '<head>{%include "components/_document_head.html"%}</head>\n'
+            "<body>{%  include  'components/_public_footer.html'  with footer_authenticated=True  %}</body>\n"
+            "</html>\n",
+            encoding="utf-8",
+        )
+        found = dict(self._standalone_documents(root=tmp_path))
+        source = found["ok.html"]
+
+        assert self._HEAD_INCLUDE_TAG.search(source)
+        assert self._FOOTER_INCLUDE_TAG.search(source)
+        assert not self._HARDCODED_LANG.search(source)
 
     def test_shared_building_blocks_stay_csp_clean(self):
         """Kopf- und Fussbaustein duerfen weder Skript noch Inline-Style tragen.

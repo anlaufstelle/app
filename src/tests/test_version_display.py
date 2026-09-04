@@ -115,15 +115,64 @@ class TestPublicFooterRendering:
       aber noch nicht erbracht bzw. das Passwort noch nicht gewechselt ist.
     """
 
-    _ANONYMOUS_ROUTES = [
-        "login",
-        "password_reset",
-        "password_reset_done",
-        "password_reset_complete",
-        "core:lockout_recovery_request",
-        "core:lockout_recovery_sent",
-        "core:lockout_recovery_backup_code",
-    ]
+    # Refs #2102 (Cross-Review M-3): die Zusage lautet "auf ALLEN Footer-Seiten",
+    # also werden auch alle 17 Dokumente gerendert geprueft — nicht nur die
+    # bequem erreichbaren zehn. Die Zuordnung Route -> Template ist explizit,
+    # damit ``test_every_footer_document_is_covered`` sie gegen den echten
+    # Template-Scan halten kann: verschwindet ein Dokument oder kommt eins dazu,
+    # faellt die Luecke hier auf und nicht erst im Handtest.
+    _ANONYMOUS_ROUTES = {
+        "login": "auth/login.html",
+        "password_reset": "registration/password_reset_form.html",
+        "password_reset_done": "registration/password_reset_done.html",
+        "password_reset_complete": "registration/password_reset_complete.html",
+        "core:lockout_recovery_request": "auth/lockout_recovery_request.html",
+        "core:lockout_recovery_sent": "auth/lockout_recovery_sent.html",
+        "core:lockout_recovery_backup_code": "auth/lockout_recovery_backup_code.html",
+        # Precachte Offline-Shell — erbt von offline_base.html.
+        "core:offline_client_list_shell": "offline_base.html",
+    }
+    # Eingeloggt, aber vor dem 2FA-Nachweis bzw. vor dem erzwungenen
+    # Passwortwechsel: hier darf trotz Anmeldung keine Version stehen.
+    _GATED_ROUTES = {
+        "mfa_verify": "auth/mfa_login.html",
+        "mfa_setup": "auth/mfa_setup.html",
+        "password_change": "auth/password_change.html",
+    }
+    # Vollstaendig angemeldet — der Gegen-Check, dass base.html den Footer behaelt.
+    _AUTHENTICATED_ROUTES = {"core:zeitstrom": "base.html"}
+    # Keine anonym erreichbare URL: Token-Seiten und die beiden
+    # Middleware-Sperrseiten werden wie im Favicon-Test direkt gerendert.
+    _RENDERED_TEMPLATES = (
+        "auth/facility_missing.html",
+        "auth/facility_archived.html",
+        "auth/lockout_recovery_confirm.html",
+        "auth/lockout_recovery_invalid.html",
+        "registration/password_reset_confirm.html",
+    )
+
+    def test_every_footer_document_is_covered(self):
+        """Vollstaendigkeits-Assert gegen den Architektur-Scanner.
+
+        Quelle der Wahrheit ist derselbe Scan, den
+        ``TestStandaloneDocumentGuard`` fuer die Include-Pflicht fuehrt — eine
+        hier von Hand gepflegte Liste koennte sonst leise hinter dem
+        Template-Baum zurueckbleiben (genau die Luecke aus dem Cross-Review).
+        """
+        from tests.test_architecture_guards_templates import TestStandaloneDocumentGuard as Guard
+
+        expected = {rel for rel, _source in Guard._standalone_documents() if rel not in Guard._FOOTERLESS_TEMPLATES}
+        covered = (
+            set(self._ANONYMOUS_ROUTES.values())
+            | set(self._GATED_ROUTES.values())
+            | set(self._AUTHENTICATED_ROUTES.values())
+            | set(self._RENDERED_TEMPLATES)
+        )
+        assert covered == expected, (
+            "Footer-Renderingtests und Template-Inventar sind auseinandergelaufen.\n"
+            f"Ungeprueft: {sorted(expected - covered)}\n"
+            f"Nicht (mehr) vorhanden: {sorted(covered - expected)}"
+        )
 
     @staticmethod
     def _assert_footer_without_version(body, label):
@@ -132,7 +181,7 @@ class TestPublicFooterRendering:
         assert 'data-testid="app-version"' not in body, f"{label}: Versionsanzeige leakt (Refs #1050/#1901)"
         assert 'data-testid="footer-help"' not in body, f"{label}: Hilfe-Link nur fuer Angemeldete"
 
-    @pytest.mark.parametrize("url_name", _ANONYMOUS_ROUTES)
+    @pytest.mark.parametrize("url_name", sorted(_ANONYMOUS_ROUTES))
     def test_anonymous_pages_show_source_link_but_no_version(self, client, settings, url_name):
         settings.SOURCE_CODE_VERSION = "abcdef1234567890"
         response = client.get(reverse(url_name))
@@ -154,7 +203,7 @@ class TestPublicFooterRendering:
         self._assert_footer_without_version(body, "mfa_verify")
         assert "abcdef1" not in body, "mfa_verify: SOURCE_CODE_VERSION leakt vor dem 2FA-Nachweis (Refs #1901)"
 
-    @pytest.mark.parametrize("url_name", ["mfa_setup", "password_change"])
+    @pytest.mark.parametrize("url_name", ["mfa_setup", "password_change"])  # mfa_verify: eigener Test (TOTP-Setup)
     def test_other_gated_pages_show_source_link_but_no_version(self, client, settings, staff_user, url_name):
         settings.SOURCE_CODE_VERSION = "abcdef1234567890"
         client.force_login(staff_user)
@@ -163,6 +212,34 @@ class TestPublicFooterRendering:
         body = response.content.decode()
         self._assert_footer_without_version(body, url_name)
         assert "abcdef1" not in body, f"{url_name}: SOURCE_CODE_VERSION leakt (Refs #1901)"
+
+    @pytest.mark.parametrize("template", _RENDERED_TEMPLATES)
+    def test_directly_rendered_pages_show_source_link_but_no_version(self, settings, template):
+        """Token-Seiten und Middleware-Sperrseiten haben keine anonym
+        erreichbare URL — sie werden mit demselben Minimalkontext gerendert,
+        den ``middleware/facility_scope.py`` baut (Refs #2090/#2102).
+
+        ``SOURCE_CODE_VERSION`` liegt dabei ausdruecklich IM Kontext: der Test
+        beweist damit, dass der Baustein sie ohne ``footer_authenticated``
+        nicht ausgibt — und nicht bloss, dass sie fehlt.
+        """
+        from django.template.loader import render_to_string
+
+        from core import context_processors
+
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        context = {
+            "csrf_token": "x",
+            "page_language": "de",
+            # lockout_recovery_confirm.html baut daraus seine Formular-Action.
+            "token": "pruefsonde",
+            **context_processors.source_code(None),
+            **context_processors.legal_pages(None),
+        }
+        assert context["SOURCE_CODE_VERSION"] == "abcdef1234567890", "Kontext-Sonde: Version muss im Kontext liegen."
+        body = render_to_string(template, context)
+        self._assert_footer_without_version(body, template)
+        assert "abcdef1" not in body, f"{template}: SOURCE_CODE_VERSION leakt (Refs #1901)"
 
     def test_authenticated_app_page_keeps_version_and_help(self, client, settings, staff_user):
         """Gegen-Check: der Umbau darf den Footer aus ``base.html`` nicht entkernen."""
