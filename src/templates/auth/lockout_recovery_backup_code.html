@@ -1,11 +1,12 @@
 {% load i18n static %}
 <!DOCTYPE html>
-<html lang="de" class="h-full">
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% trans "Backup-Code einlösen" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% include "components/_document_head.html" %}
 </head>
 <body class="min-h-screen bg-canvas flex items-center justify-center p-6">
     <div class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7">
@@ -49,6 +50,7 @@
                 {% trans "Zurück zur Anmeldung" %}
             </a>
         </div>
+        {% include "components/_public_footer.html" with footer_compact=True %}
     </div>
 </body>
 </html>

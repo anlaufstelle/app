@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% trans "Einrichtung archiviert" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% include "components/_document_head.html" %}
 </head>
 {# Refs #2067: standalone, ohne base.html — die Navigation dort liest #}
 {# Facility-gescopte Zaehler, die dieser Request per Definition nicht mehr #}
@@ -27,6 +28,7 @@
                 {% trans "Abmelden" %}
             </button>
         </form>
+        {% include "components/_public_footer.html" with footer_compact=True %}
     </div>
     {# Refs #2067: eigenstaendiger Purge — diese Seite laedt bewusst NICHT base.html, #}
     {# und das Modul ist deshalb abhaengigkeitsfrei (indexedDB.deleteDatabase). Damit #}

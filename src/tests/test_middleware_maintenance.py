@@ -69,6 +69,23 @@ class TestMaintenanceModeOn:
         assert "503" in body
         assert "Wartung" in body  # Marker aus 503.html
 
+    def test_maintenance_page_carries_head_metadata(self, flag_file):
+        """Refs #2102: auch die Wartungsseite traegt Favicon/Manifest/theme-color.
+
+        ``503.html`` traegt bewusst weiterhin KEINEN Footer — die Seite wird
+        ohne Context-Processor-Stack gerendert (``render_to_string`` ohne
+        ``request``), ``SOURCE_CODE_URL`` und die Rechtstext-URLs sind dort
+        nicht im Kontext. Der ``<style>``-Block bleibt unangetastet (sein
+        sha256 ist in der CSP gepinnt).
+        """
+        open(flag_file, "w").close()
+        with override_settings(MAINTENANCE_FLAG_FILE=flag_file):
+            rf = RequestFactory()
+            response = MaintenanceModeMiddleware(lambda r: r)(rf.get("/clients/"))
+        body = response.content.decode()
+        for needle in ('rel="icon"', 'rel="manifest"', 'rel="apple-touch-icon"', 'name="theme-color"'):
+            assert needle in body, f"503.html: Kopf-Metadaten fehlen -> {needle} (Refs #2102)"
+
 
 class TestMaintenanceModeWhitelist:
     """Health-Check, Static-Assets und Whitelist-IPs muessen durchkommen."""

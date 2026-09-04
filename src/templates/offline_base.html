@@ -51,14 +51,7 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Anlaufstelle{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#006547">
-    <link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
-    {# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    {% include "components/_document_head.html" %}
     {# Refs #1660: identische htmx-Konfiguration wie base.html — Begruendung dort. #}
     <meta name="htmx-config" content='{"includeIndicatorStyles": false, "attributesToSettle": ["class", "width", "height"]}'>
     <script src="{% static 'js/htmx.min.js' %}" defer></script>
@@ -132,26 +125,14 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
             <div id="flash-messages" role="status" aria-live="polite" aria-atomic="true"></div>
             {% block content %}{% endblock %}
         </div>
-        {# AGPL §13: Source-Link fuer Network-Use-Disclosure. Refs #835. Die #}
-        {# auth-gated Versions-/Build-Anzeigen aus base.html (Refs #1050/#1901) #}
-        {# fehlen hier bewusst — sie sind genau die Auth-Verzweigung, die eine #}
-        {# precachte Shell nicht tragen darf. #}
-        <footer class="text-center text-[12px] text-ink-muted py-4 mt-8 border-t border-subtle">
-            <span>Anlaufstelle</span>
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
-            {# Demo: Rechtstexte der Webseite verlinken (Refs #1604) — Deploy-Konfiguration, nicht Sitzung. #}
-            {% if demo_mode and DEMO_LEGAL_IMPRINT_URL %}
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ DEMO_LEGAL_IMPRINT_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Impressum" %}</a>
-            {% endif %}
-            {% if demo_mode and DEMO_LEGAL_PRIVACY_URL %}
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ DEMO_LEGAL_PRIVACY_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Datenschutz" %}</a>
-            {% endif %}
-        </footer>
+        {# Refs #2102: derselbe Baustein wie ueberall, OHNE footer_authenticated — die #}
+        {# auth-gated Versions-/Build-/Hilfe-Anzeigen aus base.html (Refs #1050/#1901) sind #}
+        {# genau die Auth-Verzweigung, die eine precachte Shell nicht tragen darf. Die #}
+        {# Rechtstexte kommen jetzt aus dem legal_pages-Context-Processor statt aus einer #}
+        {# zweiten Demo-Logik: er liefert im Demo-Modus exakt DEMO_LEGAL_IMPRINT_URL/ #}
+        {# DEMO_LEGAL_PRIVACY_URL (core/context_processors.py) und ist damit ebenso #}
+        {# Deploy-Konfiguration statt Sitzungszustand (Refs #1604, #2076). #}
+        {% include "components/_public_footer.html" with legal_links_external=True %}
     </main>
 
     {# Umami-Consent-Banner (Opt-in) — nur Demo mit UMAMI_REQUIRE_CONSENT. Refs #1604. #}

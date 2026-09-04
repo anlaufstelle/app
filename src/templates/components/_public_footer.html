@@ -1,0 +1,45 @@
+{% load i18n %}
+{# Refs #2102: gemeinsamer Footer ALLER eigenstaendigen HTML-Dokumente.         #}
+{#                                                                              #}
+{# Vor #2102 gab es den Footer VIERFACH verschieden (base.html, login.html,     #}
+{# offline_base.html, password_reset_*) und auf zehn Standalone-Seiten gar      #}
+{# nicht — dort fehlte damit auch der AGPL-§13-Quellcode-Link (Refs #835).      #}
+{#                                                                              #}
+{# Zwei explizite Schalter, beide Default AUS:                                  #}
+{#                                                                              #}
+{# * ``footer_authenticated`` — Versions-, Build- und Hilfe-Anzeige. NUR        #}
+{#   base.html setzt ihn: dort ist die Sitzung vollstaendig authentifiziert.    #}
+{#   mfa_login.html/mfa_setup.html/password_change.html sind zwar eingeloggt,   #}
+{#   aber vor dem 2FA-Nachweis bzw. dem erzwungenen Passwortwechsel — dort      #}
+{#   bleibt die Version aus (Fingerprinting, Refs #1901/#1050). Die zusaetz-    #}
+{#   liche ``user.is_authenticated``-Pruefung ist KEINE Redundanz: 403/404/     #}
+{#   403_csrf erben von base.html und sind anonym erreichbar (Refs #1901,       #}
+{#   gepinnt von test_source_code_version_hidden_on_404).                       #}
+{# * ``legal_links_external`` — wird an components/_legal_links.html            #}
+{#   durchgereicht (target=_blank fuer die Vollbild-Layouts).                   #}
+{#                                                                              #}
+{# ``footer_compact`` waehlt die Randabstaende: die Karten-Layouts (Login,      #}
+{# 2FA, Lockout, Passwort-Reset) tragen den Footer unter bzw. in einer          #}
+{# schmalen Karte und bekommen keine durchgezogene Trennlinie.                  #}
+<footer class="text-center text-[12px] text-ink-muted {% if footer_compact %}mt-6{% else %}py-4 mt-8 border-t border-subtle{% endif %}">
+    <span>Anlaufstelle</span>
+    <span aria-hidden="true" class="mx-1.5">·</span>
+    {# AGPL §13: Source-Link fuer Network-Use-Disclosure. Refs #835: Forks/Self-Hoster MUESSEN SOURCE_CODE_URL setzen. #}
+    <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+    {% if footer_authenticated and user.is_authenticated and SOURCE_CODE_VERSION %}
+    <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
+    {% endif %}
+    <span aria-hidden="true" class="mx-1.5">·</span>
+    <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+    {% if footer_authenticated and user.is_authenticated %}
+    <span aria-hidden="true" class="mx-1.5">·</span>
+    <a href="{% url 'core:help_overview' %}" class="hover:underline" data-testid="footer-help">{% trans "Hilfe" %}</a>
+    {% endif %}
+    {# Oeffentliche Rechtstexte der Demo oder der selbst gehosteten Instanz (Refs #2076). #}
+    {% include "components/_legal_links.html" with legal_links_external=legal_links_external %}
+    {# Refs #1050: deployte Version nur fuer Eingeloggte (Login-Seite bleibt bewusst versionslos). #}
+    {% if footer_authenticated and user.is_authenticated and app_version %}
+    <span aria-hidden="true" class="mx-1.5">·</span>
+    <span data-testid="app-version">v{{ app_version }}{% if app_build %} ({{ app_build|truncatechars:18 }}){% endif %}</span>
+    {% endif %}
+</footer>

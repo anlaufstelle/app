@@ -1,0 +1,22 @@
+{% load static %}
+{# Refs #2102: gemeinsamer <head>-Baustein ALLER eigenstaendigen HTML-Dokumente. #}
+{#                                                                              #}
+{# Bis #2102 pflegte jedes eigenstaendige Dokument diese Zeilen von Hand —      #}
+{# vollstaendig hatten sie nur base.html und login.html, auf allen uebrigen     #}
+{# Standalone-Seiten lief der /favicon.ico-404 aus #973 weiter. Der Baustein    #}
+{# ist die EINZIGE Quelle; wer eine neue Standalone-Seite baut, bindet ihn ein  #}
+{# (erzwungen von TestStandaloneDocumentGuard).                                 #}
+{#                                                                              #}
+{# BEWUSST NUR <link>/<meta>: keine Skripte, keine CSS-Links. login.html bleibt #}
+{# tracking-frei (siehe umami() in core/context_processors.py), und 500.html/   #}
+{# 503.html/offline.html duerfen ihren per sha256 gepinnten Inline-<style>      #}
+{# nicht durch einen Stylesheet-Link ersetzt bekommen (CSP, settings/base.py).  #}
+{# Alle vier Assets liegen im APP_SHELL des Service-Workers (static/js/sw.js).  #}
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#006547">
+<link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+{# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">

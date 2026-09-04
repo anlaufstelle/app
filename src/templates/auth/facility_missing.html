@@ -8,6 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% trans "Keine Einrichtung zugeordnet" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% include "components/_document_head.html" %}
 </head>
 {# Refs #2090: standalone, ohne base.html — die Navigation dort liest #}
 {# Facility-gescopte Zaehler, die dieser Request per Definition nicht hat. #}
@@ -28,6 +29,7 @@
                 {% trans "Abmelden" %}
             </button>
         </form>
+        {% include "components/_public_footer.html" with footer_compact=True %}
     </div>
 </body>
 </html>

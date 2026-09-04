@@ -97,3 +97,80 @@ class TestVersionFooterExactRendering:
         content = response.content.decode()
         assert 'data-testid="app-version">v0.20.0<' in content
         assert "vv0.20.0" not in content
+
+
+@pytest.mark.django_db
+class TestPublicFooterRendering:
+    """Refs #2102: der gemeinsame Fussbaustein auf allen Standalone-Seiten.
+
+    Zwei Zusagen in einem Test-Satz:
+
+    * **AGPL §13** (Refs #835): der Quellcode-Link steht auf JEDER
+      ausgelieferten Seite mit Footer — bis #2102 fehlte er auf zehn
+      Standalone-Seiten komplett und auf den vier Passwort-Reset-Seiten.
+    * **Kein Versions-Leak** (Refs #1901/#1050): weder ``app_version`` noch
+      ``SOURCE_CODE_VERSION`` noch der Hilfe-Link erscheinen auf einer nicht
+      angemeldeten Seite — und auch nicht auf ``mfa_verify``/
+      ``password_change``, wo die Sitzung zwar eingeloggt, der 2FA-Nachweis
+      aber noch nicht erbracht bzw. das Passwort noch nicht gewechselt ist.
+    """
+
+    _ANONYMOUS_ROUTES = [
+        "login",
+        "password_reset",
+        "password_reset_done",
+        "password_reset_complete",
+        "core:lockout_recovery_request",
+        "core:lockout_recovery_sent",
+        "core:lockout_recovery_backup_code",
+    ]
+
+    @staticmethod
+    def _assert_footer_without_version(body, label):
+        assert "/blob/main/LICENSE" in body, f"{label}: AGPL-3.0-Lizenzlink fehlt (Refs #835)"
+        assert "Quellcode" in body, f"{label}: AGPL-§13-Quellcode-Link fehlt (Refs #835)"
+        assert 'data-testid="app-version"' not in body, f"{label}: Versionsanzeige leakt (Refs #1050/#1901)"
+        assert 'data-testid="footer-help"' not in body, f"{label}: Hilfe-Link nur fuer Angemeldete"
+
+    @pytest.mark.parametrize("url_name", _ANONYMOUS_ROUTES)
+    def test_anonymous_pages_show_source_link_but_no_version(self, client, settings, url_name):
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        response = client.get(reverse(url_name))
+        assert response.status_code == 200
+        body = response.content.decode()
+        self._assert_footer_without_version(body, url_name)
+        assert "abcdef1" not in body, f"{url_name}: SOURCE_CODE_VERSION leakt anonym (Refs #1901)"
+
+    def test_mfa_verify_shows_source_link_but_no_version(self, client, settings, staff_user):
+        """Eingeloggt, aber ohne 2FA-Nachweis — kein Versions-Leak (Refs #1901)."""
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        TOTPDevice.objects.create(user=staff_user, name="test", confirmed=True)
+        client.force_login(staff_user)
+        response = client.get(reverse("mfa_verify"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        self._assert_footer_without_version(body, "mfa_verify")
+        assert "abcdef1" not in body, "mfa_verify: SOURCE_CODE_VERSION leakt vor dem 2FA-Nachweis (Refs #1901)"
+
+    @pytest.mark.parametrize("url_name", ["mfa_setup", "password_change"])
+    def test_other_gated_pages_show_source_link_but_no_version(self, client, settings, staff_user, url_name):
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        client.force_login(staff_user)
+        response = client.get(reverse(url_name))
+        assert response.status_code == 200
+        body = response.content.decode()
+        self._assert_footer_without_version(body, url_name)
+        assert "abcdef1" not in body, f"{url_name}: SOURCE_CODE_VERSION leakt (Refs #1901)"
+
+    def test_authenticated_app_page_keeps_version_and_help(self, client, settings, staff_user):
+        """Gegen-Check: der Umbau darf den Footer aus ``base.html`` nicht entkernen."""
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        body = response.content.decode()
+        assert "Quellcode" in body
+        assert 'data-testid="app-version"' in body
+        assert 'data-testid="footer-help"' in body
+        assert "abcdef1" in body

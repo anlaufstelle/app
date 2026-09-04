@@ -696,7 +696,23 @@ class TestPrecachedShellBumpGuard:
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
     # kein weiterer Bump.
-    _PINNED_SHELL_HASH = "339d96aa562a512ac553525b826ebf0dd96f95ca414908c9d50f551f4c011a1d"
+    # Refs #2102: offline.html und offline_base.html binden jetzt die gemeinsamen
+    # Bausteine components/_document_head.html und components/_public_footer.html
+    # ein (die der Guard seit #1845 rekursiv mit-hasht), und die Rechtstexte der
+    # Shell kommen aus dem legal_pages-Context-Processor statt aus einer zweiten
+    # Demo-Logik. Das ist eine Aenderung an GERENDERTEM Shell-Inhalt (Whitespace
+    # in jedem Fall; im selbst gehosteten Betrieb mit konfigurierten Rechtstexten
+    # zusaetzlich zwei Links, die die Shell vorher gar nicht trug) — also NICHT
+    # der Kommentar-Fall aus #1900/#1805, sondern der Fall, fuer den die Regel
+    # oben "erst CACHE_NAME bumpen, dann Hash nachziehen" gilt.
+    #
+    # !!! OFFEN FUER DEN INTEGRATOR: CACHE_NAME in src/static/js/sw.js von
+    # "anlaufstelle-v43" auf "anlaufstelle-v44" bumpen und _PINNED_CACHE_NAME
+    # unten mitziehen. Die Lane L3c hatte src/static/js/sw.js als TABU-Datei
+    # (Welle F, Briefing L3c) und durfte den Bump nicht selbst setzen; nur der
+    # Hash ist hier nachgezogen. Ohne den Bump behalten Bestandsgeraete die alte
+    # precachte Shell dauerhaft (26078b7-Bugklasse, Refs #1575).
+    _PINNED_SHELL_HASH = "51ab687a195af93ea046cf649f24ecbfad0fa565dc3143b209125351541a6218"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -1467,3 +1483,120 @@ class TestAttachmentDownloadUrlPattern:
             f"https://host/clients/{self._UUID}/export/",
         ):
             assert not pattern.search(url), f"ATTACHMENT_DOWNLOAD darf {url} nicht matchen."
+
+
+# --- Refs #2102: Kopf-Metadaten auf ALLEN Standalone-Dokumenten ---------------
+
+
+_HEAD_NEEDLES = (
+    'rel="icon"',
+    'rel="manifest"',
+    'rel="apple-touch-icon"',
+    'name="theme-color"',
+)
+
+
+def _assert_head_metadata(body, label):
+    """Refs #2102: Favicon, Manifest, apple-touch-icon und theme-color.
+
+    ``#973`` hat den ``/favicon.ico``-404 seinerzeit nur fuer ``login.html``
+    behoben; auf jedem anderen eigenstaendigen Dokument lief er weiter.
+    """
+    missing = [needle for needle in _HEAD_NEEDLES if needle not in body]
+    assert not missing, f"{label}: Kopf-Metadaten fehlen -> {missing} (Refs #973, #2102)"
+
+
+@pytest.mark.django_db
+class TestStandaloneHeadMetadata:
+    """Jede vom Browser aufgerufene Standalone-Seite traegt den Kopfbaustein.
+
+    Ausbau von ``test_login_page_has_favicon_link`` (Refs #973) auf alle
+    erreichbaren Routen — der Login-Pin bleibt als eigener Fall erhalten.
+    """
+
+    @pytest.mark.parametrize(
+        "url_name",
+        [
+            "login",
+            "password_reset",
+            "password_reset_done",
+            "password_reset_complete",
+            "core:lockout_recovery_request",
+            "core:lockout_recovery_sent",
+            "core:lockout_recovery_backup_code",
+            "offline_fallback",
+        ],
+    )
+    def test_anonymous_pages_have_head_metadata(self, client, url_name):
+        response = client.get(reverse(url_name))
+        assert response.status_code == 200, f"{url_name} nicht anonym erreichbar"
+        _assert_head_metadata(response.content.decode(), url_name)
+
+    def test_mfa_setup_page_has_head_metadata(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("mfa_setup"))
+        assert response.status_code == 200
+        _assert_head_metadata(response.content.decode(), "mfa_setup")
+
+    def test_mfa_verify_page_has_head_metadata(self, client, staff_user):
+        """Ausgangsbefund des Tickets: die 2FA-Code-Seite hatte kein Favicon."""
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        TOTPDevice.objects.create(user=staff_user, name="test", confirmed=True)
+        client.force_login(staff_user)
+        response = client.get(reverse("mfa_verify"))
+        assert response.status_code == 200
+        _assert_head_metadata(response.content.decode(), "mfa_verify")
+
+    def test_password_change_page_has_head_metadata(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("password_change"))
+        assert response.status_code == 200
+        _assert_head_metadata(response.content.decode(), "password_change")
+
+    @pytest.mark.parametrize(
+        "template",
+        ["500.html", "auth/facility_archived.html", "auth/facility_missing.html"],
+    )
+    def test_directly_rendered_pages_have_head_metadata(self, template):
+        """``500.html`` und die beiden Middleware-Seiten haben keine URL —
+        sie werden per ``render_to_string`` ausgeliefert (Django-Default-
+        Handler bzw. ``middleware/facility_scope.py``)."""
+        from django.template.loader import render_to_string
+
+        context = {"csrf_token": "x", "page_language": "de"}
+        _assert_head_metadata(render_to_string(template, context), template)
+
+
+@pytest.mark.django_db
+class TestOfflineShellLegalLinks:
+    """Refs #2102: die precachte Shell nutzt ``components/_legal_links.html``.
+
+    ``offline_base.html`` baute die Demo-Rechtstexte bis #2102 selbst aus
+    ``DEMO_LEGAL_IMPRINT_URL``/``DEMO_LEGAL_PRIVACY_URL`` — eine zweite
+    Quelle neben dem ``legal_pages``-Context-Processor. Der Processor liefert
+    im Demo-Modus exakt dieselben beiden Settings (``core/context_processors.py``),
+    im selbst gehosteten Betrieb zusaetzlich die eigenen Rechtstext-Seiten.
+    Beides ist Deploy-Konfiguration, kein Sitzungszustand — die Shell bleibt
+    also byte-gleich fuer jede Abruferin (``test_offline_shell_neutrality.py``).
+    """
+
+    def test_demo_mode_shell_shows_the_configured_legal_links(self, client, settings):
+        settings.DEMO_MODE = True
+        settings.DEMO_LEGAL_IMPRINT_URL = "https://example.org/impressum/"
+        settings.DEMO_LEGAL_PRIVACY_URL = "https://example.org/datenschutz/"
+        response = client.get(reverse("core:offline_client_list_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "https://example.org/impressum/" in body
+        assert "https://example.org/datenschutz/" in body
+
+    def test_shell_without_configured_legal_pages_shows_none(self, client, settings):
+        """Gegen-Check: ohne konfigurierte Rechtstexte bleibt der Footer leer —
+        ``_legal_links.html`` rendert nur, was auch erreichbar ist (Refs #2076)."""
+        settings.DEMO_MODE = False
+        response = client.get(reverse("core:offline_client_list_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "Impressum" not in body
+        assert "Datenschutz" not in body

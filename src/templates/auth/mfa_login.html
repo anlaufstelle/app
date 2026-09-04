@@ -1,6 +1,6 @@
 {% load i18n static otp_webauthn %}
 <!DOCTYPE html>
-<html lang="de" class="h-full">
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,6 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% trans "2FA-Code eingeben" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% include "components/_document_head.html" %}
     {# Siehe base.html zur Script-Reihenfolge. Refs #911: featureweise Alpine-Module. #}
     <script defer src="{% static 'js/alpine/base-layout.js' %}"></script>
     <script defer src="{% static 'js/alpine/widgets.js' %}"></script>
@@ -130,6 +131,7 @@
                 </button>
             </form>
         </div>
+        {% include "components/_public_footer.html" with footer_compact=True %}
     </div>
     {% if has_webauthn %}
     {# CSP-striktes Passkey-Bundle (kein Inline/eval), self-hosted via collectstatic. #}

@@ -8,14 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Anlaufstelle{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#006547">
-    <link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
-    {# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    {% include "components/_document_head.html" %}
     {% comment %}
     Refs #1660: htmx injiziert seine ``.htmx-indicator``-Regeln beim Start als
     Inline-``<style>``. Die CSP setzt ``style-src`` ohne ``'unsafe-inline'`` —
@@ -139,29 +132,9 @@
             </div>
             {% block content %}{% endblock %}
         </div>
-        {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835: Forks/Self-Hoster MUESSEN SOURCE_CODE_URL setzen. #}
-        <footer class="text-center text-[12px] text-ink-muted py-4 mt-8 border-t border-subtle">
-            <span>Anlaufstelle</span>
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
-            {# Refs #1901: auth-gated wie app_version weiter unten -- ungegatet leakte SOURCE_CODE_VERSION auch auf 404/403-CSRF (anonym erreichbar, beide erben von base.html). #}
-            {% if user.is_authenticated and SOURCE_CODE_VERSION %}
-            <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
-            {% endif %}
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
-            {% if user.is_authenticated %}
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{% url 'core:help_overview' %}" class="hover:underline" data-testid="footer-help">{% trans "Hilfe" %}</a>
-            {% endif %}
-            {# Oeffentliche Rechtstexte der Demo oder der selbst gehosteten Instanz (Refs #2076). #}
-            {% include "components/_legal_links.html" with legal_links_external=True %}
-            {# Refs #1050: deployte Version nur fuer Eingeloggte (Login-Seite bleibt bewusst versionslos). #}
-            {% if user.is_authenticated and app_version %}
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <span data-testid="app-version">v{{ app_version }}{% if app_build %} ({{ app_build|truncatechars:18 }}){% endif %}</span>
-            {% endif %}
-        </footer>
+        {# Refs #2102: einzige Quelle des Footers. base.html ist das einzige Layout, das #}
+        {# footer_authenticated setzt — die Auth-Gates selbst bleiben im Baustein. #}
+        {% include "components/_public_footer.html" with footer_authenticated=True legal_links_external=True %}
     </main>
 
     {# --- Mobile Bottom-Nav. Refs #911. --- #}

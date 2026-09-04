@@ -1,19 +1,13 @@
 {% load i18n static %}
 <!DOCTYPE html>
-<html lang="de" class="h-full">
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% trans "Anmelden" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#006547">
-    <link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
-    {# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    {% include "components/_document_head.html" %}
     {# Siehe base.html zur Script-Reihenfolge. Refs #911: featureweise Alpine-Module. #}
     <script src="{% static 'js/alpine/base-layout.js' %}" defer></script>
     <script src="{% static 'js/alpine/widgets.js' %}" defer></script>
@@ -122,17 +116,10 @@
                 </div>
             </div>
         </div>
-        {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835. #}
-        {# Refs #1901/#1050: bewusst KEIN SOURCE_CODE_VERSION-Span hier -- die anonyme Login-Seite bleibt versionslos (Fingerprinting); Quellcode-/Lizenz-Link bleiben stehen, AGPL §13 verlangt nur den Zugang. #}
-        <footer class="text-center text-[12px] text-ink-muted mt-6">
-            <span>Anlaufstelle</span>
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
-            <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
-            {# Rechtstexte muessen ohne Login erreichbar sein (Refs #1641, #2076). #}
-            {% include "components/_legal_links.html" %}
-        </footer>
+        {# Refs #1901/#1050: OHNE footer_authenticated -- die anonyme Login-Seite bleibt #}
+        {# versionslos (Fingerprinting). Quellcode-/Lizenzlink bleiben, AGPL §13 verlangt #}
+        {# nur den Zugang; die Rechtstexte muessen ohne Login erreichbar sein (Refs #1641, #2076). #}
+        {% include "components/_public_footer.html" with footer_compact=True %}
     </div>
     <script src="{% static 'js/csrf.js' %}"></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>

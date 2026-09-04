@@ -72,6 +72,13 @@ def test_manifest_and_meta_tags_share_the_real_brand_colors():
 
     assert manifest["theme_color"] == "#006547"
     assert manifest["background_color"] == "#f7f3ec"
+    # Refs #2102: die Kopf-Metadaten stehen seit dem Standalone-Umbau genau
+    # EINMAL in components/_document_head.html — jedes eigenstaendige Dokument
+    # bindet den Baustein ein (erzwungen von TestStandaloneDocumentGuard in
+    # src/tests/test_architecture_guards_templates.py). Geprueft wird deshalb
+    # die Quelle plus die Einbindung, nicht mehr die kopierte Zeile.
+    head_block = (ROOT / "src/templates/components/_document_head.html").read_text()
+    assert '<meta name="theme-color" content="#006547">' in head_block
     for template in ("base.html", "auth/login.html", "offline_base.html"):
         source = (ROOT / "src/templates" / template).read_text()
-        assert '<meta name="theme-color" content="#006547">' in source, template
+        assert '{% include "components/_document_head.html" %}' in source, template

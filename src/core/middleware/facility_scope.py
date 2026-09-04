@@ -266,6 +266,16 @@ class FacilityScopeMiddleware:
         ausgangsseitig (sie liegt vor dieser Middleware in ``MIDDLEWARE``,
         laeuft also nach ihr zurueck).
 
+        Refs #2102: der gemeinsame Footer (``components/_public_footer.html``)
+        braucht ``SOURCE_CODE_URL`` (AGPL §13, Refs #835) und die
+        Rechtstext-URLs. Statt den ganzen Prozessor-Stack ueber ``request=``
+        einzuschalten — und damit genau die Facility-Abfragen oben — werden
+        die beiden **facility-freien** Prozessoren einzeln aufgerufen. Beide
+        lesen ausschliesslich Settings bzw. das Dateisystem, keine
+        Mandantendaten. ``user`` bleibt bewusst draussen: ohne ihn (und ohne
+        ``footer_authenticated``) rendert der Footer garantiert ohne Versions-,
+        Build- und Hilfe-Anzeige (Refs #1901/#1050).
+
         Sprache: diese Middleware liegt VOR ``UserLanguageMiddleware``, die
         Seite rendert also, bevor die Praeferenz aktiviert waere, und laege
         sonst immer auf ``LANGUAGE_CODE``. Der User ist hier bereits bekannt,
@@ -278,9 +288,17 @@ class FacilityScopeMiddleware:
 
         Refs #2067 (Cross-Review Finding 8 + N1), #2090.
         """
+        from core import context_processors
+
         lang = getattr(request.user, "preferred_language", "") or settings.LANGUAGE_CODE
+        context = {
+            "csrf_token": get_token(request),
+            "page_language": lang,
+            **context_processors.source_code(request),
+            **context_processors.legal_pages(request),
+        }
         with translation.override(lang):
-            body = render_to_string(template, {"csrf_token": get_token(request), "page_language": lang})
+            body = render_to_string(template, context)
         response = HttpResponseForbidden(body)
         response["Content-Language"] = lang
         return response

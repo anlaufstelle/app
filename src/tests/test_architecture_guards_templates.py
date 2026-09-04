@@ -1014,3 +1014,145 @@ class TestLogoutIsAlwaysPostGuard:
             "partials/_navigation_desktop.html).\n"
             f"Betroffen: {violations}"
         )
+
+
+class TestStandaloneDocumentGuard:
+    """Jedes eigenstaendige HTML-Dokument traegt Kopf- und Fussbaustein (Refs #2102).
+
+    Templates mit eigenem ``<html>`` erben NICHT von ``base.html`` und pflegten
+    ihren ``<head>`` und ihren Footer bis #2102 jeweils von Hand. Ergebnis: nur
+    ``login.html`` hatte den Kopf vollstaendig, zehn Seiten (2FA-Code,
+    Backup-Code, MFA-Setup, Passwortwechsel, Lockout-Recovery, facility_*,
+    500/503, offline) hatten **gar keinen** Footer — und damit auch keinen
+    AGPL-§13-Quellcode-Link (Refs #835) und ein ``/favicon.ico``-404 (Refs
+    #973, dort nur fuer Login behoben).
+
+    Der Guard faengt die naechste neue Standalone-Seite sofort ab, statt erst
+    im Handtest. Zwei Ausnahmegruppen, beide begruendet:
+
+    * ``core/export/*_pdf.html`` rendern serverseitig via WeasyPrint zu PDF und
+      erreichen nie einen Browser — kein Favicon, kein Footer.
+    * ``500.html``/``503.html``/``offline.html`` tragen **keinen Footer**: sie
+      muessen ohne ``/static/`` und ohne DB funktionieren (Serverfehler,
+      Wartungsmodus, Netz weg) und werden ohne Context-Processor-Stack
+      gerendert (``render_to_string`` ohne ``request``) — ``SOURCE_CODE_URL``
+      und die Rechtstext-URLs sind dort schlicht nicht im Kontext. Der
+      Kopfbaustein bleibt dort Pflicht (nur ``<link>``/``<meta>``, der
+      gehashte ``<style>``-Block bleibt unberuehrt).
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    # Serverseitig via WeasyPrint gerendert -> kein Browser-Dokument.
+    _PDF_TEMPLATE_PREFIX = "core/export/"
+    _HEAD_INCLUDE = "components/_document_head.html"
+    _FOOTER_INCLUDE = "components/_public_footer.html"
+    # Begruendete Ausnahmen vom Footer — siehe Klassen-Docstring.
+    _FOOTERLESS_TEMPLATES = ("500.html", "503.html", "offline.html")
+
+    _HTML_TAG = re.compile(r"<html\b", re.IGNORECASE)
+    _HARDCODED_LANG = re.compile(r"""<html\b[^>]*\slang\s*=\s*["']de["']""", re.IGNORECASE)
+
+    @classmethod
+    def _standalone_documents(cls, root=None):
+        """Alle Templates unterhalb ``root`` mit eigenem ``<html>``-Element.
+
+        ``root`` ist parametrisiert, damit der Negativtest gegen ``tmp_path``
+        laufen kann, statt eine Probe in den echten Template-Baum zu legen
+        (xdist-Race).
+        """
+        root = Path(root) if root is not None else cls._TEMPLATES_DIR
+        for template_file in sorted(root.rglob("*.html")):
+            rel = template_file.relative_to(root).as_posix()
+            if rel.startswith(cls._PDF_TEMPLATE_PREFIX):
+                continue
+            source = template_file.read_text(errors="ignore")
+            if not cls._HTML_TAG.search(source):
+                continue
+            yield rel, source
+
+    def test_every_standalone_document_includes_the_head_block(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        documents = list(self._standalone_documents())
+        assert documents, "Kein Standalone-Template gefunden — Scanner defekt."
+        violations = [rel for rel, source in documents if self._HEAD_INCLUDE not in source]
+        assert not violations, (
+            "Diese eigenstaendigen HTML-Dokumente binden den gemeinsamen "
+            f'Kopfbaustein nicht ein: {{% include "{self._HEAD_INCLUDE}" %}}. '
+            "Ohne ihn fehlen Favicon, apple-touch-icon, Manifest und "
+            "theme-color — /favicon.ico liefert 404 (Refs #973, #2102).\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_every_standalone_document_includes_the_public_footer(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = [
+            rel
+            for rel, source in self._standalone_documents()
+            if rel not in self._FOOTERLESS_TEMPLATES and self._FOOTER_INCLUDE not in source
+        ]
+        assert not violations, (
+            "Diese eigenstaendigen HTML-Dokumente binden den gemeinsamen "
+            f'Fussbaustein nicht ein: {{% include "{self._FOOTER_INCLUDE}" %}}. '
+            "Damit fehlt der AGPL-§13-Quellcode-Link (Refs #835, #2102). "
+            "Neue Ausnahmen gehoeren begruendet in _FOOTERLESS_TEMPLATES, nicht "
+            "stillschweigend in die Vorlage.\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_no_standalone_document_hardcodes_german_lang(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = [rel for rel, source in self._standalone_documents() if self._HARDCODED_LANG.search(source)]
+        assert not violations, (
+            'Diese Dokumente stehen hart auf <html lang="de">. Bei aktiver '
+            "EN-Praeferenz ist das fuer Screenreader falsch ausgezeichnet "
+            "(Refs #2067, #2102).\n"
+            "Loesung: lang=\"{{ LANGUAGE_CODE|default:'de' }}\" (i18n-Context-"
+            "Processor) bzw. lang=\"{{ page_language|default:'de' }}\" auf den "
+            "Middleware-Seiten.\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_scanner_flags_a_synthetic_standalone_document(self, tmp_path):
+        """Negativtest gegen ``tmp_path``: der Scanner erkennt ein Dokument
+        ohne Bausteine und mit hartem ``lang`` — und ueberspringt PDF-Exports.
+
+        Ohne diesen Test koennte der Scanner still auf 0 Treffer laufen und
+        die drei Guards oben waeren dauerhaft gruen, ohne etwas zu pruefen.
+        """
+        (tmp_path / "kaputt.html").write_text(
+            '<!DOCTYPE html>\n<html lang="de">\n<head></head><body></body>\n</html>\n',
+            encoding="utf-8",
+        )
+        (tmp_path / "partial.html").write_text('<div class="x">kein Dokument</div>\n', encoding="utf-8")
+        pdf_dir = tmp_path / "core" / "export"
+        pdf_dir.mkdir(parents=True)
+        (pdf_dir / "report_pdf.html").write_text('<html lang="de"><body></body></html>\n', encoding="utf-8")
+
+        found = dict(self._standalone_documents(root=tmp_path))
+
+        assert list(found) == ["kaputt.html"], "Scanner darf nur echte Browser-Dokumente melden."
+        source = found["kaputt.html"]
+        assert self._HEAD_INCLUDE not in source
+        assert self._FOOTER_INCLUDE not in source
+        assert self._HARDCODED_LANG.search(source)
+
+    def test_shared_building_blocks_stay_csp_clean(self):
+        """Kopf- und Fussbaustein duerfen weder Skript noch Inline-Style tragen.
+
+        Beide werden in ``login.html`` eingebunden, das bewusst tracking-frei
+        bleibt (``context_processors.py`` — Umami-Kommentar), und in die
+        precachten Offline-Shells, die keine Auth-Verzweigung tragen duerfen.
+        """
+        for name in (self._HEAD_INCLUDE, self._FOOTER_INCLUDE):
+            path = self._TEMPLATES_DIR / name
+            assert path.exists(), f"{name} fehlt — der gemeinsame Baustein ist die einzige Quelle (Refs #2102)."
+            source = path.read_text(encoding="utf-8")
+            assert "<script" not in source.lower(), (
+                f"{name} darf kein <script> tragen (CSP + tracking-freie Login-Seite)."
+            )
+            assert not re.search(r"""\sstyle\s*=\s*["']""", source, re.IGNORECASE), (
+                f"{name} darf kein Inline-style=-Attribut tragen (CSP style-src ohne 'unsafe-inline')."
+            )
