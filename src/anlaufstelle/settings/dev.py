@@ -34,6 +34,10 @@ AUDIT_DETAIL_STRICT = env_bool("DJANGO_AUDIT_DETAIL_STRICT", default=True)  # no
 # Lokale Entwicklung laeuft ohne Host-Backup-Cron (Refs #2021).
 HEALTH_BACKUP_REQUIRED = False
 
+# Ein frischer Checkout hat bis zum ersten Upload kein ``src/media``; nur
+# Produktion/Container seeden ``/data/media`` aus dem Image (Refs #2119).
+HEALTH_DISK_REQUIRED = False
+
 ALLOWED_HOSTS = ["*"]
 
 # Sicherheitsrelevante Links (Einladung, Passwort-Reset, Entsperrung) zeigen

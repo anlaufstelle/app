@@ -246,13 +246,13 @@ def _check_disk_free_pct() -> float | None:
     media_root = getattr(settings, "MEDIA_ROOT", "")
     if not media_root:
         return None
-    path = Path(media_root)
     try:
+        path = Path(media_root)
         if not path.exists():
             return None
         total, _used, free = shutil.disk_usage(path)
-    except (OSError, ValueError):
-        logger.warning("health: disk usage check failed for MEDIA_ROOT=%s", path, exc_info=True)
+    except (OSError, TypeError, ValueError):
+        logger.warning("health: disk usage check failed for MEDIA_ROOT=%s", media_root, exc_info=True)
         return None
     if total <= 0:
         logger.warning("health: disk usage check returned invalid total for MEDIA_ROOT=%s", path)

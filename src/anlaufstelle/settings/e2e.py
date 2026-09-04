@@ -26,6 +26,10 @@ RATELIMIT_ENABLE = False
 # Der E2E-Stack besitzt keinen Host-Backup-Cron (Refs #2021).
 HEALTH_BACKUP_REQUIRED = False
 
+# Ein frischer Checkout hat bis zum ersten Upload kein ``src/media``; nur
+# Produktion/Container seeden ``/data/media`` aus dem Image (Refs #2119).
+HEALTH_DISK_REQUIRED = False
+
 # Session-Save-Verhalten (kein Write bei jedem Request) erbt unveraendert von
 # base.py — dort bereits SESSION_SAVE_EVERY_REQUEST = False (Refs #1827: war
 # hier redundant wiederholt).

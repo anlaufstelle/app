@@ -304,7 +304,7 @@ class TestHealthDetail:
         assert data["disk_free_pct"] is not None
         assert 0 <= data["disk_free_pct"] <= 100
 
-    def test_disk_measurement_error_degrades_when_required(self, detail_token, tmp_path, settings, monkeypatch):
+    def test_disk_measurement_error_degrades_when_required(self, detail_token, tmp_path, settings, monkeypatch, caplog):
         def _raise_disk_error(_path):
             raise OSError("disk unavailable")
 
@@ -312,11 +312,51 @@ class TestHealthDetail:
         settings.HEALTH_DISK_REQUIRED = True
         monkeypatch.setattr("core.views.health.shutil.disk_usage", _raise_disk_error)
 
-        data = _detail_get().json()
+        responses = []
+        messages = _capture_health_warnings(caplog, lambda: responses.append(_detail_get().json()))
+        data = responses[0]
 
         assert data["disk"] == "unknown"
         assert data["disk_free_pct"] is None
         assert data["disk_required"] is True
+        assert data["status"] == "degraded"
+        assert any("disk usage check failed" in message and str(tmp_path) in message for message in messages)
+
+    def test_invalid_disk_total_logs_warning_and_is_unknown(
+        self, detail_token, tmp_path, settings, monkeypatch, caplog
+    ):
+        settings.MEDIA_ROOT = tmp_path
+        settings.HEALTH_DISK_REQUIRED = True
+        monkeypatch.setattr("core.views.health.shutil.disk_usage", lambda _path: (0, 0, 0))
+
+        responses = []
+        messages = _capture_health_warnings(caplog, lambda: responses.append(_detail_get().json()))
+        data = responses[0]
+
+        assert data["disk"] == "unknown"
+        assert data["disk_free_pct"] is None
+        assert data["status"] == "degraded"
+        assert any("invalid total" in message and str(tmp_path) in message for message in messages)
+
+    @pytest.mark.parametrize("media_root", ["", None])
+    def test_empty_media_root_is_unknown(self, detail_token, settings, media_root):
+        settings.MEDIA_ROOT = media_root
+        settings.HEALTH_DISK_REQUIRED = True
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "unknown"
+        assert data["disk_free_pct"] is None
+        assert data["status"] == "degraded"
+
+    def test_invalid_media_root_type_is_unknown(self, detail_token, settings):
+        settings.MEDIA_ROOT = object()
+        settings.HEALTH_DISK_REQUIRED = True
+
+        data = _detail_get().json()
+
+        assert data["disk"] == "unknown"
+        assert data["disk_free_pct"] is None
         assert data["status"] == "degraded"
 
     def test_disk_measurement_error_stays_ok_when_not_required(self, detail_token, tmp_path, settings, monkeypatch):

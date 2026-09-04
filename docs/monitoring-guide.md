@@ -117,7 +117,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 | `backup_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_BACKUP_REQUIRED`; Produktion ist standardmäßig `true`, lokale/E2E- und Welt-A-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `backup=missing` |
 | `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py)). `null` = Messung nicht möglich (Pfad fehlt oder ist nicht lesbar) und wird als `disk=unknown` zusammengefasst. | `< 10` → `disk=low`; `null` → `disk=unknown` |
 | `disk` | string | `ok` / `low` / `unknown` | Zusammenfassung der Speicherplatzmessung: mindestens 10 % frei, unter 10 % frei oder nicht messbar. | `low` immer, `unknown` bei `disk_required=true` → **`degraded`** |
-| `disk_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_DISK_REQUIRED` (`DJANGO_HEALTH_DISK_REQUIRED`); standardmäßig `true`. | steuert die Degradierung bei `disk=unknown` |
+| `disk_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_DISK_REQUIRED` (`DJANGO_HEALTH_DISK_REQUIRED`); Produktion ist standardmäßig `true`, lokale/E2E- und Welt-A-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `disk=unknown` |
 | `stale_jobs` | array\<string\> | z. B. `[]` / `["breach_scan_last_run"]` | Keys der Hintergrundjobs (Backup, Retention, Audit-Ketten-Prüfung, Snapshots, Breach-Scan, MV-Refresh) mit Status `critical` laut [`cron_job_checks`](../src/core/services/compliance/__init__.py) ([`_check_stale_jobs`](../src/core/views/health.py)). Refs #1335. | nicht-leer → **`degraded`** |
 
 > **Zwei Sichten, bewusst getrennt (Refs #1872):** „Kein Backup gefunden" bleibt im Detailwert `last_backup_age_hours` als `null` erkennbar; in Produktion macht `backup=missing` den Gesamtstatus für Token-/interne Aufrufer jetzt zugleich `degraded`, während der anonyme Liveness-Payload unverändert bleibt. Die **Betriebsansicht** `/system/` bleibt ausführlicher und zeigt denselben Zustand als eigene Warnung mit Handlungshinweis ([`operations_job_checks`](../src/core/services/compliance/__init__.py)).
@@ -282,11 +282,11 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 
 | Aspekt | Wert | Quelle |
 |---|---|---|
-| Rate-Limit | **120 GET/min pro IP**, `block=True` (überschüssige Requests → HTTP 429) | [`health.py`](../src/core/views/health.py) L148 (`ratelimit` Decorator) |
-| Detail-Cache-TTL | **15 s** — SMTP-CONNECT, Disk-Scan, Backup-Scan, Stale-Jobs-Scan werden gecacht, damit häufiges Polling nicht jedes Mal einen SMTP-Handshake + Filesystem-/DB-Scan auslöst | L36 (`_DETAIL_CACHE_TTL_SECONDS`) |
+| Rate-Limit | **120 GET/min pro IP**, `block=True` (überschüssige Requests → HTTP 429) | [`health.py`](../src/core/views/health.py) L263 (`ratelimit` Decorator) |
+| Detail-Cache-TTL | **15 s** — SMTP-CONNECT, Disk-Scan, Backup-Scan, Stale-Jobs-Scan werden gecacht, damit häufiges Polling nicht jedes Mal einen SMTP-Handshake + Filesystem-/DB-Scan auslöst | [`health.py`](../src/core/views/health.py) L41 (`_DETAIL_CACHE_TTL_SECONDS`) |
 | Backup-Warn-Schwelle | **48 h** → `degraded` (unverändert; entspricht `BACKUP_CRITICAL_HOURS`) | [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py) (Refs #1872) |
-| Disk-Warn-Schwelle | **< 10 %** frei → `low` → `degraded`; Messung nicht möglich → `unknown` → `degraded`, wenn `HEALTH_DISK_REQUIRED=true` | `DISK_WARN_PCT` und `_check_disk_free_pct` (Refs #2119) |
-| SMTP-Timeout | **2 s** CONNECT | L31 (`SMTP_TIMEOUT_SECONDS`) |
+| Disk-Warn-Schwelle | **< 10 %** frei → `low` → `degraded`; Messung nicht möglich → `unknown` → `degraded`, wenn `HEALTH_DISK_REQUIRED=true` | [`health.py`](../src/core/views/health.py) (`DISK_WARN_PCT` und `_check_disk_free_pct`; Refs #2119) |
+| SMTP-Timeout | **2 s** CONNECT | [`health.py`](../src/core/views/health.py) L36 (`SMTP_TIMEOUT_SECONDS`) |
 | Stale-Jobs-Schwelle | jeder Job mit `critical` → `degraded`. Die drei täglichen Jobs (Backup, Retention, Audit-Ketten-Prüfung) teilen seit Refs #1872 **eine** Regel: WARNING > 36 h, CRITICAL > 48 h (= 1,5 × / 2 × Laufintervall, [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py)); die stündlichen/monatlichen Jobs behalten ihre eigenen Schwellen in [`services/compliance/cron.py`](../src/core/services/compliance/cron.py) | `_check_stale_jobs` (Refs #1335) |
 | DB-Rollen-Posture | `rolsuper` **oder** `rolbypassrls` auf `current_user` → `degraded`; **ungecacht** (ein indizierter Katalog-Lookup, billiger als der Cache-Table-Read) | `_query_runtime_role_posture` (Refs #793) |
 

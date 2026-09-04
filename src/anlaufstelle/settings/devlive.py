@@ -30,6 +30,10 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # trotz vorhandener Backups dauerhaft falsch alarmieren (Refs #2021).
 HEALTH_BACKUP_REQUIRED = False
 
+# Ein frischer Checkout hat bis zum ersten Upload kein ``src/media``; nur
+# Produktion/Container seeden ``/data/media`` aus dem Image (Refs #2119).
+HEALTH_DISK_REQUIRED = False
+
 # --- Umami Web-Analytics (Refs #1602, #1701) ---
 # dev.anlaufstelle.app trackt die Post-Login-Seiten (base.html bindet
 # partials/_umami.html ein). Die Login-Seite (login.html erbt NICHT von
