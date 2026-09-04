@@ -548,6 +548,15 @@ docker compose -f docker-compose.prod.yml exec web \
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py create_statistics_snapshots --year 2026 --month 3
 
+# Teilfehler (Refs #2118): ein Fehler in einer Einrichtung oder einem Monat
+# reisst den Lauf nicht mehr ab. Jede betroffene Einrichtung/jeder Monat
+# erscheint als Fehlerzeile im Log (Host-Cron: /var/log/anlaufstelle-
+# snapshots.log; Sidecar: `docker compose logs cron` bzw. Anwendungs-Log) und
+# auf stderr. Der Lauf selbst endet danach mit Exit-Code != 0 und einer
+# Zusammenfassung — ein rot endender Cron-Lauf bedeutet also "mindestens ein
+# Snapshot fehlt", nicht "alles fehlgeschlagen". Nach Behebung der Ursache den
+# betroffenen Monat gezielt per --year/--month nachholen (Beispiel oben).
+
 # Verwaiste dynamische Feldwerte bereinigen (Refs #1725)
 # Entfernt data_json-Keys, deren Slug nicht (mehr) am Dokumentationstyp haengt,
 # bei Personen/Faellen/Ereignissen. Zugeordnete (auch verschluesselte) Werte

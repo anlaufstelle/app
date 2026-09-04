@@ -549,6 +549,15 @@ docker compose -f docker-compose.prod.yml exec web \
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py create_statistics_snapshots --year 2026 --month 3
 
+# Partial failures (Refs #2118): an error in one facility or one month no
+# longer aborts the run. Every affected facility/month appears as an error
+# line in the log (host cron: /var/log/anlaufstelle-snapshots.log; sidecar:
+# `docker compose logs cron` resp. the application log) and on stderr. The
+# run itself then ends with exit code != 0 plus a summary — a cron run that
+# ends red therefore means "at least one snapshot is missing", not
+# "everything failed". After fixing the cause, catch up the affected month
+# with --year/--month (example above).
+
 # Clean up orphaned dynamic field values (Refs #1725)
 # Removes data_json keys whose slug is no longer attached to the document type,
 # for persons/cases/events. Assigned (including encrypted) values
@@ -2741,4 +2750,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 38aef32d649f7e793f8a6fac13b1256e1bb70cbc -->
+<!-- source-hash: dcbc812ec4f620d85be85f5a4ce94d1bd817f826 -->
