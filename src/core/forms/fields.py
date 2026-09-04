@@ -85,7 +85,7 @@ class DstAwareDateTimeField(forms.DateTimeField):
         except ValueError:
             return None
         if parsed is None:
-            for input_format in self.input_formats:
+            for input_format in self.input_formats or ():
                 try:
                     parsed = self.strptime(text, input_format)
                     break
