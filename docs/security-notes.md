@@ -1853,6 +1853,67 @@ abgedeckt: kein hartes Blocking, aber eine forensische Spur plus optionaler Webh
 
 ---
 
+---
+
+## SMTP-Timing-Orakel an Recovery- und Reset-Anfragen bleibt akzeptiertes Restrisiko (Issue #2115)
+
+**Status:** Akzeptiertes Restrisiko mit Rationale — kein Code-Fix.
+
+### Beobachtung
+
+Die beiden anfragebasierten Versandpfade für E-Mail-Accounts antworten für existierende wie für
+nicht existierende Adressen gleich (ein Redirect auf die bestätigende „gesendet"-Seite), unterscheiden
+sich aber **zeitlich**: `LockoutRecoveryRequestView.form_valid`
+([`lockout_recovery.py`](../src/core/views/lockout_recovery.py)) versendet bei einem Treffer eine
+Recovery-Token-Mail via `send_mail(..., fail_silently=False)` synchron im Anfragepfad; die
+`RateLimitedPasswordResetView` ([`auth.py`](../src/core/views/auth.py)) versendet den
+Password-Reset-Link über Djangos `PasswordResetForm.save()` ebenfalls synchron. Über den echten
+SMTP-Transport ist der Unterschied zwischen Treffer (Tokenbau + Template-Render + SMTP-Versand, bei der
+Lockout-Recovery zusätzlich der Audit-Write) und Nicht-Treffer (im Wesentlichen ein Lookup) messbar — ein
+**Account-Existenz-Orakel über das Antwort-Timing**.
+
+### Was bereits umgesetzt ist
+
+- IP-Ratelimit `5/m` (`ratelimit(key="ip", rate="5/m", method="POST", block=True)`) an beiden
+  Endpunkten — `LockoutRecoveryRequestView.post` und `RateLimitedPasswordResetView.post`.
+- Antwort-Parität: beide Views liefern für existierende wie nicht existierende Adressen dieselbe
+  Response (Redirect), sodass die Antwort selbst keine Existenz-Information preisgibt.
+
+### Trade-off — warum kein asynchroner Versand
+
+Echte Timing-Parität verlangt einen **asynchronen Versand** (Queue/Worker), der den Mail-Versand aus
+dem Anfragepfad herausnimmt. Das ist eine Architekturentscheidung (Queue-Infrastruktur, Retry- und
+Monitoring-Modell), die für den aktuellen Reifegrad unverhältnismäßig ist. Ein **künstliches
+Zeit-Padding** auf dem Nicht-Treffer-Pfad wäre fragil und deckt die reale SMTP-Latenzschwankung nicht
+ab — unter Last bliebe das Orakel bestehen. Deshalb wird die Fläche bewusst als Restrisiko
+akzeptiert, wie bei #1372.
+
+### Restfläche (akzeptiert)
+
+- **Bis zu 5 Proben pro Minute und IP** an beiden Endpunkten (IP-Ratelimit `5/m`).
+- Kein Auth-Bypass: Es fließt keine Anmelde- oder Entsperr-Information, nur die
+  Existenz-/Nicht-Existenz-Aussage einer E-Mail-Adresse.
+- Gleiche Schadklasse wie das bereits akzeptierte Username-/Account-Orakel in
+  #1372 — reine Existenzinformation ohne
+  Folgeschaden.
+
+### Trigger für Re-Evaluation
+
+- Einführung einer asynchronen Mail-/Task-Infrastruktur (Queue/Worker).
+- Auffällig viele Ratelimit-Treffer an diesen Endpunkten (`429`) im Monitoring.
+- Anhebung oder Absenkung der IP-Ratelimits der Recovery-/Reset-Endpunkte.
+
+### Verifikation
+
+- Antwort-Parität und Nicht-Versand bei unbekannter Adresse: `test_post_unknown_email_renders_same_response_no_mail`
+  ([`test_lockout_recovery.py`](../src/tests/test_lockout_recovery.py)).
+- Versand bei bekannter Adresse mit identischer Redirect-Response: `test_post_known_email_sends_recovery_link`
+  ([`test_lockout_recovery.py`](../src/tests/test_lockout_recovery.py)).
+- IP-Rate-Limit des Reset-Pfads: `test_password_reset_post_rate_limited`
+  ([`test_auth.py`](../src/tests/test_auth.py)).
+
+---
+
 ## `window.offlineStore` bleibt bewusst unkapselt — CSP ist der Schutzwall (Issue #1343)
 
 **Status:** Design-Entscheidung, bewusst nicht gekapselt. DSFA-/TOM-Einordnung in [ADR-022 § DSFA-/TOM-Einordnung des Offline-Pfads](adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343).

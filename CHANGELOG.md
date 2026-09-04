@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Selbst-Rückzug des Löschantrags im Handbuch beschrieben** (#2092) — Das Nutzerhandbuch (DE+EN) erklärt jetzt, wie eine antragstellende Person einen eigenen ausstehenden Löschantrag selbst zurückziehen kann, und macht dabei deutlich, dass nichts gelöscht wird und danach jederzeit ein neuer Antrag möglich ist.
+- **SMTP-Timing-Orakel an Recovery- und Reset-Anfragen als akzeptiertes Restrisiko dokumentiert** (#2115) — Die Security-Notes dokumentieren das über das Antwort-Timing messbare Account-Existenz-Orakel der beiden synchronen Mail-Versandwege (Recovery- und Password-Reset) mit den bestehenden IP-Ratelimits, der Antwort-Parität und der bewusst akzeptierten Restfläche, genau wie beim Username-Orakel aus #1372.
 - **SMTP-E2E-Nachweis beschreibt die echten Mail-Auslöser** (#2089) — Ein ausführbares Drehbuch, Admin-Hilfe und Operations-Runbook dokumentieren SMTP-Vorprüfung, Einladungs- und Reset-Wege, Header-Nachweis, Fehlerdiagnose und den Initialpasswort-Fallback, ohne `setup_facility` fälschlich als Mail-Auslöser zu nennen.
 
 ### Fixed
