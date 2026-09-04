@@ -89,7 +89,7 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Offline-JS-Assets im Precache.
         # Refs #1838: v41 — der offline-store-Verbund (4 Dateien) muss atomar
         # precached werden.
-        assert 'const CACHE_NAME = "anlaufstelle-v43";' in sw
+        assert 'const CACHE_NAME = "anlaufstelle-v44";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):

@@ -155,10 +155,11 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v43"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v44"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
-            "muss Bestandsgeraete per Re-Install + Re-Precache erreichen)."
+            "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
+            "#2102: Standalone-Bausteine aendern die precachte Shell → v44)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -691,7 +692,7 @@ class TestPrecachedShellBumpGuard:
     # Refs #2043: _contact_stage_legend.html aendert gerendertes Markup in der
     # precachten Offline-Personenliste; v43 und der Hash werden gemeinsam
     # nachgezogen. Der online-only Hilfe-Link wird dort bewusst unterdrueckt.
-    _PINNED_CACHE_NAME = "anlaufstelle-v43"
+    _PINNED_CACHE_NAME = "anlaufstelle-v44"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -706,12 +707,9 @@ class TestPrecachedShellBumpGuard:
     # der Kommentar-Fall aus #1900/#1805, sondern der Fall, fuer den die Regel
     # oben "erst CACHE_NAME bumpen, dann Hash nachziehen" gilt.
     #
-    # !!! OFFEN FUER DEN INTEGRATOR: CACHE_NAME in src/static/js/sw.js von
-    # "anlaufstelle-v43" auf "anlaufstelle-v44" bumpen und _PINNED_CACHE_NAME
-    # unten mitziehen. Die Lane L3c hatte src/static/js/sw.js als TABU-Datei
-    # (Welle F, Briefing L3c) und durfte den Bump nicht selbst setzen; nur der
-    # Hash ist hier nachgezogen. Ohne den Bump behalten Bestandsgeraete die alte
-    # precachte Shell dauerhaft (26078b7-Bugklasse, Refs #1575).
+    # Integrationscommit des Orchestrators (Welle F): CACHE_NAME in
+    # src/static/js/sw.js von "anlaufstelle-v43" auf "anlaufstelle-v44" gebumpt
+    # und _PINNED_CACHE_NAME oben mitgezogen (sw.js war fuer die Lane L3c TABU).
     _PINNED_SHELL_HASH = "51ab687a195af93ea046cf649f24ecbfad0fa565dc3143b209125351541a6218"
 
     @staticmethod
