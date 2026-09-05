@@ -1442,6 +1442,12 @@ class TestContextHelpLabelGuard:
     Lexer statt Regex/HTMLParser — ein ``{% include %}`` in ``{% comment %}``-
     Bloecken/``verbatim`` zaehlt NICHT, ein HTML-Kommentar (``<!-- … -->``)
     dagegen sehr wohl, weil Django ihn trotzdem rendert.
+
+    Erfasst werden ausschliesslich LITERALE Include-Ziele
+    (``{% include "components/_context_help.html" %}``). Ein Ziel ueber eine
+    Variable (``{% include help_tpl %}``, die zur Laufzeit auf die Komponente
+    zeigen koennte) bleibt ausserhalb dieser Policy — der Zielname laesst
+    sich statisch nicht auflösen (Cross-Review Fix-Runde 1, Minor-Befund).
     """
 
     _TEMPLATES_DIR = Path("src/templates")
@@ -1452,11 +1458,20 @@ class TestContextHelpLabelGuard:
     def _context_help_includes(cls, root=None):
         """Alle ``_context_help.html``-Einbindungen unterhalb ``root``.
 
-        Liefert je Fundstelle ``(relativer Pfad, Parameter-Tupel)``. Nutzt
-        denselben Lexer-Scan wie ``TestStandaloneDocumentGuard._analyze``
-        (Refs #2102) — dieselbe Grammatik-Kenntnis (Kommentarbloecke,
-        ``verbatim``, unabgeschlossene Tags) gilt hier unveraendert; die
-        bestehende Klasse wird dabei nur gelesen, nicht veraendert.
+        Liefert je Fundstelle ``(relativer Pfad, Zeilennummer, Parameter-Tupel)``.
+        Eigener, schlanker Lexer-Scan mit derselben Grammatik-Behandlung wie
+        ``TestStandaloneDocumentGuard._analyze`` (Refs #2102: Kommentarbloecke
+        via ``comment``/``endcomment``-Tags ausgeschlossen, ``verbatim`` wird
+        von Djangos ``Lexer`` bereits selbst als TEXT zurueckgegeben, ein
+        HTML-Kommentar zaehlt sehr wohl, weil Django ihn trotzdem rendert) —
+        die bestehende Klasse wird dabei nicht veraendert. Eigenstaendig statt
+        wiederverwendet, weil ``_analyze`` die Token-Zeile verwirft
+        (``_StandaloneDocument`` prueft nur binaer "eingebunden ja/nein");
+        dieser Guard braucht ``Datei:Zeile`` in der Fehlermeldung
+        (Cross-Review Fix-Runde 1, Important-Befund).
+
+        Nur LITERALE Include-Ziele werden erfasst — ``bits[1]`` muss ein in
+        Anfuehrungszeichen stehendes Literal sein, keine Variable.
 
         ``root`` ist parametrisiert, damit Negativ-/Positivproben gegen
         ``tmp_path`` laufen koennen statt gegen den echten Baum (xdist-Race).
@@ -1464,10 +1479,26 @@ class TestContextHelpLabelGuard:
         root = Path(root) if root is not None else cls._TEMPLATES_DIR
         for template_file in sorted(root.rglob("*.html")):
             rel = template_file.relative_to(root).as_posix()
-            document = TestStandaloneDocumentGuard._analyze(template_file.read_text(errors="ignore"))
-            for target, params in document.includes:
-                if target == cls._CONTEXT_HELP_INCLUDE:
-                    yield rel, params
+            source = template_file.read_text(errors="ignore")
+            comment_depth = 0
+            for token in Lexer(source).tokenize():
+                if token.token_type is not TokenType.BLOCK:
+                    continue
+                bits = token.split_contents()
+                tag = bits[0] if bits else ""
+                if tag == "comment":
+                    comment_depth += 1
+                    continue
+                if tag == "endcomment":
+                    comment_depth = max(0, comment_depth - 1)
+                    continue
+                if comment_depth or tag != "include" or len(bits) < 2:
+                    continue
+                target = bits[1]
+                if not (len(target) >= 2 and target[0] == target[-1] and target[0] in "\"'"):
+                    continue
+                if target[1:-1] == cls._CONTEXT_HELP_INCLUDE:
+                    yield rel, token.lineno, tuple(bits[2:])
 
     @classmethod
     def _has_summary_label(cls, params) -> bool:
@@ -1484,18 +1515,23 @@ class TestContextHelpLabelGuard:
         if not self._TEMPLATES_DIR.exists():
             pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
         includes = list(self._context_help_includes())
-        assert len(includes) == 6, (
-            "Erwartet werden die sechs bekannten _context_help.html-"
-            "Einbindungen aus fuenf Templates (Recon-B Abschnitt E) — Anzahl "
-            f"gedriftet oder Scanner defekt: {[rel for rel, _params in includes]}"
-        )
-        violations = [rel for rel, params in includes if not self._has_summary_label(params)]
+        # Die Labelverletzung wird VOR der Anzahlprüfung gemeldet (Cross-Review
+        # Fix-Runde 1, Important-Befund): eine neue Einbindung ohne
+        # summary_label soll als klare Datei:Zeile-Verletzung auffallen, nicht
+        # zuerst hinter einer Anzahlabweichung verschwinden.
+        violations = [f"{rel}:{line}" for rel, line, params in includes if not self._has_summary_label(params)]
         assert not violations, (
-            "Diese Templates binden components/_context_help.html ohne "
-            "eigenes summary_label ein und fallen damit still auf den "
+            "Diese Einbindungen von components/_context_help.html tragen "
+            "kein eigenes summary_label und fallen damit still auf den "
             'generischen Text "Was ist das?" zurueck (Refs #2091). Bitte '
             "summary_label=… mitgeben.\n"
             f"Betroffen: {violations}"
+        )
+        assert len(includes) == 6, (
+            "Erwartet werden die sechs bekannten _context_help.html-"
+            "Einbindungen aus fuenf Templates (Recon-B Abschnitt E) — Anzahl "
+            "gedriftet oder Scanner defekt: "
+            f"{[f'{rel}:{line}' for rel, line, _params in includes]}"
         )
 
     def test_scanner_flags_a_synthetic_include_without_summary_label(self, tmp_path):
@@ -1505,8 +1541,26 @@ class TestContextHelpLabelGuard:
             encoding="utf-8",
         )
         includes = list(self._context_help_includes(root=tmp_path))
-        assert [rel for rel, _params in includes] == ["ohne_label.html"]
-        assert not self._has_summary_label(includes[0][1])
+        assert [rel for rel, _line, _params in includes] == ["ohne_label.html"]
+        assert not self._has_summary_label(includes[0][2])
+
+    def test_scanner_reports_file_and_line_for_missing_summary_label(self, tmp_path):
+        """Cross-Review Fix-Runde 1 (Important): eine Verletzung muss als ``Datei:Zeile`` identifizierbar sein.
+
+        Die Einbindung steht bewusst NICHT in Zeile 1 — sonst koennte eine
+        hartcodierte ``:1`` die Probe still bestehen, ohne dass die
+        Zeilennummer tatsaechlich aus dem Lexer-Token stammt.
+        """
+        (tmp_path / "probe.html").write_text(
+            "<div>\n"
+            "    <p>Fuellzeile, damit die Einbindung nicht in Zeile 1 steht</p>\n"
+            '    {% include "components/_context_help.html" with help_id="x" %}\n'
+            "</div>\n",
+            encoding="utf-8",
+        )
+        includes = list(self._context_help_includes(root=tmp_path))
+        violations = [f"{rel}:{line}" for rel, line, params in includes if not self._has_summary_label(params)]
+        assert violations == ["probe.html:3"]
 
     def test_scanner_accepts_variable_summary_label(self, tmp_path):
         """Positiv: ``summary_label=variable`` (wie in base.html/condition_board.html) wird akzeptiert."""
@@ -1515,7 +1569,7 @@ class TestContextHelpLabelGuard:
             encoding="utf-8",
         )
         includes = list(self._context_help_includes(root=tmp_path))
-        assert self._has_summary_label(includes[0][1])
+        assert self._has_summary_label(includes[0][2])
 
     def test_scanner_accepts_literal_summary_label(self, tmp_path):
         """Positiv: ``summary_label="Literal"`` (wie in dashboard.html/detail.html) wird akzeptiert."""
@@ -1524,7 +1578,7 @@ class TestContextHelpLabelGuard:
             encoding="utf-8",
         )
         includes = list(self._context_help_includes(root=tmp_path))
-        assert self._has_summary_label(includes[0][1])
+        assert self._has_summary_label(includes[0][2])
 
     def test_scanner_ignores_includes_inside_comment_blocks(self, tmp_path):
         """Eine Einbindung NUR im ``{% comment %}``-Block wird ignoriert — Django rendert sie nie."""
@@ -1542,4 +1596,18 @@ class TestContextHelpLabelGuard:
         )
         includes = list(self._context_help_includes(root=tmp_path))
         assert len(includes) == 1
-        assert not self._has_summary_label(includes[0][1])
+        assert not self._has_summary_label(includes[0][2])
+
+    def test_scanner_ignores_variable_include_targets(self, tmp_path):
+        """Minor-Befund Cross-Review: ein Ziel ueber eine Variable bleibt ausserhalb der Policy.
+
+        ``{% include help_tpl %}`` koennte zur Laufzeit auf die Komponente
+        zeigen — der Name laesst sich statisch aber nicht aufloesen, also
+        zaehlt der Scanner ihn bewusst nicht mit (kein falsches Grün UND kein
+        falscher Verstoss).
+        """
+        (tmp_path / "variables_ziel.html").write_text(
+            '{% include help_tpl with help_id="x" %}\n',
+            encoding="utf-8",
+        )
+        assert list(self._context_help_includes(root=tmp_path)) == []
