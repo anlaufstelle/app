@@ -1,6 +1,6 @@
 """Pin-Tests fuer zwei Prio-1-Testluecken in ``core.forms.events`` (Welle F, 0.93).
 
-Quelle: Survivor-Triage des ``mutation-delta``-Laufs zur Fix-.93,
+Quelle: Survivor-Triage des ``mutation-delta``-Laufs zum Meilenstein release-0.93,
 Vorgabe ``welle-f-0.93/reports/pin-events.json``. Modul unter Test:
 :mod:`core.forms.events` (``src/core/forms/events.py``).
 
