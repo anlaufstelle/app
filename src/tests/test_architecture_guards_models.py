@@ -1,7 +1,29 @@
-"""Architecture-Guards — Model-Guards (Facility-Scoping, Event-Access-Policy) (Refs #929)."""
+"""Architecture-Guards — Model-Guards (Facility-Scoping, Event-Access-Policy) (Refs #929).
+
+Der Tenant-Model-Scope-Guard (:class:`TestTenantModelScopeGuard`) leitet seine
+Modellmenge seit Refs #2132 aus der **Django-Modell-Registry** ab statt aus
+einer Hand-Liste: erfasst ist jedes Modell, dessen ``_default_manager`` eine
+``FacilityScopedManager``-Ableitung ist (``EventManager``/``AttachmentManager``
+kommen ueber die Vererbung mit), vereinigt mit den drei Tenant-Modellen
+``User``/``Facility``/``Organization``, die keinen solchen Manager tragen. Neue
+facility-gescopte Modelle fallen damit automatisch unter den Guard.
+
+**Bewusst NICHT erfasst** sind facility-tragende Modelle mit eigenem, nicht von
+``FacilityScopedManager`` abgeleitetem Manager — heute ``RecentClientVisit``
+(``core/models/recent_client_visit.py``) — sowie die Auth-Fremdmodelle
+``TOTPDevice``/``WebAuthnCredential``. Ihre Zugriffe scopen ueber ``user=``
+bzw. einen expliziten ``facility=``-Filter; der Guard sieht sie nicht.
+
+**Scan-Grenze:** gescannt werden ``src/core/views/``, ``src/core/forms/`` und
+``src/core/services/``. ``src/core/retention/`` ist ein eigenes Top-Level-
+Package **neben** ``services/`` und liegt damit ausserhalb des Scans — ein
+Allowlist-Eintrag fuer ``retention/enforcement.py``/``retention/legal_holds.py``
+ist weder noetig noch moeglich (Korrektur zur Ticket-Aufzaehlung in #2132).
+"""
 
 import ast
 import re
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -80,26 +102,91 @@ def find_unscoped_get_object_or_404(scan_dir: Path, *, whitelist_prefixes: tuple
     return violations
 
 
-# --- Tenant-Model-Scope-Guard (Refs #1658) -----------------------------------
+# --- Tenant-Model-Scope-Guard (Refs #1658, ausgeweitet mit #2132) ------------
 #
 # ``core_user``/``core_facility``/``core_organization`` liegen ausserhalb von
 # RLS (Auth-Grenze, siehe ``NOT_RLS_SCOPED`` in ``src/tests/test_rls.py``).
-# Fuer diese drei Models ist der explizite Filter die einzige Huerde.
-_TENANT_MODELS = frozenset({"User", "Facility", "Organization"})
+# Fuer diese drei Models ist der explizite Filter die EINZIGE Huerde — sie
+# stehen deshalb hart drin, obwohl sie keinen ``FacilityScopedManager`` tragen.
+_EXPLICIT_TENANT_MODELS = frozenset({"User", "Facility", "Organization"})
+
+
+@cache
+def _tenant_model_names() -> frozenset[str]:
+    """Alle Modelle, die der Guard bewacht — aus der Registry abgeleitet (Refs #2132).
+
+    ``FacilityScopedQuerySet.for_facility()`` (``src/core/models/managers.py:9-11``,
+    **nicht** ``src/core/managers.py`` wie in #2132 zitiert) filtert nur, wenn es
+    aufgerufen wird; der Default-Manager scoped bewusst nicht (#1658). Ein
+    vergessener Filter in einer neuen View waere damit Cross-Facility-IDOR — auf
+    SQLite (dev/test) ohne RLS-Backstop unbemerkt.
+
+    Die Ableitung ueber ``isinstance(model._default_manager, FacilityScopedManager)``
+    nimmt ``EventManager``/``AttachmentManager`` per Vererbung mit und erfasst
+    kuenftige Modelle automatisch. Modelle mit eigenem Manager (heute
+    ``RecentClientVisit``) bleiben bewusst draussen — siehe Modul-Docstring.
+    """
+    from django.apps import apps
+
+    from core.models.managers import FacilityScopedManager
+
+    derived = {
+        model.__name__ for model in apps.get_models() if isinstance(model._default_manager, FacilityScopedManager)
+    }
+    return frozenset(derived | _EXPLICIT_TENANT_MODELS)
+
 
 # Scope-Evidenz: taucht eines dieser Tokens im *entparsten Quelltext der
-# Manager-Kette* auf, gilt der Zugriff als gescoped. Bewusst tokenbasiert
+# Manager-Kette* (bzw. im Namen der umschliessenden Aufruf-Funktion, siehe
+# ``_evidence_source``) auf, gilt der Zugriff als gescoped. Bewusst tokenbasiert
 # (statt Keyword-Introspektion), damit auch ``Q(facility=...)``-Ausdruecke,
 # ``**{"facility": …}``-Lookups und Follow-Filter in derselben Kette zaehlen.
 # ``request.user``/``current_facility`` decken den Selbst-Scope ab
 # (``filter(pk=request.user.pk)``) — ein reines ``pk=<irgendwas>`` gilt
 # absichtlich NICHT als Scope, genau das ist das IDOR-Muster.
+#
+# Refs #2132: Mit der Ausweitung auf alle facility-tragenden Modelle kommen drei
+# weitere Evidenz-Klassen dazu. Tokens sind bewusst so gewaehlt, dass sie nicht
+# von einem laengeren Bezeichner verschluckt werden koennen — ``user=`` waere
+# z.B. untauglich, weil ``is_superuser=True`` es als Teilstring enthaelt und
+# damit eine deploymentweite Abfrage faelschlich blessen wuerde.
 _SCOPE_EVIDENCE = (
+    # (1) direkte Facility-Grenze
     "facility=",
     "facility_id=",
     "facility__",
     "current_facility",
+    # (2) Selbst-Scope auf die eigene Identitaet
     "request.user",
+    # (3) gescopte Manager/Helfer — ``get_scoped_object``/``get_visible_event_or_404``
+    #     ziehen den Facility-Filter aus ``request.current_facility``, die
+    #     Manager-Methoden aus dem uebergebenen Objekt.
+    "for_facility(",
+    "visible_to(",
+    "get_scoped_object(",
+    "get_visible_event_or_404(",
+    # (4) leeres QuerySet: ``Model.objects.none()`` liefert per Definition keine
+    #     Zeile (Fail-closed-Platzhalter in den Formularen, das echte, gescopte
+    #     Queryset wird erst in ``__init__`` gesetzt).
+    "objects.none()",
+    # (5) transitive Anker: gefiltert wird ueber ein *bereits gescoptes*
+    #     Besitzer-Objekt. Dessen eigener Zugriff faellt seinerseits unter diesen
+    #     Guard, die Kette bleibt damit geschlossen.
+    "client=",
+    "client_id=",
+    "client__",
+    "case=",
+    "case_id=",
+    "case__",
+    "event=",
+    "event_id=",
+    "event__",
+    "document_type=",
+    "document_type__",
+    "field_template=",
+    "owner=",
+    "owner.attachments",
+    "requested_by=request.user",
 )
 
 
@@ -140,17 +227,43 @@ def _chain_top(parents: dict, node: "ast.AST") -> "ast.AST":
         current = parent
 
 
+def _evidence_source(parents: dict, node: "ast.AST") -> str:
+    """Quelltext, in dem nach Scope-Evidenz gesucht wird (Refs #2132).
+
+    Das ist die volle Manager-Kette — PLUS der *Name* der Funktion, als deren
+    Argument die Kette steht. Ohne diesen zweiten Teil koennte
+    ``get_scoped_object(`` niemals als Evidenz greifen: bei
+    ``get_scoped_object(Client.objects.select_related(…), request, pk=pk)`` ist
+    die Kette ein Argument, nicht Teil des Aufrufs.
+
+    Bewusst nur der ``func``-Teil und nicht der ganze umschliessende Aufruf:
+    sonst wuerde ein Nachbar-Argument (``log(request.user, Client.objects.all())``)
+    die Kette faelschlich blessen.
+    """
+    top = _chain_top(parents, node)
+    source = ast.unparse(top)
+    parent = parents.get(top)
+    if isinstance(parent, ast.Call) and top is not parent.func:
+        source = f"{ast.unparse(parent.func)}(\n{source}"
+    return source
+
+
 def find_unscoped_tenant_access(
     scan_dir: Path,
     *,
     allowlist: dict[str, str] | None = None,
     whitelist_prefixes: tuple[str, ...] = (),
 ) -> list[str]:
-    """Findet ``User``/``Facility``/``Organization``-Manager-Zugriffe ohne Facility-Scope.
+    """Findet Manager-Zugriffe auf facility-tragende Modelle ohne Facility-Scope.
+
+    Die Modellmenge kommt aus :func:`_tenant_model_names` (Registry-Ableitung +
+    ``User``/``Facility``/``Organization``, Refs #2132), die Evidenz-Tokens aus
+    :data:`_SCOPE_EVIDENCE`.
 
     AST-basiert: gesucht wird der Knoten ``<Model>.objects``; bewertet wird die
-    gesamte umschliessende Kette. Kommentare, Docstrings und Strings koennen
-    dadurch nicht faelschlich matchen (anders als bei reiner Textsuche).
+    gesamte umschliessende Kette (siehe :func:`_evidence_source`). Kommentare,
+    Docstrings und Strings koennen dadurch nicht faelschlich matchen (anders als
+    bei reiner Textsuche).
 
     ``allowlist``-Schluessel: ``"<relpath>:<qualname>:<Model>"``, Wert = kurze
     Begruendung. Die Granularitaet ist bewusst zeilenunabhaengig, aber pro
@@ -158,6 +271,7 @@ def find_unscoped_tenant_access(
     freigegebenen Funktion faellt weiterhin auf.
     """
     allowlist = allowlist or {}
+    tenant_models = _tenant_model_names()
     violations: list[str] = []
     for py_file in sorted(scan_dir.rglob("*.py")):
         if py_file.name == "__init__.py":
@@ -170,11 +284,11 @@ def find_unscoped_tenant_access(
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Attribute) and node.attr == "objects"):
                 continue
-            if not (isinstance(node.value, ast.Name) and node.value.id in _TENANT_MODELS):
+            if not (isinstance(node.value, ast.Name) and node.value.id in tenant_models):
                 continue
             model = node.value.id
             chain_source = ast.unparse(_chain_top(parents, node))
-            if any(token in chain_source for token in _SCOPE_EVIDENCE):
+            if any(token in _evidence_source(parents, node) for token in _SCOPE_EVIDENCE):
                 continue
             identifier = f"{rel}:{_enclosing_qualname(parents, node)}:{model}"
             if identifier in allowlist:
@@ -332,20 +446,30 @@ class TestEventAccessPolicyGuard:
 
 
 class TestTenantModelScopeGuard:
-    """Kein ungescopter ``User``/``Facility``/``Organization``-Manager-Zugriff (Refs #1658).
+    """Kein ungescopter Manager-Zugriff auf facility-tragende Modelle (Refs #1658, #2132).
 
     ``core_user``, ``core_facility`` und ``core_organization`` liegen bewusst
     **ausserhalb** von RLS (Auth-Grenze — siehe ``NOT_RLS_SCOPED`` in
-    ``src/tests/test_rls.py`` und ADR-005). Fuer alle anderen facility-
-    tragenden Tabellen faengt Postgres ein vergessenes Filter noch ab; hier
-    ist der explizite ``facility=``-Filter die **einzige** Huerde — und auf
-    SQLite (dev/test) gibt es ohnehin keinen RLS-Backstop.
+    ``src/tests/test_rls.py`` und ADR-005); fuer sie ist der explizite Filter
+    die **einzige** Huerde. Fuer die uebrigen facility-tragenden Tabellen faengt
+    Postgres ein vergessenes Filter zwar ab — aber erst in Prod: auf SQLite
+    (dev/test) gibt es keinen RLS-Backstop, und ein Cross-Facility-IDOR faellt
+    dort still durch. Refs #2132 zieht den Guard deshalb ueber **alle** Modelle
+    mit ``FacilityScopedManager`` (Registry-Ableitung, :func:`_tenant_model_names`).
 
     Der Guard scannt die request-nahen Schichten (``views/``, ``forms/``,
-    ``services/``) nach ``<Model>.objects``-Ketten und verlangt, dass die
-    Kette selbst eine Scope-Evidenz traegt (``facility=``/``facility__``/
-    ``request.user``/``current_facility``). Alles andere muss mit Begruendung
-    in ``_ALLOWLIST`` stehen.
+    ``services/``) nach ``<Model>.objects``-Ketten und verlangt eine Scope-
+    Evidenz aus :data:`_SCOPE_EVIDENCE` (direkter ``facility=``-Filter, gescopter
+    Helfer wie ``for_facility``/``visible_to``/``get_scoped_object``, leeres
+    QuerySet oder ein transitiver Anker wie ``client=``/``case=``/``event=``).
+    Alles andere muss mit Begruendung in einer der drei Allowlists stehen
+    (``_VIEWS_ALLOWLIST``/``_FORMS_ALLOWLIST``/``_SERVICES_ALLOWLIST`` — #2132
+    spricht verkuerzt von *einer* ``_ALLOWLIST``).
+
+    Nicht erfasst: facility-tragende Modelle mit eigenem Manager
+    (``RecentClientVisit``) und die Auth-Fremdmodelle ``TOTPDevice``/
+    ``WebAuthnCredential``; ausserhalb der Scan-Verzeichnisse liegt
+    ``src/core/retention/`` (siehe Modul-Docstring).
     """
 
     def test_synthetic_unscoped_filter_is_detected(self, tmp_path):
@@ -393,8 +517,96 @@ class TestTenantModelScopeGuard:
         assert not find_unscoped_tenant_access(tmp_path)
 
     def test_non_tenant_model_is_not_flagged(self, tmp_path):
+        """Ein Modell OHNE ``FacilityScopedManager`` bleibt ausserhalb des Guards.
+
+        Refs #2132: Bis zur Registry-Ableitung pinnte dieser Test ``Client`` —
+        genau das Modell, das der Guard jetzt bewachen SOLL. Der Pin ist damit
+        auf ``RecentClientVisit`` umgestellt: es traegt zwar ein ``facility``-
+        Feld, aber einen eigenen ``RecentClientVisitManager``, faellt also
+        bewusst nicht unter die Ableitung (siehe Modul-Docstring).
+        """
+        assert "RecentClientVisit" not in _tenant_model_names()
         (tmp_path / "ok.py").write_text(
+            "from core.models import RecentClientVisit\n\n"
+            "def view(request):\n"
+            "    return RecentClientVisit.objects.filter(is_active=True)\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_registry_derived_model_unscoped_filter_is_detected(self, tmp_path):
+        """Ein facility-tragendes Modell aus der Registry faellt jetzt auch auf (Refs #2132)."""
+        (tmp_path / "offender.py").write_text(
             "from core.models import Client\n\ndef view(request):\n    return Client.objects.filter(is_active=True)\n"
+        )
+        violations = find_unscoped_tenant_access(tmp_path)
+        assert violations
+        assert "offender.py" in violations[0]
+        assert "Client.objects" in violations[0]
+
+    def test_registry_derivation_covers_facility_scoped_models(self):
+        """Die Ableitung sieht die ``FacilityScopedManager``-Modelle — inkl. Erben (Refs #2132)."""
+        names = _tenant_model_names()
+        # Direkte FacilityScopedManager-Nutzer …
+        assert names >= {"Client", "Case", "WorkItem", "DeletionRequest"}
+        # … EventManager/AttachmentManager kommen per Vererbung mit …
+        assert names >= {"Event", "Attachment"}
+        # … und die drei Tenant-Modelle ohne solchen Manager bleiben drin.
+        assert names >= _EXPLICIT_TENANT_MODELS
+
+    def test_for_facility_and_visible_to_are_evidence(self, tmp_path):
+        """Die gescopten Manager-Methoden gelten als Evidenz (Refs #2132)."""
+        (tmp_path / "ok.py").write_text(
+            "from core.models import Client, Event\n\n"
+            "def view(request, f):\n"
+            "    people = Client.objects.for_facility(f)\n"
+            "    events = Event.objects.visible_to(request.user)\n"
+            "    return people, events\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_transitive_owner_anchor_is_evidence(self, tmp_path):
+        """``client=``/``requested_by=request.user`` scopen ueber das Besitzer-Objekt."""
+        (tmp_path / "ok.py").write_text(
+            "from core.models import Case, DeletionRequest\n\n"
+            "def view(request, person):\n"
+            "    cases = Case.objects.filter(client=person)\n"
+            "    requests = DeletionRequest.objects.filter(requested_by=request.user)\n"
+            "    return cases, requests\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_get_scoped_object_wrapper_is_evidence(self, tmp_path):
+        """Die Kette steht als ARGUMENT im Aufruf — ``_evidence_source`` faengt das."""
+        (tmp_path / "ok.py").write_text(
+            "from core.models import Client\n"
+            "from core.services.scoping import get_scoped_object\n\n"
+            "def view(request, pk):\n"
+            "    return get_scoped_object(Client.objects.select_related('document_type'), request, pk=pk)\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_sibling_argument_does_not_bless_the_chain(self, tmp_path):
+        """Nur der Funktions-NAME zaehlt, nicht ein Nachbar-Argument (Refs #2132)."""
+        (tmp_path / "offender.py").write_text(
+            "from core.models import Client\n\ndef view(request):\n    return log(request.user, Client.objects.all())\n"
+        )
+        assert find_unscoped_tenant_access(tmp_path)
+
+    def test_bare_pk_lookup_is_still_flagged(self, tmp_path):
+        """Reines ``pk=<Request-Wert>`` bleibt bewusst KEINE Evidenz — das IDOR-Muster."""
+        (tmp_path / "offender.py").write_text(
+            "from core.models import Client\n\ndef view(request, pk):\n    return Client.objects.get(pk=pk)\n"
+        )
+        violations = find_unscoped_tenant_access(tmp_path)
+        assert violations
+        assert "Client.objects" in violations[0]
+
+    def test_empty_queryset_placeholder_is_not_flagged(self, tmp_path):
+        """``Model.objects.none()`` liefert per Definition keine Zeile (Formular-Platzhalter)."""
+        (tmp_path / "ok.py").write_text(
+            "from core.models import DocumentType\n\n"
+            "class Form:\n"
+            "    document_type = Field(queryset=DocumentType.objects.none())\n"
         )
         assert not find_unscoped_tenant_access(tmp_path)
 
@@ -465,9 +677,19 @@ class TestTenantModelScopeGuard:
     # (``assigned_to``/``lead_user``) — bewusst leer.
     _FORMS_ALLOWLIST: dict[str, str] = {}
 
-    # Zwei legitime Kategorien: (1) deploymentweite Compliance-/Super-Admin-
+    # Fuenf legitime Kategorien: (1) deploymentweite Compliance-/Super-Admin-
     # Kennzahlen, (2) Identitaets-Reloads eines bereits serverseitig
-    # aufgeloesten Subjekts per Primaerschluessel.
+    # aufgeloesten Subjekts per Primaerschluessel, (3) instanzweite Wartung
+    # (Schluesselrotation, Datei-/Job-Aufraeumung) ohne Facility-Bezug,
+    # (4) die Auth-Grenze (Lockout/Recovery) — sie liegt VOR der Facility-Wahl,
+    # (5) Generic-FK-Ziele, deren ``target_id`` serverseitig aus einer bereits
+    # gescopten Menge stammt (der Guard sieht dort kein ``client=``/``event=``,
+    # weil die Spalte generisch ``target_id`` heisst).
+    #
+    # Refs #2132: Die Kategorien (3)-(5) und der Grossteil der Eintraege kamen
+    # mit der Ausweitung auf alle FacilityScopedManager-Modelle dazu. Jeder
+    # Eintrag wurde einzeln am Code geprueft; ein echter Cross-Facility-Zugriff
+    # ist NICHT darunter (sonst waere er ein Befund, kein Allowlist-Eintrag).
     _SERVICES_ALLOWLIST = {
         "compliance/app_superuser.py:_app_superuser_checks:User": (
             "Compliance-Check auf DB-Superuser — deploymentweit per Definition; "
@@ -507,16 +729,184 @@ class TestTenantModelScopeGuard:
             "``select_for_update()``-Reload des bereits aufgeloesten Users per eigener "
             "PK (Lock-Reihenfolge, Refs #1000) — kein Request-Input."
         ),
+        # --- (2) Reload/Sperre per bereits serverseitig aufgeloester PK ----
+        "case/workitems.py:_locked_workitems:WorkItem": (
+            "Kanonische Sperr-Reihenfolge (Client vor WorkItem): ``pks`` kommt aus der "
+            "bereits gescopten ``workitems``-Liste des Aufrufers, nicht aus dem Request."
+        ),
+        "client/main.py:_delete_event_attachments_for_client:Event": (
+            "``event_ids`` stammt aus der Loeschkaskade der bereits aufgeloesten Person "
+            "(Anhang-Abraeumung, M24/Refs #1738) — serverseitig erzeugte ID-Menge."
+        ),
+        "client/main.py:_delete_owned_attachments_for_client:Case": (
+            "``case_ids`` stammt aus ``_redact_cases_and_episodes`` derselben Kaskade — "
+            "serverseitig erzeugte ID-Menge, kein Request-Input."
+        ),
+        "client/main.py:_generalize_event_timestamps:Event": (
+            "Zeitstempel-Bucketing auf ``event_ids`` der anonymisierten Person; das "
+            "``bulk_update`` schreibt genau die zuvor gelesenen Zeilen zurueck."
+        ),
+        "client/main.py:anonymize_eligible_soft_deleted_clients:Client": (
+            "``select_for_update()``-Reload per ``client_pk`` aus der zuvor ermittelten "
+            "Kandidatenmenge der K-Anon-Bridge (Cron-Pfad, kein Request-Input)."
+        ),
+        "client/merge.py:_locked_clients:Client": (
+            "Sperrt genau die beiden bereits aufgeloesten Merge-Partner (``source``/"
+            "``target``) in PK-Reihenfolge — Deadlock-Vermeidung, kein neuer Lookup."
+        ),
+        "client/restriction.py:_restricted_flag:Client": (
+            "Liest die eine Art.-18-Spalte frisch zur uebergebenen Personen-PK/-Instanz; "
+            "die Person hat der Aufrufer bereits gescopt aufgeloest (Refs #2045)."
+        ),
+        "client/restriction.py:restrict_processing:Client": (
+            "``select_for_update().get(pk=client.pk)`` — Reload der EIGENEN Zeile unter "
+            "der Sperre, damit der Zustand nicht vom Minuten alten Formular-Objekt kommt."
+        ),
+        "client/restriction.py:lift_processing_restriction:Client": (
+            "Gegenstueck zu ``restrict_processing``: Reload der eigenen Zeile unter der "
+            "Sperre vor dem Aufheben der Einschraenkung."
+        ),
+        "events/crud.py:_lock_client_row:Client": (
+            "Koordinationspunkt ADR-050 D2: sperrt die Personenzeile zur ``client_id`` "
+            "des bereits gescopten Ereignisses — reine Sperre, liest nur ``pk``."
+        ),
+        "events/crud.py:_lock_event_row:Event": (
+            "Koordinationspunkt ADR-050 D2: sperrt die EIGENE Ereigniszeile "
+            "(``pk=event.pk``) vor der Hold-Lesung — reine Sperre, liest nur ``pk``."
+        ),
+        "events/crud.py:_assert_current_client_binding:Event": (
+            "Revalidierung der Personenzuordnung an der EIGENEN Ereigniszeile nach der "
+            "Sperrwartezeit (ADR-050 D2) — ``pk=event.pk``, kein Request-Input."
+        ),
+        "system/offline.py:build_client_offline_bundle:Client": (
+            "``last_contact``-Aggregat zur EIGENEN, bereits gescopten Person "
+            "(``pk=client.pk``); der Max-Join braucht das Queryset, kein zweiter Lookup."
+        ),
+        # --- (5) Generic-FK-Ziele aus serverseitig gescopten ID-Mengen ------
+        "case/deletion.py:_redact_case_deletion_request:DeletionRequest": (
+            "Generic-FK-Redaktion zum EIGENEN, bereits gescopten Fall "
+            "(``target_id=case.pk``); die generische Spalte heisst ``target_id``, "
+            "deshalb greift der ``case=``-Anker hier nicht."
+        ),
+        "client/main.py:_redact_deletion_requests:DeletionRequest": (
+            "Generic-FK-Redaktion auf ``target_id__in=event_ids`` der anonymisierten "
+            "Person — serverseitig erzeugte ID-Menge."
+        ),
+        "client/main.py:_redact_client_deletion_request:DeletionRequest": (
+            "Generic-FK-Redaktion zur EIGENEN Person (``target_id=client.pk``)."
+        ),
+        "client/main.py:_redact_case_deletion_requests:DeletionRequest": (
+            "Generic-FK-Redaktion auf ``target_id__in=case_ids`` derselben Kaskade."
+        ),
+        "client/main.py:_redact_merged_source_references:DeletionRequest": (
+            "Merge-Nachlauf: Redaktion der Antraege zu ``moved_event_ids`` — die IDs "
+            "stammen aus der gerade durchgefuehrten, gescopten Zusammenfuehrung."
+        ),
+        "client/main.py:_redact_retention_proposals:RetentionProposal": (
+            "Generic-FK-Redaktion der Aufbewahrungs-Vorschlaege zu ``event_ids`` der anonymisierten Person."
+        ),
+        "client/main.py:_redact_merged_source_references:RetentionProposal": (
+            "Merge-Nachlauf, Vorschlags-Seite: dieselbe ``moved_event_ids``-Menge wie beim DeletionRequest-Zweig."
+        ),
+        # --- (1) deploymentweite Compliance-/Super-Admin-Kennzahlen ---------
+        "compliance/audit_events.py:_audit_event_checks:AuditLog": (
+            "Zahl kritischer Audit-Events der letzten 24h ueber die ganze Instanz — "
+            "Zweck der Compliance-Kachel, gerendert nur im Super-Admin-Bereich."
+        ),
+        "compliance/backup.py:_restore_checks:AuditLog": (
+            "Letzte verifizierte Wiederherstellung der INSTANZ (Backup ist nicht "
+            "facility-granular) — deploymentweite Betriebskennzahl."
+        ),
+        "compliance/cron.py:_latest:AuditLog": (
+            "Letzter Lauf eines Hintergrundjobs; die Jobs laufen instanzweit, ihre "
+            "Audit-Zeilen tragen keine sinnvolle Facility-Einschraenkung."
+        ),
+        "compliance/retention.py:_retention_checks:AuditLog": (
+            "Letzter abgeschlossener Aufbewahrungslauf der Instanz — Gegenstueck zu "
+            "``_retention_config_checks`` (Refs #2053), gleiche Begruendung."
+        ),
+        "dashboard/main.py:super_admin_dashboard_context:AuditLog": (
+            "Super-Admin-Dashboard: deploymentweite Audit-Zahlen (gesamt/kritisch) sind "
+            "der Zweck der Kachel — wie die Facility-/User-Zaehler daneben."
+        ),
+        # --- (3) instanzweite Wartung ohne Facility-Bezug -------------------
+        "file_vault/cleanup.py:cleanup_orphan_storage_files:Attachment": (
+            "Waisen-Sweep auf dem MEDIA_ROOT: die Menge der bekannten "
+            "``storage_filename`` MUSS instanzweit sein — eine facility-gefilterte "
+            "Liste wuerde fremde, sehr wohl referenzierte Dateien als Waisen loeschen."
+        ),
+        "file_vault/cleanup.py:cleanup_orphan_storage_files:ImportJob": (
+            "Gleicher Sweep, Schutzmenge der offenen Importlaeufe — instanzweit aus demselben Grund."
+        ),
+        "file_vault/rotation.py:_reencrypt_events:Event": (
+            "Schluesselrotation verschluesselt ALLE Zeilen der Instanz neu (der Schluessel "
+            "ist deploymentweit) — bewusst facility-uebergreifend, Ops-Pfad ohne Request."
+        ),
+        "file_vault/rotation.py:_reencrypt_rectification_requests:RectificationRequest": (
+            "Schluesselrotation, Berichtigungsantrags-Zweig — gleiche Begruendung."
+        ),
+        "file_vault/rotation.py:_reencrypt_attachments:Attachment": (
+            "Schluesselrotation, Anhang-Zweig — gleiche Begruendung."
+        ),
+        "import_engine.py:cleanup_stale_import_jobs:ImportJob": (
+            "Cron-Aufraeumung liegengebliebener Importlaeufe; ``facility=None`` ist der "
+            "dokumentierte instanzweite Modus, mit Facility laeuft derselbe Code ueber "
+            "``.for_facility(...)``."
+        ),
+        # --- (4) Auth-Grenze: Lockout/Recovery vor der Facility-Wahl --------
+        "security/lockout_recovery.py:_latest_failed_anchor:AuditLog": (
+            "Fehlversuchs-Anker zum bereits aufgeloesten ``user`` — die Sperre gilt am "
+            "Login und damit VOR jedem Facility-Kontext (pre-auth)."
+        ),
+        "security/lockout_recovery.py:verify_recovery_token:AuditLog": (
+            "Prueft Anker und Entsperrung zum ``user`` aus dem signierten Token — "
+            "pre-auth, kein ``request.current_facility`` vorhanden."
+        ),
+        "security/login_lockout.py:is_locked:AuditLog": (
+            "Fehlversuchs-/Entsperr-Zeilen des bereits aufgeloesten ``user`` im "
+            "Lockout-Fenster (Refs #1000) — pre-auth wie der User-Reload daneben."
+        ),
+        "user_access.py:_locked_user_ids:AuditLog": (
+            "Listen-Variante von ``is_locked`` fuer die Benutzerverwaltung: gefiltert "
+            "ueber ``user_id__in`` der bereits per ``manageable_users(facility)`` "
+            "gescopten Nutzerliste — die Facility steckt in der ID-Menge."
+        ),
+        # --- Einzelfaelle mit eigener Begruendung ---------------------------
+        "client/main.py:resolve_writable_client:Client": (
+            "Der ``Client.objects.all()``-Zweig ist der EXPLIZITE Fallback des Ausdrucks "
+            "``Client.objects.for_facility(facility) if facility else ...`` — die "
+            "gescopte Variante steht in derselben Zeile. Alle Produktions-Aufrufer "
+            "liefern eine Facility (``PinnedClientMixin.get_client_facility()``); der "
+            "Zweig deckt den facility-losen System-/Replay-Pfad ab."
+        ),
+        "client/main.py:_normalize_document_type_kwarg:DocumentType": (
+            "Aufloesung der ``document_type_id``-Schreibweise; die Facility-Grenze zieht "
+            "unmittelbar danach ``check_document_type`` in ``clean_dynamic_data`` "
+            "(``document_type.facility_id != facility.pk`` -> ValidationError, Refs "
+            "#1833). Bewusst hier belassen: ein Vorab-Scope wuerde die fachliche "
+            "Meldung 'gehoert nicht zu dieser Einrichtung' gegen 'existiert nicht' "
+            "tauschen."
+        ),
+        "dashboard/activity.py:activity_target_prefetch:Event": (
+            "``GenericPrefetch``-Queryset zum Aufloesen der GenericFK-Ziele bereits "
+            "gescopter ``Activity``-Zeilen — es waehlt keine Zeilen aus, es folgt den "
+            "``target_id`` der Elternmenge."
+        ),
     }
 
     _FAILURE_HINT = (
-        "Ungescopter Manager-Zugriff auf User/Facility/Organization gefunden. Diese drei "
-        "Tabellen liegen ausserhalb von RLS (Auth-Grenze, siehe NOT_RLS_SCOPED in "
-        "src/tests/test_rls.py) — der explizite Filter ist die einzige Huerde, und auf "
-        "SQLite gibt es keinen DB-Backstop. Bitte ``facility=…`` ergaenzen (bzw. "
-        "``core.services.scoping.get_scoped_object`` nutzen). Ist der Zugriff bewusst "
-        "global, gehoert er mit Begruendung in die passende Allowlist von "
-        "TestTenantModelScopeGuard.\nRefs #1658 / #1376.\nBetroffen: "
+        "Ungescopter Manager-Zugriff auf ein facility-tragendes Modell gefunden "
+        "(Modellmenge: alle FacilityScopedManager-Modelle aus der Registry plus "
+        "User/Facility/Organization). Bei den drei Tenant-Tabellen ist der explizite "
+        "Filter die EINZIGE Huerde (Auth-Grenze, siehe NOT_RLS_SCOPED in "
+        "src/tests/test_rls.py); bei allen uebrigen faengt RLS den Fehler erst in Prod "
+        "ab — auf SQLite (dev/test) gibt es keinen DB-Backstop. Bitte ``facility=…`` "
+        "ergaenzen bzw. ``.for_facility(…)``/``.visible_to(…)``/"
+        "``core.services.scoping.get_scoped_object`` nutzen; ein Filter ueber ein "
+        "bereits gescoptes Besitzer-Objekt (``client=``/``case=``/``event=``) zaehlt "
+        "ebenfalls. Ist der Zugriff bewusst facility-uebergreifend, gehoert er mit "
+        "Begruendung in die passende Allowlist von TestTenantModelScopeGuard.\n"
+        "Refs #1658 / #1376 / #2132.\nBetroffen: "
     )
 
     def test_no_unscoped_tenant_access_in_views(self):
