@@ -16,8 +16,9 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from core.models import Case, Event, Settings
+from core.models import AuditLog, Case, Event, LegalHold, Settings
 from core.retention.enforcement import (
+    collect_doomed_events,
     enforce_anonymous,
     enforce_document_type_retention,
     enforce_identified,
@@ -486,4 +487,119 @@ class TestStrategyIntersection:
             "Cross-Strategy-Intersection: ein Event in 2 Kategorien darf nur "
             "einmal in collect_doomed_events landen (sonst werden EventHistory "
             "und AuditLog doppelt geschrieben)."
+        )
+
+
+@pytest.mark.django_db
+class TestFallHoldsImVorfilter:
+    """Refs #2125: ein gehaltener FALL scheidet schon im Vorfilter aus.
+
+    Der verbindliche Halt ist seit Refs #2122 der Re-Check unter der Sperre
+    (``_lock_event_and_recheck_hold``) — funktional fehlte also nichts. Die
+    Sammelstellen filterten aber weiterhin nur Ereignis- und Personen-Holds,
+    weshalb jedes Ereignis eines gehaltenen Falls in JEDEM Lauf erneut
+    eingesammelt, gesperrt und als ``deferred`` protokolliert wurde. Das ist
+    betrieblich sichtbares Dauerrauschen: Solange der Hold gilt, ist ``deferred``
+    kein Signal mehr, sondern Grundzustand.
+    """
+
+    def _gehaltener_fall_mit_ereignis(self, facility, staff_user, lead_user, doc_type, person, **case_kwargs):
+        case = Case.objects.create(
+            facility=facility,
+            client=person,
+            title="Fall unter Anordnung",
+            created_by=staff_user,
+            **case_kwargs,
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=person,
+            case=case,
+            document_type=doc_type,
+            occurred_at=_at(5000),
+            data_json={"freitext": "Klartext"},
+            created_by=staff_user,
+        )
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Case",
+            target_id=case.pk,
+            reason="Ermittlungsverfahren",
+            created_by=lead_user,
+        )
+        return case, event
+
+    def test_collect_doomed_events_laesst_das_ereignis_des_gehaltenen_falls_aus(
+        self, facility, staff_user, lead_user, doc_type_contact, client_identified, settings_obj
+    ):
+        _, event = self._gehaltener_fall_mit_ereignis(
+            facility, staff_user, lead_user, doc_type_contact, client_identified
+        )
+        gesammelt = set(collect_doomed_events(facility, settings_obj, timezone.now()).values_list("pk", flat=True))
+        assert event.pk not in gesammelt, "Das Ereignis eines gehaltenen Falls steckt weiter im Vorfilter (Refs #2125)"
+
+    def test_enforce_identified_zaehlt_das_ereignis_des_gehaltenen_falls_nicht(
+        self, facility, staff_user, lead_user, doc_type_contact, client_identified, settings_obj
+    ):
+        self._gehaltener_fall_mit_ereignis(facility, staff_user, lead_user, doc_type_contact, client_identified)
+        assert enforce_identified(facility, settings_obj, timezone.now(), dry_run=True)["count"] == 0
+
+    def test_enforce_anonymous_zaehlt_das_ereignis_des_gehaltenen_falls_nicht(
+        self, facility, staff_user, lead_user, doc_type_contact, client_identified, settings_obj
+    ):
+        _, event = self._gehaltener_fall_mit_ereignis(
+            facility, staff_user, lead_user, doc_type_contact, client_identified
+        )
+        Event.objects.filter(pk=event.pk).update(is_anonymous=True)
+        assert enforce_anonymous(facility, settings_obj, timezone.now(), dry_run=True)["count"] == 0
+
+    def test_enforce_qualified_zaehlt_das_ereignis_des_gehaltenen_falls_nicht(
+        self, facility, staff_user, lead_user, doc_type_contact, client_qualified, settings_obj
+    ):
+        self._gehaltener_fall_mit_ereignis(
+            facility,
+            staff_user,
+            lead_user,
+            doc_type_contact,
+            client_qualified,
+            status=Case.Status.CLOSED,
+            closed_at=_at(4000),
+        )
+        assert enforce_qualified(facility, settings_obj, timezone.now(), dry_run=True)["count"] == 0
+
+    def test_enforce_document_type_retention_zaehlt_das_ereignis_des_gehaltenen_falls_nicht(
+        self, facility, staff_user, lead_user, doc_type_contact, client_identified, settings_obj
+    ):
+        doc_type_contact.retention_days = 30
+        doc_type_contact.save(update_fields=["retention_days"])
+        self._gehaltener_fall_mit_ereignis(facility, staff_user, lead_user, doc_type_contact, client_identified)
+        assert enforce_document_type_retention(facility, timezone.now(), dry_run=True)["count"] == 0
+
+    def test_der_lauf_meldet_kein_deferred_mehr_fuer_den_gehaltenen_fall(
+        self, facility, staff_user, lead_user, doc_type_contact, client_identified, settings_obj
+    ):
+        """Der betrieblich sichtbare Kern: kein Dauer-``deferred`` im Lauf-Protokoll."""
+        self._gehaltener_fall_mit_ereignis(facility, staff_user, lead_user, doc_type_contact, client_identified)
+        # Positiv-Kontrolle: ein faelliges Ereignis OHNE Fall-Hold laeuft durch.
+        frei = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=_at(5000),
+            data_json={"freitext": "Klartext"},
+            created_by=staff_user,
+        )
+
+        result = enforce_identified(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["count"] == 1
+        frei.refresh_from_db()
+        assert frei.is_deleted is True, "Positiv-Kontrolle: der Lauf agiert real"
+        audit = AuditLog.objects.filter(
+            facility=facility,
+            action=AuditLog.Action.DELETE,
+            detail__category="identified",
+        ).latest("timestamp")
+        assert "deferred" not in audit.detail, (
+            f"Der Lauf meldet weiterhin ein zurueckgestelltes Ereignis fuer einen gehaltenen Fall: {audit.detail}"
         )

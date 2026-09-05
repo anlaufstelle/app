@@ -37,10 +37,22 @@ def collect_doomed_events(facility, settings_obj, now):
     # Refs #1376 (I10): ein Legal Hold auf den KLIENTEN schuetzt bisher nicht
     # dessen Events — zusaetzlich zu direkten Event-Holds ausschliessen.
     held_client_ids = get_active_hold_target_ids(facility, "Client")
+    # Refs #2125: Und der Hold auf den FALL nimmt dessen Ereignisse schon hier
+    # aus der Menge. Der verbindliche Halt bleibt der Re-Check unter der Sperre
+    # (``_lock_event_and_recheck_hold``, Refs #2122) — ohne diesen Vorfilter
+    # sammelte aber JEDER Lauf die Ereignisse eines gehaltenen Falls erneut ein,
+    # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
+    # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
     combined = Event.objects.none()
     for strategy in iter_strategies(facility, settings_obj, now):
         combined = combined | strategy.queryset
-    return combined.exclude(pk__in=held_ids).exclude(client_id__in=held_client_ids).distinct()
+    return (
+        combined.exclude(pk__in=held_ids)
+        .exclude(client_id__in=held_client_ids)
+        .exclude(case_id__in=held_case_ids)
+        .distinct()
+    )
 
 
 def _lock_event_and_recheck_hold(facility, pk):
@@ -281,6 +293,13 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
     # (entgegen der Regel) doch mit einem Klienten verknuepft sind — no-op
     # fuer echte ``client=None``-Anonyma.
     held_client_ids = get_active_hold_target_ids(facility, "Client")
+    # Refs #2125: Und der Hold auf den FALL nimmt dessen Ereignisse schon hier
+    # aus der Menge. Der verbindliche Halt bleibt der Re-Check unter der Sperre
+    # (``_lock_event_and_recheck_hold``, Refs #2122) — ohne diesen Vorfilter
+    # sammelte aber JEDER Lauf die Ereignisse eines gehaltenen Falls erneut ein,
+    # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
+    # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
     qs = (
         Event.objects.filter(
             facility=facility,
@@ -290,6 +309,7 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
         )
         .exclude(pk__in=held_ids)
         .exclude(client_id__in=held_client_ids)
+        .exclude(case_id__in=held_case_ids)
     )
     return _enforce(
         qs,
@@ -315,6 +335,13 @@ def enforce_identified(facility, settings_obj, now, dry_run):
     # Refs #1376 (I10): Legal Hold auf den Klienten selbst schuetzt dessen
     # Events ebenso wie ein direkter Event-Hold.
     held_client_ids = get_active_hold_target_ids(facility, "Client")
+    # Refs #2125: Und der Hold auf den FALL nimmt dessen Ereignisse schon hier
+    # aus der Menge. Der verbindliche Halt bleibt der Re-Check unter der Sperre
+    # (``_lock_event_and_recheck_hold``, Refs #2122) — ohne diesen Vorfilter
+    # sammelte aber JEDER Lauf die Ereignisse eines gehaltenen Falls erneut ein,
+    # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
+    # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
     identified_clients = Client.objects.filter(
         facility=facility,
         contact_stage=Client.ContactStage.IDENTIFIED,
@@ -328,6 +355,7 @@ def enforce_identified(facility, settings_obj, now, dry_run):
         )
         .exclude(pk__in=held_ids)
         .exclude(client_id__in=held_client_ids)
+        .exclude(case_id__in=held_case_ids)
     )
     return _enforce(
         qs,
@@ -352,6 +380,13 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
     # Refs #1376 (I10): Legal Hold auf den Klienten selbst schuetzt dessen
     # Events ebenso wie ein direkter Event-Hold.
     held_client_ids = get_active_hold_target_ids(facility, "Client")
+    # Refs #2125: Und der Hold auf den FALL nimmt dessen Ereignisse schon hier
+    # aus der Menge. Der verbindliche Halt bleibt der Re-Check unter der Sperre
+    # (``_lock_event_and_recheck_hold``, Refs #2122) — ohne diesen Vorfilter
+    # sammelte aber JEDER Lauf die Ereignisse eines gehaltenen Falls erneut ein,
+    # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
+    # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
     qualified_clients = Client.objects.filter(
         facility=facility,
         contact_stage=Client.ContactStage.QUALIFIED,
@@ -374,6 +409,7 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
         )
         .exclude(pk__in=held_ids)
         .exclude(client_id__in=held_client_ids)
+        .exclude(case_id__in=held_case_ids)
     )
     return _enforce(
         qs,
@@ -409,6 +445,13 @@ def enforce_document_type_retention(facility, now, dry_run):
     # Refs #1376 (I10): Legal Hold auf den Klienten selbst schuetzt dessen
     # Events ebenso wie ein direkter Event-Hold.
     held_client_ids = get_active_hold_target_ids(facility, "Client")
+    # Refs #2125: Und der Hold auf den FALL nimmt dessen Ereignisse schon hier
+    # aus der Menge. Der verbindliche Halt bleibt der Re-Check unter der Sperre
+    # (``_lock_event_and_recheck_hold``, Refs #2122) — ohne diesen Vorfilter
+    # sammelte aber JEDER Lauf die Ereignisse eines gehaltenen Falls erneut ein,
+    # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
+    # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
     doc_types_with_retention = DocumentType.objects.filter(
         facility=facility,
         entity_type=DocumentType.EntityType.EVENT,
@@ -430,6 +473,7 @@ def enforce_document_type_retention(facility, now, dry_run):
             )
             .exclude(pk__in=held_ids)
             .exclude(client_id__in=held_client_ids)
+            .exclude(case_id__in=held_case_ids)
         )
         count += _enforce(
             qs,
