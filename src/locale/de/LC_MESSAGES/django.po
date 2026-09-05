@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-04 19:49+0200\n"
+"POT-Creation-Date: 2026-09-05 22:08+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12525,3 +12525,8 @@ msgstr "Diese Uhrzeit gibt es am Tag der Zeitumstellung nicht — die Uhr spring
 #, python-format
 msgid "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
 msgstr "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s). Bitte Anführungszeichen und Zeilenumbrüche innerhalb von Feldern prüfen."
+
+#: src/core/retention/legal_holds.py:144
+#, python-format
+msgid "Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson."
+msgstr "Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson."
