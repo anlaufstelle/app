@@ -1422,3 +1422,124 @@ class TestStandaloneDocumentGuard:
             assert not re.search(r"""\sstyle\s*=\s*["']""", source, re.IGNORECASE), (
                 f"{name} darf kein Inline-style=-Attribut tragen (CSP style-src ohne 'unsafe-inline')."
             )
+
+
+class TestContextHelpLabelGuard:
+    """Jede Einbindung von ``_context_help.html`` traegt einen eigenen ``summary_label`` (Refs #2091).
+
+    Die Kontexthilfe-Komponente (``components/_context_help.html:3``) faellt
+    ohne ``summary_label`` still auf den generischen Text "Was ist das?"
+    zurueck. Die fuenf Einbindungen aus #2043 haben seit dem Cross-Review
+    unterscheidbare, kontextbenennende Namen — vorher hiessen alle gleich, und
+    auf ``/retention/`` standen zwei gleichnamige Controls direkt
+    nebeneinander (fuer Screenreader-Nutzer:innen, die per Control-Liste
+    navigieren, unbrauchbar). Der Fallback selbst bleibt bestehen (Guard statt
+    Pflichtparameter — #2091 laesst die Komponente bewusst unangetastet):
+    dieser Guard faengt stattdessen jede kuenftige Einbindung ohne eigenen
+    Namen sofort ab, statt die Regression erst im Handtest zu bemerken.
+
+    Scan analog ``TestStandaloneDocumentGuard`` (Refs #2102): Djangos eigener
+    Lexer statt Regex/HTMLParser — ein ``{% include %}`` in ``{% comment %}``-
+    Bloecken/``verbatim`` zaehlt NICHT, ein HTML-Kommentar (``<!-- … -->``)
+    dagegen sehr wohl, weil Django ihn trotzdem rendert.
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    _CONTEXT_HELP_INCLUDE = "components/_context_help.html"
+    _SUMMARY_LABEL_PARAM = re.compile(r"^summary_label\s*=")
+
+    @classmethod
+    def _context_help_includes(cls, root=None):
+        """Alle ``_context_help.html``-Einbindungen unterhalb ``root``.
+
+        Liefert je Fundstelle ``(relativer Pfad, Parameter-Tupel)``. Nutzt
+        denselben Lexer-Scan wie ``TestStandaloneDocumentGuard._analyze``
+        (Refs #2102) — dieselbe Grammatik-Kenntnis (Kommentarbloecke,
+        ``verbatim``, unabgeschlossene Tags) gilt hier unveraendert; die
+        bestehende Klasse wird dabei nur gelesen, nicht veraendert.
+
+        ``root`` ist parametrisiert, damit Negativ-/Positivproben gegen
+        ``tmp_path`` laufen koennen statt gegen den echten Baum (xdist-Race).
+        """
+        root = Path(root) if root is not None else cls._TEMPLATES_DIR
+        for template_file in sorted(root.rglob("*.html")):
+            rel = template_file.relative_to(root).as_posix()
+            document = TestStandaloneDocumentGuard._analyze(template_file.read_text(errors="ignore"))
+            for target, params in document.includes:
+                if target == cls._CONTEXT_HELP_INCLUDE:
+                    yield rel, params
+
+    @classmethod
+    def _has_summary_label(cls, params) -> bool:
+        """Traegt ``params`` (rohe ``{% include %}``-Bits nach dem Ziel) ein ``summary_label=``?
+
+        Ein reiner Name-Check auf das Vorhandensein von ``summary_label=``
+        genuegt (Recon-B Abschnitt E) — die Bits sind rohe, ungeparste
+        Ausdruecke wie ``summary_label=offline_help_label``; der Wert selbst
+        (Variable vs. String-Literal) wird bewusst nicht ausgewertet.
+        """
+        return any(cls._SUMMARY_LABEL_PARAM.match(bit) for bit in params)
+
+    def test_every_context_help_include_carries_a_summary_label(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        includes = list(self._context_help_includes())
+        assert len(includes) == 6, (
+            "Erwartet werden die sechs bekannten _context_help.html-"
+            "Einbindungen aus fuenf Templates (Recon-B Abschnitt E) — Anzahl "
+            f"gedriftet oder Scanner defekt: {[rel for rel, _params in includes]}"
+        )
+        violations = [rel for rel, params in includes if not self._has_summary_label(params)]
+        assert not violations, (
+            "Diese Templates binden components/_context_help.html ohne "
+            "eigenes summary_label ein und fallen damit still auf den "
+            'generischen Text "Was ist das?" zurueck (Refs #2091). Bitte '
+            "summary_label=… mitgeben.\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_scanner_flags_a_synthetic_include_without_summary_label(self, tmp_path):
+        """Negativtest gegen ``tmp_path``: Einbindung ohne ``summary_label`` wird erkannt."""
+        (tmp_path / "ohne_label.html").write_text(
+            '{% include "components/_context_help.html" with help_id="x" help_text="y" %}\n',
+            encoding="utf-8",
+        )
+        includes = list(self._context_help_includes(root=tmp_path))
+        assert [rel for rel, _params in includes] == ["ohne_label.html"]
+        assert not self._has_summary_label(includes[0][1])
+
+    def test_scanner_accepts_variable_summary_label(self, tmp_path):
+        """Positiv: ``summary_label=variable`` (wie in base.html/condition_board.html) wird akzeptiert."""
+        (tmp_path / "mit_variable.html").write_text(
+            '{% include "components/_context_help.html" with help_id="x" summary_label=offline_help_label %}\n',
+            encoding="utf-8",
+        )
+        includes = list(self._context_help_includes(root=tmp_path))
+        assert self._has_summary_label(includes[0][1])
+
+    def test_scanner_accepts_literal_summary_label(self, tmp_path):
+        """Positiv: ``summary_label="Literal"`` (wie in dashboard.html/detail.html) wird akzeptiert."""
+        (tmp_path / "mit_literal.html").write_text(
+            '{% include "components/_context_help.html" with summary_label="Wie funktioniert das?" %}\n',
+            encoding="utf-8",
+        )
+        includes = list(self._context_help_includes(root=tmp_path))
+        assert self._has_summary_label(includes[0][1])
+
+    def test_scanner_ignores_includes_inside_comment_blocks(self, tmp_path):
+        """Eine Einbindung NUR im ``{% comment %}``-Block wird ignoriert — Django rendert sie nie."""
+        (tmp_path / "nur_kommentar.html").write_text(
+            '{% comment %}\n{% include "components/_context_help.html" with help_id="x" %}\n{% endcomment %}\n',
+            encoding="utf-8",
+        )
+        assert list(self._context_help_includes(root=tmp_path)) == []
+
+    def test_scanner_counts_includes_inside_html_comments(self, tmp_path):
+        """Ein HTML-Kommentar zaehlt sehr wohl — Django rendert ihn (Refs #2102 I-1d)."""
+        (tmp_path / "html_kommentar.html").write_text(
+            '<!-- {% include "components/_context_help.html" with help_id="x" %} -->\n',
+            encoding="utf-8",
+        )
+        includes = list(self._context_help_includes(root=tmp_path))
+        assert len(includes) == 1
+        assert not self._has_summary_label(includes[0][1])
