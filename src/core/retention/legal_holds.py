@@ -4,8 +4,10 @@ Aus ``services/retention.py`` ausgekoppelt — eigenes Thema (Sperre
 gegen Loeschung; orthogonal zu Vorschlaegen und Enforcement).
 """
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Case, Client, Event, EventHistory, LegalHold, RetentionProposal
 from core.services.audit import audit_retention_decision
@@ -106,6 +108,43 @@ def _client_history_is_incomplete(facility, client_id) -> bool:
     return any(_history_is_incomplete(event) for event in events.iterator())
 
 
+def _assert_not_merge_tombstone(client):
+    """Weist eine Aufbewahrungssperre auf einen Merge-Tombstone ab (Refs #2144).
+
+    Red-Team B-11: Auf der bereits gesperrten Personenzeile wurde
+    ``merged_into_id`` nie gelesen. Ein Hold auf die **Quelle** einer
+    vollzogenen Zusammenfuehrung war damit still zulaessig — und deckte nichts:
+    die Ereignisse der Quelle tragen seit dem Merge ``client_id`` des Ziels
+    (``merge.py``, ``update(client=target)``), waehrend alle Deckungsmengen
+    (``collect_doomed_events``, :func:`exclude_clients_with_active_holds`) nur
+    auf den Tombstone schauen. Das Verspaetungsmerkmal meldete zusaetzlich
+    ``history_already_redacted=False``, weil die Quelle gar keine Ereigniszeile
+    mehr hat (``any(()) == False``) — ein irrefuehrendes „puenktlich" auf einem
+    Hold ohne Deckung.
+
+    **Abweisen statt umlenken:** Die Gegenrichtung ist seit ADR-045 genauso
+    hart (``_validate_merge`` verweigert den Merge unter Hold und die
+    Zusammenfuehrung einer bereits gemergten Quelle). Ein Hold friert eine Akte
+    als Beweismittel ein; wer ihn anordnet, soll die Kette selbst nachvollziehen
+    und ihn bewusst auf die Zielperson setzen, statt ihn stillschweigend
+    verschoben zu bekommen. Fail-loud wie ADR-050 D2 fordert.
+
+    Bewusst NICHT abgewiesen wird ein Hold auf eine Person im **Papierkorb**
+    (``is_deleted=True``) — genau das ist die Zusage „ein Hold haelt beide
+    Stufen auf" (Papierkorb-Frist UND Tilgung, Refs #2123) — und auch keiner auf
+    eine bereits **redigierte** Person (``anonymized_at``): der traegt das
+    bestehende Verspaetungsmerkmal ``history_already_redacted=True`` und ist
+    damit dokumentiert, nicht still.
+    """
+    if client.merged_into_id is None:
+        return
+    ziel_pseudonym = Client.objects.filter(pk=client.merged_into_id).values_list("pseudonym", flat=True).first()
+    raise ValidationError(
+        _("Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson.")
+        % {"pseudonym": ziel_pseudonym or "?"}
+    )
+
+
 def _lock_client_and_check_history(facility, target_id):
     """Sperrt die Personenzeile — der Koordinationspunkt des Personen-Holds.
 
@@ -123,6 +162,10 @@ def _lock_client_and_check_history(facility, target_id):
     client = Client.objects.filter(facility=facility, pk=target_id).select_for_update().first()
     if client is None:
         return False
+    # Refs #2144: Der Zustand der Zeile wird jetzt auch GELESEN, nicht nur
+    # gesperrt — auf der gesperrten Zeile, damit „ist ein Tombstone" eine
+    # stabile Aussage ist und nicht der Stand von vorhin.
+    _assert_not_merge_tombstone(client)
     return _client_history_is_incomplete(facility, target_id)
 
 
@@ -159,7 +202,17 @@ def _lock_case_and_check_history(facility, target_id):
     if case is None:
         return False
     client_id = case["client_id"]
-    Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk").first()
+    person = (
+        Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk", "merged_into").first()
+    )
+    # Refs #2144: Faelle haben keinen eigenen Tombstone — sie wandern beim
+    # Merge per ``update(client=target)`` mit. Ihre PERSON kann aber einer
+    # sein; ein Fall, der noch auf den Tombstone zeigt, ist derselbe stille
+    # Deckungsverlust wie beim Personen-Hold. Der Papierkorb-Zustand des Falls
+    # (``is_deleted``/``anonymized_at``) bleibt bewusst zulaessig: der Fall-Hold
+    # im Papierkorb ist genau der Halt, auf dem Refs #2123 aufbaut.
+    if person is not None:
+        _assert_not_merge_tombstone(person)
     Case.objects.filter(facility=facility, pk=target_id).select_for_update().only("pk").first()
     # Die Ereigniszeilen der Person mit unter dieselbe Sperre: ein
     # Ereignis-Hold koordiniert ueber ``core_event``, und der Sofortpfad haelt

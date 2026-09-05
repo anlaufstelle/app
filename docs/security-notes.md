@@ -2299,6 +2299,38 @@ Zwei Formen sind nötig: Präfixe für ganze Teilbäume (`/mfa/`, `/webauthn/`, 
 **Tests:** [`test_facility_less_account.py`](../src/tests/test_facility_less_account.py) (Reproduktion beider Fehlerklassen, Sperrseite, RLS-GUC, Abgrenzung zur Archiv-Sperre, Sprache durch die volle Kette, Whitelist-Herleitung in beide Richtungen) und [`test_authz_facility_less.py`](../src/tests/test_authz_facility_less.py) — der systematische Sweep über **alle 257** Methodenzeilen der AuthZ-Tabelle. Weil das Vollständigkeits-Gate `test_every_named_pattern_is_declared` für jeden neuen benannten URL-Pattern einen Eintrag dort erzwingt, wird ein neuer View **automatisch** mitgeprüft, ohne dass eine zweite Liste zu pflegen wäre.
 
 
+## Aufbewahrungssperre auf Merge-Tombstone wird abgewiesen (Issue #2144)
+
+### Beobachtung
+
+`create_hold_for_target` ([`legal_holds.py`](../src/core/retention/legal_holds.py)) sperrt für `target_type="Client"` seit #2108/#2122 die Personenzeile — den gemeinsamen Koordinationspunkt mit Sofortpfad, Nacht-Batch, K-Anon-Bridge und Ereignis-Sweep. Gelesen wurde auf dieser gesperrten Zeile aber nichts: weder `merged_into_id` noch `is_deleted`. Eine Sperre auf die **Quelle** einer bereits vollzogenen Zusammenführung war damit still zulässig und wurde regulär als `LEGAL_HOLD` auditiert.
+
+Sie deckte jedoch nichts mehr. Der Merge hängt Fälle und Ereignisse per `update(client=target)` an die Zielperson um ([`merge.py`](../src/core/services/client/merge.py)); die Zeilen behalten ihre pk, wechseln aber den Personenbezug. Die Deckungsmengen der Retention schauen ausschließlich auf den Tombstone: `collect_doomed_events`/`enforce_*` schließen `client_id__in={Quelle}` aus, `exclude_clients_with_active_holds` schließt `pk__in={Quelle}` aus ([`enforcement.py`](../src/core/retention/enforcement.py), [`legal_holds.py`](../src/core/retention/legal_holds.py)). Folge: die gewanderte Dokumentation wird am Ziel weiter redigiert, Papierkorb-Frist, Admin-Sofort-Tilgung und K-Anon-Bridge bleiben für das Ziel offen — trotz eines Holds „auf ihrer Person".
+
+Verschärfend war das **Verspätungsmerkmal** irreführend: `history_already_redacted` prüft die Ereignisse der Zielperson des Holds, und die Quelle hat nach dem Merge keine mehr (`any(()) == False`). Der Hold meldete also „pünktlich" — auf einer Akte, über die er keine Aussage mehr trifft. Für die Spoliationsfrage ist genau dieses Merkmal der Nachweis.
+
+Die **Gegenrichtung war seit ADR-045 sauber geschlossen**: `_validate_merge` weist eine Zusammenführung unter aktivem Hold ab und nennt im Docstring denselben Deckungsverlust als Begründung; eine bereits gemergte Quelle wird ebenfalls abgewiesen. Es fehlte nur die Rückrichtung — Hold **nach** Merge.
+
+### Maßnahme
+
+Auf der bereits gesperrten Personenzeile wird `merged_into_id` jetzt mitgelesen; ist es gesetzt, endet die Hold-Anlage mit einer deutschen `ValidationError`, die das Pseudonym der **Zielperson** nennt. Kein Hold, keine Auditzeile — fail-loud, wie ADR-050 D2 es für Hold-Pfade fordert. Derselbe Guard läuft im `Case`-Zweig auf der Personenzeile des Falls: Fälle selbst haben keinen Tombstone (sie wandern beim Merge mit), ihre Person kann aber einer sein.
+
+**Abweisen statt umlenken.** Ein Umbiegen des Ziels auf `merged_into` wäre technisch möglich gewesen (mit `redirected_from` im Audit-Detail). Eine Aufbewahrungssperre ist aber ein bewusster Beweismittel-Akt: wer sie anordnet, soll die Merge-Kette selbst nachvollziehen und die Zielperson benennen, statt sie stillschweigend verschoben zu bekommen. Dieselbe Antwort gibt die Gegenrichtung im Merge-Pfad.
+
+### Trade-off
+
+Zwei Zustände bleiben bewusst **zulässig**:
+
+- **Papierkorb** (`is_deleted=True`): Der Hold auf eine Person oder einen Fall im Papierkorb ist genau die Zusage aus Handbuch und Oberfläche — „ein Hold hält beide Stufen auf", Papierkorb-Frist *und* Tilgung. Eine Abweisung hätte den Schutz entfernt, auf dem #2123 (Fall-Tilgung unter Sperre) aufsetzt.
+- **Bereits redigiert** (`anonymized_at`): Dieser Fall ist nicht still, sondern trägt seit jeher das Verspätungsmerkmal `history_already_redacted=True`. Er ist dokumentiert, nicht verloren — der Unterschied zum Tombstone, wo das Merkmal fälschlich „pünktlich" meldete.
+
+Die Reichweite ist heute gering: es gibt keinen UI-Weg für direkte Personen-/Fall-Holds (`RetentionProposal.TargetType` kennt nur `EVENT`), `create_hold_for_target` ist nur per Service/Konsole erreichbar. Der Guard schließt einen latenten fail-open-Pfad, der bei jeder künftigen Verdrahtung klickbar würde.
+
+### Verifikation
+
+[`test_legal_hold_tombstone_guard.py`](../src/tests/test_legal_hold_tombstone_guard.py): Abweisung nach vollzogenem Merge (kein `LegalHold`, keine `LEGAL_HOLD`-Auditzeile, Zielpseudonym in der Meldung), Positivpfad (der Hold auf die Zielperson nimmt das gewanderte Ereignis aus `collect_doomed_events` und die Zielperson aus `exclude_clients_with_active_holds`), beide Grenzen (Papierkorb und unbekannte `target_id` bleiben zulässig), der `Case`-Zweig sowie ein beobachtender Zwei-Faden-Renn-Nachweis: eine Hold-Anlage, die in einen laufenden Merge hineinläuft, wartet am Personen-Anker und wird danach abgewiesen — statt still auf dem fertigen Tombstone zu landen.
+
+
 ---
 
 ## Weitere Einstiegspunkte
