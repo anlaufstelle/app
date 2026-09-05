@@ -13,7 +13,9 @@ Aufbau
   dadurch monoton; Ziel ist ``{}``.
 * ``AXE_REPORT_PATH=<datei.json>`` schreibt zusaetzlich JEDEN Befund jeder
   Impact-Stufe (inkl. ``moderate``/``minor``) als Artefakt — Grundlage fuer den
-  Audit-Fan-out und fuer das Pinnen der Baseline.
+  Audit-Fan-out und fuer das Pinnen der Baseline. Der erste Messlauf
+  (2026-09-05) fand ausschliesslich ``critical`` (25 Knoten) und ``serious``
+  (45 Knoten) — kein einziger ``moderate``/``minor``-Befund.
 
 Warum die Suite seriell laeuft: sie haengt an ``authenticated_page`` & Co. und
 damit am gemeinsamen E2E-Server; ausserdem schreibt das Report-Artefakt
@@ -57,7 +59,11 @@ ANONYMOUS_PAGES = [
 ]
 
 AUTHENTICATED_PAGES = [
-    ("zeitstrom", "/", "[data-testid='zeitstrom-cockpit']"),
+    # Ready-Selektor bewusst NICHT das Cockpit: ``show_cockpit`` ist
+    # rollenabhaengig (``core/zeitstrom/index.html:40``) und fuer die
+    # Anwendungsbetreuung falsch — Lauf 1 lief hier in den Timeout. Die H1
+    # traegt jede Rolle.
+    ("zeitstrom", "/", "#main-content h1:has-text('Zeitstrom')"),
     # /start/ ist eine Weiche: die Anwendungsbetreuung landet auf /verwaltung/
     # (Refs #1813) — gescannt wird also die Verwaltungs-Uebersicht.
     ("start_facility_admin", "/start/", "[data-testid='subnav-verwaltung']"),
@@ -87,7 +93,30 @@ SUPER_ADMIN_PAGES = [
 # ``/login/`` steht hier bewusst NICHT — die eigenstaendigen Auth-Templates
 # haben weder Skip-Link noch ``<main id="main-content">`` (Befund, siehe
 # Modul-Docstring und Lane-Bericht).
-SKIP_LINK_PAGES = ["/", "/events/new/", "/clients/"]
+SKIP_LINK_PAGES = [
+    "/",
+    # Befund aus dem Baseline-Lauf (Refs #1059, Ruling R-B0-8): Das Feld
+    # ``occurred_at`` traegt ``tabindex="4"`` (``core/forms/events.py:70``, die
+    # EINZIGE positive tabindex-Angabe im Repo). Ein positiver tabindex bildet
+    # eine eigene Tab-Ordnungsgruppe, die VOR allen ``tabindex=0``-Elementen
+    # liegt — das erste Tab landet dadurch mitten im Formular statt auf dem
+    # Skip-Link, WCAG 2.4.3 (Focus Order) ist verletzt. Der Fall bleibt scharf
+    # und ``strict``: sobald B2' das tabindex entfernt, kippt er auf XPASS und
+    # faellt auf, statt still gruen zu werden.
+    #
+    # axe faengt das NICHT: die Regel ``tabindex`` traegt nur den Tag
+    # ``best-practice``, nicht ``wcag2a``/``wcag21a`` — sie liegt also
+    # ausserhalb der AA-Tagauswahl des Gates. Genau dafuer gibt es diesen
+    # Funktionstest.
+    pytest.param(
+        "/events/new/",
+        marks=pytest.mark.xfail(
+            strict=True,
+            reason="positives tabindex am occurred_at-Feld — Fix in B2' (Refs #1059)",
+        ),
+    ),
+    "/clients/",
+]
 
 
 @pytest.fixture(scope="session")
