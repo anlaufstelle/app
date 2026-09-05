@@ -28,6 +28,7 @@ oder ein einzelner Fall geloescht wurde.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -39,6 +40,8 @@ from core.models import Activity, AuditLog, Case, Client, DeletionRequest
 from core.retention.legal_holds import case_has_active_hold, exclude_cases_with_active_holds
 from core.services.audit import audit_event
 from core.services.dashboard import log_activity
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Antrag und Staffelung (P1c)
@@ -443,6 +446,46 @@ def anonymize_case(case, user=None, *, trigger):
     return case
 
 
+def _lock_case_chain(facility_id, case_pk):
+    """Sperrt ``core_client`` -> ``core_case`` -> die Ereigniszeilen des Falls (Refs #2123).
+
+    Der Anker der Fall-Tilgung, Gegenstueck zu
+    :func:`core.services.client.main._lock_client_event_rows` und
+    :func:`core.retention.legal_holds._lock_case_and_check_history`. Die
+    Reihenfolge ist die kanonische aus ADR-050 D5.5: die Personenzeile zuerst
+    (sie ist die erste Stufe, die Sofortpfad, Nacht-Batch, K-Anon-Bridge,
+    Ereignis-Sweep UND die Fall-Hold-Anlage nehmen), der Fall danach, die
+    Ereigniszeilen zuletzt in ``pk``-Ordnung. Die Gegenordnung waere der
+    ABBA-Zyklus, den D5.5 ausschliesst.
+
+    Ohne diesen Anker las die Fall-Tilgung ``case_has_active_hold`` voellig
+    ungesperrt: ``anonymize_case`` oeffnet seine ``atomic`` erst danach, ein
+    waehrend der Redaktion angeordneter Fall-Hold kam also zu spaet und der
+    Fall war schon irreversibel redigiert (Spoliation, Muster #2108).
+
+    ``None`` heisst „nicht (mehr) zu tilgen": die Zeile ist verschwunden, ist
+    einer anderen Einrichtung zugeordnet — oder ein paralleler Merge hat den
+    Fall waehrend der Sperrwartezeit an eine ANDERE Person gehaengt. Deren
+    Zeile haben wir nie gesperrt und ihren Hold damit nie verlaesslich gesehen;
+    bewusst Abbruch statt Nachsperren (Sperr-Inversion, Muster
+    ``_lock_event_and_recheck_hold``). Ein spaeterer Lauf bzw. ein zweiter
+    Anlauf liest den neuen Bezug und sperrt in der richtigen Reihenfolge.
+    """
+    from core.models.event import Event
+
+    # Personenbezug ungesperrt vorlesen: die Personenzeile muss VOR der
+    # Fallzeile gesperrt werden, ihre pk steht aber nur am Fall.
+    client_id = Case.objects.filter(pk=case_pk, facility_id=facility_id).values_list("client_id", flat=True).first()
+    if client_id is None:
+        return None
+    Client.objects.filter(pk=client_id, facility_id=facility_id).select_for_update().only("pk").first()
+    locked = Case.objects.filter(pk=case_pk, facility_id=facility_id).select_for_update().first()
+    if locked is None or locked.client_id != client_id:
+        return None
+    list(Event.objects.filter(facility_id=facility_id, case_id=case_pk).order_by("pk").select_for_update().only("pk"))
+    return locked
+
+
 def anonymize_case_now(case, user):
     """Tilgt einen Fall im Papierkorb sofort — auf Admin-Anforderung.
 
@@ -456,15 +499,33 @@ def anonymize_case_now(case, user):
         oder der Person (P4). Eine manuelle Aktion darf einen Hold nicht
         aushebeln (Spoliation).
     """
-    if not case.is_deleted:
-        raise ValidationError(_("Nur Fälle im Papierkorb können anonymisiert werden."))
-    if case.anonymized_at is not None:
-        raise ValidationError(_("Der Fall wurde bereits endgültig anonymisiert."))
-    if case_has_active_hold(case):
-        raise ValidationError(
-            _("Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
-        )
-    return anonymize_case(case, user=user, trigger="manual")
+    # Refs #2123: ALLE Vorbedingungen liegen jetzt hinter der Sperrkette und
+    # werden auf der GESPERRTEN Fall-Instanz gelesen — erst dann sind „im
+    # Papierkorb", „noch nicht getilgt" und „kein Hold" stabile Aussagen und
+    # nicht der Stand von vorhin. ``anonymize_case`` traegt selbst
+    # ``@transaction.atomic``; das ist hier ein Savepoint, kein zweiter Commit.
+    with transaction.atomic():
+        locked = _lock_case_chain(case.facility_id, case.pk)
+        if locked is None or not locked.is_deleted:
+            # Zeile verschwunden, fremde Einrichtung oder waehrend der
+            # Sperrwartezeit wiederhergestellt/umgehaengt — dieselbe Antwort wie
+            # fuer einen Fall ausserhalb des Papierkorbs (Muster
+            # ``anonymize_client_now``).
+            raise ValidationError(_("Nur Fälle im Papierkorb können anonymisiert werden."))
+        if locked.anonymized_at is not None:
+            raise ValidationError(_("Der Fall wurde bereits endgültig anonymisiert."))
+        if case_has_active_hold(locked):
+            raise ValidationError(
+                _("Für diesen Fall besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich.")
+            )
+        anonymize_case(locked, user=user, trigger="manual")
+        # Die uebergebene Instanz stammt aus einem Lesevorgang von VOR der
+        # Sperrwartezeit, der Aufrufer arbeitet nach der Tilgung aber mit IHR
+        # weiter (View-Meldung, ``restore_case``-Guard). Sie bekommt deshalb den
+        # terminalen Stand der gesperrten Zeile — und bleibt, wie vor Refs #2123,
+        # das zurueckgegebene Objekt.
+        case.refresh_from_db()
+        return case
 
 
 def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=False) -> int:
@@ -498,8 +559,40 @@ def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=Fal
     if dry_run:
         return qs.count()
 
+    # Refs #2123 (Muster ``anonymize_eligible_soft_deleted_clients``, #2013/#2108):
+    # Der Hold-Ausschluss oben lief EINMAL beim Queryset-Bau. Ueber einen Lauf
+    # mit vielen Faellen liegen dazwischen Minuten — ein in dieser Zeit
+    # angeordneter Hold erreichte die bereits gesammelten Faelle nicht mehr.
+    # Deshalb je Fall: eigene Transaktion, Sperrkette in kanonischer Ordnung,
+    # und alle Bedingungen ein zweites Mal AUF DER GESPERRTEN Zeile. Die
+    # pk-Liste wird vorab materialisiert — der Lauf veraendert genau die
+    # Spalten, nach denen die Queryset-Bedingung filtert.
     count = 0
-    for case in qs:
-        anonymize_case(case, user=None, trigger="trash_days_expired")
-        count += 1
+    deferred = 0
+    for case_pk in list(qs.values_list("pk", flat=True)):
+        with transaction.atomic():
+            locked = _lock_case_chain(facility.pk, case_pk)
+            if locked is None or not locked.is_deleted or locked.anonymized_at is not None:
+                # Ein paralleler Lauf war schneller, der Fall wurde
+                # wiederhergestellt oder haengt inzwischen an einer anderen
+                # Person — nichts zu tun.
+                continue
+            if case_has_active_hold(locked):
+                # Nur AUFGESCHOBEN: ein spaeterer Lauf holt die Tilgung nach,
+                # sobald der Hold aufgehoben oder abgelaufen ist.
+                deferred += 1
+                continue
+            anonymize_case(locked, user=None, trigger="trash_days_expired")
+            count += 1
+    if deferred:
+        # Der Batch hat keine Meldungsflaeche; „nicht getilgt" und „nicht
+        # angeschaut" muessen fuer die Spoliationsfrage trotzdem
+        # unterscheidbar bleiben (dieselbe Zaehl-Semantik wie ``deferred`` am
+        # Ereignis-Sweep). Die Signatur bleibt ``int`` — die Aufrufer
+        # (``enforce_retention``/``_RetentionTotals``) zaehlen getilgte Faelle.
+        logger.info(
+            "Fall-Tilgung: %s Fall/Faelle wegen aktiver Aufbewahrungssperre zurueckgestellt (facility=%s)",
+            deferred,
+            facility.pk,
+        )
     return count

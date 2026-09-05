@@ -497,3 +497,243 @@ class TestCaseHoldAnchorRace:
             anonymize_client_now(person, admin)
         person.refresh_from_db()
         assert person.anonymized_at is None
+
+
+# ---------------------------------------------------------------------------
+# Refs #2123 — Fall-Tilgung: Anker + Re-Check, Attachment-Purge unter der Sperre
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+class TestCaseAnonymizeNowHoldRace:
+    """Der Fall-Sofortpfad muss am selben Anker warten wie die Hold-Anlage.
+
+    ``anonymize_case_now`` las ``case_has_active_hold`` vollkommen ungesperrt —
+    die eigene ``@transaction.atomic`` beginnt erst in ``anonymize_case``. Ein
+    waehrend der Redaktion angeordneter Fall-Hold kam damit zu spaet, der Fall
+    war schon irreversibel redigiert (Spoliation, Muster #2108).
+
+    Beobachtend gebaut: Faden A haelt die Personenzeile — genau die Zeile, die
+    ``create_hold_for_target`` fuer einen Fall-Hold als erste Stufe sperrt — und
+    legt in dieser Zeit den Hold an. Im gesperrten Fenster wird nur notiert.
+    """
+
+    @pytest.fixture
+    def bestand(self, django_db_setup):
+        facility, admin, person, fall = _committed_bestand(mit_fall=True, im_papierkorb=True)
+        Case.objects.filter(pk=fall.pk).update(is_deleted=True, deleted_at=timezone.now())
+        fall.refresh_from_db()
+        yield facility, admin, person, fall
+        connections.close_all()
+
+    def test_sofortpfad_wartet_am_anker_und_sieht_den_hold(self, bestand):
+        from django.core.exceptions import ValidationError
+
+        from core.services.case.deletion import anonymize_case_now
+
+        facility, admin, person, fall = bestand
+
+        a_haelt_die_sperre = threading.Event()
+        b_ist_gestartet = threading.Event()
+        b_ist_fertig = threading.Event()
+        beobachtung = {}
+        fehler = {}
+
+        def _hold_anlage_simulieren():
+            """Haelt die Personenzeile und legt den Fall-Hold an — wie ``create_hold_for_target``."""
+            connection.close()
+            try:
+                with transaction.atomic():
+                    Client.objects.filter(pk=person.pk).select_for_update().only("pk").first()
+                    a_haelt_die_sperre.set()
+                    assert b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Faden B ist nie gestartet"
+                    time.sleep(_BLOCKED_GRACE_SECONDS)
+                    beobachtung["tilgung_im_fenster_fertig"] = b_ist_fertig.is_set()
+                    LegalHold.objects.create(
+                        facility=facility,
+                        target_type="Case",
+                        target_id=fall.pk,
+                        reason="Anordnung waehrend der Tilgung",
+                        created_by=admin,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                fehler["a"] = exc
+            finally:
+                connections.close_all()
+
+        def _sofort_tilgen():
+            connection.close()
+            try:
+                b_ist_gestartet.set()
+                anonymize_case_now(Case.objects.get(pk=fall.pk), admin)
+            except Exception as exc:  # noqa: BLE001
+                fehler["b"] = exc
+            finally:
+                b_ist_fertig.set()
+                connections.close_all()
+
+        faden_a = threading.Thread(target=_hold_anlage_simulieren, name="case-hold")
+        faden_a.start()
+        assert a_haelt_die_sperre.wait(timeout=_JOIN_TIMEOUT), "Faden A bekam die Personensperre nicht"
+
+        faden_b = threading.Thread(target=_sofort_tilgen, name="anonymize-case")
+        faden_b.start()
+
+        faden_a.join(timeout=_JOIN_TIMEOUT)
+        faden_b.join(timeout=_JOIN_TIMEOUT)
+        assert not faden_a.is_alive() and not faden_b.is_alive(), "Verklemmung zwischen Hold-Anlage und Fall-Tilgung"
+        assert "a" not in fehler, fehler
+
+        assert beobachtung["tilgung_im_fenster_fertig"] is False, (
+            "Die Fall-Tilgung lief neben der gehaltenen Personenzeile durch — kein gemeinsamer Anker (Refs #2123)"
+        )
+        assert isinstance(fehler.get("b"), ValidationError), (
+            f"Die Tilgung sah den waehrenddessen angeordneten Hold nicht: {fehler!r}"
+        )
+        fall.refresh_from_db()
+        assert fall.anonymized_at is None, "Der Fall wurde trotz aktivem Hold getilgt (Spoliation)"
+
+
+@pytest.mark.django_db
+class TestCaseBatchRechecktHoldUnterSperre:
+    """Der Nacht-Batch der Fall-Tilgung muss den Hold ein zweites Mal lesen.
+
+    ``anonymize_eligible_soft_deleted_cases`` filterte Holds nur beim
+    Queryset-Bau und iterierte danach ohne Zeilensperre und ohne Re-Check —
+    dieselbe Luecke, die #2013/#2108 beim Personen-Pendant geschlossen haben.
+    """
+
+    def _fall_im_papierkorb(self, facility, staff_user, titel, tage):
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym=f"Person {titel}",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=staff_user,
+        )
+        fall = Case.objects.create(
+            facility=facility,
+            client=person,
+            title=titel,
+            created_by=staff_user,
+        )
+        Case.objects.filter(pk=fall.pk).update(is_deleted=True, deleted_at=timezone.now() - timedelta(days=tage))
+        fall.refresh_from_db()
+        return fall
+
+    def test_hold_zwischen_sammeln_und_verarbeiten_ueberspringt_den_fall(
+        self, facility, settings_obj, staff_user, lead_user, monkeypatch
+    ):
+        from core.services.case import deletion as deletion_mod
+
+        gehalten = self._fall_im_papierkorb(facility, staff_user, "Fall gehalten", settings_obj.client_trash_days + 5)
+        frei = self._fall_im_papierkorb(facility, staff_user, "Fall frei", settings_obj.client_trash_days + 5)
+
+        echte_filterung = deletion_mod.exclude_cases_with_active_holds
+        ausgeloest = {"done": False}
+
+        def _dann_hold_anlegen(queryset, fac):
+            gefiltert = echte_filterung(queryset, fac)
+            if not ausgeloest["done"]:
+                ausgeloest["done"] = True
+                LegalHold.objects.create(
+                    facility=fac,
+                    target_type="Case",
+                    target_id=gehalten.pk,
+                    reason="Anordnung waehrend des Laufs",
+                    created_by=lead_user,
+                )
+            return gefiltert
+
+        monkeypatch.setattr(deletion_mod, "exclude_cases_with_active_holds", _dann_hold_anlegen)
+
+        count = deletion_mod.anonymize_eligible_soft_deleted_cases(facility, settings_obj)
+
+        assert ausgeloest["done"], "Das Fenster wurde nicht geoeffnet — Aufbau kaputt"
+        gehalten.refresh_from_db()
+        frei.refresh_from_db()
+        assert gehalten.anonymized_at is None, "Fall unter aktivem Hold wurde getilgt (Spoliation)"
+        assert gehalten.title == "Fall gehalten", "Der gehaltene Fall wurde redigiert"
+        assert frei.anonymized_at is not None, "Positiv-Kontrolle: der Lauf agiert real"
+        assert count == 1, "``count`` muss die tatsaechlich getilgten Faelle melden"
+
+
+@pytest.mark.django_db
+class TestCaseTilgungSperrtInKanonischerOrdnung:
+    """SQL-Sequenz-Pin: ``core_client`` -> ``core_case`` -> ``core_event`` (ADR-050 D5.5)."""
+
+    def test_sofortpfad_sperrt_in_kanonischer_ordnung(self, facility, case_trashed, admin_user):
+        from core.services.case.deletion import anonymize_case_now
+
+        Event.objects.create(
+            facility=facility,
+            client=case_trashed.client,
+            case=case_trashed,
+            document_type=DocumentType.objects.create(
+                facility=facility,
+                name="Ordnungs-Typ",
+                sensitivity=DocumentType.Sensitivity.NORMAL,
+            ),
+            occurred_at=timezone.now(),
+            data_json={"freitext": "Klartext"},
+            created_by=admin_user,
+        )
+        with CaptureQueriesContext(connection) as captured:
+            anonymize_case_now(case_trashed, admin_user)
+        sequence = _lock_sequence(captured)
+        assert "core_client" in sequence, f"Fall-Tilgung nahm keinen Personen-Anker: {sequence}"
+        assert "core_case" in sequence, f"Fall-Tilgung sperrte die Fallzeile nicht: {sequence}"
+        assert "core_event" in sequence, f"Fall-Tilgung sperrte die Ereigniszeilen nicht: {sequence}"
+        assert sequence.index("core_client") < sequence.index("core_case"), (
+            f"kanonische Ordnung verdreht (core_client vor core_case): {sequence}"
+        )
+        assert sequence.index("core_case") < sequence.index("core_event"), (
+            f"kanonische Ordnung verdreht (core_case vor core_event): {sequence}"
+        )
+
+
+@pytest.mark.django_db
+class TestAttachmentPurgePrueftHoldUnterSperre:
+    """Zweite Fundstelle derselben Klasse: ``purge_attachment_chain``.
+
+    Der Hold-Check lag VOR der ``atomic``-Klammer und damit vor der
+    Client-Zeilensperre, die ``assert_processing_allowed(lock=True)`` nimmt —
+    das Art.-18-Gate war seit ``cccb048f`` unter der Sperre, der Hold-Check
+    nicht. Der Haken haengt deshalb am Art.-18-Gate: alles, was danach passiert,
+    laeuft unter der Sperre.
+    """
+
+    def test_hold_zwischen_sperre_und_pruefung_blockiert_die_vernichtung(
+        self, facility, client_identified, staff_user, lead_user, monkeypatch, _encryption_key
+    ):
+        from core.models.attachment import Attachment
+        from core.services.attachments.crud import AttachmentPurgeBlockedError, purge_attachment_chain
+        from core.services.client import restriction as restriction_mod
+        from tests.conftest import _make_attachment
+
+        anhang = _make_attachment(facility, client_identified, staff_user, ft_name="Purge-Renn-Datei")
+
+        echtes_gate = restriction_mod.assert_processing_allowed
+        ausgeloest = {"done": False}
+
+        def _dann_hold_anlegen(client_id, *, lock=False):
+            ergebnis = echtes_gate(client_id, lock=lock)
+            if not ausgeloest["done"]:
+                ausgeloest["done"] = True
+                LegalHold.objects.create(
+                    facility=facility,
+                    target_type="Client",
+                    target_id=client_identified.pk,
+                    reason="Anordnung waehrend der Vernichtung",
+                    created_by=lead_user,
+                )
+            return ergebnis
+
+        monkeypatch.setattr(restriction_mod, "assert_processing_allowed", _dann_hold_anlegen)
+
+        with pytest.raises(AttachmentPurgeBlockedError):
+            purge_attachment_chain(client_identified, anhang.entry_id)
+
+        assert ausgeloest["done"], "Das Fenster wurde nicht geoeffnet — Aufbau kaputt"
+        assert Attachment.objects.filter(pk=anhang.pk).exists(), (
+            "Die Kette wurde trotz des unter der Sperre angeordneten Holds vernichtet (Spoliation)"
+        )

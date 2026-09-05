@@ -489,10 +489,6 @@ def purge_attachment_chain(owner, entry_id):
     chain = list(owner.attachments.filter(entry_id=entry_id))
     if not chain:
         return 0
-    if owner_has_active_hold(owner):
-        raise AttachmentPurgeBlockedError(
-            _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")
-        )
     owner_client_id = owner.pk if owner.__class__.__name__ == "Client" else getattr(owner, "client_id", None)
 
     # Art.-18-Gate unter der Client-ZEILENSPERRE, in derselben Transaktion wie
@@ -516,6 +512,22 @@ def purge_attachment_chain(owner, entry_id):
                     "die Datei darf nicht einzeln vernichtet werden."
                 )
             ) from exc
+
+        # Refs #2123: Die Hold-Pruefung lag frueher VOR dieser ``atomic``-Klammer
+        # und damit vor jeder Sperre — ein zwischen Pruefung und ``delete()``
+        # angeordneter Hold kam zu spaet, die Datei war physisch weg (nicht
+        # rollback-bar). Sie liegt jetzt HINTER
+        # ``assert_processing_allowed(..., lock=True)``, das ueber
+        # ``_restricted_flag`` die ``core_client``-Zeile sperrt — genau den
+        # Anker, den ``create_hold_for_target`` fuer Personen-, Fall- und
+        # (ueber die Personenzeile) Ereignis-Holds nimmt. Erst danach ist „kein
+        # Hold" eine stabile Aussage. Die Reihenfolge der beiden Gates ist
+        # damit umgekehrt zu vorher; fachlich sind sie unabhaengig, und beide
+        # antworten mit demselben Fehlertyp an dieselbe View-Flaeche.
+        if owner_has_active_hold(owner):
+            raise AttachmentPurgeBlockedError(
+                _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")
+            )
 
         _drop_purged_marker_entries(owner, {str(attachment.pk) for attachment in chain})
         owner.attachments.filter(entry_id=entry_id).delete()
