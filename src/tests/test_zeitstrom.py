@@ -15,6 +15,13 @@ from core.services.events import get_time_range
 class _DetailsInTestIdBlock(HTMLParser):
     """Find ``details`` only inside the element carrying one test id."""
 
+    # Void-Elemente ohne schliessenden Tag duerfen die Tiefe nicht erhoehen —
+    # sonst bleibt ``self.depth`` nach z.B. einem nackten ``<input>``/``<br>``
+    # dauerhaft zu hoch, weil nie ein passendes ``handle_endtag`` feuert
+    # (Refs #2091, etabliertes Muster analog ``_ActionSequence`` in
+    # ``src/tests/test_detail_actions_parity.py``).
+    _VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
     def __init__(self, testid):
         super().__init__()
         self.testid = testid
@@ -23,14 +30,18 @@ class _DetailsInTestIdBlock(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         if self.depth:
-            self.depth += 1
             self.has_details |= tag == "details"
+            if tag not in self._VOID:
+                self.depth += 1
             return
         if dict(attrs).get("data-testid") == self.testid:
-            self.depth = 1
             self.has_details = tag == "details"
+            if tag not in self._VOID:
+                self.depth = 1
 
     def handle_endtag(self, tag):
+        if tag in self._VOID:
+            return
         if self.depth:
             self.depth -= 1
 
@@ -39,6 +50,32 @@ def _testid_block_has_details(content, testid):
     parser = _DetailsInTestIdBlock(testid)
     parser.feed(content)
     return parser.has_details
+
+
+class TestDetailsInTestIdBlockVoidElements:
+    """Void-Elemente ohne Selbstschluss duerfen die Tiefe nicht dauerhaft erhoehen (Refs #2091).
+
+    ``_DetailsInTestIdBlock`` zaehlte ``self.depth`` bisher bei JEDEM
+    ``handle_starttag`` hoch, auch fuer Void-Elemente (``<input>``, ``<br>``,
+    ``<img>``) ohne schliessenden ``/>``. Da fuer diese Tags nie ein
+    passender ``handle_endtag`` feuert, blieb die Tiefe dauerhaft zu hoch und
+    der Scanner hielt sich faelschlich weiter "innerhalb" des gesuchten
+    Containers — ein spaeteres ``<details>`` AUSSERHALB des Containers wurde
+    dadurch faelschlich mitgezaehlt. Fehlerrichtung: zu breit, nie zu eng
+    (Refs #2091, Recon-B Abschnitt E; etabliertes ``_VOID``-Muster analog
+    ``_ActionSequence`` in ``src/tests/test_detail_actions_parity.py``).
+    """
+
+    def test_void_element_without_self_close_does_not_leak_details_from_outside(self):
+        content = (
+            '<div data-testid="block"><input type="text" name="x"></div>'
+            "<details><summary>Ausserhalb</summary></details>"
+        )
+        assert not _testid_block_has_details(content, "block")
+
+    def test_void_element_without_self_close_still_detects_details_inside(self):
+        content = '<div data-testid="block"><br><details><summary>Innen</summary></details></div>'
+        assert _testid_block_has_details(content, "block")
 
 
 @pytest.fixture
