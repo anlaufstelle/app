@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Compliance warnt vor unbegrenzter Audit-Aufbewahrung** (#2053) — Das installationsweite Dashboard fasst Einrichtungen mit einer AuditLog-Aufbewahrung von 0 Monaten in einer Retention-Warnzeile zusammen und nennt die betroffenen Namen.
+- **axe-core als geprüfte Vendor-Datei für das Barrierefreiheits-Gate** (#1059) — axe-core 4.13.0 (MPL-2.0) liegt als `src/static/js/vendor/axe.min.js` im Repo und wird von den E2E-Tests same-origin injiziert, ohne neue Node- oder Python-Abhängigkeit.
 
 ### Security
 

@@ -64,6 +64,7 @@ installed via a package manager) are documented here manually instead.
 | Package | Version | License | Upstream | Vendored Path |
 |---|---|---|---|---|
 | SortableJS | 1.15.7 | MIT | <https://github.com/SortableJS/Sortable> | `src/static/js/vendor/sortable.min.js` |
+| axe-core | 4.13.0 | MPL-2.0 | <https://github.com/dequelabs/axe-core> | `src/static/js/vendor/axe.min.js` |
 
 ## Disallowed Categories
 
