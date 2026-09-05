@@ -737,3 +737,252 @@ class TestAttachmentPurgePrueftHoldUnterSperre:
         assert Attachment.objects.filter(pk=anhang.pk).exists(), (
             "Die Kette wurde trotz des unter der Sperre angeordneten Holds vernichtet (Spoliation)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Refs #2124 — Activity-Holds: Anker, Re-Check und kanonische Ordnung
+# ---------------------------------------------------------------------------
+
+
+def _aktivitaet(facility, person, actor, *, alter_tage=400):
+    """Eine Aktivitaet mit Personen-Ziel, jenseits der Aktivitaeten-Frist."""
+    from django.contrib.contenttypes.models import ContentType
+
+    from core.models import Activity
+
+    aktivitaet = Activity.objects.create(
+        facility=facility,
+        actor=actor,
+        verb=Activity.Verb.CREATED,
+        target_type=ContentType.objects.get_for_model(Client),
+        target_id=person.pk,
+        context={"action": Activity.Action.CLIENT_CREATED},
+    )
+    Activity.objects.filter(pk=aktivitaet.pk).update(occurred_at=timezone.now() - timedelta(days=alter_tage))
+    aktivitaet.refresh_from_db()
+    return aktivitaet
+
+
+@pytest.mark.django_db(transaction=True)
+class TestActivityHoldAnchorRace:
+    """Die Aktivitaets-Hold-Anlage hatte GAR KEINE Sperre (``else``-Zweig).
+
+    Der Aktivitaeten-Sweep loeschte per Bulk-``DELETE``; es gab also weder ein
+    Sperrobjekt noch einen Re-Check. Beobachtet wird, ob die Hold-Anlage im
+    gesperrten Fenster fertig wird — ohne Behauptung im Fenster (Lehre 36).
+    """
+
+    @pytest.fixture
+    def bestand(self, django_db_setup):
+        facility, admin, person, _ = _committed_bestand(events=0)
+        aktivitaet = _aktivitaet(facility, person, admin)
+        yield facility, admin, person, aktivitaet
+        connections.close_all()
+
+    def test_activity_hold_wartet_an_der_aktivitaetszeile(self, bestand):
+        from core.models import Activity
+
+        facility, admin, person, aktivitaet = bestand
+
+        a_haelt_die_sperre = threading.Event()
+        b_ist_gestartet = threading.Event()
+        b_ist_fertig = threading.Event()
+        beobachtung = {}
+        fehler = {}
+
+        def _sweep_simulieren():
+            """Haelt genau die Zeilen, die der Sweep nach dem Umbau haelt."""
+            connection.close()
+            try:
+                with transaction.atomic():
+                    Client.objects.filter(pk=person.pk).select_for_update().only("pk").first()
+                    Activity.objects.filter(pk=aktivitaet.pk).select_for_update().only("pk").first()
+                    a_haelt_die_sperre.set()
+                    assert b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Faden B ist nie gestartet"
+                    time.sleep(_BLOCKED_GRACE_SECONDS)
+                    beobachtung["hold_im_fenster_fertig"] = b_ist_fertig.is_set()
+            except Exception as exc:  # noqa: BLE001
+                fehler["a"] = exc
+            finally:
+                connections.close_all()
+
+        def _activity_hold_anlegen():
+            connection.close()
+            try:
+                b_ist_gestartet.set()
+                create_hold_for_target(
+                    facility,
+                    target_type="Activity",
+                    target_id=aktivitaet.pk,
+                    user=admin,
+                    reason="Anordnung auf die Aktivitaet",
+                )
+            except Exception as exc:  # noqa: BLE001
+                fehler["b"] = exc
+            finally:
+                b_ist_fertig.set()
+                connections.close_all()
+
+        faden_a = threading.Thread(target=_sweep_simulieren, name="activity-sweep")
+        faden_a.start()
+        assert a_haelt_die_sperre.wait(timeout=_JOIN_TIMEOUT), "Faden A bekam die Sperren nicht"
+
+        faden_b = threading.Thread(target=_activity_hold_anlegen, name="activity-hold")
+        faden_b.start()
+
+        faden_a.join(timeout=_JOIN_TIMEOUT)
+        faden_b.join(timeout=_JOIN_TIMEOUT)
+        assert not faden_a.is_alive() and not faden_b.is_alive(), "Verklemmung zwischen Sweep und Hold-Anlage"
+        assert not fehler, fehler
+
+        assert beobachtung["hold_im_fenster_fertig"] is False, (
+            "Die Aktivitaets-Hold-Anlage committete neben den gehaltenen Zeilen her — "
+            "es gibt keinen gemeinsamen Anker mit dem Sweep (Refs #2124)"
+        )
+        assert has_active_hold(facility, "Activity", aktivitaet.pk), "Der Activity-Hold fehlt — Aufbau kaputt"
+
+
+@pytest.mark.django_db
+class TestActivitySweepRechecktHoldUnterSperre:
+    """Der Sweep muss den Hold ein zweites Mal lesen — unter der Zeilensperre."""
+
+    def test_hold_zwischen_sammeln_und_loeschen_stellt_die_aktivitaet_zurueck(
+        self, facility, client_identified, staff_user, lead_user, monkeypatch
+    ):
+        from core.models import Activity
+        from core.retention import enforcement as enforcement_mod
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        settings_obj.retention_activities_days = 365
+        settings_obj.save(update_fields=["retention_activities_days"])
+
+        gehalten = _aktivitaet(facility, client_identified, staff_user)
+        frei = _aktivitaet(facility, client_identified, staff_user)
+
+        echte_lesung = enforcement_mod.get_active_hold_target_ids
+        ausgeloest = {"done": False}
+
+        def _dann_hold_anlegen(fac, target_type):
+            ergebnis = echte_lesung(fac, target_type)
+            if target_type == "Client" and not ausgeloest["done"]:
+                ausgeloest["done"] = True
+                LegalHold.objects.create(
+                    facility=fac,
+                    target_type="Activity",
+                    target_id=gehalten.pk,
+                    reason="Anordnung waehrend des Laufs",
+                    created_by=lead_user,
+                )
+            return ergebnis
+
+        monkeypatch.setattr(enforcement_mod, "get_active_hold_target_ids", _dann_hold_anlegen)
+
+        result = enforcement_mod.enforce_activities(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert ausgeloest["done"], "Das Fenster wurde nicht geoeffnet — Aufbau kaputt"
+        assert Activity.objects.filter(pk=gehalten.pk).exists(), (
+            "Aktivitaet unter aktivem Hold wurde hart geloescht (Spoliation)"
+        )
+        assert not Activity.objects.filter(pk=frei.pk).exists(), "Positiv-Kontrolle: der Lauf agiert real"
+        assert result["count"] == 1, "``count`` muss die tatsaechlich geloeschten Aktivitaeten melden"
+        audit = AuditLog.objects.filter(
+            facility=facility,
+            action=AuditLog.Action.DELETE,
+            detail__category="activities",
+        ).latest("timestamp")
+        assert audit.detail.get("deferred") == 1, (
+            f"Die Zurueckstellung muss nachweisbar sein (nicht geloescht != nicht angeschaut): {audit.detail}"
+        )
+
+    def test_client_hold_unter_der_sperre_stellt_die_aktivitaet_ebenso_zurueck(
+        self, facility, client_identified, staff_user, lead_user, monkeypatch
+    ):
+        """Refs #1376 (I10) unter der Sperre: der Personen-Hold schuetzt die Aktivitaet ihres Ziels."""
+        from core.models import Activity
+        from core.retention import enforcement as enforcement_mod
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        settings_obj.retention_activities_days = 365
+        settings_obj.save(update_fields=["retention_activities_days"])
+
+        gehalten = _aktivitaet(facility, client_identified, staff_user)
+
+        echte_lesung = enforcement_mod.get_active_hold_target_ids
+        ausgeloest = {"done": False}
+
+        def _dann_hold_anlegen(fac, target_type):
+            ergebnis = echte_lesung(fac, target_type)
+            if target_type == "Client" and not ausgeloest["done"]:
+                ausgeloest["done"] = True
+                LegalHold.objects.create(
+                    facility=fac,
+                    target_type="Client",
+                    target_id=client_identified.pk,
+                    reason="Anordnung waehrend des Laufs",
+                    created_by=lead_user,
+                )
+            return ergebnis
+
+        monkeypatch.setattr(enforcement_mod, "get_active_hold_target_ids", _dann_hold_anlegen)
+
+        result = enforcement_mod.enforce_activities(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert Activity.objects.filter(pk=gehalten.pk).exists(), (
+            "Aktivitaet unter aktivem Personen-Hold wurde hart geloescht (Spoliation)"
+        )
+        assert result["count"] == 0
+
+
+@pytest.mark.django_db
+class TestActivityLockOrder:
+    """Ordnungs-Pin: ``core_client`` vor ``core_activity``, und ``core_activity`` zuletzt."""
+
+    def test_hold_anlage_sperrt_client_vor_activity(self, facility, client_identified, staff_user, lead_user):
+        aktivitaet = _aktivitaet(facility, client_identified, staff_user)
+        with CaptureQueriesContext(connection) as captured:
+            create_hold_for_target(
+                facility,
+                target_type="Activity",
+                target_id=aktivitaet.pk,
+                user=lead_user,
+                reason="Anordnung",
+            )
+        sequence = _lock_sequence(captured)
+        assert "core_activity" in sequence, f"Der Activity-Hold nahm keinen Anker: {sequence}"
+        assert "core_client" in sequence, f"Der Activity-Hold sperrte die Personenzeile des Ziels nicht: {sequence}"
+        assert sequence.index("core_client") < sequence.index("core_activity"), (
+            f"kanonische Ordnung verdreht (core_client vor core_activity): {sequence}"
+        )
+        assert sequence.index("core_activity") == len(sequence) - 1, (
+            f"core_activity ist das LETZTE Glied der kanonischen Ordnung: {sequence}"
+        )
+
+    def test_sweep_sperrt_client_vor_activity(self, facility, client_identified, staff_user):
+        from core.retention.enforcement import enforce_activities
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        settings_obj.retention_activities_days = 365
+        settings_obj.save(update_fields=["retention_activities_days"])
+        _aktivitaet(facility, client_identified, staff_user)
+
+        with CaptureQueriesContext(connection) as captured:
+            enforce_activities(facility, settings_obj, timezone.now(), dry_run=False)
+        sequence = _lock_sequence(captured)
+        assert "core_client" in sequence, f"Der Sweep sperrte die Personenzeile des Ziels nicht: {sequence}"
+        assert "core_activity" in sequence, f"Der Sweep sperrte die Aktivitaetszeile nicht: {sequence}"
+        assert sequence.index("core_client") < sequence.index("core_activity"), (
+            f"kanonische Ordnung verdreht (core_client vor core_activity): {sequence}"
+        )
+
+    def test_hold_auf_unbekannte_aktivitaet_bleibt_zulaessig(self, facility, lead_user):
+        """``target_id`` ist ein freies Feld — Bestandsverhalten der uebrigen Zweige."""
+        import uuid
+
+        hold = create_hold_for_target(
+            facility,
+            target_type="Activity",
+            target_id=uuid.uuid4(),
+            user=lead_user,
+            reason="Anordnung",
+        )
+        assert hold.pk is not None

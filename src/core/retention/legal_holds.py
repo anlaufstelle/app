@@ -4,12 +4,13 @@ Aus ``services/retention.py`` ausgekoppelt — eigenes Thema (Sperre
 gegen Loeschung; orthogonal zu Vorschlaegen und Enforcement).
 """
 
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AuditLog, Case, Client, Event, EventHistory, LegalHold, RetentionProposal
+from core.models import Activity, AuditLog, Case, Client, Event, EventHistory, LegalHold, RetentionProposal
 from core.services.audit import audit_retention_decision
 from core.services.events.history_diff import is_redaction_marker
 
@@ -243,6 +244,65 @@ def _lock_event_and_check_redaction(facility, target_id):
     return _history_is_incomplete(event)
 
 
+def resolve_activity_client_id(facility, target_type_id, target_id):
+    """Personenbezug des Ziels einer Aktivitaet — oder ``None`` (Refs #2124).
+
+    ``Activity`` haengt nur generisch am Ziel (``target_type``/``target_id``,
+    kein Fremdschluessel) und hat weder ``client_id`` noch ``case_id``. Fuer die
+    kanonische Sperr-Reihenfolge braucht aber sowohl die Hold-Anlage als auch
+    der Sweep dieselbe Antwort auf „welche Personenzeile gehoert dazu?" — sonst
+    naehmen beide unterschiedliche Anker, und der gemeinsame Koordinationspunkt
+    waere wieder weg. Deshalb hier, einmal, fuer beide Aufrufer.
+
+    Client-Ziel: ``target_id`` **ist** die Personen-pk (keine Query noetig).
+    Ereignis-/Fall-Ziel: deren ``client_id``. Alles andere (WorkItem, Milestone,
+    Facility …) hat keinen Anker — dann bleibt es bei der Aktivitaetszeile.
+    """
+    model = ContentType.objects.get_for_id(target_type_id).model_class()
+    if model is None:
+        return None
+    if model is Client:
+        return target_id
+    if model in (Event, Case):
+        return model.objects.filter(facility=facility, pk=target_id).values_list("client_id", flat=True).first()
+    return None
+
+
+def _lock_activity_and_check(facility, target_id):
+    """Sperrt Personenzeile des Ziels und Aktivitaetszeile (Refs #2124).
+
+    Bis hierher fiel ``target_type="Activity"`` in den ``else``-Zweig:
+    ``already_redacted = False``, **keine** Sperre, kein Sperrobjekt. Der
+    Aktivitaeten-Sweep loeschte gleichzeitig per Bulk-``DELETE`` ohne
+    Zeilensperre — es gab also gar nichts, woran die beiden koordinieren
+    konnten. Dieselbe Wurzel wie #2107 (Ereignis-Sweep) und #2122 (Fall-Hold),
+    nur an der letzten offenen Stelle.
+
+    **Kanonische Ordnung**: ``core_activity`` ist das **letzte** Glied
+    (``core_client`` -> ``core_case`` -> ``core_event`` ->
+    ``core_retentionproposal`` -> ``core_eventhistory`` -> ``core_auditlog`` ->
+    ``core_activity``, ADR-050 D5.5 Nachtrag zu #2124). Aktivitaeten sind
+    Protokollzeilen; kein Pfad sperrt nach einer Aktivitaetszeile noch eine
+    andere Tabelle. Die Personenzeile des Ziels kommt deshalb zuerst — sie ist
+    dieselbe erste Stufe, die alle uebrigen Hold-Zweige nehmen.
+
+    ``already_redacted`` bleibt ``False``: Aktivitaeten haben keine
+    Ereignis-Historie, es gibt kein Verspaetungsmerkmal zu melden. Und eine
+    unbekannte ``target_id`` bleibt zulaessig — ``LegalHold.target_id`` ist ein
+    freies Feld ohne Fremdschluessel, genau wie in den drei uebrigen Zweigen
+    (Muster :func:`_lock_event_and_check_redaction`).
+    """
+    row = Activity.objects.filter(facility=facility, pk=target_id).values("target_type_id", "target_id").first()
+    if row is None:
+        # Keine Aktivitaet dieser Einrichtung — es gibt nichts zu koordinieren.
+        return False
+    client_id = resolve_activity_client_id(facility, row["target_type_id"], row["target_id"])
+    if client_id is not None:
+        Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk").first()
+    Activity.objects.filter(facility=facility, pk=target_id).select_for_update().only("pk").first()
+    return False
+
+
 def create_hold_for_target(facility, *, target_type, target_id, user, reason, expires_at=None):
     """Legt einen Legal Hold OHNE Retention-Vorschlag an (Refs #1818, ADR-044 §5).
 
@@ -287,15 +347,20 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
         # Finding 5). Refs #2122: ``Case`` gehoert dazu — der Fall-Hold
         # blockiert ueber ``exclude_clients_with_active_holds`` dieselbe
         # Personen-Anonymisierung wie ein Personen-Hold und braucht deshalb
-        # denselben Anker. ``Activity`` bleibt ohne: Aktivitaeten haben keine
-        # Ereignis-Historie, und der Aktivitaeten-Sweep hat bis heute keinen
-        # gemeinsamen Anker (Folge-Befund, s. Bericht zu Refs #2122).
+        # denselben Anker. Refs #2124: ``Activity`` hat seither ebenfalls einen
+        # Anker (Personenzeile des Ziels -> Aktivitaetszeile), traegt aber
+        # weiterhin KEIN Verspaetungsmerkmal — Aktivitaeten haben keine
+        # Ereignis-Historie, ueber deren Vollstaendigkeit etwas zu sagen waere.
         if target_type == "Event":
             already_redacted = _lock_event_and_check_redaction(facility, target_id)
         elif target_type == "Client":
             already_redacted = _lock_client_and_check_history(facility, target_id)
         elif target_type == "Case":
             already_redacted = _lock_case_and_check_history(facility, target_id)
+        elif target_type == "Activity":
+            # Refs #2124: auch die Aktivitaet bekommt ihren Anker — bis dahin
+            # der einzige Zweig ohne Sperre.
+            already_redacted = _lock_activity_and_check(facility, target_id)
         else:
             already_redacted = False
         hold = LegalHold.objects.create(

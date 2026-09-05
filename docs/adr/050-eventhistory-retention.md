@@ -287,7 +287,21 @@ Die kanonische Ordnung lautet damit vollständig:
 
 `core_case` steht **nach** der Person (jeder Fall hängt an genau einer Person, `Case.client` ist Pflichtfeld) und **vor** dem Ereignis (der Fall rahmt Ereignisse, nicht umgekehrt). Der Fall-Hold sperrt seither `core_client` → `core_case` → die Ereigniszeilen der Person (`_lock_case_and_check_history`) und trägt — wie Ereignis- und Personen-Hold — das Verspätungsmerkmal `history_already_redacted`. Gepinnt wird die Ordnung am ausgeführten SQL in `TestCaseHoldLockOrder` ([`src/tests/test_retention_hold_toctou_rest.py`](../../src/tests/test_retention_hold_toctou_rest.py)), nach dem Muster von [`test_restriction_lock_order.py`](../../src/tests/test_restriction_lock_order.py).
 
-`core_activity` ist bewusst **nicht** aufgenommen: Aktivitäts-Holds (`target_type="Activity"`) sind über keine Oberfläche und keinen In-App-Aufrufer anlegbar, und der Aktivitäten-Sweep (`enforce_activities`) löscht als Bulk-`DELETE` ohne Zeilensperre. Beides zusammen ist ein eigener Entscheid und bleibt einem Folge-Ticket vorbehalten.
+`core_activity` war hier zunächst bewusst **nicht** aufgenommen: Aktivitäts-Holds (`target_type="Activity"`) sind über keine Oberfläche und keinen In-App-Aufrufer anlegbar, und der Aktivitäten-Sweep (`enforce_activities`) löschte als Bulk-`DELETE` ohne Zeilensperre. Beides zusammen war ein eigener Entscheid und einem Folge-Ticket vorbehalten — dieses Folge-Ticket ist #2124, siehe den Nachtrag unten.
+
+### Nachtrag zu D5.5 — `core_activity` als letztes Glied (2026-09-05)
+
+Mit #2124 ist der offene Punkt entschieden. Die kanonische Ordnung lautet vollständig:
+
+> **`core_client` → `core_case` → `core_event` → `core_retentionproposal` → `core_eventhistory` → `core_auditlog` → `core_activity`**
+
+`core_activity` steht **zuletzt**. Begründung: Aktivitäten sind Protokollzeilen. Sie hängen nur generisch am Ziel (`target_type`/`target_id`, kein Fremdschlüssel, keine `client_id`/`case_id`-Spalte), und kein Pfad im Repo sperrt nach einer Aktivitätszeile noch eine andere Tabelle — die Position am Ende kann deshalb keinen ABBA-Zyklus erzeugen, egal welcher Pfad hinzukommt.
+
+Beide Seiten nehmen seither denselben Anker: `create_hold_for_target` sperrt für `target_type="Activity"` die **Personenzeile des Ziels** (Client-Ziel → dessen pk; Ereignis-/Fall-Ziel → deren `client_id`; sonst keine) und danach die Aktivitätszeile (`_lock_activity_and_check`); der Sweep `enforce_activities` löscht nicht mehr per Bulk-`DELETE`, sondern materialisiert die pk-Liste, fährt je Aktivität eine eigene Transaktion, nimmt dieselben beiden Sperren und liest Aktivitäts- und Personen-Hold erst **danach** (`_lock_activity_and_recheck_hold`). Eine gehaltene Aktivität wird zurückgestellt und als `deferred` im Audit-Detail gemeldet, statt hart gelöscht zu werden — dieselbe Zähl-Semantik wie am Ereignis-Sweep (D5.3). Die Auflösung des Personenbezugs teilen sich beide Seiten über `resolve_activity_client_id`, damit sie nicht auseinanderlaufen.
+
+Ein Verspätungsmerkmal (`history_already_redacted`) trägt der Aktivitäts-Hold weiterhin **nicht**: Aktivitäten haben keine Ereignis-Historie, über deren Vollständigkeit etwas auszusagen wäre.
+
+Gepinnt wird die Ordnung am ausgeführten SQL in `TestActivityLockOrder` ([`src/tests/test_retention_hold_toctou_rest.py`](../../src/tests/test_retention_hold_toctou_rest.py)) — für beide Seiten (Hold-Anlage und Sweep), inklusive der Zusicherung, dass `core_activity` in der Hold-Anlage das letzte gesperrte Objekt ist.
 
 ## Consequences
 

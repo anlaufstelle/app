@@ -18,7 +18,7 @@ from django.db import transaction
 # in #744/#778 entstehen keine Zirkular-Imports mehr; die fruheren Workarounds
 # in den Funktionsruempfen sind dafur ueberfluessig.
 from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, EventHistory, RetentionProposal
-from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
+from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold, resolve_activity_client_id
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
@@ -487,6 +487,54 @@ def enforce_document_type_retention(facility, now, dry_run):
     return {"count": count}
 
 
+def _lock_activity_and_recheck_hold(facility, pk):
+    """Sperrt Personenzeile des Ziels und Aktivitaetszeile, liest den Hold DANACH (Refs #2124).
+
+    Gegenstueck zu :func:`_lock_event_and_recheck_hold` fuer den
+    Aktivitaeten-Sweep, und Spiegelbild von
+    :func:`core.retention.legal_holds._lock_activity_and_check` — beide nehmen
+    ueber :func:`~core.retention.legal_holds.resolve_activity_client_id`
+    denselben Personen-Anker und danach dieselbe Aktivitaetszeile. Ohne diesen
+    gemeinsamen Punkt koordinierte die Datenbank hier gar nichts: ``Activity``
+    haengt nur generisch am Ziel, ``LegalHold.target_id`` ist ein freies Feld,
+    und unter ``READ COMMITTED`` kann ein Hold zwischen der Mengenlesung und
+    dem ``DELETE`` entstehen.
+
+    ``core_activity`` ist das **letzte** Glied der kanonischen Ordnung
+    (ADR-050 D5.5, Nachtrag zu #2124) — nach ihr sperrt kein Pfad noch eine
+    andere Tabelle.
+
+    Rueckgabe: ``(gesperrte Aktivitaet oder None, ist_gehalten)``. ``None``
+    heisst immer „ueberspringen"; ob das an einem Hold lag, sagt das zweite
+    Element.
+
+    Der Aufrufer muss innerhalb einer ``transaction.atomic()`` stehen — sonst
+    faellt die Sperre mit dem impliziten Commit des ``SELECT`` sofort wieder.
+    """
+    row = Activity.objects.filter(facility=facility, pk=pk).values("target_type_id", "target_id").first()
+    if row is None:
+        # Zeile hart entfernt — nichts zu loeschen, nichts zurueckzustellen.
+        return None, False
+    client_id = resolve_activity_client_id(facility, row["target_type_id"], row["target_id"])
+    if client_id is not None:
+        Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk").first()
+    activity = Activity.objects.filter(facility=facility, pk=pk).select_for_update().first()
+    if activity is None:
+        return None, False
+    if has_active_hold(facility, "Activity", activity.pk):
+        return None, True
+    # Refs #1376 (I10) unter der Sperre: der Personen-Hold schuetzt die
+    # Aktivitaeten, deren Ziel diese Person IST — exakt die Menge, die der
+    # Vorfilter oben ueber ``target_type=client_content_type`` ausnimmt.
+    # Aktivitaeten mit Ereignis-/Fall-Ziel bleiben bewusst ausserhalb dieser
+    # Regel (Scope #2124, s. Bericht) — ihre Personenzeile wird nur als Anker
+    # gesperrt, nicht als Hold-Quelle gelesen.
+    ist_personen_ziel = row["target_type_id"] == ContentType.objects.get_for_model(Client).pk
+    if ist_personen_ziel and has_active_hold(facility, "Client", client_id):
+        return None, True
+    return activity, False
+
+
 def enforce_activities(facility, settings_obj, now, dry_run):
     """Hard-delete activities older than ``retention_activities_days``.
 
@@ -517,19 +565,56 @@ def enforce_activities(facility, settings_obj, now, dry_run):
         .exclude(pk__in=held_ids)
         .exclude(target_type=client_content_type, target_id__in=held_client_ids)
     )
-    count = qs.count()
-    if count and not dry_run:
-        qs.delete()
+    if dry_run:
+        return {"count": qs.count()}
+
+    # Refs #2124 (gleiche Wurzel wie #2107 am Ereignis-Sweep): Die beiden
+    # Hold-Mengen oben werden EINMAL zu Beginn gelesen; ein Bulk-``DELETE``
+    # darauf ist ein Schreiben gegen einen Stand von vorhin — und Aktivitaeten
+    # werden HART geloescht, es gibt kein Zurueck. Deshalb je Zeile: eigene
+    # Transaktion, Sperre in kanonischer Ordnung (Personenzeile des Ziels ->
+    # Aktivitaetszeile) und der Hold ein zweites Mal AUF DER GESPERRTEN Zeile.
+    # Die pk-Liste wird vorab materialisiert (bounded, Muster
+    # ``_soft_delete_events``).
+    deleted = 0
+    deferred = 0
+    for pk in list(qs.values_list("pk", flat=True)):
+        with transaction.atomic():
+            activity, ist_gehalten = _lock_activity_and_recheck_hold(facility, pk)
+            if ist_gehalten:
+                deferred += 1
+            if activity is None:
+                continue
+            activity.delete()
+            deleted += 1
+    if deferred:
+        # „nicht geloescht" und „nicht angeschaut" muessen fuer die
+        # Spoliationsfrage unterscheidbar bleiben — dieselbe Zaehl-Semantik wie
+        # am Ereignis-Sweep (``_soft_delete_events``). Bewusst ZWEI literale
+        # Aufrufe statt eines ``**extra``: ein zweiter dynamischer
+        # detail-Schreibpunkt in diesem Modul waere am Architektur-Guard
+        # ``TestAuditDetailKeyInventory`` vorbei nur noch laufzeitgeprueft.
         audit_retention_decision(
             facility,
             target_type="Activity",
             action=AuditLog.Action.DELETE,
             category="activities",
             command="enforce_retention",
-            count=count,
+            count=deleted,
+            retention_days=settings_obj.retention_activities_days,
+            deferred=deferred,
+        )
+    elif deleted:
+        audit_retention_decision(
+            facility,
+            target_type="Activity",
+            action=AuditLog.Action.DELETE,
+            category="activities",
+            command="enforce_retention",
+            count=deleted,
             retention_days=settings_obj.retention_activities_days,
         )
-    return {"count": count}
+    return {"count": deleted}
 
 
 def process_facility_retention(facility, settings_obj, now, dry_run):
