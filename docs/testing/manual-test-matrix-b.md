@@ -6329,9 +6329,9 @@
 
 ### A11Y — Accessibility (WCAG-Stichproben)
 
-> **🔒 WCAG-Audit-Pending:** Die A11Y-TCs `ENT-A11Y-01..08` sind gesperrt durch die [geplante WCAG-2.1-AA-Audit-Initiative](https://github.com/anlaufstelle/app/issues/470) (systematisches WCAG 2.1 AA mit axe-core / Pa11y / Screen-Reader-Tests). Die Cases bleiben hier **bewusst als Stichproben-Spezifikation dokumentiert** — sie sind der Startpunkt für die spätere axe-core-Integration und die systematischen Audits. Bis dahin laufen sie als manuelle Smoke-Tests vor Releases (siehe `release-test-profiles.md` Sektion KEEP-MANUAL).
+> **Nachweis:** Der systematische Barrierefreiheits-Nachweis liegt in [`docs/accessibility-audit.md`](../accessibility-audit.md) (Refs #1059); automatisiertes Gate: `make test-a11y` (axe-core, Bestandsschutz-Baseline `src/tests/e2e/a11y_baseline.json`). Die A11Y-TCs `ENT-A11Y-01..12` bleiben hier **zusätzlich als Regressions-Stichproben** dokumentiert — die belegte automatisierte Abdeckung je Fall steht unter „Automatisiert durch". Bis der Screenreader-Handtest (Audit-Dokument § 3) abgenommen ist, laufen sie als manuelle Smoke-Tests vor Releases (siehe `release-test-profiles.md` Sektion KEEP-MANUAL).
 >
-> **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit, kein axe-core / Pa11y. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
+> **Bereich (Refs #912).** Manuelle Stichproben, ergänzt um die belegte automatisierte Abdeckung — **kein** Ersatz für den vollständigen Audit-Nachweis. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
 
 <details open>
 
@@ -6341,17 +6341,21 @@
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C/F |||
 
+**Automatisiert durch:** `src/tests/e2e/test_accessibility.py::TestSkipLink` (Skip-Link ist auf `/`, `/events/new/`, `/clients/` der erste Tab-Stopp und springt nach `#main-content`; Login/Passwort-Reset sind bewusst ausgenommen, siehe Erwartung), `src/tests/test_a11y_semantics.py::TestNavigationDisclosureState` (`Escape` schließt Sidebar-„Neu erstellen" und mobiles „Mehr"), `src/tests/test_a11y_semantics.py::TestOverflowMenuState` (`Escape` schließt das ⋮-Menü **und** bindet den Fokus zurück auf `x-ref="trigger"`).
+
 **Schritte:**
 1. Auf Dashboard einloggen.
-2. Ohne Maus, nur per `Tab` durch die Hauptnavigation tabben.
-3. Pro Navigationspunkt: `Enter` aktiviert den Link.
-4. `Shift+Tab` führt zurück.
-5. `Escape` schließt offene Dropdown-Menüs.
+2. Erste `Tab`-Betätigung: Skip-Link ist der erste Tab-Stopp (Ausnahme Login/Passwort-Reset, dort steht der Fokus laut R-B2-11 bewusst im ersten Feld — `Shift+Tab` erreicht dort den davorstehenden Skip-Link).
+3. Ohne Maus, nur per `Tab` durch die Hauptnavigation tabben.
+4. Pro Navigationspunkt: `Enter` aktiviert den Link.
+5. `Shift+Tab` führt zurück.
+6. Ein Aufklappmenü (Sidebar „Neu erstellen", mobiles „Mehr", ⋮-Menü einer Detailseite) mit `Enter` öffnen, mit `Escape` schließen.
 
 **Erwartetes Ergebnis:**
 - Jeder Navigationspunkt ist per Tab erreichbar.
 - Tab-Reihenfolge entspricht der visuellen Reihenfolge (oben→unten, links→rechts).
 - Keine Fokus-Falle: man kann auch wieder rauf-tabben.
+- `Escape` schließt das offene Menü **und** der Fokus kehrt sichtbar auf die öffnende Schaltfläche zurück (kein Fokusverlust auf `<body>`).
 
 **Status:** ☐ Offen
 
@@ -6362,6 +6366,8 @@
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C/F/S |||
+
+**Automatisiert durch:** keine — die tatsächliche Sichtbarkeit eines Fokus-Rings auf einer bestimmten Hintergrundfarbe ist weder per axe noch im Quelltext-Audit prüfbar; laut `docs/accessibility-audit.md` § 4.2 (2.4.7) ist das Kriterium „im Quelltext korrekt angelegt, die Sichtbarkeit auf farbigen Flächen ist aber zu bestätigen" — bleibt reiner Handtest.
 
 **Schritte:**
 1. Per Tab durch ein Formular (z.B. Event anlegen).
@@ -6383,6 +6389,8 @@
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C |||
 
+**Automatisiert durch:** `src/tests/e2e/test_accessibility.py::TestAxeFormularzustaende::test_event_form_with_dynamic_fields` (axe-Lauf auf dem frisch per HTMX geswappten Feldblock, `page_key=event_create_dynamic_fields`), `src/tests/test_a11y_mechanical_templates.py::test_condition_editor_uses_slot_specific_partial_ids` und `::test_condition_board_create_and_edit_forms_have_unique_label_targets` (nachgeladene Felder behalten eindeutige, mit `<label for>` verknüpfte IDs — Voraussetzung für eine sinnvolle Tab-Reihenfolge nach dem Swap).
+
 **Schritte:**
 1. Event-Edit-Formular öffnen mit dynamisch generierten Feldern.
 2. Per Tab durchgehen.
@@ -6392,27 +6400,32 @@
 **Erwartetes Ergebnis:**
 - Tab-Reihenfolge folgt der visuellen Layout-Reihenfolge.
 - Nach HTMX-Swap: neuer Inhalt ist in Tab-Reihenfolge integriert.
+- Das Feld „Zeitpunkt" (`id_occurred_at`) trägt kein positives `tabindex` mehr (Anti-Pattern entfernt, #805–#812); es ist kein zusätzliches, vorgezogenes Tab-Ziel.
 
 **Status:** ☐ Offen
 
 ---
 
-### TC-ID: ENT-A11Y-04 — Modal/Dialog Fokusfalle
+### TC-ID: ENT-A11Y-04 — Modal/Dialog Rolle und Bedienbarkeit
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C/F |||
 
+> **Erwartung korrigiert (B3):** Der ursprüngliche Fall verlangte eine Fokusfalle. Für den einzigen echten Dialog der Anwendung (`components/_inline_create_modal.html`, Inline-Personenanlage im Kontaktformular) ist das laut `docs/accessibility-audit.md` § 4 (A-03) bewusst **nicht** umgesetzt: Rolle und Beschriftung sind korrekt, ein Fokus-Einschluss ist ARIA-Praxisempfehlung statt Erfolgskriterium, und die sichtbare „Abbrechen"-Schaltfläche hält die Tastaturbedienung offen. Geprüft wird deshalb Rolle/Name plus die tatsächlich vorhandene Bedienbarkeit, nicht mehr eine Fokusfalle.
+
+**Automatisiert durch:** `src/tests/test_event_inline_client_create.py::TestClientInlineCreateView::test_staff_gets_minimal_modal_form` (`role="dialog"` gesetzt, `aria-modal="true"` bewusst **nicht** gesetzt).
+
 **Schritte:**
-1. Bestätigungsdialog öffnen (z.B. Klient soft-deleten).
-2. Per Tab durch die Dialog-Buttons.
-3. Tab nach letztem Button: springt zum ersten zurück (Fokusfalle).
-4. `Escape` schließt den Dialog, Fokus geht zurück zum Auslöser-Element.
+1. Im Kontaktformular (`/events/new/`) „Neue Person anlegen" öffnen (`role="dialog"`, `aria-labelledby`).
+2. Per Tab durch die Dialog-Felder und die Buttons „Person anlegen"/„Abbrechen".
+3. Tab nach dem letzten Button: Fokus verlässt den Dialog in den Rest der Seite (kein Fokus-Einschluss — bewusste Ausnahme A-03).
+4. „Abbrechen" per Tastatur (`Enter`) auslösen.
 
 **Erwartetes Ergebnis:**
-- Tab-Fokus bleibt im offenen Dialog.
-- Escape funktioniert.
-- Hintergrund-Inhalt ist nicht per Tab erreichbar, solange der Dialog offen ist.
+- Der Dialog trägt `role="dialog"` mit `aria-labelledby` auf die sichtbare Überschrift.
+- Es gibt **keine** Fokusfalle — das ist keine Regression, sondern die dokumentierte Ausnahme A-03.
+- „Abbrechen" ist jederzeit per Tastatur erreichbar und schließt den Dialog zuverlässig; damit bleibt die Tastaturbedienung trotz fehlendem Fokus-Einschluss gegeben.
 
 **Status:** ☐ Offen
 
@@ -6423,6 +6436,8 @@
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C |||
+
+**Automatisiert durch:** `src/tests/e2e/test_accessibility.py` (axe-Regeln u. a. `button-name`/`aria-*` über alle 25 Seiten-Zustände der Seiten-Matrix, Bestandsschutz-Baseline), `src/tests/test_a11y_mechanical_templates.py::test_favorite_icon_has_text_alternative` (Favoriten-Stern mit sr-only-Text), `::test_shared_list_controls_have_specific_names` (Listen-Icon-Buttons mit spezifischem Namen), `src/tests/test_a11y_semantics.py::TestOverflowMenuState` (⋮-Icon-Button mit `aria-haspopup`/`aria-expanded`/`aria-controls`).
 
 **Schritte:**
 1. DevTools-Accessibility-Tree öffnen oder VoiceOver/NVDA aktivieren.
@@ -6443,6 +6458,8 @@
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C |||
 
+**Automatisiert durch:** `src/tests/e2e/test_accessibility.py::TestAxeFormularzustaende::test_event_form_validation_errors` (axe-Lauf auf der server-gerenderten Fehlerdarstellung, `page_key=event_create_errors`), `src/tests/test_a11y_mechanical_templates.py::test_password_input_supports_error_relationships`, `::test_case_controls_have_accessible_names_and_errors`, `::test_error_free_password_pages_have_no_dangling_describedby`, `src/tests/test_a11y_semantics.py::TestAutocompleteErrorWiring` (optionales wie Pflicht-Personenfeld verknüpfen `aria-invalid`/`aria-describedby` korrekt mit dem Fehlertext).
+
 **Schritte:**
 1. Event-Form absenden mit leerem Pflichtfeld.
 2. Validierungsfehler wird angezeigt.
@@ -6452,6 +6469,8 @@
 **Erwartetes Ergebnis:**
 - Screen-Reader liest beim Fokussieren des Felds die Fehlermeldung.
 - Fehler-Text ist visuell beim Feld, nicht nur global im Toast.
+- Der Fokus springt nach dem Neuladen mit Fehlern auf das erste fehlerhafte Feld statt auf den Anfang des nachgeladenen Bereichs.
+- **Bekannte Ausnahme:** Auf genau dieser Seite (`event_create_errors`) meldet axe zusätzlich einen einzelnen, nicht verorteten `listitem`-Befund (serious) — offen dokumentiert in `docs/accessibility-audit.md` § 2.5, Folge-Ticket #2154. Das ist keine neue Regression, solange der Baseline-Eintrag unverändert bei einem Knoten steht.
 
 **Status:** ☐ Offen
 
@@ -6463,6 +6482,8 @@
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C |||
 
+**Automatisiert durch:** `src/tests/e2e/test_accessibility.py` (axe-Regel `color-contrast` über alle 25 Seiten-Zustände, Bestandsschutz-Baseline), `src/tests/test_a11y_mechanical_templates.py::test_colored_action_buttons_use_conforming_backgrounds`, `::test_event_and_handover_low_opacity_text_is_removed`, `::test_handover_highlight_timestamp_uses_conforming_text_token`, `::test_shared_border_token_meets_the_calculated_contrast_target`, `src/tests/test_a11y_semantics.py::TestTimeFilterTabs::test_active_tab_time_span_switches_to_the_readable_colour`.
+
 **Schritte:**
 1. DevTools-Contrast-Checker auf Badges (Status, Priorität).
 2. Auf Alert-Toast-Hintergründe (success/warning/error).
@@ -6471,6 +6492,7 @@
 **Erwartetes Ergebnis:**
 - Text/Hintergrund-Kontrast für normale Schriftgröße ≥ 4.5:1 (WCAG AA).
 - Für große Schrift (≥ 18.66px bold) ≥ 3:1.
+- Bewusst akzeptierte Restrisiken (nicht erneut als Befund aufmachen): gedämpfter Fließtext 4,57:1/5,07:1 knapp über der Schwelle (Audit-Dokument § 4, A-09) und `orange-600` in den Hub-Kacheln bei ≥ 20 px fett (A-10, 3,56:1 über der Großschrift-Schwelle 3:1).
 
 **Status:** ☐ Offen
 
@@ -6481,6 +6503,8 @@
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Accessibility | fachkraft | C/F |||
+
+**Automatisiert durch:** keine — `prefers-reduced-motion` ist nicht Teil des axe-Regelumfangs (`docs/accessibility-audit.md` § 1.2: `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`) und war nicht Gegenstand des Quelltext-Audits; bleibt reiner Handtest.
 
 **Schritte:**
 1. OS-Setting `prefers-reduced-motion: reduce` aktivieren (macOS: Bedienungshilfen, Windows: Vereinfachte Darstellung, DevTools: Rendering-Panel).
@@ -6510,6 +6534,80 @@
 - Kein horizontales Scrollen (Reflow funktioniert).
 - Buttons und Links sind weiterhin tap-fähig (Touch-Target ≥ 44×44 px).
 - Keine abgeschnittenen Texte.
+- Ergänzend offen (nicht durch diesen Test abgedeckt): Text-Only-Zoom und erhöhter Textabstand (1.4.4/1.4.12) — Handtest M-17 in `docs/accessibility-audit.md` § 3.2.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-10 — Screenreader-Durchlauf Zeitstrom/Ereignis/Personen-Detail
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | NVDA/VoiceOver |||
+
+**Automatisiert durch:** keine — Ansagen sind nur mit echtem Screenreader beurteilbar; die zugrundeliegende Semantik wird von `src/tests/test_a11y_semantics.py` (u. a. `TestHistoryEntryDisclosure`, `TestOverflowMenuState`, `TestTimeFilterTabs`) und `src/tests/e2e/test_accessibility.py` (axe je Seiten-Zustand) belegt.
+
+**Voraussetzung:** NVDA (Windows) oder VoiceOver (macOS/iOS) aktiv; Rolle Fachkraft angemeldet.
+
+**Schritte:**
+1. Zeitstrom-Startseite (`/`) linear mit dem Screenreader durchlesen: Überschriftennavigation, dann die Zeitfilter-Tabs mit `Tab`/Pfeiltasten (M-02, M-09), Datumsnavigation antesten (M-11).
+2. Ein Ereignis öffnen (`/events/<id>/`): Kopfbereich, Verlauf-Details-Umschalter öffnen/schließen (M-03), Statuspunkte in verlinkten Übersichten vorlesen lassen (M-07, sofern auf der Seite vorhanden).
+3. Eine Personen-Detailseite öffnen (`/clients/<id>/`): ⋮-Menü „Weitere Aktionen" öffnen/schließen (M-03), Pagination einer Anhangsliste mit der Linkliste des Screenreaders prüfen (M-12).
+
+**Erwartetes Ergebnis:**
+- Überschriftenebenen springen nicht (h1→h2→h3), jede Seite hat genau eine `h1`.
+- Zustandsbehaftete Bedienelemente (Zeitfilter, ⋮-Menü, Verlauf-Toggle) sagen ihren Zustand an, wie in § 2.2 des Audit-Dokuments für die jeweilige Korrektur beschrieben (A11Y-008/012/015/017/030/040).
+- Pagination-Links werden als „Vorherige Seite"/„Nächste Seite" angesagt, nicht als Glyphen (A11Y-016).
+- Kein Inhalt, der nur über Farbe unterscheidbar wäre, bleibt beim linearen Vorlesen unverständlich.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-11 — Live-Region-Ansage nach HTMX-Swap
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | NVDA/VoiceOver + C |||
+
+**Automatisiert durch:** `src/tests/test_a11y_semantics.py::TestListResultAnnouncement` (Live-Region liegt außerhalb des Swap-Ziels, trägt `role="status"`/`aria-live="polite"`, `data-hx-no-focus` verhindert die Doppelansage durch `focus-management.js`, die HTMX-Partial-Antwort liefert die Region **nicht** doppelt mit), `tests/js/focus-management.test.mjs` (Abschnitt „Trefferansage (A11Y-035/036)": Ansage feuert trotz `data-hx-no-focus`, auch während laufender Live-Suche, genau einmal auch bei gleicher Trefferzahl).
+
+**Voraussetzung:** NVDA (Windows) oder VoiceOver (macOS/iOS) aktiv; Rolle Fachkraft angemeldet.
+
+**Schritte:**
+1. Personenliste (`/clients/`) öffnen, Suchbegriff tippen, Fokus **nicht** bewegen, 2 Sekunden warten.
+2. Dasselbe auf der Fallliste (`/cases/`) mit einem Filter statt Freitext.
+3. Einen Suchbegriff eintippen, der zu keinem Treffer führt.
+
+**Erwartetes Ergebnis:**
+- Der Screenreader sagt nach dem HTMX-Swap genau einmal „N Personen angezeigt."/„N Fälle angezeigt." an (Singular „1 Person angezeigt."/„1 Fall angezeigt."), ohne dass der Fokus das Suchfeld verlässt.
+- Bei keinem Treffer wird „Keine Person gefunden."/„Kein Fall gefunden." angesagt.
+- Keine Doppelansage (weder durch den Fokus-Manager noch durch eine im Partial mitgelieferte zweite Live-Region).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-12 — Workitem-Autocomplete-Tastaturpfad
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C + NVDA/VoiceOver |||
+
+**Automatisiert durch:** `src/tests/test_a11y_semantics.py::TestWorkitemClientAutocomplete` (Refs #1989; `role="combobox"`, `aria-autocomplete="list"`, `aria-controls`, die vier Tastatur-Handler Pfeil-runter/-hoch/Enter/Escape, `role="listbox"`/`role="option"` mit `aria-selected`, optionales Feld ohne `aria-required`), `::TestAutocompleteErrorWiring` (Fehlerverknüpfung bei ungültigem, optionalem Personenfeld).
+
+**Schritte:**
+1. `/workitems/new/` als Fachkraft öffnen, im Feld „Person" zwei Zeichen eines vorhandenen Pseudonyms tippen.
+2. Nur mit der Tastatur weiterarbeiten: Pfeil-runter/-hoch wandert durch die Vorschläge, `Enter` übernimmt den hervorgehobenen Treffer, `Escape` schließt die Liste.
+3. Aufgabe ohne Personenauswahl speichern (Feld ist optional) — Gegenprobe.
+4. Eine bestehende Aufgabe **mit** fest zugeordneter Person bearbeiten (`/workitems/<id>/edit/`) — Gegenprobe auf den gepinnten Zweig ohne Autocomplete.
+
+**Erwartetes Ergebnis:**
+- Screenreader sagt Rolle „Kombinationsfeld", den Erweitert-Zustand und die hervorgehobene Option an.
+- `Enter` übernimmt den Treffer ins verborgene Feld, `Escape` schließt die Liste ohne Auswahl.
+- Das Feld bleibt erkennbar optional (kein `*`, kein `aria-required`); ein ungültiger Wert erzeugt eine mit `aria-describedby` verknüpfte Fehlermeldung.
+- Der gepinnte Bearbeiten-Zweig zeigt weiterhin die Person als festen Text ohne Suchfeld.
 
 **Status:** ☐ Offen
 
