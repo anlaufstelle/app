@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-05 22:08+0200\n"
+"POT-Creation-Date: 2026-09-06 15:27+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12530,3 +12530,52 @@ msgstr "Die Datei konnte nicht als CSV gelesen werden (Fehler in Zeile %(line)s)
 #, python-format
 msgid "Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson."
 msgstr "Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson."
+
+msgid "Nicht zugeordnetes Ereignis zuordnen"
+msgstr "Nicht zugeordnetes Ereignis zuordnen"
+
+msgid "Vorherige Seite"
+msgstr "Vorherige Seite"
+
+msgid "Nächste Seite"
+msgstr "Nächste Seite"
+
+msgid "Version für dieses Feld wählen"
+msgstr "Version für dieses Feld wählen"
+
+msgid "Vorheriger Tag"
+msgstr "Vorheriger Tag"
+
+msgid "Nächster Tag"
+msgstr "Nächster Tag"
+
+msgid "Nach Dokumentationstyp filtern"
+msgstr "Nach Dokumentationstyp filtern"
+
+#, python-format
+msgid "1 Person angezeigt."
+msgid_plural "%(counter)s Personen angezeigt."
+msgstr[0] "1 Person angezeigt."
+msgstr[1] "%(counter)s Personen angezeigt."
+
+#: src/templates/core/clients/list.html:122
+#, python-brace-format
+msgid "{count} Personen angezeigt."
+msgstr "{count} Personen angezeigt."
+
+msgid "Keine Person gefunden."
+msgstr "Keine Person gefunden."
+
+#, python-format
+msgid "1 Fall angezeigt."
+msgid_plural "%(counter)s Fälle angezeigt."
+msgstr[0] "1 Fall angezeigt."
+msgstr[1] "%(counter)s Fälle angezeigt."
+
+#: src/templates/core/cases/list.html:81
+#, python-brace-format
+msgid "{count} Fälle angezeigt."
+msgstr "{count} Fälle angezeigt."
+
+msgid "Kein Fall gefunden."
+msgstr "Kein Fall gefunden."
