@@ -98,12 +98,11 @@ Farbkontraste wurden dort, wo axe nichts melden konnte (nicht gescannte Seiten, 
 
 ### 2.1 Ergebnis in Zahlen — vorher und nachher
 
-**Vorher (Lane-Bericht B1, Stand 2026-09-06):**
+**Vorher (axe-Erstlauf 2026-09-05 und Vorlagen-Audit 2026-09-06):**
 
 | | Anzahl |
 |---|---|
-| Automatisiert gemeldete Verstoß-Einträge (Regel × Seite) | 34, mit 70 betroffenen Elementen |
-| Betroffene Seiten-Zustände | 22 von 25 |
+| Automatisiert gemeldete Verstoß-Einträge (Regel × Seite), axe-Erstlauf 2026-09-05 (Gate-Einführung), Rohmessung vor dem Pinnen — `zeitstrom` scheiterte in diesem Lauf am Ready-Selektor und fehlt hier noch | 34, mit 70 betroffenen Elementen auf 22 von 25 gescannten Seiten |
 | Befunde insgesamt nach Vorlagen-Audit und Zusammenführung | **47** (51 gemeldet, 4 Cross-Batch-Dubletten zusammengeführt) |
 | davon schwerwiegend (`critical`) | 7 |
 | davon erheblich (`serious`) | 22 |
@@ -113,9 +112,9 @@ Farbkontraste wurden dort, wo axe nichts melden konnte (nicht gescannte Seiten, 
 
 Die automatisierte Prüfung fand **11** dieser Befunde; die übrigen **36** stammen aus dem Quelltext-Audit — überwiegend Zustände, die nur bei Interaktion entstehen (Aufklapp-Menüs, Formularfehler, Live-Aktualisierungen), sowie Kontraste auf Seiten, die der automatisierte Lauf nicht abdeckt.
 
-**axe-Baseline (Gate, Lane-Bericht B0):** 23 Seiten · 38 Regel-Einträge · **75 Knoten**. Drei gescannte Seiten sind bereits sauber und stehen bewusst nicht in der Baseline: `login`, `password_reset`, `offline_conflicts`.
+**axe-Baseline (Gate, axe-Erstlauf 2026-09-05 (Gate-Einführung), gepinnt):** 23 Seiten · 38 Regel-Einträge · **75 Knoten**. Gegenüber der Rohmessung oben (34 Einträge/70 Knoten/22 Seiten) kam nach Korrektur des zunächst fehlgeschlagenen `zeitstrom`-Laufs ein abgeleiteter, nicht selbst gemessener Eintrag hinzu (+4 Regel-Einträge/+5 Knoten: `aria-allowed-attr`, `color-contrast`, `link-name`×2, `select-name`) — die beiden Zahlenpaare beschreiben also denselben automatisierten Lauf vor und nach dieser Ergänzung, keinen Widerspruch. Drei gescannte Seiten sind bereits sauber und stehen bewusst nicht in der Baseline: `login`, `password_reset`, `offline_conflicts`.
 
-**Nachher (axe-Endstand 2026-09-06):** 26 Seiten-Zustände · **1 Verstoß-Knoten** (`serious`). Die Baseline ist von 38 Regel-Einträgen/75 Knoten auf **1 Regel-Eintrag/1 Knoten** abgebaut. Verbleibender, bewusst offener Eintrag:
+**Nachher (axe-Endstand 2026-09-06 auf main):** 26 Seiten-Zustände · **1 Verstoß-Knoten** (`serious`). Die Baseline ist von 38 Regel-Einträgen/75 Knoten auf **1 Regel-Eintrag/1 Knoten** abgebaut. Verbleibender, bewusst offener Eintrag:
 
 | Seite | Regel | Impact | Knoten | Status |
 |---|---|---|---|---|
@@ -125,7 +124,7 @@ Der verbleibende Befund stammt aus der Fehlerausgabe „Dieses Feld ist zwingend
 
 ### 2.2 Befundliste
 
-Reihenfolge nach Schwere. Status: „behoben \<SHA\>" (Commit des Worktree-Hauptzweigs), „offen" (bewusst, mit Grund) oder „Handtest § 3" (nur mit Screenreader entscheidbar). Die Korrekturwellen B2/B2' sind in § 2.4 beschrieben.
+Reihenfolge nach Schwere. Status: „behoben" (Fix-Welle B2/B2' — Commit-Bereich auf dem Hauptzweig main siehe § 2.4), „offen" (bewusst, mit Grund) oder „Handtest § 3" (nur mit Screenreader entscheidbar). Die Korrekturwellen B2/B2' sind in § 2.4 beschrieben.
 
 | ID | Erfolgskriterium | Schwere | Welle | Status / Fix |
 |---|---|---|---|---|
@@ -194,7 +193,7 @@ Reihenfolge nach Schwere. Status: „behoben \<SHA\>" (Commit des Worktree-Haupt
 
 ### 2.3 Kontraste — vorher/nachher
 
-Die „Vorher“-Werte stammen aus den Design-Tokens der Stilvorlage bzw. der Farbpalette des CSS-Rahmenwerks nach der WCAG-Leuchtdichteformel (Lane-Bericht B1); die „Nachher“-Werte aus den rechnerischen Nachweisen der Lane-Berichte B2 und B2'. „Soll“ richtet sich nach Textgröße und -stärke (4,5:1 für Fließtext, 3:1 für großen Text ab 18,66 px fett bzw. 24 px, 3:1 für Bedienelement-Begrenzungen).
+Die „Vorher“-Werte stammen aus den Design-Tokens der Stilvorlage bzw. der Farbpalette des CSS-Rahmenwerks nach der WCAG-Leuchtdichteformel (Vorlagen-Audit 2026-09-06); die „Nachher“-Werte aus den rechnerischen Nachweisen der Fix-Wellen mechanisch (B2) und Semantik/JS (B2'), siehe § 2.4. „Soll“ richtet sich nach Textgröße und -stärke (4,5:1 für Fließtext, 3:1 für großen Text ab 18,66 px fett bzw. 24 px, 3:1 für Bedienelement-Begrenzungen).
 
 | ID | Element | Ist (vorher) | Nachher | Bewertung |
 |---|---|---|---|---|
@@ -207,17 +206,21 @@ Die „Vorher“-Werte stammen aus den Design-Tokens der Stilvorlage bzw. der Fa
 | A11Y-008 | Uhrzeitspanne im aktiven Zeitfilter | `text-ink-muted`: 4,31:1 | `text-accent`: **6,07:1** | bestanden |
 | A11Y-014 | Rahmen `--border` (Karte `#fff`) | 1,44:1 | **3,367:1** | bestanden (Nicht-Text 3:1) |
 | A11Y-014 | Rahmen `--border` (Seite `--bg`) | 1,30:1 | **3,040:1** | bestanden (Nicht-Text 3:1) |
-| — (Z-4) | Feed-Feldlabel | `text-ink-muted` bei 70 %: 2,82:1 | volles `text-ink-muted`: **5,066:1** (Karte) / **4,574:1** (Seite) | bestanden |
-| — (Z-5) | Übergabe-Zeitstempel | `text-ink-muted`: 4,314:1 | `text-ink`: **16,021:1** | bestanden |
+| — (Nachtrag) | Feed-Karten-Labels | `text-ink-muted` bei 70 %: 2,82:1 | volles `text-ink-muted`: **5,066:1** (Karte) / **4,574:1** (Seite) | bestanden |
+| — (Nachtrag) | Übergabe-Zeitstempel | `text-ink-muted`: 4,314:1 | `text-ink`: **16,021:1** | bestanden |
+
+Die beiden mit „— (Nachtrag)" markierten Zeilen sind keine der 47 Befunde aus § 2.2: Es sind datenabhängige Kontrastknoten (Feed-Karten-Labels, Übergabe-Zeitstempel), die erst während der Fix-Wellen am gerenderten Feed bzw. an der Übergabe-Zusammenfassung auffielen und deshalb keine eigene A11Y-ID tragen; behoben als Teil der Fix-Welle mechanisch (B2, siehe § 2.4).
 
 Zusätzlich bestätige (bewusst akzeptierte) Ausgangswerte ohne Korrekturbedarf: gedämpfter Fließtext 5,07:1 (Kartenweiß) bzw. 4,57:1 (Seitenhintergrund), Akzentgrün auf Weiß 7,13:1, Orange auf Weiß bei ≥ 20 px fett 3,56:1 (große Schrift, Schwelle 3:1), Statusabzeichen 4,57–8,75:1 — Einzelheiten in § 4 (A-09, A-10).
 
 ### 2.4 Korrektur-Wellen
 
-| Welle | Inhalt | Befunde | Umfang |
+Zählweise: je Welle alle Commits auf dem Hauptzweig (main), einschließlich der jeweiligen Fix-Runde 1 und der unmittelbar dadurch nötigen Folge-Commits (Integrationsnachträge) — belegt per `git log --oneline`.
+
+| Welle | Inhalt | Befunde | Commits auf main (Basis + Fix-Runde 1 + Integrationsnachträge) |
 |---|---|---|---|
-| B2 | Rein additive Auszeichnungen: Beschriftungen, `aria-label`, `for`/`id`, Tabellen-Zeilenköpfe, Farbklassen, der Rahmen-Token | 37 | 12 mechanische Fix-Commits |
-| B2' | Zustandsbehaftete Bedienmuster (Aufklapp-/Auswahlzustände, Kombinationsfeld), Live-Bereiche nach Teilaktualisierung, Fokus-Manager, Alpine-/JS-Anbindung | 10 | 5 Semantik-/JS-Commits |
+| B2 — Fix-Welle mechanisch | Rein additive Auszeichnungen: Beschriftungen, `aria-label`, `for`/`id`, Tabellen-Zeilenköpfe, Farbklassen, der Rahmen-Token | 37 | 14 — `af01a9f3`…`40de9876` (7 Basis-Commits) + `073b7693` (Kontrast-Nachtrag Übergabe-Zeitstempel) + `ee497379`…`fe945d77` (4 Commits Fix-Runde 1) + `47128fe2`, `68400340` (2 Integrationsnachträge: PWA-Shell-Cache-Version, E2E-Selektoren) |
+| B2' — Fix-Welle Semantik/JS | Zustandsbehaftete Bedienmuster (Aufklapp-/Auswahlzustände, Kombinationsfeld), Live-Bereiche nach Teilaktualisierung, Fokus-Manager, Alpine-/JS-Anbindung | 10 | 11 — `b1a8c70f`…`2d768a15` (5 Basis-Commits) + `f94f2822`…`58e0d9ee` (4 Commits Fix-Runde 1) + `b6081408`, `b514fbfa` (2 Integrationsnachträge: E2E-Selektoren, Kommentar-Angleichung) |
 
 ### 2.5 Ein automatisierter Befund ohne gefundene Ursache
 
@@ -227,7 +230,7 @@ Auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler meldet die automatis
 
 ## 3 Prüfprotokoll Screenreader (NVDA / VoiceOver) — Handtest, offen
 
-> **Noch nicht durchgeführt.** Dieser Abschnitt ist das vorbereitete Prüfprotokoll für den Screenreader-Handtest (Stufe 3). Er wird nach dem Handtest mit Ergebnissen gefüllt; erst dann ist das Audit vollständig. Die Prüfschritte entsprechen den manuellen Prüfpunkten M-01…M-18 des Lane-Berichts B1 und decken sich mit den Matrix-Fällen ENT-A11Y-01…12 (Lane B3 Teil 2).
+> **Noch nicht durchgeführt.** Dieser Abschnitt ist das vorbereitete Prüfprotokoll für den Screenreader-Handtest (Stufe 3). Er wird nach dem Handtest mit Ergebnissen gefüllt; erst dann ist das Audit vollständig. Die Prüfschritte M-01…M-15 entsprechen den manuellen Prüfpunkten aus dem Vorlagen-Audit 2026-09-06, ergänzt um M-16…M-18 (Skip-Link-Gegenprobe, Zoom/Textabstand, vollständige Tastaturprobe); sie decken sich mit den Testfällen ENT-A11Y-01…12 in `docs/testing/manual-test-matrix-b.md`.
 
 ### 3.1 Prüfumgebung (auszufüllen)
 
@@ -323,4 +326,4 @@ Für folgende Kriterien reicht weder die automatisierte Prüfung noch das Quellt
 
 ---
 
-*Dieses Dokument entstand aus dem automatisierten Gate-Lauf (axe-Baseline, Lane-Bericht B0), dem Vorlagen-Audit (Lane-Bericht B1), der Korrektur-Wellen B2/B2' (Lane-Berichte B2, B2') und dem axe-Endstand 2026-09-06. Änderungen an Befunden gehören in diese Quellen, nicht in die Fließtext-Fassung.*
+*Dieses Dokument entstand aus dem automatisierten Gate-Lauf (axe-Erstlauf 2026-09-05, Gate-Einführung), dem Vorlagen-Audit 2026-09-06, den Fix-Wellen mechanisch (B2) und Semantik/JS (B2') sowie dem axe-Endstand 2026-09-06 auf main. Änderungen an Befunden gehören in diese Quellen, nicht in die Fließtext-Fassung.*
