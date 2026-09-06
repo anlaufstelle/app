@@ -4,12 +4,19 @@
 {# Optional: `feed_target_id` — HTMX target element ID (default: event-list) #}
 {% if time_filters %}
 <div class="relative mb-4" data-testid="time-filter-tabs">
-<div class="flex gap-1 border-b border-subtle overflow-x-auto pr-8 md:pr-0" role="tablist" aria-label="{% trans 'Zeitfilter' %}">
-    {# Refs #1059 (A11Y-017): aria-selected serverseitig; time-filter-tabs.js #}
-    {# fuehrt es beim Umschalten mit (bis dahin war der aktive Tab rein visuell). #}
+{% comment %}Refs #1059 (A11Y-017, Ruling R-B2p-10): Diese Leiste ist KEIN
+ARIA-Tab-Widget — es sind unabhaengige Filterknoepfe, die per HTMX die
+Feed-Liste nachladen. ``role="tablist"``/``role="tab"`` haetten das
+Composite-Verhalten (Roving-Tabindex, Pfeil-links/-rechts, zugeordnetes
+``tabpanel``) versprochen, das es hier nicht gibt. Der Auswahlzustand ist
+deshalb ueber ``aria-pressed`` an den Knoepfen ausgedrueckt — das passt zum
+Elementtyp ``<button>`` und ist programmatisch genauso bestimmbar. Die Gruppe
+behaelt ihren Namen ueber ``role="group"`` + ``aria-label``.
+``time-filter-tabs.js`` fuehrt ``aria-pressed`` beim Umschalten mit, weil die
+Leiste selbst nicht neu gerendert wird.{% endcomment %}
+<div class="flex gap-1 border-b border-subtle overflow-x-auto pr-8 md:pr-0" role="group" aria-label="{% trans 'Zeitfilter' %}">
     <button
-        role="tab"
-        aria-selected="{% if selected_filter_id == 'all' %}true{% else %}false{% endif %}"
+        aria-pressed="{% if selected_filter_id == 'all' %}true{% else %}false{% endif %}"
         data-zeitstrom-time-filter="all"
         class="time-filter-tab whitespace-nowrap min-h-[44px] md:min-h-0 px-3.5 py-2 text-[13px] font-medium rounded-t-md {% if selected_filter_id == 'all' %}bg-accent-light text-accent border-b-2 border-accent font-semibold{% else %}text-ink-muted hover:text-ink hover:bg-canvas{% endif %}"
         data-testid="time-filter-all"
@@ -23,8 +30,7 @@
     </button>
     {% for tf in time_filters %}
     <button
-        role="tab"
-        aria-selected="{% if tf == selected_filter %}true{% else %}false{% endif %}"
+        aria-pressed="{% if tf == selected_filter %}true{% else %}false{% endif %}"
         data-zeitstrom-time-filter="{{ tf.pk }}"
         class="time-filter-tab whitespace-nowrap min-h-[44px] md:min-h-0 px-3.5 py-2 text-[13px] font-medium rounded-t-md {% if tf == selected_filter %}bg-accent-light text-accent border-b-2 border-accent font-semibold{% else %}text-ink-muted hover:text-ink hover:bg-canvas{% endif %}"
         data-testid="time-filter-{{ tf.label|slugify }}"

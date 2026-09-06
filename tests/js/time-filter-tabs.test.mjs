@@ -1,10 +1,14 @@
-// Refs #1059 (A11Y-017/008): Die Zeitfilter-Tableiste wird beim Umschalten
-// NICHT neu gerendert — der HTMX-Swap trifft die Feed-Liste. Alles, was
-// time-filter-tabs.js nicht mitzieht, bleibt auf dem Server-Stand stehen.
-// Vorher zog das Skript nur die Tailwind-Stilklassen mit: ``aria-selected``
-// blieb am alten Tab haengen (der aktive Tab war rein visuell), und die
-// Uhrzeit-Spanne behielt ``text-ink-muted``, das auf ``bg-accent-light`` nur
-// 4,31:1 erreicht.
+// Refs #1059 (A11Y-017/008, Ruling R-B2p-10): Die Zeitfilter-Leiste wird beim
+// Umschalten NICHT neu gerendert - der HTMX-Swap trifft die Feed-Liste. Alles,
+// was time-filter-tabs.js nicht mitzieht, bleibt auf dem Server-Stand stehen.
+// Vorher zog das Skript nur die Tailwind-Stilklassen mit: der Auswahlzustand
+// blieb am alten Knopf haengen (er war rein visuell), und die Uhrzeit-Spanne
+// behielt ``text-ink-muted``, das auf ``bg-accent-light`` nur 4,31:1 erreicht.
+//
+// Der Zustand steht in ``aria-pressed`` und NICHT in ``aria-selected``: die
+// Knoepfe sind unabhaengige Umschalter, kein ARIA-Tab-Widget (kein
+// Roving-Tabindex, keine Pfeilnavigation, kein zugeordnetes ``tabpanel``).
+
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 beforeAll(async () => {
@@ -14,9 +18,8 @@ beforeAll(async () => {
 function tab(id, { active = false, withTime = true } = {}) {
     const button = document.createElement("button");
     button.id = id;
-    button.setAttribute("role", "tab");
     button.className = "time-filter-tab";
-    button.setAttribute("aria-selected", active ? "true" : "false");
+    button.setAttribute("aria-pressed", active ? "true" : "false");
     if (withTime) {
         const span = document.createElement("span");
         span.className = `time-filter-tab-time ${active ? "text-accent" : "text-ink-muted"}`;
@@ -35,7 +38,7 @@ beforeEach(() => {
     document.body.innerHTML = "";
 });
 
-describe("aria-selected wandert mit (A11Y-017)", () => {
+describe("aria-pressed wandert mit (A11Y-017)", () => {
     it("setzt den angeklickten Tab auf true und alle anderen auf false", () => {
         const alle = tab("alle", { active: true, withTime: false });
         const nacht = tab("nacht");
@@ -43,20 +46,20 @@ describe("aria-selected wandert mit (A11Y-017)", () => {
 
         click(nacht);
 
-        expect(nacht.getAttribute("aria-selected")).toBe("true");
-        expect(alle.getAttribute("aria-selected")).toBe("false");
-        expect(tagsueber.getAttribute("aria-selected")).toBe("false");
+        expect(nacht.getAttribute("aria-pressed")).toBe("true");
+        expect(alle.getAttribute("aria-pressed")).toBe("false");
+        expect(tagsueber.getAttribute("aria-pressed")).toBe("false");
     });
 
-    it("laesst genau EINEN Tab ausgewaehlt, auch nach mehrfachem Umschalten", () => {
+    it("laesst genau EINEN Knopf gedrueckt, auch nach mehrfachem Umschalten", () => {
         const tabs = [tab("a", { active: true }), tab("b"), tab("c")];
 
         click(tabs[1]);
         click(tabs[2]);
         click(tabs[0]);
 
-        const selected = tabs.filter((t) => t.getAttribute("aria-selected") === "true");
-        expect(selected).toEqual([tabs[0]]);
+        const pressed = tabs.filter((t) => t.getAttribute("aria-pressed") === "true");
+        expect(pressed).toEqual([tabs[0]]);
     });
 
     it("ignoriert Elemente ohne .time-filter-tab", () => {
@@ -66,7 +69,7 @@ describe("aria-selected wandert mit (A11Y-017)", () => {
 
         click(fremd);
 
-        expect(aktiv.getAttribute("aria-selected")).toBe("true");
+        expect(aktiv.getAttribute("aria-pressed")).toBe("true");
     });
 });
 
@@ -100,6 +103,6 @@ describe("Kontrast der Uhrzeit-Spanne (A11Y-008)", () => {
         tab("nacht", { active: true });
 
         expect(() => click(alle)).not.toThrow();
-        expect(alle.getAttribute("aria-selected")).toBe("true");
+        expect(alle.getAttribute("aria-pressed")).toBe("true");
     });
 });

@@ -11,12 +11,16 @@
  * Stilklassen werden dabei vom vorherigen aktiven Tab entfernt und auf den
  * gerade angeklickten Tab gesetzt.
  *
- * Refs #1059 (A11Y-017/008): Die Tableiste selbst wird beim Umschalten NICHT
- * neu gerendert (der Swap trifft die Feed-Liste). Was hier nicht mitgezogen
- * wird, bleibt also auf dem Server-Stand stehen — deshalb wandern
- * ``aria-selected`` (der Zustand war vorher rein visuell) und die Textfarbe
- * der Uhrzeit-Spanne (``text-ink-muted`` erreicht auf ``bg-accent-light`` nur
- * 4,31:1) zusammen mit den Stilklassen.
+ * Refs #1059 (A11Y-017/008, Ruling R-B2p-10): Die Leiste selbst wird beim
+ * Umschalten NICHT neu gerendert (der Swap trifft die Feed-Liste). Was hier
+ * nicht mitgezogen wird, bleibt also auf dem Server-Stand stehen - deshalb
+ * wandern ``aria-pressed`` (der Auswahlzustand war vorher rein visuell) und
+ * die Textfarbe der Uhrzeit-Spanne (``text-ink-muted`` erreicht auf
+ * ``bg-accent-light`` nur 4,31:1) zusammen mit den Stilklassen.
+ *
+ * Bewusst ``aria-pressed`` statt ``aria-selected``/``role="tab"``: die
+ * Knoepfe sind unabhaengige Umschalter, kein ARIA-Tab-Widget (kein
+ * Roving-Tabindex, keine Pfeilnavigation, kein zugeordnetes ``tabpanel``).
  */
 (function () {
     "use strict";
@@ -55,7 +59,7 @@
             INACTIVE.forEach(function (cls) {
                 b.classList.add(cls);
             });
-            b.setAttribute("aria-selected", "false");
+            b.setAttribute("aria-pressed", "false");
             _setTimeSpanState(b, false);
         });
         INACTIVE.forEach(function (cls) {
@@ -64,7 +68,7 @@
         ACTIVE.forEach(function (cls) {
             target.classList.add(cls);
         });
-        target.setAttribute("aria-selected", "true");
+        target.setAttribute("aria-pressed", "true");
         _setTimeSpanState(target, true);
     });
 })();
