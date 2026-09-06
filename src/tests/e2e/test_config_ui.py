@@ -17,7 +17,6 @@ import re
 import uuid
 
 import pytest
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect
 
 from ._helpers import enter_sudo_mode, track_console_errors
@@ -667,16 +666,22 @@ class TestFieldBoard:
 
 
 class TestFieldBoardDragAndDrop:
-    """Gruppen-Reorder (drag_to) + Cross-Gruppen-Feld-Move (native Maus-Sequenz)."""
+    """Gruppen-Reorder + Cross-Gruppen-Feld-Move, beide ueber die native Maus-Sequenz."""
 
-    @pytest.mark.xfail(
-        reason="Lastempfindlich: drag_to loest je Browser-Session deterministisch "
-        "keinen Sortable-onEnd-POST aus (alle Retries derselben Session betroffen); "
-        "Root-Cause-Suche laeuft in #1855 — Marker fliegt dort wieder raus.",
-        strict=False,
-    )
     def test_group_reorder_persists(self, authenticated_page, base_url):
-        """(a) Gruppen-Reihenfolge per ``drag_to`` tauschen → nach Reload persistiert."""
+        """(a) Gruppen-Reihenfolge tauschen → nach Reload persistiert.
+
+        Refs #1855: Hier stand bis zur 0.94-Welle ein ``xfail`` — der Test
+        benutzte Playwrights synthetisches ``drag_to``, das bei SortableJS je
+        Browser-Session gelegentlich gar kein ``onEnd`` mit Aenderung ausloest
+        (alle drei Wiederholungen derselben Session waren dann betroffen).
+        Root-Cause ist damit **die Emulation**, nicht das Board: die native
+        Maus-Sequenz ``_native_drag`` — mit der die drei Cross-Container-Faelle
+        derselben Klasse laengst arbeiten (Plan-Risiko 1, Refs #1056/P9) —
+        loest ``onEnd`` deterministisch aus, weil SortableJS die
+        Zwischen-``dragover``-Schritte sieht. Deshalb derselbe Weg auch hier,
+        und der Marker faellt weg.
+        """
         page = authenticated_page
         pk = _create_doctype(page, base_url, _cfg_name("DT-DND-G"))
         try:
@@ -684,30 +689,15 @@ class TestFieldBoardDragAndDrop:
             g2 = _add_group(page, _cfg_name("B"))
             assert _group_order(page) == [g1, g2], "Ausgangsreihenfolge unerwartet"
 
-            # Gruppen-Reorder im selben Container funktioniert mit drag_to
-            # (manuell verifiziert, Refs #1056/P9). Handle von g1 auf die
-            # g2-Karte ziehen → g1 rutscht hinter g2.
+            # Handle von g1 auf die UNTERE Haelfte der g2-Karte ziehen → g1
+            # rutscht hinter g2 (Gegenstueck zu ``y_frac=0.12`` im
+            # Top-Level-Move, wo VOR der Zielkarte eingefuegt werden soll).
+            # ``_native_drag`` wartet selbst auf den ``/reorder/``-POST, bevor
+            # es zurueckkehrt — der folgende ``goto()`` kann ihn also nicht
+            # mehr abbrechen.
             handle = page.locator(f'[data-testid="field-group"][data-group-id="{g1}"] .group-drag-handle')
             target = page.locator(f'[data-testid="field-group"][data-group-id="{g2}"]')
-            # Auf die Antwort des Sortable-onEnd-POST warten statt fest zu
-            # schlafen: unter Host-Last dauert der reorder/blocks-POST laenger
-            # als jede Pause, und der anschliessende goto() bricht einen noch
-            # laufenden POST ab — die Reihenfolge waere dann nie persistiert.
-            # Der Drag selbst wird begrenzt wiederholt: Playwrights synthetisches
-            # drag_to loest bei SortableJS unter Last gelegentlich kein
-            # onEnd-mit-Aenderung aus (Refs #1855) — das ist eine Schwaeche der
-            # Emulation, nicht des Boards; geprueft wird die Persistenz.
-            for versuch in range(3):
-                try:
-                    with page.expect_response(
-                        lambda r: "/reorder/blocks/" in r.url and r.request.method == "POST" and r.ok,
-                        timeout=5000,
-                    ):
-                        handle.drag_to(target)
-                    break
-                except PlaywrightTimeoutError:
-                    if versuch == 2:
-                        raise
+            self._native_drag(page, handle, target, y_frac=0.85)
 
             # Persistenz gegen einen frischen Full-Load prüfen.
             page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/", wait_until="domcontentloaded")
@@ -864,14 +854,15 @@ class TestFieldBoardDragAndDrop:
         page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10), steps=25)
         page.wait_for_timeout(300)
         # Auf die Antwort des Sortable-onEnd-POST warten statt fest zu schlafen
-        # (Refs #1855): unter Host-Last dauert der Board-POST laenger als jede
-        # Pause, und der anschliessende ``goto()`` bricht einen noch laufenden
-        # POST ab — die Reihenfolge waere dann nie persistiert. Der Waiter muss
-        # VOR ``mouse.up()`` scharf sein, weil SortableJS ``onEnd`` genau daran
-        # haengt. Alle drei Board-Endpunkte (``reorder/blocks``,
-        # ``reorder/fields``, ``reorder/move-field``) liegen unter
-        # ``/reorder/`` — welcher feuert, entscheidet ``config-sortable.js`` je
-        # nach Quell-/Ziel-Container.
+        # (Refs #1855): unter
+        # Host-Last dauert der Board-POST laenger als jede Pause, und der
+        # anschliessende ``goto()`` bricht einen noch laufenden POST ab — die
+        # Reihenfolge waere dann nie persistiert. Der Waiter muss VOR
+        # ``mouse.up()`` scharf sein, weil SortableJS ``onEnd`` genau daran
+        # haengt. Alle drei Board-Endpunkte
+        # (``reorder/blocks``, ``reorder/fields``, ``reorder/move-field``)
+        # liegen unter ``/reorder/`` — welcher feuert, entscheidet
+        # ``config-sortable.js`` je nach Quell-/Ziel-Container.
         with page.expect_response(
             lambda r: "/reorder/" in r.url and r.request.method == "POST" and r.ok,
             timeout=15000,
