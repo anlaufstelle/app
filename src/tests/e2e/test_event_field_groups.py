@@ -63,7 +63,7 @@ def _open_kontakt_form(page, base_url):
     # belegt das Attribut zugleich die abgeschlossene Initialisierung genau
     # dieser Karte.
     page.locator(COLLAPSIBLE_CARD).wait_for(state="attached", timeout=10000)
-    expect(page.locator(COLLAPSIBLE_CHEVRON)).to_have_class(re.compile(r"\brotate-180\b"), timeout=10000)
+    expect(page.locator(COLLAPSIBLE_CHEVRON)).to_have_class(re.compile(r"(?:^|\s)rotate-180(?:\s|$)"), timeout=10000)
 
 
 class TestKontaktFieldGroups:
