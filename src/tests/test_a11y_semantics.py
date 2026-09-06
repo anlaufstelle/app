@@ -448,7 +448,10 @@ class TestWorkitemClientAutocomplete:
         html = _html(client, staff_user, reverse("core:workitem_update", args=[sample_workitem.pk]))
 
         assert 'data-testid="client-pinned"' in html
-        assert 'role="combobox"' not in html
+        # Die globalen Suchfelder tragen seit B2 ebenfalls role="combobox";
+        # gepinnt wird nur, dass das PERSONEN-Autocomplete nicht gerendert ist.
+        assert 'x-data="clientAutocomplete"' not in html
+        assert 'aria-label="Person suchen"' not in html
 
     def test_event_form_keeps_its_anonymous_branch(self, client, staff_user):
         """Gegenprobe zur zweiten Bestandseinbindung (Cross-Review B2', NIEDRIG).
