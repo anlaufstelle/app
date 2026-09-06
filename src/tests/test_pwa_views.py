@@ -730,7 +730,11 @@ class TestPrecachedShellBumpGuard:
     # main-Ziel; die rekursiv gehashten Offline-Formular-Partials erhalten
     # eindeutige Label-/Feld-Beziehungen und Live-Regionen. Anders als der
     # reine Kommentar-/Whitespace-Fall oben aendert das ausgeliefertes Markup.
-    _PINNED_SHELL_HASH = "a95914c8271b668a15c73d6133a3ff21cbaaf7cc2b341acd24b47ed6b25781dc"
+    # Fix-Runde #1059: Der Skip-Link der eigenstaendig gestylten Offline-Seite
+    # erhaelt seine Fokusregeln im bereits CSP-gehashten Inline-Block. Der Hash
+    # wird auf den finalen Inhalt derselben unveroeffentlichten v45-Generation
+    # nachgezogen; es existiert keine ausgelieferte Zwischen-v45 im Feld.
+    _PINNED_SHELL_HASH = "64721e998a3b098fff13485571822c9ac6c745beb18538d5c16398f1e83f85b5"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

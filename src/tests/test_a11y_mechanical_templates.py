@@ -57,6 +57,14 @@ def test_standalone_template_has_skip_link_and_main_landmark(template: str) -> N
     assert '<main id="main-content"' in source
 
 
+@pytest.mark.parametrize("template", ("500.html", "503.html", "offline.html"))
+def test_self_styled_standalone_skip_link_works_without_tailwind(template: str) -> None:
+    source = _source(template)
+    assert '<a href="#main-content" class="skip-link">' in source
+    assert ".skip-link {" in source
+    assert ".skip-link:focus {" in source
+
+
 @pytest.mark.parametrize("template", BASE_INHERITED_TEMPLATES)
 def test_remaining_standalone_family_inherits_accessible_base(template: str) -> None:
     assert '{% extends "base.html" %}' in _source(template)

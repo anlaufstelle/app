@@ -656,11 +656,11 @@ CONTENT_SECURITY_POLICY = {
         "style-src": [
             "'self'",
             # src/templates/500.html
-            "'sha256-ihZyCwioNqKY8Y5RQ80S5h0NmUocyt17nt67LWBDkRo='",
+            "'sha256-op6qqhhTqf1/gXH78cQgqQomE5hpCqcbkaPF4Qm5hQU='",
             # src/templates/503.html
-            "'sha256-smcD4VNUZNP7lE3q3hqIklcptwARfdDqbtDrd3iaqu8='",
+            "'sha256-3gnUiIkaTyZ/Prnf8LPKYhVCh+5xq7GQB9R/Nd5bVXI='",
             # src/templates/offline.html
-            "'sha256-8Nca09dL0IQR+QxkyIdvyuGA1Vhg0qhdZUqzFccOUls='",
+            "'sha256-kOi6gKgacK2jTjatd+U3zPCXFGrY3ICV4HgFmyjCabw='",
         ],
         "img-src": ["'self'", "data:"],
         "font-src": ["'self'"],
