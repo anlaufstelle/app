@@ -16,7 +16,7 @@
     {% if messages %}
     <div class="mb-4">
         {% for message in messages %}
-        <div class="p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+        <div{% if forloop.first %} id="sudo-auth-message"{% endif %} class="p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}">
             {{ message }}
         </div>
         {% endfor %}
@@ -28,12 +28,13 @@
         <input type="hidden" name="next" value="{{ next }}">
         <div>
             <label for="id_password" class="block text-sm font-medium text-ink-soft">{% trans "Passwort" %}</label>
-            {% include "components/_password_input.html" with name="password" input_id="id_password" required=True autofocus=True autocomplete="current-password" input_class="mt-1 block w-full rounded-md border border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas" %}
+            {% include "components/_password_input.html" with name="password" input_id="id_password" required=True autofocus=True autocomplete="current-password" invalid=messages described_by="sudo-auth-message" input_class="mt-1 block w-full rounded-md border border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas" %}
         </div>
         {% if needs_otp %}
         <div>
             <label for="id_otp_token" class="block text-sm font-medium text-ink-soft">{% trans "Bestätigungscode (2FA)" %}</label>
             <input type="text" name="otp_token" id="id_otp_token" required inputmode="numeric" autocomplete="one-time-code"
+                {% if messages %}aria-invalid="true" aria-describedby="sudo-auth-message"{% endif %}
                 placeholder="{% trans 'OTP oder Backup-Code' %}"
                 class="mt-1 block w-full rounded-md border border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas">
             <p class="mt-1 text-xs text-ink-muted">{% trans "Geben Sie den aktuellen 6-stelligen Code Ihrer Authenticator-App oder einen Backup-Code ein." %}</p>

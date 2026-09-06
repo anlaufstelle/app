@@ -37,7 +37,10 @@
       {# Refs #2060: Diese Seite laedt offline-db.js (Verbund oben) — ohne das Attribut #}
       {# faellt der Versionskonflikt-Hinweis hier auf den deutschen Rueckfall zurueck. #}
       data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
-    <div class="w-full max-w-[380px]">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-[380px]">
         {# Logo + Org-Header (Design: als-screens.jsx LoginScreen) #}
         <div class="text-center mb-8">
             <div class="w-12 h-12 rounded-xl bg-accent flex items-center justify-center mx-auto mb-4">
@@ -49,7 +52,7 @@
 
         <div class="bg-surface border border-subtle rounded-[10px] p-7">
             {% if form.errors %}
-            <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
+            <div id="login-errors" class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
                 {% if form.non_field_errors %}
                     {# Spezifische Meldungen (z.B. Account-Lockout, Refs #612) durchreichen. #}
                     {% for error in form.non_field_errors %}
@@ -69,11 +72,12 @@
                 <div>
                     <label for="id_username" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Benutzername" %}</label>
                     <input type="text" name="username" id="id_username" autofocus required
+                        {% if form.errors %}aria-invalid="true" aria-describedby="login-errors"{% endif %}
                         class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5">
                 </div>
                 <div>
                     <label for="id_password" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Passwort" %}</label>
-                    {% include "components/_password_input.html" with name="password" input_id="id_password" required=True autocomplete="current-password" input_class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5" %}
+                    {% include "components/_password_input.html" with name="password" input_id="id_password" required=True autocomplete="current-password" invalid=form.errors described_by="login-errors" input_class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5" %}
                 </div>
                 <button type="submit"
                     class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">
@@ -120,7 +124,7 @@
         {# versionslos (Fingerprinting). Quellcode-/Lizenzlink bleiben, AGPL §13 verlangt #}
         {# nur den Zugang; die Rechtstexte muessen ohne Login erreichbar sein (Refs #1641, #2076). #}
         {% include "components/_public_footer.html" with footer_compact=True %}
-    </div>
+    </main>
     <script src="{% static 'js/csrf.js' %}"></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
     <script src="{% static 'js/auth-bootstrap.js' %}" defer></script>

@@ -9,7 +9,10 @@
     {% include "components/_document_head.html" %}
 </head>
 <body class="min-h-screen bg-canvas flex items-center justify-center p-6">
-    <div class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7" data-testid="recovery-invalid">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7" data-testid="recovery-invalid">
         <h1 class="text-2xl font-bold text-ink mb-2">{% trans "Link ungültig" %}</h1>
         <p class="text-sm text-ink-muted mb-6">
             {% blocktrans %}Der Entsperr-Link ist nicht mehr gültig oder bereits verbraucht. Sie können einen neuen Link anfordern.{% endblocktrans %}
@@ -21,6 +24,6 @@
             {% trans "Zurück zur Anmeldung" %}
         </a>
         {% include "components/_public_footer.html" with footer_compact=True %}
-    </div>
+    </main>
 </body>
 </html>

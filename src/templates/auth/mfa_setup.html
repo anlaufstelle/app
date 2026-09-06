@@ -9,7 +9,10 @@
     {% include "components/_document_head.html" %}
 </head>
 <body class="min-h-screen bg-canvas flex items-center justify-center">
-    <div class="w-full max-w-md p-6 bg-surface rounded-lg shadow-md">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-md p-6 bg-surface rounded-lg shadow-md">
         <h1 class="text-2xl font-bold text-center text-accent mb-4">
             {% trans "Zwei-Faktor-Authentifizierung" %}
         </h1>
@@ -23,7 +26,7 @@
 
         {% if messages %}
             {% for message in messages %}
-            <div class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
+            <div{% if forloop.first %} id="mfa-setup-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
                 {{ message }}
             </div>
             {% endfor %}
@@ -46,6 +49,7 @@
                     {% trans "6-stelliger Code" %}
                 </label>
                 <input type="text" name="token" id="id_token" required autofocus
+                       {% if messages %}aria-invalid="true" aria-describedby="mfa-setup-message"{% endif %}
                        inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
                        data-testid="mfa-token-input"
                        class="mt-1 block w-full rounded-md border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border">
@@ -66,6 +70,6 @@
             </form>
         </div>
         {% include "components/_public_footer.html" with footer_compact=True %}
-    </div>
+    </main>
 </body>
 </html>

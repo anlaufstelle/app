@@ -53,13 +53,14 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <a href="#main-content" class="sr-only focus:not-sr-only">{% trans "Zum Inhalt springen" %}</a>
+    <main id="main-content" class="container">
         <p class="error-code">500</p>
         <h1 class="error-title">{% trans "Serverfehler" %}</h1>
         <p class="error-message">{% trans "Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut." %}</p>
         <div>
             <a href="/" class="back-link">{% trans "Zurück zur Startseite" %}</a>
         </div>
-    </div>
+    </main>
 </body>
 </html>

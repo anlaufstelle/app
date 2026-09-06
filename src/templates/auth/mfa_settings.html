@@ -11,7 +11,7 @@
 
     {% if messages %}
         {% for message in messages %}
-        <div class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
+        <div{% if forloop.first %} id="mfa-settings-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
             {{ message }}
         </div>
         {% endfor %}
@@ -59,12 +59,14 @@
                 </p>
                 {% endif %}
                 <button type="button" @click="toggle"
+                        aria-expanded="false" :aria-expanded="regenOpen.toString()"
+                        aria-controls="backup-codes-regenerate-panel"
                         data-testid="backup-codes-regenerate-toggle"
                         class="inline-flex items-center px-3 py-2 border border-subtle text-xs font-medium rounded-md hover:bg-canvas">
                     {% trans "Neue Backup-Codes generieren" %}
                 </button>
 
-                <div x-show="regenOpen" x-cloak x-transition class="mt-3 p-3 bg-canvas border border-subtle rounded-[10px]">
+                <div id="backup-codes-regenerate-panel" x-show="regenOpen" x-cloak x-transition class="mt-3 p-3 bg-canvas border border-subtle rounded-[10px]">
                     <p class="text-xs text-ink-soft mb-2">
                         {% trans "Zur Bestätigung einen aktuellen 6-stelligen TOTP-Code eingeben. Der bisherige Satz wird sofort ungültig." %}
                     </p>
@@ -73,6 +75,7 @@
                         <div class="flex-1 min-w-[8rem]">
                             <label for="id_regen_token" class="block text-xs font-medium text-ink-soft mb-1">{% trans "TOTP-Code" %}</label>
                             <input type="text" name="token" id="id_regen_token" required
+                                   {% if messages %}aria-invalid="true" aria-describedby="mfa-settings-message"{% endif %}
                                    inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
                                    data-testid="backup-codes-regenerate-token"
                                    class="w-full rounded-md border-subtle text-sm focus:border-accent focus:ring-accent px-3 py-2 border">

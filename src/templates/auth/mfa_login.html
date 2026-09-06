@@ -19,7 +19,10 @@
     <script defer src="{% static 'js/alpine-csp.min.js' %}"></script>
 </head>
 <body class="min-h-screen bg-canvas flex items-center justify-center">
-    <div class="w-full max-w-sm p-6 bg-surface rounded-lg shadow-md"
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-sm p-6 bg-surface rounded-lg shadow-md"
          x-data="mfaModeSwitch"
          data-initial-mode="{{ last_mode|default:'totp' }}">
         <h1 class="text-2xl font-bold text-center text-accent mb-4">
@@ -28,7 +31,7 @@
 
         {% if messages %}
             {% for message in messages %}
-            <div class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
+            <div{% if forloop.first %} id="mfa-login-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
                 {{ message }}
             </div>
             {% endfor %}
@@ -85,6 +88,7 @@
                 {# pattern-invalid+unfokussierbar im DOM und blockiert den Submit; #}
                 {# disabled nimmt es aus Constraint-Validierung UND POST (Refs #1378). #}
                 <input type="text" name="token" id="id_token_totp"
+                       {% if messages %}aria-invalid="true" aria-describedby="mfa-login-message"{% endif %}
                        x-bind:required="isTotp"
                        x-bind:disabled="isBackup"
                        x-bind:autofocus="isTotp"
@@ -98,6 +102,7 @@
                     {% trans "Backup-Code" %}
                 </label>
                 <input type="text" name="token" id="id_token_backup"
+                       {% if messages %}aria-invalid="true" aria-describedby="mfa-login-message"{% endif %}
                        x-bind:required="isBackup"
                        x-bind:disabled="isTotp"
                        inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"
@@ -132,7 +137,7 @@
             </form>
         </div>
         {% include "components/_public_footer.html" with footer_compact=True %}
-    </div>
+    </main>
     {% if has_webauthn %}
     {# CSP-striktes Passkey-Bundle (kein Inline/eval), self-hosted via collectstatic. #}
     {% render_otp_webauthn_auth_scripts %}

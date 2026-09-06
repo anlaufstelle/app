@@ -9,27 +9,24 @@
     {% include "components/_document_head.html" %}
 </head>
 <body class="min-h-screen bg-canvas flex items-center justify-center p-6">
-    <div class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7">
         <h1 class="text-2xl font-bold text-ink mb-2">{% trans "Konto entsperren" %}</h1>
         <p class="text-sm text-ink-muted mb-6">
             {% trans "Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link, mit dem Sie Ihr Konto entsperren können." %}
         </p>
 
-        {% if form.errors %}
+        {% if form.non_field_errors %}
         <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
-            {% for field in form %}{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}
             {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
         </div>
         {% endif %}
 
         <form method="post" class="space-y-4" data-testid="recovery-request-form">
             {% csrf_token %}
-            <div>
-                <label for="id_email" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
-                    {% trans "E-Mail-Adresse" %}
-                </label>
-                {{ form.email }}
-            </div>
+            {% include "components/_form_field.html" with field=form.email %}
             <button type="submit"
                     class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">
                 {% trans "Link senden" %}
@@ -45,6 +42,6 @@
             </a>
         </div>
         {% include "components/_public_footer.html" with footer_compact=True %}
-    </div>
+    </main>
 </body>
 </html>
