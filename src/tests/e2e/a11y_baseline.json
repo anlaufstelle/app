@@ -1,14 +1,5 @@
 {
   "event_create_errors": {
     "listitem": 1
-  },
-  "start_staff": {
-    "color-contrast": 1
-  },
-  "zeitstrom": {
-    "color-contrast": 1
-  },
-  "zeitstrom_assistant": {
-    "color-contrast": 1
   }
 }
