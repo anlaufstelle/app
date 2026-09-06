@@ -103,15 +103,22 @@ def report_modul():
 
 @pytest.fixture
 def mutmut_unveraendert():
-    """mutmuts Sperre vor und nach dem Test im Originalzustand halten."""
+    """mutmuts Sperre und Trampolin-Aufbau vor/nach dem Test im Original halten."""
     original = file_mutation.MutationVisitor._skip_node_and_children
-    assert not getattr(original, "_anlaufstelle_atomic_patch", False), (
-        "mutmut ist beim Testeintritt bereits gepatcht — ein frueherer Test hat nicht aufgeraeumt."
+    original_trampolin = file_mutation.function_trampoline_arrangement
+    gepatchte_stellen = (
+        ("_skip_node_and_children", original),
+        ("function_trampoline_arrangement", original_trampolin),
     )
+    for stelle, funktion in gepatchte_stellen:
+        assert not getattr(funktion, "_anlaufstelle_atomic_patch", False), (
+            f"mutmut ist beim Testeintritt an {stelle} bereits gepatcht — ein frueherer Test hat nicht aufgeraeumt."
+        )
     try:
         yield original
     finally:
         file_mutation.MutationVisitor._skip_node_and_children = original
+        file_mutation.function_trampoline_arrangement = original_trampolin
 
 
 def _mutanten(dekorator: str) -> list[str]:
@@ -197,6 +204,85 @@ def test_pragma_no_mutate_bleibt_wirksam(runner, mutmut_unveraendert) -> None:
     runner._patch_mutmut_atomic_decorators()
     quelle = "@transaction.atomic\ndef probe(wert):  # pragma: no mutate block\n    return wert + 1\n"
     assert list(file_mutation.mutate_file_contents("probe.py", quelle).mutant_names) == []
+
+
+# ── (b2) Query-Neutralitaet: genau EINE atomic-Ebene pro Aufruf ─────────────
+SYNTHETISCHE_QUELLE = (
+    "from django.db import transaction\n\n\n@transaction.atomic\ndef dienst(wert):\n    return wert + 1\n"
+)
+
+
+def _erzeuge_mutantenquelle(tmp_path: Path):
+    """Die synthetische Probe durch mutmut schicken — Datei liegt in ``tmp_path``.
+
+    Nie im echten Baum ablegen (Standardblock 3): der Mutations-Scanner laeuft
+    ueber ``src/`` und wuerde die Probe sonst mitzaehlen.
+    """
+    quelle = tmp_path / "probe_atomic_dienst.py"
+    quelle.write_text(SYNTHETISCHE_QUELLE, encoding="utf-8")
+    return file_mutation.mutate_file_contents(str(quelle), quelle.read_text(encoding="utf-8"))
+
+
+def test_trampolin_wird_nicht_zusaetzlich_in_atomic_gewickelt(runner, mutmut_unveraendert, tmp_path) -> None:
+    """Genau eine ``atomic``-Ebene pro Aufruf (Refs #2100, Checkpoint-Befund 2026-09-06).
+
+    mutmuts ``function_trampoline_arrangement`` legt die Dekoratoren der
+    Originalfunktion SOWOHL auf das Trampolin ALS AUCH auf jede Kopie. Bei
+    ``@transaction.atomic`` heisst das: pro Aufruf ein zusaetzliches
+    ``SAVEPOINT``/``RELEASE`` — die exakten Query-Pins des Projekts
+    (``test_restriction_lock_order.py::TestGateQueryCost``) messen das als
+    16 statt 14 Queries und reissen den Stats-Lauf.
+
+    Verteilung laut Ruling: Trampolin UNdekoriert, Kopien (``_orig`` +
+    Mutanten) behalten ``@transaction.atomic`` — das ist der Code unter Test.
+    """
+    runner._patch_mutmut_atomic_decorators()
+    ergebnis = _erzeuge_mutantenquelle(tmp_path)
+    code = ergebnis.code
+
+    trampolin = runner.dekoratoren_ueber(code, "dienst")
+    assert trampolin == ["@_mutmut_mutated(mutants_x_dienst__mutmut)"], (
+        "Das Trampolin traegt neben dem Dispatcher-Dekorator noch einen weiteren — "
+        f"gefunden: {trampolin}. Zwei geschachtelte atomic-Bloecke kosten pro Aufruf "
+        "zwei zusaetzliche Queries (SAVEPOINT/RELEASE)."
+    )
+
+    kopien = ["x_dienst__mutmut_orig", *ergebnis.mutant_names]
+    assert len(kopien) > 1, "Die Probe erzeugt keine Mutanten — der Patch wirkt nicht"
+    for name in kopien:
+        assert runner.dekoratoren_ueber(code, name) == ["@transaction.atomic"], (
+            f"{name}: die Kopie unter Test muss genau eine atomic-Ebene behalten"
+        )
+
+
+def test_genau_eine_atomic_ebene_pro_aufrufpfad(runner, mutmut_unveraendert, tmp_path) -> None:
+    """Zaehlnachweis: je Aufrufpfad (Trampolin -> Kopie) genau ein ``atomic``."""
+    runner._patch_mutmut_atomic_decorators()
+    ergebnis = _erzeuge_mutantenquelle(tmp_path)
+    for name in ["x_dienst__mutmut_orig", *ergebnis.mutant_names]:
+        ebenen = runner.dekoratoren_ueber(ergebnis.code, "dienst").count("@transaction.atomic")
+        ebenen += runner.dekoratoren_ueber(ergebnis.code, name).count("@transaction.atomic")
+        assert ebenen == 1, f"Aufrufpfad dienst -> {name}: {ebenen} atomic-Ebenen statt genau einer"
+
+
+def test_undekorierte_funktionen_behalten_ihr_trampolin(runner, mutmut_unveraendert, tmp_path) -> None:
+    """Der Zusatzpatch fasst nur ``atomic``-Funktionen an."""
+    runner._patch_mutmut_atomic_decorators()
+    quelle = tmp_path / "probe_schlicht.py"
+    quelle.write_text("def dienst(wert):\n    return wert + 1\n", encoding="utf-8")
+    code = file_mutation.mutate_file_contents(str(quelle), quelle.read_text(encoding="utf-8")).code
+    assert runner.dekoratoren_ueber(code, "dienst") == ["@_mutmut_mutated(mutants_x_dienst__mutmut)"]
+    assert runner.dekoratoren_ueber(code, "x_dienst__mutmut_orig") == []
+
+
+def test_trampolin_stelle_in_mutmut_sieht_aus_wie_erwartet(runner) -> None:
+    """Fingerabdruck von ``function_trampoline_arrangement`` (Recheck bei Bump)."""
+    quelltext = inspect.getsource(file_mutation.function_trampoline_arrangement)
+    fehlend = [zeile for zeile in runner.MUTMUT_TRAMPOLINE_BLOCK_FINGERPRINT if zeile not in quelltext]
+    assert not fehlend, (
+        "Der von Refs #2100 gepatchte Trampolin-Aufbau hat sich geaendert — fehlende Zeilen: "
+        f"{fehlend}. Patch pruefen statt anpassen: {RECHECK}"
+    )
 
 
 # ── (c) Gleichlauf mit dem Blindstellen-Report ──────────────────────────────
