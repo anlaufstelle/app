@@ -220,7 +220,7 @@ Zählweise: je Welle alle Commits auf dem Hauptzweig (main), einschließlich der
 | Welle | Inhalt | Befunde | Commits auf main (Basis + Fix-Runde 1 + Integrationsnachträge) |
 |---|---|---|---|
 | B2 — Fix-Welle mechanisch | Rein additive Auszeichnungen: Beschriftungen, `aria-label`, `for`/`id`, Tabellen-Zeilenköpfe, Farbklassen, der Rahmen-Token | 37 | 14 — `af01a9f3`…`40de9876` (7 Basis-Commits) + `073b7693` (Kontrast-Nachtrag Übergabe-Zeitstempel) + `ee497379`…`fe945d77` (4 Commits Fix-Runde 1) + `47128fe2`, `68400340` (2 Integrationsnachträge: PWA-Shell-Cache-Version, E2E-Selektoren) |
-| B2' — Fix-Welle Semantik/JS | Zustandsbehaftete Bedienmuster (Aufklapp-/Auswahlzustände, Kombinationsfeld), Live-Bereiche nach Teilaktualisierung, Fokus-Manager, Alpine-/JS-Anbindung | 10 | 11 — `b1a8c70f`…`2d768a15` (5 Basis-Commits) + `f94f2822`…`58e0d9ee` (4 Commits Fix-Runde 1) + `b6081408`, `b514fbfa` (2 Integrationsnachträge: E2E-Selektoren, Kommentar-Angleichung) |
+| B2' — Fix-Welle Semantik/JS | Zustandsbehaftete Bedienmuster (Aufklapp-/Auswahlzustände, Kombinationsfeld), Live-Bereiche nach Teilaktualisierung, Fokus-Manager, Alpine-/JS-Anbindung | 10 | 12 — `b1a8c70f`…`2d768a15` (5 Basis-Commits) + `f94f2822`…`58e0d9ee` (4 Commits Fix-Runde 1) + `b6081408`, `b514fbfa`, `c4873161` (3 Integrationsnachträge: E2E-Selektoren, Kommentar-Angleichung, Eingrenzung eines Rendering-Tests nach dem Zusammenführen mit der mechanischen Welle) |
 
 ### 2.5 Ein automatisierter Befund ohne gefundene Ursache
 
@@ -244,7 +244,7 @@ Auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler meldet die automatis
 
 ### 3.2 Prüfschritte
 
-Jede Zeile wird mit **bestanden / nicht bestanden / nicht prüfbar** und einer Bemerkung abgeschlossen; zusätzlich werden Screenreader-Version und Browser notiert. Die Spalte „Bezug“ verweist auf die Befunde aus § 2, deren Korrektur hier gegengeprüft wird.
+Jede Zeile wird mit **bestanden / nicht bestanden / nicht prüfbar** und einer Bemerkung abgeschlossen; zusätzlich werden Screenreader-Version und Browser notiert. Die Spalte „Bezug“ verweist auf die Befunde aus § 2, deren Korrektur hier gegengeprüft wird. Die Prüfpunkte M-01 bis M-15 stammen aus dem Vorlagen-Audit (manuell zu prüfende Befunde); M-16 bis M-18 sind Ergänzungen dieses Protokolls für Kriterien, die kein Werkzeug abdeckt (Skip-Link-Gegenhören, Vergrößerung/Textabstände, reine Tastaturbedienung).
 
 | Nr. | Seite / Bedienelement | Prüfschritt | Erwartung | Bezug | Ergebnis |
 |---|---|---|---|---|---|
