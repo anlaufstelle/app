@@ -1033,7 +1033,8 @@ class TestTenantModelScopeGuard:
             "Zweig ist heute unbenutzt und im Docstring NICHT als Ops-Modus dokumentiert. "
             "Cross-Review Fix-Runde 1: als Freibrief belassen, weil diese Lane test-only "
             "ist — das Engerziehen (``facility`` verpflichtend / eigener Ops-Einstieg) "
-            "gehoert in ein Folge-Ticket."
+            "laeuft als Folge-Ticket #2151 "
+            "(https://github.com/anlaufstelle/app/issues/2151)."
         ),
         # --- (4) Auth-Grenze: Lockout/Recovery vor der Facility-Wahl --------
         "security/lockout_recovery.py:_latest_failed_anchor:AuditLog": (
@@ -1077,7 +1078,8 @@ class TestTenantModelScopeGuard:
             "``facility=None`` aber zu (``forms/events.py``, ``forms/cases.py``, "
             "``forms/workitems.py``), ein kuenftiger Aufrufer loeste damit "
             "installationsweit auf. Als Freibrief belassen, weil diese Lane test-only "
-            "ist — Engerziehen gehoert in ein Folge-Ticket."
+            "ist — Engerziehen laeuft als Folge-Ticket #2151 "
+            "(https://github.com/anlaufstelle/app/issues/2151)."
         ),
         "client/main.py:_normalize_document_type_kwarg:DocumentType": (
             "Aufloesung der ``document_type_id``-Schreibweise; die Facility-Grenze zieht "
