@@ -14,6 +14,7 @@ Screenreader-Audit (B3) findet hier den maschinell pruefbaren Teil.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 from django.urls import reverse
@@ -36,6 +37,19 @@ def _id_count(html: str, element_id: str) -> int:
     uebersehen wuerde.
     """
     return len(re.findall(rf'(?:^|\s)id="{re.escape(element_id)}"', html))
+
+
+def _autocomplete_label(html: str) -> str:
+    """Das <label> des Personen-Autocompletes — ueber das Eingabefeld gefunden.
+
+    Ein Suchen nach ">Person" traefe auch den Navigationseintrag
+    „Person anlegen"; das Label ist nur ueber seine Nachbarschaft zum
+    ``aria-label="Person suchen"``-Feld eindeutig.
+    """
+    input_at = html.index('aria-label="Person suchen"')
+    label_end = html.rindex("</label>", 0, input_at)
+    label_start = html.rindex("<label", 0, label_end)
+    return html[label_start:label_end]
 
 
 def _tag_with(html: str, needle: str) -> str:
@@ -337,3 +351,85 @@ class TestTimeFilterTabs:
         spans = re.findall(r'<span class="time-filter-tab-time[^"]*"', html)
         assert spans and all("text-ink-muted" in span for span in spans)
         assert not any("text-accent" in span for span in spans)
+
+
+@pytest.mark.django_db
+class TestWorkitemClientAutocomplete:
+    """A11Y-026 / #1989 — die gedriftete Kopie in ``workitems/form.html``."""
+
+    URL_NAME = "core:workitem_create"
+
+    def test_form_uses_the_shared_partial_instead_of_a_copy(self):
+        """Die Drift endet nur, wenn das Markup EINMAL existiert."""
+        form = Path("src/templates/core/workitems/form.html").read_text(encoding="utf-8")
+
+        assert "components/_client_autocomplete.html" in form
+        # Der Alpine-Scope steht jetzt in der Partial, nicht mehr im Formular.
+        assert 'x-data="clientAutocomplete"' not in form
+        assert "data-autocomplete-url" not in form
+
+    def test_input_is_a_combobox(self, client, staff_user):
+        html = _html(client, staff_user, reverse(self.URL_NAME))
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+
+        assert 'role="combobox"' in tag, tag
+        assert ':aria-expanded="ariaExpanded"' in tag, tag
+        assert 'aria-autocomplete="list"' in tag, tag
+        assert 'aria-controls="client-autocomplete-list"' in tag, tag
+
+    @pytest.mark.parametrize(
+        "handler",
+        [
+            "@keydown.arrow-down.prevent=&quot;moveHighlightDown&quot;",
+            "@keydown.arrow-up.prevent=&quot;moveHighlightUp&quot;",
+            "@keydown.enter.prevent=&quot;confirmHighlight&quot;",
+            "@keydown.escape=&quot;hideResults&quot;",
+        ],
+    )
+    def test_the_four_keyboard_handlers_are_wired(self, client, staff_user, handler):
+        html = _html(client, staff_user, reverse(self.URL_NAME))
+        plain = handler.replace("&quot;", '"')
+
+        assert plain in html, plain
+
+    def test_result_list_carries_listbox_and_option_roles(self, client, staff_user):
+        html = _html(client, staff_user, reverse(self.URL_NAME))
+
+        listbox = _tag_with(html, 'id="client-autocomplete-list"')
+        assert 'role="listbox"' in listbox, listbox
+        assert _id_count(html, "client-autocomplete-list") == 1
+
+        option = _tag_with(html, 'role="option"')
+        assert ':aria-selected="c.isHighlighted"' in option, option
+
+    def test_the_optional_field_keeps_no_required_marker(self, client, staff_user):
+        """``WorkItemForm.client`` ist optional (Refs #1786) — ein Sternchen
+        oder ``aria-required`` waere hier schlicht falsch."""
+        html = _html(client, staff_user, reverse(self.URL_NAME))
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+
+        assert "aria-required" not in tag, tag
+        assert "*" not in _autocomplete_label(html)
+
+    def test_the_field_names_are_unchanged(self, client, staff_user):
+        """Verhaltensneutral: dasselbe hidden input, derselbe Scope."""
+        html = _html(client, staff_user, reverse(self.URL_NAME))
+
+        assert 'name="client"' in html
+        assert ':value="selectedId"' in html
+        assert 'x-data="clientAutocomplete"' in html
+
+    def test_pinned_branch_is_untouched(self, client, staff_user, sample_workitem):
+        """Der ``client_locked``-Zweig bleibt ohne Autocomplete."""
+        html = _html(client, staff_user, reverse("core:workitem_update", args=[sample_workitem.pk]))
+
+        assert 'data-testid="client-pinned"' in html
+        assert 'role="combobox"' not in html
+
+    def test_case_form_keeps_its_required_marker(self, client, staff_user, client_identified):
+        """Gegenprobe: ``CaseForm.client`` ist Pflicht — dort bleibt das Sternchen."""
+        html = _html(client, staff_user, reverse("core:case_create"))
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+
+        assert 'aria-required="true"' in tag, tag
+        assert "*" in _autocomplete_label(html)

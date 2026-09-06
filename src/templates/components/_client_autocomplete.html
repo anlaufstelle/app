@@ -4,18 +4,22 @@ Kontakterfassung). Parameter: ``autocomplete_component`` (x-data-Name; nur
 setzen, wenn der Alpine-Scope HIER liegen soll — die Kontakterfassung haengt
 ``eventClientAutocomplete`` bewusst am <form>, damit das Fall-Dropdown
 denselben Scope liest), ``client_form`` (Fehlerquelle), ``required_field``
-(festes Pflicht-Sternchen + aria-required/aria-invalid), ``anonymous_mode``
+(festes Pflicht-Sternchen + aria-required/aria-invalid; ohne das Flag
+bleibt das Feld optional und traegt KEIN Sternchen -- die Aufgaben-Maske
+aus #1989 hat ein optionales ``client``-Feld), ``anonymous_mode``
 (Stern nur wenn nicht anonym erlaubt), ``min_stage_hint`` (Stufen-Erklärung
 im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person),
 ``inline_create`` (HTMX-Modal aus dem Kontaktformular).
-Die gedriftete Fassung in workitems/form.html wird bewusst NICHT angefasst —
-ihre a11y-Angleichung ist Ticket #1989.{% endcomment %}
+Refs #1989: Die frueher gedriftete Fassung in workitems/form.html bindet
+diese Partial jetzt ein — dort ist ``client`` optional, deshalb haengt das
+Sternchen an ``required_field`` statt allein am fehlenden
+``anonymous_mode``.{% endcomment %}
 <div{% if inline_create %} @client-inline-created.window="selectItem($event.detail)"{% endif %}{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
      data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
      data-initial-client-id="{{ client_id|default:'' }}"
      data-autocomplete-url="{% url 'core:client_autocomplete' %}"{% endif %}>
     <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %}{% if anonymous_mode %}
-        <span x-show="notAnonymousAllowed" x-cloak class="text-red-500">*</span>{% else %} *{% endif %}
+        <span x-show="notAnonymousAllowed" x-cloak class="text-red-500">*</span>{% elif required_field %} *{% endif %}
     </label>
     <div class="relative">
         <input type="text"
