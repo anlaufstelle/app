@@ -46,10 +46,13 @@ des vollen Labels bleiben (WCAG 2.5.3, siehe components/_action_button.html).
 {# Operatorvorrang lesbar. Die Aktionen stehen deshalb GENAU EINMAL hier;    #}
 {# nur der ⋮-Rahmen wird bedingt gerendert, ``position`` folgt der Variable. #}
 {% if secondary_action_position == 'overflow' %}
-<div x-data="mobileOverflowMenu" class="relative">
-    {% include "components/_action_overflow.html" with variant=variant %}
+{# Refs #1059 (A11Y-015): Escape schliesst das Menue und gibt den Fokus an #}
+{# den ⋮-Knopf zurueck; die Panel-id traegt die Variante, weil die           #}
+{# Detailseite dieses Partial desktop UND mobil rendert (sonst Doppel-id).   #}
+<div x-data="mobileOverflowMenu" class="relative" @keydown.escape="closeWithFocus">
+    {% include "components/_action_overflow.html" with variant=variant panel_id="event-overflow-"|add:variant %}
     {# Refs #1859 (B3): max-w klemmt das 224-px-Panel auf die Viewportbreite. #}
-    <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
+    <div id="event-overflow-{{ variant }}" x-show="mobileMenu" @click.away="close" x-cloak x-transition
          class="absolute right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
 {% endif %}
         {% if show_to_client %}

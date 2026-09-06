@@ -56,10 +56,13 @@ vollen Labels bleiben (WCAG 2.5.3, siehe components/_action_button.html).
 {# fuenf — das Menue buendelt hier wirklich eine Auswahl und bleibt.           #}
 {# ``is_lead_or_admin`` impliziert ``is_staff_or_above`` (core/models/user.py),#}
 {# dieses eine Praedikat genuegt also fuer die Verzweigung.                    #}
-<div x-data="mobileOverflowMenu" class="relative">
-    {% include "components/_action_overflow.html" with variant=variant %}
+{# Refs #1059 (A11Y-015): Escape schliesst das Menue und gibt den Fokus an #}
+{# den ⋮-Knopf zurueck; die Panel-id traegt die Variante, weil die           #}
+{# Detailseite dieses Partial desktop UND mobil rendert (sonst Doppel-id).   #}
+<div x-data="mobileOverflowMenu" class="relative" @keydown.escape="closeWithFocus">
+    {% include "components/_action_overflow.html" with variant=variant panel_id="client-overflow-"|add:variant %}
     {# Refs #1859 (B3): max-w klemmt das 224-px-Panel auf die Viewportbreite. #}
-    <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
+    <div id="client-overflow-{{ variant }}" x-show="mobileMenu" @click.away="close" x-cloak x-transition
          class="absolute right-0 mt-1 w-56 max-w-[calc(100vw-2rem)] bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
         {% include "components/_action_button.html" with variant=variant position="overflow" base_url=case_create_url query_param_name="client" query_param_value=client.pk label=label_case testid="client-new-case-btn" testid_mobile="mobile-client-new-case-btn" icon_path="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" %}
         {% include "core/clients/partials/_offline_toggle_action.html" with variant=variant position="overflow" %}

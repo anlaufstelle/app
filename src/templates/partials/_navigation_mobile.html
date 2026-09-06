@@ -17,12 +17,13 @@
         {% else %}
         {# 5-Slot-Standard-Layout fuer Facility-User (Neu / Zeitstrom / Aufgaben / Personen / Mehr). Refs #1126. #}
         {# Slot 1: Neu (+) Dropdown #}
-        <div class="relative" x-data="createMenu">
-            <button @click="toggle" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center text-ink-muted hover:text-accent" aria-label="{% trans 'Neu erstellen' %}" data-testid="mobile-nav-create">
+        {# Refs #1059 (A11Y-028/029): Zustand per aria-expanded, Escape gibt den Fokus zurueck. #}
+        <div class="relative" x-data="createMenu" @keydown.escape="closeWithFocus">
+            <button @click="toggle" x-ref="trigger" aria-haspopup="true" aria-expanded="false" :aria-expanded="ariaExpanded" aria-controls="mobile-create-menu" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center text-ink-muted hover:text-accent" aria-label="{% trans 'Neu erstellen' %}" data-testid="mobile-nav-create">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                 <span class="text-[12px] font-medium">{% trans "Neu" %}</span>
             </button>
-            <div x-show="createOpen" @click.away="close" x-cloak x-transition
+            <div id="mobile-create-menu" x-show="createOpen" @click.away="close" x-cloak x-transition
                  class="absolute bottom-full left-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50" data-testid="mobile-create-dropdown">
                 <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="mobile-create-event">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
@@ -58,20 +59,20 @@
         </a>
         {% endif %}
         {# Slot 5: Mehr (inkl. Suche, Übergabe und sonstiger Items) #}
-        <div class="relative" x-data="mobileMore">
+        <div class="relative" x-data="mobileMore" @keydown.escape="closeMoreWithFocus">
             {# ``true`` statt ``page``: der Sammelknopf ist selbst keine Seite, sondern #}
             {# oeffnet ein Dropdown — dasselbe Muster wie die Zeitraum-Pille          #}
             {# (core/statistics/_zeitraum_pill.html). Refs #2007.                     #}
-            <button @click="toggleMore"{% if more_active %} aria-current="true"{% endif %} class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if more_active %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
+            <button @click="toggleMore" x-ref="moreTrigger" aria-haspopup="true" aria-expanded="false" :aria-expanded="ariaMoreExpanded" aria-controls="mobile-more-items"{% if more_active %} aria-current="true"{% endif %} class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if more_active %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
                 <span class="text-[12px] font-medium">{% trans "Mehr" %}</span>
             </button>
-            <div x-show="moreOpen" @click.away="closeAll" x-cloak x-transition
+            <div id="mobile-more-items" x-show="moreOpen" @click.away="closeAll" x-cloak x-transition
                  class="absolute bottom-full right-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50"
                  data-testid="mobile-more-items">
                 {% if user.is_assistant_or_above %}
                 {# Suche im Mehr-Dropdown (vorher eigener Slot) #}
-                <button @click="toggleSearch" class="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-search">
+                <button @click="toggleSearch" aria-haspopup="true" aria-expanded="false" :aria-expanded="ariaSearchExpanded" aria-controls="mobile-search-overlay" class="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-search">
                     <svg aria-hidden="true" class="w-4 h-4 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     {% trans "Suche" %}
                 </button>
@@ -91,9 +92,12 @@
                 <form action="{% url 'set_language' %}" method="post" class="flex items-center gap-2 px-4 py-1">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
+                    {# Refs #1059 (A11Y-044): aktiver Sprachstand programmatisch bestimmbar. #}
                     <button type="submit" name="language" value="de" data-testid="mobile-nav-language-de"
+                            aria-pressed="{% if LANGUAGE_CODE == 'de' %}true{% else %}false{% endif %}"
                             class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-3 rounded text-[13px] font-bold {% if LANGUAGE_CODE == 'de' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">DE</button>
                     <button type="submit" name="language" value="en" data-testid="mobile-nav-language-en"
+                            aria-pressed="{% if LANGUAGE_CODE == 'en' %}true{% else %}false{% endif %}"
                             class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-3 rounded text-[13px] font-bold {% if LANGUAGE_CODE == 'en' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">EN</button>
                 </form>
                 <form method="post" action="{% url 'logout' %}">
@@ -108,7 +112,7 @@
             {# Refs #1735: derselbe Guard wie am Auslöser oben — global_search ist #}
             {# assistant+; für die Systemrolle war das Overlay-Markup unerreichbar. #}
             {% if user.is_assistant_or_above %}
-            <div x-show="searchOpen" x-cloak x-transition
+            <div id="mobile-search-overlay" x-show="searchOpen" x-cloak x-transition
                  class="fixed inset-x-0 top-0 z-[60] bg-surface shadow-lg border-b border-subtle p-4"
                  @click.away="closeSearch" @keydown.escape.window="closeSearch"
                  data-testid="mobile-search-overlay">

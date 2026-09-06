@@ -145,6 +145,23 @@ document.addEventListener("alpine:init", () => {
         close() {
             this.createOpen = false;
         },
+        // Refs #1059 (A11Y-028): Escape schliesst das Menue und gibt den Fokus
+        // an den Ausloeser zurueck (``x-ref="trigger"`` am Knopf). Bewusst
+        // getrennt von ``close()``, das auch an ``@click.away`` haengt — dort
+        // waere eine Fokusruecknahme Fokus-Diebstahl.
+        closeWithFocus() {
+            if (!this.createOpen) {
+                return;
+            }
+            this.createOpen = false;
+            if (this.$refs.trigger) {
+                this.$refs.trigger.focus();
+            }
+        },
+        // CSP-Build erlaubt nur Property-Pfade — String-Getter statt Inline.
+        get ariaExpanded() {
+            return this.createOpen ? "true" : "false";
+        },
     }));
 
     /** Mobile „Mehr"-Dropdown inkl. eingebettetem Search-Overlay. */
@@ -175,6 +192,26 @@ document.addEventListener("alpine:init", () => {
         },
         closeSearch() {
             this.searchOpen = false;
+        },
+        // Refs #1059 (A11Y-029): Escape auf dem Mehr-Dropdown. Der Guard auf
+        // ``moreOpen`` haelt die Taste folgenlos, solange nur das
+        // Such-Overlay offen ist (``toggleSearch`` schliesst das Dropdown) —
+        // sonst risse der Fokus aus dem Suchfeld zurueck auf den Mehr-Knopf.
+        closeMoreWithFocus() {
+            if (!this.moreOpen) {
+                return;
+            }
+            this.moreOpen = false;
+            if (this.$refs.moreTrigger) {
+                this.$refs.moreTrigger.focus();
+            }
+        },
+        // CSP-Build: String-Getter statt Inline-Ausdruck in :aria-expanded.
+        get ariaMoreExpanded() {
+            return this.moreOpen ? "true" : "false";
+        },
+        get ariaSearchExpanded() {
+            return this.searchOpen ? "true" : "false";
         },
     }));
 

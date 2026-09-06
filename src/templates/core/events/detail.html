@@ -172,7 +172,8 @@
                     </span>
                     <span class="text-ink-muted">{{ entry.changed_by.display_name|default:entry.changed_by.username }}</span>
                     {% if diff.fields %}
-                    <button @click="toggle" class="text-ink-muted hover:text-ink-muted ml-auto text-xs underline" type="button">
+                    {# Refs #1059 (A11Y-040): Zustand des Diff-Blocks programmatisch bestimmbar. #}
+                    <button @click="toggle" aria-expanded="false" :aria-expanded="ariaExpanded" aria-controls="history-detail-{{ forloop.counter0 }}" class="text-ink-muted hover:text-ink-muted ml-auto text-xs underline" type="button">
                         <span x-show="isClosed">{% trans "Details" %}</span>
                         <span x-show="open" x-cloak>{% trans "Ausblenden" %}</span>
                     </button>
@@ -180,7 +181,7 @@
                 </div>
 
                 {% if diff.fields %}
-                <div x-show="open" x-cloak class="mt-2 ml-4 text-sm">
+                <div id="history-detail-{{ forloop.counter0 }}" x-show="open" x-cloak class="mt-2 ml-4 text-sm">
                     {% if diff.action == "create" %}
                     <dl class="space-y-1">
                         {% for f in diff.fields %}

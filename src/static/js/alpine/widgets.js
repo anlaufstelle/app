@@ -92,6 +92,25 @@ document.addEventListener("alpine:init", () => {
         close() {
             this.mobileMenu = false;
         },
+        // Refs #1059 (A11Y-015): Escape schliesst das Menue UND gibt den Fokus
+        // an den ausloesenden ``⋮``-Knopf zurueck (``x-ref="trigger"`` in
+        // components/_action_overflow.html). Bewusst NICHT in ``close()``:
+        // ``@click.away="close"`` feuert bei jedem Klick daneben — dort waere
+        // eine Fokusruecknahme Fokus-Diebstahl. Der Guard auf ``mobileMenu``
+        // haelt Escape bei geschlossenem Menue folgenlos.
+        closeWithFocus() {
+            if (!this.mobileMenu) {
+                return;
+            }
+            this.mobileMenu = false;
+            if (this.$refs.trigger) {
+                this.$refs.trigger.focus();
+            }
+        },
+        // CSP-Build: String-Getter statt Inline-Ausdruck in :aria-expanded.
+        get ariaExpanded() {
+            return this.mobileMenu ? "true" : "false";
+        },
         // Refs #1763: ersetzt das Inline-Statement-Paar
         // ``@click="close(); toggleOffline()"`` im mobilen Overflow-Menue von
         // clients/detail.html — der @alpinejs/csp-Build wertet Event-Handler
@@ -115,6 +134,21 @@ document.addEventListener("alpine:init", () => {
         },
         close() {
             this.open = false;
+        },
+        // Refs #1059 (A11Y-015): dieselbe Escape-/Fokus-Semantik wie
+        // ``mobileOverflowMenu`` — damit ein kuenftiges Template diese
+        // generische Komponente ohne a11y-Rueckschritt verwenden kann.
+        closeWithFocus() {
+            if (!this.open) {
+                return;
+            }
+            this.open = false;
+            if (this.$refs.trigger) {
+                this.$refs.trigger.focus();
+            }
+        },
+        get ariaExpanded() {
+            return this.open ? "true" : "false";
         },
     }));
 
@@ -187,6 +221,12 @@ document.addEventListener("alpine:init", () => {
         },
         get isClosed() {
             return !this.open;
+        },
+        // Refs #1059 (A11Y-040): der Diff-Block wird per x-show ein- und
+        // ausgeblendet — ohne diesen Getter meldete der Toggle seinen Zustand
+        // nur ueber den wechselnden Buttontext. Muster: collapsibleGroup.
+        get ariaExpanded() {
+            return this.open ? "true" : "false";
         },
     }));
 });

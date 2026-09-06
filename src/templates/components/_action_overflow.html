@@ -31,9 +31,19 @@ Guards: ``tests/test_detail_actions_parity.py::TestOverflowOnlyForTwoOrMoreEntri
 und ``tests/e2e/test_button_permissions.py`` (dort adressiert
 ``_selectors.action_in_bar`` eine Aktion, ohne ihren Ort zu kennen).
 
-Parameter: variant ("desktop"|"mobile"). Eigene Testids je Variante
-(``desktop-overflow-menu``/``mobile-overflow-menu``) — Bestands-E2E-Selektoren
-zielen exklusiv auf ``mobile-overflow-menu``.
+Parameter: variant ("desktop"|"mobile"), panel_id (id des zugehoerigen
+Dropdown-Panels in der aufrufenden ``_actions.html`` — Ziel von
+``aria-controls``; da jede Detailseite das Partial ZWEIMAL rendert
+(desktop + mobile), muss die id die Variante enthalten). Eigene Testids je
+Variante (``desktop-overflow-menu``/``mobile-overflow-menu``) —
+Bestands-E2E-Selektoren zielen exklusiv auf ``mobile-overflow-menu``.
+
+Refs #1059 (A11Y-015): Der Knopf meldet seinen Zustand ueber
+``aria-expanded`` (String-Getter ``ariaExpanded`` im Scope
+``mobileOverflowMenu``, CSP-Build), kuendigt das Menue per
+``aria-haspopup`` an und verweist per ``aria-controls`` auf das Panel.
+``x-ref="trigger"`` ist das Fokusziel, das ``closeWithFocus()`` nach
+Escape wieder anspringt.
 
 Refs #1859 (B2): Der Mobil-Zweig trug weder ``min-h-[44px]`` noch
 ``justify-center`` und mass dadurch ca. 34 px — sichtbar kleiner und hoeher
@@ -43,7 +53,12 @@ dort sind ALLE Kopfknoepfe ca. 34 px hoch (Maus statt Finger) — ein 44-px-⋮
 waere dort die neue Ausreisserform.
 {% endcomment %}
 <button @click="toggle" type="button"
-        class="inline-flex items-center {% if variant == 'mobile' %}justify-center min-h-[44px] min-w-[44px] bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2{% else %}bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas{% endif %}"
+        x-ref="trigger"
+        aria-haspopup="true"
+        aria-expanded="false"
+        :aria-expanded="ariaExpanded"
+        {% if panel_id %}aria-controls="{{ panel_id }}"
+        {% endif %}class="inline-flex items-center {% if variant == 'mobile' %}justify-center min-h-[44px] min-w-[44px] bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2{% else %}bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas{% endif %}"
         aria-label="{% trans 'Weitere Aktionen' %}"
         data-testid="{% if variant == 'mobile' %}mobile-overflow-menu{% else %}desktop-overflow-menu{% endif %}">
     <svg aria-hidden="true" class="w-4 h-4{% if variant == 'desktop' %} mr-1.5{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
