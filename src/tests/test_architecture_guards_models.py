@@ -22,6 +22,7 @@ ist weder noetig noch moeglich (Korrektur zur Ticket-Aufzaehlung in #2132).
 """
 
 import ast
+import copy
 import re
 from functools import cache
 from pathlib import Path
@@ -145,11 +146,18 @@ def _tenant_model_names() -> frozenset[str]:
 # (``filter(pk=request.user.pk)``) — ein reines ``pk=<irgendwas>`` gilt
 # absichtlich NICHT als Scope, genau das ist das IDOR-Muster.
 #
-# Refs #2132: Mit der Ausweitung auf alle facility-tragenden Modelle kommen drei
+# Refs #2132: Mit der Ausweitung auf alle facility-tragenden Modelle kommen zwei
 # weitere Evidenz-Klassen dazu. Tokens sind bewusst so gewaehlt, dass sie nicht
 # von einem laengeren Bezeichner verschluckt werden koennen — ``user=`` waere
 # z.B. untauglich, weil ``is_superuser=True`` es als Teilstring enthaelt und
 # damit eine deploymentweite Abfrage faelschlich blessen wuerde.
+#
+# Refs #2132 (Cross-Review Fix-Runde 1): Die Substring-Suche laeuft ueber den
+# Quelltext OHNE String-Literale (``_blanked_source``) — sonst blesst ein
+# ``Value("case=")`` in der Kette den Zugriff. Das leere QuerySet ist keine
+# Token-Evidenz mehr, sondern eine strukturelle Regel
+# (:func:`_chain_is_empty_queryset`), weil ``none()`` in einer laengeren Kette
+# (``…none().union(Model.objects.all())``) nichts mehr aussagt.
 _SCOPE_EVIDENCE = (
     # (1) direkte Facility-Grenze
     "facility=",
@@ -165,13 +173,11 @@ _SCOPE_EVIDENCE = (
     "visible_to(",
     "get_scoped_object(",
     "get_visible_event_or_404(",
-    # (4) leeres QuerySet: ``Model.objects.none()`` liefert per Definition keine
-    #     Zeile (Fail-closed-Platzhalter in den Formularen, das echte, gescopte
-    #     Queryset wird erst in ``__init__`` gesetzt).
-    "objects.none()",
-    # (5) transitive Anker: gefiltert wird ueber ein *bereits gescoptes*
+    # (4) transitive Anker: gefiltert wird ueber ein *bereits gescoptes*
     #     Besitzer-Objekt. Dessen eigener Zugriff faellt seinerseits unter diesen
-    #     Guard, die Kette bleibt damit geschlossen.
+    #     Guard, die Kette bleibt damit geschlossen. Die ``…__``-Formen zaehlen
+    #     nur mit einem Lookup-Pfad, der einen Objektbezug herstellt — siehe
+    #     ``_NON_SCOPING_LOOKUPS``.
     "client=",
     "client_id=",
     "client__",
@@ -188,6 +194,112 @@ _SCOPE_EVIDENCE = (
     "owner.attachments",
     "requested_by=request.user",
 )
+
+#: Relationale Evidenz-Tokens: sie zaehlen nur mit einem Lookup-Pfad, der einen
+#: OBJEKTBEZUG herstellt (``client__facility=…``, ``client__in=…``). Refs #2132
+#: (Cross-Review Fix-Runde 1).
+_RELATION_EVIDENCE = frozenset(
+    {
+        "facility__",
+        "client__",
+        "case__",
+        "event__",
+        "document_type__",
+    }
+)
+
+#: Lookup-Segmente, die KEINEN Objektbezug herstellen. ``client__isnull=False``
+#: sagt nur „irgendeine Person", nicht „diese Person" — es liefert weiterhin
+#: alle Faelle aller Einrichtungen. Taucht eines dieser Segmente im Lookup-Pfad
+#: auf, zaehlt das relationale Token an dieser Stelle nicht als Evidenz.
+#: Bekannte Restluecke: ein Feld-Lookup mit Gleichheit
+#: (``client__pseudonym="x"``) wuerde weiterhin blessen — er kommt im Bestand
+#: nicht vor und liesse sich nur mit einer Feldnamen-Introspektion sauber
+#: ausschliessen.
+_NON_SCOPING_LOOKUPS = frozenset(
+    {
+        "isnull",
+        "is_active",
+        "is_deleted",
+        "iexact",
+        "contains",
+        "icontains",
+        "startswith",
+        "istartswith",
+        "endswith",
+        "iendswith",
+        "regex",
+        "iregex",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "range",
+        "year",
+        "month",
+        "day",
+        "week",
+        "week_day",
+        "hour",
+        "minute",
+        "second",
+        "date",
+        "time",
+    }
+)
+
+#: Ein QuerySet, das aus nichts als ``Model.objects.none()`` besteht, liefert per
+#: Definition keine Zeile (Fail-closed-Platzhalter der Formulare). Sobald die
+#: Kette weitergeht — ``none().union(Model.objects.all())`` — gilt das nicht mehr,
+#: deshalb die Vollmatch-Regel statt eines Tokens (Cross-Review Fix-Runde 1).
+_EMPTY_QUERYSET_CHAIN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\.objects\.none\(\)")
+
+#: Lookup-Pfad hinter einem relationalen Token (``client__facility__id``).
+_LOOKUP_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:__[A-Za-z_][A-Za-z0-9_]*)*")
+
+
+class _StringBlanker(ast.NodeTransformer):
+    """Ersetzt String-Literale durch ``''`` — Evidenz darf nicht aus Text kommen."""
+
+    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+        if isinstance(node.value, str):
+            return ast.copy_location(ast.Constant(value=""), node)
+        return node
+
+
+def _blanked_source(node: "ast.AST") -> str:
+    """``ast.unparse`` des Knotens, aber mit geleerten String-Literalen."""
+    stripped = _StringBlanker().visit(copy.deepcopy(node))
+    ast.fix_missing_locations(stripped)
+    return ast.unparse(stripped)
+
+
+def _chain_is_empty_queryset(chain_source: str) -> bool:
+    """``True`` nur fuer die Kette ``Model.objects.none()`` als GANZES."""
+    return _EMPTY_QUERYSET_CHAIN.fullmatch(chain_source) is not None
+
+
+def _relation_token_is_scoping(source: str, token: str) -> bool:
+    """Stellt mindestens ein Vorkommen von *token* einen Objektbezug her?"""
+    start = 0
+    while (index := source.find(token, start)) != -1:
+        start = index + len(token)
+        match = _LOOKUP_PATH.match(source, start)
+        rest = match.group(0) if match else ""
+        if not set(rest.split("__")) & _NON_SCOPING_LOOKUPS:
+            return True
+    return False
+
+
+def _has_scope_evidence(evidence_source: str) -> bool:
+    """Traegt der (string-freie) Quelltext eine Scope-Evidenz?"""
+    for token in _SCOPE_EVIDENCE:
+        if token not in evidence_source:
+            continue
+        if token in _RELATION_EVIDENCE and not _relation_token_is_scoping(evidence_source, token):
+            continue
+        return True
+    return False
 
 
 def _parent_map(tree: "ast.AST") -> dict:
@@ -239,12 +351,16 @@ def _evidence_source(parents: dict, node: "ast.AST") -> str:
     Bewusst nur der ``func``-Teil und nicht der ganze umschliessende Aufruf:
     sonst wuerde ein Nachbar-Argument (``log(request.user, Client.objects.all())``)
     die Kette faelschlich blessen.
+
+    String-Literale werden geleert (:func:`_blanked_source`, Cross-Review
+    Fix-Runde 1), damit ein ``Value("case=")`` in der Kette keine Evidenz
+    vortaeuscht.
     """
     top = _chain_top(parents, node)
-    source = ast.unparse(top)
+    source = _blanked_source(top)
     parent = parents.get(top)
     if isinstance(parent, ast.Call) and top is not parent.func:
-        source = f"{ast.unparse(parent.func)}(\n{source}"
+        source = f"{_blanked_source(parent.func)}(\n{source}"
     return source
 
 
@@ -257,8 +373,10 @@ def find_unscoped_tenant_access(
     """Findet Manager-Zugriffe auf facility-tragende Modelle ohne Facility-Scope.
 
     Die Modellmenge kommt aus :func:`_tenant_model_names` (Registry-Ableitung +
-    ``User``/``Facility``/``Organization``, Refs #2132), die Evidenz-Tokens aus
-    :data:`_SCOPE_EVIDENCE`.
+    ``User``/``Facility``/``Organization``, Refs #2132), die Evidenz aus
+    :func:`_has_scope_evidence` (Tokens aus :data:`_SCOPE_EVIDENCE`, relationale
+    Formen zusaetzlich gegen :data:`_NON_SCOPING_LOOKUPS` geprueft) sowie der
+    strukturellen Regel :func:`_chain_is_empty_queryset`.
 
     AST-basiert: gesucht wird der Knoten ``<Model>.objects``; bewertet wird die
     gesamte umschliessende Kette (siehe :func:`_evidence_source`). Kommentare,
@@ -288,7 +406,7 @@ def find_unscoped_tenant_access(
                 continue
             model = node.value.id
             chain_source = ast.unparse(_chain_top(parents, node))
-            if any(token in _evidence_source(parents, node) for token in _SCOPE_EVIDENCE):
+            if _chain_is_empty_queryset(chain_source) or _has_scope_evidence(_evidence_source(parents, node)):
                 continue
             identifier = f"{rel}:{_enclosing_qualname(parents, node)}:{model}"
             if identifier in allowlist:
@@ -529,7 +647,7 @@ class TestTenantModelScopeGuard:
         (tmp_path / "ok.py").write_text(
             "from core.models import RecentClientVisit\n\n"
             "def view(request):\n"
-            "    return RecentClientVisit.objects.filter(is_active=True)\n"
+            "    return RecentClientVisit.objects.filter(is_favorite=True)\n"
         )
         assert not find_unscoped_tenant_access(tmp_path)
 
@@ -609,6 +727,56 @@ class TestTenantModelScopeGuard:
             "    document_type = Field(queryset=DocumentType.objects.none())\n"
         )
         assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_empty_queryset_union_evasion_is_detected(self, tmp_path):
+        """``none()`` blesst NUR die ganze Kette (Cross-Review Fix-Runde 1, Refs #2132).
+
+        ``Client.objects.none().union(Client.objects.all())`` liefert alle Personen
+        aller Einrichtungen — der Freibrief des leeren QuerySets darf sich nicht auf
+        eine weitergefuehrte Kette uebertragen.
+        """
+        (tmp_path / "offender.py").write_text(
+            "from core.models import Client\n\n"
+            "def view(request):\n"
+            "    return Client.objects.none().union(Client.objects.all())\n"
+        )
+        violations = find_unscoped_tenant_access(tmp_path)
+        assert violations
+        assert all("Client.objects" in violation for violation in violations)
+
+    def test_relational_state_lookup_is_not_evidence(self, tmp_path):
+        """``client__isnull``/``client__is_active`` sind Zustands-, keine Objektfilter."""
+        (tmp_path / "offender.py").write_text(
+            "from core.models import Case\n\n"
+            "def view(request):\n"
+            "    return Case.objects.filter(client__isnull=False, client__is_active=True)\n"
+        )
+        violations = find_unscoped_tenant_access(tmp_path)
+        assert violations
+        assert "Case.objects" in violations[0]
+
+    def test_relational_object_lookup_is_still_evidence(self, tmp_path):
+        """Gegenprobe: ein Lookup-Pfad MIT Objektbezug bleibt Evidenz."""
+        (tmp_path / "ok.py").write_text(
+            "from core.models import Case\n\n"
+            "def view(request, people):\n"
+            "    scoped = Case.objects.filter(client__facility=request.current_facility)\n"
+            "    listed = Case.objects.filter(client__in=people)\n"
+            "    return scoped, listed\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_evidence_inside_a_string_literal_does_not_count(self, tmp_path):
+        """Ein Token im String-Literal ist keine Evidenz (Cross-Review Fix-Runde 1)."""
+        (tmp_path / "offender.py").write_text(
+            "from django.db.models import Value\n\n"
+            "from core.models import Case\n\n"
+            "def view(request):\n"
+            "    return Case.objects.annotate(marker=Value('case=')).all()\n"
+        )
+        violations = find_unscoped_tenant_access(tmp_path)
+        assert violations
+        assert "Case.objects" in violations[0]
 
     def test_allowlisted_call_site_is_skipped(self, tmp_path):
         (tmp_path / "auth.py").write_text(
@@ -809,6 +977,15 @@ class TestTenantModelScopeGuard:
             "Merge-Nachlauf, Vorschlags-Seite: dieselbe ``moved_event_ids``-Menge wie beim DeletionRequest-Zweig."
         ),
         # --- (1) deploymentweite Compliance-/Super-Admin-Kennzahlen ---------
+        "compliance/breach_detection.py:detect_anonymous_login_bursts:AuditLog": (
+            "Anonyme Login-Bursts sind per Definition facility-LOS: die Zeilen tragen "
+            "``facility=None`` (unbekannter Username, keine Zuordnung moeglich). "
+            "``facility__isnull=True`` ist hier die Auswahl, nicht ihr Fehlen."
+        ),
+        "compliance/breach_detection.py:_already_reported_system:AuditLog": (
+            "Dedup der installationsweiten (``facility=None``) Findings — gleicher "
+            "Grund wie beim Burst-Detektor daneben."
+        ),
         "compliance/audit_events.py:_audit_event_checks:AuditLog": (
             "Zahl kritischer Audit-Events der letzten 24h ueber die ganze Instanz — "
             "Zweck der Compliance-Kachel, gerendert nur im Super-Admin-Bereich."
@@ -849,9 +1026,14 @@ class TestTenantModelScopeGuard:
             "Schluesselrotation, Anhang-Zweig — gleiche Begruendung."
         ),
         "import_engine.py:cleanup_stale_import_jobs:ImportJob": (
-            "Cron-Aufraeumung liegengebliebener Importlaeufe; ``facility=None`` ist der "
-            "dokumentierte instanzweite Modus, mit Facility laeuft derselbe Code ueber "
-            "``.for_facility(...)``."
+            "LATENTER ungescopter Fallback bei ``facility=None`` "
+            "(``src/core/services/import_engine.py:1010``). Der einzige "
+            "Produktions-Aufrufer uebergibt eine Facility "
+            "(``src/core/management/commands/enforce_retention.py:220``), der globale "
+            "Zweig ist heute unbenutzt und im Docstring NICHT als Ops-Modus dokumentiert. "
+            "Cross-Review Fix-Runde 1: als Freibrief belassen, weil diese Lane test-only "
+            "ist — das Engerziehen (``facility`` verpflichtend / eigener Ops-Einstieg) "
+            "gehoert in ein Folge-Ticket."
         ),
         # --- (4) Auth-Grenze: Lockout/Recovery vor der Facility-Wahl --------
         "security/lockout_recovery.py:_latest_failed_anchor:AuditLog": (
@@ -871,13 +1053,31 @@ class TestTenantModelScopeGuard:
             "ueber ``user_id__in`` der bereits per ``manageable_users(facility)`` "
             "gescopten Nutzerliste — die Facility steckt in der ID-Menge."
         ),
+        # --- Basis-QuerySets, die der Aufrufer scoped ------------------------
+        "case/cases.py:cases_with_live_client:Case": (
+            "Basis-QuerySet ohne Facility-Filter — bewusst: es liefert ein "
+            "``FacilityScopedQuerySet``, das JEDER Aufrufer scoped "
+            "(``.for_facility(...)`` in ``views/cases.py:266`` bzw. "
+            "``get_scoped_object(cases_with_live_client(), request, pk=...)`` in "
+            "``views/cases.py:400,483`` und ``views/case_episodes.py:46,57,85,92,119``). "
+            "Die Funktion zieht nur die Papierkorb-/Widerrufsgrenze (Refs #1737/#1771/#1818). "
+            "Aufgefallen erst mit der Lookup-Suffix-Haertung: ``client__is_deleted``/"
+            "``client__is_active`` sind Zustands-, keine Objektfilter."
+        ),
         # --- Einzelfaelle mit eigener Begruendung ---------------------------
         "client/main.py:resolve_writable_client:Client": (
-            "Der ``Client.objects.all()``-Zweig ist der EXPLIZITE Fallback des Ausdrucks "
-            "``Client.objects.for_facility(facility) if facility else ...`` — die "
-            "gescopte Variante steht in derselben Zeile. Alle Produktions-Aufrufer "
-            "liefern eine Facility (``PinnedClientMixin.get_client_facility()``); der "
-            "Zweig deckt den facility-losen System-/Replay-Pfad ab."
+            "LATENTER ungescopter Fallback bei ``facility=None`` "
+            "(``src/core/services/client/main.py:1022``, "
+            "``for_facility(facility) if facility else Client.objects.all()``). Der "
+            "einzige Aufrufer ist ``PinnedClientMixin.resolve_client`` "
+            "(``src/core/forms/mixins.py:146``) und uebergibt "
+            "``self.get_client_facility()``; alle heutigen Views reichen eine Facility "
+            "durch. Einen System-/Replay-Aufrufer gibt es NICHT — die Behauptung war "
+            "falsch (Cross-Review Fix-Runde 1). Die Form-Konstruktoren lassen "
+            "``facility=None`` aber zu (``forms/events.py``, ``forms/cases.py``, "
+            "``forms/workitems.py``), ein kuenftiger Aufrufer loeste damit "
+            "installationsweit auf. Als Freibrief belassen, weil diese Lane test-only "
+            "ist — Engerziehen gehoert in ein Folge-Ticket."
         ),
         "client/main.py:_normalize_document_type_kwarg:DocumentType": (
             "Aufloesung der ``document_type_id``-Schreibweise; die Facility-Grenze zieht "
