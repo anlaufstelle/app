@@ -24,7 +24,7 @@ Parameter: ``variant`` ``alpine`` ``live_url`` ``results_id`` ``spinner_id``
 <form method="get" action="{% url 'core:search' %}" role="search" class="{{ form_class }}"{% if alpine %} @submit="submitSearch"{% endif %} data-testid="search-field-{{ variant }}">
     <svg aria-hidden="true" class="{{ icon_class }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
     <input type="text" name="q"
-           {% if alpine %}:value="q" @input="setQ" @focus="focus" @click.away="close" @keydown.escape="escape" :aria-expanded="ariaExpanded" x-ref="input"{% endif %}
+           {% if alpine %}:value="q" @input="setQ" @focus="focus" @click.away="close" @keydown.escape="escape" :aria-expanded="ariaExpanded" x-ref="input" role="combobox" aria-autocomplete="list" aria-haspopup="listbox"{% endif %}
            {% if prefill %}value="{{ q }}" autofocus{% endif %}
            placeholder="{{ placeholder }}"
            aria-label="{% trans 'Suchfeld' %}"

@@ -142,3 +142,42 @@ def test_shared_list_controls_have_specific_names() -> None:
 def test_favorite_icon_has_text_alternative() -> None:
     source = _source("core/account/partials/_recent_clients_widget.html")
     assert '<span class="sr-only">{% trans "Als Favorit markiert" %}</span>' in source
+
+
+def test_search_field_declares_combobox_role_for_alpine_variant() -> None:
+    source = _source("partials/_search_field_control.html")
+    assert 'role="combobox" aria-autocomplete="list" aria-haspopup="listbox"' in source
+
+
+def test_event_and_offline_controls_have_accessible_names() -> None:
+    conflict = _source("core/events/conflict_review.html")
+    offline_event = _source("core/events/offline_create.html")
+    offline_workitem = _source("core/workitems/offline_create.html")
+    assert "aria-label=\"{% trans 'Version für dieses Feld wählen' %}\"" in conflict
+    for control_id in ("offline-event-client", "offline-event-doctype", "offline-event-occurred-at"):
+        assert f'for="{control_id}"' in offline_event
+        assert f'id="{control_id}"' in offline_event
+    assert 'for="offline-workitem-client"' in offline_workitem
+    assert 'id="offline-workitem-client"' in offline_workitem
+    assert 'with id_prefix="offline-workitem-create"' in offline_workitem
+
+
+def test_offline_event_reactive_messages_expose_status() -> None:
+    source = _source("core/events/offline_create.html")
+    assert 'data-testid="offline-event-create-stage-hint" role="status" aria-live="polite"' in source
+    assert 'data-testid="offline-event-create-error" role="alert"' in source
+
+
+def test_zeitstrom_filters_and_day_links_are_named() -> None:
+    source = _source("core/zeitstrom/index.html")
+    assert "aria-label=\"{% trans 'Nach Dokumentationstyp filtern' %}\"" in source
+    assert source.count("aria-label=\"{% trans 'Vorheriger Tag' %}\"") == 2
+    assert source.count("aria-label=\"{% trans 'Nächster Tag' %}\"") == 2
+    assert source.count('aria-disabled="true" tabindex="-1"') == 2
+
+
+def test_event_and_handover_low_opacity_text_is_removed() -> None:
+    event_create = _source("core/events/create.html")
+    handover = _source("core/handover/partials/_summary_full.html")
+    assert "text-accent opacity-70" not in event_create
+    assert "text-accent opacity-80" not in handover

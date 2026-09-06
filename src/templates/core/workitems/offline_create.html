@@ -72,8 +72,8 @@
             {# WorkItems kennen keine Kontaktstufen-Anforderung (kein DocType) —  #}
             {# "ohne Person" ist immer erlaubt. #}
             <div>
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Mitgenommene Person" %}</label>
-                <select x-model="clientPk"
+                <label for="offline-workitem-client" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Mitgenommene Person" %}</label>
+                <select id="offline-workitem-client" x-model="clientPk"
                         class="w-full rounded-md border-subtle text-sm" data-testid="offline-workitem-create-client">
                     <option value="">{% trans "— ohne Person —" %}</option>
                     <template x-for="opt in clientOptions" :key="opt.value">
@@ -83,7 +83,7 @@
             </div>
 
             {# Refs #1398/#1522: geteilter WorkItem-Feld-Loop (auch offline_detail.html includet ihn). #}
-            {% include "core/clients/_offline_workitem_fields.html" %}
+            {% include "core/clients/_offline_workitem_fields.html" with id_prefix="offline-workitem-create" %}
 
             <template x-if="wiError">
                 <p class="text-sm text-red-600" x-text="wiError" data-testid="offline-workitem-create-error"></p>

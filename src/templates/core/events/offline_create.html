@@ -55,8 +55,8 @@
 
             {# Person-Picker: mitgenommene Person | — ohne Person — (anonym). #}
             <div>
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Mitgenommene Person" %}</label>
-                <select x-model="clientPk"
+                <label for="offline-event-client" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Mitgenommene Person" %}</label>
+                <select id="offline-event-client" x-model="clientPk"
                         class="w-full rounded-md border-subtle text-sm" data-testid="offline-event-create-client">
                     <option value="" :disabled="anonymousBlocked">{% trans "— ohne Person —" %}</option>
                     <template x-for="opt in clientOptions" :key="opt.value">
@@ -65,7 +65,7 @@
                 </select>
                 {# Weiche UX: Typen mit Kontaktstufen-Anforderung erlauben keine anonyme Erfassung. #}
                 <template x-if="anonymousBlocked">
-                    <p class="mt-1 text-xs text-yellow-800" data-testid="offline-event-create-stage-hint">
+                    <p class="mt-1 text-xs text-yellow-800" data-testid="offline-event-create-stage-hint" role="status" aria-live="polite">
                         {% trans "Dieser Dokumentationstyp erfordert eine zugeordnete Person." %}
                     </p>
                 </template>
@@ -73,8 +73,8 @@
 
             {# Dokumentationstyp — nur aktive Typen aus dem Facility-Bundle. #}
             <div>
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Dokumentationstyp" %}</label>
-                <select x-model="createDocTypePk" @change="onCreateDocTypeChange"
+                <label for="offline-event-doctype" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Dokumentationstyp" %}</label>
+                <select id="offline-event-doctype" x-model="createDocTypePk" @change="onCreateDocTypeChange"
                         class="w-full rounded-md border-subtle text-sm" data-testid="offline-event-create-doctype">
                     <option value="">{% trans "– bitte wählen –" %}</option>
                     <template x-for="opt in documentTypeOptions" :key="opt.value">
@@ -84,8 +84,8 @@
             </div>
 
             <div>
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
-                <input type="datetime-local" x-model="createOccurredAt"
+                <label for="offline-event-occurred-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
+                <input id="offline-event-occurred-at" type="datetime-local" x-model="createOccurredAt"
                        class="w-full rounded-md border-subtle text-sm" data-testid="offline-event-create-occurred-at">
             </div>
 
@@ -93,7 +93,7 @@
             {% include "core/clients/_offline_event_fields.html" %}
 
             <template x-if="editError">
-                <p class="text-sm text-red-600" x-text="editError" data-testid="offline-event-create-error"></p>
+                <p class="text-sm text-red-600" x-text="editError" data-testid="offline-event-create-error" role="alert"></p>
             </template>
 
             <div class="flex gap-2">
