@@ -27,11 +27,11 @@ class TestStatisticsCharts:
         """Chart-Überschriften sind sichtbar."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/?zeitraum=jahr")
-        page.locator("h3:has-text('Kontakte im Zeitverlauf')").wait_for(state="visible", timeout=5000)
+        page.locator("h2:has-text('Kontakte im Zeitverlauf')").wait_for(state="visible", timeout=5000)
 
-        assert page.locator("h3:has-text('Kontakte im Zeitverlauf')").is_visible()
-        assert page.locator("h3:has-text('Dokumentationstypen')").is_visible()
-        assert page.locator("h3:has-text('Altersgruppen')").is_visible()
+        assert page.locator("h2:has-text('Kontakte im Zeitverlauf')").is_visible()
+        assert page.locator("h2:has-text('Dokumentationstypen')").is_visible()
+        assert page.locator("h2:has-text('Altersgruppen')").is_visible()
 
     def test_chart_data_api_called(self, authenticated_page, base_url):
         """Chart-Daten-API wird beim Laden der Seite aufgerufen."""
