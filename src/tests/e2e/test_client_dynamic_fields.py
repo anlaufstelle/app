@@ -48,7 +48,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors, wait_until
+from ._helpers import track_console_errors
 
 # M0-/M1-Muster wiederverwenden (test_config_ui.py bleibt unangetastet): die
 # Config-CRUD-Fläche und die Board-Zuordnung sind dort stabil etabliert.
@@ -187,6 +187,28 @@ def _detach_document_type(page, base_url, edit_url, detail_re) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _stamp_dynamic_fields(page):
+    """Alle aktuellen Kinder von ``#dynamic-fields`` als „vor dem Swap" markieren.
+
+    Muster aus ``test_file_vault.select_doc_type_and_wait`` (Refs #1797): das
+    Ziel ist bereits server-seitig gerendert, ein nacktes Warten auf einen
+    Selektor traefe also den VOR-Swap-Knoten.
+    """
+    page.evaluate(
+        "() => document.querySelectorAll('#dynamic-fields > *').forEach((el) => el.setAttribute('data-pre-swap', '1'))"
+    )
+
+
+def _await_dynamic_fields_swap(page):
+    """Warten, bis KEIN gestempelter Knoten mehr unter ``#dynamic-fields`` haengt.
+
+    Auf das Verschwinden der Alt-Knoten zu warten statt auf das Erscheinen eines
+    neuen deckt beide Faelle ab: einen Typ MIT Zusatzfeldern und den leeren Typ
+    (``value=""``), dessen Partial gar keine Kinder liefert.
+    """
+    page.wait_for_selector("#dynamic-fields > [data-pre-swap]", state="detached", timeout=10000)
+
+
 def switch_document_type(page, *, entity="clients", label=None, value=None, expected_status=200):
     """Typ im Select wechseln und den HTMX-Nachladevorgang abwarten.
 
@@ -194,7 +216,13 @@ def switch_document_type(page, *, entity="clients", label=None, value=None, expe
     (``hx-trigger="change"``). Auf die Antwort wird explizit gewartet und ihr
     Status geprüft — ein 4xx ist der Kern des E-12-Regressionsfalls: HTMX swapt
     dann NICHT, und ohne diese Assertion sähe man nur die Folgefehler.
+
+    Review Fix-Runde 1 (Refs #1855): Die Antwort allein ist noch KEIN
+    Swap. Deshalb werden die Alt-Knoten vor dem Wechsel gestempelt und nach der
+    Antwort ihr Verschwinden abgewartet — erst danach ist ein ``fill`` sicher.
+    Bei erwartetem 4xx entfaellt das, weil htmx dann bewusst nicht swapt.
     """
+    _stamp_dynamic_fields(page)
     with page.expect_response(
         lambda r: f"/partials/{entity}/fields/" in r.url and r.request.method == "GET"
     ) as response_info:
@@ -204,29 +232,23 @@ def switch_document_type(page, *, entity="clients", label=None, value=None, expe
             page.select_option(DOC_TYPE_SELECT, value=value)
     status = response_info.value.status
     assert status == expected_status, f"Felder-Partial antwortete {status} statt {expected_status}"
+    if expected_status == 200:
+        _await_dynamic_fields_swap(page)
 
 
-def fill_dynamic_field(page, selector, value, *, attempts=8):
-    """HTMX-nachgeladenes Feld robust gegen Swap-nach-fill befüllen (Muster #1013).
+def fill_dynamic_field(page, selector, value):
+    """Ein HTMX-nachgeladenes Feld befüllen — EINMAL, nach synchronisiertem Swap.
 
-    Der ``document_type``-Wechsel ersetzt ``#dynamic-fields`` per HTMX; unter
-    Last kann ein noch ausstehender Swap das gerade befüllte Element austauschen
-    (Wert dann leer). Daher füllen, bis der Wert stabil hält — Vorbild
-    ``test_zeitstrom_events._fill_after_htmx_swap``.
+    Review Fix-Runde 1 (Refs #1855): Hier stand eine Poll-Schleife, deren
+    Prädikat selbst ``fill`` aufrief und den Wert sofort danach las — sie war
+    schon beim ersten Durchlauf wahr und damit gar keine Barriere. Die
+    Synchronisation gehört an den Swap (``switch_document_type``); hier bleibt
+    nur das Füllen plus eine auto-wartende Wert-Assertion.
     """
     field = page.locator(selector)
     field.wait_for(state="visible", timeout=10000)
-
-    def _fuellen_und_pruefen():
-        field.fill(value)
-        return page.locator(selector).input_value() == value
-
-    # Refs #1855: Poll ueber den kanonischen Baustein aus ``_helpers`` statt
-    # einer nackten festen Pause (identisch zu ``test_zeitstrom_events``).
-    if wait_until(page, _fuellen_und_pruefen, timeout_ms=attempts * 200, interval_ms=200):
-        return
-    page.locator(selector).fill(value)
-    expect(page.locator(selector)).to_have_value(value, timeout=5000)
+    field.fill(value)
+    expect(field).to_have_value(value, timeout=5000)
 
 
 def create_client(page, base_url, pseudonym) -> str:

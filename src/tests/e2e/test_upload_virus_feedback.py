@@ -212,6 +212,26 @@ def _close_quietly(conn):
         pass
 
 
+def _stop_process(proc):
+    """gunicorn garantiert beenden: SIGTERM → wait(10) → SIGKILL → wait().
+
+    Review Fix-Runde 1: Der Teardown schickte nur ``SIGTERM`` und wartete
+    ohne Fallback. Endet der Prozess nicht in zehn Sekunden, scheiterte der
+    Teardown und der Server konnte auf Port ``base_url+200`` weiterlaufen; im
+    Startfehler-Pfad blieb er ausserdem unreaped. Beides ist Shared-State-Muell
+    fuer den seriellen Voll-Lauf.
+    """
+    if proc.poll() is not None:
+        proc.wait()
+        return
+    proc.send_signal(signal.SIGTERM)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
 @pytest.fixture(scope="module")
 def fake_clamd():
     """Fake-``clamd`` fuer die Dauer dieser Testdatei."""
@@ -270,14 +290,9 @@ def clamav_base_url(base_url, e2e_env, fake_clamd):
     url = f"http://127.0.0.1:{port}"
     try:
         _wait_for_server(url)
-    except Exception:
-        proc.send_signal(signal.SIGTERM)
-        raise
-
-    yield url
-
-    proc.send_signal(signal.SIGTERM)
-    proc.wait(timeout=10)
+        yield url
+    finally:
+        _stop_process(proc)
 
 
 @pytest.fixture

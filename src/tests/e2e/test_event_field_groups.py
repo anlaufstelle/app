@@ -19,6 +19,14 @@ pytestmark = pytest.mark.e2e
 
 COLLAPSIBLE_TOGGLE = '#dynamic-fields button:has(span:has-text("Leistungen & Notizen"))'
 
+# Genau die Karte, die den obigen Toggle traegt. ``#dynamic-fields [x-data]``
+# waere der Partial-Wurzelknoten ``conditionEvaluator`` — dessen Initialisierung
+# sagt nichts ueber die spaeter angeklickte ``collapsibleGroup``-Karte aus
+# Review Fix-Runde 1, Refs #1855).
+COLLAPSIBLE_CARD = (
+    "#dynamic-fields [x-data='collapsibleGroup']:has(button:has(span:has-text(\"Leistungen & Notizen\")))"
+)
+
 
 def _open_kontakt_form(page, base_url):
     """`/events/new/` öffnen, „Kontakt" wählen und auf die dynamischen Felder warten."""
@@ -28,15 +36,23 @@ def _open_kontakt_form(page, base_url):
     # „dauer") — auf ein konkretes Feld warten, nicht auf networkidle.
     page.locator('#dynamic-fields input[name="dauer"]').wait_for(state="attached", timeout=10000)
     # Refs #1855: Statt einer festen Pause auf die Alpine-Initialisierung SELBST
-    # warten. Alpine haengt seinen Komponenten-Zustand als ``_x_dataStack`` an den
-    # ``x-data``-Knoten — vorher verpufft ein Klick auf den Toggle wirkungslos
-    # (dasselbe Muster wie ``wait_until_htmx_bound`` fuer htmx). Python-seitig
+    # warten — und zwar an GENAU der Karte, deren Toggle die Tests gleich
+    # anklicken. Alpine legt seinen Komponenten-Zustand als ``_x_dataStack`` am
+    # ``x-data``-Knoten ab und fuellt ``open`` erst in ``init()``; vorher
+    # verpufft ein Klick auf den Toggle wirkungslos (dasselbe Muster wie
+    # ``wait_until_htmx_bound`` fuer htmx). Geprueft wird deshalb der
+    # Komponenten-State, nicht nur die Existenz des Stacks. Python-seitig
     # pollen, nicht per ``wait_for_function`` (docs/e2e-runbook.md § 8).
-    gruppe = page.locator("#dynamic-fields [x-data]").first
-    gruppe.wait_for(state="attached", timeout=10000)
-    assert wait_until(page, lambda: gruppe.evaluate("el => !!el._x_dataStack"), timeout_ms=10000, interval_ms=50), (
-        "Alpine hat die eingeswappte collapsibleGroup-Komponente nicht initialisiert"
-    )
+    karte = page.locator(COLLAPSIBLE_CARD)
+    karte.wait_for(state="attached", timeout=10000)
+    assert wait_until(
+        page,
+        lambda: karte.evaluate(
+            "el => !!el._x_dataStack && typeof el._x_dataStack[0].open === 'boolean'",
+        ),
+        timeout_ms=10000,
+        interval_ms=50,
+    ), "Alpine hat die eingeswappte collapsibleGroup-Karte nicht initialisiert"
 
 
 class TestKontaktFieldGroups:

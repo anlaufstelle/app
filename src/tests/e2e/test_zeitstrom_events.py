@@ -13,7 +13,6 @@ from datetime import datetime, time
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import wait_until
 from ._selectors import open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
@@ -21,30 +20,43 @@ pytestmark = pytest.mark.e2e
 SUBMIT = "#main-content button[type='submit']"
 
 
-def _fill_after_htmx_swap(page, selector, value, *, attempts=8):
-    """Fuelle ein HTMX-nachgeladenes Feld robust gegen Swap-nach-fill (Refs #1013).
+def _select_doc_type_and_await_swap(page, label):
+    """Dokumenttyp waehlen und den FRISCH eingeswappten Feldblock abwarten.
 
     Der ``document_type``-Wechsel laedt die FieldTemplate-Felder per HTMX nach
-    (``hx-target=#dynamic-fields``). Unter CI-Last kann der DOM-Swap das gerade
-    befuellte Element ersetzen (Wert dann leer). Wir fuellen daher neu, bis der
-    Wert stabil haelt, statt einmalig (vgl. expect_response+Poll-Pattern in
-    ``test_statistics_dashboard.py``, Refs #761/#849).
+    (``hx-target=#dynamic-fields``). Die Server-Antwort allein ist noch KEIN
+    Swap — deshalb erst die Alt-Knoten stempeln (das Ziel ist bereits
+    server-seitig gerendert, ein nacktes Warten traefe sonst den VOR-Swap-Knoten,
+    Muster ``test_file_vault.select_doc_type_and_wait``, Refs #1797), dann auf
+    die Antwort warten und zuletzt darauf, dass kein gestempelter Knoten mehr
+    haengt. Erst danach ist ein ``fill`` gegen einen ausstehenden Swap sicher
+    Review Fix-Runde 1, Refs #1855).
+    """
+    page.evaluate(
+        "() => document.querySelectorAll('#dynamic-fields > *').forEach((el) => el.setAttribute('data-pre-swap', '1'))"
+    )
+    with page.expect_response(
+        lambda r: "fields" in r.url and r.request.method == "GET",
+        timeout=15_000,
+    ):
+        page.select_option("select[name='document_type']", label=label)
+    page.wait_for_selector("#dynamic-fields > [data-pre-swap]", state="detached", timeout=10_000)
+
+
+def _fill_after_htmx_swap(page, selector, value):
+    """Ein HTMX-nachgeladenes Feld befuellen — EINMAL, nach synchronisiertem Swap.
+
+    Review Fix-Runde 1 (Refs #1855): Hier stand eine Poll-Schleife, deren
+    Praedikat selbst ``fill`` aufrief und den Wert sofort danach las — sie war
+    schon beim ersten Durchlauf wahr und damit gar keine Barriere gegen einen
+    noch ausstehenden Swap. Die Synchronisation gehoert an den Typ-Wechsel
+    (:func:`_select_doc_type_and_await_swap`); hier bleibt nur das Fuellen plus
+    eine auto-wartende Wert-Assertion.
     """
     field = page.locator(selector)
     field.wait_for(state="visible", timeout=10_000)
-
-    def _fuellen_und_pruefen():
-        field.fill(value)
-        # frisch aufloesen: ein zwischenzeitlicher Swap haette den Knoten ersetzt
-        return page.locator(selector).input_value() == value
-
-    # Refs #1855: derselbe Poll-Rhythmus wie bisher, aber ueber den kanonischen
-    # Poll-Baustein aus ``_helpers`` statt einer nackten festen Pause im Test.
-    if wait_until(page, _fuellen_und_pruefen, timeout_ms=attempts * 250, interval_ms=250):
-        return
-    # letzter Versuch + aussagekraeftige Assertion bei echtem Fehler
-    page.locator(selector).fill(value)
-    expect(page.locator(selector)).to_have_value(value, timeout=5_000)
+    field.fill(value)
+    expect(field).to_have_value(value, timeout=5_000)
 
 
 class TestAktivitaetslogStartseite:
@@ -215,11 +227,10 @@ class TestEventErstellung:
 
         # Formular ausfüllen
         # document_type-Wechsel laedt die FieldTemplate-Felder per HTMX nach
-        # (hx-target=#dynamic-fields). Erst auf den Server-Response warten, dann
-        # robust fuellen — der DOM-Swap kann unter CI-Last das gerade befuellte
+        # (hx-target=#dynamic-fields). Erst den Swap synchronisieren, dann
+        # fuellen — sonst kann der DOM-Swap unter CI-Last das gerade befuellte
         # Feld ersetzen (Refs #1013).
-        with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
-            page.select_option("select[name='document_type']", label="Kontakt")
+        _select_doc_type_and_await_swap(page, "Kontakt")
         _fill_after_htmx_swap(page, "input[name='dauer']", "20")
         _fill_after_htmx_swap(page, "textarea[name='notiz']", "E2E-Test Kontakt")
 
