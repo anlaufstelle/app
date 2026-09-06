@@ -12,8 +12,22 @@
  * Reine DOM-Manipulation, CSP-konform (kein Inline-Script, kein eval) — Muster
  * wie der globale Body-Listener in htmx-errors.js (Refs #1016, C2).
  *
- * Bewusst KEIN systematisches WCAG-Audit / axe-core (das bliebe M3/#1059 unter
- * der Feature-Sperre); dies ist der non-gated Fokus-Quick-Fix (Milestone release-0.22).
+ * Historie: entstanden als non-gated Fokus-Quick-Fix (Milestone release-0.22)
+ * ohne systematisches WCAG-Audit. Die WCAG-2.1-AA-Welle #1059 hat die
+ * Zielwahl seither um Stufe 2 (erstes invalides Feld) ergaenzt.
+ *
+ * Zielwahl (drei Stufen, Refs #1059 — die im Ticket beschriebene
+ * "3-Stufen-Strategie"):
+ *   1. Opt-in-Element [autofocus]/[data-hx-focus] im getauschten Fragment,
+ *   2. sonst das ERSTE als aria-invalid="true" markierte Feld — nach einem
+ *      Server-Re-Render mit Validierungsfehlern landet der Fokus damit auf
+ *      dem Feld, das den Fehler traegt (WCAG 3.3.1: der zugehoerige
+ *      <ul id="…-error" role="alert"> haengt per aria-describedby daran und
+ *      wird mitgelesen),
+ *   3. sonst der Swap-Container selbst (tabindex=-1) — assistive Technik
+ *      sagt seinen Inhalt an, Tab laeuft nahtlos weiter.
+ * Opt-out und Live-Such-Schutz stehen VOR dieser Wahl und bleiben
+ * unveraendert.
  *
  * Abgrenzung Live-Suche: Bei keyup-getriggerten Live-Such-/Filterfeldern (z.B.
  * core/search/index.html, core/clients/list.html) darf der Fokus NICHT ins
@@ -32,6 +46,10 @@
     // Explizites Opt-in: markiert im getauschten Fragment das gewuenschte
     // Fokus-Ziel (hat Vorrang vor der generischen Heuristik).
     var OPT_IN_SELECTOR = "[autofocus], [data-hx-focus]";
+    // Stufe 2 (Refs #1059): das erste Feld, das der Server als fehlerhaft
+    // zurueckgerendert hat. ``{% aria_field %}``/``components/_form_field.html``
+    // setzen genau dieses Attribut am Widget, nicht am Wrapper.
+    var INVALID_SELECTOR = '[aria-invalid="true"]';
 
     // Texteingabe-Feldtypen, deren Fokus bei Live-Suche/Filter NICHT gestohlen
     // werden darf. <select> zaehlt bewusst NICHT dazu: nach einer Auswahl ist es
@@ -56,14 +74,31 @@
         return false;
     }
 
+    // Sucht einen Treffer im Container ODER am Container selbst. Bei einem
+    // outerHTML-Swap ist der Container haeufig das getauschte Feld-Fragment,
+    // dann traegt er das Attribut selbst und ein reines querySelector (das
+    // nur Nachfahren sieht) uebersaehe ihn.
+    function _findWithin(container, selector) {
+        if (container.matches && container.matches(selector)) {
+            return container;
+        }
+        return container.querySelector(selector);
+    }
+
     // Waehlt das Fokus-Ziel innerhalb des getauschten Containers:
     // (a) erstes explizit markiertes Element ([autofocus]/[data-hx-focus]),
-    // (b) sonst der Container selbst (per tabindex=-1 programmatisch fokussierbar
+    // (b) sonst das erste Feld mit aria-invalid="true" (Server-Re-Render mit
+    //     Validierungsfehlern — der Fokus soll auf den Fehler zeigen),
+    // (c) sonst der Container selbst (per tabindex=-1 programmatisch fokussierbar
     //     gemacht) — assistive Technik sagt seinen Inhalt an, Tab laeuft weiter.
     function _resolveTarget(container) {
-        var explicit = container.querySelector(OPT_IN_SELECTOR);
+        var explicit = _findWithin(container, OPT_IN_SELECTOR);
         if (explicit) {
             return explicit;
+        }
+        var invalid = _findWithin(container, INVALID_SELECTOR);
+        if (invalid) {
+            return invalid;
         }
         return container;
     }
