@@ -3,8 +3,8 @@
 Die Befunde dieser Welle sind Zustands- und Rollenangaben, die es im
 gerenderten HTML entweder gibt oder nicht: ``aria-expanded`` an den
 Disclosure-Triggern, ``aria-controls`` auf ein Panel, das es wirklich gibt,
-``aria-selected`` an den Zeitfilter-Tabs, ``aria-pressed`` am
-Sprachumschalter und die Combobox-Rollen des Personen-Autocompletes.
+``aria-pressed`` an den Zeitfilter-Knoepfen (kein Tab-Pattern) und am
+Sprachumschalter sowie die Combobox-Rollen des Personen-Autocompletes.
 
 Bewusst eine eigene Datei statt Anbau an die Feature-Tests: die Zusagen
 gehoeren zusammen, nicht zu je einer Ansicht — und ein spaeteres

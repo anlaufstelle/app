@@ -3,8 +3,9 @@
 Kontakterfassung). Parameter: ``autocomplete_component`` (x-data-Name; nur
 setzen, wenn der Alpine-Scope HIER liegen soll — die Kontakterfassung haengt
 ``eventClientAutocomplete`` bewusst am <form>, damit das Fall-Dropdown
-denselben Scope liest), ``client_form`` (Fehlerquelle), ``required_field``
-(festes Pflicht-Sternchen + aria-required/aria-invalid), ``anonymous_mode``
+denselben Scope liest), ``client_form`` (Fehlerquelle; aria-invalid/aria-describedby haengen
+allein an vorhandenen Feldfehlern), ``required_field`` (festes
+Pflicht-Sternchen + aria-required), ``anonymous_mode``
 (Stern nur wenn nicht anonym erlaubt), ``min_stage_hint`` (Stufen-Erklärung
 im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person),
 ``inline_create`` (HTMX-Modal aus dem Kontaktformular).
