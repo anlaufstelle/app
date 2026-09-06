@@ -149,7 +149,11 @@ importScripts("/static/js/url-patterns.js");
 // Online-Link zur angemeldeten Hilfeseite bleibt in dieser Offline-Shell
 // bewusst aus; das geaenderte Shell-Markup muss Bestandsgeraete trotzdem per
 // Re-Install + Re-Precache erreichen.
-const CACHE_NAME = "anlaufstelle-v44";
+// Refs #1059: v44 -> v45 -- offline.html traegt jetzt Skip-Link und main-Ziel;
+// rekursiv eingebundene Offline-Formular-Partials liefern eindeutige
+// Label-/Feld-Beziehungen und Live-Regionen. Der Bump stellt das geaenderte
+// gerenderte Shell-Markup auf Bestandsgeraeten atomar bereit.
+const CACHE_NAME = "anlaufstelle-v45";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

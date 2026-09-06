@@ -155,11 +155,12 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v44"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v45"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
-            "#2102: Standalone-Bausteine aendern die precachte Shell → v44)."
+            "#2102: Standalone-Bausteine aendern die precachte Shell → v44; "
+            "#1059: Skip-Link und Formularsemantik aendern die Shell → v45)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -692,7 +693,7 @@ class TestPrecachedShellBumpGuard:
     # Refs #2043: _contact_stage_legend.html aendert gerendertes Markup in der
     # precachten Offline-Personenliste; v43 und der Hash werden gemeinsam
     # nachgezogen. Der online-only Hilfe-Link wird dort bewusst unterdrueckt.
-    _PINNED_CACHE_NAME = "anlaufstelle-v44"
+    _PINNED_CACHE_NAME = "anlaufstelle-v45"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -725,7 +726,11 @@ class TestPrecachedShellBumpGuard:
     #       (Welle F) und steht in keinem Tag und keinem Deploy — kein Geraet im
     #       Feld traegt v44, es gibt also keine Split-Brain-Generation, gegen die
     #       ein weiterer Bump schuetzen wuerde. Praezedenz: #1805, #1828.
-    _PINNED_SHELL_HASH = "b3785a43113907dd5576d8c835e2110ab393d5200195b27fddd3294d36612c3d"
+    # Refs #1059 (R-B2-8): v44 -> v45 — offline.html erhaelt Skip-Link und
+    # main-Ziel; die rekursiv gehashten Offline-Formular-Partials erhalten
+    # eindeutige Label-/Feld-Beziehungen und Live-Regionen. Anders als der
+    # reine Kommentar-/Whitespace-Fall oben aendert das ausgeliefertes Markup.
+    _PINNED_SHELL_HASH = "a95914c8271b668a15c73d6133a3ff21cbaaf7cc2b341acd24b47ed6b25781dc"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
