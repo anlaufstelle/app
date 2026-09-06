@@ -24,7 +24,8 @@
  *      dem Feld, das den Fehler traegt (WCAG 3.3.1: der zugehoerige
  *      <ul id="…-error" role="alert"> haengt per aria-describedby daran und
  *      wird mitgelesen),
- *   3. sonst der Swap-Container selbst (tabindex=-1) — assistive Technik
+ *   3. sonst der Swap-Container selbst (nur HIER wird tabindex=-1 ergaenzt,
+ *      damit ein generischer <div> .focus() annimmt) — assistive Technik
  *      sagt seinen Inhalt an, Tab laeuft nahtlos weiter.
  * Opt-out und Live-Such-Schutz stehen VOR dieser Wahl und bleiben
  * unveraendert.
@@ -96,28 +97,31 @@
         return container.querySelector(selector);
     }
 
-    // Waehlt das Fokus-Ziel innerhalb des getauschten Containers:
+    // Waehlt ein AUSGEZEICHNETES Fokus-Ziel innerhalb des getauschten Containers:
     // (a) erstes explizit markiertes Element ([autofocus]/[data-hx-focus]),
     // (b) sonst das erste Feld mit aria-invalid="true" (Server-Re-Render mit
-    //     Validierungsfehlern — der Fokus soll auf den Fehler zeigen),
-    // (c) sonst der Container selbst (per tabindex=-1 programmatisch fokussierbar
-    //     gemacht) — assistive Technik sagt seinen Inhalt an, Tab laeuft weiter.
+    //     Validierungsfehlern — der Fokus soll auf den Fehler zeigen).
+    // Findet sich keines, gibt die Funktion null zurueck und der Aufrufer faellt
+    // auf den Container selbst zurueck (Stufe 3).
     function _resolveTarget(container) {
         var explicit = _findWithin(container, OPT_IN_SELECTOR);
         if (explicit) {
             return explicit;
         }
-        var invalid = _findWithin(container, INVALID_SELECTOR);
-        if (invalid) {
-            return invalid;
-        }
-        return container;
+        return _findWithin(container, INVALID_SELECTOR);
     }
 
     function _makeFocusable(el) {
-        // Interaktive/bereits fokussierbare Elemente unangetastet lassen. Nur
-        // generische Container brauchen ein tabindex=-1, um .focus() anzunehmen
-        // (haelt sie zugleich aus der normalen Tab-Reihenfolge heraus).
+        // NUR fuer den Container-Fallback (Stufe 3): ein generischer <div>
+        // nimmt ohne tabindex kein .focus() an; -1 haelt ihn zugleich aus der
+        // normalen Tab-Reihenfolge heraus.
+        //
+        // Refs #1059 (Cross-Review B2', HOCH): Auf die Stufen 1 und 2 darf das
+        // NICHT angewandt werden. Deren Ziele sind ausgezeichnete Bedienelemente
+        // — nativ fokussierbar und Teil der Tab-Reihenfolge. Ein hier gesetztes
+        // tabindex="-1" haette das gerade als fehlerhaft angesagte Feld aus der
+        // Vorwaerts-/Rueckwaerts-Navigation entfernt: einmal verlassen, waere es
+        // per Tastatur nicht wieder erreichbar gewesen.
         if (!el.hasAttribute("tabindex")) {
             el.setAttribute("tabindex", "-1");
         }
@@ -221,9 +225,10 @@
 
         var focusTarget = _resolveTarget(target);
         if (!focusTarget) {
-            return;
+            // Stufe 3: der Container selbst — und NUR er bekommt tabindex=-1.
+            focusTarget = target;
+            _makeFocusable(focusTarget);
         }
-        _makeFocusable(focusTarget);
         try {
             focusTarget.focus({ preventScroll: false });
         } catch (_e) {

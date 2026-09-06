@@ -43,6 +43,8 @@ describe("Stufe 1 — explizites Opt-in", () => {
         afterSwap(target);
 
         expect(document.activeElement.id).toBe("opt-in");
+        // Auch das Opt-in-Ziel bleibt in der Tab-Reihenfolge.
+        expect(document.getElementById("opt-in").hasAttribute("tabindex")).toBe(false);
     });
 
     it("fokussiert [autofocus] ebenso", () => {
@@ -65,6 +67,19 @@ describe("Stufe 2 — erstes invalides Feld", () => {
         expect(document.activeElement.id).toBe("erstes");
     });
 
+    it("nimmt das invalide Feld NICHT aus der Tab-Reihenfolge", () => {
+        // Refs #1059 (Cross-Review B2', HOCH): ein programmatisch gesetztes
+        // tabindex="-1" haette das Feld nach dem Verlassen unerreichbar
+        // gemacht — native Controls sind ohnehin fokussierbar.
+        const target = container('<input id="erstes" aria-invalid="true">');
+
+        afterSwap(target);
+
+        const feld = document.getElementById("erstes");
+        expect(document.activeElement).toBe(feld);
+        expect(feld.hasAttribute("tabindex")).toBe(false);
+    });
+
     it("erkennt ein invalides Feld, das der Container SELBST ist (outerHTML-Swap)", () => {
         const field = document.createElement("input");
         field.id = "feld";
@@ -74,6 +89,7 @@ describe("Stufe 2 — erstes invalides Feld", () => {
         afterSwap(field);
 
         expect(document.activeElement.id).toBe("feld");
+        expect(field.hasAttribute("tabindex")).toBe(false);
     });
 
     it("ignoriert aria-invalid=false", () => {
