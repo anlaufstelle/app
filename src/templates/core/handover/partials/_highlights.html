@@ -29,7 +29,7 @@
             {% else %}
             <div class="flex items-center gap-2 text-[13px]">
             {% endif %}
-                <span class="font-mono text-ink-muted">{{ h.time|time:"H:i" }}</span>
+                <span class="font-mono text-ink">{{ h.time|time:"H:i" }}</span>
                 {% if h.type == "crisis" %}
                 <span class="font-semibold text-yellow-800">{% trans "Krisengespräch" %}</span>
                 {% elif h.type == "ban" %}

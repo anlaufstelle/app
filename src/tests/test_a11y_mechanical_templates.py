@@ -187,6 +187,12 @@ def test_event_and_handover_low_opacity_text_is_removed() -> None:
     assert "text-accent opacity-80" not in handover
 
 
+def test_handover_highlight_timestamp_uses_conforming_text_token() -> None:
+    highlights = _source("core/handover/partials/_highlights.html")
+    assert '<span class="font-mono text-ink">{{ h.time|time:"H:i" }}</span>' in highlights
+    assert 'class="font-mono text-ink-muted"' not in highlights
+
+
 def test_shared_border_token_meets_the_calculated_contrast_target() -> None:
     assert "--border: oklch(0.64 0.012 75);" in INPUT_CSS.read_text(encoding="utf-8")
 
