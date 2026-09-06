@@ -438,6 +438,33 @@ def _drop_purged_marker_entries(owner, purged_pks):
     return changed
 
 
+def _lock_owner_row(owner):
+    """Sperrt die Zeile des Anhang-Owners — zweite Stufe der kanonischen Ordnung.
+
+    Refs #2123 (kimi-k3 B-1, Fix-Runde 1): ``assert_processing_allowed(...,
+    lock=True)`` sperrt ausschliesslich ``core_client``. Die **direkte**
+    Ereignis-Hold-Anlage (``_lock_event_and_check_redaction``) sperrt aber nur
+    ``core_event`` und fasst die Personenzeile nie an — zwischen Purge und
+    Ereignis-Hold gab es also gar kein gemeinsames Sperrobjekt. Ein Hold, der
+    zwischen der Hold-Lesung und dem Commit des Purge entstand, kam zu spaet,
+    und der ``on_commit``-Unlink vernichtete die Datei trotz aktiver Anordnung.
+    Fuer ein anonymes Ereignis (``client_id is None``) kehrt ``_restricted_flag``
+    sogar VOR jeder Sperre zurueck: dann gab es ueberhaupt keinen Anker.
+
+    Reihenfolge: ``core_client`` (schon gehalten) -> ``core_event`` bzw.
+    ``core_case`` — genau die kanonische Ordnung aus ADR-050 D5.5. Ein
+    Inversions-Risiko entsteht nicht: die Ereignis-Hold-Anlage sperrt keine
+    weitere Tabelle, die Fall-Hold-Anlage nimmt dieselbe Richtung
+    (``core_client`` -> ``core_case``).
+
+    Fuer einen **Personen**-Owner ist nichts zu tun: seine Zeile haelt das
+    Art.-18-Gate bereits.
+    """
+    if owner.__class__.__name__ == "Client":
+        return
+    type(owner).objects.filter(pk=owner.pk, facility=owner.facility_id).select_for_update().only("pk").first()
+
+
 def purge_attachment_chain(owner, entry_id):
     """Loesche eine Versionskette **ersatzlos**: Zeilen, Dateien und Marker (Refs #1874).
 
@@ -516,14 +543,20 @@ def purge_attachment_chain(owner, entry_id):
         # Refs #2123: Die Hold-Pruefung lag frueher VOR dieser ``atomic``-Klammer
         # und damit vor jeder Sperre — ein zwischen Pruefung und ``delete()``
         # angeordneter Hold kam zu spaet, die Datei war physisch weg (nicht
-        # rollback-bar). Sie liegt jetzt HINTER
-        # ``assert_processing_allowed(..., lock=True)``, das ueber
-        # ``_restricted_flag`` die ``core_client``-Zeile sperrt — genau den
-        # Anker, den ``create_hold_for_target`` fuer Personen-, Fall- und
-        # (ueber die Personenzeile) Ereignis-Holds nimmt. Erst danach ist „kein
-        # Hold" eine stabile Aussage. Die Reihenfolge der beiden Gates ist
-        # damit umgekehrt zu vorher; fachlich sind sie unabhaengig, und beide
-        # antworten mit demselben Fehlertyp an dieselbe View-Flaeche.
+        # rollback-bar). Sie liegt jetzt HINTER beiden Sperren:
+        # ``assert_processing_allowed(..., lock=True)`` sperrt ueber
+        # ``_restricted_flag`` die ``core_client``-Zeile — den Anker der
+        # Personen- und (als erste Stufe) der Fall-Hold-Anlage —, und
+        # :func:`_lock_owner_row` die Zeile des Owners selbst. Die zweite Stufe
+        # ist noetig, weil die DIREKTE Ereignis-Hold-Anlage ausschliesslich
+        # ``core_event`` sperrt und die Personenzeile nie anfasst (kimi-k3 B-1,
+        # Fix-Runde 1) — ohne sie gab es fuer genau diesen Fall kein
+        # gemeinsames Sperrobjekt. Erst danach ist „kein Hold" eine stabile
+        # Aussage. Die Reihenfolge der beiden Gates ist umgekehrt zu vorher;
+        # fachlich sind sie unabhaengig, und beide antworten mit demselben
+        # Fehlertyp an dieselbe View-Flaeche.
+        _lock_owner_row(owner)
+
         if owner_has_active_hold(owner):
             raise AttachmentPurgeBlockedError(
                 _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")

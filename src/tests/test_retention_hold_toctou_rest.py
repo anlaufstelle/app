@@ -986,3 +986,195 @@ class TestActivityLockOrder:
             reason="Anordnung",
         )
         assert hold.pk is not None
+
+
+# ---------------------------------------------------------------------------
+# Refs #2123 (Fix-Runde 1, kimi-k3 B-1) — der Purge braucht die OWNER-Zeile
+# ---------------------------------------------------------------------------
+
+
+def _committed_ereignis_mit_anhang(*, mit_person=True):
+    """Committeter Ereignis-Owner mit Anhang-Kette — fuer die Faden-Tests."""
+    from tests.conftest import _make_attachment
+
+    org = Organization.objects.create(name="Purge-Org")
+    facility = org.facilities.create(name="Purge-Stelle")
+    Settings.objects.get_or_create(facility=facility)
+    admin = User.objects.create_user(
+        username="purge-admin",
+        password="x" * 40,
+        facility=facility,
+        role=User.Role.FACILITY_ADMIN,
+    )
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        name="Kontakt (Purge)",
+        sensitivity=DocumentType.Sensitivity.NORMAL,
+    )
+    person = None
+    if mit_person:
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Purge-Person",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+    ereignis = Event.objects.create(
+        facility=facility,
+        client=person,
+        document_type=doc_type,
+        occurred_at=timezone.now(),
+        data_json={"freitext": "Klartext"},
+        is_anonymous=person is None,
+    )
+    anhang = _make_attachment(facility, ereignis, admin, ft_name="Purge-Renn-Datei")
+    return facility, admin, person, ereignis, anhang
+
+
+@pytest.mark.django_db
+class TestAttachmentPurgeSperrtDieOwnerZeile:
+    """Ordnungs-Pin (kimi-k3 B-1): ``core_client`` -> ``core_event`` im Purge.
+
+    Der Purge sperrte bis zur Fix-Runde 1 ausschliesslich ``core_client`` (ueber
+    das Art.-18-Gate). Die **direkte** Ereignis-Hold-Anlage
+    (``_lock_event_and_check_redaction``) sperrt aber nur ``core_event`` und
+    fasst die Personenzeile nie an — zwischen beiden gab es also gar kein
+    gemeinsames Sperrobjekt. Bei einem anonymen Ereignis (``client_id is None``)
+    kehrt ``_restricted_flag`` sogar vor jeder Sperre zurueck: kein Anker
+    ueberhaupt.
+    """
+
+    def test_purge_sperrt_client_vor_event(self, facility, client_identified, staff_user, monkeypatch, _encryption_key):
+        from core.services.attachments.crud import purge_attachment_chain
+        from tests.conftest import _make_attachment
+
+        ereignis = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=DocumentType.objects.create(
+                facility=facility,
+                name="Purge-Ordnungs-Typ",
+                sensitivity=DocumentType.Sensitivity.NORMAL,
+            ),
+            occurred_at=timezone.now(),
+            data_json={"freitext": "Klartext"},
+            created_by=staff_user,
+        )
+        anhang = _make_attachment(facility, ereignis, staff_user, ft_name="Purge-Ordnungs-Datei")
+
+        with CaptureQueriesContext(connection) as captured:
+            purge_attachment_chain(ereignis, anhang.entry_id)
+        sequence = _lock_sequence(captured)
+        assert "core_client" in sequence, f"Der Purge nahm keinen Personen-Anker: {sequence}"
+        assert "core_event" in sequence, (
+            f"Der Purge sperrt die Ereigniszeile nicht — kein gemeinsamer Anker mit der "
+            f"direkten Ereignis-Hold-Anlage (kimi-k3 B-1): {sequence}"
+        )
+        assert sequence.index("core_client") < sequence.index("core_event"), (
+            f"kanonische Ordnung verdreht (core_client vor core_event): {sequence}"
+        )
+
+    def test_purge_sperrt_die_ereigniszeile_auch_ohne_personenbezug(self, facility, staff_user, _encryption_key):
+        """``owner_client_id is None``: dann ist die Ereigniszeile der EINZIGE Anker."""
+        from core.services.attachments.crud import purge_attachment_chain
+        from tests.conftest import _make_attachment
+
+        ereignis = Event.objects.create(
+            facility=facility,
+            client=None,
+            is_anonymous=True,
+            document_type=DocumentType.objects.create(
+                facility=facility,
+                name="Purge-Anonym-Typ",
+                sensitivity=DocumentType.Sensitivity.NORMAL,
+            ),
+            occurred_at=timezone.now(),
+            data_json={"freitext": "Klartext"},
+            created_by=staff_user,
+        )
+        anhang = _make_attachment(facility, ereignis, staff_user, ft_name="Purge-Anonym-Datei")
+
+        with CaptureQueriesContext(connection) as captured:
+            purge_attachment_chain(ereignis, anhang.entry_id)
+        sequence = _lock_sequence(captured)
+        assert "core_event" in sequence, (
+            f"Ein anonymes Ereignis hat keinen Personen-Anker — ohne Ereignis-Sperre gar keinen: {sequence}"
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+class TestAttachmentPurgeUndDirekterEreignisHold:
+    """Renn-Nachweis zu kimi-k3 B-1, beobachtend.
+
+    Der Haken haengt an ``owner_has_active_hold`` — an dieser Stelle haelt der
+    Purge alle Sperren, die er nimmt. Beobachtet wird, ob eine **direkte**
+    Ereignis-Hold-Anlage in diesem Fenster fertig wird. Ohne die Sperre auf
+    ``core_event`` committet sie neben dem Purge her, und der ``on_commit``-
+    Unlink vernichtet die Datei trotz aktiver Anordnung.
+    """
+
+    @pytest.fixture
+    def bestand(self, django_db_setup, _encryption_key):
+        werte = _committed_ereignis_mit_anhang()
+        yield werte
+        connections.close_all()
+
+    def test_direkter_ereignis_hold_wartet_an_der_ereigniszeile(self, bestand, monkeypatch):
+        from core.services.attachments import crud as crud_mod
+
+        facility, admin, _person, ereignis, anhang = bestand
+
+        b_ist_gestartet = threading.Event()
+        b_ist_fertig = threading.Event()
+        beobachtung = {}
+        fehler = {}
+
+        def _hold_anlegen():
+            connection.close()
+            try:
+                b_ist_gestartet.set()
+                create_hold_for_target(
+                    facility,
+                    target_type="Event",
+                    target_id=ereignis.pk,
+                    user=admin,
+                    reason="Anordnung waehrend der Vernichtung",
+                )
+            except Exception as exc:  # noqa: BLE001
+                fehler["b"] = exc
+            finally:
+                b_ist_fertig.set()
+                connections.close_all()
+
+        # ``purge_attachment_chain`` importiert den Helfer erst im Rumpf — der
+        # Haken gehoert deshalb an das QUELL-Modul, nicht an ``crud``.
+        from core.retention import legal_holds as legal_holds_mod
+
+        echte_pruefung = legal_holds_mod.owner_has_active_hold
+        faden = {}
+
+        def _erst_rennen_dann_pruefen(owner):
+            if "b" not in faden:
+                faden["b"] = threading.Thread(target=_hold_anlegen, name="event-hold")
+                faden["b"].start()
+                assert b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Der Hold-Faden ist nie gestartet"
+                time.sleep(_BLOCKED_GRACE_SECONDS)
+                # Nur BEOBACHTEN, nicht behaupten (Lehre 36).
+                beobachtung["hold_im_fenster_fertig"] = b_ist_fertig.is_set()
+            return echte_pruefung(owner)
+
+        monkeypatch.setattr(legal_holds_mod, "owner_has_active_hold", _erst_rennen_dann_pruefen)
+
+        try:
+            crud_mod.purge_attachment_chain(ereignis, anhang.entry_id)
+        except Exception as exc:  # noqa: BLE001
+            fehler["purge"] = exc
+        finally:
+            if "b" in faden:
+                faden["b"].join(timeout=_JOIN_TIMEOUT)
+                assert not faden["b"].is_alive(), "Verklemmung zwischen Purge und Ereignis-Hold-Anlage"
+
+        assert "b" not in fehler, fehler
+        assert beobachtung["hold_im_fenster_fertig"] is False, (
+            "Die direkte Ereignis-Hold-Anlage committete neben dem laufenden Purge her — "
+            "Purge und Hold-Anlage haben kein gemeinsames Sperrobjekt (kimi-k3 B-1)"
+        )

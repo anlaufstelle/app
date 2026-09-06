@@ -139,7 +139,15 @@ def _assert_not_merge_tombstone(client):
     """
     if client.merged_into_id is None:
         return
-    ziel_pseudonym = Client.objects.filter(pk=client.merged_into_id).values_list("pseudonym", flat=True).first()
+    # ``facility_id`` mitgefiltert (kimi-k3): ``merged_into`` wird zwar nur
+    # innerhalb derselben Einrichtung gesetzt, aber jede Lesung in diesem Modul
+    # traegt ihren Einrichtungs-Scope — Konvention statt Verlass auf eine
+    # Invariante an anderer Stelle.
+    ziel_pseudonym = (
+        Client.objects.filter(pk=client.merged_into_id, facility_id=client.facility_id)
+        .values_list("pseudonym", flat=True)
+        .first()
+    )
     raise ValidationError(
         _("Diese Person wurde mit %(pseudonym)s zusammengeführt – die Aufbewahrungssperre gehört auf die Zielperson.")
         % {"pseudonym": ziel_pseudonym or "?"}
@@ -204,7 +212,10 @@ def _lock_case_and_check_history(facility, target_id):
         return False
     client_id = case["client_id"]
     person = (
-        Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk", "merged_into").first()
+        Client.objects.filter(facility=facility, pk=client_id)
+        .select_for_update()
+        .only("pk", "facility", "merged_into")
+        .first()
     )
     # Refs #2144: Faelle haben keinen eigenen Tombstone — sie wandern beim
     # Merge per ``update(client=target)`` mit. Ihre PERSON kann aber einer
