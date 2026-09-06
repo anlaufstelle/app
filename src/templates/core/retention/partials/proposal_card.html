@@ -43,7 +43,7 @@
                 hx-target="#proposal-{{ proposal.pk }}"
                 hx-swap="outerHTML"
                 hx-confirm="{% trans 'Löschung freigeben?' %}"
-                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700">
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-700 text-white hover:bg-green-800">
             {% trans "Freigeben" %}
         </button>
         <button @click="toggleHoldForm"
@@ -102,7 +102,7 @@
             hx-target="#proposal-{{ proposal.pk }}"
             hx-swap="outerHTML"
             hx-confirm="{% trans 'Hold aufheben?' %}"
-            class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-yellow-600 text-white hover:bg-yellow-700">
+            class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-yellow-800 text-white hover:bg-yellow-900">
         {% trans "Hold aufheben" %}
     </button>
     {% endif %}

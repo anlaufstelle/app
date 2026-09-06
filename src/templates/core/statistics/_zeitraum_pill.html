@@ -15,6 +15,7 @@ Erwartete Variablen: `pill_key`, `pill_label`, `zeitraum_url`, `zeitraum_target`
 <button hx-get="{{ zeitraum_url }}?zeitraum={{ pill_key }}{{ view_query }}{{ bericht_query }}{{ doktyp_query }}"
         hx-target="{{ zeitraum_target }}"
         hx-push-url="true"
+        {% if period == pill_key %}aria-current="true"{% endif %}
         class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if period == pill_key %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
     {{ pill_label }}
 </button>

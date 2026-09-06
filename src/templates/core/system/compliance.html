@@ -48,13 +48,13 @@
         <div class="px-4 py-3 flex items-start gap-3" data-testid="compliance-check-{{ check.key }}" data-status="{{ check.status }}">
             {# Status-Punkt. #}
             {% if check.status == "ok" %}
-                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" aria-label="{% trans 'OK' %}"></span>
+                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" role="img" aria-label="{% trans 'OK' %}"></span>
             {% elif check.status == "warning" %}
-                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-yellow-500 shrink-0" aria-label="{% trans 'Warnung' %}"></span>
+                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-yellow-500 shrink-0" role="img" aria-label="{% trans 'Warnung' %}"></span>
             {% elif check.status == "critical" %}
-                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" aria-label="{% trans 'Kritisch' %}"></span>
+                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" role="img" aria-label="{% trans 'Kritisch' %}"></span>
             {% else %}
-                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0" aria-label="{% trans 'Unbekannt' %}"></span>
+                <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0" role="img" aria-label="{% trans 'Unbekannt' %}"></span>
             {% endif %}
             <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">

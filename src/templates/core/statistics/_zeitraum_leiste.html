@@ -59,13 +59,13 @@ Beschriftung stuenden hier zwei Datumsfelder ohne gemeinsame Ueberschrift.
 {% endcomment %}
         <span class="text-[12px] font-bold uppercase tracking-wider pb-1.5 {% if period == 'frei' %}text-accent{% else %}text-ink-muted{% endif %}">{% trans "Eigener Zeitraum" %}</span>
         <div>
-            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
-            <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
+            <label for="statistics-date-from" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <input id="statistics-date-from" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
                    class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
         </div>
         <div>
-            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
-            <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
+            <label for="statistics-date-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <input id="statistics-date-to" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
                    class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
         </div>
         <button type="submit"

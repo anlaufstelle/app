@@ -191,3 +191,35 @@ def test_condition_editor_labels_target_stable_partial_ids() -> None:
     assert 'for="id_condition_value"' in form
     assert 'id="id_condition_operator"' in operator
     assert value.count('id="id_condition_value"') == 6
+
+
+def test_statistics_controls_and_chart_headings_expose_state_and_structure() -> None:
+    range_bar = _source("core/statistics/_zeitraum_leiste.html")
+    pill = _source("core/statistics/_zeitraum_pill.html")
+    dashboard = _source("core/statistics/partials/dashboard_content.html")
+    for control_id in ("statistics-date-from", "statistics-date-to"):
+        assert f'for="{control_id}"' in range_bar
+        assert f'id="{control_id}"' in range_bar
+    assert pill.count('{% if period == pill_key %}aria-current="true"{% endif %}') == 2
+    assert dashboard.count('<h2 class="text-[13px] font-bold text-ink-soft mb-3">') == 3
+    assert dashboard.count('<h3 class="text-[13px] font-bold text-ink-soft mb-3">') == 0
+
+
+def test_system_status_dots_have_an_image_role() -> None:
+    for template in ("core/system/compliance.html", "core/system/dashboard.html"):
+        source = _source(template)
+        for label in ("OK", "Warnung", "Kritisch", "Unbekannt"):
+            assert f'role="img" aria-label="{{% trans \'{label}\' %}}"' in source
+
+
+def test_colored_action_buttons_use_conforming_backgrounds() -> None:
+    proposal = _source("core/retention/partials/proposal_card.html")
+    retention = _source("core/retention/partials/dashboard_content.html")
+    maintenance = _source("core/system/maintenance.html")
+    withdrawal = _source("core/deletion_requests/withdraw_confirm.html")
+    assert "bg-green-700 text-white hover:bg-green-800" in proposal
+    assert "bg-yellow-800 text-white hover:bg-yellow-900" in proposal
+    assert "bg-green-700 text-white hover:bg-green-800" in retention
+    assert "bg-orange-700 text-white hover:bg-orange-800" in maintenance
+    assert "bg-amber-700 text-white" in withdrawal
+    assert "hover:bg-amber-800" in withdrawal
