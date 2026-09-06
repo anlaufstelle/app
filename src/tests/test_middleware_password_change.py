@@ -6,6 +6,8 @@ Change-Seite umgeleitet — außer auf einer Whitelist von Exempt-URLs
 ``/static/``).
 """
 
+from types import SimpleNamespace
+
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpResponse
@@ -97,3 +99,17 @@ class TestForcePasswordChangeExemptUrls:
         response = _make_middleware()(request)
 
         assert response.status_code == 302
+
+
+class TestOfflineKeySaltExempt:
+    """Refs #2025: der Salt-Endpunkt bleibt auch unter Zwangswechsel erreichbar."""
+
+    def test_offline_key_salt_is_exempt(self):
+        assert "/auth/offline-key-salt/" in EXEMPT_URLS
+
+    def test_offline_key_salt_is_not_redirected(self, rf):
+        request = rf.post("/auth/offline-key-salt/")
+        request.user = SimpleNamespace(is_authenticated=True, must_change_password=True)
+        sentinel = object()
+        middleware = ForcePasswordChangeMiddleware(lambda req: sentinel)
+        assert middleware(request) is sentinel

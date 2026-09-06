@@ -2,7 +2,20 @@
 
 from django.shortcuts import redirect
 
-EXEMPT_URLS = ["/login/", "/logout/", "/password-change/", "/password-reset/", "/static/"]
+EXEMPT_URLS = [
+    "/login/",
+    "/logout/",
+    "/password-change/",
+    "/password-reset/",
+    "/static/",
+    # Refs #2025: der Offline-Login-Bootstrap holt den Schluessel-Salt direkt
+    # nach dem Login per fetch(). Wuerde der Aufruf auf /password-change/
+    # umgeleitet, bekaeme das Skript HTML statt JSON, fiele auf einen nativen
+    # Re-Submit mit dem beim Login rotierten CSRF-Token zurueck und der erste
+    # Login eines Kontos mit Zwangswechsel endete auf der 403-Seite. Dieselbe
+    # Ausnahme nimmt die MFA-Middleware (Refs #573/#588).
+    "/auth/offline-key-salt/",
+]
 
 
 class ForcePasswordChangeMiddleware:

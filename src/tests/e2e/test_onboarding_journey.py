@@ -266,7 +266,8 @@ def _erwarte_nach_login(page, base_url, ziel):
     Der Umweg macht den Test nicht blind: geprueft wird weiterhin, WOHIN die
     Middleware eine angemeldete Sitzung fuehrt — nur nicht mehr, ob der
     Bootstrap selbst dorthin navigiert hat. Fuer den nachgewiesenen Fall haelt
-    der ``xfail``-Test genau diese Zusage separat fest.
+    der erste Test in :class:`TestInitialPasswordOnboardingJourney` genau diese
+    Zusage separat fest (seit dem Fix der Middleware in Welle G gruen).
     """
     try:
         page.wait_for_url(ziel, timeout=15000)
@@ -373,8 +374,8 @@ class TestInviteOnboardingJourney:
 class TestInitialPasswordOnboardingJourney:
     """Weg 2: Initialpasswort → Zwangswechsel → MFA-Setup → Zeitstrom.
 
-    **Befund aus diesem Test (Produktionscode, NICHT hier gefixt):** Der erste
-    Login eines Kontos mit ``must_change_password=True`` endet im Browser auf
+    **Befund aus diesem Test (Refs #2025, in Welle G in der Middleware gefixt):**
+    Der erste Login eines Kontos mit ``must_change_password=True`` endete auf
     einer Seite „403 – Sicherheits-Token abgelaufen" statt auf
     ``/password-change/``. Mechanik (am Fehlerbild und am Codepfad verifiziert):
 
@@ -382,7 +383,7 @@ class TestInitialPasswordOnboardingJourney:
        ``fetch`` und holt danach den Offline-Salt von
        ``POST /auth/offline-key-salt/``.
     2. ``ForcePasswordChangeMiddleware.EXEMPT_URLS``
-       (``core/middleware/password_change.py``) enthaelt diesen Pfad NICHT — der
+       (``core/middleware/password_change.py``) enthielt diesen Pfad NICHT — der
        Salt-Request wird also auf ``/password-change/`` umgeleitet und
        beantwortet HTML statt JSON.
     3. ``saltResp.json()`` wirft, der ``catch``-Zweig in ``attach()`` faellt auf
@@ -394,21 +395,12 @@ class TestInitialPasswordOnboardingJourney:
     mit rotiertem CSRF zurueck — Ergebnis ist eine CSRF-Fehlerseite statt des
     MFA-Prompts", Refs #573/#588). Beim Zwangswechsel fehlt dieselbe Ausnahme.
 
-    Der erste Test haelt diesen Soll-Zustand als ``xfail`` fest (er wird gruen,
-    sobald der Pfad ausgenommen ist). Der zweite Test prueft die
+    Der erste Test haelt diesen Soll-Zustand fest (vor dem Fix rot, seit der
+    Ausnahme in ``EXEMPT_URLS`` gruen). Der zweite Test prueft die
     Reihenfolge-Zusage des Tickets und navigiert dafuer einmal aktiv auf ``/``
     — die Sitzung ist trotz der 403-Seite angemeldet.
     """
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason=(
-            "Befund #2025: /auth/offline-key-salt/ fehlt in "
-            "ForcePasswordChangeMiddleware.EXEMPT_URLS — der erste Login eines "
-            "Kontos mit Zwangswechsel endet auf einer 403-CSRF-Seite statt auf "
-            "/password-change/ (Produktionscode, ausserhalb der Lane-Besitzliste)"
-        ),
-    )
     def test_first_login_with_initial_password_lands_on_password_change(self, base_url, browser, e2e_env):
         """Soll-Zustand: der erste Login fuehrt direkt auf den Zwangswechsel."""
         username = f"e2e-onb-{uuid.uuid4().hex[:8]}"
