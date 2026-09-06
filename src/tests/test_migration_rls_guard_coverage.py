@@ -14,8 +14,9 @@ Dieser Guard leitet die Anforderung **ab** statt sie zu wiederholen:
 
 1. Er findet per AST alle benannten, modul-lokalen Funktionen in
    ``migrations.RunPython(<fn>, <reverse>)``. ``RunPython.noop`` wird
-   ignoriert; Lambdas und andere Attribut-Referenzen werden fail-loud als
-   nicht pruefbar gemeldet, statt still aus dem Scan zu fallen.
+   ignoriert; Lambdas, importierte Namen, Aufruf-Ausdruecke und andere
+   Attribut-Referenzen werden fail-loud als nicht pruefbar gemeldet, statt
+   still aus dem Scan zu fallen.
 2. Er sammelt je Einstiegsfunktion **transitiv** ueber modul-lokale Helfer
    sowohl ``apps.get_model("<app>", "<Model>")`` als auch literale
    ``core_*``-Tabellennamen in ``execute(...)``-SQL. Das umfasst direkte
@@ -76,11 +77,12 @@ GUARD_NAME = "assert_migration_role_bypasses_rls"
 CORE_TABLE_RE = re.compile(r"\bcore_\w+\b")
 
 #: Einstiegsfunktionen, die eine RLS-Tabelle anfassen und trotzdem KEINEN Guard
-#: tragen duerfen — mit Begruendung. ``0049._create_mv`` liest ``core_event``
-#: ausschliesslich, um die Materialized View aufzubauen. Deren spaeterer
-#: ``REFRESH`` laeuft bewusst unter der App-Rolle; ein Migrationsrollen-Guard
-#: wuerde diesen etablierten View-Laufzeitvertrag faelschlich als einmaligen
-#: RLS-Backfill klassifizieren.
+#: tragen duerfen — mit Begruendung. ``0049._create_mv`` liest ``core_event``;
+#: diese Tabelle traegt ``relrowsecurity`` UND ``relforcerowsecurity``, und
+#: ``CREATE MATERIALIZED VIEW ... AS SELECT`` befuellt die View sofort. Die
+#: Ausnahme ist daher nur eine dokumentierte Uebergangsloesung, bis der Guard
+#: in 0049 nachgezogen und diese Ausnahme wieder entfernt wird:
+#: https://github.com/anlaufstelle/app/issues/2153
 #: ``0084``/``0094`` (``core_user``) und ``0102``
 #: (``otp_totp_totpdevice``) fallen ohne Ausnahme heraus, weil ihre Tabellen
 #: keine RLS tragen.
@@ -103,7 +105,7 @@ class RunPythonEntry:
 
 @dataclass(frozen=True)
 class UnsupportedRunPythonEntry:
-    """Ein Lambda-/Attribut-Einstieg, dem der Scanner nicht sicher folgen kann."""
+    """Ein ``RunPython``-Einstieg, dem der Scanner nicht sicher folgen kann."""
 
     migration: str
     expression: str
@@ -300,9 +302,9 @@ def scan_runpython_entries(root: Path) -> RunPythonScan:
             for candidate in candidates:
                 if isinstance(candidate, ast.Name) and candidate.id in functions:
                     entry_names.append(candidate.id)
-                elif isinstance(candidate, ast.Lambda) or (
-                    isinstance(candidate, ast.Attribute) and not _is_runpython_noop(candidate)
-                ):
+                elif _is_runpython_noop(candidate):
+                    continue
+                else:
                     unsupported_entries.append(
                         UnsupportedRunPythonEntry(
                             migration=path.stem,
@@ -364,7 +366,7 @@ REPO_UNSUPPORTED_ENTRIES = REPO_SCAN.unsupported_entries
 
 def test_no_unsupported_runpython_entry_forms():
     assert not REPO_UNSUPPORTED_ENTRIES, (
-        "Nicht pruefbare RunPython-Lambda-/Attribut-Einstiege gefunden. "
+        "Nicht pruefbare RunPython-Einstiege gefunden. "
         "Eine benannte Modul-Funktion verwenden, damit der RLS-Guard pruefbar ist; "
         f"RunPython.noop bleibt erlaubt:\n  {'\n  '.join(map(str, REPO_UNSUPPORTED_ENTRIES))}"
     )
@@ -530,6 +532,27 @@ class Migration(migrations.Migration):
     operations = [migrations.RunPython(other_module.backfill)]
 """
 
+    _IMPORTIERTER_NAME = """
+from django.db import migrations
+from other_module import backfill
+
+
+class Migration(migrations.Migration):
+    operations = [migrations.RunPython(backfill)]
+"""
+
+    _AUFRUF_AUSDRUCK = """
+from django.db import migrations
+
+
+def make_backfill():
+    return lambda apps, schema_editor: None
+
+
+class Migration(migrations.Migration):
+    operations = [migrations.RunPython(make_backfill())]
+"""
+
     _NUR_NOOP = """
 from django.db import migrations
 
@@ -632,6 +655,24 @@ class Migration(migrations.Migration):
         assert scan.entries == ()
         assert len(scan.unsupported_entries) == 1
         assert scan.unsupported_entries[0].expression == "other_module.backfill"
+
+    def test_imported_name_runpython_is_reported_as_unsupported(self, tmp_path):
+        (tmp_path / "0001_probe.py").write_text(self._IMPORTIERTER_NAME, encoding="utf-8")
+
+        scan = scan_runpython_entries(tmp_path)
+
+        assert scan.entries == ()
+        assert len(scan.unsupported_entries) == 1
+        assert scan.unsupported_entries[0].expression == "backfill"
+
+    def test_call_expression_runpython_is_reported_as_unsupported(self, tmp_path):
+        (tmp_path / "0001_probe.py").write_text(self._AUFRUF_AUSDRUCK, encoding="utf-8")
+
+        scan = scan_runpython_entries(tmp_path)
+
+        assert scan.entries == ()
+        assert len(scan.unsupported_entries) == 1
+        assert scan.unsupported_entries[0].expression == "make_backfill()"
 
     def test_runpython_noop_remains_ignored(self, tmp_path):
         (tmp_path / "0001_probe.py").write_text(self._NUR_NOOP, encoding="utf-8")
