@@ -88,11 +88,10 @@ SUPER_ADMIN_PAGES = [
     ("system_compliance", "/system/compliance/", "[data-testid='compliance-group-hintergrundjobs']"),
 ]
 
-# Seiten fuer den Skip-Link-Funktionstest: alle drei erben von ``base.html``
-# (dort liegt der Skip-Link, ``base.html:59-61``, Ziel ``base.html:117``).
-# ``/login/`` steht hier bewusst NICHT — die eigenstaendigen Auth-Templates
-# haben weder Skip-Link noch ``<main id="main-content">`` (Befund, siehe
-# Modul-Docstring und Lane-Bericht).
+# Seiten fuer den Skip-Link-Funktionstest ohne ``autofocus``: alle drei erben
+# von ``base.html`` (dort liegt der Skip-Link, Ziel ``#main-content``).
+# Auf Login und Reset-Formular liegt der Fokus nach R-B2-11 bewusst im ersten
+# Feld; dort erreicht Shift+Tab den davorstehenden Skip-Link.
 SKIP_LINK_PAGES = [
     "/",
     "/events/new/",
@@ -284,7 +283,7 @@ class TestAxeFormularzustaende:
 
 
 class TestSkipLink:
-    """WCAG 2.4.1: der Skip-Link ist erstes Tab-Ziel und springt in den Inhalt.
+    """WCAG 2.4.1: ohne Autofokus ist der Skip-Link zuerst und funktioniert.
 
     Kein axe-Test — axe prueft das Vorhandensein eines Bypass-Mechanismus, aber
     nicht, ob er tatsaechlich FUNKTIONIERT. Genau das ist hier der Punkt

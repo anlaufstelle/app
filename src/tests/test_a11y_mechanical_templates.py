@@ -5,6 +5,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
+from django.contrib.auth.forms import SetPasswordForm
+from django.template.loader import render_to_string
 from django.urls import reverse
 
 pytestmark = pytest.mark.architecture
@@ -71,7 +73,7 @@ def test_bound_lockout_fields_use_shared_aria_renderer() -> None:
 def test_password_input_supports_error_relationships() -> None:
     source = _source("components/_password_input.html")
     assert '{% if invalid %}aria-invalid="true"{% endif %}' in source
-    assert '{% if described_by %}aria-describedby="{{ described_by }}"{% endif %}' in source
+    assert '{% if invalid and described_by %}aria-describedby="{{ described_by }}"{% endif %}' in source
 
 
 def test_mfa_regeneration_toggle_exposes_panel_state() -> None:
@@ -215,6 +217,8 @@ class _LabelTargetParser(HTMLParser):
         super().__init__()
         self.ids: list[str] = []
         self.label_targets: list[str] = []
+        self.password_inputs = 0
+        self.described_by: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
@@ -222,6 +226,31 @@ class _LabelTargetParser(HTMLParser):
             self.ids.append(element_id)
         if tag == "label" and (target := attributes.get("for")):
             self.label_targets.append(target)
+        if tag == "input" and attributes.get("type") == "password":
+            self.password_inputs += 1
+        if described_by := attributes.get("aria-describedby"):
+            self.described_by.extend(described_by.split())
+
+
+@pytest.mark.django_db
+def test_error_free_password_pages_have_no_dangling_describedby(client, staff_user) -> None:
+    login = client.get(reverse("login"))
+    assert login.status_code == 200
+
+    client.force_login(staff_user)
+    password_change = client.get(reverse("password_change"))
+    sudo_mode = client.get(reverse("sudo_mode"), {"next": "/"})
+    assert password_change.status_code == sudo_mode.status_code == 200
+
+    reset_confirm = render_to_string(
+        "registration/password_reset_confirm.html",
+        {"validlink": True, "form": SetPasswordForm(staff_user)},
+    )
+    parser = _LabelTargetParser()
+    parser.feed(login.content.decode() + password_change.content.decode() + sudo_mode.content.decode() + reset_confirm)
+    assert parser.password_inputs == 7
+    id_counts = Counter(parser.ids)
+    assert all(id_counts[target] == 1 for target in parser.described_by)
 
 
 @pytest.mark.django_db
