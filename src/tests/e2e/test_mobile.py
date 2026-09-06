@@ -78,14 +78,18 @@ class TestMobileZeitstromTouchTargets:
         self._assert_44px(page.locator('[data-testid="zeitstrom-filter-chip"]').first, "Inhaltsfilter")
 
         tabs = page.locator('[data-testid="time-filter-tabs"]')
-        for index in range(tabs.get_by_role("tab").count()):
-            self._assert_44px(tabs.get_by_role("tab").nth(index), f"Dienst-Reiter {index + 1}")
+        # Refs #1059 (R-B2p-10): die Zeitfilter sind Druckknoepfe mit aria-pressed in
+        # einer role="group"-Leiste, kein ARIA-Tab-Pattern mehr.
+        filter_buttons = tabs.locator(".time-filter-tab")
+        for index in range(filter_buttons.count()):
+            self._assert_44px(filter_buttons.nth(index), f"Dienst-Reiter {index + 1}")
         assert tabs.locator('[data-testid="time-filter-scroll-hint"]').is_visible()
 
-        strip = tabs.locator('[role="tablist"]')
+        strip = tabs.locator('[role="group"]')
         assert strip.evaluate("el => el.scrollWidth > el.clientWidth"), "Dienst-Reiter passen unerwartet ohne Scrollen"
-        tabs.get_by_role("tab", name="Nachtdienst").scroll_into_view_if_needed()
-        assert tabs.get_by_role("tab", name="Nachtdienst").is_visible()
+        nachtdienst = tabs.locator('[data-testid="time-filter-nachtdienst"]')
+        nachtdienst.scroll_into_view_if_needed()
+        assert nachtdienst.is_visible()
 
 
 class TestMobileNavMore:

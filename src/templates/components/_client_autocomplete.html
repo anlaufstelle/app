@@ -8,8 +8,9 @@ denselben Scope liest), ``client_form`` (Fehlerquelle), ``required_field``
 (Stern nur wenn nicht anonym erlaubt), ``min_stage_hint`` (Stufen-Erklärung
 im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person),
 ``inline_create`` (HTMX-Modal aus dem Kontaktformular).
-Die gedriftete Fassung in workitems/form.html wird bewusst NICHT angefasst —
-ihre a11y-Angleichung ist Ticket #1989.{% endcomment %}
+Refs #1989: Die frueher gedriftete Fassung in workitems/form.html bindet
+diese Partial jetzt ein; dort ist ``client`` optional, deshalb haengt das
+Sternchen an ``required_field``.{% endcomment %}
 <div{% if inline_create %} @client-inline-created.window="selectItem($event.detail)"{% endif %}{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
      data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
      data-initial-client-id="{{ client_id|default:'' }}"

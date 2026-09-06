@@ -150,7 +150,7 @@ class TestZeitstromCollapseToggle:
         page.wait_for_load_state("domcontentloaded")
         all_tab_url = (
             page.locator("[data-testid='time-filter-tabs']")
-            .get_by_role("tab", name="Alle", exact=True)
+            .locator("[data-testid='time-filter-all']")
             .get_attribute("hx-get")
         ) or ""
         occurred = now = datetime.now()
@@ -169,7 +169,8 @@ class TestZeitstromCollapseToggle:
 
         # 'Alle'-Tab → HTMX-innerHTML-Swap von #feed-list (Tagesansicht, damit der
         # eben erstellte Kontakt unabhängig von der aktuellen Schicht sichtbar ist).
-        all_tab = page.locator("[data-testid='time-filter-tabs']").get_by_role("tab", name="Alle", exact=True)
+        # Refs #1059 (R-B2p-10): Zeitfilter sind aria-pressed-Knoepfe, kein role=tab mehr.
+        all_tab = page.locator("[data-testid='time-filter-tabs']").locator("[data-testid='time-filter-all']")
         with page.expect_response(lambda r: "time_filter=all" in r.url):
             all_tab.click()
 
