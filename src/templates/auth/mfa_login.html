@@ -31,7 +31,7 @@
 
         {% if messages %}
             {% for message in messages %}
-            <div{% if forloop.first %} id="mfa-login-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
+            <div{% if 'mfa-token-error' in message.tags %} id="mfa-login-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if 'error' in message.tags %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
                 {{ message }}
             </div>
             {% endfor %}
@@ -88,7 +88,7 @@
                 {# pattern-invalid+unfokussierbar im DOM und blockiert den Submit; #}
                 {# disabled nimmt es aus Constraint-Validierung UND POST (Refs #1378). #}
                 <input type="text" name="token" id="id_token_totp"
-                       {% if messages %}aria-invalid="true" aria-describedby="mfa-login-message"{% endif %}
+                       {% if token_error and last_mode != 'backup' %}aria-invalid="true" aria-describedby="mfa-login-message"{% endif %}
                        x-bind:required="isTotp"
                        x-bind:disabled="isBackup"
                        x-bind:autofocus="isTotp"
@@ -102,7 +102,7 @@
                     {% trans "Backup-Code" %}
                 </label>
                 <input type="text" name="token" id="id_token_backup"
-                       {% if messages %}aria-invalid="true" aria-describedby="mfa-login-message"{% endif %}
+                       {% if token_error and last_mode == 'backup' %}aria-invalid="true" aria-describedby="mfa-login-message"{% endif %}
                        x-bind:required="isBackup"
                        x-bind:disabled="isTotp"
                        inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"

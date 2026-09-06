@@ -157,7 +157,11 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
                 _("Fast geschafft: Sichere die Backup-Codes und bestätige unten, um die Einrichtung abzuschließen."),
             )
             return redirect("mfa_backup_codes")
-        messages.error(request, _("Der Code ist ungültig. Bitte erneut versuchen."))
+        messages.error(
+            request,
+            _("Der Code ist ungültig. Bitte erneut versuchen."),
+            extra_tags="mfa-token-error",
+        )
         return self.render_to_response(self.get_context_data(token_error=True))
 
 
@@ -225,7 +229,11 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
             detail={"event": "mfa_token_invalid", "mode": mode},
             facility=facility,
         )
-        messages.error(request, _("Der Code ist ungültig. Bitte erneut versuchen."))
+        messages.error(
+            request,
+            _("Der Code ist ungültig. Bitte erneut versuchen."),
+            extra_tags="mfa-token-error",
+        )
         return self.render_to_response(self.get_context_data(token_error=True, last_mode=mode))
 
 
@@ -369,7 +377,11 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
         token = (request.POST.get("token") or "").strip().replace(" ", "")
         device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
         if device is None or not token or not device.verify_token(token):
-            messages.error(request, _("TOTP-Code fehlt oder ist ungültig."))
+            messages.error(
+                request,
+                _("TOTP-Code fehlt oder ist ungültig."),
+                extra_tags="mfa-token-error",
+            )
             return redirect("mfa_settings")
         codes = generate_backup_codes(user)
         _store_session_backup_codes(request, codes)

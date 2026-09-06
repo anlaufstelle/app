@@ -33,11 +33,16 @@ class SudoModeView(LoginRequiredMixin, View):
 
     template_name = "auth/sudo_mode.html"
 
-    def _render_form(self, request, next_url, status=200):
+    def _render_form(self, request, next_url, status=200, *, invalid_factor=None):
         return render(
             request,
             self.template_name,
-            {"next": next_url, "needs_otp": request.user.has_confirmed_totp_device},
+            {
+                "next": next_url,
+                "needs_otp": request.user.has_confirmed_totp_device,
+                "password_error": invalid_factor == "password",
+                "otp_error": invalid_factor == "otp",
+            },
             status=status,
         )
 
@@ -64,8 +69,8 @@ class SudoModeView(LoginRequiredMixin, View):
                 target_obj=request.user,
                 detail={"factor": "password"},
             )
-            messages.error(request, _("Passwort ist nicht korrekt."))
-            return self._render_form(request, next_url, status=403)
+            messages.error(request, _("Passwort ist nicht korrekt."), extra_tags="sudo-auth-error")
+            return self._render_form(request, next_url, status=403, invalid_factor="password")
 
         # A3.2: bei aktivem TOTP zusätzlich einen frischen 2. Faktor verlangen.
         if request.user.has_confirmed_totp_device and not verify_totp_or_backup(
@@ -77,8 +82,12 @@ class SudoModeView(LoginRequiredMixin, View):
                 target_obj=request.user,
                 detail={"factor": "otp"},
             )
-            messages.error(request, _("Der Bestätigungscode (2FA) ist nicht korrekt."))
-            return self._render_form(request, next_url, status=403)
+            messages.error(
+                request,
+                _("Der Bestätigungscode (2FA) ist nicht korrekt."),
+                extra_tags="sudo-auth-error",
+            )
+            return self._render_form(request, next_url, status=403, invalid_factor="otp")
 
         enter_sudo(request)
         log_audit_event(

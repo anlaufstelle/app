@@ -26,7 +26,7 @@
 
         {% if messages %}
             {% for message in messages %}
-            <div{% if forloop.first %} id="mfa-setup-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
+            <div{% if 'mfa-token-error' in message.tags %} id="mfa-setup-message"{% endif %} class="mb-4 p-3 rounded-md text-sm {% if 'error' in message.tags %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
                 {{ message }}
             </div>
             {% endfor %}
@@ -49,7 +49,7 @@
                     {% trans "6-stelliger Code" %}
                 </label>
                 <input type="text" name="token" id="id_token" required autofocus
-                       {% if messages %}aria-invalid="true" aria-describedby="mfa-setup-message"{% endif %}
+                       {% if token_error %}aria-invalid="true" aria-describedby="mfa-setup-message"{% endif %}
                        inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
                        data-testid="mfa-token-input"
                        class="mt-1 block w-full rounded-md border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border">

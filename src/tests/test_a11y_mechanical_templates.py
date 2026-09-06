@@ -8,6 +8,7 @@ import pytest
 from django.contrib.auth.forms import SetPasswordForm
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django_otp.plugins.otp_totp.models import TOTPDevice
 
 pytestmark = pytest.mark.architecture
 
@@ -89,6 +90,22 @@ def test_mfa_regeneration_toggle_exposes_panel_state() -> None:
     assert 'aria-expanded="false" :aria-expanded="regenOpen.toString()"' in source
     assert 'aria-controls="backup-codes-regenerate-panel"' in source
     assert '<div id="backup-codes-regenerate-panel"' in source
+
+
+@pytest.mark.django_db
+def test_mfa_info_message_does_not_mark_token_invalid(client, staff_user) -> None:
+    TOTPDevice.objects.create(user=staff_user, name="test", confirmed=True)
+    client.force_login(staff_user)
+    session = client.session
+    session["mfa_verified"] = True
+    session.save()
+
+    response = client.get(reverse("mfa_backup_codes"), follow=True)
+    assert response.status_code == 200
+    assert response.redirect_chain[-1][0] == reverse("mfa_settings")
+    token = response.content.decode().split('data-testid="backup-codes-regenerate-token"', maxsplit=1)[0]
+    opening_tag = token.rsplit("<input", maxsplit=1)[1]
+    assert "aria-invalid" not in opening_tag
 
 
 def test_static_backup_code_note_is_not_an_alert() -> None:
