@@ -29,15 +29,7 @@
 
         <div class="card p-5 space-y-4">
             {% for field in form %}
-            <div>
-                <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
-                    {{ field.label }}{% if field.field.required %} *{% endif %}
-                </label>
-                {{ field }}
-                {% for error in field.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
-            </div>
+            {% include "components/_form_field.html" with field=field %}
             {% endfor %}
         </div>
 

@@ -66,33 +66,33 @@
             <thead>
                 <tr class="text-left">
                     <th class="pb-2"></th>
-                    <th class="pb-2 font-bold text-ink">{{ client.pseudonym }}</th>
-                    <th class="pb-2 font-bold text-ink">{{ merge_target.pseudonym }}</th>
+                    <th scope="col" class="pb-2 font-bold text-ink">{{ client.pseudonym }}</th>
+                    <th scope="col" class="pb-2 font-bold text-ink">{{ merge_target.pseudonym }}</th>
                 </tr>
             </thead>
             <tbody>
                 <tr class="border-t border-subtle">
-                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Angelegt am" %}</td>
+                    <th scope="row" class="py-1.5 pr-2 text-left font-normal text-ink-muted">{% trans "Angelegt am" %}</th>
                     <td class="py-1.5 pr-2">{{ client.created_at|date:"DATE_FORMAT" }}</td>
                     <td class="py-1.5">{{ merge_target.created_at|date:"DATE_FORMAT" }}</td>
                 </tr>
                 <tr class="border-t border-subtle">
-                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Letzter Kontakt" %}</td>
+                    <th scope="row" class="py-1.5 pr-2 text-left font-normal text-ink-muted">{% trans "Letzter Kontakt" %}</th>
                     <td class="py-1.5 pr-2">{{ source_facts.last_contact|date:"DATE_FORMAT"|default:"–" }}</td>
                     <td class="py-1.5">{{ target_facts.last_contact|date:"DATE_FORMAT"|default:"–" }}</td>
                 </tr>
                 <tr class="border-t border-subtle">
-                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Ereignisse" %}</td>
+                    <th scope="row" class="py-1.5 pr-2 text-left font-normal text-ink-muted">{% trans "Ereignisse" %}</th>
                     <td class="py-1.5 pr-2" data-testid="merge-source-events">{{ source_facts.events }}</td>
                     <td class="py-1.5" data-testid="merge-target-events">{{ target_facts.events }}</td>
                 </tr>
                 <tr class="border-t border-subtle">
-                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Fälle" %}</td>
+                    <th scope="row" class="py-1.5 pr-2 text-left font-normal text-ink-muted">{% trans "Fälle" %}</th>
                     <td class="py-1.5 pr-2" data-testid="merge-source-cases">{{ source_facts.cases }}</td>
                     <td class="py-1.5" data-testid="merge-target-cases">{{ target_facts.cases }}</td>
                 </tr>
                 <tr class="border-t border-subtle">
-                    <td class="py-1.5 pr-2 text-ink-muted">{% trans "Anhänge" %}</td>
+                    <th scope="row" class="py-1.5 pr-2 text-left font-normal text-ink-muted">{% trans "Anhänge" %}</th>
                     <td class="py-1.5 pr-2" data-testid="merge-source-attachments">{{ source_facts.attachments }}</td>
                     <td class="py-1.5" data-testid="merge-target-attachments">{{ target_facts.attachments }}</td>
                 </tr>

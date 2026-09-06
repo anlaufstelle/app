@@ -32,9 +32,11 @@
                         {% csrf_token %}
                         {# required: Leereingabe-Validierung beim Inline-Edit (Refs #1016, C6). #}
                         <input type="text" name="title" value="{{ goal.title }}" required
+                               aria-label="{% trans 'Titel' %}"
                                class="w-full text-sm font-medium border border-subtle rounded px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-accent"
                                placeholder="{% trans 'Titel' %}">
                         <textarea name="description" rows="2"
+                                  aria-label="{% trans 'Beschreibung (optional)' %}"
                                   class="w-full text-sm border border-subtle rounded px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-accent"
                                   placeholder="{% trans 'Beschreibung (optional)' %}">{{ goal.description }}</textarea>
                         <div class="flex items-center space-x-2">
@@ -138,6 +140,7 @@
                       class="flex items-center space-x-2">
                     {% csrf_token %}
                     <input type="text" name="title" placeholder="{% trans 'Neuer Meilenstein' %}" required
+                           aria-label="{% trans 'Neuer Meilenstein' %}"
                            class="flex-1 text-sm border border-subtle rounded px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-accent">
                     <button type="submit" class="text-sm text-accent hover:text-accent font-medium">+</button>
                 </form>
@@ -158,6 +161,7 @@
               class="flex items-center space-x-2">
             {% csrf_token %}
             <input type="text" name="title" placeholder="{% trans 'Neues Wirkungsziel' %}" required
+                   aria-label="{% trans 'Neues Wirkungsziel' %}"
                    class="flex-1 text-sm border border-subtle rounded px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-accent">
             <button type="submit" class="text-sm bg-accent text-white px-3 py-1 rounded hover:bg-accent">
                 {% trans "Hinzufügen" %}

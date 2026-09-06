@@ -10,6 +10,7 @@
     <div class="flex gap-1">
         {% if page.has_previous %}
         <a href="?page={{ page.previous_page_number }}{% if extra_params %}&{{ extra_params }}{% endif %}"
+           aria-label="{% trans 'Vorherige Seite' %}"
            class="px-3 py-1 rounded border border-subtle hover:bg-canvas">‹</a>
         {% endif %}
         <span class="px-3 py-1 rounded border border-accent/30 bg-accent-light text-accent font-medium">
@@ -17,6 +18,7 @@
         </span>
         {% if page.has_next %}
         <a href="?page={{ page.next_page_number }}{% if extra_params %}&{{ extra_params }}{% endif %}"
+           aria-label="{% trans 'Nächste Seite' %}"
            class="px-3 py-1 rounded border border-subtle hover:bg-canvas">›</a>
         {% endif %}
     </div>

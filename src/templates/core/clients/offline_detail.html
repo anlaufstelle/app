@@ -46,17 +46,17 @@
         <div>
             {# Offline-Edit-Sync-Status (Refs #1111) #}
             <template x-if="showSynced">
-                <div class="mb-4 bg-green-50 border border-green-200 rounded-[10px] p-3" data-testid="offline-edit-synced">
+                <div class="mb-4 bg-green-50 border border-green-200 rounded-[10px] p-3" data-testid="offline-edit-synced" role="status" aria-live="polite">
                     <p class="text-sm text-green-900">{% trans "Änderung synchronisiert." %}</p>
                 </div>
             </template>
             <template x-if="showPending">
-                <div class="mb-4 bg-yellow-50 border border-yellow-200 rounded-[10px] p-3" data-testid="offline-edit-pending">
+                <div class="mb-4 bg-yellow-50 border border-yellow-200 rounded-[10px] p-3" data-testid="offline-edit-pending" role="status" aria-live="polite">
                     <p class="text-sm text-yellow-900">{% trans "Offline gespeichert – wird beim nächsten Online-Kontakt synchronisiert." %}</p>
                 </div>
             </template>
             <template x-if="showConflictNotice">
-                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-conflict">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-conflict" role="status" aria-live="polite">
                     <p class="text-sm text-red-900">
                         {% trans "Konflikt beim Synchronisieren." %}
                         <a :href="conflictHref" class="font-medium text-accent hover:underline" data-testid="offline-edit-conflict-link">{% trans "Konflikt prüfen" %}</a>
@@ -65,13 +65,13 @@
             </template>
             {# Refs #1111: Server-Validierung fehlgeschlagen — Edit blieb erhalten, nicht still verworfen. #}
             <template x-if="showInvalid">
-                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-invalid">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-invalid" role="status" aria-live="polite">
                     <p class="text-sm text-red-900">{% trans "Änderung nicht gespeichert – Eingabe ungültig:" %} <span x-text="editError"></span></p>
                 </div>
             </template>
             {# Refs #1111: transienter Sync-Fehler — Änderung lokal behalten, später erneut versucht. #}
             <template x-if="showError">
-                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-error">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-error" role="status" aria-live="polite">
                     <p class="text-sm text-red-900">{% trans "Synchronisierung fehlgeschlagen – Änderung wurde lokal behalten und wird später erneut versucht." %}</p>
                 </div>
             </template>
@@ -238,7 +238,7 @@
                                           @submit.prevent="saveEdit(event)" data-testid="offline-edit-form">
                                         <template x-for="field in editFields" :key="field.slug">
                                             <div>
-                                                <label class="block text-xs font-medium text-ink-soft mb-1">
+                                                <label :for="'offline-edit-field-' + field.slug" class="block text-xs font-medium text-ink-soft mb-1">
                                                     <span x-text="field.name"></span><template x-if="field.isRequired"><span> *</span></template>
                                                 </label>
 
@@ -247,22 +247,26 @@
                                                 </template>
                                                 <template x-if="field.isPlainInput">
                                                     <input :type="field.inputType" x-model="editValues[field.slug]"
+                                                           :id="'offline-edit-field-' + field.slug"
                                                            :required="field.isRequired"
                                                            class="w-full rounded-md border-subtle text-sm"
                                                            :data-testid="'offline-edit-input-' + field.slug">
                                                 </template>
                                                 <template x-if="field.isTextarea">
                                                     <textarea x-model="editValues[field.slug]" :required="field.isRequired" rows="3"
+                                                              :id="'offline-edit-field-' + field.slug"
                                                               class="w-full rounded-md border-subtle text-sm"
                                                               :data-testid="'offline-edit-input-' + field.slug"></textarea>
                                                 </template>
                                                 <template x-if="field.isBoolean">
                                                     <input type="checkbox" x-model="editValues[field.slug]"
+                                                           :id="'offline-edit-field-' + field.slug"
                                                            class="rounded border-subtle text-accent"
                                                            :data-testid="'offline-edit-input-' + field.slug">
                                                 </template>
                                                 <template x-if="field.isSelect">
                                                     <select x-model="editValues[field.slug]" :required="field.isRequired"
+                                                            :id="'offline-edit-field-' + field.slug"
                                                             class="w-full rounded-md border-subtle text-sm"
                                                             :data-testid="'offline-edit-input-' + field.slug">
                                                         <option value="">---------</option>
@@ -273,6 +277,7 @@
                                                 </template>
                                                 <template x-if="field.isMultiSelect">
                                                     <select multiple x-model="editValues[field.slug]"
+                                                            :id="'offline-edit-field-' + field.slug"
                                                             class="w-full rounded-md border-subtle text-sm"
                                                             :data-testid="'offline-edit-input-' + field.slug">
                                                         <template x-for="opt in field.options" :key="opt.value">
@@ -341,7 +346,7 @@
                         <template x-if="creatingWorkItem">
                             <form class="card p-4 space-y-3" @submit.prevent="saveCreateWorkItem" data-testid="offline-wi-create-form">
                                 <h3 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aufgabe erstellen (offline)" %}</h3>
-                                {% include "core/clients/_offline_workitem_fields.html" %}
+                                {% include "core/clients/_offline_workitem_fields.html" with id_prefix="offline-wi-create" %}
                                 <template x-if="wiError">
                                     <p class="text-sm text-red-600" x-text="wiError" data-testid="offline-wi-create-error"></p>
                                 </template>
@@ -412,7 +417,7 @@
                                 <template x-if="wi.editing">
                                     <form class="mt-3 border-t border-subtle pt-3 space-y-3"
                                           @submit.prevent="saveEditWorkItem(wi)" data-testid="offline-wi-edit-form">
-                                        {% include "core/clients/_offline_workitem_fields.html" %}
+                                        {% include "core/clients/_offline_workitem_fields.html" with id_prefix="offline-wi-edit" %}
                                         <template x-if="wiError">
                                             <p class="text-sm text-red-600" x-text="wiError" data-testid="offline-wi-edit-error"></p>
                                         </template>

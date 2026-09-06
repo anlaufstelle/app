@@ -48,7 +48,9 @@
                         {% if row.can_resend_invite %}<br>{% trans "Einrichtung ausstehend" %}{% endif %}
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <a href="{% url 'core:user_access_update' row.user.pk %}" class="inline-flex min-h-[44px] items-center font-medium text-accent hover:underline">{% trans "Verwalten" %}</a>
+                        <a href="{% url 'core:user_access_update' row.user.pk %}"
+                           aria-label="{% trans 'Verwalten' %}: {{ row.user.display_name|default:row.user.username }}"
+                           class="inline-flex min-h-[44px] items-center font-medium text-accent hover:underline">{% trans "Verwalten" %}</a>
                     </td>
                 </tr>
                 {% endfor %}
