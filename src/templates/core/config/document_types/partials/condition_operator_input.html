@@ -24,7 +24,7 @@ Kontext: operator_choices [(value, label)], selected_operator, doc_type,
 operator_autoload (bool).
 {% endcomment %}
 <div class="condition-operator-slot" data-testid="condition-operator-slot">
-    <select name="operator" data-testid="condition-operator"
+    <select id="id_condition_operator" name="operator" data-testid="condition-operator"
             class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
             hx-get="{% url 'core:config_condition_value_input' doc_type.pk %}"
             hx-trigger="{% if operator_autoload %}change, load{% else %}change{% endif %}"

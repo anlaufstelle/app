@@ -181,3 +181,13 @@ def test_event_and_handover_low_opacity_text_is_removed() -> None:
     handover = _source("core/handover/partials/_summary_full.html")
     assert "text-accent opacity-70" not in event_create
     assert "text-accent opacity-80" not in handover
+
+
+def test_condition_editor_labels_target_stable_partial_ids() -> None:
+    form = _source("core/config/document_types/partials/condition_form.html")
+    operator = _source("core/config/document_types/partials/condition_operator_input.html")
+    value = _source("core/config/document_types/partials/condition_value_input.html")
+    assert 'for="id_condition_operator"' in form
+    assert 'for="id_condition_value"' in form
+    assert 'id="id_condition_operator"' in operator
+    assert value.count('id="id_condition_value"') == 6

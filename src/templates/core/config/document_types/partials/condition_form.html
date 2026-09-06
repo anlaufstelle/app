@@ -44,7 +44,7 @@ generische Textfeld, kein separates Feld der Form selbst.
         {{ condition_form.depends_on_field }}
     </div>
     <div>
-        <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Operator" %}</label>
+        <label for="id_condition_operator" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Operator" %}</label>
         {% comment %}#1715: Operator-Feld als eigenständiges Partial (Wurzel = .condition-operator-slot):
         identische Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Quellwechsel.
         Ohne bekannte Quelle rendert der View die volle Operatorliste (Progressive Enhancement),
@@ -52,7 +52,7 @@ generische Textfeld, kein separates Feld der Form selbst.
         {% include "core/config/document_types/partials/condition_operator_input.html" %}
     </div>
     <div>
-        <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>
+        <label for="id_condition_value" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>
         {% comment %}Value-Slot als eigenständiges Partial (Wurzel = .condition-value-slot):
         identische Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Swaps.
         Ohne Quelltyp-Kontext (Create) rendert der else-Zweig das generische Textfeld; im
