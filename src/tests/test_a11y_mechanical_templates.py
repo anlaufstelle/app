@@ -7,6 +7,7 @@ import pytest
 pytestmark = pytest.mark.architecture
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
+INPUT_CSS = Path(__file__).resolve().parents[1] / "static" / "css" / "input.css"
 
 
 def _source(template: str) -> str:
@@ -178,9 +179,15 @@ def test_zeitstrom_filters_and_day_links_are_named() -> None:
 
 def test_event_and_handover_low_opacity_text_is_removed() -> None:
     event_create = _source("core/events/create.html")
+    event_card = _source("components/_event_card.html")
     handover = _source("core/handover/partials/_summary_full.html")
     assert "text-accent opacity-70" not in event_create
+    assert '<span class="opacity-70">{{ pf.label }}:</span>' not in event_card
     assert "text-accent opacity-80" not in handover
+
+
+def test_shared_border_token_meets_the_calculated_contrast_target() -> None:
+    assert "--border: oklch(0.64 0.012 75);" in INPUT_CSS.read_text(encoding="utf-8")
 
 
 def test_condition_editor_labels_target_stable_partial_ids() -> None:

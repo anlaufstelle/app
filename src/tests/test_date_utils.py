@@ -21,13 +21,13 @@ class TestDescribeDueDate:
     def test_tomorrow(self):
         result = describe_due_date(TODAY + timedelta(days=1), today=TODAY)
         assert result.text == "Morgen"
-        assert "text-amber-600" in result.css_class
+        assert "text-amber-700" in result.css_class
         assert result.is_overdue is False
 
     def test_day_after_tomorrow(self):
         result = describe_due_date(TODAY + timedelta(days=2), today=TODAY)
         assert result.text == "Übermorgen"
-        assert "text-amber-500" in result.css_class
+        assert "text-amber-700" in result.css_class
 
     def test_overdue_1_day_active(self):
         result = describe_due_date(TODAY - timedelta(days=1), today=TODAY)
@@ -44,7 +44,7 @@ class TestDescribeDueDate:
     def test_overdue_closed_not_marked(self):
         result = describe_due_date(TODAY - timedelta(days=3), is_closed=True, today=TODAY)
         assert result.is_overdue is False
-        assert "text-gray-400" in result.css_class
+        assert "text-gray-600" in result.css_class
         assert "Fällig am" in result.text
 
     def test_overdue_in_progress(self):
@@ -61,7 +61,7 @@ class TestDescribeDueDate:
         saturday = TODAY + timedelta(days=3)
         result = describe_due_date(saturday, today=TODAY)
         assert "Diese Woche" in result.text
-        assert "text-yellow-600" in result.css_class
+        assert "text-yellow-800" in result.css_class
 
     def test_next_calendar_week(self):
         # Nächster Montag = +5 Tage von Mittwoch
@@ -84,7 +84,7 @@ class TestDescribeDueDate:
         far = TODAY + timedelta(days=120)
         result = describe_due_date(far, today=TODAY)
         assert "2025" in result.text
-        assert "text-gray-500" in result.css_class
+        assert "text-gray-600" in result.css_class
 
     def test_year_change(self):
         # Testen mit Jahreswechsel

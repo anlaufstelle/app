@@ -108,14 +108,14 @@ def describe_due_date(
         if delta_days < 0:
             return DueDatePresentation(
                 text=_("Fällig am %(date)s") % {"date": date_format(due_date, "d.m.")},
-                css_class="text-gray-400",
+                css_class="text-gray-600",
                 is_overdue=False,
                 raw_date=due_date,
             )
         # Closed with future/today date: display normally but dimmed
         return DueDatePresentation(
             text=_format_relative(due_date, delta_days, today),
-            css_class="text-gray-400",
+            css_class="text-gray-600",
             is_overdue=False,
             raw_date=due_date,
         )
@@ -146,7 +146,7 @@ def describe_due_date(
     if delta_days == 1:
         return DueDatePresentation(
             text=_("Morgen"),
-            css_class="text-amber-600",
+            css_class="text-amber-700",
             is_overdue=False,
             raw_date=due_date,
         )
@@ -154,7 +154,7 @@ def describe_due_date(
     if delta_days == 2:
         return DueDatePresentation(
             text=_("Übermorgen"),
-            css_class="text-amber-500",
+            css_class="text-amber-700",
             is_overdue=False,
             raw_date=due_date,
         )
@@ -196,12 +196,12 @@ def _format_relative(due_date: date, delta_days: int, today: date) -> str:
 def _css_for_delta(delta_days: int, due_date: date, today: date) -> str:
     """CSS class for periods > 2 days."""
     if _same_iso_week(due_date, today):
-        return "text-yellow-600"
+        return "text-yellow-800"
     if _next_iso_week(due_date, today):
         return ""
     if due_date.year == today.year and due_date.month == today.month:
         return ""
-    return "text-gray-500"
+    return "text-gray-600"
 
 
 def _same_iso_week(d: date, today: date) -> bool:

@@ -59,7 +59,7 @@ class TestDescribeDueDateClosedPast:
         """Lines 108-114: closed + delta < 0 -> graue Text-Klasse, is_overdue=False."""
         result = describe_due_date(date(2026, 5, 1), is_closed=True, today=date(2026, 5, 20))
         assert result is not None
-        assert result.css_class == "text-gray-400"
+        assert result.css_class == "text-gray-600"
         assert result.is_overdue is False
 
 

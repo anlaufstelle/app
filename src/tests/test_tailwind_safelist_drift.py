@@ -158,7 +158,7 @@ def test_badge_and_date_sources_contribute_expected_anchors() -> None:
     assert "bg-gray-50" in badge
     # dates.py: Fälligkeits- + Wiedervorlage-Farben (inkl. orange, das die
     # frühere JS-safelist NICHT enthielt — Content-Scan-Absicherung).
-    assert {"text-red-600", "text-amber-500", "bg-orange-100", "text-orange-800"} <= dates
+    assert {"text-red-600", "text-amber-700", "text-gray-600", "bg-orange-100", "text-orange-800"} <= dates
 
 
 # ---------------------------------------------------------------------------
