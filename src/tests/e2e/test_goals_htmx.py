@@ -17,6 +17,9 @@ import re
 import uuid
 
 import pytest
+from playwright.sync_api import expect
+
+from ._helpers import wait_until
 
 pytestmark = pytest.mark.e2e
 
@@ -251,10 +254,18 @@ class TestMilestoneDeleteViaHTMX:
         ms_li = page.locator(f"#goals-section li:has(:text-is('{ms_title}'))").first
         ms_li.hover()
         # Dialog ABWEISEN → kein Delete, Meilenstein bleibt.
-        page.once("dialog", lambda dialog: dialog.dismiss())
+        # Refs #1855: Statt einer festen Pause auf das ERSCHEINEN des Dialogs
+        # warten. ``hx-confirm`` ruft ein synchrones ``window.confirm``; wird es
+        # abgewiesen, sendet htmx nie einen Request — sobald der Dialog gesehen
+        # wurde, steht der Abbruch-Zweig fest. Die auto-wartende Assertion
+        # pollt danach auf dem unveraenderten Zustand.
+        gesehen: list[str] = []
+        page.once("dialog", lambda dialog: (gesehen.append(dialog.message), dialog.dismiss()))
         ms_li.locator("form[hx-post*='/delete/'] button[type='submit']").click()
-        page.wait_for_timeout(500)
-        assert page.locator(f"#goals-section :text-is('{ms_title}')").count() == 1
+        assert wait_until(page, lambda: bool(gesehen), timeout_ms=10000, interval_ms=50), (
+            "Loesch-Bestaetigung ist nicht erschienen"
+        )
+        expect(page.locator(f"#goals-section :text-is('{ms_title}')")).to_have_count(1, timeout=5000)
 
 
 class TestGoalInlineEditValidation:
@@ -279,9 +290,12 @@ class TestGoalInlineEditValidation:
         edit_form.locator("button:has-text('Speichern')").click()
 
         # required blockt den Submit client-seitig → Form bleibt invalid + offen (kein Swap).
-        page.wait_for_timeout(300)
+        # Refs #1855: Die Constraint-Validierung des Browsers laeuft synchron im
+        # Submit-Handler — ist sie negativ, entsteht gar kein Request, auf den zu
+        # warten waere. Statt einer festen Pause pollt die auto-wartende
+        # Assertion auf dem unveraenderten (weiterhin offenen) Formular.
+        expect(edit_form).to_be_visible(timeout=5000)
         assert edit_form.evaluate("f => !f.checkValidity()")
-        assert edit_form.is_visible()
         # Nach Reload (View-Modus): leerer Titel wurde NICHT gespeichert, Original bleibt.
         page.reload(wait_until="domcontentloaded")
         assert page.locator(f"#goals-section h3:text-is('{title}')").first.is_visible()

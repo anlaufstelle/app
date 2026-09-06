@@ -12,6 +12,8 @@ from urllib.parse import urljoin
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import wait_until_htmx_bound
+
 pytestmark = pytest.mark.e2e
 
 
@@ -37,15 +39,6 @@ def _feed_cards_outside(page, baseline_ids):
     """Build a live locator for event cards not present in the baseline."""
     exclusions = "".join(f':not([aria-controls="{event_id}"])' for event_id in baseline_ids)
     return page.locator(f'#feed-list button[aria-controls^="event-detail-"]{exclusions}')
-
-
-def _wait_until_htmx_bound(page, locator):
-    """Wait for HTMX settle before interacting with a freshly swapped form."""
-    for _ in range(100):
-        if locator.evaluate("el => !!el['htmx-internal-data']"):
-            return
-        page.wait_for_timeout(50)
-    raise AssertionError("HTMX hat das Inline-Formular nicht verarbeitet")
 
 
 class TestCollaborativeTally:
@@ -78,7 +71,7 @@ class TestCollaborativeTally:
 
             syringe_form_b = page_b.locator('[data-testid^="tally-inline-form-"]')
             expect(syringe_form_b).to_be_visible()
-            _wait_until_htmx_bound(page_b, syringe_form_b)
+            wait_until_htmx_bound(page_b, syringe_form_b)
             syringe_form_b.locator('input[name="ausgabe"]').fill("17")
             syringe_form_b.locator('input[name="rueckgabe"]').fill("4")
 

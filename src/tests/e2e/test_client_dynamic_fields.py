@@ -48,7 +48,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors
+from ._helpers import track_console_errors, wait_until
 
 # M0-/M1-Muster wiederverwenden (test_config_ui.py bleibt unangetastet): die
 # Config-CRUD-Fläche und die Board-Zuordnung sind dort stabil etabliert.
@@ -216,11 +216,15 @@ def fill_dynamic_field(page, selector, value, *, attempts=8):
     """
     field = page.locator(selector)
     field.wait_for(state="visible", timeout=10000)
-    for _ in range(attempts):
+
+    def _fuellen_und_pruefen():
         field.fill(value)
-        page.wait_for_timeout(200)
-        if page.locator(selector).input_value() == value:
-            return
+        return page.locator(selector).input_value() == value
+
+    # Refs #1855: Poll ueber den kanonischen Baustein aus ``_helpers`` statt
+    # einer nackten festen Pause (identisch zu ``test_zeitstrom_events``).
+    if wait_until(page, _fuellen_und_pruefen, timeout_ms=attempts * 200, interval_ms=200):
+        return
     page.locator(selector).fill(value)
     expect(page.locator(selector)).to_have_value(value, timeout=5000)
 

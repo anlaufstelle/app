@@ -13,7 +13,7 @@ die geteilte E2E-DB verändert werden.
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors
+from ._helpers import track_console_errors, wait_until
 
 pytestmark = pytest.mark.e2e
 
@@ -27,10 +27,16 @@ def _open_kontakt_form(page, base_url):
     # HTMX swap-t #dynamic-fields mit den gruppierten Feldern (Basisdaten enthält
     # „dauer") — auf ein konkretes Feld warten, nicht auf networkidle.
     page.locator('#dynamic-fields input[name="dauer"]').wait_for(state="attached", timeout=10000)
-    # Kurz settlen lassen, damit Alpine die eingeswappte collapsibleGroup-Komponente
-    # initialisiert hat, bevor Tests den Toggle betätigen (Alpine-Transition-Regel,
-    # e2e-runbook § 8).
-    page.wait_for_timeout(300)
+    # Refs #1855: Statt einer festen Pause auf die Alpine-Initialisierung SELBST
+    # warten. Alpine haengt seinen Komponenten-Zustand als ``_x_dataStack`` an den
+    # ``x-data``-Knoten — vorher verpufft ein Klick auf den Toggle wirkungslos
+    # (dasselbe Muster wie ``wait_until_htmx_bound`` fuer htmx). Python-seitig
+    # pollen, nicht per ``wait_for_function`` (docs/e2e-runbook.md § 8).
+    gruppe = page.locator("#dynamic-fields [x-data]").first
+    gruppe.wait_for(state="attached", timeout=10000)
+    assert wait_until(page, lambda: gruppe.evaluate("el => !!el._x_dataStack"), timeout_ms=10000, interval_ms=50), (
+        "Alpine hat die eingeswappte collapsibleGroup-Komponente nicht initialisiert"
+    )
 
 
 class TestKontaktFieldGroups:

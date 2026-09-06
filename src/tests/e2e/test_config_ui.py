@@ -863,9 +863,20 @@ class TestFieldBoardDragAndDrop:
         # min-h-[1.5rem] hoch — der Auftreffpunkt darf nicht auf der Kante liegen.
         page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10), steps=25)
         page.wait_for_timeout(300)
-        page.mouse.up()
-        # Board-Swap nach dem move-field-/reorder-POST abwarten.
-        page.wait_for_timeout(900)
+        # Auf die Antwort des Sortable-onEnd-POST warten statt fest zu schlafen
+        # (Refs #1855): unter Host-Last dauert der Board-POST laenger als jede
+        # Pause, und der anschliessende ``goto()`` bricht einen noch laufenden
+        # POST ab — die Reihenfolge waere dann nie persistiert. Der Waiter muss
+        # VOR ``mouse.up()`` scharf sein, weil SortableJS ``onEnd`` genau daran
+        # haengt. Alle drei Board-Endpunkte (``reorder/blocks``,
+        # ``reorder/fields``, ``reorder/move-field``) liegen unter
+        # ``/reorder/`` — welcher feuert, entscheidet ``config-sortable.js`` je
+        # nach Quell-/Ziel-Container.
+        with page.expect_response(
+            lambda r: "/reorder/" in r.url and r.request.method == "POST" and r.ok,
+            timeout=15000,
+        ):
+            page.mouse.up()
 
     @classmethod
     def _native_move(cls, page, dtf_id, target_group_pk):

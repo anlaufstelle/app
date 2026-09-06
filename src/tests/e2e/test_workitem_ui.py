@@ -6,9 +6,41 @@ import subprocess
 import pytest
 
 from tests.e2e._helpers import python_bin as _python
+from tests.e2e._helpers import wait_until
 from tests.e2e._selectors import action_bar, find_client_link
 
 pytestmark = pytest.mark.e2e
+
+
+def _ist_status_post(response):
+    """Praedikat fuer ``expect_response``: der Statuswechsel-POST einer Aufgabe.
+
+    Jeder Statuswechsel — Zeile wie Detailseite — geht auf
+    ``core:workitem_status_update`` unter ``/workitems/``.
+    """
+    return "/workitems/" in response.url and response.request.method == "POST" and response.ok
+
+
+def _erwarte_bestaetigung(page):
+    """Naechsten Bestaetigungsdialog abweisen und sein Erscheinen protokollieren.
+
+    Refs #1855: Ersetzt die festen Pausen nach einem ABGEWIESENEN Dialog. Der
+    Dialog ist ein synchrones ``window.confirm`` — wird er abgewiesen, sendet
+    weder htmx (``hx-confirm``) noch ``confirm-action.js`` jemals einen Request.
+    Die belastbare Barriere ist deshalb nicht „eine halbe Sekunde warten",
+    sondern „der Dialog ist wirklich erschienen"; danach steht fest, dass der
+    Abbruch-Zweig genommen wurde. Nebenbei prueft der Test damit erstmals, dass
+    ueberhaupt nachgefragt wird.
+    """
+    gesehen: list[str] = []
+    page.once("dialog", lambda dialog: (gesehen.append(dialog.message), dialog.dismiss()))
+    return gesehen
+
+
+def _warte_auf_abgewiesenen_dialog(page, gesehen):
+    assert wait_until(page, lambda: bool(gesehen), timeout_ms=10000, interval_ms=50), (
+        "Bestaetigungsdialog ist nicht erschienen — der Abbruch-Zweig wurde nie erreicht"
+    )
 
 
 def _run_shell(code, e2e_env):
@@ -356,11 +388,11 @@ class TestWorkItemDetailActions:
         """Abbruch des Bestätigungsdialogs lässt den Status auf Offen."""
         page = authenticated_page
         _open_workitem_detail(page, base_url, "Verwerfen-Abbruch-Test")
-        page.once("dialog", lambda dialog: dialog.dismiss())
+        gesehen = _erwarte_bestaetigung(page)
         actions = action_bar(page, "workitem")
         actions.locator("button:has-text('Als nicht relevant schließen')").click()
         # Kein Statuswechsel — die offenen Aktionen bleiben sichtbar.
-        page.wait_for_timeout(500)
+        _warte_auf_abgewiesenen_dialog(page, gesehen)
         assert actions.locator("button:has-text('Als nicht relevant schließen')").is_visible()
 
     def test_dismiss_confirmed_sets_status_to_verworfen(self, authenticated_page, base_url):
@@ -743,10 +775,10 @@ class TestWorkItemDoneConfirmation:
         Offen — die offenen Aktionen bleiben sichtbar."""
         page = authenticated_page
         _open_workitem_detail(page, base_url, "Detail-Erledigt-Abbruch")
-        page.once("dialog", lambda dialog: dialog.dismiss())
+        gesehen = _erwarte_bestaetigung(page)
         actions = action_bar(page, "workitem")
         actions.locator("button:has-text('Als erledigt markieren')").click()
-        page.wait_for_timeout(500)
+        _warte_auf_abgewiesenen_dialog(page, gesehen)
         # Kein Statuswechsel: der Erledigen-Button ist weiter da.
         assert actions.locator("button:has-text('Als erledigt markieren')").is_visible()
 
@@ -760,9 +792,9 @@ class TestWorkItemDoneConfirmation:
             page.wait_for_load_state("domcontentloaded")
             row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
             row.wait_for(state="visible", timeout=10000)
-            page.once("dialog", lambda dialog: dialog.dismiss())
+            gesehen = _erwarte_bestaetigung(page)
             row.get_by_role("button", name="Erledigt").click()
-            page.wait_for_timeout(500)
+            _warte_auf_abgewiesenen_dialog(page, gesehen)
             assert _status_of_done_confirm_item(e2e_env, 0) == "in_progress"
         finally:
             _cleanup_done_confirm_items(e2e_env)
@@ -778,9 +810,10 @@ class TestWorkItemDoneConfirmation:
             row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
             row.wait_for(state="visible", timeout=10000)
             page.once("dialog", lambda dialog: dialog.accept())
-            row.get_by_role("button", name="Erledigt").click()
-            # Auf den HTMX-Swap zur Erledigt-Markierung warten, dann DB prüfen.
-            page.wait_for_timeout(800)
+            # Auf die Antwort des Status-POST warten statt fest zu schlafen
+            # (Refs #1855) — erst danach ist der Statuswechsel in der Datenbank.
+            with page.expect_response(_ist_status_post, timeout=15000):
+                row.get_by_role("button", name="Erledigt").click()
             assert _status_of_done_confirm_item(e2e_env, 0) == "done"
         finally:
             _cleanup_done_confirm_items(e2e_env)
@@ -829,9 +862,9 @@ class TestWorkItemDoneConfirmation:
             row1.get_by_role("checkbox", name="Auswählen").check()
 
             page.select_option("#bulk-status", value="done")
-            page.once("dialog", lambda dialog: dialog.dismiss())
+            gesehen = _erwarte_bestaetigung(page)
             page.locator("#bulk-status ~ button[type='submit']").click()
-            page.wait_for_timeout(500)
+            _warte_auf_abgewiesenen_dialog(page, gesehen)
             assert _status_of_done_confirm_item(e2e_env, 0) == "open"
             assert _status_of_done_confirm_item(e2e_env, 1) == "open"
         finally:
@@ -906,8 +939,8 @@ class TestWorkItemInboxRowActions:
             row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
             row.wait_for(state="visible", timeout=10000)
             page.once("dialog", lambda dialog: dialog.accept())
-            row.get_by_role("button", name="Als erledigt markieren").click()
-            page.wait_for_timeout(800)
+            with page.expect_response(_ist_status_post, timeout=15000):
+                row.get_by_role("button", name="Als erledigt markieren").click()
             assert _status_of_done_confirm_item(e2e_env, 0) == "done"
         finally:
             _cleanup_done_confirm_items(e2e_env)
@@ -922,9 +955,9 @@ class TestWorkItemInboxRowActions:
             page.wait_for_load_state("domcontentloaded")
             row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
             row.wait_for(state="visible", timeout=10000)
-            page.once("dialog", lambda dialog: dialog.dismiss())
+            gesehen = _erwarte_bestaetigung(page)
             row.get_by_role("button", name="Als nicht relevant schließen").click()
-            page.wait_for_timeout(500)
+            _warte_auf_abgewiesenen_dialog(page, gesehen)
             assert _status_of_done_confirm_item(e2e_env, 0) == "open"
         finally:
             _cleanup_done_confirm_items(e2e_env)
@@ -940,8 +973,8 @@ class TestWorkItemInboxRowActions:
             row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
             row.wait_for(state="visible", timeout=10000)
             page.once("dialog", lambda dialog: dialog.accept())
-            row.get_by_role("button", name="Als nicht relevant schließen").click()
-            page.wait_for_timeout(800)
+            with page.expect_response(_ist_status_post, timeout=15000):
+                row.get_by_role("button", name="Als nicht relevant schließen").click()
             assert _status_of_done_confirm_item(e2e_env, 0) == "dismissed"
         finally:
             _cleanup_done_confirm_items(e2e_env)

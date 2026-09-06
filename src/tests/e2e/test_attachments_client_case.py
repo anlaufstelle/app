@@ -160,8 +160,22 @@ class TestClientAttachmentJourney:
         page.wait_for_load_state("domcontentloaded")
         # Typwechsel -> HTMX tauscht das Feldset, beim Speichern kommt der
         # window.confirm aus #1733 (jetzt mit Datei-Zählung).
-        page.select_option('select[name="document_type"]', label="E2E-M24-P2-Akte")
-        page.wait_for_timeout(1000)
+        # Refs #1855: Statt einer festen Sekunde auf die Antwort des
+        # Feld-Partials warten UND auf den frisch eingeswappten Knoten. Der
+        # ``data-pre-swap``-Stempel ist noetig, weil ``#dynamic-fields`` schon
+        # server-seitig gerendert ist — ein nacktes ``wait_for_selector`` wuerde
+        # sonst den VOR-Swap-Knoten matchen (Muster aus
+        # ``test_file_vault.select_doc_type_and_wait``, Refs #1797).
+        page.evaluate(
+            "() => document.querySelectorAll('#dynamic-fields > *')"
+            ".forEach((el) => el.setAttribute('data-pre-swap', '1'))"
+        )
+        with page.expect_response(lambda r: "/partials/clients/fields/" in r.url and r.ok, timeout=15000):
+            page.select_option('select[name="document_type"]', label="E2E-M24-P2-Akte")
+        # ``state="attached"``: der frisch eingeswappte Wurzel-Knoten des Partials
+        # (``x-data="conditionEvaluator"``) hat bei diesem Typ keine sichtbare
+        # Ausdehnung — geprueft wird der SWAP, nicht die Sichtbarkeit.
+        page.wait_for_selector("#dynamic-fields > :not([data-pre-swap])", state="attached", timeout=10000)
 
         dialog_messages = []
         page.once("dialog", lambda dialog: (dialog_messages.append(dialog.message), dialog.accept()))

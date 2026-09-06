@@ -14,6 +14,8 @@ import time
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import wait_until_htmx_bound
+
 pytestmark = pytest.mark.e2e
 
 
@@ -475,15 +477,6 @@ class TestSerienerfassung:
 class TestTallyPanel:
     """Strichlisten-/Tally-Panel auf der Zeitstrom-Startseite (Refs #1349/#1906)."""
 
-    @staticmethod
-    def _wait_until_htmx_bound(page, locator):
-        """Nach einem Swap bis zur HTMX-Settle-Phase pollen."""
-        for _ in range(100):
-            if locator.evaluate("el => !!el['htmx-internal-data']"):
-                return
-            page.wait_for_timeout(50)
-        raise AssertionError("HTMX hat das Inline-Formular nicht verarbeitet")
-
     def test_direct_increment_raises_counter(self, staff_page, base_url):
         """„+1" legt über den regulären Erfassungspfad einen anonymen Kontakt an
         und rendert den erhöhten Zählerstand als HTMX-Partial zurück."""
@@ -533,7 +526,7 @@ class TestTallyPanel:
 
         form = row.locator(f'[data-testid="tally-inline-form-{dt_id}"]')
         expect(form).to_be_visible()
-        self._wait_until_htmx_bound(page, form)
+        wait_until_htmx_bound(page, form)
         assert form.locator('input[type="number"]').evaluate_all("els => els.map(el => el.name)") == [
             "ausgabe",
             "rueckgabe",
@@ -551,7 +544,7 @@ class TestTallyPanel:
         expect(form).to_be_visible()
         expect(form.locator('input[name="ausgabe"] + p[role="alert"]')).to_be_visible()
         expect(count).to_have_text(str(before))
-        self._wait_until_htmx_bound(page, form)
+        wait_until_htmx_bound(page, form)
 
         form.locator('input[name="ausgabe"]').fill("10")
         form.locator('input[name="rueckgabe"]').fill("4")

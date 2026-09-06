@@ -22,7 +22,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors
+from ._helpers import track_console_errors, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -54,12 +54,7 @@ def _select_backend(page, slug):
     # Settle-Phase. Ein Klick davor waere eine normale Navigation statt eines
     # Swaps. Python-seitig pollen (kein ``wait_for_function``, Refs
     # docs/e2e-runbook.md § 8).
-    for _ in range(100):
-        if karte.evaluate("el => !!el['htmx-internal-data']"):
-            break
-        page.wait_for_timeout(100)
-    else:
-        raise AssertionError("Berichtskarte wurde nicht von htmx verarbeitet (Settle blieb aus)")
+    wait_until_htmx_bound(page, karte)
     with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url) as response_info:
         karte.click()
     assert response_info.value.status == 200, f"Berichts-Request fehlgeschlagen: {response_info.value.status}"

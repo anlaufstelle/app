@@ -13,6 +13,7 @@ from datetime import datetime, time
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import wait_until
 from ._selectors import open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
@@ -31,12 +32,16 @@ def _fill_after_htmx_swap(page, selector, value, *, attempts=8):
     """
     field = page.locator(selector)
     field.wait_for(state="visible", timeout=10_000)
-    for _ in range(attempts):
+
+    def _fuellen_und_pruefen():
         field.fill(value)
-        # einen noch ausstehenden Swap settlen lassen, dann frisch aufloesen
-        page.wait_for_timeout(250)
-        if page.locator(selector).input_value() == value:
-            return
+        # frisch aufloesen: ein zwischenzeitlicher Swap haette den Knoten ersetzt
+        return page.locator(selector).input_value() == value
+
+    # Refs #1855: derselbe Poll-Rhythmus wie bisher, aber ueber den kanonischen
+    # Poll-Baustein aus ``_helpers`` statt einer nackten festen Pause im Test.
+    if wait_until(page, _fuellen_und_pruefen, timeout_ms=attempts * 250, interval_ms=250):
+        return
     # letzter Versuch + aussagekraeftige Assertion bei echtem Fehler
     page.locator(selector).fill(value)
     expect(page.locator(selector)).to_have_value(value, timeout=5_000)
