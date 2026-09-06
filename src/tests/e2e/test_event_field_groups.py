@@ -10,10 +10,12 @@ Toggle-Checks kommen ohne Formular-Submit aus, sodass weder Seed-Daten noch
 die geteilte E2E-DB verändert werden.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors, wait_until
+from ._helpers import track_console_errors
 
 pytestmark = pytest.mark.e2e
 
@@ -27,6 +29,11 @@ COLLAPSIBLE_CARD = (
     "#dynamic-fields [x-data='collapsibleGroup']:has(button:has(span:has-text(\"Leistungen & Notizen\")))"
 )
 
+# Der Chevron im Toggle traegt ``:class="rotateClass"``. Server-seitig steht dort
+# nur ``w-4 h-4 shrink-0 text-ink-muted transition-transform``; ``rotate-180``
+# kommt ausschliesslich von Alpine (``rotateClass`` liefert es bei ``open``).
+COLLAPSIBLE_CHEVRON = f"{COLLAPSIBLE_TOGGLE} svg"
+
 
 def _open_kontakt_form(page, base_url):
     """`/events/new/` öffnen, „Kontakt" wählen und auf die dynamischen Felder warten."""
@@ -35,24 +42,28 @@ def _open_kontakt_form(page, base_url):
     # HTMX swap-t #dynamic-fields mit den gruppierten Feldern (Basisdaten enthält
     # „dauer") — auf ein konkretes Feld warten, nicht auf networkidle.
     page.locator('#dynamic-fields input[name="dauer"]').wait_for(state="attached", timeout=10000)
-    # Refs #1855: Statt einer festen Pause auf die Alpine-Initialisierung SELBST
-    # warten — und zwar an GENAU der Karte, deren Toggle die Tests gleich
-    # anklicken. Alpine legt seinen Komponenten-Zustand als ``_x_dataStack`` am
-    # ``x-data``-Knoten ab und fuellt ``open`` erst in ``init()``; vorher
-    # verpufft ein Klick auf den Toggle wirkungslos (dasselbe Muster wie
-    # ``wait_until_htmx_bound`` fuer htmx). Geprueft wird deshalb der
-    # Komponenten-State, nicht nur die Existenz des Stacks. Python-seitig
-    # pollen, nicht per ``wait_for_function`` (docs/e2e-runbook.md § 8).
-    karte = page.locator(COLLAPSIBLE_CARD)
-    karte.wait_for(state="attached", timeout=10000)
-    assert wait_until(
-        page,
-        lambda: karte.evaluate(
-            "el => !!el._x_dataStack && typeof el._x_dataStack[0].open === 'boolean'",
-        ),
-        timeout_ms=10000,
-        interval_ms=50,
-    ), "Alpine hat die eingeswappte collapsibleGroup-Karte nicht initialisiert"
+    # Refs #1855 / R-A-6: Statt einer festen Pause auf ein DOM-beobachtbares
+    # ERGEBNIS der Alpine-Verarbeitung genau dieser Karte warten — vor der
+    # Bindung verpufft ein Klick auf den Toggle wirkungslos (dasselbe Muster wie
+    # ``wait_until_htmx_bound`` fuer htmx).
+    #
+    # Warum der Chevron und nicht ``aria-expanded``: Das Template rendert
+    # ``aria-expanded="true"`` als STATISCHES Attribut neben der
+    # ``:aria-expanded``-Bindung (``core/partials/dynamic_fields.html``) — es
+    # steht also schon vor Alpine im DOM und ist kein Signal. Auch der
+    # Komponenten-State taugt nicht: ``open`` ist in der Alpine-Data-Factory
+    # bereits mit ``true`` vorbelegt (``static/js/alpine/widgets.js``), ein
+    # ``typeof ... === 'boolean'`` waere schon vor ``init()`` wahr (Befund der
+    # Re-Review).
+    #
+    # Der Chevron dagegen traegt ``:class="rotateClass"``; ``rotate-180`` steht
+    # NICHT in der server-gerenderten Klassenliste und erscheint erst, wenn
+    # Alpine die Karte samt ihrer Direktiven verarbeitet hat. Weil Alpine
+    # ``x-data`` (inkl. ``init()``) vor den Direktiven im Teilbaum abarbeitet,
+    # belegt das Attribut zugleich die abgeschlossene Initialisierung genau
+    # dieser Karte.
+    page.locator(COLLAPSIBLE_CARD).wait_for(state="attached", timeout=10000)
+    expect(page.locator(COLLAPSIBLE_CHEVRON)).to_have_class(re.compile(r"\brotate-180\b"), timeout=10000)
 
 
 class TestKontaktFieldGroups:
