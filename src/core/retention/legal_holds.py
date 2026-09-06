@@ -139,7 +139,7 @@ def _assert_not_merge_tombstone(client):
     """
     if client.merged_into_id is None:
         return
-    # ``facility_id`` mitgefiltert (kimi-k3): ``merged_into`` wird zwar nur
+    # ``facility_id`` mitgefiltert (Zweitgutachten zu #2144, Befund 5): ``merged_into`` wird zwar nur
     # innerhalb derselben Einrichtung gesetzt, aber jede Lesung in diesem Modul
     # traegt ihren Einrichtungs-Scope — Konvention statt Verlass auf eine
     # Invariante an anderer Stelle.
