@@ -100,7 +100,25 @@
 
 {% include "components/_contact_stage_legend.html" %}
 
-<div id="client-table">
+{% comment %}Refs #1059 (A11Y-036): Live-Suche und Filter tauschen
+#client-table stumm aus — die neue Trefferzahl erreichte assistive Technik
+nie. Die Ansagezeile steht bewusst NEBEN dem Swap-Ziel und bleibt dauerhaft
+im DOM (eine Live-Region, die mit ihrem Inhalt zugleich eingefuegt wird,
+sagt in NVDA/JAWS nichts an); focus-management.js schreibt nach jedem Swap
+den passenden Satz hinein. ``data-hx-no-focus`` verhindert die
+Doppelansage: ohne es fokussiert derselbe Handler nach einem
+Filter-Select-Wechsel zusaetzlich den Tabellencontainer, und der wird dann
+komplett vorgelesen. Kein Doppel mit ``#flash-messages`` — die Listenantwort
+liefert keine Messages.{% endcomment %}
+<p id="client-list-status" role="status" aria-live="polite" class="sr-only" data-testid="client-list-status">{% blocktrans count counter=clients|length %}1 Person angezeigt.{% plural %}{{ counter }} Personen angezeigt.{% endblocktrans %}</p>
+
+<div id="client-table"
+     data-hx-no-focus
+     data-hx-announce-region="client-list-status"
+     data-hx-announce-rows="[data-testid='client-row']"
+     data-hx-announce-none="{% trans 'Keine Person gefunden.' %}"
+     data-hx-announce-one="{% trans '1 Person angezeigt.' %}"
+     data-hx-announce-many="{% trans '{count} Personen angezeigt.' %}">
     {% include "core/clients/partials/table.html" %}
 </div>
 

@@ -61,7 +61,23 @@
     </select>
 </div>
 
-<div id="case-table">
+{% comment %}Refs #1059 (A11Y-035): identisch zu core/clients/list.html —
+die Ansagezeile steht dauerhaft NEBEN dem Swap-Ziel (eine Live-Region, die
+mit ihrem Inhalt zugleich eingefuegt wird, sagt in NVDA/JAWS nichts an),
+focus-management.js fuellt sie nach jedem Swap. ``data-hx-no-focus``
+verhindert, dass derselbe Handler den Tabellencontainer zusaetzlich
+fokussiert und ihn dadurch ein zweites Mal vorlesen laesst. Gezaehlt werden
+die Zeilen der Desktop-Tabelle; die Mobil-Karten darunter zeigen dieselben
+Faelle und stehen unabhaengig vom Viewport im DOM.{% endcomment %}
+<p id="case-list-status" role="status" aria-live="polite" class="sr-only" data-testid="case-list-status">{% blocktrans count counter=cases|length %}1 Fall angezeigt.{% plural %}{{ counter }} Fälle angezeigt.{% endblocktrans %}</p>
+
+<div id="case-table"
+     data-hx-no-focus
+     data-hx-announce-region="case-list-status"
+     data-hx-announce-rows="table tbody tr"
+     data-hx-announce-none="{% trans 'Kein Fall gefunden.' %}"
+     data-hx-announce-one="{% trans '1 Fall angezeigt.' %}"
+     data-hx-announce-many="{% trans '{count} Fälle angezeigt.' %}">
     {% include "core/cases/partials/table.html" %}
 </div>
 {% endblock %}

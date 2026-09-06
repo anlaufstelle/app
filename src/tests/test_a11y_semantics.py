@@ -175,3 +175,78 @@ class TestHistoryEntryDisclosure:
             assert ':aria-expanded="ariaExpanded"' in tag, tag
             index = re.search(r'aria-controls="(history-detail-\d+)"', tag).group(1)
             assert _id_count(html, index) == 1, index
+
+
+@pytest.mark.django_db
+class TestListResultAnnouncement:
+    """A11Y-035/036 — HTMX-Listen tauschten ihre Tabelle stumm aus."""
+
+    LISTS = [
+        ("core:client_list", "client-table", "client-list-status", "client-row"),
+        ("core:case_list", "case-table", "case-list-status", "case-row"),
+    ]
+
+    @pytest.mark.parametrize(("route", "swap_id", "region_id", "_row"), LISTS)
+    def test_status_region_lives_outside_the_swap_target(self, client, staff_user, route, swap_id, region_id, _row):
+        """Eine Live-Region, die der Swap mit einfuegt, sagt nichts an.
+
+        Sie muss vor dem Swap im DOM stehen — also NEBEN dem Swap-Ziel.
+        """
+        html = _html(client, staff_user, reverse(route))
+
+        assert _id_count(html, region_id) == 1
+        region_at = html.index(f'id="{region_id}"')
+        swap_at = html.index(f'id="{swap_id}"')
+        assert region_at < swap_at, "Ansagezeile liegt im oder hinter dem Swap-Ziel"
+
+        region_tag = _tag_with(html, f'id="{region_id}"')
+        assert 'role="status"' in region_tag
+        assert 'aria-live="polite"' in region_tag
+        assert "sr-only" in region_tag
+
+    @pytest.mark.parametrize(("route", "swap_id", "region_id", "_row"), LISTS)
+    def test_swap_target_carries_the_announcement_contract(self, client, staff_user, route, swap_id, region_id, _row):
+        html = _html(client, staff_user, reverse(route))
+        tag = _tag_with(html, f'id="{swap_id}"')
+
+        assert f'data-hx-announce-region="{region_id}"' in tag, tag
+        assert "data-hx-announce-rows=" in tag, tag
+        for slot in ("none", "one", "many"):
+            assert f"data-hx-announce-{slot}=" in tag, (slot, tag)
+        assert "{count}" in tag, "der Mehrzahl-Satz braucht den Platzhalter"
+
+    @pytest.mark.parametrize(("route", "swap_id", "region_id", "_row"), LISTS)
+    def test_swap_target_opts_out_of_the_focus_manager(self, client, staff_user, route, swap_id, region_id, _row):
+        """Sonst fokussiert focus-management.js den Container zusaetzlich —
+        und die Liste wird ein zweites Mal vorgelesen (Doppelansage)."""
+        html = _html(client, staff_user, reverse(route))
+        tag = _tag_with(html, f'id="{swap_id}"')
+
+        assert "data-hx-no-focus" in tag, tag
+
+    def test_row_selector_matches_the_rendered_rows(self, client, staff_user, client_identified):
+        """Der Zaehl-Selektor muss auf das gerenderte Markup passen —
+        ein Selektor ins Leere sagt immer "Keine Person gefunden"."""
+        html = _html(client, staff_user, reverse("core:client_list"))
+        tag = _tag_with(html, 'id="client-table"')
+
+        assert "data-hx-announce-rows=\"[data-testid='client-row']\"" in tag
+        assert html.count('data-testid="client-row"') == 1
+
+    def test_case_row_selector_matches_the_rendered_rows(self, client, staff_user, case_open):
+        html = _html(client, staff_user, reverse("core:case_list"))
+        tag = _tag_with(html, 'id="case-table"')
+
+        assert 'data-hx-announce-rows="table tbody tr"' in tag
+        table = html[html.index("<tbody") : html.index("</tbody>")]
+        assert table.count("<tr") == 1
+
+    @pytest.mark.parametrize(("route", "_swap", "region_id", "_row"), LISTS)
+    def test_partial_response_does_not_ship_a_second_region(self, client, staff_user, route, _swap, region_id, _row):
+        """Die HTMX-Antwort darf die Ansagezeile NICHT mitliefern —
+        sonst stuende sie doppelt im DOM (4.1.1) und bliebe stumm."""
+        client.force_login(staff_user)
+        response = client.get(reverse(route), headers={"HX-Request": "true"})
+
+        assert response.status_code == 200
+        assert _id_count(response.content.decode(), region_id) == 0

@@ -29,6 +29,17 @@
  * Opt-out und Live-Such-Schutz stehen VOR dieser Wahl und bleiben
  * unveraendert.
  *
+ * Trefferansage (Refs #1059, A11Y-035/036): Listen, die per HTMX gefiltert
+ * werden, tauschen ihre Tabelle stumm aus — die neue Trefferzahl erreicht
+ * assistive Technik nie. Traegt der Swap-Container die
+ * ``data-hx-announce-*``-Attribute, schreibt dieser Handler den Satz in die
+ * dauerhaft im DOM stehende ``role="status"``-Zeile, die das Listen-Template
+ * NEBEN dem Swap-Ziel haelt (eine Live-Region, die mit ihrem Inhalt zugleich
+ * eingefuegt wird, sagt in NVDA/JAWS nichts an). Die Ansage laeuft VOR den
+ * Fokus-Ausstiegen: sie ist von ``data-hx-no-focus`` unabhaengig — Listen
+ * setzen genau dieses Opt-out, damit der Container nicht zusaetzlich
+ * fokussiert und dadurch ein zweites Mal vorgelesen wird.
+ *
  * Abgrenzung Live-Suche: Bei keyup-getriggerten Live-Such-/Filterfeldern (z.B.
  * core/search/index.html, core/clients/list.html) darf der Fokus NICHT ins
  * Ergebnis springen — sonst tippt der Nutzer ins Leere. Solche Swaps werden
@@ -129,6 +140,47 @@
         return null;
     }
 
+    // --- Trefferansage (Refs #1059) -----------------------------------------
+    // Deklarativ ueber Attribute am Swap-Container, damit jede Liste sie ohne
+    // eigenes Skript bekommt:
+    //   data-hx-announce-region  id der dauerhaften role="status"-Zeile
+    //   data-hx-announce-rows    Selektor der zu zaehlenden Zeilen
+    //   data-hx-announce-none    Text bei 0 Treffern
+    //   data-hx-announce-one     Text bei genau 1 Treffer
+    //   data-hx-announce-many    Text ab 2 Treffern, ``{count}`` als Platzhalter
+    // Die Texte kommen uebersetzt aus dem Template (Muster
+    // ``data-confirm-remove-text`` in core/clients/list.html) — hier steht
+    // kein deutscher String im Skript.
+    function _announceResultCount(container) {
+        var regionId = container.getAttribute
+            ? container.getAttribute("data-hx-announce-region")
+            : null;
+        if (!regionId) {
+            return;
+        }
+        var region = document.getElementById(regionId);
+        var rowSelector = container.getAttribute("data-hx-announce-rows");
+        if (!region || !rowSelector) {
+            return;
+        }
+        var count = container.querySelectorAll(rowSelector).length;
+        var template;
+        if (count === 0) {
+            template = container.getAttribute("data-hx-announce-none");
+        } else if (count === 1) {
+            template = container.getAttribute("data-hx-announce-one");
+        } else {
+            template = container.getAttribute("data-hx-announce-many");
+        }
+        if (!template) {
+            return;
+        }
+        // textContent zu setzen ersetzt den Textknoten auch bei gleichem Text —
+        // die Mutation ist damit auch dann beobachtbar, wenn ein Filterwechsel
+        // dieselbe Trefferzahl liefert.
+        region.textContent = template.replace("{count}", String(count));
+    }
+
     function _handleAfterSwap(event) {
         var detail = event && event.detail ? event.detail : {};
         var target = _resolveConnectedContainer(detail.target || {});
@@ -136,6 +188,10 @@
         if (!target || target.nodeType !== 1) {
             return;
         }
+
+        // Vor jeder Fokus-Entscheidung: die Trefferansage haengt an der
+        // Liste, nicht am Fokus, und muss auch unter data-hx-no-focus laufen.
+        _announceResultCount(target);
 
         var active = document.activeElement;
 
