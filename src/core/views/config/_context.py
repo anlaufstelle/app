@@ -5,6 +5,8 @@ Sie bleiben damit unabhängig von Request-/Response-Choreografie und können von
 den einzelnen Config-View-Modulen ohne lokale Zyklus-Imports genutzt werden.
 """
 
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
@@ -13,6 +15,27 @@ from core.models import DocumentTypeField, FieldCondition
 from core.services import config as config_service
 from core.services.conditions import OPERATORS_BY_FIELD_TYPE, VALUELESS_OPERATORS
 from core.services.dynamic_data import option_label_map
+
+CONDITION_CREATE_ID_PREFIX = "condition-create"
+
+
+def condition_id_prefix(raw: str | None = None, *, condition=None) -> str:
+    """Liefert einen sicheren, slot-eindeutigen ID-Praefix fuer Regel-Formulare."""
+    if condition is not None:
+        return f"condition-{condition.pk}"
+    if raw == CONDITION_CREATE_ID_PREFIX:
+        return raw
+    if raw and raw.startswith("condition-"):
+        try:
+            return f"condition-{uuid.UUID(raw.removeprefix('condition-'))}"
+        except (ValueError, TypeError):
+            pass
+    return CONDITION_CREATE_ID_PREFIX
+
+
+def prepare_condition_form(form, prefix: str) -> None:
+    """Setzt eindeutige Django-Feld-IDs, ohne POST-``name``-Attribute zu aendern."""
+    form.auto_id = f"{prefix}-%s"
 
 
 def _condition_display_value(condition):
@@ -85,16 +108,19 @@ def condition_board_context(doc_type, *, form=None):
     next_group_index = max((condition.group_index for condition in conditions), default=-1) + 1
     if form is None:
         form = FieldConditionForm(document_type=doc_type, initial={"group_index": next_group_index})
+    prefix = condition_id_prefix()
+    prepare_condition_form(form, prefix)
 
     return {
         "doc_type": doc_type,
         "condition_targets": condition_targets,
         "condition_form": form,
+        "condition_id_prefix": prefix,
         "condition_next_group_index": next_group_index,
         "condition_field_count": DocumentTypeField.objects.filter(document_type=doc_type).count(),
         # #1715: Operator-Slot des eingebetteten Neu-Formulars (typgefiltert, falls
         # die Quelle im Formularzustand bereits bekannt ist — sonst volle Liste).
-        **operator_input_context_for_form(form, doc_type),
+        **operator_input_context_for_form(form, doc_type, condition_id_prefix=prefix),
     }
 
 
@@ -122,7 +148,9 @@ def board_context(doc_type, *, add_form=None, group_form=None):
     }
 
 
-def _value_input_context(field_template, operator, current_value) -> dict:
+def _value_input_context(
+    field_template, operator, current_value, *, condition_id_prefix=CONDITION_CREATE_ID_PREFIX
+) -> dict:
     """Kontext für ``condition_value_input.html`` — je Quelltyp+Operator (E19).
 
     Gemeinsam genutzt vom HTMX-Swap-Endpoint (``ConditionValueInputView``) und vom
@@ -135,6 +163,7 @@ def _value_input_context(field_template, operator, current_value) -> dict:
         "valueless": operator in VALUELESS_OPERATORS,
         "choices": field_template.choices,
         "current_value": current_value,
+        "condition_id_prefix": condition_id_prefix,
     }
 
 
@@ -163,7 +192,14 @@ def _operator_choices_for(field_template):
     return [(value, label) for value, label in FieldCondition.Operator.choices if value in allowed]
 
 
-def _operator_input_context(field_template, current_operator, doc_type, *, autoload) -> dict:
+def _operator_input_context(
+    field_template,
+    current_operator,
+    doc_type,
+    *,
+    autoload,
+    condition_id_prefix=CONDITION_CREATE_ID_PREFIX,
+) -> dict:
     """Kontext für ``condition_operator_input.html`` — je Quelltyp (#1715).
 
     Gemeinsam genutzt vom HTMX-Swap-Endpoint (``ConditionOperatorInputView``,
@@ -182,6 +218,7 @@ def _operator_input_context(field_template, current_operator, doc_type, *, autol
         "selected_operator": selected,
         "doc_type": doc_type,
         "operator_autoload": autoload,
+        "condition_id_prefix": condition_id_prefix,
     }
 
 
@@ -207,7 +244,9 @@ def _form_source_field_template(form):
     return dtf.field_template
 
 
-def operator_input_context_for_form(form, doc_type, *, autoload=False) -> dict:
+def operator_input_context_for_form(
+    form, doc_type, *, autoload=False, condition_id_prefix=CONDITION_CREATE_ID_PREFIX
+) -> dict:
     """Baut den Operator-Slot-Kontext aus dem Formularzustand (#1715).
 
     Zentral genutzt an allen Formular-Render-Pfaden (Board, Create-GET, Edit-GET,
@@ -220,4 +259,10 @@ def operator_input_context_for_form(form, doc_type, *, autoload=False) -> dict:
         current = form.data.get("operator", "") or ""
     if not current:
         current = form.initial.get("operator", "") or ""
-    return _operator_input_context(field_template, current, doc_type, autoload=autoload)
+    return _operator_input_context(
+        field_template,
+        current,
+        doc_type,
+        autoload=autoload,
+        condition_id_prefix=condition_id_prefix,
+    )

@@ -14,29 +14,30 @@ umgebenden <form> `hx-swap="outerHTML"` und zielen auf `next .condition-value-sl
 jeder Folgeswap `htmx:targetError` werfen. Mit Wrapper-als-Wurzel ist der Swap
 idempotent über beliebig viele Quell-/Operator-Wechsel (Wrapper ersetzt Wrapper).
 
-Kontext: field_type, operator, valueless (bool), choices [(slug,label)], current_value.
+Kontext: field_type, operator, valueless (bool), choices [(slug,label)], current_value,
+condition_id_prefix.
 {% endcomment %}
 <div class="condition-value-slot" data-testid="condition-value-slot">
 {% if valueless %}
     <p class="text-[12px] text-ink-muted py-2" data-testid="condition-value-none">{% trans "Für diesen Operator ist kein Vergleichswert nötig." %}</p>
 {% elif field_type == "boolean" %}
-    <select id="id_condition_value" name="value" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <select id="{{ condition_id_prefix }}-value" name="value" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
         <option value="true"{% if current_value == "true" %} selected{% endif %}>{% trans "Ja" %}</option>
         <option value="false"{% if current_value == "false" %} selected{% endif %}>{% trans "Nein" %}</option>
     </select>
 {% elif field_type == "select" or field_type == "multi_select" %}
-    <select id="id_condition_value" name="value" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <select id="{{ condition_id_prefix }}-value" name="value" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
         {% for slug, label in choices %}
         <option value="{{ slug }}"{% if current_value == slug %} selected{% endif %}>{{ label }}</option>
         {% endfor %}
     </select>
 {% elif field_type == "number" %}
-    <input id="id_condition_value" type="number" step="any" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <input id="{{ condition_id_prefix }}-value" type="number" step="any" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% elif field_type == "date" %}
-    <input id="id_condition_value" type="date" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <input id="{{ condition_id_prefix }}-value" type="date" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% elif field_type == "time" %}
-    <input id="id_condition_value" type="time" name="value" step="1" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <input id="{{ condition_id_prefix }}-value" type="time" name="value" step="1" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% else %}
-    <input id="id_condition_value" type="text" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
+    <input id="{{ condition_id_prefix }}-value" type="text" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% endif %}
 </div>

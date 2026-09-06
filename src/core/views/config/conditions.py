@@ -32,7 +32,9 @@ from core.views.config._context import (
     _value_for_input,
     _value_input_context,
     condition_board_context,
+    condition_id_prefix,
     operator_input_context_for_form,
+    prepare_condition_form,
 )
 from core.views.mixins import FacilityAdminRequiredMixin
 
@@ -132,6 +134,8 @@ class ConditionCreateView(FacilityAdminRequiredMixin, View):
             with contextlib.suppress(ValueError, TypeError):
                 initial["target_field"] = uuid.UUID(raw_target)
         form = FieldConditionForm(document_type=doc_type, initial=initial)
+        prefix = condition_id_prefix()
+        prepare_condition_form(form, prefix)
         return render(
             request,
             FORM_TEMPLATE,
@@ -139,7 +143,8 @@ class ConditionCreateView(FacilityAdminRequiredMixin, View):
                 "condition_form": form,
                 "doc_type": doc_type,
                 "is_edit": False,
-                **operator_input_context_for_form(form, doc_type),
+                "condition_id_prefix": prefix,
+                **operator_input_context_for_form(form, doc_type, condition_id_prefix=prefix),
             },
         )
 
@@ -185,6 +190,8 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
                 "group_index": condition.group_index,
             },
         )
+        prefix = condition_id_prefix(condition=condition)
+        prepare_condition_form(form, prefix)
         # Value-Slot-Kontext mitgeben → der Edit-Prefill rendert das TYPISIERTE Input
         # (number→type=number etc.) statt des generischen Textfelds (Minor 2).
         context = {
@@ -192,9 +199,15 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
             "doc_type": doc_type,
             "condition": condition,
             "is_edit": True,
-            **_value_input_context(condition.depends_on_field.field_template, condition.operator, current_value),
+            "condition_id_prefix": prefix,
+            **_value_input_context(
+                condition.depends_on_field.field_template,
+                condition.operator,
+                current_value,
+                condition_id_prefix=prefix,
+            ),
             # #1715: Operator-Slot typgefiltert vorbefüllt (Quelle aus dem Prefill bekannt).
-            **operator_input_context_for_form(form, doc_type),
+            **operator_input_context_for_form(form, doc_type, condition_id_prefix=prefix),
         }
         return render(request, FORM_TEMPLATE, context)
 
@@ -223,6 +236,8 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
         # Das Editier-Formular postet per hx-target="this": Fehler ersetzen es an
         # Ort und Stelle (kein Flash — er stünde im Store), sonst Redirect.
         if request.headers.get("HX-Request") == "true":
+            prefix = condition_id_prefix(condition=condition)
+            prepare_condition_form(form, prefix)
             return render(
                 request,
                 FORM_TEMPLATE,
@@ -231,7 +246,8 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
                     "doc_type": doc_type,
                     "condition": condition,
                     "is_edit": True,
-                    **operator_input_context_for_form(form, doc_type),
+                    "condition_id_prefix": prefix,
+                    **operator_input_context_for_form(form, doc_type, condition_id_prefix=prefix),
                 },
             )
         return condition_board_response(request, doc_type, error=_("Die Bedingung konnte nicht gespeichert werden."))
@@ -288,7 +304,12 @@ class ConditionValueInputView(FacilityAdminRequiredMixin, View):
         return render(
             request,
             VALUE_INPUT_TEMPLATE,
-            _value_input_context(dtf.field_template, operator, request.GET.get("value", "")),
+            _value_input_context(
+                dtf.field_template,
+                operator,
+                request.GET.get("value", ""),
+                condition_id_prefix=condition_id_prefix(request.GET.get("condition_id_prefix")),
+            ),
         )
 
 
@@ -310,5 +331,11 @@ class ConditionOperatorInputView(FacilityAdminRequiredMixin, View):
         return render(
             request,
             OPERATOR_INPUT_TEMPLATE,
-            _operator_input_context(dtf.field_template, operator, doc_type, autoload=True),
+            _operator_input_context(
+                dtf.field_template,
+                operator,
+                doc_type,
+                autoload=True,
+                condition_id_prefix=condition_id_prefix(request.GET.get("condition_id_prefix")),
+            ),
         )

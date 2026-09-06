@@ -21,10 +21,10 @@ automatisch den Value-Slot nach (DOM-Reihenfolge Operator vor Value bleibt). Bei
 INITIALEN Formular-Render nur `change` (kein Extra-GET beim Seitenaufbau).
 
 Kontext: operator_choices [(value, label)], selected_operator, doc_type,
-operator_autoload (bool).
+operator_autoload (bool), condition_id_prefix.
 {% endcomment %}
 <div class="condition-operator-slot" data-testid="condition-operator-slot">
-    <select id="id_condition_operator" name="operator" data-testid="condition-operator"
+    <select id="{{ condition_id_prefix }}-operator" name="operator" data-testid="condition-operator"
             class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
             hx-get="{% url 'core:config_condition_value_input' doc_type.pk %}"
             hx-trigger="{% if operator_autoload %}change, load{% else %}change{% endif %}"

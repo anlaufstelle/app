@@ -769,7 +769,7 @@ class TestValueInputPartial:
         response = client.get(url, {"depends_on_field": str(select_dtf.pk), "operator": "equals"})
         assert response.status_code == 200
         content = response.content.decode()
-        assert '<select id="id_condition_value" name="value"' in content
+        assert '<select id="condition-create-value" name="value"' in content
         assert 'value="rot"' in content and 'value="blau"' in content
 
     def test_value_input_missing_source_is_bad_request(self, client, admin_user, doc_type_contact):

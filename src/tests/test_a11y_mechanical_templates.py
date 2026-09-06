@@ -1,8 +1,11 @@
 """Pin-Tests fuer die mechanischen WCAG-Fixes aus #1059."""
 
+from collections import Counter
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
+from django.urls import reverse
 
 pytestmark = pytest.mark.architecture
 
@@ -197,14 +200,70 @@ def test_shared_border_token_meets_the_calculated_contrast_target() -> None:
     assert "--border: oklch(0.64 0.012 75);" in INPUT_CSS.read_text(encoding="utf-8")
 
 
-def test_condition_editor_labels_target_stable_partial_ids() -> None:
+def test_condition_editor_uses_slot_specific_partial_ids() -> None:
     form = _source("core/config/document_types/partials/condition_form.html")
     operator = _source("core/config/document_types/partials/condition_operator_input.html")
     value = _source("core/config/document_types/partials/condition_value_input.html")
-    assert 'for="id_condition_operator"' in form
-    assert 'for="id_condition_value"' in form
-    assert 'id="id_condition_operator"' in operator
-    assert value.count('id="id_condition_value"') == 6
+    assert 'for="{{ condition_id_prefix }}-operator"' in form
+    assert 'for="{{ condition_id_prefix }}-value"' in form
+    assert 'id="{{ condition_id_prefix }}-operator"' in operator
+    assert value.count('id="{{ condition_id_prefix }}-value"') == 6
+
+
+class _LabelTargetParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ids: list[str] = []
+        self.label_targets: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if element_id := attributes.get("id"):
+            self.ids.append(element_id)
+        if tag == "label" and (target := attributes.get("for")):
+            self.label_targets.append(target)
+
+
+@pytest.mark.django_db
+def test_condition_board_create_and_edit_forms_have_unique_label_targets(
+    client, admin_user, doc_type_contact, field_condition
+) -> None:
+    client.force_login(admin_user)
+    board = client.get(reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk}))
+    edit = client.get(
+        reverse(
+            "core:config_condition_update",
+            kwargs={"pk": doc_type_contact.pk, "condition_pk": field_condition.pk},
+        )
+    )
+    assert board.status_code == edit.status_code == 200
+
+    parser = _LabelTargetParser()
+    parser.feed(board.content.decode() + edit.content.decode())
+    id_counts = Counter(parser.ids)
+    assert [element_id for element_id, count in id_counts.items() if count > 1] == []
+    assert parser.label_targets
+    assert all(id_counts[target] == 1 for target in parser.label_targets)
+
+
+@pytest.mark.django_db
+def test_condition_valueless_edit_form_has_no_label_without_target(
+    client, admin_user, doc_type_contact, field_condition
+) -> None:
+    field_condition.operator = "is_empty"
+    field_condition.value = None
+    field_condition.save(update_fields=["operator", "value"])
+    client.force_login(admin_user)
+    response = client.get(
+        reverse(
+            "core:config_condition_update",
+            kwargs={"pk": doc_type_contact.pk, "condition_pk": field_condition.pk},
+        )
+    )
+    assert response.status_code == 200
+    parser = _LabelTargetParser()
+    parser.feed(response.content.decode())
+    assert not any(target.endswith("-value") for target in parser.label_targets)
 
 
 def test_statistics_controls_and_chart_headings_expose_state_and_structure() -> None:

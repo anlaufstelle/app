@@ -9,6 +9,7 @@ Kontext:
   doc_type        DocumentType (für die Action-URLs)
   condition       FieldCondition (nur im Edit-Modus)
   is_edit         bool
+  condition_id_prefix  slot-eindeutiger Praefix fuer alle Control-IDs
 
 Swap-Verhalten (Muster group_form.html):
   - Anlegen (is_edit=False): postet auf #condition-board (outerHTML). Fehler
@@ -33,6 +34,7 @@ generische Textfeld, kein separates Feld der Form selbst.
       hx-swap="outerHTML"
       class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end" data-testid="condition-form">
     {% csrf_token %}
+    <input type="hidden" name="condition_id_prefix" value="{{ condition_id_prefix }}">
     {# OR-Gruppe wird nicht getippt — Hidden-Feld, von den Board-Affordanzen belegt (Plan § 5). #}
     {{ condition_form.group_index }}
     <div>
@@ -44,7 +46,7 @@ generische Textfeld, kein separates Feld der Form selbst.
         {{ condition_form.depends_on_field }}
     </div>
     <div>
-        <label for="id_condition_operator" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Operator" %}</label>
+        <label for="{{ condition_id_prefix }}-operator" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Operator" %}</label>
         {% comment %}#1715: Operator-Feld als eigenständiges Partial (Wurzel = .condition-operator-slot):
         identische Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Quellwechsel.
         Ohne bekannte Quelle rendert der View die volle Operatorliste (Progressive Enhancement),
@@ -52,7 +54,7 @@ generische Textfeld, kein separates Feld der Form selbst.
         {% include "core/config/document_types/partials/condition_operator_input.html" %}
     </div>
     <div>
-        <label for="id_condition_value" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>
+        {% if not valueless %}<label for="{{ condition_id_prefix }}-value" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>{% endif %}
         {% comment %}Value-Slot als eigenständiges Partial (Wurzel = .condition-value-slot):
         identische Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Swaps.
         Ohne Quelltyp-Kontext (Create) rendert der else-Zweig das generische Textfeld; im
