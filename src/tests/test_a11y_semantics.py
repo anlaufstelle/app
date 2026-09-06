@@ -450,6 +450,23 @@ class TestWorkitemClientAutocomplete:
         assert 'data-testid="client-pinned"' in html
         assert 'role="combobox"' not in html
 
+    def test_event_form_keeps_its_anonymous_branch(self, client, staff_user):
+        """Gegenprobe zur zweiten Bestandseinbindung (Cross-Review B2', NIEDRIG).
+
+        ``events/create.html`` bindet die Partial mit ``anonymous_mode=True``
+        ein. Dieser Zweig steht VOR der geaenderten ``required_field``-Zeile —
+        das Sternchen bleibt dort das reaktive ``x-show``-Span, und ein festes
+        ``*`` oder ``aria-required`` darf nicht auftauchen.
+        """
+        html = _html(client, staff_user, reverse("core:event_create"))
+        label = _autocomplete_label(html)
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+
+        assert 'x-show="notAnonymousAllowed"' in label, label
+        assert label.count("*") == 1, label
+        assert "aria-required" not in tag, tag
+        assert 'role="combobox"' in tag, tag
+
     def test_case_form_keeps_its_required_marker(self, client, staff_user, client_identified):
         """Gegenprobe: ``CaseForm.client`` ist Pflicht — dort bleibt das Sternchen."""
         html = _html(client, staff_user, reverse("core:case_create"))
