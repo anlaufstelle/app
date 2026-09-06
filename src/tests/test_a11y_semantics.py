@@ -433,3 +433,83 @@ class TestWorkitemClientAutocomplete:
 
         assert 'aria-required="true"' in tag, tag
         assert "*" in _autocomplete_label(html)
+
+
+@pytest.mark.django_db
+class TestAutocompleteErrorWiring:
+    """Cross-Review B2' (MITTEL, R-B2p-9) — Fehler eines OPTIONALEN Personenfelds.
+
+    ``aria-invalid``/``aria-describedby`` lagen im ``required_field``-Zweig der
+    gemeinsamen Partial. Das Aufgaben-Formular hat ein optionales
+    ``client``-Feld (Refs #1786), das bei einem ungueltigen Wert dennoch einen
+    Fehler traegt: Die Fehlerliste wurde gerendert, war aber mit der Combobox
+    nicht verknuepft.
+    """
+
+    INVALID = "nicht-uuid"
+
+    def _post(self, client, user, url, data):
+        client.force_login(user)
+        response = client.post(url, data)
+        assert response.status_code == 200, "Formular sollte mit Fehlern neu rendern"
+        return response.content.decode()
+
+    def test_optional_field_with_error_is_wired_to_its_message(self, client, staff_user):
+        html = self._post(
+            client,
+            staff_user,
+            reverse("core:workitem_create"),
+            {"item_type": "task", "title": "T", "priority": "normal", "client": self.INVALID},
+        )
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+
+        assert 'aria-invalid="true"' in tag, tag
+        assert 'aria-describedby="id_client-error"' in tag, tag
+        # Das Ziel muss es geben — sonst zeigt aria-describedby ins Leere.
+        assert _id_count(html, "id_client-error") == 1
+        # Optional bleibt optional: kein aria-required.
+        assert "aria-required" not in tag, tag
+
+    def test_required_field_with_error_keeps_both_annotations(self, client, staff_user, client_identified):
+        """Gegenprobe Pflichtfeld: dort war die Verknuepfung schon vorher da."""
+        html = self._post(client, staff_user, reverse("core:case_create"), {"title": "T", "client": self.INVALID})
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+
+        assert 'aria-required="true"' in tag, tag
+        assert 'aria-invalid="true"' in tag, tag
+        assert 'aria-describedby="id_client-error"' in tag, tag
+
+    @pytest.mark.parametrize(
+        ("route", "expect_required"),
+        [
+            ("core:case_create", True),
+            ("core:event_create", False),
+            ("core:workitem_create", False),
+        ],
+    )
+    def test_error_free_renderings_keep_their_attribute_sequence(
+        self, client, staff_user, client_identified, route, expect_required
+    ):
+        """Die TABU-Aenderung darf die drei Bestandsrenderings nicht verschieben.
+
+        Gepinnt wird die Attributfolge der Combobox — inklusive der Aussage,
+        dass OHNE Fehler weder ``aria-invalid`` noch ``aria-describedby``
+        auftauchen.
+        """
+        html = _html(client, staff_user, reverse(route))
+        tag = _tag_with(html, 'aria-label="Person suchen"')
+        attrs = re.findall(r"(?:^|\s)(:?(?:aria-|role)[\w-]*)=", tag)
+
+        expected = ["aria-label"]
+        if expect_required:
+            expected.append("aria-required")
+        expected += [
+            "role",
+            "aria-expanded",
+            ":aria-expanded",
+            "aria-autocomplete",
+            "aria-controls",
+        ]
+        assert attrs == expected, tag
+        assert "aria-invalid" not in tag
+        assert "aria-describedby" not in tag

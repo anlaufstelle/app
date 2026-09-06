@@ -4,16 +4,12 @@ Kontakterfassung). Parameter: ``autocomplete_component`` (x-data-Name; nur
 setzen, wenn der Alpine-Scope HIER liegen soll — die Kontakterfassung haengt
 ``eventClientAutocomplete`` bewusst am <form>, damit das Fall-Dropdown
 denselben Scope liest), ``client_form`` (Fehlerquelle), ``required_field``
-(festes Pflicht-Sternchen + aria-required/aria-invalid; ohne das Flag
-bleibt das Feld optional und traegt KEIN Sternchen -- die Aufgaben-Maske
-aus #1989 hat ein optionales ``client``-Feld), ``anonymous_mode``
+(festes Pflicht-Sternchen + aria-required/aria-invalid), ``anonymous_mode``
 (Stern nur wenn nicht anonym erlaubt), ``min_stage_hint`` (Stufen-Erklärung
 im Leerzustand), ``extra_hidden_attrs`` (z.B. data-autosave-person),
 ``inline_create`` (HTMX-Modal aus dem Kontaktformular).
-Refs #1989: Die frueher gedriftete Fassung in workitems/form.html bindet
-diese Partial jetzt ein — dort ist ``client`` optional, deshalb haengt das
-Sternchen an ``required_field`` statt allein am fehlenden
-``anonymous_mode``.{% endcomment %}
+Die gedriftete Fassung in workitems/form.html wird bewusst NICHT angefasst —
+ihre a11y-Angleichung ist Ticket #1989.{% endcomment %}
 <div{% if inline_create %} @client-inline-created.window="selectItem($event.detail)"{% endif %}{% if autocomplete_component %} x-data="{{ autocomplete_component }}"
      data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
      data-initial-client-id="{{ client_id|default:'' }}"
@@ -34,7 +30,7 @@ Sternchen an ``required_field`` statt allein am fehlenden
                placeholder="{% trans 'Pseudonym eingeben...' %}"
                aria-label="{% trans 'Person suchen' %}"
                {% if required_field %}aria-required="true"
-               {% if client_form.client.errors %}aria-invalid="true" aria-describedby="id_client-error"{% endif %}
+               {% endif %}{% if client_form.client.errors %}aria-invalid="true" aria-describedby="id_client-error"
                {% endif %}role="combobox"
                aria-expanded="false"
                :aria-expanded="ariaExpanded"
