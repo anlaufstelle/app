@@ -163,7 +163,7 @@ class TestCaseCRUD:
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
         _select_first_client_in_form(page)
-        pseudonym = page.locator("input[role='combobox']").input_value()
+        pseudonym = page.get_by_role("combobox", name="Person suchen").input_value()
         assert pseudonym, "Pseudonym wurde nach der Klient-Auswahl nicht im Autocomplete sichtbar."
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/$"))
@@ -425,7 +425,7 @@ class TestHTMXCaseEvents:
         # Pseudonym des gewählten Klienten merken, um das Event danach
         # derselben Person zuzuordnen. Das Autocomplete-Widget hat ein
         # ``role="combobox"``-Input, das nach der Auswahl das Pseudonym anzeigt.
-        chosen_pseudonym = page.locator("input[role='combobox']").input_value()
+        chosen_pseudonym = page.get_by_role("combobox", name="Person suchen").input_value()
         assert chosen_pseudonym, "Pseudonym wurde nach der Klient-Auswahl nicht im Autocomplete sichtbar."
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
