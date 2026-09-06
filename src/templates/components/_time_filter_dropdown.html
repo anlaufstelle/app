@@ -5,8 +5,11 @@
 {% if time_filters %}
 <div class="relative mb-4" data-testid="time-filter-tabs">
 <div class="flex gap-1 border-b border-subtle overflow-x-auto pr-8 md:pr-0" role="tablist" aria-label="{% trans 'Zeitfilter' %}">
+    {# Refs #1059 (A11Y-017): aria-selected serverseitig; time-filter-tabs.js #}
+    {# fuehrt es beim Umschalten mit (bis dahin war der aktive Tab rein visuell). #}
     <button
         role="tab"
+        aria-selected="{% if selected_filter_id == 'all' %}true{% else %}false{% endif %}"
         data-zeitstrom-time-filter="all"
         class="time-filter-tab whitespace-nowrap min-h-[44px] md:min-h-0 px-3.5 py-2 text-[13px] font-medium rounded-t-md {% if selected_filter_id == 'all' %}bg-accent-light text-accent border-b-2 border-accent font-semibold{% else %}text-ink-muted hover:text-ink hover:bg-canvas{% endif %}"
         data-testid="time-filter-all"
@@ -21,6 +24,7 @@
     {% for tf in time_filters %}
     <button
         role="tab"
+        aria-selected="{% if tf == selected_filter %}true{% else %}false{% endif %}"
         data-zeitstrom-time-filter="{{ tf.pk }}"
         class="time-filter-tab whitespace-nowrap min-h-[44px] md:min-h-0 px-3.5 py-2 text-[13px] font-medium rounded-t-md {% if tf == selected_filter %}bg-accent-light text-accent border-b-2 border-accent font-semibold{% else %}text-ink-muted hover:text-ink hover:bg-canvas{% endif %}"
         data-testid="time-filter-{{ tf.label|slugify }}"
@@ -31,7 +35,11 @@
         hx-sync="#{{ feed_target_id|default:'event-list' }}:replace"
     >
         {{ tf.label }}
-        <span class="font-mono text-[12px] text-ink-muted ml-1">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span>
+        {# Refs #1059 (A11Y-008): text-ink-muted auf bg-accent-light erreicht nur #}
+        {# 4,31:1 — im Aktivzustand deshalb text-accent (6,07:1). Die Klasse     #}
+        {# ``time-filter-tab-time`` ist der Griff, an dem time-filter-tabs.js    #}
+        {# beim Umschalten mitzieht.                                             #}
+        <span class="time-filter-tab-time font-mono text-[12px] {% if tf == selected_filter %}text-accent{% else %}text-ink-muted{% endif %} ml-1">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span>
     </button>
     {% endfor %}
 </div>

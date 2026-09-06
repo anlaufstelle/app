@@ -250,3 +250,90 @@ class TestListResultAnnouncement:
 
         assert response.status_code == 200
         assert _id_count(response.content.decode(), region_id) == 0
+
+
+@pytest.fixture
+def time_filters(facility):
+    """Zwei benannte Zeitfilter — die Tableiste rendert erst mit ihnen."""
+    from core.models import TimeFilter
+
+    return [
+        TimeFilter.objects.create(
+            facility=facility,
+            label="Frühdienst",
+            start_time="08:00",
+            end_time="16:00",
+            sort_order=0,
+        ),
+        TimeFilter.objects.create(
+            facility=facility,
+            label="Nachtdienst",
+            start_time="22:00",
+            end_time="08:00",
+            sort_order=1,
+        ),
+    ]
+
+
+@pytest.mark.django_db
+class TestTimeFilterTabs:
+    """A11Y-017/008 — der aktive Zeitfilter-Tab war rein visuell."""
+
+    def _tabs(self, html: str) -> list[str]:
+        return re.findall(r'<button[^>]*role="tab"[^>]*>', html, re.DOTALL)
+
+    def test_every_tab_carries_aria_selected(self, client, staff_user, time_filters):
+        html = _html(client, staff_user, reverse("core:zeitstrom"))
+
+        tabs = self._tabs(html)
+
+        assert len(tabs) == len(time_filters) + 1, "Alle-Tab plus je ein Zeitfilter"
+        assert all("aria-selected=" in tag for tag in tabs), tabs
+
+    def test_exactly_one_tab_is_selected(self, client, staff_user, time_filters):
+        html = _html(client, staff_user, reverse("core:zeitstrom"))
+
+        selected = [t for t in self._tabs(html) if 'aria-selected="true"' in t]
+        assert len(selected) == 1, self._tabs(html)
+
+    def test_the_selected_tab_is_the_chosen_one(self, client, staff_user, time_filters):
+        chosen = time_filters[1]
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"), {"time_filter": str(chosen.pk)})
+        html = response.content.decode()
+
+        selected = [t for t in self._tabs(html) if 'aria-selected="true"' in t]
+        assert len(selected) == 1
+        assert f'data-zeitstrom-time-filter="{chosen.pk}"' in selected[0]
+
+    def test_all_tab_is_selected_by_default(self, client, staff_user, time_filters):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"), {"time_filter": "all"})
+        html = response.content.decode()
+
+        selected = [t for t in self._tabs(html) if 'aria-selected="true"' in t]
+        assert selected and 'data-zeitstrom-time-filter="all"' in selected[0]
+
+    def test_active_tab_time_span_switches_to_the_readable_colour(self, client, staff_user, time_filters):
+        """text-ink-muted auf bg-accent-light sind 4,31:1 — unter der AA-Schwelle."""
+        chosen = time_filters[1]
+        client.force_login(staff_user)
+        html = client.get(reverse("core:zeitstrom"), {"time_filter": str(chosen.pk)}).content.decode()
+
+        spans = re.findall(r'<span class="time-filter-tab-time[^"]*"', html)
+        assert len(spans) == len(time_filters)
+        assert sum("text-accent" in span for span in spans) == 1
+        assert sum("text-ink-muted" in span for span in spans) == len(time_filters) - 1
+
+    def test_inactive_time_spans_stay_muted(self, client, staff_user, time_filters):
+        """Auf „Alle" ist kein Zeitfilter aktiv — dann bleibt jede Spanne gedaempft.
+
+        Ohne ``time_filter=all`` waehlt die Ansicht den Dienst der aktuellen
+        Uhrzeit vor; der Test waere dann tageszeitabhaengig.
+        """
+        client.force_login(staff_user)
+        html = client.get(reverse("core:zeitstrom"), {"time_filter": "all"}).content.decode()
+
+        spans = re.findall(r'<span class="time-filter-tab-time[^"]*"', html)
+        assert spans and all("text-ink-muted" in span for span in spans)
+        assert not any("text-accent" in span for span in spans)

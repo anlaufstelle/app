@@ -10,6 +10,13 @@
  * wenn das Quell-Element die ``.time-filter-tab``-Klasse hat. Aktive
  * Stilklassen werden dabei vom vorherigen aktiven Tab entfernt und auf den
  * gerade angeklickten Tab gesetzt.
+ *
+ * Refs #1059 (A11Y-017/008): Die Tableiste selbst wird beim Umschalten NICHT
+ * neu gerendert (der Swap trifft die Feed-Liste). Was hier nicht mitgezogen
+ * wird, bleibt also auf dem Server-Stand stehen — deshalb wandern
+ * ``aria-selected`` (der Zustand war vorher rein visuell) und die Textfarbe
+ * der Uhrzeit-Spanne (``text-ink-muted`` erreicht auf ``bg-accent-light`` nur
+ * 4,31:1) zusammen mit den Stilklassen.
  */
 (function () {
     "use strict";
@@ -22,6 +29,19 @@
         "font-semibold",
     ];
     var INACTIVE = ["text-ink-muted", "hover:text-ink", "hover:bg-canvas"];
+    // Uhrzeit-Spanne im Tab (nur die benannten Zeitfilter haben eine).
+    var TIME_SPAN = ".time-filter-tab-time";
+    var TIME_ACTIVE = "text-accent";
+    var TIME_INACTIVE = "text-ink-muted";
+
+    function _setTimeSpanState(tab, active) {
+        var span = tab.querySelector(TIME_SPAN);
+        if (!span) {
+            return;
+        }
+        span.classList.remove(active ? TIME_INACTIVE : TIME_ACTIVE);
+        span.classList.add(active ? TIME_ACTIVE : TIME_INACTIVE);
+    }
 
     document.body.addEventListener("htmx:beforeRequest", function (event) {
         var target = event.target;
@@ -35,6 +55,8 @@
             INACTIVE.forEach(function (cls) {
                 b.classList.add(cls);
             });
+            b.setAttribute("aria-selected", "false");
+            _setTimeSpanState(b, false);
         });
         INACTIVE.forEach(function (cls) {
             target.classList.remove(cls);
@@ -42,5 +64,7 @@
         ACTIVE.forEach(function (cls) {
             target.classList.add(cls);
         });
+        target.setAttribute("aria-selected", "true");
+        _setTimeSpanState(target, true);
     });
 })();
