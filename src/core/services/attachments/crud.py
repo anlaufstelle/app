@@ -453,12 +453,17 @@ def _lock_owner_row(owner):
 
     Reihenfolge: ``core_client`` (schon gehalten) -> ``core_event`` bzw.
     ``core_case`` — genau die kanonische Ordnung aus ADR-050 D5.5. Ein
-    Inversions-Risiko entsteht nicht: die Ereignis-Hold-Anlage sperrt keine
-    weitere Tabelle, die Fall-Hold-Anlage nimmt dieselbe Richtung
-    (``core_client`` -> ``core_case``).
+    Inversions-Risiko entsteht nicht: die Ereignis-Hold-Anlage nimmt seit
+    Fix-Runde 2 dieselbe Richtung (``core_client`` -> ``core_event``), die
+    Fall-Hold-Anlage ebenso (``core_client`` -> ``core_case`` -> ``core_event``).
 
     Fuer einen **Personen**-Owner ist nichts zu tun: seine Zeile haelt das
-    Art.-18-Gate bereits.
+    Art.-18-Gate bereits. Dass ``owner_has_active_hold`` dort zusaetzlich jeden
+    Ereignis-Hold der Person mitzaehlt, deckt seit Refs #2144/#2123
+    (Fix-Runde 2) die Hold-Anlage selbst ab: ``_lock_event_and_check_redaction``
+    sperrt jetzt ebenfalls zuerst die Personenzeile. Dieser Helfer muss deshalb
+    keine fremden Ereigniszeilen nachsperren — das waere eine unbegrenzte
+    Sperrmenge.
     """
     if owner.__class__.__name__ == "Client":
         return
@@ -548,13 +553,21 @@ def purge_attachment_chain(owner, entry_id):
         # ``_restricted_flag`` die ``core_client``-Zeile — den Anker der
         # Personen- und (als erste Stufe) der Fall-Hold-Anlage —, und
         # :func:`_lock_owner_row` die Zeile des Owners selbst. Die zweite Stufe
-        # ist noetig, weil die DIREKTE Ereignis-Hold-Anlage ausschliesslich
-        # ``core_event`` sperrt und die Personenzeile nie anfasst (kimi-k3 B-1,
-        # Fix-Runde 1) — ohne sie gab es fuer genau diesen Fall kein
-        # gemeinsames Sperrobjekt. Erst danach ist „kein Hold" eine stabile
-        # Aussage. Die Reihenfolge der beiden Gates ist umgekehrt zu vorher;
-        # fachlich sind sie unabhaengig, und beide antworten mit demselben
-        # Fehlertyp an dieselbe View-Flaeche.
+        # ist noetig, weil ein Hold auf den Owner SELBST (Ereignis, Fall) sonst
+        # kein gemeinsames Sperrobjekt mit dem Purge haette (kimi-k3 B-1,
+        # Fix-Runde 1).
+        #
+        # „Kein Hold" ist an dieser Stelle stabil, weil JEDE Hold-Anlage
+        # (Ereignis, Person, Fall, Aktivitaet) die Personenzeile als erstes
+        # Glied sperrt — seit Refs #2144/#2123 (Fix-Runde 2) auch die direkte
+        # Ereignis-Hold-Anlage. Das ist der Grund, warum die transitive Menge
+        # zaehlt, die ``owner_has_active_hold`` bei Personen- und Fall-Ownern
+        # zusaetzlich prueft (Ereignis- und Fall-Holds der Person): sie alle
+        # warten auf dieselbe ``core_client``-Zeile, die dieser Pfad haelt.
+        #
+        # Die Reihenfolge der beiden Gates ist umgekehrt zu vorher; fachlich
+        # sind sie unabhaengig, und beide antworten mit demselben Fehlertyp an
+        # dieselbe View-Flaeche.
         _lock_owner_row(owner)
 
         if owner_has_active_hold(owner):

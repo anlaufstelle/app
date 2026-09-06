@@ -546,7 +546,9 @@ class TestCaseAnonymizeNowHoldRace:
                 with transaction.atomic():
                     Client.objects.filter(pk=person.pk).select_for_update().only("pk").first()
                     a_haelt_die_sperre.set()
-                    assert b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Faden B ist nie gestartet"
+                    # NUR notieren, auch die Harness-Vorbedingung (Lehre 36
+                    # woertlich): kein ``assert`` im gesperrten Fenster.
+                    beobachtung["b_ist_gestartet"] = b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT)
                     time.sleep(_BLOCKED_GRACE_SECONDS)
                     beobachtung["tilgung_im_fenster_fertig"] = b_ist_fertig.is_set()
                     LegalHold.objects.create(
@@ -583,6 +585,7 @@ class TestCaseAnonymizeNowHoldRace:
         faden_b.join(timeout=_JOIN_TIMEOUT)
         assert not faden_a.is_alive() and not faden_b.is_alive(), "Verklemmung zwischen Hold-Anlage und Fall-Tilgung"
         assert "a" not in fehler, fehler
+        assert beobachtung.get("b_ist_gestartet") is True, "Faden B ist nie gestartet"
 
         assert beobachtung["tilgung_im_fenster_fertig"] is False, (
             "Die Fall-Tilgung lief neben der gehaltenen Personenzeile durch — kein gemeinsamer Anker (Refs #2123)"
@@ -798,7 +801,9 @@ class TestActivityHoldAnchorRace:
                     Client.objects.filter(pk=person.pk).select_for_update().only("pk").first()
                     Activity.objects.filter(pk=aktivitaet.pk).select_for_update().only("pk").first()
                     a_haelt_die_sperre.set()
-                    assert b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Faden B ist nie gestartet"
+                    # NUR notieren, auch die Harness-Vorbedingung (Lehre 36
+                    # woertlich): kein ``assert`` im gesperrten Fenster.
+                    beobachtung["b_ist_gestartet"] = b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT)
                     time.sleep(_BLOCKED_GRACE_SECONDS)
                     beobachtung["hold_im_fenster_fertig"] = b_ist_fertig.is_set()
             except Exception as exc:  # noqa: BLE001
@@ -834,6 +839,7 @@ class TestActivityHoldAnchorRace:
         faden_b.join(timeout=_JOIN_TIMEOUT)
         assert not faden_a.is_alive() and not faden_b.is_alive(), "Verklemmung zwischen Sweep und Hold-Anlage"
         assert not fehler, fehler
+        assert beobachtung.get("b_ist_gestartet") is True, "Faden B ist nie gestartet"
 
         assert beobachtung["hold_im_fenster_fertig"] is False, (
             "Die Aktivitaets-Hold-Anlage committete neben den gehaltenen Zeilen her — "
@@ -993,15 +999,21 @@ class TestActivityLockOrder:
 # ---------------------------------------------------------------------------
 
 
-def _committed_ereignis_mit_anhang(*, mit_person=True):
-    """Committeter Ereignis-Owner mit Anhang-Kette — fuer die Faden-Tests."""
+def _committed_purge_bestand(owner_art="ereignis", *, mit_person=True):
+    """Committeter Anhang-Owner samt Ereignis der Person — fuer die Faden-Tests.
+
+    ``owner_art``: ``"ereignis"`` | ``"person"`` | ``"fall"``. Das Ereignis
+    existiert in allen drei Faellen — es ist das Ziel des DIREKTEN
+    Ereignis-Holds, den ``owner_has_active_hold`` bei Personen- und Fall-Ownern
+    transitiv mitprueft Re-Review, Abschnitt 1).
+    """
     from tests.conftest import _make_attachment
 
-    org = Organization.objects.create(name="Purge-Org")
-    facility = org.facilities.create(name="Purge-Stelle")
+    org = Organization.objects.create(name=f"Purge-Org {owner_art}")
+    facility = org.facilities.create(name=f"Purge-Stelle {owner_art}")
     Settings.objects.get_or_create(facility=facility)
     admin = User.objects.create_user(
-        username="purge-admin",
+        username=f"purge-admin-{owner_art}",
         password="x" * 40,
         facility=facility,
         role=User.Role.FACILITY_ADMIN,
@@ -1015,19 +1027,29 @@ def _committed_ereignis_mit_anhang(*, mit_person=True):
     if mit_person:
         person = Client.objects.create(
             facility=facility,
-            pseudonym="Purge-Person",
+            pseudonym=f"Purge-Person {owner_art}",
             contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+    fall = None
+    if owner_art == "fall":
+        fall = Case.objects.create(
+            facility=facility,
+            client=person,
+            title="Fall mit Anhang",
+            created_by=admin,
         )
     ereignis = Event.objects.create(
         facility=facility,
         client=person,
+        case=fall,
         document_type=doc_type,
         occurred_at=timezone.now(),
         data_json={"freitext": "Klartext"},
         is_anonymous=person is None,
     )
-    anhang = _make_attachment(facility, ereignis, admin, ft_name="Purge-Renn-Datei")
-    return facility, admin, person, ereignis, anhang
+    owner = {"ereignis": ereignis, "person": person, "fall": fall}[owner_art]
+    anhang = _make_attachment(facility, owner, admin, ft_name=f"Purge-Renn-Datei {owner_art}")
+    return facility, admin, person, ereignis, owner, anhang
 
 
 @pytest.mark.django_db
@@ -1103,25 +1125,29 @@ class TestAttachmentPurgeSperrtDieOwnerZeile:
 
 @pytest.mark.django_db(transaction=True)
 class TestAttachmentPurgeUndDirekterEreignisHold:
-    """Renn-Nachweis zu kimi-k3 B-1, beobachtend.
+    """Renn-Nachweis zu kimi-k3 B-1 und Re-Review Abschnitt 1, beobachtend.
 
     Der Haken haengt an ``owner_has_active_hold`` — an dieser Stelle haelt der
     Purge alle Sperren, die er nimmt. Beobachtet wird, ob eine **direkte**
-    Ereignis-Hold-Anlage in diesem Fenster fertig wird. Ohne die Sperre auf
-    ``core_event`` committet sie neben dem Purge her, und der ``on_commit``-
-    Unlink vernichtet die Datei trotz aktiver Anordnung.
+    Ereignis-Hold-Anlage in diesem Fenster fertig wird.
+
+    Gefahren wird das fuer alle drei Owner-Arten, weil ``owner_has_active_hold``
+    dieselbe Hold-Menge prueft: bei einem **Personen**- oder **Fall**-Owner
+    zaehlt es ueber ``client_has_active_hold`` auch jeden Ereignis-Hold der
+    Person mit. Fuer diese transitive Menge reichte die Owner-Sperre aus
+    Fix-Runde 1 nicht — die Ereignis-Hold-Anlage sperrte nur ``core_event`` und
+    traf damit weder ``core_client`` noch ``core_case``. Seit Fix-Runde 2
+    verankert JEDE Hold-Anlage an der Personenzeile (Refs #2144, #2123).
+
+    Kein ``assert`` im gesperrten Fenster (Lehre 36, woertlich): auch die
+    Harness-Vorbedingung „Faden B ist gestartet" wird nur notiert und erst nach
+    ``join()`` behauptet.
     """
 
-    @pytest.fixture
-    def bestand(self, django_db_setup, _encryption_key):
-        werte = _committed_ereignis_mit_anhang()
-        yield werte
-        connections.close_all()
-
-    def test_direkter_ereignis_hold_wartet_an_der_ereigniszeile(self, bestand, monkeypatch):
+    def _rennen(self, facility, admin, ereignis, owner, anhang, monkeypatch):
+        """Startet die Hold-Anlage im gesperrten Fenster des Purge und beobachtet."""
+        from core.retention import legal_holds as legal_holds_mod
         from core.services.attachments import crud as crud_mod
-
-        facility, admin, _person, ereignis, anhang = bestand
 
         b_ist_gestartet = threading.Event()
         b_ist_fertig = threading.Event()
@@ -1147,34 +1173,139 @@ class TestAttachmentPurgeUndDirekterEreignisHold:
 
         # ``purge_attachment_chain`` importiert den Helfer erst im Rumpf — der
         # Haken gehoert deshalb an das QUELL-Modul, nicht an ``crud``.
-        from core.retention import legal_holds as legal_holds_mod
-
         echte_pruefung = legal_holds_mod.owner_has_active_hold
         faden = {}
 
-        def _erst_rennen_dann_pruefen(owner):
+        def _erst_rennen_dann_pruefen(geprueter_owner):
             if "b" not in faden:
                 faden["b"] = threading.Thread(target=_hold_anlegen, name="event-hold")
                 faden["b"].start()
-                assert b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Der Hold-Faden ist nie gestartet"
+                # NUR notieren — die Auswertung liegt nach dem Rennen.
+                beobachtung["b_ist_gestartet"] = b_ist_gestartet.wait(timeout=_JOIN_TIMEOUT)
                 time.sleep(_BLOCKED_GRACE_SECONDS)
-                # Nur BEOBACHTEN, nicht behaupten (Lehre 36).
                 beobachtung["hold_im_fenster_fertig"] = b_ist_fertig.is_set()
-            return echte_pruefung(owner)
+            return echte_pruefung(geprueter_owner)
 
         monkeypatch.setattr(legal_holds_mod, "owner_has_active_hold", _erst_rennen_dann_pruefen)
 
         try:
-            crud_mod.purge_attachment_chain(ereignis, anhang.entry_id)
+            crud_mod.purge_attachment_chain(owner, anhang.entry_id)
         except Exception as exc:  # noqa: BLE001
             fehler["purge"] = exc
         finally:
             if "b" in faden:
                 faden["b"].join(timeout=_JOIN_TIMEOUT)
-                assert not faden["b"].is_alive(), "Verklemmung zwischen Purge und Ereignis-Hold-Anlage"
+                beobachtung["faden_b_beendet"] = not faden["b"].is_alive()
 
+        assert beobachtung.get("b_ist_gestartet") is True, "Der Hold-Faden ist nie gestartet"
+        assert beobachtung.get("faden_b_beendet") is True, "Verklemmung zwischen Purge und Ereignis-Hold-Anlage"
         assert "b" not in fehler, fehler
+        return beobachtung
+
+    @pytest.fixture
+    def bestand_ereignis(self, django_db_setup, _encryption_key):
+        yield _committed_purge_bestand("ereignis")
+        connections.close_all()
+
+    @pytest.fixture
+    def bestand_person(self, django_db_setup, _encryption_key):
+        yield _committed_purge_bestand("person")
+        connections.close_all()
+
+    @pytest.fixture
+    def bestand_fall(self, django_db_setup, _encryption_key):
+        yield _committed_purge_bestand("fall")
+        connections.close_all()
+
+    def test_ereignis_owner_hold_wartet(self, bestand_ereignis, monkeypatch):
+        facility, admin, _person, ereignis, owner, anhang = bestand_ereignis
+        beobachtung = self._rennen(facility, admin, ereignis, owner, anhang, monkeypatch)
         assert beobachtung["hold_im_fenster_fertig"] is False, (
             "Die direkte Ereignis-Hold-Anlage committete neben dem laufenden Purge her — "
             "Purge und Hold-Anlage haben kein gemeinsames Sperrobjekt (kimi-k3 B-1)"
         )
+
+    def test_personen_owner_hold_auf_ereignis_der_person_wartet(self, bestand_person, monkeypatch):
+        """Transitive Menge: ``owner_has_active_hold`` prueft beim Personen-Owner auch Ereignis-Holds."""
+        facility, admin, _person, ereignis, owner, anhang = bestand_person
+        beobachtung = self._rennen(facility, admin, ereignis, owner, anhang, monkeypatch)
+        assert beobachtung["hold_im_fenster_fertig"] is False, (
+            "Der Purge eines PERSONEN-Owners prueft auch Ereignis-Holds der Person, "
+            "serialisierte aber nicht mit deren Anlage Re-Review Abschnitt 1)"
+        )
+
+    def test_fall_owner_hold_auf_ereignis_der_person_wartet(self, bestand_fall, monkeypatch):
+        """Dasselbe fuer den Fall-Owner (``client_has_active_hold`` ueber die Person)."""
+        facility, admin, _person, ereignis, owner, anhang = bestand_fall
+        beobachtung = self._rennen(facility, admin, ereignis, owner, anhang, monkeypatch)
+        assert beobachtung["hold_im_fenster_fertig"] is False, (
+            "Der Purge eines FALL-Owners prueft auch Ereignis-Holds der Person, "
+            "serialisierte aber nicht mit deren Anlage Re-Review Abschnitt 1)"
+        )
+
+
+@pytest.mark.django_db
+class TestEreignisHoldAnlageSperrtDiePersonenzeile:
+    """Ordnungs-Pin zu R-C-14: die direkte Ereignis-Hold-Anlage verankert an ``core_client``.
+
+    Damit hat JEDE Hold-Anlage (Client/Case/Event/Activity) dieselbe erste Stufe
+    und serialisiert mit allen Tilgungs- und Purge-Pfaden ueber die
+    Personenzeile.
+    """
+
+    def test_ereignis_hold_sperrt_client_vor_event(self, facility, client_identified, staff_user, lead_user):
+        ereignis = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=DocumentType.objects.create(
+                facility=facility,
+                name="Hold-Ordnungs-Typ",
+                sensitivity=DocumentType.Sensitivity.NORMAL,
+            ),
+            occurred_at=timezone.now(),
+            data_json={"freitext": "Klartext"},
+            created_by=staff_user,
+        )
+        with CaptureQueriesContext(connection) as captured:
+            create_hold_for_target(
+                facility,
+                target_type="Event",
+                target_id=ereignis.pk,
+                user=lead_user,
+                reason="Anordnung",
+            )
+        sequence = _lock_sequence(captured)
+        assert "core_client" in sequence, (
+            f"Die Ereignis-Hold-Anlage nahm keinen Personen-Anker — sie serialisiert damit weder "
+            f"mit dem Personen-Purge noch mit dem Fall-Purge Re-Review): {sequence}"
+        )
+        assert "core_event" in sequence, f"Die Ereigniszeile wurde nicht gesperrt: {sequence}"
+        assert sequence.index("core_client") < sequence.index("core_event"), (
+            f"kanonische Ordnung verdreht (core_client vor core_event): {sequence}"
+        )
+
+    def test_anonymes_ereignis_sperrt_nur_die_ereigniszeile(self, facility, staff_user, lead_user):
+        """``client_id is None``: es gibt keine Personenzeile zu sperren."""
+        ereignis = Event.objects.create(
+            facility=facility,
+            client=None,
+            is_anonymous=True,
+            document_type=DocumentType.objects.create(
+                facility=facility,
+                name="Hold-Anonym-Typ",
+                sensitivity=DocumentType.Sensitivity.NORMAL,
+            ),
+            occurred_at=timezone.now(),
+            data_json={"freitext": "Klartext"},
+            created_by=staff_user,
+        )
+        with CaptureQueriesContext(connection) as captured:
+            create_hold_for_target(
+                facility,
+                target_type="Event",
+                target_id=ereignis.pk,
+                user=lead_user,
+                reason="Anordnung",
+            )
+        sequence = _lock_sequence(captured)
+        assert sequence == ["core_event"], f"Ein anonymes Ereignis hat keine Personenzeile: {sequence}"

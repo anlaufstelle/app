@@ -244,14 +244,55 @@ def _lock_event_and_check_redaction(facility, target_id):
     ``READ COMMITTED`` ein Hold zwischen dessen ``SELECT`` und ``COMMIT``
     entstehen kann.
 
+    **Die Personenzeile kommt zuerst** (Refs #2144/#2123, Re-Review zur
+    Fix-Runde 1). Die Ereigniszeile allein reicht nicht, weil ein Ereignis-Hold
+    nicht nur ueber sein Ereignis wirkt: ``client_has_active_hold`` zaehlt ihn
+    fuer die ganze **Person** mit, ``exclude_cases_with_active_holds`` fuer
+    deren **Faelle**, und ``owner_has_active_hold`` prueft ihn deshalb auch beim
+    Purge eines Personen- oder Fall-Anhangs. Jene Pfade sperren ``core_client``
+    (und ggf. ``core_case``), nie die einzelne Ereigniszeile — ohne diesen
+    Anker gab es fuer genau diese transitive Menge kein gemeinsames
+    Sperrobjekt, und ein Ereignis-Hold konnte zwischen Hold-Lesung und Commit
+    des Purge/der Tilgung dazwischenrutschen.
+
+    Mit dieser Stufe hat **jede** Hold-Anlage (Ereignis, Person, Fall,
+    Aktivitaet) ``core_client`` als erstes Glied und serialisiert damit ueber
+    dieselbe Zeile wie Sofortpfad, Nacht-Batch, K-Anon-Bridge, Ereignis-Sweep,
+    Approve und Anhang-Purge. Die Ordnung ``core_client`` -> ``core_event``
+    bleibt die kanonische (ADR-050 D5.5) — dieselbe Richtung, die
+    ``_lock_target_rows_for_approval`` (``proposals.py``),
+    ``_lock_event_and_recheck_hold`` (``enforcement.py``) und
+    ``purge_attachment_chain`` nehmen; ein ABBA-Zyklus entsteht nicht.
+
+    **Inversions-Schutz:** die Bindung wird auf der gesperrten Ereigniszeile
+    revalidiert. Haengt ein paralleler Merge das Ereignis waehrend der
+    Sperrwartezeit an eine ANDERE Person, haetten wir deren Zeile nie gesperrt.
+    Bewusst Abbruch statt Nachsperren (Muster
+    ``_lock_target_rows_for_approval``, ``_lock_case_chain``); die anordnende
+    Person laedt neu und legt den Hold auf dem frischen Stand an.
+
     Die Redaktions-Lesung liegt bewusst **nach** der Sperre: erst danach ist
     „bereits redigiert" eine stabile Aussage und nicht der Stand von vorhin.
     """
-    event = Event.objects.filter(facility=facility, pk=target_id).select_for_update().first()
-    if event is None:
+    # Bindung ungesperrt vorlesen: die Personenzeile steht in der kanonischen
+    # Ordnung vor der Ereigniszeile, ihre pk steht aber nur am Ereignis.
+    row = Event.objects.filter(facility=facility, pk=target_id).values("client_id").first()
+    if row is None:
         # Kein Ereignis dieser Einrichtung — es gibt nichts zu koordinieren.
         # Der Hold bleibt trotzdem zulaessig: ``target_id`` ist ein freies Feld.
         return False
+    client_id = row["client_id"]
+    if client_id is not None:
+        # ``client_id`` ist ``None`` bei anonymen Ereignissen — dort gibt es
+        # keine Personenzeile und nichts zu koordinieren.
+        Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk").first()
+    event = Event.objects.filter(facility=facility, pk=target_id).select_for_update().first()
+    if event is None:
+        return False
+    if event.client_id != client_id:
+        from core.retention.proposals import TARGET_BINDING_CHANGED_MESSAGE
+
+        raise ValidationError(TARGET_BINDING_CHANGED_MESSAGE)
     return _history_is_incomplete(event)
 
 

@@ -279,7 +279,9 @@ class TestHoldWaehrendDesMergeRennens:
                     # Genau der Anker, den ``_locked_clients`` nimmt.
                     list(Client.objects.filter(pk__in=[quelle.pk, ziel.pk]).order_by("pk").select_for_update())
                     merge_haelt_die_sperre.set()
-                    assert hold_ist_gestartet.wait(timeout=_JOIN_TIMEOUT), "Der Hold-Faden ist nie gestartet"
+                    # NUR notieren, auch die Harness-Vorbedingung (Lehre 36
+                    # woertlich): kein ``assert`` im gesperrten Fenster.
+                    beobachtung["hold_ist_gestartet"] = hold_ist_gestartet.wait(timeout=_JOIN_TIMEOUT)
                     time.sleep(_BLOCKED_GRACE_SECONDS)
                     beobachtung["hold_im_fenster_fertig"] = hold_ist_fertig.is_set()
                     Client.objects.filter(pk=quelle.pk).update(merged_into=ziel, is_deleted=True)
@@ -316,6 +318,7 @@ class TestHoldWaehrendDesMergeRennens:
         faden_hold.join(timeout=_JOIN_TIMEOUT)
         assert not faden_merge.is_alive() and not faden_hold.is_alive(), "Verklemmung zwischen Merge und Hold-Anlage"
         assert "merge" not in fehler, fehler
+        assert beobachtung.get("hold_ist_gestartet") is True, "Der Hold-Faden ist nie gestartet"
 
         assert beobachtung["hold_im_fenster_fertig"] is False, (
             "Die Hold-Anlage committete neben der gehaltenen Personenzeile her"
