@@ -1,86 +1,14 @@
 {
-  "account": {
-    "aria-allowed-attr": 1
-  },
-  "attachment_list": {
-    "aria-allowed-attr": 1
-  },
-  "audit_log": {
-    "aria-allowed-attr": 1
-  },
-  "case_detail": {
-    "aria-allowed-attr": 1,
-    "select-name": 1
-  },
-  "case_list": {
-    "aria-allowed-attr": 1
-  },
-  "client_create": {
-    "aria-allowed-attr": 1
-  },
-  "client_detail": {
-    "aria-allowed-attr": 1
-  },
-  "client_list": {
-    "aria-allowed-attr": 1
-  },
-  "dsgvo": {
-    "aria-allowed-attr": 1
-  },
-  "event_create": {
-    "aria-allowed-attr": 1,
-    "color-contrast": 6
-  },
-  "event_create_dynamic_fields": {
-    "aria-allowed-attr": 1,
-    "color-contrast": 6
-  },
   "event_create_errors": {
-    "aria-allowed-attr": 1,
     "listitem": 1
   },
-  "event_detail": {
-    "aria-allowed-attr": 1
-  },
-  "retention": {
-    "aria-allowed-attr": 1,
-    "color-contrast": 3
-  },
-  "search": {
-    "aria-allowed-attr": 1
-  },
-  "start_facility_admin": {
-    "aria-allowed-attr": 1
-  },
   "start_staff": {
-    "aria-allowed-attr": 1,
-    "color-contrast": 1,
-    "link-name": 2,
-    "select-name": 1
-  },
-  "statistics": {
-    "aria-allowed-attr": 1,
-    "label": 2
-  },
-  "system_compliance": {
-    "aria-prohibited-attr": 17
-  },
-  "system_dashboard": {
-    "aria-prohibited-attr": 6
-  },
-  "workitem_inbox": {
-    "aria-allowed-attr": 1
+    "color-contrast": 1
   },
   "zeitstrom": {
-    "aria-allowed-attr": 1,
-    "color-contrast": 1,
-    "link-name": 2,
-    "select-name": 1
+    "color-contrast": 1
   },
   "zeitstrom_assistant": {
-    "aria-allowed-attr": 1,
-    "color-contrast": 1,
-    "link-name": 2,
-    "select-name": 1
+    "color-contrast": 1
   }
 }

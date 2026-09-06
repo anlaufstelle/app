@@ -130,6 +130,7 @@
 </head>
 <body data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}"
       data-i18n-db-update-dismiss="{% trans 'Schließen' %}">
+    <a href="#main-content" class="sr-only focus:not-sr-only">{% trans "Zum Inhalt springen" %}</a>
     <!-- Refs #1494 (#1544, #1499): Rueckbau der /offline/-Sonderseite
          auf einen reinen, STATISCHEN Fallback. Seit dem SW-Flip (CACHE v22)
          rendern /clients/, /workitems/ und / offline IN-PLACE ihre eigenen
@@ -143,7 +144,7 @@
          Die Strings der Badges kommen als uebersetzte data-i18n-*-Attribute
          aus dem Template — offline-home.js liest dataset. {date}-Platzhalter
          existiert hier nicht mehr (Personen-Meta ist nach /clients/ migriert). -->
-    <main data-testid="offline-home"
+    <main id="main-content" data-testid="offline-home"
           data-i18n-conflict-one="{% trans 'Konflikt — bitte auflösen' %}"
           data-i18n-conflict-other="{% trans 'Konflikte — bitte auflösen' %}"
           data-i18n-dead-one="{% trans 'nicht übertragbare Änderung' %}"

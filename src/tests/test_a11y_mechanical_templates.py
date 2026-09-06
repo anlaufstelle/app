@@ -28,6 +28,7 @@ DIRECT_STANDALONE_TEMPLATES = (
     "auth/mfa_login.html",
     "auth/mfa_setup.html",
     "auth/password_change.html",
+    "offline.html",
     "registration/password_reset_complete.html",
     "registration/password_reset_confirm.html",
     "registration/password_reset_done.html",

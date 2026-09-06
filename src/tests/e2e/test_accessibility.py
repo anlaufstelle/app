@@ -95,26 +95,7 @@ SUPER_ADMIN_PAGES = [
 # Modul-Docstring und Lane-Bericht).
 SKIP_LINK_PAGES = [
     "/",
-    # Befund aus dem Baseline-Lauf (Refs #1059, Ruling R-B0-8): Das Feld
-    # ``occurred_at`` traegt ``tabindex="4"`` (``core/forms/events.py:70``, die
-    # EINZIGE positive tabindex-Angabe im Repo). Ein positiver tabindex bildet
-    # eine eigene Tab-Ordnungsgruppe, die VOR allen ``tabindex=0``-Elementen
-    # liegt — das erste Tab landet dadurch mitten im Formular statt auf dem
-    # Skip-Link, WCAG 2.4.3 (Focus Order) ist verletzt. Der Fall bleibt scharf
-    # und ``strict``: sobald B2' das tabindex entfernt, kippt er auf XPASS und
-    # faellt auf, statt still gruen zu werden.
-    #
-    # axe faengt das NICHT: die Regel ``tabindex`` traegt nur den Tag
-    # ``best-practice``, nicht ``wcag2a``/``wcag21a`` — sie liegt also
-    # ausserhalb der AA-Tagauswahl des Gates. Genau dafuer gibt es diesen
-    # Funktionstest.
-    pytest.param(
-        "/events/new/",
-        marks=pytest.mark.xfail(
-            strict=True,
-            reason="positives tabindex am occurred_at-Feld — Fix in B2' (Refs #1059)",
-        ),
-    ),
+    "/events/new/",
     "/clients/",
 ]
 

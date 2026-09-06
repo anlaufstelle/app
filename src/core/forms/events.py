@@ -67,7 +67,6 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
         widget=forms.DateTimeInput(
             attrs={
                 "type": "datetime-local",
-                "tabindex": "4",
             },
         ),
     )

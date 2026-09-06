@@ -9,7 +9,7 @@ trägt die Klasse jetzt einmal über ``self.fields``.
 Diese Datei ist das Sicherheitsnetz der Zusammenführung: sie hält für **jedes**
 betroffene Formular fest, welches Feld die Eingabe-Klasse trägt, welches nicht,
 und welche Zusatz-Attribute (HTMX, ``data-testid``, ``rows``, ``accept``,
-``min``/``max``, ``tabindex``, ``input_type``) daran hängen. Ein Feld, das nach
+``min``/``max``, ``input_type``) daran hängen. Ein Feld, das nach
 dem Umbau seine Klasse verliert — oder eines, das plötzlich eine bekommt
 (Checkbox, Hidden, Radio) — fällt hier auf, nicht erst in der Oberfläche.
 
@@ -148,7 +148,7 @@ EXPECTED = {
     "EventMetaForm": {
         "document_type": ("Select", True, {"hx-get": "", "hx-target": "#dynamic-fields", "hx-trigger": "change"}),
         "client": ("HiddenInput", False, {}),
-        "occurred_at": ("DateTimeInput", True, {"tabindex": "4"}),
+        "occurred_at": ("DateTimeInput", True, {}),
         "case": ("Select", True, {}),
     },
     "ImportUploadForm": {
