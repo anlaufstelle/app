@@ -25,12 +25,12 @@ from core.models import (
     AuditLog,
     DocumentType,
     DocumentTypeField,
-    Event,
     FieldCondition,
     FieldGroup,
     FieldTemplate,
     QuickTemplate,
 )
+from tests._factories import make_document_type, make_event
 
 
 def _valid_post(**overrides):
@@ -81,8 +81,8 @@ class TestList:
         assert foreign_doc_type.name not in body
 
     def test_search_filters_by_name(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Alpha")
-        DocumentType.objects.create(facility=facility, name="Beta")
+        make_document_type(facility=facility, name="Alpha")
+        make_document_type(facility=facility, name="Beta")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"), {"q": "Alph"})
         body = response.content.decode()
@@ -96,8 +96,8 @@ class TestList:
         (und schon gar nicht mit einem 500er quittieren) — sonst bliebe ein
         alter Bookmark/Link als stiller, wirkungsloser Filter stehen.
         """
-        DocumentType.objects.create(facility=facility, name="Kontaktart")
-        DocumentType.objects.create(facility=facility, name="Leistungsart")
+        make_document_type(facility=facility, name="Kontaktart")
+        make_document_type(facility=facility, name="Leistungsart")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"), {"category": "service"})
         body = response.content.decode()
@@ -107,8 +107,8 @@ class TestList:
         assert 'name="category"' not in body
 
     def test_is_active_filter(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Aktiver", is_active=True)
-        DocumentType.objects.create(facility=facility, name="Inaktiver", is_active=False)
+        make_document_type(facility=facility, name="Aktiver", is_active=True)
+        make_document_type(facility=facility, name="Inaktiver", is_active=False)
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"), {"is_active": "false"})
         body = response.content.decode()
@@ -192,7 +192,7 @@ class TestCreate:
         assert not DocumentType.objects.filter(name="").exists()
 
     def test_unique_collision_is_form_error_not_500(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Doppel")
+        make_document_type(facility=facility, name="Doppel")
         client.force_login(admin_user)
         response = client.post(reverse("core:config_doctype_create"), _valid_post(name="Doppel"))
         assert response.status_code == 200
@@ -208,7 +208,7 @@ class TestCreate:
 @pytest.mark.django_db
 class TestUpdate:
     def test_system_type_immutable_on_edit(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Bann", system_type=DocumentType.SystemType.BAN)
+        dt = make_document_type(facility=facility, name="Bann", system_type=DocumentType.SystemType.BAN)
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
@@ -220,14 +220,14 @@ class TestUpdate:
 
     def test_kein_kategorie_feld_im_formular(self, client, admin_user, facility):
         """Refs #1749: Das Formularfeld ist mit dem Modellfeld entfallen."""
-        dt = DocumentType.objects.create(facility=facility, name="Wandel")
+        dt = make_document_type(facility=facility, name="Wandel")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_update", kwargs={"pk": dt.pk}))
         assert "category" not in DocumentTypeForm(facility=facility).fields
         assert b'id="id_category"' not in response.content
 
     def test_umbenennen_bleibt_moeglich(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wandel")
+        dt = make_document_type(facility=facility, name="Wandel")
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
@@ -239,7 +239,7 @@ class TestUpdate:
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_UPDATE, target_id=str(dt.pk)).exists()
 
     def test_icon_color_and_sort_order_are_editable(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="Darstellung",
             icon="users",
@@ -258,7 +258,7 @@ class TestUpdate:
         assert (dt.icon, dt.color, dt.sort_order) == ("heart", "rose", 9)
 
     def test_update_persists_tally_opt_in(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Strichlisten-Kontakt")
+        dt = make_document_type(facility=facility, name="Strichlisten-Kontakt")
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
@@ -270,7 +270,7 @@ class TestUpdate:
         assert dt.tally_enabled is True
 
     def test_update_clears_unchecked_tally_opt_in_and_audits_change(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="Strichlisten-Kontakt",
             tally_enabled=True,
@@ -309,7 +309,7 @@ class TestTallyConfigurationUI:
         [(True, "Angeboten"), (False, "Nicht angeboten")],
     )
     def test_event_detail_shows_tally_status(self, client, admin_user, facility, enabled, expected_status):
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name=f"Strichlistenstatus {enabled}",
             tally_enabled=enabled,
@@ -323,7 +323,7 @@ class TestTallyConfigurationUI:
         assert expected_status in response.content.decode()
 
     def test_non_event_detail_hides_tally_status(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="Personentyp ohne Strichliste",
             entity_type=DocumentType.EntityType.CLIENT,
@@ -365,7 +365,7 @@ class TestTallyConfigurationUI:
         facility,
         entity_type,
     ):
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name=f"Legacy-Strichlistentyp {entity_type}",
             entity_type=entity_type,
@@ -393,7 +393,7 @@ class TestDelete:
     def test_delete_blocked_by_events(
         self, client, admin_user, facility, client_identified, doc_type_contact, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -413,7 +413,7 @@ class TestDelete:
         ).exists()
 
     def test_delete_without_references(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf")
+        dt = make_document_type(facility=facility, name="Wegwerf")
         pk = str(dt.pk)
         client.force_login(admin_user)
         response = client.post(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
@@ -425,7 +425,7 @@ class TestDelete:
     def test_confirm_page_shows_event_count(
         self, client, admin_user, facility, client_identified, doc_type_contact, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -451,7 +451,7 @@ class TestDelete:
         assert b"doctype-delete-quicktemplates" in response.content
 
     def test_confirm_page_hides_quick_template_hint_when_none(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Ohne Vorlagen")
+        dt = make_document_type(facility=facility, name="Ohne Vorlagen")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
         assert response.status_code == 200
@@ -653,7 +653,7 @@ class TestEntityScopedFieldVisibility:
 
     def test_edit_form_carries_the_same_scope_attributes(self, client, admin_user, facility):
         """Auch beim Bearbeiten (entity_type disabled) greift die Sichtbarkeitsregel."""
-        doc_type = DocumentType.objects.create(
+        doc_type = make_document_type(
             facility=facility,
             name="Personenbogen 1757",
             entity_type=DocumentType.EntityType.CLIENT,
@@ -689,7 +689,7 @@ class TestEntityScopedFieldVisibility:
 
     def test_scoped_values_survive_a_roundtrip_on_an_event_type(self, client, admin_user, facility):
         """Ein Ereignis-Typ behaelt seine ausblendbaren Werte ueber Bearbeiten hinweg."""
-        doc_type = DocumentType.objects.create(
+        doc_type = make_document_type(
             facility=facility,
             name="Ereignisbogen 1757",
             entity_type=DocumentType.EntityType.EVENT,
@@ -803,7 +803,7 @@ class TestSystemTypeOnlyForEventTypes:
     def test_editing_legacy_inconsistent_type_stays_possible(self, client, admin_user, facility):
         """Bestandsdaten (vor dem Guard angelegt) dürfen nicht unbearbeitbar
         werden — beide Felder sind bei der Bearbeitung ohnehin ``disabled``."""
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="Alt-Inkonsistent",
             entity_type=DocumentType.EntityType.CLIENT,
@@ -833,7 +833,7 @@ class TestFieldRemovalConfirm:
     ):
         # Zwei Ereignisse mit einem Wert unter „dauer".
         for _ in range(2):
-            Event.objects.create(
+            make_event(
                 facility=facility,
                 client=client_identified,
                 document_type=doc_type_contact,
@@ -881,7 +881,7 @@ def _text_field(facility, doc_type, name, **kwargs):
 
 def _build_zaehler_solo(facility):
     """0 Blöcke, 2 Felder, 0 Bedingungen."""
-    doc_type = DocumentType.objects.create(facility=facility, name="Zähler Solo")
+    doc_type = make_document_type(facility=facility, name="Zähler Solo")
     _number_field(facility, doc_type, "Dauer (Solo)")
     _text_field(facility, doc_type, "Notiz (Solo)")
     return doc_type
@@ -889,7 +889,7 @@ def _build_zaehler_solo(facility):
 
 def _build_zaehler_mehrfach(facility):
     """2 Blöcke (je 1 Feld) + 1 ungruppiertes Feld = 3 Felder, 1 Bedingung."""
-    doc_type = DocumentType.objects.create(facility=facility, name="Zähler Mehrfach")
+    doc_type = make_document_type(facility=facility, name="Zähler Mehrfach")
     gruppe_1 = FieldGroup.objects.create(document_type=doc_type, name="Gruppe Eins")
     gruppe_2 = FieldGroup.objects.create(document_type=doc_type, name="Gruppe Zwei")
     quelle = _number_field(facility, doc_type, "Feld B1", field_group=gruppe_1)
@@ -906,7 +906,7 @@ def _build_zaehler_mehrfach(facility):
 
 def _build_zaehler_leer(facility):
     """0 Blöcke, 0 Felder, 0 Bedingungen — der Rand-/Leerfall."""
-    return DocumentType.objects.create(facility=facility, name="Zähler Leer")
+    return make_document_type(facility=facility, name="Zähler Leer")
 
 
 @pytest.mark.django_db
@@ -920,7 +920,7 @@ class TestBlockFieldConditionCounters:
         # nicht mitverzerrt werden — Zähler an zwei der drei Typen, damit ein
         # Kreuzprodukt (Gruppen × Felder × Bedingungen × Ereignisse) auffiele.
         for _ in range(2):
-            Event.objects.create(
+            make_event(
                 facility=facility,
                 client=client_identified,
                 document_type=doc_solo,
@@ -929,7 +929,7 @@ class TestBlockFieldConditionCounters:
                 created_by=admin_user,
             )
         for _ in range(5):
-            Event.objects.create(
+            make_event(
                 facility=facility,
                 client=client_identified,
                 document_type=doc_mehrfach,
@@ -1023,7 +1023,7 @@ class TestReportBindingsDisplay:
         # tautologisch (der Typname selbst taucht ueberall auf der Seite auf,
         # unabhaengig davon, ob die Bindungslogik je gelaufen ist).
         # E3 (Refs #1849): Erststufe der Berichtszuordnung ist der ``report_key``.
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange")
+        dt = make_document_type(facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] != []
@@ -1035,7 +1035,7 @@ class TestReportBindingsDisplay:
         assert "Erscheint in keinem Bericht." not in body
 
     def test_event_type_without_binding_shows_explicit_empty_state(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Eigenes Notizfeld")
+        dt = make_document_type(facility=facility, name="Eigenes Notizfeld")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] == []
@@ -1057,7 +1057,7 @@ class TestReportBindingsDisplay:
         assert "Erscheint in" not in body
 
     def test_edit_form_shows_bindings_above_the_form_fields(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange")
+        dt = make_document_type(facility=facility, name="Wegwerf-Bindungstyp", report_key="needle_exchange")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_update", kwargs={"pk": dt.pk}))
         assert response.context["report_bindings"] != []
@@ -1083,7 +1083,7 @@ class TestReportBindingsDisplay:
 @pytest.mark.django_db
 class TestSlugDisplay:
     def test_detail_shows_the_slug(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Sozialberatung")
+        dt = make_document_type(facility=facility, name="Sozialberatung")
         assert dt.slug == "sozialberatung"
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
@@ -1092,7 +1092,7 @@ class TestSlugDisplay:
         assert "sozialberatung" in body
 
     def test_detail_shows_the_slug_origin_hint(self, client, admin_user, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Sozialberatung")
+        dt = make_document_type(facility=facility, name="Sozialberatung")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": dt.pk}))
         body = response.content.decode()
@@ -1100,8 +1100,8 @@ class TestSlugDisplay:
         assert "unveränderbar" in body
 
     def test_list_table_shows_the_slug(self, client, admin_user, facility):
-        DocumentType.objects.create(facility=facility, name="Sozialberatung")
-        DocumentType.objects.create(facility=facility, name="Schuldnerberatung")
+        make_document_type(facility=facility, name="Sozialberatung")
+        make_document_type(facility=facility, name="Schuldnerberatung")
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_list"))
         body = response.content.decode()
