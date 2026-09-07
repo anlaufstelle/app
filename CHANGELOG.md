@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.95.0] - 2026-09-07
 
+Sammel-Release (Pre-Release) — zwischen v0.91.0 und diesem Schnitt wurde kein Release getaggt; der Block bündelt die vier Checkpoint-Meilensteine 0.92 (Ops-Sichtbarkeit und Performance), 0.93 (Sicherheits-Rest, Fixes und Abhängigkeiten), 0.94 (QA, E2E-Nachweise und Barrierefreiheit) und 0.95 (Test-Suite-Refactoring), die jeweils ohne eigenen Cut abgeschlossen wurden.
+
 ### Docs
 
 - **Admin-Handbuch trennt Host- und Container-Pfad für Backups eindeutig** (#2084) — Die deutsche und englische Betriebsanleitung beschreibt `BACKUP_HOST_DIR` jetzt als Ziel der Host-Skripte und `BACKUP_DIR` ausschließlich als Container-Mount-Ziel.
