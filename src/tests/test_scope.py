@@ -6,16 +6,17 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, DocumentType, Event, Facility, WorkItem
+from core.models import AuditLog, Case, Facility, WorkItem
 from core.models.episode import Episode
 from core.models.outcome import Milestone, OutcomeGoal
+from tests._factories import make_client, make_document_type, make_event
 
 
 def _foreign_doc_type(other_facility):
     """Refs #2066: Der Composite-FK pinnt ``document_type`` an die Facility des
     Events (DEFERRABLE — die Verletzung schlaegt erst beim Commit/Teardown zu).
     Fremd-Facility-Events brauchen seither einen Doctype ihrer eigenen Facility."""
-    return DocumentType.objects.create(facility=other_facility, name="Kontakt (fremd)", report_key="contact")
+    return make_document_type(facility=other_facility, name="Kontakt (fremd)", report_key="contact")
 
 
 @pytest.mark.django_db
@@ -23,7 +24,7 @@ class TestClientListScope:
     def test_client_list_other_facility_not_visible(self, client, staff_user, facility, organization):
         """Clients of another facility are not shown in the client list."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        Client.objects.create(facility=other_facility, pseudonym="Fremd-KL-01", created_by=staff_user)
+        make_client(facility=other_facility, pseudonym="Fremd-KL-01", created_by=staff_user)
 
         client.force_login(staff_user)
         response = client.get(reverse("core:client_list"))
@@ -37,7 +38,7 @@ class TestClientDetailScope:
     def test_client_detail_other_facility_404(self, client, staff_user, facility, organization):
         """Accessing a client from another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=other_facility,
             pseudonym="Fremd-CD-01",
             created_by=staff_user,
@@ -54,17 +55,15 @@ class TestEventDetailScope:
     def test_event_detail_other_facility_404(self, client, staff_user, facility, organization, doc_type_contact):
         """Accessing an event from another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=other_facility,
             pseudonym="Fremd-EV-01",
             created_by=staff_user,
         )
         # Refs #2066: Der Composite-FK pinnt document_type an die Facility des
         # Events — das Fremd-Event braucht einen Doctype seiner eigenen Facility.
-        other_doc_type = DocumentType.objects.create(
-            facility=other_facility, name="Kontakt (fremd)", report_key="contact"
-        )
-        other_event = Event.objects.create(
+        other_doc_type = make_document_type(facility=other_facility, name="Kontakt (fremd)", report_key="contact")
+        other_event = make_event(
             facility=other_facility,
             client=other_client,
             document_type=other_doc_type,
@@ -86,7 +85,7 @@ class TestWorkItemInboxScope:
     ):
         """WorkItems of another facility are not shown in the inbox."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=other_facility,
             pseudonym="Fremd-WI-01",
             created_by=staff_user,
@@ -112,12 +111,12 @@ class TestStatisticsScope:
     def test_statistics_scoped_to_facility(self, client, lead_user, facility, organization, doc_type_contact):
         """Statistics only show own facility data; other-facility events don't inflate counts."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=other_facility,
             pseudonym="Fremd-ST-01",
             created_by=lead_user,
         )
-        Event.objects.create(
+        make_event(
             facility=other_facility,
             client=other_client,
             document_type=_foreign_doc_type(other_facility),
@@ -169,7 +168,7 @@ class TestSearchScope:
     def test_search_scoped_to_facility(self, client, staff_user, facility, organization):
         """Search only finds own facility data; other-facility clients are invisible."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        Client.objects.create(
+        make_client(
             facility=other_facility,
             pseudonym="Fremd-SR-01",
             created_by=staff_user,
@@ -189,7 +188,7 @@ class TestCaseListScope:
     def test_case_list_other_facility_not_visible(self, client, staff_user, facility, organization):
         """Cases of another facility are not shown in the case list."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-CA-01", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-CA-01", created_by=staff_user)
         Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -210,7 +209,7 @@ class TestCaseDetailScope:
     def test_case_detail_other_facility_404(self, client, staff_user, facility, organization):
         """Accessing a case from another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-CD-02", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-CD-02", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -230,7 +229,7 @@ class TestEpisodeCreateScope:
     def test_episode_create_other_facility_404(self, client, staff_user, facility, organization):
         """Creating an episode for a case in another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-EP-01", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-EP-01", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -250,7 +249,7 @@ class TestEpisodeUpdateScope:
     def test_episode_update_other_facility_404(self, client, staff_user, facility, organization):
         """Editing an episode belonging to a case in another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-EP-02", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-EP-02", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -276,7 +275,7 @@ class TestGoalCreateScope:
     def test_goal_create_other_facility_404(self, client, staff_user, facility, organization):
         """Creating a goal for a case in another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-GO-01", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-GO-01", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -299,7 +298,7 @@ class TestGoalToggleScope:
     def test_goal_toggle_other_facility_404(self, client, staff_user, facility, organization):
         """Toggling a goal from another facility's case returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-GO-02", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-GO-02", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -324,7 +323,7 @@ class TestMilestoneScope:
     def test_milestone_toggle_other_facility_404(self, client, staff_user, facility, organization):
         """Toggling a milestone from another facility's case returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-MS-01", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-MS-01", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -360,8 +359,8 @@ class TestHandoverScope:
     ):
         """Handover summary only counts events from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-HO-01", created_by=staff_user)
-        Event.objects.create(
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-HO-01", created_by=staff_user)
+        make_event(
             facility=other_facility,
             client=other_client,
             document_type=_foreign_doc_type(other_facility),
@@ -386,7 +385,7 @@ class TestHandoverScope:
         dort trotz Übergaberelevanz nicht auftauchen.
         """
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-HO-02", created_by=staff_user)
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-HO-02", created_by=staff_user)
         WorkItem.objects.create(
             facility=other_facility,
             client=other_client,
@@ -427,8 +426,8 @@ class TestCSVExportScope:
     ):
         """CSV export only contains events from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-EX-01", created_by=lead_user)
-        Event.objects.create(
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-EX-01", created_by=lead_user)
+        make_event(
             facility=other_facility,
             client=other_client,
             document_type=_foreign_doc_type(other_facility),
@@ -456,8 +455,8 @@ class TestPDFExportScope:
     def test_pdf_export_scoped_to_facility(self, client, lead_user, facility, organization, doc_type_contact):
         """PDF export only uses data from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-PDF-01", created_by=lead_user)
-        Event.objects.create(
+        other_client = make_client(facility=other_facility, pseudonym="Fremd-PDF-01", created_by=lead_user)
+        make_event(
             facility=other_facility,
             client=other_client,
             document_type=_foreign_doc_type(other_facility),
