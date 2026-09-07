@@ -1076,7 +1076,7 @@ def abort_import(job: ImportJob, user, *, reason: str = "user") -> ImportJob:
     return job
 
 
-def cleanup_stale_import_jobs(facility=None, now=None) -> int:
+def cleanup_stale_import_jobs(facility, now=None) -> int:
     """Raeumt liegengebliebene Laeufe ab; liefert die Anzahl.
 
     Ein nicht abgeschlossener Lauf haelt eine verschluesselte Datei mit
@@ -1086,8 +1086,11 @@ def cleanup_stale_import_jobs(facility=None, now=None) -> int:
     ``cleanup_stale_proposals``, das echte Waisen loescht, weil dort kein
     Vorgang dokumentiert bleiben muss.
     """
+    if facility is None:
+        raise ValueError("Facility ist für die Import-Bereinigung erforderlich.")
+
     cutoff = (now or timezone.now()) - timedelta(days=STALE_DAYS)
-    queryset = ImportJob.objects.all() if facility is None else ImportJob.objects.for_facility(facility)
+    queryset = ImportJob.objects.for_facility(facility)
     stale = queryset.exclude(status__in=ImportJob.FINAL_STATUSES).filter(created_at__lt=cutoff)
 
     count = 0

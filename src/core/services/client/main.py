@@ -1019,7 +1019,10 @@ def resolve_writable_client(facility, client_id, *, missing_error):
     ``localStatus: "dead"`` in der Dead-Letter-UI — nicht als 409/429/5xx, die
     ``offline-queue.js`` erneut ausspielen wuerde.
     """
-    scoped = Client.objects.for_facility(facility) if facility else Client.objects.all()
+    if facility is None:
+        raise ValueError("Facility ist für die Personenauflösung erforderlich.")
+
+    scoped = Client.objects.for_facility(facility)
     try:
         client = scoped.get(pk=client_id)
     except Client.DoesNotExist as exc:

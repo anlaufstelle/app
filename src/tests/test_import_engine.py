@@ -1279,6 +1279,10 @@ class TestCleanupStaleImportJobs:
         ImportJob.objects.filter(pk=job.pk).update(created_at=timezone.now() - timedelta(days=days))
         job.refresh_from_db()
 
+    def test_requires_facility(self):
+        with pytest.raises(ValueError, match="Facility ist für die Import-Bereinigung erforderlich"):
+            import_engine.cleanup_stale_import_jobs(None)
+
     def test_old_unfinished_job_is_aborted_and_its_file_removed(self, client_job, facility):
         path = import_engine.import_file_path(client_job)
         self._age(client_job, import_engine.STALE_DAYS + 1)

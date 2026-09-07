@@ -1025,17 +1025,6 @@ class TestTenantModelScopeGuard:
         "file_vault/rotation.py:_reencrypt_attachments:Attachment": (
             "Schluesselrotation, Anhang-Zweig — gleiche Begruendung."
         ),
-        "import_engine.py:cleanup_stale_import_jobs:ImportJob": (
-            "LATENTER ungescopter Fallback bei ``facility=None`` "
-            "(``src/core/services/import_engine.py:1010``). Der einzige "
-            "Produktions-Aufrufer uebergibt eine Facility "
-            "(``src/core/management/commands/enforce_retention.py:220``), der globale "
-            "Zweig ist heute unbenutzt und im Docstring NICHT als Ops-Modus dokumentiert. "
-            "Cross-Review Fix-Runde 1: als Freibrief belassen, weil diese Lane test-only "
-            "ist — das Engerziehen (``facility`` verpflichtend / eigener Ops-Einstieg) "
-            "laeuft als Folge-Ticket #2151 "
-            "(https://github.com/anlaufstelle/app/issues/2151)."
-        ),
         # --- (4) Auth-Grenze: Lockout/Recovery vor der Facility-Wahl --------
         "security/lockout_recovery.py:_latest_failed_anchor:AuditLog": (
             "Fehlversuchs-Anker zum bereits aufgeloesten ``user`` — die Sperre gilt am "
@@ -1066,21 +1055,6 @@ class TestTenantModelScopeGuard:
             "``client__is_active`` sind Zustands-, keine Objektfilter."
         ),
         # --- Einzelfaelle mit eigener Begruendung ---------------------------
-        "client/main.py:resolve_writable_client:Client": (
-            "LATENTER ungescopter Fallback bei ``facility=None`` "
-            "(``src/core/services/client/main.py:1022``, "
-            "``for_facility(facility) if facility else Client.objects.all()``). Der "
-            "einzige Aufrufer ist ``PinnedClientMixin.resolve_client`` "
-            "(``src/core/forms/mixins.py:146``) und uebergibt "
-            "``self.get_client_facility()``; alle heutigen Views reichen eine Facility "
-            "durch. Einen System-/Replay-Aufrufer gibt es NICHT — die Behauptung war "
-            "falsch (Cross-Review Fix-Runde 1). Die Form-Konstruktoren lassen "
-            "``facility=None`` aber zu (``forms/events.py``, ``forms/cases.py``, "
-            "``forms/workitems.py``), ein kuenftiger Aufrufer loeste damit "
-            "installationsweit auf. Als Freibrief belassen, weil diese Lane test-only "
-            "ist — Engerziehen laeuft als Folge-Ticket #2151 "
-            "(https://github.com/anlaufstelle/app/issues/2151)."
-        ),
         "client/main.py:_normalize_document_type_kwarg:DocumentType": (
             "Aufloesung der ``document_type_id``-Schreibweise; die Facility-Grenze zieht "
             "unmittelbar danach ``check_document_type`` in ``clean_dynamic_data`` "

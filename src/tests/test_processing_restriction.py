@@ -92,6 +92,10 @@ class TestRestrictProcessing:
 
 @pytest.mark.django_db
 class TestWriteGate:
+    def test_resolve_writable_client_requires_facility(self, client_identified):
+        with pytest.raises(ValueError, match="Facility ist für die Personenauflösung erforderlich"):
+            resolve_writable_client(None, client_identified.pk, missing_error="fehlt")
+
     def test_update_client_blocked(self, client_identified, staff_user):
         _restrict(client_identified, staff_user)
         with pytest.raises(ValidationError) as exc:
@@ -134,6 +138,18 @@ class TestWriteGate:
         )
         form.is_valid()
         assert "client" in form.errors
+
+    def test_event_form_without_facility_never_resolves_client_installation_wide(self, client_identified, staff_user):
+        from core.forms.events import EventMetaForm
+
+        form = EventMetaForm(
+            data={"client": str(client_identified.pk), "occurred_at": "2026-05-03 14:32"},
+            facility=None,
+            user=staff_user,
+        )
+
+        with pytest.raises(ValueError, match="Facility ist für die Personenauflösung erforderlich"):
+            form.is_valid()
 
 
 # ---------------------------------------------------------------------------
