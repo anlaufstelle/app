@@ -1453,120 +1453,127 @@ class TestEntityPartialAcceptsAssignedInactiveType:
 
 
 @pytest.mark.django_db
-class TestPartialPrefillsAssignedType:
-    """Spiegel zu ``test_clients_dynamic_ui.TestPartialPrefillsAssignedType``.
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityPartialPrefillsAssignedType:
+    """Der Rueckweg auf den gespeicherten Typ liefert dessen Werte mit.
 
     Der Rueckweg auf den gespeicherten Typ ist kein Typwechsel — das Partial
     liefert dafuer ``initial_data`` mit. Bei echtem Typwechsel bleibt das
     Feldset leer (E11).
     """
 
-    @pytest.fixture
-    def case_with_values(self, facility, client_identified, staff_user, doc_type_case_form, fernet_key):
+    @staticmethod
+    def _target(request, entity: EntitySpec, facility, staff_user, fernet_key):
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            yield Case.objects.create(
+            target = entity.model.objects.create(
                 facility=facility,
-                client=client_identified,
-                title="P8-Prefill-01",
                 created_by=staff_user,
-                document_type=doc_type_case_form,
-                data_json={"anlass": "Mietschulden Q3", "verlauf": "vertraulicher Klartext"},
+                document_type=doc_type,
+                data_json={
+                    entity.field("primary"): entity.value("prefill_primary"),
+                    entity.field("secondary"): "vertraulicher Klartext",
+                },
+                **entity.identity_kwargs(request, "Prefill-01"),
             )
+        return target, doc_type
 
     def test_assigned_type_comes_back_prefilled(
-        self, client, staff_user, case_with_values, doc_type_case_form, fernet_key
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
+        target, doc_type = self._target(request, entity, facility, staff_user, fernet_key)
         client.force_login(staff_user)
         with override_settings(ENCRYPTION_KEY=fernet_key):
             response = client.get(
-                reverse("core:case_fields_partial"),
-                {"document_type": str(doc_type_case_form.pk), "case": str(case_with_values.pk)},
+                reverse(entity.url("fields_partial")),
+                {"document_type": str(doc_type.pk), entity.name: str(target.pk)},
             )
         assert response.status_code == 200
         content = response.content.decode()
-        assert "Mietschulden Q3" in content
+        assert entity.value("prefill_primary") in content
         assert "vertraulicher Klartext" in content
         assert "gAAAAA" not in content
 
-    def test_real_type_switch_stays_empty(self, client, staff_user, case_with_values, doc_type_case_mixed, fernet_key):
+    def test_real_type_switch_stays_empty(self, client, staff_user, facility, fernet_key, request, entity: EntitySpec):
+        target, _ = self._target(request, entity, facility, staff_user, fernet_key)
+        other_type = entity.doctype(request, "mixed")
         client.force_login(staff_user)
         with override_settings(ENCRYPTION_KEY=fernet_key):
             response = client.get(
-                reverse("core:case_fields_partial"),
-                {"document_type": str(doc_type_case_mixed.pk), "case": str(case_with_values.pk)},
+                reverse(entity.url("fields_partial")),
+                {"document_type": str(other_type.pk), entity.name: str(target.pk)},
             )
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'name="zielsetzung"' in content
-        assert "Mietschulden Q3" not in content
+        assert f'name="{entity.field("mixed_visible")}"' in content
+        assert entity.value("prefill_primary") not in content
 
-    def test_without_case_param_stays_empty(self, client, staff_user, case_with_values, doc_type_case_form, fernet_key):
+    def test_without_object_param_stays_empty(
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
+    ):
+        _, doc_type = self._target(request, entity, facility, staff_user, fernet_key)
         client.force_login(staff_user)
         with override_settings(ENCRYPTION_KEY=fernet_key):
             response = client.get(
-                reverse("core:case_fields_partial"),
-                {"document_type": str(doc_type_case_form.pk)},
+                reverse(entity.url("fields_partial")),
+                {"document_type": str(doc_type.pk)},
             )
         assert response.status_code == 200
-        assert "Mietschulden Q3" not in response.content.decode()
+        assert entity.value("prefill_primary") not in response.content.decode()
 
-    def test_restricted_field_value_does_not_leak(
-        self, client, staff_user, facility, client_identified, doc_type_case_mixed
-    ):
-        target = Case.objects.create(
+    def test_restricted_field_value_does_not_leak(self, client, staff_user, facility, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "mixed")
+        target = entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Prefill-02",
             created_by=staff_user,
-            document_type=doc_type_case_mixed,
-            data_json={"zielsetzung": "Wohnung", "risikoeinschaetzung": "nur fuer Leitung"},
+            document_type=doc_type,
+            data_json={
+                entity.field("mixed_visible"): entity.value("mixed_initial"),
+                entity.field("mixed_restricted"): "nur fuer Leitung",
+            },
+            **entity.identity_kwargs(request, "Prefill-02"),
         )
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_mixed.pk), "case": str(target.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk), entity.name: str(target.pk)},
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'value="Wohnung"' in content
-        assert 'name="risikoeinschaetzung"' not in content
+        assert f'value="{entity.value("mixed_initial")}"' in content
+        assert f'name="{entity.field("mixed_restricted")}"' not in content
         assert "nur fuer Leitung" not in content
 
     def test_switch_away_and_back_then_submit_keeps_values(
-        self,
-        client,
-        staff_user,
-        client_identified,
-        case_with_values,
-        doc_type_case_form,
-        doc_type_case_mixed,
-        fernet_key,
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
+        target, own_type = self._target(request, entity, facility, staff_user, fernet_key)
+        other_type = entity.doctype(request, "mixed")
         client.force_login(staff_user)
-        partial = reverse("core:case_fields_partial")
-        case_pk = str(case_with_values.pk)
+        partial = reverse(entity.url("fields_partial"))
+        target_pk = str(target.pk)
 
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            away = client.get(partial, {"document_type": str(doc_type_case_mixed.pk), "case": case_pk})
+            away = client.get(partial, {"document_type": str(other_type.pk), entity.name: target_pk})
             assert away.status_code == 200
 
-            back = client.get(partial, {"document_type": str(doc_type_case_form.pk), "case": case_pk})
+            back = client.get(partial, {"document_type": str(own_type.pk), entity.name: target_pk})
             assert back.status_code == 200
             posted = {slug: field.initial or "" for slug, field in back.context["data_form"].fields.items()}
 
             response = client.post(
-                reverse("core:case_update", args=[case_with_values.pk]),
-                _case_post_data(
-                    "P8-Prefill-01",
-                    client_identified,
-                    document_type=str(doc_type_case_form.pk),
+                reverse(entity.url("update"), args=[target.pk]),
+                entity.post_data(
+                    request,
+                    "Prefill-01",
+                    document_type=str(own_type.pk),
                     **posted,
                 ),
             )
             assert response.status_code == 302
-            case_with_values.refresh_from_db()
-            assert case_with_values.data_json["anlass"] == "Mietschulden Q3"
-            assert safe_decrypt(case_with_values.data_json["verlauf"]) == "vertraulicher Klartext"
+            target.refresh_from_db()
+            assert target.data_json[entity.field("primary")] == entity.value("prefill_primary")
+            assert safe_decrypt(target.data_json[entity.field("secondary")]) == "vertraulicher Klartext"
 
 
 # ---------------------------------------------------------------------------
