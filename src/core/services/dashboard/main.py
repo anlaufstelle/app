@@ -67,7 +67,8 @@ def lead_dashboard_context(user, facility) -> dict:
     """Daten fuer die Leitungs-Arbeitszentrale.
 
     Karten: ausstehende Loeschantraege, Retention-Vorschlaege, juengste
-    Statistik-Snapshots, Speicherbelegung der Einrichtung (Refs #2129). Legal Holds bleiben reines Superadmin-Werkzeug
+    Statistik-Snapshots, Speicherbelegung der Einrichtung (Refs #2129).
+    Legal Holds bleiben reines Superadmin-Werkzeug
     (``system_legal_hold_list``, ``SuperAdminRequiredMixin``) — die frueher
     hier mitgelieferte ``active_legal_holds``-Kachel war fuer die Leitung
     hinter dem #1735-Guard immer unsichtbar und ist entfernt (Refs #1759).

@@ -500,7 +500,11 @@ def enforce_storage_quota(facility, uploaded_file, owner, user):
 
     Reihenfolge (bindend): laeuft NACH ``enforce_upload_size`` und VOR
     ``run_virus_scan`` — fuer einen Upload, der ohnehin abgelehnt wird, soll
-    kein ClamAV-Scan (bis ``CLAMAV_TIMEOUT`` synchron) anfallen.
+    kein ClamAV-Scan (bis ``CLAMAV_TIMEOUT`` synchron) anfallen. Gerechnet wird
+    deshalb mit der Groesse VOR der Metadaten-Bereinigung (#2128); gespeichert
+    wird anschliessend die bereinigte, in aller Regel kleinere Datei. Die
+    Abweichung geht bewusst in die sichere Richtung — sie kann ein Kontingent
+    nur zu frueh, nie zu spaet greifen lassen.
 
     Bewusst **kein** ``SECURITY_VIOLATION`` und damit nicht ueber
     :func:`_reject`: ein erschoepftes Kontingent ist ein normaler
