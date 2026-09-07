@@ -748,18 +748,19 @@ class TestAttachmentPurgePrueftHoldUnterSperre:
 # ---------------------------------------------------------------------------
 
 
-def _aktivitaet(facility, person, actor, *, alter_tage=400):
-    """Eine Aktivitaet mit Personen-Ziel, jenseits der Aktivitaeten-Frist."""
+def _aktivitaet(facility, person, actor, *, ziel=None, alter_tage=400):
+    """Eine Aktivitaet mit dem angegebenen Ziel, jenseits der Frist."""
     from django.contrib.contenttypes.models import ContentType
 
     from core.models import Activity
 
+    ziel = ziel or person
     aktivitaet = Activity.objects.create(
         facility=facility,
         actor=actor,
         verb=Activity.Verb.CREATED,
-        target_type=ContentType.objects.get_for_model(Client),
-        target_id=person.pk,
+        target_type=ContentType.objects.get_for_model(ziel),
+        target_id=ziel.pk,
         context={"action": Activity.Action.CLIENT_CREATED},
     )
     Activity.objects.filter(pk=aktivitaet.pk).update(occurred_at=timezone.now() - timedelta(days=alter_tage))
@@ -939,6 +940,94 @@ class TestActivitySweepRechecktHoldUnterSperre:
         )
         assert result["count"] == 0
 
+    def test_event_hold_unter_der_sperre_stellt_die_aktivitaet_ebenso_zurueck(
+        self, facility, client_identified, staff_user, lead_user, doc_type_contact, monkeypatch
+    ):
+        from core.models import Activity
+        from core.retention import enforcement as enforcement_mod
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        settings_obj.retention_activities_days = 365
+        settings_obj.save(update_fields=["retention_activities_days"])
+        ereignis = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        gehalten = _aktivitaet(facility, client_identified, staff_user, ziel=ereignis)
+
+        echte_lesung = enforcement_mod.get_active_hold_target_ids
+        ausgeloest = {"done": False}
+
+        def _dann_hold_anlegen(fac, target_type):
+            ergebnis = echte_lesung(fac, target_type)
+            if target_type == "Event" and not ausgeloest["done"]:
+                ausgeloest["done"] = True
+                LegalHold.objects.create(
+                    facility=fac,
+                    target_type="Event",
+                    target_id=ereignis.pk,
+                    reason="Anordnung waehrend des Laufs",
+                    created_by=lead_user,
+                )
+            return ergebnis
+
+        monkeypatch.setattr(enforcement_mod, "get_active_hold_target_ids", _dann_hold_anlegen)
+
+        result = enforcement_mod.enforce_activities(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert ausgeloest["done"], "Das Fenster wurde nicht geoeffnet — Aufbau kaputt"
+        assert Activity.objects.filter(pk=gehalten.pk).exists(), (
+            "Aktivitaet mit gehaltenem Ereignis-Ziel wurde hart geloescht (Spoliation)"
+        )
+        assert result["count"] == 0
+
+    def test_case_hold_unter_der_sperre_stellt_die_aktivitaet_ebenso_zurueck(
+        self, facility, client_identified, staff_user, lead_user, monkeypatch
+    ):
+        from core.models import Activity
+        from core.retention import enforcement as enforcement_mod
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        settings_obj.retention_activities_days = 365
+        settings_obj.save(update_fields=["retention_activities_days"])
+        fall = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Fall unter Anordnung",
+            created_by=staff_user,
+        )
+        gehalten = _aktivitaet(facility, client_identified, staff_user, ziel=fall)
+
+        echte_lesung = enforcement_mod.get_active_hold_target_ids
+        ausgeloest = {"done": False}
+
+        def _dann_hold_anlegen(fac, target_type):
+            ergebnis = echte_lesung(fac, target_type)
+            if target_type == "Case" and not ausgeloest["done"]:
+                ausgeloest["done"] = True
+                LegalHold.objects.create(
+                    facility=fac,
+                    target_type="Case",
+                    target_id=fall.pk,
+                    reason="Anordnung waehrend des Laufs",
+                    created_by=lead_user,
+                )
+            return ergebnis
+
+        monkeypatch.setattr(enforcement_mod, "get_active_hold_target_ids", _dann_hold_anlegen)
+
+        result = enforcement_mod.enforce_activities(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert ausgeloest["done"], "Das Fenster wurde nicht geoeffnet — Aufbau kaputt"
+        assert Activity.objects.filter(pk=gehalten.pk).exists(), (
+            "Aktivitaet mit gehaltenem Fall-Ziel wurde hart geloescht (Spoliation)"
+        )
+        assert result["count"] == 0
+
 
 @pytest.mark.django_db
 class TestActivityLockOrder:
@@ -979,6 +1068,35 @@ class TestActivityLockOrder:
         assert "core_activity" in sequence, f"Der Sweep sperrte die Aktivitaetszeile nicht: {sequence}"
         assert sequence.index("core_client") < sequence.index("core_activity"), (
             f"kanonische Ordnung verdreht (core_client vor core_activity): {sequence}"
+        )
+
+    def test_sweep_sperrt_event_ziel_zwischen_client_und_activity(
+        self, facility, client_identified, staff_user, doc_type_contact
+    ):
+        from core.retention.enforcement import enforce_activities
+
+        settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+        settings_obj.retention_activities_days = 365
+        settings_obj.save(update_fields=["retention_activities_days"])
+        ereignis = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        _aktivitaet(facility, client_identified, staff_user, ziel=ereignis)
+
+        with CaptureQueriesContext(connection) as captured:
+            enforce_activities(facility, settings_obj, timezone.now(), dry_run=False)
+
+        sequence = _lock_sequence(captured)
+        assert "core_client" in sequence, f"Der Sweep sperrte die Personenzeile nicht: {sequence}"
+        assert "core_event" in sequence, f"Der Sweep sperrte das Ereignis-Ziel nicht: {sequence}"
+        assert "core_activity" in sequence, f"Der Sweep sperrte die Aktivitaetszeile nicht: {sequence}"
+        assert sequence.index("core_client") < sequence.index("core_event") < sequence.index("core_activity"), (
+            f"kanonische Ordnung verdreht (Client vor Event vor Activity): {sequence}"
         )
 
     def test_hold_auf_unbekannte_aktivitaet_bleibt_zulaessig(self, facility, lead_user):

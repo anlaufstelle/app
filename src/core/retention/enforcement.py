@@ -488,7 +488,7 @@ def enforce_document_type_retention(facility, now, dry_run):
 
 
 def _lock_activity_and_recheck_hold(facility, pk):
-    """Sperrt Personenzeile des Ziels und Aktivitaetszeile, liest den Hold DANACH (Refs #2124).
+    """Sperrt Zielzeilen und Aktivitaet, liest die Holds DANACH (Refs #2124/#2152).
 
     Gegenstueck zu :func:`_lock_event_and_recheck_hold` fuer den
     Aktivitaeten-Sweep, und Spiegelbild von
@@ -500,9 +500,10 @@ def _lock_activity_and_recheck_hold(facility, pk):
     und unter ``READ COMMITTED`` kann ein Hold zwischen der Mengenlesung und
     dem ``DELETE`` entstehen.
 
-    ``core_activity`` ist das **letzte** Glied der kanonischen Ordnung
-    (ADR-050 D5.5, Nachtrag zu #2124) — nach ihr sperrt kein Pfad noch eine
-    andere Tabelle.
+    Bei einem Event-Ziel liegt dessen Zeile zwischen Personen- und
+    Aktivitaetszeile. So teilt der Sweep auch mit der Event-Hold-Anlage einen
+    Anker. ``core_activity`` bleibt das **letzte** Glied der kanonischen
+    Ordnung (ADR-050 D5.5) — nach ihr sperrt kein Pfad eine andere Tabelle.
 
     Rueckgabe: ``(gesperrte Aktivitaet oder None, ist_gehalten)``. ``None``
     heisst immer „ueberspringen"; ob das an einem Hold lag, sagt das zweite
@@ -518,6 +519,10 @@ def _lock_activity_and_recheck_hold(facility, pk):
     client_id = resolve_activity_client_id(facility, row["target_type_id"], row["target_id"])
     if client_id is not None:
         Client.objects.filter(facility=facility, pk=client_id).select_for_update().only("pk").first()
+    event_content_type_id = ContentType.objects.get_for_model(Event).pk
+    case_content_type_id = ContentType.objects.get_for_model(Case).pk
+    if row["target_type_id"] == event_content_type_id:
+        Event.objects.filter(facility=facility, pk=row["target_id"]).select_for_update().only("pk").first()
     activity = Activity.objects.filter(facility=facility, pk=pk).select_for_update().first()
     if activity is None:
         return None, False
@@ -526,11 +531,12 @@ def _lock_activity_and_recheck_hold(facility, pk):
     # Refs #1376 (I10) unter der Sperre: der Personen-Hold schuetzt die
     # Aktivitaeten, deren Ziel diese Person IST — exakt die Menge, die der
     # Vorfilter oben ueber ``target_type=client_content_type`` ausnimmt.
-    # Aktivitaeten mit Ereignis-/Fall-Ziel bleiben bewusst ausserhalb dieser
-    # Regel (Scope #2124, s. Bericht) — ihre Personenzeile wird nur als Anker
-    # gesperrt, nicht als Hold-Quelle gelesen.
     ist_personen_ziel = row["target_type_id"] == ContentType.objects.get_for_model(Client).pk
     if ist_personen_ziel and has_active_hold(facility, "Client", client_id):
+        return None, True
+    if row["target_type_id"] == event_content_type_id and has_active_hold(facility, "Event", row["target_id"]):
+        return None, True
+    if row["target_type_id"] == case_content_type_id and has_active_hold(facility, "Case", row["target_id"]):
         return None, True
     return activity, False
 
@@ -556,7 +562,11 @@ def enforce_activities(facility, settings_obj, now, dry_run):
     # ebenfalls ausschliessen — sonst umgeht der Aktivitaeten-Feed den
     # Client-Hold, analog zur Event-Spoliations-Luecke oben.
     held_client_ids = get_active_hold_target_ids(facility, "Client")
+    held_event_ids = get_active_hold_target_ids(facility, "Event")
+    held_case_ids = get_active_hold_target_ids(facility, "Case")
     client_content_type = ContentType.objects.get_for_model(Client)
+    event_content_type = ContentType.objects.get_for_model(Event)
+    case_content_type = ContentType.objects.get_for_model(Case)
     qs = (
         Activity.objects.filter(
             facility=facility,
@@ -564,6 +574,8 @@ def enforce_activities(facility, settings_obj, now, dry_run):
         )
         .exclude(pk__in=held_ids)
         .exclude(target_type=client_content_type, target_id__in=held_client_ids)
+        .exclude(target_type=event_content_type, target_id__in=held_event_ids)
+        .exclude(target_type=case_content_type, target_id__in=held_case_ids)
     )
     if dry_run:
         return {"count": qs.count()}
