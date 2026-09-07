@@ -107,11 +107,57 @@ TB6│   Snapshot-Bundle AES-GCM-256 (non-extractable Key)    │
 | **S** Phishing / Replay des zweiten Faktors | TOTP (`django-otp`, Secret Fernet-at-rest [ADR-031](adr/031-totp-secret-at-rest.md)) als Standard-2FA; optional **Passkey/WebAuthn** (FIDO2, origin-gebunden ⇒ **phishing-resistent**) als zusätzlicher zweiter Faktor — nur **zusätzlich** zu einem TOTP-Gerät, kein passwordless Login, Passkey-Entfernen sudo-pflichtig; 2FA-Login mit Methoden-Chooser | [ADR-032](adr/032-webauthn-passkeys-2fa.md), #1492 | Neue Auth-Angriffsfläche: serverseitige WebAuthn-Registrierung/-Assertion-Verifikation |
 | **T** CSRF / Replay | `CsrfViewMiddleware` + `CSRF_COOKIE_HTTPONLY=True` + `SAMESITE="Strict"` (CSRF) / `"Lax"` (Session, [siehe security-notes](security-notes.md)) | [`prod.py`](../src/anlaufstelle/settings/prod.py) ||
 | **R** Password-Reset-Token-Replay | Django-Default-Tokens (signed); Reset-Link jetzt explizit kurzlebig (`PASSWORD_RESET_TIMEOUT` = 2 h statt 3-Tage-Default), Einladungen über eigenen `invite_token_generator`/`INVITE_TOKEN_TIMEOUT` entkoppelt (#1375); Token-Verbrauch loggt AuditLog | [`auth.py`](../src/core/views/auth.py) ||
-| **I** Mitschauen am Arbeitsplatz / physischer Zugriff auf die offene Sitzung (Empfangsplatz, Frauenhaus, Dokumentation am oeffentlichen Ort, BYOD) | **Quick-Exit + Sichtschutz** (#2136): Knopf „Schnell verlassen“ auf jeder angemeldeten Seite (erstes Tab-Ziel nach dem Skip-Link) plus `Strg`/`Cmd`+`Umschalt`+`X` und `Umschalt`+`Esc`, auch aus Eingabefeldern heraus — verdeckt den Inhalt sofort (`visibility:hidden` + Blende), beendet die Sitzung serverseitig (`POST /logout/` per `sendBeacon`, ohne auf die Antwort zu warten) und ersetzt die Seite per `location.replace` durch die einrichtungsweit konfigurierte neutrale Adresse (`Settings.quick_exit_url`); ein bfcache-Restore beim Zurück verdeckt und lädt neu (`pageshow`/`persisted`, ergänzend zu `Cache-Control: no-store` aus #1342). Opt-in-Sichtschutz bei `blur`/`visibilitychange` (`Settings.privacy_screen_on_blur`), Freigabe nur per Klick/Taste (kein Timer, WCAG 2.2.1). Offline dieselbe Geste ohne Server-Logout: Sitzungsschlüssel verwerfen, dazu 48-h-Revocation und Boot-Wipe (TB6). Flankiert vom Inaktivitäts-Fenster und dem absoluten Sitzungs-Maximum (Zeile oben) | [`quick-exit.js`](../src/static/js/quick-exit.js), [`base.html`](../src/templates/base.html), [`settings.py`](../src/core/models/settings.py), [`test_quick_exit.py`](../src/tests/test_quick_exit.py) + [E2E](../src/tests/e2e/test_quick_exit.py), `tests/js/quick-exit.test.mjs` | Der Schulterblick VOR dem Auslösen bleibt unadressiert (kein Blickschutzfilter-Ersatz); ungespeicherte Eingaben gehen mit der Abmeldung verloren — eine „Sperre statt Logout“ (Re-Auth ohne Sitzungsende) ist bewusst ein Folgeschritt, weil sie die Sitzung serverseitig gerade NICHT beendet; die Zieladresse steht danach im Geräteverlauf und muss deshalb unverfänglich gewählt sein (Betreiber-Entscheidung, Admin-Guide § 2.3) |
+| **I** Mitschauen am Arbeitsplatz / physischer Zugriff auf die offene Sitzung (Empfangsplatz, Frauenhaus, Dokumentation am oeffentlichen Ort, BYOD) | **Quick-Exit + Sichtschutz** (#2136): Knopf „Schnell verlassen“ auf jeder angemeldeten Seite (erstes Tab-Ziel nach dem Skip-Link) plus `Strg`/`Cmd`+`Umschalt`+`X` und `Umschalt`+`Esc`, auch aus Eingabefeldern heraus — verdeckt den Inhalt sofort (`visibility:hidden` + Blende), beendet die Sitzung serverseitig (`POST /logout/` per `sendBeacon`, ohne auf die Antwort zu warten) und ersetzt die Seite per `location.replace` durch die einrichtungsweit konfigurierte neutrale Adresse (`Settings.quick_exit_url`); ein bfcache-Restore beim Zurück verdeckt und lädt neu (`pageshow`/`persisted`, ergänzend zu `Cache-Control: no-store` aus #1342). Opt-in-Sichtschutz bei `blur`/`visibilitychange` (`Settings.privacy_screen_on_blur`), Freigabe nur per Klick/Taste (kein Timer, WCAG 2.2.1). Offline dieselbe Geste ohne Server-Logout: Sitzungsschlüssel verwerfen, dazu 48-h-Revocation und Boot-Wipe (TB6). Flankiert vom Inaktivitäts-Fenster und dem absoluten Sitzungs-Maximum (Zeile oben) | [`quick-exit.js`](../src/static/js/quick-exit.js), [`base.html`](../src/templates/base.html), [`settings.py`](../src/core/models/settings.py), [`test_quick_exit.py`](../src/tests/test_quick_exit.py) + [E2E](../src/tests/e2e/test_quick_exit.py), `tests/js/quick-exit.test.mjs` | Der Schulterblick VOR dem Auslösen bleibt unadressiert (kein Blickschutzfilter-Ersatz); ungespeicherte Eingaben gehen mit der Abmeldung verloren — eine „Sperre statt Logout“ (Re-Auth ohne Sitzungsende) ist bewusst ein Folgeschritt, weil sie die Sitzung serverseitig gerade NICHT beendet; die Zieladresse steht danach im Geräteverlauf und muss deshalb unverfänglich gewählt sein (Betreiber-Entscheidung, Admin-Guide § 2.3); drei weitere benannte Restrisiken siehe Absatz unten |
 | **I** Pseudonym-Leak via Suche | `services/search.py` filtert per Sensitivity + RLS | [`src/core/services/dashboard/search.py`](../src/core/services/dashboard/search.py) | `data_json__icontains` matcht verschlüsselte Tokens |
 | **D** Login-Flood / Bot-Spam | Rate-Limit auf alle POST-Handler (Architektur-Test 100 % Coverage) | `src/tests/test_architecture_guards_*.py` | GET-Endpunkte ohne Rate-Limit (Bestandsentscheidung) |
 | **E** Privilege-Escalation via Form-Tampering | Server-seitige Permission-Checks via Mixin-Hierarchie + `can_user_mutate_*`-Helper; `UserAdmin` entfernt Djangos native Permission-Felder (`is_staff`/`is_superuser`/`groups`/`user_permissions`) für **alle** Editoren vollständig aus Formular **und** Fieldset, sodass ein POST-Smuggling folgenlos bleibt (Autorisierung läuft ausschließlich über `role`) (#1371) | [`mixins.py`](../src/core/views/mixins.py), [`workitem_actions.py`](../src/core/views/workitem_actions.py), [`users.py`](../src/core/admin/users.py) | — (WorkItem-Race #129 Teil A geschlossen) |
 | **R** Admin-Schreibpfad umgeht Domänen-Audit/Service-Invarianten; Cross-Facility-PII-Read unauditiert (`/admin-mgmt/`) | Fachobjekte (`Client`/`Case`/`Event`/`WorkItem`) im Django-Admin strikt read-only (`ReadOnlyDomainAdminMixin`) — kein Bypass von AuditLog/EventHistory/Vier-Augen; super_admin-/Cross-Facility-Reads werden als `SYSTEM_VIEW` auditiert (`AdminReadAuditMixin`, analog `/system/`); Architektur-Guard erzwingt read-only für neue Fach-Model-Admins | [`mixins.py`](../src/core/admin/mixins.py), [`test_admin_audit.py`](../src/tests/test_admin_audit.py), [`test_architecture_guards_audit.py`](../src/tests/test_architecture_guards_audit.py) | — (Refs #1341; Trade-off in [security-notes.md](security-notes.md#fachobjekte-im-admin-read-only--cross-facility-read-audit-issue-1341)) |
+
+#### Restrisiken des Mitschauen-Schutzes (Refs #2136)
+
+Der Quick-Exit leistet, was er verspricht: Der Inhalt des auslösenden Fensters ist
+verlässlich weg, und jeder Rückweg endet auf `/login/` bzw. im
+`NoSessionKeyError`-Zustand. Drei Restflächen bleiben; sie sind bewusst nicht
+geschlossen und stehen hier, statt in der Zeile oben unterzugehen.
+
+1. **Frühere Verlaufseinträge derselben Sitzung.** `location.replace`
+   ([`quick-exit.js`](../src/static/js/quick-exit.js)) ersetzt nur den *letzten*
+   Verlaufseintrag. Alle vorher geöffneten App-Seiten bleiben in der Browser-Chronik
+   mit Pfad (`/clients/<pk>/`) **und Seitentitel**, und der Titel einer Personenseite
+   trägt das Pseudonym ([`core/clients/detail.html`](../src/templates/core/clients/detail.html)).
+   Der Browser-Verlauf ist aus JavaScript nicht löschbar (kein Web-API dafür), die
+   Restfläche ist also technisch inhärent und nicht wegzuprogrammieren. **Gegenmaßnahme
+   organisatorisch:** Verlauf am Schichtende löschen bzw. auf geteilten Geräten im
+   privaten Fenster arbeiten — so im Nutzerhandbuch benannt; der Admin-Guide weist auf
+   die Pseudonyme im Seitentitel hin.
+2. **Zweiter offener Tab.** Der Quick-Exit wirkt pro Fenster. Ein zweiter Tab behält
+   seinen bereits gerenderten DOM, bis dort etwas navigiert (dann greift die
+   serverseitig beendete Sitzung mit 302 auf `/login/`) — ein statischer DOM verlangt
+   keinen Request. Der **Memory-Krypto-Schlüssel** des zweiten Tabs wird dagegen aktiv
+   entwertet: Quick-Exit sendet nach der abgeschlossenen Löschung
+   `syncOrchestrator.broadcast({type:"key-cleared"})` — denselben Kanal, den
+   [`crypto.js`](../src/static/js/crypto.js) nach dem Idle-Wipe nutzt; der Empfänger
+   verwirft seinen Schlüssel, sobald die IndexedDB-Grundlage nachweislich fehlt. Damit
+   sind Offline-Bestände auch im zweiten Tab sofort unlesbar; sichtbar bleibt dort nur
+   das bereits gerenderte Markup.
+3. **Verlorener Logout-Beacon.** Der Logout ist per Ruling fire-and-forget (R-L3-3): Es
+   wird nicht auf die Antwort gewartet, damit die Navigation nicht am Netz hängt. Reißt
+   die Verbindung genau in diesem Moment (`sendBeacon` liefert `false` **und** der
+   `fetch`-Fallback stirbt), überlebt die **Server-Sitzung**; ein späterer, neuer Aufruf
+   einer App-Seite von diesem Gerät aus liefert dann wieder Inhalt. Zeitlich gedeckelt
+   ist das durch das Inaktivitäts-Fenster (Vorgabe 30 Min,
+   #1858) und das absolute
+   Sitzungs-Maximum (Vorgabe 12 h,
+   #1868) — dieselbe Lage wie
+   bei einem Netzabriss während eines normalen Abmeldens. Das lokale Fenster ist
+   unabhängig davon sauber: Blende liegt, Sitzungsschlüssel gelöscht, weg navigiert.
+
+**Nicht in dieser Liste, weil geschlossen:** Der persistente Offline-Sitzungsschlüssel
+wird seit R-L3-9 **abgewartet** gelöscht, bevor navigiert wird (Deckel 500 ms, danach
+wird trotzdem navigiert — die Blende liegt zu diesem Zeitpunkt bereits). Vorher konnte
+`location.replace` die IndexedDB-Transaktion mitten im Löschen abreißen und die nächste
+Offline-Shell hätte den Schlüssel wieder geladen; der E2E-Fall liest die Schlüsselzeile
+deshalb **nach** dem Dokumentwechsel.
 
 ### TB2/TB3 — Django ↔ PostgreSQL
 

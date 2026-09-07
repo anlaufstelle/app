@@ -492,6 +492,8 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 > **Empfehlung für Frauenhäuser, Gewalt-Fachberatung und Awareness-Teams (#2136):** Dort wird in Gegenwart gefährdender Personen bzw. an lauten, öffentlichen Orten dokumentiert. Schalten Sie den **Sichtschutz ein** und prüfen Sie die **Zielseite** auf Ihre Region hin — sie soll für Außenstehende zum Gerät passen und nicht als „Fluchtseite" lesbar sein. Der Knopf selbst ist immer aktiv und lässt sich nicht abschalten; die Tastenkürzel sind fest vergeben. Beide Felder werden im Audit-Log mit Alt- und Neuwert protokolliert (`SETTINGS_CHANGE`).
 >
 > **Ungespeicherte Eingaben gehen verloren**, wenn jemand die Aktion auslöst — die Abmeldung räumt wie immer die lokalen Entwürfe ab (`Clear-Site-Data`). Das ist im Nutzerhandbuch benannt und im Tooltip des Knopfs.
+>
+> **Grenzen, die Sie organisatorisch flankieren müssen** (ausführlich in [threat-model.md](threat-model.md), § „Restrisiken des Mitschauen-Schutzes“): Die Aktion ersetzt nur den **letzten** Verlaufseintrag — frühere Seitenaufrufe derselben Sitzung bleiben mit Pfad und **Seitentitel** in der Browser-Chronik, und der Titel einer Personenseite enthält das **Pseudonym**. Weisen Sie das Team an, den Verlauf am Schichtende zu löschen oder auf gemeinsam genutzten Geräten im privaten Fenster zu arbeiten. Außerdem wirkt der Knopf pro Fenster, und bei einem Netzabriss im Moment des Auslösens endet die Server-Sitzung erst über Session-Timeout bzw. maximale Sitzungsdauer.
 
 > **Grundausstattung einer neuen Einrichtung (#1970).** Neben dem Einstellungssatz entsteht beim Anlegen einer Einrichtung — im Django-Admin wie über `setup_facility` — ein knapper Startbestand, den Sie anschließend frei überschreiben können:
 >

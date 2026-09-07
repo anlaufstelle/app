@@ -68,8 +68,10 @@ const MARKUP = `
  * @param {boolean} options.beacon ``navigator.sendBeacon`` bereitstellen.
  * @param {boolean} options.beaconOk Rueckgabewert von ``sendBeacon``.
  * @param {boolean} options.inert ``inert`` als unterstuetzt vortaeuschen.
+ * @param {boolean} options.keyDropHangs ``clearSessionKey`` loest erst auf,
+ *   wenn der Test ``resolveKeyDrop()`` ruft (bzw. der Deckel greift).
  */
-async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert = true } = {}) {
+async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert = true, keyDropHangs = false } = {}) {
     _unwire();
     vi.resetModules();
 
@@ -105,8 +107,17 @@ async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert =
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
     window.fetch = fetchSpy;
 
-    const clearSessionKey = vi.fn(() => Promise.resolve());
+    // Aufloesbar von aussen: die Tests brauchen ein clearSessionKey, das
+    // BEWUSST haengt, um zu belegen, dass vor ihm nicht navigiert wird.
+    let resolveKeyDrop;
+    const keyDropped = new Promise((resolve) => {
+        resolveKeyDrop = resolve;
+    });
+    const clearSessionKey = vi.fn(() => (keyDropHangs ? keyDropped : Promise.resolve()));
     window.crypto_session = { clearSessionKey };
+
+    const broadcast = vi.fn();
+    window.syncOrchestrator = { broadcast };
 
     window.getCsrfToken = () => "TOKEN/42";
 
@@ -121,7 +132,7 @@ async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert =
     }
     _wired = added;
 
-    return { replace, reload, sendBeacon, fetchSpy, clearSessionKey };
+    return { replace, reload, sendBeacon, fetchSpy, clearSessionKey, broadcast, resolveKeyDrop };
 }
 
 function online(extra = {}) {
@@ -141,6 +152,12 @@ function press(key, modifiers = {}) {
     window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...modifiers }));
 }
 
+/** Mikrotask-Warteschlange leeren — die Navigation haengt seit R-L3-9 hinter
+ *  dem abgewarteten ``clearSessionKey``, ist also nicht mehr synchron. */
+async function tick() {
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+}
+
 beforeEach(() => {
     window.localStorage.clear();
 });
@@ -149,6 +166,7 @@ afterEach(() => {
     _unwire();
     vi.restoreAllMocks();
     vi.useRealTimers();
+    delete window.syncOrchestrator;
 });
 
 describe("Konfiguration", () => {
@@ -197,12 +215,15 @@ describe("Schnell verlassen", () => {
 
         document.getElementById("quick-exit-button").click();
 
+        // Verdecken passiert SYNCHRON, noch vor dem Warten auf die
+        // Schluessel-Loeschung — das ist der Punkt der Reihenfolge.
         expect(overlay().hidden).toBe(false);
         // Beim Verlassen bleibt die Flaeche leer — "Zum Fortfahren ..." waere
         // dort die falsche Aussage.
         expect(document.getElementById("privacy-screen-panel").hidden).toBe(true);
         expect(document.getElementById("main-content").style.visibility).toBe("hidden");
         expect(sendBeacon).toHaveBeenCalledTimes(1);
+        await tick();
         expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
     });
 
@@ -229,6 +250,7 @@ describe("Schnell verlassen", () => {
         expect(init.keepalive).toBe(true);
         expect(init.headers["X-CSRFToken"]).toBe("TOKEN/42");
         expect(init.body).toBe("csrfmiddlewaretoken=TOKEN%2F42");
+        await tick();
         expect(replace).toHaveBeenCalled();
     });
 
@@ -247,7 +269,7 @@ describe("Schnell verlassen", () => {
             throw new Error("kein Netz");
         };
 
-        window.quickExit.trigger();
+        await window.quickExit.trigger();
 
         expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
     });
@@ -257,10 +279,87 @@ describe("Schnell verlassen", () => {
         // der lokale Krypto-Schluessel (die Offline-Revocation greift danach).
         const { replace, sendBeacon, clearSessionKey } = await freshLoad({ dataset: null });
 
-        window.quickExit.trigger();
+        await window.quickExit.trigger();
 
         expect(sendBeacon).not.toHaveBeenCalled();
         expect(clearSessionKey).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+});
+
+describe("Schluessel-Loeschung vor der Navigation (R-L3-9)", () => {
+    it("navigiert erst, wenn die persistente Loeschung abgeschlossen ist", async () => {
+        // Der Kern des HOCH-Befunds: clearSessionKey nullt den RAM-Key
+        // synchron, loescht die IndexedDB-Zeile aber asynchron. Reisst
+        // location.replace den Kontext vorher weg, bleibt der Schluessel
+        // liegen — und die naechste Offline-Shell koennte ihn wieder laden.
+        const { replace, resolveKeyDrop, clearSessionKey } = await freshLoad({
+            dataset: null,
+            keyDropHangs: true,
+        });
+
+        const laeuft = window.quickExit.trigger();
+
+        expect(clearSessionKey).toHaveBeenCalledTimes(1);
+        // Die Blende liegt bereits — der Bildschirm ist geschuetzt, waehrend
+        // gewartet wird.
+        expect(overlay().hidden).toBe(false);
+        expect(document.getElementById("main-content").style.visibility).toBe("hidden");
+        await tick();
+        expect(replace).not.toHaveBeenCalled();
+
+        resolveKeyDrop();
+        await laeuft;
+
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("navigiert nach dem Deckel trotzdem, wenn die Loeschung haengt", async () => {
+        vi.useFakeTimers();
+        const { replace } = await freshLoad({ dataset: null, keyDropHangs: true });
+
+        const laeuft = window.quickExit.trigger();
+        await tick();
+        expect(replace).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(window.quickExit.KEY_DROP_TIMEOUT_MS);
+        await laeuft;
+
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("navigiert ohne Krypto-Modul ohne Verzoegerung", async () => {
+        // Testharness/Alt-Seite ohne crypto.js: kein Promise, kein Warten.
+        const { replace } = await freshLoad({ dataset: null });
+        delete window.crypto_session;
+
+        await window.quickExit.trigger();
+
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sagt anderen Tabs Bescheid — erst NACH der Loeschung", async () => {
+        // Der Empfaenger in crypto.js verankert den Schluessel wieder, wenn die
+        // IndexedDB-Zeile noch steht. Ein Broadcast vor dem Loeschen waere also
+        // schlimmer als keiner.
+        const { broadcast, resolveKeyDrop } = await freshLoad({ dataset: null, keyDropHangs: true });
+
+        const laeuft = window.quickExit.trigger();
+        await tick();
+        expect(broadcast).not.toHaveBeenCalled();
+
+        resolveKeyDrop();
+        await laeuft;
+
+        expect(broadcast).toHaveBeenCalledWith({ type: "key-cleared" });
+    });
+
+    it("navigiert auch ohne Sync-Orchestrator", async () => {
+        const { replace } = await freshLoad({ dataset: null });
+        delete window.syncOrchestrator;
+
+        await window.quickExit.trigger();
+
         expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
     });
 });
@@ -271,6 +370,7 @@ describe("Tastenkuerzel", () => {
         document.getElementById("feld").focus();
 
         press("X", { ctrlKey: true, shiftKey: true });
+        await tick();
 
         expect(replace).toHaveBeenCalledTimes(1);
     });
@@ -279,6 +379,7 @@ describe("Tastenkuerzel", () => {
         const { replace } = await freshLoad({ dataset: online() });
 
         press("x", { metaKey: true, shiftKey: true });
+        await tick();
 
         expect(replace).toHaveBeenCalledTimes(1);
     });
@@ -287,6 +388,7 @@ describe("Tastenkuerzel", () => {
         const { replace } = await freshLoad({ dataset: online() });
 
         press("Escape", { shiftKey: true });
+        await tick();
 
         expect(replace).toHaveBeenCalledTimes(1);
     });
@@ -297,6 +399,7 @@ describe("Tastenkuerzel", () => {
         const { replace } = await freshLoad({ dataset: online() });
 
         press("Escape");
+        await tick();
 
         expect(replace).not.toHaveBeenCalled();
     });
@@ -305,8 +408,43 @@ describe("Tastenkuerzel", () => {
         const { replace } = await freshLoad({ dataset: online() });
 
         press("x", { ctrlKey: true });
+        await tick();
 
         expect(replace).not.toHaveBeenCalled();
+    });
+
+    it("konsumiert die Kuerzel exklusiv — kein zweiter window-Listener feuert mit", async () => {
+        // Die mobile Suche haengt mit @keydown.escape.window am selben window
+        // (_navigation_mobile.html). ``preventDefault`` allein haette sie nicht
+        // gestoppt: sie haette waehrend der Flucht ihr Overlay geschlossen und
+        // den Fokus umgesetzt.
+        await freshLoad({ dataset: online() });
+        const konkurrent = vi.fn();
+        window.addEventListener("keydown", konkurrent);
+        try {
+            press("Escape", { shiftKey: true });
+            await tick();
+            expect(konkurrent).not.toHaveBeenCalled();
+
+            press("X", { ctrlKey: true, shiftKey: true });
+            await tick();
+            expect(konkurrent).not.toHaveBeenCalled();
+        } finally {
+            window.removeEventListener("keydown", konkurrent);
+        }
+    });
+
+    it("laesst blosses Esc unangetastet — die mobile Suche schliesst weiter", async () => {
+        await freshLoad({ dataset: online() });
+        const konkurrent = vi.fn();
+        window.addEventListener("keydown", konkurrent);
+        try {
+            press("Escape");
+            await tick();
+            expect(konkurrent).toHaveBeenCalledTimes(1);
+        } finally {
+            window.removeEventListener("keydown", konkurrent);
+        }
     });
 });
 

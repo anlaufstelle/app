@@ -33,6 +33,10 @@
     // keinen Server, der die Vorgabe rendern koennte — deshalb steht sie hier.
     var DEFAULT_URL = "https://www.wikipedia.org/";
     var STORAGE_KEY = "anlaufstelle.quickExit";
+    // R-L3-9: Deckel fuer das Warten auf die persistente Schluessel-Loeschung.
+    // Lang genug fuer einen IndexedDB-Roundtrip, kurz genug, dass ein Haenger
+    // die Flucht nicht aufhaelt (die Blende liegt in dieser Zeit bereits).
+    var KEY_DROP_TIMEOUT_MS = 500;
 
     function _body() {
         return document.body;
@@ -242,26 +246,72 @@
         return true;
     }
 
-    /** Offline gibt es keinen Logout — der Sitzungsschluessel muss trotzdem weg. */
+    /** Sitzungsschluessel verwerfen — und zwar FERTIG, bevor navigiert wird.
+     *
+     * ``clearSessionKey`` nullt den RAM-Key synchron, loescht die persistente
+     * Zeile aber erst nach einem asynchronen IndexedDB-Open und zwei
+     * abgewarteten Deletes (crypto.js). Reisst ``location.replace`` den
+     * Ausfuehrungskontext vorher weg, ist die Loeschung nicht garantiert — die
+     * naechste same-origin-Shell koennte den Schluessel wieder laden und die
+     * Offline-Daten damit erneut entschluesseln. Offline ist das der EINZIGE
+     * wirksame Riegel (ein Server-Logout gibt es dort nicht).
+     *
+     * Gewartet wird mit Deckel (R-L3-9): haengt IndexedDB, gewinnt der Timer
+     * und es wird trotzdem navigiert. Das ist vertretbar, weil die Blende zu
+     * diesem Zeitpunkt bereits liegt — der Bildschirm ist geschuetzt, auch
+     * wenn die Aufraeumarbeit noch laeuft.
+     */
     function _dropSessionKey() {
+        var pending = null;
         try {
             var session = window.crypto_session;
             if (session && typeof session.clearSessionKey === "function") {
-                var result = session.clearSessionKey();
-                if (result && typeof result.catch === "function") result.catch(function () {});
+                pending = session.clearSessionKey();
             }
         } catch (_e) {
             // Krypto nicht geladen (z.B. Testharness) — kein Grund zu bleiben.
         }
+        if (!pending || typeof pending.then !== "function") return Promise.resolve();
+        return Promise.race([
+            Promise.resolve(pending).catch(function () {}),
+            new Promise(function (resolve) {
+                window.setTimeout(resolve, KEY_DROP_TIMEOUT_MS);
+            }),
+        ]);
     }
 
+    /** Anderen Tabs sagen, dass ihr Memory-Key ohne Grundlage dasteht.
+     *
+     * Derselbe Kanal, den crypto.js nach dem Idle-Wipe nutzt
+     * (``syncOrchestrator.broadcast({type:"key-cleared"})``). Der Empfaenger in
+     * crypto.js verwirft NUR seinen Memory-Key und prueft vorher, ob die
+     * IndexedDB-Zeile wirklich fehlt — deshalb ERST nach dem abgewarteten
+     * Loeschen senden, sonst verankert er den Schluessel wieder.
+     *
+     * Der gerenderte DOM eines zweiten Tabs bleibt trotzdem stehen: Quick-Exit
+     * wirkt pro Fenster (siehe Restrisiken in docs/threat-model.md).
+     */
+    function _broadcastKeyCleared() {
+        try {
+            var orchestrator = window.syncOrchestrator;
+            if (orchestrator && typeof orchestrator.broadcast === "function") {
+                orchestrator.broadcast({ type: "key-cleared" });
+            }
+        } catch (_e) {
+            // best-effort — ohne BroadcastChannel ist das ohnehin ein No-op.
+        }
+    }
+
+    /** Gibt ein Promise zurueck, das nach der Navigation aufloest (fuer Tests). */
     function quickExit() {
         var target = _config().url;
         _showOverlay("exit");
         _shield(true);
         _logout();
-        _dropSessionKey();
-        window.location.replace(target);
+        return _dropSessionKey().then(function () {
+            _broadcastKeyCleared();
+            window.location.replace(target);
+        });
     }
 
     // --- Verdrahtung -------------------------------------------------------
@@ -279,13 +329,27 @@
         if (_isQuickExitShortcut(event)) {
             // Capture-Phase am window: das Kuerzel wirkt auch aus einem
             // fokussierten Eingabefeld heraus und vor jedem Alpine-Handler.
+            //
+            // ``stopImmediatePropagation`` zusaetzlich zu ``preventDefault``:
+            // Das Kuerzel muss EXKLUSIV konsumiert werden. ``preventDefault``
+            // unterdrueckt nur die Standardaktion, nicht weitere Listener — die
+            // mobile Suche haengt mit ``@keydown.escape.window`` am selben
+            // ``window`` und wuerde bei Umschalt+Esc mitfeuern (Dropdown
+            // schliessen, Fokus umsetzen), waehrend die Flucht laeuft. Plain
+            // ``Esc`` ist davon nicht betroffen: dieser Zweig greift nur bei
+            // den beiden Modifier-Kuerzeln.
             event.preventDefault();
+            event.stopImmediatePropagation();
             quickExit();
             return;
         }
         if (!_isOverlayVisible()) return;
         if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+            // Dieselbe Exklusivitaet fuer die Freigabe: liegt die Blende, ist
+            // sie modal — kein anderer Listener darf denselben Tastendruck
+            // zusaetzlich verarbeiten.
             event.preventDefault();
+            event.stopImmediatePropagation();
             releasePrivacyScreen();
         }
     }
@@ -335,6 +399,7 @@
     window.quickExit = {
         DEFAULT_URL: DEFAULT_URL,
         STORAGE_KEY: STORAGE_KEY,
+        KEY_DROP_TIMEOUT_MS: KEY_DROP_TIMEOUT_MS,
         config: _config,
         trigger: quickExit,
         arm: armPrivacyScreen,

@@ -112,6 +112,41 @@ def _stub_exit_target(page):
     )
 
 
+# Rohzugriff auf die Krypto-IndexedDB (``crypto.js``: DB ``anlaufstelle-crypto``,
+# Store ``meta``, Zeile ``sessionKey``). Bewusst OHNE ``window.crypto_session``:
+# Die Pruefung laeuft nach dem Verlassen auf der Zielseite, und die muss das
+# Krypto-Modul nicht geladen haben. ``indexedDB.open`` legt eine fehlende
+# Datenbank leer an — dann existiert der Store nicht und die Antwort ist
+# ``null``, was hier genau das gewuenschte Ergebnis ist.
+_READ_PERSISTED_KEY = """
+    async () => {
+        return await new Promise((resolve) => {
+            const req = indexedDB.open("anlaufstelle-crypto", 1);
+            req.onerror = () => resolve("db-error");
+            req.onsuccess = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains("meta")) {
+                    db.close();
+                    resolve(null);
+                    return;
+                }
+                const tx = db.transaction("meta", "readonly");
+                const get = tx.objectStore("meta").get("sessionKey");
+                get.onsuccess = () => {
+                    const row = get.result;
+                    db.close();
+                    resolve(row && row.cryptoKey ? "present" : null);
+                };
+                get.onerror = () => {
+                    db.close();
+                    resolve("get-error");
+                };
+            };
+        });
+    }
+"""
+
+
 def _assert_session_ended(page, base_url, deadline_s=15.0):
     """Ein Folge-Request auf eine App-Seite landet auf ``/login/``.
 
@@ -254,6 +289,12 @@ class TestOfflineSmoke:
     ``page.route``-Stub wuerde nur die Harness testen, nicht den Offline-Pfad.
     Belegt wird damit genau die Zusage aus dem Ticket — der Knopf ist offline
     da und fuehrt aus der Anwendung heraus.
+
+    Zusaetzlich (R-L3-9) der eigentliche Offline-Riegel: Ein Server-Logout gibt
+    es hier nicht, der einzige wirksame Schritt ist das Loeschen des
+    persistenten Sitzungsschluessels. Der wird NACH dem Dokumentwechsel
+    gelesen — nur so ist belegt, dass die asynchrone IndexedDB-Loeschung die
+    Navigation ueberlebt hat und nicht mit dem alten Kontext gestorben ist.
     """
 
     def test_shell_traegt_den_knopf_und_verlaesst_die_anwendung(self, browser, base_url, e2e_env):
@@ -271,6 +312,16 @@ class TestOfflineSmoke:
                 offline_ziel
             ), "Die Online-Seite hat die Konfiguration nicht gespiegelt."
 
+            # Vorbedingung: ohne einen tatsaechlich abgelegten Schluessel waere
+            # die Loeschzusicherung unten leer gruen.
+            page.evaluate("async () => { await window.crypto_session.ready(); }")
+            assert page.evaluate("() => window.crypto_session.hasSessionKey()") is True, (
+                "Der Login hat keinen Sitzungsschluessel abgelegt — die Loeschpruefung waere wertlos."
+            )
+            assert page.evaluate(_READ_PERSISTED_KEY) == "present", (
+                "Der Sitzungsschluessel liegt nicht persistent in der IndexedDB."
+            )
+
             context.set_offline(True)
             page.evaluate("() => window.dispatchEvent(new Event('offline'))")
             page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
@@ -283,6 +334,16 @@ class TestOfflineSmoke:
 
             assert page.url.endswith("/offline/"), (
                 f"Der Knopf hat die Anwendung offline nicht verlassen (URL: {page.url!r})."
+            )
+
+            # R-L3-9: Der persistente Schluessel muss nach dem Dokumentwechsel
+            # weg sein. Bis zur Fix-Runde 1 startete ``clearSessionKey`` nur und
+            # ``location.replace`` riss den Kontext mitten in der
+            # IndexedDB-Transaktion weg — die naechste Offline-Shell haette den
+            # Schluessel wieder geladen und die Bestaende erneut entschluesselt.
+            assert page.evaluate(_READ_PERSISTED_KEY) is None, (
+                "Der persistente Sitzungsschluessel liegt nach dem Verlassen weiterhin in der "
+                "IndexedDB — offline ist er der einzige Riegel."
             )
         finally:
             context.set_offline(False)

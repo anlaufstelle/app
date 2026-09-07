@@ -126,6 +126,14 @@ Ein **Zurück** im Browser bringt die Anwendung nicht wieder: Die Seite verdeckt
 
 **Ohne Internetverbindung** funktioniert der Knopf ebenfalls: Der Inhalt wird verdeckt, der lokale Schlüssel für die Offline-Daten wird verworfen und der Browser wechselt auf die neutrale Seite. Eine Abmeldung am Server ist offline nicht möglich — dafür sind die Offline-Daten ohne erneute Anmeldung nicht mehr lesbar, die Offline-Berechtigung läuft ohnehin nach 48 Stunden ab, und ein Neustart des Geräts räumt sie ab.
 
+#### Was der Knopf nicht leisten kann
+
+Drei Dinge bleiben übrig — sie sind technisch nicht zu verhindern und deshalb hier benannt statt verschwiegen:
+
+- **Der Browser-Verlauf.** Der Knopf ersetzt nur den *aktuellen* Verlaufseintrag. Alle Seiten, die Sie in dieser Sitzung vorher geöffnet haben, stehen weiter in der Chronik des Browsers (`Strg`+`H`) — mit Adresse und Seitentitel, und der Titel einer Personenseite enthält das Pseudonym. **Empfehlung:** Löschen Sie den Verlauf am Ende der Schicht, oder arbeiten Sie auf gemeinsam genutzten Geräten in einem privaten Fenster.
+- **Ein zweites offenes Fenster.** Der Knopf wirkt auf das Fenster, in dem Sie ihn drücken. Ein zweiter offener Tab zeigt seinen bereits geladenen Inhalt weiter, bis dort etwas angeklickt oder neu geladen wird — dann landet auch er auf der Anmeldemaske. **Empfehlung:** Mit einem Fenster arbeiten.
+- **Eine abgerissene Verbindung.** Die Abmeldung geht ohne Wartezeit an den Server. Ist genau in diesem Moment kein Netz da, kann sie verloren gehen; die Sitzung endet dann erst durch den Inaktivitäts-Timeout (Standard 30 Minuten) bzw. die maximale Sitzungsdauer. Ihr Bildschirm ist trotzdem sofort leer und die lokalen Daten sind gesperrt.
+
 ### Sichtschutz bei Fenster- oder Tab-Wechsel
 
 Ihre Einrichtung kann zusätzlich den **Sichtschutz** einschalten (Voreinstellung: aus). Ist er aktiv, legt sich eine neutrale Fläche über den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht — etwa beim Wechsel in ein anderes Programm.
