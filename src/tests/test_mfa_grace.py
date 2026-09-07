@@ -10,16 +10,10 @@ SOFORT.
 from datetime import timedelta
 
 import pytest
-from django.test import RequestFactory
 from django.utils import timezone
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from core.middleware.mfa import MFAEnforcementMiddleware
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _middleware():

@@ -11,15 +11,9 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
-from django.test import RequestFactory
 
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Client
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request_with_user(rf, user):

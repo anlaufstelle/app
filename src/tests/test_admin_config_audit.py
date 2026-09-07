@@ -25,7 +25,6 @@ import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.db import connection
 from django.forms.models import model_to_dict
-from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 
 from core.admin import documents as documents_admin
@@ -38,11 +37,6 @@ pytestmark = pytest.mark.django_db
 
 CONFIG_UPDATE = AuditLog.Action.CONFIG_UPDATE
 CONFIG_CREATE = AuditLog.Action.CONFIG_CREATE
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request(rf, user, method="post"):

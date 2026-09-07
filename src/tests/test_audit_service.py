@@ -1,15 +1,9 @@
 """Tests für services/audit.log_audit_event."""
 
 import pytest
-from django.test import RequestFactory
 
 from core.models import AuditLog
 from core.services.audit import log_audit_event
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 @pytest.mark.django_db

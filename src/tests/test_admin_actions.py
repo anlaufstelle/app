@@ -12,15 +12,9 @@ from unittest.mock import patch
 import pytest
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.test import RequestFactory
 
 from core.admin import FieldTemplateAdmin, UserAdmin, unlock_selected_users
 from core.models import AuditLog, FieldTemplate, User
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _make_admin_request(rf, user, method="POST"):

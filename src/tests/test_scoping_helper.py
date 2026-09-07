@@ -7,17 +7,11 @@ einen einzigen, strukturell unvergesslichen Lookup-Pfad.
 
 import pytest
 from django.http import Http404
-from django.test import RequestFactory
 
 from core.models import Event, WorkItem
 from core.services.scoping import get_scoped_object
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request(rf, facility):

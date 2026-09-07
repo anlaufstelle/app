@@ -20,18 +20,12 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.test import RequestFactory
 
 from core.admin.clients import ClientAdmin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Client
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request(rf, user, method="get"):

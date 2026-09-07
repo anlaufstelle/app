@@ -33,17 +33,11 @@ from pathlib import Path
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.db import connection
-from django.test import RequestFactory
 
 from core.middleware.facility_scope import ARCHIVED_EXEMPT_URLS, FacilityScopeMiddleware
 from core.models import AuditLog
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _archive(facility):

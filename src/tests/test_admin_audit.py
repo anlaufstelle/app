@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
-from django.test import RequestFactory
 
 from core.admin.clients import CaseAdmin, ClientAdmin
 from core.admin.events import EventAdmin
@@ -29,11 +28,6 @@ from core.models import AuditLog, Case, Client, Event, WorkItem
 pytestmark = pytest.mark.django_db
 
 SYSTEM_VIEW = AuditLog.Action.SYSTEM_VIEW
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request(rf, user, method="get"):

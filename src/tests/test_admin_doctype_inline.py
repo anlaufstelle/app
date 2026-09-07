@@ -17,18 +17,12 @@ from __future__ import annotations
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.exceptions import ValidationError
-from django.test import RequestFactory
 
 from core.admin.documents import DocumentTypeAdmin, DocumentTypeFieldInline
 from core.admin_site import anlaufstelle_admin_site
 from core.models import DocumentType, DocumentTypeField
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request(rf, user, method="get"):

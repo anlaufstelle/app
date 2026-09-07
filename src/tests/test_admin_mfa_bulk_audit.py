@@ -25,7 +25,6 @@ import uuid
 import pytest
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.db import connection
-from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 
 from core.admin import users as users_admin
@@ -37,11 +36,6 @@ from core.services.audit.chain import advisory_lock_id
 pytestmark = pytest.mark.django_db
 
 ACCESS_UPDATED = AuditLog.Action.USER_ACCESS_UPDATED
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 def _request(rf, user):

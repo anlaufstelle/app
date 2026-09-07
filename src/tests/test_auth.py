@@ -5,7 +5,6 @@ import time
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
-from django.test import RequestFactory
 
 from core.middleware.facility_scope import FacilityScopeMiddleware
 from core.middleware.password_change import ForcePasswordChangeMiddleware
@@ -13,11 +12,6 @@ from core.models import AuditLog, User
 from core.views.mixins import FacilityAdminRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 # --- Fixtures ---
-
-
-@pytest.fixture
-def rf():
-    return RequestFactory()
 
 
 # --- B.1: FacilityScopeMiddleware ---
