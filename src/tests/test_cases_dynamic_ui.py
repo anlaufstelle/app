@@ -1796,82 +1796,80 @@ class TestEntityExportDynamicData:
 
 
 @pytest.mark.django_db
-class TestCaseRerenderKeepsInactiveSelectOption:
-    """Final-Review C (Refs #1058) — Spiegel zu
-    ``TestRerenderKeepsInactiveSelectOption`` (Personen): der Re-Render nach
-    einem ungueltigen ``CaseForm`` verlor die deaktivierte Bestands-Option."""
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityRerenderKeepsInactiveSelectOption:
+    """Ein invalider Re-Render behält die deaktivierte Bestands-Option."""
 
     @staticmethod
-    def _deactivate_option(doc_type, slug="ambulant"):
-        ft = FieldTemplate.objects.get(facility=doc_type.facility, name="Hilfeform")
+    def _deactivate_option(entity: EntitySpec, doc_type):
+        slug = entity.value("select")
+        ft = FieldTemplate.objects.get(facility=doc_type.facility, name=entity.label("select"))
         ft.options_json = [{**option, "is_active": option["slug"] != slug} for option in ft.options_json]
         ft.save(update_fields=["options_json"])
         return ft
 
     def test_rerender_keeps_deactivated_option_and_no_phantom_error(
-        self, client, staff_user, facility, client_identified, doc_type_case_select
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
-        ft = self._deactivate_option(doc_type_case_select)
-        target = Case.objects.create(
+        doc_type = entity.doctype(request, "select")
+        ft = self._deactivate_option(entity, doc_type)
+        target = entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Option-01",
             created_by=staff_user,
-            document_type=doc_type_case_select,
-            data_json={ft.slug: "ambulant"},
+            document_type=doc_type,
+            data_json={ft.slug: entity.value("select")},
+            **entity.identity_kwargs(request, "Option-01"),
         )
         client.force_login(staff_user)
 
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "",  # leerer Titel -> ungueltig
-                client_identified,
-                document_type=str(doc_type_case_select.pk),
-                **{ft.slug: "ambulant"},
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data_builder(
+                request,
+                entity.invalid_identity_builder(request),
+                {"document_type": str(doc_type.pk), ft.slug: entity.value("select")},
             ),
         )
 
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'value="ambulant"' in content, "Deaktivierte Bestands-Option fehlt im Re-Render-Select"
+        assert f'value="{entity.value("select")}"' in content, "Deaktivierte Bestands-Option fehlt im Re-Render-Select"
         assert "gültige Option" not in content and "gueltige Option" not in content
 
     def test_repeated_submit_after_rerender_keeps_value(
-        self, client, staff_user, facility, client_identified, doc_type_case_select
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
-        ft = self._deactivate_option(doc_type_case_select)
-        target = Case.objects.create(
+        doc_type = entity.doctype(request, "select")
+        ft = self._deactivate_option(entity, doc_type)
+        target = entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Option-02",
             created_by=staff_user,
-            document_type=doc_type_case_select,
-            data_json={ft.slug: "ambulant"},
+            document_type=doc_type,
+            data_json={ft.slug: entity.value("select")},
+            **entity.identity_kwargs(request, "Option-02"),
         )
         client.force_login(staff_user)
 
         rerender = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "",
-                client_identified,
-                document_type=str(doc_type_case_select.pk),
-                **{ft.slug: "ambulant"},
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data_builder(
+                request,
+                entity.invalid_identity_builder(request),
+                {"document_type": str(doc_type.pk), ft.slug: entity.value("select")},
             ),
         )
         resubmitted = _selected_option(rerender.content.decode(), ft.slug)
 
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "P8-Option-02b",
-                client_identified,
-                document_type=str(doc_type_case_select.pk),
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                "Option-02b",
+                document_type=str(doc_type.pk),
                 **{ft.slug: resubmitted},
             ),
         )
 
         assert response.status_code == 302
         target.refresh_from_db()
-        assert target.data_json[ft.slug] == "ambulant"
+        assert target.data_json[ft.slug] == entity.value("select")
