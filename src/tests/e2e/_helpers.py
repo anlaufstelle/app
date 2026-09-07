@@ -1,8 +1,18 @@
 """Wiederverwendbare Helfer für E2E-Tests."""
 
 import os
+import re
 import subprocess
 import sys
+
+SEED_PASSWORD = "anlaufstelle2026"
+"""Passwort aller geseedeten E2E-Benutzer (Refs #1839).
+
+Stand vorher: 49× als Literal in 29 Dateien unter ``src/tests/e2e/``.
+NICHT verwenden, wo ein Test das Passwort selbst ÄNDERT und danach mit dem
+neuen Wert weiterarbeitet — ``test_password_change_unsynced_guard.py`` und
+``test_onboarding_journey.py`` tragen dafür bewusst eigene Konstanten.
+"""
 
 
 def python_bin() -> str:
@@ -172,3 +182,72 @@ def enter_sudo_mode(page, base_url, password="anlaufstelle2026"):
     # eindeutig die Sudo-Form.
     page.locator('form:has(input[name="password"]) button[type="submit"]').click()
     page.wait_for_url(lambda url: "/sudo/" not in url, timeout=10000)
+
+
+def do_real_login(page, base_url, username="miriam", password=SEED_PASSWORD):
+    """Echter Login-POST inkl. ``crypto_session``-Handshake (kein storage_state).
+
+    ``storage_state`` würde den Browser zwar mit gültigem Session-Cookie
+    ausstatten, aber den ``login.html``-fetch-Hook überspringen, der
+    ``crypto_session.deriveSessionKey`` auslöst und den Schlüssel in IndexedDB
+    persistiert. Ohne diesen In-Memory-Schlüssel scheitert
+    ``offlineStore.saveClientBundle`` an ``EncryptionKeyMissing`` — verschlüsselte
+    Person-Bundles lassen sich weder schreiben noch offline entschlüsseln.
+
+    Die Storage-State-Fixtures aus ``conftest.py`` (``authenticated_page`` &
+    Verwandte) sind daher **kein** Ersatz und umgekehrt: Dateien, die beide
+    Pfade nutzen, tun das bewusst.
+
+    Refs #1839: stand vorher 9× dateilokal als ``_do_real_login`` (7×
+    ``#id_*``-Selektoren + Regex-Wait, 2× ``input[name=…]`` + Lambda-Wait —
+    Playwright-äquivalent, kein dokumentierter Flake-Fix). Wird per Konvention
+    unter dem alten lokalen Namen importiert
+    (``from ._helpers import do_real_login as _do_real_login``), damit die
+    Aufrufstellen unverändert bleiben.
+    """
+    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+    page.fill("#id_username", username)
+    page.fill("#id_password", password)
+    page.click("button[type=submit]")
+    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
+    # Warten, bis der In-Memory-Key aus IndexedDB rehydriert wurde.
+    page.evaluate("async () => { await window.crypto_session.ready(); }")
+
+
+def wait_for_active_service_worker(page, timeout_ms=8000):
+    """Service Worker ist registriert, aktiviert UND kontrolliert die Page.
+
+    Das erste ``page.goto`` registriert den SW; ein zweites ``goto``/``reload``
+    ist nötig, damit er die Page tatsächlich kontrolliert
+    (``navigator.serviceWorker.controller`` ist sonst ``null`` und Requests
+    laufen am SW vorbei — der Precache greift dann offline nicht).
+
+    Standardmuster der Offline-Journeys: erst diese Barriere, DANN
+    ``context.set_offline(True)``.
+
+    ``timeout_ms`` deckt nur den abschließenden ``controller``-Wait nach dem
+    Reload ab. Refs #1839: stand vorher 10× dateilokal, 9× mit 5000 ms und
+    1× (``test_offline_workitem_ui.py``) mit 8000 ms; die strengste Fassung ist
+    hier Default, damit kein Aufrufer einen kürzeren Wait bekommt als vorher.
+    Die Herkunft der 8000 ms ist nicht durch einen Fix-Commit belegt (sie stand
+    schon im Erstcommit der Datei).
+    """
+    page.evaluate(
+        """
+        async () => {
+            const reg = await navigator.serviceWorker.getRegistration('/');
+            if (!reg) return;
+            const sw = reg.active || reg.installing || reg.waiting;
+            if (!sw || sw.state === 'activated') return;
+            return new Promise((resolve) => {
+                sw.addEventListener('statechange', () => {
+                    if (sw.state === 'activated') resolve();
+                });
+                setTimeout(resolve, 5000);
+            });
+        }
+        """
+    )
+    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=timeout_ms)
