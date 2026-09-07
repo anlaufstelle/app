@@ -32,6 +32,8 @@ from django_otp.oath import TOTP
 # soll. Refs #1606.
 from playwright._impl._errors import TargetClosedError
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
@@ -71,7 +73,7 @@ def _localhost_base(base_url: str) -> str:
     return base_url.replace("127.0.0.1", "localhost")
 
 
-def _login(page, base, username="admin", password="anlaufstelle2026"):
+def _login(page, base, username="admin", password=SEED_PASSWORD):
     page.goto(f"{base}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", username)
     page.fill("#id_password", password)

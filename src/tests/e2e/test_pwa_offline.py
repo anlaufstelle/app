@@ -8,6 +8,7 @@ import pytest
 
 from tests.e2e._selectors import find_first_client_link, open_desktop_overflow
 
+from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
@@ -133,7 +134,7 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
     page.set_default_timeout(30000)
     page.goto(f"{base_url}/login/")
     page.fill('input[name="username"]', "admin")
-    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.fill('input[name="password"]', SEED_PASSWORD)
     page.click('button[type="submit"]')
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
     try:
@@ -211,7 +212,7 @@ def test_offline_htmx_partial_get_shows_compact_banner(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "admin")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
@@ -282,7 +283,7 @@ def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
     page.set_default_timeout(30000)
     page.goto(f"{base_url}/login/")
     page.fill('input[name="username"]', "admin")
-    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.fill('input[name="password"]', SEED_PASSWORD)
     page.click('button[type="submit"]')
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
     title = f"E2E-Queue-CSRF-{uuid.uuid4().hex[:8]}"
@@ -346,7 +347,7 @@ def test_offline_clients_shell_lists_cached_clients(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
@@ -404,7 +405,7 @@ def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
         page.wait_for_function("window.crypto_session && window.offlineStore")
@@ -558,7 +559,7 @@ def test_offline_client_detail_renders_in_place(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
@@ -657,7 +658,7 @@ def _seed_dead_event(page, base_url, event_pk):
 def _login_miriam(page, base_url):
     page.goto(f"{base_url}/login/")
     page.fill('input[name="username"]', "miriam")
-    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.fill('input[name="password"]', SEED_PASSWORD)
     page.click('button[type="submit"]')
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
@@ -804,7 +805,7 @@ def test_bulk_take_offline_caches_multiple_clients(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
         page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
@@ -837,7 +838,7 @@ def test_bulk_take_offline_aborts_on_ratelimited_bundle_fetch(browser, base_url)
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
         page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
@@ -879,7 +880,7 @@ def test_offline_expiry_warning_near_ttl(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
         page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
@@ -1049,7 +1050,7 @@ def test_take_offline_shows_quota_full_message(browser, base_url):
     try:
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 

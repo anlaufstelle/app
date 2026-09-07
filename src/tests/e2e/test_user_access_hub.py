@@ -16,7 +16,7 @@ import uuid
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors
+from ._helpers import SEED_PASSWORD, track_console_errors
 
 pytestmark = pytest.mark.e2e
 
@@ -88,7 +88,7 @@ def test_admin_manages_invited_user_and_unlocks_account(authenticated_page, base
     # Dass das Fenster hier noch geschlossen ist, garantiert ``closed_sudo_window``.
     page.locator('[data-testid="user-access-create-link"]').click()
     page.wait_for_url(lambda url: "/sudo/" in url, timeout=30000, wait_until="domcontentloaded")
-    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.fill('input[name="password"]', SEED_PASSWORD)
     page.get_by_role("button", name="Bestätigen und fortfahren").click()
     page.wait_for_url(
         lambda url: url.endswith("/verwaltung/zugaenge/neu/"), timeout=30000, wait_until="domcontentloaded"

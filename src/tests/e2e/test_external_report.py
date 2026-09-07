@@ -16,10 +16,12 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
-def _login(page: Page, base_url: str, username: str, password: str = "anlaufstelle2026") -> None:
+def _login(page: Page, base_url: str, username: str, password: str = SEED_PASSWORD) -> None:
     """Login via /login/-Form. Wartet auf Navigations-Abmelden-Button als Login-Anker."""
     page.goto(f"{base_url}/login/")
     page.locator("input[name='username']").fill(username)

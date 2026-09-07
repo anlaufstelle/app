@@ -6,7 +6,9 @@ from pathlib import Path
 import psycopg
 import requests
 
-PASSWORD = "anlaufstelle2026"
+from ._helpers import SEED_PASSWORD
+
+PASSWORD = SEED_PASSWORD
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REPORT_PATH = REPO_ROOT / "docs" / "archive" / "audits" / "2026-06-12-a1-laufzeit-authz-matrix.md"
 

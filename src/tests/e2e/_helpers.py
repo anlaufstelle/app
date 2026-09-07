@@ -164,7 +164,7 @@ def track_console_errors(page):
     return errors
 
 
-def enter_sudo_mode(page, base_url, password="anlaufstelle2026"):
+def enter_sudo_mode(page, base_url, password=SEED_PASSWORD):
     """SudoMode für die laufende Session aktivieren (Refs #683).
 
     Sicherheitskritische Aktionen (z.B. Datenauskunft-Export, 2FA-Deaktivierung)

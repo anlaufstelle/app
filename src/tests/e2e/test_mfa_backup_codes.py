@@ -10,6 +10,8 @@ import sys
 
 import pytest
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
@@ -118,7 +120,7 @@ class TestZZMFABackupCodeLogin:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "lena")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 # Redirect zum MFA-Prompt
                 page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
@@ -150,7 +152,7 @@ class TestZZMFABackupCodeLogin:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "felix")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
 
@@ -178,7 +180,7 @@ class TestZZMFABackupCodeLogin:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "emma")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"))
 
@@ -215,7 +217,7 @@ class TestZZMFATotpLogin:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "miriam")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
 
@@ -242,7 +244,7 @@ class TestZZMFASettingsBackupSection:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"))
                 page.locator("[data-testid='mfa-toggle-mode']").click()

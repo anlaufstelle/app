@@ -20,6 +20,8 @@ import re
 
 import pytest
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 # Base64url-encoded 16-byte dummy salt, matching the `_bootstrap` helper used
@@ -47,7 +49,7 @@ def _ensure_service_worker_controls(page):
         page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=10000)
 
 
-def _login_via_form(page, base_url, username="miriam", password="anlaufstelle2026"):
+def _login_via_form(page, base_url, username="miriam", password=SEED_PASSWORD):
     """Real login form submit so `auth-bootstrap.js` derives the session key.
 
     Storage-state fixtures skip the login form and therefore never populate the

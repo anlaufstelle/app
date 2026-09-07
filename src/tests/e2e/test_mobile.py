@@ -10,7 +10,7 @@ import pytest
 from django.utils import timezone
 from playwright.sync_api import expect
 
-from ._helpers import django_shell
+from ._helpers import SEED_PASSWORD, django_shell
 from ._selectors import action_bar, open_mobile_overflow, open_mobile_search_overlay, wait_for_settled
 
 pytestmark = pytest.mark.e2e
@@ -132,7 +132,7 @@ class TestMobileNavMore:
         page = context.new_page()
         page.goto(f"{base_url}/login/")
         page.fill('input[name="username"]', "miriam")
-        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.fill('input[name="password"]', SEED_PASSWORD)
         page.click('button[type="submit"]')
         page.wait_for_url(f"{base_url}/")
 

@@ -14,6 +14,8 @@ from playwright.sync_api import expect
 from tests.e2e._helpers import enter_sudo_mode
 from tests.e2e._selectors import find_client_link
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
@@ -267,7 +269,7 @@ class TestZZAccountLockout:
         try:
             page.goto(f"{base_url}/login/")
             page.fill('input[name="username"]', "markus")
-            page.fill('input[name="password"]', "anlaufstelle2026")
+            page.fill('input[name="password"]', SEED_PASSWORD)
             page.click('button[type="submit"]')
 
             # Erst auf die Sperr-Meldung warten, DANN die URL prüfen:
@@ -313,7 +315,7 @@ class TestZZAccountLockout:
         try:
             page.goto(f"{base_url}/login/")
             page.fill('input[name="username"]', "lena")
-            page.fill('input[name="password"]', "anlaufstelle2026")
+            page.fill('input[name="password"]', SEED_PASSWORD)
             page.click('button[type="submit"]')
             page.wait_for_url(f"{base_url}/")
             assert page.url == f"{base_url}/"

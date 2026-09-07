@@ -17,10 +17,12 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
-def _login(page: Page, base_url: str, username: str, password: str = "anlaufstelle2026") -> None:
+def _login(page: Page, base_url: str, username: str, password: str = SEED_PASSWORD) -> None:
     """Login via /login/-Form. Wartet auf Logout-Button als Login-Anker."""
     page.goto(f"{base_url}/login/")
     page.locator("input[name='username']").fill(username)
@@ -30,7 +32,7 @@ def _login(page: Page, base_url: str, username: str, password: str = "anlaufstel
     page.get_by_role("button", name="Abmelden").first.wait_for(timeout=30_000)
 
 
-def _do_sudo(page: Page, password: str = "anlaufstelle2026") -> None:
+def _do_sudo(page: Page, password: str = SEED_PASSWORD) -> None:
     """Sudo-Form ausfuellen, wenn die Seite auf /sudo/ steht."""
     page.locator("input[name='password']").fill(password)
     page.get_by_role("button", name="Bestätigen und fortfahren").click()

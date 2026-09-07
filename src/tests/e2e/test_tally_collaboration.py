@@ -12,7 +12,7 @@ from urllib.parse import urljoin
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import wait_until_htmx_bound
+from ._helpers import SEED_PASSWORD, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -57,7 +57,7 @@ class TestCollaborativeTally:
         try:
             page_b.goto(f"{base_url}/login/", wait_until="domcontentloaded")
             page_b.locator('input[name="username"]').fill("markus")
-            page_b.locator('input[name="password"]').fill("anlaufstelle2026")
+            page_b.locator('input[name="password"]').fill(SEED_PASSWORD)
             page_b.locator('button[type="submit"]').click()
             page_b.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
             page_b.goto(f"{base_url}/", wait_until="domcontentloaded")

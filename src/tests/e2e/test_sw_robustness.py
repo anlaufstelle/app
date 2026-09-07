@@ -42,12 +42,13 @@ import uuid
 
 import pytest
 
+from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = pytest.mark.e2e
 
 
-def _login_with_retry(browser, base_url, username="admin", password="anlaufstelle2026", attempts=3):
+def _login_with_retry(browser, base_url, username="admin", password=SEED_PASSWORD, attempts=3):
     """Eigener Login-Helfer statt der ``authenticated_page``/``_login_storage_state``-
     Fixture aus conftest.py.
 

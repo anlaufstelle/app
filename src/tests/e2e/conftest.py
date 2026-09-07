@@ -22,6 +22,8 @@ import pytest
 import requests
 from filelock import FileLock
 
+from ._helpers import SEED_PASSWORD
+
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
 # NICHT test-Settings verwenden — Django rehashed Passwörter bei Login
 # automatisch auf den primären Hasher (MD5), was den Dev-Login zerstört.
@@ -290,7 +292,7 @@ def browser(launch_browser):
     browser.close()
 
 
-def _create_storage_state(launch_browser, base_url, username, password="anlaufstelle2026"):
+def _create_storage_state(launch_browser, base_url, username, password=SEED_PASSWORD):
     """Einmalig einloggen und Storage-State für einen User speichern.
 
     Nutzt einen eigenen, sofort wieder geschlossenen Browser statt der
@@ -526,7 +528,7 @@ def super_admin_page(base_url, browser, _super_admin_storage_state):
     context.close()
 
 
-def login_as(browser, base_url, username, password="anlaufstelle2026"):
+def login_as(browser, base_url, username, password=SEED_PASSWORD):
     """Helfer: Einloggen als beliebiger User; gibt (page, context) zurück.
 
     ACHTUNG: Jeder Aufruf verbraucht einen Rate-Limit-Versuch (5/min).

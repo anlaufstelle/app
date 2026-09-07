@@ -25,6 +25,8 @@ import sys
 import pytest
 from django_otp.oath import TOTP
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
@@ -98,7 +100,7 @@ class TestZZMFASetupFlow:
                 # ein Zwischenstand für spätere Tests aktiv.
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
@@ -166,7 +168,7 @@ class TestZZMFASetupFlow:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
@@ -200,7 +202,7 @@ class TestZZMFASetupFlow:
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
                 page.fill("#id_username", "admin")
-                page.fill("#id_password", "anlaufstelle2026")
+                page.fill("#id_password", SEED_PASSWORD)
                 page.click("button[type=submit]")
                 page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 

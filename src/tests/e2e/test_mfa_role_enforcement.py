@@ -17,10 +17,12 @@ Der Default-Server bleibt MFA-frei (s. Unit-Tests
 
 import pytest
 
+from ._helpers import SEED_PASSWORD
+
 pytestmark = pytest.mark.e2e
 
 
-def _login(browser, base_url, username, password="anlaufstelle2026"):
+def _login(browser, base_url, username, password=SEED_PASSWORD):
     """Frischer Login gegen den angegebenen Server; gibt (page, context) zurück."""
     context = browser.new_context(locale="de-DE")
     page = context.new_page()
