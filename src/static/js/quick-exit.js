@@ -274,40 +274,76 @@
      * ``KEY_DROP_ERROR`` statt nur "fertig". Nur der erste Fall ist ein
      * NACHWEIS, dass die persistente Zeile weg ist — und nur er darf den
      * Cross-Tab-Broadcast ausloesen.
+     *
+     * ``KEY_DROP_CLEARED`` verlangt seit R-L3-13 ZWEI Belege: die ausdrueckliche
+     * Erfolgsmeldung von ``clearSessionKey()`` UND eine leere Rueckleseprobe
+     * (``hasPersistedSessionKey()``). Der Deckel umspannt beide Schritte.
      */
     function _dropSessionKey() {
-        var pending;
-        try {
-            var session = window.crypto_session;
-            if (!session || typeof session.clearSessionKey !== "function") {
-                // Kein Krypto-Modul (Testharness, abgebrochener Ladevorgang):
-                // Wir haben nichts geloescht und duerfen es auch nicht
-                // behaupten — also kein Broadcast.
-                return Promise.resolve(KEY_DROP_ERROR);
-            }
-            pending = session.clearSessionKey();
-        } catch (_e) {
+        var session = window.crypto_session;
+        if (!session || typeof session.clearSessionKey !== "function") {
+            // Kein Krypto-Modul (Testharness, abgebrochener Ladevorgang): Wir
+            // haben nichts geloescht und duerfen es auch nicht behaupten.
             return Promise.resolve(KEY_DROP_ERROR);
         }
-        if (!pending || typeof pending.then !== "function") {
-            // Synchron zurueckgekehrt: die Loeschung ist damit abgeschlossen.
-            return Promise.resolve(KEY_DROP_CLEARED);
-        }
         return Promise.race([
-            Promise.resolve(pending).then(
-                function () {
-                    return KEY_DROP_CLEARED;
-                },
-                function () {
-                    return KEY_DROP_ERROR;
-                }
-            ),
+            _clearAndVerify(session),
             new Promise(function (resolve) {
                 window.setTimeout(function () {
                     resolve(KEY_DROP_TIMEOUT);
                 }, KEY_DROP_TIMEOUT_MS);
             }),
         ]);
+    }
+
+    /** Loeschen und den Erfolg NACHLESEN — kein Verlass auf die Zusage allein.
+     *
+     * Zwei Stufen, beide noetig (R-L3-13):
+     *   1. ``clearSessionKey()`` meldet seit Refs #2136 ``{persisted: true}``
+     *      nur, wenn der IndexedDB-Delete des Schluessels wirklich durchlief.
+     *      Alles andere — eine Rejection, eine synchrone Rueckkehr (also gar
+     *      kein Promise), ein fehlendes oder falsches Ergebnisobjekt — heisst
+     *      "nicht nachgewiesen".
+     *   2. Danach wird die Zeile zurueckgelesen. Erst wenn sie nachweislich
+     *      FEHLT, gilt die Loeschung als belegt. Diese zweite Stufe faengt
+     *      auch den Fall ab, dass eine aeltere/fremde crypto.js-Fassung
+     *      ``{persisted:true}`` meldet, ohne es halten zu koennen.
+     */
+    function _clearAndVerify(session) {
+        var pending;
+        try {
+            pending = session.clearSessionKey();
+        } catch (_e) {
+            return Promise.resolve(KEY_DROP_ERROR);
+        }
+        if (!pending || typeof pending.then !== "function") {
+            // Synchrone Rueckkehr: es gibt nichts, worauf man warten koennte,
+            // und damit auch keinen Nachweis.
+            return Promise.resolve(KEY_DROP_ERROR);
+        }
+        return Promise.resolve(pending).then(function (outcome) {
+            if (!outcome || outcome.persisted !== true) return KEY_DROP_ERROR;
+            return _confirmKeyRowGone(session);
+        }, function () {
+            return KEY_DROP_ERROR;
+        });
+    }
+
+    /** Rueckleseprobe: liegt die Schluesselzeile wirklich nicht mehr da? */
+    function _confirmKeyRowGone(session) {
+        if (typeof session.hasPersistedSessionKey !== "function") return KEY_DROP_ERROR;
+        var probe;
+        try {
+            probe = session.hasPersistedSessionKey();
+        } catch (_e) {
+            return KEY_DROP_ERROR;
+        }
+        if (!probe || typeof probe.then !== "function") return KEY_DROP_ERROR;
+        return Promise.resolve(probe).then(function (stillThere) {
+            return stillThere ? KEY_DROP_ERROR : KEY_DROP_CLEARED;
+        }, function () {
+            return KEY_DROP_ERROR;
+        });
     }
 
     /** Fehlgeschlagene Loeschung sichtbar machen, ohne die Flucht aufzuhalten. */
@@ -320,9 +356,9 @@
                           KEY_DROP_TIMEOUT_MS +
                           " ms nicht abgeschlossen. Es wird trotzdem verlassen; der Schluessel kann bis zum " +
                           "naechsten Abmelden, Idle-Wipe oder Ablauf der Offline-Berechtigung bestehen bleiben."
-                    : "Schnell verlassen: Der lokale Sitzungsschluessel konnte nicht geloescht werden. Es wird " +
-                          "trotzdem verlassen; der Schluessel kann bis zum naechsten Abmelden, Idle-Wipe oder " +
-                          "Ablauf der Offline-Berechtigung bestehen bleiben."
+                    : "Schnell verlassen: Die Loeschung des lokalen Sitzungsschluessels ist nicht nachgewiesen " +
+                          "(Fehler oder Zeile weiterhin vorhanden). Es wird trotzdem verlassen; der Schluessel kann " +
+                          "bis zum naechsten Abmelden, Idle-Wipe oder Ablauf der Offline-Berechtigung bestehen bleiben."
             );
         } catch (_e) {
             // ignore — eine Warnung darf die Flucht nicht aufhalten.

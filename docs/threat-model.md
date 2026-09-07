@@ -134,7 +134,9 @@ stehen, statt in der Zeile oben unterzugehen.
    seinen bereits gerenderten DOM, bis dort etwas navigiert (dann greift die
    serverseitig beendete Sitzung mit 302 auf `/login/`) — ein statischer DOM verlangt
    keinen Request. Sein **Memory-Krypto-Schlüssel** wird entwertet, **sofern die
-   Löschung im auslösenden Tab nachweislich gelungen ist**: nur dann sendet Quick-Exit
+   Löschung im auslösenden Tab nachweislich gelungen ist** (nachweislich heißt seit
+   R-L3-13: Erfolgsmeldung von `clearSessionKey()` **und** leere Rückleseprobe, siehe
+   Punkt 4): nur dann sendet Quick-Exit
    `syncOrchestrator.broadcast({type:"key-cleared"})` — denselben Kanal, den
    [`crypto.js`](../src/static/js/crypto.js) nach dem Idle-Wipe nutzt. Der Empfänger
    verwirft seinen Schlüssel, wenn die IndexedDB-Grundlage fehlt, und **verankert ihn
@@ -166,17 +168,32 @@ stehen, statt in der Zeile oben unterzugehen.
    der 48-h-Offline-Berechtigung (TB6). Bis dahin sind die lokal liegenden,
    verschlüsselten Offline-Bestände auf diesem Gerät wieder lesbar, sobald jemand die
    App erneut öffnet. Der Fall ist unterscheidbar gemacht statt stillschweigend als
-   Erfolg gewertet: `_dropSessionKey()` liefert `cleared`/`timeout`/`error`
-   ([`quick-exit.js`](../src/static/js/quick-exit.js), R-L3-12), nur `cleared` löst den
-   Broadcast aus Punkt 2 aus, `timeout`/`error` schreiben eine Konsolenwarnung. **Nicht
-   messbar im Betrieb** (kein Telemetriekanal, und ein Audit-Ereignis ist hier bewusst
-   ausgeschlossen) — deshalb die organisatorische Empfehlung, das Gerät nach dem
+   Erfolg gewertet — in zwei Schritten:
+   * `clearSessionKey()` in [`crypto.js`](../src/static/js/crypto.js) **meldet** den
+     Ausgang (`{persisted: true|false}`, R-L3-13) statt einen gescheiterten
+     IndexedDB-Delete zu verschlucken. Es wirft weiterhin nicht — jeder bestehende
+     Aufrufer (`wipeOfflineState`, Idle-Wipe, Passwortwechsel) `await`et die Funktion
+     und würde von einer Rejection unvermittelt abbrechen; beim Logout wäre ein
+     abgebrochener Wipe schlimmer als ein stiller. Der Memory-Schlüssel fällt in jedem
+     Fall.
+   * `_dropSessionKey()` in [`quick-exit.js`](../src/static/js/quick-exit.js) wertet nur
+     als `cleared`, was **beide** Belege hat: die Erfolgsmeldung UND eine leere
+     Rückleseprobe (`hasPersistedSessionKey()`). Eine synchrone Rückkehr, ein fehlendes
+     Ergebnisobjekt, ein Lesefehler oder eine noch stehende Zeile zählen als `error`;
+     der Deckel als `timeout`. Nur `cleared` löst den Broadcast aus Punkt 2 aus,
+     `timeout`/`error` schreiben eine Konsolenwarnung.
+
+   **Nicht messbar im Betrieb** (kein Telemetriekanal, und ein Audit-Ereignis ist hier
+   bewusst ausgeschlossen) — deshalb die organisatorische Empfehlung, das Gerät nach dem
    Verlassen nicht unbeaufsichtigt zu lassen.
 
-**Was der Erstbefund geschlossen hat:** Bis zur Fix-Runde 1 riss `location.replace` die
+**Was die Prüfrunden geschlossen haben:** Bis zur Fix-Runde 1 riss `location.replace` die
 IndexedDB-Transaktion mitten im Löschen ab, ohne dass überhaupt gewartet wurde — der
 Schlüssel blieb im Normalfall liegen, nicht nur im Ausnahmefall. Der E2E-Fall liest die
-Schlüsselzeile deshalb **nach** dem Dokumentwechsel.
+Schlüsselzeile deshalb **nach** dem Dokumentwechsel. Bis zur Fix-Runde 3 konnte ein
+gescheiterter Delete zudem als Erfolg durchgehen und einen `key-cleared`-Broadcast
+auslösen, der den Schlüssel in einem Fremd-Tab über `_applyKeyCleared` sogar **wieder
+verankert** hätte; das schließt der Melde- und Rücklesepfad aus Punkt 4.
 
 ### TB2/TB3 — Django ↔ PostgreSQL
 

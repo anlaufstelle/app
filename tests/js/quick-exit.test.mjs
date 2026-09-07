@@ -72,6 +72,12 @@ const MARKUP = `
  *   wenn der Test ``resolveKeyDrop()``/``rejectKeyDrop()`` ruft (bzw. der
  *   Deckel greift).
  * @param {boolean} options.keyDropRejects ``clearSessionKey`` scheitert sofort.
+ * @param {boolean} options.keyDropReportsFailure ``clearSessionKey`` meldet
+ *   ``{persisted: false}`` (IndexedDB-Delete gescheitert).
+ * @param {boolean} options.keyDropSync ``clearSessionKey`` kehrt synchron
+ *   zurueck (gibt kein Promise) — nichts nachgewiesen.
+ * @param {boolean} options.keyRowRemains Die Rueckleseprobe findet die Zeile
+ *   noch.
  */
 async function freshLoad({
     dataset = {},
@@ -80,6 +86,9 @@ async function freshLoad({
     inert = true,
     keyDropHangs = false,
     keyDropRejects = false,
+    keyDropReportsFailure = false,
+    keyDropSync = false,
+    keyRowRemains = false,
 } = {}) {
     _unwire();
     vi.resetModules();
@@ -116,21 +125,27 @@ async function freshLoad({
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
     window.fetch = fetchSpy;
 
-    // Von aussen steuerbar: die Tests brauchen ein clearSessionKey, das
-    // BEWUSST haengt (belegt, dass vor ihm nicht navigiert wird) und eines,
-    // das scheitert (belegt, dass dann NICHT gebroadcastet wird).
+    // Spiegelt den PRODUKTIONSVERTRAG von crypto.js (Refs #2136/R-L3-13):
+    // ``clearSessionKey()`` liefert ``{persisted: true|false}``, und
+    // ``hasPersistedSessionKey()`` ist die Rueckleseprobe. Der reale Pfad
+    // gegen ein kaputtes IndexedDB steht in
+    // ``tests/js/crypto-clear-session-key.test.mjs`` — hier werden die
+    // Verzweigungen von quick-exit.js gegen diesen Vertrag durchgespielt.
     let resolveKeyDrop;
     let rejectKeyDrop;
     const keyDropped = new Promise((resolve, reject) => {
-        resolveKeyDrop = resolve;
+        resolveKeyDrop = () => resolve({ persisted: true });
         rejectKeyDrop = reject;
     });
     keyDropped.catch(() => {}); // kein unhandled rejection, wenn der Test nicht awaitet
     const clearSessionKey = vi.fn(() => {
         if (keyDropRejects) return Promise.reject(new Error("IndexedDB kaputt"));
-        return keyDropHangs ? keyDropped : Promise.resolve();
+        if (keyDropSync) return { persisted: true }; // gar kein Promise
+        if (keyDropReportsFailure) return Promise.resolve({ persisted: false });
+        return keyDropHangs ? keyDropped : Promise.resolve({ persisted: true });
     });
-    window.crypto_session = { clearSessionKey };
+    const hasPersistedSessionKey = vi.fn(() => Promise.resolve(keyRowRemains));
+    window.crypto_session = { clearSessionKey, hasPersistedSessionKey };
 
     // Die Fehlerpfade warnen bewusst — abfangen statt die Testausgabe fluten.
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -151,7 +166,18 @@ async function freshLoad({
     }
     _wired = added;
 
-    return { replace, reload, sendBeacon, fetchSpy, clearSessionKey, broadcast, resolveKeyDrop, rejectKeyDrop, warn };
+    return {
+        replace,
+        reload,
+        sendBeacon,
+        fetchSpy,
+        clearSessionKey,
+        hasPersistedSessionKey,
+        broadcast,
+        resolveKeyDrop,
+        rejectKeyDrop,
+        warn,
+    };
 }
 
 function online(extra = {}) {
@@ -186,6 +212,7 @@ afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     delete window.syncOrchestrator;
+    delete window.crypto_session;
 });
 
 describe("Konfiguration", () => {
@@ -382,6 +409,16 @@ describe("Schluessel-Loeschung vor der Navigation (R-L3-9)", () => {
         expect(warn).not.toHaveBeenCalled();
     });
 
+    it("liest die Schluesselzeile vor dem Broadcast zurueck", async () => {
+        const { broadcast, hasPersistedSessionKey, clearSessionKey } = await freshLoad({ dataset: null });
+
+        await window.quickExit.trigger();
+
+        expect(clearSessionKey).toHaveBeenCalledTimes(1);
+        expect(hasPersistedSessionKey).toHaveBeenCalledTimes(1);
+        expect(broadcast).toHaveBeenCalledWith({ type: "key-cleared" });
+    });
+
     it("sendet KEINEN Broadcast, wenn der Deckel greift", async () => {
         // R-L3-12: Der Empfaenger in crypto.js verankert einen noch
         // vorhandenen Schluessel WIEDER (cachedKey = row.cryptoKey). Ein
@@ -408,8 +445,65 @@ describe("Schluessel-Loeschung vor der Navigation (R-L3-9)", () => {
 
         expect(broadcast).not.toHaveBeenCalled();
         expect(warn).toHaveBeenCalledTimes(1);
-        expect(String(warn.mock.calls[0][0])).toMatch(/konnte nicht geloescht werden/);
+        expect(String(warn.mock.calls[0][0])).toMatch(/nicht nachgewiesen/);
         expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sendet KEINEN Broadcast, wenn clearSessionKey den Fehlschlag meldet", async () => {
+        // R-L3-13: crypto.js liefert seit Refs #2136 {persisted:false}, wenn der
+        // IndexedDB-Delete gescheitert ist — vorher war das von einem Erfolg
+        // nicht zu unterscheiden.
+        const { broadcast, warn, replace, hasPersistedSessionKey } = await freshLoad({
+            dataset: null,
+            keyDropReportsFailure: true,
+        });
+
+        await window.quickExit.trigger();
+
+        expect(broadcast).not.toHaveBeenCalled();
+        // Gar nicht erst zurueckgelesen: der Melder hat schon Nein gesagt.
+        expect(hasPersistedSessionKey).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sendet KEINEN Broadcast bei synchroner Rueckkehr — nichts nachgewiesen", async () => {
+        // Eine Fassung ohne Promise laesst sich nicht abwarten; sie darf
+        // deshalb auch nicht als Nachweis durchgehen.
+        const { broadcast, warn, replace } = await freshLoad({ dataset: null, keyDropSync: true });
+
+        await window.quickExit.trigger();
+
+        expect(broadcast).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sendet KEINEN Broadcast, wenn die Zeile beim Ruecklesen noch da ist", async () => {
+        // Zweiter Beleg (R-L3-13): auch eine Erfolgsmeldung wird nachgelesen.
+        const { broadcast, warn, replace, hasPersistedSessionKey } = await freshLoad({
+            dataset: null,
+            keyRowRemains: true,
+        });
+
+        await window.quickExit.trigger();
+
+        expect(hasPersistedSessionKey).toHaveBeenCalledTimes(1);
+        expect(broadcast).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sendet KEINEN Broadcast ohne Rueckleseschnittstelle", async () => {
+        // Aeltere/fremde crypto.js-Fassung: sie kann {persisted:true} melden,
+        // ohne dass es pruefbar waere.
+        const { broadcast, warn } = await freshLoad({ dataset: null });
+        delete window.crypto_session.hasPersistedSessionKey;
+
+        await window.quickExit.trigger();
+
+        expect(broadcast).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
     });
 
     it("sendet KEINEN Broadcast ohne Krypto-Modul — es wurde nichts geloescht", async () => {

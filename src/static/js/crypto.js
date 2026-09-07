@@ -651,15 +651,67 @@
         return JSON.parse(new TextDecoder().decode(plainBuffer));
     }
 
+    /** Sitzungsschluessel verwerfen.
+     *
+     * Refs #2136 (R-L3-13): Die Funktion **wirft weiterhin nicht** — jeder
+     * bestehende Aufrufer (``wipeOfflineState``, ``_enforceIdleWipeLocked``,
+     * der Passwortwechsel in auth-bootstrap.js, die Offline-E2E) ``await``et
+     * sie und wuerde von einer Rejection unvermittelt abbrechen; beim Logout
+     * waere ein abgebrochener Wipe schlimmer als ein stiller. Stattdessen
+     * MELDET sie den Ausgang: ``{persisted: true}`` heisst „die persistente
+     * Zeile ist nachweislich weg", ``{persisted: false}`` heisst „der
+     * IndexedDB-Delete ist gescheitert, die Zeile kann noch da sein".
+     *
+     * Vorher verschluckte der ``catch`` beide Delete-Fehler und erfuellte das
+     * Promise trotzdem — ein Aufrufer konnte einen Fehlschlag nicht von einem
+     * Erfolg unterscheiden. Fuer den Normalfall (Logout mit
+     * ``Clear-Site-Data``) war das folgenlos; fuer „Schnell verlassen" ist es
+     * das nicht: dort ist die Loeschung offline der einzige Riegel, und ein
+     * faelschlich als Erfolg gewerteter Fehlschlag loeste einen
+     * ``key-cleared``-Broadcast aus, der in einem Fremd-Tab den Schluessel
+     * ueber ``_applyKeyCleared`` sogar wieder verankert haette.
+     *
+     * Der Memory-Key faellt in JEDEM Fall — daran aendert sich nichts.
+     */
     async function clearSessionKey() {
         cachedKey = null;
         try {
             await _idbDelete(KEY_NAME);
+        } catch (_e) {
+            // Der Schluessel ist das Entscheidende: schlaegt SEIN Delete fehl,
+            // ist die Loeschung nicht nachgewiesen. Der Aktivitaetsstempel
+            // wird trotzdem noch versucht (er haengt am Key, #1065).
+            try {
+                await _idbDelete(ACTIVITY_KEY);
+            } catch (_e2) {
+                // ignore — siehe unten
+            }
+            return { persisted: false };
+        }
+        try {
             // Drop the activity stamp with the key: the next idle check
             // starts a fresh window instead of re-wiping forever (#1065).
             await _idbDelete(ACTIVITY_KEY);
         } catch (_e) {
-            // ignore — Clear-Site-Data on logout will get rid of it anyway
+            // Der Stempel ist kein Geheimnis und ohne Key wirkungslos — sein
+            // Fehlschlag entwertet die Schluessel-Loeschung nicht.
+        }
+        return { persisted: true };
+    }
+
+    /** Liegt (noch) ein persistenter Sitzungsschluessel in der IndexedDB?
+     *
+     * Refs #2136 (R-L3-13): Rueckleseprobe fuer Aufrufer, die einen
+     * Loeschnachweis brauchen statt eines Versprechens. Konservativ im
+     * Fehlerfall: Ein Lesefehler liefert ``true`` („koennte da sein"), damit
+     * niemand aus einer misslungenen Pruefung eine Zusage ableitet.
+     */
+    async function hasPersistedSessionKey() {
+        try {
+            const row = await _idbGet(KEY_NAME);
+            return !!(row && row.cryptoKey);
+        } catch (_e) {
+            return true;
         }
     }
 
@@ -691,6 +743,11 @@
         isSupported: isSupported,
         deriveSessionKey: deriveSessionKey,
         clearSessionKey: clearSessionKey,
+        // Refs #2136 (R-L3-13): Rueckleseprobe fuer den Loeschnachweis des
+        // Quick-Exit. Bewusst nur LESEND und ohne Schluesselmaterial im
+        // Rueckgabewert — die Oberflaechen-Minimierung aus #1476 (R8) bleibt
+        // unberuehrt.
+        hasPersistedSessionKey: hasPersistedSessionKey,
         wipeOfflineState: wipeOfflineState,
         // Refs #1324: exponiert fuer den deterministischen Idle-Wipe-Trigger
         // (Interval/visibilitychange rufen es intern; Tests treiben es gezielt).
