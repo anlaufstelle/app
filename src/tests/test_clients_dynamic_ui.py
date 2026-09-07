@@ -328,69 +328,6 @@ class TestPartialPrefillsAssignedType:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.django_db
-class TestClientDetailDynamicSection:
-    def test_values_are_visible(self, client, staff_user, facility, doc_type_client_profile, fernet_key):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = Client.objects.create(
-                facility=facility,
-                pseudonym="P7-Detail-01",
-                created_by=staff_user,
-                document_type=doc_type_client_profile,
-                data_json={"wohnsituation": "WG", "diagnose": "Detail-Klartext"},
-            )
-            client.force_login(staff_user)
-            content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
-        assert "Zusatzfelder" in content
-        assert "Wohnsituation" in content
-        assert "WG" in content
-        assert "Detail-Klartext" in content
-
-    def test_restricted_field_shows_placeholder(self, client, staff_user, facility, doc_type_client_mixed):
-        target = Client.objects.create(
-            facility=facility,
-            pseudonym="P7-Detail-02",
-            created_by=staff_user,
-            document_type=doc_type_client_mixed,
-            data_json={"sprache": "DE", "gefaehrdung": "nur fuer Leitung"},
-        )
-        client.force_login(staff_user)
-        content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
-        assert "Eingeschränkt" in content
-        assert "nur fuer Leitung" not in content
-
-    def test_lead_sees_restricted_field(self, client, lead_user, facility, staff_user, doc_type_client_mixed):
-        target = Client.objects.create(
-            facility=facility,
-            pseudonym="P7-Detail-03",
-            created_by=staff_user,
-            document_type=doc_type_client_mixed,
-            data_json={"sprache": "DE", "gefaehrdung": "nur fuer Leitung"},
-        )
-        client.force_login(lead_user)
-        content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
-        assert "nur fuer Leitung" in content
-
-    def test_section_absent_without_type(self, client, staff_user, client_identified):
-        client.force_login(staff_user)
-        content = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
-        assert "Zusatzfelder" not in content
-
-    def test_section_absent_when_doctype_not_visible(self, client, staff_user, facility, doc_type_client_high):
-        target = Client.objects.create(
-            facility=facility,
-            pseudonym="P7-Detail-04",
-            created_by=staff_user,
-            document_type=doc_type_client_high,
-            data_json={"schutzkonzept": "streng vertraulich"},
-        )
-        client.force_login(staff_user)
-        content = client.get(reverse("core:client_detail", args=[target.pk])).content.decode()
-        assert "Zusatzfelder" not in content
-        assert "streng vertraulich" not in content
-        assert doc_type_client_high.name not in content
-
-
 # ---------------------------------------------------------------------------
 # Art.-15-Auskunftsexport
 # ---------------------------------------------------------------------------

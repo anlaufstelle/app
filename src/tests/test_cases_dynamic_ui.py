@@ -1582,76 +1582,99 @@ class TestEntityPartialPrefillsAssignedType:
 
 
 @pytest.mark.django_db
-class TestCaseDetailDynamicSection:
-    def test_values_are_visible(self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key):
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityDetailDynamicSection:
+    @staticmethod
+    def _target(request, entity: EntitySpec, facility, staff_user, suffix, doc_type, data_json):
+        return entity.model.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            document_type=doc_type,
+            data_json=data_json,
+            **entity.identity_kwargs(request, suffix),
+        )
+
+    def test_values_are_visible(self, client, staff_user, facility, fernet_key, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = Case.objects.create(
-                facility=facility,
-                client=client_identified,
-                title="P8-Detail-01",
-                created_by=staff_user,
-                document_type=doc_type_case_form,
-                data_json={"anlass": "Mietschulden", "verlauf": "Detail-Klartext"},
+            target = self._target(
+                request,
+                entity,
+                facility,
+                staff_user,
+                "Detail-01",
+                doc_type,
+                {
+                    entity.field("primary"): entity.value("primary"),
+                    entity.field("secondary"): "Detail-Klartext",
+                },
             )
             client.force_login(staff_user)
-            content = client.get(reverse("core:case_detail", args=[target.pk])).content.decode()
+            content = client.get(reverse(entity.url("detail"), args=[target.pk])).content.decode()
         assert "Zusatzfelder" in content
-        assert "Anlass" in content
-        assert "Mietschulden" in content
+        assert entity.label("primary") in content
+        assert entity.value("primary") in content
         assert "Detail-Klartext" in content
 
-    def test_restricted_field_shows_placeholder(
-        self, client, staff_user, facility, client_identified, doc_type_case_mixed
-    ):
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Detail-02",
-            created_by=staff_user,
-            document_type=doc_type_case_mixed,
-            data_json={"zielsetzung": "Wohnung", "risikoeinschaetzung": "nur fuer Leitung"},
+    def test_restricted_field_shows_placeholder(self, client, staff_user, facility, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "mixed")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Detail-02",
+            doc_type,
+            {
+                entity.field("mixed_visible"): entity.value("mixed_initial"),
+                entity.field("mixed_restricted"): "nur fuer Leitung",
+            },
         )
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_detail", args=[target.pk])).content.decode()
+        content = client.get(reverse(entity.url("detail"), args=[target.pk])).content.decode()
         assert "Eingeschränkt" in content
         assert "nur fuer Leitung" not in content
 
-    def test_lead_sees_restricted_field(
-        self, client, lead_user, staff_user, facility, client_identified, doc_type_case_mixed
-    ):
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Detail-03",
-            created_by=staff_user,
-            document_type=doc_type_case_mixed,
-            data_json={"zielsetzung": "Wohnung", "risikoeinschaetzung": "nur fuer Leitung"},
+    def test_lead_sees_restricted_field(self, client, lead_user, staff_user, facility, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "mixed")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Detail-03",
+            doc_type,
+            {
+                entity.field("mixed_visible"): entity.value("mixed_initial"),
+                entity.field("mixed_restricted"): "nur fuer Leitung",
+            },
         )
         client.force_login(lead_user)
-        content = client.get(reverse("core:case_detail", args=[target.pk])).content.decode()
+        content = client.get(reverse(entity.url("detail"), args=[target.pk])).content.decode()
         assert "nur fuer Leitung" in content
 
-    def test_section_absent_without_type(self, client, staff_user, case_open):
+    def test_section_absent_without_type(self, client, staff_user, request, entity: EntitySpec):
+        target = entity.fixture(request, "object")
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_detail", args=[case_open.pk])).content.decode()
+        content = client.get(reverse(entity.url("detail"), args=[target.pk])).content.decode()
         assert "Zusatzfelder" not in content
 
-    def test_section_absent_when_doctype_not_visible(
-        self, client, staff_user, facility, client_identified, doc_type_case_high
-    ):
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Detail-04",
-            created_by=staff_user,
-            document_type=doc_type_case_high,
-            data_json={"gefahrenlage": "streng vertraulich"},
+    def test_section_absent_when_doctype_not_visible(self, client, staff_user, facility, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "high")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Detail-04",
+            doc_type,
+            {entity.field("high"): entity.value("high_confidential")},
         )
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_detail", args=[target.pk])).content.decode()
+        content = client.get(reverse(entity.url("detail"), args=[target.pk])).content.decode()
         assert "Zusatzfelder" not in content
-        assert "streng vertraulich" not in content
-        assert doc_type_case_high.name not in content
+        assert entity.value("high_confidential") not in content
+        assert doc_type.name not in content
 
 
 # ---------------------------------------------------------------------------
