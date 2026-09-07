@@ -45,7 +45,11 @@ class UnknownPackageError(LookupError):
         self.name = name
         self.available = list(available)
         rendered = ", ".join(self.available) if self.available else "–"
-        super().__init__(f"Unbekanntes Paket {name!r}. Verfügbare Pakete: {rendered}.")
+        # Meldung vorab bauen: der Guard gegen f-Strings in gettext-Aufrufen (#662)
+        # trifft auch einen f-String direkt im Konstruktor-Aufruf; die Meldung ist
+        # bewusst unuebersetzt (CLI-Fehlertext).
+        message = f"Unbekanntes Paket {name!r}. Verfügbare Pakete: {rendered}."
+        super().__init__(message)
 
 
 def _package_root() -> Traversable:
