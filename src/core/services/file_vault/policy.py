@@ -590,8 +590,44 @@ _MULTIFRAME_SAVE_FORMATS = frozenset({"TIFF", "WEBP", "PNG", "GIF"})
 # TIFF-``tag_v2``) faellt weg.
 _KEEP_IMAGE_INFO_KEYS = frozenset({"icc_profile", "transparency"})
 
+# Wie viel des WebP-RIFF-Containers nach dem ``VP8L``-Chunk abgesucht wird.
+# Vor dem Bilddatenstrom stehen nur kleine Chunks (``VP8X`` 10 Byte, ``ICCP``,
+# ``EXIF``, ``ANIM``); 64 KiB decken das mit grossem Abstand ab und begrenzen
+# zugleich den Lesepuffer.
+_WEBP_HEADER_SCAN_BYTES = 64 * 1024
 
-def _image_save_kwargs(save_format: str, source):
+
+def _webp_is_lossless(data: bytes) -> bool:
+    """Traegt dieser WebP-Container einen verlustfreien Bilddatenstrom?
+
+    Pillow 12 legt die Verlustfreiheit **nicht** in ``Image.info`` ab (weder
+    ``lossless`` noch ein Aequivalent) — verifiziert gegen 12.3.0. Ohne eigene
+    Erkennung wuerde ein verlustfrei gespeicherter Dokumentenscan beim
+    Bereinigen verlustbehaftet neu komprimiert; genau die Schrift-Artefakte,
+    die man auf einem Bescheid-Scan nicht will.
+
+    Die Antwort steht im RIFF-Containerkopf: ein ``VP8L``-Chunk ist der
+    verlustfreie Datenstrom, ``VP8 `` der verlustbehaftete. Gelaufen wird die
+    Chunk-Kette des Containers (Simple- wie Extended-Format mit
+    ``VP8X``/``ICCP``/``EXIF`` davor); bei animierten Dateien steckt der
+    Datenstrom im ``ANMF``-Chunk hinter dessen 16-Byte-Kopf.
+    """
+    if len(data) < 16 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        return False
+    offset = 12
+    while offset + 8 <= len(data):
+        fourcc = data[offset : offset + 4]
+        size = int.from_bytes(data[offset + 4 : offset + 8], "little")
+        if fourcc == b"VP8L":
+            return True
+        if fourcc == b"ANMF" and data[offset + 24 : offset + 28] == b"VP8L":
+            return True
+        # RIFF-Chunks sind auf gerade Laenge gepolstert.
+        offset += 8 + size + (size % 2)
+    return False
+
+
+def _image_save_kwargs(save_format: str, source, header: bytes = b""):
     """Encoder-Optionen je Zielformat (Refs #2128).
 
     JPEG bekommt ``quality="keep"``/``subsampling="keep"``: ohne sie wuerde
@@ -610,7 +646,7 @@ def _image_save_kwargs(save_format: str, source):
     if save_format == "PNG":
         return {"optimize": True}
     if save_format == "WEBP":
-        if source.info.get("lossless"):
+        if source.info.get("lossless") or _webp_is_lossless(header):
             return {"lossless": True}
         return {"quality": 95}
     if save_format == "TIFF":
@@ -694,6 +730,11 @@ def strip_image_metadata(facility, uploaded_file, owner, user):
     from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: PLC0415
     from PIL import Image, ImageSequence, UnidentifiedImageError  # noqa: PLC0415 — lazy, wie in enforce_image_limits
 
+    # Nur fuer WebP wird der RIFF-Containerkopf gebraucht (Verlustfreiheit,
+    # siehe ``_webp_is_lossless``) — begrenzt gelesen, damit die Stufe fuer
+    # keinen Upload eine zweite Vollkopie im RAM haelt.
+    uploaded_file.seek(0)
+    header = uploaded_file.read(_WEBP_HEADER_SCAN_BYTES) if ext == "webp" else b""
     uploaded_file.seek(0)
     buffer = io.BytesIO()
     try:
@@ -710,7 +751,7 @@ def strip_image_metadata(facility, uploaded_file, owner, user):
                     frames = [_cleaned_image(frame, source) for frame in ImageSequence.Iterator(source)]
                 else:
                     frames = [_cleaned_image(source, source)]
-                save_kwargs = _image_save_kwargs(save_format, source)
+                save_kwargs = _image_save_kwargs(save_format, source, header)
                 if multiframe:
                     save_kwargs = {**save_kwargs, "save_all": True, "append_images": frames[1:]}
                 frames[0].save(buffer, format=save_format, **save_kwargs)

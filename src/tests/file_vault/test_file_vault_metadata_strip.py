@@ -109,6 +109,21 @@ def _webp_with_exif() -> bytes:
     return buf.getvalue()
 
 
+def _webp_lossless() -> bytes:
+    img = _gradient(40, 12)
+    exif = img.getexif()
+    exif[ExifTags.Base.Make] = SECRET_MARKER
+    buf = io.BytesIO()
+    img.save(buf, format="WEBP", lossless=True, exif=exif)
+    return buf.getvalue()
+
+
+def _gif_in_tif_container() -> bytes:
+    """GIF-Bytes unter ``.tiff``-Namen — libmagic erkennt ``image/gif``, und
+    ``tif``/``tiff`` haben keine Positiv-Allowlist in ``_STRONG_MAGIC``."""
+    return _gif_bytes()
+
+
 def _tiff_two_frames() -> bytes:
     first = _gradient(30, 10)
     second = _gradient(30, 10).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
@@ -287,6 +302,33 @@ class TestWebpUndTiff:
         assert Image.open(io.BytesIO(stored)).format == "WEBP"
         assert dict(Image.open(io.BytesIO(stored)).getexif()) == {}
 
+    def test_verlustfreies_webp_bleibt_verlustfrei(self, upload):
+        """Pillow legt die Verlustfreiheit nicht in ``Image.info`` ab — sie wird
+        aus dem RIFF-Containerkopf gelesen (``VP8L``). Ohne das wuerde ein
+        verlustfrei gespeicherter Scan beim Bereinigen verlustbehaftet neu
+        komprimiert."""
+        source = _webp_lossless()
+        assert b"VP8L" in source
+
+        attachment = upload("scan.webp", source, "image/webp")
+
+        stored = _stored_bytes(attachment)
+        assert SECRET_MARKER.encode() not in stored
+        assert b"VP8L" in stored
+        original = Image.open(io.BytesIO(source)).convert("RGB")
+        cleaned = Image.open(io.BytesIO(stored)).convert("RGB")
+        assert cleaned.tobytes() == original.tobytes()
+
+    def test_format_ohne_eigene_encoder_optionen_bleibt_im_container(self, upload):
+        """Ein Format, fuer das ``_image_save_kwargs`` nichts Besonderes kennt
+        (hier GIF-Bytes unter ``.tiff``-Namen), wird im **erkannten** Format
+        zurueckgeschrieben — der Container und damit der verifizierte MIME-Typ
+        bleiben stimmig."""
+        attachment = upload("getarnt.tiff", _gif_in_tif_container(), "image/gif")
+
+        assert attachment.detected_mime == "image/gif"
+        assert Image.open(io.BytesIO(_stored_bytes(attachment))).format == "GIF"
+
     def test_tiff_bleibt_mehrseitig_ohne_beschreibung(self, upload):
         """Mehrseitige TIFF: alle Frames bleiben erhalten (``save_all``),
         die IPTC-/Description-Tags der Quelle verschwinden."""
@@ -300,6 +342,39 @@ class TestWebpUndTiff:
         result = Image.open(io.BytesIO(stored))
         assert result.format == "TIFF"
         assert len(list(ImageSequence.Iterator(result))) == 2
+
+
+class TestWebpVerlustfreiErkennung:
+    """Direkte Sonde auf ``_webp_is_lossless`` — die beiden Zweige, die ueber
+    die Upload-Pipeline nicht (Nicht-WebP-Header) bzw. nur mit einer
+    animierten Datei (``ANMF``) erreichbar sind."""
+
+    def test_nicht_webp_bytes_gelten_als_verlustbehaftet(self):
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        assert _webp_is_lossless(b"") is False
+        assert _webp_is_lossless(PDF_BYTES) is False
+        assert _webp_is_lossless(b"RIFF" + b"\x00" * 4 + b"AVI " + b"\x00" * 8) is False
+
+    def test_animiertes_verlustfreies_webp_wird_erkannt(self):
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        first = _gradient(20, 8)
+        second = _gradient(20, 8).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        buf = io.BytesIO()
+        first.save(buf, format="WEBP", save_all=True, append_images=[second], lossless=True, duration=100)
+
+        assert _webp_is_lossless(buf.getvalue()) is True
+
+    def test_animiertes_verlustbehaftetes_webp_wird_nicht_faelschlich_erkannt(self):
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        first = _gradient(20, 8)
+        second = _gradient(20, 8).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        buf = io.BytesIO()
+        first.save(buf, format="WEBP", save_all=True, append_images=[second], quality=50, duration=100)
+
+        assert _webp_is_lossless(buf.getvalue()) is False
 
 
 @pytest.mark.django_db
@@ -370,6 +445,28 @@ class TestFailClosedBeiUndekodierbarenBildern:
         assert entry.detail["reason"] == "image_undecodable"
         assert entry.detail["extension"] == "png"
         assert "kaputt.png" not in str(entry.detail)
+
+    def test_bild_ohne_erkennbares_quellformat_wird_abgelehnt(self, upload, event, monkeypatch):
+        """Defensiv: liefert Pillow kein ``format``, ist unbekannt, in welchem
+        Container zurueckzuschreiben waere — dann lieber ablehnen als
+        ungestrippt speichern."""
+        from contextlib import contextmanager
+
+        from PIL import Image as PILImage
+
+        @contextmanager
+        def _formatlos(*args, **kwargs):
+            with _echtes_open(*args, **kwargs) as img:
+                img.format = None
+                yield img
+
+        _echtes_open = PILImage.open
+        monkeypatch.setattr(PILImage, "open", _formatlos)
+
+        with pytest.raises(ValidationError):
+            upload("ohne-format.png", _png_with_text(), "image/png")
+
+        assert Attachment.objects.filter(event=event).count() == 0
 
     def test_keine_verwaiste_enc_datei_bleibt_liegen(self, upload, facility_with_settings, settings):
         from pathlib import Path
