@@ -12,6 +12,12 @@ Established commercial social-sector software targets large providers with hundr
 
 Anlaufstelle fills this gap. It is an open-source specialized application for documentation, operations management, and impact measurement -- built around pseudonymization, contact levels, and the daily rhythms of low-threshold work. It is designed to be self-hosted with `docker compose up`, learnable in two to three hours, and affordable for donation-funded facilities with five to thirty staff members. Licensed under AGPL v3, it belongs to the community it serves.
 
+### Who It's For
+
+Anlaufstelle fits wherever people come in without an appointment and without a real name, and where most contacts stay anonymous or pseudonymous. The working pattern is contact → short documentation → (optional) casework → statistics; communication and scheduling happen outside the system. It is a poor fit when real-name files, correspondence with authorities, or live communication channels are the core of the work.
+
+Beyond the original domain of low-threshold substance-use and homelessness services, curated domain packages are shipped for open social and life counselling (`beratungsstelle`), awareness teams at festivals and clubs (`awareness`), women's shelters and violence counselling (`frauenhaus`), and mobile and open youth work (`jugendarbeit`). Each package replaces the standard catalogue rather than being loaded on top of it.
+
 ## Core Domain Concepts
 
 ### Contact Levels (Kontaktstufen)
@@ -279,7 +285,13 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### Unreleased
+
+- **Use cases and domain packages documented** (#2140) — the concept's § 3 now frames the primary target group as a working mode and adds fit/anti-fit tables; the FAQ, the README's "Who it's for" section, and the glossary cover the four shipped packages.
+- **Domain packages replace, not extend** — each curated package (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) is loaded against a fresh facility via `setup_facility --package <name>`, never layered on top of the standard catalogue.
+- **Quick exit added to the glossary** — the look-away protection for documentation in the presence of threatening situations.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-08-28 -->
+<!-- translation-date: 2026-09-07 -->
 <!-- source-hash: 2a8d93c6cd75a4b59ca4ebfa599ff1f739065577 -->

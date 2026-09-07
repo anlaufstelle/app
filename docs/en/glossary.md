@@ -18,6 +18,7 @@
 | AuditLog | Audit log | Technical term for the audit trail. A dedicated entity stored separately from case documentation. Immutable (append-only). |
 | Backup-Codes | Backup codes | Single-use recovery codes for 2FA emergencies (since v0.10.1). Users receive 10 codes when enabling TOTP; each works exactly once and may be entered at the 2FA login prompt instead of an authenticator code. Consumed codes are invalidated and logged via `MFA_BACKUP_CODE_USED`. Has its own rate limit (5/min). When all codes are exhausted, an admin reset is the fallback. |
 | Benannter Zeitfilter | Named time filter | A saved work-time window with a label (e.g. "Night shift 21:30–09:00"). Used as a quick filter on the dashboard and in statistics. Pure UI configuration, not a data structure. See: TimeFilter. |
+| Betreiber-Empfehlung | Operator recommendation | A recommendation for operating a facility that a package cannot capture (e.g. retention periods, k-threshold, time windows, quick templates, roles). Documented in the respective package guide (`docs/packages-<domain>.md`) rather than in the package itself. |
 | Case | Case | A case — a bracket around related work with a person. Contains episodes, assignments, and optionally outcome goals. |
 | Chronik | Timeline | The chronological sequence of all events documented for a person. The timeline is the primary view of a person in Anlaufstelle. |
 | ClamAV | ClamAV | Open-source malware scanner running as a sidecar service. All file uploads are scanned before being encrypted and stored. Fail-closed: uploads are rejected if ClamAV is unreachable. |
@@ -26,6 +27,7 @@
 | Dexie.js | Dexie.js | Minimal IndexedDB wrapper used for the secure offline store. Vendored under `src/static/js/dexie.min.js` (Apache-2.0, v4.2.0). |
 | DocumentType | Document type | A configurable category of events (e.g. "Contact", "Crisis counseling", "Needle exchange"). Defines fields, sensitivity, and retention period. |
 | DocumentTypeField | Document type field | Association of a field template (FieldTemplate) with a document type (DocumentType). Determines field order in the form and allows reuse of field templates across multiple types. |
+| Domänen-Paket | Domain package | The technical realization of the domain library: a versionable YAML catalog of preconfigured document types and fields for a specific facility type, applied via `setup_facility --package <name>` or `manage.py load_package`. See: Domain library, [docs/packages.md](../packages.md). |
 | Domänenbibliothek | Domain library | Preconfigured set of document types for a specific facility type (e.g. "Low-threshold addiction services"). Seed data loaded during initial setup. |
 | DSGVO | GDPR | General Data Protection Regulation — the European regulation for the protection of personal data. Together with social data protection (SGB X), the central legal framework for Anlaufstelle. |
 | Einrichtung | Facility | A concrete site or location. The primary scope boundary for staff members. All entities have a foreign key to Facility. |
@@ -59,6 +61,7 @@
 | PWA | Progressive Web App | Installable web app for smartphones and desktops. Provides home-screen install, an app-like shell, and offline behavior coordinated by the Service Worker. Used in Anlaufstelle for the streetwork quick-capture flow. |
 | Quasi-Identifikator | Quasi-identifier | An attribute that does not identify on its own but does in combination with others. The k-anonymization equivalence class is `(facility, age_cluster, contact_stage)` ([ADR-023](../adr/023-k-anonymization-statistik.md)). |
 | Quick Template | Quick template | Pre-filled event template maintained by admins. Applied by clicking a button on "Document contact"; fills empty fields only; self-heals against deactivated select options. |
+| Quick-Exit | Quick exit | Look-away protection: a feature that instantly disguises the interface when someone might be looking over a person's shoulder (e.g. switching to a neutral page). A data-protection term, see [data-protection.md](data-protection.md). |
 | Retention Proposal | Retention proposal | Individual deletion/anonymization suggestion surfaced on the retention dashboard. Can be approved, deferred, or rejected in bulk. |
 | Role | Role | Determines which actions a user may perform. Five roles (Refs #867, [ADR-018](../adr/018-rollenmodell-superadmin.md)): Super-Admin (installation-wide system control, no facility), Application manager (`facility_admin`, full access within one facility), Lead (professional leadership), Staff (case worker), Assistant (support). |
 | Row Level Security (RLS) | Row Level Security (RLS) | PostgreSQL defense-in-depth applied to all facility-scoped tables (23 as of v0.10.2). Policies read the session variable `app.current_facility_id` and fail closed when it is NULL. The variable is set per request session-wide (not via `SET LOCAL`) and explicitly cleared for anonymous requests. See [`src/core/migrations/0047_postgres_rls_setup.py`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py) and [`src/tests/test_rls.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls.py). |
@@ -77,5 +80,5 @@
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-08-24 -->
+<!-- translation-date: 2026-09-07 -->
 <!-- source-hash: bbcc60064e61b1506ec946ff97ecb5c3b7270ad7 -->

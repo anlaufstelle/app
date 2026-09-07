@@ -40,7 +40,8 @@
 Anlaufstelle is built for facilities where most contacts are anonymous or pseudonymous:
 
 - **Open consultation hours & social counseling** — low-threshold advice centers
-- **Psychosocial counseling, youth & women's services** — anonymous where needed
+- **Psychosocial counseling, youth & women's services** — anonymous where needed (packages `beratungsstelle`, `jugendarbeit`, `frauenhaus`)
+- **Awareness teams** — festivals, clubs, large events (package `awareness`)
 - **Drop-in centers** — low-threshold addiction services
 - **Street outreach / mobile work**
 - **Day shelters, warming centers and emergency shelters** — homelessness support
@@ -80,7 +81,7 @@ You can define time periods to match your operations — e.g. "Night shift 21:30
 
 Every facility works differently. Anlaufstelle adapts to your documentation practice: What types of contacts do you have? What services are recorded? What fields does an entry need?
 
-This works without programming, directly in the interface — for events as well as for client and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility.
+This works without programming, directly in the interface — for events as well as for client and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility. Four domain packages ship alongside the standard catalog (advice center, awareness, women's shelter, youth work) — see [docs/packages.md](docs/packages.md).
 
 The configuration also governs data protection:
 
@@ -222,5 +223,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-08-31 -->
+<!-- translation-date: 2026-09-07 -->
 <!-- source-hash: b6068ca379ea9818cd895c8e995578b5d4a55707 -->
