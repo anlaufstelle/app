@@ -136,6 +136,62 @@ class TestStoreImportUpload:
             import_engine.store_import_upload(facility, admin_user, oversized, target_type=ImportJob.TargetType.CLIENT)
         assert ImportJob.objects.for_facility(facility).count() == 0
 
+    @pytest.mark.parametrize("fmt", ["BMP", "TIFF", "JPEG", "PNG", "GIF", "WEBP"])
+    def test_rejects_binary_image_payloads(self, facility, admin_user, media_root, fmt):
+        """Refs #2128 (Fix-Runde 1): Der Import-Wizard verschluesselt Rohbytes
+        direkt (``encrypt_file``) und umgeht damit die File-Vault-Pipeline —
+        also auch die Metadaten-Bereinigung. Bislang begrenzte ihn serverseitig
+        nichts auf CSV: ein BMP oder TIFF laesst sich als CP1252 dekodieren und
+        von ``csv.reader`` als Kopfzeile akzeptieren. Damit haette #2128 einen
+        Bild-Bypass in einem zweiten Speicherpfad."""
+        import io as _io
+
+        from PIL import Image
+
+        img = Image.new("RGB", (4, 2), (7, 8, 9))
+        buf = _io.BytesIO()
+        (img.convert("P") if fmt == "GIF" else img).save(buf, format=fmt)
+
+        with pytest.raises(ValidationError):
+            import_engine.store_import_upload(
+                facility,
+                admin_user,
+                _upload(buf.getvalue(), name="tarnung.csv"),
+                target_type=ImportJob.TargetType.CLIENT,
+            )
+        assert ImportJob.objects.for_facility(facility).count() == 0
+
+    def test_rejects_pdf_and_zip_payloads(self, facility, admin_user, media_root):
+        import zipfile
+
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w") as zf:
+            zf.writestr("word/document.xml", "<document/>")
+
+        for payload in (b"%PDF-1.4\ntrailer<</Size 1>>\n%%EOF\n", zip_buf.getvalue()):
+            with pytest.raises(ValidationError):
+                import_engine.store_import_upload(
+                    facility,
+                    admin_user,
+                    _upload(payload, name="tarnung.csv"),
+                    target_type=ImportJob.TargetType.CLIENT,
+                )
+        assert ImportJob.objects.for_facility(facility).count() == 0
+
+    def test_real_csv_with_bom_and_cp1252_still_accepted(self, facility, admin_user, media_root):
+        """Gegenprobe: die beiden real vorkommenden Excel-Exporte bleiben gueltig."""
+        content = PSEUDONYM_HEADER + "IMP-Ü;identified;u18;Straße\n"
+
+        bom_job = import_engine.store_import_upload(
+            facility, admin_user, _upload(content, encoding="utf-8-sig"), target_type=ImportJob.TargetType.CLIENT
+        )
+        cp_job = import_engine.store_import_upload(
+            facility, admin_user, _upload(content, encoding="cp1252"), target_type=ImportJob.TargetType.CLIENT
+        )
+
+        assert bom_job.pk is not None
+        assert cp_job.pk is not None
+
     def test_rejects_files_above_the_row_limit(self, facility, admin_user, media_root):
         content = PSEUDONYM_HEADER + "".join(f"P-{i};;;\n" for i in range(import_engine.MAX_ROWS + 1))
         with pytest.raises(ValidationError):

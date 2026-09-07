@@ -25,6 +25,7 @@ import io
 import logging
 import os
 import struct
+from typing import Any
 
 from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
@@ -39,6 +40,39 @@ logger = logging.getLogger(__name__)
 
 # Bild-Extensions, fuer die der Decompression-Bomb-Pixelcheck greift (#1268).
 _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff"})
+
+# Bild-MIME-Typen, die libmagic fuer diese Endungsfamilie liefert (#2128,
+# R-L7a-6). Sie binden die Inhalts- an die Endungsfamilie: ein Bild MUSS unter
+# einer Bild-Endung hochgeladen werden. Ohne diese Bindung genuegte es, ein
+# JPEG ``foto.docx`` zu nennen und ``image/jpeg`` korrekt zu deklarieren —
+# ``enforce_magic_bytes`` sah "erkannt == deklariert" und liess es durch, und
+# jede endungsbasierte Folgestufe (Pixel-Cap, Metadaten-Strip) sah kein Bild.
+# Bewusst eine feste Liste statt ``startswith("image/")``: sie soll nur
+# Formate abweisen, deren Endungsfamilie hier tatsaechlich bekannt ist.
+_IMAGE_MIMES = frozenset(
+    {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/tiff",
+        "image/bmp",
+        "image/x-ms-bmp",
+    }
+)
+
+
+def _is_image_mime(mime) -> bool:
+    """Sieht der per Magic-Bytes erkannte Typ nach Bild aus? (#2128)
+
+    Bewusst breiter als :data:`_IMAGE_MIMES`: fuer den *Pixel-Cap* zaehlt jeder
+    ``image/*``-Typ, auch ein hier nicht namentlich gefuehrter (``image/avif``,
+    ``image/heic``). Ein Dekodier-Guard darf nicht daran scheitern, dass eine
+    Formatliste nicht nachgezogen wurde.
+    """
+    return (mime or "").lower().startswith("image/")
+
 
 # ZIP-Family-Extensions, fuer die der Archiv-Expansions-Guard greift (#1310, S4).
 # OOXML (docx/xlsx/pptx) sind ZIP-Container — derselbe Decompression-Bomb-Vektor.
@@ -127,18 +161,25 @@ def enforce_upload_size(facility, uploaded_file, owner, user):
     )
 
 
-def enforce_image_limits(facility, uploaded_file, owner, user):
+def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=None):
     """Reject decompression-bomb images (Refs #1268 (T3)).
 
     Setzt ``PIL.Image.MAX_IMAGE_PIXELS`` und lehnt Bilder ab, deren (aus dem
     Header gelesene, NICHT dekodierte) Pixelzahl ``FILE_VAULT_MAX_IMAGE_PIXELS``
     uebersteigt — so kann eine klein komprimierte Datei nicht in eine RAM-Bombe
-    dekodieren. Nicht-Bild-Uploads (per Extension) werden uebersprungen; fuer sie
-    bleiben Extension-/Magic-/Virus-Checks zustaendig.
+    dekodieren. Nicht-Bild-Uploads werden uebersprungen; fuer sie bleiben
+    Extension-/Magic-/Virus-Checks zustaendig.
+
+    Refs #2128 (Fix-Runde 1, R-L7a-6): „Bild oder nicht" entscheidet jetzt der
+    per Magic-Bytes **erkannte** Typ ODER die Endung — nicht mehr die Endung
+    allein. Ein JPEG unter ``foto.docx`` umging sonst den Pixel-Cap komplett.
+    ``detected_mime`` ist optional, damit Bestandsaufrufer ohne Sniff-Ergebnis
+    (und Tests) unveraendert funktionieren; dann entscheidet wie bisher die
+    Endung.
     """
     name = uploaded_file.name or ""
     ext = _extension(uploaded_file)
-    if ext not in _IMAGE_EXTENSIONS:
+    if ext not in _IMAGE_EXTENSIONS and not _is_image_mime(detected_mime):
         return
 
     import warnings  # noqa: PLC0415
@@ -454,6 +495,29 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
             allowed=sorted(allowed_strong),
         )
 
+    # #2128 (Fix-Runde 1, R-L7a-6): Inhalts- an Endungsfamilie binden.
+    # Der Gleichheits-Zweig unten laesst jede Datei durch, deren erkannter Typ
+    # dem deklarierten entspricht — ohne den Inhalt je an die Endung zu binden.
+    # Ein JPEG mit korrekt deklariertem ``image/jpeg`` unter der per Default
+    # erlaubten Endung ``.docx``/``.odt`` kam so unverandert durch: der
+    # Archiv-Guard uebersprang es (kein ZIP), der Pixel-Cap und die
+    # Metadaten-Bereinigung entschieden endungsbasiert und sahen kein Bild.
+    # Ergebnis waeren EXIF/GPS im Vault UND ein umgangener Decompression-Bomb-
+    # Schutz gewesen. Fail-closed: erkanntes Bild verlangt eine Bild-Endung.
+    if detected_mime in _IMAGE_MIMES and extension not in _IMAGE_EXTENSIONS:
+        _reject(
+            facility,
+            user,
+            owner,
+            reason="mime_mismatch",
+            message=_("Datei-Inhalt ist ein Bild (%(detected)s), die Endung .%(ext)s ist keine Bild-Endung.")
+            % {"detected": detected_mime, "ext": extension or "?"},
+            filename=uploaded_file.name,
+            declared=declared_mime,
+            detected=detected_mime,
+            extension=extension,
+        )
+
     # libmagic returns "application/octet-stream" when it cannot confidently
     # identify the content (common for small archives, ZIP-like containers, and
     # formats whose magic.mgc definitions are terse). Treat it as "unknown",
@@ -576,11 +640,24 @@ def run_virus_scan(facility, uploaded_file, owner, user):
         )
 
 
-# Bild-Extensions MIT relevantem Metadaten-Container (Refs #2128, Befund N-1).
-# Teilmenge von :data:`_IMAGE_EXTENSIONS`: ``gif``/``bmp`` bleiben bewusst
-# draussen — sie tragen keinen EXIF-/XMP-/Text-Container, ein Re-Encode brächte
-# dort nur Risiko (Animation, Palette) ohne Datenschutz-Gewinn.
+# Bild-Formate MIT bereinigtem Metadaten-Container (Refs #2128, Befund N-1).
+#
+# ``gif``/``bmp`` bleiben bewusst draussen — aber NICHT, weil sie keine
+# Metadaten tragen koennten: GIF89a kennt sowohl die *Comment Extension* als
+# auch die *XMP-Data-Application-Extension*, BMP v5 kann ein ICC-Profil
+# einbetten. Beides bleibt hier erhalten. Der Grund fuer die Ausnahme ist ein
+# anderer: ein Pillow-Re-Encode wuerde bei GIF die Palette neu quantisieren und
+# bei animierten Dateien Frame-Timing/Disposal-Verhalten veraendern — ein
+# sichtbarer Eingriff ins Bild fuer einen Metadaten-Kanal, den die Praxis nicht
+# nutzt (Beratungsfotos sind JPEG/PNG). Bewusst dokumentiertes Restrisiko
+# (Admin-Handbuch § 2.9): wer es ausschliessen will, laesst ``gif``/``bmp``
+# aus ``Settings.allowed_file_types`` heraus.
 _METADATA_STRIP_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "tif", "tiff"})
+
+# Dieselbe Menge auf der MIME-Seite (#2128, Fix-Runde 1, R-L7a-6). Massgeblich
+# ist der per Magic-Bytes ERKANNTE Typ; die Endung entscheidet nur noch dort,
+# wo libmagic nichts Belastbares liefert (``application/octet-stream``).
+_METADATA_STRIP_MIMES = frozenset({"image/jpeg", "image/jpg", "image/png", "image/webp", "image/tiff"})
 
 # Formate, deren Encoder mehrere Frames schreiben kann. Nur fuer sie wird
 # ``save_all`` gesetzt — sonst verlöre ein mehrseitiges TIFF bzw. ein
@@ -594,14 +671,14 @@ _MULTIFRAME_SAVE_FORMATS = frozenset({"TIFF", "WEBP", "PNG", "GIF"})
 # TIFF-``tag_v2``) faellt weg.
 _KEEP_IMAGE_INFO_KEYS = frozenset({"icc_profile", "transparency"})
 
-# Wie viel des WebP-RIFF-Containers nach dem ``VP8L``-Chunk abgesucht wird.
-# Vor dem Bilddatenstrom stehen nur kleine Chunks (``VP8X`` 10 Byte, ``ICCP``,
-# ``EXIF``, ``ANIM``); 64 KiB decken das mit grossem Abstand ab und begrenzen
-# zugleich den Lesepuffer.
-_WEBP_HEADER_SCAN_BYTES = 64 * 1024
+# Obergrenze der abgelaufenen RIFF-Chunks. Vor dem Bilddatenstrom stehen in
+# realen Dateien eine Handvoll Chunks (``VP8X``, ``ICCP``, ``EXIF``, ``XMP ``,
+# ``ANIM``); die Schranke ist reine Schleifen-Hygiene gegen eine praeparierte
+# Chunk-Kette und kostet nur 8 gelesene Byte je Durchlauf.
+_WEBP_MAX_CHUNKS = 64
 
 
-def _webp_is_lossless(data: bytes) -> bool:
+def _webp_is_lossless(stream) -> bool:
     """Traegt dieser WebP-Container einen verlustfreien Bilddatenstrom?
 
     Pillow 12 legt die Verlustfreiheit **nicht** in ``Image.info`` ab (weder
@@ -610,28 +687,49 @@ def _webp_is_lossless(data: bytes) -> bool:
     Bereinigen verlustbehaftet neu komprimiert; genau die Schrift-Artefakte,
     die man auf einem Bescheid-Scan nicht will.
 
-    Die Antwort steht im RIFF-Containerkopf: ein ``VP8L``-Chunk ist der
-    verlustfreie Datenstrom, ``VP8 `` der verlustbehaftete. Gelaufen wird die
-    Chunk-Kette des Containers (Simple- wie Extended-Format mit
-    ``VP8X``/``ICCP``/``EXIF`` davor); bei animierten Dateien steckt der
-    Datenstrom im ``ANMF``-Chunk hinter dessen 16-Byte-Kopf.
+    Die Antwort steht im RIFF-Containerkopf: ``VP8L`` ist der verlustfreie
+    Datenstrom, ``VP8 `` der verlustbehaftete, ``VP8X`` nur der Kopf des
+    Extended-Formats (er sagt nichts ueber die Codierung und wird
+    uebersprungen). Gelaufen wird die **vollstaendige** Chunk-Kette ueber den
+    Stream: je Chunk werden nur 8 Byte Kopf gelesen, die Nutzlast wird
+    uebersprungen (RIFF polstert auf gerade Laenge). Ein Praefix-Scan waere
+    falsch — ein zulaessiges ICC-/EXIF-/XMP-Chunk vor dem Bilddatenstrom kann
+    beliebig gross sein (Refs #2128, Fix-Runde 1: bei 70 kB ICC lag ``VP8L``
+    bei Offset 70 038 und wurde uebersehen).
+
+    Bei animierten Dateien steckt der Datenstrom im ``ANMF``-Chunk hinter
+    dessen 16-Byte-Kopf; der erste Frame entscheidet fuer die ganze Datei.
     """
-    if len(data) < 16 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+    try:
+        stream.seek(0)
+        if stream.read(4) != b"RIFF":
+            return False
+        stream.seek(8)
+        if stream.read(4) != b"WEBP":
+            return False
+        offset = 12
+        for _ in range(_WEBP_MAX_CHUNKS):
+            stream.seek(offset)
+            head = stream.read(8)
+            if len(head) < 8:
+                return False
+            fourcc = head[:4]
+            size = int.from_bytes(head[4:8], "little")
+            if fourcc == b"VP8L":
+                return True
+            if fourcc == b"VP8 ":
+                return False
+            if fourcc == b"ANMF":
+                # ANMF-Kopf: 16 Byte Frame-Geometrie/-Timing, dann der
+                # eingebettete Bilddatenstrom (ggf. nach einem ALPH-Chunk).
+                return stream.read(20)[16:20] == b"VP8L"
+            offset += 8 + size + (size % 2)
+    except (OSError, ValueError):  # pragma: no cover - defensiv, Stream kaputt
         return False
-    offset = 12
-    while offset + 8 <= len(data):
-        fourcc = data[offset : offset + 4]
-        size = int.from_bytes(data[offset + 4 : offset + 8], "little")
-        if fourcc == b"VP8L":
-            return True
-        if fourcc == b"ANMF" and data[offset + 24 : offset + 28] == b"VP8L":
-            return True
-        # RIFF-Chunks sind auf gerade Laenge gepolstert.
-        offset += 8 + size + (size % 2)
     return False
 
 
-def _image_save_kwargs(save_format: str, source, header: bytes = b""):
+def _image_save_kwargs(save_format: str, source, webp_lossless: bool = False) -> dict[str, Any]:
     """Encoder-Optionen je Zielformat (Refs #2128).
 
     JPEG bekommt ``quality="keep"``/``subsampling="keep"``: ohne sie wuerde
@@ -640,23 +738,36 @@ def _image_save_kwargs(save_format: str, source, header: bytes = b""):
     ``keep`` verlangt allerdings, dass der Encoder die Quantisierungstabellen
     der Quelle sieht; das erledigt :func:`_cleaned_image` (siehe dort).
 
-    PNG ist per Definition verlustfrei. WebP folgt der Quelle
-    (``img.info["lossless"]``), sonst hoher Qualitaetswert. TIFF behaelt die
+    PNG ist per Definition verlustfrei. WebP folgt der Quelle (``webp_lossless``
+    aus :func:`_webp_is_lossless`), sonst hoher Qualitaetswert. TIFF behaelt die
     Kompression der Quelle, damit ein LZW-Scan nicht unkomprimiert aufgeblasen
     wird.
+
+    **ICC-Profil (Fix-Runde 1):** Die JPEG- und WebP-Encoder von Pillow lesen
+    das Profil ausschliesslich aus den Save-Argumenten — ein Profil in
+    ``im.info`` ignorieren sie. Die Zusage aus R-L7a-1 („ICC-Profil bleibt")
+    galt deshalb nur fuer PNG und TIFF, deren Encoder auf ``im.info``
+    zurueckfallen; JPEG und WebP verloren die Farbtreue still. Hier wird es
+    fuer beide explizit durchgereicht.
     """
+    icc_profile = source.info.get("icc_profile")
+    kwargs: dict[str, Any] = {}
     if save_format == "JPEG":
-        return {"quality": "keep", "subsampling": "keep"}
-    if save_format == "PNG":
+        kwargs = {"quality": "keep", "subsampling": "keep"}
+    elif save_format == "PNG":
         return {"optimize": True}
-    if save_format == "WEBP":
-        if source.info.get("lossless") or _webp_is_lossless(header):
-            return {"lossless": True}
-        return {"quality": 95}
-    if save_format == "TIFF":
+    elif save_format == "WEBP":
+        kwargs = {"lossless": True} if webp_lossless else {"quality": 95}
+    elif save_format == "TIFF":
         compression = source.info.get("compression")
         return {"compression": compression} if compression else {}
-    return {}
+    else:
+        return {}
+    # Nur JPEG und WebP brauchen das Profil explizit; PNG/TIFF ziehen es aus
+    # ``im.info`` (dort steht es dank ``_cleaned_image``).
+    if icc_profile:
+        kwargs["icc_profile"] = icc_profile
+    return kwargs
 
 
 def _cleaned_image(frame, source):
@@ -686,13 +797,21 @@ def _cleaned_image(frame, source):
     return cleaned
 
 
-def strip_image_metadata(facility, uploaded_file, owner, user):
+def strip_image_metadata(facility, uploaded_file, owner, user, detected_mime=None):
     """Entferne eingebettete Metadaten aus Bild-Uploads (Refs #2128, Befund N-1).
 
     Liefert die zu speichernde Datei zurueck — fuer Nicht-Bilder und fuer
     ``gif``/``bmp`` **dasselbe** Objekt (byte-identisch), fuer die Formate aus
-    :data:`_METADATA_STRIP_EXTENSIONS` eine neue, re-encodierte Datei ohne
-    EXIF/GPS, ohne PNG-Textchunks, ohne XMP/IPTC.
+    :data:`_METADATA_STRIP_MIMES` eine neue, re-encodierte Datei ohne EXIF/GPS,
+    ohne PNG-Textchunks, ohne XMP/IPTC.
+
+    Massgeblich ist der per Magic-Bytes **erkannte** Typ (``detected_mime``),
+    nicht die Endung (Refs #2128, Fix-Runde 1, R-L7a-6). Die Endung entscheidet
+    nur noch, wenn libmagic nichts Belastbares liefert
+    (``application/octet-stream``) — dann faellt die Stufe auf
+    :data:`_METADATA_STRIP_EXTENSIONS` zurueck und Pillow hat das letzte Wort.
+    Ein erkanntes Bild unter einer Nicht-Bild-Endung erreicht diese Stufe gar
+    nicht mehr: ``enforce_magic_bytes`` weist es vorher fail-closed ab.
 
     Warum ueberhaupt: Fotos aus der Beratungspraxis (Verletzungsdokumentation,
     Bescheid-Scan) tragen regelmaessig den Aufnahmeort per EXIF-GPS — also den
@@ -726,7 +845,17 @@ def strip_image_metadata(facility, uploaded_file, owner, user):
       libmagic-Lauf koennte nur dasselbe Ergebnis liefern.
     """
     ext = _extension(uploaded_file)
-    if ext not in _METADATA_STRIP_EXTENSIONS:
+    mime = (detected_mime or "").lower()
+    if mime in _METADATA_STRIP_MIMES:
+        # Erkannter Typ ist massgeblich — unabhaengig davon, wie die Datei heisst.
+        pass
+    elif _is_image_mime(mime):
+        # Erkanntes Bild, aber kein Strip-Format (gif/bmp und exotische
+        # image/*-Typen, die Pillow ggf. gar nicht oeffnen kann): unveraendert.
+        return uploaded_file
+    elif ext not in _METADATA_STRIP_EXTENSIONS:
+        # libmagic liefert nichts Belastbares (``application/octet-stream``)
+        # oder gar keinen Bild-Typ — dann entscheidet wie bisher die Endung.
         return uploaded_file
 
     import warnings  # noqa: PLC0415
@@ -734,11 +863,11 @@ def strip_image_metadata(facility, uploaded_file, owner, user):
     from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: PLC0415
     from PIL import Image, ImageSequence, UnidentifiedImageError  # noqa: PLC0415 — lazy, wie in enforce_image_limits
 
-    # Nur fuer WebP wird der RIFF-Containerkopf gebraucht (Verlustfreiheit,
-    # siehe ``_webp_is_lossless``) — begrenzt gelesen, damit die Stufe fuer
-    # keinen Upload eine zweite Vollkopie im RAM haelt.
-    uploaded_file.seek(0)
-    header = uploaded_file.read(_WEBP_HEADER_SCAN_BYTES) if ext == "webp" else b""
+    # Verlustfreiheit VOR dem Oeffnen bestimmen (siehe ``_webp_is_lossless``):
+    # der Chunk-Walk liest nur Kopf-Bytes und spult den Stream selbst, waehrend
+    # Pillow ihn danach exklusiv haelt. Fuer Nicht-WebP kostet das genau einen
+    # 4-Byte-Read (kein ``RIFF`` -> sofort ``False``).
+    webp_lossless = _webp_is_lossless(uploaded_file)
     uploaded_file.seek(0)
     buffer = io.BytesIO()
     try:
@@ -755,7 +884,7 @@ def strip_image_metadata(facility, uploaded_file, owner, user):
                     frames = [_cleaned_image(frame, source) for frame in ImageSequence.Iterator(source)]
                 else:
                     frames = [_cleaned_image(source, source)]
-                save_kwargs = _image_save_kwargs(save_format, source, header)
+                save_kwargs = _image_save_kwargs(save_format, source, webp_lossless)
                 if multiframe:
                     save_kwargs = {**save_kwargs, "save_all": True, "append_images": frames[1:]}
                 frames[0].save(buffer, format=save_format, **save_kwargs)

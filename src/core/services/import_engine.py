@@ -184,6 +184,76 @@ def delete_import_file(job: ImportJob) -> None:
         logger.warning("Import-Datei konnte nicht geloescht werden: job=%s", job.pk)
 
 
+# Byte-Signaturen bekannter Binaerformate (#2128, Fix-Runde 1).
+#
+# Warum ueberhaupt hier: ``store_import_upload`` verschluesselt die Rohbytes
+# direkt (``encrypt_file``) und umgeht damit die komplette File-Vault-Pipeline —
+# also auch die Metadaten-Bereinigung aus #2128. Serverseitig begrenzte den
+# Wizard bislang nichts auf CSV (das Formular hat nur ein clientseitiges
+# ``accept``); ein BMP oder TIFF laesst sich als CP1252 dekodieren und von
+# ``csv.reader`` als Kopfzeile akzeptieren. Damit haette #2128 einen
+# Bild-Bypass in einem zweiten Speicherpfad gehabt.
+#
+# Bewusst Signaturen statt libmagic: der Import-Pfad darf nicht von der
+# System-Bibliothek ``libmagic1`` abhaengen (die File-Vault-Tests skippen ohne
+# sie). Bewusst KEINE 2-Byte-Praefixe ohne Gegenprobe — ``BM`` allein wuerde
+# eine CSV mit der Spalte „BMI" abweisen; deshalb prueft der BMP-Eintrag
+# zusaetzlich das Dateigroessen-Feld des Headers.
+_BINARY_SIGNATURES: tuple[tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", "PNG"),
+    (b"\xff\xd8\xff", "JPEG"),
+    (b"GIF87a", "GIF"),
+    (b"GIF89a", "GIF"),
+    (b"II*\x00", "TIFF"),
+    (b"MM\x00*", "TIFF"),
+    (b"%PDF-", "PDF"),
+    (b"PK\x03\x04", "ZIP/Office"),
+    (b"\x1f\x8b", "GZIP"),
+    (b"\x7fELF", "ELF"),
+    (b"\xd0\xcf\x11\xe0", "Office-97"),
+)
+
+
+def _binary_kind(raw: bytes) -> str | None:
+    """Name des erkannten Binaerformats — ``None``, wenn es Text sein kann.
+
+    Drei Erkennungswege, absteigend nach Spezifitaet:
+
+    1. Feste Signaturen (:data:`_BINARY_SIGNATURES`).
+    2. RIFF-Container (WebP/WAV/AVI): ``RIFF`` + Formatkennung an Offset 8.
+    3. Ein ``NUL``-Byte irgendwo im Inhalt. Keines der unterstuetzten
+       Encodings (``utf-8-sig``, ``cp1252``) erzeugt aus einer echten
+       Tabellenkalkulations-Ausgabe ein Nullbyte; jedes Binaerformat hat
+       welche. Das faengt auch BMP, dessen 2-Byte-Signatur allein zu
+       unspezifisch waere.
+    """
+    for signature, kind in _BINARY_SIGNATURES:
+        if raw.startswith(signature):
+            return kind
+    if raw[:4] == b"RIFF" and len(raw) >= 12:
+        return raw[8:12].decode("ascii", "replace").strip() or "RIFF"
+    if b"\x00" in raw:
+        return "Binaerdatei"
+    return None
+
+
+def _reject_binary_upload(raw: bytes) -> None:
+    """Weist Uploads ab, die keine Textdatei sein koennen (#2128).
+
+    Bewusst eine gewoehnliche Formular-``ValidationError`` und **kein**
+    ``SECURITY_VIOLATION``: die haeufigste Ursache ist eine versehentlich
+    gewaehlte Excel- oder Bilddatei, kein Angriff. Die Meldung nennt das
+    erkannte Format, damit die Anwendungsbetreuung weiss, was schiefging.
+    """
+    kind = _binary_kind(raw)
+    if kind is None:
+        return
+    raise ValidationError(
+        _("Die Datei ist keine Textdatei (erkannt: %(kind)s). Bitte exportieren Sie die Daten als CSV.")
+        % {"kind": kind},
+    )
+
+
 def _read_upload(uploaded_file) -> bytes:
     """Liest den Upload vollstaendig ein — nach Groessenpruefung.
 
@@ -191,6 +261,12 @@ def _read_upload(uploaded_file) -> bytes:
     ``file_vault.policy.enforce_upload_size``). 5 MiB im Speicher sind fuer den
     zweifachen Bedarf (Parsen + Verschluesseln) vertretbar und ersparen einen
     Temp-Datei-Zwischenschritt.
+
+    Danach wird der Inhalt auf Textfaehigkeit geprueft
+    (:func:`_reject_binary_upload`, Refs #2128): dieser Pfad verschluesselt die
+    Rohbytes direkt und umgeht die File-Vault-Pipeline samt
+    Metadaten-Bereinigung — er muss deshalb selbst dafuer sorgen, dass hier nur
+    Text landet.
     """
     size = getattr(uploaded_file, "size", None)
     if size is not None and size > MAX_BYTES:
@@ -202,6 +278,10 @@ def _read_upload(uploaded_file) -> bytes:
         raise ValidationError(
             _("Die Datei ist zu groß (maximal %(mb)s MB).") % {"mb": MAX_BYTES // (1024 * 1024)},
         )
+    # #2128 (Fix-Runde 1): erst hier, nach der Groessenpruefung — die Signatur
+    # zu lesen setzt die Bytes voraus, und eine Riesendatei soll dafuer nicht
+    # in den RAM.
+    _reject_binary_upload(raw)
     return raw
 
 

@@ -965,7 +965,10 @@ File attachments (photos, scans, documents) on **events, clients and cases** ([A
 3. **ClamAV scan** before encryption:
    - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
    - Virus detected → the upload is discarded and an audit-log entry is written.
-4. **Metadata stripping** for image uploads (Refs #2128): `jpg`/`jpeg`/`png`/`webp`/`tif`/`tiff` are re-encoded and lose their EXIF data (including the **GPS capture location**, device model/serial, capture timestamp, embedded thumbnail), PNG text chunks (`tEXt`/`iTXt`) and XMP/IPTC blocks. **Orientation is preserved** -- it is baked into the pixels, so portrait photos do not flip. The ICC colour profile is kept as well. `gif`/`bmp` and every non-image file (PDF, DOCX, ODT...) stay byte-identical. **Always on, no toggle** -- the application is not a forensic evidence tool. If a file cannot be decoded despite matching magic bytes, the upload is rejected (fail-closed, audit reason `image_undecodable`).
+4a. **Content and extension must belong to the same family** (Refs #2128): the magic-bytes check rejects a file whose content is detected as an image but whose extension is not an image extension (`foto.docx`, `scan.odt`). Without that binding it was enough to name a photo `.docx` and declare `image/jpeg` correctly -- metadata stripping **and** decompression-bomb protection would both have waved it through.
+4. **Metadata stripping** for image uploads (Refs #2128): JPEG, PNG, WebP and TIFF are re-encoded and lose their EXIF data (including the **GPS capture location**, device model/serial, capture timestamp, embedded thumbnail), PNG text chunks (`tEXt`/`iTXt`) and XMP/IPTC blocks. **Orientation is preserved** -- it is baked into the pixels, so portrait photos do not flip; the ICC colour profile is kept as well. What counts is the type **detected** in step 4a via magic bytes, not the file extension. Every non-image file (PDF, DOCX, ODT...) stays byte-identical. **Always on, no toggle** -- the application is not a forensic evidence tool. If a file cannot be decoded despite matching magic bytes, the upload is rejected (fail-closed, audit reason `image_undecodable`).
+
+> **GIF and BMP are deliberately not cleaned.** This is not an oversight: GIF89a supports both a *comment extension* and an *XMP application extension*, and BMP v5 can embed an ICC profile -- those blocks **are preserved**. A Pillow re-encode would re-quantize the GIF colour palette and change frame timing and disposal behaviour of animated files; that is a visible change to the picture for a metadata channel practice does not use (counselling photos are JPEG or PNG). **Recommendation:** to rule it out, leave `gif` and `bmp` out of `allowed_file_types`.
 5. The payload is encrypted chunk-wise with Fernet (MultiFernet) (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
 6. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
 
@@ -1995,4 +1998,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 9bb987a83ffccdeca286ef658f842bc79dff56b1 -->
+<!-- source-hash: 6a6e3c6fb3eef69773b37d2a8b76fd2a546b27a5 -->

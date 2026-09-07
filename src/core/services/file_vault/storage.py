@@ -116,7 +116,9 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     # massgeblich ist statt des browser-gemeldeten content_type.
     detected_mime = enforce_magic_bytes(facility, uploaded_file, owner, user)
     # #1268: Decompression-Bomb-Schutz fuer Bild-Uploads (Pixel-Obergrenze).
-    enforce_image_limits(facility, uploaded_file, owner, user)
+    # #2128 (Fix-Runde 1): der erkannte MIME entscheidet, ob es ein Bild ist —
+    # nicht die Endung (ein JPEG unter ``foto.docx`` umging sonst den Cap).
+    enforce_image_limits(facility, uploaded_file, owner, user, detected_mime)
     # #1310 (S4): Archiv-Expansions-Guard (Zip-Bomb) fuer ZIP/OOXML-Container.
     enforce_archive_limits(facility, uploaded_file, owner, user)
     # #2128 (N-1): Bild-Metadaten (EXIF/GPS, PNG-Textchunks, XMP/IPTC) entfernen —
@@ -125,7 +127,7 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     # fuer Nicht-Bilder dasselbe Objekt, sonst die bereinigte Datei; ab hier
     # gilt AUSSCHLIESSLICH sie (Groesse/MIME der Zeile muessen zu den
     # tatsaechlich gespeicherten Bytes passen).
-    payload = strip_image_metadata(facility, uploaded_file, owner, user)
+    payload = strip_image_metadata(facility, uploaded_file, owner, user, detected_mime)
 
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name

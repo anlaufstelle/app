@@ -151,6 +151,35 @@ def _bmp_bytes() -> bytes:
     return buf.getvalue()
 
 
+def _srgb_icc() -> bytes:
+    """Ein echtes, kleines sRGB-ICC-Profil (588 Byte) aus Pillows Mitgabe."""
+    from PIL import ImageCms
+
+    return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+
+
+def _with_icc(fmt: str, **save_kwargs) -> tuple[bytes, bytes]:
+    """(Bytes, ICC-Profil) eines Bildes mit eingebettetem ICC **und** EXIF."""
+    icc = _srgb_icc()
+    img = _gradient(40, 12)
+    exif = img.getexif()
+    exif[ExifTags.Base.Make] = SECRET_MARKER
+    buf = io.BytesIO()
+    img.save(buf, format=fmt, icc_profile=icc, exif=exif, **save_kwargs)
+    return buf.getvalue(), icc
+
+
+def _webp_lossless_hinter_grossem_icc() -> bytes:
+    """Verlustfreies WebP, dessen ``VP8L``-Chunk hinter einem 70-kB-ICC liegt.
+
+    Genau der Fall, an dem ein 64-KiB-Praefix-Scan scheitert.
+    """
+    img = _gradient(40, 12)
+    buf = io.BytesIO()
+    img.save(buf, format="WEBP", lossless=True, icc_profile=b"\x00" * 70_000)
+    return buf.getvalue()
+
+
 def _docx_bytes() -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -168,7 +197,7 @@ def facility_with_settings(facility):
     Settings.objects.update_or_create(
         facility=facility,
         defaults={
-            "allowed_file_types": "pdf,docx,jpg,jpeg,png,webp,tif,tiff,gif,bmp",
+            "allowed_file_types": "pdf,docx,odt,jpg,jpeg,png,webp,tif,tiff,gif,bmp",
             "max_file_size_mb": 10,
         },
     )
@@ -319,6 +348,19 @@ class TestWebpUndTiff:
         cleaned = Image.open(io.BytesIO(stored)).convert("RGB")
         assert cleaned.tobytes() == original.tobytes()
 
+    def test_verlustfreies_webp_auch_hinter_grossem_icc_chunk(self, upload):
+        """Der ``VP8L``-Chunk liegt hier bei Offset ~70 000 — ein Scan ueber ein
+        64-KiB-Praefix haette das Bild faelschlich als verlustbehaftet
+        eingestuft und mit ``quality=95`` neu codiert."""
+        source = _webp_lossless_hinter_grossem_icc()
+        assert source.find(b"VP8L") > 64 * 1024
+
+        attachment = upload("grossicc.webp", source, "image/webp")
+
+        stored = _stored_bytes(attachment)
+        assert b"VP8L" in stored
+        assert b"VP8 " not in stored
+
     def test_format_ohne_eigene_encoder_optionen_bleibt_im_container(self, upload):
         """Ein Format, fuer das ``_image_save_kwargs`` nichts Besonderes kennt
         (hier GIF-Bytes unter ``.tiff``-Namen), wird im **erkannten** Format
@@ -345,16 +387,37 @@ class TestWebpUndTiff:
 
 
 class TestWebpVerlustfreiErkennung:
-    """Direkte Sonde auf ``_webp_is_lossless`` — die beiden Zweige, die ueber
-    die Upload-Pipeline nicht (Nicht-WebP-Header) bzw. nur mit einer
-    animierten Datei (``ANMF``) erreichbar sind."""
+    """Direkte Sonde auf ``_webp_is_lossless`` — die Zweige, die über die
+    Upload-Pipeline nicht (Nicht-WebP-Stream) bzw. nur mit einer animierten
+    Datei (``ANMF``) erreichbar sind. Der Chunk-Walk arbeitet auf dem Stream
+    und liest je Chunk nur 8 Byte Kopf."""
 
     def test_nicht_webp_bytes_gelten_als_verlustbehaftet(self):
         from core.services.file_vault.policy import _webp_is_lossless
 
-        assert _webp_is_lossless(b"") is False
-        assert _webp_is_lossless(PDF_BYTES) is False
-        assert _webp_is_lossless(b"RIFF" + b"\x00" * 4 + b"AVI " + b"\x00" * 8) is False
+        assert _webp_is_lossless(io.BytesIO(b"")) is False
+        assert _webp_is_lossless(io.BytesIO(PDF_BYTES)) is False
+        assert _webp_is_lossless(io.BytesIO(b"RIFF" + b"\x00" * 4 + b"AVI " + b"\x00" * 8)) is False
+
+    def test_verlustfreies_standbild_wird_erkannt(self):
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        assert _webp_is_lossless(io.BytesIO(_webp_lossless())) is True
+
+    def test_verlustbehaftetes_standbild_wird_nicht_faelschlich_erkannt(self):
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        assert _webp_is_lossless(io.BytesIO(_webp_with_exif())) is False
+
+    def test_grosser_chunk_vor_dem_bilddatenstrom_wird_uebersprungen(self):
+        """Der Kern der Fix-Runde: ``VP8L`` liegt hinter einem 70-kB-ICC-Chunk.
+        Ein Praefix-Scan haette hier ``False`` gesagt."""
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        data = _webp_lossless_hinter_grossem_icc()
+        assert data.find(b"VP8L") > 64 * 1024
+
+        assert _webp_is_lossless(io.BytesIO(data)) is True
 
     def test_animiertes_verlustfreies_webp_wird_erkannt(self):
         from core.services.file_vault.policy import _webp_is_lossless
@@ -364,7 +427,7 @@ class TestWebpVerlustfreiErkennung:
         buf = io.BytesIO()
         first.save(buf, format="WEBP", save_all=True, append_images=[second], lossless=True, duration=100)
 
-        assert _webp_is_lossless(buf.getvalue()) is True
+        assert _webp_is_lossless(io.BytesIO(buf.getvalue())) is True
 
     def test_animiertes_verlustbehaftetes_webp_wird_nicht_faelschlich_erkannt(self):
         from core.services.file_vault.policy import _webp_is_lossless
@@ -374,7 +437,7 @@ class TestWebpVerlustfreiErkennung:
         buf = io.BytesIO()
         first.save(buf, format="WEBP", save_all=True, append_images=[second], quality=50, duration=100)
 
-        assert _webp_is_lossless(buf.getvalue()) is False
+        assert _webp_is_lossless(io.BytesIO(buf.getvalue())) is False
 
 
 @pytest.mark.django_db
@@ -396,6 +459,96 @@ class TestFormateOhneMetadatenContainer:
         attachment = upload("bild.bmp", source, "image/bmp")
 
         assert _stored_bytes(attachment) == source
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestBildUnterNichtBildEndung:
+    """Refs #2128 (Fix-Runde 1, R-L7a-6): Die Bereinigung darf nicht an der
+    Dateiendung haengen.
+
+    Ein JPEG mit korrekt deklariertem ``image/jpeg`` unter der standardmaessig
+    erlaubten Endung ``.docx``/``.odt`` bestand den Magic-Bytes-Check (erkannt
+    == deklariert) und wurde danach von einer rein endungsbasierten
+    Strip-Entscheidung durchgewunken — EXIF/GPS blieben drin, und der Pixel-Cap
+    griff ebenfalls nicht.
+    """
+
+    @pytest.mark.parametrize("name", ["foto.docx", "foto.odt"])
+    def test_jpeg_unter_nicht_bild_endung_wird_abgelehnt(self, upload, event, name):
+        with pytest.raises(ValidationError):
+            upload(name, _jpeg_with_gps(), "image/jpeg")
+
+        assert Attachment.objects.filter(event=event).count() == 0
+
+    def test_ablehnung_wird_als_mime_mismatch_protokolliert(self, upload, facility_with_settings):
+        with pytest.raises(ValidationError):
+            upload("foto.docx", _jpeg_with_gps(), "image/jpeg")
+
+        entry = AuditLog.objects.filter(
+            facility=facility_with_settings,
+            action=AuditLog.Action.SECURITY_VIOLATION,
+        ).latest("timestamp")
+        assert entry.detail["reason"] == "mime_mismatch"
+        assert entry.detail["detected"] == "image/jpeg"
+        assert entry.detail["extension"] == "docx"
+
+    def test_bild_unter_eigener_endung_bleibt_unveraendert_erlaubt(self, upload):
+        """Gegenprobe: derselbe Inhalt unter ``.jpg`` wird normal gestrippt."""
+        attachment = upload("foto.jpg", _jpeg_with_gps(), "image/jpeg")
+
+        assert SECRET_MARKER.encode() not in _stored_bytes(attachment)
+
+    def test_echte_docx_bleibt_erlaubt(self, upload):
+        source = _docx_bytes()
+
+        attachment = upload("bericht.docx", source, DOCX_MIME)
+
+        assert _stored_bytes(attachment) == source
+
+    def test_pixel_cap_greift_am_erkannten_mime_statt_an_der_endung(self, facility_with_settings, staff_user, settings):
+        """Direkte Sonde: ``enforce_image_limits`` darf einen Bild-Upload nicht
+        deshalb durchlassen, weil die Endung nicht nach Bild aussieht."""
+        from core.services.file_vault.policy import enforce_image_limits
+
+        settings.FILE_VAULT_MAX_IMAGE_PIXELS = 50
+        buf = io.BytesIO()
+        _gradient(10, 10).save(buf, format="PNG")  # 100 Pixel > 50
+        getarnt = SimpleUploadedFile("tarnung.docx", buf.getvalue(), content_type="image/png")
+
+        with pytest.raises(ValidationError):
+            enforce_image_limits(facility_with_settings, getarnt, None, staff_user, detected_mime="image/png")
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestIccProfilBleibtErhalten:
+    """R-L7a-1: „ICC-Profil bleibt". Fuer JPEG und WebP zieht der Pillow-Encoder
+    das Profil NUR aus den Save-Argumenten — ``info`` allein reicht nicht."""
+
+    @pytest.mark.parametrize(
+        ("fmt", "name", "content_type", "save_kwargs"),
+        [
+            ("JPEG", "foto.jpg", "image/jpeg", {"quality": 60}),
+            ("WEBP", "bild.webp", "image/webp", {"quality": 80}),
+            ("PNG", "scan.png", "image/png", {}),
+            ("TIFF", "scan.tiff", "image/tiff", {}),
+        ],
+    )
+    def test_profil_bleibt_exif_geht(self, upload, fmt, name, content_type, save_kwargs):
+        source, icc = _with_icc(fmt, **save_kwargs)
+
+        attachment = upload(name, source, content_type)
+
+        stored = _stored_bytes(attachment)
+        result = Image.open(io.BytesIO(stored))
+        assert result.info.get("icc_profile") == icc, f"{fmt}: ICC-Profil verloren"
+        assert SECRET_MARKER.encode() not in stored
+        # ``getexif()`` liefert bei TIFF die Basis-Tags des Containers (Breite,
+        # Hoehe, Bittiefe) — dort ist die leere Erwartung fachlich falsch. Dass
+        # die Aufnahme-Metadaten weg sind, belegt der Marker-Check darueber.
+        if fmt != "TIFF":
+            assert dict(result.getexif()) == {}
 
 
 @pytest.mark.django_db
