@@ -1290,8 +1290,9 @@ class TestCaseFieldsPartial:
 
 
 @pytest.mark.django_db
-class TestPartialAcceptsAssignedInactiveType:
-    """``?case=<pk>`` erlaubt genau den bereits zugewiesenen (inaktiven) Typ.
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityPartialAcceptsAssignedInactiveType:
+    """Der Objektparameter erlaubt genau den zugewiesenen inaktiven Typ.
 
     Ohne diese Symmetrie zum ``CaseForm``-Queryset entsteht ein **stiller
     Datenverlust**: Bearbeiterin wechselt im Select weg vom inaktiven Ist-Typ
@@ -1302,140 +1303,148 @@ class TestPartialAcceptsAssignedInactiveType:
     Bestandswerte.
     """
 
-    @pytest.fixture
-    def case_with_inactive_type(self, facility, client_identified, staff_user, doc_type_case_form):
-        target = Case.objects.create(
+    @staticmethod
+    def _inactive_target(request, entity: EntitySpec, facility, staff_user):
+        doc_type = entity.doctype(request, "form")
+        target = entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Partial-01",
             created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+            document_type=doc_type,
+            data_json={entity.field("primary"): entity.value("primary")},
+            **entity.identity_kwargs(request, "Partial-01"),
         )
-        doc_type_case_form.is_active = False
-        doc_type_case_form.save(update_fields=["is_active"])
-        return target
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
+        return target, doc_type
 
-    def test_assigned_inactive_type_is_served(self, client, staff_user, case_with_inactive_type, doc_type_case_form):
-        """(a) mit ``case``-Param + inaktivem Ist-Typ ⇒ 200 mit dessen Feldern."""
+    def test_assigned_inactive_type_is_served(self, client, staff_user, facility, request, entity: EntitySpec):
+        """(a) Objektparameter + inaktiver Ist-Typ ⇒ 200 mit dessen Feldern."""
+        target, doc_type = self._inactive_target(request, entity, facility, staff_user)
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk), "case": str(case_with_inactive_type.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk), entity.name: str(target.pk)},
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'name="anlass"' in content
-        assert 'name="verlauf"' in content
+        assert f'name="{entity.field("primary")}"' in content
+        assert f'name="{entity.field("secondary")}"' in content
 
-    def test_other_inactive_type_stays_404(self, client, staff_user, case_with_inactive_type, doc_type_case_mixed):
+    def test_other_inactive_type_stays_404(self, client, staff_user, facility, request, entity: EntitySpec):
         """(b) ein inaktiver, aber NICHT zugewiesener Typ bleibt trotz Param 404."""
-        doc_type_case_mixed.is_active = False
-        doc_type_case_mixed.save(update_fields=["is_active"])
+        target, _ = self._inactive_target(request, entity, facility, staff_user)
+        other_type = entity.doctype(request, "mixed")
+        other_type.is_active = False
+        other_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_mixed.pk), "case": str(case_with_inactive_type.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(other_type.pk), entity.name: str(target.pk)},
         )
         assert response.status_code == 404
 
-    def test_foreign_case_pk_is_404(self, client, staff_user, doc_type_case_form, foreign_case):
-        """(c) fremde Fall-PK ⇒ 404 (facility-gescopter Lookup, kein IDOR-Fenster)."""
+    def test_foreign_object_pk_is_404(self, client, staff_user, request, entity: EntitySpec):
+        """(c) fremde Objekt-PK ⇒ 404 (facility-gescopter Lookup)."""
+        doc_type = entity.doctype(request, "form")
+        foreign_object = entity.fixture(request, "foreign_object")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk), "case": str(foreign_case.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk), entity.name: str(foreign_object.pk)},
         )
         assert response.status_code == 404
 
-    def test_malformed_case_pk_is_404(self, client, staff_user, doc_type_case_form):
+    def test_malformed_object_pk_is_404(self, client, staff_user, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "form")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk), "case": "keine-uuid"},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk), entity.name: "keine-uuid"},
         )
         assert response.status_code == 404
 
-    def test_active_type_unaffected_by_param(self, client, staff_user, case_open, doc_type_case_form):
+    def test_active_type_unaffected_by_param(self, client, staff_user, request, entity: EntitySpec):
         """Der Param lockert nichts fuer aktive Typen — er ist nur eine Ausnahme."""
+        doc_type = entity.doctype(request, "form")
+        target = entity.fixture(request, "object")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk), "case": str(case_open.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk), entity.name: str(target.pk)},
         )
         assert response.status_code == 200
 
-    def test_invisible_assigned_type_still_403(
-        self, client, staff_user, facility, client_identified, doc_type_case_high
-    ):
+    def test_invisible_assigned_type_still_403(self, client, staff_user, facility, request, entity: EntitySpec):
         """Sensitivity bleibt hart: der Param hebelt das 403-Gate nicht aus."""
-        target = Case.objects.create(
+        doc_type = entity.doctype(request, "high")
+        target = entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Partial-02",
             created_by=staff_user,
-            document_type=doc_type_case_high,
-            data_json={"gefahrenlage": "streng vertraulich"},
+            document_type=doc_type,
+            data_json={entity.field("high"): entity.value("high_confidential")},
+            **entity.identity_kwargs(request, "Partial-02"),
         )
-        doc_type_case_high.is_active = False
-        doc_type_case_high.save(update_fields=["is_active"])
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_high.pk), "case": str(target.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk), entity.name: str(target.pk)},
         )
         assert response.status_code == 403
 
-    def test_update_form_hx_get_carries_case_param(self, client, staff_user, case_with_inactive_type):
+    def test_update_form_hx_get_carries_object_param(self, client, staff_user, facility, request, entity: EntitySpec):
         """Ohne den Param im ``hx-get`` schickt der Browser ihn nie mit."""
+        target, _ = self._inactive_target(request, entity, facility, staff_user)
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_update", args=[case_with_inactive_type.pk])).content.decode()
-        expected = f"{reverse('core:case_fields_partial')}?case={case_with_inactive_type.pk}"
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
+        expected = f"{reverse(entity.url('fields_partial'))}?{entity.name}={target.pk}"
         assert f'hx-get="{expected}"' in content
 
-    def test_create_form_hx_get_has_no_case_param(self, client, staff_user, doc_type_case_form):
+    def test_create_form_hx_get_has_no_object_param(self, client, staff_user, request, entity: EntitySpec):
         """M0-Falle: ``Case.id`` traegt einen UUID-Default, ``pk`` allein
         unterscheidet Anlage und Bearbeitung nicht (``_state.adding``, E-13)."""
+        entity.doctype(request, "form")
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_create")).content.decode()
-        assert f'hx-get="{reverse("core:case_fields_partial")}"' in content
-        assert "?case=" not in content
+        content = client.get(reverse(entity.url("create"))).content.decode()
+        assert f'hx-get="{reverse(entity.url("fields_partial"))}"' in content
+        assert f"?{entity.name}=" not in content
 
-    def test_switch_away_and_back_returns_own_fields(
-        self, client, staff_user, client_identified, case_with_inactive_type, doc_type_case_form, doc_type_case_mixed
-    ):
+    def test_switch_away_and_back_returns_own_fields(self, client, staff_user, facility, request, entity: EntitySpec):
         """(e) Charakterisierung des Ausgangsszenarios auf View-Ebene."""
+        target, own_type = self._inactive_target(request, entity, facility, staff_user)
+        other_type = entity.doctype(request, "mixed")
         client.force_login(staff_user)
-        partial = reverse("core:case_fields_partial")
-        case_pk = str(case_with_inactive_type.pk)
+        partial = reverse(entity.url("fields_partial"))
+        target_pk = str(target.pk)
 
         # 1. Weg vom Ist-Typ auf einen anderen (aktiven) Typ.
-        away = client.get(partial, {"document_type": str(doc_type_case_mixed.pk), "case": case_pk})
+        away = client.get(partial, {"document_type": str(other_type.pk), entity.name: target_pk})
         assert away.status_code == 200
-        assert 'name="zielsetzung"' in away.content.decode()
+        assert f'name="{entity.field("mixed_visible")}"' in away.content.decode()
 
         # 2. Zurueck auf den inaktiven Ist-Typ — ohne die Ausnahme ein 404, bei
         #    dem HTMX den DOM unveraendert liesse.
-        back = client.get(partial, {"document_type": str(doc_type_case_form.pk), "case": case_pk})
+        back = client.get(partial, {"document_type": str(own_type.pk), entity.name: target_pk})
         assert back.status_code == 200
         back_content = back.content.decode()
-        assert 'name="anlass"' in back_content
-        assert 'name="zielsetzung"' not in back_content
+        assert f'name="{entity.field("primary")}"' in back_content
+        assert f'name="{entity.field("mixed_visible")}"' not in back_content
 
         # 3. Und der darauf folgende Submit erhaelt die Bestandswerte.
         response = client.post(
-            reverse("core:case_update", args=[case_with_inactive_type.pk]),
-            _case_post_data(
-                "P8-Partial-01",
-                client_identified,
-                document_type=str(doc_type_case_form.pk),
-                anlass="Mietschulden",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                "Partial-01",
+                document_type=str(own_type.pk),
+                **{entity.field("primary"): entity.value("primary")},
             ),
         )
         assert response.status_code == 302
-        case_with_inactive_type.refresh_from_db()
-        assert case_with_inactive_type.document_type_id == doc_type_case_form.pk
-        assert case_with_inactive_type.data_json["anlass"] == "Mietschulden"
+        target.refresh_from_db()
+        assert target.document_type_id == own_type.pk
+        assert target.data_json[entity.field("primary")] == entity.value("primary")
 
 
 # ---------------------------------------------------------------------------
