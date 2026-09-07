@@ -43,22 +43,6 @@ from core.reporting.base import (
     feld_bindungen,
     typ_bindungen,
 )
-from tests.conftest import isolate_reporting_registry
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry-Isolation je Test (Muster ``test_reporting_registry.py``).
-
-    Die echte Discovery laeuft **vor** dem Patchen einmal: ``@register_backend``
-    ist ein Import-Seiteneffekt und laeuft je Modul nur beim *ersten* Import —
-    liefe sie erstmals gegen ein Test-Dict, waere die reale Registry fuer den
-    Rest des Prozesses leer. Isoliert wird danach mit einer **Kopie**, damit die
-    Strukturtests unten die echten Backends sehen, ad-hoc registrierte
-    Test-Backends aber nicht in Folgetests leaken.
-    """
-    isolate_reporting_registry(monkeypatch)
-
 
 # Synthetische Schluessel fuer die Guard-Tests: die Registry-Isolation arbeitet
 # mit einer **Kopie** der echten Registry (die Strukturtests unten brauchen die

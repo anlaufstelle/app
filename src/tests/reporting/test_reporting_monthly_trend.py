@@ -18,21 +18,8 @@ from core.models import DocumentType, Event, Facility, Organization, Settings
 from core.reporting import registry
 from core.reporting.base import CompletenessIssue, DatasetResult
 from core.reporting.data_source import MAPPED_EVENTS
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren, echte Backends bleiben verfuegbar.
-
-    Muster aus ``test_reporting_example.py`` (``docs/reporting-plugins.md``
-    § 10): erst die echte Discovery ausloesen (``@register_backend`` ist ein
-    Import-Seiteneffekt und feuert je Modul nur beim *ersten* Import), dann mit
-    einer Kopie isolieren.
-    """
-    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

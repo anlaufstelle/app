@@ -35,19 +35,12 @@ from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_
 from core.reporting.db_guard import reporting_statement_timeout
 from core.reporting.registry import register_backend
 from core.services.dashboard import create_or_update_snapshot, ensure_snapshots_for_months
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
 # Der Wert, den ein defektes Backend aus ``build_dataset`` mitbringt. Er darf in
 # KEINER Fehlerantwort auftauchen — weder im Panel-HTML noch im Export-Body.
 _ROHWERT = 4711
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren (Muster ``tests.conftest.isolate_reporting_registry``)."""
-    isolate_reporting_registry(monkeypatch)
 
 
 class _BasisBackend(DatasetBackend):

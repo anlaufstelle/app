@@ -29,7 +29,6 @@ from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.export import SuppressionContractError, export_dataset
 from core.services.dashboard.external_report import _get_threshold
-from tests.conftest import isolate_reporting_registry
 
 
 class _Facility:
@@ -222,10 +221,6 @@ class TestRegistrierteBackendsStempelnDenKonfiguriertenWert:
     gesamte DB-freie Renderer-Suite in ``test_reporting_export.py``
     DB-pflichtig.
     """
-
-    @pytest.fixture(autouse=True)
-    def _isolated_registry(self, monkeypatch):
-        isolate_reporting_registry(monkeypatch)
 
     def test_jedes_registrierte_backend_stempelt_den_konfigurierten_wert(self, facility):
         erwartet = _get_threshold(facility)

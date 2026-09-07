@@ -36,14 +36,8 @@ from core.packages.schema import parse_package
 from core.reporting import registry
 from core.reporting.base import DOPPELBINDUNG_CODE
 from core.services.config import add_field_to_doctype, conflicting_report_key_field
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

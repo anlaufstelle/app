@@ -20,15 +20,8 @@ from core.reporting import registry
 from core.reporting.base import CompletenessIssue, DatasetResult
 from core.reporting.data_source import CASES_IN_PERIOD
 from core.services.case.cases import close_case, reopen_case
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren, echte Backends bleiben verfuegbar (§ 10)."""
-    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

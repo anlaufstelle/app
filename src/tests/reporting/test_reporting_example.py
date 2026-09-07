@@ -22,32 +22,13 @@ from core.reporting import registry
 from core.reporting.backends.example import ExampleBackend
 from core.reporting.base import DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren, echte Backends bleiben verfuegbar.
-
-    Muster aus ``test_reporting_sample_report_1.py``/``test_reporting_views.py``:
-    erst die echte Discovery ausloesen (``@register_backend`` ist ein
-    Import-Seiteneffekt, laeuft je Modul nur beim *ersten* Import), dann mit
-    einer Kopie isolieren.
-    """
-    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture
 def backend():
     return registry.get_backend("example")
-
-
-@pytest.fixture
-def date_range():
-    today = timezone.localdate()
-    return today - timedelta(days=1), today + timedelta(days=1)
 
 
 class TestDiscovery:

@@ -4,7 +4,6 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from core.reporting import registry
 from core.reporting.base import (
     CompletenessIssue,
     DatasetBackend,
@@ -13,21 +12,6 @@ from core.reporting.base import (
     project_records,
     stamp_threshold,
 )
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry-Isolation je Test (Pflicht laut Brief, s. test_reporting_registry.py).
-
-    ``base``-Tests registrieren zwar keine echten Backends, aber die
-    Test-Doubles fuer die ABC-Faelle sind eigenstaendige Klassen — die
-    Isolation verhindert trotzdem, dass ein spaeter ergaenzter Test in
-    diesem Modul ueber ``_REGISTRY``/``_discovered`` mit anderen Tests
-    desselben xdist-Workers interferiert.
-    """
-    monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
-    monkeypatch.setattr(registry, "_discovered", True)
-    yield
 
 
 class _CompleteBackend(DatasetBackend):

@@ -31,7 +31,6 @@ from core.reporting.backends.sample_report_1 import (
 )
 from core.reporting.base import EXCLUDED_KEY, CompletenessIssue, DatasetBackend, DatasetResult, FieldSpec
 from core.reporting.export import export_dataset
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
 
@@ -124,17 +123,6 @@ def _identitaets_terme(payload):
 def _exakt_rueckrechenbar(terme):
     """Genau ein verborgener Term ⇒ die Identitaet bestimmt ihn exakt."""
     return sum(1 for wert in terme.values() if wert is None) == 1
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren, echte Backends aber verfuegbar halten.
-
-    Wie in ``test_reporting_registry.py``: erst die echte Discovery ausloesen
-    (``@register_backend`` ist ein Import-Seiteneffekt und laeuft je Modul nur
-    beim *ersten* Import), dann mit einer Kopie isolieren.
-    """
-    isolate_reporting_registry(monkeypatch)
 
 
 @pytest.fixture

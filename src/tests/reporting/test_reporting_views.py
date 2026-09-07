@@ -19,21 +19,8 @@ from core.models import AuditLog
 from core.reporting import registry
 from core.reporting.base import DatasetBackend, DatasetResult, FieldSpec, stamp_threshold
 from core.reporting.registry import register_backend
-from tests.conftest import isolate_reporting_registry
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry(monkeypatch):
-    """Registry je Test isolieren, echte Backends (``sample-report-1``) bleiben verfuegbar.
-
-    Muster aus ``test_reporting_sample_report_1.py``: erst die echte Discovery ausloesen
-    (``@register_backend`` ist ein Import-Seiteneffekt, laeuft je Modul nur beim
-    *ersten* Import), dann mit einer Kopie isolieren, damit ad-hoc registrierte
-    Test-Backends (Zeilen-Modus, Pflichtfall 8) nicht in andere Tests leaken.
-    """
-    isolate_reporting_registry(monkeypatch)
 
 
 def _mapped(doc_type):
