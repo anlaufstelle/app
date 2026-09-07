@@ -98,6 +98,108 @@ def _workitem_form(facility, title):
     )
 
 
+def _build_client_form(request, value):
+    return _client_form(request.getfixturevalue("facility"), value)
+
+
+def _build_case_form(request, value):
+    return _case_form(
+        request.getfixturevalue("facility"),
+        request.getfixturevalue("client_identified"),
+        value,
+    )
+
+
+def _build_episode_form(_request, value):
+    return _episode_form(value)
+
+
+def _build_workitem_form(request, value):
+    return _workitem_form(request.getfixturevalue("facility"), value)
+
+
+_EMOJI_FORM_CASES = (
+    (_build_client_form, "pseudonym", EMOJI),
+    (_build_client_form, "pseudonym", EMOJI_2),
+    (_build_case_form, "title", EMOJI),
+    (_build_episode_form, "title", EMOJI),
+    (_build_workitem_form, "title", EMOJI_2),
+)
+
+_EMOJI_MODEL_CASES = (
+    (
+        OutcomeGoal,
+        "title",
+        EMOJI,
+        {},
+        {"case": "case_open", "created_by": "staff_user"},
+    ),
+    (
+        Milestone,
+        "title",
+        EMOJI_2,
+        {},
+        {"goal": "outcome_goal"},
+    ),
+)
+
+_RTL_FORM_CASES = (
+    (_build_client_form, "pseudonym", RTL_OVERRIDE),
+    (_build_case_form, "title", RTL_OVERRIDE),
+    (_build_episode_form, "title", RTL_OVERRIDE),
+    (_build_workitem_form, "title", RTL_OVERRIDE),
+)
+
+_NULL_BYTE_CASES = (
+    (
+        Client,
+        "pseudonym",
+        _build_client_form,
+        {"contact_stage": Client.ContactStage.IDENTIFIED},
+        {"facility": "facility"},
+    ),
+    (
+        Case,
+        "title",
+        _build_case_form,
+        {"status": Case.Status.OPEN},
+        {
+            "facility": "facility",
+            "client": "client_identified",
+            "created_by": "staff_user",
+        },
+    ),
+    (
+        OutcomeGoal,
+        "title",
+        None,
+        {},
+        {"case": "case_open", "created_by": "staff_user"},
+    ),
+    (
+        Milestone,
+        "title",
+        None,
+        {},
+        {"goal": "outcome_goal"},
+    ),
+)
+
+_WHITESPACE_TRIM_FORM_CASES = (
+    (_build_client_form, "pseudonym", "Test"),
+    (_build_case_form, "title", "Test"),
+    (_build_episode_form, "title", "Test"),
+    (_build_workitem_form, "title", "Test"),
+)
+
+_WHITESPACE_ONLY_FORM_CASES = (
+    (_build_client_form, "pseudonym", False),
+    (_build_case_form, "title", False),
+    (_build_episode_form, "title", False),
+    (_build_workitem_form, "title", False),
+)
+
+
 # =========================================================================
 # 1. EMOJI / UNICODE
 # =========================================================================
@@ -107,49 +209,35 @@ def _workitem_form(facility, title):
 class TestEmojiAccepted:
     """Emoji und erweitertes Unicode müssen im UTF-8-Stack durchlaufen."""
 
-    def test_client_pseudonym_with_emoji(self, facility):
-        """Pseudonym mit Emoji-Suffix wird unverändert akzeptiert."""
-        form = _client_form(facility, EMOJI)
+    @pytest.mark.parametrize(
+        ("form_builder", "field", "expected"),
+        _EMOJI_FORM_CASES,
+        ids=(
+            "client-pseudonym-emoji",
+            "client-pseudonym-supplementary-emoji",
+            "case-title-emoji",
+            "episode-title-emoji",
+            "workitem-title-emoji",
+        ),
+    )
+    def test_form_value_accepted(self, request, form_builder, field, expected):
+        form = form_builder(request, expected)
         assert_form_valid(form)
-        assert_clean_value(form, "pseudonym", EMOJI)
+        assert_clean_value(form, field, expected)
 
-    def test_client_pseudonym_with_supplementary_plane_emoji(self, facility):
-        """Emoji aus der Supplementary Plane (U+1F680) wird akzeptiert."""
-        form = _client_form(facility, EMOJI_2)
-        assert_form_valid(form)
-        assert_clean_value(form, "pseudonym", EMOJI_2)
-
-    def test_case_title_with_emoji(self, facility, client_identified):
-        """Case-Titel mit Emoji-Inhalt ist valide."""
-        form = _case_form(facility, client_identified, EMOJI)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == EMOJI
-
-    def test_episode_title_with_emoji(self, facility):
-        """Episode-Titel akzeptiert Emoji."""
-        form = _episode_form(EMOJI)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == EMOJI
-
-    def test_workitem_title_with_emoji(self, facility):
-        """WorkItem-Titel akzeptiert Emoji."""
-        form = _workitem_form(facility, EMOJI_2)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == EMOJI_2
-
-    def test_outcomegoal_title_with_emoji_persists(self, case_open, staff_user):
-        """OutcomeGoal mit Emoji im Titel persistiert verlustfrei."""
-        goal = OutcomeGoal.objects.create(case=case_open, title=EMOJI, created_by=staff_user)
-        goal.full_clean()  # Model-Layer-Validierung
-        goal.refresh_from_db()
-        assert goal.title == EMOJI
-
-    def test_milestone_title_with_emoji_persists(self, outcome_goal):
-        """Milestone mit Emoji im Titel persistiert verlustfrei."""
-        milestone = Milestone.objects.create(goal=outcome_goal, title=EMOJI_2)
-        milestone.full_clean()
-        milestone.refresh_from_db()
-        assert milestone.title == EMOJI_2
+    @pytest.mark.parametrize(
+        ("model", "field", "expected", "required_defaults", "fixture_deps"),
+        _EMOJI_MODEL_CASES,
+        ids=("outcomegoal-title-emoji", "milestone-title-emoji"),
+    )
+    def test_model_value_persists(self, request, model, field, expected, required_defaults, fixture_deps):
+        defaults = required_defaults | {
+            key: request.getfixturevalue(fixture_name) for key, fixture_name in fixture_deps.items()
+        }
+        instance = model.objects.create(**defaults, **{field: expected})
+        instance.full_clean()  # Model-Layer-Validierung
+        instance.refresh_from_db()
+        assert getattr(instance, field) == expected
 
 
 # =========================================================================
@@ -169,29 +257,20 @@ class TestRTLOverrideMarker:
     angepasst werden.
     """
 
-    def test_client_pseudonym_with_rtl_override_is_accepted(self, facility):
-        """RTL-Override im Pseudonym wird unverändert akzeptiert (current behavior)."""
-        form = _client_form(facility, RTL_OVERRIDE)
+    @pytest.mark.parametrize(
+        ("form_builder", "field", "expected"),
+        _RTL_FORM_CASES,
+        ids=(
+            "client-pseudonym-rtl-override",
+            "case-title-rtl-override",
+            "episode-title-rtl-override",
+            "workitem-title-rtl-override",
+        ),
+    )
+    def test_form_value_accepted(self, request, form_builder, field, expected):
+        form = form_builder(request, expected)
         assert_form_valid(form)
-        assert_clean_value(form, "pseudonym", RTL_OVERRIDE)
-
-    def test_case_title_with_rtl_override_is_accepted(self, facility, client_identified):
-        """RTL-Override im Case-Titel wird unverändert akzeptiert."""
-        form = _case_form(facility, client_identified, RTL_OVERRIDE)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == RTL_OVERRIDE
-
-    def test_episode_title_with_rtl_override_is_accepted(self):
-        """RTL-Override im Episode-Titel wird unverändert akzeptiert."""
-        form = _episode_form(RTL_OVERRIDE)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == RTL_OVERRIDE
-
-    def test_workitem_title_with_rtl_override_is_accepted(self, facility):
-        """RTL-Override im WorkItem-Titel wird unverändert akzeptiert."""
-        form = _workitem_form(facility, RTL_OVERRIDE)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == RTL_OVERRIDE
+        assert_clean_value(form, field, expected)
 
 
 # =========================================================================
@@ -209,50 +288,28 @@ class TestNullByteRejected:
     ist, dass der Wert NICHT klaglos gespeichert wird.
     """
 
-    def test_client_pseudonym_null_byte_rejected(self, facility):
-        """Null-Byte im Pseudonym wird abgelehnt — Form invalid oder DB-Fehler."""
-        form = _client_form(facility, NULL_BYTE)
-        if not form.is_valid():
-            return  # Form fängt es ab — gut.
-        # Form akzeptiert, aber save() muss scheitern.
-        with pytest.raises((DataError, IntegrityError, ValueError, ValidationError)):
-            with transaction.atomic():
-                Client.objects.create(
-                    facility=facility,
-                    pseudonym=NULL_BYTE,
-                    contact_stage=Client.ContactStage.IDENTIFIED,
-                )
+    @pytest.mark.parametrize(
+        ("model", "field", "form_builder", "required_defaults", "fixture_deps"),
+        _NULL_BYTE_CASES,
+        ids=(
+            "client-pseudonym-null-byte",
+            "case-title-null-byte",
+            "outcomegoal-title-null-byte",
+            "milestone-title-null-byte",
+        ),
+    )
+    def test_value_rejected(self, request, model, field, form_builder, required_defaults, fixture_deps):
+        if form_builder is not None:
+            form = form_builder(request, NULL_BYTE)
+            if not form.is_valid():
+                return  # Form fängt es ab — gut.
 
-    def test_case_title_null_byte_rejected(self, facility, client_identified, staff_user):
-        """Null-Byte im Case-Titel wird abgelehnt."""
-        form = _case_form(facility, client_identified, NULL_BYTE)
-        if not form.is_valid():
-            return
+        defaults = required_defaults | {
+            key: request.getfixturevalue(fixture_name) for key, fixture_name in fixture_deps.items()
+        }
         with pytest.raises((DataError, IntegrityError, ValueError, ValidationError)):
             with transaction.atomic():
-                Case.objects.create(
-                    facility=facility,
-                    client=client_identified,
-                    title=NULL_BYTE,
-                    status=Case.Status.OPEN,
-                    created_by=staff_user,
-                )
-
-    def test_outcomegoal_title_null_byte_rejected_at_save(self, case_open, staff_user):
-        """Direkter Model-Save mit Null-Byte muss scheitern (DB-Layer)."""
-        with pytest.raises((DataError, IntegrityError, ValueError, ValidationError)):
-            with transaction.atomic():
-                OutcomeGoal.objects.create(
-                    case=case_open,
-                    title=NULL_BYTE,
-                    created_by=staff_user,
-                )
-
-    def test_milestone_title_null_byte_rejected_at_save(self, outcome_goal):
-        """Milestone-Save mit Null-Byte muss scheitern (DB-Layer)."""
-        with pytest.raises((DataError, IntegrityError, ValueError, ValidationError)):
-            with transaction.atomic():
-                Milestone.objects.create(goal=outcome_goal, title=NULL_BYTE)
+                model.objects.create(**defaults, **{field: NULL_BYTE})
 
 
 # =========================================================================
@@ -266,29 +323,20 @@ class TestWhitespaceTrim:
     Whitespaces werden in ``cleaned_data`` entfernt.
     """
 
-    def test_client_pseudonym_whitespace_trimmed(self, facility):
-        """Pseudonym wird in cleaned_data getrimmt."""
-        form = _client_form(facility, WHITESPACE_PADDED)
+    @pytest.mark.parametrize(
+        ("form_builder", "field", "expected"),
+        _WHITESPACE_TRIM_FORM_CASES,
+        ids=(
+            "client-pseudonym-whitespace-trim",
+            "case-title-whitespace-trim",
+            "episode-title-whitespace-trim",
+            "workitem-title-whitespace-trim",
+        ),
+    )
+    def test_form_value_trimmed(self, request, form_builder, field, expected):
+        form = form_builder(request, WHITESPACE_PADDED)
         assert_form_valid(form)
-        assert_clean_value(form, "pseudonym", "Test")
-
-    def test_case_title_whitespace_trimmed(self, facility, client_identified):
-        """Case-Titel wird in cleaned_data getrimmt."""
-        form = _case_form(facility, client_identified, WHITESPACE_PADDED)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == "Test"
-
-    def test_episode_title_whitespace_trimmed(self):
-        """Episode-Titel wird in cleaned_data getrimmt."""
-        form = _episode_form(WHITESPACE_PADDED)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == "Test"
-
-    def test_workitem_title_whitespace_trimmed(self, facility):
-        """WorkItem-Titel wird in cleaned_data getrimmt."""
-        form = _workitem_form(facility, WHITESPACE_PADDED)
-        assert_form_valid(form)
-        assert form.cleaned_data["title"] == "Test"
+        assert_clean_value(form, field, expected)
 
 
 # =========================================================================
@@ -302,26 +350,17 @@ class TestWhitespaceOnlyRejected:
     müssen das als ``required``-Fehler melden.
     """
 
-    def test_client_pseudonym_whitespace_only_rejected(self, facility):
-        """Nur-Whitespace-Pseudonym wird als Pflichtfeld-Fehler abgelehnt."""
-        form = _client_form(facility, ONLY_WHITESPACE)
-        assert not form.is_valid()
-        assert "pseudonym" in form.errors
-
-    def test_case_title_whitespace_only_rejected(self, facility, client_identified):
-        """Nur-Whitespace-Case-Titel wird als Pflichtfeld-Fehler abgelehnt."""
-        form = _case_form(facility, client_identified, ONLY_WHITESPACE)
-        assert not form.is_valid()
-        assert "title" in form.errors
-
-    def test_episode_title_whitespace_only_rejected(self):
-        """Nur-Whitespace-Episode-Titel wird als Pflichtfeld-Fehler abgelehnt."""
-        form = _episode_form(ONLY_WHITESPACE)
-        assert not form.is_valid()
-        assert "title" in form.errors
-
-    def test_workitem_title_whitespace_only_rejected(self, facility):
-        """Nur-Whitespace-WorkItem-Titel wird als Pflichtfeld-Fehler abgelehnt."""
-        form = _workitem_form(facility, ONLY_WHITESPACE)
-        assert not form.is_valid()
-        assert "title" in form.errors
+    @pytest.mark.parametrize(
+        ("form_builder", "field", "expected"),
+        _WHITESPACE_ONLY_FORM_CASES,
+        ids=(
+            "client-pseudonym-whitespace-only",
+            "case-title-whitespace-only",
+            "episode-title-whitespace-only",
+            "workitem-title-whitespace-only",
+        ),
+    )
+    def test_form_value_rejected(self, request, form_builder, field, expected):
+        form = form_builder(request, ONLY_WHITESPACE)
+        assert form.is_valid() is expected
+        assert field in form.errors
