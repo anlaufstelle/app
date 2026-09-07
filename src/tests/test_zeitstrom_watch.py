@@ -21,6 +21,7 @@ from core.services.zeitstrom_watch import (
     build_zeitstrom_page_scope,
     build_zeitstrom_tally_topology_validator,
 )
+from tests._factories import make_client, make_document_type, make_event
 
 
 def _scope_for_client(client):
@@ -216,7 +217,7 @@ class TestZeitstromWatchHttpContract:
 class TestZeitstromWatchVisibility:
     def test_low_user_high_event_keeps_etag_and_returns_304(self, client, assistant_user, staff_user, facility):
         """A hidden HIGH event must not become a timing side channel."""
-        high_type = DocumentType.objects.create(
+        high_type = make_document_type(
             facility=facility,
             name="Nur Leitung sichtbar",
             sensitivity=DocumentType.Sensitivity.HIGH,
@@ -302,7 +303,7 @@ class TestZeitstromWatchVisibility:
         client_identified,
         doc_type_contact,
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -354,7 +355,7 @@ class TestZeitstromWatchVisibility:
     def test_other_facility_change_keeps_validator(self, client, staff_user, second_facility, second_facility_user):
         client.force_login(staff_user)
         first = _watch(client)
-        other_type = DocumentType.objects.create(facility=second_facility, name="Fremder Kontakt")
+        other_type = make_document_type(facility=second_facility, name="Fremder Kontakt")
         Event.objects.create(
             facility=second_facility,
             document_type=other_type,
@@ -378,7 +379,7 @@ class TestZeitstromWatchVisibility:
     def test_activity_targeting_hidden_event_does_not_change_low_etag(
         self, client, assistant_user, staff_user, facility
     ):
-        high_type = DocumentType.objects.create(
+        high_type = make_document_type(
             facility=facility,
             name="Verdecktes Ereignis",
             sensitivity=DocumentType.Sensitivity.HIGH,
@@ -458,12 +459,12 @@ class TestZeitstromWatchVisibility:
         facility,
         client_identified,
     ):
-        ban_type = DocumentType.objects.create(
+        ban_type = make_document_type(
             facility=facility,
             name="Hausverbot Feed",
             system_type=DocumentType.SystemType.BAN,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=ban_type,
@@ -484,7 +485,7 @@ class TestZeitstromWatchVisibility:
     def test_safety_banner_changes_are_not_part_of_the_live_watcher(
         self, client, assistant_user, staff_user, facility, client_identified
     ):
-        ban_type = DocumentType.objects.create(
+        ban_type = make_document_type(
             facility=facility,
             name="Sicherheits-Hausverbot",
             system_type=DocumentType.SystemType.BAN,
@@ -492,7 +493,7 @@ class TestZeitstromWatchVisibility:
         )
         client.force_login(assistant_user)
         initial = _watch(client, params={"view": "uebergabe"})
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=ban_type,
@@ -641,7 +642,7 @@ class TestZeitstromWatchChromeProjections:
         params = {"type": "events"}
         first = _watch(client, params=params)
 
-        Client.objects.create(
+        make_client(
             facility=facility,
             pseudonym="Neu im aktuellen Dienst",
             created_by=staff_user,
@@ -784,7 +785,7 @@ class TestZeitstromWatchRefreshPartials:
             doc_type_contact.name = "Nach Seitenaufbau umbenannt"
             doc_type_contact.save(update_fields=["name"])
         elif change == "add":
-            DocumentType.objects.create(
+            make_document_type(
                 facility=doc_type_contact.facility,
                 name="Nach Seitenaufbau ergänzt",
                 tally_enabled=True,
@@ -993,7 +994,7 @@ class TestZeitstromWatchRefreshPartials:
         assert "tally_topology" in removed.json()["components"]
 
         previous.update(removed.json()["validators"])
-        DocumentType.objects.create(
+        make_document_type(
             facility=doc_type_contact.facility,
             name="Neue Strichliste",
             tally_enabled=True,
