@@ -39,14 +39,14 @@ class TestPDFExportE2E:
     def test_pdf_export_button_visible(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        assert page.locator("button:has-text('PDF-Export')").is_visible()
+        assert page.get_by_test_id("statistics-export-form").locator("button:has-text('PDF-Export')").is_visible()
 
     def test_pdf_download(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_download() as download_info:
-            page.locator("button:has-text('PDF-Export')").click()
+            page.get_by_test_id("statistics-export-form").locator("button:has-text('PDF-Export')").click()
         download = download_info.value
         assert download.suggested_filename.endswith(".pdf")
 
@@ -198,7 +198,7 @@ class TestDoktypFilterErreichtDieExporteE2E:
         self._filter_auf_ersten_typ(page, base_url)
 
         with page.expect_download() as download_info:
-            page.locator("[data-testid='statistics-export-form'] button:has-text('PDF-Export')").click()
+            page.get_by_test_id("statistics-export-form").locator("button:has-text('PDF-Export')").click()
         download = download_info.value
         assert download.suggested_filename.endswith(".pdf")
         assert download.path().read_bytes()[:4] == b"%PDF"
