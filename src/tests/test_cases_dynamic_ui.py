@@ -54,7 +54,9 @@ from core.models.attachment import Attachment
 from core.services.client import _gather_cases, export_client_data
 from core.services.file_vault import is_encrypted_value, safe_decrypt
 from tests._entity_expectations import ENTITY_PARAMS, EntitySpec
-from tests.test_clients_dynamic_ui import doc_type_client_high as doc_type_client_high  # noqa: F401
+from tests.test_clients_dynamic_ui import doc_type_client_high, doc_type_client_mixed
+
+_IMPORTED_CLIENT_FIXTURES = (doc_type_client_high, doc_type_client_mixed)
 
 
 def raw_data_json(case_obj) -> dict:
@@ -472,55 +474,71 @@ class TestEntityCreateWithDynamicData:
 
 
 @pytest.mark.django_db
-class TestCaseUpdateWithDynamicData:
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityUpdateWithDynamicData:
+    @staticmethod
+    def _target(request, entity: EntitySpec, facility, staff_user, suffix, doc_type, data_json):
+        return entity.model.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            document_type=doc_type,
+            data_json=data_json,
+            **entity.identity_kwargs(request, suffix),
+        )
+
     def test_update_get_prefills_decrypted_values(
-        self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = Case.objects.create(
-                facility=facility,
-                client=client_identified,
-                title="P8-Update-01",
-                created_by=staff_user,
-                document_type=doc_type_case_form,
-                data_json={"anlass": "Mietschulden", "verlauf": "Klartext-Probe"},
+            target = self._target(
+                request,
+                entity,
+                facility,
+                staff_user,
+                "Update-01",
+                doc_type,
+                {
+                    entity.field("primary"): entity.value("primary"),
+                    entity.field("secondary"): "Klartext-Probe",
+                },
             )
             client.force_login(staff_user)
-            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+            content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert "Klartext-Probe" in content
-        assert "Mietschulden" in content
+        assert entity.value("primary") in content
 
-    def test_update_saves_changed_values(
-        self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key
-    ):
+    def test_update_saves_changed_values(self, client, staff_user, facility, fernet_key, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = Case.objects.create(
-                facility=facility,
-                client=client_identified,
-                title="P8-Update-02",
-                created_by=staff_user,
-                document_type=doc_type_case_form,
-                data_json={"anlass": "Mietschulden"},
+            target = self._target(
+                request,
+                entity,
+                facility,
+                staff_user,
+                "Update-02",
+                doc_type,
+                {entity.field("primary"): entity.value("primary")},
             )
             client.force_login(staff_user)
             response = client.post(
-                reverse("core:case_update", args=[target.pk]),
-                _case_post_data(
-                    "P8-Update-02",
-                    client_identified,
-                    document_type=str(doc_type_case_form.pk),
-                    anlass="Wohnungsverlust",
-                    verlauf="Neu",
+                reverse(entity.url("update"), args=[target.pk]),
+                entity.post_data(
+                    request,
+                    "Update-02",
+                    document_type=str(doc_type.pk),
+                    **{
+                        entity.field("primary"): entity.value("update_primary"),
+                        entity.field("secondary"): "Neu",
+                    },
                 ),
             )
             assert response.status_code == 302
             target.refresh_from_db()
-            assert target.data_json["anlass"] == "Wohnungsverlust"
-            assert safe_decrypt(target.data_json["verlauf"]) == "Neu"
+            assert target.data_json[entity.field("primary")] == entity.value("update_primary")
+            assert safe_decrypt(target.data_json[entity.field("secondary")]) == "Neu"
 
-    def test_restricted_field_hidden_and_preserved(
-        self, client, staff_user, facility, client_identified, doc_type_case_mixed
-    ):
+    def test_restricted_field_hidden_and_preserved(self, client, staff_user, facility, request, entity: EntitySpec):
         """Ein HIGH-Feld ist fuer Staff unsichtbar — und ueberlebt dessen Update.
 
         ``FieldTemplate.save()`` erzwingt bei ``sensitivity=high`` zusaetzlich
@@ -528,37 +546,42 @@ class TestCaseUpdateWithDynamicData:
         Fernet-Token im JSONB und wird von ``merge_dynamic_data`` als solcher
         nachgezogen (keine Doppelverschluesselung).
         """
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Update-03",
-            created_by=staff_user,
-            document_type=doc_type_case_mixed,
-            data_json={"zielsetzung": "Wohnung", "risikoeinschaetzung": "nur fuer Leitung"},
+        doc_type = entity.doctype(request, "mixed")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Update-03",
+            doc_type,
+            {
+                entity.field("mixed_visible"): entity.value("mixed_initial"),
+                entity.field("mixed_restricted"): "nur fuer Leitung",
+            },
         )
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
-        assert "Zielsetzung" in content
-        assert "Risikoeinschaetzung" not in content
-        assert 'name="risikoeinschaetzung"' not in content
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
+        assert entity.label("mixed_visible") in content
+        assert entity.label("mixed_restricted") not in content
+        assert f'name="{entity.field("mixed_restricted")}"' not in content
         assert "nur fuer Leitung" not in content
 
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "P8-Update-03",
-                client_identified,
-                document_type=str(doc_type_case_mixed.pk),
-                zielsetzung="Arbeit",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                "Update-03",
+                document_type=str(doc_type.pk),
+                **{entity.field("mixed_visible"): entity.value("mixed_updated")},
             ),
         )
         assert response.status_code == 302
         target.refresh_from_db()
-        assert target.data_json["zielsetzung"] == "Arbeit"
-        assert safe_decrypt(target.data_json["risikoeinschaetzung"]) == "nur fuer Leitung"
+        assert target.data_json[entity.field("mixed_visible")] == entity.value("mixed_updated")
+        assert safe_decrypt(target.data_json[entity.field("mixed_restricted")]) == "nur fuer Leitung"
 
     def test_historical_restricted_number_outside_new_range_redirects_without_writing(
-        self, client, staff_user, facility, client_identified
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
         """Refs #1927: Der E11-Nachzug kann einen Feldfehler als dict auslösen.
 
@@ -568,8 +591,8 @@ class TestCaseUpdateWithDynamicData:
         """
         document_type = DocumentType.objects.create(
             facility=facility,
-            entity_type=DocumentType.EntityType.CASE,
-            name="Fall-Zahlengrenze",
+            entity_type=entity.entity_type,
+            name=entity.value("range_doctype_name"),
         )
         number_field = FieldTemplate.objects.create(
             facility=facility,
@@ -584,50 +607,54 @@ class TestCaseUpdateWithDynamicData:
         )
         DocumentTypeField.objects.create(document_type=document_type, field_template=number_field)
         DocumentTypeField.objects.create(document_type=document_type, field_template=visible_field)
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Historische Zahl",
-            created_by=staff_user,
-            document_type=document_type,
-            data_json={number_field.slug: 0, visible_field.slug: "vorher"},
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            entity.value("historical_identity"),
+            document_type,
+            {number_field.slug: 0, visible_field.slug: "vorher"},
         )
         # Ein historischer Klartextwert kann den heutigen HIGH=>verschlüsselt-
         # Backstop umgangen haben. Die nachträglich gesetzte Untergrenze macht
         # den vom Merge erneut validierten Wert ungültig.
-        Case.objects.filter(pk=target.pk).update(data_json={number_field.slug: -1, visible_field.slug: "vorher"})
+        entity.model.objects.filter(pk=target.pk).update(
+            data_json={number_field.slug: -1, visible_field.slug: "vorher"}
+        )
         number_field.min_value = 0
         number_field.save(update_fields=["min_value"])
 
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "P8-Neuer Titel",
-                client_identified,
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                entity.value("historical_new_identity"),
                 document_type=str(document_type.pk),
                 **{visible_field.slug: "nachher"},
             ),
         )
 
         assert response.status_code == 302
-        assert response.url == reverse("core:case_update", args=[target.pk])
+        assert response.url == reverse(entity.url("update"), args=[target.pk])
         # Refs #1936-Vertrag: Die Grenze eines fuer diese Rolle unsichtbaren
         # Feldes ist eine interne Regelkennung und wird vollstaendig ersetzt.
         assert [str(message) for message in get_messages(response.wsgi_request)] == ["Ungültige Eingabe."]
         target.refresh_from_db()
-        assert target.title == "P8-Historische Zahl"
+        expected_identity = f"{entity.id_prefix}{entity.value('historical_identity')}"
+        assert getattr(target, entity.identity_field) == expected_identity
         assert target.data_json == {number_field.slug: -1, visible_field.slug: "vorher"}
-        assert Attachment.objects.filter(case=target).count() == 0
+        assert Attachment.objects.filter(**{entity.attachment_relation: target}).count() == 0
 
     def test_visible_field_service_error_keeps_its_concrete_message(
-        self, client, staff_user, facility, client_identified
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
         """Refs #1936: Nur restricted/unbekannte Keys werden redigiert."""
         document_type = DocumentType.objects.create(
             facility=facility,
-            entity_type=DocumentType.EntityType.CASE,
-            name="Fall-Sichtbarfehler",
+            entity_type=entity.entity_type,
+            name=entity.value("visible_error_doctype_name"),
         )
         visible_field = FieldTemplate.objects.create(
             facility=facility,
@@ -635,25 +662,26 @@ class TestCaseUpdateWithDynamicData:
             field_type=FieldTemplate.FieldType.NUMBER,
         )
         DocumentTypeField.objects.create(document_type=document_type, field_template=visible_field)
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Sichtbarfehler",
-            created_by=staff_user,
-            document_type=document_type,
-            data_json={visible_field.slug: 3},
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            entity.value("visible_error_identity"),
+            document_type,
+            {visible_field.slug: 3},
         )
 
         client.force_login(staff_user)
         with patch(
-            "core.views.cases.update_case",
+            entity.update_service_path,
             side_effect=ValidationError({visible_field.slug: ["Wert muss mindestens 5 sein."]}),
         ):
             response = client.post(
-                reverse("core:case_update", args=[target.pk]),
-                _case_post_data(
-                    "P8-Sichtbar-Neu",
-                    client_identified,
+                reverse(entity.url("update"), args=[target.pk]),
+                entity.post_data(
+                    request,
+                    entity.value("visible_error_new_identity"),
                     document_type=str(document_type.pk),
                     **{visible_field.slug: "3"},
                 ),
@@ -662,35 +690,36 @@ class TestCaseUpdateWithDynamicData:
         assert response.status_code == 302
         assert [str(message) for message in get_messages(response.wsgi_request)] == ["Wert muss mindestens 5 sein."]
 
-    def test_type_switch_drops_old_keys(
-        self, client, staff_user, facility, client_identified, doc_type_case_form, doc_type_case_mixed
-    ):
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Update-04",
-            created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+    def test_type_switch_drops_old_keys(self, client, staff_user, facility, request, entity: EntitySpec):
+        old_type = entity.doctype(request, "form")
+        new_type = entity.doctype(request, "mixed")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Update-04",
+            old_type,
+            {entity.field("primary"): entity.value("primary")},
         )
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "P8-Update-04",
-                client_identified,
-                document_type=str(doc_type_case_mixed.pk),
-                zielsetzung="Wohnung",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                "Update-04",
+                document_type=str(new_type.pk),
+                **{entity.field("mixed_visible"): entity.value("mixed_initial")},
             ),
         )
         assert response.status_code == 302
         target.refresh_from_db()
-        assert target.document_type_id == doc_type_case_mixed.pk
-        assert "anlass" not in target.data_json
-        assert target.data_json["zielsetzung"] == "Wohnung"
+        assert target.document_type_id == new_type.pk
+        assert entity.field("primary") not in target.data_json
+        assert target.data_json[entity.field("mixed_visible")] == entity.value("mixed_initial")
 
     def test_removing_type_clears_data_json_without_error(
-        self, client, staff_user, facility, client_identified, doc_type_case_form
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
         """P5/P4b-Review: ``document_type=None`` + befuelltes ``data_json`` ist fail-closed.
 
@@ -698,18 +727,20 @@ class TestCaseUpdateWithDynamicData:
         ``ValidationError`` und der Benutzer bekaeme einen Fehler statt eines
         geleerten Datensatzes.
         """
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Update-05",
-            created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+        doc_type = entity.doctype(request, "form")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Update-05",
+            doc_type,
+            {entity.field("primary"): entity.value("primary")},
         )
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data("P8-Update-05", client_identified, document_type=""),
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(request, "Update-05", document_type=""),
         )
         assert response.status_code == 302
         target.refresh_from_db()

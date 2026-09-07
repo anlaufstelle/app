@@ -96,6 +96,7 @@ class EntitySpec:
 
     name: str
     model: type[Model]
+    entity_type: str
     url_names: tuple[tuple[str, str], ...]
     identity_field: str
     identity_kwargs_builder: IdentityKwargsBuilder
@@ -111,6 +112,8 @@ class EntitySpec:
     picker_excluded_fixtures: tuple[str, ...]
     id_prefix: str
     db_table: str
+    update_service_path: str
+    attachment_relation: str
 
     @staticmethod
     def _lookup(entries: tuple[tuple[str, str], ...], key: str) -> str:
@@ -144,6 +147,7 @@ class EntitySpec:
 CASE = EntitySpec(
     name="case",
     model=Case,
+    entity_type="case",
     url_names=(
         ("create", "core:case_create"),
         ("update", "core:case_update"),
@@ -199,18 +203,30 @@ CASE = EntitySpec(
         ("high_secret", "geheim"),
         ("discarded", "wird verworfen"),
         ("rerender_primary", "Anlass-Wert"),
+        ("update_primary", "Wohnungsverlust"),
+        ("mixed_initial", "Wohnung"),
+        ("mixed_updated", "Arbeit"),
+        ("historical_identity", "Historische Zahl"),
+        ("historical_new_identity", "Neuer Titel"),
+        ("range_doctype_name", "Fall-Zahlengrenze"),
+        ("visible_error_identity", "Sichtbarfehler"),
+        ("visible_error_new_identity", "Sichtbar-Neu"),
+        ("visible_error_doctype_name", "Fall-Sichtbarfehler"),
         ("select", "ambulant"),
         ("select_label", "Ambulant"),
     ),
     picker_excluded_fixtures=("doc_type_client_profile", "doc_type_contact"),
     id_prefix="P8-",
     db_table="core_case",
+    update_service_path="core.views.cases.update_case",
+    attachment_relation="case",
 )
 
 
 CLIENT = EntitySpec(
     name="client",
     model=Client,
+    entity_type="client",
     url_names=(
         ("create", "core:client_create"),
         ("update", "core:client_update"),
@@ -266,12 +282,23 @@ CLIENT = EntitySpec(
         ("high_secret", "geheim"),
         ("discarded", "wird verworfen"),
         ("rerender_primary", "WG-Wert"),
+        ("update_primary", "Eigene Wohnung"),
+        ("mixed_initial", "DE"),
+        ("mixed_updated", "EN"),
+        ("historical_identity", "Historische-Zahl"),
+        ("historical_new_identity", "Neuer-Pseudonym"),
+        ("range_doctype_name", "Personen-Zahlengrenze"),
+        ("visible_error_identity", "Sichtbarfehler"),
+        ("visible_error_new_identity", "Sichtbar-Neu"),
+        ("visible_error_doctype_name", "Personen-Sichtbarfehler"),
         ("select", "wohnungslos"),
         ("select_label", "Wohnungslos"),
     ),
     picker_excluded_fixtures=("doc_type_contact",),
     id_prefix="P7-",
     db_table="core_client",
+    update_service_path="core.views.clients.update_client",
+    attachment_relation="client",
 )
 
 
