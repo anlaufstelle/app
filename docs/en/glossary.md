@@ -78,4 +78,4 @@
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-08-24 -->
-<!-- source-hash: afe83957abef404676bf3225b203c5b5d8ce141a -->
+<!-- source-hash: bbcc60064e61b1506ec946ff97ecb5c3b7270ad7 -->

@@ -3,8 +3,8 @@
 **Open-Source-Fachsystem für niedrigschwellige soziale Arbeit**
 
 Autor: Erika Musterfrau, Tobias Nix
-Stand: Juli 2026
-Version: 1.7
+Stand: September 2026
+Version: 1.8
 
 ---
 
@@ -20,6 +20,7 @@ Version: 1.7
 | 1.5 | Mai 2026 (2026-05-10) | 5-Rollen-Modell mit `super_admin` als oberster, facility-übergreifender Rolle (Persona Jonas). Bisherige `admin`-Rolle in `facility_admin` umbenannt (UI-Label „Anwendungsbetreuung"). § 5 (Persona Jonas), § 6 (Berechtigungsmodell), § 9 (Role + Organization), § 14 (Glossar), § 18 (DSGVO-Tabelle), § 25 (Monitoring/Backup) entsprechend aktualisiert. Organisation explizit als reine Branding-Hülse formuliert (Variante b1, [ADR-018](adr/018-rollenmodell-superadmin.md)). DSGVO-Rechenschaftspflicht: jeder Cross-Facility-Lese-Zugriff erzeugt `SYSTEM_VIEW`-AuditLog. Refs #867, löst #866. |
 | 1.6 | Juni 2026 (2026-06-20) | Doku-Audit-Nachzug (#1071 Block A): § 16 Offline-Krypto code-treu (non-extractable `CryptoKey` in IndexedDB statt „nur in-memory"; Offline-Edit-Einstieg als deferred #1111 statt „implementiert"; Idle-Key-Wipe + Bundle-Caps, [ADR-022](adr/022-offline-snapshot-keys.md)). § 19 Datenschutz-Reife auf Stand v0.15 (Retention-Automatisierung [ADR-021](adr/021-retention-modell.md), K-Anonymisierung [ADR-023](adr/023-k-anonymization-statistik.md), 4-Augen-Löschung, DSGVO-Vorlagen als umgesetzt; Portabilität/Berichtigung weiter offen). § 14 Querverweis auf das Datenschutz-Glossar (`docs/glossar.md`). |
 | 1.7 | Juli 2026 (2026-07-07) | Doku-Drift-Korrektur (#1417): § 16 Stufe 3 auf ADR-022-Re-Evaluationsstand (2026-06-29) gehoben — Offline-Edit-Einstieg ist seit #1111 verdrahtet und produktiv (nicht mehr deferred), inkl. Dead-Letter-Ansicht (`/offline/conflicts/`, seit #1396 auch offline erreichbar) und Fallaufgaben-Editieren (#1398). |
+| 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
 
 ---
 
@@ -76,7 +77,7 @@ Das Projekt entstand 2009 als Konzept für ein Dokumentationssystem speziell fü
 
 ### Positionierung
 
-Anlaufstelle ist das Fachsystem, das die Lücke zwischen teurer Großträger-Software und selbstgebastelten Excel-Tabellen schließt — indem es Pseudonymisierung, Kontaktstufen und die Arbeitsrealität niedrigschwelliger Einrichtungen als Kernkonzepte behandelt, nicht als optionale Erweiterungen.
+Anlaufstelle ist das Fachsystem, das die Lücke zwischen teurer Großträger-Software und selbstgebastelten Excel-Tabellen schließt — indem es Pseudonymisierung, Kontaktstufen und die Arbeitsrealität niedrigschwelliger Einrichtungen als Kernkonzepte behandelt, nicht als optionale Erweiterungen. Über die Ursprungsdomäne der Sucht- und Wohnungslosenhilfe hinaus richtet es sich an alle Einrichtungen, deren Arbeitsrealität demselben Muster folgt: offene Sprechstunden, anonyme Kontakte, Dokumentation statt Akte — von der Sozial-/Lebensberatung über Awareness-Teams bis zur Frauenhaus- und Jugendarbeit (siehe § 3).
 
 ### Abgrenzung zu bestehender Fachsoftware
 
@@ -142,18 +143,54 @@ Was 2009 fehlte und heute essenziell ist: DSGVO-Konformität, mobile Nutzung (St
 
 ## 3. Zielgruppen
 
-### Primäre Zielgruppe: Niedrigschwellige Einrichtungen
+### Primäre Zielgruppe: Ein Arbeitsmodus, nicht eine Einrichtungsart
 
-Anlaufstelle richtet sich in erster Linie an Einrichtungen, die folgende Merkmale teilen:
+Anlaufstelle richtet sich an alle Einrichtungen, deren Arbeitsrealität einem gemeinsamen Muster folgt: Menschen kommen **ohne Termin** und **ohne Klarnamen**; die Mehrzahl der Kontakte bleibt **anonym oder pseudonym**. Der Arbeitsablauf ist *Kontakt → kurze Dokumentation → (optional) Fallarbeit → Statistik*; Kommunikation und Terminierung laufen außerhalb des Systems. Anlaufstelle dokumentiert die Arbeit, nicht die Akte.
+
+An erster Stelle stehen **offene Sozial- und Lebensberatung sowie niedrigschwellige Beratungsstellen** — Anlaufstellen, die ohne Termin und ohne Voraussetzung aufgesucht werden können. Gleichrangig dazu gehören die Bestandsbeispiele der Ursprungsdomäne:
 
 - **Kontaktläden und Kontaktcafés** — Einrichtungen der niedrigschwelligen Suchthilfe, in denen drogengebrauchende Menschen steriles Besteck erhalten, einen Ort zum Verweilen finden und bei Bedarf Beratung in Anspruch nehmen.
 - **Notschlafstellen** — Einrichtungen der Wohnungslosenhilfe, die eine Übernachtungsmöglichkeit, Grundversorgung und erste Anlaufpunkte für weiterführende Hilfen bieten.
-- **Streetwork** — Mobile soziale Arbeit im öffentlichen Raum, bei der Kontakte häufig spontan, flüchtig und anonym sind.
+- **Aufsuchende Arbeit / Streetwork** — Mobile soziale Arbeit im öffentlichen Raum, bei der Kontakte häufig spontan, flüchtig und anonym sind.
 - **Tagesaufenthalte** — Einrichtungen, die tagsüber einen geschützten Raum bieten — mit Verpflegung, Postadresse, Beratungsangeboten.
 - **Drogen- und Suchthilfe** — Konsumräume, Substitutionsambulanzen (dokumentarischer Anteil), niedrigschwellige Beratungsstellen.
-- **Niedrigschwellige Beratungsangebote** — Anlaufstellen, die ohne Termin und ohne Voraussetzung aufgesucht werden können.
 
 Gemeinsames Merkmal: Die Mehrzahl der Kontakte ist anonym oder pseudonym. Die Dokumentation dient der operativen Informationsweitergabe im Team, der Nachweispflicht gegenüber Fördermittelgebern und — bei qualifizierten Kontakten — der fachlichen Prozesssteuerung.
+
+### Weitere Einsatzzwecke
+
+Ein Einsatzzweck passt zu Anlaufstelle, wenn seine Arbeitsrealität *Kontakt → kurze Dokumentation → (optional) Fallarbeit → Statistik* ist, wenn Anonymität und Pseudonymität fachlich gewollt sind und wenn Kommunikation und Terminierung in anderen Systemen oder außerhalb stattfinden dürfen. Er passt schlecht, wenn Klarnamens-Akten, Korrespondenz mit Behörden oder Live-Kommunikationskanäle der Kern der Arbeit sind.
+
+Für die folgenden Domänen liefert Anlaufstelle kuratierte **Domänen-Pakete** (siehe [docs/packages.md](packages.md) und die jeweilige Paket-Doku):
+
+- **Awareness-Teams** (Paket `awareness`, [docs/packages-awareness.md](packages-awareness.md)) — Festivals, Klubs und Großveranstaltungen. Kontakte sind überwiegend anonym, die Dokumentation geschieht unter Zeitdruck neben dem Betrieb, oft ohne Netz — genau das Offline- und Strichlisten-Profil von Anlaufstelle. Hohe Sensitivität (sexualisierte Gewalt, Diskriminierung) wird durch Sensitivitätsstufen und erzwungene Verschlüsselung getragen; Platzverweise lassen sich über den Systemtyp `ban` abbilden.
+- **Frauenhaus und Gewalt-Fachberatung** (Paket `frauenhaus`, [docs/packages-frauenhaus.md](packages-frauenhaus.md)) — Pseudonyme Klientel, hohe Art.-9-Dichte, Fallarbeit mit Zielen („sichere Wohnsituation") und Fördermittel-Statistik. Vorbedingung ist der **Quick-Exit** (Mitschauen-Schutz, siehe Glossar): Dokumentation geschieht oft in Gegenwart gefährdender Situationen am Empfangsplatz.
+- **Mobile und offene Jugendarbeit** (Paket `jugendarbeit`, [docs/packages-jugendarbeit.md](packages-jugendarbeit.md)) — Jugendzentren, Fanprojekte, aufsuchende Arbeit. Streetwork-Profil mit Offline, allgegenwärtige Anonym-Strichlisten, U18-Schwerpunkt und Träger-Reporting.
+- **Sozial-/Lebensberatungsstelle mit offener Sprechstunde** (Paket `beratungsstelle`, [docs/packages-beratungsstelle.md](packages-beratungsstelle.md)) — die generische Domäne aus der Positionierung: offene Sprechstunden, anonyme Kurzberatung, Formularhilfe und Vermittlung, ohne die Sucht-/Medizin-Typen des Standardkatalogs.
+
+Mittlere Fits, die Anlaufstelle als Randsystem nutzen können, ohne Kernprodukt zu sein: **Telefonseelsorge** (nur als Schichtstatistik-/Dokumentations-Randsystem, da Kanal-Integration fehlt), **Opfer- und Antidiskriminierungsberatung** sowie **Schwangerschaftsberatung** (jeweils mit dem Vorbehalt, dass Klarnamen-Korrespondenz außerhalb bleibt).
+
+#### Fit-Übersicht
+
+| Einsatzzweck | Fit | Paket/Verweis |
+|---|---|---|
+| Sozial-/Lebensberatungsstelle mit offener Sprechstunde | sehr hoch | Paket `beratungsstelle` (#2145) |
+| Awareness-Teams (Festivals, Klubs, Großveranstaltungen) | sehr hoch | Paket `awareness` |
+| Frauenhaus / Gewalt-Fachberatung | sehr hoch | Paket `frauenhaus` (Vorbedingung Quick-Exit) |
+| Mobile / offene Jugendarbeit | hoch | Paket `jugendarbeit` |
+| Telefonseelsorge | mittel | nur als Schichtstatistik-Randsystem |
+| Opfer- / Antidiskriminierungsberatung | mittel | ohne Paket |
+| Schwangerschaftsberatung | mittel | ohne Paket |
+
+#### Anti-Fits — wofür Anlaufstelle bewusst nicht gebaut ist
+
+| Einsatzzweck | Begründung |
+|---|---|
+| Klarnamen-Behördenkorrespondenz / Aktenführung | Das Datenmodell ist pseudonym; die Dokumentation ist keine Akte im Rechtssinne. Wer Klarnamen und Amtspost braucht, kauft anderswo. |
+| Kanal-zentrierte Dienste (Krisenchat, Telefonie) | Kommunikationskanäle sind bewusst ausgegrenzt (Prinzip 8, § 13 „Klientelportal"); die Dokumentation geschieht hinterher, nicht im Kontakt. |
+| Terminplanung / Dienstplanung | Anlaufstelle ersetzt nicht die Dienstplanung (Prinzip 8); Zeitfenster sind Sichten, keine Schicht-Container (§ 13 „Zeitfenster als Datenmodell"). |
+| Klientenportal / Self-Service | Kein Klientel-Login und kein Self-Service, auch nicht für Berichtigung ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). |
+| Hinweisgebersystem (HinSchG) | Braucht einen anonymen Inbound-Kanal für Fremde und einen Rückfrage-Kanal — strukturell ein anderer Anwendungstyp. |
 
 ### Sekundäre Zielgruppe: Kleine und mittlere Träger
 
@@ -508,6 +545,7 @@ Der aktuelle Stand von Anlaufstelle umfasst:
 - Falllogik: Fälle eröffnen/schließen, Episoden, Zuständigkeiten
 - Wirkungsmessung: Ziele, Meilensteine und Outcomes pro Fall
 - DSGVO-Dokumentationspaket: Verarbeitungsverzeichnis, DSFA, AV-Vertrag, TOMs, Informationspflichten, Beschäftigten-Information und Löschkonzept als Vorlagen ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/))
+- Domänen-Pakete: mitgelieferter Katalog für Beratungsstelle, Awareness, Frauenhaus und Jugendarbeit (release-0.96, siehe [docs/packages.md](packages.md))
 
 Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md).
 
@@ -519,7 +557,6 @@ Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md)
 | Betroffenenrechte | Self-Service für Auskunft, Berichtigung, Löschung, Portabilität | Hoch |
 | REST-API | Authentifizierte API mit Facility-Scoping | Mittel |
 | Import-Werkzeuge | CSV-Import für Datenmigration | Mittel |
-| Domänenbibliotheken | Installierbare Seed-Pakete für verschiedene Einrichtungstypen | Niedrig |
 
 ---
 
@@ -806,7 +843,7 @@ Eine leere Datenbank ist für eine Einrichtung, die Anlaufstelle zum ersten Mal 
 
 Die Domänenbibliothek löst dieses Problem: Sie liefert vorkonfigurierte Dokumentationstypen als versionierbare, erweiterbare Startbibliothek. Eine Einrichtung wählt beim Setup eine passende Bibliothek (z.B. „Niedrigschwellige Suchthilfe / Kontaktladen") und erhält sofort einen sinnvollen Satz an Dokumentationstypen mit passenden Feldern. Danach kann sie Typen anpassen, deaktivieren oder eigene hinzufügen.
 
-Domänenbibliotheken sind keine fest eingebauten Typen. Sie sind Seed-Daten — Startvorschläge, die bei der Ersteinrichtung eingespielt werden. Einrichtungen können alles verändern. Neue Bibliotheken können von der Community beigesteuert werden, z.B. für Wohnungslosenhilfe, Streetwork oder Frauenhäuser.
+Domänenbibliotheken sind keine fest eingebauten Typen. Sie sind Seed-Daten — Startvorschläge, die bei der Ersteinrichtung eingespielt werden. Einrichtungen können alles verändern. Technisch sind sie als **Domänen-Pakete** realisiert: versionierbare YAML-Kataloge, die über `setup_facility --package <name>` bzw. `manage.py load_package` eingespielt werden (Mechanik: [docs/packages.md](packages.md)). Mitgeliefert werden neben dem Standardkatalog die Pakete `beratungsstelle`, `awareness`, `frauenhaus` und `jugendarbeit` (siehe § 3 „Weitere Einsatzzwecke"). Weitere Bibliotheken können von der Community beigesteuert werden, z.B. für Wohnungslosenhilfe, Streetwork oder weitere Domänen.
 
 ### Beispielbibliothek: Niedrigschwellige Suchthilfe / Kontaktladen
 
@@ -841,7 +878,7 @@ Die Domänenbibliothek ist ein Startvorschlag, kein Korsett:
 - Einrichtungen können eigene Typen definieren, die in keiner Bibliothek vorkommen.
 - Typen werden nie gelöscht, sondern deaktiviert — damit historische Daten ihre Typzuordnung behalten.
 - Verschiedene Bibliotheken können parallel existieren. Eine Notschlafstelle braucht einen Typ „Übernachtung", den ein Streetwork-Projekt nicht hat.
-- Die Community kann neue Bibliotheken beitragen: „Wohnungslosenhilfe", „Frauenhaus", „Jugendnotdienst" — jeweils mit domänenspezifischen Typen und Feldern.
+- Die Community kann neue Bibliotheken beitragen: „Wohnungslosenhilfe", „Frauenhaus", „Jugendnotdienst" — jeweils mit domänenspezifischen Typen und Feldern. Die mitgelieferten Domänen-Pakete (Beratungsstelle, Awareness, Frauenhaus, Jugendarbeit) sind in [docs/packages.md](packages.md) und den Paket-Dokus `docs/packages-<domäne>.md` dokumentiert.
 
 ---
 
@@ -971,12 +1008,14 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Audit-Trail** | Unveränderliches Protokoll aller sicherheitsrelevanten Aktionen im System: Zugriffe, Änderungen, Löschungen, Login-Versuche. Dient der DSGVO-Compliance und der Nachvollziehbarkeit. Siehe: AuditLog. |
 | **AuditLog** | Technischer Begriff für den Audit-Trail. Eine eigene Entität, getrennt von der fachlichen Dokumentation gespeichert. Unveränderlich (Append-Only). |
 | **Benannter Zeitfilter** | Ein gespeicherter Arbeitszeitraum mit Label (z.B. „Nachtdienst 21:30–09:00"). Dient als Schnellfilter auf der Startseite und in der Statistik. Reine UI-Konfiguration, keine Datenstruktur. Siehe: TimeFilter. |
+| **Betreiber-Empfehlung** | Empfehlung für den Betrieb einer Einrichtung, die nicht paketfähig ist (z.B. Aufbewahrungsfristen, k-Schwelle, Zeitfenster, QuickTemplates, Rollen). Steht in der jeweiligen Paket-Doku (`docs/packages-<domäne>.md`) statt im Paket selbst. |
 | **Case** | Fall — eine Klammer um zusammenhängende Arbeit mit einer Person. Enthält Episoden, Zuständigkeiten und optional Wirkungsziele. |
 | **Chronik** | Der zeitliche Verlauf aller Ereignisse, die zu einer Person dokumentiert wurden. Die Chronik ist die primäre Sicht auf eine Person in Anlaufstelle. |
 | **Client** | Person/Klientel im System. Wird unter einem Pseudonym geführt. Hat eine Kontaktstufe, die den Lebenszyklus im System bestimmt. |
 | **DocumentType** | Dokumentationstyp — eine konfigurierbare Kategorie von Ereignissen (z.B. „Kontakt", „Krisengespräch", „Spritzentausch"). Definiert Felder, Sensitivität und Löschfrist. |
 | **DocumentTypeField** | Zuordnung einer Feldvorlage (FieldTemplate) zu einem Dokumentationstyp (DocumentType). Legt die Reihenfolge der Felder im Formular fest und ermöglicht die Wiederverwendung von Feldvorlagen in mehreren Typen. |
-| **Domänenbibliothek** | Vorkonfigurierter Satz von Dokumentationstypen für einen bestimmten Einrichtungstyp (z.B. „Niedrigschwellige Suchthilfe"). Seed-Daten, die bei der Ersteinrichtung eingespielt werden. |
+| **Domänen-Paket** | Die technische Realisierung der Domänenbibliothek: ein versionierbarer YAML-Katalog vorkonfigurierter Dokumentationstypen und Felder für einen bestimmten Einrichtungstyp, eingespielt über `setup_facility --package <name>` bzw. `manage.py load_package`. Siehe: Domänenbibliothek, [docs/packages.md](packages.md). |
+| **Domänenbibliothek** | Vorkonfigurierter Satz von Dokumentationstypen für einen bestimmten Einrichtungstyp (z.B. „Niedrigschwellige Suchthilfe"). Seed-Daten, die bei der Ersteinrichtung eingespielt werden. Technisch realisiert als Domänen-Paket. |
 | **DSGVO** | Datenschutz-Grundverordnung — die europäische Verordnung zum Schutz personenbezogener Daten. Zusammen mit dem Sozialdatenschutz (SGB X) der zentrale rechtliche Rahmen für Anlaufstelle. |
 | **Episode** | Eine abgrenzbare Phase innerhalb eines Falls: z.B. eine Krisenphase, ein Vermittlungsprozess. |
 | **Ereignis** | Der zentrale Baustein der Dokumentation. Ein zeitgestempelter Eintrag, der ein Vorkommnis festhält. Gehört zu einem Dokumentationstyp und optional zu einer Person. Siehe: Event. |
@@ -992,6 +1031,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Outcome** | Wirkung — das Ergebnis der Arbeit mit einer Person. Nicht die Aktivität („347 Kontakte"), sondern die Veränderung („stabile Wohnsituation erreicht"). |
 | **OutcomeGoal** | Wirkungsziel — was durch die Arbeit erreicht werden soll. Zugeordnet zu einem Fall. |
 | **Pseudonym** | Vom Team vergebener Name für eine Person im System. Primärer Identifikator in Anlaufstelle. Die Zuordnung zum realen Namen existiert nur im Wissen der Mitarbeitenden, nicht im System. |
+| **Quick-Exit** | Mitschauen-Schutz: eine Funktion, die die Oberfläche bei drohendem Mitschauen sofort unkenntlich macht (z.B. Wechsel auf eine neutrale Seite). Datenschutz-Begriff, siehe [docs/datenschutz.md](datenschutz.md). |
 | **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Fünf Rollen: `super_admin` (Systemadministration, facility-übergreifend, `/system/`-Bereich), `facility_admin` (Anwendungsbetreuung, Vollkontrolle einer Einrichtung), `lead` (fachliche Leitung), `staff` (Fachkraft), `assistant` (Assistenz). Nur `super_admin` arbeitet facility-übergreifend; alle anderen sind strikt facility-gebunden. Details: [ADR-018](adr/018-rollenmodell-superadmin.md). |
 | **Scope** | Sichtbarkeitsbereich. Bestimmt, welche Daten für einen User zugänglich sind — abhängig von Einrichtung, Rolle und Kontaktstufe. |
 | **Sensitivität** | Einstufung eines Dokumentationstyps oder Feldes hinsichtlich des Schutzbedarfs. Steuert, welche Rollen auf Feldwerte zugreifen dürfen. Konfigurierbar pro Dokumentationstyp und pro Feld (`FieldTemplate.sensitivity`). Unabhängig von der Feldverschlüsselung (`is_encrypted`). |

@@ -223,4 +223,4 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-08-31 -->
-<!-- source-hash: 787b5e59a67e7a25ff6008a83cd08e64e2e2c7ab -->
+<!-- source-hash: b6068ca379ea9818cd895c8e995578b5d4a55707 -->

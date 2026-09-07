@@ -40,7 +40,8 @@
 Anlaufstelle richtet sich an Einrichtungen, in denen die Mehrzahl der Kontakte anonym oder pseudonym ist:
 
 - **Offene Sprechstunden & Sozialberatung** — niedrigschwellige Beratungsstellen
-- **Psychosoziale Beratung, Jugend- & Frauenberatung** — anonym möglich
+- **Psychosoziale Beratung, Jugend- & Frauenberatung** — anonym möglich (Pakete `beratungsstelle`, `jugendarbeit`, `frauenhaus`)
+- **Awareness-Teams** — Festivals, Klubs, Großveranstaltungen (Paket `awareness`)
 - **Kontaktläden und Kontaktcafés** — niedrigschwellige Suchthilfe
 - **Aufsuchende Arbeit / Streetwork** — mobile soziale Arbeit
 - **Tagestreffs, Wärmestuben und Notschlafstellen** — Wohnungslosenhilfe
@@ -80,7 +81,7 @@ Sie können Zeiträume passend zu Ihrem Betrieb definieren — z. B. „Nachtdie
 
 Jede Einrichtung arbeitet anders. Anlaufstelle lässt sich an Ihre Dokumentationspraxis anpassen: Welche Kontaktarten gibt es? Welche Leistungen werden erfasst? Welche Felder braucht ein Eintrag?
 
-Das geht ohne Programmierung, direkt in der Oberfläche — für Ereignisse ebenso wie für Personen- und Fallformulare. Felder lassen sich zu Abschnitten gruppieren, sortieren und mit Bedingungen versehen („zeige das Feld nur, wenn …"). Eine Konfiguration lässt sich als YAML-Paket festhalten, versionieren und in einer weiteren Einrichtung wieder einspielen.
+Das geht ohne Programmierung, direkt in der Oberfläche — für Ereignisse ebenso wie für Personen- und Fallformulare. Felder lassen sich zu Abschnitten gruppieren, sortieren und mit Bedingungen versehen („zeige das Feld nur, wenn …"). Eine Konfiguration lässt sich als YAML-Paket festhalten, versionieren und in einer weiteren Einrichtung wieder einspielen. Mitgeliefert werden vier Domänen-Pakete (Beratungsstelle, Awareness, Frauenhaus, Jugendarbeit) neben dem Standardkatalog — siehe [docs/packages.md](docs/packages.md).
 
 Die Konfiguration bestimmt auch den Datenschutz:
 

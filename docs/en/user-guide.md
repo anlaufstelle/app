@@ -1001,4 +1001,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-08 -->
-<!-- source-hash: b2c8302ddb57e6fc571c394528e9481dcb5efb2d -->
+<!-- source-hash: e0989235618bca49d79e70aaf954f6ad13316c80 -->

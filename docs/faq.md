@@ -52,6 +52,26 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 ---
 
+### 1a. Für welche Arbeitsfelder passt Anlaufstelle — und welche Pakete werden mitgeliefert?
+
+Anlaufstelle passt überall dort, wo Menschen **ohne Termin** und **ohne Klarnamen** kommen und die Mehrzahl der Kontakte anonym oder pseudonym bleibt. Der Arbeitsablauf ist *Kontakt → kurze Dokumentation → (optional) Fallarbeit → Statistik*; Kommunikation und Terminierung laufen außerhalb des Systems. Es passt schlecht, wenn Klarnamens-Akten, Behördenkorrespondenz oder Live-Kommunikationskanäle der Kern der Arbeit sind.
+
+Neben dem Standardkatalog werden vier **Domänen-Pakete** mitgeliefert, die Sie bei der Einrichtung einer neuen Einrichtung über `setup_facility --package <name>` einspielen:
+
+- `beratungsstelle` — offene Sprechstunden, anonyme Kurzberatung, Formularhilfe
+- `awareness` — Awareness-Teams auf Festivals, in Klubs und bei Großveranstaltungen
+- `frauenhaus` — Frauenhaus und Gewalt-Fachberatung (Vorbedingung: Quick-Exit)
+- `jugendarbeit` — mobile und offene Jugendarbeit, Jugendzentren
+
+Ein Domänen-Paket **ersetzt** den Standardkatalog, es wird nicht zusätzlich geladen — laden Sie es deshalb nur gegen eine frische Einrichtung.
+
+**Relevante Dateien:**
+- [`docs/fachkonzept-anlaufstelle.md`](https://github.com/anlaufstelle/app/blob/main/docs/fachkonzept-anlaufstelle.md) — § 3 „Zielgruppen" mit Fit-/Anti-Fit-Übersicht
+- [`docs/packages.md`](https://github.com/anlaufstelle/app/blob/main/docs/packages.md) — Paket-Mechanik und mitgelieferter Katalog
+- [`docs/admin-guide.md`](https://github.com/anlaufstelle/app/blob/main/docs/admin-guide.md) — Einrichtung einer neuen Einrichtung
+
+---
+
 ### 2. Wie richte ich 2FA ein?
 
 Kurz: **Benutzermenü → Zwei-Faktor-Authentifizierung** (`/mfa/settings/`) → **2FA einrichten**, QR-Code mit einer Authenticator-App scannen, 6-stelligen Code bestätigen.
