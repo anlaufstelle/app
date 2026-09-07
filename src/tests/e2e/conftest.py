@@ -22,7 +22,7 @@ import pytest
 import requests
 from filelock import FileLock
 
-from ._helpers import SEED_PASSWORD
+from tests.e2e._helpers import SEED_PASSWORD  # absolut: test_e2e_storage_state_ttl laedt die Datei ohne Paketkontext
 
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
 # NICHT test-Settings verwenden — Django rehashed Passwörter bei Login
