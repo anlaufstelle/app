@@ -8,24 +8,8 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Client, DocumentType, Event, Facility, Organization, User
+from core.models import Client, DocumentType, Event, Facility, Organization
 from core.services.dashboard import get_statistics
-
-
-@pytest.fixture
-def facility(db):
-    org = Organization.objects.create(name="Test-Org")
-    return Facility.objects.create(organization=org, name="Test-Einrichtung")
-
-
-@pytest.fixture
-def admin_user(facility):
-    return User.objects.create_user(
-        username="stat_admin",
-        password="test1234",
-        role=User.Role.FACILITY_ADMIN,
-        facility=facility,
-    )
 
 
 @pytest.fixture

@@ -40,7 +40,7 @@ from datetime import date, datetime
 import pytest
 from django.utils import timezone
 
-from core.models import Client, DocumentType, Event, Facility, Organization, User
+from core.models import Client, DocumentType, Event, User
 from core.reporting import registry
 from core.reporting.backends.sample_report_1 import (
     _EXPORT_ISSUE_CODES,
@@ -83,12 +83,6 @@ def _nur_typ_bindung(name: str, key: str):
 @pytest.fixture
 def backend():
     return registry.get_backend("sample-report-1")
-
-
-@pytest.fixture
-def facility(db):
-    org = Organization.objects.create(name="Dreiteilung-Org")
-    return Facility.objects.create(organization=org, name="Dreiteilung-Stelle")
 
 
 @pytest.fixture

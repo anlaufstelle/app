@@ -131,12 +131,6 @@ def backend():
 
 
 @pytest.fixture
-def facility(db):
-    org = Organization.objects.create(name="Reporting-Org")
-    return Facility.objects.create(organization=org, name="Reporting-Einrichtung")
-
-
-@pytest.fixture
 def user(facility):
     return User.objects.create_user(
         username="reporting_admin",
