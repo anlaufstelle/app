@@ -6,10 +6,11 @@ import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
-from core.models import Activity, DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.models import Activity, DocumentType, DocumentTypeField, FieldTemplate
 from core.services.dashboard import log_activity, render_activity_summary
 from core.services.events import build_feed_items, enrich_events_with_preview
 from core.templatetags.core_tags import activity_target_url, doctype_badge_classes
+from tests._factories import make_document_type, make_event
 
 
 @pytest.mark.django_db
@@ -19,7 +20,7 @@ class TestEnrichEventsWithPreview:
     def test_basic_preview_fields(self, facility, staff_user, client_identified, doc_type_contact):
         # doc_type_contact has Dauer (number, sort=0) and Notiz (textarea, sort=1)
         # Event with dauer=15 → preview should show Dauer:15, but NOT Notiz (textarea)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -36,12 +37,12 @@ class TestEnrichEventsWithPreview:
 
     def test_max_three_fields(self, facility, staff_user, client_identified):
         # Create doc type with 5 non-textarea fields
-        dt = DocumentType.objects.create(facility=facility, name="Multi")
+        dt = make_document_type(facility=facility, name="Multi")
         for i in range(5):
             ft = FieldTemplate.objects.create(facility=facility, name=f"Feld{i}", field_type="text")
             DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=i)
         data = {f"feld{i}": f"val{i}" for i in range(5)}
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -55,7 +56,7 @@ class TestEnrichEventsWithPreview:
 
     def test_textarea_skipped(self, facility, staff_user, client_identified, doc_type_contact):
         # doc_type_contact: Dauer=number, Notiz=textarea
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -72,7 +73,7 @@ class TestEnrichEventsWithPreview:
     def test_expanded_fields_include_textarea(self, facility, staff_user, client_identified, doc_type_contact):
         """Refs #707: expanded_fields zeigt alle Felder inkl. textarea, damit
         Notizen ohne Detail-Klick im Feed lesbar sind."""
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -91,12 +92,12 @@ class TestEnrichEventsWithPreview:
 
     def test_expanded_fields_no_three_field_limit(self, facility, staff_user, client_identified):
         """Refs #707: expanded_fields hat kein Limit von 3 (anders als preview_fields)."""
-        dt = DocumentType.objects.create(facility=facility, name="MultiExpand")
+        dt = make_document_type(facility=facility, name="MultiExpand")
         for i in range(5):
             ft = FieldTemplate.objects.create(facility=facility, name=f"Feld{i}", field_type="text")
             DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=i)
         data = {f"feld{i}": f"val{i}" for i in range(5)}
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -111,7 +112,7 @@ class TestEnrichEventsWithPreview:
 
     def test_encrypted_field_hidden_for_assistant(self, facility, assistant_user, client_identified):
         # ELEVATED doc type with encrypted field
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="Sensitive",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
@@ -123,7 +124,7 @@ class TestEnrichEventsWithPreview:
             is_encrypted=True,
         )
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -136,7 +137,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields == []
 
     def test_encrypted_field_visible_for_admin(self, facility, admin_user, client_identified):
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="SensitiveAdmin",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
@@ -148,7 +149,7 @@ class TestEnrichEventsWithPreview:
             is_encrypted=True,
         )
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -162,10 +163,10 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["label"] == "Geheim"
 
     def test_boolean_formatting(self, facility, staff_user, client_identified):
-        dt = DocumentType.objects.create(facility=facility, name="BoolTest")
+        dt = make_document_type(facility=facility, name="BoolTest")
         ft = FieldTemplate.objects.create(facility=facility, name="Aktiv", field_type="boolean")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -178,7 +179,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["value"] == "Ja"
 
     def test_select_label_resolved(self, facility, staff_user, client_identified):
-        dt = DocumentType.objects.create(facility=facility, name="SelectTest")
+        dt = make_document_type(facility=facility, name="SelectTest")
         ft = FieldTemplate.objects.create(
             facility=facility,
             name="Art",
@@ -189,7 +190,7 @@ class TestEnrichEventsWithPreview:
             ],
         )
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -202,7 +203,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["value"] == "Beta"
 
     def test_multi_select_labels(self, facility, staff_user, client_identified):
-        dt = DocumentType.objects.create(facility=facility, name="MultiTest")
+        dt = make_document_type(facility=facility, name="MultiTest")
         ft = FieldTemplate.objects.create(
             facility=facility,
             name="Leistungen",
@@ -213,7 +214,7 @@ class TestEnrichEventsWithPreview:
             ],
         )
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -229,10 +230,10 @@ class TestEnrichEventsWithPreview:
         """Stufe-A-File-Marker (`{"__file__": True, ...}`) ist im Preview ein
         sprechender Hinweis statt rohes Dict-Repr (Refs #670).
         """
-        dt = DocumentType.objects.create(facility=facility, name="StageA")
+        dt = make_document_type(facility=facility, name="StageA")
         ft = FieldTemplate.objects.create(facility=facility, name="Scan", field_type="file")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -246,10 +247,10 @@ class TestEnrichEventsWithPreview:
 
     def test_file_marker_stage_b_singular(self, facility, staff_user, client_identified):
         """Stufe-B-Marker (`__files__` mit 1 Entry) → `[1 Datei]`."""
-        dt = DocumentType.objects.create(facility=facility, name="StageB1")
+        dt = make_document_type(facility=facility, name="StageB1")
         ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -268,10 +269,10 @@ class TestEnrichEventsWithPreview:
 
     def test_file_marker_stage_b_plural(self, facility, staff_user, client_identified):
         """Stufe-B-Marker (`__files__` mit 3 Entries) → `[3 Dateien]`."""
-        dt = DocumentType.objects.create(facility=facility, name="StageB3")
+        dt = make_document_type(facility=facility, name="StageB3")
         ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -293,7 +294,7 @@ class TestEnrichEventsWithPreview:
         assert event.preview_fields[0]["value"] == "[3 Dateien]"
 
     def test_empty_data_json(self, facility, staff_user, client_identified, doc_type_contact):
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -313,7 +314,7 @@ class TestEnrichEventsWithPreview:
 
     def test_batch_efficiency(self, facility, staff_user, client_identified, doc_type_contact):
         # Two events with same doc type — should batch into 1 DTF query
-        e1 = Event.objects.create(
+        e1 = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -321,7 +322,7 @@ class TestEnrichEventsWithPreview:
             data_json={"dauer": 10},
             created_by=staff_user,
         )
-        e2 = Event.objects.create(
+        e2 = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -368,7 +369,7 @@ class TestMixedFeedCreatedFilter:
     def test_mixed_feed_excludes_created_activities(self, facility, staff_user, client_identified, doc_type_contact):
         today = timezone.localdate()
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -399,7 +400,7 @@ class TestMixedFeedCreatedFilter:
     def test_activities_filter_includes_created(self, facility, staff_user, client_identified, doc_type_contact):
         today = timezone.localdate()
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -430,12 +431,12 @@ class TestActivitySensitivityFilter:
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
 
         # HIGH sensitivity → invisible to staff (max ELEVATED)
-        dt_high = DocumentType.objects.create(
+        dt_high = make_document_type(
             facility=facility,
             name="Vertraulich",
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt_high,
@@ -461,7 +462,7 @@ class TestActivitySensitivityFilter:
         today = timezone.localdate()
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
 
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -650,7 +651,7 @@ class TestPreviewOrderMatchesBlockSequence:
         from core.models import FieldGroup
         from core.services.config import iter_fields_in_block_order
 
-        dt = DocumentType.objects.create(facility=facility, name="FeedInterleaved")
+        dt = make_document_type(facility=facility, name="FeedInterleaved")
 
         def _ft(name):
             return FieldTemplate.objects.create(facility=facility, name=name, field_type="text")
@@ -663,7 +664,7 @@ class TestPreviewOrderMatchesBlockSequence:
         DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Frei B"), field_group=None, sort_order=2)
 
         data = {"frei-a": "a", "innen-1": "1", "innen-2": "2", "frei-b": "b"}
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
