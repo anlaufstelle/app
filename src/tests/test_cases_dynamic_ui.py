@@ -1038,7 +1038,8 @@ class TestEntityInactiveAssignedDocumentType:
 
 
 @pytest.mark.django_db
-class TestInvisibleDocumentTypeLock:
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityInvisibleDocumentTypeLock:
     """``_lock_invisible_document_type`` — vier Richtungen, alle fixiert.
 
     Darf die Rolle den Typ des Falls nicht sehen, faellt das Typ-Select ganz aus
@@ -1046,78 +1047,84 @@ class TestInvisibleDocumentTypeLock:
     leerem Feld Typ und alle unsichtbaren Werte still loeschen.
     """
 
-    @pytest.fixture
-    def locked_case(self, facility, client_identified, staff_user, doc_type_case_high):
-        return Case.objects.create(
+    @staticmethod
+    def _locked(request, entity: EntitySpec, facility, staff_user):
+        doc_type = entity.doctype(request, "high")
+        target = entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Lock-Typ-01",
             created_by=staff_user,
-            document_type=doc_type_case_high,
-            data_json={"gefahrenlage": "streng vertraulich"},
+            document_type=doc_type,
+            data_json={entity.field("high"): entity.value("high_confidential")},
+            **entity.identity_kwargs(request, entity.value("lock_identity")),
         )
+        return target, doc_type
 
-    def test_get_leaks_nothing(self, client, staff_user, locked_case, doc_type_case_high):
+    def test_get_leaks_nothing(self, client, staff_user, facility, request, entity: EntitySpec):
+        target, doc_type = self._locked(request, entity, facility, staff_user)
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_update", args=[locked_case.pk])).content.decode()
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert 'name="document_type"' not in content
-        assert doc_type_case_high.name not in content
-        assert "Gefahrenlage" not in content
-        assert "streng vertraulich" not in content
+        assert doc_type.name not in content
+        assert entity.label("high") not in content
+        assert entity.value("high_confidential") not in content
 
-    def test_normal_post_keeps_type_and_hidden_values(
-        self, client, staff_user, client_identified, locked_case, doc_type_case_high
-    ):
+    def test_normal_post_keeps_type_and_hidden_values(self, client, staff_user, facility, request, entity: EntitySpec):
+        target, doc_type = self._locked(request, entity, facility, staff_user)
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[locked_case.pk]),
-            _case_post_data("P8-Lock-Typ-01", client_identified, description="Neue Beschreibung"),
-        )
-        assert response.status_code == 302
-        locked_case.refresh_from_db()
-        assert locked_case.description == "Neue Beschreibung"
-        assert locked_case.document_type_id == doc_type_case_high.pk
-        assert safe_decrypt(locked_case.data_json["gefahrenlage"]) == "streng vertraulich"
-
-    def test_smuggled_visible_type_is_ignored(
-        self, client, staff_user, client_identified, locked_case, doc_type_case_high, doc_type_case_form
-    ):
-        client.force_login(staff_user)
-        response = client.post(
-            reverse("core:case_update", args=[locked_case.pk]),
-            _case_post_data(
-                "P8-Lock-Typ-01",
-                client_identified,
-                document_type=str(doc_type_case_form.pk),
-                anlass="untergeschoben",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                entity.value("lock_identity"),
+                **{entity.field("meta"): entity.value("meta_updated")},
             ),
         )
         assert response.status_code == 302
-        locked_case.refresh_from_db()
-        assert locked_case.document_type_id == doc_type_case_high.pk
-        assert "anlass" not in locked_case.data_json
-        assert safe_decrypt(locked_case.data_json["gefahrenlage"]) == "streng vertraulich"
+        target.refresh_from_db()
+        assert getattr(target, entity.field("meta")) == entity.value("meta_updated")
+        assert target.document_type_id == doc_type.pk
+        assert safe_decrypt(target.data_json[entity.field("high")]) == entity.value("high_confidential")
 
-    def test_authorized_role_is_unaffected(self, client, lead_user, client_identified, locked_case, doc_type_case_high):
+    def test_smuggled_visible_type_is_ignored(self, client, staff_user, facility, request, entity: EntitySpec):
+        target, high_type = self._locked(request, entity, facility, staff_user)
+        visible_type = entity.doctype(request, "form")
+        client.force_login(staff_user)
+        response = client.post(
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                entity.value("lock_identity"),
+                document_type=str(visible_type.pk),
+                **{entity.field("primary"): "untergeschoben"},
+            ),
+        )
+        assert response.status_code == 302
+        target.refresh_from_db()
+        assert target.document_type_id == high_type.pk
+        assert entity.field("primary") not in target.data_json
+        assert safe_decrypt(target.data_json[entity.field("high")]) == entity.value("high_confidential")
+
+    def test_authorized_role_is_unaffected(self, client, lead_user, staff_user, facility, request, entity: EntitySpec):
+        target, doc_type = self._locked(request, entity, facility, staff_user)
         client.force_login(lead_user)
-        content = client.get(reverse("core:case_update", args=[locked_case.pk])).content.decode()
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert 'name="document_type"' in content
-        assert doc_type_case_high.name in content
-        assert "Gefahrenlage" in content
-        assert "streng vertraulich" in content
+        assert doc_type.name in content
+        assert entity.label("high") in content
+        assert entity.value("high_confidential") in content
 
         response = client.post(
-            reverse("core:case_update", args=[locked_case.pk]),
-            _case_post_data(
-                "P8-Lock-Typ-01",
-                client_identified,
-                document_type=str(doc_type_case_high.pk),
-                gefahrenlage="von der Leitung geaendert",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                entity.value("lock_identity"),
+                document_type=str(doc_type.pk),
+                **{entity.field("high"): "von der Leitung geaendert"},
             ),
         )
         assert response.status_code == 302
-        locked_case.refresh_from_db()
-        assert safe_decrypt(locked_case.data_json["gefahrenlage"]) == "von der Leitung geaendert"
+        target.refresh_from_db()
+        assert safe_decrypt(target.data_json[entity.field("high")]) == "von der Leitung geaendert"
 
 
 # ---------------------------------------------------------------------------

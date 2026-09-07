@@ -185,6 +185,7 @@ CASE = EntitySpec(
         ("conditional_target", "betreuungsdetails"),
         ("file_source", "kostenbescheid"),
         ("file_target", "bescheid-erlaeuterung"),
+        ("meta", "description"),
     ),
     labels=(
         ("primary", "Anlass"),
@@ -213,6 +214,8 @@ CASE = EntitySpec(
         ("visible_error_identity", "Sichtbarfehler"),
         ("visible_error_new_identity", "Sichtbar-Neu"),
         ("visible_error_doctype_name", "Fall-Sichtbarfehler"),
+        ("lock_identity", "Lock-Typ-01"),
+        ("meta_updated", "Neue Beschreibung"),
         ("select", "ambulant"),
         ("select_label", "Ambulant"),
     ),
@@ -265,6 +268,7 @@ CLIENT = EntitySpec(
         ("conditional_target", "betreuungsdetails"),
         ("file_source", "nachweis"),
         ("file_target", "nachweis-erlaeuterung"),
+        ("meta", "notes"),
     ),
     labels=(
         ("primary", "Wohnsituation"),
@@ -293,6 +297,8 @@ CLIENT = EntitySpec(
         ("visible_error_identity", "Sichtbarfehler"),
         ("visible_error_new_identity", "Sichtbar-Neu"),
         ("visible_error_doctype_name", "Personen-Sichtbarfehler"),
+        ("lock_identity", "Lock-01"),
+        ("meta_updated", "Neue Notiz"),
         ("select", "wohnungslos"),
         ("select_label", "Wohnungslos"),
     ),
