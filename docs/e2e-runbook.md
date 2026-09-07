@@ -295,6 +295,22 @@ Mehrstufige Ketten (Swap löst den nächsten Request aus) **nicht** in eine Samm
 
 Details: [e2e-architecture.md § Fixture-Architektur](e2e-architecture.md#fixture-architektur).
 
+### Helfer-Referenz (`src/tests/e2e/_helpers.py`)
+
+Diese Bausteine lagen bis #1839
+dateilokal kopiert in bis zu zehn Spec-Dateien. **Nicht erneut kopieren** — importieren:
+
+| Helfer | Wofür |
+|--------|-------|
+| `SEED_PASSWORD` | Passwort aller Seed-User. Nicht in Tests verwenden, die das Passwort selbst ändern. |
+| `do_real_login(page, base_url, username="miriam")` | Echter Login-POST **statt** Storage-State. Nötig, sobald der Test verschlüsselte Offline-Bundles schreibt/liest: nur der Login-Formular-POST löst `crypto_session.deriveSessionKey` aus. Die `authenticated_page`-Familie ist dafür **kein** Ersatz (Cookie ja, Krypto-Schlüssel nein). |
+| `wait_for_active_service_worker(page, timeout_ms=8000)` | SW registriert **und** aktiviert **und** `navigator.serviceWorker.controller` gesetzt. Immer vor `context.set_offline(True)` — sonst greift der Precache nicht. |
+| `wait_until(page, predicate, …)` | Python-seitiges Polling statt `page.wait_for_function` mit `async`-Callback (§ 4.1). |
+| `wait_until_htmx_bound(page, locator)` | htmx-Settle-Fenster (§ 4.4). |
+| `track_console_errors(page)` | Konsolen-Errors/JS-Exceptions einsammeln. |
+| `enter_sudo_mode(page, base_url)` | SudoMode für sicherheitskritische Aktionen. |
+| `django_shell(e2e_env, script)` / `python_bin()` | Vorbedingungen gegen die E2E-DB setzen. |
+
 ---
 
 ## 6. Manueller E2E-Server (ohne pytest)
