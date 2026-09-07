@@ -59,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Test-Suite-Struktur** (#1839) — Familien-Unterpakete `reporting`/`file_vault`/`offline` mit eigenen conftests, Fixture-Deduplikation, gemeinsame E2E-Helfer, Entity-Parametrisierung der Fall-/Personen-Zwillinge, Wertetabellen für Grenzwerttests, Factories — identische Abdeckung (Coverage 97,27 % vorher/nachher), Item-Zahl 15 436 → 15 448 (nur neue Guard-/Selbsttests).
 - **Ein nicht messbarer Speicherplatz degradiert den Health-Status** (#2119) — `/health/` weist eine fehlgeschlagene Messung jetzt als `disk=unknown` aus und degradiert standardmäßig, während Betreiber dies für Instanzen ohne messbaren `MEDIA_ROOT` mit `DJANGO_HEALTH_DISK_REQUIRED=false` bewusst abschalten können.
 - **Fehlende Backup-Signale degradieren den Health-Status** (#2021) — Produktion meldet ohne Welt-B-Backup `backup=missing` und `status=degraded`, während ein expliziter Schalter andere Backup-Welten ausnimmt und das Erstsetup vor einem fehlenden Host-Cron warnt.
 

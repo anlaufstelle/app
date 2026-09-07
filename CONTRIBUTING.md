@@ -737,6 +737,12 @@ make test
 
 Tests liegen unter `src/tests/`. Die drei größten Familien haben eigene Unterpakete mit Familien-`conftest.py` (Refs #1839): `src/tests/reporting/` (Berichts-Backends), `src/tests/file_vault/` (Datei-Tresor) und `src/tests/offline/` (Offline-Bundle/-Shells); alle übrigen Unit-Tests liegen flach in `src/tests/`. Neue Tests kommen in die passende Datei oder in eine neue Datei nach dem Muster `test_<feature>.py` — in das Familien-Unterpaket, wenn es eines gibt. Fixtures, die eine ganze Familie braucht, gehören in deren `conftest.py`; suiteweite Fixtures in `src/tests/conftest.py`. Die Mutations-Pin-Dateien (`test_mutation_followup_*.py`, `test_mutation_pins_*.py`) bleiben bewusst flach — ihre Node-IDs zeigen auf konkrete Mutanten.
 
+**Fixtures:** Suiteweite Fixtures zuerst in `src/tests/conftest.py`; erst wenn eine ganze Familie sie braucht (≥ 2 Dateien), gehören sie in deren `conftest.py`. Sonderfälle leiten die dateilokale Fixture gleichen Namens ab (`def facility(facility)`), statt die Root-Fixture zu kopieren. Für Request-Objekte `pytest-django`-`rf` verwenden.
+
+**Wertetabellen:** Gleiche Prüflogik × verschiedene Eingaben gehört in `@pytest.mark.parametrize` mit sprechenden `ids=` — Muster: `test_boundary_*`, `_authz_expectations.py`, `_entity_expectations.py`.
+
+**Factories:** Neue Tests, die `Event`, `DocumentType` oder `Client` per `.objects.create(...)` anlegen, verwenden die Wrapper aus `src/tests/_factories.py` (`make_event`, `make_document_type`, `make_client`), sobald mindestens die je Modell festen Pflichtfelder explizit gesetzt werden — abweichende Fälle (fehlendes `client`/`created_by` bei nullable Feldern, `**kwargs`-Weiterreichung) bleiben bei direktem `Model.objects.create(...)`. Die Factories legen bewusst genau ein Objekt an und setzen keine Defaults für variierende Felder — wer ein Feld braucht, übergibt es explizit über `**overrides`, damit kein Testverhalten still von einem Factory-Default abhängt. Neue Wrapper für weitere Modelle nur nach demselben Muster und nach Rücksprache mit dem Orchestrator ergänzen.
+
 **Parallel:** `make test-parallel` nutzt pytest-xdist für parallele Ausführung auf allen verfügbaren CPU-Kernen. `make ci` nutzt automatisch die parallele Variante.
 
 ### End-to-End-Tests (Playwright)
@@ -752,7 +758,7 @@ E2E-Tests liegen unter `src/tests/e2e/`. Sie sind mit `@pytest.mark.e2e` markier
 
 **Wichtig:** Jedes neue Feature muss E2E-Tests enthalten, die zusammen mit dem Feature entwickelt werden — nicht nachträglich. Neue E2E-Test-Dateien werden nach dem Muster `test_<stream_oder_feature>.py` benannt.
 
-Fixtures für Login, Server-Setup u. ä. liegen in `src/tests/e2e/conftest.py`. Ausführliches Runbook mit Checklisten und Troubleshooting: [docs/e2e-runbook.md](docs/e2e-runbook.md).
+Fixtures für Login, Server-Setup u. ä. liegen in `src/tests/e2e/conftest.py`; gemeinsame Helfer in `src/tests/e2e/_helpers.py` (`do_real_login`, `wait_for_active_service_worker`, `SEED_PASSWORD`, `django_shell`). Seeds binden die Ziel-Facility an den Admin-User (UUID-Primärschlüssel) — nie `order_by("pk").first()`. Ausführliches Runbook mit Checklisten und Troubleshooting: [docs/e2e-runbook.md](docs/e2e-runbook.md).
 
 **Parallele E2E-Tests:** `make test-e2e-parallel` startet pro xdist-Worker einen eigenen gunicorn-Prozess auf eigenem Port mit eigener Datenbank. Default: 2 Worker (`E2E_WORKERS=4 make test-e2e-parallel` für mehr). `--dist loadfile` hält Tests aus derselben Datei auf demselben Worker.
 

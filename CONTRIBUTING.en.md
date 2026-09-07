@@ -730,6 +730,12 @@ make test
 
 Tests are located under `src/tests/`. The three largest families have their own sub-packages with a family `conftest.py` (Refs #1839): `src/tests/reporting/` (report backends), `src/tests/file_vault/` (file vault) and `src/tests/offline/` (offline bundle/shells); all other unit tests live flat in `src/tests/`. New tests go into the appropriate file or a new file following the pattern `test_<feature>.py` — into the family sub-package if one exists. Fixtures needed by a whole family belong in its `conftest.py`; suite-wide fixtures in `src/tests/conftest.py`. The mutation pin files (`test_mutation_followup_*.py`, `test_mutation_pins_*.py`) deliberately stay flat — their node IDs point at concrete mutants.
 
+**Fixtures:** Put suite-wide fixtures in `src/tests/conftest.py` first; only when a whole family needs one (≥ 2 files) does it belong in the family's `conftest.py`. Special cases derive a file-local fixture of the same name (`def facility(facility)`) instead of copying the root fixture. Use pytest-django's `rf` for request objects.
+
+**Value tables:** The same check logic × different inputs belongs in `@pytest.mark.parametrize` with descriptive `ids=` — patterns: `test_boundary_*`, `_authz_expectations.py`, `_entity_expectations.py`.
+
+**Factories:** New tests that create `Event`, `DocumentType` or `Client` via `.objects.create(...)` should use the wrappers from `src/tests/_factories.py` (`make_event`, `make_document_type`, `make_client`) as soon as at least the fixed required fields per model are set explicitly — deviating cases (missing `client`/`created_by` on nullable fields, `**kwargs` forwarding) stay with direct `Model.objects.create(...)`. The factories deliberately create exactly one object and set no defaults for varying fields — whoever needs a field passes it explicitly via `**overrides`, so no test behavior silently depends on a factory default. Add new wrappers for further models only following the same pattern and after consulting the orchestrator.
+
 **Parallel:** `make test-parallel` uses pytest-xdist to run on all available CPU cores. `make ci` uses the parallel variant automatically.
 
 ### End-to-End Tests (Playwright)
@@ -745,7 +751,7 @@ E2E tests are located under `src/tests/e2e/`. They are marked with `@pytest.mark
 
 **Important:** Every new feature must include E2E tests that are developed alongside the feature — not added later. New E2E test files are named following the pattern `test_<stream_or_feature>.py`.
 
-Fixtures for login, server setup, etc. are located in `src/tests/e2e/conftest.py`. Comprehensive runbook with checklists and troubleshooting: [docs/e2e-runbook.md](docs/e2e-runbook.md).
+Fixtures for login, server setup, etc. are located in `src/tests/e2e/conftest.py`; shared helpers in `src/tests/e2e/_helpers.py` (`do_real_login`, `wait_for_active_service_worker`, `SEED_PASSWORD`, `django_shell`). Seeds bind the target facility to the admin user (UUID primary keys) — never `order_by("pk").first()`. Comprehensive runbook with checklists and troubleshooting: [docs/e2e-runbook.md](docs/e2e-runbook.md).
 
 **Parallel E2E tests:** `make test-e2e-parallel` starts a separate gunicorn process per xdist worker on its own port with its own database. Default: 2 workers (`E2E_WORKERS=4 make test-e2e-parallel` for more). `--dist loadfile` keeps tests from the same file on the same worker.
 
@@ -985,4 +991,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.91.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 793c5a55157f750832e1564f5460765b65bcdfd2 -->
+<!-- source-hash: dc76774b43f7ad151d91699d5e844e8e21ad18f3 -->
