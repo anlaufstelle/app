@@ -23,12 +23,8 @@ Abgedeckt:
 
 from __future__ import annotations
 
-import json
-import re
-
 import pytest
 from cryptography.fernet import Fernet
-from django.db import connection
 from django.test import override_settings
 from django.urls import reverse
 
@@ -39,14 +35,6 @@ from core.models import (
     FieldCondition,
     FieldTemplate,
 )
-
-
-def raw_data_json(client_obj) -> dict:
-    """``core_client.data_json`` direkt aus der DB-Zeile (Muster P4b)."""
-    with connection.cursor() as cur:
-        cur.execute("SELECT data_json FROM core_client WHERE id = %s", [str(client_obj.pk)])
-        raw = cur.fetchone()[0]
-    return json.loads(raw) if isinstance(raw, str) else raw
 
 
 @pytest.fixture
@@ -187,32 +175,6 @@ def doc_type_client_file_condition(facility):
         group_index=0,
     )
     return doc_type
-
-
-def _selected_option(html: str, field_name: str) -> str:
-    """Wert der im ``<select name=field_name>`` vorausgewaehlten Option.
-
-    Simuliert, was ein Browser aus dem re-gerenderten Formular posten wuerde:
-    ohne vorausgewaehlte Option (weil sie aus den Choices gefallen ist) sendet
-    er die leere Auswahl.
-    """
-    block = re.search(rf'<select[^>]*name="{re.escape(field_name)}"(.*?)</select>', html, re.S)
-    if block is None:
-        return ""
-    selected = re.search(r'<option value="([^"]*)"[^>]*\bselected\b', block.group(1))
-    return selected.group(1) if selected else ""
-
-
-def _client_post_data(pseudonym, **extra):
-    """Basis-POST-Body fuer ``ClientForm`` (Pflichtfelder + Ueberschreibungen)."""
-    data = {
-        "pseudonym": pseudonym,
-        "contact_stage": Client.ContactStage.IDENTIFIED,
-        "age_cluster": Client.AgeCluster.UNKNOWN,
-        "notes": "",
-    }
-    data.update(extra)
-    return data
 
 
 # ---------------------------------------------------------------------------

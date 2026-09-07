@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 IdentityKwargsBuilder = Callable[["FixtureRequest", str], dict[str, Any]]
 PostDataBuilder = Callable[["FixtureRequest", str, dict[str, Any]], dict[str, Any]]
-DynamicDataAccessor = Callable[["Model"], dict[str, Any]]
+DynamicDataAccessor = Callable[["Model"], list[dict[str, Any]]]
+EntityRecordAccessor = Callable[["Model"], dict[str, Any]]
+RawDataAccessor = Callable[["Model"], dict[str, Any]]
 InvalidIdentityBuilder = Callable[["FixtureRequest"], str]
 ExportOwnerAccessor = Callable[["Model"], "Client"]
 ExportEntryAccessor = Callable[[dict[str, Any]], dict[str, Any]]
@@ -70,11 +72,11 @@ def _client_post_data(request: FixtureRequest, identity: str, extra: dict[str, A
     return data
 
 
-def _gather_case_dynamic_data(obj: Model) -> dict[str, Any]:
+def _gather_case_dynamic_data(obj: Model) -> list[dict[str, Any]]:
     return _gather_cases(obj.client)[0]["dynamic_data"]
 
 
-def _gather_client_dynamic_data(obj: Model) -> dict[str, Any]:
+def _gather_client_dynamic_data(obj: Model) -> list[dict[str, Any]]:
     return _gather_client_fields(obj)["dynamic_data"]
 
 
@@ -129,8 +131,8 @@ class EntitySpec:
     invalid_identity_builder: InvalidIdentityBuilder
     post_data_builder: PostDataBuilder
     gather_dynamic_data: DynamicDataAccessor
-    gather_entity_record: DynamicDataAccessor
-    raw_data_json: DynamicDataAccessor
+    gather_entity_record: EntityRecordAccessor
+    raw_data_json: RawDataAccessor
     export_owner: ExportOwnerAccessor
     export_entry: ExportEntryAccessor
     export_base_keys: tuple[str, ...]
@@ -141,7 +143,6 @@ class EntitySpec:
     values: tuple[tuple[str, str], ...]
     picker_excluded_fixtures: tuple[str, ...]
     id_prefix: str
-    db_table: str
     update_service_path: str
     attachment_relation: str
 
@@ -269,7 +270,6 @@ CASE = EntitySpec(
     ),
     picker_excluded_fixtures=("doc_type_client_profile", "doc_type_contact"),
     id_prefix="P8-",
-    db_table="core_case",
     update_service_path="core.views.cases.update_case",
     attachment_relation="case",
 )
@@ -370,7 +370,6 @@ CLIENT = EntitySpec(
     ),
     picker_excluded_fixtures=("doc_type_contact",),
     id_prefix="P7-",
-    db_table="core_client",
     update_service_path="core.views.clients.update_client",
     attachment_relation="client",
 )
