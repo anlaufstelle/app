@@ -632,7 +632,7 @@ Beispiele aus dem Sachbericht:
 
 ## 10. Test-Checkliste für neue Backends
 
-Testdateien folgen dem Muster `src/tests/test_reporting_<slug>.py`. Die bestehenden Suiten (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_sample_report_1.py`, `test_reporting_example.py`, `test_reporting_views.py`) sind Vorlagen.
+Testdateien liegen im Familien-Unterpaket `src/tests/reporting/` und folgen dem Muster `src/tests/reporting/test_reporting_<slug>.py`; die Familien-`conftest.py` dort isoliert die Registry je Test automatisch (`_isolated_registry`, autouse) — eine eigene Isolations-Fixture ist in neuen Dateien nicht mehr nötig. Die bestehenden Suiten (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_sample_report_1.py`, `test_reporting_example.py`, `test_reporting_views.py`) sind Vorlagen.
 
 **Registry-Isolation (Pflicht, sonst ordnungsabhängige Fehlschläge).** Ad-hoc registrierte Test-Backends dürfen nicht in Folgetests desselben Workers leaken. Direkt am Modul patchen, kein Proxy:
 

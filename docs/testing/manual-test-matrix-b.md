@@ -4715,7 +4715,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_sample_report_1.py::TestValidateCompleteness` |
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/reporting/test_reporting_sample_report_1.py::TestValidateCompleteness` |
 
 **Voraussetzung:** ENT-STAT-10; Zeitraum mit Ereignissen ohne Personenbezug bzw. ohne Berichtszuordnung (Seed liefert beides).
 
@@ -4771,7 +4771,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_registry.py` |
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/reporting/test_reporting_registry.py` |
 
 **Voraussetzung:** Beispiel-Backend `src/core/reporting/backends/example.py` vorhanden (Copy-Vorlage).
 
@@ -4799,7 +4799,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/test_reporting_views.py::TestBerichteFormZeitraumDurchreichung` |
+| Statistik | leitung | C | ⚪ | `test_reporting_backends.py`, `src/tests/reporting/test_reporting_views.py::TestBerichteFormZeitraumDurchreichung` |
 
 **Voraussetzung:** ENT-STAT-10.
 
@@ -4829,7 +4829,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `src/tests/test_reporting_views.py::TestDatasetExportView` |
+| Statistik | leitung | C | ⚪ | `src/tests/reporting/test_reporting_views.py::TestDatasetExportView` |
 
 **Voraussetzung:** ENT-STAT-12 (mindestens ein Download durchgeführt).
 
@@ -4856,7 +4856,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | leitung | C | ⚪ | `src/tests/test_reporting_sample_report_1.py::TestPrepareExport`, `test_reporting_backends.py` |
+| Statistik | leitung | C | ⚪ | `src/tests/reporting/test_reporting_sample_report_1.py::TestPrepareExport`, `test_reporting_backends.py` |
 
 **Voraussetzung:** Kleinstfallzahl-Schwelle der Einrichtung gesetzt (Standard); Zeitraum mit Kategorien unterhalb der Schwelle.
 

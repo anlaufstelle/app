@@ -633,7 +633,7 @@ Examples from the activity report:
 
 ## 10. Test Checklist for New Backends
 
-Test files follow the pattern `src/tests/test_reporting_<slug>.py`. The existing suites (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_sample_report_1.py`, `test_reporting_example.py`, `test_reporting_views.py`) serve as templates.
+Test files live in the family sub-package `src/tests/reporting/` and follow the pattern `src/tests/reporting/test_reporting_<slug>.py`; the family `conftest.py` there isolates the registry per test automatically (`_isolated_registry`, autouse) — new files no longer need their own isolation fixture. The existing suites (`test_reporting_base.py`, `test_reporting_registry.py`, `test_reporting_export.py`, `test_reporting_sample_report_1.py`, `test_reporting_example.py`, `test_reporting_views.py`) serve as templates.
 
 **Registry isolation (mandatory — otherwise you get order-dependent failures).** Ad-hoc test backends must not leak into subsequent tests on the same worker. Patch the module directly, no proxy:
 
@@ -688,5 +688,5 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 
 <!-- translation-source: docs/reporting-plugins.md -->
 <!-- translation-version: v0.91.0 -->
-<!-- translation-date: 2026-09-01 -->
-<!-- source-hash: 23f8b4d3cab8ed50985be5f61037bcfab736988a -->
+<!-- translation-date: 2026-09-07 -->
+<!-- source-hash: 1fcdcf28351d8e877ab43fc4f4cfcc53db93a745 -->

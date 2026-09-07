@@ -735,7 +735,7 @@ make test
 # entspricht: python -m pytest -m "not e2e"
 ```
 
-Tests liegen unter `src/tests/`. Neue Tests kommen in die passende Datei oder in eine neue Datei nach dem Muster `test_<feature>.py`.
+Tests liegen unter `src/tests/`. Die drei größten Familien haben eigene Unterpakete mit Familien-`conftest.py` (Refs #1839): `src/tests/reporting/` (Berichts-Backends), `src/tests/file_vault/` (Datei-Tresor) und `src/tests/offline/` (Offline-Bundle/-Shells); alle übrigen Unit-Tests liegen flach in `src/tests/`. Neue Tests kommen in die passende Datei oder in eine neue Datei nach dem Muster `test_<feature>.py` — in das Familien-Unterpaket, wenn es eines gibt. Fixtures, die eine ganze Familie braucht, gehören in deren `conftest.py`; suiteweite Fixtures in `src/tests/conftest.py`. Die Mutations-Pin-Dateien (`test_mutation_followup_*.py`, `test_mutation_pins_*.py`) bleiben bewusst flach — ihre Node-IDs zeigen auf konkrete Mutanten.
 
 **Parallel:** `make test-parallel` nutzt pytest-xdist für parallele Ausführung auf allen verfügbaren CPU-Kernen. `make ci` nutzt automatisch die parallele Variante.
 
@@ -762,7 +762,7 @@ Fixtures für Login, Server-Setup u. ä. liegen in `src/tests/e2e/conftest.py`. 
 
 Während der Entwicklung nie die volle Suite laufen lassen — in Schichten vorgehen, jeweils mit Fail-Fast (`pytest -x`):
 
-1. **Fokus:** `pytest src/tests/test_<betroffene_datei>.py -x` — nur Tests im geänderten Bereich. E2E fokussiert: `pytest src/tests/e2e/test_<feature>.py -x`.
+1. **Fokus:** `pytest src/tests/test_<betroffene_datei>.py -x` — nur Tests im geänderten Bereich (bei Familien-Unterpaketen `pytest src/tests/<familie>/test_<datei>.py -x`, ganze Familie: `pytest src/tests/<familie> -x`). E2E fokussiert: `pytest src/tests/e2e/test_<feature>.py -x`.
 2. **Gruppe:** Betroffene Testdateien zusammen: `pytest src/tests/test_a.py src/tests/test_b.py -x`.
 3. **Parallel:** `make test-parallel` — volle Unit-Suite parallel, vor dem Commit.
 4. **Smoke:** `make test-e2e-smoke` — ~40 kritische E2E-Flows (~2-3 min), nach Feature fertig.
@@ -973,6 +973,11 @@ src/
       input.css          # Tailwind-Eingabedatei
       styles.css         # Kompiliertes CSS (nicht committen)
   tests/
+    conftest.py          # Suiteweite Fixtures
+    test_<feature>.py    # Unit-/Integrationstests (flach)
+    reporting/           # Familien-Unterpaket mit eigener conftest.py (Refs #1839)
+    file_vault/          # dito (Datei-Tresor)
+    offline/             # dito (Offline-Bundle/-Shells)
     e2e/                 # Playwright E2E-Tests
       conftest.py        # Shared Fixtures
       test_<feature>.py  # Tests pro Feature

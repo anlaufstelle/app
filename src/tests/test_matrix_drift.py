@@ -1,8 +1,9 @@
 """Tests fuer ``scripts/verify_test_matrix_drift.py`` (Refs #922 / #923).
 
 Das Script verifiziert, dass alle in der Manual-Test-Matrix referenzierten
-Test-Files tatsaechlich in ``src/tests/`` oder ``src/tests/e2e/``
-existieren. Refs #1071 Block B: die Matrix ist in Hub + Sektions-Dateien
+Test-Files tatsaechlich unter ``src/tests/`` existieren — rekursiv, also
+auch in ``src/tests/e2e/`` und den Familien-Unterpaketen (Refs #1839).
+Refs #1071 Block B: die Matrix ist in Hub + Sektions-Dateien
 (``manual-test-matrix-a.md`` … ``-d.md``) gesplittet; das Script scannt
 per Default alle. Wenn die Matrix ein File behauptet, das nicht
 existiert, soll der Drift-Check den CI-Build mit Exit-Code != 0 stoppen.
@@ -86,6 +87,29 @@ def test_existing_file_in_tests_or_e2e_passes(tmp_path: Path) -> None:
     )
 
 
+def test_file_in_nested_subpackage_resolves(tmp_path: Path) -> None:
+    """Refs #1839: Familien-Unterpakete (``src/tests/<familie>/``) zaehlen.
+
+    Die Matrix referenziert nur Basenames; ein Umzug einer Testdatei in ein
+    Unterpaket darf keinen Drift-Alarm ausloesen. Geprueft ueber die
+    Funktion selbst mit einem synthetischen Baum (kein Repo-Zustand noetig).
+    """
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location("verify_test_matrix_drift", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    tests_dir = tmp_path / "tests"
+    (tests_dir / "familie").mkdir(parents=True)
+    (tests_dir / "familie" / "test_nested.py").write_text("", encoding="utf-8")
+    (tests_dir / "test_flat.py").write_text("", encoding="utf-8")
+
+    missing = module.find_missing({"test_nested.py", "test_flat.py", "test_phantom.py"}, (tests_dir,))
+    assert missing == {"test_phantom.py"}
+
+
 def test_em_dash_placeholder_is_ignored(tmp_path: Path) -> None:
     """Zeilen mit ``—`` als E2E-Platzhalter werden nicht als File-Ref gewertet."""
     fake_matrix = tmp_path / "matrix.md"
@@ -126,7 +150,7 @@ def test_invalid_matrix_path_fails(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "filename",
-    ["test_workflow_complete.py", "test_offline_apis.py", "test_audit.py"],
+    ["test_workflow_complete.py", "test_offline_apis.py", "test_audit.py", "test_reporting_registry.py"],
 )
 def test_known_e2e_files_resolve(tmp_path: Path, filename: str) -> None:
     """Stichprobe: bekannte E2E-Files aus der Matrix existieren."""

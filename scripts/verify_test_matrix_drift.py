@@ -38,7 +38,11 @@ DEFAULT_MATRIX = (
     TESTING_DIR / "manual-test-matrix-c.md",
     TESTING_DIR / "manual-test-matrix-d.md",
 )
-SEARCH_DIRS = (ROOT / "src" / "tests", ROOT / "src" / "tests" / "e2e")
+# Refs #1839: seit den Familien-Unterpaketen (``src/tests/reporting/``,
+# ``file_vault/``, ``offline/``) wird ``src/tests`` REKURSIV durchsucht — die
+# Matrix referenziert weiterhin nur Basenames, ein Umzug in ein Unterpaket
+# darf keinen Drift-Alarm auslösen. ``e2e/`` ist damit mit abgedeckt.
+SEARCH_DIRS = (ROOT / "src" / "tests",)
 
 # `test_<name>.py` in Backticks. Keine Slashes — die Matrix referenziert nur
 # den Basename, ohne Verzeichnis. Mehrfach pro Zelle, komma-getrennt.
@@ -51,13 +55,13 @@ def extract_refs(text: str) -> set[str]:
 
 
 def find_missing(refs: set[str], search_dirs: tuple[Path, ...] = SEARCH_DIRS) -> set[str]:
-    """Basenames aus ``refs``, die in keinem der ``search_dirs`` existieren."""
+    """Basenames aus ``refs``, die in keinem der ``search_dirs`` (rekursiv) existieren."""
     existing: set[str] = set()
     for directory in search_dirs:
         if not directory.is_dir():
             continue
-        for path in directory.iterdir():
-            if path.is_file() and path.suffix == ".py":
+        for path in directory.rglob("*.py"):
+            if path.is_file():
                 existing.add(path.name)
     return refs - existing
 
@@ -96,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {name}", file=sys.stderr)
         print(
             "\nTipp: die Sektions-Dateien 'docs/testing/manual-test-matrix-*.md' aktualisieren "
-            "oder die fehlenden Files in 'src/tests/' bzw. 'src/tests/e2e/' anlegen.",
+            "oder die fehlenden Files unter 'src/tests/' (Unterpakete inklusive, z. B. 'src/tests/e2e/') anlegen.",
             file=sys.stderr,
         )
         return 1

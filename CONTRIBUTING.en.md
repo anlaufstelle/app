@@ -728,7 +728,7 @@ make test
 # equivalent to: python -m pytest -m "not e2e"
 ```
 
-Tests are located under `src/tests/`. New tests go into the appropriate file or a new file following the pattern `test_<feature>.py`.
+Tests are located under `src/tests/`. The three largest families have their own sub-packages with a family `conftest.py` (Refs #1839): `src/tests/reporting/` (report backends), `src/tests/file_vault/` (file vault) and `src/tests/offline/` (offline bundle/shells); all other unit tests live flat in `src/tests/`. New tests go into the appropriate file or a new file following the pattern `test_<feature>.py` — into the family sub-package if one exists. Fixtures needed by a whole family belong in its `conftest.py`; suite-wide fixtures in `src/tests/conftest.py`. The mutation pin files (`test_mutation_followup_*.py`, `test_mutation_pins_*.py`) deliberately stay flat — their node IDs point at concrete mutants.
 
 **Parallel:** `make test-parallel` uses pytest-xdist to run on all available CPU cores. `make ci` uses the parallel variant automatically.
 
@@ -755,7 +755,7 @@ Fixtures for login, server setup, etc. are located in `src/tests/e2e/conftest.py
 
 Never run the full suite during development — work in layers, always with fail-fast (`pytest -x`):
 
-1. **Focus:** `pytest src/tests/test_<affected_file>.py -x` — only tests in the changed area. E2E focused: `pytest src/tests/e2e/test_<feature>.py -x`.
+1. **Focus:** `pytest src/tests/test_<affected_file>.py -x` — only tests in the changed area (for family sub-packages `pytest src/tests/<family>/test_<file>.py -x`, whole family: `pytest src/tests/<family> -x`). E2E focused: `pytest src/tests/e2e/test_<feature>.py -x`.
 2. **Group:** Affected test files together: `pytest src/tests/test_a.py src/tests/test_b.py -x`.
 3. **Parallel:** `make test-parallel` — full unit suite in parallel, before committing.
 4. **Smoke:** `make test-e2e-smoke` — ~40 critical E2E flows (~2-3 min), once a feature is complete.
@@ -964,6 +964,11 @@ src/
       input.css          # Tailwind input file
       styles.css         # Compiled CSS (do not commit)
   tests/
+    conftest.py          # Suite-wide fixtures
+    test_<feature>.py    # Unit/integration tests (flat)
+    reporting/           # Family sub-package with its own conftest.py (Refs #1839)
+    file_vault/          # ditto (file vault)
+    offline/             # ditto (offline bundle/shells)
     e2e/                 # Playwright E2E tests
       conftest.py        # Shared fixtures
       test_<feature>.py  # Tests per feature
@@ -979,5 +984,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.91.0 -->
-<!-- translation-date: 2026-09-04 -->
-<!-- source-hash: eec2ecd5c4cb2d4a9de95ede4b279d3d782c5653 -->
+<!-- translation-date: 2026-09-07 -->
+<!-- source-hash: 793c5a55157f750832e1564f5460765b65bcdfd2 -->

@@ -112,12 +112,17 @@ E2E_DIR = ROOT / "src" / "tests" / "e2e"
 #     `test_audit.py`
 #     `test_cases.py::test_create_case`
 #     `src/tests/test_rls.py`              (expliziter Unit-Pfad)
+#     `src/tests/reporting/test_reporting_views.py`  (Unit-Pfad in einem
+#                                            Familien-Unterpaket, Refs #1839)
 #     `src/tests/e2e/test_dashboard.py`    (expliziter E2E-Pfad)
 #
-# Gruppe ``path`` fängt einen optionalen ``src/tests/``- bzw.
-# ``src/tests/e2e/``-Präfix; Gruppe ``name`` den Basenamen; ein optionaler
-# ``::Klasse::methode``-Suffix wird mitgematcht, aber verworfen.
-TEST_FILE_REF = re.compile(r"`(?P<path>src/tests/(?:e2e/)?)?(?P<name>test_[a-z0-9_]+\.py)(?:::[A-Za-z0-9_:]+)?`")
+# Gruppe ``path`` fängt einen optionalen ``src/tests/``-Präfix inklusive
+# genau eines Unterpakets (``e2e/``, ``reporting/``, …); Gruppe ``name`` den
+# Basenamen; ein optionaler ``::Klasse::methode``-Suffix wird mitgematcht,
+# aber verworfen.
+TEST_FILE_REF = re.compile(
+    r"`(?P<path>src/tests/(?:[a-z_][a-z0-9_]*/)?)?(?P<name>test_[a-z0-9_]+\.py)(?:::[A-Za-z0-9_:]+)?`"
+)
 
 
 def discover_e2e_files(e2e_dir: Path = E2E_DIR) -> set[str]:
@@ -135,16 +140,17 @@ def cell_referenced_e2e_files(cell: str, e2e_files: set[str]) -> set[str]:
     * einen expliziten ``src/tests/e2e/``-Pfad nennt, **oder**
     * einen Basenamen nennt, der in ``e2e_files`` existiert.
 
-    Ein expliziter ``src/tests/``-Pfad **ohne** ``e2e/`` ist ein Unit-Test
-    und zählt nie — selbst wenn derselbe Basename zufällig auch in
-    ``src/tests/e2e/`` läge (der Autor war explizit).
+    Ein expliziter ``src/tests/``-Pfad **ohne** ``e2e/`` — flach oder in
+    einem Familien-Unterpaket wie ``src/tests/reporting/`` (Refs #1839) —
+    ist ein Unit-Test und zählt nie — selbst wenn derselbe Basename zufällig
+    auch in ``src/tests/e2e/`` läge (der Autor war explizit).
     """
     found: set[str] = set()
     for m in TEST_FILE_REF.finditer(cell):
         path = m.group("path") or ""
         name = m.group("name")
         explicit_e2e = path.endswith("e2e/")
-        explicit_unit = path == "src/tests/"  # src/tests/ ohne e2e/
+        explicit_unit = path.startswith("src/tests/") and not explicit_e2e  # flach oder Unterpaket, ohne e2e/
         if explicit_e2e:
             found.add(name)
         elif explicit_unit:
