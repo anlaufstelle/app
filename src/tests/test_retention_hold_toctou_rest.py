@@ -53,6 +53,7 @@ from core.retention.anonymization import anonymize_clients
 from core.retention.legal_holds import create_hold_for_target, has_active_hold
 from core.retention.proposals import reactivate_deferred_proposals
 from core.services.client import anonymize_client_now
+from tests._factories import make_client, make_document_type, make_event
 
 #: Untergrenze, bis der Gegenspieler sicher an der Zeile haengt. Bewusst nur
 #: eine Untergrenze: laeuft er langsamer, ist der Test trotzdem aussagekraeftig.
@@ -88,7 +89,7 @@ def _committed_bestand(*, mit_fall=False, im_papierkorb=False, events=5):
         facility=facility,
         role=User.Role.FACILITY_ADMIN,
     )
-    doc_type = DocumentType.objects.create(
+    doc_type = make_document_type(
         facility=facility,
         name="Kontakt (TOCTOU)",
         sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -210,7 +211,7 @@ class TestKAnonBridgeHoldRecheck:
             pseudonym=pseudonym,
             contact_stage=Client.ContactStage.IDENTIFIED,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=person,
             document_type=doc_type_contact,
@@ -268,7 +269,7 @@ class TestAutoApproveRespectsHold:
     """Fundstelle 2: Auto-Approve muss dieselbe Sequenz wie ``approve_proposal`` fahren."""
 
     def _proposal(self, facility, client, doc_type, staff_user, *, defer_count=3):
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client,
             document_type=doc_type,
@@ -387,7 +388,7 @@ class TestCaseHoldLockOrder:
 
     def test_hold_auf_fall_fremder_einrichtung_bleibt_zulaessig(self, facility, other_facility, lead_user, staff_user):
         """``target_id`` ist ein freies Feld — ein unbekannter Fall darf nicht knallen."""
-        fremd = Client.objects.create(facility=other_facility, pseudonym="Fremd", created_by=staff_user)
+        fremd = make_client(facility=other_facility, pseudonym="Fremd", created_by=staff_user)
         fall = Case.objects.create(
             facility=other_facility,
             client=fremd,
@@ -607,7 +608,7 @@ class TestCaseBatchRechecktHoldUnterSperre:
     """
 
     def _fall_im_papierkorb(self, facility, staff_user, titel, tage):
-        person = Client.objects.create(
+        person = make_client(
             facility=facility,
             pseudonym=f"Person {titel}",
             contact_stage=Client.ContactStage.IDENTIFIED,
@@ -667,11 +668,11 @@ class TestCaseTilgungSperrtInKanonischerOrdnung:
     def test_sofortpfad_sperrt_in_kanonischer_ordnung(self, facility, case_trashed, admin_user):
         from core.services.case.deletion import anonymize_case_now
 
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=case_trashed.client,
             case=case_trashed,
-            document_type=DocumentType.objects.create(
+            document_type=make_document_type(
                 facility=facility,
                 name="Ordnungs-Typ",
                 sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -1018,7 +1019,7 @@ def _committed_purge_bestand(owner_art="ereignis", *, mit_person=True):
         facility=facility,
         role=User.Role.FACILITY_ADMIN,
     )
-    doc_type = DocumentType.objects.create(
+    doc_type = make_document_type(
         facility=facility,
         name="Kontakt (Purge)",
         sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -1069,10 +1070,10 @@ class TestAttachmentPurgeSperrtDieOwnerZeile:
         from core.services.attachments.crud import purge_attachment_chain
         from tests.conftest import _make_attachment
 
-        ereignis = Event.objects.create(
+        ereignis = make_event(
             facility=facility,
             client=client_identified,
-            document_type=DocumentType.objects.create(
+            document_type=make_document_type(
                 facility=facility,
                 name="Purge-Ordnungs-Typ",
                 sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -1100,11 +1101,11 @@ class TestAttachmentPurgeSperrtDieOwnerZeile:
         from core.services.attachments.crud import purge_attachment_chain
         from tests.conftest import _make_attachment
 
-        ereignis = Event.objects.create(
+        ereignis = make_event(
             facility=facility,
             client=None,
             is_anonymous=True,
-            document_type=DocumentType.objects.create(
+            document_type=make_document_type(
                 facility=facility,
                 name="Purge-Anonym-Typ",
                 sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -1254,10 +1255,10 @@ class TestEreignisHoldAnlageSperrtDiePersonenzeile:
     """
 
     def test_ereignis_hold_sperrt_client_vor_event(self, facility, client_identified, staff_user, lead_user):
-        ereignis = Event.objects.create(
+        ereignis = make_event(
             facility=facility,
             client=client_identified,
-            document_type=DocumentType.objects.create(
+            document_type=make_document_type(
                 facility=facility,
                 name="Hold-Ordnungs-Typ",
                 sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -1286,11 +1287,11 @@ class TestEreignisHoldAnlageSperrtDiePersonenzeile:
 
     def test_anonymes_ereignis_sperrt_nur_die_ereigniszeile(self, facility, staff_user, lead_user):
         """``client_id is None``: es gibt keine Personenzeile zu sperren."""
-        ereignis = Event.objects.create(
+        ereignis = make_event(
             facility=facility,
             client=None,
             is_anonymous=True,
-            document_type=DocumentType.objects.create(
+            document_type=make_document_type(
                 facility=facility,
                 name="Hold-Anonym-Typ",
                 sensitivity=DocumentType.Sensitivity.NORMAL,
