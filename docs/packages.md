@@ -20,6 +20,7 @@ Mitgelieferte Pakete liegen flach unter `core/packages/<name>.yaml`. Der technis
 |---|---|---:|---|---|
 | `default` | Niedrigschwellige Hilfe | 9 | Drei Standardschichten und zwei Schnellvorlagen am Typ „Kontakt“ | [Standardkatalog und Schema v1](#1-aufbau) |
 | `awareness` | Awareness-Teams bei Veranstaltungen | 7 | Anonyme Kurzkontakte, sensibles Vorfallsprofil, kein Datei-Feld | [Awareness-Paket](packages-awareness.md) |
+| `beratungsstelle` | Offene Sprechstunde / Sozialberatung | 8 | Anonyme Kurzberatung, Beratungsgespräch ab Pseudonym, deaktivierbares Hausverbot | [Beratungsstelle](packages-beratungsstelle.md) |
 
 Domänen-Pakete: siehe die Zeilen, die die jeweiligen Paket-Issues ergänzen ([#2137 Awareness](https://github.com/anlaufstelle/app/issues/2137), [#2145 Beratungsstelle](https://github.com/anlaufstelle/app/issues/2145), [#2138 Frauenhaus](https://github.com/anlaufstelle/app/issues/2138), [#2139 Jugendarbeit](https://github.com/anlaufstelle/app/issues/2139)).
 

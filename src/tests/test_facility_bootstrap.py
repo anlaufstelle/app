@@ -384,6 +384,7 @@ class TestEnsureFacilityBaseline:
             DEFAULT_QUICK_TEMPLATES,
             DEFAULT_TIME_FILTERS,
             PACKAGE_COMFORT,
+            QuickTemplateDef,
         )
 
         assert [(item.label, item.start_time, item.end_time) for item in PACKAGE_COMFORT["awareness"].time_filters] == [
@@ -408,7 +409,11 @@ class TestEnsureFacilityBaseline:
             ("versorgung", "Wasser gegeben", {"bedarf": ["wasser"]}),
             ("versorgung", "Ruheraum begleitet", {"bedarf": ["ruheraum"]}),
         ]
-        assert PACKAGE_COMFORT["beratungsstelle"].quick_templates == ()
+        assert PACKAGE_COMFORT["beratungsstelle"].quick_templates == (
+            QuickTemplateDef("kurzberatung", "Kurzinfo Sprechstunde", {"dauer": 10, "weiterverweis": "keine"}),
+            QuickTemplateDef("kontakt", "Formularhilfe", {"leistungen": ["formularhilfe"]}),
+            QuickTemplateDef("kurzberatung", "Telefonische Kurzberatung", {"dauer": 15}),
+        )
         assert PACKAGE_COMFORT["frauenhaus"].quick_templates == ()
         assert PACKAGE_COMFORT["jugendarbeit"].quick_templates == ()
 

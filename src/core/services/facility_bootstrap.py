@@ -168,7 +168,11 @@ PACKAGE_COMFORT: dict[str, ComfortDefs] = {
             TimeFilterDef("Sprechstunde Nachmittag", time(13, 0), time(17, 0)),
             TimeFilterDef("Termine", time(17, 0), time(20, 0)),
         ),
-        (),
+        (
+            QuickTemplateDef("kurzberatung", "Kurzinfo Sprechstunde", {"dauer": 10, "weiterverweis": "keine"}),
+            QuickTemplateDef("kontakt", "Formularhilfe", {"leistungen": ["formularhilfe"]}),
+            QuickTemplateDef("kurzberatung", "Telefonische Kurzberatung", {"dauer": 15}),
+        ),
     ),
 
     # Frauenhaus
