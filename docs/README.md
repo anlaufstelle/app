@@ -28,6 +28,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 | [screenshots.md](screenshots.md) | Bebilderter Rundgang durch die Oberfläche (Demo-Daten, pseudonymisiert); EN: [screenshots.en.md](screenshots.en.md) | Stakeholder, Endanwender |
 | [faq.md](faq.md) | Häufige Fragen — Betrieb, Troubleshooting, organisatorische Abläufe (synchron mit #474) | Admins, Endanwender |
 | [packages.md](packages.md) | Konfigurationspakete (YAML, Schema v1): Formatreferenz, Loader-Semantik, `manage.py load_package`, Pflegeregeln (Refs #1058, [ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)) | IT-Admins, Konfigurations-Autor:innen |
+| [packages-awareness.md](packages-awareness.md) | Awareness-Paket: sieben Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen (Refs #2137) | IT-Admins, Awareness-Koordination |
 | [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Monitoring, Alerts, Cron-Jobs, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
 | [facility-export-schema.md](facility-export-schema.md) | Facility-Gesamtexport (JSON, Schema v1): Feldliste, Versionierungsregel, Papierkorb-/Anonymisierungs-Grenzen, Anhang-Hashes, `manage.py export_facility` (Refs #1060) | IT-Admins, Entwickler |
 | [monitoring-guide.md](monitoring-guide.md) | `/health/`-Endpoint: Felder, HTTP-Status-Codes, Liveness vs. Detail, Anbindung an Uptime-/Monitoring-Tools (Refs #1071) | IT-Admins, DevOps |

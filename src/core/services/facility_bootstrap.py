@@ -155,7 +155,15 @@ PACKAGE_COMFORT: dict[str, ComfortDefs] = {
             TimeFilterDef("Abend", time(18, 0), time(0, 0)),
             TimeFilterDef("Nacht", time(0, 0), time(6, 0)),
         ),
-        (),
+        (
+            QuickTemplateDef("versorgung", "Wasser gegeben", {"bedarf": ["wasser"]}),
+            QuickTemplateDef("versorgung", "Ruheraum begleitet", {"bedarf": ["ruheraum"]}),
+            QuickTemplateDef(
+                "gewaltvorfall",
+                "Vorfall → Security übergeben",
+                {"weitergabe-an": ["security"]},
+            ),
+        ),
     ),
 
     # Beratungsstelle

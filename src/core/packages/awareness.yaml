@@ -1,0 +1,318 @@
+# Awareness-Dokumentationspaket (Schema v1) — Refs #2137.
+#
+# WICHTIG — Kompatibilitaet mit Bestands-Einrichtungen:
+#
+# * ``document_types[].slug`` ist der Lookup-Key des Loaders und muss EXAKT
+#   dem Ergebnis des Slug-Backfills aus Migration ``0117`` entsprechen
+#   (slugify + Umlaut-Map ueber den ``name``). Ein abweichender Slug legt in
+#   jeder Bestands-Einrichtung einen DUPLIKAT-Typ an, statt den vorhandenen
+#   zu aktualisieren. Dasselbe gilt fuer ``groups[].slug`` (stabile Slugs
+#   seit #1710) und ``field_templates[].slug``.
+# * ``system_type`` muss bei allen Typen mitgefuehrt werden, die einen haben:
+#   der Loader erlaubt ``None`` -> Wert (Bestand ohne Systemtyp), aber weder
+#   Wechsel noch Entfernen (E13). Ein fehlender Schluessel waere beim
+#   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler. Seit E4 (Refs #1850)
+#   sind das nur noch ``krisengespraech`` (``crisis``) und ``hausverbot``
+#   (``ban``) — die uebrigen sieben Werte sind aus dem Enum entfernt, ihre
+#   Zeilen hier entfallen ersatzlos. Gegen einen Bestand, den Migration
+#   ``0147`` bereits genullt hat, ist das kein E13-Konflikt (leer bleibt
+#   leer); ein aelteres Paket, das sie noch mitfuehrt, laedt weiterhin — der
+#   Wert entfaellt dann mit einer Warnung im Load-Report.
+# * ``report_key`` (E3, Refs #1849) muss EXAKT dem Ergebnis des Backfills aus
+#   Migration ``0145`` entsprechen — Typ-Ebene wie Feld-Ebene. Ein abweichender
+#   Wert waere gegen eine aktualisierte Bestands-Einrichtung ein
+#   Immutabilitaets-Fehler (leer -> gesetzt ist erlaubt, gesetzt -> anders
+#   nicht). Der Doppellauf-Test in ``test_packages_loader.py`` haelt das fest.
+# * Bei ``select``/``multi_select`` ist der ``options``-Schluessel PFLICHT —
+#   Weglassen leert ``options_json`` mit blosser Warnung.
+# * KEINE ``conditions``-Schluessel: der Seed bringt keine Feldbedingungen
+#   mit, und ein fehlender Schluessel laesst per UI gepflegte Bedingungen
+#   unangetastet (E14/M1-E20). ``conditions: []`` wuerde sie LOESCHEN.
+#
+# ``sort_order`` folgt der globalen Block-Sequenz (ADR-036/#1713): Gruppen
+# und ungruppierte Felder teilen sich EINE Sequenz je Dokumentationstyp;
+# ein Feld INNERHALB einer Gruppe traegt seinen Innen-Index 0..n-1.
+
+schema_version: 1
+
+field_templates:
+  - slug: anliegen
+    name: Anliegen
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: orientierung, label: Orientierung, is_active: true}
+      - {slug: gespraech, label: Gespräch, is_active: true}
+      - {slug: belaestigung, label: Belästigung, is_active: true}
+      - {slug: unwohlsein, label: Unwohlsein, is_active: true}
+      - {slug: begleitung, label: Begleitung, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: alterscluster
+    name: Altersgruppe
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Geschätztes Alter
+    options:
+      - {slug: u18, label: "U18", is_active: true}
+      - {slug: "18-26", label: "18-26", is_active: true}
+      - {slug: "27-plus", label: "27+", is_active: true}
+      - {slug: unbekannt, label: Unbekannt, is_active: true}
+
+  - slug: dauer
+    name: Dauer
+    report_key: dauer_minuten
+    field_type: number
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Dauer in Minuten
+
+  - slug: veranstaltung
+    name: Veranstaltung
+    field_type: text
+    is_encrypted: false
+    sensitivity: normal
+    help_text: Kurzbezeichnung zur Gruppierung, keine eigene Einrichtung
+
+  - slug: bedarf
+    name: Bedarf
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: wasser, label: Wasser, is_active: true}
+      - {slug: decke, label: Decke, is_active: true}
+      - {slug: ruheraum, label: Ruheraum, is_active: true}
+      - {slug: gehoerschutz, label: Gehörschutz, is_active: true}
+      - {slug: hygieneartikel, label: Hygieneartikel, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: art-des-vorfalls
+    name: Art des Vorfalls
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: sexualisierte-gewalt, label: Sexualisierte Gewalt, is_active: true}
+      - {slug: koerperliche-gewalt, label: Körperliche Gewalt, is_active: true}
+      - {slug: verbale-gewalt, label: Verbale Gewalt, is_active: true}
+      - {slug: diskriminierung, label: Diskriminierung, is_active: true}
+      - {slug: transphobie, label: Transphobie, is_active: true}
+      - {slug: homophobie, label: Homophobie, is_active: true}
+      - {slug: rassismus, label: Rassismus, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: beteiligung
+    name: Beteiligung
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: betroffene-person, label: Betroffene Person, is_active: true}
+      - {slug: zeugin-zeuge, label: Zeugin oder Zeuge, is_active: true}
+      - {slug: begleitperson, label: Begleitperson, is_active: true}
+
+  - slug: ort-im-veranstaltungsgelaende
+    name: Ort im Veranstaltungsgelände
+    field_type: text
+    is_encrypted: true
+    sensitivity: high
+    help_text: Nur den Bereich angeben, keine Adresse
+
+  - slug: weitergabe-an
+    name: Weitergabe an
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: orga, label: Orga, is_active: true}
+      - {slug: security, label: Security, is_active: true}
+      - {slug: sanitaet, label: Sanität, is_active: true}
+      - {slug: polizei, label: Polizei, is_active: true}
+      - {slug: niemand, label: Niemand, is_active: true}
+      - {slug: offen, label: Offen, is_active: true}
+
+  - slug: folgesituation
+    name: Folgesituation
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: beruhigt, label: Beruhigt, is_active: true}
+      - {slug: weiterbegleitet, label: Weiterbegleitet, is_active: true}
+      - {slug: abgegeben, label: Abgegeben, is_active: true}
+      - {slug: abgeholt, label: Abgeholt, is_active: true}
+      - {slug: unbekannt, label: Unbekannt, is_active: true}
+
+  - slug: notiz-vorfall
+    name: Notiz (Vorfall)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: art-der-krise
+    name: Art der Krise
+    report_key: art_der_krise
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: akute-belastung, label: Akute Belastung, is_active: true}
+      - {slug: suizidal, label: Suizidal, is_active: true}
+      - {slug: substanzintoxikation, label: Substanzintoxikation, is_active: true}
+      - {slug: psychische-krise, label: Psychische Krise, is_active: true}
+      - {slug: gewaltfolge, label: Gewaltfolge, is_active: true}
+      - {slug: medizinisch, label: Medizinisch, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: notiz-krise
+    name: Notiz (Krise)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: weitervermittlung
+    name: Weitervermittlung
+    field_type: text
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: grund
+    name: Grund
+    field_type: textarea
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: bis
+    name: Bis
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: aktiv
+    name: Aktiv
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: vermittelt-an
+    name: Vermittelt an
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: sanitaet, label: Sanität, is_active: true}
+      - {slug: psy-support, label: Psy-Support, is_active: true}
+      - {slug: security, label: Security, is_active: true}
+      - {slug: taxi-safe-home, label: Taxi / Safe Home, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: notiz
+    name: Notiz
+    field_type: textarea
+    is_encrypted: false
+    sensitivity: ""
+
+document_types:
+  - slug: awareness-kontakt
+    name: Awareness-Kontakt
+    entity_type: event
+    tally_enabled: true
+    report_key: contact
+    sensitivity: normal
+    icon: users
+    color: indigo
+    sort_order: 0
+    field_refs:
+      - {template_slug: anliegen, sort_order: 0}
+      - {template_slug: alterscluster, sort_order: 1}
+      - {template_slug: dauer, sort_order: 2}
+      - {template_slug: veranstaltung, sort_order: 3}
+
+  - slug: versorgung
+    name: Versorgung
+    entity_type: event
+    tally_enabled: true
+    report_key: supply
+    sensitivity: normal
+    icon: heart
+    color: rose
+    sort_order: 1
+    field_refs:
+      - {template_slug: bedarf, sort_order: 0}
+      - {template_slug: veranstaltung, sort_order: 1}
+
+  - slug: gewaltvorfall
+    name: Gewaltvorfall
+    entity_type: event
+    tally_enabled: false
+    report_key: incident
+    sensitivity: elevated
+    icon: alert-triangle
+    color: red
+    sort_order: 2
+    field_refs:
+      - {template_slug: art-des-vorfalls, sort_order: 0}
+      - {template_slug: beteiligung, sort_order: 1}
+      - {template_slug: ort-im-veranstaltungsgelaende, sort_order: 2}
+      - {template_slug: weitergabe-an, sort_order: 3}
+      - {template_slug: folgesituation, sort_order: 4}
+      - {template_slug: notiz-vorfall, sort_order: 5}
+
+  - slug: krisensituation
+    name: Krisensituation
+    entity_type: event
+    system_type: crisis
+    tally_enabled: false
+    report_key: crisis
+    sensitivity: elevated
+    icon: alert-triangle
+    color: amber
+    sort_order: 3
+    field_refs:
+      - {template_slug: art-der-krise, sort_order: 0}
+      - {template_slug: notiz-krise, sort_order: 1}
+      - {template_slug: weitervermittlung, sort_order: 2}
+
+  - slug: orga-meldung
+    name: Orga-Meldung (Platzverweis)
+    entity_type: event
+    system_type: ban
+    tally_enabled: false
+    report_key: excluded
+    sensitivity: elevated
+    icon: slash
+    color: red
+    sort_order: 4
+    field_refs:
+      - {template_slug: grund, sort_order: 0}
+      - {template_slug: bis, sort_order: 1}
+      - {template_slug: aktiv, sort_order: 2}
+
+  - slug: vermittlung
+    name: Vermittlung
+    entity_type: event
+    tally_enabled: true
+    report_key: referral
+    sensitivity: normal
+    icon: share-2
+    color: blue
+    sort_order: 5
+    field_refs:
+      - {template_slug: vermittelt-an, sort_order: 0}
+      - {template_slug: veranstaltung, sort_order: 1}
+
+  - slug: notiz
+    name: Notiz
+    entity_type: event
+    tally_enabled: true
+    report_key: excluded
+    sensitivity: normal
+    icon: file-text
+    color: gray
+    sort_order: 6
+    field_refs:
+      - {template_slug: notiz, sort_order: 0}

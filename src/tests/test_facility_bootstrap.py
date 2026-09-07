@@ -401,7 +401,14 @@ class TestEnsureFacilityBaseline:
         assert PACKAGE_COMFORT["default"].quick_templates is DEFAULT_QUICK_TEMPLATES
         assert PACKAGE_COMFORT["frauenhaus"].time_filters is DEFAULT_TIME_FILTERS
         assert PACKAGE_COMFORT["jugendarbeit"].time_filters is DEFAULT_TIME_FILTERS
-        assert PACKAGE_COMFORT["awareness"].quick_templates == ()
+        assert [
+            (item.document_type_slug, item.name, item.prefilled_data)
+            for item in PACKAGE_COMFORT["awareness"].quick_templates
+        ] == [
+            ("versorgung", "Wasser gegeben", {"bedarf": ["wasser"]}),
+            ("versorgung", "Ruheraum begleitet", {"bedarf": ["ruheraum"]}),
+            ("gewaltvorfall", "Vorfall → Security übergeben", {"weitergabe-an": ["security"]}),
+        ]
         assert PACKAGE_COMFORT["beratungsstelle"].quick_templates == ()
         assert PACKAGE_COMFORT["frauenhaus"].quick_templates == ()
         assert PACKAGE_COMFORT["jugendarbeit"].quick_templates == ()
