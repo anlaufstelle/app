@@ -5,12 +5,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Case, DocumentType, DocumentTypeField, Event, FieldTemplate, User
+from tests._factories import make_document_type, make_event
 
 
 @pytest.fixture
 def doc_type_high(facility):
     """DocumentType mit HIGH-Sensibilität und einem verschlüsselten Feld."""
-    doc_type = DocumentType.objects.create(
+    doc_type = make_document_type(
         facility=facility,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Hochsensibel",
@@ -35,7 +36,7 @@ def doc_type_high(facility):
 @pytest.fixture
 def doc_type_elevated(facility):
     """DocumentType mit ELEVATED-Sensibilität."""
-    doc_type = DocumentType.objects.create(
+    doc_type = make_document_type(
         facility=facility,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         name="ErhoehtSensibel",
@@ -119,7 +120,7 @@ class TestEventDetailFieldSensitivity:
 
     def test_encrypted_field_restricted_for_staff(self, client, staff_user, facility):
         """Even on NORMAL doc type, an encrypted field is HIGH → hidden for staff."""
-        doc_type = DocumentType.objects.create(
+        doc_type = make_document_type(
             facility=facility,
             name="NormalMitEncrypted",
             sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -157,7 +158,7 @@ class TestEventDetailFieldSensitivity:
 
         Proves that is_encrypted alone no longer restricts visibility.
         """
-        doc_type = DocumentType.objects.create(
+        doc_type = make_document_type(
             facility=facility,
             name="NormalEncNoSens",
             sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -196,7 +197,7 @@ class TestEventDetailFieldSensitivity:
 
         Proves that sensitivity alone controls visibility, independent of encryption.
         """
-        doc_type = DocumentType.objects.create(
+        doc_type = make_document_type(
             facility=facility,
             name="NormalMitHighField",
             sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -311,7 +312,7 @@ class TestClientDetailHidesEventsBySensitivity:
     def test_assistant_does_not_see_high_event_in_client_detail(
         self, client, assistant_user, facility, doc_type_high, client_identified, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -327,7 +328,7 @@ class TestClientDetailHidesEventsBySensitivity:
     def test_staff_sees_high_event_in_client_detail(
         self, client, lead_user, facility, doc_type_high, client_identified, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -360,7 +361,7 @@ class TestCaseDetailHidesEventsBySensitivity:
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             case=case,
@@ -384,7 +385,7 @@ class TestCaseDetailHidesEventsBySensitivity:
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             case=case,
@@ -406,7 +407,7 @@ class TestZeitstromHidesEventsBySensitivity:
     def test_assistant_does_not_see_elevated_event_in_zeitstrom(
         self, client, assistant_user, facility, doc_type_elevated, client_identified, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_elevated,
@@ -430,7 +431,7 @@ class TestHandoverHidesEventsBySensitivity:
         # Mark the doc type as system_type='crisis' so it shows up in highlights
         doc_type_high.system_type = "crisis"
         doc_type_high.save()
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -450,7 +451,7 @@ class TestHandoverHidesEventsBySensitivity:
 
         doc_type_high.system_type = "crisis"
         doc_type_high.save()
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -495,7 +496,7 @@ class TestEventVisibilityService:
         from core.services.compliance import user_can_see_document_type, user_can_see_event
 
         user = request.getfixturevalue(user_fixture)
-        document_type = DocumentType.objects.create(
+        document_type = make_document_type(
             facility=facility,
             name=f"Sichtbarkeit {user_fixture} {sensitivity}",
             sensitivity=sensitivity,
@@ -628,7 +629,7 @@ class TestUnbekannteSensitivityGates:
         from core.services.compliance import user_can_see_field
         from core.services.dashboard.search import event_search_queryset
 
-        doc_type = DocumentType.objects.create(
+        doc_type = make_document_type(
             facility=facility,
             name="Suchindex-Typ",
             sensitivity=DocumentType.Sensitivity.NORMAL,
@@ -647,7 +648,7 @@ class TestUnbekannteSensitivityGates:
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_normal, sort_order=1)
         self._force_sensitivity(ft_unbekannt, self.UNBEKANNT)
 
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type,
