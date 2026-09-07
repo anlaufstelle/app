@@ -44,7 +44,7 @@ from core.models import (
 )
 from core.models.attachment import Attachment
 from core.services.client import _gather_client_fields, export_client_data
-from core.services.file_vault import is_encrypted_value, safe_decrypt
+from core.services.file_vault import safe_decrypt
 
 
 def raw_data_json(client_obj) -> dict:
@@ -229,78 +229,6 @@ def _client_post_data(pseudonym, **extra):
 # ---------------------------------------------------------------------------
 # Anlage
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestClientCreateWithDynamicData:
-    def test_create_persists_dynamic_values_encrypted(
-        self, client, staff_user, facility, doc_type_client_profile, fernet_key
-    ):
-        client.force_login(staff_user)
-        with override_settings(ENCRYPTION_KEY=fernet_key):
-            response = client.post(
-                reverse("core:client_create"),
-                _client_post_data(
-                    "P7-Create-01",
-                    document_type=str(doc_type_client_profile.pk),
-                    wohnsituation="WG",
-                    diagnose="Sehr sensibel",
-                ),
-            )
-            assert response.status_code == 302
-            created = Client.objects.get(pseudonym="P7-Create-01")
-            assert created.document_type_id == doc_type_client_profile.pk
-            row = raw_data_json(created)
-            assert row["wohnsituation"] == "WG"
-            assert is_encrypted_value(row["diagnose"])
-            assert safe_decrypt(row["diagnose"]) == "Sehr sensibel"
-
-    def test_create_without_type_keeps_data_json_empty(self, client, staff_user, doc_type_client_profile):
-        client.force_login(staff_user)
-        response = client.post(
-            reverse("core:client_create"),
-            _client_post_data("P7-Create-02", wohnsituation="wird verworfen"),
-        )
-        assert response.status_code == 302
-        created = Client.objects.get(pseudonym="P7-Create-02")
-        assert created.document_type_id is None
-        assert created.data_json == {}
-
-    def test_create_rerender_on_invalid_meta_keeps_dynamic_fields(
-        self, client, staff_user, client_identified, doc_type_client_profile
-    ):
-        """Pseudonym-Kollision -> Re-Render; die dynamischen Felder bleiben befuellt."""
-        client.force_login(staff_user)
-        response = client.post(
-            reverse("core:client_create"),
-            _client_post_data(
-                client_identified.pseudonym,
-                document_type=str(doc_type_client_profile.pk),
-                wohnsituation="WG-Wert",
-            ),
-        )
-        assert response.status_code == 200
-        content = response.content.decode()
-        assert "Wohnsituation" in content
-        assert "WG-Wert" in content
-
-    def test_post_rerender_does_not_leak_restricted_doctype_labels(
-        self, client, staff_user, client_identified, doc_type_client_high
-    ):
-        """#774-Spiegel: ein HIGH-Typ im POST darf keine Feldlabels ausspielen."""
-        client.force_login(staff_user)
-        response = client.post(
-            reverse("core:client_create"),
-            _client_post_data(
-                client_identified.pseudonym,
-                document_type=str(doc_type_client_high.pk),
-                schutzkonzept="geheim",
-            ),
-        )
-        assert response.status_code == 200
-        content = response.content.decode()
-        assert "Schutzkonzept" not in content
-        assert doc_type_client_high.name not in content
 
 
 # ---------------------------------------------------------------------------

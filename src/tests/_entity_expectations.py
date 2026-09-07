@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from django.db import connection
 
 from core.models import Case, Client
 from core.services.client import _gather_cases, _gather_client_fields
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 IdentityKwargsBuilder = Callable[["FixtureRequest", str], dict[str, Any]]
 PostDataBuilder = Callable[["FixtureRequest", str, dict[str, Any]], dict[str, Any]]
 DynamicDataAccessor = Callable[["Model"], dict[str, Any]]
+InvalidIdentityBuilder = Callable[["FixtureRequest"], str]
 
 
 def _case_identity_kwargs(request: FixtureRequest, identity: str) -> dict[str, Any]:
@@ -31,6 +34,15 @@ def _case_identity_kwargs(request: FixtureRequest, identity: str) -> dict[str, A
 def _client_identity_kwargs(request: FixtureRequest, identity: str) -> dict[str, Any]:
     del request
     return {"pseudonym": identity}
+
+
+def _blank_identity(request: FixtureRequest) -> str:
+    del request
+    return ""
+
+
+def _duplicate_client_identity(request: FixtureRequest) -> str:
+    return request.getfixturevalue("client_identified").pseudonym
 
 
 def _case_post_data(request: FixtureRequest, identity: str, extra: dict[str, Any]) -> dict[str, Any]:
@@ -64,6 +76,20 @@ def _gather_client_dynamic_data(obj: Model) -> dict[str, Any]:
     return _gather_client_fields(obj)["dynamic_data"]
 
 
+def _raw_case_data_json(obj: Model) -> dict[str, Any]:
+    with connection.cursor() as cur:
+        cur.execute("SELECT data_json FROM core_case WHERE id = %s", [str(obj.pk)])
+        raw = cur.fetchone()[0]
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def _raw_client_data_json(obj: Model) -> dict[str, Any]:
+    with connection.cursor() as cur:
+        cur.execute("SELECT data_json FROM core_client WHERE id = %s", [str(obj.pk)])
+        raw = cur.fetchone()[0]
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
 @dataclass(frozen=True)
 class EntitySpec:
     """Alle strukturellen und fachsprachlichen Unterschiede einer Entitaet."""
@@ -73,8 +99,10 @@ class EntitySpec:
     url_names: tuple[tuple[str, str], ...]
     identity_field: str
     identity_kwargs_builder: IdentityKwargsBuilder
+    invalid_identity_builder: InvalidIdentityBuilder
     post_data_builder: PostDataBuilder
     gather_dynamic_data: DynamicDataAccessor
+    raw_data_json: DynamicDataAccessor
     doctype_fixtures: tuple[tuple[str, str], ...]
     fixture_names: tuple[tuple[str, str], ...]
     field_names: tuple[tuple[str, str], ...]
@@ -124,8 +152,10 @@ CASE = EntitySpec(
     ),
     identity_field="title",
     identity_kwargs_builder=_case_identity_kwargs,
+    invalid_identity_builder=_blank_identity,
     post_data_builder=_case_post_data,
     gather_dynamic_data=_gather_case_dynamic_data,
+    raw_data_json=_raw_case_data_json,
     doctype_fixtures=(
         ("form", "doc_type_case_form"),
         ("high", "doc_type_case_high"),
@@ -167,6 +197,8 @@ CASE = EntitySpec(
         ("confirm_primary", "A"),
         ("confirm_secondary", "B"),
         ("high_secret", "geheim"),
+        ("discarded", "wird verworfen"),
+        ("rerender_primary", "Anlass-Wert"),
         ("select", "ambulant"),
         ("select_label", "Ambulant"),
     ),
@@ -187,8 +219,10 @@ CLIENT = EntitySpec(
     ),
     identity_field="pseudonym",
     identity_kwargs_builder=_client_identity_kwargs,
+    invalid_identity_builder=_duplicate_client_identity,
     post_data_builder=_client_post_data,
     gather_dynamic_data=_gather_client_dynamic_data,
+    raw_data_json=_raw_client_data_json,
     doctype_fixtures=(
         ("form", "doc_type_client_profile"),
         ("high", "doc_type_client_high"),
@@ -230,6 +264,8 @@ CLIENT = EntitySpec(
         ("confirm_primary", "WG"),
         ("confirm_secondary", "Text"),
         ("high_secret", "geheim"),
+        ("discarded", "wird verworfen"),
+        ("rerender_primary", "WG-Wert"),
         ("select", "wohnungslos"),
         ("select_label", "Wohnungslos"),
     ),

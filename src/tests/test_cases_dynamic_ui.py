@@ -378,78 +378,92 @@ class TestEntityTypeChangeConfirm:
 
 
 @pytest.mark.django_db
-class TestCaseCreateWithDynamicData:
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityCreateWithDynamicData:
     def test_create_persists_dynamic_values_encrypted(
-        self, client, staff_user, client_identified, doc_type_case_form, fernet_key
+        self, client, staff_user, fernet_key, request, entity: EntitySpec
     ):
+        doc_type = entity.doctype(request, "form")
         client.force_login(staff_user)
         with override_settings(ENCRYPTION_KEY=fernet_key):
             response = client.post(
-                reverse("core:case_create"),
-                _case_post_data(
-                    "P8-Create-01",
-                    client_identified,
-                    document_type=str(doc_type_case_form.pk),
-                    anlass="Mietschulden",
-                    verlauf="Sehr sensibel",
+                reverse(entity.url("create")),
+                entity.post_data(
+                    request,
+                    "Create-01",
+                    document_type=str(doc_type.pk),
+                    **{
+                        entity.field("primary"): entity.value("primary"),
+                        entity.field("secondary"): entity.value("secondary"),
+                    },
                 ),
             )
             assert response.status_code == 302
-            created = Case.objects.get(title="P8-Create-01")
-            assert created.document_type_id == doc_type_case_form.pk
-            row = raw_data_json(created)
-            assert row["anlass"] == "Mietschulden"
-            assert is_encrypted_value(row["verlauf"])
-            assert safe_decrypt(row["verlauf"]) == "Sehr sensibel"
+            created = entity.model.objects.get(**{entity.identity_field: f"{entity.id_prefix}Create-01"})
+            assert created.document_type_id == doc_type.pk
+            row = entity.raw_data_json(created)
+            assert row[entity.field("primary")] == entity.value("primary")
+            assert is_encrypted_value(row[entity.field("secondary")])
+            assert safe_decrypt(row[entity.field("secondary")]) == entity.value("secondary")
 
-    def test_create_without_type_keeps_data_json_empty(self, client, staff_user, client_identified):
+    def test_create_without_type_keeps_data_json_empty(self, client, staff_user, request, entity: EntitySpec):
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_create"),
-            _case_post_data("P8-Create-02", client_identified, anlass="wird verworfen"),
+            reverse(entity.url("create")),
+            entity.post_data(
+                request,
+                "Create-02",
+                **{entity.field("primary"): entity.value("discarded")},
+            ),
         )
         assert response.status_code == 302
-        created = Case.objects.get(title="P8-Create-02")
+        created = entity.model.objects.get(**{entity.identity_field: f"{entity.id_prefix}Create-02"})
         assert created.document_type_id is None
         assert created.data_json == {}
 
     def test_create_rerender_on_invalid_meta_keeps_dynamic_fields(
-        self, client, staff_user, client_identified, doc_type_case_form
+        self, client, staff_user, request, entity: EntitySpec
     ):
-        """Leerer Titel -> Re-Render; die dynamischen Felder bleiben befuellt."""
+        """Ungueltige Stammdaten rendern mit befuellten dynamischen Feldern neu."""
+        doc_type = entity.doctype(request, "form")
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_create"),
-            _case_post_data(
-                "",
-                client_identified,
-                document_type=str(doc_type_case_form.pk),
-                anlass="Anlass-Wert",
+            reverse(entity.url("create")),
+            entity.post_data_builder(
+                request,
+                entity.invalid_identity_builder(request),
+                {
+                    "document_type": str(doc_type.pk),
+                    entity.field("primary"): entity.value("rerender_primary"),
+                },
             ),
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert "Anlass" in content
-        assert "Anlass-Wert" in content
+        assert entity.label("primary") in content
+        assert entity.value("rerender_primary") in content
 
     def test_post_rerender_does_not_leak_restricted_doctype_labels(
-        self, client, staff_user, client_identified, doc_type_case_high
+        self, client, staff_user, request, entity: EntitySpec
     ):
         """#774-Spiegel: ein HIGH-Typ im POST darf keine Feldlabels ausspielen."""
+        doc_type = entity.doctype(request, "high")
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_create"),
-            _case_post_data(
-                "",
-                client_identified,
-                document_type=str(doc_type_case_high.pk),
-                gefahrenlage="geheim",
+            reverse(entity.url("create")),
+            entity.post_data_builder(
+                request,
+                entity.invalid_identity_builder(request),
+                {
+                    "document_type": str(doc_type.pk),
+                    entity.field("high"): entity.value("high_secret"),
+                },
             ),
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert "Gefahrenlage" not in content
-        assert doc_type_case_high.name not in content
+        assert entity.label("high") not in content
+        assert doc_type.name not in content
 
 
 # ---------------------------------------------------------------------------
