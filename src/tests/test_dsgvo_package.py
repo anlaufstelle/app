@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 from django.test import Client as DjangoClient
 
-from core.models import AuditLog, Facility, Organization, Settings, User
+from core.models import AuditLog, Settings
 from core.services.client import _document_type_retention_overrides, get_document_list, render_document
 
 # Refs #1775: Zeilen der Fristen-Tabelle in dsfa.md § 2.3
@@ -34,9 +34,13 @@ def _retention_rows(content: str) -> dict[int, tuple[str, str]]:
 
 
 @pytest.fixture
-def facility(db):
-    org = Organization.objects.create(name="DSGVO-Org")
-    facility = Facility.objects.create(organization=org, name="DSGVO-Einrichtung")
+def facility(facility):
+    """Root-conftest-Einrichtung plus die hier assertierten Settings (Refs #1839).
+
+    ``facility_full_name`` und die drei Aufbewahrungsfristen werden in dieser
+    Datei erwartet (Z. 101/475 bzw. 106-108/215/223/298) und bleiben deshalb
+    hier stehen; Organisation und Einrichtung kommen aus ``tests/conftest.py``.
+    """
     Settings.objects.create(
         facility=facility,
         facility_full_name="Anlaufstelle Musterstadt",
@@ -45,39 +49,6 @@ def facility(db):
         retention_qualified_days=3650,
     )
     return facility
-
-
-@pytest.fixture
-def admin_user(facility):
-    return User.objects.create_user(
-        username="dsgvo_admin",
-        password="test1234",
-        role=User.Role.FACILITY_ADMIN,
-        facility=facility,
-        is_staff=True,
-    )
-
-
-@pytest.fixture
-def lead_user(facility):
-    return User.objects.create_user(
-        username="dsgvo_lead",
-        password="test1234",
-        role=User.Role.LEAD,
-        facility=facility,
-        is_staff=True,
-    )
-
-
-@pytest.fixture
-def staff_user(facility):
-    return User.objects.create_user(
-        username="dsgvo_staff",
-        password="test1234",
-        role=User.Role.STAFF,
-        facility=facility,
-        is_staff=True,
-    )
 
 
 @pytest.mark.django_db

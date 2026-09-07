@@ -8,44 +8,13 @@ from django.utils import timezone
 
 from core.models import (
     AuditLog,
-    Client,
     DocumentType,
     Event,
-    Facility,
-    Organization,
     User,
 )
 from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
 from core.reporting.base import EXCLUDED_KEY
 from tests._reporting_helpers import get_sample_report_1_statistics
-
-
-@pytest.fixture
-def facility(db):
-    org = Organization.objects.create(name="Export-Org")
-    return Facility.objects.create(organization=org, name="Export-Einrichtung")
-
-
-@pytest.fixture
-def admin_user(facility):
-    return User.objects.create_user(
-        username="export_admin",
-        password="test1234",
-        role=User.Role.FACILITY_ADMIN,
-        facility=facility,
-        is_staff=True,
-    )
-
-
-@pytest.fixture
-def staff_user(facility):
-    return User.objects.create_user(
-        username="export_staff",
-        password="test1234",
-        role=User.Role.STAFF,
-        facility=facility,
-        is_staff=True,
-    )
 
 
 # E3/E4 (Refs #1849, #1850): Die Berichtszuordnung steht im ``report_key`` —
@@ -80,21 +49,10 @@ def doc_type_hausverbot(facility):
 
 
 @pytest.fixture
-def sample_client(facility, admin_user):
-    return Client.objects.create(
-        facility=facility,
-        pseudonym="Export-01",
-        contact_stage=Client.ContactStage.IDENTIFIED,
-        age_cluster=Client.AgeCluster.AGE_18_26,
-        created_by=admin_user,
-    )
-
-
-@pytest.fixture
-def sample_events(facility, admin_user, doc_type_kontakt, doc_type_notiz, sample_client):
+def sample_events(facility, admin_user, doc_type_kontakt, doc_type_notiz, client_identified):
     Event.objects.create(
         facility=facility,
-        client=sample_client,
+        client=client_identified,
         document_type=doc_type_kontakt,
         occurred_at=timezone.now() - timedelta(days=2),
         data_json={"dauer": 15},
@@ -111,7 +69,7 @@ def sample_events(facility, admin_user, doc_type_kontakt, doc_type_notiz, sample
     )
     Event.objects.create(
         facility=facility,
-        client=sample_client,
+        client=client_identified,
         document_type=doc_type_notiz,
         occurred_at=timezone.now() - timedelta(days=1),
         data_json={"notiz": "Test"},
@@ -367,11 +325,11 @@ class TestSampleReport1Export:
         assert SAMPLE_REPORT_1_CATEGORY_MAP["medical"] == "Versorgung"
 
     def test_sample_report_1_statistics_excludes_notiz(
-        self, facility, admin_user, doc_type_kontakt, doc_type_notiz, sample_client
+        self, facility, admin_user, doc_type_kontakt, doc_type_notiz, client_identified
     ):
         Event.objects.create(
             facility=facility,
-            client=sample_client,
+            client=client_identified,
             document_type=doc_type_kontakt,
             occurred_at=timezone.now(),
             data_json={},
@@ -379,7 +337,7 @@ class TestSampleReport1Export:
         )
         Event.objects.create(
             facility=facility,
-            client=sample_client,
+            client=client_identified,
             document_type=doc_type_notiz,
             occurred_at=timezone.now(),
             data_json={},
