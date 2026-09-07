@@ -225,10 +225,19 @@ class TestSetupFacilityDefaultPackage:
         with pytest.raises(CommandError, match="Verfügbare Pakete: default"):
             call_command("setup_facility", package="missing")
 
+    def test_empty_package_name_is_unknown_before_prompting(self, monkeypatch):
+        def _fail(*args, **kwargs):  # pragma: no cover - darf nie laufen
+            raise AssertionError("Die Paketprüfung muss vor der ersten Eingabe greifen.")
+
+        monkeypatch.setattr("builtins.input", _fail)
+
+        with pytest.raises(CommandError, match="Verfügbare Pakete: default") as excinfo:
+            call_command("setup_facility", package="")
+
+        assert "Unbekanntes Paket ''." in str(excinfo.value)
+
     def test_synthetic_package_creates_only_its_catalog(self, tmp_path: Path, monkeypatch):
-        from core.management.commands import setup_facility as command_module
         from core.packages import catalog
-        from core.packages.catalog import PackageInfo
         from core.services import facility_bootstrap
 
         raw = {
@@ -250,15 +259,16 @@ class TestSetupFacilityDefaultPackage:
             "probe",
             facility_bootstrap.ComfortDefs((), ()),
         )
-        monkeypatch.setitem(command_module.PACKAGE_INFO, "probe", PackageInfo("Probe", "Test"))
         catalog._package_data_cache.clear()
+        try:
+            output = self._run(package="probe")
 
-        self._run(package="probe")
-
-        facility = Facility.objects.get(name="Stelle")
-        assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == {"probe-typ"}
-        assert set(FieldTemplate.objects.for_facility(facility).values_list("slug", flat=True)) == {"probe-feld"}
-        catalog._package_data_cache.clear()
+            facility = Facility.objects.get(name="Stelle")
+            assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == {"probe-typ"}
+            assert set(FieldTemplate.objects.for_facility(facility).values_list("slug", flat=True)) == {"probe-feld"}
+            assert "probe eingespielt" in output
+        finally:
+            catalog._package_data_cache.clear()
 
     def test_opt_out_leaves_the_facility_empty(self):
         self._run(no_default_package=True)
@@ -325,6 +335,39 @@ class TestSetupFacilityDefaultPackage:
         )
         assert DocumentType.objects.filter(facility=facility).count() == 1
         assert "load_package --default" in output
+
+    def test_existing_catalog_with_domain_package_explains_replacement(self, tmp_path: Path, monkeypatch):
+        from core.packages import catalog
+        from core.services import facility_bootstrap
+
+        raw = {
+            "schema_version": 1,
+            "field_templates": [{"slug": "probe-feld", "name": "Probe-Feld"}],
+            "document_types": [
+                {
+                    "slug": "probe-typ",
+                    "name": "Probe-Typ",
+                    "entity_type": "event",
+                    "field_refs": [{"template_slug": "probe-feld"}],
+                }
+            ],
+        }
+        (tmp_path / "probe.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
+        monkeypatch.setattr(catalog, "_package_root", lambda: tmp_path)
+        monkeypatch.setitem(facility_bootstrap.PACKAGE_COMFORT, "probe", facility_bootstrap.ComfortDefs((), ()))
+        org = Organization.objects.create(name="Org")
+        facility = Facility.objects.create(organization=org, name="Stelle")
+        DocumentType.objects.create(facility=facility, slug="bestand", name="Bestand")
+        catalog._package_data_cache.clear()
+        try:
+            output = self._run(package="probe", username="neuer-admin")
+        finally:
+            catalog._package_data_cache.clear()
+
+        assert "Domänen-Pakete sind Ersatz, kein Zusatz" in output
+        assert "für ein anderes Paket eine neue Einrichtung anlegen" in output
+        assert f"load_package --default --facility {facility.id} --dry-run" in output
+        assert "load_package --package probe" not in output
 
 
 @pytest.mark.django_db
@@ -434,13 +477,13 @@ class TestSetupFacilityCatalogFailure:
     moeglich, z.B. bei einem defekten ausgelieferten Katalog.
     """
 
-    def _run(self):
+    def _run(self, *, package=None):
         out = io.StringIO()
         with (
             patch("builtins.input", side_effect=["Org", "Stelle", "admin"]),
             patch("getpass.getpass", side_effect=["pw1234", "pw1234"]),
         ):
-            call_command("setup_facility", stdout=out)
+            call_command("setup_facility", package=package, stdout=out)
         return out.getvalue()
 
     def test_package_load_error_becomes_a_command_error(self, monkeypatch):
@@ -475,6 +518,27 @@ class TestSetupFacilityCatalogFailure:
         with pytest.raises(CommandError, match="Standardkatalog"):
             self._run()
 
+        assert Organization.objects.count() == 0
+
+    def test_invalid_catalog_yaml_becomes_a_command_error(self, tmp_path: Path, monkeypatch):
+        from core.packages import catalog
+        from core.services import facility_bootstrap
+
+        (tmp_path / "probe.yaml").write_text(
+            "field_templates: [{slug: notiz, name: Notiz\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(catalog, "_package_root", lambda: tmp_path)
+        monkeypatch.setitem(facility_bootstrap.PACKAGE_COMFORT, "probe", facility_bootstrap.ComfortDefs((), ()))
+        catalog._package_data_cache.clear()
+        try:
+            with pytest.raises(CommandError) as excinfo:
+                self._run(package="probe")
+        finally:
+            catalog._package_data_cache.clear()
+
+        assert "core/packages/probe.yaml" in str(excinfo.value)
+        assert "while parsing" in str(excinfo.value)
         assert Organization.objects.count() == 0
 
 

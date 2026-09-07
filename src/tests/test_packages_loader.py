@@ -76,6 +76,10 @@ def _counts() -> tuple[int, int, int, int, int]:
 def test_every_catalog_package_is_idempotent_on_a_fresh_facility(facility, package_name):
     package = parse_catalog_package(package_name)
     first = load_package(facility, package)
+    inactive_type_slug = package.document_types[0].slug
+    inactive_template_slug = package.field_templates[0].slug
+    DocumentType.objects.for_facility(facility).filter(slug=inactive_type_slug).update(is_active=False)
+    FieldTemplate.objects.for_facility(facility).filter(slug=inactive_template_slug).update(is_active=False)
     before = _counts()
 
     second = load_package(facility, package)
@@ -87,6 +91,10 @@ def test_every_catalog_package_is_idempotent_on_a_fresh_facility(facility, packa
         assert section.updated == []
     assert second.field_templates.unchanged
     assert second.document_types.unchanged
+    assert inactive_type_slug in second.document_types.unchanged
+    assert inactive_template_slug in second.field_templates.unchanged
+    assert not DocumentType.objects.for_facility(facility).get(slug=inactive_type_slug).is_active
+    assert not FieldTemplate.objects.for_facility(facility).get(slug=inactive_template_slug).is_active
     assert _counts() == before
 
 

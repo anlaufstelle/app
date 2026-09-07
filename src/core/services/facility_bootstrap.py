@@ -383,7 +383,8 @@ def ensure_facility_baseline(facility: Facility, *, package: str | None = "defau
         try:
             comfort = PACKAGE_COMFORT[package]
         except KeyError as exc:
-            raise UnknownPackageError(package, list_packages()) from exc
+            available = [name for name in list_packages() if name in PACKAGE_COMFORT]
+            raise UnknownPackageError(package, available) from exc
 
     with transaction.atomic():
         package_report = ensure_catalog_package(facility, package) if package is not None else None

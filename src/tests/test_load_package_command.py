@@ -368,8 +368,29 @@ def bundled_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     catalog._package_data_cache.clear()
 
 
+@pytest.fixture
+def broken_bundled_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from core.packages import catalog
+
+    (tmp_path / "broken.yaml").write_text(
+        "field_templates: [{slug: dauer, name: Dauer\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(catalog, "_package_root", lambda: tmp_path)
+    catalog._package_data_cache.clear()
+    yield
+    catalog._package_data_cache.clear()
+
+
 @pytest.mark.django_db
 class TestNamedDomainPackage:
+    def test_invalid_catalog_yaml_becomes_a_command_error(self, broken_bundled_probe, facility):
+        with pytest.raises(CommandError) as excinfo:
+            _run(package="broken", facility=facility.id)
+
+        assert "core/packages/broken.yaml" in str(excinfo.value)
+        assert "while parsing" in str(excinfo.value)
+
     def test_foreign_slug_aborts_even_in_dry_run(self, bundled_probe, facility):
         DocumentType.objects.create(
             facility=facility,

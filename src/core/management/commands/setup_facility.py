@@ -44,6 +44,7 @@ auf den Auslieferungsstand zurueck. Begruendung und Abgrenzung zu
 
 import getpass
 
+import yaml
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -96,7 +97,9 @@ class Command(BaseCommand):
         requested_package = options.get("package")
         if options["no_default_package"] and requested_package is not None:
             raise CommandError("--package und --no-default-package schliessen sich aus.")
-        package_name = None if options["no_default_package"] else (requested_package or "default")
+        package_name = (
+            None if options["no_default_package"] else ("default" if requested_package is None else requested_package)
+        )
         available_packages = list_packages()
         if package_name is not None and package_name not in available_packages:
             raise CommandError(str(UnknownPackageError(package_name, available_packages)))
@@ -198,6 +201,12 @@ class Command(BaseCommand):
                 "Es wurde nichts angelegt. Mit --no-default-package lässt sich die Einrichtung "
                 "vorläufig ohne Katalog anlegen."
             ) from exc
+        except yaml.YAMLError as exc:
+            package_path = f"core/packages/{package}.yaml"
+            raise CommandError(
+                f"YAML-Fehler in {package_path!r}:\n{exc}\n"
+                "Der ganze Lauf ist eine Transaktion: es wurde NICHTS angelegt."
+            ) from exc
 
     def _write_package_summary(self, facility, report, *, package_name):
         """Eine Zeile zum Katalog — der Operator soll sehen, ob dokumentiert werden kann."""
@@ -209,18 +218,26 @@ class Command(BaseCommand):
                 )
             )
             return
-        display_name = PACKAGE_INFO[package_name].display_name
+        package_info = PACKAGE_INFO.get(package_name)
+        display_name = package_info.display_name if package_info is not None else package_name
         if report is None:
-            load_option = "--default" if package_name == "default" else f"--package {package_name}"
             # Bestands-Einrichtung: der Command fasst einen vorhandenen Katalog
-            # NICHT an (siehe ``core/services/facility_bootstrap.py``) und nennt
-            # stattdessen den expliziten Weg mit Vorschau.
+            # NICHT an (siehe ``core/services/facility_bootstrap.py``).
+            if package_name != "default":
+                self.stdout.write(
+                    self.style.WARNING(
+                        "Einrichtung trägt bereits einen Katalog; Domänen-Pakete sind Ersatz, kein Zusatz — "
+                        "für ein anderes Paket eine neue Einrichtung anlegen; den Standardkatalog nachziehen: "
+                        f"manage.py load_package --default --facility {facility.id} --dry-run"
+                    )
+                )
+                return
             self.stdout.write(
                 self.style.WARNING(
                     f"{display_name} nicht eingespielt — die Einrichtung bringt bereits "
                     "Dokumentationstypen oder Feldvorlagen mit; gepflegte Werte bleiben unverändert. "
                     "Auslieferungsstand bewusst nachziehen (mit Vorschau): "
-                    f"manage.py load_package {load_option} --facility {facility.id} --dry-run"
+                    f"manage.py load_package --default --facility {facility.id} --dry-run"
                 )
             )
             return

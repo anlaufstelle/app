@@ -359,6 +359,24 @@ class TestEnsureFacilityBaseline:
 
         assert not TimeFilter.objects.for_facility(facility).exists()
 
+    def test_missing_comfort_is_not_reported_as_available(self, facility, monkeypatch):
+        from core.packages.catalog import UnknownPackageError
+        from core.services import facility_bootstrap
+
+        monkeypatch.setattr(facility_bootstrap, "list_packages", lambda: ["default", "orphan"])
+
+        with pytest.raises(UnknownPackageError) as excinfo:
+            facility_bootstrap.ensure_facility_baseline(facility, package="orphan")
+
+        assert excinfo.value.available == ["default"]
+        assert "Verfügbare Pakete: default." in str(excinfo.value)
+
+    def test_every_shipped_package_has_comfort_definitions(self):
+        from core.packages.catalog import list_packages
+        from core.services.facility_bootstrap import PACKAGE_COMFORT
+
+        assert set(list_packages()) <= set(PACKAGE_COMFORT)
+
     def test_package_comfort_definitions_are_kept_separate(self):
         from datetime import time
 

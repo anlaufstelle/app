@@ -87,3 +87,14 @@ def test_catalog_parser_keeps_schema_v1_strict(synthetic_catalog):
 
     with pytest.raises(PackageValidationError, match="time_filters"):
         catalog.parse_catalog_package("alpha")
+
+
+def test_catalog_reader_exposes_yaml_parse_errors(synthetic_catalog):
+    (synthetic_catalog / "alpha.yaml").write_text(
+        "field_templates: [{slug: notiz, name: Notiz\n",
+        encoding="utf-8",
+    )
+    catalog._package_data_cache.clear()
+
+    with pytest.raises(yaml.YAMLError, match="while parsing"):
+        load_package_data("alpha")

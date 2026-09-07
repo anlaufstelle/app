@@ -175,6 +175,9 @@ class Command(BaseCommand):
                 data = load_package_data(package_name)
             except UnknownPackageError as exc:
                 raise CommandError(str(exc)) from exc
+            except yaml.YAMLError as exc:
+                package_path = f"core/packages/{package_name}.yaml"
+                raise CommandError(f"YAML-Fehler in {package_path!r}:\n{exc}") from exc
             self.stdout.write(self.style.MIGRATE_HEADING(f"Katalogpaket: core/packages/{package_name}.yaml\n"))
             return data, package_name
         # Reihenfolge ist bewusst: erst der ``--default``-Zweig, dann die

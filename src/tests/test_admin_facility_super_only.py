@@ -193,6 +193,16 @@ class TestFacilityAdminBootstrapsBaseline:
         assert form.fields["package"].initial == "default"
         assert 'for="id_package"' in form["package"].label_tag()
 
+    def test_add_form_falls_back_to_package_name_without_metadata(self, rf, super_admin_user, monkeypatch):
+        from core.admin import organization as admin_module
+
+        monkeypatch.setattr(admin_module, "list_packages", lambda: ["ohne-info"])
+
+        form_class = _admin().get_form(_request(rf, super_admin_user), obj=None)
+        form = form_class()
+
+        assert list(form.fields["package"].choices) == [("ohne-info", "ohne-info")]
+
     def test_add_uses_selected_package_for_bootstrap(
         self,
         rf,

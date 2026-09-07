@@ -15,8 +15,9 @@ from core.services.facility_bootstrap import ensure_facility_baseline
 
 def _package_choices():
     for name in list_packages():
-        info = PACKAGE_INFO[name]
-        yield name, f"{info.display_name} — {info.domain}"
+        info = PACKAGE_INFO.get(name)
+        label = f"{info.display_name} — {info.domain}" if info is not None else name
+        yield name, label
 
 
 class FacilityAdminForm(forms.ModelForm):
