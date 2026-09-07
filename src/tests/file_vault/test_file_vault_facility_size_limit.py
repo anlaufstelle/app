@@ -65,18 +65,6 @@ def doc_type_with_file(facility):
     return dt, ft_file
 
 
-@pytest.fixture
-def event(facility, staff_user, doc_type_with_file):
-    dt, _ = doc_type_with_file
-    return Event.objects.create(
-        facility=facility,
-        document_type=dt,
-        occurred_at=timezone.now(),
-        data_json={},
-        created_by=staff_user,
-    )
-
-
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestServiceLayerFacilySizeLimit:

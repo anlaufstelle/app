@@ -31,7 +31,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
     )
 
 
-from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
+from core.models import AuditLog, Event, Settings  # noqa: E402
 from core.models.attachment import Attachment  # noqa: E402
 from core.services.audit.hash import hmac_hash_value  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
@@ -72,22 +72,6 @@ VALID_DOCX_BYTES = (
     b"[Content_Types].xml"
     b"PK\x05\x06" + b"\x00" * 18  # central directory end signature
 )
-
-
-@pytest.fixture
-def doc_type_with_file(facility):
-    dt = DocumentType.objects.create(
-        facility=facility,
-        name="DocWithFile",
-        sensitivity=DocumentType.Sensitivity.NORMAL,
-    )
-    ft_file = FieldTemplate.objects.create(
-        facility=facility,
-        name="Scan",
-        field_type=FieldTemplate.FieldType.FILE,
-    )
-    DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
-    return dt, ft_file
 
 
 @pytest.fixture

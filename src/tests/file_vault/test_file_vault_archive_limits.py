@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.models import AuditLog, DocumentType, Event, Settings
 from core.models.attachment import Attachment
 from core.services.audit.hash import hmac_hash_value
 from core.services.file_vault import store_encrypted_file
@@ -54,22 +54,6 @@ def _zip_with_entries(name, count, *, content_type="application/zip"):
         for i in range(count):
             zf.writestr(f"e{i}.txt", b"x")
     return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
-
-
-@pytest.fixture
-def doc_type_with_file(facility):
-    dt = DocumentType.objects.create(
-        facility=facility,
-        name="DocWithFile",
-        sensitivity=DocumentType.Sensitivity.NORMAL,
-    )
-    ft_file = FieldTemplate.objects.create(
-        facility=facility,
-        name="Scan",
-        field_type=FieldTemplate.FieldType.FILE,
-    )
-    DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
-    return dt, ft_file
 
 
 @pytest.fixture
