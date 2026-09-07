@@ -15,6 +15,7 @@ from django.db import DatabaseError, IntegrityError, connection, transaction
 
 from core.models import DocumentType
 from core.models.slug import _SLUG_RE
+from tests._factories import make_document_type
 
 # Migrationsmodul hat einen ziffernstartigen Namen — nur via importlib ladbar
 # (Muster ``test_totp_secret_at_rest.py``).
@@ -24,16 +25,16 @@ _migration = importlib.import_module("core.migrations.0117_documenttype_slug_ent
 @pytest.mark.django_db
 class TestSlugGeneration:
     def test_auto_slug_from_name(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Beratung")
+        dt = make_document_type(facility=facility, name="Beratung")
         assert dt.slug == "beratung"
 
     def test_umlaut_slug(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Krisengespräch")
+        dt = make_document_type(facility=facility, name="Krisengespräch")
         assert dt.slug == "krisengespraech"
 
     def test_empty_slug_raises(self, facility):
         with pytest.raises(ValidationError, match="gültigen Slug"):
-            DocumentType.objects.create(facility=facility, name="!!!")
+            make_document_type(facility=facility, name="!!!")
 
     def test_full_clean_before_save_allows_empty_slug(self, facility):
         # Bestandsmuster (z. B. test_contact_stage): full_clean() auf einer
@@ -49,27 +50,27 @@ class TestSlugGeneration:
 @pytest.mark.django_db
 class TestSlugCollision:
     def test_different_names_same_slug_gets_suffix(self, facility):
-        dt1 = DocumentType.objects.create(facility=facility, name="Test Typ")
-        dt2 = DocumentType.objects.create(facility=facility, name="Test-Typ")
+        dt1 = make_document_type(facility=facility, name="Test Typ")
+        dt2 = make_document_type(facility=facility, name="Test-Typ")
         assert dt1.slug == "test-typ"
         assert dt2.slug == "test-typ-2"
 
     def test_cross_facility_same_slug_allowed(self, facility, other_facility):
-        dt1 = DocumentType.objects.create(facility=facility, name="Beratung")
-        dt2 = DocumentType.objects.create(facility=other_facility, name="Beratung")
+        dt1 = make_document_type(facility=facility, name="Beratung")
+        dt2 = make_document_type(facility=other_facility, name="Beratung")
         assert dt1.slug == dt2.slug == "beratung"
 
 
 @pytest.mark.django_db
 class TestSlugImmutability:
     def test_slug_immutable_after_creation(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Beratung")
+        dt = make_document_type(facility=facility, name="Beratung")
         dt.slug = "changed"
         with pytest.raises(ValidationError, match="nach Erstellung nicht geändert"):
             dt.save()
 
     def test_same_slug_no_error(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Beratung")
+        dt = make_document_type(facility=facility, name="Beratung")
         dt.slug = "beratung"
         dt.save()  # kein Fehler
 
@@ -77,42 +78,40 @@ class TestSlugImmutability:
 @pytest.mark.django_db
 class TestExplicitSlug:
     def test_explicit_valid_slug_accepted(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Foo", slug="custom-slug")
+        dt = make_document_type(facility=facility, name="Foo", slug="custom-slug")
         assert dt.slug == "custom-slug"
 
     def test_explicit_invalid_slug_rejected(self, facility):
         with pytest.raises(ValidationError, match="nicht gültig"):
-            DocumentType.objects.create(facility=facility, name="Foo", slug="Invalid Slug!")
+            make_document_type(facility=facility, name="Foo", slug="Invalid Slug!")
 
     def test_duplicate_explicit_slug_same_facility_raises(self, facility):
-        DocumentType.objects.create(facility=facility, name="A", slug="same-slug")
+        make_document_type(facility=facility, name="A", slug="same-slug")
         with pytest.raises(IntegrityError), transaction.atomic():
-            DocumentType.objects.create(facility=facility, name="B", slug="same-slug")
+            make_document_type(facility=facility, name="B", slug="same-slug")
 
 
 @pytest.mark.django_db
 class TestEntityTypeImmutability:
     def test_event_to_client_raises(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Beratung", entity_type=DocumentType.EntityType.EVENT)
+        dt = make_document_type(facility=facility, name="Beratung", entity_type=DocumentType.EntityType.EVENT)
         dt.entity_type = DocumentType.EntityType.CLIENT
         with pytest.raises(ValidationError, match="entity_type kann nach Erstellung nicht geändert werden"):
             dt.save()
 
     def test_client_to_event_raises(self, facility):
-        dt = DocumentType.objects.create(
-            facility=facility, name="Person-Dok", entity_type=DocumentType.EntityType.CLIENT
-        )
+        dt = make_document_type(facility=facility, name="Person-Dok", entity_type=DocumentType.EntityType.CLIENT)
         dt.entity_type = DocumentType.EntityType.EVENT
         with pytest.raises(ValidationError, match="entity_type kann nach Erstellung nicht geändert werden"):
             dt.save()
 
     def test_same_entity_type_no_error(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Beratung")
+        dt = make_document_type(facility=facility, name="Beratung")
         dt.entity_type = DocumentType.EntityType.EVENT
         dt.save()  # kein Fehler
 
     def test_default_entity_type_is_event(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Beratung")
+        dt = make_document_type(facility=facility, name="Beratung")
         assert dt.entity_type == DocumentType.EntityType.EVENT
 
 
@@ -123,7 +122,7 @@ class TestDocumentTypeSlugImmutableTrigger:
     (Refs #1709) — schließt ORM-Bypasses, die an ``save()`` vorbeigehen."""
 
     def _create(self, facility, **kwargs):
-        return DocumentType.objects.create(facility=facility, name="Beratung", **kwargs)
+        return make_document_type(facility=facility, name="Beratung", **kwargs)
 
     def test_raw_update_of_slug_is_blocked(self, facility):
         dt = self._create(facility)
@@ -343,7 +342,7 @@ class TestE16SeedSlugTable:
 
     def test_seed_names_produce_expected_slugs(self, facility):
         for name, expected_slug in self.EXPECTED.items():
-            dt = DocumentType.objects.create(facility=facility, name=name)
+            dt = make_document_type(facility=facility, name=name)
             assert dt.slug == expected_slug, f"{name} → {dt.slug} (erwartet {expected_slug})"
             dt.delete()
 
@@ -361,7 +360,7 @@ class TestExistingDocumentTypesGetEventEntityType:
     """Bestand bekommt ``entity_type="event"`` (Migrations-Default, Refs #1058)."""
 
     def test_created_without_explicit_entity_type_is_event(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Bestandstyp")
+        dt = make_document_type(facility=facility, name="Bestandstyp")
         assert dt.entity_type == "event"
 
 
@@ -374,19 +373,19 @@ class TestSlugNormalization:
     Schema-Fehler ab, der Typ waere damit dauerhaft nicht paketfaehig."""
 
     def test_underscore_becomes_hyphen(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="Feld_mit_Unterstrich")
+        dt = make_document_type(facility=facility, name="Feld_mit_Unterstrich")
         assert dt.slug == "feld-mit-unterstrich"
         assert _SLUG_RE.fullmatch(dt.slug)
 
     def test_multiple_separators_collapse(self, facility):
-        dt = DocumentType.objects.create(facility=facility, name="A__B -- C")
+        dt = make_document_type(facility=facility, name="A__B -- C")
         assert dt.slug == "a-b-c"
         assert _SLUG_RE.fullmatch(dt.slug)
 
     def test_truncation_never_ends_on_hyphen(self, facility):
         # 119 Zeichen + Trennzeichen + Rest: der Schnitt bei 120 landet exakt
         # auf dem Bindestrich.
-        dt = DocumentType.objects.create(facility=facility, name="A" * 119 + " xy")
+        dt = make_document_type(facility=facility, name="A" * 119 + " xy")
         assert len(dt.slug) <= 120
         assert not dt.slug.endswith("-")
         assert _SLUG_RE.fullmatch(dt.slug)
@@ -396,8 +395,8 @@ class TestSlugNormalization:
         # ``(facility, name)``-Constraint) — das Ausrufezeichen faellt beim
         # Slugifizieren weg, die Slug-Kollision bleibt also erhalten.
         long_name = "A" * 119 + " xy"
-        first = DocumentType.objects.create(facility=facility, name=long_name)
-        second = DocumentType.objects.create(facility=facility, name=long_name + "!")
+        first = make_document_type(facility=facility, name=long_name)
+        second = make_document_type(facility=facility, name=long_name + "!")
         assert first.slug != second.slug
         for slug in (first.slug, second.slug):
             assert len(slug) <= 120
@@ -407,7 +406,7 @@ class TestSlugNormalization:
         """Gegenprobe gegen die Schema-Validierung, die das Paketformat nutzt."""
         from core.packages.schema import _SLUG_RE as SCHEMA_SLUG_RE
 
-        dt = DocumentType.objects.create(facility=facility, name="Beratung_Intensiv")
+        dt = make_document_type(facility=facility, name="Beratung_Intensiv")
         assert SCHEMA_SLUG_RE.fullmatch(dt.slug)
 
 
