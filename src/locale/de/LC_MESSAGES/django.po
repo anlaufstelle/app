@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-06 15:27+0200\n"
+"POT-Creation-Date: 2026-09-07 21:25+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12579,3 +12579,15 @@ msgstr "{count} Fälle angezeigt."
 
 msgid "Kein Fall gefunden."
 msgstr "Kein Fall gefunden."
+
+msgid "Gewaltvorfall"
+msgstr "Gewaltvorfall"
+
+msgid "Schutzmaßnahme"
+msgstr "Schutzmaßnahme"
+
+msgid "Gruppenangebot"
+msgstr "Gruppenangebot"
+
+msgid "Versorgung (Bedarf)"
+msgstr "Versorgung (Bedarf)"
