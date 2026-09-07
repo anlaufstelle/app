@@ -282,6 +282,55 @@ class TestAxeFormularzustaende:
         _scan(page, base_url, "event_create_errors", a11y_baseline, a11y_report_path)
 
 
+@pytest.fixture
+def privacy_screen_on(e2e_env):
+    """Sichtschutz der Einrichtung „Hauptstelle" ein- und danach ausschalten.
+
+    Ueber den Namen statt ueber ``.first()`` — der Primaerschluessel ist eine
+    UUID (Refs #2166). Der Zustand wird nach dem Test zurueckgedreht, damit die
+    uebrigen Scans dieser Session unveraendert bleiben.
+    """
+
+    def _set(value):
+        django_shell(
+            e2e_env,
+            "from core.models import Facility, Settings;"
+            " f = Facility.objects.get(name='Hauptstelle');"
+            " s, _ = Settings.objects.get_or_create(facility=f);"
+            f" s.privacy_screen_on_blur = {value};"
+            " s.save(update_fields=['privacy_screen_on_blur']);"
+            " print(s.privacy_screen_on_blur)",
+        )
+
+    _set(True)
+    yield
+    _set(False)
+
+
+class TestAxeMitschauenSchutz:
+    """Refs #2136: Quick-Exit-Knopf und aktive Sichtblende.
+
+    Der Knopf laeuft ohnehin durch jeden Scan der Matrix oben mit — er steht
+    seit #2136 auf jeder angemeldeten Seite. Der eigene Fall hier gilt dem
+    Zustand, den die Matrix strukturell nicht sieht: die EINGEBLENDETE
+    Sichtblende. Sie ist ein modaler Dialog ueber stillgelegtem Inhalt, und
+    genau daran bricht a11y typischerweise (Dialog ohne Namen, fokussierbare
+    Reste unter ``aria-hidden``, Fokusfalle).
+    """
+
+    def test_eingeblendete_sichtblende(
+        self, authenticated_page, base_url, a11y_baseline, a11y_report_path, privacy_screen_on
+    ):
+        page = authenticated_page
+        _open(page, base_url, "/clients/", "#main-content h1:has-text('Personen')")
+        expect(page.locator("[data-testid='quick-exit-button']")).to_be_visible()
+
+        page.evaluate("() => window.dispatchEvent(new Event('blur'))")
+        expect(page.locator("[data-testid='privacy-screen']")).to_be_visible(timeout=10000)
+
+        _scan(page, base_url, "client_list_privacy_screen", a11y_baseline, a11y_report_path)
+
+
 class TestSkipLink:
     """WCAG 2.4.1: ohne Autofokus ist der Skip-Link zuerst und funktioniert.
 

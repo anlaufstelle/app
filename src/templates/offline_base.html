@@ -73,45 +73,80 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
       data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
       data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
 
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+    {# Refs #2136: focus:z-[80] statt focus:z-50 — die Quick-Exit-Leiste darunter #}
+    {# ist sticky auf z-50 und deckend; bei gleichem z-index gewaenne sie als #}
+    {# spaeteres Geschwister und verdeckte den fokussierten Skip-Link (mobil ueber #}
+    {# die volle Breite). Nur hier und in offline_base.html noetig — die #}
+    {# eigenstaendigen Seiten tragen keine Leiste. #}
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[80] focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
 
-    {# Offline-Banner und Sync-Indikator — 1:1 aus base.html (Refs #1495), aber #}
-    {# ohne den Rollen-Gate um den Personenlisten-Link: die Shell kennt die #}
-    {# Rolle nicht und darf sie nicht kennen. Der Link bleibt trotzdem #}
-    {# unsichtbar, solange nichts gecacht ist (x-show="hasCachedClients"), und #}
-    {# die Systemrolle hat mangels Einrichtung nie gecachte Personen. #}
-    <div x-data="offlineStatus"
-         @online.window="onOnline"
-         @offline.window="onOffline"
-         @offline-queue-count.window="onQueueEvent"
-         @offline-clients-count.window="onClientsEvent"
-         @offline-unsynced-count.window="onUnsyncedEvent"
-         @offline-conflict-count.window="onConflictEvent"
-         id="offline-status" class="sticky top-0 z-50">
-        <div x-show="offline" x-cloak
-             class="bg-yellow-500 text-white text-center text-sm py-2"
-             data-testid="offline-banner">
-            {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
-            <a href="{% url 'core:client_list' %}" aria-label="{% trans 'Zur Personenliste' %}" x-show="hasCachedClients" x-cloak class="ml-2 text-xs underline" data-testid="offline-cached-count">
-                (<span x-text="cachedClients"></span><span x-show="isSingleCachedClient" x-cloak> {% trans "Person lokal verfügbar" %}</span><span x-show="hasMultipleCachedClients" x-cloak> {% trans "Personen lokal verfügbar" %}</span>)
-            </a>
-            <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
-                · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
-            </span>
+    {% comment %}Refs #2136 (N-2): Mitschauen-/Shoulder-Surfing-Schutz.
+
+    Der Knopf steht direkt hinter dem Skip-Link und ist damit das erste
+    fokussierbare Element der Seite (WCAG 2.1.1) — wer die Anwendung in
+    Gegenwart einer gefaehrdenden Person bedient, erreicht ihn mit einem Tab.
+    Die Leiste klebt oben (sticky) und ist auf JEDER angemeldeten Seite
+    sichtbar, auch mobil: die Bottom-Nav behaelt ihre fuenf Slots, und im
+    "Mehr"-Menue waere der Knopf hinter einem Tap versteckt. Anders als in
+    base.html ohne md:ml-60-Einrueckung: die Shell traegt keine fixierte
+    Sidebar, sondern die statische Leiste aus _offline_navigation.html.
+
+    Der Sticky-Wrapper umschliesst jetzt AUCH den Offline-Statusbalken (der
+    ihn vorher selbst trug, Refs #1495): zwei getrennte sticky-Elemente auf
+    top-0 laegen uebereinander statt untereinander. Das Markup ist hier
+    bewusst statisch und OHNE Sitzungsbezug — die Shell muss byte-gleich
+    bleiben (Refs #1966); Ziel-Adresse und Sichtschutz-Schalter liest
+    quick-exit.js offline aus dem localStorage-Spiegel der Online-Seiten.
+    {% endcomment %}
+    <div class="sticky top-0 z-50">
+        <div id="quick-exit-bar" class="flex justify-end bg-canvas px-4 md:px-8">
+            <button type="button" id="quick-exit-button" data-testid="quick-exit-button"
+                    aria-keyshortcuts="Control+Shift+X Shift+Escape"
+                    title="{% trans 'Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc.' %}"
+                    class="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-md border border-red-200 text-[13px] font-semibold text-red-700 hover:bg-red-50">
+                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/></svg>
+                {% trans "Schnell verlassen" %}
+            </button>
         </div>
-        <div x-show="showSyncBanner" x-cloak
-             class="bg-blue-500 text-white text-center text-sm py-2"
-             data-testid="sync-banner">
-            <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
-        </div>
-        <div x-show="showConflictBanner" x-cloak
-             class="bg-red-500 text-white text-center text-sm py-2"
-             data-testid="conflict-banner">
-            <a href="{% url 'core:offline_conflict_list' %}" class="underline">
-                <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
-            </a>
+        {# Offline-Banner und Sync-Indikator — 1:1 aus base.html (Refs #1495), aber #}
+        {# ohne den Rollen-Gate um den Personenlisten-Link: die Shell kennt die #}
+        {# Rolle nicht und darf sie nicht kennen. Der Link bleibt trotzdem #}
+        {# unsichtbar, solange nichts gecacht ist (x-show="hasCachedClients"), und #}
+        {# die Systemrolle hat mangels Einrichtung nie gecachte Personen. Das #}
+        {# sticky-Verhalten traegt seit Refs #2136 der gemeinsame Wrapper oben. #}
+        <div x-data="offlineStatus"
+             @online.window="onOnline"
+             @offline.window="onOffline"
+             @offline-queue-count.window="onQueueEvent"
+             @offline-clients-count.window="onClientsEvent"
+             @offline-unsynced-count.window="onUnsyncedEvent"
+             @offline-conflict-count.window="onConflictEvent"
+             id="offline-status">
+            <div x-show="offline" x-cloak
+                 class="bg-yellow-500 text-white text-center text-sm py-2"
+                 data-testid="offline-banner">
+                {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
+                <a href="{% url 'core:client_list' %}" aria-label="{% trans 'Zur Personenliste' %}" x-show="hasCachedClients" x-cloak class="ml-2 text-xs underline" data-testid="offline-cached-count">
+                    (<span x-text="cachedClients"></span><span x-show="isSingleCachedClient" x-cloak> {% trans "Person lokal verfügbar" %}</span><span x-show="hasMultipleCachedClients" x-cloak> {% trans "Personen lokal verfügbar" %}</span>)
+                </a>
+                <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
+                    · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
+                </span>
+            </div>
+            <div x-show="showSyncBanner" x-cloak
+                 class="bg-blue-500 text-white text-center text-sm py-2"
+                 data-testid="sync-banner">
+                <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
+            </div>
+            <div x-show="showConflictBanner" x-cloak
+                 class="bg-red-500 text-white text-center text-sm py-2"
+                 data-testid="conflict-banner">
+                <a href="{% url 'core:offline_conflict_list' %}" class="underline">
+                    <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
+                </a>
+            </div>
         </div>
     </div>
 
@@ -137,6 +172,30 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
 
     {# Umami-Consent-Banner (Opt-in) — nur Demo mit UMAMI_REQUIRE_CONSENT. Refs #1604. #}
     {% include "partials/_umami_consent.html" %}
+
+    {% comment %}Refs #2136 (N-2): Sichtblende. Statisches Markup, sichtbar
+    gemacht ausschliesslich von static/js/quick-exit.js — beim Sichtschutz
+    (opt-in, blur/visibilitychange) mit Text und Knopf, beim "Schnell
+    verlassen" ohne beides (die Aufforderung "Zum Fortfahren ..." waere dort
+    falsch). Kein Timer und keine Bewegung (WCAG 2.2.1); die Freigabe
+    erfolgt per Klick, Enter oder Leertaste, danach kehrt der Fokus an sein
+    Ausgangselement zurueck (2.4.3). Das ``hidden``-Attribut ist der
+    Zustandstraeger — deshalb traegt die Wurzel bewusst KEINE
+    display-Utility, die es ueberstimmen wuerde.
+    {% endcomment %}
+    <div id="privacy-screen" data-testid="privacy-screen" hidden
+         role="dialog" aria-modal="true" aria-labelledby="privacy-screen-title"
+         class="fixed inset-0 z-[70] bg-canvas">
+        <div id="privacy-screen-panel" class="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+            <p id="privacy-screen-title" class="text-base font-semibold text-ink">
+                {% trans "Anlaufstelle — Zum Fortfahren klicken oder Taste drücken" %}
+            </p>
+            <button type="button" id="privacy-screen-resume" data-testid="privacy-screen-resume"
+                    class="btn-primary inline-flex items-center justify-center min-h-[44px] px-5">
+                {% trans "Fortfahren" %}
+            </button>
+        </div>
+    </div>
 
     {% block extra_js %}{% endblock %}
 
@@ -167,6 +226,9 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
     <script src="{% static 'js/double-submit.js' %}" defer></script>
     <script src="{% static 'js/htmx-errors.js' %}" defer></script>
     <script src="{% static 'js/focus-management.js' %}" defer></script>
+    {# Refs #2136 (N-2): Mitschauen-Schutz — dieselbe statische Datei wie in #}
+    {# base.html; sie liest ihre Konfiguration offline aus dem localStorage. #}
+    <script src="{% static 'js/quick-exit.js' %}" defer></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
 </body>
 </html>

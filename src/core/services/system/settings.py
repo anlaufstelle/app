@@ -49,6 +49,11 @@ _AUDIT_FIELDS = (
     # bereits ueberschrittenen Wert legt alle Datei-Uploads lahm. Dieselbe
     # Auditpflicht wie bei ``max_file_size_mb``.
     "max_storage_mb",
+    # Refs #2136 (N-2): Mitschauen-Schutz. Ein stilles Abschalten des
+    # Sichtschutzes oder ein Umbiegen der Fluchtseite auf eine verraeterische
+    # Adresse ist eine sicherheitsrelevante Konfigurationsaenderung.
+    "quick_exit_url",
+    "privacy_screen_on_blur",
 )
 
 # Bewusst ausgeschlossen — keine verhaltensrelevanten Settings (#893):
@@ -89,6 +94,13 @@ _AUDIT_VALUE_FIELDS = frozenset(
         # Refs #2129: rein numerischer Konfigurationswert ohne PII; ein
         # Hochsetzen (Aufweichen des Kontingents) muss rekonstruierbar sein.
         "max_storage_mb",
+        # Refs #2136 (N-2): beide Felder sind Konfigurationswerte ohne PII —
+        # ein Boolean und eine oeffentliche, absichtlich unverfaengliche
+        # Adresse, die ohnehin in jeder ausgelieferten Seite steht. Das
+        # Umbiegen der Fluchtseite muss forensisch rekonstruierbar sein,
+        # genau wie das Hochsetzen des Sitzungs-Caps.
+        "quick_exit_url",
+        "privacy_screen_on_blur",
     }
 )
 

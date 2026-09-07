@@ -35,6 +35,10 @@ EDITABLE_FIELDS = {
     "retention_use_k_anonymization",
     "k_anonymity_threshold",
     "search_trigram_threshold",
+    # Refs #2136 (N-2): Mitschauen-Schutz — beide Felder sind Betreiber-Regler
+    # und muessen im Formular stehen; der Drift-Guard unten erzwingt das.
+    "quick_exit_url",
+    "privacy_screen_on_blur",
 }
 
 

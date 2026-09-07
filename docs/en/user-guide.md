@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> Most recently synchronized on 2026-09-02 (§ 2 shift filter and daylight-saving changes, #2057). Previously synchronized on 2026-09-02 (§ 7 self-withdrawal of a deletion request, #2092). Previously synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
+> Most recently synchronized on 2026-09-07 (§ 1 quick exit and privacy screen, #2136). Previously synchronized on 2026-09-02 (§ 2 shift filter and daylight-saving changes, #2057). Previously synchronized on 2026-09-02 (§ 7 self-withdrawal of a deletion request, #2092). Previously synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
 > The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417), 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551), 2026-08-03 (§ 7 reports section, #1061; § 7 data-source declaration per report artifact, #1743) 2026-08-04 (§ 2a Lead tile removed the Legal Holds tile, #1759) and 2026-08-04 (§ 3 file attachments on clients and cases, removing a file, type change discards values and files; § 3a "Assigned to" column, visibility and filters across all three owners, #1738; plus the § 9 audience note the 2026-07-14 re-sync had missed, #1785) and 2026-08-11 (§§ 3-5, 7-10: renamed contact levels "Pseudonym only"/"With additional details" and the create-action wording "Document contact"/"Create person"/"Create task"/"Create case", #1805) and 2026-08-12 (§ 7 report selection: cards instead of a dropdown, "Dataset Reports" tab, PDF export moved onto the report card, #1804) and 2026-08-13 (§ 2a role landing redirects, #1813; § 6 search results page, #1803).
 
 # Anlaufstelle -- User Guide
@@ -106,6 +106,35 @@ At login, the 2FA page then offers **Sign in with passkey** -- alternatively, yo
 ### Signing Out
 
 Click **Sign Out** in the top-right corner. For data protection reasons, you will be automatically signed out after a configured period of inactivity (default: 30 minutes).
+
+### Quick Exit
+
+At the top of every page there is a **Quick exit** button. It is meant for situations where someone is reading along or unexpectedly standing next to you -- at a reception desk, in a women's shelter, when documenting in a public place.
+
+One click does three things, in this order:
+
+1. The screen content is **covered immediately**.
+2. You are **signed out** -- the session ends on the server as well, not just in the browser.
+3. The browser navigates to a **neutral page** (your facility decides which one; the default is the Wikipedia home page).
+
+Two **keyboard shortcuts** trigger the same action, including from inside a text field:
+
+| Shortcut | Note |
+|---|---|
+| `Ctrl` + `Shift` + `X` | on macOS `Cmd` + `Shift` + `X` |
+| `Shift` + `Esc` | alternative if the first combination is taken |
+
+> **Unsaved input is lost in the process.** That is not special behavior of this button: every sign-out clears the locally cached drafts. If you have time, save first; if you do not, the protection matters more than the draft.
+
+Pressing **Back** in the browser does not bring the application back: the page covers itself again and reloads -- you end up on the sign-in form.
+
+**Without an internet connection** the button works as well: the content is covered, the local key for the offline data is discarded, and the browser navigates to the neutral page. Signing out on the server is not possible offline -- but the offline data is unreadable without signing in again, the offline authorization expires after 48 hours anyway, and restarting the device clears it.
+
+### Privacy Screen on Window or Tab Change
+
+Your facility can additionally enable the **privacy screen** (default: off). When it is active, a neutral surface covers the content as soon as the window loses focus or the tab moves to the background -- for example when you switch to another program.
+
+To continue, click **Continue** or press `Enter` or the space bar. The cursor then returns to where it was before. There is no countdown and nothing moves; the surface stays until you release it.
 
 ---
 
@@ -954,5 +983,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 71784cd1c46a22307d0a4863ab4ca33047c88708 -->
+<!-- translation-date: 2026-09-08 -->
+<!-- source-hash: e9fa4c734df819d8a1c86d0e242210698b7b8e4d -->

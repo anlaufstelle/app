@@ -40,6 +40,14 @@ _FIELD_GROUPS = (
             "k_anonymity_threshold",
         ),
     ),
+    # Refs #2136 (N-2): eigene Gruppe statt Anhaengen an "Sicherheit". Die
+    # Sicherheits-Gruppe regelt, wie lange eine Sitzung lebt und wer sich wie
+    # anmeldet; diese beiden Felder regeln, was jemand SIEHT, der neben der
+    # Fachkraft steht. Verschiedene Fragen, verschiedene Zielgruppen (Frauenhaus/
+    # Awareness) — und die Wahl der Fluchtseite ist eine Entscheidung, die eine
+    # Einrichtung bewusst treffen soll, nicht eine, die zwischen zwei
+    # Sitzungs-Timeouts untergeht.
+    (_("Mitschauen-Schutz"), ("quick_exit_url", "privacy_screen_on_blur")),
     (_("Dateien"), ("allowed_file_types", "max_file_size_mb", "max_storage_mb")),
 )
 

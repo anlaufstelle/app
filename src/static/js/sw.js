@@ -153,7 +153,13 @@ importScripts("/static/js/url-patterns.js");
 // rekursiv eingebundene Offline-Formular-Partials liefern eindeutige
 // Label-/Feld-Beziehungen und Live-Regionen. Der Bump stellt das geaenderte
 // gerenderte Shell-Markup auf Bestandsgeraeten atomar bereit.
-const CACHE_NAME = "anlaufstelle-v45";
+// Refs #2136: v45 -> v46 -- der Mitschauen-Schutz bringt eine NEUE precachte
+// Datei (quick-exit.js) und geaendertes Shell-Markup mit (Knopf, Sichtblende,
+// gemeinsamer Sticky-Wrapper in offline_base.html). Ohne Bump behielte ein
+// Bestandsgeraet die alte Shell OHNE Knopf und ohne das Skript im Precache —
+// die Aktion "Schnell verlassen" waere offline genau dort tot, wo sie
+// gebraucht wird. Der Bump erzwingt Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v46";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -331,6 +337,11 @@ const APP_SHELL = [
     // rendern. Ohne Pre-Cache bliebe der Fokus-Handler im Kalt-Offline-Pfad nach
     // einem SW-Update (leerer SWR-Runtime-Cache) aus.
     "/static/js/focus-management.js",
+    // Refs #2136 (N-2): Der Mitschauen-Schutz ist offline genauso noetig wie
+    // online — die Shell traegt denselben Knopf und dieselbe Sichtblende. Ohne
+    // Pre-Cache bliebe das Markup im Kalt-Offline-Pfad ohne Verhalten (der
+    // Knopf taete nichts, das Tastenkuerzel gaebe es nicht).
+    "/static/js/quick-exit.js",
     // Refs #1334: Das PWA-Manifest (aus Scope-Gruenden unter /manifest.json,
     // nicht /static/) und das deklarierte Site-Icon (favicon.svg) offline
     // verfuegbar machen — sonst net::ERR_INTERNET_DISCONNECTED beim Offline-

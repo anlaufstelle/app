@@ -486,6 +486,12 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 | Aufbewahrung identifiziert (Tage) | 365 | Löschfrist für Kontakte zu Personen der Stufe „Nur Pseudonym" |
 | Aufbewahrung qualifiziert (Tage) | 3650 | Löschfrist nach Fallabschluss (Stufe „Mit Zusatzangaben") |
 | 2FA einrichtungsweit verpflichtend | false | Erzwingt TOTP-2FA für **alle** Benutzer dieser Einrichtung (siehe [§ 2.7](#27-zwei-faktor-authentifizierung-2fa)) |
+| Ziel für „Schnell verlassen" | `https://www.wikipedia.org/` | Adresse, die der Knopf **Schnell verlassen** und die Tastenkürzel `Strg`+`Umschalt`+`X` / `Umschalt`+`Esc` öffnen. Pflichtfeld, nur `http`/`https`. Eine unverfängliche, öffentliche Seite ohne Cookie-Banner wählen — sie steht danach im Verlauf des Geräts, und ein Consent-Dialog kostet genau die Sekunden, die die Aktion sparen soll |
+| Sichtschutz bei Fenster- oder Tab-Wechsel | false | Verdeckt den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Freigabe per Klick oder Taste, ohne Timer |
+
+> **Empfehlung für Frauenhäuser, Gewalt-Fachberatung und Awareness-Teams (#2136):** Dort wird in Gegenwart gefährdender Personen bzw. an lauten, öffentlichen Orten dokumentiert. Schalten Sie den **Sichtschutz ein** und prüfen Sie die **Zielseite** auf Ihre Region hin — sie soll für Außenstehende zum Gerät passen und nicht als „Fluchtseite" lesbar sein. Der Knopf selbst ist immer aktiv und lässt sich nicht abschalten; die Tastenkürzel sind fest vergeben. Beide Felder werden im Audit-Log mit Alt- und Neuwert protokolliert (`SETTINGS_CHANGE`).
+>
+> **Ungespeicherte Eingaben gehen verloren**, wenn jemand die Aktion auslöst — die Abmeldung räumt wie immer die lokalen Entwürfe ab (`Clear-Site-Data`). Das ist im Nutzerhandbuch benannt und im Tooltip des Knopfs.
 
 > **Grundausstattung einer neuen Einrichtung (#1970).** Neben dem Einstellungssatz entsteht beim Anlegen einer Einrichtung — im Django-Admin wie über `setup_facility` — ein knapper Startbestand, den Sie anschließend frei überschreiben können:
 >

@@ -124,11 +124,12 @@ class TestAuditLogCreationAllowlist:
             150: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
-            # Refs #2129: +8 Zeilen durch ``max_storage_mb`` in _AUDIT_FIELDS und
-            # _AUDIT_VALUE_FIELDS (144 -> 152, 173 -> 181). Reine Zeilen-
+            # Refs #2129 + #2136: +8 Zeilen durch ``max_storage_mb`` und +12 Zeilen
+            # durch ``quick_exit_url``/``privacy_screen_on_blur`` in _AUDIT_FIELDS
+            # und _AUDIT_VALUE_FIELDS (144 -> 164, 173 -> 193). Reine Zeilen-
             # Nachfuehrung, keine neue Schreibstelle.
-            152: "update_settings-Body — Settings-Diff-Helper",
-            181: "log_settings_change-Body — zweite create-Stelle",
+            164: "update_settings-Body — Settings-Diff-Helper",
+            193: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {

@@ -1,7 +1,7 @@
 """Facility settings (singleton per facility)."""
 
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, URLValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -20,6 +20,16 @@ DEFAULT_RETENTION_QUALIFIED_DAYS = 3650
 # SessionIdleRefreshMiddleware greifen fuer Nutzer ohne Einrichtung bzw. ohne
 # Settings-Zeile darauf zurueck.
 DEFAULT_SESSION_ABSOLUTE_HOURS = 12
+
+# Refs #2136 (N-2): Vorgabeziel der Aktion "Schnell verlassen". Kriterien der
+# Auswahl: oeffentlich, HTTPS, ohne Consent-Banner und ohne Werbe-/Tracking-
+# Interstitial (ein Cookie-Dialog auf der Fluchtseite kostet genau die Sekunden,
+# die die Aktion sparen soll) und inhaltlich so unauffaellig, dass die Seite im
+# Verlauf oder ueber die Schulter nicht als "Fluchtseite" lesbar ist. Die
+# Konstante ist die einzige Quelle des Literals — dieselbe Vorgabe steht in
+# static/js/quick-exit.js als Fallback fuer die Offline-Shell (dort gibt es
+# keinen Server, der sie rendern koennte); der Gleichlauf ist getestet.
+DEFAULT_QUICK_EXIT_URL = "https://www.wikipedia.org/"
 
 
 class Settings(models.Model):
@@ -220,6 +230,34 @@ class Settings(models.Model):
             "Mindest-Ähnlichkeit (0.0–1.0) für Fuzzy-Treffer im Pseudonym. "
             "Kleinere Werte liefern mehr, aber ungenauere Treffer; größere "
             "Werte sind strenger. Standard: 0.3."
+        ),
+    )
+    # Refs #2136 (N-2): Mitschauen-/Shoulder-Surfing-Schutz. Beide Felder sind
+    # einrichtungsweit (wie alles in dieser Zeile) — die Zielseite ist eine
+    # fachliche Entscheidung der Einrichtung, nicht des Betreibers der Instanz.
+    quick_exit_url = models.URLField(
+        max_length=200,
+        default=DEFAULT_QUICK_EXIT_URL,
+        # URLField bringt einen URLValidator mit, der auch ftp/ftps zulaesst.
+        # Der zusaetzliche Validator schneidet das auf http/https zu: alles
+        # andere ist im Browser entweder kein Navigationsziel oder (javascript:,
+        # data:) ein Skript-Injektionsvektor in location.replace().
+        validators=[URLValidator(schemes=["http", "https"])],
+        verbose_name=_("Ziel für „Schnell verlassen“"),
+        help_text=_(
+            "Adresse, die die Aktion „Schnell verlassen“ öffnet. Eine "
+            "unverfängliche, öffentliche Seite ohne Cookie-Banner wählen — sie "
+            "steht danach im Verlauf des Geräts. Nur http/https."
+        ),
+    )
+    privacy_screen_on_blur = models.BooleanField(
+        default=False,
+        verbose_name=_("Sichtschutz bei Fenster- oder Tab-Wechsel"),
+        help_text=_(
+            "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das "
+            "Fenster den Fokus verliert oder der Tab in den Hintergrund geht. "
+            "Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein "
+            "Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."
         ),
     )
     updated_at = models.DateTimeField(

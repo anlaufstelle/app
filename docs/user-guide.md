@@ -103,6 +103,35 @@ Beim Login bietet die 2FA-Seite dann **Mit Passkey anmelden** an — alternativ 
 
 Klicken Sie oben rechts auf **Abmelden**. Aus Datenschutzgründen werden Sie nach einer konfigurierten Inaktivitätszeit automatisch abgemeldet (Standard: 30 Minuten).
 
+### Schnell verlassen
+
+Oben auf jeder Seite steht der Knopf **Schnell verlassen**. Er ist für Situationen gedacht, in denen jemand mitliest oder unerwartet neben Ihnen steht — am Empfangsplatz, im Frauenhaus, bei der Dokumentation an einem öffentlichen Ort.
+
+Ein Klick bewirkt drei Dinge in dieser Reihenfolge:
+
+1. Der Bildschirminhalt wird **sofort verdeckt**.
+2. Sie werden **abgemeldet** — die Sitzung endet auch auf dem Server, nicht nur im Browser.
+3. Der Browser wechselt auf eine **neutrale Seite** (welche, legt Ihre Einrichtung fest; Standard ist die Startseite von Wikipedia).
+
+Dieselbe Aktion lösen zwei **Tastenkürzel** aus, auch aus einem Eingabefeld heraus:
+
+| Kürzel | Hinweis |
+|---|---|
+| `Strg` + `Umschalt` + `X` | auf dem Mac `Cmd` + `Umschalt` + `X` |
+| `Umschalt` + `Esc` | Alternative, wenn die erste Kombination belegt ist |
+
+> **Ungespeicherte Eingaben gehen dabei verloren.** Das ist kein Sonderverhalten des Knopfs: Jede Abmeldung räumt die lokal zwischengespeicherten Entwürfe ab. Wenn Sie Zeit haben, speichern Sie vorher; wenn nicht, ist der Schutz wichtiger als der Entwurf.
+
+Ein **Zurück** im Browser bringt die Anwendung nicht wieder: Die Seite verdeckt sich erneut und lädt neu — Sie landen auf der Anmeldemaske.
+
+**Ohne Internetverbindung** funktioniert der Knopf ebenfalls: Der Inhalt wird verdeckt, der lokale Schlüssel für die Offline-Daten wird verworfen und der Browser wechselt auf die neutrale Seite. Eine Abmeldung am Server ist offline nicht möglich — dafür sind die Offline-Daten ohne erneute Anmeldung nicht mehr lesbar, die Offline-Berechtigung läuft ohnehin nach 48 Stunden ab, und ein Neustart des Geräts räumt sie ab.
+
+### Sichtschutz bei Fenster- oder Tab-Wechsel
+
+Ihre Einrichtung kann zusätzlich den **Sichtschutz** einschalten (Voreinstellung: aus). Ist er aktiv, legt sich eine neutrale Fläche über den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht — etwa beim Wechsel in ein anderes Programm.
+
+Zum Weiterarbeiten klicken Sie auf **Fortfahren** oder drücken `Enter` bzw. die Leertaste. Der Cursor steht danach wieder dort, wo er vorher stand. Es läuft kein Countdown und nichts bewegt sich; die Fläche bleibt, bis Sie sie freigeben.
+
 ---
 
 ## 2. Startseite – Zeitstrom

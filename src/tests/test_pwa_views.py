@@ -155,12 +155,14 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v45"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v46"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
             "#2102: Standalone-Bausteine aendern die precachte Shell → v44; "
-            "#1059: Skip-Link und Formularsemantik aendern die Shell → v45)."
+            "#1059: Skip-Link und Formularsemantik aendern die Shell → v45; "
+            "#2136: Quick-Exit-Knopf, Sichtblende und die neue precachte "
+            "quick-exit.js aendern Shell und APP_SHELL → v46)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -693,7 +695,12 @@ class TestPrecachedShellBumpGuard:
     # Refs #2043: _contact_stage_legend.html aendert gerendertes Markup in der
     # precachten Offline-Personenliste; v43 und der Hash werden gemeinsam
     # nachgezogen. Der online-only Hilfe-Link wird dort bewusst unterdrueckt.
-    _PINNED_CACHE_NAME = "anlaufstelle-v45"
+    # Refs #2136: v45 -> v46 — der Mitschauen-Schutz aendert die precachte
+    # Shell (Knopf, Sichtblende, gemeinsamer Sticky-Wrapper in
+    # offline_base.html) UND den APP_SHELL-Block (neue Datei quick-exit.js).
+    # Beides ist ausgeliefertes Markup bzw. Precache-Inhalt, also der Fall, fuer
+    # den die Regel oben gilt: erst CACHE_NAME bumpen, dann Hash nachziehen.
+    _PINNED_CACHE_NAME = "anlaufstelle-v46"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -734,7 +741,17 @@ class TestPrecachedShellBumpGuard:
     # erhaelt seine Fokusregeln im bereits CSP-gehashten Inline-Block. Der Hash
     # wird auf den finalen Inhalt derselben unveroeffentlichten v45-Generation
     # nachgezogen; es existiert keine ausgelieferte Zwischen-v45 im Feld.
-    _PINNED_SHELL_HASH = "64721e998a3b098fff13485571822c9ac6c745beb18538d5c16398f1e83f85b5"
+    # Refs #2136: Hash gemeinsam mit dem v46-Bump darueber nachgezogen.
+    # Zwei Nachtraege im selben Lauf (Selbst-Review): (1) der fokussierte
+    # Skip-Link bekommt in base.html/offline_base.html focus:z-[80] statt
+    # focus:z-50, sonst verdeckte ihn die neue, deckende Sticky-Leiste;
+    # (2) der Tooltip des Knopfs sagt "beendet die Sitzung" statt "meldet Sie
+    # ab" — in der Offline-Shell gibt es keinen Server-Logout, wohl aber das
+    # Verwerfen des Sitzungsschluessels. NUR der Hash wird nachgezogen, KEIN
+    # v47 — anlaufstelle-v46 entstand im selben unveroeffentlichten Lauf, steht
+    # in keinem Tag und keinem Deploy, es gibt also keine
+    # Split-Brain-Generation im Feld (Praezedenz: #1805, #1828).
+    _PINNED_SHELL_HASH = "bad1baf5aa58cc60a59ea395eccf1c0697acd5a6549a7efbc1d5406296a9766a"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

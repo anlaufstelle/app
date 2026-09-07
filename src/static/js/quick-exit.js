@@ -1,0 +1,343 @@
+/*
+ * Mitschauen-/Shoulder-Surfing-Schutz (Refs #2136, Befund N-2).
+ *
+ * Zwei getrennte Funktionen in einer Datei, weil sie sich dieselbe
+ * Sichtblende und dieselbe Konfiguration teilen:
+ *
+ * 1. "Schnell verlassen" — Knopf in der Kopfleiste, Ctrl/Cmd+Shift+X oder
+ *    Shift+Esc. Reihenfolge ist bewusst (1) verdecken, (2) abmelden,
+ *    (3) navigieren: die Person, die mitliest, steht neben dem Geraet, nicht
+ *    vor dem Server. Auf die Logout-Antwort wird NICHT gewartet — sie kommt
+ *    an, waehrend die neue Seite schon laedt (``sendBeacon``/``keepalive``).
+ * 2. Sichtschutz bei Fokusverlust (opt-in je Einrichtung) — legt bei
+ *    ``blur``/``visibilitychange`` eine deckende Flaeche ueber den Inhalt.
+ *    Freigabe nur per Klick oder Taste, KEIN Timer (WCAG 2.2.1) und keine
+ *    Bewegung.
+ *
+ * WARUM EIGENE DATEI (statt einer Alpine-Komponente in base-layout.js):
+ * Die precachten Offline-Shells erben ``offline_base.html`` und muessen
+ * byte-gleich bleiben (Refs #1966) — sie duerfen also keine Facility-Werte
+ * serverseitig rendern. Diese Datei laeuft dort mit demselben statischen
+ * Script-Tag und liest die Konfiguration aus ``localStorage``, wo die
+ * ONLINE-Seiten sie hinterlegt haben. Ohne Spiegel greifen die Vorgaben
+ * (Standardziel, Sichtschutz aus).
+ *
+ * KEIN Audit-Ereignis und kein Zaehler: Zweck der Aktion ist der Schutz der
+ * Person, nicht die Rechenschaft ueber ihr Verhalten.
+ */
+(function () {
+    "use strict";
+
+    // Muss mit ``core.models.settings.DEFAULT_QUICK_EXIT_URL`` uebereinstimmen
+    // (Drift-Guard: src/tests/test_quick_exit.py). Die Offline-Shell hat
+    // keinen Server, der die Vorgabe rendern koennte — deshalb steht sie hier.
+    var DEFAULT_URL = "https://www.wikipedia.org/";
+    var STORAGE_KEY = "anlaufstelle.quickExit";
+
+    function _body() {
+        return document.body;
+    }
+
+    /** Nur http/https navigieren — ``javascript:``/``data:`` waeren XSS.
+     *
+     * Der Wert kommt zwar aus einem validierten Settings-Feld, laeuft aber
+     * ueber ``localStorage`` (same-origin beschreibbar) in die Offline-Shell.
+     * Die zweite Pruefung kostet nichts und schliesst genau diesen Umweg.
+     */
+    function _isNavigableUrl(value) {
+        if (!value) return false;
+        try {
+            var parsed = new URL(value, window.location.href);
+            return parsed.protocol === "http:" || parsed.protocol === "https:";
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    function _readMirror() {
+        try {
+            var raw = window.localStorage.getItem(STORAGE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    function _writeMirror(config) {
+        try {
+            window.localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({ url: config.url, privacyScreen: config.privacyScreen })
+            );
+        } catch (_e) {
+            // Privater Modus / abgeschaltete Speicherung: die Online-Seite
+            // funktioniert weiter, offline greifen die Vorgaben.
+        }
+    }
+
+    /** Konfiguration: Online aus den ``data-``-Attributen, offline aus dem Spiegel. */
+    function _config() {
+        var body = _body();
+        var dataset = body ? body.dataset : {};
+        var hasServerConfig = typeof dataset.quickExitUrl === "string";
+        if (hasServerConfig) {
+            var config = {
+                url: _isNavigableUrl(dataset.quickExitUrl) ? dataset.quickExitUrl : DEFAULT_URL,
+                privacyScreen: dataset.privacyScreen === "1",
+            };
+            _writeMirror(config);
+            return config;
+        }
+        var mirror = _readMirror();
+        return {
+            url: mirror && _isNavigableUrl(mirror.url) ? mirror.url : DEFAULT_URL,
+            privacyScreen: !!(mirror && mirror.privacyScreen),
+        };
+    }
+
+    function _logoutUrl() {
+        var body = _body();
+        return (body && body.dataset.quickExitLogoutUrl) || "";
+    }
+
+    function _overlay() {
+        return document.getElementById("privacy-screen");
+    }
+
+    function _overlayPanel() {
+        return document.getElementById("privacy-screen-panel");
+    }
+
+    function _resumeButton() {
+        return document.getElementById("privacy-screen-resume");
+    }
+
+    /** Alles unter der Blende: jedes direkte body-Kind ausser ihr selbst.
+     *
+     * Bewusst nicht die Aufzaehlung "main + nav + Leiste": Der Skip-Link ist
+     * ebenfalls ein direktes body-Kind und bliebe sonst fokussierbar — die
+     * Blende haette ein Loch, durch das die Tabulator-Taste hinausfuehrt. Eine
+     * generische Regel deckt ausserdem alles ab, was spaeter dazukommt
+     * (Banner, Consent-Leiste, weitere Layout-Bausteine).
+     */
+    function _shieldedRegions() {
+        var overlay = _overlay();
+        return Array.prototype.filter.call(document.body.children, function (element) {
+            return element !== overlay && element.tagName !== "SCRIPT";
+        });
+    }
+
+    var _supportsInert = typeof HTMLElement !== "undefined" && "inert" in HTMLElement.prototype;
+
+    /** Inhalt unter der Blende stilllegen.
+     *
+     * ``visibility: hidden`` ist der eigentliche Riegel: Es nimmt den Inhalt
+     * aus der Darstellung, aus der Tab-Reihenfolge UND aus dem
+     * Accessibility-Baum. Ein blosses Overlay davor waere nur optisch — bei
+     * "Schnell verlassen" muss der Inhalt auch dann weg sein, wenn die
+     * Navigation haengt. ``inert`` kommt zusaetzlich obendrauf (und ist der
+     * einzige Traeger, wo es unterstuetzt wird); wo es fehlt, uebernimmt
+     * ``aria-hidden`` die Rolle im Accessibility-Baum. Fokussierbare Reste in
+     * einem ``aria-hidden``-Teilbaum kann es dabei nicht geben — die
+     * Sichtbarkeit ist ja gleichzeitig weg (axe: aria-hidden-focus).
+     */
+    function _shield(active) {
+        _shieldedRegions().forEach(function (region) {
+            if (_supportsInert) {
+                region.inert = active;
+            } else if (active) {
+                region.setAttribute("aria-hidden", "true");
+            } else {
+                region.removeAttribute("aria-hidden");
+            }
+            region.style.visibility = active ? "hidden" : "";
+        });
+    }
+
+    var _lastFocused = null;
+
+    function _showOverlay(mode) {
+        var overlay = _overlay();
+        if (!overlay) return;
+        var panel = _overlayPanel();
+        // Beim Verlassen bleibt die Flaeche leer: die Aufforderung
+        // "Zum Fortfahren ..." waere dort falsch — es geht gerade nicht weiter.
+        if (panel) panel.hidden = mode === "exit";
+        overlay.dataset.mode = mode;
+        overlay.hidden = false;
+    }
+
+    function _hideOverlay() {
+        var overlay = _overlay();
+        if (!overlay) return;
+        overlay.hidden = true;
+        delete overlay.dataset.mode;
+    }
+
+    function _isOverlayVisible() {
+        var overlay = _overlay();
+        return !!overlay && !overlay.hidden;
+    }
+
+    // --- Sichtschutz -------------------------------------------------------
+
+    function armPrivacyScreen() {
+        if (_isOverlayVisible()) return;
+        _lastFocused = document.activeElement;
+        _showOverlay("privacy");
+        _shield(true);
+        var resume = _resumeButton();
+        if (resume) resume.focus();
+    }
+
+    /** WCAG 2.4.3: Fokus zurueck auf das Element, das ihn vor der Blende hatte. */
+    function releasePrivacyScreen() {
+        var overlay = _overlay();
+        if (!overlay || overlay.dataset.mode !== "privacy") return;
+        _hideOverlay();
+        _shield(false);
+        var previous = _lastFocused;
+        _lastFocused = null;
+        if (previous && typeof previous.focus === "function" && document.contains(previous)) {
+            previous.focus();
+        }
+    }
+
+    // --- Schnell verlassen -------------------------------------------------
+
+    /** Abmelden ohne auf die Antwort zu warten.
+     *
+     * ``sendBeacon`` mit ``application/x-www-form-urlencoded``-Blob: der
+     * CSRF-Token muss im Body stehen, weil ein Beacon keine eigenen Header
+     * setzen kann und der Cookie ``HttpOnly`` ist (Refs #602). Fehlt
+     * ``sendBeacon`` (oder lehnt es die Uebergabe ab), uebernimmt ein
+     * ``fetch`` mit ``keepalive`` — dieselbe Zusage, die Anfrage ueberlebt
+     * die Navigation.
+     */
+    function _logout() {
+        var url = _logoutUrl();
+        if (!url) return false; // Offline-Shell: kein Server erreichbar.
+        var token = (typeof window.getCsrfToken === "function" && window.getCsrfToken()) || "";
+        var body = "csrfmiddlewaretoken=" + encodeURIComponent(token);
+        if (navigator.sendBeacon) {
+            var blob = new Blob([body], { type: "application/x-www-form-urlencoded" });
+            if (navigator.sendBeacon(url, blob)) return true;
+        }
+        try {
+            window.fetch(url, {
+                method: "POST",
+                keepalive: true,
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRFToken": token,
+                },
+                body: body,
+            });
+        } catch (_e) {
+            // Auch ein gescheiterter Logout darf die Navigation nicht
+            // aufhalten — sichtbar ist am Geraet nur die neue Seite.
+            return false;
+        }
+        return true;
+    }
+
+    /** Offline gibt es keinen Logout — der Sitzungsschluessel muss trotzdem weg. */
+    function _dropSessionKey() {
+        try {
+            var session = window.crypto_session;
+            if (session && typeof session.clearSessionKey === "function") {
+                var result = session.clearSessionKey();
+                if (result && typeof result.catch === "function") result.catch(function () {});
+            }
+        } catch (_e) {
+            // Krypto nicht geladen (z.B. Testharness) — kein Grund zu bleiben.
+        }
+    }
+
+    function quickExit() {
+        var target = _config().url;
+        _showOverlay("exit");
+        _shield(true);
+        _logout();
+        _dropSessionKey();
+        window.location.replace(target);
+    }
+
+    // --- Verdrahtung -------------------------------------------------------
+
+    function _isQuickExitShortcut(event) {
+        var key = event.key || "";
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && key.toLowerCase() === "x") return true;
+        // Shift+Esc als Alternative — reines Esc bliebe ein
+        // Character-Key-Shortcut (WCAG 2.1.4) und kollidierte mit dem
+        // Schliessen der mobilen Suche (@keydown.escape.window).
+        return event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && (key === "Escape" || key === "Esc");
+    }
+
+    function _onKeydown(event) {
+        if (_isQuickExitShortcut(event)) {
+            // Capture-Phase am window: das Kuerzel wirkt auch aus einem
+            // fokussierten Eingabefeld heraus und vor jedem Alpine-Handler.
+            event.preventDefault();
+            quickExit();
+            return;
+        }
+        if (!_isOverlayVisible()) return;
+        if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+            event.preventDefault();
+            releasePrivacyScreen();
+        }
+    }
+
+    function init() {
+        var config = _config();
+
+        var button = document.getElementById("quick-exit-button");
+        if (button) button.addEventListener("click", quickExit);
+
+        var overlay = _overlay();
+        if (overlay) overlay.addEventListener("click", releasePrivacyScreen);
+
+        window.addEventListener("keydown", _onKeydown, true);
+
+        // bfcache: ``Cache-Control: no-store`` (Refs #1342) verhindert einen
+        // Restore nicht garantiert in jedem Browser. Kommt die Seite trotzdem
+        // aus dem Vor-/Zurueck-Cache, stuende dort der Inhalt VOR dem
+        // Verlassen — also verdecken und neu laden; nach dem Logout endet der
+        // Reload auf /login/. Nur auf angemeldeten Online-Seiten: in der
+        // Offline-Shell wuerde ein Reload ins Netz laufen.
+        if (_logoutUrl()) {
+            window.addEventListener("pageshow", function (event) {
+                if (!event.persisted) return;
+                _showOverlay("exit");
+                _shield(true);
+                window.location.reload();
+            });
+        }
+
+        if (config.privacyScreen) {
+            window.addEventListener("blur", armPrivacyScreen);
+            document.addEventListener("visibilitychange", function () {
+                if (document.hidden) armPrivacyScreen();
+            });
+        }
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+
+    // Nur fuer die Tests und den Offline-Pfad sichtbar; die UI ruft
+    // ausschliesslich ueber Knopf und Tastenkuerzel.
+    window.quickExit = {
+        DEFAULT_URL: DEFAULT_URL,
+        STORAGE_KEY: STORAGE_KEY,
+        config: _config,
+        trigger: quickExit,
+        arm: armPrivacyScreen,
+        release: releasePrivacyScreen,
+    };
+})();
