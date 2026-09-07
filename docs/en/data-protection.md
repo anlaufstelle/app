@@ -32,6 +32,7 @@
 | Measure | Reference | For |
 |---|---|---|
 | Art. 25 Privacy by design/default | [ADR-005](../adr/005-facility-scoping-and-rls.md) — facility scoping + RLS | [Auditor] [Dev] |
+| Art. 25 Data minimization on upload | **Metadata stripping for image attachments** (#2128): `strip_image_metadata` in [`services/file_vault/policy.py`](../../src/core/services/file_vault/policy.py) re-encodes jpg/jpeg/png/webp/tif/tiff before encryption and removes EXIF (incl. the **GPS capture location**, device identifiers, capture time, embedded thumbnail), PNG text chunks and XMP/IPTC — orientation is preserved as a pixel rotation, the ICC profile is kept. Always on, no toggle; images that cannot be decoded are rejected fail-closed. **Limit:** PDF/OOXML document metadata (`/Author`, `dc:creator` — staff real names) is **not** cleaned. | [Auditor] [Dev] [Operator] |
 | Art. 32 Encryption at rest | [ADR-006](../adr/006-fernet-field-encryption.md) (fields) · [ADR-014](../adr/014-encrypted-file-vault.md) (file vault, Fernet/AES-128) — **identical per owner**: files on events, clients and cases run through the same pipeline (virus scan → encryption → storage path), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) | [Auditor] [Dev] |
 | Art. 32 Access control | [ADR-005](../adr/005-facility-scoping-and-rls.md) (RLS) · [ADR-018](../adr/018-rollenmodell-superadmin.md)/[ADR-020](../adr/020-three-role-postgres-model.md) (roles) · [ADR-015](../adr/015-mfa-totp.md) (MFA) | [Auditor] [Dev] |
 | Art. 32 Integrity/traceability | [ADR-007](../adr/007-auditlog-append-only.md) — append-only audit log | [Auditor] [Dev] |
@@ -67,5 +68,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 25d836549bc33d26484dc7e7ca09b2b9c2041fd1 -->
+<!-- translation-date: 2026-09-07 -->
+<!-- source-hash: 09dab1b51c448eb9cb13a2c05ca19633258a9d33 -->

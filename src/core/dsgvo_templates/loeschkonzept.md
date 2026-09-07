@@ -61,6 +61,15 @@ nicht physisch. Die endgültige Löschung folgt dem Lebenszyklus des zugehörige
 Datensatzes; der dafür vorgesehene Sofortlöschweg beseitigt Datei und Versionen
 ersatzlos, sofern kein Legal Hold greift.
 
+Bereits beim Hochladen greift die Datenminimierung nach Art. 5 Abs. 1 lit. c
+DSGVO: Bilddateien werden vor der Verschlüsselung neu kodiert und verlieren
+dabei ihre eingebetteten Metadaten — insbesondere den GPS-Aufnahmeort, die
+Gerätekennung, den Aufnahmezeitpunkt und das eingebettete Vorschaubild. Diese
+Angaben entstehen dadurch gar nicht erst als aufzubewahrender Bestand. Für
+Dokumentformate (PDF, Office) gilt das nicht; deren Dokumenteigenschaften
+können Angaben über die bearbeitende Beschäftigte enthalten und sind
+organisatorisch zu behandeln.
+
 ### 3.3 Audit-Log
 
 Das Audit-Log wird rollierend nach `auditlog_retention_months` bereinigt. Der

@@ -35,6 +35,7 @@ from core.services.file_vault.policy import (
     enforce_magic_bytes,
     enforce_upload_size,
     run_virus_scan,
+    strip_image_metadata,
 )
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,9 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
        ``SECURITY_VIOLATION`` protokolliert (fail-closed, Issue #524).
     4. Verify magic-bytes MIME matches the declared ``content_type`` (Refs #610).
     5. Decompression-/Zip-Bomb-Guards (#1268/#1310).
-    6. UUID-Dateiname + Facility-Unterverzeichnis + Fernet-Encrypt auf Disk
+    6. Metadaten-Bereinigung der Bild-Uploads (#2128) — EXIF/GPS, PNG-Textchunks
+       und XMP/IPTC werden entfernt, bevor irgendetwas verschluesselt wird.
+    7. UUID-Dateiname + Facility-Unterverzeichnis + Fernet-Encrypt auf Disk
        (Chunks an die Storage-ID gebunden, A4.5 / Refs #1016).
     """
     enforce_allowed_file_types(facility, uploaded_file, owner, user)
@@ -109,6 +112,13 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     enforce_image_limits(facility, uploaded_file, owner, user)
     # #1310 (S4): Archiv-Expansions-Guard (Zip-Bomb) fuer ZIP/OOXML-Container.
     enforce_archive_limits(facility, uploaded_file, owner, user)
+    # #2128 (N-1): Bild-Metadaten (EXIF/GPS, PNG-Textchunks, XMP/IPTC) entfernen —
+    # NACH dem Pixel-Cap (sonst dekodierte der Re-Encode eine Decompression-Bomb
+    # voll in den RAM) und unmittelbar VOR der Verschluesselung. ``payload`` ist
+    # fuer Nicht-Bilder dasselbe Objekt, sonst die bereinigte Datei; ab hier
+    # gilt AUSSCHLIESSLICH sie (Groesse/MIME der Zeile muessen zu den
+    # tatsaechlich gespeicherten Bytes passen).
+    payload = strip_image_metadata(facility, uploaded_file, owner, user)
 
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
@@ -116,7 +126,7 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     # A4.5 (Refs #1016): Chunks an die Storage-ID binden (v2-Format) — schützt
     # Bestandsdateien gegen Reorder/Truncation/Cross-File-Splicing auf der Disk.
     try:
-        encrypt_file(uploaded_file, output_path, file_id=storage_name)
+        encrypt_file(payload, output_path, file_id=storage_name)
     except Exception:
         # Scheitert die Verschluesselung, keine halbe ``.enc`` auf Disk lassen (#662).
         output_path.unlink(missing_ok=True)
@@ -125,8 +135,11 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     return StagedUpload(
         storage_name=storage_name,
         output_path=output_path,
+        # #2128: der Container bleibt beim Re-Encode identisch (gespeichert wird
+        # im von Pillow erkannten Quellformat), der verifizierte libmagic-MIME
+        # gilt deshalb unveraendert weiter.
         detected_mime=detected_mime or "",
-        file_size=uploaded_file.size,
+        file_size=payload.size,
         original_name=uploaded_file.name,
         content_type=uploaded_file.content_type or "application/octet-stream",
     )

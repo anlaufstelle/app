@@ -964,8 +964,11 @@ File attachments (photos, scans, documents) on **events, clients and cases** ([A
 3. **ClamAV scan** before encryption:
    - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
    - Virus detected → the upload is discarded and an audit-log entry is written.
-4. The payload is encrypted chunk-wise with Fernet (MultiFernet) (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
-5. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
+4. **Metadata stripping** for image uploads (Refs #2128): `jpg`/`jpeg`/`png`/`webp`/`tif`/`tiff` are re-encoded and lose their EXIF data (including the **GPS capture location**, device model/serial, capture timestamp, embedded thumbnail), PNG text chunks (`tEXt`/`iTXt`) and XMP/IPTC blocks. **Orientation is preserved** -- it is baked into the pixels, so portrait photos do not flip. The ICC colour profile is kept as well. `gif`/`bmp` and every non-image file (PDF, DOCX, ODT...) stay byte-identical. **Always on, no toggle** -- the application is not a forensic evidence tool. If a file cannot be decoded despite matching magic bytes, the upload is rejected (fail-closed, audit reason `image_undecodable`).
+5. The payload is encrypted chunk-wise with Fernet (MultiFernet) (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
+6. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
+
+> **Note on document metadata:** Stripping only applies to images. Metadata in PDF (`/Author`, `/Creator`) and OOXML files (`docProps/core.xml`, `dc:creator`) is left untouched -- those typically carry the real name of the **staff member** working on the file, not of the data subject. If that matters, clean the documents before uploading.
 
 > **Plaintext staging buffer** (#1661): Uploads above `FILE_UPLOAD_MAX_MEMORY_SIZE` (default 2.5 MB) are buffered by Django as a plaintext temp file on disk (`FILE_UPLOAD_TEMP_DIR`) before step 3, ahead of scanning and encryption. In the shipped Compose files this buffer lives on a `/tmp` tmpfs (RAM) rather than persistent storage. Details, verification, and fallback options without tmpfs: [ops runbook § 5.7a](../ops-runbook.md).
 
@@ -1972,4 +1975,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 238386c9ddadf543bb34563677fdd76451e8c665 -->
+<!-- source-hash: b2dbba4da7468135bd1962ff421fa4e4550cfc12 -->

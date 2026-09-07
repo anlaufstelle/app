@@ -221,6 +221,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 - **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual. On clients and cases it works identically: pick the file in the form, save the record.
 - **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
 - **Encryption:** All attachments are stored encrypted (Fernet, AES-128-CBC with HMAC-SHA256). That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
+- **Image metadata is removed:** For images (JPG, PNG, WebP, TIFF) the embedded metadata is deleted on upload -- above all the **GPS capture location** (on phone photos often the home or current address of the person concerned), plus device model, capture time and the embedded thumbnail, which may still show the uncropped original. The picture itself stays unchanged, and portrait photos stay portrait. This does **not** happen for PDF and Office files -- their document properties may still name the staff member who worked on them.
 - **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your administrator can adjust this limit.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event (or of the client or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
@@ -953,5 +954,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-02 -->
-<!-- source-hash: 55181c9101d15f6c88f36c17173ac2948a0bf548 -->
+<!-- translation-date: 2026-09-07 -->
+<!-- source-hash: 0194a509d07f30df83c581afb11f0ce2c5a3d35a -->

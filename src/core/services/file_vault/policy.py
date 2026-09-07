@@ -21,6 +21,7 @@ Enforcement-Regel liest den Owner selbst.
 
 from __future__ import annotations
 
+import io
 import logging
 import os
 import struct
@@ -518,3 +519,166 @@ def run_virus_scan(facility, uploaded_file, owner, user):
             filename=uploaded_file.name,
             signature=result.signature or "",
         )
+
+
+# Bild-Extensions MIT relevantem Metadaten-Container (Refs #2128, Befund N-1).
+# Teilmenge von :data:`_IMAGE_EXTENSIONS`: ``gif``/``bmp`` bleiben bewusst
+# draussen — sie tragen keinen EXIF-/XMP-/Text-Container, ein Re-Encode brächte
+# dort nur Risiko (Animation, Palette) ohne Datenschutz-Gewinn.
+_METADATA_STRIP_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "tif", "tiff"})
+
+# Formate, deren Encoder mehrere Frames schreiben kann. Nur fuer sie wird
+# ``save_all`` gesetzt — sonst verlöre ein mehrseitiges TIFF bzw. ein
+# animiertes WebP/APNG beim Bereinigen alle Frames ausser dem ersten.
+_MULTIFRAME_SAVE_FORMATS = frozenset({"TIFF", "WEBP", "PNG", "GIF"})
+
+# ``Image.info``-Schluessel, die den Re-Encode ueberleben duerfen. Beides ist
+# Bild-*Wiedergabe*, keine Aufnahme-Metadatenspur: ohne ICC-Profil kippen die
+# Farben, ohne ``transparency`` wird ein transparentes Palettenbild opak.
+# Alles andere (``exif``, ``xmp``, ``comment``, ``dpi``, PNG-Textchunks,
+# TIFF-``tag_v2``) faellt weg.
+_KEEP_IMAGE_INFO_KEYS = frozenset({"icc_profile", "transparency"})
+
+
+def _image_save_kwargs(save_format: str, source):
+    """Encoder-Optionen je Zielformat (Refs #2128).
+
+    JPEG bekommt ``quality="keep"``/``subsampling="keep"``: ohne sie wuerde
+    jedes Handyfoto verlustbehaftet neu komprimiert — bei einem q60-Original
+    ergibt ein Re-Encode mit ``quality=95`` eine **doppelt so grosse** Datei.
+    ``keep`` verlangt allerdings, dass der Encoder die Quantisierungstabellen
+    der Quelle sieht; das erledigt :func:`_cleaned_image` (siehe dort).
+
+    PNG ist per Definition verlustfrei. WebP folgt der Quelle
+    (``img.info["lossless"]``), sonst hoher Qualitaetswert. TIFF behaelt die
+    Kompression der Quelle, damit ein LZW-Scan nicht unkomprimiert aufgeblasen
+    wird.
+    """
+    if save_format == "JPEG":
+        return {"quality": "keep", "subsampling": "keep"}
+    if save_format == "PNG":
+        return {"optimize": True}
+    if save_format == "WEBP":
+        if source.info.get("lossless"):
+            return {"lossless": True}
+        return {"quality": 95}
+    if save_format == "TIFF":
+        compression = source.info.get("compression")
+        return {"compression": compression} if compression else {}
+    return {}
+
+
+def _cleaned_image(frame, source):
+    """Ein Frame ohne Metadaten, mit in die Pixel gedrehter Orientierung.
+
+    ``ImageOps.exif_transpose`` liefert **immer** ein neues, "nacktes"
+    ``Image`` (auch wenn nichts zu drehen war — dann eine ``copy()``). Genau
+    das ist hier der Hebel: die Kopie hat kein ``tag_v2`` mehr, weshalb der
+    TIFF-Encoder die sonst uebernommenen IPTC-/Photoshop-/XMP-Tags der Quelle
+    nicht mehr findet, und kein ``exif``/``xmp``/``comment`` in ``encoderinfo``.
+    Uebrig bleibt ``info``, aus dem JPEG-/PNG-/TIFF-Encoder sonst noch
+    ``exif``/``xmp``/``comment`` nachziehen — das wird hier auf
+    :data:`_KEEP_IMAGE_INFO_KEYS` eingedampft.
+
+    ``format``/``quantization`` werden bewusst wieder gesetzt: der
+    JPEG-Encoder prueft fuer ``quality="keep"`` genau diese beiden Attribute
+    (``Cannot use 'keep' when original image is not a JPEG``).
+    """
+    from PIL import ImageOps  # noqa: PLC0415 — lazy wie die uebrigen PIL-Importe
+
+    cleaned = ImageOps.exif_transpose(frame)
+    cleaned.info = {key: value for key, value in frame.info.items() if key in _KEEP_IMAGE_INFO_KEYS}
+    cleaned.format = source.format
+    quantization = getattr(source, "quantization", None)
+    if quantization is not None:
+        cleaned.quantization = quantization
+    return cleaned
+
+
+def strip_image_metadata(facility, uploaded_file, owner, user):
+    """Entferne eingebettete Metadaten aus Bild-Uploads (Refs #2128, Befund N-1).
+
+    Liefert die zu speichernde Datei zurueck — fuer Nicht-Bilder und fuer
+    ``gif``/``bmp`` **dasselbe** Objekt (byte-identisch), fuer die Formate aus
+    :data:`_METADATA_STRIP_EXTENSIONS` eine neue, re-encodierte Datei ohne
+    EXIF/GPS, ohne PNG-Textchunks, ohne XMP/IPTC.
+
+    Warum ueberhaupt: Fotos aus der Beratungspraxis (Verletzungsdokumentation,
+    Bescheid-Scan) tragen regelmaessig den Aufnahmeort per EXIF-GPS — also den
+    Aufenthaltsort der betroffenen Person —, dazu Geraete-Seriennummer,
+    Zeitstempel und ein eingebettetes Vorschaubild, das den **unbeschnittenen**
+    Originalausschnitt zeigt. Das lag bisher vollstaendig im Vault und ging bei
+    Download, Art.-15-Auskunft und Einrichtungs-Export 1:1 wieder heraus —
+    entgegen Art. 5 Abs. 1 lit. c DSGVO. Kein Schalter: die Anwendung ist kein
+    Beweissicherungswerkzeug, und ein Opt-out machte die Datenminimierung zur
+    Disziplinfrage.
+
+    Reihenfolge (bindend): laeuft NACH ``enforce_image_limits`` und damit nach
+    dem Pixel-Cap (#1268) — sonst dekodierte ausgerechnet diese Stufe eine
+    Decompression-Bomb voll in den RAM — und unmittelbar VOR ``encrypt_file``.
+
+    Fail-closed: laesst sich die Datei trotz bestandenem Magic-Bytes-Check
+    nicht dekodieren oder nicht zurueckschreiben, wird der Upload mit
+    ``image_undecodable`` abgewiesen. Sie stillschweigend ungestrippt zu
+    speichern waere genau das Loch, das dieses Ticket schliesst.
+
+    Zwei bewusste Entscheide (R-L7a-1):
+
+    * **Groessen-Cap nach dem Re-Encode wird nicht erneut geprueft.**
+      ``enforce_upload_size`` laeuft davor und bleibt der Memory-DoS-Schutz;
+      der Re-Encode entfernt Metadaten und behaelt (JPEG) die
+      Quantisierungstabellen, verkleinert also praktisch immer. Eine zweite
+      Pruefung waere Komplexitaet ohne Sicherheitsgewinn.
+    * **``detected_mime`` wird beibehalten, nicht neu gesniffed.** Gespeichert
+      wird im Format, das Pillow in der Quelle erkannt hat (``img.format``) —
+      der Container und damit die Magic-Bytes bleiben identisch, ein zweiter
+      libmagic-Lauf koennte nur dasselbe Ergebnis liefern.
+    """
+    ext = _extension(uploaded_file)
+    if ext not in _METADATA_STRIP_EXTENSIONS:
+        return uploaded_file
+
+    import warnings  # noqa: PLC0415
+
+    from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: PLC0415
+    from PIL import Image, ImageSequence, UnidentifiedImageError  # noqa: PLC0415 — lazy, wie in enforce_image_limits
+
+    uploaded_file.seek(0)
+    buffer = io.BytesIO()
+    try:
+        with warnings.catch_warnings():
+            # Der Pixel-Cap hat bereits entschieden; eine Bomb-Warnung des
+            # vollen Dekodierens darf hier nicht zum Fehler werden.
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            with Image.open(uploaded_file) as source:
+                save_format = source.format
+                if not save_format:
+                    raise ValueError("Pillow lieferte kein Quellformat")
+                multiframe = save_format in _MULTIFRAME_SAVE_FORMATS and getattr(source, "n_frames", 1) > 1
+                if multiframe:
+                    frames = [_cleaned_image(frame, source) for frame in ImageSequence.Iterator(source)]
+                else:
+                    frames = [_cleaned_image(source, source)]
+                save_kwargs = _image_save_kwargs(save_format, source)
+                if multiframe:
+                    save_kwargs = {**save_kwargs, "save_all": True, "append_images": frames[1:]}
+                frames[0].save(buffer, format=save_format, **save_kwargs)
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+        _reject(
+            facility,
+            user,
+            owner,
+            reason="image_undecodable",
+            message=_("Bilddatei konnte nicht gelesen werden — Upload abgelehnt."),
+            cause=exc,
+            filename=uploaded_file.name,
+            extension=ext,
+        )
+    finally:
+        uploaded_file.seek(0)
+
+    return SimpleUploadedFile(
+        uploaded_file.name,
+        buffer.getvalue(),
+        content_type=uploaded_file.content_type or "application/octet-stream",
+    )

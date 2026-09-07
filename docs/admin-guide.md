@@ -960,8 +960,11 @@ Dateianhänge (Fotos, Scans, Dokumente) an **Ereignissen, Personen und Fällen**
 3. **ClamAV-Scan** vor Verschlüsselung:
    - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
    - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
-4. Inhalt wird chunk-weise mit Fernet (MultiFernet) verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
-5. Download erfolgt ausschließlich über die geschützte Django-View (kein direkter Webserver-Zugriff auf `MEDIA_ROOT`).
+4. **Metadaten-Bereinigung** bei Bild-Uploads (Refs #2128): `jpg`/`jpeg`/`png`/`webp`/`tif`/`tiff` werden neu kodiert und verlieren dabei EXIF (inklusive **GPS-Aufnahmeort**, Gerätemodell/-seriennummer, Aufnahmezeit, eingebettetes Vorschaubild), PNG-Textchunks (`tEXt`/`iTXt`) sowie XMP-/IPTC-Blöcke. Die **Orientierung bleibt erhalten** — sie wird in die Pixel gedreht, Hochformat-Fotos kippen also nicht. Das ICC-Farbprofil bleibt ebenfalls. `gif`/`bmp` und alle Nicht-Bild-Dateien (PDF, DOCX, ODT …) bleiben byte-identisch. **Immer aktiv, kein Schalter** — die Anwendung ist kein Beweissicherungswerkzeug. Lässt sich eine Datei trotz passender Magic-Bytes nicht dekodieren, wird der Upload abgelehnt (fail-closed, Audit-Grund `image_undecodable`).
+5. Inhalt wird chunk-weise mit Fernet (MultiFernet) verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
+6. Download erfolgt ausschließlich über die geschützte Django-View (kein direkter Webserver-Zugriff auf `MEDIA_ROOT`).
+
+> **Hinweis zu Dokument-Metadaten:** Die Bereinigung greift ausschließlich bei Bildern. Metadaten in PDF (`/Author`, `/Creator`) und in OOXML-Dateien (`docProps/core.xml`, `dc:creator`) bleiben unverändert — dort steht typischerweise der Klarname der **bearbeitenden Person**, nicht der betroffenen. Wer das ausschließen will, bereinigt die Dokumente vor dem Hochladen.
 
 > **Klartext-Zwischenpuffer (Refs #1661):** Uploads oberhalb von `FILE_UPLOAD_MAX_MEMORY_SIZE` (Default 2,5 MB) puffert Django vor Schritt 3 als Klartext-Tempdatei auf Platte (`FILE_UPLOAD_TEMP_DIR`), bevor sie gescannt und verschlüsselt werden. In den mitgelieferten Compose-Dateien liegt dieser Puffer auf einem `/tmp`-tmpfs (RAM) statt auf persistentem Storage. Details, Verifikation und Fallback-Optionen ohne tmpfs: [Ops-Runbook § 5.7a](ops-runbook.md).
 
