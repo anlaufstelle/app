@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.95.0] - 2026-09-07
+
 ### Docs
 
 - **Admin-Handbuch trennt Host- und Container-Pfad für Backups eindeutig** (#2084) — Die deutsche und englische Betriebsanleitung beschreibt `BACKUP_HOST_DIR` jetzt als Ziel der Host-Skripte und `BACKUP_DIR` ausschließlich als Container-Mount-Ziel.

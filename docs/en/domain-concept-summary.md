@@ -270,7 +270,16 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Accessibility and offline resilience**: the mobile search is usable again, screen readers announce where you are, list search fields carry accessible names, filters show their loading state, a full device storage no longer silently stops draft saving, a rolled-back server explains why offline data is unreachable, and pseudonym renames are warned about and marked in the history.
 - **The mutation gate measures again what it should**: every parallel mutmut fork now gets its own test database — before this fix, a foreign failure could only flip a mutant towards "killed", so all earlier scores were upper bounds. The structurally unmeasured share (decorated functions) is now quantified alongside every score, and the v0.91.0 delta ran with a full survivor triage whose priority-1 gaps are pinned by dedicated tests.
 
+### v0.95.0 (2026-09-07)
+
+- **Retention holds close their race windows**: a hold ordered while the nightly deletion run, an immediate anonymisation, a case erasure or a proposal approval is already in flight now stops that operation instead of arriving too late; holds also protect activities and can no longer be placed on a person that has been merged into another record.
+- **Accessibility is measured, not asserted**: forms, navigation, menus, tabs and lists meet the mechanical WCAG 2.1 AA criteria and announce their state to screen readers, an axe-core gate runs against the main pages, and the evidence document plus three manual-test cases cover what only a human can check.
+- **Sign-in paths are hardened under concurrency**: the first login with an initial password leads to the password change instead of a 403, recovery links and backup codes stay single-use even when redeemed in parallel, and every unlock records the source IP.
+- **A broken report backend no longer takes the building down**: statistics, exports, the monthly snapshot and the configuration pages isolate a failing report per facility, exports never leave partially, and every report query has a statement timeout.
+- **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
+- **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.91.0 -->
+<!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-08-28 -->
 <!-- source-hash: 19f61ad93ada6b0789df13d4ce6c8d90875665e2 -->

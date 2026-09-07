@@ -952,6 +952,6 @@ Each episode shows its status:
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.91.0 -->
+<!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-02 -->
 <!-- source-hash: 55181c9101d15f6c88f36c17173ac2948a0bf548 -->
