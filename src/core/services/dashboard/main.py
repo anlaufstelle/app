@@ -27,7 +27,7 @@ from core.models import (
     User,
     WorkItem,
 )
-from core.services.file_vault.quota import facility_storage_usage
+from core.services.file_vault.quota import facility_storage_usage, storage_warning
 
 
 def staff_dashboard_context(user, facility) -> dict:
@@ -94,6 +94,10 @@ def lead_dashboard_context(user, facility) -> dict:
         "pending_retention_proposals": pending_retention_proposals,
         "last_snapshot": last_snapshot,
         "storage_usage": storage_usage,
+        # Refs #2129 (Fix-Runde 1): Der Warnzustand darf nicht allein an der
+        # Textfarbe haengen (WCAG 1.4.1) — derselbe Satz wie in der
+        # Warnliste der Anwendungsbetreuung, aus einer Quelle.
+        "storage_warning": storage_warning(storage_usage),
     }
 
 
@@ -138,19 +142,9 @@ def facility_admin_dashboard_context(user, facility) -> dict:
     # bereits die Stelle, an der die Anwendungsbetreuung Konfigurationsprobleme
     # sieht. Bewusst nur bei erreichter Schwelle: eine Dauerwarnung ist keine.
     storage_usage = facility_storage_usage(facility)
-    if storage_usage.is_near_limit:
-        warnings.append(
-            _(
-                "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, "
-                "davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
-            )
-            % {
-                "percent": storage_usage.percent_used,
-                "used": storage_usage.used_mb,
-                "limit": storage_usage.limit_mb,
-                "trash": storage_usage.trash_mb,
-            }
-        )
+    quota_warning = storage_warning(storage_usage)
+    if quota_warning:
+        warnings.append(quota_warning)
 
     return {
         "users_without_mfa": users_without_mfa,

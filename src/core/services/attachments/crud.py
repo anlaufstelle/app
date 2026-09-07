@@ -104,11 +104,22 @@ def stage_uploads(facility, user, file_fields) -> Iterator[StagedUploadBatch]:
     staged_all: list = []
     staged_by_slug: dict[str, list] = {}
     batch: StagedUploadBatch | None = None
+    # Refs #2129 (Fix-Runde 1, R-L7a-5): laufende Summe der bereits gestagten
+    # Dateien. Sie existieren noch als KEINE ``Attachment``-Zeile — ohne diesen
+    # Offset saehe jede Datei desselben Submits denselben alten DB-Verbrauch,
+    # und ein einzelnes Formular koennte das Kontingent mit bis zu
+    # ``FILE_VAULT_MAX_UPLOAD_FILES`` Dateien deterministisch reissen.
+    # Gezaehlt wird ``staged.file_size`` (nach der Metadaten-Bereinigung) —
+    # genau der Wert, der spaeter in der Zeile steht.
+    pending_bytes = 0
     try:
         for slug, uploaded_list in file_fields.items():
             prepared = []
             for uploaded_file in uploaded_list or []:
-                staged = prepare_encrypted_upload(facility, uploaded_file, user, owner=None)
+                staged = prepare_encrypted_upload(
+                    facility, uploaded_file, user, owner=None, pending_bytes=pending_bytes
+                )
+                pending_bytes += staged.file_size
                 staged_all.append(staged)
                 prepared.append(staged)
             if prepared:
@@ -246,6 +257,11 @@ def stage_attachment_uploads(owner, user, request_files, file_fields, document_t
     facility = owner.facility
     staged_by_key: dict[str, list] = {}
     staged_all: list = []
+    # Refs #2129 (Fix-Runde 1, R-L7a-5): eine laufende Summe fuer den GANZEN
+    # Request — REPLACE- und ADD-Uploads eines Submits zaehlen gemeinsam gegen
+    # das Kontingent (siehe ``stage_uploads``). Ersetzte Vorversionen bleiben
+    # bis zur physischen Tilgung auf der Platte und zaehlen ohnehin weiter.
+    pending_bytes = 0
     try:
         for slug, _ft, current_entries, attachments_by_pk in _iter_file_fields(owner, user, document_type, data_json):
             for entry in current_entries:
@@ -256,13 +272,19 @@ def stage_attachment_uploads(owner, user, request_files, file_fields, document_t
                 replace_file = request_files.get(key)
                 if replace_file is None:
                     continue
-                staged = prepare_encrypted_upload(facility, replace_file, user, owner=owner)
+                staged = prepare_encrypted_upload(
+                    facility, replace_file, user, owner=owner, pending_bytes=pending_bytes
+                )
+                pending_bytes += staged.file_size
                 staged_all.append(staged)
                 staged_by_key[key] = [staged]
 
             prepared = []
             for uploaded_file in file_fields.get(slug) or []:
-                staged = prepare_encrypted_upload(facility, uploaded_file, user, owner=owner)
+                staged = prepare_encrypted_upload(
+                    facility, uploaded_file, user, owner=owner, pending_bytes=pending_bytes
+                )
+                pending_bytes += staged.file_size
                 staged_all.append(staged)
                 prepared.append(staged)
             if prepared:

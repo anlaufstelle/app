@@ -546,7 +546,7 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
     )
 
 
-def enforce_storage_quota(facility, uploaded_file, owner, user):
+def enforce_storage_quota(facility, uploaded_file, owner, user, *, pending_bytes: int = 0):
     """Reject uploads that would exceed the facility's storage quota (Refs #2129).
 
     Befund N-5: Die Groessenbegrenzung galt bis hierher ausschliesslich **pro
@@ -575,18 +575,26 @@ def enforce_storage_quota(facility, uploaded_file, owner, user):
     Betriebszustand, kein Angriff. Die Rechenschaftsspur ist eine eigene
     ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile.
 
-    **Race bewusst toleriert:** Zwei parallele Uploads am Limit koennen es
-    gemeinsam ueberschreiten — die Summe wird ohne Lock gelesen. Das Kontingent
-    schuetzt gegen das Volllaufen der Platte, es ist keine Buchhaltung; ein
-    ``select_for_update``/Advisory-Lock wuerde die Upload-Pipeline zusaetzlich
-    je Einrichtung serialisieren und liefe damit dem Entwurfsziel aus #1345
-    zuwider (Scan/Encrypt gerade NICHT unter dem Facility-Lock der
-    AuditLog-Hashkette).
+    ``pending_bytes`` (Refs #2129, Fix-Runde 1, R-L7a-5) traegt die Summe der
+    Dateien, die im SELBEN Request bereits gestagt, aber noch nicht als
+    ``Attachment``-Zeile persistiert sind. Ohne diesen Offset sah jede Datei
+    eines Formular-Submits denselben alten DB-Verbrauch: ein einzelner Submit
+    mit bis zu ``FILE_VAULT_MAX_UPLOAD_FILES`` Dateien konnte das Kontingent
+    deterministisch und wiederholbar reissen. Das ist ausdruecklich NICHT der
+    unten tolerierte Renn-Fall — hier gibt es kein Rennen, nur eine Schleife.
+
+    **Race bewusst toleriert:** Zwei *parallele* Uploads (zwei Requests) am
+    Limit koennen es gemeinsam ueberschreiten — die Summe wird ohne Lock
+    gelesen. Das Kontingent schuetzt gegen das Volllaufen der Platte, es ist
+    keine Buchhaltung; ein ``select_for_update``/Advisory-Lock wuerde die
+    Upload-Pipeline zusaetzlich je Einrichtung serialisieren und liefe damit
+    dem Entwurfsziel aus #1345 zuwider (Scan/Encrypt gerade NICHT unter dem
+    Facility-Lock der AuditLog-Hashkette).
     """
     from core.services.file_vault.audit import audit_attachment_quota_exceeded  # noqa: PLC0415 — Zyklus vermeiden
     from core.services.file_vault.quota import facility_storage_usage  # noqa: PLC0415
 
-    size = getattr(uploaded_file, "size", None) or 0
+    size = (getattr(uploaded_file, "size", None) or 0) + max(pending_bytes, 0)
     usage = facility_storage_usage(facility)
     if usage.fits(size):
         return

@@ -1041,7 +1041,9 @@ The **stricter** of the two always applies. If both are empty or `0`, the facili
 
 **Display and warning.** The administration hub (`/verwaltung/`) shows the row "Speicher -- X von Y MB belegt", the lead workspace shows the same figure as a card. From **90 %** usage an additional hint appears in the configuration warnings of the administration hub.
 
-> **Deliberate limit:** Two concurrent uploads at the quota can jointly exceed it slightly -- usage is read without a lock. The quota protects against filling the volume, it is not an accounting ledger; a lock would serialize every upload of a facility.
+Several files of **one** form count together: the check knows about the files already processed in the same submission and rejects the one that would break the quota.
+
+> **Deliberate limit:** Two **concurrent** submissions at the quota can jointly exceed it slightly -- usage is read without a lock. The quota protects against filling the volume, it is not an accounting ledger; a lock would serialize every upload of a facility.
 
 #### Safe Downloads (RFC 5987)
 
@@ -1998,4 +2000,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 6a6e3c6fb3eef69773b37d2a8b76fd2a546b27a5 -->
+<!-- source-hash: e5024f25f86a1eccc6f7ff39f880f2c755684011 -->

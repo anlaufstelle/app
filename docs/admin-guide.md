@@ -1037,7 +1037,9 @@ Wirksam ist immer das **striktere** der beiden Limits. Sind beide leer bzw. `0`,
 
 **Anzeige und Warnung.** Der Verwaltungs-Hub (`/verwaltung/`) zeigt die Zeile „Speicher — X von Y MB belegt (davon Z MB im Papierkorb)", die Leitungs-Arbeitszentrale dieselbe Zahl als Karte. Ab **90 %** Füllstand erscheint zusätzlich ein Hinweis in den Konfigurations-Warnungen der Anwendungsbetreuung.
 
-> **Grenze (bewusst):** Zwei gleichzeitige Uploads am Limit können es gemeinsam knapp überschreiten — der Verbrauch wird ohne Sperre gelesen. Das Kontingent schützt gegen das Volllaufen des Datenträgers, es ist keine Buchhaltung; eine Sperre würde jeden Upload einer Einrichtung serialisieren.
+Mehrere Dateien **eines** Formulars zählen gemeinsam: Die Prüfung kennt die im selben Vorgang bereits verarbeiteten Dateien und lehnt diejenige ab, mit der das Kontingent reißen würde.
+
+> **Grenze (bewusst):** Zwei **gleichzeitige** Vorgänge am Limit können es gemeinsam knapp überschreiten — der Verbrauch wird ohne Sperre gelesen. Das Kontingent schützt gegen das Volllaufen des Datenträgers, es ist keine Buchhaltung; eine Sperre würde jeden Upload einer Einrichtung serialisieren.
 
 #### Sichere Downloads (RFC 5987)
 

@@ -18,12 +18,20 @@ from core.services.file_vault.storage import StagedUpload
 
 
 class _FakeStaged:
-    """StagedUpload-Double mit Datei in einem tmp-Verzeichnis."""
+    """StagedUpload-Double mit Datei in einem tmp-Verzeichnis.
+
+    Refs #2129 (Fix-Runde 1): traegt zusaetzlich ``file_size`` — die
+    Staging-Schleife summiert die bereits gestagten Byte auf und reicht sie als
+    ``pending_bytes`` an die naechste Kontingent-Pruefung weiter.
+    """
+
+    FILE_SIZE = 1000
 
     def __init__(self, tmp_dir: Path, name: str):
         self.output_path = tmp_dir / f"{name}.enc"
         self.output_path.write_bytes(b"enc")
         self.storage_name = f"{name}.enc"
+        self.file_size = self.FILE_SIZE
 
 
 @pytest.fixture
@@ -39,10 +47,11 @@ def patch_prepare(monkeypatch):
     def _install(tmp_path: Path, fail_at: str | None = None, exc: Exception | None = None):
         created: list[_FakeStaged] = []
 
-        def _fake(facility, uploaded_file, user, *, owner=None):
+        def _fake(facility, uploaded_file, user, *, owner=None, pending_bytes=0):
             if uploaded_file == fail_at:
                 raise exc
             staged = _FakeStaged(tmp_path, f"staged-{uploaded_file}")
+            staged.seen_pending_bytes = pending_bytes
             created.append(staged)
             return staged
 
@@ -67,6 +76,23 @@ class TestStageUploadsHappyPath:
             assert all(s.output_path.exists() for s in created)
             staged.commit()
         assert all(s.output_path.exists() for s in created), "commit() muss die .enc-Dateien erhalten"
+
+    def test_kontingent_offset_waechst_ueber_den_ganzen_batch(self, tmp_path, facility_stub, patch_prepare):
+        """Refs #2129 (Fix-Runde 1, R-L7a-5): Jede weitere Datei desselben
+        Submits muss die bereits gestagten Byte als ``pending_bytes`` sehen —
+        sonst prueft jede Datei gegen denselben alten DB-Verbrauch, und ein
+        einzelnes Formular reisst das Kontingent deterministisch.
+        """
+        created = patch_prepare(tmp_path)
+
+        with stage_uploads(facility_stub, None, _file_fields("anhang", "bericht", "scan")) as staged:
+            staged.commit()
+
+        assert [s.seen_pending_bytes for s in created] == [
+            0,
+            _FakeStaged.FILE_SIZE,
+            2 * _FakeStaged.FILE_SIZE,
+        ]
 
     def test_empty_file_fields_is_noop(self, tmp_path, facility_stub, patch_prepare):
         patch_prepare(tmp_path)

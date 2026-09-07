@@ -204,6 +204,27 @@ class TestFacilityStorageUsage:
         assert usage.percent_used == 90
         assert usage.is_near_limit is True
 
+    def test_schwelle_vergleicht_ungerundet(self, facility_with_settings, existing_bytes, settings):
+        """Refs #2129 (Fix-Runde 1): Die Schwelle wurde bisher auf der
+        **gerundeten** Prozentzahl geprueft — 89,6 % rundeten auf 90 und
+        loesten die Warnung aus, obwohl sie noch nicht faellig war. Der
+        Vergleich laeuft jetzt auf dem Byte-Verhaeltnis."""
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1000)
+        existing_bytes(896 * MB)  # 89,6 %
+
+        usage = facility_storage_usage(facility_with_settings)
+
+        assert usage.percent_used == 90, "die ANZEIGE darf weiter runden"
+        assert usage.is_near_limit is False, "die SCHWELLE darf nicht runden"
+
+    def test_schwelle_greift_ab_exakt_neunzig_prozent(self, facility_with_settings, existing_bytes, settings):
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1000)
+        existing_bytes(900 * MB)
+
+        assert facility_storage_usage(facility_with_settings).is_near_limit is True
+
     def test_unter_der_schwelle_keine_warnung(self, facility_with_settings, existing_bytes, settings):
         settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
         Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=10)
@@ -347,6 +368,101 @@ class TestQuotaDurchsetzung:
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
+class TestQuotaImSelbenRequest:
+    """Refs #2129 (Fix-Runde 1, R-L7a-5 / Review-Befund B2).
+
+    ``stage_uploads``/``stage_attachment_uploads`` stagen alle Dateien eines
+    Formular-Submits, BEVOR irgendeine davon als ``Attachment``-Zeile
+    existiert. Jede Einzelpruefung sah deshalb denselben alten DB-Verbrauch —
+    ein einzelner Submit konnte das Kontingent mit bis zu
+    ``FILE_VAULT_MAX_UPLOAD_FILES`` Dateien deterministisch ueberschreiten. Das
+    ist keine tolerierte Parallel-Race (die betrifft zwei Requests), sondern
+    der normale Batch-Pfad.
+    """
+
+    def test_drei_dateien_im_batch_reissen_das_kontingent_nicht(
+        self, facility_with_settings, staff_user, doc_type_with_file, existing_bytes, settings
+    ):
+        from core.services.attachments.crud import stage_uploads
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1)
+        # Rest: 2x PDF passt, das dritte nicht mehr.
+        existing_bytes(1 * MB - 2 * len(PDF_BYTES) - 1)
+        _, ft_file = doc_type_with_file
+        files = {
+            ft_file.name.lower(): [
+                SimpleUploadedFile(f"datei{i}.pdf", PDF_BYTES, content_type="application/pdf") for i in range(3)
+            ]
+        }
+
+        with pytest.raises(ValidationError) as exc:
+            with stage_uploads(facility_with_settings, staff_user, files):
+                pass
+
+        assert "Speicherkontingent" in str(exc.value)
+
+    def test_batch_unter_dem_kontingent_geht_vollstaendig_durch(
+        self, facility_with_settings, staff_user, doc_type_with_file, existing_bytes, settings
+    ):
+        from core.services.attachments.crud import stage_uploads
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1)
+        existing_bytes(1 * MB - 4 * len(PDF_BYTES))
+        _, ft_file = doc_type_with_file
+        files = {
+            ft_file.name.lower(): [
+                SimpleUploadedFile(f"datei{i}.pdf", PDF_BYTES, content_type="application/pdf") for i in range(3)
+            ]
+        }
+
+        with stage_uploads(facility_with_settings, staff_user, files) as batch:
+            staged = [item for entries in batch.by_slug.values() for item in entries]
+            batch.commit()
+
+        assert len(staged) == 3
+        for item in staged:
+            item.output_path.unlink(missing_ok=True)
+
+    def test_replace_pfad_zaehlt_ebenfalls_kumulativ(
+        self, facility_with_settings, staff_user, doc_type_with_file, event, existing_bytes, settings
+    ):
+        """Derselbe Fehler lag im Update-/Replace-Pfad."""
+        from core.services.attachments.crud import stage_attachment_uploads
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1)
+        existing_bytes(1 * MB - 2 * len(PDF_BYTES) - 1)
+        dt, ft_file = doc_type_with_file
+        slug = ft_file.slug
+        file_fields = {
+            slug: [SimpleUploadedFile(f"neu{i}.pdf", PDF_BYTES, content_type="application/pdf") for i in range(3)]
+        }
+
+        with pytest.raises(ValidationError) as exc:
+            stage_attachment_uploads(event, staff_user, {}, file_fields, dt, data_json={})
+
+        assert "Speicherkontingent" in str(exc.value)
+
+    def test_pending_bytes_wirkt_direkt_am_enforcer(self, facility_with_settings, staff_user, existing_bytes, settings):
+        """Direkte Sonde auf den neuen Parameter: dieselbe Datei passt ohne
+        Offset und passt mit Offset nicht mehr."""
+        from core.services.file_vault.policy import enforce_storage_quota
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1)
+        existing_bytes(1 * MB - 1000)
+        uploaded = SimpleUploadedFile("x.pdf", PDF_BYTES, content_type="application/pdf")
+
+        enforce_storage_quota(facility_with_settings, uploaded, None, staff_user)
+
+        with pytest.raises(ValidationError):
+            enforce_storage_quota(facility_with_settings, uploaded, None, staff_user, pending_bytes=900)
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
 class TestQuotaAudit:
     def test_ablehnung_schreibt_quota_eintrag_statt_security_violation(
         self, facility_with_settings, existing_bytes, upload, settings
@@ -408,6 +524,49 @@ class TestSichtbarkeit:
 
         assert ctx["storage_usage"].used_mb == 4
         assert ctx["storage_usage"].limit_mb == 10
+
+    def test_leitungs_dashboard_zeigt_einen_warntext_nicht_nur_farbe(
+        self, facility_with_settings, lead_user, existing_bytes, settings
+    ):
+        """Refs #2129 (Fix-Runde 1): Bei Erreichen der Schwelle wechselte im
+        Lead-Dashboard nur die Textfarbe — der Warnzustand war rein farblich
+        codiert (WCAG 1.4.1) und der geforderte Hinweistext fehlte."""
+        from core.services.dashboard import lead_dashboard_context
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=10)
+        existing_bytes(9 * MB)
+
+        ctx = lead_dashboard_context(lead_user, facility_with_settings)
+
+        assert ctx["storage_warning"], "Leitung bekommt keinen Warntext"
+        assert "Speicherkontingent" in ctx["storage_warning"]
+
+    def test_leitungs_dashboard_ohne_warnung_unterhalb_der_schwelle(
+        self, facility_with_settings, lead_user, existing_bytes, settings
+    ):
+        from core.services.dashboard import lead_dashboard_context
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=10)
+        existing_bytes(5 * MB)
+
+        assert lead_dashboard_context(lead_user, facility_with_settings)["storage_warning"] is None
+
+    def test_admin_und_leitung_teilen_denselben_warntext(
+        self, facility_with_settings, admin_user, lead_user, existing_bytes, settings
+    ):
+        """Ein msgid fuer beide Rollen — sonst driften die Formulierungen."""
+        from core.services.dashboard import facility_admin_dashboard_context, lead_dashboard_context
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=10)
+        existing_bytes(9 * MB)
+
+        admin_warnings = facility_admin_dashboard_context(admin_user, facility_with_settings)["settings_warnings"]
+        lead_warning = lead_dashboard_context(lead_user, facility_with_settings)["storage_warning"]
+
+        assert lead_warning in admin_warnings
 
     def test_warnung_ab_neunzig_prozent(self, facility_with_settings, admin_user, existing_bytes, settings):
         from core.services.dashboard import facility_admin_dashboard_context

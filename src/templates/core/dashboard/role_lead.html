@@ -56,6 +56,12 @@
             {% blocktrans with trash=storage_usage.trash_mb %}belegt · kein Kontingent gesetzt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
             {% endif %}
         </div>
+        {% comment %}Refs #2129 (Fix-Runde 1): Der Warnzustand darf nicht allein
+        über die Textfarbe erkennbar sein (WCAG 1.4.1) — derselbe Satz, den die
+        Anwendungsbetreuung in ihrer Warnliste sieht.{% endcomment %}
+        {% if storage_warning %}
+        <p class="text-[12px] font-medium text-orange-700 mt-2" data-testid="card-storage-warning">{{ storage_warning }}</p>
+        {% endif %}
     </a>
 </div>
 {% endblock %}

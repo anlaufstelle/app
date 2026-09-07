@@ -45,6 +45,7 @@ from dataclasses import dataclass
 
 from django.conf import settings as django_settings
 from django.db.models import Q, Sum
+from django.utils.translation import gettext as _
 
 from core.models.attachment import Attachment
 from core.models.settings import Settings
@@ -84,15 +85,31 @@ class StorageUsage:
 
     @property
     def percent_used(self) -> int | None:
-        """Fuellstand in Prozent — ``None`` bei unbegrenztem Kontingent."""
+        """Fuellstand in Prozent fuer die **Anzeige** — ``None`` bei
+        unbegrenztem Kontingent.
+
+        Bewusst gerundet: eine Kachel „89,63 %" liest niemand. Fuer die
+        Schwellenfrage ist dieser Wert NICHT massgeblich, siehe
+        :attr:`is_near_limit`.
+        """
         if not self.limit_bytes:
             return None
         return round(self.used_bytes * 100 / self.limit_bytes)
 
     @property
     def is_near_limit(self) -> bool:
-        percent = self.percent_used
-        return percent is not None and percent >= WARN_THRESHOLD_PERCENT
+        """Ist die Warnschwelle erreicht? Vergleich auf dem **ungerundeten**
+        Byte-Verhaeltnis (Refs #2129, Fix-Runde 1).
+
+        Vorher lief der Vergleich ueber :attr:`percent_used` — also ueber eine
+        bereits kaufmaennisch gerundete Ganzzahl. 89,6 % wurden damit zu 90 und
+        loesten die Warnung aus, obwohl die Schwelle nicht erreicht war. Eine
+        Warnung, die zu frueh kommt, wird weggeklickt; genau das soll sie nicht.
+        Ganzzahl-Arithmetik statt Division, damit kein Gleitkomma-Rand entsteht.
+        """
+        if not self.limit_bytes:
+            return False
+        return self.used_bytes * 100 >= self.limit_bytes * WARN_THRESHOLD_PERCENT
 
     def fits(self, additional_bytes: int) -> bool:
         """Passt eine weitere Datei dieser Groesse noch hinein?
@@ -102,6 +119,29 @@ class StorageUsage:
         if self.limit_bytes is None:
             return True
         return self.used_bytes + additional_bytes <= self.limit_bytes
+
+
+def storage_warning(usage: StorageUsage) -> str | None:
+    """Der Warnsatz ab :data:`WARN_THRESHOLD_PERCENT` — ``None`` darunter.
+
+    **Ein** msgid fuer beide Rollen (Refs #2129, Fix-Runde 1): Die
+    Anwendungsbetreuung sieht ihn in der ``settings_warnings``-Liste des
+    Verwaltungs-Hubs, die Leitung als Hinweistext in ihrer Arbeitszentrale.
+    Zwei getrennte Formulierungen wuerden auseinanderdriften — und im
+    Lead-Dashboard fehlte der Text bisher ganz: dort war der Warnzustand
+    ausschliesslich ueber die Textfarbe codiert (WCAG 1.4.1).
+    """
+    if not usage.is_near_limit:
+        return None
+    return _(
+        "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, "
+        "davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+    ) % {
+        "percent": usage.percent_used,
+        "used": usage.used_mb,
+        "limit": usage.limit_mb,
+        "trash": usage.trash_mb,
+    }
 
 
 def _configured_limit_bytes(facility) -> int | None:

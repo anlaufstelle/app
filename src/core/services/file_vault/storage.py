@@ -66,7 +66,7 @@ class StagedUpload:
     content_type: str
 
 
-def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
+def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None, pending_bytes=0):
     """Validieren, scannen und verschluesseln — OHNE DB-Write (Refs #1345).
 
     Fuehrt die volle Pre-Encrypt-Policy-Pipeline plus ClamAV-Scan und
@@ -77,6 +77,11 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     per-Facility ``pg_advisory_xact_lock`` des AuditLog-Inserts (Hashkette) NICHT
     ueber den Scan gehalten — andere audit-schreibende Aktionen derselben
     Facility blockieren nicht mehr (Schreibserialisierung je Facility, #1345).
+
+    ``pending_bytes`` (Refs #2129, Fix-Runde 1): Summe der im selben Request
+    bereits gestagten, aber noch nicht persistierten Dateien. Nur die
+    Staging-Schleifen in ``services/attachments/crud.py`` fuellen den Wert; fuer
+    Einzel-Aufrufer bleibt der Default 0 und damit das bisherige Verhalten.
 
     Reihenfolge der Checks bleibt EXAKT wie bisher (#1268: Groesse VOR
     Voll-Pufferung im Virenscan — Memory-DoS-Schutz; #1274: verifizierter
@@ -110,7 +115,7 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     # einen Upload, der ohnehin abgelehnt wird, soll kein synchroner ClamAV-Lauf
     # anfallen. Bewusst kein SECURITY_VIOLATION (normaler Betriebszustand), aber
     # mit eigener ATTACHMENT_QUOTA_EXCEEDED-Audit-Zeile.
-    enforce_storage_quota(facility, uploaded_file, owner, user)
+    enforce_storage_quota(facility, uploaded_file, owner, user, pending_bytes=pending_bytes)
     run_virus_scan(facility, uploaded_file, owner, user)
     # #1274: den verifizierten (libmagic) MIME festhalten, damit er beim Download
     # massgeblich ist statt des browser-gemeldeten content_type.
