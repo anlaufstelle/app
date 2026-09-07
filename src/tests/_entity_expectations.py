@@ -1,0 +1,237 @@
+"""Deklarative Soll-Tabelle fuer die Dynamic-UI-Tests von Fall und Person."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+from core.models import Case, Client
+from core.services.client import _gather_cases, _gather_client_fields
+
+if TYPE_CHECKING:
+    from _pytest.fixtures import FixtureRequest
+    from django.db.models import Model
+
+
+IdentityKwargsBuilder = Callable[["FixtureRequest", str], dict[str, Any]]
+PostDataBuilder = Callable[["FixtureRequest", str, dict[str, Any]], dict[str, Any]]
+DynamicDataAccessor = Callable[["Model"], dict[str, Any]]
+
+
+def _case_identity_kwargs(request: FixtureRequest, identity: str) -> dict[str, Any]:
+    return {
+        "client": request.getfixturevalue("client_identified"),
+        "title": identity,
+    }
+
+
+def _client_identity_kwargs(request: FixtureRequest, identity: str) -> dict[str, Any]:
+    del request
+    return {"pseudonym": identity}
+
+
+def _case_post_data(request: FixtureRequest, identity: str, extra: dict[str, Any]) -> dict[str, Any]:
+    data = {
+        "title": identity,
+        "client": str(request.getfixturevalue("client_identified").pk),
+        "description": "",
+        "lead_user": "",
+    }
+    data.update(extra)
+    return data
+
+
+def _client_post_data(request: FixtureRequest, identity: str, extra: dict[str, Any]) -> dict[str, Any]:
+    del request
+    data = {
+        "pseudonym": identity,
+        "contact_stage": Client.ContactStage.IDENTIFIED,
+        "age_cluster": Client.AgeCluster.UNKNOWN,
+        "notes": "",
+    }
+    data.update(extra)
+    return data
+
+
+def _gather_case_dynamic_data(obj: Model) -> dict[str, Any]:
+    return _gather_cases(obj.client)[0]["dynamic_data"]
+
+
+def _gather_client_dynamic_data(obj: Model) -> dict[str, Any]:
+    return _gather_client_fields(obj)["dynamic_data"]
+
+
+@dataclass(frozen=True)
+class EntitySpec:
+    """Alle strukturellen und fachsprachlichen Unterschiede einer Entitaet."""
+
+    name: str
+    model: type[Model]
+    url_names: tuple[tuple[str, str], ...]
+    identity_field: str
+    identity_kwargs_builder: IdentityKwargsBuilder
+    post_data_builder: PostDataBuilder
+    gather_dynamic_data: DynamicDataAccessor
+    doctype_fixtures: tuple[tuple[str, str], ...]
+    fixture_names: tuple[tuple[str, str], ...]
+    field_names: tuple[tuple[str, str], ...]
+    labels: tuple[tuple[str, str], ...]
+    values: tuple[tuple[str, str], ...]
+    picker_excluded_fixtures: tuple[str, ...]
+    id_prefix: str
+    db_table: str
+
+    @staticmethod
+    def _lookup(entries: tuple[tuple[str, str], ...], key: str) -> str:
+        return dict(entries)[key]
+
+    def url(self, action: str) -> str:
+        return self._lookup(self.url_names, action)
+
+    def fixture(self, request: FixtureRequest, key: str) -> Any:
+        return request.getfixturevalue(self._lookup(self.fixture_names, key))
+
+    def doctype(self, request: FixtureRequest, variant: str) -> Any:
+        return request.getfixturevalue(self._lookup(self.doctype_fixtures, variant))
+
+    def field(self, key: str) -> str:
+        return self._lookup(self.field_names, key)
+
+    def label(self, key: str) -> str:
+        return self._lookup(self.labels, key)
+
+    def value(self, key: str) -> str:
+        return self._lookup(self.values, key)
+
+    def identity_kwargs(self, request: FixtureRequest, suffix: str) -> dict[str, Any]:
+        return self.identity_kwargs_builder(request, f"{self.id_prefix}{suffix}")
+
+    def post_data(self, request: FixtureRequest, suffix: str, **extra: Any) -> dict[str, Any]:
+        return self.post_data_builder(request, f"{self.id_prefix}{suffix}", extra)
+
+
+CASE = EntitySpec(
+    name="case",
+    model=Case,
+    url_names=(
+        ("create", "core:case_create"),
+        ("update", "core:case_update"),
+        ("detail", "core:case_detail"),
+        ("fields_partial", "core:case_fields_partial"),
+    ),
+    identity_field="title",
+    identity_kwargs_builder=_case_identity_kwargs,
+    post_data_builder=_case_post_data,
+    gather_dynamic_data=_gather_case_dynamic_data,
+    doctype_fixtures=(
+        ("form", "doc_type_case_form"),
+        ("high", "doc_type_case_high"),
+        ("mixed", "doc_type_case_mixed"),
+        ("select", "doc_type_case_select"),
+        ("conditional", "doc_type_case_conditional"),
+        ("file_condition", "doc_type_case_file_condition"),
+    ),
+    fixture_names=(
+        ("foreign_doctype", "foreign_doc_type_case"),
+        ("object", "case_open"),
+        ("foreign_object", "foreign_case"),
+    ),
+    field_names=(
+        ("primary", "anlass"),
+        ("secondary", "verlauf"),
+        ("high", "gefahrenlage"),
+        ("mixed_visible", "zielsetzung"),
+        ("mixed_restricted", "risikoeinschaetzung"),
+        ("select", "hilfeform"),
+        ("boolean", "kostenzusage"),
+        ("conditional_source", "betreuungsform"),
+        ("conditional_target", "betreuungsdetails"),
+        ("file_source", "kostenbescheid"),
+        ("file_target", "bescheid-erlaeuterung"),
+    ),
+    labels=(
+        ("primary", "Anlass"),
+        ("secondary", "Verlauf"),
+        ("high", "Gefahrenlage"),
+        ("mixed_visible", "Zielsetzung"),
+        ("mixed_restricted", "Risikoeinschaetzung"),
+        ("select", "Hilfeform"),
+        ("boolean", "Kostenzusage"),
+    ),
+    values=(
+        ("primary", "Mietschulden"),
+        ("secondary", "Sehr sensibel"),
+        ("select", "ambulant"),
+        ("select_label", "Ambulant"),
+    ),
+    picker_excluded_fixtures=("doc_type_client_profile", "doc_type_contact"),
+    id_prefix="P8-",
+    db_table="core_case",
+)
+
+
+CLIENT = EntitySpec(
+    name="client",
+    model=Client,
+    url_names=(
+        ("create", "core:client_create"),
+        ("update", "core:client_update"),
+        ("detail", "core:client_detail"),
+        ("fields_partial", "core:client_fields_partial"),
+    ),
+    identity_field="pseudonym",
+    identity_kwargs_builder=_client_identity_kwargs,
+    post_data_builder=_client_post_data,
+    gather_dynamic_data=_gather_client_dynamic_data,
+    doctype_fixtures=(
+        ("form", "doc_type_client_profile"),
+        ("high", "doc_type_client_high"),
+        ("mixed", "doc_type_client_mixed"),
+        ("select", "doc_type_client_select"),
+        ("conditional", "doc_type_client_conditional"),
+        ("file_condition", "doc_type_client_file_condition"),
+    ),
+    fixture_names=(
+        ("foreign_doctype", "foreign_doc_type_client"),
+        ("object", "client_identified"),
+        ("foreign_object", "foreign_client"),
+    ),
+    field_names=(
+        ("primary", "wohnsituation"),
+        ("secondary", "diagnose"),
+        ("high", "schutzkonzept"),
+        ("mixed_visible", "sprache"),
+        ("mixed_restricted", "gefaehrdung"),
+        ("select", "wohnform"),
+        ("boolean", "einwilligung"),
+        ("conditional_source", "betreuung"),
+        ("conditional_target", "betreuungsdetails"),
+        ("file_source", "nachweis"),
+        ("file_target", "nachweis-erlaeuterung"),
+    ),
+    labels=(
+        ("primary", "Wohnsituation"),
+        ("secondary", "Diagnose"),
+        ("high", "Schutzkonzept"),
+        ("mixed_visible", "Sprache"),
+        ("mixed_restricted", "Gefaehrdung"),
+        ("select", "Wohnform"),
+        ("boolean", "Einwilligung"),
+    ),
+    values=(
+        ("primary", "WG"),
+        ("secondary", "Sehr sensibel"),
+        ("select", "wohnungslos"),
+        ("select_label", "Wohnungslos"),
+    ),
+    picker_excluded_fixtures=("doc_type_contact",),
+    id_prefix="P7-",
+    db_table="core_client",
+)
+
+
+ENTITY_SPECS = (CASE, CLIENT)
+ENTITY_PARAMS = tuple(pytest.param(spec, id=spec.name) for spec in ENTITY_SPECS)

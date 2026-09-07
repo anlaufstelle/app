@@ -222,62 +222,6 @@ def _client_post_data(pseudonym, **extra):
 
 
 # ---------------------------------------------------------------------------
-# Typ-Picker
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestClientTypePicker:
-    def test_only_client_types_of_own_facility(
-        self,
-        client,
-        staff_user,
-        doc_type_client_profile,
-        doc_type_contact,
-        foreign_doc_type_client,
-    ):
-        client.force_login(staff_user)
-        response = client.get(reverse("core:client_create"))
-        assert response.status_code == 200
-        content = response.content.decode()
-        # Auf die Option-PKs pruefen: der Name „Kontakt" von ``doc_type_contact``
-        # ist ein Teilstring der ContactStage-Labels und waere kein Beweis.
-        assert f'value="{doc_type_client_profile.pk}"' in content
-        assert doc_type_client_profile.name in content
-        assert f'value="{doc_type_contact.pk}"' not in content
-        assert f'value="{foreign_doc_type_client.pk}"' not in content
-        assert foreign_doc_type_client.name not in content
-
-    def test_high_sensitivity_type_hidden_for_staff(
-        self, client, staff_user, doc_type_client_profile, doc_type_client_high
-    ):
-        client.force_login(staff_user)
-        content = client.get(reverse("core:client_create")).content.decode()
-        assert doc_type_client_profile.name in content
-        assert doc_type_client_high.name not in content
-
-    def test_high_sensitivity_type_visible_for_lead(self, client, lead_user, doc_type_client_high):
-        client.force_login(lead_user)
-        content = client.get(reverse("core:client_create")).content.decode()
-        assert doc_type_client_high.name in content
-
-    def test_inactive_type_hidden(self, client, staff_user, doc_type_client_profile):
-        doc_type_client_profile.is_active = False
-        doc_type_client_profile.save(update_fields=["is_active"])
-        client.force_login(staff_user)
-        content = client.get(reverse("core:client_create")).content.decode()
-        assert doc_type_client_profile.name not in content
-
-    def test_create_form_has_no_type_switch_warning(self, client, staff_user, doc_type_client_profile):
-        """Refs #1733: im Anlage-Formular kann nichts verloren gehen — der
-        Hinweis erschien dort bislang trotzdem und war reines Rauschen."""
-        client.force_login(staff_user)
-        content = client.get(reverse("core:client_create")).content.decode()
-        assert "doc-type-switch-hint" not in content
-        assert "data-confirm-discard" not in content
-
-
-# ---------------------------------------------------------------------------
 # Typwechsel/-entfernen: Warnung + Rückfrage (Refs #1733)
 # ---------------------------------------------------------------------------
 

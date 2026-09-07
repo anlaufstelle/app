@@ -53,6 +53,8 @@ from core.models import (
 from core.models.attachment import Attachment
 from core.services.client import _gather_cases, export_client_data
 from core.services.file_vault import is_encrypted_value, safe_decrypt
+from tests._entity_expectations import ENTITY_PARAMS, EntitySpec
+from tests.test_clients_dynamic_ui import doc_type_client_high as doc_type_client_high  # noqa: F401
 
 
 def raw_data_json(case_obj) -> dict:
@@ -234,51 +236,52 @@ def _case_post_data(title, client_obj, **extra):
 
 
 @pytest.mark.django_db
-class TestCaseTypePicker:
-    def test_only_case_types_of_own_facility(
-        self,
-        client,
-        staff_user,
-        doc_type_case_form,
-        doc_type_client_profile,
-        doc_type_contact,
-        foreign_doc_type_case,
-    ):
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityTypePicker:
+    def test_only_entity_types_of_own_facility(self, client, staff_user, request, entity: EntitySpec):
+        own_type = entity.doctype(request, "form")
+        foreign_type = entity.fixture(request, "foreign_doctype")
+        excluded_types = tuple(request.getfixturevalue(name) for name in entity.picker_excluded_fixtures)
         client.force_login(staff_user)
-        response = client.get(reverse("core:case_create"))
+        response = client.get(reverse(entity.url("create")))
         assert response.status_code == 200
         content = response.content.decode()
         # Auf die Option-PKs pruefen (Muster P7/E-4): Typnamen koennen als
         # Teilstring anderer Labels auftauchen und waeren kein Beweis.
-        assert f'value="{doc_type_case_form.pk}"' in content
-        assert doc_type_case_form.name in content
-        assert f'value="{doc_type_client_profile.pk}"' not in content
-        assert f'value="{doc_type_contact.pk}"' not in content
-        assert f'value="{foreign_doc_type_case.pk}"' not in content
-        assert foreign_doc_type_case.name not in content
+        assert f'value="{own_type.pk}"' in content
+        assert own_type.name in content
+        for excluded_type in excluded_types:
+            assert f'value="{excluded_type.pk}"' not in content
+        assert f'value="{foreign_type.pk}"' not in content
+        assert foreign_type.name not in content
 
-    def test_high_sensitivity_type_hidden_for_staff(self, client, staff_user, doc_type_case_form, doc_type_case_high):
+    def test_high_sensitivity_type_hidden_for_staff(self, client, staff_user, request, entity: EntitySpec):
+        own_type = entity.doctype(request, "form")
+        high_type = entity.doctype(request, "high")
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_create")).content.decode()
-        assert doc_type_case_form.name in content
-        assert doc_type_case_high.name not in content
+        content = client.get(reverse(entity.url("create"))).content.decode()
+        assert own_type.name in content
+        assert high_type.name not in content
 
-    def test_high_sensitivity_type_visible_for_lead(self, client, lead_user, doc_type_case_high):
+    def test_high_sensitivity_type_visible_for_lead(self, client, lead_user, request, entity: EntitySpec):
+        high_type = entity.doctype(request, "high")
         client.force_login(lead_user)
-        content = client.get(reverse("core:case_create")).content.decode()
-        assert doc_type_case_high.name in content
+        content = client.get(reverse(entity.url("create"))).content.decode()
+        assert high_type.name in content
 
-    def test_inactive_type_hidden(self, client, staff_user, doc_type_case_form):
-        doc_type_case_form.is_active = False
-        doc_type_case_form.save(update_fields=["is_active"])
+    def test_inactive_type_hidden(self, client, staff_user, request, entity: EntitySpec):
+        own_type = entity.doctype(request, "form")
+        own_type.is_active = False
+        own_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_create")).content.decode()
-        assert doc_type_case_form.name not in content
+        content = client.get(reverse(entity.url("create"))).content.decode()
+        assert own_type.name not in content
 
-    def test_create_form_has_no_type_switch_warning(self, client, staff_user, doc_type_case_form):
+    def test_create_form_has_no_type_switch_warning(self, client, staff_user, request, entity: EntitySpec):
         """Refs #1733: im Anlage-Formular kann nichts verloren gehen."""
+        entity.doctype(request, "form")
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_create")).content.decode()
+        content = client.get(reverse(entity.url("create"))).content.decode()
         assert "doc-type-switch-hint" not in content
         assert "data-confirm-discard" not in content
 
