@@ -7450,7 +7450,7 @@
 **Forms:** `src/core/forms/dynamic.py` (`DynamicDataForm` — entity-neutrale Basis, `grouped_fields()`; das Flag `exclude_file_fields` ist mit M24 ersatzlos entfallen); `src/core/forms/clients.py` (`DynamicClientDataForm`, `ClientForm` mit hx-get-Typ-Select); `src/core/forms/cases.py` (Fall-Pendant) 
 **Services:** `src/core/services/dynamic_data.py` (`merge_dynamic_data` — E11-Typwechsel-Policy, `validate_data_json`, `remove_restricted_fields`, `decrypt_dynamic_text_data`); `src/core/services/client/main.py` (`_check_client_document_type`), `src/core/services/case/cases.py` (`_check_case_document_type`) 
 **Models:** `Client.document_type`/`Client.data_json`, `Case.document_type`/`Case.data_json` (Migrationen `0118`/`0119`, `on_delete=PROTECT`); Verschlüsselung über `DynamicDataEncryptionMixin` (Cache an `document_type_id` gebunden) 
-**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über Unit-/View-Suiten `test_clients_dynamic_ui.py`, `test_cases_dynamic_ui.py`, `test_client_dynamic_data.py`, `test_case_dynamic_data.py`, `test_forms_dynamic.py`, `test_client_export.py` 
+**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über Unit-/View-Suiten `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py`, `test_case_dynamic_data.py`, `test_forms_dynamic.py`, `test_client_export.py`
 **Hintergrund:** [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) (entity_type, E11-Typwechsel; der dort in §9 beschriebene mehrschichtige FILE-Ausschluss „E8" ist seit M24 abgelöst), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) (Datei-Felder an allen drei Entitäten), [`docs/packages.md`](../packages.md) 
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) legt die Wegwerf-Typen an, die eigentlichen Fälle laufen als **fachkraft** (`miriam`); für die Sensitivitäts-Probe zusätzlich **assistenz** (`lena`).
@@ -7463,7 +7463,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | admin + fachkraft (`miriam`) | C/F | ⚪ | `test_clients_dynamic_ui.py`, `test_client_dynamic_data.py` |
+| Klient:innen / Zusatzfelder | admin + fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
 
 **Vorbereitung:**
 - Als `admin` je einen Wegwerf-Typ mit `entity_type` **Person** und einen mit `entity_type` **Fall** angelegt; die Seed-Ereignistypen (Kontakt, Krisengespräch, …) existieren ohnehin.
@@ -7492,7 +7492,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C || `test_clients_dynamic_ui.py`, `test_client_dynamic_data.py` |
+| Klient:innen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C || `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
 
 **Vorbereitung:**
 - ENT-CLIENT-DYN-01 durchgeführt; die Person trägt einen Wert im Feld mit Sensibilität **hoch**.
@@ -7520,7 +7520,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Klient:innen | admin (facility_admin) | C || `test_clients_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
+| Konfiguration / Klient:innen | admin (facility_admin) | C || `test_entity_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
 
 **Vorbereitung:**
 - Eine Feldvorlage vom Typ **Datei** existiert (der Seed liefert `Anhang` mit).
@@ -7546,7 +7546,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_clients_dynamic_ui.py`, `test_forms_dynamic.py` |
+| Klient:innen / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_forms_dynamic.py` |
 
 **Vorbereitung:**
 - Zwei Person-Typen mit **unterschiedlichen** Feldsets; die Person trägt aktuell Typ A mit ausgefüllten Feldern.
@@ -7574,7 +7574,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_cases_dynamic_ui.py`, `test_case_dynamic_data.py` |
+| Fälle / Zusatzfelder | fachkraft (`miriam`) | C/F | ⚪ | `test_entity_dynamic_ui.py`, `test_case_dynamic_data.py` |
 
 **Vorbereitung:**
 - Fall-Wegwerf-Typ (`entity_type` = Fall) mit mindestens einem normalen und einem sensiblen Feld angelegt.
@@ -7600,7 +7600,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Fälle | admin (facility_admin) | C || `test_cases_dynamic_ui.py`, `test_config_document_types.py` |
+| Konfiguration / Fälle | admin (facility_admin) | C || `test_entity_dynamic_ui.py`, `test_config_document_types.py` |
 
 **Vorbereitung:**
 - ENT-CASE-DYN-01 durchgeführt (mindestens ein Fall trägt den Wegwerf-Typ); analog eine Person mit Person-Typ aus ENT-CLIENT-DYN-01.

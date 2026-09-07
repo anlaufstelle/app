@@ -509,8 +509,8 @@ class TestClientCaseViewMirrorParity:
       oder das Fall-Model laden, bliebe dieser Guard still — dagegen helfen
       nur die Verhaltens-Tests aus (d).
     * (d) Er prueft Struktur, nicht Verhalten: dass die Kopien dasselbe TUN,
-      beweisen die Zwillings-Testdateien ``test_clients_dynamic_ui.py`` /
-      ``test_cases_dynamic_ui.py``, nicht dieser Guard.
+      beweist die Zwillings-Suite ``test_entity_dynamic_ui.py``, nicht dieser
+      Guard.
 
     **Selbstsicherung gegen Uebernormalisierung:** Wuerde die Normalisierung
     kaputt zu breit (ein Token-Paar, das echte Unterschiede wegbuegelt), dann
@@ -837,8 +837,8 @@ class TestClientCaseViewMirrorParity:
         Dieser Test pinnt genau die motivierende Drift-Klasse aus [b27be80b]:
         ein Kontext-Schluessel, der nur in EINEM der beiden Zwillinge steht — der
         Fix wurde in der einen View gemacht und in der anderen vergessen. Werte
-        prueft er bewusst nicht (das tun ``test_clients_dynamic_ui.py`` /
-        ``test_cases_dynamic_ui.py``), nur den Bestand der Schluessel.
+        prueft er bewusst nicht (das tut ``test_entity_dynamic_ui.py``), nur
+        den Bestand der Schluessel.
         """
         client_keys = self._render_context_keys(self._CLIENT_MODULE)
         case_keys = self._render_context_keys(self._CASE_MODULE)

@@ -1,4 +1,9 @@
-"""Deklarative Soll-Tabelle fuer die Dynamic-UI-Tests von Fall und Person."""
+"""Deklarative Soll-Tabelle fuer die Dynamic-UI-Tests von Fall und Person.
+
+``picker_excluded_fixtures`` ist bewusst asymmetrisch: Der Basis-Client-Test
+schloss keinen Falltyp-Fixture aus, der Basis-Case-Test den Personenprofil-Typ
+hingegen explizit.
+"""
 
 from __future__ import annotations
 
@@ -229,7 +234,6 @@ CASE = EntitySpec(
         ("mixed_restricted", "risikoeinschaetzung"),
         ("select", "hilfeform"),
         ("boolean", "kostenzusage"),
-        ("conditional_source", "betreuungsform"),
         ("conditional_target", "betreuungsdetails"),
         ("file_source", "kostenbescheid"),
         ("file_target", "bescheid-erlaeuterung"),
@@ -329,7 +333,6 @@ CLIENT = EntitySpec(
         ("mixed_restricted", "gefaehrdung"),
         ("select", "wohnform"),
         ("boolean", "einwilligung"),
-        ("conditional_source", "betreuung"),
         ("conditional_target", "betreuungsdetails"),
         ("file_source", "nachweis"),
         ("file_target", "nachweis-erlaeuterung"),
