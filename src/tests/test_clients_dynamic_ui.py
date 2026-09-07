@@ -39,7 +39,6 @@ from core.models import (
     FieldCondition,
     FieldTemplate,
 )
-from core.services.client import _gather_client_fields, export_client_data
 
 
 def raw_data_json(client_obj) -> dict:
@@ -331,107 +330,6 @@ class TestPartialPrefillsAssignedType:
 # ---------------------------------------------------------------------------
 # Art.-15-Auskunftsexport
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestClientExportDynamicData:
-    def test_export_contains_label_and_plaintext(
-        self, facility, staff_user, lead_user, doc_type_client_profile, fernet_key
-    ):
-        with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = Client.objects.create(
-                facility=facility,
-                pseudonym="P7-Export-01",
-                created_by=staff_user,
-                document_type=doc_type_client_profile,
-                data_json={"wohnsituation": "WG", "diagnose": "Export-Klartext"},
-            )
-            data = export_client_data(target, facility, lead_user)
-
-        assert data["client"]["document_type"] == doc_type_client_profile.name
-        entries = data["client"]["dynamic_data"]
-        by_label = {entry["label"]: entry["value"] for entry in entries}
-        assert by_label["Wohnsituation"] == "WG"
-        assert by_label["Diagnose"] == "Export-Klartext"
-
-    def test_export_without_type_carries_no_dynamic_keys(self, client_identified):
-        """Ohne ``document_type`` erscheinen keine Dynamik-Keys im Stammdaten-Dict.
-
-        Refs #1752: Der Basis-Schluesselsatz ist per Produktentscheid vom
-        2026-08-03 um ``notes``, die Papierkorb-/Anonymisierungs-Metadaten und
-        ``updated_at`` gewachsen. Die urspruengliche Aussage des Tests —
-        ``dynamic_data``/``dynamic_data_orphaned`` bleiben ohne Typ fern —
-        bleibt unveraendert gepinnt.
-        """
-        result = _gather_client_fields(client_identified)
-        assert set(result.keys()) == {
-            "pseudonym",
-            "contact_stage",
-            "age_cluster",
-            "notes",
-            "is_active",
-            "k_anonymized",
-            "created_at",
-            "updated_at",
-            "created_by",
-            "is_deleted",
-            "deleted_at",
-            "deleted_by",
-        }
-
-    def test_export_formats_select_and_boolean_values(self, facility, staff_user, doc_type_client_select):
-        """Slugs/Booleans sind fuer die betroffene Person nicht lesbar — Labels ausweisen."""
-        target = Client.objects.create(
-            facility=facility,
-            pseudonym="P7-Export-03",
-            created_by=staff_user,
-            document_type=doc_type_client_select,
-            data_json={"wohnform": "wohnungslos", "einwilligung": True},
-        )
-        entries = _gather_client_fields(target)["dynamic_data"]
-        by_label = {entry["label"]: str(entry["value"]) for entry in entries}
-        assert by_label["Wohnform"] == "Wohnungslos"
-        assert by_label["Einwilligung"] == "Ja"
-
-    def test_pdf_export_renders_dynamic_data(
-        self, facility, staff_user, lead_user, doc_type_client_profile, fernet_key
-    ):
-        """Label UND Klartext-Wert muessen wirklich im gerenderten Dokument stehen.
-
-        Statt nur die ``%PDF``-Magic zu pruefen (die auch ein leeres Dokument
-        traegt), wird das HTML abgefangen, das WeasyPrint zu sehen bekommt.
-        """
-        from unittest.mock import patch
-
-        import weasyprint
-
-        from core.services.client import export_client_data_pdf
-
-        captured: dict[str, str] = {}
-        real_html = weasyprint.HTML
-
-        def capturing_html(*args, **kwargs):
-            captured["string"] = kwargs.get("string", "")
-            return real_html(*args, **kwargs)
-
-        with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = Client.objects.create(
-                facility=facility,
-                pseudonym="P7-Export-02",
-                created_by=staff_user,
-                document_type=doc_type_client_profile,
-                data_json={"wohnsituation": "WG", "diagnose": "PDF-Klartext"},
-            )
-            with patch("core.services.client.export.weasyprint.HTML", side_effect=capturing_html):
-                pdf_bytes = export_client_data_pdf(target, facility, lead_user)
-
-        assert pdf_bytes[:4] == b"%PDF"
-        html = captured["string"]
-        assert doc_type_client_profile.name in html
-        assert "Wohnsituation" in html
-        assert "WG" in html
-        assert "Diagnose" in html
-        assert "PDF-Klartext" in html
 
 
 @pytest.mark.django_db

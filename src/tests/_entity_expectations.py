@@ -22,6 +22,8 @@ IdentityKwargsBuilder = Callable[["FixtureRequest", str], dict[str, Any]]
 PostDataBuilder = Callable[["FixtureRequest", str, dict[str, Any]], dict[str, Any]]
 DynamicDataAccessor = Callable[["Model"], dict[str, Any]]
 InvalidIdentityBuilder = Callable[["FixtureRequest"], str]
+ExportOwnerAccessor = Callable[["Model"], "Client"]
+ExportEntryAccessor = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 def _case_identity_kwargs(request: FixtureRequest, identity: str) -> dict[str, Any]:
@@ -76,6 +78,30 @@ def _gather_client_dynamic_data(obj: Model) -> dict[str, Any]:
     return _gather_client_fields(obj)["dynamic_data"]
 
 
+def _gather_case_record(obj: Model) -> dict[str, Any]:
+    return _gather_cases(obj.client)[0]
+
+
+def _gather_client_record(obj: Model) -> dict[str, Any]:
+    return _gather_client_fields(obj)
+
+
+def _case_export_owner(obj: Model) -> Client:
+    return obj.client
+
+
+def _client_export_owner(obj: Model) -> Client:
+    return obj
+
+
+def _case_export_entry(data: dict[str, Any]) -> dict[str, Any]:
+    return data["cases"][0]
+
+
+def _client_export_entry(data: dict[str, Any]) -> dict[str, Any]:
+    return data["client"]
+
+
 def _raw_case_data_json(obj: Model) -> dict[str, Any]:
     with connection.cursor() as cur:
         cur.execute("SELECT data_json FROM core_case WHERE id = %s", [str(obj.pk)])
@@ -103,7 +129,11 @@ class EntitySpec:
     invalid_identity_builder: InvalidIdentityBuilder
     post_data_builder: PostDataBuilder
     gather_dynamic_data: DynamicDataAccessor
+    gather_entity_record: DynamicDataAccessor
     raw_data_json: DynamicDataAccessor
+    export_owner: ExportOwnerAccessor
+    export_entry: ExportEntryAccessor
+    export_base_keys: tuple[str, ...]
     doctype_fixtures: tuple[tuple[str, str], ...]
     fixture_names: tuple[tuple[str, str], ...]
     field_names: tuple[tuple[str, str], ...]
@@ -159,7 +189,24 @@ CASE = EntitySpec(
     invalid_identity_builder=_blank_identity,
     post_data_builder=_case_post_data,
     gather_dynamic_data=_gather_case_dynamic_data,
+    gather_entity_record=_gather_case_record,
     raw_data_json=_raw_case_data_json,
+    export_owner=_case_export_owner,
+    export_entry=_case_export_entry,
+    export_base_keys=(
+        "title",
+        "description",
+        "status",
+        "created_at",
+        "updated_at",
+        "closed_at",
+        "lead_user",
+        "created_by",
+        "is_deleted",
+        "deleted_at",
+        "deleted_by",
+        "anonymized_at",
+    ),
     doctype_fixtures=(
         ("form", "doc_type_case_form"),
         ("high", "doc_type_case_high"),
@@ -243,7 +290,24 @@ CLIENT = EntitySpec(
     invalid_identity_builder=_duplicate_client_identity,
     post_data_builder=_client_post_data,
     gather_dynamic_data=_gather_client_dynamic_data,
+    gather_entity_record=_gather_client_record,
     raw_data_json=_raw_client_data_json,
+    export_owner=_client_export_owner,
+    export_entry=_client_export_entry,
+    export_base_keys=(
+        "pseudonym",
+        "contact_stage",
+        "age_cluster",
+        "notes",
+        "is_active",
+        "k_anonymized",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "is_deleted",
+        "deleted_at",
+        "deleted_by",
+    ),
     doctype_fixtures=(
         ("form", "doc_type_client_profile"),
         ("high", "doc_type_client_high"),

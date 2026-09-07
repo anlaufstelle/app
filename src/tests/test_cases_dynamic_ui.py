@@ -51,7 +51,7 @@ from core.models import (
     FieldTemplate,
 )
 from core.models.attachment import Attachment
-from core.services.client import _gather_cases, export_client_data
+from core.services.client import export_client_data
 from core.services.file_vault import is_encrypted_value, safe_decrypt
 from tests._entity_expectations import ENTITY_PARAMS, EntitySpec
 from tests.test_clients_dynamic_ui import (
@@ -59,6 +59,7 @@ from tests.test_clients_dynamic_ui import (
     doc_type_client_file_condition,
     doc_type_client_high,
     doc_type_client_mixed,
+    doc_type_client_select,
 )
 
 _IMPORTED_CLIENT_FIXTURES = (
@@ -66,6 +67,7 @@ _IMPORTED_CLIENT_FIXTURES = (
     doc_type_client_file_condition,
     doc_type_client_high,
     doc_type_client_mixed,
+    doc_type_client_select,
 )
 
 
@@ -1683,29 +1685,45 @@ class TestEntityDetailDynamicSection:
 
 
 @pytest.mark.django_db
-class TestCaseExportDynamicData:
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityExportDynamicData:
+    @staticmethod
+    def _target(request, entity: EntitySpec, facility, staff_user, suffix, doc_type, data_json):
+        return entity.model.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            document_type=doc_type,
+            data_json=data_json,
+            **entity.identity_kwargs(request, suffix),
+        )
+
     def test_export_contains_label_and_plaintext(
-        self, facility, client_identified, staff_user, lead_user, doc_type_case_form, fernet_key
+        self, facility, staff_user, lead_user, fernet_key, request, entity: EntitySpec
     ):
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            Case.objects.create(
-                facility=facility,
-                client=client_identified,
-                title="P8-Export-01",
-                created_by=staff_user,
-                document_type=doc_type_case_form,
-                data_json={"anlass": "Mietschulden", "verlauf": "Export-Klartext"},
+            target = self._target(
+                request,
+                entity,
+                facility,
+                staff_user,
+                "Export-01",
+                doc_type,
+                {
+                    entity.field("primary"): entity.value("primary"),
+                    entity.field("secondary"): "Export-Klartext",
+                },
             )
-            data = export_client_data(client_identified, facility, lead_user)
+            data = export_client_data(entity.export_owner(target), facility, lead_user)
 
-        case_entry = data["cases"][0]
-        assert case_entry["document_type"] == doc_type_case_form.name
-        by_label = {entry["label"]: entry["value"] for entry in case_entry["dynamic_data"]}
-        assert by_label["Anlass"] == "Mietschulden"
-        assert by_label["Verlauf"] == "Export-Klartext"
+        export_entry = entity.export_entry(data)
+        assert export_entry["document_type"] == doc_type.name
+        by_label = {entry["label"]: entry["value"] for entry in export_entry["dynamic_data"]}
+        assert by_label[entity.label("primary")] == entity.value("primary")
+        assert by_label[entity.label("secondary")] == "Export-Klartext"
 
-    def test_export_without_type_carries_no_dynamic_keys(self, case_open, client_identified):
-        """Ohne ``document_type`` erscheinen keine Dynamik-Keys im Fall-Dict.
+    def test_export_without_type_carries_no_dynamic_keys(self, request, entity: EntitySpec):
+        """Ohne ``document_type`` erscheinen keine Dynamik-Keys im Entity-Dict.
 
         Refs #1752: Der Basis-Schluesselsatz ist per Produktentscheid vom
         2026-08-03 um ``updated_at`` und die Papierkorb-Metadaten gewachsen,
@@ -1713,41 +1731,29 @@ class TestCaseExportDynamicData:
         Die urspruengliche Aussage — ``dynamic_data``/``dynamic_data_orphaned``
         bleiben ohne Typ fern — bleibt unveraendert gepinnt.
         """
-        result = _gather_cases(client_identified)[0]
-        assert set(result.keys()) == {
-            "title",
-            "description",
-            "status",
-            "created_at",
-            "updated_at",
-            "closed_at",
-            "lead_user",
-            "created_by",
-            "is_deleted",
-            "deleted_at",
-            "deleted_by",
-            "anonymized_at",
-        }
+        target = entity.fixture(request, "object")
+        result = entity.gather_entity_record(target)
+        assert set(result.keys()) == set(entity.export_base_keys)
 
-    def test_export_formats_select_and_boolean_values(
-        self, facility, client_identified, staff_user, doc_type_case_select
-    ):
+    def test_export_formats_select_and_boolean_values(self, facility, staff_user, request, entity: EntitySpec):
         """Slugs/Booleans sind fuer die betroffene Person nicht lesbar — Labels ausweisen."""
-        Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Export-03",
-            created_by=staff_user,
-            document_type=doc_type_case_select,
-            data_json={"hilfeform": "ambulant", "kostenzusage": True},
+        doc_type = entity.doctype(request, "select")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Export-03",
+            doc_type,
+            {entity.field("select"): entity.value("select"), entity.field("boolean"): True},
         )
-        entries = _gather_cases(client_identified)[0]["dynamic_data"]
+        entries = entity.gather_dynamic_data(target)
         by_label = {entry["label"]: str(entry["value"]) for entry in entries}
-        assert by_label["Hilfeform"] == "Ambulant"
-        assert by_label["Kostenzusage"] == "Ja"
+        assert by_label[entity.label("select")] == entity.value("select_label")
+        assert by_label[entity.label("boolean")] == "Ja"
 
-    def test_pdf_export_renders_case_dynamic_data(
-        self, facility, client_identified, staff_user, lead_user, doc_type_case_form, fernet_key
+    def test_pdf_export_renders_dynamic_data(
+        self, facility, staff_user, lead_user, fernet_key, request, entity: EntitySpec
     ):
         """Label UND Klartext-Wert muessen wirklich im gerenderten Dokument stehen."""
         from unittest.mock import patch
@@ -1763,24 +1769,29 @@ class TestCaseExportDynamicData:
             captured["string"] = kwargs.get("string", "")
             return real_html(*args, **kwargs)
 
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            Case.objects.create(
-                facility=facility,
-                client=client_identified,
-                title="P8-Export-02",
-                created_by=staff_user,
-                document_type=doc_type_case_form,
-                data_json={"anlass": "Mietschulden", "verlauf": "PDF-Klartext"},
+            target = self._target(
+                request,
+                entity,
+                facility,
+                staff_user,
+                "Export-02",
+                doc_type,
+                {
+                    entity.field("primary"): entity.value("primary"),
+                    entity.field("secondary"): "PDF-Klartext",
+                },
             )
             with patch("core.services.client.export.weasyprint.HTML", side_effect=capturing_html):
-                pdf_bytes = export_client_data_pdf(client_identified, facility, lead_user)
+                pdf_bytes = export_client_data_pdf(entity.export_owner(target), facility, lead_user)
 
         assert pdf_bytes[:4] == b"%PDF"
         html = captured["string"]
-        assert doc_type_case_form.name in html
-        assert "Anlass" in html
-        assert "Mietschulden" in html
-        assert "Verlauf" in html
+        assert doc_type.name in html
+        assert entity.label("primary") in html
+        assert entity.value("primary") in html
+        assert entity.label("secondary") in html
         assert "PDF-Klartext" in html
 
 
