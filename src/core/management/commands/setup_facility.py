@@ -48,6 +48,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from core.models import Facility, Organization, Settings, User
+from core.packages.catalog import PACKAGE_INFO, UnknownPackageError, list_packages
 from core.packages.loader import PackageLoadError
 from core.packages.schema import PackageValidationError
 from core.services.facility_bootstrap import ensure_facility_baseline
@@ -61,6 +62,10 @@ class Command(BaseCommand):
     help = "Interactive setup of a new facility"
 
     def add_arguments(self, parser):
+        parser.add_argument(
+            "--package",
+            help="Mitgeliefertes Katalogpaket einspielen (Standard: default).",
+        )
         parser.add_argument(
             "--no-default-package",
             action="store_true",
@@ -87,6 +92,14 @@ class Command(BaseCommand):
                 "-e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD "
                 "web python manage.py setup_facility (siehe docs/ops-runbook.md § 9)."
             )
+
+        requested_package = options.get("package")
+        if options["no_default_package"] and requested_package is not None:
+            raise CommandError("--package und --no-default-package schliessen sich aus.")
+        package_name = None if options["no_default_package"] else (requested_package or "default")
+        available_packages = list_packages()
+        if package_name is not None and package_name not in available_packages:
+            raise CommandError(str(UnknownPackageError(package_name, available_packages)))
 
         self.stdout.write(self.style.MIGRATE_HEADING("Anlaufstelle – Einrichtung einrichten"))
         self.stdout.write("")
@@ -144,20 +157,19 @@ class Command(BaseCommand):
                 user.set_password(password)
                 user.save()
 
-            wants_package = not options["no_default_package"]
-            baseline = self._ensure_baseline(facility, with_package=wants_package)
+            baseline = self._ensure_baseline(facility, package=package_name)
 
         if created:
             self.stdout.write(self.style.SUCCESS(f"Admin-Benutzer '{admin_username}' erstellt."))
         else:
             self.stdout.write(self.style.WARNING(f"Benutzer '{admin_username}' existiert bereits."))
 
-        self._write_package_summary(facility, baseline.package, wants_package=wants_package)
+        self._write_package_summary(facility, baseline.package_report, package_name=baseline.package)
         self._write_baseline_summary(baseline)
 
         self.stdout.write(self.style.SUCCESS(f"\nEinrichtung '{facility_name}' ({org_name}) erfolgreich eingerichtet."))
 
-    def _ensure_baseline(self, facility, *, with_package):
+    def _ensure_baseline(self, facility, *, package):
         """Grundausstattung einspielen und Katalog-Fehler in eine lesbare Meldung uebersetzen.
 
         Muster des Schwester-Commands ``load_package`` (dort ``handle()``):
@@ -168,27 +180,28 @@ class Command(BaseCommand):
         Admin-Benutzer wieder mit; das sagt die Meldung ausdruecklich, damit
         niemand einen halb angelegten Zustand vermutet.
         """
+        catalog_label = "Standardkatalog" if package == "default" else f"Katalogpaket {package!r}"
         try:
-            return ensure_facility_baseline(facility, with_package=with_package)
+            return ensure_facility_baseline(facility, package=package)
         except PackageLoadError as exc:
             for identifier, message in exc.report.errors:
                 self.stderr.write(self.style.ERROR(f"  {identifier}: {message}"))
             raise CommandError(
-                f"Standardkatalog konnte nicht eingespielt werden — {len(exc.report.errors)} Fehler. "
+                f"{catalog_label} konnte nicht eingespielt werden — {len(exc.report.errors)} Fehler. "
                 "Der ganze Lauf ist eine Transaktion: es wurde NICHTS angelegt. Konflikte im Bestand "
                 "bereinigen und den Befehl wiederholen."
             ) from exc
         except PackageValidationError as exc:
             raise CommandError(
-                "Der mitgelieferte Standardkatalog ist ungültig — das ist ein Fehler im "
+                f"{catalog_label} ist ungültig — das ist ein Fehler im "
                 f"ausgelieferten Stand, nicht in Ihrer Eingabe:\n{exc}\n"
                 "Es wurde nichts angelegt. Mit --no-default-package lässt sich die Einrichtung "
                 "vorläufig ohne Katalog anlegen."
             ) from exc
 
-    def _write_package_summary(self, facility, report, *, wants_package):
-        """Eine Zeile zum Standardkatalog — der Operator soll sehen, ob dokumentiert werden kann."""
-        if not wants_package:
+    def _write_package_summary(self, facility, report, *, package_name):
+        """Eine Zeile zum Katalog — der Operator soll sehen, ob dokumentiert werden kann."""
+        if package_name is None:
             self.stdout.write(
                 self.style.WARNING(
                     "Standardkatalog übersprungen (--no-default-package) — dokumentieren lässt sich "
@@ -196,23 +209,25 @@ class Command(BaseCommand):
                 )
             )
             return
+        display_name = PACKAGE_INFO[package_name].display_name
         if report is None:
+            load_option = "--default" if package_name == "default" else f"--package {package_name}"
             # Bestands-Einrichtung: der Command fasst einen vorhandenen Katalog
             # NICHT an (siehe ``core/services/facility_bootstrap.py``) und nennt
             # stattdessen den expliziten Weg mit Vorschau.
             self.stdout.write(
                 self.style.WARNING(
-                    "Standardkatalog nicht eingespielt — die Einrichtung bringt bereits "
+                    f"{display_name} nicht eingespielt — die Einrichtung bringt bereits "
                     "Dokumentationstypen oder Feldvorlagen mit; gepflegte Werte bleiben unverändert. "
                     "Auslieferungsstand bewusst nachziehen (mit Vorschau): "
-                    f"manage.py load_package --default --facility {facility.id} --dry-run"
+                    f"manage.py load_package {load_option} --facility {facility.id} --dry-run"
                 )
             )
             return
         types = report.document_types
         self.stdout.write(
             self.style.SUCCESS(
-                f"Standardkatalog eingespielt: {len(types.created)} Dokumentationstypen angelegt, "
+                f"{display_name} eingespielt: {len(types.created)} Dokumentationstypen angelegt, "
                 f"{len(types.updated)} aktualisiert, {len(types.unchanged)} unverändert."
             )
         )
@@ -246,10 +261,13 @@ class Command(BaseCommand):
                 )
             )
         elif not baseline.quick_templates:
+            if baseline.package is None:
+                reason = "ohne Katalog gibt es keinen passenden Dokumentationstyp"
+            else:
+                reason = f"für das Paket {baseline.package!r} sind keine passenden Vorlagen vorkonfiguriert"
             self.stdout.write(
                 self.style.WARNING(
-                    "Schnellvorlagen nicht angelegt — sie hängen an Dokumentationstypen des "
-                    "Standardkatalogs, den diese Einrichtung nicht hat. Nachträglich anlegen: "
+                    f"Schnellvorlagen nicht angelegt — {reason}. Nachträglich anlegen: "
                     "im Admin unter Core → Quick-Templates."
                 )
             )

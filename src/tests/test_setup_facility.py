@@ -1,9 +1,11 @@
 """Tests for the setup_facility management command."""
 
 import io
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 from django.core.management import CommandError, call_command
 from django.urls import reverse
 
@@ -175,13 +177,18 @@ class TestSetupFacilityValidation:
 class TestSetupFacilityDefaultPackage:
     """Kaltstart-Minimum (Refs #1883): nach dem Lauf ist dokumentierbar."""
 
-    def _run(self, *, no_default_package=False, username="admin"):
+    def _run(self, *, no_default_package=False, package=None, username="admin"):
         out = io.StringIO()
         with (
             patch("builtins.input", side_effect=["Org", "Stelle", username]),
             patch("getpass.getpass", side_effect=["pw1234", "pw1234"]),
         ):
-            call_command("setup_facility", no_default_package=no_default_package, stdout=out)
+            call_command(
+                "setup_facility",
+                no_default_package=no_default_package,
+                package=package,
+                stdout=out,
+            )
         return out.getvalue()
 
     def test_default_package_is_applied(self):
@@ -193,6 +200,65 @@ class TestSetupFacilityDefaultPackage:
             facility=facility, entity_type=DocumentType.EntityType.EVENT, is_active=True
         ).exists()
         assert FieldTemplate.objects.filter(facility=facility).exists()
+
+    def test_explicit_default_package_is_applied(self):
+        self._run(package="default")
+
+        facility = Facility.objects.get(name="Stelle")
+        assert DocumentType.objects.filter(facility=facility, slug="kontakt").exists()
+
+    def test_package_and_opt_out_are_mutually_exclusive_before_prompting(self, monkeypatch):
+        def _fail(*args, **kwargs):  # pragma: no cover - darf nie laufen
+            raise AssertionError("Die Optionsprüfung muss vor der ersten Eingabe greifen.")
+
+        monkeypatch.setattr("builtins.input", _fail)
+
+        with pytest.raises(CommandError, match="--package und --no-default-package"):
+            call_command("setup_facility", package="default", no_default_package=True)
+
+    def test_unknown_package_reports_available_names_before_prompting(self, monkeypatch):
+        def _fail(*args, **kwargs):  # pragma: no cover - darf nie laufen
+            raise AssertionError("Die Paketprüfung muss vor der ersten Eingabe greifen.")
+
+        monkeypatch.setattr("builtins.input", _fail)
+
+        with pytest.raises(CommandError, match="Verfügbare Pakete: default"):
+            call_command("setup_facility", package="missing")
+
+    def test_synthetic_package_creates_only_its_catalog(self, tmp_path: Path, monkeypatch):
+        from core.management.commands import setup_facility as command_module
+        from core.packages import catalog
+        from core.packages.catalog import PackageInfo
+        from core.services import facility_bootstrap
+
+        raw = {
+            "schema_version": 1,
+            "field_templates": [{"slug": "probe-feld", "name": "Probe-Feld"}],
+            "document_types": [
+                {
+                    "slug": "probe-typ",
+                    "name": "Probe-Typ",
+                    "entity_type": "event",
+                    "field_refs": [{"template_slug": "probe-feld"}],
+                }
+            ],
+        }
+        (tmp_path / "probe.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
+        monkeypatch.setattr(catalog, "_package_root", lambda: tmp_path)
+        monkeypatch.setitem(
+            facility_bootstrap.PACKAGE_COMFORT,
+            "probe",
+            facility_bootstrap.ComfortDefs((), ()),
+        )
+        monkeypatch.setitem(command_module.PACKAGE_INFO, "probe", PackageInfo("Probe", "Test"))
+        catalog._package_data_cache.clear()
+
+        self._run(package="probe")
+
+        facility = Facility.objects.get(name="Stelle")
+        assert set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True)) == {"probe-typ"}
+        assert set(FieldTemplate.objects.for_facility(facility).values_list("slug", flat=True)) == {"probe-feld"}
+        catalog._package_data_cache.clear()
 
     def test_opt_out_leaves_the_facility_empty(self):
         self._run(no_default_package=True)

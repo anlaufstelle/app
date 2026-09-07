@@ -12,4 +12,24 @@ Schichtung (bewusst getrennt):
   (Management-Command), damit das Format auch aus JSON/API-Input befüllbar ist.
 * :mod:`core.packages.loader` — idempotenter Upsert eines ``PackageV1`` gegen
   eine Einrichtung, mit Report, Savepoints je Objekt und Dry-Run.
+* :mod:`core.packages.catalog` — Reader und Anzeige-Metadaten fuer die
+  mitgelieferten YAML-Pakete.
 """
+
+from core.packages.catalog import (
+    PACKAGE_INFO,
+    PackageInfo,
+    UnknownPackageError,
+    list_packages,
+    load_package_data,
+    parse_catalog_package,
+)
+
+__all__ = [
+    "PACKAGE_INFO",
+    "PackageInfo",
+    "UnknownPackageError",
+    "list_packages",
+    "load_package_data",
+    "parse_catalog_package",
+]

@@ -12,6 +12,18 @@ Der mitgelieferte Standardkatalog ist selbst ein Paket: [`src/core/packages/defa
 
 ---
 
+## Mitgelieferter Katalog
+
+Mitgelieferte Pakete liegen flach unter `core/packages/<name>.yaml`. Der technische Name wird bei `setup_facility --package <name>` und `load_package --package <name>` verwendet.
+
+| Name | Domäne | Typen | Besonderheiten | Doku |
+|---|---|---:|---|---|
+| `default` | Niedrigschwellige Hilfe | 9 | Drei Standardschichten und zwei Schnellvorlagen am Typ „Kontakt“ | [Standardkatalog und Schema v1](#1-aufbau) |
+
+Domänen-Pakete: siehe die Zeilen, die die jeweiligen Paket-Issues ergänzen ([#2137 Awareness](https://github.com/anlaufstelle/app/issues/2137), [#2145 Beratungsstelle](https://github.com/anlaufstelle/app/issues/2145), [#2138 Frauenhaus](https://github.com/anlaufstelle/app/issues/2138), [#2139 Jugendarbeit](https://github.com/anlaufstelle/app/issues/2139)).
+
+---
+
 ## 1. Aufbau
 
 Ein Paket hat drei Top-Level-Schlüssel:
@@ -291,19 +303,22 @@ Schema-Fehler (vor dem Laden) tragen stattdessen den **Pfad in der YAML**, z. B.
 ## 4. `manage.py load_package`
 
 ```
-python src/manage.py load_package (--file <pfad/zur/paket.yaml> | --default) --facility <uuid> [--dry-run]
+python src/manage.py load_package (--file <pfad/zur/paket.yaml> | --package <name> | --default) --facility <uuid> [--dry-run]
 ```
 
 | Argument | Pflicht | Bedeutung |
 |---|---|---|
 | `--file` | ja¹ | Pfad zur Paket-YAML |
+| `--package` | ja¹ | Mitgeliefertes Paket aus dem Katalog nach technischem Namen |
 | `--default` | ja¹ | Statt `--file`: der mitgelieferte Standardkatalog (`core/packages/default.yaml`) |
 | `--facility` | ja | UUID der Ziel-Einrichtung (`Facility.id`) |
 | `--dry-run` | nein | Simuliert den Lauf und rollt am Ende zurück — **identischer Code-Pfad**, der Report zeigt exakt, was ein Echtlauf getan hätte |
 
-¹ Genau eines von `--file` / `--default`. Beides zusammen oder keines von beiden bricht mit einer Meldung ab.
+¹ Genau eines von `--file` / `--package` / `--default`. Mehrere Quellen zusammen oder gar keine brechen mit einer Meldung ab. `--default` ist ein weiterhin unterstützter Alias für `--package default`.
 
 > **`--default` — Standardkatalog nachziehen (#1883).** `manage.py setup_facility` stattet eine **neue** Einrichtung automatisch mit dem Standardkatalog aus — eine Einrichtung, die schon Dokumentationstypen oder Feldvorlagen trägt, lässt es dagegen unangetastet (Ersteinrichtung, kein Katalog-Update). Für eine **bestehende** Einrichtung — im Django-Admin unter **Core → Einrichtungen** entstanden, oder mit `--no-default-package` bewusst leer gestartet — ist `--default` der Weg dorthin: fachlich identisch zu `--file <container-pfad>/default.yaml`, nur ohne dass der Betreiber diesen Pfad kennen muss. Auf Bestandszeilen gilt dabei die übliche Rücksync-Semantik dieses Commands (siehe Tabelle unten) — deshalb erst mit `--dry-run`. Ohne mindestens einen Typ mit `entity_type: event` bleibt die Typ-Auswahl beim Dokumentieren leer.
+
+> ⚠️ **Domänen-Pakete sind Ersatz, nicht Zusatz.** Ein mitgeliefertes Paket außer `default` wird nur auf eine frische, katalogfreie Einrichtung geladen. Trägt die Einrichtung Typ- oder Feld-Slugs, die im gewählten Paket nicht vorkommen, bricht der Command auch mit `--dry-run` ab und nennt die fremden Slugs. Das schützt insbesondere wiederverwendete Slugs und deren vollständig zurückgeschriebene Optionslisten. Für eine neue Einrichtung deshalb `setup_facility --package <name>` verwenden; der Doppellauf **desselben** Pakets bleibt idempotent erlaubt. Nur `--default` / `--package default` behält für Bestandsinstallationen die dokumentierte Rücksync-Semantik.
 
 Im Container immer ueber den dedizierten **Maintenance-Service** (siehe Kasten):
 
@@ -315,6 +330,10 @@ docker compose run --rm \
 # Standardkatalog statt eigener Datei:
 docker compose run --rm maintenance \
   load_package --default --facility <uuid> --dry-run
+
+# Mitgeliefertes Domänen-Paket — nur gegen eine frische Einrichtung:
+docker compose run --rm maintenance \
+  load_package --package awareness --facility <uuid> --dry-run
 ```
 
 > ⚠️ **Rollen-Voraussetzung.** Der Loader schreibt in fünf Tabellen mit Row-Level-Security (`core_documenttype`, `core_fieldtemplate`, `core_documenttypefield`, `core_fieldgroup`, `core_fieldcondition`). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — deshalb sieht `web` die Admin-Zugangsdaten gar nicht. Der opt-in Service `maintenance` laedt sie und verbindet als BYPASSRLS-Rolle; der Command prüft das vorab und bricht mit einer klaren Meldung ab. Hintergrund: [Ops-Runbook § 9.5](ops-runbook.md), [ADR-033](adr/033-runtime-owner-role-separation.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Maintenance-Pfad überflüssig.

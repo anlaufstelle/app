@@ -9,17 +9,18 @@ beide :func:`ensure_facility_baseline` auf, statt einen zweiten Weg mit
 abweichendem Ergebnis zu bauen (genau die Falle aus Refs #1884). Ein
 Architektur-Guard (``test_architecture_guards_models.py``) pinnt das.
 
-**Drei Bestaende, zwei Mechanismen (Refs #1970).** Dokumentationstypen und
-Feldvorlagen kommen aus dem mitgelieferten Paket ``core/packages/default.yaml``
-— das ist der einzige Bestand, dessen Fehlen die Einrichtung **blockiert**.
+**Drei Bestaende, zwei Mechanismen (Refs #1970, #2134).**
+Dokumentationstypen und Feldvorlagen kommen aus einem mitgelieferten Paket
+unter ``core/packages/<name>.yaml`` — das ist der einzige Bestand, dessen
+Fehlen die Einrichtung **blockiert**.
 Schichtfenster (``TimeFilter``) und Schnellvorlagen (``QuickTemplate``) sind
 Komfort und stehen als schmale Deklaration in diesem Modul: das Paketformat v1
 kennt ausschliesslich ``schema_version``, ``field_templates`` und
 ``document_types`` (``_PACKAGE_KEYS`` in ``core/packages/schema.py``, jeder
 unbekannte Schluessel ist ein harter Validierungsfehler) — die beiden sind dort
 gar nicht ausdrueckbar. Eine Schema-Erweiterung dafuer haette Parser, Loader,
-Report, ``--dry-run`` und die Paket-Doku mitgezogen; fuer zwei Komfort-Objekte
-ohne Fremdpaket-Bedarf ist das zu viel Apparat.
+Report, ``--dry-run`` und die Paket-Doku mitgezogen. Die Komfortdefinitionen
+stehen deshalb je Paket in :data:`PACKAGE_COMFORT`.
 
 Der Startbestand ist bewusst **neu gefasst** und nicht aus ``core/seed/``
 gehoben: die Seed-Schnellvorlagen sind Demo-Inhalte einer fiktiven Einrichtung
@@ -38,7 +39,7 @@ Einstieg dagegen bei jedem Lauf — ein Wiederholungslauf ist eine ausdruecklich
 Operator-Handlung mit einer Ausgabe je Bestand.
 
 **Ausstatten, nicht nachziehen.** Der Einstieg heisst
-:func:`ensure_default_package` und nicht ``apply_…``, weil er genau eine Frage
+:func:`ensure_catalog_package` und nicht ``apply_…``, weil er genau eine Frage
 beantwortet: „hat diese Einrichtung schon einen Katalog?" — wenn ja, fasst er
 sie nicht an. Der Loader ist deklarativ und schreibt bei jedem Lauf die
 Paket-Werte auf Bestandszeilen zurueck (``name``, ``sort_order``, ``color``,
@@ -79,8 +80,9 @@ from core.models.field_template import FieldTemplate
 from core.models.organization import Facility
 from core.models.quick_template import QuickTemplate
 from core.models.time_filter import TimeFilter
-from core.packages.default_catalog import parse_default_package
+from core.packages.catalog import UnknownPackageError, list_packages, parse_catalog_package
 from core.packages.loader import PackageReport, load_package
+from core.packages.schema import PackageV1
 from core.services.dashboard import filter_prefilled_data
 
 
@@ -133,15 +135,60 @@ DEFAULT_QUICK_TEMPLATES: tuple[QuickTemplateDef, ...] = (
 
 
 @dataclass(frozen=True)
+class ComfortDefs:
+    """Zeitfenster und Schnellvorlagen ausserhalb des Paketformats v1."""
+
+    time_filters: tuple[TimeFilterDef, ...]
+    quick_templates: tuple[QuickTemplateDef, ...]
+
+
+# Paket-Lanen ergaenzen ihre QuickTemplates in getrennten Bloecken; die
+# Leerzeilen sind deshalb bewusst formatter-stabil und minimieren Merge-Konflikte.
+# fmt: off
+PACKAGE_COMFORT: dict[str, ComfortDefs] = {
+    # Standardkatalog
+    "default": ComfortDefs(DEFAULT_TIME_FILTERS, DEFAULT_QUICK_TEMPLATES),
+
+    # Awareness
+    "awareness": ComfortDefs(
+        (
+            TimeFilterDef("Abend", time(18, 0), time(0, 0)),
+            TimeFilterDef("Nacht", time(0, 0), time(6, 0)),
+        ),
+        (),
+    ),
+
+    # Beratungsstelle
+    "beratungsstelle": ComfortDefs(
+        (
+            TimeFilterDef("Sprechstunde Vormittag", time(8, 0), time(12, 0)),
+            TimeFilterDef("Sprechstunde Nachmittag", time(13, 0), time(17, 0)),
+            TimeFilterDef("Termine", time(17, 0), time(20, 0)),
+        ),
+        (),
+    ),
+
+    # Frauenhaus
+    "frauenhaus": ComfortDefs(DEFAULT_TIME_FILTERS, ()),
+
+    # Jugendarbeit
+    "jugendarbeit": ComfortDefs(DEFAULT_TIME_FILTERS, ()),
+}
+# fmt: on
+
+
+@dataclass(frozen=True)
 class FacilityBaseline:
     """Was :func:`ensure_facility_baseline` tatsaechlich angelegt hat.
 
-    Jedes Feld ist ``None``, wenn der jeweilige Bestand schon da war und
-    deshalb **unangetastet** blieb — die Unterscheidung, an der die Ausgabe
-    von ``setup_facility`` haengt.
+    ``package`` nennt die Auswahl (oder ``None`` beim Opt-out),
+    ``package_report`` ist ``None``, wenn ein bestehender Katalog deshalb
+    **unangetastet** blieb. Dasselbe ``None``-Signal nutzen die beiden
+    Komfortlisten fuer bereits gepflegten Bestand.
     """
 
-    package: PackageReport | None
+    package: str | None
+    package_report: PackageReport | None
     quick_templates: list[QuickTemplate] | None
     time_filters: list[TimeFilter] | None
 
@@ -161,6 +208,23 @@ def has_catalog_objects(facility: Facility) -> bool:
     # zaehlen bewusst mit: der Loader wuerde sie ueber den Slug wiederfinden und
     # ueberschreiben, sie sind also genauso schuetzenswerter Bestand.
     return DocumentType.objects.for_facility(facility).exists() or FieldTemplate.objects.for_facility(facility).exists()
+
+
+def foreign_catalog_slugs(facility: Facility, package: PackageV1) -> set[str]:
+    """Vorhandene Typ-/Feld-Slugs, die ``package`` nicht deklariert."""
+    package_slugs = {item.slug for item in package.document_types} | {item.slug for item in package.field_templates}
+    existing_slugs = set(DocumentType.objects.for_facility(facility).values_list("slug", flat=True))
+    existing_slugs.update(FieldTemplate.objects.for_facility(facility).values_list("slug", flat=True))
+    return existing_slugs - package_slugs
+
+
+def ensure_catalog_package(facility: Facility, name: str) -> PackageReport | None:
+    """Stattet eine katalogfreie Einrichtung einmalig mit ``name`` aus."""
+    package = parse_catalog_package(name)
+    with transaction.atomic():
+        if has_catalog_objects(facility):
+            return None
+        return load_package(facility, package)
 
 
 def ensure_default_package(facility: Facility) -> PackageReport | None:
@@ -186,10 +250,23 @@ def ensure_default_package(facility: Facility) -> PackageReport | None:
     # Der Loader klammert sich selbst atomar; die Klammer hier haelt zusaetzlich
     # Bestandspruefung und Anwenden zusammen, wenn der Aufrufer noch keine
     # Transaktion geoeffnet hat.
-    with transaction.atomic():
-        if has_catalog_objects(facility):
-            return None
-        return load_package(facility, parse_default_package())
+    return ensure_catalog_package(facility, "default")
+
+
+def ensure_time_filters(facility: Facility, definitions: tuple[TimeFilterDef, ...]) -> list[TimeFilter] | None:
+    """Legt deklarierte Zeitfenster an, sofern noch keine gepflegt sind."""
+    if TimeFilter.objects.for_facility(facility).exists():
+        return None
+    return [
+        TimeFilter.objects.create(
+            facility=facility,
+            label=item.label,
+            start_time=item.start_time,
+            end_time=item.end_time,
+            sort_order=index,
+        )
+        for index, item in enumerate(definitions)
+    ]
 
 
 def ensure_default_time_filters(facility: Facility) -> list[TimeFilter] | None:
@@ -207,18 +284,34 @@ def ensure_default_time_filters(facility: Facility) -> list[TimeFilter] | None:
     Schichten selbst pflegt — dann bleibt sie unangetastet. Sonst wuerde ein
     Wiederholungslauf geloeschte Standardschichten stumm wieder hereinholen.
     """
-    if TimeFilter.objects.for_facility(facility).exists():
+    return ensure_time_filters(facility, DEFAULT_TIME_FILTERS)
+
+
+def ensure_quick_templates(facility: Facility, definitions: tuple[QuickTemplateDef, ...]) -> list[QuickTemplate] | None:
+    """Legt deklarierte Schnellvorlagen nur an vorhandenen Typ-Slugs an."""
+    if QuickTemplate.objects.for_facility(facility).exists():
         return None
-    return [
-        TimeFilter.objects.create(
-            facility=facility,
-            label=item.label,
-            start_time=item.start_time,
-            end_time=item.end_time,
-            sort_order=index,
+    doc_types = {
+        doc_type.slug: doc_type
+        for doc_type in DocumentType.objects.for_facility(facility).filter(
+            slug__in={item.document_type_slug for item in definitions}
         )
-        for index, item in enumerate(DEFAULT_TIME_FILTERS)
-    ]
+    }
+    created: list[QuickTemplate] = []
+    for item in definitions:
+        doc_type = doc_types.get(item.document_type_slug)
+        if doc_type is None:
+            continue
+        created.append(
+            QuickTemplate.objects.create(
+                facility=facility,
+                document_type=doc_type,
+                name=item.name,
+                prefilled_data=filter_prefilled_data(doc_type, dict(item.prefilled_data)),
+                sort_order=len(created),
+            )
+        )
+    return created
 
 
 def ensure_default_quick_templates(facility: Facility) -> list[QuickTemplate] | None:
@@ -246,32 +339,10 @@ def ensure_default_quick_templates(facility: Facility) -> list[QuickTemplate] | 
     ``beratung``, entstuende sonst ein Wert, den ``apply_template`` beim
     Anwenden ohnehin still verwirft — gespeichert, aber wirkungslos.
     """
-    if QuickTemplate.objects.for_facility(facility).exists():
-        return None
-    doc_types = {
-        doc_type.slug: doc_type
-        for doc_type in DocumentType.objects.for_facility(facility).filter(
-            slug__in={item.document_type_slug for item in DEFAULT_QUICK_TEMPLATES}
-        )
-    }
-    created: list[QuickTemplate] = []
-    for item in DEFAULT_QUICK_TEMPLATES:
-        doc_type = doc_types.get(item.document_type_slug)
-        if doc_type is None:
-            continue
-        created.append(
-            QuickTemplate.objects.create(
-                facility=facility,
-                document_type=doc_type,
-                name=item.name,
-                prefilled_data=filter_prefilled_data(doc_type, dict(item.prefilled_data)),
-                sort_order=len(created),
-            )
-        )
-    return created
+    return ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES)
 
 
-def ensure_facility_baseline(facility: Facility, *, with_package: bool = True) -> FacilityBaseline:
+def ensure_facility_baseline(facility: Facility, *, package: str | None = "default") -> FacilityBaseline:
     """Der EINE Einstieg fuer die Grundausstattung einer Einrichtung (Refs #1970).
 
     Beide Laufzeit-Anlagepfade rufen ihn auf — der Django-Admin
@@ -282,7 +353,7 @@ def ensure_facility_baseline(facility: Facility, *, with_package: bool = True) -
     (``test_architecture_guards_models.py``) pinnt deshalb, dass jede
     Facility-Anlage hier vorbeikommt.
 
-    ``with_package=False`` ist das Opt-out von ``setup_facility``
+    ``package=None`` ist das Opt-out von ``setup_facility``
     (``--no-default-package``) und laesst **nur** den Dokumentationstyp-Katalog
     weg. Die Schichtfenster haengen an keinem Katalog und entstehen trotzdem;
     Schnellvorlagen haengen an Katalog-Slugs und bleiben ohne Katalog
@@ -295,8 +366,8 @@ def ensure_facility_baseline(facility: Facility, *, with_package: bool = True) -
     harter Validierungsfehler. Ein mitgeliefertes Konfigurationspaket kann die
     beiden also nicht transportieren. Eine Schema-Erweiterung dafuer haette
     Parser, Loader, Report, ``--dry-run`` und die Paket-Doku mitgezogen — fuer
-    zwei Komfort-Objekte ohne Fremdpaket-Bedarf zu viel; sie stehen deshalb als
-    schmale Deklaration in diesem Modul.
+    die Komfort-Objekte zu viel; sie stehen deshalb je Paket als schmale
+    Deklaration in diesem Modul.
 
     Fehler werden nicht geschluckt (siehe :func:`ensure_default_package`): die
     Transaktionsklammer nimmt bei einem kaputten Katalog auch Schichtfenster und
@@ -306,8 +377,21 @@ def ensure_facility_baseline(facility: Facility, *, with_package: bool = True) -
     # Reihenfolge ist bedeutsam: der Katalog zuerst, weil die Schnellvorlagen an
     # seinen Slugs haengen — und weil ein Katalog-Fehler dann abbricht, bevor
     # ueberhaupt etwas anderes entstanden ist.
+    if package is None:
+        comfort = ComfortDefs(DEFAULT_TIME_FILTERS, ())
+    else:
+        try:
+            comfort = PACKAGE_COMFORT[package]
+        except KeyError as exc:
+            raise UnknownPackageError(package, list_packages()) from exc
+
     with transaction.atomic():
-        package = ensure_default_package(facility) if with_package else None
-        quick_templates = ensure_default_quick_templates(facility)
-        time_filters = ensure_default_time_filters(facility)
-    return FacilityBaseline(package=package, quick_templates=quick_templates, time_filters=time_filters)
+        package_report = ensure_catalog_package(facility, package) if package is not None else None
+        quick_templates = ensure_quick_templates(facility, comfort.quick_templates)
+        time_filters = ensure_time_filters(facility, comfort.time_filters)
+    return FacilityBaseline(
+        package=package,
+        package_report=package_report,
+        quick_templates=quick_templates,
+        time_filters=time_filters,
+    )

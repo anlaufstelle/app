@@ -20,28 +20,13 @@ Bewusst nur Lesen und Parsen: das Anwenden auf eine Einrichtung liegt in
 
 from __future__ import annotations
 
-import copy
-import importlib.resources
 from typing import Any
 
-from core.packages.schema import PackageV1, parse_package
-from core.packages.yaml_io import safe_load_unique
-
-# Paket-Ressource neben dem Loader (``core/packages/default.yaml``) — ueber
-# ``importlib.resources`` adressiert, damit der Pfad unabhaengig vom
-# Arbeitsverzeichnis und vom Deploy-Layout (Container: ``COPY src/ ./``)
-# aufloesbar bleibt.
-_PACKAGE_ANCHOR = "core.packages"
-_PACKAGE_RESOURCE = "default.yaml"
+from core.packages.catalog import load_package_data, parse_catalog_package
+from core.packages.schema import PackageV1
 
 #: Repo-relativer Pfad des Katalogs — fuer Meldungen/Doku, nicht zum Oeffnen.
 DEFAULT_PACKAGE_PATH = "core/packages/default.yaml"
-
-# Modulweiter Cache: die Datei wird einmal je Prozess gelesen und geparst,
-# auch wenn der Aufrufer ueber mehrere Einrichtungen laeuft. Bewusst LAZY (kein
-# Import-Zeit-Dateizugriff — sonst braeche der Import in Umgebungen ohne den
-# Paketbaum, siehe Import-Zeit-Guard in den Architektur-Tests).
-_package_data_cache: dict[str, Any] | None = None
 
 
 def load_default_package_data() -> dict[str, Any]:
@@ -51,16 +36,7 @@ def load_default_package_data() -> dict[str, Any]:
     Tests, die Katalog-Varianten bauen) duerfen das Ergebnis gefahrlos
     veraendern, ohne den Cache zu vergiften.
     """
-    global _package_data_cache
-    if _package_data_cache is None:
-        text = importlib.resources.files(_PACKAGE_ANCHOR).joinpath(_PACKAGE_RESOURCE).read_text(encoding="utf-8")
-        # Haertung Refs #1727: auch der Standardkatalog laeuft ueber den Duplikat-
-        # Key-strikten Loader — ein Copy-Paste-Fehler im Repo faellt so auf.
-        data = safe_load_unique(text)
-        if not isinstance(data, dict):
-            raise ValueError(f"{_PACKAGE_ANCHOR}/{_PACKAGE_RESOURCE} enthaelt kein Mapping auf oberster Ebene.")
-        _package_data_cache = data
-    return copy.deepcopy(_package_data_cache)
+    return load_package_data("default")
 
 
 def parse_default_package() -> PackageV1:
@@ -70,4 +46,4 @@ def parse_default_package() -> PackageV1:
     immer einen Fehler im ausgelieferten Repo-Katalog, nie eine Operator-
     Eingabe — sie schlaegt deshalb ungefiltert bis zum Aufrufer durch.
     """
-    return parse_package(load_default_package_data())
+    return parse_catalog_package("default")

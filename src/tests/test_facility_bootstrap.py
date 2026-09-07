@@ -111,6 +111,28 @@ class TestEnsureDefaultPackage:
 
 
 @pytest.mark.django_db
+class TestForeignCatalogSlugs:
+    def test_reports_inactive_document_types_and_field_templates_outside_package(self, facility):
+        from core.packages.default_catalog import parse_default_package
+        from core.services.facility_bootstrap import foreign_catalog_slugs
+
+        DocumentType.objects.create(
+            facility=facility,
+            slug="fremder-typ",
+            name="Fremder Typ",
+            is_active=False,
+        )
+        FieldTemplate.objects.create(
+            facility=facility,
+            slug="fremdes-feld",
+            name="Fremdes Feld",
+            is_active=False,
+        )
+
+        assert foreign_catalog_slugs(facility, parse_default_package()) == {"fremder-typ", "fremdes-feld"}
+
+
+@pytest.mark.django_db
 class TestEnsureDefaultTimeFilters:
     """Refs #1970: Schichtfenster gehoeren zur Grundausstattung.
 
@@ -292,7 +314,8 @@ class TestEnsureFacilityBaseline:
 
         result = ensure_facility_baseline(facility)
 
-        assert result.package is not None
+        assert result.package == "default"
+        assert result.package_report is not None
         assert result.time_filters
         assert result.quick_templates
         assert DocumentType.objects.filter(facility=facility, entity_type="event").exists()
@@ -304,9 +327,10 @@ class TestEnsureFacilityBaseline:
         from core.models import QuickTemplate, TimeFilter
         from core.services.facility_bootstrap import ensure_facility_baseline
 
-        result = ensure_facility_baseline(facility, with_package=False)
+        result = ensure_facility_baseline(facility, package=None)
 
         assert result.package is None
+        assert result.package_report is None
         assert not DocumentType.objects.filter(facility=facility).exists()
         assert TimeFilter.objects.for_facility(facility).exists()
         # Ohne Katalog gibt es keinen Typ, an dem eine Vorlage haengen koennte.
@@ -320,9 +344,59 @@ class TestEnsureFacilityBaseline:
 
         result = ensure_facility_baseline(facility)
 
-        assert result.package is None
+        assert result.package == "default"
+        assert result.package_report is None
         assert result.quick_templates is None
         assert result.time_filters is None
+
+    def test_unknown_package_fails_before_creating_comfort_objects(self, facility):
+        from core.models import TimeFilter
+        from core.packages.catalog import UnknownPackageError
+        from core.services.facility_bootstrap import ensure_facility_baseline
+
+        with pytest.raises(UnknownPackageError, match="missing"):
+            ensure_facility_baseline(facility, package="missing")
+
+        assert not TimeFilter.objects.for_facility(facility).exists()
+
+    def test_package_comfort_definitions_are_kept_separate(self):
+        from datetime import time
+
+        from core.services.facility_bootstrap import (
+            DEFAULT_QUICK_TEMPLATES,
+            DEFAULT_TIME_FILTERS,
+            PACKAGE_COMFORT,
+        )
+
+        assert [(item.label, item.start_time, item.end_time) for item in PACKAGE_COMFORT["awareness"].time_filters] == [
+            ("Abend", time(18, 0), time(0, 0)),
+            ("Nacht", time(0, 0), time(6, 0)),
+        ]
+        assert [
+            (item.label, item.start_time, item.end_time) for item in PACKAGE_COMFORT["beratungsstelle"].time_filters
+        ] == [
+            ("Sprechstunde Vormittag", time(8, 0), time(12, 0)),
+            ("Sprechstunde Nachmittag", time(13, 0), time(17, 0)),
+            ("Termine", time(17, 0), time(20, 0)),
+        ]
+        assert PACKAGE_COMFORT["default"].time_filters is DEFAULT_TIME_FILTERS
+        assert PACKAGE_COMFORT["default"].quick_templates is DEFAULT_QUICK_TEMPLATES
+        assert PACKAGE_COMFORT["frauenhaus"].time_filters is DEFAULT_TIME_FILTERS
+        assert PACKAGE_COMFORT["jugendarbeit"].time_filters is DEFAULT_TIME_FILTERS
+        assert PACKAGE_COMFORT["awareness"].quick_templates == ()
+        assert PACKAGE_COMFORT["beratungsstelle"].quick_templates == ()
+        assert PACKAGE_COMFORT["frauenhaus"].quick_templates == ()
+        assert PACKAGE_COMFORT["jugendarbeit"].quick_templates == ()
+
+    def test_package_quick_templates_skip_unknown_type_slugs(self, facility):
+        from core.services.facility_bootstrap import QuickTemplateDef, ensure_quick_templates
+
+        created = ensure_quick_templates(
+            facility,
+            (QuickTemplateDef("nicht-im-katalog", "Nicht anlegen", {}),),
+        )
+
+        assert created == []
 
     def test_a_broken_catalog_takes_the_whole_baseline_with_it(self, facility, monkeypatch):
         """Fail-loud: keine halb ausgestattete Einrichtung (Muster aus Refs #1883)."""
@@ -330,10 +404,10 @@ class TestEnsureFacilityBaseline:
         from core.packages.schema import PackageValidationError
         from core.services import facility_bootstrap
 
-        def _boom(_facility):
+        def _boom(_facility, _package):
             raise PackageValidationError([("document_types[0].slug", "kaputt")])
 
-        monkeypatch.setattr(facility_bootstrap, "ensure_default_package", _boom)
+        monkeypatch.setattr(facility_bootstrap, "ensure_catalog_package", _boom)
 
         with pytest.raises(PackageValidationError):
             facility_bootstrap.ensure_facility_baseline(facility)

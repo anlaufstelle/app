@@ -40,10 +40,12 @@ import yaml
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
 from core.models.organization import Facility
-from core.packages.default_catalog import DEFAULT_PACKAGE_PATH, load_default_package_data
+from core.packages.catalog import UnknownPackageError, load_package_data
+from core.packages.default_catalog import DEFAULT_PACKAGE_PATH
 from core.packages.loader import PackageLoadError, PackageReport, load_package
 from core.packages.schema import PackageV1, PackageValidationError, parse_package
 from core.packages.yaml_io import safe_load_unique
+from core.services.facility_bootstrap import foreign_catalog_slugs
 
 # Refs #1016/#1070/#1512: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -78,6 +80,10 @@ class Command(BaseCommand):
                 "Bestands-Einrichtung nachtraeglich auf den Auslieferungsstand zu bringen."
             ),
         )
+        parser.add_argument(
+            "--package",
+            help="Mitgeliefertes Katalogpaket nach Name einspielen.",
+        )
         parser.add_argument("--facility", required=True, help="UUID der Ziel-Einrichtung.")
         parser.add_argument(
             "--dry-run",
@@ -104,8 +110,18 @@ class Command(BaseCommand):
                 "(siehe docs/ops-runbook.md § 9.5)."
             )
         facility = self._resolve_facility(options["facility"])
-        raw = self._read_source(options)
+        raw, package_name = self._read_source(options)
         package = self._parse_package(raw)
+
+        if package_name is not None and package_name != "default":
+            foreign_slugs = foreign_catalog_slugs(facility, package)
+            if foreign_slugs:
+                rendered = ", ".join(sorted(foreign_slugs))
+                raise CommandError(
+                    "Domänen-Pakete sind Ersatz, kein Zusatz: die Einrichtung trägt bereits "
+                    f"einen anderen Katalog (fremde Slugs: {rendered}). Gegen eine frische "
+                    f"Einrichtung laden (setup_facility --package {package_name})."
+                )
 
         dry_run: bool = bool(options["dry_run"])
         try:
@@ -135,8 +151,8 @@ class Command(BaseCommand):
         except Facility.DoesNotExist as exc:
             raise CommandError(f"Einrichtung mit UUID {raw_uuid!r} nicht gefunden.") from exc
 
-    def _read_source(self, options: dict[str, Any]) -> dict[str, Any]:
-        """Paketquelle bestimmen: genau eines von ``--file`` / ``--default``.
+    def _read_source(self, options: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+        """Paketquelle bestimmen: genau eines von Datei, Alias oder Katalogname.
 
         Refs #1883: ``--default`` schliesst die Bestandsluecke des
         Kaltstart-Tickets — ``setup_facility`` stattet nur NEUE Einrichtungen
@@ -147,11 +163,20 @@ class Command(BaseCommand):
         """
         path_str: str | None = options.get("file")
         use_default: bool = bool(options.get("default"))
-        if path_str and use_default:
-            raise CommandError("--file und --default schliessen sich aus — genau eine Paketquelle angeben.")
+        package_name: str | None = options.get("package")
+        selected = int(bool(path_str)) + int(use_default) + int(package_name is not None)
+        if selected > 1:
+            raise CommandError("--file, --default und --package schliessen sich aus — genau eine Paketquelle angeben.")
         if use_default:
             self.stdout.write(self.style.MIGRATE_HEADING(f"Standardkatalog: {DEFAULT_PACKAGE_PATH}\n"))
-            return load_default_package_data()
+            return load_package_data("default"), "default"
+        if package_name is not None:
+            try:
+                data = load_package_data(package_name)
+            except UnknownPackageError as exc:
+                raise CommandError(str(exc)) from exc
+            self.stdout.write(self.style.MIGRATE_HEADING(f"Katalogpaket: core/packages/{package_name}.yaml\n"))
+            return data, package_name
         # Reihenfolge ist bewusst: erst der ``--default``-Zweig, dann die
         # Leerpruefung. Ein zusammengefasstes ``if not path_str and not
         # use_default`` narrowt ``path_str`` fuer mypy NICHT auf ``str``
@@ -159,10 +184,10 @@ class Command(BaseCommand):
         # ``arg-type``-Fehler.
         if not path_str:
             raise CommandError(
-                f"Keine Paketquelle angegeben — entweder --file <pfad> oder --default "
+                f"Keine Paketquelle angegeben — entweder --file <pfad>, --package <name> oder --default "
                 f"(mitgelieferter Standardkatalog {DEFAULT_PACKAGE_PATH})."
             )
-        return self._read_package_file(path_str)
+        return self._read_package_file(path_str), None
 
     def _read_package_file(self, path_str: str) -> dict[str, Any]:
         path = Path(path_str)

@@ -381,6 +381,15 @@ Nach dem Login als `super_admin` legen Sie die erste Einrichtung und einen `faci
 docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 ```
 
+Ohne Option wird `default` gewählt. Ein mitgeliefertes Domänen-Paket wählen Sie beim Anlegen ausdrücklich aus:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  setup_facility --package awareness
+```
+
+`--package` und `--no-default-package` schließen sich gegenseitig aus; ein unbekannter Paketname wird mit der sortierten Liste der tatsächlich mitgelieferten Pakete abgewiesen.
+
 > ⚠️ **Rollen-Voraussetzung (#1883).** Der Befehl schreibt in Tabellen mit Row-Level-Security (Einstellungen, Dokumentationstypen, Feldvorlagen). Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Web-Requests keinen Einrichtungs-Kontext; sie erhaelt bewusst keine Admin-Secrets. Der opt-in Service `maintenance` verbindet als BYPASSRLS-Rolle. Der Befehl prüft das vorab und bricht mit einer klaren Meldung ab, **bevor** die erste Eingabeaufforderung erscheint. Hintergrund: [Ops-Runbook § 9 DB-Rollenmodell](ops-runbook.md). Bei einer lokalen Entwicklungs-Datenbank, deren Rolle ohnehin Superuser ist, ist der Maintenance-Pfad überflüssig.
 
 Das Skript fragt interaktiv nach:
@@ -398,6 +407,8 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > **Opt-out `--no-default-package`:** Wer den Standardkatalog nicht will (eigenes Konfigurationspaket, komplett eigene Typen), hängt `--no-default-package` an. Die Einrichtung startet dann **ohne** Dokumentationstypen und ist erst dokumentierbar, nachdem ein Paket geladen wurde (siehe [docs/packages.md](packages.md)). Der Befehl weist am Ende ausdrücklich darauf hin.
 
+> ⚠️ **Domänen-Pakete sind Ersatz, nicht Zusatz.** Laden Sie ein Domänen-Paket mit `setup_facility --package <name>` gegen eine frische Einrichtung. `load_package --package <name>` bricht bei Typ- oder Feld-Slugs ab, die nicht zum gewählten Paket gehören — auch im Dry-Run. Ein erneuter Lauf desselben Pakets bleibt erlaubt. Der Standardkatalog ist der Bestandsfall: `--default` beziehungsweise `--package default` synchronisiert seine Paketwerte wie bisher zurück.
+
 > **Bereits bestehende Einrichtung nachrüsten:** Für eine Einrichtung, die es schon gibt — im Django-Admin unter **Core → Einrichtungen** angelegt oder mit `--no-default-package` bewusst leer gestartet — spielt derselbe Standardkatalog nachträglich ein:
 >
 > ```bash
@@ -409,7 +420,7 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > **Hinweis:** Sollte eine Organisation oder Einrichtung mit dem angegebenen Namen bereits existieren, wird sie wiederverwendet. Ein bestehender Benutzername wird nicht überschrieben.
 
-> **Zweite Einrichtung im Django-Admin (#1970):** Weitere Einrichtungen legen Sie im laufenden Betrieb unter **Core → Einrichtungen → Einrichtung hinzufügen** an — das ist der einzige Weg an der Oberfläche und `super_admin` vorbehalten. Das Speichern erzeugt **dieselbe Grundausstattung** wie `setup_facility`: Einstellungssatz, Standardkatalog der Dokumentationstypen, Standardschichten und Schnellvorlagen. Die neue Einrichtung ist damit sofort dokumentierbar; zu tun bleibt nur noch, ihr unter **Core → Benutzer** mindestens ein Konto zuzuordnen. Der Startbestand entsteht **genau einmal, beim Anlegen**: Ein späteres Speichern derselben Einrichtung (z. B. beim Umbenennen oder beim Umschalten von „Aktiv“) rührt ihren Bestand nicht an — auch dann nicht, wenn er leer ist. Das ist Absicht, denn leer kann eine Entscheidung sein: Eine per `--no-default-package` bewusst katalogfrei eingerichtete Einrichtung bekäme sonst beim ersten Umbenennen still den kompletten Standardkatalog. Vor dieser Version im Admin angelegte, leer gebliebene Einrichtungen rüsten Sie deshalb ausdrücklich nach: den Katalog mit `manage.py load_package --default --facility <uuid>` (Befehl samt Rollen-Override oben), Zeitfenster und Schnellvorlagen von Hand unter **Core → Zeitfenster** bzw. **Core → Quick-Templates**.
+> **Zweite Einrichtung im Django-Admin (#1970):** Weitere Einrichtungen legen Sie im laufenden Betrieb unter **Core → Einrichtungen → Einrichtung hinzufügen** an — das ist der einzige Weg an der Oberfläche und `super_admin` vorbehalten. Im Feld **„Paket"** wählen Sie den mitgelieferten Katalog; ohne Änderung ist `default` vorausgewählt. Das Speichern erzeugt **dieselbe paketbezogene Grundausstattung** wie `setup_facility --package <name>`: Einstellungssatz, gewählter Katalog, passende Zeitfenster und die für dieses Paket deklarierten Schnellvorlagen. Die neue Einrichtung ist damit sofort dokumentierbar; zu tun bleibt nur noch, ihr unter **Core → Benutzer** mindestens ein Konto zuzuordnen. Der Startbestand entsteht **genau einmal, beim Anlegen**: Beim späteren Ändern fehlt das Paketfeld, und ein Speichern (z. B. Umbenennen oder „Aktiv" umschalten) rührt den Bestand nicht an — auch dann nicht, wenn er leer ist. Vor dieser Version im Admin angelegte, leer gebliebene Einrichtungen rüsten Sie deshalb ausdrücklich nach: den Standardkatalog mit `manage.py load_package --default --facility <uuid>` (Befehl samt Rollen-Override oben), Zeitfenster und Schnellvorlagen von Hand unter **Core → Zeitfenster** bzw. **Core → Quick-Templates**.
 
 > **Organization als Branding-Hülse:** Die Organisation dient nur dem Träger-Branding (Logo, Name in Berichten). Es gibt keinen Org-Admin und keinen Cross-Facility-Effekt durch sie — facility-übergreifender Zugriff läuft ausschließlich über `super_admin` und `/system/`. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 

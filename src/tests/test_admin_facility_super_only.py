@@ -179,6 +179,80 @@ class TestFacilityAdminBootstrapsBaseline:
     zweiten Weg mit abweichendem Ergebnis — genau die Falle aus Refs #1884.
     """
 
+    def test_add_form_offers_package_choice_with_accessible_label(self, rf, super_admin_user, monkeypatch):
+        from core.admin import organization as admin_module
+
+        monkeypatch.setattr(admin_module, "list_packages", lambda: ["default", "awareness"])
+        form_class = _admin().get_form(_request(rf, super_admin_user), obj=None)
+        form = form_class()
+
+        assert list(form.fields["package"].choices) == [
+            ("default", "Standardkatalog — niedrigschwellige Hilfe"),
+            ("awareness", "Awareness — Awareness-Teams bei Veranstaltungen"),
+        ]
+        assert form.fields["package"].initial == "default"
+        assert 'for="id_package"' in form["package"].label_tag()
+
+    def test_add_uses_selected_package_for_bootstrap(
+        self,
+        rf,
+        super_admin_user,
+        organization,
+        monkeypatch,
+    ):
+        from core.admin import organization as admin_module
+
+        selected = []
+        monkeypatch.setattr(admin_module, "list_packages", lambda: ["default", "awareness"])
+        monkeypatch.setattr(
+            admin_module,
+            "ensure_facility_baseline",
+            lambda facility, *, package: selected.append((facility.name, package)),
+        )
+        admin_cls = _admin()
+        request = _request(rf, super_admin_user)
+        form_class = admin_cls.get_form(request, obj=None)
+        form = form_class(
+            data={
+                "organization": str(organization.pk),
+                "name": "Awareness-Team",
+                "package": "awareness",
+                "is_active": "on",
+            }
+        )
+        assert form.is_valid(), form.errors
+        new_facility = form.save(commit=False)
+
+        admin_cls.save_model(request, new_facility, form=form, change=False)
+
+        assert selected == [("Awareness-Team", "awareness")]
+
+    def test_add_without_form_defaults_to_default_package(
+        self,
+        rf,
+        super_admin_user,
+        organization,
+        monkeypatch,
+    ):
+        from core.admin import organization as admin_module
+
+        selected = []
+        monkeypatch.setattr(
+            admin_module,
+            "ensure_facility_baseline",
+            lambda facility, *, package: selected.append(package),
+        )
+        new_facility = Facility(organization=organization, name="Standardstelle")
+
+        _admin().save_model(_request(rf, super_admin_user), new_facility, form=None, change=False)
+
+        assert selected == ["default"]
+
+    def test_change_form_has_no_package_field(self, rf, super_admin_user, facility):
+        form_class = _admin().get_form(_request(rf, super_admin_user), obj=facility)
+
+        assert "package" not in form_class.base_fields
+
     def test_add_provisions_catalog_shifts_and_templates(self, rf, super_admin_user, organization):
         from core.models import DocumentType, QuickTemplate, TimeFilter
 

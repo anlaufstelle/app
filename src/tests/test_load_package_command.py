@@ -45,15 +45,25 @@ def _write_yaml(tmp_path: Path, data: Any, name: str = "package.yaml") -> Path:
     return path
 
 
-def _run(*, file: Path | str, facility: Any, dry_run: bool = False) -> str:
+def _run(
+    *,
+    facility: Any,
+    file: Path | str | None = None,
+    package: str | None = None,
+    default: bool = False,
+    dry_run: bool = False,
+) -> str:
     out = io.StringIO()
-    call_command(
-        "load_package",
-        file=str(file),
-        facility=str(facility),
-        dry_run=dry_run,
-        stdout=out,
-    )
+    options = {
+        "facility": str(facility),
+        "package": package,
+        "default": default,
+        "dry_run": dry_run,
+        "stdout": out,
+    }
+    if file is not None:
+        options["file"] = str(file)
+    call_command("load_package", **options)
     return out.getvalue()
 
 
@@ -321,3 +331,72 @@ class TestDefaultCatalogOption:
     def test_neither_file_nor_default_aborts(self, facility):
         with pytest.raises(CommandError, match="--file"):
             call_command("load_package", facility=str(facility.id))
+
+    def test_default_alias_and_named_default_share_the_dry_run_path(self, facility):
+        before = _counts()
+
+        alias_output = _run(default=True, facility=facility.id, dry_run=True)
+        named_output = _run(package="default", facility=facility.id, dry_run=True)
+
+        assert _counts() == before
+        assert "Dry-Run" in alias_output
+        assert "Dry-Run" in named_output
+        assert "Import abgeschlossen" not in alias_output
+        assert "Import abgeschlossen" not in named_output
+
+    def test_package_is_mutually_exclusive_with_file_and_default(self, tmp_path, facility):
+        path = _write_yaml(tmp_path, _MINI_PACKAGE)
+
+        with pytest.raises(CommandError, match="--file, --default und --package"):
+            _run(file=path, package="default", facility=facility.id)
+        with pytest.raises(CommandError, match="--file, --default und --package"):
+            _run(default=True, package="default", facility=facility.id)
+
+    def test_unknown_named_package_lists_available_packages(self, facility):
+        with pytest.raises(CommandError, match="Verfügbare Pakete: default"):
+            _run(package="missing", facility=facility.id)
+
+
+@pytest.fixture
+def bundled_probe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from core.packages import catalog
+
+    (tmp_path / "probe.yaml").write_text(yaml.safe_dump(_MINI_PACKAGE), encoding="utf-8")
+    monkeypatch.setattr(catalog, "_package_root", lambda: tmp_path)
+    catalog._package_data_cache.clear()
+    yield
+    catalog._package_data_cache.clear()
+
+
+@pytest.mark.django_db
+class TestNamedDomainPackage:
+    def test_foreign_slug_aborts_even_in_dry_run(self, bundled_probe, facility):
+        DocumentType.objects.create(
+            facility=facility,
+            slug="fremder-typ",
+            name="Fremder Typ",
+            is_active=False,
+        )
+        before = _counts()
+
+        with pytest.raises(CommandError, match=r"Ersatz, kein Zusatz.*fremder-typ"):
+            _run(package="probe", facility=facility.id, dry_run=True)
+
+        assert _counts() == before
+        assert not FieldTemplate.objects.for_facility(facility).filter(slug="dauer").exists()
+
+    def test_second_run_of_the_same_named_package_is_allowed(self, bundled_probe, facility):
+        _run(package="probe", facility=facility.id)
+        before = _counts()
+
+        output = _run(package="probe", facility=facility.id)
+
+        assert _counts() == before
+        assert "unverändert" in output
+
+    def test_default_keeps_resync_semantics_with_foreign_slugs(self, facility):
+        DocumentType.objects.create(facility=facility, slug="fremder-typ", name="Fremder Typ")
+
+        output = _run(package="default", facility=facility.id, dry_run=True)
+
+        assert "Dry-Run" in output

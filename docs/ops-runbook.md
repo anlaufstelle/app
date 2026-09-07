@@ -609,8 +609,8 @@ docker compose -f docker-compose.prod.yml run --rm \
   -v "$PWD/exports:/exports" maintenance inventory_report_bindings \
   --facility "Beratungsstelle Nord" --format json --output /exports/report-bindings.json
 
-# Ersteinrichtung einer Einrichtung (Refs #1883): interaktiv Organisation,
-# Einrichtung, Einstellungen, Standardkatalog und ersten facility_admin anlegen.
+# Ersteinrichtung einer Einrichtung (Refs #1883, #2134): interaktiv Organisation,
+# Einrichtung, Einstellungen, gewaehlten Katalog und ersten facility_admin anlegen.
 # MUSS mit der Admin-DB-Rolle laufen (BYPASSRLS) — der Command schreibt in
 # core_settings und (mit Standardkatalog) in core_documenttype/-fieldtemplate/
 # -documenttypefield/-fieldgroup/-fieldcondition, allesamt FORCE-RLS-Tabellen
@@ -618,12 +618,19 @@ docker compose -f docker-compose.prod.yml run --rm \
 # Guard greift VOR der ersten Eingabeaufforderung, damit niemand erst ein
 # Passwort tippt und dann am Schreibzugriff scheitert. Der ganze Lauf ist EINE
 # Transaktion: ein Abbruch laesst keine halb angelegte Einrichtung zurueck.
+# Ohne Option gilt --package default. Ein Domaenen-Paket wird mit
+# --package <name> als ERSATZ gegen die frische Einrichtung geladen.
+# --package und --no-default-package schliessen sich aus.
 # --no-default-package laesst den Katalog weg (Einrichtung startet ohne
 # Dokumentationstypen und ist erst nach load_package dokumentierbar).
 # Traegt die Einrichtung schon Dokumentationstypen oder Feldvorlagen, bleibt
 # der Katalog UNANGETASTET — Ersteinrichtung, kein Katalog-Update (dafuer der
 # naechste Befehl).
 docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
+
+# Neue Einrichtung direkt mit einem mitgelieferten Domaenen-Paket:
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  setup_facility --package awareness
 
 # Standardkatalog in eine BESTEHENDE Einrichtung nachziehen (Refs #1883):
 # fachlich identisch zu "load_package --file <…>/default.yaml", nur ohne
@@ -633,6 +640,12 @@ docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 # gleiche Rollen-Voraussetzung.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   load_package --default --facility <uuid> --dry-run
+
+# Mitgeliefertes Domaenen-Paket nur gegen eine katalogfreie Einrichtung.
+# Fremde Typ-/Feld-Slugs brechen auch den Dry-Run ab; der Doppellauf
+# desselben Pakets bleibt erlaubt.
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  load_package --package awareness --facility <uuid> --dry-run
 ```
 
 ---

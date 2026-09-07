@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
+from core.packages.catalog import list_packages, parse_catalog_package
 from core.packages.loader import PackageLoadError, PackageReport, load_package
 from core.packages.schema import parse_package
 from core.services.config import iter_blocks_in_order
@@ -68,6 +69,25 @@ def _counts() -> tuple[int, int, int, int, int]:
         DocumentTypeField.objects.count(),
         FieldCondition.objects.count(),
     )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("package_name", list_packages())
+def test_every_catalog_package_is_idempotent_on_a_fresh_facility(facility, package_name):
+    package = parse_catalog_package(package_name)
+    first = load_package(facility, package)
+    before = _counts()
+
+    second = load_package(facility, package)
+
+    assert first.errors == []
+    assert second.errors == []
+    for _section_name, section in second.sections():
+        assert section.created == []
+        assert section.updated == []
+    assert second.field_templates.unchanged
+    assert second.document_types.unchanged
+    assert _counts() == before
 
 
 @pytest.mark.django_db

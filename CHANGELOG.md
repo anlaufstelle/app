@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Vier neue Berichtsschlüssel für Gewaltvorfall, Schutzmaßnahme, Gruppenangebot und Versorgungsbedarf** (#2135) — Die Auswahl „Berichtsschlüssel“ am Dokumentationstyp bietet zusätzlich **Gewaltvorfall**, **Schutzmaßnahme**, **Gruppenangebot** und **Versorgung (Bedarf)**. Der Beispiel-Sachbericht und der Monatsverlauf zählen Ereignisse mit diesen Schlüsseln ab sofort mit, statt sie als „Berichtsschlüssel, den kein Bericht kennt“ zu melden: Die ersten drei bringen je eine neue Zeile mit („Vorfälle“, „Schutz“, „Gruppenangebote“), **Versorgung (Bedarf)** zählt in die bestehende Zeile „Versorgung“. An bestehenden Berichten ändert sich dadurch nichts — eine neue Zeile erscheint erst, sobald ein Typ mit dem passenden Schlüssel Ereignisse trägt, und Monats-Auswertungen aus der Zeit davor bleiben unverändert gültig. Grundlage für die mitgelieferten Domänen-Pakete Awareness, Frauenhaus und Jugendarbeit.
+- **Paket-Katalog für neue Einrichtungen** (#2134) — Mitgelieferte Domänen-Pakete lassen sich in CLI und Django-Admin als Ersatz für den Standardkatalog auswählen; Fremd-Slugs verhindern ein versehentliches Mischen.
 
 ## [0.95.0] - 2026-09-07
 

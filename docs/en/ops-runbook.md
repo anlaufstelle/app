@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Most recently synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
 
 # Operations Runbook
@@ -610,8 +611,8 @@ docker compose -f docker-compose.prod.yml run --rm \
   -v "$PWD/exports:/exports" maintenance inventory_report_bindings \
   --facility "Beratungsstelle Nord" --format json --output /exports/report-bindings.json
 
-# Initial facility setup (Refs #1883): interactively create the organization,
-# facility, settings, default catalog, and first facility_admin.
+# Initial facility setup (Refs #1883, #2134): interactively create the
+# organization, facility, settings, selected catalog, and first facility_admin.
 # MUST run with the admin DB role (BYPASSRLS) — the command writes to
 # core_settings and (with the default catalog) to core_documenttype/-fieldtemplate/
 # -documenttypefield/-fieldgroup/-fieldcondition, all FORCE-RLS tables
@@ -619,12 +620,19 @@ docker compose -f docker-compose.prod.yml run --rm \
 # guard triggers BEFORE the first prompt, so nobody types a
 # password first and then fails at the write access. The whole run is ONE
 # transaction: an abort leaves no half-created facility behind.
+# With no option, --package default applies. A domain package is loaded as a
+# REPLACEMENT against the fresh facility via --package <name>.
+# --package and --no-default-package are mutually exclusive.
 # --no-default-package leaves out the catalog (the facility starts without
 # document types and can only be documented on after load_package).
 # If the facility already carries document types or field templates, the
 # catalog stays UNTOUCHED — initial setup, not a catalog update (that's what
 # the next command is for).
 docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
+
+# Create a new facility directly with a bundled domain package:
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  setup_facility --package awareness
 
 # Apply the default catalog to an EXISTING facility (Refs #1883):
 # functionally identical to "load_package --file <…>/default.yaml", just without
@@ -634,6 +642,12 @@ docker compose -f docker-compose.prod.yml run --rm maintenance setup_facility
 # same role prerequisite.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   load_package --default --facility <uuid> --dry-run
+
+# A bundled domain package only goes into a catalog-free facility.
+# Foreign type/field slugs abort even a dry run; repeating the same package
+# remains allowed. The command's messages remain German.
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  load_package --package awareness --facility <uuid> --dry-run
 ```
 
 ---
@@ -2749,5 +2763,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-01 -->
-<!-- source-hash: dcbc812ec4f620d85be85f5a4ce94d1bd817f826 -->
+<!-- translation-date: 2026-09-07 -->
+<!-- source-hash: ea3d553c5b77622da2b5f6bafca73c8749e4f4cb -->

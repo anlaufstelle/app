@@ -1,13 +1,37 @@
 """Admin fuer Organization + Facility (Refs #785, #958)."""
 
+from django import forms
 from django.contrib import admin
+from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
 
 from core.admin.mixins import SuperAdminOnlyAdminMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Facility, Organization
+from core.packages.catalog import PACKAGE_INFO, list_packages
 from core.services.facility import ensure_settings_for_facility
 from core.services.facility_bootstrap import ensure_facility_baseline
+
+
+def _package_choices():
+    for name in list_packages():
+        info = PACKAGE_INFO[name]
+        yield name, f"{info.display_name} — {info.domain}"
+
+
+class FacilityAdminForm(forms.ModelForm):
+    """Facility-Formular mit Katalogwahl ausserhalb des Datenmodells."""
+
+    package = forms.ChoiceField(
+        choices=_package_choices,
+        initial="default",
+        label=_("Paket"),
+        help_text=_("Katalog für die Grundausstattung der neuen Einrichtung."),
+    )
+
+    class Meta:
+        model = Facility
+        fields = "__all__"
 
 
 @admin.register(Organization, site=anlaufstelle_admin_site)
@@ -33,6 +57,14 @@ class FacilityAdmin(SuperAdminOnlyAdminMixin, ModelAdmin):
     list_display = ("name", "organization", "is_active", "created_at")
     list_filter = ("is_active", "organization")
     search_fields = ("name",)
+    form = FacilityAdminForm
+
+    def get_form(self, request, obj=None, **kwargs):
+        """Paketwahl nur beim Anlegen zeigen; Bestandskatalog nie implizit wechseln."""
+        form = super().get_form(request, obj, **kwargs)
+        if obj is not None:
+            form.base_fields.pop("package", None)
+        return form
 
     def save_model(self, request, obj, form, change):
         """Sichert Einstellungen und Grundausstattung der Einrichtung (Refs #1884, #1970).
@@ -94,4 +126,5 @@ class FacilityAdmin(SuperAdminOnlyAdminMixin, ModelAdmin):
         super().save_model(request, obj, form, change)
         ensure_settings_for_facility(obj)
         if not change:
-            ensure_facility_baseline(obj)
+            package = str(form.cleaned_data.get("package") or "default") if form is not None else "default"
+            ensure_facility_baseline(obj, package=package)
