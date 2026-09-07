@@ -14,7 +14,6 @@ from core.models import (
     DeletionRequest,
     DocumentType,
     Episode,
-    Event,
     EventHistory,
     Facility,
     LegalHold,
@@ -35,6 +34,7 @@ from core.services.client import (
     export_client_data,
 )
 from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
+from tests._factories import make_client, make_document_type, make_event
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def staff_user(staff_user):
 
 @pytest.fixture
 def doc_type(facility):
-    return DocumentType.objects.create(
+    return make_document_type(
         facility=facility,
         name="Kontakt",
         report_key="contact",
@@ -90,7 +90,7 @@ def doc_type(facility):
 
 @pytest.fixture
 def sample_client(facility, admin_user):
-    return Client.objects.create(
+    return make_client(
         facility=facility,
         pseudonym="Export-Klientel",
         contact_stage=Client.ContactStage.IDENTIFIED,
@@ -101,7 +101,7 @@ def sample_client(facility, admin_user):
 
 @pytest.fixture
 def sample_event(facility, admin_user, doc_type, sample_client):
-    return Event.objects.create(
+    return make_event(
         facility=facility,
         client=sample_client,
         document_type=doc_type,
@@ -145,12 +145,12 @@ class TestClientTargetQueries:
         sample_client,
         sample_event,
     ):
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=facility,
             pseudonym="Fremd-Target",
             created_by=admin_user,
         )
-        other_event = Event.objects.create(
+        other_event = make_event(
             facility=facility,
             client=other_client,
             document_type=doc_type,
@@ -208,12 +208,12 @@ class TestClientTargetQueries:
     ):
         from django.contrib.contenttypes.models import ContentType
 
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=facility,
             pseudonym="Fremd-Activity",
             created_by=admin_user,
         )
-        other_event = Event.objects.create(
+        other_event = make_event(
             facility=facility,
             client=other_client,
             document_type=doc_type,
@@ -287,7 +287,7 @@ class TestClientTargetQueries:
         """
         from core.services.client.export import _gather_legal_holds
 
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=facility,
             pseudonym="Fremd-Hold-Ziel",
             created_by=admin_user,
@@ -370,13 +370,13 @@ class TestClientTargetQueries:
         Hold auf einer Aktivitaet ZU diesem Ereignis — erscheint nicht in der
         Auskunft dieser Rolle, wird aber redigiert.
         """
-        hidden_document_type = DocumentType.objects.create(
+        hidden_document_type = make_document_type(
             facility=facility,
             name="Nicht sichtbarer Export-Typ",
             report_key="hidden_export_type",
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
-        hidden_event = Event.objects.create(
+        hidden_event = make_event(
             facility=facility,
             client=sample_client,
             document_type=hidden_document_type,
@@ -488,7 +488,7 @@ class TestClientTargetQueries:
         }
 
         # Gegenprobe: fremde Ziele derselben Einrichtung bleiben draussen.
-        other_client = Client.objects.create(
+        other_client = make_client(
             facility=facility,
             pseudonym="Fremd-Loeschantrag",
             created_by=admin_user,
@@ -563,7 +563,7 @@ class TestClientExportService:
         sie erscheinen jetzt unter ``deleted_events``. Siehe
         ``TestClientExportDeletedEvents``.
         """
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=sample_client,
             document_type=doc_type,
@@ -805,7 +805,7 @@ class TestClientExportCoreCategories:
             started_at=timezone.now().date(),
             created_by=admin_user,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=sample_client,
             document_type=doc_type,
@@ -860,7 +860,7 @@ class TestClientExportCoreCategories:
         assert [e["target_type"] for e in data["deletion_requests"]] == ["Event"]
 
     def test_deletion_requests_of_other_client_excluded(self, sample_client, facility, admin_user, confirmer_user):
-        other = Client.objects.create(
+        other = make_client(
             facility=facility,
             pseudonym="Fremd-Klientel",
             created_by=admin_user,
@@ -905,7 +905,7 @@ class TestClientExportCrossTableCategories:
         assert episode["is_deleted"] is False
 
     def test_episodes_of_other_client_excluded(self, sample_client, facility, admin_user):
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-E", created_by=admin_user)
+        other = make_client(facility=facility, pseudonym="Fremd-E", created_by=admin_user)
         other_case = CaseModel.objects.create(facility=facility, client=other, title="Fremdfall", created_by=admin_user)
         Episode.objects.create(
             case=other_case,
@@ -981,7 +981,7 @@ class TestClientExportCrossTableCategories:
     def test_activities_of_other_client_excluded(self, sample_client, facility, admin_user):
         from core.services.dashboard import log_activity
 
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-A", created_by=admin_user)
+        other = make_client(facility=facility, pseudonym="Fremd-A", created_by=admin_user)
         log_activity(
             facility=facility,
             actor=admin_user,
@@ -1031,7 +1031,7 @@ class TestClientExportCrossTableCategories:
         assert [e["reason"] for e in data["legal_holds"]] == ["Pruefverfahren"]
 
     def test_legal_hold_of_other_target_excluded(self, sample_client, facility, admin_user):
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-L", created_by=admin_user)
+        other = make_client(facility=facility, pseudonym="Fremd-L", created_by=admin_user)
         LegalHold.objects.create(
             facility=facility,
             target_type="Client",
@@ -1060,8 +1060,8 @@ class TestClientExportCrossTableCategories:
         assert entry["details"] == {"document_type": "Kontakt"}
 
     def test_retention_proposal_of_other_event_excluded(self, sample_client, facility, doc_type, admin_user):
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-R", created_by=admin_user)
-        other_event = Event.objects.create(
+        other = make_client(facility=facility, pseudonym="Fremd-R", created_by=admin_user)
+        other_event = make_event(
             facility=facility,
             client=other,
             document_type=doc_type,
@@ -1236,7 +1236,7 @@ class TestClientExportDeletedEvents:
 
     @pytest.fixture
     def deleted_event(self, facility, doc_type, sample_client, admin_user):
-        return Event.objects.create(
+        return make_event(
             facility=facility,
             client=sample_client,
             document_type=doc_type,
@@ -1286,13 +1286,13 @@ class TestClientExportDeletedEvents:
         assert [e["reason"] for e in data["deletion_requests"]] == ["Auf Wunsch geloescht"]
 
     def test_deleted_events_respect_sensitivity_filter(self, sample_client, facility, staff_user, admin_user):
-        high_type = DocumentType.objects.create(
+        high_type = make_document_type(
             facility=facility,
             name="Krise",
             system_type=DocumentType.SystemType.CRISIS,
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=sample_client,
             document_type=high_type,
@@ -1479,7 +1479,7 @@ class TestClientExportAuditTrail:
         assert "203.0.113.9" not in rendered
 
     def test_audit_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-Audit", created_by=admin_user)
+        other = make_client(facility=facility, pseudonym="Fremd-Audit", created_by=admin_user)
         AuditLog.objects.create(
             facility=facility,
             user=admin_user,
@@ -1491,8 +1491,8 @@ class TestClientExportAuditTrail:
         assert data["audit_trail"] == []
 
     def test_download_of_other_clients_event_excluded(self, sample_client, facility, doc_type, admin_user):
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-DL", created_by=admin_user)
-        other_event = Event.objects.create(
+        other = make_client(facility=facility, pseudonym="Fremd-DL", created_by=admin_user)
+        other_event = make_event(
             facility=facility,
             client=other,
             document_type=doc_type,
@@ -1512,7 +1512,7 @@ class TestClientExportAuditTrail:
         assert data["audit_trail"] == []
 
     def test_audit_of_deleted_event_included(self, sample_client, facility, doc_type, admin_user):
-        deleted = Event.objects.create(
+        deleted = make_event(
             facility=facility,
             client=sample_client,
             document_type=doc_type,
@@ -1624,7 +1624,7 @@ class TestClientExportAuditTrail:
 
     def test_episode_and_goal_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
         """Gegenprobe: Episoden/Ziele fremder Faelle duerfen nicht mitmatchen."""
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-Episode", created_by=admin_user)
+        other = make_client(facility=facility, pseudonym="Fremd-Episode", created_by=admin_user)
         other_case = CaseModel.objects.create(
             facility=facility,
             client=other,
@@ -1672,7 +1672,7 @@ class TestClientExportAuditTrail:
 
     def test_case_targeted_rows_of_other_client_excluded(self, sample_client, facility, admin_user):
         """Gegenprobe zum Fall-Zweig: fremde Fall-IDs duerfen nicht mitmatchen."""
-        other = Client.objects.create(facility=facility, pseudonym="Fremd-Fall", created_by=admin_user)
+        other = make_client(facility=facility, pseudonym="Fremd-Fall", created_by=admin_user)
         other_case = CaseModel.objects.create(
             facility=facility,
             client=other,
@@ -1692,7 +1692,7 @@ class TestClientExportAuditTrail:
 
     def test_download_of_other_clients_owner_excluded(self, sample_client, facility, admin_user):
         """Gegenprobe zum Owner-Schema: fremde Owner-IDs bleiben draussen."""
-        other = Client.objects.create(
+        other = make_client(
             facility=facility,
             pseudonym="Fremd-Owner",
             contact_stage=Client.ContactStage.IDENTIFIED,
@@ -1728,7 +1728,7 @@ class TestClientExportAuditTrail:
         """Gegenprobe: fremde Antrags-PKs duerfen nicht mitmatchen."""
         from core.services.client.rectification import request_rectification
 
-        other = Client.objects.create(
+        other = make_client(
             facility=facility,
             pseudonym="Fremd-Berichtigung-Audit",
             contact_stage=Client.ContactStage.IDENTIFIED,
@@ -1964,7 +1964,7 @@ class TestClientExportAttachments:
                 created_by=admin_user,
             )
             _make_attachment(facility, case, file_field_template, admin_user, filename=f"Fall-{i}.pdf")
-            event = Event.objects.create(
+            event = make_event(
                 facility=facility,
                 client=sample_client,
                 document_type=doc_type,
@@ -2018,7 +2018,7 @@ class TestClientExportAttachments:
         assert data["attachments"][0]["filename"] == "[verschlüsselt]"
 
     def test_attachments_of_another_client_are_excluded(self, sample_client, facility, file_field_template, admin_user):
-        other = Client.objects.create(
+        other = make_client(
             facility=facility,
             pseudonym="Fremd-Anhang",
             contact_stage=Client.ContactStage.IDENTIFIED,
@@ -2040,7 +2040,7 @@ class TestClientExportAttachments:
         """
         from core.models import DocumentTypeField
 
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             name="Personenprofil-Datei",
             entity_type=DocumentType.EntityType.CLIENT,
@@ -2077,7 +2077,7 @@ def _select_field_on_client(facility, sample_client, name="Wohnsituation", slug_
         field_type=FieldTemplate.FieldType.SELECT,
         options_json=[{"slug": slug, "label": label}],
     )
-    dt = DocumentType.objects.create(
+    dt = make_document_type(
         facility=facility,
         name="Personenprofil-Berichtigung",
         entity_type=DocumentType.EntityType.CLIENT,
@@ -2199,7 +2199,7 @@ class TestClientExportRectificationRequests:
     def test_request_of_another_client_is_excluded(self, sample_client, facility, staff_user, admin_user):
         from core.services.client.rectification import request_rectification
 
-        other = Client.objects.create(
+        other = make_client(
             facility=facility,
             pseudonym="Fremd-Berichtigung",
             contact_stage=Client.ContactStage.IDENTIFIED,
@@ -2290,7 +2290,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
     # der PENDING-Loeschantrag wuerden ``_validate_merge`` sonst abweisen.
     from core.services.client import merge_clients
 
-    merge_source = Client.objects.create(
+    merge_source = make_client(
         facility=facility,
         pseudonym="PDF-Duplikat",
         contact_stage=Client.ContactStage.IDENTIFIED,
@@ -2328,7 +2328,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
     )
     goal = OutcomeGoal.objects.create(case=case, title="PDF-Ziel", description="Ziel-Text", created_by=admin_user)
     Milestone.objects.create(goal=goal, title="PDF-Meilenstein", sort_order=0)
-    event = Event.objects.create(
+    event = make_event(
         facility=facility,
         client=sample_client,
         document_type=doc_type,
@@ -2338,7 +2338,7 @@ def fully_populated_client(facility, doc_type, sample_client, admin_user, confir
         data_json={"notiz": "Ereignis-Klartext"},
         created_by=admin_user,
     )
-    deleted_event = Event.objects.create(
+    deleted_event = make_event(
         facility=facility,
         client=sample_client,
         document_type=doc_type,
@@ -2668,7 +2668,7 @@ class TestClientExportMergeProvenance:
     def merged_pair(self, facility, sample_client, admin_user, lead_user):
         from core.services.client import merge_clients
 
-        source = Client.objects.create(
+        source = make_client(
             facility=facility,
             pseudonym="Merge-Quelle",
             contact_stage=Client.ContactStage.IDENTIFIED,
@@ -2728,7 +2728,7 @@ class TestClientExportMergeProvenance:
         (dasselbe Prinzip wie in der Antragsliste: die Antragsart beim Namen nennen)."""
         from core.services.client import request_client_merge
 
-        source = Client.objects.create(
+        source = make_client(
             facility=facility,
             pseudonym="Merge-Antrag-Quelle",
             contact_stage=Client.ContactStage.QUALIFIED,
@@ -2784,7 +2784,7 @@ class TestAnonymizationRedactsOnlyOwnCaseRequests:
             facility=fremd_facility,
             is_staff=True,
         )
-        fremd_client = Client.objects.create(facility=fremd_facility, pseudonym="Fremd-Person", created_by=fremd_user)
+        fremd_client = make_client(facility=fremd_facility, pseudonym="Fremd-Person", created_by=fremd_user)
         fremd_case = CaseModel.objects.create(
             facility=fremd_facility, client=fremd_client, title="Fremder Fall", created_by=fremd_user
         )
