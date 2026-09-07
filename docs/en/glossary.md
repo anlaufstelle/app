@@ -61,7 +61,7 @@
 | PWA | Progressive Web App | Installable web app for smartphones and desktops. Provides home-screen install, an app-like shell, and offline behavior coordinated by the Service Worker. Used in Anlaufstelle for the streetwork quick-capture flow. |
 | Quasi-Identifikator | Quasi-identifier | An attribute that does not identify on its own but does in combination with others. The k-anonymization equivalence class is `(facility, age_cluster, contact_stage)` ([ADR-023](../adr/023-k-anonymization-statistik.md)). |
 | Quick Template | Quick template | Pre-filled event template maintained by admins. Applied by clicking a button on "Document contact"; fills empty fields only; self-heals against deactivated select options. |
-| Quick-Exit | Quick exit | Look-away protection: a feature that instantly disguises the interface when someone might be looking over a person's shoulder (e.g. switching to a neutral page). A data-protection term, see [data-protection.md](data-protection.md). |
+| Quick-Exit | Quick exit | Quick-exit action in the header bar of every signed-in page (button + keyboard shortcut `Ctrl+Shift+X` / `Shift+Esc`): instantly hides the content, ends the session, and opens a neutral, facility-configured page. Separately, the optional privacy screen (facility setting) hides the content behind a neutral surface on window or tab switch, until a key press or click releases it. Not a disguise mode, no interface rebranding. A data-protection term, see [data-protection.md](data-protection.md). |
 | Retention Proposal | Retention proposal | Individual deletion/anonymization suggestion surfaced on the retention dashboard. Can be approved, deferred, or rejected in bulk. |
 | Role | Role | Determines which actions a user may perform. Five roles (Refs #867, [ADR-018](../adr/018-rollenmodell-superadmin.md)): Super-Admin (installation-wide system control, no facility), Application manager (`facility_admin`, full access within one facility), Lead (professional leadership), Staff (case worker), Assistant (support). |
 | Row Level Security (RLS) | Row Level Security (RLS) | PostgreSQL defense-in-depth applied to all facility-scoped tables (23 as of v0.10.2). Policies read the session variable `app.current_facility_id` and fail closed when it is NULL. The variable is set per request session-wide (not via `SET LOCAL`) and explicitly cleared for anonymous requests. See [`src/core/migrations/0047_postgres_rls_setup.py`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py) and [`src/tests/test_rls.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls.py). |
@@ -81,4 +81,4 @@
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: bbcc60064e61b1506ec946ff97ecb5c3b7270ad7 -->
+<!-- source-hash: 9ef3cf738717744f1901f663a89bfc8d5b790b8d -->

@@ -186,7 +186,7 @@ Mittlere Fits, die Anlaufstelle als Randsystem nutzen können, ohne Kernprodukt 
 
 | Einsatzzweck | Begründung |
 |---|---|
-| Klarnamen-Behördenkorrespondenz / Aktenführung | Das Datenmodell ist pseudonym; die Dokumentation ist keine Akte im Rechtssinne. Wer Klarnamen und Amtspost braucht, kauft anderswo. |
+| Klarnamen-Behördenkorrespondenz / Aktenführung | Das Datenmodell ist pseudonym; die Dokumentation ist keine Akte im Rechtssinne. Wer Klarnamen-Akten und Behördenkorrespondenz als Kern braucht, ist mit einem Aktensystem besser bedient. |
 | Kanal-zentrierte Dienste (Krisenchat, Telefonie) | Kommunikationskanäle sind bewusst ausgegrenzt (Prinzip 8, § 13 „Klientelportal"); die Dokumentation geschieht hinterher, nicht im Kontakt. |
 | Terminplanung / Dienstplanung | Anlaufstelle ersetzt nicht die Dienstplanung (Prinzip 8); Zeitfenster sind Sichten, keine Schicht-Container (§ 13 „Zeitfenster als Datenmodell"). |
 | Klientenportal / Self-Service | Kein Klientel-Login und kein Self-Service, auch nicht für Berichtigung ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). |
@@ -1031,7 +1031,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Outcome** | Wirkung — das Ergebnis der Arbeit mit einer Person. Nicht die Aktivität („347 Kontakte"), sondern die Veränderung („stabile Wohnsituation erreicht"). |
 | **OutcomeGoal** | Wirkungsziel — was durch die Arbeit erreicht werden soll. Zugeordnet zu einem Fall. |
 | **Pseudonym** | Vom Team vergebener Name für eine Person im System. Primärer Identifikator in Anlaufstelle. Die Zuordnung zum realen Namen existiert nur im Wissen der Mitarbeitenden, nicht im System. |
-| **Quick-Exit** | Mitschauen-Schutz: eine Funktion, die die Oberfläche bei drohendem Mitschauen sofort unkenntlich macht (z.B. Wechsel auf eine neutrale Seite). Datenschutz-Begriff, siehe [docs/datenschutz.md](datenschutz.md). |
+| **Quick-Exit** | Schnell-verlassen-Aktion in der Kopfleiste jeder eingeloggten Seite (Knopf + Tastenkürzel `Strg+Umschalt+X` / `Umschalt+Esc`): verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale, von der Einrichtung konfigurierte Seite. Davon getrennt: der optionale Sichtschutz (Facility-Einstellung) — verbirgt den Inhalt bei Fenster- oder Tab-Wechsel hinter einer neutralen Fläche, bis eine Taste oder ein Klick sie freigibt. Kein Tarnmodus, keine Umbenennung der Oberfläche. Datenschutz-Begriff, siehe [docs/datenschutz.md](datenschutz.md). |
 | **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Fünf Rollen: `super_admin` (Systemadministration, facility-übergreifend, `/system/`-Bereich), `facility_admin` (Anwendungsbetreuung, Vollkontrolle einer Einrichtung), `lead` (fachliche Leitung), `staff` (Fachkraft), `assistant` (Assistenz). Nur `super_admin` arbeitet facility-übergreifend; alle anderen sind strikt facility-gebunden. Details: [ADR-018](adr/018-rollenmodell-superadmin.md). |
 | **Scope** | Sichtbarkeitsbereich. Bestimmt, welche Daten für einen User zugänglich sind — abhängig von Einrichtung, Rolle und Kontaktstufe. |
 | **Sensitivität** | Einstufung eines Dokumentationstyps oder Feldes hinsichtlich des Schutzbedarfs. Steuert, welche Rollen auf Feldwerte zugreifen dürfen. Konfigurierbar pro Dokumentationstyp und pro Feld (`FieldTemplate.sensitivity`). Unabhängig von der Feldverschlüsselung (`is_encrypted`). |

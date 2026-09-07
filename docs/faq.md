@@ -7,6 +7,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 **A. Erste Schritte & Konfiguration**
 1. [Wie stelle ich den Standard-Dokumentationstyp ein?](#1-wie-stelle-ich-den-standard-dokumentationstyp-ein)
+1a. [Für welche Arbeitsfelder passt Anlaufstelle — und welche Pakete werden mitgeliefert?](#1a-für-welche-arbeitsfelder-passt-anlaufstelle--und-welche-pakete-werden-mitgeliefert)
 2. [Wie richte ich 2FA ein?](#2-wie-richte-ich-2fa-ein)
 3. [Authenticator-App zeigt „Code ungültig" — was tun?](#3-authenticator-app-zeigt-code-ungültig--was-tun)
 4. [Ich habe mein Handy verloren — wie komme ich wieder rein?](#4-ich-habe-mein-handy-verloren--wie-komme-ich-wieder-rein)
