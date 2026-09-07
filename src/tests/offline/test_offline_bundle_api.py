@@ -17,13 +17,14 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, Case, DocumentType, DocumentTypeField, Event, FieldTemplate, User, WorkItem
+from core.models import AuditLog, Case, DocumentType, DocumentTypeField, FieldTemplate, User, WorkItem
 from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
+from tests._factories import make_document_type, make_event
 
 
 @pytest.fixture
 def doc_type_high(facility):
-    dt = DocumentType.objects.create(
+    dt = make_document_type(
         facility=facility,
         sensitivity=DocumentType.Sensitivity.HIGH,
         name="Hochsensibel",
@@ -40,7 +41,7 @@ def doc_type_high(facility):
 @pytest.fixture
 def doc_type_normal_with_high_field(facility):
     """NORMAL document type but with a HIGH-sensitivity field override."""
-    dt = DocumentType.objects.create(
+    dt = make_document_type(
         facility=facility,
         sensitivity=DocumentType.Sensitivity.NORMAL,
         name="NormalMitHighField",
@@ -85,7 +86,7 @@ class TestBuildClientOfflineBundleService:
         """``last_contact`` = juengstes ``occurred_at`` als ISO-String."""
         from datetime import timedelta
 
-        older = Event.objects.create(
+        older = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -93,7 +94,7 @@ class TestBuildClientOfflineBundleService:
             data_json={},
             created_by=staff_user,
         )
-        newest = Event.objects.create(
+        newest = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -123,7 +124,7 @@ class TestBuildClientOfflineBundleService:
 
         from core.services.system import LOOKBACK_DAYS
 
-        old = Event.objects.create(
+        old = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -152,7 +153,7 @@ class TestBuildClientOfflineBundleService:
 
         from core.models import Client
 
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -160,7 +161,7 @@ class TestBuildClientOfflineBundleService:
             data_json={},
             created_by=staff_user,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -168,7 +169,7 @@ class TestBuildClientOfflineBundleService:
             data_json={},
             created_by=staff_user,
         )
-        deleted_newest = Event.objects.create(
+        deleted_newest = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -197,7 +198,7 @@ class TestBuildClientOfflineBundleService:
         self, facility, client_identified, doc_type_contact, doc_type_high, staff_user
     ):
         # Event accessible to staff (NORMAL doc type)
-        visible_event = Event.objects.create(
+        visible_event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -208,7 +209,7 @@ class TestBuildClientOfflineBundleService:
             idempotency_payload_hash="d" * 64,
         )
         # Event locked away for staff (HIGH doc type)
-        hidden_event = Event.objects.create(
+        hidden_event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -228,7 +229,7 @@ class TestBuildClientOfflineBundleService:
     def test_bundle_fields_filtered_by_field_sensitivity(
         self, facility, client_identified, doc_type_normal_with_high_field, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_normal_with_high_field,
@@ -248,7 +249,7 @@ class TestBuildClientOfflineBundleService:
     def test_lead_sees_high_field_that_staff_cannot(
         self, facility, client_identified, doc_type_normal_with_high_field, lead_user, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_normal_with_high_field,
@@ -346,7 +347,7 @@ class TestBuildClientOfflineBundleService:
 
         # Create 5 events more than the cap to verify truncation.
         for i in range(MAX_EVENTS_PER_BUNDLE + 5):
-            Event.objects.create(
+            make_event(
                 facility=facility,
                 client=client_identified,
                 document_type=doc_type_contact,
@@ -359,7 +360,7 @@ class TestBuildClientOfflineBundleService:
         assert len(bundle["events"]) == MAX_EVENTS_PER_BUNDLE
 
     def test_bundle_includes_referenced_document_types(self, facility, client_identified, doc_type_contact, staff_user):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -376,7 +377,7 @@ class TestBuildClientOfflineBundleService:
         (EventMetaForm: alle aktiven Facility-Doctypes), nicht nur die von den
         Events der Person bereits genutzten — sonst ist ein nie genutzter Typ
         offline nicht anlegbar. Die Person hat hier gar keine Events."""
-        unused = DocumentType.objects.create(
+        unused = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="NieGenutzt",
@@ -389,7 +390,7 @@ class TestBuildClientOfflineBundleService:
     def test_bundle_excludes_inactive_unreferenced_document_type(self, facility, client_identified, staff_user):
         """Refs #1397: spiegelt online ``is_active=True`` — ein stillgelegter Typ,
         den kein Event nutzt, wird nicht zur Offline-Erfassung angeboten."""
-        inactive = DocumentType.objects.create(
+        inactive = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Stillgelegt",
@@ -403,13 +404,13 @@ class TestBuildClientOfflineBundleService:
         """Refs #1397: ein Event auf einem seither stillgelegten Typ muss dessen
         Schema weiter mitschicken, damit der vorhandene Wert offline rendert
         (Vereinigung: aktiver Katalog ∪ referenzierte Typen)."""
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="AlterTyp",
             is_active=False,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -432,13 +433,13 @@ class TestBuildClientOfflineBundleService:
         widerspricht hier bewusst der Zielreihenfolge, und ein NUR per Event
         referenzierter (inaktiver) Typ muss korrekt EINsortiert werden statt
         ans Ende gehaengt zu werden."""
-        dt_c = DocumentType.objects.create(
+        dt_c = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Charlie",
             sort_order=10,
         )
-        dt_a = DocumentType.objects.create(
+        dt_a = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Alpha",
@@ -446,14 +447,14 @@ class TestBuildClientOfflineBundleService:
         )
         # Inaktiv, nur per Event referenziert — muss trotzdem gemaess seiner
         # sort_order zwischen dt_a und dt_c einsortiert werden, nicht ans Ende.
-        dt_b_inactive = DocumentType.objects.create(
+        dt_b_inactive = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="Bravo",
             sort_order=7,
             is_active=False,
         )
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=dt_b_inactive,
@@ -478,7 +479,7 @@ class TestBuildClientOfflineBundleService:
         leerem Token aussteigt) feuert dann nie und ein offline entstandener
         Edit überschreibt Server-Daten still (silent Last-Write-Wins).
         """
-        event = Event.objects.create(
+        event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -508,7 +509,7 @@ class TestBuildClientOfflineBundleService:
             facility=facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE
         )
         DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=ft_anhang, sort_order=2)
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -552,7 +553,7 @@ class TestBuildClientOfflineBundleService:
     def test_bundle_reports_field_metadata(
         self, facility, client_identified, doc_type_normal_with_high_field, lead_user, staff_user
     ):
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_normal_with_high_field,
@@ -572,7 +573,7 @@ class TestBuildClientOfflineBundleService:
         Auswahl-Optionen (SELECT/MULTI_SELECT), Pflichtfeld-Flag, Hilfetext.
         Der aktuelle Wert fürs Vorbelegen liegt im Event (``data_fields``).
         """
-        dt = DocumentType.objects.create(
+        dt = make_document_type(
             facility=facility,
             sensitivity=DocumentType.Sensitivity.NORMAL,
             name="MitAuswahl",
@@ -590,7 +591,7 @@ class TestBuildClientOfflineBundleService:
             ],
         )
         DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=dt,
@@ -624,7 +625,7 @@ class TestBuildClientOfflineBundleService:
         dessen Eingabe der Server beim Replay still verwirft, und es verließe
         mehr Schema die Servergrenze als die Read-Snapshot-Filterung erlaubt.
         """
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_normal_with_high_field,
@@ -650,7 +651,7 @@ class TestBuildClientOfflineBundleService:
         Staff+ darf alles, Assistant nur eigene Events). Ohne dieses Flag liefe
         ein Assistant in einen 403-Replay und der Edit bliebe ewig „unsynced".
         """
-        own_event = Event.objects.create(
+        own_event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -658,7 +659,7 @@ class TestBuildClientOfflineBundleService:
             data_json={"dauer": 1},
             created_by=assistant_user,
         )
-        foreign_event = Event.objects.create(
+        foreign_event = make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -741,7 +742,7 @@ class TestClientBundleDocTypeSensitivityFilter:
         Klienten genutzter HIGH-DocType bleibt fuer eine berechtigte Rolle
         (Lead) im Bundle — der neue Katalog-Filter darf referenzierte, dem
         Nutzer sichtbare Typen nicht zusaetzlich unterdruecken."""
-        Event.objects.create(
+        make_event(
             facility=facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -774,7 +775,7 @@ class TestClientBundleDocTypeEntityTypeFilter:
         return {dt["pk"] for dt in bundle["document_types"]}
 
     def test_client_type_absent_from_catalog(self, facility, client_identified, staff_user):
-        client_dt = DocumentType.objects.create(
+        client_dt = make_document_type(
             facility=facility,
             name="Personendaten",
             entity_type=DocumentType.EntityType.CLIENT,
@@ -926,7 +927,7 @@ class TestOfflineClientBundleView:
         assert response.status_code == 405
 
     def test_high_sensitivity_event_not_in_bundle_for_staff(self, client, client_identified, doc_type_high, staff_user):
-        Event.objects.create(
+        make_event(
             facility=staff_user.facility,
             client=client_identified,
             document_type=doc_type_high,
@@ -1012,7 +1013,7 @@ class TestOfflineClientBundleView:
         etag_2 = client.get(self._url(client_identified.pk)).headers["ETag"]
         assert etag_1 == etag_2, "ETag muss ueber volatile Metadaten hinweg stabil sein"
 
-        Event.objects.create(
+        make_event(
             facility=staff_user.facility,
             client=client_identified,
             document_type=doc_type_contact,
