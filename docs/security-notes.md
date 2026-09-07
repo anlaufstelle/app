@@ -350,7 +350,7 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 
 - Art.-15-/Auskunfts-Export: `_serialize_event()` in [`client/export.py`](../src/core/services/client/export.py), gepinnt in [`test_client_export.py`](../src/tests/test_client_export.py).
 - Facility-/Backup-Export: `_serialize_event()` in [`system/facility_export.py`](../src/core/services/system/facility_export.py), gepinnt in [`test_facility_export.py`](../src/tests/test_facility_export.py).
-- Offline-Bundle: `_serialize_event()` in [`system/offline.py:165`](../src/core/services/system/offline.py) (dieselbe Allowlist-Bauart), gepinnt in [`test_offline_bundle_api.py::test_bundle_contains_only_visible_events`](../src/tests/test_offline_bundle_api.py) (Zeilen 210f. setzen den Hash, 228f. prüfen sein Fehlen im Bundle).
+- Offline-Bundle: `_serialize_event()` in [`system/offline.py:165`](../src/core/services/system/offline.py) (dieselbe Allowlist-Bauart), gepinnt in `test_offline_bundle_api.py::test_bundle_contains_only_visible_events` (Zeilen 210f. setzen den Hash, 228f. prüfen sein Fehlen im Bundle).
 - CSV-Sachbericht-Export (`export_events_csv()` in [`system/export.py`](../src/core/services/system/export.py)) baut Zeilen ausschließlich aus fest benannten Spalten plus `document_type`-Feld-Slugs — der Hash kann strukturell gar nicht in eine Zeile geraten.
 - Detail-Ansicht (kein Export im engeren Sinn, aber derselbe Vertrag — der Hash läuft dem UI nie zu): gepinnt in [`test_events_crud.py::TestEventDetailView::test_event_detail_renders`](../src/tests/test_events_crud.py) (Zeilen 582-590) — setzt den Hash explizit und prüft, dass er im gerenderten HTML nicht vorkommt.
 
@@ -365,7 +365,7 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 - [`test_anonymize_residue.py::TestAnonymizeResidueMatrix::test_idempotency_payload_hash_and_key_survive_anonymization`](../src/tests/test_anonymize_residue.py) — pinnt, dass die Spalte `anonymize_client()` (Hard-Pfad) unverändert übersteht.
 - [`test_retention_k_anonymization.py::TestKAnonEnforcement::test_full_bucket_is_k_anonymized`](../src/tests/test_retention_k_anonymization.py) — pinnt, dass der K-Anon-Bridge-Pfad die Spalte ebenfalls nicht anfasst.
 - [`test_retention_redaction.py::TestSoftDeleteEventRedacts::test_manual_soft_delete_writes_redacted_history`](../src/tests/test_retention_redaction.py) — pinnt, dass der manuelle Soft-Delete-Pfad (`soft_delete_event`) die Spalte nicht anfasst.
-- [`test_client_export.py`](../src/tests/test_client_export.py), [`test_facility_export.py`](../src/tests/test_facility_export.py), [`test_offline_bundle_api.py`](../src/tests/test_offline_bundle_api.py), [`test_events_crud.py`](../src/tests/test_events_crud.py) — pinnen den Exportausschluss/UI-Ausschluss.
+- [`test_client_export.py`](../src/tests/test_client_export.py), [`test_facility_export.py`](../src/tests/test_facility_export.py), `test_offline_bundle_api.py`, [`test_events_crud.py`](../src/tests/test_events_crud.py) — pinnen den Exportausschluss/UI-Ausschluss.
 - [`tests/_residue_expectations.py`](../src/tests/_residue_expectations.py) — Klassifikation `non_pii` für `core_event.idempotency_payload_hash`/`idempotency_key`.
 - Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken-verweis-auf-audit-reports)
 
@@ -497,7 +497,7 @@ Die Bearbeiten-Formulare rendern die gepinnte Person **read-only** (Pseudonym al
 - [`test_cases.py`](../src/tests/test_cases.py) / [`test_workitems_service_helpers.py`](../src/tests/test_workitems_service_helpers.py) — Service-Grenze des Pinnings (#1786): Case strikt (auch der unveränderte Wert fliegt), WorkItem Attach-only inkl. No-op-Fall und der neuen Feld-Allowlist.
 - [`test_events_crud.py`](../src/tests/test_events_crud.py) / [`test_workitems_service_helpers.py`](../src/tests/test_workitems_service_helpers.py) — die Nachzügler aus #1789: leere `update_event`-Allowlist (auch der `client`-Kwarg fliegt, ohne Teil-Write) und der Lost-Update-Schutz von `update_workitem` (paralleler Statuswechsel, Recurrence-Marker und Redaktion überleben einen stalen Save).
 - [`test_client_pinning_views.py`](../src/tests/test_client_pinning_views.py) — die Fläche darüber (#1786): manipulierter POST auf eine andere lebende Person derselben Einrichtung ändert nichts (Formularfehler statt Redirect), Bearbeiten-GET rendert die Person ohne `<input name="client">`, Neuanlage und personenlose Aufgabe behalten das Autocomplete.
-- [`test_offline_client_revocation.py`](../src/tests/test_offline_client_revocation.py) — Widerruf entsteht auf beiden Anonymisierungspfaden, Endpoint ist facility-gescoped/audit-frei, Prune-Fenster.
+- `test_offline_client_revocation.py` — Widerruf entsteht auf beiden Anonymisierungspfaden, Endpoint ist facility-gescoped/audit-frei, Prune-Fenster.
 - [`test_revoked_client_write_gate.py`](../src/tests/test_revoked_client_write_gate.py) — die serverseitige zweite Linie (#1771): Formular-Gates für beide Widerrufs-Zustände, Replay endet reproduzierbar als 422-Dead-Letter (kein Retry-Loop), und ein Multipart-Schreibzugriff erzeugt weder `Attachment`-Zeile noch `.enc`-Datei.
 - [`tests/js/offline-revocations.test.mjs`](../tests/js/offline-revocations.test.mjs) — Client-Purge gegen echtes Dexie + echte Krypto (inkl. ungesyncter Arbeit und Entwürfe) sowie die Ereignis→Person-Auflösung gequeuter Edit-POSTs samt Reihenfolge-Pin und der konservativ stehen bleibenden Rest-Grenze (#1774).
 - [`tests/js/autosave-draft-person.test.mjs`](../tests/js/autosave-draft-person.test.mjs) — Personenbezug des Autosave-Entwurfs Ende-zu-Ende: `data-autosave-person` → `__personPk` im verschlüsselten Umschlag → Purge (#1774), inkl. Entwurf ohne Person und tolerant gelesenem Alt-Format.
@@ -2226,7 +2226,7 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 
 ### Verifikation
 
-- [`test_offline_shell_neutrality.py`](../src/tests/test_offline_shell_neutrality.py) — Byte-Gleichheit anonym vs. angemeldet für alle acht Shells, Abwesenheit von Name/Rolle/Einrichtung/`data-user-id`/CSRF-Meta, Vollständigkeit der Skriptkette und ein ableitungsbasierter Vollständigkeits-Check gegen die View-Klassen.
+- `test_offline_shell_neutrality.py` — Byte-Gleichheit anonym vs. angemeldet für alle acht Shells, Abwesenheit von Name/Rolle/Einrichtung/`data-user-id`/CSRF-Meta, Vollständigkeit der Skriptkette und ein ableitungsbasierter Vollständigkeits-Check gegen die View-Klassen.
 - [`test_pwa_views.py`](../src/tests/test_pwa_views.py) — Shell-Hash-Guard samt gepinntem `CACHE_NAME` (`anlaufstelle-v38`).
 - [`tests/js/sw-boot-purge-gate.test.mjs`](../tests/js/sw-boot-purge-gate.test.mjs) — der Boot-Purge läuft ohne `data-user-id` weiter und bleibt ohne Session-Key aus.
 
