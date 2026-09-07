@@ -34,6 +34,7 @@ Mutanten abweicht.
 """
 
 import csv
+import logging
 from pathlib import Path
 
 import pytest
@@ -254,26 +255,23 @@ class TestDynamicTemplatesOrdering:
 
 
 class TestCoerceOptionLabelDefault:
-    """Der Label-Default ``""`` ist Vertrag, nicht Zufall.
+    """Eine fehlende Beschriftung darf keine leere Zelle akzeptieren.
 
     Ein Options-Dict OHNE ``"label"``-Schluessel ist ueber das Formular nicht
     erzeugbar, ``options_json`` ist aber ein rohes ``JSONField`` ohne
-    DB-Constraint (Seed, Paket-Import, Bestandsdaten). Der Default entscheidet
-    dann, ob eine leere Zelle auf diese Option matcht.
+    DB-Constraint (Seed, Paket-Import, Bestandsdaten). Refs #2156: Eine leere
+    Zelle ist kein Optionswert und muss auch bei solchen Altdaten fail-closed
+    bleiben.
     """
 
     @pytest.mark.django_db
-    def test_option_without_label_key_matches_the_empty_cell(self, facility):
-        """Pin: ``x__coerce_option__mutmut_20``/``_22``/``_25``.
+    def test_option_without_label_key_never_matches_the_empty_cell(self, facility):
+        """Pin des neuen #2156-Vertrags fuer leere Zellen und Label-Default.
 
-        * ``_20``: ``option.get("label", "")`` -> ``option.get("label", None)``;
-        * ``_22``: Default weggelassen (implizit ``None``);
-        * ``_25``: Default -> ``"XXXX"``.
-
-        Original: ``"".casefold() == "".casefold()`` -> Treffer -> Rueckgabe
-        ``"z"``. Mutanten: verglichen wird gegen ``"none"`` bzw. ``"xxxx"`` —
-        kein Treffer, es fliegt ``_CellError("invalid_option")`` statt einer
-        Rueckgabe.
+        Die alte Erwartung gab ``"z"`` zurueck. Jetzt werden Error-Code und
+        Spaltenbezug exakt gepinnt: Entfernt ein Mutant den Leerwert-Guard oder
+        laesst ein fehlendes Label wieder als ``""`` matchen, liefert er den
+        Slug statt dieses Fehlers.
         """
         template = FieldTemplate.objects.create(
             facility=facility,
@@ -282,7 +280,11 @@ class TestCoerceOptionLabelDefault:
             options_json=[{"slug": "z", "is_active": True}],
         )
 
-        assert import_engine._coerce_option(template, "", "Zugang") == "z"
+        with pytest.raises(import_engine._CellError) as excinfo:
+            import_engine._coerce_option(template, "", "Zugang")
+
+        assert excinfo.value.code == "invalid_option"
+        assert excinfo.value.column == "Zugang"
 
     @pytest.mark.django_db
     def test_invalid_option_keeps_its_column(self, facility):
@@ -374,30 +376,36 @@ class TestErrorEntryFallbackMessage:
 
 
 class TestClassifyImportErrorFallback:
-    """Ein nicht klassifizierbarer Fehler bricht mit klarer Meldung ab.
+    """Ein nicht klassifizierbarer Fehler wird PII-frei protokolliert.
 
     ``_IMPORT_ERROR_CLASSIFIERS`` endet bei ``ValueError`` — ein ``RuntimeError``
-    faellt also wirklich durch. Der Text ist der Entwickler-Vertrag dieses
-    Netzes (er landet im Traceback und damit in der Fehler-Gruppierung), sobald
-    die Typkopplung zwischen ``run_import``-``except`` und Tabelle bricht.
+    faellt also wirklich in den defensiven #2156-Fallback. Code, feste Meldung
+    und Exception-Log sind gemeinsam der Vertrag dieses Sicherheitsnetzes.
     """
 
-    def test_unclassifiable_exception_raises_the_exact_type_error(self):
-        """Pin: ``x__classify_import_error__mutmut_2``/``_3``/``_4``/``_5``.
+    def test_unclassifiable_exception_returns_exact_fallback_and_logs(self, caplog):
+        """Pin des neuen #2156-Fallbacks statt des alten ``TypeError``.
 
-        * ``_2``: ``TypeError("Nicht klassifizierbarer Importfehler")`` ->
-          ``TypeError(None)`` -> ``str(exc) == "None"``;
-        * ``_3``: ``"XXNicht klassifizierbarer ImportfehlerXX"``;
-        * ``_4``: ``"nicht klassifizierbarer importfehler"``;
-        * ``_5``: ``"NICHT KLASSIFIZIERBARER IMPORTFEHLER"``.
-
-        Original: ``str(exc) == "Nicht klassifizierbarer Importfehler"``; alle
-        vier Mutanten weichen im Text ab.
+        Ein Mutant an Code, Meldung, Spaltenwert oder Log-Aufruf veraendert die
+        exakte Ergebnismenge. Die RuntimeError-Interna bleiben ausschliesslich
+        im Server-Traceback und gelangen nicht in die Nutzermeldung.
         """
-        with pytest.raises(TypeError) as excinfo:
-            import_engine._classify_import_error(RuntimeError("beliebig"))
+        logger_name = "core.services.import_engine"
+        with caplog.at_level(logging.ERROR, logger=logger_name):
+            try:
+                raise RuntimeError("beliebig")
+            except RuntimeError as exc:
+                classified = import_engine._classify_import_error(exc)
 
-        assert str(excinfo.value) == "Nicht klassifizierbarer Importfehler"
+        assert (classified.column, classified.code, classified.message) == (
+            None,
+            "unexpected_error",
+            "Beim Import ist ein unerwarteter Fehler aufgetreten.",
+        )
+        records = [record for record in caplog.records if record.name == logger_name]
+        assert [(record.getMessage(), record.levelno, record.exc_info[0]) for record in records] == [
+            ("unexpected_import_error", logging.ERROR, RuntimeError)
+        ]
 
     def test_a_listed_type_is_still_classified(self):
         """Gegenprobe (kein eigener Mutant): ``ValueError`` erreicht das Netz nie."""
