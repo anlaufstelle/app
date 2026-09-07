@@ -76,17 +76,11 @@ MIGRATIONS_DIR = REPO_ROOT / "src" / "core" / "migrations"
 GUARD_NAME = "assert_migration_role_bypasses_rls"
 CORE_TABLE_RE = re.compile(r"\bcore_\w+\b")
 
-#: Einstiegsfunktionen, die eine RLS-Tabelle anfassen und trotzdem KEINEN Guard
-#: tragen duerfen — mit Begruendung. ``0049._create_mv`` liest ``core_event``;
-#: diese Tabelle traegt ``relrowsecurity`` UND ``relforcerowsecurity``, und
-#: ``CREATE MATERIALIZED VIEW ... AS SELECT`` befuellt die View sofort. Die
-#: Ausnahme ist daher nur eine dokumentierte Uebergangsloesung, bis der Guard
-#: in 0049 nachgezogen und diese Ausnahme wieder entfernt wird:
-#: https://github.com/anlaufstelle/app/issues/2153
-#: ``0084``/``0094`` (``core_user``) und ``0102``
-#: (``otp_totp_totpdevice``) fallen ohne Ausnahme heraus, weil ihre Tabellen
-#: keine RLS tragen.
-ACKNOWLEDGED_WITHOUT_GUARD: frozenset[tuple[str, str]] = frozenset({("0049_statistics_event_flat_mv", "_create_mv")})
+#: Einstiegsfunktionen, die eine RLS-Tabelle anfassen und trotzdem keinen Guard
+#: tragen duerfen. Aktuell gibt es keine solchen Ausnahmen; ``0084``/``0094``
+#: (``core_user``) und ``0102`` (``otp_totp_totpdevice``) fallen aus der
+#: Ableitung heraus, weil ihre Tabellen keine RLS tragen.
+ACKNOWLEDGED_WITHOUT_GUARD: frozenset[tuple[str, str]] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -425,7 +419,7 @@ class TestGuardCoverage:
         }
 
     def test_raw_sql_only_rls_entries_are_guarded(self):
-        """Vier Dateien/fuenf Funktionen sind davon laut DB wirklich RLS-relevant."""
+        """Fuenf Dateien/sechs Funktionen sind davon laut DB wirklich RLS-relevant."""
         rls_tables = _rls_tables()
         actual = {
             (entry.migration, entry.function)
@@ -435,6 +429,7 @@ class TestGuardCoverage:
             and (entry.migration, entry.function) not in ACKNOWLEDGED_WITHOUT_GUARD
         }
         assert actual == {
+            ("0049_statistics_event_flat_mv", "_create_mv"),
             ("0130_attachment_owner_facility", "backfill_facility"),
             ("0130_attachment_owner_facility", "guard_no_owner_rows"),
             ("0131_rls_attachment", "guard_no_owner_rows"),

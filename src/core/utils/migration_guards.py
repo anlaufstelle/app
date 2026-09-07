@@ -57,9 +57,9 @@ mehr, sondern der Architektur-Guard
 ``RunPython``-Einstiege per AST, sammelt ihre Modelle transitiv, loest sie zur
 Laufzeit gegen ``pg_class.relrowsecurity`` auf und wird rot, wenn eine
 guard-lose Fundstelle dazukommt. Bewusst ohne Guard bleiben nur Funktionen,
-deren Tabellen gar keine RLS tragen (``0049`` Materialized View, ``0084``/
-``0094`` ``core_user``, ``0102`` ``otp_totp_totpdevice``) — sie fallen aus der
-Ableitung heraus, statt als Hand-Ausnahme gefuehrt zu werden.
+deren Tabellen gar keine RLS tragen (``0084``/``0094`` ``core_user``,
+``0102`` ``otp_totp_totpdevice``) — sie fallen aus der Ableitung heraus, statt
+als Hand-Ausnahme gefuehrt zu werden.
 
 """
 

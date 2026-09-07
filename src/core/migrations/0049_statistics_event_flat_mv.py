@@ -14,6 +14,8 @@ Refs #544.
 
 from django.db import migrations
 
+from core.utils.migration_guards import assert_migration_role_bypasses_rls
+
 MV_NAME = "core_statistics_event_flat"
 
 CREATE_SQL = f"""
@@ -46,6 +48,7 @@ DROP_SQL = f"DROP MATERIALIZED VIEW IF EXISTS {MV_NAME};"
 
 
 def _create_mv(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     if schema_editor.connection.vendor != "postgresql":
         return
     with schema_editor.connection.cursor() as cursor:
@@ -56,6 +59,7 @@ def _create_mv(apps, schema_editor):
 
 
 def _drop_mv(apps, schema_editor):
+    assert_migration_role_bypasses_rls(schema_editor)
     if schema_editor.connection.vendor != "postgresql":
         return
     with schema_editor.connection.cursor() as cursor:
