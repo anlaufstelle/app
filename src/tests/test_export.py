@@ -1,5 +1,7 @@
 """Tests für Export-Views und Services."""
 
+import csv
+import io
 from datetime import date, timedelta
 
 import pytest
@@ -10,6 +12,7 @@ from core.models import (
     AuditLog,
     DocumentType,
     Event,
+    FieldTemplate,
     User,
 )
 from core.reporting.backends.sample_report_1 import CATEGORY_MAP as SAMPLE_REPORT_1_CATEGORY_MAP
@@ -146,6 +149,80 @@ class TestCSVExport:
         client.force_login(admin_user)
         response = client.get("/statistics/export/csv/")
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestCSVExportFileMarkers:
+    """Refs #2130: Datei-Anhänge sind keine Spalten der Ereignis-CSV."""
+
+    def _csv_rows(self, facility, admin_user):
+        from core.services.system import export_events_csv
+
+        today = date.today()
+        content = "".join(export_events_csv(facility, today - timedelta(days=1), today, user=admin_user))
+        return list(csv.reader(io.StringIO(content)))
+
+    def test_file_field_and_multifile_marker_are_absent(self, facility, admin_user, client_identified):
+        attachment_id = "11111111-1111-1111-1111-111111111111"
+        file_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Interner Datei-Anhang",
+            slug="interner-datei-anhang",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        document_type = DocumentType.objects.create(facility=facility, name="CSV mit Datei")
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=document_type,
+            occurred_at=timezone.now(),
+            data_json={
+                file_field.slug: {
+                    "__files__": True,
+                    "entries": [{"id": attachment_id, "sort": 0}],
+                }
+            },
+            created_by=admin_user,
+        )
+
+        rows = self._csv_rows(facility, admin_user)
+        header = rows[1]
+        serialized = "\n".join(",".join(row) for row in rows)
+
+        assert file_field.name not in header
+        assert "__files__" not in serialized
+        assert "entries" not in serialized
+        assert attachment_id not in serialized
+
+    @pytest.mark.parametrize(
+        "marker",
+        [
+            {"__files__": True, "entries": [{"id": "22222222-2222-2222-2222-222222222222", "sort": 0}]},
+            {"__file__": True, "attachment_id": "33333333-3333-3333-3333-333333333333"},
+        ],
+        ids=["stage-b", "legacy-stage-a"],
+    )
+    def test_orphaned_file_marker_under_text_slug_renders_empty(self, facility, admin_user, client_identified, marker):
+        text_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Früherer Datei-Anhang",
+            slug="frueherer-datei-anhang",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        document_type = DocumentType.objects.create(facility=facility, name="CSV nach Typwechsel")
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=document_type,
+            occurred_at=timezone.now(),
+            data_json={text_field.slug: marker},
+            created_by=admin_user,
+        )
+
+        rows = self._csv_rows(facility, admin_user)
+        column = rows[1].index(text_field.name)
+
+        assert rows[2][column] == ""
 
 
 @pytest.mark.django_db

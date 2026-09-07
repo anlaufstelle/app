@@ -12,7 +12,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event, FieldTemplate
 from core.services.compliance import user_can_see_field
-from core.services.dynamic_data import option_label_map
+from core.services.dynamic_data import is_file_marker, option_label_map
 from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 
@@ -89,6 +89,11 @@ def _collect_field_templates(facility, user):
     """
     all_field_templates = {}
     for ft in FieldTemplate.objects.for_facility(facility).order_by("name"):
+        # Refs #2130: Die Ereignis-CSV ist ein Tabellen-/Statistikformat.
+        # Datei-Anhaenge bleiben in ihrem geschuetzten Download-Pfad und
+        # erscheinen weder als Spalte noch als interner Marker im Artefakt.
+        if ft.field_type == FieldTemplate.FieldType.FILE:
+            continue
         all_field_templates[ft.slug] = ft
     field_slugs = list(all_field_templates.keys())
 
@@ -125,7 +130,13 @@ def _resolve_field_value(value, ft):
     """Convert a raw data_json value into a CSV-ready string.
 
     Handles encrypted dicts, multi/single-select option lookups and lists.
+    File markers are omitted even under a slug whose template was retyped.
     """
+    # Refs #2130: Ein Typwechsel kann bewusst einen verwaisten Datei-Marker
+    # unter einem heute anders typisierten Slug hinterlassen. Dieser Value-
+    # Guard muss deshalb vor dem generischen Dict-/Decrypt-Zweig liegen.
+    if is_file_marker(value):
+        return ""
     if isinstance(value, dict):
         return safe_decrypt(value)
     if isinstance(value, list):
