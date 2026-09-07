@@ -857,7 +857,8 @@ class TestCaseUpdateOptimisticLockingAndAudit:
 
 
 @pytest.mark.django_db
-class TestInactiveAssignedDocumentType:
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityInactiveAssignedDocumentType:
     """Ein zwischenzeitlich deaktivierter Typ darf beim Update nicht still wegfallen.
 
     Ohne die Queryset-Ausnahme (Muster #1160, ``_select_choices``) faellt der
@@ -872,88 +873,105 @@ class TestInactiveAssignedDocumentType:
         doc_type.save(update_fields=["is_active"])
         return doc_type
 
-    def test_update_get_preselects_inactive_assigned_type(
-        self, client, staff_user, facility, client_identified, doc_type_case_form
-    ):
-        target = Case.objects.create(
+    @staticmethod
+    def _target(request, entity: EntitySpec, facility, staff_user, suffix, doc_type, data_json):
+        return entity.model.objects.create(
             facility=facility,
-            client=client_identified,
-            title="P8-Inaktiv-01",
             created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+            document_type=doc_type,
+            data_json=data_json,
+            **entity.identity_kwargs(request, suffix),
         )
-        self._deactivate(doc_type_case_form)
-        client.force_login(staff_user)
-        content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
 
-        assert f'<option value="{doc_type_case_form.pk}" selected>' in content
+    def test_update_get_preselects_inactive_assigned_type(
+        self, client, staff_user, facility, request, entity: EntitySpec
+    ):
+        doc_type = entity.doctype(request, "form")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Inaktiv-01",
+            doc_type,
+            {entity.field("primary"): entity.value("primary")},
+        )
+        self._deactivate(doc_type)
+        client.force_login(staff_user)
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
+
+        assert f'<option value="{doc_type.pk}" selected>' in content
         assert "(deaktiviert)" in content
         # Die Zusatzfelder des inaktiven Typs bleiben bearbeitbar.
-        assert 'name="anlass"' in content
-        assert "Mietschulden" in content
+        assert f'name="{entity.field("primary")}"' in content
+        assert entity.value("primary") in content
 
     def test_unchanged_submit_keeps_inactive_type_and_values(
-        self, client, staff_user, facility, client_identified, doc_type_case_form
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Inaktiv-02",
-            created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+        doc_type = entity.doctype(request, "form")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Inaktiv-02",
+            doc_type,
+            {entity.field("primary"): entity.value("primary")},
         )
-        self._deactivate(doc_type_case_form)
+        self._deactivate(doc_type)
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "P8-Inaktiv-02",
-                client_identified,
-                document_type=str(doc_type_case_form.pk),
-                anlass="Mietschulden",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(
+                request,
+                "Inaktiv-02",
+                document_type=str(doc_type.pk),
+                **{entity.field("primary"): entity.value("primary")},
             ),
         )
         assert response.status_code == 302
         target.refresh_from_db()
-        assert target.document_type_id == doc_type_case_form.pk
-        assert target.data_json["anlass"] == "Mietschulden"
+        assert target.document_type_id == doc_type.pk
+        assert target.data_json[entity.field("primary")] == entity.value("primary")
 
-    def test_create_still_hides_inactive_types(self, client, staff_user, client_identified, doc_type_case_form):
+    def test_create_still_hides_inactive_types(self, client, staff_user, request, entity: EntitySpec):
         """Die Ausnahme gilt NUR fuer den bearbeiteten Datensatz — Neuanlagen nicht."""
-        self._deactivate(doc_type_case_form)
+        doc_type = entity.doctype(request, "form")
+        self._deactivate(doc_type)
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_create")).content.decode()
-        assert f'value="{doc_type_case_form.pk}"' not in content
+        content = client.get(reverse(entity.url("create"))).content.decode()
+        assert f'value="{doc_type.pk}"' not in content
 
         # Und ein untergeschobener POST wird abgelehnt (Queryset-Validierung).
         response = client.post(
-            reverse("core:case_create"),
-            _case_post_data(
-                "P8-Inaktiv-03",
-                client_identified,
-                document_type=str(doc_type_case_form.pk),
-                anlass="Mietschulden",
+            reverse(entity.url("create")),
+            entity.post_data(
+                request,
+                "Inaktiv-03",
+                document_type=str(doc_type.pk),
+                **{entity.field("primary"): entity.value("primary")},
             ),
         )
         assert response.status_code == 200
-        assert not Case.objects.filter(title="P8-Inaktiv-03").exists()
+        assert not entity.model.objects.filter(**{entity.identity_field: f"{entity.id_prefix}Inaktiv-03"}).exists()
 
-    def test_deliberate_removal_still_works(self, client, staff_user, facility, client_identified, doc_type_case_form):
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Inaktiv-04",
-            created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+    def test_deliberate_removal_still_works(self, client, staff_user, facility, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "form")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Inaktiv-04",
+            doc_type,
+            {entity.field("primary"): entity.value("primary")},
         )
-        self._deactivate(doc_type_case_form)
+        self._deactivate(doc_type)
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data("P8-Inaktiv-04", client_identified, document_type=""),
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data(request, "Inaktiv-04", document_type=""),
         )
         assert response.status_code == 302
         target.refresh_from_db()
@@ -961,51 +979,57 @@ class TestInactiveAssignedDocumentType:
         assert target.data_json == {}
 
     def test_invalid_rerender_keeps_inactive_type_fields(
-        self, client, staff_user, facility, client_identified, doc_type_case_form
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
         """Auch der Re-Render eines ungueltigen Formulars behaelt die Feldwerte."""
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Inaktiv-05",
-            created_by=staff_user,
-            document_type=doc_type_case_form,
-            data_json={"anlass": "Mietschulden"},
+        doc_type = entity.doctype(request, "form")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Inaktiv-05",
+            doc_type,
+            {entity.field("primary"): entity.value("primary")},
         )
-        self._deactivate(doc_type_case_form)
+        self._deactivate(doc_type)
         client.force_login(staff_user)
         response = client.post(
-            reverse("core:case_update", args=[target.pk]),
-            _case_post_data(
-                "",  # leerer Titel -> ungueltig
-                client_identified,
-                document_type=str(doc_type_case_form.pk),
-                anlass="Wohnungsverlust",
+            reverse(entity.url("update"), args=[target.pk]),
+            entity.post_data_builder(
+                request,
+                entity.invalid_identity_builder(request),
+                {
+                    "document_type": str(doc_type.pk),
+                    entity.field("primary"): entity.value("update_primary"),
+                },
             ),
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'name="anlass"' in content
-        assert "Wohnungsverlust" in content
+        assert f'name="{entity.field("primary")}"' in content
+        assert entity.value("update_primary") in content
 
     def test_invisible_type_lock_beats_inactive_exception(
-        self, client, staff_user, facility, client_identified, doc_type_case_high
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
         """Inaktiv UND unsichtbar: die Lock-Logik hat Vorrang, das Feld faellt ganz weg."""
-        target = Case.objects.create(
-            facility=facility,
-            client=client_identified,
-            title="P8-Inaktiv-06",
-            created_by=staff_user,
-            document_type=doc_type_case_high,
-            data_json={"gefahrenlage": "streng vertraulich"},
+        doc_type = entity.doctype(request, "high")
+        target = self._target(
+            request,
+            entity,
+            facility,
+            staff_user,
+            "Inaktiv-06",
+            doc_type,
+            {entity.field("high"): entity.value("high_confidential")},
         )
-        self._deactivate(doc_type_case_high)
+        self._deactivate(doc_type)
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert 'name="document_type"' not in content
-        assert doc_type_case_high.name not in content
-        assert "streng vertraulich" not in content
+        assert doc_type.name not in content
+        assert entity.value("high_confidential") not in content
 
 
 # ---------------------------------------------------------------------------
