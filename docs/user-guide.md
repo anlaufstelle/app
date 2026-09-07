@@ -124,15 +124,16 @@ Dieselbe Aktion lösen zwei **Tastenkürzel** aus, auch aus einem Eingabefeld he
 
 Ein **Zurück** im Browser bringt die Anwendung nicht wieder: Die Seite verdeckt sich erneut und lädt neu — Sie landen auf der Anmeldemaske.
 
-**Ohne Internetverbindung** funktioniert der Knopf ebenfalls: Der Inhalt wird verdeckt, der lokale Schlüssel für die Offline-Daten wird verworfen und der Browser wechselt auf die neutrale Seite. Eine Abmeldung am Server ist offline nicht möglich — dafür sind die Offline-Daten ohne erneute Anmeldung nicht mehr lesbar, die Offline-Berechtigung läuft ohnehin nach 48 Stunden ab, und ein Neustart des Geräts räumt sie ab.
+**Ohne Internetverbindung** funktioniert der Knopf ebenfalls: Der Inhalt wird verdeckt, der lokale Schlüssel für die Offline-Daten wird gelöscht und der Browser wechselt auf die neutrale Seite. Eine Abmeldung am Server ist offline nicht möglich — dafür sind die Offline-Daten ohne erneute Anmeldung nicht mehr lesbar, die Offline-Berechtigung läuft ohnehin nach 48 Stunden ab, und ein Neustart des Geräts räumt sie ab.
 
 #### Was der Knopf nicht leisten kann
 
-Drei Dinge bleiben übrig — sie sind technisch nicht zu verhindern und deshalb hier benannt statt verschwiegen:
+Sicher ist eines: **Ihr Bildschirm ist sofort leer.** Alles Weitere versucht die Anwendung so gut sie kann — vier Grenzen bleiben, und sie stehen hier, statt verschwiegen zu werden:
 
 - **Der Browser-Verlauf.** Der Knopf ersetzt nur den *aktuellen* Verlaufseintrag. Alle Seiten, die Sie in dieser Sitzung vorher geöffnet haben, stehen weiter in der Chronik des Browsers (`Strg`+`H`) — mit Adresse und Seitentitel, und der Titel einer Personenseite enthält das Pseudonym. **Empfehlung:** Löschen Sie den Verlauf am Ende der Schicht, oder arbeiten Sie auf gemeinsam genutzten Geräten in einem privaten Fenster.
-- **Ein zweites offenes Fenster.** Der Knopf wirkt auf das Fenster, in dem Sie ihn drücken. Ein zweiter offener Tab zeigt seinen bereits geladenen Inhalt weiter, bis dort etwas angeklickt oder neu geladen wird — dann landet auch er auf der Anmeldemaske. **Empfehlung:** Mit einem Fenster arbeiten.
-- **Eine abgerissene Verbindung.** Die Abmeldung geht ohne Wartezeit an den Server. Ist genau in diesem Moment kein Netz da, kann sie verloren gehen; die Sitzung endet dann erst durch den Inaktivitäts-Timeout (Standard 30 Minuten) bzw. die maximale Sitzungsdauer. Ihr Bildschirm ist trotzdem sofort leer und die lokalen Daten sind gesperrt.
+- **Ein zweites offenes Fenster.** Der Knopf wirkt auf das Fenster, in dem Sie ihn drücken. Ein zweiter offener Tab zeigt seinen bereits geladenen Inhalt weiter, bis dort etwas angeklickt oder neu geladen wird — dann landet auch er auf der Anmeldemaske. Sein Zugriff auf die lokalen Offline-Daten wird mitgesperrt, sobald die Löschung im ersten Fenster geklappt hat (siehe nächster Punkt). **Empfehlung:** Mit einem Fenster arbeiten und zweite Fenster vorher schließen.
+- **Eine abgerissene Verbindung.** Die Abmeldung geht ohne Wartezeit an den Server. Ist genau in diesem Moment kein Netz da, kann sie verloren gehen; die Sitzung endet dann erst durch den Inaktivitäts-Timeout (Standard 30 Minuten) bzw. die maximale Sitzungsdauer.
+- **Ein hängendes oder fehlgeschlagenes Löschen des lokalen Schlüssels.** Die Anwendung wartet vor dem Wechsel eine halbe Sekunde darauf, dass der Schlüssel für die Offline-Daten wirklich gelöscht ist — im Regelfall reicht das. Klappt es in dieser Zeit nicht, wird trotzdem gewechselt (Ihr Bildschirm ist wichtiger), und der Schlüssel bleibt bis zur nächsten regulären Abmeldung, bis zur automatischen Sperre nach längerer Untätigkeit oder bis zum Ablauf der 48-Stunden-Offline-Berechtigung bestehen. Wer das Gerät danach öffnet, kann die lokal gespeicherten Daten also unter Umständen noch sehen. **Empfehlung:** Lassen Sie das Gerät nach dem Verlassen nicht unbeaufsichtigt liegen.
 
 ### Sichtschutz bei Fenster- oder Tab-Wechsel
 

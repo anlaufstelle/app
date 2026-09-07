@@ -115,10 +115,10 @@ TB6│   Snapshot-Bundle AES-GCM-256 (non-extractable Key)    │
 
 #### Restrisiken des Mitschauen-Schutzes (Refs #2136)
 
-Der Quick-Exit leistet, was er verspricht: Der Inhalt des auslösenden Fensters ist
-verlässlich weg, und jeder Rückweg endet auf `/login/` bzw. im
-`NoSessionKeyError`-Zustand. Drei Restflächen bleiben; sie sind bewusst nicht
-geschlossen und stehen hier, statt in der Zeile oben unterzugehen.
+Der Quick-Exit leistet zuverlässig das, wofür er da ist: Der Inhalt des auslösenden
+Fensters ist weg, bevor irgendetwas anderes passiert. Alles Weitere ist **Best Effort mit
+benannten Grenzen** — vier Restflächen, die bewusst nicht geschlossen sind und hier
+stehen, statt in der Zeile oben unterzugehen.
 
 1. **Frühere Verlaufseinträge derselben Sitzung.** `location.replace`
    ([`quick-exit.js`](../src/static/js/quick-exit.js)) ersetzt nur den *letzten*
@@ -133,13 +133,17 @@ geschlossen und stehen hier, statt in der Zeile oben unterzugehen.
 2. **Zweiter offener Tab.** Der Quick-Exit wirkt pro Fenster. Ein zweiter Tab behält
    seinen bereits gerenderten DOM, bis dort etwas navigiert (dann greift die
    serverseitig beendete Sitzung mit 302 auf `/login/`) — ein statischer DOM verlangt
-   keinen Request. Der **Memory-Krypto-Schlüssel** des zweiten Tabs wird dagegen aktiv
-   entwertet: Quick-Exit sendet nach der abgeschlossenen Löschung
+   keinen Request. Sein **Memory-Krypto-Schlüssel** wird entwertet, **sofern die
+   Löschung im auslösenden Tab nachweislich gelungen ist**: nur dann sendet Quick-Exit
    `syncOrchestrator.broadcast({type:"key-cleared"})` — denselben Kanal, den
-   [`crypto.js`](../src/static/js/crypto.js) nach dem Idle-Wipe nutzt; der Empfänger
-   verwirft seinen Schlüssel, sobald die IndexedDB-Grundlage nachweislich fehlt. Damit
-   sind Offline-Bestände auch im zweiten Tab sofort unlesbar; sichtbar bleibt dort nur
-   das bereits gerenderte Markup.
+   [`crypto.js`](../src/static/js/crypto.js) nach dem Idle-Wipe nutzt. Der Empfänger
+   verwirft seinen Schlüssel, wenn die IndexedDB-Grundlage fehlt, und **verankert ihn
+   sonst neu**; genau deshalb wird nach Timeout oder Fehler (Punkt 4) **nicht**
+   gesendet — ein Broadcast wäre dort schädlicher als keiner. Ohne
+   `BroadcastChannel`/Sync-Orchestrator ist der Kanal ein stiller No-op. Im Ergebnis:
+   der zweite Tab behält im Regelfall keinen brauchbaren Schlüssel mehr, sein bereits
+   gerendertes Markup aber in **jedem** Fall. **Gegenmaßnahme organisatorisch:** zweite
+   Fenster schließen und das Gerät nicht unbeaufsichtigt lassen.
 3. **Verlorener Logout-Beacon.** Der Logout ist per Ruling fire-and-forget (R-L3-3): Es
    wird nicht auf die Antwort gewartet, damit die Navigation nicht am Netz hängt. Reißt
    die Verbindung genau in diesem Moment (`sendBeacon` liefert `false` **und** der
@@ -149,15 +153,30 @@ geschlossen und stehen hier, statt in der Zeile oben unterzugehen.
    #1858) und das absolute
    Sitzungs-Maximum (Vorgabe 12 h,
    #1868) — dieselbe Lage wie
-   bei einem Netzabriss während eines normalen Abmeldens. Das lokale Fenster ist
-   unabhängig davon sauber: Blende liegt, Sitzungsschlüssel gelöscht, weg navigiert.
+   bei einem Netzabriss während eines normalen Abmeldens. Das auslösende Fenster ist
+   unabhängig davon leer und weg navigiert.
+4. **Löschung des lokalen Schlüssels innerhalb der Frist.** Der persistente
+   Offline-Sitzungsschlüssel wird seit R-L3-9 **abgewartet** gelöscht, bevor navigiert
+   wird — aber mit Deckel (500 ms). Der Regelfall ist die abgeschlossene Löschung; hängt
+   IndexedDB länger oder schlägt der Delete fehl, wird trotzdem verlassen (die Blende
+   liegt zu diesem Zeitpunkt bereits, der Bildschirm ist geschützt), und der Schlüssel
+   **bleibt dann liegen** — bis zum nächsten regulären Abmelden
+   (`Clear-Site-Data: "storage"`), bis zum Idle-Wipe
+   (#1324) oder bis zum Ablauf
+   der 48-h-Offline-Berechtigung (TB6). Bis dahin sind die lokal liegenden,
+   verschlüsselten Offline-Bestände auf diesem Gerät wieder lesbar, sobald jemand die
+   App erneut öffnet. Der Fall ist unterscheidbar gemacht statt stillschweigend als
+   Erfolg gewertet: `_dropSessionKey()` liefert `cleared`/`timeout`/`error`
+   ([`quick-exit.js`](../src/static/js/quick-exit.js), R-L3-12), nur `cleared` löst den
+   Broadcast aus Punkt 2 aus, `timeout`/`error` schreiben eine Konsolenwarnung. **Nicht
+   messbar im Betrieb** (kein Telemetriekanal, und ein Audit-Ereignis ist hier bewusst
+   ausgeschlossen) — deshalb die organisatorische Empfehlung, das Gerät nach dem
+   Verlassen nicht unbeaufsichtigt zu lassen.
 
-**Nicht in dieser Liste, weil geschlossen:** Der persistente Offline-Sitzungsschlüssel
-wird seit R-L3-9 **abgewartet** gelöscht, bevor navigiert wird (Deckel 500 ms, danach
-wird trotzdem navigiert — die Blende liegt zu diesem Zeitpunkt bereits). Vorher konnte
-`location.replace` die IndexedDB-Transaktion mitten im Löschen abreißen und die nächste
-Offline-Shell hätte den Schlüssel wieder geladen; der E2E-Fall liest die Schlüsselzeile
-deshalb **nach** dem Dokumentwechsel.
+**Was der Erstbefund geschlossen hat:** Bis zur Fix-Runde 1 riss `location.replace` die
+IndexedDB-Transaktion mitten im Löschen ab, ohne dass überhaupt gewartet wurde — der
+Schlüssel blieb im Normalfall liegen, nicht nur im Ausnahmefall. Der E2E-Fall liest die
+Schlüsselzeile deshalb **nach** dem Dokumentwechsel.
 
 ### TB2/TB3 — Django ↔ PostgreSQL
 

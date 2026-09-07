@@ -37,6 +37,15 @@
     // Lang genug fuer einen IndexedDB-Roundtrip, kurz genug, dass ein Haenger
     // die Flucht nicht aufhaelt (die Blende liegt in dieser Zeit bereits).
     var KEY_DROP_TIMEOUT_MS = 500;
+    // R-L3-12: dreiwertiges Ergebnis der Loeschung. Der Unterschied ist NICHT
+    // kosmetisch — der ``key-cleared``-Empfaenger in crypto.js verankert einen
+    // noch vorhandenen Schluessel wieder (``cachedKey = row.cryptoKey``). Ein
+    // Broadcast nach Timeout oder Fehler waere also schlimmer als keiner: er
+    // koennte einem Fremd-Tab den bereits verworfenen Memory-Key
+    // zurueckgeben.
+    var KEY_DROP_CLEARED = "cleared";
+    var KEY_DROP_TIMEOUT = "timeout";
+    var KEY_DROP_ERROR = "error";
 
     function _body() {
         return document.body;
@@ -260,24 +269,64 @@
      * und es wird trotzdem navigiert. Das ist vertretbar, weil die Blende zu
      * diesem Zeitpunkt bereits liegt — der Bildschirm ist geschuetzt, auch
      * wenn die Aufraeumarbeit noch laeuft.
+     *
+     * Liefert (R-L3-12) ``KEY_DROP_CLEARED`` / ``KEY_DROP_TIMEOUT`` /
+     * ``KEY_DROP_ERROR`` statt nur "fertig". Nur der erste Fall ist ein
+     * NACHWEIS, dass die persistente Zeile weg ist — und nur er darf den
+     * Cross-Tab-Broadcast ausloesen.
      */
     function _dropSessionKey() {
-        var pending = null;
+        var pending;
         try {
             var session = window.crypto_session;
-            if (session && typeof session.clearSessionKey === "function") {
-                pending = session.clearSessionKey();
+            if (!session || typeof session.clearSessionKey !== "function") {
+                // Kein Krypto-Modul (Testharness, abgebrochener Ladevorgang):
+                // Wir haben nichts geloescht und duerfen es auch nicht
+                // behaupten — also kein Broadcast.
+                return Promise.resolve(KEY_DROP_ERROR);
             }
+            pending = session.clearSessionKey();
         } catch (_e) {
-            // Krypto nicht geladen (z.B. Testharness) — kein Grund zu bleiben.
+            return Promise.resolve(KEY_DROP_ERROR);
         }
-        if (!pending || typeof pending.then !== "function") return Promise.resolve();
+        if (!pending || typeof pending.then !== "function") {
+            // Synchron zurueckgekehrt: die Loeschung ist damit abgeschlossen.
+            return Promise.resolve(KEY_DROP_CLEARED);
+        }
         return Promise.race([
-            Promise.resolve(pending).catch(function () {}),
+            Promise.resolve(pending).then(
+                function () {
+                    return KEY_DROP_CLEARED;
+                },
+                function () {
+                    return KEY_DROP_ERROR;
+                }
+            ),
             new Promise(function (resolve) {
-                window.setTimeout(resolve, KEY_DROP_TIMEOUT_MS);
+                window.setTimeout(function () {
+                    resolve(KEY_DROP_TIMEOUT);
+                }, KEY_DROP_TIMEOUT_MS);
             }),
         ]);
+    }
+
+    /** Fehlgeschlagene Loeschung sichtbar machen, ohne die Flucht aufzuhalten. */
+    function _warnKeyDropFailed(status) {
+        try {
+            if (!window.console || typeof window.console.warn !== "function") return;
+            window.console.warn(
+                status === KEY_DROP_TIMEOUT
+                    ? "Schnell verlassen: Die Loeschung des lokalen Sitzungsschluessels war nach " +
+                          KEY_DROP_TIMEOUT_MS +
+                          " ms nicht abgeschlossen. Es wird trotzdem verlassen; der Schluessel kann bis zum " +
+                          "naechsten Abmelden, Idle-Wipe oder Ablauf der Offline-Berechtigung bestehen bleiben."
+                    : "Schnell verlassen: Der lokale Sitzungsschluessel konnte nicht geloescht werden. Es wird " +
+                          "trotzdem verlassen; der Schluessel kann bis zum naechsten Abmelden, Idle-Wipe oder " +
+                          "Ablauf der Offline-Berechtigung bestehen bleiben."
+            );
+        } catch (_e) {
+            // ignore — eine Warnung darf die Flucht nicht aufhalten.
+        }
     }
 
     /** Anderen Tabs sagen, dass ihr Memory-Key ohne Grundlage dasteht.
@@ -285,8 +334,11 @@
      * Derselbe Kanal, den crypto.js nach dem Idle-Wipe nutzt
      * (``syncOrchestrator.broadcast({type:"key-cleared"})``). Der Empfaenger in
      * crypto.js verwirft NUR seinen Memory-Key und prueft vorher, ob die
-     * IndexedDB-Zeile wirklich fehlt — deshalb ERST nach dem abgewarteten
-     * Loeschen senden, sonst verankert er den Schluessel wieder.
+     * IndexedDB-Zeile wirklich fehlt — steht sie noch, VERANKERT er seinen
+     * Schluessel stattdessen neu (``cachedKey = row.cryptoKey``). Deshalb wird
+     * ausschliesslich nach einem nachgewiesenen ``KEY_DROP_CLEARED`` gesendet:
+     * ein Broadcast nach Timeout oder Fehler koennte einem Fremd-Tab den
+     * bereits verworfenen Schluessel zurueckgeben (R-L3-12).
      *
      * Der gerenderte DOM eines zweiten Tabs bleibt trotzdem stehen: Quick-Exit
      * wirkt pro Fenster (siehe Restrisiken in docs/threat-model.md).
@@ -308,8 +360,12 @@
         _showOverlay("exit");
         _shield(true);
         _logout();
-        return _dropSessionKey().then(function () {
-            _broadcastKeyCleared();
+        return _dropSessionKey().then(function (status) {
+            if (status === KEY_DROP_CLEARED) {
+                _broadcastKeyCleared();
+            } else {
+                _warnKeyDropFailed(status);
+            }
             window.location.replace(target);
         });
     }

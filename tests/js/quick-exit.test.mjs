@@ -69,9 +69,18 @@ const MARKUP = `
  * @param {boolean} options.beaconOk Rueckgabewert von ``sendBeacon``.
  * @param {boolean} options.inert ``inert`` als unterstuetzt vortaeuschen.
  * @param {boolean} options.keyDropHangs ``clearSessionKey`` loest erst auf,
- *   wenn der Test ``resolveKeyDrop()`` ruft (bzw. der Deckel greift).
+ *   wenn der Test ``resolveKeyDrop()``/``rejectKeyDrop()`` ruft (bzw. der
+ *   Deckel greift).
+ * @param {boolean} options.keyDropRejects ``clearSessionKey`` scheitert sofort.
  */
-async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert = true, keyDropHangs = false } = {}) {
+async function freshLoad({
+    dataset = {},
+    beacon = true,
+    beaconOk = true,
+    inert = true,
+    keyDropHangs = false,
+    keyDropRejects = false,
+} = {}) {
     _unwire();
     vi.resetModules();
 
@@ -107,14 +116,24 @@ async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert =
     const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }));
     window.fetch = fetchSpy;
 
-    // Aufloesbar von aussen: die Tests brauchen ein clearSessionKey, das
-    // BEWUSST haengt, um zu belegen, dass vor ihm nicht navigiert wird.
+    // Von aussen steuerbar: die Tests brauchen ein clearSessionKey, das
+    // BEWUSST haengt (belegt, dass vor ihm nicht navigiert wird) und eines,
+    // das scheitert (belegt, dass dann NICHT gebroadcastet wird).
     let resolveKeyDrop;
-    const keyDropped = new Promise((resolve) => {
+    let rejectKeyDrop;
+    const keyDropped = new Promise((resolve, reject) => {
         resolveKeyDrop = resolve;
+        rejectKeyDrop = reject;
     });
-    const clearSessionKey = vi.fn(() => (keyDropHangs ? keyDropped : Promise.resolve()));
+    keyDropped.catch(() => {}); // kein unhandled rejection, wenn der Test nicht awaitet
+    const clearSessionKey = vi.fn(() => {
+        if (keyDropRejects) return Promise.reject(new Error("IndexedDB kaputt"));
+        return keyDropHangs ? keyDropped : Promise.resolve();
+    });
     window.crypto_session = { clearSessionKey };
+
+    // Die Fehlerpfade warnen bewusst — abfangen statt die Testausgabe fluten.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const broadcast = vi.fn();
     window.syncOrchestrator = { broadcast };
@@ -132,7 +151,7 @@ async function freshLoad({ dataset = {}, beacon = true, beaconOk = true, inert =
     }
     _wired = added;
 
-    return { replace, reload, sendBeacon, fetchSpy, clearSessionKey, broadcast, resolveKeyDrop };
+    return { replace, reload, sendBeacon, fetchSpy, clearSessionKey, broadcast, resolveKeyDrop, rejectKeyDrop, warn };
 }
 
 function online(extra = {}) {
@@ -352,6 +371,56 @@ describe("Schluessel-Loeschung vor der Navigation (R-L3-9)", () => {
         await laeuft;
 
         expect(broadcast).toHaveBeenCalledWith({ type: "key-cleared" });
+    });
+
+    it("meldet im Erfolgsfall nichts auf der Konsole", async () => {
+        const { warn, broadcast } = await freshLoad({ dataset: null });
+
+        await window.quickExit.trigger();
+
+        expect(broadcast).toHaveBeenCalledWith({ type: "key-cleared" });
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("sendet KEINEN Broadcast, wenn der Deckel greift", async () => {
+        // R-L3-12: Der Empfaenger in crypto.js verankert einen noch
+        // vorhandenen Schluessel WIEDER (cachedKey = row.cryptoKey). Ein
+        // Broadcast nach Timeout koennte einem Fremd-Tab also den bereits
+        // verworfenen Memory-Key zurueckgeben — schlimmer als gar keiner.
+        vi.useFakeTimers();
+        const { replace, broadcast, warn } = await freshLoad({ dataset: null, keyDropHangs: true });
+
+        const laeuft = window.quickExit.trigger();
+        await vi.advanceTimersByTimeAsync(window.quickExit.KEY_DROP_TIMEOUT_MS);
+        await laeuft;
+
+        expect(broadcast).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toMatch(/nicht abgeschlossen/);
+        // Der Schutz vor Haengern bleibt: verlassen wird trotzdem.
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sendet KEINEN Broadcast, wenn die Loeschung scheitert", async () => {
+        const { replace, broadcast, warn } = await freshLoad({ dataset: null, keyDropRejects: true });
+
+        await window.quickExit.trigger();
+
+        expect(broadcast).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toMatch(/konnte nicht geloescht werden/);
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+    });
+
+    it("sendet KEINEN Broadcast ohne Krypto-Modul — es wurde nichts geloescht", async () => {
+        const { broadcast, warn, replace } = await freshLoad({ dataset: null });
+        delete window.crypto_session;
+
+        await window.quickExit.trigger();
+
+        expect(broadcast).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
     });
 
     it("navigiert auch ohne Sync-Orchestrator", async () => {
