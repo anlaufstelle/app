@@ -429,6 +429,26 @@ class TestWebpVerlustfreiErkennung:
 
         assert _webp_is_lossless(io.BytesIO(buf.getvalue())) is True
 
+    def test_abgeschnittener_chunk_kopf_gilt_als_verlustbehaftet(self):
+        """Untrusted Bytes: bricht die Chunk-Kette mitten im Kopf ab, gilt die
+        Datei als verlustbehaftet statt eine Ausnahme zu werfen."""
+        from core.services.file_vault.policy import _webp_is_lossless
+
+        # Gueltiger RIFF/WEBP-Kopf, danach ein abgeschnittener Chunk-Kopf.
+        stumpf = b"RIFF" + (100).to_bytes(4, "little") + b"WEBP" + b"VP8"
+
+        assert _webp_is_lossless(io.BytesIO(stumpf)) is False
+
+    def test_endlose_chunk_kette_bricht_nach_der_schranke_ab(self):
+        """Eine praeparierte Kette aus lauter Null-Laengen-Chunks darf die
+        Schleife nicht ewig laufen lassen."""
+        from core.services.file_vault.policy import _WEBP_MAX_CHUNKS, _webp_is_lossless
+
+        fuellchunks = (b"XXXX" + (0).to_bytes(4, "little")) * (_WEBP_MAX_CHUNKS + 5)
+        data = b"RIFF" + len(fuellchunks).to_bytes(4, "little") + b"WEBP" + fuellchunks
+
+        assert _webp_is_lossless(io.BytesIO(data)) is False
+
     def test_animiertes_verlustbehaftetes_webp_wird_nicht_faelschlich_erkannt(self):
         from core.services.file_vault.policy import _webp_is_lossless
 
@@ -459,6 +479,34 @@ class TestFormateOhneMetadatenContainer:
         attachment = upload("bild.bmp", source, "image/bmp")
 
         assert _stored_bytes(attachment) == source
+
+
+class TestSaveArgumenteJeFormat:
+    """Direkte Sonde auf ``_image_save_kwargs`` — der Rueckfall fuer ein Format
+    ohne eigene Encoder-Optionen (z. B. ``MPO``, der Mehrbild-JPEG-Container)
+    ist ueber die Pipeline nur schwer erreichbar."""
+
+    def test_unbekanntes_zielformat_bekommt_keine_optionen(self):
+        from types import SimpleNamespace
+
+        from core.services.file_vault.policy import _image_save_kwargs
+
+        quelle = SimpleNamespace(info={"icc_profile": b"x" * 8})
+
+        assert _image_save_kwargs("MPO", quelle) == {}
+
+    def test_icc_wandert_nur_bei_jpeg_und_webp_in_die_argumente(self):
+        from types import SimpleNamespace
+
+        from core.services.file_vault.policy import _image_save_kwargs
+
+        quelle = SimpleNamespace(info={"icc_profile": b"profil"})
+
+        assert _image_save_kwargs("JPEG", quelle)["icc_profile"] == b"profil"
+        assert _image_save_kwargs("WEBP", quelle)["icc_profile"] == b"profil"
+        # PNG/TIFF ziehen es aus ``im.info`` — dort steht es dank _cleaned_image.
+        assert "icc_profile" not in _image_save_kwargs("PNG", quelle)
+        assert "icc_profile" not in _image_save_kwargs("TIFF", quelle)
 
 
 @pytest.mark.django_db
