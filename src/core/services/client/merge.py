@@ -373,7 +373,7 @@ def _locked_clients(source, target):
         assert_processing_allowed(client.pk)
     try:
         return locked[source.pk], locked[target.pk]
-    except KeyError:  # pragma: no cover — Personen-Zeilen werden redigiert, nie geloescht
+    except KeyError:  # Personen-Zeilen werden redigiert, nie geloescht
         raise ValidationError(_("Person nicht gefunden.")) from None
 
 

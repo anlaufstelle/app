@@ -132,7 +132,7 @@ class TestStoreImportUpload:
 
     def test_rejects_files_above_the_byte_limit(self, facility, admin_user, media_root):
         oversized = _upload(b"x" * (import_engine.MAX_BYTES + 1))
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Die Datei ist zu groß \\(maximal 5 MB\\)\\."):
             import_engine.store_import_upload(facility, admin_user, oversized, target_type=ImportJob.TargetType.CLIENT)
         assert ImportJob.objects.for_facility(facility).count() == 0
 
@@ -194,13 +194,13 @@ class TestStoreImportUpload:
 
     def test_rejects_files_above_the_row_limit(self, facility, admin_user, media_root):
         content = PSEUDONYM_HEADER + "".join(f"P-{i};;;\n" for i in range(import_engine.MAX_ROWS + 1))
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Die Datei hat mehr als 1000 Datenzeilen\\."):
             import_engine.store_import_upload(
                 facility, admin_user, _upload(content), target_type=ImportJob.TargetType.CLIENT
             )
 
     def test_rejects_duplicate_column_headers(self, facility, admin_user, media_root):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Die Kopfzeile enthält doppelte Spaltenüberschriften\\."):
             import_engine.store_import_upload(
                 facility,
                 admin_user,
@@ -227,7 +227,10 @@ class TestStoreImportUpload:
             )
 
     def test_event_job_without_document_type_is_rejected(self, facility, admin_user, media_root):
-        with pytest.raises(ValidationError):
+        with pytest.raises(
+            ValidationError,
+            match="Für den Ereignis-Import ist ein Dokumentationstyp erforderlich\\.",
+        ):
             import_engine.store_import_upload(
                 facility, admin_user, _upload("Datum\n01.01.2026\n"), target_type=ImportJob.TargetType.EVENT
             )
@@ -382,22 +385,22 @@ class TestApplyMapping:
 
     def test_missing_required_target_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Diese Pflichtfelder brauchen eine Spalte: Pseudonym"):
             import_engine.apply_mapping(job, {"Notizen": "notes"})
 
     def test_duplicate_target_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Das Zielfeld „Pseudonym“ ist mehrfach zugeordnet\\."):
             import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Notizen": "pseudonym"})
 
     def test_unknown_target_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="„facility“ ist kein zulässiges Zielfeld\\."):
             import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Notizen": "facility"})
 
     def test_unknown_column_is_rejected(self, facility, admin_user, media_root):
         job = self._job(facility, admin_user)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Die Spalte „Gibtsnicht“ gibt es in der Datei nicht\\."):
             import_engine.apply_mapping(job, {"Pseudonym": "pseudonym", "Gibtsnicht": "notes"})
 
     def test_unknown_column_wins_over_unknown_target_and_missing_required(self, facility, admin_user, media_root):
@@ -412,7 +415,7 @@ class TestApplyMapping:
         job = self._job(facility, admin_user)
         job.status = ImportJob.Status.COMMITTED
         job.save(update_fields=["status"])
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Der Importlauf ist bereits abgeschlossen\\."):
             import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
 
 
@@ -1208,11 +1211,11 @@ class TestCommitImport:
         )
         import_engine.apply_mapping(job, {"Pseudonym": "pseudonym"})
         import_engine.run_import(job, admin_user, commit=False)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Der Importlauf enthält Fehler und kann nicht übernommen werden\\."):
             import_engine.commit_import(job, admin_user)
 
     def test_commit_requires_a_validated_job(self, client_job, admin_user):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Der Importlauf muss zuerst fehlerfrei geprüft werden\\."):
             import_engine.commit_import(client_job, admin_user)
 
     def test_a_conflict_after_the_dry_run_rolls_back_but_keeps_the_report(self, client_job, admin_user, facility):
@@ -1250,7 +1253,7 @@ class TestAbortImport:
 
     def test_final_job_cannot_be_aborted_twice(self, client_job, admin_user):
         import_engine.abort_import(client_job, admin_user)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Der Importlauf ist bereits abgeschlossen\\."):
             import_engine.abort_import(client_job, admin_user)
 
 
@@ -1387,7 +1390,7 @@ class TestCleanupStaleImportJobs:
 class TestMissingSourceFile:
     def test_reading_a_deleted_upload_fails_loudly(self, client_job, admin_user):
         import_engine.import_file_path(client_job).unlink()
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Die hochgeladene Datei ist nicht mehr vorhanden\\."):
             import_engine.read_rows(client_job)
 
 
@@ -1430,5 +1433,5 @@ class TestPureHelpers:
     def test_read_upload_enforces_the_byte_limit(self):
         stream = io.BytesIO(b"x" * (import_engine.MAX_BYTES + 1))
         stream.size = import_engine.MAX_BYTES + 1
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="Die Datei ist zu groß \\(maximal 5 MB\\)\\."):
             import_engine._read_upload(stream)

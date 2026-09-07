@@ -327,7 +327,7 @@ def tally_request_matches_live_context(facility, params, *, context: TallyLiveCo
 def new_tally_idempotency_key() -> str:
     """Erzeuge einen serverseitigen, zentral normalisierten Aktionsschlüssel."""
     key = normalize_idempotency_key(uuid.uuid4().hex)
-    if key is None:  # pragma: no cover - UUID-hex erfüllt den zentralen Vertrag per Definition
+    if key is None:  # UUID-hex erfüllt den zentralen Vertrag per Definition
         raise RuntimeError("Servergenerierter Tally-Idempotenzschlüssel ist ungültig")
     return key
 

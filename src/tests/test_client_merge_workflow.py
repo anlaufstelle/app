@@ -11,6 +11,7 @@ NICHT hier — sie liegen bei den View- und Export-Tests
 (``test_client_merge_views.py``, ``test_client_export*.py``).
 """
 
+import logging
 from datetime import timedelta
 
 import pytest
@@ -114,27 +115,31 @@ class TestMergeStaging:
 
 class TestMergeValidation:
     def test_refuses_self_merge(self, source, lead_user):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, source, lead_user)
+        assert exc_info.value.messages == ["Eine Person kann nicht mit sich selbst zusammengeführt werden."]
 
     def test_refuses_cross_facility_merge(self, source, second_facility, staff_user, lead_user):
         other = Client.objects.create(
             facility=second_facility,
             pseudonym="Fremde Einrichtung",
         )
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, other, lead_user)
+        assert exc_info.value.messages == ["Beide Personen müssen zur selben Einrichtung gehören."]
 
     def test_refuses_trashed_participant(self, source, target, lead_user):
         source.soft_delete(user=lead_user)
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, target, lead_user)
+        assert exc_info.value.messages == ["Personen im Papierkorb können nicht zusammengeführt werden."]
 
     def test_refuses_anonymized_participant(self, source, target, lead_user):
         target.is_active = False
         target.save(update_fields=["is_active"])
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, target, lead_user)
+        assert exc_info.value.messages == ["Anonymisierte Personen können nicht zusammengeführt werden."]
 
     def test_refuses_participant_under_legal_hold(self, source, target, lead_user):
         LegalHold.objects.create(
@@ -144,13 +149,37 @@ class TestMergeValidation:
             reason="Gerichtsverfahren",
             created_by=lead_user,
         )
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, target, lead_user)
+        assert exc_info.value.messages == [
+            "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+        ]
 
     def test_refuses_pending_deletion_request(self, source, target, staff_user, lead_user):
         request_client_deletion(source, staff_user, reason="Antrag laeuft")
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, target, lead_user)
+        assert exc_info.value.messages == [
+            "Für eine der beiden Personen läuft bereits ein Lösch- oder Zusammenführungs-Antrag."
+        ]
+
+
+def test_client_merged_log_has_exact_message_and_structured_fields(source, target, lead_user, caplog):
+    logger_name = "core.services.client.merge"
+    with caplog.at_level(logging.INFO, logger=logger_name):
+        merge_clients(source, target, lead_user)
+
+    records = [record for record in caplog.records if record.name == logger_name and record.levelno == logging.INFO]
+    assert [
+        (
+            record.getMessage(),
+            getattr(record, "source_id", None),
+            getattr(record, "target_id", None),
+            getattr(record, "user_id", None),
+        )
+        for record in records
+        if record.getMessage() == "client_merged"
+    ] == [("client_merged", str(source.pk), str(target.pk), lead_user.pk)]
 
 
 class TestEmptyValueDefinition:

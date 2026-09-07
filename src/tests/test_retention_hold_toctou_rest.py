@@ -494,8 +494,11 @@ class TestCaseHoldAnchorRace:
             user=admin,
             reason="Anordnung auf den Fall",
         )
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as exc_info:
             anonymize_client_now(person, admin)
+        assert exc_info.value.messages == [
+            "Für diese Person besteht eine Aufbewahrungssperre (Legal Hold) — Anonymisierung nicht möglich."
+        ]
         person.refresh_from_db()
         assert person.anonymized_at is None
 

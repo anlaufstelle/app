@@ -145,9 +145,9 @@ def test_client_autocomplete_view_uses_ilike(client):
 
 def test_ilike_lookup_only_on_text_fields():
     """UUIDField / DateTimeField must raise FieldError, not compile invalid SQL."""
-    with pytest.raises(FieldError):
+    with pytest.raises(FieldError, match="Unsupported lookup 'ilike' for UUIDField"):
         str(Client.objects.filter(id__ilike="abc").query)
-    with pytest.raises(FieldError):
+    with pytest.raises(FieldError, match="Unsupported lookup 'ilike' for DateTimeField"):
         str(Client.objects.filter(created_at__ilike="2026").query)
 
 

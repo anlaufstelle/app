@@ -22,6 +22,7 @@ Reset-auf-dasselbe-Passwort), und der Revocations-Pfad aus
 
 from __future__ import annotations
 
+import logging
 import time
 from unittest.mock import patch
 
@@ -31,6 +32,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.urls import reverse
+from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -39,8 +41,11 @@ from core.services.security import SUDO_SESSION_KEY, invite_token_generator
 from core.services.security.credentials import (
     REVOCATION_EFFECTS,
     RevocationReason,
+    flush_user_sessions,
     revoke_credentials,
 )
+
+LOGGER_NAME = "core.services.security.credentials"
 
 
 def _db_session_for(user) -> str:
@@ -313,8 +318,37 @@ class TestWirkungsMatrix:
         assert zeile.facility_id == staff_user.facility_id
 
     def test_unbekannter_grund_scheitert_laut(self, staff_user):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="'was-auch-immer' is not a valid RevocationReason"):
             revoke_credentials(staff_user, reason="was-auch-immer")
+
+    def test_flush_log_zeile_ist_vollstaendig(self, staff_user, caplog):
+        key = _db_session_for(staff_user)
+
+        with translation.override("de"), caplog.at_level(logging.INFO, logger=LOGGER_NAME):
+            flush_user_sessions(staff_user)
+
+        records = [record for record in caplog.records if record.name == LOGGER_NAME and record.levelno == logging.INFO]
+        assert [record.getMessage() for record in records] == [
+            f"Offline-Invalidierung: 1 Session(s) für User {staff_user.pk} geflusht."
+        ]
+        assert Session.objects.filter(session_key=key).exists() is False
+
+    def test_flush_dos_deckel_log_zeile_ist_vollstaendig(self, staff_user, settings, caplog):
+        settings.OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = 0
+        key = _db_session_for(staff_user)
+
+        with translation.override("de"), caplog.at_level(logging.ERROR, logger=LOGGER_NAME):
+            flush_user_sessions(staff_user)
+
+        records = [
+            record for record in caplog.records if record.name == LOGGER_NAME and record.levelno == logging.ERROR
+        ]
+        assert [record.getMessage() for record in records] == [
+            f"Offline-Invalidierung: Session-Scan-Obergrenze (0) für User {staff_user.pk} erreicht — "
+            "Rest nicht geflusht (Salt ist rotiert; Rest läuft bei Inaktivität ab, spätestens am "
+            "absoluten Sitzungs-Maximum, Refs #1858/#1868)."
+        ]
+        assert Session.objects.filter(session_key=key).exists() is True
 
 
 @pytest.mark.django_db

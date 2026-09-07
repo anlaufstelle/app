@@ -87,8 +87,9 @@ def _capture_health_warnings(caplog, call) -> list[str]:
     """Fuehrt ``call()`` aus und liefert die WARNING-Meldungen des Health-Loggers.
 
     Der ``core``-Logger hat ``propagate=False`` (``settings/base.py``) — der
-    ``caplog``-Handler muss daher explizit an den Modul-Logger gehaengt werden
-    (gleiches Muster wie ``test_refresh_statistics_view.py``)."""
+    ``caplog``-Handler muss daher explizit an den Modul-Logger gehaengt werden.
+    Weil fremde Records im Capture-Puffer liegen koennen, wird anschliessend
+    gezielt nach Logger und Mindest-Level gefiltert."""
     module_logger = logging.getLogger("core.views.health")
     caplog.set_level(logging.WARNING)
     module_logger.addHandler(caplog.handler)
@@ -96,7 +97,11 @@ def _capture_health_warnings(caplog, call) -> list[str]:
         call()
     finally:
         module_logger.removeHandler(caplog.handler)
-    return [record.getMessage() for record in caplog.records]
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "core.views.health" and record.levelno >= logging.WARNING
+    ]
 
 
 @pytest.mark.django_db

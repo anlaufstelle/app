@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -47,6 +48,23 @@ class TestAggregateChecks:
         internal = [c for c in result if c.key.startswith("_internal_")][0]
         assert internal.status == compliance.ComplianceStatus.UNKNOWN
         assert "boom" in (internal.detail or "")
+
+    def test_helper_failure_log_has_exact_line_level_and_traceback(self, caplog):
+        def broken_check():
+            raise RuntimeError("boom")
+
+        with caplog.at_level(logging.ERROR, logger="core.services.compliance"):
+            checks = compliance._run_helpers((broken_check,))
+
+        records = [
+            record
+            for record in caplog.records
+            if record.name == "core.services.compliance" and record.levelno == logging.ERROR
+        ]
+        assert [(record.getMessage(), record.exc_info is not None) for record in records] == [
+            ("Compliance-Helper broken_check fehlgeschlagen", True)
+        ]
+        assert checks[0].key == "_internal_broken_check"
 
     def test_status_enum_values(self):
         for status in compliance.ComplianceStatus:
