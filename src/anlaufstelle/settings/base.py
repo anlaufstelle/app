@@ -544,12 +544,23 @@ CLAMAV_TIMEOUT = env_int("CLAMAV_TIMEOUT", 15)
 #   Eintraege, billig aus dem EOCD-Record gelesen, BEVOR zipfile.ZipFile() pro
 #   Eintrag ein ZipInfo materialisiert — sonst waere der Archiv-Guard selbst ein
 #   Memory-DoS (~1 Mio Mini-Eintraege => hunderte MB transient) auf RAM-limitierten Hosts.
+# * FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB — Betreiber-Backstop fuer das
+#   Speicherkontingent JE EINRICHTUNG (#2129, Befund N-5). Anders als die Werte
+#   darueber ist das keine Per-Datei-Grenze, sondern die Summe aller Anhaenge
+#   einer Einrichtung inklusive Papierkorb. Er greift, solange (oder soweit)
+#   ``Settings.max_storage_mb`` kein strengeres eigenes Kontingent setzt —
+#   wirksam ist immer das striktere der beiden. ``0`` schaltet den Backstop ab
+#   (dann ist eine Einrichtung ohne eigenes Kontingent unbegrenzt). Sinn: im
+#   Mehr-Mandanten-Betrieb soll eine Einrichtung den gemeinsamen MEDIA_ROOT
+#   nicht fuellen koennen; der globale Disk-Check in /health/ meldet das nur,
+#   verhindert es nicht und kennt keine Einrichtung.
 FILE_VAULT_MAX_UPLOAD_BYTES = env_int("FILE_VAULT_MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
 FILE_VAULT_MAX_UPLOAD_FILES = env_int("FILE_VAULT_MAX_UPLOAD_FILES", 20)
 FILE_VAULT_MAX_IMAGE_PIXELS = env_int("FILE_VAULT_MAX_IMAGE_PIXELS", 40_000_000)
 FILE_VAULT_MAX_ARCHIVE_BYTES = env_int("FILE_VAULT_MAX_ARCHIVE_BYTES", 200 * 1024 * 1024)
 FILE_VAULT_MAX_ARCHIVE_RATIO = env_int("FILE_VAULT_MAX_ARCHIVE_RATIO", 100)
 FILE_VAULT_MAX_ARCHIVE_ENTRIES = env_int("FILE_VAULT_MAX_ARCHIVE_ENTRIES", 10000)
+FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = env_int("FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB", 2048)
 
 # --- Default PK ---
 

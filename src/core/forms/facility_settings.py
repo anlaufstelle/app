@@ -40,7 +40,7 @@ _FIELD_GROUPS = (
             "k_anonymity_threshold",
         ),
     ),
-    (_("Dateien"), ("allowed_file_types", "max_file_size_mb")),
+    (_("Dateien"), ("allowed_file_types", "max_file_size_mb", "max_storage_mb")),
 )
 
 

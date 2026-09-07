@@ -153,6 +153,22 @@ class Settings(models.Model):
         default=10,
         verbose_name=_("Max. Dateigröße (MB)"),
     )
+    # Refs #2129 (Befund N-5): Bis hierher galt eine Obergrenze nur PRO DATEI.
+    # Im Mehr-Mandanten-Betrieb konnte eine Einrichtung mit lauter legitimen
+    # Uploads den gemeinsamen MEDIA_ROOT fuellen — die Folge traf alle. ``None``
+    # heisst „kein einrichtungseigenes Limit"; dann greift der Betreiber-Backstop
+    # ``FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB``. Wirksam ist immer das striktere
+    # der beiden (siehe ``services/file_vault/quota.py``).
+    max_storage_mb = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Speicherkontingent (MB)"),
+        help_text=_(
+            "Gesamtgröße aller Dateianhänge dieser Einrichtung, inklusive Papierkorb. "
+            "Leer = kein einrichtungseigenes Kontingent; es gilt dann der vom Betrieb "
+            "gesetzte Standardwert."
+        ),
+    )
     mfa_enforced_facility_wide = models.BooleanField(
         default=False,
         verbose_name=_("2FA-Pflicht für alle Nutzer"),

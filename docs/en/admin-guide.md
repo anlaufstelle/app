@@ -209,6 +209,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `FILE_VAULT_MAX_ARCHIVE_BYTES` | `209715200` (200 MB) | Zip-bomb protection: maximum sum of uncompressed entries (read from the zip directory). |
 | `FILE_VAULT_MAX_ARCHIVE_RATIO` | `100` | Zip-bomb protection: maximum expansion ratio (uncompressed/compressed). |
 | `FILE_VAULT_MAX_ARCHIVE_ENTRIES` | `10000` | Zip-bomb protection: maximum number of entries (read from the EOCD record). |
+| `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | `2048` (2 GB) | Operator backstop for the **per-facility storage quota** (#2129) -- not a per-file limit but the sum of all attachments of one facility, trash included. `0` disables the backstop. See [Storage quotas](#storage-quotas). |
 
 **Maintenance Mode (#700)**
 
@@ -1019,6 +1020,25 @@ For events, persons and cases, **soft-deleted records are rotated too**. That is
 
 - Per facility: `Settings.max_file_size_mb` (default **10 MB**) -- see [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py).
 - Global: Django's `DATA_UPLOAD_MAX_MEMORY_SIZE` applies as an additional hard limit. Raise it via ENV or settings override if larger uploads must be allowed.
+
+#### Storage Quotas
+
+The upload limit above applies **per file**. Refs #2129 adds a cap on the **sum** of all file attachments **per facility**. The reason is multi-tenant operation: without a quota, one facility can fill the shared `MEDIA_ROOT` with nothing but legitimate uploads -- and the consequences (upload failures, backup failures) hit **every** facility on the instance. The disk check in `/health/` reports a full volume, it does not prevent one, and it knows nothing about facilities.
+
+| Knob | Where | Meaning |
+|---|---|---|
+| `Settings.max_storage_mb` | Administration → Settings, group "Files" | Quota of **this** facility in MB. Empty = no facility-specific quota. |
+| `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | ENV (default **2048**) | Operator backstop for every facility without its own quota. `0` = no backstop. |
+
+The **stricter** of the two always applies. If both are empty or `0`, the facility is unlimited.
+
+**What counts.** Every attachment of the facility, **trash included** and including superseded versions: a removed attachment is only gone from the practitioner's view; the encrypted file stays on disk until it is physically purged. The display therefore reports the trash share separately -- that is the lever a full facility uses to free space again (irreversible deletion, see the file overview in the [user guide](user-guide.md)). Source files of the CSV import (`ImportJob`) do **not** count; they are temporary.
+
+**What happens when the quota is reached.** The upload is rejected before it is scanned or encrypted -- the practitioner sees "Speicherkontingent der Einrichtung erschöpft: X von Y MB belegt (davon Z MB im Papierkorb)". It is logged under its own audit action **"Storage quota exceeded"** (`attachment_quota_exceeded`), deliberately **not** as a security violation: a full quota is an operational state, not an attack.
+
+**Display and warning.** The administration hub (`/verwaltung/`) shows the row "Speicher -- X von Y MB belegt", the lead workspace shows the same figure as a card. From **90 %** usage an additional hint appears in the configuration warnings of the administration hub.
+
+> **Deliberate limit:** Two concurrent uploads at the quota can jointly exceed it slightly -- usage is read without a lock. The quota protects against filling the volume, it is not an accounting ledger; a lock would serialize every upload of a facility.
 
 #### Safe Downloads (RFC 5987)
 
@@ -1975,4 +1995,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: b2dbba4da7468135bd1962ff421fa4e4550cfc12 -->
+<!-- source-hash: 9bb987a83ffccdeca286ef658f842bc79dff56b1 -->

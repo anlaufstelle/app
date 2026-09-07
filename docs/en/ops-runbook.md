@@ -905,7 +905,17 @@ docker system prune -f
 
 # Check old backup files
 du -sh /opt/anlaufstelle/backups/*/
+
+# Attachment usage per facility (size of the MEDIA_ROOT subfolder)
+du -sh /opt/anlaufstelle/media/*/
 ```
+
+> **Monitoring is no substitute for a quota** (#2129). The disk check in `/health/` (`HEALTH_DISK_REQUIRED`) reports **that** the volume is filling up -- it does not prevent it and knows nothing about facilities. In multi-tenant operation that is not enough: a single facility can fill the shared `MEDIA_ROOT` with nothing but legitimate uploads, and the consequences (upload and backup failures) then hit everyone. Set a per-facility storage quota:
+>
+> - `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` (ENV, default **2048**) -- backstop for every facility without its own quota; `0` disables it.
+> - `Settings.max_storage_mb` per facility (Administration → Settings, group "Files") -- the stricter of the two always applies.
+>
+> The **trash counts**: a removed attachment keeps its space until it is physically purged. When a facility runs full, irreversible deletion of old attachments (lead/administration) is the fastest lever -- the administration overview reports the trash share separately. Details: [admin guide § 2.9 "Storage quotas"](admin-guide.md#storage-quotas).
 
 ### 5.6 Web Container Does Not Start (Restart Loop)
 
@@ -2764,4 +2774,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-07 -->
-<!-- source-hash: ea3d553c5b77622da2b5f6bafca73c8749e4f4cb -->
+<!-- source-hash: d268a9c72b28267a93d292008ce9f4be9bc3f2fe -->

@@ -12,7 +12,7 @@
     <a href="{% url 'core:zeitstrom' %}" class="text-[13px] text-accent hover:underline">{% trans "Zum Zeitstrom" %} →</a>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" data-testid="lead-dashboard-cards">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" data-testid="lead-dashboard-cards">
     <a href="{% url 'core:deletion_request_list' %}" class="card p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Löschanträge" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-deletion-requests">{{ pending_deletion_requests }}</div>
@@ -38,6 +38,24 @@
         <div class="text-[20px] font-bold text-ink mt-1" data-testid="card-last-snapshot">—</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "noch kein Snapshot" %}</div>
         {% endif %}
+    </a>
+    {% comment %}Refs #2129: Die Leitung erreicht den Verwaltungs-Hub mit derselben
+    Zahl nicht (FacilityAdminRequiredMixin) — ohne diese Karte erfuehre sie von
+    einem vollen Speicherkontingent erst, wenn eine Fachkraft nicht mehr
+    hochladen kann. Zielseite ist die Dateien-Uebersicht: dort steht, was den
+    Platz belegt.{% endcomment %}
+    <a href="{% url 'core:attachment_list' %}" class="card p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Speicher" %}</div>
+        <div class="text-[20px] font-bold {% if storage_usage.is_near_limit %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-storage-usage">
+            {% if storage_usage.limit_mb %}{{ storage_usage.used_mb }} / {{ storage_usage.limit_mb }} MB{% else %}{{ storage_usage.used_mb }} MB{% endif %}
+        </div>
+        <div class="text-[12px] text-ink-soft mt-1">
+            {% if storage_usage.limit_mb %}
+            {% blocktrans with trash=storage_usage.trash_mb %}belegt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
+            {% else %}
+            {% blocktrans with trash=storage_usage.trash_mb %}belegt · kein Kontingent gesetzt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
+            {% endif %}
+        </div>
     </a>
 </div>
 {% endblock %}

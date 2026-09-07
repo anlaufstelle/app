@@ -204,6 +204,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | `FILE_VAULT_MAX_ARCHIVE_BYTES` | `209715200` (200 MB) | Zip-Bomb-Schutz: maximale Summe der unkomprimierten Einträge (aus dem Zip-Directory gelesen). |
 | `FILE_VAULT_MAX_ARCHIVE_RATIO` | `100` | Zip-Bomb-Schutz: maximales Expansions-Verhältnis (unkomprimiert/komprimiert). |
 | `FILE_VAULT_MAX_ARCHIVE_ENTRIES` | `10000` | Zip-Bomb-Schutz: maximale Anzahl Einträge (aus dem EOCD-Record gelesen). |
+| `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | `2048` (2 GB) | Betreiber-Backstop für das **Speicherkontingent je Einrichtung** (#2129) — keine Per-Datei-Grenze, sondern die Summe aller Anhänge einer Einrichtung inklusive Papierkorb. `0` schaltet den Backstop ab. Siehe [Speicherkontingente](#speicherkontingente). |
 
 **Wartungsmodus (#700)**
 
@@ -1015,6 +1016,25 @@ Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze*
 
 - Per Einrichtung: `Settings.max_file_size_mb` (Default **10 MB**) — siehe [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py).
 - Global: Djangos `DATA_UPLOAD_MAX_MEMORY_SIZE` gilt als zusätzliche harte Grenze. Erhöhung via ENV bzw. Settings-Override, falls größere Uploads erlaubt sein sollen.
+
+#### Speicherkontingente
+
+Das Upload-Limit oben gilt **pro Datei**. Refs #2129 ergänzt eine Obergrenze für die **Summe** aller Dateianhänge **je Einrichtung**. Anlass ist der Mehr-Mandanten-Betrieb: Ohne Kontingent kann eine Einrichtung mit lauter legitimen Uploads den gemeinsamen `MEDIA_ROOT` füllen — die Folge (Upload-Fehler, Backup-Fehler) trifft dann **alle** Einrichtungen der Instanz. Der Disk-Check in `/health/` meldet einen vollen Datenträger, verhindert ihn nicht und kennt keine Einrichtung.
+
+| Stellschraube | Ort | Bedeutung |
+|---|---|---|
+| `Settings.max_storage_mb` | Verwaltung → Einstellungen, Gruppe „Dateien" | Kontingent **dieser** Einrichtung in MB. Leer = kein eigenes Kontingent. |
+| `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | ENV (Default **2048**) | Betreiber-Backstop für alle Einrichtungen ohne eigenes Kontingent. `0` = kein Backstop. |
+
+Wirksam ist immer das **striktere** der beiden Limits. Sind beide leer bzw. `0`, ist die Einrichtung unbegrenzt.
+
+**Was mitzählt.** Alle Anhänge der Einrichtung, **inklusive Papierkorb** und inklusive abgelöster Vorversionen: Ein entfernter Anhang ist nur aus der Fach-Sicht weg, die verschlüsselte Datei liegt bis zur physischen Tilgung weiter auf der Platte. Die Anzeige weist den Papierkorb-Anteil deshalb gesondert aus — er ist der Hebel, mit dem eine volle Einrichtung wieder Luft bekommt (ersatzloses Löschen, siehe [Dateien-Übersicht im Benutzerhandbuch](user-guide.md)). Quelldateien des CSV-Imports (`ImportJob`) zählen **nicht** mit; sie sind temporär.
+
+**Was passiert beim Erreichen.** Der Upload wird abgelehnt, bevor er gescannt oder verschlüsselt wird — die Fachkraft sieht „Speicherkontingent der Einrichtung erschöpft: X von Y MB belegt (davon Z MB im Papierkorb)". Protokolliert wird das als eigene Audit-Aktion **„Speicherkontingent überschritten"** (`attachment_quota_exceeded`), bewusst **nicht** als Sicherheitsverletzung: Ein volles Kontingent ist ein Betriebszustand, kein Angriff.
+
+**Anzeige und Warnung.** Der Verwaltungs-Hub (`/verwaltung/`) zeigt die Zeile „Speicher — X von Y MB belegt (davon Z MB im Papierkorb)", die Leitungs-Arbeitszentrale dieselbe Zahl als Karte. Ab **90 %** Füllstand erscheint zusätzlich ein Hinweis in den Konfigurations-Warnungen der Anwendungsbetreuung.
+
+> **Grenze (bewusst):** Zwei gleichzeitige Uploads am Limit können es gemeinsam knapp überschreiten — der Verbrauch wird ohne Sperre gelesen. Das Kontingent schützt gegen das Volllaufen des Datenträgers, es ist keine Buchhaltung; eine Sperre würde jeden Upload einer Einrichtung serialisieren.
 
 #### Sichere Downloads (RFC 5987)
 

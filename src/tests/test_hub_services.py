@@ -204,14 +204,17 @@ class TestMetricRoleFilterAndBudget:
             datenschutz_overview(facility, admin_user)
 
     def test_verwaltung_metric_query_count_is_at_most_five(self, facility, admin_user, django_assert_max_num_queries):
-        """Die drei Zeilen der Verwaltungs-Übersicht; die Doctype-Zeile nennt zwei
-        Zahlen aus **einem** Aggregat."""
+        """Die vier Zeilen der Verwaltungs-Übersicht; die Doctype-Zeile nennt zwei
+        Zahlen aus **einem** Aggregat, die Speicher-Zeile (Refs #2129) drei aus
+        einem Aggregat plus einer Settings-Abfrage."""
         with django_assert_max_num_queries(5):
             verwaltung_metrics(facility)
 
 
 class TestVerwaltungOverview:
-    def test_metrics_name_doctypes_fieldtemplates_and_imports(self, facility, admin_user, field_template, import_job):
+    def test_metrics_name_doctypes_fieldtemplates_imports_and_storage(
+        self, facility, admin_user, field_template, import_job
+    ):
         from core.models import DocumentType
 
         DocumentType.objects.create(facility=facility, name="Hub-Typ aktiv")
@@ -219,7 +222,10 @@ class TestVerwaltungOverview:
 
         metrics = verwaltung_metrics(facility)
 
-        assert [m.key for m in metrics] == ["config", "config-fieldtemplates", "import"]
+        # Refs #2129: vierte Zeile "Speicher" — die Anwendungsbetreuung muss
+        # sehen, wie voll das Kontingent der Einrichtung ist, bevor der erste
+        # Upload daran scheitert.
+        assert [m.key for m in metrics] == ["config", "config-fieldtemplates", "import", "storage"]
         # Zwei Zahlen aus EINEM Aggregat: Bestand und davon aktiv.
         assert _metric(metrics, "config").value == 2
         assert "1" in _metric(metrics, "config").detail
@@ -238,7 +244,7 @@ class TestVerwaltungOverview:
         Rollen-Dashboard — die Anwendungsbetreuung verliert beim Umzug nichts."""
         context = verwaltung_overview(facility, admin_user)
 
-        assert [m.key for m in context["metrics"]] == ["config", "config-fieldtemplates", "import"]
+        assert [m.key for m in context["metrics"]] == ["config", "config-fieldtemplates", "import", "storage"]
         assert context["users_total"] >= 1
         assert "users_without_mfa" in context
         assert isinstance(context["settings_warnings"], list)

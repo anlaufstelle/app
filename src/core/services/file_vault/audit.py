@@ -182,3 +182,42 @@ def log_attachment_violation(facility, user, owner, *, reason, filename, **extra
         owner_id=owner_id,
         **extra,
     )
+
+
+def audit_attachment_quota_exceeded(facility, user, owner, *, usage, requested_bytes: int):
+    """Auditiere einen am Speicherkontingent gescheiterten Upload (Refs #2129).
+
+    Bewusst **kein** ``SECURITY_VIOLATION`` wie die uebrigen Reject-Pfade
+    dieses Moduls: das Kontingent ist ein normaler Betriebszustand („die
+    Einrichtung ist voll"), kein Angriff. Unter ``SECURITY_VIOLATION``
+    verwaesserte die Zeile die Sicherheits-Sicht und erbte zugleich deren
+    Prune-Ausnahme (:data:`core.retention.audit_pruning.PRUNE_EXEMPT_ACTIONS`)
+    — eine Betriebsmeldung wuerde damit jede Aufbewahrungsfrist ueberleben.
+
+    Das ``detail`` traegt ausschliesslich Konfigurations- und Mengenangaben.
+    Der Dateiname erscheint hier — anders als bei
+    :func:`log_attachment_violation` — **gar nicht**, auch nicht als Hash: fuer
+    die Rechenschaftsfrage („wann war das Kontingent erschoepft") ist er ohne
+    Belang, und was nicht geschrieben wird, ueberlebt auch keine Anonymisierung
+    (Refs #1751). ``used_mb``/``requested_mb`` tragen zwei Nachkommastellen —
+    die Meldung an die Fachkraft rundet auf ganze MB, die forensische Spur soll
+    genauer sein; ``limit_mb`` ist der konfigurierte Ganz-MB-Wert selbst.
+    """
+    from core.models import AuditLog
+
+    owner_type, owner_id = _owner_reference(owner)
+    return audit_event(
+        AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED,
+        user=user,
+        facility=facility,
+        target_type="Attachment",
+        target_id=str(owner.pk) if getattr(owner, "pk", None) else None,
+        detail={
+            "owner_type": owner_type,
+            "owner_id": owner_id,
+            "reason": "quota_exceeded",
+            "used_mb": round(usage.used_bytes / (1024 * 1024), 2),
+            "limit_mb": usage.limit_mb,
+            "requested_mb": round(requested_bytes / (1024 * 1024), 2),
+        },
+    )

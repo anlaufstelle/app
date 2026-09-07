@@ -52,6 +52,7 @@ from core.models import (
 )
 from core.models.workitem import DeletionRequest
 from core.services.dashboard import facility_admin_dashboard_context
+from core.services.file_vault.quota import facility_storage_usage
 
 
 @dataclass(frozen=True)
@@ -209,11 +210,34 @@ def datenschutz_overview(facility: Any, user: Any) -> list[HubMetric]:
 _OPEN_IMPORT_STATES = tuple(status for status in ImportJob.Status.values if status not in set(ImportJob.FINAL_STATUSES))
 
 
-def verwaltung_metrics(facility: Any) -> list[HubMetric]:
-    """Die drei Zähler-Zeilen der Verwaltungs-Übersicht (3 Queries).
+def _storage_detail(usage) -> str:
+    """Der Beisatz der Speicher-Zeile — die Zahl davor ist der belegte Wert.
 
-    Alle drei Zielseiten sind ``ADMIN_ONLY`` wie die Übersicht selbst — hier
+    Ohne Kontingent gibt es keinen Nenner; dann nennt der Beisatz nur den
+    Papierkorb-Anteil, denn genau der ist der Hebel, mit dem eine volle
+    Einrichtung wieder Luft bekommt.
+    """
+    if usage.limit_mb is None:
+        return _("MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt") % {"trash": usage.trash_mb}
+    return _("von %(limit)s MB belegt (davon %(trash)s MB im Papierkorb)") % {
+        "limit": usage.limit_mb,
+        "trash": usage.trash_mb,
+    }
+
+
+def verwaltung_metrics(facility: Any) -> list[HubMetric]:
+    """Die vier Zähler-Zeilen der Verwaltungs-Übersicht (5 Queries).
+
+    Alle vier Zielseiten sind für die Anwendungsbetreuung erreichbar — hier
     gibt es nichts rollenabhängig zu filtern.
+
+    Die Speicher-Zeile (Refs [#2129]) zieht ihre Zahlen aus demselben Rechner,
+    der den Upload durchsetzt (``facility_storage_usage``) — eine Kachel, die
+    eine andere Zahl nennt als die Regel dahinter, ist schlimmer als keine
+    Kachel (Regel 1 im Modul-Docstring). Ihr Ziel ist die Dateien-Übersicht:
+    dort steht, was den Platz belegt.
+
+    [#2129]: https://github.com/anlaufstelle/app/issues/2129
     """
     doctypes = DocumentType.objects.for_facility(facility).aggregate(
         total=Count("pk"),
@@ -221,6 +245,7 @@ def verwaltung_metrics(facility: Any) -> list[HubMetric]:
     )
     fieldtemplates = FieldTemplate.objects.for_facility(facility).count()
     open_imports = ImportJob.objects.for_facility(facility).filter(status__in=_OPEN_IMPORT_STATES).count()
+    storage = facility_storage_usage(facility)
 
     return [
         HubMetric(
@@ -247,6 +272,15 @@ def verwaltung_metrics(facility: Any) -> list[HubMetric]:
             url_name="core:import_list",
             testid="hub-metric-import",
             is_actionable=open_imports > 0,
+        ),
+        HubMetric(
+            key="storage",
+            label=_("Speicher"),
+            value=storage.used_mb,
+            detail=_storage_detail(storage),
+            url_name="core:attachment_list",
+            testid="hub-metric-storage",
+            is_actionable=storage.is_near_limit,
         ),
     ]
 

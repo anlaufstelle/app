@@ -33,6 +33,7 @@ from core.services.file_vault.policy import (
     enforce_archive_limits,
     enforce_image_limits,
     enforce_magic_bytes,
+    enforce_storage_quota,
     enforce_upload_size,
     run_virus_scan,
     strip_image_metadata,
@@ -88,6 +89,7 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     1. Enforce ``Settings.allowed_file_types`` extension whitelist (Refs #610).
     2. Enforce ``min(Facility-Limit, globaler Cap)`` VOR jeder Voll-Pufferung
        (#1268/#1363).
+    2a. Enforce das Speicherkontingent der Einrichtung (#2129) — vor dem Scan.
     3. Scan file with ClamAV (if CLAMAV_ENABLED) BEFORE encryption — infizierte
        Uploads werden mit ``ValidationError`` abgelehnt und als
        ``SECURITY_VIOLATION`` protokolliert (fail-closed, Issue #524).
@@ -104,6 +106,11 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None):
     # (min(Facility-Limit, globaler Cap)) fuer ALLE Aufrufer, auch den Replace-Pfad,
     # der am DynamicEventDataForm vorbeilaeuft.
     enforce_upload_size(facility, uploaded_file, owner, user)
+    # #2129 (N-5): Speicherkontingent der Einrichtung VOR dem Virenscan — fuer
+    # einen Upload, der ohnehin abgelehnt wird, soll kein synchroner ClamAV-Lauf
+    # anfallen. Bewusst kein SECURITY_VIOLATION (normaler Betriebszustand), aber
+    # mit eigener ATTACHMENT_QUOTA_EXCEEDED-Audit-Zeile.
+    enforce_storage_quota(facility, uploaded_file, owner, user)
     run_virus_scan(facility, uploaded_file, owner, user)
     # #1274: den verifizierten (libmagic) MIME festhalten, damit er beim Download
     # massgeblich ist statt des browser-gemeldeten content_type.

@@ -26,6 +26,9 @@ EDITABLE_FIELDS = {
     "eventhistory_chronicle_months",
     "allowed_file_types",
     "max_file_size_mb",
+    # Refs #2129: das Speicherkontingent je Einrichtung gehoert in dieselbe
+    # Formular-Gruppe "Dateien"; der Drift-Guard unten erzwingt seine Aufnahme.
+    "max_storage_mb",
     "mfa_enforced_facility_wide",
     "retention_auto_approve_after_defer",
     "retention_max_defer_count",
@@ -44,6 +47,11 @@ def _post_data(settings_obj: Settings) -> dict[str, str]:
                 data[name] = "on"
         elif name == "default_document_type":
             data[name] = str(value.pk) if value else ""
+        elif value is None:
+            # Refs #2129: ``max_storage_mb`` ist das erste NULLbare Feld des
+            # Formulars — ``str(None)`` haette "None" gepostet und das Formular
+            # ungueltig gemacht. Leer heisst hier "kein eigenes Kontingent".
+            data[name] = ""
         else:
             data[name] = str(value)
     return data

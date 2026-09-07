@@ -482,6 +482,57 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
     )
 
 
+def enforce_storage_quota(facility, uploaded_file, owner, user):
+    """Reject uploads that would exceed the facility's storage quota (Refs #2129).
+
+    Befund N-5: Die Groessenbegrenzung galt bis hierher ausschliesslich **pro
+    Datei**. Im Mehr-Mandanten-Betrieb konnte damit eine Einrichtung mit lauter
+    legitimen Uploads den gemeinsamen ``MEDIA_ROOT`` fuellen — die Folge
+    (Upload-Fehler, Backup-Fehler) traf **alle** Mandanten. Der globale
+    Disk-Check in ``/health/`` meldet das, verhindert es nicht und kennt keine
+    Einrichtung.
+
+    Wirksames Limit, Verbrauch und Papierkorb-Anteil kommen aus
+    :func:`~core.services.file_vault.quota.facility_storage_usage` — derselbe
+    Rechner, den die Kacheln im Verwaltungs-Hub und in der
+    Leitungs-Arbeitszentrale anzeigen. Der Grenzwert ist **inklusiv**: genau
+    aufgehen darf noch.
+
+    Reihenfolge (bindend): laeuft NACH ``enforce_upload_size`` und VOR
+    ``run_virus_scan`` — fuer einen Upload, der ohnehin abgelehnt wird, soll
+    kein ClamAV-Scan (bis ``CLAMAV_TIMEOUT`` synchron) anfallen.
+
+    Bewusst **kein** ``SECURITY_VIOLATION`` und damit nicht ueber
+    :func:`_reject`: ein erschoepftes Kontingent ist ein normaler
+    Betriebszustand, kein Angriff. Die Rechenschaftsspur ist eine eigene
+    ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile.
+
+    **Race bewusst toleriert:** Zwei parallele Uploads am Limit koennen es
+    gemeinsam ueberschreiten — die Summe wird ohne Lock gelesen. Das Kontingent
+    schuetzt gegen das Volllaufen der Platte, es ist keine Buchhaltung; ein
+    ``select_for_update``/Advisory-Lock wuerde die Upload-Pipeline zusaetzlich
+    je Einrichtung serialisieren und liefe damit dem Entwurfsziel aus #1345
+    zuwider (Scan/Encrypt gerade NICHT unter dem Facility-Lock der
+    AuditLog-Hashkette).
+    """
+    from core.services.file_vault.audit import audit_attachment_quota_exceeded  # noqa: PLC0415 — Zyklus vermeiden
+    from core.services.file_vault.quota import facility_storage_usage  # noqa: PLC0415
+
+    size = getattr(uploaded_file, "size", None) or 0
+    usage = facility_storage_usage(facility)
+    if usage.fits(size):
+        return
+
+    audit_attachment_quota_exceeded(facility, user, owner, usage=usage, requested_bytes=size)
+    raise ValidationError(
+        _(
+            "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt "
+            "(davon %(trash)d MB im Papierkorb)."
+        )
+        % {"used": usage.used_mb, "limit": usage.limit_mb, "trash": usage.trash_mb}
+    )
+
+
 def run_virus_scan(facility, uploaded_file, owner, user):
     """Scan ``uploaded_file`` via ClamAV. Raises ``ValidationError`` on hit or
     when the scanner is unreachable while ``CLAMAV_ENABLED`` is true.

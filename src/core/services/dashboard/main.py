@@ -27,6 +27,7 @@ from core.models import (
     User,
     WorkItem,
 )
+from core.services.file_vault.quota import facility_storage_usage
 
 
 def staff_dashboard_context(user, facility) -> dict:
@@ -66,7 +67,7 @@ def lead_dashboard_context(user, facility) -> dict:
     """Daten fuer die Leitungs-Arbeitszentrale.
 
     Karten: ausstehende Loeschantraege, Retention-Vorschlaege, juengste
-    Statistik-Snapshots. Legal Holds bleiben reines Superadmin-Werkzeug
+    Statistik-Snapshots, Speicherbelegung der Einrichtung (Refs #2129). Legal Holds bleiben reines Superadmin-Werkzeug
     (``system_legal_hold_list``, ``SuperAdminRequiredMixin``) — die frueher
     hier mitgelieferte ``active_legal_holds``-Kachel war fuer die Leitung
     hinter dem #1735-Guard immer unsichtbar und ist entfernt (Refs #1759).
@@ -81,10 +82,17 @@ def lead_dashboard_context(user, facility) -> dict:
 
     last_snapshot = StatisticsSnapshot.objects.for_facility(facility).order_by("-year", "-month").first()
 
+    # Refs #2129: Die Leitung hat eine eigene Arbeitszentrale — der
+    # Verwaltungs-Hub mit derselben Zahl ist ``FacilityAdminRequiredMixin`` und
+    # fuer sie unerreichbar. Ohne diese Karte erfuehre sie von einem vollen
+    # Kontingent erst, wenn eine Fachkraft eine Datei nicht mehr hochladen kann.
+    storage_usage = facility_storage_usage(facility)
+
     return {
         "pending_deletion_requests": pending_deletion_requests,
         "pending_retention_proposals": pending_retention_proposals,
         "last_snapshot": last_snapshot,
+        "storage_usage": storage_usage,
     }
 
 
@@ -124,10 +132,30 @@ def facility_admin_dashboard_context(user, facility) -> dict:
                 )
             )
 
+    # Refs #2129: Die Warnung haengt sich in die bestehende Liste statt eine
+    # eigene UI-Sektion zu bauen — der orange Banner in ``verwaltung.html`` ist
+    # bereits die Stelle, an der die Anwendungsbetreuung Konfigurationsprobleme
+    # sieht. Bewusst nur bei erreichter Schwelle: eine Dauerwarnung ist keine.
+    storage_usage = facility_storage_usage(facility)
+    if storage_usage.is_near_limit:
+        warnings.append(
+            _(
+                "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, "
+                "davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+            )
+            % {
+                "percent": storage_usage.percent_used,
+                "used": storage_usage.used_mb,
+                "limit": storage_usage.limit_mb,
+                "trash": storage_usage.trash_mb,
+            }
+        )
+
     return {
         "users_without_mfa": users_without_mfa,
         "users_total": users_qs.count(),
         "settings_warnings": warnings,
+        "storage_usage": storage_usage,
     }
 
 

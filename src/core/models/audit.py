@@ -100,6 +100,17 @@ class AuditLog(models.Model):
         # geschriebener, unveraenderlicher Zeilen.
         ATTACHMENT_UPLOAD = "attachment_upload", _("Anhang hochgeladen")
         ATTACHMENT_DELETE = "attachment_delete", _("Anhang gelöscht")
+        # Refs #2129 (Befund N-5): Ein Upload, der am Speicherkontingent der
+        # Einrichtung scheitert. Bewusst KEINE ``SECURITY_VIOLATION``: das ist
+        # ein normaler Betriebszustand („die Platte der Einrichtung ist voll"),
+        # kein Angriff — unter ``SECURITY_VIOLATION`` verwaesserte es die
+        # Sicherheits-Sicht und erbte zugleich deren Prune-Ausnahme. Eine eigene
+        # Aktion statt ``detail["reason"]`` an einer generischen, weil unter
+        # /audit/ genau die Frage gestellt wird („warum kann hier niemand mehr
+        # hochladen?"). Das ``detail`` traegt nur Konfigurations- und
+        # Mengenangaben (``used_mb``/``limit_mb``/``requested_mb``), nie den
+        # Dateinamen.
+        ATTACHMENT_QUOTA_EXCEEDED = "attachment_quota_exceeded", _("Speicherkontingent überschritten")
         WORKITEM_CREATE = "workitem_create", _("Aufgabe angelegt")
         WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
         # Refs #1871: Die Fach-UI fuer Zugaenge schliesst die bisherige

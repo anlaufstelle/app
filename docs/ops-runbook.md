@@ -903,7 +903,17 @@ docker system prune -f
 
 # Alte Backup-Dateien pruefen
 du -sh /opt/anlaufstelle/backups/*/
+
+# Belegung der Anhaenge je Einrichtung (Groesse des MEDIA_ROOT-Unterordners)
+du -sh /opt/anlaufstelle/media/*/
 ```
+
+> **Monitoring ersetzt kein Kontingent** (#2129). Der Disk-Check in `/health/` (`HEALTH_DISK_REQUIRED`) meldet, **dass** der Datenträger volläuft — er verhindert es nicht und kennt keine Einrichtung. Im Mehr-Mandanten-Betrieb reicht das nicht: Eine einzige Einrichtung kann den gemeinsamen `MEDIA_ROOT` mit lauter legitimen Uploads füllen, und die Folge (Upload- und Backup-Fehler) trifft dann alle. Setzen Sie deshalb ein Speicherkontingent je Einrichtung:
+>
+> - `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` (ENV, Default **2048**) — Backstop für jede Einrichtung ohne eigenes Kontingent; `0` schaltet ihn ab.
+> - `Settings.max_storage_mb` je Einrichtung (Verwaltung → Einstellungen, Gruppe „Dateien") — wirksam ist immer das striktere der beiden Limits.
+>
+> Der **Papierkorb zählt mit**: Ein entfernter Anhang belegt seinen Platz bis zur physischen Tilgung. Läuft eine Einrichtung voll, ist das ersatzlose Löschen alter Anhänge (Leitung/Anwendungsbetreuung) der schnellste Hebel — die Verwaltungs-Übersicht weist den Papierkorb-Anteil gesondert aus. Details: [Admin-Handbuch § 2.9 „Speicherkontingente"](admin-guide.md#speicherkontingente).
 
 ### 5.6 Web-Container startet nicht (Restart-Loop)
 

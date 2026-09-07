@@ -44,6 +44,11 @@ _AUDIT_FIELDS = (
     # Datei-Upload-Policy
     "allowed_file_types",
     "max_file_size_mb",
+    # Refs #2129: Das Speicherkontingent entscheidet, ob eine Einrichtung
+    # ueberhaupt noch dokumentieren kann — ein stilles Herabsetzen auf einen
+    # bereits ueberschrittenen Wert legt alle Datei-Uploads lahm. Dieselbe
+    # Auditpflicht wie bei ``max_file_size_mb``.
+    "max_storage_mb",
 )
 
 # Bewusst ausgeschlossen — keine verhaltensrelevanten Settings (#893):
@@ -81,6 +86,9 @@ _AUDIT_VALUE_FIELDS = frozenset(
         "k_anonymity_threshold",
         "search_trigram_threshold",
         "max_file_size_mb",
+        # Refs #2129: rein numerischer Konfigurationswert ohne PII; ein
+        # Hochsetzen (Aufweichen des Kontingents) muss rekonstruierbar sein.
+        "max_storage_mb",
     }
 )
 

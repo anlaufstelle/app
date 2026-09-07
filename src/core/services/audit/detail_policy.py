@@ -199,6 +199,13 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "versions": "Zahl der physisch entfernten Versionen einer Anhang-Kette (Refs #1874)",
     "file_size": "Groesse eines erfolgreich gespeicherten Anhangs in Bytes (Refs #1960)",
     "mime": "verifizierter MIME-Typ eines Anhangs — technischer Typmarker (Refs #1960)",
+    # Refs #2129: ``ATTACHMENT_QUOTA_EXCEEDED`` (Upload am Speicherkontingent der
+    # Einrichtung gescheitert). Drei reine Mengen-/Konfigurationsangaben ueber die
+    # Einrichtung als Ganzes — kein Bezug auf eine Person, kein Dateiname (der
+    # steht hier bewusst nicht einmal als Hash, siehe ``audit_attachment_quota_exceeded``).
+    "used_mb": "belegter Speicher der Einrichtung in MB — Mengenangabe (Refs #2129)",
+    "limit_mb": "geltendes Speicherkontingent der Einrichtung in MB — Konfiguration (Refs #2129)",
+    "requested_mb": "Groesse des abgewiesenen Uploads in MB (Refs #2129)",
     "source_ip": "IP-Adresse eines Breach-Detection-Treffers — Sicherheits-Forensik",
     # -- File-Vault-Rejects (``_reject`` in services/file_vault/policy.py) ---
     # Der Klartext-Dateiname wird von ``log_attachment_violation`` zentral in
@@ -271,8 +278,9 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "artifact_released": "Kennzeichen, dass ein Artefakt das Haus verlassen hat (Refs #1770)",
     "system": "Kennzeichen eines nicht request-getriebenen Vorgangs (Refs #1369)",
     "reason": (
-        "Grund eines Sicherheitsverstosses/Legal Holds und Ausloeser eines "
+        "Grund eines Sicherheitsverstosses/Legal Holds, Ausloeser eines "
         "Credential-Widerrufs (Refs #1965: password_change/password_reset/invite_setup) "
+        "und Grund einer Kontingent-Ablehnung (Refs #2129: quota_exceeded) "
         "— feste Slugs"
     ),
     # -- Bewusst zugelassener Freitext ------------------------------------
