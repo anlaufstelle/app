@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 21:25+0200\n"
+"POT-Creation-Date: 2026-09-07 21:58+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12492,3 +12492,9 @@ msgstr "Group activity"
 
 msgid "Versorgung (Bedarf)"
 msgstr "Supply (need)"
+
+msgid "Paket"
+msgstr "Package"
+
+msgid "Katalog für die Grundausstattung der neuen Einrichtung."
+msgstr "Catalog used for the new facility's initial setup."
