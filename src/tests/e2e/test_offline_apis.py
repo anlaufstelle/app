@@ -16,32 +16,13 @@ from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
+
 pytestmark = pytest.mark.e2e
 
 
 # ---------------------------------------------------------------------------
 # Helpers
-
-
-def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026"):
-    """Full login flow inkl. crypto_session-Handshake (keine storage_state).
-
-    storage_state würde den Browser mit gültigem Session-Cookie ausstatten,
-    aber den ``login.html``-fetch-Hook überspringen, der
-    ``crypto_session.deriveSessionKey`` auslöst. Ohne Session-Key scheitert
-    aber ``offlineStore.saveClientBundle`` an ``EncryptionKeyMissing``.
-    """
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill("#id_username", username)
-    page.fill("#id_password", password)
-    page.click("button[type=submit]")
-    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    # Warten bis der In-Memory-Key aus IndexedDB rehydriert wurde.
-    page.evaluate(
-        """async () => {
-            await window.crypto_session.ready();
-        }"""
-    )
 
 
 _UUID_RE = re.compile(r"/clients/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/")

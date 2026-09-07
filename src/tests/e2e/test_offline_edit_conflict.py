@@ -28,7 +28,9 @@ from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 from ._helpers import wait_until
 
 pytestmark = pytest.mark.e2e
@@ -105,16 +107,6 @@ def _server_client_event_notes(e2e_env, client_pk):
 # Browser-Helfer
 
 
-def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026"):
-    """Vollständiger Login inkl. crypto_session-Handshake (kein storage_state)."""
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill("#id_username", username)
-    page.fill("#id_password", password)
-    page.click("button[type=submit]")
-    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
-
-
 def _cache_bundle(page, client_pk):
     """Bundle holen + verschlüsselt in IndexedDB ablegen (wie der Mitnehmen-Button)."""
     return page.evaluate(
@@ -168,29 +160,6 @@ def _force_stale_csrf_meta(page):
             meta.setAttribute('content', 'stale-precached-token-DEADBEEF');
         }"""
     )
-
-
-def _wait_for_active_service_worker(page, base_url):
-    """SW registriert + aktiviert + kontrolliert die Page (sonst kann er
-    ``/clients/<pk>/`` offline nicht in-place ausliefern). Analog
-    ``test_pwa_offline._wait_for_active_service_worker``."""
-    page.evaluate(
-        """async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }"""
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
 
 
 def _go_offline(page):
@@ -546,7 +515,7 @@ class TestOfflineEditReplay:
         try:
             _do_real_login(page, base_url)
             assert _cache_bundle(page, client_pk)["ok"]
-            _wait_for_active_service_worker(page, base_url)
+            _wait_for_active_service_worker(page)
 
             # Offline → kanonische URL: der SW liefert die In-Place-Shell.
             _go_offline(page)
@@ -595,7 +564,7 @@ class TestOfflineEditReplay:
         try:
             _do_real_login(page, base_url)
             assert _cache_bundle(page, client_pk)["ok"]
-            _wait_for_active_service_worker(page, base_url)
+            _wait_for_active_service_worker(page)
 
             _go_offline(page)
             _open_inplace_shell(page, base_url, client_pk)

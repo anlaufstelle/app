@@ -23,6 +23,7 @@ from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
 
 pytestmark = pytest.mark.e2e
@@ -37,17 +38,6 @@ def _shell(e2e_env, script):
         check=True,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
-
-
-def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026"):
-    import re
-
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill("#id_username", username)
-    page.fill("#id_password", password)
-    page.click("button[type=submit]")
-    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
 
 
 def _workitem_count(e2e_env, title):

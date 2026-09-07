@@ -22,14 +22,15 @@ WICHTIG: E2E seriell ausführen (RAM-Limit der Container) — nicht parallelisie
 
 from __future__ import annotations
 
-import re
 import subprocess
 import uuid
 from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = pytest.mark.e2e
 
@@ -133,15 +134,6 @@ def _server_workitem_field(e2e_env, wi_pk, field):
 
 # ---------------------------------------------------------------------------
 # Browser-Helfer (Muster aus test_offline_edit_conflict.py)
-
-
-def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026"):
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill("#id_username", username)
-    page.fill("#id_password", password)
-    page.click("button[type=submit]")
-    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
 
 
 def _cache_bundle(page, client_pk):
@@ -358,31 +350,6 @@ def _server_dismiss_workitem(e2e_env, wi_pk):
         f" w = WorkItem.objects.get(pk='{wi_pk}'); w.status='dismissed'; w.save();"
         " print(w.updated_at.isoformat())",
     )[-1]
-
-
-def _wait_for_active_service_worker(page):
-    """SW registriert + aktiviert + kontrolliert die Seite (Kopie aus
-    test_pwa_offline.py — Fixtures/Helfer werden per Konvention dieses
-    Verzeichnisses dateilokal kopiert)."""
-    page.evaluate(
-        """
-        async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }
-        """
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=8000)
 
 
 def _poll_server_field(e2e_env, wi_pk, field, expected, timeout_s=20):

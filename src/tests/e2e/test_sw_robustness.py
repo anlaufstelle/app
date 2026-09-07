@@ -42,6 +42,8 @@ import uuid
 
 import pytest
 
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+
 pytestmark = pytest.mark.e2e
 
 
@@ -75,35 +77,6 @@ def _login_with_retry(browser, base_url, username="admin", password="anlaufstell
     raise last_exc
 
 
-def _wait_for_active_service_worker(page, base_url) -> None:
-    """Ensure a Service Worker is registered, activated and controls the page.
-
-    Analog ``test_pwa_offline._wait_for_active_service_worker`` /
-    ``test_offline_edit_conflict._wait_for_active_service_worker``: Erstes
-    ``page.goto`` registriert den SW; ein zweites ``goto``/``reload`` ist
-    noetig, damit der SW die Page tatsaechlich kontrolliert.
-    """
-    page.evaluate(
-        """
-        async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }
-        """
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
-
-
 def _make_stalling_route(invocations):
     """Playwright-Route-Handler, der den Request bewusst haengen laesst —
     simuliert Lie-Fi (die Verbindung "haengt", statt sauber zu scheitern).
@@ -131,7 +104,7 @@ def test_lie_fi_navigation_falls_back_before_hanging(browser, base_url):
     page, context = _login_with_retry(browser, base_url)
     target_re = re.compile(r"^" + re.escape(f"{base_url}/clients/") + r"$")
     try:
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         invocations: list[float] = []
         context.route(target_re, _make_stalling_route(invocations))
@@ -184,7 +157,7 @@ def test_update_activates_without_user_confirmation(browser, base_url):
     page, context = _login_with_retry(browser, base_url)
     probe = f"e2e-autoactivate-{uuid.uuid4().hex[:8]}"
     try:
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         # Marker verschwindet nur durch einen echten Reload (Muster:
         # TestOfflineRetryButton.test_retry_link_reloads_current_url).
@@ -234,11 +207,11 @@ def test_dirty_page_is_not_reloaded_on_update(browser, base_url):
     page, context = _login_with_retry(browser, base_url)
     probe = f"e2e-dirty-{uuid.uuid4().hex[:8]}"
     try:
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         page.goto(f"{base_url}/clients/new/")
         page.wait_for_load_state("domcontentloaded")
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         # Seite dirty machen: echte Nutzereingabe (loest input-Event aus).
         typed = f"E2E-Dirty-{uuid.uuid4().hex[:6]}"
@@ -377,7 +350,7 @@ def test_runtime_cache_trim_enforces_entry_budget(browser, base_url):
     """
     page, context = _login_with_retry(browser, base_url)
     try:
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         max_entries, cache_name = _read_sw_constants(page)
         runtime_name = cache_name + "-runtime"
         overflow = 12
@@ -450,12 +423,12 @@ def test_activate_evicts_orphaned_cache_generations(browser, base_url):
     page, context = _login_with_retry(browser, base_url)
     probe = f"e2e-hygiene-{uuid.uuid4().hex[:8]}"
     try:
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         # Dirty machen -> kein Auto-Reload (siehe Docstring).
         page.goto(f"{base_url}/clients/new/")
         page.wait_for_load_state("domcontentloaded")
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         page.fill("input[name='pseudonym']", f"E2E-Hygiene-{uuid.uuid4().hex[:6]}")
 
         _max_entries, cache_name = _read_sw_constants(page)
@@ -539,8 +512,8 @@ def test_queue_ack_handshake_survives_multiple_open_tabs(browser, base_url):
             "page2 hat keinen Session-Key uebernommen — Testannahme (IndexedDB-Sharing) verletzt."
         )
 
-        _wait_for_active_service_worker(page1, base_url)
-        _wait_for_active_service_worker(page2, base_url)
+        _wait_for_active_service_worker(page1)
+        _wait_for_active_service_worker(page2)
 
         context.set_offline(True)
         page1.evaluate("window.dispatchEvent(new Event('offline'))")

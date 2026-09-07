@@ -36,6 +36,9 @@ from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+
 pytestmark = pytest.mark.e2e
 
 
@@ -54,37 +57,6 @@ def _bootstrap(page, base_url):
             await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
         }"""
     )
-
-
-def _real_login(page, base_url, username="admin", password="anlaufstelle2026"):
-    """Echtes Login (kein storage_state) — crypto_session leitet den Schluessel
-    aus dem Passwort ab, sonst scheitert die verschluesselte Queue."""
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill('input[name="username"]', username)
-    page.fill('input[name="password"]', password)
-    page.click('button[type="submit"]')
-    page.wait_for_url(lambda url: "/login/" not in url, timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
-
-
-def _wait_for_active_service_worker(page):
-    page.evaluate(
-        """async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }"""
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
 
 
 def _purge(page):
@@ -214,7 +186,7 @@ class TestIdempotencyKeyBridge:
         page = context.new_page()
         page.set_default_timeout(30000)
         try:
-            _real_login(page, base_url)
+            _do_real_login(page, base_url, username="admin")
             page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
             _wait_for_active_service_worker(page)
             _purge(page)
@@ -436,7 +408,7 @@ class TestReplayMarker:
         page = context.new_page()
         page.set_default_timeout(30000)
         try:
-            _real_login(page, base_url)
+            _do_real_login(page, base_url, username="admin")
             page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
             _wait_for_active_service_worker(page)
             _purge(page)

@@ -29,6 +29,9 @@ from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+
 pytestmark = pytest.mark.e2e
 
 
@@ -42,40 +45,6 @@ EV_ANON_PK = "e2e2e2e2-0000-4000-8000-000000000002"
 
 # ---------------------------------------------------------------------------
 # Browser-Helfer (kopiert aus test_offline_client_list_journey.py — dateilokal).
-
-
-def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026"):
-    """Echter Login-POST — nur so leitet ``crypto_session`` den Session-Schluessel
-    ab und persistiert ihn in IndexedDB (Voraussetzung, um verschluesselte
-    Bundles zu schreiben und offline wieder zu entschluesseln)."""
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill('input[name="username"]', username)
-    page.fill('input[name="password"]', password)
-    page.click('button[type="submit"]')
-    page.wait_for_url(lambda url: "/login/" not in url, timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
-
-
-def _wait_for_active_service_worker(page):
-    page.evaluate(
-        """
-        async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }
-        """
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
 
 
 def _isolate_http_cache(page):

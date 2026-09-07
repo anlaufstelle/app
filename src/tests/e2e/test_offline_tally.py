@@ -18,40 +18,10 @@ import pytest
 from django.utils import timezone
 from playwright.sync_api import expect
 
+from ._helpers import do_real_login as _do_real_login
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+
 pytestmark = pytest.mark.e2e
-
-
-def _real_login(page, base_url):
-    """Echter Login statt Storage-State: nur so ist der Queue-Key vorhanden."""
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill("#id_username", "miriam")
-    page.fill("#id_password", "anlaufstelle2026")
-    page.click("button[type=submit]")
-    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
-
-
-def _wait_for_active_service_worker(page):
-    """Warten, bis der Service Worker die Seite wirklich kontrolliert."""
-    page.evaluate(
-        """
-        async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }
-        """
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
 
 
 def _tally_row(page, name):
@@ -146,7 +116,7 @@ class TestOfflineTallyReconciliation:
         page = context.new_page()
         page.set_default_timeout(30000)
         try:
-            _real_login(page, base_url)
+            _do_real_login(page, base_url)
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => !!(window.crypto_session && window.offlineStore && "
@@ -334,7 +304,7 @@ class TestOfflineTallyReconciliation:
         page = context.new_page()
         page.set_default_timeout(30000)
         try:
-            _real_login(page, base_url)
+            _do_real_login(page, base_url)
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => !!(window.crypto_session && window.offlineStore && "
@@ -479,7 +449,7 @@ class TestOfflineTallyReconciliation:
         page = context.new_page()
         page.set_default_timeout(30000)
         try:
-            _real_login(page, base_url)
+            _do_real_login(page, base_url)
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => !!(window.crypto_session && window.offlineStore && window.syncOrchestrator)",
@@ -569,7 +539,7 @@ class TestOfflineTallyReconciliation:
         page = context.new_page()
         page.set_default_timeout(30000)
         try:
-            _real_login(page, base_url)
+            _do_real_login(page, base_url)
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => !!(window.crypto_session && window.offlineStore && window.offlineTallyUi)",

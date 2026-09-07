@@ -8,6 +8,8 @@ import pytest
 
 from tests.e2e._selectors import find_first_client_link, open_desktop_overflow
 
+from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
 
@@ -113,35 +115,6 @@ def test_offline_banner_visible_when_offline(authenticated_page, base_url):
     assert not banner.is_visible()
 
 
-def _wait_for_active_service_worker(page, base_url) -> None:
-    """Ensure a Service Worker is registered, activated and controls the page.
-
-    Erstes ``page.goto`` registriert den SW; ein zweites ``goto`` (oder
-    ``reload``) ist noetig, damit der SW die Page tatsaechlich kontrolliert
-    (``navigator.serviceWorker.controller`` ist sonst ``null`` und Requests
-    laufen am SW vorbei).
-    """
-    page.evaluate(
-        """
-        async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return;
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw || sw.state === 'activated') return;
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve();
-                });
-                setTimeout(resolve, 5000);
-            });
-        }
-        """
-    )
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
-
-
 @pytest.mark.webkit_transport_artifact
 def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
     """Offline + URL-encoded POST an /workitems/new/ → SW queuet & liefert Feedback.
@@ -165,7 +138,7 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
     page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
     try:
         page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         # Offline gehen
         page.context.set_offline(True)
@@ -243,7 +216,7 @@ def test_offline_htmx_partial_get_shows_compact_banner(browser, base_url):
         page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
 
         page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         original_title = page.title()
 
         page.context.set_offline(True)
@@ -393,7 +366,7 @@ def test_offline_clients_shell_lists_cached_clients(browser, base_url):
         page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
 
         # SW muss die Seite kontrollieren, bevor wir offline gehen.
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         page.context.set_offline(True)
         page.evaluate("window.dispatchEvent(new Event('offline'))")
 
@@ -453,7 +426,7 @@ def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
         )
 
         # SW muss die Seite kontrollieren, bevor wir offline gehen.
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         page.context.set_offline(True)
         page.evaluate("window.dispatchEvent(new Event('offline'))")
 
@@ -603,7 +576,7 @@ def test_offline_client_detail_renders_in_place(browser, base_url):
         page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
 
         # SW muss die Seite kontrollieren, bevor wir offline gehen.
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         page.context.set_offline(True)
         # Kanonische Detail-URL erneut ansteuern — der SW serviert den Shell
@@ -705,7 +678,7 @@ def test_offline_conflict_list_renders_in_place(browser, base_url):
         event_pk = str(uuid.uuid4())
         _seed_dead_event(page, base_url, event_pk)
 
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         page.context.set_offline(True)
         page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
 
@@ -738,7 +711,7 @@ def test_offline_conflict_review_renders_in_place(browser, base_url):
     try:
         _login_miriam(page, base_url)
         page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
 
         event_pk = str(uuid.uuid4())
         page.context.set_offline(True)
@@ -766,7 +739,7 @@ def test_offline_discard_dead_event_updates_list(browser, base_url):
         event_pk = str(uuid.uuid4())
         _seed_dead_event(page, base_url, event_pk)
 
-        _wait_for_active_service_worker(page, base_url)
+        _wait_for_active_service_worker(page)
         page.context.set_offline(True)
         page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
 

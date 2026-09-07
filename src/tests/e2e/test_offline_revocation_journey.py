@@ -30,13 +30,13 @@ WICHTIG: E2E seriell ausfuehren (RAM-Limit der Container) — nicht parallelisie
 
 from __future__ import annotations
 
-import re
 import subprocess
 import uuid
 from contextlib import suppress
 
 import pytest
 
+from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
 
 pytestmark = pytest.mark.e2e
@@ -110,15 +110,6 @@ def _server_event_notes(e2e_env, client_pk):
 
 # ---------------------------------------------------------------------------
 # Browser-Helfer (Muster: test_offline_edit_conflict.py)
-
-
-def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026"):
-    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-    page.fill("#id_username", username)
-    page.fill("#id_password", password)
-    page.click("button[type=submit]")
-    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    page.evaluate("async () => { await window.crypto_session.ready(); }")
 
 
 def _cache_bundle(page, client_pk):
