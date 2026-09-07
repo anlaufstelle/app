@@ -100,7 +100,7 @@ from core.models import Facility, User
 from core.services.security.invite import build_invite_url
 from core.services.user_access import create_invited_user
 
-facility = Facility.objects.order_by("pk").first()
+facility = User.objects.get(username="admin").facility  # nicht first(): UUID-PK, Ordnung zufaellig (E2E-Harness)
 actor = User.objects.get(username="admin")
 result = create_invited_user(
     facility=facility,
@@ -158,7 +158,7 @@ def _create_user_with_initial_password(e2e_env, username):
     script = f"""
 from core.models import Facility, User
 
-facility = Facility.objects.order_by("pk").first()
+facility = User.objects.get(username="admin").facility  # nicht first(): UUID-PK, Ordnung zufaellig (E2E-Harness)
 user = User(
     facility=facility,
     username="{username}",

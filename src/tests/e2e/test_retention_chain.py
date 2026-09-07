@@ -100,7 +100,7 @@ from datetime import timedelta
 from django.utils import timezone
 from core.models import Client, DocumentType, Event, Facility, User
 
-facility = Facility.objects.order_by("pk").first()
+facility = User.objects.get(username="admin").facility  # nicht first(): UUID-PK, Ordnung zufaellig (E2E-Harness)
 settings_obj = facility.settings
 doc_type = DocumentType.objects.filter(facility=facility, entity_type="event").order_by("pk").first()
 actor = User.objects.get(username="admin")
