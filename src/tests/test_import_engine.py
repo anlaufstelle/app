@@ -1055,6 +1055,77 @@ class TestDatabaseErrorsBecomeRowErrors:
 
 
 @pytest.mark.django_db
+class TestUnexpectedImportErrors:
+    def test_classifier_uses_pii_safe_fallback_and_logs_exception(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(import_engine.logger, "exception", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+        classified = import_engine._classify_import_error(RuntimeError("interne Fremdursache"))
+
+        assert classified.code == "unexpected_error"
+        assert classified.column is None
+        assert classified.message == "Beim Import ist ein unerwarteter Fehler aufgetreten."
+        assert calls == [(("unexpected_import_error",), {})]
+
+    def test_runtime_error_is_a_row_error_and_later_rows_still_run(self, client_job, admin_user, monkeypatch, caplog):
+        real_execute = import_engine._execute_import_row
+        calls = 0
+
+        def _first_row_fails(job, user, values, columns):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("interne Fremdursache")
+            return real_execute(job, user, values, columns)
+
+        monkeypatch.setattr(import_engine, "_execute_import_row", _first_row_fails)
+
+        result = import_engine.run_import(client_job, admin_user, commit=False)
+
+        assert result["summary"] == {"rows": 3, "created": 2, "errors": 1, "committed": False}
+        assert result["errors"] == [
+            {
+                "row": 2,
+                "column": "",
+                "code": "unexpected_error",
+                "message": "Beim Import ist ein unerwarteter Fehler aufgetreten.",
+            }
+        ]
+        assert "interne Fremdursache" not in str(result)
+        assert [record.getMessage() for record in caplog.records if record.name == import_engine.logger.name] == [
+            "unexpected_import_error"
+        ]
+
+
+@pytest.mark.django_db
+class TestImportErrorLocationContract:
+    def test_every_row_error_reports_code_and_source_column(self, facility, admin_user, media_root):
+        job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload(
+                "Pseudonym;Kontaktstufe;Altersgruppe\nLOC-01;nicht-zulaessig;u18\nLOC-02;identified;nicht-zulaessig\n"
+            ),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.apply_mapping(
+            job,
+            {
+                "Pseudonym": "pseudonym",
+                "Kontaktstufe": "contact_stage",
+                "Altersgruppe": "age_cluster",
+            },
+        )
+
+        result = import_engine.run_import(job, admin_user, commit=False)
+
+        assert [(error["row"], error["code"], error["column"]) for error in result["errors"]] == [
+            (2, "invalid_option", "Kontaktstufe"),
+            (3, "invalid_option", "Altersgruppe"),
+        ]
+
+
+@pytest.mark.django_db
 class TestBrokenTransactionIsNotMaskedAsRowError:
     """Eine kaputte Transaktion ist Infrastruktur, kein Zeilenfehler (Refs #1793).
 
@@ -1327,6 +1398,15 @@ class TestPureHelpers:
 
     def test_sniffer_falls_back_to_semicolon(self):
         assert import_engine._sniff_delimiter("nur-eine-spalte\nwert\n") == ";"
+
+    def test_empty_cell_never_matches_option_without_label(self):
+        template = FieldTemplate(options_json=[{"slug": "ohne-label", "is_active": True}])
+
+        with pytest.raises(import_engine._CellError) as exc_info:
+            import_engine._coerce_option(template, "", "Auswahl")
+
+        assert exc_info.value.code == "invalid_option"
+        assert exc_info.value.column == "Auswahl"
 
     @pytest.mark.parametrize("text", ["", "\n", " ; ; \n"])
     def test_parse_csv_rejects_a_file_without_header(self, text):

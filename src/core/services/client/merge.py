@@ -99,6 +99,7 @@ from core.services.audit import audit_client_event, audit_event
 from core.services.client.main import get_pending_deletion_request, update_client_stage
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
+from core.services.targets import TARGET_CLIENT, target_q
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +130,8 @@ def get_pending_merge_request(client):
     """
     return (
         DeletionRequest.objects.filter(
+            target_q(TARGET_CLIENT, [client.pk]),
             facility_id=client.facility_id,
-            target_type=DeletionRequest.TargetType.CLIENT,
-            target_id=client.pk,
             status=DeletionRequest.Status.PENDING,
             merge_into__isnull=False,
         )

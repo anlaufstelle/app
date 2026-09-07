@@ -1,6 +1,7 @@
 """Service layer for client-related business logic."""
 
 import logging
+import uuid
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -27,6 +28,7 @@ from core.services.dynamic_data import clean_dynamic_data
 from core.services.events.history_diff import build_anonymization_marker
 from core.services.security import check_version_conflict
 from core.services.system import bypass_replication_triggers, current_connection_owns
+from core.services.targets import TARGET_EVENT, target_q
 
 logger = logging.getLogger(__name__)
 
@@ -468,10 +470,7 @@ def _redact_retention_proposals(event_ids: list) -> None:
 
     if not event_ids:
         return
-    proposals = RetentionProposal.objects.filter(
-        target_type=RetentionProposal.TargetType.EVENT,
-        target_id__in=event_ids,
-    )
+    proposals = RetentionProposal.objects.filter(target_q(TARGET_EVENT, event_ids))
     for proposal in proposals.iterator():
         details = proposal.details or {}
         if "pseudonym" not in details:
@@ -633,7 +632,7 @@ def _redact_merged_source_references(client) -> None:
             extra={"client_id": str(client.pk)},
         )
         return
-    moved_event_ids = row.detail.get("moved_events") or []
+    moved_event_ids = [uuid.UUID(str(value)) for value in (row.detail.get("moved_events") or [])]
     if not moved_event_ids:
         return
     merged_at = row.timestamp
@@ -648,21 +647,13 @@ def _redact_merged_source_references(client) -> None:
         target_id__in=moved_event_ids,
         created_at__lte=merged_at,
     ).update(context={"schema": 1, "action": Activity.Action.REDACTED.value})
-    DeletionRequest.objects.filter(
-        target_type=DeletionRequest.TargetType.EVENT,
-        target_id__in=moved_event_ids,
-        created_at__lte=merged_at,
-    ).update(reason="[Anonymisiert]")
-    LegalHold.objects.for_facility(client.facility).filter(
-        target_type="Event",
-        target_id__in=moved_event_ids,
-        created_at__lte=merged_at,
-    ).update(reason="[Anonymisiert]")
-    proposals = RetentionProposal.objects.filter(
-        target_type=RetentionProposal.TargetType.EVENT,
-        target_id__in=moved_event_ids,
-        proposed_at__lte=merged_at,
+    DeletionRequest.objects.filter(target_q(TARGET_EVENT, moved_event_ids), created_at__lte=merged_at).update(
+        reason="[Anonymisiert]"
     )
+    LegalHold.objects.for_facility(client.facility).filter(
+        target_q(TARGET_EVENT, moved_event_ids), created_at__lte=merged_at
+    ).update(reason="[Anonymisiert]")
+    proposals = RetentionProposal.objects.filter(target_q(TARGET_EVENT, moved_event_ids), proposed_at__lte=merged_at)
     for proposal in proposals.iterator():
         details = proposal.details or {}
         if "pseudonym" not in details:

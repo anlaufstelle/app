@@ -232,6 +232,11 @@ class TestTallyEligibilityPolicy:
 
 @pytest.mark.django_db
 class TestTallyPolicyConsumers:
+    def test_tally_document_types_uses_pk_as_name_tiebreak(self, facility, staff_user):
+        queryset = tally_document_types(facility, staff_user)
+
+        assert queryset.query.order_by == ("name", "pk")
+
     def test_tally_document_types_keeps_filterable_queryset_contract_and_annotation(
         self,
         facility,

@@ -17,6 +17,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Case, Client, DeletionRequest, Event, User
 from core.services.audit import audit_event
+from core.services.targets import TARGET_CASE, TARGET_CLIENT, TARGET_EVENT
 
 #: Meldung des Rennens „inzwischen entschieden" — die View macht daraus eine
 #: ``messages.error``-Zeile, statt sie als 404 zu verschlucken.
@@ -157,12 +158,12 @@ def annotate_deletion_targets(requests, facility, user) -> None:
     if not requests:
         return
 
-    client_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CLIENT]
+    client_ids = [r.target_id for r in requests if r.target_type == TARGET_CLIENT]
     # Merge-Antraege (Refs #1876): das Ziel der Zusammenfuehrung haengt an
     # derselben Bulk-Query — die Liste soll zeigen, WOHIN aufgeloest wuerde.
     client_ids += [r.merge_into_id for r in requests if r.merge_into_id is not None]
-    event_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.EVENT]
-    case_ids = [r.target_id for r in requests if r.target_type == DeletionRequest.TargetType.CASE]
+    event_ids = [r.target_id for r in requests if r.target_type == TARGET_EVENT]
+    case_ids = [r.target_id for r in requests if r.target_type == TARGET_CASE]
 
     clients = {c.pk: c for c in Client.objects.for_facility(facility).filter(pk__in=client_ids)} if client_ids else {}
     # Fail-closed: ohne Fall-Sichtbarkeit bleibt die Menge leer, der Zweig
@@ -198,7 +199,7 @@ def annotate_deletion_targets(requests, facility, user) -> None:
                 dr.merge_target_url = (
                     "" if merge_target.is_deleted else reverse("core:client_detail", args=[merge_target.pk])
                 )
-        if dr.target_type == DeletionRequest.TargetType.CLIENT:
+        if dr.target_type == TARGET_CLIENT:
             target = clients.get(dr.target_id)
             if target is None:
                 dr.target_label = _("Person (nicht mehr auffindbar)")
@@ -208,7 +209,7 @@ def annotate_deletion_targets(requests, facility, user) -> None:
             dr.target_url = "" if target.is_deleted else reverse("core:client_detail", args=[target.pk])
             continue
 
-        if dr.target_type == DeletionRequest.TargetType.CASE:
+        if dr.target_type == TARGET_CASE:
             target = cases.get(dr.target_id)
             if target is None:
                 # Unsichtbar (Rollen-Gate) oder nicht mehr vorhanden — beides

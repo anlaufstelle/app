@@ -123,6 +123,7 @@ ERROR_MESSAGES: dict[str, Any] = {
     "validation": _("Die fachliche Prüfung hat die Zeile abgelehnt."),
     "permission": _("Ihre Rolle darf diese Dokumentation nicht anlegen."),
     "invalid_value": _("Der Zeileninhalt ist für dieses Ziel nicht verwendbar."),
+    "unexpected_error": _("Beim Import ist ein unerwarteter Fehler aufgetreten."),
 }
 
 _GENERIC_MESSAGE = _("Die Zeile konnte nicht übernommen werden.")
@@ -650,11 +651,14 @@ def _coerce_boolean(raw: str, column: str | None) -> bool:
 
 def _coerce_option(template: FieldTemplate, raw: str, column: str | None) -> str:
     """Slug oder Label einer aktiven Option → Slug (das Wire-Format von ``data_json``)."""
+    if raw == "":
+        raise _CellError("invalid_option", column)
     options = [option for option in (template.options_json or []) if isinstance(option, dict)]
     for option in options:
         if not option.get("is_active", True):
             continue
-        if raw == option.get("slug") or raw.casefold() == str(option.get("label", "")).casefold():
+        label = option.get("label")
+        if raw == option.get("slug") or (label and raw.casefold() == str(label).casefold()):
             return option["slug"]
     raise _CellError("invalid_option", column)
 
@@ -881,7 +885,8 @@ def _classify_import_error(exc: Exception) -> _ClassifiedImportError:
     for exception_type, classifier in _IMPORT_ERROR_CLASSIFIERS:
         if isinstance(exc, exception_type):
             return classifier(exc)
-    raise TypeError("Nicht klassifizierbarer Importfehler")
+    logger.exception("unexpected_import_error")
+    return _ClassifiedImportError(None, "unexpected_error", str(ERROR_MESSAGES["unexpected_error"]))
 
 
 def _mapped_columns(job: ImportJob) -> dict[str, str]:
@@ -928,7 +933,7 @@ def run_import(job: ImportJob, user, *, commit: bool = False) -> dict:
             values, columns = _row_values(header, row, columns_map)
             try:
                 _execute_import_row(job, user, values, columns)
-            except (_CellError, IntegrityError, DatabaseError, ValidationError, PermissionDenied, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001 - Zeilen-Savepoint isoliert Fremdfehler; Klassifizierer loggt sie.
                 classified = _classify_import_error(exc)
                 errors.append(
                     _error_entry(

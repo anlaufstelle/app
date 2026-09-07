@@ -356,7 +356,7 @@ def tally_document_types(facility, user):
         DocumentType.objects.for_facility(facility)
         .annotate(requires_number_input=Exists(required_fields))
         .filter(pk__in=eligible_ids)
-        .order_by("name")
+        .order_by("name", "pk")
     )
 
 
