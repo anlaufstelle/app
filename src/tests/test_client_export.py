@@ -38,44 +38,45 @@ from core.services.client.export import ATTACHMENT_FIELD_PLACEHOLDER
 
 
 @pytest.fixture
-def facility(db):
-    org = Organization.objects.create(name="ClientExport-Org")
-    facility = Facility.objects.create(organization=org, name="ClientExport-Einrichtung")
+def facility(facility):
+    """Root-conftest-Einrichtung plus die hier assertierten Settings (Refs #1839).
+
+    ``facility_full_name`` steht in den Erwartungen dieser Datei (Z. 580, 613,
+    614) und bleibt deshalb lokal; Organisation und Einrichtung kommen aus
+    ``tests/conftest.py``.
+    """
     Settings.objects.create(facility=facility, facility_full_name="Anlaufstelle Teststadt")
     return facility
 
 
 @pytest.fixture
-def admin_user(facility):
-    return User.objects.create_user(
-        username="ce_admin",
-        password="test1234",
-        role=User.Role.FACILITY_ADMIN,
-        facility=facility,
-        is_staff=True,
-    )
+def admin_user(admin_user):
+    """conftest-``admin_user`` mit dem hier erwarteten Namen (Refs #1839).
+
+    Der Username erscheint in dieser Datei sowohl als erwarteter Akteur
+    ("created_by"/"deleted_by"/"reviewed_by") als auch in Negativ-Assertionen
+    gegen PII-Leaks — Rolle, ``facility`` und ``is_staff`` kommen unveraendert
+    aus der Root-conftest.
+    """
+    admin_user.username = "ce_admin"
+    admin_user.save(update_fields=["username"])
+    return admin_user
 
 
 @pytest.fixture
-def lead_user(facility):
-    return User.objects.create_user(
-        username="ce_lead",
-        password="test1234",
-        role=User.Role.LEAD,
-        facility=facility,
-        is_staff=True,
-    )
+def lead_user(lead_user):
+    """conftest-``lead_user`` mit dem hier erwarteten Namen (Refs #1839)."""
+    lead_user.username = "ce_lead"
+    lead_user.save(update_fields=["username"])
+    return lead_user
 
 
 @pytest.fixture
-def staff_user(facility):
-    return User.objects.create_user(
-        username="ce_staff",
-        password="test1234",
-        role=User.Role.STAFF,
-        facility=facility,
-        is_staff=True,
-    )
+def staff_user(staff_user):
+    """conftest-``staff_user`` mit dem hier erwarteten Namen (Refs #1839)."""
+    staff_user.username = "ce_staff"
+    staff_user.save(update_fields=["username"])
+    return staff_user
 
 
 @pytest.fixture
