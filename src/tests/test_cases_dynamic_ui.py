@@ -54,9 +54,19 @@ from core.models.attachment import Attachment
 from core.services.client import _gather_cases, export_client_data
 from core.services.file_vault import is_encrypted_value, safe_decrypt
 from tests._entity_expectations import ENTITY_PARAMS, EntitySpec
-from tests.test_clients_dynamic_ui import doc_type_client_high, doc_type_client_mixed
+from tests.test_clients_dynamic_ui import (
+    doc_type_client_conditional,
+    doc_type_client_file_condition,
+    doc_type_client_high,
+    doc_type_client_mixed,
+)
 
-_IMPORTED_CLIENT_FIXTURES = (doc_type_client_high, doc_type_client_mixed)
+_IMPORTED_CLIENT_FIXTURES = (
+    doc_type_client_conditional,
+    doc_type_client_file_condition,
+    doc_type_client_high,
+    doc_type_client_mixed,
+)
 
 
 def raw_data_json(case_obj) -> dict:
@@ -1133,95 +1143,95 @@ class TestEntityInvisibleDocumentTypeLock:
 
 
 @pytest.mark.django_db
-class TestCaseFieldsPartial:
-    def test_staff_gets_fields(self, client, staff_user, doc_type_case_form):
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityFieldsPartial:
+    def test_staff_gets_fields(self, client, staff_user, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "form")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert "Anlass" in content
-        assert "Verlauf" in content
+        assert entity.label("primary") in content
+        assert entity.label("secondary") in content
 
-    def test_assistant_is_denied(self, client, assistant_user, doc_type_case_form):
+    def test_assistant_is_denied(self, client, assistant_user, request, entity: EntitySpec):
+        doc_type = entity.doctype(request, "form")
         client.force_login(assistant_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code in (403, 302)
         if response.status_code == 302:
             assert "/login" in response["Location"]
 
-    def test_without_param_renders_empty(self, client, staff_user):
+    def test_without_param_renders_empty(self, client, staff_user, entity: EntitySpec):
         client.force_login(staff_user)
-        response = client.get(reverse("core:case_fields_partial"))
+        response = client.get(reverse(entity.url("fields_partial")))
         assert response.status_code == 200
 
-    def test_restricted_sensitivity_blocked(self, client, staff_user, doc_type_case_high):
+    def test_restricted_sensitivity_blocked(self, client, staff_user, request, entity: EntitySpec):
         """E-9: Sensitivity-Gate antwortet 403 (Event-/Personen-Muster), nicht 404."""
+        doc_type = entity.doctype(request, "high")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_high.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code == 403
 
-    def test_foreign_facility_type_is_404(self, client, staff_user, foreign_doc_type_case):
+    def test_foreign_facility_type_is_404(self, client, staff_user, request, entity: EntitySpec):
+        doc_type = entity.fixture(request, "foreign_doctype")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(foreign_doc_type_case.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code == 404
 
-    def test_client_type_is_404(self, client, staff_user, doc_type_client_profile):
+    def test_event_type_is_404(self, client, staff_user, request, entity: EntitySpec):
+        doc_type = request.getfixturevalue("doc_type_contact")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_client_profile.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code == 404
 
-    def test_event_type_is_404(self, client, staff_user, doc_type_contact):
+    def test_inactive_type_is_404(self, client, staff_user, request, entity: EntitySpec):
+        """Ohne Objekt-Parameter bleibt das Verhalten unveraendert (Fall d)."""
+        doc_type = entity.doctype(request, "form")
+        doc_type.is_active = False
+        doc_type.save(update_fields=["is_active"])
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_contact.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code == 404
 
-    def test_inactive_type_is_404(self, client, staff_user, doc_type_case_form):
-        """Ohne ``case``-Parameter bleibt das Verhalten unveraendert (Fall d)."""
-        doc_type_case_form.is_active = False
-        doc_type_case_form.save(update_fields=["is_active"])
+    def test_malformed_pk_is_404(self, client, staff_user, entity: EntitySpec):
         client.force_login(staff_user)
-        response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_form.pk)},
-        )
+        response = client.get(reverse(entity.url("fields_partial")), {"document_type": "keine-uuid"})
         assert response.status_code == 404
 
-    def test_malformed_pk_is_404(self, client, staff_user):
-        client.force_login(staff_user)
-        response = client.get(reverse("core:case_fields_partial"), {"document_type": "keine-uuid"})
-        assert response.status_code == 404
-
-    def test_conditions_payload_lands_in_html(self, client, staff_user, doc_type_case_conditional):
-        """M1-Bedingungen greifen auf der Fall-Seite ohne Zusatzarbeit."""
+    def test_conditions_payload_lands_in_html(self, client, staff_user, request, entity: EntitySpec):
+        """M1-Bedingungen greifen auf beiden Entity-Seiten ohne Zusatzarbeit."""
+        doc_type = entity.doctype(request, "conditional")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_conditional.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         content = response.content.decode()
         assert 'id="field-conditions"' in content
-        assert "betreuungsdetails" in content
+        assert entity.field("conditional_target") in content
         assert "is_not_empty" in content
 
-    def test_file_source_condition_is_active(self, client, staff_user, facility, doc_type_case_file_condition):
+    def test_file_source_condition_is_active(self, client, staff_user, facility, request, entity: EntitySpec):
         """Anforderungsaenderung M24/AP4 (Refs #1738, ADR-039 §9).
 
         **Vorher (E8):** die Bedingungs-Quelle war ein per
@@ -1233,29 +1243,45 @@ class TestCaseFieldsPartial:
         im Feldset, die Bedingung wird ausgeliefert, die Pflicht des Ziels
         greift nur bei gefuellter Quelle (Spiegel aus dem Personen-Pfad).
         """
+        doc_type = entity.doctype(request, "file_condition")
+        source_field = entity.field("file_source")
+        target_field = entity.field("file_target")
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:case_fields_partial"),
-            {"document_type": str(doc_type_case_file_condition.pk)},
+            reverse(entity.url("fields_partial")),
+            {"document_type": str(doc_type.pk)},
         )
         assert response.status_code == 200
         content = response.content.decode()
-        assert 'name="kostenbescheid"' in content
+        assert f'name="{source_field}"' in content
         assert 'id="field-conditions"' in content
-        assert 'name="bescheid-erlaeuterung"' in content
+        assert f'name="{target_field}"' in content
 
         form = response.context["data_form"]
-        assert "kostenbescheid" in form.fields
-        assert form.fields["bescheid-erlaeuterung"].required is False
-        assert form.condition_target_slugs == {"bescheid-erlaeuterung"}
+        assert source_field in form.fields
+        assert form.fields[target_field].required is False
+        assert form.condition_target_slugs == {target_field}
         # ``facility`` ist Pflicht: ``DynamicDataForm.clean()`` steigt ohne sie
         # frueh aus und liesse die konditionale Pflichtpruefung aus.
         bound = form.__class__(
-            {"bescheid-erlaeuterung": ""},
-            document_type=doc_type_case_file_condition,
+            {target_field: ""},
+            document_type=doc_type,
             facility=facility,
         )
         assert bound.is_valid(), bound.errors
+
+
+@pytest.mark.django_db
+class TestCaseFieldsPartial:
+    """Entity-eigener Scope-Guard ohne Client-Gegenstück."""
+
+    def test_client_type_is_404(self, client, staff_user, doc_type_client_profile):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:case_fields_partial"),
+            {"document_type": str(doc_type_client_profile.pk)},
+        )
+        assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------
