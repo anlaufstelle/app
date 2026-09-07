@@ -27,7 +27,7 @@ from django.test import RequestFactory
 
 from core.admin import UserAdmin
 from core.admin_site import anlaufstelle_admin_site
-from core.models import Facility, User
+from core.models import User
 
 pytestmark = pytest.mark.django_db
 
@@ -35,11 +35,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def rf():
     return RequestFactory()
-
-
-@pytest.fixture
-def other_facility(organization):
-    return Facility.objects.create(organization=organization, name="Andere Stelle")
 
 
 def _request(rf, user, method="get"):

@@ -14,7 +14,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
 
 from core.admin_site import anlaufstelle_admin_site
-from core.models import Client, Facility
+from core.models import Client
 
 
 @pytest.fixture
@@ -57,10 +57,6 @@ class TestHasRolePermission:
 
 @pytest.mark.django_db
 class TestScopeToFacility:
-    @pytest.fixture
-    def other_facility(self, organization):
-        return Facility.objects.create(organization=organization, name="Andere Stelle")
-
     @pytest.fixture
     def own_client(self, facility, staff_user):
         return Client.objects.create(

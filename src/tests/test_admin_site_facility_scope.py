@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.models import Client, Facility
-
-
-@pytest.fixture
-def other_facility(organization):
-    return Facility.objects.create(organization=organization, name="Andere Stelle")
+from core.models import Client
 
 
 @pytest.fixture

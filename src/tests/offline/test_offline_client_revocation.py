@@ -28,17 +28,12 @@ from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, Client, Facility, OfflineClientRevocation, Settings
+from core.models import AuditLog, Client, OfflineClientRevocation, Settings
 from core.services.system import (
     OFFLINE_REVOCATION_RETENTION_SECONDS,
     prune_offline_client_revocations,
     revoke_offline_client_bundles,
 )
-
-
-@pytest.fixture
-def other_facility(organization):
-    return Facility.objects.create(organization=organization, name="Fremdstelle")
 
 
 def _revoked_pks(facility):
