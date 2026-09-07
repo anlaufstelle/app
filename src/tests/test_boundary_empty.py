@@ -14,100 +14,59 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
-
-@pytest.mark.django_db
-class TestEmptyDashboards:
-    """Listen-/Dashboard-Views ohne Daten → 200 + Empty-State."""
-
-    def test_zeitstrom_empty_renders_200(self, client, staff_user):
-        """Aktivitäts-/Zeitstrom-Feed ohne Events → 200."""
-        client.force_login(staff_user)
-        resp = client.get(reverse("core:zeitstrom"))
-        assert resp.status_code == 200
-
-    def test_client_list_empty_shows_empty_state(self, client, staff_user):
-        """Klientel-Liste ohne Personen → 200 + ``Keine Personen``-Hinweis."""
-        client.force_login(staff_user)
-        resp = client.get(reverse("core:client_list"))
-        assert resp.status_code == 200
-        content = resp.content.decode("utf-8")
-        assert "Keine Personen" in content, "Erwartet 'Keine Personen' im Empty-State, im Content nicht gefunden."
-
-    def test_case_list_empty_renders_200(self, client, staff_user):
-        """Fall-Liste ohne Fälle → 200."""
-        client.force_login(staff_user)
-        resp = client.get(reverse("core:case_list"))
-        assert resp.status_code == 200
-
-    def test_attachment_list_empty_renders_200(self, client, staff_user):
-        """Zentrale Anhang-Übersicht ohne Attachments → 200."""
-        client.force_login(staff_user)
-        resp = client.get(reverse("core:attachment_list"))
-        assert resp.status_code == 200
+_EMPTY_VIEW_CASES = (
+    ("core:zeitstrom", "staff_user", {}, None),
+    ("core:client_list", "staff_user", {}, "Keine Personen"),
+    ("core:case_list", "staff_user", {}, None),
+    ("core:attachment_list", "staff_user", {}, None),
+    ("core:statistics", "lead_user", {}, None),
+    ("core:statistics", "lead_user", {"period": "quarter"}, "Keine Daten"),
+    ("core:audit_log", "admin_user", {"action": "XXXX_NONEXISTENT_ACTION"}, "Keine Einträge"),
+    ("core:search", "staff_user", {}, None),
+    ("core:search", "staff_user", {"q": "ZZZ-NICHT-VORHANDEN-9999"}, "Keine Ergebnisse"),
+    ("core:retention_dashboard", "lead_user", {}, None),
+    ("core:deletion_request_list", "admin_user", {}, None),
+)
 
 
 @pytest.mark.django_db
-class TestEmptyStatistics:
-    """Statistik-View ohne Snapshot-Daten → 200 + ``Keine Daten``-Hinweis."""
-
-    def test_statistics_empty_renders_200(self, client, lead_user):
-        client.force_login(lead_user)
-        resp = client.get(reverse("core:statistics"))
-        assert resp.status_code == 200
-
-    def test_statistics_empty_period_shows_keine_daten(self, client, lead_user):
-        """Quartal-Filter auf leere DB → ``Keine Daten im gewählten Zeitraum``."""
-        client.force_login(lead_user)
-        resp = client.get(reverse("core:statistics"), {"period": "quarter"})
-        assert resp.status_code == 200
+@pytest.mark.parametrize(
+    ("url_name", "actor_fixture", "query_params", "expected_text"),
+    _EMPTY_VIEW_CASES,
+    ids=(
+        "zeitstrom-empty",
+        "client-list-empty-state",
+        "case-list-empty",
+        "attachment-list-empty",
+        "statistics-empty",
+        "statistics-quarter-empty-state",
+        "audit-log-no-match",
+        "search-without-query",
+        "search-no-match",
+        "retention-dashboard-empty",
+        "deletion-request-list-empty",
+    ),
+)
+def test_empty_view_renders(client, request, url_name, actor_fixture, query_params, expected_text):
+    """Leere Listen und Dashboards rendern HTTP 200 und ihren Empty-State."""
+    actor = request.getfixturevalue(actor_fixture)
+    client.force_login(actor)
+    resp = client.get(reverse(url_name), query_params)
+    assert resp.status_code == 200
+    if expected_text is not None:
         content = resp.content.decode("utf-8")
-        assert "Keine Daten" in content, "Erwartet 'Keine Daten'-Hinweis im Statistik-Template bei leerer DB."
-
-
-@pytest.mark.django_db
-class TestEmptyAuditLog:
-    """Audit-Liste ohne passende Einträge → 200.
-
-    Der Test-Login schreibt selbst Audit-Einträge (Login-Event). Wir filtern
-    daher gezielt auf eine Action, die garantiert keine Einträge hat, um
-    den Empty-State des Templates zu erreichen.
-    """
-
-    def test_audit_log_filter_no_match_renders_200(self, client, admin_user):
-        client.force_login(admin_user)
-        # Filter auf nicht-existente Aktion → leere Treffer-Tabelle.
-        resp = client.get(reverse("core:audit_log"), {"action": "XXXX_NONEXISTENT_ACTION"})
-        assert resp.status_code == 200
-        content = resp.content.decode("utf-8")
-        assert "Keine Einträge" in content, "Erwartet 'Keine Einträge'-Empty-State bei leerem Filter."
-
-
-@pytest.mark.django_db
-class TestEmptySearch:
-    """Search-View ohne Query und ohne Treffer → 200."""
-
-    def test_search_without_query_renders_200(self, client, staff_user):
-        client.force_login(staff_user)
-        resp = client.get(reverse("core:search"))
-        assert resp.status_code == 200
-
-    def test_search_no_match_shows_empty_message(self, client, staff_user):
-        """Query, die nichts matcht → 200 + ``Keine Ergebnisse``-Hinweis."""
-        client.force_login(staff_user)
-        resp = client.get(reverse("core:search"), {"q": "ZZZ-NICHT-VORHANDEN-9999"})
-        assert resp.status_code == 200
-        content = resp.content.decode("utf-8")
-        assert "Keine Ergebnisse" in content, "Erwartet 'Keine Ergebnisse'-Hinweis bei nicht-matchender Search-Query."
+        messages = {
+            "Keine Personen": "Erwartet 'Keine Personen' im Empty-State, im Content nicht gefunden.",
+            "Keine Daten": "Erwartet 'Keine Daten'-Hinweis im Statistik-Template bei leerer DB.",
+            "Keine Einträge": "Erwartet 'Keine Einträge'-Empty-State bei leerem Filter.",
+            "Keine Ergebnisse": "Erwartet 'Keine Ergebnisse'-Hinweis bei nicht-matchender Search-Query.",
+        }
+        assert expected_text in content, messages[expected_text]
 
 
 @pytest.mark.django_db
 class TestEmptyRetentionDashboard:
     """Aufbewahrungs-Dashboard ohne Vorschläge → 200 + Empty-Hinweis."""
-
-    def test_retention_dashboard_empty_renders_200(self, client, lead_user):
-        client.force_login(lead_user)
-        resp = client.get(reverse("core:retention_dashboard"))
-        assert resp.status_code == 200
 
     def test_retention_dashboard_shows_keine_loeschvorschlaege(self, client, lead_user):
         client.force_login(lead_user)
@@ -116,13 +75,3 @@ class TestEmptyRetentionDashboard:
         assert "Keine Löschvorschläge" in content, (
             "Erwartet 'Keine Löschvorschläge'-Hinweis im leeren Retention-Dashboard."
         )
-
-
-@pytest.mark.django_db
-class TestEmptyDeletionRequestList:
-    """Lösch-Antrags-Liste ohne Anträge → 200."""
-
-    def test_deletion_request_list_empty_renders_200(self, client, admin_user):
-        client.force_login(admin_user)
-        resp = client.get(reverse("core:deletion_request_list"))
-        assert resp.status_code == 200
