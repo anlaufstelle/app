@@ -164,6 +164,9 @@ CASE = EntitySpec(
     values=(
         ("primary", "Mietschulden"),
         ("secondary", "Sehr sensibel"),
+        ("confirm_primary", "A"),
+        ("confirm_secondary", "B"),
+        ("high_secret", "geheim"),
         ("select", "ambulant"),
         ("select_label", "Ambulant"),
     ),
@@ -224,6 +227,9 @@ CLIENT = EntitySpec(
     values=(
         ("primary", "WG"),
         ("secondary", "Sehr sensibel"),
+        ("confirm_primary", "WG"),
+        ("confirm_secondary", "Text"),
+        ("high_secret", "geheim"),
         ("select", "wohnungslos"),
         ("select_label", "Wohnungslos"),
     ),

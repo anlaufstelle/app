@@ -292,50 +292,62 @@ class TestEntityTypePicker:
 
 
 @pytest.mark.django_db
-class TestCaseTypeChangeConfirm:
-    """Spiegel von ``TestClientTypeChangeConfirm`` — derselbe E11-Rebuild trifft
-    Fälle genauso (``merge_dynamic_data``)."""
+@pytest.mark.parametrize("entity", ENTITY_PARAMS)
+class TestEntityTypeChangeConfirm:
+    """Typwechsel warnt bei beiden Entitäten vor dynamischem Datenverlust."""
 
-    def _target(self, facility, client_obj, staff_user, doc_type, data_json):
-        return Case.objects.create(
+    def _target(self, request, entity: EntitySpec, facility, staff_user, doc_type, data_json):
+        return entity.model.objects.create(
             facility=facility,
-            client=client_obj,
-            title="P8-Confirm",
             created_by=staff_user,
             document_type=doc_type,
             data_json=data_json,
+            **entity.identity_kwargs(request, "Confirm"),
         )
 
     def test_edit_with_values_carries_confirm_attributes_and_count(
-        self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
+        doc_type = entity.doctype(request, "form")
+        data_json = {
+            entity.field("primary"): entity.value("confirm_primary"),
+            entity.field("secondary"): entity.value("confirm_secondary"),
+        }
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = self._target(
-                facility, client_identified, staff_user, doc_type_case_form, {"anlass": "A", "verlauf": "B"}
-            )
+            target = self._target(request, entity, facility, staff_user, doc_type, data_json)
             client.force_login(staff_user)
-            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+            content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert 'x-data="confirmDynamicDataLoss"' in content
+        assert 'data-confirm-discard="' in content
         confirm = re.search(r'data-confirm-discard="([^"]*)"', content).group(1)
         assert "2" in confirm
         assert "entfernen" in confirm.lower()
 
     def test_edit_without_values_has_no_confirm_and_no_warning(
-        self, client, staff_user, facility, client_identified, doc_type_case_form
+        self, client, staff_user, facility, request, entity: EntitySpec
     ):
-        target = self._target(facility, client_identified, staff_user, doc_type_case_form, {})
+        doc_type = entity.doctype(request, "form")
+        target = self._target(request, entity, facility, staff_user, doc_type, {})
         client.force_login(staff_user)
-        content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+        content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert "data-confirm-discard" not in content
         assert "doc-type-switch-hint" not in content
 
     def test_edit_with_values_shows_alert_styled_warning(
-        self, client, staff_user, facility, client_identified, doc_type_case_form, fernet_key
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
+        doc_type = entity.doctype(request, "form")
         with override_settings(ENCRYPTION_KEY=fernet_key):
-            target = self._target(facility, client_identified, staff_user, doc_type_case_form, {"anlass": "A"})
+            target = self._target(
+                request,
+                entity,
+                facility,
+                staff_user,
+                doc_type,
+                {entity.field("primary"): entity.value("confirm_primary")},
+            )
             client.force_login(staff_user)
-            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+            content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         hint = re.search(r'<[^>]*data-testid="doc-type-switch-hint"[^>]*>(.*?)</div>', content, re.S)
         assert hint is not None, "Hinweis fehlt im Bearbeiten-Formular mit Werten"
         assert 'role="alert"' in hint.group(0)
@@ -343,14 +355,20 @@ class TestCaseTypeChangeConfirm:
         assert "entfern" in hint.group(1).lower()
 
     def test_locked_invisible_type_gets_no_confirm(
-        self, client, staff_user, facility, client_identified, doc_type_case_high, fernet_key
+        self, client, staff_user, facility, fernet_key, request, entity: EntitySpec
     ):
+        doc_type = entity.doctype(request, "high")
         with override_settings(ENCRYPTION_KEY=fernet_key):
             target = self._target(
-                facility, client_identified, staff_user, doc_type_case_high, {"gefahrenlage": "geheim"}
+                request,
+                entity,
+                facility,
+                staff_user,
+                doc_type,
+                {entity.field("high"): entity.value("high_secret")},
             )
             client.force_login(staff_user)
-            content = client.get(reverse("core:case_update", args=[target.pk])).content.decode()
+            content = client.get(reverse(entity.url("update"), args=[target.pk])).content.decode()
         assert "data-confirm-discard" not in content
 
 
