@@ -443,6 +443,11 @@ class TestBackendMetadaten:
             "accompaniment": "Vermittlung",
             "counseling": "Beratung",
             "referral": "Vermittlung",
+            # Refs #2135: die vier Domaenen-Schluessel der Paket-Klammer #2133.
+            "incident": "Vorfälle",
+            "protection": "Schutz",
+            "group_activity": "Gruppenangebote",
+            "supply": "Versorgung",
         }
         # Notiz und Hausverbot sind bewusst nicht zugeordnet.
         assert "note" not in CATEGORY_MAP

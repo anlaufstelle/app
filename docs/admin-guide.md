@@ -628,8 +628,14 @@ Die Auswahl kommt aus den Berichten selbst: Was ein Bericht auswertet, deklarier
 | **Spritzentausch** | Versorgung |
 | **Begleitung** | Vermittlung |
 | **Vermittlung** | Vermittlung |
+| **Gewaltvorfall** | Vorfälle |
+| **Schutzmaßnahme** | Schutz |
+| **Gruppenangebot** | Gruppenangebote |
+| **Versorgung (Bedarf)** | Versorgung |
 | **Gehört ausdrücklich in keinen Bericht** | *(ausgeschlossen — und **kein** Mangel)* |
 | *(leer)* | *(erscheint in keinem Bericht — und wird als Lücke gemeldet)* |
+
+> **Ergänzt 2026-09-07 (#2135):** Die letzten vier Schlüssel — **Gewaltvorfall**, **Schutzmaßnahme**, **Gruppenangebot** und **Versorgung (Bedarf)** — stammen aus den mitgelieferten Domänen-Paketen für Awareness-Arbeit, Frauenhaus und Jugendarbeit ([Paket-Übersicht #2133](https://github.com/anlaufstelle/app/issues/2133)). Sie stehen **jeder** Einrichtung zur Wahl, unabhängig davon, welches Paket geladen ist: Der Werteraum kommt aus dem Bericht, nicht aus dem Katalog. Drei davon bringen eine neue Zeile in den Beispiel-Sachbericht mit; **Versorgung (Bedarf)** zählt bewusst in die bestehende Zeile „Versorgung" — eine Wasserflasche oder ein Ruheraum steht dort neben der Wundversorgung. An den Zahlen bestehender Berichte ändert sich nichts: Neue Zeilen erscheinen erst, sobald ein Typ mit dem passenden Schlüssel Ereignisse trägt.
 
 > **Der Berichtsschlüssel wirkt nicht auf die Übersicht.** Kennzahlen, Diagramme und Tabellen des Reiters „Übersicht" (Kontakte im Zeitverlauf, Dokumentationstypen, Altersgruppen) zählen die Ereignisse des Zeitraums **unabhängig vom Berichtsschlüssel** — auch solche, die kein Bericht auswertet. Ein Typ mit „Gehört ausdrücklich in keinen Bericht" fällt deshalb aus den Berichten heraus, die über den Berichtsschlüssel zuordnen (etwa dem Beispiel-Sachbericht), bleibt in der Übersicht aber sichtbar und zählt dort weiter mit. Auch der Reiter „Externer Bericht" kennt den Berichtsschlüssel nicht.
 >

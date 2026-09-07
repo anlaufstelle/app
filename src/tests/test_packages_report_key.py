@@ -97,6 +97,13 @@ class TestSchema:
         assert package.document_types[0].normalized_report_keys == ((alt, "excluded"),)
 
     def test_die_sieben_zaehlenden_werte_bleiben_gleichnamig(self):
+        """Die sieben Bestands-Schluessel des Beispiel-Sachberichts.
+
+        Keine Aussage ueber die **Gesamtmenge**: seit Refs #2135 deklariert der
+        Bericht zusaetzlich ``incident``/``protection``/``group_activity``/
+        ``supply``. Fuer den Parser gilt dort dieselbe Regel — er normalisiert
+        nur ``note``/``ban`` und laesst jeden anderen Wert unangetastet.
+        """
         for key in ("contact", "crisis", "medical", "needle_exchange", "accompaniment", "counseling", "referral"):
             definition = parse_package(_raw({"report_key": key})).document_types[0]
             assert definition.report_key == key

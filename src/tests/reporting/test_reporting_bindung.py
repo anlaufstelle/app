@@ -595,7 +595,17 @@ class TestSampleReport1Bindung:
         """
         from core.reporting.backends.sample_report_1 import TYP_BINDUNG
 
-        assert set(TYP_BINDUNG.ziele()) == {"Kontakte", "Beratung", "Versorgung", "Vermittlung"}
+        assert set(TYP_BINDUNG.ziele()) == {
+            "Kontakte",
+            "Beratung",
+            "Versorgung",
+            "Vermittlung",
+            # Refs #2135: drei neue Zielzeilen der Domaenen-Pakete;
+            # ``supply`` faellt bewusst in die bestehende „Versorgung".
+            "Vorfälle",
+            "Schutz",
+            "Gruppenangebote",
+        }
         assert all(type(ziel) is str for ziel in TYP_BINDUNG.ziele())
 
     def test_bestandsaliasse_sind_ableitungen(self):

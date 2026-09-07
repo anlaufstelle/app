@@ -86,6 +86,16 @@ TYP_BINDUNG = TypBindung(
         BindungsEintrag("accompaniment", _("Begleitung"), ziel="Vermittlung"),
         BindungsEintrag("counseling", _("Beratungsgespräch"), ziel="Beratung"),
         BindungsEintrag("referral", _("Vermittlung"), ziel="Vermittlung"),
+        # Domaenen-Schluessel der Paket-Klammer #2133 (Refs #2135). Drei neue
+        # Zielzeilen und EINE Erweiterung: ``supply`` teilt sich „Versorgung"
+        # mit ``medical``/``needle_exchange``, weil eine Wasserflasche oder ein
+        # Ruheraum dieselbe Zeile fuellt wie eine Wundversorgung. ``protection``
+        # bekommt bewusst eine eigene Zeile statt „Vermittlung": dokumentiert
+        # ist eine Schutzmassnahme FUER die Person, keine Weitergabe an Dritte.
+        BindungsEintrag("incident", _("Gewaltvorfall"), ziel="Vorfälle"),
+        BindungsEintrag("protection", _("Schutzmaßnahme"), ziel="Schutz"),
+        BindungsEintrag("group_activity", _("Gruppenangebot"), ziel="Gruppenangebote"),
+        BindungsEintrag("supply", _("Versorgung (Bedarf)"), ziel="Versorgung"),
     )
 )
 

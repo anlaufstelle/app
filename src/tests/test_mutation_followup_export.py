@@ -942,6 +942,12 @@ class TestSampleReport1CategoryMapConstant:
             "accompaniment",
             "counseling",
             "referral",
+            # Refs #2135 (Pin-Nachzug): die vier Domaenen-Schluessel der
+            # Paket-Klammer #2133 gehoeren seither zum Vertrag dieses Berichts.
+            "incident",
+            "protection",
+            "group_activity",
+            "supply",
         }
 
     def test_map_excludes_note_and_ban(self):
@@ -956,3 +962,7 @@ class TestSampleReport1CategoryMapConstant:
         assert SAMPLE_REPORT_1_CATEGORY_MAP["needle_exchange"] == "Versorgung"
         assert SAMPLE_REPORT_1_CATEGORY_MAP["accompaniment"] == "Vermittlung"
         assert SAMPLE_REPORT_1_CATEGORY_MAP["referral"] == "Vermittlung"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["incident"] == "Vorfälle"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["protection"] == "Schutz"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["group_activity"] == "Gruppenangebote"
+        assert SAMPLE_REPORT_1_CATEGORY_MAP["supply"] == "Versorgung"

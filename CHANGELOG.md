@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Vier neue Berichtsschlüssel für Gewaltvorfall, Schutzmaßnahme, Gruppenangebot und Versorgungsbedarf** (#2135) — Die Auswahl „Berichtsschlüssel“ am Dokumentationstyp bietet zusätzlich **Gewaltvorfall**, **Schutzmaßnahme**, **Gruppenangebot** und **Versorgung (Bedarf)**. Der Beispiel-Sachbericht und der Monatsverlauf zählen Ereignisse mit diesen Schlüsseln ab sofort mit, statt sie als „Berichtsschlüssel, den kein Bericht kennt“ zu melden: Die ersten drei bringen je eine neue Zeile mit („Vorfälle“, „Schutz“, „Gruppenangebote“), **Versorgung (Bedarf)** zählt in die bestehende Zeile „Versorgung“. An bestehenden Berichten ändert sich dadurch nichts — eine neue Zeile erscheint erst, sobald ein Typ mit dem passenden Schlüssel Ereignisse trägt, und Monats-Auswertungen aus der Zeit davor bleiben unverändert gültig. Grundlage für die mitgelieferten Domänen-Pakete Awareness, Frauenhaus und Jugendarbeit.
+
 ## [0.95.0] - 2026-09-07
 
 Sammel-Release (Pre-Release) — zwischen v0.91.0 und diesem Schnitt wurde kein Release getaggt; der Block bündelt die vier Checkpoint-Meilensteine 0.92 (Ops-Sichtbarkeit und Performance), 0.93 (Sicherheits-Rest, Fixes und Abhängigkeiten), 0.94 (QA, E2E-Nachweise und Barrierefreiheit) und 0.95 (Test-Suite-Refactoring), die jeweils ohne eigenen Cut abgeschlossen wurden.
