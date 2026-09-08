@@ -111,6 +111,9 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
             initial["occurred_at"] = timezone.localtime(timezone.now()).strftime("%Y-%m-%dT%H:%M")
             kwargs["initial"] = initial
         super().__init__(*args, **kwargs)
+        # Refs #2127: Sichtbarkeits-Zustand der Okkurrenz-Auswahl, gesetzt in
+        # ``clean()``. Ein ungebundenes Formular kennt keinen Grenzfall.
+        self._show_occurred_at_fold = False
         self._facility = facility
         if facility:
             # M2 (Refs #1058): nur event-Typen anbieten — client-/case-Typen
@@ -134,6 +137,27 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
             case_qs = case_qs.select_related("client")
             self.fields["case"].queryset = case_qs  # type: ignore[attr-defined]
             self.fields["case"].label_from_instance = _case_label  # type: ignore[attr-defined]
+
+    @property
+    def show_occurred_at_fold(self) -> bool:
+        """Refs #2127: Rendert das Template die Okkurrenz-Auswahl?
+
+        Der Zustand kommt aus :meth:`clean` — ausdruecklich **nicht** aus
+        ``BoundField.value()``. Letzteres liefert bei einem gebundenen Formular
+        den ROH uebermittelten POST-Wert und nicht ``cleaned_data``: eine
+        mitgeschickte Auswahl haette das Feld deshalb auch ausserhalb des
+        Doppelfensters wieder sichtbar gemacht, sobald ein anderes Feld
+        scheitert und das Formular neu gerendert wird — genau der Fall, den
+        ``clean()`` laengst auf ``""`` normalisiert hat.
+
+        ``self.errors`` ist Djangos uebliche Lazy-Kante: der Zugriff erzwingt
+        ``full_clean()``, falls ein Template das gebundene Formular rendert,
+        ohne dass der View vorher ``is_valid()`` gerufen hat.
+        """
+        if not self.is_bound:
+            return False
+        _ = self.errors
+        return self._show_occurred_at_fold
 
     def get_client_facility(self):
         """Hook aus :class:`~core.forms.mixins.PinnedClientMixin`.
@@ -204,6 +228,10 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
         if not isinstance(occurred_at, AmbiguousWallClock):
             cleaned["occurred_at_fold"] = ""
             return cleaned
+        # Ab hier ist der Grenzfall sicher: das Template darf (und muss) das
+        # Auswahlfeld zeigen — auch dann, wenn die Auswahl bereits getroffen
+        # wurde und nur ein ANDERES Feld den Redisplay ausloest.
+        self._show_occurred_at_fold = True
         fold = cleaned.get("occurred_at_fold")
         if fold in (OCCURRENCE_FOLD_SUMMER, OCCURRENCE_FOLD_WINTER):
             cleaned["occurred_at"] = occurred_at.resolve(int(fold))

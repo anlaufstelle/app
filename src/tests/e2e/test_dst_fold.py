@@ -37,10 +37,13 @@ pytestmark = [pytest.mark.e2e]
 
 BASELINE_PATH = Path(__file__).with_name("a11y_baseline.json")
 
-# Rueckfalltag Europe/Berlin 2026: 25.10., 03:00 -> 02:00. Bewusst in der
-# Zukunft: ein Ereignis in der Vergangenheit taucht in Loeschfristen-/
-# Statistik-Fenstern anderer Tests derselben Session auf, eines in der Zukunft
-# in keinem.
+# Rueckfalltag Europe/Berlin 2026: 25.10., 03:00 -> 02:00 (letzter Sonntag im
+# Oktober). Ein FESTES Datum, bewusst ohne jeden Bezug auf das aktuelle
+# Kalenderdatum: die Zeitzonenregel dieses Tages ist unveraenderlich, waehrend
+# "liegt in der Zukunft" eine Aussage ueber die Systemuhr waere — und damit
+# genau keine Zusicherung. Dass die angelegten Ereignisse spaetere Tests
+# derselben Session nicht stoeren, sichert stattdessen das Aufraeumen in
+# ``_retire_events_of_the_double_hour``.
 AMBIGUOUS_WALL_CLOCK = "2026-10-25T02:30"
 SUMMER_UTC = "2026-10-25T00:30:00+00:00"
 WINTER_UTC = "2026-10-25T01:30:00+00:00"
@@ -53,6 +56,48 @@ EVENT_DETAIL_URL = re.compile(r"/events/[0-9a-f-]+/$")
 # Grenzfall darf gar keinen critical/serious-Verstoss erzeugen. Die Baseline
 # wird nur abgebaut, nie erweitert (Standardblock 39/59).
 AXE_PAGE_KEY = "event_create_fold_choice"
+
+
+@pytest.fixture(autouse=True)
+def _retire_events_of_the_double_hour(e2e_env):
+    """Was dieser Test anlegt, nimmt er am Ende wieder aus dem Verkehr.
+
+    Die E2E-Datenbank wird pro pytest-Session **einmal** geseedet; alles, was
+    ein Test anlegt, sehen alle spaeteren Tests derselben Session. Ein Ereignis
+    am Rueckfalltag hat in Zeitstrom-, Statistik- und Loeschfristen-Fenstern
+    nichts verloren — und die frueher hier notierte Begruendung "das Datum
+    liegt ja in der Zukunft" war eine Aussage ueber die Systemuhr, die ab dem
+    26.10.2026 schlicht falsch waere.
+
+    **Warum kein hartes DELETE:** Ereignisse lassen sich in dieser Anwendung
+    grundsaetzlich nicht hart loeschen. Der Cascade traefe ``EventHistory``,
+    und darauf liegt ein Datenbank-Trigger::
+
+        ProgrammingError: EventHistory records are append-only — DELETE not allowed
+        CONTEXT: PL/pgSQL function prevent_eventhistory_delete()
+
+    Das ist eine gewollte Produktzusage (revisionssichere Historie), keine
+    Huerde, die ein Test umgehen darf. Der Teardown setzt deshalb ``is_deleted``
+    — dasselbe Flag, das auch der Loeschweg der Anwendung setzt und gegen das
+    praktisch jede Ereignis-Abfrage filtert (``feed.py:171``,
+    Modell-Kommentar ``event.py:120``): Zeitstrom, Statistik und Uebergabe sehen
+    die Zeilen danach nicht mehr, eine Papierkorb-Ansicht fuer Ereignisse gibt
+    es nicht.
+
+    Gefiltert wird ueber die beiden EXAKTEN UTC-Zeitpunkte, die nur diese Datei
+    erzeugen kann (die zwei Lesarten derselben Wanduhrzeit) — nicht ueber einen
+    Tages- oder Bereichsfilter. Damit kann der Teardown nichts treffen, was er
+    nicht selbst angelegt hat, auch wenn ein Test vorzeitig abbricht.
+    """
+    yield
+    django_shell(
+        e2e_env,
+        "import datetime as dt;"
+        " from core.models import Event;"
+        f" instants = [dt.datetime.fromisoformat(s) for s in {[SUMMER_UTC, WINTER_UTC]!r}];"
+        " qs = Event.objects.filter(occurred_at__in=instants, is_deleted=False);"
+        " print('stillgelegt', qs.update(is_deleted=True))",
+    )
 
 
 def _provoke_the_question(page, base_url):

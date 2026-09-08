@@ -796,6 +796,34 @@ class TestEventFormOccurrenceFold:
         assert field.required is False
         assert [value for value, _label in field.choices] == ["", "0", "1"]
 
+    # ---------------------------------------------------------------
+    # Sichtbarkeits-Zustand — die EINE Quelle für das Template
+    # ---------------------------------------------------------------
+
+    def test_an_unbound_form_never_shows_the_choice(self, facility, staff_user, doc_type_contact):
+        assert EventMetaForm(facility=facility, user=staff_user).show_occurred_at_fold is False
+
+    def test_the_choice_shows_in_the_double_hour_without_an_answer(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        assert form.show_occurred_at_fold is True
+
+    def test_the_choice_keeps_showing_after_it_was_answered(self, facility, staff_user, doc_type_contact):
+        """Sonst verschwände die Auswahl bei einem Fehler an einem anderen Feld."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="1")
+        assert form.show_occurred_at_fold is True
+
+    def test_a_stray_choice_outside_the_double_hour_does_not_show(self, facility, staff_user, doc_type_contact):
+        """Der rohe POST-Wert darf das Feld NICHT sichtbar machen (Refs #2127, R-L8-1)."""
+        for occurred_at in ("2026-05-16T10:00", "2026-10-25T01:30", "2026-03-29T02:30"):
+            form = self._form(facility, staff_user, doc_type_contact, occurred_at, fold="1")
+            assert form.show_occurred_at_fold is False, occurred_at
+
+    def test_the_state_is_computed_even_without_an_is_valid_call(self, facility, staff_user, doc_type_contact):
+        """Das Template darf das Formular rendern, ohne dass der View vorher geprüft hat."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        assert form.show_occurred_at_fold is True
+        assert form._errors is not None, "Der Zugriff muss full_clean() ausgelöst haben"
+
 
 @pytest.mark.django_db
 class TestEventCreateTemplateOccurrenceFold:
@@ -874,6 +902,41 @@ class TestEventCreateTemplateOccurrenceFold:
         response = client.post(
             reverse("core:event_create"),
             {"document_type": str(doc_type_contact.pk), "occurred_at": "", "client": ""},
+        )
+        assert response.status_code == 200
+        assert 'id="id_occurred_at_fold"' not in response.content.decode()
+
+    def test_a_stray_choice_on_an_ordinary_day_is_not_rendered(self, client, staff_user, doc_type_contact):
+        """Refs #2127 (R-L8-1): außerhalb des Doppelfensters bleibt das Feld unsichtbar.
+
+        Der Fall ist real: ein POST, der ``occurred_at_fold`` mitschickt (weil
+        die Rückfrage im vorigen Anlauf schon beantwortet wurde) und danach an
+        einem ANDEREN Feld scheitert. Wer die Sichtbarkeit am rohen POST-Wert
+        festmacht (``BoundField.value()``), zeigt das Feld hier fälschlich —
+        obwohl ``clean()`` die Auswahl längst auf ``""`` normalisiert hat.
+        """
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {"document_type": "", "occurred_at": "2026-05-16T10:00", "client": "", "occurred_at_fold": "1"},
+        )
+        assert response.status_code == 200
+        assert 'id="id_occurred_at_fold"' not in response.content.decode()
+
+    def test_a_stray_choice_on_the_spring_forward_day_is_not_rendered(self, client, staff_user, doc_type_contact):
+        """Die Lückenstunde ist nicht wählbar — dort darf keine Auswahl erscheinen."""
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_contact, "2026-03-29T02:30", fold="1")
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert 'id="id_occurred_at_fold"' not in html
+        assert "springt von 02:00 direkt auf 03:00" in html
+
+    def test_a_stray_choice_on_the_neighbouring_hour_is_not_rendered(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {"document_type": "", "occurred_at": "2026-10-25T01:30", "client": "", "occurred_at_fold": "1"},
         )
         assert response.status_code == 200
         assert 'id="id_occurred_at_fold"' not in response.content.decode()

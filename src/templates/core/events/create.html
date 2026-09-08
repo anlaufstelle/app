@@ -147,8 +147,12 @@
 
                     {% comment %}Refs #2127: Okkurrenz-Auswahl fuer die doppelte
                     Stunde am Rueckfalltag. Das Feld steht NUR im Grenzfall im
-                    DOM — die Sichtbarkeit entscheidet der Server (Fehler am
-                    Feld ODER bereits getroffene Auswahl), nicht JavaScript:
+                    DOM — die Sichtbarkeit entscheidet der Server, nicht
+                    JavaScript, und zwar ueber den in ``clean()`` berechneten
+                    Zustand ``show_occurred_at_fold`` (NICHT ueber
+                    ``occurred_at_fold.value``: das ist der rohe POST-Wert und
+                    haette das Feld auch ausserhalb des Doppelfensters gezeigt,
+                    sobald ein ANDERES Feld scheitert):
                     ein per CSS/JS verstecktes Select waere fuer Tastatur und
                     Screenreader trotzdem erreichbar, und ohne JS gaebe es
                     ueberhaupt keinen Sichtbarkeitswechsel. Es steht bewusst
@@ -167,7 +171,7 @@
                     implizite Listenrolle, die <li> stuenden dann ohne
                     Listen-Elternteil da (axe-Regel ``listitem``,
                     Refs #2154).{% endcomment %}
-                    {% if meta_form.occurred_at_fold.errors or meta_form.occurred_at_fold.value %}
+                    {% if meta_form.show_occurred_at_fold %}
                     <div class="mt-3">
                         <label for="id_occurred_at_fold" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.occurred_at_fold.label }}</label>
                         <select name="occurred_at_fold" id="id_occurred_at_fold"
