@@ -13,11 +13,22 @@ from django.test import Client as RequestClient
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Client, DocumentType, DocumentTypeField, Event, FieldTemplate, QuickTemplate, TimeFilter
+from core.models import (
+    Attachment,
+    Client,
+    DocumentType,
+    DocumentTypeField,
+    Event,
+    FieldTemplate,
+    QuickTemplate,
+    TimeFilter,
+)
 from core.packages.catalog import parse_catalog_package
 from core.packages.loader import load_package
+from core.reporting.backends.counseling_hours import CounselingHoursBackend
 from core.reporting.backends.sample_report_1 import SampleReport1Backend
 from core.services.events.crud import create_event
+from core.services.file_vault.encryption import encrypt_field
 from core.services.system.bans import get_active_bans
 
 pytestmark = pytest.mark.django_db
@@ -300,38 +311,92 @@ def test_beratungsgespraech_reicht_pseudonym(facility, staff_user, client_identi
     assert event.is_anonymous is False
 
 
-def test_sensitivitaet_der_ereignis_details(facility, assistant_user, staff_user):
+def test_assistent_sieht_nur_normale_pakettypen(facility, assistant_user, staff_user):
     _load_package(facility)
-    elevated = Event.objects.create(
-        facility=facility,
-        document_type=DocumentType.objects.for_facility(facility).get(slug="beratungsgespraech"),
-        occurred_at=timezone.now(),
-        data_json={},
-        created_by=staff_user,
-    )
-    high_type = DocumentType.objects.create(
-        facility=facility,
-        name="High-Sensitivität (Prüfung)",
-        slug="high-pruefung",
-        entity_type=DocumentType.EntityType.EVENT,
-        sensitivity=DocumentType.Sensitivity.HIGH,
-        report_key="excluded",
-    )
-    high_event = Event.objects.create(
-        facility=facility,
-        document_type=high_type,
-        occurred_at=timezone.now(),
-        data_json={},
-        created_by=staff_user,
-    )
+    events = {
+        slug: Event.objects.create(
+            facility=facility,
+            document_type=DocumentType.objects.for_facility(facility).get(slug=slug),
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        for slug in ("kontakt", "kurzberatung", "beratungsgespraech", "krisengespraech", "hausverbot")
+    }
 
     assistant_client = RequestClient()
     assistant_client.force_login(assistant_user)
-    assert assistant_client.get(reverse("core:event_detail", kwargs={"pk": elevated.pk})).status_code == 404
+
+    assert assistant_client.get(reverse("core:event_detail", kwargs={"pk": events["kontakt"].pk})).status_code == 200
+    assert (
+        assistant_client.get(reverse("core:event_detail", kwargs={"pk": events["kurzberatung"].pk})).status_code == 200
+    )
+    for slug in ("beratungsgespraech", "krisengespraech", "hausverbot"):
+        response = assistant_client.get(reverse("core:event_detail", kwargs={"pk": events[slug].pk}))
+        assert response.status_code == 404
+
+
+def test_high_felder_bleiben_fuer_staff_verborgen(facility, staff_user, lead_user):
+    _load_package(facility)
+    document_type = DocumentType.objects.for_facility(facility).get(slug="beratungsgespraech")
+    event = Event.objects.create(
+        facility=facility,
+        document_type=document_type,
+        occurred_at=timezone.now(),
+        data_json={
+            "thema": "Wohnungsverlust",
+            "vereinbarungen": "Sofortige Unterstützung klären",
+        },
+        created_by=staff_user,
+    )
+    attachment = Attachment.objects.create(
+        facility=facility,
+        event=event,
+        field_template=FieldTemplate.objects.for_facility(facility).get(slug="scan-bescheid"),
+        storage_filename="bescheid.enc",
+        original_filename_encrypted=encrypt_field("Bescheid.pdf"),
+        file_size=12,
+        mime_type="application/pdf",
+    )
+    event.data_json["scan-bescheid"] = {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}
+    event.save(update_fields=["data_json"])
 
     staff_client = RequestClient()
     staff_client.force_login(staff_user)
-    assert staff_client.get(reverse("core:event_detail", kwargs={"pk": high_event.pk})).status_code == 404
+    response = staff_client.get(reverse("core:event_detail", kwargs={"pk": event.pk}))
+    assert response.status_code == 200
+    staff_content = response.content.decode()
+    assert "Wohnungsverlust" not in staff_content
+    assert "Sofortige Unterstützung klären" not in staff_content
+    assert "Bescheid.pdf" not in staff_content
+
+    lead_client = RequestClient()
+    lead_client.force_login(lead_user)
+    response = lead_client.get(reverse("core:event_detail", kwargs={"pk": event.pk}))
+    assert response.status_code == 200
+    lead_content = response.content.decode()
+    assert "Wohnungsverlust" in lead_content
+    assert "Sofortige Unterstützung klären" in lead_content
+    assert "Bescheid.pdf" in lead_content
+
+
+def test_kurzberatung_zaehlt_in_beratungsstunden(facility, staff_user):
+    _load_package(facility)
+    occurred_at = timezone.make_aware(datetime(2026, 5, 12, 10, 0))
+    Event.objects.create(
+        facility=facility,
+        document_type=DocumentType.objects.for_facility(facility).get(slug="kurzberatung"),
+        occurred_at=occurred_at,
+        data_json={"dauer": 17},
+        created_by=staff_user,
+    )
+
+    result = CounselingHoursBackend().build_dataset(facility, date(2026, 5, 1), date(2026, 5, 31))
+    issues = CounselingHoursBackend().validate_completeness(facility, date(2026, 5, 1), date(2026, 5, 31))
+
+    assert result.records == [{"kategorie": "counseling", "events": 1, "minuten": 17, "beitragende": 1}]
+    assert result.summary == {"events_gesamt": 1, "minuten_gesamt": 17}
+    assert "unknown_report_keys" not in [issue.code for issue in issues]
 
 
 def test_hausverbot_projektion(facility, staff_user, client_identified):
