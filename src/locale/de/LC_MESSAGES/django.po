@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 11:00+0200\n"
+"POT-Creation-Date: 2026-09-08 11:50+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12544,30 +12544,8 @@ msgstr "Nächster Tag"
 msgid "Nach Dokumentationstyp filtern"
 msgstr "Nach Dokumentationstyp filtern"
 
-#, python-format
-msgid "1 Person angezeigt."
-msgid_plural "%(counter)s Personen angezeigt."
-msgstr[0] "1 Person angezeigt."
-msgstr[1] "%(counter)s Personen angezeigt."
-
-#: src/templates/core/clients/list.html:122
-#, python-brace-format
-msgid "{count} Personen angezeigt."
-msgstr "{count} Personen angezeigt."
-
 msgid "Keine Person gefunden."
 msgstr "Keine Person gefunden."
-
-#, python-format
-msgid "1 Fall angezeigt."
-msgid_plural "%(counter)s Fälle angezeigt."
-msgstr[0] "1 Fall angezeigt."
-msgstr[1] "%(counter)s Fälle angezeigt."
-
-#: src/templates/core/cases/list.html:81
-#, python-brace-format
-msgid "{count} Fälle angezeigt."
-msgstr "{count} Fälle angezeigt."
 
 msgid "Kein Fall gefunden."
 msgstr "Kein Fall gefunden."
@@ -12698,3 +12676,21 @@ msgstr "vor 0.96 nicht erfasst"
 
 msgid "2. Einrichtung <em>Zweigstelle Nord</em> (Beratungsstelle, Paket <code>beratungsstelle</code>): gleiche Konten mit Suffix <span class=\"font-mono\">_1</span>."
 msgstr "2. Einrichtung <em>Zweigstelle Nord</em> (Beratungsstelle, Paket <code>beratungsstelle</code>): gleiche Konten mit Suffix <span class=\"font-mono\">_1</span>."
+
+msgid "1 Person gefunden."
+msgstr "1 Person gefunden."
+
+msgid "1 Fall gefunden."
+msgstr "1 Fall gefunden."
+
+#: src/templates/core/clients/list.html:118
+#: src/templates/core/clients/partials/table.html:24
+#, python-format
+msgid "%(total)s Personen gefunden, Seite %(page)s von %(pages)s."
+msgstr "%(total)s Personen gefunden, Seite %(page)s von %(pages)s."
+
+#: src/templates/core/cases/list.html:74
+#: src/templates/core/cases/partials/table.html:9
+#, python-format
+msgid "%(total)s Fälle gefunden, Seite %(page)s von %(pages)s."
+msgstr "%(total)s Fälle gefunden, Seite %(page)s von %(pages)s."
