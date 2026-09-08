@@ -136,11 +136,13 @@ def _delete_event(page, base_url, event_url) -> None:
         reason = page.locator("textarea#id_reason")
         if reason.count():
             reason.fill("E2E-Cleanup")
-        # Anonymes Event → Direktlösch-Zweig; der Button-Text ist auf der
-        # Bestätigungsseite eindeutig (Logout-/Sprach-Submits heißen anders).
+        # Anonymes Event → Direktlösch-Zweig; `data-testid="event-delete-confirm"`
+        # (Refs #2167) steht an BEIDEN Submit-Buttons des Templates (nur einer
+        # ist je Branch sichtbar) und ist stabiler als ein Text-Selektor.
         # Vorher scopte `form:has(#id_reason)` — das Begründungsfeld rendert
-        # bei anonymen Events aber gar nicht, das Cleanup war ein No-op.
-        page.locator('button[type="submit"]:has-text("Endgültig löschen")').click()
+        # bei anonymen Events aber gar nicht, das Cleanup war ein No-op; danach
+        # ein Text-Selektor auf den Button-Inhalt.
+        page.locator('[data-testid="event-delete-confirm"]').click()
         page.wait_for_url(lambda url: "/delete/" not in url, timeout=10000)
     except Exception:
         pass
