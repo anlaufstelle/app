@@ -68,6 +68,6 @@
 Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, storage limitation, soft-delete strategies) → [glossary.md](glossary.md).
 
 <!-- translation-source: docs/datenschutz.md -->
-<!-- translation-version: v0.95.0 -->
+<!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-08 -->
 <!-- source-hash: 6fb812de52720bf38c0e2d1c6667b398ce999c4c -->

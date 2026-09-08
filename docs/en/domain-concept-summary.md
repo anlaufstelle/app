@@ -285,12 +285,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
-### Unreleased
+### v0.96.0 (2026-09-08)
 
 - **Anlaufstelle's target group is a working mode, not a facility type**: § 3 now leads with open social/life counseling and low-threshold advice centers, adds a fit/anti-fit table for further use cases, and documents four curated domain packages (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) that replace, not extend, the standard catalog — mirrored in the FAQ, the README's "Who it's for" section, and the glossary.
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.95.0 -->
+<!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-08 -->
 <!-- source-hash: d305d3628916bd2aada46324d8e43a2479905303 -->

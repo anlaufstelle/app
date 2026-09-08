@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.96.0] - 2026-09-08
+
 ### Added
 
 - **Frauenhaus-Paket für Schutzwohnungen und Gewalt-Fachberatung** (#2138) — Acht Dokumentationstypen, 24/7-Schichtfenster, zwei Schnellvorlagen und Betreiberhinweise unterstützen pseudonyme Beratung, nur für Leitungsrollen sichtbare Gefährdungslagen und Schutzmaßnahmen ohne fachlich falsche Hausverbotslogik.
