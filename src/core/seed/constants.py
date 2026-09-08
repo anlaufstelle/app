@@ -230,282 +230,475 @@ MILESTONE_TITLES = [
 ]
 
 # Typ-spezifische Event-Daten-Pools für Bulk-Generierung.
-# Der Schlüssel ist der ``system_type``, solange es einen gibt, sonst der Name
-# des Dokumentationstyps aus ``core/packages/default.yaml`` (E4, Refs #1850:
-# die sieben Berichts-Systemtypen sind entfallen — ``crisis`` und ``ban``
-# bleiben, weil sie App-Verhalten steuern). Ein Name-Schlüssel muss deshalb
-# EXAKT dem ``name``-Wert im Paket entsprechen, sonst greift der Pool nicht und
-# der Seed füllt den Typ über die generische Fallback-Generierung.
-# Refs #1730: explizit annotiert — die Pools je Typ haben unterschiedliche
-# Realistische Ereignis-Gewichtung je Dokumentationstyp: Hausverbote extrem
-# selten. Geschluesselt wie ``EVENT_DATA_POOLS`` — ``system_type``, solange es
-# einen gibt (``crisis``/``ban``), sonst der ``name`` aus ``default.yaml``
-# (E4, Refs #1850). Die Namens-Kopplung ist byte-genau und per Test gegen die
-# default.yaml gepinnt (test_seed_pool_name_pinning) — ein Rename dort wuerde
-# die Seed-Daten sonst still auf Fallbacks degradieren.
-EVENT_TYPE_WEIGHTS: dict[str, float] = {
-    "Kontakt": 40,
-    "crisis": 12,
-    "Medizinische Versorgung": 10,
-    "Spritzentausch": 10,
-    "Begleitung": 8,
-    "Beratungsgespräch": 8,
-    "Vermittlung": 5,
-    "Notiz": 6,
-    "ban": 0.2,
+# Refs #2148 (R-L5c-2): AEUSSERER Schluessel ist der Paketname
+# (``core.seed.scale.FACILITY_PACKAGES``), INNERER Schluessel der Typ-**Slug**
+# innerhalb dieses Pakets — nicht mehr ``system_type or name``. Grund: mehrere
+# Pakete teilen sich denselben Slug (``kontakt``, ``beratungsgespraech``,
+# ``begleitung``, ``vermittlung``, ``notiz``, ``krisengespraech``,
+# ``hausverbot`` stehen sowohl in ``default.yaml`` als auch in
+# ``beratungsstelle.yaml``) mit VOELLIG unterschiedlichem fachlichen
+# Zuschnitt und teils unterschiedlichen ``options`` (``art-der-krise`` traegt
+# in ``default.yaml`` andere Slugs als in ``beratungsstelle.yaml``) — ein
+# globaler Slug-Schluessel ohne Paket-Namensraum wuerde Options-Werte des
+# einen Pakets in ein anderes leaken lassen, das sie gar nicht kennt (siehe
+# Krise-/Hausverbot-Guard in ``test_seed_pool_name_pinning.py``). Nur Pakete
+# mit handgeschriebenen Pools tauchen hier ueberhaupt auf (``default``,
+# ``beratungsstelle``); alle anderen (``awareness``/``jugendarbeit``/
+# ``frauenhaus``) fehlen bewusst und fuellen jeden Typ ausschliesslich ueber
+# den generischen Fallback-Generator (Option C ist bewusst NICHT umgesetzt).
+# Ein fehlender Slug innerhalb eines vorhandenen Pakets faellt ebenfalls auf
+# den Fallback zurueck. Die Namens-/Slug-Kopplung an die Kataloge ist per Test
+# gepinnt (test_seed_pool_name_pinning) — ein Rename dort wuerde die Seed-
+# Daten sonst still auf Fallbacks degradieren.
+EVENT_TYPE_WEIGHTS: dict[str, dict[str, float]] = {
+    # Standardkatalog (core/packages/default.yaml).
+    "default": {
+        "kontakt": 40,
+        "krisengespraech": 12,
+        "medizinische-versorgung": 10,
+        "spritzentausch": 10,
+        "begleitung": 8,
+        "beratungsgespraech": 8,
+        "vermittlung": 5,
+        "notiz": 6,
+        "hausverbot": 0.2,
+    },
+    # Beratungsstelle (core/packages/beratungsstelle.yaml, Refs #2145/#2148).
+    "beratungsstelle": {
+        "kontakt": 35,
+        "kurzberatung": 25,
+        "beratungsgespraech": 15,
+        "krisengespraech": 8,
+        "begleitung": 5,
+        "vermittlung": 5,
+        "notiz": 6,
+        "hausverbot": 0.2,
+    },
 }
 
 # Value-Shapes (str/int/bool/list je Key); ohne Annotation joint mypy die
 # Werttypen ueber alle Top-Level-Keys hinweg bis zu ``object`` zusammen, was
 # transitiv (ueber den seed-Command) in core.seed.events zu Folgefehlern beim
 # Konsum (``random.choice``/``deepcopy``) führt.
-EVENT_DATA_POOLS: dict[str, list[dict[str, Any]]] = {
-    "Kontakt": [
-        {
-            "dauer": 15,
-            "leistungen": ["beratung", "essen"],
-            "notiz": "Kam zum Frühstück, Beratungsbedarf wegen Wohnsituation.",
-        },
-        {
-            "dauer": 30,
-            "leistungen": ["kleidung", "duschen"],
-            "notiz": "Winterjacke und Schlafsack ausgegeben, hat geduscht.",
-        },
-        {"dauer": 10, "leistungen": ["essen"], "notiz": "Kurzer Besuch, Mittagessen."},
-        {
-            "dauer": 45,
-            "leistungen": ["beratung", "telefon"],
-            "notiz": "Telefonat mit Vermieter geführt, Beratung zur Mietschuldenübernahme.",
-        },
-        {"dauer": 20, "leistungen": ["duschen", "waesche"], "notiz": "Wäsche gewaschen und geduscht."},
-        {"dauer": 5, "leistungen": ["post"], "notiz": "Post abgeholt."},
-        {
-            "dauer": 25,
-            "leistungen": ["essen", "beratung", "kleidung"],
-            "notiz": "Frühstück, Kleidung ausgesucht, kurze Beratung zum Jobcenter-Termin.",
-        },
-        {
-            "dauer": 35,
-            "leistungen": ["beratung", "sonstiges"],
-            "notiz": "Längeres Gespräch über aktuelle Lebenssituation, braucht Schlafsack.",
-            "strassenkontakt": True,
-        },
-        {"dauer": 10, "leistungen": ["essen", "sachspenden"], "notiz": "Hygienebeutel mitgegeben."},
-        {
-            "dauer": 60,
-            "leistungen": ["beratung", "telefon", "post"],
-            "notiz": "ALG-II-Antrag gemeinsam ausgefüllt, beim Jobcenter angerufen.",
-        },
-        {"dauer": 15, "leistungen": ["essen"], "notiz": "Stammgast, Kaffee und Frühstück.", "strassenkontakt": False},
-        {
-            "dauer": 20,
-            "leistungen": ["sonstiges"],
-            "notiz": "Aufladen vom Handy, kurzer Aufenthalt im Tagesraum.",
-            "strassenkontakt": True,
-        },
-    ],
-    "crisis": [
-        {
-            "art-der-krise": "psychische-krise",
-            "dauer": 60,
-            "notiz-krise": "Starke Unruhe, Stimmen hören. Stabilisiert durch Gespräch und Tee.",
-            "weitervermittlung": "",
-        },
-        {
-            "art-der-krise": "substanzkrise",
-            "dauer": 45,
-            "notiz-krise": "Überdosierung abgewendet, Vitalzeichen stabil. Notarzt nicht nötig.",
-            "weitervermittlung": "",
-        },
-        {
-            "art-der-krise": "suizidal",
-            "dauer": 90,
-            "notiz-krise": "Akute Suizidalität, Non-Suizid-Vereinbarung getroffen.",
-            "weitervermittlung": "Psychiatrische Notaufnahme",
-        },
-        {
-            "art-der-krise": "gewalt",
-            "dauer": 40,
-            "notiz-krise": "Nach Schlägerei aufgelöst, Wunden versorgt.",
-            "weitervermittlung": "",
-        },
-        {
-            "art-der-krise": "obdachlosigkeit",
-            "dauer": 50,
-            "notiz-krise": "Schlafplatz verloren, akute Verzweiflung. Notschlafstelle vermittelt.",
-            "weitervermittlung": "Notschlafstelle",
-        },
-        {
-            "art-der-krise": "psychische-krise",
-            "dauer": 75,
-            "notiz-krise": "Panikattacke, Atemübungen durchgeführt. Langsam beruhigt.",
-            "weitervermittlung": "",
-        },
-        {
-            "art-der-krise": "substanzkrise",
-            "dauer": 55,
-            "notiz-krise": "Starke Entzugserscheinungen, zittert. Warmen Tee, Ruheraum.",
-            "weitervermittlung": "Substitutionsambulanz",
-        },
-        {
-            "art-der-krise": "suizidal",
-            "dauer": 80,
-            "notiz-krise": "Passive Suizidalität nach Räumung der Wohnung. Längeres Gespräch, etwas stabilisiert.",
-            "weitervermittlung": "Krisendienst",
-        },
-        {
-            "art-der-krise": "gewalt",
-            "dauer": 35,
-            "notiz-krise": "Wurde auf der Straße ausgeraubt. Polizei informiert, beruhigt.",
-            "weitervermittlung": "Polizeiwache",
-        },
-        {
-            "art-der-krise": "sonstiges",
-            "dauer": 30,
-            "notiz-krise": "Zusammenbruch nach Abschiebebescheid. Emotionale Stabilisierung.",
-            "weitervermittlung": "Flüchtlingsberatung",
-        },
-    ],
-    "Medizinische Versorgung": [
-        {
-            "art-der-versorgung": "wundversorgung",
-            "notiz-medizin": "Schnittwunde am Unterarm gereinigt und verbunden.",
-            "krankenhaus": False,
-        },
-        {
-            "art-der-versorgung": "medikamentenausgabe",
-            "notiz-medizin": "Ibuprofen 400 ausgegeben gegen Zahnschmerzen.",
-            "krankenhaus": False,
-        },
-        {
-            "art-der-versorgung": "beratung",
-            "notiz-medizin": "Beratung zur Hepatitis-C-Behandlung, Termin in Ambulanz vermittelt.",
-            "krankenhaus": False,
-        },
-        {
-            "art-der-versorgung": "wundversorgung",
-            "notiz-medizin": "Entzündete Einstichstelle, Desinfektion und Verband. Arztbesuch empfohlen.",
-            "krankenhaus": False,
-        },
-        {
-            "art-der-versorgung": "sonstiges",
-            "notiz-medizin": "Blutdruckmessung, Werte im Normalbereich.",
-            "krankenhaus": False,
-        },
-        {
-            "art-der-versorgung": "wundversorgung",
-            "notiz-medizin": "Tiefe Schnittwunde, muss genäht werden.",
-            "krankenhaus": True,
-        },
-        {
-            "art-der-versorgung": "medikamentenausgabe",
-            "notiz-medizin": "Pflaster und Wundsalbe ausgegeben.",
-            "krankenhaus": False,
-        },
-        {
-            "art-der-versorgung": "sonstiges",
-            "notiz-medizin": "Verdacht auf Unterkühlung, aufgewärmt, Vitalzeichen kontrolliert.",
-            "krankenhaus": True,
-        },
-    ],
-    "Spritzentausch": [
-        {"ausgabe": 10, "rueckgabe": 10},
-        {"ausgabe": 5, "rueckgabe": 3},
-        {"ausgabe": 20, "rueckgabe": 18},
-        {"ausgabe": 10, "rueckgabe": 6},
-        {"ausgabe": 30, "rueckgabe": 25},
-        {"ausgabe": 15, "rueckgabe": 15},
-        {"ausgabe": 8, "rueckgabe": 5},
-        {"ausgabe": 50, "rueckgabe": 42},
-        {"ausgabe": 10, "rueckgabe": 10},
-        {"ausgabe": 25, "rueckgabe": 20},
-    ],
-    "Begleitung": [
-        {"ziel": "Jobcenter", "notiz-begleitung": "Termin zur Leistungsklärung, Unterlagen dabei."},
-        {"ziel": "Hausarzt Dr. Müller", "notiz-begleitung": "Blutabnahme und Befundbesprechung."},
-        {"ziel": "Amtsgericht", "notiz-begleitung": "Anhörung wegen offener Geldstrafe."},
-        {"ziel": "Notschlafstelle", "notiz-begleitung": "Platz für die Nacht gesichert."},
-        {"ziel": "Sozialamt", "notiz-begleitung": "Antrag auf Grundsicherung abgegeben."},
-        {"ziel": "Schuldnerberatung", "notiz-begleitung": "Erstgespräch, Schuldenaufstellung begonnen."},
-        {"ziel": "Suchtberatungsstelle", "notiz-begleitung": "Erstgespräch zur Substitution."},
-        {"ziel": "Krankenhaus Notaufnahme", "notiz-begleitung": "Abszess muss operiert werden, Einweisung."},
-        {"ziel": "Ausländerbehörde", "notiz-begleitung": "Duldung verlängern, alle Dokumente dabei."},
-        {"ziel": "Wohnungsamt", "notiz-begleitung": "Antrag auf Dringlichkeitsschein eingereicht."},
-    ],
-    "Beratungsgespräch": [
-        {
-            "thema": "Wohnsituation und Mietschulden",
-            "dauer": 45,
-            "vereinbarungen": "Unterlagen für Mietschuldenübernahme zusammenstellen.",
-        },
-        {
-            "thema": "Substitutionsbehandlung",
-            "dauer": 30,
-            "vereinbarungen": "Termin bei Substitutionsambulanz nächste Woche.",
-        },
-        {
-            "thema": "Arbeitssuche und Bewerbungen",
-            "dauer": 40,
-            "vereinbarungen": "Lebenslauf gemeinsam erstellen, Folgetermin in 2 Wochen.",
-        },
-        {
-            "thema": "Schuldenregulierung",
-            "dauer": 50,
-            "vereinbarungen": "Schuldenaufstellung mitbringen, Schuldnerberatung kontaktieren.",
-        },
-        {
-            "thema": "Familienkontakt",
-            "dauer": 35,
-            "vereinbarungen": "Brief an Schwester formulieren, nächste Woche besprechen.",
-        },
-        {
-            "thema": "Gesundheitliche Beschwerden",
-            "dauer": 30,
-            "vereinbarungen": "Arzttermin vereinbaren, Krankenversicherungsstatus klären.",
-        },
-        {
-            "thema": "Aufenthaltsgenehmigung",
-            "dauer": 55,
-            "vereinbarungen": "Anwalt für Asylrecht kontaktieren, Dokumente kopieren.",
-        },
-        {
-            "thema": "Straffälligkeit und Bewährung",
-            "dauer": 40,
-            "vereinbarungen": "Nächsten Bewährungshelfer-Termin einhalten, Sozialstunden beginnen.",
-        },
-        {
-            "thema": "Psychische Belastung",
-            "dauer": 50,
-            "vereinbarungen": "Psychiatrischen Dienst aufsuchen, Krisenplan besprechen.",
-        },
-        {
-            "thema": "Alltagsstruktur aufbauen",
-            "dauer": 35,
-            "vereinbarungen": "Wochenplan erstellen, regelmäßig zum Frühstück kommen.",
-        },
-    ],
-    "Notiz": [
-        {"notiz": "Team-Info: Klientel wirkte heute sehr aufgelöst, bitte im Blick behalten."},
-        {"notiz": "Neue Telefonnummer hinterlegt."},
-        {"notiz": "Hat sich länger nicht blicken lassen. Bei nächstem Kontakt nachfragen."},
-        {"notiz": "Möchte an der Kochgruppe teilnehmen, auf Warteliste gesetzt."},
-        {"notiz": "Konflikt mit anderem Besucher im Tagesraum, konnte deeskaliert werden."},
-        {"notiz": "Rückmeldung von Jobcenter: Antrag bewilligt."},
-        {"notiz": "Arztbrief liegt vor, muss noch besprochen werden."},
-        {"notiz": "Hat Interesse an Deutschkurs geäußert, Infos rausgesucht."},
-        {"notiz": "Wirkte heute stabil und gut gelaunt, positives Gespräch."},
-        {"notiz": "Betreuer:in vom Sozialpsychiatrischen Dienst hat angerufen."},
-        {"notiz": "Wurde von Streetwork-Team angetroffen, schläft unter der Brücke."},
-        {"notiz": "Personalausweis ist abgelaufen, Termin beim Bürgeramt nötig."},
-    ],
-    "ban": [
-        {"grund": "Wiederholte Verstöße gegen die Hausordnung trotz Abmahnung."},
-        {"grund": "Bedrohung von Mitarbeitenden mit einem Gegenstand."},
-        {"grund": "Drogenkonsum in den Räumlichkeiten, mehrfach ermahnt."},
-        {"grund": "Sachbeschädigung: Stuhl geworfen, Fenster beschädigt."},
-        {"grund": "Körperliche Auseinandersetzung mit anderem Besucher."},
-        {"grund": "Diebstahl aus der Kleiderkammer."},
-        {"grund": "Verbale Beleidigung und rassistische Äußerungen gegenüber Besucher:innen."},
-        {"grund": "Handeln mit Betäubungsmitteln auf dem Gelände."},
-    ],
+EVENT_DATA_POOLS: dict[str, dict[str, list[dict[str, Any]]]] = {
+    "default": {
+        "kontakt": [
+            {
+                "dauer": 15,
+                "leistungen": ["beratung", "essen"],
+                "notiz": "Kam zum Frühstück, Beratungsbedarf wegen Wohnsituation.",
+            },
+            {
+                "dauer": 30,
+                "leistungen": ["kleidung", "duschen"],
+                "notiz": "Winterjacke und Schlafsack ausgegeben, hat geduscht.",
+            },
+            {"dauer": 10, "leistungen": ["essen"], "notiz": "Kurzer Besuch, Mittagessen."},
+            {
+                "dauer": 45,
+                "leistungen": ["beratung", "telefon"],
+                "notiz": "Telefonat mit Vermieter geführt, Beratung zur Mietschuldenübernahme.",
+            },
+            {"dauer": 20, "leistungen": ["duschen", "waesche"], "notiz": "Wäsche gewaschen und geduscht."},
+            {"dauer": 5, "leistungen": ["post"], "notiz": "Post abgeholt."},
+            {
+                "dauer": 25,
+                "leistungen": ["essen", "beratung", "kleidung"],
+                "notiz": "Frühstück, Kleidung ausgesucht, kurze Beratung zum Jobcenter-Termin.",
+            },
+            {
+                "dauer": 35,
+                "leistungen": ["beratung", "sonstiges"],
+                "notiz": "Längeres Gespräch über aktuelle Lebenssituation, braucht Schlafsack.",
+                "strassenkontakt": True,
+            },
+            {"dauer": 10, "leistungen": ["essen", "sachspenden"], "notiz": "Hygienebeutel mitgegeben."},
+            {
+                "dauer": 60,
+                "leistungen": ["beratung", "telefon", "post"],
+                "notiz": "ALG-II-Antrag gemeinsam ausgefüllt, beim Jobcenter angerufen.",
+            },
+            {
+                "dauer": 15,
+                "leistungen": ["essen"],
+                "notiz": "Stammgast, Kaffee und Frühstück.",
+                "strassenkontakt": False,
+            },
+            {
+                "dauer": 20,
+                "leistungen": ["sonstiges"],
+                "notiz": "Aufladen vom Handy, kurzer Aufenthalt im Tagesraum.",
+                "strassenkontakt": True,
+            },
+        ],
+        "krisengespraech": [
+            {
+                "art-der-krise": "psychische-krise",
+                "dauer": 60,
+                "notiz-krise": "Starke Unruhe, Stimmen hören. Stabilisiert durch Gespräch und Tee.",
+                "weitervermittlung": "",
+            },
+            {
+                "art-der-krise": "substanzkrise",
+                "dauer": 45,
+                "notiz-krise": "Überdosierung abgewendet, Vitalzeichen stabil. Notarzt nicht nötig.",
+                "weitervermittlung": "",
+            },
+            {
+                "art-der-krise": "suizidal",
+                "dauer": 90,
+                "notiz-krise": "Akute Suizidalität, Non-Suizid-Vereinbarung getroffen.",
+                "weitervermittlung": "Psychiatrische Notaufnahme",
+            },
+            {
+                "art-der-krise": "gewalt",
+                "dauer": 40,
+                "notiz-krise": "Nach Schlägerei aufgelöst, Wunden versorgt.",
+                "weitervermittlung": "",
+            },
+            {
+                "art-der-krise": "obdachlosigkeit",
+                "dauer": 50,
+                "notiz-krise": "Schlafplatz verloren, akute Verzweiflung. Notschlafstelle vermittelt.",
+                "weitervermittlung": "Notschlafstelle",
+            },
+            {
+                "art-der-krise": "psychische-krise",
+                "dauer": 75,
+                "notiz-krise": "Panikattacke, Atemübungen durchgeführt. Langsam beruhigt.",
+                "weitervermittlung": "",
+            },
+            {
+                "art-der-krise": "substanzkrise",
+                "dauer": 55,
+                "notiz-krise": "Starke Entzugserscheinungen, zittert. Warmen Tee, Ruheraum.",
+                "weitervermittlung": "Substitutionsambulanz",
+            },
+            {
+                "art-der-krise": "suizidal",
+                "dauer": 80,
+                "notiz-krise": "Passive Suizidalität nach Räumung der Wohnung. Längeres Gespräch, etwas stabilisiert.",
+                "weitervermittlung": "Krisendienst",
+            },
+            {
+                "art-der-krise": "gewalt",
+                "dauer": 35,
+                "notiz-krise": "Wurde auf der Straße ausgeraubt. Polizei informiert, beruhigt.",
+                "weitervermittlung": "Polizeiwache",
+            },
+            {
+                "art-der-krise": "sonstiges",
+                "dauer": 30,
+                "notiz-krise": "Zusammenbruch nach Abschiebebescheid. Emotionale Stabilisierung.",
+                "weitervermittlung": "Flüchtlingsberatung",
+            },
+        ],
+        "medizinische-versorgung": [
+            {
+                "art-der-versorgung": "wundversorgung",
+                "notiz-medizin": "Schnittwunde am Unterarm gereinigt und verbunden.",
+                "krankenhaus": False,
+            },
+            {
+                "art-der-versorgung": "medikamentenausgabe",
+                "notiz-medizin": "Ibuprofen 400 ausgegeben gegen Zahnschmerzen.",
+                "krankenhaus": False,
+            },
+            {
+                "art-der-versorgung": "beratung",
+                "notiz-medizin": "Beratung zur Hepatitis-C-Behandlung, Termin in Ambulanz vermittelt.",
+                "krankenhaus": False,
+            },
+            {
+                "art-der-versorgung": "wundversorgung",
+                "notiz-medizin": "Entzündete Einstichstelle, Desinfektion und Verband. Arztbesuch empfohlen.",
+                "krankenhaus": False,
+            },
+            {
+                "art-der-versorgung": "sonstiges",
+                "notiz-medizin": "Blutdruckmessung, Werte im Normalbereich.",
+                "krankenhaus": False,
+            },
+            {
+                "art-der-versorgung": "wundversorgung",
+                "notiz-medizin": "Tiefe Schnittwunde, muss genäht werden.",
+                "krankenhaus": True,
+            },
+            {
+                "art-der-versorgung": "medikamentenausgabe",
+                "notiz-medizin": "Pflaster und Wundsalbe ausgegeben.",
+                "krankenhaus": False,
+            },
+            {
+                "art-der-versorgung": "sonstiges",
+                "notiz-medizin": "Verdacht auf Unterkühlung, aufgewärmt, Vitalzeichen kontrolliert.",
+                "krankenhaus": True,
+            },
+        ],
+        "spritzentausch": [
+            {"ausgabe": 10, "rueckgabe": 10},
+            {"ausgabe": 5, "rueckgabe": 3},
+            {"ausgabe": 20, "rueckgabe": 18},
+            {"ausgabe": 10, "rueckgabe": 6},
+            {"ausgabe": 30, "rueckgabe": 25},
+            {"ausgabe": 15, "rueckgabe": 15},
+            {"ausgabe": 8, "rueckgabe": 5},
+            {"ausgabe": 50, "rueckgabe": 42},
+            {"ausgabe": 10, "rueckgabe": 10},
+            {"ausgabe": 25, "rueckgabe": 20},
+        ],
+        "begleitung": [
+            {"ziel": "Jobcenter", "notiz-begleitung": "Termin zur Leistungsklärung, Unterlagen dabei."},
+            {"ziel": "Hausarzt Dr. Müller", "notiz-begleitung": "Blutabnahme und Befundbesprechung."},
+            {"ziel": "Amtsgericht", "notiz-begleitung": "Anhörung wegen offener Geldstrafe."},
+            {"ziel": "Notschlafstelle", "notiz-begleitung": "Platz für die Nacht gesichert."},
+            {"ziel": "Sozialamt", "notiz-begleitung": "Antrag auf Grundsicherung abgegeben."},
+            {"ziel": "Schuldnerberatung", "notiz-begleitung": "Erstgespräch, Schuldenaufstellung begonnen."},
+            {"ziel": "Suchtberatungsstelle", "notiz-begleitung": "Erstgespräch zur Substitution."},
+            {"ziel": "Krankenhaus Notaufnahme", "notiz-begleitung": "Abszess muss operiert werden, Einweisung."},
+            {"ziel": "Ausländerbehörde", "notiz-begleitung": "Duldung verlängern, alle Dokumente dabei."},
+            {"ziel": "Wohnungsamt", "notiz-begleitung": "Antrag auf Dringlichkeitsschein eingereicht."},
+        ],
+        "beratungsgespraech": [
+            {
+                "thema": "Wohnsituation und Mietschulden",
+                "dauer": 45,
+                "vereinbarungen": "Unterlagen für Mietschuldenübernahme zusammenstellen.",
+            },
+            {
+                "thema": "Substitutionsbehandlung",
+                "dauer": 30,
+                "vereinbarungen": "Termin bei Substitutionsambulanz nächste Woche.",
+            },
+            {
+                "thema": "Arbeitssuche und Bewerbungen",
+                "dauer": 40,
+                "vereinbarungen": "Lebenslauf gemeinsam erstellen, Folgetermin in 2 Wochen.",
+            },
+            {
+                "thema": "Schuldenregulierung",
+                "dauer": 50,
+                "vereinbarungen": "Schuldenaufstellung mitbringen, Schuldnerberatung kontaktieren.",
+            },
+            {
+                "thema": "Familienkontakt",
+                "dauer": 35,
+                "vereinbarungen": "Brief an Schwester formulieren, nächste Woche besprechen.",
+            },
+            {
+                "thema": "Gesundheitliche Beschwerden",
+                "dauer": 30,
+                "vereinbarungen": "Arzttermin vereinbaren, Krankenversicherungsstatus klären.",
+            },
+            {
+                "thema": "Aufenthaltsgenehmigung",
+                "dauer": 55,
+                "vereinbarungen": "Anwalt für Asylrecht kontaktieren, Dokumente kopieren.",
+            },
+            {
+                "thema": "Straffälligkeit und Bewährung",
+                "dauer": 40,
+                "vereinbarungen": "Nächsten Bewährungshelfer-Termin einhalten, Sozialstunden beginnen.",
+            },
+            {
+                "thema": "Psychische Belastung",
+                "dauer": 50,
+                "vereinbarungen": "Psychiatrischen Dienst aufsuchen, Krisenplan besprechen.",
+            },
+            {
+                "thema": "Alltagsstruktur aufbauen",
+                "dauer": 35,
+                "vereinbarungen": "Wochenplan erstellen, regelmäßig zum Frühstück kommen.",
+            },
+        ],
+        "notiz": [
+            {"notiz": "Team-Info: Klientel wirkte heute sehr aufgelöst, bitte im Blick behalten."},
+            {"notiz": "Neue Telefonnummer hinterlegt."},
+            {"notiz": "Hat sich länger nicht blicken lassen. Bei nächstem Kontakt nachfragen."},
+            {"notiz": "Möchte an der Kochgruppe teilnehmen, auf Warteliste gesetzt."},
+            {"notiz": "Konflikt mit anderem Besucher im Tagesraum, konnte deeskaliert werden."},
+            {"notiz": "Rückmeldung von Jobcenter: Antrag bewilligt."},
+            {"notiz": "Arztbrief liegt vor, muss noch besprochen werden."},
+            {"notiz": "Hat Interesse an Deutschkurs geäußert, Infos rausgesucht."},
+            {"notiz": "Wirkte heute stabil und gut gelaunt, positives Gespräch."},
+            {"notiz": "Betreuer:in vom Sozialpsychiatrischen Dienst hat angerufen."},
+            {"notiz": "Wurde von Streetwork-Team angetroffen, schläft unter der Brücke."},
+            {"notiz": "Personalausweis ist abgelaufen, Termin beim Bürgeramt nötig."},
+        ],
+        "hausverbot": [
+            {"grund": "Wiederholte Verstöße gegen die Hausordnung trotz Abmahnung."},
+            {"grund": "Bedrohung von Mitarbeitenden mit einem Gegenstand."},
+            {"grund": "Drogenkonsum in den Räumlichkeiten, mehrfach ermahnt."},
+            {"grund": "Sachbeschädigung: Stuhl geworfen, Fenster beschädigt."},
+            {"grund": "Körperliche Auseinandersetzung mit anderem Besucher."},
+            {"grund": "Diebstahl aus der Kleiderkammer."},
+            {"grund": "Verbale Beleidigung und rassistische Äußerungen gegenüber Besucher:innen."},
+            {"grund": "Handeln mit Betäubungsmitteln auf dem Gelände."},
+        ],
+    },
+    # Beratungsstelle (core/packages/beratungsstelle.yaml, Refs #2145/#2148):
+    # eigener Namensraum trotz geteilter Slugs mit "default" — Inhalte,
+    # Options-Slugs (``art-der-krise``, ``thema-kurz``, ``weiterverweis``,
+    # ``leistungen``) und Sprache folgen ausschliesslich dem Beratungsstellen-
+    # Zuschnitt (``docs/packages-beratungsstelle.md``), niemals dem
+    # Kontaktladen-Vokabular des Standardkatalogs. Sprache nach
+    # ``docs/sprachleitlinie.md`` ("Person" statt "Klient(el)"), keine
+    # Klarnamen.
+    "beratungsstelle": {
+        "kontakt": [
+            {
+                "dauer": 10,
+                "alterscluster": "27-plus",
+                "leistungen": ["information"],
+                "notiz": "Kurze Frage zum Ablauf der Sprechstunde beantwortet.",
+            },
+            {
+                "dauer": 15,
+                "alterscluster": "18-26",
+                "leistungen": ["formularhilfe"],
+                "notiz": "Antragsformular gemeinsam durchgesehen.",
+            },
+            {
+                "dauer": 5,
+                "alterscluster": "unbekannt",
+                "leistungen": ["wartebereich"],
+                "notiz": "Wartet auf den Termin bei der Fachkraft.",
+            },
+            {
+                "dauer": 20,
+                "alterscluster": "27-plus",
+                "leistungen": ["telefonat-fuer-klientin"],
+                "notiz": "Rückruf beim Amt für die Person vereinbart.",
+            },
+            {
+                "dauer": 10,
+                "alterscluster": "u18",
+                "leistungen": ["weiterverweis"],
+                "notiz": "An die Jugendberatung weiterverwiesen.",
+            },
+            {
+                "dauer": 25,
+                "alterscluster": "18-26",
+                "leistungen": ["information", "formularhilfe"],
+                "notiz": "Flyer der Beratungsstelle mitgegeben, Termin vereinbart.",
+            },
+            {
+                "dauer": 8,
+                "alterscluster": "27-plus",
+                "leistungen": ["sonstiges"],
+                "notiz": "Kurz vorbeigekommen, Unterlagen abgegeben.",
+            },
+            {
+                "dauer": 15,
+                "alterscluster": "unbekannt",
+                "leistungen": ["information"],
+                "notiz": "Nach Öffnungszeiten und Zuständigkeit gefragt.",
+            },
+        ],
+        "kurzberatung": [
+            {"thema-kurz": "wohnen", "dauer": 12, "weiterverweis": "fachstelle"},
+            {"thema-kurz": "geld-schulden", "dauer": 15, "weiterverweis": "interne-beratung"},
+            {"thema-kurz": "arbeit", "dauer": 10, "weiterverweis": "keine"},
+            {"thema-kurz": "gesundheit", "dauer": 18, "weiterverweis": "behoerde"},
+            {"thema-kurz": "familie-beziehung", "dauer": 20, "weiterverweis": "interne-beratung"},
+            {"thema-kurz": "behoerden-antraege", "dauer": 10, "weiterverweis": "fachstelle"},
+            {"thema-kurz": "aufenthalt", "dauer": 25, "weiterverweis": "fachstelle"},
+            {"thema-kurz": "sonstiges", "dauer": 8, "weiterverweis": "keine"},
+        ],
+        "beratungsgespraech": [
+            {
+                "thema": "Wohnungssuche und drohende Kündigung besprochen.",
+                "dauer": 45,
+                "vereinbarungen": "Unterlagen für die Mietschuldenübernahme zusammenstellen.",
+            },
+            {
+                "thema": "Überschuldung und offene Mahnungen.",
+                "dauer": 40,
+                "vereinbarungen": "Schuldnerberatung kontaktieren, Aufstellung mitbringen.",
+            },
+            {
+                "thema": "Unsicherer Aufenthaltsstatus.",
+                "dauer": 50,
+                "vereinbarungen": "Termin bei einer Fachanwältin für Aufenthaltsrecht vereinbaren.",
+            },
+            {
+                "thema": "Konflikt innerhalb der Familie.",
+                "dauer": 35,
+                "vereinbarungen": "Gespräch mit der Familienberatungsstelle vorbereiten.",
+            },
+            {
+                "thema": "Arbeitssuche nach längerer Pause.",
+                "dauer": 30,
+                "vereinbarungen": "Lebenslauf gemeinsam überarbeiten, Folgetermin in zwei Wochen.",
+            },
+            {
+                "thema": "Antrag auf Sozialleistungen abgelehnt.",
+                "dauer": 45,
+                "vereinbarungen": "Widerspruch fristgerecht einreichen.",
+            },
+        ],
+        "krisengespraech": [
+            {
+                "art-der-krise": "psychische-krise",
+                "dauer": 60,
+                "notiz-krise": "Starke innere Unruhe, durch das Gespräch stabilisiert.",
+                "weitervermittlung": "",
+            },
+            {
+                "art-der-krise": "suizidal",
+                "dauer": 75,
+                "notiz-krise": "Akute Suizidgedanken geäußert, Krisenplan gemeinsam besprochen.",
+                "weitervermittlung": "Psychiatrische Ambulanz",
+            },
+            {
+                "art-der-krise": "gewalt",
+                "dauer": 40,
+                "notiz-krise": "Nach einer Bedrohungssituation aufgesucht, beruhigt.",
+                "weitervermittlung": "Opferschutz",
+            },
+            {
+                "art-der-krise": "wohnungsverlust",
+                "dauer": 50,
+                "notiz-krise": "Akute Wohnungslosigkeit droht, Notunterkunft vermittelt.",
+                "weitervermittlung": "Notunterkunft",
+            },
+            {
+                "art-der-krise": "finanzielle-notlage",
+                "dauer": 35,
+                "notiz-krise": "Konto gepfändet, keine Mittel mehr für die Miete.",
+                "weitervermittlung": "Schuldnerberatung",
+            },
+            {
+                "art-der-krise": "akute-belastung",
+                "dauer": 55,
+                "notiz-krise": "Überforderung nach mehreren Rückschlägen, im Gespräch stabilisiert.",
+                "weitervermittlung": "",
+            },
+            {
+                "art-der-krise": "sonstiges",
+                "dauer": 30,
+                "notiz-krise": "Akute Verzweiflung nach einem Behördenbescheid.",
+                "weitervermittlung": "Sozialpsychiatrischer Dienst",
+            },
+        ],
+        "begleitung": [
+            {"ziel": "Jobcenter", "notiz-begleitung": "Termin zur Leistungsklärung begleitet."},
+            {"ziel": "Sozialamt", "notiz-begleitung": "Antrag auf Grundsicherung gemeinsam abgegeben."},
+            {"ziel": "Schuldnerberatung", "notiz-begleitung": "Erstgespräch begleitet, Unterlagen mitgebracht."},
+            {"ziel": "Ausländerbehörde", "notiz-begleitung": "Verlängerung des Aufenthaltstitels begleitet."},
+            {"ziel": "Wohnungsamt", "notiz-begleitung": "Antrag auf Dringlichkeitsschein eingereicht."},
+        ],
+        "notiz": [
+            {"notiz": "Rückmeldung vom Amt steht noch aus, beim nächsten Kontakt nachfragen."},
+            {"notiz": "Neue Erreichbarkeit hinterlegt."},
+            {"notiz": "Termin bei der Fachstelle wahrgenommen, Rückmeldung positiv."},
+            {"notiz": "Wünscht Beratung auf Englisch beim nächsten Termin."},
+            {"notiz": "Unterlagen nachgereicht, liegen jetzt vollständig vor."},
+        ],
+        "hausverbot": [
+            {"grund": "Wiederholt aggressives Verhalten gegenüber Mitarbeitenden."},
+            {"grund": "Störung anderer Beratungsgespräche trotz mehrfacher Ansprache."},
+            {"grund": "Bedrohung ausgesprochen, Polizei informiert."},
+        ],
+    },
 }

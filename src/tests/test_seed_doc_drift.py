@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from core.seed.constants import USER_TEMPLATES
-from core.seed.scale import SCALE_CONFIG
+from core.seed.scale import FACILITY_PACKAGES, SCALE_CONFIG
 
 # Meta-Test, der auf das Repo-Filesystem zugreift (``CONTRIBUTING.md`` +
 # Seed-Quellen). Im Mutmut-Subprozess laeuft pytest aus ``mutants/`` und diese
@@ -101,6 +101,15 @@ def documented_metric_labels(md: str) -> set[str]:
     return labels
 
 
+def scale_table_row(md: str, label: str) -> str | None:
+    """Die vollstaendige Rohzeile der Scale-Tabelle mit erster Spalte ``label``."""
+    for row in _scale_table_rows(md)[1:]:
+        cells = [c.strip() for c in row.strip("|").split("|")]
+        if cells and cells[0] == label:
+            return row
+    return None
+
+
 def parse_seed_credentials(md: str) -> tuple[dict[str, str], str]:
     """``({username: role}, password)`` aus der „Seed-Zugangsdaten"-Zeile."""
     line = next((ln for ln in md.splitlines() if "Seed-Zugangsdaten" in ln), "")
@@ -151,6 +160,16 @@ def test_every_scale_key_is_documented() -> None:
         assert KEY_TO_DOC_LABEL[key] in labels, (
             f"Seed-Feld '{key}' erwartet die Tabellenzeile '{KEY_TO_DOC_LABEL[key]}' in CONTRIBUTING — fehlt."
         )
+
+
+def test_paket_zeile_nennt_jedes_facility_package() -> None:
+    """Refs #2148: die CONTRIBUTING-Tabelle muss jedes Paket aus
+    ``core.seed.scale.FACILITY_PACKAGES`` nennen — ein neu zugeordnetes oder
+    umbenanntes Paket ohne Doku-Nachzug faellt hier auf."""
+    row = scale_table_row(_contributing(), "Pakete je Einrichtung (Refs #2148)")
+    assert row is not None, "CONTRIBUTING-Tabelle: Zeile 'Pakete je Einrichtung (Refs #2148)' fehlt."
+    for package in FACILITY_PACKAGES:
+        assert f"`{package}`" in row, f"Paket {package!r} (core.seed.scale.FACILITY_PACKAGES) fehlt in der Zeile."
 
 
 def test_documented_credentials_match_seed_code() -> None:

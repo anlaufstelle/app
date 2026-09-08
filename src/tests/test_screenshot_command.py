@@ -27,6 +27,23 @@ class TestDsgvoPaketRole:
         assert "admin" in LANG_SWITCH_USERNAMES
 
 
+class TestBeratungsstelleGalerieShot:
+    """Refs #2148 (Maintainer-Entscheid 2026-09-06): einziger Shot, der den
+    Paket-Unterschied der Zweigstelle Nord zeigt (Typwahl Kurzberatung/
+    Beratungsgespraech/Krisengespraech/Begleitung statt Kontaktladen-Typen).
+    """
+
+    def test_shot_uses_emma_1_role_and_is_not_mobile(self):
+        shot = _shot("ereignis-anlegen-beratungsstelle")
+        assert shot.route == "core:event_create"
+        assert shot.role == "emma_1"
+        assert shot.mobile is False
+
+    def test_lang_switch_usernames_include_emma_1(self):
+        """Sonst rendert der EN-Durchlauf fuer den emma_1-Login deutsch."""
+        assert "emma_1" in LANG_SWITCH_USERNAMES
+
+
 class TestStatistikenWaitJs:
     """Refs #1594: die Statistik-Seite zeichnet ihre Charts clientseitig
     asynchron — der Shot muss auf das ``data-charts-ready``-Attribut warten,

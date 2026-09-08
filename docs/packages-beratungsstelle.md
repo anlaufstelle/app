@@ -86,4 +86,4 @@ Für eine bestehende, noch leere oder vollständig vorbereitete Einrichtung:
 python manage.py load_package --package beratungsstelle --facility <uuid>
 ```
 
-Pakete sind **Ersatz, kein Zusatz**: `beratungsstelle.yaml` ersetzt den Standardkatalog und wird nicht zusätzlich zu `default.yaml` eingespielt. Der Seed soll dieses Paket für die Zweigstelle Nord verwenden (geplant in #2148).
+Pakete sind **Ersatz, kein Zusatz**: `beratungsstelle.yaml` ersetzt den Standardkatalog und wird nicht zusätzlich zu `default.yaml` eingespielt. Der Seed nutzt dieses Paket für die Zweigstelle Nord — ab `--scale=medium` (#2148).

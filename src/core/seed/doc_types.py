@@ -41,6 +41,7 @@ from core.models import DocumentType, Facility, FieldGroup
 # ist Fixture-Territorium, aus dem der Produktionspfad nicht importieren darf.
 # Hier bleibt der Bestands-Name als Re-Export stehen: Seed und Tests behalten
 # ihren Import, und es gibt weiterhin genau EINE Implementierung samt Cache.
+from core.packages.catalog import parse_catalog_package
 from core.packages.default_catalog import load_default_package_data
 from core.packages.loader import PackageReport, load_package
 from core.packages.schema import PackageV1, parse_package
@@ -48,21 +49,37 @@ from core.packages.schema import PackageV1, parse_package
 __all__ = ["load_default_package_data", "seed_document_types"]
 
 
-def seed_document_types(facility: Facility) -> PackageReport:
-    """Spielt das Standardpaket in ``facility`` ein (idempotent).
+def seed_document_types(facility: Facility, *, package: str = "default") -> PackageReport:
+    """Spielt ``package`` in ``facility`` ein (idempotent).
+
+    Refs #2148 (R-L5c-1): generalisiert vom reinen Standardkatalog auf jedes
+    mitgelieferte Paket — der Katalog-Reader (:mod:`core.packages.catalog`)
+    ist derselbe, den auch ``setup_facility``/``load_package`` nutzen. Ein
+    unbekannter Paketname (z. B. ein Domaenen-Paket, das noch nicht im Katalog
+    liegt) schlaegt **fail-loud** als
+    :class:`~core.packages.catalog.UnknownPackageError` durch — kein stiller
+    Fallback auf den Standardkatalog.
 
     Fehler werden **nicht** geschluckt: eine
     :class:`~core.packages.schema.PackageValidationError` (kaputtes YAML im
     Repo) bzw. :class:`~core.packages.loader.PackageLoadError` (Konflikt mit
     dem Bestand) schlägt bis zum Aufrufer durch — ein halb eingespielter
     Katalog wäre schlimmer als ein abgebrochener Seed-Lauf.
+
+    Der Standardkatalog (``package="default"``) laeuft bewusst weiter ueber
+    das modulweite Re-Export :data:`load_default_package_data` statt direkt
+    ueber :func:`~core.packages.catalog.parse_catalog_package` — Bestandstests
+    (``test_reseed_after_catalog_rename_keeps_same_fieldgroup_row`` u. a.)
+    monkeypatchen genau diesen Namen, um eine Katalog-Variante einzuspeisen.
     """
-    package = parse_package(load_default_package_data())
+    parsed_package = (
+        parse_package(load_default_package_data()) if package == "default" else parse_catalog_package(package)
+    )
     # Cleanup + Anwendung in EINER Transaktion: ohne die Klammer bliebe eine
     # gelöschte Gruppe gelöscht, wenn der Loader danach zurückrollt.
     with transaction.atomic():
-        _delete_orphan_field_groups(facility, package)
-        return load_package(facility, package)
+        _delete_orphan_field_groups(facility, parsed_package)
+        return load_package(facility, parsed_package)
 
 
 def _delete_orphan_field_groups(facility: Facility, package: PackageV1) -> None:

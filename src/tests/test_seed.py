@@ -211,6 +211,217 @@ def test_seed_medium_second_facility_users_have_suffix():
 
 
 # ---------------------------------------------------------------------------
+# Scale: medium — Pakete je Einrichtung (Refs #2148, R-L5c-1/2/5)
+# ---------------------------------------------------------------------------
+
+EXPECTED_BERATUNGSSTELLE_TYPES = {
+    "kontakt",
+    "kurzberatung",
+    "beratungsgespraech",
+    "krisengespraech",
+    "begleitung",
+    "vermittlung",
+    "notiz",
+    "hausverbot",
+}
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen():
+    """R-L5c-1: Zweigstelle Nord bekommt das Paket ``beratungsstelle`` statt
+    des Standardkatalogs — genau dessen 8 Typen, keinen Standard-Typ."""
+    call_command("seed", scale="medium")
+
+    nord = Facility.objects.get(name="Zweigstelle Nord")
+    slugs = set(DocumentType.objects.filter(facility=nord).values_list("slug", flat=True))
+
+    assert slugs == EXPECTED_BERATUNGSSTELLE_TYPES
+    assert "spritzentausch" not in slugs
+    assert "medizinische-versorgung" not in slugs
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_hauptstelle_behaelt_standardkatalog():
+    """Gegenprobe: die Hauptstelle bleibt beim Standardkatalog."""
+    call_command("seed", scale="medium")
+
+    haupt = Facility.objects.get(name="Hauptstelle")
+    slugs = set(DocumentType.objects.filter(facility=haupt).values_list("slug", flat=True))
+
+    assert {"spritzentausch", "medizinische-versorgung"} <= slugs
+    assert "kurzberatung" not in slugs
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ():
+    """R-L5c-5: jeder der 8 Beratungsstellen-Typen bekommt mindestens ein
+    Ereignis (750 Ereignisse, fixer Zufalls-Seed 42 in ``seed.handle()``)."""
+    from core.models import Event
+
+    call_command("seed", scale="medium")
+
+    nord = Facility.objects.get(name="Zweigstelle Nord")
+    for slug in sorted(EXPECTED_BERATUNGSSTELLE_TYPES):
+        assert Event.objects.filter(facility=nord, document_type__slug=slug).exists(), (
+            f"Kein Ereignis fuer Typ {slug!r} an der Zweigstelle Nord."
+        )
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_zweigstelle_nord_komfort_kommt_aus_package_comfort():
+    """R-L5c-1: Zeitfenster/QuickTemplates der Zweigstelle Nord entsprechen
+    ``PACKAGE_COMFORT["beratungsstelle"]`` — nicht den Hauptstelle-Demo-Inhalten
+    (``core/seed/quick_templates.py``/``DEFAULT_TIME_FILTERS``)."""
+    from core.models import QuickTemplate
+
+    call_command("seed", scale="medium")
+
+    nord = Facility.objects.get(name="Zweigstelle Nord")
+    assert set(TimeFilter.objects.filter(facility=nord).values_list("label", flat=True)) == {
+        "Sprechstunde Vormittag",
+        "Sprechstunde Nachmittag",
+        "Termine",
+    }
+    assert set(QuickTemplate.objects.filter(facility=nord).values_list("name", flat=True)) == {
+        "Kurzinfo Sprechstunde",
+        "Formularhilfe",
+        "Telefonische Kurzberatung",
+    }
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options():
+    """R-L5c-2-Pflicht-Guard: Krisengespraech-Ereignisse der Zweigstelle Nord
+    tragen NUR gueltige ``art-der-krise``-Options-Slugs des Pakets
+    ``beratungsstelle`` — insbesondere KEINE Standardkatalog-exklusiven Werte
+    wie ``substanzkrise``/``obdachlosigkeit``, die es im Paket nicht gibt.
+    Der Wert liegt unverschluesselt vor (``art-der-krise`` ist
+    ``is_encrypted: false`` in beiden Katalogen)."""
+    from core.models import Event
+
+    call_command("seed", scale="medium")
+
+    nord = Facility.objects.get(name="Zweigstelle Nord")
+    valid_crisis_options = {
+        "akute-belastung",
+        "suizidal",
+        "gewalt",
+        "wohnungsverlust",
+        "finanzielle-notlage",
+        "psychische-krise",
+        "sonstiges",
+    }
+    events = Event.objects.filter(facility=nord, document_type__slug="krisengespraech")
+    assert events.exists()
+    for event in events:
+        wert = event.data_json.get("art-der-krise")
+        assert wert in valid_crisis_options, (
+            f"Krisengespraech-Ereignis {event.pk} traegt 'art-der-krise'={wert!r} — "
+            f"keine gueltige Option des Pakets beratungsstelle ({sorted(valid_crisis_options)})."
+        )
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys():
+    """R-L5c-5: der Beispiel-Sachbericht meldet fuer die Zweigstelle Nord
+    keinen ``unknown_report_keys``-Befund — alle 8 Typen sind ueber einen
+    ``report_key`` gebunden."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.reporting.backends.sample_report_1 import SampleReport1Backend
+
+    call_command("seed", scale="medium")
+
+    nord = Facility.objects.get(name="Zweigstelle Nord")
+    today = timezone.localdate()
+    issues = SampleReport1Backend().validate_completeness(nord, today - timedelta(days=365), today)
+    unbekannt = [issue for issue in issues if issue.code == "unknown_report_keys"]
+    assert unbekannt == [], unbekannt
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_medium_doppellauf_ist_idempotent_fuer_zweigstelle_nord():
+    """R-L5c-5: ein zweiter Lauf ohne ``--flush`` aendert weder Dokumentations-
+    typen/Feldvorlagen noch die Ereignis-/Komfort-Objekt-Zahl der Zweigstelle
+    Nord."""
+    from core.models import Event, QuickTemplate
+
+    call_command("seed", scale="medium")
+    nord = Facility.objects.get(name="Zweigstelle Nord")
+
+    def _counts():
+        return (
+            DocumentType.objects.filter(facility=nord).count(),
+            FieldTemplate.objects.filter(facility=nord).count(),
+            Event.objects.filter(facility=nord).count(),
+            QuickTemplate.objects.filter(facility=nord).count(),
+            TimeFilter.objects.filter(facility=nord).count(),
+        )
+
+    counts_before = _counts()
+    call_command("seed", scale="medium")
+    assert _counts() == counts_before
+
+
+# ---------------------------------------------------------------------------
+# Scale: large — Pakete je Einrichtung (Refs #2148, R-L5c-1)
+#
+# jugendarbeit.yaml/frauenhaus.yaml laufen parallel in L5a/L4 und lagen zum
+# Start dieser Lane noch nicht im Katalog (`core.packages.catalog.list_packages()`
+# findet nur vorhandene YAMLs). ``seed_document_types``/``ensure_facility_baseline``
+# brechen dann fail-loud mit ``UnknownPackageError`` ab (R-L5c-1) — die Tests
+# unten ueberspringen genau diesen Fall mit Begruendung, statt still auf einen
+# Standardkatalog-Fallback zu pruefen. Der Orchestrator faehrt
+# ``make seed --scale=large`` nach den L5a/L4-Merges erneut; sobald beide YAMLs
+# vorliegen, laufen diese Tests ohne Aenderung durch (kein Skip mehr).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("facility_name", "package_name"),
+    [
+        ("Zweigstelle Süd", "awareness"),
+        ("Außenstelle Ost", "jugendarbeit"),
+        ("Außenstelle West", "frauenhaus"),
+    ],
+)
+def test_seed_large_facility_traegt_ihr_domaenen_paket(facility_name, package_name):
+    from core.packages.catalog import UnknownPackageError, list_packages
+
+    if package_name not in list_packages():
+        pytest.skip(
+            f"Paket {package_name!r} ({facility_name}) liegt auf diesem Stand noch nicht im "
+            "Katalog — L5a/L4 (#2148) laufen parallel und landen erst mit einem eigenen Merge. "
+            "Der Orchestrator faehrt 'make seed --scale=large' danach erneut."
+        )
+
+    try:
+        call_command("seed", scale="large")
+    except UnknownPackageError:
+        # Ein Index HINTER dem eigenen kann noch fehlen — jede Facility wird
+        # einzeln (nicht in einer gemeinsamen Transaktion) angelegt, das
+        # eigene Paket ist also trotz des spaeteren Abbruchs schon angewendet.
+        pass
+
+    facility = Facility.objects.get(name=facility_name)
+    assert DocumentType.objects.filter(facility=facility).exists()
+    from core.models import Event
+
+    assert Event.objects.filter(facility=facility).exists()
+
+
+# ---------------------------------------------------------------------------
 # Organization
 # ---------------------------------------------------------------------------
 

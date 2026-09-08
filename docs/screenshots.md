@@ -4,7 +4,12 @@
 
 Ein vollständiger Rundgang durch Anlaufstelle. Alle Bilder stammen aus der
 Demo-Umgebung (`make seed --scale=medium`) und zeigen ausschließlich
-pseudonymisierte Beispieldaten.
+pseudonymisierte Beispieldaten. Die Demo-Umgebung trägt zwei Einrichtungen mit
+je einem eigenen Katalog: die Hauptstelle (Standardkatalog / Kontaktladen) und
+die Zweigstelle Nord (Paket `beratungsstelle`, offene Sprechstunde und
+Sozialberatung — [`docs/packages-beratungsstelle.md`](packages-beratungsstelle.md)).
+`--scale=large` fügt drei weitere Einrichtungen mit den Paketen `awareness`,
+`jugendarbeit` und `frauenhaus` hinzu.
 
 ## Alltag & Dokumentation
 
@@ -13,6 +18,12 @@ pseudonymisierte Beispieldaten.
 
 ### Ereignis erfassen
 ![Ereignis erfassen](screenshots/ereignis-anlegen.webp)
+
+### Ereignis erfassen — Paket Beratungsstelle
+![Ereignis erfassen (Beratungsstelle)](screenshots/ereignis-anlegen-beratungsstelle.webp)
+
+Typwahl Kurzberatung / Beratungsgespräch / Krisengespräch / Begleitung aus dem
+Paket Beratungsstelle (Zweigstelle Nord).
 
 ### Personenliste
 ![Personenliste](screenshots/personenliste.webp)

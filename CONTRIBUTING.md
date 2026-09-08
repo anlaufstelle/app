@@ -237,6 +237,7 @@ es wird nichts angewendet, auch nicht für die übrigen Typen):
 | Daten | `small` (Default) | `medium` | `large` |
 |---|---|---|---|
 | Einrichtungen | 1 | 2 | 5 |
+| Pakete je Einrichtung (Refs #2148) | Hauptstelle: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` |
 | Users (gesamt) | 7 (1 super_admin + 6 facility-User) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) |
 | Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 |
 | Clients / Einrichtung | 7 | 40 | 500 |

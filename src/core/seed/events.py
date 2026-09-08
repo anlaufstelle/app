@@ -65,15 +65,18 @@ def build_data_template(doc_type: DocumentType) -> list[dict]:
     return fields
 
 
-def random_data(dt_name: str, dt_data_templates: dict) -> dict:
+def random_data(slug: str, dt_data_templates: dict, *, package: str = "default") -> dict:
     """Generate plausible random ``data_json`` for a given document type.
 
-    ``dt_name`` ist der Poolschluessel: der ``system_type``, solange es einen
-    gibt, sonst der Name des Dokumentationstyps. Seit E4 (Refs #1850) tragen
-    nur noch ``ban`` und ``crisis`` einen Systemtyp — die uebrigen Pools haengen
-    deshalb am deutschen Namen aus ``default.yaml``.
+    ``slug`` ist der Poolschluessel INNERHALB von ``package`` (Refs #2148,
+    R-L5c-2) — der Typ-Slug, nicht der Name/Systemtyp. Mehrere Pakete duerfen
+    denselben Slug fuehren (z. B. ``kontakt`` in ``default`` UND
+    ``beratungsstelle``) mit voellig unterschiedlichem fachlichen Zuschnitt —
+    ein globaler Name-/Systemtyp-Schluessel wuerde die Pakete vermischen und
+    z. B. ``art-der-krise``-Werte des Standardkatalogs in ein Paket leaken
+    lassen, das diese Options-Slugs gar nicht kennt.
     """
-    pool = EVENT_DATA_POOLS.get(dt_name)
+    pool = EVENT_DATA_POOLS.get(package, {}).get(slug)
     if pool:
         template = copy.deepcopy(random.choice(pool))
         # Minor variation on numeric fields
@@ -83,17 +86,17 @@ def random_data(dt_name: str, dt_data_templates: dict) -> dict:
             template["ausgabe"] = max(1, template["ausgabe"] + random.randint(-2, 5))
             template["rueckgabe"] = min(template["rueckgabe"], template["ausgabe"])
         # Dynamic dates for accompaniment
-        if dt_name == "Begleitung":
+        if slug == "begleitung":
             offset = random.randint(-7, 14)
             template["datum"] = (date.today() + timedelta(days=offset)).isoformat()
             template["uhrzeit"] = f"{random.randint(8, 16):02d}:{random.choice(['00', '30'])}"
         # Dynamic next appointment for counseling
-        if dt_name == "Beratungsgespräch":
+        if slug == "beratungsgespraech":
             template["naechster-termin"] = (date.today() + timedelta(days=random.randint(7, 28))).isoformat()
         return template
 
     # Fallback: generic generation for unknown document types
-    fields = dt_data_templates.get(dt_name, [])
+    fields = dt_data_templates.get(slug, [])
     data: dict = {}
     for f in fields:
         key = f["key"]
@@ -198,8 +201,15 @@ def seed_events_small(facility: Facility) -> None:
         )
 
 
-def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client], cfg: dict) -> int:
+def seed_events_bulk(
+    facility: Facility, users: list[User], clients: list[Client], cfg: dict, *, package: str = "default"
+) -> int:
     """Generate events with ``bulk_create`` for non-small scales.
+
+    ``package`` waehlt den Pool-/Gewichts-Namensraum aus ``EVENT_TYPE_WEIGHTS``/
+    ``EVENT_DATA_POOLS`` (Refs #2148) — Facilities ohne handgeschriebene Pools
+    fallen fuer jeden Typ auf den generischen Generator zurueck (Gewicht 5,
+    gueltige Options-Slugs zufaellig).
 
     Returns the number of newly created events (0 when the facility is
     already at or above the target).
@@ -222,15 +232,17 @@ def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client
         return 0
 
     # Pre-build data templates per document type (skip encrypted fields).
+    # Refs #2148 (R-L5c-2): Schluessel ist der Typ-Slug, nicht mehr
+    # ``system_type or name`` — der Slug ist je Einrichtung eindeutig und
+    # (anders als der frei aenderbare Name) der Loader-Lookup-Key selbst.
     dt_data_templates = {}
     for dt in doc_types:
-        dt_data_templates[dt.system_type or dt.name] = build_data_template(dt)
+        dt_data_templates[dt.slug] = build_data_template(dt)
 
-    # Refs #1730: ``dt.system_type`` ist nullable (``str | None``); ``dict.get``
-    # verlangt einen ``str``-Key. Der Name ist der Zweitschluessel (Idiom von
-    # ``dt_data_templates`` oben) — ein einrichtungseigener Typ ohne Eintrag
+    # Ein einrichtungseigener Typ ohne Eintrag im gewaehlten Paket-Namensraum
     # faellt weiterhin auf den Default-Weight 5 zurueck.
-    weights = [EVENT_TYPE_WEIGHTS.get(dt.system_type or dt.name, 5) for dt in doc_types]
+    weights_table = EVENT_TYPE_WEIGHTS.get(package, {})
+    weights = [weights_table.get(dt.slug, 5) for dt in doc_types]
     today = timezone.localdate()
 
     now = timezone.now()
@@ -254,7 +266,7 @@ def seed_events_bulk(facility: Facility, users: list[User], clients: list[Client
             base_date.replace(hour=hour, minute=minute, second=0, microsecond=0),
             now,
         )
-        data_json = random_data(doc_type.system_type or doc_type.name, dt_data_templates)
+        data_json = random_data(doc_type.slug, dt_data_templates, package=package)
 
         # Bans realistic: most expired, max 2 active (grund from pool)
         if doc_type.system_type == "ban":

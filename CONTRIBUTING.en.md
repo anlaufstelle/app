@@ -234,6 +234,7 @@ applied, not even for the remaining types):
 | Data | `small` (default) | `medium` | `large` |
 |---|---|---|---|
 | Facilities | 1 | 2 | 5 |
+| Packages per facility (Refs #2148) | Main facility: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` |
 | Users (total) | 7 (1 super_admin + 6 facility users) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) |
 | Users / facility | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 |
 | Clients / facility | 7 | 40 | 500 |
@@ -990,5 +991,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-07 -->
-<!-- source-hash: dc76774b43f7ad151d91699d5e844e8e21ad18f3 -->
+<!-- translation-date: 2026-09-08 -->
+<!-- source-hash: d9740a4313564ce7da73a093046603fe50ed2cda -->

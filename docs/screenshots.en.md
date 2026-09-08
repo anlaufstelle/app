@@ -3,7 +3,13 @@
 > **[Deutsche Version](screenshots.md)** · back to the [README](../README.en.md)
 
 A full tour of Anlaufstelle. All images come from the demo environment
-(`make seed --scale=medium`) and show pseudonymised sample data only.
+(`make seed --scale=medium`) and show pseudonymised sample data only. The demo
+environment carries two facilities, each with its own catalogue: the main
+facility (standard catalogue / drop-in centre) and "Zweigstelle Nord"
+(package `beratungsstelle`, an open counselling service
+[`docs/packages-beratungsstelle.md`](packages-beratungsstelle.md), German only).
+`--scale=large` adds three more facilities with the packages `awareness`,
+`jugendarbeit` and `frauenhaus`.
 
 ## Daily work & documentation
 
@@ -12,6 +18,12 @@ A full tour of Anlaufstelle. All images come from the demo environment
 
 ### Log an event
 ![Log an event](screenshots/ereignis-anlegen-en.webp)
+
+### Log an event — counselling-service package
+![Log an event (counselling service)](screenshots/ereignis-anlegen-beratungsstelle-en.webp)
+
+Type selection for short counselling / counselling session / crisis session /
+accompaniment from the counselling-service package (Zweigstelle Nord).
 
 ### Client list
 ![Client list](screenshots/personenliste-en.webp)

@@ -69,3 +69,18 @@ FACILITY_NAMES = [
     "Außenstelle Ost",
     "Außenstelle West",
 ]
+
+# Refs #2148 (R-L5c-1, Maintainer-Entscheid 2026-09-06, Option B): ein
+# mitgeliefertes Paket je Facility-Index, index-gleich zu ``FACILITY_NAMES``.
+# ``medium`` (2 Einrichtungen) ist ein Praefix von ``large`` (5) — die Tabelle
+# gilt fuer beide Profile unveraendert. Nur Index 0 (Hauptstelle) und Index 1
+# (Zweigstelle Nord, `beratungsstelle`) tragen handgeschriebene Event-Pools
+# (core/seed/constants.py); Index 2-4 fuellen ausschliesslich ueber den
+# Fallback-Generator (Option C = bewusst NICHT umgesetzt, siehe #2148).
+FACILITY_PACKAGES = [
+    "default",  # Hauptstelle
+    "beratungsstelle",  # Zweigstelle Nord
+    "awareness",  # Zweigstelle Süd
+    "jugendarbeit",  # Außenstelle Ost
+    "frauenhaus",  # Außenstelle West
+]

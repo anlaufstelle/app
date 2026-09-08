@@ -21,10 +21,11 @@ from core.seed.events import seed_events_bulk, seed_events_small
 from core.seed.flush import flush_seed_data
 from core.seed.organization import seed_facility, seed_organization
 from core.seed.quick_templates import seed_quick_templates
-from core.seed.scale import FACILITY_NAMES, SCALE_CONFIG
+from core.seed.scale import FACILITY_NAMES, FACILITY_PACKAGES, SCALE_CONFIG
 from core.seed.settings_seed import seed_settings, seed_time_filters
 from core.seed.users import seed_super_admin, seed_users
 from core.seed.workitems import seed_work_items
+from core.services.facility_bootstrap import PACKAGE_COMFORT, ensure_quick_templates, ensure_time_filters
 
 
 class Command(BaseCommand):
@@ -97,11 +98,30 @@ class Command(BaseCommand):
         # fuer ``range()`` explizit.
         for idx in range(int(cfg["facilities"])):
             facility_name = FACILITY_NAMES[idx]
+            # Refs #2148 (R-L5c-1): ein mitgeliefertes Paket je Facility-Index
+            # statt fuer jede Einrichtung derselbe Standardkatalog. Faellt
+            # ``seed_document_types`` fail-loud auf ein noch fehlendes
+            # Domaenen-Paket (``UnknownPackageError``), bricht der Lauf hier
+            # bewusst ab — kein stiller Fallback auf ``default``.
+            package_name = FACILITY_PACKAGES[idx]
             facility = seed_facility(org, facility_name)
-            seed_document_types(facility)
-            seed_quick_templates(facility)
+            seed_document_types(facility, package=package_name)
+            if package_name == "default":
+                # Hauptstelle: eigene, reichhaltigere Demo-Vorlagen/-Schichten
+                # (siehe core/seed/quick_templates.py-Docstring) statt des
+                # schmalen Produktions-Startbestands aus PACKAGE_COMFORT.
+                seed_quick_templates(facility)
+                seed_time_filters(facility)
+            else:
+                # Andere Pakete: Komfortobjekte kommen unveraendert aus dem
+                # Produktions-Startbestand (PACKAGE_COMFORT), damit sie nicht
+                # zweimal gepflegt werden muessen (R-L5c-1 "nichts doppelt
+                # anlegen"). ``seed_document_types`` hat den Katalog bereits
+                # angewendet — hier folgen nur noch die beiden Komfortlisten.
+                comfort = PACKAGE_COMFORT[package_name]
+                ensure_quick_templates(facility, comfort.quick_templates)
+                ensure_time_filters(facility, comfort.time_filters)
             seed_settings(facility)
-            seed_time_filters(facility)
             users = seed_users(facility, idx)
 
             if scale == "small":
@@ -112,7 +132,7 @@ class Command(BaseCommand):
                 seed_work_items(facility, users, clients, cfg)
             else:
                 clients = seed_clients_bulk(facility, users, cfg)
-                created_events = seed_events_bulk(facility, users, clients, cfg)
+                created_events = seed_events_bulk(facility, users, clients, cfg, package=package_name)
                 if created_events:
                     self.stdout.write(f"  {created_events} Events für {facility.name} erstellt.")
                 created_cases = seed_cases(facility, users, clients, cfg)

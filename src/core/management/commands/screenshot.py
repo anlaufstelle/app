@@ -50,7 +50,10 @@ SEED_PASSWORD = "anlaufstelle2026"  # noqa: S105 — seed-only credential (dev/e
 # Seed-Usernamen, deren `preferred_language` je Sprachdurchlauf umgestellt wird.
 # Refs #1595: "admin" ergaenzt, weil der dsgvo-paket-Shot als FacilityAdmin
 # laeuft und sonst auch im EN-Durchlauf deutsch rendert.
-LANG_SWITCH_USERNAMES = ("emma", "superadmin", "admin")
+# Refs #2148: "emma_1" (Zweigstelle Nord/Beratungsstelle) ergaenzt fuer den
+# Galerie-Shot "ereignis-anlegen-beratungsstelle" — sonst rendert dessen
+# EN-Durchlauf deutsch, weil der Login-User keine eigene Sprachpraeferenz hat.
+LANG_SWITCH_USERNAMES = ("emma", "emma_1", "superadmin", "admin")
 
 DESKTOP: ViewportSize = {"width": 1280, "height": 800}
 MOBILE: ViewportSize = {"width": 375, "height": 812}
@@ -94,6 +97,11 @@ SHOTS: list[Shot] = [
     # --- Gallery ---
     Shot("login", "/login/", role=None, langs=("de",)),
     Shot("ereignis-anlegen", "core:event_create"),
+    # Refs #2148: einziger Shot, der den Paket-Unterschied zeigt (Typwahl
+    # Kurzberatung/Beratungsgespraech/Krisengespraech/Begleitung aus dem Paket
+    # Beratungsstelle) — Zweigstelle Nord, Login "emma_1" (Maintainer-Entscheid
+    # 2026-09-06, siehe docs/screenshots.md "Alltag & Dokumentation").
+    Shot("ereignis-anlegen-beratungsstelle", "core:event_create", role="emma_1"),
     Shot("fallakte", "core:case_detail", pk_kind="case", full_page=True),
     Shot("uebergabe", "/?view=uebergabe"),
     Shot("statistik-extern", "core:statistics_external_report"),
