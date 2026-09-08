@@ -49,6 +49,7 @@ def test_target_q_rejects_non_uuid_target_ids(target_ids):
         target_q(TARGET_EVENT, target_ids)
 
 
+@pytest.mark.architecture  # scannt src/core/**/*.py — in mutmut-Runs deselektiert (Mutanten-Varianten im Quelltext)
 def test_handwritten_target_filter_inventory_has_no_new_entries():
     """Neue CharField-Zielfilter müssen Typ und IDs über ``target_q`` koppeln."""
     assert _handwritten_target_filters(SERVICES_ROOT) == Counter(
