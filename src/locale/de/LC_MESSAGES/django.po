@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 08:37+0200\n"
+"POT-Creation-Date: 2026-09-08 08:45+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12655,3 +12655,30 @@ msgstr "belegt · kein Kontingent gesetzt · davon %(trash)s MB im Papierkorb"
 
 msgid "Beim Import ist ein unerwarteter Fehler aufgetreten."
 msgstr "Beim Import ist ein unerwarteter Fehler aufgetreten."
+
+msgid "Schnell verlassen"
+msgstr "Schnell verlassen"
+
+msgid "Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc."
+msgstr "Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc."
+
+msgid "Anlaufstelle — Zum Fortfahren klicken oder Taste drücken"
+msgstr "Anlaufstelle — Zum Fortfahren klicken oder Taste drücken"
+
+msgid "Fortfahren"
+msgstr "Fortfahren"
+
+msgid "Mitschauen-Schutz"
+msgstr "Mitschauen-Schutz"
+
+msgid "Ziel für „Schnell verlassen“"
+msgstr "Ziel für „Schnell verlassen“"
+
+msgid "Adresse, die die Aktion „Schnell verlassen“ öffnet. Eine unverfängliche, öffentliche Seite ohne Cookie-Banner wählen — sie steht danach im Verlauf des Geräts. Nur http/https."
+msgstr "Adresse, die die Aktion „Schnell verlassen“ öffnet. Eine unverfängliche, öffentliche Seite ohne Cookie-Banner wählen — sie steht danach im Verlauf des Geräts. Nur http/https."
+
+msgid "Sichtschutz bei Fenster- oder Tab-Wechsel"
+msgstr "Sichtschutz bei Fenster- oder Tab-Wechsel"
+
+msgid "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."
+msgstr "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."

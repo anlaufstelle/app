@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 08:37+0200\n"
+"POT-Creation-Date: 2026-09-08 08:45+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12556,3 +12556,30 @@ msgstr "used · no quota set · %(trash)s MB of that in the trash"
 
 msgid "Beim Import ist ein unerwarteter Fehler aufgetreten."
 msgstr "An unexpected error occurred during the import."
+
+msgid "Schnell verlassen"
+msgstr "Quick exit"
+
+msgid "Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc."
+msgstr "Covers the content immediately, ends the session and opens a neutral page. Unsaved input is lost in the process. Shortcuts: Ctrl+Shift+X or Shift+Esc."
+
+msgid "Anlaufstelle — Zum Fortfahren klicken oder Taste drücken"
+msgstr "Anlaufstelle — click or press a key to continue"
+
+msgid "Fortfahren"
+msgstr "Continue"
+
+msgid "Mitschauen-Schutz"
+msgstr "Shoulder-surfing protection"
+
+msgid "Ziel für „Schnell verlassen“"
+msgstr "Quick-exit target"
+
+msgid "Adresse, die die Aktion „Schnell verlassen“ öffnet. Eine unverfängliche, öffentliche Seite ohne Cookie-Banner wählen — sie steht danach im Verlauf des Geräts. Nur http/https."
+msgstr "Address opened by the \"Quick exit\" action. Pick an innocuous public page without a cookie banner — it ends up in the device history afterwards. http/https only."
+
+msgid "Sichtschutz bei Fenster- oder Tab-Wechsel"
+msgstr "Privacy screen on window or tab change"
+
+msgid "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."
+msgstr "When enabled, a neutral surface covers the content as soon as the window loses focus or the tab moves to the background. It is released by a click or key press; no timer runs. Recommended for workplaces with public traffic."
