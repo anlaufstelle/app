@@ -438,25 +438,42 @@ def test_seed_document_types_upgrade_from_default_to_beratungsstelle_fails_loud(
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_large_missing_package_creates_no_new_facility():
-    """R-L5c-7 (Fix-Runde 1 Punkt 3): fehlt ein ``FACILITY_PACKAGES``-Eintrag
+def test_seed_large_missing_package_creates_no_new_facility(monkeypatch):
+    """R-L5c-7 (Fix-Runde 2 Punkt 3): fehlt ein ``FACILITY_PACKAGES``-Eintrag
     im Katalog, bricht der Lauf VOR der ersten Facility-Anlage ab — weder ein
-    halb ausgestatteter Bestand noch ueberhaupt eine neue Einrichtung."""
-    from core.packages.catalog import list_packages
-    from core.seed.scale import FACILITY_PACKAGES
+    halb ausgestatteter Bestand noch ueberhaupt eine neue Einrichtung, UND
+    bereits vorhandene Bestandsdaten bleiben unangetastet (der Lauf mit
+    ``--flush`` fuehrt den Flush gar nicht erst aus).
 
-    missing = set(FACILITY_PACKAGES[: SCALE_CONFIG["large"]["facilities"]]) - set(list_packages())
-    if not missing:
-        pytest.skip(
-            "Alle FACILITY_PACKAGES sind im Katalog vorhanden (frauenhaus/L4 vermutlich "
-            "inzwischen gemergt) — dieser Test braucht mindestens ein fehlendes Paket, um "
-            "den fail-loud-Pfad vor der ersten Facility-Anlage zu pruefen."
-        )
+    Das fehlende Paket wird deterministisch simuliert (Monkeypatch auf die
+    vom ``seed``-Command tatsaechlich genutzte ``list_packages()``-Naht,
+    ``core.management.commands.seed.list_packages`` — der Name, den
+    ``from core.packages.catalog import list_packages`` dort bindet) statt
+    ueber einen realen Katalog-Luecken-Zustand: dieser Test bleibt dadurch
+    dauerhaft scharf, unabhaengig davon, ob gerade alle fuenf Domaenen-Pakete
+    im Repo vorliegen (Fix-Runde 1 hatte hier faelschlich per ``pytest.skip``
+    aufgegeben, sobald frauenhaus gemergt war — Re-Review Punkt 3)."""
+    import core.management.commands.seed as seed_command
+    from core.models import Event
+    from core.packages.catalog import list_packages as real_list_packages
 
-    before = Facility.objects.count()
-    with pytest.raises(CommandError):
-        call_command("seed", scale="large")
-    assert Facility.objects.count() == before, "Ein fehlendes Paket darf KEINE neue Einrichtung hinterlassen."
+    # Bestand VOR dem (erwartet scheiternden) Lauf: ein --flush duerfte ihn
+    # nicht anfassen, wenn die Vorpruefung wie vorgesehen zuerst abbricht.
+    call_command("seed", scale="small")
+    facilities_before = Facility.objects.count()
+    events_before = Event.objects.count()
+
+    monkeypatch.setattr(
+        seed_command, "list_packages", lambda: [name for name in real_list_packages() if name != "frauenhaus"]
+    )
+
+    with pytest.raises(CommandError, match="Fehlende Pakete im Katalog: frauenhaus"):
+        call_command("seed", scale="large", flush=True)
+
+    assert Facility.objects.count() == facilities_before, (
+        "Ein fehlendes Paket darf KEINE neue Einrichtung hinterlassen."
+    )
+    assert Event.objects.count() == events_before, "Bei fehlendem Paket darf --flush den Bestand nicht geloescht haben."
 
 
 @pytest.mark.slow
@@ -517,19 +534,28 @@ def test_seed_large_facility_matches_its_package_catalog_exactly(idx, facility_n
     mindestens ein Ereignis, und JEDER select-/multi_select-Wert in den
     erzeugten ``data_json`` ist eine gueltige Option DESSELBEN Pakets — auch
     fuer die Fallback-generierten crisis-/ban-Typen der Indizes 2-4, die keine
-    handgeschriebenen Pools haben."""
-    from core.packages.catalog import list_packages, parse_catalog_package
+    handgeschriebenen Pools haben.
+
+    Fix-Runde 2 Punkt 4: die Skip-Regel greift AUSSCHLIESSLICH auf einen beim
+    Parsen/Laden tatsaechlich auftretenden ``UnknownPackageError`` — kein
+    vorgelagerter ``list_packages()``-Check mehr. Im aktuellen Fuenf-Pakete-
+    Stand laufen dadurch alle fuenf Faelle wirklich durch (0 skipped); der
+    Skip greift nur noch automatisch, wenn ein Paket kuenftig tatsaechlich
+    fehlt (nicht mehr, sobald jemand vorab kontrolliert etwas vorspiegelt).
+    """
+    from core.packages.catalog import UnknownPackageError, parse_catalog_package
     from core.seed.organization import seed_organization
 
-    if package_name not in list_packages():
-        pytest.skip(
-            f"Paket {package_name!r} (Index {idx}, {facility_name}) liegt auf diesem Stand "
-            "noch nicht im Katalog — landet mit einem eigenen Merge (#2148 L4). Dieser Test "
-            "wird automatisch scharf, sobald list_packages() das Paket findet."
-        )
-
     org = seed_organization()
-    facility, event_model = _seed_one_package_facility(org, facility_name, package_name, idx)
+    try:
+        facility, event_model = _seed_one_package_facility(org, facility_name, package_name, idx)
+    except UnknownPackageError:
+        pytest.skip(
+            f"Paket {package_name!r} (Index {idx}, {facility_name}) ist beim Laden als "
+            "UnknownPackageError aufgefallen — liegt auf diesem Stand noch nicht im Katalog "
+            "und landet mit einem eigenen Merge (#2148). Dieser Test wird automatisch scharf, "
+            "sobald das Paket ladbar ist."
+        )
 
     package_data = parse_catalog_package(package_name)
     expected_slugs = {dt.slug for dt in package_data.document_types}
