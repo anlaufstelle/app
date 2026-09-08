@@ -26,7 +26,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0175_withdrawn_deletion_request"),
+        ("core", "0177_settings_quick_exit"),
     ]
 
     operations = [
