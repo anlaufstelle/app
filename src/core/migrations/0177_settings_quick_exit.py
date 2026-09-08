@@ -18,7 +18,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0175_withdrawn_deletion_request'),
+        ('core', '0176_settings_max_storage_mb'),
     ]
 
     operations = [
