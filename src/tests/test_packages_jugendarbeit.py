@@ -32,14 +32,21 @@ from core.reporting.backends.sample_report_1 import SampleReport1Backend
 from core.services.events import create_event
 
 EXPECTED_TYPES = {
-    "kontakt": ("normal", True, None, None, "contact"),
-    "veranstaltungsteilnahme": ("normal", True, None, None, "group_activity"),
-    "bezugsarbeit": ("normal", True, None, None, "contact"),
-    "krisengespraech-jugend": ("elevated", False, "identified", "crisis", "crisis"),
-    "beratung-jugend": ("elevated", False, "qualified", None, "counseling"),
-    "vermittlung": ("normal", True, None, None, "referral"),
-    "hausverbot-jugend": ("elevated", False, "identified", "ban", "excluded"),
-    "notiz": ("normal", True, None, None, "excluded"),
+    "kontakt": ("Kontakt", "normal", True, None, None, "contact"),
+    "veranstaltungsteilnahme": (
+        "Veranstaltung / Angebot",
+        "normal",
+        True,
+        None,
+        None,
+        "group_activity",
+    ),
+    "bezugsarbeit": ("Mobile Bezugsarbeit", "normal", True, None, None, "contact"),
+    "krisengespraech-jugend": ("Krisengespräch", "elevated", False, "identified", "crisis", "crisis"),
+    "beratung-jugend": ("Beratung", "elevated", False, "qualified", None, "counseling"),
+    "vermittlung": ("Vermittlung (Jugendamt/Schule/Hilfe)", "normal", True, None, None, "referral"),
+    "hausverbot-jugend": ("Hausverbot", "elevated", False, "identified", "ban", "excluded"),
+    "notiz": ("Notiz", "normal", True, None, None, "excluded"),
 }
 
 EXPECTED_FIELDS = {
@@ -62,6 +69,17 @@ EXPECTED_FIELDS = {
     "vereinbarungen",
     "weitervermittlung-jugend",
     "zielgruppe",
+}
+
+EXPECTED_FIELD_REFS = {
+    "kontakt": ["leistungen", "alterscluster", "strassenkontakt", "dauer", "notiz"],
+    "veranstaltungsteilnahme": ["angebotsname", "teilnehmende", "zielgruppe"],
+    "bezugsarbeit": ["ort", "anlass", "leistungen"],
+    "krisengespraech-jugend": ["art-der-krise", "notiz-krise", "weitervermittlung-jugend"],
+    "beratung-jugend": ["thema", "vereinbarungen", "sorgeberechtigte-informiert"],
+    "vermittlung": [],
+    "hausverbot-jugend": ["grund", "bis", "aktiv"],
+    "notiz": ["notiz"],
 }
 
 ANONYMOUS_TYPES = ["kontakt", "veranstaltungsteilnahme", "bezugsarbeit", "vermittlung", "notiz"]
@@ -93,6 +111,7 @@ def test_jugendarbeit_package_parses_strictly_with_exact_catalog_contract():
     assert {item.slug for item in package.field_templates} == EXPECTED_FIELDS
     assert {
         item.slug: (
+            item.name,
             item.sensitivity,
             item.tally_enabled,
             item.min_contact_stage,
@@ -101,6 +120,9 @@ def test_jugendarbeit_package_parses_strictly_with_exact_catalog_contract():
         )
         for item in package.document_types
     } == EXPECTED_TYPES
+    assert {
+        item.slug: [field_ref.template_slug for field_ref in item.field_refs] for item in package.document_types
+    } == EXPECTED_FIELD_REFS
     assert all(item.entity_type == "event" for item in package.document_types)
     assert all(item.field_type != "file" for item in package.field_templates)
     assert _option_slugs(package, "leistungen") == [
@@ -178,7 +200,11 @@ def test_jugendarbeit_package_load_is_warning_free_and_idempotent(facility):
         assert section.updated == []
     assert second.field_templates.unchanged == [item.slug for item in package.field_templates]
     assert second.document_types.unchanged == [item.slug for item in package.document_types]
-    assert len(second.field_refs.unchanged) == 21
+    assert second.field_refs.unchanged == [
+        f"{type_slug}/{field_slug}"
+        for type_slug, field_slugs in EXPECTED_FIELD_REFS.items()
+        for field_slug in field_slugs
+    ]
     assert second.groups.unchanged == second.conditions.unchanged == []
     assert _counts() == before
 
@@ -307,6 +333,45 @@ def test_assistant_can_see_normal_jugendarbeit_events(client, facility, staff_us
     client.force_login(assistant_user)
 
     assert client.get(reverse("core:event_detail", kwargs={"pk": event.pk})).status_code == 200
+
+
+@pytest.mark.django_db
+def test_high_felder_bleiben_fuer_staff_verborgen(client, facility, staff_user, lead_user):
+    types = _loaded_types(facility)
+    events_and_values = []
+    for slug, data_json in (
+        (
+            "beratung-jugend",
+            {
+                "thema": "Drohender Wohnungsverlust",
+                "vereinbarungen": "Sofortige Unterstützung klären",
+            },
+        ),
+        ("krisengespraech-jugend", {"notiz-krise": "Akute Familienkrise im vertraulichen Gespräch"}),
+    ):
+        cleartext_values = tuple(data_json.values())
+        event = Event.objects.create(
+            facility=facility,
+            document_type=types[slug],
+            occurred_at=timezone.now(),
+            data_json=data_json,
+            created_by=staff_user,
+        )
+        events_and_values.append((event, cleartext_values))
+
+    client.force_login(staff_user)
+    for event, values in events_and_values:
+        response = client.get(reverse("core:event_detail", kwargs={"pk": event.pk}))
+        assert response.status_code == 200
+        staff_content = response.content.decode()
+        assert all(value not in staff_content for value in values)
+
+    client.force_login(lead_user)
+    for event, values in events_and_values:
+        response = client.get(reverse("core:event_detail", kwargs={"pk": event.pk}))
+        assert response.status_code == 200
+        lead_content = response.content.decode()
+        assert all(value in lead_content for value in values)
 
 
 @pytest.mark.django_db

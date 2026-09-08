@@ -1,6 +1,6 @@
 # Paket „Jugendarbeit“
 
-Das Paket richtet eine neue Einrichtung für mobile und offene Jugendarbeit ein, etwa für Streetwork, Fanprojekte oder Jugendzentren. Es unterstützt personenlose Strichlisten für Laufkundschaft und Gruppenangebote ebenso wie identifizierte Krisenarbeit und qualifizierte Beratung. Der U18-Schwerpunkt prägt Felder und empfohlene Aufbewahrungszeiten; kleine Fallzahlen bleiben in Berichten durch k-Anonymität unterdrückt. Das Streetwork-Profil ist offline nutzbar und erfasst Orte bewusst nur als Stadtteil oder Spot, nicht als genaue Adresse.
+Das Paket richtet eine neue Einrichtung für mobile und offene Jugendarbeit ein, etwa für Streetwork, Fanprojekte oder Jugendzentren. Es unterstützt personenlose Strichlisten für Jugendliche, die ohne Termin und ohne Voraussetzung kommen, und für Gruppenangebote ebenso wie identifizierte Krisenarbeit und qualifizierte Beratung. Der U18-Schwerpunkt prägt Felder und empfohlene Aufbewahrungszeiten; kleine Fallzahlen bleiben in Berichten durch k-Anonymität unterdrückt. Das Streetwork-Profil ist offline nutzbar und erfasst Orte bewusst nur als Stadtteil oder Spot, nicht als genaue Adresse.
 
 ## Einspielen
 
