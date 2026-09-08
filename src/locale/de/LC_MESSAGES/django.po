@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 08:31+0200\n"
+"POT-Creation-Date: 2026-09-08 08:37+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12652,3 +12652,6 @@ msgstr "belegt · davon %(trash)s MB im Papierkorb"
 #, python-format
 msgid "belegt · kein Kontingent gesetzt · davon %(trash)s MB im Papierkorb"
 msgstr "belegt · kein Kontingent gesetzt · davon %(trash)s MB im Papierkorb"
+
+msgid "Beim Import ist ein unerwarteter Fehler aufgetreten."
+msgstr "Beim Import ist ein unerwarteter Fehler aufgetreten."
