@@ -29,7 +29,7 @@ from datetime import date
 from django.utils import timezone
 from core.models import Client, DocumentType, Event, Facility, User
 
-facility = Facility.objects.first()
+facility = Facility.objects.get(name="Hauptstelle")
 admin = User.objects.filter(facility=facility, role="facility_admin").first() or User.objects.first()
 
 # Deterministisches Seed-Pseudonym (der Aufrufer setzt den Marker per

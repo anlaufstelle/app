@@ -30,7 +30,7 @@ def _set_default_document_type(doc_type_name, env):
     """Setzt den Standard-Dokumentationstyp via Django-Shell."""
     script = (
         "from core.models import Settings, DocumentType, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"dt = DocumentType.objects.filter(facility=f, name='{doc_type_name}').first(); "
         "s, _ = Settings.objects.get_or_create(facility=f); "
         "s.default_document_type = dt; "
@@ -43,7 +43,7 @@ def _clear_default_document_type(env):
     """Entfernt den Standard-Dokumentationstyp."""
     script = (
         "from core.models import Settings, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         "s = Settings.objects.filter(facility=f).first(); "
         "s.default_document_type = None; "
         "s.save() if s else None"

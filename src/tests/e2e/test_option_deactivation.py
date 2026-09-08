@@ -33,7 +33,7 @@ _SEED_SACHSPENDEN_EVENT_SHELL = r"""
 from django.utils import timezone
 from core.models import DocumentType, Event, Facility, User
 
-facility = Facility.objects.first()
+facility = Facility.objects.get(name="Hauptstelle")
 admin = User.objects.filter(facility=facility, role="facility_admin").first() or User.objects.first()
 
 # "Kontakt" ist der Dokumentationstyp mit dem Feld "leistungen"

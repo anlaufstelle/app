@@ -426,8 +426,8 @@ def _seed_focus_box_items(e2e_env):
         "from core.models import WorkItem, Facility, User; "
         "from datetime import timedelta; "
         "from django.utils import timezone; "
-        "f = Facility.objects.first(); "
         "u = User.objects.get(username='admin'); "
+        "f = u.facility; "
         "today = timezone.localdate(); "
         f"WorkItem.objects.filter(facility=f, title__startswith='{_ZFB}').delete(); "
         "WorkItem.objects.create(facility=f, created_by=u, "
@@ -450,7 +450,7 @@ def _seed_focus_box_items(e2e_env):
 def _cleanup_focus_box_items(e2e_env):
     code = (
         "from core.models import WorkItem, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"WorkItem.objects.filter(facility=f, title__startswith='{_ZFB}').delete(); "
         "print('CLEAN')"
     )
@@ -552,7 +552,7 @@ def _seed_done_items_for_admin(e2e_env, count=2):
 def _cleanup_bulk_items(e2e_env):
     code = (
         "from core.models import WorkItem, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK}').delete(); "
         "print('CLEAN')"
     )
@@ -657,7 +657,7 @@ def _seed_done_item_assigned_to_other(e2e_env):
 def _cleanup_foreign_bulk_items(e2e_env):
     code = (
         "from core.models import WorkItem, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK_FOREIGN}').delete(); "
         "print('CLEAN')"
     )
@@ -742,7 +742,7 @@ def _seed_items_for_done_confirm(e2e_env, status, count=1):
 def _cleanup_done_confirm_items(e2e_env):
     code = (
         "from core.models import WorkItem, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"WorkItem.objects.filter(facility=f, title__startswith='{_DONE_CONFIRM}').delete(); "
         "print('CLEAN')"
     )
@@ -753,7 +753,7 @@ def _status_of_done_confirm_item(e2e_env, index=0):
     """Liest den aktuellen Status eines Erledigt-Bestätigungs-Items aus der DB."""
     code = (
         "from core.models import WorkItem, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"wi = WorkItem.objects.get(facility=f, title='{_DONE_CONFIRM} {index}'); "
         "print('STATUS', wi.status)"
     )
@@ -1047,7 +1047,7 @@ def _seed_done_unassigned_for_admin(e2e_env, count):
 def _cleanup_layout_items(e2e_env):
     code = (
         "from core.models import WorkItem, Facility; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"WorkItem.objects.filter(facility=f, title__startswith='{_LAYOUT}').delete(); "
         "print('CLEAN')"
     )

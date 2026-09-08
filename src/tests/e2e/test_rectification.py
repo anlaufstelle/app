@@ -72,7 +72,7 @@ def rect_run(e2e_env):
         e2e_env,
         "from core.models import DocumentType, DocumentTypeField, Facility, FieldTemplate; "
         "import json; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"dt = DocumentType.objects.create(facility=f, name='E2E-Rect-Profil {run_id}', "
         "  entity_type=DocumentType.EntityType.CLIENT, sensitivity=DocumentType.Sensitivity.NORMAL); "
         f"ft = FieldTemplate.objects.create(facility=f, name='E2E Merkmal {run_id}', slug='{slug}', "
@@ -124,7 +124,7 @@ def _make_client(e2e_env, rect_run, label, *, notes="", with_doc_type=False, dat
         e2e_env,
         "from core.models import Client, Facility; "
         "import json; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         f"c = Client.objects.create(facility=f, pseudonym='{pseudonym}', contact_stage='identified', "
         f"  age_cluster='18_26', notes={notes!r}, document_type_id={doc_type}, "
         f"  data_json=json.loads({data_json!r})); "

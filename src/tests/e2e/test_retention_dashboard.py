@@ -49,7 +49,7 @@ def _ensure_proposals(e2e_env, count=3):
         "from datetime import date, timedelta; "
         "from django.utils import timezone; "
         "import uuid; "
-        "f = Facility.objects.first(); "
+        "f = Facility.objects.get(name='Hauptstelle'); "
         "dt = DocumentType.objects.filter(facility=f, entity_type='event').first(); "
         "c = Client.objects.create(facility=f, contact_stage='identified', "
         "  pseudonym='RET-E2E-' + uuid.uuid4().hex[:8]); "

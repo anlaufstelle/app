@@ -522,3 +522,53 @@ class TestE2ESelectorStabilityGuard:
             "Eintrag entfernen).\n"
             "Veraltete Einträge:\n  " + "\n  ".join(stale)
         )
+
+
+class TestE2ESeedFacilityGuard:
+    """Blockt neue ``Facility.objects.first()``-Seeds in src/tests/e2e/.
+
+    Refs #2166: Facility-PK ist eine UUID — ``Facility.objects.first()`` bzw.
+    ``Facility.objects.order_by("pk").first()`` liefert dann eine physische,
+    nicht garantierte Reihenfolge. Sobald ein früherer Spec (z. B.
+    ``test_admin_site.py``) eine zweite Facility anlegt, würfelt die Auswahl —
+    Fix-Muster 660dc07b band die Onboarding-/Retention-Journeys stattdessen an
+    ``User.objects.get(username="admin").facility``; die übrigen 16 Seeds
+    (#2166) an ``Facility.objects.get(name="Hauptstelle")``.
+
+    Gleiche Mechanik wie ``TestE2ESelectorStabilityGuard``, aber mit
+    Whitelist-Start bei 0 — der Fix bereinigt ALLE Stellen, keine Restmenge
+    ist geduldet.
+    """
+
+    _E2E_DIR = Path("src/tests/e2e")
+    _PATTERN = re.compile(r'Facility\.objects\.(?:order_by\(["\']pk["\']\)\.)?first\(\)')
+
+    # Keine Ausnahmen: jeder neue Treffer ist ein Regressions-Fund.
+    _WHITELIST_MAX: ClassVar[dict[str, int]] = {}
+
+    def _count_in_file(self, path: Path) -> int:
+        if not path.exists():
+            return 0
+        return len(self._PATTERN.findall(path.read_text(errors="ignore")))
+
+    def test_no_new_facility_first_seeds(self):
+        """Neue Files dürfen kein ``Facility.objects.first()``/``order_by("pk").first()``."""
+        if not self._E2E_DIR.exists():
+            pytest.skip(f"{self._E2E_DIR} nicht vorhanden")
+
+        violations: list[str] = []
+        for py_file in sorted(self._E2E_DIR.glob("test_*.py")):
+            name = py_file.name
+            count = self._count_in_file(py_file)
+            allowed = self._WHITELIST_MAX.get(name, 0)
+            if count > allowed:
+                violations.append(f"{name}: {count} Facility.objects.first()-Seed(s), erlaubt sind {allowed}")
+
+        assert not violations, (
+            "E2E-Seeds dürfen die Ziel-Facility nicht über Facility.objects."
+            'first()/order_by("pk").first() waehlen (UUID-PK, Reihenfolge '
+            "nicht garantiert). Stattdessen Facility.objects.get(name="
+            '"Hauptstelle") bzw. User.objects.get(username="admin").facility '
+            "verwenden (Refs #2166).\n"
+            "Verstöße:\n  " + "\n  ".join(violations)
+        )

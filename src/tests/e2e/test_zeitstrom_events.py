@@ -598,7 +598,7 @@ def _arrange_history_matrix_doc_type(e2e_env):
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
     code = (
         "from core.models import DocumentType, DocumentTypeField, FieldTemplate, Facility\n"
-        "f = Facility.objects.first()\n"
+        "f = Facility.objects.get(name='Hauptstelle')\n"
         "dt, _ = DocumentType.objects.get_or_create(\n"
         f"    facility=f, name='{_HISTORY_DT_NAME}',\n"
         "    defaults={'sensitivity': 'normal', 'entity_type': 'event', 'is_active': True},\n"

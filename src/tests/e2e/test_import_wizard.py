@@ -300,7 +300,7 @@ class TestImportEventWithDataJson:
         _shell(
             e2e_env,
             "from core.models import Client, Facility; "
-            "f = Facility.objects.first(); "
+            "f = Facility.objects.get(name='Hauptstelle'); "
             f"Client.objects.create(facility=f, pseudonym='{pseudonym}', contact_stage='identified'); "
             "print('client ok')",
         )
