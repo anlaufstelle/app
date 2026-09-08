@@ -129,9 +129,12 @@
                         {% endfor %}
                     </select>
                     {% if meta_form.document_type.errors %}
-                    <ul id="id_document_type-error" class="mt-1 text-sm text-red-600" role="alert">
-                        {% for error in meta_form.document_type.errors %}<li>{{ error }}</li>{% endfor %}
-                    </ul>
+                    {# Refs #2154 (Fix-Runde 1, R-A-4): role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. Nachgezogen nach dem L8-Merge (vorher TABU). #}
+                    <div role="alert">
+                        <ul id="id_document_type-error" role="list" class="mt-1 text-sm text-red-600">
+                            {% for error in meta_form.document_type.errors %}<li>{{ error }}</li>{% endfor %}
+                        </ul>
+                    </div>
                     {% endif %}
                 </div>
 
@@ -233,9 +236,12 @@
                     </template>
                 </select>
                 {% if meta_form.case.errors %}
-                <ul id="id_case-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in meta_form.case.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
+                {# Refs #2154 (Fix-Runde 1, R-A-4): role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. Nachgezogen nach dem L8-Merge (vorher TABU). #}
+                <div role="alert">
+                    <ul id="id_case-error" role="list" class="mt-1 text-sm text-red-600">
+                        {% for error in meta_form.case.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
                 {% endif %}
                 <p class="mt-1 text-[12px] text-ink-muted">
                     {% trans "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen." %}

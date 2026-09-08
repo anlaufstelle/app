@@ -153,3 +153,97 @@ class TestListAnnouncementTotal:
         # Live-Suche (Refs #1339, Abgrenzung Live-Suche in focus-management.js):
         # der Fokus bleibt im Suchfeld, die Ansage darf ihn nicht stehlen.
         assert page.evaluate("document.activeElement.getAttribute('name')") == "q"
+
+
+# Fix-Runde 1 Review MITTEL, a-codex-review.md § C): die kleine
+# ``small``-Scale-Seed-Groesse (<= 7 Klientel, DEFAULT_PAGE_SIZE = 25) laesst
+# ``paginator.count`` und die Zahl sichtbarer Zeilen in JEDEM bisherigen Test
+# zufaellig zusammenfallen — eine fehlerhafte Reimplementierung mit
+# ``len(page)``/gezaehlten DOM-Zeilen haette denselben erwarteten Text
+# geliefert. ``_BULK_COUNT`` erzwingt genau den Unterschied: mehr Datensaetze
+# als eine Seite fasst.
+_BULK_MARKER = "E2E2155Bulk-"
+_BULK_COUNT = 30  # > DEFAULT_PAGE_SIZE (25) -> genau 2 Seiten (ceil(30/25))
+
+_CREATE_BULK_CLIENTS = f"""
+from core.models import Client, Facility, User
+f = Facility.objects.get(name="Hauptstelle")
+admin = User.objects.get(username="admin")
+created = 0
+for i in range({_BULK_COUNT}):
+    Client.objects.create(
+        facility=f,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym=f"{_BULK_MARKER}{{i:03d}}",
+        created_by=admin,
+    )
+    created += 1
+print(created)
+"""
+
+# Aufraeumen wie in ``test_dst_fold.py`` (``_retire_events_of_the_double_hour``):
+# ``is_deleted=True`` statt Hard-Delete (derselbe Soft-Delete-Weg wie die
+# Anwendung selbst nutzt), gefiltert ueber den fuer diese Datei eindeutigen
+# Pseudonym-Marker -- trifft nichts, was ein anderer Test angelegt hat, auch
+# wenn dieser Test vorzeitig abbricht.
+_RETIRE_BULK_CLIENTS = f"""
+from core.models import Client
+n = Client.objects.filter(pseudonym__startswith="{_BULK_MARKER}").update(is_deleted=True)
+print(n)
+"""
+
+_BULK_SEARCH_PAGINATOR = f"""
+from django.core.paginator import Paginator
+from core.constants import DEFAULT_PAGE_SIZE
+from core.models import Client, Facility
+f = Facility.objects.get(name="Hauptstelle")
+qs = (
+    Client.objects.for_facility(f)
+    .filter(is_active=True, is_deleted=False, pseudonym__ilike="{_BULK_MARKER}")
+    .order_by("pseudonym")
+)
+p = Paginator(qs, DEFAULT_PAGE_SIZE)
+print(p.count)
+print(p.num_pages)
+"""
+
+
+class TestListAnnouncementAcrossMultiplePages:
+    """Refs #2155, Fix-Runde 1: Gesamtwert != sichtbare Zeilen, echt bewiesen."""
+
+    @pytest.fixture(autouse=True)
+    def _bulk_clients(self, e2e_env):
+        created = int(django_shell(e2e_env, _CREATE_BULK_CLIENTS)[-1])
+        assert created == _BULK_COUNT, "Vorbedingung: alle Bulk-Klienten muessen angelegt worden sein"
+        yield
+        django_shell(e2e_env, _RETIRE_BULK_CLIENTS)
+
+    def test_client_search_across_two_pages_announces_the_total_not_the_visible_rows(
+        self, authenticated_page, base_url, e2e_env
+    ):
+        page = authenticated_page
+        page.goto(f"{base_url}/clients/")
+
+        # Marker-Suche statt Stufen-Filter: unabhaengig von jeder Seed-Menge
+        # eindeutig auf genau die hier angelegten Datensaetze (kein anderes
+        # Pseudonym im Bestand enthaelt diesen String).
+        search = page.locator('input[aria-label="Suchbegriff"]')
+        search.click()
+        search.press_sequentially(_BULK_MARKER, delay=20)
+
+        total, pages = _paginator_count_and_pages(e2e_env, _BULK_SEARCH_PAGINATOR)
+        assert total == _BULK_COUNT, "Marker darf keine Kollision mit Seed-Pseudonymen haben"
+        assert pages == 2, "Der Test soll genau den Mehrseiten-Fall pruefen"
+
+        region = page.locator("#client-list-status")
+        expect(region).to_have_count(1)
+        expect(region).to_have_text(f"{total} Personen gefunden, Seite 1 von {pages}.", timeout=10000)
+        assert region.get_attribute("role") == "status"
+        assert region.get_attribute("aria-live") == "polite"
+
+        # Die entscheidende Unterscheidung: Seite 1 zeigt hoechstens
+        # DEFAULT_PAGE_SIZE Zeilen, die Ansage nennt aber den STRENG
+        # GROESSEREN Gesamtwert — eine Reimplementierung ueber die sichtbare
+        # Zeilenzahl waere hier nachweisbar falsch Review MITTEL).
+        visible_rows = page.locator("[data-testid='client-row']").count()
+        assert 0 < visible_rows < total, (visible_rows, total)

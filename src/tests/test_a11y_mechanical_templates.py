@@ -117,6 +117,26 @@ def test_static_backup_code_note_is_not_an_alert() -> None:
     assert 'role="alert"' not in opening_tag
 
 
+@pytest.mark.parametrize("error_id", ["id_document_type-error", "id_case-error"])
+def test_event_create_document_type_and_case_errors_are_real_lists(error_id: str) -> None:
+    """Refs #2154, Fix-Runde 1 (Ruling R-A-4): nach dem L8-Merge nachgezogen.
+
+    Bis zum L8-Merge waren diese zwei Stellen TABU (fremdes Template) und
+    blieben bewusst unangetastet /kimi-k3-Review bestaetigten die
+    Restluecke als real, nicht nur behauptet). Jetzt gilt fuer sie dasselbe
+    Muster wie fuer die uebrigen 13 Fundstellen der Fehlerklasse: ``role="alert"``
+    sitzt auf einem umschliessenden ``<div>``, das ``<ul>`` behaelt seine
+    Listenrolle per ``role="list"`` UND seine ``id`` (aria-describedby-Ziel
+    bleibt unveraendert erreichbar).
+    """
+    source = _source("core/events/create.html")
+
+    assert f'<ul id="{error_id}" role="alert"' not in source, (
+        f"{error_id}: role=alert ueberschreibt weiterhin die Listenrolle des <ul> (axe listitem)"
+    )
+    assert f'<ul id="{error_id}" role="list"' in source, f"{error_id}: erwartetes role=list-Muster fehlt"
+
+
 def test_case_controls_have_accessible_names_and_errors() -> None:
     event_list = _source("core/cases/partials/event_list.html")
     goals = _source("core/cases/partials/goals_section.html")
