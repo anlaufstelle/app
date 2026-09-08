@@ -248,3 +248,19 @@ class TestVerwaltungOverview:
         assert context["users_total"] >= 1
         assert "users_without_mfa" in context
         assert isinstance(context["settings_warnings"], list)
+
+
+def test_storage_detail_without_limit_names_only_the_trash_share():
+    """Ohne Kontingent gibt es keinen Nenner — der Beisatz nennt nur den Papierkorb-Anteil.
+
+    Deckt den ``limit_mb is None``-Zweig von ``_storage_detail`` (#2129),
+    den die Kachel-Tests nur mit gesetztem Kontingent durchlaufen.
+    """
+    from core.services.file_vault.quota import StorageUsage
+    from core.services.hubs import _storage_detail
+
+    unbegrenzt = StorageUsage(used_bytes=7 * 1024 * 1024, trash_bytes=2 * 1024 * 1024, limit_bytes=None)
+    begrenzt = StorageUsage(used_bytes=7 * 1024 * 1024, trash_bytes=2 * 1024 * 1024, limit_bytes=50 * 1024 * 1024)
+
+    assert _storage_detail(unbegrenzt) == "MB belegt (davon 2 MB im Papierkorb) · kein Kontingent gesetzt"
+    assert _storage_detail(begrenzt) == "von 50 MB belegt (davon 2 MB im Papierkorb)"
