@@ -407,7 +407,6 @@ class TestEnsureFacilityBaseline:
         ] == [
             ("versorgung", "Wasser gegeben", {"bedarf": ["wasser"]}),
             ("versorgung", "Ruheraum begleitet", {"bedarf": ["ruheraum"]}),
-            ("gewaltvorfall", "Vorfall → Security übergeben", {"weitergabe-an": ["security"]}),
         ]
         assert PACKAGE_COMFORT["beratungsstelle"].quick_templates == ()
         assert PACKAGE_COMFORT["frauenhaus"].quick_templates == ()

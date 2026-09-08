@@ -158,11 +158,6 @@ PACKAGE_COMFORT: dict[str, ComfortDefs] = {
         (
             QuickTemplateDef("versorgung", "Wasser gegeben", {"bedarf": ["wasser"]}),
             QuickTemplateDef("versorgung", "Ruheraum begleitet", {"bedarf": ["ruheraum"]}),
-            QuickTemplateDef(
-                "gewaltvorfall",
-                "Vorfall → Security übergeben",
-                {"weitergabe-an": ["security"]},
-            ),
         ),
     ),
 

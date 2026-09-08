@@ -1,6 +1,6 @@
 # Paket „Awareness“
 
-Das Paket richtet eine dauerhafte Facility für ein Awareness-Team ein, das bei Festivals, in Klubs oder bei anderen Veranstaltungen arbeitet. Eine Veranstaltung ist dabei **keine eigene Facility**: Die Facility steht für das Team beziehungsweise die Organisation. Einzelne Veranstaltungen werden über den Datumsbereich in Statistik und Export sowie das Feld `veranstaltung` unterschieden. Die Dokumentation ist auf überwiegend anonyme Kurzkontakte, Zeitdruck und sensible Vorfallsdaten zugeschnitten; kleine Fallzahlen bleiben in Abschlussberichten durch k-Anonymität unterdrückt.
+Das Paket richtet eine dauerhafte Facility für ein Awareness-Team ein, das bei Festivals, in Klubs oder bei anderen Veranstaltungen arbeitet. Eine Veranstaltung ist dabei **keine eigene Facility**: Die Facility steht für das Team beziehungsweise die Organisation. Einzelne Veranstaltungen werden immer über den Datumsbereich in Statistik und Export unterschieden; nur Awareness-Kontakt, Versorgung und Vermittlung tragen zusätzlich das Feld `veranstaltung`. Die Dokumentation ist auf überwiegend anonyme Kurzkontakte, Zeitdruck und sensible Vorfallsdaten zugeschnitten; kleine Fallzahlen bleiben in Abschlussberichten durch k-Anonymität unterdrückt.
 
 ## Einspielen
 
@@ -54,13 +54,21 @@ Die Sichtbarkeit folgt der Rollenobergrenze der Anwendung. Ein nicht sichtbares 
 | Vermittlung | sichtbar | sichtbar | sichtbar | sichtbar |
 | Notiz | sichtbar | sichtbar | sichtbar | sichtbar |
 
+Innerhalb eines sichtbaren Typs gilt zusätzlich die Sensitivität des einzelnen Felds:
+
+| High-Feld | Typ | assistant | staff | lead | facility_admin |
+|---|---|:---:|:---:|:---:|:---:|
+| `ort-im-veranstaltungsgelaende` | Gewaltvorfall | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
+| `notiz-vorfall` | Gewaltvorfall | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
+| `notiz-krise` | Krisensituation | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
+
 Empfohlene Rollenverteilung: Die Koordination arbeitet als `lead`; Crew-Mitglieder erhalten abhängig vom Sichtbarkeitsbedarf `staff` oder `assistant`. Für `lead` und `facility_admin` sollte MFA organisatorisch verpflichtend sein. Ein facility-weiter MFA-Zwang ist bei ehrenamtlicher Crew auf privaten Geräten nicht die empfohlene Voreinstellung.
 
 ## Berichte und Veranstaltungssicht
 
 Kontakt, Versorgung, Gewaltvorfall, Krise und Vermittlung fließen über ihre bekannten `report_key`-Werte in den Beispiel-Sachbericht ein. `dauer` macht Beratungsstunden für Awareness-Kontakte verfügbar; `art-der-krise` liefert die Krisenarten-Verteilung. Ein Leistungs-Bericht über `leistungen` ist bewusst **nicht verfügbar**, weil das Paket dieses Feld nicht enthält. Orga-Meldung und Notiz sind mit `excluded` ausdrücklich von fachlichen Berichtskategorien ausgenommen.
 
-Für eine Veranstaltung wird in Statistik und Export ein Datumsbereich gewählt und bei Bedarf nach dem Feld `veranstaltung` gruppiert. `TimeFilter` bildet ausschließlich Tageszeiten ab; die mitgelieferten Fenster „Abend“ (18:00–00:00) und „Nacht“ (00:00–06:00) sind keine Veranstaltungscontainer. Ein echtes Veranstaltungs-Aggregat ist in #2143 vorgesehen. Abschlussberichte sollten die konfigurierte k-Anonymitäts-Schwelle verwenden; kleine Gruppen werden dadurch unterdrückt.
+Für eine Veranstaltung wird in Statistik und Export immer ein Datumsbereich gewählt. Nur Awareness-Kontakt, Versorgung und Vermittlung lassen sich zusätzlich über ihr Feld `veranstaltung` gruppieren; Gewaltvorfall, Krisensituation, Orga-Meldung und Notiz tragen dieses Feld nicht. `TimeFilter` bildet ausschließlich Tageszeiten ab; die mitgelieferten Fenster „Abend“ (18:00–00:00) und „Nacht“ (00:00–06:00) sind keine Veranstaltungscontainer. Ein echtes Veranstaltungs-Aggregat ist in #2143 vorgesehen. Abschlussberichte sollten die konfigurierte k-Anonymitäts-Schwelle verwenden; kleine Gruppen werden dadurch unterdrückt.
 
 ## Betreiber-Empfehlungen
 
@@ -71,7 +79,7 @@ Diese Einstellungen sind nicht Teil des Paketformats und werden nicht automatisc
 - `allowed_file_types`: restriktiv konfigurieren, obwohl das Paket selbst keine Datei-Felder enthält.
 - MFA rollenbezogen für `lead` und `facility_admin` verpflichtend machen; `mfa_enforced_facility_wide` für BYOD-/Ehrenamts-Teams nicht pauschal aktivieren.
 - Die gelieferten Zeitfenster „Abend“ und „Nacht“ an die tatsächlichen Einsatzzeiten anpassen.
-- Die Schnellvorlagen „Wasser gegeben“, „Ruheraum begleitet“ und „Vorfall → Security übergeben“ fachlich prüfen und bei Bedarf ergänzen.
+- Die Schnellvorlagen „Wasser gegeben“ und „Ruheraum begleitet“ fachlich prüfen und bei Bedarf ergänzen. Schnellvorlagen mit Vorbelegung sind nur an Typen der Sensitivität normal wirksam — der Sicherheitsfilter verwirft Vorbelegungen an erhöhten Typen.
 
 Es gibt keine Seed-Automatik für Betreiber-Settings oder Rollen. Retention, erlaubte Dateitypen, k-Anonymität, MFA und Benutzerrollen werden nach dem Einspielen bewusst durch die Anwendungsbetreuung festgelegt.
 
@@ -79,6 +87,6 @@ Es gibt keine Seed-Automatik für Betreiber-Settings oder Rollen. Retention, erl
 
 - Alle Typen bleiben anonym nutzbar; auch bei Gewalt- und Krisensituationen wird keine Identifizierung erzwungen.
 - `orga-meldung` verwendet `system_type: ban` und exakt `grund`/`bis`/`aktiv`, damit Banner und Hausverbots-Auswertung funktionieren.
-- Die Veranstaltung wird als Datumsbereich plus Feldwert dokumentiert, nicht als Facility oder TimeFilter-Container.
+- Die Veranstaltung wird als Datumsbereich dokumentiert, nicht als Facility oder TimeFilter-Container; nur Awareness-Kontakt, Versorgung und Vermittlung führen zusätzlich den Feldwert `veranstaltung`.
 - Es gibt kein `leistungen`-Feld und damit keinen Leistungs-Bericht; Versorgung hat die eigene Berichtskategorie `supply`.
 - Kein Datei-Feld und keine Fotodokumentation von betroffenen Personen.

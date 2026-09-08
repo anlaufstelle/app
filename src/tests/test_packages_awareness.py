@@ -31,35 +31,35 @@ from core.services.events import create_event
 from core.services.system import get_active_bans
 
 EXPECTED_TYPES = {
-    "awareness-kontakt": ("normal", True, None, "contact"),
-    "versorgung": ("normal", True, None, "supply"),
-    "gewaltvorfall": ("elevated", False, None, "incident"),
-    "krisensituation": ("elevated", False, "crisis", "crisis"),
-    "orga-meldung": ("elevated", False, "ban", "excluded"),
-    "vermittlung": ("normal", True, None, "referral"),
-    "notiz": ("normal", True, None, "excluded"),
+    "awareness-kontakt": ("Awareness-Kontakt", "normal", True, None, "contact"),
+    "versorgung": ("Versorgung", "normal", True, None, "supply"),
+    "gewaltvorfall": ("Gewaltvorfall", "elevated", False, None, "incident"),
+    "krisensituation": ("Krisensituation", "elevated", False, "crisis", "crisis"),
+    "orga-meldung": ("Orga-Meldung (Platzverweis)", "elevated", False, "ban", "excluded"),
+    "vermittlung": ("Vermittlung", "normal", True, None, "referral"),
+    "notiz": ("Notiz", "normal", True, None, "excluded"),
 }
 
 EXPECTED_FIELDS = {
-    "aktiv",
-    "alterscluster",
-    "anliegen",
-    "art-der-krise",
-    "art-des-vorfalls",
-    "bedarf",
-    "beteiligung",
-    "bis",
-    "dauer",
-    "folgesituation",
-    "grund",
-    "notiz",
-    "notiz-krise",
-    "notiz-vorfall",
-    "ort-im-veranstaltungsgelaende",
-    "veranstaltung",
-    "vermittelt-an",
-    "weitergabe-an",
-    "weitervermittlung",
+    "aktiv": "boolean",
+    "alterscluster": "select",
+    "anliegen": "multi_select",
+    "art-der-krise": "select",
+    "art-des-vorfalls": "multi_select",
+    "bedarf": "multi_select",
+    "beteiligung": "select",
+    "bis": "date",
+    "dauer": "number",
+    "folgesituation": "select",
+    "grund": "textarea",
+    "notiz": "textarea",
+    "notiz-krise": "textarea",
+    "notiz-vorfall": "textarea",
+    "ort-im-veranstaltungsgelaende": "text",
+    "veranstaltung": "text",
+    "vermittelt-an": "select",
+    "weitergabe-an": "multi_select",
+    "weitervermittlung": "text",
 }
 
 
@@ -86,9 +86,10 @@ def _option_slugs(package, field_slug: str) -> list[str]:
 def test_awareness_package_parses_strictly_with_exact_catalog_contract():
     package = parse_catalog_package("awareness")
 
-    assert {item.slug for item in package.field_templates} == EXPECTED_FIELDS
+    assert {item.slug: item.field_type for item in package.field_templates} == EXPECTED_FIELDS
     assert {
         item.slug: (
+            item.name,
             item.sensitivity,
             item.tally_enabled,
             item.system_type,
@@ -181,10 +182,11 @@ def test_setup_facility_installs_only_awareness_and_its_comfort_objects():
         .exists()
     )
     assert list(TimeFilter.objects.for_facility(facility).values_list("label", flat=True)) == ["Abend", "Nacht"]
-    assert list(QuickTemplate.objects.for_facility(facility).values_list("name", "document_type__slug")) == [
-        ("Wasser gegeben", "versorgung"),
-        ("Ruheraum begleitet", "versorgung"),
-        ("Vorfall → Security übergeben", "gewaltvorfall"),
+    assert list(
+        QuickTemplate.objects.for_facility(facility).values_list("name", "document_type__slug", "prefilled_data")
+    ) == [
+        ("Wasser gegeben", "versorgung", {"bedarf": ["wasser"]}),
+        ("Ruheraum begleitet", "versorgung", {"bedarf": ["ruheraum"]}),
     ]
     assert "Awareness eingespielt: 7 Dokumentationstypen angelegt" in out.getvalue()
 
@@ -199,7 +201,6 @@ def test_quick_templates_reference_existing_fields_and_active_options(facility):
     assert [item.prefilled_data for item in PACKAGE_COMFORT["awareness"].quick_templates] == [
         {"bedarf": ["wasser"]},
         {"bedarf": ["ruheraum"]},
-        {"weitergabe-an": ["security"]},
     ]
 
     for item in PACKAGE_COMFORT["awareness"].quick_templates:
