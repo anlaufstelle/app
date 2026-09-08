@@ -179,7 +179,16 @@ PACKAGE_COMFORT: dict[str, ComfortDefs] = {
     "frauenhaus": ComfortDefs(DEFAULT_TIME_FILTERS, ()),
 
     # Jugendarbeit
-    "jugendarbeit": ComfortDefs(DEFAULT_TIME_FILTERS, ()),
+    "jugendarbeit": ComfortDefs(
+        (
+            TimeFilterDef("Nachmittag", time(14, 0), time(18, 0)),
+            TimeFilterDef("Abend", time(18, 0), time(22, 0)),
+        ),
+        (
+            QuickTemplateDef("kontakt", "Kontakt JZ-Raum", {"leistungen": ["aufenthaltsraum"]}),
+            QuickTemplateDef("veranstaltungsteilnahme", "Veranstaltung (Personenzahl)", {"teilnehmende": 10}),
+        ),
+    ),
 }
 # fmt: on
 

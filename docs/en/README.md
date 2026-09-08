@@ -53,6 +53,7 @@ Templates included:
 | [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
 | [packages-awareness.md](../packages-awareness.md) | Awareness package: seven documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2137) |
 | [packages-beratungsstelle.md](../packages-beratungsstelle.md) | German-only operator guide for the “Beratungsstelle” package: target picture, types, reports, roles, recommendations (Refs #2145) |
+| [packages-jugendarbeit.md](../packages-jugendarbeit.md) | Operator documentation for the youth-work package: types, fields, roles, reports, and recommendations (Refs #2139); intentionally German-only |
 | [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
@@ -75,4 +76,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 02b3bba0f0d3cd75f7eb72259b6a4634d420a438 -->
+<!-- source-hash: 09ac9c0921d9b20ce7af73753c6b4e51ca017996 -->

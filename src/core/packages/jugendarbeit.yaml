@@ -1,0 +1,314 @@
+# Jugendarbeit-Dokumentationspaket (Schema v1) — Refs #2139.
+#
+# WICHTIG — Kompatibilitaet mit Bestands-Einrichtungen:
+#
+# * ``document_types[].slug`` ist der Lookup-Key des Loaders und muss EXAKT
+#   dem Ergebnis des Slug-Backfills aus Migration ``0117`` entsprechen
+#   (slugify + Umlaut-Map ueber den ``name``). Ein abweichender Slug legt in
+#   jeder Bestands-Einrichtung einen DUPLIKAT-Typ an, statt den vorhandenen
+#   zu aktualisieren. Dasselbe gilt fuer ``groups[].slug`` (stabile Slugs
+#   seit #1710) und ``field_templates[].slug``.
+# * ``system_type`` muss bei allen Typen mitgefuehrt werden, die einen haben:
+#   der Loader erlaubt ``None`` -> Wert (Bestand ohne Systemtyp), aber weder
+#   Wechsel noch Entfernen (E13). Ein fehlender Schluessel waere beim
+#   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler. Seit E4 (Refs #1850)
+#   sind das nur noch ``krisengespraech`` (``crisis``) und ``hausverbot``
+#   (``ban``) — die uebrigen sieben Werte sind aus dem Enum entfernt, ihre
+#   Zeilen hier entfallen ersatzlos. Gegen einen Bestand, den Migration
+#   ``0147`` bereits genullt hat, ist das kein E13-Konflikt (leer bleibt
+#   leer); ein aelteres Paket, das sie noch mitfuehrt, laedt weiterhin — der
+#   Wert entfaellt dann mit einer Warnung im Load-Report.
+# * ``report_key`` (E3, Refs #1849) muss EXAKT dem Ergebnis des Backfills aus
+#   Migration ``0145`` entsprechen — Typ-Ebene wie Feld-Ebene. Ein abweichender
+#   Wert waere gegen eine aktualisierte Bestands-Einrichtung ein
+#   Immutabilitaets-Fehler (leer -> gesetzt ist erlaubt, gesetzt -> anders
+#   nicht). Der Doppellauf-Test in ``test_packages_loader.py`` haelt das fest.
+# * Bei ``select``/``multi_select`` ist der ``options``-Schluessel PFLICHT —
+#   Weglassen leert ``options_json`` mit blosser Warnung.
+# * KEINE ``conditions``-Schluessel: der Seed bringt keine Feldbedingungen
+#   mit, und ein fehlender Schluessel laesst per UI gepflegte Bedingungen
+#   unangetastet (E14/M1-E20). ``conditions: []`` wuerde sie LOESCHEN.
+#
+# ``sort_order`` folgt der globalen Block-Sequenz (ADR-036/#1713): Gruppen
+# und ungruppierte Felder teilen sich EINE Sequenz je Dokumentationstyp;
+# ein Feld INNERHALB einer Gruppe traegt seinen Innen-Index 0..n-1.
+
+schema_version: 1
+
+field_templates:
+  - slug: dauer
+    name: Dauer
+    report_key: dauer_minuten
+    field_type: number
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Dauer in Minuten
+
+  - slug: notiz
+    name: Notiz
+    field_type: textarea
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: leistungen
+    name: Leistungen
+    report_key: leistungen
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: essen, label: Essen, is_active: true}
+      - {slug: getraenk, label: Getränk, is_active: true}
+      - {slug: wlan, label: WLAN, is_active: true}
+      - {slug: spiele, label: Spiele, is_active: true}
+      - {slug: aufenthaltsraum, label: Aufenthaltsraum, is_active: true}
+      - {slug: ladestation, label: Ladestation, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: alterscluster
+    name: Altersgruppe
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Geschätztes Alter beim Ereignis; unabhängig von der Altersgruppe der Person
+    options:
+      - {slug: u18, label: "U18", is_active: true}
+      - {slug: "18-26", label: "18-26", is_active: true}
+      - {slug: "27-plus", label: "27+", is_active: true}
+      - {slug: unbekannt, label: Unbekannt, is_active: true}
+
+  - slug: strassenkontakt
+    name: Straßenkontakt
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: angebotsname
+    name: Angebotsname
+    field_type: text
+    is_encrypted: false
+    sensitivity: normal
+
+  - slug: teilnehmende
+    name: Teilnehmende
+    field_type: number
+    min_value: 1
+    is_encrypted: false
+    sensitivity: normal
+    help_text: Kopfzahl, keine Liste von Pseudonymen
+
+  - slug: zielgruppe
+    name: Zielgruppe
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: normal
+    options:
+      - {slug: grundschule, label: Grundschule, is_active: true}
+      - {slug: sek-i, label: Sekundarstufe I, is_active: true}
+      - {slug: sek-ii, label: Sekundarstufe II, is_active: true}
+      - {slug: gefluechtete-jugendliche, label: Geflüchtete Jugendliche, is_active: true}
+      - {slug: queere-jugendliche, label: Queere Jugendliche, is_active: true}
+      - {slug: offen, label: Offen, is_active: true}
+
+  - slug: ort
+    name: Ort
+    field_type: text
+    is_encrypted: false
+    sensitivity: normal
+    help_text: Stadtteil oder Spot, keine Adresse
+
+  - slug: anlass
+    name: Anlass
+    field_type: select
+    is_encrypted: false
+    sensitivity: normal
+    options:
+      - {slug: streetwork, label: Streetwork, is_active: true}
+      - {slug: schulhof, label: Schulhof, is_active: true}
+      - {slug: fest, label: Fest, is_active: true}
+      - {slug: unterwegs-angesprochen, label: Unterwegs angesprochen, is_active: true}
+
+  - slug: art-der-krise
+    name: Art der Krise
+    report_key: art_der_krise
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: mobbing, label: Mobbing, is_active: true}
+      - {slug: familienkrise, label: Familienkrise, is_active: true}
+      - {slug: substanz, label: Substanz, is_active: true}
+      - {slug: psychische-belastung, label: Psychische Belastung, is_active: true}
+      - {slug: selbstverletzendes-verhalten, label: Selbstverletzendes Verhalten, is_active: true}
+      - {slug: suizidalitaet, label: Suizidalität, is_active: true}
+      - {slug: sexualitaet-identitaet, label: Sexualität / Identität, is_active: true}
+      - {slug: gewalt, label: Gewalt, is_active: true}
+
+  - slug: notiz-krise
+    name: Notiz (Krise)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: weitervermittlung-jugend
+    name: Weitervermittlung
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: jugendamt, label: Jugendamt, is_active: true}
+      - {slug: schulsozialarbeit, label: Schulsozialarbeit, is_active: true}
+      - {slug: therapeutin, label: Therapeut:in, is_active: true}
+      - {slug: notdienst, label: Notdienst, is_active: true}
+      - {slug: keine, label: Keine, is_active: true}
+
+  - slug: thema
+    name: Thema
+    field_type: text
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: vereinbarungen
+    name: Vereinbarungen
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: sorgeberechtigte-informiert
+    name: Sorgeberechtigte informiert
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: normal
+
+  - slug: grund
+    name: Grund
+    field_type: textarea
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: bis
+    name: Bis
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: aktiv
+    name: Aktiv
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+document_types:
+  - slug: kontakt
+    name: Kontakt
+    entity_type: event
+    tally_enabled: true
+    report_key: contact
+    sensitivity: normal
+    icon: users
+    color: indigo
+    sort_order: 0
+    field_refs:
+      - {template_slug: leistungen, sort_order: 0}
+      - {template_slug: alterscluster, sort_order: 1}
+      - {template_slug: strassenkontakt, sort_order: 2}
+      - {template_slug: dauer, sort_order: 3}
+      - {template_slug: notiz, sort_order: 4}
+
+  - slug: veranstaltungsteilnahme
+    name: Veranstaltung / Angebot
+    entity_type: event
+    tally_enabled: true
+    report_key: group_activity
+    sensitivity: normal
+    icon: users
+    color: indigo
+    sort_order: 1
+    field_refs:
+      - {template_slug: angebotsname, sort_order: 0}
+      - {template_slug: teilnehmende, sort_order: 1}
+      - {template_slug: zielgruppe, sort_order: 2}
+
+  - slug: bezugsarbeit
+    name: Mobile Bezugsarbeit
+    entity_type: event
+    tally_enabled: true
+    report_key: contact
+    sensitivity: normal
+    icon: map-pin
+    color: green
+    sort_order: 2
+    field_refs:
+      - {template_slug: ort, sort_order: 0}
+      - {template_slug: anlass, sort_order: 1}
+      - {template_slug: leistungen, sort_order: 2}
+
+  - slug: krisengespraech-jugend
+    name: Krisengespräch
+    entity_type: event
+    system_type: crisis
+    tally_enabled: false
+    min_contact_stage: identified
+    report_key: crisis
+    sensitivity: elevated
+    icon: alert-triangle
+    color: amber
+    sort_order: 3
+    field_refs:
+      - {template_slug: art-der-krise, sort_order: 0}
+      - {template_slug: notiz-krise, sort_order: 1}
+      - {template_slug: weitervermittlung-jugend, sort_order: 2}
+
+  - slug: beratung-jugend
+    name: Beratung
+    entity_type: event
+    tally_enabled: false
+    min_contact_stage: qualified
+    report_key: counseling
+    sensitivity: elevated
+    icon: message-circle
+    color: purple
+    sort_order: 4
+    field_refs:
+      - {template_slug: thema, sort_order: 0}
+      - {template_slug: vereinbarungen, sort_order: 1}
+      - {template_slug: sorgeberechtigte-informiert, sort_order: 2}
+
+  - slug: vermittlung
+    name: Vermittlung (Jugendamt/Schule/Hilfe)
+    entity_type: event
+    tally_enabled: true
+    report_key: referral
+    sensitivity: normal
+    icon: share-2
+    color: blue
+    sort_order: 5
+
+  - slug: hausverbot-jugend
+    name: Hausverbot
+    entity_type: event
+    system_type: ban
+    tally_enabled: false
+    min_contact_stage: identified
+    report_key: excluded
+    sensitivity: elevated
+    icon: slash
+    color: red
+    sort_order: 6
+    field_refs:
+      - {template_slug: grund, sort_order: 0}
+      - {template_slug: bis, sort_order: 1}
+      - {template_slug: aktiv, sort_order: 2}
+
+  - slug: notiz
+    name: Notiz
+    entity_type: event
+    tally_enabled: true
+    report_key: excluded
+    sensitivity: normal
+    icon: file-text
+    color: gray
+    sort_order: 7
+    field_refs:
+      - {template_slug: notiz, sort_order: 0}

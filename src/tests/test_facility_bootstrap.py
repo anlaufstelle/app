@@ -401,7 +401,12 @@ class TestEnsureFacilityBaseline:
         assert PACKAGE_COMFORT["default"].time_filters is DEFAULT_TIME_FILTERS
         assert PACKAGE_COMFORT["default"].quick_templates is DEFAULT_QUICK_TEMPLATES
         assert PACKAGE_COMFORT["frauenhaus"].time_filters is DEFAULT_TIME_FILTERS
-        assert PACKAGE_COMFORT["jugendarbeit"].time_filters is DEFAULT_TIME_FILTERS
+        assert [
+            (item.label, item.start_time, item.end_time) for item in PACKAGE_COMFORT["jugendarbeit"].time_filters
+        ] == [
+            ("Nachmittag", time(14, 0), time(18, 0)),
+            ("Abend", time(18, 0), time(22, 0)),
+        ]
         assert [
             (item.document_type_slug, item.name, item.prefilled_data)
             for item in PACKAGE_COMFORT["awareness"].quick_templates
@@ -415,7 +420,13 @@ class TestEnsureFacilityBaseline:
             QuickTemplateDef("kurzberatung", "Telefonische Kurzberatung", {"dauer": 15}),
         )
         assert PACKAGE_COMFORT["frauenhaus"].quick_templates == ()
-        assert PACKAGE_COMFORT["jugendarbeit"].quick_templates == ()
+        assert [
+            (item.document_type_slug, item.name, item.prefilled_data)
+            for item in PACKAGE_COMFORT["jugendarbeit"].quick_templates
+        ] == [
+            ("kontakt", "Kontakt JZ-Raum", {"leistungen": ["aufenthaltsraum"]}),
+            ("veranstaltungsteilnahme", "Veranstaltung (Personenzahl)", {"teilnehmende": 10}),
+        ]
 
     def test_package_quick_templates_skip_unknown_type_slugs(self, facility):
         from core.services.facility_bootstrap import QuickTemplateDef, ensure_quick_templates
