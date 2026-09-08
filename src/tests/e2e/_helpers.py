@@ -232,13 +232,13 @@ def wait_for_active_service_worker(page, timeout_ms=8000):
     Die Herkunft der 8000 ms ist nicht durch einen Fix-Commit belegt (sie stand
     schon im Erstcommit der Datei).
 
-    NICHT ersetzt: ``_ensure_service_worker_controls`` in
-    ``test_logout_cleanup.py`` und ``test_offline_login_bootstrap.py``. Die
-    beiden sind byte-identisch zueinander und decken nur die zweite Hälfte
-    dieses Helfers ab (``controller``-Wait ohne die vorgelagerte
-    Aktivierungs-Promise), dafür mit 10000 ms. Ein Ersatz durch diesen Helfer
-    wäre keine reine Umbenennung, sondern ein zusätzlicher Wartschritt in genau
-    den zwei Journeys, die am empfindlichsten auf SW-Timing reagieren.
+    Refs #2165: ``test_logout_cleanup.py`` und ``test_offline_login_bootstrap.py``
+    hielten bis dahin eine byte-identische ``_ensure_service_worker_controls``,
+    die nur die zweite Hälfte dieses Helfers abdeckte (``controller``-Wait ohne
+    die vorgelagerte Aktivierungs-Promise), dafür mit 10000 ms statt 8000 ms.
+    Dieser Helfer ist eine Obermenge (zusätzliche Aktivierungs-Promise-Stufe
+    VOR dem ``controller``-Wait) — beide Aufrufstellen rufen ihn jetzt mit
+    ``timeout_ms=10000`` auf, damit der bisherige Timeout-Wert erhalten bleibt.
     """
     page.evaluate(
         """

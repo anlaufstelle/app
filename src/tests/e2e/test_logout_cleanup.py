@@ -21,6 +21,7 @@ import re
 import pytest
 
 from ._helpers import SEED_PASSWORD
+from ._helpers import wait_for_active_service_worker as _ensure_service_worker_controls
 
 pytestmark = pytest.mark.e2e
 
@@ -28,25 +29,6 @@ pytestmark = pytest.mark.e2e
 # in test_offline_store.py / test_crypto_session.py so IV behaviour stays
 # consistent across the suite.
 _DUMMY_SALT = "YWJjZGVmZ2hpamtsbW5vcA"
-
-
-def _ensure_service_worker_controls(page):
-    """Sicherstellen, dass ein Service Worker die Seite wirklich kontrolliert.
-
-    Refs #1951: Die Zusicherung auf ein sauberes ``/login/`` hat nur Zaehne,
-    wenn ueberhaupt ein Service Worker aktiv ist — der Abbruch entsteht ja erst
-    dadurch, dass ``Clear-Site-Data: "storage"`` dessen Registrierung abraeumt
-    und die noch lebende Seite darauf mit einer eigenen Navigation reagiert.
-
-    Ohne diese Vorbedingung waeren die Logout-Tests still gruen: Fehlt etwa das
-    ungetrackte Build-Artefakt ``src/static/css/styles.css`` (404), scheitert
-    ``cache.addAll(APP_SHELL)`` im ``install``-Handler, der Worker aktiviert
-    nie, und der Fehler kann gar nicht auftreten. Muster wie in
-    ``test_offline_contract_integration.py``.
-    """
-    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
-        page.reload(wait_until="domcontentloaded")
-        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=10000)
 
 
 def _login_via_form(page, base_url, username="miriam", password=SEED_PASSWORD):
@@ -61,7 +43,7 @@ def _login_via_form(page, base_url, username="miriam", password=SEED_PASSWORD):
     page.fill("#id_password", password)
     page.click("button[type=submit]")
     page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
-    _ensure_service_worker_controls(page)
+    _ensure_service_worker_controls(page, timeout_ms=10000)
     page.wait_for_function("window.crypto_session && window.offlineStore")
     page.evaluate(
         """async () => {
