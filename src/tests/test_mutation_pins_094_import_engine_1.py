@@ -266,18 +266,19 @@ class TestCoerceOptionLabelDefault:
 
     @pytest.mark.django_db
     def test_option_without_label_key_never_matches_the_empty_cell(self, facility):
-        """Pin des neuen #2156-Vertrags fuer leere Zellen und Label-Default.
+        """Pin des #2156-Leerwert-Guards mit einem mutantenwirksamen Altdatensatz.
 
-        Die alte Erwartung gab ``"z"`` zurueck. Jetzt werden Error-Code und
-        Spaltenbezug exakt gepinnt: Entfernt ein Mutant den Leerwert-Guard oder
-        laesst ein fehlendes Label wieder als ``""`` matchen, liefert er den
-        Slug statt dieses Fehlers.
+        Die Option ohne Label traegt absichtlich auch einen leeren Slug, was
+        regulaere Formulare nicht erzeugen, das rohe JSONField aber enthalten
+        kann. Entfernt ein Mutant ``if raw == ""``, matcht die leere Zelle den
+        leeren Slug und der Test wird rot; mit Guard bleiben Error-Code und
+        Spaltenbezug exakt gepinnt.
         """
         template = FieldTemplate.objects.create(
             facility=facility,
             name="Zugang",
             field_type=FieldTemplate.FieldType.SELECT,
-            options_json=[{"slug": "z", "is_active": True}],
+            options_json=[{"slug": "", "is_active": True}],
         )
 
         with pytest.raises(import_engine._CellError) as excinfo:
