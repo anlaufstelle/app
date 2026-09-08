@@ -413,6 +413,7 @@ def test_hausverbot_jugend_appears_in_ban_overview(facility, staff_user):
     assert result.summary["aktiv_aktuell"] == 1
 
 
+@pytest.mark.architecture  # liest docs/ — in mutmut-Runs deselektiert (Kopie ohne docs/)
 def test_jugendarbeit_documentation_is_indexed():
     root = Path(__file__).resolve().parents[2]
     assert (root / "docs/packages-jugendarbeit.md").is_file()

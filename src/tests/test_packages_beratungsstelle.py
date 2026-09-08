@@ -423,6 +423,7 @@ def test_hausverbot_projektion(facility, staff_user, client_identified):
     assert bans[0]["client"] == client_identified
 
 
+@pytest.mark.architecture  # liest docs/ — in mutmut-Runs deselektiert (Kopie ohne docs/)
 def test_dokumentation_ist_gefuehrt():
     # Repo-verankert statt CWD-relativ: mutmut startet die Suite nicht im Repo-Root (Refs #2145).
     repo_root = Path(__file__).resolve().parents[2]

@@ -314,6 +314,7 @@ def test_orga_meldung_uses_the_ban_projection(facility, staff_user):
     assert bans[0]["bis_datum"] == date.fromisoformat(until)
 
 
+@pytest.mark.architecture  # liest docs/ — in mutmut-Runs deselektiert (Kopie ohne docs/)
 def test_awareness_documentation_is_indexed():
     root = Path(__file__).resolve().parents[2]
     assert (root / "docs/packages-awareness.md").is_file()

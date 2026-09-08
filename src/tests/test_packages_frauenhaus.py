@@ -502,6 +502,7 @@ def test_scan_dokument_uses_encrypted_attachment_pipeline(
     assert b"".join(get_decrypted_file_stream(attachment)) == PDF_BYTES
 
 
+@pytest.mark.architecture  # liest docs/ — in mutmut-Runs deselektiert (Kopie ohne docs/)
 def test_frauenhaus_documentation_is_indexed():
     root = Path(__file__).resolve().parents[2]
     packages_doc = (root / "docs/packages.md").read_text(encoding="utf-8")
