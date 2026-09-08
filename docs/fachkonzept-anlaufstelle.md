@@ -164,7 +164,7 @@ Ein Einsatzzweck passt zu Anlaufstelle, wenn seine Arbeitsrealität *Kontakt →
 Für die folgenden Domänen liefert Anlaufstelle kuratierte **Domänen-Pakete** (siehe [docs/packages.md](packages.md) und die jeweilige Paket-Doku):
 
 - **Awareness-Teams** (Paket `awareness`, [docs/packages-awareness.md](packages-awareness.md)) — Festivals, Klubs und Großveranstaltungen. Kontakte sind überwiegend anonym, die Dokumentation geschieht unter Zeitdruck neben dem Betrieb, oft ohne Netz — genau das Offline- und Strichlisten-Profil von Anlaufstelle. Hohe Sensitivität (sexualisierte Gewalt, Diskriminierung) wird durch Sensitivitätsstufen und erzwungene Verschlüsselung getragen; Platzverweise lassen sich über den Systemtyp `ban` abbilden.
-- **Frauenhaus und Gewalt-Fachberatung** (Paket `frauenhaus`, [docs/packages-frauenhaus.md](packages-frauenhaus.md)) — Pseudonyme Klientel, hohe Art.-9-Dichte, Fallarbeit mit Zielen („sichere Wohnsituation") und Fördermittel-Statistik. Vorbedingung ist der **Quick-Exit** (Mitschauen-Schutz, siehe Glossar): Dokumentation geschieht oft in Gegenwart gefährdender Situationen am Empfangsplatz.
+- **Frauenhaus und Gewalt-Fachberatung** (Paket `frauenhaus`, [docs/packages-frauenhaus.md](packages-frauenhaus.md)) — Pseudonyme Klientel, hohe Art.-9-Dichte, Fallarbeit mit Zielen („sichere Wohnsituation") und Fördermittel-Statistik. Vorbedingung ist der **Quick-Exit** (Schnell-verlassen-Aktion mit optionalem Sichtschutz, siehe Glossar): Dokumentation geschieht oft in Gegenwart gefährdender Situationen am Empfangsplatz.
 - **Mobile und offene Jugendarbeit** (Paket `jugendarbeit`, [docs/packages-jugendarbeit.md](packages-jugendarbeit.md)) — Jugendzentren, Fanprojekte, aufsuchende Arbeit. Streetwork-Profil mit Offline, allgegenwärtige Anonym-Strichlisten, U18-Schwerpunkt und Träger-Reporting.
 - **Sozial-/Lebensberatungsstelle mit offener Sprechstunde** (Paket `beratungsstelle`, [docs/packages-beratungsstelle.md](packages-beratungsstelle.md)) — die generische Domäne aus der Positionierung: offene Sprechstunden, anonyme Kurzberatung, Formularhilfe und Vermittlung, ohne die Sucht-/Medizin-Typen des Standardkatalogs.
 
@@ -189,7 +189,7 @@ Mittlere Fits, die Anlaufstelle als Randsystem nutzen können, ohne Kernprodukt 
 | Klarnamen-Behördenkorrespondenz / Aktenführung | Das Datenmodell ist pseudonym; die Dokumentation ist keine Akte im Rechtssinne. Wer Klarnamen-Akten und Behördenkorrespondenz als Kern braucht, ist mit einem Aktensystem besser bedient. |
 | Kanal-zentrierte Dienste (Krisenchat, Telefonie) | Kommunikationskanäle sind bewusst ausgegrenzt (Prinzip 8, § 13 „Klientelportal"); die Dokumentation geschieht hinterher, nicht im Kontakt. |
 | Terminplanung / Dienstplanung | Anlaufstelle ersetzt nicht die Dienstplanung (Prinzip 8); Zeitfenster sind Sichten, keine Schicht-Container (§ 13 „Zeitfenster als Datenmodell"). |
-| Klientenportal / Self-Service | Kein Klientel-Login und kein Self-Service, auch nicht für Berichtigung ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). |
+| Klientelportal / Self-Service | Kein Klientel-Login und kein Self-Service, auch nicht für Berichtigung ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). |
 | Hinweisgebersystem (HinSchG) | Braucht einen anonymen Inbound-Kanal für Fremde und einen Rückfrage-Kanal — strukturell ein anderer Anwendungstyp. |
 
 ### Sekundäre Zielgruppe: Kleine und mittlere Träger
@@ -878,7 +878,7 @@ Die Domänenbibliothek ist ein Startvorschlag, kein Korsett:
 - Einrichtungen können eigene Typen definieren, die in keiner Bibliothek vorkommen.
 - Typen werden nie gelöscht, sondern deaktiviert — damit historische Daten ihre Typzuordnung behalten.
 - Verschiedene Bibliotheken können parallel existieren. Eine Notschlafstelle braucht einen Typ „Übernachtung", den ein Streetwork-Projekt nicht hat.
-- Die Community kann neue Bibliotheken beitragen: „Wohnungslosenhilfe", „Frauenhaus", „Jugendnotdienst" — jeweils mit domänenspezifischen Typen und Feldern. Die mitgelieferten Domänen-Pakete (Beratungsstelle, Awareness, Frauenhaus, Jugendarbeit) sind in [docs/packages.md](packages.md) und den Paket-Dokus `docs/packages-<domäne>.md` dokumentiert.
+- Die Community kann neue Bibliotheken beitragen: „Wohnungslosenhilfe", „Frauenhaus", „Jugendnotdienst" — jeweils mit domänenspezifischen Typen und Feldern. Die mitgelieferten Domänen-Pakete (Beratungsstelle, Awareness, Frauenhaus, Jugendarbeit) sind in [docs/packages.md](packages.md) und den Paket-Dokus `docs/packages-<domain>.md` dokumentiert.
 
 ---
 
@@ -1008,7 +1008,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Audit-Trail** | Unveränderliches Protokoll aller sicherheitsrelevanten Aktionen im System: Zugriffe, Änderungen, Löschungen, Login-Versuche. Dient der DSGVO-Compliance und der Nachvollziehbarkeit. Siehe: AuditLog. |
 | **AuditLog** | Technischer Begriff für den Audit-Trail. Eine eigene Entität, getrennt von der fachlichen Dokumentation gespeichert. Unveränderlich (Append-Only). |
 | **Benannter Zeitfilter** | Ein gespeicherter Arbeitszeitraum mit Label (z.B. „Nachtdienst 21:30–09:00"). Dient als Schnellfilter auf der Startseite und in der Statistik. Reine UI-Konfiguration, keine Datenstruktur. Siehe: TimeFilter. |
-| **Betreiber-Empfehlung** | Empfehlung für den Betrieb einer Einrichtung, die nicht paketfähig ist (z.B. Aufbewahrungsfristen, k-Schwelle, Zeitfenster, QuickTemplates, Rollen). Steht in der jeweiligen Paket-Doku (`docs/packages-<domäne>.md`) statt im Paket selbst. |
+| **Betreiber-Empfehlung** | Empfehlung für den Betrieb einer Einrichtung, die nicht paketfähig ist (z.B. Aufbewahrungsfristen, k-Schwelle, Zeitfenster, QuickTemplates, Rollen). Steht in der jeweiligen Paket-Doku (`docs/packages-<domain>.md`) statt im Paket selbst. |
 | **Case** | Fall — eine Klammer um zusammenhängende Arbeit mit einer Person. Enthält Episoden, Zuständigkeiten und optional Wirkungsziele. |
 | **Chronik** | Der zeitliche Verlauf aller Ereignisse, die zu einer Person dokumentiert wurden. Die Chronik ist die primäre Sicht auf eine Person in Anlaufstelle. |
 | **Client** | Person/Klientel im System. Wird unter einem Pseudonym geführt. Hat eine Kontaktstufe, die den Lebenszyklus im System bestimmt. |

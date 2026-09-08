@@ -16,7 +16,7 @@ Anlaufstelle fills this gap. It is an open-source specialized application for do
 
 Anlaufstelle fits wherever people come in without an appointment and without a real name, and where most contacts stay anonymous or pseudonymous. The working pattern is contact → short documentation → (optional) casework → statistics; communication and scheduling happen outside the system. It is a poor fit when real-name files, correspondence with authorities, or live communication channels are the core of the work.
 
-Beyond the original domain of low-threshold substance-use and homelessness services, curated domain packages are shipped for open social and life counselling (`beratungsstelle`), awareness teams at festivals and clubs (`awareness`), women's shelters and violence counselling (`frauenhaus`), and mobile and open youth work (`jugendarbeit`). Each package replaces the standard catalogue rather than being loaded on top of it.
+Beyond the original domain of low-threshold substance-use and homelessness services, curated domain packages are shipped for open social and life counseling (`beratungsstelle`), awareness teams at festivals and clubs (`awareness`), women's shelters and violence counseling (`frauenhaus`), and mobile and open youth work (`jugendarbeit`). Each package replaces the standard catalog rather than being loaded on top of it.
 
 ## Core Domain Concepts
 
@@ -287,11 +287,10 @@ The largest collective pre-release to date — the configurability milestones M0
 
 ### Unreleased
 
-- **Use cases and domain packages documented** (#2140) — the concept's § 3 now frames the primary target group as a working mode and adds fit/anti-fit tables; the FAQ, the README's "Who it's for" section, and the glossary cover the four shipped packages.
-- **Domain packages replace, not extend** — each curated package (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) is loaded against a fresh facility via `setup_facility --package <name>`, never layered on top of the standard catalogue.
-- **Quick exit added to the glossary** — a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
+- **Anlaufstelle's target group is a working mode, not a facility type**: § 3 now leads with open social/life counseling and low-threshold advice centers, adds a fit/anti-fit table for further use cases, and documents four curated domain packages (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) that replace, not extend, the standard catalog — mirrored in the FAQ, the README's "Who it's for" section, and the glossary.
+- **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-07 -->
-<!-- source-hash: cc0ba98a0daf40bdb4e0c0f66c8c9464e2d38a0b -->
+<!-- translation-date: 2026-09-08 -->
+<!-- source-hash: d305d3628916bd2aada46324d8e43a2479905303 -->

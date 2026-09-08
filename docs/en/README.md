@@ -51,10 +51,10 @@ Templates included:
 |----------|-------------|
 | [architecture.md](../architecture.md) | Architecture overview as a signpost: layers (views → services → models), security architecture in brief, no-code configuration core, offline PWA, test landscape — with pointers into the in-depth documents (Refs #1062) |
 | [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
-| [packages-frauenhaus.md](../packages-frauenhaus.md) | German-only operator guide for the “Frauenhaus” package: eight documentation types, effective sensitivity matrix, reports, and recommendations (Refs #2138) |
-| [packages-awareness.md](../packages-awareness.md) | Awareness package: seven documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2137) |
-| [packages-beratungsstelle.md](../packages-beratungsstelle.md) | German-only operator guide for the “Beratungsstelle” package: target picture, types, reports, roles, recommendations (Refs #2145) |
-| [packages-jugendarbeit.md](../packages-jugendarbeit.md) | Operator documentation for the youth-work package: types, fields, roles, reports, and recommendations (Refs #2139); intentionally German-only |
+| [packages-beratungsstelle.md](../packages-beratungsstelle.md) | “Beratungsstelle” package: eight documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2145) |
+| [packages-awareness.md](../packages-awareness.md) | “Awareness” package: seven documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2137) |
+| [packages-frauenhaus.md](../packages-frauenhaus.md) | “Frauenhaus” package: eight documentation types, effective sensitivity matrix, reports, and recommendations for 24/7 operation (Refs #2138) |
+| [packages-jugendarbeit.md](../packages-jugendarbeit.md) | “Jugendarbeit” package: eight documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2139) |
 | [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
@@ -77,4 +77,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-08 -->
-<!-- source-hash: 2da150360621ddda4342f9f569a1a0c1904534c4 -->
+<!-- source-hash: bd69a31d1c670cbad4cd01a738f7e8b811a717a5 -->

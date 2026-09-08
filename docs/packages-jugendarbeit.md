@@ -68,9 +68,8 @@ Für Alltagskontakte kann `assistant` genügen. Krisen, Beratungen und Hausverbo
 ## Verfügbare Berichte
 
 - Der **Beispiel-Sachbericht** zählt Kontakte, Beratung, Vermittlung und Krisen sowie `veranstaltungsteilnahme` in der eigenen Zeile „Gruppenangebote“. Notiz und Hausverbot sind mit `excluded` ausdrücklich ausgenommen.
-- Der **Leistungs-Bericht** wertet die Jugend-Optionen von `leistungen` an Kontakt und mobiler Bezugsarbeit aus.
-- Der Bericht **Beratungsstunden** wertet `dauer` an Ereignissen mit `report_key: contact` aus. Im gelieferten Katalog trägt Kontakt dieses Feld; Beratung und Krise haben bewusst kein Minutenfeld.
-- Die **Krisenarten-Verteilung** wertet `art-der-krise` aus.
+- **Beratungsstunden:** Der Bericht zieht alle Ereignisse mit `report_key: contact`, `counseling` oder `crisis` — also Kontakt, mobile Bezugsarbeit, Beratung und Krisengespräch. Nur Kontakt trägt `dauer`; Bezugsarbeit, Beratung und Krisengespräch haben kein Minutenfeld, erscheinen deshalb mit 0 Minuten und erzeugen dauerhaft den Vollständigkeitshinweis „Ereignisse ohne Wertangabe“.
+- **Beispiel: Leistungs- und Krisenarten-Verteilung:** Dieser eine Bericht ist im Jugendarbeit-Paket über beide Gruppen verfügbar: Der Leistungs-Block wertet `leistungen` an Kontakt und mobiler Bezugsarbeit aus, der Krisen-Block `art-der-krise` (`report_key: art_der_krise`) an Krisengespräch.
 - Die **Hausverbots-Übersicht** erkennt `hausverbot-jugend` über `system_type: ban` und zählt ausgesprochene, aktive und abgelaufene Hausverbote.
 
 Für Berichte empfiehlt sich eine k-Anonymitäts-Schwelle von 5. Bei kleinen Gruppen unterdrückt die Anwendung dadurch Werte im Export.

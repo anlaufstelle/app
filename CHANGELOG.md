@@ -32,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Ereignis-CSV lässt Datei-Felder und interne Datei-Marker aus** (#2130) — Datei-Anhänge erscheinen weder als Spalte noch als technische Marker-Dicts und UUIDs im Tabellenexport; verwaiste Marker nach einem Feldtypwechsel ergeben eine leere Zelle.
 ### Docs
 
-- **Einsatzzwecke & Domänen-Pakete dokumentiert** (#2140) — Fachkonzept § 3 (Arbeitsmodus, Fit/Anti-Fit), FAQ 1a, README „Für wen", Glossar.
+- **Einsatzzwecke & Domänen-Pakete dokumentiert** (#2140) — Fachkonzept § 3 (Arbeitsmodus, Fit/Anti-Fit), FAQ 1a, README „Für wen", Glossar; Katalog-Übersicht in `docs/packages.md` und `docs/README.md`/`docs/en/README.md` auf einheitliche Reihenfolge und Wortlaut gebracht.
 
 ## [0.95.0] - 2026-09-07
 

@@ -28,7 +28,7 @@
 | DocumentType | Document type | A configurable category of events (e.g. "Contact", "Crisis counseling", "Needle exchange"). Defines fields, sensitivity, and retention period. |
 | DocumentTypeField | Document type field | Association of a field template (FieldTemplate) with a document type (DocumentType). Determines field order in the form and allows reuse of field templates across multiple types. |
 | Domänen-Paket | Domain package | The technical realization of the domain library: a versionable YAML catalog of preconfigured document types and fields for a specific facility type, applied via `setup_facility --package <name>` or `manage.py load_package`. See: Domain library, [docs/packages.md](../packages.md). |
-| Domänenbibliothek | Domain library | Preconfigured set of document types for a specific facility type (e.g. "Low-threshold addiction services"). Seed data loaded during initial setup. |
+| Domänenbibliothek | Domain library | Preconfigured set of document types for a specific facility type (e.g. "Low-threshold addiction services"). Seed data loaded during initial setup. Technically realized as a domain package. |
 | DSGVO | GDPR | General Data Protection Regulation — the European regulation for the protection of personal data. Together with social data protection (SGB X), the central legal framework for Anlaufstelle. |
 | Einrichtung | Facility | A concrete site or location. The primary scope boundary for staff members. All entities have a foreign key to Facility. |
 | Episode | Episode | A distinguishable phase within a case: e.g. a crisis phase, a referral process. |
@@ -80,5 +80,5 @@
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-07 -->
-<!-- source-hash: 9ef3cf738717744f1901f663a89bfc8d5b790b8d -->
+<!-- translation-date: 2026-09-08 -->
+<!-- source-hash: f4dd5df6ecaa0bda8a9f679de3073d1d64474d73 -->
