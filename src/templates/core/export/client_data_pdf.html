@@ -345,7 +345,9 @@
 
     {% comment %}Refs #1752: Soft-deletete Ereignisse sind bis zum Hard-Purge weiterhin
     gespeicherte Daten. Ihr ``data_json`` ist beim Loeschen geleert — ausgewiesen
-    werden Existenz und Zeitpunkt, die Inhalte stehen in der Aenderungshistorie.{% endcomment %}
+    werden Existenz und Zeitpunkt, die Inhalte stehen in der Aenderungshistorie.
+    Refs #2157: seit 0.96 zusaetzlich Loeschzeitpunkt und Ausloeser, in derselben
+    Form wie im Fall-Papierkorb (Abschnitt 4).{% endcomment %}
     <h2>{% trans "8. Gelöschte Ereignisse (Papierkorb)" %}</h2>
     {% if deleted_events %}
     <p>{% trans "Diese Ereignisse sind gelöscht, aber noch nicht endgültig entfernt. Ihre Inhalte wurden beim Löschen entfernt; was noch vorhanden ist, steht in der Änderungshistorie." %}</p>
@@ -356,6 +358,8 @@
                 <th>{% trans "Zeitpunkt" %}</th>
                 <th>{% trans "Fall" %}</th>
                 <th>{% trans "Erstellt von" %}</th>
+                <th>{% trans "Gelöscht am" %}</th>
+                <th>{% trans "Gelöscht von" %}</th>
                 <th>{% trans "Zuletzt geändert am" %}</th>
             </tr>
         </thead>
@@ -366,6 +370,15 @@
                 <td>{{ event.occurred_at }}</td>
                 <td>{{ event.case|default:"-" }}</td>
                 <td>{{ event.created_by|default:"-" }}</td>
+                {% comment %}Refs #2157: drei unterscheidbare Wirklichkeiten. Ein leeres
+                Feld liesse die betroffene Person raten, welche davon vorliegt — und
+                „Zuletzt geaendert am" ist zwar faktisch der Loeschzeitpunkt, aber
+                falsch beschriftet. Ohne ``deleted_at`` ist das Ereignis vor 0.96
+                geloescht worden (kein Backfill, Migration 0176); ist der Zeitpunkt
+                gesetzt und der Ausloeser leer, war es der naechtliche
+                Aufbewahrungslauf (dort handelt keine Person).{% endcomment %}
+                <td>{% if event.deleted_at %}{{ event.deleted_at }}{% else %}{% trans "vor 0.96 nicht erfasst" %}{% endif %}</td>
+                <td>{% if event.deleted_by %}{{ event.deleted_by }}{% elif event.deleted_at %}{% trans "Aufbewahrungslauf" %}{% else %}{% trans "vor 0.96 nicht erfasst" %}{% endif %}</td>
                 <td>{{ event.updated_at }}</td>
             </tr>
             {% endfor %}

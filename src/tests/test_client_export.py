@@ -2640,6 +2640,99 @@ class TestClientExportPdfCoverage:
             )
 
 
+def _pdf_section(html, heading):
+    """Der HTML-Block EINES PDF-Abschnitts — von seiner Ueberschrift bis zur naechsten.
+
+    Ohne den Schnitt truegt jede Nadel: ``ce_staff`` und ein ISO-Zeitstempel
+    stehen im Gesamtdokument an einem Dutzend Stellen. Refs #2157.
+    """
+    start = html.index(heading)
+    rest = html[start:]
+    end = rest.find("<h2>")
+    return rest[:end] if end != -1 else rest
+
+
+@pytest.mark.django_db
+class TestClientExportPdfDeletedEventMetadata:
+    """Refs #2157 — das PDF weist Loeschzeitpunkt und Ausloeser genauso aus wie das JSON.
+
+    Der Fall-Papierkorb traegt die Spalten „Geloescht am"/„Geloescht von" seit
+    #1818; der
+    Ereignis-Papierkorb zeigte bis #2157 nur „Zuletzt geaendert am" — faktisch
+    derselbe Zeitpunkt, aber falsch beschriftet, und ohne jede Angabe zum
+    Ausloeser. Das PDF ist das Dokument, das die betroffene Person tatsaechlich
+    in die Hand bekommt; die drei Wirklichkeiten (Person / Aufbewahrungslauf /
+    Altbestand) muessen dort unterscheidbar sein.
+    """
+
+    SECTION = "8. Gelöschte Ereignisse (Papierkorb)"
+
+    def test_pdf_section_has_both_deletion_columns(self, sample_client, facility, sample_event, admin_user, staff_user):
+        from core.services.events.crud import soft_delete_event
+
+        soft_delete_event(sample_event, staff_user)
+
+        section = _pdf_section(_render_export_html(sample_client, facility, admin_user), self.SECTION)
+        assert "Gelöscht am" in section
+        assert "Gelöscht von" in section
+
+    def test_pdf_names_time_and_actor_of_a_manual_deletion(
+        self, sample_client, facility, sample_event, admin_user, staff_user
+    ):
+        """``sample_event`` wurde von ``ce_admin`` erstellt und von ``ce_staff``
+        geloescht — der Name in diesem Abschnitt kann also nur aus
+        ``deleted_by`` stammen."""
+        from core.services.events.crud import soft_delete_event
+
+        soft_delete_event(sample_event, staff_user)
+        sample_event.refresh_from_db()
+
+        section = _pdf_section(_render_export_html(sample_client, facility, admin_user), self.SECTION)
+        assert sample_event.deleted_at.isoformat() in section
+        assert "ce_staff" in section
+
+    def test_pdf_marks_a_system_deletion_as_the_retention_run(self, sample_client, facility, doc_type, admin_user):
+        """Der Aufbewahrungslauf loescht ohne handelnde Person. Ein blosses „-"
+        waere hier nicht unterscheidbar vom Altbestand — und „vor 0.96 nicht
+        erfasst" waere schlicht falsch."""
+        swept_at = timezone.now()
+        make_event(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            deleted_at=swept_at,
+            deleted_by=None,
+            created_by=admin_user,
+        )
+
+        section = _pdf_section(_render_export_html(sample_client, facility, admin_user), self.SECTION)
+        assert swept_at.isoformat() in section
+        assert "Aufbewahrungslauf" in section
+        assert "vor 0.96 nicht erfasst" not in section
+
+    def test_pdf_marks_a_legacy_trash_entry_as_unrecorded(self, sample_client, facility, doc_type, admin_user):
+        """Vor 0.96 geloeschte Ereignisse tragen beide Felder nicht (kein
+        Backfill). Eine leere Zelle liesse die betroffene Person raten; die
+        Auskunft sagt stattdessen, dass die Angabe damals nicht erfasst wurde."""
+        legacy = make_event(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            created_by=admin_user,
+        )
+        assert legacy.deleted_at is None and legacy.deleted_by is None
+
+        section = _pdf_section(_render_export_html(sample_client, facility, admin_user), self.SECTION)
+        assert section.count("vor 0.96 nicht erfasst") == 2
+        assert "Aufbewahrungslauf" not in section
+
+
 @pytest.mark.django_db
 class TestClientExportCompleteness:
     """Refs #1752 — Vollstaendigkeits-Pin ueber die Kategorienliste des Issues.
