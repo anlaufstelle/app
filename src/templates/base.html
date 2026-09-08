@@ -65,10 +65,11 @@
       data-quick-exit-logout-url="{% url 'logout' %}">
 
     {# Refs #2136: focus:z-[80] statt focus:z-50 — die Quick-Exit-Leiste darunter #}
-    {# ist sticky auf z-50 und deckend; bei gleichem z-index gewaenne sie als #}
-    {# spaeteres Geschwister und verdeckte den fokussierten Skip-Link (mobil ueber #}
-    {# die volle Breite). Nur hier und in offline_base.html noetig — die #}
-    {# eigenstaendigen Seiten tragen keine Leiste. #}
+    {# ist sticky und deckend; bei gleichem z-index gewaenne sie als spaeteres #}
+    {# Geschwister und verdeckte den fokussierten Skip-Link (mobil ueber die volle #}
+    {# Breite). Nur hier und in offline_base.html noetig — die eigenstaendigen #}
+    {# Seiten tragen keine Leiste. Der Abstand bleibt: die Leiste steht hier seit #}
+    {# dem Nachzug auf z-30 (Begruendung unten), in offline_base.html auf z-50. #}
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[80] focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
@@ -87,8 +88,22 @@
     Der Sticky-Wrapper umschliesst jetzt AUCH den Offline-Statusbalken (der
     ihn vorher selbst trug, Refs #1495): zwei getrennte sticky-Elemente auf
     top-0 laegen uebereinander statt untereinander.
+
+    z-30 statt z-50 (Nachzug zu #2136): Das mobile Such-Overlay liegt
+    ``fixed inset-x-0 top-0 z-[60]``, aber INNERHALB der Bottom-Nav
+    (``partials/_navigation_mobile.html``), und die spannt mit ``z-40`` einen
+    eigenen Stapelkontext auf — sein ``z-[60]`` wirkt nur nav-intern, nach
+    aussen zaehlt die ``40``. Die Leiste ueberlappt das Overlay geometrisch
+    (Leiste 0-44 px, Suchfeld ca. 16-58 px) und fing auf ``z-50`` jeden Tap
+    ins Suchfeld ab. Der Wrapper trug das ``z-50`` schon vor #2136, blieb
+    ohne sichtbaren Offline-Banner aber 0 px hoch; erst die stets sichtbare
+    Leiste macht die Ueberlappung real. ``z-30`` haelt sie weiter ueber dem
+    gesamten Seiteninhalt (unpositioniert bzw. ``z-10``) und ueber der
+    Desktop-Sidebar (``z-index: auto``), ordnet sie aber unter die Nav und
+    deren Overlays ein. Gegen Dialoge/Toasts aus ``<main>`` (``z-50``,
+    spaeteres Geschwister) verlor sie ohnehin schon.
     {% endcomment %}
-    <div class="sticky top-0 z-50">
+    <div class="sticky top-0 z-30">
         <div id="quick-exit-bar" class="md:ml-60 flex justify-end bg-canvas px-4 md:px-8">
             <button type="button" id="quick-exit-button" data-testid="quick-exit-button"
                     aria-keyshortcuts="Control+Shift+X Shift+Escape"

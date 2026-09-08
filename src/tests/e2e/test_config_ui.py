@@ -54,7 +54,12 @@ class TestFacilitySettingsHub:
         expect(warning_links).to_have_count(2)
 
         page.goto(f"{base_url}/verwaltung/einstellungen/", wait_until="domcontentloaded")
-        expect(page.locator("fieldset")).to_have_count(4)
+        # #2136 ergaenzt die Sektion Quick-Exit/Sichtschutz (Gruppe
+        # "Mitschauen-Schutz" in core/forms/facility_settings.py) als fuenfte
+        # Gruppe; das Formular rendert ein fieldset je Gruppe. Weiterhin exakt
+        # gezaehlt: die Zahl haelt fest, dass keine Gruppe still verschwindet
+        # oder unbemerkt dazukommt.
+        expect(page.locator("fieldset")).to_have_count(5)
         expect(page.locator('input[name="facility_full_name"]')).to_be_visible()
         expect(page.locator('input[name="max_file_size_mb"]')).to_be_visible()
 

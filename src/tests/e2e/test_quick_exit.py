@@ -48,6 +48,7 @@ import pytest
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+from ._selectors import open_mobile_search_overlay
 
 pytestmark = pytest.mark.e2e
 
@@ -240,6 +241,74 @@ class TestTastaturpfad:
             "Zweites Tab-Ziel ist nicht der Knopf „Schnell verlassen“: "
             + str(page.evaluate("() => document.activeElement && document.activeElement.outerHTML"))
         )
+
+
+class TestSchichtungMobil:
+    """Die Leiste darf das mobile Such-Overlay nicht abfangen (Nachzug zu #2136).
+
+    Die Leiste liegt ``sticky top-0`` im Wurzel-Stapelkontext. Das mobile
+    Such-Overlay liegt ``fixed inset-x-0 top-0`` — aber INNERHALB der
+    Bottom-Nav, und die spannt mit ``z-40`` einen eigenen Stapelkontext auf.
+    Das ``z-[60]`` des Overlays wirkt deshalb nur nav-intern; nach aussen
+    zaehlt die ``40`` der Nav. Beide belegen denselben Streifen am oberen
+    Rand (Leiste 0–44 px, Suchfeld ca. 16–58 px), und mit der Leiste auf
+    ``z-50`` lag sie darueber: jeder Tap ins Suchfeld landete auf ihr
+    (Playwright: „<div id=quick-exit-bar …> subtree intercepts pointer
+    events"). Der Streifen ist mobil nicht abwaehlbar — vor #2136 war der
+    gemeinsame Wrapper leer und damit 0 px hoch, weshalb die Kollision erst
+    mit der Leiste sichtbar wurde.
+
+    Der zweite Fall haelt die Gegenrichtung fest: Ist das Overlay zu, gehoert
+    der Streifen wieder der Leiste. Ein Fix per ``pointer-events-none`` haette
+    den ersten Fall geheilt und den Knopf dabei stillgelegt.
+    """
+
+    def test_offenes_overlay_bekommt_den_tap_ins_suchfeld(
+        self, mobile_authenticated_page, base_url, default_quick_exit
+    ):
+        page = mobile_authenticated_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        page.locator("[data-testid='quick-exit-button']").wait_for(state="visible", timeout=15000)
+
+        open_mobile_search_overlay(page)
+        feld = page.locator("[data-testid='mobile-search-input']")
+
+        # Der echte Tap: Playwrights Aktionierbarkeitspruefung wartet die
+        # ``x-transition`` ab und benennt im Fehlerfall das abfangende
+        # Element. Das kurze Zeitlimit haelt eine Regression bei ~10 s statt
+        # bei den 30 s der Vorgabe.
+        feld.click(timeout=10000)
+
+        # Und die Schichtung explizit: am oberen Rand des Feldes, also genau
+        # dort, wo die 44 px hohe Leiste liegt.
+        box = feld.bounding_box()
+        assert box is not None, "Das Suchfeld hat keine Box."
+        treffer = page.evaluate(
+            "([x, y]) => { const el = document.elementFromPoint(x, y); return el && "
+            "{ id: el.id, testid: el.getAttribute('data-testid'), "
+            "imOverlay: !!el.closest('#mobile-search-overlay') }; }",
+            [box["x"] + box["width"] / 2, box["y"] + 2],
+        )
+        assert treffer and treffer["imOverlay"], (
+            f"Ueber dem oberen Rand des Suchfeldes liegt ein fremdes Element: {treffer}"
+        )
+
+    def test_geschlossenes_overlay_laesst_den_knopf_erreichbar(
+        self, mobile_authenticated_page, base_url, default_quick_exit
+    ):
+        page = mobile_authenticated_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        knopf = page.locator("[data-testid='quick-exit-button']")
+        knopf.wait_for(state="visible", timeout=15000)
+
+        box = knopf.bounding_box()
+        assert box is not None, "Der Knopf hat keine Box."
+        treffer = page.evaluate(
+            "([x, y]) => { const el = document.elementFromPoint(x, y); return el && "
+            "{ id: el.id, imKnopf: !!el.closest('#quick-exit-button') }; }",
+            [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
+        )
+        assert treffer and treffer["imKnopf"], f"Der Knopf nimmt den Tap nicht mehr an: {treffer}"
 
 
 class TestSichtschutz:
