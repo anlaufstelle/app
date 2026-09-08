@@ -671,26 +671,32 @@
      * ``key-cleared``-Broadcast aus, der in einem Fremd-Tab den Schluessel
      * ueber ``_applyKeyCleared`` sogar wieder verankert haette.
      *
-     * Der Memory-Key faellt in JEDEM Fall — daran aendert sich nichts.
+     * Der Memory-Key faellt in JEDEM Fall — daran aendert sich nichts. Der
+     * Aktivitaetsstempel dagegen faellt NUR mit einem nachweislich geloeschten
+     * Schluessel (R-L3-14): Er ist der Ausloeser des naechsten Idle-Laufs, und
+     * ein ueberlebender Schluessel braucht genau den.
      */
     async function clearSessionKey() {
         cachedKey = null;
         try {
             await _idbDelete(KEY_NAME);
         } catch (_e) {
-            // Der Schluessel ist das Entscheidende: schlaegt SEIN Delete fehl,
-            // ist die Loeschung nicht nachgewiesen. Der Aktivitaetsstempel
-            // wird trotzdem noch versucht (er haengt am Key, #1065).
-            try {
-                await _idbDelete(ACTIVITY_KEY);
-            } catch (_e2) {
-                // ignore — siehe unten
-            }
+            // R-L3-14: Der Aktivitaetsstempel bleibt hier BEWUSST stehen.
+            // Scheitert der Delete der Schluesselzeile, liegt der Schluessel
+            // weiterhin auf dem Geraet — und dann ist der alte, laengst
+            // ueberfaellige Stempel genau das, was den naechsten Idle-Lauf
+            // erneut ausloest. Wuerde er mitgeloescht, faende
+            // ``_enforceIdleWipeLocked`` kein ``ts`` mehr, startete ein FRISCHES
+            // Zeitfenster (siehe dort) und verschoebe die naechste
+            // Loeschprobe um eine volle Sitzungsdauer — ausgerechnet in dem
+            // Fall, in dem sie noetig ist.
             return { persisted: false };
         }
         try {
             // Drop the activity stamp with the key: the next idle check
             // starts a fresh window instead of re-wiping forever (#1065).
+            // Erst HIER, wo der Schluessel nachweislich weg ist — dann gibt es
+            // auch nichts mehr, was ein erneuter Wipe holen muesste.
             await _idbDelete(ACTIVITY_KEY);
         } catch (_e) {
             // Der Stempel ist kein Geheimnis und ohne Key wirkungslos — sein

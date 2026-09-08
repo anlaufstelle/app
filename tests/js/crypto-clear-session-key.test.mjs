@@ -49,7 +49,17 @@ function _setIndexedDb(value) {
  * ``tx.objectStore(store)``). Je nach Schalter scheitert der Delete oder der
  * Get, waehrend der Rest normal antwortet.
  */
-function kaputtesIndexedDb({ deleteFails = false, getFails = false, vorhandeneZeile = null } = {}) {
+function kaputtesIndexedDb({
+    deleteFails = false,
+    getFails = false,
+    vorhandeneZeile = null,
+    // R-L3-14: nur DIESE Schluessel scheitern beim Delete; alle uebrigen
+    // gelingen. So laesst sich der partielle Fall stellen — Key-Delete kaputt,
+    // Stempel-Delete waere moeglich.
+    deleteFailsFor = null,
+    protokoll = null,
+} = {}) {
+    const _scheitert = (key) => (deleteFailsFor ? deleteFailsFor.indexOf(key) !== -1 : deleteFails);
     return {
         open() {
             const req = {};
@@ -61,9 +71,10 @@ function kaputtesIndexedDb({ deleteFails = false, getFails = false, vorhandeneZe
                     transaction() {
                         const tx = { error: new Error("IndexedDB-Fehler (Attrappe)") };
                         tx.objectStore = () => ({
-                            delete() {
+                            delete(key) {
+                                if (protokoll) protokoll.push(key);
                                 queueMicrotask(() => {
-                                    if (deleteFails) tx.onerror && tx.onerror();
+                                    if (_scheitert(key)) tx.onerror && tx.onerror();
                                     else tx.oncomplete && tx.oncomplete();
                                 });
                             },
@@ -91,6 +102,48 @@ function kaputtesIndexedDb({ deleteFails = false, getFails = false, vorhandeneZe
             return req;
         },
     };
+}
+
+/** Rohzugriff auf eine Zeile der Krypto-IndexedDB (es gibt keine oeffentliche
+ *  Leseschnittstelle fuer den Aktivitaetsstempel). */
+function rohZeile(key) {
+    return new Promise((resolve, reject) => {
+        const req = ECHTES_IDB.open("anlaufstelle-crypto", 1);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction("meta", "readonly");
+            const get = tx.objectStore("meta").get(key);
+            get.onsuccess = () => {
+                db.close();
+                resolve(get.result || null);
+            };
+            get.onerror = () => {
+                db.close();
+                reject(get.error);
+            };
+        };
+    });
+}
+
+function rohSchreiben(record) {
+    return new Promise((resolve, reject) => {
+        const req = ECHTES_IDB.open("anlaufstelle-crypto", 1);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction("meta", "readwrite");
+            tx.objectStore("meta").put(record);
+            tx.oncomplete = () => {
+                db.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db.close();
+                reject(tx.error);
+            };
+        };
+    });
 }
 
 async function schluesselAblegen() {
@@ -142,6 +195,54 @@ describe("clearSessionKey meldet den Ausgang der persistenten Loeschung", () => 
         await expect(
             Promise.all([cryptoSession.clearSessionKey(), Promise.resolve("anderer Zweig")])
         ).resolves.toEqual([{ persisted: false }, "anderer Zweig"]);
+    });
+});
+
+describe("Aktivitaetsstempel und Idle-Wipe (R-L3-14)", () => {
+    // Warum das zaehlt: ``_enforceIdleWipeLocked`` startet ein FRISCHES
+    // Zeitfenster, wenn es keinen Stempel findet — statt den ueberfaelligen
+    // Wipe erneut zu versuchen. Wuerde der Stempel nach einem GESCHEITERTEN
+    // Key-Delete mitgeloescht, verschoebe sich die naechste Loeschprobe um eine
+    // volle Sitzungsdauer, obwohl der Schluessel noch auf dem Geraet liegt.
+
+    it("laesst den Stempel stehen, wenn der Key-Delete scheitert", async () => {
+        await schluesselAblegen();
+        await rohSchreiben({ key: "lastActivity", ts: 1 });
+        const protokoll = [];
+        _setIndexedDb(kaputtesIndexedDb({ deleteFailsFor: ["sessionKey"], protokoll }));
+
+        const ergebnis = await cryptoSession.clearSessionKey();
+
+        expect(ergebnis).toEqual({ persisted: false });
+        // Der Stempel wurde nicht einmal ANGEFASST — obwohl sein Delete hier
+        // gelungen waere.
+        expect(protokoll).toEqual(["sessionKey"]);
+        _setIndexedDb(ECHTES_IDB);
+        expect(await rohZeile("lastActivity")).toEqual({ key: "lastActivity", ts: 1 });
+    });
+
+    it("loescht bei Erfolg beides — Schluessel und Stempel", async () => {
+        await schluesselAblegen();
+        await rohSchreiben({ key: "lastActivity", ts: 1 });
+
+        const ergebnis = await cryptoSession.clearSessionKey();
+
+        expect(ergebnis).toEqual({ persisted: true });
+        expect(await rohZeile("sessionKey")).toBeNull();
+        expect(await rohZeile("lastActivity")).toBeNull();
+    });
+
+    it("meldet trotzdem Erfolg, wenn nur der Stempel-Delete scheitert", async () => {
+        // Der Stempel ist kein Geheimnis und ohne Schluessel wirkungslos — sein
+        // Fehlschlag darf den Loeschnachweis nicht entwerten.
+        await schluesselAblegen();
+        const protokoll = [];
+        _setIndexedDb(kaputtesIndexedDb({ deleteFailsFor: ["lastActivity"], protokoll }));
+
+        const ergebnis = await cryptoSession.clearSessionKey();
+
+        expect(ergebnis).toEqual({ persisted: true });
+        expect(protokoll).toEqual(["sessionKey", "lastActivity"]);
     });
 });
 
