@@ -165,95 +165,12 @@ describe("Die vorgelagerten Ausstiege bleiben unveraendert", () => {
     });
 });
 
-describe("Trefferansage (A11Y-035/036)", () => {
-    function liste(rows, attrs = {}) {
-        const region = document.createElement("p");
-        region.id = "liste-status";
-        region.setAttribute("role", "status");
-        region.textContent = "alt";
-        document.body.appendChild(region);
-
-        const target = container(
-            Array.from({ length: rows }, () => '<div data-testid="zeile"></div>').join(""),
-            Object.assign(
-                {
-                    "data-hx-no-focus": "",
-                    "data-hx-announce-region": "liste-status",
-                    "data-hx-announce-rows": "[data-testid='zeile']",
-                    "data-hx-announce-none": "Keine Person gefunden.",
-                    "data-hx-announce-one": "1 Person angezeigt.",
-                    "data-hx-announce-many": "{count} Personen angezeigt.",
-                },
-                attrs
-            )
-        );
-        return { region, target };
-    }
-
-    it.each([
-        [0, "Keine Person gefunden."],
-        [1, "1 Person angezeigt."],
-        [7, "7 Personen angezeigt."],
-    ])("sagt bei %i Zeilen %s an", (rows, erwartet) => {
-        const { region, target } = liste(rows);
-
-        afterSwap(target);
-
-        expect(region.textContent).toBe(erwartet);
-    });
-
-    it("sagt an, obwohl data-hx-no-focus den Fokus unterdrueckt", () => {
-        const { region, target } = liste(3);
-
-        afterSwap(target);
-
-        expect(region.textContent).toBe("3 Personen angezeigt.");
-        expect(document.activeElement).toBe(document.body);
-    });
-
-    it("sagt auch bei laufender Live-Suche an (Fokus bleibt im Suchfeld)", () => {
-        const suche = document.createElement("input");
-        suche.type = "search";
-        document.body.appendChild(suche);
-        const { region, target } = liste(2);
-        suche.focus();
-
-        afterSwap(target);
-
-        expect(region.textContent).toBe("2 Personen angezeigt.");
-        expect(document.activeElement).toBe(suche);
-    });
-
-    it("ersetzt den Textknoten auch bei gleicher Trefferzahl", () => {
-        const { region, target } = liste(2);
-        afterSwap(target);
-        const erster = region.firstChild;
-
-        afterSwap(target);
-
-        expect(region.textContent).toBe("2 Personen angezeigt.");
-        expect(region.firstChild).not.toBe(erster);
-    });
-
-    it("laesst Swaps ohne Ansage-Attribute unberuehrt", () => {
-        const region = document.createElement("p");
-        region.id = "liste-status";
-        region.textContent = "unveraendert";
-        document.body.appendChild(region);
-        const target = container('<div data-testid="zeile"></div>');
-
-        afterSwap(target);
-
-        expect(region.textContent).toBe("unveraendert");
-    });
-
-    it("bleibt still, wenn die Ansagezeile fehlt", () => {
-        const target = container('<div data-testid="zeile"></div>', {
-            "data-hx-announce-region": "gibts-nicht",
-            "data-hx-announce-rows": "[data-testid='zeile']",
-            "data-hx-announce-one": "1 Person angezeigt.",
-        });
-
-        expect(() => afterSwap(target)).not.toThrow();
-    });
-});
+// Die vormalige "Trefferansage (A11Y-035/036)"-Testgruppe pinnte
+// ``_announceResultCount`` (DOM-Zeilenzaehlung ueber
+// ``data-hx-announce-*``-Attribute). Refs #2155: der Pfad ist entfernt — die
+// Trefferansage kommt jetzt serverseitig als ``hx-swap-oob``-Fragment aus den
+// Listen-Templates selbst (echter ``paginator.count`` statt gezaehlter
+// DOM-Zeilen). Die beiden hier mitgeprueften, weiterhin gueltigen Verhalten
+// (``data-hx-no-focus`` unterdrueckt Fokus, Live-Suche behaelt den Fokus im
+// Suchfeld) bleiben oben in "Die vorgelagerten Ausstiege bleiben
+// unveraendert" abgedeckt — unabhaengig von der Ansage getestet.

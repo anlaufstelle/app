@@ -8,6 +8,21 @@
     Initialisierung erzeugte.
 {% endcomment %}
 
+{% if request.htmx %}
+{% comment %}Refs #2155: OOB-Ansage des Gesamtwerts. Ausserhalb des
+``{% if clients %}``-Zweigs, damit sie auch im Leerzustand rendert; per
+``request.htmx`` (django-htmx-Middleware, ``settings/base.py``) statt eines
+eigenen Kontext-Flags — dieses Partial wird sowohl per ``{% include %}`` aus
+``list.html`` (Full-Page) als auch direkt als HTMX-Antwort
+(``HTMXPartialMixin.render_htmx_or_full``) gerendert, und nur bei Letzterem
+soll das Fragment mitkommen: ``list.html`` bringt die dauerhafte Zeile mit
+demselben ``id`` bereits mit, ein zweites Element ohne dieses Gate gaebe es
+beim Erstladen doppelt. ``hx-swap-oob="true"`` ersetzt dieses Element anhand
+der ID irgendwo im aktuellen DOM — unabhaengig davon, wo im Antwort-HTML es
+steht.{% endcomment %}
+<p id="client-list-status" hx-swap-oob="true" role="status" aria-live="polite" class="sr-only" data-testid="client-list-status">{% if clients.paginator.count == 0 %}{% trans "Keine Person gefunden." %}{% elif clients.paginator.count == 1 %}{% trans "1 Person gefunden." %}{% else %}{% blocktrans with total=clients.paginator.count page=clients.number pages=clients.paginator.num_pages %}{{ total }} Personen gefunden, Seite {{ page }} von {{ pages }}.{% endblocktrans %}{% endif %}</p>
+{% endif %}
+
 {% if clients %}
 {# Refs #812 (C-45): role=table + Pseudo-row/columnheader/cell auf der CSS-Grid-Liste. #}
 <div class="client-list" role="table" aria-label="{% trans 'Personen' %}">

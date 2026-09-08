@@ -1,5 +1,13 @@
 {% load i18n %}
 
+{% if request.htmx %}
+{% comment %}Refs #2155: OOB-Ansage des Gesamtwerts — s. clients/partials/table.html
+fuer die ausfuehrliche Begruendung (Gate ueber ``request.htmx``, ausserhalb
+des ``{% if cases %}``-Zweigs, ``hx-swap-oob="true"`` mit derselben ID wie die
+dauerhafte Zeile in ``list.html``).{% endcomment %}
+<p id="case-list-status" hx-swap-oob="true" role="status" aria-live="polite" class="sr-only" data-testid="case-list-status">{% if cases.paginator.count == 0 %}{% trans "Kein Fall gefunden." %}{% elif cases.paginator.count == 1 %}{% trans "1 Fall gefunden." %}{% else %}{% blocktrans with total=cases.paginator.count page=cases.number pages=cases.paginator.num_pages %}{{ total }} Fälle gefunden, Seite {{ page }} von {{ pages }}.{% endblocktrans %}{% endif %}</p>
+{% endif %}
+
 {% if cases %}
 {# Desktop: Table #}
 <div class="hidden sm:block bg-surface border border-subtle rounded-[10px] overflow-hidden">

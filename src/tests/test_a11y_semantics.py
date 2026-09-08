@@ -60,6 +60,14 @@ def _tag_with(html: str, needle: str) -> str:
     return html[start : end + 1]
 
 
+def _status_text(html: str, region_id: str) -> str:
+    """Textinhalt der ``<p id="{region_id}">…</p>``-Ansagezeile, getrimmt."""
+    tag = _tag_with(html, f'id="{region_id}"')
+    start = html.index(tag) + len(tag)
+    end = html.index("</p>", start)
+    return html[start:end].strip()
+
+
 @pytest.mark.django_db
 class TestOverflowMenuState:
     """A11Y-015 — der ``⋮``-Trigger meldete weder Zustand noch Ziel."""
@@ -193,7 +201,17 @@ class TestHistoryEntryDisclosure:
 
 @pytest.mark.django_db
 class TestListResultAnnouncement:
-    """A11Y-035/036 — HTMX-Listen tauschten ihre Tabelle stumm aus."""
+    """A11Y-035/036 — HTMX-Listen tauschten ihre Tabelle stumm aus.
+
+    Refs #2155: die Ansage nannte bis hierher die auf der Seite SICHTBAREN
+    Zeilen (client-seitig per ``focus-management.js``/``_announceResultCount``
+    gezaehlt) statt des echten Paginator-Gesamtwerts. Der Vertrag ist jetzt:
+    Erst-Render UND HTMX-Partial liefern denselben Satz aus
+    ``<paginator>.count``/``.number``/``.paginator.num_pages`` — das Partial
+    als ``hx-swap-oob="true"``-Fragment mit derselben ID wie die dauerhafte
+    Zeile im Eltern-Template (``list.html``), kein Client-seitiges Zaehlen
+    mehr.
+    """
 
     LISTS = [
         ("core:client_list", "client-table", "client-list-status", "client-row"),
@@ -219,15 +237,22 @@ class TestListResultAnnouncement:
         assert "sr-only" in region_tag
 
     @pytest.mark.parametrize(("route", "swap_id", "region_id", "_row"), LISTS)
-    def test_swap_target_carries_the_announcement_contract(self, client, staff_user, route, swap_id, region_id, _row):
+    def test_swap_target_no_longer_carries_a_client_side_announce_contract(
+        self, client, staff_user, route, swap_id, region_id, _row
+    ):
+        """Refs #2155 (Assertion verschaerft — vormals forderte dieser Test die
+        ``data-hx-announce-*``-Attribute; sie sind mit dem client-seitigen
+        Zaehlpfad entfallen). Regressionswaechter: die alten Attribute duerfen
+        nicht wiederkehren, sonst laeuft wieder eine zweite, aus der
+        Zeilenzahl gespeiste Ansage neben dem OOB-Fragment."""
         html = _html(client, staff_user, reverse(route))
         tag = _tag_with(html, f'id="{swap_id}"')
 
-        assert f'data-hx-announce-region="{region_id}"' in tag, tag
-        assert "data-hx-announce-rows=" in tag, tag
-        for slot in ("none", "one", "many"):
-            assert f"data-hx-announce-{slot}=" in tag, (slot, tag)
-        assert "{count}" in tag, "der Mehrzahl-Satz braucht den Platzhalter"
+        assert "data-hx-announce-region=" not in tag, tag
+        assert "data-hx-announce-rows=" not in tag, tag
+        assert "data-hx-announce-none=" not in tag, tag
+        assert "data-hx-announce-one=" not in tag, tag
+        assert "data-hx-announce-many=" not in tag, tag
 
     @pytest.mark.parametrize(("route", "swap_id", "region_id", "_row"), LISTS)
     def test_swap_target_opts_out_of_the_focus_manager(self, client, staff_user, route, swap_id, region_id, _row):
@@ -238,32 +263,50 @@ class TestListResultAnnouncement:
 
         assert "data-hx-no-focus" in tag, tag
 
-    def test_row_selector_matches_the_rendered_rows(self, client, staff_user, client_identified):
-        """Der Zaehl-Selektor muss auf das gerenderte Markup passen —
-        ein Selektor ins Leere sagt immer "Keine Person gefunden"."""
+    def test_first_render_announces_the_total_not_the_row_count(self, client, staff_user, client_identified):
+        """Refs #2155 (Assertion verschaerft — vormals pruefte dieser Test nur,
+        dass ein ``data-hx-announce-rows``-Selektor zum Markup passt; jetzt
+        steht der volle Gesamtwert-Satz direkt in der Ansagezeile)."""
         html = _html(client, staff_user, reverse("core:client_list"))
-        tag = _tag_with(html, 'id="client-table"')
 
-        assert "data-hx-announce-rows=\"[data-testid='client-row']\"" in tag
-        assert html.count('data-testid="client-row"') == 1
+        assert _status_text(html, "client-list-status") == "1 Person gefunden."
 
-    def test_case_row_selector_matches_the_rendered_rows(self, client, staff_user, case_open):
+    def test_case_first_render_announces_the_total_not_the_row_count(self, client, staff_user, case_open):
         html = _html(client, staff_user, reverse("core:case_list"))
-        tag = _tag_with(html, 'id="case-table"')
 
-        assert 'data-hx-announce-rows="table tbody tr"' in tag
-        table = html[html.index("<tbody") : html.index("</tbody>")]
-        assert table.count("<tr") == 1
+        assert _status_text(html, "case-list-status") == "1 Fall gefunden."
 
     @pytest.mark.parametrize(("route", "_swap", "region_id", "_row"), LISTS)
-    def test_partial_response_does_not_ship_a_second_region(self, client, staff_user, route, _swap, region_id, _row):
-        """Die HTMX-Antwort darf die Ansagezeile NICHT mitliefern —
-        sonst stuende sie doppelt im DOM (4.1.1) und bliebe stumm."""
+    def test_partial_response_ships_exactly_one_oob_status_fragment(
+        self, client, staff_user, route, _swap, region_id, _row
+    ):
+        """Refs #2155 (Assertion verschaerft — vormals durfte die Region GAR
+        NICHT im Partial vorkommen; jetzt MUSS sie als ``hx-swap-oob``-Fragment
+        vorkommen, GENAU EINMAL — sonst entweder Doppelansage (4.1.1, zwei
+        Elemente mit derselben ID) oder gar keine Ansage nach einem Swap)."""
         client.force_login(staff_user)
         response = client.get(reverse(route), headers={"HX-Request": "true"})
+        content = response.content.decode()
 
         assert response.status_code == 200
-        assert _id_count(response.content.decode(), region_id) == 0
+        assert _id_count(content, region_id) == 1
+        tag = _tag_with(content, f'id="{region_id}"')
+        assert 'hx-swap-oob="true"' in tag, tag
+        assert 'role="status"' in tag, tag
+        assert 'aria-live="polite"' in tag, tag
+
+    def test_partial_response_total_matches_the_first_render(self, client, staff_user, client_identified):
+        """Erst-Render und HTMX-Partial muessen denselben Satz liefern — sonst
+        weicht die Ansage nach dem ersten Filterwechsel vom Ausgangszustand ab,
+        obwohl sich am Gesamtwert nichts geaendert hat."""
+        full_html = _html(client, staff_user, reverse("core:client_list"))
+        full_content = _status_text(full_html, "client-list-status")
+
+        client.force_login(staff_user)
+        partial = client.get(reverse("core:client_list"), headers={"HX-Request": "true"}).content.decode()
+        partial_content = _status_text(partial, "client-list-status")
+
+        assert full_content == partial_content == "1 Person gefunden."
 
 
 @pytest.fixture
