@@ -81,7 +81,7 @@ You can define time periods to match your operations — e.g. "Night shift 21:30
 
 Every facility works differently. Anlaufstelle adapts to your documentation practice: What types of contacts do you have? What services are recorded? What fields does an entry need?
 
-This works without programming, directly in the interface — for events as well as for client and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility. Four domain packages ship alongside the standard catalog (advice center, awareness, women's shelter, youth work) — see [docs/packages.md](docs/packages.md).
+This works without programming, directly in the interface — for events as well as for client and case forms. Fields can be grouped into sections, sorted, and given conditions ("show this field only when …"). A configuration can be captured as a YAML package, versioned, and applied to another facility. Four domain packages ship alongside the standard catalog (`beratungsstelle`, `awareness`, `frauenhaus`, `jugendarbeit`) — see [docs/packages.md](docs/packages.md).
 
 The configuration also governs data protection:
 
@@ -223,5 +223,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-09-07 -->
+<!-- translation-date: 2026-09-08 -->
 <!-- source-hash: b6068ca379ea9818cd895c8e995578b5d4a55707 -->

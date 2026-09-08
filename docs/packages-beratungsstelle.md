@@ -54,8 +54,8 @@ Konkret bedeuten die Ebenen:
 ## Berichte
 
 - **Sachbericht:** alle acht Typen sind über `contact`, `counseling`, `crisis`, `accompaniment`, `referral` oder `excluded` zugeordnet.
-- **Beratungsstunden:** `kontakt`, `kurzberatung`, `beratungsgespraech` und `krisengespraech` zählen über `dauer` (`dauer_minuten`); anonyme und pseudonyme Beratung erscheinen gemeinsam in der Sachbericht-Zeile „Beratung“.
-- **Leistungs-Bericht:** `kontakt` liefert die Auswahl `leistungen` mit dem Feld-Berichtsschlüssel `leistungen`.
+- **Beratungsstunden:** `kontakt`, `kurzberatung`, `beratungsgespraech` und `krisengespraech` zählen über `dauer` (`dauer_minuten`); anders als bei Awareness, Jugendarbeit und Frauenhaus tragen hier alle vier `contact`/`counseling`/`crisis`-Typen ein Minutenfeld — es gibt keine 0-Minuten-Zeilen und keinen Vollständigkeitshinweis „Ereignisse ohne Wertangabe“. Anonyme und pseudonyme Beratung erscheinen gemeinsam in der Sachbericht-Zeile „Beratung“.
+- **Beispiel: Leistungs- und Krisenarten-Verteilung:** Dieser eine Bericht ist im Beratungsstelle-Paket über beide Gruppen verfügbar: Der Leistungs-Block wertet `leistungen` an Kontakt aus, der Krisen-Block `art-der-krise` (`report_key: art_der_krise`) an Krisengespräch.
 
 ## Betreiber-Empfehlungen
 
