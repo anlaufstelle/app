@@ -1011,7 +1011,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 | Datenbestand | Umfang |
 |---|---|
 | **`Event.data_json`** | **vollständig — inklusive soft-gelöschter Ereignisse** (#1724); je Zeile mit Row-Lock und Compare-and-Swap |
-| `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass) |
+| `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass); je Zeile mit Row-Lock und Compare-and-Swap auf den geänderten Spalten (#2177) |
 | `Attachment.original_filename_encrypted` | vollständig — Anhänge an Ereignis, Person und Fall (das Modell hieß bis #1738 `EventAttachment`); je Zeile mit Row-Lock und Compare-and-Swap |
 | TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
 | **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen**; je Zeile mit Row-Lock und Compare-and-Swap |
@@ -1022,7 +1022,7 @@ Seit den entitätsübergreifenden dynamischen Feldern ([ADR-037](adr/037-konfigu
 
 Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet. Die frühere Lücke bei soft-gelöschten Ereignissen (`is_deleted=False`-Filter) ist seit #1724 geschlossen.
 
-> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Die Rotation überschreibt dabei nie eine zwischenzeitliche Änderung — auch nicht bei Redaktions- oder Anonymisierungsläufen, die `updated_at` nicht fortschreiben. Den Lauf dann wiederholen und den alten Schlüssel bis zu einem Lauf ohne diese Meldung behalten. Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
+> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Die Rotation überschreibt dabei nie eine zwischenzeitliche Änderung — auch nicht bei Redaktions- oder Anonymisierungsläufen, die `updated_at` nicht fortschreiben. Das gilt seit #2177 auch für die **Ereignis-Historie**: Redigiert der nächtliche Aufbewahrungslauf oder eine Anonymisierung nach Art. 17 DSGVO eine Historienzeile, während die Rotation läuft, überspringt die Rotation diese Zeile und meldet sie als übersprungen — der Redaktionsstand bleibt. Bereits redigierte Zeilen sind ohnehin keine Rotationskandidaten mehr: Sie tragen keine verschlüsselten Werte, sondern nur noch den Redaktionsvermerk. Den Lauf dann wiederholen und den alten Schlüssel bis zu einem Lauf ohne diese Meldung behalten. Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
 
 #### Upload-Limit
 

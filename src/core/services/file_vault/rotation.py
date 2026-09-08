@@ -227,7 +227,7 @@ def _reencrypt_rectification_requests(dry_run: bool, *, on_contended: Callable[[
     return updated
 
 
-def _reencrypt_event_history(dry_run: bool) -> int:
+def _reencrypt_event_history(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
     """Refs #783 — EventHistory ist append-only (Trigger ``prevent_eventhistory_update``).
 
     UPDATE wird per ``bypass_replication_triggers`` umgangen — derselbe
@@ -239,23 +239,70 @@ def _reencrypt_event_history(dry_run: bool) -> int:
     ``compliance`` → ``clamav`` → ``file_vault.virus_scan``) — ein Modul-Import
     an dieser Stelle liefe beim Package-Import von ``file_vault`` selbst in
     einen echten Zirkel (``file_vault`` re-exportiert ``rotate_all``).
+
+    Refs #2177 (Red-Team B-12): Dies war der siebte und letzte Pfad, der noch
+    **unbedingt** schrieb — #2131 hatte die sechs anderen auf Row-Lock +
+    wertgebundenes Compare-and-Swap umgestellt, diesen aber uebersehen. Auf
+    ``data_before``/``data_after`` arbeiten zwei produktive Konkurrenzschreiber
+    (der ADR-050-Retentionssweep und die Art.-17-Anonymisierungskaskade); ihr
+    Redaktionsmarker wurde von der Rotation mit einer frisch verschluesselten
+    Kopie des ALTEN Payloads ueberschrieben. Weil ``redacted_at`` dabei stehen
+    blieb, fiel die Zeile anschliessend dauerhaft aus dem Idempotenz-Filter des
+    Sweeps (``redacted_at__isnull=True``) — eine stille, dauerhafte Umkehr einer
+    Loeschung nach Art. 17 ohne Heilungspfad.
+
+    Zwei Aenderungen schliessen das, beide aus dem Muster der Schwesterpfade:
+
+    * Statt eines ``iterator()``-Snapshot-Cursors (dessen Lesefenster der
+      GESAMTE Lauf war) werden erst die pks eingesammelt und jede Zeile
+      unmittelbar vor ihrem Schreibversuch neu gelesen. Das verkleinert das
+      Fenster auf eine Zeile und loest nebenbei ``cannot ALTER TABLE ...
+      because it is being used by active queries in this session``: der offene
+      Server-Cursor kollidierte mit dem Owner-DDL des Trigger-Bypasses, sobald
+      der Lauf innerhalb eines ``atomic()``-Blocks stattfand.
+    * Geschrieben wird per :func:`_locked_compare_and_swap` — wertgebunden auf
+      genau die Spalten, die diese Zeile aendern soll. Committet ein Redaktions-
+      oder Anonymisierungslauf in der Zwischenzeit, findet das CAS seinen
+      Erwartungswert nicht mehr, ueberspringt die Zeile und meldet Kontention.
+
+    Eine Sonderbehandlung fuer bereits redigierte Zeilen braucht es dafuer
+    nicht: der Marker (``{"_redacted": true, ...}``) traegt keine
+    verschluesselten Werte, ``_reencrypt_data_json`` meldet ``changed = False``
+    und die Zeile faellt vor jedem Schreibversuch aus der Schleife. Die
+    Redaktion gewinnt damit in beiden Reihenfolgen.
     """
     from core.services.system import bypass_replication_triggers
 
     updated = 0
-    for hist in EventHistory.objects.iterator(chunk_size=500):
+    pks = list(EventHistory.objects.values_list("pk", flat=True))
+    for pk in pks:
+        hist = EventHistory.objects.filter(pk=pk).first()
+        if hist is None:
+            continue
         before, before_changed = _reencrypt_data_json(hist.data_before)
         after, after_changed = _reencrypt_data_json(hist.data_after)
         if not (before_changed or after_changed):
             continue
-        updated += 1
         if dry_run:
+            updated += 1
             continue
-        with transaction.atomic(), bypass_replication_triggers():
-            EventHistory.objects.filter(pk=hist.pk).update(
-                data_before=before,
-                data_after=after,
-            )
+        # Nur die tatsaechlich zu rotierenden Spalten binden: eine leere oder
+        # ``NULL``-Spalte aendert sich nie und wuerde als Erwartungswert nur
+        # falsche Kontention erzeugen (JSON-``null`` vs. SQL-``NULL``).
+        expected = {}
+        updates = {}
+        if before_changed:
+            expected["data_before"] = hist.data_before
+            updates["data_before"] = before
+        if after_changed:
+            expected["data_after"] = hist.data_after
+            updates["data_after"] = after
+        with bypass_replication_triggers():
+            swapped = _locked_compare_and_swap(EventHistory, pk, expected=expected, updates=updates)
+        if swapped:
+            updated += 1
+        elif on_contended is not None:
+            on_contended()
     return updated
 
 
@@ -393,7 +440,9 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
     Kontentions-Warnung: Erkennung und Retry-Logik leben hier, die
     Formatierung ueber ``self.style``/``self.stderr`` bleibt Command-Sache.
 
-    ``contended`` ist bewusst eine Gesamtzahl ueber alle sieben Modellpfade:
+    ``contended`` ist bewusst eine Gesamtzahl ueber alle sieben Modellpfade
+    (seit Refs #2177 wirklich alle sieben — ``EventHistory`` meldete bis dahin
+    als einziger Pfad keine Kontention, weil er unbedingt schrieb):
     Fuer den Betriebsentscheid "Alt-Schluessel noch nicht entfernen, Lauf
     wiederholen" ist jede einzelne uebersprungene Zeile gleich kritisch. Die
     bestehende TOTP-Warnung nennt zusaetzlich die betroffenen Geraete-PKs.
@@ -405,7 +454,7 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
         contended += 1
 
     events_updated = _reencrypt_events(dry_run, on_contended=_count_contended)
-    history_updated = _reencrypt_event_history(dry_run)
+    history_updated = _reencrypt_event_history(dry_run, on_contended=_count_contended)
     attachments_updated = _reencrypt_attachments(dry_run, on_contended=_count_contended)
     totp_updated, totp_contended = _reencrypt_totp_devices(dry_run)
     if totp_contended and on_totp_contended is not None:

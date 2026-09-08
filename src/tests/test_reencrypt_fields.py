@@ -67,6 +67,38 @@ def raw_event_data_json(event) -> dict:
     return json.loads(raw) if isinstance(raw, str) else raw
 
 
+def raw_history_payloads(history) -> tuple[dict | None, dict | None]:
+    """``core_eventhistory.data_before``/``data_after`` direkt aus der DB-Zeile."""
+    with connection.cursor() as cur:
+        cur.execute(
+            "SELECT data_before, data_after FROM core_eventhistory WHERE id = %s",
+            [str(history.pk)],
+        )
+        before, after = cur.fetchone()
+    return (
+        json.loads(before) if isinstance(before, str) else before,
+        json.loads(after) if isinstance(after, str) else after,
+    )
+
+
+def decryptable_values(payload) -> list[str]:
+    """Die aus *payload* noch entschluesselbaren Klartexte (Refs #2177).
+
+    Das ist der Schadensmassstab des Rennens: Steht nach dem Lauf wieder
+    Klartext in einer redigierten Spalte, ist eine Loeschung nach Art. 17
+    still rueckgaengig gemacht worden.
+    """
+    if not isinstance(payload, dict):
+        return []
+    found = []
+    for value in payload.values():
+        if is_encrypted_value(value):
+            plain = safe_decrypt(value)
+            if plain != "[verschlüsselt]":
+                found.append(plain)
+    return found
+
+
 @pytest.mark.django_db
 def test_reencrypt_client_token_rotates_under_key_rotation(facility, doc_type_client_profile, staff_user):
     """``Client.data_json['diagnose']`` wird unter dem neuen Primaerschluessel neu verschluesselt."""
@@ -361,7 +393,12 @@ class TestRotateAll:
         staff_user,
         monkeypatch,
     ):
-        """Event/Client/Case/Attachment/Rectification nutzen denselben CAS-Vertrag."""
+        """Alle sechs veraenderlichen Pfade nutzen denselben CAS-Vertrag.
+
+        Refs #2177: ``EventHistory`` ist seit B-12 der sechste Pfad an dieser
+        Stelle — vorher schrieb er als einziger unbedingt und tauchte deshalb
+        weder in ``calls_by_model`` noch im ``contended``-Zaehler auf.
+        """
         from core.services.file_vault import rotation as rotation_module
 
         key = generate_key()
@@ -409,7 +446,7 @@ class TestRotateAll:
                 review_note=encrypt_field("CAS-Prüfvermerk"),
                 requested_by=staff_user,
             )
-            EventHistory.objects.create(
+            history = EventHistory.objects.create(
                 event=event,
                 action=EventHistory.Action.UPDATE,
                 changed_by=staff_user,
@@ -442,16 +479,16 @@ class TestRotateAll:
 
         assert counts == {
             "events": 0,
-            "event_history": 1,
+            "event_history": 0,
             "attachments": 0,
             "totp_devices": 0,
             "clients": 0,
             "cases": 0,
             "rectification_requests": 0,
-            "contended": 5,
+            "contended": 6,
         }
         calls_by_model = {model: (pk, expected, updates) for model, pk, expected, updates in calls}
-        assert set(calls_by_model) == {Event, Client, Case, Attachment, RectificationRequest}
+        assert set(calls_by_model) == {Event, Client, Case, Attachment, RectificationRequest, EventHistory}
         assert set(calls_by_model[Event][1]) == {"updated_at", "data_json"}
         assert set(calls_by_model[Event][2]) == {"data_json", "updated_at"}
         assert set(calls_by_model[Client][1]) == {"updated_at", "data_json"}
@@ -463,18 +500,23 @@ class TestRotateAll:
             "reason",
             "review_note",
         }
+        assert set(calls_by_model[EventHistory][1]) == {"data_before", "data_after"}
+        assert set(calls_by_model[EventHistory][2]) == {"data_before", "data_after"}
 
         event.refresh_from_db()
         client.refresh_from_db()
         case.refresh_from_db()
         attachment.refresh_from_db()
         rectification.refresh_from_db()
+        history_before, history_after = raw_history_payloads(history)
         with override_settings(ENCRYPTION_KEY=key):
             assert safe_decrypt(raw_event_data_json(event)["notiz-krise"]) == "Event-CAS"
             assert safe_decrypt(raw_client_data_json(client)["diagnose"]) == "Client-CAS"
             assert safe_decrypt(raw_case_data_json(case)["verlauf"]) == "Case-CAS"
             assert safe_decrypt(attachment.original_filename_encrypted) == "cas-test.pdf"
             assert safe_decrypt(rectification.review_note) == "CAS-Prüfvermerk"
+            assert safe_decrypt(history_before["notiz-krise"]) == "History-alt"
+            assert safe_decrypt(history_after["notiz-krise"]) == "History-neu"
 
     def test_locked_cas_reports_a_row_deleted_before_lock_as_contention(self):
         from core.services.file_vault.rotation import _locked_compare_and_swap
@@ -586,6 +628,149 @@ class TestRotateAll:
             "contended": 0,
         }
         assert _rewrap_one_totp_device(2_147_483_647, lambda value: value, lambda value: value) == "empty"
+
+    def test_history_rotation_rewraps_both_columns_without_contention(
+        self, facility, client_identified, doc_type_crisis, staff_user
+    ):
+        """Refs #2177: der ungestoerte Historienpfad rotiert weiterhin beide Spalten.
+
+        Der Gegenbeweis zum Rennen-Test: das Compare-and-Swap darf den
+        Normalfall nicht ausbremsen — beide Chiffrate wechseln, der Klartext
+        bleibt, und niemand wird als Kontention gemeldet.
+        """
+        old_key = generate_key()
+        new_key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+            event = Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type_crisis,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            history = EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"notiz-krise": encrypt_field("Vorher-Wortlaut")},
+                data_after={"notiz-krise": encrypt_field("Nachher-Wortlaut")},
+            )
+        before_token, after_token = raw_history_payloads(history)
+
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+            counts = rotate_all(dry_run=False)
+            rotated_before, rotated_after = raw_history_payloads(history)
+
+            assert safe_decrypt(rotated_before["notiz-krise"]) == "Vorher-Wortlaut"
+            assert safe_decrypt(rotated_after["notiz-krise"]) == "Nachher-Wortlaut"
+
+        assert counts["event_history"] == 1
+        assert counts["contended"] == 0
+        assert rotated_before["notiz-krise"]["value"] != before_token["notiz-krise"]["value"]
+        assert rotated_after["notiz-krise"]["value"] != after_token["notiz-krise"]["value"]
+
+    def test_history_row_deleted_during_the_run_is_skipped_silently(
+        self, facility, client_identified, doc_type_crisis, staff_user, monkeypatch
+    ):
+        """Refs #2177: eine waehrend des Laufs geloeschte Zeile ist keine Kontention.
+
+        Die zweite Stufe des Aufbewahrungslaufs
+        (``delete_redacted_event_history_rows``) entfernt redigierte Zeilen
+        nach Fristablauf — sie kann also zwischen der pk-Sammlung und dem
+        Lesen einer Zeile committen. Dann gibt es nichts mehr zu rotieren und
+        auch nichts zu melden: der Lauf ueberspringt die pk still.
+        """
+        from core.services.file_vault import rotation as rotation_module
+        from core.services.system import bypass_replication_triggers
+
+        key = generate_key()
+        with override_settings(ENCRYPTION_KEY=key):
+            event = Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type_crisis,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"notiz-krise": encrypt_field("Erste Fassung")},
+                data_after=None,
+            )
+            EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"notiz-krise": encrypt_field("Zweite Fassung")},
+                data_after=None,
+            )
+
+            original_reencrypt = rotation_module._reencrypt_data_json
+            state = {"deleted": False}
+
+            def delete_the_other_row(payload):
+                # Beim Lesen der ersten Historienzeile verschwindet die andere —
+                # unabhaengig davon, welche der beiden zuerst drankommt.
+                if not state["deleted"] and isinstance(payload, dict) and "notiz-krise" in payload:
+                    state["deleted"] = True
+                    with bypass_replication_triggers(tables=("core_eventhistory",)):
+                        EventHistory.objects.exclude(data_before=payload).delete()
+                return original_reencrypt(payload)
+
+            monkeypatch.setattr(rotation_module, "_reencrypt_data_json", delete_the_other_row)
+
+            counts = rotate_all(dry_run=False)
+
+        assert state["deleted"]
+        assert EventHistory.objects.count() == 1
+        assert counts["event_history"] == 1
+        assert counts["contended"] == 0
+
+    def test_history_row_redacted_before_the_run_is_left_untouched(
+        self, facility, client_identified, doc_type_crisis, staff_user
+    ):
+        """Refs #2177: eine vor dem Lauf redigierte Zeile ist kein Rotationskandidat.
+
+        Der Marker traegt keine Chiffrate mehr — ``_reencrypt_data_json``
+        meldet ``changed = False``, die Zeile faellt vor jedem Schreibversuch
+        aus der Schleife. Die Redaktion gewinnt hier also ohne Sonderlogik.
+        """
+        from core.retention.eventhistory import redact_event_history_rows
+
+        key = generate_key()
+        with override_settings(ENCRYPTION_KEY=key):
+            event = Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type_crisis,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            history = EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"notiz-krise": encrypt_field("Vorher-Wortlaut")},
+                data_after={"notiz-krise": encrypt_field("Nachher-Wortlaut")},
+            )
+            redact_event_history_rows(facility, [history.pk], category="test-2177")
+            redacted_before, redacted_after = raw_history_payloads(history)
+
+            counts = rotate_all(dry_run=False)
+
+            assert decryptable_values(redacted_before) == []
+            assert decryptable_values(redacted_after) == []
+
+        history.refresh_from_db()
+        assert history.redacted_at is not None
+        assert counts["event_history"] == 0
+        assert counts["contended"] == 0
+        assert raw_history_payloads(history) == (redacted_before, redacted_after)
 
     def test_on_totp_contended_callback_not_invoked_without_contention(self, facility):
         """Der optionale Kontentions-Callback bleibt bei einem sauberen Lauf ungerufen."""
@@ -829,6 +1014,122 @@ class TestRotationCompareAndSwapRace:
             assert rerun["contended"] == 0
             assert rerun_token["value"] != user_token["value"]
             assert safe_decrypt(rerun_token) == "Nutzerstand gewinnt"
+
+    def test_history_redaction_between_read_and_write_wins(
+        self, facility, client_identified, doc_type_crisis, staff_user, monkeypatch
+    ):
+        """Refs #2177 (Red-Team B-12): der Retentionssweep gewinnt gegen die Rotation.
+
+        Beobachtend gebaut: der Redaktions-Sweep committet auf einer eigenen
+        Verbindung genau zwischen Lesen und Schreiben der Rotation; geprueft
+        wird NACH dem Rennen, im gesperrten Fenster steht kein ``assert``.
+
+        Ohne Row-Lock und Compare-and-Swap schrieb die Rotation ihre Kopie des
+        alten Payloads unbedingt zurueck: der redigierte Wortlaut war wieder
+        entschluesselbar, ``redacted_at`` blieb gesetzt — die Zeile fiel damit
+        dauerhaft aus dem Idempotenz-Filter des Sweeps
+        (``redacted_at__isnull=True``) und hatte keinen Heilungspfad mehr.
+        """
+        from core.retention.eventhistory import redact_event_history_rows
+        from core.services.events.history_diff import is_redaction_marker
+        from core.services.file_vault import rotation as rotation_module
+
+        old_key = generate_key()
+        new_key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+            event = Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type_crisis,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            target = EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"notiz-krise": encrypt_field("Vorher-Wortlaut-Art17")},
+                data_after={"notiz-krise": encrypt_field("Nachher-Wortlaut-Art17")},
+            )
+            # Nachbarzeile ohne den Sync-Slug: sie belegt, dass die Rotation nur
+            # die umkaempfte Zeile ueberspringt und nicht den ganzen Lauf.
+            untouched = EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"unbeteiligt": encrypt_field("Nachbarzeile")},
+                data_after=None,
+            )
+
+        rotation_has_read = threading.Event()
+        redaction_committed = threading.Event()
+        errors = {}
+        result = {}
+        original_reencrypt = rotation_module._reencrypt_data_json
+
+        def synchronized_reencrypt(payload):
+            healed = original_reencrypt(payload)
+            if isinstance(payload, dict) and "notiz-krise" in payload and not rotation_has_read.is_set():
+                rotation_has_read.set()
+                if not redaction_committed.wait(timeout=_JOIN_TIMEOUT):
+                    errors["sync"] = RuntimeError("Redaktion wurde nicht rechtzeitig committed")
+            return healed
+
+        monkeypatch.setattr(rotation_module, "_reencrypt_data_json", synchronized_reencrypt)
+
+        def commit_redaction():
+            connection.close()
+            try:
+                if not rotation_has_read.wait(timeout=_JOIN_TIMEOUT):
+                    errors["redaction"] = RuntimeError("Rotation hat die Historienzeile nicht gelesen")
+                    return
+                redact_event_history_rows(facility, [target.pk], category="test-2177")
+            except Exception as exc:  # noqa: BLE001
+                errors["redaction"] = exc
+            finally:
+                redaction_committed.set()
+                connections.close_all()
+
+        def run_rotation():
+            connection.close()
+            try:
+                result["counts"] = rotation_module.rotate_all(dry_run=False)
+            except Exception as exc:  # noqa: BLE001
+                errors["rotation"] = exc
+            finally:
+                connections.close_all()
+
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+            redaction_thread = threading.Thread(target=commit_redaction, name="rotation-history-redaction")
+            rotation_thread = threading.Thread(target=run_rotation, name="rotation-history-command")
+            redaction_thread.start()
+            rotation_thread.start()
+
+            redaction_thread.join(timeout=_JOIN_TIMEOUT)
+            rotation_thread.join(timeout=_JOIN_TIMEOUT)
+
+            assert not redaction_thread.is_alive() and not rotation_thread.is_alive(), "Verklemmung im Historienrennen"
+            assert not errors, errors
+
+            target.refresh_from_db()
+            redacted_before, redacted_after = raw_history_payloads(target)
+
+            assert is_redaction_marker(redacted_before)
+            assert is_redaction_marker(redacted_after)
+            assert decryptable_values(redacted_before) == []
+            assert decryptable_values(redacted_after) == []
+            assert target.redacted_at is not None
+            assert result["counts"]["event_history"] == 1
+            assert result["counts"]["contended"] == 1
+
+            monkeypatch.setattr(rotation_module, "_reencrypt_data_json", original_reencrypt)
+            rerun = rotation_module.rotate_all(dry_run=False)
+
+            assert rerun["contended"] == 0
+            assert rerun["event_history"] == 1
+            assert raw_history_payloads(target) == (redacted_before, redacted_after)
+            assert safe_decrypt(raw_history_payloads(untouched)[0]["unbeteiligt"]) == "Nachbarzeile"
 
 
 @pytest.mark.django_db
