@@ -13,6 +13,22 @@ Options-Werte des einen Pakets in ein anderes leaken, das sie gar nicht kennt.
 
 Dieser Test macht sowohl die Slug-Kopplung als auch die Options-Trennung
 byte-genau falsifizierbar.
+
+**Geltungsbereich (Fix-Runde 1, Punkt 4):** diese Datei prueft ausschliesslich
+die PAKETE mit handgeschriebenen Pools (``default``, ``beratungsstelle`` —
+alle Schluessel von ``EVENT_DATA_POOLS``/``EVENT_TYPE_WEIGHTS``). Die drei
+NICHT gepoolten Fallback-Pakete (``awareness``, ``jugendarbeit``,
+``frauenhaus``) haben hier bewusst KEINE eigenen Tests — ihr Cross-Paket-
+Leak-Guard laeuft stattdessen END-TO-END in
+``test_seed.py::test_seed_large_facility_matches_its_package_catalog_exactly``
+(parametrisiert ueber alle fuenf ``FACILITY_PACKAGES``-Indizes, inkl.
+``pytest.skip`` mit Grund fuer noch fehlende Kataloge): dort werden echte
+Ereignisse ueber den generischen Fallback-Generator erzeugt und JEDER
+select-/multi_select-Wert gegen die tatsaechlich geladenen FieldTemplate-
+Optionen DIESER Einrichtung geprueft — ein rein statischer YAML-Vergleich wie
+hier waere fuer den Fallback-Pfad ohnehin nur eine Verdopplung, weil es dort
+keine handgeschriebenen Werte gibt, die von der Katalog-YAML abweichen
+koennten.
 """
 
 from pathlib import Path

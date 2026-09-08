@@ -32,6 +32,7 @@ nie etwas, das ein Paket nicht mehr erwähnt. Siehe
 
 from __future__ import annotations
 
+from django.core.management.base import CommandError
 from django.db import transaction
 
 from core.models import DocumentType, Facility, FieldGroup
@@ -44,7 +45,8 @@ from core.models import DocumentType, Facility, FieldGroup
 from core.packages.catalog import parse_catalog_package
 from core.packages.default_catalog import load_default_package_data
 from core.packages.loader import PackageReport, load_package
-from core.packages.schema import PackageV1, parse_package
+from core.packages.schema import PackageV1
+from core.services.facility_bootstrap import foreign_catalog_slugs
 
 __all__ = ["load_default_package_data", "seed_document_types"]
 
@@ -53,28 +55,42 @@ def seed_document_types(facility: Facility, *, package: str = "default") -> Pack
     """Spielt ``package`` in ``facility`` ein (idempotent).
 
     Refs #2148 (R-L5c-1): generalisiert vom reinen Standardkatalog auf jedes
-    mitgelieferte Paket — der Katalog-Reader (:mod:`core.packages.catalog`)
-    ist derselbe, den auch ``setup_facility``/``load_package`` nutzen. Ein
+    mitgelieferte Paket — läuft für JEDEN Paketnamen (inkl. ``"default"``)
+    ueber denselben Katalog-Reader (:func:`~core.packages.catalog.parse_catalog_package`),
+    den auch ``setup_facility``/``load_package`` nutzen (Fix-Runde 1, MITTEL A:
+    kein Sonderpfad mehr ueber :mod:`core.packages.default_catalog`). Ein
     unbekannter Paketname (z. B. ein Domaenen-Paket, das noch nicht im Katalog
     liegt) schlaegt **fail-loud** als
     :class:`~core.packages.catalog.UnknownPackageError` durch — kein stiller
     Fallback auf den Standardkatalog.
+
+    Refs #2148 (R-L5c-6, Fix-Runde 1 HOCH A): „Ersatz, kein Zusatz" gilt auch
+    im Seed. Ein Domaenen-Paket (``package != "default"``) darf nur gegen eine
+    Einrichtung OHNE fremden Katalog laufen — sonst blieben Default-Reste
+    (Typen/Felder, die das neue Paket nicht kennt) neben den neuen Paket-Typen
+    stehen. Die Pruefung spiegelt ``load_package.py`` 1:1 (``foreign_catalog_slugs``);
+    ein Treffer bricht **vor** ``load_package()`` mit ``CommandError`` ab —
+    nichts wird halb geladen. ``package="default"`` bleibt bewusst die
+    dokumentierte Rücksync-Ausnahme (wie beim CLI-Pfad): wer den
+    Auslieferungsstand zurückholen will, darf das weiterhin auf einem
+    beliebigen Bestand tun.
 
     Fehler werden **nicht** geschluckt: eine
     :class:`~core.packages.schema.PackageValidationError` (kaputtes YAML im
     Repo) bzw. :class:`~core.packages.loader.PackageLoadError` (Konflikt mit
     dem Bestand) schlägt bis zum Aufrufer durch — ein halb eingespielter
     Katalog wäre schlimmer als ein abgebrochener Seed-Lauf.
-
-    Der Standardkatalog (``package="default"``) laeuft bewusst weiter ueber
-    das modulweite Re-Export :data:`load_default_package_data` statt direkt
-    ueber :func:`~core.packages.catalog.parse_catalog_package` — Bestandstests
-    (``test_reseed_after_catalog_rename_keeps_same_fieldgroup_row`` u. a.)
-    monkeypatchen genau diesen Namen, um eine Katalog-Variante einzuspeisen.
     """
-    parsed_package = (
-        parse_package(load_default_package_data()) if package == "default" else parse_catalog_package(package)
-    )
+    parsed_package = parse_catalog_package(package)
+    if package != "default":
+        foreign_slugs = foreign_catalog_slugs(facility, parsed_package)
+        if foreign_slugs:
+            rendered = ", ".join(sorted(foreign_slugs))
+            raise CommandError(
+                f"Einrichtung „{facility.name}“ trägt bereits einen anderen Katalog "
+                f"(fremde Slugs: {rendered}) — Domänen-Pakete sind Ersatz, kein Zusatz. "
+                "`make seed --flush` verwenden."
+            )
     # Cleanup + Anwendung in EINER Transaktion: ohne die Klammer bliebe eine
     # gelöschte Gruppe gelöscht, wenn der Loader danach zurückrollt.
     with transaction.atomic():

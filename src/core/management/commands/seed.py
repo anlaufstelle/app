@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Case, Client, User
+from core.packages.catalog import list_packages
 from core.seed.activities import seed_activities
 from core.seed.attachments import attach_files_to_client_and_case, attach_files_to_counseling_events
 from core.seed.cases import assign_events_to_cases, seed_cases, seed_episodes, seed_goals
@@ -83,6 +84,23 @@ class Command(BaseCommand):
 
         scale = options["scale"]
         cfg = SCALE_CONFIG[scale]
+
+        # Refs #2148 (R-L5c-7, Fix-Runde 1 Punkt 3): ALLE fuer dieses Profil
+        # benoetigten Pakete VOR der ersten Facility-Anlage gegen den Katalog
+        # aufloesen — noch vor ``--flush``. Ein fehlendes Domaenen-Paket (z. B.
+        # ein neues, noch nicht gemergtes Paket) darf weder eine halb
+        # ausgestattete Einrichtung noch ueberhaupt eine NEUE Einrichtung
+        # hinterlassen; ein bereits gefluteter Bestand waere zudem unnoetig
+        # verloren, wenn der Lauf ohnehin abbricht.
+        needed_packages = FACILITY_PACKAGES[: int(cfg["facilities"])]
+        available_packages = set(list_packages())
+        missing_packages = sorted({name for name in needed_packages if name not in available_packages})
+        if missing_packages:
+            raise CommandError(
+                f"Fehlende Pakete im Katalog: {', '.join(missing_packages)} — keine Einrichtung "
+                f"wurde angelegt. Verfügbare Pakete: {', '.join(sorted(available_packages))}."
+            )
+
         random.seed(42)
 
         if options["flush"]:

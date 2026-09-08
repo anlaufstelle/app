@@ -4,6 +4,7 @@ import importlib.resources
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 # Der Seed-Command erzeugt Datei-Uploads via ``store_encrypted_file``, das seit
 # #610 libmagic für Magic-Bytes-Validierung verwendet. Ohne libmagic (z.B.
@@ -34,7 +35,9 @@ from core.models import (  # noqa: E402
     User,
     WorkItem,
 )
+from core.packages import catalog as packages_catalog  # noqa: E402
 from core.seed import doc_types  # noqa: E402
+from core.seed.scale import FACILITY_NAMES, SCALE_CONFIG  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Idempotency (existing tests)
@@ -330,8 +333,9 @@ def test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options():
 @pytest.mark.django_db
 def test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys():
     """R-L5c-5: der Beispiel-Sachbericht meldet fuer die Zweigstelle Nord
-    keinen ``unknown_report_keys``-Befund — alle 8 Typen sind ueber einen
-    ``report_key`` gebunden."""
+    keinen ``unknown_report_keys``- UND keinen ``unmapped_system_types``-Befund
+    (Fix-Runde 1 MITTEL B) — alle 8 Typen sind ueber einen ``report_key``
+    gebunden UND jeder Typ mit ``system_type`` ist im Sachbericht abgebildet."""
     from datetime import timedelta
 
     from django.utils import timezone
@@ -343,8 +347,9 @@ def test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys():
     nord = Facility.objects.get(name="Zweigstelle Nord")
     today = timezone.localdate()
     issues = SampleReport1Backend().validate_completeness(nord, today - timedelta(days=365), today)
-    unbekannt = [issue for issue in issues if issue.code == "unknown_report_keys"]
-    assert unbekannt == [], unbekannt
+    codes = {issue.code for issue in issues}
+    assert "unknown_report_keys" not in codes, [i for i in issues if i.code == "unknown_report_keys"]
+    assert "unmapped_system_types" not in codes, [i for i in issues if i.code == "unmapped_system_types"]
 
 
 @pytest.mark.slow
@@ -352,7 +357,18 @@ def test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys():
 def test_seed_medium_doppellauf_ist_idempotent_fuer_zweigstelle_nord():
     """R-L5c-5: ein zweiter Lauf ohne ``--flush`` aendert weder Dokumentations-
     typen/Feldvorlagen noch die Ereignis-/Komfort-Objekt-Zahl der Zweigstelle
-    Nord."""
+    Nord.
+
+    Bewusst NICHT geprueft: die ``Client``-Zahl. ``seed_clients_bulk``
+    (``core/seed/clients.py``, außerhalb der L5c-Aenderungen — Diff gegen
+    ``main`` leer) waehlt ihre Pseudonyme ueber einen bei jedem Lauf neu
+    gemischten Pool und dedupliziert nur ueber bereits VORHANDENE Namen; weil
+    andere Seed-Schritte zwischen zwei Laeufen unterschiedlich viele
+    ``random.*()``-Aufrufe konsumieren (idempotente Schritte ueberspringen
+    beim zweiten Lauf Arbeit), driftet der Zufallszustand vor dem Mischen
+    auseinander und der zweite Lauf legt zusaetzliche Personen an. Das ist
+    **vorbestehendes** Verhalten (Fix-Runde 1, Bericht-Punkt 8), nicht Teil
+    von #2148 — siehe Bericht-Abschnitt „Fix-Runde 1"."""
     from core.models import Event, QuickTemplate
 
     call_command("seed", scale="medium")
@@ -372,53 +388,191 @@ def test_seed_medium_doppellauf_ist_idempotent_fuer_zweigstelle_nord():
     assert _counts() == counts_before
 
 
+@pytest.mark.django_db
+def test_seed_document_types_upgrade_from_default_to_beratungsstelle_fails_loud():
+    """R-L5c-6 (Fix-Runde 1 HOCH A/Punkt 5): eine Einrichtung, die (wie vor
+    #2148) bereits mit dem Standardkatalog ausgestattet ist, darf NICHT still
+    auf ein Domaenen-Paket „upgegradet" werden — das liesse Default-Reste
+    (Typen/Felder, die ``beratungsstelle`` nicht kennt) neben den neuen
+    Paket-Typen stehen (additiver Mischkatalog). Fail-loud statt Reparatur."""
+    from core.seed.organization import seed_facility, seed_organization
+
+    org = seed_organization()
+    facility = seed_facility(org, "Zweigstelle Nord")
+    doc_types.seed_document_types(facility, package="default")
+
+    slugs_before = set(DocumentType.objects.filter(facility=facility).values_list("slug", flat=True))
+    assert "spritzentausch" in slugs_before  # Standardkatalog-Beleg, VOR #2148 typisch
+
+    with pytest.raises(CommandError):
+        doc_types.seed_document_types(facility, package="beratungsstelle")
+
+    slugs_after = set(DocumentType.objects.filter(facility=facility).values_list("slug", flat=True))
+    assert slugs_after == slugs_before, "Katalog haette beim fail-loud-Abbruch unveraendert bleiben muessen."
+    assert "kurzberatung" not in slugs_after, "Kein additiver Mischkatalog — beratungsstelle-Typ darf nicht leaken."
+
+
 # ---------------------------------------------------------------------------
-# Scale: large — Pakete je Einrichtung (Refs #2148, R-L5c-1)
+# Scale: large — Pakete je Einrichtung (Refs #2148, R-L5c-1/R-L5c-7)
 #
-# jugendarbeit.yaml/frauenhaus.yaml laufen parallel in L5a/L4 und lagen zum
-# Start dieser Lane noch nicht im Katalog (`core.packages.catalog.list_packages()`
-# findet nur vorhandene YAMLs). ``seed_document_types``/``ensure_facility_baseline``
-# brechen dann fail-loud mit ``UnknownPackageError`` ab (R-L5c-1) — die Tests
-# unten ueberspringen genau diesen Fall mit Begruendung, statt still auf einen
-# Standardkatalog-Fallback zu pruefen. Der Orchestrator faehrt
-# ``make seed --scale=large`` nach den L5a/L4-Merges erneut; sobald beide YAMLs
-# vorliegen, laufen diese Tests ohne Aenderung durch (kein Skip mehr).
+# `core.packages.catalog.list_packages()` findet nur tatsaechlich vorhandene
+# YAMLs — solange ein Domaenen-Paket (z. B. frauenhaus/L4) noch parallel in
+# einer anderen Lane entsteht, fehlt es hier. Die Tests unten sind bewusst
+# so gebaut, dass sie unabhaengig vom jeweiligen Merge-Stand funktionieren
+# (pytest.skip mit Grund je fehlendem Paket) UND automatisch schaerfer werden,
+# sobald mehr Pakete vorliegen — ohne Codeaenderung.
+#
+# Seit Fix-Runde 1 (R-L5c-7, Punkt 3) loest ``seed`` ALLE fuer ein Scale-Profil
+# benoetigten Pakete VOR der ersten Facility-Anlage auf: fehlt EINES, bricht
+# der GESAMTE Lauf ab, BEVOR irgendeine Einrichtung entsteht — auch fuer
+# Indizes, deren eigenes Paket verfuegbar waere. Ein echter
+# ``call_command("seed", scale="large")`` kann Index 2/3 („Zweigstelle Süd"/
+# „Außenstelle Ost") deshalb nur testen, wenn ALLE fuenf Pakete vorliegen.
+# Der Inhalts-Guard unten (R-L5c-2) seedet jede Facility deshalb bewusst
+# DIREKT ueber dieselben Bausteine, die ``seed.py`` intern nutzt (kein Umweg
+# ueber die Kommando-Vorpruefung) — das ist die einzige Art, jeden Index schon
+# JETZT unabhaengig von "frauenhaus" zu pruefen, und pytest.skip greift trotzdem
+# pro Index einzeln, sobald ein Paket wirklich fehlt.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.slow
 @pytest.mark.django_db
+def test_seed_large_missing_package_creates_no_new_facility():
+    """R-L5c-7 (Fix-Runde 1 Punkt 3): fehlt ein ``FACILITY_PACKAGES``-Eintrag
+    im Katalog, bricht der Lauf VOR der ersten Facility-Anlage ab — weder ein
+    halb ausgestatteter Bestand noch ueberhaupt eine neue Einrichtung."""
+    from core.packages.catalog import list_packages
+    from core.seed.scale import FACILITY_PACKAGES
+
+    missing = set(FACILITY_PACKAGES[: SCALE_CONFIG["large"]["facilities"]]) - set(list_packages())
+    if not missing:
+        pytest.skip(
+            "Alle FACILITY_PACKAGES sind im Katalog vorhanden (frauenhaus/L4 vermutlich "
+            "inzwischen gemergt) — dieser Test braucht mindestens ein fehlendes Paket, um "
+            "den fail-loud-Pfad vor der ersten Facility-Anlage zu pruefen."
+        )
+
+    before = Facility.objects.count()
+    with pytest.raises(CommandError):
+        call_command("seed", scale="large")
+    assert Facility.objects.count() == before, "Ein fehlendes Paket darf KEINE neue Einrichtung hinterlassen."
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def test_seed_large_succeeds_once_all_packages_are_available():
+    """Gegenprobe zu oben: sobald alle Pakete vorliegen, entsteht jede der
+    fuenf Einrichtungen ganz normal (self-aktivierend nach dem L4-Merge)."""
+    from core.packages.catalog import list_packages
+    from core.seed.scale import FACILITY_PACKAGES
+
+    if set(FACILITY_PACKAGES[: SCALE_CONFIG["large"]["facilities"]]) - set(list_packages()):
+        pytest.skip("Noch nicht alle FACILITY_PACKAGES im Katalog vorhanden.")
+
+    call_command("seed", scale="large")
+    for name in FACILITY_NAMES:
+        assert Facility.objects.filter(name=name).exists(), name
+
+
+def _seed_one_package_facility(org, facility_name: str, package_name: str, idx: int):
+    """Seedet EINE Einrichtung mit ihrem Paket — dieselben Bausteine wie
+    ``seed.py``s Schleife, aber ohne dessen Kommando-weite Vorabpruefung
+    (R-L5c-7), damit Index 2/3 unabhaengig von einem noch fehlenden
+    spaeteren Paket (Index 4, ``frauenhaus``) getestet werden koennen."""
+    from core.models import Event
+    from core.seed.clients import seed_clients_bulk
+    from core.seed.events import seed_events_bulk
+    from core.seed.organization import seed_facility
+    from core.seed.users import seed_users
+    from core.services.facility_bootstrap import PACKAGE_COMFORT, ensure_quick_templates, ensure_time_filters
+
+    facility = seed_facility(org, facility_name)
+    doc_types.seed_document_types(facility, package=package_name)
+    if package_name != "default":
+        comfort = PACKAGE_COMFORT[package_name]
+        ensure_quick_templates(facility, comfort.quick_templates)
+        ensure_time_filters(facility, comfort.time_filters)
+    users = seed_users(facility, idx)
+    clients = seed_clients_bulk(facility, users, SCALE_CONFIG["large"])
+    seed_events_bulk(facility, users, clients, SCALE_CONFIG["large"], package=package_name)
+    return facility, Event
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("facility_name", "package_name"),
+    ("idx", "facility_name", "package_name"),
     [
-        ("Zweigstelle Süd", "awareness"),
-        ("Außenstelle Ost", "jugendarbeit"),
-        ("Außenstelle West", "frauenhaus"),
+        (0, "Hauptstelle", "default"),
+        (1, "Zweigstelle Nord", "beratungsstelle"),
+        (2, "Zweigstelle Süd", "awareness"),
+        (3, "Außenstelle Ost", "jugendarbeit"),
+        (4, "Außenstelle West", "frauenhaus"),
     ],
 )
-def test_seed_large_facility_traegt_ihr_domaenen_paket(facility_name, package_name):
-    from core.packages.catalog import UnknownPackageError, list_packages
+def test_seed_large_facility_matches_its_package_catalog_exactly(idx, facility_name, package_name):
+    """R-L5c-2-Pflicht-Guard (Fix-Runde 1 HOCH B): jede Facility traegt GENAU
+    die Typ-Slugs ihres Pakets (keine Default-/Fremdtypen), jeder Typ bekommt
+    mindestens ein Ereignis, und JEDER select-/multi_select-Wert in den
+    erzeugten ``data_json`` ist eine gueltige Option DESSELBEN Pakets — auch
+    fuer die Fallback-generierten crisis-/ban-Typen der Indizes 2-4, die keine
+    handgeschriebenen Pools haben."""
+    from core.packages.catalog import list_packages, parse_catalog_package
+    from core.seed.organization import seed_organization
 
     if package_name not in list_packages():
         pytest.skip(
-            f"Paket {package_name!r} ({facility_name}) liegt auf diesem Stand noch nicht im "
-            "Katalog — L5a/L4 (#2148) laufen parallel und landen erst mit einem eigenen Merge. "
-            "Der Orchestrator faehrt 'make seed --scale=large' danach erneut."
+            f"Paket {package_name!r} (Index {idx}, {facility_name}) liegt auf diesem Stand "
+            "noch nicht im Katalog — landet mit einem eigenen Merge (#2148 L4). Dieser Test "
+            "wird automatisch scharf, sobald list_packages() das Paket findet."
         )
 
-    try:
-        call_command("seed", scale="large")
-    except UnknownPackageError:
-        # Ein Index HINTER dem eigenen kann noch fehlen — jede Facility wird
-        # einzeln (nicht in einer gemeinsamen Transaktion) angelegt, das
-        # eigene Paket ist also trotz des spaeteren Abbruchs schon angewendet.
-        pass
+    org = seed_organization()
+    facility, event_model = _seed_one_package_facility(org, facility_name, package_name, idx)
 
-    facility = Facility.objects.get(name=facility_name)
-    assert DocumentType.objects.filter(facility=facility).exists()
-    from core.models import Event
+    package_data = parse_catalog_package(package_name)
+    expected_slugs = {dt.slug for dt in package_data.document_types}
 
-    assert Event.objects.filter(facility=facility).exists()
+    actual_slugs = set(DocumentType.objects.filter(facility=facility).values_list("slug", flat=True))
+    assert actual_slugs == expected_slugs, (
+        f"{package_name}: Ist {sorted(actual_slugs)} != Soll {sorted(expected_slugs)}"
+    )
+
+    for slug in expected_slugs:
+        assert event_model.objects.filter(facility=facility, document_type__slug=slug).exists(), (
+            f"{package_name}.{slug}: keine Ereignisse erzeugt."
+        )
+
+    # Cross-Paket-Leak-Guard: JEDER select-/multi_select-Wert in data_json ist
+    # eine gueltige Option DESSELBEN Pakets — gelesen aus den tatsaechlich
+    # geladenen FieldTemplate-Zeilen dieser Einrichtung (nicht aus einem
+    # anderen Paket), damit Fallback-generierte Werte (Index 2-4) genauso
+    # geprueft werden wie handgeschriebene Pools (Index 0/1).
+    field_options: dict[str, tuple[str, set]] = {}
+    for ft in FieldTemplate.objects.filter(facility=facility):
+        if ft.field_type in ("select", "multi_select") and ft.options_json:
+            field_options[ft.slug] = (
+                ft.field_type,
+                {o["slug"] if isinstance(o, dict) else o for o in ft.options_json},
+            )
+
+    for event in event_model.objects.filter(facility=facility):
+        for key, value in event.data_json.items():
+            if key not in field_options:
+                continue
+            field_type, valid_options = field_options[key]
+            if field_type == "select":
+                assert value in valid_options, (
+                    f"{package_name}.{event.document_type.slug}.{key}: {value!r} "
+                    f"nicht in {sorted(valid_options)} — Cross-Paket-Leak?"
+                )
+            elif field_type == "multi_select":
+                fremd = set(value) - valid_options
+                assert not fremd, (
+                    f"{package_name}.{event.document_type.slug}.{key}: {sorted(fremd)} "
+                    f"nicht in {sorted(valid_options)} — Cross-Paket-Leak?"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -850,7 +1004,11 @@ def test_reseed_after_catalog_rename_keeps_same_fieldgroup_row(monkeypatch):
     basis_pk = basis.pk
 
     renamed = _renamed_catalog(doc_type_slug="kontakt", group_slug="basisdaten", new_group_name="Stammdaten")
-    monkeypatch.setattr(doc_types, "load_default_package_data", lambda: renamed)
+    # Fix-Runde 1 (MITTEL A): ``seed_document_types`` laeuft jetzt fuer JEDEN
+    # Paketnamen (inkl. "default") ueber ``core.packages.catalog.parse_catalog_package``,
+    # das intern das MODULGLOBALE ``load_package_data`` von ``catalog.py`` aufruft
+    # — genau dort wird gepatcht, nicht mehr am alten ``doc_types``-Re-Export.
+    monkeypatch.setattr(packages_catalog, "load_package_data", lambda name: renamed)
 
     call_command("seed")
 
@@ -872,7 +1030,7 @@ def test_reseed_after_catalog_group_removal_deletes_row_and_ungroups_fields(monk
     removed_pk = removed.pk
 
     reduced = _catalog_without_group(doc_type_slug="kontakt", group_slug="leistungen-notizen")
-    monkeypatch.setattr(doc_types, "load_default_package_data", lambda: reduced)
+    monkeypatch.setattr(packages_catalog, "load_package_data", lambda name: reduced)
 
     call_command("seed")
 

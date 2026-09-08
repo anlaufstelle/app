@@ -39,6 +39,20 @@ class TestBeratungsstelleGalerieShot:
         assert shot.role == "emma_1"
         assert shot.mobile is False
 
+    def test_shot_renders_in_both_languages(self):
+        """Maintainer-Entscheid: DE + EN (Fix-Runde 1, NIEDRIG B) — explizit
+        gepinnt statt nur ueber den Dataclass-Default abgedeckt."""
+        assert _shot("ereignis-anlegen-beratungsstelle").langs == ("de", "en")
+
+    def test_shot_sits_directly_after_the_standard_event_shot(self):
+        """Maintainer-Entscheid 2026-09-06: Position direkt nach dem
+        Standard-Shot ``ereignis-anlegen`` in der Galerie (Fix-Runde 1,
+        NIEDRIG B)."""
+        names = [s.name for s in SHOTS]
+        idx_standard = names.index("ereignis-anlegen")
+        idx_beratungsstelle = names.index("ereignis-anlegen-beratungsstelle")
+        assert idx_beratungsstelle == idx_standard + 1
+
     def test_lang_switch_usernames_include_emma_1(self):
         """Sonst rendert der EN-Durchlauf fuer den emma_1-Login deutsch."""
         assert "emma_1" in LANG_SWITCH_USERNAMES
