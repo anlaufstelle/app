@@ -1733,14 +1733,22 @@ class TestBacklogMigrationExecutorRun:
         previous = ("core", "0173_auditlog_event_history_redacted")
 
         executor = MigrationExecutor(db_connection)
-        executor.migrate([previous])  # 0174 zuruecknehmen (reverse_code = noop)
-        executor.loader.build_graph()
-        executor.migrate([target])  # und wirklich neu anwenden
+        try:
+            executor.migrate([previous])  # 0174 zuruecknehmen (reverse_code = noop)
+            executor.loader.build_graph()
+            executor.migrate([target])  # und wirklich neu anwenden
 
-        assert not EventHistory.objects.filter(event=held_event, redacted_at__isnull=False).exists(), (
-            "der echte Migrationslauf muss den Hold genauso respektieren"
-        )
-        assert EventHistory.objects.filter(event=free_event, redacted_at__isnull=True).count() == 0
+            assert not EventHistory.objects.filter(event=held_event, redacted_at__isnull=False).exists(), (
+                "der echte Migrationslauf muss den Hold genauso respektieren"
+            )
+            assert EventHistory.objects.filter(event=free_event, redacted_at__isnull=True).count() == 0
+        finally:
+            # ``transaction=True``: der Rueckweg auf 0173 nimmt auch alle spaeteren
+            # Migrationen (0175 ff.) zurueck, und der Vorlauf endet bei 0174. Ohne
+            # Rueckkehr zum Graph-Kopf fehlen den folgenden Tests desselben Workers
+            # die neueren Spalten (Refs #2129 max_storage_mb, #2136 quick_exit_url).
+            executor.loader.build_graph()
+            executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 @pytest.mark.django_db
