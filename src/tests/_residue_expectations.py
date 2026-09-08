@@ -206,6 +206,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # ---- core_settings (Einrichtungs-Konfiguration, kein Klientenbezug) --
     non_pii("core_settings", "facility_full_name", reason="Name der Einrichtung (Konfiguration), keine Klientendaten."),
     non_pii("core_settings", "allowed_file_types", reason="Kommagetrennte Dateiendungen (Konfiguration)."),
+    non_pii(
+        "core_settings",
+        "quick_exit_url",
+        reason="Zieladresse der Schnell-verlassen-Aktion (Konfiguration, Refs #2136), keine Klientendaten.",
+    ),
     # ---- core_timefilter -------------------------------------------------
     non_pii("core_timefilter", "label", reason="Schicht-Bezeichnung (z.B. 'Frühschicht'), Konfiguration."),
     # ---- core_legalhold --------------------------------------------------

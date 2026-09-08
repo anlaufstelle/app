@@ -463,7 +463,11 @@ class TestStageAttachmentUploads:
                 dt_file,
             )
 
-        vorbereiten.assert_called_once_with(sample_event.facility, datei, staff_user, owner=sample_event)
+        # Refs #2129: seit dem Speicherkontingent reicht der Ersatz-Zweig die laufende
+        # Staging-Summe (``pending_bytes``) mit — beim einzigen Ersatz ist sie 0.
+        vorbereiten.assert_called_once_with(
+            sample_event.facility, datei, staff_user, owner=sample_event, pending_bytes=0
+        )
 
     def test_cleanup_liste_traegt_die_gestagte_datei_selbst(
         self, staff_user, sample_event, ft_file, dt_file, medienordner
@@ -519,7 +523,11 @@ class TestStageAttachmentUploads:
         with patch("core.services.file_vault.prepare_encrypted_upload") as vorbereiten:
             stage_attachment_uploads(sample_event, staff_user, {}, {ft_file.slug: [datei]}, dt_file)
 
-        vorbereiten.assert_called_once_with(sample_event.facility, datei, staff_user, owner=sample_event)
+        # Refs #2129: seit dem Speicherkontingent reicht der Ersatz-Zweig die laufende
+        # Staging-Summe (``pending_bytes``) mit — beim einzigen Ersatz ist sie 0.
+        vorbereiten.assert_called_once_with(
+            sample_event.facility, datei, staff_user, owner=sample_event, pending_bytes=0
+        )
 
 
 # ---------------------------------------------------------------------------
