@@ -38,6 +38,48 @@ class TestRoleDashboardView:
         # "Löschanträge" UTF-8-kodiert
         assert "Löschanträge".encode() in response.content
 
+    def test_lead_sees_the_storage_row(self, client, lead_user):
+        """Refs #2129: der Speicherstand steht als eigene Zeile unter dem
+        Karten-Raster (nicht als vierte Rasterkarte, siehe #1759)."""
+        self._login(client, lead_user)
+        content = client.get(reverse("core:dashboard")).content.decode()
+        assert 'data-testid="lead-dashboard-storage"' in content
+        assert "Speicher" in content
+
+    def test_lead_storage_warning_is_rendered_as_text_not_only_colour(
+        self, client, lead_user, facility, doc_type_contact
+    ):
+        """Refs #2129 (R-L7a-3): Ab 90 % Belegung muss die Leitung einen
+        lesbaren Satz sehen — eine allein farblich codierte Warnung waere
+        weder WCAG-konform (1.4.1) noch handlungsleitend."""
+        import uuid
+
+        from core.models import Client as ClientModel
+        from core.models import FieldTemplate, Settings
+        from core.models.attachment import Attachment
+        from core.services.file_vault.encryption import encrypt_field
+
+        Settings.objects.update_or_create(facility=facility, defaults={"max_storage_mb": 10})
+        person = ClientModel.objects.create(facility=facility, pseudonym="SPEICHER-01")
+        vorlage = FieldTemplate.objects.create(facility=facility, name="Scan", field_type=FieldTemplate.FieldType.FILE)
+        Attachment.objects.create(
+            facility=facility,
+            client=person,
+            field_template=vorlage,
+            storage_filename=f"{uuid.uuid4()}.enc",
+            original_filename_encrypted=encrypt_field("bestand.pdf"),
+            file_size=9 * 1024 * 1024,
+            mime_type="application/pdf",
+            is_current=True,
+            entry_id=uuid.uuid4(),
+        )
+
+        self._login(client, lead_user)
+        content = client.get(reverse("core:dashboard")).content.decode()
+
+        assert 'data-testid="lead-storage-warning"' in content
+        assert "Speicherkontingent zu 90" in content
+
     def test_facility_admin_redirected_to_verwaltung(self, client, admin_user):
         """Regel N3: die Verwaltungs-Übersicht ersetzt die fast leere Rollen-Seite."""
         self._login(client, admin_user)

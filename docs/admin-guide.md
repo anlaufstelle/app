@@ -1043,7 +1043,7 @@ Wirksam ist immer das **striktere** der beiden Limits. Sind beide leer bzw. `0`,
 
 **Was passiert beim Erreichen.** Der Upload wird abgelehnt, bevor er gescannt oder verschlüsselt wird — die Fachkraft sieht „Speicherkontingent der Einrichtung erschöpft: X von Y MB belegt (davon Z MB im Papierkorb)". Protokolliert wird das als eigene Audit-Aktion **„Speicherkontingent überschritten"** (`attachment_quota_exceeded`), bewusst **nicht** als Sicherheitsverletzung: Ein volles Kontingent ist ein Betriebszustand, kein Angriff.
 
-**Anzeige und Warnung.** Der Verwaltungs-Hub (`/verwaltung/`) zeigt die Zeile „Speicher — X von Y MB belegt (davon Z MB im Papierkorb)", die Leitungs-Arbeitszentrale dieselbe Zahl als Karte. Ab **90 %** Füllstand erscheint zusätzlich ein Hinweis in den Konfigurations-Warnungen der Anwendungsbetreuung.
+**Anzeige und Warnung.** Der Verwaltungs-Hub (`/verwaltung/`) zeigt die Zeile „Speicher — X von Y MB belegt (davon Z MB im Papierkorb)", die Leitungs-Arbeitszentrale dieselbe Zeile unterhalb ihrer Karten. Ab **90 %** Füllstand erscheint zusätzlich ein Hinweis in den Konfigurations-Warnungen der Anwendungsbetreuung — und derselbe Satz als Hinweistext direkt unter der Speicher-Zeile der Leitung.
 
 Mehrere Dateien **eines** Formulars zählen gemeinsam: Die Prüfung kennt die im selben Vorgang bereits verarbeiteten Dateien und lehnt diejenige ab, mit der das Kontingent reißen würde.
 

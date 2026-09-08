@@ -12,7 +12,7 @@
     <a href="{% url 'core:zeitstrom' %}" class="text-[13px] text-accent hover:underline">{% trans "Zum Zeitstrom" %} →</a>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" data-testid="lead-dashboard-cards">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" data-testid="lead-dashboard-cards">
     <a href="{% url 'core:deletion_request_list' %}" class="card p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Löschanträge" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-deletion-requests">{{ pending_deletion_requests }}</div>
@@ -39,29 +39,41 @@
         <div class="text-[12px] text-ink-soft mt-1">{% trans "noch kein Snapshot" %}</div>
         {% endif %}
     </a>
-    {% comment %}Refs #2129: Die Leitung erreicht den Verwaltungs-Hub mit derselben
-    Zahl nicht (FacilityAdminRequiredMixin) — ohne diese Karte erfuehre sie von
-    einem vollen Speicherkontingent erst, wenn eine Fachkraft nicht mehr
-    hochladen kann. Zielseite ist die Dateien-Uebersicht: dort steht, was den
-    Platz belegt.{% endcomment %}
-    <a href="{% url 'core:attachment_list' %}" class="card p-4 hover:border-accent transition-colors block">
-        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Speicher" %}</div>
-        <div class="text-[20px] font-bold {% if storage_usage.is_near_limit %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-storage-usage">
-            {% if storage_usage.limit_mb %}{{ storage_usage.used_mb }} / {{ storage_usage.limit_mb }} MB{% else %}{{ storage_usage.used_mb }} MB{% endif %}
-        </div>
-        <div class="text-[12px] text-ink-soft mt-1">
-            {% if storage_usage.limit_mb %}
-            {% blocktrans with trash=storage_usage.trash_mb %}belegt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
-            {% else %}
-            {% blocktrans with trash=storage_usage.trash_mb %}belegt · kein Kontingent gesetzt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
-            {% endif %}
-        </div>
-        {% comment %}Refs #2129 (Fix-Runde 1): Der Warnzustand darf nicht allein
-        über die Textfarbe erkennbar sein (WCAG 1.4.1) — derselbe Satz, den die
+</div>
+
+{% comment %}Refs #2129 + #1759: Der Speicherstand steht bewusst NEBEN dem Raster,
+nicht darin. Das Raster trägt die drei Arbeitsvorräte der Leitung — Dinge, die auf
+eine Entscheidung warten. Der Speicherstand ist keiner davon, sondern eine
+Bestandsangabe über die Einrichtung; genau dafür benutzt der Verwaltungs-Hub eine
+Statuszeile statt einer Kachel (Konzept #1801 §4.2). So bleibt die
+Drei-Karten-Regel aus #1759 unangetastet, statt sie für eine fachlich andersartige
+Angabe aufzuweichen. Die Leitung erreicht den Verwaltungs-Hub mit derselben Zahl
+nicht (FacilityAdminRequiredMixin) — ohne diese Zeile erführe sie von einem vollen
+Kontingent erst, wenn eine Fachkraft nicht mehr hochladen kann. Zielseite ist die
+Dateien-Übersicht: dort steht, was den Platz belegt.{% endcomment %}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden mb-6" data-testid="lead-dashboard-storage">
+    <ul class="divide-y divide-subtle">
+        <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
+            <span class="text-[13px] font-semibold text-ink min-w-[10rem]">{% trans "Speicher" %}</span>
+            <span class="text-[20px] font-bold {% if storage_usage.is_near_limit %}text-orange-600{% else %}text-ink{% endif %}" data-testid="lead-storage-value">{% if storage_usage.limit_mb %}{{ storage_usage.used_mb }} / {{ storage_usage.limit_mb }} MB{% else %}{{ storage_usage.used_mb }} MB{% endif %}</span>
+            <span class="text-[12px] text-ink-soft">
+                {% if storage_usage.limit_mb %}
+                {% blocktrans with trash=storage_usage.trash_mb %}belegt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
+                {% else %}
+                {% blocktrans with trash=storage_usage.trash_mb %}belegt · kein Kontingent gesetzt · davon {{ trash }} MB im Papierkorb{% endblocktrans %}
+                {% endif %}
+            </span>
+            <a href="{% url 'core:attachment_list' %}" class="ml-auto inline-flex items-center min-h-[44px] text-[13px] font-medium text-accent hover:underline" data-testid="lead-link-storage">{% trans "Öffnen" %} →</a>
+        </li>
+        {% comment %}Refs #2129 (R-L7a-3): Der Warnzustand darf nicht allein über die
+        Textfarbe erkennbar sein (WCAG 1.4.1) — derselbe Satz, den die
         Anwendungsbetreuung in ihrer Warnliste sieht.{% endcomment %}
         {% if storage_warning %}
-        <p class="text-[12px] font-medium text-orange-700 mt-2" data-testid="card-storage-warning">{{ storage_warning }}</p>
+        <li class="flex items-start gap-2 px-4 py-3 text-[13px] text-ink" data-testid="lead-storage-warning">
+            <span aria-hidden="true" class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></span>
+            <span>{{ storage_warning }}</span>
+        </li>
         {% endif %}
-    </a>
-</div>
+    </ul>
+</section>
 {% endblock %}

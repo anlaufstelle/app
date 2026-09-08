@@ -1047,7 +1047,7 @@ The **stricter** of the two always applies. If both are empty or `0`, the facili
 
 **What happens when the quota is reached.** The upload is rejected before it is scanned or encrypted -- the practitioner sees "Speicherkontingent der Einrichtung erschöpft: X von Y MB belegt (davon Z MB im Papierkorb)". It is logged under its own audit action **"Storage quota exceeded"** (`attachment_quota_exceeded`), deliberately **not** as a security violation: a full quota is an operational state, not an attack.
 
-**Display and warning.** The administration hub (`/verwaltung/`) shows the row "Speicher -- X von Y MB belegt", the lead workspace shows the same figure as a card. From **90 %** usage an additional hint appears in the configuration warnings of the administration hub.
+**Display and warning.** The administration hub (`/verwaltung/`) shows the row "Speicher -- X von Y MB belegt", the lead workspace shows the same row below its cards. From **90 %** usage an additional hint appears in the configuration warnings of the administration hub -- and the same sentence as a hint right below the lead's storage row.
 
 Several files of **one** form count together: the check knows about the files already processed in the same submission and rejects the one that would break the quota.
 
@@ -2008,4 +2008,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.95.0 -->
 <!-- translation-date: 2026-09-08 -->
-<!-- source-hash: b4ac83e18faebfe56c880cdc354f52596029d090 -->
+<!-- source-hash: fabbd358532579fd7c2a3b6b7790c52fc907bb18 -->

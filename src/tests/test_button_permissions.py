@@ -494,6 +494,29 @@ class TestActionTargetGuards:
         karten = [t for t in grid.testids if t.startswith("card-")]
         assert len(karten) == 3, karten
 
+    def test_lead_dashboard_storage_row_sits_outside_the_card_grid(self, client, lead_user):
+        """Refs #2129: Die Speicher-Anzeige der Leitung ist bewusst KEINE
+        vierte Rasterkarte.
+
+        Das Raster traegt die drei Arbeitsvorraete der Leitung (Loeschantraege,
+        Loeschvorschlaege, Statistik) — Dinge, die auf eine Entscheidung
+        warten. Der Speicherstand ist keiner davon, sondern eine
+        Bestandsangabe ueber die Einrichtung; genau dafuer benutzt der
+        Verwaltungs-Hub eine Statuszeile statt einer Kachel (Konzept #1801
+        §4.2). Sie steht deshalb als eigene Zeile UNTER dem Raster — die
+        Drei-Karten-Regel aus #1759 bleibt damit unangetastet, statt sie fuer
+        eine fachlich andersartige Angabe aufzuweichen.
+        """
+        client.force_login(lead_user)
+        content = client.get(reverse("core:dashboard")).content.decode()
+
+        grid = _container(content, "lead-dashboard-cards")
+        assert not [t for t in grid.testids if "storage" in t], grid.testids
+
+        zeile = _container(content, "lead-dashboard-storage")
+        assert "lead-storage-value" in zeile.testids, zeile.testids
+        assert reverse("core:attachment_list") in content
+
     def test_assistant_event_create_has_no_cases_fetch_url(self, client, assistant_user):
         """``cases_for_client`` ist STAFF_PLUS — der Fetch lief für die Assistenz
         ins 403 und wurde in ``forms.js`` still zu ``[]`` geschluckt."""
