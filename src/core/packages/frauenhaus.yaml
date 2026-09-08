@@ -1,0 +1,331 @@
+# Frauenhaus-Dokumentationspaket (Schema v1) — Refs #2138.
+#
+# WICHTIG — Kompatibilitaet mit Bestands-Einrichtungen:
+#
+# * ``document_types[].slug`` ist der Lookup-Key des Loaders und muss EXAKT
+#   dem Ergebnis des Slug-Backfills aus Migration ``0117`` entsprechen
+#   (slugify + Umlaut-Map ueber den ``name``). Ein abweichender Slug legt in
+#   jeder Bestands-Einrichtung einen DUPLIKAT-Typ an, statt den vorhandenen
+#   zu aktualisieren. Dasselbe gilt fuer ``groups[].slug`` (stabile Slugs
+#   seit #1710) und ``field_templates[].slug``.
+# * ``system_type`` muss bei allen Typen mitgefuehrt werden, die einen haben:
+#   der Loader erlaubt ``None`` -> Wert (Bestand ohne Systemtyp), aber weder
+#   Wechsel noch Entfernen (E13). Ein fehlender Schluessel waere beim
+#   Re-Lauf gegen eine gepflegte Einrichtung ein Fehler. Seit E4 (Refs #1850)
+#   sind das nur noch ``krisengespraech`` (``crisis``) und ``hausverbot``
+#   (``ban``) — die uebrigen sieben Werte sind aus dem Enum entfernt, ihre
+#   Zeilen hier entfallen ersatzlos. Gegen einen Bestand, den Migration
+#   ``0147`` bereits genullt hat, ist das kein E13-Konflikt (leer bleibt
+#   leer); ein aelteres Paket, das sie noch mitfuehrt, laedt weiterhin — der
+#   Wert entfaellt dann mit einer Warnung im Load-Report.
+# * ``report_key`` (E3, Refs #1849) muss EXAKT dem Ergebnis des Backfills aus
+#   Migration ``0145`` entsprechen — Typ-Ebene wie Feld-Ebene. Ein abweichender
+#   Wert waere gegen eine aktualisierte Bestands-Einrichtung ein
+#   Immutabilitaets-Fehler (leer -> gesetzt ist erlaubt, gesetzt -> anders
+#   nicht). Der Doppellauf-Test in ``test_packages_loader.py`` haelt das fest.
+# * Bei ``select``/``multi_select`` ist der ``options``-Schluessel PFLICHT —
+#   Weglassen leert ``options_json`` mit blosser Warnung.
+# * KEINE ``conditions``-Schluessel: der Seed bringt keine Feldbedingungen
+#   mit, und ein fehlender Schluessel laesst per UI gepflegte Bedingungen
+#   unangetastet (E14/M1-E20). ``conditions: []`` wuerde sie LOESCHEN.
+#
+# ``sort_order`` folgt der globalen Block-Sequenz (ADR-036/#1713): Gruppen
+# und ungruppierte Felder teilen sich EINE Sequenz je Dokumentationstyp;
+# ein Feld INNERHALB einer Gruppe traegt seinen Innen-Index 0..n-1.
+
+schema_version: 1
+
+field_templates:
+  # --- Anfrage -------------------------------------------------------------
+  - slug: kontaktweg
+    name: Kontaktweg
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: telefon, label: Telefon, is_active: true}
+      - {slug: persoenlich, label: Persönlich, is_active: true}
+      - {slug: mail-weitergeleitet, label: Mail weitergeleitet, is_active: true}
+      - {slug: dritte-stelle, label: Dritte Stelle, is_active: true}
+
+  - slug: anliegen
+    name: Anliegen
+    field_type: multi_select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: unterbringung, label: Unterbringung, is_active: true}
+      - {slug: beratung, label: Beratung, is_active: true}
+      - {slug: rechtliches, label: Rechtliches, is_active: true}
+      - {slug: finanzen, label: Finanzen, is_active: true}
+      - {slug: kind, label: Kind, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: aufnahme-moeglich
+    name: Aufnahme möglich
+    field_type: boolean
+    is_encrypted: false
+    sensitivity: ""
+
+  # --- Beratungsstunden / Beratung ----------------------------------------
+  - slug: dauer
+    name: Dauer
+    report_key: dauer_minuten
+    field_type: number
+    is_encrypted: false
+    sensitivity: ""
+    help_text: Dauer in Minuten
+
+  - slug: thema
+    name: Thema
+    field_type: text
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: vereinbarungen
+    name: Vereinbarungen
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: naechster-schritt
+    name: Nächster Schritt
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: scan-dokument
+    name: Scan/Dokument
+    field_type: file
+    is_required: false
+    is_encrypted: true
+    sensitivity: high
+
+  # --- Gefaehrdungslage ---------------------------------------------------
+  - slug: ausloeser
+    name: Auslöser
+    report_key: art_der_krise
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: aktuelle-eskalation, label: Aktuelle Eskalation, is_active: true}
+      - {slug: drohlage, label: Drohlage, is_active: true}
+      - {slug: stalking, label: Stalking, is_active: true}
+      - {slug: kindeswohl, label: Kindeswohl, is_active: true}
+      - {slug: nachverfolgung, label: Nachverfolgung, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: notiz-gefaehrdung
+    name: Notiz (Gefährdung)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  - slug: eskalationskanal
+    name: Eskalationskanal
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: polizei, label: Polizei, is_active: true}
+      - {slug: jugendamt, label: Jugendamt, is_active: true}
+      - {slug: anwalt, label: Anwalt, is_active: true}
+      - {slug: medizinisch, label: Medizinisch, is_active: true}
+      - {slug: keine, label: Keine, is_active: true}
+
+  # --- Begleitung ----------------------------------------------------------
+  - slug: ziel
+    name: Ziel
+    field_type: text
+    is_required: true
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: datum
+    name: Datum
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: uhrzeit
+    name: Uhrzeit
+    field_type: time
+    is_encrypted: false
+    sensitivity: ""
+
+  - slug: notiz-begleitung
+    name: Notiz (Begleitung)
+    field_type: textarea
+    is_encrypted: true
+    sensitivity: high
+
+  # --- Schutzmassnahme ----------------------------------------------------
+  - slug: art
+    name: Art der Schutzmaßnahme
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: einstweilige-anordnung, label: Einstweilige Anordnung, is_active: true}
+      - {slug: schutzantrag, label: Schutzantrag, is_active: true}
+      - {slug: kontaktverbot, label: Kontaktverbot, is_active: true}
+      - {slug: raeumungsankuendigung, label: Räumungsankündigung, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: gueltig-bis
+    name: Gültig bis
+    field_type: date
+    is_encrypted: false
+    sensitivity: ""
+
+  # --- Wohnungswechsel ----------------------------------------------------
+  - slug: von-nach
+    name: Wohnungswechsel
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: aufnahme, label: Aufnahme, is_active: true}
+      - {slug: interner-wechsel, label: Interner Wechsel, is_active: true}
+      - {slug: auszug-eigene-wohnung, label: Auszug in eigene Wohnung, is_active: true}
+      - {slug: auszug-andere-einrichtung, label: Auszug in andere Einrichtung, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  # --- Vermittlung / Notiz ------------------------------------------------
+  - slug: vermittelt-an
+    name: Vermittelt an
+    field_type: select
+    is_encrypted: false
+    sensitivity: ""
+    options:
+      - {slug: rechtsberatung, label: Rechtsberatung, is_active: true}
+      - {slug: jugendamt, label: Jugendamt, is_active: true}
+      - {slug: jobcenter, label: Jobcenter, is_active: true}
+      - {slug: aerztlich, label: Ärztlich, is_active: true}
+      - {slug: therapie, label: Therapie, is_active: true}
+      - {slug: sonstiges, label: Sonstiges, is_active: true}
+
+  - slug: notiz
+    name: Notiz
+    field_type: textarea
+    is_encrypted: false
+    sensitivity: ""
+
+document_types:
+  - slug: anfrage
+    name: Anfrage (Erstkontakt)
+    entity_type: event
+    tally_enabled: true
+    min_contact_stage: identified
+    report_key: contact
+    sensitivity: normal
+    icon: users
+    color: indigo
+    sort_order: 0
+    field_refs:
+      - {template_slug: kontaktweg, sort_order: 0}
+      - {template_slug: anliegen, sort_order: 1}
+      - {template_slug: aufnahme-moeglich, sort_order: 2}
+
+  - slug: beratung
+    name: Beratungsgespräch
+    entity_type: event
+    tally_enabled: false
+    min_contact_stage: qualified
+    report_key: counseling
+    sensitivity: elevated
+    icon: message-circle
+    color: purple
+    sort_order: 1
+    field_refs:
+      - {template_slug: thema, sort_order: 0}
+      - {template_slug: dauer, sort_order: 1}
+      - {template_slug: vereinbarungen, sort_order: 2}
+      - {template_slug: naechster-schritt, sort_order: 3}
+      - {template_slug: scan-dokument, sort_order: 4}
+
+  - slug: gefaehrdungslage
+    name: Gefährdungslage
+    entity_type: event
+    system_type: crisis
+    tally_enabled: false
+    min_contact_stage: qualified
+    report_key: crisis
+    sensitivity: high
+    icon: alert-triangle
+    color: amber
+    sort_order: 2
+    field_refs:
+      - {template_slug: ausloeser, sort_order: 0}
+      - {template_slug: notiz-gefaehrdung, sort_order: 1}
+      - {template_slug: eskalationskanal, sort_order: 2}
+
+  - slug: begleitung
+    name: Begleitung (Behörde/Gericht/Polizei)
+    entity_type: event
+    tally_enabled: false
+    min_contact_stage: identified
+    report_key: accompaniment
+    sensitivity: normal
+    icon: map-pin
+    color: green
+    sort_order: 3
+    field_refs:
+      - {template_slug: ziel, sort_order: 0}
+      - {template_slug: datum, sort_order: 1}
+      - {template_slug: uhrzeit, sort_order: 2}
+      - {template_slug: notiz-begleitung, sort_order: 3}
+
+  - slug: schutzmassnahme
+    name: Schutzmaßnahme
+    entity_type: event
+    tally_enabled: false
+    min_contact_stage: identified
+    report_key: protection
+    sensitivity: elevated
+    icon: heart
+    color: rose
+    sort_order: 4
+    field_refs:
+      - {template_slug: art, sort_order: 0}
+      - {template_slug: gueltig-bis, sort_order: 1}
+
+  - slug: wohnungswechsel
+    name: Wohnungswechsel/Übergang
+    entity_type: event
+    tally_enabled: false
+    min_contact_stage: identified
+    report_key: contact
+    sensitivity: normal
+    icon: map-pin
+    color: green
+    sort_order: 5
+    field_refs:
+      - {template_slug: von-nach, sort_order: 0}
+      - {template_slug: datum, sort_order: 1}
+
+  - slug: vermittlung
+    name: Vermittlung
+    entity_type: event
+    tally_enabled: true
+    min_contact_stage: identified
+    report_key: referral
+    sensitivity: normal
+    icon: share-2
+    color: blue
+    sort_order: 6
+    field_refs:
+      - {template_slug: vermittelt-an, sort_order: 0}
+
+  - slug: notiz
+    name: Notiz
+    entity_type: event
+    tally_enabled: true
+    report_key: excluded
+    sensitivity: normal
+    icon: file-text
+    color: gray
+    sort_order: 7
+    field_refs:
+      - {template_slug: notiz, sort_order: 0}

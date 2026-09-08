@@ -176,7 +176,17 @@ PACKAGE_COMFORT: dict[str, ComfortDefs] = {
     ),
 
     # Frauenhaus
-    "frauenhaus": ComfortDefs(DEFAULT_TIME_FILTERS, ()),
+    "frauenhaus": ComfortDefs(
+        DEFAULT_TIME_FILTERS,
+        (
+            QuickTemplateDef(
+                "anfrage",
+                "Telefonische Anfrage Unterbringung",
+                {"kontaktweg": "telefon", "anliegen": ["unterbringung"]},
+            ),
+            QuickTemplateDef("notiz", "Belegstand vermerkt", {}),
+        ),
+    ),
 
     # Jugendarbeit
     "jugendarbeit": ComfortDefs(

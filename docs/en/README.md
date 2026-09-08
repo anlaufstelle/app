@@ -51,6 +51,7 @@ Templates included:
 |----------|-------------|
 | [architecture.md](../architecture.md) | Architecture overview as a signpost: layers (views → services → models), security architecture in brief, no-code configuration core, offline PWA, test landscape — with pointers into the in-depth documents (Refs #1062) |
 | [packages.md](../packages.md) | Configuration packages (YAML, schema v1): format reference, loader semantics, `manage.py load_package`, maintenance rules (Refs #1058, [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md)) |
+| [packages-frauenhaus.md](../packages-frauenhaus.md) | German-only operator guide for the “Frauenhaus” package: eight documentation types, effective sensitivity matrix, reports, and recommendations (Refs #2138) |
 | [packages-awareness.md](../packages-awareness.md) | Awareness package: seven documentation types, sensitivity matrix, reports, and operator recommendations (Refs #2137) |
 | [packages-beratungsstelle.md](../packages-beratungsstelle.md) | German-only operator guide for the “Beratungsstelle” package: target picture, types, reports, roles, recommendations (Refs #2145) |
 | [packages-jugendarbeit.md](../packages-jugendarbeit.md) | Operator documentation for the youth-work package: types, fields, roles, reports, and recommendations (Refs #2139); intentionally German-only |
@@ -75,5 +76,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.95.0 -->
-<!-- translation-date: 2026-08-28 -->
-<!-- source-hash: 09ac9c0921d9b20ce7af73753c6b4e51ca017996 -->
+<!-- translation-date: 2026-09-08 -->
+<!-- source-hash: 2da150360621ddda4342f9f569a1a0c1904534c4 -->

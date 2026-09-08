@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Frauenhaus-Paket für Schutzwohnungen und Gewalt-Fachberatung** (#2138) — Acht Dokumentationstypen, 24/7-Schichtfenster, zwei Schnellvorlagen und Betreiberhinweise unterstützen pseudonyme Beratung, nur für Leitungsrollen sichtbare Gefährdungslagen und Schutzmaßnahmen ohne fachlich falsche Hausverbotslogik.
 - **Awareness-Paket für Veranstaltungsteams** (#2137) — Sieben Dokumentationstypen, zwei vorbefüllte Versorgungs-Schnellvorlagen und Betreiberhinweise unterstützen anonyme Kontakte, Versorgung sowie geschützt sichtbare Gewalt- und Krisensituationen ohne Fotodokumentation.
 - **Konfigurationspaket „Beratungsstelle“ mit anonymer Kurzberatung** (#2145) — Das neue Paket `beratungsstelle` ersetzt den Standardkatalog durch acht Typen für offene Sprechstunden und Sozialberatung, darunter eine anonyme Kurzberatung, ein Beratungsgespräch ab Pseudonym, Krisen, Begleitungen, Vermittlungen, Notizen und ein deaktivierbares Hausverbot; Zeitfenster, drei Schnellvorlagen und eine Betreiber-Doku sind vorbereitet.
 - **Jugendarbeit-Paket mit acht Dokumentationstypen** (#2139) — Neue Einrichtungen können einen auf mobile und offene Jugendarbeit zugeschnittenen Katalog mit anonymen Kontakten, Gruppenangeboten, Beratung, Krisenarbeit und Hausverboten auswählen.

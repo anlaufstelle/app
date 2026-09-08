@@ -419,7 +419,14 @@ class TestEnsureFacilityBaseline:
             QuickTemplateDef("kontakt", "Formularhilfe", {"leistungen": ["formularhilfe"]}),
             QuickTemplateDef("kurzberatung", "Telefonische Kurzberatung", {"dauer": 15}),
         )
-        assert PACKAGE_COMFORT["frauenhaus"].quick_templates == ()
+        assert PACKAGE_COMFORT["frauenhaus"].quick_templates == (
+            QuickTemplateDef(
+                "anfrage",
+                "Telefonische Anfrage Unterbringung",
+                {"kontaktweg": "telefon", "anliegen": ["unterbringung"]},
+            ),
+            QuickTemplateDef("notiz", "Belegstand vermerkt", {}),
+        )
         assert [
             (item.document_type_slug, item.name, item.prefilled_data)
             for item in PACKAGE_COMFORT["jugendarbeit"].quick_templates
