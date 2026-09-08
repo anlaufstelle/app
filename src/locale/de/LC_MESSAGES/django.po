@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 10:13+0200\n"
+"POT-Creation-Date: 2026-09-08 10:49+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12697,3 +12697,9 @@ msgstr "In der Nacht der Umstellung auf die Winterzeit läuft die Stunde von 02:
 
 msgid "Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."
 msgstr "Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."
+
+msgid "Aufbewahrungslauf"
+msgstr "Aufbewahrungslauf"
+
+msgid "vor 0.96 nicht erfasst"
+msgstr "vor 0.96 nicht erfasst"

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 10:13+0200\n"
+"POT-Creation-Date: 2026-09-08 10:49+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12598,3 +12598,9 @@ msgstr "On the night the clocks fall back to standard time, the hour from 02:00 
 
 msgid "Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."
 msgstr "This time occurs twice on the fall-back day — please choose daylight-saving or standard time."
+
+msgid "Aufbewahrungslauf"
+msgstr "Retention run"
+
+msgid "vor 0.96 nicht erfasst"
+msgstr "not recorded before 0.96"
