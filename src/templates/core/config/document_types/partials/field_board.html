@@ -130,11 +130,14 @@ Kontext: doc_type, blocks (Liste aus {"kind":"group","group":g,"fields":[...]} |
         </div>
         <button type="submit" class="px-3.5 py-2 btn-primary text-[13px] whitespace-nowrap">{% trans "Feld hinzufügen" %}</button>
         {% if add_form.errors %}
-        <ul class="w-full mt-1 text-[12px] text-red-600" role="alert" data-testid="field-add-errors">
-            {% for error in add_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
-            {% for error in add_form.field_template.errors %}<li>{{ error }}</li>{% endfor %}
-            {% for error in add_form.field_group.errors %}<li>{{ error }}</li>{% endfor %}
-        </ul>
+        {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+        <div role="alert" class="w-full">
+            <ul role="list" class="mt-1 text-[12px] text-red-600" data-testid="field-add-errors">
+                {% for error in add_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                {% for error in add_form.field_template.errors %}<li>{{ error }}</li>{% endfor %}
+                {% for error in add_form.field_group.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        </div>
         {% endif %}
     </form>
 

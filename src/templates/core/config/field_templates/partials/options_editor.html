@@ -30,9 +30,12 @@ multi_select ein und synchronisiert jede Aenderung zurueck ins Textarea.
 
     {% if field.errors %}
     {# Muss ausserhalb des per JavaScript versteckten Textarea-Wrappers bleiben. #}
-    <ul data-options-field-errors id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
-        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
-    </ul>
+    {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+    <div role="alert">
+        <ul data-options-field-errors id="{{ field.id_for_label }}-error" role="list" class="mt-1 text-sm text-red-600">
+            {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+    </div>
     {% endif %}
     <div data-options-json-wrapper>
         <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">

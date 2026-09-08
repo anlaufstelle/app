@@ -33,9 +33,12 @@ Swap-Verhalten:
         </label>
         {{ form.name }}
         {% if form.name.errors %}
-        <ul class="mt-1 text-[12px] text-red-600" role="alert" data-testid="group-form-errors">
-            {% for error in form.name.errors %}<li>{{ error }}</li>{% endfor %}
-        </ul>
+        {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+        <div role="alert">
+            <ul role="list" class="mt-1 text-[12px] text-red-600" data-testid="group-form-errors">
+                {% for error in form.name.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        </div>
         {% endif %}
     </div>
     <label class="flex items-center gap-1.5 text-[13px] text-ink pb-2">

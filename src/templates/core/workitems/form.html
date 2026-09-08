@@ -40,9 +40,12 @@
                     <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% if form.due_date.errors %}
-                <ul id="id_due_date-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.due_date.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
+                {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+                <div role="alert">
+                    <ul id="id_due_date-error" role="list" class="mt-1 text-sm text-red-600">
+                        {% for error in form.due_date.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
                 {% endif %}
             </div>
 
@@ -59,9 +62,12 @@
                     <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% if form.remind_at.errors %}
-                <ul id="id_remind_at-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.remind_at.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
+                {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+                <div role="alert">
+                    <ul id="id_remind_at-error" role="list" class="mt-1 text-sm text-red-600">
+                        {% for error in form.remind_at.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
                 {% endif %}
             </div>
 
@@ -84,9 +90,12 @@
                 <p class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink" data-testid="client-pinned">{{ workitem.client.pseudonym }}</p>
                 <p class="mt-1 text-[12px] text-ink-muted">{% trans "Die Personenzuordnung ist nach dem Anlegen festgelegt." %}</p>
                 {% if form.client.errors %}
-                <ul class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
+                {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+                <div role="alert">
+                    <ul role="list" class="mt-1 text-sm text-red-600">
+                        {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                </div>
                 {% endif %}
             </div>
             {% else %}

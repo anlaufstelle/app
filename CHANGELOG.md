@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Einsatzzwecke & Domänen-Pakete dokumentiert** (#2140) — Fachkonzept § 3 (Arbeitsmodus, Fit/Anti-Fit), FAQ 1a, README „Für wen", Glossar; Katalog-Übersicht in `docs/packages.md` und `docs/README.md`/`docs/en/README.md` auf einheitliche Reihenfolge und Wortlaut gebracht.
+- **Fehlerlisten des Ereignisformulars und weiterer Formulare sind wieder echte Listen** (#2154) — Die automatisierte Barrierefreiheitsprüfung meldete auf dem Ereignisformular im Fehlerzustand ein Listenelement außerhalb einer Liste: `role="alert"` direkt auf dem `<ul>` überschrieb dessen Listenrolle, die Fehlermeldung stand für Screenreader ohne Listen-Elternteil da. Die Rolle sitzt jetzt auf einem umschließenden Element, das `<ul>` bekommt seine Listenrolle zurück — Fokus, Ansage und Aussehen bleiben unverändert. Dieselbe Fehlerklasse fand sich an einem guten Dutzend weiterer Fehlerlisten im Formular-Baustein, den Zusatzfeldern, der Personensuche, im Aufgaben- und Fall-Formular, in mehreren Konfigurations-Formularen und in den Passwort-Formularen und wurde dort im selben Zug behoben.
 
 ## [0.95.0] - 2026-09-07
 

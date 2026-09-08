@@ -140,9 +140,11 @@
                     <label for="id_occurred_at" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.occurred_at.label }} *</label>
                     {% aria_field meta_form.occurred_at %}
                     {% if meta_form.occurred_at.errors %}
-                    <ul id="id_occurred_at-error" class="mt-1 text-sm text-red-600" role="alert">
-                        {% for error in meta_form.occurred_at.errors %}<li>{{ error }}</li>{% endfor %}
-                    </ul>
+                    <div role="alert">
+                        <ul id="id_occurred_at-error" role="list" class="mt-1 text-sm text-red-600">
+                            {% for error in meta_form.occurred_at.errors %}<li>{{ error }}</li>{% endfor %}
+                        </ul>
+                    </div>
                     {% endif %}
 
                     {% comment %}Refs #2127: Okkurrenz-Auswahl fuer die doppelte

@@ -67,9 +67,12 @@ generische Textfeld, kein separates Feld der Form selbst.
         </button>
     </div>
     {% if condition_form.errors %}
-    <ul class="sm:col-span-2 text-[12px] text-red-600" role="alert" data-testid="condition-form-errors">
-        {% for error in condition_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
-        {% for field in condition_form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}
-    </ul>
+    {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. #}
+    <div role="alert" class="sm:col-span-2">
+        <ul role="list" class="text-[12px] text-red-600" data-testid="condition-form-errors">
+            {% for error in condition_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            {% for field in condition_form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}
+        </ul>
+    </div>
     {% endif %}
 </form>
