@@ -424,9 +424,11 @@ def test_hausverbot_projektion(facility, staff_user, client_identified):
 
 
 def test_dokumentation_ist_gefuehrt():
-    package_doc = Path("docs/packages-beratungsstelle.md")
-    packages_doc = Path("docs/packages.md").read_text(encoding="utf-8")
-    readme = Path("docs/README.md").read_text(encoding="utf-8")
+    # Repo-verankert statt CWD-relativ: mutmut startet die Suite nicht im Repo-Root (Refs #2145).
+    repo_root = Path(__file__).resolve().parents[2]
+    package_doc = repo_root / "docs" / "packages-beratungsstelle.md"
+    packages_doc = (repo_root / "docs" / "packages.md").read_text(encoding="utf-8")
+    readme = (repo_root / "docs" / "README.md").read_text(encoding="utf-8")
 
     assert package_doc.exists()
     assert "`beratungsstelle`" in packages_doc
