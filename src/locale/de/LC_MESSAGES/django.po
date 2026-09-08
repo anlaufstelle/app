@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 08:45+0200\n"
+"POT-Creation-Date: 2026-09-08 10:13+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12682,3 +12682,18 @@ msgstr "Sichtschutz bei Fenster- oder Tab-Wechsel"
 
 msgid "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."
 msgstr "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."
+
+msgid "Welche der beiden Stunden?"
+msgstr "Welche der beiden Stunden?"
+
+msgid "Sommerzeit — erste Stunde (MESZ)"
+msgstr "Sommerzeit — erste Stunde (MESZ)"
+
+msgid "Winterzeit — zweite Stunde (MEZ)"
+msgstr "Winterzeit — zweite Stunde (MEZ)"
+
+msgid "In der Nacht der Umstellung auf die Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal. Die erste Stunde ist noch Sommerzeit, die zweite bereits Winterzeit."
+msgstr "In der Nacht der Umstellung auf die Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal. Die erste Stunde ist noch Sommerzeit, die zweite bereits Winterzeit."
+
+msgid "Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."
+msgstr "Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."

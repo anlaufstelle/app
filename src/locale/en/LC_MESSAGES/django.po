@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 08:45+0200\n"
+"POT-Creation-Date: 2026-09-08 10:13+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12583,3 +12583,18 @@ msgstr "Privacy screen on window or tab change"
 
 msgid "Wenn aktiv, verdeckt eine neutrale Fläche den Inhalt, sobald das Fenster den Fokus verliert oder der Tab in den Hintergrund geht. Die Freigabe erfolgt per Klick oder Tastendruck; es läuft kein Timer. Empfohlen für Arbeitsplätze mit Publikumsverkehr."
 msgstr "When enabled, a neutral surface covers the content as soon as the window loses focus or the tab moves to the background. It is released by a click or key press; no timer runs. Recommended for workplaces with public traffic."
+
+msgid "Welche der beiden Stunden?"
+msgstr "Which of the two hours?"
+
+msgid "Sommerzeit — erste Stunde (MESZ)"
+msgstr "Daylight-saving time — first hour (CEST)"
+
+msgid "Winterzeit — zweite Stunde (MEZ)"
+msgstr "Standard time — second hour (CET)"
+
+msgid "In der Nacht der Umstellung auf die Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal. Die erste Stunde ist noch Sommerzeit, die zweite bereits Winterzeit."
+msgstr "On the night the clocks fall back to standard time, the hour from 02:00 to 03:00 runs twice. The first hour is still daylight-saving time, the second is already standard time."
+
+msgid "Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."
+msgstr "This time occurs twice on the fall-back day — please choose daylight-saving or standard time."
