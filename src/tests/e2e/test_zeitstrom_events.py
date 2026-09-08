@@ -312,9 +312,11 @@ class TestEventEditAndDelete:
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/delete/$"))
 
         # Identified Client → kein 4-Augen, direkter Löschen-Button
-        assert page.locator("button:has-text('Endgültig löschen')").is_visible()
+        # (data-testid="event-delete-confirm", Refs #2167 — stabiler als der
+        # Text-Selektor, an beiden Confirm-Branches identisch vergeben)
+        assert page.locator('[data-testid="event-delete-confirm"]').is_visible()
 
-        page.click("button:has-text('Endgültig löschen')")
+        page.click('[data-testid="event-delete-confirm"]')
         page.wait_for_url(lambda url: "/events/" not in url)
 
         assert page.locator("[role='alert']:has-text('Ereignis wurde gelöscht.')").first.is_visible()
