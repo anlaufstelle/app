@@ -59,26 +59,23 @@ def _reencrypt_data_json(payload):
     return new_payload, changed
 
 
-def _locked_compare_and_swap(model, pk, *, expected: dict, updates: dict, attempts: int = 3) -> bool:
+def _locked_compare_and_swap(model, pk, *, expected: dict, updates: dict) -> bool:
     """Lock one row and apply *updates* only while *expected* still matches.
 
     The candidate values are deliberately read and transformed before this
     short transaction. A writer that commits in that window therefore wins:
     the lock waits for it, the compare-and-swap sees the changed version/value,
     and the rotation skips its now-stale payload instead of overwriting it.
-    As in the TOTP path, a bounded retry handles transient CAS misses; the
-    expected values stay bound to the candidate being rotated, so a real
-    domain edit can never be adopted and overwritten by the same run.
+    There is deliberately no retry with the stale candidate: a zero-row update
+    is counted as contention and the operator repeats the whole rotation run.
+    The TOTP path remains separate because it re-reads its candidate under the
+    row lock before each bounded attempt.
     """
-    for _ in range(attempts):
-        with transaction.atomic():
-            locked = model.objects.select_for_update().filter(pk=pk).only("pk").first()
-            if locked is None:
-                return False
-            affected = model.objects.filter(pk=pk, **expected).update(**updates)
-        if affected:
-            return True
-    return False
+    with transaction.atomic():
+        locked = model.objects.select_for_update().filter(pk=pk).only("pk").first()
+        if locked is None:
+            return False
+        return bool(model.objects.filter(pk=pk, **expected).update(**updates))
 
 
 def _reencrypt_events(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
@@ -127,7 +124,7 @@ def _reencrypt_events(dry_run: bool, *, on_contended: Callable[[], None] | None 
             if _locked_compare_and_swap(
                 Event,
                 pk,
-                expected={"updated_at": event.updated_at},
+                expected={"updated_at": event.updated_at, "data_json": event.data_json},
                 updates={"data_json": healed, "updated_at": timezone.now()},
             ):
                 updated += 1
@@ -171,7 +168,7 @@ def _rotate_dynamic_json_model(model, *, dry_run: bool, on_contended: Callable[[
             if _locked_compare_and_swap(
                 model,
                 pk,
-                expected={"updated_at": obj.updated_at},
+                expected={"updated_at": obj.updated_at, "data_json": obj.data_json},
                 updates={"data_json": healed, "updated_at": timezone.now()},
             ):
                 updated += 1

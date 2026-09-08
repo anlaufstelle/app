@@ -1022,7 +1022,7 @@ Seit den entitätsübergreifenden dynamischen Feldern ([ADR-037](adr/037-konfigu
 
 Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet. Die frühere Lücke bei soft-gelöschten Ereignissen (`is_deleted=False`-Filter) ist seit #1724 geschlossen.
 
-> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Den Lauf dann wiederholen und den alten Schlüssel bis zu einem Lauf ohne diese Meldung behalten. Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
+> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Die Rotation überschreibt dabei nie eine zwischenzeitliche Änderung — auch nicht bei Redaktions- oder Anonymisierungsläufen, die `updated_at` nicht fortschreiben. Den Lauf dann wiederholen und den alten Schlüssel bis zu einem Lauf ohne diese Meldung behalten. Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
 
 #### Upload-Limit
 

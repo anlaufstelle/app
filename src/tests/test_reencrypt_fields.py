@@ -32,6 +32,7 @@ import pytest
 from django.core.management import CommandError, call_command
 from django.db import connection, connections, transaction
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import Case, Client, Event, EventHistory, RectificationRequest
@@ -431,8 +432,8 @@ class TestRotateAll:
 
         calls = []
 
-        def reject_cas(model, pk, *, expected, updates, attempts=3):
-            calls.append((model, pk, expected, updates, attempts))
+        def reject_cas(model, pk, *, expected, updates):
+            calls.append((model, pk, expected, updates))
             return False
 
         monkeypatch.setattr(rotation_module, "_locked_compare_and_swap", reject_cas)
@@ -449,12 +450,12 @@ class TestRotateAll:
             "rectification_requests": 0,
             "contended": 5,
         }
-        calls_by_model = {model: (pk, expected, updates, attempts) for model, pk, expected, updates, attempts in calls}
+        calls_by_model = {model: (pk, expected, updates) for model, pk, expected, updates in calls}
         assert set(calls_by_model) == {Event, Client, Case, Attachment, RectificationRequest}
-        assert set(calls_by_model[Event][1]) == {"updated_at"}
+        assert set(calls_by_model[Event][1]) == {"updated_at", "data_json"}
         assert set(calls_by_model[Event][2]) == {"data_json", "updated_at"}
-        assert set(calls_by_model[Client][1]) == {"updated_at"}
-        assert set(calls_by_model[Case][1]) == {"updated_at"}
+        assert set(calls_by_model[Client][1]) == {"updated_at", "data_json"}
+        assert set(calls_by_model[Case][1]) == {"updated_at", "data_json"}
         assert set(calls_by_model[Attachment][1]) == {"original_filename_encrypted"}
         assert set(calls_by_model[RectificationRequest][1]) == {
             "old_value",
@@ -462,7 +463,6 @@ class TestRotateAll:
             "reason",
             "review_note",
         }
-        assert all(call[3] == 3 for call in calls_by_model.values())
 
         event.refresh_from_db()
         client.refresh_from_db()
@@ -488,6 +488,35 @@ class TestRotateAll:
             )
             is False
         )
+
+    def test_locked_cas_uses_jsonb_equality_once_without_retry(
+        self, facility, client_identified, doc_type_crisis, staff_user
+    ):
+        from core.services.file_vault.rotation import _locked_compare_and_swap
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            swapped = _locked_compare_and_swap(
+                Event,
+                event.pk,
+                expected={"data_json": {"stale": True}},
+                updates={"data_json": {}},
+            )
+
+        lock_queries = [query["sql"] for query in queries if "FOR UPDATE" in query["sql"]]
+        update_queries = [query["sql"] for query in queries if query["sql"].startswith('UPDATE "core_event"')]
+        assert swapped is False
+        assert len(lock_queries) == 1
+        assert len(update_queries) == 1
+        assert '"data_json" = ' in update_queries[0]
 
     def test_unrotatable_values_are_skipped_without_writes(
         self, facility, client_identified, doc_type_crisis, staff_user
@@ -568,6 +597,146 @@ class TestRotateAll:
 @pytest.mark.django_db(transaction=True)
 class TestRotationCompareAndSwapRace:
     """Refs #2131: parallele Fachänderungen gewinnen gegen die Rotation."""
+
+    def _run_stampless_redaction_race(
+        self,
+        *,
+        target,
+        model,
+        payload_slug,
+        redact,
+        raw_data_json,
+        counter,
+        old_key,
+        new_key,
+        monkeypatch,
+    ):
+        from core.services.file_vault import rotation as rotation_module
+
+        user_holds_lock = threading.Event()
+        rotation_has_read = threading.Event()
+        user_committed = threading.Event()
+        errors = {}
+        result = {}
+        original_reencrypt = rotation_module._reencrypt_data_json
+
+        def synchronized_reencrypt(payload):
+            healed = original_reencrypt(payload)
+            if isinstance(payload, dict) and payload_slug in payload and not rotation_has_read.is_set():
+                rotation_has_read.set()
+                if not user_committed.wait(timeout=_JOIN_TIMEOUT):
+                    errors["sync"] = RuntimeError("Stempellose Redaktion wurde nicht rechtzeitig committed")
+            return healed
+
+        monkeypatch.setattr(rotation_module, "_reencrypt_data_json", synchronized_reencrypt)
+
+        def save_redaction_without_timestamp():
+            connection.close()
+            try:
+                with transaction.atomic():
+                    current = model.objects.select_for_update().get(pk=target.pk)
+                    user_holds_lock.set()
+                    if not rotation_has_read.wait(timeout=_JOIN_TIMEOUT):
+                        errors["redaction"] = RuntimeError("Rotation hat die Zielzeile nicht gelesen")
+                    else:
+                        redact(current)
+            except Exception as exc:  # noqa: BLE001
+                errors["redaction"] = exc
+            finally:
+                user_committed.set()
+                connections.close_all()
+
+        def run_rotation():
+            connection.close()
+            try:
+                if not user_holds_lock.wait(timeout=_JOIN_TIMEOUT):
+                    errors["rotation"] = RuntimeError("Redaktions-Faden bekam die Zeilensperre nicht")
+                    return
+                result["counts"] = rotation_module.rotate_all(dry_run=False)
+            except Exception as exc:  # noqa: BLE001
+                errors["rotation"] = exc
+            finally:
+                connections.close_all()
+
+        keys = f"{new_key},{old_key}"
+        with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+            redaction_thread = threading.Thread(
+                target=save_redaction_without_timestamp,
+                name=f"rotation-{counter}-redaction",
+            )
+            rotation_thread = threading.Thread(target=run_rotation, name=f"rotation-{counter}-command")
+            redaction_thread.start()
+            if not user_holds_lock.wait(timeout=_JOIN_TIMEOUT):
+                errors["main"] = RuntimeError("Redaktions-Faden bekam die Zeilensperre nicht")
+            rotation_thread.start()
+
+            redaction_thread.join(timeout=_JOIN_TIMEOUT)
+            rotation_thread.join(timeout=_JOIN_TIMEOUT)
+
+        assert not redaction_thread.is_alive() and not rotation_thread.is_alive(), "Verklemmung im Redaktionsrennen"
+        assert not errors, errors
+        target.refresh_from_db()
+        assert raw_data_json(target) == {}
+        assert target.document_type_id is None
+        assert result["counts"][counter] == 0
+        assert result["counts"]["contended"] == 1
+
+    def test_client_anonymization_without_timestamp_wins(
+        self, facility, doc_type_client_profile, staff_user, monkeypatch
+    ):
+        from core.services.client.main import _redact_client_identity
+
+        old_key = generate_key()
+        new_key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+            client = Client.objects.create(
+                facility=facility,
+                pseudonym="CAS-Client-Redaktion",
+                created_by=staff_user,
+                document_type=doc_type_client_profile,
+                data_json={"diagnose": "Diese PII muss getilgt bleiben"},
+            )
+
+        self._run_stampless_redaction_race(
+            target=client,
+            model=Client,
+            payload_slug="diagnose",
+            redact=_redact_client_identity,
+            raw_data_json=raw_client_data_json,
+            counter="clients",
+            old_key=old_key,
+            new_key=new_key,
+            monkeypatch=monkeypatch,
+        )
+
+    def test_case_redaction_without_timestamp_wins(
+        self, facility, client_identified, doc_type_case_form, staff_user, monkeypatch
+    ):
+        from core.services.case.deletion import redact_case_content
+
+        old_key = generate_key()
+        new_key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+            case = Case.objects.create(
+                facility=facility,
+                client=client_identified,
+                title="CAS-Fall-Redaktion",
+                created_by=staff_user,
+                document_type=doc_type_case_form,
+                data_json={"verlauf": "Diese Fall-PII muss getilgt bleiben"},
+            )
+
+        self._run_stampless_redaction_race(
+            target=case,
+            model=Case,
+            payload_slug="verlauf",
+            redact=redact_case_content,
+            raw_data_json=raw_case_data_json,
+            counter="cases",
+            old_key=old_key,
+            new_key=new_key,
+            monkeypatch=monkeypatch,
+        )
 
     def test_user_save_between_rotation_read_and_write_wins(
         self, facility, client_identified, doc_type_crisis, staff_user, monkeypatch
