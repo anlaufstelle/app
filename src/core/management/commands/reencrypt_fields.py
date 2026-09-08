@@ -57,6 +57,13 @@ class Command(BaseCommand):
             )
 
         counts = rotate_all(dry_run=dry_run, on_totp_contended=_warn_totp_contended)
+        if counts["contended"]:
+            self.stderr.write(
+                self.style.WARNING(
+                    f"{counts['contended']} Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen "
+                    "und den Alt-Schlüssel bis zu einem Lauf ohne diese Meldung behalten."
+                )
+            )
 
         action = "Would re-encrypt" if dry_run else "Re-encrypted"
         self.stdout.write(

@@ -30,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Ereignis-CSV lässt Datei-Felder und interne Datei-Marker aus** (#2130) — Datei-Anhänge erscheinen weder als Spalte noch als technische Marker-Dicts und UUIDs im Tabellenexport; verwaiste Marker nach einem Feldtypwechsel ergeben eine leere Zelle.
 
+### Security
+
+- **Schlüsselrotation bewahrt parallele Fachänderungen** (#2131) — `reencrypt_fields` schützt veränderliche Datensätze mit Row-Lock und Compare-and-Swap, überspringt konkurrierend geänderte Zeilen und fordert sichtbar zur Wiederholung auf, statt einen veralteten Stand zu überschreiben.
+
 ## [0.95.0] - 2026-09-07
 
 Sammel-Release (Pre-Release) — zwischen v0.91.0 und diesem Schnitt wurde kein Release getaggt; der Block bündelt die vier Checkpoint-Meilensteine 0.92 (Ops-Sichtbarkeit und Performance), 0.93 (Sicherheits-Rest, Fixes und Abhängigkeiten), 0.94 (QA, E2E-Nachweise und Barrierefreiheit) und 0.95 (Test-Suite-Refactoring), die jeweils ohne eigenen Cut abgeschlossen wurden.

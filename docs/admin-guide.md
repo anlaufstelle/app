@@ -1010,18 +1010,19 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 | Datenbestand | Umfang |
 |---|---|
-| **`Event.data_json`** | **vollständig — inklusive soft-gelöschter Ereignisse** (#1724) |
+| **`Event.data_json`** | **vollständig — inklusive soft-gelöschter Ereignisse** (#1724); je Zeile mit Row-Lock und Compare-and-Swap |
 | `EventHistory.data_before` / `data_after` | vollständig (append-only, Update über den Replikations-Bypass) |
-| `Attachment.original_filename_encrypted` | vollständig — Anhänge an Ereignis, Person und Fall (das Modell hieß bis #1738 `EventAttachment`) |
+| `Attachment.original_filename_encrypted` | vollständig — Anhänge an Ereignis, Person und Fall (das Modell hieß bis #1738 `EventAttachment`); je Zeile mit Row-Lock und Compare-and-Swap |
 | TOTP-Secrets (`otp_totp_totpdevice.key`) | vollständig, je Gerät mit Row-Lock und Compare-and-Swap |
-| **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen** |
-| **`Case.data_json`** | **vollständig — inklusive soft-gelöschter Fälle** |
+| **`Client.data_json`** | **vollständig — inklusive soft-gelöschter Personen**; je Zeile mit Row-Lock und Compare-and-Swap |
+| **`Case.data_json`** | **vollständig — inklusive soft-gelöschter Fälle**; je Zeile mit Row-Lock und Compare-and-Swap |
+| `RectificationRequest.old_value` / `new_value` / `reason` / `review_note` | vollständig, je Zeile mit Row-Lock und Compare-and-Swap auf den geänderten Wertspalten |
 
 Seit den entitätsübergreifenden dynamischen Feldern ([ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)) tragen auch **Personen** und **Fälle** verschlüsselte Zusatzfelder in `data_json`. Der Lauf rotiert sie mit und heilt dabei zusätzlich Klartext-Reste in Feldern, die laut Dokumentationstyp verschlüsselt sein müssen.
 
 Bei Ereignissen, Personen und Fällen werden **auch soft-gelöschte Datensätze** rotiert. Das ist Absicht: ein Datensatz im Papierkorb soll nicht dauerhaft unter einem ausrangierten Schlüssel liegen bleiben, nur weil er auf Löschung wartet. Die frühere Lücke bei soft-gelöschten Ereignissen (`is_deleted=False`-Filter) ist seit #1724 geschlossen.
 
-> **Betriebshinweis:** Der Lauf nimmt für Ereignisse, Personen, Fälle und Anhänge **keinen** Row-Lock (anders als beim TOTP-Rewrap). Bei paralleler Bearbeitung während der Rotation ist ein verlorenes Update theoretisch möglich — die Rotation deshalb im Wartungsfenster fahren, nicht im laufenden Betrieb.
+> **Betriebshinweis:** Der Lauf schützt jede zu ändernde Zeile mit Row-Lock und Compare-and-Swap. Gewinnt eine parallele Fachänderung, überspringt die Rotation den veralteten Stand und warnt: „N Zeilen wegen paralleler Änderung übersprungen — Lauf wiederholen“. Den Lauf dann wiederholen und den alten Schlüssel bis zu einem Lauf ohne diese Meldung behalten. Ein Wartungsfenster bleibt wegen der zusätzlichen Datenbanklast empfehlenswert, ist aber keine Voraussetzung mehr, um verlorene Updates zu verhindern.
 
 #### Upload-Limit
 

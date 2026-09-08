@@ -33,6 +33,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from django.db import transaction
+from django.utils import timezone
 
 from core.models import Case, Client, Event, EventHistory, RectificationRequest
 from core.models.attachment import Attachment
@@ -58,7 +59,29 @@ def _reencrypt_data_json(payload):
     return new_payload, changed
 
 
-def _reencrypt_events(dry_run: bool) -> int:
+def _locked_compare_and_swap(model, pk, *, expected: dict, updates: dict, attempts: int = 3) -> bool:
+    """Lock one row and apply *updates* only while *expected* still matches.
+
+    The candidate values are deliberately read and transformed before this
+    short transaction. A writer that commits in that window therefore wins:
+    the lock waits for it, the compare-and-swap sees the changed version/value,
+    and the rotation skips its now-stale payload instead of overwriting it.
+    As in the TOTP path, a bounded retry handles transient CAS misses; the
+    expected values stay bound to the candidate being rotated, so a real
+    domain edit can never be adopted and overwritten by the same run.
+    """
+    for _ in range(attempts):
+        with transaction.atomic():
+            locked = model.objects.select_for_update().filter(pk=pk).only("pk").first()
+            if locked is None:
+                return False
+            affected = model.objects.filter(pk=pk, **expected).update(**updates)
+        if affected:
+            return True
+    return False
+
+
+def _reencrypt_events(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
     """M2/P6-Nachzug (Refs #1724, Entscheid E17): rotiert ALLE ``Event``-Rows
     inkl. soft-deleted.
 
@@ -77,9 +100,19 @@ def _reencrypt_events(dry_run: bool) -> int:
     ``Client``/``Case`` — ein Pflichtfeld (kein ``null=True``), das nullable-
     Narrowing aus Refs #1730 (``document_type = obj.document_type if
     obj.document_type_id else None``) gilt hier also nicht.
+
+    Refs #2131: Das fruehere ``save(update_fields=["data_json",
+    "updated_at"])`` rief zwar das einzige Event-``pre_save``-Signal auf, nahm
+    dessen ``search_text`` aber nicht in ``update_fields`` auf. Der Signalwert
+    wurde daher schon vorher nie persistiert; das CAS-``update()`` verliert
+    keine wirksame Nebenwirkung.
     """
     updated = 0
-    for event in Event.objects.iterator(chunk_size=500):
+    pks = list(Event.objects.values_list("pk", flat=True))
+    for pk in pks:
+        event = Event.objects.select_related("document_type").filter(pk=pk).first()
+        if event is None:
+            continue
         new_data, changed = _reencrypt_data_json(event.data_json)
         # A4.4 (Refs #1024): zusätzlich Plaintext-PII-Felder (laut
         # document_type ``is_encrypted=True``) nachverschlüsseln — heilt
@@ -88,14 +121,22 @@ def _reencrypt_events(dry_run: bool) -> int:
         # Werte unangetastet.
         healed = encrypt_dynamic_data(event.document_type, new_data) if event.document_type_id else new_data
         if changed or healed != event.data_json:
-            updated += 1
-            if not dry_run:
-                event.data_json = healed
-                event.save(update_fields=["data_json", "updated_at"])
+            if dry_run:
+                updated += 1
+                continue
+            if _locked_compare_and_swap(
+                Event,
+                pk,
+                expected={"updated_at": event.updated_at},
+                updates={"data_json": healed, "updated_at": timezone.now()},
+            ):
+                updated += 1
+            elif on_contended is not None:
+                on_contended()
     return updated
 
 
-def _rotate_dynamic_json_model(model, *, dry_run: bool) -> int:
+def _rotate_dynamic_json_model(model, *, dry_run: bool, on_contended: Callable[[], None] | None = None) -> int:
     """Gemeinsamer Rotationspfad fuer ``Client``/``Case`` (Refs #1835).
 
     ``_reencrypt_clients``/``_reencrypt_cases`` waren bis aufs Modell
@@ -115,15 +156,27 @@ def _rotate_dynamic_json_model(model, *, dry_run: bool) -> int:
     ``if``-Ausdruck).
     """
     updated = 0
-    for obj in model.objects.iterator(chunk_size=500):
+    pks = list(model.objects.values_list("pk", flat=True))
+    for pk in pks:
+        obj = model.objects.select_related("document_type").filter(pk=pk).first()
+        if obj is None:
+            continue
         new_data, changed = _reencrypt_data_json(obj.data_json)
         document_type = obj.document_type if obj.document_type_id else None
         healed = encrypt_dynamic_data(document_type, new_data) if document_type is not None else new_data
         if changed or healed != obj.data_json:
-            updated += 1
-            if not dry_run:
-                obj.data_json = healed
-                obj.save(update_fields=["data_json", "updated_at"])
+            if dry_run:
+                updated += 1
+                continue
+            if _locked_compare_and_swap(
+                model,
+                pk,
+                expected={"updated_at": obj.updated_at},
+                updates={"data_json": healed, "updated_at": timezone.now()},
+            ):
+                updated += 1
+            elif on_contended is not None:
+                on_contended()
     return updated
 
 
@@ -133,7 +186,7 @@ def _rotate_dynamic_json_model(model, *, dry_run: bool) -> int:
 _RECTIFICATION_COLUMNS = ("old_value", "new_value", "reason", "review_note")
 
 
-def _reencrypt_rectification_requests(dry_run: bool) -> int:
+def _reencrypt_rectification_requests(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
     """Siebter Rotationspfad: die Wertpaare der Art.-16-Antraege (Refs #1060).
 
     ``old_value``/``new_value``/``reason``/``review_note`` sind
@@ -149,8 +202,13 @@ def _reencrypt_rectification_requests(dry_run: bool) -> int:
     :func:`_rotate_dynamic_json_model`, Refs #1724/E17).
     """
     updated = 0
-    for rr in RectificationRequest.objects.iterator(chunk_size=500):
-        changed: list[str] = []
+    pks = list(RectificationRequest.objects.values_list("pk", flat=True))
+    for pk in pks:
+        rr = RectificationRequest.objects.filter(pk=pk).first()
+        if rr is None:
+            continue
+        expected = {}
+        updates = {}
         for column in _RECTIFICATION_COLUMNS:
             value = getattr(rr, column)
             if not is_encrypted_value(value):
@@ -158,13 +216,17 @@ def _reencrypt_rectification_requests(dry_run: bool) -> int:
             decrypted = safe_decrypt(value)
             if decrypted == "[verschlüsselt]":
                 continue
-            setattr(rr, column, encrypt_field(decrypted))
-            changed.append(column)
-        if not changed:
+            expected[column] = value
+            updates[column] = encrypt_field(decrypted)
+        if not updates:
             continue
-        updated += 1
-        if not dry_run:
-            rr.save(update_fields=changed)
+        if dry_run:
+            updated += 1
+            continue
+        if _locked_compare_and_swap(RectificationRequest, pk, expected=expected, updates=updates):
+            updated += 1
+        elif on_contended is not None:
+            on_contended()
     return updated
 
 
@@ -288,10 +350,10 @@ def _rewrap_one_totp_device(pk, decrypt_totp_key, encrypt_totp_key, *, attempts:
     return "contended"
 
 
-def _reencrypt_attachments(dry_run: bool) -> int:
+def _reencrypt_attachments(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
     """``Attachment.original_filename_encrypted`` ist ein Fernet-
-    verschluesseltes JSON-Marker-Dict. Hier reicht ein normales Save —
-    keine append-only-Trigger schuetzen die Tabelle.
+    verschluesseltes JSON-Marker-Dict. Refs #2131: Der Marker selbst ist der
+    Versionsstempel fuer das wertgebundene Compare-and-Swap.
 
     M24 (Refs #1738, ADR-039): Die Iteration ist **owner-generisch** und
     war es immer — sie laeuft ueber ALLE ``Attachment``-Zeilen, gleich ob
@@ -301,37 +363,63 @@ def _reencrypt_attachments(dry_run: bool) -> int:
     personen-/falleigenen Zeilen rotieren automatisch mit.
     """
     updated = 0
-    for att in Attachment.objects.iterator(chunk_size=500):
+    pks = list(Attachment.objects.values_list("pk", flat=True))
+    for pk in pks:
+        att = Attachment.objects.filter(pk=pk).first()
+        if att is None:
+            continue
         value = att.original_filename_encrypted
         if not is_encrypted_value(value):
             continue
         decrypted = safe_decrypt(value)
         if decrypted == "[verschlüsselt]":
             continue
-        updated += 1
         if dry_run:
+            updated += 1
             continue
-        att.original_filename_encrypted = encrypt_field(decrypted)
-        att.save(update_fields=["original_filename_encrypted"])
+        if _locked_compare_and_swap(
+            Attachment,
+            pk,
+            expected={"original_filename_encrypted": value},
+            updates={"original_filename_encrypted": encrypt_field(decrypted)},
+        ):
+            updated += 1
+        elif on_contended is not None:
+            on_contended()
     return updated
 
 
 def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] | None = None) -> dict[str, int]:
-    """Fuehrt alle sieben Rotationspfade aus, liefert die Zaehler der Ausgabezeile.
+    """Fuehrt alle sieben Rotationspfade aus und meldet Kontention additiv.
 
     ``on_totp_contended`` ist ein optionaler Callback fuer die TOTP-Rewrap-
     Kontentions-Warnung: Erkennung und Retry-Logik leben hier, die
     Formatierung ueber ``self.style``/``self.stderr`` bleibt Command-Sache.
+
+    ``contended`` ist bewusst eine Gesamtzahl ueber alle sieben Modellpfade:
+    Fuer den Betriebsentscheid "Alt-Schluessel noch nicht entfernen, Lauf
+    wiederholen" ist jede einzelne uebersprungene Zeile gleich kritisch. Die
+    bestehende TOTP-Warnung nennt zusaetzlich die betroffenen Geraete-PKs.
     """
-    events_updated = _reencrypt_events(dry_run)
+    contended = 0
+
+    def _count_contended() -> None:
+        nonlocal contended
+        contended += 1
+
+    events_updated = _reencrypt_events(dry_run, on_contended=_count_contended)
     history_updated = _reencrypt_event_history(dry_run)
-    attachments_updated = _reencrypt_attachments(dry_run)
-    totp_updated, contended = _reencrypt_totp_devices(dry_run)
-    if contended and on_totp_contended is not None:
-        on_totp_contended(contended)
-    clients_updated = _rotate_dynamic_json_model(Client, dry_run=dry_run)
-    cases_updated = _rotate_dynamic_json_model(Case, dry_run=dry_run)
-    rectifications_updated = _reencrypt_rectification_requests(dry_run)
+    attachments_updated = _reencrypt_attachments(dry_run, on_contended=_count_contended)
+    totp_updated, totp_contended = _reencrypt_totp_devices(dry_run)
+    if totp_contended and on_totp_contended is not None:
+        on_totp_contended(totp_contended)
+    contended += len(totp_contended)
+    clients_updated = _rotate_dynamic_json_model(Client, dry_run=dry_run, on_contended=_count_contended)
+    cases_updated = _rotate_dynamic_json_model(Case, dry_run=dry_run, on_contended=_count_contended)
+    rectifications_updated = _reencrypt_rectification_requests(
+        dry_run,
+        on_contended=_count_contended,
+    )
 
     return {
         "events": events_updated,
@@ -341,4 +429,5 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
         "clients": clients_updated,
         "cases": cases_updated,
         "rectification_requests": rectifications_updated,
+        "contended": contended,
     }
