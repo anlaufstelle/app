@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 10:49+0200\n"
+"POT-Creation-Date: 2026-09-08 11:00+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5563,13 +5563,6 @@ msgstr "Password for all:"
 #: src/templates/auth/_demo_credentials.html:19
 msgid "Alle Logins & Rollen"
 msgstr "All logins & roles"
-
-#: src/templates/auth/_demo_credentials.html:37
-msgid ""
-"2. Einrichtung: gleiche Konten mit Suffix <span class=\"font-mono\">_1</"
-"span>."
-msgstr ""
-"2nd facility: same accounts with suffix <span class=\"font-mono\">_1</span>."
 
 #: src/templates/auth/_demo_credentials.html:43
 msgid "Was ist im Demo deaktiviert?"
@@ -12604,3 +12597,6 @@ msgstr "Retention run"
 
 msgid "vor 0.96 nicht erfasst"
 msgstr "not recorded before 0.96"
+
+msgid "2. Einrichtung <em>Zweigstelle Nord</em> (Beratungsstelle, Paket <code>beratungsstelle</code>): gleiche Konten mit Suffix <span class=\"font-mono\">_1</span>."
+msgstr "2nd facility <em>Zweigstelle Nord</em> (counselling service, package <code>beratungsstelle</code>): same accounts with suffix <span class=\"font-mono\">_1</span>."
