@@ -32,7 +32,7 @@ from core.forms.dynamic import (  # noqa: F401 — Re-Export, Importpfad-Stabili
     _resolve_upload_constraints,
     _select_choices,
 )
-from core.forms.fields import DstAwareDateTimeField
+from core.forms.fields import AmbiguousWallClock, DstAwareDateTimeField
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType
 
@@ -41,6 +41,20 @@ def _case_label(case: Case) -> str:
     """Dropdown label: title plus client pseudonym so users can distinguish cases."""
     pseudonym = case.client.pseudonym if case.client_id else None
     return f"{case.title} – {pseudonym}" if pseudonym else case.title
+
+
+# Refs #2127: Die beiden Lesarten der doppelten Stunde am Rueckfalltag. Die
+# Werte sind die ``fold``-Werte aus PEP 495 als String (Formulardaten sind
+# Strings); der Leerwert ist der Normalfall — er steht fuer "noch nicht
+# gefragt" UND fuer "gibt es hier nicht zu entscheiden".
+OCCURRENCE_FOLD_SUMMER = "0"
+OCCURRENCE_FOLD_WINTER = "1"
+OCCURRENCE_FOLD_CHOICES = (
+    # Bestands-msgid (``offline_create.html``/``offline_detail.html``) — bewusst wiederverwendet.
+    ("", _("– bitte wählen –")),  # pragma: no mutate
+    (OCCURRENCE_FOLD_SUMMER, _("Sommerzeit — erste Stunde (MESZ)")),  # pragma: no mutate
+    (OCCURRENCE_FOLD_WINTER, _("Winterzeit — zweite Stunde (MEZ)")),  # pragma: no mutate
+)
 
 
 class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
@@ -64,11 +78,25 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
     )
     occurred_at = DstAwareDateTimeField(
         label=_("Zeitpunkt"),  # pragma: no mutate
+        # Refs #2127: Die doppelte Stunde des Rueckfalltags kommt als
+        # ``AmbiguousWallClock`` hier an statt als Feldfehler — aufgeloest wird
+        # sie unten in ``clean()`` mit der Antwort auf ``occurred_at_fold``.
+        resolve_ambiguous=True,
         widget=forms.DateTimeInput(
             attrs={
                 "type": "datetime-local",
             },
         ),
+    )
+    occurred_at_fold = forms.ChoiceField(
+        required=False,
+        label=_("Welche der beiden Stunden?"),  # pragma: no mutate
+        choices=OCCURRENCE_FOLD_CHOICES,
+        help_text=_(
+            "In der Nacht der Umstellung auf die Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal. "
+            "Die erste Stunde ist noch Sommerzeit, die zweite bereits Winterzeit."
+        ),
+        widget=forms.Select(),
     )
     case = forms.ModelChoiceField(
         queryset=Case.objects.none(),
@@ -146,6 +174,52 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
             client_id,
             missing_error=_("Person existiert nicht."),  # pragma: no mutate
         )
+
+    def clean(self):
+        """Refs #2127: die doppelte Stunde des Rueckfalltags aufloesen — oder nachfragen.
+
+        ``occurred_at`` traegt hier einen :class:`~core.forms.fields.AmbiguousWallClock`,
+        wenn die eingegebene Wanduhrzeit am Rueckfalltag zweimal existiert.
+        Genau dann — und nur dann — ist ``occurred_at_fold`` eine Pflichtangabe:
+
+        * mit Auswahl wird daraus ein aware ``datetime`` mit dem gewaehlten
+          ``fold``; die beiden Lesarten liegen in UTC eine Stunde auseinander;
+        * ohne Auswahl bekommt **das Auswahlfeld** den Fehler (nicht die
+          Uhrzeit — die ist nicht falsch, sondern nur noch nicht entschieden),
+          und der unaufgeloeste Zwischenwert wird aus ``cleaned_data``
+          entfernt, damit kein Verbraucher ihn je zu sehen bekommt. Das
+          Template rendert das Feld daraufhin sichtbar (serverseitiger
+          Sichtbarkeitswechsel, kein JavaScript).
+
+        Ausserhalb des Doppelfensters ist die Auswahl bedeutungslos und wird
+        auf den Leerwert normalisiert — ein mitgeschickter Wert darf einen
+        eindeutigen Zeitpunkt nicht verschieben.
+        """
+        # ``Form.clean`` ist laut Stub ``dict | None`` (eine Unterklasse darf
+        # nichts zurueckgeben — Django faellt dann auf ``self.cleaned_data``
+        # zurueck). Der Fallback macht genau das explizit, statt sich auf die
+        # heutige Basisimplementierung zu verlassen.
+        cleaned = super().clean() or self.cleaned_data
+        occurred_at = cleaned.get("occurred_at")
+        if not isinstance(occurred_at, AmbiguousWallClock):
+            cleaned["occurred_at_fold"] = ""
+            return cleaned
+        fold = cleaned.get("occurred_at_fold")
+        if fold in (OCCURRENCE_FOLD_SUMMER, OCCURRENCE_FOLD_WINTER):
+            cleaned["occurred_at"] = occurred_at.resolve(int(fold))
+            return cleaned
+        # Ein bereits vom ChoiceField abgelehnter Wert (manipuliertes Select)
+        # traegt seinen eigenen Fehler — keine zweite Meldung am selben Feld.
+        if not self.has_error("occurred_at_fold"):
+            self.add_error(
+                "occurred_at_fold",
+                forms.ValidationError(
+                    _("Diese Uhrzeit gibt es am Rückfalltag zweimal — bitte Sommer- oder Winterzeit wählen."),
+                    code="fold_required",
+                ),
+            )
+        cleaned.pop("occurred_at", None)
+        return cleaned
 
 
 class DynamicEventDataForm(DynamicDataForm):

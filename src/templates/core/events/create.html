@@ -144,6 +144,51 @@
                         {% for error in meta_form.occurred_at.errors %}<li>{{ error }}</li>{% endfor %}
                     </ul>
                     {% endif %}
+
+                    {% comment %}Refs #2127: Okkurrenz-Auswahl fuer die doppelte
+                    Stunde am Rueckfalltag. Das Feld steht NUR im Grenzfall im
+                    DOM — die Sichtbarkeit entscheidet der Server (Fehler am
+                    Feld ODER bereits getroffene Auswahl), nicht JavaScript:
+                    ein per CSS/JS verstecktes Select waere fuer Tastatur und
+                    Screenreader trotzdem erreichbar, und ohne JS gaebe es
+                    ueberhaupt keinen Sichtbarkeitswechsel. Es steht bewusst
+                    IN diesem Block, direkt hinter der Uhrzeit: so folgt es ihr
+                    in der Tab-Reihenfolge (WCAG 2.4.3).
+
+                    ``autofocus`` nur im Fehlerfall: die Seite kommt als
+                    vollstaendiger POST-Redisplay zurueck (kein hx-post am
+                    Formular), das globale Fokus-Management aus
+                    ``focus-management.js`` greift also nicht — es haengt an
+                    ``htmx:afterSwap``. Ohne dieses Attribut begaenne die
+                    Fachkraft nach der Rueckfrage wieder ganz oben.
+
+                    Fehlerliste als <div role="alert"> um ein <ul role="list">:
+                    ``role="alert"`` direkt am <ul> ueberschreibt dessen
+                    implizite Listenrolle, die <li> stuenden dann ohne
+                    Listen-Elternteil da (axe-Regel ``listitem``,
+                    Refs #2154).{% endcomment %}
+                    {% if meta_form.occurred_at_fold.errors or meta_form.occurred_at_fold.value %}
+                    <div class="mt-3">
+                        <label for="id_occurred_at_fold" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.occurred_at_fold.label }}</label>
+                        <select name="occurred_at_fold" id="id_occurred_at_fold"
+                                data-testid="occurred-at-fold"
+                                aria-describedby="id_occurred_at_fold-help{% if meta_form.occurred_at_fold.errors %} id_occurred_at_fold-error{% endif %}"
+                                {% if meta_form.occurred_at_fold.errors %}aria-invalid="true" autofocus{% endif %}
+                                class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink">
+                            {% for value, label in meta_form.occurred_at_fold.field.choices %}
+                            <option value="{{ value }}"{% if meta_form.occurred_at_fold.value == value %} selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if meta_form.occurred_at_fold.errors %}
+                        <div role="alert">
+                            <ul id="id_occurred_at_fold-error" role="list" class="mt-1 text-sm text-red-600">
+                                {% for error in meta_form.occurred_at_fold.errors %}<li>{{ error }}</li>{% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        <p id="id_occurred_at_fold-help" class="mt-1 text-[12px] text-ink-muted">{{ meta_form.occurred_at_fold.help_text }}</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 

@@ -149,6 +149,11 @@ EXPECTED = {
         "document_type": ("Select", True, {"hx-get": "", "hx-target": "#dynamic-fields", "hx-trigger": "change"}),
         "client": ("HiddenInput", False, {}),
         "occurred_at": ("DateTimeInput", True, {}),
+        # Refs #2127: Okkurrenz-Auswahl fuer die doppelte Stunde am
+        # Rueckfalltag. Das Widget wird im Template von Hand gerendert (wie
+        # ``document_type``); der Katalog haelt trotzdem fest, dass das Feld
+        # existiert und die Eingabe-Klasse wie jedes andere Select bekommt.
+        "occurred_at_fold": ("Select", True, {}),
         "case": ("Select", True, {}),
     },
     "ImportUploadForm": {

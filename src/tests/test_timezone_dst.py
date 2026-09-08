@@ -19,9 +19,12 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils import timezone, translation
 
 from core.forms.events import EventMetaForm
+from core.forms.fields import AmbiguousWallClock, DstAwareDateTimeField
 from core.models import Event, TimeFilter
 from core.services.events import build_feed_items, get_time_range
 from core.services.events.tally import current_tally_context
@@ -489,22 +492,28 @@ class TestEventFormDstInput:
     (Vorstelltag) Wanduhrzeiten in ``forms.DateTimeField`` ab — mit **einer**
     generischen Meldung für beide Fälle. Eine Fachkraft um 02:30 in der
     Nachtschicht erfährt daraus weder, welcher der beiden Fälle vorliegt, noch
-    was sie stattdessen eintragen soll. Diese Tests pinnen zwei
-    unterscheidbare Texte mit Handlungsanweisung — und dass die regulären
-    Nachbarstunden beider Grenztage unverändert gültig bleiben.
+    was sie stattdessen eintragen soll. Diese Tests pinnen den Vorstelltag-Text
+    mit Handlungsanweisung — und dass die regulären Nachbarstunden beider
+    Grenztage unverändert gültig bleiben.
+
+    Refs #2127: Der Rückfalltag ist seit der Okkurrenz-Auswahl **kein**
+    Formularfehler an ``occurred_at`` mehr, sondern eine Rückfrage an
+    ``occurred_at_fold`` — seine Zusicherungen stehen in
+    :class:`TestEventFormOccurrenceFold` (Formular) bzw.
+    :class:`TestDstAwareDateTimeFieldKeepsTheAmbiguousMessageByDefault` (Feld
+    ohne Opt-in).
     """
 
     @staticmethod
-    def _form(facility, staff_user, doc_type_contact, occurred_at):
-        return EventMetaForm(
-            data={
-                "document_type": str(doc_type_contact.pk),
-                "occurred_at": occurred_at,
-                "client": "",
-            },
-            facility=facility,
-            user=staff_user,
-        )
+    def _form(facility, staff_user, doc_type_contact, occurred_at, fold=None):
+        data = {
+            "document_type": str(doc_type_contact.pk),
+            "occurred_at": occurred_at,
+            "client": "",
+        }
+        if fold is not None:
+            data["occurred_at_fold"] = fold
+        return EventMetaForm(data=data, facility=facility, user=staff_user)
 
     @staticmethod
     def _occurred_at_errors(form):
@@ -514,22 +523,8 @@ class TestEventFormDstInput:
         return codes, " ".join(form.errors["occurred_at"])
 
     # ---------------------------------------------------------------
-    # Rückfalltag 2026-10-25 — 02:00–02:59 gibt es zweimal
+    # Rückfalltag 2026-10-25 — die Nachbarstunden bleiben eindeutig
     # ---------------------------------------------------------------
-
-    def test_ambiguous_time_gets_own_message_with_instruction(self, facility, staff_user, doc_type_contact):
-        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
-        codes, text = self._occurred_at_errors(form)
-        assert codes == ["dst_ambiguous"], f"Erwartet der eigene Code, bekommen: {codes}"
-        assert "zweimal" in text, text
-        assert "vor 02:00 oder ab 03:00" in text, text
-
-    def test_ambiguous_message_is_not_the_generic_django_text(self, facility, staff_user, doc_type_contact):
-        """Gegenprobe: der Django-Standardtext nennt die Zeitzone technisch."""
-        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
-        _codes, text = self._occurred_at_errors(form)
-        assert "Europe/Berlin" not in text, text
-        assert "Zeitzone" not in text, text
 
     def test_hour_before_fall_back_stays_valid_in_summer_time(self, facility, staff_user, doc_type_contact):
         form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T01:30")
@@ -580,14 +575,313 @@ class TestEventFormDstInput:
         assert codes == ["invalid"], codes
 
     # ---------------------------------------------------------------
-    # Katalog: beide Texte sind übersetzt
+    # Katalog: der Vorstelltag-Text ist übersetzt
     # ---------------------------------------------------------------
 
     def test_messages_are_translated_to_english(self, facility, staff_user, doc_type_contact):
         with translation.override("en"):
-            ambiguous = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
-            _codes, ambiguous_text = self._occurred_at_errors(ambiguous)
             nonexistent = self._form(facility, staff_user, doc_type_contact, "2026-03-29T02:30")
             _codes, nonexistent_text = self._occurred_at_errors(nonexistent)
-        assert "twice" in ambiguous_text, ambiguous_text
         assert "does not exist" in nonexistent_text, nonexistent_text
+
+
+class TestDstAwareDateTimeFieldKeepsTheAmbiguousMessageByDefault:
+    """Ohne Opt-in bleibt der #2117-Vertrag des Feldes unverändert (Refs #2127).
+
+    Die Auflösung der doppelten Stunde ist eine Formular-Fähigkeit, keine
+    Feld-Fähigkeit: sie braucht ein zweites Eingabefeld, das nur das Formular
+    hat. Ein Verbraucher ohne dieses zweite Feld (und
+    ``src/tests/test_mutation_pins_093_fields.py`` prüft das Feld genau so:
+    ``DstAwareDateTimeField()`` ohne Argumente) muss die mehrdeutige Uhrzeit
+    weiterhin ablehnen — sonst käme bei ihm ein Zwischenwert statt eines
+    ``datetime`` an.
+
+    Die drei Zusicherungen standen bis #2127 wörtlich in
+    ``TestEventFormDstInput`` und sind nur vom Formular auf das Feld gewandert
+    (Verbraucher gewechselt, Zusage unverändert).
+    """
+
+    @staticmethod
+    def _errors(value):
+        field = DstAwareDateTimeField()
+        with pytest.raises(ValidationError) as excinfo:
+            field.clean(value)
+        codes = [error.code for error in excinfo.value.error_list]
+        return codes, " ".join(excinfo.value.messages)
+
+    def test_ambiguous_time_gets_own_message_with_instruction(self):
+        codes, text = self._errors("2026-10-25T02:30")
+        assert codes == ["dst_ambiguous"], f"Erwartet der eigene Code, bekommen: {codes}"
+        assert "zweimal" in text, text
+        assert "vor 02:00 oder ab 03:00" in text, text
+
+    def test_ambiguous_message_is_not_the_generic_django_text(self):
+        """Gegenprobe: der Django-Standardtext nennt die Zeitzone technisch."""
+        _codes, text = self._errors("2026-10-25T02:30")
+        assert "Europe/Berlin" not in text, text
+        assert "Zeitzone" not in text, text
+
+    def test_ambiguous_message_is_translated_to_english(self):
+        with translation.override("en"):
+            _codes, text = self._errors("2026-10-25T02:30")
+        assert "twice" in text, text
+
+    def test_opt_in_field_returns_the_unresolved_wall_clock_instead(self):
+        """Mit Opt-in wirft das Feld nicht mehr — es reicht den naiven Wert weiter."""
+        field = DstAwareDateTimeField(resolve_ambiguous=True)
+        value = field.clean("2026-10-25T02:30")
+        assert isinstance(value, AmbiguousWallClock)
+        assert value.naive == dt.datetime(2026, 10, 25, 2, 30)
+
+    def test_opt_in_field_still_rejects_the_nonexistent_hour(self):
+        """Die Lücke am Vorstelltag ist auch mit Opt-in nicht auflösbar."""
+        field = DstAwareDateTimeField(resolve_ambiguous=True)
+        with pytest.raises(ValidationError) as excinfo:
+            field.clean("2026-03-29T02:30")
+        assert [error.code for error in excinfo.value.error_list] == ["dst_nonexistent"]
+
+    def test_opt_in_field_leaves_ordinary_times_untouched(self):
+        field = DstAwareDateTimeField(resolve_ambiguous=True)
+        value = field.clean("2026-05-16T10:00")
+        assert timezone.is_aware(value)
+        assert value.utcoffset() == dt.timedelta(hours=2)
+
+
+@pytest.mark.django_db
+class TestEventFormOccurrenceFold:
+    """Die doppelte Stunde am Rückfalltag wird erfassbar (Refs #2127).
+
+    Bis #2127 kostete der Rückfalltag die reale zweite Stunde: die Fachkraft
+    wich auf 01:59/03:00 aus und vermerkte die Wahrheit im Freitext. Der
+    Ablauf ist jetzt zweistufig und ohne JavaScript: der erste POST mit einer
+    Uhrzeit im Doppelfenster stellt die Rückfrage (Fehler am neuen Feld
+    ``occurred_at_fold``), der zweite POST mit der Auswahl speichert den
+    gewählten Zeitpunkt. Die beiden Lesarten unterscheiden sich in UTC um
+    genau eine Stunde — das ist der ganze fachliche Gehalt des Tickets.
+    """
+
+    @staticmethod
+    def _form(facility, staff_user, doc_type_contact, occurred_at, fold=None):
+        data = {
+            "document_type": str(doc_type_contact.pk),
+            "occurred_at": occurred_at,
+            "client": "",
+        }
+        if fold is not None:
+            data["occurred_at_fold"] = fold
+        return EventMetaForm(data=data, facility=facility, user=staff_user)
+
+    @staticmethod
+    def _fold_errors(form):
+        assert not form.is_valid()
+        assert "occurred_at_fold" in form.errors, form.errors
+        codes = [error.code for error in form.errors.as_data()["occurred_at_fold"]]
+        return codes, " ".join(form.errors["occurred_at_fold"])
+
+    # ---------------------------------------------------------------
+    # Erster POST: Rückfrage statt Ablehnung
+    # ---------------------------------------------------------------
+
+    def test_ambiguous_hour_without_choice_asks_at_the_fold_field(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        codes, text = self._fold_errors(form)
+        assert codes == ["fold_required"], codes
+        assert "zweimal" in text, text
+        assert "Sommer- oder Winterzeit" in text, text
+
+    def test_ambiguous_hour_without_choice_carries_no_error_on_the_timestamp(
+        self, facility, staff_user, doc_type_contact
+    ):
+        """Die Uhrzeit selbst ist nicht falsch — sie ist nur noch nicht entschieden."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        assert not form.is_valid()
+        assert "occurred_at" not in form.errors, form.errors
+
+    def test_unresolved_timestamp_never_reaches_cleaned_data(self, facility, staff_user, doc_type_contact):
+        """Kein Zwischenwert im ``cleaned_data`` — der View liest ``occurred_at`` direkt."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30")
+        assert not form.is_valid()
+        assert "occurred_at" not in form.cleaned_data, form.cleaned_data
+
+    def test_empty_choice_is_treated_like_no_choice(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="")
+        codes, _text = self._fold_errors(form)
+        assert codes == ["fold_required"], codes
+
+    # ---------------------------------------------------------------
+    # Zweiter POST: beide Lesarten speichern verschiedene Zeitpunkte
+    # ---------------------------------------------------------------
+
+    def test_summer_time_choice_stores_the_first_hour(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="0")
+        assert form.is_valid(), form.errors
+        value = form.cleaned_data["occurred_at"]
+        assert timezone.is_aware(value)
+        assert value.fold == 0
+        assert value.utcoffset() == dt.timedelta(hours=2)
+        assert value.astimezone(UTC) == dt.datetime(2026, 10, 25, 0, 30, tzinfo=UTC)
+
+    def test_winter_time_choice_stores_the_second_hour(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="1")
+        assert form.is_valid(), form.errors
+        value = form.cleaned_data["occurred_at"]
+        assert timezone.is_aware(value)
+        assert value.fold == 1
+        assert value.utcoffset() == dt.timedelta(hours=1)
+        assert value.astimezone(UTC) == dt.datetime(2026, 10, 25, 1, 30, tzinfo=UTC)
+
+    def test_both_choices_differ_by_exactly_one_hour(self, facility, staff_user, doc_type_contact):
+        """Der eigentliche Zweck: zwei unterscheidbare Zeitpunkte, nicht zwei Etiketten.
+
+        Gerechnet wird in UTC — und das ist keine Bequemlichkeit: PEP 495
+        schreibt fuer Arithmetik INNERHALB derselben Zeitzone ausdruecklich
+        vor, dass ``fold`` ignoriert wird ("naive" Semantik). Die Differenz
+        der beiden Wanduhrzeiten ist deshalb null; erst der Wechsel in eine
+        andere Zeitzone (hier UTC) macht die Stunde sichtbar. So speichert die
+        Datenbank die Werte ebenfalls.
+        """
+        summer = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="0")
+        winter = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="1")
+        assert summer.is_valid(), summer.errors
+        assert winter.is_valid(), winter.errors
+        delta = winter.cleaned_data["occurred_at"].astimezone(UTC) - summer.cleaned_data["occurred_at"].astimezone(UTC)
+        assert delta == dt.timedelta(hours=1), delta
+
+    # ---------------------------------------------------------------
+    # Außerhalb des Doppelfensters: die Auswahl ist bedeutungslos
+    # ---------------------------------------------------------------
+
+    def test_choice_on_an_ordinary_day_is_ignored(self, facility, staff_user, doc_type_contact):
+        form = self._form(facility, staff_user, doc_type_contact, "2026-05-16T10:00", fold="1")
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["occurred_at"].utcoffset() == dt.timedelta(hours=2)
+        assert form.cleaned_data["occurred_at_fold"] == ""
+
+    def test_choice_on_the_neighbouring_hour_is_ignored(self, facility, staff_user, doc_type_contact):
+        """01:30 am Rückfalltag ist eindeutig Sommerzeit — die Auswahl darf nichts verschieben."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T01:30", fold="1")
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["occurred_at"].utcoffset() == dt.timedelta(hours=2)
+        assert form.cleaned_data["occurred_at_fold"] == ""
+
+    # ---------------------------------------------------------------
+    # Vorstelltag und Fehlerklassen bleiben unberührt
+    # ---------------------------------------------------------------
+
+    def test_nonexistent_hour_keeps_its_own_message_even_with_a_choice(self, facility, staff_user, doc_type_contact):
+        """Die Lücke ist nicht wählbar — eine Auswahl darf sie nicht auflösen."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-03-29T02:30", fold="1")
+        assert not form.is_valid()
+        codes = [error.code for error in form.errors.as_data()["occurred_at"]]
+        assert codes == ["dst_nonexistent"], codes
+        assert "occurred_at_fold" not in form.errors, form.errors
+
+    def test_unknown_choice_value_is_rejected_once(self, facility, staff_user, doc_type_contact):
+        """Ein manipulierter Wert ergibt genau EINEN Fehler, nicht zwei."""
+        form = self._form(facility, staff_user, doc_type_contact, "2026-10-25T02:30", fold="7")
+        codes, _text = self._fold_errors(form)
+        assert codes == ["invalid_choice"], codes
+        assert "occurred_at" not in form.cleaned_data, form.cleaned_data
+
+    def test_choice_without_a_timestamp_does_not_crash(self, facility, staff_user, doc_type_contact):
+        """Leere Pflichtuhrzeit + Auswahl: nur der Pflichtfeld-Fehler, kein Folgefehler."""
+        form = self._form(facility, staff_user, doc_type_contact, "", fold="1")
+        assert not form.is_valid()
+        assert [error.code for error in form.errors.as_data()["occurred_at"]] == ["required"]
+        assert "occurred_at_fold" not in form.errors, form.errors
+
+    def test_the_field_is_optional_and_offers_exactly_three_values(self, facility, staff_user, doc_type_contact):
+        form = EventMetaForm(facility=facility, user=staff_user)
+        field = form.fields["occurred_at_fold"]
+        assert field.required is False
+        assert [value for value, _label in field.choices] == ["", "0", "1"]
+
+
+@pytest.mark.django_db
+class TestEventCreateTemplateOccurrenceFold:
+    """Das Select steht nur im Grenzfall im DOM (Refs #2127, R-L8-1/R-L8-3).
+
+    Der Sichtbarkeitswechsel passiert serverseitig — kein JavaScript, kein
+    ``hidden``-Attribut, das eine Fachkraft mit Tastatur trotzdem erreicht.
+    Außerhalb des Doppelfensters existiert das Feld im gerenderten Formular
+    schlicht nicht.
+    """
+
+    @staticmethod
+    def _post(client, doc_type_contact, occurred_at, fold=None):
+        payload = {
+            "document_type": str(doc_type_contact.pk),
+            "occurred_at": occurred_at,
+            "client": "",
+        }
+        if fold is not None:
+            payload["occurred_at_fold"] = fold
+        return client.post(reverse("core:event_create"), payload)
+
+    def test_empty_form_does_not_render_the_select(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create"))
+        assert response.status_code == 200
+        assert 'id="id_occurred_at_fold"' not in response.content.decode()
+
+    def test_ambiguous_hour_renders_the_select_with_its_error(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_contact, "2026-10-25T02:30")
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert 'id="id_occurred_at_fold"' in html
+        assert 'id="id_occurred_at_fold-error"' in html
+        assert 'for="id_occurred_at_fold"' in html
+        assert "Sommer- oder Winterzeit" in html
+
+    def test_the_error_list_keeps_its_list_role_inside_the_alert(self, client, staff_user, doc_type_contact):
+        """``role="alert"`` auf dem ``<ul>`` würde dessen Listenrolle entwerten (Refs #2154)."""
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_contact, "2026-10-25T02:30")
+        html = response.content.decode()
+        assert '<div role="alert">' in html
+        assert '<ul id="id_occurred_at_fold-error" role="list"' in html
+
+    def test_the_select_is_described_by_help_and_error(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_contact, "2026-10-25T02:30")
+        html = response.content.decode()
+        assert 'aria-describedby="id_occurred_at_fold-help id_occurred_at_fold-error"' in html
+        assert 'aria-invalid="true"' in html
+        assert 'id="id_occurred_at_fold-help"' in html
+
+    def test_the_select_takes_the_focus_after_the_redisplay(self, client, staff_user, doc_type_contact):
+        """Ohne HTMX greift das globale Fokus-Management nicht — ``autofocus`` schon."""
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_contact, "2026-10-25T02:30")
+        html = response.content.decode()
+        marker = html.index('id="id_occurred_at_fold"')
+        assert "autofocus" in html[marker : marker + 600], html[marker : marker + 600]
+
+    def test_a_made_choice_stays_rendered_when_another_field_fails(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {"document_type": "", "occurred_at": "2026-10-25T02:30", "client": "", "occurred_at_fold": "1"},
+        )
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert 'id="id_occurred_at_fold"' in html
+        assert '<option value="1" selected' in html
+
+    def test_an_ordinary_timestamp_error_does_not_pull_the_select_in(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {"document_type": str(doc_type_contact.pk), "occurred_at": "", "client": ""},
+        )
+        assert response.status_code == 200
+        assert 'id="id_occurred_at_fold"' not in response.content.decode()
+
+    def test_the_saved_event_keeps_the_chosen_hour(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_contact, "2026-10-25T02:30", fold="1")
+        assert response.status_code == 302
+        event = Event.objects.filter(created_by=staff_user).order_by("-created_at").first()
+        assert event is not None
+        assert event.occurred_at.astimezone(UTC) == dt.datetime(2026, 10, 25, 1, 30, tzinfo=UTC)

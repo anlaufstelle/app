@@ -179,6 +179,14 @@ Unter der Datumsnavigation stehen **TimeFilter-Tabs** (z. B. „Frühdienst", �
 
 **Zeitumstellung.** An den beiden Umstellungswochenenden ist eine Uhrzeit nicht eindeutig, und der Schichtfilter legt das ausdrücklich fest. In der Nacht zur Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal; eine Schicht, die in dieser Stunde endet, endet beim **zweiten** Mal — eine Nachtschicht von 20:00 bis 02:45 dauert an diesem Tag also real 7 Stunden 45, und alles, was in der zusätzlichen Stunde dokumentiert wurde, bleibt in Zeitstrom, Übergabe und Strichliste sichtbar. In der Nacht zur Sommerzeit fällt die Stunde von 02:00 bis 03:00 aus; eine Schicht, die dort enden würde, endet stattdessen nach der vereinbarten Dauer ab Schichtbeginn und ist real eine Stunde kürzer. Ganztagsansichten sind davon nicht betroffen — der Umstellungstag im Herbst umfasst weiterhin 25 Stunden, der im Frühjahr 23.
 
+**Die doppelte Stunde erfassen.** Ein Kontakt, der wirklich in dieser doppelten Stunde stattgefunden hat, lässt sich mit seiner echten Uhrzeit dokumentieren — Sie müssen nicht auf 01:59 oder 03:00 ausweichen. Tragen Sie den **Zeitpunkt** beim Anlegen wie gewohnt ein (etwa den 25.10.2026 um 02:30) und speichern Sie. Weil es diese Uhrzeit an diesem Tag zweimal gibt, fragt das Formular einmal nach: direkt unter dem Zeitpunkt erscheint das Auswahlfeld **„Welche der beiden Stunden?"** mit den beiden Möglichkeiten **Sommerzeit — erste Stunde (MESZ)** und **Winterzeit — zweite Stunde (MEZ)**. Wählen Sie die zutreffende Stunde und speichern Sie erneut. Das Auswahlfeld erscheint ausschließlich in diesem Grenzfall; an allen anderen Tagen und zu allen anderen Uhrzeiten sehen Sie es nicht.
+
+Die beiden Stunden sind für die Anwendung wirklich verschiedene Zeitpunkte, die eine Stunde auseinanderliegen: der Kontakt landet in der Schicht, in der er stattfand, und die Reihenfolge im Zeitstrom stimmt. Angezeigt wird anschließend in beiden Fällen dieselbe Wanduhrzeit (02:30) — der Unterschied steckt im gespeicherten Zeitpunkt, nicht in der Anzeige.
+
+**Beim Bearbeiten** eines Kontakts lässt sich der Zeitpunkt grundsätzlich nicht mehr ändern; er steht dort nur zur Ansicht. Die Auswahl treffen Sie also beim Anlegen. Ist ein Eintrag versehentlich in der falschen Stunde gelandet, legen Sie ihn neu an und lassen den falschen Eintrag löschen ([Kontakt löschen](#kontakt-löschen)).
+
+In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar nicht** — dort weist das Formular eine Uhrzeit aus diesem Fenster weiterhin zurück und nennt den Grund. Eine Auswahl gibt es hier nicht: eine Uhrzeit, die es nicht gibt, wird durch keine Angabe real.
+
 Wenn ein Schichtfilter aktiv ist, erscheint oberhalb des Feeds ein aufklappbarer **Schichtübergabe-Block** mit Statistiken (Anzahl Kontakte, neue Aufgaben, neue Personen) und Highlights (Krisen-Ereignisse, neue Hausverbote, dringende Aufgaben).
 
 ### Feed filtern
