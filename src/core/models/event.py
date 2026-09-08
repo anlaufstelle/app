@@ -106,6 +106,29 @@ class Event(DynamicDataEncryptionMixin):
     search_text = models.TextField(default="", blank=True, verbose_name=_("Suchindex"))
     is_anonymous = models.BooleanField(default=False, verbose_name=_("Anonym"))
     is_deleted = models.BooleanField(default=False, verbose_name=_("Gelöscht"))
+    # Refs #2157: Papierkorb-Metadaten in der Form von ``SoftDeletableModel``
+    # (``models/mixins.py``), aber bewusst OHNE Umstellung auf das Mixin: seine
+    # ``soft_delete()``/``restore()``-Methoden schreiben ein volles ``save()``,
+    # waehrend ``soft_delete_event`` mit ``update_fields``-Praezision gegen ein
+    # paralleles Merge arbeitet (``services/events/crud.py``). Ohne die beiden
+    # Felder konnte die Art.-15-Auskunft bei Ereignissen im Papierkorb weder
+    # Loeschzeitpunkt noch Ausloeser ausweisen, obwohl sie beides bei Person und
+    # Fall liefert. Vor 0.96 geloeschte Ereignisse tragen ``NULL`` — es gibt
+    # bewusst keinen Backfill (die loeschende Person ist aus dem Bestand nicht
+    # rekonstruierbar).
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Gelöscht am"),
+    )
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=_("Gelöscht von"),
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Aktualisiert am"))
 

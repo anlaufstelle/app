@@ -1253,6 +1253,66 @@ class TestClientExportDeletedEvents:
         assert entry["document_type"] == "Kontakt"
         assert entry["is_deleted"] is True
 
+    def test_manually_deleted_event_reports_time_and_actor(
+        self, sample_client, facility, sample_event, admin_user, staff_user
+    ):
+        """Refs #2157 — die Auskunft weist bei Ereignissen Zeitpunkt UND Auslöser aus.
+
+        Vorbild ist der Fall-Papierkorb (``TestClientExportTrashedCases``):
+        ``is_deleted`` allein beantwortet nicht, seit wann ein Eintrag im
+        Papierkorb liegt und wer ihn dorthin gelegt hat.
+        """
+        from core.services.events.crud import soft_delete_event
+
+        soft_delete_event(sample_event, staff_user)
+
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["deleted_events"][0]
+        assert entry["is_deleted"] is True
+        assert entry["deleted_at"] is not None
+        assert entry["deleted_by"] == "ce_staff"
+
+    def test_system_deleted_event_reports_no_actor(self, sample_client, facility, doc_type, admin_user):
+        """Refs #2157 — der Aufbewahrungslauf löscht ohne handelnde Person.
+
+        ``deleted_by`` bleibt dort ``None`` (Muster ``EventHistory.changed_by``
+        im selben Pfad); die Auskunft darf daraus keinen Nutzernamen erfinden.
+        Das Setzen selbst ist in ``test_retention.py`` gepinnt.
+        """
+        swept = make_event(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            deleted_at=timezone.now(),
+            deleted_by=None,
+            created_by=admin_user,
+        )
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = next(e for e in data["deleted_events"] if e["occurred_at"] == swept.occurred_at.isoformat())
+        assert entry["deleted_at"] is not None
+        assert entry["deleted_by"] is None
+
+    def test_legacy_trash_entry_reports_unknown_deletion_metadata(
+        self, sample_client, facility, deleted_event, admin_user
+    ):
+        """Refs #2157 — vor 0.96 gelöschte Ereignisse tragen die Felder nicht.
+
+        Es gibt bewusst keinen Backfill (die löschende Person ist aus dem
+        Bestand nicht rekonstruierbar). Die Auskunft muss diesen Bestand
+        trotzdem fehlerfrei ausweisen — mit ``null`` statt einer erfundenen
+        Angabe.
+        """
+        assert deleted_event.deleted_at is None
+        assert deleted_event.deleted_by is None
+
+        data = export_client_data(sample_client, facility, admin_user)
+        entry = data["deleted_events"][0]
+        assert entry["deleted_at"] is None
+        assert entry["deleted_by"] is None
+
     def test_deleted_events_stay_out_of_live_section(
         self, sample_client, facility, deleted_event, sample_event, admin_user
     ):
@@ -2620,6 +2680,19 @@ class TestClientExportCompleteness:
         "k_anonymized",
         "updated_at",
     ]
+    # Refs #2157: Ereignisse tragen dieselben Papierkorb-Metadaten wie Person
+    # und Fall — ``anonymized_at`` hat hier bewusst kein Pendant, weil das
+    # Soft-Delete eines Ereignisses seinen Inhalt sofort leert (keine zweite
+    # Frist bis zur Tilgung).
+    REQUIRED_EVENT_FIELDS = [
+        "document_type",
+        "occurred_at",
+        "is_deleted",
+        "deleted_at",
+        "deleted_by",
+        "created_at",
+        "updated_at",
+    ]
 
     def test_every_category_is_populated(self, fully_populated_client, facility, admin_user):
         data = export_client_data(fully_populated_client, facility, admin_user)
@@ -2630,6 +2703,14 @@ class TestClientExportCompleteness:
         data = export_client_data(fully_populated_client, facility, admin_user)
         missing = [key for key in self.REQUIRED_CLIENT_FIELDS if key not in data["client"]]
         assert missing == [], f"Fehlende Stammdaten-Felder: {missing}"
+
+    def test_event_entries_cover_required_fields(self, fully_populated_client, facility, admin_user):
+        """Refs #2157 — lebende UND gelöschte Ereignisse tragen den vollen Satz."""
+        data = export_client_data(fully_populated_client, facility, admin_user)
+        for section in ("events", "deleted_events"):
+            for entry in data[section]:
+                missing = [key for key in self.REQUIRED_EVENT_FIELDS if key not in entry]
+                assert missing == [], f"Fehlende Ereignis-Felder in {section}: {missing}"
 
     def test_history_entries_carry_contents(self, fully_populated_client, facility, admin_user):
         data = export_client_data(fully_populated_client, facility, admin_user)

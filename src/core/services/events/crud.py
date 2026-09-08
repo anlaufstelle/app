@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, EventHistory, FieldTemplate
@@ -514,6 +515,14 @@ def soft_delete_event(event, user, *, source=None):
 
     bump_ban_revision_for_event_change(event.facility, event.document_type, event.data_json, {})
     event.is_deleted = True
+    # Refs #2157: Zeitpunkt UND Ausloeser des Papierkorb-Eintrags. ``user`` ist
+    # hier immer die Person, die die Loeschentscheidung traegt — beim gepruef-
+    # ten Vier-Augen-Weg der Reviewer (``approve_deletion``), beim Strichlisten-
+    # Undo die zuruecknehmende Person, sonst die loeschende Fachkraft. Der
+    # Systempfad (Aufbewahrungslauf) laeuft hier bewusst vorbei und stempelt
+    # ``deleted_by=None`` (``retention/enforcement.py``).
+    event.deleted_at = timezone.now()
+    event.deleted_by = user
     event.data_json = {}
     delete_attachments_for(event)
     # ``update_fields`` statt eines vollen ``save()``: die Instanz stammt
@@ -523,7 +532,7 @@ def soft_delete_event(event, user, *, source=None):
     # Liste stehen, sonst persistiert Django den vom ``pre_save``-Signal
     # berechneten Leerwert nicht und der Klartext-PII bliebe im Suchindex
     # stehen (Refs #1092) — dieselbe Liste wie im Retention-Loeschpfad.
-    event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
+    event.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "data_json", "search_text", "updated_at"])
     EventHistory.objects.create(
         event=event,
         changed_by=user,

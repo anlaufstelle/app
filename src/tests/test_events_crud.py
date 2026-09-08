@@ -144,6 +144,9 @@ class TestEventService:
         soft_delete_event(event, staff_user)
         event.refresh_from_db()
         assert event.is_deleted is True
+        # Refs #2157: die Einzelloeschung stempelt Zeitpunkt und handelnde Person.
+        assert event.deleted_at is not None
+        assert event.deleted_by == staff_user
         history = EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).first()
         assert history is not None
         assert history.data_before == {"_redacted": True, "fields": ["dauer"]}

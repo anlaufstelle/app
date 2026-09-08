@@ -151,6 +151,10 @@ class TestDocumentTypeRetention:
         # DocumentType-Retention wurde angewendet
         assert event.is_deleted is True
         assert event.data_json == {}
+        # Refs #2157: auch der Typ-Fristenpfad stempelt Zeitpunkt (Ausloeser
+        # bleibt leer — System-Loeschung ohne handelnde Person).
+        assert event.deleted_at is not None
+        assert event.deleted_by is None
 
         # EventHistory-DELETE-Eintrag
         assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).exists()

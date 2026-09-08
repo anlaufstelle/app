@@ -410,6 +410,16 @@ def _serialize_event(event, attachment_index=None):
         "episode": event.episode.title if event.episode else None,
         "is_anonymous": event.is_anonymous,
         "is_deleted": event.is_deleted,
+        # Refs #2157: Zeitpunkt und Ausloeser des Papierkorb-Eintrags — dieselben
+        # Angaben wie bei Person und Fall (``_soft_delete_meta``), nur ohne
+        # ``anonymized_at``: das Soft-Delete eines Ereignisses leert seinen Inhalt
+        # sofort, es gibt keine zweite Frist bis zur Tilgung. Vor 0.96 geloeschte
+        # Ereignisse tragen ``null`` (kein Backfill, Migration 0176) — die Auskunft
+        # weist die Luecke aus, statt einen Wert zu erfinden. Der Nutzername wird
+        # wie bei Fall und Person NICHT redigiert; ``None`` steht fuer die
+        # System-Loeschung durch den Aufbewahrungslauf.
+        "deleted_at": _isoformat(event.deleted_at),
+        "deleted_by": _username(event.deleted_by),
         "created_at": event.created_at.isoformat(),
         "updated_at": event.updated_at.isoformat(),
     }
@@ -438,7 +448,7 @@ def _gather_events(client, user, attachment_index=None, *, is_deleted=False):
     events = (
         Event.objects.visible_to(user)
         .filter(client=client, is_deleted=is_deleted)
-        .select_related("document_type", "created_by", "case", "episode")
+        .select_related("document_type", "created_by", "case", "episode", "deleted_by")
         .order_by("-occurred_at", "pk")
     )
     events_data = []
@@ -588,6 +598,12 @@ def _gather_event_history(event_ids):
             "event": {
                 "document_type": entry.event.document_type.name,
                 "occurred_at": entry.event.occurred_at.isoformat(),
+                # Refs #2157: der Ereignis-Bezug bleibt bewusst schmal — er ordnet
+                # die Aenderung nur zu. Loeschzeitpunkt und -ausloeser stehen im
+                # Ereignis-Abschnitt selbst (``deleted_events``); sie hier zu
+                # wiederholen wuerde den gepinnten Schluesselsatz aufweichen
+                # (``test_mutation_followup_client_export_gathers.py``:
+                # "bleibt aber bewusst schmal").
                 "is_deleted": entry.event.is_deleted,
             },
             "redacted": _entry_is_redacted(entry),

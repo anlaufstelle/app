@@ -13,6 +13,7 @@ from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.utils import timezone
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben. Nach den Submodul-Schnitten
 # in #744/#778 entstehen keine Zirkular-Imports mehr; die fruheren Workarounds
@@ -200,12 +201,21 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
 
             bump_ban_revision_for_event_change(facility, event.document_type, event.data_json, {})
             event.is_deleted = True
+            # Refs #2157: Papierkorb-Metadaten auch im Systempfad. ``deleted_by``
+            # bleibt bewusst ``None`` — der Aufbewahrungslauf hat keine handelnde
+            # Person; dasselbe Muster wie ``EventHistory.changed_by=None`` beim
+            # Nachweis-INSERT weiter unten. ``_username(None)`` liefert im Export ``null``,
+            # ohne Sonderlogik.
+            event.deleted_at = timezone.now()
+            event.deleted_by = None
             event.data_json = {}
             # Refs #1092: ``search_text`` MUSS in ``update_fields`` stehen, sonst
             # persistiert Django den vom ``pre_save``-Signal
             # (``_refresh_event_search_text``) berechneten Leerwert nicht und der
             # Klartext-PII leakt in der search_text-Spalte (DSGVO-Residue).
-            event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
+            event.save(
+                update_fields=["is_deleted", "deleted_at", "deleted_by", "data_json", "search_text", "updated_at"]
+            )
             # EventHistory ist trigger-append-only (Migration 0012) — INSERT in
             # atomic ist konform; genau ein DELETE-Nachweis pro geleertem Event.
             EventHistory.objects.create(

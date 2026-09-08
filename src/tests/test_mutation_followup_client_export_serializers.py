@@ -79,6 +79,11 @@ class TestSerializeEvent:
         "episode",
         "is_anonymous",
         "is_deleted",
+        # Refs #2157: Papierkorb-Metadaten wie bei Person und Fall — der Pin
+        # zieht die neuen Keys nach (Ticket-Auftrag „anpassen, nicht
+        # abschwächen"), der Vergleich bleibt exakt.
+        "deleted_at",
+        "deleted_by",
         "created_at",
         "updated_at",
     }
@@ -93,6 +98,13 @@ class TestSerializeEvent:
         Dateien bleibt aber exakt derselbe: ``attachments`` kommt nur dazu, wenn
         es Anhänge gibt (``Key nur wenn nicht leer``), damit das Bestandsformat
         bitgleich bleibt.
+
+        Anforderung erneut geändert mit #2157: ``deleted_at``/``deleted_by``
+        kommen dazu, damit die Art.-15-Auskunft bei Ereignissen im Papierkorb
+        denselben Löschzeitpunkt und -auslöser ausweist wie bei Fällen und
+        Personen. Der Test heißt weiter ``…_all_ten_keys``, weil sein
+        Bezeichner in Pin-Protokollen früherer Wellen steht; gepinnt ist
+        ``BASE_KEYS``, nicht die Zahl im Namen (heute zwölf).
 
         Der Pin bleibt exakt (``==``, nicht ``<=``): fällt ein Key weg, bricht
         er — kommt ein ungewollter dazu, ebenfalls.

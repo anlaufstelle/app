@@ -59,6 +59,10 @@ class TestTallyUndoService:
         event.refresh_from_db()
         assert first.pk == second.pk == event.pk
         assert event.is_deleted is True
+        # Refs #2157: auch der Undo-Pfad stempelt — Ausloeser ist die Person,
+        # die den Strich zurueckgenommen hat.
+        assert event.deleted_at is not None
+        assert event.deleted_by == staff_user
         delete_audits = AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(event.pk))
         assert delete_audits.count() == 1
         assert delete_audits.get().detail["source"] == "tally_undo"

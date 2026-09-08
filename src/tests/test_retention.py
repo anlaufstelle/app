@@ -155,6 +155,11 @@ def test_anonymous_event_older_than_retention_gets_deleted(anon_event_expired):
     anon_event_expired.refresh_from_db()
     assert anon_event_expired.is_deleted is True
     assert anon_event_expired.data_json == {}
+    # Refs #2157: der Papierkorb-Eintrag traegt Loeschzeitpunkt und Ausloeser.
+    # Der Sweep loescht ohne handelnde Person -> ``deleted_by`` bleibt ``None``
+    # (dasselbe Muster wie ``EventHistory.changed_by=None`` in diesem Pfad).
+    assert anon_event_expired.deleted_at is not None
+    assert anon_event_expired.deleted_by is None
 
 
 @pytest.mark.django_db
@@ -165,6 +170,9 @@ def test_anonymous_event_within_retention_stays(anon_event_recent):
     anon_event_recent.refresh_from_db()
     assert anon_event_recent.is_deleted is False
     assert anon_event_recent.data_json != {}
+    # Refs #2157: kein Papierkorb-Stempel ohne Papierkorb.
+    assert anon_event_recent.deleted_at is None
+    assert anon_event_recent.deleted_by is None
 
 
 @pytest.mark.django_db
@@ -175,6 +183,8 @@ def test_identified_event_expired_gets_deleted(identified_event_expired):
     identified_event_expired.refresh_from_db()
     assert identified_event_expired.is_deleted is True
     assert identified_event_expired.data_json == {}
+    assert identified_event_expired.deleted_at is not None
+    assert identified_event_expired.deleted_by is None
 
 
 @pytest.mark.django_db

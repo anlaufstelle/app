@@ -1,0 +1,200 @@
+"""Guard + Verhalten: Ereignisse tragen Löschzeitpunkt UND Auslöser (Refs #2157).
+
+Die Art.-15-Auskunft weist bei Fällen und Personen „gelöscht am/von" aus, bei
+Ereignissen bisher nicht — ``Event`` trug nur ``is_deleted``. Mit #2157 stehen
+``deleted_at``/``deleted_by`` auch am Ereignis.
+
+Der **Scanner-Guard** hält die Zusage über alle künftigen Schreibpfade: wer
+``is_deleted = True`` setzt, muss im selben Gültigkeitsbereich auch
+``deleted_at`` und ``deleted_by`` setzen — sonst entstünde erneut ein
+Papierkorb-Eintrag ohne Zeitpunkt und ohne Auslöser. Bulk-Pfade
+(``.update(is_deleted=True)``) sind dieselbe Lücke in Massenform und deshalb
+mit erfasst; heute existiert kein solcher Pfad, der Guard hält das fest.
+
+Der Scanner ist über ``root=`` parametrisiert und legt **keine** Proben im
+echten Baum ab (Standardblock 3): die Negativfälle laufen gegen ``tmp_path``.
+"""
+
+import ast
+from pathlib import Path
+
+import pytest
+from django.utils import timezone
+
+from core.models import Event
+from core.services.events.crud import soft_delete_event
+
+CORE_ROOT = Path(__file__).resolve().parents[1] / "core"
+
+#: Felder, die ein Soft-Delete-Schreibpfad zusammen mit ``is_deleted`` setzen muss.
+REQUIRED_COMPANION_FIELDS = ("deleted_at", "deleted_by")
+
+
+def _is_true(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and node.value is True
+
+
+def _attribute_writes(scope: ast.AST) -> tuple[dict[str, int], dict[str, set[str]]]:
+    """(``is_deleted = True``-Stellen, gesetzte Begleitfelder je Basisausdruck).
+
+    Verschachtelte Funktionsdefinitionen bleiben Teil ihres äußeren Scopes —
+    ein Helfer, der den Zeitstempel setzt, zählt damit für den Aufrufer mit.
+    Das ist bewusst großzügig: der Guard soll fehlende Felder finden, nicht
+    Stilfragen entscheiden.
+    """
+    deletions: dict[str, int] = {}
+    companions: dict[str, set[str]] = {}
+    for node in ast.walk(scope):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if not isinstance(target, ast.Attribute):
+                continue
+            base = ast.unparse(target.value)
+            if target.attr == "is_deleted" and _is_true(node.value):
+                deletions.setdefault(base, node.lineno)
+            elif target.attr in REQUIRED_COMPANION_FIELDS:
+                companions.setdefault(base, set()).add(target.attr)
+    return deletions, companions
+
+
+def _scopes(tree: ast.Module):
+    """Modul plus jede Funktions-/Methodendefinition als eigener Gültigkeitsbereich."""
+    yield tree
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            yield node
+
+
+def _bulk_update_violations(tree: ast.Module, rel: str) -> list[str]:
+    """``.update(is_deleted=True, ...)`` ohne ``deleted_at``/``deleted_by``."""
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not isinstance(func, ast.Attribute) or func.attr != "update":
+            continue
+        keywords = {kw.arg for kw in node.keywords if kw.arg}
+        if not any(kw.arg == "is_deleted" and _is_true(kw.value) for kw in node.keywords):
+            continue
+        missing = [field for field in REQUIRED_COMPANION_FIELDS if field not in keywords]
+        if missing:
+            violations.append(f"{rel}:{node.lineno}: .update(is_deleted=True) ohne {', '.join(missing)}")
+    return violations
+
+
+def find_soft_deletes_without_metadata(root: Path) -> list[str]:
+    """Soft-Delete-Schreibpfade unter ``root`` ohne ``deleted_at``/``deleted_by``.
+
+    ``root`` ist injizierbar, damit der Gegenstands-Test gegen ``tmp_path``
+    laufen kann; im Guard selbst ist ``src/core`` die SSOT.
+    """
+    violations: list[str] = []
+    for py_file in sorted(root.rglob("*.py")):
+        rel = py_file.relative_to(root).as_posix()
+        tree = ast.parse(py_file.read_text())
+        seen: set[tuple[str, int]] = set()
+        for scope in _scopes(tree):
+            deletions, companions = _attribute_writes(scope)
+            for base, lineno in deletions.items():
+                missing = [field for field in REQUIRED_COMPANION_FIELDS if field not in companions.get(base, set())]
+                if not missing or (base, lineno) in seen:
+                    continue
+                seen.add((base, lineno))
+                violations.append(f"{rel}:{lineno}: {base}.is_deleted = True ohne {', '.join(missing)}")
+        violations.extend(_bulk_update_violations(tree, rel))
+    return sorted(set(violations))
+
+
+class TestSoftDeleteMetadataGuard:
+    """Refs #2157 — kein Papierkorb-Eintrag ohne Zeitpunkt und Auslöser."""
+
+    def test_core_has_no_soft_delete_without_metadata(self):
+        violations = find_soft_deletes_without_metadata(CORE_ROOT)
+        assert violations == [], (
+            "Soft-Delete-Schreibpfade ohne Papierkorb-Metadaten: "
+            + "; ".join(violations)
+            + ". Die Art.-15-Auskunft weist Loeschzeitpunkt und Ausloeser aus — ein Pfad, der "
+            "nur ``is_deleted`` setzt, hinterlässt einen Eintrag ohne beides."
+        )
+
+    def test_guard_flags_a_write_without_metadata(self, tmp_path):
+        (tmp_path / "probe.py").write_text("def wipe(event):\n    event.is_deleted = True\n    event.save()\n")
+        violations = find_soft_deletes_without_metadata(tmp_path)
+        assert violations == ["probe.py:2: event.is_deleted = True ohne deleted_at, deleted_by"]
+
+    def test_guard_accepts_a_complete_write(self, tmp_path):
+        (tmp_path / "probe.py").write_text(
+            "def wipe(event, user):\n"
+            "    event.is_deleted = True\n"
+            "    event.deleted_at = now()\n"
+            "    event.deleted_by = user\n"
+            "    event.save()\n"
+        )
+        assert find_soft_deletes_without_metadata(tmp_path) == []
+
+    def test_guard_flags_a_partial_write(self, tmp_path):
+        (tmp_path / "probe.py").write_text(
+            "def wipe(event):\n    event.is_deleted = True\n    event.deleted_at = now()\n    event.save()\n"
+        )
+        assert find_soft_deletes_without_metadata(tmp_path) == ["probe.py:2: event.is_deleted = True ohne deleted_by"]
+
+    def test_guard_flags_bulk_updates(self, tmp_path):
+        (tmp_path / "probe.py").write_text("def wipe(qs):\n    qs.update(is_deleted=True)\n")
+        violations = find_soft_deletes_without_metadata(tmp_path)
+        assert violations == ["probe.py:2: .update(is_deleted=True) ohne deleted_at, deleted_by"]
+
+    def test_guard_accepts_complete_bulk_updates(self, tmp_path):
+        (tmp_path / "probe.py").write_text(
+            "def wipe(qs, user):\n    qs.update(is_deleted=True, deleted_at=now(), deleted_by=user)\n"
+        )
+        assert find_soft_deletes_without_metadata(tmp_path) == []
+
+    def test_guard_ignores_restore_and_filters(self, tmp_path):
+        (tmp_path / "probe.py").write_text(
+            "def restore(event):\n"
+            "    event.is_deleted = False\n"
+            "    event.save()\n"
+            "\n"
+            "def read(qs):\n"
+            "    return qs.filter(is_deleted=True)\n"
+        )
+        assert find_soft_deletes_without_metadata(tmp_path) == []
+
+
+@pytest.mark.django_db
+class TestEventSoftDeleteFields:
+    """Refs #2157 — der manuelle Löschpfad stempelt Zeitpunkt und Auslöser.
+
+    Der Retention-Sweep (``deleted_by=None``, System-Löschung) ist in
+    ``test_retention.py`` gepinnt, wo sein Kommando ohnehin läuft.
+    """
+
+    def test_fresh_event_carries_no_deletion_metadata(self, sample_event):
+        assert sample_event.deleted_at is None
+        assert sample_event.deleted_by is None
+
+    def test_soft_delete_event_stamps_time_and_actor(self, sample_event, staff_user):
+        before = timezone.now()
+        soft_delete_event(sample_event, staff_user)
+
+        sample_event.refresh_from_db()
+        assert sample_event.is_deleted is True
+        assert sample_event.deleted_at is not None
+        assert sample_event.deleted_at >= before
+        assert sample_event.deleted_by == staff_user
+
+    def test_metadata_survives_the_update_fields_write(self, sample_event, staff_user):
+        """``soft_delete_event`` schreibt bewusst mit ``update_fields`` (Merge-Race).
+
+        Fehlten die beiden neuen Namen in der Liste, bliebe die Instanz im
+        Speicher korrekt, die Zeile in der Datenbank aber leer — genau die
+        Lücke, die #2157 schließt. Deshalb wird hier frisch aus der Datenbank
+        gelesen statt die mutierte Instanz zu prüfen.
+        """
+        soft_delete_event(sample_event, staff_user)
+
+        stored = Event.objects.get(pk=sample_event.pk)
+        assert stored.deleted_at is not None
+        assert stored.deleted_by_id == staff_user.pk

@@ -149,6 +149,10 @@ class TestApproveDeletion:
         assert pending_request.reviewed_at is not None
         assert event_qualified.is_deleted is True
         assert event_qualified.data_json == {}
+        # Refs #2157: Ausloeser des Papierkorb-Eintrags ist die *pruefende*
+        # Person (sie trifft die Loeschentscheidung), nicht die beantragende.
+        assert event_qualified.deleted_at is not None
+        assert event_qualified.deleted_by == lead_user
 
     def test_creates_event_history_delete(self, pending_request, lead_user, event_qualified):
         approve_deletion(pending_request, lead_user)
