@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 21:58+0200\n"
+"POT-Creation-Date: 2026-09-08 08:31+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12597,3 +12597,58 @@ msgstr "Paket"
 
 msgid "Katalog für die Grundausstattung der neuen Einrichtung."
 msgstr "Katalog für die Grundausstattung der neuen Einrichtung."
+
+msgid "Bilddatei konnte nicht gelesen werden — Upload abgelehnt."
+msgstr "Bilddatei konnte nicht gelesen werden — Upload abgelehnt."
+
+#: src/core/services/file_vault/policy.py:605
+#, python-format
+msgid "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt (davon %(trash)d MB im Papierkorb)."
+msgstr "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt (davon %(trash)d MB im Papierkorb)."
+
+msgid "Speicherkontingent überschritten"
+msgstr "Speicherkontingent überschritten"
+
+msgid "Speicherkontingent (MB)"
+msgstr "Speicherkontingent (MB)"
+
+msgid "Gesamtgröße aller Dateianhänge dieser Einrichtung, inklusive Papierkorb. Leer = kein einrichtungseigenes Kontingent; es gilt dann der vom Betrieb gesetzte Standardwert."
+msgstr "Gesamtgröße aller Dateianhänge dieser Einrichtung, inklusive Papierkorb. Leer = kein einrichtungseigenes Kontingent; es gilt dann der vom Betrieb gesetzte Standardwert."
+
+msgid "Speicher"
+msgstr "Speicher"
+
+#: src/core/services/hubs.py:222
+#, python-format
+msgid "von %(limit)s MB belegt (davon %(trash)s MB im Papierkorb)"
+msgstr "von %(limit)s MB belegt (davon %(trash)s MB im Papierkorb)"
+
+#: src/core/services/hubs.py:221
+#, python-format
+msgid "MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt"
+msgstr "MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt"
+
+#: src/core/services/file_vault/quota.py:137
+#, python-format
+msgid "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+msgstr "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+
+#: src/core/services/file_vault/policy.py:513
+#, python-format
+msgid "Datei-Inhalt ist ein Bild (%(detected)s), die Endung .%(ext)s ist keine Bild-Endung."
+msgstr "Datei-Inhalt ist ein Bild (%(detected)s), die Endung .%(ext)s ist keine Bild-Endung."
+
+#: src/core/services/import_engine.py:252
+#, python-format
+msgid "Die Datei ist keine Textdatei (erkannt: %(kind)s). Bitte exportieren Sie die Daten als CSV."
+msgstr "Die Datei ist keine Textdatei (erkannt: %(kind)s). Bitte exportieren Sie die Daten als CSV."
+
+#: src/templates/core/dashboard/role_lead.html:56
+#, python-format
+msgid "belegt · davon %(trash)s MB im Papierkorb"
+msgstr "belegt · davon %(trash)s MB im Papierkorb"
+
+#: src/templates/core/dashboard/role_lead.html:58
+#, python-format
+msgid "belegt · kein Kontingent gesetzt · davon %(trash)s MB im Papierkorb"
+msgstr "belegt · kein Kontingent gesetzt · davon %(trash)s MB im Papierkorb"

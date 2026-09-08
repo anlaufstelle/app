@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 21:58+0200\n"
+"POT-Creation-Date: 2026-09-08 08:31+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12498,3 +12498,58 @@ msgstr "Package"
 
 msgid "Katalog für die Grundausstattung der neuen Einrichtung."
 msgstr "Catalog used for the new facility's initial setup."
+
+msgid "Bilddatei konnte nicht gelesen werden — Upload abgelehnt."
+msgstr "Image file could not be read -- upload rejected."
+
+#: src/core/services/file_vault/policy.py:605
+#, python-format
+msgid "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt (davon %(trash)d MB im Papierkorb)."
+msgstr "Storage quota of this facility is exhausted: %(used)d of %(limit)d MB used (%(trash)d MB of that in the trash)."
+
+msgid "Speicherkontingent überschritten"
+msgstr "Storage quota exceeded"
+
+msgid "Speicherkontingent (MB)"
+msgstr "Storage quota (MB)"
+
+msgid "Gesamtgröße aller Dateianhänge dieser Einrichtung, inklusive Papierkorb. Leer = kein einrichtungseigenes Kontingent; es gilt dann der vom Betrieb gesetzte Standardwert."
+msgstr "Total size of all file attachments of this facility, trash included. Empty = no facility-specific quota; the operator default applies instead."
+
+msgid "Speicher"
+msgstr "Storage"
+
+#: src/core/services/hubs.py:222
+#, python-format
+msgid "von %(limit)s MB belegt (davon %(trash)s MB im Papierkorb)"
+msgstr "of %(limit)s MB used (%(trash)s MB of that in the trash)"
+
+#: src/core/services/hubs.py:221
+#, python-format
+msgid "MB belegt (davon %(trash)s MB im Papierkorb) · kein Kontingent gesetzt"
+msgstr "MB used (%(trash)s MB of that in the trash) · no quota set"
+
+#: src/core/services/file_vault/quota.py:137
+#, python-format
+msgid "Speicherkontingent zu %(percent)s %% belegt (%(used)s von %(limit)s MB, davon %(trash)s MB im Papierkorb) — Papierkorb leeren oder Kontingent erhoehen."
+msgstr "Storage quota %(percent)s %% used (%(used)s of %(limit)s MB, %(trash)s MB of that in the trash) -- empty the trash or raise the quota."
+
+#: src/core/services/file_vault/policy.py:513
+#, python-format
+msgid "Datei-Inhalt ist ein Bild (%(detected)s), die Endung .%(ext)s ist keine Bild-Endung."
+msgstr "The file content is an image (%(detected)s), but the extension .%(ext)s is not an image extension."
+
+#: src/core/services/import_engine.py:252
+#, python-format
+msgid "Die Datei ist keine Textdatei (erkannt: %(kind)s). Bitte exportieren Sie die Daten als CSV."
+msgstr "The file is not a text file (detected: %(kind)s). Please export the data as CSV."
+
+#: src/templates/core/dashboard/role_lead.html:56
+#, python-format
+msgid "belegt · davon %(trash)s MB im Papierkorb"
+msgstr "used · %(trash)s MB of that in the trash"
+
+#: src/templates/core/dashboard/role_lead.html:58
+#, python-format
+msgid "belegt · kein Kontingent gesetzt · davon %(trash)s MB im Papierkorb"
+msgstr "used · no quota set · %(trash)s MB of that in the trash"
