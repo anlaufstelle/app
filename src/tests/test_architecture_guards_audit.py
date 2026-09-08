@@ -535,6 +535,14 @@ class TestE2ESeedFacilityGuard:
     ``User.objects.get(username="admin").facility``; die übrigen 16 Seeds
     (#2166) an ``Facility.objects.get(name="Hauptstelle")``.
 
+    Fix-Runde 1 Review): der ursprüngliche Scan traf nur unmittelbar
+    unter ``src/tests/e2e/`` liegende ``test_*.py`` — ein neuer Seed in
+    ``conftest.py``, ``_helpers.py`` oder einem künftigen Unterverzeichnis
+    wäre unentdeckt geblieben. Der Scan läuft jetzt rekursiv über ALLE
+    ``*.py``-Dateien unter ``src/tests/e2e/`` (``rglob``, kein Namensfilter).
+    Keine Ausnahmen: aktuell enthält keine Nicht-Test-Datei im Baum das
+    Muster, ein Ausschluss wäre unbegründet.
+
     Gleiche Mechanik wie ``TestE2ESelectorStabilityGuard``, aber mit
     Whitelist-Start bei 0 — der Fix bereinigt ALLE Stellen, keine Restmenge
     ist geduldet.
@@ -557,8 +565,8 @@ class TestE2ESeedFacilityGuard:
             pytest.skip(f"{self._E2E_DIR} nicht vorhanden")
 
         violations: list[str] = []
-        for py_file in sorted(self._E2E_DIR.glob("test_*.py")):
-            name = py_file.name
+        for py_file in sorted(self._E2E_DIR.rglob("*.py")):
+            name = py_file.relative_to(self._E2E_DIR).as_posix()
             count = self._count_in_file(py_file)
             allowed = self._WHITELIST_MAX.get(name, 0)
             if count > allowed:
