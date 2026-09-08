@@ -298,8 +298,8 @@ document_types:
     min_contact_stage: identified
     report_key: contact
     sensitivity: normal
-    icon: map-pin
-    color: green
+    icon: repeat
+    color: teal
     sort_order: 5
     field_refs:
       - {template_slug: von-nach, sort_order: 0}

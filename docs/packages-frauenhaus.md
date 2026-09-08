@@ -27,7 +27,7 @@ Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalog
 | `vermittlung` | Vermittlung | normal | ja | `identified` || `referral` |
 | `notiz` | Notiz | normal | ja ||| `excluded` |
 
-`schutzmassnahme` trägt bewusst **keinen** `system_type`: Die Maßnahme schützt die Person und ist kein Hausverbot gegen sie. Daher speist dieser Typ weder Hausverbots-Banner noch Hausverbots-Übersicht. `gefaehrdungslage` trägt dagegen `system_type: crisis` und erscheint dadurch in den Krisen-Highlights von Zeitstrom und Übergabe.
+`schutzmassnahme` trägt bewusst **keinen** `system_type`: Die Maßnahme schützt die Person und ist kein Hausverbot gegen sie. Daher speist dieser Typ weder Hausverbots-Banner noch Hausverbots-Übersicht. `gefaehrdungslage` trägt dagegen `system_type: crisis` und erscheint dadurch in den Krisen-Highlights von Zeitstrom und Übergabe. Diese Ansichten filtern nach Rollensichtbarkeit: Eine `staff`-Schicht sieht die Gefährdungslage in der Übergabe nicht; wer sie dort lesen soll, braucht mindestens `lead`.
 
 ## Felder
 
@@ -79,10 +79,9 @@ Damit sind Auslöser und Eskalationskanal einer Gefährdungslage trotz unverschl
 ## Berichte
 
 - **Sachbericht:** Alle acht Typen sind über bekannte Berichtsschlüssel zugeordnet. `schutzmassnahme` erscheint in der eigenen Zeile **„Schutz“**; Notizen sind mit `excluded` ausdrücklich ausgenommen.
-- **Beratungsstunden:** Beratungsgespräche liefern über `dauer` (`dauer_minuten`) dokumentierte Minuten in der Kategorie `counseling`.
-- **Krisenarten-Verteilung:** `ausloeser` ist als domänenspezifisches Auswahlfeld an `art_der_krise` gebunden.
+- **Beratungsstunden:** Beratungsgespräche liefern über `dauer` (`dauer_minuten`) dokumentierte Minuten in der Kategorie `counseling`. Wegen ihrer Berichtsschlüssel bezieht der Bericht auch `anfrage`, `wohnungswechsel` und `gefaehrdungslage` ein; da diese Typen kein `dauer`-Feld haben, erscheinen ihre Ereignisse mit 0 Minuten und erzeugen erwartungsgemäß den Vollständigkeitshinweis „Ereignisse ohne Wertangabe“.
+- **Beispiel: Leistungs- und Krisenarten-Verteilung:** Dieser eine Bericht ist im Frauenhaus-Paket über `ausloeser` (`report_key: art_der_krise`) verfügbar und füllt nur den Krisen-Block; ein Leistungs-Block ist mangels `report_key: leistungen` nicht verfügbar. Der publizierte Spaltenwert bleibt bewusst `art-der-krise`, der `summary_key` bleibt `events_art_der_krise` – beide sind vom Feldnamen „Auslöser“ entkoppelt.
 - **Hausverbots-Übersicht:** bewusst **nicht verfügbar**, weil das Paket keinen Typ mit `system_type: ban` enthält.
-- **Leistungs-Bericht:** bewusst **nicht verfügbar**, weil das Paket kein Feld mit `report_key: leistungen` enthält.
 
 Die konfigurierte k-Anonymitäts-Schwelle gilt auch für diese Berichte; kleine Fallzahlen werden unterdrückt.
 

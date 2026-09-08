@@ -366,12 +366,10 @@ def test_type_visibility_matrix_matches_roles(facility, staff_user, assistant_us
     request_client = RequestClient()
     for role, user in users.items():
         request_client.force_login(user)
-        visible = {
-            slug
-            for slug, event in events.items()
-            if request_client.get(reverse("core:event_detail", kwargs={"pk": event.pk})).status_code == 200
-        }
-        assert visible == ROLE_VISIBLE_TYPES[role]
+        for slug, event in events.items():
+            response = request_client.get(reverse("core:event_detail", kwargs={"pk": event.pk}))
+            expected_status = 200 if slug in ROLE_VISIBLE_TYPES[role] else 404
+            assert response.status_code == expected_status
 
 
 def test_field_visibility_matrix_includes_effective_type_sensitivity(
