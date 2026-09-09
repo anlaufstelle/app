@@ -19,9 +19,11 @@ redis>=6.0
 # 49.0.0 war mit #1129 verifiziert, der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
 cryptography>=50.0.0,<51
 python-dotenv>=1.0
-# Obergrenze <70, damit ein Major-Bump (Dependabot) den PDF-Export nicht
+# Obergrenze <71, damit ein Major-Bump (Dependabot) den PDF-Export nicht
 # ueberraschend bricht — insb. den SSRF-url_fetcher (Refs #1610, #1596).
-weasyprint>=69.0,<70
+# 70.0 bewusst gezogen: CVE-2026-55073 (write_pdf() ignorierte den
+# uebergebenen url_fetcher in zwei Kanaelen), SSRF-/Export-Tests gegen 70.0 gruen.
+weasyprint>=70.0,<71
 django-unfold>=0.103.0
 django-csp>=4.0
 sentry-sdk[django]>=2.66.0
@@ -40,3 +42,6 @@ pyyaml>=6.0
 urllib3>=2.7.0
 # Pin transitiver dep wegen PYSEC-2026-2253 bis PYSEC-2026-2257 (weasyprint zieht es ein).
 pillow>=12.3.0
+# Pin transitiver dep: WeasyPrint 70 nutzt CSS-Notes-Pseudoelemente (::note-call) in seinem
+# UA-Stylesheet; cssselect2 < 0.10 kennt sie nicht und loggt bei jedem PDF drei Warnungen.
+cssselect2>=0.10.1
