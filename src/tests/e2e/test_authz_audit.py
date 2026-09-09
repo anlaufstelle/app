@@ -93,7 +93,8 @@ def medium_seed(request, base_url):
             "src/tests/e2e/test_authz_audit.py -m authz_audit -v"
         )
 
-    python = str(helpers.REPO_ROOT / ".venv" / "bin" / "python")
+    venv_python = helpers.REPO_ROOT / ".venv" / "bin" / "python"
+    python = str(venv_python) if venv_python.exists() else sys.executable
     if not os.path.exists(python):
         python = sys.executable
     env = {

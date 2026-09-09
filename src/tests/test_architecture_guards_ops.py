@@ -2935,3 +2935,40 @@ class TestAuditHwmBackupAndDrillWiring:
         assert "HighWaterMarkStore.load" in body
         assert "Audit-HWM-Signaturpruefung fehlgeschlagen" in body
         assert body.index("HighWaterMarkStore.load") < body.index("mark_restore_verified")
+
+
+class TestNoHardcodedVenvInterpreterInTests:
+    """Tests duerfen keinen festen ``.venv``-Interpreterpfad voraussetzen (Refs #2022).
+
+    Stage-CI v0.96.0 (Test #133) lief rot, weil ``test_ops_backup_hwm.py`` den
+    Docker-Shim mit ``REPO_ROOT / ".venv" / "bin" / "python"`` startete — lokal
+    existiert das venv, auf dem GitHub-Runner nicht, und der Restore-Drill
+    meldete den fehlenden Interpreter als Signaturfehler. Konvention (E2E-conftest):
+    ``.venv/bin/python`` nur mit ``exists()``-Pruefung und ``sys.executable``-Fallback.
+    """
+
+    # Nur Pfad-KONSTRUKTION zaehlt (Path-Komposition oder String-Literal als Interpreter),
+    # keine Doku-/Hilfetexte mit Beispielbefehlen.
+    _VENV_RE = re.compile(r"[\"']\.venv[\"']\s*/\s*[\"']bin[\"']|[\"']\.venv/bin/python[\"']\s*\)")
+
+    def test_every_venv_reference_has_a_sys_executable_fallback(self):
+        tests_dir = Path(__file__).resolve().parent
+        befunde: list[str] = []
+        for path in sorted(tests_dir.rglob("*.py")):
+            if path.name == Path(__file__).name:
+                continue
+            text = path.read_text(encoding="utf-8")
+            lines = text.splitlines()
+            for lineno, line in enumerate(lines, start=1):
+                stripped = line.strip()
+                if stripped.startswith("#") or not self._VENV_RE.search(line):
+                    continue
+                # Fallback in derselben Zeile ODER (Variable + Fallback in den naechsten zwei Zeilen).
+                fenster = "\n".join(lines[lineno - 1 : lineno + 2])
+                if "sys.executable" in fenster or "exists(" in fenster:
+                    continue
+                befunde.append(f"{path.relative_to(tests_dir)}:{lineno}: {stripped[:100]}")
+        assert not befunde, (
+            "Fester .venv-Interpreterpfad ohne sys.executable-Fallback — bricht auf Runnern ohne venv:\n"
+            + "\n".join(befunde)
+        )
