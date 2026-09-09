@@ -476,9 +476,36 @@ def test_seed_large_missing_package_creates_no_new_facility(monkeypatch):
     assert Event.objects.count() == events_before, "Bei fehlendem Paket darf --flush den Bestand nicht geloescht haben."
 
 
+@pytest.fixture
+def _large_profile_verkleinert(monkeypatch):
+    """Paket-/Katalog-Logik des ``large``-Profils mit kleinem Volumen pruefen.
+
+    Die Large-Tests sichern Fail-loud, Paketzuordnung und Options-Slugs je
+    Einrichtung — nicht die Menge. Mit 5 x 10 000 Ereignissen brauchte der
+    Block lokal ~150 s und auf dem 2-vCPU-Stage-Runner ueber 15 min (Stage-CI
+    v0.96.0 #134 blieb bei 95 % stehen). Das verkleinerte Profil behaelt die
+    fuenf Einrichtungen und alle Paketpfade bei.
+    """
+    from core.seed.scale import SCALE_CONFIG
+
+    klein = dict(SCALE_CONFIG["large"])
+    klein.update(
+        {
+            "users_per_facility": min(klein.get("users_per_facility", 6), 6),
+            "clients_per_facility": min(klein.get("clients_per_facility", 50), 50),
+            "events_per_facility": min(klein.get("events_per_facility", 1000), 1000),
+            "cases": min(klein.get("cases", 5), 5),
+            "work_items": min(klein.get("work_items", 5), 5),
+            "retention_proposals": min(klein.get("retention_proposals", 4), 4),
+        }
+    )
+    monkeypatch.setitem(SCALE_CONFIG, "large", klein)
+    return klein
+
+
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_large_succeeds_once_all_packages_are_available():
+def test_seed_large_succeeds_once_all_packages_are_available(_large_profile_verkleinert):
     """Gegenprobe zu oben: sobald alle Pakete vorliegen, entsteht jede der
     fuenf Einrichtungen ganz normal (self-aktivierend nach dem L4-Merge)."""
     from core.packages.catalog import list_packages
@@ -528,7 +555,9 @@ def _seed_one_package_facility(org, facility_name: str, package_name: str, idx: 
         (4, "Außenstelle West", "frauenhaus"),
     ],
 )
-def test_seed_large_facility_matches_its_package_catalog_exactly(idx, facility_name, package_name):
+def test_seed_large_facility_matches_its_package_catalog_exactly(
+    _large_profile_verkleinert, idx, facility_name, package_name
+):
     """R-L5c-2-Pflicht-Guard (Fix-Runde 1 HOCH B): jede Facility traegt GENAU
     die Typ-Slugs ihres Pakets (keine Default-/Fremdtypen), jeder Typ bekommt
     mindestens ein Ereignis, und JEDER select-/multi_select-Wert in den
