@@ -8,6 +8,7 @@ import hmac
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OPS_DIR = REPO_ROOT / "scripts" / "ops"
 BACKUP_SCRIPT = OPS_DIR / "backup.sh"
 RESTORE_DRILL = OPS_DIR / "restore-drill.sh"
-PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+# Interpreter fuer den Docker-Shim: lokal das venv, auf CI-Runnern (ohne .venv)
+# der laufende Interpreter — sonst meldet der Drill Schritt 2b faelschlich als
+# Signaturfehler (Stage-CI v0.96.0, Test #133).
+_VENV_PYTHON = REPO_ROOT / ".venv" / "bin" / "python"
+PYTHON = _VENV_PYTHON if _VENV_PYTHON.exists() else Path(sys.executable)
 
 BACKUP_KEY = "not-a-placeholder-0123456789abcdef"
 AUDIT_KEY = "audit-hwm-test-key-with-enough-entropy"
