@@ -78,6 +78,11 @@ jobs:
           node-version: "24"
           cache: npm
       - run: pip install -r requirements-dev.txt
+      # libharfbuzz-subset0: WeasyPrint >= 70 warnt beim Import ohne HarfBuzz-Subset
+      # (DeprecationWarning), unter ``filterwarnings = error`` stirbt damit
+      # django.setup() beim pytest-Start (Stage-CI #137, v0.96.0). Zeile analog
+      # test.yml; ``playwright install --with-deps`` bringt das Paket nicht mit.
+      - run: sudo apt-get update && sudo apt-get install -y libharfbuzz-subset0
       - run: npm ci
       - run: npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
       - run: cd src && python manage.py collectstatic --noinput

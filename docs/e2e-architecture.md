@@ -297,5 +297,5 @@ Schritt-für-Schritt-Bedienung + Debugging: siehe [e2e-runbook.md](e2e-runbook.m
 
 ### WeasyPrint-Fehler in CI
 
-- **Ursache:** Fehlende System-Dependencies (Pango, Cairo, GDK-Pixbuf)
-- **Fix:** In CI-Pipeline installieren: `apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0`
+- **Ursache:** Fehlende System-Dependencies (Pango, Cairo, GDK-Pixbuf; seit WeasyPrint 70 auch HarfBuzz-Subset — ohne `libharfbuzz-subset0` warnt der Import, und unter `filterwarnings = error` stirbt damit `django.setup()` beim pytest-Start)
+- **Fix:** In CI-Pipeline installieren: `apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libharfbuzz-subset0` (test.yml und e2e.yml tun das; das Dockerfile installiert das Paket ebenfalls)

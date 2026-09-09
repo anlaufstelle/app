@@ -36,8 +36,10 @@ RUN npm ci && npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css
 FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS final
 
 # WeasyPrint + libmagic (file-upload magic-bytes validation, Refs #610) system dependencies
+# libharfbuzz-subset0: von WeasyPrint >= 70 beim Import geladen (Font-Subsetting);
+# ohne das Paket DeprecationWarning, kuenftige Versionen setzen es voraus.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
+    libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
     libcairo2 libgdk-pixbuf-2.0-0 libffi-dev \
     libglib2.0-0 shared-mime-info \
     fontconfig fonts-dejavu-core \

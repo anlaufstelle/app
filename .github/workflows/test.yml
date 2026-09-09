@@ -51,7 +51,12 @@ jobs:
       # Paket ueberspringen sich die Tests still (``shutil.which``-Guard), das
       # Gate waere hier also stumm statt gruen. Zeile analog lint.yml
       # (``translations-coverage``).
-      - run: sudo apt-get update && sudo apt-get install -y gettext
+      # libharfbuzz-subset0: WeasyPrint >= 70 laedt HarfBuzz-Subset beim Import und
+      # warnt (DeprecationWarning) ohne die Bibliothek — unter ``filterwarnings =
+      # error`` stirbt damit django.setup() (Stage-CI #137, v0.96.0). Das
+      # Runner-Image bringt das Paket nicht mit; kuenftige WeasyPrint-Versionen
+      # setzen es voraus. Gleiche Zeile in e2e.yml, Paket auch im Dockerfile.
+      - run: sudo apt-get update && sudo apt-get install -y gettext libharfbuzz-subset0
       # ``styles.css`` ist ein gitignoriertes Tailwind-Build-Artefakt (v4, #1480):
       # der Prod-Dockerfile baut es, die PWA-/APP_SHELL-Guards und der
       # collectstatic-Test brauchen es ebenfalls. Schritt analog zu e2e.yml.
