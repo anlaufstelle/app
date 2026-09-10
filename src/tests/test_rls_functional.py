@@ -17,6 +17,7 @@ ist bewusst ohne RLS modelliert (Aggregat-Lese, keine Pseudonyme) —
 out of scope fuer diesen Test.
 """
 
+import logging
 import os
 from contextlib import contextmanager
 
@@ -27,7 +28,12 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, FieldCondition, FieldGroup
 from core.models.document_type_field import DocumentTypeField
+from core.models.event_history import EventHistory
 from core.models.field_template import FieldTemplate
+from core.services.client import anonymize_client_now
+from core.services.events import create_event
+from core.services.events.history_diff import build_anonymization_marker
+from core.services.system import current_connection_owns
 from tests.conftest import xdist_role_suffix
 
 # Unter mutmut überspringen (Refs #1388/#930). Die ``rls_test_role``-Fixture ist
@@ -563,3 +569,179 @@ class TestAttachmentRLSIsolation:
             cur.execute("SELECT count(*) FROM core_attachment WHERE storage_filename = %s", [marker])
             count = cur.fetchone()[0]
         assert count == 1, "INSERT mit eigener facility_id muss unter der direkten Policy gelingen."
+
+
+# ===========================================================================
+# Refs #2159 (ADR-050 M-8): Deferral-Zweig der Ereignishistorie-Redaktion
+# ===========================================================================
+
+DEFERRAL_LOGGER = "core.services.client.main"
+#: Praefix der Ops-Zeile. Gefiltert wird auf ihn, weil derselbe Logger in
+#: derselben Kaskade auch ``client_anonymized`` schreibt — der Vertrag ist
+#: die Deferral-Zeile, nicht „dieser Logger schweigt sonst".
+DEFERRAL_PREFIX = "eventhistory_redaction_deferred"
+
+
+def _deferral_messages(caplog):
+    """Alle fertig formatierten Deferral-Meldungen des Laufs."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == DEFERRAL_LOGGER and DEFERRAL_PREFIX in record.getMessage()
+    ]
+
+
+@pytest.fixture
+def art17_person_with_history(facility, admin_user, staff_user, doc_type_contact):
+    """Person im Papierkorb MIT Ereignis UND Historienzeile.
+
+    Die Historienzeile ist die Vorbedingung, an der alles haengt:
+    ``_redact_event_history`` steigt bei ``history_qs.exists()`` aus — ohne sie
+    erreicht der Lauf den Owner-DDL-Zweig nie und der Test waere Scheingruen.
+    """
+
+    def _make(pseudonym):
+        person = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym=pseudonym,
+            created_by=staff_user,
+        )
+        create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5, "notiz": "Klartext-Notiz"},
+            client=person,
+        )
+        assert EventHistory.objects.filter(event__client=person).exists(), (
+            "Vorbedingung verletzt: ohne EventHistory-Zeile erreicht der Lauf den Deferral-Zweig nie"
+        )
+        person.soft_delete(user=admin_user)
+        return person
+
+    return _make
+
+
+@contextmanager
+def _reset_facility_guc():
+    """Setzt ``app.current_facility_id`` nach dem Block zurueck.
+
+    ``as_rls_role`` setzt die GUC session-weit (``is_local=false``) und raeumt
+    im ``finally`` nur die Rolle weg. Fuer die Owner-Gegenprobe im selben
+    Prozess darf kein Facility-Rest aus dem vorherigen Test stehenbleiben.
+    """
+    try:
+        yield
+    finally:
+        with connection.cursor() as cur:
+            cur.execute("RESET ROLE")
+            cur.execute("SELECT set_config('app.current_facility_id', '', false)")
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestEventHistoryRedactionDeferralUnderAppRole:
+    """Der Aufschub der Historien-Redaktion, belegt unter der ECHTEN App-Rolle.
+
+    ADR-050 M-8: ``_redact_event_history`` braucht fuer den Trigger-Bypass
+    Owner-DDL (``ALTER TABLE ... DISABLE TRIGGER``). Der Webprozess laeuft unter
+    einer Rolle ohne Tabellen-Eigentum (ADR-033), nimmt den Bypass deshalb
+    nicht und **meldet** den uebersprungenen Schritt als Ops-Zeile
+    ``eventhistory_redaction_deferred rows=… reason=connection_is_not_table_owner``;
+    der owner-seitige Nachlauf holt die Redaktion.
+
+    Diese Ops-Zeile ist der einzige Beleg, dass etwas aufgeschoben wurde —
+    gepinnt war sie bisher nur ueber einen ``monkeypatch``-Stub des Praedikats
+    ``current_connection_owns`` (``test_mutation_pins_094_main_1.py``), weil die
+    Testverbindung stets Tabelleneigentuemerin ist. Hier laeuft derselbe Pfad
+    unter ``rls_test_role``: ``NOSUPERUSER``, ``NOBYPASSRLS`` (Default), nur
+    DML-Grants, **kein** Ownership — der Zweig wird also von der Datenbank
+    ausgewaehlt, nicht von einem Test-Stub.
+
+    ``transaction=True`` wie in der Cross-Tenant-Klasse: ``SET ROLE`` und
+    Statement-Cache vertragen sich nicht mit der Savepoint-Strategie.
+    """
+
+    def test_app_role_does_not_own_the_history_table(self, rls_test_role, facility_a_with_data):
+        """Vorbedingung, ohne die die beiden folgenden Tests nichts belegen:
+        unter ``SET ROLE`` beantwortet PostgreSQL selbst die Eigentumsfrage mit
+        Nein — ``pg_has_role(current_user, relowner, 'USAGE')`` ist genau die
+        Bedingung, die der Server auch fuer Owner-DDL stellt."""
+        with _reset_facility_guc(), as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            cur.execute("SELECT current_user")
+            (role_in_session,) = cur.fetchone()
+            cur.execute(
+                "SELECT pg_catalog.pg_has_role(current_user, c.relowner, 'USAGE') "
+                "FROM pg_catalog.pg_class c WHERE c.oid = 'core_eventhistory'::regclass"
+            )
+            (has_owner_role,) = cur.fetchone()
+            predicate = current_connection_owns("core_eventhistory")
+
+        assert role_in_session == rls_test_role
+        assert has_owner_role is False, (
+            "Die Testrolle ist Mitglied der Owner-Rolle — dann waere der "
+            "Deferral-Zweig unter ihr gar nicht erreichbar und der Nachweis wertlos."
+        )
+        assert predicate is False
+
+    def test_immediate_art17_path_defers_and_logs_the_row_count(
+        self, rls_test_role, facility, admin_user, art17_person_with_history, caplog
+    ):
+        """Der oeffentliche Sofortpfad unter der App-Rolle: Person sofort
+        anonymisiert, Historie unangetastet, Aufschub als Ops-Zeile gemeldet.
+
+        Geprueft wird die fertig formatierte Meldung — Text UND eingesetzte
+        Zeilenzahl —, und die Zahl gegen den tatsaechlichen Bestand.
+        """
+        person = art17_person_with_history("Art17-RLS-Deferral")
+        event_ids = list(Event.objects.filter(client=person).values_list("id", flat=True))
+        assert event_ids
+
+        with caplog.at_level(logging.INFO, logger=DEFERRAL_LOGGER):
+            with _reset_facility_guc(), as_rls_role(rls_test_role, facility_id=facility.pk):
+                anonymize_client_now(person, admin_user)
+
+        rows = EventHistory.objects.filter(event_id__in=event_ids)
+        row_count = rows.count()
+        assert row_count >= 1
+
+        assert _deferral_messages(caplog) == [
+            f"eventhistory_redaction_deferred rows={row_count} reason=connection_is_not_table_owner"
+        ]
+
+        # Die Person ist sofort getilgt — nur die frueheren Fassungen stehen aus.
+        person.refresh_from_db()
+        assert person.anonymized_at is not None
+        assert person.pseudonym.startswith("Gelöscht-")
+        for row in rows:
+            assert row.redacted_at is None
+            assert row.data_after != build_anonymization_marker()
+
+    def test_owner_connection_redacts_without_a_deferral_line(
+        self, facility, admin_user, art17_person_with_history, caplog
+    ):
+        """Gegenprobe: dieselbe Funktion, dieselben Daten — nur ohne
+        ``SET ROLE``. Die Verbindung ist Eigentuemerin, der Bypass greift, die
+        Historie ist sofort redigiert und es wird **nichts** aufgeschoben.
+
+        Ohne diese Haelfte belegte der Test oben nur, dass irgendetwas nicht
+        passiert ist.
+        """
+        person = art17_person_with_history("Art17-RLS-Owner")
+        event_ids = list(Event.objects.filter(client=person).values_list("id", flat=True))
+
+        with caplog.at_level(logging.INFO, logger=DEFERRAL_LOGGER):
+            with _reset_facility_guc():
+                assert current_connection_owns("core_eventhistory") is True
+                anonymize_client_now(person, admin_user)
+
+        assert _deferral_messages(caplog) == []
+
+        rows = list(EventHistory.objects.filter(event_id__in=event_ids))
+        assert rows
+        marker = build_anonymization_marker()
+        for row in rows:
+            assert row.data_before == marker
+            assert row.data_after == marker

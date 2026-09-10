@@ -350,6 +350,18 @@ class TestEventHistoryDeferralIsLoggedVerbatim:
     aufgeschoben wurde und wie viele Zeilen betroffen sind — ohne sie ist der
     Aufschub unsichtbar. Verglichen wird die fertig formatierte Meldung, damit
     Text UND eingesetzte Zeilenzahl gepinnt sind.
+
+    Refs #2159: Denselben Zweig belegt inzwischen ein echter Integrationstest
+    OHNE Stub —
+    ``test_rls_functional.py::TestEventHistoryRedactionDeferralUnderAppRole``
+    faehrt den Art.-17-Sofortpfad unter ``rls_test_role`` (``NOSUPERUSER``,
+    ``NOBYPASSRLS``, kein Tabellen-Eigentum), sodass PostgreSQL selbst den
+    Deferral-Zweig auswaehlt, und prueft dieselbe Ops-Zeile samt Zeilenzahl.
+    Der Stub hier bleibt trotzdem stehen: ``test_rls_functional.py`` wird unter
+    ``MUTANT_UNDER_TEST`` komplett uebersprungen (DatabaseBlocker-Leak, Refs
+    #1388, siehe Modul-Header dort) — mutmut sieht also nur diesen Pin. Erst
+    wenn der Integrationstest im Mutations-Lauf mitlaeuft, waere der Stub
+    entbehrlich.
     """
 
     def test_the_deferral_line_carries_text_and_row_count(
