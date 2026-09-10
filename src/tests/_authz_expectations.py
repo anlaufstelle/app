@@ -172,6 +172,8 @@ EXPECTATIONS = (
     # Akteure inkl. anonym — der Übergabe-Inhalt selbst ist über
     # ZeitstromView (ASSISTANT_PLUS) gegated.
     E("core:handover", "public", get=ALL_AUTH, anonymous_ok=True),
+    # Refs #2042: Schichtnotiz — POST-only, StaffRequiredMixin (Fachkraft, Leitung, Anwendungsbetreuung).
+    E("core:handover_note", "facility-write", post=STAFF_PLUS),
     E("core:client_list", "facility-read", get=ASSISTANT_PLUS),
     E(
         "core:client_detail",
