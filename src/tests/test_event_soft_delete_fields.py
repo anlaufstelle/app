@@ -251,6 +251,66 @@ class TestCaseHoldBlocksTheManualDeletePath:
         assert path.exists(), "der Anhang darf physisch nicht verschwinden"
         assert not AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(case_event.pk)).exists()
 
+    def test_a_case_assigned_after_the_instance_was_read_still_blocks(
+        self, facility, case_open, case_event, staff_user, admin_user
+    ):
+        """Cross-Review Runde 1, Befund 1: der Guard darf die Fallzuordnung nicht
+        aus der übergebenen Instanz nehmen.
+
+        ``_lock_event_row`` sperrte nur, ohne die Zeile zu lesen, und
+        ``_assert_current_client_binding`` revalidierte allein den
+        Personenbezug. Ein Ereignis, das zwischen dem Laden der Instanz und dem
+        Löschen einem gehaltenen Fall **derselben Person** zugeordnet wurde,
+        passierte damit beide Prüfungen — über den regulären Service
+        ``assign_event_to_case``, ohne Bypass. Der Löschvorgang leerte die
+        Nutzdaten und entfernte die Anhänge physisch; in der Datenbank blieb
+        das geleerte Ereignis sogar am gehaltenen Fall hängen, weil
+        ``update_fields`` die Zuordnung nicht zurückschreibt.
+        """
+        from core.services.case.cases import assign_event_to_case, remove_event_from_case
+
+        remove_event_from_case(Event.objects.get(pk=case_event.pk), staff_user)
+        case_event.refresh_from_db()
+        assert case_event.case_id is None, "Vorbedingung: die gelesene Instanz kennt keinen Fall"
+        # Ab hier ist ``case_event`` bewusst veraltet: in der Datenbank hängt das
+        # Ereignis wieder am Fall, im Speicher nicht.
+        assign_event_to_case(case_open, Event.objects.get(pk=case_event.pk), staff_user)
+        attachment = _make_attachment(facility, case_event, staff_user, ft_name="Anhang (Stale-Fall)")
+        path = get_attachment_path(attachment)
+        self._hold_on(facility, admin_user, "Case", case_open.pk)
+
+        with pytest.raises(ValidationError) as exc_info:
+            soft_delete_event(case_event, staff_user)
+
+        assert exc_info.value.messages == [str(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)]
+        stored = Event.objects.get(pk=case_event.pk)
+        assert stored.is_deleted is False
+        assert stored.data_json == {"dauer": 15, "notiz": "Testnotiz"}
+        assert stored.case_id == case_open.pk
+        assert Attachment.objects.filter(pk=attachment.pk).exists()
+        assert path.exists()
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(case_event.pk)).exists()
+
+    def test_a_case_assigned_after_the_instance_was_read_does_not_block_without_a_hold(
+        self, facility, case_open, case_closed, case_event, staff_user, admin_user
+    ):
+        """Gegenprobe zum Vorigen: die Lesung unter der Sperre darf nur den Hold
+        durchsetzen, nicht jede zwischenzeitliche Umhängung abweisen — anders
+        als beim Personenbezug, dessen Wechsel den Vorgang bewusst abbricht
+        (dort war die falsche Personenzeile gesperrt)."""
+        from core.services.case.cases import assign_event_to_case, remove_event_from_case
+
+        remove_event_from_case(Event.objects.get(pk=case_event.pk), staff_user)
+        case_event.refresh_from_db()
+        assign_event_to_case(case_closed, Event.objects.get(pk=case_event.pk), staff_user)
+        self._hold_on(facility, admin_user, "Case", case_open.pk)
+
+        soft_delete_event(case_event, staff_user)
+
+        stored = Event.objects.get(pk=case_event.pk)
+        assert stored.is_deleted is True
+        assert stored.case_id == case_closed.pk
+
     def test_hold_on_another_case_leaves_the_delete_path_open(
         self, facility, case_open, case_closed, case_event, staff_user, admin_user
     ):

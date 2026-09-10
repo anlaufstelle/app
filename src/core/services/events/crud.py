@@ -434,7 +434,8 @@ CLIENT_BINDING_CHANGED_MESSAGE = _(
 
 
 def _assert_current_client_binding(event):
-    """Revalidiert den Event->Client-Bezug NACH der Ereignissperre.
+    """Revalidiert den Event->Client-Bezug NACH der Ereignissperre — und liefert
+    die unter der Sperre gelesene Bindung ``(client_id, case_id)`` zurueck.
 
     Der Aufrufer haelt das Ereignis womoeglich seit Minuten im Speicher (der
     gepruefte Vier-Augen-Weg laedt es ungesperrt), und die Client-Sperre oben
@@ -449,13 +450,29 @@ def _assert_current_client_binding(event):
     ABBA-Zyklus, den ADR-050 D5.5 ausschliesst. Der Vorgang bricht deshalb
     sauber ab und ist wiederholbar; beim naechsten Versuch liest der Aufrufer
     den neuen Bezug und sperrt in der richtigen Reihenfolge.
+
+    Die **Fall**-Zuordnung kommt aus derselben Lesung (Refs #2197,
+    Cross-Review-Runde 1): sie wird nicht revalidiert, sondern schlicht
+    zurueckgegeben — der Hold-Check braucht den Stand der gesperrten Zeile,
+    nicht den der Instanz. Anders als beim Personenbezug ist ein Wechsel hier
+    **kein** Abbruchgrund: der Fall haengt an derselben Person, deren Zeile
+    bereits gesperrt ist, und genau diese Zeile nimmt auch die Fall-Hold-Anlage
+    als erste Stufe (``legal_holds._lock_case_and_check_history``). Es fehlt
+    also keine Sperre — nur der aktuelle Wert. EINE Lesung statt zweier: der
+    Personenbezug muss ohnehin frisch geprueft werden.
+
+    Ist die Zeile verschwunden (theoretisch — Ereignisse werden nie hart
+    geloescht), verhaelt sich die Pruefung wie bisher: ``client_id`` gilt als
+    ``None`` und ein gesetzter Bezug bricht ab.
     """
-    current_client_id = Event.objects.filter(pk=event.pk).values_list("client_id", flat=True).first()
+    binding = Event.objects.filter(pk=event.pk).values_list("client_id", "case_id").first()
+    current_client_id = binding[0] if binding is not None else None
     if current_client_id != event.client_id:
         raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
+    return binding if binding is not None else (None, None)
 
 
-def _assert_no_active_hold(event):
+def _assert_no_active_hold(event, *, client_id, case_id):
     """M-9 (ADR-050 D2): Der manuelle Loeschpfad prueft den Hold — bisher gar nicht.
 
     ``soft_delete_event`` leerte Payload und Anhaenge unmittelbar; **nur** die
@@ -484,14 +501,28 @@ def _assert_no_active_hold(event):
     ODER-Verkettung: sie lesen drei verschiedene Ziel-Typen, und jede von
     ihnen faellt fuer sich aus (ein falloses oder personenloses Ereignis
     ueberspringt ihre Zeile).
+
+    ``client_id`` und ``case_id`` sind **Pflichtargumente** und kommen aus der
+    unter der Sperre gelesenen Zeile (``_assert_current_client_binding``), nicht
+    aus ``event`` (Cross-Review-Runde 1, Befund 1). Die uebergebene Instanz
+    stammt womoeglich aus einem aelteren Lesevorgang: wurde das Ereignis
+    inzwischen einem gehaltenen Fall DERSELBEN Person zugeordnet
+    (``services/case/cases.py::assign_event_to_case`` — regulaerer Service, kein
+    Bypass), traegt sie noch die alte, fallslose Zuordnung. Der Guard haette den
+    Fall-Hold nie gesehen und die Nutzdaten samt Anhaengen unwiederbringlich
+    geleert — waehrend ``update_fields`` die Fallzuordnung nicht einmal
+    zurueckschreibt, das geleerte Ereignis also am gehaltenen Fall haengen
+    bliebe. Ein Pflichtargument statt eines Defaults, damit ein kuenftiger
+    Aufrufer die Lesung nicht stillschweigend ueberspringen kann. Dieselbe
+    Disziplin haelt der Sweep seit Refs #2197 (``retention/eventhistory.py``).
     """
     from core.retention.legal_holds import has_active_hold
 
     if has_active_hold(event.facility, "Event", event.pk):
         raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
-    if event.client_id and has_active_hold(event.facility, "Client", event.client_id):
+    if client_id and has_active_hold(event.facility, "Client", client_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
-    if event.case_id and has_active_hold(event.facility, "Case", event.case_id):
+    if case_id and has_active_hold(event.facility, "Case", case_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
 
 
@@ -521,8 +552,11 @@ def soft_delete_event(event, user, *, source=None):
     # ueberspringt.
     _lock_client_row(event.client_id)
     _lock_event_row(event)
-    _assert_current_client_binding(event)
-    _assert_no_active_hold(event)
+    # Refs #2197 (Cross-Review-Runde 1): die Bindung kommt aus der gesperrten
+    # Zeile, nicht aus der womoeglich veralteten Instanz — sonst prueft der
+    # Hold-Guard eine Fallzuordnung von vorhin.
+    current_client_id, current_case_id = _assert_current_client_binding(event)
+    _assert_no_active_hold(event, client_id=current_client_id, case_id=current_case_id)
     history_payload = build_redacted_delete_history(event)
     # Refs #1917: VOR dem Wipe bumpen — nur ein aktiver Ban erzeugt ein
     # Existenz-Delta; das Löschen eines schlafenden Hausverbots bleibt für

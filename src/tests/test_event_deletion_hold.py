@@ -55,6 +55,45 @@ class TestApproveDeletionHonoursHolds:
         assert not AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(case_event.pk)).exists()
         assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_APPROVED).exists()
 
+    def test_a_case_assigned_between_load_and_delete_still_stops_the_approval(
+        self, facility, case_open, case_event, staff_user, admin_user, monkeypatch
+    ):
+        """Cross-Review Runde 1, Befund 1 — auf dem geprüften Weg.
+
+        ``approve_deletion`` lädt das Ereignis selbst und reicht die Instanz an
+        ``soft_delete_event`` weiter. Zwischen diesem Laden und dem Erwerb der
+        Ereignissperre liegt ein Fenster; wird das Ereignis darin einem
+        gehaltenen Fall zugeordnet (regulärer Service, kein ORM-Bypass), sah der
+        Guard die alte, fallslose Instanz. Der Wrapper bildet genau dieses
+        Fenster ab und lässt die Guards unangetastet.
+        """
+        from core.models import Event
+        from core.services.case.cases import assign_event_to_case, remove_event_from_case
+        from core.services.events import deletion as deletion_module
+
+        remove_event_from_case(Event.objects.get(pk=case_event.pk), staff_user)
+        dr = request_deletion(Event.objects.get(pk=case_event.pk), staff_user, reason="Auf Wunsch der Person")
+        _hold(facility, admin_user, "Case", case_open.pk)
+        original = deletion_module.soft_delete_event
+
+        def _assign_to_the_held_case_first(event, user, **kwargs):
+            assign_event_to_case(case_open, Event.objects.get(pk=event.pk), staff_user)
+            return original(event, user, **kwargs)
+
+        monkeypatch.setattr(deletion_module, "soft_delete_event", _assign_to_the_held_case_first)
+
+        with pytest.raises(ValidationError) as exc_info:
+            approve_deletion(dr, admin_user)
+
+        assert exc_info.value.messages == [str(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)]
+        stored = Event.objects.get(pk=case_event.pk)
+        assert stored.is_deleted is False
+        assert stored.data_json == {"dauer": 15, "notiz": "Testnotiz"}
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(case_event.pk)).exists()
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_APPROVED).exists()
+
     def test_event_hold_stops_the_approved_deletion(self, facility, sample_event, staff_user, admin_user):
         """Der schon vorhandene Ereignis-Zweig, über denselben Einstieg belegt —
         er hielt den Vier-Augen-Weg bisher als einziger auf."""
