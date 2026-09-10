@@ -92,7 +92,9 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Refs #1059: v45 — die geaenderte Offline-Shell wird neu precached.
         # Refs #2136: v46 — der Mitschauen-Schutz bringt eine neue precachte
         # Datei (quick-exit.js) und geaendertes Shell-Markup mit.
-        assert 'const CACHE_NAME = "anlaufstelle-v46";' in sw
+        # Refs #2201: v47 — die Runtime-Cache-Klassifikation (Origin + Pfad +
+        # Content-Type) verwirft alte Falscheintraege ueber die Cache-Generation.
+        assert 'const CACHE_NAME = "anlaufstelle-v47";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):
