@@ -19,7 +19,7 @@ jobs:
     # Stage-Läufe #134/#135 wurden bei 99 % vom Job-Limit abgebrochen. Einen
     # echten Hänger begrenzt jetzt ``--timeout`` je Test (unten), nicht das
     # Job-Limit.
-    timeout-minutes: 60
+    timeout-minutes: 50
     services:
       postgres:
         image: postgres:18-alpine
@@ -75,7 +75,7 @@ jobs:
       # wie in e2e.yml, damit auch blockierende C-Aufrufe abgebrochen werden;
       # der langsamste Test liegt lokal bei ~15 s). --durations zeigt die
       # teuersten Tests, damit Runner-Kosten sichtbar bleiben.
-      - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --timeout=600 --timeout-method=thread --durations=30 --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=96
+      - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --dist worksteal --timeout=600 --timeout-method=thread --durations=30 --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=96
         env:
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
