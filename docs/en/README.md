@@ -76,5 +76,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-08 -->
-<!-- source-hash: bd69a31d1c670cbad4cd01a738f7e8b811a717a5 -->
+<!-- translation-date: 2026-09-10 -->
+<!-- source-hash: 5c87052369342c6a7bf70fe75fd40452208c9ca8 -->
