@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill verifies and probe-extracts the matching media archive while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180).
+> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
 
@@ -1214,10 +1214,10 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev f
 | 3b | **Completeness guard (fail-closed):** row comparison of the critical RLS tables (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) between the throwaway DB and the live DB (`$POSTGRES_DB`) — `Live>0` but `Restore=0` turns it red. Catches the incomplete `--prod` restore that the `psql` exit code (without `ON_ERROR_STOP`) swallows (Refs #1336) |
 | 4 | RLS policy check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` must yield `>= 18` (a conservative floor in the script; the actual count is higher, see section 9) |
 | 5 | `auditlog_immutable` trigger exists AND blocks a raw UPDATE |
-| 6 | `--prod` only: verify the media archive matching the selected database backup via HMAC, probe-extract it into a host temporary directory, and compare the `tar -tf` entries with the extracted result; output `Medien: N Dateien, M Bytes, HMAC ok`. If the matching archive is absent, skip the step with `INFO` as a valid database-only case. The trap cleans up the temporary directory and throwaway database. |
-| 7 | **On full success (all steps including 3b):** `mark_restore_verified` in the web container → compliance marker |
+| 6 | `--prod` only: verify the media archive matching the selected database backup via HMAC, probe-extract it into a host temporary directory in one pass, and compare the Tar listing produced during extraction with the extracted result; output `Medien: N Dateien, M Bytes, HMAC ok`. The target needs roughly twice the archive size free beforehand; `TMPDIR=/path/with/space` redirects the step to another filesystem. If the matching archive is absent, skip the step with `INFO` as a valid database-only case. The trap cleans up the temporary directory and throwaway database. |
+| 7 | **On full success (all steps including 3b and 6):** `mark_restore_verified` in the web container → compliance marker |
 
-Output: one `OK` / `FAIL` entry per step. Exit code != 0 on any `FAIL`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
+Output: one `OK` / `FAIL` entry per executed step; optional skipped checks report `INFO`. Exit code != 0 on any `FAIL`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
 
 > **Benign exception during the restore (step 2):** The dump contains a `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, which on restore fails against `FORCE ROW LEVEL SECURITY` on `core_event` (`--dev`: `pg_restore: errors ignored on restore: 1`). This only affects the statistics cache, not the payload data — the mv-refresh timer rebuilds it hourly. The `--dev` drill reports this as `OK … MV-Refresh übersprungen (benigne)` (German, from the script's own log output: "MV refresh skipped (benign)") and only fails on **other** errors. In the `--prod` branch, `psql` deliberately runs without `ON_ERROR_STOP` (the same MV refresh error is tolerated), which means the exit code alone does not prove completeness — the fail-closed proof is delivered by the row comparison in **step 3b**, before the restore is marked as verified.
 
@@ -2775,4 +2775,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: af1b12e02ec5f1aa765b93b557e50e2c254d7d51 -->
+<!-- source-hash: 153ce66a9ac6a6a1cfd25b1092023215511b3911 -->

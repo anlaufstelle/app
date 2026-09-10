@@ -191,7 +191,7 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
                          ./restore-src/anlaufstelle_<timestamp>_media.tar.gz.enc
 ```
 
-`restore.sh` erledigt in einem Lauf: HMAC-Verify der DB und, falls übergeben, des Medienarchivs → Bestätigungsabfrage → `openssl enc -d | gunzip | psql` → Medien-Inhalt löschen → Medienarchiv per `tar -x` in `/data` des `web`-Containers entpacken. Damit sind beide Sidecars geprüft, bevor die erste destruktive Aktion beginnt. Der `BACKUP_ENCRYPTION_KEY` aus der `.env` wird automatisch geladen.
+[`restore.sh`](../scripts/ops/restore.sh) erledigt in einem Lauf: HMAC-Verify der DB und, falls übergeben, des Medienarchivs → Bestätigungsabfrage → erneuter DB-HMAC-Verify → `openssl enc -d | gunzip | psql` → erneuter Medien-HMAC-Verify → Medien-Inhalt löschen → Medienarchiv per `tar -x` in `/data` des `web`-Containers entpacken. Damit sind beide Sidecars geprüft, bevor die erste destruktive Aktion beginnt, und das Prüf-Nutzungs-Fenster bleibt klein. Bricht `tar -x` ab, ist der Medienbestand unvollständig; Ursache beheben und den vollständigen Medien-Restore wiederholen. Der `BACKUP_ENCRYPTION_KEY` aus der `.env` wird automatisch geladen.
 
 > **Welt A (dev / `pg_restore`-Format):** Statt `restore.sh` der Notfall-Befehl aus dem Skript-Header:
 > ```bash

@@ -14,12 +14,14 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.architecture
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPS_DIR = REPO_ROOT / "scripts" / "ops"
 BACKUP_KEY = "restore-media-order-key-0123456789abcdef"
 REAL_OPENSSL = shutil.which("openssl")
+pytestmark = [
+    pytest.mark.architecture,
+    pytest.mark.skipif(REAL_OPENSSL is None, reason="openssl nicht installiert"),
+]
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -177,18 +179,23 @@ def test_valid_sidecars_are_both_checked_before_destructive_actions(tmp_path: Pa
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     actions = action_log.read_text(encoding="utf-8").splitlines()
     hmac_positions = [index for index, line in enumerate(actions) if line.startswith("hmac ")]
-    destructive_positions = [index for index, line in enumerate(actions) if " psql " in line or "rm -rf" in line]
-    assert len(hmac_positions) == 2
-    assert destructive_positions
-    assert max(hmac_positions) < min(destructive_positions)
+    psql_pos = next(index for index, line in enumerate(actions) if " psql " in line)
+    media_delete_pos = next(index for index, line in enumerate(actions) if "rm -rf" in line)
+    assert len(hmac_positions) == 4
+    assert hmac_positions[0] < hmac_positions[1] < hmac_positions[2] < psql_pos
+    assert psql_pos < hmac_positions[3] < media_delete_pos
 
 
 def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Path) -> None:
     root, bindir, action_log, _, _ = _make_sandbox(tmp_path)
     env = _base_env(root, bindir, action_log)
+    media_tmp = root / "media-tmp"
+    media_tmp.mkdir()
+    env["TMPDIR"] = str(media_tmp)
 
     result = subprocess.run(
         ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         env=env,
@@ -198,3 +205,34 @@ def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Pat
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "Medien: 2 Dateien, 9 Bytes, HMAC ok" in result.stdout
+    assert list(media_tmp.iterdir()) == []
+
+
+def test_restore_drill_fails_before_extract_when_tmpdir_space_is_too_small(tmp_path: Path) -> None:
+    root, bindir, action_log, _, _ = _make_sandbox(tmp_path)
+    media_tmp = root / "media-tmp"
+    media_tmp.mkdir()
+    _write_executable(
+        bindir / "df",
+        """#!/usr/bin/env bash
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'
+printf 'stub 1 1 0 100%% %s\\n' "${@: -1}"
+""",
+    )
+    env = _base_env(root, bindir, action_log)
+    env["TMPDIR"] = str(media_tmp)
+
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=root,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert "Nicht genug freier Platz" in result.stdout
+    assert "TMPDIR" in result.stdout
+    assert "Medien: 2 Dateien" not in result.stdout

@@ -90,6 +90,9 @@ fi
 
 # DB restore — beide HMAC-Sidecars wurden in der Vorpruefung verifiziert.
 echo "Stelle DB-Backup wieder her..."
+# Direkt vor der Nutzung erneut pruefen, damit die interaktive Wartezeit das
+# Pruef-Nutzungs-Fenster nicht unnoetig vergroessert (Refs #2195).
+backup_verify_hmac "$BACKUP_FILE"
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE" \
     | gunzip \
     | docker compose -f "$COMPOSE_FILE" exec -T db \
@@ -102,6 +105,8 @@ if [[ -n "$MEDIA_FILE" ]]; then
     MEDIA_PARENT="$(dirname "$MEDIA_ROOT_CONTAINER")"
     MEDIA_NAME="$(basename "$MEDIA_ROOT_CONTAINER")"
 
+    echo "Prüfe Integrität des Medien-Backups erneut unmittelbar vor der Nutzung (HMAC)..."
+    backup_verify_hmac "$MEDIA_FILE"
     echo "Loesche bestehenden Medien-Inhalt unter ${MEDIA_ROOT_CONTAINER} ..."
     docker compose -f "$COMPOSE_FILE" exec -T web \
         sh -c "rm -rf '${MEDIA_ROOT_CONTAINER}'/* '${MEDIA_ROOT_CONTAINER}'/.[!.]* 2>/dev/null || true"

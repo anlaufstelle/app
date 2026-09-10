@@ -378,19 +378,23 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
         echo "INFO - Schritt 6: Kein passendes Medien-Archiv — uebersprungen (DB-only-Backup zulaessig)"
     elif ! backup_verify_hmac "$LATEST_MEDIA"; then
         fail "Schritt 6: Medien-HMAC-Verifikation fehlgeschlagen — Archiv manipuliert/beschaedigt oder Sidecar fehlt"
-    elif ! MEDIA_TMP_DIR="$(mktemp -d)" || ! MEDIA_LIST_FILE="$(mktemp)"; then
+    elif [[ ! -d "${TMPDIR:-/tmp}" || ! -w "${TMPDIR:-/tmp}" ]]; then
+        fail "Schritt 6: TMPDIR ${TMPDIR:-/tmp} fehlt oder ist nicht beschreibbar"
+    elif ! MEDIA_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/anl-drill-media-XXXXXX")" \
+        || ! MEDIA_LIST_FILE="$(mktemp "${TMPDIR:-/tmp}/anl-drill-media-list-XXXXXX")"; then
         fail "Schritt 6: Temporaeres Verzeichnis fuer Medien-Pruefung konnte nicht angelegt werden"
     else
-        openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_MEDIA" \
-            | gunzip \
-            | tar -tf - >"$MEDIA_LIST_FILE"
-        MEDIA_LIST_RC=("${PIPESTATUS[@]}")
-        if [[ "${MEDIA_LIST_RC[0]}" -ne 0 || "${MEDIA_LIST_RC[1]}" -ne 0 || "${MEDIA_LIST_RC[2]}" -ne 0 ]]; then
-            fail "Schritt 6: Medien-Archiv konnte nicht vollstaendig aufgelistet werden"
+        MEDIA_ARCHIVE_BYTES=$(wc -c <"$LATEST_MEDIA" | tr -d '[:space:]')
+        MEDIA_REQUIRED_BYTES=$((MEDIA_ARCHIVE_BYTES * 2))
+        MEDIA_AVAILABLE_KB=$(df -Pk "$MEDIA_TMP_DIR" | awk 'NR == 2 {print $4}')
+        if [[ ! "$MEDIA_AVAILABLE_KB" =~ ^[0-9]+$ ]]; then
+            fail "Schritt 6: Freier Platz in TMPDIR ${TMPDIR:-/tmp} konnte nicht ermittelt werden"
+        elif [[ $((MEDIA_AVAILABLE_KB * 1024)) -lt "$MEDIA_REQUIRED_BYTES" ]]; then
+            fail "Schritt 6: Nicht genug freier Platz in TMPDIR ${TMPDIR:-/tmp} — mindestens ${MEDIA_REQUIRED_BYTES} Bytes (Archivgroesse x2) erforderlich"
         else
             openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_MEDIA" \
                 | gunzip \
-                | tar -C "$MEDIA_TMP_DIR" -xf -
+                | tar -C "$MEDIA_TMP_DIR" -xvf - >"$MEDIA_LIST_FILE"
             MEDIA_EXTRACT_RC=("${PIPESTATUS[@]}")
             if [[ "${MEDIA_EXTRACT_RC[0]}" -ne 0 || "${MEDIA_EXTRACT_RC[1]}" -ne 0 || "${MEDIA_EXTRACT_RC[2]}" -ne 0 ]]; then
                 fail "Schritt 6: Medien-Archiv konnte nicht vollstaendig probeentpackt werden"
@@ -404,8 +408,10 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
                         MEDIA_MATCHED_COUNT=$((MEDIA_MATCHED_COUNT + 1))
                     fi
                 done <"$MEDIA_LIST_FILE"
-                MEDIA_FILE_COUNT=$(find "$MEDIA_TMP_DIR" -type f -printf '.' | wc -c | tr -d '[:space:]')
-                MEDIA_BYTES=$(find "$MEDIA_TMP_DIR" -type f -printf '%s\n' | awk '{total += $1} END {print total + 0}')
+                MEDIA_FILE_COUNT=$(find "$MEDIA_TMP_DIR" -type f \
+                    -exec sh -c 'printf "%s\n" "$#"' sh {} + \
+                    | awk '{total += $1} END {print total + 0}')
+                MEDIA_BYTES=$(find "$MEDIA_TMP_DIR" -type f -exec cat {} + | wc -c | tr -d '[:space:]')
                 if [[ "$MEDIA_LISTED_COUNT" -eq 0 || "$MEDIA_MATCHED_COUNT" -ne "$MEDIA_LISTED_COUNT" ]]; then
                     fail "Schritt 6: Probeentpackung stimmt nicht mit tar-Listing ueberein (${MEDIA_MATCHED_COUNT}/${MEDIA_LISTED_COUNT} Eintraege)"
                 else

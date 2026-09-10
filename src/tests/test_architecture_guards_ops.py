@@ -1391,21 +1391,50 @@ class TestRestoreHmacBeforeDestructiveActions:
     """
 
     _RESTORE = Path("scripts/ops/restore.sh")
+    _DRILL = Path("scripts/ops/restore-drill.sh")
 
     def test_both_hmac_sidecars_precede_confirmation_and_restore(self) -> None:
         flat = _flat_script(self._RESTORE)
-        db_hmac_pos = flat.find('backup_verify_hmac "$BACKUP_FILE"')
-        media_hmac_pos = flat.find('backup_verify_hmac "$MEDIA_FILE"')
+        db_hmac_positions = [match.start() for match in re.finditer(r'backup_verify_hmac "\$BACKUP_FILE"', flat)]
+        media_hmac_positions = [match.start() for match in re.finditer(r'backup_verify_hmac "\$MEDIA_FILE"', flat)]
         confirm_pos = flat.find('read -rp "Fortfahren? (ja/nein): " CONFIRM')
+        db_decrypt_pos = flat.find(
+            'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE"'
+        )
         psql_pos = flat.find('psql -U "$SU_USER" "$POSTGRES_DB"')
         media_delete_pos = flat.find("rm -rf '${MEDIA_ROOT_CONTAINER}'/*")
+        media_decrypt_pos = flat.find(
+            'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE"'
+        )
 
-        assert min(db_hmac_pos, media_hmac_pos, confirm_pos, psql_pos, media_delete_pos) >= 0
-        assert db_hmac_pos < confirm_pos
-        assert media_hmac_pos < confirm_pos
-        assert db_hmac_pos < psql_pos
-        assert media_hmac_pos < psql_pos
-        assert media_hmac_pos < media_delete_pos
+        assert len(db_hmac_positions) == 2
+        assert len(media_hmac_positions) == 2
+        assert min(confirm_pos, db_decrypt_pos, psql_pos, media_delete_pos, media_decrypt_pos) >= 0
+        assert db_hmac_positions[0] < confirm_pos
+        assert media_hmac_positions[0] < confirm_pos
+        assert confirm_pos < db_hmac_positions[1] < db_decrypt_pos < psql_pos
+        assert psql_pos < media_hmac_positions[1] < media_delete_pos < media_decrypt_pos
+        assert flat[db_hmac_positions[1] : db_decrypt_pos].splitlines() == ['backup_verify_hmac "$BACKUP_FILE"']
+        media_use_prefix = flat[media_hmac_positions[1] : media_delete_pos].splitlines()
+        assert len(media_use_prefix) == 3
+        assert media_use_prefix[0] == 'backup_verify_hmac "$MEDIA_FILE"'
+        assert media_use_prefix[1].lstrip().startswith('echo "Loesche bestehenden Medien-Inhalt')
+        assert re.fullmatch(r'\s*docker compose -f "\$COMPOSE_FILE" exec -T web\s+sh -c "', media_use_prefix[2])
+
+        bare_db_calls = re.findall(r'(?m)^[ \t]*backup_verify_hmac "\$BACKUP_FILE"[ \t]*$', flat)
+        bare_media_calls = re.findall(r'(?m)^[ \t]*backup_verify_hmac "\$MEDIA_FILE"[ \t]*$', flat)
+        assert len(bare_db_calls) == len(db_hmac_positions)
+        assert len(bare_media_calls) == len(media_hmac_positions)
+
+    def test_media_drill_is_single_pass_portable_and_space_guarded(self) -> None:
+        flat = _flat_script(self._DRILL)
+
+        assert "TMPDIR" in flat
+        assert 'df -Pk "$MEDIA_TMP_DIR"' in flat
+        assert "MEDIA_REQUIRED_BYTES" in flat
+        assert flat.count('-in "$LATEST_MEDIA"') == 1
+        assert 'tar -C "$MEDIA_TMP_DIR" -xvf -' in flat
+        assert "-printf" not in flat
 
 
 class TestBackupVerifyCompletenessGuard:
