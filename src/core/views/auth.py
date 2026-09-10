@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.http import require_POST
@@ -24,6 +25,27 @@ from core.services.security.session_rotation import rotate_session_after_privile
 from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_post_login_url(request, redirect_to: str | None) -> str:
+    """Resolve a safe post-authentication target with the role default.
+
+    ``next`` values can originate from login or MFA requests, so validate the
+    target at this shared boundary even if an upstream Django view already did
+    so. A root target is the implicit default for super admins, not a deliberate
+    deep link (Refs #970/#2206).
+    """
+    is_safe = url_has_allowed_host_and_scheme(
+        url=redirect_to or "",
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    )
+    safe_redirect_to = redirect_to if is_safe else None
+    if getattr(request.user, "is_super_admin", False):
+        if safe_redirect_to and safe_redirect_to not in ("/", settings.LOGIN_REDIRECT_URL):
+            return safe_redirect_to
+        return "/system/"
+    return safe_redirect_to or settings.LOGIN_REDIRECT_URL
 
 
 def _login_username_key(group, request):
@@ -64,15 +86,7 @@ class CustomLoginView(auth_views.LoginView):
         Ohne diese Sonderbehandlung uebersteuert das implizite ``?next=/``
         die ``/system/``-Logik systematisch im Normal-Login.
         """
-        user = self.request.user
-        if user.is_authenticated and getattr(user, "is_super_admin", False):
-            # ``?next=...`` darf das ueberstimmen NUR bei echten Deep-Links —
-            # "/" und der LOGIN_REDIRECT_URL gelten nicht als gezielter Wunsch.
-            redirect_to = self.get_redirect_url()
-            if redirect_to and redirect_to not in ("/", settings.LOGIN_REDIRECT_URL):
-                return redirect_to
-            return "/system/"
-        return super().get_success_url()
+        return resolve_post_login_url(self.request, self.get_redirect_url())
 
     def form_valid(self, form):
         # Account-Lockout (Refs #612): Nach 10 Fehlversuchen in 15 Minuten

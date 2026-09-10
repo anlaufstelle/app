@@ -42,6 +42,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
+from core.views.auth import resolve_post_login_url
 
 
 class VerifiedSessionRequiredForPasskey(exceptions.OTPWebAuthnApiError):
@@ -140,6 +141,9 @@ class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
     Assertion aufgerufen (nach ``authenticate_complete`` + ``check_device_usable``).
     Genau dort — und nur dort — heben wir die Session auf 2FA-verifiziert an.
     """
+
+    def get_success_url(self):
+        return resolve_post_login_url(self.request, self.get_redirect_url())
 
     def complete_auth(self, device):
         super().complete_auth(device)

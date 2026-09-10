@@ -14,6 +14,7 @@ bei Logout oder Session-Expiry ist die 2FA-Verifikation neu nötig.
 """
 
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -57,6 +58,14 @@ class MFAEnforcementMiddleware:
         if user is not None and user.is_authenticated and not any(request.path.startswith(url) for url in EXEMPT_URLS):
             redirect_url = self._required_redirect(request, user)
             if redirect_url is not None:
+                target = request.get_full_path()
+                if (
+                    redirect_url == "/mfa/verify/"
+                    and request.method == "GET"
+                    and not request.path.startswith("/mfa/")
+                    and target != "/"
+                ):
+                    redirect_url = f"{redirect_url}?{urlencode({'next': target})}"
                 return redirect(redirect_url)
         return self.get_response(request)
 

@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Rollenweiche und Zielpfad bleiben beim zweiten Faktor erhalten** (#2206) — `super_admin` landet nach dem zweiten Faktor im Systembereich; `next` überlebt den 2FA-Schritt.
 - **Import-Übernahme weist ungültig gewordene Zuordnungen ab** (#2196) — Probelauf und Übernahme prüfen gespeicherte Ziele erneut und melden entfernte oder deaktivierte Feldvorlagen, statt Werte still auszulassen.
 - **Import-Übernahme verwendet den gesperrten Job-Stand** (#2199) — Parallele Browser-Sitzungen übernehmen zuverlässig die zuletzt bestätigte Zuordnung statt eines veralteten View-Snapshots.
 - **Import-Uploads zählen gegen das Speicherkontingent** (#2180) — Offene CSV-Quelldateien werden vor dem Schreiben neuer Uploads berücksichtigt und Kontingent-Ablehnungen als Importvorgang protokolliert.

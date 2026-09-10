@@ -48,7 +48,8 @@ from core.services.security import (
     verify_backup_code,
 )
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
-from core.views.utils import object_back_link
+from core.views.auth import resolve_post_login_url
+from core.views.utils import object_back_link, safe_redirect_path
 
 logger = logging.getLogger(__name__)
 
@@ -177,9 +178,19 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
 
     template_name = "auth/mfa_login.html"
 
+    @staticmethod
+    def _success_url(request):
+        raw_redirect_to = request.POST.get("next") or request.GET.get("next")
+        redirect_to = (
+            safe_redirect_path(raw_redirect_to)
+            if raw_redirect_to and raw_redirect_to.startswith("/")
+            else raw_redirect_to
+        )
+        return resolve_post_login_url(request, redirect_to)
+
     def get(self, request, *args, **kwargs):
         if request.session.get("mfa_verified"):
-            return redirect(django_settings.LOGIN_REDIRECT_URL)
+            return redirect(self._success_url(request))
         # Passkey ODER TOTP genuegt als bestaetigter zweiter Faktor (ADR-032).
         if not request.user.has_confirmed_mfa_device:
             return redirect("mfa_setup")
@@ -228,12 +239,12 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
                     detail={"remaining": remaining_backup_codes(request.user)},
                     facility=facility,
                 )
-                return redirect(django_settings.LOGIN_REDIRECT_URL)
+                return redirect(self._success_url(request))
         elif token and device.verify_token(token):
             # Refs #2034: Rotation vor dem Anheben (siehe Backup-Zweig oben).
             rotate_session_after_privilege_gain(request)
             request.session["mfa_verified"] = True
-            return redirect(django_settings.LOGIN_REDIRECT_URL)
+            return redirect(self._success_url(request))
 
         log_audit_event(
             request,
