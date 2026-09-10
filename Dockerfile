@@ -116,7 +116,7 @@ EXPOSE 8000
 # Bei ``status=degraded`` (z.B. ClamAV ausgefallen) liefert /health/ HTTP 200,
 # damit Last-Balancer den Pod nicht direkt rauswerfen — der Container-Healthcheck
 # soll das aber trotzdem als ungesund markieren, damit Operator-Tooling
-# (k8s) den Vorfall sieht.
+# (k8s, eigene Orchestrierung) den Vorfall sieht.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request, json, sys; \
 body = urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read(); \

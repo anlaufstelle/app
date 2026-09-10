@@ -29,7 +29,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 2. **Solange nur eine Stage existiert (heute):** Caddy laeuft als Service im jeweiligen Compose-Stack, eigenes `Caddyfile.<stage>` daneben — minimal, ohne Reverse-Proxy-Plumbing.
 3. **Sobald >1 Stage gleichzeitig auf derselben Maschine laeuft:** Caddy wird in einen eigenen `docker-compose.proxy.yml`-Stack ausgegliedert, mit zentralem `Caddyfile` und `import sites.d/*.caddy`. Jeder Stage-Stack legt sein File in `sites.d/` ab. Reverse-Proxy zielt ueber das gemeinsame Docker-Netzwerk auf den jeweiligen `web`-Container der Stage. Diese Migration ist Bestandteil des `stage`-Plans, **nicht** dieses ADRs.
 4. **Live-Demo (`anlaufstelle.app`)** laeuft als isolierter Single-Stack auf einer **eigenen Maschine**. Architektur identisch zum Self-Host-Setup, das wir Tragern empfehlen — Demo dient als Live-Referenz fuer das Versprechen aus §1009.
-5. **Coolify** bleibt als **alternativer**, nicht-primaerer Pfad in `docs/coolify-deployment.md` dokumentiert: fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige Bedarfsfaelle, die Plain Compose nachweislich nicht abdeckt. Der Pfad waechst und schrumpft mit nachgewiesenem Nutzen, nicht mit Bequemlichkeit.
+5. **Coolify** bleibt als **alternativer**, nicht-primaerer Pfad in `docs/coolify-deployment.md` (entfernt, Refs #2202) dokumentiert: fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige Bedarfsfaelle, die Plain Compose nachweislich nicht abdeckt. Der Pfad waechst und schrumpft mit nachgewiesenem Nutzen, nicht mit Bequemlichkeit.
 
 ## Consequences
 
@@ -62,5 +62,5 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 
 - Fachkonzept: [`docs/fachkonzept-anlaufstelle.md`](../fachkonzept-anlaufstelle.md) §163, §247, §844, §928, §1009
 - Issues: #320 (Recherche), #554 (Coolify-Pivot, geschlossen mit diesem ADR), #671 (Plain-Compose-Pivot), #862 (Plan-Issue dieses ADRs)
-- Begleitende Doku: `docs/dev-deployment.md`, `docs/coolify-deployment.md` (alternativer Pfad), [`docs/ops-runbook.md`](../ops-runbook.md)
+- Begleitende Doku: `docs/dev-deployment.md`, `docs/coolify-deployment.md` (alternativer Pfad, entfernt, Refs #2202), [`docs/ops-runbook.md`](../ops-runbook.md)
 - Verwandte ADRs: [ADR-009](009-settings-inheritance.md) (Settings-Vererbung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Pipeline)

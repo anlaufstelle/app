@@ -2,7 +2,7 @@
 
 > **Abgrenzung zum Restore-Drill:** Der quartalsweise [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) beweist den *Happy Path* — „lässt sich das neueste Backup in eine Wegwerf-DB **auf demselben, laufenden Host** zurückspielen?". Dieses Dokument deckt den **Totalverlust** ab: Der Prod-Host ist weg (Hardware-Defekt, Ransomware, Provider-Ausfall, versehentliches `docker volume rm` ohne Tarball). Es beschreibt das Beschaffen eines Off-Site-Backups, die Wiederbeschaffung der Schlüssel, den Aufbau auf einem **fabrikfrischen Server** und konkrete RTO/RPO-Ziele.
 >
-> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die realen Skripte verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), `dev-ops/deploy/backup.sh` (dev-only), `dev-ops/deploy/bootstrap.sh` (dev-only), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
+> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die realen Skripte verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), `dev-ops/deploy/bootstrap.sh` (dev-only, Server-Provisioning in [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host)), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
 
 ---
 
@@ -54,7 +54,7 @@
 Ein vollständiges Recovery rekonstruiert **drei** Dinge. Fehlt eines, ist die Wiederherstellung unvollständig oder unmöglich:
 
 1. **Die verschlüsselten Backup-Artefakte** (Off-Site, siehe [§5](#5-off-site-backup-beschaffen)):
-   - DB-Dump (`*.sql.gz.enc` + `.hmac` **oder** `dump-*.pgc.enc`)
+   - DB-Dump (`*.sql.gz.enc` + `.hmac`)
    - Medien-Tarball (`*_media.tar.gz.enc` + `.hmac`). Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
 2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEY(S)` und `BACKUP_ENCRYPTION_KEY`.
 3. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.

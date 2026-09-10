@@ -177,7 +177,7 @@ def _check_stale_jobs() -> list[str]:
     Retention, Breach-Detection etc. nie — still, ohne Fehlermeldung. Seit dem
     ``cron``-Sidecar (Refs #794) deckt der mitgelieferte Stack die
     manage.py-Jobs ab; Backup bleibt Host-Cron, und Deployments ohne unser
-    Compose-File (k8s) planen weiterhin alles selbst — der Check bleibt
+    Compose-File (k8s, eigene Orchestrierung) planen weiterhin alles selbst — der Check bleibt
     also der Wirksamkeits-Nachweis. Er wiederverwendet
     :func:`core.services.compliance.cron_job_checks` (bereits das
     Compliance-Dashboard), damit beide Stellen dieselbe Wahrheit zeigen.

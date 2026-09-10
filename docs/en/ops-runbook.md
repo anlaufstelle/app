@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; Coolify references reworded to "k8s"/"custom orchestration", #2202).
+> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; Coolify references reworded to "k8s"/"custom orchestration", #2202; pre-1.0 migration/historical framing removed -- the pre-0.23 host-crontab migration subsection, the database-role version-dated markers, and the pre-1.0-installation framing in the role-split recovery section (§ 9.6) are now described as current state or as a misconfiguration-recovery path, #2205).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
 
@@ -394,7 +394,7 @@ zone to `Europe/Berlin` or move the host cron time earlier accordingly.
 <summary>Complete host crontab — alternative for setups WITHOUT the sidecar</summary>
 
 Relevant if the stack is run without `docker-compose.prod.yml` (e.g.
-k8s) and therefore no `cron` service exists.
+k8s, custom orchestration) and therefore no `cron` service exists.
 
 ```cron
 # Anlaufstelle – Operational cron jobs (alternative: without the cron sidecar)
@@ -456,7 +456,7 @@ invoked on **every** deploy by `dev-ops/deploy/deploy-dev.sh` (dev-only)
 does **not** get the `cron` sidecar from [§3.2](#32-cron-sidecar-standard):
 running both in parallel would execute every job twice, and here the timers are
 additionally the test case for the host scheduler path that k8s setups
-without our compose file use.
+or setups with custom orchestration without our compose file use.
 
 > **Note (Refs #980):** Previously, `bootstrap.sh` installed the timers inline. Since `bootstrap.sh` only runs during initial provisioning, timers added later never made it onto the running host (the backup cron stayed absent). The installation now lives in `install-timers.sh` and runs on every `deploy-dev.sh`.
 
@@ -1289,8 +1289,8 @@ as well as the alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 With an active scanner and an unreachable daemon, the overall status is set to
 `"degraded"`, the HTTP status stays 200 (the hard block happens
 on upload, not on the health check). The container healthcheck in the Dockerfile
-reads the JSON `status` and reports unhealthy on `degraded` — k8s see
-the incident, but the load balancer does not pull the pod out.
+reads the JSON `status` and reports unhealthy on `degraded` — k8s or custom
+orchestration see the incident, but the load balancer does not pull the pod out.
 
 ### 7.4 Database Updates (Signatures)
 
@@ -1982,7 +1982,7 @@ SELECT pg_get_userbyid(c.relowner) AS owner, count(*)
 > above is then the measure: it must show the admin role only.
 
 **Case C occurs when no init script is mounted:** if `db` loads the full env
-without [`deploy/postgres-init/`](../deploy/postgres-init/), the Postgres image
+without [`deploy/postgres-init/`](../../deploy/postgres-init/), the Postgres image
 creates `${POSTGRES_USER}` itself via `initdb --username="$POSTGRES_USER"` —
 the app role *is* then the bootstrap role, and an admin role is never created.
 
@@ -2735,4 +2735,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: b66513e733f476ff1dc702a519aba63b87a5e3f6 -->
+<!-- source-hash: c1e0bac6d3238cd7ed60a1ff5b123110b214023e -->

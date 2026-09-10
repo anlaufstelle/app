@@ -391,7 +391,7 @@ setzen oder die Host-Cron-Zeit entsprechend vorziehen.
 <summary>Vollstaendige Host-Crontab — Alternative fuer Setups OHNE Sidecar</summary>
 
 Relevant, wenn der Stack ohne `docker-compose.prod.yml` betrieben wird (z. B.
-k8s) und deshalb kein `cron`-Service existiert.
+k8s, eigene Orchestrierung) und deshalb kein `cron`-Service existiert.
 
 ```cron
 # Anlaufstelle – Operative Cron-Jobs (Alternative: ohne cron-Sidecar)
@@ -453,7 +453,7 @@ installiert — aufgerufen bei **jedem** Deploy durch `dev-ops/deploy/deploy-dev
 den `cron`-Sidecar aus [§3.2](#32-cron-sidecar-standard) bewusst **nicht**:
 beides parallel wuerde jeden Job doppelt ausfuehren, und die Timer sind hier
 zusaetzlich der Testfall fuer den Host-Scheduler-Pfad, den k8s-Setups
-ohne unser Compose-File nutzen.
+oder Setups mit eigener Orchestrierung ohne unser Compose-File nutzen.
 
 > **Hinweis (Refs #980):** Frueher installierte `bootstrap.sh` die Timer inline. Da `bootstrap.sh` nur beim Erst-Provisioning laeuft, kamen nachtraeglich ergaenzte Timer nie auf den laufenden Host (Backup-Cron blieb aus). Die Installation liegt jetzt in `install-timers.sh` und laeuft bei jedem `deploy-dev.sh`.
 
@@ -1286,8 +1286,8 @@ sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
 `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
 beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
-liest den JSON-`status` und meldet bei `degraded` ungesund — k8s sehen
-den Vorfall, der Last-Balancer reisst den Pod aber nicht raus.
+liest den JSON-`status` und meldet bei `degraded` ungesund — k8s oder eigene
+Orchestrierung sehen den Vorfall, der Last-Balancer reisst den Pod aber nicht raus.
 
 ### 7.4 Datenbank-Updates (Signaturen)
 
