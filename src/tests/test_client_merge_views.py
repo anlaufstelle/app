@@ -312,6 +312,41 @@ class TestTrashAndUnmerge:
         client.force_login(lead_user)
         assert client.post(reverse("core:client_unmerge", kwargs={"pk": source.pk})).status_code == 403
 
+    def test_unmerge_post_under_legal_hold_shows_the_error_instead_of_undoing(
+        self, client, admin_user, lead_user, source, target
+    ):
+        """Refs #2200: der Guard sitzt im Dienst, die Oberflaeche zeigt seine Meldung.
+
+        Fail-loud statt still: 302 auf den Papierkorb mit deutscher Meldung,
+        kein 500, kein Aufheben. Die Meldung nennt keine Pseudonyme — der
+        Hold-Zustand einer Person ist selbst eine Auskunft.
+        """
+        from django.contrib.messages import get_messages
+
+        merge_clients(source, target, lead_user)
+        LegalHold.objects.create(
+            facility=source.facility,
+            target_type="Client",
+            target_id=target.pk,
+            reason="Gerichtsverfahren",
+            created_by=lead_user,
+        )
+        client.force_login(admin_user)
+
+        response = client.post(reverse("core:client_unmerge", kwargs={"pk": source.pk}))
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:client_trash")
+        texts = [str(message) for message in get_messages(response.wsgi_request)]
+        assert texts == [
+            "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+        ]
+        assert source.pseudonym not in texts[0]
+        assert target.pseudonym not in texts[0]
+        source.refresh_from_db()
+        assert source.merged_into_id == target.pk
+        assert source.is_deleted is True
+
     def test_unmerge_on_plain_trashed_client_shows_error(self, client, admin_user, client_trashed):
         client.force_login(admin_user)
         response = client.post(reverse("core:client_unmerge", kwargs={"pk": client_trashed.pk}))

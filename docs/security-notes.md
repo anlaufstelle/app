@@ -2362,6 +2362,33 @@ Ausdrücklich entschieden (und hier festgehalten, damit die Frage nicht erneut g
 [`test_event_soft_delete_fields.py`](../src/tests/test_event_soft_delete_fields.py) (`TestCaseHoldBlocksTheManualDeletePath`: Nutzdaten, Audit und die verschlüsselte Datei überleben; Gegenproben für einen fremden Fall und ein fallloses Ereignis), [`test_event_deletion_hold.py`](../src/tests/test_event_deletion_hold.py) (Vier-Augen-Weg: der Antrag bleibt offen, kein `DELETION_APPROVED`), [`test_tally_undo.py`](../src/tests/test_tally_undo.py) (`TestTallyUndoAndLegalHolds`: geerbtes Hold-Gate und die Begründung, warum der Fall-Zweig dort gegenstandslos ist) sowie [`test_eventhistory_retention.py`](../src/tests/test_eventhistory_retention.py) (`TestCaseHoldsAreHardToo`: Sweep stellt zurück, ungehaltener Fall wird weiter redigiert, ein während der Sperrwartezeit in einen gehaltenen Fall umgehängtes Ereignis wird gehalten; `TestBacklogMigrationHonoursHolds`: derselbe Schutz im Altbestand über Migration 0174).
 
 
+## Aufheben einer Zusammenführung unter aktivem Hold wird abgewiesen (Issue #2200)
+
+### Beobachtung
+
+Die Gegenrichtung zu #2144. `_validate_merge` weist eine Zusammenführung unter aktivem Hold seit ADR-045 ab und nennt im Docstring den Grund: auf der Quellseite verlöre ein Personen-Hold still die Deckung über deren Ereignisse. `unmerge_client` ([`merge.py`](../src/core/services/client/merge.py)) prüfte Berechtigung, `merged_into`-Konsistenz, `anonymized_at` der Quelle und den Ziel-Tombstone — **keinen Hold**.
+
+Beim Aufheben wandern Fälle, Ereignisse, Aufgaben und übernommene Anhänge zur Quelle zurück; ein Client-Hold auf der **Zielperson** bleibt dort stehen. `owner_has_active_hold` war vorher wahr, danach falsch — bei weiterhin aktivem Hold. Die zurückgewanderte Dokumentation fiel damit still in den regulären Aufbewahrungslauf: ein Beweismittel-Hold verlor seinen Umfang, ohne Fehler, ohne Hinweis, ohne Auditbezug (Spoliation über einen Umweg, Muster #1066). Ein Ereignis-Hold blieb erhalten (die pk ändert sich nicht) — betroffen war die **abgeleitete** Deckung über die Person, also genau die Ebene, auf der ein Hold für „alle Ereignisse dieser Person" gesetzt wird.
+
+### Maßnahme
+
+Auf den beiden bereits gesperrten, frisch gelesenen Personenzeilen (`_locked_clients` nimmt sie in einem Statement in kanonischer `pk`-Ordnung) wird jetzt `client_has_active_hold` für Ziel **und** Quelle gefragt; trifft es zu, endet das Aufheben mit derselben deutschen `ValidationError` wie der Merge. Fail-loud und ohne PII: die Meldung nennt keine Pseudonyme — der Hold-Zustand einer Person ist selbst eine Auskunft.
+
+**Abweisen statt spiegeln.** Den Hold beim Aufheben auf die Quelle zu spiegeln (zweiter Hold, gleiche Begründung, Audit-Verweis) wäre technisch möglich. Eine Aufbewahrungssperre ist aber ein bewusster Beweismittel-Akt; ein still erzeugter Zweit-Hold wäre das Gegenteil — dasselbe Argument, mit dem #2144 das Umlenken auf die Zielperson verworfen hat. Bis eine ausdrückliche Übertragungsregel existiert, wartet das Aufheben auf das Ende der Sperre.
+
+**Dieselbe Hold-Menge wie der Merge.** `client_has_active_hold` zählt neben dem Personen-Hold auch ein gehaltenes **Ereignis** und einen gehaltenen **Fall** dieser Person mit. Beim Fall reißt die Deckung tatsächlich nicht: die `case_id` des Ereignisses bleibt, und der Fall wandert als Ganzes zurück — der Fall-Hold deckt weiter. Das Abweisen ist dort also strenger als nötig. Eine zweite, engere Hold-Menge daneben wäre aber genau die Drift, die #1756 gekostet hat; die Überdeckung ist der bewusst gewählte Preis.
+
+### Grenzen
+
+- **Hold auf der Quelle ist über die Service-Wege nicht herstellbar.** `create_hold_for_target` weist eine Sperre auf einen Merge-Tombstone seit #2144 ab (`_assert_not_merge_tombstone`). Der Quell-Zweig ist damit Abwehr in der Tiefe für Alt- und Reparaturzustände, die nicht über die Service-Wege entstanden sind — der Guard hält sie trotzdem.
+- **Reichweite.** `ClientUnmergeView` ist über den Papierkorb erreichbar (Anwendungsbetreuung); Personen-Holds entstehen weiterhin nur per Service/Konsole. Geschlossen wird ein Pfad, der bei jeder künftigen Verdrahtung klickbar würde.
+
+### Verifikation
+
+[`test_client_merge_workflow.py`](../src/tests/test_client_merge_workflow.py) (`TestUnmergeUnderLegalHold`: Hold auf dem Ziel — Ereignis bleibt beim Ziel, `owner_has_active_hold` bleibt wahr, kein `CLIENT_RESTORED` mit `unmerged_from`, kein `client_unmerged`-Log; Hold auf der Quelle über den direkten Modell-Bypass, nachdem `create_hold_for_target` ihn abgewiesen hat; zurückwanderndes gehaltenes Ereignis; gehaltener Fall; und die Gegenprobe ohne Hold, die zeigt, dass die Fall-Zuordnung das Aufheben unbeschadet übersteht) sowie [`test_client_merge_views.py`](../src/tests/test_client_merge_views.py) (HTTP: 302 auf den Papierkorb mit der Meldung, kein 500, keine Pseudonyme in der Meldung, die Zusammenführung bleibt bestehen).
+
+
+
 ---
 
 ## Weitere Einstiegspunkte

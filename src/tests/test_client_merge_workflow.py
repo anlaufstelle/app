@@ -792,6 +792,165 @@ class TestUnmerge:
             unmerge_client(source, lead_user)
 
 
+class TestUnmergeUnderLegalHold:
+    """Refs #2200: Aufheben einer Zusammenfuehrung unter aktivem Hold wird abgewiesen.
+
+    ``_validate_merge`` weist eine Zusammenfuehrung unter Hold seit ADR-045 ab
+    und nennt im Docstring den Grund: auf der Quellseite verloere ein
+    Personen-Hold still die Deckung ueber deren Ereignisse. Das Aufheben ist
+    dieselbe Bewegung in die Gegenrichtung — es hatte den Guard nicht. Ein
+    Hold auf der Zielperson blieb beim Ziel stehen, waehrend die Ereignisse zur
+    Quelle zurueckwanderten: ``owner_has_active_hold`` vorher wahr, nachher
+    falsch, der Hold weiterhin aktiv (Spoliation ueber einen Umweg, Muster
+    Refs #1066).
+
+    Bis eine ausdrueckliche Uebertragungsregel existiert, ist Abweisen die
+    ehrliche Antwort: ein Hold ist ein bewusster Beweismittel-Akt, ein still
+    erzeugter Zweit-Hold waere das Gegenteil (Argument aus Refs #2144).
+    """
+
+    HOLD_MESSAGE = (
+        "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+    )
+
+    def _hold(self, facility, user, target_type, target_id):
+        """Direkt am Modell — ``create_hold_for_target`` weist einen Hold auf den
+        Merge-Tombstone seit Refs #2144 ab, und genau diesen Alt-/Reparaturzustand
+        muss der Guard hier aushalten (Muster ``test_legal_hold_tombstone_guard.py``)."""
+        return LegalHold.objects.create(
+            facility=facility,
+            target_type=target_type,
+            target_id=target_id,
+            reason="Gerichtsverfahren",
+            created_by=user,
+        )
+
+    def test_hold_on_the_target_keeps_the_documentation_covered(
+        self, facility, source, target, doc_type_contact, staff_user, lead_user, caplog
+    ):
+        from core.retention.legal_holds import owner_has_active_hold
+
+        event = _event(facility, source, doc_type_contact, staff_user)
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        target.refresh_from_db()
+        self._hold(facility, lead_user, "Client", target.pk)
+        assert owner_has_active_hold(target) is True
+
+        with caplog.at_level(logging.INFO, logger="core.services.client.merge"):
+            with pytest.raises(ValidationError) as exc_info:
+                unmerge_client(source, lead_user)
+
+        assert exc_info.value.messages == [self.HOLD_MESSAGE]
+        event.refresh_from_db()
+        assert event.client_id == target.pk, "die Dokumentation bleibt unter der Deckung des Holds"
+        source.refresh_from_db()
+        assert source.merged_into_id == target.pk
+        assert source.is_deleted is True
+        target.refresh_from_db()
+        assert owner_has_active_hold(target) is True
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.CLIENT_RESTORED,
+            target_id=str(source.pk),
+            detail__unmerged_from=str(target.pk),
+        ).exists()
+        assert [r for r in caplog.records if r.getMessage() == "client_unmerged"] == []
+
+    def test_hold_on_the_source_tombstone_is_refused_as_well(self, facility, source, target, lead_user):
+        """Defense in depth. Ueber den Service-Weg ist dieser Zustand seit
+        Refs #2144 nicht mehr herstellbar — der Guard haelt ihn trotzdem, denn
+        Alt-Bestand und Reparaturen entstehen nicht ueber Service-Wege."""
+        from core.retention.legal_holds import create_hold_for_target
+
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        with pytest.raises(ValidationError):
+            create_hold_for_target(
+                facility,
+                target_type="Client",
+                target_id=source.pk,
+                user=lead_user,
+                reason="Gerichtsverfahren",
+            )
+        self._hold(facility, lead_user, "Client", source.pk)
+
+        with pytest.raises(ValidationError) as exc_info:
+            unmerge_client(source, lead_user)
+
+        assert exc_info.value.messages == [self.HOLD_MESSAGE]
+        source.refresh_from_db()
+        assert source.merged_into_id == target.pk
+
+    def test_hold_on_a_returning_event_is_refused(
+        self, facility, source, target, doc_type_contact, staff_user, lead_user
+    ):
+        """Der Ereignis-Hold wandert mit (die pk bleibt), aber die Person, unter
+        deren Deckung er heute steht, waere nach dem Aufheben eine andere.
+        ``client_has_active_hold`` zieht diese Linie ueber ``events__pk__in``."""
+        event = _event(facility, source, doc_type_contact, staff_user)
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        self._hold(facility, lead_user, "Event", event.pk)
+
+        with pytest.raises(ValidationError) as exc_info:
+            unmerge_client(source, lead_user)
+
+        assert exc_info.value.messages == [self.HOLD_MESSAGE]
+        event.refresh_from_db()
+        assert event.client_id == target.pk
+
+    def test_hold_on_a_returning_case_is_refused(self, facility, source, target, staff_user, lead_user):
+        """Ein Fall-Hold verliert beim Aufheben **keine** Deckung — die
+        Fall-Zuordnung des Ereignisses bleibt, und der Fall wandert als Ganzes
+        zurueck (siehe ``test_case_binding_survives_an_unmerge_without_holds``).
+        Abgewiesen wird trotzdem: ``client_has_active_hold`` schliesst ueber
+        ``cases__pk__in`` auch die Person eines gehaltenen Falls ein — dieselbe
+        Menge, die schon den Merge in der Gegenrichtung abweist. Strenger als
+        noetig, aber konsistent und fail-loud statt still."""
+        case = Case.objects.create(facility=facility, client=source, title="Fall Quelle", created_by=staff_user)
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        case.refresh_from_db()
+        assert case.client_id == target.pk
+        self._hold(facility, lead_user, "Case", case.pk)
+
+        with pytest.raises(ValidationError) as exc_info:
+            unmerge_client(source, lead_user)
+
+        assert exc_info.value.messages == [self.HOLD_MESSAGE]
+
+    def test_case_binding_survives_an_unmerge_without_holds(
+        self, facility, source, target, doc_type_contact, staff_user, lead_user
+    ):
+        """Die Sachaussage hinter dem Fall-Zweig: ein Fall-Hold **haette** hier
+        nichts verloren. Fall und Ereignis wandern gemeinsam zurueck, die
+        ``case_id`` des Ereignisses bleibt unveraendert — anders als beim
+        Personen-Hold, dessen Deckung ueber ``client_id`` laeuft und genau
+        deshalb reisst."""
+        from core.retention.legal_holds import case_has_active_hold
+
+        case = Case.objects.create(facility=facility, client=source, title="Fall Quelle", created_by=staff_user)
+        event = _event(facility, source, doc_type_contact, staff_user, case=case)
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+
+        unmerge_client(source, lead_user)
+
+        case.refresh_from_db()
+        event.refresh_from_db()
+        assert case.client_id == source.pk
+        assert event.client_id == source.pk
+        assert event.case_id == case.pk
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Case",
+            target_id=case.pk,
+            reason="Gerichtsverfahren",
+            created_by=lead_user,
+        )
+        assert case_has_active_hold(case) is True
+
+
 class TestChainMerge:
     """Ketten-Merges duerfen das Undo-Versprechen nicht still brechen (ADR-045).
 

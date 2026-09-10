@@ -677,6 +677,9 @@ def unmerge_client(source, user):
     Nach der Redaktion des Tombstones ist nichts mehr umkehrbar — die
     Stammdaten der Quelle sind getilgt, ein „Restore" ergaebe eine leere
     Huelle; der Versuch wird abgewiesen.
+
+    Unter einer aktiven Aufbewahrungssperre auf Ziel ODER Quelle wird ebenfalls
+    abgewiesen (Refs #2200) — Begruendung am Guard unten.
     """
     if not user.is_lead_or_admin:
         raise ValidationError(_("Nur die Leitung darf eine Zusammenführung aufheben."))
@@ -686,6 +689,39 @@ def unmerge_client(source, user):
     source, target = _locked_clients(source, target)
     if source.merged_into_id != target.pk:
         raise ValidationError(_("Diese Person ist nicht zusammengeführt."))
+    # Refs #2200: Spiegelbild zum Hold-Guard in ``_validate_merge`` — auf den
+    # bereits gesperrten, frisch gelesenen Zeilen, damit kein Hold zwischen
+    # Lesung und Wirkung entstehen kann.
+    #
+    # Der Merge weist unter Hold ab, weil eine QUELLE ihre Deckung ueber die
+    # eigenen Ereignisse verloere. Das Aufheben ist dieselbe Bewegung in die
+    # Gegenrichtung und hatte den Guard nicht: die Ereignisse wandern zur
+    # Quelle zurueck, ein Hold auf der ZIELperson bleibt dort stehen und deckt
+    # sie nicht mehr (``owner_has_active_hold`` vorher wahr, nachher falsch,
+    # der Hold weiterhin aktiv). Danach fallen sie in den regulaeren
+    # Aufbewahrungslauf — Spoliation ueber einen Umweg (Muster Refs #1066).
+    #
+    # Abweisen statt spiegeln: ein Hold ist ein bewusster Beweismittel-Akt,
+    # ein still erzeugter Zweit-Hold auf der Quelle waere das Gegenteil
+    # (dasselbe Argument wie in Refs #2144). Bis eine ausdrueckliche
+    # Uebertragungsregel existiert, wartet das Aufheben auf das Ende der
+    # Sperre.
+    #
+    # ``client_has_active_hold`` ist bewusst dieselbe Menge wie im Merge — sie
+    # zaehlt neben dem Personen-Hold auch ein gehaltenes Ereignis und einen
+    # gehaltenen Fall dieser Person mit. Beim Fall reisst die Deckung zwar
+    # nicht (die ``case_id`` des Ereignisses bleibt, der Fall wandert als
+    # Ganzes mit), das Abweisen ist dort also strenger als noetig — eine
+    # zweite, engere Hold-Menge daneben waere aber genau die Drift, die
+    # Refs #1756 gekostet hat.
+    for person in (target, source):
+        if client_has_active_hold(person):
+            raise ValidationError(
+                _(
+                    "Für eine der beiden Personen besteht eine Aufbewahrungssperre "
+                    "(Legal Hold) — Zusammenführen nicht möglich."
+                )
+            )
     # Refs #2085: Gefragt wird der terminale Stempel, nicht das Anzeigefeld.
     # Bis dahin stand hier ``if not source.is_active`` — das trug nur, weil
     # ``_redact_client_identity`` beide Felder in derselben Transaktion setzt.
