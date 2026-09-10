@@ -1773,7 +1773,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestTrashAnonymizeAction` |
+| Klient:innen / Retention | admin (facility_admin) | C/F | ⚪ | `test_client_deletion_status.py::TestTrashAnonymizeAction`, `test_rls_functional.py::TestEventHistoryRedactionDeferralUnderAppRole` |
 
 **Code-Referenz:** `anonymize_client_now` in [src/core/services/client/main.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/main.py), `ClientAnonymizeView` in [src/core/views/client_deletion.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/client_deletion.py) (Refs #1737, #1756)
 
@@ -1806,6 +1806,7 @@
 - Zweck: Art.-17-Sofortlöschung ohne 30 Tage Papierkorb **und** Auflösen von Konfigurations-Blockaden ohne Datenresurrektion (siehe ENT-CONFIG-25).
 - Der Vier-Augen-Antragsweg bleibt der einzige Weg **in** den Papierkorb — die Aktion wirkt nur auf `is_deleted=True`.
 - Ein Sperrvermerk darf durch eine manuelle Aktion nicht ausgehebelt werden (Spoliationsschutz, Refs #1066).
+- Der im vierten Erwartungspunkt beschriebene Ausgang „Historie erst nach dem nächtlichen Lauf redigiert" ist seit #2159 automatisiert belegt: `test_rls_functional.py::TestEventHistoryRedactionDeferralUnderAppRole` fährt genau diese Aktion unter der echten App-Rolle (`rls_test_role`, NOSUPERUSER/NOBYPASSRLS, kein Tabellen-Eigentum) und pinnt die Betriebs-Logzeile `eventhistory_redaction_deferred rows=… reason=connection_is_not_table_owner` als Vertrag; die Owner-Gegenprobe derselben Klasse deckt den zweiten, sofort redigierenden Ausgang ab (ADR-050 M-8).
 
 **Status:** ☐ Offen
 
