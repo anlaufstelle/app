@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from uuid import UUID
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -283,6 +283,12 @@ class HandoverNoteUpdateView(StaffRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
+        if facility is None:
+            # Einrichtungslose Konten (super_admin traegt die Bindung per Design
+            # nicht) haben keine Schicht, in die sie schreiben koennten — 403 wie
+            # jede andere facility-gebundene Schreibroute, nicht 400 (Refs #2042,
+            # AuthZ-Guard ``test_authz_facility_less``).
+            raise PermissionDenied
         now = timezone.localtime()
         today = timezone.localdate()
 
