@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180).
+> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; Coolify references reworded to "k8s"/"custom orchestration", #2202).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
 
@@ -54,7 +54,7 @@ docker compose -f docker-compose.prod.yml images web
 # (NOSUPERUSER, NOBYPASSRLS) and the admin role (NOSUPERUSER, BYPASSRLS)
 # (deploy/postgres-init/01-app-role.sh). If they are missing or still set to
 # change-me-*, DB init or the migrate job fails.
-# Source: .env.example, docs/coolify-deployment.md.
+# Source: .env.example.
 # The staging stack runs the same check against .env.staging instead of .env
 # (ENV_FILE=.env.staging, template .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
@@ -433,7 +433,7 @@ actually ran through.
 <summary>Old host crontab (complete) — only for setups WITHOUT the sidecar</summary>
 
 Relevant if the stack is run without `docker-compose.prod.yml` (e.g.
-Coolify, k8s) and therefore no `cron` service exists.
+k8s) and therefore no `cron` service exists.
 
 ```cron
 # Anlaufstelle – Operational cron jobs (legacy: without the cron sidecar)
@@ -494,7 +494,7 @@ invoked on **every** deploy by `dev-ops/deploy/deploy-dev.sh` (dev-only)
 (idempotent). The dev stack runs via `docker-compose.dev.yml` and deliberately
 does **not** get the `cron` sidecar from [§3.2](#32-cron-sidecar-standard):
 running both in parallel would execute every job twice, and here the timers are
-additionally the test case for the host scheduler path that Coolify/k8s setups
+additionally the test case for the host scheduler path that k8s setups
 without our compose file use.
 
 > **Note (Refs #980):** Previously, `bootstrap.sh` installed the timers inline. Since `bootstrap.sh` only runs during initial provisioning, timers added later never made it onto the running host (the backup cron stayed absent). The installation now lives in `install-timers.sh` and runs on every `deploy-dev.sh`.
@@ -1172,7 +1172,7 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 **Recommended:** Enable object lock / write-once policy on the bucket — ransomware then cannot overwrite encrypted backups.
 
-**Failure mode** (Refs #797): If the off-site sync fails (network down, invalid credentials, disk full on the off-site host), `backup.sh` logs an `ERROR`. A **state file** `$BACKUP_STATE_DIR/.offsite_state` (default: next to the backups) counts consecutive failures. On the **second** consecutive failure, the script exits with exit code 1 — the cron/Coolify job turns red and the operator sees the incident immediately, without having to scan the logs. Successful runs reset the counter.
+**Failure mode** (Refs #797): If the off-site sync fails (network down, invalid credentials, disk full on the off-site host), `backup.sh` logs an `ERROR`. A **state file** `$BACKUP_STATE_DIR/.offsite_state` (default: next to the backups) counts consecutive failures. On the **second** consecutive failure, the script exits with exit code 1 — the cron job turns red and the operator sees the incident immediately, without having to scan the logs. Successful runs reset the counter.
 
 **Sentry hook (optional):** If `SENTRY_DSN` AND a `BACKUP_SENTRY_HOOK` script are set, `backup.sh` calls the hook on every off-site failure (arguments: description, off-site target). The hook is a free operator choice — e.g. `sentry-cli send-event` or a custom `curl` script. Without a hook, it stays at log + exit code.
 
@@ -1328,7 +1328,7 @@ as well as the alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 With an active scanner and an unreachable daemon, the overall status is set to
 `"degraded"`, the HTTP status stays 200 (the hard block happens
 on upload, not on the health check). The container healthcheck in the Dockerfile
-reads the JSON `status` and reports unhealthy on `degraded` — Coolify/k8s see
+reads the JSON `status` and reports unhealthy on `degraded` — k8s see
 the incident, but the load balancer does not pull the pod out.
 
 ### 7.4 Database Updates (Signatures)
@@ -2775,4 +2775,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 153ce66a9ac6a6a1cfd25b1092023215511b3911 -->
+<!-- source-hash: 3c6aa4aa98e7fb2904c5737320a206ef36aed0cd -->

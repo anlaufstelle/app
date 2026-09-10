@@ -288,7 +288,7 @@ echo "Rotation abgeschlossen."
 # Failure-Mode: jeder Fehler erhoeht einen persistenten Counter im
 # State-File ``$BACKUP_STATE_DIR/.offsite_state``. Erst beim ZWEITEN
 # aufeinanderfolgenden Fehler beendet das Skript mit Exit-Code 1 — das
-# fuehrt zu einer sichtbaren Cron-/Coolify-Warnung. Einzelne transiente
+# fuehrt zu einer sichtbaren Cron-Warnung. Einzelne transiente
 # Fehler werden weiterhin nur geloggt, das lokale Backup ist gerettet
 # und Off-Site darf beim naechsten Run nachziehen.
 if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then

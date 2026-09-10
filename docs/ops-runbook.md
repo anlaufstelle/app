@@ -49,7 +49,7 @@ docker compose -f docker-compose.prod.yml images web
 # NOBYPASSRLS) und die Admin-Rolle (NOSUPERUSER, BYPASSRLS) an
 # (deploy/postgres-init/01-app-role.sh). Fehlen sie oder stehen noch auf
 # change-me-*, schlagen DB-Init bzw. der Migrate-Job fehl.
-# Quelle: .env.example, docs/coolify-deployment.md.
+# Quelle: .env.example.
 # Fuer den Staging-Stack gilt derselbe Check gegen .env.staging statt .env
 # (ENV_FILE=.env.staging, Vorlage .env.staging.example) — Refs #2086.
 ENV_FILE="${ENV_FILE:-.env}"
@@ -430,7 +430,7 @@ tatsaechlich durchlaufen.
 <summary>Alte Host-Crontab (vollstaendig) — nur noch fuer Setups OHNE Sidecar</summary>
 
 Relevant, wenn der Stack ohne `docker-compose.prod.yml` betrieben wird (z. B.
-Coolify, k8s) und deshalb kein `cron`-Service existiert.
+k8s) und deshalb kein `cron`-Service existiert.
 
 ```cron
 # Anlaufstelle – Operative Cron-Jobs (Legacy: ohne cron-Sidecar)
@@ -491,7 +491,7 @@ installiert — aufgerufen bei **jedem** Deploy durch `dev-ops/deploy/deploy-dev
 (idempotent). Der Dev-Stack laeuft ueber `docker-compose.dev.yml` und bekommt
 den `cron`-Sidecar aus [§3.2](#32-cron-sidecar-standard) bewusst **nicht**:
 beides parallel wuerde jeden Job doppelt ausfuehren, und die Timer sind hier
-zusaetzlich der Testfall fuer den Host-Scheduler-Pfad, den Coolify-/k8s-Setups
+zusaetzlich der Testfall fuer den Host-Scheduler-Pfad, den k8s-Setups
 ohne unser Compose-File nutzen.
 
 > **Hinweis (Refs #980):** Frueher installierte `bootstrap.sh` die Timer inline. Da `bootstrap.sh` nur beim Erst-Provisioning laeuft, kamen nachtraeglich ergaenzte Timer nie auf den laufenden Host (Backup-Cron blieb aus). Die Installation liegt jetzt in `install-timers.sh` und laeuft bei jedem `deploy-dev.sh`.
@@ -1169,7 +1169,7 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 **Empfohlen:** Object-Lock / Write-Once-Policy am Bucket aktivieren — Ransomware kann verschluesselte Backups dann nicht ueberschreiben.
 
-**Failure-Mode** (Refs #797): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-/Coolify-Job wird damit rot und der Operator sieht den Vorfall sofort, ohne die Logs scannen zu muessen. Erfolgreiche Laeufe setzen den Counter zurueck.
+**Failure-Mode** (Refs #797): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-Job wird damit rot und der Operator sieht den Vorfall sofort, ohne die Logs scannen zu muessen. Erfolgreiche Laeufe setzen den Counter zurueck.
 
 **Sentry-Hook (optional):** Wenn `SENTRY_DSN` UND ein `BACKUP_SENTRY_HOOK`-Skript gesetzt sind, ruft `backup.sh` den Hook bei jedem Off-Site-Fehler auf (Argumente: Beschreibung, Off-Site-Ziel). Der Hook ist freie Operator-Wahl — z.B. `sentry-cli send-event` oder ein eigenes `curl`-Skript. Ohne Hook bleibt es bei Log + Exit-Code.
 
@@ -1325,7 +1325,7 @@ sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
 `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
 beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
-liest den JSON-`status` und meldet bei `degraded` ungesund — Coolify/k8s sehen
+liest den JSON-`status` und meldet bei `degraded` ungesund — k8s sehen
 den Vorfall, der Last-Balancer reisst den Pod aber nicht raus.
 
 ### 7.4 Datenbank-Updates (Signaturen)

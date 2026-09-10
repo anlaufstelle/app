@@ -1,6 +1,6 @@
 # Monitoring-Guide — der `/health/`-Endpoint
 
-> **Zweck:** Den `/health/`-Endpoint operativ verstehen — welche Felder er liefert, welche HTTP-Status-Codes er setzt, was jeder Wert bedeutet und wie man Uptime-/Monitoring-Tools anbindet. [coolify-deployment.md](coolify-deployment.md) sagt nur „Monitoring-Alerts einrichten" — dieses Dokument liefert die fehlende Substanz.
+> **Zweck:** Den `/health/`-Endpoint operativ verstehen — welche Felder er liefert, welche HTTP-Status-Codes er setzt, was jeder Wert bedeutet und wie man Uptime-/Monitoring-Tools anbindet.
 >
 > **Code ist die Wahrheitsquelle.** Alle Feldnamen, Schwellen und Status-Codes sind gegen [`src/core/views/health.py`](../src/core/views/health.py) (View) und [`src/anlaufstelle/urls.py`](../src/anlaufstelle/urls.py) (Route `path("health/", HealthView.as_view(), name="health")`) verifiziert. Stand: v0.14.0-Roadmap (Refs #1071 Block D).
 
@@ -243,7 +243,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 
 ### 7.2 Container-/Compose-Healthcheck
 
-`/health/` ist der natürliche Docker-Healthcheck (siehe [coolify-deployment.md](coolify-deployment.md), Hinweiskasten ClamAV). Beispiel:
+`/health/` ist der natürliche Docker-Healthcheck (siehe [Ops-Runbook § 7](ops-runbook.md#7-clamav-virenscan), Hinweiskasten ClamAV). Beispiel:
 
 ```yaml
 healthcheck:
@@ -270,7 +270,7 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 
 ### 7.4 Was zusätzlich überwachen?
 
-`/health/` deckt App-Liveness + die genannten Komponenten ab. **Nicht** abgedeckt und separat per Host-Monitoring (Coolify/Hetzner/Node-Exporter) zu überwachen:
+`/health/` deckt App-Liveness + die genannten Komponenten ab. **Nicht** abgedeckt und separat per Host-Monitoring (Hetzner/Node-Exporter) zu überwachen:
 
 - **RAM/CPU des Hosts** (`/health/` misst nur Disk-frei auf `MEDIA_ROOT`).
 - **Off-Site-Backup-Status** — `scripts/ops/backup.sh` signalisiert Off-Site-Fehler über Exit-Code/State-File/optionalen Sentry-Hook, **nicht** über `/health/` ([ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738)).
@@ -296,6 +296,6 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 
 ## 9. Abgrenzung: `/health/` vs. Compliance-Dashboard
 
-`/health/` ist der **Realtime-Liveness/Komponenten**-Check für Maschinen. Für die **Compliance-/Governance-Sicht** (inkl. eines robusteren Backup-Alters- und Restore-Test-Checks) gibt es das **Compliance-Dashboard** `/system/compliance/` (super_admin, Refs #919): es aggregiert 11 Checks (DB-Rollen, **Backup-Alter**, **Restore-Test-Alter**, ClamAV + Signatur, Retention-Cron, MFA-Quote, Migrationen, Versionen, kritische Audit-Events) mit `ok`/`warning`/`critical`/`unknown` — siehe [coolify-deployment.md „Nach Go-Live"](coolify-deployment.md) und [ops-runbook §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739).
+`/health/` ist der **Realtime-Liveness/Komponenten**-Check für Maschinen. Für die **Compliance-/Governance-Sicht** (inkl. eines robusteren Backup-Alters- und Restore-Test-Checks) gibt es das **Compliance-Dashboard** `/system/compliance/` (super_admin, Refs #919): es aggregiert 11 Checks (DB-Rollen, **Backup-Alter**, **Restore-Test-Alter**, ClamAV + Signatur, Retention-Cron, MFA-Quote, Migrationen, Versionen, kritische Audit-Events) mit `ok`/`warning`/`critical`/`unknown` — siehe [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739).
 
 **Faustregel:** `/health/` für Uptime-/Pager-Alerting (Sekunden/Minuten), `/system/compliance/` für die periodische Betriebs-/Audit-Durchsicht (Tage). Für Totalverlust-Wiederherstellung: [disaster-recovery.md](disaster-recovery.md).

@@ -528,5 +528,4 @@ Rückbau abgeschlossen am / durch:
 - [ops-runbook.md §6.6a — Off-Site-Backup-Sync](ops-runbook.md#66a-off-site-backup-sync-refs-738)
 - [ops-runbook.md §13 — PostgreSQL-Major-Upgrade (16→18)](ops-runbook.md#13-postgresql-major-upgrade-16--18) (dump→frisches-Cluster→restore, derselbe Mechanismus wie DR)
 - [monitoring-guide.md — `/health/`-Felder und Status-Codes](monitoring-guide.md)
-- [coolify-deployment.md — Environment-Variablen](coolify-deployment.md)
 - [.env.example — kanonische Secret-Liste](../.env.example)

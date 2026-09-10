@@ -19,7 +19,7 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 **Out of Scope (vertrauen wir):**
 
 - Host-OS, Docker-Daemon, Kernel-Härtung
-- Coolify/Deployment-Plattform und deren TLS-Terminierung
+- Deployment-Plattform und deren TLS-Terminierung
 - Mail-Provider (SPF/DKIM/Spam-Filter) und Browser-Sandbox
 - Physische Sicherheit von Backups jenseits der `BACKUP_ENCRYPTION_KEY`-Verschlüsselung
 

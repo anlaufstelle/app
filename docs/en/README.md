@@ -64,7 +64,6 @@ Templates included:
 | [cra-einordnung.md](../compliance/cra-einordnung.md) | CRA classification (EU 2024/2847) — FOSS scope, gap check against Annex I, reporting-process sketch, review trigger (Refs #1077) |
 | `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
 | dev-deployment.md | Dev/test environment deployment |
-| [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
 | `release-checklist.md` (dev-only) | Release process, sanitize steps, hard-exclusion list |
 | [performance-budgets.md](../performance-budgets.md) | Performance targets and budgets |
 | [sprachleitlinie.md](../sprachleitlinie.md) | Language guideline for UI and handbook — _Klientel → Person_, terminology matrix, refactor priorities (Refs #604) |
@@ -77,4 +76,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 5c87052369342c6a7bf70fe75fd40452208c9ca8 -->
+<!-- source-hash: b021540b4ab313b1117c4ad3a38106e4458f234d -->

@@ -2,7 +2,7 @@
 
 Bisher liefen alle RLS-Tests als Superuser-DB-User — der bypassed RLS
 per Postgres-Default und macht echte Policy-Verletzungen in Tests
-unsichtbar. Wenn ein Coolify-Default oder Migrations-Setup den
+unsichtbar. Wenn ein Plattform-Default oder Migrations-Setup den
 Django-DB-User als Superuser anlegt, wird RLS in Produktion **still**
 abgeschaltet — kein CI-Alarm.
 

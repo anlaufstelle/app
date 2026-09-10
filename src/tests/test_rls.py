@@ -6,7 +6,7 @@ Diese Tests prüfen daher die Migration-Korrektheit — dass Policies und
 ``FORCE ROW LEVEL SECURITY`` auf allen erwarteten Tabellen existieren.
 
 Das eigentliche RLS-Verhalten greift in Produktion, wo der Django-DB-User
-explizit kein Superuser sein darf (siehe docs/coolify-deployment.md).
+explizit kein Superuser sein darf (siehe docs/ops-runbook.md § 9).
 """
 
 import pytest

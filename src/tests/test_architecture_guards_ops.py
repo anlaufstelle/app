@@ -355,7 +355,6 @@ class TestDeploymentDbSecretBoundary:
     _OPERATOR_DOCS = (
         Path("docs/ops-runbook.md"),
         Path("docs/packages.md"),
-        Path("docs/coolify-deployment.md"),
         Path("docs/disaster-recovery.md"),
         Path("docs/admin-guide.md"),
         Path("docs/en/admin-guide.md"),

@@ -795,7 +795,7 @@ class TestProdHealthcheckRedirectExempt:
 
 @pytest.mark.architecture
 class TestVorlagenFuehrenLoopbackHostsFuerDenHealthcheck:
-    """Refs #2077: Prod-Vorlage und Coolify-Anleitung muessen ``localhost`` und
+    """Refs #2077: Prod-Vorlage muss ``localhost`` und
     ``127.0.0.1`` in ``ALLOWED_HOSTS`` fuehren.
 
     Zweite, vom Redirect-Exempt unabhaengige Haelfte des Deadlocks: Django prueft
@@ -820,17 +820,6 @@ class TestVorlagenFuehrenLoopbackHostsFuerDenHealthcheck:
             ".env.example fuehrt ALLOWED_HOSTS ohne localhost/127.0.0.1 — jede frische "
             f"Installation nach Vorlage bekommt am Container-Healthcheck einen "
             f"DisallowedHost-400 und wird nie healthy (Refs #2077). Gefunden: {sorted(hosts)}"
-        )
-
-    def test_coolify_anleitung_fuehrt_die_loopback_hosts(self):
-        inhalt = (REPO_ROOT / "docs/coolify-deployment.md").read_text(encoding="utf-8")
-        treffer = re.search(r"^-\s*`ALLOWED_HOSTS=([^`]*)`", inhalt, re.MULTILINE)
-        assert treffer is not None, "docs/coolify-deployment.md nennt keine ALLOWED_HOSTS-Zeile"
-        hosts = {h.strip() for h in treffer.group(1).split(",")}
-        assert hosts >= self._PFLICHT, (
-            "docs/coolify-deployment.md nennt ALLOWED_HOSTS ohne localhost/127.0.0.1 — die "
-            "Anleitung fuehrt ihren eigenen Wert, unabhaengig von .env.example, und liefe "
-            f"in denselben DisallowedHost-400 am Healthcheck (Refs #2077). Gefunden: {sorted(hosts)}"
         )
 
 
