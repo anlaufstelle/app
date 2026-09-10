@@ -47,6 +47,7 @@ from core.services.security import (
     remaining_backup_codes,
     verify_backup_code,
 )
+from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,10 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
                 candidate = f"{stripped[:4]}-{stripped[4:]}".lower()
             # Neue 22-Zeichen-Codes bleiben unveraendert (case-sensitive!).
             if candidate and verify_backup_code(request.user, candidate):
+                # Refs #2034: erst rotieren, dann anheben — ein vor dem Verify
+                # entwendetes ``sessionid``-Cookie erbt die verifizierte Sitzung
+                # sonst mit.
+                rotate_session_after_privilege_gain(request)
                 request.session["mfa_verified"] = True
                 log_audit_event(
                     request,
@@ -219,6 +224,8 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
                 )
                 return redirect(django_settings.LOGIN_REDIRECT_URL)
         elif token and device.verify_token(token):
+            # Refs #2034: Rotation vor dem Anheben (siehe Backup-Zweig oben).
+            rotate_session_after_privilege_gain(request)
             request.session["mfa_verified"] = True
             return redirect(django_settings.LOGIN_REDIRECT_URL)
 
@@ -345,6 +352,10 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
                 return redirect("mfa_setup")
             device.confirmed = True
             device.save(update_fields=["confirmed"])
+            # Refs #2034: Der Setup-Abschluss ist die erste Rechteanhebung der
+            # Sitzung (2FA aktiv + verifiziert) — Rotation vor dem Flag. Der
+            # Abbau von ``mfa_setup_pending`` oben wandert mit.
+            rotate_session_after_privilege_gain(request)
             request.session["mfa_verified"] = True
             log_audit_event(
                 request,

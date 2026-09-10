@@ -41,6 +41,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
+from core.services.security.session_rotation import rotate_session_after_privilege_gain
 
 
 class VerifiedSessionRequiredForPasskey(exceptions.OTPWebAuthnApiError):
@@ -142,6 +143,11 @@ class WebAuthnAuthenticationCompleteView(CompleteCredentialAuthenticationView):
 
     def complete_auth(self, device):
         super().complete_auth(device)
+        # Refs #2034: Session-ID NACH ``super()`` rotieren — ``otp_login`` hat
+        # dort gerade ``otp_device_id`` gestempelt, und ``cycle_key()`` traegt
+        # es in die neue Sitzung mit. Rotation vor dem Flag, damit ein vor der
+        # Assertion entwendetes Cookie die verifizierte Sitzung nicht erbt.
+        rotate_session_after_privilege_gain(self.request)
         # Erfolg wird — analog zum TOTP-Verify — nicht eigens auditiert; nur das
         # Anheben der Session auf 2FA-verifiziert ist hier sicherheitskritisch.
         self.request.session["mfa_verified"] = True

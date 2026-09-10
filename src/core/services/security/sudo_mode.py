@@ -22,6 +22,8 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
 
+from core.services.security.session_rotation import rotate_session_after_privilege_gain
+
 SUDO_SESSION_KEY = "sudo_until"
 
 
@@ -35,7 +37,13 @@ def enter_sudo(request) -> None:
     Aufrufer ist verantwortlich, vorher das Passwort + ggf. MFA zu
     pruefen — diese Funktion vertraut dem Caller und setzt nur den
     Timestamp.
+
+    Refs #2034: Der Grant ist eine Rechteanhebung, also rotiert die
+    Django-Session-ID zuerst; erst danach wird der Stempel geschrieben.
+    Die Rotation sitzt bewusst hier und nicht in ``SudoModeView.post`` —
+    sie gilt damit fuer JEDEN kuenftigen Aufrufer von ``enter_sudo``.
     """
+    rotate_session_after_privilege_gain(request)
     request.session[SUDO_SESSION_KEY] = int(time.time()) + _ttl_seconds()
 
 
