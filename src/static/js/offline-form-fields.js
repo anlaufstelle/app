@@ -223,6 +223,22 @@
         }
     }
 
+    // Refs #2187: Liest die App-Zeitzone (``data-app-timezone``) aus dem
+    // Formular-Kontext. Alpine bindet ``$el`` an das Element, auf dem der
+    // ausgefuehrte Ausdruck steht — bei ``@submit.prevent="saveCreate"`` also
+    // an das FORMULAR, das das Attribut selbst traegt. Ein reines
+    // ``querySelector`` (nur Nachfahren) griffe dort ins Leere und der
+    // "UTC"-Fallback wuerde die Rueckfallstunden-Pruefung still entschaerfen.
+    // Deshalb zuerst ``closest`` (schliesst das Element selbst ein), dann
+    // ``querySelector`` fuer den Fall, dass ``$el`` die x-data-Wurzel ist.
+    function appTimeZone(el) {
+        if (!el) return "UTC";
+        const host =
+            (el.closest && el.closest("[data-app-timezone]")) ||
+            (el.querySelector && el.querySelector("[data-app-timezone]"));
+        return (host && host.dataset && host.dataset.appTimezone) || "UTC";
+    }
+
     // Reines Datum (ohne Zeit). ACHTUNG: bewusst OHNE 10-Zeichen-Schnitt —
     // offline-client-view.js schneidet ISO-Timestamps VOR dem Aufruf selbst
     // aufs Datum (_dateOnly), offline-workitem-list.js parst den vollen Wert.
@@ -257,6 +273,7 @@
         emptyWorkItemValues: emptyWorkItemValues,
         workItemFormData: workItemFormData,
         isAmbiguousWallClock: isAmbiguousWallClock,
+        appTimeZone: appTimeZone,
         fileNote: fileNote,
         formatTs: formatTs,
         formatDate: formatDate,

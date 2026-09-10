@@ -154,7 +154,7 @@
             },
 
             get _appTimeZone() {
-                return this.$el.querySelector("[data-app-timezone]")?.dataset?.appTimezone || "UTC";
+                return window.offlineFormFields.appTimeZone(this.$el);
             },
 
             _checkOccurredAt() {

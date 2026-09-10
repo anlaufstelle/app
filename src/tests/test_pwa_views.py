@@ -758,7 +758,15 @@ class TestPrecachedShellBumpGuard:
     # offline_create.html und offline_detail.html; die Dead-Letter-Feldcodes
     # aendern conflict_list.html. Der finale Shell-Hash wird innerhalb
     # derselben, noch unveroeffentlichten v47-Generation nachgezogen.
-    _PINNED_SHELL_HASH = "254ecfe89aa8320a60506ae96dbbc783f1491954f212df20be8ce29331f0436a"
+    # Refs #2187 (E2E-Nachlauf): ``{% get_current_timezone as app_timezone %}``
+    # stand in beiden Erfassungs-Shells VOR dem ``{% block content %}`` und lief
+    # deshalb nie — ``data-app-timezone`` ging leer an den Client. Der Tag zieht
+    # in den Block um; das aendert gerendertes Shell-Markup. NUR der Hash wird
+    # nachgezogen, KEIN v48: anlaufstelle-v47 entstand im selben noch
+    # unveroeffentlichten Lauf (Welle J), steht in keinem Tag und keinem Deploy —
+    # kein Geraet im Feld traegt v47, es gibt also keine Split-Brain-Generation,
+    # gegen die ein Bump schuetzen wuerde (Praezedenz: #1805, #1828, #2136).
+    _PINNED_SHELL_HASH = "2f558341beb922af2ac9f4469f760bae675375404516b9527b418e3bda61e792"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -1203,6 +1211,35 @@ class TestOfflineClientShellView:
         kein Server-Auth-Gate (die Daten schuetzt der IndexedDB-Schluessel)."""
         response = client.get(reverse("core:offline_client_shell"))
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestOfflineShellRendersAppTimeZone:
+    """Refs #2187: Die beiden Erfassungs-Shells muessen die App-Zeitzone tragen.
+
+    ``data-app-timezone`` ist die einzige Quelle, aus der der clientseitige
+    Rueckfallstunden-Guard (``offline-form-fields.appTimeZone`` →
+    ``isAmbiguousWallClock``) die Zone kennt. Faellt das Attribut leer aus,
+    greift stillschweigend der ``"UTC"``-Fallback — in UTC gibt es keine
+    doppelte Stunde, der Guard laeuft ins Leere und die mehrdeutige Zeit
+    landet unbemerkt in der Warteschlange. Genau das passierte, solange
+    ``{% get_current_timezone as app_timezone %}`` VOR dem ``{% block %}``
+    stand: ein Template mit ``{% extends %}`` rendert nur seine Bloecke.
+    """
+
+    @pytest.mark.parametrize(
+        ("url_name", "testid"),
+        [
+            ("core:offline_event_shell", "offline-event-create-form"),
+            ("core:offline_client_shell", "offline-create-form"),
+        ],
+    )
+    def test_shell_carries_configured_time_zone(self, client, settings, url_name, testid):
+        settings.TIME_ZONE = "Europe/Berlin"
+        body = client.get(reverse(url_name)).content.decode()
+        assert f'data-testid="{testid}"' in body
+        assert 'data-app-timezone="Europe/Berlin"' in body
+        assert 'data-app-timezone=""' not in body
 
 
 @pytest.mark.django_db

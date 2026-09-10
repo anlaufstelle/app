@@ -1,10 +1,13 @@
 {% extends "offline_base.html" %}
 {% load i18n static tz %}
-{% get_current_timezone as app_timezone %}
 
 {% block title %}{% trans "Offline-Ansicht" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
+{# Refs #2187: Die Zuweisung MUSS im gerenderten Block stehen. Ein Kind mit  #}
+{# extends rendert ausschliesslich seine Bloecke — Knoten davor fuehrt Django #}
+{# nie aus, die Variable bliebe leer und data-app-timezone damit auch.        #}
+{% get_current_timezone as app_timezone %}
 <div x-data="offlineClientView" data-pk="{{ client_pk }}" x-init="load"
      data-testid="offline-client-view"
      data-dead-reason-not-found="{% trans 'Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen' %}"

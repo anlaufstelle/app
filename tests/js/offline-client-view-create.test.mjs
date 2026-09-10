@@ -57,6 +57,27 @@ describe("Offline-Akten-Create", () => {
         root.remove();
     });
 
+    // Refs #2187: ``@submit.prevent="saveCreate"`` steht auf dem Formular —
+    // Alpine liefert es als ``$el``, und genau dort sitzt auch
+    // ``data-app-timezone`` (Gegenstueck zur Spec in
+    // tests/js/offline-dst-ambiguous.test.mjs).
+    it("weist die doppelte Stunde auch ab, wenn Alpine das Formular als $el liefert", async () => {
+        const root = componentRoot();
+        const component = makeComponent(root);
+        component.$el = root.querySelector("form");
+        component.createDocTypePk = "doctype-1";
+        component.createOccurredAt = "2026-10-25T02:30";
+        const markEventNew = vi.fn(async () => ({}));
+        window.offlineEdit = { markEventNew };
+
+        await component.saveCreate();
+
+        expect(component.dstError).toContain("zweimal");
+        expect(markEventNew).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(root.querySelector('[data-testid="offline-create-occurred-at"]'));
+        root.remove();
+    });
+
     it("zeigt beim synchronen 422 die Feldfehler als invalid", async () => {
         Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
         const root = componentRoot();

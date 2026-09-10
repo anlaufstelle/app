@@ -86,6 +86,36 @@ describe("isAmbiguousWallClock", () => {
         root.remove();
     });
 
+    // Refs #2187: Alpine bindet ``$el`` an das Element, auf dem der Ausdruck
+    // steht — ``@submit.prevent="saveCreate"`` sitzt auf dem FORMULAR, und
+    // ebendieses Formular traegt ``data-app-timezone``. Ein reines
+    // ``querySelector`` (nur Nachfahren) findet das Attribut dann nie, faellt
+    // still auf "UTC" zurueck und die Rueckfallstunde rutscht durch.
+    it("erkennt die doppelte Stunde auch, wenn Alpine das Formular als $el liefert", async () => {
+        const root = document.createElement("div");
+        root.innerHTML = `
+            <form data-app-timezone="Europe/Berlin">
+                <input data-testid="offline-event-create-occurred-at">
+            </form>`;
+        document.body.append(root);
+        const form = root.querySelector("form");
+        const occurredAt = root.querySelector('[data-testid="offline-event-create-occurred-at"]');
+        const markEventNew = vi.fn(async () => ({}));
+        window.offlineEdit = { markEventNew };
+        const component = eventCreateFactory();
+        component.$el = form;
+        component.createDocTypePk = "doctype-1";
+        component.createOccurredAt = "2026-10-25T02:30";
+
+        await component.saveCreate();
+
+        expect(component.dstError).toContain("zweimal");
+        expect(markEventNew).not.toHaveBeenCalled();
+        expect(component.saved).not.toBe(true);
+        expect(document.activeElement).toBe(occurredAt);
+        root.remove();
+    });
+
     it("setzt den Save bei fehlender Intl-Unterstuetzung fort", async () => {
         const root = document.createElement("div");
         root.innerHTML = `
