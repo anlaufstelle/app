@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 from contextlib import suppress
+from pathlib import Path
 
 import pytest
 import requests
@@ -126,6 +127,18 @@ def django_db_setup():
     """Override: E2E-Tests brauchen keine Test-DB, der Server nutzt die echte Dev-DB."""
 
 
+def _static_fingerprint() -> str:
+    """Fingerabdruck der Quellen fuer ``collectstatic``: Dateizahl + juengste mtime unter ``src/static``."""
+    root = Path("src/static")
+    count = 0
+    newest = 0
+    for path in root.rglob("*"):
+        if path.is_file():
+            count += 1
+            newest = max(newest, int(path.stat().st_mtime))
+    return f"{count}:{newest}"
+
+
 @pytest.fixture(scope="session")
 def base_url(request, tmp_path_factory):
     """Startet den Django-Dev-Server mit Seed-Daten für die gesamte Test-Session.
@@ -139,17 +152,24 @@ def base_url(request, tmp_path_factory):
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
     worker_env = {**_E2E_ENV, "E2E_DATABASE_NAME": db_name}
 
-    # collectstatic nur einmal (filelock über shared tmp-Verzeichnis)
+    # collectstatic nur einmal je Stand (filelock über shared tmp-Verzeichnis).
+    # Der Marker traegt einen Fingerabdruck von ``src/static`` (Dateizahl +
+    # juengste mtime): ein Marker ohne Fingerabdruck liess collectstatic ueber
+    # Tage hinweg aus, und gunicorn lieferte veraltete Kopien aus
+    # ``staticfiles/`` — Specs neuer JS-Aenderungen scheiterten dann, obwohl
+    # das Feature funktionierte (Refs #2187, #2175).
     root_tmp = tmp_path_factory.getbasetemp().parent
+    stamp_file = root_tmp / "collectstatic.stamp"
     with FileLock(str(root_tmp / "collectstatic.lock")):
-        if not (root_tmp / "collectstatic.done").exists():
+        fingerprint = _static_fingerprint()
+        if stamp_file.read_text() != fingerprint if stamp_file.exists() else True:
             subprocess.run(
                 [python, "src/manage.py", "collectstatic", "--noinput"],
                 check=True,
                 capture_output=True,
                 env=worker_env,
             )
-            (root_tmp / "collectstatic.done").touch()
+            stamp_file.write_text(fingerprint)
 
     # E2E-Datenbank erstellen + Migrationen + Seed (pro Worker)
     _create_e2e_db(python, db_name)
