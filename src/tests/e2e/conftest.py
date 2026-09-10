@@ -427,7 +427,13 @@ def _sync_storage_state(cache, username, context) -> None:
         cache.pop(username, None)
         return
     if _session_cookie_value(state):
-        cache[username] = (entry[0], state)
+        # Nur die Cookies uebernehmen: ``context.storage_state()`` traegt auch
+        # ``origins`` (localStorage) — z. B. die Einklapp-Einstellung des
+        # Zeitstroms. Die wanderte sonst als Snapshot in jeden folgenden Kontext
+        # desselben Nutzers und machte ``test_zeitstrom_collapse`` reihenfolge-
+        # abhaengig rot (Voll-Lauf Welle J). Der Login-Snapshot selbst ist
+        # reines Cookie-JSON; localStorage gehoert jedem Kontext allein.
+        cache[username] = (entry[0], {"cookies": state.get("cookies", []), "origins": []})
     else:
         cache.pop(username, None)
 
