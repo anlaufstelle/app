@@ -143,6 +143,12 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
             # den Flow vorher, bleibt der Setup-Status eindeutig unvollständig —
             # ``has_confirmed_totp_device`` ist dann weiterhin False und die
             # Middleware führt beim nächsten Aufruf zurück ins Setup.
+            #
+            # Refs #2034 (Ort 8): Der TOTP-Nachweis ist bereits erbracht, gleich
+            # landen frische Klartext-Codes in der Sitzung — vorher rotieren,
+            # damit ein vor dem Setup entwendetes Cookie sie nicht ueber
+            # ``/mfa/backup-codes/`` mitliest.
+            rotate_session_after_privilege_gain(request)
             codes = generate_backup_codes(request.user)
             _store_session_backup_codes(request, codes)
             request.session["mfa_setup_pending"] = True
@@ -394,6 +400,13 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
                 extra_tags="mfa-token-error",
             )
             return redirect("mfa_settings")
+        # Refs #2034 (Ort 7): Der frische TOTP-Nachweis ist eine Rechteanhebung —
+        # rotieren, BEVOR die neuen Klartext-Codes in der Sitzung landen. Ohne
+        # das laese ein vor der Regenerierung entwendetes, noch nicht
+        # ``mfa_verified``-Cookie die Codes ueber ``/mfa/backup-codes/`` mit und
+        # koennte sich mit einem davon selbst auf ``mfa_verified`` heben —
+        # ``/mfa/`` ist von der MFA-Enforcement ausgenommen.
+        rotate_session_after_privilege_gain(request)
         codes = generate_backup_codes(user)
         _store_session_backup_codes(request, codes)
         log_audit_event(

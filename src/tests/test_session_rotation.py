@@ -6,7 +6,7 @@ Rechteanhebung INNERHALB derselben Sitzung muss ebenfalls rotieren, damit ein
 vor der Anhebung entwendetes oder zurueckgelassenes Cookie die angehobene
 Faehigkeit nicht erbt (Szenario A9).
 
-Fuenf Rotationsorte werden hier abgesichert:
+Acht Rotationsorte werden hier abgesichert:
 
 1. TOTP-Verify (``MFAVerifyView.post``, ``mode="totp"``),
 2. Backup-Code-Verify (``MFAVerifyView.post``, ``mode="backup"``),
@@ -17,7 +17,12 @@ Fuenf Rotationsorte werden hier abgesichert:
    und die davon erbende ``InviteConfirmView``) — Ruling R-A1-10 aus
    Fix-Runde 1: Django legt das gepruefte Token in die BESTEHENDE Session und
    leitet auf den tokenfreien Pfad um; ohne Rotation kann ein vorher kopiertes
-   Cookie damit das Passwort setzen.
+   Cookie damit das Passwort setzen,
+7. Backup-Code-Regenerierung (``MFARegenerateBackupCodesView.post``) und
+8. Setup-Verify (``MFASetupView.post``) — Ruling R-A1-14 aus Fix-Runde 3:
+   beide legen nach einem erfolgreichen TOTP-Nachweis frische Klartext-Codes in
+   die Sitzung; ohne Rotation liest ein vorher entwendetes Cookie sie mit und
+   hebt sich beim Regenerate-Pfad damit selbst auf ``mfa_verified``.
 
 Je Ort drei Zusagen: **rotiert** (alte ID weg, alter Cookie abgemeldet),
 **erhaelt** (Fristen-, Login- und OTP-Sessiondaten ueberleben), **rotiert nicht
@@ -32,6 +37,7 @@ Djangos Session-ID (``request.session.session_key``).
 from __future__ import annotations
 
 import json
+import re
 from unittest import mock
 
 import pytest
@@ -51,11 +57,13 @@ from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import AuditLog
 from core.models import EncryptedTOTPDevice as TOTPDevice
 from core.services.security import (
+    BACKUP_CODES_COUNT,
     SUDO_SESSION_KEY,
     enter_sudo,
     generate_backup_codes,
     invite_token_generator,
 )
+from core.views.auth import CustomPasswordResetConfirmView, InviteConfirmView
 
 STAFF_PASSWORD = "testpass123"
 ADMIN_PASSWORD = "test-pw-123"
@@ -67,6 +75,12 @@ NEW_PASSWORD = "Frisch-Gesetzt-2026!"
 RESET_TOKEN_KEY = "_password_reset_token"
 # Challenge-State der WebAuthn-Assertion (``django_otp_webauthn``).
 WEBAUTHN_STATE_KEY = "otp_webauthn_authentication_state"
+# Verschluesselte Zwischenablage der frischen Backup-Codes
+# (``core.views.mfa._SESSION_BACKUP_CODES_KEY``).
+SESSION_BACKUP_CODES_KEY = "mfa_backup_codes"
+# Die angezeigten Klartext-Codes aus ``auth/mfa_backup_codes.html``
+# (Format wie in ``test_mfa_backup_codes.py``: 22 Zeichen URL-safe Base64).
+CODE_IN_BACKUP_HTML = re.compile(r'select-all">([A-Za-z0-9_-]{22})</li>')
 
 
 # --- Helfer ---------------------------------------------------------------
@@ -802,3 +816,125 @@ class TestRotationSurvivesExceptionAfterTokenWrite:
         assert _session_row_exists(old_key) is True
         assert client.session.session_key == old_key
         assert RESET_TOKEN_KEY not in client.session
+
+
+# --- 7./8. Frische Backup-Codes nach TOTP-Nachweis (R-A1-14) ---------------
+
+
+def _codes_in_backup_page(client) -> list[str]:
+    """Klartext-Backup-Codes, die ``/mfa/backup-codes/`` diesem Client zeigt."""
+    response = client.get("/mfa/backup-codes/")
+    if response.status_code != 200:
+        return []
+    return CODE_IN_BACKUP_HTML.findall(response.content.decode("utf-8"))
+
+
+@pytest.mark.django_db
+class TestRotationBeforeStoringFreshBackupCodes:
+    """Fix-Runde 3, Ruling R-A1-14 (Re-Review N1/N2).
+
+    Frische Backup-Codes liegen zwischen Erzeugung und Quittung im Klartext in
+    der Sitzung und werden von ``/mfa/backup-codes/`` angezeigt. Erzeugt werden
+    sie nur nach einem **erfolgreichen TOTP-Nachweis** — das ist eine
+    Rechteanhebung im Sinne von R-A1-1. Ohne Rotation liest ein vorher
+    entwendetes Cookie derselben Sitzung die Codes mit; beim Regenerate-Pfad
+    (Ort 7) reicht das aus, um sich mit einem der Codes selbst auf
+    ``mfa_verified`` zu heben, ohne den TOTP-Faktor je besessen zu haben.
+    """
+
+    def test_regenerate_rotates_before_storing_codes(self, client, staff_user):
+        """Ort 7 — ``MFARegenerateBackupCodesView.post``."""
+        device = _confirmed_totp(staff_user)
+        # Bewusst OHNE ``mfa_verified``: genau dieser Cookie soll gesperrt bleiben.
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        stolen = _client_with_stolen_cookie(old_key)
+
+        response = client.post("/mfa/backup-codes/regenerate/", {"token": _valid_token(device)})
+
+        assert response.status_code == 302
+        assert response.url == "/mfa/backup-codes/"
+        # Der legitime Client sieht seine frischen Codes.
+        assert len(_codes_in_backup_page(client)) == BACKUP_CODES_COUNT
+        # Der alte Cookie ist tot — und sieht deshalb keine Codes.
+        assert client.session.session_key != old_key
+        assert _session_row_exists(old_key) is False
+        assert _codes_in_backup_page(stolen) == []
+        # Und kann sich folglich auch nicht ueber einen Code verifizieren.
+        stolen_verify = stolen.post("/mfa/verify/", {"token": "irgendwas", "mode": "backup"})
+        assert stolen_verify.status_code in (302, 403)
+        assert stolen.session.get("mfa_verified") is not True
+
+    def test_setup_rotates_before_storing_codes(self, client, staff_user):
+        """Ort 8 — ``MFASetupView.post`` (gleiche Bauart, kleinere Wirkung)."""
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        client.get("/mfa/setup/")
+        device = TOTPDevice.objects.get(user=staff_user, confirmed=False)
+        stolen = _client_with_stolen_cookie(old_key)
+
+        response = client.post("/mfa/setup/", {"token": _valid_token(device)})
+
+        assert response.status_code == 302
+        assert response.url == "/mfa/backup-codes/"
+        assert len(_codes_in_backup_page(client)) == BACKUP_CODES_COUNT
+        assert client.session.session_key != old_key
+        assert _session_row_exists(old_key) is False
+        assert _codes_in_backup_page(stolen) == []
+        # Der Setup-Zustand haengt an der NEUEN Sitzung.
+        assert client.session.get("mfa_setup_pending") is True
+        assert stolen.session.get("mfa_setup_pending") is not True
+
+    def test_failed_regenerate_neither_rotates_nor_stores(self, client, staff_user):
+        """Gegenprobe: ohne gueltigen TOTP-Code kein Recht, keine Codes, keine Rotation."""
+        _confirmed_totp(staff_user)
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+
+        response = client.post("/mfa/backup-codes/regenerate/", {"token": "000000"})
+
+        assert response.status_code == 302
+        assert response.url == "/mfa/settings/"
+        assert client.session.session_key == old_key
+        assert _session_row_exists(old_key) is True
+        assert client.session.get(SESSION_BACKUP_CODES_KEY) is None
+
+    def test_failed_setup_neither_rotates_nor_stores(self, client, staff_user):
+        """Gegenprobe fuer Ort 8."""
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        client.get("/mfa/setup/")
+
+        response = client.post("/mfa/setup/", {"token": "000000"})
+
+        assert response.status_code == 200
+        assert client.session.session_key == old_key
+        assert _session_row_exists(old_key) is True
+        assert client.session.get(SESSION_BACKUP_CODES_KEY) is None
+        assert client.session.get("mfa_setup_pending") is not True
+
+
+@pytest.mark.django_db
+class TestResetConfirmKeepsLoginNotRequiredMarker:
+    """Fix-Runde 3, Re-Review N3.
+
+    ``View.as_view()`` kopiert ``cls.dispatch.__dict__`` auf die View-Funktion.
+    Djangos ``PasswordResetConfirmView`` markiert ihr ``dispatch`` per
+    ``login_not_required`` mit ``login_required = False`` — genau das ging durch
+    den eigenen ``dispatch``-Override verloren. Ohne die Markierung wuerde eine
+    spaeter eingehaengte ``LoginRequiredMiddleware`` Reset und Invite fuer
+    Abgemeldete sperren: also fuer die Gruppe, fuer die es sie gibt.
+    """
+
+    @pytest.mark.parametrize(
+        "view_class",
+        [CustomPasswordResetConfirmView, InviteConfirmView],
+    )
+    def test_view_function_keeps_login_required_false(self, view_class):
+        view = view_class.as_view()
+        assert getattr(view, "login_required", None) is False, (
+            f"{view_class.__name__}.as_view() traegt keine login_not_required-Markierung mehr"
+        )
+
+    def test_marker_matches_the_django_parent(self):
+        from django.contrib.auth.views import PasswordResetConfirmView
+
+        parent = PasswordResetConfirmView.as_view()
+        child = CustomPasswordResetConfirmView.as_view()
+        assert getattr(child, "login_required", None) == getattr(parent, "login_required", None)

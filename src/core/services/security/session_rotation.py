@@ -49,8 +49,18 @@ def rotate_session_after_privilege_gain(request: HttpRequest) -> None:
     danach nicht mehr angemeldet.
 
     Aufrufreihenfolge am Rotationsort (bindend): Erfolg feststellen → rotieren →
-    erst danach das Rechte-Flag (``mfa_verified``, ``sudo_until``) schreiben.
-    Nur nach FESTGESTELLTEM Erfolg aufrufen: auf einem Fehlschlagspfad waere die
-    Rotation ein kostenloser Sitzungs-Reset fuer jeden, der das Cookie besitzt.
+    erst danach das Rechte-Flag (``mfa_verified``, ``sudo_until``) bzw. das
+    Geheimnis (frische Backup-Codes, Reset-Token) schreiben. Nur nach
+    FESTGESTELLTEM Erfolg aufrufen: auf einem Fehlschlagspfad waere die Rotation
+    ein kostenloser Sitzungs-Reset fuer jeden, der das Cookie besitzt.
+
+    Fehlermodi von ``cycle_key()`` (geprueft an
+    ``django/contrib/sessions/backends/base.py`` und ``…/db.py``): ``create()``
+    setzt ``_session_key`` auf den NEUEN Wert, bevor es die Zeile anlegt.
+    Scheitert der Insert, laufen spaetere Saves gegen die neue ID, nie gegen die
+    alte. Scheitert stattdessen erst das Loeschen der alten Zeile, bleibt diese
+    mit ihrem zuletzt PERSISTIERTEN Inhalt stehen — und der traegt das gerade
+    erst in-memory geschriebene Recht bzw. Geheimnis nicht. In keinem Fehlermodus
+    erbt die alte Sitzungszeile also die Anhebung.
     """
     request.session.cycle_key()

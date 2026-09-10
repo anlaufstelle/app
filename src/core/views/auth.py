@@ -4,8 +4,8 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import INTERNAL_RESET_SESSION_TOKEN
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -271,6 +271,16 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
         return super().form_valid(form)
 
 
+# Refs #2034: ``View.as_view()`` kopiert ``cls.dispatch.__dict__`` auf die
+# View-Funktion. Djangos ``PasswordResetConfirmView`` markiert ihr ``dispatch``
+# per ``login_not_required`` mit ``login_required = False``; der eigene
+# ``dispatch``-Override unten bringt kein solches ``__dict__`` mit und wuerde die
+# Markierung sonst verschlucken. Ohne sie sperrte eine spaeter eingehaengte
+# ``LoginRequiredMiddleware`` Reset und Invite ausgerechnet fuer Abgemeldete —
+# also fuer die Gruppe, fuer die es beide Wege ueberhaupt gibt. ``never_cache``
+# und ``sensitive_post_parameters`` der Elternklasse umschliessen weiterhin den
+# ``super()``-Aufruf und brauchen keine Wiederholung.
+@method_decorator(login_not_required, name="dispatch")
 class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     """Password-Reset, der zugleich einen aktiven Account-Lockout aufhebt (Refs #869).
 
@@ -300,7 +310,7 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         """Refs #2034: Der Token-Uebergang ist eine Rechteanhebung — rotieren.
 
         Djangos ``PasswordResetConfirmView.dispatch`` legt ein gueltiges Token
-        unter ``INTERNAL_RESET_SESSION_TOKEN`` in die **bestehende** Sitzung und
+        unter ``auth_views.INTERNAL_RESET_SESSION_TOKEN`` in die **bestehende** Sitzung und
         leitet auf den tokenfreien ``set-password``-Pfad um. Ab diesem Moment
         darf die Sitzung ein neues Passwort setzen, ohne den Link je gesehen zu
         haben — ein vorher entwendetes oder zurueckgelassenes Cookie erbt genau
@@ -334,11 +344,11 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         ``token_generator`` unveraendert mit.
         """
         session = self.request.session
-        token_before = session.get(INTERNAL_RESET_SESSION_TOKEN)
+        token_before = session.get(auth_views.INTERNAL_RESET_SESSION_TOKEN)
         try:
             return super().dispatch(*args, **kwargs)
         finally:
-            token_after = session.get(INTERNAL_RESET_SESSION_TOKEN)
+            token_after = session.get(auth_views.INTERNAL_RESET_SESSION_TOKEN)
             if token_after is not None and token_after != token_before:
                 rotate_session_after_privilege_gain(self.request)
 
