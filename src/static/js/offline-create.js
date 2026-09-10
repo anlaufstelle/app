@@ -177,14 +177,14 @@
                 if (this.saving) return;
                 this.editError = "";
                 this.dstError = "";
-                const occurredAtError = this._checkOccurredAt();
-                if (occurredAtError) {
-                    this.dstError = occurredAtError;
-                    this.$el.querySelector('[data-testid="offline-event-create-occurred-at"]')?.focus();
-                    return;
-                }
                 this.saving = true;
                 try {
+                    const occurredAtError = this._checkOccurredAt();
+                    if (occurredAtError) {
+                        this.dstError = occurredAtError;
+                        this.$el.querySelector('[data-testid="offline-event-create-occurred-at"]')?.focus();
+                        return;
+                    }
                     if (!window.offlineEdit || !window.offlineEdit.markEventNew) {
                         this.editError = "Offline-Erfassung nicht verfügbar.";
                         return;

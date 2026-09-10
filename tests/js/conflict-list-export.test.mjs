@@ -98,6 +98,52 @@ describe("R10 — exportNote als bewusste, protokollierte Aktion", () => {
     });
 });
 
+describe("#2187 — PII-freie Feldcodes im Dead-Letter-View-Model", () => {
+    function deadItem(lastError) {
+        const c = makeComponent();
+        c._reasonText = { invalid: "Vom Server als ungültig abgelehnt" };
+        return c._eventItem(
+            {
+                pk: "ev-dead",
+                data: {
+                    deadReason: "invalid",
+                    documentTypeName: "Kontakt",
+                    formData: {},
+                    lastError,
+                },
+            },
+            true,
+        );
+    }
+
+    it("gibt Feldnamen und Fehlercodes fuer die Anzeige frei", () => {
+        const item = deadItem(JSON.stringify({ occurred_at_fold: ["fold_required"], dauer: ["min_value"] }));
+        expect(item.reasonText).toBe("Vom Server als ungültig abgelehnt");
+        expect(item.fieldErrors).toEqual([
+            { key: "occurred_at_fold", text: "occurred_at_fold (fold_required)" },
+            { key: "dauer", text: "dauer (min_value)" },
+        ]);
+        expect(item.hasFieldErrors).toBe(true);
+    });
+
+    it("laesst Dead-Events ohne lastError generisch", () => {
+        const item = deadItem("");
+        expect(item.fieldErrors).toEqual([]);
+        expect(item.hasFieldErrors).toBe(false);
+    });
+
+    it.each([
+        "kein-json",
+        JSON.stringify({ occurred_at_fold: [{ code: "fold_required", value: "02:30" }] }),
+        JSON.stringify({ occurred_at_fold: ["fold_required", "Wert 02:30"] }),
+        JSON.stringify(["fold_required"]),
+    ])("zeigt bei unerwartetem lastError-Inhalt fail-closed nichts an", (lastError) => {
+        const item = deadItem(lastError);
+        expect(item.fieldErrors).toEqual([]);
+        expect(item.hasFieldErrors).toBe(false);
+    });
+});
+
 // Refs #1828: Verhaltens-Pin der fuenf Listen-Aktionen VOR der Konsolidierung
 // auf das gemeinsame _act-Skelett — nur "Verwerfen" ist confirm-pflichtig
 // (S1-Regel im Dateikopf), jede Aktion laedt danach neu, frischt die

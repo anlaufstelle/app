@@ -1,5 +1,6 @@
 {% extends "offline_base.html" %}
-{% load i18n static %}
+{% load i18n static tz %}
+{% get_current_timezone as app_timezone %}
 
 {% block title %}{% trans "Offline-Ansicht" %} – Anlaufstelle{% endblock %}
 
@@ -118,7 +119,8 @@
                     </button>
                 </template>
                 <template x-if="creating">
-                    <form class="card p-4 space-y-3" @submit.prevent="saveCreate" data-testid="offline-create-form">
+                    <form class="card p-4 space-y-3" @submit.prevent="saveCreate" data-testid="offline-create-form"
+                          data-app-timezone="{{ app_timezone }}">
                         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Kontakt dokumentieren (offline)" %}</h2>
                         <div>
                             <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Dokumentationstyp" %}</label>
@@ -131,9 +133,17 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
-                            <input type="datetime-local" x-model="createOccurredAt"
-                                   class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-occurred-at">
+                            <label for="offline-create-occurred-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
+                            <input id="offline-create-occurred-at" type="datetime-local" x-model="createOccurredAt"
+                                   @input="onOccurredAtInput" :aria-invalid="dstAriaInvalid"
+                                   class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-occurred-at"
+                                   aria-describedby="offline-create-occurred-at-error">
+                            <div id="offline-create-occurred-at-error" x-show="dstError" x-cloak
+                                 class="mt-2 text-sm text-red-600" role="alert">
+                                <ul role="list" class="list-disc pl-4">
+                                    <li x-text="dstError"></li>
+                                </ul>
+                            </div>
                         </div>
                         <template x-if="hasCaseOptions">
                             <div>

@@ -101,14 +101,41 @@ describe("sw.js Runtime-Cache-Klassifikation", () => {
         expect(spy.cache.put).not.toHaveBeenCalled();
     });
 
-    it("cacht echte /static/ Assets mit passendem Content-Type", async () => {
+    it.each([
+        "text/css",
+        "application/javascript",
+        "text/javascript",
+        "font/woff2",
+        "image/svg+xml",
+        "application/font-woff",
+    ])("cacht erlaubten Asset-Content-Type %s", async (contentType) => {
         const spy = runtimeCacheSpy();
         const { handlers, fetch: fetchMock } = workerContext(spy.caches);
-        fetchMock.mockResolvedValueOnce(buildFetchResponse({ contentType: "application/javascript" }));
+        fetchMock.mockResolvedValueOnce(buildFetchResponse({ contentType }));
 
         await dispatchFetch(handlers, `${ORIGIN}/static/js/app.js`);
         expect(spy.cache.put).toHaveBeenCalledTimes(1);
     });
+
+    it.each([
+        "text/css-malformed",
+        "application/javascript-x",
+        "text/javascriptx",
+        "application/font-woff-x",
+        "fontish/woff2",
+        "imagery/svg+xml",
+        "application/octet-stream",
+    ])(
+        "cacht nicht erlaubten oder praefixaehnlichen Content-Type %s nicht",
+        async (contentType) => {
+            const spy = runtimeCacheSpy();
+            const { handlers, fetch: fetchMock } = workerContext(spy.caches);
+            fetchMock.mockResolvedValueOnce(buildFetchResponse({ contentType }));
+
+            await dispatchFetch(handlers, `${ORIGIN}/static/js/app.js`);
+            expect(spy.cache.put).not.toHaveBeenCalled();
+        },
+    );
 
     it("cacht fremde Origin mit /static/ Pfad nicht", async () => {
         const spy = runtimeCacheSpy();
@@ -181,5 +208,19 @@ describe("sw.js Runtime-Cache-Klassifikation", () => {
 
         await dispatchFetch(handlers, `${ORIGIN}/manifest.json`);
         expect(spy.cache.put).toHaveBeenCalledTimes(1);
+    });
+
+    it("cacht application/json ausschliesslich fuer /manifest.json", async () => {
+        const manifestSpy = runtimeCacheSpy();
+        const manifestWorker = workerContext(manifestSpy.caches);
+        manifestWorker.fetch.mockResolvedValueOnce(buildFetchResponse({ contentType: "application/json" }));
+        await dispatchFetch(manifestWorker.handlers, `${ORIGIN}/manifest.json`);
+        expect(manifestSpy.cache.put).toHaveBeenCalledTimes(1);
+
+        const staticSpy = runtimeCacheSpy();
+        const staticWorker = workerContext(staticSpy.caches);
+        staticWorker.fetch.mockResolvedValueOnce(buildFetchResponse({ contentType: "application/json" }));
+        await dispatchFetch(staticWorker.handlers, `${ORIGIN}/static/data.json`);
+        expect(staticSpy.cache.put).not.toHaveBeenCalled();
     });
 });

@@ -159,6 +159,7 @@ importScripts("/static/js/url-patterns.js");
 // Bestandsgeraet die alte Shell OHNE Knopf und ohne das Skript im Precache —
 // die Aktion "Schnell verlassen" waere offline genau dort tot, wo sie
 // gebraucht wird. Der Bump erzwingt Re-Install + Re-Precache.
+// Refs #2201: v46 -> v47, damit Bestandsgeraete die gehaertete Shell laden.
 const CACHE_NAME = "anlaufstelle-v47";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
@@ -790,9 +791,10 @@ self.addEventListener("fetch", (event) => {
                             const cacheControl = (response.headers.get("cache-control") || "").toLowerCase();
                             const isManifest = requestUrl.pathname === "/manifest.json";
                             const isCacheableAsset =
-                                (contentType.startsWith("text/css") ||
-                                    contentType.startsWith("application/javascript") ||
-                                    contentType.startsWith("text/javascript") ||
+                                (contentType === "text/css" ||
+                                    contentType === "application/javascript" ||
+                                    contentType === "text/javascript" ||
+                                    contentType === "application/font-woff" ||
                                     contentType.startsWith("font/") ||
                                     contentType.startsWith("image/") ||
                                     (isManifest &&

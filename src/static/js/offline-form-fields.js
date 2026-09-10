@@ -164,57 +164,63 @@
         return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
     }
 
-    // Refs #2187: Prueft, ob eine Wanduhrzeit ("YYYY-MM-DDTHH:MM") in der
+    // Refs #2187: Prueft, ob eine Wanduhrzeit ("YYYY-MM-DDTHH:MM[:SS]") in der
     // gegebenen Zeitzone zweimal vorkommt (Rueckfalltag). Die Logik baut die
     // beiden UTC-Kandidaten aus den beiden Offset-Lesarten (vor/nach der
     // Umstellung) und prueft, ob beide wieder dieselbe Wanduhrzeit ergeben.
     // Nicht-existente Zeiten (Vorstelltag) und eindeutige Zeiten ergeben
     // false.
     function isAmbiguousWallClock(localInput, timeZone) {
-        if (!localInput || localInput.length !== 16) return false;
-        const wallDate = localInput.slice(0, 10);
-        const wallTime = localInput.slice(11, 16);
+        const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d{1,3})?)?$/.exec(localInput || "");
+        if (!match) return false;
+        const wallDate = match[1];
+        const wallTime = match[2];
+        const wallInput = wallDate + "T" + wallTime;
         // Die zu pruefende Wanduhrzeit als Basis-UTC-Tag (ohne Zeitzone).
         const baseDate = new Date(wallDate + "T" + wallTime + "Z");
         if (Number.isNaN(baseDate.getTime())) return false;
         const baseMs = baseDate.getTime();
 
-        const fmt = new Intl.DateTimeFormat("en-CA", {
-            timeZone: timeZone,
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-            timeZoneName: "longOffset",
-        });
+        try {
+            const fmt = new Intl.DateTimeFormat("en-CA", {
+                timeZone: timeZone,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZoneName: "longOffset",
+            });
 
-        // Iteriere ueber die 25 Stunden ab einem fruehen UTC-Tag; die
-        // relevanten Offset-Wechsel liegen in diesem Fenster.
-        const startMs = baseMs - 10 * 60 * 60 * 1000;
-        const seen = new Set();
-        for (let offset = 0; offset <= 24 * 60 * 60 * 1000; offset += 15 * 60 * 1000) {
-            const d = new Date(startMs + offset);
-            const parts = fmt.formatToParts(d);
-            const asWall =
-                parts.find((p) => p.type === "year").value +
-                "-" +
-                parts.find((p) => p.type === "month").value +
-                "-" +
-                parts.find((p) => p.type === "day").value +
-                "T" +
-                parts.find((p) => p.type === "hour").value +
-                ":" +
-                parts.find((p) => p.type === "minute").value;
-            if (asWall === localInput) {
-                const offsetName = (parts.find((p) => p.type === "timeZoneName") || {}).value || "";
-                seen.add(offsetName);
+            // UTC-Offsets reichen bis +14 h. Das symmetrische Fenster deckt
+            // deshalb auch Rueckfallstunden in Sydney/Auckland ab.
+            const startMs = baseMs - 14 * 60 * 60 * 1000;
+            const seen = new Set();
+            for (let offset = 0; offset <= 28 * 60 * 60 * 1000; offset += 15 * 60 * 1000) {
+                const d = new Date(startMs + offset);
+                const parts = fmt.formatToParts(d);
+                const asWall =
+                    parts.find((p) => p.type === "year").value +
+                    "-" +
+                    parts.find((p) => p.type === "month").value +
+                    "-" +
+                    parts.find((p) => p.type === "day").value +
+                    "T" +
+                    parts.find((p) => p.type === "hour").value +
+                    ":" +
+                    parts.find((p) => p.type === "minute").value;
+                if (asWall === wallInput) {
+                    const offsetName = (parts.find((p) => p.type === "timeZoneName") || {}).value || "";
+                    seen.add(offsetName);
+                }
             }
+            return seen.size >= 2;
+        } catch (_e) {
+            // Aeltere Browser kennen longOffset teils nicht. Dann fail-open;
+            // die Server-Validierung beim Replay bleibt die zweite Linie.
+            return false;
         }
-        // Mehrdeutig: mindestens zwei verschiedene Offset-Namen ergeben dieselbe
-        // Wanduhrzeit.
-        return seen.size >= 2;
     }
 
     // Reines Datum (ohne Zeit). ACHTUNG: bewusst OHNE 10-Zeichen-Schnitt —

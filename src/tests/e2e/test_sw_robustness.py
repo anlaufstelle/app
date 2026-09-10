@@ -416,28 +416,45 @@ def test_runtime_cache_rejects_dynamic_url_with_static_query(browser, base_url):
     page, context = _login_with_retry(browser, base_url)
     try:
         _wait_for_active_service_worker(page)
-        max_entries, cache_name = _read_sw_constants(page)
+        _max_entries, cache_name = _read_sw_constants(page)
         runtime_name = cache_name + "-runtime"
 
         # Dynamische Seite mit /static/ im Query-String aufrufen.
         target = f"{base_url}/clients/?q=/static/foo.js"
         page.goto(target, wait_until="domcontentloaded")
 
-        cache_state = page.evaluate(
-            """async ([runtimeName, targetUrl]) => {
+        # Der SWR-cache.put() laeuft absichtlich fire-and-forget. Ein danach
+        # angeforderter, positiv klassifizierter Asset-Key ist die
+        # Fertigstellungsbarriere: erst wenn er im Runtime-Cache liegt, wird
+        # die Negativ-Assertion ausgewertet (Polling wie beim Budget-Test).
+        barrier = f"{base_url}/static/css/styles.css?classification_barrier=1"
+        page.evaluate("async (url) => { await fetch(url); }", barrier)
+        cache_state = None
+        for _ in range(60):
+            cache_state = page.evaluate(
+                """async ([runtimeName, targetUrl, barrierUrl]) => {
                     const rt = await caches.open(runtimeName);
                     const keys = await rt.keys();
                     let hasTarget = false;
                     let hasHtml = false;
+                    let hasBarrier = false;
                     for (const req of keys) {
                         if (req.url === targetUrl) hasTarget = true;
+                        if (req.url === barrierUrl) hasBarrier = true;
                         const resp = await rt.match(req);
                         const ct = resp ? resp.headers.get('content-type') || '' : '';
                         if (ct.startsWith('text/html')) hasHtml = true;
                     }
-                    return {hasTarget, hasHtml};
+                    return {hasTarget, hasHtml, hasBarrier};
                 }""",
-            [runtime_name, target],
+                [runtime_name, target, barrier],
+            )
+            if cache_state["hasBarrier"]:
+                break
+            page.wait_for_timeout(250)
+
+        assert cache_state is not None and cache_state["hasBarrier"], (
+            "Runtime-Cache-Barriere blieb aus — die Negativpruefung waere nicht deterministisch abgeschlossen."
         )
 
         assert not cache_state["hasTarget"], (

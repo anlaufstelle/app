@@ -53,11 +53,33 @@ describe("#2187 — pk-lose Create-Replay-Klassifikation", () => {
             },
         };
 
-        const result = await window.offlineEdit.replayModifiedEvent(record);
+        const result = await window.offlineEdit.replayModifiedEvent(record, { replay: true });
 
         expect(result).toEqual({ status: "dead", deadReason: "invalid", errors: expectedErrorCodes, statusCode: 422 });
         expect(offlineStore.markEventDead).toHaveBeenCalledWith(eventPk, "invalid", JSON.stringify(expectedErrorCodes));
         expect(offlineStore.updateEventLocalStatus).not.toHaveBeenCalledWith(eventPk, "new");
+    });
+
+    it("behaelt einen synchronen 422-Create als invalid mit Serverfehlern", async () => {
+        const errors = { occurred_at_fold: [{ message: "Auswahl erforderlich.", code: "fold_required" }] };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => ({
+                redirected: false,
+                status: 422,
+                json: async () => ({ error: "invalid", errors }),
+            })),
+        );
+        const record = {
+            pk: eventPk,
+            localStatus: "new",
+            data: { occurredAt: "2026-10-25T02:30", formData: {}, idempotencyKey: "idem-sync" },
+        };
+
+        const result = await window.offlineEdit.replayModifiedEvent(record);
+
+        expect(result).toEqual({ status: "invalid", errors });
+        expect(offlineStore.markEventDead).not.toHaveBeenCalled();
     });
 
     it("bleibt fuer 404/410 Create unchanged dead-lettering", async () => {

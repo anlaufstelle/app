@@ -43,6 +43,27 @@ describe("isAmbiguousWallClock", () => {
         expect(helpers.isAmbiguousWallClock("2026-08-10T14:00", "Europe/Berlin")).toBe(false);
     });
 
+    it.each([
+        ["America/New_York", "2026-11-01T01:30", "2026-11-01T02:30"],
+        ["Australia/Sydney", "2026-04-05T02:30", "2026-04-05T03:30"],
+        ["Pacific/Auckland", "2026-04-05T02:30", "2026-04-05T03:30"],
+    ])("erkennt die Rueckfallstunde in %s", (timeZone, ambiguous, unambiguous) => {
+        expect(helpers.isAmbiguousWallClock(ambiguous, timeZone)).toBe(true);
+        expect(helpers.isAmbiguousWallClock(unambiguous, timeZone)).toBe(false);
+    });
+
+    it("akzeptiert Sekunden im datetime-local-Wert", () => {
+        expect(helpers.isAmbiguousWallClock("2026-10-25T02:30:15", "Europe/Berlin")).toBe(true);
+    });
+
+    it("bleibt bei fehlender Intl-Unterstuetzung fail-open", () => {
+        const dateTimeFormat = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(function () {
+            throw new RangeError("longOffset unsupported");
+        });
+        expect(helpers.isAmbiguousWallClock("2026-10-25T02:30", "Europe/Berlin")).toBe(false);
+        dateTimeFormat.mockRestore();
+    });
+
     it("speichert eine mehrdeutige Wanduhrzeit nicht und setzt den Fokus zurueck", async () => {
         const root = document.createElement("div");
         root.innerHTML = `
@@ -62,6 +83,32 @@ describe("isAmbiguousWallClock", () => {
         expect(component.dstError).toContain("zweimal");
         expect(markEventNew).not.toHaveBeenCalled();
         expect(document.activeElement).toBe(occurredAt);
+        root.remove();
+    });
+
+    it("setzt den Save bei fehlender Intl-Unterstuetzung fort", async () => {
+        const root = document.createElement("div");
+        root.innerHTML = `
+            <form data-app-timezone="Europe/Berlin">
+                <input data-testid="offline-event-create-occurred-at">
+            </form>`;
+        document.body.append(root);
+        const markEventNew = vi.fn(async () => ({}));
+        window.offlineEdit = { markEventNew };
+        const component = eventCreateFactory();
+        component.$el = root;
+        component.createDocTypePk = "doctype-1";
+        component.createOccurredAt = "2026-10-25T02:30";
+        const dateTimeFormat = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(function () {
+            throw new RangeError("longOffset unsupported");
+        });
+
+        await component.saveCreate();
+
+        expect(markEventNew).toHaveBeenCalledTimes(1);
+        expect(component.saved).toBe(true);
+        expect(component.dstError).toBe("");
+        dateTimeFormat.mockRestore();
         root.remove();
     });
 });

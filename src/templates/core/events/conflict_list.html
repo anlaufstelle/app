@@ -131,6 +131,17 @@
                                 <span class="ml-2 text-xs text-ink-muted" x-text="item.lastEditedAtFmt"></span>
                             </div>
                             <p class="mt-0.5 text-xs text-ink-muted" data-testid="dead-event-reason" x-text="item.reasonText"></p>
+                            <template x-if="item.hasFieldErrors">
+                                <div class="mt-1 text-xs text-ink-muted" role="status" aria-live="polite"
+                                     data-testid="dead-event-field-errors">
+                                    <span>{% trans "Abgelehnte Felder:" %}</span>
+                                    <ul class="mt-0.5 list-disc list-inside" role="list">
+                                        <template x-for="fieldError in item.fieldErrors" :key="fieldError.key">
+                                            <li x-text="fieldError.text"></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                             <button type="button" @click="exportNote(item)"

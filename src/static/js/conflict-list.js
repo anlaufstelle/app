@@ -160,12 +160,43 @@
                     lastEditedAtFmt: lastEditedAtFmt,
                     reasonText: "",
                     noteText: "",
+                    fieldErrors: [],
+                    hasFieldErrors: false,
                 };
                 if (isDead) {
                     item.reasonText = this._reasonText[data.deadReason] || "";
                     item.noteText = this._buildNoteText(data.formData || {});
+                    item.fieldErrors = this._deadFieldErrors(data.lastError);
+                    item.hasFieldErrors = item.fieldErrors.length > 0;
                 }
                 return item;
+            },
+
+            // Refs #2187: lastError darf ausschliesslich das vom Replay
+            // erzeugte JSON aus Feldnamen und maschinenlesbaren Codes
+            // verlassen. Unerwartete Formen bleiben fail-closed unsichtbar,
+            // damit weder Eingabewerte noch Server-Freitext erscheinen.
+            _deadFieldErrors(lastError) {
+                if (typeof lastError !== "string" || !lastError) return [];
+                let parsed;
+                try {
+                    parsed = JSON.parse(lastError);
+                } catch (_e) {
+                    return [];
+                }
+                if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return [];
+                const rows = [];
+                for (const field of Object.keys(parsed)) {
+                    const codes = parsed[field];
+                    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(field) || !Array.isArray(codes) || !codes.length) {
+                        return [];
+                    }
+                    if (codes.some((code) => typeof code !== "string" || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(code))) {
+                        return [];
+                    }
+                    rows.push({ key: field, text: field + " (" + codes.join(", ") + ")" });
+                }
+                return rows;
             },
 
             _queueItem(q, isDead) {

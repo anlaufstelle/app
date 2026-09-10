@@ -329,7 +329,7 @@
      * HTTP-Replay-Contract (ADR-030). Store-Side-Effects laufen zentral hier:
      * Erfolg raeumt den Record ab, 404/410 dead-lettert ihn.
      */
-    async function _classifyCreateResponse(record, response) {
+    async function _classifyCreateResponse(record, response, options) {
         // Refs #1351 (Bug #2): Ein Redirect auf /login/ ist KEIN Erfolg —
         // die Session ist waehrend des Offline-Fensters abgelaufen und fetch
         // folgt dem 302 transparent bis zur Login-Seite. Ohne diesen Guard
@@ -389,6 +389,12 @@
                 body = {};
             }
             const fieldErrors = (body && body.errors) || {};
+            // Der synchrone Create in der Offline-Akte hat weiterhin eine
+            // sichtbare Formular-UI und muss die Serverfehler dort anzeigen.
+            // Nur der unbeaufsichtigte Reconnect-Replay dead-lettert.
+            if (!options || options.replay !== true) {
+                return { status: "invalid", errors: fieldErrors };
+            }
             // Refs #2187: Nur Feldnamen + Fehlercodes ins Dead-Letter-Detail;
             // serverseitige Meldungen koennen Eingabewerte enthalten.
             const errorCodes = Object.fromEntries(
@@ -422,7 +428,7 @@
      * ins Bundle. Antwort-Klassifikation: _classifyCreateResponse (geteilt
      * mit dem WorkItem-Track, Refs #1398).
      */
-    async function replayNewEvent(record, csrf) {
+    async function replayNewEvent(record, csrf, options) {
         const data = record.data || {};
         const form = new URLSearchParams();
         if (record.clientPk) form.set("client", record.clientPk);
@@ -437,7 +443,7 @@
         if (!response) {
             return { status: "network-error" };
         }
-        return await _classifyCreateResponse(record, response);
+        return await _classifyCreateResponse(record, response, options);
     }
 
     /*
@@ -534,7 +540,7 @@
      * Event-Pendant (#1329): der beim Anlegen geminte Key bleibt ueber
      * Re-Edits/Retries stabil.
      */
-    async function replayNewWorkItem(record, csrf) {
+    async function replayNewWorkItem(record, csrf, options) {
         const data = record.data || {};
         const form = new URLSearchParams();
         if (record.clientPk) form.set("client", record.clientPk);
@@ -545,10 +551,10 @@
         if (!response) {
             return { status: "network-error" };
         }
-        return await _classifyCreateResponse(record, response);
+        return await _classifyCreateResponse(record, response, options);
     }
 
-    async function replayModifiedEvent(record) {
+    async function replayModifiedEvent(record, options) {
         if (!navigator.onLine) return { status: "offline" };
         await window.crypto_session?.awaitReady?.();
         if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
@@ -564,9 +570,9 @@
         // WorkItem-Track; Events tragen nie `kind: "workitem"`.
         if (record.localStatus === "new") {
             if (_isWorkItemRecord(record)) {
-                return await replayNewWorkItem(record, csrf);
+                return await replayNewWorkItem(record, csrf, options);
             }
-            return await replayNewEvent(record, csrf);
+            return await replayNewEvent(record, csrf, options);
         }
 
         const form = new URLSearchParams();
@@ -726,7 +732,7 @@
         // beim Netzfehler (symmetrisch zur generischen Queue).
         const records = await _store().listModifiedEvents();
         for (const record of records) {
-            const result = await replayModifiedEvent(record);
+            const result = await replayModifiedEvent(record, { replay: true });
             if (
                 result.status === "network-error" ||
                 result.status === "offline" ||

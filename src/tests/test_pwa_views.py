@@ -755,9 +755,10 @@ class TestPrecachedShellBumpGuard:
     # in keinem Tag und keinem Deploy, es gibt also keine
     # Split-Brain-Generation im Feld (Praezedenz: #1805, #1828).
     # Refs #2187: Der Hinweis zur doppelten Stunde aendert das gerenderte
-    # offline_create.html; der finale Shell-Hash wird innerhalb derselben,
-    # noch unveroeffentlichten v47-Generation nachgezogen.
-    _PINNED_SHELL_HASH = "f99ddf77974e6092caf1bf7687f4b825ea2ce575c0ed9868e04b2a24df040055"
+    # offline_create.html und offline_detail.html; die Dead-Letter-Feldcodes
+    # aendern conflict_list.html. Der finale Shell-Hash wird innerhalb
+    # derselben, noch unveroeffentlichten v47-Generation nachgezogen.
+    _PINNED_SHELL_HASH = "254ecfe89aa8320a60506ae96dbbc783f1491954f212df20be8ce29331f0436a"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
