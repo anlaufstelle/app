@@ -337,11 +337,79 @@ def _create_storage_state(launch_browser, base_url, username, password=SEED_PASS
 # eingefrorenen Snapshot.
 _STORAGE_STATE_TTL_S = 15 * 60
 
+# Seed-Benutzername je Storage-State/Page-Fixture. Der Cache ist nach diesem
+# Namen geschluesselt; die Page-Fixtures brauchen ihn beim Ruecksynchronisieren
+# (siehe ``_sync_storage_state``).
+_ADMIN_USER = "admin"
+_LEAD_USER = "emma"
+_STAFF_USER = "miriam"
+_ASSISTANT_USER = "lena"
+_SUPER_ADMIN_USER = "superadmin"
+
 
 @pytest.fixture(scope="session")
 def _storage_state_cache():
     """Session-weiter Cache ``username -> (monotonic-Zeitstempel, state)``."""
     return {}
+
+
+def _session_cookie_value(state) -> str:
+    """Wert des ``sessionid``-Cookies aus einem Playwright-Storage-State."""
+    for cookie in state.get("cookies", []):
+        if cookie.get("name") == "sessionid":
+            return cookie.get("value") or ""
+    return ""
+
+
+def _sync_storage_state(cache, username, context) -> None:
+    """Gecachten Storage-State aus dem LEBENDEN Kontext nachziehen (Refs #2034).
+
+    Seit #2034 rotiert der Server die Django-Session-ID bei jeder
+    Rechteanhebung innerhalb der Sitzung — MFA-Verify (TOTP/Backup-Code),
+    Setup-Verify und -Abschluss, Backup-Code-Neuerzeugung, Passkey-Assertion,
+    Sudo-Grant und die Uebernahme eines Reset-/Invite-Tokens. ``cycle_key()``
+    legt eine neue Zeile an und **loescht die alte**.
+
+    Der Cache oben haelt aber einen EINGEFRORENEN Snapshot: sobald ein Test in
+    seinem Kontext eine solche Anhebung durchlaeuft (typisch
+    ``_helpers.enter_sudo_mode``), traegt der Snapshot einen Cookie, dessen
+    Server-Session es nicht mehr gibt. Jeder spaetere Kontext aus demselben
+    Snapshot startet abgemeldet und landet auf ``/login/?next=…`` — dieselbe
+    Klasse wie die bekannte ``set_password``-Storage-State-Falle. Beobachtet im
+    A1-Lauf: ``test_auth_roles.py::TestZZAccountLockout::test_admin_unlock_action_restores_login``
+    holt Sudo auf der ``authenticated_page``; der unmittelbar folgende
+    ``test_case_deletion_workflow.py::…::test_only_the_admin_sees_the_trash_link``
+    war der erste von 47 Fehlschlaegen.
+
+    Deshalb wird der Snapshot beim Abbau JEDER Page-Fixture aus dem lebenden
+    Kontext erneuert. Zwei Faelle:
+
+    * Der Kontext hat noch einen ``sessionid``-Cookie → Snapshot ersetzen. Der
+      urspruengliche Zeitstempel bleibt stehen: die TTL misst weiterhin ab dem
+      Login, und der rotierte Cookie laeuft ohnehin spaeter ab als der alte.
+    * Kein ``sessionid`` mehr (der Test hat abgemeldet, Quick-Exit ausgeloest
+      oder die Sitzung wurde serverseitig geflusht) → Eintrag verwerfen, damit
+      der naechste Consumer sich frisch anmeldet statt einen toten Cookie zu erben.
+
+    Das Produktionsverhalten bleibt unangetastet — die Rotation ist die Zusage
+    aus #2034, nicht der Fehler. Nicht abgedeckt (und in dieser Testfamilie
+    nicht vorhanden): ein Test, der INNERHALB seines Laufs eine Anhebung
+    durchfuehrt und danach einen ZWEITEN Kontext aus demselben gecachten State
+    oeffnet. Ein solcher Test muesste den Kontext selbst neu aufbauen.
+    """
+    entry = cache.get(username)
+    if entry is None:
+        return
+    try:
+        state = context.storage_state()
+    except Exception:
+        # Kontext/Browser schon zu oder abgestuerzt: konservativ verwerfen.
+        cache.pop(username, None)
+        return
+    if _session_cookie_value(state):
+        cache[username] = (entry[0], state)
+    else:
+        cache.pop(username, None)
 
 
 def _fresh_storage_state(cache, launch_browser, base_url, username):
@@ -356,31 +424,31 @@ def _fresh_storage_state(cache, launch_browser, base_url, username):
 @pytest.fixture
 def _login_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State fuer Admin-User (Session-Cookies, TTL-erneuert)."""
-    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "admin")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, _ADMIN_USER)
 
 
 @pytest.fixture
 def _lead_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Lead-User (emma)."""
-    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "emma")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, _LEAD_USER)
 
 
 @pytest.fixture
 def _staff_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Staff-User (miriam)."""
-    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "miriam")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, _STAFF_USER)
 
 
 @pytest.fixture
 def _assistant_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Assistant-User (lena)."""
-    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "lena")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, _ASSISTANT_USER)
 
 
 @pytest.fixture
 def _super_admin_storage_state(base_url, launch_browser, _storage_state_cache):
     """Storage-State für Super-Admin (superadmin) — Refs #867."""
-    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, "superadmin")
+    return _fresh_storage_state(_storage_state_cache, launch_browser, base_url, _SUPER_ADMIN_USER)
 
 
 def _setup_page(context):
@@ -439,18 +507,22 @@ def _cleanup_browser_state(page) -> None:
 
 
 @pytest.fixture
-def authenticated_page(base_url, browser, _login_storage_state):
+def authenticated_page(base_url, browser, _login_storage_state, _storage_state_cache):
     """Playwright-Page mit eingeloggtem Admin-User (wiederverwendete Session)."""
     context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/")
-    yield page
-    _cleanup_browser_state(page)
-    context.close()
+    try:
+        yield page
+    finally:
+        # Refs #2034: Rotation waehrend des Tests in den Cache nachziehen.
+        _sync_storage_state(_storage_state_cache, _ADMIN_USER, context)
+        _cleanup_browser_state(page)
+        context.close()
 
 
 @pytest.fixture
-def mobile_authenticated_page(base_url, browser, _login_storage_state):
+def mobile_authenticated_page(base_url, browser, _login_storage_state, _storage_state_cache):
     """Playwright-Page mit iPhone-Viewport (375x667) und Touch-Emulation.
 
     Refs #928. Nutzbar für Mobile-Workflow-Tests, die das
@@ -474,46 +546,62 @@ def mobile_authenticated_page(base_url, browser, _login_storage_state):
     )
     page = _setup_page(context)
     page.goto(f"{base_url}/")
-    yield page
-    _cleanup_browser_state(page)
-    context.close()
+    try:
+        yield page
+    finally:
+        # Refs #2034: Rotation waehrend des Tests in den Cache nachziehen.
+        _sync_storage_state(_storage_state_cache, _ADMIN_USER, context)
+        _cleanup_browser_state(page)
+        context.close()
 
 
 @pytest.fixture
-def lead_page(base_url, browser, _lead_storage_state):
+def lead_page(base_url, browser, _lead_storage_state, _storage_state_cache):
     """Playwright-Page mit eingeloggtem Lead-User (emma)."""
     context = browser.new_context(storage_state=_lead_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/")
-    yield page
-    _cleanup_browser_state(page)
-    context.close()
+    try:
+        yield page
+    finally:
+        # Refs #2034: Rotation waehrend des Tests in den Cache nachziehen.
+        _sync_storage_state(_storage_state_cache, _LEAD_USER, context)
+        _cleanup_browser_state(page)
+        context.close()
 
 
 @pytest.fixture
-def staff_page(base_url, browser, _staff_storage_state):
+def staff_page(base_url, browser, _staff_storage_state, _storage_state_cache):
     """Playwright-Page mit eingeloggtem Staff-User (miriam)."""
     context = browser.new_context(storage_state=_staff_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/")
-    yield page
-    _cleanup_browser_state(page)
-    context.close()
+    try:
+        yield page
+    finally:
+        # Refs #2034: Rotation waehrend des Tests in den Cache nachziehen.
+        _sync_storage_state(_storage_state_cache, _STAFF_USER, context)
+        _cleanup_browser_state(page)
+        context.close()
 
 
 @pytest.fixture
-def assistant_page(base_url, browser, _assistant_storage_state):
+def assistant_page(base_url, browser, _assistant_storage_state, _storage_state_cache):
     """Playwright-Page mit eingeloggtem Assistant-User (lena)."""
     context = browser.new_context(storage_state=_assistant_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/")
-    yield page
-    _cleanup_browser_state(page)
-    context.close()
+    try:
+        yield page
+    finally:
+        # Refs #2034: Rotation waehrend des Tests in den Cache nachziehen.
+        _sync_storage_state(_storage_state_cache, _ASSISTANT_USER, context)
+        _cleanup_browser_state(page)
+        context.close()
 
 
 @pytest.fixture
-def super_admin_page(base_url, browser, _super_admin_storage_state):
+def super_admin_page(base_url, browser, _super_admin_storage_state, _storage_state_cache):
     """Playwright-Page mit eingeloggtem Super-Admin (superadmin) — Refs #867.
 
     Landet nach Login auf ``/system/`` (siehe ``CustomLoginView.get_success_url``).
@@ -523,9 +611,13 @@ def super_admin_page(base_url, browser, _super_admin_storage_state):
     context = browser.new_context(storage_state=_super_admin_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/system/")
-    yield page
-    _cleanup_browser_state(page)
-    context.close()
+    try:
+        yield page
+    finally:
+        # Refs #2034: Rotation waehrend des Tests in den Cache nachziehen.
+        _sync_storage_state(_storage_state_cache, _SUPER_ADMIN_USER, context)
+        _cleanup_browser_state(page)
+        context.close()
 
 
 def login_as(browser, base_url, username, password=SEED_PASSWORD):

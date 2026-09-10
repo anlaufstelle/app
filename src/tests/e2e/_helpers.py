@@ -173,6 +173,15 @@ def enter_sudo_mode(page, base_url, password=SEED_PASSWORD):
 
     Nach Aufruf navigiert die Page zurück zur Startseite — der Test kann dann
     den eigentlichen Flow (z.B. Download-Klick) starten.
+
+    Refs #2034: Der Sudo-Grant ist eine Rechteanhebung und **rotiert die
+    Django-Session-ID** — der Server löscht dabei die alte Sitzungszeile. Der
+    Kontext dieser Page bekommt den neuen ``sessionid``-Cookie über die Antwort
+    und läuft normal weiter; der session-weit gecachte Storage-State desselben
+    Nutzers würde ohne Nachzug aber den toten Cookie behalten. Das erledigt
+    ``conftest._sync_storage_state`` beim Abbau der Page-Fixture. Wer diesen
+    Helfer in einem selbst gebauten Kontext benutzt und danach einen ZWEITEN
+    Kontext aus einem gecachten State öffnet, muss den State selbst erneuern.
     """
     page.goto(f"{base_url}/sudo/?next=/", wait_until="domcontentloaded")
     page.fill('input[name="password"]', password)
