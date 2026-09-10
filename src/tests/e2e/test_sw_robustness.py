@@ -406,6 +406,51 @@ def test_runtime_cache_trim_enforces_entry_budget(browser, base_url):
         context.close()
 
 
+def test_runtime_cache_rejects_dynamic_url_with_static_query(browser, base_url):
+    """Refs #2201: URLs, die ``/static/`` nur im Query-String tragen, duerfen
+    nicht als statische Assets klassifiziert werden. Eine dynamische Seite
+    mit ``?q=/static/`` soll den Runtime-Cache (und den Precache) nicht
+    verunreinigen; insbesondere darf keine Antwort mit ``text/html`` darin
+    landen.
+    """
+    page, context = _login_with_retry(browser, base_url)
+    try:
+        _wait_for_active_service_worker(page)
+        max_entries, cache_name = _read_sw_constants(page)
+        runtime_name = cache_name + "-runtime"
+
+        # Dynamische Seite mit /static/ im Query-String aufrufen.
+        target = f"{base_url}/clients/?q=/static/foo.js"
+        page.goto(target, wait_until="domcontentloaded")
+
+        cache_state = page.evaluate(
+            """async ([runtimeName, targetUrl]) => {
+                    const rt = await caches.open(runtimeName);
+                    const keys = await rt.keys();
+                    let hasTarget = false;
+                    let hasHtml = false;
+                    for (const req of keys) {
+                        if (req.url === targetUrl) hasTarget = true;
+                        const resp = await rt.match(req);
+                        const ct = resp ? resp.headers.get('content-type') || '' : '';
+                        if (ct.startsWith('text/html')) hasHtml = true;
+                    }
+                    return {hasTarget, hasHtml};
+                }""",
+            [runtime_name, target],
+        )
+
+        assert not cache_state["hasTarget"], (
+            "Runtime-Cache enthaelt die dynamische Ziel-URL mit '/static/' im Query-String — "
+            "die Klassifikation wurde ueber den Teilstring in der URL statt ueber den Pfad ausgefuehrt."
+        )
+        assert not cache_state["hasHtml"], (
+            "Runtime-Cache enthaelt eine text/html-Antwort — dynamische Seiten duerfen nicht gecacht werden."
+        )
+    finally:
+        context.close()
+
+
 def test_activate_evicts_orphaned_cache_generations(browser, base_url):
     """Refs #1546: Der activate-Handler behaelt genau den aktuellen Precache
     (CACHE_NAME) UND den zugehoerigen Runtime-Cache (RUNTIME_CACHE_NAME) und

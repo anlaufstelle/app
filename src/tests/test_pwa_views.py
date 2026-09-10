@@ -155,14 +155,15 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v46"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v47"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
             "#2102: Standalone-Bausteine aendern die precachte Shell → v44; "
             "#1059: Skip-Link und Formularsemantik aendern die Shell → v45; "
             "#2136: Quick-Exit-Knopf, Sichtblende und die neue precachte "
-            "quick-exit.js aendern Shell und APP_SHELL → v46)."
+            "quick-exit.js aendern Shell und APP_SHELL → v46; "
+            "#2201: Runtime-Cache-Fehleintraege werden per v47 entfernt)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -700,7 +701,9 @@ class TestPrecachedShellBumpGuard:
     # offline_base.html) UND den APP_SHELL-Block (neue Datei quick-exit.js).
     # Beides ist ausgeliefertes Markup bzw. Precache-Inhalt, also der Fall, fuer
     # den die Regel oben gilt: erst CACHE_NAME bumpen, dann Hash nachziehen.
-    _PINNED_CACHE_NAME = "anlaufstelle-v46"
+    # Refs #2201: v46 -> v47 — die neue Runtime-Cache-Klassifikation verwirft
+    # alte Fehlklassifikationen beim Activate.
+    _PINNED_CACHE_NAME = "anlaufstelle-v47"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,

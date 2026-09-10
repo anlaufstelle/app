@@ -159,7 +159,7 @@ importScripts("/static/js/url-patterns.js");
 // Bestandsgeraet die alte Shell OHNE Knopf und ohne das Skript im Precache —
 // die Aktion "Schnell verlassen" waere offline genau dort tot, wo sie
 // gebraucht wird. Der Bump erzwingt Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v46";
+const CACHE_NAME = "anlaufstelle-v47";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -762,10 +762,16 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Refs #1334: /manifest.json liegt aus PWA-Scope-Gruenden nicht unter
-    // /static/, soll aber wie ein statisches Asset offline aus dem Cache
-    // kommen (gleiche stale-while-revalidate-Behandlung).
-    if (request.url.includes("/static/") || new URL(request.url).pathname === "/manifest.json") {
+    // Refs #2201: Assets werden ausschliesslich per Same-Origin +
+    // statischem Pfad klassifiziert; Query-/Fragment-Anteile duerfen keinen
+    // Einfluss haben. /manifest.json wird aus PWA-Scope-Gruenden wie ein
+    // statisches Asset behandelt.
+    const requestUrl = new URL(request.url);
+    const isStaticAsset =
+        requestUrl.origin === self.location.origin &&
+        (requestUrl.pathname.startsWith("/static/") || requestUrl.pathname === "/manifest.json");
+
+    if (isStaticAsset) {
         // Stale-while-revalidate: sofort aus dem Cache servieren, im
         // Hintergrund die neue Version holen und den Cache aktualisieren.
         // Offline-Fähigkeit bleibt erhalten (Cache-Fallback), aber der
@@ -777,17 +783,39 @@ self.addEventListener("fetch", (event) => {
                 const networkFetch = fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) })
                     .then((response) => {
                         if (response && response.ok) {
-                            const clone = response.clone();
-                            // Refs #1546: Laufzeit-Revalidierung landet im
-                            // GETRENNTEN Runtime-Cache (nicht im Precache) und
-                            // wird direkt danach auf das Eintrags-Budget
-                            // gekappt. So waechst der Precache nie ueber das
-                            // kuratierte APP_SHELL hinaus, und gehashte
-                            // Asset-URLs akkumulieren nicht ueber
-                            // Release-Generationen.
-                            caches
-                                .open(RUNTIME_CACHE_NAME)
-                                .then((cache) => cache.put(request, clone).then(() => _trimRuntimeCache()));
+                            const contentType = (response.headers.get("content-type") || "")
+                                .split(";", 1)[0]
+                                .trim()
+                                .toLowerCase();
+                            const cacheControl = (response.headers.get("cache-control") || "").toLowerCase();
+                            const isManifest = requestUrl.pathname === "/manifest.json";
+                            const isCacheableAsset =
+                                (contentType.startsWith("text/css") ||
+                                    contentType.startsWith("application/javascript") ||
+                                    contentType.startsWith("text/javascript") ||
+                                    contentType.startsWith("font/") ||
+                                    contentType.startsWith("image/") ||
+                                    (isManifest &&
+                                        (contentType === "application/manifest+json" ||
+                                            contentType === "application/json"))) &&
+                                !cacheControl.includes("no-store") &&
+                                !request.headers.has("HX-Request") &&
+                                !contentType.startsWith("text/html");
+                            if (isCacheableAsset) {
+                                const clone = response.clone();
+                                // Refs #1546/#2201: Laufzeit-Revalidierung landet im
+                                // GETRENNTEN Runtime-Cache (nicht im Precache) und
+                                // wird direkt danach auf das Eintrags-Budget
+                                // gekappt. So waechst der Precache nie ueber das
+                                // kuratierte APP_SHELL hinaus, und gehashte
+                                // Asset-URLs akkumulieren nicht ueber
+                                // Release-Generationen. Nur erlaubte Asset-Typen
+                                // werden ueberhaupt gecacht; HTML/HTMX/no-store
+                                // bleiben draussen.
+                                caches
+                                    .open(RUNTIME_CACHE_NAME)
+                                    .then((cache) => cache.put(request, clone).then(() => _trimRuntimeCache()));
+                            }
                         }
                         return response;
                     })
