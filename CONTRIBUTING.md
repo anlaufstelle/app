@@ -844,7 +844,7 @@ Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `
 
 4. **Pull Request öffnen:**
    - Titel im Conventional-Commits-Stil (`feat: ...`, `fix: ...`)
-   - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
+   - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen? Die Vorlage [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) ist dabei verbindlich (siehe „PR-Body-Pflicht" unten).
    - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
    - Verlinkung des zugehörigen GitHub-Issues
 
@@ -904,6 +904,8 @@ AGPL-kompatibel ist. Kennzeichne Übernahmen (Quelle + Lizenz) im Commit oder PR
 **KI-Unterstützung:** Beiträge dürfen mit KI-Werkzeugen erstellt sein (dieses Projekt nutzt
 sie selbst). Für die Rechte am Ergebnis bürgst du per Sign-off wie für jeden anderen
 Beitrag — prüfe KI-Output entsprechend sorgfältig.
+
+**PR-Body-Pflicht:** Für Pull Requests ist die Vorlage [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) verbindlich — Zweck/Refs, Änderungen, Verifikation und die DCO-Bestätigung gehören in den PR-Body. Jeder Commit trägt `Signed-off-by: Name <E-Mail>`; fehlt der Sign-off, fragen wir nach und übernehmen den PR erst mit vollständigem Sign-off. Ein CI-Zwang für den Sign-off besteht in dieser Fassung bewusst nicht.
 
 ### Namensnennung
 

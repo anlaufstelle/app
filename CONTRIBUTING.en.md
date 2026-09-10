@@ -837,7 +837,7 @@ The watchdog detects stalled or dead master processes and restarts `make mutatio
 
 4. **Open a pull request:**
    - Title in Conventional Commits style (`feat: ...`, `fix: ...`)
-   - Description: What was changed and why? Which issues are being closed?
+   - Description: What was changed and why? Which issues are being closed? The template [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) is mandatory here (see "PR body requirement" below).
    - Screenshot or demo if UI changes are included
    - Link to the associated GitHub issue
 
@@ -896,6 +896,8 @@ AGPL-compatible. Mark any adopted material (source + license) in the commit or P
 **AI assistance:** Contributions may be created with AI tools (this project uses them
 itself). You vouch for the rights to the result via your sign-off, as with any other
 contribution — review AI output accordingly.
+
+**PR body requirement:** The template [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) is mandatory for pull requests — purpose/Refs, changes, verification and the DCO confirmation belong in the PR body. Every commit carries `Signed-off-by: Name <email>`; if the sign-off is missing, we ask and only take over the PR once the sign-off is complete. There is deliberately no CI enforcement of the sign-off in this version.
 
 ### Attribution
 
@@ -991,5 +993,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-08 -->
-<!-- source-hash: d9740a4313564ce7da73a093046603fe50ed2cda -->
+<!-- translation-date: 2026-09-10 -->
+<!-- source-hash: ed9285def40796b1c701ac0dc6568bf327347747 -->
