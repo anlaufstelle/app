@@ -18,7 +18,17 @@ from django.utils import timezone
 # Refs #818 — Inline-Imports an Modulkopf gehoben. Nach den Submodul-Schnitten
 # in #744/#778 entstehen keine Zirkular-Imports mehr; die fruheren Workarounds
 # in den Funktionsruempfen sind dafur ueberfluessig.
-from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, EventHistory, RetentionProposal
+from core.models import (
+    Activity,
+    AuditLog,
+    Case,
+    Client,
+    DocumentType,
+    Event,
+    EventHistory,
+    RetentionProposal,
+    ShiftHandoverNote,
+)
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold, resolve_activity_client_id
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
@@ -635,6 +645,65 @@ def enforce_activities(facility, settings_obj, now, dry_run):
             command="enforce_retention",
             count=deleted,
             retention_days=settings_obj.retention_activities_days,
+        )
+    return {"count": deleted}
+
+
+def enforce_handover_notes(facility, settings_obj, now, dry_run):
+    """Refs #2042 — Uebergabenotizen aelter als ``retention_handover_notes_days``
+    endgueltig loeschen.
+
+    Returns ``{"count": N}``.
+
+    Muster :func:`enforce_activities` (das einzige Nicht-Event-Modell mit
+    eigener Frist): defensiver Abbruch bei einer Frist < 1, physische
+    Loeschung, je Zeile eigene Transaktion mit Sperre und Re-Read, und eine
+    ``audit_retention_decision``-Zeile nur, wenn wirklich etwas geloescht
+    wurde.
+
+    **Bewusst ohne Legal-Hold-Zweig.** Ein Hold-Ziel-Typ
+    ``"ShiftHandoverNote"`` existiert nicht und wird in dieser Welle nicht
+    eingefuehrt: Holds sichern Personen-, Fall- und Ereignisakten fuer ein
+    laufendes Verfahren; die Schichtnotiz ist eine Dienstnotiz ohne
+    Personenbezug im Schema und traegt eine bewusst kurze Frist. Die Grenze
+    steht ausdruecklich im Hold-Kontrakt (``docs/security-notes.md``); ein
+    spaeterer Bedarf ist ein eigenes Ticket, kein stiller Nachbau.
+
+    Der Stichtag laeuft ueber ``updated_at``: massgeblich ist die letzte
+    fachliche Aenderung, nicht das Anlegen. Die Schluesselrotation fasst
+    ``updated_at`` bewusst NICHT an (siehe
+    ``rotation._reencrypt_shift_handover_notes``) — sonst drehte ein
+    Rotationslauf die Aufbewahrungsuhr zurueck.
+    """
+
+    if settings_obj.retention_handover_notes_days < 1:
+        return {"count": 0}
+
+    cutoff = now - timedelta(days=settings_obj.retention_handover_notes_days)
+    qs = ShiftHandoverNote.objects.filter(facility=facility, updated_at__lt=cutoff)
+    if dry_run:
+        return {"count": qs.count()}
+
+    deleted = 0
+    for pk in list(qs.values_list("pk", flat=True)):
+        with transaction.atomic():
+            note = ShiftHandoverNote.objects.select_for_update().filter(pk=pk, updated_at__lt=cutoff).first()
+            if note is None:
+                # Zwischen Sammeln und Sperren geaendert oder geloescht: der
+                # naechste Lauf entscheidet neu. Ein Hard-Delete auf einen
+                # Stand von vorhin ist nicht rueckholbar (Refs #2124).
+                continue
+            note.delete()
+            deleted += 1
+    if deleted:
+        audit_retention_decision(
+            facility,
+            target_type="ShiftHandoverNote",
+            action=AuditLog.Action.DELETE,
+            category="handover_notes",
+            command="enforce_retention",
+            count=deleted,
+            retention_days=settings_obj.retention_handover_notes_days,
         )
     return {"count": deleted}
 

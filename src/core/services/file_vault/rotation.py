@@ -7,6 +7,11 @@ sieben Rotationspfade samt RLS-Guard-Kontext im Command selbst. Der Command
 behaelt Argument-Parsing, den RLS-Bypass-Guard und die Ausgabe; hier lebt nur
 noch, WAS rotiert wird.
 
+Refs #2042 (Lane E): ``ShiftHandoverNote`` ist der achte Rotationspfad — eine
+verschluesselte Freitextspalte mit eigener, kurzer Aufbewahrungsfrist. Sie
+rotiert wie die Wertpaare der Berichtigungsantraege, aber ohne ``updated_at``
+mitzuschreiben: an dem Zeitstempel haengt die Loeschfrist.
+
 M4 Strang C (Refs #1060): ``RectificationRequest`` ist der siebte Rotationspfad —
 seine vier verschluesselten Spalten (Wertpaar, Begruendung, Pruefvermerk) sind
 nach ADR-041 dauerhafte Rechenschaftsbelege und muessen daher mitrotieren, sonst
@@ -35,7 +40,7 @@ from collections.abc import Callable
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Case, Client, Event, EventHistory, RectificationRequest
+from core.models import Case, Client, Event, EventHistory, RectificationRequest, ShiftHandoverNote
 from core.models.attachment import Attachment
 from core.services.file_vault.encryption import encrypt_dynamic_data, encrypt_field, is_encrypted_value, safe_decrypt
 
@@ -227,6 +232,49 @@ def _reencrypt_rectification_requests(dry_run: bool, *, on_contended: Callable[[
     return updated
 
 
+def _reencrypt_shift_handover_notes(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
+    """Achter Rotationspfad: die manuellen Schichtnotizen (Refs #2042).
+
+    ``ShiftHandoverNote.note`` ist ein ``encrypt_field``-Marker-Dict wie
+    ``RectificationRequest.reason`` — nur eine Spalte je Zeile, ohne
+    JSON-Zwischenstufe (die Notiz ist immer Freitext). Ohne diesen Pfad
+    laege der Freitext bis zum Ablauf seiner Frist unter einem ausrangierten
+    Schluessel und der Alt-Schluessel liesse sich nie entfernen.
+
+    ``updated_at`` wird bewusst **nicht** mitgeschrieben (anders als bei
+    Event/Client/Case, wo es zum wertgebundenen Vergleich gehoert): an genau
+    diesem Zeitstempel haengt die Aufbewahrungsfrist
+    (``enforce_handover_notes``). Ein Rotationslauf wuerde sonst die
+    Loeschuhr jeder Notiz zurueckdrehen — aus einem Schluesselwechsel wuerde
+    eine stille Fristverlaengerung.
+    """
+    updated = 0
+    pks = list(ShiftHandoverNote.objects.values_list("pk", flat=True))
+    for pk in pks:
+        note = ShiftHandoverNote.objects.filter(pk=pk).first()
+        if note is None:
+            continue
+        value = note.note
+        if not is_encrypted_value(value):
+            continue
+        decrypted = safe_decrypt(value)
+        if decrypted == "[verschlüsselt]":
+            continue
+        if dry_run:
+            updated += 1
+            continue
+        if _locked_compare_and_swap(
+            ShiftHandoverNote,
+            pk,
+            expected={"note": value},
+            updates={"note": encrypt_field(decrypted)},
+        ):
+            updated += 1
+        elif on_contended is not None:
+            on_contended()
+    return updated
+
+
 def _reencrypt_event_history(dry_run: bool, *, on_contended: Callable[[], None] | None = None) -> int:
     """Refs #783 — EventHistory ist append-only (Trigger ``prevent_eventhistory_update``).
 
@@ -297,7 +345,7 @@ def _reencrypt_event_history(dry_run: bool, *, on_contended: Callable[[], None] 
         if after_changed:
             expected["data_after"] = hist.data_after
             updates["data_after"] = after
-        with bypass_replication_triggers():
+        with bypass_replication_triggers(tables=("core_eventhistory",)):
             swapped = _locked_compare_and_swap(EventHistory, pk, expected=expected, updates=updates)
         if swapped:
             updated += 1
@@ -434,13 +482,13 @@ def _reencrypt_attachments(dry_run: bool, *, on_contended: Callable[[], None] | 
 
 
 def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] | None = None) -> dict[str, int]:
-    """Fuehrt alle sieben Rotationspfade aus und meldet Kontention additiv.
+    """Fuehrt alle acht Rotationspfade aus und meldet Kontention additiv.
 
     ``on_totp_contended`` ist ein optionaler Callback fuer die TOTP-Rewrap-
     Kontentions-Warnung: Erkennung und Retry-Logik leben hier, die
     Formatierung ueber ``self.style``/``self.stderr`` bleibt Command-Sache.
 
-    ``contended`` ist bewusst eine Gesamtzahl ueber alle sieben Modellpfade
+    ``contended`` ist bewusst eine Gesamtzahl ueber alle acht Modellpfade
     (seit Refs #2177 wirklich alle sieben — ``EventHistory`` meldete bis dahin
     als einziger Pfad keine Kontention, weil er unbedingt schrieb):
     Fuer den Betriebsentscheid "Alt-Schluessel noch nicht entfernen, Lauf
@@ -466,6 +514,10 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
         dry_run,
         on_contended=_count_contended,
     )
+    handover_notes_updated = _reencrypt_shift_handover_notes(
+        dry_run,
+        on_contended=_count_contended,
+    )
 
     return {
         "events": events_updated,
@@ -475,5 +527,6 @@ def rotate_all(*, dry_run: bool, on_totp_contended: Callable[[list[int]], None] 
         "clients": clients_updated,
         "cases": cases_updated,
         "rectification_requests": rectifications_updated,
+        "shift_handover_notes": handover_notes_updated,
         "contended": contended,
     }

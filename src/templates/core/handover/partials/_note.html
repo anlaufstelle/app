@@ -1,0 +1,106 @@
+{% load i18n %}
+{% comment %}Manuelle Schichtnotiz in der Übergabe (Refs #2042).
+
+Sitzt bewusst VOR den Kennzahlen: die subjektive Mitteilung der abgebenden
+Kraft ist das, was die Folgeschicht zuerst lesen soll. Ein Block je Schicht —
+die angezeigte (zuletzt abgeschlossene) und die laufende; fallen beide
+zusammen, kommt nur ein Block.
+
+a11y: Der HTMX-Swap ersetzt genau diesen Container. Die Statusmeldung ist ein
+aria-live="polite"-Bereich (kein Fokusraub), Fehler stehen als role="alert"
+mit role="list" am ul (Refs #2154), und das Textfeld traegt nach dem Swap
+autofocus — der Fokus landet wieder dort, wo er war.{% endcomment %}
+<div id="handover-note" class="mb-5">
+    {% if handover_note_errors %}
+    <div role="alert" class="bg-red-50 border border-red-200 rounded-[10px] p-3 mb-3">
+        <ul role="list" class="text-[13px] text-red-700">
+            {% for fehler in handover_note_errors %}
+            <li>{{ fehler }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    <div aria-live="polite" class="sr-only" data-testid="handover-note-status">
+        {% if handover_note_saved %}{% trans "Übergabenotiz gespeichert." %}{% endif %}
+    </div>
+
+    {% for block in handover_notes.blocks %}
+    <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 mb-3" data-testid="handover-note-{{ block.kind }}">
+        <div class="flex flex-wrap items-baseline gap-2 mb-2">
+            <h2 class="font-bold text-[13px] text-ink m-0">
+                {% if block.kind == "previous" %}{% trans "Übergabenotiz der letzten Schicht" %}{% else %}{% trans "Notiz für die laufende Schicht" %}{% endif %}
+            </h2>
+            <span class="text-[12px] text-ink-muted">{{ block.label }} · {{ block.range_label }} · {{ block.shift.shift_date|date:"j. F Y" }}</span>
+        </div>
+
+        {% if handover_note_conflict and block.shift == handover_note_conflict.shift %}
+        {% comment %}Anlagekonflikt (Refs #2042, R-E-23): zwei Personen haben dieselbe
+        Schicht gleichzeitig erstmals beschrieben. BEIDE Fassungen bleiben stehen —
+        der gespeicherte Bestand zum Lesen, die eigene Eingabe im Feld zum
+        Weiterarbeiten. Ueberschrieben wird nur, wer den Knopf ein zweites Mal
+        bewusst drueckt; „Verwerfen" laedt den gespeicherten Stand.{% endcomment %}
+        <div class="rounded-[10px] border border-amber-300 bg-amber-50 p-3 mb-3" data-testid="handover-note-conflict">
+            <p class="text-[12px] font-semibold text-amber-900 mb-1">{% trans "Inzwischen gespeicherte Fassung" %}</p>
+            {% if handover_note_conflict.vorhanden %}
+            <p class="text-[13px] text-ink whitespace-pre-line" data-testid="handover-note-conflict-stored">{{ handover_note_conflict.bestand }}</p>
+            {% else %}
+            <p class="text-[13px] text-ink-muted" data-testid="handover-note-conflict-stored">{% trans "Die zuvor gespeicherte Fassung wurde inzwischen gelöscht." %}</p>
+            {% endif %}
+            {% if handover_note_conflict.autor %}
+            <p class="mt-1 text-[12px] text-ink-muted">{% blocktrans with autor=handover_note_conflict.autor zeit=handover_note_conflict.zeit|date:"j. F Y, H:i" %}Gespeichert von {{ autor }} am {{ zeit }}{% endblocktrans %}</p>
+            {% endif %}
+        </div>
+        <form method="post" action="{% url 'core:handover_note' %}" hx-post="{% url 'core:handover_note' %}" hx-target="#handover-note" hx-swap="outerHTML">
+            {% csrf_token %}
+            <input type="hidden" name="shift_date" value="{{ block.shift.shift_date|date:'Y-m-d' }}">
+            <input type="hidden" name="time_filter" value="{{ block.shift.time_filter_id }}">
+            <input type="hidden" name="display_date" value="{{ handover_note_display.shift_date|date:'Y-m-d' }}">
+            <input type="hidden" name="display_time_filter" value="{{ handover_note_display.time_filter_id }}">
+            {% comment %}Bindet den Abgleich an genau die oben gezeigte Fassung (Refs #2042,
+            R-E-25). Weicht der Bestand beim Uebernehmen davon ab — geaendert, ersetzt oder
+            geloescht —, wird nicht geschrieben, sondern erneut verglichen.{% endcomment %}
+            <input type="hidden" name="base_revision" value="{{ handover_note_conflict.base_revision }}">
+            <label for="handover-note-text-{{ block.kind }}" class="block text-[12px] font-semibold text-ink-soft mb-1">{% trans "Ihre Eingabe" %}</label>
+            <textarea id="handover-note-text-{{ block.kind }}" name="note" rows="3"
+                      aria-describedby="handover-note-help-{{ block.kind }}"
+                      class="w-full rounded-[10px] border border-subtle bg-canvas px-3 py-2 text-[13px] text-ink"
+                      autofocus>{{ handover_note_conflict.eingabe }}</textarea>
+            <p id="handover-note-help-{{ block.kind }}" class="mt-1 text-[12px] text-ink-muted">
+                {% trans "Beide Fassungen vergleichen und entscheiden: Erneut speichern ersetzt genau die oben stehende Fassung durch Ihre Eingabe. Ändert jemand sie in der Zwischenzeit, wird nicht gespeichert, sondern erneut verglichen. Verwerfen behält die gespeicherte Fassung." %}
+            </p>
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+                <button type="submit" class="inline-flex items-center min-h-[44px] px-4 rounded-[10px] bg-accent text-white text-[13px] font-semibold" data-testid="handover-note-conflict-overwrite">{% trans "Meine Eingabe übernehmen und ersetzen" %}</button>
+                <button type="submit" name="discard" value="1" class="inline-flex items-center min-h-[44px] px-4 rounded-[10px] border border-subtle bg-surface text-[13px] font-semibold text-ink" data-testid="handover-note-conflict-discard">{% trans "Verwerfen" %}</button>
+            </div>
+        </form>
+        {% elif block.editable and handover_notes.can_write %}
+        <form method="post" action="{% url 'core:handover_note' %}" hx-post="{% url 'core:handover_note' %}" hx-target="#handover-note" hx-swap="outerHTML">
+            {% csrf_token %}
+            <input type="hidden" name="shift_date" value="{{ block.shift.shift_date|date:'Y-m-d' }}">
+            <input type="hidden" name="time_filter" value="{{ block.shift.time_filter_id }}">
+            <input type="hidden" name="display_date" value="{{ handover_note_display.shift_date|date:'Y-m-d' }}">
+            <input type="hidden" name="display_time_filter" value="{{ handover_note_display.time_filter_id }}">
+            <label for="handover-note-text-{{ block.kind }}" class="block text-[12px] font-semibold text-ink-soft mb-1">{% trans "Notiz für die Folgeschicht" %}</label>
+            <textarea id="handover-note-text-{{ block.kind }}" name="note" rows="3"
+                      aria-describedby="handover-note-help-{{ block.kind }}"
+                      class="w-full rounded-[10px] border border-subtle bg-canvas px-3 py-2 text-[13px] text-ink"
+                      {% if handover_note_saved and block.shift == handover_note_saved_shift %}autofocus{% endif %}>{{ block.text }}</textarea>
+            <p id="handover-note-help-{{ block.kind }}" class="mt-1 text-[12px] text-ink-muted">
+                {% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung bis {{ grenze }}. Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation.{% endblocktrans %}
+            </p>
+            <div class="mt-2 flex items-center gap-3">
+                <button type="submit" class="inline-flex items-center min-h-[44px] px-4 rounded-[10px] bg-accent text-white text-[13px] font-semibold">{% trans "Notiz speichern" %}</button>
+                {% if block.author %}<span class="text-[12px] text-ink-muted">{% blocktrans with autor=block.author zeit=block.updated_at|date:"j. F Y, H:i" %}Zuletzt geändert von {{ autor }} am {{ zeit }}{% endblocktrans %}</span>{% endif %}
+            </div>
+        </form>
+        {% elif block.text %}
+        <p class="text-[13px] text-ink whitespace-pre-line">{{ block.text }}</p>
+        <p class="mt-2 text-[12px] text-ink-muted">
+            {% if block.author %}{% blocktrans with autor=block.author zeit=block.updated_at|date:"j. F Y, H:i" %}Zuletzt geändert von {{ autor }} am {{ zeit }}{% endblocktrans %} · {% endif %}{% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung war bis {{ grenze }} möglich.{% endblocktrans %}
+        </p>
+        {% else %}
+        <p class="text-[13px] text-ink-muted">{% trans "Für diese Schicht wurde keine Übergabenotiz hinterlassen." %}</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>

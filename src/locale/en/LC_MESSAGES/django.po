@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-10 18:14+0200\n"
+"POT-Creation-Date: 2026-09-10 18:39+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12601,3 +12601,125 @@ msgstr "%(total)s cases found, page %(page)s of %(pages)s."
 #, python-format
 msgid "Die Spalte „%(column)s“ verweist auf das nicht mehr verfügbare Zielfeld „%(target)s“. Bitte prüfen Sie die Zuordnung im Zuordnungsschritt."
 msgstr "The column “%(column)s” refers to the target field “%(target)s”, which is no longer available. Please check the assignment in the mapping step."
+
+msgid "Aufbewahrung Übergabenotizen (Tage)"
+msgstr "Handover note retention (days)"
+
+msgid "Bearbeitbar bis"
+msgstr "Editable until"
+
+#: src/templates/core/handover/partials/_note.html:92
+#, python-format
+msgid "Bearbeitung bis %(grenze)s. Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation."
+msgstr "Editable until %(grenze)s. Please no real names — use pseudonyms as in the rest of the documentation."
+
+#: src/core/services/case/handover_note.py:365
+#, python-format
+msgid "Bearbeitung nur bis %(grenze)s möglich — diese Schicht ist abgeschlossen."
+msgstr "Editing is only possible until %(grenze)s — this shift has ended."
+
+#: src/templates/core/handover/partials/_note.html:102
+#, python-format
+msgid "Bearbeitung war bis %(grenze)s möglich."
+msgstr "Editing was possible until %(grenze)s."
+
+msgid "Beide Fassungen vergleichen und entscheiden: Erneut speichern ersetzt genau die oben stehende Fassung durch Ihre Eingabe. Ändert jemand sie in der Zwischenzeit, wird nicht gespeichert, sondern erneut verglichen. Verwerfen behält die gespeicherte Fassung."
+msgstr "Compare both versions and decide: saving again replaces exactly the version above with your input. If someone changes it in the meantime, nothing is saved and the comparison is shown again. Discard keeps the saved version."
+
+msgid "Die Schicht konnte nicht bestimmt werden. Bitte die Seite neu laden."
+msgstr "The shift could not be determined. Please reload the page."
+
+msgid "Die zuvor gespeicherte Fassung wurde inzwischen gelöscht."
+msgstr "The previously saved version has since been deleted."
+
+msgid "Diese Schichtnotiz wurde geändert, während Sie verglichen haben. Bitte die jetzt gespeicherte Fassung lesen und erneut entscheiden — die eigene Eingabe ist im Feld erhalten."
+msgstr "This shift note was changed while you were comparing. Please read the version that is now saved and decide again — your own input is kept in the field."
+
+msgid "Für diese Einrichtung sind Schichten konfiguriert — eine Übergabenotiz gehört zu einer Schicht, nicht zum ganzen Tag."
+msgstr "This facility has configured shifts — a handover note belongs to a shift, not to the whole day."
+
+msgid "Für diese Schicht wurde keine Übergabenotiz hinterlassen."
+msgstr "No handover note was left for this shift."
+
+msgid "Für diese Schicht wurde soeben eine andere Notiz gespeichert. Bitte beide Fassungen vergleichen: Der gespeicherte Text steht oben, die eigene Eingabe ist im Feld erhalten."
+msgstr "Another note for this shift has just been saved. Please compare both versions: the saved text is above, your own input is kept in the field."
+
+#: src/templates/core/handover/partials/_note.html:52
+#, python-format
+msgid "Gespeichert von %(autor)s am %(zeit)s"
+msgstr "Saved by %(autor)s on %(zeit)s"
+
+msgid "Ihre Eingabe"
+msgstr "Your input"
+
+msgid "Inzwischen gespeicherte Fassung"
+msgstr "Version saved in the meantime"
+
+msgid "Lokales Kalenderdatum des Schichtbeginns."
+msgstr "Local calendar date on which the shift starts."
+
+msgid "Meine Eingabe übernehmen und ersetzen"
+msgstr "Use my input and replace"
+
+msgid "Notiz (verschlüsselt)"
+msgstr "Note (encrypted)"
+
+msgid "Notiz für die Folgeschicht"
+msgstr "Note for the following shift"
+
+msgid "Notiz für die laufende Schicht"
+msgstr "Note for the current shift"
+
+msgid "Notiz speichern"
+msgstr "Save note"
+
+msgid "Schicht"
+msgstr "Shift"
+
+msgid "Schichtbeginn"
+msgstr "Shift start"
+
+msgid "Schichtdatum"
+msgstr "Shift date"
+
+msgid "Schichtende"
+msgstr "Shift end"
+
+msgid "Verfasst von"
+msgstr "Written by"
+
+msgid "Wie lange manuelle Schichtnotizen in der Übergabe aufbewahrt werden, bevor enforce_retention sie endgültig löscht."
+msgstr "How long manual shift notes in the handover are kept before enforce_retention deletes them permanently."
+
+msgid "Zuletzt geändert von"
+msgstr "Last changed by"
+
+#: src/templates/core/handover/partials/_note.html:96
+#: src/templates/core/handover/partials/_note.html:102
+#, python-format
+msgid "Zuletzt geändert von %(autor)s am %(zeit)s"
+msgstr "Last changed by %(autor)s on %(zeit)s"
+
+msgid "Übergabenotiz"
+msgstr "Handover note"
+
+msgid "Übergabenotiz angelegt"
+msgstr "Handover note created"
+
+msgid "Übergabenotiz der letzten Schicht"
+msgstr "Handover note from the last shift"
+
+msgid "Übergabenotiz gelöscht"
+msgstr "Handover note deleted"
+
+msgid "Übergabenotiz gespeichert."
+msgstr "Handover note saved."
+
+msgid "Übergabenotiz geändert"
+msgstr "Handover note changed"
+
+msgid "Übergabenotizen"
+msgstr "Handover notes"
+
+msgid "Übergabenotizen sind Fachkräften, Leitung und Anwendungsbetreuung vorbehalten."
+msgstr "Handover notes are restricted to staff, leads and application administrators."

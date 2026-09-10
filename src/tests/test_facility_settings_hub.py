@@ -18,6 +18,10 @@ EDITABLE_FIELDS = {
     "retention_identified_days",
     "retention_qualified_days",
     "retention_activities_days",
+    # Refs #2042: die Frist der manuellen Schichtnotiz gehoert in dieselbe
+    # Formular-Gruppe "Datenschutz und Fristen"; der Drift-Guard unten
+    # erzwingt ihre Aufnahme ins Formular.
+    "retention_handover_notes_days",
     "client_trash_days",
     "auditlog_retention_months",
     # ADR-050 D3/D8 (Refs #2065): beide Historien-Fristen sind Betreiber-Regler,

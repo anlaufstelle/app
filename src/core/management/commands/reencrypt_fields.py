@@ -1,8 +1,8 @@
 """Re-encrypt all encrypted Event/EventHistory/Attachment/Client/Case/
-RectificationRequest fields with the current primary key.
+RectificationRequest/ShiftHandoverNote fields with the current primary key.
 
 Thin wrapper (Refs #1835, Muster ``enforce_retention.py``): Argument-Parsing,
-der RLS-Bypass-Guard und die Ausgabe leben hier; die sieben Rotationspfade
+der RLS-Bypass-Guard und die Ausgabe leben hier; die acht Rotationspfade
 selbst lebt in :mod:`core.services.file_vault.rotation` (``rotate_all``).
 """
 
@@ -21,7 +21,8 @@ class Command(BaseCommand):
         "Event.data_json, EventHistory.data_before/data_after, "
         "Attachment.original_filename_encrypted (Refs #783), TOTP-Secrets "
         "(Refs #1362), Client.data_json, Case.data_json (Refs #1058), "
-        "RectificationRequest-Wertpaare (Refs #1060). Heilt zusätzlich "
+        "RectificationRequest-Wertpaare (Refs #1060), ShiftHandoverNote.note "
+        "(Refs #2042). Heilt zusätzlich "
         "Plaintext-PII in Event/Client/Case.data_json (Refs #1024 A4.4, #1058)."
     )
 
@@ -71,6 +72,7 @@ class Command(BaseCommand):
                 f"{action} {counts['events']} events, {counts['event_history']} history entries, "
                 f"{counts['attachments']} attachments, {counts['totp_devices']} TOTP devices, "
                 f"{counts['clients']} clients, {counts['cases']} cases, "
-                f"{counts['rectification_requests']} rectification requests."
+                f"{counts['rectification_requests']} rectification requests, "
+                f"{counts['shift_handover_notes']} handover notes."
             )
         )

@@ -2,10 +2,13 @@
 
 import json
 from contextlib import contextmanager
+from datetime import date as date_cls
 from datetime import timedelta
 from urllib.parse import urlencode
+from uuid import UUID
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import connection, transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -13,12 +16,25 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
 from django.utils.crypto import constant_time_compare
+from django.utils.decorators import method_decorator
 from django.utils.http import parse_etags
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import TemplateView
+from django_ratelimit.decorators import ratelimit
 
-from core.models import DocumentType
+from core.constants import RATELIMIT_MUTATION
+from core.models import DocumentType, TimeFilter
 from core.services.case import build_handover_summary
+from core.services.case.handover_note import (
+    HandoverNoteConflictError,
+    Shift,
+    assert_shift_date_supported,
+    build_handover_note_context,
+    decrypt_note,
+    note_revision,
+    save_note,
+)
 from core.services.dashboard import build_focus_box, staff_dashboard_context
 from core.services.events import (
     build_feed_items,
@@ -37,11 +53,15 @@ from core.services.zeitstrom_watch import (
     build_zeitstrom_watch_snapshot,
     zeitstrom_page_scope_matches,
 )
-from core.views.mixins import AssistantOrAboveRequiredMixin
+from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 ZEITSTROM_FILTER_TRANSITION_HEADER = "X-Zeitstrom-Filter-Transition"
 ZEITSTROM_VALIDATORS_HEADER = "X-Zeitstrom-Validators"
 ZEITSTROM_PREVIOUS_STATE_HEADER = "X-Zeitstrom-Previous-State"
+
+#: Eine Meldung fuer jede Art unbrauchbarer Schichtkoordinaten — sie nennt
+#: bewusst keinen Feldnamen und keinen eingegebenen Wert (Refs #2042, E-06).
+_SHIFT_UNRESOLVED = _("Die Schicht konnte nicht bestimmt werden. Bitte die Seite neu laden.")
 
 
 class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
@@ -129,8 +149,6 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         active_bans = get_active_bans(facility, user=self.request.user)
 
         # Pills für die Type-Filter im Zeitstrom (Design: als-screens.jsx Filter-Pills)
-        from django.utils.translation import gettext as _
-
         filter_options = [
             ("", _("Alle")),
             ("events", _("Kontakte")),
@@ -179,6 +197,20 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             context["selected_filter"] = uebergabe_filter
             context["selected_filter_id"] = str(uebergabe_filter.pk) if uebergabe_filter else "all"
             context["zeitstrom_filter_state"] = state.params
+            # Refs #2042: die manuelle Schichtnotiz sitzt oben in der
+            # Uebergabe — zur angezeigten (zuletzt abgeschlossenen) Schicht
+            # und zur laufenden. ``None`` fuer Rollen ohne Leserecht.
+            angezeigte_schicht = Shift(target_date, uebergabe_filter)
+            context["handover_notes"] = build_handover_note_context(
+                facility,
+                self.request.user,
+                angezeigte_schicht,
+                now=now,
+            )
+            # Refs #2042 (E-04): das Formular fuehrt die ANZEIGE-Koordinaten
+            # als Hidden-Fields mit, damit der HTMX-Austausch nach dem
+            # Speichern dieselbe Uebergabe zeigt wie der vorherige GET.
+            context["handover_note_display"] = angezeigte_schicht
         else:
             show_tally_panel = state.is_live_tally_context
             if show_tally_panel:
@@ -223,6 +255,183 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                     }
                 ),
             )
+
+
+class HandoverNoteUpdateView(StaffRequiredMixin, View):
+    """HTMX-Endpunkt der manuellen Schichtnotiz (Refs #2042).
+
+    Bewusst eine eigene, kleine POST-Route statt eines Zweigs in
+    ``ZeitstromView``: die Uebergabe selbst ist eine GET-Ansicht mit
+    Watch-/ETag-Vertrag, in den ein Schreibpfad nicht gehoert. Die Rolle wird
+    doppelt geprueft — hier ueber ``StaffRequiredMixin`` (die Uebergabe selbst
+    steht der Assistenz offen) und noch einmal im Service, damit kein zweiter
+    Aufrufer am Guard vorbeikommt.
+
+    **Zwei Schicht-Koordinatenpaare** (Refs #2042, Befund E-04): das
+    Formular sagt mit ``shift_date``/``time_filter``, WELCHE Notiz geschrieben
+    wird, und mit ``display_date``/``display_time_filter``, WELCHE Uebergabe
+    gerade auf dem Bildschirm steht. Vorher war beides dasselbe — nach dem
+    Speichern der laufenden Notiz verengte sich der Austausch auf genau diesen
+    Block, und die Notiz der abgebenden Schicht verschwand aus der Seite, bis
+    jemand neu lud. Fehlen oder taugen die Anzeigekoordinaten nicht, wird die
+    automatische Uebergabe neu aufgeloest — dieselbe Quelle wie im GET.
+    """
+
+    http_method_names = ["post"]
+    template_name = "core/handover/partials/_note.html"
+
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
+    def post(self, request):
+        facility = request.current_facility
+        now = timezone.localtime()
+        today = timezone.localdate()
+
+        schicht = self._parse_shift(request, facility, "shift_date", "time_filter", today=today)
+        fehler: list[str] = []
+        gespeicherte_schicht = None
+        konflikt = None
+        if schicht is None:
+            # Malformte Koordinaten sind ein **Client**-Fehler: so etwas kann
+            # die eigene Oberflaeche nicht erzeugen (Refs #2042, E-06).
+            return self._render(
+                request,
+                facility,
+                now=now,
+                today=today,
+                fehler=[str(_SHIFT_UNRESOLVED)],
+                gespeicherte_schicht=None,
+                konflikt=None,
+                status=400,
+            )
+        if request.POST.get("discard") == "1":
+            # „Verwerfen" nach einem Anlagekonflikt: nichts schreiben, nur den
+            # gespeicherten Stand neu zeigen (Refs #2042, R-E-23).
+            return self._render(
+                request,
+                facility,
+                now=now,
+                today=today,
+                fehler=[],
+                gespeicherte_schicht=None,
+                konflikt=None,
+            )
+        try:
+            save_note(
+                facility,
+                schicht,
+                request.user,
+                request.POST.get("note", ""),
+                now=now,
+                # Nur der Abgleich schickt dieses Feld mit. Fehlt es, ist der
+                # POST eine gewoehnliche Bearbeitung und laeuft wie bisher
+                # (Refs #2042, R-E-25: der Bestandsvergleich gilt dem
+                # Konflikt-Abgleich, nicht jeder Bearbeitung).
+                base_revision=request.POST.get("base_revision"),
+            )
+            gespeicherte_schicht = schicht
+        except HandoverNoteConflictError as exc:
+            fehler = list(exc.messages)
+            traeger = (exc.bestand.updated_by or exc.bestand.author) if exc.bestand is not None else None
+            konflikt = {
+                "shift": schicht,
+                "vorhanden": exc.bestand is not None,
+                "bestand": decrypt_note(exc.bestand),
+                "eingabe": exc.eingabe,
+                "autor": str(traeger) if traeger else None,
+                "zeit": exc.bestand.updated_at if exc.bestand is not None else None,
+                # Frische Revision: der naechste Abgleich gilt genau DER
+                # Fassung, die diese Antwort zeigt.
+                "base_revision": note_revision(exc.bestand),
+            }
+        except ValidationError as exc:
+            # Fachliche Ausgaenge (Fenster zu, Schicht-Identitaet) sind ein
+            # ERGEBNIS, kein Protokollfehler — und muessen im HTMX-Pfad
+            # sichtbar bleiben, der 4xx nicht einwechselt (s. ``_render``).
+            fehler = list(exc.messages)
+
+        return self._render(
+            request,
+            facility,
+            now=now,
+            today=today,
+            fehler=fehler,
+            gespeicherte_schicht=gespeicherte_schicht,
+            konflikt=konflikt,
+        )
+
+    @staticmethod
+    def _parse_shift(request, facility, date_key, filter_key, *, today):
+        """Schichtkoordinaten aus dem POST — ``None``, wenn sie nicht taugen.
+
+        Datum und UUID werden geprueft, **bevor** irgendein Fenster gerechnet
+        wird (Refs #2042, E-06): ein syntaktisch gueltiges ``9999-12-31`` lief
+        sonst beim Folgetag in einen ``OverflowError``, eine kaputte UUID in
+        eine ungefangene ``ValidationError`` — beides HTTP 500.
+        """
+        raw_date = request.POST.get(date_key)
+        if raw_date is None:
+            return None
+        try:
+            shift_date = date_cls.fromisoformat(raw_date)
+        except (TypeError, ValueError):
+            return None
+        raw_filter = request.POST.get(filter_key, "")
+        if not raw_filter:
+            shift = Shift(shift_date, None)
+        else:
+            try:
+                canonical = UUID(raw_filter)
+            except (TypeError, ValueError, AttributeError):
+                return None
+            time_filter = TimeFilter.objects.for_facility(facility).filter(pk=canonical).first()
+            if time_filter is None:
+                return None
+            shift = Shift(shift_date, time_filter)
+        try:
+            assert_shift_date_supported(shift, today=today)
+        except ValidationError:
+            return None
+        return shift
+
+    def _display_shift(self, request, facility, *, today, now):
+        """Die Schicht, deren Uebergabe angezeigt wird — nie die Schreibschicht."""
+        schicht = self._parse_shift(request, facility, "display_date", "display_time_filter", today=today)
+        if schicht is not None:
+            return schicht
+        state = resolve_zeitstrom_state({"view": "uebergabe"}, facility, today=today, now=now)
+        return Shift(state.target_date, state.time_filter)
+
+    def _render(self, request, facility, *, now, today, fehler, gespeicherte_schicht, konflikt, status=200):
+        """Rendert den kanonischen Anzeigekontext.
+
+        **Zum Statuscode** (Refs #2042, E-06): ``400`` gibt es ausschliesslich
+        fuer malformte Schichtkoordinaten — eine Anfrage, die die eigene
+        Oberflaeche nicht stellen kann. Fachliche Ausgaenge (Fenster
+        geschlossen, Schicht-Identitaet, Anlagekonflikt) bleiben bei ``200``,
+        und zwar bewusst: das vendorierte htmx 2.0.10 traegt die Vorgabe
+        ``responseHandling: [{code:"[45]..", swap:false, error:true}]``, wechselt
+        4xx-Antworten also **nicht** ein. Ein 400 auf einem Ergebnis, das die
+        Fachkraft lesen muss, waere im HTMX-Pfad eine stumme Antwort. Die
+        globale htmx-Konfiguration liegt in ``base.html`` und damit ausserhalb
+        dieser Lane; der Fall ist im Bericht als bewusste Grenze vermerkt. Fuer
+        den 400er bleibt der nicht-HTMX-Pfad (das Formular traegt ``action``)
+        sichtbar, und der Client-Fehler ist im Netzwerk-Log eindeutig.
+        """
+        angezeigt = self._display_shift(request, facility, today=today, now=now)
+        context = {
+            "handover_notes": build_handover_note_context(facility, request.user, angezeigt, now=now),
+            "handover_note_display": angezeigt,
+            "handover_note_errors": fehler,
+            "handover_note_saved": gespeicherte_schicht is not None,
+            # Refs #2042: NUR der gerade gespeicherte Block bekommt den Fokus
+            # zurueck. Ein ``autofocus`` an jedem Block schickte ihn nach dem
+            # Speichern in das erste Textfeld der Seite — also in eine fremde
+            # Schicht (WCAG 2.4.3: der Fokus gehoert an das Ausgangselement).
+            "handover_note_saved_shift": gespeicherte_schicht,
+            # Refs #2042 (R-E-23): beide Fassungen des Anlagekonflikts.
+            "handover_note_conflict": konflikt,
+        }
+        return render(request, self.template_name, context, status=status)
 
 
 def _reload_required(*, json_response):

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-10 18:14+0200\n"
+"POT-Creation-Date: 2026-09-10 18:39+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12699,3 +12699,125 @@ msgstr "%(total)s Fälle gefunden, Seite %(page)s von %(pages)s."
 #, python-format
 msgid "Die Spalte „%(column)s“ verweist auf das nicht mehr verfügbare Zielfeld „%(target)s“. Bitte prüfen Sie die Zuordnung im Zuordnungsschritt."
 msgstr "Die Spalte „%(column)s“ verweist auf das nicht mehr verfügbare Zielfeld „%(target)s“. Bitte prüfen Sie die Zuordnung im Zuordnungsschritt."
+
+msgid "Aufbewahrung Übergabenotizen (Tage)"
+msgstr "Aufbewahrung Übergabenotizen (Tage)"
+
+msgid "Bearbeitbar bis"
+msgstr "Bearbeitbar bis"
+
+#: src/templates/core/handover/partials/_note.html:92
+#, python-format
+msgid "Bearbeitung bis %(grenze)s. Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation."
+msgstr "Bearbeitung bis %(grenze)s. Bitte keine Klarnamen — Pseudonyme wie in der Dokumentation."
+
+#: src/core/services/case/handover_note.py:365
+#, python-format
+msgid "Bearbeitung nur bis %(grenze)s möglich — diese Schicht ist abgeschlossen."
+msgstr "Bearbeitung nur bis %(grenze)s möglich — diese Schicht ist abgeschlossen."
+
+#: src/templates/core/handover/partials/_note.html:102
+#, python-format
+msgid "Bearbeitung war bis %(grenze)s möglich."
+msgstr "Bearbeitung war bis %(grenze)s möglich."
+
+msgid "Beide Fassungen vergleichen und entscheiden: Erneut speichern ersetzt genau die oben stehende Fassung durch Ihre Eingabe. Ändert jemand sie in der Zwischenzeit, wird nicht gespeichert, sondern erneut verglichen. Verwerfen behält die gespeicherte Fassung."
+msgstr "Beide Fassungen vergleichen und entscheiden: Erneut speichern ersetzt genau die oben stehende Fassung durch Ihre Eingabe. Ändert jemand sie in der Zwischenzeit, wird nicht gespeichert, sondern erneut verglichen. Verwerfen behält die gespeicherte Fassung."
+
+msgid "Die Schicht konnte nicht bestimmt werden. Bitte die Seite neu laden."
+msgstr "Die Schicht konnte nicht bestimmt werden. Bitte die Seite neu laden."
+
+msgid "Die zuvor gespeicherte Fassung wurde inzwischen gelöscht."
+msgstr "Die zuvor gespeicherte Fassung wurde inzwischen gelöscht."
+
+msgid "Diese Schichtnotiz wurde geändert, während Sie verglichen haben. Bitte die jetzt gespeicherte Fassung lesen und erneut entscheiden — die eigene Eingabe ist im Feld erhalten."
+msgstr "Diese Schichtnotiz wurde geändert, während Sie verglichen haben. Bitte die jetzt gespeicherte Fassung lesen und erneut entscheiden — die eigene Eingabe ist im Feld erhalten."
+
+msgid "Für diese Einrichtung sind Schichten konfiguriert — eine Übergabenotiz gehört zu einer Schicht, nicht zum ganzen Tag."
+msgstr "Für diese Einrichtung sind Schichten konfiguriert — eine Übergabenotiz gehört zu einer Schicht, nicht zum ganzen Tag."
+
+msgid "Für diese Schicht wurde keine Übergabenotiz hinterlassen."
+msgstr "Für diese Schicht wurde keine Übergabenotiz hinterlassen."
+
+msgid "Für diese Schicht wurde soeben eine andere Notiz gespeichert. Bitte beide Fassungen vergleichen: Der gespeicherte Text steht oben, die eigene Eingabe ist im Feld erhalten."
+msgstr "Für diese Schicht wurde soeben eine andere Notiz gespeichert. Bitte beide Fassungen vergleichen: Der gespeicherte Text steht oben, die eigene Eingabe ist im Feld erhalten."
+
+#: src/templates/core/handover/partials/_note.html:52
+#, python-format
+msgid "Gespeichert von %(autor)s am %(zeit)s"
+msgstr "Gespeichert von %(autor)s am %(zeit)s"
+
+msgid "Ihre Eingabe"
+msgstr "Ihre Eingabe"
+
+msgid "Inzwischen gespeicherte Fassung"
+msgstr "Inzwischen gespeicherte Fassung"
+
+msgid "Lokales Kalenderdatum des Schichtbeginns."
+msgstr "Lokales Kalenderdatum des Schichtbeginns."
+
+msgid "Meine Eingabe übernehmen und ersetzen"
+msgstr "Meine Eingabe übernehmen und ersetzen"
+
+msgid "Notiz (verschlüsselt)"
+msgstr "Notiz (verschlüsselt)"
+
+msgid "Notiz für die Folgeschicht"
+msgstr "Notiz für die Folgeschicht"
+
+msgid "Notiz für die laufende Schicht"
+msgstr "Notiz für die laufende Schicht"
+
+msgid "Notiz speichern"
+msgstr "Notiz speichern"
+
+msgid "Schicht"
+msgstr "Schicht"
+
+msgid "Schichtbeginn"
+msgstr "Schichtbeginn"
+
+msgid "Schichtdatum"
+msgstr "Schichtdatum"
+
+msgid "Schichtende"
+msgstr "Schichtende"
+
+msgid "Verfasst von"
+msgstr "Verfasst von"
+
+msgid "Wie lange manuelle Schichtnotizen in der Übergabe aufbewahrt werden, bevor enforce_retention sie endgültig löscht."
+msgstr "Wie lange manuelle Schichtnotizen in der Übergabe aufbewahrt werden, bevor enforce_retention sie endgültig löscht."
+
+msgid "Zuletzt geändert von"
+msgstr "Zuletzt geändert von"
+
+#: src/templates/core/handover/partials/_note.html:96
+#: src/templates/core/handover/partials/_note.html:102
+#, python-format
+msgid "Zuletzt geändert von %(autor)s am %(zeit)s"
+msgstr "Zuletzt geändert von %(autor)s am %(zeit)s"
+
+msgid "Übergabenotiz"
+msgstr "Übergabenotiz"
+
+msgid "Übergabenotiz angelegt"
+msgstr "Übergabenotiz angelegt"
+
+msgid "Übergabenotiz der letzten Schicht"
+msgstr "Übergabenotiz der letzten Schicht"
+
+msgid "Übergabenotiz gelöscht"
+msgstr "Übergabenotiz gelöscht"
+
+msgid "Übergabenotiz gespeichert."
+msgstr "Übergabenotiz gespeichert."
+
+msgid "Übergabenotiz geändert"
+msgstr "Übergabenotiz geändert"
+
+msgid "Übergabenotizen"
+msgstr "Übergabenotizen"
+
+msgid "Übergabenotizen sind Fachkräften, Leitung und Anwendungsbetreuung vorbehalten."
+msgstr "Übergabenotizen sind Fachkräften, Leitung und Anwendungsbetreuung vorbehalten."

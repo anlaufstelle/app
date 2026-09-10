@@ -25,6 +25,7 @@ from core.models import (
     RectificationRequest,
     RetentionProposal,
     Settings,
+    ShiftHandoverNote,
     TimeFilter,
     User,
     WorkItem,
@@ -93,6 +94,13 @@ def flush_seed_data() -> None:
         DocumentTypeField.objects.all().delete()
         DocumentType.objects.all().delete()
         FieldTemplate.objects.all().delete()
+        # Refs #2042: VOR den Zeitfenstern. ``ShiftHandoverNote.time_filter``
+        # traegt seit dem Cross-Review ``on_delete=PROTECT`` — ein Zeitfenster
+        # mit Notizen ist bewusst nicht loeschbar, damit Uebergabewissen nicht
+        # an Frist und Audit-Log vorbei verschwindet. Der Seed-Flush raeumt
+        # ohnehin ALLES ab; er muss die Notizen nur selbst mitnehmen, statt am
+        # Schutz haengenzubleiben.
+        ShiftHandoverNote.objects.all().delete()
         TimeFilter.objects.all().delete()
         Settings.objects.all().delete()
         User.objects.all().delete()

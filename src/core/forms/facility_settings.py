@@ -27,6 +27,9 @@ _FIELD_GROUPS = (
             "retention_identified_days",
             "retention_qualified_days",
             "retention_activities_days",
+            # Refs #2042: direkt hinter der Aktivitaeten-Frist — beide regeln
+            # die Aufbewahrung von Betriebsspuren neben der Fallakte.
+            "retention_handover_notes_days",
             "client_trash_days",
             "auditlog_retention_months",
             # ADR-050 D3/D8 (Refs #2065): direkt hinter der Audit-Frist — beide

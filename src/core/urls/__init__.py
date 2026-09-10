@@ -153,6 +153,7 @@ from core.views.workitems import (
     WorkItemInboxView,
 )
 from core.views.zeitstrom import (
+    HandoverNoteUpdateView,
     ZeitstromBansPartialView,
     ZeitstromCurrentShiftPartialView,
     ZeitstromFeedPartialView,
@@ -190,6 +191,8 @@ urlpatterns = [
     ),
     # Übergabe → in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
     path("uebergabe/", RedirectView.as_view(url="/?view=uebergabe", permanent=True), name="handover"),
+    # Refs #2042: Schreibpfad der manuellen Schichtnotiz (HTMX-POST).
+    path("uebergabe/notiz/", HandoverNoteUpdateView.as_view(), name="handover_note"),
     # Redirects (alte URLs)
     path("aktivitaetslog/", RedirectView.as_view(pattern_name="core:zeitstrom", permanent=True)),
     path("timeline/", RedirectView.as_view(pattern_name="core:zeitstrom", permanent=True)),

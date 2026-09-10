@@ -254,6 +254,20 @@ class AuditLog(models.Model):
             "processing_restriction_lifted",
             _("Einschränkung der Verarbeitung aufgehoben"),
         )
+        # Refs #2042: manuelle Schichtnotiz in der Uebergabe. Drei eigene
+        # Aktionen statt einer generischen „Notiz geaendert" — unter /audit/
+        # ist genau die Unterscheidung die Frage („wurde eine Uebergabenotiz
+        # geloescht, bevor die Folgeschicht sie lesen konnte?"), und ein
+        # Enum-Wert je Vorgang erspart es, dafuer das ``detail`` zu lesen
+        # (Muster ``CLIENT_SOFT_DELETED``/``CLIENT_RESTORED``). Das ``detail``
+        # traegt ausschliesslich Schicht-Koordinaten (``shift_date``,
+        # ``time_filter``) und ``changed_fields`` — nie den Notiztext: der ist
+        # Freitext ueber Personen und liegt verschluesselt an der Zeile
+        # (#1751). Die Loeschung durch den Retention-Sweep laeuft nicht
+        # hierueber, sondern ueber ``audit_retention_decision``.
+        HANDOVER_NOTE_CREATED = "handover_note_created", _("Übergabenotiz angelegt")
+        HANDOVER_NOTE_UPDATED = "handover_note_updated", _("Übergabenotiz geändert")
+        HANDOVER_NOTE_DELETED = "handover_note_deleted", _("Übergabenotiz gelöscht")
 
     objects = FacilityScopedManager()
 

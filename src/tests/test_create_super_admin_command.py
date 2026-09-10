@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from django.core.management import CommandError, call_command
 
-from core.models import User
+from core.models import AuditLog, User
 
 
 @pytest.mark.django_db
@@ -63,6 +63,30 @@ class TestCreateSuperAdminCommand:
 
         user = User.objects.get(username="jonas_mfa")
         assert user.mfa_required is True
+
+    def test_created_super_admin_mfa_requirement_is_audited_as_system(self):
+        """Refs #2172: Der zweite Bootstrap-Save des MFA-Flags hinterlässt
+        einen system-attribuierten, datenminimierten Zugangs-Nachweis."""
+        with patch("getpass.getpass", side_effect=["StrongPass!2026", "StrongPass!2026"]):
+            call_command(
+                "create_super_admin",
+                "--username=jonas_mfa_audit",
+                "--email=jonas_mfa_audit@example.org",
+            )
+
+        user = User.objects.get(username="jonas_mfa_audit")
+        entry = AuditLog.objects.get(
+            action=AuditLog.Action.USER_ACCESS_UPDATED,
+            target_id=str(user.pk),
+        )
+        assert entry.user == user
+        assert entry.actor is None
+        assert entry.facility is None
+        assert entry.detail == {
+            "changed_fields": ["mfa_required"],
+            "username": user.username,
+            "system": True,
+        }
 
     def test_force_overrides_existing_super_admin_check(self):
         """Wenn bereits ein super_admin existiert, blockt der Command —

@@ -2,6 +2,7 @@
 deactivation and password-reset requests (Refs #598)."""
 
 import pytest
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -188,6 +189,140 @@ def test_role_change_via_admin_records_acting_admin_as_actor(admin_user, staff_u
     assert entry.detail["actor_id"] == admin_user.pk
     assert entry.detail["actor_username"] == admin_user.username
     assert "system" not in entry.detail
+
+
+@pytest.mark.django_db
+def test_mfa_required_change_via_admin_records_access_update(admin_user, staff_user, facility):
+    """Refs #2172: Ein Einzel-Edit der MFA-Pflicht ist genau einmal und
+    datenminimiert dem handelnden Admin und dem Zielkonto zugeordnet."""
+    staff_user.mfa_required = True
+    _save_user_via_admin(admin_user, staff_user, facility)
+
+    entry = AuditLog.objects.get(
+        action=AuditLog.Action.USER_ACCESS_UPDATED,
+        target_id=str(staff_user.pk),
+    )
+    assert entry.user == staff_user
+    assert entry.actor == admin_user
+    assert entry.facility == facility
+    assert entry.target_type == "User"
+    assert entry.detail["changed_fields"] == ["mfa_required"]
+    assert entry.detail["actor_id"] == admin_user.pk
+    assert entry.detail["actor_username"] == admin_user.username
+    assert "system" not in entry.detail
+    assert "old_value" not in entry.detail
+    assert "new_value" not in entry.detail
+    assert not ({"password", "totp_secret", "backup_codes"} & entry.detail.keys())
+
+
+@pytest.mark.django_db
+def test_unchanged_mfa_required_via_admin_records_no_access_update(admin_user, staff_user, facility):
+    """Refs #2172: Ein Save ohne echten Flag-Wechsel erzeugt kein Audit-Rauschen."""
+    _save_user_via_admin(admin_user, staff_user, facility)
+
+    assert not AuditLog.objects.filter(
+        action=AuditLog.Action.USER_ACCESS_UPDATED,
+        target_id=str(staff_user.pk),
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_mfa_required_and_role_change_keep_separate_action_contracts(admin_user, staff_user, facility):
+    """Refs #2172: Rollen- und MFA-Änderung bleiben zwei fachlich eindeutige
+    Actions; jede Action entsteht beim gemeinsamen Save genau einmal."""
+    staff_user.role = User.Role.LEAD
+    staff_user.mfa_required = True
+    _save_user_via_admin(admin_user, staff_user, facility)
+
+    entries = AuditLog.objects.filter(target_id=str(staff_user.pk))
+    assert entries.filter(action=AuditLog.Action.USER_ROLE_CHANGED).count() == 1
+    access_entry = entries.get(action=AuditLog.Action.USER_ACCESS_UPDATED)
+    assert access_entry.detail["changed_fields"] == ["mfa_required"]
+
+
+@pytest.mark.django_db
+@override_settings(SUDO_MODE_ENABLED=False)
+def test_facility_admin_cannot_edit_protected_super_admin_mfa(client, admin_user, super_admin_user):
+    """Refs #2172: Objekt-Scoping weist den echten Admin-POST auf ein
+    geschütztes super_admin-Konto ab; folglich entsteht kein Nachweis."""
+    client.force_login(admin_user)
+    response = client.post(
+        f"/admin-mgmt/core/user/{super_admin_user.pk}/change/",
+        {"mfa_required": "on", "_save": "Speichern"},
+    )
+
+    assert response.status_code in (302, 404)
+    super_admin_user.refresh_from_db()
+    assert super_admin_user.mfa_required is False
+    assert not AuditLog.objects.filter(
+        action=AuditLog.Action.USER_ACCESS_UPDATED,
+        target_id=str(super_admin_user.pk),
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_mfa_required_field_visibility_follows_user_change_permissions(rf, admin_user, super_admin_user, staff_user):
+    """Refs #2172: Beide erlaubten Editoren sehen das Feld; das geschützte
+    super_admin-Konto bleibt für facility_admin auf Objektebene gesperrt."""
+    from core.admin.users import UserAdmin
+    from core.admin_site import anlaufstelle_admin_site
+
+    model_admin = UserAdmin(User, anlaufstelle_admin_site)
+    facility_request = rf.get("/admin-mgmt/core/user/")
+    facility_request.user = admin_user
+    facility_request.current_facility = admin_user.facility
+    super_request = rf.get("/admin-mgmt/core/user/")
+    super_request.user = super_admin_user
+    super_request.current_facility = None
+
+    assert "mfa_required" in model_admin.get_form(facility_request, obj=staff_user, change=True).base_fields
+    assert "mfa_required" in model_admin.get_form(super_request, obj=super_admin_user, change=True).base_fields
+    assert model_admin.has_change_permission(facility_request, super_admin_user) is False
+
+
+@pytest.mark.django_db
+@override_settings(SUDO_MODE_ENABLED=False)
+def test_admin_change_form_post_audits_mfa_required(client, rf, super_admin_user, staff_user):
+    """Refs #2172: Das echte Django-Admin-Formular bietet das Feld an und
+    sein POST schreibt den request-attribuierten Nachweis."""
+    from core.admin.users import UserAdmin
+    from core.admin_site import anlaufstelle_admin_site
+
+    model_admin = UserAdmin(User, anlaufstelle_admin_site)
+    request = rf.post("/admin-mgmt/core/user/")
+    request.user = super_admin_user
+    request.current_facility = None
+    form_cls = model_admin.get_form(request, obj=staff_user, change=True)
+    assert "mfa_required" in form_cls.base_fields
+    date_widget = form_cls.base_fields["date_joined"].widget
+    date_part, time_part = date_widget.decompress(staff_user.date_joined)
+
+    client.force_login(super_admin_user)
+    response = client.post(
+        f"/admin-mgmt/core/user/{staff_user.pk}/change/",
+        {
+            "username": staff_user.username,
+            "role": staff_user.role,
+            "facility": str(staff_user.facility_id),
+            "preferred_language": staff_user.preferred_language,
+            "is_active": "on",
+            "mfa_required": "on",
+            "date_joined_0": date_widget.widgets[0].format_value(date_part),
+            "date_joined_1": date_widget.widgets[1].format_value(time_part),
+            "_save": "Speichern",
+        },
+    )
+
+    assert response.status_code == 302
+    staff_user.refresh_from_db()
+    assert staff_user.mfa_required is True
+    entry = AuditLog.objects.get(
+        action=AuditLog.Action.USER_ACCESS_UPDATED,
+        target_id=str(staff_user.pk),
+    )
+    assert entry.actor == super_admin_user
+    assert entry.user == staff_user
+    assert entry.detail["changed_fields"] == ["mfa_required"]
 
 
 @pytest.mark.django_db

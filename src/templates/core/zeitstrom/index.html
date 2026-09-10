@@ -98,7 +98,7 @@
 <div class="flex flex-wrap gap-1.5 mb-5 justify-center">
     <a href="?date={{ target_date|date:'Y-m-d' }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if not selected_filter %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Ganzer Tag" %}</a>
     {% for tf in time_filters %}
-    <a href="?date={{ target_date|date:'Y-m-d' }}&time_filter={{ tf.pk }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_filter.pk == tf.pk %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{{ tf.label }} <span class="font-mono text-[12px] ml-1 opacity-80">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span></a>
+    <a href="?date={{ target_date|date:'Y-m-d' }}&time_filter={{ tf.pk }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_filter.pk == tf.pk %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{{ tf.label }} <span class="font-mono text-[12px] ml-1">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span></a>
     {% endfor %}
 </div>
 {% endif %}

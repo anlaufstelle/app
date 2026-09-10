@@ -202,17 +202,20 @@ def _capture_old_user_state(sender, instance, **kwargs):
     if not instance.pk:
         instance._audit_old_role = None
         instance._audit_old_is_active = None
+        instance._audit_old_mfa_required = None
         instance._audit_old_can_confirm_deletion = None
         return
     try:
-        old = User.objects.only("role", "is_active", "can_confirm_deletion").get(pk=instance.pk)
+        old = User.objects.only("role", "is_active", "mfa_required", "can_confirm_deletion").get(pk=instance.pk)
     except User.DoesNotExist:
         instance._audit_old_role = None
         instance._audit_old_is_active = None
+        instance._audit_old_mfa_required = None
         instance._audit_old_can_confirm_deletion = None
         return
     instance._audit_old_role = old.role
     instance._audit_old_is_active = old.is_active
+    instance._audit_old_mfa_required = old.mfa_required
     instance._audit_old_can_confirm_deletion = old.can_confirm_deletion
 
 
@@ -243,8 +246,8 @@ def _resolve_audit_actor(instance):
 
 @receiver(post_save, sender=User)
 def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
-    """Vergleicht alten und neuen User-Zustand; loggt Rollenwechsel und
-    Deaktivierung (True → False) als eigene AuditLog-Einträge.
+    """Vergleicht alten und neuen User-Zustand; loggt Rollen-, Zugangs- und
+    Deaktivierungsänderungen als eigene AuditLog-Einträge.
 
     Refs #1369: ``user`` traegt das **Ziel** (der veraenderte User), ``actor``
     den **handelnden Admin**. So attribuiert der immutable Log die Eskalation
@@ -275,6 +278,8 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
         return
     old_role = getattr(instance, "_audit_old_role", None)
     old_is_active = getattr(instance, "_audit_old_is_active", None)
+    old_mfa_required = getattr(instance, "_audit_old_mfa_required", None)
+    update_fields = kwargs.get("update_fields")
 
     actor, attribution = _resolve_audit_actor(instance)
 
@@ -308,6 +313,42 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
             detail=validate_audit_detail(
                 {"username": instance.username, **attribution},
                 source="signals.USER_DEACTIVATED",
+            ),
+        )
+
+    # Refs #2172: Der Admin-Einzel-Edit (save ohne update_fields) und der
+    # einrichtungslose Bootstrap-super_admin verwenden denselben minimierten
+    # Vertrag wie Zugänge-Fach-UI und Admin-Bulk-Aktion. Fach-UI und Bulk
+    # speichern gezielt mit update_fields und schreiben bereits direkt samt IP;
+    # sie dürfen hier keine zweite Zeile erhalten. Der Command-Sonderfall ist
+    # anhand seiner invarianten Kombination (super_admin ohne Facility) sicher
+    # vom facility-gebundenen Fach-UI-Pfad zu unterscheiden.
+    is_system_super_admin_save = (
+        update_fields is not None
+        and "mfa_required" in update_fields
+        and instance.is_super_admin
+        and instance.facility_id is None
+    )
+    if (
+        old_mfa_required is not None
+        and old_mfa_required != instance.mfa_required
+        and (update_fields is None or is_system_super_admin_save)
+        and not getattr(instance, "_audit_skip_mfa_required", False)
+    ):
+        AuditLog.objects.create(
+            facility=getattr(instance, "facility", None),
+            user=instance,
+            actor=actor,
+            action=AuditLog.Action.USER_ACCESS_UPDATED,
+            target_type="User",
+            target_id=str(instance.pk),
+            detail=validate_audit_detail(
+                {
+                    "changed_fields": ["mfa_required"],
+                    "username": instance.username,
+                    **attribution,
+                },
+                source="signals.USER_ACCESS_UPDATED",
             ),
         )
 

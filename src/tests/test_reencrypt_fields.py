@@ -25,6 +25,8 @@ Abgedeckt:
 
 import json
 import threading
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 from io import StringIO
 from uuid import uuid4
 
@@ -35,10 +37,25 @@ from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from core.models import Case, Client, Event, EventHistory, RectificationRequest
+from core.models import Case, Client, Event, EventHistory, RectificationRequest, ShiftHandoverNote
 from core.models.attachment import Attachment
 from core.services.file_vault import encrypt_field, generate_key, is_encrypted_value, safe_decrypt
 from core.services.file_vault.rotation import rotate_all
+
+
+def _handover_window():
+    """Pflicht-Fenstergrenzen einer Schichtnotiz (Refs #2042, E-01).
+
+    Fuer die Rotation ohne Belang — sie fasst nur die ``note``-Spalte an —,
+    aber seit Fix-Runde 1 nicht mehr nullbar.
+    """
+    heute = timezone.localdate()
+    return {
+        "window_start": timezone.make_aware(datetime.combine(heute, dt_time.min)),
+        "window_end": timezone.make_aware(datetime.combine(heute, dt_time.max)),
+        "editable_until": timezone.make_aware(datetime.combine(heute + timedelta(days=1), dt_time.max)),
+    }
+
 
 _JOIN_TIMEOUT = 30
 
@@ -348,8 +365,12 @@ class TestRotateAll:
     zu durchlaufen.
     """
 
-    def test_dict_shape_has_all_eight_counters(self, facility):
-        """Sieben Pfade plus Kontention landen unter stabilen Schluesseln."""
+    def test_dict_shape_has_all_nine_counters(self, facility):
+        """Acht Pfade plus Kontention landen unter stabilen Schluesseln.
+
+        Refs #2042: ``shift_handover_notes`` ist der achte Pfad — der Pin ist
+        bewusst nachgezogen (Schluessel ergaenzt, keine Erwartung gelockert).
+        """
         counts = rotate_all(dry_run=True)
         assert counts == {
             "events": 0,
@@ -359,6 +380,7 @@ class TestRotateAll:
             "clients": 0,
             "cases": 0,
             "rectification_requests": 0,
+            "shift_handover_notes": 0,
             "contended": 0,
         }
 
@@ -393,11 +415,13 @@ class TestRotateAll:
         staff_user,
         monkeypatch,
     ):
-        """Alle sechs veraenderlichen Pfade nutzen denselben CAS-Vertrag.
+        """Alle sieben veraenderlichen Pfade nutzen denselben CAS-Vertrag.
 
         Refs #2177: ``EventHistory`` ist seit B-12 der sechste Pfad an dieser
         Stelle — vorher schrieb er als einziger unbedingt und tauchte deshalb
         weder in ``calls_by_model`` noch im ``contended``-Zaehler auf.
+        Refs #2042: ``ShiftHandoverNote`` kommt als siebter dazu — die
+        Erwartung ist additiv verschaerft, keine bestehende Zusage gelockert.
         """
         from core.services.file_vault import rotation as rotation_module
 
@@ -453,6 +477,15 @@ class TestRotateAll:
                 data_before={"notiz-krise": encrypt_field("History-alt")},
                 data_after={"notiz-krise": encrypt_field("History-neu")},
             )
+            handover_note = ShiftHandoverNote.objects.create(
+                facility=facility,
+                shift_date=timezone.localdate(),
+                time_filter=None,
+                note=encrypt_field("CAS-Schichtnotiz"),
+                author=staff_user,
+                updated_by=staff_user,
+                **_handover_window(),
+            )
 
             dry_counts = rotate_all(dry_run=True)
 
@@ -464,6 +497,7 @@ class TestRotateAll:
             "clients": 1,
             "cases": 1,
             "rectification_requests": 1,
+            "shift_handover_notes": 1,
             "contended": 0,
         }
 
@@ -485,10 +519,19 @@ class TestRotateAll:
             "clients": 0,
             "cases": 0,
             "rectification_requests": 0,
-            "contended": 6,
+            "shift_handover_notes": 0,
+            "contended": 7,
         }
         calls_by_model = {model: (pk, expected, updates) for model, pk, expected, updates in calls}
-        assert set(calls_by_model) == {Event, Client, Case, Attachment, RectificationRequest, EventHistory}
+        assert set(calls_by_model) == {
+            Event,
+            Client,
+            Case,
+            Attachment,
+            RectificationRequest,
+            EventHistory,
+            ShiftHandoverNote,
+        }
         assert set(calls_by_model[Event][1]) == {"updated_at", "data_json"}
         assert set(calls_by_model[Event][2]) == {"data_json", "updated_at"}
         assert set(calls_by_model[Client][1]) == {"updated_at", "data_json"}
@@ -502,6 +545,11 @@ class TestRotateAll:
         }
         assert set(calls_by_model[EventHistory][1]) == {"data_before", "data_after"}
         assert set(calls_by_model[EventHistory][2]) == {"data_before", "data_after"}
+        # Refs #2042: die Schichtnotiz bindet NUR ihre Chiffrat-Spalte — kein
+        # ``updated_at``, weil die Retention-Frist an genau diesem Zeitstempel
+        # haengt; eine Rotation darf die Aufbewahrungsuhr nicht zurueckdrehen.
+        assert set(calls_by_model[ShiftHandoverNote][1]) == {"note"}
+        assert set(calls_by_model[ShiftHandoverNote][2]) == {"note"}
 
         event.refresh_from_db()
         client.refresh_from_db()
@@ -517,6 +565,8 @@ class TestRotateAll:
             assert safe_decrypt(rectification.review_note) == "CAS-Prüfvermerk"
             assert safe_decrypt(history_before["notiz-krise"]) == "History-alt"
             assert safe_decrypt(history_after["notiz-krise"]) == "History-neu"
+            handover_note.refresh_from_db()
+            assert safe_decrypt(handover_note.note) == "CAS-Schichtnotiz"
 
     def test_locked_cas_reports_a_row_deleted_before_lock_as_contention(self):
         from core.services.file_vault.rotation import _locked_compare_and_swap
@@ -625,6 +675,7 @@ class TestRotateAll:
             "clients": 0,
             "cases": 0,
             "rectification_requests": 0,
+            "shift_handover_notes": 0,
             "contended": 0,
         }
         assert _rewrap_one_totp_device(2_147_483_647, lambda value: value, lambda value: value) == "empty"
@@ -777,6 +828,50 @@ class TestRotateAll:
         calls = []
         rotate_all(dry_run=True, on_totp_contended=calls.append)
         assert calls == []
+
+
+@pytest.mark.django_db
+class TestEventHistoryRotationTriggerSelection:
+    def test_rotation_laesst_das_auditlog_geschlossen(
+        self, facility, client_identified, doc_type_crisis, staff_user, monkeypatch
+    ):
+        """Refs #2184: Die Rotation oeffnet nur die EventHistory-Trigger."""
+        from core.services.system import _db_admin
+
+        old_key = generate_key()
+        new_key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+            event = Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type_crisis,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            EventHistory.objects.create(
+                event=event,
+                action=EventHistory.Action.UPDATE,
+                changed_by=staff_user,
+                data_before={"notiz-krise": encrypt_field("Vorher-Wortlaut")},
+                data_after={"notiz-krise": encrypt_field("Nachher-Wortlaut")},
+            )
+
+        opened: list[tuple[str, str]] = []
+        original = _db_admin.bypass_replication_triggers
+
+        def _recording(tables=None):
+            opened.extend(_db_admin._selected_triggers(tables))
+            return original(tables=tables)
+
+        monkeypatch.setattr("core.services.system.bypass_replication_triggers", _recording)
+
+        with override_settings(ENCRYPTION_KEYS=f"{new_key},{old_key}", ENCRYPTION_KEY=""):
+            counts = rotate_all(dry_run=False)
+
+        assert counts["event_history"] == 1
+        assert opened
+        assert {table for table, _trigger in opened} == {"core_eventhistory"}
 
 
 @pytest.mark.django_db(transaction=True)
@@ -1148,6 +1243,7 @@ def test_command_warns_about_contended_rows_and_exits_successfully(monkeypatch):
             "clients": 0,
             "cases": 0,
             "rectification_requests": 0,
+            "shift_handover_notes": 0,
             "contended": 2,
         },
     )
@@ -1181,3 +1277,109 @@ class TestReencryptFieldsRlsBypassGuard:
         out = StringIO()
         call_command("reencrypt_fields", stdout=out)
         assert "Re-encrypted" in out.getvalue()
+
+
+@pytest.mark.django_db
+class TestShiftHandoverNoteRotation:
+    """Achter Rotationspfad: die manuelle Schichtnotiz (Refs #2042).
+
+    Ohne ihn liesse sich ein ausrangierter Schluessel nie entfernen — die
+    Notiz haelt Freitext ueber Personen bis zum Ablauf ihrer Frist.
+    """
+
+    @staticmethod
+    def _note(facility, staff_user, text):
+        return ShiftHandoverNote.objects.create(
+            facility=facility,
+            shift_date=timezone.localdate(),
+            time_filter=None,
+            note=encrypt_field(text),
+            author=staff_user,
+            updated_by=staff_user,
+            **_handover_window(),
+        )
+
+    def test_rotation_wechselt_das_chiffrat_und_haelt_den_klartext(self, facility, staff_user):
+        key_alt = generate_key()
+        key_neu = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key_alt):
+            note = self._note(facility, staff_user, "Schichtnotiz-Rotation")
+            token_vorher = note.note["value"]
+
+        with override_settings(ENCRYPTION_KEYS=f"{key_neu},{key_alt}", ENCRYPTION_KEY=""):
+            counts = rotate_all(dry_run=False)
+            assert counts["shift_handover_notes"] == 1
+            note.refresh_from_db()
+            assert note.note["value"] != token_vorher
+            assert safe_decrypt(note.note) == "Schichtnotiz-Rotation"
+
+    def test_dry_run_zaehlt_ohne_zu_schreiben(self, facility, staff_user):
+        key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+            note = self._note(facility, staff_user, "Schichtnotiz-DryRun")
+            token_vorher = note.note["value"]
+            assert rotate_all(dry_run=True)["shift_handover_notes"] == 1
+            note.refresh_from_db()
+            assert note.note["value"] == token_vorher
+
+    def test_leere_notiz_wird_uebersprungen(self, facility, staff_user):
+        key = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key):
+            ShiftHandoverNote.objects.create(
+                facility=facility,
+                shift_date=timezone.localdate(),
+                time_filter=None,
+                note=None,
+                author=staff_user,
+                **_handover_window(),
+            )
+            assert rotate_all(dry_run=False)["shift_handover_notes"] == 0
+
+    def test_zeile_zwischen_lesen_und_schreiben_geloescht_zaehlt_als_kontention(
+        self, facility, staff_user, monkeypatch
+    ):
+        """Beobachtender Race-Guard: die Zeile verschwindet vor dem CAS."""
+        from core.services.file_vault import rotation as rotation_module
+
+        key_alt = generate_key()
+        key_neu = generate_key()
+        with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=key_alt):
+            note = self._note(facility, staff_user, "Schichtnotiz-Race")
+
+        echtes_cas = rotation_module._locked_compare_and_swap
+
+        def loescht_dann_cas(model, pk, *, expected, updates):
+            if model is ShiftHandoverNote:
+                ShiftHandoverNote.objects.filter(pk=pk).delete()
+            return echtes_cas(model, pk, expected=expected, updates=updates)
+
+        monkeypatch.setattr(rotation_module, "_locked_compare_and_swap", loescht_dann_cas)
+        with override_settings(ENCRYPTION_KEYS=f"{key_neu},{key_alt}", ENCRYPTION_KEY=""):
+            counts = rotate_all(dry_run=False)
+
+        assert counts["shift_handover_notes"] == 0
+        assert counts["contended"] == 1
+        assert not ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_ausgabezeile_des_commands_nennt_die_schichtnotizen(self, facility, staff_user, monkeypatch):
+        from core.management.commands import reencrypt_fields as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: True)
+        monkeypatch.setattr(
+            cmd,
+            "rotate_all",
+            lambda **_kwargs: {
+                "events": 0,
+                "event_history": 0,
+                "attachments": 0,
+                "totp_devices": 0,
+                "clients": 0,
+                "cases": 0,
+                "rectification_requests": 0,
+                "shift_handover_notes": 3,
+                "contended": 0,
+            },
+        )
+        out = StringIO()
+        call_command("reencrypt_fields", stdout=out)
+        assert "3 handover notes" in out.getvalue()

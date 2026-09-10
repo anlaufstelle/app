@@ -189,6 +189,22 @@ In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar
 
 Wenn ein Schichtfilter aktiv ist, erscheint oberhalb des Feeds ein aufklappbarer **Schichtübergabe-Block** mit Statistiken (Anzahl Kontakte, neue Aufgaben, neue Personen) und Highlights (Krisen-Ereignisse, neue Hausverbote, dringende Aufgaben).
 
+#### Übergabenotiz
+
+Ganz oben in der Übergabe — noch vor den Statistiken — steht die **Übergabenotiz**: ein Freitextfeld für das, was keine Kennzahl abbildet („B war heute sehr belastbar, bitte nachfassen"). Sie sehen dort zwei Blöcke: die Notiz der **zuletzt abgeschlossenen Schicht**, die Sie gerade übernehmen, und darunter das Feld für die **laufende Schicht**, in der Sie selbst arbeiten. Sind für Ihre Einrichtung **keine Schichten** eingerichtet, gilt der Kalendertag als Schicht: oben steht dann die Notiz von **gestern**, darunter das Feld für **heute**.
+
+**Wer darf.** Lesen und schreiben dürfen Fachkraft, Leitung und Anwendungsbetreuung. Die Assistenz sieht die Notiz nicht — auch keinen Hinweis darauf, dass es eine gibt.
+
+**Wie lange bearbeitbar.** Eine Notiz bleibt bis zum **Ende der Folgeschicht** änderbar: Wer im Frühdienst schreibt, kann bis zum Ende des Spätdienstes nachbessern; danach ist der Eintrag schreibgeschützt und trägt den Hinweis, bis wann eine Bearbeitung möglich war. Die Frist steht unter dem Textfeld. An den Umstellungswochenenden gilt dieselbe Schichtlogik wie oben beschrieben. **Die Frist steht mit dem Anlegen fest:** Ändert die Anwendungsbetreuung später die Schichtzeiten oder schaltet eine Schicht ab, öffnet das eine bereits geschlossene Notiz **nicht** wieder — was übergeben wurde, bleibt übergeben.
+
+**Leeres Feld = keine Notiz.** Speichern Sie das Feld leer, wird der Eintrag entfernt — eine leere Notiz soll die Folgeschicht nicht als „nichts zu melden" fehlleiten.
+
+**Wenn zwei gleichzeitig schreiben.** Legen zwei Personen im selben Moment die erste Notiz derselben Schicht an, gewinnt eine von beiden. Steht bei der anderen derselbe Text, passiert nichts weiter. Bei abweichendem Text zeigt die Seite **beide Fassungen**: oben die inzwischen gespeicherte (mit Autor und Zeit), darunter im Textfeld die eigene Eingabe — nichts davon geht verloren. Sie entscheiden dann: **Meine Eingabe übernehmen und ersetzen** schreibt den eigenen Text und ersetzt damit **genau die angezeigte** Fassung, **Verwerfen** behält die gespeicherte. Überschrieben wird nie stillschweigend — auch dann nicht, wenn sich der Bestand während Ihres Vergleichs noch einmal ändert: In diesem Fall wird nichts gespeichert, sondern die inzwischen aktuelle Fassung erneut zum Abgleich angezeigt, mit Ihrer Eingabe unverändert im Feld.
+
+**Bitte keine Klarnamen.** Verwenden Sie dieselben Pseudonyme wie in der übrigen Dokumentation. Die Notiz ist verschlüsselt gespeichert und wird nach der von der Anwendungsbetreuung eingestellten Frist (Vorgabe: 90 Tage) automatisch gelöscht. Sie ist bewusst **nicht** Teil der Auskunft nach Art. 15 und **nicht** durchsuchbar.
+
+Jede Änderung an einer Notiz erscheint im Audit-Log — protokolliert werden Schicht und Zeitpunkt, nie der Text selbst.
+
 ### Feed filtern
 
 Direkt über dem Feed gibt es zwei Dropdowns:

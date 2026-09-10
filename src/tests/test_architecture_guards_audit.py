@@ -126,10 +126,12 @@ class TestAuditLogCreationAllowlist:
         "core/services/system/settings.py": {
             # Refs #2129 + #2136: +8 Zeilen durch ``max_storage_mb`` und +12 Zeilen
             # durch ``quick_exit_url``/``privacy_screen_on_blur`` in _AUDIT_FIELDS
-            # und _AUDIT_VALUE_FIELDS (144 -> 164, 173 -> 193). Reine Zeilen-
+            # und _AUDIT_VALUE_FIELDS (144 -> 164, 173 -> 193).
+            # Refs #2042: +9 Zeilen durch ``retention_handover_notes_days`` in
+            # denselben beiden Listen (164 -> 173, 193 -> 202). Reine Zeilen-
             # Nachfuehrung, keine neue Schreibstelle.
-            164: "update_settings-Body — Settings-Diff-Helper",
-            193: "log_settings_change-Body — zweite create-Stelle",
+            173: "update_settings-Body — Settings-Diff-Helper",
+            202: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {
@@ -137,10 +139,11 @@ class TestAuditLogCreationAllowlist:
             134: "on_user_logged_out — auth signal",
             167: "on_user_login_failed — no-facility branch",
             178: "on_user_login_failed — with-facility branch",
-            259: "post_save User — request-getriebene Anlage (Refs #1871)",
-            282: "post_save User — role change detection (actor-Attribution, Refs #1369)",
-            301: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
-            318: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
+            262: "post_save User — request-getriebene Anlage (Refs #1871)",
+            287: "post_save User — role change detection (actor-Attribution, Refs #1369)",
+            306: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
+            338: "post_save User — MFA-Pflicht geändert (Refs #2172)",
+            359: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
         },
     }
 

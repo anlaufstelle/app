@@ -102,6 +102,23 @@ class Settings(models.Model):
         validators=[MinValueValidator(1)],
         verbose_name=_("Aufbewahrung Aktivitäten (Tage)"),
     )
+    # Refs #2042: eigene, bewusst KURZE Frist fuer die Uebergabenotiz. Sie ist
+    # eine fluechtige Dienstnotiz und kein Fallvorgang — 90 Tage decken den
+    # Rueckblick auf einen Dienstplan-Zyklus ab, ohne dass Freitext ueber
+    # Personen jahrelang liegen bleibt (Art. 5 Abs. 1 lit. e DSGVO).
+    # ``PositiveIntegerField`` statt ``IntegerField`` + Check-Constraint:
+    # negative Werte schliesst schon der Spaltentyp aus, und die
+    # Enforcement-Funktion bricht bei ``< 1`` defensiv ab (Muster
+    # ``enforce_activities``, Security N8).
+    retention_handover_notes_days = models.PositiveIntegerField(
+        default=90,
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Aufbewahrung Übergabenotizen (Tage)"),
+        help_text=_(
+            "Wie lange manuelle Schichtnotizen in der Übergabe aufbewahrt werden, "
+            "bevor enforce_retention sie endgültig löscht."
+        ),
+    )
     client_trash_days = models.PositiveIntegerField(
         default=30,
         verbose_name=_("Papierkorb-Frist (Tage)"),

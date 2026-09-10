@@ -11,20 +11,22 @@ Stichtag.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 import pytest
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Event, LegalHold, Settings
+from core.models import AuditLog, Case, Event, LegalHold, Settings, ShiftHandoverNote
 from core.retention.enforcement import (
     collect_doomed_events,
     enforce_anonymous,
     enforce_document_type_retention,
+    enforce_handover_notes,
     enforce_identified,
     enforce_qualified,
 )
 from core.retention.proposals import create_proposals_for_facility
+from core.services.file_vault import encrypt_field
 
 
 def _at(days_ago: int):
@@ -603,3 +605,118 @@ class TestFallHoldsImVorfilter:
         assert "deferred" not in audit.detail, (
             f"Der Lauf meldet weiterhin ein zurueckgestelltes Ereignis fuer einen gehaltenen Fall: {audit.detail}"
         )
+
+
+@pytest.mark.django_db
+class TestEnforceHandoverNotes:
+    """Refs #2042: eigene, kurze Frist fuer die manuelle Schichtnotiz.
+
+    Muster ``enforce_activities``: physische Loeschung, je Zeile Sperre +
+    Re-Read, eine ``audit_retention_decision``-Zeile je Lauf mit Treffern.
+    Bewusst OHNE Hold-Ziel-Typ — eine Uebergabenotiz ist keine Personenakte
+    (bewusste Grenze, ``docs/security-notes.md`` § Hold-Kontrakt).
+    """
+
+    @staticmethod
+    def _notiz(facility, staff_user, *, alter_tage: int, shift_date=None):
+        from datetime import date
+
+        tag = shift_date or date(2026, 1, 1)
+        beginn = timezone.make_aware(datetime.combine(tag, time.min))
+        note = ShiftHandoverNote.objects.create(
+            facility=facility,
+            shift_date=tag,
+            time_filter=None,
+            note=encrypt_field("Freitext"),
+            author=staff_user,
+            updated_by=staff_user,
+            # Refs #2042 (E-01): die Fenstergrenzen sind seit Fix-Runde 1
+            # Pflichtfelder. Fuer die Retention selbst spielen sie keine Rolle
+            # — massgeblich ist ``updated_at`` —, sie muessen aber plausibel
+            # gesetzt sein.
+            window_start=beginn,
+            window_end=timezone.make_aware(datetime.combine(tag, time.max)),
+            editable_until=timezone.make_aware(datetime.combine(tag + timedelta(days=1), time.max)),
+        )
+        ShiftHandoverNote.objects.filter(pk=note.pk).update(updated_at=_at(alter_tage))
+        return note
+
+    def test_pos_alte_notiz_wird_geloescht(self, facility, staff_user, settings_obj):
+        note = self._notiz(facility, staff_user, alter_tage=120)
+        assert enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False) == {"count": 1}
+        assert not ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_neg_junge_notiz_bleibt(self, facility, staff_user, settings_obj):
+        note = self._notiz(facility, staff_user, alter_tage=30)
+        assert enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False) == {"count": 0}
+        assert ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_boundary_genau_auf_der_frist_bleibt(self, facility, staff_user, settings_obj):
+        """Cutoff ist strikt ``<`` — am Stichtag wird nicht geloescht.
+
+        ``now`` wird EINMAL festgehalten und sowohl fuer ``updated_at`` als auch
+        fuer den Lauf verwendet: mit zwei ``timezone.now()``-Aufrufen laege die
+        Zeile um die Laufzeit dazwischen vor dem Stichtag und der Test pruefte
+        nicht mehr den Grenzfall, sondern die Uhr.
+        """
+        jetzt = timezone.now()
+        note = self._notiz(facility, staff_user, alter_tage=0)
+        ShiftHandoverNote.objects.filter(pk=note.pk).update(updated_at=jetzt - timedelta(days=90))
+        result = enforce_handover_notes(facility, settings_obj, jetzt, dry_run=True)
+        assert result == {"count": 0}
+        assert ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_boundary_eine_sekunde_darueber_wird_geloescht(self, facility, staff_user, settings_obj):
+        """Gegenprobe zum Grenzfall: eine Sekunde aelter faellt."""
+        jetzt = timezone.now()
+        note = self._notiz(facility, staff_user, alter_tage=0)
+        ShiftHandoverNote.objects.filter(pk=note.pk).update(updated_at=jetzt - timedelta(days=90, seconds=1))
+        assert enforce_handover_notes(facility, settings_obj, jetzt, dry_run=False) == {"count": 1}
+        assert not ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_dry_run_zaehlt_ohne_zu_loeschen(self, facility, staff_user, settings_obj):
+        note = self._notiz(facility, staff_user, alter_tage=120)
+        assert enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=True) == {"count": 1}
+        assert ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_frist_unter_eins_bricht_defensiv_ab(self, facility, staff_user, settings_obj):
+        settings_obj.retention_handover_notes_days = 0
+        settings_obj.save(update_fields=["retention_handover_notes_days"])
+        note = self._notiz(facility, staff_user, alter_tage=5000)
+        assert enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False) == {"count": 0}
+        assert ShiftHandoverNote.objects.filter(pk=note.pk).exists()
+
+    def test_fremde_einrichtung_bleibt_unberuehrt(self, facility, second_facility, staff_user, settings_obj):
+        from datetime import date
+
+        fremd = ShiftHandoverNote.objects.create(
+            facility=second_facility,
+            shift_date=date(2026, 1, 1),
+            time_filter=None,
+            note=encrypt_field("Freitext"),
+            window_start=timezone.make_aware(datetime.combine(date(2026, 1, 1), time.min)),
+            window_end=timezone.make_aware(datetime.combine(date(2026, 1, 1), time.max)),
+            editable_until=timezone.make_aware(datetime.combine(date(2026, 1, 2), time.max)),
+        )
+        ShiftHandoverNote.objects.filter(pk=fremd.pk).update(updated_at=_at(500))
+        assert enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False) == {"count": 0}
+        assert ShiftHandoverNote.objects.filter(pk=fremd.pk).exists()
+
+    def test_audit_zeile_traegt_kategorie_und_frist_ohne_text(self, facility, staff_user, settings_obj):
+        self._notiz(facility, staff_user, alter_tage=120)
+        enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False)
+        audit = AuditLog.objects.filter(
+            facility=facility,
+            action=AuditLog.Action.DELETE,
+            detail__category="handover_notes",
+        ).latest("timestamp")
+        assert audit.target_type == "ShiftHandoverNote"
+        assert audit.detail["count"] == 1
+        assert audit.detail["retention_days"] == 90
+        assert audit.detail["command"] == "enforce_retention"
+        assert "Freitext" not in str(audit.detail)
+
+    def test_ohne_treffer_keine_audit_zeile(self, facility, staff_user, settings_obj):
+        self._notiz(facility, staff_user, alter_tage=5)
+        enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False)
+        assert not AuditLog.objects.filter(detail__category="handover_notes").exists()

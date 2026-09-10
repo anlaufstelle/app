@@ -141,6 +141,9 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "anonymized_trash_clients": "Zaehler des Retention-Laufs",
     "anonymized_trash_cases": "Zaehler des Retention-Laufs (Refs #1818)",
     "hard_deleted_activities": "Zaehler des Retention-Laufs",
+    # Refs #2042 (Lane E): Zaehler der endgueltig geloeschten Uebergabenotizen
+    # desselben Laufs — Menge, kein Inhalt.
+    "hard_deleted_handover_notes": "Zaehler des Retention-Laufs (Refs #2042)",
     "pruned_auditlog": "Zaehler des Retention-Laufs",
     "pruned_offline_revocations": "Zaehler des Retention-Laufs",
     "clients": "Entitaeten-Zaehler des Einrichtungs-Exports",
@@ -243,6 +246,15 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "schema_version": "Schemaversion eines Offline-Bundles",
     "view": "Name der aktualisierten Datenbank-Sicht",
     "backend": "Slug der Berichts-Pipeline (Refs #1754) — Identitaet der Herausgabe",
+    # Refs #2042 (Lane E): Koordinaten der Schicht, zu der eine Uebergabenotiz
+    # gehoert. Beide bezeichnen die Schicht, nie ihren Inhalt — der Notiztext
+    # selbst liegt verschluesselt an der Zeile und darf nie ins Log (#1751).
+    "shift_date": "Lokales Kalenderdatum des Schichtbeginns einer Uebergabenotiz — Datum, kein Inhalt",
+    "time_filter": (
+        "Bezeichnung des Zeitfensters einer Uebergabenotiz (bzw. ``null`` fuer den Ganztag). "
+        "Wie ``document_type`` Konfiguration der Einrichtung, keine Klienten-PII — und ohne sie "
+        "waere eine HANDOVER_NOTE_DELETED-Zeile keiner Schicht mehr zuzuordnen."
+    ),
     "format": "Ausgabeformat eines Exports (CSV/PDF/JSON)",
     # -- Zustands- und Verlaufsangaben ------------------------------------
     "changed_fields": "Liste geaenderter Feldnamen — Namen, keine Werte",

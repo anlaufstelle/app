@@ -90,7 +90,8 @@ def bypass_replication_triggers(tables=None):
 
     ``tables`` schraenkt ein, WELCHE Tabellen geoeffnet werden (ADR-050 M-6,
     Refs #2065); ``None`` = alle drei Trigger, also das unveraenderte
-    Bestandsverhalten der vier Alt-Aufrufer. Der Sinn der Verengung ist nicht
+    Bestandsverhalten der Alt-Aufrufer (heute die drei ohne ``tables`` aus der
+    Aufruferliste unten). Der Sinn der Verengung ist nicht
     Sparsamkeit, sondern der Deadlock-Pfad: wer nur ``core_eventhistory``
     oeffnet, nimmt auf ``core_auditlog`` gar keine DDL-Sperre mehr, sondern nur
     das ``ROW EXCLUSIVE`` seines eigenen Nachweis-Inserts — dieselbe Ordnung
@@ -116,10 +117,12 @@ def bypass_replication_triggers(tables=None):
     ``pg_trigger.tgenabled`` gelesen und exakt wiederhergestellt.
 
     Aufrufer (alle laufen als Owner-/Admin-Wartungsrolle): ``prune_auditlog``,
-    ``Client.anonymize()`` (DSGVO Art. 17), ``backfill_audit_chain``,
-    ``reencrypt_fields`` — alle vier ohne ``tables`` und damit unveraendert —
-    sowie der EventHistory-Sweep aus ADR-050, der als einziger die Verengung
-    auf ``core_eventhistory`` nutzt.
+    ``Client.anonymize()`` (DSGVO Art. 17), ``backfill_audit_chain``
+    — alle drei ohne ``tables`` und damit unveraendert — sowie der
+    EventHistory-Sweep aus ADR-050 und die EventHistory-Rotation in
+    ``reencrypt_fields``, die die Verengung auf ``core_eventhistory`` nutzen.
+    Die Datenmigration 0174 nutzt dieselbe Verengung fuer ihren einmaligen
+    Historien-Backfill.
 
     No-op on non-PostgreSQL backends (test SQLite) — callers must
     accept that behaviour.

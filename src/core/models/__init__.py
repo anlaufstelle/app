@@ -22,6 +22,7 @@ from .recent_client_visit import RecentClientVisit
 from .rectification import RectificationRequest
 from .retention import LegalHold, RetentionProposal
 from .settings import Settings
+from .shift_handover_note import ShiftHandoverNote
 from .statistics_snapshot import StatisticsSnapshot
 from .time_filter import TimeFilter
 from .user import User
@@ -56,6 +57,7 @@ __all__ = [
     "LegalHold",
     "RetentionProposal",
     "Settings",
+    "ShiftHandoverNote",
     "StatisticsSnapshot",
     "TimeFilter",
     "User",

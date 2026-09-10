@@ -793,6 +793,10 @@ siehe § Restidentifizierbarkeit der Tombstone-Timeline) blockieren seit #1756
 **beide** Bulk-Einstiege; Begründung und Bucket-Entscheid in
 [ADR-023 Update 2026-08-03](adr/023-k-anonymization-statistik.md).
 
+### Reichweite des Legal Hold: bewusst kein Zieltyp „Übergabenotiz" (#2042)
+
+Der Legal Hold kennt die Zieltypen `Client`, `Case`, `Event` und `Activity` (Anhänge folgen ihrem Owner, `owner_has_active_hold`) — die manuelle **Schichtnotiz** (`ShiftHandoverNote`, Refs #2042) ist bewusst **nicht** darunter, und `enforce_handover_notes` fragt deshalb keinen Hold ab. Begründung: Der Hold sichert die Akte, auf die sich ein laufendes Verfahren bezieht; die Schichtnotiz trägt keinen Personen- oder Fallbezug im Datenmodell (kein Client-/Case-Fremdschlüssel) und ließe sich einem Verfahren nur über ihren Freitext zuordnen — genau die Zuordnung, die aus Datenminimierungsgründen nicht hergestellt wird. Das **benannte Restrisiko**: eine Notiz, die für ein Verfahren relevant gewesen wäre, verfällt nach `retention_handover_notes_days` (Vorgabe 90 Tage), ohne dass ein Hold sie hält. Wer eine solche Notiz sichern muss, sichert sie organisatorisch (Aktenvermerk im Fall) — die Frist ist bewusst kurz, weil die Notiz eine Dienstmitteilung und kein Beweismittel ist. Ein Hold-Zieltyp für Übergabenotizen wäre eine eigene Entscheidung mit eigenem Ticket, kein stiller Nachbau.
+
 ### Disclosure-Analyse der Berichts-Artefakte (2026-08-03, Issue #1742)
 
 **Status:** Analyse **abgeschlossen und umgesetzt** — **K5**

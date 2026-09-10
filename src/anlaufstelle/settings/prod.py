@@ -10,6 +10,7 @@ import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
 from ._env import env_bool, env_csv, env_int
+from ._sentry import before_breadcrumb as _sentry_before_breadcrumb
 from ._sentry import before_send as _sentry_before_send
 from ._sentry import before_send_transaction as _sentry_before_send_transaction
 from .base import *  # noqa: F401, F403
@@ -49,6 +50,11 @@ if _sentry_dsn:
         # query_string mit potenziellen Klient*innen-Namen als Suchbegriff),
         # Spans und Breadcrumbs — daher derselbe Scrub über einen eigenen Hook.
         before_send_transaction=_sentry_before_send_transaction,
+        # Refs #2198: Der BreadcrumbHandler baut aus jeder Log-Zeile ab INFO
+        # einen Breadcrumb mit der bereits interpolierten Message. Werte darin
+        # (Einrichtungs-/Personennamen) sind musterbasiert nicht erkennbar —
+        # dieser Hook reduziert Log-Breadcrumbs auf ihr Format-Template.
+        before_breadcrumb=_sentry_before_breadcrumb,
     )
 
 # --- Media (encrypted attachments) ---

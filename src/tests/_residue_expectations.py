@@ -319,4 +319,12 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         reason="Feldbezeichner (Stammdatenname oder data_json.<slug>), kein Feldwert.",
     ),
     non_pii("core_rectificationrequest", "status", reason="Enum (pending/approved/rejected)."),
+    # ---- core_shifthandovernote (Refs #2042) -----------------------------
+    # Freitext der abgebenden Kraft an die Folgeschicht. Kein Client-FK, aber
+    # der Text kann Personen nennen — deshalb konservativ ``pii``, exakt wie
+    # ``core_rectificationrequest.reason``: Fernet-Marker-Dict in der Spalte,
+    # von der Art.-17-Anonymisierung nicht angefasst (die Zeile haengt an der
+    # SCHICHT, nicht an der Person) und stattdessen ueber die eigene, kurze
+    # Frist ``Settings.retention_handover_notes_days`` physisch geloescht.
+    pii("core_shifthandovernote", "note"),
 )

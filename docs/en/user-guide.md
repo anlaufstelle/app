@@ -194,6 +194,22 @@ On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:0
 
 When a shift filter is active, an expandable **shift handover block** appears above the feed with statistics (number of contacts, activities, new tasks) and highlights (crisis events, new entry bans, urgent tasks).
 
+#### Handover note
+
+At the very top of the handover -- before the statistics -- sits the **handover note**: a free-text field for everything no metric captures ("B coped very well today, please follow up"). You see two blocks there: the note of the **shift that just ended**, the one you are taking over, and below it the field for the **current shift** you are working in. If **no shifts** are configured for your facility, the calendar day is the shift: the note from **yesterday** appears at the top, the field for **today** below it.
+
+**Who may.** Staff, leads and application administrators may read and write. Assistants do not see the note -- not even a hint that one exists.
+
+**How long it stays editable.** A note stays editable until the **end of the following shift**: whoever writes during the early shift can amend it until the late shift ends; after that the entry is read-only and states until when editing was possible. The deadline is shown below the text field. On the changeover weekends the same shift logic described above applies. **The deadline is fixed when the note is created:** if the application administration later changes the shift times or switches a shift off, that does **not** reopen a note that has already closed -- what was handed over stays handed over.
+
+**Empty field = no note.** Save the field empty and the entry is removed -- an empty note must not mislead the following shift into reading "nothing to report".
+
+**When two people write at once.** If two people create the first note of the same shift at the same moment, one of them wins. If the other one wrote the same text, nothing further happens. With a different text the page shows **both versions**: the one that was saved in the meantime at the top (with author and time), your own input below it in the text field -- nothing is lost. You then decide: **Use my input and replace** writes your text and replaces **exactly the version shown**, **Discard** keeps the saved one. Nothing is ever overwritten silently -- not even if the stored version changes again while you are comparing: in that case nothing is saved, and the version that is current by then is shown for another comparison, with your input unchanged in the field.
+
+**Please no real names.** Use the same pseudonyms as in the rest of the documentation. The note is stored encrypted and is deleted automatically after the retention period configured by the application administration (default: 90 days). It is deliberately **not** part of the Article 15 disclosure and **not** searchable.
+
+Every change to a note appears in the audit log -- shift and timestamp are recorded, never the text itself.
+
 ### Filtering the feed
 
 Two dropdowns above the feed:
@@ -1001,5 +1017,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-08 -->
-<!-- source-hash: 337699112755b3212ca1ccb2e56d6cfa78c596d3 -->
+<!-- translation-date: 2026-09-10 -->
+<!-- source-hash: 84cfe69cdd60acefbe8399d619a47718bcce7cfe -->

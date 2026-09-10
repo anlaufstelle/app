@@ -26,6 +26,12 @@ _AUDIT_FIELDS = (
     "retention_identified_days",
     "retention_qualified_days",
     "retention_activities_days",
+    # Refs #2042: die Frist der manuellen Schichtnotiz. Sie ist die kuerzeste
+    # Fachfrist der Anwendung und die einzige mit physischer Loeschung ohne
+    # Papierkorb — ein stilles Herabsetzen vernichtet Uebergabewissen sofort
+    # und unwiederbringlich. Dieselbe Auditpflicht wie bei den uebrigen
+    # Retention-Fristen.
+    "retention_handover_notes_days",
     # Retention-Workflow
     "client_trash_days",
     "auditlog_retention_months",
@@ -81,6 +87,9 @@ _AUDIT_VALUE_FIELDS = frozenset(
         "retention_identified_days",
         "retention_qualified_days",
         "retention_activities_days",
+        # Refs #2042: rein numerischer Fristwert ohne PII — ein Herabsetzen
+        # muss forensisch rekonstruierbar sein wie bei den Nachbarfristen.
+        "retention_handover_notes_days",
         "client_trash_days",
         "auditlog_retention_months",
         "eventhistory_detail_months",

@@ -13,6 +13,7 @@
 | Art. 5(1)(b) Purpose limitation — search scope | [ADR-043](../adr/043-suchraum-volltextsuche.md) — search queries are deliberately **not** logged (rationale + residual risk), the case frame stays deliberately open to every staff member; five rules for any extension of the search scope | [Auditor] [Dev] |
 | Art. 5(1)(c) Data minimization | [ADR-023](../adr/023-k-anonymization-statistik.md) · [`external_report.py`](../../src/core/services/dashboard/external_report.py) | [Auditor] [Dev] |
 | Art. 5(1)(e) Storage limitation | [ADR-021](../adr/021-retention-modell.md) · **Attachments:** `DocumentType.retention_days` is **event-only** — client- and case-owned files have no retention period of their own, they follow the owner's lifecycle ([ADR-039](../adr/039-owner-generische-dateianhaenge.md)) | [Auditor] [Dev] [Operator] |
+| Art. 5(1)(e) Storage limitation — handover note | **Manual shift note** (#2042): its own, deliberately short period `Settings.retention_handover_notes_days` (default 90 days), **physical** deletion by `enforce_retention` ([`retention/enforcement.py`](../../src/core/retention/enforcement.py)) — no trash, no legal hold. See the "Handover note" section below | [Auditor] [Dev] [Operator] |
 | Art. 5(1)(f) Integrity & confidentiality | [ADR-006](../adr/006-fernet-field-encryption.md) · [ADR-007](../adr/007-auditlog-append-only.md) · [ADR-014](../adr/014-encrypted-file-vault.md) · [security-notes.md](../security-notes.md) | [Auditor] [Dev] |
 | Art. 5(2) Accountability | [ADR-007](../adr/007-auditlog-append-only.md) · [Processing register](../../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) · **what the audit log does not record** (ordinary list, detail and search requests): [ADR-043](../adr/043-suchraum-volltextsuche.md), [Admin Guide § 7.4](admin-guide.md#74-audit-log) | [Auditor] |
 
@@ -63,11 +64,28 @@
 | Legal texts | the demo's own pages `/impressum/` + `/datenschutzerklaerung/` (#1641; contents provided as the operator's deploy-time overlay, linked from the demo footer + consent banner) | [Operator] |
 | Technology / CSP scoping | consent gate [`umami-consent.js`](../../src/static/js/umami-consent.js) · narrowly scoped CSP allowance [`DemoUmamiCSPRelaxMiddleware`](../../src/core/middleware/demo_umami_csp_relax.py) · [security-notes.md](../security-notes.md#eng-gescopte-ausnahme--umami-analytics-auf-der-demo-issue-1604) · [ADR-022 § (c)](../adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
 
+## D3. Handover note (manual shift note, Refs #2042)
+
+Since 0.97 the handover shows one free-text field per shift -- what the outgoing worker wants the incoming one to know. The data-protection assessment is given here in full because it deliberately deviates from the rest of the data model in several places.
+
+| Aspect | Rule | For |
+|---|---|---|
+| Data category | Unstructured free text written by a staff member about the course of a shift. **No personal reference in the schema** -- the `ShiftHandoverNote` model carries no client or case foreign key, only facility, shift date and time window. The text *may* name people; the user guide and the field hint therefore require the same pseudonyms as the rest of the documentation | [Auditor] [Operator] |
+| Purpose | Handover between two duties (Art. 6(1)(f), or whichever legal basis the operator uses for its professional documentation) -- the note replaces no case record and is no place for diagnoses or assessments | [Operator] [Auditor] |
+| Art. 32 encryption at rest | Fernet field encryption, like the reason of a rectification request ([ADR-006](../adr/006-fernet-field-encryption.md)); the column never holds plaintext, and the eighth key-rotation path (`reencrypt_fields`) covers it | [Auditor] [Dev] |
+| Art. 32 access control | Reading **and** writing require staff level or above (`staff`/`lead`/`facility_admin`); assistants reach the handover but do not see the note -- not even a placeholder. Row-level security like every facility-owned table ([ADR-005](../adr/005-facility-scoping-and-rls.md)) | [Auditor] [Dev] |
+| Art. 5(1)(e) storage limitation | `Settings.retention_handover_notes_days`, default **90 days** from the last change. `enforce_retention` deletes **physically** (no trash, no anonymisation step). There is **no** legal-hold target type for handover notes -- holds protect client, case and event records for ongoing proceedings; the boundary is stated in the hold contract in [security-notes.md](../security-notes.md) | [Auditor] [Dev] [Operator] |
+| Art. 5(2) accountability -- **manual** create/change/delete | Every action by a staff member writes **one audit row per note** (`HANDOVER_NOTE_CREATED`/`_UPDATED`/`_DELETED`). The `detail` carries only the shift date, the time-window label and the field list `["note"]` -- **never the text** | [Auditor] [Dev] |
+| Art. 5(2) accountability -- **expiry** | The nightly retention run deliberately writes **no** per-note row but **one aggregated retention decision** per run and facility (`DELETE`, category `handover_notes`, carrying the count and the applicable period -- the `enforce_activities` pattern). Which individual note expired cannot be reconstructed from it: that is the price of data minimisation in an append-only log, not an oversight | [Auditor] [Dev] |
+| Deleting a time filter | A time window that still has notes **cannot be deleted** (`on_delete=PROTECT`). That leaves no third, unaudited path on which handover knowledge disappears -- the configuration can only be tidied up once the notes' retention period has passed | [Auditor] [Operator] [Dev] |
+| **Deliberate exclusion:** Art. 15 disclosure | The note is **not** part of the client data export. Without a client foreign key there is no defensible "this note is about this person" mapping; full-text searching encrypted free text in order to compile a disclosure would be a new, broader processing operation. The counterweight is the short period plus the pseudonym rule. Should a note nevertheless be requested for a disclosure in an individual case, that is an **organisational** step for the operator | [Auditor] [Operator] |
+| **Deliberate exclusion:** search | The note does not feed `Event.search_text` and cannot be found through the search -- the search space stays limited to `Client.pseudonym` and `Event.search_text` ([ADR-043](../adr/043-suchraum-volltextsuche.md)) | [Auditor] [Dev] |
+
 ## E. Terms
 
 Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, storage limitation, soft-delete strategies) → [glossary.md](glossary.md).
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-08 -->
-<!-- source-hash: 6fb812de52720bf38c0e2d1c6667b398ce999c4c -->
+<!-- translation-date: 2026-09-10 -->
+<!-- source-hash: 6163acf2c90a7e0824210be8f4ae9e637275444a -->

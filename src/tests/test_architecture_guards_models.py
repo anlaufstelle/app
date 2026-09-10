@@ -1025,6 +1025,9 @@ class TestTenantModelScopeGuard:
         "file_vault/rotation.py:_reencrypt_attachments:Attachment": (
             "Schluesselrotation, Anhang-Zweig — gleiche Begruendung."
         ),
+        "file_vault/rotation.py:_reencrypt_shift_handover_notes:ShiftHandoverNote": (
+            "Schluesselrotation, Schichtnotiz-Zweig (Refs #2042) — gleiche Begruendung."
+        ),
         # --- (4) Auth-Grenze: Lockout/Recovery vor der Facility-Wahl --------
         "security/lockout_recovery.py:_latest_failed_anchor:AuditLog": (
             "Fehlversuchs-Anker zum bereits aufgeloesten ``user`` — die Sperre gilt am "

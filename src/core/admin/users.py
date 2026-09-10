@@ -188,10 +188,12 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
         betroffen.sort(key=lambda obj: (lock_ids[obj.facility_id], str(obj.facility_id)))
         for user in betroffen:
             user.mfa_required = True
-            # Refs #1369: transienter Actor-Kontext für die Signal-Handler; das
-            # Feld selbst trägt keine eigene Signal-Action, die Zeile schreiben
-            # wir direkt darunter.
+            # Refs #2172: Der Bulk-Pfad besitzt bereits seinen direkten,
+            # IP-attribuierten Audit-Write. Das Signal auditiert deshalb nur
+            # Einzel-/Command-Saves und wird hier explizit unterdrückt, damit
+            # die Sammelaktion weiterhin genau eine Zeile je Konto schreibt.
             user._audit_actor = actor
+            user._audit_skip_mfa_required = True
             user.save(update_fields=["mfa_required"])
             audit_event(
                 AuditLog.Action.USER_ACCESS_UPDATED,
@@ -233,6 +235,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
                     "phone",
                     "notes",
                     "must_change_password",
+                    "mfa_required",
                     "preferred_language",
                     # Refs #1053: Grant/Revoke-UI für das Vier-Augen-Recht;
                     # jede Änderung wird via Signal audit-geloggt.
@@ -402,8 +405,9 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         Djangos ``UserAdmin.user_change_password`` ruft ``form.save()`` direkt
         auf und umgeht ``save_model()`` vollstaendig — der #1369-Actor-
         Mechanismus (``obj._audit_actor``) greift hier also nicht, und der
-        ``post_save``-Diff in ``signals/audit.py`` verfolgt nur ``role``,
-        ``is_active`` und ``can_confirm_deletion``. Uebrig blieb Djangos
+        ``post_save``-Diff in ``signals/audit.py`` verfolgt nur Modellfelder
+        wie ``role``, ``is_active``, ``mfa_required`` und
+        ``can_confirm_deletion``, nicht aber den Passwort-Hash. Uebrig blieb Djangos
         **mutierbares** ``admin.LogEntry``; im append-only, HMAC-verketteten
         AuditLog stand nichts, obwohl ein Credential-Wechsel im Threat-Model
         als Privilegien-Ereignis gilt (Rigor von ``USER_ROLE_CHANGED``, #1369).

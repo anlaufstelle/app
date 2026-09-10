@@ -12,6 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.models import AuditLog, Facility, Settings
+from core.retention.enforcement import enforce_handover_notes
 from core.retention.eventhistory import enforce_eventhistory_retention
 from core.services.audit import audit_event
 from core.services.dashboard import ensure_snapshots_for_months
@@ -52,6 +53,11 @@ class _RetentionTotals:
     # Fristbegriff).
     trash_anonymized_cases: int = 0
     activities: int = 0
+    # Refs #2042: manuelle Schichtnotizen, die ihre eigene, kurze Frist
+    # (``retention_handover_notes_days``) ueberschritten haben. Eigener
+    # Zaehler, weil die Notiz weder Ereignis noch Aktivitaet ist und ihre
+    # Loeschung physisch (nicht soft) erfolgt.
+    handover_notes: int = 0
     auditlog_pruned: int = 0
     # Refs #1760: abgelaufene Offline-Widerrufe (klartext-frei, aber pseudonymer
     # Bezug auf bereits anonymisierte Personen -> Art. 5 Abs. 1 lit. e).
@@ -175,6 +181,7 @@ class Command(BaseCommand):
 
         totals.deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
         totals.activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
+        totals.handover_notes += enforce_handover_notes(facility, settings_obj, now, dry_run)["count"]
         totals.anonymized += anonymize_clients(facility, dry_run)["count"]
         # Refs #626: Soft-deletete Personen aus dem Papierkorb anonymisieren,
         # sobald die client_trash_days-Frist abgelaufen ist.
@@ -233,6 +240,9 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(f"[dry-run] Would hard-delete {totals.activities} activity/activities in total.")
             )
+            self.stdout.write(
+                self.style.WARNING(f"[dry-run] Would hard-delete {totals.handover_notes} handover note(s) in total.")
+            )
             self.stdout.write(self.style.WARNING(f"[dry-run] Would anonymize {totals.anonymized} client(s) in total."))
             self.stdout.write(
                 self.style.WARNING(
@@ -260,6 +270,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Soft-deleted {totals.deleted} event(s) in total."))
         self.stdout.write(self.style.SUCCESS(f"Hard-deleted {totals.activities} activity/activities in total."))
+        self.stdout.write(self.style.SUCCESS(f"Hard-deleted {totals.handover_notes} handover note(s) in total."))
         self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.anonymized} client(s) in total."))
         self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.trash_anonymized} trash-expired client(s) in total."))
         self.stdout.write(
@@ -285,6 +296,7 @@ class Command(BaseCommand):
                 "facilities": facilities.count(),
                 "soft_deleted_events": totals.deleted,
                 "hard_deleted_activities": totals.activities,
+                "hard_deleted_handover_notes": totals.handover_notes,
                 "anonymized_clients": totals.anonymized,
                 "anonymized_trash_clients": totals.trash_anonymized,
                 "anonymized_trash_cases": totals.trash_anonymized_cases,

@@ -81,6 +81,11 @@ AUTHENTICATED_PAGES = [
     ("account", "/account/", "#main-content h1:has-text('Mein Profil')"),
     ("dsgvo", "/dsgvo/", "#main-content h1:has-text('DSGVO-Dokumentationspaket')"),
     ("offline_conflicts", "/offline/conflicts/", "[data-testid='conflict-list-view']"),
+    # Refs #2042: die Uebergabe hatte bis hierher gar keinen axe-Lauf (die
+    # Route ist ein Redirect auf ``/?view=uebergabe``, kein eigenes Ziel).
+    # Ready-Selektor ist der Notiz-Container: er steht erst, wenn der
+    # Uebergabe-Zweig gerendert wurde, und ist rollenunabhaengig ab Fachkraft.
+    ("uebergabe", "/?view=uebergabe", "#handover-note"),
 ]
 
 SUPER_ADMIN_PAGES = [

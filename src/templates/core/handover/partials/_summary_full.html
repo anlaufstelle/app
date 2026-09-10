@@ -9,6 +9,11 @@
     </div>
 </div>
 
+{# Manuelle Schichtnotiz — bewusst VOR den Kennzahlen (Refs #2042). #}
+{% if handover_notes %}
+{% include "core/handover/partials/_note.html" %}
+{% endif %}
+
 {# Statistiken (KPI-Cards) #}
 <div class="mb-6">
     <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Statistiken" %}</h2>
