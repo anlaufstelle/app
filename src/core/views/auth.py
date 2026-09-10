@@ -5,6 +5,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.views import INTERNAL_RESET_SESSION_TOKEN
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +20,7 @@ from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.security import RevocationReason, invite_token_generator, is_locked, revoke_credentials
 from core.services.security.origin import external_link_context
+from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
@@ -293,6 +295,39 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     #: ``InviteConfirmView`` ueberschreibt ihn — dieselbe Mechanik, aber im
     #: Protokoll unterscheidbar (Ersteinrichtung vs. Zuruecksetzen).
     revocation_reason = RevocationReason.PASSWORD_RESET
+
+    def dispatch(self, *args, **kwargs):
+        """Refs #2034: Der Token-Uebergang ist eine Rechteanhebung — rotieren.
+
+        Djangos ``PasswordResetConfirmView.dispatch`` legt ein gueltiges Token
+        unter ``INTERNAL_RESET_SESSION_TOKEN`` in die **bestehende** Sitzung und
+        leitet auf den tokenfreien ``set-password``-Pfad um. Ab diesem Moment
+        darf die Sitzung ein neues Passwort setzen, ohne den Link je gesehen zu
+        haben — ein vorher entwendetes oder zurueckgelassenes Cookie erbt genau
+        das (Cross-Review Fix-Runde 1, Ruling R-A1-10).
+
+        Erkannt wird der Uebergang am neu erschienenen Session-Eintrag, statt
+        die Token-Pruefung der Elternklasse zu duplizieren (eine zweite Kopie
+        der Pruefung waere die groessere Fehlerquelle). Die Rotation laeuft
+        damit zwar nach dem In-Memory-Write, aber vor JEDEM Persistieren und vor
+        der Antwort: ``cycle_key()`` schreibt die Daten unter der NEUEN ID und
+        loescht die alte Zeile — es existiert zu keiner Zeit eine gespeicherte
+        Sitzung unter der alten ID, die das Token traegt.
+
+        Fehlschlaege (ungueltiges/abgelaufenes Token, unbekannte UID) rotieren
+        bewusst nicht: sie heben nichts an, und eine Rotation waere dort ein
+        kostenloser Sitzungs-Reset fuer jeden Cookie-Besitzer.
+
+        ``InviteConfirmView`` erbt diesen Ablauf mit dem eigenen
+        ``token_generator`` unveraendert mit.
+        """
+        session = self.request.session
+        token_before = session.get(INTERNAL_RESET_SESSION_TOKEN)
+        response = super().dispatch(*args, **kwargs)
+        token_after = session.get(INTERNAL_RESET_SESSION_TOKEN)
+        if token_after is not None and token_after != token_before:
+            rotate_session_after_privilege_gain(self.request)
+        return response
 
     def form_valid(self, form):
         response = super().form_valid(form)
