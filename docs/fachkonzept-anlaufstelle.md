@@ -4,7 +4,7 @@
 
 Autor: Erika Musterfrau, Tobias Nix
 Stand: September 2026
-Version: 1.8
+Version: 1.9
 
 ---
 
@@ -21,6 +21,7 @@ Version: 1.8
 | 1.6 | Juni 2026 (2026-06-20) | Doku-Audit-Nachzug (#1071 Block A): § 16 Offline-Krypto code-treu (non-extractable `CryptoKey` in IndexedDB statt „nur in-memory"; Offline-Edit-Einstieg als deferred #1111 statt „implementiert"; Idle-Key-Wipe + Bundle-Caps, [ADR-022](adr/022-offline-snapshot-keys.md)). § 19 Datenschutz-Reife auf Stand v0.15 (Retention-Automatisierung [ADR-021](adr/021-retention-modell.md), K-Anonymisierung [ADR-023](adr/023-k-anonymization-statistik.md), 4-Augen-Löschung, DSGVO-Vorlagen als umgesetzt; Portabilität/Berichtigung weiter offen). § 14 Querverweis auf das Datenschutz-Glossar (`docs/glossar.md`). |
 | 1.7 | Juli 2026 (2026-07-07) | Doku-Drift-Korrektur (#1417): § 16 Stufe 3 auf ADR-022-Re-Evaluationsstand (2026-06-29) gehoben — Offline-Edit-Einstieg ist seit #1111 verdrahtet und produktiv (nicht mehr deferred), inkl. Dead-Letter-Ansicht (`/offline/conflicts/`, seit #1396 auch offline erreichbar) und Fallaufgaben-Editieren (#1398). |
 | 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
+| 1.9 | September 2026 (2026-09-10) | § 5 um die Persona der Beratungsstellen-Domäne ergänzt (#2190). |
 
 ---
 
@@ -282,6 +283,12 @@ Heike ist 48, leitet eine niedrigschwellige Einrichtung eines freien Trägers. I
 
 **Was sie braucht:** Auf Knopfdruck wissen, wie viele Kontakte es im letzten Halbjahr gab, aufgeschlüsselt nach Leistungsart und Alterscluster. Einen druckfertigen Bericht für den Fördermittelgeber. Überblick über den Verlauf einzelner Klientel. DSGVO-Sicherheit.
 
+#### Amira — Beraterin in der offenen Sprechstunde
+
+Amira ist 35, Beraterin in der offenen Sprechstunde einer Sozial-/Lebensberatungsstelle. Menschen kommen ohne Termin und oft ohne Klarnamen; die Kurzberatung bleibt anonym dokumentierbar, ab einem stabilen Pseudonym beginnt ein Beratungsgespräch. Am Vormittag führt sie die offene Sprechstunde, am Nachmittag die zweite Sprechstunde, am frühen Abend Termine und Formularhilfe. Viele Kontakte sind kurz: eine Auskunft, eine Vermittlung an eine Fachstelle, ein ausgefülltes Formular. Sie behält im Blick, wer zuletzt da war und ob eine Vermittlung oder ein Folgetermin noch offen ist.
+
+**Was sie braucht:** Einen anonymen Kurzkontakt in wenigen Sekunden dokumentieren. Eine Vermittlung an eine Fachstelle oder Behörde anlegen und im Team sichtbar machen. Formularhilfe und Folgetermine zuordnen können. Ein schlankes Formular für die Kurzberatung, ohne Pflichtfelder, die bei einem anonymen Kontakt gar nicht zu befüllen wären.
+
 #### Jonas — Systemadministration (`super_admin`)
 
 Jonas ist 41, zuständig für die IT bei einem Trägerverband, der fünf niedrigschwellige Einrichtungen betreibt. Er hostet die Anlaufstelle-Installation auf einem eigenen Server. Er ist kein Softwareentwickler, aber er kann Linux-Server administrieren, Docker-Container starten und Backups einrichten. Er hat kein Budget für externe IT-Dienstleister. Jede neue Software bedeutet für ihn: Installation, Datensicherung, Benutzerverwaltung, DSGVO-Dokumentation.
@@ -290,7 +297,7 @@ Jonas ist 41, zuständig für die IT bei einem Trägerverband, der fünf niedrig
 
 **Was er braucht:** Ein System, das mit `docker compose up` läuft. Automatische Backups. Eine Bootstrap-Routine, die ohne Default-Passwörter den ersten Super-Admin-Account anlegt (`manage.py create_super_admin`). DSGVO-Vorlagen, die er nur noch ausfüllen muss.
 
-> **Hinweis:** Jonas repräsentiert die Systemadministrations-Rolle. Während Selin, Deniz und Heike facility-gebunden arbeiten, wirkt Jonas oberhalb der Einrichtungsgrenze. Auch in einer Single-Tenant-Installation existiert mindestens ein `super_admin` — er legt die erste Einrichtung und den ersten `facility_admin` an. Die Erstinstallation läuft nicht über Seed-Daten, sondern über den interaktiven Befehl `manage.py create_super_admin`.
+> **Hinweis:** Jonas repräsentiert die Systemadministrations-Rolle. Während Selin, Deniz, Heike und Amira facility-gebunden arbeiten, wirkt Jonas oberhalb der Einrichtungsgrenze. Auch in einer Single-Tenant-Installation existiert mindestens ein `super_admin` — er legt die erste Einrichtung und den ersten `facility_admin` an. Die Erstinstallation läuft nicht über Seed-Daten, sondern über den interaktiven Befehl `manage.py create_super_admin`.
 
 ### Typische Workflows
 
