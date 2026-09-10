@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 11:50+0200\n"
+"POT-Creation-Date: 2026-09-10 18:14+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12694,3 +12694,8 @@ msgstr "%(total)s Personen gefunden, Seite %(page)s von %(pages)s."
 #, python-format
 msgid "%(total)s Fälle gefunden, Seite %(page)s von %(pages)s."
 msgstr "%(total)s Fälle gefunden, Seite %(page)s von %(pages)s."
+
+#: src/core/services/import_engine.py:557
+#, python-format
+msgid "Die Spalte „%(column)s“ verweist auf das nicht mehr verfügbare Zielfeld „%(target)s“. Bitte prüfen Sie die Zuordnung im Zuordnungsschritt."
+msgstr "Die Spalte „%(column)s“ verweist auf das nicht mehr verfügbare Zielfeld „%(target)s“. Bitte prüfen Sie die Zuordnung im Zuordnungsschritt."
