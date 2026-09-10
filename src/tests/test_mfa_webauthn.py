@@ -142,6 +142,45 @@ class TestTotpVerifyRegistersDjangoOTPDevice:
 
 
 @pytest.mark.django_db
+class TestMfaSetupCompletionRegistersDjangoOTPDevice:
+    """Refs #2175: Der Setup-Abschluss ist ein zweiter Faktor — auch fuer django-otp.
+
+    ``MFABackupCodesView`` schaltet das TOTP-Geraet scharf und setzt
+    ``mfa_verified``. Seit django-otp-webauthn 0.10.3 prueft die
+    Registrierungs-Zeremonie zusaetzlich ``user.is_verified()`` — ohne
+    ``otp_login`` haengt der Nutzer direkt nach dem Setup in einer Sitzung
+    fest, in der er keinen Passkey anlegen kann (403), obwohl die App-Seite
+    sie als verifiziert fuehrt.
+    """
+
+    def _walk_through_setup(self, client, staff_user):
+        client.login(username="teststaff", password="testpass123")
+        client.get("/mfa/setup/")
+        device = TOTPDevice.objects.get(user=staff_user, confirmed=False)
+        assert client.post("/mfa/setup/", {"token": _valid_totp(device)}).status_code == 302
+        response = client.post("/mfa/backup-codes/", {"confirm_saved": "1"})
+        assert response.status_code == 302
+        device.refresh_from_db()
+        return device, response
+
+    def test_setup_completion_marks_session_as_otp_verified(self, client, staff_user):
+        device, response = self._walk_through_setup(client, staff_user)
+
+        assert device.confirmed is True
+        assert client.session["mfa_verified"] is True
+        assert client.session[DEVICE_ID_SESSION_KEY] == device.persistent_id
+        assert response.wsgi_request.user.is_verified() is True
+
+    def test_passkey_registration_begins_right_after_setup(self, client, staff_user):
+        self._walk_through_setup(client, staff_user)
+
+        response = client.post("/webauthn/registration/begin/")
+
+        assert response.status_code == 200
+        assert "challenge" in json.loads(response.content)
+
+
+@pytest.mark.django_db
 class TestPasskeyRegistrationRequiresVerifiedSession:
     """Zweitfaktor-Bypass-Regression (adversarialer Review Refs #1492).
 

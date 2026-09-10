@@ -376,6 +376,12 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
             # Sitzung (2FA aktiv + verifiziert) — Rotation vor dem Flag. Der
             # Abbau von ``mfa_setup_pending`` oben wandert mit.
             rotate_session_after_privilege_gain(request)
+            # Refs #2175: Der Setup-Abschluss ist ein vollwertiger zweiter
+            # Faktor — django-otp muss ihn genauso sehen wie den Verify-Pfad.
+            # django-otp-webauthn 0.10.3 prueft in der Registrierungs-Zeremonie
+            # zusaetzlich ``user.is_verified()``; ohne ``otp_login`` koennte der
+            # Nutzer direkt nach der Einrichtung keinen Passkey anlegen (403).
+            otp_login(request, device)
             request.session["mfa_verified"] = True
             log_audit_event(
                 request,
