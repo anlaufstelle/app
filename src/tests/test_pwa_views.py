@@ -754,7 +754,10 @@ class TestPrecachedShellBumpGuard:
     # v47 — anlaufstelle-v46 entstand im selben unveroeffentlichten Lauf, steht
     # in keinem Tag und keinem Deploy, es gibt also keine
     # Split-Brain-Generation im Feld (Praezedenz: #1805, #1828).
-    _PINNED_SHELL_HASH = "bad1baf5aa58cc60a59ea395eccf1c0697acd5a6549a7efbc1d5406296a9766a"
+    # Refs #2187: Der Hinweis zur doppelten Stunde aendert das gerenderte
+    # offline_create.html; der finale Shell-Hash wird innerhalb derselben,
+    # noch unveroeffentlichten v47-Generation nachgezogen.
+    _PINNED_SHELL_HASH = "f99ddf77974e6092caf1bf7687f4b825ea2ce575c0ed9868e04b2a24df040055"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

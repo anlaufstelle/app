@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Rollenweiche und Zielpfad bleiben beim zweiten Faktor erhalten** (#2206) — `super_admin` landet nach dem zweiten Faktor im Systembereich; `next` überlebt den 2FA-Schritt.
+- **Doppelte Stunde in der Offline-Erfassung wird vorab abgewiesen und ein 422 beim Create-Replay als Dead-Letter sichtbar** (#2187) — Die Offline-Create-Shell erkennt Wanduhrzeiten im Doppelfenster der Winterzeit-Rückstellung clientseitig und lehnt sie mit einem erklärenden Hinweis ab; ein 422 auf dem pk-losen Create-Replay markiert den Datensatz als `dead` statt ihn endlos erneut zu versuchen.
 - **Import-Übernahme weist ungültig gewordene Zuordnungen ab** (#2196) — Probelauf und Übernahme prüfen gespeicherte Ziele erneut und melden entfernte oder deaktivierte Feldvorlagen, statt Werte still auszulassen.
 - **Import-Übernahme verwendet den gesperrten Job-Stand** (#2199) — Parallele Browser-Sitzungen übernehmen zuverlässig die zuletzt bestätigte Zuordnung statt eines veralteten View-Snapshots.
 - **Import-Uploads zählen gegen das Speicherkontingent** (#2180) — Offene CSV-Quelldateien werden vor dem Schreiben neuer Uploads berücksichtigt und Kontingent-Ablehnungen als Importvorgang protokolliert.

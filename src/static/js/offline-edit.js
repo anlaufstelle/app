@@ -375,17 +375,31 @@
             return { status: "ratelimited", statusCode: response.status };
         }
         if (response.status === 422) {
-            // Refs #1351/#1384 (M11): serverseitige Formularvalidierung
-            // fehlgeschlagen, jetzt mit Feldfehlern statt eines blossen
-            // Re-Renders. Record NICHT verwerfen — als "new" behalten, dem
-            // Nutzer die Feldfehler melden (analog replayModifiedEvent/422).
+            // Refs #2187: Beim pk-losen Create-Replay ist ein 422 PERMANENT,
+            // weil der Nutzer die Eingabe offline nicht mehr korrigieren kann
+            // (kein Server-Re-Render, keine Feld-UI im Create-Kontext). Der
+            // Record wird ins Dead-Letter geschoben; Feldfehler-Codes
+            // (PII-frei) gehen mit, damit die Dead-Letter-Liste den Grund
+            // anzeigen kann. Der Edit-Pfad (replayModifiedEvent) bleibt
+            // unveraendert: dort ist 422 reparabel.
             let body = null;
             try {
                 body = await response.json();
             } catch (_e) {
                 body = {};
             }
-            return { status: "invalid", errors: (body && body.errors) || {} };
+            const fieldErrors = (body && body.errors) || {};
+            // Refs #2187: Nur Feldnamen + Fehlercodes ins Dead-Letter-Detail;
+            // serverseitige Meldungen koennen Eingabewerte enthalten.
+            const errorCodes = Object.fromEntries(
+                Object.entries(fieldErrors).map(([key, items]) => [
+                    key,
+                    Array.isArray(items) ? items.map((item) => (item && item.code) || "").filter(Boolean) : [],
+                ])
+            );
+            await _store().markEventDead(record.pk, "invalid", JSON.stringify(errorCodes));
+            _fireCountEvent();
+            return { status: "dead", deadReason: "invalid", errors: errorCodes, statusCode: response.status };
         }
         if (response.status === 200) {
             // Serverseitige Formularvalidierung fehlgeschlagen (Re-Render).

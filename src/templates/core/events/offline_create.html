@@ -1,5 +1,6 @@
 {% extends "offline_base.html" %}
-{% load i18n static %}
+{% load i18n static tz %}
+{% get_current_timezone as app_timezone %}
 
 {% block title %}{% trans "Kontakt dokumentieren (offline)" %} – Anlaufstelle{% endblock %}
 
@@ -50,7 +51,8 @@
     </template>
 
     <template x-if="showForm">
-        <form class="card p-4 space-y-3" @submit.prevent="saveCreate" data-testid="offline-event-create-form">
+        <form class="card p-4 space-y-3" @submit.prevent="saveCreate" data-testid="offline-event-create-form"
+              data-app-timezone="{{ app_timezone }}">
             <h1 class="text-[18px] font-bold text-ink">{% trans "Kontakt dokumentieren (offline)" %}</h1>
 
             {# Person-Picker: mitgenommene Person | — ohne Person — (anonym). #}
@@ -86,14 +88,26 @@
             <div>
                 <label for="offline-event-occurred-at" class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zeitpunkt" %}</label>
                 <input id="offline-event-occurred-at" type="datetime-local" x-model="createOccurredAt"
-                       class="w-full rounded-md border-subtle text-sm" data-testid="offline-event-create-occurred-at">
+                       @input="onOccurredAtInput" :aria-invalid="dstAriaInvalid"
+                       class="w-full rounded-md border-subtle text-sm" data-testid="offline-event-create-occurred-at"
+                       aria-describedby="offline-event-occurred-at-error">
+                <div id="offline-event-occurred-at-error" x-show="dstError" x-cloak
+                     class="mt-2 text-sm text-red-600" role="alert">
+                    <ul role="list" class="list-disc pl-4">
+                        <li x-text="dstError"></li>
+                    </ul>
+                </div>
             </div>
 
             {# Refs #1521: geteilter pk-loser Feld-Loop (auch offline_detail.html includet ihn). #}
             {% include "core/clients/_offline_event_fields.html" %}
 
             <template x-if="editError">
-                <p class="text-sm text-red-600" x-text="editError" data-testid="offline-event-create-error" role="alert"></p>
+                <div class="text-sm text-red-600" data-testid="offline-event-create-error" role="alert">
+                    <ul role="list" class="list-disc pl-4">
+                        <li x-text="editError"></li>
+                    </ul>
+                </div>
             </template>
 
             <div class="flex gap-2">

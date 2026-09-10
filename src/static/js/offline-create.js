@@ -57,6 +57,7 @@
             editFields: [],
             editValues: {},
             editError: "",
+            dstError: "",
             saving: false,
             saved: false,
 
@@ -152,10 +153,37 @@
                 }
             },
 
+            get _appTimeZone() {
+                return this.$el.querySelector("[data-app-timezone]")?.dataset?.appTimezone || "UTC";
+            },
+
+            _checkOccurredAt() {
+                if (!this.createOccurredAt || !window.offlineFormFields.isAmbiguousWallClock) return "";
+                if (window.offlineFormFields.isAmbiguousWallClock(this.createOccurredAt, this._appTimeZone)) {
+                    return "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal. Bitte online erfassen oder eine Uhrzeit außerhalb von 02:00–02:59 wählen.";
+                }
+                return "";
+            },
+
+            get dstAriaInvalid() {
+                return this.dstError ? "true" : "false";
+            },
+
+            onOccurredAtInput() {
+                this.dstError = "";
+            },
+
             async saveCreate() {
                 if (this.saving) return;
-                this.saving = true;
                 this.editError = "";
+                this.dstError = "";
+                const occurredAtError = this._checkOccurredAt();
+                if (occurredAtError) {
+                    this.dstError = occurredAtError;
+                    this.$el.querySelector('[data-testid="offline-event-create-occurred-at"]')?.focus();
+                    return;
+                }
+                this.saving = true;
                 try {
                     if (!window.offlineEdit || !window.offlineEdit.markEventNew) {
                         this.editError = "Offline-Erfassung nicht verfügbar.";
@@ -198,6 +226,7 @@
             reset() {
                 this.saved = false;
                 this.editError = "";
+                this.dstError = "";
                 this.clientPk = "";
                 this.createDocTypePk = "";
                 this.createDocTypeName = "";
