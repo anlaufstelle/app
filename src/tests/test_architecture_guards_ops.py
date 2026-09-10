@@ -1385,6 +1385,29 @@ class TestOpsScriptPathResolution:
         )
 
 
+class TestRestoreHmacBeforeDestructiveActions:
+    """Refs #2195: Beide Restore-Artefakte muessen authentifiziert sein,
+    bevor Bestaetigung oder destruktive Aktionen beginnen.
+    """
+
+    _RESTORE = Path("scripts/ops/restore.sh")
+
+    def test_both_hmac_sidecars_precede_confirmation_and_restore(self) -> None:
+        flat = _flat_script(self._RESTORE)
+        db_hmac_pos = flat.find('backup_verify_hmac "$BACKUP_FILE"')
+        media_hmac_pos = flat.find('backup_verify_hmac "$MEDIA_FILE"')
+        confirm_pos = flat.find('read -rp "Fortfahren? (ja/nein): " CONFIRM')
+        psql_pos = flat.find('psql -U "$SU_USER" "$POSTGRES_DB"')
+        media_delete_pos = flat.find("rm -rf '${MEDIA_ROOT_CONTAINER}'/*")
+
+        assert min(db_hmac_pos, media_hmac_pos, confirm_pos, psql_pos, media_delete_pos) >= 0
+        assert db_hmac_pos < confirm_pos
+        assert media_hmac_pos < confirm_pos
+        assert db_hmac_pos < psql_pos
+        assert media_hmac_pos < psql_pos
+        assert media_hmac_pos < media_delete_pos
+
+
 class TestBackupVerifyCompletenessGuard:
     """Refs #1336 (DOC-P1): der ``--verify``-Pfad muss den stillen
     unvollstaendigen Dump (Dump unter NOBYPASSRLS-Rolle -> 0 Zeilen der

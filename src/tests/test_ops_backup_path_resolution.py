@@ -135,6 +135,18 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
         cwd=str(root),
         timeout=60,
     )
+    assert backup_result.returncode == 0, (
+        f"backup.sh scheiterte (rc={backup_result.returncode}).\n"
+        f"STDOUT:\n{backup_result.stdout}\nSTDERR:\n{backup_result.stderr}"
+    )
+    db_backups = sorted(daily_dir.glob("anlaufstelle_*.sql.gz.enc"))
+    assert len(db_backups) == 1
+    # Der Docker-Stub liefert fuer die Medien-Pipeline bewusst nur Fake-Bytes.
+    # Diese Pfadtests bilden daher den zulaessigen DB-only-Fall ab; der echte
+    # Medien-Drill wird in test_ops_restore_media_order.py separat geprueft.
+    for media_artifact in daily_dir.glob("*_media.tar.gz.enc*"):
+        media_artifact.unlink()
+
     restore_result = subprocess.run(
         ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
         capture_output=True,
@@ -148,17 +160,12 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
         timeout=60,
     )
 
-    assert backup_result.returncode == 0, (
-        f"backup.sh scheiterte (rc={backup_result.returncode}).\n"
-        f"STDOUT:\n{backup_result.stdout}\nSTDERR:\n{backup_result.stderr}"
-    )
-    db_backups = sorted(daily_dir.glob("anlaufstelle_*.sql.gz.enc"))
-    assert len(db_backups) == 1
     assert restore_result.returncode == 0, (
         f"restore-drill.sh scheiterte (rc={restore_result.returncode}).\n"
         f"STDOUT:\n{restore_result.stdout}\nSTDERR:\n{restore_result.stderr}"
     )
     assert f"Drill gegen DB-Backup: {db_backups[0]}" in restore_result.stdout
+    assert "INFO - Schritt 6: Kein passendes Medien-Archiv — uebersprungen" in restore_result.stdout
 
 
 def test_env_example_paths_use_project_host_directory(tmp_path: Path) -> None:

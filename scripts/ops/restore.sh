@@ -66,6 +66,15 @@ backup_require_real_key
 # db-Container — wie scripts/ops/restore-drill.sh (Review N4).
 SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 
+# Beide Artefakte authentifizieren, bevor die Bestaetigung abgefragt und die
+# Datenbank als erste destruktive Aktion eingespielt wird (Refs #2195).
+echo "Prüfe Integrität des DB-Backups (HMAC)..."
+backup_verify_hmac "$BACKUP_FILE"
+if [[ -n "$MEDIA_FILE" ]]; then
+    echo "Prüfe Integrität des Medien-Backups (HMAC)..."
+    backup_verify_hmac "$MEDIA_FILE"
+fi
+
 echo "WARNUNG: Die Datenbank '${POSTGRES_DB}' wird überschrieben!"
 echo "DB-Backup:    ${BACKUP_FILE}"
 if [[ -n "$MEDIA_FILE" ]]; then
@@ -79,9 +88,7 @@ if [[ "$CONFIRM" != "ja" ]]; then
     exit 0
 fi
 
-# DB restore — A4.3: Integrität VOR dem Entschlüsseln prüfen.
-echo "Prüfe Integrität des DB-Backups (HMAC)..."
-backup_verify_hmac "$BACKUP_FILE"
+# DB restore — beide HMAC-Sidecars wurden in der Vorpruefung verifiziert.
 echo "Stelle DB-Backup wieder her..."
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE" \
     | gunzip \
@@ -99,8 +106,6 @@ if [[ -n "$MEDIA_FILE" ]]; then
     docker compose -f "$COMPOSE_FILE" exec -T web \
         sh -c "rm -rf '${MEDIA_ROOT_CONTAINER}'/* '${MEDIA_ROOT_CONTAINER}'/.[!.]* 2>/dev/null || true"
 
-    echo "Prüfe Integrität des Medien-Backups (HMAC)..."
-    backup_verify_hmac "$MEDIA_FILE"
     echo "Entpacke Medien-Backup ..."
     openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE" \
         | gunzip \

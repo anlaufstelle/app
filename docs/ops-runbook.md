@@ -1211,7 +1211,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzw
 | 3b | **Vollstaendigkeits-Guard (fail-closed):** Zeilenabgleich der kritischen RLS-Tabellen (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Faengt den unvollstaendigen `--prod`-Restore ab, den der `psql`-Exit-Code (ohne `ON_ERROR_STOP`) verschluckt (Refs #1336) |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
-| 6 | Cleanup: Wegwerf-DB drop (via trap) |
+| 6 | Nur `--prod`: Zum gewählten DB-Backup gehörendes Medienarchiv per HMAC prüfen, in ein Host-Tempverzeichnis probeentpacken und `tar -tf`-Einträge mit der Probeentpackung vergleichen; Ausgabe `Medien: N Dateien, M Bytes, HMAC ok`. Fehlt das passende Archiv, wird der Schritt als zulässiger DB-only-Fall mit `INFO` übersprungen. Tempverzeichnis und Wegwerf-DB werden via Trap aufgeräumt. |
 | 7 | **Bei vollem Erfolg (alle Schritte inkl. 3b):** `mark_restore_verified` im web-Container → Compliance-Marker |
 
 Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
@@ -1246,7 +1246,7 @@ Host-Befehl `mail` an das Betriebs-Postfach zustellen kann.
 
 #### Manueller Sentinel-Drill fuer Medien-Volume-Persistenz
 
-Ergaenzt `restore-drill.sh` um den Container-Recreate-Aspekt:
+Der automatische Schritt 6 prüft die Integrität und Probeentpackbarkeit des Medien-**Backups**. Dieser separate Sentinel-Drill prüft ausschließlich, ob das laufende Medien-**Volume** einen Container-Recreate übersteht; er ersetzt den Backup-Test nicht.
 
 ```bash
 # 1. Sentinel-Datei in MEDIA_ROOT anlegen

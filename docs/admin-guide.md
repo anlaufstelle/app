@@ -1162,7 +1162,7 @@ Der Prüflauf validiert den HMAC vor dem Entschlüsseln, stellt den jüngsten Da
   backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 ```
 
-Das Skript verlangt die Eingabe `ja`, prüft jeweils zuerst den HMAC und entschlüsselt erst danach. Der SQL-Dump wird bewusst über den lokalen Bootstrap-Superuser (`POSTGRES_SUPERUSER`, Default `postgres`) eingespielt: Nur dieser kann die enthaltenen Owner-/`FORCE RLS`-Anweisungen und Datenkopien zuverlässig wiederherstellen. Beim Medien-Restore wird der bestehende Inhalt von `MEDIA_ROOT` vor dem Entpacken ersetzt.
+Noch vor der Bestätigungsabfrage prüft das Skript zuerst den DB-HMAC und, falls das zweite Argument übergeben wurde, den Medien-HMAC. Erst nach beiden erfolgreichen Vorprüfungen und der Eingabe `ja` spielt es die Datenbank ein; anschließend ersetzt und entpackt es den Medienbestand. Der SQL-Dump wird bewusst über den lokalen Bootstrap-Superuser (`POSTGRES_SUPERUSER`, Default `postgres`) eingespielt: Nur dieser kann die enthaltenen Owner-/`FORCE RLS`-Anweisungen und Datenkopien zuverlässig wiederherstellen.
 
 4. Führen Sie die Migrationen mit der Admin-Rolle aus und starten Sie anschließend den Stack:
 

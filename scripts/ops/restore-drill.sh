@@ -144,6 +144,8 @@ SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 DRILL_FAILED=0
 HWM_COPIED=0
 HWM_DRILL_CONTAINER_PATH="/tmp/audit_hwm-drill-$$.json"
+MEDIA_TMP_DIR=""
+MEDIA_LIST_FILE=""
 ok() { echo "OK   - $*"; }
 fail() {
     echo "FAIL - $*"
@@ -165,6 +167,12 @@ echo "Drill gegen DB-Backup: $LATEST_DB"
 # Schritt 1: Wegwerf-DB anlegen
 DRILL_DB="anlaufstelle_drill_$$"
 cleanup() {
+    if [[ -n "$MEDIA_TMP_DIR" ]]; then
+        rm -rf -- "$MEDIA_TMP_DIR"
+    fi
+    if [[ -n "$MEDIA_LIST_FILE" ]]; then
+        rm -f -- "$MEDIA_LIST_FILE"
+    fi
     if [[ "$HWM_COPIED" -eq 1 ]]; then
         dc exec -T web rm -f "$HWM_DRILL_CONTAINER_PATH" >/dev/null 2>&1 || true
     fi
@@ -360,7 +368,55 @@ else
     fail "Schritt 5: auditlog_immutable-Trigger fehlt in Restore"
 fi
 
-# Schritt 6: Cleanup laeuft via trap
+# Schritt 6: Passendes Medien-Archiv authentifizieren und auf dem Host
+# probeweise entpacken (Refs #2195). Das Prod-Backup benennt beide Archive mit
+# demselben Zeitstempel. Ein fehlendes Medien-Archiv ist zulaessig, weil der
+# Restore-Pfad ausdruecklich DB-only-Backups unterstuetzt.
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    LATEST_MEDIA="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
+    if [[ ! -f "$LATEST_MEDIA" ]]; then
+        echo "INFO - Schritt 6: Kein passendes Medien-Archiv — uebersprungen (DB-only-Backup zulaessig)"
+    elif ! backup_verify_hmac "$LATEST_MEDIA"; then
+        fail "Schritt 6: Medien-HMAC-Verifikation fehlgeschlagen — Archiv manipuliert/beschaedigt oder Sidecar fehlt"
+    elif ! MEDIA_TMP_DIR="$(mktemp -d)" || ! MEDIA_LIST_FILE="$(mktemp)"; then
+        fail "Schritt 6: Temporaeres Verzeichnis fuer Medien-Pruefung konnte nicht angelegt werden"
+    else
+        openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_MEDIA" \
+            | gunzip \
+            | tar -tf - >"$MEDIA_LIST_FILE"
+        MEDIA_LIST_RC=("${PIPESTATUS[@]}")
+        if [[ "${MEDIA_LIST_RC[0]}" -ne 0 || "${MEDIA_LIST_RC[1]}" -ne 0 || "${MEDIA_LIST_RC[2]}" -ne 0 ]]; then
+            fail "Schritt 6: Medien-Archiv konnte nicht vollstaendig aufgelistet werden"
+        else
+            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_MEDIA" \
+                | gunzip \
+                | tar -C "$MEDIA_TMP_DIR" -xf -
+            MEDIA_EXTRACT_RC=("${PIPESTATUS[@]}")
+            if [[ "${MEDIA_EXTRACT_RC[0]}" -ne 0 || "${MEDIA_EXTRACT_RC[1]}" -ne 0 || "${MEDIA_EXTRACT_RC[2]}" -ne 0 ]]; then
+                fail "Schritt 6: Medien-Archiv konnte nicht vollstaendig probeentpackt werden"
+            else
+                MEDIA_LISTED_COUNT=0
+                MEDIA_MATCHED_COUNT=0
+                while IFS= read -r MEDIA_ENTRY; do
+                    [[ -z "$MEDIA_ENTRY" ]] && continue
+                    MEDIA_LISTED_COUNT=$((MEDIA_LISTED_COUNT + 1))
+                    if [[ -e "$MEDIA_TMP_DIR/$MEDIA_ENTRY" || -L "$MEDIA_TMP_DIR/$MEDIA_ENTRY" ]]; then
+                        MEDIA_MATCHED_COUNT=$((MEDIA_MATCHED_COUNT + 1))
+                    fi
+                done <"$MEDIA_LIST_FILE"
+                MEDIA_FILE_COUNT=$(find "$MEDIA_TMP_DIR" -type f -printf '.' | wc -c | tr -d '[:space:]')
+                MEDIA_BYTES=$(find "$MEDIA_TMP_DIR" -type f -printf '%s\n' | awk '{total += $1} END {print total + 0}')
+                if [[ "$MEDIA_LISTED_COUNT" -eq 0 || "$MEDIA_MATCHED_COUNT" -ne "$MEDIA_LISTED_COUNT" ]]; then
+                    fail "Schritt 6: Probeentpackung stimmt nicht mit tar-Listing ueberein (${MEDIA_MATCHED_COUNT}/${MEDIA_LISTED_COUNT} Eintraege)"
+                else
+                    ok "Schritt 6: Medien: ${MEDIA_FILE_COUNT} Dateien, ${MEDIA_BYTES} Bytes, HMAC ok"
+                fi
+            fi
+        fi
+    fi
+else
+    echo "INFO - Schritt 6: Kein Medien-Archiv im dev-Backup-Format — uebersprungen"
+fi
 
 # Schritt 7: Bei vollem Erfolg den Restore-Test im AuditLog dokumentieren.
 # Laeuft im web-Container (DSGVO Art. 32 lit. c: Wiederherstellbarkeit belegt).

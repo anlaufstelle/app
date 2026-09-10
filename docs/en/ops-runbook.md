@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-10 (§§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180).
+> Most recently synchronized on 2026-09-10 (§ 6.6 the production restore drill verifies and probe-extracts the matching media archive while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
 
@@ -1214,7 +1214,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev f
 | 3b | **Completeness guard (fail-closed):** row comparison of the critical RLS tables (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) between the throwaway DB and the live DB (`$POSTGRES_DB`) — `Live>0` but `Restore=0` turns it red. Catches the incomplete `--prod` restore that the `psql` exit code (without `ON_ERROR_STOP`) swallows (Refs #1336) |
 | 4 | RLS policy check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` must yield `>= 18` (a conservative floor in the script; the actual count is higher, see section 9) |
 | 5 | `auditlog_immutable` trigger exists AND blocks a raw UPDATE |
-| 6 | Cleanup: drop the throwaway DB (via trap) |
+| 6 | `--prod` only: verify the media archive matching the selected database backup via HMAC, probe-extract it into a host temporary directory, and compare the `tar -tf` entries with the extracted result; output `Medien: N Dateien, M Bytes, HMAC ok`. If the matching archive is absent, skip the step with `INFO` as a valid database-only case. The trap cleans up the temporary directory and throwaway database. |
 | 7 | **On full success (all steps including 3b):** `mark_restore_verified` in the web container → compliance marker |
 
 Output: one `OK` / `FAIL` entry per step. Exit code != 0 on any `FAIL`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
@@ -1249,7 +1249,7 @@ to the operations mailbox.
 
 #### Manual Sentinel Drill for Media Volume Persistence
 
-Complements `restore-drill.sh` with the container recreate aspect:
+Automated step 6 checks the integrity and probe extraction of the media **backup**. This separate sentinel drill checks only whether the live media **volume** survives a container recreation; it does not replace the backup test.
 
 ```bash
 # 1. Create a sentinel file in MEDIA_ROOT
@@ -2775,4 +2775,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 18eae4bbea2a20f582e3261b6d4ea5655fc2a00c -->
+<!-- source-hash: af1b12e02ec5f1aa765b93b557e50e2c254d7d51 -->
