@@ -37,7 +37,60 @@ from core.models import (  # noqa: E402
 )
 from core.packages import catalog as packages_catalog  # noqa: E402
 from core.seed import doc_types  # noqa: E402
-from core.seed.scale import FACILITY_NAMES, SCALE_CONFIG  # noqa: E402
+from core.seed.scale import FACILITY_NAMES, FACILITY_PACKAGES, SCALE_CONFIG  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def _medium_seed(django_db_setup, django_db_blocker):
+    with django_db_blocker.unblock():
+        call_command("flush", interactive=False, verbosity=0)
+        call_command("seed", scale="medium")
+        admin = User.objects.select_related("facility").get(username="admin")
+        Facility.objects.get(pk=admin.facility_id, name="Hauptstelle")
+
+
+@pytest.fixture(scope="class")
+def _medium_seed_class(_medium_seed, django_db_blocker):
+    yield
+    with django_db_blocker.unblock():
+        call_command("flush", interactive=False, verbosity=0)
+
+
+@pytest.fixture(scope="module")
+def _large_seed(django_db_setup, django_db_blocker):
+    original = SCALE_CONFIG["large"]
+    reduced = dict(original)
+    reduced.update(
+        {
+            "users_per_facility": min(reduced.get("users_per_facility", 6), 6),
+            "clients_per_facility": min(reduced.get("clients_per_facility", 50), 50),
+            "events_per_facility": min(reduced.get("events_per_facility", 1000), 1000),
+            "cases": min(reduced.get("cases", 5), 5),
+            "work_items": min(reduced.get("work_items", 5), 5),
+            "retention_proposals": min(reduced.get("retention_proposals", 4), 4),
+        }
+    )
+    with django_db_blocker.unblock():
+        call_command("flush", interactive=False, verbosity=0)
+        SCALE_CONFIG["large"] = reduced
+        try:
+            from core.seed.organization import seed_organization
+
+            org = seed_organization()
+            for idx, (facility_name, package_name) in enumerate(zip(FACILITY_NAMES, FACILITY_PACKAGES, strict=True)):
+                _seed_one_package_facility(org, facility_name, package_name, idx)
+        finally:
+            SCALE_CONFIG["large"] = original
+        admin = User.objects.select_related("facility").get(username="admin")
+        Facility.objects.get(pk=admin.facility_id, name="Hauptstelle")
+
+
+@pytest.fixture(scope="class")
+def _large_seed_class(_large_seed, django_db_blocker):
+    yield
+    with django_db_blocker.unblock():
+        call_command("flush", interactive=False, verbosity=0)
+
 
 # ---------------------------------------------------------------------------
 # Idempotency (existing tests)
@@ -178,10 +231,8 @@ def test_seed_solo_creates_bulk_clients():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_creates_two_facilities():
+def _test_seed_medium_creates_two_facilities(_medium_seed):
     """Medium scale creates two facilities."""
-    call_command("seed", scale="medium")
-
     assert Facility.objects.count() == 2
     assert Facility.objects.filter(name="Hauptstelle").exists()
     assert Facility.objects.filter(name="Zweigstelle Nord").exists()
@@ -189,15 +240,13 @@ def test_seed_medium_creates_two_facilities():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_creates_users_per_facility():
+def _test_seed_medium_creates_users_per_facility(_medium_seed):
     """Medium scale creates 6 users per facility + 1 installation-wide super-admin.
 
     Refs #867: ``seed_super_admin()`` legt zusaetzlich zur Per-Facility-User-
     Liste einen installation-weiten ``superadmin`` an (Persona Jonas).
     Daher 6 (Hauptstelle) + 6 (Zweigstelle Nord) + 1 (super-admin) = 13.
     """
-    call_command("seed", scale="medium")
-
     assert User.objects.count() == 13
     # Sicherheitsprobe: genau ein super_admin, der Rest sind facility-User.
     assert User.objects.filter(role=User.Role.SUPER_ADMIN).count() == 1
@@ -205,10 +254,8 @@ def test_seed_medium_creates_users_per_facility():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_second_facility_users_have_suffix():
+def _test_seed_medium_second_facility_users_have_suffix(_medium_seed):
     """Users in the second facility have a '_1' suffix to avoid name collision."""
-    call_command("seed", scale="medium")
-
     assert User.objects.filter(username="admin").exists()
     assert User.objects.filter(username="admin_1").exists()
 
@@ -231,11 +278,9 @@ EXPECTED_BERATUNGSSTELLE_TYPES = {
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen():
+def _test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen(_medium_seed):
     """R-L5c-1: Zweigstelle Nord bekommt das Paket ``beratungsstelle`` statt
     des Standardkatalogs — genau dessen 8 Typen, keinen Standard-Typ."""
-    call_command("seed", scale="medium")
-
     nord = Facility.objects.get(name="Zweigstelle Nord")
     slugs = set(DocumentType.objects.filter(facility=nord).values_list("slug", flat=True))
 
@@ -246,10 +291,8 @@ def test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_hauptstelle_behaelt_standardkatalog():
+def _test_seed_medium_hauptstelle_behaelt_standardkatalog(_medium_seed):
     """Gegenprobe: die Hauptstelle bleibt beim Standardkatalog."""
-    call_command("seed", scale="medium")
-
     haupt = Facility.objects.get(name="Hauptstelle")
     slugs = set(DocumentType.objects.filter(facility=haupt).values_list("slug", flat=True))
 
@@ -259,12 +302,10 @@ def test_seed_medium_hauptstelle_behaelt_standardkatalog():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ():
+def _test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ(_medium_seed):
     """R-L5c-5: jeder der 8 Beratungsstellen-Typen bekommt mindestens ein
     Ereignis (750 Ereignisse, fixer Zufalls-Seed 42 in ``seed.handle()``)."""
     from core.models import Event
-
-    call_command("seed", scale="medium")
 
     nord = Facility.objects.get(name="Zweigstelle Nord")
     for slug in sorted(EXPECTED_BERATUNGSSTELLE_TYPES):
@@ -275,13 +316,11 @@ def test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_zweigstelle_nord_komfort_kommt_aus_package_comfort():
+def _test_seed_medium_zweigstelle_nord_komfort_kommt_aus_package_comfort(_medium_seed):
     """R-L5c-1: Zeitfenster/QuickTemplates der Zweigstelle Nord entsprechen
     ``PACKAGE_COMFORT["beratungsstelle"]`` — nicht den Hauptstelle-Demo-Inhalten
     (``core/seed/quick_templates.py``/``DEFAULT_TIME_FILTERS``)."""
     from core.models import QuickTemplate
-
-    call_command("seed", scale="medium")
 
     nord = Facility.objects.get(name="Zweigstelle Nord")
     assert set(TimeFilter.objects.filter(facility=nord).values_list("label", flat=True)) == {
@@ -298,7 +337,7 @@ def test_seed_medium_zweigstelle_nord_komfort_kommt_aus_package_comfort():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options():
+def _test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options(_medium_seed):
     """R-L5c-2-Pflicht-Guard: Krisengespraech-Ereignisse der Zweigstelle Nord
     tragen NUR gueltige ``art-der-krise``-Options-Slugs des Pakets
     ``beratungsstelle`` — insbesondere KEINE Standardkatalog-exklusiven Werte
@@ -306,8 +345,6 @@ def test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options():
     Der Wert liegt unverschluesselt vor (``art-der-krise`` ist
     ``is_encrypted: false`` in beiden Katalogen)."""
     from core.models import Event
-
-    call_command("seed", scale="medium")
 
     nord = Facility.objects.get(name="Zweigstelle Nord")
     valid_crisis_options = {
@@ -331,7 +368,7 @@ def test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options():
 
 @pytest.mark.slow
 @pytest.mark.django_db
-def test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys():
+def _test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys(_medium_seed):
     """R-L5c-5: der Beispiel-Sachbericht meldet fuer die Zweigstelle Nord
     keinen ``unknown_report_keys``- UND keinen ``unmapped_system_types``-Befund
     (Fix-Runde 1 MITTEL B) — alle 8 Typen sind ueber einen ``report_key``
@@ -342,14 +379,48 @@ def test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys():
 
     from core.reporting.backends.sample_report_1 import SampleReport1Backend
 
-    call_command("seed", scale="medium")
-
     nord = Facility.objects.get(name="Zweigstelle Nord")
     today = timezone.localdate()
     issues = SampleReport1Backend().validate_completeness(nord, today - timedelta(days=365), today)
     codes = {issue.code for issue in issues}
     assert "unknown_report_keys" not in codes, [i for i in issues if i.code == "unknown_report_keys"]
     assert "unmapped_system_types" not in codes, [i for i in issues if i.code == "unmapped_system_types"]
+
+
+@pytest.mark.slow
+@pytest.mark.django_db
+def _test_seed_medium_shares_single_organization(_medium_seed):
+    """Medium scale: all facilities belong to the same organization."""
+    org = Organization.objects.get(name="Anlaufstelle")
+    assert Facility.objects.filter(organization=org).count() == 2
+
+
+@pytest.mark.usefixtures("_medium_seed_class")
+class TestSharedMediumSeed:
+    test_seed_medium_creates_two_facilities = staticmethod(_test_seed_medium_creates_two_facilities)
+    test_seed_medium_creates_users_per_facility = staticmethod(_test_seed_medium_creates_users_per_facility)
+    test_seed_medium_second_facility_users_have_suffix = staticmethod(
+        _test_seed_medium_second_facility_users_have_suffix
+    )
+    test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen = staticmethod(
+        _test_seed_medium_zweigstelle_nord_traegt_nur_beratungsstelle_typen
+    )
+    test_seed_medium_hauptstelle_behaelt_standardkatalog = staticmethod(
+        _test_seed_medium_hauptstelle_behaelt_standardkatalog
+    )
+    test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ = staticmethod(
+        _test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ
+    )
+    test_seed_medium_zweigstelle_nord_komfort_kommt_aus_package_comfort = staticmethod(
+        _test_seed_medium_zweigstelle_nord_komfort_kommt_aus_package_comfort
+    )
+    test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options = staticmethod(
+        _test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options
+    )
+    test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys = staticmethod(
+        _test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys
+    )
+    test_seed_medium_shares_single_organization = staticmethod(_test_seed_medium_shares_single_organization)
 
 
 @pytest.mark.slow
@@ -486,8 +557,6 @@ def _large_profile_verkleinert(monkeypatch):
     v0.96.0 #134 blieb bei 95 % stehen). Das verkleinerte Profil behaelt die
     fuenf Einrichtungen und alle Paketpfade bei.
     """
-    from core.seed.scale import SCALE_CONFIG
-
     klein = dict(SCALE_CONFIG["large"])
     klein.update(
         {
@@ -522,8 +591,9 @@ def test_seed_large_succeeds_once_all_packages_are_available(_large_profile_verk
 def _seed_one_package_facility(org, facility_name: str, package_name: str, idx: int):
     """Seedet EINE Einrichtung mit ihrem Paket — dieselben Bausteine wie
     ``seed.py``s Schleife, aber ohne dessen Kommando-weite Vorabpruefung
-    (R-L5c-7), damit Index 2/3 unabhaengig von einem noch fehlenden
-    spaeteren Paket (Index 4, ``frauenhaus``) getestet werden koennen."""
+    (R-L5c-7). Die modulweite Large-Fixture baut damit jeden Paketstand genau
+    einmal auf, bevor die parametrisierten Assertions ihn gemeinsam lesen.
+    """
     from core.models import Event
     from core.seed.clients import seed_clients_bulk
     from core.seed.events import seed_events_bulk
@@ -555,9 +625,7 @@ def _seed_one_package_facility(org, facility_name: str, package_name: str, idx: 
         (4, "Außenstelle West", "frauenhaus"),
     ],
 )
-def test_seed_large_facility_matches_its_package_catalog_exactly(
-    _large_profile_verkleinert, idx, facility_name, package_name
-):
+def _test_seed_large_facility_matches_its_package_catalog_exactly(_large_seed, idx, facility_name, package_name):
     """R-L5c-2-Pflicht-Guard (Fix-Runde 1 HOCH B): jede Facility traegt GENAU
     die Typ-Slugs ihres Pakets (keine Default-/Fremdtypen), jeder Typ bekommt
     mindestens ein Ereignis, und JEDER select-/multi_select-Wert in den
@@ -565,26 +633,15 @@ def test_seed_large_facility_matches_its_package_catalog_exactly(
     fuer die Fallback-generierten crisis-/ban-Typen der Indizes 2-4, die keine
     handgeschriebenen Pools haben.
 
-    Fix-Runde 2 Punkt 4: die Skip-Regel greift AUSSCHLIESSLICH auf einen beim
-    Parsen/Laden tatsaechlich auftretenden ``UnknownPackageError`` — kein
-    vorgelagerter ``list_packages()``-Check mehr. Im aktuellen Fuenf-Pakete-
-    Stand laufen dadurch alle fuenf Faelle wirklich durch (0 skipped); der
-    Skip greift nur noch automatisch, wenn ein Paket kuenftig tatsaechlich
-    fehlt (nicht mehr, sobald jemand vorab kontrolliert etwas vorspiegelt).
+    Seit #2194 baut die modulweite Fixture alle fuenf Paketstaende gemeinsam
+    ueber dieselben Bausteine auf; jeder Parameterfall liest nur seine gebundene
+    Einrichtung. Fehlende Pakete lassen deshalb das Fixture fail-loud abbrechen.
     """
-    from core.packages.catalog import UnknownPackageError, parse_catalog_package
-    from core.seed.organization import seed_organization
+    from core.models import Event
+    from core.packages.catalog import parse_catalog_package
 
-    org = seed_organization()
-    try:
-        facility, event_model = _seed_one_package_facility(org, facility_name, package_name, idx)
-    except UnknownPackageError:
-        pytest.skip(
-            f"Paket {package_name!r} (Index {idx}, {facility_name}) ist beim Laden als "
-            "UnknownPackageError aufgefallen — liegt auf diesem Stand noch nicht im Katalog "
-            "und landet mit einem eigenen Merge (#2148). Dieser Test wird automatisch scharf, "
-            "sobald das Paket ladbar ist."
-        )
+    facility = Facility.objects.get(name=facility_name)
+    event_model = Event
 
     package_data = parse_catalog_package(package_name)
     expected_slugs = {dt.slug for dt in package_data.document_types}
@@ -630,6 +687,13 @@ def test_seed_large_facility_matches_its_package_catalog_exactly(
                 )
 
 
+@pytest.mark.usefixtures("_large_seed_class")
+class TestSharedLargeSeed:
+    test_seed_large_facility_matches_its_package_catalog_exactly = staticmethod(
+        _test_seed_large_facility_matches_its_package_catalog_exactly
+    )
+
+
 # ---------------------------------------------------------------------------
 # Organization
 # ---------------------------------------------------------------------------
@@ -642,16 +706,6 @@ def test_seed_creates_single_organization():
 
     assert Organization.objects.count() == 1
     assert Organization.objects.filter(name="Anlaufstelle").exists()
-
-
-@pytest.mark.slow
-@pytest.mark.django_db
-def test_seed_medium_shares_single_organization():
-    """Medium scale: all facilities belong to the same organization."""
-    call_command("seed", scale="medium")
-
-    org = Organization.objects.get(name="Anlaufstelle")
-    assert Facility.objects.filter(organization=org).count() == 2
 
 
 # ---------------------------------------------------------------------------
