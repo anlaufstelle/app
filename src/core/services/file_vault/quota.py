@@ -35,8 +35,10 @@ der Fachkraft entfernt", die ``.enc`` liegt bis zur physischen Tilgung
 (Owner-Loeschung/Anonymisierung bzw. ``purge_attachment_chain``) weiter auf der
 Platte und belegt Platz. Die Anzeige weist den Papierkorb-Anteil deshalb
 gesondert aus — er ist der Hebel, mit dem eine volle Einrichtung wieder Luft
-bekommt. ``ImportJob``-Quelldateien zaehlen **nicht** mit: sie sind temporaer
-und haengen an einem eigenen Modell.
+bekommt. Die **Anzeige** aus :func:`facility_storage_usage` bleibt
+Anhang-basiert. Offene ``ImportJob``-Quelldateien zaehlen bei der
+**Durchsetzung** als ``pending_bytes`` mit, bis der Lauf ``COMMITTED`` oder
+``ABORTED`` ist; sie sind temporaer und haengen an einem eigenen Modell.
 """
 
 from __future__ import annotations

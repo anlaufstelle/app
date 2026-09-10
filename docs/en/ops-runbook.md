@@ -1,5 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
+> Most recently synchronized on 2026-09-10 (§§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180).
+> Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
 
 # Operations Runbook
@@ -287,7 +288,7 @@ Column **Where**: `Sidecar` = runs out of the box in the `cron` container ([§3.
 | `enforce_retention` | Daily 03:00 | Sidecar | Soft-delete expired events, anonymize clients |
 | `verify_audit_chain` | Daily 03:30 (after retention) | Sidecar | Verify the AuditLog's HMAC integrity chain; exit code != 0 on suspected tampering (Refs #1070). A fully green run writes the last-run marker `AUDIT_CHAIN_VERIFIED` — visible as the "Audit chain check" row under `/system/` and in the compliance dashboard (Refs #1872). A tamper finding writes **no** marker, so the indicator runs overdue |
 | `create_statistics_snapshots` | Monthly, day 1, 04:00 | Sidecar | Save monthly aggregates before events are deleted |
-| `cleanup_orphan_storage_files` | Daily 04:30 (after snapshots) | Sidecar | Delete orphaned `.enc` files with no `Attachment` **and no open `ImportJob` record** (owner-independent: event, person, and case attachments; CSV import uploads under `<facility>/imports/` are protected via `ImportJob.storage_filename` while the run is open — `commit_import`/`abort_import` clear the field, finished runs do not protect it any longer); MUST run as the admin DB role (BYPASSRLS), otherwise fail-loud — without the bypass the run would also see 0 `ImportJob` rows and would delete the open uploads of every facility (Refs #662, #1554, #1738, #1060) |
+| `cleanup_orphan_storage_files` | Daily 04:30 (after snapshots) | Sidecar | Delete orphaned `.enc` files with no `Attachment` **and no open `ImportJob` record** (owner-independent: event, person, and case attachments; CSV import uploads under `<facility>/imports/` are protected via `ImportJob.storage_filename` and count during quota enforcement while the run is open — `commit_import`/`abort_import` clear the field, finished runs do not protect it any longer); MUST run as the admin DB role (BYPASSRLS), otherwise fail-loud — without the bypass the run would also see 0 `ImportJob` rows and would delete the open uploads of every facility (Refs #662, #1554, #1738, #1060, #2180) |
 | `clearsessions` | Daily 05:00 | Sidecar | Delete expired rows from `django_session` (storage limitation under Art. 5(1)(e) GDPR) |
 | `detect_breaches` | Hourly at:30 | Sidecar | Heuristics-based breach detection (failed-login burst / mass export / mass delete) → AuditLog SECURITY_VIOLATION + optional webhook (Refs #685) |
 | `refresh_statistics_view` | Hourly at:15 | Sidecar | Refresh the materialized view `core_statistics_event_flat` (statistics dashboard) |
@@ -915,7 +916,7 @@ du -sh /opt/anlaufstelle/media/*/
 > - `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` (ENV, default **2048**) -- backstop for every facility without its own quota; `0` disables it.
 > - `Settings.max_storage_mb` per facility (Administration → Settings, group "Files") -- the stricter of the two always applies.
 >
-> The **trash counts**: a removed attachment keeps its space until it is physically purged. When a facility runs full, irreversible deletion of old attachments (lead/administration) is the fastest lever -- the administration overview reports the trash share separately. Details: [admin guide § 2.9 "Storage quotas"](admin-guide.md#storage-quotas).
+> The **trash counts**: a removed attachment keeps its space until it is physically purged. Source files of open CSV imports also count during enforcement until the run is committed or aborted; the administration overview remains attachment-based. When a facility runs full, irreversible deletion of old attachments (lead/administration) is the fastest lever -- the administration overview reports the trash share separately. Details: [admin guide § 2.9 "Storage quotas"](admin-guide.md#storage-quotas).
 
 ### 5.6 Web Container Does Not Start (Restart Loop)
 
@@ -2773,5 +2774,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-07 -->
-<!-- source-hash: d268a9c72b28267a93d292008ce9f4be9bc3f2fe -->
+<!-- translation-date: 2026-09-10 -->
+<!-- source-hash: 18eae4bbea2a20f582e3261b6d4ea5655fc2a00c -->

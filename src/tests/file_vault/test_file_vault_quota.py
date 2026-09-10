@@ -478,6 +478,7 @@ class TestQuotaAudit:
             facility=facility_with_settings, action=AuditLog.Action.SECURITY_VIOLATION
         ).exists()
         entry = AuditLog.objects.get(facility=facility_with_settings, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED)
+        assert entry.target_type == "Attachment"
         assert entry.detail["reason"] == "quota_exceeded"
         assert entry.detail["limit_mb"] == 1
         assert "used_mb" in entry.detail
@@ -493,6 +494,29 @@ class TestQuotaAudit:
 
         entry = AuditLog.objects.get(facility=facility_with_settings, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED)
         assert "Mustermann" not in str(entry.detail)
+
+    def test_target_type_can_identify_an_import_job(self, facility_with_settings, staff_user, existing_bytes, settings):
+        from core.services.file_vault.policy import enforce_storage_quota
+
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.filter(facility=facility_with_settings).update(max_storage_mb=1)
+        existing_bytes(1 * MB)
+        uploaded = SimpleUploadedFile("import.csv", b"Pseudonym\nQ\n", content_type="text/csv")
+
+        with pytest.raises(ValidationError):
+            enforce_storage_quota(
+                facility_with_settings,
+                uploaded,
+                None,
+                staff_user,
+                target_type="ImportJob",
+            )
+
+        entry = AuditLog.objects.get(
+            facility=facility_with_settings,
+            action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED,
+        )
+        assert entry.target_type == "ImportJob"
 
 
 @pytest.mark.django_db

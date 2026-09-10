@@ -546,7 +546,15 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
     )
 
 
-def enforce_storage_quota(facility, uploaded_file, owner, user, *, pending_bytes: int = 0):
+def enforce_storage_quota(
+    facility,
+    uploaded_file,
+    owner,
+    user,
+    *,
+    pending_bytes: int = 0,
+    target_type: str = "Attachment",
+):
     """Reject uploads that would exceed the facility's storage quota (Refs #2129).
 
     Befund N-5: Die Groessenbegrenzung galt bis hierher ausschliesslich **pro
@@ -583,6 +591,10 @@ def enforce_storage_quota(facility, uploaded_file, owner, user, *, pending_bytes
     deterministisch und wiederholbar reissen. Das ist ausdruecklich NICHT der
     unten tolerierte Renn-Fall — hier gibt es kein Rennen, nur eine Schleife.
 
+    ``target_type`` aendert ausschliesslich die Zielklassifikation der
+    Audit-Zeile. Der Default ``Attachment`` haelt alle bestehenden Aufrufer
+    unveraendert; der CSV-Import setzt ``ImportJob``.
+
     **Race bewusst toleriert:** Zwei *parallele* Uploads (zwei Requests) am
     Limit koennen es gemeinsam ueberschreiten — die Summe wird ohne Lock
     gelesen. Das Kontingent schuetzt gegen das Volllaufen der Platte, es ist
@@ -599,7 +611,14 @@ def enforce_storage_quota(facility, uploaded_file, owner, user, *, pending_bytes
     if usage.fits(size):
         return
 
-    audit_attachment_quota_exceeded(facility, user, owner, usage=usage, requested_bytes=size)
+    audit_attachment_quota_exceeded(
+        facility,
+        user,
+        owner,
+        usage=usage,
+        requested_bytes=size,
+        target_type=target_type,
+    )
     raise ValidationError(
         _(
             "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt "

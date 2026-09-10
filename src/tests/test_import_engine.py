@@ -16,7 +16,17 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, IntegrityError
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Client, DocumentType, DocumentTypeField, Event, FieldTemplate, ImportJob
+from core.models import (
+    Activity,
+    AuditLog,
+    Client,
+    DocumentType,
+    DocumentTypeField,
+    Event,
+    FieldTemplate,
+    ImportJob,
+    Settings,
+)
 from core.services import import_engine
 from core.services.file_vault import decrypt_field, encrypt_file
 
@@ -27,6 +37,12 @@ def _upload(content, name="import.csv", encoding="utf-8"):
     """CSV als hochgeladene Datei — Bytes wie sie der Browser schickt."""
     raw = content.encode(encoding) if isinstance(content, str) else content
     return SimpleUploadedFile(name, raw, content_type="text/csv")
+
+
+def _large_csv_upload(marker: str, payload_bytes: int = 600_000):
+    row_bytes = 100_000
+    rows = [f"{marker}-{index};" + "x" * row_bytes for index in range(payload_bytes // row_bytes)]
+    return _upload("Pseudonym;Notizen\n" + "\n".join(rows) + "\n", name=f"{marker}.csv")
 
 
 @pytest.fixture
@@ -135,6 +151,102 @@ class TestStoreImportUpload:
         with pytest.raises(ValidationError, match="Die Datei ist zu groß \\(maximal 5 MB\\)\\."):
             import_engine.store_import_upload(facility, admin_user, oversized, target_type=ImportJob.TargetType.CLIENT)
         assert ImportJob.objects.for_facility(facility).count() == 0
+
+    @pytest.mark.parametrize(
+        "open_status",
+        [ImportJob.Status.UPLOADED, ImportJob.Status.MAPPED, ImportJob.Status.VALIDATED],
+    )
+    def test_open_import_uploads_count_towards_the_storage_quota(
+        self, facility, admin_user, media_root, settings, open_status
+    ):
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.update_or_create(facility=facility, defaults={"max_storage_mb": 1})
+        first = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _large_csv_upload("QUOTA-FIRST"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        ImportJob.objects.filter(pk=first.pk).update(status=open_status)
+
+        with pytest.raises(ValidationError, match="Speicherkontingent der Einrichtung erschöpft"):
+            import_engine.store_import_upload(
+                facility,
+                admin_user,
+                _large_csv_upload("QUOTA-SECOND"),
+                target_type=ImportJob.TargetType.CLIENT,
+            )
+
+        jobs = ImportJob.objects.for_facility(facility)
+        assert list(jobs.values_list("pk", flat=True)) == [first.pk]
+        assert import_engine.import_file_path(first).exists()
+        assert len(list(import_engine._import_dir(facility).glob("*.enc"))) == 1
+        entry = AuditLog.objects.get(
+            facility=facility,
+            action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED,
+        )
+        assert entry.target_type == "ImportJob"
+        assert entry.target_id == ""
+        assert set(entry.detail) == {
+            "owner_type",
+            "owner_id",
+            "reason",
+            "used_mb",
+            "limit_mb",
+            "requested_mb",
+        }
+        assert entry.detail["owner_type"] is None
+        assert entry.detail["owner_id"] is None
+        assert entry.detail["reason"] == "quota_exceeded"
+        assert entry.detail["used_mb"] == 0.0
+        assert entry.detail["limit_mb"] == 1
+        assert entry.detail["requested_mb"] > entry.detail["limit_mb"]
+        assert "QUOTA-SECOND" not in str(entry.detail)
+
+    def test_missing_open_import_file_counts_as_zero(self, facility, admin_user, media_root, settings):
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.update_or_create(facility=facility, defaults={"max_storage_mb": 1})
+        missing = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _large_csv_upload("QUOTA-MISSING"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        import_engine.import_file_path(missing).unlink()
+
+        accepted = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _large_csv_upload("QUOTA-AFTER-MISSING"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+
+        assert accepted.status == ImportJob.Status.UPLOADED
+        assert ImportJob.objects.for_facility(facility).count() == 2
+
+    @pytest.mark.parametrize("final_status", [ImportJob.Status.COMMITTED, ImportJob.Status.ABORTED])
+    def test_final_import_uploads_do_not_count_towards_the_storage_quota(
+        self, facility, admin_user, media_root, settings, final_status
+    ):
+        settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+        Settings.objects.update_or_create(facility=facility, defaults={"max_storage_mb": 1})
+        finished = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _large_csv_upload(f"QUOTA-{final_status}"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        ImportJob.objects.filter(pk=finished.pk).update(status=final_status)
+
+        accepted = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _large_csv_upload(f"QUOTA-NEW-{final_status}"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+
+        assert accepted.status == ImportJob.Status.UPLOADED
+        assert ImportJob.objects.for_facility(facility).count() == 2
 
     @pytest.mark.parametrize("fmt", ["BMP", "TIFF", "JPEG", "PNG", "GIF", "WEBP"])
     def test_rejects_binary_image_payloads(self, facility, admin_user, media_root, fmt):

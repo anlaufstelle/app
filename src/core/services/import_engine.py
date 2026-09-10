@@ -70,6 +70,7 @@ from core.services.events import create_event
 # (``MEDIA_ROOT/<facility-pk>/``); ein zweiter Pfadbau hier waere eine stille
 # Drift-Quelle, sobald das Layout sich aendert.
 from core.services.file_vault import _facility_dir, decrypt_file_stream, encrypt_field, encrypt_file
+from core.services.file_vault.policy import enforce_storage_quota
 from core.services.system.field_types import get_spec
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,25 @@ def delete_import_file(job: ImportJob) -> None:
         import_file_path(job).unlink(missing_ok=True)
     except OSError:  # pragma: no cover - Dateisystemfehler
         logger.warning("Import-Datei konnte nicht geloescht werden: job=%s", job.pk)
+
+
+def _pending_import_upload_bytes(facility) -> int:
+    """Dateigroesse aller nicht-finalen Importlaeufe der Einrichtung."""
+    filenames = (
+        ImportJob.objects.for_facility(facility)
+        .exclude(status__in=ImportJob.FINAL_STATUSES)
+        .values_list("storage_filename", flat=True)
+    )
+    import_dir = _import_dir(facility)
+    total = 0
+    for storage_filename in filenames:
+        if not storage_filename:
+            continue
+        try:
+            total += (import_dir / storage_filename).stat().st_size
+        except FileNotFoundError:
+            continue
+    return total
 
 
 # Byte-Signaturen bekannter Binaerformate (#2128, Fix-Runde 1).
@@ -399,6 +419,15 @@ def store_import_upload(
     # Fail-loud VOR jedem Dateischreiben: ein Ereignis-Lauf ohne Typ oder mit
     # fremdem/unpassendem Typ ist nicht ausfuehrbar.
     job.clean()
+
+    enforce_storage_quota(
+        facility,
+        uploaded_file,
+        owner=None,
+        user=user,
+        pending_bytes=_pending_import_upload_bytes(facility),
+        target_type="ImportJob",
+    )
 
     storage_filename = f"{uuid.uuid4()}.enc"
     output_path = _import_dir(facility) / storage_filename

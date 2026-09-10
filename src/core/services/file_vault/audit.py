@@ -184,7 +184,15 @@ def log_attachment_violation(facility, user, owner, *, reason, filename, **extra
     )
 
 
-def audit_attachment_quota_exceeded(facility, user, owner, *, usage, requested_bytes: int):
+def audit_attachment_quota_exceeded(
+    facility,
+    user,
+    owner,
+    *,
+    usage,
+    requested_bytes: int,
+    target_type: str = "Attachment",
+):
     """Auditiere einen am Speicherkontingent gescheiterten Upload (Refs #2129).
 
     Bewusst **kein** ``SECURITY_VIOLATION`` wie die uebrigen Reject-Pfade
@@ -202,6 +210,10 @@ def audit_attachment_quota_exceeded(facility, user, owner, *, usage, requested_b
     (Refs #1751). ``used_mb``/``requested_mb`` tragen zwei Nachkommastellen —
     die Meldung an die Fachkraft rundet auf ganze MB, die forensische Spur soll
     genauer sein; ``limit_mb`` ist der konfigurierte Ganz-MB-Wert selbst.
+
+    ``target_type`` bleibt fuer bestehende Anhangspfade standardmaessig
+    ``Attachment``; der CSV-Import kennzeichnet seinen Pre-Save-Reject als
+    ``ImportJob``, ohne das etablierte Detail-Schema zu erweitern.
     """
     from core.models import AuditLog
 
@@ -210,7 +222,7 @@ def audit_attachment_quota_exceeded(facility, user, owner, *, usage, requested_b
         AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED,
         user=user,
         facility=facility,
-        target_type="Attachment",
+        target_type=target_type,
         target_id=str(owner.pk) if getattr(owner, "pk", None) else None,
         detail={
             "owner_type": owner_type,
