@@ -12,7 +12,12 @@ Fuenf Rotationsorte werden hier abgesichert:
 2. Backup-Code-Verify (``MFAVerifyView.post``, ``mode="backup"``),
 3. Setup-Abschluss (``MFABackupCodesView.post``, Zweig ``mfa_setup_pending``),
 4. WebAuthn-Assertion (``WebAuthnAuthenticationCompleteView.complete_auth``),
-5. Sudo-Grant (``core.services.security.sudo_mode.enter_sudo``).
+5. Sudo-Grant (``core.services.security.sudo_mode.enter_sudo``),
+6. Passwort-Reset-/Invite-Token-Uebergang (``CustomPasswordResetConfirmView``
+   und die davon erbende ``InviteConfirmView``) — Ruling R-A1-10 aus
+   Fix-Runde 1: Django legt das gepruefte Token in die BESTEHENDE Session und
+   leitet auf den tokenfreien Pfad um; ohne Rotation kann ein vorher kopiertes
+   Cookie damit das Passwort setzen.
 
 Je Ort drei Zusagen: **rotiert** (alte ID weg, alter Cookie abgemeldet),
 **erhaelt** (Fristen-, Login- und OTP-Sessiondaten ueberleben), **rotiert nicht
@@ -26,24 +31,41 @@ Djangos Session-ID (``request.session.session_key``).
 
 from __future__ import annotations
 
+import json
 from unittest import mock
 
 import pytest
 from django.conf import settings as django_settings
+from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.test import Client, RequestFactory
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.oath import totp as oath_totp
 
 from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
 from core.models import AuditLog
 from core.models import EncryptedTOTPDevice as TOTPDevice
-from core.services.security import SUDO_SESSION_KEY, enter_sudo, generate_backup_codes
+from core.services.security import (
+    SUDO_SESSION_KEY,
+    enter_sudo,
+    generate_backup_codes,
+    invite_token_generator,
+)
 
 STAFF_PASSWORD = "testpass123"
 ADMIN_PASSWORD = "test-pw-123"
+NEW_PASSWORD = "Frisch-Gesetzt-2026!"
+
+# Djangos ``PasswordResetConfirmView`` legt das gepruefte Token unter diesem
+# Schluessel ab (``django.contrib.auth.views.INTERNAL_RESET_SESSION_TOKEN``) und
+# leitet auf den tokenfreien ``set-password``-Pfad um.
+RESET_TOKEN_KEY = "_password_reset_token"
+# Challenge-State der WebAuthn-Assertion (``django_otp_webauthn``).
+WEBAUTHN_STATE_KEY = "otp_webauthn_authentication_state"
 
 
 # --- Helfer ---------------------------------------------------------------
@@ -65,6 +87,31 @@ def _login(client, username: str, password: str) -> str:
     key = client.session.session_key
     assert key
     return key
+
+
+# Bewusst NICHT der Modell-Default (30 Min): nur so beweist der Vergleich, dass
+# ``_session_expiry`` die Rotation ueberlebt und nicht bloss zufaellig auf
+# ``SESSION_COOKIE_AGE`` zurueckfaellt (Fix-Runde 1, Befund 4).
+NON_DEFAULT_TIMEOUT_MINUTES = 45
+
+
+def _with_non_default_timeout(settings_obj):
+    """Facility-Sitzungslaufzeit auf einen Nicht-Default-Wert setzen."""
+    assert settings_obj.session_timeout_minutes != NON_DEFAULT_TIMEOUT_MINUTES
+    settings_obj.session_timeout_minutes = NON_DEFAULT_TIMEOUT_MINUTES
+    settings_obj.save(update_fields=["session_timeout_minutes"])
+    return settings_obj
+
+
+def _seed_extra_payload(client) -> None:
+    """Einen fremden, app-unbekannten Session-Wert einsaeen (Befund 4).
+
+    Ein Voll-Dict-Vergleich beweist die Erhaltung unbekannter Schluessel nur,
+    wenn ueberhaupt einer da ist.
+    """
+    session = client.session
+    session["_review_probe"] = {"nested": [1, 2, 3], "text": "unveraendert"}
+    session.save()
 
 
 def _mark_verified(client) -> None:
@@ -120,23 +167,30 @@ class TestRotationAtMfaVerify:
         assert client.session.get("mfa_verified") is True
         _assert_old_cookie_is_dead(old_key, client.session.session_key)
 
-    def test_totp_verify_preserves_session_payload(self, client, staff_user):
+    def test_totp_verify_preserves_session_payload(self, client, staff_user, settings_obj):
         device = _confirmed_totp(staff_user)
+        _with_non_default_timeout(settings_obj)
         _login(client, "teststaff", STAFF_PASSWORD)
+        _seed_extra_payload(client)
         before = dict(client.session.items())
-        # Der Login stempelt beide Fristen — sie sind die einzigen
-        # Session-getragenen Werte, die eine Rotation kosten koennte.
+        # Der Login stempelt beide Fristen …
         assert LAST_RENEWAL_KEY in before
         assert ABSOLUTE_DEADLINE_KEY in before
+        # … und die facility-eigene Sitzungslaufzeit (Nicht-Default-Wert!).
+        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
 
-        client.post("/mfa/verify/", {"token": _valid_token(device)})
+        response = client.post("/mfa/verify/", {"token": _valid_token(device)})
 
+        assert response.status_code == 302
+        assert response.url == "/"
         after = dict(client.session.items())
         assert after[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
         assert after[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
+        assert after["_session_expiry"] == before["_session_expiry"]
         assert after["_auth_user_id"] == before["_auth_user_id"]
         assert after["_auth_user_backend"] == before["_auth_user_backend"]
         assert after["_auth_user_hash"] == before["_auth_user_hash"]
+        assert after["_review_probe"] == {"nested": [1, 2, 3], "text": "unveraendert"}
         # Genau EIN Unterschied: das angehobene Recht.
         assert after == {**before, "mfa_verified": True}
 
@@ -151,17 +205,24 @@ class TestRotationAtMfaVerify:
         assert client.session.get("mfa_verified") is True
         _assert_old_cookie_is_dead(old_key, client.session.session_key)
 
-    def test_backup_code_verify_preserves_deadlines(self, client, staff_user):
+    def test_backup_code_verify_preserves_deadlines(self, client, staff_user, settings_obj):
         _confirmed_totp(staff_user)
         codes = generate_backup_codes(staff_user)
+        _with_non_default_timeout(settings_obj)
         _login(client, "teststaff", STAFF_PASSWORD)
+        _seed_extra_payload(client)
         before = dict(client.session.items())
+        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
 
-        client.post("/mfa/verify/", {"token": codes[0], "mode": "backup"})
+        response = client.post("/mfa/verify/", {"token": codes[0], "mode": "backup"})
 
+        assert response.status_code == 302
+        assert response.url == "/"
         after = dict(client.session.items())
         assert after[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
         assert after[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
+        assert after["_session_expiry"] == before["_session_expiry"]
+        assert after["_review_probe"] == before["_review_probe"]
         assert after == {**before, "mfa_verified": True}
 
     def test_invalid_totp_neither_rotates_nor_elevates(self, client, staff_user):
@@ -218,16 +279,23 @@ class TestRotationAtMfaSetupCompletion:
         assert TOTPDevice.objects.filter(user=staff_user, confirmed=True).exists()
         _assert_old_cookie_is_dead(old_key, client.session.session_key)
 
-    def test_setup_confirmation_preserves_deadlines(self, client, staff_user):
+    def test_setup_confirmation_preserves_deadlines(self, client, staff_user, settings_obj):
+        _with_non_default_timeout(settings_obj)
         _login(client, "teststaff", STAFF_PASSWORD)
+        _seed_extra_payload(client)
         self._walk_to_backup_codes(client, staff_user)
         before = dict(client.session.items())
+        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
 
-        client.post("/mfa/backup-codes/", {"confirm_saved": "1"})
+        response = client.post("/mfa/backup-codes/", {"confirm_saved": "1"})
 
+        assert response.status_code == 302
+        assert response.url == "/mfa/settings/"
         after = dict(client.session.items())
         assert after[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
         assert after[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
+        assert after["_session_expiry"] == before["_session_expiry"]
+        assert after["_review_probe"] == before["_review_probe"]
         assert after["_auth_user_id"] == before["_auth_user_id"]
         # Der Abbau von ``mfa_setup_pending``/``mfa_backup_codes`` gehoert zum
         # Vorgang und ueberlebt die Rotation als Abbau (nicht als Wiederkehr).
@@ -271,52 +339,123 @@ class TestRotationAtMfaSetupCompletion:
 # --- 4. WebAuthn-Assertion ------------------------------------------------
 
 
-def _library_complete_auth(view, device):
-    """Ersatz fuer ``CompleteCredentialAuthenticationView.complete_auth``.
+def _make_passkey(user, *, confirmed=True, credential_id=b"rot-cred-1"):
+    from django_otp_webauthn.models import WebAuthnCredential
 
-    Bildet den einzigen Session-Effekt der Bibliothek nach (``otp_login``
-    stempelt den django-otp-Geraeteschluessel), ohne die Krypto-Ceremony.
+    return WebAuthnCredential.objects.create(
+        user=user,
+        name="Testschluessel",
+        confirmed=confirmed,
+        credential_id=credential_id,
+        public_key=b"pubkey-bytes",
+        aaguid="00000000-0000-0000-0000-000000000000",
+        sign_count=0,
+    )
+
+
+def _arm_webauthn_challenge(client) -> None:
+    """Begonnene Assertion simulieren: Challenge-State in die Session legen.
+
+    Nur der State wird gesetzt — die Krypto-Ceremony selbst wird an der
+    Helfer-Grenze (`WebAuthnHelper.authenticate_complete`) gemockt.
     """
-    view.request.session[DEVICE_ID_SESSION_KEY] = "otp_webauthn.webauthncredential/1"
+    session = client.session
+    session[WEBAUTHN_STATE_KEY] = {"challenge": "cmV2aWV3LWNoYWxsZW5nZQ", "require_user_verification": False}
+    session.save()
 
 
 @pytest.mark.django_db
 class TestRotationAtWebAuthnAssertion:
-    """``WebAuthnAuthenticationCompleteView.complete_auth``."""
+    """``WebAuthnAuthenticationCompleteView`` — ueber den ECHTEN Endpunkt.
 
-    def _request(self, user):
-        request = RequestFactory().post("/webauthn/authentication/complete/")
-        request.user = user
-        session = SessionStore()
-        session[LAST_RENEWAL_KEY] = 1_700_000_000.0
-        session[ABSOLUTE_DEADLINE_KEY] = 1_700_043_200.0
-        session["mfa_verified"] = False
-        session.save()
-        request.session = session
-        return request
+    Fix-Runde 1, Befund 2: der erste Entwurf ersetzte die komplette
+    Elternmethode und arbeitete auf einer kuenstlichen, nie angemeldeten
+    Session — damit war der Nachweis „alter Cookie abgemeldet" (R-A1-3) an
+    diesem Ort nicht erbracht. Jetzt laeuft der echte
+    ``super().complete_auth()``/``otp_login`` in einer echten, angemeldeten
+    Client-Session; gemockt wird ausschliesslich die kryptografische
+    Helfer-Grenze.
+    """
 
-    def test_complete_auth_rotates_and_preserves_otp_device(self, staff_user):
-        from core.views.mfa_webauthn import WebAuthnAuthenticationCompleteView
-
-        view = WebAuthnAuthenticationCompleteView()
-        view.request = self._request(staff_user)
-        old_key = view.request.session.session_key
+    def test_complete_auth_rotates_and_keeps_session_usable(self, client, staff_user, settings_obj):
+        credential = _make_passkey(staff_user)
+        _with_non_default_timeout(settings_obj)
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        _seed_extra_payload(client)
+        before = dict(client.session.items())
+        # Nicht-Default-Sitzungslaufzeit aus den Facility-Settings (Befund 4).
+        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
+        _arm_webauthn_challenge(client)
 
         with mock.patch(
-            "django_otp_webauthn.views.CompleteCredentialAuthenticationView.complete_auth",
-            _library_complete_auth,
+            "django_otp_webauthn.helpers.WebAuthnHelper.authenticate_complete",
+            return_value=credential,
         ):
-            view.complete_auth(mock.Mock())
+            response = client.post(
+                reverse("otp_webauthn:credential-authentication-complete"),
+                data="{}",
+                content_type="application/json",
+            )
 
-        session = view.request.session
+        assert response.status_code == 200
+        payload = json.loads(response.content)
+        assert payload["id"] == credential.pk
+        assert payload["redirect_url"] == "/"
+
+        session = client.session
         assert session.get("mfa_verified") is True
-        assert session.session_key != old_key
-        assert _session_row_exists(old_key) is False
-        # Der von ``otp_login`` gesetzte Geraeteschluessel darf die Rotation
-        # ueberleben — sonst gilt der Faktor serverseitig als nicht geprueft.
-        assert session.get(DEVICE_ID_SESSION_KEY) == "otp_webauthn.webauthncredential/1"
-        assert session.get(LAST_RENEWAL_KEY) == 1_700_000_000.0
-        assert session.get(ABSOLUTE_DEADLINE_KEY) == 1_700_043_200.0
+        # ``otp_login`` hat VOR der Rotation gestempelt — der Wert muss mitwandern.
+        assert session.get(DEVICE_ID_SESSION_KEY) == credential.persistent_id
+        # Anmeldung, Fristen und die facility-eigene Laufzeit ueberleben.
+        assert session["_auth_user_id"] == before["_auth_user_id"]
+        assert session["_auth_user_backend"] == before["_auth_user_backend"]
+        assert session["_auth_user_hash"] == before["_auth_user_hash"]
+        assert session[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
+        assert session[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
+        assert session["_session_expiry"] == before["_session_expiry"]
+        assert session["_review_probe"] == before["_review_probe"]
+        # Der Challenge-State ist verbraucht (Replay-Schutz der Bibliothek).
+        assert WEBAUTHN_STATE_KEY not in session
+        # Der NEUE Cookie traegt eine benutzbare, verifizierte Anmeldung …
+        follow_up = client.get("/")
+        assert follow_up.status_code == 200
+        # … und der alte ist tot.
+        _assert_old_cookie_is_dead(old_key, session.session_key)
+
+    def test_failed_assertion_with_armed_challenge_audits_without_rotating(self, client, staff_user):
+        """Echter Assertion-Fehler (Fix-Runde 1, Befund 3).
+
+        Die Ceremony laeuft bis in ``check_device_usable`` und scheitert dort an
+        einem deaktivierten Credential — ``CredentialDisabled`` gehoert NICHT zu
+        ``_NON_ASSERTION_ERRORS``, der ``WEBAUTHN_FAILED``-Audit-Zweig wird also
+        wirklich erreicht.
+        """
+        credential = _make_passkey(staff_user, confirmed=False, credential_id=b"rot-cred-2")
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        _arm_webauthn_challenge(client)
+
+        with mock.patch(
+            "django_otp_webauthn.helpers.WebAuthnHelper.authenticate_complete",
+            return_value=credential,
+        ):
+            response = client.post(
+                reverse("otp_webauthn:credential-authentication-complete"),
+                data="{}",
+                content_type="application/json",
+            )
+
+        assert response.status_code == 403
+        assert json.loads(response.content)["code"] == "credential_disabled"
+        session = client.session
+        assert session.session_key == old_key
+        assert _session_row_exists(old_key) is True
+        assert session.get("mfa_verified") is not True
+        assert session.get(DEVICE_ID_SESSION_KEY) is None
+        # Der Challenge-State ist trotzdem verbraucht — ``get_state`` popt und
+        # speichert VOR der Verifikation (Replay-Schutz).
+        assert WEBAUTHN_STATE_KEY not in session
+        audit = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.WEBAUTHN_FAILED).latest("timestamp")
+        assert audit.detail == {"event": "webauthn_assertion_failed", "code": "credential_disabled"}
 
     def test_failed_assertion_neither_rotates_nor_elevates(self, client, staff_user):
         """Kein begonnener Ablauf → ``InvalidState`` (400), Session unveraendert."""
@@ -382,20 +521,28 @@ class TestRotationAtSudoGrant:
         _assert_old_cookie_is_dead(old_key, client.session.session_key)
         assert AuditLog.objects.filter(user=admin_user, action=AuditLog.Action.SUDO_MODE_ENTERED).exists()
 
-    def test_sudo_grant_preserves_session_payload(self, client, admin_user):
+    def test_sudo_grant_preserves_session_payload(self, client, admin_user, settings_obj):
         self._prepare_admin(admin_user)
+        _with_non_default_timeout(settings_obj)
         _login(client, admin_user.username, ADMIN_PASSWORD)
+        _seed_extra_payload(client)
         before = dict(client.session.items())
+        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
 
-        client.post(reverse("sudo_mode"), {"password": ADMIN_PASSWORD, "next": "/clients/"})
+        response = client.post(reverse("sudo_mode"), {"password": ADMIN_PASSWORD, "next": "/clients/"})
 
+        assert response.status_code == 302
+        assert response.url == "/clients/"
         after = dict(client.session.items())
         assert after[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
         assert after[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
+        assert after["_session_expiry"] == before["_session_expiry"]
         assert after["_auth_user_id"] == before["_auth_user_id"]
         assert after["_auth_user_hash"] == before["_auth_user_hash"]
-        # Genau EIN Zugang: der Sudo-Stempel.
-        assert set(after) - set(before) == {SUDO_SESSION_KEY}
+        assert after["_review_probe"] == before["_review_probe"]
+        # Voll-Dict-Delta: genau EIN Zugang, der Sudo-Stempel, sonst wertgleich.
+        assert {k: v for k, v in after.items() if k != SUDO_SESSION_KEY} == before
+        assert isinstance(after[SUDO_SESSION_KEY], int)
 
     def test_sudo_grant_with_second_factor_rotates(self, client, admin_user):
         """A3.2-Pfad (TOTP-Geraet vorhanden): Passwort + frischer OTP."""
@@ -446,3 +593,116 @@ class TestRotationAtSudoGrant:
         assert AuditLog.objects.filter(user=admin_user, action=AuditLog.Action.SUDO_MODE_FAILED).latest(
             "timestamp"
         ).detail == {"factor": "otp"}
+
+
+# --- 6. Passwort-Reset-/Invite-Token-Uebergang (R-A1-10) -------------------
+
+
+@pytest.mark.django_db
+class TestRotationAtPasswordResetTokenHandover:
+    """``CustomPasswordResetConfirmView.dispatch`` und ``InviteConfirmView``.
+
+    Fix-Runde 1, Befund 1 (BLOCKER): Django speichert das gepruefte Token unter
+    ``_password_reset_token`` in der bestehenden Session und leitet auf den
+    tokenfreien ``set-password``-Pfad um. Das ist eine Rechteanhebung — die
+    Sitzung darf danach ein neues Passwort setzen. Ohne Rotation erbt ein vor
+    dem Klick kopiertes Cookie genau diese Faehigkeit, ohne den Reset-Link je
+    gesehen zu haben.
+    """
+
+    def _uid(self, user) -> str:
+        return urlsafe_base64_encode(force_bytes(user.pk))
+
+    def _open_link(self, client, user, url_name: str, generator):
+        """Reset-/Invite-Link im legitimen Client oeffnen (Token-Uebergang)."""
+        # ``last_login`` fliesst in den Token-Hash — nach dem Login neu laden,
+        # sonst erzeugt der Generator ein Token fuer einen veralteten Stand.
+        user.refresh_from_db()
+        token = generator.make_token(user)
+        response = client.get(reverse(url_name, kwargs={"uidb64": self._uid(user), "token": token}))
+        assert response.status_code == 302, response.status_code
+        assert response.url.endswith("/set-password/")
+        return response.url
+
+    def _assert_handover_rotates(self, client, user, url_name, generator, settings_obj):
+        _with_non_default_timeout(settings_obj)
+        old_key = _login(client, user.username, STAFF_PASSWORD)
+        _seed_extra_payload(client)
+        before = dict(client.session.items())
+        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
+
+        form_url = self._open_link(client, user, url_name, generator)
+
+        new_key = client.session.session_key
+        # (a) Rotiert, alte Zeile weg, alter Cookie abgemeldet.
+        _assert_old_cookie_is_dead(old_key, new_key)
+        # (b) Die Reset-Faehigkeit haengt an der NEUEN Sitzung.
+        assert client.session.get(RESET_TOKEN_KEY)
+        # (c) Anmeldung und Fristen ueberleben die Rotation.
+        assert client.session["_auth_user_id"] == before["_auth_user_id"]
+        assert client.session[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
+        assert client.session[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
+        assert client.session["_session_expiry"] == before["_session_expiry"]
+        assert client.session["_review_probe"] == before["_review_probe"]
+
+        # (d) Der zweite Client mit dem ALTEN Cookie sieht das Formular nicht …
+        stolen = _client_with_stolen_cookie(old_key)
+        stolen_get = stolen.get(form_url)
+        assert stolen_get.status_code == 200
+        assert stolen_get.context["validlink"] is False
+        # … und kann erst recht kein Passwort setzen.
+        stolen_post = stolen.post(form_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD})
+        assert stolen_post.status_code == 200
+        assert stolen_post.context["validlink"] is False
+        user.refresh_from_db()
+        assert user.check_password(NEW_PASSWORD) is False, (
+            "Alter Cookie erbte die Reset-Berechtigung und konnte das Passwort setzen"
+        )
+
+        # (e) Der legitime Client kann setzen — die Rotation bricht den Ablauf nicht.
+        legit_get = client.get(form_url)
+        assert legit_get.status_code == 200
+        assert legit_get.context["validlink"] is True
+        legit_post = client.post(form_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD})
+        assert legit_post.status_code == 302
+        user.refresh_from_db()
+        assert user.check_password(NEW_PASSWORD) is True
+
+    def test_password_reset_handover_rotates(self, client, staff_user, settings_obj):
+        self._assert_handover_rotates(
+            client, staff_user, "password_reset_confirm", default_token_generator, settings_obj
+        )
+
+    def test_invite_handover_rotates(self, client, staff_user, settings_obj):
+        self._assert_handover_rotates(client, staff_user, "invite_confirm", invite_token_generator, settings_obj)
+
+    def test_invalid_reset_token_neither_rotates_nor_grants(self, client, staff_user):
+        """Fehlschlag: ungueltiges Token → keine Rotation, keine Faehigkeit."""
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+
+        response = client.get(
+            reverse(
+                "password_reset_confirm",
+                kwargs={"uidb64": self._uid(staff_user), "token": "aaaaaa-bbbbbbbbbbbbbbbbbbbbbb"},
+            )
+        )
+
+        assert response.status_code == 200
+        assert response.context["validlink"] is False
+        assert client.session.session_key == old_key
+        assert _session_row_exists(old_key) is True
+        assert RESET_TOKEN_KEY not in client.session
+
+    def test_reset_link_for_anonymous_visitor_still_works(self, client, staff_user):
+        """Der Normalfall (abgemeldet) darf durch die Rotation nicht brechen."""
+        token = default_token_generator.make_token(staff_user)
+        response = client.get(
+            reverse("password_reset_confirm", kwargs={"uidb64": self._uid(staff_user), "token": token})
+        )
+        assert response.status_code == 302
+        form_url = response.url
+        assert client.session.get(RESET_TOKEN_KEY)
+        assert client.get(form_url).context["validlink"] is True
+        assert client.post(form_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}).status_code == 302
+        staff_user.refresh_from_db()
+        assert staff_user.check_password(NEW_PASSWORD) is True
