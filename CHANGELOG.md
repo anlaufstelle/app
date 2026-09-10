@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Abhängigkeiten aktualisiert (Dependabot-Sammel-Batch)** (#2168, #2164, #2163, #2162, #2095, #2094, #1979, #1919) — `django-unfold` 0.104.1 → 0.105.0, `django-stubs` 6.0.9 → 6.1.0, `filelock` 3.32.2 → 3.32.4, `ruff` 0.16.1 → 0.16.5, `pytest-playwright` 0.8.0 → 0.9.0 (Dev-Tooling), `@alpinejs/csp` 3.15.12 → 3.17.1, `dexie` 4.4.4 → 4.4.5 und **vitest 5.0.0** (Major, alle 45 JS-Testdateien liefen ohne Anpassung grün) sowie vier GitHub-Actions-SHA-Pins (`codeql-action` 4.37.6 → 4.37.9, `docker/setup-buildx-action`/`docker/setup-qemu-action` 4.2.0 → 4.3.0). Für Betreiber und Nutzer ändert sich nichts sichtbar außer optischen Detailfixes im Admin-Bereich (Unfold-Patch).
 
+- **Security-Pins isoliert aktualisiert: `cryptography`, `django-otp`, `django-otp-webauthn`** (#2175) — `cryptography` 50.0.0 → 50.0.1, `django-otp` 1.7.0 → 1.7.2 und `django-otp-webauthn` 0.10.0 → 0.10.3 ([GHSA-8r76-c459-ww98](https://github.com/Stormbase/django-otp-webauthn/security/advisories/GHSA-8r76-c459-ww98)); TOTP-/Backup-Code-Verify meldet den zweiten Faktor jetzt auch an django-otp (`is_verified`), damit die Passkey-Registrierung weiter gelingt.
 ### Fixed
 
 - **Rollenweiche und Zielpfad bleiben beim zweiten Faktor erhalten** (#2206) — `super_admin` landet nach dem zweiten Faktor im Systembereich; `next` überlebt den 2FA-Schritt.

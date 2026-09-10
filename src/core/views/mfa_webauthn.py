@@ -81,6 +81,18 @@ class _RequireVerifiedSessionAndTOTPMixin:
     TOTP-Vorbedingung (400).
     """
 
+    def initial(self, request, *args, **kwargs):
+        # Preserve the app-level error contract before 0.10.3 performs its
+        # additional django-otp ``is_verified()`` check. ``super()`` still
+        # enforces that new upstream boundary for sessions whose app flag is set.
+        if not request.session.get("mfa_verified"):
+            raise VerifiedSessionRequiredForPasskey(
+                detail=(
+                    "Ein Passkey kann nur in einer bereits per zweitem Faktor bestätigten Sitzung hinzugefügt werden."
+                ),
+            )
+        return super().initial(request, *args, **kwargs)
+
     def check_can_register(self):
         super().check_can_register()
         # (1) Sicherheitsgrenze: Registrierung nur in bereits 2FA-verifizierter

@@ -15,6 +15,8 @@ from unittest import mock
 import pytest
 from django.http import JsonResponse
 from django.test import RequestFactory
+from django_otp import DEVICE_ID_SESSION_KEY
+from django_otp.oath import totp
 
 from core.models import AuditLog
 from core.models import EncryptedTOTPDevice as TOTPDevice
@@ -23,6 +25,11 @@ from core.models import EncryptedTOTPDevice as TOTPDevice
 def _make_totp(user):
     """Bestätigtes TOTP-Gerät (Voraussetzung für Passkey-Registrierung)."""
     return TOTPDevice.objects.create(user=user, name="totp", confirmed=True, key="a" * 40)
+
+
+def _valid_totp(device):
+    token = totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)
+    return f"{token:0{device.digits}d}"
 
 
 def _make_passkey(user, *, confirmed=True, credential_id=b"cred-1"):
@@ -113,13 +120,25 @@ class TestPasskeyRegistrationRequiresTOTP:
         assert json.loads(response.content)["code"] == "totp_required"
 
     def test_registration_begin_allowed_with_totp(self, client, staff_user):
-        _make_totp(staff_user)
+        device = _make_totp(staff_user)
         client.login(username="teststaff", password="testpass123")
-        _verify_session(client)
+        client.post("/mfa/verify/", {"token": _valid_totp(device)})
         response = client.post("/webauthn/registration/begin/")
         assert response.status_code == 200
         # py_webauthn liefert Registrierungs-Optionen mit einer Challenge.
         assert "challenge" in json.loads(response.content)
+
+
+@pytest.mark.django_db
+class TestTotpVerifyRegistersDjangoOTPDevice:
+    def test_totp_verify_marks_request_user_and_session_as_verified(self, client, staff_user):
+        device = _make_totp(staff_user)
+        client.login(username="teststaff", password="testpass123")
+
+        response = client.post("/mfa/verify/", {"token": _valid_totp(device)})
+
+        assert response.wsgi_request.user.is_verified() is True
+        assert client.session[DEVICE_ID_SESSION_KEY] == device.persistent_id
 
 
 @pytest.mark.django_db

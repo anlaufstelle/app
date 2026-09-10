@@ -30,6 +30,7 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import TemplateView
+from django_otp import login as otp_login
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
@@ -231,6 +232,7 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
                 # entwendetes ``sessionid``-Cookie erbt die verifizierte Sitzung
                 # sonst mit.
                 rotate_session_after_privilege_gain(request)
+                otp_login(request, device)
                 request.session["mfa_verified"] = True
                 log_audit_event(
                     request,
@@ -243,6 +245,7 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
         elif token and device.verify_token(token):
             # Refs #2034: Rotation vor dem Anheben (siehe Backup-Zweig oben).
             rotate_session_after_privilege_gain(request)
+            otp_login(request, device)
             request.session["mfa_verified"] = True
             return redirect(self._success_url(request))
 

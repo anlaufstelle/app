@@ -670,9 +670,9 @@ django-otp==1.7.2 \
     # via
     #   -r requirements.in
     #   django-otp-webauthn
-django-otp-webauthn==0.10.0 \
-    --hash=sha256:74886bce08d17262af365a22cb9ff9649844a9f7b9d60b48aaa5fb8b4008baab \
-    --hash=sha256:7ad4b5bffbdb26aea4d7bc2d78daefa3745139f9ec3c2e7d22d84f0518781319
+django-otp-webauthn==0.10.3 \
+    --hash=sha256:61f2a1e187a36234838257e6e9679113f6c6ffcfd284137abde4eabe51d01b43 \
+    --hash=sha256:75bf33e8fd26eea6d50874024d36cc2c810893ab7276c638370d31a31d86cbd9
     # via -r requirements.in
 django-ratelimit==4.1.0 \
     --hash=sha256:555943b283045b917ad59f196829530d63be2a39adb72788d985b90c81ba808b \
