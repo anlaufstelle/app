@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Coolify-Leitfaden entfernt** (#2202) — `docs/coolify-deployment.md` widersprach [ADR-017](docs/adr/017-deployment-topology.md) (Plain Docker Compose als primärer und einziger dokumentierter Pfad), betrieb niemand und wurde seit 2026-05 nie mehr gegen eine echte Installation verifiziert; alle Verweise in Doku, Code-Kommentaren und Tests sind bereinigt, Historie steht in dieser ADR.
+- **Vor-1.0-Migrations- und Legacy-Hinweise aus der öffentlichen Doku entfernt** (#2205) — v1.0.0 ist die erste öffentliche Version; Passagen der Form „Updates von < 0.23", „Bestandsinstallation", „seit vX.Y" oder „Legacy-…" beschrieben eine Historie, die für Leser der 1.0-Doku nicht existiert (u. a. der Cron-Sidecar-Übergang und die DB-Rollentrennung im Ops-Runbook, versionsdatierte Änderungskästen im Admin-Handbuch, die Welt-A/Welt-B-Unterscheidung in der Disaster-Recovery-Doku). Historie bleibt im CHANGELOG und in den ADRs; ein neuer Guard-Test verhindert Rückfälle. `docs/README.md`/EN nennen die Regel jetzt unter „Konventionen".
 
 ## [0.96.0] - 2026-09-08
 

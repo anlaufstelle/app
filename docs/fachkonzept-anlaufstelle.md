@@ -1122,7 +1122,7 @@ Anlaufstelle ist als PWA umgesetzt, nicht als native App. Die Begründung:
 
 ### Offline-Fähigkeit: Abgestuft (Streetwork-Modus M6A)
 
-Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Django + HTMX nicht realistisch und für die Zielgruppe überdimensioniert. Stattdessen ein abgestufter Ansatz, der seit Release v0.10 (April 2026) als Streetwork-Modus M6A zur Verfügung steht; die produktive Nutzung ist als Pre-Release noch nicht freigegeben (vgl. [README](../README.md)) — die einzigen laufenden Instanzen sind dev und demo:
+Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Django + HTMX nicht realistisch und für die Zielgruppe überdimensioniert. Stattdessen ein abgestufter Ansatz, der als Streetwork-Modus M6A zur Verfügung steht; die produktive Nutzung ist als Pre-Release noch nicht freigegeben (vgl. [README](../README.md)) — die einzigen laufenden Instanzen sind dev und demo:
 
 **Stufe 1 — Write-Queue für offline erfasste Ereignisse (implementiert).**
 - Schnellerfassung und Ereigniserfassung schreiben bei Netzausfall in eine lokale Write-Queue im Browser (IndexedDB, verschlüsselt).
@@ -1286,7 +1286,7 @@ Barrierefreiheit wird nicht als eigenes Roadmap-Thema behandelt, sondern als Que
 
 Anlaufstelle ist ein System für den deutschen Sozialsektor. Die Primärsprache der Oberfläche, Dokumentation, Domänenbibliothek und DSGVO-Vorlagen ist Deutsch — die Fachsprache der Zielgruppe und der regulatorische Kontext sind deutsch. Das ist richtig und kein Mangel.
 
-Seit v0.1.0 ist die Anwendung vollständig internationalisiert:
+Die Anwendung ist vollständig internationalisiert:
 
 - **Alle UI-Strings über Djangos `gettext`-System.** 31 Dateien (Models, Views, Forms, Services, Templates) verwenden `gettext_lazy` bzw. `{% trans %}`. Keine hart codierten deutschen Strings.
 - **Zwei Sprachen aktiv:** Deutsch (primär) und Englisch. Locale-Verzeichnisse (`src/locale/de/`, `src/locale/en/`) sind vorhanden.

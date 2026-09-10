@@ -8,6 +8,12 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 
 ---
 
+## Konventionen
+
+Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CHANGELOG.md) und in die [ADRs](adr/) — v1.0.0 ist die erste öffentliche Version, es gibt keine Installationen auf Vor-1.0-Ständen, für die eine Migrationsanleitung nötig wäre. Entsprechend: keine „seit vX.Y"-Marker in Fließtext, keine Migrationskästen für Stände vor 1.0 (Refs #2205).
+
+---
+
 ## Konzept & Architektur
 
 | Dokument | Beschreibung | Zielgruppe |

@@ -138,11 +138,9 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | `TRUSTED_PROXY_CIDRS` | empty | Address ranges of the proxies whose incoming `X-Forwarded-For` the reverse proxy may believe -- **space-separated only** (a comma is not a separator, and a netmask is not a valid notation), as CIDR (`203.0.113.0/24`, `2001:db8::/32`), as a single address, or with the keyword `private_ranges`. Leave empty as long as Caddy is the only proxy: Caddy then discards any value sent by the client and sets the header itself. In front of a CDN or load balancer the variable is a **prerequisite** for `TRUSTED_PROXY_HOPS > 1`; the same value populates the Caddy configuration and the application. An unusable range aborts startup (#1963). |
 | `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, backup age, disk free, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
 
-> **Migrating existing installations:** If your `ALLOWED_HOSTS` lists exactly one public host name -- optionally alongside `localhost`/`127.0.0.1` for the health check -- there is nothing to do: `EXTERNAL_ORIGIN` is derived from it. If it lists several public hosts (e.g. with and without `www.`) or a subdomain pattern, add the variable to your `.env` **before** the update; otherwise the application will no longer start after the update and will name exactly this variable in the log. The value is the address under which the facility actually reaches the application -- it will appear in every invitation, password-reset, and unlock email.
-
 **Database (PostgreSQL — three-role model, #902)**
 
-Since v0.12, Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuser (creates the app roles on first start only), the **app role** (`POSTGRES_USER`, `NOSUPERUSER NOBYPASSRLS` — Django runtime, protected by RLS), and the **admin role** (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS` — migrations, seed, retention pruning). **Breaking change for self-hosters:** The three new `.env` variables are mandatory.
+Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuser (creates the app roles on first start only), the **app role** (`POSTGRES_USER`, `NOSUPERUSER NOBYPASSRLS` — Django runtime, protected by RLS), and the **admin role** (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS` — migrations, seed, retention pruning). The `.env` variables `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` and `POSTGRES_BOOTSTRAP_PASSWORD` are mandatory.
 
 | Name | Default | Description |
 |---|---|---|
@@ -162,7 +160,7 @@ Since v0.12, Anlaufstelle separates three DB roles: a hardcoded `postgres` boots
 | Name | Default | Description |
 |---|---|---|
 | `ENCRYPTION_KEYS` | -- | Comma-separated list of Fernet keys. The **first** key is the write key (new data is encrypted with it); all others are read-only (decrypt fallback during rotation). |
-| `ENCRYPTION_KEY` | -- | Legacy single key. At least one of the two variables must be set in production; otherwise the app refuses to start. |
+| `ENCRYPTION_KEY` | -- | Single-key operation (alternative to `ENCRYPTION_KEYS`); a key ring is preferred. At least one of the two variables must be set in production; otherwise the app refuses to start. |
 
 **Virus Scanning (ClamAV, #524)**
 
@@ -537,7 +535,7 @@ New accounts are created **without** a clear-text password. Instead, the applica
 **Token validity (L4, Refs #1375):** Invitation and password-reset tokens have **separate** validity periods:
 
 - **Invitations** expire after `INVITE_TOKEN_TIMEOUT` (default **3 days** = 259200 s, adjustable via the `DJANGO_INVITE_TOKEN_TIMEOUT` env var) — a newly invited staff member realistically needs days to open the link.
-- **Password resets** expire after `PASSWORD_RESET_TIMEOUT` (default **2 hours**, formerly Django's default of 3 days; adjustable via the `DJANGO_PASSWORD_RESET_TIMEOUT` env var) — a reset link is a strong recovery primitive and should be short-lived.
+- **Password resets** expire after `PASSWORD_RESET_TIMEOUT` (default **2 hours**, deviating from Django's default of 3 days; adjustable via the `DJANGO_PASSWORD_RESET_TIMEOUT` env var) — a reset link is a strong recovery primitive and should be short-lived.
 
 Both generators are additionally separated by their own `key_salt` (a reset token is not valid on `/invite/` and vice versa) and invalidate the token automatically once the user has set their first password.
 
@@ -559,7 +557,7 @@ does not arrive, also check the spam folder, quarantine, and the provider's
 SPF/DKIM/DMARC alignment. Until this is fixed, the initial-password route below
 is available as a technical emergency fallback.
 
-**Technical legacy fallback without email:** The product UI always requires an email address. For backwards compatibility, only the Django admin can still create a user **without** an email address and then displays a one-time clear-text initial password. This path is **insecure** and should only be used as a last resort -- better: add the email address and resend the invitation.
+**Technical fallback without email:** The product UI always requires an email address. Only the Django admin can create a user **without** an email address and then displays a one-time clear-text initial password. This path is **insecure** and should only be used as a last resort -- better: add the email address and resend the invitation.
 
 > **Note:** `must_change_password` is set on **every** account created in the admin. Once the user completes the invitation setup step -- or a password reset later on -- the flag is cleared automatically (#1969); they chose the password themselves in that step and are not asked to replace it again right at their first login. The forced change therefore remains exactly where it is needed: for the fallback without an email address, where the admin knows the initial password.
 
@@ -595,9 +593,7 @@ Under **Administration > Documentation types** (`/config/document-types/`), you 
 
 The pair `(facility, name)` is unique: within one facility, each documentation-type name can be used only **once**. Trying to create a second type with the same name is rejected as a form error.
 
-> **Changed on 2026-08-04 (#1749, [ADR-040](../adr/040-documenttype-category-entfernt.md)):** The **Category** field (Contact/Service/Admin/Note) has been **removed** -- together with the form field, the list filter and the "Category" columns in the statistics dashboard and the report PDF. It was a pure display grouping with no effect on the export or on the ban/crisis logic; the **system type** was and remains authoritative for that (see below). Its role in the uniqueness key is gone as well: the same name in two categories used to be allowed (e.g. "Note" as Admin *and* as Note), and no longer is. During the update the migration checks this up front and **aborts** if a facility carries such duplicate names -- rename them beforehand; merging them automatically would be a data decision only you can make.
->
-> In **configuration packages** (YAML) the `category` key may stay: packages remain valid and loadable, but the value is ignored and the load report flags it as a warning. See [docs/packages.md](../packages.md) (German).
+> **Configuration packages** (YAML) may contain the `category` key: packages remain valid and loadable, but the value is ignored and the load report flags it as a warning. See [docs/packages.md](../packages.md) (German).
 
 #### Sensitivity Level
 
@@ -623,8 +619,6 @@ Enabling a type does not override visibility rules: it appears only to roles tha
 
 The system type links a documentation type to internal application logic. It is set at creation and **cannot be changed afterwards**.
 
-> **Changed on 2026-08-12 (#1849, [ADR-042](../adr/042-report-key-berichtszuordnung.md)):** The **report mapping now has a field of its own** -- the **report key** (see the next section). The system type only drives application logic. If you previously brought a type into the example activity report via the system type, you will find it there unchanged: the update gave every existing type the matching report key. **The hardcoded slug fallback is gone** -- a type without a report key appears in no report, even if its slug is one of the package slugs.
-
 The system type serves **one** purpose: **UI logic**. Accordingly there are exactly two values:
 
 | System Type | Effect |
@@ -633,8 +627,6 @@ The system type serves **one** purpose: **UI logic**. Accordingly there are exac
 | **Crisis** | Displayed as a highlight in the handover (recent crisis events) |
 
 > **Note:** Not every documentation type needs a system type -- most do without one. Whether a type lands in a report is answered by the "Appears in …" information in the detail and form views; the system type has nothing to do with it.
-
-> **Changed on 2026-08-12 (#1850, [ADR-042](../adr/042-report-key-berichtszuordnung.md)):** Until this update the selection had **nine** values; the other seven (Contact, Medical, Needle Exchange, Accompaniment, Counseling, Referral, Note) were pure report mappings and have been without effect since the report key arrived. They are now **removed**. On existing types the system type was cleared in the process -- the report mapping has been living in the report key since the previous update and stays untouched; **the numbers in your reports do not change.** What you will notice: the form now offers only "Ban" and "Crisis", and the detail view of an affected type shows "–" for the system type.
 
 > **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added:** a value belongs here only if it drives application behaviour. Report mappings go through the report key.
 
@@ -878,7 +870,7 @@ If a staff member loses their authenticator device, an administrator has to dele
 2. Select the affected user's device and delete it.
 3. Inform the user: on their next login they will be redirected to `/mfa/setup/` (if `is_mfa_enforced=True`) or can re-enable 2FA voluntarily.
 
-Since v0.10.1 there are also **backup codes as a second factor** for exactly this recovery case (Refs #588). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
+There are also **backup codes as a second factor** for exactly this recovery case (Refs #588). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
 
 #### Account Lockout
 
@@ -1085,7 +1077,7 @@ Source: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/mai
 
 - The WebCrypto API (`crypto.subtle`) and IndexedDB must be available.
 - Supported: current versions of Firefox, Chrome, Edge, Safari.
-- Not supported: legacy browsers without a modern crypto API (offline mode is grayed out in that case).
+- Not supported: outdated browsers without a modern crypto API (offline mode is grayed out in that case).
 
 #### Streetwork Levels
 
@@ -1357,7 +1349,7 @@ Operating the tracker instance (setup, backups, retention, upgrades) is operator
 
 The `detect_breaches` management command heuristically analyzes the audit log for anomalies (failed-login bursts, mass exports/deletions, distributed login attacks) and writes hits as audit events; optionally a webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) is notified. The windows/thresholds are controlled via the `BREACH_*` variables (see the [ENV reference in § 1](#full-environment-variable-reference) as well as [ops runbook § 6.5b](../ops-runbook.md)).
 
-> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
 
 **Recommended cron (hourly, at minute 30):**
 
@@ -1548,7 +1540,7 @@ docker compose -f docker-compose.prod.yml exec web \
   python manage.py enforce_retention --facility "Beratungsstelle Nord"
 ```
 
-> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
 
 **Set up as a daily cron job (recommended):**
 
@@ -1816,11 +1808,11 @@ Included (Refs #1752):
 | Access log | Audit entries about the client, their cases and their events: action, timestamp, reference — including the steps of the four-eyes workflows (Refs #2048): deletion requests appear under the category “Löschantrag” (requested/approved/rejected, from the client, case and merge paths), rectification requests under “Berichtigung” |
 | File attachments | **Metadata** for every attachment on the client, their cases and their events (Refs #1738): field name and field slug, decrypted filename, file size, MIME type, timestamp and uploading user, plus the state within the version chain (current yes/no, superseded at, removed at) -- **the complete chain including superseded and removed links** |
 
-**On the structure of the attachment data (JSON):** client-owned attachments live under the top-level key `attachments` -- it is **always** present, possibly as an empty list. Case- and event-owned attachments appear as `attachments` **inside the respective entry** under `cases[i]` or `events[i]`, and only when non-empty (so the existing format for records without files stays unchanged); deleted events (`deleted_events`) carry them too. If a filename cannot be decrypted, the value reads `[verschlüsselt]` -- the record does not invent a name. The MIME type is the type **verified** at upload time; only legacy rows without detection fall back to the browser-reported one. In the custom fields themselves, the technical file marker is replaced by the placeholder `[Dateianhang – Angaben unter „Dateianhänge"]`. **In the PDF**, client-owned attachments form their own section "Dateianhänge"; case- and event-owned attachments appear as a "Dateianhänge" column in the respective table.
+**On the structure of the attachment data (JSON):** client-owned attachments live under the top-level key `attachments` -- it is **always** present, possibly as an empty list. Case- and event-owned attachments appear as `attachments` **inside the respective entry** under `cases[i]` or `events[i]`, and only when non-empty (so the existing format for records without files stays unchanged); deleted events (`deleted_events`) carry them too. If a filename cannot be decrypted, the value reads `[verschlüsselt]` -- the record does not invent a name. The MIME type is the type **verified** at upload time; only existing rows without detection fall back to the browser-reported one. In the custom fields themselves, the technical file marker is replaced by the placeholder `[Dateianhang – Angaben unter „Dateianhänge"]`. **In the PDF**, client-owned attachments form their own section "Dateianhänge"; case- and event-owned attachments appear as a "Dateianhänge" column in the respective table.
 
 **On the structure of the deleted cases (JSON):** they live under the top-level key `deleted_cases` -- it is **always** present, possibly as an empty list; since #1818, `cases` lists only the **live** cases. Both lists carry `is_deleted`, `deleted_at`, `deleted_by` and `anonymized_at` per entry. The last value answers what `is_deleted` alone leaves open: if it is set, the case contents have been **removed irreversibly** (the row deliberately stays, § 7.5); if it is empty, the case merely sits in the trash and can be restored. Episodes and outcome goals of a deleted case stay in **one** list (`episodes`, `outcome_goals`) -- their case title maps them to either section. **In the PDF**, cases in the trash form their own section "Fälle im Papierkorb" directly after "Fälle".
 
-**On the structure of the deleted events (JSON):** they live under the top-level key `deleted_events` -- it is **always** present, possibly as an empty list; `events` lists only the **live** events. Both lists carry `is_deleted`, `deleted_at` and `deleted_by` per entry. The event reference inside the change history deliberately stays narrow (document type, timestamp, trash flag) -- it only maps the change to its event; the deletion data lives in the `deleted_events` section itself. There is deliberately **no** `anonymized_at` here: unlike a case, an event's contents are already removed at deletion time, so there is no second period until the purge -- what remains is in the change history. **Events deleted before version 0.96 carry `null` in both fields**: the data was not recorded back then and cannot be reconstructed retroactively (least of all who deleted the event) -- the access record states the gap instead of inventing a value. If `deleted_at` is set and `deleted_by` is empty, the retention run deleted the event (period expired, no acting user). **In the PDF**, the section „Gelöschte Ereignisse (Papierkorb)" carries the same two columns „Gelöscht am" and „Gelöscht von" as the section „Fälle im Papierkorb"; instead of an empty cell it shows „Aufbewahrungslauf" (system deletion) or „vor 0.96 nicht erfasst" (legacy records), so the data subject can tell the three cases apart. These fixed placeholders are currently displayed in German in both interface languages.
+**On the structure of the deleted events (JSON):** they live under the top-level key `deleted_events` -- it is **always** present, possibly as an empty list; `events` lists only the **live** events. Both lists carry `is_deleted`, `deleted_at` and `deleted_by` per entry. The event reference inside the change history deliberately stays narrow (document type, timestamp, trash flag) -- it only maps the change to its event; the deletion data lives in the `deleted_events` section itself. There is deliberately **no** `anonymized_at` here: unlike a case, an event's contents are already removed at deletion time, so there is no second period until the purge -- what remains is in the change history. **Events deleted before version 0.96 carry `null` in both fields**: the data was not recorded back then and cannot be reconstructed retroactively (least of all who deleted the event) -- the access record states the gap instead of inventing a value. If `deleted_at` is set and `deleted_by` is empty, the retention run deleted the event (period expired, no acting user). **In the PDF**, the section „Gelöschte Ereignisse (Papierkorb)" carries the same two columns „Gelöscht am" and „Gelöscht von" as the section „Fälle im Papierkorb"; instead of an empty cell it shows „Aufbewahrungslauf" (system deletion) or „vor 0.96 nicht erfasst" (pre-existing records), so the data subject can tell the three cases apart. These fixed placeholders are currently displayed in German in both interface languages.
 
 **On the structure of the merges (JSON):** they live under the top-level key `merged_from` -- it is **always** present, possibly as an empty list. Per merged record: `pseudonym`, `merged_at` and `anonymized`. The pseudonym is read from the **live** trash row: as long as the dissolved record sits unredacted in the trash, it appears in clear text; after the retention run purges it, only the redacted marker remains (`anonymized: true`) -- the access record thus carries the clear-text pseudonym exactly as long as the trash itself. Conversely, the access record of the dissolved record carries the field `merged_into` in its `client` block (present on tombstones only; "deleted at" is then also the merge timestamp), and a merge request in `deletion_requests` is marked with `merge_request: true`. **In the PDF**, the merges form their own section "Zusammenführungen" at the end, and the tombstone reference appears as the master-data row "Zusammengeführt in". **Important for Art. 15 requests covering the full history:** the access log of the dissolved record stays with its own dataset (append-only) and does **not** flow into the target's export -- answer such a request with **both** exports (target record and tombstone; the latter stays exportable via the trash or the record URL, even after redaction).
 
@@ -1903,14 +1895,14 @@ The materialized view is **not updated live** on every `INSERT` -- it must be re
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py refresh_statistics_view
 
-# Blocking (if there is no UNIQUE index -- legacy schemas)
+# Blocking (if there is no UNIQUE index)
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py refresh_statistics_view --no-concurrent
 ```
 
 Implementation: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
 
-> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
 
 **Recommended cron cadence:**
 
@@ -1943,7 +1935,7 @@ Snapshots are created automatically whenever `enforce_retention` deletes events 
 
 It is also recommended to create snapshots regularly via cron:
 
-> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (k8s, custom orchestration). Setting up both makes the job run twice — details: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
 
 ```bash
 # Monthly on the 1st at 02:00 -- captures the previous month
@@ -2022,4 +2014,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 6da174c0388505d6f45c75b68b0085875ad35015 -->
+<!-- source-hash: de38ec48e75729f5d164d9a969329a0406c20db9 -->

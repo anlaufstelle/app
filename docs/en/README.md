@@ -7,6 +7,12 @@
 
 ---
 
+## Conventions
+
+The docs describe the **current state**. History belongs in [CHANGELOG.md](../../CHANGELOG.md) and the [ADRs](../adr/) — v1.0.0 is the first public release, so there are no pre-1.0 existing installations that would need a migration guide. Accordingly: no "since vX.Y" markers in running text, no migration boxes for pre-1.0 states (Refs #2205).
+
+---
+
 ## Available in English
 
 | Document | Description | Audience |
@@ -76,4 +82,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: b021540b4ab313b1117c4ad3a38106e4458f234d -->
+<!-- source-hash: 170af4d132978e23a118d4bd465ba48c76176a31 -->

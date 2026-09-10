@@ -128,7 +128,7 @@ Refs #2086. All four deployment stacks run the same three-role PostgreSQL model 
 Invariants that hold for **every** stack:
 
 - The `db` service loads **no** `env_file`; it sets its `environment:` block via Compose interpolation — otherwise `POSTGRES_USER` would be the app role and therefore the bootstrap superuser.
-- Every stack sets `REQUIRE_ADMIN_DB_ROLE: "true"`, which rules out the legacy path without a separate admin role (where the app role becomes owner itself).
+- Every stack sets `REQUIRE_ADMIN_DB_ROLE: "true"`, which rules out the path without a separate admin role (where the app role becomes owner itself).
 - The app role is nowhere an owner and nowhere `SUPERUSER`/`BYPASSRLS`.
 - `web` loads **no** `env_file` but an explicit runtime allowlist (Refs #1962). Among the **application services**, only `maintenance` and `cron` see admin/bootstrap secrets; the `db` service necessarily receives them as well (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — it is the service that creates the roles. It gets only those values and no application secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
 - On **staging**, the `web` healthcheck additionally verifies the **actual** connection role on every start and continuously afterwards (`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`). The plain HTTP check was not sufficient: on a bypassing role `/health/` reports `degraded` but still answers HTTP 200, and the `db_role_posture` detail field is only served in the token/session payload. Refs #2086.
@@ -254,15 +254,6 @@ valid — then no media restore is needed.
 
 > This chapter is the **authoritative list of background jobs**; the [Admin Guide](admin-guide.md) points here.
 
-> **⚠️ Operator action for updates from < 0.23:** Since
-> #794, the stack ships the background jobs
-> as a **`cron` sidecar** ([§3.2](#32-cron-sidecar-standard)) — previously they had to be
-> set up via a host crontab. Anyone who still has the entries from the old §3.2 in the host
-> cron will now run them **twice**. Remove those entries before the sidecar's
-> first start; the **only exception is the backup**, which
-> continues to run host-side ([§3.3](#33-host-cron-backup--remaining-host-jobs)).
-> Migration steps: [§3.3](#33-host-cron-backup--remaining-host-jobs).
-
 > **⚠️ The backup still does NOT run automatically.** The sidecar covers every job
 > that runs as a `manage.py` command inside the container. `backup.sh`, by contrast, runs
 > `docker compose exec` (pg_dump in the db container, tar in the web container) and
@@ -271,7 +262,7 @@ valid — then no media restore is needed.
 > `no-new-privileges`, `read_only`). The backup therefore stays **one**
 > host crontab entry, see [§3.3](#33-host-cron-backup--remaining-host-jobs).
 > Without it, an installation has **no backup** — with no error message, just silence;
-> since 0.92, `initial-setup.sh` warns when it cannot find such an entry.
+> `initial-setup.sh` warns when it cannot find such an entry.
 > The compliance dashboard shows the run status per job
 > ([`/system/compliance/`](admin-guide.md), category "Background jobs", super admins
 > only) — the [`/health/` endpoint](../monitoring-guide.md) (German) also aggregates it roughly
@@ -399,44 +390,14 @@ from `Europe/Berlin` (for example, on UTC hosts), `0 2 * * *` lands at 03:00 or
 retention (03:00)" ordering flips or degenerates into a tie. Set the host time
 zone to `Europe/Berlin` or move the host cron time earlier accordingly.
 
-#### Migrating from the Old Host Crontab (Operator Action)
-
-Installations from before release 0.23 have all jobs in the host cron. After the update,
-the jobs that the sidecar has taken over would otherwise run twice — mostly
-harmless in domain terms (the commands are idempotent), but it produces duplicate
-breach webhooks, duplicate audit markers, and unnecessary load. Therefore:
-
-```bash
-# 1. Back up the current crontab
-crontab -l > ~/crontab.vor-0.23.bak
-
-# 2. REMOVE all lines that call one of these commands:
-#      enforce_retention · verify_audit_chain · create_statistics_snapshots
-#      cleanup_orphan_storage_files · detect_breaches · refresh_statistics_view
-crontab -e
-
-# 3. Leave the backup, invite-audit, and health-check lines in place (see block above).
-
-# 4. Update the stack and bring up the sidecar
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-
-# 5. Verify: sidecar is running, schedule loaded
-docker compose -f docker-compose.prod.yml logs cron | head -30
-```
-
-The next day, check in the compliance dashboard (`/system/compliance/`, "Background jobs")
-that the markers are fresh — that's the evidence that the jobs
-actually ran through.
-
 <details>
-<summary>Old host crontab (complete) — only for setups WITHOUT the sidecar</summary>
+<summary>Complete host crontab — alternative for setups WITHOUT the sidecar</summary>
 
 Relevant if the stack is run without `docker-compose.prod.yml` (e.g.
 k8s) and therefore no `cron` service exists.
 
 ```cron
-# Anlaufstelle – Operational cron jobs (legacy: without the cron sidecar)
+# Anlaufstelle – Operational cron jobs (alternative: without the cron sidecar)
 # Set up in /etc/crontab or via `crontab -e` on the host
 
 # Backup (daily 02:00, before retention)
@@ -1491,7 +1452,7 @@ scope must therefore be restricted accordingly.
 
 ## 9. Row Level Security (RLS)
 
-Since v0.10.0, PostgreSQL RLS on all facility-scoped tables (currently
+PostgreSQL RLS on all facility-scoped tables (currently
 **25**, enforced test-derived —
 [`test_rls.py`](../../src/tests/test_rls.py)) protects
 against cross-facility leaks (defense-in-depth below the Django scoping
@@ -1525,7 +1486,7 @@ the rollback restriction of the `0129`–`0131` chain: [§ 2.2](#22-roll-back-a-
 loads a dedicated Postgres role ``rls_test_role`` (``NOSUPERUSER``)
 and verifies, via ``SET ROLE``, cross-tenant 0-rows for Client, Event,
 AuditLog, and Activity. This means the RLS protection has been functionally
-tested in CI since v0.11 — not just the existence of the policies. If the
+tested in CI — not just the existence of the policies. If the
 production DB user accidentally becomes a superuser, the cross-
 tenant test in CI does **not** fail (it uses the explicit test role),
 but the smoke query from § 9.2 below must return ``rolsuper =
@@ -1965,9 +1926,10 @@ WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_
 
 **Fresh DBs** pick up the split automatically
 ([`deploy/postgres-init/01-app-role.sh`](../../deploy/postgres-init/01-app-role.sh):
-admin becomes owner, app only gets DML). **Existing installations** need a
-**one-off, maintainer-led** rebuild — brief downtime recommended (no write
-requests during it).
+admin becomes owner, app only gets DML). An **already-running installation with
+a misconfigured role setup** (ownership still with the app role, or no separate
+admin role) needs a **one-off, maintainer-led** rebuild — brief downtime
+recommended (no write requests during it).
 
 > **The simpler, already rehearsed alternative:** dump → fresh volume → restore
 > per [§ 13.1](#131-prodstaging--preserving-data-maintenance-window). The init
@@ -2019,12 +1981,10 @@ SELECT pg_get_userbyid(c.relowner) AS owner, count(*)
 > (B or C) and let the already-completed steps pass through. The last query
 > above is then the measure: it must show the admin role only.
 
-**Case C is the normal situation for staging installations predating
-#2086:** the stack
-mounted no init script and loaded the full `.env.staging` on `db`, so the
-Postgres image created `${POSTGRES_USER}` itself via
-`initdb --username="$POSTGRES_USER"` — the app role *is* the bootstrap role
-there, and an admin role was never created.
+**Case C occurs when no init script is mounted:** if `db` loads the full env
+without [`deploy/postgres-init/`](../deploy/postgres-init/), the Postgres image
+creates `${POSTGRES_USER}` itself via `initdb --username="$POSTGRES_USER"` —
+the app role *is* then the bootstrap role, and an admin role is never created.
 
 #### 9.6.1 Case A — ownership move only
 
@@ -2410,7 +2370,7 @@ still-app-owned tables (the attribute profile of app/admin alone stays the
 same through the ownership move). Once the move has been carried out (admin is
 the owner), the gate is green again.
 
-> **Order for existing installations with a pending move (Refs
+> **Order for a pending role move (Refs
 > #1738):** First run the
 > ownership move above, **then** deploy. The `0129`–`0131` attachment chain
 > needs both — owner rights for the DDL (`DROP`/`CREATE POLICY`, `ALTER TABLE`)
@@ -2505,7 +2465,7 @@ Refs #528.
 
 ## 11. Statistics Materialized View
 
-Since v0.10.0, the materialized view `core_statistics_event_flat`
+The materialized view `core_statistics_event_flat`
 pre-aggregates all event facts for the statistics dashboard. The refresh runs via a
 management command and uses `REFRESH MATERIALIZED VIEW CONCURRENTLY`, so
 running readers are not blocked
@@ -2775,4 +2735,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 3c6aa4aa98e7fb2904c5737320a206ef36aed0cd -->
+<!-- source-hash: b66513e733f476ff1dc702a519aba63b87a5e3f6 -->

@@ -123,7 +123,7 @@ Refs #2086. Alle vier Deployment-Stacks fahren dasselbe Drei-Rollen-PostgreSQL-M
 Invarianten, die fuer **jeden** Stack gelten:
 
 - Der `db`-Service laedt **kein** `env_file`, sondern setzt seinen `environment:`-Block ueber Compose-Interpolation — sonst waere `POSTGRES_USER` die App-Rolle und damit der Bootstrap-Superuser.
-- Jeder Stack setzt `REQUIRE_ADMIN_DB_ROLE: "true"`; der Legacy-Pfad ohne separate Admin-Rolle (App-Rolle wird selbst Owner) ist damit ausgeschlossen.
+- Jeder Stack setzt `REQUIRE_ADMIN_DB_ROLE: "true"`; der Pfad ohne separate Admin-Rolle (App-Rolle wird selbst Owner) ist damit ausgeschlossen.
 - Die App-Rolle ist nirgends Owner und nirgends `SUPERUSER`/`BYPASSRLS`.
 - `web` laedt **kein** `env_file`, sondern eine explizite Runtime-Allowlist (Refs #1962). Unter den **Anwendungsdiensten** sehen Admin-/Bootstrap-Secrets nur `maintenance` und `cron`; der `db`-Service bekommt sie zwangslaeufig ebenfalls (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — er legt die Rollen ja an. Er erhaelt aber ausschliesslich die dafuer noetigen Werte und keine Anwendungs-Secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
 
@@ -250,15 +250,6 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 > Dieses Kapitel ist die **autoritative Liste der Hintergrundjobs**; das [Admin-Handbuch](admin-guide.md) verweist hierauf.
 
-> **⚠️ Betreiber-Aktion bei Updates von < 0.23:** Der Stack liefert die Hintergrundjobs
-> seit #794 als **`cron`-Sidecar**
-> mit ([§3.2](#32-cron-sidecar-standard)) — vorher mussten sie per Host-Crontab
-> eingerichtet werden. Wer die Eintraege aus dem alten §3.2 bereits im Host-Cron
-> stehen hat, laesst sie nach dem Update **doppelt** laufen. Diese Eintraege vor dem
-> ersten Start des Sidecars entfernen; **einzige Ausnahme ist das Backup**, das
-> weiterhin Host-seitig laeuft ([§3.3](#33-host-cron-backup--restliche-host-jobs)).
-> Migrationsschritte: [§3.3](#33-host-cron-backup--restliche-host-jobs).
-
 > **⚠️ Das Backup laeuft weiterhin NICHT automatisch.** Der Sidecar deckt alle Jobs
 > ab, die als `manage.py`-Kommando im Container laufen. `backup.sh` faehrt dagegen
 > `docker compose exec` (pg_dump im db-Container, tar im web-Container) und
@@ -267,7 +258,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 > `no-new-privileges`, `read_only`) entwerten. Backup bleibt daher **ein**
 > Host-Crontab-Eintrag, siehe [§3.3](#33-host-cron-backup--restliche-host-jobs).
 > Ohne ihn hat eine Installation **kein Backup** — ohne Fehlermeldung, nur Stille;
-> `initial-setup.sh` warnt seit 0.92, wenn es keinen solchen Eintrag findet.
+> `initial-setup.sh` warnt, wenn es keinen solchen Eintrag findet.
 > Den Lauf-Status je Job zeigt das Compliance-Dashboard
 > ([`/system/compliance/`](admin-guide.md), Kategorie „Hintergrundjobs", nur
 > Super-Admins) — grob aggregiert auch der [`/health/`-Endpoint](monitoring-guide.md)
@@ -396,44 +387,14 @@ auf 03:00 oder 04:00 Ortszeit und die zugesagte Reihenfolge „Backup vor
 Retention (03:00)" kippt oder wird zum Gleichstand; Host-TZ auf `Europe/Berlin`
 setzen oder die Host-Cron-Zeit entsprechend vorziehen.
 
-#### Migration von der alten Host-Crontab (Betreiber-Aktion)
-
-Installationen vor Release 0.23 haben alle Jobs im Host-Cron. Nach dem Update
-laufen die vom Sidecar uebernommenen Jobs sonst doppelt — fachlich meist
-harmlos (die Kommandos sind wiederholbar), aber es entstehen doppelte
-Breach-Webhooks, doppelte Audit-Marker und unnoetige Last. Deshalb:
-
-```bash
-# 1. Aktuelle Crontab sichern
-crontab -l > ~/crontab.vor-0.23.bak
-
-# 2. Alle Zeilen ENTFERNEN, die eines dieser Kommandos aufrufen:
-#      enforce_retention · verify_audit_chain · create_statistics_snapshots
-#      cleanup_orphan_storage_files · detect_breaches · refresh_statistics_view
-crontab -e
-
-# 3. Backup-, Invite-Audit- und Health-Check-Zeile stehen lassen (siehe Block oben).
-
-# 4. Stack aktualisieren und Sidecar hochfahren
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-
-# 5. Verifizieren: Sidecar laeuft, Zeitplan geladen
-docker compose -f docker-compose.prod.yml logs cron | head -30
-```
-
-Am Folgetag im Compliance-Dashboard (`/system/compliance/`, „Hintergrundjobs")
-pruefen, dass die Marker frisch sind — das ist der Beleg, dass die Jobs
-tatsaechlich durchlaufen.
-
 <details>
-<summary>Alte Host-Crontab (vollstaendig) — nur noch fuer Setups OHNE Sidecar</summary>
+<summary>Vollstaendige Host-Crontab — Alternative fuer Setups OHNE Sidecar</summary>
 
 Relevant, wenn der Stack ohne `docker-compose.prod.yml` betrieben wird (z. B.
 k8s) und deshalb kein `cron`-Service existiert.
 
 ```cron
-# Anlaufstelle – Operative Cron-Jobs (Legacy: ohne cron-Sidecar)
+# Anlaufstelle – Operative Cron-Jobs (Alternative: ohne cron-Sidecar)
 # In /etc/crontab oder via `crontab -e` auf dem Host einrichten
 
 # Backup (taeglich 02:00, vor Retention)
@@ -1488,7 +1449,7 @@ müssen entsprechend restriktiv sein.
 
 ## 9. Row Level Security (RLS)
 
-Seit v0.10.0 ist PostgreSQL-RLS auf allen facility-gescopten Tabellen (derzeit
+PostgreSQL-RLS ist auf allen facility-gescopten Tabellen (derzeit
 **25**, per Test ableitungsbasiert erzwungen —
 [`test_rls.py`](../src/tests/test_rls.py)) gegen Cross-Facility-Leaks
 abgesichert (Defense-in-Depth unterhalb der Django-Scoping-Schicht). Die
@@ -1521,7 +1482,7 @@ Rollback-Einschraenkung der Kette `0129`–`0131`: [§ 2.2](#22-migration-zuruec
 [`src/tests/test_rls_functional.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls_functional.py)
 laedt eine dedizierte Postgres-Rolle ``rls_test_role`` (``NOSUPERUSER``)
 und verifiziert per ``SET ROLE`` Cross-Tenant-0-Rows fuer Client, Event,
-AuditLog und Activity. Damit ist der RLS-Schutz seit v0.11 funktional
+AuditLog und Activity. Damit ist der RLS-Schutz funktional
 in CI getestet — nicht nur die Existenz der Policies. Wenn der
 Produktions-DB-User versehentlich Superuser wird, schlaegt der Cross-
 Tenant-Test in CI **nicht** fehl (er nutzt die explizite Test-Rolle),
@@ -1963,9 +1924,10 @@ WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_
 
 **Fresh DBs** ziehen die Trennung automatisch auf
 ([`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh):
-Admin wird Owner, App bekommt nur DML). **Bestandsinstallationen** brauchen einen
-**einmaligen, Maintainer-geführten** Umbau — kurze Downtime empfohlen (keine
-schreibenden Requests währenddessen).
+Admin wird Owner, App bekommt nur DML). Eine **bereits laufende Installation mit
+fehlerhafter Rollenkonfiguration** (Ownership noch bei der App-Rolle oder keine
+separate Admin-Rolle) braucht einen **einmaligen, Maintainer-geführten** Umbau —
+kurze Downtime empfohlen (keine schreibenden Requests währenddessen).
 
 > **Die einfachere, bereits durchgespielte Alternative:** Dump → frisches Volume →
 > Restore nach [§ 13.1](#131-prodstaging--daten-erhalten-wartungsfenster). Dabei
@@ -2018,12 +1980,11 @@ SELECT pg_get_userbyid(c.relowner) AS owner, count(*)
 > Schritte einfach durchlaufen. Die letzte Query oben ist danach das Mass:
 > sie darf nur noch die Admin-Rolle zeigen.
 
-**Fall C ist der Normalfall für Bestands-Staging vor
-#2086:** Der Stack
-mountete kein Init-Script und lud auf `db` die volle `.env.staging`; das
-Postgres-Image legte damit `${POSTGRES_USER}` selbst per
-`initdb --username="$POSTGRES_USER"` an — die App-Rolle *ist* dort die
-Bootstrap-Rolle, und eine Admin-Rolle wurde nie erzeugt.
+**Fall C tritt auf, wenn kein Init-Script gemountet ist:** Laedt `db` die volle
+Env ohne [`deploy/postgres-init/`](../deploy/postgres-init/), legt das
+Postgres-Image `${POSTGRES_USER}` selbst per `initdb --username="$POSTGRES_USER"`
+an — die App-Rolle *ist* dann die Bootstrap-Rolle, und eine Admin-Rolle wird nie
+erzeugt.
 
 #### 9.6.1 Fall A — nur der Ownership-Umzug
 
@@ -2413,7 +2374,7 @@ App-owned Tabellen grün wurde (das Attributprofil App/Admin allein bleibt beim
 Ownership-Umzug ja gleich). Nach durchgeführtem Umzug (Admin ist Owner) ist das
 Gate wieder grün.
 
-> **Reihenfolge bei Bestandsinstallationen mit ausstehendem Umzug (Refs
+> **Reihenfolge bei ausstehendem Rollen-Umzug (Refs
 > #1738):** Erst den
 > Ownership-Umzug oben fahren, **dann** deployen. Die Attachment-Kette `0129`–`0131`
 > braucht beides — Owner-Rechte fuer die DDL (`DROP`/`CREATE POLICY`, `ALTER TABLE`)
@@ -2508,7 +2469,7 @@ Refs #528.
 
 ## 11. Statistics Materialized View
 
-Seit v0.10.0 aggregiert die Materialized View `core_statistics_event_flat`
+Die Materialized View `core_statistics_event_flat` aggregiert
 alle Event-Fakten fuer das Statistik-Dashboard vor. Der Refresh laeuft per
 Management-Command und nutzt `REFRESH MATERIALIZED VIEW CONCURRENTLY`, damit
 laufende Leser nicht blockiert werden

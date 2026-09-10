@@ -271,7 +271,7 @@ Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_pol
 
 Das ersatzlose Löschen eines Dateianhangs (`purge_attachment_chain`, Route `core:attachment_delete`) entfernt die Zeilen, die `__files__`-Marker **und** die verschlüsselten `.enc`-Dateien der ganzen Versionskette vom Datenträger. Innerhalb der laufenden Instanz ist der Vorgang damit vollständig und unwiderruflich — es gibt keinen Papierkorb und keinen Wiederherstellungspfad.
 
-**Nicht erfasst sind die Sicherungskopien daneben.** Der Prod-Backup-Pfad (Welt B, [`scripts/ops/backup.sh`](../scripts/ops/backup.sh)) schreibt neben dem DB-Dump einen Medien-Tarball `*_media.tar.gz.enc` (+ `.hmac`), der über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) zurückspielbar ist (siehe [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-die-zwei-backup-welten)). Eine Datei, die heute gelöscht wird, liegt in jedem Backup weiter, das vor der Löschung entstanden ist — bis zum Ablauf der Backup-Aufbewahrung bzw. bis zur Rotation des Off-Site-Ziels. Ein Restore holt sie zurück; die DB-Zeile käme dabei mit, weil der DB-Dump aus demselben Zeitpunkt stammt.
+**Nicht erfasst sind die Sicherungskopien daneben.** Der Prod-Backup-Pfad ([`scripts/ops/backup.sh`](../scripts/ops/backup.sh)) schreibt neben dem DB-Dump einen Medien-Tarball `*_media.tar.gz.enc` (+ `.hmac`), der über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) zurückspielbar ist (siehe [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-backup-format)). Eine Datei, die heute gelöscht wird, liegt in jedem Backup weiter, das vor der Löschung entstanden ist — bis zum Ablauf der Backup-Aufbewahrung bzw. bis zur Rotation des Off-Site-Ziels. Ein Restore holt sie zurück; die DB-Zeile käme dabei mit, weil der DB-Dump aus demselben Zeitpunkt stammt.
 
 Für ein Feature, das ausdrücklich als **Datenminimierung** angeboten wird (Anlassfall: falsche Datei, falsche Person, Klarname im Dokument), ist eine unbedingte Zusage „keine Wiederherstellung — auch nicht durch die Administration" gegenüber der betroffenen Person deshalb falsch.
 
@@ -293,7 +293,7 @@ Ein Backup ist per Konstruktion ein Stand **von vorher**. Nachträglich einzelne
 ### Verifikation
 
 - [`test_attachment_purge.py`](../src/tests/test_attachment_purge.py) — `TestConfirmationNamesTheRecord::test_warning_qualifies_the_promise_against_media_backups` pinnt den Hinweiskasten.
-- [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-die-zwei-backup-welten) — Nachweis, dass der Medien-Tarball existiert und zurückspielbar ist.
+- [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-backup-format) — Nachweis, dass der Medien-Tarball existiert und zurückspielbar ist.
 
 ---
 

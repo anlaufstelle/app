@@ -102,7 +102,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
 
-**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (seit v0.10.1, [Issue #588](https://github.com/anlaufstelle/app/issues/588)). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
+**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (Refs [Issue #588](https://github.com/anlaufstelle/app/issues/588)). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
 
 **Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie eine Administratorin, Ihr TOTP-Gerät zurückzusetzen.
 
@@ -118,7 +118,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4a. Mein Konto ist nach mehreren Login-Fehlversuchen gesperrt — was tun?
 
-Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py), seit v0.10.1). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
+Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
 
 **Vorgehen:**
 
@@ -304,7 +304,7 @@ Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**
 
 ### 10. Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?
 
-Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und mobile Einsätze.
+Ja — es gibt einen sicheren **Offline-Modus** für Streetwork und mobile Einsätze.
 
 **Ablauf:**
 1. **Vor dem Verlassen des Büros:** Personen in den Offline-Cache laden (Schaltfläche in der Personen-Liste).
@@ -702,4 +702,4 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 
 ---
 
-*Konsolidiert aus #105, #429, #471, #506. Erstverifikation der Inhalte am 29.04.2026 gegen v0.10.2. v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1. Die Krypto-, Lockout- und Offline-Angaben wurden am 2026-07-13 im Doku-Review gegen den Code nachgeprüft (Refs #1551).*
+*Konsolidiert aus #105, #429, #471, #506. Erstverifikation der Inhalte am 29.04.2026 gegen v0.10.2. v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide zeitgleich eingeführt. Die Krypto-, Lockout- und Offline-Angaben wurden am 2026-07-13 im Doku-Review gegen den Code nachgeprüft (Refs #1551).*

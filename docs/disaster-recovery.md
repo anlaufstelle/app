@@ -9,7 +9,7 @@
 ## Inhaltsverzeichnis
 
 1. [RTO / RPO — Zielwerte](#1-rto--rpo--zielwerte)
-2. [Die zwei Backup-Welten](#2-die-zwei-backup-welten)
+2. [Backup-Format](#2-backup-format)
 3. [Was ein Recovery braucht — Inventar](#3-was-ein-recovery-braucht--inventar)
 4. [Schlüssel- und Secret-Wiederbeschaffung](#4-schlüssel--und-secret-wiederbeschaffung)
 5. [Off-Site-Backup beschaffen](#5-off-site-backup-beschaffen)
@@ -32,23 +32,20 @@
 
 ---
 
-## 2. Die zwei Backup-Welten
+## 2. Backup-Format
 
-Das Projekt hat **zwei getrennte, nicht austauschbare** Backup-/Restore-Pfade. Welcher für ein Recovery relevant ist, hängt davon ab, welcher auf der verlorenen Instanz lief. Die Details (inkl. Kompatibilitätsmatrix) stehen in [ops-runbook.md §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) — hier nur die Recovery-relevante Kurzfassung:
+[`scripts/ops/backup.sh`](../scripts/ops/backup.sh) sichert das Prod-Schema (`docker-compose.prod.yml`). Details (inkl. Restore-Drill) stehen in [ops-runbook.md §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) — hier nur die Recovery-relevante Kurzfassung:
 
-| | **Welt A — `dev-ops/deploy/backup.sh`** | **Welt B — `scripts/ops/backup.sh`** |
-|---|---|---|
-| Läuft auf | `dev.anlaufstelle.app` (Hetzner, plain Docker Compose) | Prod-Schema (`docker-compose.prod.yml`) |
-| Dump-Format | `pg_dump -Fc` (custom) | plain SQL + `gzip` |
-| Verschlüsselung | AES-256-CBC (`openssl enc -pbkdf2`) | AES-256-CBC **+ HMAC-SHA256-Sidecar** ([`_backup_common.sh`](../scripts/ops/_backup_common.sh), Refs #1024) |
-| Dateien | `dump-*.pgc.enc` | `*.sql.gz.enc` **+** `*.sql.gz.enc.hmac` |
-| Medien-Backup | — (nur DB) | `*_media.tar.gz.enc` (+ `.hmac`), `tar` aus dem `web`-Container |
-| Restore-Tool | `pg_restore` | `psql` über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) |
-| Restore-Drill | [`restore-drill.sh --dev`](../scripts/ops/restore-drill.sh) zielt **hierauf** (Default/Auto) | [`restore-drill.sh --prod`](../scripts/ops/restore-drill.sh) (seit #1336: HMAC-Check + `gunzip \| psql` + Zeilenabgleich gegen Live-DB); `backup.sh --verify` bleibt leichtgewichtige Alternative |
-| Ablage (Default) | `$BACKUP_DIR` = `/var/backups/anl` | `<projekt>/backups/{daily,weekly,monthly}` |
-| Off-Site-Sync | — (kein Off-Site im Skript) | `BACKUP_OFFSITE_TARGET` (rclone / `s3://` / scp) |
-
-> **Konsequenz für Recovery:** Ein `dump-*.pgc.enc` wird mit `pg_restore` zurückgespielt, ein `*.sql.gz.enc` mit `psql` (bzw. `restore.sh`) — und nur die Welt-B-Backups tragen einen Medien-Tarball **und** ein Off-Site-Ziel. Ein Cross-Restore schlägt fehl (anderes Format, fehlender HMAC-Sidecar). Vor dem Restore also zuerst feststellen, **welche Dateinamen** im Off-Site-Speicher liegen.
+| | **`scripts/ops/backup.sh`** |
+|---|---|
+| Dump-Format | plain SQL + `gzip` |
+| Verschlüsselung | AES-256-CBC **+ HMAC-SHA256-Sidecar** ([`_backup_common.sh`](../scripts/ops/_backup_common.sh), Refs #1024) |
+| Dateien | `*.sql.gz.enc` **+** `*.sql.gz.enc.hmac` |
+| Medien-Backup | `*_media.tar.gz.enc` (+ `.hmac`), `tar` aus dem `web`-Container |
+| Restore-Tool | `psql` über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) |
+| Restore-Drill | [`restore-drill.sh --prod`](../scripts/ops/restore-drill.sh) (seit #1336: HMAC-Check + `gunzip \| psql` + Zeilenabgleich gegen Live-DB); `backup.sh --verify` bleibt leichtgewichtige Alternative |
+| Ablage (Default) | `<projekt>/backups/{daily,weekly,monthly}` |
+| Off-Site-Sync | `BACKUP_OFFSITE_TARGET` (rclone / `s3://` / scp) |
 
 ---
 
@@ -58,7 +55,7 @@ Ein vollständiges Recovery rekonstruiert **drei** Dinge. Fehlt eines, ist die W
 
 1. **Die verschlüsselten Backup-Artefakte** (Off-Site, siehe [§5](#5-off-site-backup-beschaffen)):
    - DB-Dump (`*.sql.gz.enc` + `.hmac` **oder** `dump-*.pgc.enc`)
-   - Medien-Tarball (`*_media.tar.gz.enc` + `.hmac`) — **nur Welt B**. Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
+   - Medien-Tarball (`*_media.tar.gz.enc` + `.hmac`). Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
 2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEY(S)` und `BACKUP_ENCRYPTION_KEY`.
 3. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
 
@@ -118,7 +115,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 
 ## 5. Off-Site-Backup beschaffen
 
-Off-Site-Sync ist **nur in Welt B** (`scripts/ops/backup.sh`) implementiert und **nur aktiv, wenn `BACKUP_OFFSITE_TARGET` gesetzt war** (siehe [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) und [§8](#8-offene-punkte-noch-nicht-verdrahtet)). Das Skript unterstützt drei Zielformate; das Retrieval ist jeweils die Umkehrung des `copy`/`sync`:
+Off-Site-Sync ist mit `scripts/ops/backup.sh` implementiert und **nur aktiv, wenn `BACKUP_OFFSITE_TARGET` gesetzt war** (siehe [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) und [§8](#8-offene-punkte-noch-nicht-verdrahtet)). Das Skript unterstützt drei Zielformate; das Retrieval ist jeweils die Umkehrung des `copy`/`sync`:
 
 ```bash
 # Variante rclone (S3/B2/R2/Storj/...) — BACKUP_OFFSITE_TARGET=rclone:remote:bucket/path
@@ -131,7 +128,7 @@ aws s3 sync s3://bucket/path/daily ./restore-src --exclude "*" --include "*.enc"
 scp "user@host:/path/*.enc" "user@host:/path/*.hmac" ./restore-src/
 ```
 
-**Immer DB- *und* (bei Welt B) Medien-Artefakt samt `.hmac`-Sidecar holen.** Ohne den Sidecar verweigert `restore.sh` den Restore (`backup_verify_hmac` bricht ab — [`_backup_common.sh`](../scripts/ops/_backup_common.sh) L33). Das jüngste DB-Backup heißt `anlaufstelle_<timestamp>.sql.gz.enc`, der dazugehörige Medien-Tarball `anlaufstelle_<timestamp>_media.tar.gz.enc`.
+**Immer DB- *und* Medien-Artefakt samt `.hmac`-Sidecar holen.** Ohne den Sidecar verweigert `restore.sh` den Restore (`backup_verify_hmac` bricht ab — [`_backup_common.sh`](../scripts/ops/_backup_common.sh) L33). Das jüngste DB-Backup heißt `anlaufstelle_<timestamp>.sql.gz.enc`, der dazugehörige Medien-Tarball `anlaufstelle_<timestamp>_media.tar.gz.enc`.
 
 > **Object-Lock prüfen:** [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) empfiehlt eine Write-Once-/Object-Lock-Policy am Bucket. Beim Ransomware-Szenario ist das der Unterschied zwischen „Backups noch da" und „Backups mitverschlüsselt".
 
@@ -141,7 +138,7 @@ scp "user@host:/path/*.enc" "user@host:/path/*.hmac" ./restore-src/
 
 Szenario: leerer Server (Hetzner CX22 o. vergleichbar, Debian 13), nichts vom alten Host außer den beschafften Backup-Artefakten ([§5](#5-off-site-backup-beschaffen)) und den Secrets ([§4](#4-schlüssel--und-secret-wiederbeschaffung)).
 
-Dieser Ablauf entspricht dem regulären Provisioning (`dev-ops/deploy/bootstrap.sh`, dev-only) plus Restore. Er beschreibt das **Welt-B/Prod**-Schema (`docker-compose.prod.yml` + `scripts/ops/restore.sh`); für das `dev.anlaufstelle.app`-Schema (Welt A, `pg_restore`) gilt der Restore-Befehl aus dem Skript-Header von `dev-ops/deploy/backup.sh` (dev-only) bzw. [ops-runbook §2.3](ops-runbook.md#23-vollstaendiger-rollback-db-restore).
+Dieser Ablauf entspricht dem regulären Provisioning (`dev-ops/deploy/bootstrap.sh`, dev-only) plus Restore mit `docker-compose.prod.yml` + `scripts/ops/restore.sh`.
 
 ### Schritt 1 — Host härten + Docker installieren
 
@@ -192,14 +189,6 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
 ```
 
 [`restore.sh`](../scripts/ops/restore.sh) erledigt in einem Lauf: HMAC-Verify der DB und, falls übergeben, des Medienarchivs → Bestätigungsabfrage → erneuter DB-HMAC-Verify → `openssl enc -d | gunzip | psql` → erneuter Medien-HMAC-Verify → Medien-Inhalt löschen → Medienarchiv per `tar -x` in `/data` des `web`-Containers entpacken. Damit sind beide Sidecars geprüft, bevor die erste destruktive Aktion beginnt, und das Prüf-Nutzungs-Fenster bleibt klein. Bricht `tar -x` ab, ist der Medienbestand unvollständig; Ursache beheben und den vollständigen Medien-Restore wiederholen. Der `BACKUP_ENCRYPTION_KEY` aus der `.env` wird automatisch geladen.
-
-> **Welt A (dev / `pg_restore`-Format):** Statt `restore.sh` der Notfall-Befehl aus dem Skript-Header:
-> ```bash
-> openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
->   -in dump-<timestamp>.pgc.enc \
->   | docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T db \
->     pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists
-> ```
 
 ### Schritt 5 — Migrationen + Stack hochfahren
 
@@ -264,9 +253,9 @@ Ehrliche Bestandsaufnahme — diese Teile sind **organisatorisch**, nicht im Cod
 
 - **`entschieden` — keine personelle Escrow-Trennung im Solo-Maintainer-Modell.** #1477 war ein Governance-Issue und ist geschlossen; ohne Vertretung entfällt die Übergabe an eine zweite Person dauerhaft. Es gibt weiterhin keinen Code-Pfad, der `BACKUP_ENCRYPTION_KEY`/`ENCRYPTION_KEYS` an einen getrennten Ort spiegelt. Für Recovery und Drill ist deshalb die vom Maintainer verwahrte, vom Prod-Host getrennte `.env`-Kopie die Schlüsselquelle. Fehlt diese Kopie nach einem Host-Totalverlust, bleiben die Backups endgültig unlesbar ([§4.4](#44-wo-die-schlüssel-liegen-sollten--eskrow)).
 
-- **`offen` — Off-Site nur für Welt B, und nur wenn konfiguriert.** `dev-ops/deploy/backup.sh` (Welt A, das auf `dev.anlaufstelle.app` läuft) hat **keinen** Off-Site-Sync. `scripts/ops/backup.sh` (Welt B) hat einen, aber nur aktiv bei gesetztem `BACKUP_OFFSITE_TARGET`. Ist keines konfiguriert, überlebt **kein** Backup den Host-Totalverlust. → Vor Produktivbetrieb `BACKUP_OFFSITE_TARGET` setzen **und** das erste Off-Site-Retrieval einmal proben.
+- **`offen` — Off-Site nur wenn konfiguriert.** `scripts/ops/backup.sh` hat Off-Site-Sync, aber nur aktiv bei gesetztem `BACKUP_OFFSITE_TARGET`. Ist keines konfiguriert, überlebt **kein** Backup den Host-Totalverlust. → Vor Produktivbetrieb `BACKUP_OFFSITE_TARGET` setzen **und** das erste Off-Site-Retrieval einmal proben.
 
-- **`offen` — `restic` ist installiert, aber ungenutzt.** `dev-ops/deploy/bootstrap.sh` (dev-only) L30 installiert `restic`, doch **kein** Skript verwendet es. Off-Site läuft (in Welt B) über rclone/aws/scp, nicht über restic. Die restic-Installation ist derzeit toter Ballast bzw. Vorbereitung für ein noch nicht gebautes restic-basiertes Off-Site/Eskrow. → Entweder einen restic-Pfad bauen oder die Installation aus dem Bootstrap entfernen.
+- **`offen` — `restic` ist installiert, aber ungenutzt.** `dev-ops/deploy/bootstrap.sh` (dev-only) L30 installiert `restic`, doch **kein** Skript verwendet es. Off-Site läuft über rclone/aws/scp, nicht über restic. Die restic-Installation ist derzeit toter Ballast bzw. Vorbereitung für ein noch nicht gebautes restic-basiertes Off-Site/Eskrow. → Entweder einen restic-Pfad bauen oder die Installation aus dem Bootstrap entfernen.
 
 - **`offen` — Recovery auf fabrikfrischem Host ist nicht end-to-end geprobt.** Der [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) testet Restore **auf dem laufenden Host** in eine Wegwerf-DB; das PG-16→18-Upgrade ([ops-runbook §13](ops-runbook.md#13-postgresql-major-upgrade-16--18)) testet dump→frisches-Cluster→restore lokal. Der **vollständige** DR-Pfad aus [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host) (frischer Server + Off-Site-Download + Schlüssel aus der Maintainer-`.env`-Kopie + Restore) ist in dieser Form **noch nicht als Drill durchgespielt**. → Einmal jährlich als „echten" DR-Drill auf einem Wegwerf-Server üben und das Ergebnis hier/in einem Issue festhalten.
 

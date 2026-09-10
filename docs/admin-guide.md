@@ -131,11 +131,9 @@ Die betriebsrelevanten ENV-Variablen, die die Anwendung zur Laufzeit auswertet (
 | `TRUSTED_PROXY_CIDRS` | leer | Adressbereiche der Proxys, denen der Reverse-Proxy ein eingehendes `X-Forwarded-For` glauben darf — **nur** durch Leerzeichen getrennt (Kommas sind kein Trennzeichen, Netzmasken keine gültige Schreibweise), als CIDR (`203.0.113.0/24`, `2001:db8::/32`), als einzelne Adresse oder mit dem Schlüsselwort `private_ranges`. Leer lassen, solange Caddy der einzige Proxy ist: Caddy verwirft dann jeden vom Client mitgeschickten Wert und setzt den Header selbst. Vor einem CDN oder Loadbalancer ist die Variable **Voraussetzung** für `TRUSTED_PROXY_HOPS > 1`; derselbe Wert füllt die Caddy-Konfiguration und die Anwendung. Ein unbrauchbarer Bereich bricht den Start ab (#1963). |
 | `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt Monitoring-Caller, die Detailfelder von `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, Backup-Alter, Disk-frei, `stale_jobs`) abzurufen. Ohne Token liefert `/health/` nur `{"status": …}` (siehe [§ 5.1](#51-health-endpoint), #1375). |
 
-> **Migration bestehender Installationen:** Wer bisher genau einen öffentlichen Hostnamen in `ALLOWED_HOSTS` führt — gern zusammen mit `localhost`/`127.0.0.1` für den Healthcheck, muss nichts tun: `EXTERNAL_ORIGIN` wird daraus abgeleitet. Wer mehrere öffentliche Hosts (z. B. mit und ohne `www.`) oder ein Subdomain-Muster einträgt, ergänzt die Variable **vor** dem Update in der `.env`; andernfalls startet die Anwendung nach dem Update nicht mehr und nennt im Log genau diese Variable. Der Wert ist die Adresse, unter der die Einrichtung die Anwendung tatsächlich aufruft — sie steht anschließend in jeder Einladungs-, Passwort-Reset- und Entsperr-Mail.
-
 **Datenbank (PostgreSQL — Drei-Rollen-Modell, #902)**
 
-Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Superuser (legt beim ersten Start nur die App-Rollen an), die **App-Rolle** (`POSTGRES_USER`, `NOSUPERUSER NOBYPASSRLS` — Django-Runtime, RLS-geschützt) und die **Admin-Rolle** (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS` — Migrationen, Seed, Retention-Pruning). **Breaking-Change für Self-Hoster:** Die drei neuen `.env`-Variablen sind Pflicht.
+Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Superuser (legt beim ersten Start nur die App-Rollen an), die **App-Rolle** (`POSTGRES_USER`, `NOSUPERUSER NOBYPASSRLS` — Django-Runtime, RLS-geschützt) und die **Admin-Rolle** (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS` — Migrationen, Seed, Retention-Pruning). Die `.env`-Variablen `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` und `POSTGRES_BOOTSTRAP_PASSWORD` sind Pflicht.
 
 | Name | Default | Beschreibung |
 |---|---|---|
@@ -155,7 +153,7 @@ Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bo
 | Name | Default | Beschreibung |
 |---|---|---|
 | `ENCRYPTION_KEYS` || Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
-| `ENCRYPTION_KEY` || Legacy-Single-Key (Einzelkey). Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
+| `ENCRYPTION_KEY` || Einzelschlüssel-Betrieb (Alternative zu `ENCRYPTION_KEYS`); Schlüsselring bevorzugt. Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
 
 **Virus-Scan (ClamAV, #524)**
 
@@ -530,7 +528,7 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 **Token-Gültigkeit (L4, Refs #1375):** Einladungs- und Passwort-Reset-Tokens haben **getrennte** Gültigkeiten:
 
 - **Einladungen** laufen nach `INVITE_TOKEN_TIMEOUT` ab (Default **3 Tage** = 259200 s, per ENV `DJANGO_INVITE_TOKEN_TIMEOUT` anpassbar) — ein neu eingeladener Mitarbeitender braucht realistisch Tage, um den Link zu öffnen.
-- **Passwort-Resets** laufen nach `PASSWORD_RESET_TIMEOUT` ab (Default **2 Stunden**, früher Django-Default 3 Tage; per ENV `DJANGO_PASSWORD_RESET_TIMEOUT` anpassbar) — ein Reset-Link ist ein starkes Recovery-Primitiv und soll kurzlebig sein.
+- **Passwort-Resets** laufen nach `PASSWORD_RESET_TIMEOUT` ab (Default **2 Stunden**, abweichend vom Django-Standardwert von 3 Tagen; per ENV `DJANGO_PASSWORD_RESET_TIMEOUT` anpassbar) — ein Reset-Link ist ein starkes Recovery-Primitiv und soll kurzlebig sein.
 
 Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-Token gilt nicht auf `/invite/` und umgekehrt) und invalidieren den Token automatisch, sobald der Nutzer sein erstes Passwort gesetzt hat.
 
@@ -553,7 +551,7 @@ Mail-Backend: Bleibt die Mail aus, zusätzlich Spam-Ordner, Quarantäne und beim
 Provider die SPF-/DKIM-/DMARC-Ausrichtung prüfen. Bis zur Behebung steht der
 folgende Initialpasswort-Weg als technischer Notfall-Fallback zur Verfügung.
 
-**Technischer Legacy-Fallback ohne E-Mail:** Die Fach-UI verlangt immer eine E-Mail-Adresse. Nur der Django-Admin kann zur Abwärtskompatibilität noch einen Nutzer **ohne** E-Mail-Adresse anlegen und zeigt dann einmalig ein Klartext-Initialpasswort. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
+**Technischer Fallback ohne E-Mail:** Die Fach-UI verlangt immer eine E-Mail-Adresse. Nur der Django-Admin kann einen Nutzer **ohne** E-Mail-Adresse anlegen und zeigt dann einmalig ein Klartext-Initialpasswort. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
 
 > **Hinweis:** `must_change_password` wird bei **jeder** Neuanlage im Admin gesetzt. Schließt der Nutzer den Setup-Schritt der Einladung ab — oder später einen Passwort-Reset, wird das Flag dabei automatisch wieder gelöscht (#1969); er hat sein Passwort in diesem Schritt ja selbst gewählt und muss es beim ersten Login nicht sofort erneut ändern. Erzwungen bleibt der Wechsel damit genau dort, wo er gebraucht wird: beim Fallback ohne E-Mail-Adresse, bei dem der Admin das Initialpasswort kennt.
 
@@ -589,9 +587,7 @@ Unter **Verwaltung → Dokumentationstypen** (`/config/document-types/`) legen S
 
 Das Paar `(Einrichtung, Name)` ist eindeutig: Pro Einrichtung kann jeder Dokumentationstyp-Name nur **einmal** vergeben werden. Der Versuch, einen zweiten Typ mit demselben Namen anzulegen, wird als Formularfehler abgewiesen.
 
-> **Geändert 2026-08-04 (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** Das Feld **Kategorie** (Kontakt/Leistung/Verwaltung/Notiz) ist **entfallen** — samt Formularfeld, Listen-Filter und den „Kategorie"-Spalten in Statistik-Dashboard und Berichts-PDF. Es war eine reine Anzeige-Gruppierung ohne Wirkung auf Export oder Bann-/Krisen-Logik; dafür war und ist der **Systemtyp** maßgeblich (siehe unten). Mit der Kategorie ist auch ihre Rolle im Eindeutigkeits-Schlüssel entfallen: Bisher war derselbe Name in zwei Kategorien erlaubt (z. B. „Notiz" als Verwaltung *und* als Notiz), jetzt nicht mehr. Beim Update prüft die Migration das vorab und **bricht ab**, wenn eine Einrichtung solche Doppelnamen führt — benennen Sie sie vorher um; ein automatisches Zusammenführen wäre ein Datenentscheid, den nur Sie treffen können.
->
-> In **Konfigurationspaketen** (YAML) darf der Schlüssel `category` stehen bleiben: Pakete bleiben gültig und ladbar, der Wert wird aber ignoriert und der Ladebericht weist ihn als Warnung aus. Siehe [docs/packages.md](packages.md).
+> **Konfigurationspakete** (YAML) dürfen den Schlüssel `category` enthalten: Pakete bleiben gültig und ladbar, der Wert wird aber ignoriert und der Ladebericht weist ihn als Warnung aus. Siehe [docs/packages.md](packages.md).
 
 #### Sensibilitätsstufe
 
@@ -617,8 +613,6 @@ Die Freigabe hebt keine Sichtbarkeitsregeln auf: Ein Typ erscheint nur für Roll
 
 Der Systemtyp verknüpft einen Dokumentationstyp mit interner Anwendungslogik. Er wird bei der Erstellung gesetzt und ist danach **nicht mehr änderbar**.
 
-> **Geändert 2026-08-12 (#1849, [ADR-042](adr/042-report-key-berichtszuordnung.md)):** Die **Berichtszuordnung hat ein eigenes Feld** bekommen — den **Berichtsschlüssel** (siehe nächster Abschnitt). Der Systemtyp steuert nur noch Anwendungslogik. Wer bisher einen Typ über den Systemtyp in den Beispiel-Sachbericht gebracht hat, findet ihn dort unverändert: das Update hat allen Bestandstypen den passenden Berichtsschlüssel gegeben. **Der hartkodierte Slug-Zweitschlüssel ist entfallen** — ein Typ ohne Berichtsschlüssel erscheint in keinem Bericht, auch wenn sein Slug einer der Paket-Slugs ist.
-
 Der Systemtyp hat **eine** Funktion: **UI-Logik**. Entsprechend gibt es genau zwei Werte:
 
 | Systemtyp | Auswirkung |
@@ -627,8 +621,6 @@ Der Systemtyp hat **eine** Funktion: **UI-Logik**. Entsprechend gibt es genau zw
 | **Krisengespräch** | Wird als Highlight in der Übergabe angezeigt (letzte Krisen-Events) |
 
 > **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp — die meisten kommen ohne aus. Ob ein Typ in einem Bericht landet, sagt Ihnen die Auskunft „Erscheint in …" in Detail- und Formularansicht; der Systemtyp hat damit nichts zu tun.
-
-> **Geändert 2026-08-12 (#1850, [ADR-042](adr/042-report-key-berichtszuordnung.md)):** Die Auswahl hatte bis zu diesem Update **neun** Werte; die übrigen sieben (Kontakt, Medizinische Versorgung, Spritzentausch, Begleitung, Beratungsgespräch, Vermittlung, Notiz) waren reine Berichts-Zuordnungen und sind seit dem Berichtsschlüssel wirkungslos. Sie sind jetzt **entfernt**. An Bestandstypen wurde der Systemtyp dabei geleert — die Berichtszuordnung steht seit dem vorigen Update im Berichtsschlüssel und bleibt unverändert; **an den Zahlen Ihrer Berichte ändert sich nichts.** Was Sie sehen: Im Formular stehen nur noch „Hausverbot" und „Krisengespräch" zur Wahl, und in der Detailansicht eines betroffenen Typs steht beim Systemtyp jetzt „–".
 
 > **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu: Ein Wert gehört nur dann hierher, wenn er Anwendungsverhalten steuert. Berichts-Zuordnungen laufen über den Berichtsschlüssel.
 
@@ -872,7 +864,7 @@ Wenn eine Mitarbeiterin ihr Authenticator-Gerät verliert, muss ein Administrato
 2. Das Gerät des betroffenen Users auswählen und löschen.
 3. User informieren: nach dem nächsten Login wird automatisch auf `/mfa/setup/` umgeleitet (bei `is_mfa_enforced=True`) oder der User kann 2FA freiwillig neu einrichten.
 
-Seit v0.10.1 gibt es zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte — am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
+Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte — am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
 
 #### Account-Lockout
 
@@ -1079,7 +1071,7 @@ Quelle: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/mai
 
 - WebCrypto-API (`crypto.subtle`) und IndexedDB müssen verfügbar sein.
 - Unterstützt: aktuelle Versionen von Firefox, Chrome, Edge, Safari.
-- Nicht unterstützt: Legacy-Browser ohne moderne Crypto-API (der Offline-Modus wird in dem Fall ausgegraut).
+- Nicht unterstützt: veraltete Browser ohne moderne Crypto-API (der Offline-Modus wird in dem Fall ausgegraut).
 
 #### Streetwork-Stufen
 
@@ -1349,7 +1341,7 @@ Betrieb der Tracker-Instanz (Setup, Backups, Retention, Upgrades) ist Betreiber-
 
 Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf Anomalien aus (fehlgeschlagene Login-Bursts, Massen-Exporte/-Löschungen, verteilte Login-Angriffe) und schreibt Treffer als Audit-Events; optional wird ein Webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) benachrichtigt. Die Fenster/Schwellen werden über die `BREACH_*`-Variablen gesteuert (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz) sowie [Ops-Runbook § 6.5b](ops-runbook.md)).
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Empfohlener Cron (stündlich, jeweils zur 30. Minute):**
 
@@ -1540,7 +1532,7 @@ docker compose -f docker-compose.prod.yml exec web \
   python manage.py enforce_retention --facility "Beratungsstelle Nord"
 ```
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Als täglicher Cron einrichten (empfohlen):**
 
@@ -1896,14 +1888,14 @@ Die Materialized View wird **nicht live** mit jedem `INSERT` aktualisiert — si
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py refresh_statistics_view
 
-# Blockierend (falls kein UNIQUE-Index — Legacy-Schemas)
+# Blockierend (falls kein UNIQUE-Index vorhanden)
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py refresh_statistics_view --no-concurrent
 ```
 
 Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Empfohlener Cron-Rhythmus:**
 
@@ -1936,7 +1928,7 @@ Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht �
 
 Zusätzlich empfiehlt es sich, Snapshots regelmäßig per Cron zu erstellen:
 
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 ```bash
 # Monatlich am 1. um 02:00 — sichert den Vormonat
