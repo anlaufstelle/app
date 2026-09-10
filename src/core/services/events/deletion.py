@@ -163,7 +163,21 @@ def reject_deletion(deletion_request, reviewer):
     geloescht bleibt — und weil beide Schritte auditiert werden, versiegelt
     das append-only AuditLog den Widerspruch dauerhaft (DELETE, danach
     DELETION_REJECTED).
+
+    Vier-Augen-Prinzip (A3.4, Refs #2082): der Reviewer darf nicht der
+    Antragsteller sein — hier im Service als Single Source of Truth, wie in
+    :func:`approve_deletion` und in den drei Reject-Pendants
+    (``reject_client_deletion``, ``reject_case_deletion``,
+    ``reject_client_merge``). Dieser Weg war der einzige der vier, der sich
+    dafuer allein auf ``DeletionRequestReviewView`` und dahinter auf die
+    CHECK-Constraint ``deletion_request_different_reviewer`` verliess: an der
+    View vorbei aufgerufen brach er mitten in der Transaktion mit
+    ``IntegrityError`` ab statt mit der deutschen Meldung, die jeder andere
+    Reject-Weg liefert. Der Guard steht deshalb VOR der Sperre — kein
+    Statuswechsel, kein Reviewer-Stempel, keine DELETION_REJECTED-Zeile.
     """
+    if deletion_request.requested_by_id == reviewer.pk:
+        raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
     # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
     # die Zeile bis zum Commit dieser Transaktion.
     deletion_request = DeletionRequest.objects.select_for_update().get(

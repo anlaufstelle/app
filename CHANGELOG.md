@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Ereignis-Löschanträge weisen den Eigenreview jetzt auch beim direkten Aufruf im Dienst ab** (#2082) — Das Vier-Augen-Prinzip „Prüferin ≠ Antragstellerin" erzwang beim Ablehnen eines Ereignis-Löschantrags bislang nur die Oberfläche und dahinter eine Datenbank-Bedingung (technischer Fehlerabbruch statt Meldung); der Dienst prüft es nun selbst — wie schon bei Personen, Fällen und Zusammenführungen, sodass auch ein Aufruf an der Oberfläche vorbei mit derselben deutschen Meldung abgewiesen wird, ohne den Antrag zu verändern.
+
 ## [0.96.0] - 2026-09-08
 
 ### Added

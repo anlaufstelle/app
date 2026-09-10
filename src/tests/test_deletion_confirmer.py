@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event, User
-from core.services.events import approve_deletion, request_deletion
+from core.services.events import approve_deletion, reject_deletion, request_deletion
 
 
 @pytest.fixture
@@ -96,6 +96,59 @@ class TestRightEnforcement:
     def test_staff_without_right_cannot_access_list(self, client, staff_user):
         client.force_login(staff_user)
         assert client.get(reverse("core:deletion_request_list")).status_code == 403
+
+
+@pytest.mark.django_db
+class TestRejectServiceEnforcesFourEyes:
+    """Refs #2082: Der Ereignis-Reject erzwingt „Reviewer != Antragsteller"
+    selbst — nicht erst die View und nicht erst der DB-CHECK.
+
+    ``reject_deletion`` war der einzige der vier Reject-Wege
+    (Person/Fall/Zusammenfuehrung/Ereignis) ohne diesen Guard im Service.
+    Abgefangen wurde der Eigenreview bis dahin von
+    ``DeletionRequestReviewView`` und dahinter von der CHECK-Constraint
+    ``deletion_request_different_reviewer`` — letztere aber als
+    ``IntegrityError`` mitten in der Transaktion, also ohne die deutsche
+    Meldung, die jeder andere Reject-Weg liefert. Der Service ist die Single
+    Source of Truth (dasselbe Argument wie in ``approve_deletion``).
+    """
+
+    def test_service_rejects_self_review(self, lead_user, event_qualified):
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        with pytest.raises(ValidationError, match="Vier-Augen"):
+            reject_deletion(dr, lead_user)
+
+    def test_self_review_leaves_request_event_and_audit_untouched(self, lead_user, event_qualified):
+        """Kein Zustandswechsel, kein Reviewer-Stempel, keine Audit-Zeile —
+        der Guard sitzt VOR der Sperre und damit vor jedem Schreibzugriff."""
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        with pytest.raises(ValidationError, match="Vier-Augen"):
+            reject_deletion(dr, lead_user)
+        dr.refresh_from_db()
+        event_qualified.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert dr.reviewed_by_id is None
+        assert dr.reviewed_at is None
+        assert event_qualified.is_deleted is False
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(dr.pk),
+        ).exists()
+
+    def test_foreign_reviewer_still_rejects(self, lead_user, confirmer_staff, event_qualified):
+        """Positivkontrolle: der zulaessige Fremd-Reviewer lehnt weiterhin ab
+        — der Guard verengt den Weg nicht ueber das Vier-Augen-Prinzip hinaus."""
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        reject_deletion(dr, confirmer_staff)
+        dr.refresh_from_db()
+        event_qualified.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.REJECTED
+        assert dr.reviewed_by_id == confirmer_staff.pk
+        assert event_qualified.is_deleted is False
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(dr.pk),
+        ).exists()
 
 
 @pytest.mark.django_db
