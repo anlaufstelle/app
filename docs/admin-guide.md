@@ -1097,6 +1097,8 @@ Seit #1945 greift der Schutz auch, wenn vor dem Formelzeichen **unsichtbare Zeic
 >
 > **Praxis:** Nutzen Sie den CSV-Import für die **Übernahme aus Fremdsystemen**, nicht als Sicherung-und-Rückspielweg für eigene Daten. Für Letzteres ist die verschlüsselte Datenbank- und Mediensicherung mit `backup.sh` (siehe [§ 3](#3-backup-und-wiederherstellung)) der richtige Weg. Müssen Sie einen exportierten Wert doch wieder einlesen, entfernen Sie das führende `'` vorher in der Tabellenkalkulation.
 
+Ändern sich während eines laufenden Imports der Dokumentationstyp oder zugeordnete Feldvorlagen, weist die Anwendung den Probelauf beziehungsweise die Übernahme ab und verweist zurück auf den Zuordnungsschritt. So werden entfernte oder deaktivierte Zielfelder nicht still ausgelassen. Für die Übernahme gilt immer die **zuletzt erfolgreich bestätigte Zuordnung** — auch wenn sie in einer anderen Browser-Sitzung bestätigt wurde.
+
 Die Berichts-Exporte in **JSON und XML** sanitisieren bewusst nicht — dort gibt es keinen Formel-Kontext, und CSV-Escapes würden die maschinenlesbaren Werte verfälschen.
 
 Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/system/export.py) (`_sanitize_csv_cell`), [`src/core/services/import_engine.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/import_engine.py).

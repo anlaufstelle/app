@@ -16,7 +16,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError, IntegrityError
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Client, DocumentTypeField, Event, FieldTemplate, ImportJob
+from core.models import Activity, AuditLog, Client, DocumentType, DocumentTypeField, Event, FieldTemplate, ImportJob
 from core.services import import_engine
 from core.services.file_vault import decrypt_field, encrypt_file
 
@@ -446,6 +446,31 @@ class TestRunImportCharacterization:
             import_engine.run_import(client_job, admin_user, commit=False)
 
         assert exc_info.value.messages == ["Für diesen Importlauf ist noch keine Spaltenzuordnung hinterlegt."]
+
+    def test_missing_dynamic_template_is_a_classified_cell_error(
+        self, facility, admin_user, doc_type_client_profile, media_root
+    ):
+        job = _profile_job(
+            facility,
+            admin_user,
+            doc_type_client_profile,
+            "Pseudonym;Wohnform\nTPL-CELL;Wohnung\n",
+            {"Pseudonym": "pseudonym", "Wohnform": "data_json.wohnsituation"},
+        )
+        template = FieldTemplate.objects.get(facility=facility, slug="wohnsituation")
+        template.is_active = False
+        template.save(update_fields=["is_active"])
+
+        with pytest.raises(import_engine._CellError) as exc_info:
+            import_engine._collect_data_json(
+                job,
+                {"data_json.wohnsituation": "Wohnung"},
+                {"data_json.wohnsituation": "Wohnform"},
+            )
+
+        classified = import_engine._classify_import_error(exc_info.value)
+        assert classified.column == "Wohnform"
+        assert classified.code == "invalid_value"
 
     @pytest.mark.parametrize(
         ("exception_type", "source_message", "expected_code", "expected_message"),
@@ -1239,6 +1264,56 @@ class TestCommitImport:
         assert not Client.objects.filter(pseudonym="IMP-01").exists()
         assert client_job.storage_filename != ""
 
+    def test_inactive_mapped_template_rejects_commit(self, facility, admin_user, doc_type_client_profile, media_root):
+        job = _profile_job(
+            facility,
+            admin_user,
+            doc_type_client_profile,
+            "Pseudonym;Wohnform\nTPL-COMMIT;Wohnung\n",
+            {"Pseudonym": "pseudonym", "Wohnform": "data_json.wohnsituation"},
+        )
+        import_engine.run_import(job, admin_user, commit=False)
+        template = FieldTemplate.objects.get(facility=facility, slug="wohnsituation")
+        template.is_active = False
+        template.save(update_fields=["is_active"])
+
+        with pytest.raises(
+            ValidationError,
+            match="Spalte „Wohnform“.{0,80}Zielfeld „data_json.wohnsituation“",
+        ):
+            import_engine.commit_import(job, admin_user)
+
+        job.refresh_from_db()
+        assert job.status == ImportJob.Status.VALIDATED
+        assert job.mapping_json["columns"]["Wohnform"] == "data_json.wohnsituation"
+        assert not Client.objects.filter(pseudonym="TPL-COMMIT").exists()
+
+    def test_changed_document_type_is_loaded_from_the_locked_job(
+        self, facility, admin_user, doc_type_client_profile, media_root
+    ):
+        job = _profile_job(
+            facility,
+            admin_user,
+            doc_type_client_profile,
+            "Pseudonym;Wohnform\nDOC-TYPE;Wohnung\n",
+            {"Pseudonym": "pseudonym", "Wohnform": "data_json.wohnsituation"},
+        )
+        import_engine.run_import(job, admin_user, commit=False)
+        replacement = DocumentType.objects.create(
+            facility=facility,
+            entity_type=DocumentType.EntityType.CLIENT,
+            name="Anderes Personenprofil",
+        )
+        ImportJob.objects.filter(pk=job.pk).update(document_type=replacement)
+
+        with pytest.raises(ValidationError, match="Zielfeld „data_json.wohnsituation“"):
+            import_engine.commit_import(job, admin_user)
+
+        job.refresh_from_db()
+        assert job.document_type_id == replacement.pk
+        assert job.status == ImportJob.Status.VALIDATED
+        assert not Client.objects.filter(pseudonym="DOC-TYPE").exists()
+
 
 @pytest.mark.django_db
 class TestAbortImport:
@@ -1345,6 +1420,27 @@ class TestConcurrentTransitionsAreSerialized:
         client_job.refresh_from_db()
         assert client_job.status == ImportJob.Status.COMMITTED
         assert Client.objects.filter(pseudonym__startswith="IMP-").count() == 3
+
+    def test_commit_uses_the_latest_mapping_from_the_locked_job(self, facility, admin_user, media_root):
+        first_request_job = import_engine.store_import_upload(
+            facility,
+            admin_user,
+            _upload("Pseudonym;Wert\nLOCK-MAP;identified\n"),
+            target_type=ImportJob.TargetType.CLIENT,
+        )
+        mapping_a = {"Pseudonym": "pseudonym", "Wert": "notes"}
+        mapping_b = {"Pseudonym": "pseudonym", "Wert": "contact_stage"}
+        import_engine.probe_import(first_request_job, admin_user, mapping_a)
+
+        second_request_job = ImportJob.objects.get(pk=first_request_job.pk)
+        import_engine.probe_import(second_request_job, admin_user, mapping_b)
+        import_engine.commit_import(first_request_job, admin_user)
+
+        first_request_job.refresh_from_db()
+        imported = Client.objects.get(facility=facility, pseudonym="LOCK-MAP")
+        assert first_request_job.mapping_json["columns"] == mapping_b
+        assert imported.contact_stage == Client.ContactStage.IDENTIFIED
+        assert imported.notes == ""
 
 
 @pytest.mark.django_db

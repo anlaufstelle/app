@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Ereignis-Löschanträge weisen den Eigenreview jetzt auch beim direkten Aufruf im Dienst ab** (#2082) — Das Vier-Augen-Prinzip „Prüferin ≠ Antragstellerin" erzwang beim Ablehnen eines Ereignis-Löschantrags bislang nur die Oberfläche und dahinter eine Datenbank-Bedingung (technischer Fehlerabbruch statt Meldung); der Dienst prüft es nun selbst — wie schon bei Personen, Fällen und Zusammenführungen, sodass auch ein Aufruf an der Oberfläche vorbei mit derselben deutschen Meldung abgewiesen wird, ohne den Antrag zu verändern.
+### Fixed
+
+- **Import-Übernahme weist ungültig gewordene Zuordnungen ab** (#2196) — Probelauf und Übernahme prüfen gespeicherte Ziele erneut und melden entfernte oder deaktivierte Feldvorlagen, statt Werte still auszulassen.
+- **Import-Übernahme verwendet den gesperrten Job-Stand** (#2199) — Parallele Browser-Sitzungen übernehmen zuverlässig die zuletzt bestätigte Zuordnung statt eines veralteten View-Snapshots.
 
 ## [0.96.0] - 2026-09-08
 

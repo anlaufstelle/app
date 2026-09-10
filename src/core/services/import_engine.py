@@ -511,6 +511,8 @@ def _validate_mapping_entry(
     header: list[str],
     known: dict[str, ImportTarget],
     assigned: set[str],
+    *,
+    persisted: bool = False,
 ) -> None:
     """Validiert eine nicht-leere Spaltenzuordnung in stabiler Fehlerreihenfolge."""
     _raise_first_mapping_error(
@@ -521,7 +523,15 @@ def _validate_mapping_entry(
             ),
             (
                 lambda: target not in known,
-                lambda: _("„%(target)s“ ist kein zulässiges Zielfeld.") % {"target": target},
+                lambda: (
+                    _(
+                        "Die Spalte „%(column)s“ verweist auf das nicht mehr verfügbare Zielfeld "
+                        "„%(target)s“. Bitte prüfen Sie die Zuordnung im Zuordnungsschritt."
+                    )
+                    % {"column": column, "target": target}
+                    if persisted
+                    else _("„%(target)s“ ist kein zulässiges Zielfeld.") % {"target": target}
+                ),
             ),
             (
                 lambda: target in assigned,
@@ -736,8 +746,10 @@ def _collect_data_json(job: ImportJob, values: dict, columns: dict) -> dict:
         if not target.startswith(DATA_JSON_PREFIX):
             continue
         template = templates.get(target[len(DATA_JSON_PREFIX) :])
-        if template is None or raw == "":
+        if raw == "":
             continue
+        if template is None:
+            raise _CellError("invalid_value", columns.get(target))
         data[template.slug] = _coerce_field_value(template, raw, columns.get(target))
     return data
 
@@ -897,6 +909,18 @@ def _mapped_columns(job: ImportJob) -> dict[str, str]:
     return columns_map
 
 
+def _validate_persisted_mapping(job: ImportJob, header: list[str]) -> dict[str, str]:
+    """Revalidiert die gespeicherte Zuordnung gegen den aktuellen Zielbestand."""
+    columns_map = _mapped_columns(job)
+    known = {target.key: target for target in available_targets(job)}
+    assigned: set[str] = set()
+    for column, target in columns_map.items():
+        _validate_mapping_entry(column, target, header, known, assigned, persisted=True)
+        assigned.add(target)
+    _validate_required_mappings(known, assigned)
+    return columns_map
+
+
 def _execute_import_row(job: ImportJob, user, values: dict, columns: dict) -> None:
     """Importiert eine Zeile innerhalb ihres eigenen Savepoints."""
     # Ohne den inneren Savepoint vergiftet ein IntegrityError die äußere
@@ -923,7 +947,7 @@ def run_import(job: ImportJob, user, *, commit: bool = False) -> dict:
         raise ValidationError(_("Der Importlauf ist bereits abgeschlossen."))
 
     header, rows = read_rows(job)
-    columns_map = _mapped_columns(job)
+    columns_map = _validate_persisted_mapping(job, header)
 
     errors: list[dict] = []
     created = 0
@@ -975,10 +999,15 @@ def _lock_job(job: ImportJob) -> None:
     eigenen, in der View geladenen Instanz. Entschiede der Statusuebergang auf
     diesem In-Memory-Snapshot, importierte ein Doppelklick auf „Uebernehmen" die
     Datei zweimal, und ein spaeter eintreffendes ``abort_import`` schriebe einen
-    bereits uebernommenen Lauf auf ``ABORTED`` um. ``probe_import``,
-    ``commit_import`` und ``abort_import`` laufen deshalb ueber DENSELBEN Lock:
-    der zweite Request blockiert, liest danach den Endzustand und faellt in den
-    Guard.
+    bereits uebernommenen Lauf auf ``ABORTED`` um. Auch Zuordnung,
+    Dokumentationstyp und die weiteren verarbeitungsrelevanten Felder muessen
+    vom gesperrten Datensatz stammen: sonst koennte ein Commit zwar den frischen
+    Status, aber die alte Zuordnung seiner View-Instanz verwenden.
+
+    ``probe_import``, ``commit_import`` und ``abort_import`` laufen deshalb
+    ueber DENSELBEN Lock: der zweite Request blockiert, liest danach den
+    vollstaendigen Verarbeitungsstand und faellt in den Guard beziehungsweise
+    arbeitet mit der zuletzt bestaetigten Zuordnung.
 
     Muster wie ``core.services.case.workitems`` — Neuladen innerhalb der
     Transaktionsklammer, mit explizitem ``facility_id``-Filter, damit Tenant-
@@ -989,6 +1018,11 @@ def _lock_job(job: ImportJob) -> None:
     job.status = locked.status
     job.result_json = locked.result_json
     job.storage_filename = locked.storage_filename
+    job.original_filename_encrypted = locked.original_filename_encrypted
+    job.mapping_json = locked.mapping_json
+    job.document_type_id = locked.document_type_id
+    job._state.fields_cache.pop("document_type", None)
+    job.target_type = locked.target_type
 
 
 def probe_import(job: ImportJob, user, mapping: dict[str, str]) -> dict:
