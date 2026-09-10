@@ -323,3 +323,72 @@ class TestTallyUndoView:
         response = client.post(reverse("core:tally_undo"), {"token": mint_tally_undo_token(event)})
 
         assert response.status_code == 403
+
+
+@pytest.mark.django_db
+class TestTallyUndoAndLegalHolds:
+    """Refs #2197 (a): der dritte Einstieg in ``_assert_no_active_hold``.
+
+    ``undo_tally_event`` ruft ``soft_delete_event`` (``tally_undo.py:139``) und
+    erbt damit dessen Hold-Gate. Der **Fall**-Zweig ist über diesen Weg
+    allerdings strukturell unerreichbar: die Rücknahme prüft vorher
+    ``event.case_id is not None`` und verweigert die Fähigkeit. Beide Hälften
+    stehen hier, damit der Befund nicht als ungeprüfte Annahme im Bericht
+    endet.
+    """
+
+    def test_undo_of_an_event_under_legal_hold_is_refused(self, facility, staff_user, admin_user, doc_type_contact):
+        from django.core.exceptions import ValidationError
+
+        from core.models import LegalHold
+        from core.services.events.tally_undo import mint_tally_undo_token, undo_tally_event
+
+        event = _tally_event(facility, staff_user, doc_type_contact)
+        token = mint_tally_undo_token(event)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event.pk,
+            reason="Ermittlungsverfahren",
+            created_by=admin_user,
+        )
+
+        with pytest.raises(ValidationError):
+            undo_tally_event(facility, staff_user, token)
+
+        event.refresh_from_db()
+        assert event.is_deleted is False
+
+    def test_a_tally_event_with_a_case_loses_its_undo_capability_before_the_hold_gate(
+        self, facility, client_identified, staff_user, admin_user, doc_type_contact
+    ):
+        """Die Begründung, warum der Fall-Zweig hier keine eigene Zelle hat.
+
+        Ein Strichlisten-Ereignis ist anonym und fallslos; wird ihm nachträglich
+        ein Fall angehängt, verweigert schon die Fähigkeitsprüfung die Rücknahme
+        (``TallyUndoDenied``) — der Löschpfad wird gar nicht erst betreten. Der
+        Fall-Hold hat auf diesem Weg deshalb nichts zu verhindern, und das
+        Ereignis überlebt trotzdem.
+        """
+        from core.models import Case, LegalHold
+        from core.services.events.tally_undo import TallyUndoDenied, mint_tally_undo_token, undo_tally_event
+
+        event = _tally_event(facility, staff_user, doc_type_contact)
+        token = mint_tally_undo_token(event)
+        case = Case.objects.create(
+            facility=facility, client=client_identified, title="Nachträglicher Fall", created_by=staff_user
+        )
+        Event.objects.filter(pk=event.pk).update(case=case)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Case",
+            target_id=case.pk,
+            reason="Ermittlungsverfahren",
+            created_by=admin_user,
+        )
+
+        with pytest.raises(TallyUndoDenied):
+            undo_tally_event(facility, staff_user, token)
+
+        event.refresh_from_db()
+        assert event.is_deleted is False

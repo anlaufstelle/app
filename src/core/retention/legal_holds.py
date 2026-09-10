@@ -650,8 +650,10 @@ def owner_has_active_hold(owner):
     Purge dagegen macht die Datei unwiederbringlich — er ist der erste
     Anhang-Pfad, an dem ein Hold ueberhaupt etwas zu verhindern hat.
 
-    ``LegalHold.target_type`` kennt nur ``Event``/``Client``/``Activity``; ein
-    Anhang ist nie selbst Hold-Ziel. Die Sperre wird deshalb ueber den Owner
+    ``LegalHold.target_type`` ist ein freies ``CharField`` ohne ``choices``
+    (ADR-044 §4); als Werte vergeben ``create_hold_for_target`` und die
+    Aufrufer heute ``Event``/``Client``/``Case``/``Activity``. Ein Anhang ist
+    nie selbst Hold-Ziel. Die Sperre wird deshalb ueber den Owner
     aufgeloest:
 
     * **Ereignis** — eigener Event-Hold ODER (ueber die Person) der

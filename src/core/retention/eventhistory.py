@@ -186,9 +186,19 @@ def lock_and_partition_events(event_ids):
        verschieben (``services/client/merge.py``), dessen Hold diese Charge
        dann nie saehe. Wer sich zwischenzeitlich bewegt hat, wird
        zurueckgestellt statt mit der veralteten Sperrmenge verarbeitet —
-       dieselbe Disziplin wie im Workitem-Bulk aus L1.
+       dieselbe Disziplin wie im Workitem-Bulk aus L1. Die **Fall**-Zuordnung
+       wird dabei mit frisch gelesen (Refs #2197): ein Umhaengen innerhalb
+       DERSELBEN Person laesst den Personenbezug unveraendert, das Ereignis
+       bleibt also in der Charge — ein Fall aus dem Snapshot von vorhin waere
+       dann der falsche.
     4. Erst danach der Hold-Zustand; unter ``READ COMMITTED`` waere er vorher
-       nur der Stand von vorhin.
+       nur der Stand von vorhin. Gezaehlt werden Ereignis-, Personen- **und**
+       Fall-Holds (Refs #2197): der Fall-Hold gilt seit Refs #2122 im
+       Aufbewahrungslauf, wurde hier aber nie gelesen — der Sweep redigierte
+       die Historie der Ereignisse eines gehaltenen Falls trotzdem
+       (Spoliation, Muster Refs #1066). Sein Koordinationspunkt ist dieselbe
+       Personenzeile aus Stufe 1: ``_lock_case_and_check_history`` nimmt sie
+       beim Anlegen des Holds als erste Stufe.
 
     Liefert ``(eligible, held, skipped)`` als Ereignis-Mengen. Muss innerhalb
     einer offenen Transaktion laufen.
@@ -215,14 +225,24 @@ def lock_and_partition_events(event_ids):
     locked_events = _lock_rows(Event, sorted(set(snapshot) - blocked_by_client))
 
     # Revalidierung NACH der Ereignissperre.
-    current_clients = dict(Event.objects.filter(pk__in=locked_events).values_list("pk", "client_id"))
-    moved = {pk for pk in locked_events if current_clients.get(pk) != snapshot[pk][1]}
+    current = {
+        pk: (client_id, case_id)
+        for pk, client_id, case_id in Event.objects.filter(pk__in=locked_events).values_list(
+            "pk", "client_id", "case_id"
+        )
+    }
+    moved = {pk for pk in locked_events if current.get(pk, (None, None))[0] != snapshot[pk][1]}
     locked_events -= moved
 
     facility_ids = {snapshot[pk][0] for pk in locked_events}
     held_events = get_active_hold_target_ids_for_facilities(facility_ids, "Event")
     held_clients = get_active_hold_target_ids_for_facilities(facility_ids, "Client")
-    held = {pk for pk in locked_events if pk in held_events or current_clients.get(pk) in held_clients}
+    held_cases = get_active_hold_target_ids_for_facilities(facility_ids, "Case")
+    held = set()
+    for pk in locked_events:
+        client_id, case_id = current.get(pk, (None, None))
+        if pk in held_events or client_id in held_clients or case_id in held_cases:
+            held.add(pk)
 
     skipped = set(event_ids) - locked_events - held
     return locked_events - held, held, skipped

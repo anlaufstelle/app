@@ -1259,6 +1259,119 @@ class TestClientHoldsAreHard:
         assert not EventHistory.objects.filter(event=event, redacted_at__isnull=False).exists()
 
 
+@pytest.mark.django_db
+class TestCaseHoldsAreHardToo:
+    """Refs #2197 (b): der Sweep bildet die Hold-Menge auch aus FALL-Holds.
+
+    ``lock_and_partition_events`` las bis hierher nur Ereignis- und
+    Personen-Holds (``held_events``/``held_clients``). Der Fall-Hold gilt seit
+    Refs #2122 im Aufbewahrungslauf — dort stellt ``_lock_event_and_recheck_hold``
+    das Ereignis eines gehaltenen Falls zurueck. Der Historien-Sweep redigierte
+    dieselben Ereignisse trotzdem: der Rahmen blieb stehen, sein Inhalt nicht
+    (Spoliation, Muster Refs #1066).
+
+    Der Koordinationspunkt ist derselbe wie beim Personen-Hold: ``core_client``.
+    ``_lock_case_and_check_history`` sperrt beim Anlegen eines Fall-Holds zuerst
+    die Personenzeile — genau die, die dieser Sweep als erste Stufe nimmt.
+    """
+
+    def _deleted_event(self, facility, staff_user, doc_type_contact, *, client, case=None):
+        from core.services.events import soft_delete_event
+
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+            client=client,
+            case=case,
+        )
+        soft_delete_event(event, staff_user)
+        return event
+
+    def test_ereignis_eines_gehaltenen_falls_wird_zurueckgestellt(
+        self, facility, settings_obj, staff_user, admin_user, client_identified, doc_type_contact, case_open
+    ):
+        from core.retention.eventhistory import enforce_eventhistory_retention
+        from core.retention.legal_holds import create_hold_for_target
+
+        event = self._deleted_event(facility, staff_user, doc_type_contact, client=client_identified, case=case_open)
+        create_hold_for_target(
+            facility,
+            target_type="Case",
+            target_id=case_open.pk,
+            user=admin_user,
+            reason="Ermittlungsverfahren",
+        )
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["redacted"] == 0
+        assert result["deferred"] == 1
+        assert not EventHistory.objects.filter(event=event, redacted_at__isnull=False).exists()
+
+    def test_ereignis_eines_ungehaltenen_falls_wird_weiterhin_redigiert(
+        self, facility, settings_obj, staff_user, client_identified, doc_type_contact, case_open
+    ):
+        """Gegenprobe: der neue Zweig darf nur das Gehaltene zurueckstellen."""
+        from core.retention.eventhistory import enforce_eventhistory_retention
+
+        event = self._deleted_event(facility, staff_user, doc_type_contact, client=client_identified, case=case_open)
+
+        result = enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+
+        assert result["deferred"] == 0
+        assert result["redacted"] == 2
+        assert EventHistory.objects.filter(event=event, redacted_at__isnull=False).count() == 2
+
+    def test_zwischenzeitlich_in_einen_gehaltenen_fall_verschobenes_ereignis_wird_gehalten(
+        self, facility, settings_obj, staff_user, admin_user, client_identified, doc_type_contact, case_open
+    ):
+        """Die Fall-Zugehoerigkeit wird NACH der Sperre gelesen, nicht aus dem Snapshot.
+
+        Ein Umhaengen des Ereignisses in einen anderen Fall DERSELBEN Person
+        laesst den Personenbezug unveraendert — die Revalidierung aus Finding C
+        greift also nicht, das Ereignis bleibt in der Charge. Wuerde der Sweep
+        den Fall aus dem Snapshot von vorhin nehmen, saehe er den Hold des
+        neuen Falls nie. Die Personenzeile ist waehrenddessen gesperrt; genau
+        sie nimmt ``_lock_case_and_check_history`` als erste Stufe, der Hold
+        kann also nicht danebenher committen.
+        """
+        from core.models import Case, Event
+        from core.retention import eventhistory as module
+        from core.retention.legal_holds import create_hold_for_target
+
+        event = self._deleted_event(facility, staff_user, doc_type_contact, client=client_identified, case=case_open)
+        held_case = Case.objects.create(
+            facility=facility, client=client_identified, title="Beweismittel-Fall", created_by=staff_user
+        )
+        create_hold_for_target(
+            facility,
+            target_type="Case",
+            target_id=held_case.pk,
+            user=admin_user,
+            reason="Ermittlungsverfahren",
+        )
+        original_lock = module._lock_rows
+
+        def _move_event_into_the_held_case(model, ids):
+            locked = original_lock(model, ids)
+            if model is Event and locked:
+                Event.objects.filter(pk__in=locked).update(case=held_case)
+            return locked
+
+        module._lock_rows = _move_event_into_the_held_case
+        try:
+            result = module.enforce_eventhistory_retention(facility, settings_obj, timezone.now(), dry_run=False)
+        finally:
+            module._lock_rows = original_lock
+
+        assert result["redacted"] == 0
+        assert result["deferred"] == 1
+        assert not EventHistory.objects.filter(event=event, redacted_at__isnull=False).exists()
+
+
 @pytest.mark.django_db(transaction=True)
 class TestBacklogMigrationHonoursHolds:
     """Fix-Runde 1, Finding 1 (Critical): die Bestandsmigration war hold-blind.
@@ -1320,6 +1433,36 @@ class TestBacklogMigrationHonoursHolds:
         _run_backfill()
 
         assert not EventHistory.objects.filter(event=event, redacted_at__isnull=False).exists()
+
+    def test_ereignis_unter_case_hold_wird_zurueckgestellt(
+        self, facility, staff_user, admin_user, doc_type_contact, client_identified
+    ):
+        """Refs #2197 (b): derselbe Baustein, deshalb derselbe Schutz im Altbestand.
+
+        Die Migration importiert ``lock_and_partition_events`` (ADR-044 §3:
+        eine Fassung, keine Drift) — der Fall-Zweig kommt hier ohne eine Zeile
+        Migrationscode an. Genau das haelt dieser Test fest.
+        """
+        from core.models import Case, Event, LegalHold
+
+        event = self._deleted_event(facility, staff_user, doc_type_contact, client=client_identified)
+        case = Case.objects.create(
+            facility=facility, client=client_identified, title="Beweismittel-Fall", created_by=staff_user
+        )
+        Event.objects.filter(pk=event.pk).update(case=case)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Case",
+            target_id=case.pk,
+            reason="Ermittlungsverfahren",
+            created_by=admin_user,
+        )
+
+        _run_backfill()
+
+        rows = EventHistory.objects.filter(event=event)
+        assert rows.filter(redacted_at__isnull=False).count() == 0
+        assert rows.filter(data_after={"dauer": 30, "notiz": "Zweitgespräch"}).exists(), "Inhalte erhalten"
 
     def test_ungehaltene_ereignisse_werden_weiterhin_redigiert(
         self, facility, staff_user, admin_user, doc_type_contact

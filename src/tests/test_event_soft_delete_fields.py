@@ -19,10 +19,13 @@ import ast
 from pathlib import Path
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from core.models import Event
-from core.services.events.crud import soft_delete_event
+from core.models import Attachment, AuditLog, Event, LegalHold
+from core.services.events.crud import LEGAL_HOLD_BLOCKS_DELETE_MESSAGE, soft_delete_event
+from core.services.file_vault.storage import get_attachment_path
+from tests.conftest import _make_attachment
 
 CORE_ROOT = Path(__file__).resolve().parents[1] / "core"
 
@@ -198,3 +201,73 @@ class TestEventSoftDeleteFields:
         stored = Event.objects.get(pk=sample_event.pk)
         assert stored.deleted_at is not None
         assert stored.deleted_by_id == staff_user.pk
+
+
+@pytest.mark.django_db
+class TestCaseHoldBlocksTheManualDeletePath:
+    """Refs #2197 (a): ein Hold auf den FALL hält auch den manuellen Klick an.
+
+    ``_lock_event_and_recheck_hold`` (``core/retention/enforcement.py``) prüft
+    den Fall-Zweig seit Refs #2122 unter der Sperre — der manuelle Pfad kannte
+    nur Ereignis- und Personen-Holds. Damit durfte ein Klick mehr als der Cron:
+    der Aufbewahrungslauf stellte das Ereignis eines gehaltenen Falls zurück,
+    ``soft_delete_event`` leerte es und löschte seine Anhänge **physisch**
+    (nicht rollback-bar) — die Hintertür um einen bewusst gesetzten
+    Beweismittel-Hold (Spoliation, Muster Refs #1066).
+    """
+
+    def _hold_on(self, facility, admin_user, target_type, target_id):
+        return LegalHold.objects.create(
+            facility=facility,
+            target_type=target_type,
+            target_id=target_id,
+            reason="Ermittlungsverfahren",
+            created_by=admin_user,
+        )
+
+    def test_event_of_a_held_case_keeps_payload_audit_and_file(
+        self, facility, case_open, case_event, staff_user, admin_user
+    ):
+        """Die drei Wirkungen, die ``soft_delete_event`` sonst entfaltet.
+
+        Der Anhang wird eigens geprüft, weil er der einzige unumkehrbare Teil
+        ist: ``delete_attachments_for`` entfernt die verschlüsselte Datei von
+        der Platte, kein Papierkorb hält sie vor.
+        """
+        attachment = _make_attachment(facility, case_event, staff_user, ft_name="Anhang (Fall-Hold)")
+        path = get_attachment_path(attachment)
+        assert path.exists(), "Vorbedingung: die verschlüsselte Datei liegt auf der Platte"
+        self._hold_on(facility, admin_user, "Case", case_open.pk)
+
+        with pytest.raises(ValidationError) as exc_info:
+            soft_delete_event(case_event, staff_user)
+
+        assert exc_info.value.messages == [str(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)]
+        case_event.refresh_from_db()
+        assert case_event.is_deleted is False
+        assert case_event.deleted_at is None
+        assert case_event.data_json == {"dauer": 15, "notiz": "Testnotiz"}
+        assert Attachment.objects.filter(pk=attachment.pk).exists()
+        assert path.exists(), "der Anhang darf physisch nicht verschwinden"
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(case_event.pk)).exists()
+
+    def test_hold_on_another_case_leaves_the_delete_path_open(
+        self, facility, case_open, case_closed, case_event, staff_user, admin_user
+    ):
+        """Gegenprobe: der Guard darf nur den gehaltenen Fall anhalten."""
+        self._hold_on(facility, admin_user, "Case", case_closed.pk)
+
+        soft_delete_event(case_event, staff_user)
+
+        case_event.refresh_from_db()
+        assert case_event.is_deleted is True
+
+    def test_event_without_a_case_is_unaffected(self, facility, sample_event, staff_user, admin_user):
+        """Der Zweig fragt ``event.case_id`` zuerst — ein fallloses Ereignis
+        darf nicht über einen zufällig gleich lautenden Hold stolpern."""
+        self._hold_on(facility, admin_user, "Case", sample_event.pk)
+
+        soft_delete_event(sample_event, staff_user)
+
+        sample_event.refresh_from_db()
+        assert sample_event.is_deleted is True

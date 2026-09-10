@@ -2331,6 +2331,37 @@ Die Reichweite ist heute gering: es gibt keinen UI-Weg für direkte Personen-/Fa
 [`test_legal_hold_tombstone_guard.py`](../src/tests/test_legal_hold_tombstone_guard.py): Abweisung nach vollzogenem Merge (kein `LegalHold`, keine `LEGAL_HOLD`-Auditzeile, Zielpseudonym in der Meldung), Positivpfad (der Hold auf die Zielperson nimmt das gewanderte Ereignis aus `collect_doomed_events` und die Zielperson aus `exclude_clients_with_active_holds`), beide Grenzen (Papierkorb und unbekannte `target_id` bleiben zulässig), der `Case`-Zweig sowie ein beobachtender Zwei-Faden-Renn-Nachweis: eine Hold-Anlage, die in einen laufenden Merge hineinläuft, wartet am Personen-Anker und wird danach abgewiesen — statt still auf dem fertigen Tombstone zu landen.
 
 
+## Fall-Hold hält auch den manuellen Löschpfad und den Historien-Sweep an (Issue #2197)
+
+### Beobachtung
+
+Ein Hold auf einen **Fall** schützt seit #2122 die Ereignisse dieses Falls: `_lock_event_and_recheck_hold` ([`enforcement.py`](../src/core/retention/enforcement.py)) stellt sie unter der Sperre als `deferred` zurück, `exclude_cases_with_active_holds` zieht die Gegenrichtung. Zwei Ereignis-Pfade hatten diesen dritten Zweig nicht übernommen:
+
+- **Der manuelle Löschpfad.** `_assert_no_active_hold` ([`crud.py`](../src/core/services/events/crud.py)) prüfte nur Ereignis- und Personen-Holds. Über ihn laufen das direkte Löschen durch die Fachkraft, die Rücknahme eines Strichlisten-Eintrags und der geprüfte Vier-Augen-Weg (`approve_deletion`). Ein Ereignis in einem gehaltenen Fall ließ sich damit per Klick leeren — und `delete_attachments_for` entfernt dabei die verschlüsselten Anhänge **physisch**, was kein Papierkorb zurückholt. Der eigene Docstring der Funktion versprach das Gegenteil: „ein manueller Klick darf nicht mehr dürfen als der Cron".
+- **Der Historien-Sweep und die Bestandsmigration.** `lock_and_partition_events` ([`eventhistory.py`](../src/core/retention/eventhistory.py)) bildete die Hold-Menge aus `"Event"` und `"Client"`. Der Sweep redigierte die Verlaufsfassungen der Ereignisse eines gehaltenen Falls, während der Aufbewahrungslauf das lebende Ereignis (korrekt) stehen ließ — der Rahmen blieb, sein Inhalt nicht (Spoliation, Muster #1066).
+
+### Maßnahme
+
+`_assert_no_active_hold` bekommt den dritten Zweig (`event.case_id` + `has_active_hold(..., "Case", ...)`) mit derselben Meldung wie die beiden anderen — fail-loud, ohne PII. `lock_and_partition_events` liest die Fall-Zugehörigkeit in der Revalidierung **nach** der Ereignissperre mit und nimmt `held_cases` ins Hold-Tripel auf.
+
+Bewusst in der Revalidierung und nicht im Snapshot: ein Umhängen des Ereignisses in einen anderen Fall **derselben** Person lässt den Personenbezug unverändert; die Revalidierung aus Finding C greift dann nicht, und ein Fall-Wert von vor den Sperren wäre der falsche. Der Koordinationspunkt ist dieselbe Personenzeile, die Stufe 1 ohnehin sperrt — `_lock_case_and_check_history` nimmt sie beim Anlegen eines Fall-Holds als erste Stufe (kanonische Ordnung `core_client` → `core_case` → `core_event`).
+
+Die Bestandsmigration `0174_redact_deleted_event_history_backlog` importiert denselben Baustein und ist damit ohne eine Zeile Migrationscode mitkorrigiert (ADR-044 §3: eine Fassung, keine Drift).
+
+### Grenzen
+
+- **Strichlisten-Rücknahme.** `undo_tally_event` verweigert die Fähigkeit schon vorher, wenn das Ereignis eine Person **oder** einen Fall trägt; ein Strichlisten-Ereignis ist anonym und fallslos. Der Fall-Zweig ist über diesen Pfad also gegenstandslos — das Ereignis überlebt, aber über die Fähigkeitsprüfung, nicht über das Hold-Gate.
+- **Reichweite.** Fall-Holds entstehen weiterhin nur per Service/Konsole (`create_hold_for_target`, kein UI-Weg). Geschlossen wird ein latenter fail-open-Pfad, der bei jeder künftigen Verdrahtung klickbar würde.
+
+### Hold-Kontrakt: Ziele und Meilensteine frieren **nicht** ein
+
+Ausdrücklich entschieden (und hier festgehalten, damit die Frage nicht erneut gestellt wird): ein Fall-Hold sperrt `delete_milestone`/`toggle_milestone` ([`goals.py`](../src/core/services/case/goals.py)) **nicht**. Ziele und Meilensteine sind Arbeitsstand der laufenden Fallarbeit, keine Beweisdokumentation; der Legal Hold schützt die Dokumentation und ihre Historie vor Tilgung, nicht die Planung vor Fortschritt. Die Art.-18-Einschränkung deckt den Fall, in dem eine betroffene Person die Verarbeitung angehalten haben will — dafür steht `assert_processing_allowed`, und das greift dort. Eine zusätzliche Hold-Sperre auf Ziel-Mutationen wäre Überdeckung, die die Fallarbeit anhält, ohne ein Beweismittel zu sichern.
+
+### Verifikation
+
+[`test_event_soft_delete_fields.py`](../src/tests/test_event_soft_delete_fields.py) (`TestCaseHoldBlocksTheManualDeletePath`: Nutzdaten, Audit und die verschlüsselte Datei überleben; Gegenproben für einen fremden Fall und ein fallloses Ereignis), [`test_event_deletion_hold.py`](../src/tests/test_event_deletion_hold.py) (Vier-Augen-Weg: der Antrag bleibt offen, kein `DELETION_APPROVED`), [`test_tally_undo.py`](../src/tests/test_tally_undo.py) (`TestTallyUndoAndLegalHolds`: geerbtes Hold-Gate und die Begründung, warum der Fall-Zweig dort gegenstandslos ist) sowie [`test_eventhistory_retention.py`](../src/tests/test_eventhistory_retention.py) (`TestCaseHoldsAreHardToo`: Sweep stellt zurück, ungehaltener Fall wird weiter redigiert, ein während der Sperrwartezeit in einen gehaltenen Fall umgehängtes Ereignis wird gehalten; `TestBacklogMigrationHonoursHolds`: derselbe Schutz im Altbestand über Migration 0174).
+
+
 ---
 
 ## Weitere Einstiegspunkte

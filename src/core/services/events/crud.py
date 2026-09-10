@@ -470,12 +470,28 @@ def _assert_no_active_hold(event):
     Der Hold auf die **Person** zaehlt mit (Refs #1376, I10): er schuetzt
     deren Ereignisse schon im Retention-Pfad, und ein manueller Klick darf
     nicht mehr duerfen als der Cron.
+
+    Der Hold auf den **Fall** ebenso (Refs #2197): seit Refs #2122 haelt ihn
+    ``retention/enforcement.py::_lock_event_and_recheck_hold`` unter der
+    Sperre an, und dessen Kommentar benannte diese Funktion bereits als die
+    Schwester, der der Zweig fehlte. Solange er fehlte, war derselbe Satz von
+    oben gebrochen: der Cron stellte das Ereignis eines gehaltenen Falls
+    zurueck, der Klick leerte es — inklusive der **physischen** Loeschung
+    seiner Anhaenge (``delete_attachments_for``), die kein Papierkorb
+    zurueckholt. Der Rahmen waere stehen geblieben, sein Inhalt nicht.
+
+    Die drei Zweige sind bewusst getrennte Abfragen und keine
+    ODER-Verkettung: sie lesen drei verschiedene Ziel-Typen, und jede von
+    ihnen faellt fuer sich aus (ein falloses oder personenloses Ereignis
+    ueberspringt ihre Zeile).
     """
     from core.retention.legal_holds import has_active_hold
 
     if has_active_hold(event.facility, "Event", event.pk):
         raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
     if event.client_id and has_active_hold(event.facility, "Client", event.client_id):
+        raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
+    if event.case_id and has_active_hold(event.facility, "Case", event.case_id):
         raise ValidationError(LEGAL_HOLD_BLOCKS_DELETE_MESSAGE)
 
 
