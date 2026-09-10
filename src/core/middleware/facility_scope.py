@@ -109,10 +109,11 @@ FACILITY_MISSING_EXEMPT_URLS = (
     "/auth/offline-key-salt/",
     # Eigenes Konto inklusive Lockout-Selbsthilfe (/account/recovery/...)
     "/account/",
-    # Rollen-Einstieg, Hilfe, Uebergabe-Redirect
+    # Rollen-Einstieg, Hilfe (die Uebergabe steht als exakter Pfad unten:
+    # unter /uebergabe/notiz/ liegt seit Refs #2042 eine facility-gebundene
+    # Schreibroute, die hinter den Guard gehoert)
     "/start/",
     "/hilfe/",
-    "/uebergabe/",
     # Refresh-Pfad des Offline-Replays; die uebrigen /api/v1/offline/-Endpunkte
     # sind facility-gebunden und bleiben BEWUSST draussen.
     "/api/v1/offline/csrf/",
@@ -135,6 +136,10 @@ FACILITY_MISSING_EXEMPT_URLS = (
 #: haelt die Ableitung „freigestellt ist genau ``public`` + ``auth-flow``"
 #: ohne eine einzige gepflegte Ausnahme dicht.
 FACILITY_MISSING_EXEMPT_PATHS = (
+    # Uebergabe-Redirect/-Ansicht (public, ALL_AUTH): exakt, damit die
+    # Schreibroute /uebergabe/notiz/ (facility-write, Refs #2042) nicht mit
+    # durch einen Praefix rutscht.
+    "/uebergabe/",
     "/offline/",
     "/offline/clients/",
     "/offline/client-shell/",
