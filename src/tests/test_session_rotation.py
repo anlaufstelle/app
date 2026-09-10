@@ -206,8 +206,9 @@ class TestRotationAtMfaVerify:
         assert after["_auth_user_backend"] == before["_auth_user_backend"]
         assert after["_auth_user_hash"] == before["_auth_user_hash"]
         assert after["_review_probe"] == {"nested": [1, 2, 3], "text": "unveraendert"}
-        # Genau EIN Unterschied: das angehobene Recht.
-        assert after == {**before, "mfa_verified": True}
+        # Genau ZWEI Unterschiede: das angehobene Recht und das bei django-otp
+        # angemeldete Geraet (Refs #2175: ``otp_login`` nach dem zweiten Faktor).
+        assert after == {**before, "mfa_verified": True, DEVICE_ID_SESSION_KEY: device.persistent_id}
 
     def test_backup_code_verify_rotates_session_id(self, client, staff_user):
         _confirmed_totp(staff_user)
@@ -221,7 +222,7 @@ class TestRotationAtMfaVerify:
         _assert_old_cookie_is_dead(old_key, client.session.session_key)
 
     def test_backup_code_verify_preserves_deadlines(self, client, staff_user, settings_obj):
-        _confirmed_totp(staff_user)
+        device = _confirmed_totp(staff_user)
         codes = generate_backup_codes(staff_user)
         _with_non_default_timeout(settings_obj)
         _login(client, "teststaff", STAFF_PASSWORD)
@@ -238,7 +239,8 @@ class TestRotationAtMfaVerify:
         assert after[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
         assert after["_session_expiry"] == before["_session_expiry"]
         assert after["_review_probe"] == before["_review_probe"]
-        assert after == {**before, "mfa_verified": True}
+        # Refs #2175: auch der Backup-Code-Zweig meldet das TOTP-Geraet bei django-otp an.
+        assert after == {**before, "mfa_verified": True, DEVICE_ID_SESSION_KEY: device.persistent_id}
 
     def test_invalid_totp_neither_rotates_nor_elevates(self, client, staff_user):
         _confirmed_totp(staff_user)
