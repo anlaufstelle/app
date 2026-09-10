@@ -610,14 +610,97 @@ def _run_backfill():
     module.redact_deleted_event_history_backlog(_Apps(), _SchemaEditor())
 
 
-@pytest.mark.django_db(transaction=True)
-class TestBacklogMigration:
+class _BacklogMigrationClassState:
+    @pytest.fixture(scope="class", autouse=True)
+    @classmethod
+    def _backlog_database(cls, django_db_setup, django_db_blocker):
+        from django.core.management import call_command
+
+        with django_db_blocker.unblock():
+            call_command("flush", interactive=False, verbosity=0)
+            yield
+            call_command("flush", interactive=False, verbosity=0)
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def organization(cls, _backlog_database):
+        from core.models import Organization
+
+        return Organization.objects.create(name="Testorg")
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def facility(cls, organization):
+        from core.models import Facility
+
+        return Facility.objects.create(organization=organization, name="Teststelle")
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def staff_user(cls, facility):
+        from core.models import User
+
+        return User.objects.create_user(username="teststaff", role=User.Role.STAFF, facility=facility, is_staff=True)
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def admin_user(cls, facility):
+        from core.models import User
+
+        return User.objects.create_user(
+            username="testadmin",
+            role=User.Role.FACILITY_ADMIN,
+            facility=facility,
+            is_staff=True,
+            can_confirm_deletion=True,
+        )
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def client_identified(cls, facility, staff_user):
+        from core.models import Client
+
+        return Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Test-ID-01",
+            created_by=staff_user,
+        )
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def doc_type_contact(cls, facility):
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Kontakt",
+            report_key="contact",
+            tally_enabled=True,
+        )
+        duration = FieldTemplate.objects.create(
+            facility=facility,
+            name="Dauer",
+            field_type=FieldTemplate.FieldType.NUMBER,
+            report_key="dauer_minuten",
+        )
+        note = FieldTemplate.objects.create(
+            facility=facility,
+            name="Notiz",
+            field_type=FieldTemplate.FieldType.TEXTAREA,
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=duration, sort_order=0)
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=note, sort_order=1)
+        return doc_type
+
+
+@pytest.mark.django_db
+class TestBacklogMigration(_BacklogMigrationClassState):
     """Paket 9 (Migrationsskizze Schritt 7): der D2-Bestand.
 
-    ``transaction=True``, weil die Migration je Charge eine eigene explizite
-    Transaktion oeffnet — unter der gekapselten Test-Transaktion waere das
-    ``ALTER TABLE`` einer inneren ``atomic()`` nur ein Savepoint und der
-    geprueft Ablauf ein anderer als im Deploy.
+    Diese Tests rufen die Arbeitsfunktion direkt auf und teilen ihren
+    unveraenderten Basisstand je Klasse. Den echten, ungekapstelten
+    Migrationsuebergang prueft separat ``TestBacklogMigrationExecutorRun``.
     """
 
     def test_bestand_geloeschter_ereignisse_wird_nachredigiert(self, facility, staff_user, doc_type_contact):
@@ -1372,8 +1455,8 @@ class TestCaseHoldsAreHardToo:
         assert not EventHistory.objects.filter(event=event, redacted_at__isnull=False).exists()
 
 
-@pytest.mark.django_db(transaction=True)
-class TestBacklogMigrationHonoursHolds:
+@pytest.mark.django_db
+class TestBacklogMigrationHonoursHolds(_BacklogMigrationClassState):
     """Fix-Runde 1, Finding 1 (Critical): die Bestandsmigration war hold-blind.
 
     Ein vor dem Upgrade geloeschtes, gehaltenes Ereignis haette beim Deploy
@@ -1746,8 +1829,8 @@ class TestSweepRevalidatesClientBinding:
         assert result["redacted"] == 2
 
 
-@pytest.mark.django_db(transaction=True)
-class TestBacklogMigrationChecksHoldsPerBatch:
+@pytest.mark.django_db
+class TestBacklogMigrationChecksHoldsPerBatch(_BacklogMigrationClassState):
     """Fix-Runde 2, Finding A (Critical): das Live-Deploy-Rennen der Migration.
 
     Migrationen laufen dokumentiert VOR dem Rolling-Restart, waehrend der
