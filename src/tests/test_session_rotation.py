@@ -39,6 +39,7 @@ from django.conf import settings as django_settings
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
+from django.core.exceptions import DisallowedRedirect
 from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils.encoding import force_bytes
@@ -706,3 +707,98 @@ class TestRotationAtPasswordResetTokenHandover:
         assert client.post(form_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}).status_code == 302
         staff_user.refresh_from_db()
         assert staff_user.check_password(NEW_PASSWORD) is True
+
+
+@pytest.mark.django_db
+class TestRotationSurvivesExceptionAfterTokenWrite:
+    """Fix-Runde 2, Ruling R-A1-12: die Rotation muss ausnahmesicher sein.
+
+    Djangos ``PasswordResetConfirmView.dispatch`` schreibt das gueltige Token in
+    die Sitzung und baut ERST DANACH den Redirect. Wirft dieser Schritt (oder
+    irgendetwas dahinter), wurde die Rotation im ersten Entwurf uebersprungen —
+    die Session-Middleware speicherte das Token beim Antwortbau aber trotzdem,
+    und zwar unter der ALTEN ID. Ein zweiter Client mit dem alten Cookie konnte
+    danach das Passwort setzen.
+
+    Die Ausnahme wird hier per ``monkeypatch`` an genau der Stelle ausgeloest,
+    an der die Elternklasse den Redirect baut — unabhaengig davon, welcher
+    konkrete Ausloeser (ueberlanger Pfad, Fehlkonfiguration, Bibliotheks-Bug)
+    sie in Produktion erzeugt.
+    """
+
+    def _uid(self, user) -> str:
+        return urlsafe_base64_encode(force_bytes(user.pk))
+
+    def _link(self, user, url_name, generator) -> str:
+        user.refresh_from_db()
+        return reverse(url_name, kwargs={"uidb64": self._uid(user), "token": generator.make_token(user)})
+
+    def _assert_capability_did_not_survive_in_old_session(self, user, old_key):
+        # Die alte Sitzungszeile ist weg — die Faehigkeit kann nicht an ihr haengen.
+        assert _session_row_exists(old_key) is False, (
+            "Alte django_session-Zeile ueberlebte die Ausnahme und traegt das Reset-Token"
+        )
+        form_url = reverse("password_reset_confirm", kwargs={"uidb64": self._uid(user), "token": "set-password"})
+        stolen = _client_with_stolen_cookie(old_key)
+        stolen_get = stolen.get(form_url)
+        assert stolen_get.status_code == 200
+        assert stolen_get.context["validlink"] is False
+        stolen_post = stolen.post(form_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD})
+        assert stolen_post.status_code == 200
+        assert stolen_post.context["validlink"] is False
+        user.refresh_from_db()
+        assert user.check_password(NEW_PASSWORD) is False, (
+            "Alter Cookie erbte die Reset-Berechtigung ueber den Ausnahmepfad und konnte das Passwort setzen"
+        )
+
+    def test_reset_rotates_even_when_redirect_build_raises(self, client, staff_user, monkeypatch):
+        """``DisallowedRedirect`` nach dem Token-Write → 400, Faehigkeit rotiert mit."""
+
+        def _raise_disallowed(*args, **kwargs):
+            raise DisallowedRedirect("Unsafe redirect")
+
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        link = self._link(staff_user, "password_reset_confirm", default_token_generator)
+        monkeypatch.setattr("django.contrib.auth.views.HttpResponseRedirect", _raise_disallowed)
+
+        response = client.get(link)
+
+        # SuspiciousOperation → 400; die Antwort entsteht, die Session wird
+        # ausgangsseitig gespeichert. Genau hier lag die Luecke.
+        assert response.status_code == 400
+        self._assert_capability_did_not_survive_in_old_session(staff_user, old_key)
+
+    def test_invite_rotates_even_when_dispatch_raises(self, client, staff_user, monkeypatch):
+        """Beliebige Ausnahme (500-Pfad) nach dem Token-Write — Invite-Route."""
+
+        def _raise_runtime(*args, **kwargs):
+            raise RuntimeError("Antwortbau gescheitert")
+
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        link = self._link(staff_user, "invite_confirm", invite_token_generator)
+        monkeypatch.setattr("django.contrib.auth.views.HttpResponseRedirect", _raise_runtime)
+
+        with pytest.raises(RuntimeError):
+            client.get(link)
+
+        self._assert_capability_did_not_survive_in_old_session(staff_user, old_key)
+
+    def test_exception_before_token_write_does_not_rotate(self, client, staff_user, monkeypatch):
+        """Gegenprobe: bricht es VOR dem Write ab, wurde nichts angehoben — also keine Rotation."""
+
+        def _raise_runtime(*args, **kwargs):
+            raise RuntimeError("Nutzeraufloesung gescheitert")
+
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        link = self._link(staff_user, "password_reset_confirm", default_token_generator)
+        monkeypatch.setattr(
+            "django.contrib.auth.views.PasswordResetConfirmView.get_user",
+            _raise_runtime,
+        )
+
+        with pytest.raises(RuntimeError):
+            client.get(link)
+
+        assert _session_row_exists(old_key) is True
+        assert client.session.session_key == old_key
+        assert RESET_TOKEN_KEY not in client.session

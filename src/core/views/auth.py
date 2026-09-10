@@ -314,20 +314,33 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         loescht die alte Zeile — es existiert zu keiner Zeit eine gespeicherte
         Sitzung unter der alten ID, die das Token traegt.
 
-        Fehlschlaege (ungueltiges/abgelaufenes Token, unbekannte UID) rotieren
-        bewusst nicht: sie heben nichts an, und eine Rotation waere dort ein
-        kostenloser Sitzungs-Reset fuer jeden Cookie-Besitzer.
+        Das ``finally`` ist dabei die eigentliche Sicherheitszusage und kein
+        Stilmittel (Ruling R-A1-12): die Elternklasse schreibt das Token und
+        baut ERST DANACH den Redirect. Wirft dieser Schritt — der Reviewer hat
+        es ueber einen ueberlangen, weiterhin dekodierbaren Reset-Pfad und den
+        daraus folgenden ``DisallowedRedirect`` gezeigt —, entsteht trotzdem
+        eine Antwort (400 bzw. 500), und die ``SessionMiddleware`` speichert die
+        Sitzung ausgangsseitig **mit** dem Token. Ohne ``finally`` bliebe genau
+        dieser Fall unrotiert: das Token laege unter der ALTEN ID, und ein
+        zweiter Client mit dem alten Cookie koennte damit das Passwort setzen.
+        Die Ausnahme wird nach der Rotation unveraendert weitergereicht.
+
+        Fehlschlaege (ungueltiges/abgelaufenes Token, unbekannte UID, Abbruch
+        VOR dem Write) rotieren bewusst nicht: sie heben nichts an, und eine
+        Rotation waere dort ein kostenloser Sitzungs-Reset fuer jeden
+        Cookie-Besitzer.
 
         ``InviteConfirmView`` erbt diesen Ablauf mit dem eigenen
         ``token_generator`` unveraendert mit.
         """
         session = self.request.session
         token_before = session.get(INTERNAL_RESET_SESSION_TOKEN)
-        response = super().dispatch(*args, **kwargs)
-        token_after = session.get(INTERNAL_RESET_SESSION_TOKEN)
-        if token_after is not None and token_after != token_before:
-            rotate_session_after_privilege_gain(self.request)
-        return response
+        try:
+            return super().dispatch(*args, **kwargs)
+        finally:
+            token_after = session.get(INTERNAL_RESET_SESSION_TOKEN)
+            if token_after is not None and token_after != token_before:
+                rotate_session_after_privilege_gain(self.request)
 
     def form_valid(self, form):
         response = super().form_valid(form)
