@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from django.contrib.sessions.backends.db import SessionStore
 from django.test import RequestFactory
 from django.urls import reverse
 from django_otp.oath import totp as oath_totp
@@ -18,17 +19,22 @@ from core.services.security import (
 )
 
 
+@pytest.mark.django_db
 class TestSudoModeService:
-    """Service-Level: enter/is_in/clear."""
+    """Service-Level: enter/is_in/clear.
+
+    Refs #2034: Die frühere Attrappe (``class _Sess(dict)``) war keine Session —
+    ihr fehlten ``session_key``, ``save()`` und vor allem ``cycle_key()``. Seit
+    ``enter_sudo`` die Session-ID rotiert, prüft dieser Block gegen den echten
+    DB-Session-Store; die Zusagen der vier Tests bleiben unverändert.
+    """
 
     def _request_with_session(self):
         rf = RequestFactory()
         request = rf.get("/")
-
-        class _Sess(dict):
-            modified = False
-
-        request.session = _Sess()
+        session = SessionStore()
+        session.save()
+        request.session = session
         return request
 
     def test_enter_sudo_sets_session_key(self):
