@@ -62,6 +62,8 @@ def _backup_sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 if [[ "$*" == *" exec -T cron cat /data/audit_hwm.json"* ]]; then
     printf '%s\\n' "$TEST_HWM_JSON"
+elif [[ "$*" == *"SELECT COUNT(*) FROM core_"* ]]; then
+    printf '1\\n'
 elif [[ "$*" == *" exec "* ]]; then
     printf 'FAKE-CONTAINER-OUTPUT\\n'
 fi
@@ -105,7 +107,7 @@ def test_backup_exports_hwm_into_daily_and_scp_offsite(tmp_path: Path) -> None:
     assert len(hwm_files) == 1
     assert '"sig":"signed"' in hwm_files[0].read_text(encoding="utf-8")
     assert "exec -T cron cat /data/audit_hwm.json" in docker_log.read_text(encoding="utf-8")
-    assert str(hwm_files[0]) in scp_log.read_text(encoding="utf-8")
+    assert str(hwm_files[0].parent) in scp_log.read_text(encoding="utf-8")
 
 
 def _write_prod_backup(backup_dir: Path) -> None:
@@ -122,6 +124,13 @@ def _write_prod_backup(backup_dir: Path) -> None:
     derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
     signature = hmac.new(derived.encode(), encrypted, hashlib.sha256).hexdigest()
     backup_file.with_name(f"{backup_file.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
+    manifest = backup_dir / "anlaufstelle_2026-09-02_020000.manifest"
+    manifest.write_text(
+        "core_facility=1\ncore_client=1\ncore_event=1\ncore_workitem=1\ncore_auditlog=1\ncore_attachment=1\n",
+        encoding="utf-8",
+    )
+    manifest_signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
+    manifest.with_name(f"{manifest.name}.hmac").write_text(f"{manifest_signature}\n", encoding="utf-8")
 
 
 def _restore_sandbox(
@@ -160,6 +169,13 @@ if [[ " $* " == *" cp "* ]]; then
         fi
         shift
     done
+fi
+if [[ "$*" == *" exec -T web sh -c cat > "* ]]; then
+    command="${@: -1}"
+    target="${command#*\\'}"
+    target="${target%\\'}"
+    cat > "$target"
+    exit $?
 fi
 if [[ "$*" == *" exec -T web rm -f "* ]]; then
     /bin/rm -f "${@: -1}"

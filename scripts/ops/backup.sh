@@ -178,6 +178,27 @@ mkdir -p "$DAILY_DIR" "$WEEKLY_DIR" "$MONTHLY_DIR"
 
 BACKUP_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.sql.gz.enc"
 MEDIA_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}_media.tar.gz.enc"
+MANIFEST_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.manifest"
+
+# Absoluter Referenzstand fuer den Restore-Drill. Der Drill vergleicht den
+# Restore spaeter gegen diese Werte, nicht gegen eine moeglicherweise bereits
+# aus demselben Backup aufgebaute Live-Datenbank. Die Betriebsanleitung fordert
+# fuer den Satz weiterhin Schreibruhe; das Manifest ersetzt keinen Snapshot
+# ueber DB und Medien.
+MANIFEST_TABLES=(core_facility core_client core_event core_workitem core_auditlog core_attachment)
+: > "$MANIFEST_FILE"
+for tbl in "${MANIFEST_TABLES[@]}"; do
+    MANIFEST_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db \
+        psql -v ON_ERROR_STOP=1 -U "$DUMP_USER" -d "$POSTGRES_DB" -t -A \
+        -c "SELECT COUNT(*) FROM ${tbl};" | tr -d '[:space:]')
+    if [[ ! "$MANIFEST_COUNT" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: Zeilenzahl-Manifest ist unvollstaendig (${tbl})."
+        exit 1
+    fi
+    printf '%s=%s\n' "$tbl" "$MANIFEST_COUNT" >> "$MANIFEST_FILE"
+done
+backup_write_hmac "$MANIFEST_FILE"
+echo "Zeilenzahl-Manifest erstellt: ${MANIFEST_FILE}"
 
 # DB-Backup
 echo "Erstelle DB-Backup: ${BACKUP_FILE}"
@@ -246,40 +267,30 @@ else
     echo "INFO: DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — kein Audit-HWM-Artefakt gesichert."
 fi
 
-# Rotation
+# Weekly-/Monthly-Snapshots werden vor dem Off-Site-Abgleich angelegt, damit
+# alle drei Retention-Stufen im selben Lauf uebertragen werden koennen.
 DOW=$(date +%u)  # 1=Montag, 7=Sonntag
 DOM=$(date +%d)  # Tag des Monats
 
-# Sonntags → Weekly kopieren (DB + Medien + HMAC-Sidecars)
+# Sonntags → Weekly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
 if [[ "$DOW" -eq 7 ]]; then
-    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "$WEEKLY_DIR/"
+    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" \
+        "$MANIFEST_FILE" "$MANIFEST_FILE.hmac" "$WEEKLY_DIR/"
     if [[ -n "$HWM_FILE" ]]; then
         cp "$HWM_FILE" "$WEEKLY_DIR/"
     fi
     echo "Weekly-Backup kopiert."
 fi
 
-# Am 1. des Monats → Monthly kopieren (DB + Medien + HMAC-Sidecars)
+# Am 1. des Monats → Monthly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
 if [[ "$DOM" -eq "01" ]]; then
-    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "$MONTHLY_DIR/"
+    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" \
+        "$MANIFEST_FILE" "$MANIFEST_FILE.hmac" "$MONTHLY_DIR/"
     if [[ -n "$HWM_FILE" ]]; then
         cp "$HWM_FILE" "$MONTHLY_DIR/"
     fi
     echo "Monthly-Backup kopiert."
 fi
-
-# Alte Backups löschen — DB + Medien + HMAC-Sidecars parallel (A4.3)
-find "$DAILY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +7 -delete
-find "$DAILY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +7 -delete
-find "$WEEKLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +28 -delete
-find "$WEEKLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +28 -delete
-find "$MONTHLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +90 -delete
-find "$MONTHLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +90 -delete
-find "$DAILY_DIR" -name "audit_hwm-*.json" -mtime +7 -delete
-find "$WEEKLY_DIR" -name "audit_hwm-*.json" -mtime +28 -delete
-find "$MONTHLY_DIR" -name "audit_hwm-*.json" -mtime +90 -delete
-
-echo "Rotation abgeschlossen."
 
 # Off-Site-Sync (Refs #738; State-File + Sentry: Refs #797).
 # BACKUP_OFFSITE_TARGET: rclone-Remote ("rclone:remote:bucket"),
@@ -291,32 +302,42 @@ echo "Rotation abgeschlossen."
 # fuehrt zu einer sichtbaren Cron-Warnung. Einzelne transiente
 # Fehler werden weiterhin nur geloggt, das lokale Backup ist gerettet
 # und Off-Site darf beim naechsten Run nachziehen.
+OFFSITE_OK=true
 if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
-    echo "Synce Tagesbackups nach: ${BACKUP_OFFSITE_TARGET}"
-    OFFSITE_OK=true
+    echo "Synce Daily-, Weekly- und Monthly-Backups nach: ${BACKUP_OFFSITE_TARGET}"
     case "$BACKUP_OFFSITE_TARGET" in
         rclone:*)
             REMOTE="${BACKUP_OFFSITE_TARGET#rclone:}"
             rclone copy "$DAILY_DIR" "$REMOTE/daily" \
-                --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json" --transfers 2 \
+                --include "*.enc" --include "*.hmac" --include "*.manifest" --include "audit_hwm-*.json" --transfers 2 \
                 || { echo "ERROR: rclone copy fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
+            rclone copy "$WEEKLY_DIR" "$REMOTE/weekly" \
+                --include "*.enc" --include "*.hmac" --include "*.manifest" --include "audit_hwm-*.json" --transfers 2 \
+                || { echo "ERROR: rclone copy fehlgeschlagen — Weekly-Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
+            rclone copy "$MONTHLY_DIR" "$REMOTE/monthly" \
+                --include "*.enc" --include "*.hmac" --include "*.manifest" --include "audit_hwm-*.json" --transfers 2 \
+                || { echo "ERROR: rclone copy fehlgeschlagen — Monthly-Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             ;;
         s3://*)
             command -v aws >/dev/null 2>&1 || {
                 echo "ERROR: aws-CLI nicht installiert — Off-Site (S3) nicht moeglich."; OFFSITE_OK=false; }
             if [[ "$OFFSITE_OK" == true ]]; then
                 aws s3 sync "$DAILY_DIR" "${BACKUP_OFFSITE_TARGET}/daily" \
-                    --exclude "*" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json" \
+                    --exclude "*" --include "*.enc" --include "*.hmac" --include "*.manifest" --include "audit_hwm-*.json" \
                     || { echo "ERROR: aws s3 sync fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
+                aws s3 sync "$WEEKLY_DIR" "${BACKUP_OFFSITE_TARGET}/weekly" \
+                    --exclude "*" --include "*.enc" --include "*.hmac" --include "*.manifest" --include "audit_hwm-*.json" \
+                    || { echo "ERROR: aws s3 sync fehlgeschlagen — Weekly-Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
+                aws s3 sync "$MONTHLY_DIR" "${BACKUP_OFFSITE_TARGET}/monthly" \
+                    --exclude "*" --include "*.enc" --include "*.hmac" --include "*.manifest" --include "audit_hwm-*.json" \
+                    || { echo "ERROR: aws s3 sync fehlgeschlagen — Monthly-Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             fi
             ;;
         *@*:*)
-            # SCP-Target — kompatibel mit OpenSSH ssh/scp inkl. Schluessel-Auth via SSH-Agent.
-            OFFSITE_FILES=("$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac")
-            if [[ -n "$HWM_FILE" ]]; then
-                OFFSITE_FILES+=("$HWM_FILE")
-            fi
-            scp -q -B "${OFFSITE_FILES[@]}" "${BACKUP_OFFSITE_TARGET%/}/" \
+            # SCP gleicht ebenfalls alle Retention-Stufen ab, sodass ein nach
+            # einem transienten Fehler ausgelassener Satz nachgeholt wird.
+            scp -q -B -r "$DAILY_DIR" "$WEEKLY_DIR" "$MONTHLY_DIR" \
+                "${BACKUP_OFFSITE_TARGET%/}/" \
                 || { echo "ERROR: scp fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             ;;
         *)
@@ -356,4 +377,25 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
             exit 1
         fi
     fi
+fi
+
+# Rotation erst nach einem erfolgreichen Off-Site-Abgleich. Schon der erste
+# Sync-Fehler setzt die lokale Loeschung aus, auch wenn er fuer die bestehende
+# Zwei-Fehler-Alarmierung noch keinen harten Exit ausloest.
+if [[ "$OFFSITE_OK" == false ]]; then
+    echo "WARNUNG: Rotation ausgesetzt — Off-Site-Sync war nicht vollstaendig."
+else
+    find "$DAILY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +7 -delete
+    find "$DAILY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +7 -delete
+    find "$DAILY_DIR" \( -name "*.manifest" -o -name "*.manifest.hmac" \) -mtime +7 -delete
+    find "$WEEKLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +28 -delete
+    find "$WEEKLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +28 -delete
+    find "$WEEKLY_DIR" \( -name "*.manifest" -o -name "*.manifest.hmac" \) -mtime +28 -delete
+    find "$MONTHLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +90 -delete
+    find "$MONTHLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +90 -delete
+    find "$MONTHLY_DIR" \( -name "*.manifest" -o -name "*.manifest.hmac" \) -mtime +90 -delete
+    find "$DAILY_DIR" -name "audit_hwm-*.json" -mtime +7 -delete
+    find "$WEEKLY_DIR" -name "audit_hwm-*.json" -mtime +28 -delete
+    find "$MONTHLY_DIR" -name "audit_hwm-*.json" -mtime +90 -delete
+    echo "Rotation abgeschlossen."
 fi

@@ -142,6 +142,7 @@ backup_require_real_key
 SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 
 DRILL_FAILED=0
+DRILL_UNDETERMINED=0
 HWM_COPIED=0
 HWM_DRILL_CONTAINER_PATH="/tmp/audit_hwm-drill-$$.json"
 MEDIA_TMP_DIR=""
@@ -163,6 +164,45 @@ if [[ -z "$LATEST_DB" ]]; then
     exit 1
 fi
 echo "Drill gegen DB-Backup: $LATEST_DB"
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    BACKUP_TIMESTAMP="${LATEST_DB##*/}"
+    BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP#anlaufstelle_}"
+    BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP%.sql.gz.enc}"
+    MEDIA_FILE="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
+    echo "Ausgewaehlter Restore-Satz: DB=${LATEST_DB##*/}, Medien=${MEDIA_FILE##*/}, HWM=audit_hwm-${BACKUP_TIMESTAMP}.json"
+else
+    echo "Ausgewaehlter Restore-Satz: DB=${LATEST_DB##*/} (dev-Format ohne Medien-/HWM-Artefakt)"
+fi
+
+# Der Prod-Drill braucht den beim Backup authentifiziert mitgeschriebenen,
+# absoluten Tabellenstand. Ein Vergleich mit der Live-DB ist auf einem frischen
+# Restore-Host wertlos, wenn diese selbst aus derselben unvollstaendigen Quelle
+# aufgebaut wurde.
+declare -A MANIFEST_COUNTS=()
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    MANIFEST_FILE="${LATEST_DB%.sql.gz.enc}.manifest"
+    if [[ ! -f "$MANIFEST_FILE" ]]; then
+        fail "Schritt 0: Zeilenzahl-Manifest fehlt (${MANIFEST_FILE##*/})"
+        exit 1
+    elif ! backup_verify_hmac "$MANIFEST_FILE"; then
+        fail "Schritt 0: HMAC-Verifikation des Zeilenzahl-Manifests fehlgeschlagen (${MANIFEST_FILE##*/})"
+        exit 1
+    fi
+    while IFS='=' read -r tbl expected extra; do
+        if [[ -n "$extra" || ! "$tbl" =~ ^core_[a-z_]+$ || ! "$expected" =~ ^[0-9]+$ ]]; then
+            fail "Schritt 0: Zeilenzahl-Manifest ungueltig (${MANIFEST_FILE##*/})"
+            exit 1
+        fi
+        MANIFEST_COUNTS["$tbl"]="$expected"
+    done < "$MANIFEST_FILE"
+    for tbl in core_facility core_client core_event core_workitem core_auditlog core_attachment; do
+        if [[ ! -v "MANIFEST_COUNTS[$tbl]" ]]; then
+            fail "Schritt 0: Zeilenzahl-Manifest enthaelt ${tbl} nicht (${MANIFEST_FILE##*/})"
+            exit 1
+        fi
+    done
+    ok "Schritt 0: Zeilenzahl-Manifest authentifiziert (${MANIFEST_FILE##*/})"
+fi
 
 # Schritt 1: Wegwerf-DB anlegen
 DRILL_DB="anlaufstelle_drill_$$"
@@ -271,31 +311,41 @@ rm -f "$RESTORE_ERR"
 # verify_audit_chain-Pfad. Eine fehlende/manipulierte HWM faerbt den Drill rot,
 # bricht die folgenden Restore-Pruefungen aber bewusst nicht hart ab.
 if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
-    LATEST_HWM=$(find "$BACKUP_DIR" -maxdepth 1 -name 'audit_hwm-*.json' -type f 2>/dev/null | sort -r | head -n1)
-    if [[ -z "$LATEST_HWM" ]]; then
-        fail "Schritt 2b: Kein Audit-HWM-Backup (audit_hwm-*.json) in ${BACKUP_DIR} gefunden"
-    elif dc cp "$LATEST_HWM" "web:${HWM_DRILL_CONTAINER_PATH}" >/dev/null 2>&1; then
+    HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"
+    if [[ ! -f "$HWM_FILE" ]]; then
+        fail "Schritt 2b: Kein Audit-HWM-Backup fuer den Restore-Satz (${HWM_FILE##*/})"
+    elif dc exec -T web sh -c "cat > '$HWM_DRILL_CONTAINER_PATH'" < "$HWM_FILE"; then
         HWM_COPIED=1
         HWM_VERIFY_CODE="from core.services.audit.hwm import HighWaterMarkStore; HighWaterMarkStore.load('${HWM_DRILL_CONTAINER_PATH}')"
         if dc exec -T web python manage.py shell -c "$HWM_VERIFY_CODE" >/dev/null 2>&1; then
-            ok "Schritt 2b: Audit-HWM-Signatur verifiziert (${LATEST_HWM##*/})"
+            if dc exec -T -e POSTGRES_DB="$DRILL_DB" \
+                -e DJANGO_AUDIT_HWM_PATH="$HWM_DRILL_CONTAINER_PATH" web \
+                python manage.py verify_audit_chain >/dev/null 2>&1; then
+                ok "Schritt 2b: Audit-HWM-Signatur verifiziert und gegen restaurierte Kette geprueft (${HWM_FILE##*/})"
+            else
+                fail "Schritt 2b: Audit-HWM passt nicht zur restaurierten Kette (${HWM_FILE##*/})"
+            fi
         else
-            fail "Schritt 2b: Audit-HWM-Signaturpruefung fehlgeschlagen — Datei manipuliert oder AUDIT_HASH_KEY falsch"
+            fail "Schritt 2b: Audit-HWM-Signaturpruefung fehlgeschlagen (${HWM_FILE##*/}) — Datei manipuliert oder AUDIT_HASH_KEY falsch"
         fi
     else
-        fail "Schritt 2b: Audit-HWM konnte nicht in den Drill-Container kopiert werden"
+        fail "Schritt 2b: Audit-HWM konnte nicht in den Drill-Container gestreamt werden (${HWM_FILE##*/})"
     fi
 elif [[ "$DRILL_FORMAT" == "prod" ]]; then
     echo "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen (DJANGO_AUDIT_HWM_PATH nicht gesetzt)"
 fi
 
 # Schritt 3: Stichproben pro Tabelle
-EXPECTED_TABLES=("core_facility" "core_client" "core_event" "core_auditlog" "core_workitem")
+EXPECTED_TABLES=("core_facility" "core_client" "core_event" "core_auditlog" "core_workitem" "core_attachment")
 SAMPLE_FAIL=0
 for tbl in "${EXPECTED_TABLES[@]}"; do
     COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
     if [[ -z "$COUNT" || "$COUNT" =~ [^0-9] ]]; then
         echo "       - ${tbl}: nicht abfragbar (${COUNT:-leer})"
+        SAMPLE_FAIL=1
+    elif [[ "$DRILL_FORMAT" == "prod" ]] \
+        && [[ "${MANIFEST_COUNTS[$tbl]}" -gt 0 && "$COUNT" -eq 0 ]]; then
+        echo "       - ${tbl}: 0 Zeilen, Manifest erwartet ${MANIFEST_COUNTS[$tbl]}"
         SAMPLE_FAIL=1
     else
         echo "       - ${tbl}: ${COUNT} Zeilen"
@@ -307,37 +357,32 @@ else
     fail "Schritt 3: mindestens eine Tabelle nicht abfragbar"
 fi
 
-# Schritt 3b: Vollstaendigkeits-Guard — Restore vs. Quelle/Live-DB (Refs #1336).
-# Kritisch fuer den --prod-Zweig: dort wird via ``psql`` OHNE ON_ERROR_STOP
-# eingespielt (der benigne MV-Refresh unter FORCE-RLS darf nicht failen) —
-# dadurch bleibt der psql-Exit-Code aber auch bei ECHTEN Fehlern 0. Ein leerer
-# oder mittendrin abgebrochener Restore waere sonst unsichtbar, denn Schritt 3
-# laesst COUNT=0 als gueltige Zahl durch. Daher hier derselbe Mechanismus wie
-# ``backup.sh --verify``: Zeilenzahl-Abgleich kritischer RLS-Tabellen zwischen
-# Wegwerf-DB und Live-DB. Fail-closed-Signal: Live>0 aber Restore=0 (Dump
-# RLS-leer bzw. Restore unvollstaendig). Dieser Nachweis MUSS vor
-# mark_restore_verified (Schritt 7) stehen, sonst faerbt ein unvollstaendiger
-# Restore den Compliance-Check faelschlich gruen. Der benigne MV-Refresh
-# beruehrt die Nutzdaten NICHT — core_client/core_event/... bleiben gefuellt.
-COMPLETENESS_TABLES=("core_client" "core_event" "core_workitem" "core_auditlog")
+# Schritt 3b: Vollstaendigkeits-Guard gegen den absoluten, authentifizierten
+# Referenzstand aus dem zum Dump gehoerenden Manifest. Dieser Nachweis MUSS vor
+# mark_restore_verified (Schritt 7) stehen.
+COMPLETENESS_TABLES=("core_facility" "core_client" "core_event" "core_workitem" "core_auditlog" "core_attachment")
 COMPLETENESS_FAIL=0
-for tbl in "${COMPLETENESS_TABLES[@]}"; do
-    RESTORED_COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
-    LIVE_COUNT=$(psql_su -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
-    if [[ -z "$RESTORED_COUNT" || ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
-        echo "       - ${tbl}: im Restore nicht abfragbar (${RESTORED_COUNT:-leer})"
-        COMPLETENESS_FAIL=1
-    elif [[ "$LIVE_COUNT" =~ ^[0-9]+$ && "$LIVE_COUNT" -gt 0 && "$RESTORED_COUNT" -eq 0 ]]; then
-        echo "       - ${tbl}: Live=${LIVE_COUNT} Zeilen, Restore=0 — leerer/teilweiser Restore"
-        COMPLETENESS_FAIL=1
-    else
-        echo "       - ${tbl}: Restore=${RESTORED_COUNT} (Live=${LIVE_COUNT:-n/a})"
-    fi
-done
-if [[ "$COMPLETENESS_FAIL" -eq 0 ]]; then
-    ok "Schritt 3b: Vollstaendigkeits-Guard bestanden — Restore vs. Live konsistent"
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    for tbl in "${COMPLETENESS_TABLES[@]}"; do
+        RESTORED_COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+        EXPECTED_COUNT="${MANIFEST_COUNTS[$tbl]}"
+        if [[ -z "$RESTORED_COUNT" || ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "       - ${tbl}: im Restore nicht abfragbar (${RESTORED_COUNT:-leer})"
+            COMPLETENESS_FAIL=1
+        elif [[ "$RESTORED_COUNT" -ne "$EXPECTED_COUNT" ]]; then
+            echo "       - ${tbl}: Restore=${RESTORED_COUNT}, Manifest=${EXPECTED_COUNT} — unvollstaendiger Restore"
+            COMPLETENESS_FAIL=1
+        else
+            echo "       - ${tbl}: Restore=${RESTORED_COUNT}, Manifest=${EXPECTED_COUNT}"
+        fi
+    done
 else
-    fail "Schritt 3b: Restore unvollstaendig (Live>0 aber Restore=0 bzw. nicht abfragbar) — NICHT als verifiziert markieren"
+    echo "INFO - Schritt 3b: Zeilenzahl-Manifest gilt nur fuer das Prod-Backup-Format"
+fi
+if [[ "$COMPLETENESS_FAIL" -eq 0 ]]; then
+    ok "Schritt 3b: Vollstaendigkeits-Guard gegen Manifest bestanden"
+else
+    fail "Schritt 3b: Restore weicht vom Zeilenzahl-Manifest ab — nicht als verifiziert markieren"
 fi
 
 # Schritt 4: RLS-Policy-Check
@@ -352,17 +397,25 @@ fi
 # Schritt 5: AuditLog-Immutability-Trigger-Check
 TRIGGER_COUNT=$(psql_su -d "$DRILL_DB" -t -A \
     -c "SELECT COUNT(*) FROM pg_trigger WHERE tgname = 'auditlog_immutable';" 2>/dev/null | tr -d '[:space:]')
+AUDIT_ROW_COUNT=$(psql_su -d "$DRILL_DB" -t -A \
+    -c "SELECT COUNT(*) FROM core_auditlog;" 2>/dev/null | tr -d '[:space:]')
 if [[ "$TRIGGER_COUNT" == "1" ]]; then
-    # Raw UPDATE muss am Trigger scheitern. Output separat einfangen: psql endet
-    # bei der erwarteten Exception mit rc!=0, was unter ``set -o pipefail`` eine
-    # direkte ``… | grep``-Pipe verfaelschen wuerde (Pipeline-rc = psql-rc != 0,
-    # obwohl grep matcht). Daher erst in eine Variable, dann grep.
-    UPDATE_OUT=$(psql_su -d "$DRILL_DB" \
-        -c "UPDATE core_auditlog SET action = 'logout' WHERE id = (SELECT id FROM core_auditlog LIMIT 1);" 2>&1 || true)
-    if grep -qi "immutable" <<<"$UPDATE_OUT"; then
-        ok "Schritt 5: auditlog_immutable-Trigger blockt UPDATE"
+    if [[ ! "$AUDIT_ROW_COUNT" =~ ^[0-9]+$ ]]; then
+        fail "Schritt 5: AuditLog-Zeilenzahl nicht abfragbar"
+    elif [[ "$AUDIT_ROW_COUNT" -eq 0 ]]; then
+        echo "NICHT PRUEFBAR - Schritt 5: core_auditlog ist leer; Trigger kann nicht ausgeloest werden"
+        DRILL_UNDETERMINED=1
     else
-        fail "Schritt 5: Trigger existiert, blockt UPDATE aber NICHT — kritisch"
+        # Raw UPDATE muss am Trigger scheitern. Output separat einfangen: psql
+        # endet bei der erwarteten Exception mit rc!=0, was eine direkte Pipe
+        # verfaelschen wuerde. Daher erst in eine Variable, dann grep.
+        UPDATE_OUT=$(psql_su -d "$DRILL_DB" \
+            -c "UPDATE core_auditlog SET action = 'logout' WHERE id = (SELECT id FROM core_auditlog LIMIT 1);" 2>&1 || true)
+        if grep -qi "immutable" <<<"$UPDATE_OUT"; then
+            ok "Schritt 5: auditlog_immutable-Trigger blockt UPDATE"
+        else
+            fail "Schritt 5: Trigger existiert, blockt UPDATE aber NICHT — kritisch"
+        fi
     fi
 else
     fail "Schritt 5: auditlog_immutable-Trigger fehlt in Restore"
@@ -373,7 +426,7 @@ fi
 # demselben Zeitstempel. Ein fehlendes Medien-Archiv ist zulaessig, weil der
 # Restore-Pfad ausdruecklich DB-only-Backups unterstuetzt.
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
-    LATEST_MEDIA="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
+    LATEST_MEDIA="$MEDIA_FILE"
     if [[ ! -f "$LATEST_MEDIA" ]]; then
         echo "INFO - Schritt 6: Kein passendes Medien-Archiv — uebersprungen (DB-only-Backup zulaessig)"
     elif ! backup_verify_hmac "$LATEST_MEDIA"; then
@@ -415,7 +468,7 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
                 if [[ "$MEDIA_LISTED_COUNT" -eq 0 || "$MEDIA_MATCHED_COUNT" -ne "$MEDIA_LISTED_COUNT" ]]; then
                     fail "Schritt 6: Probeentpackung stimmt nicht mit tar-Listing ueberein (${MEDIA_MATCHED_COUNT}/${MEDIA_LISTED_COUNT} Eintraege)"
                 else
-                    ok "Schritt 6: Medien: ${MEDIA_FILE_COUNT} Dateien, ${MEDIA_BYTES} Bytes, HMAC ok"
+                    ok "Schritt 6: Medien ${LATEST_MEDIA##*/}: ${MEDIA_FILE_COUNT} Dateien, ${MEDIA_BYTES} Bytes, HMAC ok"
                 fi
             fi
         fi
@@ -426,7 +479,7 @@ fi
 
 # Schritt 7: Bei vollem Erfolg den Restore-Test im AuditLog dokumentieren.
 # Laeuft im web-Container (DSGVO Art. 32 lit. c: Wiederherstellbarkeit belegt).
-if [[ "$DRILL_FAILED" -eq 0 ]]; then
+if [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 ]]; then
     NOTE="Restore-Drill $(date -u +%Y-%m-%dT%H:%MZ) gegen ${LATEST_DB##*/} -> ${DRILL_DB}"
     if dc exec -T web python manage.py mark_restore_verified --note "$NOTE" >/dev/null 2>&1; then
         ok "Schritt 7: Restore-Test im AuditLog dokumentiert (mark_restore_verified)"
@@ -438,6 +491,12 @@ fi
 if [[ "$DRILL_FAILED" -ne 0 ]]; then
     echo
     echo "DRILL FEHLGESCHLAGEN — mindestens ein Schritt hat FAIL gemeldet."
+    exit 1
+fi
+
+if [[ "$DRILL_UNDETERMINED" -ne 0 ]]; then
+    echo
+    echo "DRILL OFFEN — mindestens ein Schritt war nicht pruefbar; Restore wird nicht als verifiziert markiert."
     exit 1
 fi
 

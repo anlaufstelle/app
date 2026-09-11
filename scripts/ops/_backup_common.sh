@@ -38,7 +38,7 @@ backup_verify_hmac() {
     expected="$(cat "${file}.hmac")"
     actual="$(openssl dgst -sha256 -hmac "$key" "$file" | awk '{print $NF}')"
     if [[ "$expected" != "$actual" ]]; then
-        echo "FEHLER: HMAC-Verifikation fehlgeschlagen — ${file} ist manipuliert oder beschädigt. Abbruch." >&2
+        echo "FEHLER: HMAC-Pruefung fehlgeschlagen — moegliche Ursachen: falscher BACKUP_ENCRYPTION_KEY, beschädigte Datei oder Sidecar eines anderen Backups (${file}.hmac). Abbruch." >&2
         return 1
     fi
 }

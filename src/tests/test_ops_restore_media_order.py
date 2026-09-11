@@ -103,6 +103,14 @@ def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     media_backup = daily / "anlaufstelle_2026-09-10_020000_media.tar.gz.enc"
     _encrypt(gzip.compress(b"SELECT 1;\n"), db_backup)
     _encrypt(_media_payload(), media_backup)
+    manifest = daily / "anlaufstelle_2026-09-10_020000.manifest"
+    manifest.write_text(
+        "core_facility=1\ncore_client=1\ncore_event=1\ncore_workitem=1\ncore_auditlog=1\ncore_attachment=1\n",
+        encoding="utf-8",
+    )
+    derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
+    signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
+    manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
 
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -133,6 +141,10 @@ if [[ "$*" == *" exec -T db psql "* ]]; then
         printf '1\\n'
     else
         cat >/dev/null
+        if [[ "${TEST_PSQL_FAIL:-0}" == "1" ]]; then
+            printf 'ERROR: kaputte SQL-Zeile\\n' >&2
+            exit 1
+        fi
     fi
 elif [[ "$*" == *" python manage.py mark_restore_verified "* ]]; then
     exit 0
@@ -186,6 +198,20 @@ def test_valid_sidecars_are_both_checked_before_destructive_actions(tmp_path: Pa
     assert psql_pos < hmac_positions[3] < media_delete_pos
 
 
+def test_database_restore_error_stops_before_hwm_or_media_changes(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    env = _base_env(root, bindir, action_log)
+    env["TEST_PSQL_FAIL"] = "1"
+
+    result = _run_restore(root, env, db_backup, media_backup)
+
+    assert result.returncode != 0
+    assert "DB-Wiederherstellung abgeschlossen." not in result.stdout
+    actions = action_log.read_text(encoding="utf-8")
+    assert " tar -C /data/media.restore." not in actions
+    assert " mv /data/media.restore." not in actions
+
+
 def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Path) -> None:
     root, bindir, action_log, _, _ = _make_sandbox(tmp_path)
     env = _base_env(root, bindir, action_log)
@@ -204,7 +230,7 @@ def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Pat
     )
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "Medien: 2 Dateien, 9 Bytes, HMAC ok" in result.stdout
+    assert "anlaufstelle_2026-09-10_020000_media.tar.gz.enc: 2 Dateien, 9 Bytes, HMAC ok" in result.stdout
     assert list(media_tmp.iterdir()) == []
 
 
