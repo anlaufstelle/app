@@ -3,7 +3,7 @@
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
 > Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only.
-> Most recently synchronized on 2026-09-11 (index entry for the removed compliance memo dropped, #2207).
+> Synchronization update 2026-09-11: Added the accessibility audit to the German-only index (#2215).
 
 
 ---
@@ -66,6 +66,7 @@ Templates included:
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
 | [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
+| [accessibility-audit.md](../accessibility-audit.md) | Accessibility audit evidence for WCAG 2.1 Level AA, including automated findings, remediation, and the screen-reader test protocol |
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
 | `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
@@ -82,4 +83,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 72eb101bd5a481e96ae8413e0abb655371ecc57b -->
+<!-- source-hash: 372565d231ba85eea00d5b866d90948dc88fe5e4 -->

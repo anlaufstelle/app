@@ -60,6 +60,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 |----------|-------------|------------|
 | [datenschutz.md](datenschutz.md) | DSGVO-Wegweiser: Artikel/Recht → ADR/Vorlage/Code/FAQ | alle (Auditor/Dev/Träger) |
 | [glossar.md](glossar.md) | Datenschutz-/Compliance-Glossar — Vertiefung der Datenschutz-Begriffe (K-Anonymität, Retention, Pseudonymisierung …); allgemeines Domänen-Glossar in [Fachkonzept §14](fachkonzept-anlaufstelle.md#14-glossar), bilingual [en/glossary.md](en/glossary.md) | alle (Auditor/Dev/Träger) |
+| [accessibility-audit.md](accessibility-audit.md) | Nachweis der Barrierefreiheitsprüfung nach WCAG 2.1 Stufe AA mit automatisierten Befunden, Korrekturen und Screenreader-Prüfprotokoll | Auditoren, Entwickler, QA |
 | [security-notes.md](security-notes.md) | Bewusste Security-Design-Entscheidungen (2FA, Fernet, RLS, Audit, Lockout) | Security-Officer, Entwickler |
 | [threat-model.md](threat-model.md) | Sicherheitsmodell, Angriffsfläche, bekannte offene Lücken | Security-Officer, Auditoren |
 | `audit-inventar.md` (dev-only) | Index aller Audit-Klassifizierungs-Codes (FND-\*, S-\*, Phasen, Sprints); die zugrunde liegenden Multi-AI-Audits liegen archiviert unter `docs/archive/` (dev-only) | Entwickler, Auditoren |
@@ -74,6 +75,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [reporting-plugins.md](reporting-plugins.md) | Berichts-Backends als Plugin-System: API-Referenz (`DatasetBackend`, `DatasetResult`), „Eigenes Backend in fünf Schritten", Discovery, Snapshot-Vertrag, k-Anonymität, Export-Formate, Test-Checkliste (Refs #1061, [ADR-038](adr/038-reporting-plugin-backends.md)); EN: [en/reporting-plugins.md](en/reporting-plugins.md) | Entwickler |
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
+| testing/assertion-conventions.md | Konventionen für präzise Assertions zu Exceptions, Logs, eingeschränkten Saves und Query-Budgets | Entwickler, QA |
 | testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail im Hub [testing/manual-test-matrix.md](testing/manual-test-matrix.md) (Front-matter + Anhänge) mit Sektions-Dateien `manual-test-matrix-a.md`…`-d.md`, Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
 | testing/release-test-profiles.md | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage run-template.md → testing/runs/ | QA, Release-Manager |
 | testing/abnahme-0.98.md | Gerüst der konsolidierten Abnahmematrix für release-0.98 — Quellenabbildung, Spaltenschema, neue Prüfbereiche seit 0.96 (Refs #2170) | QA, Release-Manager |
