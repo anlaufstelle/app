@@ -4,8 +4,8 @@
 # wieder auf die verwundbare 6.0.7 zurueckfaellt. Obergrenze <6.1: der
 # Minor-Sprung gehoert zum LTS-Umstieg (#1662), nicht in einen Patch-Release.
 Django>=6.0.8,<6.1
-psycopg[binary]>=3.3.4
-gunicorn>=26.0.0
+psycopg[binary]>=3.3.5
+gunicorn>=26.2.0
 whitenoise>=6.5
 django-htmx>=1.29.0
 django-ratelimit>=4.1

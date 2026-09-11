@@ -1,5 +1,5 @@
 -r requirements.in
-ruff>=0.15.22
+ruff>=0.16.6
 pip-tools>=7.6.1
 # Abhaengigkeits-Audit im schlanken CI-Audit-Job (Refs #2063).
 pip-audit>=2.10.1
@@ -10,7 +10,7 @@ pip-licenses>=5.5.5
 # click.edit()); idna kommt transitiv ueber requests (CVE-2026-45409, ReDoS in
 # idna.encode()).
 click>=8.3.3
-idna>=3.15
+idna>=3.19
 pip>=26.2  # CVE-2026-13346 / GHSA-qwm4-qh6w-59xr (Refs #2116)
 pytest>=9.1.1
 pytest-django>=4.13.0
