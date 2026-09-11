@@ -30,6 +30,13 @@ def _caddy_environment(compose_path: Path) -> str:
     return "\n".join(f"      {name}: probe" for name in names)
 
 
+def _stat_with_app_group() -> str:
+    return """#!/bin/bash
+mode="$(/usr/bin/stat -c %a "${!#}")" || exit $?
+printf '1000 %s\n' "$mode"
+"""
+
+
 def _run_setup(
     tmp_path: Path,
     *,
@@ -85,9 +92,16 @@ exit 0
         """#!/bin/bash
 printf 'install %s\n' "$*" >> "$TEST_COMMAND_LOG"
 # Das Testkonto laeuft in einem User-Namespace, in dem GID 1000 nicht gemappt
-# ist. Die echte install-Binaerdatei prueft Anlage und Modus; die verlangten
-# numerischen Owner-/Gruppenargumente werden zusaetzlich im Aufruf verifiziert.
-exec /usr/bin/install -d -m 2750 "${!#}"
+# ist. Nur die Zielgruppe wird deshalb auf die reale Testgruppe abgebildet;
+# alle anderen Argumente einschliesslich Owner und Modus gehen unveraendert an
+# die echte install-Binaerdatei.
+args=("$@")
+for ((index = 0; index < ${#args[@]}; index++)); do
+    if [[ "${args[$index]}" == "-g" && "${args[$((index + 1))]}" == "1000" ]]; then
+        args[$((index + 1))]="$(/usr/bin/id -g)"
+    fi
+done
+exec /usr/bin/install "${args[@]}"
 """,
     )
     if id_stub is None:
@@ -159,18 +173,23 @@ def test_backup_directory_is_prepared_before_first_up(tmp_path: Path) -> None:
     assert commands.index(" up -d db") > commands.index("volume ls")
 
 
-def test_existing_root_owned_backup_directory_with_app_group_is_accepted(tmp_path: Path) -> None:
+def test_existing_backup_directory_with_mode_2750_is_accepted_without_ownership_change(
+    tmp_path: Path,
+) -> None:
     backup_dir = tmp_path / "precreated-backups"
     backup_dir.mkdir(mode=0o750)
     backup_dir.chmod(0o2750)
+    owner_before = (backup_dir.stat().st_uid, backup_dir.stat().st_gid)
     result, commands, _ = _run_setup(
         tmp_path,
         backup_dir=backup_dir,
-        stat_stub="#!/bin/sh\nprintf '1000 2750\\n'\n",
+        stat_stub=_stat_with_app_group(),
     )
     assert result.returncode == 0, result.stderr
     assert " up -d db" in commands
     assert "install " not in commands
+    assert (backup_dir.stat().st_uid, backup_dir.stat().st_gid) == owner_before
+    assert backup_dir.stat().st_mode & 0o7777 == 0o2750
 
 
 def test_missing_backup_directory_without_group_privilege_fails_before_up(tmp_path: Path) -> None:
@@ -190,16 +209,32 @@ esac
     assert " up -d db" not in commands
 
 
-def test_existing_backup_directory_with_wrong_access_prints_repair_command(tmp_path: Path) -> None:
+def test_existing_backup_directory_with_wrong_group_prints_repair_command(tmp_path: Path) -> None:
     backup_dir = tmp_path / "wrong-backups"
     backup_dir.mkdir()
+    backup_dir.chmod(0o2750)
     result, commands, _ = _run_setup(
         tmp_path,
         backup_dir=backup_dir,
-        stat_stub="#!/bin/sh\nprintf '2000 2755\\n'\n",
     )
     assert result.returncode != 0
     assert f'sudo chgrp 1000 "{backup_dir}" && sudo chmod 2750 "{backup_dir}"' in result.stderr
+    assert " up -d db" not in commands
+
+
+@pytest.mark.parametrize("mode", [0o0750, 0o2770, 0o2753])
+def test_existing_backup_directory_with_wrong_mode_stops_before_up(tmp_path: Path, mode: int) -> None:
+    backup_dir = tmp_path / "wrong-mode-backups"
+    backup_dir.mkdir()
+    backup_dir.chmod(mode)
+    result, commands, _ = _run_setup(
+        tmp_path,
+        backup_dir=backup_dir,
+        stat_stub=_stat_with_app_group(),
+    )
+    assert result.returncode != 0
+    assert f'sudo chgrp 1000 "{backup_dir}" && sudo chmod 2750 "{backup_dir}"' in result.stderr
+    assert "Modus 2750" not in result.stdout
     assert " up -d db" not in commands
 
 

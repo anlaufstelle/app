@@ -242,11 +242,8 @@ backup_owner="$(id -un)"
 if [[ -d "$backup_host_dir" ]]; then
     read -r backup_group backup_mode < <(stat -c '%g %a' "$backup_host_dir") ||
         fail "Rechte des Backup-Verzeichnisses konnten nicht gelesen werden: ${backup_host_dir}"
-    backup_mode_value=$((8#$backup_mode))
-    backup_group_bits=$(((backup_mode_value >> 3) & 7))
-    backup_other_bits=$((backup_mode_value & 7))
-    if [[ "$backup_group" != "1000" || $((backup_group_bits & 5)) -ne 5 || $((backup_other_bits & 4)) -ne 0 ]]; then
-        fail "Backup-Verzeichnis hat nicht Gruppe 1000 mit Gruppen-r-x ohne Weltleserecht: ${backup_host_dir}
+    if [[ "$backup_group" != "1000" || "$backup_mode" != "2750" ]]; then
+        fail "Backup-Verzeichnis hat nicht Gruppe 1000 mit Modus 2750: ${backup_host_dir}
   Korrigieren:
   sudo chgrp 1000 \"${backup_host_dir}\" && sudo chmod 2750 \"${backup_host_dir}\""
     fi
