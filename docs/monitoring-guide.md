@@ -239,7 +239,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
 ### 7.1 Zwei Überwachungsebenen
 
 1. **Liveness (HTTP-Code):** Reicht für „lebt der Service?". Externe Uptime-Tools prüfen `GET https://$DOMAIN/health/` auf **HTTP 200**. Ein 503 oder Timeout → Alarm. Fehlende Backups und die übrigen Detailchecks sieht dieser anonyme Weg nicht.
-2. **Health (Token + JSON-`status`):** Nötig für Backup, Disk, Cache, SMTP und `stale_jobs` sowie um jedes `degraded` zu sehen (bleibt HTTP 200!). Das Tool sendet den Token und wertet den **Response-Body** aus.
+2. **Health (Token + JSON-`status`):** Nötig für Backup, Disk, Cache, SMTP und `stale_jobs` sowie um jedes `degraded` zu sehen (bleibt HTTP 200!). Im heutigen Basis-Dateisatz wird `DJANGO_HEALTH_DETAIL_TOKEN` noch nicht an `web` durchgereicht; bis zum Compose-Fix #2219 ist dafür eine eigene `compose.override.yml` mit `services.web.environment` nötig (konkretes Muster: [Admin-Handbuch § 1](admin-guide.md#vollständige-umgebungsvariablen-referenz)). Ab #2219 genügt die direkte Allowlist. Das Tool sendet den Token und wertet den **Response-Body** aus.
 
 ### 7.2 Container-/Compose-Healthcheck
 

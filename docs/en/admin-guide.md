@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-11: review fixes for host-independent key generation, backup-directory permissions, legal Compose file sets, the current runtime allowlist, release-tag selection, and migration-free diagnostics (#2218).
 > Most recently synchronized on 2026-09-11 (§§ 1--6 fresh-install prerequisites, complete source acquisition, quoted environment values, key and DB-password generation, production setting routing, setup sequence, monitoring boundaries, backup scheduling, and troubleshooting, plus the RLS wording in § 7.9, #2218). Previously synchronized on 2026-09-10 (§ 3.3 both database and optional media HMAC sidecars are verified before confirmation and repeated immediately before use, plus recovery guidance after interrupted media extraction, #2195; § 7.5 client merge: the legal-hold limit when reverting a merge -- an active hold on the target or the source, including indirectly through one of their events or cases, refuses **Revert merge**, and the hold is deliberately not mirrored onto the source, #2200; § 2.9 open CSV import source files count during quota enforcement while the display remains attachment-based, #2180; § 2.11 running imports reject changed documentation types or field templates and commit the most recently confirmed mapping, #2196, #2199; § 5.6 URL-bearing event fields are masked structurally -- query string dropped, path resolved against the route schema including subpath prefix and missing trailing slash, token-signal heuristic for unresolvable paths including percent-encoded tokens; log entries and log breadcrumbs are reduced to their template, person key-value pairs, structured person keys, the client IP and the proxy headers including `Forwarded` are scrubbed -- plus the corresponding limits, #2198; § 2.3/§ 2.5 the retention setting for handover notes (days) and the hard-delete of manual shift notes in the retention run, plus the note that a time filter with handover notes can only be deleted after the retention period, #2042; § 2.4 `super_admin` can change **MFA required** for super-admin/bootstrap accounts under **Core > Users**, and each change is recorded as `USER_ACCESS_UPDATED` with `mfa_required` -- the field is also visible to application managers editing regular accounts, #2172; the alternative-deployment box in § 1 is removed and the cron-job notes in § 2.9 are reworded without the alternative deployment path, #2202; pre-1.0 migration/historical framing removed -- the EXTERNAL_ORIGIN migration box, three dated "Changed" boxes (documentation-type category, report key, system type), the outdated `ENCRYPTION_KEY`/email-less-fallback wording, and several version-dated markers are now described as current state, #2205).
 > Previously synchronized on 2026-09-08 (§ 2.9 the key-rotation coverage table and the operational note now cover `EventHistory` as well: the history columns are rotated per row with a row lock and compare-and-swap, a redaction or Art. 17 anonymization committed during the run wins and the row is reported as skipped, and rows that are already redacted are no longer rotation candidates, #2177).
 > Previously synchronized on 2026-09-08 (§ 2.9 row-lock/compare-and-swap protection, contention warnings, retry guidance and the maintenance-window recommendation for key rotation, #2131; § 7.6 the Art. 15 access record now states the deletion timestamp and the triggering user for events in the trash, plus the `deleted_events` structure note and the `null` boundary for events deleted before 0.96, #2157). Previously synchronized on 2026-08-30 (§ 2 self-hosted imprint/privacy files, safe Markdown subset, read-only mount and 404 behavior, #2076). Previously synchronized on 2026-08-28 (§ 2.2c the hard-delete description corrected -- Django wraps the whole delete cascade in one transaction, so the trigger error rolls back completely; partial destruction only arises from hand-written scripts that commit between tables, #2067). Previously synchronized on 2026-08-28 (§ 2.2c archiving a facility now actually blocks access -- sign-in, running sessions and the RLS context -- plus the raw-shell hard-delete pitfall around the `auditlog_immutable` trigger and the cross-reference to user offboarding, #2067). Previously synchronized on 2026-08-28 (§ 5.6 the hosted-Sentry third-country/DPA check and the DPA-template subprocessor cross-reference, #2052). Previously synchronized on 2026-08-28 (§§ 1/2.11/3/4.2 the RLS-safe `backup.sh`/`restore.sh` path for database and media backups, verification, cron, and recovery, #2074). Previously synchronized on 2026-08-25 (§ 7.4 the seven audit actions for domain edits, case links and attachments, their data-minimized details and regular retention, #1860). Previously synchronized on 2026-08-24 (§§ 2.4/2.7 the facility-scoped Access UI, sudo requirement, invitation, role, MFA, deletion-confirmation, deactivation and unlock flows, #1871). Previously synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
@@ -48,7 +49,7 @@ This guide is intended for IT administrators of social service facilities who in
 
 - Docker Engine 24 or newer and Docker Compose v2 (as a plugin: `docker compose`)
 - `git` and `openssl`
-- `python3` with the `cryptography` module **or** Docker for the Fernet-key container generator described below
+- Docker is also required for the Fernet-key container generator described below; host `python3` is needed only for the optional alternative command
 - root/`sudo` rights to create the installation directory and configure host operations
 - a publicly reachable server; DNS records for `DOMAIN` **and** `www.<DOMAIN>` must point to it
 - ports 80 and 443 accessible from the internet
@@ -109,29 +110,29 @@ Generate a separate value of at least 32 characters for **each** of the three da
 openssl rand -hex 24
 ```
 
-**Generate an encryption key:**
+**Generate an encryption key (without host Python):**
+
+```bash
+docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:v0.96.0 \
+  -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+`v0.96.0` is an example value. Use the same release tag that you selected via [`APP_VERSION`](#full-environment-variable-reference) for `docker-compose.prod.yml`; available tags are listed on the [releases page](https://github.com/anlaufstelle/app/releases). The entrypoint override is required. If the host optionally has `python3` and the `cryptography` module installed, this alternative command generates the same key:
 
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-If the host lacks the Python `cryptography` module, generate the same key with the application image. The entrypoint override is required:
-
-```bash
-docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:<tag> \
-  -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
-
 **Generate a secret key:**
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+openssl rand -base64 48 | tr -d '\n'
 ```
 
 **Generate an audit hash key:**
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+openssl rand -base64 48 | tr -d '\n'
 ```
 
 The `DJANGO_AUDIT_HASH_KEY` secures the audit hashes — pseudonymized entries (e.g. emails in password-reset audits) as well as the HMAC integrity chain of the audit log — and is deliberately kept separate from `DJANGO_SECRET_KEY` (see [`docs/disaster-recovery.md`](https://github.com/anlaufstelle/app/blob/main/docs/disaster-recovery.md)).
@@ -142,29 +143,50 @@ The `DJANGO_AUDIT_HASH_KEY` secures the audit hashes — pseudonymized entries (
 
 The following tables document application settings and operating variables (see [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) and [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)).
 
-**Application setting vs. passed-through setting:** `web` deliberately does not load all of `.env`; it receives an explicit allowlist. `maintenance` and `cron`, by contrast, load the full file. The routing for the documented overrides is:
+**Application setting vs. passed-through setting:** `web` deliberately does not load all of `.env`; it receives an explicit allowlist. `maintenance` and `cron`, by contrast, load the full file. The table separates the **current state of this file set** from the target after the pending [Compose fix #2219](https://github.com/anlaufstelle/app/issues/2219):
 
-| Variable(s) | Target in the production stack |
-|---|---|
-| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `DJANGO_SETTINGS_MODULE`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS`, `DJANGO_HEALTH_DETAIL_TOKEN`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | `web` |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` | `web`; the app role remains RLS-restricted |
-| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | `maintenance`/initialization only, deliberately **not** `web` |
-| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | `web` |
-| `LOG_FORMAT`, `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | `web` |
-| `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | `web` |
-| `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS` | `web` |
-| `BREACH_*`, `TZ` | `cron`; `TZ` also sets the containers' time base |
-| `BACKUP_HOST_DIR` | host scripts and volume mount; `BACKUP_DIR` is the read-only target in `web` |
-| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` only with the additional `compose.legal.yml`, as shown under [Mandatory information](#configure-mandatory-information-imprintprivacy) |
+| Variable(s) | Current state of this file set | Target after Compose fix #2219 |
+|---|---|---|
+| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | passed from `.env` to `web` | unchanged |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | passed from `.env` to `web`; the app role remains RLS-restricted | unchanged |
+| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | passed from `.env` to `web` | unchanged |
+| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | passed from `.env` to `web` | unchanged |
+| `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | fixed in `docker-compose.prod.yml` to `anlaufstelle.settings.prod`, `db`, and `clamav`; `.env` does not override them | `DJANGO_SETTINGS_MODULE` and `POSTGRES_HOST` remain fixed; `CLAMAV_HOST` becomes configurable |
+| `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | **not** passed to `web`; setting them only in `.env` and recreating the service has no effect | passed to `web` |
+| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | `maintenance`/initialization only, deliberately **not** `web` | unchanged |
+| `BREACH_*`, `TZ` | `cron`; `TZ` also sets the containers' time base | unchanged |
+| `BACKUP_HOST_DIR` | host scripts and volume mount; `BACKUP_DIR` is the read-only target in `web` | unchanged |
+| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` only with the additional `compose.legal.yml`, as shown under [Mandatory information](#configure-mandatory-information-imprintprivacy) | unchanged |
 
-Set an override in `.env`, then recreate the affected service with `docker compose -f docker-compose.prod.yml up -d --force-recreate <service>`. For legal texts, use both Compose files as specified in “Mandatory information”.
+Until #2219 is integrated, create your own `compose.override.yml` next to `.env` for a setting that is not currently passed through. Example for the detail token (add further names under `environment:` using the same pattern):
+
+```yaml
+services:
+  web:
+    environment:
+      DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
+```
+
+Set the value in `.env`, then recreate `web` with exactly this file set:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.override.yml \
+  up -d --force-recreate web
+```
+
+If legal texts are configured, `compose.legal.yml` must also be included in this and every later recreate:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.override.yml \
+  -f compose.legal.yml up -d --force-recreate web
+```
 
 **Django & Hosts**
 
 | Name | Default | Description |
 |---|---|---|
-| `DJANGO_SECRET_KEY` | -- (required in prod) | Signs sessions/CSRF. Generate with `secrets.token_urlsafe(64)`. |
-| `DJANGO_AUDIT_HASH_KEY` | -- (required in prod) | HMAC key for pseudonymized audit entries (e.g. password-reset emails), separate from `DJANGO_SECRET_KEY` -- without its own key, the audit hash would otherwise silently fall back to `SHA256(SECRET_KEY)`, which a `SECRET_KEY` leak could then exploit retroactively; hence fail-closed. Generate with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`. |
+| `DJANGO_SECRET_KEY` | -- (required in prod) | Signs sessions/CSRF. Generate with `openssl rand -base64 48 \| tr -d '\n'`. |
+| `DJANGO_AUDIT_HASH_KEY` | -- (required in prod) | HMAC key for pseudonymized audit entries (e.g. password-reset emails), separate from `DJANGO_SECRET_KEY` -- without its own key, the audit hash would otherwise silently fall back to `SHA256(SECRET_KEY)`, which a `SECRET_KEY` leak could then exploit retroactively; hence fail-closed. Generate it separately with `openssl rand -base64 48 \| tr -d '\n'`. |
 | `DJANGO_SETTINGS_MODULE` | -- | In production: `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | -- (required in prod) | Comma-separated host names, e.g. `anlaufstelle.example.de`. |
 | `EXTERNAL_ORIGIN` | derived from `ALLOWED_HOSTS` | Fixed base of every security-relevant link -- the invitation setup link, the password-reset link, and the account-unlock link. Format `https://host[:port]`, without a path and without a trailing slash; a value carrying a path or missing the scheme is rejected at startup. Those links are therefore **no longer** built from the `Host` header of the incoming request. If `ALLOWED_HOSTS` lists exactly **one** public host name, the application derives `https://<host>` itself and the variable can be omitted -- `localhost`, `127.0.0.1` and `::1` do not count, they are only there for the container health check. With several public hosts or with subdomain patterns only (`.example.de`) it is **mandatory** -- otherwise the application refuses to start (#1967). |
@@ -266,7 +288,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `FILE_UPLOAD_TEMP_DIR` | Django default (`tempfile.gettempdir()`) | Directory for the plaintext staging buffer of uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, before they are encrypted into the file vault (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). Pinned to `/tmp` (tmpfs/RAM) in the shipped Compose files -- [ops runbook § 5.7a](../ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Read-only mount target inside the container; the health endpoint and the backup row in the system area read the backup age from it. The host scripts ignore this variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Base directory on the host; relative values are resolved against the repository root. `backup.sh` writes to `daily/`, `weekly/`, and `monthly/` below it; `restore-drill.sh` reads from `daily/`. Compose mounts this directory read-only onto `BACKUP_DIR`, so the container sees the same files. |
-| `APP_VERSION` | `dev` | Version string that `/health/` exposes in the `version` detail field (token/authenticated callers only). |
+| `APP_VERSION` | `dev` | Release tag of the app image selected by `docker-compose.prod.yml`, e.g. `v0.96.0`; available tags are listed on the [releases page](https://github.com/anlaufstelle/app/releases). `/health/` exposes the value in the `version` detail field (token/authenticated callers only). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, GDPR export). |
 
 ### Step 3: Review the Caddyfile
@@ -291,12 +313,15 @@ No changes are needed as long as `DOMAIN` is set in `.env` and DNS for both `DOM
 **Recommended -- a single command:** the bundled script [`scripts/initial-setup.sh`](../../scripts/initial-setup.sh) runs the complete first-time setup in the correct order (Refs #793):
 
 ```bash
-mkdir -p backups
-chmod 700 backups
+set -a
+. ./.env
+set +a
+BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
+sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"
 ./scripts/initial-setup.sh
 ```
 
-Creating `backups` before the first container start keeps the bind mount owned by the operating account; otherwise Docker creates a missing directory as `root`. The script starts the database, waits for readiness, creates the schema through the one-shot job, brings up the full stack, and verifies deployment settings and database roles. Finally it creates the super-admin interactively unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
+The example uses the recommended backup account, `root`: it can write to the actually configured `BACKUP_HOST_DIR`. Group GID 1000 belongs to the container user `appuser`; mode `2750` gives it read and traverse access only and passes the group to new subdirectories. Use `umask 0027` for backup runs so that new directories and files remain readable by that group; if you use a dedicated backup account, replace only `-o root`. Never make backups readable by all users. Starting with the Compose/script fix #2219, `initial-setup.sh` performs this preparation. Without that fix, it must happen before the first container start as shown above; otherwise Docker creates the missing bind mount as `root`. The script starts the database, waits for readiness, creates the schema through the one-shot job, brings up the full stack, and verifies deployment settings and database roles. Finally it creates the super-admin interactively unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
 
 The script is **idempotent** (a second run is safe: migrations become no-ops, an existing super-admin is skipped) and **fail-loud** -- if a step fails, it exits with a non-zero code and an explanation. Optional environment variables: `COMPOSE_FILE` (default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. It deliberately accepts **no** password -- `create_super_admin` prompts for it interactively ([ADR-018](../adr/018-rollenmodell-superadmin.md)).
 
@@ -1178,6 +1203,8 @@ Prerequisites in `.env`:
 - a random, separately escrowed `BACKUP_ENCRYPTION_KEY`,
 - `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#complete-environment-variable-reference)).
 
+The backup account needs write access, while `appuser` in the container (UID/GID 1000) must be able to read and traverse the directory so that health and compliance checks can find the backups. The restrictive group model from [Step 4](#step-4-start-the-stack) provides both for the configured `BACKUP_HOST_DIR`; `umask 0027` preserves group readability for new content without making backups world-readable.
+
 > **RLS is security-critical here:** `pg_dump` must run as `POSTGRES_ADMIN_USER`. The `POSTGRES_USER` application role is `NOBYPASSRLS`; a raw dump under that role fails at `FORCE ROW LEVEL SECURITY` or would not be a complete backup of facility-scoped data. Do not replace `backup.sh` with a custom `pg_dump -U anlaufstelle` command or the application role.
 
 Keep `.env`, or at least `BACKUP_ENCRYPTION_KEY` and the complete `ENCRYPTION_KEYS` history, separate from the production host. Without the backup key the archive cannot be decrypted; without the field/vault keys its encrypted contents remain unreadable. Configure an off-site destination as well to protect against complete host loss; details are in [Ops Runbook § 6.6a](../ops-runbook.md#66a-off-site-backup-sync-refs-738).
@@ -1198,7 +1225,7 @@ sudo crontab -e
 Entry for a daily backup at 02:00, before retention jobs:
 
 ```cron
-0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
+0 2 * * * cd /opt/anlaufstelle && umask 0027 && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 ```
 
 `/etc/crontab` additionally requires the username `root` after the five time fields; do not copy the five-field line there unchanged. Also configure weekly rotation for `/var/log/anlaufstelle-backup.log` (for example eight compressed rotations with `copytruncate`) under `/etc/logrotate.d/`.
@@ -1223,9 +1250,13 @@ The verification run validates the HMAC before decryption, restores the latest d
 3. Start the restore from the repository root. The second argument is optional, but required for a complete recovery including file attachments:
 
 ```bash
+set -a
+. ./.env
+set +a
+BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
 ./scripts/ops/restore.sh \
-  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
-  backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
+  "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc" \
+  "$BACKUP_HOST_DIR/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc"
 ```
 
 Before even asking for confirmation, the script first verifies the database HMAC and, when the second argument was supplied, the media HMAC. Only after both preflight checks succeed and the operator enters `ja` does it restore the database; it repeats the corresponding check immediately before each archive is used, then replaces and extracts the media contents. The SQL dump is deliberately loaded through the local bootstrap superuser (`POSTGRES_SUPERUSER`, default `postgres`): only that role can reliably restore the included owner/`FORCE RLS` statements and data copies. If media extraction aborts, the media contents are incomplete and the full media restore must be repeated.
@@ -1236,6 +1267,14 @@ Before even asking for confirmation, the script first verifies the database HMAC
 docker compose -f docker-compose.prod.yml run --rm \
   --entrypoint=/app/docker-migrate.sh maintenance
 docker compose -f docker-compose.prod.yml up -d
+```
+
+If legal texts are configured, use the complete file set for both steps instead:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.legal.yml run --rm \
+  --entrypoint=/app/docker-migrate.sh maintenance
+docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
 ```
 
 5. Check database roles, health, and samples from both the database **and** file vault. See [Section 5](#5-monitoring), [Ops Runbook § 9](../ops-runbook.md#9-row-level-security-rls), and the [disaster-recovery smoke verification](../disaster-recovery.md#7-smoke-verifikation-nach-restore).
@@ -1260,10 +1299,25 @@ docker compose -f docker-compose.prod.yml run --rm \
 docker compose -f docker-compose.prod.yml up -d web caddy
 ```
 
+If legal texts are configured, the same update sequence is:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.legal.yml pull web
+docker compose -f docker-compose.prod.yml -f compose.legal.yml run --rm \
+  --entrypoint=/app/docker-migrate.sh maintenance
+docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web caddy
+```
+
 Check the logs afterwards:
 
 ```bash
 docker compose -f docker-compose.prod.yml logs web --tail=50
+```
+
+If legal texts are configured:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.legal.yml logs web --tail=50
 ```
 
 ### 4.2 Before an Update
@@ -1281,6 +1335,12 @@ If problems occur after an update:
 docker compose -f docker-compose.prod.yml up -d
 
 # Restore the database backup from before the update (if necessary)
+```
+
+If legal texts are configured, the rollback restart must also use both files:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
 ```
 
 ---
@@ -1320,7 +1380,7 @@ Expected response content: "status": "ok"
 Check interval: 1 minute
 ```
 
-This anonymous liveness check cannot detect a **missing or stale backup** or an SMTP outage. For these signals, configure a strong `DJANGO_HEALTH_DETAIL_TOKEN`, send it as `X-Health-Token`, and additionally evaluate the JSON `status` value; alternatively monitor backups and mail separately.
+This anonymous liveness check cannot detect a **missing or stale backup** or an SMTP outage. In the current base file set, `DJANGO_HEALTH_DETAIL_TOKEN` does not yet reach the web service. Until the Compose fix #2219, use the `compose.override.yml` described above; starting with that fix, the direct allowlist is sufficient. Send the strong token as `X-Health-Token` and additionally evaluate the JSON `status` value; alternatively monitor backups and mail separately.
 
 **curl-based cron check:**
 
@@ -1442,13 +1502,15 @@ The `detect_breaches` management command heuristically analyzes the audit log fo
 **Steps:**
 
 ```bash
-# Re-run the migrate/maintenance job so its output is visible
+# Check the configuration again without running migrations
 docker compose -f docker-compose.prod.yml run --rm \
-  --entrypoint=/app/docker-migrate.sh maintenance
+  --entrypoint sh maintenance -c 'python manage.py check --deploy'
 
 # If web has already been created
 docker compose -f docker-compose.prod.yml logs web
 ```
+
+If `initial-setup.sh` aborts, its original error message is already in the terminal output. The first command above checks only the current Django configuration; it deliberately does not start another migration run.
 
 Common causes:
 
@@ -1479,6 +1541,15 @@ The `cron` sidecar has no HTTP endpoint; its image healthcheck must be disabled 
 docker compose -f docker-compose.prod.yml up -d --force-recreate cron
 docker compose -f docker-compose.prod.yml ps cron
 docker compose -f docker-compose.prod.yml logs cron
+```
+
+If legal texts are configured, use both files for the recreate and the follow-up checks as well:
+
+```bash
+docker compose -f docker-compose.prod.yml -f compose.legal.yml \
+  up -d --force-recreate cron
+docker compose -f docker-compose.prod.yml -f compose.legal.yml ps cron
+docker compose -f docker-compose.prod.yml -f compose.legal.yml logs cron
 ```
 
 ### Problem: ClamAV Signatures Are Stale
@@ -2145,4 +2216,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 54c4b5355637afd7812b14a73ddaf3f451b3a910 -->
+<!-- source-hash: 6df1f7eb2551c31525367af519b1cf5a73bcf4a0 -->
