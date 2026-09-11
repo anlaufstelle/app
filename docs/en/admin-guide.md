@@ -813,7 +813,7 @@ Once a bound is tightened, the central validator checks **every** write -- inclu
 
 #### Safely Retracting a Bound
 
-If a bound turns out too tight, retract it at the same location: loosen or clear **Minimum Value**/**Maximum Value** on the field template. That takes effect immediately for future writes; previously blocked records become saveable again as soon as their stored value fits the (now wider) bound -- without anyone having to change a value after the fact. If the bound is instead maintained through a configuration package, a separate tri-state rule applies there (an omitted key leaves an existing bound untouched; only an explicit `null` removes it) -- see docs/packages.md.
+If a bound turns out too tight, retract it at the same location: loosen or clear **Minimum Value**/**Maximum Value** on the field template. That takes effect immediately for future writes; previously blocked records become saveable again as soon as their stored value fits the (now wider) bound -- without anyone having to change a value after the fact. If the bound is instead maintained through a configuration package, a separate tri-state rule applies there (an omitted key leaves an existing bound untouched; only an explicit `null` removes it) -- see [docs/packages.md](../packages.md).
 
 ### 2.6b Fuzzy Search (pg_trgm)
 
@@ -1572,7 +1572,7 @@ Legal Holds are managed in the retention dashboard and in the Django admin (see 
 
 #### Retention of the Event History
 
-Every save of an event writes a **history version**: who changed which fields to which values, and when. Until version 0.89 these versions had **no retention period** — they outlived the deletion period of the event itself. Concretely: an event whose `retention_identified_days` have expired is emptied, but its earlier versions kept every wording ever stored. The period was formally enforced and factually undermined. Since ADR-050, `enforce_retention` closes this gap in two stages.
+Every save of an event writes a **history version**: who changed which fields to which values, and when. Until version 0.89 these versions had **no retention period** — they outlived the deletion period of the event itself. Concretely: an event whose `retention_identified_days` have expired is emptied, but its earlier versions kept every wording ever stored. The period was formally enforced and factually undermined. Since [ADR-050](../adr/050-eventhistory-retention.md), `enforce_retention` closes this gap in two stages.
 
 **Stage 1 — redaction.** The version remains, its *values* fall away. What stays: timestamp, acting person, action and the names of the affected fields. What disappears: the contents. In the event detail view and in the Art. 15 access record, "– (redacted)" appears in their place. Two triggers:
 
