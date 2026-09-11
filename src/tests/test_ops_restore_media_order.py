@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import hmac
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -13,10 +14,14 @@ import tarfile
 from pathlib import Path
 
 import pytest
+from django.test import override_settings
+
+from core.services.audit.hwm import HighWaterMarkStore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPS_DIR = REPO_ROOT / "scripts" / "ops"
 BACKUP_KEY = "restore-media-order-key-0123456789abcdef"
+AUDIT_KEY = "restore-hwm-key-0123456789abcdef"
 REAL_OPENSSL = shutil.which("openssl")
 pytestmark = [
     pytest.mark.architecture,
@@ -284,6 +289,8 @@ printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
 if [[ "$*" == *" exec -T db psql "* ]]; then
     if [[ "$*" == *"SELECT facility_id, storage_filename"* ]]; then
         printf '%s\\n' "$ATTACHMENT_ROWS"
+    elif [[ "$*" == *"SELECT storage_filename"* ]]; then
+        printf '%s\\n' "${ATTACHMENT_ROWS#*|}"
     else
         cat >/dev/null
     fi
@@ -346,6 +353,9 @@ def _install_hwm_restore_docker(bindir: Path) -> None:
     _write_executable(
         bindir / "python",
         """#!/usr/bin/env bash
+if [[ "${1:-}" == "manage.py" && "${2:-}" == "shell" && "${3:-}" == "-c" ]]; then
+    exec "$PYTHON_BIN" -c "$4"
+fi
 exec "$PYTHON_BIN" "$@"
 """,
     )
@@ -396,6 +406,9 @@ def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = Fal
             "HOST_HWM_TARGET": str(hwm_target),
             "HWM_CALL_COUNT": str(tmp_path / "hwm-calls"),
             "PYTHON_BIN": str(Path(os.sys.executable)),
+            "PYTHONPATH": str(REPO_ROOT / "src"),
+            "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.test",
+            "DJANGO_AUDIT_HASH_KEY": AUDIT_KEY,
             "TEST_HWM_STREAM_FAIL": "1" if stream_fails else "0",
         }
     )
@@ -409,6 +422,15 @@ def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = Fal
         timeout=30,
     )
     return result, hwm_target, action_log
+
+
+def _signed_hwm_payload(tmp_path: Path) -> bytes:
+    payload_path = tmp_path / "signed-hwm.json"
+    with override_settings(AUDIT_HASH_KEY=AUDIT_KEY):
+        HighWaterMarkStore(path=str(payload_path), chains={}).save()
+    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    assert payload["sig"] != "signed"
+    return payload_path.read_bytes()
 
 
 def test_empty_hwm_source_fails_without_changing_anchor(tmp_path: Path) -> None:
@@ -428,15 +450,25 @@ def test_invalid_hwm_json_fails_without_changing_anchor(tmp_path: Path) -> None:
 
 
 def test_interrupted_hwm_stream_preserves_old_anchor(tmp_path: Path) -> None:
-    payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    payload = _signed_hwm_payload(tmp_path)
     result, hwm_target, _ = _run_hwm_restore(tmp_path, payload, stream_fails=True)
 
     assert result.returncode != 0
     assert hwm_target.read_bytes() == b"old-anchor"
 
 
-def test_valid_hwm_stream_atomically_replaces_anchor(tmp_path: Path) -> None:
+def test_invalid_hwm_signature_preserves_old_anchor(tmp_path: Path) -> None:
     payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    result, hwm_target, action_log = _run_hwm_restore(tmp_path, payload)
+
+    assert result.returncode != 0
+    assert "Signatur ungueltig" in result.stderr
+    assert hwm_target.read_bytes() == b"old-anchor"
+    assert " psql " not in action_log.read_text(encoding="utf-8")
+
+
+def test_valid_hwm_stream_atomically_replaces_anchor(tmp_path: Path) -> None:
+    payload = _signed_hwm_payload(tmp_path)
     result, hwm_target, _ = _run_hwm_restore(tmp_path, payload)
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

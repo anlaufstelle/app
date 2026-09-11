@@ -103,24 +103,28 @@ validate_or_install_hwm() {
         -c '
             set -eu
             mode="$1"; target="$2"; expected_size="$3"; expected_sha256="$4"
-            target_dir=$(dirname "$target")
-            HWM_TEMP="${target_dir}/.audit-hwm-restore.$$"
-            trap '\''rm -f "$HWM_TEMP"'\'' EXIT HUP INT TERM
+            HWM_CHECK="/tmp/hwm-check.$$"
+            trap '\''rm -f "$HWM_CHECK" "${HWM_TEMP:-}"'\'' EXIT HUP INT TERM
             umask 077
-            cat > "$HWM_TEMP"
-            actual_size=$(wc -c < "$HWM_TEMP" | tr -d "[:space:]")
-            actual_sha256=$(sha256sum "$HWM_TEMP" | cut -d " " -f 1)
-            test "$actual_size" = "$expected_size"
-            test "$actual_sha256" = "$expected_sha256"
+            cat > "$HWM_CHECK"
+            DJANGO_AUDIT_HWM_PATH="$HWM_CHECK" python manage.py shell -c '\''from core.services.audit.hwm import HighWaterMarkStore; import os; HighWaterMarkStore.load(os.environ["DJANGO_AUDIT_HWM_PATH"])'\''
             python -c '\''import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 chains = data.get("chains")
 valid_chain = lambda value: isinstance(value, dict) and isinstance(value.get("count"), int) and isinstance(value.get("last_entry_hash"), str)
-if data.get("version") != 1 or not isinstance(chains, dict) or not isinstance(data.get("sig"), str) or not data["sig"] or not all(valid_chain(value) for value in chains.values()):
-    raise SystemExit("Audit-HWM: Pflichtfelder oder Feldtypen ungueltig")'\'' "$HWM_TEMP"
-            if test "$mode" = install; then
-                mv -f "$HWM_TEMP" "$target"
+if data.get("version") != 1 or not isinstance(chains, dict) or not all(valid_chain(value) for value in chains.values()):
+    raise SystemExit("Audit-HWM: Pflichtfelder oder Feldtypen ungueltig")'\'' "$HWM_CHECK"
+            if test "$mode" = validate; then
+                exit 0
             fi
+            target_dir=$(dirname "$target")
+            HWM_TEMP="${target_dir}/.audit-hwm-restore.$$"
+            cat "$HWM_CHECK" > "$HWM_TEMP"
+            actual_size=$(wc -c < "$HWM_TEMP" | tr -d "[:space:]")
+            actual_sha256=$(sha256sum "$HWM_TEMP" | cut -d " " -f 1)
+            test "$actual_size" = "$expected_size"
+            test "$actual_sha256" = "$expected_sha256"
+            mv -f "$HWM_TEMP" "$target"
         ' sh "$mode" "$DJANGO_AUDIT_HWM_PATH" "$HWM_EXPECTED_SIZE" "$HWM_EXPECTED_SHA256" < "$HWM_FILE"
 }
 

@@ -74,9 +74,17 @@ exit 0
         bindir / "scp",
         """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$SCP_LOG"
-exit 0
+exit "${TEST_OFFSITE_FAIL:-0}"
 """,
     )
+    for command in ("rclone", "aws"):
+        _write_executable(
+            bindir / command,
+            """#!/usr/bin/env bash
+printf '%s %s\\n' "${0##*/}" "$*" >> "$SCP_LOG"
+exit "${TEST_OFFSITE_FAIL:-0}"
+""",
+        )
     docker_log.write_text("", encoding="utf-8")
     scp_log.write_text("", encoding="utf-8")
     return root, docker_log, scp_log
@@ -110,7 +118,71 @@ def test_backup_exports_hwm_into_daily_and_scp_offsite(tmp_path: Path) -> None:
     assert str(hwm_files[0].parent) in scp_log.read_text(encoding="utf-8")
 
 
-def _write_prod_backup(backup_dir: Path, timestamp: str = "2026-09-02_020000") -> None:
+@pytest.mark.parametrize(
+    "target",
+    ("backup@example:/archive", "rclone:remote:archive", "s3://bucket/archive"),
+)
+def test_offsite_transfer_failure_prevents_rotation_until_success(tmp_path: Path, target: str) -> None:
+    root, docker_log, transfer_log = _backup_sandbox(tmp_path)
+    env_file = root / ".env"
+    env_file.write_text(
+        env_file.read_text(encoding="utf-8").replace(
+            "BACKUP_OFFSITE_TARGET=backup@example:/archive",
+            f"BACKUP_OFFSITE_TARGET={target}",
+        ),
+        encoding="utf-8",
+    )
+    aged_files = []
+    old_timestamp = 1_600_000_000
+    for tier in ("daily", "weekly", "monthly"):
+        aged = root / "backups" / tier / f"aged-{tier}.sql.gz.enc"
+        aged.parent.mkdir(parents=True, exist_ok=True)
+        aged.write_bytes(b"aged")
+        os.utime(aged, (old_timestamp, old_timestamp))
+        aged_files.append(aged)
+
+    env = dict(os.environ)
+    env.update(
+        {
+            "PATH": f"{tmp_path / 'backup-bin'}:{env['PATH']}",
+            "DOCKER_LOG": str(docker_log),
+            "SCP_LOG": str(transfer_log),
+            "TEST_HWM_JSON": '{"version":1,"chains":{},"sig":"signed"}',
+            "TEST_OFFSITE_FAIL": "1",
+        }
+    )
+    failed = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "backup.sh")],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
+
+    assert failed.returncode == 0, failed.stderr
+    assert "Rotation ausgesetzt" in failed.stdout
+    assert all(path.exists() for path in aged_files)
+
+    env["TEST_OFFSITE_FAIL"] = "0"
+    succeeded = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "backup.sh")],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
+
+    assert succeeded.returncode == 0, succeeded.stderr
+    assert "Rotation abgeschlossen" in succeeded.stdout
+    assert all(not path.exists() for path in aged_files)
+
+
+def _write_prod_backup(
+    backup_dir: Path,
+    timestamp: str = "2026-09-02_020000",
+    *,
+    audit_count: int = 1,
+) -> None:
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_file = backup_dir / f"anlaufstelle_{timestamp}.sql.gz.enc"
     encrypted = subprocess.run(
@@ -127,7 +199,7 @@ def _write_prod_backup(backup_dir: Path, timestamp: str = "2026-09-02_020000") -
     manifest = backup_dir / f"anlaufstelle_{timestamp}.manifest"
     tables = ("core_facility", "core_client", "core_event", "core_workitem", "core_auditlog", "core_attachment")
     if "MANIFEST_TIMESTAMP" in RESTORE_DRILL.read_text(encoding="utf-8"):
-        payload = "".join(f"table_{table}=1\n" for table in tables)
+        payload = "".join(f"table_{table}={audit_count if table == 'core_auditlog' else 1}\n" for table in tables)
         payload += f"backup_timestamp={timestamp}\n"
         payload += f"db_sha256={hashlib.sha256(backup_file.read_bytes()).hexdigest()}\n"
     else:
@@ -147,10 +219,11 @@ def _restore_sandbox(
     add_newer_backup: bool = False,
     foreign_manifest: bool = False,
     sql_error: bool = False,
+    audit_count: int = 1,
 ) -> tuple[Path, Path, subprocess.CompletedProcess]:
     compose_dir = tmp_path / "restore-root"
     backup_dir = compose_dir / "backups" / "daily"
-    _write_prod_backup(backup_dir)
+    _write_prod_backup(backup_dir, audit_count=audit_count)
     if add_newer_backup:
         _write_prod_backup(backup_dir, "2026-09-11_020000")
     if foreign_manifest:
@@ -186,10 +259,16 @@ def _restore_sandbox(
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 if [[ "$*" == *" --entrypoint sh maintenance "* && "$*" == *"verify_audit_chain"* ]]; then
     payload=$(cat)
-    if [[ "$payload" == *"manipulated"* ]]; then
-        printf 'HwmIntegrityError: Signatur ungueltig\\n' >&2
+    hwm_check=$(mktemp)
+    printf '%s' "$payload" > "$hwm_check"
+    if ! PYTHONPATH="$REAL_SRC" DJANGO_SETTINGS_MODULE=anlaufstelle.settings.test \
+        DJANGO_AUDIT_HASH_KEY="$DJANGO_AUDIT_HASH_KEY" "$PYTHON_BIN" -c \
+        'from core.services.audit.hwm import HighWaterMarkStore; import sys; HighWaterMarkStore.load(sys.argv[1])' \
+        "$hwm_check"; then
+        rm -f "$hwm_check"
         exit 1
     fi
+    rm -f "$hwm_check"
     if [[ "${TEST_CHAIN_ERROR:-}" == "role" ]]; then
         printf 'CommandError: verify_audit_chain laeuft als RLS-gefilterte App-Rolle\\n' >&2
         exit 1
@@ -236,7 +315,9 @@ elif [[ "$*" == *"UPDATE core_auditlog"* ]]; then
     printf 'auditlog is immutable\\n' >&2
     exit 1
 elif [[ "$*" == *"SELECT COUNT(*) FROM core_auditlog"* && -s "$CHAIN_RAN_FILE" ]]; then
-    printf '2\\n'
+    printf '%s\\n' "$((TEST_AUDIT_COUNT + 1))"
+elif [[ "$*" == *"SELECT COUNT(*) FROM core_auditlog"* ]]; then
+    printf '%s\\n' "$TEST_AUDIT_COUNT"
 elif [[ "$*" == *"SELECT COUNT(*)"* ]]; then
     printf '1\\n'
 elif [[ "$*" == *" exec -T db psql "* ]]; then
@@ -266,6 +347,7 @@ exit 0
             "DJANGO_AUDIT_HASH_KEY": AUDIT_KEY,
             "TEST_CHAIN_ERROR": chain_error,
             "TEST_SQL_ERROR": "1" if sql_error else "0",
+            "TEST_AUDIT_COUNT": str(audit_count),
             "CHAIN_RAN_FILE": str(tmp_path / "chain-ran"),
         }
     )
@@ -341,6 +423,20 @@ def test_restore_drill_logs_real_role_error_and_blocks_marker(tmp_path: Path) ->
     assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
 
 
+def test_restore_drill_logs_chain_mismatch_and_blocks_marker(tmp_path: Path) -> None:
+    signature = hmac.new(AUDIT_KEY.encode(), b"{}", hashlib.sha256).hexdigest()
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=f'{{"version":1,"chains":{{}},"sig":"{signature}"}}',
+        chain_error="mismatch",
+    )
+
+    assert result.returncode == 1
+    assert "CommandError: tail truncation" in result.stdout
+    assert "Audit-HWM passt nicht zur restaurierten Kette" in result.stdout
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
+
+
 def test_restore_drill_counts_before_successful_chain_command(tmp_path: Path) -> None:
     signature = hmac.new(AUDIT_KEY.encode(), b"{}", hashlib.sha256).hexdigest()
     _, docker_log, result = _restore_sandbox(
@@ -353,6 +449,22 @@ def test_restore_drill_counts_before_successful_chain_command(tmp_path: Path) ->
     last_count = actions.rindex("SELECT COUNT(*) FROM core_attachment")
     chain = actions.index("verify_audit_chain")
     assert last_count < chain
+
+
+def test_empty_audit_stays_open_after_successful_writing_chain_check(tmp_path: Path) -> None:
+    signature = hmac.new(AUDIT_KEY.encode(), b"{}", hashlib.sha256).hexdigest()
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=f'{{"version":1,"chains":{{}},"sig":"{signature}"}}',
+        audit_count=0,
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "NICHT PRUEFBAR - Schritt 5: core_auditlog ist leer" in result.stdout
+    assert "DRILL OFFEN" in result.stdout
+    actions = docker_log.read_text(encoding="utf-8")
+    assert "verify_audit_chain" in actions
+    assert "mark_restore_verified" not in actions
 
 
 def test_restore_drill_rejects_foreign_validly_signed_manifest(tmp_path: Path) -> None:

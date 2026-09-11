@@ -1616,6 +1616,13 @@ class TestRestoreDrillProdFormat:
             "authentifizierten Zeilenzahl fail-closed reagieren (exakte Gleichheit statt nur "
             "'Restore=0') — strenger als der fruehere Live-Vergleich (Refs #2221)."
         )
+        assert '! "$RESTORED_COUNT" =~ ^[0-9]+$ || ! "$LIVE_COUNT" =~ ^[0-9]+$' in completeness, (
+            "Der manifestlose Dev-Zweig muss beide Zaehler fail-closed als nichtnullige "
+            "Ganzzahlen validieren (Refs #1336, #2221)."
+        )
+        assert 'RESTORED_COUNT" -ne "$LIVE_COUNT"' in completeness, (
+            "Der Dev-Zweig muss weiterhin exakte Gleichheit zwischen Restore und Live-DB verlangen (Refs #1336, #2221)."
+        )
         # Der Nachweis muss weiterhin VOR mark_restore_verified stehen, sonst
         # dokumentiert der Drill einen unvollstaendigen Restore als verifiziert.
         guard_pos = flat.find('RESTORED_COUNT" -ne "$EXPECTED_COUNT"')
@@ -1628,6 +1635,10 @@ class TestRestoreDrillProdFormat:
             "mark_restore_verified stehen — sonst faerbt ein unvollstaendiger oder durch ein "
             "manipuliertes Manifest verschleierter Restore den Compliance-Check gruen "
             "(Refs #1336, #2221)."
+        )
+        dev_guard_pos = flat.find('RESTORED_COUNT" -ne "$LIVE_COUNT"')
+        assert dev_guard_pos != -1 and dev_guard_pos < mark_pos, (
+            "Der Dev-Vollstaendigkeitsvergleich muss VOR mark_restore_verified stehen (Refs #1336, #2221)."
         )
 
     def test_requires_live_db_name_for_comparison(self) -> None:

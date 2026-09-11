@@ -393,10 +393,14 @@ fi
 # mark_restore_verified (Schritt 7) stehen.
 COMPLETENESS_TABLES=("core_facility" "core_client" "core_event" "core_workitem" "core_auditlog" "core_attachment")
 COMPLETENESS_FAIL=0
+AUDIT_ROW_COUNT_BEFORE_CHAIN=""
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
     for tbl in "${COMPLETENESS_TABLES[@]}"; do
         RESTORED_COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
         EXPECTED_COUNT="${MANIFEST_COUNTS[$tbl]}"
+        if [[ "$tbl" == "core_auditlog" ]]; then
+            AUDIT_ROW_COUNT_BEFORE_CHAIN="$RESTORED_COUNT"
+        fi
         if [[ -z "$RESTORED_COUNT" || ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
             echo "       - ${tbl}: im Restore nicht abfragbar (${RESTORED_COUNT:-leer})"
             COMPLETENESS_FAIL=1
@@ -413,6 +417,9 @@ else
     for tbl in "${COMPLETENESS_TABLES[@]}"; do
         RESTORED_COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
         LIVE_COUNT=$(psql_su -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+        if [[ "$tbl" == "core_auditlog" ]]; then
+            AUDIT_ROW_COUNT_BEFORE_CHAIN="$RESTORED_COUNT"
+        fi
         if [[ ! "$RESTORED_COUNT" =~ ^[0-9]+$ || ! "$LIVE_COUNT" =~ ^[0-9]+$ ]]; then
             echo "       - ${tbl}: Restore oder Live-DB nicht abfragbar"
             COMPLETENESS_FAIL=1
@@ -480,12 +487,10 @@ fi
 # Schritt 5: AuditLog-Immutability-Trigger-Check
 TRIGGER_COUNT=$(psql_su -d "$DRILL_DB" -t -A \
     -c "SELECT COUNT(*) FROM pg_trigger WHERE tgname = 'auditlog_immutable';" 2>/dev/null | tr -d '[:space:]')
-AUDIT_ROW_COUNT=$(psql_su -d "$DRILL_DB" -t -A \
-    -c "SELECT COUNT(*) FROM core_auditlog;" 2>/dev/null | tr -d '[:space:]')
 if [[ "$TRIGGER_COUNT" == "1" ]]; then
-    if [[ ! "$AUDIT_ROW_COUNT" =~ ^[0-9]+$ ]]; then
+    if [[ ! "$AUDIT_ROW_COUNT_BEFORE_CHAIN" =~ ^[0-9]+$ ]]; then
         fail "Schritt 5: AuditLog-Zeilenzahl nicht abfragbar"
-    elif [[ "$AUDIT_ROW_COUNT" -eq 0 ]]; then
+    elif [[ "$AUDIT_ROW_COUNT_BEFORE_CHAIN" -eq 0 ]]; then
         echo "NICHT PRUEFBAR - Schritt 5: core_auditlog ist leer; Trigger kann nicht ausgeloest werden"
         DRILL_UNDETERMINED=1
     else

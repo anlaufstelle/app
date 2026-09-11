@@ -92,12 +92,15 @@ def test_hmac_error_lists_ambiguous_root_causes() -> None:
 def test_empty_expected_tables_and_audit_probe_keep_drill_open() -> None:
     drill = _script("restore-drill.sh")
     samples = drill.split("# Schritt 3:", maxsplit=1)[1].split("# Schritt 3b:", maxsplit=1)[0]
+    completeness = drill.split("# Schritt 3b:", maxsplit=1)[1].split("# Schritt 2b:", maxsplit=1)[0]
     audit = drill.split("# Schritt 5:", maxsplit=1)[1].split("# Schritt 6:", maxsplit=1)[0]
     mark = drill.split("# Schritt 7:", maxsplit=1)[1]
 
     assert '"${MANIFEST_COUNTS[$tbl]}" -gt 0 && "$COUNT" -eq 0' in samples
     assert "DRILL_UNDETERMINED=0" in drill
-    assert "AUDIT_ROW_COUNT=" in audit
+    assert 'AUDIT_ROW_COUNT_BEFORE_CHAIN="$RESTORED_COUNT"' in completeness
+    assert "SELECT COUNT(*) FROM core_auditlog" not in audit
+    assert '"$AUDIT_ROW_COUNT_BEFORE_CHAIN" -eq 0' in audit
     assert "NICHT PRUEFBAR" in audit
     assert "DRILL_UNDETERMINED=1" in audit
     assert '[[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 ]]' in mark
@@ -169,8 +172,9 @@ def test_restore_hwm_is_validated_and_atomically_replaced() -> None:
     assert "json.load" in restore
     assert 'data.get("version") != 1' in restore
     assert 'data.get("chains")' in restore
-    assert 'data.get("sig")' in restore
+    assert "HighWaterMarkStore.load" in restore
     assert 'mv -f "$HWM_TEMP" "$target"' in restore
+    assert restore.index("HighWaterMarkStore.load") < restore.index('mv -f "$HWM_TEMP" "$target"')
     assert 'cat > "$DJANGO_AUDIT_HWM_PATH"' not in hwm
 
 
@@ -185,6 +189,9 @@ def test_hand_check_builds_bad_sql_before_valid_sidecar_and_separates_control() 
         < normalized.index("komprimieren")
         < normalized.index("sidecar")
     )
+    assert "db_sha256" in normalized
+    assert "manifest neu signieren" in normalized
+    assert normalized.index("komprimieren") < normalized.index("db_sha256") < normalized.index("manifest neu signieren")
     assert "getrennter kontrolllauf" in normalized
 
 
