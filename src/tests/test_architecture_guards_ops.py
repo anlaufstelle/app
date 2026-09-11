@@ -143,13 +143,28 @@ class TestPublicBackupScriptsRlsRoles:
         )
 
     def test_restore_runs_as_superuser(self) -> None:
+        """Verschaerft fuer #2221: ein Plain-SQL-Restore ohne ON_ERROR_STOP laeuft
+        nach einem Fehler mitten im Dump (z.B. eine gescheiterte Zeile) einfach
+        weiter — der psql-Exit-Code verschleiert dann einen kaputten Restore.
+        Ohne --single-transaction bleibt ein abgebrochener Restore zudem teilweise
+        angewendet statt vollstaendig zurueckgerollt zu werden. Beide Flags sind
+        jetzt Pflicht, zusaetzlich zum Superuser aus Review N4.
+        """
         flat = self._flat(self._RESTORE)
         assert 'SU_USER="${POSTGRES_SUPERUSER:-postgres}"' in flat, (
             "restore.sh muss den Plain-SQL-Dump als Superuser einspielen: "
             "OWNER-TO-/FORCE-RLS-Statements scheitern unter der App-Rolle (Review N4)."
         )
-        call = re.search(r"psql\s+-U\s+\"\$SU_USER\"[^\n]*", flat)
-        assert call is not None, 'Restore-Pipe in restore.sh muss psql -U "$SU_USER" nutzen (Review N4).'
+        call = re.search(
+            r'psql\s+-v\s+ON_ERROR_STOP=1\s+--single-transaction\s+-U\s+"\$SU_USER"\s+"\$POSTGRES_DB"',
+            flat,
+        )
+        assert call is not None, (
+            "Restore-Pipe in restore.sh muss psql -v ON_ERROR_STOP=1 --single-transaction "
+            '-U "$SU_USER" "$POSTGRES_DB" nutzen — ohne ON_ERROR_STOP bleibt ein Fehler mitten '
+            "im Dump unbemerkt, ohne --single-transaction bleibt ein abgebrochener Restore "
+            "teilweise angewendet statt atomar zurueckgerollt (Refs #2221, verschaerft aus Review N4)."
+        )
 
 
 class TestDeployChecksWiredIntoStartup:
@@ -1393,6 +1408,13 @@ class TestRestoreHmacBeforeDestructiveActions:
     _DRILL = Path("scripts/ops/restore-drill.sh")
 
     def test_both_hmac_sidecars_precede_confirmation_and_restore(self) -> None:
+        """Verschaerft fuer #2221: die frueher direkt geloeschte Live-Medien-
+        Struktur (``rm -rf '${MEDIA_ROOT_CONTAINER}'/*``) wich einem
+        Staging-Pfad (entpacken -> Anhang-Abgleich -> atomarer mv-Tausch). Die
+        unmittelbare Vor-Nutzung-HMAC-Pruefung muss weiterhin JEDER
+        Schreibaktion vorausgehen — jetzt zusaetzlich vor dem Anlegen/Leeren
+        des Staging-Verzeichnisses und vor dem destruktiven Bestandstausch.
+        """
         flat = _flat_script(self._RESTORE)
         db_hmac_positions = [match.start() for match in re.finditer(r'backup_verify_hmac "\$BACKUP_FILE"', flat)]
         media_hmac_positions = [match.start() for match in re.finditer(r'backup_verify_hmac "\$MEDIA_FILE"', flat)]
@@ -1400,25 +1422,62 @@ class TestRestoreHmacBeforeDestructiveActions:
         db_decrypt_pos = flat.find(
             'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE"'
         )
-        psql_pos = flat.find('psql -U "$SU_USER" "$POSTGRES_DB"')
-        media_delete_pos = flat.find("rm -rf '${MEDIA_ROOT_CONTAINER}'/*")
+        psql_pos = flat.find('psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$POSTGRES_DB"')
+        media_stage_prep_pos = flat.find(
+            'docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE" "$MEDIA_OLD"'
+        )
         media_decrypt_pos = flat.find(
             'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE"'
+        )
+        attachment_check_pos = flat.find("SELECT storage_filename FROM core_attachment")
+        media_swap_pos = flat.find(
+            'docker compose -f "$COMPOSE_FILE" exec -T web mv "$MEDIA_STAGE" "$MEDIA_ROOT_CONTAINER"'
         )
 
         assert len(db_hmac_positions) == 2
         assert len(media_hmac_positions) == 2
-        assert min(confirm_pos, db_decrypt_pos, psql_pos, media_delete_pos, media_decrypt_pos) >= 0
+        assert (
+            min(
+                confirm_pos,
+                db_decrypt_pos,
+                psql_pos,
+                media_stage_prep_pos,
+                media_decrypt_pos,
+                attachment_check_pos,
+                media_swap_pos,
+            )
+            >= 0
+        )
         assert db_hmac_positions[0] < confirm_pos
         assert media_hmac_positions[0] < confirm_pos
         assert confirm_pos < db_hmac_positions[1] < db_decrypt_pos < psql_pos
-        assert psql_pos < media_hmac_positions[1] < media_delete_pos < media_decrypt_pos
+        assert psql_pos < media_hmac_positions[1] < media_stage_prep_pos < media_decrypt_pos
         assert flat[db_hmac_positions[1] : db_decrypt_pos].splitlines() == ['backup_verify_hmac "$BACKUP_FILE"']
-        media_use_prefix = flat[media_hmac_positions[1] : media_delete_pos].splitlines()
-        assert len(media_use_prefix) == 3
-        assert media_use_prefix[0] == 'backup_verify_hmac "$MEDIA_FILE"'
-        assert media_use_prefix[1].lstrip().startswith('echo "Loesche bestehenden Medien-Inhalt')
-        assert re.fullmatch(r'\s*docker compose -f "\$COMPOSE_FILE" exec -T web\s+sh -c "', media_use_prefix[2])
+
+        # Zwischen der unmittelbaren Vor-Nutzung-Pruefung und dem Anlegen des
+        # Staging-Verzeichnisses darf keine weitere Anweisung stehen (Leerzeilen
+        # aus entfernten Kommentaren werden ignoriert) — sonst entstuende ein
+        # TOCTOU-Fenster zwischen Pruefung und erster Schreibaktion.
+        media_reverify_prefix = [
+            line for line in flat[media_hmac_positions[1] : media_stage_prep_pos].splitlines() if line.strip()
+        ]
+        assert media_reverify_prefix == ['backup_verify_hmac "$MEDIA_FILE"'], (
+            "Nach der unmittelbaren Vor-Nutzung-HMAC-Pruefung des Medien-Backups darf vor dem "
+            "Anlegen/Leeren des Staging-Verzeichnisses keine weitere Anweisung stehen (Refs #2195, #2221)."
+        )
+
+        # Neu (#2221): Staging statt Vorab-Loeschung — der Anhang-Abgleich muss
+        # VOR dem destruktiven Bestandstausch (mv Staging -> Live) laufen, und
+        # auch der Tausch selbst darf erst nach der HMAC-Pruefung erfolgen.
+        assert media_decrypt_pos < attachment_check_pos < media_swap_pos, (
+            "Der Anhang-Abgleich (core_attachment vs. entpacktes Staging-Verzeichnis) muss VOR dem "
+            "Aktivieren des neuen Medienbestands laufen — sonst wird ein unvollstaendiges "
+            "Medien-Backup live geschaltet, bevor der Fehler auffaellt (Refs #2221)."
+        )
+        assert media_hmac_positions[1] < media_swap_pos, (
+            "Der destruktive Bestandstausch (mv MEDIA_STAGE -> MEDIA_ROOT_CONTAINER) darf erst nach "
+            "der unmittelbaren Vor-Nutzung-HMAC-Pruefung erfolgen (Refs #2195, #2221)."
+        )
 
         bare_db_calls = re.findall(r'(?m)^[ \t]*backup_verify_hmac "\$BACKUP_FILE"[ \t]*$', flat)
         bare_media_calls = re.findall(r'(?m)^[ \t]*backup_verify_hmac "\$MEDIA_FILE"[ \t]*$', flat)
@@ -1507,34 +1566,64 @@ class TestRestoreDrillProdFormat:
         )
 
     def test_prod_completeness_guard_before_mark_verified(self) -> None:
-        """Refs #1336 (Cleanup): der --prod-Zweig spielt via ``psql`` bewusst
-        OHNE ON_ERROR_STOP ein (benigner MV-Refresh unter FORCE-RLS), wodurch der
-        psql-Exit-Code auch bei ECHTEN Fehlern 0 bleibt. Ein leerer/teilweiser
-        Restore darf den Compliance-Marker NICHT gruen faerben — daher muss ein
-        Vollstaendigkeits-Abgleich (Wegwerf-DB vs. Live-DB, fail-closed bei
-        Live>0 aber Restore=0, wie ``backup.sh --verify``) VOR
-        ``mark_restore_verified`` laufen.
+        """Refs #1336 (Cleanup), verschaerft fuer #2221: der --prod-Zweig spielt
+        via ``psql`` bewusst OHNE ON_ERROR_STOP ein (benigner MV-Refresh unter
+        FORCE-RLS), wodurch der psql-Exit-Code auch bei ECHTEN Fehlern 0 bleibt.
+        Ein leerer/teilweiser Restore darf den Compliance-Marker NICHT gruen
+        faerben. Der fruehere Live-DB-Vergleich (Live>0/Restore=0) wich einem
+        HMAC-authentifizierten Zeilenzahl-Manifest (Schritt 0): der Abgleich
+        verlangt jetzt EXAKTE Gleichheit gegen den beim Backup mitgeschriebenen
+        Referenzstand — strenger als der reine Nichtnull-Check gegen eine
+        womoeglich selbst aus demselben Backup aufgebaute Live-DB.
         """
         flat = _flat_script(self._DRILL)
-        # Zeilenzahl-Abgleich Restore-DB (DRILL_DB) gegen Quelle/Live-DB (POSTGRES_DB).
-        assert '-d "$DRILL_DB"' in flat and '-d "$POSTGRES_DB"' in flat, (
-            "Der Drill muss die Wegwerf-DB (DRILL_DB) gegen die Live-DB "
-            "(POSTGRES_DB) abgleichen — sonst bleibt ein leerer Restore unsichtbar (Refs #1336)."
+        # Das Manifest muss per HMAC authentifiziert sein, BEVOR seine Werte als
+        # Referenzstand fuer den Abgleich dienen — sonst koennte ein manipuliertes
+        # Manifest einen unvollstaendigen Restore als vollstaendig ausweisen.
+        manifest_hmac_pos = flat.find('backup_verify_hmac "$MANIFEST_FILE"')
+        manifest_parse_pos = flat.find('MANIFEST_COUNTS["$tbl"]="$expected"')
+        assert manifest_hmac_pos != -1 and manifest_parse_pos != -1, (
+            "restore-drill.sh muss das Zeilenzahl-Manifest per HMAC verifizieren, bevor "
+            "MANIFEST_COUNTS befuellt wird (Refs #2221)."
         )
-        assert 'RESTORED_COUNT" -eq 0' in flat, (
-            "Der Vollstaendigkeits-Guard muss auf 'Live>0 aber Restore=0' "
-            "(leerer/teilweiser Restore) fail-closed reagieren (Refs #1336)."
+        assert manifest_hmac_pos < manifest_parse_pos, (
+            "Die HMAC-Verifikation des Manifests muss VOR dem Einlesen der erwarteten "
+            "Zeilenzahlen stehen — sonst koennte ein manipuliertes Manifest unbemerkt als "
+            "Referenzstand dienen (Refs #2221)."
         )
-        # Der Nachweis muss VOR mark_restore_verified stehen, sonst dokumentiert
-        # der Drill einen unvollstaendigen Restore als verifiziert.
-        guard_pos = flat.find('RESTORED_COUNT" -eq 0')
+        # Zeilenzahl-Abgleich Restore-DB (DRILL_DB) gegen den authentifizierten
+        # Manifest-Referenzstand — kein Live-DB-Vergleich mehr (Refs #2221).
+        assert '-d "$DRILL_DB"' in flat, (
+            "Der Drill muss die Wegwerf-DB (DRILL_DB) gegen den authentifizierten "
+            "Manifest-Referenzstand abgleichen (Refs #1336)."
+        )
+        assert '-d "$POSTGRES_DB"' not in flat, (
+            "Schritt 3b darf die Live-DB (POSTGRES_DB) nicht mehr als Vergleichsziel verwenden — "
+            "auf einem frisch aus demselben unvollstaendigen Backup aufgebauten Restore-Host waere "
+            "der Live-Abgleich wertlos. Referenz ist ausschliesslich das authentifizierte "
+            "Zeilenzahl-Manifest aus Schritt 0 (Refs #2221)."
+        )
+        assert 'EXPECTED_COUNT="${MANIFEST_COUNTS[$tbl]}"' in flat, (
+            "Der Abgleich muss die erwartete Zeilenzahl aus dem authentifizierten Manifest "
+            "(MANIFEST_COUNTS) beziehen, nicht aus der Live-DB (Refs #2221)."
+        )
+        assert 'RESTORED_COUNT" -ne "$EXPECTED_COUNT"' in flat, (
+            "Der Vollstaendigkeits-Guard muss auf JEDE Abweichung von der im Manifest "
+            "authentifizierten Zeilenzahl fail-closed reagieren (exakte Gleichheit statt nur "
+            "'Restore=0') — strenger als der fruehere Live-Vergleich (Refs #2221)."
+        )
+        # Der Nachweis muss weiterhin VOR mark_restore_verified stehen, sonst
+        # dokumentiert der Drill einen unvollstaendigen Restore als verifiziert.
+        guard_pos = flat.find('RESTORED_COUNT" -ne "$EXPECTED_COUNT"')
         mark_pos = flat.find("mark_restore_verified")
         assert guard_pos != -1 and mark_pos != -1, (
             "Vollstaendigkeits-Guard und mark_restore_verified muessen beide im Drill vorkommen (Refs #1336)."
         )
-        assert guard_pos < mark_pos, (
-            "Der Vollstaendigkeits-Check muss VOR mark_restore_verified stehen — "
-            "sonst faerbt ein unvollstaendiger Restore den Compliance-Check gruen (Refs #1336)."
+        assert manifest_hmac_pos < guard_pos < mark_pos, (
+            "HMAC-Verifikation des Manifests und Vollstaendigkeits-Check muessen VOR "
+            "mark_restore_verified stehen — sonst faerbt ein unvollstaendiger oder durch ein "
+            "manipuliertes Manifest verschleierter Restore den Compliance-Check gruen "
+            "(Refs #1336, #2221)."
         )
 
     def test_requires_live_db_name_for_comparison(self) -> None:
@@ -2981,11 +3070,47 @@ class TestAuditHwmBackupAndDrillWiring:
         assert "audit_hwm-*.json" in body
 
     def test_restore_drill_loads_latest_hwm_before_marking_success(self) -> None:
+        """Refs #2022, verschaerft fuer #2221: der Drill lud frueher schlicht
+        die per Wildcard gefundene ``audit_hwm-*.json`` — das erlaubt ein
+        Timestamp-Mismatch zwischen restauriertem Dump und gepruefter HWM (ein
+        alter Dump koennte gegen eine neuere HWM "verifiziert" werden oder
+        umgekehrt). Die HWM-Datei ist jetzt an denselben BACKUP_TIMESTAMP wie
+        der DB-Dump gebunden, und die restaurierte Audit-Kette wird zusaetzlich
+        per ``verify_audit_chain`` gegen die signaturgeprueften HWM-Werte
+        abgeglichen, bevor der Restore als verifiziert markiert wird.
+        """
         body = _flat_script(self._DRILL)
-        assert "audit_hwm-*.json" in body
+        # An den Dump-Zeitstempel gebunden statt "juengste Datei"-Wildcard-Suche.
+        assert 'HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"' in body, (
+            "Die HWM-Datei muss an denselben BACKUP_TIMESTAMP wie der restaurierte DB-Dump "
+            "gebunden sein — eine 'juengste HWM'-Suche koennte einen Dump gegen die falsche "
+            "HWM verifizieren (Refs #2221)."
+        )
+        assert "audit_hwm-*.json" not in body, (
+            "restore-drill.sh darf die Restore-HWM nicht mehr per Wildcard/'juengste Datei' "
+            "auswaehlen — sie muss zum restaurierten Dump-Zeitstempel passen (Refs #2221)."
+        )
         assert "HighWaterMarkStore.load" in body
         assert "Audit-HWM-Signaturpruefung fehlgeschlagen" in body
-        assert body.index("HighWaterMarkStore.load") < body.index("mark_restore_verified")
+        # Kettenpruefung: die restaurierte DB muss gegen die signaturgeprueften
+        # HWM-Werte abgeglichen werden — eine gueltig signierte, aber zu einer
+        # anderen Kette gehoerende HWM darf nicht durchgewunken werden.
+        assert "verify_audit_chain" in body, (
+            "Der Drill muss verify_audit_chain gegen die restaurierte Wegwerf-DB laufen lassen, "
+            "nicht nur die HWM-Signatur pruefen (Refs #2221)."
+        )
+        assert "Audit-HWM passt nicht zur restaurierten Kette" in body, (
+            "Ein Kettenmismatch (Signatur ok, aber HWM passt nicht zur restaurierten Kette) muss "
+            "als eigener Fehlerfall erkannt werden (Refs #2221)."
+        )
+        load_pos = body.index("HighWaterMarkStore.load")
+        chain_pos = body.index("verify_audit_chain")
+        mark_pos = body.index("mark_restore_verified")
+        assert load_pos < chain_pos < mark_pos, (
+            "Reihenfolge muss sein: HWM-Signatur laden/pruefen -> Kette gegen die restaurierte "
+            "DB verifizieren -> erst danach darf mark_restore_verified erreichbar sein "
+            "(Refs #2022, #2221)."
+        )
 
 
 class TestNoHardcodedVenvInterpreterInTests:
