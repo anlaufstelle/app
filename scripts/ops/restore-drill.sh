@@ -11,7 +11,9 @@ set -uo pipefail
 #
 # Zwei ausgelieferte Backup-Pfade -> zwei Formate; der Drill deckt BEIDE ab
 # (OPS-05, Refs #1336). Wahl per Flag ``--dev``/``--prod`` oder ``$DRILL_FORMAT``;
-# ohne Angabe wird anhand der vorhandenen Backup-Dateien auto-erkannt.
+# fuer Prod zusaetzlich per ``--timestamp``/``$BACKUP_TIMESTAMP``. Ohne Satzwahl
+# wird anhand der vorhandenen Backup-Dateien auto-erkannt und der neueste Satz
+# mit einem deutlichen Banner verwendet.
 #
 #   dev  : dev-ops/deploy/backup.sh (dev.anlaufstelle.app)
 #          - Quelle:  $DEV_BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
@@ -43,11 +45,28 @@ source "${SCRIPT_DIR}/_backup_common.sh"
 
 # --- Backup-Format / Modus (OPS-05, Refs #1336) ---------------------------
 DRILL_FORMAT="${DRILL_FORMAT:-}"
-case "${1:-}" in
-    --prod) DRILL_FORMAT="prod"; shift ;;
-    --dev)  DRILL_FORMAT="dev";  shift ;;
-    --*)    echo "FAIL - unbekannte Option: $1 (erlaubt: --dev, --prod)" >&2; exit 2 ;;
-esac
+BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP:-}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prod) DRILL_FORMAT="prod"; shift ;;
+        --dev) DRILL_FORMAT="dev"; shift ;;
+        --timestamp)
+            [[ $# -ge 2 ]] || { echo "FAIL - --timestamp braucht einen Wert" >&2; exit 2; }
+            BACKUP_TIMESTAMP="$2"
+            shift 2
+            ;;
+        --*) echo "FAIL - unbekannte Option: $1 (erlaubt: --dev, --prod, --timestamp <ts>)" >&2; exit 2 ;;
+        *) echo "FAIL - unerwartetes Argument: $1" >&2; exit 2 ;;
+    esac
+done
+if [[ -n "$BACKUP_TIMESTAMP" && "$DRILL_FORMAT" != "prod" ]]; then
+    echo "FAIL - --timestamp/BACKUP_TIMESTAMP ist nur zusammen mit dem Prod-Format erlaubt" >&2
+    exit 2
+fi
+if [[ -n "$BACKUP_TIMESTAMP" && ! "$BACKUP_TIMESTAMP" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}$ ]]; then
+    echo "FAIL - ungueltiger Backup-Zeitstempel: ${BACKUP_TIMESTAMP}" >&2
+    exit 2
+fi
 
 COMPOSE_DIR="${COMPOSE_DIR:-/opt/anlaufstelle}"
 cd "$COMPOSE_DIR" || {
@@ -143,7 +162,6 @@ SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 
 DRILL_FAILED=0
 DRILL_UNDETERMINED=0
-HWM_COPIED=0
 HWM_DRILL_CONTAINER_PATH="/tmp/audit_hwm-drill-$$.json"
 MEDIA_TMP_DIR=""
 MEDIA_LIST_FILE=""
@@ -156,18 +174,28 @@ fail() {
 dc() { "${COMPOSE[@]}" "$@"; }
 psql_su() { dc exec -T db psql -U "$SU_USER" "$@"; }
 
-# Schritt 0: neuestes Backup finden
-LATEST_DB=$(find "$BACKUP_DIR" -maxdepth 1 -name "$BACKUP_GLOB" -type f 2>/dev/null | sort -r | head -n1)
-if [[ -z "$LATEST_DB" ]]; then
+# Schritt 0: Backup finden. Eine explizite Prod-Satzwahl hat Vorrang vor dem
+# lexikografisch neuesten Satz; ohne Angabe bleibt das bisherige Verhalten.
+if [[ "$DRILL_FORMAT" == "prod" && -n "$BACKUP_TIMESTAMP" ]]; then
+    LATEST_DB="${BACKUP_DIR}/anlaufstelle_${BACKUP_TIMESTAMP}.sql.gz.enc"
+    echo "ACHTUNG - explizit gewaehlter Restore-Satz: ${BACKUP_TIMESTAMP}"
+else
+    LATEST_DB=$(find "$BACKUP_DIR" -maxdepth 1 -name "$BACKUP_GLOB" -type f 2>/dev/null | sort -r | head -n1)
+    if [[ "$DRILL_FORMAT" == "prod" ]]; then
+        echo "ACHTUNG - Ohne explizite Satzwahl wird der neueste Restore-Satz verwendet."
+    fi
+fi
+if [[ -z "$LATEST_DB" || ! -f "$LATEST_DB" ]]; then
     fail "Kein DB-Backup (${BACKUP_GLOB}) in ${BACKUP_DIR} gefunden"
     echo "Drill abgebrochen — keine Restore-Quelle. Laeuft der Backup-Timer? (Ops-Runbook §3.3)"
     exit 1
 fi
 echo "Drill gegen DB-Backup: $LATEST_DB"
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
-    BACKUP_TIMESTAMP="${LATEST_DB##*/}"
-    BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP#anlaufstelle_}"
-    BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP%.sql.gz.enc}"
+    SELECTED_TIMESTAMP="${LATEST_DB##*/}"
+    SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP#anlaufstelle_}"
+    SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP%.sql.gz.enc}"
+    BACKUP_TIMESTAMP="$SELECTED_TIMESTAMP"
     MEDIA_FILE="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
     echo "Ausgewaehlter Restore-Satz: DB=${LATEST_DB##*/}, Medien=${MEDIA_FILE##*/}, HWM=audit_hwm-${BACKUP_TIMESTAMP}.json"
 else
@@ -188,12 +216,29 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
         fail "Schritt 0: HMAC-Verifikation des Zeilenzahl-Manifests fehlgeschlagen (${MANIFEST_FILE##*/})"
         exit 1
     fi
-    while IFS='=' read -r tbl expected extra; do
-        if [[ -n "$extra" || ! "$tbl" =~ ^core_[a-z_]+$ || ! "$expected" =~ ^[0-9]+$ ]]; then
+    MANIFEST_TIMESTAMP=""
+    MANIFEST_DB_SHA256=""
+    MANIFEST_MEDIA_SHA256=""
+    MANIFEST_HWM_SHA256=""
+    while IFS='=' read -r key value extra; do
+        if [[ -n "$extra" ]]; then
             fail "Schritt 0: Zeilenzahl-Manifest ungueltig (${MANIFEST_FILE##*/})"
             exit 1
         fi
-        MANIFEST_COUNTS["$tbl"]="$expected"
+        case "$key" in
+            table_core_*)
+                if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+                    fail "Schritt 0: Zeilenzahl-Manifest ungueltig (${MANIFEST_FILE##*/})"
+                    exit 1
+                fi
+                MANIFEST_COUNTS["${key#table_}"]="$value"
+                ;;
+            backup_timestamp) MANIFEST_TIMESTAMP="$value" ;;
+            db_sha256) MANIFEST_DB_SHA256="$value" ;;
+            media_sha256) MANIFEST_MEDIA_SHA256="$value" ;;
+            hwm_sha256) MANIFEST_HWM_SHA256="$value" ;;
+            *) fail "Schritt 0: Unbekannter Manifest-Eintrag: ${key}"; exit 1 ;;
+        esac
     done < "$MANIFEST_FILE"
     for tbl in core_facility core_client core_event core_workitem core_auditlog core_attachment; do
         if [[ ! -v "MANIFEST_COUNTS[$tbl]" ]]; then
@@ -201,6 +246,28 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
             exit 1
         fi
     done
+    ACTUAL_DB_SHA256=$(sha256sum "$LATEST_DB" | awk '{print $1}')
+    MANIFEST_MEDIA_FILE="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
+    MANIFEST_HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"
+    if [[ "$MANIFEST_TIMESTAMP" != "$BACKUP_TIMESTAMP" ]]; then
+        fail "Schritt 0: Manifest-Satzkennung passt nicht zum gewaehlten Dump (${MANIFEST_TIMESTAMP:-fehlt} != ${BACKUP_TIMESTAMP})"
+        exit 1
+    elif [[ ! "$MANIFEST_DB_SHA256" =~ ^[0-9a-f]{64}$ || "$ACTUAL_DB_SHA256" != "$MANIFEST_DB_SHA256" ]]; then
+        fail "Schritt 0: Manifest-Dump-Hash passt nicht zum gewaehlten Dump (${LATEST_DB##*/})"
+        exit 1
+    fi
+    if [[ -n "$MANIFEST_MEDIA_SHA256" && -f "$MANIFEST_MEDIA_FILE" ]]; then
+        if [[ "$(sha256sum "$MANIFEST_MEDIA_FILE" | awk '{print $1}')" != "$MANIFEST_MEDIA_SHA256" ]]; then
+            fail "Schritt 0: Manifest-Medien-Hash passt nicht zum gewaehlten Satz (${MANIFEST_MEDIA_FILE##*/})"
+            exit 1
+        fi
+    fi
+    if [[ -n "$MANIFEST_HWM_SHA256" && -f "$MANIFEST_HWM_FILE" ]]; then
+        if [[ "$(sha256sum "$MANIFEST_HWM_FILE" | awk '{print $1}')" != "$MANIFEST_HWM_SHA256" ]]; then
+            fail "Schritt 0: Manifest-HWM-Hash passt nicht zum gewaehlten Satz (${MANIFEST_HWM_FILE##*/})"
+            exit 1
+        fi
+    fi
     ok "Schritt 0: Zeilenzahl-Manifest authentifiziert (${MANIFEST_FILE##*/})"
 fi
 
@@ -212,9 +279,6 @@ cleanup() {
     fi
     if [[ -n "$MEDIA_LIST_FILE" ]]; then
         rm -f -- "$MEDIA_LIST_FILE"
-    fi
-    if [[ "$HWM_COPIED" -eq 1 ]]; then
-        dc exec -T web rm -f "$HWM_DRILL_CONTAINER_PATH" >/dev/null 2>&1 || true
     fi
     psql_su -d postgres -c "DROP DATABASE IF EXISTS \"${DRILL_DB}\";" >/dev/null 2>&1 || true
 }
@@ -250,7 +314,8 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
     fi
     openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_DB" \
         | gunzip \
-        | dc exec -T db psql -U "$SU_USER" -d "$DRILL_DB" >/dev/null 2>"$RESTORE_ERR"
+        | dc exec -T db psql -U "$SU_USER" -d "$DRILL_DB" -v ON_ERROR_STOP=1 --single-transaction \
+            >/dev/null 2>"$RESTORE_ERR"
     # PIPESTATUS sofort in einem Rutsch sichern — jede folgende Zuweisung wuerde
     # es ueberschreiben (und mit ``set -u`` zum unbound-Fehler fuehren).
     PIPE_RC=("${PIPESTATUS[@]}")
@@ -266,17 +331,13 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
         rm -f "$RESTORE_ERR"
         exit 1
     fi
-    # psql laeuft ohne ON_ERROR_STOP (wie backup.sh --verify): der abschliessende
-    # REFRESH MATERIALIZED VIEW kann an FORCE-RLS scheitern, ohne die Nutzdaten
-    # zu betreffen (der mv-refresh-Timer baut den Cache neu). Der psql-Exit-Code
-    # ist damit KEIN Vollstaendigkeits-Beweis (er bleibt auch bei echten Fehlern
-    # 0) — die Vollstaendigkeit belegt fail-closed der Guard in Schritt 3b
-    # (Zeilenabgleich Restore vs. Live) plus RLS-/Trigger-Check (Schritt 4/5).
-    if [[ "$PSQL_RC" -eq 0 ]]; then
-        ok "Schritt 2: DB-Backup wiederhergestellt (psql, plain SQL)"
-    else
-        ok "Schritt 2: DB-Backup eingespielt — psql meldete rc=$PSQL_RC (i.d.R. benigner MV-Refresh unter FORCE-RLS; Schritt 3b prueft die Nutzdaten fail-closed)"
+    if [[ "$PSQL_RC" -ne 0 ]]; then
+        fail "Schritt 2: DB-Restore fehlgeschlagen (psql rc=$PSQL_RC):"
+        sed 's/^/       /' "$RESTORE_ERR" | head -15
+        rm -f "$RESTORE_ERR"
+        exit 1
     fi
+    ok "Schritt 2: DB-Backup wiederhergestellt (psql, plain SQL)"
 else
     # Dev-Format: custom format -> pg_restore.
     openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_DB" \
@@ -304,36 +365,6 @@ else
     fi
 fi
 rm -f "$RESTORE_ERR"
-
-# Schritt 2b: Offsite-verankerten Audit-HWM im Prod-Pfad pruefen (Refs #2022).
-# Die Datei wird in das beschreibbare /tmp des Web-Containers kopiert und dort
-# ueber dieselbe HighWaterMarkStore.load()-API geladen wie im regulaeren
-# verify_audit_chain-Pfad. Eine fehlende/manipulierte HWM faerbt den Drill rot,
-# bricht die folgenden Restore-Pruefungen aber bewusst nicht hart ab.
-if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
-    HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"
-    if [[ ! -f "$HWM_FILE" ]]; then
-        fail "Schritt 2b: Kein Audit-HWM-Backup fuer den Restore-Satz (${HWM_FILE##*/})"
-    elif dc exec -T web sh -c "cat > '$HWM_DRILL_CONTAINER_PATH'" < "$HWM_FILE"; then
-        HWM_COPIED=1
-        HWM_VERIFY_CODE="from core.services.audit.hwm import HighWaterMarkStore; HighWaterMarkStore.load('${HWM_DRILL_CONTAINER_PATH}')"
-        if dc exec -T web python manage.py shell -c "$HWM_VERIFY_CODE" >/dev/null 2>&1; then
-            if dc exec -T -e POSTGRES_DB="$DRILL_DB" \
-                -e DJANGO_AUDIT_HWM_PATH="$HWM_DRILL_CONTAINER_PATH" web \
-                python manage.py verify_audit_chain >/dev/null 2>&1; then
-                ok "Schritt 2b: Audit-HWM-Signatur verifiziert und gegen restaurierte Kette geprueft (${HWM_FILE##*/})"
-            else
-                fail "Schritt 2b: Audit-HWM passt nicht zur restaurierten Kette (${HWM_FILE##*/})"
-            fi
-        else
-            fail "Schritt 2b: Audit-HWM-Signaturpruefung fehlgeschlagen (${HWM_FILE##*/}) — Datei manipuliert oder AUDIT_HASH_KEY falsch"
-        fi
-    else
-        fail "Schritt 2b: Audit-HWM konnte nicht in den Drill-Container gestreamt werden (${HWM_FILE##*/})"
-    fi
-elif [[ "$DRILL_FORMAT" == "prod" ]]; then
-    echo "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen (DJANGO_AUDIT_HWM_PATH nicht gesetzt)"
-fi
 
 # Schritt 3: Stichproben pro Tabelle
 EXPECTED_TABLES=("core_facility" "core_client" "core_event" "core_auditlog" "core_workitem" "core_attachment")
@@ -377,12 +408,64 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
         fi
     done
 else
-    echo "INFO - Schritt 3b: Zeilenzahl-Manifest gilt nur fuer das Prod-Backup-Format"
+    # Das dev-Format besitzt kein signiertes Manifest. Seine alte Zusicherung
+    # bleibt deshalb erhalten: exakter Vergleich der Wegwerf-DB mit der Live-DB.
+    for tbl in "${COMPLETENESS_TABLES[@]}"; do
+        RESTORED_COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+        LIVE_COUNT=$(psql_su -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+        if [[ ! "$RESTORED_COUNT" =~ ^[0-9]+$ || ! "$LIVE_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "       - ${tbl}: Restore oder Live-DB nicht abfragbar"
+            COMPLETENESS_FAIL=1
+        elif [[ "$RESTORED_COUNT" -ne "$LIVE_COUNT" ]]; then
+            echo "       - ${tbl}: Restore=${RESTORED_COUNT}, Live=${LIVE_COUNT} — unvollstaendiger Restore"
+            COMPLETENESS_FAIL=1
+        else
+            echo "       - ${tbl}: Restore=${RESTORED_COUNT}, Live=${LIVE_COUNT}"
+        fi
+    done
 fi
 if [[ "$COMPLETENESS_FAIL" -eq 0 ]]; then
-    ok "Schritt 3b: Vollstaendigkeits-Guard gegen Manifest bestanden"
+    if [[ "$DRILL_FORMAT" == "prod" ]]; then
+        ok "Schritt 3b: Vollstaendigkeits-Guard gegen Manifest bestanden"
+    else
+        ok "Schritt 3b: Vollstaendigkeits-Guard gegen Live-DB bestanden"
+    fi
 else
-    fail "Schritt 3b: Restore weicht vom Zeilenzahl-Manifest ab — nicht als verifiziert markieren"
+    fail "Schritt 3b: Restore ist unvollstaendig — nicht als verifiziert markieren"
+fi
+
+# Schritt 2b: Offsite-verankerten Audit-HWM im Prod-Pfad pruefen (Refs #2022).
+# Die Schrittnummer bleibt fuer das referenzierte Pruefblatt stabil. Die
+# Ausfuehrung folgt bewusst erst auf den exakten Manifest-Zaehlvergleich: Der
+# Management-Command protokolliert einen erfolgreichen Lauf in core_auditlog
+# und darf den unveraenderten Restore-Bestand deshalb erst danach erweitern.
+# Der maintenance-Service stellt den erforderlichen BYPASSRLS-Kontext bereit.
+if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
+    HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"
+    HWM_VERIFY_ERR="$(mktemp)"
+    HWM_VERIFY_OUT="$(mktemp)"
+    if [[ ! -f "$HWM_FILE" ]]; then
+        fail "Schritt 2b: Kein Audit-HWM-Backup fuer den Restore-Satz (${HWM_FILE##*/})"
+    elif dc run --rm -T -e POSTGRES_DB="$DRILL_DB" \
+        -e DJANGO_AUDIT_HWM_PATH="$HWM_DRILL_CONTAINER_PATH" --entrypoint sh maintenance \
+        -c 'cat > "$DJANGO_AUDIT_HWM_PATH" && python manage.py shell -c "from core.services.audit.hwm import HighWaterMarkStore; import os; HighWaterMarkStore.load(os.environ['\''DJANGO_AUDIT_HWM_PATH'\''])" && python manage.py verify_audit_chain' \
+        < "$HWM_FILE" >"$HWM_VERIFY_OUT" 2>"$HWM_VERIFY_ERR"; then
+        sed 's/^/       /' "$HWM_VERIFY_OUT"
+        ok "Schritt 2b: Audit-HWM-Signatur verifiziert und gegen restaurierte Kette geprueft (${HWM_FILE##*/})"
+    else
+        cat "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR" | sed 's/^/       /'
+        if grep -qiE 'RLS-gefilterte|connection|could not connect|database .* does not exist|password authentication|OperationalError' \
+            "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR"; then
+            fail "Schritt 2b: Rollen-/Verbindungsfehler bei der Audit-Kettenpruefung (${HWM_FILE##*/})"
+        elif grep -qiE 'HwmIntegrityError|Signatur ungueltig|JSONDecodeError' "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR"; then
+            fail "Schritt 2b: Audit-HWM-Signaturpruefung fehlgeschlagen (${HWM_FILE##*/}) — Datei manipuliert oder AUDIT_HASH_KEY falsch"
+        else
+            fail "Schritt 2b: Audit-HWM passt nicht zur restaurierten Kette (${HWM_FILE##*/})"
+        fi
+    fi
+    rm -f "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR"
+elif [[ "$DRILL_FORMAT" == "prod" ]]; then
+    echo "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen (DJANGO_AUDIT_HWM_PATH nicht gesetzt)"
 fi
 
 # Schritt 4: RLS-Policy-Check

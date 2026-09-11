@@ -110,9 +110,9 @@ def test_backup_exports_hwm_into_daily_and_scp_offsite(tmp_path: Path) -> None:
     assert str(hwm_files[0].parent) in scp_log.read_text(encoding="utf-8")
 
 
-def _write_prod_backup(backup_dir: Path) -> None:
-    backup_dir.mkdir(parents=True)
-    backup_file = backup_dir / "anlaufstelle_2026-09-02_020000.sql.gz.enc"
+def _write_prod_backup(backup_dir: Path, timestamp: str = "2026-09-02_020000") -> None:
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_file = backup_dir / f"anlaufstelle_{timestamp}.sql.gz.enc"
     encrypted = subprocess.run(
         ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-pass", f"pass:{BACKUP_KEY}"],
         input=gzip.compress(b"SELECT 1;\n"),
@@ -124,11 +124,15 @@ def _write_prod_backup(backup_dir: Path) -> None:
     derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
     signature = hmac.new(derived.encode(), encrypted, hashlib.sha256).hexdigest()
     backup_file.with_name(f"{backup_file.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
-    manifest = backup_dir / "anlaufstelle_2026-09-02_020000.manifest"
-    manifest.write_text(
-        "core_facility=1\ncore_client=1\ncore_event=1\ncore_workitem=1\ncore_auditlog=1\ncore_attachment=1\n",
-        encoding="utf-8",
-    )
+    manifest = backup_dir / f"anlaufstelle_{timestamp}.manifest"
+    tables = ("core_facility", "core_client", "core_event", "core_workitem", "core_auditlog", "core_attachment")
+    if "MANIFEST_TIMESTAMP" in RESTORE_DRILL.read_text(encoding="utf-8"):
+        payload = "".join(f"table_{table}=1\n" for table in tables)
+        payload += f"backup_timestamp={timestamp}\n"
+        payload += f"db_sha256={hashlib.sha256(backup_file.read_bytes()).hexdigest()}\n"
+    else:
+        payload = "".join(f"{table}=1\n" for table in tables)
+    manifest.write_text(payload, encoding="utf-8")
     manifest_signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
     manifest.with_name(f"{manifest.name}.hmac").write_text(f"{manifest_signature}\n", encoding="utf-8")
 
@@ -138,10 +142,29 @@ def _restore_sandbox(
     *,
     hwm_payload: str | None,
     hwm_configured: bool = True,
+    chain_error: str = "",
+    timestamp: str | None = None,
+    add_newer_backup: bool = False,
+    foreign_manifest: bool = False,
+    sql_error: bool = False,
 ) -> tuple[Path, Path, subprocess.CompletedProcess]:
     compose_dir = tmp_path / "restore-root"
     backup_dir = compose_dir / "backups" / "daily"
     _write_prod_backup(backup_dir)
+    if add_newer_backup:
+        _write_prod_backup(backup_dir, "2026-09-11_020000")
+    if foreign_manifest:
+        manifest = backup_dir / "anlaufstelle_2026-09-02_020000.manifest"
+        payload = manifest.read_text(encoding="utf-8")
+        if "backup_timestamp=" in payload:
+            payload = payload.replace(
+                "backup_timestamp=2026-09-02_020000",
+                "backup_timestamp=2026-08-01_020000",
+            )
+        manifest.write_text(payload, encoding="utf-8")
+        derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
+        signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
+        manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
     if hwm_payload is not None:
         (backup_dir / "audit_hwm-2026-09-02_020000.json").write_text(hwm_payload, encoding="utf-8")
     env_lines = [
@@ -161,6 +184,24 @@ def _restore_sandbox(
         bindir / "docker",
         """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
+if [[ "$*" == *" --entrypoint sh maintenance "* && "$*" == *"verify_audit_chain"* ]]; then
+    payload=$(cat)
+    if [[ "$payload" == *"manipulated"* ]]; then
+        printf 'HwmIntegrityError: Signatur ungueltig\\n' >&2
+        exit 1
+    fi
+    if [[ "${TEST_CHAIN_ERROR:-}" == "role" ]]; then
+        printf 'CommandError: verify_audit_chain laeuft als RLS-gefilterte App-Rolle\\n' >&2
+        exit 1
+    fi
+    if [[ "${TEST_CHAIN_ERROR:-}" == "mismatch" ]]; then
+        printf 'CommandError: tail truncation\\n' >&2
+        exit 1
+    fi
+    printf '1' > "$CHAIN_RAN_FILE"
+    printf 'Alle Audit-Ketten intakt.\\n'
+    exit 0
+fi
 if [[ " $* " == *" cp "* ]]; then
     while (($#)); do
         if [[ "$1" == "cp" ]]; then
@@ -194,10 +235,18 @@ elif [[ "$*" == *"FROM pg_trigger"* ]]; then
 elif [[ "$*" == *"UPDATE core_auditlog"* ]]; then
     printf 'auditlog is immutable\\n' >&2
     exit 1
+elif [[ "$*" == *"SELECT COUNT(*) FROM core_auditlog"* && -s "$CHAIN_RAN_FILE" ]]; then
+    printf '2\\n'
 elif [[ "$*" == *"SELECT COUNT(*)"* ]]; then
     printf '1\\n'
 elif [[ "$*" == *" exec -T db psql "* ]]; then
     cat >/dev/null
+    if [[ "${TEST_SQL_ERROR:-0}" == "1" ]]; then
+        printf 'ERROR: COPY core_eventhistory fehlgeschlagen\\n' >&2
+        if [[ " $* " == *" ON_ERROR_STOP=1 "* ]]; then
+            exit 1
+        fi
+    fi
 fi
 exit 0
 """,
@@ -215,10 +264,16 @@ exit 0
             "REAL_SRC": str(REPO_ROOT / "src"),
             "PYTHON_BIN": str(PYTHON),
             "DJANGO_AUDIT_HASH_KEY": AUDIT_KEY,
+            "TEST_CHAIN_ERROR": chain_error,
+            "TEST_SQL_ERROR": "1" if sql_error else "0",
+            "CHAIN_RAN_FILE": str(tmp_path / "chain-ran"),
         }
     )
+    args = ["bash", str(RESTORE_DRILL), "--prod"]
+    if timestamp is not None:
+        args.extend(["--timestamp", timestamp])
     result = subprocess.run(
-        ["bash", str(RESTORE_DRILL), "--prod"],
+        args,
         capture_output=True,
         text=True,
         env=env,
@@ -270,3 +325,141 @@ def test_restore_drill_accepts_valid_hwm_signature(tmp_path: Path) -> None:
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "OK   - Schritt 2b: Audit-HWM-Signatur verifiziert" in result.stdout
     assert "Schritt 7: Restore-Test im AuditLog dokumentiert" in result.stdout
+
+
+def test_restore_drill_logs_real_role_error_and_blocks_marker(tmp_path: Path) -> None:
+    signature = hmac.new(AUDIT_KEY.encode(), b"{}", hashlib.sha256).hexdigest()
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=f'{{"version":1,"chains":{{}},"sig":"{signature}"}}',
+        chain_error="role",
+    )
+
+    assert result.returncode == 1
+    assert "RLS-gefilterte App-Rolle" in result.stdout
+    assert "Rollen-/Verbindungsfehler" in result.stdout
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
+
+
+def test_restore_drill_counts_before_successful_chain_command(tmp_path: Path) -> None:
+    signature = hmac.new(AUDIT_KEY.encode(), b"{}", hashlib.sha256).hexdigest()
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=f'{{"version":1,"chains":{{}},"sig":"{signature}"}}',
+    )
+
+    assert result.returncode == 0, result.stdout
+    actions = docker_log.read_text(encoding="utf-8")
+    last_count = actions.rindex("SELECT COUNT(*) FROM core_attachment")
+    chain = actions.index("verify_audit_chain")
+    assert last_count < chain
+
+
+def test_restore_drill_rejects_foreign_validly_signed_manifest(tmp_path: Path) -> None:
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=None,
+        hwm_configured=False,
+        foreign_manifest=True,
+    )
+
+    assert result.returncode == 1
+    assert "Manifest-Satzkennung passt nicht" in result.stdout
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
+
+
+def test_restore_drill_timestamp_selects_requested_not_latest_set(tmp_path: Path) -> None:
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=None,
+        hwm_configured=False,
+        timestamp="2026-09-02_020000",
+        add_newer_backup=True,
+    )
+
+    assert result.returncode == 0, result.stdout
+    assert "explizit gewaehlter Restore-Satz: 2026-09-02_020000" in result.stdout
+    assert "Drill gegen DB-Backup:" in result.stdout
+    assert "anlaufstelle_2026-09-02_020000.sql.gz.enc" in result.stdout
+    assert "anlaufstelle_2026-09-11_020000.sql.gz.enc" not in result.stdout
+    assert "mark_restore_verified" in docker_log.read_text(encoding="utf-8")
+
+
+def test_prod_sql_error_requires_on_error_stop_and_blocks_marker(tmp_path: Path) -> None:
+    _, docker_log, result = _restore_sandbox(
+        tmp_path,
+        hwm_payload=None,
+        hwm_configured=False,
+        sql_error=True,
+    )
+
+    assert result.returncode == 1
+    assert "ERROR: COPY core_eventhistory fehlgeschlagen" in result.stdout
+    assert "DB-Restore fehlgeschlagen" in result.stdout
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
+
+
+def test_dev_count_mismatch_keeps_marker_blocked(tmp_path: Path) -> None:
+    root = tmp_path / "dev-root"
+    ops = root / "scripts" / "ops"
+    ops.mkdir(parents=True)
+    shutil.copy(RESTORE_DRILL, ops / "restore-drill.sh")
+    shutil.copy(OPS_DIR / "_backup_common.sh", ops / "_backup_common.sh")
+    (root / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8")
+    backup_dir = tmp_path / "dev-backups"
+    backup_dir.mkdir()
+    backup = backup_dir / "dump-2026-09-02_020000.pgc.enc"
+    encrypted = subprocess.run(
+        ["openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2", "-pass", f"pass:{BACKUP_KEY}"],
+        input=b"custom-dump",
+        capture_output=True,
+        check=True,
+        timeout=30,
+    ).stdout
+    backup.write_bytes(encrypted)
+    (root / ".env.dev").write_text(
+        f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}\nPOSTGRES_DB=anlaufstelle\n",
+        encoding="utf-8",
+    )
+    bindir = tmp_path / "dev-bin"
+    bindir.mkdir()
+    docker_log = tmp_path / "dev-docker.log"
+    docker_log.write_text("", encoding="utf-8")
+    _write_executable(
+        bindir / "docker",
+        """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$DOCKER_LOG"
+if [[ "$*" == *" pg_restore "* ]]; then cat >/dev/null; exit 0; fi
+if [[ "$*" == *"relrowsecurity"* ]]; then printf '20\\n'; exit 0; fi
+if [[ "$*" == *"FROM pg_trigger"* ]]; then printf '1\\n'; exit 0; fi
+if [[ "$*" == *"UPDATE core_auditlog"* ]]; then printf 'immutable\\n' >&2; exit 1; fi
+if [[ "$*" == *"SELECT COUNT(*) FROM core_client"* ]]; then
+    if [[ "$*" == *" -d anlaufstelle "* ]]; then printf '1\\n'; else printf '0\\n'; fi
+    exit 0
+fi
+if [[ "$*" == *"SELECT COUNT(*)"* ]]; then printf '1\\n'; exit 0; fi
+exit 0
+""",
+    )
+    env = dict(os.environ)
+    env.update(
+        {
+            "PATH": f"{bindir}:{env['PATH']}",
+            "COMPOSE_DIR": str(root),
+            "ENV_FILE": str(root / ".env.dev"),
+            "DEV_BACKUP_DIR": str(backup_dir),
+            "DOCKER_LOG": str(docker_log),
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(ops / "restore-drill.sh"), "--dev"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "core_client: Restore=0, Live=1" in result.stdout
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")

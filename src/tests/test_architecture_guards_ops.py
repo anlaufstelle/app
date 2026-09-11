@@ -155,6 +155,10 @@ class TestPublicBackupScriptsRlsRoles:
             "restore.sh muss den Plain-SQL-Dump als Superuser einspielen: "
             "OWNER-TO-/FORCE-RLS-Statements scheitern unter der App-Rolle (Review N4)."
         )
+        superuser_call = re.search(r'psql\s+[^\n]*-U\s+"\$SU_USER"[^\n]*', flat)
+        assert superuser_call is not None, (
+            'Die alte Zusicherung bleibt bestehen: Restore-Pipe muss psql als "$SU_USER" aufrufen (Review N4).'
+        )
         call = re.search(
             r'psql\s+-v\s+ON_ERROR_STOP=1\s+--single-transaction\s+-U\s+"\$SU_USER"\s+"\$POSTGRES_DB"',
             flat,
@@ -1429,7 +1433,7 @@ class TestRestoreHmacBeforeDestructiveActions:
         media_decrypt_pos = flat.find(
             'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE"'
         )
-        attachment_check_pos = flat.find("SELECT storage_filename FROM core_attachment")
+        attachment_check_pos = flat.find("SELECT facility_id, storage_filename FROM core_attachment")
         media_swap_pos = flat.find(
             'docker compose -f "$COMPOSE_FILE" exec -T web mv "$MEDIA_STAGE" "$MEDIA_ROOT_CONTAINER"'
         )
@@ -1478,6 +1482,8 @@ class TestRestoreHmacBeforeDestructiveActions:
             "Der destruktive Bestandstausch (mv MEDIA_STAGE -> MEDIA_ROOT_CONTAINER) darf erst nach "
             "der unmittelbaren Vor-Nutzung-HMAC-Pruefung erfolgen (Refs #2195, #2221)."
         )
+        assert 'attachment_path="${facility_id}/${storage_filename}"' in flat
+        assert 'test -f "${MEDIA_STAGE}/$attachment_path"' in flat
 
         bare_db_calls = re.findall(r'(?m)^[ \t]*backup_verify_hmac "\$BACKUP_FILE"[ \t]*$', flat)
         bare_media_calls = re.findall(r'(?m)^[ \t]*backup_verify_hmac "\$MEDIA_FILE"[ \t]*$', flat)
@@ -1566,22 +1572,20 @@ class TestRestoreDrillProdFormat:
         )
 
     def test_prod_completeness_guard_before_mark_verified(self) -> None:
-        """Refs #1336 (Cleanup), verschaerft fuer #2221: der --prod-Zweig spielt
-        via ``psql`` bewusst OHNE ON_ERROR_STOP ein (benigner MV-Refresh unter
-        FORCE-RLS), wodurch der psql-Exit-Code auch bei ECHTEN Fehlern 0 bleibt.
-        Ein leerer/teilweiser Restore darf den Compliance-Marker NICHT gruen
-        faerben. Der fruehere Live-DB-Vergleich (Live>0/Restore=0) wich einem
-        HMAC-authentifizierten Zeilenzahl-Manifest (Schritt 0): der Abgleich
-        verlangt jetzt EXAKTE Gleichheit gegen den beim Backup mitgeschriebenen
-        Referenzstand — strenger als der reine Nichtnull-Check gegen eine
-        womoeglich selbst aus demselben Backup aufgebaute Live-DB.
+        """Refs #1336 (Cleanup), verschaerft fuer #2221: Der Prod-Zweig muss
+        unerwartete SQL-Fehler bereits beim Import stoppen und anschließend
+        EXAKTE Gleichheit gegen das HMAC-authentifizierte Zeilenzahl-Manifest
+        verlangen. Der bisherige Live-DB-Vergleich bleibt fuer das manifestlose
+        Dev-Format bestehen; keine der beiden Format-Zusicherungen darf entfallen.
         """
         flat = _flat_script(self._DRILL)
+        raw = self._DRILL.read_text(encoding="utf-8")
+        completeness = raw.split("# Schritt 3b:", maxsplit=1)[1].split("# Schritt 2b:", maxsplit=1)[0]
         # Das Manifest muss per HMAC authentifiziert sein, BEVOR seine Werte als
         # Referenzstand fuer den Abgleich dienen — sonst koennte ein manipuliertes
         # Manifest einen unvollstaendigen Restore als vollstaendig ausweisen.
         manifest_hmac_pos = flat.find('backup_verify_hmac "$MANIFEST_FILE"')
-        manifest_parse_pos = flat.find('MANIFEST_COUNTS["$tbl"]="$expected"')
+        manifest_parse_pos = flat.find('MANIFEST_COUNTS["${key#table_}"]="$value"')
         assert manifest_hmac_pos != -1 and manifest_parse_pos != -1, (
             "restore-drill.sh muss das Zeilenzahl-Manifest per HMAC verifizieren, bevor "
             "MANIFEST_COUNTS befuellt wird (Refs #2221)."
@@ -1593,16 +1597,16 @@ class TestRestoreDrillProdFormat:
         )
         # Zeilenzahl-Abgleich Restore-DB (DRILL_DB) gegen den authentifizierten
         # Manifest-Referenzstand — kein Live-DB-Vergleich mehr (Refs #2221).
-        assert '-d "$DRILL_DB"' in flat, (
+        assert '-d "$DRILL_DB"' in completeness, (
             "Der Drill muss die Wegwerf-DB (DRILL_DB) gegen den authentifizierten "
             "Manifest-Referenzstand abgleichen (Refs #1336)."
         )
-        assert '-d "$POSTGRES_DB"' not in flat, (
-            "Schritt 3b darf die Live-DB (POSTGRES_DB) nicht mehr als Vergleichsziel verwenden — "
-            "auf einem frisch aus demselben unvollstaendigen Backup aufgebauten Restore-Host waere "
-            "der Live-Abgleich wertlos. Referenz ist ausschliesslich das authentifizierte "
-            "Zeilenzahl-Manifest aus Schritt 0 (Refs #2221)."
+        assert '-d "$POSTGRES_DB"' in completeness, (
+            "Die alte Zusicherung bleibt fuer das dev-Format bestehen: Wegwerf-DB und Live-DB "
+            "werden weiterhin exakt verglichen (Refs #1336, #2221)."
         )
+        assert 'if [[ "$DRILL_FORMAT" == "prod" ]]' in completeness
+        assert 'EXPECTED_COUNT="${MANIFEST_COUNTS[$tbl]}"' in completeness
         assert 'EXPECTED_COUNT="${MANIFEST_COUNTS[$tbl]}"' in flat, (
             "Der Abgleich muss die erwartete Zeilenzahl aus dem authentifizierten Manifest "
             "(MANIFEST_COUNTS) beziehen, nicht aus der Live-DB (Refs #2221)."
@@ -3092,6 +3096,8 @@ class TestAuditHwmBackupAndDrillWiring:
         )
         assert "HighWaterMarkStore.load" in body
         assert "Audit-HWM-Signaturpruefung fehlgeschlagen" in body
+        assert "--entrypoint sh maintenance" in body
+        assert '-e POSTGRES_DB="$DRILL_DB"' in body
         # Kettenpruefung: die restaurierte DB muss gegen die signaturgeprueften
         # HWM-Werte abgeglichen werden — eine gueltig signierte, aber zu einer
         # anderen Kette gehoerende HWM darf nicht durchgewunken werden.
@@ -3105,10 +3111,11 @@ class TestAuditHwmBackupAndDrillWiring:
         )
         load_pos = body.index("HighWaterMarkStore.load")
         chain_pos = body.index("verify_audit_chain")
+        count_pos = body.index('RESTORED_COUNT" -ne "$EXPECTED_COUNT"')
         mark_pos = body.index("mark_restore_verified")
-        assert load_pos < chain_pos < mark_pos, (
-            "Reihenfolge muss sein: HWM-Signatur laden/pruefen -> Kette gegen die restaurierte "
-            "DB verifizieren -> erst danach darf mark_restore_verified erreichbar sein "
+        assert count_pos < load_pos < chain_pos < mark_pos, (
+            "Reihenfolge muss sein: unveraenderten Restore zaehlen -> HWM-Signatur laden/pruefen -> "
+            "Kette gegen die restaurierte DB verifizieren -> erst danach darf mark_restore_verified erreichbar sein "
             "(Refs #2022, #2221)."
         )
 

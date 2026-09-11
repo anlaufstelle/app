@@ -182,9 +182,10 @@ MANIFEST_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.manifest"
 
 # Absoluter Referenzstand fuer den Restore-Drill. Der Drill vergleicht den
 # Restore spaeter gegen diese Werte, nicht gegen eine moeglicherweise bereits
-# aus demselben Backup aufgebaute Live-Datenbank. Die Betriebsanleitung fordert
-# fuer den Satz weiterhin Schreibruhe; das Manifest ersetzt keinen Snapshot
-# ueber DB und Medien.
+# aus demselben Backup aufgebaute Live-Datenbank. Signiert wird das Manifest
+# erst nach Erzeugung aller Satzartefakte, damit es deren Kennung und Hashes
+# kryptografisch bindet. Die Betriebsanleitung fordert fuer den Satz weiterhin
+# Schreibruhe; das Manifest ersetzt keinen Snapshot ueber DB und Medien.
 MANIFEST_TABLES=(core_facility core_client core_event core_workitem core_auditlog core_attachment)
 : > "$MANIFEST_FILE"
 for tbl in "${MANIFEST_TABLES[@]}"; do
@@ -195,10 +196,8 @@ for tbl in "${MANIFEST_TABLES[@]}"; do
         echo "ERROR: Zeilenzahl-Manifest ist unvollstaendig (${tbl})."
         exit 1
     fi
-    printf '%s=%s\n' "$tbl" "$MANIFEST_COUNT" >> "$MANIFEST_FILE"
+    printf 'table_%s=%s\n' "$tbl" "$MANIFEST_COUNT" >> "$MANIFEST_FILE"
 done
-backup_write_hmac "$MANIFEST_FILE"
-echo "Zeilenzahl-Manifest erstellt: ${MANIFEST_FILE}"
 
 # DB-Backup
 echo "Erstelle DB-Backup: ${BACKUP_FILE}"
@@ -266,6 +265,20 @@ if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
 else
     echo "INFO: DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — kein Audit-HWM-Artefakt gesichert."
 fi
+
+# Satzbindung: Die signierte Nutzlast nennt den ausgewaehlten Zeitstempel und
+# bindet mindestens den verschluesselten Dump, daneben auch Medien und HWM,
+# sofern diese Artefakte Teil des Satzes sind.
+{
+    printf 'backup_timestamp=%s\n' "$TIMESTAMP"
+    printf 'db_sha256=%s\n' "$(sha256sum "$BACKUP_FILE" | awk '{print $1}')"
+    printf 'media_sha256=%s\n' "$(sha256sum "$MEDIA_FILE" | awk '{print $1}')"
+    if [[ -n "$HWM_FILE" ]]; then
+        printf 'hwm_sha256=%s\n' "$(sha256sum "$HWM_FILE" | awk '{print $1}')"
+    fi
+} >> "$MANIFEST_FILE"
+backup_write_hmac "$MANIFEST_FILE"
+echo "Zeilenzahl-Manifest mit Satzbindung erstellt: ${MANIFEST_FILE}"
 
 # Weekly-/Monthly-Snapshots werden vor dem Off-Site-Abgleich angelegt, damit
 # alle drei Retention-Stufen im selben Lauf uebertragen werden koennen.

@@ -52,10 +52,11 @@ def _encrypt(payload: bytes, destination: Path) -> None:
     destination.with_name(f"{destination.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
 
 
-def _media_payload() -> bytes:
+def _media_payload(entries: tuple[tuple[str, bytes], ...] | None = None) -> bytes:
     payload = io.BytesIO()
     with tarfile.open(fileobj=payload, mode="w") as archive:
-        for name, content in (("media/alpha.txt", b"vier"), ("media/nested/beta.txt", b"fuenf")):
+        archive_entries = entries or (("media/alpha.txt", b"vier"), ("media/nested/beta.txt", b"fuenf"))
+        for name, content in archive_entries:
             info = tarfile.TarInfo(name)
             info.size = len(content)
             archive.addfile(info, io.BytesIO(content))
@@ -105,7 +106,15 @@ def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     _encrypt(_media_payload(), media_backup)
     manifest = daily / "anlaufstelle_2026-09-10_020000.manifest"
     manifest.write_text(
-        "core_facility=1\ncore_client=1\ncore_event=1\ncore_workitem=1\ncore_auditlog=1\ncore_attachment=1\n",
+        "table_core_facility=1\n"
+        "table_core_client=1\n"
+        "table_core_event=1\n"
+        "table_core_workitem=1\n"
+        "table_core_auditlog=1\n"
+        "table_core_attachment=1\n"
+        "backup_timestamp=2026-09-10_020000\n"
+        f"db_sha256={hashlib.sha256(db_backup.read_bytes()).hexdigest()}\n"
+        f"media_sha256={hashlib.sha256(media_backup.read_bytes()).hexdigest()}\n",
         encoding="utf-8",
     )
     derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
@@ -143,7 +152,10 @@ if [[ "$*" == *" exec -T db psql "* ]]; then
         cat >/dev/null
         if [[ "${TEST_PSQL_FAIL:-0}" == "1" ]]; then
             printf 'ERROR: kaputte SQL-Zeile\\n' >&2
-            exit 1
+            if [[ " $* " == *" ON_ERROR_STOP=1 "* ]]; then
+                exit 1
+            fi
+            exit 0
         fi
     fi
 elif [[ "$*" == *" python manage.py mark_restore_verified "* ]]; then
@@ -262,3 +274,171 @@ printf 'stub 1 1 0 100%% %s\\n' "${@: -1}"
     assert "Nicht genug freier Platz" in result.stdout
     assert "TMPDIR" in result.stdout
     assert "Medien: 2 Dateien" not in result.stdout
+
+
+def _install_real_media_docker(bindir: Path) -> None:
+    _write_executable(
+        bindir / "docker",
+        """#!/usr/bin/env bash
+printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
+if [[ "$*" == *" exec -T db psql "* ]]; then
+    if [[ "$*" == *"SELECT facility_id, storage_filename"* ]]; then
+        printf '%s\\n' "$ATTACHMENT_ROWS"
+    else
+        cat >/dev/null
+    fi
+    exit 0
+fi
+if [[ "$*" == *" exec -T web "* ]]; then
+    while [[ "$1" != "web" ]]; do shift; done
+    shift
+    mapped=()
+    for arg in "$@"; do
+        mapped+=("${arg//$CONTAINER_MEDIA_ROOT/$HOST_MEDIA_ROOT}")
+    done
+    "${mapped[@]}"
+    exit $?
+fi
+exit 0
+""",
+    )
+
+
+@pytest.mark.parametrize(
+    ("entries", "expected_success"),
+    [
+        ((("media/facility-123/document.enc", b"ciphertext"),), True),
+        ((("media/document.enc", b"wrong-root"),), False),
+    ],
+)
+def test_restore_checks_real_archive_at_facility_path(
+    tmp_path: Path,
+    entries: tuple[tuple[str, bytes], ...],
+    expected_success: bool,
+) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    _encrypt(_media_payload(entries), media_backup)
+    _install_real_media_docker(bindir)
+    host_media = tmp_path / "container" / "media"
+    host_media.mkdir(parents=True)
+    (host_media / "old.enc").write_bytes(b"old")
+    env = _base_env(root, bindir, action_log)
+    env.update(
+        {
+            "ATTACHMENT_ROWS": "facility-123|document.enc",
+            "HOST_MEDIA_ROOT": str(host_media),
+            "CONTAINER_MEDIA_ROOT": "/data/media",
+        }
+    )
+
+    result = _run_restore(root, env, db_backup, media_backup)
+
+    assert (result.returncode == 0) is expected_success, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    if expected_success:
+        assert (host_media / "facility-123" / "document.enc").read_bytes() == b"ciphertext"
+        assert not (host_media / "old.enc").exists()
+    else:
+        assert (host_media / "old.enc").read_bytes() == b"old"
+        assert "facility-123/document.enc" in result.stderr
+
+
+def _install_hwm_restore_docker(bindir: Path) -> None:
+    _write_executable(
+        bindir / "python",
+        """#!/usr/bin/env bash
+exec "$PYTHON_BIN" "$@"
+""",
+    )
+    _write_executable(
+        bindir / "docker",
+        """#!/usr/bin/env bash
+printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
+if [[ "$*" == *" run --rm --entrypoint sh -T maintenance "* ]]; then
+    payload=$(cat)
+    count=0
+    [[ -f "$HWM_CALL_COUNT" ]] && count=$(cat "$HWM_CALL_COUNT")
+    count=$((count + 1))
+    printf '%s' "$count" > "$HWM_CALL_COUNT"
+    while [[ "$1" != "-c" ]]; do shift; done
+    script="$2"
+    shift 2
+    runner="$1"; mode="$2"
+    shift 3
+    if [[ "${TEST_HWM_STREAM_FAIL:-0}" == "1" && "$count" -eq 2 ]]; then
+        printf 'parti' | /bin/sh -c "$script" "$runner" "$mode" "$HOST_HWM_TARGET" "$@"
+        exit $?
+    fi
+    printf '%s' "$payload" | /bin/sh -c "$script" "$runner" "$mode" "$HOST_HWM_TARGET" "$@"
+    exit $?
+fi
+if [[ "$*" == *" exec -T db psql "* ]]; then
+    cat >/dev/null
+    exit 0
+fi
+exit 0
+""",
+    )
+
+
+def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = False):
+    root, bindir, action_log, db_backup, _ = _make_sandbox(tmp_path)
+    hwm_source = db_backup.parent / "audit_hwm-2026-09-10_020000.json"
+    hwm_source.write_bytes(payload)
+    hwm_target = tmp_path / "audit_hwm.json"
+    hwm_target.write_bytes(b"old-anchor")
+    with (root / ".env").open("a", encoding="utf-8") as env_file:
+        env_file.write("DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json\n")
+    _install_hwm_restore_docker(bindir)
+    env = _base_env(root, bindir, action_log)
+    env.update(
+        {
+            "DJANGO_AUDIT_HWM_PATH": "/data/audit_hwm.json",
+            "HOST_HWM_TARGET": str(hwm_target),
+            "HWM_CALL_COUNT": str(tmp_path / "hwm-calls"),
+            "PYTHON_BIN": str(Path(os.sys.executable)),
+            "TEST_HWM_STREAM_FAIL": "1" if stream_fails else "0",
+        }
+    )
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore.sh"), str(db_backup)],
+        input="ja\n",
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=root,
+        timeout=30,
+    )
+    return result, hwm_target, action_log
+
+
+def test_empty_hwm_source_fails_without_changing_anchor(tmp_path: Path) -> None:
+    result, hwm_target, action_log = _run_hwm_restore(tmp_path, b"")
+
+    assert result.returncode != 0
+    assert hwm_target.read_bytes() == b"old-anchor"
+    assert " psql " not in action_log.read_text(encoding="utf-8")
+
+
+def test_invalid_hwm_json_fails_without_changing_anchor(tmp_path: Path) -> None:
+    result, hwm_target, action_log = _run_hwm_restore(tmp_path, b'{"version":1,"chains":{}}')
+
+    assert result.returncode != 0
+    assert hwm_target.read_bytes() == b"old-anchor"
+    assert " psql " not in action_log.read_text(encoding="utf-8")
+
+
+def test_interrupted_hwm_stream_preserves_old_anchor(tmp_path: Path) -> None:
+    payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    result, hwm_target, _ = _run_hwm_restore(tmp_path, payload, stream_fails=True)
+
+    assert result.returncode != 0
+    assert hwm_target.read_bytes() == b"old-anchor"
+
+
+def test_valid_hwm_stream_atomically_replaces_anchor(tmp_path: Path) -> None:
+    payload = b'{"version":1,"chains":{},"sig":"signed"}'
+    result, hwm_target, _ = _run_hwm_restore(tmp_path, payload)
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert hwm_target.read_bytes() == payload
+    assert "RESTORE-SATZ WIEDERHERGESTELLT: 2026-09-10_020000" in result.stdout
