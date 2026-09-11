@@ -185,6 +185,8 @@ Beiträge sind willkommen. Bitte lies zuerst die [Contributing-Richtlinien](CONT
 
 Wie Entscheidungen getroffen werden und wer das Projekt verantwortet, steht in [GOVERNANCE.md](GOVERNANCE.md) und [MAINTAINERS.md](MAINTAINERS.md).
 
+Das Projekt wird derzeit von einer Person gepflegt — dauerhafte Mitarbeit ist ausdrücklich erwünscht, und der Weg ins Maintainer-Team steht in [GOVERNANCE.md § Aufnahme weiterer Maintainer](GOVERNANCE.md#aufnahme-weiterer-maintainer).
+
 Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufstelle/app/issues)
 
 ---

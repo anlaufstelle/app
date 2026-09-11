@@ -20,35 +20,29 @@ ist alleinige Ansprechperson für Sicherheitsmeldungen
 Das ist ein bewusst offen ausgewiesenes **Bus-Faktor-1-Risiko**: Fällt diese
 Person aus, steht das Projekt ohne handlungsfähige Zweitperson da.
 
-## Vertretung: keine — bewusster Entscheid (2026-08-27)
+## Vertretung: derzeit keine (Stand 2026-08-27)
 
-> **ENTSCHIEDEN (Maintainer, 2026-08-27): Es wird keine Vertretung benannt.**
-> Das Solo-Maintainer-Modell ist der gewollte Dauerzustand, nicht ein
-> Übergangszustand. Das damit verbundene **Bus-Faktor-1-Risiko ist bewusst
-> akzeptiert** und bleibt oben offen ausgewiesen.
+> **Stand 2026-08-27 (Maintainer-Entscheid, präzisiert 2026-09-10):** Es ist
+> derzeit **keine Vertretung benannt**, weil es keine zweite aktive Person gibt.
+> Das Solo-Maintainer-Modell ist der **Ist-Stand, nicht das Zielbild**: Sobald
+> jemand substanziell mitarbeitet, wird das Maintainer-Team erweitert
+> ([GOVERNANCE.md § Aufnahme weiterer Maintainer](GOVERNANCE.md#aufnahme-weiterer-maintainer));
+> Ziel ist eine Community um das Projekt. Bis dahin ist das
+> **Bus-Faktor-1-Risiko** offen ausgewiesen und in Kauf genommen.
 
 Begründung und Reichweite:
 
-- Nach der eigenen Scope-Einschätzung liegt das Projekt im heutigen
-  Betriebsmodell (quelloffen, kostenlos, kein Hosting-/SaaS-Angebot)
-  **außerhalb des CRA-Anwendungsbereichs**; einschlägig wären allenfalls die
-  anteiligen Meldepflichten des Verwalter-Light-Regimes (Art. 24)
-  ([docs/compliance/cra-einordnung.md § 1.4](docs/compliance/cra-einordnung.md)).
-  Die früher hier geführte Frist 2026-09-11 war eine selbst gesetzte
-  Vorsichtsmarke, keine feststehende Rechtspflicht.
-- **Konsequenz im Ausfall der Hauptperson:** Es gibt keine meldefähige
-  Zweitperson; die 24-Stunden-Frühwarnfähigkeit ([docs/ops-runbook.md
-  § 6.5b](docs/ops-runbook.md)) besteht in diesem Fall nicht. Das ist Teil des
-  akzeptierten Risikos.
-- **Wiedervorlage-Trigger bleibt:** Wechselt das Betriebsmodell in den
-  CRA-Scope (kostenpflichtiges Hosting/SaaS, Produktverkauf, kommerzialisierte
-  Demo), ist dieser Entscheid **neu zu bewerten**
-  ([docs/compliance/cra-einordnung.md § 4](docs/compliance/cra-einordnung.md)).
-- Die Signing-Key-/Secret-Escrow-Trennung entfällt als eigenständige Aufgabe
-  sie war Voraussetzung eines Vertretungswegs. Die vorbereitete Checkliste
-  (`docs/dev/deputy-escrow-runbook.md`, dev-only) bleibt als Vorlage erhalten,
-  falls der Entscheid später revidiert wird; dasselbe gilt für die
-  auskommentierten Vier-Augen-Zeilen in [.github/CODEOWNERS](.github/CODEOWNERS).
+- **Konsequenz im Ausfall der Hauptperson:** Es gibt keine handlungsfähige
+  Zweitperson. Sicherheitsmeldungen ([SECURITY.md](SECURITY.md)), Releases und
+  die Deploy-Geheimnisse ruhen so lange. Das ist Teil des akzeptierten Risikos.
+- **Trigger:** Erfüllt eine zweite Person die Aufnahmekriterien
+  ([GOVERNANCE.md § Aufnahme weiterer Maintainer](GOVERNANCE.md#aufnahme-weiterer-maintainer)),
+  werden E-1 (Vertretung), E-2 (Escrow-Trennung) und E-3 (Vier-Augen-Review)
+  gemeinsam ausgeführt. Dafür gibt es weder einen Zeitplan noch eine
+  Suchkampagne — die Aufnahme erfolgt anlassbezogen.
+- **Vorlagen bleiben erhalten:** die vorbereitete Checkliste
+  (`docs/dev/deputy-escrow-runbook.md`, dev-only) und die auskommentierten
+  Vier-Augen-Zeilen in [.github/CODEOWNERS](.github/CODEOWNERS).
 
 ## Verantwortungsbereiche (Code-Ownership)
 
@@ -64,8 +58,8 @@ nicht in der Prosa untergehen. Sie werden gestrichen, sobald sie entschieden sin
 
 | # | Offener Punkt | Frist / Anlass | Stand und Folgearbeit im Repository |
 |---|---------------|----------------|--------------------------------------|
-| ~~**E-1**~~ | ~~Vertretung benennen~~ — **entschieden 2026-08-27: keine Vertretung** (siehe [§ Vertretung](#vertretung-keine--bewusster-entscheid-2026-08-27)) | Wiedervorlage nur bei Wechsel des Betriebsmodells in den CRA-Scope | Bus-Faktor-1-Risiko bewusst akzeptiert; [SECURITY.md](SECURITY.md) entsprechend formuliert |
-| ~~**E-2**~~ | ~~Escrow-Trennung wählen~~ — **mit E-1 entfallen** (2026-08-27): ohne Vertretung gibt es keine Zweitperson, für die getrennte Zugänge einzurichten wären | Wiedervorlage zusammen mit E-1 | Checkliste `docs/dev/deputy-escrow-runbook.md` (dev-only) bleibt als Vorlage erhalten |
+| ~~**E-1**~~ | ~~Vertretung benennen~~ — **Stand 2026-08-27: derzeit keine Vertretung** (siehe [§ Vertretung](#vertretung-derzeit-keine-stand-2026-08-27)) | anlassbezogen: zweite Person erfüllt die Aufnahmekriterien | Bus-Faktor-1-Risiko offen ausgewiesen und in Kauf genommen; [SECURITY.md](SECURITY.md) entsprechend formuliert |
+| **E-2** | **Escrow-Trennung wählen** — **ruht, bis E-1 eintritt**: solange keine Zweitperson benannt ist, gibt es niemanden, für den getrennte Zugänge einzurichten wären | gemeinsam mit E-1 | Checkliste `docs/dev/deputy-escrow-runbook.md` (dev-only) bleibt als Vorlage erhalten |
 | **E-3** | **Vier-Augen-Review für sicherheitskritische Pfade** aktivieren | sobald eine zweite Person Maintainer ist | vorbereitete, auskommentierte Zeilen in [.github/CODEOWNERS](.github/CODEOWNERS) einkommentieren; [GOVERNANCE.md § Review & Self-Review](GOVERNANCE.md#review--self-review) nachziehen |
 | **E-4** | **Eigene `AUTHORS`-/Copyright-Datei** — ja oder nein | ohne Frist | Heute bewusst **nicht** angelegt: Urheberschaft wird über Git-Historie, `Co-authored-by`-Trailer und die namentliche Nennung im Release-CHANGELOG geführt ([CONTRIBUTING.md § Namensnennung](CONTRIBUTING.md#namensnennung)). Eine eigene Datei setzt eine Copyright-/SPDX-Konvention voraus, die das Projekt bisher nicht hat — sie wäre sonst nur eine zweite, driftende Kopie der Historie. |
 

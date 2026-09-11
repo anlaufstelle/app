@@ -1,6 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
+> Most recently synchronized on 2026-09-11 (release-history wording: no deputy is currently designated, #2207).
 
 # Domain Concept Summary
 
@@ -246,7 +247,7 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Subject-access answers are complete across all record types**: the Article 15 export now lists legal holds and deletion requests that target cases and activities — not only the person and their events — drawing from the same target definitions the Article 17 redaction uses, so the two can no longer drift apart. Congruence tests fail loudly if a future record type is added on one side only.
 - **Unknown sensitivity values are always treated as most restrictive**: every visibility decision (lists, detail views, downloads, the offline bundle and the event search index) now hides fields whose sensitivity value is unrecognised, closing a path where the search index could have exposed text of an otherwise invisible field. Behaviour for all known values is unchanged and pinned by tests.
 - **User creation in the technical admin works again**: the creation form demanded two password fields it never displayed, so saving always failed; the form no longer asks for a password at all — the application assigns one itself (e-mail invitation, or a displayed initial password where no address is given).
-- **Governance is settled**: the maintainer documents record the deliberate decision to continue without a designated deputy; the solo-maintainer model and its bus-factor risk are stated openly, and the security policy describes the actual state instead of announcing a deputy.
+- **Governance is settled**: the maintainer documents record that no deputy is currently designated; the solo-maintainer model and its bus-factor risk are stated openly, and the security policy describes the actual state instead of announcing a deputy.
 - **Contact capture no longer returns a server error for manipulated document-type values**, and the mobile offline test harness now exercises the same startup path real browsers take.
 
 ### v0.84.0 (2026-08-25)
@@ -292,5 +293,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-10 -->
+<!-- translation-date: 2026-09-11 -->
 <!-- source-hash: 4889f1a6ee82f974b27eb182a3a98a66e0bb0005 -->

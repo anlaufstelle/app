@@ -65,12 +65,12 @@ mit der Benennung aktiviert
    Grundsatzfragen per ADR.
 3. **Sicherheitslücken:** **nicht** öffentlich, sondern ausschließlich über die
    vertraulichen Kanäle in [SECURITY.md](SECURITY.md).
-4. **Betriebs-/Vorfall-Eskalation** (inkl. DSGVO Art. 33/34 und der CRA-24/72-h-
-   Fristen): folgt dem manuellen Prozess in
+4. **Betriebs-/Vorfall-Eskalation** (inkl. DSGVO Art. 33/34): folgt dem
+   manuellen Prozess in
    [docs/ops-runbook.md § 6.5b](docs/ops-runbook.md). Bei Ausfall der
-   Hauptperson ruht die Eskalation: eine Vertretung ist **bewusst nicht
-   vorgesehen** (Entscheid 2026-08-27, Begründung und Reichweite in
-   [MAINTAINERS.md § Vertretung](MAINTAINERS.md#vertretung-keine--bewusster-entscheid-2026-08-27)).
+   Hauptperson ruht die Eskalation: eine Vertretung ist **derzeit nicht
+   benannt** (Stand 2026-08-27, Begründung und Reichweite in
+   [MAINTAINERS.md § Vertretung](MAINTAINERS.md#vertretung-derzeit-keine-stand-2026-08-27)).
 
 ## Aufnahme weiterer Maintainer
 
@@ -123,7 +123,7 @@ statt beschönigt.
 ## Verweise
 
 - [MAINTAINERS.md](MAINTAINERS.md) — wer aktuell verantwortlich ist, Bus-Faktor,
-  Vertretungs-Entscheid (2026-08-27: bewusst keine).
+  Vertretungs-Stand (2026-08-27: derzeit keine benannt).
 - [CONTRIBUTING.md](CONTRIBUTING.md) — Beitragsprozess, DCO, Lizenz.
 - [SECURITY.md](SECURITY.md) — Sicherheitsmeldungen und SLA.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Verhaltensregeln.

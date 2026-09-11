@@ -251,7 +251,7 @@ Das setzt den Compliance-Check „Restore-Test" im Dashboard (`/system/complianc
 
 Ehrliche Bestandsaufnahme — diese Teile sind **organisatorisch**, nicht im Code gelöst (Stand v0.14.0):
 
-- **`entschieden` — keine personelle Escrow-Trennung im Solo-Maintainer-Modell.** #1477 war ein Governance-Issue und ist geschlossen; ohne Vertretung entfällt die Übergabe an eine zweite Person dauerhaft. Es gibt weiterhin keinen Code-Pfad, der `BACKUP_ENCRYPTION_KEY`/`ENCRYPTION_KEYS` an einen getrennten Ort spiegelt. Für Recovery und Drill ist deshalb die vom Maintainer verwahrte, vom Prod-Host getrennte `.env`-Kopie die Schlüsselquelle. Fehlt diese Kopie nach einem Host-Totalverlust, bleiben die Backups endgültig unlesbar ([§4.4](#44-wo-die-schlüssel-liegen-sollten--eskrow)).
+- **`entschieden` — keine personelle Escrow-Trennung im Solo-Maintainer-Modell.** #1477 war ein Governance-Issue und ist geschlossen; solange keine Vertretung benannt ist, gibt es keine Übergabe an eine zweite Person. Es gibt weiterhin keinen Code-Pfad, der `BACKUP_ENCRYPTION_KEY`/`ENCRYPTION_KEYS` an einen getrennten Ort spiegelt. Für Recovery und Drill ist deshalb die vom Maintainer verwahrte, vom Prod-Host getrennte `.env`-Kopie die Schlüsselquelle. Fehlt diese Kopie nach einem Host-Totalverlust, bleiben die Backups endgültig unlesbar ([§4.4](#44-wo-die-schlüssel-liegen-sollten--eskrow)).
 
 - **`offen` — Off-Site nur wenn konfiguriert.** `scripts/ops/backup.sh` hat Off-Site-Sync, aber nur aktiv bei gesetztem `BACKUP_OFFSITE_TARGET`. Ist keines konfiguriert, überlebt **kein** Backup den Host-Totalverlust. → Vor Produktivbetrieb `BACKUP_OFFSITE_TARGET` setzen **und** das erste Off-Site-Retrieval einmal proben.
 
@@ -294,7 +294,7 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   `BACKUP_HOST_DIR=./backups` bezeichnet auf dem Host `<Repo>/backups`,
   `BACKUP_DIR=/backups` ausschließlich das read-only Mount-Ziel im Container.
   Bei einem abweichenden Host-Pfad muss `BACKUP_HOST_DIR` den tatsächlich
-  bereitgestellten Ort nennen. Es gibt bewusst **kein** personell getrenntes
+  bereitgestellten Ort nennen. Es gibt derzeit **kein** personell getrenntes
   Escrow: #1477 ist als
   Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen. Im
   Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie", nicht

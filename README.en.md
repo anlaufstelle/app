@@ -185,6 +185,8 @@ Contributions are welcome. Please read the [contributing guidelines](CONTRIBUTIN
 
 How decisions are made and who is responsible for the project is documented in [GOVERNANCE.md](GOVERNANCE.md) and [MAINTAINERS.md](MAINTAINERS.md).
 
+The project is currently maintained by one person — ongoing contributions are explicitly welcome, and the path into the maintainer team is described in [GOVERNANCE.md § Aufnahme weiterer Maintainer](GOVERNANCE.md#aufnahme-weiterer-maintainer) (German).
+
 Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app/issues)
 
 ---
@@ -223,5 +225,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-08 -->
-<!-- source-hash: d2744ddef09dc46b229383337fa3f0d9e55712b6 -->
+<!-- translation-date: 2026-09-11 -->
+<!-- source-hash: 776c7dc9c2ee6fd7f1b418ed36a79fd28740cf83 -->
