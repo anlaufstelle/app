@@ -220,6 +220,43 @@ class TestEventErstellung:
         assert page.locator("dt:has-text('Fall')").count() == 0
 
     @pytest.mark.smoke
+    def test_empty_number_field_has_no_placeholder_in_detail(self, authenticated_page, base_url):
+        """Zahlenfeld leer lassen → Detail-Seite zeigt keinen Python-Literal (Refs #2220).
+
+        Der Fall aus dem Installations-Trockenlauf: Beim ersten dokumentierten
+        Kontakt bleibt das optionale Zahlenfeld „Dauer" leer. Ein leeres
+        ``IntegerField`` liefert ``None`` (nicht ``""`` wie ein Textfeld), und die
+        Detailseite hat dieses ``None`` frueher woertlich gerendert.
+        """
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/")
+
+        _select_doc_type_and_await_swap(page, "Kontakt")
+        # „Dauer" bleibt bewusst leer — nur die Notiz wird gefuellt.
+        _fill_after_htmx_swap(page, "textarea[name='notiz']", "E2E ohne Dauer")
+        expect(page.locator("input[name='dauer']")).to_have_value("")
+
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+        page.wait_for_load_state("domcontentloaded")
+
+        # Anchor-then-content wie in ``test_event_save_and_appears_in_detail``.
+        page.locator("dt:has-text('Dauer')").first.wait_for(state="visible", timeout=30000)
+        # ``state="attached"`` statt ``visible``: ein leeres ``dd`` hat keine
+        # Hoehe und gilt Playwright deshalb als unsichtbar — genau der Zustand,
+        # den dieser Test als korrekt festschreibt. ``text_content`` liest den
+        # Knoten unabhaengig von der Sichtbarkeit.
+        dauer_value = page.locator("dt:has-text('Dauer') + dd").first
+        dauer_value.wait_for(state="attached", timeout=10000)
+        assert (dauer_value.text_content() or "").strip() == ""
+
+        # Gegenprobe: Die gefuellte Nachbarzelle steht weiterhin da.
+        page.locator("dl").get_by_text("E2E ohne Dauer").first.wait_for(state="visible", timeout=5000)
+
+        # Kein ``dd`` der Seite besteht nur aus dem Literal „None".
+        assert page.locator("dd").filter(has_text=re.compile(r"^\s*None\s*$")).count() == 0
+
+    @pytest.mark.smoke
     def test_event_save_and_appears_in_detail(self, authenticated_page, base_url):
         """Event speichern → Detail-Seite mit Daten."""
         page = authenticated_page

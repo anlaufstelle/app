@@ -147,8 +147,17 @@
                     {{ field.value }}
                 </dd>
                 {% else %}
+                {# Refs #2220: Ein leer gelassenes Zahlen-, Datums- oder Zeitfeld     #}
+                {# liegt als ``None`` im ``data_json`` (ein leeres IntegerField gibt  #}
+                {# ``None``, ein leeres CharField ``""``), und die Anzeige-           #}
+                {# formatierung reicht es unveraendert durch — ohne Filter stand der  #}
+                {# Python-Literal „None" in der Gruppe. Leer statt Gedankenstrich,    #}
+                {# weil die Nachbarfelder mit ``""``/``[]`` genauso rendern.          #}
+                {# ``default_if_none`` und nicht ``default``: eine gespeicherte 0 ist #}
+                {# ein echter Wert und muss stehen bleiben (gleiche Begruendung wie   #}
+                {# in core/export/client_data_pdf.html).                              #}
                 <dd class="text-sm font-medium {% if field.is_sensitive %}text-amber-700{% endif %}">
-                    {{ field.value }}
+                    {{ field.value|default_if_none:"" }}
                 </dd>
                 {% endif %}
             </div>
