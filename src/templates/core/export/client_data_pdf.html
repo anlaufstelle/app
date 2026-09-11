@@ -61,16 +61,24 @@
         {% comment %}M2/P7 (Refs #1058): Zusatzfelder gehoeren zur Auskunft, sobald die
         Person einen Dokumentationstyp traegt. Werte kommen entschluesselt aus
         ``_gather_entity_dynamic_data`` (verwaiste separat via
-        ``_gather_entity_orphan_data``, Refs #1725/#1730).{% endcomment %}
+        ``_gather_entity_orphan_data``, Refs #1725/#1730).
+
+        Refs #2224 (gleiche Regel wie #2220): Ein leer gelassenes Zahlen-, Datums-
+        oder Zeitfeld liegt als ``None`` im ``data_json`` und wurde hier woertlich
+        als „None" in das ausgehaendigte Auskunftsdokument gerendert. Dieselbe
+        Filterung steht an jeder Stelle dieses Templates, die einen dynamischen
+        Feldwert ausgibt (Faelle, Faelle im Papierkorb, Spalte „Daten" der
+        Kontakte). ``default_if_none`` und nicht ``default``: eine gespeicherte 0
+        ist ein echter Wert und muss in der Auskunft stehen bleiben.{% endcomment %}
         {% if client.document_type %}
         <tr><th>{% trans "Dokumentationstyp" %}</th><td>{{ client.document_type }}</td></tr>
         {% for entry in client.dynamic_data %}
-        <tr><th>{{ entry.label }}</th><td>{{ entry.value }}</td></tr>
+        <tr><th>{{ entry.label }}</th><td>{{ entry.value|default_if_none:"" }}</td></tr>
         {% endfor %}
         {% comment %}Refs #1725(a): verwaiste Felder (Slug nicht mehr am Typ) gehoeren
         zur Auskunft; separater Unterabschnitt aus ``client.dynamic_data_orphaned``.{% endcomment %}
         {% for entry in client.dynamic_data_orphaned %}
-        <tr><th>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em></th><td>{{ entry.value }}</td></tr>
+        <tr><th>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em></th><td>{{ entry.value|default_if_none:"" }}</td></tr>
         {% endfor %}
         {% endif %}
     </table>
@@ -154,11 +162,11 @@
                     {% if case.document_type %}
                     <strong>{{ case.document_type }}</strong>
                     {% for entry in case.dynamic_data %}
-                        <br>{{ entry.label }}: {{ entry.value }}
+                        <br>{{ entry.label }}: {{ entry.value|default_if_none:"" }}
                     {% endfor %}
                     {% comment %}Refs #1725(a): verwaiste Fall-Felder separat.{% endcomment %}
                     {% for entry in case.dynamic_data_orphaned %}
-                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value }}
+                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value|default_if_none:"" }}
                     {% endfor %}
                     {% else %}-{% endif %}
                 </td>
@@ -217,10 +225,10 @@
                     {% if case.document_type %}
                     <strong>{{ case.document_type }}</strong>
                     {% for entry in case.dynamic_data %}
-                        <br>{{ entry.label }}: {{ entry.value }}
+                        <br>{{ entry.label }}: {{ entry.value|default_if_none:"" }}
                     {% endfor %}
                     {% for entry in case.dynamic_data_orphaned %}
-                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value }}
+                        <br>{{ entry.label }} <em>({% trans "nicht mehr zugeordnet" %})</em>: {{ entry.value|default_if_none:"" }}
                     {% endfor %}
                     {% else %}-{% endif %}
                 </td>
@@ -323,9 +331,14 @@
                 <td>{{ event.case|default:"-" }}</td>
                 <td>{{ event.episode|default:"-" }}</td>
                 <td>{{ event.created_by|default:"-" }}</td>
+                {% comment %}Refs #2224: Diese Spalte gibt ``event.data`` slug-treu aus
+                (``_gather_events``, bewusst OHNE FieldTemplate-Lookup) — anders als die
+                Zusatzfelder von Person und Fall laeuft der Wert hier nicht durch
+                ``format_dynamic_display_value``. Der ``None``-Filter gehoert deshalb
+                genauso hierher; ohne ihn stand „None" in der Auskunft.{% endcomment %}
                 <td>
                     {% for key, value in event.data.items %}
-                        <strong>{{ key }}:</strong> {{ value }}{% if not forloop.last %}, {% endif %}
+                        <strong>{{ key }}:</strong> {{ value|default_if_none:"" }}{% if not forloop.last %}, {% endif %}
                     {% endfor %}
                 </td>
                 {% comment %}Refs #1738: ereignis-eigene Anhaenge — bis M24 fehlten
