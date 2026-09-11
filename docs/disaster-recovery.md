@@ -23,7 +23,7 @@
 
 | Kennzahl | Zielwert | Begründung / Verankerung im Code |
 |---|---|---|
-| **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der Backup-Timer läuft täglich um **02:00** (`dev-ops/deploy/install-timers.sh`, dev-only: `OnCalendar="*-*-* 02:00:00"`). Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
+| **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der einzurichtende Host-Cron aus [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) läuft täglich um **02:00**. Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
 | **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct **nach jeder Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet). |
 | **RTO** (Zeit bis Service wieder online auf frischem Host) | **Richtwert 2–4 h** | Setzt sich zusammen aus: Server provisionieren + `bootstrap.sh` (~20–30 min) · Off-Site-Backup herunterladen (datenmengenabhängig) · DB- + Medien-Restore (~10–30 min bei mittlerer Datenmenge) · Smoke-Verifikation (~15 min). **Kein vertraglich zugesichertes SLA** — Richtwert für einen geübten Operator mit verfügbaren Schlüsseln. |
 | **RTO ohne Schlüssel** | **∞ (nicht wiederherstellbar)** | Ohne `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` sind die verschlüsselten Feld-/Datei-Inhalte **dauerhaft unlesbar**; ohne `BACKUP_ENCRYPTION_KEY` ist das Backup selbst nicht entschlüsselbar. Die Schlüssel-Eskrow-Strategie ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) ist damit der kritischste RTO-Faktor. |
@@ -51,13 +51,14 @@
 
 ## 3. Was ein Recovery braucht — Inventar
 
-Ein vollständiges Recovery rekonstruiert **drei** Dinge. Fehlt eines, ist die Wiederherstellung unvollständig oder unmöglich:
+Ein vollständiges Recovery rekonstruiert **vier** Dinge. Fehlt eines, ist die Wiederherstellung unvollständig oder unmöglich:
 
 1. **Die verschlüsselten Backup-Artefakte** (Off-Site, siehe [§5](#5-off-site-backup-beschaffen)):
    - DB-Dump (`*.sql.gz.enc` + `.hmac`)
    - Medien-Tarball (`*_media.tar.gz.enc` + `.hmac`). Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
 2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEY(S)` und `BACKUP_ENCRYPTION_KEY`.
-3. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
+3. **Der externe Audit-Anker** `audit_hwm-<timestamp>.json`, der genau zum gewählten DB-/Medien-Satz gehört. Ohne ihn kann die wiederhergestellte Audit-Kette nicht gegen ihren vor dem Ausfall gesicherten Stand geprüft werden.
+4. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
 
 ---
 
@@ -69,20 +70,27 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 
 | Variable | Rolle im Recovery | Code-Beleg |
 |---|---|---|
-| `BACKUP_ENCRYPTION_KEY` | Entschlüsselt das Backup selbst (`openssl enc -d`) **und** leitet den HMAC-Verify-Key ab. **Ohne ihn ist das Backup wertloser Chiffretext.** | [`backup.sh`](../scripts/ops/backup.sh) L37/L132, [`restore.sh`](../scripts/ops/restore.sh) L69, [`_backup_common.sh`](../scripts/ops/_backup_common.sh) (HMAC-Key-Ableitung) |
-| `ENCRYPTION_KEY` **oder** `ENCRYPTION_KEYS` | Fernet-Key(s) für die **Feld- und Datei-Verschlüsselung** in der DB/im Vault. Ein wiederhergestelltes Backup ist ohne den passenden Key lesbar als Tabellenstruktur, aber alle verschlüsselten Inhalte bleiben unentschlüsselbar. Bei Key-Rotation müssen **alle je benutzten** Keys in `ENCRYPTION_KEYS` stehen (MultiFernet, erster Key = aktiv). | [`settings/base.py`](../src/anlaufstelle/settings/base.py) L278–279, Pflichtprüfung in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) L139 |
+| `BACKUP_ENCRYPTION_KEY` | Entschlüsselt das Backup selbst (`openssl enc -d`) **und** leitet den HMAC-Verify-Key ab. **Ohne ihn ist das Backup wertloser Chiffretext.** | Pflichtprüfung `: "${BACKUP_ENCRYPTION_KEY:?...}"` in [`backup.sh`](../scripts/ops/backup.sh) und [`restore.sh`](../scripts/ops/restore.sh); HMAC-Key-Ableitung in [`_backup_common.sh`](../scripts/ops/_backup_common.sh) |
+| `ENCRYPTION_KEY` **oder** `ENCRYPTION_KEYS` | Fernet-Key(s) für die **Feld- und Datei-Verschlüsselung** in der DB/im Vault. Ein wiederhergestelltes Backup ist ohne den passenden Key lesbar als Tabellenstruktur, aber alle verschlüsselten Inhalte bleiben unentschlüsselbar. Bei Key-Rotation müssen **alle je benutzten** Keys in `ENCRYPTION_KEYS` stehen (MultiFernet, erster Key = aktiv). | Einstellungen `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` in [`settings/base.py`](../src/anlaufstelle/settings/base.py), Produktionsprüfung `_validate_fernet_keys()` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
 
 > **MultiFernet-Falle:** Wurde der Feld-Key je rotiert, enthält das Backup Werte, die mit **mehreren** Generationen verschlüsselt sind. `ENCRYPTION_KEYS` muss dann **lückenlos alle** alten Keys enthalten, sonst sind ältere Datensätze nach dem Restore unlesbar. Die Key-Historie gehört deshalb mit ins Eskrow.
+>
+> **Diagnose bei fehlgeschlagener HMAC-Prüfung:** Der Test kann die Ursachen nicht unterscheiden. Möglich sind ein falscher `BACKUP_ENCRYPTION_KEY` (der HMAC-Key wird daraus abgeleitet), ein manipuliertes oder beschädigtes Artefakt oder ein `.hmac`-Sidecar aus einem anderen Backup-Satz. Den Satz deshalb nicht verwerfen, bevor Schlüssel und Dateizuordnung geprüft sind.
 
 ### 4.2 Wichtig — ohne diese startet der Stack nicht sauber
 
 | Variable | Rolle | Code-Beleg |
 |---|---|---|
-| `POSTGRES_BOOTSTRAP_PASSWORD` | Passwort des Bootstrap-Superusers `postgres` im frischen Cluster; das Init-Script legt damit die App-/Admin-Rolle an. | [`docker-compose.prod.yml`](../docker-compose.prod.yml) L12 (`POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}`) |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` | App-Login (NOSUPERUSER, NOBYPASSRLS) → im Container `APP_DB_USER`/`APP_DB_PASSWORD`. Muss beim Restore wieder denselben Rollennamen ergeben, sonst passen Ownership/Grants aus dem Dump nicht. | Compose L14–15, [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) |
-| `POSTGRES_ADMIN_USER` / `POSTGRES_ADMIN_PASSWORD` | Admin-Rolle (NOSUPERUSER, BYPASSRLS) für Migrationen/Seed/Retention → `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD`. | Compose L16–17 |
-| `DJANGO_SECRET_KEY` | Session-/CSRF-/Signing-Key. Ein **neuer** Wert ist technisch zulässig (invalidiert nur bestehende Sessions/Signaturen); für saubere Forensik den alten bevorzugen. | [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) L38 |
-| `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge. Ein neuer Wert macht **alte** Audit-Hashes nicht mehr nachvollziehbar — für DSGVO-Beweiskraft den alten wiederbeschaffen. | [`.env.example`](../.env.example) L14 |
+| `POSTGRES_DB` | Name der Ziel-Datenbank. Backup, Restore, Compose und die Rollenprüfung müssen denselben Namen verwenden. | Pflichtprüfung `: "${POSTGRES_DB:?...}"` in [`backup.sh`](../scripts/ops/backup.sh) und [`restore.sh`](../scripts/ops/restore.sh) |
+| `POSTGRES_BOOTSTRAP_PASSWORD` | Passwort des Bootstrap-Superusers `postgres` im frischen Cluster; das Init-Script legt damit die App-/Admin-Rolle an. | Compose-Variable `POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}` in [`docker-compose.prod.yml`](../docker-compose.prod.yml) |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | App-Login (NOSUPERUSER, NOBYPASSRLS) → im Container `APP_DB_USER`/`APP_DB_PASSWORD`. Muss beim Restore wieder denselben Rollennamen ergeben, sonst passen Ownership/Grants aus dem Dump nicht. | Compose-Variablen `APP_DB_USER`/`APP_DB_PASSWORD` in [`docker-compose.prod.yml`](../docker-compose.prod.yml), Rollenerzeugung in [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) |
+| `POSTGRES_ADMIN_USER` / `POSTGRES_ADMIN_PASSWORD` | Admin-Rolle (NOSUPERUSER, BYPASSRLS) für Migrationen/Seed/Retention → `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD`. | Compose-Variablen `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD` in [`docker-compose.prod.yml`](../docker-compose.prod.yml), Rollenerzeugung in [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) |
+| `DJANGO_SECRET_KEY` | Session-/CSRF-/Signing-Key. Ein **neuer** Wert ist technisch zulässig (invalidiert bestehende Sessions und Signaturen); den alten Wert nach Möglichkeit wiederbeschaffen. | Produktionsprüfung `DJANGO_SECRET_KEY` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
+| `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge, die Audit-Ketten und die Signatur des externen HWM. Ein neuer Wert macht alte Audit-Hashes, die Ketten und den gesicherten HWM unverifizierbar. | Audit-Kettenfunktion `_chain_hmac()` und HWM-Funktion `_sign_payload()` in `src/core/services/audit/` |
+| `DJANGO_AUDIT_HWM_PATH` | Persistenter Pfad der HWM-Betriebsdatei, empfohlen `/data/audit_hwm.json`. Er muss vor dem ersten Backup gesetzt sein. | Einstellung `AUDIT_HWM_PATH` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
+| `BACKUP_HOST_DIR` / `BACKUP_DIR` | Host-Ablage und read-only Container-Mount der Backups. `BACKUP_HOST_DIR` muss den wiederbeschafften Satz enthalten; `BACKUP_DIR` muss zum Compose-Mount passen. | Variablen `BACKUP_HOST_DIR` in [`backup.sh`](../scripts/ops/backup.sh) und `BACKUP_DIR` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
+| `MEDIA_ROOT` / `MEDIA_ROOT_CONTAINER` | App-Pfad und Skriptpfad für die Medien. Beide müssen auf dasselbe persistente Verzeichnis zeigen; der Archivwurzelname muss dessen Basename entsprechen. | Einstellung `MEDIA_ROOT` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) und Variable `MEDIA_ROOT_CONTAINER` in [`backup.sh`](../scripts/ops/backup.sh)/[`restore.sh`](../scripts/ops/restore.sh) |
+| `EXTERNAL_ORIGIN` | Öffentliche Basis-URL für Links. Fehlt sie, wird sie nur bei genau einem öffentlichen Host aus `ALLOWED_HOSTS` abgeleitet; bei mehreren öffentlichen Hosts muss sie ausdrücklich gesetzt sein. | Ableitung und Pflichtprüfung `EXTERNAL_ORIGIN` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py); `.env.example` zeigt Haupt- und `www`-Host |
 
 > **`POSTGRES_USER`/`POSTGRES_ADMIN_USER` sind keine Geheimnisse, aber load-bearing.** Der Rollenname muss identisch zum verlorenen Setup sein, weil der Dump `OWNER`/`GRANT`-Klauseln auf genau diese Rollennamen enthält (seit A1.4 ist die **Admin-Rolle** DB-/Objekt-Owner, die App-Rolle hat nur DML — [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)). Andere Passwörter sind ok; andere **Rollennamen** brechen den Restore.
 >
@@ -105,17 +113,23 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 
 ### 4.3 Optional
 
-`SENTRY_DSN`, `EMAIL_HOST*`, `BACKUP_OFFSITE_TARGET`, `CLAMAV_*`, `ALLOWED_HOSTS`, `DOMAIN`, `TRUSTED_PROXY_HOPS` — für den Betrieb nötig, aber aus `.env.example` + bekannter Infrastruktur rekonstruierbar; kein Datenverlust-Risiko.
+`SENTRY_DSN`, `EMAIL_HOST*`, `CLAMAV_*` und `TRUSTED_PROXY_HOPS` sind aus `.env.example` und der bekannten Infrastruktur rekonstruierbar. `ALLOWED_HOSTS` und `DOMAIN` müssen dabei die Loopback-Namen für den Container-Healthcheck beibehalten. `BACKUP_OFFSITE_TARGET` ist rekonstruierbar, sein Zugangsmaterial jedoch ein eigenes Recovery-Artefakt nach § 4.4.
 
 ### 4.4 Wo die Schlüssel liegen sollten — Eskrow
 
-> **Stand: noch nicht verdrahtet — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **müssen** mindestens `BACKUP_ENCRYPTION_KEY`, die vollständige `ENCRYPTION_KEYS`-Historie und der **aktuelle** Satz `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD`/`POSTGRES_BOOTSTRAP_PASSWORD` an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust. Die DB-Passwörter sind auf einem fabrikfrischen Cluster zwar technisch neu wählbar; für Diagnose, Rotation und Recovery am vorhandenen Cluster muss der Eskrow aber dem aktuellen Login-Stand entsprechen.
+> **Stand: noch nicht verdrahtet — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **müssen** mindestens `BACKUP_ENCRYPTION_KEY`, die vollständige `ENCRYPTION_KEYS`-Historie, `DJANGO_AUDIT_HASH_KEY`, `DJANGO_SECRET_KEY` und der **aktuelle** Satz `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD`/`POSTGRES_BOOTSTRAP_PASSWORD` an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). `DJANGO_SECRET_KEY` ist im Gegensatz zu den Verschlüsselungs- und Audit-Schlüsseln ersetzbar, beendet dann aber bestehende Sessions und macht alte Signaturen ungültig. Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust. Die DB-Passwörter sind auf einem fabrikfrischen Cluster zwar technisch neu wählbar; für Diagnose, Rotation und Recovery am vorhandenen Cluster muss der Eskrow aber dem aktuellen Login-Stand entsprechen.
+>
+> Zum getrennt gesicherten Recovery-Material gehört außerdem der **Zugang zum Off-Site-Ziel**: bei scp die SSH-Identität des ausführenden Kontos samt `known_hosts`, bei rclone die passende `rclone.conf`, bei S3 die benötigten AWS-Credentials. Die Rückholung muss ohne den verlorenen Prod-Host möglich sein.
 
 ---
 
 ## 5. Off-Site-Backup beschaffen
 
-Off-Site-Sync ist mit `scripts/ops/backup.sh` implementiert und **nur aktiv, wenn `BACKUP_OFFSITE_TARGET` gesetzt war** (siehe [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) und [§8](#8-offene-punkte-noch-nicht-verdrahtet)). Das Skript unterstützt drei Zielformate; das Retrieval ist jeweils die Umkehrung des `copy`/`sync`:
+Off-Site-Sync ist mit `scripts/ops/backup.sh` implementiert und **nur aktiv, wenn `BACKUP_OFFSITE_TARGET` gesetzt war** (siehe [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) und [§8](#8-offene-punkte-noch-nicht-verdrahtet)). Das Zugangsmaterial muss dem Konto zur Verfügung stehen, unter dem `backup.sh` tatsächlich läuft; bei scp umfasst das insbesondere SSH-Schlüssel bzw. Agent und `known_hosts`.
+
+Vor dem Backup gilt eine definierte **Schreibruhe**: keine fachlichen Schreibzugriffe, Uploads, Importe, Retention oder sonstigen Hintergrundjobs, bis DB-Dump, Medienarchiv und HWM erzeugt sind. Ein gemeinsamer Dateizeitstempel beweist keine inhaltliche Konsistenz dieser nacheinander erstellten Artefakte.
+
+Das Skript unterstützt drei Zielformate. Es überträgt bei rclone und S3 die Dateien des aktuellen Laufs nach `<ziel>/daily`; scp legt sie direkt unter `<ziel>/` ab. `weekly/` und `monthly/` werden nicht übertragen. rclone verwendet `copy`, S3 `sync` ohne `--delete`, und scp kopiert nur den aktuellen Satz: Die lokale Rotation wird daher nicht am Ziel gespiegelt. **Off-Site-Retention und Löschschutz sind eine Policy des Zielsystems**, nicht Verhalten des Backup-Skripts. Das Retrieval ist je Variante:
 
 ```bash
 # Variante rclone (S3/B2/R2/Storj/...) — BACKUP_OFFSITE_TARGET=rclone:remote:bucket/path
@@ -129,6 +143,8 @@ scp "user@host:/path/*.enc" "user@host:/path/*.hmac" ./restore-src/
 ```
 
 **Immer DB- *und* Medien-Artefakt samt `.hmac`-Sidecar holen.** Ohne den Sidecar verweigert `restore.sh` den Restore (`backup_verify_hmac` bricht ab — [`_backup_common.sh`](../scripts/ops/_backup_common.sh) L33). Das jüngste DB-Backup heißt `anlaufstelle_<timestamp>.sql.gz.enc`, der dazugehörige Medien-Tarball `anlaufstelle_<timestamp>_media.tar.gz.enc`.
+
+Nach jedem Backup den **Off-Site-Bestand selbst** abgleichen: alle fünf Dateien des gewählten Zeitstempels (DB, DB-HMAC, Medien, Medien-HMAC, Audit-HWM) müssen am erwarteten Zielpfad vorhanden sein. Der Exit-Code allein genügt nicht; insbesondere endet der erste Off-Site-Fehler bewusst noch mit Exit-Code 0. Regelmäßig zusätzlich prüfen, dass Ziel-Retention und Object Lock die vereinbarte Aufbewahrung tatsächlich abbilden.
 
 > **Object-Lock prüfen:** [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) empfiehlt eine Write-Once-/Object-Lock-Policy am Bucket. Beim Ransomware-Szenario ist das der Unterschied zwischen „Backups noch da" und „Backups mitverschlüsselt".
 
@@ -180,6 +196,15 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
 
 ### Schritt 4 — DB-Backup entschlüsseln + wiederherstellen
 
+`restore.sh` leert die Ziel-Datenbank nicht, und der Dump enthält kein `--clean`. Ein Wiederanlauf ist deshalb nur in eine **frisch angelegte, leere Ziel-DB** zulässig. Auch Exit-Code 0 belegt keine Vollständigkeit. Vor jedem erneuten Versuch die Ziel-DB verwerfen und leer neu anlegen:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db sh -c \
+  'dropdb -U postgres --if-exists "$POSTGRES_DB" && createdb -U postgres -O "$ADMIN_DB_USER" "$POSTGRES_DB"'
+```
+
+Vor dem Medien-Restore `MEDIA_ROOT`, `MEDIA_ROOT_CONTAINER`, den persistenten Mount und den Wurzelnamen des Medienarchivs abgleichen. `MEDIA_ROOT` und `MEDIA_ROOT_CONTAINER` müssen auf dasselbe App-Verzeichnis zeigen; jede Abweichung hält den Restore an.
+
 ```bash
 # restore.sh prüft den HMAC VOR dem Entschlüsseln, entschlüsselt, entpackt
 # und spielt via psql in $POSTGRES_DB ein. Fragt interaktiv (ja/nein), weil
@@ -188,7 +213,23 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
                          ./restore-src/anlaufstelle_<timestamp>_media.tar.gz.enc
 ```
 
-[`restore.sh`](../scripts/ops/restore.sh) erledigt in einem Lauf: HMAC-Verify der DB und, falls übergeben, des Medienarchivs → Bestätigungsabfrage → erneuter DB-HMAC-Verify → `openssl enc -d | gunzip | psql` → erneuter Medien-HMAC-Verify → Medien-Inhalt löschen → Medienarchiv per `tar -x` in `/data` des `web`-Containers entpacken. Damit sind beide Sidecars geprüft, bevor die erste destruktive Aktion beginnt, und das Prüf-Nutzungs-Fenster bleibt klein. Bricht `tar -x` ab, ist der Medienbestand unvollständig; Ursache beheben und den vollständigen Medien-Restore wiederholen. Der `BACKUP_ENCRYPTION_KEY` aus der `.env` wird automatisch geladen.
+[`restore.sh`](../scripts/ops/restore.sh) erledigt in einem Lauf: HMAC-Verify der DB und, falls übergeben, des Medienarchivs → Bestätigungsabfrage → erneuter DB-HMAC-Verify → `openssl enc -d | gunzip | psql` → erneuter Medien-HMAC-Verify → Medien-Inhalt löschen → Medienarchiv per `tar -x` in `/data` des `web`-Containers entpacken. Damit sind beide Sidecars geprüft, bevor die erste destruktive Aktion beginnt, und das Prüf-Nutzungs-Fenster bleibt klein. **Der bestehende Medien-Inhalt wird vor dem Entpacken gelöscht.** Auf einem Bestandssystem vorher separat sichern; der Restore stellt ausschließlich den Stand des Archivs her. Auf dem hier beschriebenen fabrikfrischen Host ist die Löschung folgenlos. Bricht `tar -x` ab, ist der Medienbestand unvollständig; Ursache beheben, die Ziel-DB erneut leer anlegen und den vollständigen DB-/Medien-Restore wiederholen. Der `BACKUP_ENCRYPTION_KEY` aus der `.env` wird automatisch geladen.
+
+Nach dem Restore die DB-/Medien-Konsistenz prüfen: Jede wiederhergestellte Anhangzeile muss eine Datei am tatsächlichen App-`MEDIA_ROOT` besitzen. Dateiname und Größe müssen den DB-Metadaten entsprechen; die Tabelle enthält keine Prüfsumme. Fehlt eine Datei, ist der Restore unvollständig.
+
+### Schritt 4b — Audit-HWM zurückspielen und Kette prüfen
+
+Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz `<timestamp>` gehörende `audit_hwm-<timestamp>.json` an `DJANGO_AUDIT_HWM_PATH` ablegen. Nicht pauschal die jüngste HWM-Datei verwenden. Das Off-Site-Original unverändert aufbewahren:
+
+```bash
+docker compose -f docker-compose.prod.yml stop cron
+docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
+  -c 'cat > "$DJANGO_AUDIT_HWM_PATH"' \
+  < ./restore-src/audit_hwm-<timestamp>.json
+docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
+```
+
+Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten.
 
 ### Schritt 5 — Migrationen + Stack hochfahren
 
@@ -197,13 +238,11 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
 # dass App-Rolle = NOSUPERUSER/NOBYPASSRLS und Admin = BYPASSRLS (Refs #1002).
 docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 
-# Vollständigen Stack hochfahren (web, caddy, ggf. clamav).
+# Vollständigen Stack samt mitgeliefertem cron-Sidecar hochfahren.
 docker compose -f docker-compose.prod.yml up -d
-
-# Hintergrundjob-Timer (Backup/Retention/Snapshots/Breach/MV-Refresh) installieren,
-# sonst läuft das nächste Backup nicht (Refs #980).
-sudo bash dev-ops/deploy/install-timers.sh
 ```
+
+Retention, Audit-Verifikation, Snapshots, Bereinigung, Breach-Erkennung und MV-Refresh laufen ab Werk im `cron`-Sidecar aus `deploy/crontab`. Zusätzlich ist **nur der Host-Cron für `scripts/ops/backup.sh`** nach [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) einzurichten. Keine weiteren Host-Cronzeilen für die Sidecar-Jobs anlegen, sonst laufen sie doppelt.
 
 Danach weiter mit der [Smoke-Verifikation](#7-smoke-verifikation-nach-restore).
 
@@ -211,9 +250,14 @@ Danach weiter mit der [Smoke-Verifikation](#7-smoke-verifikation-nach-restore).
 
 ## 7. Smoke-Verifikation nach Restore
 
-Reihenfolge: erst Infrastruktur-Checks (DB-Rollen, RLS), dann Health-Endpoint, dann Stichproben. Bricht ein früher Check, hat es keinen Sinn, weiterzulaufen.
+Reihenfolge: erst Infrastruktur-Checks (DB-Rollen, RLS), dann Health-Endpoint, dann Stichproben. Vor den Shell-Prüfungen die rekonstruierte `.env` laden. Nach einem frühen `FAIL` grundsätzlich anhalten. Eine diagnostische Fortsetzung ist zulässig, wenn sie ausdrücklich als Abweichung protokolliert wird; das Gesamtergebnis bleibt dann **OFFEN**.
 
 ```bash
+cd /opt/anlaufstelle
+set -a
+source .env
+set +a
+
 # 1) DB-Rollen-Gate — App-Rolle ohne Superuser/BYPASSRLS, Admin mit BYPASSRLS.
 docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles   # Exit 0
 
@@ -221,7 +265,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles   
 docker compose -f docker-compose.prod.yml exec -T db sh -c \
   'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
 
-# 3) Health-Endpoint (Liveness + Detail). Erwartet HTTP 200 + "status":"ok".
+# 3) Health-Liveness. Erwartet HTTP 200 + {"status":"ok"}.
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # 4) Migrationsstand vollständig?
@@ -232,7 +276,9 @@ docker compose -f docker-compose.prod.yml exec -T db \
   psql -U $POSTGRES_USER -d $POSTGRES_DB -tAc "SELECT count(*) FROM core_facility;"
 ```
 
-**Verschlüsselungs-Roundtrip — der entscheidende Check.** Der Health-Endpoint führt intern einen Fernet-Encrypt/Decrypt-Roundtrip aus und meldet `"encryption_key": "ok"` nur, wenn `ENCRYPTION_KEY(S)` zur wiederhergestellten Datenlage passt ([`health.py`](../src/core/views/health.py) `_check_encryption_key`, L62–78). Ist hier `"error"`, kippt der Gesamtstatus auf `error`/HTTP 503 — **die wahrscheinlichste Ursache nach einem Restore ist ein fehlender/falscher (rotierter) Feld-Schlüssel** ([§4.1](#41-kritisch--ohne-diese-ist-recovery-unmöglich)). Zusätzlich stichprobenhaft einen Datensatz mit verschlüsseltem Feld in der App öffnen (z. B. eine Klient:innen-Detailseite), um zu sehen, dass Klartext entschlüsselt wird.
+**Health-Detail nur per Session:** Im ausgelieferten Prod-Stack erreicht `DJANGO_HEALTH_DETAIL_TOKEN` den `web`-Container nicht. Den Detail-Payload deshalb in einer angemeldeten Browser-Session als `super_admin` prüfen. Der dortige Fernet-Roundtrip verschlüsselt und entschlüsselt nur einen **frischen** Wert; `"encryption_key": "ok"` beweist nicht, dass der wiederhergestellte Bestand mit allen benötigten Schlüsselgenerationen lesbar ist.
+
+Für jede benötigte Generation in `ENCRYPTION_KEYS` mindestens einen bereits vor dem Backup damit verschlüsselten Datensatz in der App öffnen und lesbaren Klartext bestätigen. Zusätzlich einen echten Vault-Anhang herunterladen, öffnen und seinen Dateinamen sowie seine Byte-Größe mit den wiederhergestellten DB-Metadaten abgleichen. Die Tabelle führt keine Prüfsumme; der echte Download ist daher unverzichtbar.
 
 Felder/Codes des Endpoints im Detail: [monitoring-guide.md](monitoring-guide.md).
 
@@ -277,16 +323,15 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   `docker-compose.prod.yml`, `deploy/postgres-init/` und `scripts/ops/` liegt
   vor. Die Host-Härtung und Installation aus [§6 Schritt 1](#schritt-1--host-härten--docker-installieren)
   können von einem dafür berechtigten System ausgeführt werden.
-  `dev-ops/deploy/bootstrap.sh` und `dev-ops/deploy/install-timers.sh` sind
-  dev-only und im Release-Tarball nicht enthalten
-  (`scripts/verify_release_test_guard.py`); sie müssen für den Drill separat
-  aus dem Repository bereitgestellt werden. Ist das nicht möglich, werden
-  Host-Härtung und Timer-Installation im Protokoll als NICHT PRÜFBAR vermerkt.
+  Host-Härtung und Docker-Installation werden mit den Werkzeugen der
+  jeweiligen Installation ausgeführt und im Protokoll belegt. Der
+  mitgelieferte `cron`-Sidecar übernimmt die Anwendungsjobs; nur der
+  Backup-Host-Cron wird nach dem erfolgreichen Restore eingerichtet.
 - `BACKUP_OFFSITE_TARGET` war auf der Quellinstallation gesetzt, der Zugang zum
   Off-Site-Ziel funktioniert ohne den verlorenen Prod-Host, und ein
   zusammengehöriger Welt-B-Satz ist vorhanden: DB-`*.sql.gz.enc` samt `.hmac`,
-  Medien-`*_media.tar.gz.enc` samt `.hmac` und die jüngste
-  `audit_hwm-*.json`.
+  Medien-`*_media.tar.gz.enc` samt `.hmac` und die zum selben Zeitstempel
+  gehörende `audit_hwm-<timestamp>.json`.
 - Die vom Maintainer verwahrte, host-getrennte `.env`-Kopie enthält mindestens
   die in [§4](#4-schlüssel--und-secret-wiederbeschaffung) genannten Schlüssel,
   die unveränderten DB-Rollennamen und Zugangsdaten. Die rekonstruierte `.env`
@@ -299,6 +344,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen. Im
   Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie", nicht
   „Escrow".
+- Vor dem Quellbackup wurden Referenzzahlen für die in den Erfolgskriterien
+  genannten Tabellen erhoben und die fachlichen Schreibzugriffe sowie
+  schreibenden Hintergrundjobs bis zum Abschluss von DB-Dump, Medienarchiv und
+  HWM angehalten. Ein gleicher Dateizeitstempel allein ist kein
+  Konsistenznachweis.
 - Für den HWM-Nachweis war `DJANGO_AUDIT_HWM_PATH` bereits **vor Erstellung des
   Quellbackups** gesetzt (empfohlen: `/data/audit_hwm.json`), sodass
   `scripts/ops/backup.sh` die signierte Datei tatsächlich offsite übertragen
@@ -311,9 +361,15 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   für diesen Drill die Variable deshalb setzen, damit die Signaturprüfung
   wirklich läuft. Andernfalls gilt der HWM-Nachweis als NICHT PRÜFBAR, nicht
   als bestanden.
-- Eine gültige Health-Detail-Autorisierung und ein Browser-Testkonto sind
-  verfügbar. Secrets, Passwörter, vollständige `.env`-Inhalte und
+- Falls noch kein HWM existiert, ihn **vor dem Quellbackup** bewusst erzeugen:
+  `docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain`.
+  Der Lauf muss vollständig grün sein, erst dann ist der Anker geschrieben.
+- Ein `super_admin`-Browser-Testkonto für den Session-Zugriff auf den
+  Health-Detail-Payload ist verfügbar. Secrets, Passwörter, vollständige `.env`-Inhalte und
   personenbezogene Stichprobendaten werden nie ins Drill-Protokoll kopiert.
+- Die Off-Site-Rückholung wurde von einem **dritten Rechner** ohne Zutun des
+  Prod-Hosts getestet; Zugangsmaterial und `known_hosts` stammen aus dem
+  getrennt gesicherten Recovery-Bestand.
 
 #### Schrittfolge
 
@@ -361,14 +417,15 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    scp "user@host:/path/*.enc" "user@host:/path/*.hmac" "user@host:/path/audit_hwm-*.json" "$BACKUP_HOST_DIR/daily/"
    ```
 
-   DB-/Medien-Dateien und ihre `.hmac`-Sidecars müssen denselben
-   Backup-Zeitstempel tragen. Die HWM-Datei folgt dem separaten Namen
-   `audit_hwm-<timestamp>.json`.
-4. [§6 Schritt 4 und 5](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
-   fortsetzen: Welt-B-DB und Medien über `restore.sh` aus dem gerade befüllten
-   Verzeichnis wiederherstellen, Migrationen ausführen und den Stack samt
-   Hintergrundjobs starten. `restore.sh` überträgt den Medien-Tarball per
-   `docker compose exec web`; deshalb vor seinem Aufruf den noch nicht
+   DB-/Medien-Dateien, ihre `.hmac`-Sidecars und die HWM-Datei müssen denselben
+   Backup-Zeitstempel tragen. Vor dem Weitergehen genau diesen Fünfersatz
+   festhalten; Dateinamensgleichheit ersetzt weder Schreibruhe noch den späteren
+   Inhaltsabgleich.
+4. [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
+   fortsetzen: Ziel-DB frisch und leer anlegen, Pfade abgleichen und Welt-B-DB
+   sowie Medien über `restore.sh` aus dem gerade befüllten Verzeichnis
+   wiederherstellen. `restore.sh` überträgt den Medien-Tarball per
+   `docker compose -f docker-compose.prod.yml exec web`; deshalb vor seinem Aufruf den noch nicht
    öffentlich über Caddy erreichbaren Web-Container als Transportziel starten:
 
    ```bash
@@ -388,12 +445,19 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
                             "$BACKUP_HOST_DIR/daily/anlaufstelle_2026-09-03_020000_media.tar.gz.enc"
    ```
 
+   Danach jede Anhangzeile gegen Datei, Dateiname und Größe am App-`MEDIA_ROOT`
+   abgleichen. Anschließend [§6 Schritt 4b](#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)
+   mit `audit_hwm-2026-09-03_020000.json` aus genau diesem Satz ausführen. Erst
+   nach grüner Audit-Kettenprüfung Migrationen und Stack nach §6 Schritt 5
+   starten.
+
 5. Die fünf Infrastruktur- und Datenprüfungen aus
    [§7](#7-smoke-verifikation-nach-restore) in der dort vorgegebenen Reihenfolge
-   ausführen. Beim Health-Aufruf mit Detail-Autorisierung müssen mindestens
-   `status: ok` und `encryption_key: ok` erscheinen. Danach im Browser einen
-   wiederhergestellten Datensatz mit verschlüsseltem Feld öffnen und den
-   lesbaren Klartext bestätigen, ohne ihn im Protokoll wiederzugeben.
+   ausführen. Beim Health-Aufruf in der angemeldeten `super_admin`-Session müssen
+   mindestens `status: ok` und `encryption_key: ok` erscheinen. Danach je
+   benötigter Schlüsselgeneration einen wiederhergestellten Datensatz öffnen
+   und einen echten Vault-Anhang herunterladen; nur Metadaten und Ergebnis,
+   keine Inhalte protokollieren.
 6. Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
    als Root gegen das Prod-Format fahren. Dieser Aufruf ist unverändert aus dem
    Skript-Header und dem Operations-Runbook übernommen. Der Drill liest die
@@ -408,9 +472,10 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
 
    Der Lauf muss neben HMAC, Tabellen-Stichproben, Vollständigkeitsvergleich,
    RLS und `auditlog_immutable` ausdrücklich
-   `Schritt 2b: Audit-HWM-Signatur verifiziert` melden. Schritt 2b lädt die jüngste
-   `audit_hwm-*.json` über `HighWaterMarkStore.load()`; eine fehlende Datei,
-   eine manipulierte Signatur oder ein falscher `DJANGO_AUDIT_HASH_KEY` ist ein
+   `Schritt 2b: Audit-HWM-Signatur verifiziert` melden. Schritt 2b bindet die
+   `audit_hwm-<timestamp>.json` desselben Restore-Satzes ein und lädt sie über
+   `HighWaterMarkStore.load()`; eine fehlende oder abweichende Datei, eine
+   manipulierte Signatur oder ein falscher `DJANGO_AUDIT_HASH_KEY` ist ein
    `FAIL`. Der HWM-Schritt wird nur bei konfiguriertem
    `DJANGO_AUDIT_HWM_PATH` ausgeführt. Diese Konfiguration bleibt eine harte
    Vorbedingung und darf nicht durch ein grünes Ergebnis der übrigen Schritte
@@ -428,9 +493,15 @@ Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind
   Host-Pfad `${BACKUP_HOST_DIR:-./backups}/daily` an.
 - `restore.sh`, Migrationen und Stack-Start endeten erfolgreich; DB-Rollen und
   RLS entsprechen [§7](#7-smoke-verifikation-nach-restore).
+- Die Tabellenzahlen entsprechen dem **vor dem Backup** erhobenen Referenzstand.
+  Der Drill-Schritt 3b vergleicht nur vier Tabellen mit einer Live-DB und ist
+  auf einem frischen Host kein Vollständigkeitsnachweis.
 - Health meldet `status: ok` und `encryption_key: ok`; eine verschlüsselte
-  Datenstichprobe ist im Browser lesbar und die erwartete Facility-Anzahl ist
-  vorhanden.
+  Datenstichprobe je benötigter Schlüsselgeneration ist im Browser lesbar. Ein
+  echter Vault-Anhang lässt sich herunterladen; Dateiname und Größe stimmen mit
+  den DB-Metadaten überein. Jedes `degraded` bleibt ein `FAIL`.
+- Jede Anhangzeile besitzt ihre Datei am App-`MEDIA_ROOT`; fehlt eine Datei, ist
+  der Restore unvollständig.
 - `restore-drill.sh --prod` endet mit Exit-Code 0, meldet keine `FAIL`-Zeile und
   nennt in seiner Banner-Zeile dasselbe Host-Verzeichnis wie Schritt 3. Er
   bestätigt insbesondere Schritt 2b (HWM-Signatur), Schritt 3b
@@ -471,9 +542,12 @@ Drill-Start / Service wieder erreichbar / Drill-Ende:
 
 Backup-Quelle und Off-Site-Verfahren (rclone / S3 / scp):
 Backup-Zeitstempel:
+Referenzstand vor Backup (Tabelle = Zeilen):
+Schreibruhe von / bis:
 DB + DB-HMAC vorhanden: JA / NEIN
 Medien + Medien-HMAC vorhanden: JA / NEIN
 Audit-HWM vorhanden: JA / NEIN
+Off-Site-Rückholung auf drittem Rechner ohne Prod-Host: OK / FAIL
 DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
 DJANGO_AUDIT_HWM_PATH in rekonstruierter .env gesetzt: JA / NEIN
 Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
@@ -482,13 +556,16 @@ Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
 §6 Schritt 2 Release + .env: OK / FAIL — Notiz:
 §6 Schritt 3 DB-Rollen-Init: OK / FAIL — Notiz:
 §6 Schritt 4 DB-/Medien-Restore: OK / FAIL — Notiz:
+§6 Schritt 4b HWM-Rückspielung + Kettenprüfung: OK / FAIL — Notiz:
 §6 Schritt 5 Migrationen + Stack + Jobs: OK / FAIL — Notiz:
 
 §7 DB-Rollen: OK / FAIL — Nachweis:
 §7 RLS: OK / FAIL — Anzahl:
 §7 Health status / encryption_key: OK / FAIL — Werte:
 §7 offene Migrationen: OK / FAIL — Anzahl:
-§7 Daten-/Verschlüsselungsstichprobe: OK / FAIL — keine Inhalte notieren
+§7 Datenstichprobe je Schlüsselgeneration: OK / FAIL — keine Inhalte notieren
+§7 Vault-Download, Dateiname und Größe: OK / FAIL — keine Inhalte notieren
+§7 DB-/Medien-Vollständigkeit am App-Pfad: OK / FAIL
 
 Vom Drill gemeldetes BACKUP_HOST_DIR/daily:
 restore-drill.sh --prod Exit-Code:
@@ -496,10 +573,18 @@ Schritt 1 Wegwerf-DB angelegt: OK / FAIL
 Schritt 2 HMAC/Restore: OK / FAIL
 Schritt 2b Audit-HWM-Signatur: OK / FAIL / NICHT PRÜFBAR
 Schritt 3 Tabellen-Stichproben: OK / FAIL
-Schritt 3b Vollständigkeits-Guard: OK / FAIL
+Schritt 3b Vier-Tabellen-Abgleich gegen Live-DB: OK / FAIL
 Schritt 4 RLS: OK / FAIL
 Schritt 5 auditlog_immutable: OK / FAIL
+Schritt 6 Medien-HMAC und Probeentpackung: OK / FAIL
 Schritt 7 RESTORE_VERIFIED: OK / FAIL
+
+Erfolgskriterium Off-Site-Rückholung: OK / FAIL
+Erfolgskriterium Referenz-Zeilenabgleich: OK / FAIL
+Erfolgskriterium Health + Schlüsselgenerationen + Vault-Download: OK / FAIL
+Erfolgskriterium DB-/Medien-Konsistenz: OK / FAIL
+Erfolgskriterium vollständiger Restore-Drill: OK / FAIL
+Erfolgskriterium RTO/RPO: OK / FAIL
 
 Gemessene RPO / Ziel ≤ 24 h:
 Gemessene RTO / Richtwert 2–4 h:

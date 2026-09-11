@@ -97,7 +97,7 @@ docker compose -f docker-compose.prod.yml logs web --tail=50
 
 # Health-Check
 curl -sf https://$DOMAIN/health/
-# Erwartete Antwort: {"status": "ok", "database": "connected", "version": "..."}
+# Erwartete anonyme Antwort: {"status": "ok"}
 
 # Migrations-Status verifizieren
 docker compose -f docker-compose.prod.yml exec web \
@@ -128,7 +128,7 @@ Invarianten, die fuer **jeden** Stack gelten:
 - `web` laedt **kein** `env_file`, sondern eine explizite Runtime-Allowlist (Refs #1962). Unter den **Anwendungsdiensten** sehen Admin-/Bootstrap-Secrets nur `maintenance` und `cron`; der `db`-Service bekommt sie zwangslaeufig ebenfalls (`POSTGRES_PASSWORD`, `APP_DB_PASSWORD`, `ADMIN_DB_PASSWORD`) — er legt die Rollen ja an. Er erhaelt aber ausschliesslich die dafuer noetigen Werte und keine Anwendungs-Secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY*`).
 
 - Auf **staging** verifiziert zusaetzlich der `web`-Healthcheck bei jedem Start und danach laufend die **tatsaechliche** Verbindungsrolle (`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`). Der reine HTTP-Check taugte dafuer nicht: `/health/` meldet bei bypassender Rolle zwar `degraded`, antwortet aber weiter mit HTTP 200, und das Detailfeld `db_role_posture` steht nur im Token-/Session-Payload. Refs #2086.
-- Auf **staging** ist daran auch die **Exposition** gebunden, nicht nur die Anzeige: `caddy` haengt mit `depends_on: {condition: service_healthy, restart: true}` an `web` (Compose >= v2.17 — ohne `restart: true` liesse Compose einen bereits laufenden Caddy nach einem `web`-Update unberuehrt weiterrouten), und `Caddyfile.staging` prueft den Upstream **aktiv** auf `db_role_posture` und schickt dafuer `X-Health-Token`. `DJANGO_HEALTH_DETAIL_TOKEN` ist auf diesem Stack deshalb Pflicht — und zwar haerter als "sonst 502": der `{$…}`-Platzhalter wird beim **Adaptieren** der Caddyfile ersetzt, ohne Wert bricht die Adaption ab und **`caddy` startet gar nicht** (verifiziert gegen `caddy:2-alpine` v2.11.4). Die Diagnose steht dann in `docker compose logs caddy`. **Betriebsregel:** nach jeder Aenderung an `web` den ganzen Stack anfassen (`docker compose ... up -d`), nicht nur `up -d web` — sonst wird Caddy nicht neu gestartet und das Gate greift nicht.
+- Auf **staging** ist daran auch die **Exposition** gebunden, nicht nur die Anzeige: `caddy` haengt mit `depends_on: {condition: service_healthy, restart: true}` an `web` (Compose >= v2.17 — ohne `restart: true` liesse Compose einen bereits laufenden Caddy nach einem `web`-Update unberuehrt weiterrouten), und `Caddyfile.staging` prueft den Upstream **aktiv** auf `db_role_posture` und schickt dafuer `X-Health-Token`. `DJANGO_HEALTH_DETAIL_TOKEN` ist auf diesem Stack deshalb Pflicht — und zwar haerter als "sonst 502": der `{$…}`-Platzhalter wird beim **Adaptieren** der Caddyfile ersetzt, ohne Wert bricht die Adaption ab und **`caddy` startet gar nicht** (verifiziert gegen `caddy:2-alpine` v2.11.4). Die Diagnose steht dann in `docker compose -f docker-compose.staging.yml logs caddy`. **Betriebsregel:** nach jeder Aenderung an `web` den ganzen Stack anfassen (`docker compose -f docker-compose.staging.yml up -d`), nicht nur `up -d web` — sonst wird Caddy nicht neu gestartet und das Gate greift nicht.
 
 Bis #2086 war `docker-compose.staging.yml` die einzige Ausnahme: ohne Init-Mount, mit `env_file` auf `db` **und** `web`. Der Webprozess verband dort als Bootstrap-Superuser, `FORCE ROW LEVEL SECURITY` war wirkungslos, und Staging validierte genau die Fehlerklasse nicht, fuer die es gedacht ist. Der Guard `TestStagingStackRoleSeparation` in `src/tests/test_architecture_guards_ops.py` pinnt den neuen Zustand.
 
@@ -252,7 +252,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 > **⚠️ Das Backup laeuft weiterhin NICHT automatisch.** Der Sidecar deckt alle Jobs
 > ab, die als `manage.py`-Kommando im Container laufen. `backup.sh` faehrt dagegen
-> `docker compose exec` (pg_dump im db-Container, tar im web-Container) und
+> `docker compose -f docker-compose.prod.yml exec` (pg_dump im db-Container, tar im web-Container) und
 > braeuchte dafuer den Docker-Socket im Sidecar — das waere root-aequivalent auf dem
 > Host und wuerde die Runtime-Haertung des gesamten Stacks (`cap_drop: ALL`,
 > `no-new-privileges`, `read_only`) entwerten. Backup bleibt daher **ein**
@@ -289,13 +289,14 @@ Der `cron`-Service in
 faehrt dasselbe App-Image wie `web`, startet darin aber statt Gunicorn den
 Cron-Daemon **supercronic** und arbeitet die Job-Definitionen aus
 [`deploy/crontab`](https://github.com/anlaufstelle/app/blob/main/deploy/crontab)
-ab (read-only in den Container gemountet). Nach `docker compose up -d` laufen
+ab (read-only in den Container gemountet). Nach
+`docker compose -f docker-compose.prod.yml up -d` laufen
 Retention, Audit-Ketten-Verifikation, Snapshots, Orphan-Cleanup,
 Session-Bereinigung, Breach-Detection und MV-Refresh ohne weitere Einrichtung.
 
 **Warum supercronic und nicht `cron`/`crond`:** klassische Cron-Daemons
 daemonisieren sich weg (Container haette keinen Vordergrundprozess), loggen nach
-Syslog statt stdout (kein `docker compose logs`) und brauchen setuid-Bits, die
+Syslog statt stdout (kein `docker compose -f docker-compose.prod.yml logs`) und brauchen setuid-Bits, die
 mit `no-new-privileges` + `cap_drop: ALL` kollidieren. supercronic ist ein
 statisch gelinktes Go-Binary, das genau diese Punkte adressiert. Es kommt
 versions- und sha256-gepinnt ins Image
@@ -348,7 +349,7 @@ synchron.
 
 Zwei Jobs bleiben Host-seitig, weil sie im Sidecar nicht laufen koennen:
 
-- **`backup.sh`** — braucht `docker compose exec` (pg_dump im db-Container, tar
+- **`backup.sh`** — braucht `docker compose -f docker-compose.prod.yml exec` (pg_dump im db-Container, tar
   im web-Container) und damit den Docker-Socket. Ein Socket-Mount im Sidecar
   waere root-aequivalent auf dem Host.
 - **Invite-Token-Audit / Health-Check** — `psql`-Abfrage bzw. externer
@@ -365,10 +366,30 @@ nach `daily/`, `weekly/` und `monthly/`; der Prod-Zweig von
 bewusst ignoriert. Compose mountet `BACKUP_HOST_DIR` nach `BACKUP_DIR`,
 damit `/health/` dieselben Dateien sieht.
 
+**Voraussetzungen fuer den Cron-Eintrag:** Die folgenden Beispiele sind
+ausdruecklich fuer `sudo crontab -e`, also die fuenf Zeitfelder der
+**Root-Crontab**. Root wird empfohlen, weil `backup.sh` den Docker-Socket
+benoetigt. Nicht unveraendert nach `/etc/crontab` kopieren; dort waere nach den
+fuenf Zeitfeldern ein sechstes Feld fuer das Ausfuehrungskonto erforderlich.
+Vorher Host-Zeitzone und Cron-Dienst einrichten sowie die Logdateien mit
+passenden Rechten anlegen:
+
+```bash
+sudo timedatectl set-timezone Europe/Berlin
+sudo systemctl enable --now cron
+sudo install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-backup.log
+sudo install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-invites.log
+sudo install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-health.log
+```
+
+Fuer alle `anlaufstelle-*.log` unter `/var/log` eine Logrotate-Regel mit
+regelmaessiger Rotation, Komprimierung und begrenzter Aufbewahrung einrichten;
+nach Aenderungen `sudo logrotate --debug /etc/logrotate.conf` pruefen.
+
 ```cron
 # Anlaufstelle – Host-Cron (Backup + Hygiene). Alles Weitere macht der
 # cron-Sidecar aus §3.2 — diese Eintraege NICHT dupliziert einrichten!
-# In /etc/crontab oder via `crontab -e` auf dem Host einrichten
+# Via `sudo crontab -e` in der Root-Crontab einrichten (fuenf Zeitfelder)
 
 # Backup (taeglich 02:00, vor der Retention im Sidecar um 03:00)
 0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
@@ -392,10 +413,13 @@ setzen oder die Host-Cron-Zeit entsprechend vorziehen.
 
 Relevant, wenn der Stack ohne `docker-compose.prod.yml` betrieben wird (z. B.
 k8s, eigene Orchestrierung) und deshalb kein `cron`-Service existiert.
+Auch diese Alternative setzt den laufenden Cron-Dienst, die richtige
+Host-Zeitzone, vorab angelegte beschreibbare Logdateien und eine Logrotate-Regel
+voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
 
 ```cron
 # Anlaufstelle – Operative Cron-Jobs (Alternative: ohne cron-Sidecar)
-# In /etc/crontab oder via `crontab -e` auf dem Host einrichten
+# Via `sudo crontab -e` in der Root-Crontab einrichten (fuenf Zeitfelder)
 
 # Backup (taeglich 02:00, vor Retention)
 0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
@@ -512,7 +536,7 @@ docker compose -f docker-compose.prod.yml exec web \
 # Teilfehler (Refs #2118): ein Fehler in einer Einrichtung oder einem Monat
 # reisst den Lauf nicht mehr ab. Jede betroffene Einrichtung/jeder Monat
 # erscheint als Fehlerzeile im Log (Host-Cron: /var/log/anlaufstelle-
-# snapshots.log; Sidecar: `docker compose logs cron` bzw. Anwendungs-Log) und
+# snapshots.log; Sidecar: `docker compose -f docker-compose.prod.yml logs cron` bzw. Anwendungs-Log) und
 # auf stderr. Der Lauf selbst endet danach mit Exit-Code != 0 und einer
 # Zusammenfassung — ein rot endender Cron-Lauf bedeutet also "mindestens ein
 # Snapshot fehlt", nicht "alles fehlgeschlagen". Nach Behebung der Ursache den
@@ -1129,7 +1153,7 @@ make maintenance-off
 
 ### 6.6a Off-Site-Backup-Sync (Refs #738)
 
-Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` synct optional nach jeder Rotation in ein Off-Site-Ziel.
+Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` uebertraegt optional nach jeder Rotation die Dateien des aktuellen Laufs in ein Off-Site-Ziel.
 
 ```bash
 # .env: Off-Site-Ziel konfigurieren (eines von drei Formaten)
@@ -1142,7 +1166,20 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 **Empfohlen:** Object-Lock / Write-Once-Policy am Bucket aktivieren — Ransomware kann verschluesselte Backups dann nicht ueberschreiben.
 
-**Failure-Mode** (Refs #797): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-Job wird damit rot und der Operator sieht den Vorfall sofort, ohne die Logs scannen zu muessen. Erfolgreiche Laeufe setzen den Counter zurueck.
+**Was am Ziel landet:** rclone und S3 schreiben den aktuellen Satz unter
+`<ziel>/daily`; scp schreibt ihn unmittelbar unter `<ziel>/`. `weekly/` und
+`monthly/` werden in keiner Variante uebertragen. rclone nutzt `copy`, S3
+`sync` ohne `--delete`, und scp kopiert nur den neuen Satz. Die lokale Rotation
+wird daher nicht am Ziel gespiegelt. Aufbewahrung, Loeschung und Object Lock
+sind als eigene **Ziel-Policy** einzurichten und zu kontrollieren.
+
+Credentials muessen dem Konto zur Verfuegung stehen, unter dem `backup.sh`
+tatsaechlich laeuft. Fuer scp gehoeren dazu die SSH-Identitaet bzw. der geladene
+SSH-Agent und der `known_hosts`-Eintrag dieses Kontos; fuer rclone bzw. S3 die
+passende Konfiguration und Credentials. Welches Konto ausfuehrt, legt die
+Installation fest.
+
+**Failure-Mode** (Refs #797): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-Job wird damit rot. Der erste Fehler endet bewusst noch mit Exit-Code 0. Deshalb den **ersten Lauf nach der Einrichtung am Ziel selbst** pruefen: DB, DB-HMAC, Medienarchiv, Medien-HMAC und Audit-HWM des Zeitstempels muessen am variantenrichtigen Pfad liegen. Der Exit-Code allein ist kein Erfolgsnachweis. Erfolgreiche Laeufe setzen den Counter zurueck.
 
 **Sentry-Hook (optional):** Wenn `SENTRY_DSN` UND ein `BACKUP_SENTRY_HOOK`-Skript gesetzt sind, ruft `backup.sh` den Hook bei jedem Off-Site-Fehler auf (Argumente: Beschreibung, Off-Site-Ziel). Der Hook ist freie Operator-Wahl — z.B. `sentry-cli send-event` oder ein eigenes `curl`-Skript. Ohne Hook bleibt es bei Log + Exit-Code.
 
@@ -1179,9 +1216,9 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzw
 | 0 | Neuestes Backup im format-spezifischen Verzeichnis finden (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
-| 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: neueste `audit_hwm-*.json` in den Drill-Container kopieren und die HMAC-Signatur laden; fehlend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Ist die Variable nicht gesetzt, wird Schritt 2b mit `INFO` uebersprungen und der Drill kann mit Exit-Code 0 enden ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
+| 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: die zum gewaehlten DB-Backup-Zeitstempel gehoerende `audit_hwm-<Zeitstempel>.json` per Stream in den gehaerteten Drill-Container schreiben und die HMAC-Signatur laden; fehlend, abweichend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Ist die Variable nicht gesetzt, wird Schritt 2b mit `INFO` uebersprungen und der Drill kann mit Exit-Code 0 enden ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
 | 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts abfragbar? |
-| 3b | **Vollstaendigkeits-Guard (fail-closed):** Zeilenabgleich der kritischen RLS-Tabellen (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Faengt den unvollstaendigen `--prod`-Restore ab, den der `psql`-Exit-Code (ohne `ON_ERROR_STOP`) verschluckt (Refs #1336) |
+| 3b | Begrenzter Zeilenabgleich der vier RLS-Tabellen `core_client`, `core_event`, `core_workitem` und `core_auditlog` zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Der Vergleich deckt weder weitere Tabellen noch Teilmengen ab und ist auf einem frischen Host wirkungslos. |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
 | 6 | Nur `--prod`: Zum gewählten DB-Backup gehörendes Medienarchiv per HMAC prüfen, in einem Durchlauf in ein Host-Tempverzeichnis probeentpacken und das dabei erzeugte Tar-Listing mit der Probeentpackung vergleichen; Ausgabe `Medien: N Dateien, M Bytes, HMAC ok`. Vorher müssen dort ungefähr Archivgröße × 2 frei sein; `TMPDIR=/pfad/mit/platz` lenkt den Schritt auf ein anderes Dateisystem. Fehlt das passende Archiv, wird der Schritt als zulässiger DB-only-Fall mit `INFO` übersprungen. Tempverzeichnis und Wegwerf-DB werden via Trap aufgeräumt. |
@@ -1189,7 +1226,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzw
 
 Output: ein `OK` / `FAIL`-Eintrag pro ausgeführtem Schritt; optionale übersprungene Prüfungen melden `INFO`. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
 
-> **Benigne Ausnahme beim Restore (Schritt 2):** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitert (`--dev`: `pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache, nicht die Nutzdaten — der mv-refresh-Timer baut ihn stündlich neu. Der `--dev`-Drill meldet das als `OK … MV-Refresh übersprungen (benigne)` und schlägt nur bei **anderen** Fehlern fehl. Im `--prod`-Zweig laeuft `psql` bewusst ohne `ON_ERROR_STOP` (derselbe MV-Refresh-Fehler wird toleriert), wodurch der Exit-Code allein keine Vollstaendigkeit belegt — den fail-closed-Beweis liefert der Zeilenabgleich in **Schritt 3b**, bevor der Restore als verifiziert markiert wird.
+> **Benigne Ausnahme beim Restore (Schritt 2):** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitert (`--dev`: `pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache, nicht die Nutzdaten — der mv-refresh-Timer baut ihn stündlich neu. Der `--dev`-Drill meldet das als `OK … MV-Refresh übersprungen (benigne)` und schlägt nur bei **anderen** Fehlern fehl. Im `--prod`-Zweig laeuft `psql` bewusst ohne `ON_ERROR_STOP` (derselbe MV-Refresh-Fehler wird toleriert). **Der Exit-Code belegt keine Vollstaendigkeit; Schritt 3b vergleicht nur vier Tabellen gegen die Live-DB und ist auf einem frischen Host wirkungslos.** Fuer einen Vollstaendigkeitsnachweis die Restore-Zahlen mit einem vor dem Backup erhobenen Referenzstand vergleichen.
 
 **Compliance-Marker (Refs #919):** Schritt 7 schreibt bei Erfolg automatisch einen `RESTORE_VERIFIED`-AuditLog-Eintrag (`manage.py mark_restore_verified`), den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
 
@@ -1250,9 +1287,27 @@ DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json
 
 Der Pfad liegt bewusst neben `MEDIA_ROOT=/data/media`: Er ist damit fuer `cron`/`maintenance` unter dem schreibgeschuetzten Container-Dateisystem persistent beschreibbar, wird aber nicht mit Nutzer-Uploads vermischt. Der `web`-Dienst liest die Datei nicht und braucht die Variable nicht in seiner expliziten Env-Allowlist.
 
-Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je Kette. Die Datei ist mit `DJANGO_AUDIT_HASH_KEY` HMAC-signiert und enthaelt keine Klartext-Falldaten; eine zusaetzliche Verschluesselung ist deshalb nicht noetig. `scripts/ops/backup.sh` exportiert sie per `docker compose exec -T cron cat …` als `backups/daily/audit_hwm-<Zeitstempel>.json`, rotiert sie mit DB-/Medienbackups und nimmt sie in alle drei Off-Site-Wege (rclone, S3, SCP) auf. Ist der Pfad nicht gesetzt oder die Datei noch nicht vorhanden, bleibt das DB-/Medienbackup gueltig, aber das Skript protokolliert den fehlenden HWM-Anker.
+Den ersten Anker sofort nach der Einrichtung und **vor dem ersten Backup**
+erzeugen; nicht bis zum naechsten Sidecar-Termin warten:
 
-Ist `DJANGO_AUDIT_HWM_PATH` gesetzt, kopiert `scripts/ops/restore-drill.sh --prod` die neueste HWM-Datei nach `/tmp` des Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine dann fehlende Datei oder ungueltige Signatur erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird. Ist die Variable nicht gesetzt, ueberspringt der Drill Schritt 2b mit einer `INFO`-Zeile; das allein laesst Exit-Code 0 und den Restore-Marker weiterhin zu.
+```bash
+docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
+```
+
+Nur ein vollstaendig gruener Lauf schreibt den Anker. Bei einem `FAIL` zuerst die
+Audit-Kette klaeren und kein Backup als vollstaendig verankert behandeln.
+
+Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je Kette. Die Datei ist mit `DJANGO_AUDIT_HASH_KEY` HMAC-signiert und enthaelt keine Klartext-Falldaten; eine zusaetzliche Verschluesselung ist deshalb nicht noetig. `scripts/ops/backup.sh` exportiert sie per `docker compose -f docker-compose.prod.yml exec -T cron cat …` als `backups/daily/audit_hwm-<Zeitstempel>.json`, rotiert sie mit DB-/Medienbackups und nimmt sie in alle drei Off-Site-Wege (rclone, S3, SCP) auf. Ist der Pfad nicht gesetzt oder die Datei noch nicht vorhanden, bleibt das DB-/Medienbackup gueltig, aber das Skript protokolliert den fehlenden HWM-Anker.
+
+Ist `DJANGO_AUDIT_HWM_PATH` gesetzt, streamt `scripts/ops/restore-drill.sh --prod` die zum gewaehlten DB-Backup-Zeitstempel gehoerende HWM-Datei nach `/tmp` des gehaerteten Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine fehlende, zeitlich abweichende oder ungueltig signierte Datei erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird. Ist die Variable nicht gesetzt, ueberspringt der Drill Schritt 2b mit einer `INFO`-Zeile; das allein laesst Exit-Code 0 und den Restore-Marker weiterhin zu.
+
+Beim echten Recovery gilt eine strengere Reihenfolge: `cron` stoppen, das
+unveraenderte Off-Site-Original des gewaehlten Restore-Satzes per
+`maintenance`-One-Shot an `DJANGO_AUDIT_HWM_PATH` streamen, danach
+`verify_audit_chain` vollstaendig gruen ausfuehren und **erst dann** die Jobs
+starten. Der erste gruene Lauf schreibt die Betriebsdatei fort; das
+Off-Site-Original deshalb separat und unveraendert aufbewahren. Die ausfuehrbare
+Schrittfolge steht in [disaster-recovery.md § 6 Schritt 4b](disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen).
 
 ---
 
@@ -1297,22 +1352,36 @@ Funde werden mit `reason=virus_detected` und der gemeldeten Signatur geloggt.
 sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
 `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
-beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
-liest den JSON-`status` und meldet bei `degraded` ungesund — k8s oder eigene
-Orchestrierung sehen den Vorfall, der Last-Balancer reisst den Pod aber nicht raus.
+beim Upload, nicht am Healthcheck). Der Prod-Stack ueberschreibt den
+JSON-auswertenden Image-Healthcheck mit einem reinen HTTP-Aufruf. Weil
+`degraded` weiterhin HTTP 200 liefert, kann der `web`-Container bei einem
+Scanner-Ausfall `healthy` bleiben. Externes Monitoring muss deshalb den
+Detail-Payload in einer autorisierten Session auswerten; der HTTP-Code allein
+erkennt den Ausfall nicht.
 
 ### 7.4 Datenbank-Updates (Signaturen)
 
-Das offizielle `clamav/clamav:stable`-Image aktualisiert die Signaturen
-automatisch über `freshclam` im Container. Persistenz erfolgt im
-benannten Volume `clamav-db`. Kein zusätzlicher Cron-Job notwendig.
+Das benannte Volume `clamav-db` persistiert den vorhandenen Signaturstand. Im
+ausgelieferten Prod-Stack haengt `clamav` jedoch ausschliesslich am isolierten
+internen Netz und erreicht die Update-Server nicht; ein automatischer
+`freshclam`-Erfolg ist daher **nicht** gegeben. Eine im Dashboard als veraltet
+gemeldete Signatur ist kein voruebergehender Anlaufzustand. Logs und Stand
+pruefen:
+
+```bash
+docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
+docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
+```
+
+Bis ein ausgehender Update-Pfad oder ein interner Signatur-Mirror eingerichtet
+ist, bleibt der Signaturstand eingefroren und der Betriebszustand offen.
 
 ### 7.5 Manueller Check
 
 ```bash
 # Daemon erreichbar?
 docker compose -f docker-compose.prod.yml exec web \
-  python -c "from core.services.virus_scan import ping; print(ping)"
+  python manage.py shell -c "from core.services.file_vault.virus_scan import ping; print(ping)"
 
 # EICAR-Test gegen den laufenden Scanner (manuell, nur zur Verifikation):
 docker compose -f docker-compose.prod.yml exec clamav \
