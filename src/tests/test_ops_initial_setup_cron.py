@@ -55,13 +55,16 @@ exit 0
 printf '%s\\n' "$*" >> "{sudo_log}"
 printf '%s' "${{TEST_ROOT_CRONTAB:-}}"
 exit 0
-""",
+        """,
     )
+    _write_executable(bindir / "stat", "#!/bin/sh\nprintf '1000 2750\\n'\n")
 
     compose = tmp_path / "docker-compose.probe.yml"
     compose.write_text("services: {}\n", encoding="utf-8")
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
     env_file = tmp_path / ".env.probe"
-    env_file.write_text("POSTGRES_USER=anlaufstelle\n", encoding="utf-8")
+    env_file.write_text(f"POSTGRES_USER=anlaufstelle\nBACKUP_HOST_DIR='{backup_dir}'\n", encoding="utf-8")
     result = subprocess.run(
         ["/bin/bash", str(SCRIPT)],
         capture_output=True,
@@ -93,7 +96,7 @@ def test_missing_backup_cron_warns_without_failing(tmp_path: Path) -> None:
 def test_current_user_backup_cron_suppresses_warning(tmp_path: Path) -> None:
     result, _ = _run_setup(
         tmp_path,
-        current_crontab="0 2 * * * /opt/anlaufstelle/scripts/ops/backup.sh\n",
+        current_crontab=f"0 2 * * * {REPO_ROOT}/scripts/ops/backup.sh\n",
     )
 
     assert result.returncode == 0, result.stderr
@@ -104,7 +107,7 @@ def test_current_user_backup_cron_suppresses_warning(tmp_path: Path) -> None:
 def test_root_backup_cron_suppresses_warning(tmp_path: Path) -> None:
     result, sudo_log = _run_setup(
         tmp_path,
-        root_crontab="0 2 * * * /opt/anlaufstelle/scripts/ops/backup.sh\n",
+        root_crontab=f"0 2 * * * {REPO_ROOT}/scripts/ops/backup.sh\n",
     )
 
     assert result.returncode == 0, result.stderr

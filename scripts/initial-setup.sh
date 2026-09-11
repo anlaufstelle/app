@@ -180,7 +180,24 @@ env_file_value() {
     printf '%s' "$value"
 }
 
-if grep -q 'DJANGO_HEALTH_DETAIL_TOKEN' "$COMPOSE_FILE"; then
+# Compose rendert hier bewusst nur den Caddy-Service. Damit entscheidet die
+# tatsaechliche, per YAML aufgeloeste Service-Umgebung statt eines zufaelligen
+# Variablennamens an anderer Stelle der Compose-Datei.
+caddy_requires_health_token() {
+    local caddy_config
+    caddy_config="$(compose config 2>/dev/null)" ||
+        fail "Caddy-Service aus der Compose-Datei konnte nicht ausgewertet werden: ${COMPOSE_FILE}"
+    awk '
+        $0 == "  caddy:" { in_caddy = 1; next }
+        in_caddy && /^  [^[:space:]]/ { in_caddy = 0 }
+        in_caddy && $0 == "    environment:" { in_environment = 1; next }
+        in_environment && /^    [^[:space:]]/ { in_environment = 0 }
+        in_environment && /^      DJANGO_HEALTH_DETAIL_TOKEN:/ { found = 1 }
+        END { exit(found ? 0 : 1) }
+    ' <<<"$caddy_config"
+}
+
+if caddy_requires_health_token; then
     health_token="$(env_file_value DJANGO_HEALTH_DETAIL_TOKEN "$ENV_FILE")"
     # Reiner Whitespace ist kein brauchbares Token — genauso behandeln wie leer.
     [[ -n "${health_token//[[:space:]]/}" ]] ||
@@ -193,6 +210,25 @@ fi
 info "Compose-Datei: ${COMPOSE_FILE}"
 info "Env-Datei:     ${ENV_FILE}"
 
+# Ein fester Top-Level-Compose-Name trennt neue Dev-/Prod-Volumes. Bei einem
+# Upgrade kann dadurch ein unter dem frueheren Verzeichnisnamen angelegtes
+# pgdata-Volume aus dem aktiven Projekt fallen. Die Daten bleiben erhalten;
+# der Betreiber muss aber den bisherigen Projektnamen explizit setzen.
+active_project_name="$(compose config 2>/dev/null | awk '$1 == "name:" { print $2; exit }')"
+if [[ -n "$active_project_name" ]]; then
+    foreign_pgdata_volume=""
+    while IFS= read -r volume_name; do
+        if [[ "$volume_name" == *_pgdata && "$volume_name" != "${active_project_name}_pgdata" ]]; then
+            foreign_pgdata_volume="$volume_name"
+            break
+        fi
+    done < <(docker volume ls --format '{{.Name}}' 2>/dev/null || true)
+    if [[ -n "$foreign_pgdata_volume" ]]; then
+        warn "Volume ${foreign_pgdata_volume} gehoert nicht zum aktiven Compose-Projekt ${active_project_name}."
+        warn "Bestandsinstallation: bisherigen Projektnamen in COMPOSE_PROJECT_NAME eintragen (docker volume ls | grep pgdata)."
+    fi
+fi
+
 # Der read-only Mount im web-Container wird von appuser (UID/GID 1000)
 # traversiert. Das Backupkonto bleibt Eigentuemer und damit schreibberechtigt;
 # fuer appuser gibt die Gruppe nur Lesen/Durchqueren frei. Keine Weltrechte.
@@ -203,14 +239,30 @@ if [[ "$backup_host_dir" != /* ]]; then
     backup_host_dir="${compose_dir}/${backup_host_dir}"
 fi
 backup_owner="$(id -un)"
-backup_group=1000
-if [[ "$(id -u)" == "1000" ]]; then
-    # appuser hat dieselbe UID und kann bereits ueber die Owner-Rechte lesen;
-    # die aufrufende Person muss dann nicht Mitglied der Gruppe 1000 sein.
-    backup_group="$(id -gn)"
+if [[ -d "$backup_host_dir" ]]; then
+    read -r backup_group backup_mode < <(stat -c '%g %a' "$backup_host_dir") ||
+        fail "Rechte des Backup-Verzeichnisses konnten nicht gelesen werden: ${backup_host_dir}"
+    backup_mode_value=$((8#$backup_mode))
+    backup_group_bits=$(((backup_mode_value >> 3) & 7))
+    backup_other_bits=$((backup_mode_value & 7))
+    if [[ "$backup_group" != "1000" || $((backup_group_bits & 5)) -ne 5 || $((backup_other_bits & 4)) -ne 0 ]]; then
+        fail "Backup-Verzeichnis hat nicht Gruppe 1000 mit Gruppen-r-x ohne Weltleserecht: ${backup_host_dir}
+  Korrigieren:
+  sudo chgrp 1000 \"${backup_host_dir}\" && sudo chmod 2750 \"${backup_host_dir}\""
+    fi
+else
+    can_set_app_group=0
+    if [[ "$(id -u)" == "0" ]] || [[ " $(id -G) " == *" 1000 "* ]]; then
+        can_set_app_group=1
+    fi
+    if [[ "$can_set_app_group" != "1" ]]; then
+        fail "Backup-Verzeichnis fehlt und das Betriebskonto darf Gruppe 1000 nicht setzen: ${backup_host_dir}
+  Vor dem erneuten Setup ausfuehren:
+  sudo install -d -m 2750 -o \"${backup_owner}\" -g 1000 \"${backup_host_dir}\""
+    fi
+    install -d -m 2750 -o "$backup_owner" -g 1000 "$backup_host_dir" ||
+        fail "Backup-Verzeichnis konnte nicht mit Modus 2750 fuer Backupkonto und appuser angelegt werden: ${backup_host_dir}"
 fi
-install -d -m 2750 -o "$backup_owner" -g "$backup_group" "$backup_host_dir" ||
-    fail "Backup-Verzeichnis konnte nicht mit Modus 2750 fuer Backupkonto und appuser angelegt werden: ${backup_host_dir}"
 info "Backup-Verzeichnis vorbereitet: ${backup_host_dir} (Modus 2750, fuer appuser UID 1000 lesbar)."
 
 # ---------------------------------------------------------------------------
@@ -291,10 +343,14 @@ step "4/6  Deployment-Settings pruefen (manage.py check --deploy)"
 # `docker-entrypoint.sh` fuehrt denselben Check bei jedem Web-Start
 # fail-closed aus (Security N6). Hier laeuft er zusaetzlich, damit die
 # Erstinbetriebnahme das Ergebnis sichtbar protokolliert.
-deploy_output="$({
+deploy_exit=0
+deploy_output="$(
     manage.py check --deploy 2>&1
-})"
+)" || deploy_exit=$?
 printf '%s\n' "$deploy_output"
+if [[ "$deploy_exit" != "0" ]]; then
+    fail "Deployment-Settings-Check fehlgeschlagen (Exit ${deploy_exit}); Diagnose siehe oben."
+fi
 deploy_issue_count="$(sed -n 's/^System check identified \([0-9][0-9]*\) issue.*/\1/p' <<<"$deploy_output" | tail -n1)"
 if [[ -n "$deploy_issue_count" && "$deploy_issue_count" != "0" ]]; then
     warn "${deploy_issue_count} Deployment-Warnungen gemeldet — Ausgabe oben pruefen."
@@ -349,8 +405,9 @@ super_admin_exists() {
 # erreichbar — in der Root-Crontab nach. Fehler/fehlende Rechte sind ein
 # Warnsignal, aber kein Grund, die ansonsten erfolgreiche Einrichtung
 # nachtraeglich abzubrechen.
-backup_cron_installed() {
+backup_cron_status() {
     local user_crontab="" root_crontab="" active_crontab=""
+    local line script_path saw_missing=0 saw_foreign=0
     if command -v crontab >/dev/null 2>&1; then
         user_crontab="$(crontab -l 2>/dev/null || true)"
     fi
@@ -358,7 +415,25 @@ backup_cron_installed() {
         root_crontab="$(sudo -n crontab -l -u root 2>/dev/null || true)"
     fi
     active_crontab="$(printf '%s\n%s\n' "$user_crontab" "$root_crontab" | grep -v '^[[:space:]]*#' || true)"
-    grep -Eq '(^|[[:space:]])/[^[:space:]]*/scripts/ops/backup\.sh([[:space:]]|$)' <<<"$active_crontab"
+    while IFS= read -r line; do
+        if [[ "$line" == *"cd ${PROJECT_DIR} && ./scripts/ops/backup.sh"* ]]; then
+            [[ -f "${PROJECT_DIR}/scripts/ops/backup.sh" && -x "${PROJECT_DIR}/scripts/ops/backup.sh" ]] && return 0
+            saw_missing=1
+            continue
+        fi
+        if [[ "$line" =~ (^|[[:space:]])(/[^[:space:]]*/scripts/ops/backup\.sh)([[:space:]]|$) ]]; then
+            script_path="${BASH_REMATCH[2]}"
+            if [[ ! -f "$script_path" || ! -x "$script_path" ]]; then
+                saw_missing=1
+                continue
+            fi
+            [[ "$script_path" == "${PROJECT_DIR}/scripts/ops/backup.sh" ]] && return 0
+            saw_foreign=1
+        fi
+    done <<<"$active_crontab"
+    [[ "$saw_foreign" == "1" ]] && return 2
+    [[ "$saw_missing" == "1" ]] && return 1
+    return 3
 }
 
 step "6/6  Super-Admin anlegen (Bootstrap, ADR-018)"
@@ -421,11 +496,14 @@ Naechste Schritte:
 
 EOF
 
-if backup_cron_installed; then
-    info "Host-Cron-Eintrag fuer backup.sh gefunden."
-else
-    warn "Kein Host-Cron-Eintrag fuer backup.sh gefunden — Backups nach docs/ops-runbook.md § 3.3 einrichten."
-fi
+cron_status=0
+backup_cron_status || cron_status=$?
+case "$cron_status" in
+    0) info "Host-Cron-Eintrag fuer backup.sh gefunden." ;;
+    1) warn "Cron-Ziel fuer backup.sh nicht gefunden oder nicht ausfuehrbar — Eintrag auf ${PROJECT_DIR}/scripts/ops/backup.sh korrigieren." ;;
+    2) warn "Cron-Eintrag zeigt auf fremde Installation — Eintrag auf ${PROJECT_DIR}/scripts/ops/backup.sh korrigieren." ;;
+    *) warn "Kein Host-Cron-Eintrag fuer backup.sh gefunden — Backups nach docs/ops-runbook.md § 3.3 einrichten." ;;
+esac
 
 cat <<EOF
 

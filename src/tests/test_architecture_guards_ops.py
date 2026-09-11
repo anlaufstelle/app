@@ -2917,10 +2917,8 @@ class TestInitialSetupGuardsTheHealthToken:
     def test_preflight_is_conditional_on_the_compose_file(self) -> None:
         body = self._SCRIPT.read_text(encoding="utf-8")
         assert self._TOKEN in body, f"scripts/initial-setup.sh prueft {self._TOKEN} nicht."
-        assert re.search(rf'grep -q [\'"]{self._TOKEN}[\'"] "\$COMPOSE_FILE"', body), (
-            "Der Preflight muss an der Compose-Datei haengen, nicht am Stack-Namen — "
-            "sonst schlaegt er auf prod falsch an."
-        )
+        assert 'caddy_config="$(compose config' in body
+        assert not re.search(rf'grep -q [\'"]{self._TOKEN}[\'"] "\$COMPOSE_FILE"', body)
 
     @staticmethod
     def _stub_docker(tmp_path: Path) -> tuple[Path, Path]:
@@ -2929,7 +2927,21 @@ class TestInitialSetupGuardsTheHealthToken:
         bindir.mkdir()
         log = tmp_path / "docker-argv.log"
         stub = bindir / "docker"
-        stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\nexit 0\n', encoding="utf-8")
+        stub.write_text(
+            f"""#!/bin/sh
+printf "%s\\n" "$*" >> "{log}"
+if [ "$1 $2" = "compose version" ]; then
+    exit 0
+fi
+case "$*" in
+    *" config")
+        printf 'services:\\n  caddy:\\n    environment:\\n      DJANGO_HEALTH_DETAIL_TOKEN: probe\\n'
+        ;;
+esac
+exit 0
+""",
+            encoding="utf-8",
+        )
         stub.chmod(0o755)
         return bindir, log
 

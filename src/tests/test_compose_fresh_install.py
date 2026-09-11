@@ -1,5 +1,10 @@
-"""Struktur-Guards fuer den ausgelieferten Fresh-Install-Compose-Stack."""
+"""Verhaltens-Guards fuer den ausgelieferten Fresh-Install-Compose-Stack."""
 
+import json
+import os
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -27,11 +32,17 @@ def test_cron_disables_the_inherited_image_healthcheck() -> None:
     assert cron["healthcheck"] == {"disable": True}
 
 
-def test_web_healthcheck_rejects_a_degraded_json_status() -> None:
+@pytest.mark.parametrize(("status", "expected_rc"), [("ok", 0), ("degraded", 1), ("error", 1)])
+def test_web_healthcheck_exit_code_follows_json_status(status: str, expected_rc: int) -> None:
     healthcheck = _load(PROD_PATH)["services"]["web"]["healthcheck"]["test"]
-    command = " ".join(healthcheck)
-    assert "json.load" in command
-    assert "['status'] == 'ok'" in command
+    python_command = shlex.split(healthcheck[1])
+    expression = python_command[2]
+    mock = (
+        "import io, urllib.request; "
+        f"urllib.request.urlopen = lambda *_: io.StringIO({json.dumps(json.dumps({'status': status}))}); "
+    )
+    result = subprocess.run([sys.executable, "-c", mock + expression], timeout=10)
+    assert result.returncode == expected_rc
 
 
 def test_clamav_has_a_dedicated_egress_network() -> None:
@@ -39,6 +50,9 @@ def test_clamav_has_a_dedicated_egress_network() -> None:
     assert set(compose["services"]["clamav"]["networks"]) == {"internal", "clamav-egress"}
     assert compose["networks"]["internal"]["internal"] is True
     assert compose["networks"]["clamav-egress"].get("internal", False) is False
+    assert [
+        name for name, service in compose["services"].items() if "clamav-egress" in (service.get("networks") or [])
+    ] == ["clamav"]
 
 
 def test_web_runtime_allowlist_contains_documented_non_secrets() -> None:
@@ -62,6 +76,37 @@ def test_web_runtime_allowlist_contains_documented_non_secrets() -> None:
         "DJANGO_HEALTH_DETAIL_TOKEN",
     }
     assert expected <= environment.keys()
+
+
+def test_web_runtime_allowlist_passes_operator_values_to_compose(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(ENV_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+    operator_values = {
+        "MAINTENANCE_RETRY_AFTER": "137",
+        "LOG_FORMAT": "json",
+        "DJANGO_HEALTH_DETAIL_TOKEN": "operator token;with-#",
+    }
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(PROD_PATH),
+            "--env-file",
+            str(env_file),
+            "config",
+            "--format",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, **operator_values},
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    web_environment = json.loads(result.stdout)["services"]["web"]["environment"]
+    for name, value in operator_values.items():
+        assert web_environment[name] == value
 
 
 def test_external_clamav_host_is_not_overwritten() -> None:
@@ -103,11 +148,50 @@ def test_env_example_uses_shell_safe_single_quoted_assignments() -> None:
             ), assignment
 
 
+def test_documented_operator_value_with_spaces_and_special_characters_is_shell_safe(tmp_path: Path) -> None:
+    example = next(
+        line.removeprefix("# ")
+        for line in ENV_PATH.read_text(encoding="utf-8").splitlines()
+        if line.startswith("# KEY=")
+    )
+    env_file = tmp_path / ".env.operator"
+    env_file.write_text(example + "\n", encoding="utf-8")
+    result = subprocess.run(
+        ["/bin/bash", "-c", 'set -eu; source "$1"; printf "%s" "$KEY"', "bash", str(env_file)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "Wert mit Leerzeichen; # und $"
+
+
 def test_env_example_avoids_default_compose_commands() -> None:
     text = ENV_PATH.read_text(encoding="utf-8")
     for line in text.splitlines():
         if "docker compose" in line:
             assert "-f docker-compose.prod.yml" in line, line
+
+
+def test_env_example_recreate_commands_keep_each_selected_override() -> None:
+    lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
+    labelled_commands = [
+        (line.removeprefix("# ").rstrip(":"), lines[index + 1].removeprefix("# "))
+        for index, line in enumerate(lines[:-1])
+        if line.startswith(("# Basis ohne", "# Mit Pflichtangaben"))
+    ]
+    assert len(labelled_commands) == 6
+    for label, command_line in labelled_commands:
+        command_parts = command_line.split(" && ")
+        assert all("-f docker-compose.prod.yml" in command for command in command_parts)
+        if label == "Mit Pflichtangaben":
+            assert all("-f docker-compose.prod.yml -f compose.legal.yml" in command for command in command_parts)
+        if label == "Mit Pflichtangaben und Settings-Override":
+            assert all(
+                "-f docker-compose.prod.yml -f compose.legal.yml -f compose.override.yml" in command
+                for command in command_parts
+            )
+    assert "Explizite -f-Listen laden compose.override.yml nicht automatisch" in ENV_PATH.read_text(encoding="utf-8")
 
 
 def test_env_example_defines_empty_redis_password_without_warning_noise() -> None:
