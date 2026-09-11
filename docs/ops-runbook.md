@@ -974,6 +974,12 @@ die Konfiguration korrigieren und die Web-Logs lesen:
 docker compose -f docker-compose.prod.yml logs web --tail=100
 ```
 
+Ergaenzend zeigt `/health/` mit authentifizierter Session oder `X-Health-Token`
+(Admin-Handbuch [§ 5.1](admin-guide.md#51-health-endpoint)) im Feld `smtp` den
+Wert `ok` oder `unreachable` — ein reiner TCP-Verbindungstest zu
+`EMAIL_HOST`/`EMAIL_PORT`, kein Authentifizierungs- oder Zustellnachweis;
+anonym bleibt das Feld unsichtbar.
+
 In **Verwaltung → Zugaenge** erscheinen bei einem Backend-Fehler die Warnung
 „Zugang wurde angelegt, die Einladung konnte aber nicht versendet werden“ oder
 „Einladung konnte nicht versendet werden“. Der Zugang kann danach ueber

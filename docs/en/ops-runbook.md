@@ -1,5 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer; § 6.5c the paragraph coupling the advisory cadence to a regulatory reporting duty was dropped together with the removed compliance memo, and the § 8 SBOM rationale is worded neutrally, #2207).
+> Most recently synchronized on 2026-09-11 (§ 5.8 the `/health/` `smtp` field named as an additional quick check between the `sendtestemail` exit code and actual delivery, #2089).
+> Previously synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer; § 6.5c the paragraph coupling the advisory cadence to a regulatory reporting duty was dropped together with the removed compliance memo, and the § 8 SBOM rationale is worded neutrally, #2207).
 > Previously synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; the alternative deployment path reworded to "k8s"/"custom orchestration", #2202; pre-1.0 migration/historical framing removed -- the pre-0.23 host-crontab migration subsection, the database-role version-dated markers, and the pre-1.0-installation framing in the role-split recovery section (§ 9.6) are now described as current state or as a misconfiguration-recovery path, #2205).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
@@ -977,6 +978,12 @@ configuration and inspect the web logs:
 ```bash
 docker compose -f docker-compose.prod.yml logs web --tail=100
 ```
+
+Additionally, `/health/` with an authenticated session or `X-Health-Token`
+(Admin Guide [§ 5.1](admin-guide.md#51-health-endpoint)) reports `ok` or
+`unreachable` in the `smtp` field — a plain TCP connectivity test to
+`EMAIL_HOST`/`EMAIL_PORT`, not proof of authentication or delivery; the field
+stays invisible anonymously.
 
 Under **Administration > Access**, a backend error produces the literal German
 warning “Zugang wurde angelegt, die Einladung konnte aber nicht versendet
@@ -2734,4 +2741,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 48d413a8ba728f18aefce47f5a8adc5e859f90a7 -->
+<!-- source-hash: 9da138984cffde3d527bd960aa0463f4dd7b77a9 -->

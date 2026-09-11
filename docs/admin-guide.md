@@ -548,8 +548,12 @@ Erscheint beim Anlegen oder erneuten Senden die Meldung, dass die Einladung
 nicht versendet werden konnte, SMTP-Werte und Web-Logs prüfen und danach
 **Einladung erneut senden**. Eine Erfolgsmeldung belegt nur die Übergabe an das
 Mail-Backend: Bleibt die Mail aus, zusätzlich Spam-Ordner, Quarantäne und beim
-Provider die SPF-/DKIM-/DMARC-Ausrichtung prüfen. Bis zur Behebung steht der
-folgende Initialpasswort-Weg als technischer Notfall-Fallback zur Verfügung.
+Provider die SPF-/DKIM-/DMARC-Ausrichtung prüfen. Mit angemeldeter Session oder
+`X-Health-Token` zeigt zusätzlich `/health/` ([§ 5.1](#51-health-endpoint)) im Feld `smtp`, ob der
+konfigurierte Server per TCP erreichbar ist (`ok`/`unreachable`) — das prüft
+nur die Erreichbarkeit, nicht Authentifizierung oder tatsächliche Zustellung,
+und bleibt anonym unsichtbar. Bis zur Behebung steht der folgende
+Initialpasswort-Weg als technischer Notfall-Fallback zur Verfügung.
 
 **Technischer Fallback ohne E-Mail:** Die Fach-UI verlangt immer eine E-Mail-Adresse. Nur der Django-Admin kann einen Nutzer **ohne** E-Mail-Adresse anlegen und zeigt dann einmalig ein Klartext-Initialpasswort. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
 
