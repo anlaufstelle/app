@@ -37,26 +37,30 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 ### Voraussetzungen
 
-- Docker Engine 24 oder neuer
-- Docker Compose v2 (als Plugin: `docker compose`)
-- Öffentlich erreichbarer Server mit DNS-Eintrag für Ihre Domain
-- Ports 80 und 443 müssen von außen erreichbar sein
+**Für die Installation zwingend:**
+
+- Docker Engine 24 oder neuer und Docker Compose v2 (als Plugin: `docker compose`)
+- `git` und `openssl`
+- `python3` mit dem Modul `cryptography` **oder** Docker für den unten beschriebenen Container-Generator des Fernet-Schlüssels
+- Root-/`sudo`-Rechte zum Anlegen des Installationsverzeichnisses und für die Host-Betriebseinrichtung
+- öffentlich erreichbarer Server; DNS-Einträge für `DOMAIN` **und** `www.<DOMAIN>` müssen auf ihn zeigen
+- von außen erreichbare Ports 80 und 443
+
+**Für den laufenden Betrieb zwingend:** `bash` (nicht nur `sh`), `tar`, `gzip`/`gunzip`, `curl` sowie ein installierter und laufender Cron-Dienst für das Host-Backup. Optional sind `jq` für JSON-Auswertung, `mail` für lokale Alarmmails und — je nach Off-Site-Ziel — `rclone`, `aws` oder `scp`.
 
 ### Schritt 1: Dateien herunterladen
 
 ```bash
-git clone https://github.com/anlaufstelle/app.git
-cd app
+sudo install -d -o "$(id -u)" -g "$(id -g)" /opt/anlaufstelle
+git clone https://github.com/anlaufstelle/app.git /opt/anlaufstelle
+cd /opt/anlaufstelle
 ```
 
-Alternativ: Nur die benötigten Produktionsdateien herunterladen:
-
-```bash
-curl -O https://raw.githubusercontent.com/anlaufstelle/app/main/docker-compose.prod.yml
-curl -O https://raw.githubusercontent.com/anlaufstelle/app/main/Caddyfile
-```
+Das Verzeichnis `/opt/anlaufstelle` ist im gesamten Handbuch das **Installationsverzeichnis**. Verwenden Sie den vollständigen Repository- oder Release-Tarball: Neben `docker-compose.prod.yml` und `Caddyfile` benötigt der Produktionsstack insbesondere `.env.example`, die PostgreSQL-Initialisierung, den Cron-Fahrplan sowie die Setup- und Betriebsskripte in ihrer Verzeichnisstruktur.
 
 ### Schritt 2: Umgebungsvariablen konfigurieren
+
+> **Quotierungsregel:** Die `.env` wird sowohl von Docker Compose gelesen als auch von den Host-Backup-Skripten als Shell-Datei geladen. Setzen Sie deshalb **jeden Wert in einfache Anführungszeichen**, zum Beispiel `TRUSTED_PROXY_CIDRS='203.0.113.0/24 198.51.100.0/24'`. So bleiben Leerzeichen und `$` literal und werden von beiden Wegen gleich gelesen. Die unten erzeugten Zufallswerte enthalten keine einfachen Anführungszeichen.
 
 Erstellen Sie eine `.env`-Datei im selben Verzeichnis wie `docker-compose.prod.yml`:
 
@@ -68,28 +72,34 @@ Minimale `.env` für den Produktionsbetrieb:
 
 ```dotenv
 # Domain (muss DNS-Eintrag haben)
-DOMAIN=anlaufstelle.meine-einrichtung.de
+DOMAIN='anlaufstelle.meine-einrichtung.de'
 
 # Django
-DJANGO_SECRET_KEY=<langer-zufaelliger-string>
-DJANGO_AUDIT_HASH_KEY=<separater-langer-zufaelliger-string>
-DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod
+DJANGO_SECRET_KEY='<langer-zufaelliger-string>'
+DJANGO_AUDIT_HASH_KEY='<separater-langer-zufaelliger-string>'
+DJANGO_SETTINGS_MODULE='anlaufstelle.settings.prod'
 # localhost/127.0.0.1 noetig fuer den Container-Healthcheck
 # (http://localhost:8000/health/) — prod.py baut ALLOWED_HOSTS rein aus dieser
 # Variable, ohne localhost wirft /health/ einen DisallowedHost-400.
-ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de,localhost,127.0.0.1
+ALLOWED_HOSTS='anlaufstelle.meine-einrichtung.de,localhost,127.0.0.1'
 
 # Datenbank (Drei-Rollen-Modell, Refs #902)
-POSTGRES_DB=anlaufstelle
-POSTGRES_USER=anlaufstelle                         # App-Rolle (Django-Runtime): NOSUPERUSER, NOBYPASSRLS
-POSTGRES_PASSWORD=<sicheres-datenbankpasswort>
-POSTGRES_ADMIN_USER=anlaufstelle_admin             # Admin-Rolle (Migrationen/Seed/Retention): NOSUPERUSER, BYPASSRLS
-POSTGRES_ADMIN_PASSWORD=<sicheres-admin-passwort>
-POSTGRES_BOOTSTRAP_PASSWORD=<sicheres-bootstrap-passwort>  # postgres-Bootstrap-Superuser (nur Rollen-Setup)
+POSTGRES_DB='anlaufstelle'
+POSTGRES_USER='anlaufstelle'                         # App-Rolle (Django-Runtime): NOSUPERUSER, NOBYPASSRLS
+POSTGRES_PASSWORD='<mindestens-32-zeichen>'
+POSTGRES_ADMIN_USER='anlaufstelle_admin'             # Admin-Rolle (Migrationen/Seed/Retention): NOSUPERUSER, BYPASSRLS
+POSTGRES_ADMIN_PASSWORD='<mindestens-32-zeichen>'
+POSTGRES_BOOTSTRAP_PASSWORD='<mindestens-32-zeichen>'  # postgres-Bootstrap-Superuser (nur Rollen-Setup)
 
 # Feldverschlüsselung (Pflicht in Produktion)
 # Empfohlen: Plural-Form für Rotation; der erste Key ist Write-Key, weitere sind Read-Only.
-ENCRYPTION_KEYS=<fernet-schluessel-1>
+ENCRYPTION_KEYS='<fernet-schluessel-1>'
+```
+
+Erzeugen Sie für **jedes** der drei Datenbankpasswörter einen eigenen Wert mit mindestens 32 Zeichen; `change-me`-Platzhalter werden abgewiesen. Das folgende Kommando liefert 48 Zeichen und wird dreimal ausgeführt:
+
+```bash
+openssl rand -hex 24
 ```
 
 **Verschlüsselungsschlüssel generieren:**
@@ -98,10 +108,17 @@ ENCRYPTION_KEYS=<fernet-schluessel-1>
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
+Falls auf dem Host das Python-Modul `cryptography` fehlt, erzeugen Sie denselben Schlüssel mit dem App-Image. Der Entrypoint-Override ist erforderlich:
+
+```bash
+docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:<tag> \
+  -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
 **Secret Key generieren:**
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
 **Audit-Hash-Key generieren:**
@@ -116,13 +133,30 @@ Der `DJANGO_AUDIT_HASH_KEY` sichert die Audit-Hashes — pseudonymisierte Eintr�
 
 #### Vollständige Umgebungsvariablen-Referenz
 
-Die betriebsrelevanten ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) und [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py); `base.py`/`prod.py` bleiben die maßgebliche Quelle):
+Die folgenden Tabellen dokumentieren App-Settings und Betriebsvariablen (siehe [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) und [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py); `base.py`/`prod.py` bleiben die maßgebliche Quelle).
+
+**App-Setting vs. durchgereichte Einstellung:** Der `web`-Dienst lädt die `.env` bewusst nicht vollständig, sondern erhält eine explizite Allowlist. `maintenance` und `cron` laden dagegen die ganze Datei. Die Zuordnung für angebotene Abweichungen ist:
+
+| Variable(n) | Ziel im Produktionsstack |
+|---|---|
+| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `DJANGO_SETTINGS_MODULE`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS`, `DJANGO_HEALTH_DETAIL_TOKEN`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | `web` |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` | `web`; die App-Rolle bleibt RLS-beschränkt |
+| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | nur `maintenance`/Initialisierung, bewusst **nicht** `web` |
+| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_HOST`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | `web` |
+| `LOG_FORMAT`, `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | `web` |
+| `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB` | `web` |
+| `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS` | `web` |
+| `BREACH_*`, `TZ` | `cron`; `TZ` bestimmt außerdem die Zeitbasis der Container |
+| `BACKUP_HOST_DIR` | Host-Skripte und Volume-Mount; `BACKUP_DIR` ist das read-only Ziel in `web` |
+| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` nur mit dem zusätzlichen `compose.legal.yml`, wie unter [Pflichtangaben](#pflichtangaben-impressumdatenschutz-einrichten) gezeigt |
+
+Eine Abweichung wird in `.env` gesetzt und danach der betroffene Dienst mit `docker compose -f docker-compose.prod.yml up -d --force-recreate <dienst>` neu erstellt. Für Rechtstexte müssen dabei beide Compose-Dateien wie im Abschnitt „Pflichtangaben“ angegeben werden.
 
 **Django & Hosts**
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `DJANGO_SECRET_KEY` | — (Pflicht in prod) | Signierung von Sessions/CSRF. Mit `secrets.token_urlsafe(50)` generieren. |
+| `DJANGO_SECRET_KEY` | — (Pflicht in prod) | Signierung von Sessions/CSRF. Mit `secrets.token_urlsafe(64)` generieren. |
 | `DJANGO_AUDIT_HASH_KEY` | — (Pflicht in prod) | HMAC-Schlüssel für die Audit-Hashes: pseudonymisierte Einträge (z. B. Passwort-Reset-E-Mails) und die Integritätskette des Audit-Logs. Bewusst separat vom `DJANGO_SECRET_KEY` — ohne eigenen Schlüssel fiele der Audit-Hash sonst still auf `SHA256(SECRET_KEY)` zurück, was ein Secret-Key-Leak rückwirkend ausnutzbar machen würde; daher fail-closed (ohne Wert verweigert die App in Produktion den Start). Generieren: `python -c "import secrets; print(secrets.token_urlsafe(64))"`. Siehe [`docs/disaster-recovery.md`](https://github.com/anlaufstelle/app/blob/main/docs/disaster-recovery.md). |
 | `DJANGO_SETTINGS_MODULE` || In Produktion `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
@@ -139,10 +173,10 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 |---|---|---|
 | `POSTGRES_DB` | `anlaufstelle` | Datenbankname. |
 | `POSTGRES_USER` | `anlaufstelle` | App-Rolle (Django-Runtime), `NOSUPERUSER NOBYPASSRLS`. |
-| `POSTGRES_PASSWORD` | `anlaufstelle` | Passwort der App-Rolle (in Produktion sicher setzen!). |
+| `POSTGRES_PASSWORD` | `anlaufstelle` | Passwort der App-Rolle; in Produktion mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
 | `POSTGRES_ADMIN_USER` | `anlaufstelle_admin` | Admin-Rolle für Migrationen/Seed/Retention, `NOSUPERUSER BYPASSRLS`. |
-| `POSTGRES_ADMIN_PASSWORD` || Passwort der Admin-Rolle. |
-| `POSTGRES_BOOTSTRAP_PASSWORD` || Passwort des `postgres`-Bootstrap-Superusers (nur initiales Rollen-Setup). |
+| `POSTGRES_ADMIN_PASSWORD` || Passwort der Admin-Rolle; mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
+| `POSTGRES_BOOTSTRAP_PASSWORD` || Passwort des `postgres`-Bootstrap-Superusers (nur initiales Rollen-Setup); mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB-Host. |
 | `POSTGRES_PORT` | `5432` | DB-Port. |
 
@@ -230,26 +264,32 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 
 ### Schritt 3: Caddyfile prüfen
 
-Die mitgelieferte `Caddyfile` übernimmt automatisch TLS-Zertifikate via Let's Encrypt:
+Die mitgelieferte `Caddyfile` übernimmt automatisch TLS-Zertifikate via Let's Encrypt und enthält zwei Site-Blöcke:
 
 ```
 {$DOMAIN} {
     reverse_proxy web:8000
     ...
 }
+
+www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} permanent
+}
 ```
 
-Keine Anpassung nötig, solange `DOMAIN` in der `.env` gesetzt ist.
+Keine Anpassung nötig, solange `DOMAIN` in der `.env` gesetzt ist und DNS sowohl für `DOMAIN` als auch für `www.<DOMAIN>` auf diesen Server zeigt.
 
 ### Schritt 4: Stack starten
 
 **Empfohlen — ein Befehl:** Das mitgelieferte Skript [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) führt die komplette Erstinbetriebnahme in der richtigen Reihenfolge aus (Refs #793):
 
 ```bash
+mkdir -p backups
+chmod 700 backups
 ./scripts/initial-setup.sh
 ```
 
-Es startet die Datenbank und wartet auf ihre Bereitschaft, legt das Schema per One-Shot-Job an, fährt den vollen Stack hoch und **verifiziert anschließend die Sicherheits-Posture**: `manage.py check --deploy` (Deployment-Settings) und `manage.py check_db_roles` (DB-Rollen und Ownership). Zum Schluss legt es — sofern noch keiner existiert — interaktiv den Super-Admin an (siehe [§ 2.1](#21-erstinstallation-super-admin-anlegen-bootstrap)).
+Das vor dem ersten Containerstart angelegte `backups`-Verzeichnis bleibt im Besitz des Betriebskontos; andernfalls würde Docker den fehlenden Bind-Mount als `root` anlegen. Das Skript startet die Datenbank und wartet auf ihre Bereitschaft, legt das Schema per One-Shot-Job an, fährt den vollen Stack hoch und verifiziert Deployment-Settings sowie die DB-Rollen. Zum Schluss legt es — sofern noch keiner existiert — interaktiv den Super-Admin an (siehe [§ 2.1](#21-erstinstallation-super-admin-anlegen-bootstrap)).
 
 Das Skript ist **idempotent** (ein zweiter Lauf ist gefahrlos: Migrationen sind dann No-ops, ein vorhandener Super-Admin wird übersprungen) und **fail-loud** — bricht ein Schritt ab, endet es mit einem Exit-Code ≠ 0 und einer Erklärung. Optionale Umgebungsvariablen: `COMPOSE_FILE` (Default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. Ein Passwort nimmt es bewusst **nicht** entgegen — das fragt `create_super_admin` interaktiv ab ([ADR-018](adr/018-rollenmodell-superadmin.md)).
 
@@ -270,7 +310,7 @@ docker compose -f docker-compose.prod.yml up -d
 
 # 4. Sicherheits-Posture verifizieren
 docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
-docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 ```
 
 Details zum Migrate-Job (Ownership-Normalisierung, Advisory-Lock, erwartete Ausgabe) siehe die kanonische Quelle [`docs/ops-runbook.md` § 1.2](ops-runbook.md#12-deploy-schritte).
@@ -297,6 +337,8 @@ Erwartete (anonyme) Antwort — seit #1375 enthält sie **nur** das `status`-Fel
 ```json
 {"status": "ok"}
 ```
+
+**Direkt nach der Installation normal:** Die MFA-Quote im Compliance-Dashboard bleibt kritisch, bis alle MFA-pflichtigen Konten ihren zweiten Faktor eingerichtet haben. Noch nie gelaufene Hintergrundjobs erscheinen zunächst als `unknown`: View-Refresh und Breach-Scan laufen erstmals zur nächsten Viertel- beziehungsweise halben Stunde, Retention/Audit-Prüfung/Orphan-Cleanup täglich ab 03:00 Uhr und Statistik-Snapshots am nächsten Monatsersten um 04:00 Uhr. Bleibt ein Zustand über seinen ersten planmäßigen Lauf hinaus bestehen, prüfen Sie `docker compose -f docker-compose.prod.yml logs cron`. Ein veralteter ClamAV-Signaturstand ist dagegen kein normaler Anlaufzustand.
 
 ---
 
@@ -337,7 +379,7 @@ Ohne gesetzten Pfad sowie bei einer fehlenden, nicht regulären, leeren, zu gro�
 
 ### 2.1 Erstinstallation: Super-Admin anlegen (Bootstrap)
 
-**Vor jeder anderen Konfiguration** — direkt nach dem ersten `docker compose up` — wird ein **Super-Admin** (`role=super_admin`, „Systemadministration") angelegt. Diese Rolle ist der einzige facility-übergreifende Account und betreibt die Installation. Sie wird **nicht** über das normale Admin-UI angelegt, sondern über einen dedizierten interaktiven Befehl ohne Default-Passwort:
+**Vor jeder anderen Konfiguration** — als letzter Schritt von `./scripts/initial-setup.sh` — wird ein **Super-Admin** (`role=super_admin`, „Systemadministration") angelegt. Diese Rolle ist der einzige facility-übergreifende Account und betreibt die Installation. Sie wird **nicht** über das normale Admin-UI angelegt, sondern über einen dedizierten interaktiven Befehl ohne Default-Passwort:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web \
@@ -351,9 +393,8 @@ Das Skript fragt interaktiv nach:
 1. **Benutzername** (frei wählbar — Empfehlung: nicht `admin`)
 2. **E-Mail-Adresse** (Pflicht — wird für Recovery-Mails genutzt)
 3. **Passwort** (zweimal eingeben — keinen Default, keinen Demo-Wert)
-4. **Anzeigename**
 
-Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an und legen die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
+Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an und legen die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Beim ersten Aufruf von `/admin-mgmt/` verlangt der Sudo-Modus eine erneute Passwortbestätigung. Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
 
 > **Wichtig — kein Default-Passwort:** Aus DSGVO- und Sicherheits-Gründen liefert die Anwendung **kein** Default-Passwort und keinen Default-Benutzernamen aus (anders als der frühere `make seed`-Workflow für Entwicklungs-Demos). Wer den Befehl überspringt, erhält **keinen** anmeldungsfähigen Account.
 
@@ -393,7 +434,7 @@ Das Skript fragt interaktiv nach:
 
 1. **Name der Organisation** – z. B. `Diakonie Musterstadt e.V.`
 2. **Name der Einrichtung** – z. B. `Beratungsstelle Nord`
-3. **Benutzername der Anwendungsbetreuung** (`facility_admin`)
+3. **Admin-Benutzername** der Anwendungsbetreuung (`facility_admin`; Vorgabe `admin` kann überschrieben werden)
 4. **Passwort der Anwendungsbetreuung** (zweimal eingeben)
 
 Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Standardkatalog der Dokumentationstypen**, die drei **Standardschichten** (Frühdienst, Spätdienst, Nachtdienst), zwei **Schnellvorlagen** am Typ „Kontakt“ und der erste `facility_admin`-Benutzer angelegt. Die Einrichtung ist damit sofort benutzbar: Ohne mindestens einen Dokumentationstyp bliebe die Typ-Auswahl beim Dokumentieren leer und es ließe sich kein einziger Kontakt erfassen.
@@ -428,6 +469,8 @@ Die Adminoberfläche ist erreichbar unter:
 ```
 https://anlaufstelle.meine-einrichtung.de/admin-mgmt/
 ```
+
+Der Aufruf führt zunächst zur Re-Authentifizierung im Sudo-Modus. Bestätigen Sie dort das Passwort des angemeldeten Kontos; anschließend öffnet sich die Adminoberfläche.
 
 Hier können Sie verwalten:
 
@@ -470,7 +513,7 @@ Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Lösc
 
 ### 2.3 Einstellungen pro Einrichtung
 
-Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konfigurieren:
+Im Admin unter **Core → Einstellungen** können Sie unter anderem die folgenden wichtigsten Felder konfigurieren; die vollständige Feldliste steht direkt im Adminformular:
 
 | Feld | Standardwert | Beschreibung |
 |---|---|---|
@@ -984,11 +1027,11 @@ Dateianhänge (Fotos, Scans, Dokumente) an **Ereignissen, Personen und Fällen**
 
 #### ClamAV-Service (`docker-compose.prod.yml`)
 
-Das Produktions-Compose enthält einen eigenen `clamav`-Container mit Healthcheck (`clamdcheck.sh`). Der Web-Dienst wartet auf `service_healthy`, bevor er startet. Referenz: [`docker-compose.prod.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.prod.yml). Konfigurierbar über `CLAMAV_ENABLED` / `CLAMAV_HOST` / `CLAMAV_PORT` / `CLAMAV_TIMEOUT` (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz)).
+Das Produktions-Compose enthält einen eigenen `clamav`-Container mit dem Binary-Smoke-Healthcheck `clamdscan --version`. Der Web-Dienst wartet auf `service_healthy`, bevor er startet. Referenz: [`docker-compose.prod.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.prod.yml). Konfigurierbar über `CLAMAV_ENABLED` / `CLAMAV_HOST` / `CLAMAV_PORT` / `CLAMAV_TIMEOUT` (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz)).
 
 #### Healthcheck
 
-Der `/health/`-Endpoint prüft in Produktion zusätzlich zur Datenbank die Erreichbarkeit des ClamAV-Daemons. Ist ClamAV aktiviert, aber nicht erreichbar, signalisiert der Endpoint einen Fehlerzustand (HTTP 503) — so erkennen externe Monitore auch „Uploads sind aktuell nicht möglich".
+Der `/health/`-Endpoint prüft in Produktion zusätzlich zur Datenbank die Erreichbarkeit des ClamAV-Daemons. Ist ClamAV aktiviert, aber nicht erreichbar, steht im JSON-Payload `status: "degraded"`, der HTTP-Status bleibt **200**. Monitore müssen deshalb den Payload-Wert `status` auswerten; eine reine HTTP-Code-Prüfung erkennt „Uploads sind aktuell nicht möglich“ nicht.
 
 #### Schlüssel-Rotation (`ENCRYPTION_KEYS`)
 
@@ -1003,7 +1046,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 > ⚠️ **Rollen-Voraussetzung (Refs #1058).** `reencrypt_fields` liest und schreibt Tabellen mit Row-Level-Security. Die Laufzeit-Rolle des `web`-Containers ist `NOBYPASSRLS` und hat außerhalb eines Requests keinen Einrichtungs-Kontext — ein Aufruf dort sähe **0 Zeilen**. Deshalb immer ueber den Maintenance-Service aufrufen ([Ops-Runbook § 9.5](ops-runbook.md)):
 >
 > ```bash
-> docker compose run --rm maintenance reencrypt_fields --dry-run
+> docker compose -f docker-compose.prod.yml run --rm maintenance reencrypt_fields --dry-run
 > ```
 >
 > Der Command bricht seit #1058 mit einer klaren Fehlermeldung ab, wenn der Bypass-Kontext fehlt (fail-loud statt „0 rotiert, Erfolg gemeldet"). Bei älteren Ständen ohne diesen Guard gilt: **Schritt 3 niemals nach einem Lauf ausführen, der überall `0` meldet** — sonst steht der Alt-Schlüssel nicht mehr in der Liste, obwohl nichts rotiert wurde.
@@ -1111,11 +1154,11 @@ Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anl
 
 ### 3.1 Verschlüsselte Datenbank- und Mediensicherung
 
-Der kanonische Produktionsweg ist [`scripts/ops/backup.sh`](../scripts/ops/backup.sh). Führen Sie das Skript im Repository-Root aus:
+Der kanonische Produktionsweg ist [`scripts/ops/backup.sh`](../scripts/ops/backup.sh). Führen Sie das Skript im festgelegten Installationsverzeichnis aus. Das Konto braucht Docker-Zugriff und Schreibrecht auf `BACKUP_HOST_DIR`; die folgenden Beispiele verwenden deshalb `sudo`:
 
 ```bash
 cd /opt/anlaufstelle
-./scripts/ops/backup.sh
+sudo ./scripts/ops/backup.sh
 ```
 
 Das Skript lädt die `.env`, sichert PostgreSQL **und** den verschlüsselten File-Vault (`MEDIA_ROOT`), komprimiert beide Archive, verschlüsselt sie mit AES-256-CBC und schreibt zu jedem Archiv einen HMAC-SHA256-Sidecar. Die Dateien landen unter `BACKUP_HOST_DIR` in `daily/`, `weekly/` und `monthly/`; die eingebaute Rotation bewahrt sie 7, 28 beziehungsweise 90 Tage auf.
@@ -1133,17 +1176,30 @@ Bewahren Sie `.env` beziehungsweise mindestens `BACKUP_ENCRYPTION_KEY` und die v
 
 ### 3.2 Automatisches Backup einrichten
 
-Empfohlenes Cron-Beispiel für tägliche Backups um 02:00 Uhr (auf dem Host, vor den Retention-Läufen):
+Empfohlen ist die **root-Crontab** auf dem Host: Sie verwendet fünf Zeitfelder und das ausführende Konto hat Docker-Zugriff. Aktivieren Sie vorher den Cron-Dienst, prüfen Sie die Host-Zeitzone und legen Sie die Logdatei mit restriktiven Rechten an:
+
+```bash
+sudo systemctl enable --now cron
+timedatectl status
+sudo touch /var/log/anlaufstelle-backup.log
+sudo chown root:adm /var/log/anlaufstelle-backup.log
+sudo chmod 640 /var/log/anlaufstelle-backup.log
+sudo crontab -e
+```
+
+Eintrag für tägliche Backups um 02:00 Uhr (vor den Retention-Läufen):
 
 ```cron
 0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 ```
 
+In `/etc/crontab` wäre zusätzlich nach den fünf Zeitfeldern der Benutzer `root` erforderlich; kopieren Sie die Fünf-Feld-Zeile dort nicht unverändert hinein. Richten Sie für `/var/log/anlaufstelle-backup.log` außerdem eine wöchentliche Logrotation (zum Beispiel acht komprimierte Rotationen mit `copytruncate`) unter `/etc/logrotate.d/` ein.
+
 Keinen zusätzlichen `find ... -delete`-Job einrichten: `backup.sh` rotiert Datenbank-, Medien- und HMAC-Dateien gemeinsam. Prüfen Sie regelmäßig das neueste Backup:
 
 ```bash
 cd /opt/anlaufstelle
-./scripts/ops/backup.sh --verify
+sudo ./scripts/ops/backup.sh --verify
 ```
 
 Der Prüflauf validiert den HMAC vor dem Entschlüsseln, stellt den jüngsten Datenbank-Dump in einer temporären Datenbank wieder her, vergleicht kritische RLS-Tabellen mit der Live-Datenbank und prüft das jüngste Medienarchiv. Der ausführlichere quartalsweise Restore-Drill ist im [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) beschrieben.
@@ -1243,7 +1299,7 @@ GET /health/
 {"status": "error"}
 ```
 
-Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält seit #1375 bewusst **nur** das `status`-Feld (Recon-Härtung): Subsystem-Ausfälle bleiben anonym über `status`/HTTP-Code sichtbar (`degraded` bei Scanner-/SMTP-Problemen sowie bei einer RLS-umgehenden DB-Runtime-Rolle, `error` + 503 bei DB-/Key-Ausfall), aber alle Detailfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) liefert `/health/` nur an authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`). Die vollständige, autoritative Feld-Referenz (alle Felder, Werte, Status-Codes und Schwellen) steht im [Monitoring-Guide](monitoring-guide.md).
+Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält bewusst **nur** das `status`-Feld (Recon-Härtung). Anonym fließen DB- und Encryption-Key-Ausfälle (`error` + HTTP 503), ein nicht erreichbarer ClamAV-Scanner und eine RLS-umgehende DB-Runtime-Rolle (`degraded` + HTTP 200) ein. `smtp`, Backup, Disk, Cache und `stale_jobs` werden dagegen nur für authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`) geprüft; nur diese erhalten auch die Detailfelder. Die vollständige, autoritative Feld-Referenz steht im [Monitoring-Guide](monitoring-guide.md).
 
 ### 5.2 Monitoring-Integration
 
@@ -1255,6 +1311,8 @@ Erwarteter HTTP-Status: 200
 Erwarteter Antwort-Inhalt: "status": "ok"
 Prüfintervall: 1 Minute
 ```
+
+Dieses anonyme Liveness-Monitoring erkennt insbesondere **kein fehlendes oder veraltetes Backup** und keinen SMTP-Ausfall. Für diese Signale konfigurieren Sie einen starken `DJANGO_HEALTH_DETAIL_TOKEN`, senden ihn als `X-Health-Token` und prüfen zusätzlich den JSON-Wert `status`; alternativ überwachen Sie Backup und Mailweg separat.
 
 **curl-basierter Cron-Check:**
 
@@ -1371,11 +1429,16 @@ Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf A
 
 ### Problem: Web-Dienst startet nicht
 
-**Symptom:** `docker compose ps` zeigt `web` als `Restarting` oder `Exit 1`.
+**Symptom:** `docker compose -f docker-compose.prod.yml ps` zeigt `web` als `Restarting`/`Exit 1`, oder der Migrate-/Maintenance-Lauf bricht ab, bevor `web` überhaupt startet.
 
 **Vorgehen:**
 
 ```bash
+# Ausgabe des Migrate-/Maintenance-Laufs erneut sichtbar machen
+docker compose -f docker-compose.prod.yml run --rm \
+  --entrypoint=/app/docker-migrate.sh maintenance
+
+# Falls web bereits angelegt wurde
 docker compose -f docker-compose.prod.yml logs web
 ```
 
@@ -1383,11 +1446,43 @@ Häufige Ursachen:
 
 | Fehlermeldung | Lösung |
 |---|---|
-| `ENCRYPTION_KEY must be set in production` | `ENCRYPTION_KEY` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
+| `DJANGO_SECRET_KEY muss in Produktion gesetzt sein.` | `DJANGO_SECRET_KEY` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
+| `ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein.` | `ENCRYPTION_KEYS` oder `ENCRYPTION_KEY` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
 | `DJANGO_AUDIT_HASH_KEY muss in Produktion gesetzt sein` | `DJANGO_AUDIT_HASH_KEY` (separat vom Secret Key) in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
-| `connection refused` (Datenbank) | Prüfen ob `db`-Dienst läuft: `docker compose ps db` |
-| `django.db.utils.OperationalError` | Datenbankzugangsdaten in `.env` prüfen |
+| `connection refused` (Datenbank) | Prüfen, ob `db` läuft: `docker compose -f docker-compose.prod.yml ps db` |
+| `django.db.utils.OperationalError` / `password authentication failed` | Stimmen Rollen und `.env` nach einer Passwortänderung nicht mehr überein, Passwörter koordiniert mit `rotate-db-passwords.sh` rotieren. Bei einer Erstinstallation zuerst den Abschnitt [DB-Init abgebrochen](#problem-db-init-abgebrochen-rollen-fehlen) prüfen. |
 | `ImproperlyConfigured` | Umgebungsvariablen unvollständig – Logs für Details lesen |
+
+### Problem: `web` wird `unhealthy`, `caddy` startet nicht
+
+Der Container-Healthcheck ruft `http://localhost:8000/health/` auf. Fehlt `localhost` in `ALLOWED_HOSTS`, weist Django diese interne Probe ab und `caddy` bleibt im Zustand `Created`.
+
+```bash
+docker compose -f docker-compose.prod.yml logs web | grep DisallowedHost
+```
+
+Ergänzen Sie `localhost,127.0.0.1` wie in [Schritt 2](#schritt-2-umgebungsvariablen-konfigurieren) gezeigt und erstellen Sie `web` anschließend neu.
+
+### Problem: `cron` wird als `unhealthy` angezeigt
+
+Der `cron`-Sidecar hat keinen HTTP-Endpunkt; sein Image-Healthcheck muss im Produktions-Compose deaktiviert sein. Prüfen Sie, ob Sie die aktuelle `docker-compose.prod.yml` verwenden, und erstellen Sie den Dienst neu:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --force-recreate cron
+docker compose -f docker-compose.prod.yml ps cron
+docker compose -f docker-compose.prod.yml logs cron
+```
+
+### Problem: ClamAV-Signatur ist veraltet
+
+Ein Signaturstand älter als sieben Tage ist kein normaler Anlaufzustand. Prüfen Sie Update-Protokoll und installierte Signaturversion:
+
+```bash
+docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
+docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
+```
+
+Das Update-Protokoll muss einen erfolgreichen Download zeigen. Wiederholte DNS-/Downloadfehler erfordern eine Prüfung des ausgehenden Netzwerkpfads oder des konfigurierten Mirrors; ein grüner `clamdscan --version`-Healthcheck belegt nur, dass das Binary startet, nicht dass die Signaturen aktuell sind.
 
 ### Problem: TLS-Zertifikat wird nicht ausgestellt
 
@@ -1428,13 +1523,36 @@ docker compose -f docker-compose.prod.yml exec web \
 ### Problem: Datenbankverbindung schlägt fehl
 
 ```bash
-# Direkte DB-Verbindung testen
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U anlaufstelle -c "\l"
+# TCP-Verbindung der App mit den tatsächlich konfigurierten Zugangsdaten testen
+docker compose -f docker-compose.prod.yml exec web python manage.py shell -c \
+  "from django.db import connection; connection.ensure_connection(); print(connection.connection.info.host)"
 
 # Datenbank-Healthcheck-Status
-docker inspect anlaufstelle-db-1 | grep -A5 Health
+docker inspect $(docker compose -f docker-compose.prod.yml ps -q db) | grep -A5 Health
 ```
+
+### Problem: DB-Init abgebrochen (Rollen fehlen)
+
+Lehnt `01-app-role.sh` beim ersten Start eines **noch leeren** Clusters ein zu kurzes Passwort oder einen Platzhalter ab, kann der neu gestartete DB-Container später trotzdem `healthy` erscheinen. Die App-/Admin-Rollen fehlen dann; PostgreSQL kann das beim Migrate-Lauf irreführend als `password authentication failed` melden.
+
+```bash
+# Ursprünglichen Init-Abbruch suchen
+docker compose -f docker-compose.prod.yml logs db | grep 01-app-role
+
+# Vorhandene Anwendungsrollen prüfen
+docker compose -f docker-compose.prod.yml exec db \
+  psql -U postgres -d anlaufstelle -c \
+  "SELECT rolname FROM pg_roles WHERE rolname IN ('anlaufstelle', 'anlaufstelle_admin') ORDER BY rolname;"
+```
+
+Nur wenn dies der **erste, nachweislich noch leere Installationsversuch** ist: korrigieren Sie alle drei Passwörter auf mindestens 32 Zeichen, verwerfen Sie das unvollständig initialisierte Volume und beginnen Sie erneut:
+
+```bash
+docker compose -f docker-compose.prod.yml down -v
+./scripts/initial-setup.sh
+```
+
+> **Datenverlust-Warnung:** `down -v` löscht die komplette Datenbank und alle Compose-Volumes dieses Stacks. Auf einer bereits befüllten Installation darf dieser Weg niemals verwendet werden; stoppen Sie dort und stellen Sie aus einem geprüften Backup wieder her beziehungsweise holen Sie fachkundige Unterstützung. Eine Passwortrotation repariert fehlende Rollen nicht.
 
 ### Problem: Speicherplatz voll
 
@@ -1442,8 +1560,10 @@ docker inspect anlaufstelle-db-1 | grep -A5 Health
 # Docker-Speicherverbrauch analysieren
 docker system df
 
-# Alte Images und ungenutzte Volumes bereinigen
+# Nicht mehr verwendete Container, Netzwerke und Images bereinigen (keine Volumes)
 docker system prune -f
+
+# Niemals pauschal --volumes ergänzen: pgdata/media können Instanzdaten enthalten.
 
 # Datenbank-Volume-Größe
 docker system df -v | grep pgdata
@@ -1857,7 +1977,7 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 
 ### 7.9 Row Level Security (RLS)
 
-Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **allen facility-scoped Tabellen** (derzeit 27, per Test ableitungsbasiert erzwungen) als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
+Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **allen facility-scoped Tabellen** (per Test ableitungsbasiert erzwungen) als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
 
 #### Funktionsweise
 

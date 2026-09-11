@@ -34,10 +34,10 @@ Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängi
 
 | Aufrufer | Bekommt | Warum |
 |---|---|---|
-| **Anonym** (Default für externes Monitoring) | **Nur** `status` (+ HTTP-Code). **Keine** Subsystem- oder Detailfelder. | Recon-Härtung: Subsystem-Status (`database`, `virus_scanner`/`clamav`, `encryption_key`) und Infrastruktur-Details (`version`, `disk_free_pct` …) verraten Angreifern unauthentifiziert den Betriebszustand einzelner Komponenten (L9/N13, Refs #1375). Für Uptime bleibt `status` + HTTP-Code aussagekräftig. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
-| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `disk`, `disk_required`, `stale_jobs`). | Operatives Monitoring will die Details. |
+| **Anonym** (Default für externes Monitoring) | **Nur** `status` (+ HTTP-Code). **Keine** Subsystem- oder Detailfelder. In `status` fließen DB/Key, ClamAV und die RLS-Rollen-Posture ein. | Recon-Härtung: Feldnamen und Infrastrukturdetails bleiben verborgen. SMTP, Cache, Backup, Disk und `stale_jobs` werden anonym gar nicht geprüft, damit kein teurer Handshake-/Filesystem-Check pro Poll läuft. |
+| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `disk`, `disk_required`, `stale_jobs`). Der Gesamtstatus berücksichtigt zusätzlich diese Detailchecks. | Operatives Monitoring benötigt die Details und ihre Statuswirkung. |
 
-> **Änderung ggü. #1024 A7.1 (L9/N13, Refs #1375):** `database`, `virus_scanner`/`clamav` und `encryption_key` waren bis dahin auch im anonymen Payload enthalten. Sie liegen jetzt hinter dem Token-Gate. Der **kritische** Effekt eines DB-/Encryption-Key-Ausfalls (HTTP 503) und eines Scanner-Ausfalls (`status: degraded`) bleibt auch anonym sichtbar — nur die Subsystem-*Feldnamen* selbst sind Token-only.
+> `database`, `virus_scanner`/`clamav` und `encryption_key` liegen hinter dem Token-Gate. Der **kritische** Effekt eines DB-/Encryption-Key-Ausfalls (HTTP 503), eines Scanner-Ausfalls und einer RLS-umgehenden Runtime-Rolle (`status: degraded`) bleibt auch anonym sichtbar — nur die Subsystem-*Feldnamen* selbst sind Token-only.
 
 **Als „intern" gilt ein Aufrufer, wenn** entweder
 
@@ -76,7 +76,7 @@ Das Top-Level-`status` ist die **feinere** Gesundheits-Bewertung. Drei Werte, hi
 | `status` | Bedeutung | Auslöser | HTTP |
 |---|---|---|---|
 | `"ok"` | Alles im grünen Bereich. | Startwert, solange kein Check etwas anderes setzt. | 200 |
-| `"degraded"` | Service funktioniert, aber eine **nicht-kritische** Komponente ist beeinträchtigt — zeitnah ansehen. | ClamAV nicht erreichbar **oder** SMTP unreachable **oder** Backup älter als 48 h **oder** Disk-frei < 10 % **oder** die DB-Runtime-Rolle umgeht RLS (`db_role_posture = bypasses_rls`, Refs #793). | **200** |
+| `"degraded"` | Service funktioniert, aber eine **nicht-kritische** Komponente ist beeinträchtigt — zeitnah ansehen. | Anonym und intern: ClamAV nicht erreichbar oder DB-Runtime-Rolle umgeht RLS. Nur intern/Token zusätzlich: Cache-/SMTP-Fehler, Backup fehlt/ist älter als 48 h, Disk knapp/nicht messbar oder kritische `stale_jobs`. | **200** |
 | `"error"` | Service effektiv unbenutzbar — **sofort** handeln. | DB nicht erreichbar **oder** Encryption-Key-Roundtrip fehlgeschlagen. | 503 |
 
 Mechanik (aus [`health.py`](../src/core/views/health.py)): `status` startet auf `"ok"`; ein fehlgeschlagener kritischer Check setzt `"error"` + HTTP 503; ein beeinträchtigter unkritischer Check setzt `"degraded"` **nur, wenn status noch `"ok"` ist** (`if … and status == "ok"`) — ein bestehendes `"error"` wird also nie zu `"degraded"` heruntergestuft.
@@ -95,7 +95,7 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
 
 ### 5.2 Detail-Felder (nur intern/Token)
 
-Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„setzt Status"** markierten Checks laufen dennoch bei **jedem** Aufruf und fließen in das anonym sichtbare `status`/den HTTP-Code ein — nur der jeweilige *Feldname* ist Token-only (L9/N13, Refs #1375).
+Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-Key, ClamAV und DB-Rollen-Posture werden bei jedem Aufruf geprüft und wirken auch auf den anonymen `status`/HTTP-Code. Cache, SMTP, Backup, Disk und `stale_jobs` werden dagegen **nur** für interne/Token-Aufrufer ausgeführt und beeinflussen ausschließlich deren Gesamtstatus.
 
 | Feld | Typ | Werte | Bedeutung | Setzt Status |
 |---|---|---|---|---|
@@ -140,7 +140,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 }
 ```
 
-> Der anonyme Payload enthält **nur** `status` (L9/N13, Refs #1375). Ein `degraded`/`error` erscheint hier ebenso, aber **ohne** die auslösenden Subsystemfelder — für die Ursache braucht es den Token-Payload.
+> Der anonyme Payload enthält **nur** `status`. Er kann DB-/Key-Fehler, ClamAV-Ausfall und eine RLS-umgehende Runtime-Rolle anzeigen. Backup-, Disk-, Cache-, SMTP- und `stale_jobs`-Probleme erscheinen anonym nicht; dafür braucht es den Token-/Session-Payload.
 
 **Intern/Token, alles ok (HTTP 200):**
 
@@ -238,8 +238,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 
 ### 7.1 Zwei Überwachungsebenen
 
-1. **Liveness (HTTP-Code):** Reicht für „lebt der Service?". Externe Uptime-Tools (UptimeRobot, Better Stack, Healthchecks.io, Pingdom …) prüfen einfach `GET https://$DOMAIN/health/` auf **HTTP 200**. Ein 503 oder Timeout → Alarm.
-2. **Health (JSON-`status`):** Nötig, um `degraded` zu sehen (bleibt HTTP 200!). Das Tool muss den **Response-Body** parsen und auf `"status": "degraded"`/`"error"` matchen.
+1. **Liveness (HTTP-Code):** Reicht für „lebt der Service?". Externe Uptime-Tools prüfen `GET https://$DOMAIN/health/` auf **HTTP 200**. Ein 503 oder Timeout → Alarm. Fehlende Backups und die übrigen Detailchecks sieht dieser anonyme Weg nicht.
+2. **Health (Token + JSON-`status`):** Nötig für Backup, Disk, Cache, SMTP und `stale_jobs` sowie um jedes `degraded` zu sehen (bleibt HTTP 200!). Das Tool sendet den Token und wertet den **Response-Body** aus.
 
 ### 7.2 Container-/Compose-Healthcheck
 

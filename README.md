@@ -151,7 +151,7 @@ Benutzerhandbuch, Admin-Handbuch und Fachkonzept finden Sie im [docs/](docs/)-Ve
 
 ### Produktiv installieren
 
-Kurzfassung: `.env.example` nach `.env` kopieren, die Pflichtwerte darin setzen (Schlüssel, Datenbank-Rollen, `ALLOWED_HOSTS` samt `localhost,127.0.0.1` für den Container-Healthcheck) und den Stack mit `docker compose -f docker-compose.prod.yml up -d` starten. Den maßgeblichen Schritt-für-Schritt-Weg — Migrationspfad, Erstanmeldung über `create_super_admin`, Backup und Betrieb — beschreibt [docs/admin-guide.md § 1](docs/admin-guide.md#1-installation-docker-compose).
+Beziehen Sie den vollständigen Produktionsstand per `git clone https://github.com/anlaufstelle/app.git /opt/anlaufstelle`; einzelne Compose-Dateien reichen nicht aus. Kopieren Sie dort `.env.example` nach `.env`, setzen Sie die Pflichtwerte (Schlüssel, Datenbank-Rollen, `ALLOWED_HOSTS` samt `localhost,127.0.0.1` für den Container-Healthcheck) und starten Sie die Erstinbetriebnahme mit `./scripts/initial-setup.sh`. Den maßgeblichen Schritt-für-Schritt-Weg — Voraussetzungen, Migrationspfad, Erstanmeldung über `create_super_admin`, Backup und Betrieb — beschreibt [docs/admin-guide.md § 1](docs/admin-guide.md#1-installation-docker-compose).
 
 Der Quick-Start weiter unten ist **kein** Produktionsweg: Er lädt Demodaten und bindet bewusst nur auf `127.0.0.1`.
 
@@ -167,7 +167,7 @@ Das bedeutet: Der Quellcode ist frei nutzbar, veränderbar und weiterzugeben —
 
 Anlaufstelle wird ohne Mängelgewähr bereitgestellt, ohne Gewährleistung jeglicher Art (siehe [LICENSE](LICENSE), §15–16). Die Software und ihre Dokumentation stellen **keine Rechtsberatung** dar. Betreiber sind eigenverantwortlich für die Einhaltung datenschutzrechtlicher Pflichten (DSGVO, SGB X) — insbesondere für Datenschutz-Folgenabschätzung, Auftragsverarbeitungsverträge und organisatorische Maßnahmen.
 
-> **⚠️ Nach der Installation: Backup einrichten.** Aufbewahrungsfristen, Breach-Detection und die übrigen Hintergrundjobs erledigt der mitgelieferte `cron`-Sidecar ab `docker compose up -d` von selbst. Das **Backup** braucht weiterhin einen Host-Crontab-Eintrag (es setzt `docker compose exec` ein und dürfte den Docker-Socket nicht im Container haben) — ohne ihn wird nie gesichert, still und ohne Fehlermeldung. Einrichtung und Migration bestehender Crontabs: [docs/ops-runbook.md § 3 „Cron-Jobs"](docs/ops-runbook.md#3-cron-jobs).
+> **⚠️ Nach der Installation: Backup einrichten.** Aufbewahrungsfristen, Breach-Detection und die übrigen Hintergrundjobs erledigt der mit `./scripts/initial-setup.sh` gestartete `cron`-Sidecar von selbst. Das **Backup** braucht weiterhin einen Host-Crontab-Eintrag (das Skript setzt `docker compose -f docker-compose.prod.yml exec` ein und darf den Docker-Socket nicht im Container haben) — ohne ihn wird nie gesichert, still und ohne Fehlermeldung. Einrichtung und Migration bestehender Crontabs: [docs/ops-runbook.md § 3 „Cron-Jobs"](docs/ops-runbook.md#3-cron-jobs).
 
 ---
 
@@ -196,7 +196,7 @@ Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufste
 
 ### Quick-Start
 
-**Voraussetzungen:** Docker mit Docker Compose
+**Voraussetzungen für diesen lokalen Entwicklungs-Quick-Start:** Docker mit Docker Compose. Die zusätzlichen zwingenden Installations- und Betriebsvoraussetzungen des Produktionswegs stehen getrennt im [Admin-Handbuch](docs/admin-guide.md#voraussetzungen).
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git

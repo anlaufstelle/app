@@ -327,16 +327,16 @@ python src/manage.py load_package (--file <pfad/zur/paket.yaml> | --package <nam
 Im Container immer ueber den dedizierten **Maintenance-Service** (siehe Kasten):
 
 ```bash
-docker compose run --rm \
+docker compose -f docker-compose.prod.yml run --rm \
   -v "$PWD/paket.yaml:/tmp/paket.yaml:ro" maintenance \
   load_package --file /tmp/paket.yaml --facility <uuid> --dry-run
 
 # Standardkatalog statt eigener Datei:
-docker compose run --rm maintenance \
+docker compose -f docker-compose.prod.yml run --rm maintenance \
   load_package --default --facility <uuid> --dry-run
 
 # Mitgeliefertes Domänen-Paket — nur gegen eine frische Einrichtung:
-docker compose run --rm maintenance \
+docker compose -f docker-compose.prod.yml run --rm maintenance \
   load_package --package awareness --facility <uuid> --dry-run
 ```
 

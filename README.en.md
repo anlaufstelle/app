@@ -1,5 +1,5 @@
 > **[Deutsche Version / German version](README.md)**
-> Most recently synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
+> Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
 
 # Anlaufstelle
 
@@ -152,7 +152,7 @@ User manual, admin manual, and domain concept are available in the [docs/](docs/
 
 ### Production installation
 
-In short: copy `.env.example` to `.env`, fill in the mandatory values (keys, database roles, `ALLOWED_HOSTS` including `localhost,127.0.0.1` for the container health check) and start the stack with `docker compose -f docker-compose.prod.yml up -d`. The authoritative step-by-step guide — migration path, first sign-in via `create_super_admin`, backups and operations — is [docs/en/admin-guide.md § 1](docs/en/admin-guide.md#1-installation-docker-compose).
+Obtain the complete production source with `git clone https://github.com/anlaufstelle/app.git /opt/anlaufstelle`; individual Compose files are insufficient. Copy `.env.example` to `.env` there, fill in the mandatory values (keys, database roles, `ALLOWED_HOSTS` including `localhost,127.0.0.1` for the container health check), and run the first-time setup with `./scripts/initial-setup.sh`. The authoritative step-by-step guide — prerequisites, migration path, first sign-in via `create_super_admin`, backups, and operations — is [docs/en/admin-guide.md § 1](docs/en/admin-guide.md#1-installation-docker-compose).
 
 The quick start further down is **not** a production path: it loads demo data and deliberately binds to `127.0.0.1` only.
 
@@ -168,7 +168,7 @@ This means: the source code is free to use, modify, and redistribute — even wh
 
 Anlaufstelle is provided "as is", without warranty of any kind (see [LICENSE](LICENSE), Sections 15-16). The software and its documentation do **not constitute legal advice**. Operators are solely responsible for compliance with data protection regulations (GDPR, SGB X) — in particular for data protection impact assessments, data processing agreements, and organizational measures.
 
-> **⚠️ After installation: set up backups.** Retention enforcement, breach detection, and the remaining background jobs are handled automatically by the bundled `cron` sidecar from `docker compose up -d` onwards. **Backups** still require a host crontab entry (the script uses `docker compose exec` and must not have the Docker socket inside a container) — without it nothing is ever backed up, silently and without any error message. Setup and migration of existing crontabs: [docs/ops-runbook.md § 3 "Cron jobs"](docs/ops-runbook.md#3-cron-jobs).
+> **⚠️ After installation: set up backups.** Retention enforcement, breach detection, and the remaining background jobs are handled automatically by the `cron` sidecar started through `./scripts/initial-setup.sh`. **Backups** still require a host crontab entry (the script uses `docker compose -f docker-compose.prod.yml exec` and must not have the Docker socket inside a container) — without it nothing is ever backed up, silently and without any error message. Setup and migration of existing crontabs: [docs/ops-runbook.md § 3 "Cron jobs"](docs/ops-runbook.md#3-cron-jobs).
 
 ---
 
@@ -197,7 +197,7 @@ Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app
 
 ### Quick Start
 
-**Prerequisites:** Docker with Docker Compose
+**Prerequisites for this local development quick start:** Docker with Docker Compose. The additional mandatory installation and operating prerequisites for production are listed separately in the [admin guide](docs/en/admin-guide.md#prerequisites).
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
@@ -227,4 +227,4 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 776c7dc9c2ee6fd7f1b418ed36a79fd28740cf83 -->
+<!-- source-hash: 51c03014dd5c61be764e1cfa64ec24529298e4d7 -->
