@@ -89,8 +89,5 @@
 # läuft sie schlicht ins Leere (kein Fehler, nur wirkungslos).
 # /dev-ops/release/                @tobiasnix @<vertretung>
 
-# Regulatorische Einordnungen (heute: CRA-Einordnung)
-# /docs/compliance/                @tobiasnix @<vertretung>
-
 # Threat Model — Grundlage aller Sicherheitsannahmen
 # /docs/threat-model.md            @tobiasnix @<vertretung>

@@ -28,8 +28,6 @@ Vor `1.0` gilt eine **regelbasierte** Zusage **ohne Kalenderfristen**:
 
 > **Konsequenz für Betreiber:** Dem aktuellen Minor folgen. Ein Stand, der zwei Reihen zurückliegt, ist ohne weitere Ankündigung ungepatcht. Verbindliche Auskunft ist die Versionstabelle oben, nicht das Release-Datum.
 
-Einordnung dieser Regel gegenüber Art. 13(8) der EU-Cyberresilienz-Verordnung: [`docs/compliance/cra-einordnung.md`](docs/compliance/cra-einordnung.md).
-
 ## Schwachstellen melden
 
 **Sicherheitsmeldungen bitte NICHT als öffentliches GitHub-Issue eröffnen.** Öffentlich gemeldete Schwachstellen gefährden Nutzerdaten anderer Einrichtungen, bevor wir eine Korrektur ausliefern können.
@@ -72,7 +70,7 @@ Behobene Schwachstellen werden **koordiniert veröffentlicht**, nicht stillschwe
 3. **Fix** als Patch-Release der aktuellen Minor-Reihe (siehe Support-Regel oben).
 4. **Veröffentlichung** des Advisory nach Auslieferung des Patches plus 7 Tagen Schonfrist (siehe SLA-Tabelle oben), zusammen mit einem `Security`-Eintrag in [CHANGELOG.md](CHANGELOG.md), der die GHSA-/CVE-Nummer nennt.
 
-Der operative Ablauf inklusive Zuständigkeiten und der zusätzlichen behördlichen Meldefristen bei **aktiv ausgenutzten** Schwachstellen steht in [`docs/ops-runbook.md` § 6.5c](docs/ops-runbook.md) und [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md).
+Der operative Ablauf inklusive Zuständigkeiten steht in [`docs/ops-runbook.md` § 6.5c](docs/ops-runbook.md).
 
 ## Anerkennung (Hall of Fame)
 
@@ -119,8 +117,6 @@ Before `1.0` the commitment is **rule-based, without calendar deadlines**:
 
 > **Consequence for operators:** follow the current minor. An installation two series behind is unpatched without further notice. The binding statement is the version table above, not the release date.
 
-How this rule relates to Art. 13(8) of the EU Cyber Resilience Act: [`docs/compliance/cra-einordnung.md`](docs/compliance/cra-einordnung.md) (German).
-
 ## Reporting a Vulnerability
 
 **Please do NOT open a public GitHub issue for security reports.** Public disclosure exposes user data in other installations before we can ship a fix.
@@ -163,7 +159,7 @@ Fixed vulnerabilities are **disclosed in a coordinated way**, not patched silent
 3. **Fix** as a patch release of the current minor series (see the support rule above).
 4. **Publication** of the advisory after the patch ships plus a 7-day grace period (see the SLA table above), together with a `Security` entry in [CHANGELOG.md](CHANGELOG.md) naming the GHSA/CVE ID.
 
-The operational procedure including responsibilities and the additional regulatory reporting deadlines for **actively exploited** vulnerabilities lives in [`docs/en/ops-runbook.md` § 6.5c](docs/en/ops-runbook.md) and [`docs/compliance/cra-einordnung.md` § 3](docs/compliance/cra-einordnung.md) (German).
+The operational procedure including responsibilities lives in [`docs/en/ops-runbook.md` § 6.5c](docs/en/ops-runbook.md).
 
 ## Hall of Fame
 

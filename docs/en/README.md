@@ -3,6 +3,7 @@
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
 > Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only.
+> Most recently synchronized on 2026-09-11 (index entry for the removed compliance memo dropped, #2207).
 
 
 ---
@@ -67,7 +68,6 @@ Templates included:
 | [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
-| [cra-einordnung.md](../compliance/cra-einordnung.md) | CRA classification (EU 2024/2847) — FOSS scope, gap check against Annex I, reporting-process sketch, review trigger (Refs #1077) |
 | `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
 | dev-deployment.md | Dev/test environment deployment |
 | `release-checklist.md` (dev-only) | Release process, sanitize steps, hard-exclusion list |
@@ -81,5 +81,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 170af4d132978e23a118d4bd465ba48c76176a31 -->
+<!-- translation-date: 2026-09-11 -->
+<!-- source-hash: 72eb101bd5a481e96ae8413e0abb655371ecc57b -->

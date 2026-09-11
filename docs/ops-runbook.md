@@ -1087,8 +1087,6 @@ gh api repos/anlaufstelle/app/private-vulnerability-reporting # {"enabled": true
 | 5 | **Veroeffentlichung** — Advisory publizieren (Patch + 7 Tage Schonfrist), `Security`-Eintrag im [CHANGELOG](../CHANGELOG.md) mit GHSA-/CVE-Nummer, Hall-of-Fame-Nennung | Maintainer/Vertretung | Patch + 7 Tage |
 | 6 | **Kein Fix** — Ablehnung begruenden (Out-of-Scope-Liste in `SECURITY.md`), Vorgang gegenueber der meldenden Person sauber abschliessen | Maintainer/Vertretung | ≤ 10 Werktage |
 
-**Kopplung an die CRA-Meldepflicht:** Ist die Schwachstelle **aktiv ausgenutzt**, treten die behoerdlichen 24-h-/72-h-Fristen aus [`docs/compliance/cra-einordnung.md` § 3](compliance/cra-einordnung.md) **zusaetzlich** hinzu — sie ersetzen den Takt oben nicht, sondern laufen parallel und frueher. Der Ausloeser ist damit nicht „kritischer Score", sondern „Hinweis auf Ausnutzung in freier Wildbahn".
-
 **Abgrenzung:** Ein GHSA beschreibt eine Schwachstelle **im Anlaufstelle-Code**. Fuer verwundbare Abhaengigkeiten gilt § 8.3 (`pip-audit`/Dependabot) — dort existiert das Upstream-Advisory bereits, ein eigenes GHSA waere Doppelmeldung. Ein eigenes Advisory ist nur faellig, wenn die Anwendung die Upstream-Luecke exponiert und Betreiber deshalb handeln muessen.
 
 ### 6.5a Maintenance-Mode (Refs #700)
@@ -1373,7 +1371,7 @@ Förderung, öffentliche Beschaffung, Lieferanten-Audits) und listet alle direkt
 transitiven Python-Dependencies mit Versionen, Lizenzen und CVE-Status zum
 Build-Zeitpunkt.
 
-**Dauerhaftes Release-Artefakt (Refs #1895):** Das CI-Artefakt verfaellt nach 90 Tagen — fuer ein aelteres Release war danach nicht mehr belegbar, welche Komponenten drinstecken. CRA Anhang I Teil II Nr. 1 verlangt aber genau das. Der Release-Build erzeugt deshalb zusaetzlich eine **dauerhafte** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) aus den Lock-Files des gebauten Trees — offline, ohne Netzabruf und byte-identisch bei Wiederholung. Umfang: alle Python-Distributionen aus `requirements.txt` (direkt **und** transitiv) plus alle npm-Pakete aus `package-lock.json`. Die vier vendorten Frontend-Libs (htmx, Alpine-CSP, Dexie, Chart.js) sind darin als `required` gefuehrt, obwohl sie im Lockfile als `dev` stehen — sie werden ausgeliefert (`src/static/js/`) und laufen im Browser der Nutzerinnen. Build-/Testwerkzeuge bleiben `optional`. Bis `1.0` verbleibt das Artefakt beim Maintainer (es gibt bis dahin keine GitHub-Release-Page) und ist ueber den Kontakt in [SECURITY.md](../SECURITY.md) erhaeltlich; ab `1.0` haengt es am GitHub-Release.
+**Dauerhaftes Release-Artefakt (Refs #1895):** Das CI-Artefakt verfaellt nach 90 Tagen — fuer ein aelteres Release war danach nicht mehr belegbar, welche Komponenten drinstecken. Genau dieser Nachweis soll dauerhaft moeglich bleiben. Der Release-Build erzeugt deshalb zusaetzlich eine **dauerhafte** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) aus den Lock-Files des gebauten Trees — offline, ohne Netzabruf und byte-identisch bei Wiederholung. Umfang: alle Python-Distributionen aus `requirements.txt` (direkt **und** transitiv) plus alle npm-Pakete aus `package-lock.json`. Die vier vendorten Frontend-Libs (htmx, Alpine-CSP, Dexie, Chart.js) sind darin als `required` gefuehrt, obwohl sie im Lockfile als `dev` stehen — sie werden ausgeliefert (`src/static/js/`) und laufen im Browser der Nutzerinnen. Build-/Testwerkzeuge bleiben `optional`. Bis `1.0` verbleibt das Artefakt beim Maintainer (es gibt bis dahin keine GitHub-Release-Page) und ist ueber den Kontakt in [SECURITY.md](../SECURITY.md) erhaeltlich; ab `1.0` haengt es am GitHub-Release.
 
 ```bash
 # SBOM des letzten erfolgreichen Test-Workflow-Runs herunterladen
@@ -1402,7 +1400,7 @@ Das Projekt erzeugt damit drei unterschiedliche, einander ergänzende SBOMs:
 | SBOM | Umfang und Aufbewahrung |
 |------|-------------------------|
 | CI-Artefakt aus dem `audit`-Job | Python-Abhängigkeiten; 90 Tage |
-| Dauerhafte Release-SBOM `sbom-vX.Y.Z.json` | Python- und npm-Abhängigkeiten aus den Lock-Files; dauerhafter Nachweis nach CRA Anhang I Teil II Nr. 1 |
+| Dauerhafte Release-SBOM `sbom-vX.Y.Z.json` | Python- und npm-Abhängigkeiten aus den Lock-Files; dauerhafter Nachweis der Abhängigkeiten je Release |
 | Image-SBOM als Attestation | Zusätzlich Basis-Image-Layer und Systempakete am Image-Manifest |
 
 Die Image-SBOM ersetzt die dauerhafte Release-SBOM nicht. Der

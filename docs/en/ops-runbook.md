@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer and the CRA early-warning coupling is gone, #2207).
+> Most recently synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer; § 6.5c the paragraph coupling the advisory cadence to a regulatory reporting duty was dropped together with the removed compliance memo, and the § 8 SBOM rationale is worded neutrally, #2207).
 > Previously synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; the alternative deployment path reworded to "k8s"/"custom orchestration", #2202; pre-1.0 migration/historical framing removed -- the pre-0.23 host-crontab migration subsection, the database-role version-dated markers, and the pre-1.0-installation framing in the role-split recovery section (§ 9.6) are now described as current state or as a misconfiguration-recovery path, #2205).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
 > The German version is the authoritative source.
@@ -1091,8 +1091,6 @@ gh api repos/anlaufstelle/app/private-vulnerability-reporting # {"enabled": true
 | 5 | **Publication** — publish the advisory (patch + 7-day grace period), a `Security` entry in the [CHANGELOG](../../CHANGELOG.md) with the GHSA/CVE number, hall-of-fame credit | Maintainer/backup | patch + 7 days |
 | 6 | **No fix** — justify the rejection (out-of-scope list in `SECURITY.md`), close the matter cleanly with the reporter | Maintainer/backup | ≤ 10 business days |
 
-**Coupling to the CRA reporting duty:** If the vulnerability is **actively exploited**, the regulatory 24h/72h deadlines from [`docs/compliance/cra-einordnung.md` § 3](../compliance/cra-einordnung.md) (German) additionally apply — they don't replace the cadence above, but run in parallel and earlier. The trigger is therefore not "critical score" but "evidence of exploitation in the wild".
-
 **Boundary:** A GHSA describes a vulnerability **in the Anlaufstelle code**. For vulnerable dependencies, § 8.3 applies (`pip-audit`/Dependabot) — there, the upstream advisory already exists, and a dedicated GHSA would be a duplicate report. A dedicated advisory is only warranted if the application exposes the upstream gap and operators therefore need to act.
 
 ### 6.5a Maintenance Mode (Refs #700)
@@ -1377,7 +1375,7 @@ funding, public procurement, supplier audits) and lists all direct and
 transitive Python dependencies with versions, licenses, and CVE status at
 build time.
 
-**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days — for an older release, it was then no longer possible to prove which components it contained. But CRA Annex I Part II No. 1 requires exactly that. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. Until `1.0`, the artifact stays with the maintainer (there is no GitHub release page until then) and is available via the contact in [SECURITY.md](../../SECURITY.md); from `1.0` on, it is attached to the GitHub release.
+**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days — for an older release, it was then no longer possible to prove which components it contained. That proof is meant to stay available permanently. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. Until `1.0`, the artifact stays with the maintainer (there is no GitHub release page until then) and is available via the contact in [SECURITY.md](../../SECURITY.md); from `1.0` on, it is attached to the GitHub release.
 
 ```bash
 # Download the SBOM from the last successful test workflow run
@@ -1406,7 +1404,7 @@ The project therefore creates three distinct, complementary SBOMs:
 | SBOM | Scope and retention |
 |------|---------------------|
 | CI artifact from the `audit` job | Python dependencies; 90 days |
-| Durable release SBOM `sbom-vX.Y.Z.json` | Python and npm dependencies from the lock files; durable evidence under CRA Annex I Part II No. 1 |
+| Durable release SBOM `sbom-vX.Y.Z.json` | Python and npm dependencies from the lock files; durable evidence of the dependencies per release |
 | Image SBOM as an attestation | Additionally covers base-image layers and system packages on the image manifest |
 
 The image SBOM does not replace the durable release SBOM. Multi-platform
@@ -2736,4 +2734,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: a6d962b085be254ca90544b14d131dc56c04388e -->
+<!-- source-hash: 48d413a8ba728f18aefce47f5a8adc5e859f90a7 -->

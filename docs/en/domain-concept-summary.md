@@ -1,7 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
-> Most recently synchronized on 2026-09-11 (release-history wording: no deputy is currently designated, #2207).
+> Most recently synchronized on 2026-09-11 (release-history wording: no deputy is currently designated, and the two entries framed around the EU regulation now name the actual governance state and the support/SBOM/advisory work, #2207).
 
 # Domain Concept Summary
 
@@ -210,7 +210,7 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 
 - **Defense-in-depth wave**: the Content-Security-Policy now ships `style-src` without `'unsafe-inline'` (special pages via sha256 hashes, narrow admin-UI exception); statistics materialized-view access is funneled through a facility-enforcing helper; an AST guard fails CI on unscoped queries against the three non-RLS tables; upload temp files are pinned to tmpfs with a new deploy check.
 - **Operations out of the box**: `scripts/initial-setup.sh` performs the full first-run setup idempotently; the health endpoint continuously reports whether the runtime DB connection could bypass row-level security (`db_role_posture`); `docker-compose.prod.yml` gains a supercronic cron sidecar for the six background jobs (backup stays host-side) and a Redis cache service (database-cache fallback unchanged).
-- **Governance clarified**: the CRA deadline is documented as a self-imposed precaution (the project is outside the CRA's scope in its current operating model), and funding-programme references were removed project-wide.
+- **Governance clarified**: the maintainer and governance documents describe the actual state — a single maintainer, no deputy currently designated — and funding-programme references were removed project-wide.
 - **"Works ≠ correct" pilot**: the first synthetic-persona walk against the dev instance produced eleven triage candidates and directly led to two pre-release fixes (htmx settle attributes, admin CSP exception).
 
 ### v0.80.0 (2026-08-10)
@@ -239,7 +239,7 @@ The largest collective pre-release to date — the configurability milestones M0
 - **A facility created at runtime gets its settings row**: previously only the initial setup and migrations created it. Without that row, retention enforcement and statistics snapshots silently skipped the facility — meaning no retention period was applied to it at all.
 - **Spreadsheet formula protection covers invisible characters**: a CSV cell whose formula character is preceded by a space, a non-breaking space or a zero-width character is now neutralised too. Spreadsheets discard those characters on import and evaluate the cell anyway. Re-importing an exported file remains deliberately out of scope, and the administrator handbook says so.
 - **Rate limiting in search is recognisable as such**: hitting the limit produced a generic error toast, indistinguishable from a server fault or from "no results". It now carries its own wording.
-- **Cyber Resilience Act groundwork**: `SECURITY.md` states which release line receives fixes and for how long (rule-based while the project is pre-1.0, switching to dated end-of-support per minor at 1.0), every release build emits a CycloneDX software bill of materials alongside its notes, and the advisory handling process is written down. Private vulnerability reporting is enabled on the public repository, so the reporting path named in `SECURITY.md` actually works.
+- **Security support and supply-chain groundwork**: `SECURITY.md` states which release line receives fixes and for how long (rule-based while the project is pre-1.0, switching to dated end-of-support per minor at 1.0), every release build emits a CycloneDX software bill of materials alongside its notes, and the advisory handling process is written down. Private vulnerability reporting is enabled on the public repository, so the reporting path named in `SECURITY.md` actually works.
 
 ### v0.86.0 (2026-08-27)
 
