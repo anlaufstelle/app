@@ -327,7 +327,10 @@ docker compose -f docker-compose.prod.yml run --rm \
     --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Vollen Stack starten (web + caddy)
-docker compose -f docker-compose.prod.yml up -d
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d
 
 # 4. Sicherheits-Posture verifizieren
 docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
@@ -1257,17 +1260,9 @@ Noch vor der Bestätigungsabfrage prüft das Skript zuerst den DB-HMAC und, fall
 ```bash
 docker compose -f docker-compose.prod.yml run --rm \
   --entrypoint=/app/docker-migrate.sh maintenance
-docker compose -f docker-compose.prod.yml up -d
-```
-
-Ist mindestens eine Zusatzdatei eingerichtet, verwenden Sie stattdessen bei beiden Schritten den vollständigen Dateisatz (Legal beziehungsweise Override jeweils nur, falls eingerichtet):
-
-```bash
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-docker compose "${compose_files[@]}" run --rm \
-  --entrypoint=/app/docker-migrate.sh maintenance
 docker compose "${compose_files[@]}" up -d
 ```
 
@@ -1290,18 +1285,9 @@ docker compose -f docker-compose.prod.yml run --rm \
     --entrypoint=/app/docker-migrate.sh maintenance
 
 # 3. Stack neu starten (web + caddy, DB bleibt; kurze Downtime)
-docker compose -f docker-compose.prod.yml up -d web caddy
-```
-
-Ist mindestens eine Zusatzdatei eingerichtet, lautet derselbe Update-Ablauf mit dem vollständigen Dateisatz:
-
-```bash
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-docker compose "${compose_files[@]}" pull web
-docker compose "${compose_files[@]}" run --rm \
-  --entrypoint=/app/docker-migrate.sh maintenance
 docker compose "${compose_files[@]}" up -d web caddy
 ```
 
@@ -1329,18 +1315,12 @@ Falls nach einem Update Probleme auftreten:
 ```bash
 # Auf ein bestimmtes Image-Tag zurückwechseln
 # In docker-compose.prod.yml: image: ghcr.io/anlaufstelle/app:v1.2.3
-docker compose -f docker-compose.prod.yml up -d
-
-# Datenbank-Backup von vor dem Update einspielen (falls nötig)
-```
-
-Ist mindestens eine Zusatzdatei eingerichtet, muss auch der Rollback-Neustart den vollständigen Dateisatz verwenden:
-
-```bash
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 docker compose "${compose_files[@]}" up -d
+
+# Datenbank-Backup von vor dem Update einspielen (falls nötig)
 ```
 
 ---
@@ -1538,20 +1518,12 @@ Ergänzen Sie `localhost,127.0.0.1` wie in [Schritt 2](#schritt-2-umgebungsvaria
 Der `cron`-Sidecar hat keinen HTTP-Endpunkt; sein Image-Healthcheck muss im Produktions-Compose deaktiviert sein. Prüfen Sie, ob Sie die aktuelle `docker-compose.prod.yml` verwenden, und erstellen Sie den Dienst neu:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --force-recreate cron
-docker compose -f docker-compose.prod.yml ps cron
-docker compose -f docker-compose.prod.yml logs cron
-```
-
-Ist mindestens eine Zusatzdatei eingerichtet, verwenden Sie auch für das Recreate und die Folgeprüfungen den vollständigen Dateisatz:
-
-```bash
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 docker compose "${compose_files[@]}" up -d --force-recreate cron
-docker compose "${compose_files[@]}" ps cron
-docker compose "${compose_files[@]}" logs cron
+docker compose -f docker-compose.prod.yml ps cron
+docker compose -f docker-compose.prod.yml logs cron
 ```
 
 ### Problem: ClamAV-Signatur ist veraltet
