@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Most recently synchronized on 2026-09-11 (§ 5.8 the `/health/` `smtp` field named as an additional quick check between the `sendtestemail` exit code and actual delivery, #2089).
+> Most recently synchronized on 2026-09-11 (§ 5.8 the `/health/` `smtp` field named as an additional quick check between the `sendtestemail` exit code and actual delivery; the paragraph now separates the technical defaults (nothing is fail-closed) from the operational necessity per variable, and states that `EMAIL_USE_TLS` only wires up STARTTLS -- implicit TLS/SMTPS via Django's `EMAIL_USE_SSL` is not supported by this deployment path, #2089).
 > Previously synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer; § 6.5c the paragraph coupling the advisory cadence to a regulatory reporting duty was dropped together with the removed compliance memo, and the § 8 SBOM rationale is worded neutrally, #2207).
 > Previously synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; the alternative deployment path reworded to "k8s"/"custom orchestration", #2202; pre-1.0 migration/historical framing removed -- the pre-0.23 host-crontab migration subsection, the database-role version-dated markers, and the pre-1.0-installation framing in the role-split recovery section (§ 9.6) are now described as current state or as a misconfiguration-recovery path, #2205).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
@@ -955,12 +955,18 @@ A full RAM buffer instead of disk streaming (setting `FILE_UPLOAD_MAX_MEMORY_SIZ
 
 ### 5.8 Checking SMTP Delivery
 
-Production uses Django's SMTP backend. In `.env`, `EMAIL_HOST`, `EMAIL_PORT`,
-`EMAIL_USE_TLS`, and `DEFAULT_FROM_EMAIL` must match the relay. If it requires
-authentication, `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` are required too.
-`EXTERNAL_ORIGIN` must also contain the public base URL so that invitation and
-reset links are valid. The sender should be authorized for SPF, DKIM, and
-DMARC.
+Production uses Django's SMTP backend. None of the `EMAIL_*` values is
+technically required — without any set, `EMAIL_HOST=localhost`, port `587`,
+STARTTLS (`EMAIL_USE_TLS=True`), and the sender `noreply@anlaufstelle.app`
+apply. Operationally, i.e. for actual delivery, `EMAIL_HOST` must point at the
+relay in `.env`; only set `EMAIL_PORT` and `EMAIL_USE_TLS` if they need to
+deviate from the default. `EMAIL_USE_TLS=True` negotiates **STARTTLS** on the
+configured port — implicit TLS/SMTPS (classically port 465, Django's
+`EMAIL_USE_SSL`) is currently **not wired up**: a relay offering only port 465
+cannot be connected to this application. If the relay requires authentication,
+`EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` are needed too. `EXTERNAL_ORIGIN`
+must also contain the public base URL so that invitation and reset links are
+valid. The sender should be authorized for SPF, DKIM, and DMARC.
 
 Before the first onboarding, replace the example address and send Django's
 standard test message from the running web container:
@@ -2741,4 +2747,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 9da138984cffde3d527bd960aa0463f4dd7b77a9 -->
+<!-- source-hash: 77f7dccdc252e5c00a1dfa581ce8d217d3263eaa -->

@@ -534,15 +534,22 @@ Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-To
 
 **Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht.
 
-**SMTP-Voraussetzungen und Fehlersuche:** Für den Versand müssen Betreiber
-`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` und `DEFAULT_FROM_EMAIL` passend zum
-SMTP-Relay setzen; verlangt der Relay eine Anmeldung, sind zusätzlich
-`EMAIL_HOST_USER` und `EMAIL_HOST_PASSWORD` Pflicht. `DEFAULT_FROM_EMAIL` muss
-eine für SPF, DKIM und DMARC autorisierte Absenderdomain verwenden. Damit die
-Links in Einladungs- und Reset-Mails auf die richtige öffentliche Instanz
-zeigen, muss außerdem `EXTERNAL_ORIGIN` stimmen. Das
-[Operations-Runbook § 5.8](ops-runbook.md#58-smtp-versand-pruefen) enthält den
-Testbefehl und den Log-Zugriff.
+**SMTP-Voraussetzungen und Fehlersuche:** Technisch ist keiner dieser Werte
+Pflicht — ohne Angabe startet die Anwendung mit `EMAIL_HOST=localhost`, Port
+`587`, STARTTLS aktiv (`EMAIL_USE_TLS=True`) und Absender
+`noreply@anlaufstelle.app`. Betrieblich, also für tatsächliche Zustellung,
+müssen Betreiber `EMAIL_HOST` auf ein erreichbares Relay setzen; `EMAIL_PORT`
+und `EMAIL_USE_TLS` nur anpassen, wenn sie vom Default abweichen sollen.
+`EMAIL_USE_TLS=True` verhandelt **STARTTLS** auf dem konfigurierten Port
+implizites TLS/SMTPS (klassisch Port 465, Djangos `EMAIL_USE_SSL`) ist derzeit
+**nicht verdrahtet**: ein Relay, das ausschließlich Port 465 anbietet, lässt
+sich mit dieser Anwendung nicht anbinden. Verlangt der Relay eine Anmeldung,
+sind zusätzlich `EMAIL_HOST_USER` und `EMAIL_HOST_PASSWORD` betrieblich
+notwendig. `DEFAULT_FROM_EMAIL` muss eine für SPF, DKIM und DMARC autorisierte
+Absenderdomain verwenden. Damit die Links in Einladungs- und Reset-Mails auf
+die richtige öffentliche Instanz zeigen, muss außerdem `EXTERNAL_ORIGIN`
+stimmen. Das [Operations-Runbook § 5.8](ops-runbook.md#58-smtp-versand-pruefen)
+enthält den Testbefehl und den Log-Zugriff.
 
 Erscheint beim Anlegen oder erneuten Senden die Meldung, dass die Einladung
 nicht versendet werden konnte, SMTP-Werte und Web-Logs prüfen und danach

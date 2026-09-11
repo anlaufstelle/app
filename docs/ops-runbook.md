@@ -950,12 +950,20 @@ Ein voller RAM-Buffer statt Disk-Streaming (`FILE_UPLOAD_MAX_MEMORY_SIZE` sehr h
 
 ### 5.8 SMTP-Versand pruefen
 
-Der Produktionsbetrieb nutzt Djangos SMTP-Backend. In `.env` muessen
-`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` und `DEFAULT_FROM_EMAIL` zum Relay
-passen; verlangt er Authentifizierung, sind auch `EMAIL_HOST_USER` und
-`EMAIL_HOST_PASSWORD` Pflicht. Fuer gueltige Einladungs- und Reset-Links muss
-ausserdem `EXTERNAL_ORIGIN` die oeffentliche Basis-URL enthalten. Der Absender
-soll fuer SPF, DKIM und DMARC autorisiert sein.
+Der Produktionsbetrieb nutzt Djangos SMTP-Backend. Technisch ist keiner der
+`EMAIL_*`-Werte Pflicht — ohne Angabe gelten `EMAIL_HOST=localhost`, Port
+`587`, STARTTLS (`EMAIL_USE_TLS=True`) und der Absender
+`noreply@anlaufstelle.app`. Betrieblich, also fuer tatsaechliche Zustellung,
+muss `EMAIL_HOST` in `.env` auf das erreichbare Relay zeigen; `EMAIL_PORT` und
+`EMAIL_USE_TLS` nur setzen, wenn sie vom Default abweichen sollen.
+`EMAIL_USE_TLS=True` verhandelt **STARTTLS** auf dem konfigurierten Port —
+implizites TLS/SMTPS (klassisch Port 465, Djangos `EMAIL_USE_SSL`) ist derzeit
+**nicht verdrahtet**: ein Relay mit ausschliesslich Port 465 laesst sich mit
+dieser Anwendung nicht anbinden. Verlangt der Relay Authentifizierung, sind
+zusaetzlich `EMAIL_HOST_USER` und `EMAIL_HOST_PASSWORD` noetig. Fuer gueltige
+Einladungs- und Reset-Links muss ausserdem `EXTERNAL_ORIGIN` die oeffentliche
+Basis-URL enthalten. Der Absender soll fuer SPF, DKIM und DMARC autorisiert
+sein.
 
 Vor dem ersten Onboarding die Beispieladresse ersetzen und Djangos
 Standard-Testmail aus dem laufenden Web-Container senden:
