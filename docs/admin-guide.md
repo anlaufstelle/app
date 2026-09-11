@@ -159,18 +159,13 @@ services:
       DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
 ```
 
-Setzen Sie den Wert in `.env` und erstellen Sie `web` mit genau diesem Dateisatz neu:
+Setzen Sie den Wert in `.env` und erstellen Sie `web` mit dem vollständigen **Dateisatz** neu. Sobald ein Compose-Aufruf mindestens ein ausdrückliches `-f` enthält, lädt Compose `compose.override.yml` nicht automatisch. Deshalb bauen alle folgenden Recreate-Befehle die Liste in der festen Reihenfolge `docker-compose.prod.yml`, `compose.legal.yml` (falls eingerichtet), `compose.override.yml` (falls eingerichtet) auf:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.override.yml \
-  up -d --force-recreate web
-```
-
-Sind Rechtstexte eingerichtet, muss `compose.legal.yml` bei diesem und jedem späteren Recreate ebenfalls enthalten sein:
-
-```bash
-docker compose -f docker-compose.prod.yml -f compose.override.yml \
-  -f compose.legal.yml up -d --force-recreate web
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d --force-recreate web
 ```
 
 **Django & Hosts**
@@ -214,8 +209,8 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 
 | Name | Default (prod) | Beschreibung |
 |---|---|---|
-| `CLAMAV_ENABLED` | `true` | Aktiviert den Virenscan vor Upload-Verschlüsselung. Fail-closed: Ist der Daemon nicht erreichbar, wird der Upload abgewiesen. |
-| `CLAMAV_HOST` | `clamav` | Hostname des ClamAV-Daemons (Service-Name im Compose-Netzwerk). |
+| `CLAMAV_ENABLED` | `true` | Aktiviert den Virenscan vor Upload-Verschlüsselung. Fail-closed: Ist der Daemon nicht erreichbar, wird der Upload abgewiesen. `false` ist ausschließlich für Entwicklung und Tests zulässig, nicht für Produktion. |
+| `CLAMAV_HOST` | `clamav` | Hostname des ClamAV-Daemons (Service-Name im Compose-Netzwerk). Ein externer Scanner wird über `CLAMAV_HOST` und `CLAMAV_PORT` konfiguriert; die Durchreichung des externen Hosts folgt mit #2219. |
 | `CLAMAV_PORT` | `3310` | TCP-Port des clamd-Sockets. |
 | `CLAMAV_TIMEOUT` | `15` | Wall-Clock-Timeout in Sekunden pro Scan-Aufruf; MUSS unter `GUNICORN_TIMEOUT` liegen, sonst killt der Worker-Timeout den Request statt fail-closed abzuweisen. |
 
@@ -313,7 +308,9 @@ sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"
 ./scripts/initial-setup.sh
 ```
 
-Das Beispiel verwendet das empfohlene Backupkonto `root`: Es darf in das tatsächlich konfigurierte `BACKUP_HOST_DIR` schreiben. Die Gruppe mit GID 1000 gehört dem Container-Benutzer `appuser`; Modus `2750` gibt ihm nur Lese- und Durchgangsrecht und vererbt die Gruppe an neue Unterverzeichnisse. Verwenden Sie für Backupläufe `umask 0027`, damit auch neue Verzeichnisse und Dateien für diese Gruppe lesbar bleiben; für ein eigenes Backupkonto ersetzen Sie nur `-o root`. Geben Sie Sicherungen niemals für alle Benutzer frei. Ab dem Compose-/Skript-Fix #2219 übernimmt `initial-setup.sh` diese Vorbereitung. Ohne den Fix muss sie vor dem ersten Containerstart wie oben erfolgen; andernfalls würde Docker den fehlenden Bind-Mount als `root` anlegen. Das Skript startet die Datenbank und wartet auf ihre Bereitschaft, legt das Schema per One-Shot-Job an, fährt den vollen Stack hoch und verifiziert Deployment-Settings sowie die DB-Rollen. Zum Schluss legt es — sofern noch keiner existiert — interaktiv den Super-Admin an (siehe [§ 2.1](#21-erstinstallation-super-admin-anlegen-bootstrap)).
+Das Beispiel verwendet das empfohlene Backupkonto `root`, weil die Backups als root-Cron laufen. Die Gruppe mit GID 1000 gehört dem Container-Benutzer `appuser`; Modus `2750` gibt ihm nur Lese- und Durchgangsrecht und vererbt die Gruppe an neue Unterverzeichnisse. Verwenden Sie für Backupläufe `umask 0027`, damit auch neue Verzeichnisse und Dateien für diese Gruppe lesbar bleiben. Geben Sie Sicherungen niemals für alle Benutzer frei.
+
+`initial-setup.sh` läuft danach **ohne `sudo`** als Betriebskonto. Mit #2219 prüft und verlangt es genau diesen Verzeichnisvertrag; es nimmt an einem vorhandenen Verzeichnis weder `chown` noch `chgrp` vor. Ein vorhandenes `BACKUP_HOST_DIR` mit Gruppe 1000 und Modus `2750` wird akzeptiert. Fehlt das Verzeichnis, legt das Skript es nur an, wenn das aufrufende Konto GID 1000 setzen darf (Gruppenmitglied oder root); andernfalls bricht es **vor dem ersten `up`** ab und nennt `sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"`. Bei falscher Gruppe oder falschem Modus bricht es mit `sudo chgrp 1000 "$BACKUP_HOST_DIR" && sudo chmod 2750 "$BACKUP_HOST_DIR"` als Korrekturbefehl ab. Es legt das Verzeichnis nicht selbst mit root-Rechten an. Danach startet das Skript die Datenbank, wartet auf ihre Bereitschaft, legt das Schema per One-Shot-Job an, fährt den vollen Stack hoch und verifiziert Deployment-Settings sowie die DB-Rollen. Zum Schluss legt es — sofern noch keiner existiert — interaktiv den Super-Admin an (siehe [§ 2.1](#21-erstinstallation-super-admin-anlegen-bootstrap)).
 
 Das Skript ist **idempotent** (ein zweiter Lauf ist gefahrlos: Migrationen sind dann No-ops, ein vorhandener Super-Admin wird übersprungen) und **fail-loud** — bricht ein Schritt ab, endet es mit einem Exit-Code ≠ 0 und einer Erklärung. Optionale Umgebungsvariablen: `COMPOSE_FILE` (Default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. Ein Passwort nimmt es bewusst **nicht** entgegen — das fragt `create_super_admin` interaktiv ab ([ADR-018](adr/018-rollenmodell-superadmin.md)).
 
@@ -391,10 +388,13 @@ services:
       - ./legal:/run/legal:ro
 ```
 
-Starten Sie den Webdienst danach mit beiden Compose-Dateien neu (und geben Sie bei späteren Compose-Aufrufen dieselbe zweite Datei an):
+Starten Sie den Webdienst danach mit dem vollständigen [Dateisatz aus § 1](#vollständige-umgebungsvariablen-referenz) neu. `compose.legal.yml` ist hier eingerichtet; `compose.override.yml` wird aufgenommen, falls Sie es eingerichtet haben:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d web
 ```
 
 Jede Datei muss eine reguläre, nicht leere UTF-8-Datei von höchstens 256 KiB sein. Die Dateien unterstützen bewusst nur einen kleinen Markdown-Ausschnitt: Überschriften mit `#` bis `###`, Absätze und Leerzeilen, unsortierte Listen mit `-` oder `*` sowie Links der Form `[Text](URL)`. Linktext ist auf 256 Zeichen und das Linkziel auf 2.048 Zeichen begrenzt; längere Konstrukte erscheinen als normaler Text. Linkziele sind ausschließlich mit `http:`, `https:` oder `mailto:` erlaubt; HTML und alles andere wird ebenfalls als Text ausgegeben. Damit können Rechtstexte keine Skripte oder Styles in die Anwendung einschleusen.
@@ -1194,7 +1194,7 @@ Voraussetzungen in `.env`:
 - ein zufälliger, separat verwahrter `BACKUP_ENCRYPTION_KEY`,
 - `BACKUP_HOST_DIR` als Basisverzeichnis auf dem Host; das Skript schreibt ausschließlich dorthin und ignoriert das nur als Container-Mount-Ziel verwendete `BACKUP_DIR` (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)).
 
-Das Backupkonto braucht Schreibrecht, während `appuser` im Container (UID/GID 1000) das Verzeichnis lesen und durchqueren muss, damit Health- und Compliance-Prüfungen die Sicherungen finden. Das restriktive Gruppenmodell aus [Schritt 4](#schritt-4-stack-starten) erfüllt beides für das konfigurierte `BACKUP_HOST_DIR`; `umask 0027` erhält die Gruppenlesbarkeit neuer Inhalte, ohne Sicherungen weltlesbar zu machen.
+Der root-Cron braucht Schreibrecht, während `appuser` im Container (UID/GID 1000) das Verzeichnis lesen und durchqueren muss, damit Health- und Compliance-Prüfungen die Sicherungen finden. Legen Sie das konfigurierte `BACKUP_HOST_DIR` deshalb vor dem Setup als `root:1000` mit Modus `2750` an, genau wie in [Schritt 4](#schritt-4-stack-starten). `initial-setup.sh` läuft ohne `sudo`, akzeptiert den korrekten Bestand und ändert dessen Eigentümer oder Gruppe nicht; bei Abweichungen bricht es vor dem ersten `up` mit dem dort dokumentierten Korrekturbefehl ab. `umask 0027` erhält die Gruppenlesbarkeit neuer Inhalte, ohne Sicherungen weltlesbar zu machen.
 
 > **RLS ist hier sicherheitskritisch:** `pg_dump` muss als `POSTGRES_ADMIN_USER` laufen. Die App-Rolle `POSTGRES_USER` ist `NOBYPASSRLS`; ein roher Dump mit dieser Rolle scheitert an `FORCE ROW LEVEL SECURITY` beziehungsweise wäre als Sicherung der einrichtungsbezogenen Daten nicht vollständig. Verwenden Sie deshalb weder einen eigenen `pg_dump -U anlaufstelle`-Befehl noch die App-Rolle als Ersatz für `backup.sh`.
 
@@ -1260,12 +1260,15 @@ docker compose -f docker-compose.prod.yml run --rm \
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Mit eingerichteten Rechtstexten verwenden Sie stattdessen bei beiden Schritten den vollständigen Dateisatz:
+Ist mindestens eine Zusatzdatei eingerichtet, verwenden Sie stattdessen bei beiden Schritten den vollständigen Dateisatz (Legal beziehungsweise Override jeweils nur, falls eingerichtet):
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml run --rm \
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" run --rm \
   --entrypoint=/app/docker-migrate.sh maintenance
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
+docker compose "${compose_files[@]}" up -d
 ```
 
 5. Prüfen Sie Datenbankrollen, Gesundheitszustand und Stichproben aus Datenbank **und** File-Vault. Siehe [Abschnitt 5](#5-monitoring), [Ops-Runbook § 9](ops-runbook.md#9-row-level-security-rls) und die [Smoke-Verifikation des Disaster-Recovery-Leitfadens](disaster-recovery.md#7-smoke-verifikation-nach-restore).
@@ -1290,13 +1293,16 @@ docker compose -f docker-compose.prod.yml run --rm \
 docker compose -f docker-compose.prod.yml up -d web caddy
 ```
 
-Mit eingerichteten Rechtstexten lautet derselbe Update-Ablauf:
+Ist mindestens eine Zusatzdatei eingerichtet, lautet derselbe Update-Ablauf mit dem vollständigen Dateisatz:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml pull web
-docker compose -f docker-compose.prod.yml -f compose.legal.yml run --rm \
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" pull web
+docker compose "${compose_files[@]}" run --rm \
   --entrypoint=/app/docker-migrate.sh maintenance
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web caddy
+docker compose "${compose_files[@]}" up -d web caddy
 ```
 
 Prüfen Sie anschließend die Logs:
@@ -1305,10 +1311,10 @@ Prüfen Sie anschließend die Logs:
 docker compose -f docker-compose.prod.yml logs web --tail=50
 ```
 
-Mit eingerichteten Rechtstexten:
+Mit eingerichteter Zusatzdatei verwenden Sie denselben oben aufgebauten vollständigen Dateisatz:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml logs web --tail=50
+docker compose "${compose_files[@]}" logs web --tail=50
 ```
 
 ### 4.2 Vor einem Update
@@ -1328,10 +1334,13 @@ docker compose -f docker-compose.prod.yml up -d
 # Datenbank-Backup von vor dem Update einspielen (falls nötig)
 ```
 
-Mit eingerichteten Rechtstexten muss auch der Rollback-Neustart beide Dateien verwenden:
+Ist mindestens eine Zusatzdatei eingerichtet, muss auch der Rollback-Neustart den vollständigen Dateisatz verwenden:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d
 ```
 
 ---
@@ -1534,13 +1543,15 @@ docker compose -f docker-compose.prod.yml ps cron
 docker compose -f docker-compose.prod.yml logs cron
 ```
 
-Mit eingerichteten Rechtstexten verwenden Sie auch für das Recreate und die Folgeprüfungen beide Dateien:
+Ist mindestens eine Zusatzdatei eingerichtet, verwenden Sie auch für das Recreate und die Folgeprüfungen den vollständigen Dateisatz:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml \
-  up -d --force-recreate cron
-docker compose -f docker-compose.prod.yml -f compose.legal.yml ps cron
-docker compose -f docker-compose.prod.yml -f compose.legal.yml logs cron
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d --force-recreate cron
+docker compose "${compose_files[@]}" ps cron
+docker compose "${compose_files[@]}" logs cron
 ```
 
 ### Problem: ClamAV-Signatur ist veraltet
@@ -1552,7 +1563,7 @@ docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
-Das Update-Protokoll muss einen erfolgreichen Download zeigen. Wiederholte DNS-/Downloadfehler erfordern eine Prüfung des ausgehenden Netzwerkpfads oder des konfigurierten Mirrors; ein grüner `clamdscan --version`-Healthcheck belegt nur, dass das Binary startet, nicht dass die Signaturen aktuell sind.
+Der Signaturdownload setzt voraus, dass der `clamav`-Dienst einen funktionierenden ausgehenden Netzwerkpfad (Egress) zum Signaturserver beziehungsweise konfigurierten Mirror besitzt; diesen Pfad stellt der Zielstand nach #2219 bereit. Das Update-Protokoll muss einen erfolgreichen Download zeigen. Wiederholte DNS-/Downloadfehler erfordern eine Prüfung dieses Egress-Pfads oder des Mirrors. Ein grüner `clamdscan --version`-Healthcheck belegt nur, dass das Binary startet, nicht dass die Signaturen aktuell sind; kontrollieren Sie den angezeigten Signaturstand zusätzlich im Compliance-Dashboard unter `/system/compliance/`.
 
 ### Problem: TLS-Zertifikat wird nicht ausgestellt
 

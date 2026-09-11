@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Synchronization update 2026-09-11: review fixes for host-independent key generation, backup-directory permissions, legal Compose file sets, the current runtime allowlist, release-tag selection, and migration-free diagnostics (#2218).
+> Synchronization update 2026-09-11: the root-cron backup-directory contract, complete optional Compose file sets, ClamAV production/external-scanner limits, and signature-download egress diagnostics (#2218).
 > Most recently synchronized on 2026-09-11 (§§ 1--6 fresh-install prerequisites, complete source acquisition, quoted environment values, key and DB-password generation, production setting routing, setup sequence, monitoring boundaries, backup scheduling, and troubleshooting, plus the RLS wording in § 7.9, #2218). Previously synchronized on 2026-09-10 (§ 3.3 both database and optional media HMAC sidecars are verified before confirmation and repeated immediately before use, plus recovery guidance after interrupted media extraction, #2195; § 7.5 client merge: the legal-hold limit when reverting a merge -- an active hold on the target or the source, including indirectly through one of their events or cases, refuses **Revert merge**, and the hold is deliberately not mirrored onto the source, #2200; § 2.9 open CSV import source files count during quota enforcement while the display remains attachment-based, #2180; § 2.11 running imports reject changed documentation types or field templates and commit the most recently confirmed mapping, #2196, #2199; § 5.6 URL-bearing event fields are masked structurally -- query string dropped, path resolved against the route schema including subpath prefix and missing trailing slash, token-signal heuristic for unresolvable paths including percent-encoded tokens; log entries and log breadcrumbs are reduced to their template, person key-value pairs, structured person keys, the client IP and the proxy headers including `Forwarded` are scrubbed -- plus the corresponding limits, #2198; § 2.3/§ 2.5 the retention setting for handover notes (days) and the hard-delete of manual shift notes in the retention run, plus the note that a time filter with handover notes can only be deleted after the retention period, #2042; § 2.4 `super_admin` can change **MFA required** for super-admin/bootstrap accounts under **Core > Users**, and each change is recorded as `USER_ACCESS_UPDATED` with `mfa_required` -- the field is also visible to application managers editing regular accounts, #2172; the alternative-deployment box in § 1 is removed and the cron-job notes in § 2.9 are reworded without the alternative deployment path, #2202; pre-1.0 migration/historical framing removed -- the EXTERNAL_ORIGIN migration box, three dated "Changed" boxes (documentation-type category, report key, system type), the outdated `ENCRYPTION_KEY`/email-less-fallback wording, and several version-dated markers are now described as current state, #2205).
 > Previously synchronized on 2026-09-08 (§ 2.9 the key-rotation coverage table and the operational note now cover `EventHistory` as well: the history columns are rotated per row with a row lock and compare-and-swap, a redaction or Art. 17 anonymization committed during the run wins and the row is reported as skipped, and rows that are already redacted are no longer rotation candidates, #2177).
 > Previously synchronized on 2026-09-08 (§ 2.9 row-lock/compare-and-swap protection, contention warnings, retry guidance and the maintenance-window recommendation for key rotation, #2131; § 7.6 the Art. 15 access record now states the deletion timestamp and the triggering user for events in the trash, plus the `deleted_events` structure note and the `null` boundary for events deleted before 0.96, #2157). Previously synchronized on 2026-08-30 (§ 2 self-hosted imprint/privacy files, safe Markdown subset, read-only mount and 404 behavior, #2076). Previously synchronized on 2026-08-28 (§ 2.2c the hard-delete description corrected -- Django wraps the whole delete cascade in one transaction, so the trigger error rolls back completely; partial destruction only arises from hand-written scripts that commit between tables, #2067). Previously synchronized on 2026-08-28 (§ 2.2c archiving a facility now actually blocks access -- sign-in, running sessions and the RLS context -- plus the raw-shell hard-delete pitfall around the `auditlog_immutable` trigger and the cross-reference to user offboarding, #2067). Previously synchronized on 2026-08-28 (§ 5.6 the hosted-Sentry third-country/DPA check and the DPA-template subprocessor cross-reference, #2052). Previously synchronized on 2026-08-28 (§§ 1/2.11/3/4.2 the RLS-safe `backup.sh`/`restore.sh` path for database and media backups, verification, cron, and recovery, #2074). Previously synchronized on 2026-08-25 (§ 7.4 the seven audit actions for domain edits, case links and attachments, their data-minimized details and regular retention, #1860). Previously synchronized on 2026-08-24 (§§ 2.4/2.7 the facility-scoped Access UI, sudo requirement, invitation, role, MFA, deletion-confirmation, deactivation and unlock flows, #1871). Previously synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
@@ -167,18 +167,13 @@ services:
       DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
 ```
 
-Set the value in `.env`, then recreate `web` with exactly this file set:
+Set the value in `.env`, then recreate `web` with the complete **file set**. As soon as a Compose invocation contains at least one explicit `-f`, Compose does not load `compose.override.yml` automatically. Every recreate command below therefore builds the list in the fixed order `docker-compose.prod.yml`, `compose.legal.yml` (if configured), `compose.override.yml` (if configured):
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.override.yml \
-  up -d --force-recreate web
-```
-
-If legal texts are configured, `compose.legal.yml` must also be included in this and every later recreate:
-
-```bash
-docker compose -f docker-compose.prod.yml -f compose.override.yml \
-  -f compose.legal.yml up -d --force-recreate web
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d --force-recreate web
 ```
 
 **Django & Hosts**
@@ -222,8 +217,8 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 
 | Name | Default (prod) | Description |
 |---|---|---|
-| `CLAMAV_ENABLED` | `true` | Enables virus scanning before upload encryption. Fail-closed: if the daemon is unreachable, the upload is rejected. |
-| `CLAMAV_HOST` | `clamav` | Hostname of the ClamAV daemon (service name in the Compose network). |
+| `CLAMAV_ENABLED` | `true` | Enables virus scanning before upload encryption. Fail-closed: if the daemon is unreachable, the upload is rejected. `false` is permitted only for development and tests, not in production. |
+| `CLAMAV_HOST` | `clamav` | Hostname of the ClamAV daemon (service name in the Compose network). Configure an external scanner through `CLAMAV_HOST` and `CLAMAV_PORT`; passing through the external host follows with #2219. |
 | `CLAMAV_PORT` | `3310` | TCP port of the clamd socket. |
 | `CLAMAV_TIMEOUT` | `15` | Wall-clock timeout in seconds per scan invocation; MUST be below `GUNICORN_TIMEOUT`, otherwise the worker timeout kills the request instead of failing closed. |
 
@@ -321,7 +316,9 @@ sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"
 ./scripts/initial-setup.sh
 ```
 
-The example uses the recommended backup account, `root`: it can write to the actually configured `BACKUP_HOST_DIR`. Group GID 1000 belongs to the container user `appuser`; mode `2750` gives it read and traverse access only and passes the group to new subdirectories. Use `umask 0027` for backup runs so that new directories and files remain readable by that group; if you use a dedicated backup account, replace only `-o root`. Never make backups readable by all users. Starting with the Compose/script fix #2219, `initial-setup.sh` performs this preparation. Without that fix, it must happen before the first container start as shown above; otherwise Docker creates the missing bind mount as `root`. The script starts the database, waits for readiness, creates the schema through the one-shot job, brings up the full stack, and verifies deployment settings and database roles. Finally it creates the super-admin interactively unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
+The example uses the recommended backup account, `root`, because backups run from root's cron. Group GID 1000 belongs to the container user `appuser`; mode `2750` gives it read and traverse access only and passes the group to new subdirectories. Use `umask 0027` for backup runs so that new directories and files remain readable by that group. Never make backups readable by all users.
+
+`initial-setup.sh` then runs **without `sudo`** as the operating account. With #2219, it checks and requires exactly this directory contract; it does not run `chown` or `chgrp` on an existing directory. An existing `BACKUP_HOST_DIR` with group 1000 and mode `2750` is accepted. If the directory is missing, the script creates it only when the invoking account may set GID 1000 (a group member or root); otherwise it aborts **before the first `up`** and prints `sudo install -d -m 2750 -o root -g 1000 "$BACKUP_HOST_DIR"`. If the group or mode is wrong, it aborts with `sudo chgrp 1000 "$BACKUP_HOST_DIR" && sudo chmod 2750 "$BACKUP_HOST_DIR"` as the correction command. It does not create the directory with root privileges itself. The script then starts the database, waits for readiness, creates the schema through the one-shot job, brings up the full stack, and verifies deployment settings and database roles. Finally it creates the super-admin interactively unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
 
 The script is **idempotent** (a second run is safe: migrations become no-ops, an existing super-admin is skipped) and **fail-loud** -- if a step fails, it exits with a non-zero code and an explanation. Optional environment variables: `COMPOSE_FILE` (default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. It deliberately accepts **no** password -- `create_super_admin` prompts for it interactively ([ADR-018](../adr/018-rollenmodell-superadmin.md)).
 
@@ -399,10 +396,13 @@ services:
       - ./legal:/run/legal:ro
 ```
 
-Restart the web service with both Compose files afterward (and supply the same second file on later Compose invocations):
+Restart the web service with the complete [file set from Section 1](#full-environment-variable-reference). `compose.legal.yml` is configured here; `compose.override.yml` is included if you configured it:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d web
 ```
 
 Each file must be a regular, non-empty UTF-8 file no larger than 256 KiB. The files deliberately support only a small Markdown subset: headings from `#` through `###`, paragraphs and blank lines, unordered lists with `-` or `*`, and links in the form `[Text](URL)`. Link text is limited to 256 characters and link targets to 2,048 characters; longer constructs are displayed as ordinary text. Link targets are limited to `http:`, `https:`, and `mailto:`; HTML and everything else are displayed as text as well. Legal text therefore cannot inject scripts or styles into the application.
@@ -1203,7 +1203,7 @@ Prerequisites in `.env`:
 - a random, separately escrowed `BACKUP_ENCRYPTION_KEY`,
 - `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#complete-environment-variable-reference)).
 
-The backup account needs write access, while `appuser` in the container (UID/GID 1000) must be able to read and traverse the directory so that health and compliance checks can find the backups. The restrictive group model from [Step 4](#step-4-start-the-stack) provides both for the configured `BACKUP_HOST_DIR`; `umask 0027` preserves group readability for new content without making backups world-readable.
+Root's cron needs write access, while `appuser` in the container (UID/GID 1000) must be able to read and traverse the directory so that health and compliance checks can find the backups. Before setup, create the configured `BACKUP_HOST_DIR` as `root:1000` with mode `2750`, exactly as in [Step 4](#step-4-start-the-stack). `initial-setup.sh` runs without `sudo`, accepts a correct existing directory, and does not change its owner or group; if the contract is violated, it aborts before the first `up` with the correction command documented there. `umask 0027` preserves group readability for new content without making backups world-readable.
 
 > **RLS is security-critical here:** `pg_dump` must run as `POSTGRES_ADMIN_USER`. The `POSTGRES_USER` application role is `NOBYPASSRLS`; a raw dump under that role fails at `FORCE ROW LEVEL SECURITY` or would not be a complete backup of facility-scoped data. Do not replace `backup.sh` with a custom `pg_dump -U anlaufstelle` command or the application role.
 
@@ -1269,12 +1269,15 @@ docker compose -f docker-compose.prod.yml run --rm \
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-If legal texts are configured, use the complete file set for both steps instead:
+If at least one additional file is configured, use the complete file set for both steps instead (Legal and Override only when configured):
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml run --rm \
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" run --rm \
   --entrypoint=/app/docker-migrate.sh maintenance
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
+docker compose "${compose_files[@]}" up -d
 ```
 
 5. Check database roles, health, and samples from both the database **and** file vault. See [Section 5](#5-monitoring), [Ops Runbook § 9](../ops-runbook.md#9-row-level-security-rls), and the [disaster-recovery smoke verification](../disaster-recovery.md#7-smoke-verifikation-nach-restore).
@@ -1299,13 +1302,16 @@ docker compose -f docker-compose.prod.yml run --rm \
 docker compose -f docker-compose.prod.yml up -d web caddy
 ```
 
-If legal texts are configured, the same update sequence is:
+If at least one additional file is configured, the same update sequence uses the complete file set:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml pull web
-docker compose -f docker-compose.prod.yml -f compose.legal.yml run --rm \
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" pull web
+docker compose "${compose_files[@]}" run --rm \
   --entrypoint=/app/docker-migrate.sh maintenance
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d web caddy
+docker compose "${compose_files[@]}" up -d web caddy
 ```
 
 Check the logs afterwards:
@@ -1314,10 +1320,10 @@ Check the logs afterwards:
 docker compose -f docker-compose.prod.yml logs web --tail=50
 ```
 
-If legal texts are configured:
+With an additional file configured, use the same complete file set built above:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml logs web --tail=50
+docker compose "${compose_files[@]}" logs web --tail=50
 ```
 
 ### 4.2 Before an Update
@@ -1337,10 +1343,13 @@ docker compose -f docker-compose.prod.yml up -d
 # Restore the database backup from before the update (if necessary)
 ```
 
-If legal texts are configured, the rollback restart must also use both files:
+If at least one additional file is configured, the rollback restart must also use the complete file set:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d
 ```
 
 ---
@@ -1543,13 +1552,15 @@ docker compose -f docker-compose.prod.yml ps cron
 docker compose -f docker-compose.prod.yml logs cron
 ```
 
-If legal texts are configured, use both files for the recreate and the follow-up checks as well:
+If at least one additional file is configured, use the complete file set for the recreate and follow-up checks as well:
 
 ```bash
-docker compose -f docker-compose.prod.yml -f compose.legal.yml \
-  up -d --force-recreate cron
-docker compose -f docker-compose.prod.yml -f compose.legal.yml ps cron
-docker compose -f docker-compose.prod.yml -f compose.legal.yml logs cron
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d --force-recreate cron
+docker compose "${compose_files[@]}" ps cron
+docker compose "${compose_files[@]}" logs cron
 ```
 
 ### Problem: ClamAV Signatures Are Stale
@@ -1561,7 +1572,7 @@ docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
-The update log must show a successful download. Repeated DNS/download errors require checking the outbound network path or configured mirror; a green `clamdscan --version` healthcheck proves only that the binary starts, not that signatures are current.
+Signature downloads require the `clamav` service to have a working outbound network path (egress) to the signature server or configured mirror; the target state after #2219 provides that path. The update log must show a successful download. Repeated DNS/download errors require checking that egress path or the mirror. A green `clamdscan --version` healthcheck proves only that the binary starts, not that signatures are current; also inspect the displayed signature state in the compliance dashboard at `/system/compliance/`.
 
 ### Problem: TLS Certificate Is Not Issued
 
@@ -2216,4 +2227,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 6df1f7eb2551c31525367af519b1cf5a73bcf4a0 -->
+<!-- source-hash: dd2a642f2b725ed36c68de5f6ed952a7a5e4d98c -->
