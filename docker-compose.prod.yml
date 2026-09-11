@@ -1,3 +1,7 @@
+# Produktions-Recreates mit Pflichtangaben verwenden beide Dateien:
+# docker compose -f docker-compose.prod.yml -f compose.legal.yml up -d
+name: anlaufstelle-prod
+
 services:
   db:
     image: postgres:18-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa
@@ -188,14 +192,16 @@ services:
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS-}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       EXTERNAL_ORIGIN: ${EXTERNAL_ORIGIN-}
-      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_HOST: ${EMAIL_HOST-}
       EMAIL_PORT: ${EMAIL_PORT:-587}
       EMAIL_HOST_USER: ${EMAIL_HOST_USER-}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD-}
       EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+      EMAIL_USE_SSL: ${EMAIL_USE_SSL-}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@anlaufstelle.app}
       MEDIA_ROOT: ${MEDIA_ROOT:-/data/media}
       CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
       CLAMAV_TIMEOUT: ${CLAMAV_TIMEOUT:-15}
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
@@ -204,8 +210,23 @@ services:
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      DJANGO_INVITE_TOKEN_TIMEOUT: ${DJANGO_INVITE_TOKEN_TIMEOUT:-259200}
+      DJANGO_PASSWORD_RESET_TIMEOUT: ${DJANGO_PASSWORD_RESET_TIMEOUT:-7200}
+      DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
+      SUDO_MODE_TTL_SECONDS: ${SUDO_MODE_TTL_SECONDS:-900}
+      MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE-}
+      MAINTENANCE_ALLOW_IPS: ${MAINTENANCE_ALLOW_IPS-}
+      MAINTENANCE_CACHE_TTL: ${MAINTENANCE_CACHE_TTL:-5}
+      MAINTENANCE_RETRY_AFTER: ${MAINTENANCE_RETRY_AFTER:-600}
+      FILE_VAULT_MAX_UPLOAD_BYTES: ${FILE_VAULT_MAX_UPLOAD_BYTES:-52428800}
+      FILE_VAULT_MAX_UPLOAD_FILES: ${FILE_VAULT_MAX_UPLOAD_FILES:-20}
+      FILE_VAULT_MAX_IMAGE_PIXELS: ${FILE_VAULT_MAX_IMAGE_PIXELS:-40000000}
+      FILE_VAULT_MAX_ARCHIVE_BYTES: ${FILE_VAULT_MAX_ARCHIVE_BYTES:-209715200}
+      FILE_VAULT_MAX_ARCHIVE_RATIO: ${FILE_VAULT_MAX_ARCHIVE_RATIO:-100}
+      FILE_VAULT_MAX_ARCHIVE_ENTRIES: ${FILE_VAULT_MAX_ARCHIVE_ENTRIES:-10000}
+      FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB: ${FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB:-2048}
       POSTGRES_HOST: db
-      CLAMAV_HOST: clamav
       # Refs #1017: Stabiler App-Rollenname für check_db_roles — der Migrate-Job
       # (docker-migrate.sh) überschreibt POSTGRES_USER auf die Admin-Rolle; ohne
       # diese Variable prüfte das Rollen-Gate fälschlich die Admin- statt App-Rolle.
@@ -249,7 +270,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')\""]
+      test: ["CMD-SHELL", "python -c \"import json, urllib.request; ok = json.load(urllib.request.urlopen('http://localhost:8000/health/'))['status'] == 'ok'; raise SystemExit(0 if ok else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -371,7 +392,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Bewusst KEIN healthcheck und KEIN ports: supercronic hat keinen
+    # Der Image-Healthcheck prueft den Webserver, den dieser Sidecar nicht
+    # startet. Deshalb explizit deaktivieren; die Job-Wirksamkeit zeigen die
+    # Marker im Compliance-Dashboard.
+    healthcheck:
+      disable: true
+    # Bewusst KEIN ports: supercronic hat keinen
     # Endpunkt. Ob die Jobs wirklich laufen, zeigt das Compliance-Dashboard
     # (/system/compliance/, Kategorie „Hintergrundjobs") bzw. ``stale_jobs``
     # im /health/-Payload — beide lesen die Cron-Marker aus dem AuditLog
@@ -422,6 +448,9 @@ services:
     restart: unless-stopped
     networks:
       - internal
+      # freshclam braucht DNS/HTTPS-Egress fuer automatische Signaturupdates.
+      # Das getrennte Netz verbindet keinen weiteren App-Service.
+      - clamav-egress
 
   caddy:
     image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
@@ -484,3 +513,5 @@ networks:
   internal:
     internal: true
   frontend:
+  clamav-egress:
+    internal: false

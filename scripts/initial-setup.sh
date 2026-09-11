@@ -114,6 +114,16 @@ compose() { docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
 # `exec -T` (kein TTY) — fuer alle nicht-interaktiven manage.py-Aufrufe.
 manage() { compose exec -T web python manage.py "$@"; }
 
+# Kompatibler Befehlsname fuer die Setup-Guards. Nur der Rollencheck muss in
+# den privilegierten maintenance-Service; alle anderen Checks bleiben in web.
+manage.py() {
+    if [[ "${1:-}" == "check_db_roles" ]]; then
+        compose run --rm maintenance "$@"
+    else
+        manage "$@"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Preflight
 # ---------------------------------------------------------------------------
@@ -182,6 +192,26 @@ fi
 
 info "Compose-Datei: ${COMPOSE_FILE}"
 info "Env-Datei:     ${ENV_FILE}"
+
+# Der read-only Mount im web-Container wird von appuser (UID/GID 1000)
+# traversiert. Das Backupkonto bleibt Eigentuemer und damit schreibberechtigt;
+# fuer appuser gibt die Gruppe nur Lesen/Durchqueren frei. Keine Weltrechte.
+backup_host_dir="$(env_file_value BACKUP_HOST_DIR "$ENV_FILE")"
+backup_host_dir="${backup_host_dir:-./backups}"
+if [[ "$backup_host_dir" != /* ]]; then
+    compose_dir="$(cd "$(dirname "$COMPOSE_FILE")" && pwd)"
+    backup_host_dir="${compose_dir}/${backup_host_dir}"
+fi
+backup_owner="$(id -un)"
+backup_group=1000
+if [[ "$(id -u)" == "1000" ]]; then
+    # appuser hat dieselbe UID und kann bereits ueber die Owner-Rechte lesen;
+    # die aufrufende Person muss dann nicht Mitglied der Gruppe 1000 sein.
+    backup_group="$(id -gn)"
+fi
+install -d -m 2750 -o "$backup_owner" -g "$backup_group" "$backup_host_dir" ||
+    fail "Backup-Verzeichnis konnte nicht mit Modus 2750 fuer Backupkonto und appuser angelegt werden: ${backup_host_dir}"
+info "Backup-Verzeichnis vorbereitet: ${backup_host_dir} (Modus 2750, fuer appuser UID 1000 lesbar)."
 
 # ---------------------------------------------------------------------------
 # Warte-Helfer
@@ -261,8 +291,16 @@ step "4/6  Deployment-Settings pruefen (manage.py check --deploy)"
 # `docker-entrypoint.sh` fuehrt denselben Check bei jedem Web-Start
 # fail-closed aus (Security N6). Hier laeuft er zusaetzlich, damit die
 # Erstinbetriebnahme das Ergebnis sichtbar protokolliert.
-manage check --deploy
-info "Keine Deployment-Warnungen."
+deploy_output="$({
+    manage.py check --deploy 2>&1
+})"
+printf '%s\n' "$deploy_output"
+deploy_issue_count="$(sed -n 's/^System check identified \([0-9][0-9]*\) issue.*/\1/p' <<<"$deploy_output" | tail -n1)"
+if [[ -n "$deploy_issue_count" && "$deploy_issue_count" != "0" ]]; then
+    warn "${deploy_issue_count} Deployment-Warnungen gemeldet — Ausgabe oben pruefen."
+else
+    info "Keine Deployment-Warnungen."
+fi
 
 # ---------------------------------------------------------------------------
 # 5. DB-Rollen-Posture
@@ -273,10 +311,10 @@ step "5/6  DB-Rollen-Posture verifizieren (manage.py check_db_roles)"
 # Attributprofil oder fehlender Ownership-Umzug (fatal), 2 = Konfiguration
 # unvollstaendig (Warnung, z.B. Legacy-Setup ohne separate Admin-Rolle).
 roles_exit=0
-manage check_db_roles || roles_exit=$?
+manage.py check_db_roles || roles_exit=$?
 case "$roles_exit" in
     0)
-        info "OK — App-Rolle ohne SUPERUSER/BYPASSRLS, Ownership getrennt."
+        info "OK — DB-Rollenprofil ueber den maintenance-Service verifiziert."
         ;;
     2)
         warn "Konfiguration unvollstaendig (Exit 2) — vermutlich fehlt POSTGRES_ADMIN_USER"
@@ -320,7 +358,7 @@ backup_cron_installed() {
         root_crontab="$(sudo -n crontab -l -u root 2>/dev/null || true)"
     fi
     active_crontab="$(printf '%s\n%s\n' "$user_crontab" "$root_crontab" | grep -v '^[[:space:]]*#' || true)"
-    grep -q 'backup\.sh' <<<"$active_crontab"
+    grep -Eq '(^|[[:space:]])/[^[:space:]]*/scripts/ops/backup\.sh([[:space:]]|$)' <<<"$active_crontab"
 }
 
 step "6/6  Super-Admin anlegen (Bootstrap, ADR-018)"

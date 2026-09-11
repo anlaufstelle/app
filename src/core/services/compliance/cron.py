@@ -18,6 +18,7 @@ from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 
 _CATEGORY = "Hintergrundjobs"
+_CRON_ACTION_HINT = "docker compose -f docker-compose.prod.yml logs cron prüfen (Ops-Runbook § 3.2)."
 
 
 def _latest(action: str) -> AuditLog | None:
@@ -40,7 +41,7 @@ def _snapshot_checks() -> list[ComplianceCheck]:
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
                 message="Noch kein Snapshot-Lauf — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint="systemd-Timer 'anlaufstelle-snapshots.timer' prüfen (Ops-Runbook §3).",  # pragma: no mutate # noqa: E501
+                action_hint=_CRON_ACTION_HINT,
             )
         ]
     age_days = (_clock.now() - entry.timestamp).days
@@ -76,7 +77,7 @@ def _snapshot_checks() -> list[ComplianceCheck]:
             status=ComplianceStatus.CRITICAL,
             message=f"Letzter Lauf vor {age_days} Tagen — Cron ausgefallen?",  # pragma: no mutate
             detail=detail,
-            action_hint="systemd-Timer-Status prüfen + manuell ausführen.",  # pragma: no mutate
+            action_hint=_CRON_ACTION_HINT,
         )
     ]
 
@@ -93,7 +94,7 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
                 message="Noch kein Breach-Scan — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint="systemd-Timer 'anlaufstelle-breach.timer' prüfen (Ops-Runbook §3).",  # pragma: no mutate # noqa: E501
+                action_hint=_CRON_ACTION_HINT,
             )
         ]
     age = _age_hours(entry)
@@ -129,7 +130,7 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
             status=ComplianceStatus.CRITICAL,
             message=f"Letzter Scan vor {age:.0f}h — Cron ausgefallen?",  # pragma: no mutate
             detail=detail,
-            action_hint="systemd-Timer-Status prüfen + manuell ausführen.",  # pragma: no mutate
+            action_hint=_CRON_ACTION_HINT,
         )
     ]
 
@@ -146,7 +147,7 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
                 message="Noch kein View-Refresh — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint="systemd-Timer 'anlaufstelle-mv-refresh.timer' prüfen (Ops-Runbook §3).",  # pragma: no mutate # noqa: E501
+                action_hint=_CRON_ACTION_HINT,
             )
         ]
     age = _age_hours(entry)
@@ -182,7 +183,7 @@ def _mv_refresh_checks() -> list[ComplianceCheck]:
             status=ComplianceStatus.CRITICAL,
             message=f"Letzter Refresh vor {age:.0f}h — Cron ausgefallen?",  # pragma: no mutate
             detail=detail,
-            action_hint="systemd-Timer-Status prüfen + manuell ausführen.",  # pragma: no mutate
+            action_hint=_CRON_ACTION_HINT,
         )
     ]
 
@@ -213,7 +214,7 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
                 category=_CATEGORY,
                 status=ComplianceStatus.UNKNOWN,
                 message="Noch keine Ketten-Pruefung — Cron lief vielleicht nie.",  # pragma: no mutate
-                action_hint="Cron-Job 'verify_audit_chain' pruefen (Ops-Runbook §3.1).",  # pragma: no mutate
+                action_hint=_CRON_ACTION_HINT,
             )
         ]
     age = _age_hours(entry)
@@ -238,7 +239,7 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
                 status=ComplianceStatus.WARNING,
                 message=f"Letzte Pruefung vor {age:.0f}h — ein Tageslauf fehlt.",  # pragma: no mutate
                 detail=detail,
-                action_hint="Cron muss taeglich laufen (deploy/crontab: 30 3 * * *).",  # pragma: no mutate
+                action_hint=_CRON_ACTION_HINT,
             )
         ]
     return [
@@ -249,6 +250,6 @@ def _audit_chain_checks() -> list[ComplianceCheck]:
             status=ComplianceStatus.CRITICAL,
             message=f"Letzte Pruefung vor {age:.0f}h — Cron aus oder Lauf bricht rot ab.",  # pragma: no mutate
             detail=detail,
-            action_hint="Cron-Log auf Tamper-Verdacht pruefen + manuell ausfuehren.",  # pragma: no mutate
+            action_hint=_CRON_ACTION_HINT,
         )
     ]

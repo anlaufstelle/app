@@ -283,7 +283,10 @@ def _db_role_checks() -> list[ComplianceCheck]:
                 status=ComplianceStatus.WARNING,
                 message="Admin-/Maintenance-Rolle nicht konfiguriert.",  # pragma: no mutate
                 detail="; ".join(config_errors),
-                action_hint="POSTGRES_ADMIN_USER + POSTGRES_ADMIN_PASSWORD in .env setzen (siehe #902).",  # pragma: no mutate  # noqa: E501
+                action_hint=(
+                    "Im web-Container nicht pruefbar — Prüfung über "
+                    "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles."
+                ),  # pragma: no mutate
             )
         )
 

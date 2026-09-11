@@ -226,13 +226,16 @@ if _file_upload_temp_dir:
 # Für Passwort-zurücksetzen und andere E-Mail-Funktionen.
 # Konfiguration via Umgebungsvariablen:
 #   EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
-#   EMAIL_USE_TLS, DEFAULT_FROM_EMAIL
+#   EMAIL_USE_TLS, EMAIL_USE_SSL, DEFAULT_FROM_EMAIL
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
 EMAIL_PORT = env_int("EMAIL_PORT", 587)
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", default=False)
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ImproperlyConfigured("EMAIL_USE_TLS und EMAIL_USE_SSL duerfen nicht gleichzeitig aktiviert sein.")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.app")
 
 # --- Database ---
