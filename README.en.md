@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](README.md)**
+> Most recently synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
 
 # Anlaufstelle
 
