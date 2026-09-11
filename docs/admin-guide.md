@@ -337,6 +337,8 @@ docker compose -f docker-compose.prod.yml exec web python manage.py check --depl
 docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 ```
 
+Bleibt `REDIS_PASSWORD` leer (Vorlagen-Default), meldet `python manage.py check --deploy` die Warnung `core.W004` (Redis ohne Passwort). Sie ist in dieser Konfiguration erwartet und kein Fehler. Wer die Warnung vermeiden will, setzt `REDIS_PASSWORD`; Compose übergibt den Wert an Redis und bettet ihn für den Webdienst in `REDIS_URL` ein.
+
 Details zum Migrate-Job (Ownership-Normalisierung, Advisory-Lock, erwartete Ausgabe) siehe die kanonische Quelle [`docs/ops-runbook.md` § 1.2](ops-runbook.md#12-deploy-schritte).
 
 Beim ersten Start:
