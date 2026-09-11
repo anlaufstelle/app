@@ -129,6 +129,43 @@ class TestUserAdminSaveModel:
         assert not new_user.has_usable_password()
         mock_send.assert_called_once()
 
+    def test_failed_facility_user_invite_names_existing_resend_path(self, rf, admin_user, facility):
+        new_user = User(
+            username="failedinvite",
+            email="failedinvite@example.com",
+            role=User.Role.STAFF,
+            facility=facility,
+        )
+        request = _make_admin_request(rf, admin_user)
+
+        with patch("core.admin.users.send_invite_email", side_effect=RuntimeError("SMTP nicht erreichbar")):
+            UserAdmin(User, AdminSite()).save_model(request, new_user, form=None, change=False)
+
+        messages = [str(message) for message in request._messages]
+        assert any(
+            "Verwaltung → Zugänge" in message and "„Einladung erneut senden“" in message for message in messages
+        ), messages
+        assert all("„Setup-Link erneut senden“" not in message for message in messages)
+
+    def test_failed_super_admin_invite_explains_no_resend_path(self, rf, super_admin_user):
+        new_user = User(
+            username="failedsuperinvite",
+            email="failedsuperinvite@example.com",
+            role=User.Role.SUPER_ADMIN,
+            facility=None,
+        )
+        request = _make_admin_request(rf, super_admin_user)
+
+        with patch("core.admin.users.send_invite_email", side_effect=RuntimeError("SMTP nicht erreichbar")):
+            UserAdmin(User, AdminSite()).save_model(request, new_user, form=None, change=False)
+
+        messages = [str(message) for message in request._messages]
+        assert any(
+            "Kein erneuter Versand für super_admin-Konten" in message and "Konto löschen und neu anlegen" in message
+            for message in messages
+        ), messages
+        assert all("„Setup-Link erneut senden“" not in message for message in messages)
+
     def test_save_model_without_email_sets_initial_password(self, rf, admin_user, facility):
         """Neuer User ohne E-Mail → generate_initial_password + has_usable_password."""
         new_user = User(

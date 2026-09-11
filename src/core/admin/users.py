@@ -374,10 +374,13 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
             try:
                 send_invite_email(obj)
             except Exception as exc:  # pragma: no cover - Mail-Backend-Fehler
+                if obj.role == User.Role.SUPER_ADMIN:
+                    retry_hint = "Kein erneuter Versand für super_admin-Konten: Konto löschen und neu anlegen."
+                else:
+                    retry_hint = "Einladung unter Verwaltung → Zugänge per „Einladung erneut senden“ auslösen."
                 messages.error(
                     request,
-                    f"Einladungs-E-Mail konnte nicht versendet werden: {exc}. "
-                    f"Bitte über „Setup-Link erneut senden“ erneut versuchen.",
+                    f"Einladungs-E-Mail konnte nicht versendet werden: {exc}. {retry_hint}",
                 )
                 return
             messages.success(

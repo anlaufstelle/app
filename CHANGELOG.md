@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Fehlgeschlagene Benutzer-Einladungen nennen nur vorhandene Wiederholungswege** (#2223) — Die Django-Admin-Meldung verweist für einrichtungsgebundene Rollen auf „Verwaltung → Zugänge“ und erklärt für `super_admin`-Konten, dass kein erneuter Versand verfügbar ist.
 - **Rollenweiche und Zielpfad bleiben beim zweiten Faktor erhalten** (#2206) — `super_admin` landet nach dem zweiten Faktor im Systembereich; `next` überlebt den 2FA-Schritt.
 - **Doppelte Stunde in der Offline-Erfassung wird vorab abgewiesen und ein 422 beim Create-Replay als Dead-Letter sichtbar** (#2187) — Die Offline-Create-Shell erkennt Wanduhrzeiten im Doppelfenster der Winterzeit-Rückstellung clientseitig und lehnt sie mit einem erklärenden Hinweis ab; ein 422 auf dem pk-losen Create-Replay markiert den Datensatz als `dead` statt ihn endlos erneut zu versuchen.
 - **Import-Übernahme weist ungültig gewordene Zuordnungen ab** (#2196) — Probelauf und Übernahme prüfen gespeicherte Ziele erneut und melden entfernte oder deaktivierte Feldvorlagen, statt Werte still auszulassen.
