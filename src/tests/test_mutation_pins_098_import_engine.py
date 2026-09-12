@@ -1,3 +1,5 @@
+import pytest
+
 """Pin-Tests der Welle K (0.98) — Prio-2-Survivors in ``core.services.import_engine``.
 
 Quelle: Füllauftrag #2193,
@@ -20,6 +22,8 @@ deckungsgleich mit dem Batch-Text (keine Numerierungsdrift in diesem Modul).
 """
 
 from core.services import import_engine
+
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 #: RIFF-Header, bewusst NUL-frei: 4 Bytes Signatur + 4 Bytes Groessenfeld ohne
 #: Nullbyte + 4 Bytes Formatkennung ("WEBP") + Textrumpf. Damit greift beim
