@@ -222,7 +222,7 @@ def test_existing_backup_directory_with_wrong_group_prints_repair_command(tmp_pa
     assert " up -d db" not in commands
 
 
-@pytest.mark.parametrize("mode", [0o0750, 0o2770, 0o2753])
+@pytest.mark.parametrize("mode", [0o0750, 0o2770, 0o2753, 0o2755])
 def test_existing_backup_directory_with_wrong_mode_stops_before_up(tmp_path: Path, mode: int) -> None:
     backup_dir = tmp_path / "wrong-mode-backups"
     backup_dir.mkdir()
