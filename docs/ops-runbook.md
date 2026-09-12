@@ -377,9 +377,9 @@ passenden Rechten anlegen:
 ```bash
 sudo timedatectl set-timezone Europe/Berlin
 sudo systemctl enable --now cron
-sudo install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-backup.log
-sudo install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-invites.log
-sudo install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-health.log
+sudo sh -c '[ -e /var/log/anlaufstelle-backup.log ] || install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-backup.log'
+sudo sh -c '[ -e /var/log/anlaufstelle-invites.log ] || install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-invites.log'
+sudo sh -c '[ -e /var/log/anlaufstelle-health.log ] || install -o root -g adm -m 0640 /dev/null /var/log/anlaufstelle-health.log'
 ```
 
 Fuer alle `anlaufstelle-*.log` unter `/var/log` eine Logrotate-Regel mit
@@ -1153,7 +1153,7 @@ make maintenance-off
 
 ### 6.6a Off-Site-Backup-Sync (Refs #738)
 
-Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` uebertraegt optional nach jeder Rotation die Dateien des aktuellen Laufs in ein Off-Site-Ziel.
+Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` uebertraegt optional die vorhandenen Retention-Stufen in ein Off-Site-Ziel und rotiert lokal erst nach erfolgreichem Abgleich.
 
 ```bash
 # .env: Off-Site-Ziel konfigurieren (eines von drei Formaten)
@@ -1166,12 +1166,14 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 **Empfohlen:** Object-Lock / Write-Once-Policy am Bucket aktivieren — Ransomware kann verschluesselte Backups dann nicht ueberschreiben.
 
-**Was am Ziel landet:** rclone und S3 schreiben den aktuellen Satz unter
-`<ziel>/daily`; scp schreibt ihn unmittelbar unter `<ziel>/`. `weekly/` und
-`monthly/` werden in keiner Variante uebertragen. rclone nutzt `copy`, S3
-`sync` ohne `--delete`, und scp kopiert nur den neuen Satz. Die lokale Rotation
-wird daher nicht am Ziel gespiegelt. Aufbewahrung, Loeschung und Object Lock
-sind als eigene **Ziel-Policy** einzurichten und zu kontrollieren.
+**Was am Ziel landet:** Vor der lokalen Rotation kopieren rclone und S3 den
+gefilterten Bestand von `daily/`, `weekly/` und `monthly/` unter die jeweils
+gleichnamigen Zielverzeichnisse. Ihre Filter umfassen `*.enc`, `*.hmac`,
+`*.manifest` und `audit_hwm-*.json`. scp kopiert alle drei Verzeichnisse
+rekursiv und ungefiltert unter `<ziel>/`. rclone nutzt `copy`, S3 `sync` ohne `--delete`; die
+lokale Rotation wird daher nicht als Loeschung am Ziel gespiegelt. Aufbewahrung,
+Loeschung und Object Lock sind als eigene **Ziel-Policy** einzurichten und zu
+kontrollieren.
 
 Credentials muessen dem Konto zur Verfuegung stehen, unter dem `backup.sh`
 tatsaechlich laeuft. Fuer scp gehoeren dazu die SSH-Identitaet bzw. der geladene
@@ -1179,7 +1181,7 @@ SSH-Agent und der `known_hosts`-Eintrag dieses Kontos; fuer rclone bzw. S3 die
 passende Konfiguration und Credentials. Welches Konto ausfuehrt, legt die
 Installation fest.
 
-**Failure-Mode** (Refs #797): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-Job wird damit rot. Der erste Fehler endet bewusst noch mit Exit-Code 0. Deshalb den **ersten Lauf nach der Einrichtung am Ziel selbst** pruefen: DB, DB-HMAC, Medienarchiv, Medien-HMAC und Audit-HWM des Zeitstempels muessen am variantenrichtigen Pfad liegen. Der Exit-Code allein ist kein Erfolgsnachweis. Erfolgreiche Laeufe setzen den Counter zurueck.
+**Failure-Mode** (Refs #797): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-Job wird damit rot. Bereits beim ersten Fehler bleibt die lokale Rotation ausgesetzt, obwohl der Lauf bewusst noch mit Exit-Code 0 endet. Deshalb den **ersten Lauf nach der Einrichtung am Ziel selbst** pruefen: DB, DB-HMAC, Medienarchiv, Medien-HMAC, Manifest, Manifest-HMAC und Audit-HWM des Zeitstempels muessen am variantenrichtigen Pfad liegen. Der Exit-Code allein ist kein Erfolgsnachweis. Erfolgreiche Laeufe setzen den Counter zurueck.
 
 **Sentry-Hook (optional):** Wenn `SENTRY_DSN` UND ein `BACKUP_SENTRY_HOOK`-Skript gesetzt sind, ruft `backup.sh` den Hook bei jedem Off-Site-Fehler auf (Argumente: Beschreibung, Off-Site-Ziel). Der Hook ist freie Operator-Wahl — z.B. `sentry-cli send-event` oder ein eigenes `curl`-Skript. Ohne Hook bleibt es bei Log + Exit-Code.
 
@@ -1190,7 +1192,7 @@ Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und d
 Das Skript deckt seit OPS-05 (Refs #1336) **beide** ausgelieferten Backup-Formate ab. Die Wahl erfolgt per Flag `--dev`/`--prod` oder `$DRILL_FORMAT`; ohne Angabe wird das Format anhand der vorhandenen Backup-Dateien auto-erkannt (Default `dev`, rueckwaerts-kompatibel — der bestehende dev-Timer laeuft unveraendert). Liegen **beide** Formate gleichzeitig vor, bricht der Drill ab und verlangt eine explizite Wahl:
 
 - **`--dev`** — `dev-ops/deploy/backup.sh`, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$DEV_BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`.
-- **`--prod`** — `scripts/ops/backup.sh`, der an Self-Hoster ausgelieferte kanonische Pfad: plain SQL + `gzip` + A4.3-HMAC-Sidecar → `psql`, Quelle `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (Default `<Repo>/backups/daily`), Stack `docker-compose.prod.yml`. Der HMAC-Sidecar wird VOR dem Entschluesseln geprueft.
+- **`--prod`** — `scripts/ops/backup.sh`, der an Self-Hoster ausgelieferte kanonische Pfad: plain SQL + `gzip`, HMAC-Sidecars, Zeilenzahl-Manifest und zeitgleicher HWM → `psql`, Quelle `$BACKUP_HOST_DIR/daily/anlaufstelle_*.sql.gz.enc` (Default `<Repo>/backups/daily`), Stack `docker-compose.prod.yml`. Manifest und HMAC-Sidecars werden VOR dem Entschluesseln geprueft.
 
 Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container) ein — noetig fuer `CREATE DATABASE`, bypassed zugleich RLS/FORCE-RLS beim Restore.
 
@@ -1199,26 +1201,31 @@ Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust
 | Backup-Quelle | Dump-Format | Verschluesselung | Datei(en) | Restore-Tool | Restore-Drill |
 |---|---|---|---|---|---|
 | `dev-ops/deploy/backup.sh` (laeuft auf `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (kein HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh --dev` (Glob `dump-*.pgc.enc`) |
-| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecar (Refs #1024) | `*.sql.gz.enc` + `.hmac` | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod` (HMAC-Check vor Decrypt, Refs #1336); `backup.sh --verify` bleibt leichtgewichtige Alternative |
+| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecars (Refs #1024) | DB + Medien samt Sidecars, `*.manifest` samt Sidecar, optional zeitgleicher HWM | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod --timestamp <Zeitstempel>` (Manifest-/HMAC-Check vor Decrypt); `backup.sh --verify` bleibt leichtgewichtige Alternative |
 
 Warum kein Cross-Restore: Der `--dev`-Zweig sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Der `--prod`-Zweig sucht `anlaufstelle_*.sql.gz.enc`, prueft den `.hmac`-Sidecar und spielt via `gunzip | psql` ein — ein `dump-*.pgc.enc` traegt keinen Sidecar (`backup_verify_hmac` bricht ab) und ist Binaerformat. Ein Lauf gegen das jeweils fremde Format schlaegt also fehl. Wer keinen vollen Drill fahren will, nutzt fuer den Prod-Pfad `scripts/ops/backup.sh --verify` (HMAC + Probe-Decrypt + Zeilenabgleich gegen die Live-DB).
+
+**Versionsgrenze:** `restore.sh` akzeptiert aus Kompatibilitaetsgruenden ein
+Altbackup ohne Manifest. Der aktuelle Prod-Drill verlangt das Manifest dagegen
+zwingend und bricht in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Ein solcher
+Altsatz kann den heutigen Vollstaendigkeitsnachweis daher nicht erbringen.
 
 Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`):
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # Format auto-erkennen
-sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # Prod-Format erzwingen (*.sql.gz.enc)
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000 # Prod-Satz explizit waehlen
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzwingen (dump-*.pgc.enc)
 ```
 
 | Schritt | Pruefung |
 |---|---|
-| 0 | Neuestes Backup im format-spezifischen Verzeichnis finden (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
+| 0 | Backup im format-spezifischen Verzeichnis finden; bei `--prod --timestamp <Zeitstempel>` exakt diesen Satz waehlen, sonst den neuesten. Das zeitgleiche Manifest samt HMAC authentifizieren, Satzkennung sowie DB-/Medien-/HWM-Hashes pruefen und die Referenzzahlen fuer sechs Tabellen laden. Ohne Manifest bricht der Prod-Drill ab. |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
-| 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
-| 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: die zum gewaehlten DB-Backup-Zeitstempel gehoerende `audit_hwm-<Zeitstempel>.json` per Stream in den gehaerteten Drill-Container schreiben und die HMAC-Signatur laden; fehlend, abweichend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Ist die Variable nicht gesetzt, wird Schritt 2b mit `INFO` uebersprungen und der Drill kann mit Exit-Code 0 enden ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
-| 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts abfragbar? |
-| 3b | Begrenzter Zeilenabgleich der vier RLS-Tabellen `core_client`, `core_event`, `core_workitem` und `core_auditlog` zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Der Vergleich deckt weder weitere Tabellen noch Teilmengen ab und ist auf einem frischen Host wirkungslos. |
+| 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql -v ON_ERROR_STOP=1 --single-transaction` (plain SQL); `--dev` `pg_restore` (custom format) |
+| 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: nach Schritt 3b die zum gewaehlten DB-Backup-Zeitstempel gehoerende `audit_hwm-<Zeitstempel>.json` per Stream in den gehaerteten Drill-Container schreiben, die HMAC-Signatur laden und die restaurierte Kette prüfen; fehlend, abweichend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Die Bezeichnung 2b bleibt für das Prüfblatt stabil. Ist die Variable nicht gesetzt, wird der Schritt mit `INFO` uebersprungen und der Drill kann mit Exit-Code 0 enden ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
+| 3 | Stichproben pro Manifesttabelle (`core_facility`, `core_client`, `core_event`, `core_workitem`, `core_auditlog`, `core_attachment`) — Counts abfragbar? |
+| 3b | Im Prod-Format exakter Zeilenabgleich dieser sechs Tabellen zwischen Wegwerf-DB und authentifiziertem Manifest; jede Abweichung ist `FAIL`. Nur der Dev-Zweig vergleicht weiterhin exakt gegen die Live-DB. Dieser Schritt läuft vor der schreibenden Audit-Kettenprüfung und dem Compliance-Marker. |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
 | 6 | Nur `--prod`: Zum gewählten DB-Backup gehörendes Medienarchiv per HMAC prüfen, in einem Durchlauf in ein Host-Tempverzeichnis probeentpacken und das dabei erzeugte Tar-Listing mit der Probeentpackung vergleichen; Ausgabe `Medien: N Dateien, M Bytes, HMAC ok`. Vorher müssen dort ungefähr Archivgröße × 2 frei sein; `TMPDIR=/pfad/mit/platz` lenkt den Schritt auf ein anderes Dateisystem. Fehlt das passende Archiv, wird der Schritt als zulässiger DB-only-Fall mit `INFO` übersprungen. Tempverzeichnis und Wegwerf-DB werden via Trap aufgeräumt. |
@@ -1226,7 +1233,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzw
 
 Output: ein `OK` / `FAIL`-Eintrag pro ausgeführtem Schritt; optionale übersprungene Prüfungen melden `INFO`. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
 
-> **Benigne Ausnahme beim Restore (Schritt 2):** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitert (`--dev`: `pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache, nicht die Nutzdaten — der mv-refresh-Timer baut ihn stündlich neu. Der `--dev`-Drill meldet das als `OK … MV-Refresh übersprungen (benigne)` und schlägt nur bei **anderen** Fehlern fehl. Im `--prod`-Zweig laeuft `psql` bewusst ohne `ON_ERROR_STOP` (derselbe MV-Refresh-Fehler wird toleriert). **Der Exit-Code belegt keine Vollstaendigkeit; Schritt 3b vergleicht nur vier Tabellen gegen die Live-DB und ist auf einem frischen Host wirkungslos.** Fuer einen Vollstaendigkeitsnachweis die Restore-Zahlen mit einem vor dem Backup erhobenen Referenzstand vergleichen.
+> **Benigne Ausnahme beim Restore (Schritt 2):** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Dev-Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitern kann (`pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache. Der `--dev`-Drill toleriert ausschließlich diesen Fall. Im Prod-Zweig beendet `psql -v ON_ERROR_STOP=1 --single-transaction` jeden SQL-Fehler. Vollständigkeit belegt dort zusätzlich der exakte Manifestabgleich in Schritt 3b.
 
 **Compliance-Marker (Refs #919):** Schritt 7 schreibt bei Erfolg automatisch einen `RESTORE_VERIFIED`-AuditLog-Eintrag (`manage.py mark_restore_verified`), den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
 
@@ -1301,12 +1308,15 @@ Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je 
 
 Ist `DJANGO_AUDIT_HWM_PATH` gesetzt, streamt `scripts/ops/restore-drill.sh --prod` die zum gewaehlten DB-Backup-Zeitstempel gehoerende HWM-Datei nach `/tmp` des gehaerteten Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine fehlende, zeitlich abweichende oder ungueltig signierte Datei erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird. Ist die Variable nicht gesetzt, ueberspringt der Drill Schritt 2b mit einer `INFO`-Zeile; das allein laesst Exit-Code 0 und den Restore-Marker weiterhin zu.
 
-Beim echten Recovery gilt eine strengere Reihenfolge: `cron` stoppen, das
-unveraenderte Off-Site-Original des gewaehlten Restore-Satzes per
-`maintenance`-One-Shot an `DJANGO_AUDIT_HWM_PATH` streamen, danach
-`verify_audit_chain` vollstaendig gruen ausfuehren und **erst dann** die Jobs
-starten. Der erste gruene Lauf schreibt die Betriebsdatei fort; das
-Off-Site-Original deshalb separat und unveraendert aufbewahren. Die ausfuehrbare
+Beim echten Recovery gilt eine strengere Reihenfolge: `cron` erfolgreich
+stoppen, die HWM-Quelle auf Existenz pruefen, das unveraenderte Off-Site-Original
+des gewaehlten Restore-Satzes per `maintenance`-One-Shot an
+`DJANGO_AUDIT_HWM_PATH` streamen und die installierte Datei per SHA-256 mit dem
+Original vergleichen. Jeder Fehler bricht ab; erst danach darf
+`verify_audit_chain` laufen und **erst nach dessen Erfolg** duerfen Jobs starten.
+Ein fehlender Betriebsanker gilt der Software als Erstlauf, weshalb diese
+Pruefung vor der Kettenpruefung zwingend ist. Der erste gruene Lauf schreibt die
+Betriebsdatei fort; das Off-Site-Original deshalb separat und unveraendert aufbewahren. Die ausfuehrbare
 Schrittfolge steht in [disaster-recovery.md § 6 Schritt 4b](disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen).
 
 ---

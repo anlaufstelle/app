@@ -2,7 +2,7 @@
 
 > **Abgrenzung zum Restore-Drill:** Der quartalsweise [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) beweist den *Happy Path* — „lässt sich das neueste Backup in eine Wegwerf-DB **auf demselben, laufenden Host** zurückspielen?". Dieses Dokument deckt den **Totalverlust** ab: Der Prod-Host ist weg (Hardware-Defekt, Ransomware, Provider-Ausfall, versehentliches `docker volume rm` ohne Tarball). Es beschreibt das Beschaffen eines Off-Site-Backups, die Wiederbeschaffung der Schlüssel, den Aufbau auf einem **fabrikfrischen Server** und konkrete RTO/RPO-Ziele.
 >
-> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die realen Skripte verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), `dev-ops/deploy/bootstrap.sh` (dev-only, Server-Provisioning in [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host)), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
+> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die ausgelieferten Dateien verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh), [`Dockerfile`](../Dockerfile) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
 
 ---
 
@@ -24,8 +24,8 @@
 | Kennzahl | Zielwert | Begründung / Verankerung im Code |
 |---|---|---|
 | **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der einzurichtende Host-Cron aus [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) läuft täglich um **02:00**. Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
-| **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct **nach jeder Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet). |
-| **RTO** (Zeit bis Service wieder online auf frischem Host) | **Richtwert 2–4 h** | Setzt sich zusammen aus: Server provisionieren + `bootstrap.sh` (~20–30 min) · Off-Site-Backup herunterladen (datenmengenabhängig) · DB- + Medien-Restore (~10–30 min bei mittlerer Datenmenge) · Smoke-Verifikation (~15 min). **Kein vertraglich zugesichertes SLA** — Richtwert für einen geübten Operator mit verfügbaren Schlüsseln. |
+| **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct die Retention-Stufen **vor der Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet). |
+| **RTO** (Zeit bis Service wieder online auf frischem Host) | **Richtwert 2–4 h** | Setzt sich zusammen aus: Betriebssystem härten und Docker installieren (installationsabhängig) · Off-Site-Backup herunterladen (datenmengenabhängig) · DB- + Medien-Restore (~10–30 min bei mittlerer Datenmenge) · Smoke-Verifikation (~15 min). **Kein vertraglich zugesichertes SLA** — Richtwert für einen geübten Operator mit verfügbaren Schlüsseln. |
 | **RTO ohne Schlüssel** | **∞ (nicht wiederherstellbar)** | Ohne `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` sind die verschlüsselten Feld-/Datei-Inhalte **dauerhaft unlesbar**; ohne `BACKUP_ENCRYPTION_KEY` ist das Backup selbst nicht entschlüsselbar. Die Schlüssel-Eskrow-Strategie ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) ist damit der kritischste RTO-Faktor. |
 
 > **Die RTO-Annahme steht und fällt mit zwei Voraussetzungen:** (a) ein aktuelles Off-Site-Backup ist erreichbar und (b) die Schlüssel sind aus einem **vom Prod-Host getrennten** Speicher wiederbeschaffbar. Sind beide erfüllt, ist Recovery Routine. Fehlt eines, ist es kein Recovery mehr, sondern Datenverlust.
@@ -40,10 +40,10 @@
 |---|---|
 | Dump-Format | plain SQL + `gzip` |
 | Verschlüsselung | AES-256-CBC **+ HMAC-SHA256-Sidecar** ([`_backup_common.sh`](../scripts/ops/_backup_common.sh), Refs #1024) |
-| Dateien | `*.sql.gz.enc` **+** `*.sql.gz.enc.hmac` |
-| Medien-Backup | `*_media.tar.gz.enc` (+ `.hmac`), `tar` aus dem `web`-Container |
+| Dateien | `*.sql.gz.enc` + `.hmac`, `*.manifest` + `.hmac`, `audit_hwm-*.json` |
+| Medien-Backup | `*_media.tar.gz.enc` + `.hmac`, `tar` aus dem `web`-Container |
 | Restore-Tool | `psql` über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) |
-| Restore-Drill | [`restore-drill.sh --prod`](../scripts/ops/restore-drill.sh) (seit #1336: HMAC-Check + `gunzip \| psql` + Zeilenabgleich gegen Live-DB); `backup.sh --verify` bleibt leichtgewichtige Alternative |
+| Restore-Drill | [`restore-drill.sh --prod --timestamp <timestamp>`](../scripts/ops/restore-drill.sh): Manifest-/HMAC-Prüfung + `gunzip \| psql` + exakter Sechs-Tabellen-Abgleich gegen das authentifizierte Manifest; `backup.sh --verify` bleibt eine leichtere Prüfung mit Live-DB-Vergleich |
 | Ablage (Default) | `<projekt>/backups/{daily,weekly,monthly}` |
 | Off-Site-Sync | `BACKUP_OFFSITE_TARGET` (rclone / `s3://` / scp) |
 
@@ -51,11 +51,12 @@
 
 ## 3. Was ein Recovery braucht — Inventar
 
-Ein vollständiges Recovery rekonstruiert **vier** Dinge. Fehlt eines, ist die Wiederherstellung unvollständig oder unmöglich:
+Ein vollständiges Recovery rekonstruiert **vier Kategorien**. Der aktuelle Backup-Satz selbst umfasst bei konfiguriertem HWM **sieben Dateien**. Fehlt eine davon, ist die vollständige Wiederherstellung nicht nachgewiesen:
 
 1. **Die verschlüsselten Backup-Artefakte** (Off-Site, siehe [§5](#5-off-site-backup-beschaffen)):
-   - DB-Dump (`*.sql.gz.enc` + `.hmac`)
-   - Medien-Tarball (`*_media.tar.gz.enc` + `.hmac`). Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
+   - DB-Dump (`anlaufstelle_<timestamp>.sql.gz.enc` + `.hmac`)
+   - Medien-Tarball (`anlaufstelle_<timestamp>_media.tar.gz.enc` + `.hmac`). Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
+   - authentifiziertes Zeilenzahl-Manifest (`anlaufstelle_<timestamp>.manifest` + `.hmac`). Es bindet Satzkennung, Artefakt-Hashes und die Referenzzahlen von sechs Tabellen.
 2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEY(S)` und `BACKUP_ENCRYPTION_KEY`.
 3. **Der externe Audit-Anker** `audit_hwm-<timestamp>.json`, der genau zum gewählten DB-/Medien-Satz gehört. Ohne ihn kann die wiederhergestellte Audit-Kette nicht gegen ihren vor dem Ausfall gesicherten Stand geprüft werden.
 4. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
@@ -71,7 +72,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 | Variable | Rolle im Recovery | Code-Beleg |
 |---|---|---|
 | `BACKUP_ENCRYPTION_KEY` | Entschlüsselt das Backup selbst (`openssl enc -d`) **und** leitet den HMAC-Verify-Key ab. **Ohne ihn ist das Backup wertloser Chiffretext.** | Pflichtprüfung `: "${BACKUP_ENCRYPTION_KEY:?...}"` in [`backup.sh`](../scripts/ops/backup.sh) und [`restore.sh`](../scripts/ops/restore.sh); HMAC-Key-Ableitung in [`_backup_common.sh`](../scripts/ops/_backup_common.sh) |
-| `ENCRYPTION_KEY` **oder** `ENCRYPTION_KEYS` | Fernet-Key(s) für die **Feld- und Datei-Verschlüsselung** in der DB/im Vault. Ein wiederhergestelltes Backup ist ohne den passenden Key lesbar als Tabellenstruktur, aber alle verschlüsselten Inhalte bleiben unentschlüsselbar. Bei Key-Rotation müssen **alle je benutzten** Keys in `ENCRYPTION_KEYS` stehen (MultiFernet, erster Key = aktiv). | Einstellungen `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` in [`settings/base.py`](../src/anlaufstelle/settings/base.py), Produktionsprüfung `_validate_fernet_keys()` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
+| `ENCRYPTION_KEY` **oder** `ENCRYPTION_KEYS` | Fernet-Key(s) für die **Feld- und Datei-Verschlüsselung** in der DB/im Vault. Ein wiederhergestelltes Backup ist ohne den passenden Key lesbar als Tabellenstruktur, aber alle verschlüsselten Inhalte bleiben unentschlüsselbar. Bei Key-Rotation müssen **alle je benutzten** Keys in `ENCRYPTION_KEYS` stehen (MultiFernet, erster Key = aktiv). | Einstellungen `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` in [`settings/base.py`](../src/anlaufstelle/settings/base.py); direkte Produktionsprüfung in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py), Zeilen 304–311 |
 
 > **MultiFernet-Falle:** Wurde der Feld-Key je rotiert, enthält das Backup Werte, die mit **mehreren** Generationen verschlüsselt sind. `ENCRYPTION_KEYS` muss dann **lückenlos alle** alten Keys enthalten, sonst sind ältere Datensätze nach dem Restore unlesbar. Die Key-Historie gehört deshalb mit ins Eskrow.
 >
@@ -86,7 +87,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | App-Login (NOSUPERUSER, NOBYPASSRLS) → im Container `APP_DB_USER`/`APP_DB_PASSWORD`. Muss beim Restore wieder denselben Rollennamen ergeben, sonst passen Ownership/Grants aus dem Dump nicht. | Compose-Variablen `APP_DB_USER`/`APP_DB_PASSWORD` in [`docker-compose.prod.yml`](../docker-compose.prod.yml), Rollenerzeugung in [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) |
 | `POSTGRES_ADMIN_USER` / `POSTGRES_ADMIN_PASSWORD` | Admin-Rolle (NOSUPERUSER, BYPASSRLS) für Migrationen/Seed/Retention → `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD`. | Compose-Variablen `ADMIN_DB_USER`/`ADMIN_DB_PASSWORD` in [`docker-compose.prod.yml`](../docker-compose.prod.yml), Rollenerzeugung in [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) |
 | `DJANGO_SECRET_KEY` | Session-/CSRF-/Signing-Key. Ein **neuer** Wert ist technisch zulässig (invalidiert bestehende Sessions und Signaturen); den alten Wert nach Möglichkeit wiederbeschaffen. | Produktionsprüfung `DJANGO_SECRET_KEY` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) |
-| `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge, die Audit-Ketten und die Signatur des externen HWM. Ein neuer Wert macht alte Audit-Hashes, die Ketten und den gesicherten HWM unverifizierbar. | Audit-Kettenfunktion `_chain_hmac()` und HWM-Funktion `_sign_payload()` in `src/core/services/audit/` |
+| `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge, die Audit-Ketten und die Signatur des externen HWM. Ein neuer Wert macht alte Audit-Hashes, die Ketten und den gesicherten HWM unverifizierbar. | [`compute_entry_hash`](../src/core/services/audit/chain.py), Zeilen 102–105, und [`_sign`](../src/core/services/audit/hwm.py), Zeilen 58–61 |
 | `DJANGO_AUDIT_HWM_PATH` | Persistenter Pfad der HWM-Betriebsdatei, empfohlen `/data/audit_hwm.json`. Er muss vor dem ersten Backup gesetzt sein. | Einstellung `AUDIT_HWM_PATH` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
 | `BACKUP_HOST_DIR` / `BACKUP_DIR` | Host-Ablage und read-only Container-Mount der Backups. `BACKUP_HOST_DIR` muss den wiederbeschafften Satz enthalten; `BACKUP_DIR` muss zum Compose-Mount passen. | Variablen `BACKUP_HOST_DIR` in [`backup.sh`](../scripts/ops/backup.sh) und `BACKUP_DIR` in [`settings/base.py`](../src/anlaufstelle/settings/base.py) |
 | `MEDIA_ROOT` / `MEDIA_ROOT_CONTAINER` | App-Pfad und Skriptpfad für die Medien. Beide müssen auf dasselbe persistente Verzeichnis zeigen; der Archivwurzelname muss dessen Basename entsprechen. | Einstellung `MEDIA_ROOT` in [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) und Variable `MEDIA_ROOT_CONTAINER` in [`backup.sh`](../scripts/ops/backup.sh)/[`restore.sh`](../scripts/ops/restore.sh) |
@@ -129,22 +130,30 @@ Off-Site-Sync ist mit `scripts/ops/backup.sh` implementiert und **nur aktiv, wen
 
 Vor dem Backup gilt eine definierte **Schreibruhe**: keine fachlichen Schreibzugriffe, Uploads, Importe, Retention oder sonstigen Hintergrundjobs, bis DB-Dump, Medienarchiv und HWM erzeugt sind. Ein gemeinsamer Dateizeitstempel beweist keine inhaltliche Konsistenz dieser nacheinander erstellten Artefakte.
 
-Das Skript unterstützt drei Zielformate. Es überträgt bei rclone und S3 die Dateien des aktuellen Laufs nach `<ziel>/daily`; scp legt sie direkt unter `<ziel>/` ab. `weekly/` und `monthly/` werden nicht übertragen. rclone verwendet `copy`, S3 `sync` ohne `--delete`, und scp kopiert nur den aktuellen Satz: Die lokale Rotation wird daher nicht am Ziel gespiegelt. **Off-Site-Retention und Löschschutz sind eine Policy des Zielsystems**, nicht Verhalten des Backup-Skripts. Das Retrieval ist je Variante:
+Das Skript unterstützt drei Zielformate. Vor der lokalen Rotation übertragen rclone und S3 den gefilterten Inhalt von `daily/`, `weekly/` und `monthly/` in die gleichnamigen Zielverzeichnisse; ihre Filter umfassen `*.enc`, `*.hmac`, `*.manifest` und `audit_hwm-*.json`. scp kopiert diese drei Verzeichnisse rekursiv und ungefiltert unter das Ziel. rclone verwendet `copy`, S3 `sync` ohne `--delete`. Die lokale Rotation wird daher nicht als Löschung am Ziel gespiegelt. **Off-Site-Retention und Löschschutz sind eine Policy des Zielsystems**, nicht Verhalten des Backup-Skripts.
+
+Für ein Recovery zuerst genau einen Zeitstempel auswählen und ausschließlich dessen sieben Dateien in ein isoliertes Verzeichnis holen:
 
 ```bash
-# Variante rclone (S3/B2/R2/Storj/...) — BACKUP_OFFSITE_TARGET=rclone:remote:bucket/path
-rclone copy remote:bucket/path/daily ./restore-src --include "*.enc" --include "*.hmac"
+# Einmalig setzen; Beispielwert durch den ausgewählten Satz ersetzen.
+RESTORE_TIMESTAMP=2026-09-03_020000
+BACKUP_HOST_DIR="/opt/anlaufstelle/drill-backups/$RESTORE_TIMESTAMP"
+RESTORE_SET_DIR="$BACKUP_HOST_DIR/daily"
+mkdir -p "$RESTORE_SET_DIR"
+
+# Variante rclone (S3/B2/R2/Storj/...) — Quelle <remote>/daily
+rclone copy remote:bucket/path/daily "$RESTORE_SET_DIR" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" --include "audit_hwm-${RESTORE_TIMESTAMP}.json" --exclude "*"
 
 # Variante S3 — BACKUP_OFFSITE_TARGET=s3://bucket/path
-aws s3 sync s3://bucket/path/daily ./restore-src --exclude "*" --include "*.enc" --include "*.hmac"
+aws s3 sync s3://bucket/path/daily "$RESTORE_SET_DIR" --exclude "*" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" --include "audit_hwm-${RESTORE_TIMESTAMP}.json"
 
 # Variante scp — BACKUP_OFFSITE_TARGET=user@host:/path
-scp "user@host:/path/*.enc" "user@host:/path/*.hmac" ./restore-src/
+scp "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.manifest" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" "user@host:/path/daily/audit_hwm-${RESTORE_TIMESTAMP}.json" "$RESTORE_SET_DIR/"
 ```
 
-**Immer DB- *und* Medien-Artefakt samt `.hmac`-Sidecar holen.** Ohne den Sidecar verweigert `restore.sh` den Restore (`backup_verify_hmac` bricht ab — [`_backup_common.sh`](../scripts/ops/_backup_common.sh) L33). Das jüngste DB-Backup heißt `anlaufstelle_<timestamp>.sql.gz.enc`, der dazugehörige Medien-Tarball `anlaufstelle_<timestamp>_media.tar.gz.enc`.
+**Immer den vollständigen Sieben-Dateien-Satz holen.** Ohne einen benötigten Sidecar verweigern Restore bzw. Drill die Prüfung. Backups aus älteren Versionen können noch ohne Manifest vorliegen: `restore.sh` akzeptiert dessen Abwesenheit aus Kompatibilitätsgründen und kann dann auch einen DB-only-Aufruf zulassen; `restore-drill.sh --prod` bricht dagegen in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Ein solches Altbackup kann deshalb nicht den heutigen Vollständigkeitsnachweis liefern und bleibt im Drill **OFFEN**.
 
-Nach jedem Backup den **Off-Site-Bestand selbst** abgleichen: alle fünf Dateien des gewählten Zeitstempels (DB, DB-HMAC, Medien, Medien-HMAC, Audit-HWM) müssen am erwarteten Zielpfad vorhanden sein. Der Exit-Code allein genügt nicht; insbesondere endet der erste Off-Site-Fehler bewusst noch mit Exit-Code 0. Regelmäßig zusätzlich prüfen, dass Ziel-Retention und Object Lock die vereinbarte Aufbewahrung tatsächlich abbilden.
+Nach jedem Backup den **Off-Site-Bestand selbst** abgleichen: alle sieben Dateien des gewählten Zeitstempels müssen am erwarteten Zielpfad vorhanden sein. Der Exit-Code allein genügt nicht; insbesondere endet der erste Off-Site-Fehler bewusst noch mit Exit-Code 0. Regelmäßig zusätzlich prüfen, dass Ziel-Retention und Object Lock die vereinbarte Aufbewahrung tatsächlich abbilden.
 
 > **Object-Lock prüfen:** [ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738) empfiehlt eine Write-Once-/Object-Lock-Policy am Bucket. Beim Ransomware-Szenario ist das der Unterschied zwischen „Backups noch da" und „Backups mitverschlüsselt".
 
@@ -154,19 +163,11 @@ Nach jedem Backup den **Off-Site-Bestand selbst** abgleichen: alle fünf Dateien
 
 Szenario: leerer Server (Hetzner CX22 o. vergleichbar, Debian 13), nichts vom alten Host außer den beschafften Backup-Artefakten ([§5](#5-off-site-backup-beschaffen)) und den Secrets ([§4](#4-schlüssel--und-secret-wiederbeschaffung)).
 
-Dieser Ablauf entspricht dem regulären Provisioning (`dev-ops/deploy/bootstrap.sh`, dev-only) plus Restore mit `docker-compose.prod.yml` + `scripts/ops/restore.sh`.
+Dieser Ablauf verwendet nur ausgelieferte Release-Bestandteile: `docker-compose.prod.yml`, die Init-Dateien unter `deploy/postgres-init/`, die Skripte unter `scripts/ops/` und `docker-migrate.sh` aus dem Container-Image. Ein Host-Provisioning-Skript gehört nicht zu diesem Ablauf.
 
 ### Schritt 1 — Host härten + Docker installieren
 
-```bash
-# bootstrap.sh installiert: docker-ce, ufw + fail2ban + unattended-upgrades,
-# Service-User 'anlaufstelle', SSH-Hardening, ufw-docker, Log-Rotation,
-# Verzeichnis-Layout /opt/anlaufstelle + /var/backups/anl.
-scp dev-ops/deploy/bootstrap.sh root@<neuer-host>:/root/
-ssh root@<neuer-host> bash /root/bootstrap.sh
-```
-
-> `bootstrap.sh` installiert **nicht** die Hintergrundjob-Timer und legt **keine** `.env` an — das macht regulär `deploy-dev.sh`/`install-timers.sh` bzw. der Operator von Hand.
+Docker Engine samt Compose-Plugin nach der Anleitung der gewählten Distribution installieren. Firewall, SSH-Härtung, automatische Sicherheitsupdates, Host-Zeitzone und die Verzeichnisse `/opt/anlaufstelle` sowie die gewählte Host-Backup-Ablage nach der eigenen Infrastrukturvorgabe einrichten und protokollieren. Diese hostabhängigen Schritte liefert das Release nicht als Skript aus.
 
 ### Schritt 2 — Code/Release + `.env` einspielen
 
@@ -184,7 +185,7 @@ cp .env.example .env && chmod 600 .env
 ### Schritt 3 — Frisches DB-Cluster mit korrekten Rollen hochfahren
 
 ```bash
-# Nur die DB starten. Das Init-Script 01-app-role.sh legt im frischen Cluster
+# Zunächst nur die DB starten. Das Init-Script 01-app-role.sh legt im frischen Cluster
 # die App-Rolle (NOSUPERUSER NOBYPASSRLS) + Admin-Rolle (NOSUPERUSER BYPASSRLS)
 # an — KRITISCH: Rollen müssen existieren, BEVOR der Dump Ownership/Grants
 # wiederherstellt (ADR-020, ADR-005).
@@ -196,40 +197,87 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
 
 ### Schritt 4 — DB-Backup entschlüsseln + wiederherstellen
 
-`restore.sh` leert die Ziel-Datenbank nicht, und der Dump enthält kein `--clean`. Ein Wiederanlauf ist deshalb nur in eine **frisch angelegte, leere Ziel-DB** zulässig. Auch Exit-Code 0 belegt keine Vollständigkeit. Vor jedem erneuten Versuch die Ziel-DB verwerfen und leer neu anlegen:
+`restore.sh` leert die Ziel-Datenbank nicht, und der Dump enthält kein `--clean`. Ein Wiederanlauf ist deshalb nur in eine **frisch angelegte, leere Ziel-DB** zulässig. Vorher alle schreibenden Dienste stoppen und verbliebene Verbindungen beenden. DB-Neuanlage, Start des für den Medientransport benötigten `web`-Containers und der vollständige Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt:
 
 ```bash
+cd /opt/anlaufstelle
+set -a
+source .env
+set +a
+RESTORE_TIMESTAMP=2026-09-03_020000
+BACKUP_HOST_DIR="/opt/anlaufstelle/drill-backups/$RESTORE_TIMESTAMP"
+RESTORE_SET_DIR="$BACKUP_HOST_DIR/daily"
+set -o pipefail
+
+docker compose -f docker-compose.prod.yml stop web cron && \
+docker compose -f docker-compose.prod.yml exec -T db psql -U "${POSTGRES_SUPERUSER:-postgres}" -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB}' AND pid <> pg_backend_pid();" && \
 docker compose -f docker-compose.prod.yml exec -T db sh -c \
-  'dropdb -U postgres --if-exists "$POSTGRES_DB" && createdb -U postgres -O "$ADMIN_DB_USER" "$POSTGRES_DB"'
+  'dropdb -U postgres --if-exists "$POSTGRES_DB" && createdb -U postgres -O "$ADMIN_DB_USER" "$POSTGRES_DB"' && \
+docker compose -f docker-compose.prod.yml up -d web && \
+./scripts/ops/restore.sh "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" \
+                         "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" \
+  | tee /tmp/anlaufstelle-restore.log
 ```
 
 Vor dem Medien-Restore `MEDIA_ROOT`, `MEDIA_ROOT_CONTAINER`, den persistenten Mount und den Wurzelnamen des Medienarchivs abgleichen. `MEDIA_ROOT` und `MEDIA_ROOT_CONTAINER` müssen auf dasselbe App-Verzeichnis zeigen; jede Abweichung hält den Restore an.
 
+[`restore.sh`](../scripts/ops/restore.sh) authentifiziert ein vorhandenes Manifest sowie DB und Medien über ihre HMAC-Sidecars, erzwingt den im Manifest gebundenen Medien-Hash, validiert und installiert den zeitgleichen HWM und spielt den Dump mit `ON_ERROR_STOP` in einer Transaktion ein. Der Drill prüft zusätzlich Satzkennung, DB- und HWM-Hash des Manifests. Medien werden neben `MEDIA_ROOT` in ein Staging-Verzeichnis entpackt. Dort gleicht das Skript für jede Zeile aus `core_attachment` den Sollpfad `<MEDIA_ROOT>/<facility_id>/<storage_filename>` ab; erst danach tauscht es Staging und bisherigen Bestand atomar. Scheitert Extraktion, Pfadprüfung oder Tausch, bleibt bzw. wird der vorherige Medienbestand wieder aktiv. Die Abschlusszeile `RESTORE-SATZ WIEDERHERGESTELLT: <timestamp>` muss exakt `RESTORE_TIMESTAMP` nennen.
+
+Die Medienprüfungen haben getrennte Aussagen:
+
+1. **Vollständigkeit:** Alle DB-Sollpfade `<MEDIA_ROOT>/<facility_id>/<storage_filename>` müssen nach dem Restore auf Disk vorhanden sein. Das prüft `restore.sh` bereits im Staging und vor der Aktivierung.
+2. **Archivtreue:** Größe und Inhalt der verschlüsselten `.enc`-Dateien werden gegen das zuvor per HMAC authentifizierte Archiv geprüft. Weil der aktivierte Bestand durch atomaren `mv` unmittelbar aus genau diesem Staging stammt, darf zwischen Probe und Aktivierung kein neuer Upload oder Job laufen.
+3. **Klartextmetadaten:** Originalname und `core_attachment.file_size` gehören zum entschlüsselten Download, nicht zur verschlüsselten `.enc`-Datei auf Disk. Dieser Abgleich erfolgt erst in der Downloadprobe aus §7.
+
+Für die Archivtreue das bereits authentifizierte Medienarchiv erneut HMAC-prüfen, in `/tmp` des laufenden `web`-Containers probeentpacken und SHA-256 plus Größe jedes weiterhin verschlüsselten Anhangs mit dem aktivierten `MEDIA_ROOT` vergleichen:
+
 ```bash
-# restore.sh prüft den HMAC VOR dem Entschlüsseln, entschlüsselt, entpackt
-# und spielt via psql in $POSTGRES_DB ein. Fragt interaktiv (ja/nein), weil
-# es die Ziel-DB überschreibt. .hmac-Sidecar muss neben der .enc liegen.
-./scripts/ops/restore.sh ./restore-src/anlaufstelle_<timestamp>.sql.gz.enc \
-                         ./restore-src/anlaufstelle_<timestamp>_media.tar.gz.enc
+MEDIA_ARCHIVE="$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc"
+MEDIA_VERIFY_DIR="/tmp/media-verify-$RESTORE_TIMESTAMP"
+set -o pipefail
+source ./scripts/ops/_backup_common.sh
+backup_verify_hmac "$MEDIA_ARCHIVE" && \
+docker compose -f docker-compose.prod.yml exec -T web sh -c 'rm -rf "$1" && mkdir -p "$1"' sh "$MEDIA_VERIFY_DIR" && \
+openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_ARCHIVE" \
+  | gunzip \
+  | docker compose -f docker-compose.prod.yml exec -T web tar -C "$MEDIA_VERIFY_DIR" --strip-components=1 -xf - && \
+docker compose -f docker-compose.prod.yml exec -T web sh -c '
+  cd "$1" && find . -type f -exec sha256sum {} + | sort -k2 > /tmp/media-archive.sha256 &&
+  cd "$2" && find . -type f -exec sha256sum {} + | sort -k2 > /tmp/media-live.sha256 &&
+  cmp /tmp/media-archive.sha256 /tmp/media-live.sha256
+' sh "$MEDIA_VERIFY_DIR" "$MEDIA_ROOT" && \
+docker compose -f docker-compose.prod.yml exec -T web rm -rf "$MEDIA_VERIFY_DIR"
 ```
 
-[`restore.sh`](../scripts/ops/restore.sh) erledigt in einem Lauf: HMAC-Verify der DB und, falls übergeben, des Medienarchivs → Bestätigungsabfrage → erneuter DB-HMAC-Verify → `openssl enc -d | gunzip | psql` → erneuter Medien-HMAC-Verify → Medien-Inhalt löschen → Medienarchiv per `tar -x` in `/data` des `web`-Containers entpacken. Damit sind beide Sidecars geprüft, bevor die erste destruktive Aktion beginnt, und das Prüf-Nutzungs-Fenster bleibt klein. **Der bestehende Medien-Inhalt wird vor dem Entpacken gelöscht.** Auf einem Bestandssystem vorher separat sichern; der Restore stellt ausschließlich den Stand des Archivs her. Auf dem hier beschriebenen fabrikfrischen Host ist die Löschung folgenlos. Bricht `tar -x` ab, ist der Medienbestand unvollständig; Ursache beheben, die Ziel-DB erneut leer anlegen und den vollständigen DB-/Medien-Restore wiederholen. Der `BACKUP_ENCRYPTION_KEY` aus der `.env` wird automatisch geladen.
+Unmittelbar nach dem Restore und **vor** Audit-Kettenprüfung, Migrationen, Jobs oder Browserzugriff die sechs Manifesttabellen mit einer RLS-umgehenden Rolle zählen. Derselbe Befehl wird auf der Quelle während der Schreibruhe ausgeführt; seine Ausgabe muss mit Ziel und authentifiziertem Manifest übereinstimmen:
 
-Nach dem Restore die DB-/Medien-Konsistenz prüfen: Jede wiederhergestellte Anhangzeile muss eine Datei am tatsächlichen App-`MEDIA_ROOT` besitzen. Dateiname und Größe müssen den DB-Metadaten entsprechen; die Tabelle enthält keine Prüfsumme. Fehlt eine Datei, ist der Restore unvollständig.
+```bash
+for table in core_facility core_client core_event core_workitem core_auditlog core_attachment; do
+  docker compose -f docker-compose.prod.yml exec -T db \
+    psql -U "${POSTGRES_SUPERUSER:-postgres}" -d "$POSTGRES_DB" -t -A \
+    -c "SELECT '${table}=' || COUNT(*) FROM ${table};"
+done
+```
 
 ### Schritt 4b — Audit-HWM zurückspielen und Kette prüfen
 
-Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz `<timestamp>` gehörende `audit_hwm-<timestamp>.json` an `DJANGO_AUDIT_HWM_PATH` ablegen. Nicht pauschal die jüngste HWM-Datei verwenden. Das Off-Site-Original unverändert aufbewahren:
+Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehörende HWM-Original aus `RESTORE_SET_DIR` nochmals fail-closed an `DJANGO_AUDIT_HWM_PATH` ablegen. Nicht pauschal die jüngste Datei verwenden. Ein fehlender Betriebsanker gilt der Software als Erstlauf; deshalb müssen Existenz, erfolgreicher Import und Byte-Identität **vor** `verify_audit_chain` belegt sein. Das Off-Site-Original bleibt unverändert. Die gesamte Folge ist eine `&&`-Kette; auch ein fehlgeschlagenes `stop cron` bricht sie ab:
 
 ```bash
-docker compose -f docker-compose.prod.yml stop cron
+HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
+test -s "$HWM_SOURCE" && \
+docker compose -f docker-compose.prod.yml stop cron && \
+SOURCE_HWM_SHA256="$(sha256sum "$HWM_SOURCE" | awk '{print $1}')" && \
 docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
-  -c 'cat > "$DJANGO_AUDIT_HWM_PATH"' \
-  < ./restore-src/audit_hwm-<timestamp>.json
+  -c 'cat > "$DJANGO_AUDIT_HWM_PATH"' < "$HWM_SOURCE" && \
+INSTALLED_HWM_SHA256="$(docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
+  -c 'sha256sum "$DJANGO_AUDIT_HWM_PATH"' | awk '{print $1}')" && \
+test "$SOURCE_HWM_SHA256" = "$INSTALLED_HWM_SHA256" && \
 docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
 ```
 
-Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten.
+Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten.
 
 ### Schritt 5 — Migrationen + Stack hochfahren
 
@@ -242,7 +290,7 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migr
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-Retention, Audit-Verifikation, Snapshots, Bereinigung, Breach-Erkennung und MV-Refresh laufen ab Werk im `cron`-Sidecar aus `deploy/crontab`. Zusätzlich ist **nur der Host-Cron für `scripts/ops/backup.sh`** nach [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) einzurichten. Keine weiteren Host-Cronzeilen für die Sidecar-Jobs anlegen, sonst laufen sie doppelt.
+Retention, Audit-Verifikation, Snapshots, Bereinigung, Breach-Erkennung und MV-Refresh laufen ab Werk im `cron`-Sidecar aus `deploy/crontab`. Zusätzlich ist **nur der Host-Cron für `scripts/ops/backup.sh`** nach [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) einzurichten — auf einem Wegwerfhost aber erst nach dem vollständig grünen Drill-Nachweis. Keine weiteren Host-Cronzeilen für die Sidecar-Jobs anlegen, sonst laufen sie doppelt.
 
 Danach weiter mit der [Smoke-Verifikation](#7-smoke-verifikation-nach-restore).
 
@@ -250,7 +298,7 @@ Danach weiter mit der [Smoke-Verifikation](#7-smoke-verifikation-nach-restore).
 
 ## 7. Smoke-Verifikation nach Restore
 
-Reihenfolge: erst Infrastruktur-Checks (DB-Rollen, RLS), dann Health-Endpoint, dann Stichproben. Vor den Shell-Prüfungen die rekonstruierte `.env` laden. Nach einem frühen `FAIL` grundsätzlich anhalten. Eine diagnostische Fortsetzung ist zulässig, wenn sie ausdrücklich als Abweichung protokolliert wird; das Gesamtergebnis bleibt dann **OFFEN**.
+Vor Eintritt in diesen Abschnitt müssen die unmittelbar nach dem Restore erhobenen Zahlen aller sechs Manifesttabellen bereits exakt mit Manifest und Quellreferenz übereinstimmen; ein späteres Nachzählen wäre wegen schreibender Prüfungen und Jobs keine vergleichbare Messung mehr. Danach gilt: erst Infrastruktur-Checks (DB-Rollen, RLS), dann Health-Endpoint, dann Stichproben. Vor den Shell-Prüfungen die rekonstruierte `.env` laden. Nach einem frühen `FAIL` grundsätzlich anhalten. Eine diagnostische Fortsetzung ist zulässig, wenn sie ausdrücklich als Abweichung protokolliert wird; das Gesamtergebnis bleibt dann **OFFEN**.
 
 ```bash
 cd /opt/anlaufstelle
@@ -326,12 +374,12 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   Host-Härtung und Docker-Installation werden mit den Werkzeugen der
   jeweiligen Installation ausgeführt und im Protokoll belegt. Der
   mitgelieferte `cron`-Sidecar übernimmt die Anwendungsjobs; nur der
-  Backup-Host-Cron wird nach dem erfolgreichen Restore eingerichtet.
+  Backup-Host-Cron wird erst nach dem erfolgreichen Drill eingerichtet.
 - `BACKUP_OFFSITE_TARGET` war auf der Quellinstallation gesetzt, der Zugang zum
   Off-Site-Ziel funktioniert ohne den verlorenen Prod-Host, und ein
   zusammengehöriger Welt-B-Satz ist vorhanden: DB-`*.sql.gz.enc` samt `.hmac`,
-  Medien-`*_media.tar.gz.enc` samt `.hmac` und die zum selben Zeitstempel
-  gehörende `audit_hwm-<timestamp>.json`.
+  Medien-`*_media.tar.gz.enc` samt `.hmac`, Zeilenzahl-`*.manifest` samt `.hmac`
+  und die zum selben Zeitstempel gehörende `audit_hwm-<timestamp>.json`.
 - Die vom Maintainer verwahrte, host-getrennte `.env`-Kopie enthält mindestens
   die in [§4](#4-schlüssel--und-secret-wiederbeschaffung) genannten Schlüssel,
   die unveränderten DB-Rollennamen und Zugangsdaten. Die rekonstruierte `.env`
@@ -344,8 +392,9 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen. Im
   Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie", nicht
   „Escrow".
-- Vor dem Quellbackup wurden Referenzzahlen für die in den Erfolgskriterien
-  genannten Tabellen erhoben und die fachlichen Schreibzugriffe sowie
+- Vor dem Quellbackup wurden mit `POSTGRES_SUPERUSER` oder der RLS-umgehenden
+  Admin-Rolle Referenzzahlen für `core_facility`, `core_client`, `core_event`,
+  `core_workitem`, `core_auditlog` und `core_attachment` erhoben und die fachlichen Schreibzugriffe sowie
   schreibenden Hintergrundjobs bis zum Abschluss von DB-Dump, Medienarchiv und
   HWM angehalten. Ein gleicher Dateizeitstempel allein ist kein
   Konsistenznachweis.
@@ -381,72 +430,71 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    Release-Stand einspielen, `.env` mit Modus `0600` aus der
    Maintainer-Kopie rekonstruieren und das frische DB-Cluster starten. Keine
    Schlüsselwerte in die Shell-History oder das Protokoll kopieren.
-3. Für die Off-Site-Rückholung genau **eine** der drei aus [§5](#5-off-site-backup-beschaffen)
-   abgeleiteten Varianten verwenden. Den Beispiel-Remote durch das gesetzte
-   `BACKUP_OFFSITE_TARGET` ersetzen. Host-Backup und Prod-Drill verwenden
-   denselben Ort `${BACKUP_HOST_DIR:-./backups}/daily`; `BACKUP_DIR` bezeichnet
-   nur das Container-Ziel und wird von beiden Host-Skripten ignoriert. Die
-   folgenden Befehle laden `BACKUP_HOST_DIR` aus der rekonstruierten `.env` und
-   setzen den dokumentierten Default. Genau eine Rückholvariante anschließend
-   in derselben Shell ausführen:
+3. Für die Off-Site-Rückholung genau **eine** der drei Varianten verwenden und
+   genau einen Sieben-Dateien-Satz in ein isoliertes Drill-Verzeichnis legen.
+   Den Beispiel-Remote durch das Quellziel ersetzen. Für den Wegwerfhost in
+   `.env` ein separates, anfangs leeres Off-Site-Ziel als
+   `BACKUP_OFFSITE_TARGET` konfigurieren, etwa einen nur für den Drill angelegten
+   Bucket-Prefix. Kein Drill-Lauf darf das produktive Ziel beschreiben.
+   `BACKUP_DIR` bleibt nur das
+   Container-Ziel. Die folgende Vorbereitung legt Satz und Host-Pfad fest;
+   danach genau eine Rückholvariante aus [§5](#5-off-site-backup-beschaffen) mit
+   denselben Variablen ausführen:
 
    ```bash
    cd /opt/anlaufstelle
    set -a
    source .env
    set +a
-   BACKUP_HOST_DIR="${BACKUP_HOST_DIR:-./backups}"
-   mkdir -p "$BACKUP_HOST_DIR/daily"
+   RESTORE_TIMESTAMP=2026-09-03_020000
+   BACKUP_HOST_DIR="/opt/anlaufstelle/drill-backups/$RESTORE_TIMESTAMP"
+   RESTORE_SET_DIR="$BACKUP_HOST_DIR/daily"
+   mkdir -p "$RESTORE_SET_DIR"
    ```
 
    Variante rclone:
 
    ```bash
-   rclone copy remote:bucket/path/daily "$BACKUP_HOST_DIR/daily" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json"
+   rclone copy remote:bucket/path/daily "$RESTORE_SET_DIR" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" --include "audit_hwm-${RESTORE_TIMESTAMP}.json" --exclude "*"
    ```
 
    Variante S3:
 
    ```bash
-   aws s3 sync s3://bucket/path/daily "$BACKUP_HOST_DIR/daily" --exclude "*" --include "*.enc" --include "*.hmac" --include "audit_hwm-*.json"
+   aws s3 sync s3://bucket/path/daily "$RESTORE_SET_DIR" --exclude "*" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" --include "anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest" --include "anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" --include "audit_hwm-${RESTORE_TIMESTAMP}.json"
    ```
 
    Variante scp:
 
    ```bash
-   scp "user@host:/path/*.enc" "user@host:/path/*.hmac" "user@host:/path/audit_hwm-*.json" "$BACKUP_HOST_DIR/daily/"
+   scp "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.manifest" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" "user@host:/path/daily/audit_hwm-${RESTORE_TIMESTAMP}.json" "$RESTORE_SET_DIR/"
    ```
 
-   DB-/Medien-Dateien, ihre `.hmac`-Sidecars und die HWM-Datei müssen denselben
-   Backup-Zeitstempel tragen. Vor dem Weitergehen genau diesen Fünfersatz
+   DB-/Medien-Dateien, Manifest, ihre drei `.hmac`-Sidecars und die HWM-Datei müssen denselben
+   Backup-Zeitstempel tragen. Vor dem Weitergehen genau diesen Sieben-Dateien-Satz
    festhalten; Dateinamensgleichheit ersetzt weder Schreibruhe noch den späteren
    Inhaltsabgleich.
 4. [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
    fortsetzen: Ziel-DB frisch und leer anlegen, Pfade abgleichen und Welt-B-DB
    sowie Medien über `restore.sh` aus dem gerade befüllten Verzeichnis
-   wiederherstellen. `restore.sh` überträgt den Medien-Tarball per
-   `docker compose -f docker-compose.prod.yml exec web`; deshalb vor seinem Aufruf den noch nicht
-   öffentlich über Caddy erreichbaren Web-Container als Transportziel starten:
+   wiederherstellen. Die dortige `&&`-Kette startet `web` vor dem Medien-Restore
+   als Transportziel; `cron` bleibt gestoppt.
 
-   ```bash
-   docker compose -f docker-compose.prod.yml up -d web
-   ```
+   `web` wartet über `depends_on` auf einen gesunden `clamav`. Der Scanner läuft
+   im isolierten internen Netz; der ausgelieferte Stack stellt keinen
+   ausgehenden Update-Pfad für neue Signaturen bereit. Ein veralteter
+   Signaturstand ist daher kein bloßer Anlaufzustand und bleibt ein offener
+   Betriebsbefund.
 
-   `web` wartet über `depends_on` auf einen gesunden `clamav`; dessen erster
-   Signatur-Download kann auf einem frischen Host mehrere Minuten dauern und
-   zählt zur gemessenen RTO.
+   In der rekonstruierten `.env` muss `BACKUP_HOST_DIR` genau den isolierten
+   Wert aus Schritt 3 nennen. Dann die vollständige §6-Kette mit diesem
+   `RESTORE_TIMESTAMP` und `RESTORE_SET_DIR` ausführen; sie schreibt die
+   Restore-Ausgabe nach `/tmp/anlaufstelle-restore.log`.
 
-   Danach den Restore ausführen. Den Platzhalter durch den in Schritt 3
-   geprüften gemeinsamen Zeitstempel ersetzen (die folgende Zeit ist nur ein
-   kopierbares Formatbeispiel):
-
-   ```bash
-   ./scripts/ops/restore.sh "$BACKUP_HOST_DIR/daily/anlaufstelle_2026-09-03_020000.sql.gz.enc" \
-                            "$BACKUP_HOST_DIR/daily/anlaufstelle_2026-09-03_020000_media.tar.gz.enc"
-   ```
-
-   Danach jede Anhangzeile gegen Datei, Dateiname und Größe am App-`MEDIA_ROOT`
-   abgleichen. Anschließend [§6 Schritt 4b](#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)
+   Die Abschlusszeile aus `/tmp/anlaufstelle-restore.log` muss
+   `RESTORE-SATZ WIEDERHERGESTELLT: $RESTORE_TIMESTAMP` nennen. Danach die sechs
+   Manifesttabellen unmittelbar zählen und die drei getrennten Medienprüfungen
+   aus §6 auswerten. Anschließend [§6 Schritt 4b](#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)
    mit `audit_hwm-2026-09-03_020000.json` aus genau diesem Satz ausführen. Erst
    nach grüner Audit-Kettenprüfung Migrationen und Stack nach §6 Schritt 5
    starten.
@@ -467,10 +515,15 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    Host-Verzeichnis nennen:
 
    ```bash
-   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod
+   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp "$RESTORE_TIMESTAMP" \
+     | tee /tmp/anlaufstelle-restore-drill.log
+   grep -F "RESTORE-SATZ WIEDERHERGESTELLT: $RESTORE_TIMESTAMP" /tmp/anlaufstelle-restore.log
+   grep -F "ACHTUNG - explizit gewaehlter Restore-Satz: $RESTORE_TIMESTAMP" /tmp/anlaufstelle-restore-drill.log
    ```
 
-   Der Lauf muss neben HMAC, Tabellen-Stichproben, Vollständigkeitsvergleich,
+   Der explizite `--timestamp`-Weg ist die vom Skript angebotene Satzwahl; ohne
+   ihn würde das Skript den lexikografisch neuesten Dump wählen. Beide
+   `grep`-Befehle müssen denselben Zeitstempel bestätigen. Der Lauf muss neben HMAC, Tabellen-Stichproben, Vollständigkeitsvergleich,
    RLS und `auditlog_immutable` ausdrücklich
    `Schritt 2b: Audit-HWM-Signatur verifiziert` melden. Schritt 2b bindet die
    `audit_hwm-<timestamp>.json` desselben Restore-Satzes ein und lädt sie über
@@ -479,7 +532,8 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    `FAIL`. Der HWM-Schritt wird nur bei konfiguriertem
    `DJANGO_AUDIT_HWM_PATH` ausgeführt. Diese Konfiguration bleibt eine harte
    Vorbedingung und darf nicht durch ein grünes Ergebnis der übrigen Schritte
-   ersetzt werden.
+   ersetzt werden. Erst nach diesem Nachweis darf der Backup-Host-Cron aktiviert
+   werden.
 7. Endzeit, Exit-Code, jede `OK`-/`FAIL`-Zeile und Abweichungen protokollieren.
    Bei einem `FAIL` bleibt das Gesamtergebnis **OFFEN**; keine einzelne
    erfolgreiche Stichprobe in „grün" umdeuten.
@@ -489,13 +543,13 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
 Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind:
 
 - Off-Site-Rückholung gelang ohne Zugriff auf den ursprünglichen Prod-Host;
-  DB, Medien, beide HMAC-Sidecars und Audit-HWM kamen vollständig unter dem
+  DB, Medien, Manifest, alle drei HMAC-Sidecars und Audit-HWM kamen vollständig unter dem
   Host-Pfad `${BACKUP_HOST_DIR:-./backups}/daily` an.
 - `restore.sh`, Migrationen und Stack-Start endeten erfolgreich; DB-Rollen und
   RLS entsprechen [§7](#7-smoke-verifikation-nach-restore).
-- Die Tabellenzahlen entsprechen dem **vor dem Backup** erhobenen Referenzstand.
-  Der Drill-Schritt 3b vergleicht nur vier Tabellen mit einer Live-DB und ist
-  auf einem frischen Host kein Vollständigkeitsnachweis.
+- Die Zahlen der sechs Manifesttabellen entsprechen dem während der Schreibruhe
+  erhobenen, authentifizierten Manifest. Drill-Schritt 3b vergleicht sie exakt,
+  bevor Kettenprüfung oder Compliance-Markierung den Restore verändern.
 - Health meldet `status: ok` und `encryption_key: ok`; eine verschlüsselte
   Datenstichprobe je benötigter Schlüsselgeneration ist im Browser lesbar. Ein
   echter Vault-Anhang lässt sich herunterladen; Dateiname und Größe stimmen mit
@@ -546,6 +600,7 @@ Referenzstand vor Backup (Tabelle = Zeilen):
 Schreibruhe von / bis:
 DB + DB-HMAC vorhanden: JA / NEIN
 Medien + Medien-HMAC vorhanden: JA / NEIN
+Manifest + Manifest-HMAC vorhanden: JA / NEIN
 Audit-HWM vorhanden: JA / NEIN
 Off-Site-Rückholung auf drittem Rechner ohne Prod-Host: OK / FAIL
 DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
@@ -573,13 +628,14 @@ Schritt 1 Wegwerf-DB angelegt: OK / FAIL
 Schritt 2 HMAC/Restore: OK / FAIL
 Schritt 2b Audit-HWM-Signatur: OK / FAIL / NICHT PRÜFBAR
 Schritt 3 Tabellen-Stichproben: OK / FAIL
-Schritt 3b Vier-Tabellen-Abgleich gegen Live-DB: OK / FAIL
+Schritt 3b Sechs-Tabellen-Abgleich gegen Manifest: OK / FAIL
 Schritt 4 RLS: OK / FAIL
 Schritt 5 auditlog_immutable: OK / FAIL
 Schritt 6 Medien-HMAC und Probeentpackung: OK / FAIL
 Schritt 7 RESTORE_VERIFIED: OK / FAIL
 
 Erfolgskriterium Off-Site-Rückholung: OK / FAIL
+Erfolgskriterium Restore + Migrationen + Stack + DB-Rollen/RLS: OK / FAIL
 Erfolgskriterium Referenz-Zeilenabgleich: OK / FAIL
 Erfolgskriterium Health + Schlüsselgenerationen + Vault-Download: OK / FAIL
 Erfolgskriterium DB-/Medien-Konsistenz: OK / FAIL
