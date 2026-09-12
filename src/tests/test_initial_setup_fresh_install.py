@@ -155,7 +155,7 @@ def test_prod_compose_accepts_an_empty_optional_health_token(tmp_path: Path) -> 
 
 def test_staging_compose_requires_the_caddy_health_token(tmp_path: Path) -> None:
     if not STAGING_COMPOSE.exists():
-        pytest.skip("docker-compose.staging.yml nicht im Public-Snapshot — Staging-Guard nicht anwendbar")
+        pytest.skip("docker-compose.staging.yml fehlt in diesem Baum — Staging-Guard nicht anwendbar")
     result, commands, _ = _run_setup(tmp_path, compose_path=STAGING_COMPOSE, health_token="")
     assert result.returncode != 0
     assert "DJANGO_HEALTH_DETAIL_TOKEN fehlt oder ist leer" in result.stderr
