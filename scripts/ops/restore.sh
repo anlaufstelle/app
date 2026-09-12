@@ -43,11 +43,6 @@ if [[ ! -f "$BACKUP_FILE" ]]; then
     exit 1
 fi
 
-if [[ -n "$MEDIA_FILE" && ! -f "$MEDIA_FILE" ]]; then
-    echo "Fehler: Medien-Backup-Datei nicht gefunden: $MEDIA_FILE"
-    exit 1
-fi
-
 # .env laden falls vorhanden
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
     set -a
@@ -59,6 +54,45 @@ fi
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
 backup_require_real_key
+
+# Ein vorhandenes Manifest ist Teil des authentifizierten Backup-Satzes. Wenn
+# es einen Medien-Hash enthaelt, sind Medien-Archiv und Sidecar verpflichtend;
+# nur ein Manifest ohne Medien-Hash beschreibt einen DB-only-Satz.
+MANIFEST_FILE="${BACKUP_FILE%.sql.gz.enc}.manifest"
+MANIFEST_MEDIA_SHA256=""
+if [[ -f "$MANIFEST_FILE" ]]; then
+    echo "Prüfe Integrität des Backup-Manifests (HMAC)..."
+    backup_verify_hmac "$MANIFEST_FILE"
+    while IFS='=' read -r key value extra; do
+        if [[ -n "$extra" ]]; then
+            echo "FEHLER: Backup-Manifest ungueltig: ${MANIFEST_FILE}" >&2
+            exit 1
+        fi
+        if [[ "$key" == "media_sha256" ]]; then
+            MANIFEST_MEDIA_SHA256="$value"
+        fi
+    done < "$MANIFEST_FILE"
+    if [[ -n "$MANIFEST_MEDIA_SHA256" ]]; then
+        if [[ ! "$MANIFEST_MEDIA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "FEHLER: Manifest-Medien-Hash ist ungueltig: ${MANIFEST_FILE}" >&2
+            exit 1
+        elif [[ -z "$MEDIA_FILE" || ! -f "$MEDIA_FILE" ]]; then
+            echo "FEHLER: Satz unvollstaendig: Medien-Archiv fehlt." >&2
+            exit 1
+        elif [[ ! -f "${MEDIA_FILE}.hmac" ]]; then
+            echo "FEHLER: Satz unvollstaendig: Medien-Sidecar fehlt: ${MEDIA_FILE}.hmac" >&2
+            exit 1
+        elif [[ "$(sha256sum "$MEDIA_FILE" | awk '{print $1}')" != "$MANIFEST_MEDIA_SHA256" ]]; then
+            echo "FEHLER: Manifest-Medien-Hash passt nicht zum gewaehlten Satz: ${MEDIA_FILE}" >&2
+            exit 1
+        fi
+    fi
+fi
+
+if [[ -n "$MEDIA_FILE" && ! -f "$MEDIA_FILE" ]]; then
+    echo "Fehler: Medien-Backup-Datei nicht gefunden: $MEDIA_FILE"
+    exit 1
+fi
 
 # Wenn ein Audit-HWM konfiguriert ist, gehoert ausschliesslich die Datei mit
 # demselben Zeitstempel wie der DB-Dump zum Restore-Satz. Fehlt sie, darf der

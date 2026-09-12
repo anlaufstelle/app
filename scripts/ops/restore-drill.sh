@@ -146,10 +146,10 @@ echo "Restore-Drill — Format: ${DRILL_FORMAT}, Backups: ${BACKUP_DIR}"
 # durchwinken. Fail-closed (Refs #1441).
 backup_require_real_key
 
-# Der Vollstaendigkeits-Guard (Schritt 3b) gleicht die Wegwerf-DB gegen die
-# Live-DB ab — dafuer muss der Live-DB-Name bekannt sein (wie backup.sh
-# --verify). Fehlt er, koennte ein leerer/teilweiser Restore nicht als solcher
-# erkannt werden; fail-closed statt still gruen (Refs #1336).
+# Der Vollstaendigkeits-Guard (Schritt 3b) gleicht im Prod-Format die
+# Wegwerf-DB mit dem authentifizierten Manifest ab; nur das Dev-Format nutzt
+# dafuer weiterhin die Live-DB (wie backup.sh --verify). POSTGRES_DB benennt
+# zudem die Live-Datenbank und muss deshalb in beiden Formaten bekannt sein.
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt (aus $ENV_FILE) — der Vollstaendigkeits-Abgleich braucht die Live-DB}"
 
 # Der Drill braucht CREATE DATABASE — das kann auf dem 3-Rollen-Modell nur der
@@ -256,8 +256,17 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
         fail "Schritt 0: Manifest-Dump-Hash passt nicht zum gewaehlten Dump (${LATEST_DB##*/})"
         exit 1
     fi
-    if [[ -n "$MANIFEST_MEDIA_SHA256" && -f "$MANIFEST_MEDIA_FILE" ]]; then
-        if [[ "$(sha256sum "$MANIFEST_MEDIA_FILE" | awk '{print $1}')" != "$MANIFEST_MEDIA_SHA256" ]]; then
+    if [[ -n "$MANIFEST_MEDIA_SHA256" ]]; then
+        if [[ ! "$MANIFEST_MEDIA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            fail "Schritt 0: Manifest-Medien-Hash ist ungueltig (${MANIFEST_FILE##*/})"
+            exit 1
+        elif [[ ! -f "$MANIFEST_MEDIA_FILE" ]]; then
+            fail "Schritt 0: Satz unvollstaendig: Medien-Archiv fehlt (${MANIFEST_MEDIA_FILE##*/})"
+            exit 1
+        elif [[ ! -f "${MANIFEST_MEDIA_FILE}.hmac" ]]; then
+            fail "Schritt 0: Satz unvollstaendig: Medien-Sidecar fehlt (${MANIFEST_MEDIA_FILE##*/}.hmac)"
+            exit 1
+        elif [[ "$(sha256sum "$MANIFEST_MEDIA_FILE" | awk '{print $1}')" != "$MANIFEST_MEDIA_SHA256" ]]; then
             fail "Schritt 0: Manifest-Medien-Hash passt nicht zum gewaehlten Satz (${MANIFEST_MEDIA_FILE##*/})"
             exit 1
         fi
@@ -294,13 +303,12 @@ fi
 # Schritt 2: decrypten + restore in die Wegwerf-DB — Format-abhaengig
 # (prod: gunzip|psql, dev: pg_restore).
 #
-# Bekannte benigne Ausnahme: das Dump enthaelt ``REFRESH MATERIALIZED VIEW
-# core_statistics_event_flat``. Beim Restore scheitert dieser Refresh an
-# FORCE ROW LEVEL SECURITY auf core_event (RLS gilt dort selbst fuer den Owner,
-# und der Refresh laeuft nicht mit BYPASSRLS) -> pg_restore endet mit rc=1
-# ("errors ignored on restore: 1"). Das betrifft nur den Statistik-Cache, nicht
-# die Nutzdaten — der mv-refresh-Timer baut ihn stuendlich neu. Solche reinen
-# MV-Refresh-Fehler tolerieren wir; jeder andere/zusaetzliche Fehler bleibt FAIL.
+# Nur im Dev-Format kann das Dump beim ``REFRESH MATERIALIZED VIEW
+# core_statistics_event_flat`` an FORCE ROW LEVEL SECURITY auf core_event
+# scheitern; pg_restore endet dann mit rc=1 ("errors ignored on restore: 1").
+# Diesen reinen Statistik-Cache-Fehler toleriert der Dev-Zweig gezielt. Im
+# Prod-Format beendet jeder psql-Fehler den Restore; alle weiteren Fehler
+# bleiben in beiden Formaten ein FAIL.
 RESTORE_ERR="$(mktemp)"
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
     # Prod-Format: plain SQL (gzip) -> psql. A4.3-HMAC-Sidecar VOR dem
@@ -511,8 +519,9 @@ fi
 
 # Schritt 6: Passendes Medien-Archiv authentifizieren und auf dem Host
 # probeweise entpacken (Refs #2195). Das Prod-Backup benennt beide Archive mit
-# demselben Zeitstempel. Ein fehlendes Medien-Archiv ist zulaessig, weil der
-# Restore-Pfad ausdruecklich DB-only-Backups unterstuetzt.
+# demselben Zeitstempel. Ein fehlendes Medien-Archiv ist nur zulaessig, wenn
+# das authentifizierte Manifest keinen Medien-Hash enthaelt und damit einen
+# DB-only-Satz beschreibt.
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
     LATEST_MEDIA="$MEDIA_FILE"
     if [[ ! -f "$LATEST_MEDIA" ]]; then

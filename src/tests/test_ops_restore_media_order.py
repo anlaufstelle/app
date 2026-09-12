@@ -174,11 +174,24 @@ exit 0
     return root, bindir, action_log, db_backup, media_backup
 
 
+def _rewrite_manifest_media_hash(manifest: Path, value: str | None) -> None:
+    lines = [line for line in manifest.read_text(encoding="utf-8").splitlines() if not line.startswith("media_sha256=")]
+    if value is not None:
+        lines.append(f"media_sha256={value}")
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
+    signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
+    manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
+
+
 def _run_restore(
-    root: Path, env: dict[str, str], db_backup: Path, media_backup: Path
+    root: Path, env: dict[str, str], db_backup: Path, media_backup: Path | None
 ) -> subprocess.CompletedProcess[str]:
+    args = ["bash", str(root / "scripts" / "ops" / "restore.sh"), str(db_backup)]
+    if media_backup is not None:
+        args.append(str(media_backup))
     return subprocess.run(
-        ["bash", str(root / "scripts" / "ops" / "restore.sh"), str(db_backup), str(media_backup)],
+        args,
         input="ja\n",
         capture_output=True,
         text=True,
@@ -200,7 +213,7 @@ def test_tampered_media_sidecar_stops_before_database_restore_or_media_delete(tm
     assert "rm -rf" not in actions
 
 
-def test_valid_sidecars_are_both_checked_before_destructive_actions(tmp_path: Path) -> None:
+def test_valid_sidecars_are_checked_before_destructive_actions(tmp_path: Path) -> None:
     root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
 
     result = _run_restore(root, _base_env(root, bindir, action_log), db_backup, media_backup)
@@ -210,9 +223,9 @@ def test_valid_sidecars_are_both_checked_before_destructive_actions(tmp_path: Pa
     hmac_positions = [index for index, line in enumerate(actions) if line.startswith("hmac ")]
     psql_pos = next(index for index, line in enumerate(actions) if " psql " in line)
     media_delete_pos = next(index for index, line in enumerate(actions) if "rm -rf" in line)
-    assert len(hmac_positions) == 4
-    assert hmac_positions[0] < hmac_positions[1] < hmac_positions[2] < psql_pos
-    assert psql_pos < hmac_positions[3] < media_delete_pos
+    assert len(hmac_positions) == 5
+    assert hmac_positions[0] < hmac_positions[1] < hmac_positions[2] < hmac_positions[3] < psql_pos
+    assert psql_pos < hmac_positions[4] < media_delete_pos
 
 
 def test_database_restore_error_stops_before_hwm_or_media_changes(tmp_path: Path) -> None:
@@ -249,6 +262,120 @@ def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Pat
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "anlaufstelle_2026-09-10_020000_media.tar.gz.enc: 2 Dateien, 9 Bytes, HMAC ok" in result.stdout
     assert list(media_tmp.iterdir()) == []
+
+
+def test_restore_drill_rejects_manifest_media_when_archive_is_missing(tmp_path: Path) -> None:
+    root, bindir, action_log, _, media_backup = _make_sandbox(tmp_path)
+    media_backup.unlink()
+    media_backup.with_name(f"{media_backup.name}.hmac").unlink()
+
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=_base_env(root, bindir, action_log),
+        cwd=root,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert "Satz unvollstaendig: Medien-Archiv fehlt" in result.stdout
+    assert "mark_restore_verified" not in action_log.read_text(encoding="utf-8")
+
+
+def test_restore_drill_rejects_manifest_media_when_sidecar_is_missing(tmp_path: Path) -> None:
+    root, bindir, action_log, _, media_backup = _make_sandbox(tmp_path)
+    media_backup.with_name(f"{media_backup.name}.hmac").unlink()
+
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=_base_env(root, bindir, action_log),
+        cwd=root,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert "Satz unvollstaendig: Medien-Sidecar fehlt" in result.stdout
+    assert "mark_restore_verified" not in action_log.read_text(encoding="utf-8")
+
+
+def test_restore_drill_allows_database_only_manifest_without_media_hash(tmp_path: Path) -> None:
+    root, bindir, action_log, _, media_backup = _make_sandbox(tmp_path)
+    manifest = media_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
+    _rewrite_manifest_media_hash(manifest, None)
+    media_backup.unlink()
+    media_backup.with_name(f"{media_backup.name}.hmac").unlink()
+
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=_base_env(root, bindir, action_log),
+        cwd=root,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "DB-only-Backup zulaessig" in result.stdout
+    assert "mark_restore_verified" in action_log.read_text(encoding="utf-8")
+
+
+def test_restore_drill_rejects_media_with_wrong_manifest_hash(tmp_path: Path) -> None:
+    root, bindir, action_log, _, media_backup = _make_sandbox(tmp_path)
+    manifest = media_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
+    _rewrite_manifest_media_hash(manifest, "0" * 64)
+
+    result = subprocess.run(
+        ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=_base_env(root, bindir, action_log),
+        cwd=root,
+        timeout=30,
+    )
+
+    assert result.returncode == 1
+    assert "Manifest-Medien-Hash passt nicht" in result.stdout
+    assert "mark_restore_verified" not in action_log.read_text(encoding="utf-8")
+
+
+def test_restore_rejects_manifest_media_when_archive_argument_is_missing(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, _ = _make_sandbox(tmp_path)
+
+    result = _run_restore(root, _base_env(root, bindir, action_log), db_backup, None)
+
+    assert result.returncode == 1
+    assert "Satz unvollstaendig: Medien-Archiv fehlt" in result.stderr
+    assert " psql " not in action_log.read_text(encoding="utf-8")
+
+
+def test_restore_allows_database_only_manifest_without_media_hash(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    manifest = db_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
+    _rewrite_manifest_media_hash(manifest, None)
+
+    result = _run_restore(root, _base_env(root, bindir, action_log), db_backup, None)
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert " psql " in action_log.read_text(encoding="utf-8")
+
+
+def test_restore_rejects_media_with_wrong_manifest_hash_before_database_import(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    manifest = db_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
+    _rewrite_manifest_media_hash(manifest, "0" * 64)
+
+    result = _run_restore(root, _base_env(root, bindir, action_log), db_backup, media_backup)
+
+    assert result.returncode == 1
+    assert "Manifest-Medien-Hash passt nicht" in result.stderr
+    assert " psql " not in action_log.read_text(encoding="utf-8")
 
 
 def test_restore_drill_fails_before_extract_when_tmpdir_space_is_too_small(tmp_path: Path) -> None:
@@ -325,6 +452,8 @@ def test_restore_checks_real_archive_at_facility_path(
 ) -> None:
     root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
     _encrypt(_media_payload(entries), media_backup)
+    manifest = db_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
+    _rewrite_manifest_media_hash(manifest, hashlib.sha256(media_backup.read_bytes()).hexdigest())
     _install_real_media_docker(bindir)
     host_media = tmp_path / "container" / "media"
     host_media.mkdir(parents=True)
@@ -392,6 +521,8 @@ exit 0
 
 def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = False):
     root, bindir, action_log, db_backup, _ = _make_sandbox(tmp_path)
+    manifest = db_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
+    _rewrite_manifest_media_hash(manifest, None)
     hwm_source = db_backup.parent / "audit_hwm-2026-09-10_020000.json"
     hwm_source.write_bytes(payload)
     hwm_target = tmp_path / "audit_hwm.json"

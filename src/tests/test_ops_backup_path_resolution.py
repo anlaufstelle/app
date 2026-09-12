@@ -15,6 +15,8 @@ Rein subprocess-basiert (kein Django/DB) — analog zu
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import shutil
 import subprocess
@@ -62,6 +64,7 @@ _ENV = (
     "POSTGRES_PASSWORD=apppw\n"
     "BACKUP_ENCRYPTION_KEY=not-a-placeholder-0123456789abcdef\n"
 )
+_BACKUP_KEY = _ENV.partition("BACKUP_ENCRYPTION_KEY=")[2].splitlines()[0]
 
 
 def _make_sandbox(tmp_path: Path, *, backup_env: str = "") -> tuple[Path, Path, Path]:
@@ -142,10 +145,18 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
     db_backups = sorted(daily_dir.glob("anlaufstelle_*.sql.gz.enc"))
     assert len(db_backups) == 1
     # Der Docker-Stub liefert fuer die Medien-Pipeline bewusst nur Fake-Bytes.
-    # Diese Pfadtests bilden daher den zulaessigen DB-only-Fall ab; der echte
-    # Medien-Drill wird in test_ops_restore_media_order.py separat geprueft.
+    # Die Fixture bildet deshalb einen authentifizierten DB-only-Satz ohne
+    # Medien-Hash; der echte Medien-Drill wird separat geprueft.
     for media_artifact in daily_dir.glob("*_media.tar.gz.enc*"):
         media_artifact.unlink()
+    manifest = next(daily_dir.glob("anlaufstelle_*.manifest"))
+    manifest_lines = [
+        line for line in manifest.read_text(encoding="utf-8").splitlines() if not line.startswith("media_sha256=")
+    ]
+    manifest.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+    derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{_BACKUP_KEY}".encode()).hexdigest()
+    signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
+    manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
 
     restore_result = subprocess.run(
         ["bash", str(root / "scripts" / "ops" / "restore-drill.sh"), "--prod"],
