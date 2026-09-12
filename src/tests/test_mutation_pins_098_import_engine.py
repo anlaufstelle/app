@@ -1,5 +1,3 @@
-import pytest
-
 """Pin-Tests der Welle K (0.98) — Prio-2-Survivors in ``core.services.import_engine``.
 
 Quelle: Füllauftrag #2193,
@@ -20,6 +18,8 @@ Konventionen wie ``test_mutation_pins_096_import_engine.py``: Zusicherungen
 vergleichen EXAKT (``==``); der Funktionskoerper ist bei allen drei Mutanten
 deckungsgleich mit dem Batch-Text (keine Numerierungsdrift in diesem Modul).
 """
+
+import pytest
 
 from core.services import import_engine
 
