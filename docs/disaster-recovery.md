@@ -222,7 +222,7 @@ docker compose -f docker-compose.prod.yml up -d web && \
 
 Vor dem Medien-Restore `MEDIA_ROOT`, `MEDIA_ROOT_CONTAINER`, den persistenten Mount und den Wurzelnamen des Medienarchivs abgleichen. `MEDIA_ROOT` und `MEDIA_ROOT_CONTAINER` müssen auf dasselbe App-Verzeichnis zeigen; jede Abweichung hält den Restore an.
 
-[`restore.sh`](../scripts/ops/restore.sh) authentifiziert ein vorhandenes Manifest sowie DB und Medien über ihre HMAC-Sidecars, erzwingt den im Manifest gebundenen Medien-Hash, validiert und installiert den zeitgleichen HWM und spielt den Dump mit `ON_ERROR_STOP` in einer Transaktion ein. Der Drill prüft zusätzlich Satzkennung, DB- und HWM-Hash des Manifests. Medien werden neben `MEDIA_ROOT` in ein Staging-Verzeichnis entpackt. Dort gleicht das Skript für jede Zeile aus `core_attachment` den Sollpfad `<MEDIA_ROOT>/<facility_id>/<storage_filename>` ab; erst danach tauscht es Staging und bisherigen Bestand atomar. Scheitert Extraktion, Pfadprüfung oder Tausch, bleibt bzw. wird der vorherige Medienbestand wieder aktiv. Die Abschlusszeile `RESTORE-SATZ WIEDERHERGESTELLT: <timestamp>` muss exakt `RESTORE_TIMESTAMP` nennen.
+[`restore.sh`](../scripts/ops/restore.sh) authentifiziert ein vorhandenes Manifest sowie DB und Medien über ihre HMAC-Sidecars, erzwingt den im Manifest gebundenen Medien-Hash und spielt den Dump mit `ON_ERROR_STOP` in einer Transaktion ein. Den zeitgleichen HWM prüft es im `maintenance`-Kontext zuerst auf Signatur und Struktur, schreibt ihn dann in eine temporäre Datei im Zielverzeichnis, vergleicht deren Größe und SHA-256 mit der Quelle und aktiviert sie per `mv -f`. Der Drill prüft zusätzlich Satzkennung, DB- und HWM-Hash des Manifests. Medien werden neben `MEDIA_ROOT` in ein Staging-Verzeichnis entpackt. Dort gleicht das Skript für jede Zeile aus `core_attachment` den Sollpfad `<MEDIA_ROOT>/<facility_id>/<storage_filename>` ab; erst danach tauscht es Staging und bisherigen Bestand atomar. Scheitert Extraktion, Pfadprüfung oder Tausch vor der erfolgreichen Aktivierung, bleibt bzw. wird der vorherige Medienbestand wieder aktiv. Nach erfolgreicher Aktivierung löscht das Skript den Altbestand; die Rückfallmöglichkeit ist daher keine dauerhafte Sicherungszusage. Die Abschlusszeile `RESTORE-SATZ WIEDERHERGESTELLT: <timestamp>` muss exakt `RESTORE_TIMESTAMP` nennen.
 
 Die Medienprüfungen haben getrennte Aussagen:
 
@@ -268,9 +268,19 @@ Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehören
 HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
 test -s "$HWM_SOURCE" && \
 docker compose -f docker-compose.prod.yml stop cron && \
+SOURCE_HWM_SIZE="$(wc -c < "$HWM_SOURCE" | tr -d '[:space:]')" && \
 SOURCE_HWM_SHA256="$(sha256sum "$HWM_SOURCE" | awk '{print $1}')" && \
-docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
-  -c 'cat > "$DJANGO_AUDIT_HWM_PATH"' < "$HWM_SOURCE" && \
+docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T \
+  -e EXPECTED_HWM_SIZE="$SOURCE_HWM_SIZE" -e EXPECTED_HWM_SHA256="$SOURCE_HWM_SHA256" maintenance \
+  -c 'set -eu
+      target_dir=$(dirname "$DJANGO_AUDIT_HWM_PATH")
+      hwm_temp="${target_dir}/.audit-hwm-recovery.$$"
+      trap '\''rm -f "$hwm_temp"'\'' EXIT HUP INT TERM
+      umask 077
+      cat > "$hwm_temp"
+      test "$(wc -c < "$hwm_temp" | tr -d "[:space:]")" = "$EXPECTED_HWM_SIZE"
+      test "$(sha256sum "$hwm_temp" | awk '\''{print $1}'\'')" = "$EXPECTED_HWM_SHA256"
+      mv -f "$hwm_temp" "$DJANGO_AUDIT_HWM_PATH"' < "$HWM_SOURCE" && \
 INSTALLED_HWM_SHA256="$(docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
   -c 'sha256sum "$DJANGO_AUDIT_HWM_PATH"' | awk '{print $1}')" && \
 test "$SOURCE_HWM_SHA256" = "$INSTALLED_HWM_SHA256" && \
@@ -521,8 +531,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    grep -F "ACHTUNG - explizit gewaehlter Restore-Satz: $RESTORE_TIMESTAMP" /tmp/anlaufstelle-restore-drill.log
    ```
 
-   Der explizite `--timestamp`-Weg ist die vom Skript angebotene Satzwahl; ohne
-   ihn würde das Skript den lexikografisch neuesten Dump wählen. Beide
+   Der explizite `--timestamp`-Weg ist die hier verwendete Satzwahl. Alternativ
+   akzeptiert das Skript nur zusammen mit `--prod` die Umgebungsvariable
+   `BACKUP_TIMESTAMP` im Format `JJJJ-MM-TT_HHMMSS`, beispielsweise
+   `sudo env BACKUP_TIMESTAMP="$RESTORE_TIMESTAMP" bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod`.
+   Ohne eine der beiden Angaben würde das Skript den lexikografisch neuesten Dump wählen. Beide
    `grep`-Befehle müssen denselben Zeitstempel bestätigen. Der Lauf muss neben HMAC, Tabellen-Stichproben, Vollständigkeitsvergleich,
    RLS und `auditlog_immutable` ausdrücklich
    `Schritt 2b: Audit-HWM-Signatur verifiziert` melden. Schritt 2b bindet die
@@ -534,7 +547,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    Vorbedingung und darf nicht durch ein grünes Ergebnis der übrigen Schritte
    ersetzt werden. Erst nach diesem Nachweis darf der Backup-Host-Cron aktiviert
    werden.
-7. Endzeit, Exit-Code, jede `OK`-/`FAIL`-Zeile und Abweichungen protokollieren.
+7. Endzeit, Exit-Code, jede `OK`-, `FAIL`- oder `NICHT PRUEFBAR`-Zeile und Abweichungen protokollieren.
+   Meldet Schritt 5 bei einem in Manifest und Restore leeren `core_auditlog`
+   `NICHT PRUEFBAR`, ist das weder ein defekter Trigger noch ein erfolgreicher
+   Triggernachweis: Der Drill bleibt `OFFEN`, endet mit Exit-Code 1 und führt
+   Schritt 7 (`mark_restore_verified`) nicht aus.
    Bei einem `FAIL` bleibt das Gesamtergebnis **OFFEN**; keine einzelne
    erfolgreiche Stichprobe in „grün" umdeuten.
 
@@ -630,7 +647,7 @@ Schritt 2b Audit-HWM-Signatur: OK / FAIL / NICHT PRÜFBAR
 Schritt 3 Tabellen-Stichproben: OK / FAIL
 Schritt 3b Sechs-Tabellen-Abgleich gegen Manifest: OK / FAIL
 Schritt 4 RLS: OK / FAIL
-Schritt 5 auditlog_immutable: OK / FAIL
+Schritt 5 auditlog_immutable: OK / FAIL / NICHT PRÜFBAR
 Schritt 6 Medien-HMAC und Probeentpackung: OK / FAIL
 Schritt 7 RESTORE_VERIFIED: OK / FAIL
 

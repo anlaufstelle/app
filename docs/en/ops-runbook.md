@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Synchronization update 2026-09-12: manifest-bound backup sets, pre-rotation off-site transfer, explicit restore-set selection, fail-closed audit HWM handling, exact manifest completeness checks, and idempotent cron log setup now mirror the German operator guidance (#2222).
+> Synchronization update 2026-09-12: manifest-bound media requirements, empty-audit outcomes, both explicit restore-set selectors, atomic audit HWM installation, pre-rotation off-site transfer, exact manifest completeness checks, and idempotent cron log setup now mirror the German operator guidance (#2222).
 > Previously synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer; § 6.5c the paragraph coupling the advisory cadence to a regulatory reporting duty was dropped together with the removed compliance memo, and the § 8 SBOM rationale is worded neutrally, #2207).
 > Previously synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; the alternative deployment path reworded to "k8s"/"custom orchestration", #2202; pre-1.0 migration/historical framing removed -- the pre-0.23 host-crontab migration subsection, the database-role version-dated markers, and the pre-1.0-installation framing in the role-split recovery section (§ 9.6) are now described as current state or as a misconfiguration-recovery path, #2205).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
@@ -1216,23 +1216,26 @@ The backup files are `0600` and owned by root — therefore run **as root**. Wit
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # auto-detect the format
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000 # select one prod set
+sudo env BACKUP_TIMESTAMP=2026-09-03_020000 bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # equivalent environment-based set selection
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev format (dump-*.pgc.enc)
 ```
 
+`--timestamp` and `BACKUP_TIMESTAMP` are valid only when bound to the prod format; the value must use the `YYYY-MM-DD_HHMMSS` format.
+
 | Step | Check |
 |---|---|
-| 0 | Find a backup in the format-specific directory; `--prod --timestamp <timestamp>` selects exactly that set, otherwise the newest is used. Authenticate its timestamp-matched manifest and HMAC, verify set ID plus database/media/HWM hashes, and load reference counts for six tables. A prod drill without a manifest aborts. |
+| 0 | Find a backup in the format-specific directory; `--prod --timestamp <timestamp>` or `--prod` with `BACKUP_TIMESTAMP=<timestamp>` selects exactly that set, otherwise the newest is used. Authenticate its timestamp-matched manifest and HMAC, verify set ID plus database/media/HWM hashes, and load reference counts for six tables. A prod drill without a manifest aborts. If the authenticated manifest contains `media_sha256`, a missing media archive, missing sidecar, or wrong hash aborts the drill before the throwaway database is created; `restore.sh` aborts before import in the same cases. |
 | 1 | Create a fresh throwaway DB (`anlaufstelle_drill_<pid>`) |
 | 2 | Decrypt + restore the backup — `--prod` first checks the HMAC sidecar, then `gunzip \| psql -v ON_ERROR_STOP=1 --single-transaction` (plain SQL); `--dev` `pg_restore` (custom format) |
 | 2b | `--prod` only and when `DJANGO_AUDIT_HWM_PATH` is set: after step 3b, stream the `audit_hwm-<timestamp>.json` matching the selected database backup timestamp into the hardened drill container, load its HMAC signature, and verify the restored chain; missing, mismatched, or manipulated → `FAIL`, while the remaining restore checks continue. The 2b label remains stable for the test sheet. If the variable is unset, the step is skipped with `INFO` and the drill can still exit with code 0 ([§6.7](#67-back-up-and-verify-the-audit-high-water-mark-refs-2022)) |
 | 3 | Spot-check each manifest table (`core_facility`, `core_client`, `core_event`, `core_workitem`, `core_auditlog`, `core_attachment`) — are counts queryable? |
 | 3b | In prod mode, exactly compare these six tables between the throwaway DB and the authenticated manifest; every mismatch is `FAIL`. Only the dev branch still performs an exact comparison with the live DB. This step runs before the writing audit-chain check and compliance marker. |
 | 4 | RLS policy check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` must yield `>= 18` (a conservative floor in the script; the actual count is higher, see section 9) |
-| 5 | `auditlog_immutable` trigger exists AND blocks a raw UPDATE |
-| 6 | `--prod` only: verify the media archive matching the selected database backup via HMAC, probe-extract it into a host temporary directory in one pass, and compare the Tar listing produced during extraction with the extracted result; output `Medien: N Dateien, M Bytes, HMAC ok`. The target needs roughly twice the archive size free beforehand; `TMPDIR=/path/with/space` redirects the step to another filesystem. If the matching archive is absent, skip the step with `INFO` as a valid database-only case. The trap cleans up the temporary directory and throwaway database. |
+| 5 | `auditlog_immutable` trigger exists AND blocks a raw UPDATE. If both the audit target in the manifest and the actual count in `core_auditlog` are 0, the check is `NICHT PRUEFBAR`: this demonstrates neither a broken trigger nor that the trigger works. The drill remains `OFFEN`, exits with code 1, and does not run step 7. |
+| 6 | `--prod` only: verify the media archive matching the selected database backup via HMAC, probe-extract it into a host temporary directory in one pass, and compare the Tar listing produced during extraction with the extracted result; output `Medien: N Dateien, M Bytes, HMAC ok`. The target needs roughly twice the archive size free beforehand; `TMPDIR=/path/with/space` redirects the step to another filesystem. A missing matching archive is a valid database-only case reported as `INFO` only when the authenticated manifest contains no media hash. The trap cleans up the temporary directory and throwaway database. |
 | 7 | **On full success (all steps including 3b and 6):** `mark_restore_verified` in the web container → compliance marker |
 
-Output: one `OK` / `FAIL` entry per executed step; optional skipped checks report `INFO`. Exit code != 0 on any `FAIL`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
+Output: one `OK`, `FAIL`, or `NICHT PRUEFBAR` entry per executed step; optional skipped checks report `INFO`. Exit code != 0 on any `FAIL` or `NICHT PRUEFBAR`. On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
 
 > **Benign exception during the restore (step 2):** In dev mode, the dump may fail to `REFRESH MATERIALIZED VIEW core_statistics_event_flat` against `FORCE ROW LEVEL SECURITY` on `core_event` (`pg_restore: errors ignored on restore: 1`). This only affects the statistics cache. The `--dev` drill tolerates only this case. In prod mode, `psql -v ON_ERROR_STOP=1 --single-transaction` aborts on every SQL error. Completeness is additionally established there by the exact manifest comparison in step 3b.
 
@@ -1309,10 +1312,12 @@ A green `verify_audit_chain` run writes the count and last hash for each chain t
 
 When `DJANGO_AUDIT_HWM_PATH` is set, `scripts/ops/restore-drill.sh --prod` streams the HWM file matching the selected database backup timestamp into the hardened drill container's `/tmp` and loads it through `HighWaterMarkStore.load()`. A missing, timestamp-mismatched, or incorrectly signed file produces `FAIL` and therefore exit code 1; the drill still runs the remaining restore, RLS, and trigger checks so a second failure is not hidden. If the variable is unset, the drill skips step 2b with an `INFO` line; that alone does not prevent exit code 0 or the restore marker.
 
-For an actual recovery, the order is stricter: successfully stop `cron`, verify
-that the HWM source exists, stream the unchanged off-site original from the
-selected restore set to `DJANGO_AUDIT_HWM_PATH` via a `maintenance` one-shot,
-and compare the installed file with the original via SHA-256. Every error
+For an actual recovery, the order is stricter: successfully stop `cron` and
+verify that the HWM source exists. `restore.sh` checks the source signature and
+structure in the `maintenance` context, writes it to a temporary file in the
+target directory, compares its size and SHA-256 with the source, and activates
+it using `mv -f`. The additional import in the disaster-recovery runbook uses
+the same temporary-file, comparison, and replacement sequence. Every error
 aborts; only then may `verify_audit_chain` run, and jobs may start **only after
 it succeeds**. Software treats a missing operational anchor as a first run, so
 this check before chain verification is mandatory. The first green run advances
@@ -2822,4 +2827,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-12 -->
-<!-- source-hash: eeb7e8b71141125a80aeaa54d85730b54064bdc9 -->
+<!-- source-hash: 6c7a153861c7404fad411501ed53fd4cf4fcbf0c -->

@@ -1215,23 +1215,26 @@ Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehr
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # Format auto-erkennen
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000 # Prod-Satz explizit waehlen
+sudo env BACKUP_TIMESTAMP=2026-09-03_020000 bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # Gleichwertige Satzwahl per Umgebungsvariable
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzwingen (dump-*.pgc.enc)
 ```
 
+`--timestamp` und `BACKUP_TIMESTAMP` sind nur an das Prod-Format gebunden erlaubt; der Wert muss dem Format `JJJJ-MM-TT_HHMMSS` entsprechen.
+
 | Schritt | Pruefung |
 |---|---|
-| 0 | Backup im format-spezifischen Verzeichnis finden; bei `--prod --timestamp <Zeitstempel>` exakt diesen Satz waehlen, sonst den neuesten. Das zeitgleiche Manifest samt HMAC authentifizieren, Satzkennung sowie DB-/Medien-/HWM-Hashes pruefen und die Referenzzahlen fuer sechs Tabellen laden. Ohne Manifest bricht der Prod-Drill ab. |
+| 0 | Backup im format-spezifischen Verzeichnis finden; bei `--prod --timestamp <Zeitstempel>` oder `--prod` mit `BACKUP_TIMESTAMP=<Zeitstempel>` exakt diesen Satz waehlen, sonst den neuesten. Das zeitgleiche Manifest samt HMAC authentifizieren, Satzkennung sowie DB-/Medien-/HWM-Hashes pruefen und die Referenzzahlen fuer sechs Tabellen laden. Ohne Manifest bricht der Prod-Drill ab. Enthält das authentifizierte Manifest einen `media_sha256`, bricht der Drill bei fehlendem Medienarchiv, fehlendem Sidecar oder falschem Hash bereits vor Anlage der Wegwerf-DB ab; `restore.sh` bricht in denselben Fällen vor dem Import ab. |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql -v ON_ERROR_STOP=1 --single-transaction` (plain SQL); `--dev` `pg_restore` (custom format) |
 | 2b | Nur `--prod` und bei gesetztem `DJANGO_AUDIT_HWM_PATH`: nach Schritt 3b die zum gewaehlten DB-Backup-Zeitstempel gehoerende `audit_hwm-<Zeitstempel>.json` per Stream in den gehaerteten Drill-Container schreiben, die HMAC-Signatur laden und die restaurierte Kette prüfen; fehlend, abweichend oder manipuliert → `FAIL`, die weiteren Restore-Pruefungen laufen trotzdem weiter. Die Bezeichnung 2b bleibt für das Prüfblatt stabil. Ist die Variable nicht gesetzt, wird der Schritt mit `INFO` uebersprungen und der Drill kann mit Exit-Code 0 enden ([§6.7](#67-audit-high-water-mark-sichern-und-pruefen-refs-2022)) |
 | 3 | Stichproben pro Manifesttabelle (`core_facility`, `core_client`, `core_event`, `core_workitem`, `core_auditlog`, `core_attachment`) — Counts abfragbar? |
 | 3b | Im Prod-Format exakter Zeilenabgleich dieser sechs Tabellen zwischen Wegwerf-DB und authentifiziertem Manifest; jede Abweichung ist `FAIL`. Nur der Dev-Zweig vergleicht weiterhin exakt gegen die Live-DB. Dieser Schritt läuft vor der schreibenden Audit-Kettenprüfung und dem Compliance-Marker. |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
-| 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
-| 6 | Nur `--prod`: Zum gewählten DB-Backup gehörendes Medienarchiv per HMAC prüfen, in einem Durchlauf in ein Host-Tempverzeichnis probeentpacken und das dabei erzeugte Tar-Listing mit der Probeentpackung vergleichen; Ausgabe `Medien: N Dateien, M Bytes, HMAC ok`. Vorher müssen dort ungefähr Archivgröße × 2 frei sein; `TMPDIR=/pfad/mit/platz` lenkt den Schritt auf ein anderes Dateisystem. Fehlt das passende Archiv, wird der Schritt als zulässiger DB-only-Fall mit `INFO` übersprungen. Tempverzeichnis und Wegwerf-DB werden via Trap aufgeräumt. |
+| 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE. Sind Audit-Soll im Manifest und Ist in `core_auditlog` beide 0, ist die Prüfung `NICHT PRUEFBAR`: Das belegt weder einen defekten Trigger noch dessen Funktion. Der Drill bleibt `OFFEN`, endet mit Exit-Code 1 und führt Schritt 7 nicht aus. |
+| 6 | Nur `--prod`: Zum gewählten DB-Backup gehörendes Medienarchiv per HMAC prüfen, in einem Durchlauf in ein Host-Tempverzeichnis probeentpacken und das dabei erzeugte Tar-Listing mit der Probeentpackung vergleichen; Ausgabe `Medien: N Dateien, M Bytes, HMAC ok`. Vorher müssen dort ungefähr Archivgröße × 2 frei sein; `TMPDIR=/pfad/mit/platz` lenkt den Schritt auf ein anderes Dateisystem. Ein fehlendes passendes Archiv ist nur dann ein zulässiger DB-only-Fall mit `INFO`, wenn das authentifizierte Manifest keinen Medienhash enthält. Tempverzeichnis und Wegwerf-DB werden via Trap aufgeräumt. |
 | 7 | **Bei vollem Erfolg (alle Schritte inkl. 3b und 6):** `mark_restore_verified` im web-Container → Compliance-Marker |
 
-Output: ein `OK` / `FAIL`-Eintrag pro ausgeführtem Schritt; optionale übersprungene Prüfungen melden `INFO`. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
+Output: ein `OK`, `FAIL` oder `NICHT PRUEFBAR` pro ausgeführtem Schritt; optionale übersprungene Prüfungen melden `INFO`. Exit-Code != 0 bei jedem `FAIL` und bei `NICHT PRUEFBAR`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
 
 > **Benigne Ausnahme beim Restore (Schritt 2):** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Dev-Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitern kann (`pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache. Der `--dev`-Drill toleriert ausschließlich diesen Fall. Im Prod-Zweig beendet `psql -v ON_ERROR_STOP=1 --single-transaction` jeden SQL-Fehler. Vollständigkeit belegt dort zusätzlich der exakte Manifestabgleich in Schritt 3b.
 
@@ -1309,10 +1312,12 @@ Ein gruener `verify_audit_chain`-Lauf schreibt dort Zaehler und letzten Hash je 
 Ist `DJANGO_AUDIT_HWM_PATH` gesetzt, streamt `scripts/ops/restore-drill.sh --prod` die zum gewaehlten DB-Backup-Zeitstempel gehoerende HWM-Datei nach `/tmp` des gehaerteten Drill-Containers und laedt sie ueber `HighWaterMarkStore.load()`. Eine fehlende, zeitlich abweichende oder ungueltig signierte Datei erzeugt `FAIL` und damit Exit-Code 1; der Drill fuehrt die uebrigen Restore-, RLS- und Trigger-Pruefungen dennoch aus, damit ein zweiter Fehler nicht verdeckt wird. Ist die Variable nicht gesetzt, ueberspringt der Drill Schritt 2b mit einer `INFO`-Zeile; das allein laesst Exit-Code 0 und den Restore-Marker weiterhin zu.
 
 Beim echten Recovery gilt eine strengere Reihenfolge: `cron` erfolgreich
-stoppen, die HWM-Quelle auf Existenz pruefen, das unveraenderte Off-Site-Original
-des gewaehlten Restore-Satzes per `maintenance`-One-Shot an
-`DJANGO_AUDIT_HWM_PATH` streamen und die installierte Datei per SHA-256 mit dem
-Original vergleichen. Jeder Fehler bricht ab; erst danach darf
+stoppen und die HWM-Quelle auf Existenz pruefen. `restore.sh` prüft Signatur und
+Struktur der Quelle im `maintenance`-Kontext, schreibt sie in eine temporäre
+Datei im Zielverzeichnis, vergleicht Größe und SHA-256 mit der Quelle und
+aktiviert sie per `mv -f`. Der zusätzliche Nachimport aus dem
+Disaster-Recovery-Runbook verwendet dieselbe Tempdatei-, Vergleichs- und
+Tauschfolge. Jeder Fehler bricht ab; erst danach darf
 `verify_audit_chain` laufen und **erst nach dessen Erfolg** duerfen Jobs starten.
 Ein fehlender Betriebsanker gilt der Software als Erstlauf, weshalb diese
 Pruefung vor der Kettenpruefung zwingend ist. Der erste gruene Lauf schreibt die
