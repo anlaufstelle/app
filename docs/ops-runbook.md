@@ -1386,7 +1386,7 @@ gemeldete Signatur ist kein voruebergehender Anlaufzustand. Logs und Stand
 pruefen:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
+docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 

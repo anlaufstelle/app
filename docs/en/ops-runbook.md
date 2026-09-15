@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Synchronization update 2026-09-15: the restore-drill guidance now documents the explicit `COMPOSE_DIR` handoff and the `.env`-only `BACKUP_HOST_DIR` source.
+> Synchronization update 2026-09-15: the restore-drill guidance now documents the explicit `COMPOSE_DIR` handoff and the `.env`-only `BACKUP_HOST_DIR` source, and § 7.4 reads the freshclam result from the container log (#2248).
 > Synchronization update 2026-09-15: the production Compose healthcheck treats only `error`/HTTP 503 as unhealthy while `degraded` remains available and requires separate monitoring (#2173).
 > Synchronization update 2026-09-12: manifest-bound media requirements, empty-audit outcomes, both explicit restore-set selectors, atomic audit HWM installation, pre-rotation off-site transfer, exact manifest completeness checks, and idempotent cron log setup now mirror the German operator guidance (#2222).
 > Most recently synchronized on 2026-09-11 (§ 5.8 the `/health/` `smtp` field named as an additional quick check between the `sendtestemail` exit code and actual delivery; the paragraph now separates the technical defaults (nothing is fail-closed) from the operational necessity per variable, and states that `EMAIL_USE_TLS` only wires up STARTTLS -- implicit TLS/SMTPS via Django's `EMAIL_USE_SSL` is not supported by this deployment path, #2089).
@@ -1389,7 +1389,7 @@ in the dashboard is not a transient startup condition. Check the logs and
 state:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
+docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
@@ -2833,4 +2833,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 52d633bc75e03fd6b0dcbeb08393a1ce7ce3faac -->
+<!-- source-hash: b5c70d29f827694188278c0c132c8baf29c7b579 -->
