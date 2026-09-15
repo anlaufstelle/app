@@ -22,6 +22,10 @@ extend-exclude = ["src/core/migrations"]
 select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
 
 [tool.ruff.lint.per-file-ignores]
+# Der Release-Sanitizer berechnet git-Blob-Hashes (git hash-object = sha1 ueber
+# "blob <len>\0" + Inhalt) — kein Sicherheitszweck. Die Datei bleibt bewusst
+# byte-identisch, weil ihr Hash Teil der Build-Signatur des Release-Builds ist.
+"dev-ops/release/sanitize_release_tree.py" = ["S324"]
 # Tests duerfen assert-Anweisungen, harte Test-Passwoerter und random()
 # verwenden; pytest.raises(Exception) und assert-False sind gebraeuchliche
 # Test-Patterns; nested-with kommt durch viele patch()-Schichten zustande.
