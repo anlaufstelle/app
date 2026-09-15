@@ -818,6 +818,10 @@ class TestZeitstromWatchRefreshPartials:
             ),
             ("X-Zeitstrom-Validators", json.dumps({"tally_topology": '"wrong"'})),
         ],
+        # Feste IDs: der Baseline-Fall enthält das Tagesdatum; ohne ``ids`` änderte
+        # sich die Node-ID um Mitternacht, und Testauswahlen aus einem früheren
+        # Sammellauf (mutmut) fanden den Test nicht mehr (Refs #2174).
+        ids=["previous-state-missing", "previous-state-baseline-today", "validators-topology-wrong"],
     )
     def test_time_filter_transition_rejects_missing_or_mismatched_baseline(
         self,
