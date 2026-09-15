@@ -143,7 +143,13 @@ exec "$REAL_OPENSSL" "$@"
         bindir / "docker",
         """#!/usr/bin/env bash
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
-if [[ "$*" == *" exec -T db psql "* ]]; then
+if [[ "$*" == *" exec -T web sh -c "* ]]; then
+    if [[ "${TEST_WEB_MEDIA_ROOT_ERROR:-0}" == "1" ]]; then
+        printf 'MEDIA_ROOT konnte nicht gelesen werden\\n' >&2
+        exit 1
+    fi
+    printf '%s' "${TEST_WEB_MEDIA_ROOT-/data/media}"
+elif [[ "$*" == *" exec -T db psql "* ]]; then
     if [[ "$*" == *"relrowsecurity"* ]]; then
         printf '20\\n'
     elif [[ "$*" == *"FROM pg_trigger"* ]]; then
@@ -226,6 +232,62 @@ def test_valid_sidecars_are_checked_before_destructive_actions(tmp_path: Path) -
     assert len(hmac_positions) == 5
     assert hmac_positions[0] < hmac_positions[1] < hmac_positions[2] < hmac_positions[3] < psql_pos
     assert psql_pos < hmac_positions[4] < media_delete_pos
+
+
+def test_media_root_mismatch_stops_before_confirmation_or_destructive_actions(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    env = _base_env(root, bindir, action_log)
+    env["MEDIA_ROOT_CONTAINER"] = "/data/media"
+    env["TEST_WEB_MEDIA_ROOT"] = "/data/media-abweichend"
+
+    result = _run_restore(root, env, db_backup, media_backup)
+
+    assert result.returncode != 0
+    assert "MEDIA_ROOT='/data/media-abweichend', MEDIA_ROOT_CONTAINER='/data/media'." in result.stderr
+    assert ".env" in result.stderr
+    assert "WARNUNG:" not in result.stdout
+    actions = action_log.read_text(encoding="utf-8")
+    assert " psql " not in actions
+    assert " mv " not in actions
+    assert " tar " not in actions
+
+
+def test_matching_media_roots_pass_precheck_before_confirmation(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    env = _base_env(root, bindir, action_log)
+    env["MEDIA_ROOT_CONTAINER"] = "/data/media"
+    env["TEST_WEB_MEDIA_ROOT"] = "/data/media"
+
+    result = _run_restore(root, env, db_backup, media_backup)
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    actions = action_log.read_text(encoding="utf-8").splitlines()
+    precheck_pos = next(index for index, line in enumerate(actions) if " exec -T web sh -c " in line)
+    psql_pos = next(index for index, line in enumerate(actions) if " psql " in line)
+    assert precheck_pos < psql_pos
+
+
+@pytest.mark.parametrize("failure_mode", ["empty", "error"])
+def test_unavailable_web_media_root_stops_before_destructive_actions(tmp_path: Path, failure_mode: str) -> None:
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    env = _base_env(root, bindir, action_log)
+    env["MEDIA_ROOT_CONTAINER"] = "/data/media"
+    if failure_mode == "empty":
+        env["TEST_WEB_MEDIA_ROOT"] = ""
+    else:
+        env["TEST_WEB_MEDIA_ROOT_ERROR"] = "1"
+
+    result = _run_restore(root, env, db_backup, media_backup)
+
+    assert result.returncode != 0
+    assert "MEDIA_ROOT" in result.stderr
+    assert "/data/media" in result.stderr
+    assert ".env" in result.stderr
+    assert "WARNUNG:" not in result.stdout
+    actions = action_log.read_text(encoding="utf-8")
+    assert " psql " not in actions
+    assert " mv " not in actions
+    assert " tar " not in actions
 
 
 def test_database_restore_error_stops_before_hwm_or_media_changes(tmp_path: Path) -> None:
@@ -363,7 +425,9 @@ def test_restore_allows_database_only_manifest_without_media_hash(tmp_path: Path
     result = _run_restore(root, _base_env(root, bindir, action_log), db_backup, None)
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert " psql " in action_log.read_text(encoding="utf-8")
+    actions = action_log.read_text(encoding="utf-8")
+    assert " psql " in actions
+    assert " exec -T web sh -c " not in actions
 
 
 def test_restore_rejects_media_with_wrong_manifest_hash_before_database_import(tmp_path: Path) -> None:
@@ -413,6 +477,10 @@ def _install_real_media_docker(bindir: Path) -> None:
         bindir / "docker",
         """#!/usr/bin/env bash
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
+if [[ "$*" == *" exec -T web sh -c "* ]]; then
+    printf '%s' "${TEST_WEB_MEDIA_ROOT-/data/media}"
+    exit 0
+fi
 if [[ "$*" == *" exec -T db psql "* ]]; then
     if [[ "$*" == *"SELECT facility_id, storage_filename"* ]]; then
         printf '%s\\n' "$ATTACHMENT_ROWS"

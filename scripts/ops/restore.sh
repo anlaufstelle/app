@@ -53,6 +53,7 @@ fi
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
+MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/data/media}"
 backup_require_real_key
 
 # Ein vorhandenes Manifest ist Teil des authentifizierten Backup-Satzes. Wenn
@@ -174,6 +175,28 @@ if [[ -n "$HWM_FILE" ]]; then
     echo "Validiere Audit-HWM vor der Wiederherstellung ..."
     validate_or_install_hwm validate
 fi
+if [[ -n "$MEDIA_FILE" ]]; then
+    MEDIA_ROOT_EFFECTIVE=""
+    if ! MEDIA_ROOT_EFFECTIVE=$(timeout 30s docker compose -f "$COMPOSE_FILE" exec -T web \
+        sh -c 'printf %s "$MEDIA_ROOT"'); then
+        echo "FEHLER: MEDIA_ROOT des web-Containers konnte nicht ermittelt werden." >&2
+        echo "  MEDIA_ROOT='<nicht ermittelbar>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
+        echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
+        exit 1
+    fi
+    if [[ -z "$MEDIA_ROOT_EFFECTIVE" ]]; then
+        echo "FEHLER: MEDIA_ROOT des web-Containers ist leer." >&2
+        echo "  MEDIA_ROOT='<leer>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
+        echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
+        exit 1
+    fi
+    if [[ "$MEDIA_ROOT_EFFECTIVE" != "$MEDIA_ROOT_CONTAINER" ]]; then
+        echo "FEHLER: Medienpfade weichen voneinander ab." >&2
+        echo "  MEDIA_ROOT='${MEDIA_ROOT_EFFECTIVE}', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
+        echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
+        exit 1
+    fi
+fi
 
 echo "WARNUNG: Die Datenbank '${POSTGRES_DB}' wird überschrieben!"
 echo "DB-Backup:    ${BACKUP_FILE}"
@@ -210,7 +233,6 @@ fi
 
 # Medien-Restore (Refs #720)
 if [[ -n "$MEDIA_FILE" ]]; then
-    MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/data/media}"
     MEDIA_STAGE="${MEDIA_ROOT_CONTAINER}.restore.$$"
     MEDIA_OLD="${MEDIA_ROOT_CONTAINER}.old.$$"
 
