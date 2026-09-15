@@ -202,6 +202,19 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
     Die Ausnahme IST ein ``ValidationError`` mit dem Text des Vorab-Checks —
     Views und Formulare reagieren unveraendert, auch wenn niemand sie abfaengt
     (dann fehlt nur die Rechenschaftszeile, nie die Ablehnung).
+
+    **Sperr-Vertrag fuer Aufrufer mit eigener Transaktion (Refs #2178):** Im
+    Replace-Modus sperrt dieser Aufruf genau die Zeile, die er abloest — und
+    zwar unmittelbar vor dem Advisory-Lock der Einrichtung, der bis zum Ende
+    der AEUSSEREN Transaktion haelt. Wer in derselben Transaktion MEHRERE
+    Anhangs-Schreibvorgaenge absetzt, muss deshalb die Zeilen der GANZEN
+    Batch-Menge (alles, was ersetzt oder geloescht wird) vorher sperren —
+    :func:`~core.services.attachments.crud.lock_batch_attachment_rows` tut
+    genau das, und ``apply_attachment_changes`` ruft es auf. Ohne diesen
+    Vorlauf faellt die Zeilensperre des zweiten Commits hinter den
+    Advisory-Lock des ersten, und ein gleichzeitiger
+    :func:`soft_delete_attachment_chain` derselben Kette bildet einen
+    Deadlock-Zyklus (SQLSTATE ``40P01``).
     """
     try:
         with transaction.atomic():

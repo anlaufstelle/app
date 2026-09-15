@@ -185,6 +185,11 @@ def finalize_staged_files(owner, user, staged_by_slug, document_type):
     ``staged_by_slug`` ist ein ``{slug: [StagedUpload, ...]}``-Dict in
     Upload-Reihenfolge (siehe ``EventCreateView.post``). ``owner`` ist ein
     ``Event``, ``Client`` oder ``Case`` (Refs #1738).
+
+    Reiner ADD-Batch: Dieser Pfad haengt ausschliesslich neue Ketten an einen
+    frisch erzeugten Owner und fasst **keine** Bestandszeile an. Die
+    Batch-Sperrmenge des Vertrags aus :func:`lock_batch_attachment_rows` ist
+    hier also leer — es gibt nichts vorzusperren (Refs #2178).
     """
     from core.services.file_vault import commit_staged_upload
 
@@ -404,6 +409,60 @@ def _write_file_marker(owner, slug, updated_entries):
         del owner.data_json[slug]
 
 
+def lock_batch_attachment_rows(owner, entry_ids) -> None:
+    """Sperrt ALLE Bestandszeilen einer Batch-Menge in EINER Abfrage (#2178).
+
+    **Vertrag fuer Aufrufer mit eigener Transaktion:** Wer in derselben
+    ``transaction.atomic()`` MEHRERE Anhangs-Schreibvorgaenge absetzt, sperrt
+    vorher die Zeilen aller Ketten, die dieser Vorgang ersetzt oder loescht.
+
+    Warum das noetig ist: ``commit_staged_upload`` sperrt im Replace-Modus nur
+    die eine Zeile, die es selbst abloest — und zwar unmittelbar bevor es den
+    Advisory-Lock der Einrichtung nimmt. Der haelt bis zum Ende der
+    **aeusseren** Transaktion. Der zweite Commit desselben Batches sperrt seine
+    Zeile also NACH einem bereits gehaltenen Advisory-Lock, waehrend
+    ``soft_delete_attachment_chain`` die Zeile vor seiner Audit-Zeile nimmt:
+    gegenlaeufige Reihenfolge, PostgreSQL loest den Zyklus mit SQLSTATE
+    ``40P01`` auf. Eine einzige vorgezogene Sperrabfrage zieht saemtliche
+    Zeilensperren des Batches vor den ersten Advisory-Lock.
+
+    ``ORDER BY pk`` gibt der Sperrabfrage eine feste Reihenfolge, damit zwei
+    gleichzeitige Batches derselben Einrichtung sich nicht gegenseitig
+    verschraenken. Leere Menge = keine Abfrage (der reine ADD-Batch zahlt
+    nichts).
+
+    Die Sperre laeuft ueber den Reverse-Accessor des Owners (ADR-039 §2) und
+    greift ganze Ketten (``entry_id``): Ersetzen fasst die aktuelle Zeile an,
+    Soft-Delete alle Zeilen der Kette.
+    """
+    ids = sorted({str(entry_id) for entry_id in entry_ids if entry_id})
+    if not ids:
+        return
+    list(owner.attachments.select_for_update().filter(entry_id__in=ids).order_by("pk").values_list("pk", flat=True))
+
+
+def _batch_entry_ids(file_field_states, request_post, staged_by_key) -> set:
+    """Die ``entry_id``-Werte, die dieser Batch ersetzt oder loescht.
+
+    Liest dieselben Quellen wie :func:`_apply_remove` und :func:`_apply_replace`
+    — die hidden-CSV ``<slug>__remove`` und die Staging-Schluessel aus
+    :func:`replace_upload_key` —, damit die Sperrmenge exakt der spaeteren
+    Schreibmenge entspricht. Reine ADD-Schluessel bleiben draussen: sie fassen
+    keine Bestandszeile an.
+    """
+    ids: set = set()
+    for slug, _ft, current_entries, attachments_by_pk in file_field_states:
+        remove_raw = request_post.get(f"{slug}__remove", "")
+        remove_ids = {x.strip() for x in remove_raw.split(",") if x.strip()}
+        for entry in current_entries:
+            att = attachments_by_pk.get(str(entry["id"]))
+            if att is None:
+                continue
+            if str(att.entry_id) in remove_ids or replace_upload_key(slug, att.entry_id) in staged_by_key:
+                ids.add(att.entry_id)
+    return ids
+
+
 def apply_attachment_changes(owner, user, request_post, request_files, file_fields, document_type, staged_by_key=None):
     """Applizieren von REMOVE/REPLACE/ADD auf die FILE-Felder eines Owners.
 
@@ -416,6 +475,11 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
 
     Aktualisiert anschliessend den Marker im ``owner.data_json``. ``owner`` ist
     ein ``Event``, ``Client`` oder ``Case`` (Refs #1738).
+
+    Sperr-Reihenfolge (Refs #2178): Vor dem ersten Schreibvorgang sperrt
+    :func:`lock_batch_attachment_rows` alle Ketten, die dieser Vorgang ersetzt
+    oder loescht — erst danach laufen REMOVE/REPLACE/ADD und damit der erste
+    Advisory-Lock der Einrichtung.
 
     ``staged_by_key`` (Refs #1956) ist das Ergebnis von
     :func:`stage_attachment_uploads`; gestagte Dateien, die hier keine DB-Zeile
@@ -437,7 +501,16 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
     # raeumt bei ausbleibendem Commit alles weg).
     staged_pending = dict(staged_by_key)
     try:
-        for slug, ft, current_entries, attachments_by_pk in _iter_file_fields(owner, user, document_type):
+        # Einmal materialisieren: dieselbe Feldliste traegt die Sperrmenge und
+        # die Anwendung. Jedes Feld liest und schreibt nur seinen eigenen Slug,
+        # die Vorab-Materialisierung aendert daran nichts.
+        file_field_states = list(_iter_file_fields(owner, user, document_type))
+        # Refs #2178 (Fix-Runde 2): Batch-Vertrag — ALLE Zeilen, die dieser
+        # Vorgang ersetzt oder loescht, VOR dem ersten Commit sperren. Sonst
+        # faellt die Zeilensperre des zweiten Commits hinter den Advisory-Lock
+        # des ersten (siehe ``lock_batch_attachment_rows``).
+        lock_batch_attachment_rows(owner, _batch_entry_ids(file_field_states, request_post, staged_pending))
+        for slug, ft, current_entries, attachments_by_pk in file_field_states:
             current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user)
             updated_entries = _apply_replace(slug, current_entries, attachments_by_pk, staged_pending, ft, owner, user)
             updated_entries = _apply_add(slug, updated_entries, staged_pending, ft, owner, user)

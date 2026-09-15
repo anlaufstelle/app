@@ -838,3 +838,112 @@ class TestAuditIdempotenz:
         # Fehlerklasse und Text sind die des Vorab-Checks (Views reagieren unveraendert).
         assert isinstance(exc, ValidationError)
         assert "Speicherkontingent der Einrichtung erschöpft" in exc.messages[0]
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestBatchSperrReihenfolge:
+    """Refs #2178 Fix-Runde 2: der Batch-Einstieg sperrt VOR dem ersten Commit.
+
+    Ein einzelner ``commit_staged_upload`` sperrt seine Vorgaengerzeile selbst.
+    Setzt ein Aufrufer aber MEHRERE Commits in derselben Transaktion ab, genuegt
+    das nicht: Der erste Commit nimmt den Advisory-Lock der Einrichtung und
+    haelt ihn bis zum Ende der aeusseren Transaktion; die Zeilensperre des
+    ZWEITEN Commits faellt danach. Gegen einen gleichzeitigen Soft-Delete der
+    zweiten Kette ist das wieder die verdrehte Reihenfolge — PostgreSQL bricht
+    mit SQLSTATE ``40P01`` ab. Der Batch-Einstieg sperrt deshalb alle Zeilen der
+    Batch-Menge in EINER Abfrage, bevor der erste Commit laeuft.
+    """
+
+    def test_zwei_ersetzungen_im_batch_gegen_soft_delete(
+        self, quota_facility, upload_target, staff_user, occupy, stage, monkeypatch
+    ):
+        from core.services.attachments.crud import apply_attachment_changes, replace_upload_key
+        from core.services.file_vault import audit as audit_module
+        from core.services.file_vault import soft_delete_attachment_chain
+
+        event, ft_file = upload_target
+        alt = [occupy(CHUNK), occupy(CHUNK)]
+        event.data_json = {
+            ft_file.slug: {
+                "__files__": True,
+                "entries": [{"id": str(alt[0].pk), "sort": 0}, {"id": str(alt[1].pk), "sort": 1}],
+            }
+        }
+        event.save(update_fields=["data_json"])
+        staged_list = stage(2)
+        staged_by_key = {
+            replace_upload_key(ft_file.slug, alt[0].entry_id): [staged_list[0]],
+            replace_upload_key(ft_file.slug, alt[1].entry_id): [staged_list[1]],
+        }
+
+        zeile_gesperrt = threading.Event()
+        echtes_audit = audit_module.audit_attachment_delete
+
+        def verzoegertes_audit(*args, **kwargs):
+            zeile_gesperrt.set()
+            time.sleep(GNADENFENSTER)
+            return echtes_audit(*args, **kwargs)
+
+        monkeypatch.setattr(audit_module, "audit_attachment_delete", verzoegertes_audit)
+
+        def soft_delete():
+            """Loescht die ZWEITE Kette — die der Batch als letzte ersetzt."""
+            return soft_delete_attachment_chain(event, alt[1].entry_id, staff_user)
+
+        def batch_ersetzen():
+            assert zeile_gesperrt.wait(JOIN_TIMEOUT), "Soft-Delete hat die Zeile nie gesperrt"
+            with quota_backstop_audit_boundary(), transaction.atomic():
+                apply_attachment_changes(
+                    event,
+                    staff_user,
+                    {},
+                    {},
+                    {},
+                    event.document_type,
+                    staged_by_key=staged_by_key,
+                )
+            return "batch"
+
+        results = _run_threads([soft_delete, batch_ersetzen])
+
+        fehler = {i: r for i, r in results.items() if isinstance(r, Exception)}
+        sqlstates = [getattr(getattr(exc, "__cause__", None), "sqlstate", None) for exc in fehler.values()]
+        assert "40P01" not in sqlstates, f"Deadlock im Batch-/Soft-Delete-Paar: {results!r}"
+        assert not fehler, f"beide Vorgaenge muessen definiert enden: {results!r}"
+        assert results[0] == 1
+        assert results[1] == "batch"
+
+    def test_batch_sperrt_alle_zeilen_vor_dem_ersten_advisory_lock(
+        self, quota_facility, upload_target, staff_user, occupy, stage
+    ):
+        """Die Reihenfolge im Einzellauf: EINE ``FOR UPDATE``-Abfrage ueber die
+        ganze Batch-Menge, und zwar vor dem ersten ``pg_advisory_xact_lock``."""
+        from core.services.attachments.crud import apply_attachment_changes, replace_upload_key
+
+        event, ft_file = upload_target
+        alt = [occupy(CHUNK), occupy(CHUNK)]
+        event.data_json = {
+            ft_file.slug: {
+                "__files__": True,
+                "entries": [{"id": str(alt[0].pk), "sort": 0}, {"id": str(alt[1].pk), "sort": 1}],
+            }
+        }
+        event.save(update_fields=["data_json"])
+        staged_list = stage(2)
+        staged_by_key = {
+            replace_upload_key(ft_file.slug, alt[0].entry_id): [staged_list[0]],
+            replace_upload_key(ft_file.slug, alt[1].entry_id): [staged_list[1]],
+        }
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as ctx:
+            apply_attachment_changes(event, staff_user, {}, {}, {}, event.document_type, staged_by_key=staged_by_key)
+
+        sql = [q["sql"] for q in ctx.captured_queries]
+        batch_locks = [i for i, s in enumerate(sql) if "FOR UPDATE" in s.upper() and "core_attachment" in s]
+        advisory_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        assert batch_locks, f"keine Batch-Zeilensperre: {sql!r}"
+        assert advisory_at, f"kein Advisory-Lock im Batch: {sql!r}"
+        assert batch_locks[0] < advisory_at[0], "die Batch-Sperre muss VOR dem ersten Advisory-Lock liegen"
+        # Beide Ketten stehen in DERSELBEN Abfrage (feste Reihenfolge nach pk).
+        assert "IN (" in sql[batch_locks[0]].upper() or "= ANY" in sql[batch_locks[0]].upper(), sql[batch_locks[0]]
