@@ -947,3 +947,114 @@ class TestBatchSperrReihenfolge:
         assert batch_locks[0] < advisory_at[0], "die Batch-Sperre muss VOR dem ersten Advisory-Lock liegen"
         # Beide Ketten stehen in DERSELBEN Abfrage (feste Reihenfolge nach pk).
         assert "IN (" in sql[batch_locks[0]].upper() or "= ANY" in sql[batch_locks[0]].upper(), sql[batch_locks[0]]
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestAutocommitServiceVertrag:
+    """Refs #2178 Fix-Runde 3: der transaktionslose Service-Einstieg bleibt nutzbar.
+
+    ``apply_attachment_changes`` oeffnet keine eigene Transaktion. Fuer Aufrufer
+    **ohne** aeussere Transaktion (dokumentierter Bequemlichkeitsmodus, direkte
+    Service-Aufrufe) gibt es nichts vorzusperren: Jede Storage-Operation schuetzt
+    ihre eigene Mutation in ihrer eigenen kurzen Transaktion, und kein Aufrufer
+    haelt den Advisory-Lock ueber mehrere Operationen hinweg. Eine
+    ``select_for_update``-Vorsperre waere dort nicht nur nutzlos, sondern ein
+    Abbruch (``TransactionManagementError``).
+    """
+
+    @pytest.fixture
+    def marker(self, upload_target):
+        """Setzt den ``__files__``-Marker des Owners auf die uebergebenen Zeilen."""
+        event, ft_file = upload_target
+
+        def _marker(*attachments):
+            event.data_json = {
+                ft_file.slug: {
+                    "__files__": True,
+                    "entries": [{"id": str(att.pk), "sort": i} for i, att in enumerate(attachments)],
+                }
+            }
+            event.save(update_fields=["data_json"])
+            return event
+
+        return _marker
+
+    def test_entfernen_ohne_aufrufer_transaktion(self, quota_facility, upload_target, staff_user, occupy, marker):
+        from core.services.attachments.crud import apply_attachment_changes
+
+        event, ft_file = upload_target
+        alt = occupy(CHUNK)
+        marker(alt)
+        assert not connection.in_atomic_block, "dieser Fall prueft gerade den Autocommit-Modus"
+
+        apply_attachment_changes(
+            event,
+            staff_user,
+            {f"{ft_file.slug}__remove": str(alt.entry_id)},
+            {},
+            {},
+            event.document_type,
+            staged_by_key={},
+        )
+
+        alt.refresh_from_db()
+        assert alt.deleted_at is not None, "REMOVE muss auch ohne Aufrufer-Transaktion wirken"
+
+    def test_ersetzen_ohne_aufrufer_transaktion(self, quota_facility, upload_target, staff_user, occupy, stage, marker):
+        from core.services.attachments.crud import apply_attachment_changes, replace_upload_key
+
+        event, ft_file = upload_target
+        alt = occupy(CHUNK)
+        marker(alt)
+        staged = stage(1)[0]
+        assert not connection.in_atomic_block
+
+        apply_attachment_changes(
+            event,
+            staff_user,
+            {},
+            {},
+            {},
+            event.document_type,
+            staged_by_key={replace_upload_key(ft_file.slug, alt.entry_id): [staged]},
+        )
+
+        alt.refresh_from_db()
+        assert not alt.is_current and alt.superseded_by_id is not None, "REPLACE muss den Vorgaenger abloesen"
+        assert Attachment.objects.for_facility(quota_facility).count() == 2
+
+    def test_hinzufuegen_ohne_aufrufer_transaktion(self, quota_facility, upload_target, staff_user, stage, marker):
+        from core.services.attachments.crud import apply_attachment_changes
+
+        event, ft_file = upload_target
+        staged = stage(1)[0]
+        assert not connection.in_atomic_block
+
+        apply_attachment_changes(
+            event, staff_user, {}, {}, {}, event.document_type, staged_by_key={ft_file.slug: [staged]}
+        )
+
+        assert Attachment.objects.for_facility(quota_facility).count() == 1
+        assert staged.output_path.exists()
+
+    def test_bequemlichkeitsmodus_ohne_staged_by_key(self, quota_facility, upload_target, staff_user, occupy, marker):
+        """Der ausdruecklich zugesicherte Modus ``staged_by_key=None``."""
+        from core.services.attachments.crud import apply_attachment_changes
+
+        event, ft_file = upload_target
+        alt = occupy(CHUNK)
+        marker(alt)
+        assert not connection.in_atomic_block
+
+        apply_attachment_changes(
+            event,
+            staff_user,
+            {f"{ft_file.slug}__remove": str(alt.entry_id)},
+            {},
+            {},
+            event.document_type,
+        )
+
+        alt.refresh_from_db()
+        assert alt.deleted_at is not None

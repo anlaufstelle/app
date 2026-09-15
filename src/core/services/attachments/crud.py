@@ -31,7 +31,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models import FieldTemplate
@@ -431,10 +431,22 @@ def lock_batch_attachment_rows(owner, entry_ids) -> None:
     verschraenken. Leere Menge = keine Abfrage (der reine ADD-Batch zahlt
     nichts).
 
+    **Nur mit offener Aufrufer-Transaktion** (Refs #2178, Fix-Runde 3): Ohne
+    ``atomic()`` des Aufrufers gibt es nichts vorzusperren — dann oeffnet jede
+    Storage-Operation ihre eigene kurze Transaktion, schuetzt ihre Mutation
+    selbst und gibt Zeilensperre wie Advisory-Lock sofort wieder frei; ueber
+    mehrere Operationen hinweg haelt niemand einen Lock, und die verdrehte
+    Reihenfolge kann gar nicht entstehen. Eine ``select_for_update``-Abfrage
+    waere dort nicht nur wirkungslos: Django lehnt sie im Autocommit-Modus mit
+    ``TransactionManagementError`` ab und braeche damit den ausdruecklich
+    zugesicherten transaktionslosen Service-Einstieg.
+
     Die Sperre laeuft ueber den Reverse-Accessor des Owners (ADR-039 §2) und
     greift ganze Ketten (``entry_id``): Ersetzen fasst die aktuelle Zeile an,
     Soft-Delete alle Zeilen der Kette.
     """
+    if not connection.in_atomic_block:
+        return
     ids = sorted({str(entry_id) for entry_id in entry_ids if entry_id})
     if not ids:
         return
@@ -476,10 +488,14 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
     Aktualisiert anschliessend den Marker im ``owner.data_json``. ``owner`` ist
     ein ``Event``, ``Client`` oder ``Case`` (Refs #1738).
 
-    Sperr-Reihenfolge (Refs #2178): Vor dem ersten Schreibvorgang sperrt
-    :func:`lock_batch_attachment_rows` alle Ketten, die dieser Vorgang ersetzt
-    oder loescht — erst danach laufen REMOVE/REPLACE/ADD und damit der erste
-    Advisory-Lock der Einrichtung.
+    Sperr-Reihenfolge (Refs #2178): Haelt der Aufrufer eine eigene Transaktion,
+    sperrt :func:`lock_batch_attachment_rows` vor dem ersten Schreibvorgang alle
+    Ketten, die dieser Vorgang ersetzt oder loescht — erst danach laufen
+    REMOVE/REPLACE/ADD und damit der erste Advisory-Lock der Einrichtung. **Ohne
+    aeussere Transaktion entfaellt die Vorsperre** (Fix-Runde 3): dort schuetzt
+    jede Storage-Operation ihre Mutation in ihrer eigenen kurzen Transaktion,
+    niemand haelt einen Lock ueber mehrere Operationen, und
+    ``select_for_update`` waere im Autocommit-Modus ein Abbruch.
 
     ``staged_by_key`` (Refs #1956) ist das Ergebnis von
     :func:`stage_attachment_uploads`; gestagte Dateien, die hier keine DB-Zeile
