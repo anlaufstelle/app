@@ -1030,7 +1030,10 @@ class TestDbRoleChecksBuildsCompleteCards:
         assert card.category == "Datenbank"
         assert card.message == "Admin-/Maintenance-Rolle nicht konfiguriert."
         assert card.detail == "erster Konfigurationshinweis; zweiter Konfigurationshinweis"
-        assert card.action_hint == "POSTGRES_ADMIN_USER + POSTGRES_ADMIN_PASSWORD in .env setzen (siehe #902)."
+        assert card.action_hint == (
+            "Im web-Container nicht pruefbar — Prüfung über docker compose -f "
+            "docker-compose.prod.yml run --rm maintenance check_db_roles."
+        )
 
 
 # ---------------------------------------------------------------------------
