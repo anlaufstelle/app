@@ -68,6 +68,7 @@ Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor
    - **FreeOTP / FreeOTP+** (Android, Open Source)
    - **1Password**, **Bitwarden**, **Proton Pass** (als integrierter Authenticator)
 4. Den 6-stelligen Code aus der App eingeben und **Bestätigen & aktivieren** klicken.
+5. Die angezeigten Backup-Codes sicher verwahren, die Pflicht-Checkbox **Ich habe die Codes sicher gespeichert.** aktivieren und bestätigen. Erst dieser Schritt schließt die Einrichtung ab. Wer die Seite vorher verlässt, beginnt beim nächsten Aufruf wieder unter `/mfa/setup/`.
 
 > **Tipp:** Falls der QR-Code nicht scannbar ist, tippen Sie auf **Secret manuell eingeben** und übertragen die Zeichenkette in die App (Feld „Secret" / „Schlüssel" — Base32, ohne Leerzeichen). Wählen Sie in der App den Typ **TOTP / zeitbasiert**.
 
@@ -76,6 +77,8 @@ Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor
 1. Benutzername und Passwort wie gewohnt eingeben.
 2. Auf der folgenden Seite den aktuell in der App angezeigten 6-stelligen Code eintippen.
 3. Der Code ist jeweils **30 Sekunden** gültig — falls er abläuft, einfach den nächsten nehmen.
+
+Nach mehreren falschen Eingaben drosselt `django-otp` weitere Prüfungen zunehmend. Während dieser Wartezeit kann deshalb auch ein korrekter Code abgewiesen werden; warten Sie die Sperrfrist ab, statt weitere Codes direkt hintereinander einzugeben.
 
 **2FA deaktivieren:**
 

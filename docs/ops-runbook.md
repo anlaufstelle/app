@@ -1210,12 +1210,13 @@ Altbackup ohne Manifest. Der aktuelle Prod-Drill verlangt das Manifest dagegen
 zwingend und bricht in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Ein solcher
 Altsatz kann den heutigen Vollstaendigkeitsnachweis daher nicht erbringen.
 
-Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`):
+Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # Format auto-erkennen
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000 # Prod-Satz explizit waehlen
 sudo env BACKUP_TIMESTAMP=2026-09-03_020000 bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # Gleichwertige Satzwahl per Umgebungsvariable
+sudo env COMPOSE_DIR=/srv/anlaufstelle bash /srv/anlaufstelle/scripts/ops/restore-drill.sh --prod # Installation ausserhalb von /opt/anlaufstelle
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # Dev-Format erzwingen (dump-*.pgc.enc)
 ```
 

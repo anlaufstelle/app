@@ -517,15 +517,16 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    und einen echten Vault-Anhang herunterladen; nur Metadaten und Ergebnis,
    keine Inhalte protokollieren.
 6. Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
-   als Root gegen das Prod-Format fahren. Dieser Aufruf ist unverändert aus dem
-   Skript-Header und dem Operations-Runbook übernommen. Der Drill liest die
+   als Root gegen das Prod-Format fahren. `COMPOSE_DIR` muss dabei auf das in
+   Schritt 1 vorbereitete Installationsverzeichnis mit `.env` und
+   `docker-compose.prod.yml` zeigen. Der Drill liest die
    rekonstruierte `.env`, löst denselben Host-Pfad
    `${BACKUP_HOST_DIR:-./backups}/daily` auf und ignoriert das Container-Ziel
    `BACKUP_DIR`. Seine Banner-Zeile muss deshalb das in Schritt 3 befüllte
    Host-Verzeichnis nennen:
 
    ```bash
-   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp "$RESTORE_TIMESTAMP" \
+   sudo env COMPOSE_DIR=/opt/anlaufstelle bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp "$RESTORE_TIMESTAMP" \
      | tee /tmp/anlaufstelle-restore-drill.log
    grep -F "RESTORE-SATZ WIEDERHERGESTELLT: $RESTORE_TIMESTAMP" /tmp/anlaufstelle-restore.log
    grep -F "ACHTUNG - explizit gewaehlter Restore-Satz: $RESTORE_TIMESTAMP" /tmp/anlaufstelle-restore-drill.log

@@ -416,7 +416,7 @@ Das Skript fragt interaktiv nach:
 2. **E-Mail-Adresse** (Pflicht — wird für Recovery-Mails genutzt)
 3. **Passwort** (zweimal eingeben — keinen Default, keinen Demo-Wert)
 
-Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an und legen die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Beim ersten Aufruf von `/admin-mgmt/` verlangt der Sudo-Modus eine erneute Passwortbestätigung. Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
+Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an. Die in Produktion sofort verlangte 2FA-Ersteinrichtung ist erst abgeschlossen, nachdem die Backup-Codes sicher verwahrt und über die Pflicht-Checkbox bestätigt wurden; ein vorzeitiges Verlassen führt beim nächsten Aufruf wieder zu `/mfa/setup/`. Danach legen Sie die erste Einrichtung und den ersten `facility_admin` an — im Django-Admin (`/admin-mgmt/`, **Core → Einrichtungen**) oder mit dem Setup-Skript aus [§ 2.2](#22-einrichtung-und-anwendungsbetreuung-anlegen). Beim ersten Aufruf von `/admin-mgmt/` verlangt der Sudo-Modus eine erneute Passwortbestätigung. Der `/system/`-Bereich zeigt Organisation und Einrichtungen nur an; angelegt wird dort nichts.
 
 > **Wichtig — kein Default-Passwort:** Aus DSGVO- und Sicherheits-Gründen liefert die Anwendung **kein** Default-Passwort und keinen Default-Benutzernamen aus (anders als der frühere `make seed`-Workflow für Entwicklungs-Demos). Wer den Befehl überspringt, erhält **keinen** anmeldungsfähigen Account.
 
@@ -940,7 +940,9 @@ Wenn eine Mitarbeiterin ihr Authenticator-Gerät verliert, muss ein Administrato
 2. Das Gerät des betroffenen Users auswählen und löschen.
 3. User informieren: nach dem nächsten Login wird automatisch auf `/mfa/setup/` umgeleitet (bei `is_mfa_enforced=True`) oder der User kann 2FA freiwillig neu einrichten.
 
-Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte — am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
+Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte. Anschließend muss er über die Pflicht-Checkbox bestätigen, dass er die Codes sicher gespeichert hat; erst dann ist das TOTP-Gerät bestätigt und die Einrichtung abgeschlossen. Verlässt er die Seite vorher, führt der nächste Aufruf wieder zu `/mfa/setup/`. Am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
+
+`django-otp` drosselt TOTP- und Backup-Code-Prüfungen nach mehreren Fehlversuchen zunehmend. Während der daraus folgenden Wartezeit kann auch ein korrekter Code abgewiesen werden; vor einem Reset deshalb die Sperrfrist abwarten und nicht unmittelbar weiterprobieren.
 
 #### Account-Lockout
 
@@ -1180,7 +1182,7 @@ Der kanonische Produktionsweg ist [`scripts/ops/backup.sh`](../scripts/ops/backu
 
 ```bash
 cd /opt/anlaufstelle
-sudo ./scripts/ops/backup.sh
+sudo sh -c 'umask 0027 && ./scripts/ops/backup.sh'
 ```
 
 Das Skript lädt die `.env`, sichert PostgreSQL **und** den verschlüsselten File-Vault (`MEDIA_ROOT`), komprimiert beide Archive, verschlüsselt sie mit AES-256-CBC und schreibt zu jedem Archiv einen HMAC-SHA256-Sidecar. Die Dateien landen unter `BACKUP_HOST_DIR` in `daily/`, `weekly/` und `monthly/`; die eingebaute Rotation bewahrt sie 7, 28 beziehungsweise 90 Tage auf.
@@ -1526,7 +1528,7 @@ docker compose -f docker-compose.prod.yml logs cron
 Ein Signaturstand älter als sieben Tage ist kein normaler Anlaufzustand. Prüfen Sie Update-Protokoll und installierte Signaturversion:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
+docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 

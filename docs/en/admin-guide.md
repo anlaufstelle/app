@@ -1,6 +1,7 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-15: § 2.3 the quick-exit target row now states that the target does not learn the origin of the jump (no `Referer` header) (#2179).
 > Synchronization update 2026-09-15: § 2.4 documents the Django-admin resend action for pending `super_admin` invitations (#2223).
+> Synchronization update 2026-09-15: mandatory backup-code acknowledgement and OTP throttling during initial 2FA setup, the manual backup umask, and the container-internal freshclam result log now mirror the German operator guidance.
 > Synchronization update 2026-09-15: the production Compose allowlist, configurable ClamAV host, detail-token routing, delivered ClamAV egress path, and critical-only production healthcheck semantics are described as the current state (#2173).
 > Previously synchronized on 2026-09-11: the expected `core.W004` warning when Redis has no password, the root-cron backup-directory contract, complete optional Compose file sets for every start and recreate command, ClamAV production/external-scanner limits, and signature-download egress diagnostics (#2218).
 > Most recently synchronized on 2026-09-11 (§§ 1--6 fresh-install prerequisites, complete source acquisition, quoted environment values, key and DB-password generation, production setting routing, setup sequence, monitoring boundaries, backup scheduling, and troubleshooting, plus the RLS wording in § 7.9, #2218). Previously synchronized on 2026-09-10 (§ 3.3 both database and optional media HMAC sidecars are verified before confirmation and repeated immediately before use, plus recovery guidance after interrupted media extraction, #2195; § 7.5 client merge: the legal-hold limit when reverting a merge -- an active hold on the target or the source, including indirectly through one of their events or cases, refuses **Revert merge**, and the hold is deliberately not mirrored onto the source, #2200; § 2.9 open CSV import source files count during quota enforcement while the display remains attachment-based, #2180; § 2.11 running imports reject changed documentation types or field templates and commit the most recently confirmed mapping, #2196, #2199; § 5.6 URL-bearing event fields are masked structurally -- query string dropped, path resolved against the route schema including subpath prefix and missing trailing slash, token-signal heuristic for unresolvable paths including percent-encoded tokens; log entries and log breadcrumbs are reduced to their template, person key-value pairs, structured person keys, the client IP and the proxy headers including `Forwarded` are scrubbed -- plus the corresponding limits, #2198; § 2.3/§ 2.5 the retention setting for handover notes (days) and the hard-delete of manual shift notes in the retention run, plus the note that a time filter with handover notes can only be deleted after the retention period, #2042; § 2.4 `super_admin` can change **MFA required** for super-admin/bootstrap accounts under **Core > Users**, and each change is recorded as `USER_ACCESS_UPDATED` with `mfa_required` -- the field is also visible to application managers editing regular accounts, #2172; the alternative-deployment box in § 1 is removed and the cron-job notes in § 2.9 are reworded without the alternative deployment path, #2202; pre-1.0 migration/historical framing removed -- the EXTERNAL_ORIGIN migration box, three dated "Changed" boxes (documentation-type category, report key, system type), the outdated `ENCRYPTION_KEY`/email-less-fallback wording, and several version-dated markers are now described as current state, #2205).
@@ -427,7 +428,7 @@ The script interactively prompts for:
 2. **Email address** (required -- used for recovery emails)
 3. **Password** (enter twice -- no default, no demo value)
 
-After successful completion, exactly one user with the role `super_admin` exists. Use this account to log in at `/login/` and then create the first facility and the first `facility_admin` -- in the Django admin (`/admin-mgmt/`, **Core > Facilities**) or with the setup script from [§ 2.2](#22-create-a-facility-and-application-manager). On the first visit to `/admin-mgmt/`, sudo mode asks you to confirm the password again. The `/system/` area only displays the organization and its facilities; nothing is created there.
+After successful completion, exactly one user with the role `super_admin` exists. Use this account to log in at `/login/`. The 2FA initial setup required immediately in production is complete only after the backup codes have been stored securely and acknowledged with the required checkbox; leaving early sends the next attempt back to `/mfa/setup/`. Then create the first facility and the first `facility_admin` -- in the Django admin (`/admin-mgmt/`, **Core > Facilities**) or with the setup script from [§ 2.2](#22-create-a-facility-and-application-manager). On the first visit to `/admin-mgmt/`, sudo mode asks you to confirm the password again. The `/system/` area only displays the organization and its facilities; nothing is created there.
 
 > **Important -- no default password:** For GDPR and security reasons, the application ships with **no** default password and no default username (unlike the former `make seed` workflow for development demos). Skipping this command leaves you with **no** usable login.
 
@@ -950,7 +951,9 @@ If a staff member loses their authenticator device, an administrator has to dele
 2. Select the affected user's device and delete it.
 3. Inform the user: on their next login they will be redirected to `/mfa/setup/` (if `is_mfa_enforced=True`) or can re-enable 2FA voluntarily.
 
-There are also **backup codes as a second factor** for exactly this recovery case (Refs #588). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
+There are also **backup codes as a second factor** for exactly this recovery case (Refs #588). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager. The user must then confirm through the required checkbox that the codes have been stored securely; only then is the TOTP device confirmed and setup complete. Leaving the page first sends the next attempt back to `/mfa/setup/`. At the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
+
+`django-otp` increasingly throttles TOTP and backup-code checks after multiple failed attempts. A correct code can also be rejected during the resulting waiting period; before resetting the device, wait for the lockout interval instead of immediately trying more codes.
 
 #### Account Lockout
 
@@ -1192,7 +1195,7 @@ The canonical production path is [`scripts/ops/backup.sh`](../../scripts/ops/bac
 
 ```bash
 cd /opt/anlaufstelle
-sudo ./scripts/ops/backup.sh
+sudo sh -c 'umask 0027 && ./scripts/ops/backup.sh'
 ```
 
 The script loads `.env`, backs up PostgreSQL **and** the encrypted file vault (`MEDIA_ROOT`), compresses both archives, encrypts them with AES-256-CBC, and writes an HMAC-SHA256 sidecar for each archive. Files are stored below `BACKUP_HOST_DIR` in `daily/`, `weekly/`, and `monthly/`; built-in rotation retains them for 7, 28, and 90 days respectively.
@@ -1538,7 +1541,7 @@ docker compose -f docker-compose.prod.yml logs cron
 A signature set older than seven days is not a normal startup state. Inspect the update log and installed signature version:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
+docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
@@ -2197,4 +2200,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 92ac513645370dcbd98e528182c74121f078bfeb -->
+<!-- source-hash: 9a8ff7ae051813e42dafd6bab3a2065022ca994e -->

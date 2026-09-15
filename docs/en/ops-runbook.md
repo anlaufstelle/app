@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-15: the restore-drill guidance now documents the explicit `COMPOSE_DIR` handoff and the `.env`-only `BACKUP_HOST_DIR` source.
 > Synchronization update 2026-09-15: the production Compose healthcheck treats only `error`/HTTP 503 as unhealthy while `degraded` remains available and requires separate monitoring (#2173).
 > Synchronization update 2026-09-12: manifest-bound media requirements, empty-audit outcomes, both explicit restore-set selectors, atomic audit HWM installation, pre-rotation off-site transfer, exact manifest completeness checks, and idempotent cron log setup now mirror the German operator guidance (#2222).
 > Most recently synchronized on 2026-09-11 (§ 5.8 the `/health/` `smtp` field named as an additional quick check between the `sendtestemail` exit code and actual delivery; the paragraph now separates the technical defaults (nothing is fail-closed) from the operational necessity per variable, and states that `EMAIL_USE_TLS` only wires up STARTTLS -- implicit TLS/SMTPS via Django's `EMAIL_USE_SSL` is not supported by this deployment path, #2089).
@@ -1213,12 +1214,13 @@ manifest. The current prod drill requires the manifest and aborts in step 0
 with `Zeilenzahl-Manifest fehlt` when it is absent. Such an older set therefore
 cannot provide today's completeness evidence.
 
-The backup files are `0600` and owned by root — therefore run **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`):
+The backup files are `0600` and owned by root — therefore run **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
 ```bash
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # auto-detect the format
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000 # select one prod set
 sudo env BACKUP_TIMESTAMP=2026-09-03_020000 bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # equivalent environment-based set selection
+sudo env COMPOSE_DIR=/srv/anlaufstelle bash /srv/anlaufstelle/scripts/ops/restore-drill.sh --prod # installation outside /opt/anlaufstelle
 sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev format (dump-*.pgc.enc)
 ```
 
@@ -2831,4 +2833,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 6f30190ac457c69b0e012567c2eda76924f1fae4 -->
+<!-- source-hash: 52d633bc75e03fd6b0dcbeb08393a1ce7ce3faac -->
