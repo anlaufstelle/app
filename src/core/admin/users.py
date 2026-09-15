@@ -410,14 +410,14 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
             super().save_model(request, obj, form, change)
             try:
                 send_invite_email(obj)
-            except Exception as exc:  # pragma: no cover - Mail-Backend-Fehler
+            except Exception:  # pragma: no cover - Mail-Backend-Fehler
                 if obj.role == User.Role.SUPER_ADMIN:
                     retry_hint = "Einladung im Django-Admin über die Aktion „Einladung erneut senden“ auslösen."
                 else:
                     retry_hint = "Einladung unter Verwaltung → Zugänge per „Einladung erneut senden“ auslösen."
                 messages.error(
                     request,
-                    f"Einladungs-E-Mail konnte nicht versendet werden: {exc}. {retry_hint}",
+                    f"Einladungs-E-Mail konnte nicht versendet werden. {retry_hint}",
                 )
                 return
             messages.success(

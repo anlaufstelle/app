@@ -160,13 +160,17 @@ class TestUserAdminSaveModel:
         )
         request = _make_admin_request(rf, super_admin_user)
 
-        with patch("core.admin.users.send_invite_email", side_effect=RuntimeError("SMTP nicht erreichbar")):
+        backend_detail = "relay.internal rejected /invite/uid/backend-secret-token/"
+        with patch("core.admin.users.send_invite_email", side_effect=RuntimeError(backend_detail)):
             UserAdmin(User, AdminSite()).save_model(request, new_user, form=None, change=False)
 
         messages = [str(message) for message in request._messages]
         assert any(
             "Django-Admin" in message and "Aktion „Einladung erneut senden“" in message for message in messages
         ), messages
+        assert all(backend_detail not in message for message in messages)
+        assert all("/invite/" not in message for message in messages)
+        assert all("backend-secret-token" not in message for message in messages)
         assert all("Konto löschen und neu anlegen" not in message for message in messages)
         assert all("„Setup-Link erneut senden“" not in message for message in messages)
 

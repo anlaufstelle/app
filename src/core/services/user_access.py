@@ -1,8 +1,10 @@
 """Einrichtungsgebundene Benutzerverwaltung fuer den Zugaenge-Hub (#1871).
 
-``core_user`` ist absichtlich keine RLS-Tabelle. Deshalb beginnt jeder
-oeffentliche Einstieg dieses Moduls mit einem expliziten Facility-Filter und
-schliesst ``super_admin`` aus; Views greifen nie direkt per PK auf ``User`` zu.
+``core_user`` ist absichtlich keine RLS-Tabelle. Deshalb beginnen die
+einrichtungsgebundenen Einstiege dieses Moduls mit einem expliziten
+Facility-Filter und schliessen ``super_admin`` aus; Views greifen nie direkt
+per PK auf ``User`` zu. Einzige Ausnahme ist der installationsweite
+Einladungs-Resend fuer aktive, authentifizierte ``super_admin``-Actors.
 """
 
 from __future__ import annotations
@@ -123,7 +125,11 @@ def _deliver_invitation(user: User, actor: User, trigger: str, ip_address: str |
     try:
         sent = send_invite_email(user)
     except Exception:
-        logger.exception("Einladungs-E-Mail konnte nicht versendet werden", extra={"user_pk": user.pk})
+        logger.error(
+            "Einladungs-E-Mail konnte nicht versendet werden",
+            extra={"user_pk": user.pk},
+            exc_info=False,
+        )
         return False
     if sent:
         _audit_invite(user, actor, trigger, ip_address)
@@ -234,7 +240,11 @@ def resend_user_invitation(user: User, *, facility, actor, ip_address: str | Non
 
 def resend_invitation_for_any_user(target: User, *, actor, ip_address: str | None = None) -> bool:
     """Einladung installationsweit durch die Systemadministration erneut senden."""
-    if not getattr(actor, "is_authenticated", False) or not getattr(actor, "is_super_admin", False):
+    if (
+        not getattr(actor, "is_authenticated", False)
+        or not getattr(actor, "is_active", False)
+        or not getattr(actor, "is_super_admin", False)
+    ):
         raise PermissionDenied("Der installationsweite Einladungsversand ist nur für super_admin erlaubt.")
 
     if not target.email or not target.must_change_password:

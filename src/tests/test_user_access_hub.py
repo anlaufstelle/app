@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import re
+from smtplib import SMTPDataError
 from unittest.mock import patch
 
 import pytest
@@ -11,6 +14,7 @@ from django.test import override_settings
 from django.urls import reverse
 
 from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
+from core.logging import JsonFormatter, VerboseScrubbingFormatter
 from core.models import AuditLog, User
 from core.services import user_access as user_access_service
 from core.services.security import LOCKOUT_THRESHOLD
@@ -496,6 +500,74 @@ class TestInviteAndUnlockActions:
             user_access_service.resend_invitation_for_any_user(invited, actor=admin_user)
 
         assert not AuditLog.objects.filter(action=AuditLog.Action.USER_INVITE_SENT, user=invited).exists()
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_any_user_resend_rejects_inactive_super_admin_without_side_effects(self, super_admin_user):
+        super_admin_user.is_active = False
+        super_admin_user.save(update_fields=["is_active"])
+        invited = User(
+            username="pending_for_inactive_super_admin",
+            email="pending-inactive-super-admin@example.org",
+            role=User.Role.SUPER_ADMIN,
+            must_change_password=True,
+        )
+        invited.set_password("NochNutzbar-123")
+        invited.save()
+        password_before = invited.password
+
+        with pytest.raises(PermissionDenied):
+            user_access_service.resend_invitation_for_any_user(invited, actor=super_admin_user)
+
+        invited.refresh_from_db()
+        assert mail.outbox == []
+        assert invited.password == password_before
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.USER_INVITE_SENT,
+            user=invited,
+            detail__trigger="invite_resend",
+        ).exists()
+
+    def test_invite_backend_exception_is_absent_from_production_log_formats(self, facility, admin_user, caplog):
+        invited = _pending_invite(facility, username="pending_backend_rejection")
+        rejected_links = []
+
+        def reject_message(**kwargs):
+            setup_link = re.search(r"https?://[^\s<>\"]+/invite/[^\s<>\"]+", kwargs["message"]).group(0)
+            rejected_links.append(setup_link)
+            raise SMTPDataError(554, f"relay backend rejected {setup_link}".encode())
+
+        with (
+            caplog.at_level(logging.ERROR, logger=user_access_service.logger.name),
+            patch("core.services.security.invite.send_mail", side_effect=reject_message),
+        ):
+            sent = resend_user_invitation(invited, facility=facility, actor=admin_user)
+
+        assert sent is False
+        assert len(rejected_links) == 1
+        setup_link = rejected_links[0]
+        token = setup_link.rstrip("/").rsplit("/", 1)[-1]
+        record = next(record for record in caplog.records if record.name == user_access_service.logger.name)
+        outputs = (
+            VerboseScrubbingFormatter(fmt="{message}", style="{").format(record),
+            JsonFormatter().format(record),
+        )
+        assert record.exc_info is False
+        assert all(str(invited.pk) in output for output in outputs)
+        assert all("/invite/" not in output for output in outputs)
+        assert all(token not in output for output in outputs)
+        assert all("relay backend rejected" not in output for output in outputs)
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.USER_INVITE_SENT,
+            user=invited,
+            detail__trigger="invite_resend",
+        ).exists()
+
+    def test_module_contract_documents_installation_wide_resend_exception(self):
+        contract = user_access_service.__doc__ or ""
+
+        assert "Ausnahme" in contract
+        assert "installationsweit" in contract
+        assert "aktive, authentifizierte ``super_admin``" in contract
 
     def test_pending_invite_can_be_resent_and_is_audited(self, client, facility, admin_user):
         invited = _pending_invite(facility)
