@@ -148,7 +148,7 @@ if [[ "$*" == *" exec -T web sh -c "* ]]; then
         printf 'MEDIA_ROOT konnte nicht gelesen werden\\n' >&2
         exit 1
     fi
-    printf '%s' "${TEST_WEB_MEDIA_ROOT-/data/media}"
+    MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
 elif [[ "$*" == *" exec -T db psql "* ]]; then
     if [[ "$*" == *"relrowsecurity"* ]]; then
         printf '20\\n'
@@ -245,6 +245,30 @@ def test_media_root_mismatch_stops_before_confirmation_or_destructive_actions(tm
     assert result.returncode != 0
     assert "MEDIA_ROOT='/data/media-abweichend', MEDIA_ROOT_CONTAINER='/data/media'." in result.stderr
     assert ".env" in result.stderr
+    assert "WARNUNG:" not in result.stdout
+    actions = action_log.read_text(encoding="utf-8")
+    assert " psql " not in actions
+    assert " mv " not in actions
+    assert " tar " not in actions
+
+
+def test_media_root_with_trailing_newline_is_not_treated_as_equal(tmp_path: Path) -> None:
+    """Ein abschliessender Zeilenumbruch im Container-MEDIA_ROOT ist eine Abweichung.
+
+    Die Kommandosubstitution in der Shell entfernt abschliessende Zeilenumbrueche;
+    ohne Schutz wuerde ``/data/media\n`` faelschlich als ``/data/media`` gelten und
+    der Restore die Medien am App-Pfad vorbei ablegen (Refs
+    https://github.com/anlaufstelle/app/issues/2024).
+    """
+    root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
+    env = _base_env(root, bindir, action_log)
+    env["MEDIA_ROOT_CONTAINER"] = "/data/media"
+    env["TEST_WEB_MEDIA_ROOT"] = "/data/media\n"
+
+    result = _run_restore(root, env, db_backup, media_backup)
+
+    assert result.returncode != 0
+    assert "MEDIA_ROOT_CONTAINER='/data/media'." in result.stderr
     assert "WARNUNG:" not in result.stdout
     actions = action_log.read_text(encoding="utf-8")
     assert " psql " not in actions
@@ -478,7 +502,7 @@ def _install_real_media_docker(bindir: Path) -> None:
         """#!/usr/bin/env bash
 printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
 if [[ "$*" == *" exec -T web sh -c "* ]]; then
-    printf '%s' "${TEST_WEB_MEDIA_ROOT-/data/media}"
+    MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
     exit 0
 fi
 if [[ "$*" == *" exec -T db psql "* ]]; then

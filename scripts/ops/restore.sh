@@ -177,13 +177,17 @@ if [[ -n "$HWM_FILE" ]]; then
 fi
 if [[ -n "$MEDIA_FILE" ]]; then
     MEDIA_ROOT_EFFECTIVE=""
+    # Ein Sentinel hinter dem Wert verhindert, dass die Kommandosubstitution
+    # abschliessende Zeilenumbrueche entfernt und ein abweichender Pfad als
+    # gleich durchgeht (Refs https://github.com/anlaufstelle/app/issues/2024).
     if ! MEDIA_ROOT_EFFECTIVE=$(timeout 30s docker compose -f "$COMPOSE_FILE" exec -T web \
-        sh -c 'printf %s "$MEDIA_ROOT"'); then
+        sh -c 'printf "%s@" "$MEDIA_ROOT"') || [[ "$MEDIA_ROOT_EFFECTIVE" != *@ ]]; then
         echo "FEHLER: MEDIA_ROOT des web-Containers konnte nicht ermittelt werden." >&2
         echo "  MEDIA_ROOT='<nicht ermittelbar>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
         echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
         exit 1
     fi
+    MEDIA_ROOT_EFFECTIVE="${MEDIA_ROOT_EFFECTIVE%@}"
     if [[ -z "$MEDIA_ROOT_EFFECTIVE" ]]; then
         echo "FEHLER: MEDIA_ROOT des web-Containers ist leer." >&2
         echo "  MEDIA_ROOT='<leer>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
