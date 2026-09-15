@@ -390,6 +390,32 @@
         }
     }
 
+    /** Fehlgeschlagene Referrer-Unterdrueckung sichtbar machen, ohne die Flucht
+     *  aufzuhalten.
+     *
+     * Der Wortlaut ist FEST und datenarm: weder die Zieladresse noch der
+     * Ausnahme-Text gehen in die Konsole. Eine Konsolenzeile landet in
+     * Screenshots, Fehlerberichten und Bildschirmaufnahmen — die Zieladresse
+     * dort auszugeben waere genau die Angabe, die der Sprung vor Dritten
+     * verbergen soll, und eine fremde Ausnahme-Meldung koennte beliebigen
+     * Inhalt nachziehen.
+     *
+     * Selbst gekapselt wie ``_warnKeyDropFailed``: eine ersetzte oder
+     * fehlerhafte ``console.warn`` darf den Sprung nicht verhindern.
+     */
+    function _warnReferrerSuppressionFailed() {
+        try {
+            if (!window.console || typeof window.console.warn !== "function") return;
+            window.console.warn(
+                "Schnell verlassen: Die Unterdrueckung der Herkunft fuer den Sprung konnte nicht gesetzt " +
+                    "werden. Es wird trotzdem verlassen; das Sprungziel kann dabei erfahren, von welcher " +
+                    "Adresse aus gesprungen wurde."
+            );
+        } catch (_e) {
+            // ignore — eine Warnung darf die Flucht nicht aufhalten.
+        }
+    }
+
     /** Diese EINE Navigation referrerfrei machen (Refs #2179).
      *
      * Das Dokument wird mit ``Referrer-Policy: strict-origin-when-cross-origin``
@@ -414,7 +440,10 @@
     function _suppressReferrer() {
         try {
             var head = document.head;
-            if (!head) return;
+            if (!head) {
+                _warnReferrerSuppressionFailed();
+                return;
+            }
             // Ein vorhandenes Meta ueberschreiben statt ein zweites danebenzulegen:
             // welches von mehreren gilt, ist nichts, worauf sich die Flucht
             // verlassen sollte.
@@ -427,7 +456,9 @@
             meta.setAttribute("content", "no-referrer");
             head.appendChild(meta);
         } catch (_e) {
-            // best-effort — eine gescheiterte Politik darf die Flucht nicht aufhalten.
+            // best-effort — eine gescheiterte Politik darf die Flucht nicht
+            // aufhalten. Still bleiben darf sie aber auch nicht (siehe unten).
+            _warnReferrerSuppressionFailed();
         }
     }
 

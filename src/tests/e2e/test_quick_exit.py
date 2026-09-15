@@ -256,6 +256,11 @@ class TestSchnellVerlassen:
         selbst — auf ``unsafe-url``, den schaerfsten Fall: Origin UND Pfad,
         also strikt mehr, als Produktion je sendet. Genau diese Politik muss
         der Sprung ueberschreiben.
+
+        Der Fall ist eine **Positivkontrolle nur zusammen mit einem Rot-Lauf**:
+        Dass er ohne die Unterdrueckung wirklich scheitert, zeigt erst ein Lauf
+        gegen ein ``quick-exit.js`` ohne ``_suppressReferrer()`` (Anleitung im
+        Lane-Bericht). Eine DOM-Assertion allein ersetzt diesen Nachweis nicht.
         """
         kopfzeilen = []
         context = browser.new_context(locale="de-DE")
@@ -272,9 +277,19 @@ class TestSchnellVerlassen:
                     document.head.appendChild(meta);
                 }"""
             )
+            # Vorcheck auf die WIRKSAME Politik, nicht nur auf DOM-Inhalt: nach
+            # dem HTML-Verarbeitungsmodell gilt das ZULETZT eingefuegte
+            # ``meta[name=referrer]``. Ein blosses „irgendwo steht unsafe-url"
+            # waere auch dann erfuellt, wenn danach noch ein strengeres Meta
+            # folgte — der Fall belegte dann nichts.
             assert page.evaluate(
-                """() => !!document.head.querySelector('meta[name="referrer"][content="unsafe-url"]')"""
-            ), "Die leckende Ausgangspolitik steht nicht im Dokument — der Fall wuerde nichts belegen."
+                """() => Array.from(document.head.querySelectorAll('meta[name="referrer"]')).map(
+                    (meta) => meta.getAttribute("content")
+                )"""
+            ) == ["unsafe-url"], (
+                "Die leckende Ausgangspolitik ist nicht die wirksame: erwartet wird GENAU EIN "
+                "meta[name=referrer], und zwar mit 'unsafe-url'."
+            )
 
             with page.expect_navigation(url=re.compile(r"wikipedia\.org"), timeout=15000):
                 page.locator("[data-testid='quick-exit-button']").click()

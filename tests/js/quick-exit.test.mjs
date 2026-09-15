@@ -572,20 +572,31 @@ describe("Referrer beim Sprung auf die Zielseite", () => {
         expect(referrerMetas().map((meta) => meta.getAttribute("content"))).toEqual(["no-referrer"]);
     });
 
-    it("ueberschreibt eine bereits vorhandene Referrer-Politik statt sie zu ergaenzen", async () => {
-        // Zwei ``meta[name=referrer]`` im Dokument: der Browser wertet das
-        // zuletzt eingefuegte aus, aber darauf will sich die Flucht nicht
-        // verlassen. Nach dem Sprung steht genau EINES da — und zwar unseres.
-        const alt = document.createElement("meta");
-        alt.setAttribute("name", "referrer");
-        alt.setAttribute("content", "unsafe-url");
-        document.head.appendChild(alt);
+    it("ueberschreibt vorhandene Referrer-Politiken — im Sprungmoment, nicht danach", async () => {
+        // ZWEI vorhandene ``meta[name=referrer]``: das prueft die
+        // Entfernungs-Schleife (eines allein liefe auch mit einer Ersetzung
+        // durch). Und wieder zaehlt der Zustand IM Moment des Sprungs: wuerde
+        // eine vorhandene Politik erst NACH ``location.replace`` ersetzt,
+        // traege die Navigation noch die alte — und der DOM sae hinterher
+        // trotzdem richtig aus.
+        ["unsafe-url", "origin"].forEach((content) => {
+            const vorhanden = document.createElement("meta");
+            vorhanden.setAttribute("name", "referrer");
+            vorhanden.setAttribute("content", content);
+            document.head.appendChild(vorhanden);
+        });
 
         const { replace } = await freshLoad({ dataset: online() });
+
+        let politikenBeimSprung = ["REPLACE-NICHT-GERUFEN"];
+        replace.mockImplementation(() => {
+            politikenBeimSprung = referrerMetas().map((meta) => meta.getAttribute("content"));
+        });
 
         await window.quickExit.trigger();
 
         expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+        expect(politikenBeimSprung).toEqual(["no-referrer"]);
         expect(referrerMetas().map((meta) => meta.getAttribute("content"))).toEqual(["no-referrer"]);
     });
 
@@ -614,6 +625,84 @@ describe("Referrer beim Sprung auf die Zielseite", () => {
             });
         }
 
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+    });
+
+    it("warnt datenarm, wenn das Setzen der Politik an einer DOM-Ausnahme scheitert", async () => {
+        // Still scheitern waere das Schlimmste: Betreiber und Support saehen
+        // einen Schutz, den es in diesem Fenster nicht gab. Die Warnung ist
+        // fest verdrahtet — weder die Zieladresse noch der Ausnahme-Text
+        // gehoeren in eine Konsole, die in Screenshots, Fehlerberichten und
+        // Bildschirmaufnahmen landet.
+        const { replace, warn } = await freshLoad({ dataset: online() });
+        const original = document.head.appendChild.bind(document.head);
+        Object.defineProperty(document.head, "appendChild", {
+            configurable: true,
+            writable: true,
+            value: () => {
+                throw new Error("head gesperrt example.org/geheim");
+            },
+        });
+        try {
+            await window.quickExit.trigger();
+        } finally {
+            Object.defineProperty(document.head, "appendChild", {
+                configurable: true,
+                writable: true,
+                value: original,
+            });
+        }
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0]).toHaveLength(1);
+        const meldung = String(warn.mock.calls[0][0]);
+        expect(meldung).toMatch(/Herkunft/);
+        expect(meldung).not.toMatch(/example\.org/);
+        expect(meldung).not.toMatch(/head gesperrt/);
+    });
+
+    it("warnt auch, wenn es gar keinen <head> gibt — und verlaesst trotzdem", async () => {
+        const { replace, warn } = await freshLoad({ dataset: online() });
+        Object.defineProperty(document, "head", { configurable: true, get: () => null });
+        try {
+            await window.quickExit.trigger();
+        } finally {
+            delete document.head; // Prototyp-Getter wieder freilegen
+        }
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toMatch(/Herkunft/);
+    });
+
+    it("verlaesst auch dann, wenn die Warnung selbst wirft", async () => {
+        // Eine ersetzte oder kaputte ``console.warn`` (Erweiterung, Testharness)
+        // darf die Flucht nicht verhindern — deshalb ist die Warnung selbst
+        // gekapselt.
+        const { replace, warn } = await freshLoad({ dataset: online() });
+        const original = document.head.appendChild.bind(document.head);
+        Object.defineProperty(document.head, "appendChild", {
+            configurable: true,
+            writable: true,
+            value: () => {
+                throw new Error("head gesperrt");
+            },
+        });
+        warn.mockImplementation(() => {
+            throw new Error("Konsole kaputt");
+        });
+        try {
+            await window.quickExit.trigger();
+        } finally {
+            Object.defineProperty(document.head, "appendChild", {
+                configurable: true,
+                writable: true,
+                value: original,
+            });
+        }
+
+        expect(warn).toHaveBeenCalledTimes(1);
         expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
     });
 
