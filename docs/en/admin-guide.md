@@ -1,5 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> Synchronization update 2026-09-11: the expected `core.W004` warning when Redis has no password, the root-cron backup-directory contract, complete optional Compose file sets for every start and recreate command, ClamAV production/external-scanner limits, and signature-download egress diagnostics (#2218).
+> Synchronization update 2026-09-15: the production Compose allowlist, configurable ClamAV host, detail-token routing, and delivered ClamAV egress path are described as the current state (#2173).
+> Previously synchronized on 2026-09-11: the expected `core.W004` warning when Redis has no password, the root-cron backup-directory contract, complete optional Compose file sets for every start and recreate command, ClamAV production/external-scanner limits, and signature-download egress diagnostics (#2218).
 > Most recently synchronized on 2026-09-11 (§§ 1--6 fresh-install prerequisites, complete source acquisition, quoted environment values, key and DB-password generation, production setting routing, setup sequence, monitoring boundaries, backup scheduling, and troubleshooting, plus the RLS wording in § 7.9, #2218). Previously synchronized on 2026-09-10 (§ 3.3 both database and optional media HMAC sidecars are verified before confirmation and repeated immediately before use, plus recovery guidance after interrupted media extraction, #2195; § 7.5 client merge: the legal-hold limit when reverting a merge -- an active hold on the target or the source, including indirectly through one of their events or cases, refuses **Revert merge**, and the hold is deliberately not mirrored onto the source, #2200; § 2.9 open CSV import source files count during quota enforcement while the display remains attachment-based, #2180; § 2.11 running imports reject changed documentation types or field templates and commit the most recently confirmed mapping, #2196, #2199; § 5.6 URL-bearing event fields are masked structurally -- query string dropped, path resolved against the route schema including subpath prefix and missing trailing slash, token-signal heuristic for unresolvable paths including percent-encoded tokens; log entries and log breadcrumbs are reduced to their template, person key-value pairs, structured person keys, the client IP and the proxy headers including `Forwarded` are scrubbed -- plus the corresponding limits, #2198; § 2.3/§ 2.5 the retention setting for handover notes (days) and the hard-delete of manual shift notes in the retention run, plus the note that a time filter with handover notes can only be deleted after the retention period, #2042; § 2.4 `super_admin` can change **MFA required** for super-admin/bootstrap accounts under **Core > Users**, and each change is recorded as `USER_ACCESS_UPDATED` with `mfa_required` -- the field is also visible to application managers editing regular accounts, #2172; the alternative-deployment box in § 1 is removed and the cron-job notes in § 2.9 are reworded without the alternative deployment path, #2202; pre-1.0 migration/historical framing removed -- the EXTERNAL_ORIGIN migration box, three dated "Changed" boxes (documentation-type category, report key, system type), the outdated `ENCRYPTION_KEY`/email-less-fallback wording, and several version-dated markers are now described as current state, #2205).
 > Previously synchronized on 2026-09-08 (§ 2.9 the key-rotation coverage table and the operational note now cover `EventHistory` as well: the history columns are rotated per row with a row lock and compare-and-swap, a redaction or Art. 17 anonymization committed during the run wins and the row is reported as skipped, and rows that are already redacted are no longer rotation candidates, #2177).
 > Previously synchronized on 2026-09-08 (§ 2.9 row-lock/compare-and-swap protection, contention warnings, retry guidance and the maintenance-window recommendation for key rotation, #2131; § 7.6 the Art. 15 access record now states the deletion timestamp and the triggering user for events in the trash, plus the `deleted_events` structure note and the `null` boundary for events deleted before 0.96, #2157). Previously synchronized on 2026-08-30 (§ 2 self-hosted imprint/privacy files, safe Markdown subset, read-only mount and 404 behavior, #2076). Previously synchronized on 2026-08-28 (§ 2.2c the hard-delete description corrected -- Django wraps the whole delete cascade in one transaction, so the trigger error rolls back completely; partial destruction only arises from hand-written scripts that commit between tables, #2067). Previously synchronized on 2026-08-28 (§ 2.2c archiving a facility now actually blocks access -- sign-in, running sessions and the RLS context -- plus the raw-shell hard-delete pitfall around the `auditlog_immutable` trigger and the cross-reference to user offboarding, #2067). Previously synchronized on 2026-08-28 (§ 5.6 the hosted-Sentry third-country/DPA check and the DPA-template subprocessor cross-reference, #2052). Previously synchronized on 2026-08-28 (§§ 1/2.11/3/4.2 the RLS-safe `backup.sh`/`restore.sh` path for database and media backups, verification, cron, and recovery, #2074). Previously synchronized on 2026-08-25 (§ 7.4 the seven audit actions for domain edits, case links and attachments, their data-minimized details and regular retention, #1860). Previously synchronized on 2026-08-24 (§§ 2.4/2.7 the facility-scoped Access UI, sudo requirement, invitation, role, MFA, deletion-confirmation, deactivation and unlock flows, #1871). Previously synchronized on 2026-08-24 (§ 2.5 the person age-group catalog is fixed system-wide and distinct from configurable event fields, #1877). Previously synchronized on 2026-08-24 (§ 7.6 authorized roles see decrypted encrypted values in event history, including the retroactive scope and redacted-delete boundary, #1961). Previously synchronized on 2026-08-24 (§§ 1.4/2.2/4.1 privileged database commands now run through the dedicated maintenance service and `web` never receives admin/bootstrap secrets, #1962). Previously synchronized on 2026-08-22 (§ 2.2b the Django admin interface section is renumbered -- the guide carried two sections numbered 2.2, and §§ 2.1/2.3/2.5 all cross-reference "§ 2.2"; § 2.5 points to the configuration-package reference, #1894; § 1 `TRUSTED_PROXY_CIDRS` is space-separated only and the two new start-up checks `core.W003`/`core.E003` (#1963)). Previously synchronized on 2026-08-21 (§ 2.2 admin DB role for `setup_facility`, the default catalog on cold start, the `--no-default-package` opt-out, a repeat run leaving an existing catalog alone, and retrofitting an existing facility, #1883; §§ 2.1/2.2 facilities are created in the Django admin -- the `/system/` area only displays them; § 2.5 starting point note); § 1 `EXTERNAL_ORIGIN` as the fixed base of security-relevant links and the migration note for existing installations (#1967); §§ 2.2/2.3/2.5 facilities created in the Django admin now start with the default catalog, shifts and quick templates (#1970). Previously on 2026-08-20 (§ 2.11 CSV import and export: formula protection against leading whitespace/zero-width characters and the deliberate round-trip boundary, #1945; § 2.3 every facility has exactly one settings record and what happens without it, #1884).
@@ -143,31 +144,24 @@ The `DJANGO_AUDIT_HASH_KEY` secures the audit hashes — pseudonymized entries (
 
 The following tables document application settings and operating variables (see [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) and [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)).
 
-**Application setting vs. passed-through setting:** `web` deliberately does not load all of `.env`; it receives an explicit allowlist. `maintenance` and `cron`, by contrast, load the full file. The table separates the **current state of this file set** from the target after the pending [Compose fix #2219](https://github.com/anlaufstelle/app/issues/2219):
+**Application setting vs. passed-through setting:** `web` deliberately does not load all of `.env`; it receives the explicit allowlist delivered with #2219. `maintenance` and `cron`, by contrast, load the full file. The table describes the delivered state:
 
-| Variable(s) | Current state of this file set | Target after Compose fix #2219 |
-|---|---|---|
-| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | passed from `.env` to `web` | unchanged |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | passed from `.env` to `web`; the app role remains RLS-restricted | unchanged |
-| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | passed from `.env` to `web` | unchanged |
-| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | passed from `.env` to `web` | unchanged |
-| `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | fixed in `docker-compose.prod.yml` to `anlaufstelle.settings.prod`, `db`, and `clamav`; `.env` does not override them | `DJANGO_SETTINGS_MODULE` and `POSTGRES_HOST` remain fixed; `CLAMAV_HOST` becomes configurable |
-| `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | **not** passed to `web`; setting them only in `.env` and recreating the service has no effect | passed to `web` |
-| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | `maintenance`/initialization only, deliberately **not** `web` | unchanged |
-| `BREACH_*`, `TZ` | `cron`; `TZ` also sets the containers' time base | unchanged |
-| `BACKUP_HOST_DIR` | host scripts and volume mount; `BACKUP_DIR` is the read-only target in `web` | unchanged |
-| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` only with the additional `compose.legal.yml`, as shown under [Mandatory information](#configure-mandatory-information-imprintprivacy) | unchanged |
+| Variable(s) | State |
+|---|---|
+| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | passed from `.env` to `web` |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | passed from `.env` to `web`; the app role remains RLS-restricted |
+| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | passed from `.env` to `web` |
+| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | passed from `.env` to `web` |
+| `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` and `POSTGRES_HOST` are fixed in `docker-compose.prod.yml` to `anlaufstelle.settings.prod` and `db`; `CLAMAV_HOST` is configurable through `.env` |
+| `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | passed from `.env` to `web` |
+| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | `maintenance`/initialization only, deliberately **not** `web` |
+| `BREACH_*`, `TZ` | `cron`; `TZ` also sets the containers' time base |
+| `BACKUP_HOST_DIR` | host scripts and volume mount; `BACKUP_DIR` is the read-only target in `web` |
+| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` only with the additional `compose.legal.yml`, as shown under [Mandatory information](#configure-mandatory-information-imprintprivacy) |
 
-Until #2219 is integrated, create your own `compose.override.yml` next to `.env` for a setting that is not currently passed through. Example for the detail token (add further names under `environment:` using the same pattern):
+> Every variable named in this table reaches its stated service through the delivered allowlist. A `compose.override.yml` is needed only for additional variable names not listed here.
 
-```yaml
-services:
-  web:
-    environment:
-      DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
-```
-
-Set the value in `.env`, then recreate `web` with the complete **file set**. As soon as a Compose invocation contains at least one explicit `-f`, Compose does not load `compose.override.yml` automatically. Every recreate command below therefore builds the list in the fixed order `docker-compose.prod.yml`, `compose.legal.yml` (if configured), `compose.override.yml` (if configured):
+Set configuration values in `.env`, then recreate `web` with the complete **file set**. As soon as a Compose invocation contains at least one explicit `-f`, Compose does not load `compose.override.yml` automatically. Every recreate command below therefore builds the list in the fixed order `docker-compose.prod.yml`, `compose.legal.yml` (if configured), `compose.override.yml` (if configured):
 
 ```bash
 compose_files=(-f docker-compose.prod.yml)
@@ -218,7 +212,7 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 | Name | Default (prod) | Description |
 |---|---|---|
 | `CLAMAV_ENABLED` | `true` | Enables virus scanning before upload encryption. Fail-closed: if the daemon is unreachable, the upload is rejected. `false` is permitted only for development and tests, not in production. |
-| `CLAMAV_HOST` | `clamav` | Hostname of the ClamAV daemon (service name in the Compose network). Configure an external scanner through `CLAMAV_HOST` and `CLAMAV_PORT`; passing through the external host follows with #2219. |
+| `CLAMAV_HOST` | `clamav` | Hostname of the ClamAV daemon (service name in the Compose network). Configure an external scanner through `CLAMAV_HOST` and `CLAMAV_PORT`; `CLAMAV_HOST` is passed through from `.env`. |
 | `CLAMAV_PORT` | `3310` | TCP port of the clamd socket. |
 | `CLAMAV_TIMEOUT` | `15` | Wall-clock timeout in seconds per scan invocation; MUST be below `GUNICORN_TIMEOUT`, otherwise the worker timeout kills the request instead of failing closed. |
 
@@ -1371,7 +1365,7 @@ Expected response content: "status": "ok"
 Check interval: 1 minute
 ```
 
-This anonymous liveness check cannot detect a **missing or stale backup** or an SMTP outage. In the current base file set, `DJANGO_HEALTH_DETAIL_TOKEN` does not yet reach the web service. Until the Compose fix #2219, use the `compose.override.yml` described above; starting with that fix, the direct allowlist is sufficient. Send the strong token as `X-Health-Token` and additionally evaluate the JSON `status` value; alternatively monitor backups and mail separately.
+This anonymous liveness check cannot detect a **missing or stale backup** or an SMTP outage. `DJANGO_HEALTH_DETAIL_TOKEN` reaches `web` through the delivered allowlist. Send the strong token as `X-Health-Token` and additionally evaluate the JSON `status` value; alternatively monitor backups and mail separately.
 
 **curl-based cron check:**
 
@@ -1546,7 +1540,7 @@ docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
-Signature downloads require the `clamav` service to have a working outbound network path (egress) to the signature server or configured mirror; the target state after #2219 provides that path. The update log must show a successful download. Repeated DNS/download errors require checking that egress path or the mirror. A green `clamdscan --version` healthcheck proves only that the binary starts, not that signatures are current; also inspect the displayed signature state in the compliance dashboard at `/system/compliance/`.
+Signature downloads require the `clamav` service to have a working outbound network path (egress) to the signature server or configured mirror; that path was delivered with #2219. The update log must show a successful download. Repeated DNS/download errors require checking that egress path or the mirror. A green `clamdscan --version` healthcheck proves only that the binary starts, not that signatures are current; also inspect the displayed signature state in the compliance dashboard at `/system/compliance/`.
 
 ### Problem: TLS Certificate Is Not Issued
 
@@ -2200,5 +2194,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-11 -->
-<!-- source-hash: d5a6d559d8a0c15f3f53d0b8e3f3b1bff25c22ae -->
+<!-- translation-date: 2026-09-15 -->
+<!-- source-hash: 74ba390ace4165d743a341feb001604cddc39471 -->

@@ -135,31 +135,24 @@ Der `DJANGO_AUDIT_HASH_KEY` sichert die Audit-Hashes — pseudonymisierte Eintr�
 
 Die folgenden Tabellen dokumentieren App-Settings und Betriebsvariablen (siehe [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) und [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py); `base.py`/`prod.py` bleiben die maßgebliche Quelle).
 
-**App-Setting vs. durchgereichte Einstellung:** Der `web`-Dienst lädt die `.env` bewusst nicht vollständig, sondern erhält eine explizite Allowlist. `maintenance` und `cron` laden dagegen die ganze Datei. Die Tabelle trennt den **Ist-Stand dieses Dateisatzes** vom Ziel nach dem noch ausstehenden [Compose-Fix #2219](https://github.com/anlaufstelle/app/issues/2219):
+**App-Setting vs. durchgereichte Einstellung:** Der `web`-Dienst lädt die `.env` bewusst nicht vollständig, sondern erhält die mit #2219 ausgelieferte explizite Allowlist. `maintenance` und `cron` laden dagegen die ganze Datei. Die Tabelle beschreibt den ausgelieferten Stand:
 
-| Variable(n) | Ist-Stand dieses Dateisatzes | Ziel ab Compose-Fix #2219 |
-|---|---|---|
-| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | aus `.env` an `web` durchgereicht | unverändert |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | aus `.env` an `web` durchgereicht; die App-Rolle bleibt RLS-beschränkt | unverändert |
-| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | aus `.env` an `web` durchgereicht | unverändert |
-| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | aus `.env` an `web` durchgereicht | unverändert |
-| `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | in `docker-compose.prod.yml` fest auf `anlaufstelle.settings.prod`, `db` und `clamav` gesetzt; `.env` überschreibt sie nicht | `DJANGO_SETTINGS_MODULE` und `POSTGRES_HOST` bleiben fest; `CLAMAV_HOST` wird konfigurierbar |
-| `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | **nicht** an `web` durchgereicht; Setzen nur in `.env` und ein Recreate bleiben wirkungslos | werden an `web` durchgereicht |
-| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | nur `maintenance`/Initialisierung, bewusst **nicht** `web` | unverändert |
-| `BREACH_*`, `TZ` | `cron`; `TZ` bestimmt außerdem die Zeitbasis der Container | unverändert |
-| `BACKUP_HOST_DIR` | Host-Skripte und Volume-Mount; `BACKUP_DIR` ist das read-only Ziel in `web` | unverändert |
-| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` nur mit dem zusätzlichen `compose.legal.yml`, wie unter [Pflichtangaben](#pflichtangaben-impressumdatenschutz-einrichten) gezeigt | unverändert |
+| Variable(n) | Stand |
+|---|---|
+| `DJANGO_SECRET_KEY`, `DJANGO_AUDIT_HASH_KEY`, `ALLOWED_HOSTS`, `EXTERNAL_ORIGIN`, `TRUSTED_PROXY_HOPS`, `TRUSTED_PROXY_CIDRS` | aus `.env` an `web` durchgereicht |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | aus `.env` an `web` durchgereicht; die App-Rolle bleibt RLS-beschränkt |
+| `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | aus `.env` an `web` durchgereicht |
+| `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | aus `.env` an `web` durchgereicht |
+| `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` und `POSTGRES_HOST` sind in `docker-compose.prod.yml` fest auf `anlaufstelle.settings.prod` und `db` gesetzt; `CLAMAV_HOST` ist über `.env` konfigurierbar |
+| `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | aus `.env` an `web` durchgereicht |
+| `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | nur `maintenance`/Initialisierung, bewusst **nicht** `web` |
+| `BREACH_*`, `TZ` | `cron`; `TZ` bestimmt außerdem die Zeitbasis der Container |
+| `BACKUP_HOST_DIR` | Host-Skripte und Volume-Mount; `BACKUP_DIR` ist das read-only Ziel in `web` |
+| `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` nur mit dem zusätzlichen `compose.legal.yml`, wie unter [Pflichtangaben](#pflichtangaben-impressumdatenschutz-einrichten) gezeigt |
 
-Bis #2219 integriert ist, legen Sie für eine heute nicht durchgereichte Einstellung eine eigene `compose.override.yml` neben `.env` an. Beispiel für den Detail-Token (weitere Namen werden nach demselben Muster unter `environment:` ergänzt):
+> Alle in dieser Tabelle genannten Variablen erreichen ihren angegebenen Dienst über die ausgelieferte Allowlist. Eine `compose.override.yml` ist nur für zusätzliche, hier nicht genannte Variablennamen nötig.
 
-```yaml
-services:
-  web:
-    environment:
-      DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
-```
-
-Setzen Sie den Wert in `.env` und erstellen Sie `web` mit dem vollständigen **Dateisatz** neu. Sobald ein Compose-Aufruf mindestens ein ausdrückliches `-f` enthält, lädt Compose `compose.override.yml` nicht automatisch. Deshalb bauen alle folgenden Recreate-Befehle die Liste in der festen Reihenfolge `docker-compose.prod.yml`, `compose.legal.yml` (falls eingerichtet), `compose.override.yml` (falls eingerichtet) auf:
+Setzen Sie Konfigurationswerte in `.env` und erstellen Sie `web` mit dem vollständigen **Dateisatz** neu. Sobald ein Compose-Aufruf mindestens ein ausdrückliches `-f` enthält, lädt Compose `compose.override.yml` nicht automatisch. Deshalb bauen alle folgenden Recreate-Befehle die Liste in der festen Reihenfolge `docker-compose.prod.yml`, `compose.legal.yml` (falls eingerichtet), `compose.override.yml` (falls eingerichtet) auf:
 
 ```bash
 compose_files=(-f docker-compose.prod.yml)
@@ -210,7 +203,7 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 | Name | Default (prod) | Beschreibung |
 |---|---|---|
 | `CLAMAV_ENABLED` | `true` | Aktiviert den Virenscan vor Upload-Verschlüsselung. Fail-closed: Ist der Daemon nicht erreichbar, wird der Upload abgewiesen. `false` ist ausschließlich für Entwicklung und Tests zulässig, nicht für Produktion. |
-| `CLAMAV_HOST` | `clamav` | Hostname des ClamAV-Daemons (Service-Name im Compose-Netzwerk). Ein externer Scanner wird über `CLAMAV_HOST` und `CLAMAV_PORT` konfiguriert; die Durchreichung des externen Hosts folgt mit #2219. |
+| `CLAMAV_HOST` | `clamav` | Hostname des ClamAV-Daemons (Service-Name im Compose-Netzwerk). Ein externer Scanner wird über `CLAMAV_HOST` und `CLAMAV_PORT` konfiguriert; `CLAMAV_HOST` wird über `.env` durchgereicht. |
 | `CLAMAV_PORT` | `3310` | TCP-Port des clamd-Sockets. |
 | `CLAMAV_TIMEOUT` | `15` | Wall-Clock-Timeout in Sekunden pro Scan-Aufruf; MUSS unter `GUNICORN_TIMEOUT` liegen, sonst killt der Worker-Timeout den Request statt fail-closed abzuweisen. |
 
@@ -1362,7 +1355,7 @@ Erwarteter Antwort-Inhalt: "status": "ok"
 Prüfintervall: 1 Minute
 ```
 
-Dieses anonyme Liveness-Monitoring erkennt insbesondere **kein fehlendes oder veraltetes Backup** und keinen SMTP-Ausfall. Im heutigen Basis-Dateisatz erreicht `DJANGO_HEALTH_DETAIL_TOKEN` den Webdienst noch nicht. Nutzen Sie bis zum Compose-Fix #2219 die oben beschriebene `compose.override.yml`; ab diesem Fix genügt die direkte Allowlist. Senden Sie den starken Token als `X-Health-Token` und prüfen Sie zusätzlich den JSON-Wert `status`; alternativ überwachen Sie Backup und Mailweg separat.
+Dieses anonyme Liveness-Monitoring erkennt insbesondere **kein fehlendes oder veraltetes Backup** und keinen SMTP-Ausfall. `DJANGO_HEALTH_DETAIL_TOKEN` erreicht `web` über die ausgelieferte Allowlist. Senden Sie den starken Token als `X-Health-Token` und prüfen Sie zusätzlich den JSON-Wert `status`; alternativ überwachen Sie Backup und Mailweg separat.
 
 **curl-basierter Cron-Check:**
 
@@ -1537,7 +1530,7 @@ docker compose -f docker-compose.prod.yml logs clamav | grep -i freshclam
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
-Der Signaturdownload setzt voraus, dass der `clamav`-Dienst einen funktionierenden ausgehenden Netzwerkpfad (Egress) zum Signaturserver beziehungsweise konfigurierten Mirror besitzt; diesen Pfad stellt der Zielstand nach #2219 bereit. Das Update-Protokoll muss einen erfolgreichen Download zeigen. Wiederholte DNS-/Downloadfehler erfordern eine Prüfung dieses Egress-Pfads oder des Mirrors. Ein grüner `clamdscan --version`-Healthcheck belegt nur, dass das Binary startet, nicht dass die Signaturen aktuell sind; kontrollieren Sie den angezeigten Signaturstand zusätzlich im Compliance-Dashboard unter `/system/compliance/`.
+Der Signaturdownload setzt voraus, dass der `clamav`-Dienst einen funktionierenden ausgehenden Netzwerkpfad (Egress) zum Signaturserver beziehungsweise konfigurierten Mirror besitzt; dieser Pfad ist mit #2219 ausgeliefert. Das Update-Protokoll muss einen erfolgreichen Download zeigen. Wiederholte DNS-/Downloadfehler erfordern eine Prüfung dieses Egress-Pfads oder des Mirrors. Ein grüner `clamdscan --version`-Healthcheck belegt nur, dass das Binary startet, nicht dass die Signaturen aktuell sind; kontrollieren Sie den angezeigten Signaturstand zusätzlich im Compliance-Dashboard unter `/system/compliance/`.
 
 ### Problem: TLS-Zertifikat wird nicht ausgestellt
 
