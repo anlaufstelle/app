@@ -39,6 +39,23 @@ bekommt. Die **Anzeige** aus :func:`facility_storage_usage` bleibt
 Anhang-basiert. Offene ``ImportJob``-Quelldateien zaehlen bei der
 **Durchsetzung** als ``pending_bytes`` mit, bis der Lauf ``COMMITTED`` oder
 ``ABORTED`` ist; sie sind temporaer und haengen an einem eigenen Modell.
+
+Zwei Stufen, zwei Aufgaben
+==========================
+
+Die Durchsetzung haengt an zwei Stellen (Refs #2178):
+
+1. :func:`~core.services.file_vault.policy.enforce_storage_quota` **vor** dem
+   Virenscan — lockfrei, damit fuer einen ohnehin abgelehnten Upload kein
+   synchroner ClamAV-Lauf und keine Verschluesselung anfaellt. Diese Stufe
+   **spart Arbeit**, sie entscheidet nicht endgueltig: zwischen ihr und der
+   Attachment-Zeile liegt die gesamte teure Pipeline.
+2. :func:`facility_storage_overrun` im Commit — unter der Sperre der
+   Einrichtung und unmittelbar vor dem Insert. Diese Stufe **entscheidet**:
+   ohne sie ueberziehen gleichzeitige Uploads das Kontingent gemeinsam um
+   ``Nebenlaeufigkeit x max_file_size_mb`` (dynamisch belegt, Red-Team B-13).
+   Serialisiert wird nur der kurze DB-Teil — Scan und Verschluesselung laufen
+   weiterhin ohne jede Sperre.
 """
 
 from __future__ import annotations
@@ -46,6 +63,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from django.conf import settings as django_settings
+from django.db import connection
 from django.db.models import Q, Sum
 from django.utils.translation import gettext as _
 
@@ -172,6 +190,15 @@ def _configured_limit_bytes(facility) -> int | None:
     return min(candidates) * _BYTES_PER_MB
 
 
+def _facility_totals(facility) -> tuple[int, int]:
+    """``(belegt, davon Papierkorb)`` in Bytes — EINE bedingte Aggregat-Query."""
+    totals = Attachment.objects.for_facility(facility).aggregate(
+        used=Sum("file_size"),
+        trash=Sum("file_size", filter=Q(deleted_at__isnull=False)),
+    )
+    return totals["used"] or 0, totals["trash"] or 0
+
+
 def facility_storage_usage(facility) -> StorageUsage:
     """Belegung und wirksames Kontingent einer Einrichtung (2 Queries).
 
@@ -179,12 +206,87 @@ def facility_storage_usage(facility) -> StorageUsage:
     eine fuer das Einrichtungs-Setting — die Kachel darf die Uebersichtsseiten
     nicht teurer machen.
     """
-    totals = Attachment.objects.for_facility(facility).aggregate(
-        used=Sum("file_size"),
-        trash=Sum("file_size", filter=Q(deleted_at__isnull=False)),
-    )
+    used, trash = _facility_totals(facility)
     return StorageUsage(
-        used_bytes=totals["used"] or 0,
-        trash_bytes=totals["trash"] or 0,
+        used_bytes=used,
+        trash_bytes=trash,
         limit_bytes=_configured_limit_bytes(facility),
     )
+
+
+def storage_lock_name(facility_id) -> str:
+    """Der Ressourcen-Name der Kontingent-Sperre einer Einrichtung (Refs #2178).
+
+    **Bewusst derselbe Name wie die AuditLog-Hashkette** — die Sperre ist
+    dieselbe, nicht nur eine gleichnamige. Ein eigener Namensraum waere hier
+    ein Deadlock-Risiko und kein Gewinn:
+
+    * Der Commit-Pfad laeuft produktiv in einer Aufrufer-Transaktion, die den
+      Ketten-Lock der Einrichtung **bereits haelt**: ``create_event``/
+      ``update_event`` (bzw. die Personen-/Fall-Pendants) schreiben ihre
+      AuditLog-Zeile, bevor ``finalize_staged_files``/
+      ``apply_attachment_changes`` die Anhaenge persistieren. Reihenfolge dort:
+      Kette → Kontingent.
+    * Ein Aufrufer ohne vorherige Audit-Zeile (``store_encrypted_file``, Seed)
+      naehme mit eigenem Namensraum die umgekehrte Reihenfolge: Kontingent →
+      Kette. Zwei solche Transaktionen derselben Einrichtung bildeten damit
+      einen Deadlock-Zyklus, den Postgres nur noch durch Abbruch aufloest.
+    * Ein einziger Lock je Einrichtung kennt keine Reihenfolge, die sich
+      verdrehen koennte. Er kostet auch nichts zusaetzlich: dieselbe
+      Transaktion nimmt ihn wenige Anweisungen spaeter fuer die
+      Anhang-Audit-Zeile ohnehin und haelt ihn bis zum Commit.
+
+    Abgeleitet wird der Name ausschliesslich ueber
+    :func:`~core.services.audit.chain.advisory_lock_name` — eine zweite,
+    kopierte Formatierung waere genau die stille Drift, vor der dessen
+    Docstring warnt.
+    """
+    from core.services.audit.chain import advisory_lock_name  # noqa: PLC0415 — Zyklus vermeiden
+
+    return advisory_lock_name(facility_id)
+
+
+def lock_facility_storage(facility_id) -> None:
+    """Sperrt die Einrichtung fuer die Dauer der laufenden Transaktion.
+
+    ``pg_advisory_xact_lock`` wird beim COMMIT/ROLLBACK automatisch
+    freigegeben — nur so ueberspannt die Sperre „Summe lesen + Zeile
+    schreiben" und serialisiert genau das. Auf Nicht-PostgreSQL (SQLite)
+    entfaellt sie, wie in :func:`~core.services.audit.chain.assign_chain_fields`.
+
+    Fail-loud ausserhalb einer Transaktion: im Autocommit-Modus liefe die
+    Sperre in ihrer eigenen impliziten Transaktion und waere mit dem Ende des
+    ``SELECT`` schon wieder weg — ein lautloser No-op, der genau die Zusage
+    dieses Moduls aushebelte.
+    """
+    if connection.vendor != "postgresql":
+        return
+    if not connection.in_atomic_block:
+        raise RuntimeError(
+            "lock_facility_storage() ausserhalb einer Transaktion — die Xact-Sperre "
+            "waere sofort wieder frei und wuerde nichts serialisieren."
+        )
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [storage_lock_name(facility_id)])
+
+
+def facility_storage_overrun(facility, additional_bytes: int) -> StorageUsage | None:
+    """Passt ``additional_bytes`` noch — **unter der Sperre** gepruefte Antwort.
+
+    Liefert ``None``, wenn die Datei hineinpasst, sonst die
+    :class:`StorageUsage`, die sie sprengt (der Aufrufer auditiert damit NACH
+    dem Rollback, siehe ``storage.commit_staged_upload``).
+
+    Die Konfigurationsfrage laeuft VOR der Sperre: eine Einrichtung ohne
+    wirksames Kontingent zahlt weder Sperre noch Summen-Query. Das Limit ist
+    Konfiguration und nicht umkaempft; umkaempft ist allein die Summe, und die
+    wird erst nach dem Sperren gelesen (Refs #2178).
+    """
+    limit_bytes = _configured_limit_bytes(facility)
+    if limit_bytes is None:
+        return None
+
+    lock_facility_storage(getattr(facility, "pk", facility))
+    used, trash = _facility_totals(facility)
+    usage = StorageUsage(used_bytes=used, trash_bytes=trash, limit_bytes=limit_bytes)
+    return None if usage.fits(additional_bytes) else usage

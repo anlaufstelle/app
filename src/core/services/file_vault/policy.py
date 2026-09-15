@@ -595,13 +595,16 @@ def enforce_storage_quota(
     Audit-Zeile. Der Default ``Attachment`` haelt alle bestehenden Aufrufer
     unveraendert; der CSV-Import setzt ``ImportJob``.
 
-    **Race bewusst toleriert:** Zwei *parallele* Uploads (zwei Requests) am
-    Limit koennen es gemeinsam ueberschreiten — die Summe wird ohne Lock
-    gelesen. Das Kontingent schuetzt gegen das Volllaufen der Platte, es ist
-    keine Buchhaltung; ein ``select_for_update``/Advisory-Lock wuerde die
-    Upload-Pipeline zusaetzlich je Einrichtung serialisieren und liefe damit
-    dem Entwurfsziel aus #1345 zuwider (Scan/Encrypt gerade NICHT unter dem
-    Facility-Lock der AuditLog-Hashkette).
+    **Diese Stufe entscheidet nicht endgueltig** (Refs #2178): die Summe wird
+    hier bewusst ohne Lock gelesen — zwischen dem Lesen und der spaeteren
+    Attachment-Zeile liegt die gesamte teure Pipeline, und die soll gerade
+    NICHT je Einrichtung serialisiert werden (Entwurfsziel #1345: Scan/Encrypt
+    laufen nicht unter dem Facility-Lock der AuditLog-Hashkette). Ihr Zweck ist,
+    Arbeit zu sparen. Dass gleichzeitige Uploads das Kontingent gemeinsam
+    ueberschreiten, verhindert der Backstop im Commit-Pfad
+    (:func:`check_storage_quota_at_commit`, aufgerufen aus
+    ``storage._commit_staged_upload``) — dort ist der Vorgang ein kurzer
+    DB-Write, den eine Sperre nichts kostet.
     """
     from core.services.file_vault.audit import audit_attachment_quota_exceeded  # noqa: PLC0415 — Zyklus vermeiden
     from core.services.file_vault.quota import facility_storage_usage  # noqa: PLC0415
@@ -619,13 +622,66 @@ def enforce_storage_quota(
         requested_bytes=size,
         target_type=target_type,
     )
-    raise ValidationError(
-        _(
-            "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt "
-            "(davon %(trash)d MB im Papierkorb)."
-        )
-        % {"used": usage.used_mb, "limit": usage.limit_mb, "trash": usage.trash_mb}
-    )
+    raise ValidationError(storage_quota_message(usage))
+
+
+def storage_quota_message(usage) -> str:
+    """Der Meldungstext fuer ein erschoepftes Kontingent — EINE Quelle.
+
+    Vorab-Check und Commit-Backstop (Refs #2178) muessen nach aussen
+    ununterscheidbar sein: Views und Formulare reagieren auf Fehlerklasse und
+    Text, nicht darauf, an welcher Stelle der Pipeline das Kontingent gerissen
+    ist. Zwei getrennte Formulierungen waeren zwei msgids und zwei Gelegenheiten
+    auseinanderzudriften.
+    """
+    return _(
+        "Speicherkontingent der Einrichtung erschöpft: %(used)d von %(limit)d MB belegt "
+        "(davon %(trash)d MB im Papierkorb)."
+    ) % {"used": usage.used_mb, "limit": usage.limit_mb, "trash": usage.trash_mb}
+
+
+class StorageQuotaBackstopError(Exception):
+    """Der Backstop hat angeschlagen — Traeger fuer die Audit-Zeile danach.
+
+    Bewusst **kein** ``ValidationError``: dieser wuerde von den Aufrufern
+    sofort als fachlicher Formularfehler behandelt, waehrend die
+    ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile noch fehlt. Die Ausnahme traegt die
+    Nutzdaten aus der Transaktion heraus; erst ``commit_staged_upload``
+    schreibt — NACH dem Rollback — die Audit-Zeile und uebersetzt sie in den
+    ``ValidationError`` mit dem Text des Vorab-Checks (Refs #2178).
+    """
+
+    def __init__(self, usage, requested_bytes: int):
+        super().__init__("Speicherkontingent im Commit-Pfad ueberschritten")
+        self.usage = usage
+        self.requested_bytes = requested_bytes
+
+
+def check_storage_quota_at_commit(facility, additional_bytes: int) -> None:
+    """Der fail-closed Backstop unmittelbar vor der Attachment-Zeile (#2178).
+
+    Laeuft in der kurzen Commit-Transaktion, nimmt dort die Sperre der
+    Einrichtung und liest die Summe erneut. Erst diese Stufe schliesst das
+    Rennen: der Vorab-Check in ``prepare_encrypted_upload`` liegt ausserhalb
+    jeder Transaktion, beliebig viele gleichzeitige Uploads sehen dort
+    denselben alten Stand und ueberziehen das Kontingent gemeinsam (Red-Team
+    B-13, dynamisch mit zwoelf parallelen Uploads belegt).
+
+    **Vor** dem Insert, nicht danach: ein blosses Nachrechnen nach dem Insert
+    haette dasselbe Rennen, denn unter READ COMMITTED sieht jede Transaktion
+    ihre eigene unbestaetigte Zeile, aber keine fremde. Entscheidend ist nicht
+    der Zeitpunkt der Pruefung, sondern dass „Summe lesen + Zeile schreiben"
+    je Einrichtung serialisiert ist. Vor dem Insert zu pruefen spart zusaetzlich
+    den Rollback einer bereits geschriebenen Zeile.
+
+    Raises:
+        StorageQuotaBackstopError: wenn die Datei nicht mehr hineinpasst.
+    """
+    from core.services.file_vault.quota import facility_storage_overrun  # noqa: PLC0415 — Zyklus vermeiden
+
+    usage = facility_storage_overrun(facility, additional_bytes)
+    if usage is not None:
+        raise StorageQuotaBackstopError(usage, additional_bytes)
 
 
 def run_virus_scan(facility, uploaded_file, owner, user):

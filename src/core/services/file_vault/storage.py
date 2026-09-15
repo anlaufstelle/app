@@ -23,12 +23,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings as django_settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from core.models.attachment import Attachment, owner_field_name
 from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.file_vault.policy import (
+    StorageQuotaBackstopError,
+    check_storage_quota_at_commit,
     enforce_allowed_file_types,
     enforce_archive_limits,
     enforce_image_limits,
@@ -36,6 +39,7 @@ from core.services.file_vault.policy import (
     enforce_storage_quota,
     enforce_upload_size,
     run_virus_scan,
+    storage_quota_message,
     strip_image_metadata,
 )
 
@@ -160,7 +164,25 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None, pendi
 
 
 def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
-    """Persistiere Upload und Audit-Zeile atomar; Fehler raeumen die Datei auf."""
+    """Persistiere Upload und Audit-Zeile atomar; Fehler raeumen die Datei auf.
+
+    Reisst der Kontingent-Backstop (Refs #2178), wird die Rechenschaftszeile
+    ``ATTACHMENT_QUOTA_EXCEEDED`` **ausserhalb** des ``atomic()``-Blocks
+    geschrieben: innerhalb der zurueckgerollten Transaktion verschwaende sie
+    mit ihr. Die Abweisung traegt Fehlerklasse und Text des Vorab-Checks, damit
+    Views und Formulare unveraendert reagieren.
+
+    **Grenze, wenn der Aufrufer eine eigene ``atomic()`` haelt** (der
+    Regelfall in ``crud.finalize_staged_files``/``crud.apply_attachment_changes``
+    unter der View-Transaktion): der innere Block ist dann nur ein Savepoint,
+    die Audit-Zeile entsteht in der noch offenen Aufrufer-Transaktion — und
+    rollt mit ihr zurueck, sobald der ``ValidationError`` nach oben durchschlaegt.
+    Das ist hinnehmbar und nicht reparierbar, ohne eine zweite Verbindung
+    aufzumachen: die wuerde am Advisory-Lock der Hashkette haengen, den die
+    Aufrufer-Transaktion selbst haelt. Sicherheitswirksam ist allein, dass die
+    Attachment-Zeile nicht entsteht (Ueberzug 0); die Rechenschaft traegt in
+    diesen Pfaden der Vorab-Check, der VOR jeder Transaktion auditiert.
+    """
     try:
         with transaction.atomic():
             return _commit_staged_upload(
@@ -172,6 +194,18 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
                 sort_order=sort_order,
                 audit=audit,
             )
+    except StorageQuotaBackstopError as exc:
+        from core.services.file_vault.audit import audit_attachment_quota_exceeded
+
+        staged.output_path.unlink(missing_ok=True)
+        audit_attachment_quota_exceeded(
+            owner.facility,
+            user,
+            owner,
+            usage=exc.usage,
+            requested_bytes=exc.requested_bytes,
+        )
+        raise ValidationError(storage_quota_message(exc.usage)) from exc
     except Exception:
         staged.output_path.unlink(missing_ok=True)
         raise
@@ -183,7 +217,10 @@ def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=Non
 
     Sicher innerhalb der Aufrufer-``transaction.atomic()`` aufzurufen: hier faellt
     kein ClamAV-Scan und keine Verschluesselung mehr an, nur Attachment-,
-    Versions- und AuditLog-Schreibvorgaenge.
+    Versions- und AuditLog-Schreibvorgaenge. Eine Transaktion ist Pflicht — der
+    Kontingent-Backstop (Refs #2178) nimmt eine ``pg_advisory_xact_lock``-Sperre,
+    die ausserhalb einer Transaktion wirkungslos waere (fail-loud in
+    ``quota.lock_facility_storage``).
 
     ``owner`` ist ein ``Event``, ``Client`` oder ``Case`` (AP2, Refs #1738); der
     passende Owner-FK wird ueber :func:`~core.models.attachment.owner_field_name`
@@ -205,6 +242,17 @@ def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=Non
         # Cleanup-Garantie ausloesen wie ein DB-Fehler (#662) — sonst bliebe
         # die bereits verschluesselte ``.enc`` als Waise auf der Disk liegen.
         owner_field = owner_field_name(owner)
+        # #2178 (Red-Team B-13): fail-closed Backstop VOR dem Insert — die Summe
+        # ein zweites Mal lesen, diesmal unter der Sperre der Einrichtung. Der
+        # Vorab-Check in ``prepare_encrypted_upload`` liegt ausserhalb jeder
+        # Transaktion und spart nur den Scan; ohne diese Stufe ueberziehen
+        # gleichzeitige Uploads das Kontingent gemeinsam. Gesperrt wird
+        # ausschliesslich der kurze DB-Teil (Scan/Encrypt sind laengst vorbei),
+        # und zwar mit derselben Sperre, die die AuditLog-Hashkette wenige
+        # Anweisungen spaeter ohnehin nimmt — ein zweiter Namensraum brauchte
+        # eine Lock-Reihenfolge, die die Aufrufer-Transaktionen nicht einhalten
+        # koennen (siehe ``quota.storage_lock_name``).
+        check_storage_quota_at_commit(owner.facility, staged.file_size)
         if supersedes is not None:
             # Replace-Modus: entry_id + sort_order vom Vorgänger übernehmen.
             entry_id = supersedes.entry_id

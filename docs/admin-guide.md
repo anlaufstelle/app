@@ -1117,7 +1117,7 @@ Wirksam ist immer das **striktere** der beiden Limits. Sind beide leer bzw. `0`,
 
 Mehrere Dateien **eines** Formulars zählen gemeinsam: Die Prüfung kennt die im selben Vorgang bereits verarbeiteten Dateien und lehnt diejenige ab, mit der das Kontingent reißen würde.
 
-> **Grenze (bewusst):** Zwei **gleichzeitige** Vorgänge am Limit können es gemeinsam knapp überschreiten — der Verbrauch wird ohne Sperre gelesen. Das Kontingent schützt gegen das Volllaufen des Datenträgers, es ist keine Buchhaltung; eine Sperre würde jeden Upload einer Einrichtung serialisieren.
+**Gleichzeitige Uploads.** Das Kontingent hält auch dann, wenn beliebig viele Uploads einer Einrichtung zur selben Zeit laufen (Refs #2178): Die Prüfung vor dem Virenscan spart nur unnötige Arbeit; entschieden wird im Speicherschritt, unmittelbar bevor der Anhang eingetragen wird — dort wird die Summe unter einer kurzen Sperre je Einrichtung ein zweites Mal gelesen. Überzogen wird das Kontingent damit um **0 Byte**. Virenscan und Verschlüsselung laufen weiterhin ohne jede Sperre; serialisiert ist allein der kurze Datenbankteil. Wird der Upload erst dort abgewiesen, sieht die Fachkraft dieselbe Meldung wie sonst, und es bleibt weder eine verschlüsselte Datei noch ein Anhangseintrag zurück.
 
 #### Sichere Downloads (RFC 5987)
 
