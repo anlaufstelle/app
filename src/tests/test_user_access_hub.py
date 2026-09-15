@@ -5,12 +5,14 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import override_settings
 from django.urls import reverse
 
 from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
 from core.models import AuditLog, User
+from core.services import user_access as user_access_service
 from core.services.security import LOCKOUT_THRESHOLD
 from core.services.user_access import (
     _assert_actor,
@@ -459,6 +461,42 @@ class TestUpdateUserAccess:
 
 
 class TestInviteAndUnlockActions:
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_super_admin_can_resend_super_admin_invite_and_revoke_password(self, super_admin_user):
+        invited = User(
+            username="pending_super_admin",
+            email="pending-super-admin@example.org",
+            role=User.Role.SUPER_ADMIN,
+            facility=None,
+            must_change_password=True,
+        )
+        invited.set_password("NochNutzbar-123")
+        invited.save()
+
+        with patch(
+            "core.services.user_access.revoke_credentials",
+            wraps=user_access_service.revoke_credentials,
+        ) as revoke:
+            sent = user_access_service.resend_invitation_for_any_user(invited, actor=super_admin_user)
+
+        assert sent is True
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [invited.email]
+        invited.refresh_from_db()
+        assert invited.has_usable_password() is False
+        revoke.assert_called_once()
+        row = AuditLog.objects.get(action=AuditLog.Action.USER_INVITE_SENT, user=invited)
+        assert row.actor == super_admin_user
+        assert row.detail["trigger"] == "invite_resend"
+
+    def test_any_user_resend_rejects_facility_admin(self, facility, admin_user):
+        invited = _pending_invite(facility, username="pending_forbidden_any_user")
+
+        with pytest.raises(PermissionDenied):
+            user_access_service.resend_invitation_for_any_user(invited, actor=admin_user)
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.USER_INVITE_SENT, user=invited).exists()
+
     def test_pending_invite_can_be_resent_and_is_audited(self, client, facility, admin_user):
         invited = _pending_invite(facility)
         client.force_login(admin_user)

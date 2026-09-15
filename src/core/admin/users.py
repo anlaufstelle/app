@@ -19,6 +19,7 @@ from core.services.audit.chain import advisory_lock_id
 from core.services.security import is_locked as user_is_locked
 from core.services.security import send_invite_email
 from core.services.security import unlock as unlock_user
+from core.services.user_access import resend_invitation_for_any_user, resend_user_invitation
 
 _INITIAL_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 _INITIAL_PASSWORD_LENGTH = 12
@@ -216,6 +217,42 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
         messages.info(request, "Keine Änderung — alle ausgewählten Nutzenden waren bereits MFA-pflichtig.")
 
 
+@admin.action(description="Einladung erneut senden (Setup-Link)")
+def resend_invitation_for_selected_users(modeladmin, request, queryset):
+    """Ausstehende Einladungen rollen- und einrichtungsgetreu erneut senden."""
+    from core.signals.audit import get_client_ip
+
+    actor = request.user
+    ip_address = get_client_ip(request)
+    is_super_admin = getattr(actor, "is_super_admin", False)
+    facility = getattr(request, "current_facility", None) or getattr(actor, "facility", None)
+
+    for target in queryset:
+        if not is_super_admin and (
+            facility is None
+            or not getattr(actor, "is_facility_admin", False)
+            or target.facility_id != facility.pk
+            or target.is_super_admin
+        ):
+            messages.warning(request, f"{target.username}: Erneuter Einladungsversand nicht erlaubt.")
+            continue
+
+        try:
+            if is_super_admin:
+                sent = resend_invitation_for_any_user(target, actor=actor, ip_address=ip_address)
+            else:
+                sent = resend_user_invitation(target, facility=facility, actor=actor, ip_address=ip_address)
+        except (PermissionDenied, ValidationError) as exc:
+            reason = "; ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
+            messages.warning(request, f"{target.username}: {reason}")
+            continue
+
+        if sent:
+            messages.success(request, f"Einladungslink an {target.email} gesendet")
+        else:
+            messages.error(request, f"Einladung an {target.email or target.username} konnte nicht versendet werden.")
+
+
 @admin.register(User, site=anlaufstelle_admin_site)
 class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     form = UserChangeForm
@@ -223,7 +260,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "display_name", "role", "facility", "is_active")
     list_filter = ("role", "facility", "is_active", "is_staff")
-    actions = [unlock_selected_users, enforce_mfa_for_selected_users]
+    actions = [unlock_selected_users, enforce_mfa_for_selected_users, resend_invitation_for_selected_users]
     fieldsets = BaseUserAdmin.fieldsets + (
         (
             "Anlaufstelle",
@@ -375,7 +412,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
                 send_invite_email(obj)
             except Exception as exc:  # pragma: no cover - Mail-Backend-Fehler
                 if obj.role == User.Role.SUPER_ADMIN:
-                    retry_hint = "Kein erneuter Versand für super_admin-Konten: Konto löschen und neu anlegen."
+                    retry_hint = "Einladung im Django-Admin über die Aktion „Einladung erneut senden“ auslösen."
                 else:
                     retry_hint = "Einladung unter Verwaltung → Zugänge per „Einladung erneut senden“ auslösen."
                 messages.error(

@@ -232,6 +232,21 @@ def resend_user_invitation(user: User, *, facility, actor, ip_address: str | Non
     return _deliver_invitation(target, actor, "invite_resend", ip_address)
 
 
+def resend_invitation_for_any_user(target: User, *, actor, ip_address: str | None = None) -> bool:
+    """Einladung installationsweit durch die Systemadministration erneut senden."""
+    if not getattr(actor, "is_authenticated", False) or not getattr(actor, "is_super_admin", False):
+        raise PermissionDenied("Der installationsweite Einladungsversand ist nur für super_admin erlaubt.")
+
+    if not target.email or not target.must_change_password:
+        raise ValidationError(_("Ein Setup-Link kann nur für einen noch nicht eingerichteten Zugang versendet werden."))
+
+    if target.has_usable_password():
+        target.set_unusable_password()
+        target.save(update_fields=["password"])
+        revoke_credentials(target, reason=RevocationReason.PRIVILEGE_REVOKED)
+    return _deliver_invitation(target, actor, "invite_resend", ip_address)
+
+
 def unlock_managed_user(user: User, *, facility, actor, ip_address: str | None = None) -> bool:
     _assert_actor(facility, actor)
     target = get_manageable_user(facility, user.pk)

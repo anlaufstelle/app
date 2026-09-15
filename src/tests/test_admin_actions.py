@@ -10,10 +10,14 @@ Abgedeckt:
 from unittest.mock import patch
 
 import pytest
+from django.contrib import messages as django_messages
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.core import mail
+from django.test import override_settings
 
 from core.admin import FieldTemplateAdmin, UserAdmin, unlock_selected_users
+from core.admin import users as user_admin_module
 from core.models import AuditLog, FieldTemplate, User
 
 
@@ -147,7 +151,7 @@ class TestUserAdminSaveModel:
         ), messages
         assert all("„Setup-Link erneut senden“" not in message for message in messages)
 
-    def test_failed_super_admin_invite_explains_no_resend_path(self, rf, super_admin_user):
+    def test_failed_super_admin_invite_names_admin_action(self, rf, super_admin_user):
         new_user = User(
             username="failedsuperinvite",
             email="failedsuperinvite@example.com",
@@ -161,9 +165,9 @@ class TestUserAdminSaveModel:
 
         messages = [str(message) for message in request._messages]
         assert any(
-            "Kein erneuter Versand für super_admin-Konten" in message and "Konto löschen und neu anlegen" in message
-            for message in messages
+            "Django-Admin" in message and "Aktion „Einladung erneut senden“" in message for message in messages
         ), messages
+        assert all("Konto löschen und neu anlegen" not in message for message in messages)
         assert all("„Setup-Link erneut senden“" not in message for message in messages)
 
     def test_save_model_without_email_sets_initial_password(self, rf, admin_user, facility):
@@ -192,6 +196,177 @@ class TestUserAdminSaveModel:
             admin_cls.save_model(request, staff_user, form=None, change=True)
 
         mock_send.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestResendInvitationAdminAction:
+    @staticmethod
+    def _pending_user(*, username, email, role, facility, usable_password=False):
+        user = User(
+            username=username,
+            email=email,
+            role=role,
+            facility=facility,
+            must_change_password=True,
+        )
+        if usable_password:
+            user.set_password("NochNutzbar-123")
+        else:
+            user.set_unusable_password()
+        user.save()
+        return user
+
+    def test_action_is_registered_on_user_admin(self):
+        assert user_admin_module.resend_invitation_for_selected_users in UserAdmin.actions
+        assert (
+            user_admin_module.resend_invitation_for_selected_users.short_description
+            == "Einladung erneut senden (Setup-Link)"
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_super_admin_resends_selected_super_admin_invite(self, rf, super_admin_user):
+        invited = self._pending_user(
+            username="admin_action_super",
+            email="admin-action-super@example.org",
+            role=User.Role.SUPER_ADMIN,
+            facility=None,
+            usable_password=True,
+        )
+        request = _make_admin_request(rf, super_admin_user)
+
+        user_admin_module.resend_invitation_for_selected_users(
+            UserAdmin(User, AdminSite()), request, User.objects.filter(pk=invited.pk)
+        )
+
+        assert len(mail.outbox) == 1
+        invited.refresh_from_db()
+        assert invited.has_usable_password() is False
+        row = AuditLog.objects.get(action=AuditLog.Action.USER_INVITE_SENT, user=invited)
+        assert row.actor == super_admin_user
+        assert row.detail["trigger"] == "invite_resend"
+        assert row.ip_address == "127.0.0.1"
+        action_messages = list(request._messages)
+        assert any(
+            message.level == django_messages.SUCCESS and invited.email in str(message) for message in action_messages
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_facility_admin_cannot_resend_super_admin_invite(self, rf, facility, admin_user):
+        invited = self._pending_user(
+            username="admin_action_forbidden_super",
+            email="forbidden-super@example.org",
+            role=User.Role.SUPER_ADMIN,
+            facility=facility,
+        )
+        request = _make_admin_request(rf, admin_user)
+        request.current_facility = facility
+
+        user_admin_module.resend_invitation_for_selected_users(
+            UserAdmin(User, AdminSite()), request, User.objects.filter(pk=invited.pk)
+        )
+
+        assert mail.outbox == []
+        assert not AuditLog.objects.filter(action=AuditLog.Action.USER_INVITE_SENT, user=invited).exists()
+        action_messages = list(request._messages)
+        assert any(
+            message.level == django_messages.WARNING and "nicht erlaubt" in str(message) for message in action_messages
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_facility_admin_cannot_resend_foreign_facility_invite(self, rf, facility, admin_user, foreign_staff):
+        foreign_staff.email = "foreign-pending@example.org"
+        foreign_staff.must_change_password = True
+        foreign_staff.set_unusable_password()
+        foreign_staff.save(update_fields=["email", "must_change_password", "password"])
+        request = _make_admin_request(rf, admin_user)
+        request.current_facility = facility
+
+        user_admin_module.resend_invitation_for_selected_users(
+            UserAdmin(User, AdminSite()), request, User.objects.filter(pk=foreign_staff.pk)
+        )
+
+        assert mail.outbox == []
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.USER_INVITE_SENT,
+            user=foreign_staff,
+        ).exists()
+        action_messages = list(request._messages)
+        assert any(
+            message.level == django_messages.WARNING and "nicht erlaubt" in str(message) for message in action_messages
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_invalid_selected_accounts_warn_without_sending(self, rf, facility, super_admin_user):
+        without_email = self._pending_user(
+            username="admin_action_without_email",
+            email="",
+            role=User.Role.STAFF,
+            facility=facility,
+        )
+        established = self._pending_user(
+            username="admin_action_established",
+            email="established@example.org",
+            role=User.Role.STAFF,
+            facility=facility,
+        )
+        established.must_change_password = False
+        established.save(update_fields=["must_change_password"])
+        request = _make_admin_request(rf, super_admin_user)
+
+        user_admin_module.resend_invitation_for_selected_users(
+            UserAdmin(User, AdminSite()), request, User.objects.filter(pk__in=[without_email.pk, established.pk])
+        )
+
+        assert mail.outbox == []
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.USER_INVITE_SENT, user__in=[without_email, established]
+        ).exists()
+        action_messages = list(request._messages)
+        warnings = [message for message in action_messages if message.level == django_messages.WARNING]
+        assert len(warnings) == 2
+        assert all("noch nicht eingerichteten Zugang" in str(message) for message in warnings)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_facility_admin_resends_own_facility_invite(self, rf, facility, admin_user):
+        invited = self._pending_user(
+            username="admin_action_facility",
+            email="admin-action-facility@example.org",
+            role=User.Role.STAFF,
+            facility=facility,
+            usable_password=True,
+        )
+        request = _make_admin_request(rf, admin_user)
+
+        user_admin_module.resend_invitation_for_selected_users(
+            UserAdmin(User, AdminSite()), request, User.objects.filter(pk=invited.pk)
+        )
+
+        assert len(mail.outbox) == 1
+        invited.refresh_from_db()
+        assert invited.has_usable_password() is False
+        row = AuditLog.objects.get(action=AuditLog.Action.USER_INVITE_SENT, user=invited)
+        assert row.actor == admin_user
+        assert row.detail["trigger"] == "invite_resend"
+        assert row.facility == facility
+
+    def test_mail_backend_failure_is_an_error_without_exception_detail(self, rf, super_admin_user):
+        invited = self._pending_user(
+            username="admin_action_mail_failure",
+            email="mail-failure@example.org",
+            role=User.Role.SUPER_ADMIN,
+            facility=None,
+        )
+        request = _make_admin_request(rf, super_admin_user)
+
+        with patch("core.services.user_access.send_invite_email", side_effect=RuntimeError("SMTP secret detail")):
+            user_admin_module.resend_invitation_for_selected_users(
+                UserAdmin(User, AdminSite()), request, User.objects.filter(pk=invited.pk)
+            )
+
+        assert not AuditLog.objects.filter(action=AuditLog.Action.USER_INVITE_SENT, user=invited).exists()
+        action_messages = list(request._messages)
+        assert any(message.level == django_messages.ERROR for message in action_messages)
+        assert all("SMTP secret detail" not in str(message) for message in action_messages)
 
 
 @pytest.mark.django_db

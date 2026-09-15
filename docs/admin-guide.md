@@ -597,7 +597,7 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 
 Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-Token gilt nicht auf `/invite/` und umgekehrt) und invalidieren den Token automatisch, sobald der Nutzer sein erstes Passwort gesetzt hat.
 
-**Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht.
+**Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann die Anwendungsbetreuung in der Zugangs-Detailansicht über **Einladung erneut senden** einen neuen Token ausstellen und eine frische Mail verschicken lassen. Der Button erscheint nur, solange die Einrichtung des Kontos aussteht. Für `super_admin`-Konten und technische Sonderfälle markiert die Systemadministration stattdessen die betreffenden Konten unter **Core → Benutzer** im Django-Admin und wählt die Aktion **Einladung erneut senden (Setup-Link)**. Die Aktion verarbeitet nur Konten mit hinterlegter E-Mail und noch ausstehender Einrichtung; ein gegebenenfalls noch nutzbares Initialpasswort wird dabei entwertet.
 
 **SMTP-Voraussetzungen und Fehlersuche:** Technisch ist keiner dieser Werte
 Pflicht — ohne Angabe startet die Anwendung mit `EMAIL_HOST=localhost`, Port
