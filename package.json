@@ -13,7 +13,7 @@
     "@alpinejs/csp": "3.17.2",
     "@tailwindcss/cli": "^4.0.0",
     "chart.js": "4.5.1",
-    "dexie": "4.4.5",
+    "dexie": "4.4.6",
     "fake-indexeddb": "6.2.5",
     "htmx.org": "2.0.10",
     "jsdom": "29.1.1",
