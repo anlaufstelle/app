@@ -254,7 +254,7 @@ healthcheck:
   start_period: 40s
 ```
 
-`curl -f` failt bei HTTP ≥ 400 → der Container wird bei DB-/Key-Ausfall (503) `unhealthy`. **Achtung:** `degraded` (200) macht den Container **nicht** unhealthy — das ist gewollt (Last-Balancer soll den Pod bei ClamAV-Ausfall nicht rauswerfen), bedeutet aber, dass degraded-Zustände **separat** überwacht werden müssen. So verhält sich auch [`docker-compose.prod.yml`](../docker-compose.prod.yml) (reiner `urlopen`-Aufruf, nur der HTTP-Code zählt).
+`curl -f` failt bei HTTP ≥ 400 → der Container wird bei DB-/Key-Ausfall (503) `unhealthy`. **Achtung:** `degraded` (200) macht den Container **nicht** unhealthy — das ist gewollt (Last-Balancer soll den Pod bei ClamAV-Ausfall nicht rauswerfen), bedeutet aber, dass degraded-Zustände **separat** überwacht werden müssen. Auch [`docker-compose.prod.yml`](../docker-compose.prod.yml) parst den Response-Body: Nur `error` (HTTP 503) macht `web` `unhealthy`, `degraded` nicht.
 
 > **Ausnahme `docker-compose.dev.yml`:** Dessen `web`-Healthcheck parst den Body und verlangt `status == "ok"` — dort macht **jeder** `degraded`-Zustand den Container `unhealthy`, und `caddy` (`depends_on: service_healthy`) startet nicht. Das ist für die Dev-Instanz beabsichtigt (streng), heißt aber: Bevor eine bestehende Installation mit diesem Compose-File aktualisiert wird, muss `manage.py check_db_roles` Exit `0` liefern — sonst zieht die neue `db_role_posture`-Prüfung (Refs #793) den Status auf `degraded` und der Stack fährt nicht hoch. Auf frisch per [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) initialisierten Clustern ist das automatisch erfüllt.
 

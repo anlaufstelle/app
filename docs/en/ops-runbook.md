@@ -1,5 +1,7 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-15: the production Compose healthcheck treats only `error`/HTTP 503 as unhealthy while `degraded` remains available and requires separate monitoring (#2173).
 > Synchronization update 2026-09-12: manifest-bound media requirements, empty-audit outcomes, both explicit restore-set selectors, atomic audit HWM installation, pre-rotation off-site transfer, exact manifest completeness checks, and idempotent cron log setup now mirror the German operator guidance (#2222).
+> Most recently synchronized on 2026-09-11 (§ 5.8 the `/health/` `smtp` field named as an additional quick check between the `sendtestemail` exit code and actual delivery; the paragraph now separates the technical defaults (nothing is fail-closed) from the operational necessity per variable, and states that `EMAIL_USE_TLS` only wires up STARTTLS -- implicit TLS/SMTPS via Django's `EMAIL_USE_SSL` is not supported by this deployment path, #2089).
 > Previously synchronized on 2026-09-11 (§ 6.5b step 2 the deputy wording follows the current governance state -- escalation is paused while no second person is a maintainer; § 6.5c the paragraph coupling the advisory cadence to a regulatory reporting duty was dropped together with the removed compliance memo, and the § 8 SBOM rationale is worded neutrally, #2207).
 > Previously synchronized on 2026-09-10 (§ 6.6 the production restore drill checks `TMPDIR` capacity, verifies and probe-extracts the matching media archive in one pass, and only marks success after step 6 while the sentinel drill remains a separate volume-persistence check, #2195; §§ 3.1/5.5 open CSV import source files count during quota enforcement while the usage display remains attachment-based, #2180; the alternative deployment path reworded to "k8s"/"custom orchestration", #2202; pre-1.0 migration/historical framing removed -- the pre-0.23 host-crontab migration subsection, the database-role version-dated markers, and the pre-1.0-installation framing in the role-split recovery section (§ 9.6) are now described as current state or as a misconfiguration-recovery path, #2205).
 > Previously synchronized on 2026-09-07 (§ 3.5 bundled package selection and replacement-not-addition guard, #2134).
@@ -1367,11 +1369,13 @@ Findings are logged with `reason=virus_detected` and the reported signature.
 as well as the alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 With an active scanner and an unreachable daemon, the overall status is set to
 `"degraded"`, the HTTP status stays 200 (the hard block happens
-on upload, not on the health check). The production stack overrides the
-JSON-aware image healthcheck with a plain HTTP request. Because `degraded`
-still returns HTTP 200, the `web` container can remain `healthy` during a
-scanner outage. External monitoring must therefore evaluate the detail payload
-in an authorized session; the HTTP status alone does not detect the outage.
+on upload, not on the health check). The container healthcheck in the Dockerfile
+reads the JSON `status` and reports unhealthy on `degraded`. The production Compose
+file overrides this image check: only `error` or HTTP 503 makes `web` unhealthy, so
+neither `caddy` (`service_healthy`) nor `initial-setup.sh` fails because of a
+non-critical incident. `degraded` remains HTTP 200 and must be monitored through the
+token detail path, the compliance dashboard, and external monitoring (see the
+[monitoring guide](../monitoring-guide.md)).
 
 ### 7.4 Database Updates (Signatures)
 
@@ -2826,5 +2830,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.96.0 -->
-<!-- translation-date: 2026-09-12 -->
-<!-- source-hash: 6c7a153861c7404fad411501ed53fd4cf4fcbf0c -->
+<!-- translation-date: 2026-09-15 -->
+<!-- source-hash: 6f30190ac457c69b0e012567c2eda76924f1fae4 -->

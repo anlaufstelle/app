@@ -270,7 +270,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import json, urllib.request; ok = json.load(urllib.request.urlopen('http://localhost:8000/health/'))['status'] == 'ok'; raise SystemExit(0 if ok else 1)\""]
+      # Nur kritische App-Zustaende sperren caddy; degraded bleibt erreichbar.
+      test: ["CMD-SHELL", "python -c \"import json, urllib.request; ok = json.load(urllib.request.urlopen('http://localhost:8000/health/'))['status'] != 'error'; raise SystemExit(0 if ok else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3

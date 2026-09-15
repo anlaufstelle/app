@@ -1367,12 +1367,13 @@ Funde werden mit `reason=virus_detected` und der gemeldeten Signatur geloggt.
 sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs #798).
 Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
 `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
-beim Upload, nicht am Healthcheck). Der Prod-Stack ueberschreibt den
-JSON-auswertenden Image-Healthcheck mit einem reinen HTTP-Aufruf. Weil
-`degraded` weiterhin HTTP 200 liefert, kann der `web`-Container bei einem
-Scanner-Ausfall `healthy` bleiben. Externes Monitoring muss deshalb den
-Detail-Payload in einer autorisierten Session auswerten; der HTTP-Code allein
-erkennt den Ausfall nicht.
+beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
+liest den JSON-`status` und meldet bei `degraded` ungesund. Der Produktions-Compose
+ersetzt diesen Image-Check: Nur `error` beziehungsweise HTTP 503 macht `web`
+ungesund, damit weder `caddy` (`service_healthy`) noch `initial-setup.sh` an einer
+nicht-kritischen Störung scheitern. `degraded` bleibt HTTP 200 und muss über den
+Token-Detailpfad, das Compliance-Dashboard und externes Monitoring überwacht werden
+(siehe [Monitoring-Guide](monitoring-guide.md)).
 
 ### 7.4 Datenbank-Updates (Signaturen)
 

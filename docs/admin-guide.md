@@ -1500,7 +1500,7 @@ Häufige Ursachen:
 
 ### Problem: `web` wird `unhealthy`, `caddy` startet nicht
 
-Der Container-Healthcheck ruft `http://localhost:8000/health/` auf. Fehlt `localhost` in `ALLOWED_HOSTS`, weist Django diese interne Probe ab und `caddy` bleibt im Zustand `Created`.
+Der Container-Healthcheck ruft `http://localhost:8000/health/` auf. Im Produktions-Compose lösen nur `error`/HTTP 503 (Datenbank oder Encryption-Key) sowie eine abgewiesene Probe wie `DisallowedHost` diesen Zustand aus; `degraded` nicht. Fehlt `localhost` in `ALLOWED_HOSTS`, weist Django diese interne Probe ab und `caddy` bleibt im Zustand `Created`.
 
 ```bash
 docker compose -f docker-compose.prod.yml logs web | grep DisallowedHost

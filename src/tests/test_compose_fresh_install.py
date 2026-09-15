@@ -32,7 +32,7 @@ def test_cron_disables_the_inherited_image_healthcheck() -> None:
     assert cron["healthcheck"] == {"disable": True}
 
 
-@pytest.mark.parametrize(("status", "expected_rc"), [("ok", 0), ("degraded", 1), ("error", 1)])
+@pytest.mark.parametrize(("status", "expected_rc"), [("ok", 0), ("degraded", 0), ("error", 1)])
 def test_web_healthcheck_exit_code_follows_json_status(status: str, expected_rc: int) -> None:
     healthcheck = _load(PROD_PATH)["services"]["web"]["healthcheck"]["test"]
     python_command = shlex.split(healthcheck[1])
@@ -43,6 +43,27 @@ def test_web_healthcheck_exit_code_follows_json_status(status: str, expected_rc:
     )
     result = subprocess.run([sys.executable, "-c", mock + expression], timeout=10)
     assert result.returncode == expected_rc
+
+
+def test_web_healthcheck_http_503_is_unhealthy() -> None:
+    healthcheck = _load(PROD_PATH)["services"]["web"]["healthcheck"]["test"]
+    expression = shlex.split(healthcheck[1])[2]
+    mock = (
+        "import urllib.error, urllib.request; "
+        "urllib.request.urlopen = lambda *_: (_ for _ in ()).throw("
+        "urllib.error.HTTPError('http://localhost:8000/health/', 503, 'Unavailable', {}, None)); "
+    )
+
+    result = subprocess.run([sys.executable, "-c", mock + expression], timeout=10)
+
+    assert result.returncode != 0
+
+
+def test_caddy_waits_for_the_critical_only_web_healthcheck() -> None:
+    compose = _load(PROD_PATH)
+    assert compose["services"]["caddy"]["depends_on"]["web"]["condition"] == "service_healthy"
+    expression = shlex.split(compose["services"]["web"]["healthcheck"]["test"][1])[2]
+    assert "!= 'error'" in expression
 
 
 def test_clamav_has_a_dedicated_egress_network() -> None:
