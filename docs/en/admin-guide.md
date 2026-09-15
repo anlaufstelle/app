@@ -159,7 +159,7 @@ The following tables document application settings and operating variables (see 
 | `BACKUP_HOST_DIR` | host scripts and volume mount; `BACKUP_DIR` is the read-only target in `web` |
 | `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` only with the additional `compose.legal.yml`, as shown under [Mandatory information](#configure-mandatory-information-imprintprivacy) |
 
-> Every variable named in this table reaches its stated service through the delivered allowlist. A `compose.override.yml` is needed only for additional variable names not listed here.
+> Every variable assigned to `web` in this table reaches the service through the delivered allowlist; `BACKUP_HOST_DIR` acts through host scripts and the volume mount, and `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` only with the additional `compose.legal.yml`. A `compose.override.yml` is needed only for additional variable names not listed here.
 
 Set configuration values in `.env`, then recreate `web` with the complete **file set**. As soon as a Compose invocation contains at least one explicit `-f`, Compose does not load `compose.override.yml` automatically. Every recreate command below therefore builds the list in the fixed order `docker-compose.prod.yml`, `compose.legal.yml` (if configured), `compose.override.yml` (if configured):
 
@@ -2195,4 +2195,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 35c8ca142cb94c9a4b11adf3e42c3d4b22d11277 -->
+<!-- source-hash: c21439bbdd804eb3ed69305f320c92f6e396b072 -->

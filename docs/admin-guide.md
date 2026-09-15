@@ -150,7 +150,7 @@ Die folgenden Tabellen dokumentieren App-Settings und Betriebsvariablen (siehe [
 | `BACKUP_HOST_DIR` | Host-Skripte und Volume-Mount; `BACKUP_DIR` ist das read-only Ziel in `web` |
 | `LEGAL_IMPRINT_FILE`, `LEGAL_PRIVACY_FILE` | `web` nur mit dem zusätzlichen `compose.legal.yml`, wie unter [Pflichtangaben](#pflichtangaben-impressumdatenschutz-einrichten) gezeigt |
 
-> Alle in dieser Tabelle genannten Variablen erreichen ihren angegebenen Dienst über die ausgelieferte Allowlist. Eine `compose.override.yml` ist nur für zusätzliche, hier nicht genannte Variablennamen nötig.
+> Alle in dieser Tabelle `web` zugeordneten Variablen erreichen den Dienst über die ausgelieferte Allowlist; `BACKUP_HOST_DIR` wirkt über Host-Skripte und Volume-Mount, `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` nur mit dem zusätzlichen `compose.legal.yml`. Eine `compose.override.yml` ist nur für zusätzliche, hier nicht genannte Variablennamen nötig.
 
 Setzen Sie Konfigurationswerte in `.env` und erstellen Sie `web` mit dem vollständigen **Dateisatz** neu. Sobald ein Compose-Aufruf mindestens ein ausdrückliches `-f` enthält, lädt Compose `compose.override.yml` nicht automatisch. Deshalb bauen alle folgenden Recreate-Befehle die Liste in der festen Reihenfolge `docker-compose.prod.yml`, `compose.legal.yml` (falls eingerichtet), `compose.override.yml` (falls eingerichtet) auf:
 
