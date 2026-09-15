@@ -390,6 +390,47 @@
         }
     }
 
+    /** Diese EINE Navigation referrerfrei machen (Refs #2179).
+     *
+     * Das Dokument wird mit ``Referrer-Policy: strict-origin-when-cross-origin``
+     * ausgeliefert (``settings/prod.py``). Ein https->https-Sprung auf eine
+     * fremde Origin schickt dem Sprungziel damit ``Referer: https://<origin>/``
+     * — die Policy schneidet zwar den Pfad ab, aber im Server-Log des Ziels
+     * (per Vorgabe ein Dritter) steht, dass unmittelbar zuvor die Instanz einer
+     * Beratungsstelle offen war. Fuer ein Feature, dessen Zweck Diskretion ist,
+     * ist das ein Informationsleck.
+     *
+     * ``<meta name="referrer" content="no-referrer">`` wirkt fuer die
+     * NACHFOLGENDEN Navigationen desselben Dokuments und laesst den
+     * ausgelieferten Header aller anderen Seiten unberuehrt — deshalb wird es
+     * erst hier, unmittelbar vor dem Sprung, eingehaengt. Der Weg ueber die
+     * DOM-API bleibt CSP-konform (kein Inline-Skript, kein ``style``/``script``).
+     *
+     * Die Alternative, statt ``location.replace`` einen synthetischen
+     * ``<a rel="noreferrer">``-Klick zu feuern, ist die schlechtere: sie kostet
+     * den Verlaufs-ERSATZ, die App-Adresse bliebe also im Zurueck-Verlauf
+     * stehen — genau das, was der Sprung vermeiden soll.
+     */
+    function _suppressReferrer() {
+        try {
+            var head = document.head;
+            if (!head) return;
+            // Ein vorhandenes Meta ueberschreiben statt ein zweites danebenzulegen:
+            // welches von mehreren gilt, ist nichts, worauf sich die Flucht
+            // verlassen sollte.
+            var vorhandene = head.querySelectorAll('meta[name="referrer"]');
+            for (var i = 0; i < vorhandene.length; i += 1) {
+                if (vorhandene[i].parentNode) vorhandene[i].parentNode.removeChild(vorhandene[i]);
+            }
+            var meta = document.createElement("meta");
+            meta.setAttribute("name", "referrer");
+            meta.setAttribute("content", "no-referrer");
+            head.appendChild(meta);
+        } catch (_e) {
+            // best-effort — eine gescheiterte Politik darf die Flucht nicht aufhalten.
+        }
+    }
+
     /** Gibt ein Promise zurueck, das nach der Navigation aufloest (fuer Tests). */
     function quickExit() {
         var target = _config().url;
@@ -402,6 +443,7 @@
             } else {
                 _warnKeyDropFailed(status);
             }
+            _suppressReferrer();
             window.location.replace(target);
         });
     }

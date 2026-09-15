@@ -193,7 +193,12 @@ Schlüssel blieb im Normalfall liegen, nicht nur im Ausnahmefall. Der E2E-Fall l
 Schlüsselzeile deshalb **nach** dem Dokumentwechsel. Bis zur Fix-Runde 3 konnte ein
 gescheiterter Delete zudem als Erfolg durchgehen und einen `key-cleared`-Broadcast
 auslösen, der den Schlüssel in einem Fremd-Tab über `_applyKeyCleared` sogar **wieder
-verankert** hätte; das schließt der Melde- und Rücklesepfad aus Punkt 4.
+verankert** hätte; das schließt der Melde- und Rücklesepfad aus Punkt 4. Seit
+#2179 hängt der Sprung
+außerdem unmittelbar vor `location.replace` ein
+`<meta name="referrer" content="no-referrer">` in den `<head>`: Das Sprungziel
+per Vorgabe ein Dritter — erfährt die Herkunft nicht mehr über den `Referer`, und die
+`Referrer-Policy` aller übrigen Seiten bleibt unverändert.
 
 ### TB2/TB3 — Django ↔ PostgreSQL
 

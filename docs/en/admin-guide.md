@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-15: § 2.3 the quick-exit target row now states that the target does not learn the origin of the jump (no `Referer` header) (#2179).
 > Synchronization update 2026-09-15: § 2.4 documents the Django-admin resend action for pending `super_admin` invitations (#2223).
 > Synchronization update 2026-09-15: the production Compose allowlist, configurable ClamAV host, detail-token routing, delivered ClamAV egress path, and critical-only production healthcheck semantics are described as the current state (#2173).
 > Previously synchronized on 2026-09-11: the expected `core.W004` warning when Redis has no password, the root-cron backup-directory contract, complete optional Compose file sets for every start and recreate command, ClamAV production/external-scanner limits, and signature-download egress diagnostics (#2218).
@@ -558,7 +559,7 @@ Under **Core > Settings** in the admin, you can configure the following key fiel
 | Retention qualified (days) | 3650 | Deletion period after case closure ("With additional details" level) |
 | Retention handover notes (days) | 90 | Deletion period for the manual shift notes in the handover (#2042). Deliberately short: a duty note is not a case record. The run deletes them **permanently** (no trash) |
 | Facility-wide 2FA enforcement | false | Enforces TOTP 2FA for **all** users of this facility (see [Section 2.7](#27-two-factor-authentication-2fa)) |
-| Quick-exit target | `https://www.wikipedia.org/` | Address opened by the **Quick exit** button and the shortcuts `Ctrl`+`Shift`+`X` / `Shift`+`Esc`. Required field, `http`/`https` only. Pick an innocuous public page without a cookie banner -- it ends up in the device history afterwards, and a consent dialog costs exactly the seconds the action is meant to save |
+| Quick-exit target | `https://www.wikipedia.org/` | Address opened by the **Quick exit** button and the shortcuts `Ctrl`+`Shift`+`X` / `Shift`+`Esc`. Required field, `http`/`https` only. Pick an innocuous public page without a cookie banner -- it ends up in the device history afterwards, and a consent dialog costs exactly the seconds the action is meant to save. The target does not learn where the visitor came from (no `Referer`) |
 | Privacy screen on window or tab change | false | Covers the content as soon as the window loses focus or the tab moves to the background. Released by click or key press, without a timer |
 
 > **Recommendation for women's shelters, violence counselling and awareness teams (#2136):** documentation there happens in the presence of endangering persons or in loud, public places. Turn the **privacy screen on** and review the **target page** for your region -- it should fit the device to an outsider and must not read as an "escape page". The button itself is always active and cannot be switched off; the shortcuts are fixed. Both fields are recorded in the audit log with old and new values (`SETTINGS_CHANGE`).
@@ -2196,4 +2197,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.96.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 699e8ab29593f921f16537bd96350003223e8a2e -->
+<!-- source-hash: 92ac513645370dcbd98e528182c74121f078bfeb -->

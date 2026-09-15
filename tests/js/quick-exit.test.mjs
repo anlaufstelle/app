@@ -527,6 +527,114 @@ describe("Schluessel-Loeschung vor der Navigation (R-L3-9)", () => {
     });
 });
 
+describe("Referrer beim Sprung auf die Zielseite", () => {
+    // Refs #2179: Das Dokument liefert in Produktion
+    // ``Referrer-Policy: strict-origin-when-cross-origin``. Ein https->https-
+    // Sprung auf eine fremde Origin schickt dem Sprungziel damit
+    // ``Referer: https://<app-origin>/`` — dessen Server-Log verzeichnet, dass
+    // unmittelbar zuvor eine Beratungs-Instanz offen war. Fuer ein Feature,
+    // dessen Zweck Diskretion ist, ist das ein Informationsleck an einen
+    // Dritten. Genau diese EINE Navigation wird referrerfrei gemacht, ohne die
+    // Politik der uebrigen Links des Dokuments anzufassen.
+
+    function referrerMetas() {
+        return Array.from(document.head.querySelectorAll('meta[name="referrer"]'));
+    }
+
+    beforeEach(() => {
+        // ``freshLoad`` setzt nur den ``<body>`` zurueck — der ``<head>`` der
+        // jsdom-Umgebung ueberlebt den Modul-Neustart.
+        referrerMetas().forEach((meta) => meta.parentNode.removeChild(meta));
+    });
+
+    afterEach(() => {
+        referrerMetas().forEach((meta) => meta.parentNode.removeChild(meta));
+    });
+
+    it("haengt no-referrer in den <head>, BEVOR es navigiert", async () => {
+        const { replace } = await freshLoad({ dataset: online() });
+
+        // Die Reihenfolge ist der ganze Punkt: ein Meta, das erst NACH
+        // ``location.replace`` im Dokument steht, kommt fuer die laufende
+        // Navigation zu spaet. Deshalb wird der Zustand IM Moment des Sprungs
+        // gelesen, nicht danach.
+        let politikBeimSprung = "REPLACE-NICHT-GERUFEN";
+        replace.mockImplementation(() => {
+            const meta = document.head.querySelector('meta[name="referrer"]');
+            politikBeimSprung = meta ? meta.getAttribute("content") : null;
+        });
+
+        await window.quickExit.trigger();
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+        expect(politikBeimSprung).toBe("no-referrer");
+        // und es bleibt auch danach stehen (die Navigation laeuft asynchron weiter)
+        expect(referrerMetas().map((meta) => meta.getAttribute("content"))).toEqual(["no-referrer"]);
+    });
+
+    it("ueberschreibt eine bereits vorhandene Referrer-Politik statt sie zu ergaenzen", async () => {
+        // Zwei ``meta[name=referrer]`` im Dokument: der Browser wertet das
+        // zuletzt eingefuegte aus, aber darauf will sich die Flucht nicht
+        // verlassen. Nach dem Sprung steht genau EINES da — und zwar unseres.
+        const alt = document.createElement("meta");
+        alt.setAttribute("name", "referrer");
+        alt.setAttribute("content", "unsafe-url");
+        document.head.appendChild(alt);
+
+        const { replace } = await freshLoad({ dataset: online() });
+
+        await window.quickExit.trigger();
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+        expect(referrerMetas().map((meta) => meta.getAttribute("content"))).toEqual(["no-referrer"]);
+    });
+
+    it("laesst die Flucht laufen, wenn das Setzen der Politik scheitert", async () => {
+        // Die Politik ist Best Effort: ein gesperrter ``<head>`` (Erweiterung,
+        // exotische Umgebung) darf die Flucht nicht aufhalten — verdecken und
+        // abmelden sind wichtiger als der Referer. Ohne das ``try/catch`` in
+        // ``_suppressReferrer`` wuerde der Wurf das Promise ablehnen und
+        // ``location.replace`` bliebe ungerufen.
+        const { replace } = await freshLoad({ dataset: online() });
+        const original = document.head.appendChild.bind(document.head);
+        Object.defineProperty(document.head, "appendChild", {
+            configurable: true,
+            writable: true,
+            value: () => {
+                throw new Error("head gesperrt");
+            },
+        });
+        try {
+            await window.quickExit.trigger();
+        } finally {
+            Object.defineProperty(document.head, "appendChild", {
+                configurable: true,
+                writable: true,
+                value: original,
+            });
+        }
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+    });
+
+    it("macht auch die Offline-Flucht auf das Vorgabeziel referrerfrei", async () => {
+        // Offline gibt es keinen Logout — der Sprung findet trotzdem statt,
+        // und das Vorgabeziel ist ein Dritter (Wikipedia).
+        const { replace } = await freshLoad({ dataset: null });
+
+        let politikBeimSprung = "REPLACE-NICHT-GERUFEN";
+        replace.mockImplementation(() => {
+            const meta = document.head.querySelector('meta[name="referrer"]');
+            politikBeimSprung = meta ? meta.getAttribute("content") : null;
+        });
+
+        await window.quickExit.trigger();
+
+        expect(replace).toHaveBeenCalledWith(DEFAULT_URL);
+        expect(politikBeimSprung).toBe("no-referrer");
+    });
+});
+
 describe("Tastenkuerzel", () => {
     it("greift bei Strg+Umschalt+X auch aus einem fokussierten Eingabefeld", async () => {
         const { replace } = await freshLoad({ dataset: online() });

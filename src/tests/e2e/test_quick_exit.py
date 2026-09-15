@@ -113,6 +113,21 @@ def _stub_exit_target(page):
     )
 
 
+def _stub_exit_target_recording(page, kopfzeilen):
+    """Wie ``_stub_exit_target``, haelt aber die Kopfzeilen der Zielanfrage fest.
+
+    ``all_headers()`` liefert die tatsaechlich gesendeten Kopfzeilen in
+    Kleinschreibung — inklusive derer, die der Browser selbst ergaenzt.
+    ``referer`` ist genau so eine.
+    """
+
+    def handler(route):
+        kopfzeilen.append(route.request.all_headers())
+        route.fulfill(status=200, content_type="text/html; charset=utf-8", body=STUB_HTML)
+
+    page.route(EXIT_TARGET_GLOB, handler)
+
+
 # Rohzugriff auf die Krypto-IndexedDB (``crypto.js``: DB ``anlaufstelle-crypto``,
 # Store ``meta``, Zeile ``sessionKey``). Bewusst OHNE ``window.crypto_session``:
 # Die Pruefung laeuft nach dem Verlassen auf der Zielseite, und die muss das
@@ -219,6 +234,58 @@ class TestSchnellVerlassen:
                 page.keyboard.press("Shift+Escape")
 
             assert STUB_MARKER in page.content()
+        finally:
+            context.close()
+
+    def test_sprung_verraet_dem_sprungziel_die_herkunft_nicht(self, browser, base_url, e2e_env, default_quick_exit):
+        """Die Anfrage an das Sprungziel traegt keine ``Referer``-Kopfzeile.
+
+        Refs https://github.com/anlaufstelle/app/issues/2179.
+
+        **Warum das Dokument hier erst eine leckende Politik bekommt:** Der
+        E2E-Server erbt von ``settings/dev.py`` und liefert damit Djangos
+        Default ``Referrer-Policy: same-origin``. Darunter laesst der Browser
+        den Cross-Origin-Referer ohnehin weg — die Zusage waere ohne Zutun
+        gruen, auch OHNE den Fix, und der Fall belegte nichts. Produktion
+        liefert dagegen ``strict-origin-when-cross-origin``
+        (``settings/prod.py``), und http->https ist kein Downgrade: dort geht
+        die Origin mit.
+
+        Statt die Server-Kopfzeile umzubiegen (was jede App-Antwort durch
+        einen Route-Handler zwaenge) setzt der Test die Politik im Dokument
+        selbst — auf ``unsafe-url``, den schaerfsten Fall: Origin UND Pfad,
+        also strikt mehr, als Produktion je sendet. Genau diese Politik muss
+        der Sprung ueberschreiben.
+        """
+        kopfzeilen = []
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        try:
+            _do_real_login(page, base_url)
+            _stub_exit_target_recording(page, kopfzeilen)
+
+            page.evaluate(
+                """() => {
+                    const meta = document.createElement("meta");
+                    meta.setAttribute("name", "referrer");
+                    meta.setAttribute("content", "unsafe-url");
+                    document.head.appendChild(meta);
+                }"""
+            )
+            assert page.evaluate(
+                """() => !!document.head.querySelector('meta[name="referrer"][content="unsafe-url"]')"""
+            ), "Die leckende Ausgangspolitik steht nicht im Dokument — der Fall wuerde nichts belegen."
+
+            with page.expect_navigation(url=re.compile(r"wikipedia\.org"), timeout=15000):
+                page.locator("[data-testid='quick-exit-button']").click()
+
+            assert STUB_MARKER in page.content(), "Die App-Seite wurde nicht durch die Zielseite ersetzt."
+            assert kopfzeilen, "Die Anfrage an das Sprungziel wurde nicht abgefangen."
+            referer = kopfzeilen[0].get("referer", "")
+            assert not referer, (
+                "Der Sprung hat dem Sprungziel die Herkunft verraten: "
+                f"Referer={referer!r} — erwartet war gar keine Referer-Kopfzeile."
+            )
         finally:
             context.close()
 
