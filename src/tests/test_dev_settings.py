@@ -171,7 +171,14 @@ class TestEnvExampleEntfuehrtDieLokalenLinks:
             if not zeile or zeile.startswith("#") or "=" not in zeile:
                 continue
             key, _, value = zeile.partition("=")
-            werte[key.strip()] = value.strip()
+            value = value.strip()
+            # Die Vorlage quotiert Werte wie Compose/dotenv sie lesen: ein
+            # umschliessendes Paar einfacher oder doppelter Anfuehrungszeichen
+            # gehoert nicht zum Wert (Refs
+            # https://github.com/anlaufstelle/app/issues/2219).
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            werte[key.strip()] = value
         return werte
 
     def test_external_origin_ist_nicht_aktiv_gesetzt(self):
