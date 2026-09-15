@@ -640,24 +640,57 @@ def storage_quota_message(usage) -> str:
     ) % {"used": usage.used_mb, "limit": usage.limit_mb, "trash": usage.trash_mb}
 
 
-class StorageQuotaBackstopError(Exception):
-    """Der Backstop hat angeschlagen — Traeger fuer die Audit-Zeile danach.
+class StorageQuotaBackstopError(ValidationError):
+    """Der Backstop hat angeschlagen — traegt die Nutzdaten der Audit-Zeile mit.
 
-    Bewusst **kein** ``ValidationError``: dieser wuerde von den Aufrufern
-    sofort als fachlicher Formularfehler behandelt, waehrend die
-    ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile noch fehlt. Die Ausnahme traegt die
-    Nutzdaten aus der Transaktion heraus; erst ``commit_staged_upload``
-    schreibt — NACH dem Rollback — die Audit-Zeile und uebersetzt sie in den
-    ``ValidationError`` mit dem Text des Vorab-Checks (Refs #2178).
+    **Ein ``ValidationError``**, damit Views und Formulare ohne Sonderbehandlung
+    reagieren: Klasse, ``messages`` und Text sind die des Vorab-Checks
+    (:func:`storage_quota_message`). Wer die Ausnahme nur durchreicht, bekommt
+    exakt das bisherige Nutzerverhalten.
+
+    Zusaetzlich traegt sie alles, was die ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile
+    braucht. Das ist noetig, weil die Zeile NICHT dort geschrieben werden darf,
+    wo der Fehler entsteht: sie entstuende in der Transaktion, die gleich
+    zurueckrollt, und verschwaende mit ihr. Geschrieben wird sie am **aeussersten
+    Transaktionsrand** — ohne Aufrufer-Transaktion direkt in
+    ``storage.commit_staged_upload``, sonst von
+    :func:`~core.services.attachments.crud.quota_backstop_audit_boundary`
+    (Refs #2178).
+
+    :meth:`write_audit` ist idempotent: es schreibt genau einmal, egal wie viele
+    Raender die Ausnahme passiert.
     """
 
-    def __init__(self, usage, requested_bytes: int):
-        super().__init__("Speicherkontingent im Commit-Pfad ueberschritten")
+    def __init__(self, *, facility, user, owner, usage, requested_bytes: int):
+        super().__init__(storage_quota_message(usage))
+        self.facility = facility
+        self.user = user
+        self.owner = owner
         self.usage = usage
         self.requested_bytes = requested_bytes
+        self.audited = False
+
+    def write_audit(self) -> None:
+        """Schreibt die Rechenschaftszeile — nur beim ersten Aufruf.
+
+        MUSS ausserhalb jeder Transaktion laufen, die wegen dieser Ausnahme
+        zurueckrollt; sonst ist die Zeile mit dem Rollback wieder weg.
+        """
+        if self.audited:
+            return
+        from core.services.file_vault.audit import audit_attachment_quota_exceeded  # noqa: PLC0415 — Zyklus vermeiden
+
+        audit_attachment_quota_exceeded(
+            self.facility,
+            self.user,
+            self.owner,
+            usage=self.usage,
+            requested_bytes=self.requested_bytes,
+        )
+        self.audited = True
 
 
-def check_storage_quota_at_commit(facility, additional_bytes: int) -> None:
+def check_storage_quota_at_commit(owner, user, additional_bytes: int) -> None:
     """Der fail-closed Backstop unmittelbar vor der Attachment-Zeile (#2178).
 
     Laeuft in der kurzen Commit-Transaktion, nimmt dort die Sperre der
@@ -674,14 +707,24 @@ def check_storage_quota_at_commit(facility, additional_bytes: int) -> None:
     je Einrichtung serialisiert ist. Vor dem Insert zu pruefen spart zusaetzlich
     den Rollback einer bereits geschriebenen Zeile.
 
+    ``owner``/``user`` gehen nur in die Nutzdaten der Ausnahme (Audit-Attribution);
+    die ``facility`` kommt IMMER aus ``owner.facility`` (ADR-039 §2).
+
     Raises:
         StorageQuotaBackstopError: wenn die Datei nicht mehr hineinpasst.
     """
     from core.services.file_vault.quota import facility_storage_overrun  # noqa: PLC0415 — Zyklus vermeiden
 
+    facility = owner.facility
     usage = facility_storage_overrun(facility, additional_bytes)
     if usage is not None:
-        raise StorageQuotaBackstopError(usage, additional_bytes)
+        raise StorageQuotaBackstopError(
+            facility=facility,
+            user=user,
+            owner=owner,
+            usage=usage,
+            requested_bytes=additional_bytes,
+        )
 
 
 def run_virus_scan(facility, uploaded_file, owner, user):

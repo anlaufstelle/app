@@ -23,8 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings as django_settings
-from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
 from core.models.attachment import Attachment, owner_field_name
@@ -39,7 +38,6 @@ from core.services.file_vault.policy import (
     enforce_storage_quota,
     enforce_upload_size,
     run_virus_scan,
-    storage_quota_message,
     strip_image_metadata,
 )
 
@@ -163,25 +161,47 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None, pendi
     )
 
 
+def _lock_superseded_row(owner, supersedes) -> None:
+    """Sperrt die abzuloesende ``Attachment``-Zeile — Schritt 1 der Reihenfolge.
+
+    Der Replace-Pfad schreibt die Vorgaengerzeile erst am Ende
+    (``is_current``/``superseded_by``/``superseded_at``). Ohne diese Sperre
+    faellt die Zeilensperre also NACH dem Advisory-Lock der Einrichtung an,
+    waehrend ``soft_delete_attachment_chain`` sie VOR seiner Audit-Zeile nimmt —
+    zwei gegenlaeufige Reihenfolgen auf denselben zwei Sperren. Ein
+    ``SELECT … FOR UPDATE`` zieht sie an den Anfang und macht die Reihenfolge
+    ueberall gleich (Refs #2178).
+
+    Ist die Zeile inzwischen physisch getilgt, sperrt das ``SELECT`` nichts —
+    das anschliessende ``save(update_fields=…)`` verhaelt sich unveraendert.
+
+    Der Zugriff laeuft ueber den Reverse-Accessor des Owners (ADR-039 §2, wie
+    ``soft_delete_attachment_chain``) — damit ist er owner- und facility-gescopt
+    und sperrt nie eine fremde Zeile, selbst wenn eine falsche ``pk`` hereinkaeme.
+    """
+    owner.attachments.select_for_update().filter(pk=supersedes.pk).values_list("pk", flat=True).first()
+
+
 def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
     """Persistiere Upload und Audit-Zeile atomar; Fehler raeumen die Datei auf.
 
-    Reisst der Kontingent-Backstop (Refs #2178), wird die Rechenschaftszeile
-    ``ATTACHMENT_QUOTA_EXCEEDED`` **ausserhalb** des ``atomic()``-Blocks
-    geschrieben: innerhalb der zurueckgerollten Transaktion verschwaende sie
-    mit ihr. Die Abweisung traegt Fehlerklasse und Text des Vorab-Checks, damit
-    Views und Formulare unveraendert reagieren.
+    Reisst der Kontingent-Backstop (Refs #2178), traegt die Ausnahme die
+    Nutzdaten der Rechenschaftszeile ``ATTACHMENT_QUOTA_EXCEEDED`` mit sich.
+    Geschrieben wird sie erst, wenn keine Transaktion mehr offen ist, die sie
+    wieder mitnehmen wuerde:
 
-    **Grenze, wenn der Aufrufer eine eigene ``atomic()`` haelt** (der
-    Regelfall in ``crud.finalize_staged_files``/``crud.apply_attachment_changes``
-    unter der View-Transaktion): der innere Block ist dann nur ein Savepoint,
-    die Audit-Zeile entsteht in der noch offenen Aufrufer-Transaktion — und
-    rollt mit ihr zurueck, sobald der ``ValidationError`` nach oben durchschlaegt.
-    Das ist hinnehmbar und nicht reparierbar, ohne eine zweite Verbindung
-    aufzumachen: die wuerde am Advisory-Lock der Hashkette haengen, den die
-    Aufrufer-Transaktion selbst haelt. Sicherheitswirksam ist allein, dass die
-    Attachment-Zeile nicht entsteht (Ueberzug 0); die Rechenschaft traegt in
-    diesen Pfaden der Vorab-Check, der VOR jeder Transaktion auditiert.
+    * **ohne Aufrufer-``atomic()``** (Seed, direkter Service-Aufruf) ist der
+      Rollback hier schon durch — die Zeile entsteht sofort;
+    * **mit Aufrufer-``atomic()``** (Regelfall: ``crud.finalize_staged_files``/
+      ``crud.apply_attachment_changes`` unter der View-Transaktion) faellt sie
+      dem aeussersten Rand zu, den
+      :func:`~core.services.attachments.crud.quota_backstop_audit_boundary`
+      markiert. Der Vorab-Check ersetzt sie NICHT: im abgefangenen Rennen hat
+      er erfolgreich geprueft und ist ohne Audit zurueckgekehrt.
+
+    Die Ausnahme IST ein ``ValidationError`` mit dem Text des Vorab-Checks —
+    Views und Formulare reagieren unveraendert, auch wenn niemand sie abfaengt
+    (dann fehlt nur die Rechenschaftszeile, nie die Ablehnung).
     """
     try:
         with transaction.atomic():
@@ -195,17 +215,14 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
                 audit=audit,
             )
     except StorageQuotaBackstopError as exc:
-        from core.services.file_vault.audit import audit_attachment_quota_exceeded
-
         staged.output_path.unlink(missing_ok=True)
-        audit_attachment_quota_exceeded(
-            owner.facility,
-            user,
-            owner,
-            usage=exc.usage,
-            requested_bytes=exc.requested_bytes,
-        )
-        raise ValidationError(storage_quota_message(exc.usage)) from exc
+        if not connection.in_atomic_block:
+            # Kein Aufrufer-``atomic()`` mehr offen: der Rollback ist durch, die
+            # Zeile kann sofort und dauerhaft geschrieben werden.
+            exc.write_audit()
+        # Sonst traegt die Ausnahme die Nutzdaten weiter nach oben; auditiert
+        # wird am aeussersten Transaktionsrand (``quota_backstop_audit_boundary``).
+        raise
     except Exception:
         staged.output_path.unlink(missing_ok=True)
         raise
@@ -242,6 +259,16 @@ def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=Non
         # Cleanup-Garantie ausloesen wie ein DB-Fehler (#662) — sonst bliebe
         # die bereits verschluesselte ``.enc`` als Waise auf der Disk liegen.
         owner_field = owner_field_name(owner)
+        # SPERR-REIHENFOLGE (Refs #2178): (1) Attachment-Zeile, (2) Advisory-Lock
+        # der Einrichtung (Kontingent = Audit-Hashkette, ein einziger Key).
+        # Dieselbe Reihenfolge haelt ``soft_delete_attachment_chain`` ein (erst
+        # das Zeilen-Update, dann die Audit-Zeile). Ohne Schritt 1 nahm der
+        # Replace-Pfad den Advisory-Lock ZUERST und die Zeilensperre erst beim
+        # ``supersedes.save()`` — gegen einen gleichzeitigen Soft-Delete
+        # derselben Kette ein Deadlock-Zyklus (PostgreSQL bricht eine der beiden
+        # Transaktionen mit SQLSTATE 40P01 ab).
+        if supersedes is not None:
+            _lock_superseded_row(owner, supersedes)
         # #2178 (Red-Team B-13): fail-closed Backstop VOR dem Insert — die Summe
         # ein zweites Mal lesen, diesmal unter der Sperre der Einrichtung. Der
         # Vorab-Check in ``prepare_encrypted_upload`` liegt ausserhalb jeder
@@ -252,7 +279,7 @@ def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=Non
         # Anweisungen spaeter ohnehin nimmt — ein zweiter Namensraum brauchte
         # eine Lock-Reihenfolge, die die Aufrufer-Transaktionen nicht einhalten
         # koennen (siehe ``quota.storage_lock_name``).
-        check_storage_quota_at_commit(owner.facility, staged.file_size)
+        check_storage_quota_at_commit(owner, user, staged.file_size)
         if supersedes is not None:
             # Replace-Modus: entry_id + sort_order vom Vorgänger übernehmen.
             entry_id = supersedes.entry_id

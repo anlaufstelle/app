@@ -221,20 +221,24 @@ def storage_lock_name(facility_id) -> str:
     dieselbe, nicht nur eine gleichnamige. Ein eigener Namensraum waere hier
     ein Deadlock-Risiko und kein Gewinn:
 
-    * Der Commit-Pfad laeuft produktiv in einer Aufrufer-Transaktion, die den
-      Ketten-Lock der Einrichtung **bereits haelt**: ``create_event``/
-      ``update_event`` (bzw. die Personen-/Fall-Pendants) schreiben ihre
-      AuditLog-Zeile, bevor ``finalize_staged_files``/
-      ``apply_attachment_changes`` die Anhaenge persistieren. Reihenfolge dort:
-      Kette → Kontingent.
-    * Ein Aufrufer ohne vorherige Audit-Zeile (``store_encrypted_file``, Seed)
-      naehme mit eigenem Namensraum die umgekehrte Reihenfolge: Kontingent →
-      Kette. Zwei solche Transaktionen derselben Einrichtung bildeten damit
-      einen Deadlock-Zyklus, den Postgres nur noch durch Abbruch aufloest.
-    * Ein einziger Lock je Einrichtung kennt keine Reihenfolge, die sich
-      verdrehen koennte. Er kostet auch nichts zusaetzlich: dieselbe
-      Transaktion nimmt ihn wenige Anweisungen spaeter fuer die
-      Anhang-Audit-Zeile ohnehin und haelt ihn bis zum Commit.
+    * **Ein einziger Lock je Einrichtung kennt keine Reihenfolge, die sich
+      verdrehen koennte.** Das ist der tragende Grund — er haengt an keiner
+      Annahme darueber, was Aufrufer vorher tun.
+    * Mit einem zweiten Namensraum gaebe es dagegen zwei Sperren und damit eine
+      Reihenfolge: Eine Transaktion, die ihre AuditLog-Zeile schon geschrieben
+      hat (der Regelfall: ``create_event``/``update_event`` laufen vor
+      ``finalize_staged_files``/``apply_attachment_changes``), haelt den
+      Ketten-Lock und braucht danach das Kontingent; ein Aufrufer ohne
+      vorherige Audit-Zeile (``store_encrypted_file``, Seed, und ein
+      ``update_event`` ohne geaenderte Felder, das gar keine Zeile schreibt)
+      naehme sie umgekehrt. Zwei solche Transaktionen derselben Einrichtung
+      bildeten einen Deadlock-Zyklus, den Postgres nur durch Abbruch aufloest.
+    * Der geteilte Key kostet nichts zusaetzlich: dieselbe Transaktion nimmt ihn
+      wenige Anweisungen spaeter fuer die Anhang-Audit-Zeile ohnehin und haelt
+      ihn bis zum Commit.
+    * Zeilensperren sind davon unberuehrt — fuer sie gilt die Reihenfolge
+      „Zeile vor Advisory-Lock", die ``storage._lock_superseded_row`` im
+      Replace-Pfad herstellt (Refs #2178, Fix-Runde 1).
 
     Abgeleitet wird der Name ausschliesslich ueber
     :func:`~core.services.audit.chain.advisory_lock_name` — eine zweite,

@@ -25,6 +25,7 @@ from core.services.attachments import (
     discard_type_switch_file_chains,
     finalize_staged_files,
     preserve_file_markers,
+    quota_backstop_audit_boundary,
     stage_attachment_uploads,
     stage_uploads,
 )
@@ -431,7 +432,13 @@ class ClientCreateView(StaffRequiredMixin, View):
         # ``EventCreateView.post``). Policy-/Virus-Reject (ValidationError aus
         # dem Staging) landet als Non-Field-Error am Formular.
         try:
-            with stage_uploads(facility, request.user, file_fields) as staged:
+            # Refs #2178: Der Rand fuer die Kontingent-Rechenschaft liegt UM die
+            # Transaktion, aber INNERHALB des ValidationError-Zweigs der View.
+            # Reisst das Speicherkontingent erst im Commit, rollt der
+            # ValidationError den ganzen Vorgang zurueck — die
+            # ATTACHMENT_QUOTA_EXCEEDED-Zeile entsteht deshalb erst hier, nach dem
+            # Rollback, statt mit ihm zu verschwinden.
+            with stage_uploads(facility, request.user, file_fields) as staged, quota_backstop_audit_boundary():
                 with transaction.atomic():
                     client = create_client(
                         facility=facility,
@@ -764,27 +771,33 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 )
 
             expected_updated_at = request.POST.get("expected_updated_at") or None
-            with transaction.atomic():
-                if type_switched:
-                    discard_type_switch_file_chains(client, request.user)
-                client = update_client(
-                    client,
-                    request.user,
-                    old_stage=old_stage,
-                    expected_updated_at=expected_updated_at,
-                    **fields,
-                )
-                if doc_type is not None:
-                    apply_attachment_changes(
+            # Refs #2178: Der Rand fuer die Kontingent-Rechenschaft liegt UM die
+            # Transaktion. Reisst das Speicherkontingent erst im Commit, rollt der
+            # ValidationError den ganzen Vorgang zurueck — die
+            # ATTACHMENT_QUOTA_EXCEEDED-Zeile entsteht deshalb erst hier, nach dem
+            # Rollback, statt mit ihm zu verschwinden.
+            with quota_backstop_audit_boundary():
+                with transaction.atomic():
+                    if type_switched:
+                        discard_type_switch_file_chains(client, request.user)
+                    client = update_client(
                         client,
                         request.user,
-                        request.POST,
-                        request.FILES,
-                        file_fields,
-                        doc_type,
-                        staged_by_key=staged_by_key,
+                        old_stage=old_stage,
+                        expected_updated_at=expected_updated_at,
+                        **fields,
                     )
-            committed = True
+                    if doc_type is not None:
+                        apply_attachment_changes(
+                            client,
+                            request.user,
+                            request.POST,
+                            request.FILES,
+                            file_fields,
+                            doc_type,
+                            staged_by_key=staged_by_key,
+                        )
+                committed = True
         except ValidationError as e:
             # #1938: Fehler an einem fuer diese Rolle unsichtbaren Feld duerfen
             # weder Slug noch Grenze nennen — derselbe Vertrag wie im

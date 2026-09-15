@@ -38,6 +38,46 @@ from core.models import FieldTemplate
 from core.services.dynamic_data import build_field_template_lookup, is_file_marker, normalize_file_marker
 
 
+@contextmanager
+def quota_backstop_audit_boundary() -> Iterator[None]:
+    """Der aeusserste Transaktionsrand fuer die Kontingent-Rechenschaft (#2178).
+
+    **Gehoert UM den ``transaction.atomic()``-Block**, nicht hinein::
+
+        with quota_backstop_audit_boundary():
+            with transaction.atomic():
+                obj = create_x(...)
+                finalize_staged_files(obj, request.user, staged.by_slug, doc_type)
+            staged.commit()
+
+    Warum das noetig ist: Reisst das Speicherkontingent erst im Commit
+    (``storage._commit_staged_upload``), rollt der ``ValidationError`` die
+    gesamte Aufrufer-Transaktion zurueck. Eine Audit-Zeile, die INNERHALB dieser
+    Transaktion geschrieben wird, verschwindet mit ihr — und der Vorab-Check
+    ersetzt sie nicht: im abgefangenen Rennen hat er erfolgreich geprueft und
+    ist ohne Audit zurueckgekehrt. Ohne diesen Rand bliebe genau die neu
+    abgefangene Ablehnung unprotokolliert.
+
+    Die Ausnahme traegt die Nutzdaten (``StorageQuotaBackstopError``); hier —
+    nach dem Rollback, aber noch auf derselben Verbindung — wird daraus die
+    dauerhafte ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile. Eine zweite Verbindung
+    waere falsch: sie liefe in den Advisory-Lock der Hashkette, den die
+    Aufrufer-Transaktion selbst haelt.
+
+    Anschliessend wird dieselbe Ausnahme weitergereicht — sie IST der
+    ``ValidationError`` mit dem Text des Vorab-Checks, Views und Formulare
+    reagieren also unveraendert. ``write_audit`` ist idempotent; ein
+    verschachtelter zweiter Rand schreibt nichts doppelt.
+    """
+    from core.services.file_vault.policy import StorageQuotaBackstopError  # noqa: PLC0415 — Zyklus vermeiden
+
+    try:
+        yield
+    except StorageQuotaBackstopError as exc:
+        exc.write_audit()
+        raise
+
+
 class AttachmentPurgeBlockedError(PermissionDenied):
     """Ein physisches Loeschen ist gesperrt (Refs #1874).
 

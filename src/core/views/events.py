@@ -22,7 +22,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
 from core.models import Client, DocumentType, Event
-from core.services.attachments import stage_attachment_uploads, stage_uploads
+from core.services.attachments import quota_backstop_audit_boundary, stage_attachment_uploads, stage_uploads
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, assert_processing_allowed
@@ -427,20 +427,27 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                     # DB-Write, rollt die Transaktion auch das Event zurück —
                     # sonst verweist die DB auf einen Anhang, der nie persistiert
                     # wurde (Refs #584).
-                    with transaction.atomic():
-                        event = create_event(
-                            facility=facility,
-                            user=request.user,
-                            document_type=doc_type,
-                            occurred_at=meta_form.cleaned_data["occurred_at"],
-                            data_json=text_data,
-                            client=client,
-                            case=case,
-                            idempotency_key=idem_key,
-                            idempotency_payload_hash=idem_payload_hash,
-                        )
-                        finalize_staged_files(event, request.user, staged.by_slug, doc_type)
-                    staged.commit()
+                    # Refs #2178: Der Rand fuer die Kontingent-Rechenschaft liegt UM die
+                    # Transaktion, aber INNERHALB des ValidationError-Zweigs der View.
+                    # Reisst das Speicherkontingent erst im Commit, rollt der
+                    # ValidationError den ganzen Vorgang zurueck — die
+                    # ATTACHMENT_QUOTA_EXCEEDED-Zeile entsteht deshalb erst hier, nach dem
+                    # Rollback, statt mit ihm zu verschwinden.
+                    with quota_backstop_audit_boundary():
+                        with transaction.atomic():
+                            event = create_event(
+                                facility=facility,
+                                user=request.user,
+                                document_type=doc_type,
+                                occurred_at=meta_form.cleaned_data["occurred_at"],
+                                data_json=text_data,
+                                client=client,
+                                case=case,
+                                idempotency_key=idem_key,
+                                idempotency_payload_hash=idem_payload_hash,
+                            )
+                            finalize_staged_files(event, request.user, staged.by_slug, doc_type)
+                        staged.commit()
                 except ValidationError as e:
                     # #1938: ``create_event`` validiert ``data_json`` ein zweites
                     # Mal und liefert den Fehler feldbezogen; er gehört deshalb ans
@@ -1081,28 +1088,34 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                     event.document_type,
                     data_json=merged,
                 )
-                with transaction.atomic():
-                    update_event(
-                        event,
-                        request.user,
-                        merged,
-                        expected_updated_at=expected_updated_at,
-                        # Refs #1338: JSON-/Offline-Replay-Clients müssen den
-                        # Versions-Token mitschicken (kein stilles Last-Write-
-                        # Wins mehr). Der klassische HTML-Formular-Pfad bleibt
-                        # unverändert (kein require).
-                        require_version_token=wants_json,
-                    )
-                    apply_attachment_changes(
-                        event,
-                        request.user,
-                        request.POST,
-                        request.FILES,
-                        file_fields,
-                        event.document_type,
-                        staged_by_key=staged_by_key,
-                    )
-                committed = True
+                # Refs #2178: Der Rand fuer die Kontingent-Rechenschaft liegt UM die
+                # Transaktion. Reisst das Speicherkontingent erst im Commit, rollt der
+                # ValidationError den ganzen Vorgang zurueck — die
+                # ATTACHMENT_QUOTA_EXCEEDED-Zeile entsteht deshalb erst hier, nach dem
+                # Rollback, statt mit ihm zu verschwinden.
+                with quota_backstop_audit_boundary():
+                    with transaction.atomic():
+                        update_event(
+                            event,
+                            request.user,
+                            merged,
+                            expected_updated_at=expected_updated_at,
+                            # Refs #1338: JSON-/Offline-Replay-Clients müssen den
+                            # Versions-Token mitschicken (kein stilles Last-Write-
+                            # Wins mehr). Der klassische HTML-Formular-Pfad bleibt
+                            # unverändert (kein require).
+                            require_version_token=wants_json,
+                        )
+                        apply_attachment_changes(
+                            event,
+                            request.user,
+                            request.POST,
+                            request.FILES,
+                            file_fields,
+                            event.document_type,
+                            staged_by_key=staged_by_key,
+                        )
+                    committed = True
             except ValidationError as e:
                 # #1936: Nur die drei expliziten Optimistic-Locking-Codes
                 # duerfen in den 409-Konfliktresolver. Fachliche/service-seitige

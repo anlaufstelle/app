@@ -34,8 +34,13 @@ Transaktions-Rollback laufen.
 
 from __future__ import annotations
 
+import ast
+import contextlib
+import pathlib
 import threading
+import time
 import uuid
+from unittest import mock
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -43,6 +48,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection, connections, transaction
 from django.db.models import Sum
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 from django.utils import timezone
 
 # ``prepare_encrypted_upload`` prueft Magic-Bytes via libmagic (#610).
@@ -58,8 +64,10 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
 from core.models.attachment import Attachment  # noqa: E402
+from core.services.attachments.crud import quota_backstop_audit_boundary  # noqa: E402
 from core.services.file_vault import commit_staged_upload, prepare_encrypted_upload  # noqa: E402
 from core.services.file_vault.encryption import encrypt_field  # noqa: E402
+from core.services.file_vault.quota import lock_facility_storage  # noqa: E402
 
 MB = 1024 * 1024
 
@@ -70,6 +78,12 @@ CHUNK = 256 * 1024
 #: Obergrenze fuer ``Thread.join`` und ``Barrier.wait``. Kein Sleep-Warten:
 #: die Barriere gibt alle Threads gleichzeitig frei, der Rest ist DB-Arbeit.
 JOIN_TIMEOUT = 30
+
+#: Begrenztes Fenster, in dem der Soft-Delete seine Zeilensperre haelt, bevor
+#: er den Ketten-Lock nimmt. Bewusst eine reine Untergrenze: laeuft der
+#: Gegenspieler langsamer, ist der Test trotzdem aussagekraeftig (er haette die
+#: Sperren dann erst recht nicht in verdrehter Reihenfolge genommen).
+GNADENFENSTER = 0.75
 
 _PDF = (
     b"%PDF-1.4\n"
@@ -175,9 +189,11 @@ def stage(quota_facility, staff_user, media_root):
     return _stage
 
 
-def _commit_in_parallel(staged_list, event, ft_file, user):
+def _commit_in_parallel(staged_list, commit):
     """Alle ``staged``-Dateien barrier-synchron committen — je eigener Thread,
-    je eigene DB-Verbindung. Liefert ``{index: Attachment | Exception}``.
+    je eigene DB-Verbindung. ``commit(idx, staged)`` ist die Aufruferform
+    (direkt, unter Aufrufer-Transaktion, …). Liefert
+    ``{index: Attachment | Exception}``.
     """
     barrier = threading.Barrier(len(staged_list), timeout=JOIN_TIMEOUT)
     results: dict[int, object] = {}
@@ -186,7 +202,7 @@ def _commit_in_parallel(staged_list, event, ft_file, user):
     def worker(idx, staged):
         try:
             barrier.wait()
-            attachment = commit_staged_upload(event, ft_file, staged, user, sort_order=idx)
+            attachment = commit(idx, staged)
             with guard:
                 results[idx] = attachment
         except Exception as exc:  # noqa: BLE001 — Sammeltest, Auswertung unten
@@ -202,6 +218,15 @@ def _commit_in_parallel(staged_list, event, ft_file, user):
         t.join(timeout=JOIN_TIMEOUT)
     assert not any(t.is_alive() for t in threads), "Worker-Thread haengt — Deadlock-Verdacht"
     return results
+
+
+def _direkt(event, ft_file, user):
+    """Aufruferform „direkter Service-Aufruf ohne eigene Transaktion"."""
+
+    def _commit(idx, staged):
+        return commit_staged_upload(event, ft_file, staged, user, sort_order=idx)
+
+    return _commit
 
 
 def _used_bytes(facility) -> int:
@@ -222,7 +247,7 @@ class TestKontingentGegenNebenlaeufigeUploads:
         event, ft_file = upload_target
         staged_list = stage(2)
 
-        results = _commit_in_parallel(staged_list, event, ft_file, staff_user)
+        results = _commit_in_parallel(staged_list, _direkt(event, ft_file, staff_user))
 
         gewinner = [i for i, r in results.items() if isinstance(r, Attachment)]
         verlierer = [i for i, r in results.items() if isinstance(r, Exception)]
@@ -248,7 +273,7 @@ class TestKontingentGegenNebenlaeufigeUploads:
         event, ft_file = upload_target
         staged_list = stage(6)
 
-        results = _commit_in_parallel(staged_list, event, ft_file, staff_user)
+        results = _commit_in_parallel(staged_list, _direkt(event, ft_file, staff_user))
 
         gewinner = [i for i, r in results.items() if isinstance(r, Attachment)]
         verlierer = [i for i, r in results.items() if isinstance(r, Exception)]
@@ -301,31 +326,68 @@ class TestKontingentGegenNebenlaeufigeUploads:
         assert Attachment.objects.for_facility(quota_facility).count() == 1
         assert not staged.output_path.exists()
 
-    def test_quota_audit_zeile_teilt_das_schicksal_der_aufrufer_transaktion(
+    def test_quota_audit_zeile_ueberlebt_die_aufrufer_transaktion(
         self, quota_facility, upload_target, staff_user, occupy, stage
     ):
-        """Dokumentierte Grenze: mit eigener ``atomic()`` des Aufrufers rollt der
-        ``ValidationError`` die Audit-Zeile mit zurueck.
+        """Auch mit eigener ``atomic()`` des Aufrufers bleibt die Zeile bestehen.
 
-        Genau so verhalten sich die produktiven Pfade (``finalize_staged_files``
-        / ``apply_attachment_changes`` unter der View-Transaktion): der ganze
-        Vorgang — Ereignis, Anhaenge, Audit — wird verworfen. Die Rechenschaft
-        traegt dort der Vorab-Check, der VOR jeder Transaktion auditiert.
-        Sicherheitswirksam ist nur, dass die Zeile nicht entsteht; der
-        Ueberzug bleibt 0.
+        Der Regelfall (``finalize_staged_files``/``apply_attachment_changes``
+        unter der View-Transaktion) verwirft mit dem ``ValidationError`` den
+        ganzen Vorgang — Ereignis, Anhaenge, Audit. Der Vorab-Check ersetzt die
+        Zeile NICHT: im abgefangenen Rennen hat er erfolgreich geprueft und ist
+        ohne Audit zurueckgekehrt. Die Ablehnung wird deshalb am aeussersten
+        Transaktionsrand auditiert (``quota_backstop_audit_boundary``).
         """
         event, ft_file = upload_target
         staged = stage(1)[0]
         occupy(3 * MB)
 
-        with pytest.raises(ValidationError), transaction.atomic():
+        with pytest.raises(ValidationError), quota_backstop_audit_boundary(), transaction.atomic():
+            lock_facility_storage(quota_facility.pk)
             commit_staged_upload(event, ft_file, staged, staff_user)
 
-        assert not AuditLog.objects.filter(
-            facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED
-        ).exists()
+        entry = AuditLog.objects.get(facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED)
+        assert entry.detail["reason"] == "quota_exceeded"
         assert Attachment.objects.for_facility(quota_facility).count() == 1
         assert not staged.output_path.exists()
+
+    @pytest.mark.parametrize(("anzahl", "plaetze"), [(2, 1), (6, 2)])
+    @pytest.mark.parametrize("aufrufer", ["direkt", "aeussere_transaktion", "aeussere_transaktion_mit_ketten_lock"])
+    def test_jede_ablehnung_hinterlaesst_eine_dauerhafte_audit_zeile(
+        self, anzahl, plaetze, aufrufer, quota_facility, upload_target, staff_user, occupy, stage
+    ):
+        """Refs #2178 Fix-Runde 1: die Auditspur haengt nicht an der Aufruferform.
+
+        Drei Aufruferformen, die es im Baum wirklich gibt: der direkte
+        Service-Aufruf (Seed/Tests), der Regelfall unter einer
+        View-Transaktion und derselbe Fall, wenn die Transaktion den
+        Ketten-Lock schon haelt (``create_event``/``update_event`` haben ihre
+        Audit-Zeile bereits geschrieben).
+        """
+        occupy(3 * MB - plaetze * CHUNK)
+        event, ft_file = upload_target
+        staged_list = stage(anzahl)
+
+        def commit(idx, staged):
+            if aufrufer == "direkt":
+                return commit_staged_upload(event, ft_file, staged, staff_user, sort_order=idx)
+            with quota_backstop_audit_boundary(), transaction.atomic():
+                if aufrufer == "aeussere_transaktion_mit_ketten_lock":
+                    lock_facility_storage(quota_facility.pk)
+                return commit_staged_upload(event, ft_file, staged, staff_user, sort_order=idx)
+
+        results = _commit_in_parallel(staged_list, commit)
+
+        gewinner = [i for i, r in results.items() if isinstance(r, Attachment)]
+        verlierer = [i for i, r in results.items() if isinstance(r, Exception)]
+        assert len(gewinner) == plaetze, results
+        assert all(isinstance(results[i], ValidationError) for i in verlierer), results
+        assert _used_bytes(quota_facility) == 3 * MB
+        assert AuditLog.objects.filter(
+            facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED
+        ).count() == len(verlierer), (
+            f"jede Ablehnung braucht eine dauerhafte Rechenschaftszeile ({aufrufer}, n={anzahl})"
+        )
 
 
 @pytest.mark.django_db
@@ -434,3 +496,345 @@ class TestKontingentSperreFailLoud:
         assert not connection.in_atomic_block
         with pytest.raises(RuntimeError, match="ausserhalb einer Transaktion"):
             lock_facility_storage(quota_facility.pk)
+
+
+def _run_threads(targets):
+    """Startet ``targets`` (parameterlose Callables) gleichzeitig und sammelt
+    Rueckgabewert bzw. Ausnahme je Index."""
+    results: dict[int, object] = {}
+    guard = threading.Lock()
+
+    def worker(idx, fn):
+        try:
+            value = fn()
+            with guard:
+                results[idx] = value
+        except Exception as exc:  # noqa: BLE001 — Sammeltest, Auswertung beim Aufrufer
+            with guard:
+                results[idx] = exc
+        finally:
+            connections.close_all()
+
+    threads = [threading.Thread(target=worker, args=(i, fn)) for i, fn in enumerate(targets)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=JOIN_TIMEOUT)
+    assert not any(t.is_alive() for t in threads), f"Thread haengt — Deadlock-Verdacht: {results!r}"
+    return results
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestSperrReihenfolge:
+    """Refs #2178 Fix-Runde 1: (1) Attachment-Zeile, (2) Advisory-Lock — ueberall.
+
+    Der Replace-Pfad schreibt die Vorgaengerzeile erst am Ende. Nahm er den
+    Advisory-Lock der Einrichtung davor (Kontingent-Backstop), stand er in
+    genau umgekehrter Reihenfolge zu ``soft_delete_attachment_chain``, das die
+    Zeile zuerst aktualisiert und den Lock erst mit seiner Audit-Zeile nimmt.
+    PostgreSQL loest den Zyklus mit SQLSTATE ``40P01`` auf — ein 500er in einem
+    unterstuetzten Servicepfad.
+    """
+
+    def test_replace_und_soft_delete_verklemmen_sich_nicht(
+        self, quota_facility, upload_target, staff_user, occupy, stage, monkeypatch
+    ):
+        from core.services.file_vault import audit as audit_module
+        from core.services.file_vault import soft_delete_attachment_chain
+
+        owner, ft_file = upload_target
+        alt = occupy(CHUNK)
+        staged = stage(1)[0]
+        zeile_gesperrt = threading.Event()
+        echtes_audit = audit_module.audit_attachment_delete
+
+        def verzoegertes_audit(*args, **kwargs):
+            """Haelt die Zeilensperre des Soft-Deletes ein begrenztes Fenster lang,
+            bevor der Ketten-Lock genommen wird — genau das Fenster, in dem der
+            Replace-Pfad seine Sperren erwirbt."""
+            zeile_gesperrt.set()
+            time.sleep(GNADENFENSTER)
+            return echtes_audit(*args, **kwargs)
+
+        monkeypatch.setattr(audit_module, "audit_attachment_delete", verzoegertes_audit)
+
+        def soft_delete():
+            return soft_delete_attachment_chain(owner, alt.entry_id, staff_user)
+
+        def replace():
+            assert zeile_gesperrt.wait(JOIN_TIMEOUT), "Soft-Delete hat die Zeile nie gesperrt"
+            return commit_staged_upload(owner, ft_file, staged, staff_user, supersedes=alt)
+
+        results = _run_threads([soft_delete, replace])
+
+        fehler = {i: r for i, r in results.items() if isinstance(r, Exception)}
+        sqlstates = [getattr(getattr(exc, "__cause__", None), "sqlstate", None) for exc in fehler.values()]
+        assert "40P01" not in sqlstates, f"Deadlock im Replace-/Soft-Delete-Paar: {results!r}"
+        assert not fehler, f"beide Pfade muessen definiert enden: {results!r}"
+        assert results[0] == 1, "der Soft-Delete hat genau eine Zeile der Kette markiert"
+        assert isinstance(results[1], Attachment)
+
+    def test_replace_sperrt_die_vorgaengerzeile_vor_dem_advisory_lock(
+        self, quota_facility, upload_target, staff_user, occupy, stage
+    ):
+        """Die Reihenfolge selbst, ohne Nebenlaeufigkeit: ``FOR UPDATE`` auf der
+        abzuloesenden Zeile steht VOR dem ersten ``pg_advisory_xact_lock``."""
+        owner, ft_file = upload_target
+        alt = occupy(CHUNK)
+        staged = stage(1)[0]
+
+        with CaptureQueriesContext(connection) as ctx:
+            commit_staged_upload(owner, ft_file, staged, staff_user, supersedes=alt)
+
+        sql = [q["sql"] for q in ctx.captured_queries]
+        row_lock_at = [i for i, s in enumerate(sql) if "FOR UPDATE" in s.upper() and "core_attachment" in s]
+        advisory_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        assert row_lock_at, f"keine Zeilensperre auf der Vorgaengerzeile: {sql!r}"
+        assert advisory_at, f"kein Advisory-Lock im Commit-Pfad: {sql!r}"
+        assert row_lock_at[0] < advisory_at[0], "Reihenfolge verletzt: Zeile muss vor dem Advisory-Lock kommen"
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestKontingentAuditImViewPfad:
+    """Refs #2178 Fix-Runde 1: die Rechenschaftszeile ueberlebt den echten
+    View-Rollback — gepruft am Request, nicht nur am Service.
+
+    Der Vorab-Check wird fuer diese Faelle stillgelegt. Er ist im echten Rennen
+    genau das, was er hier simuliert: er hat erfolgreich geprueft und ist ohne
+    Audit zurueckgekehrt, waehrend eine andere Transaktion das Kontingent
+    ausschoepfte. Erst dadurch greift der Backstop deterministisch — ohne Threads.
+
+    ``transaction=True`` ist Pflicht: nur dann ist die ``atomic()`` der View die
+    aeusserste Transaktion, und nur dann ist der Rollback ein echter Rollback.
+    """
+
+    @pytest.fixture
+    def ohne_vorab_check(self, monkeypatch):
+        from core.services.file_vault import storage as storage_module
+
+        monkeypatch.setattr(storage_module, "enforce_storage_quota", lambda *args, **kwargs: None)
+
+    def _post_datei(self, client, url, daten, slug):
+        return client.post(
+            url,
+            {**daten, slug: SimpleUploadedFile("neu.pdf", _pdf_of(CHUNK), content_type="application/pdf")},
+        )
+
+    def test_ereignis_anlegen_auditiert_die_abgewiesene_datei(
+        self, client, quota_facility, upload_target, staff_user, occupy, media_root, ohne_vorab_check
+    ):
+        event, ft_file = upload_target
+        occupy(3 * MB)
+        client.force_login(staff_user)
+
+        resp = self._post_datei(
+            client,
+            reverse("core:event_create"),
+            {
+                "document_type": str(event.document_type.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+            },
+            ft_file.slug,
+        )
+
+        assert resp.status_code == 200, "das Formular wird mit Fehler neu gerendert, kein 500"
+        assert Event.objects.for_facility(quota_facility).count() == 1, "kein neues Ereignis"
+        assert Attachment.objects.for_facility(quota_facility).count() == 1, "keine neue Anhangszeile"
+        entry = AuditLog.objects.get(facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED)
+        assert entry.detail["reason"] == "quota_exceeded"
+
+    def test_ereignis_aendern_auditiert_die_abgewiesene_datei(
+        self, client, quota_facility, upload_target, staff_user, occupy, media_root, ohne_vorab_check
+    ):
+        event, ft_file = upload_target
+        occupy(3 * MB)
+        client.force_login(staff_user)
+
+        resp = self._post_datei(
+            client,
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(event.document_type.pk),
+                "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+            },
+            ft_file.slug,
+        )
+
+        # Der Aenderungspfad meldet Service-Fehler als Message und leitet auf das
+        # Formular zurueck (bestehender Vertrag, unveraendert). Neu ist allein,
+        # dass die Ablehnung eine dauerhafte Rechenschaftszeile hinterlaesst.
+        assert resp.status_code == 302
+        assert resp.url.endswith("/edit/")
+        assert Attachment.objects.for_facility(quota_facility).count() == 1
+        assert (
+            AuditLog.objects.filter(facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED).count()
+            == 1
+        )
+
+
+@pytest.mark.django_db
+@pytest.mark.postgres
+class TestQueryBudget:
+    """Refs #2178 Fix-Runde 1: der Zuwachs wird als GESAMTZAHL festgenagelt.
+
+    Referenz ist der Commit-Pfad mit stillgelegtem Backstop (Kontingent-Pruefung
+    UND Zeilensperre) — also der Stand vor #2178.
+    """
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _ohne_backstop():
+        from core.services.file_vault import storage as storage_module
+
+        with (
+            mock.patch.object(storage_module, "check_storage_quota_at_commit"),
+            mock.patch.object(storage_module, "_lock_superseded_row"),
+        ):
+            yield
+
+    def _messen(self, commit):
+        with self._ohne_backstop(), CaptureQueriesContext(connection) as referenz:
+            commit(0)
+        with CaptureQueriesContext(connection) as gemessen:
+            commit(1)
+        return len(gemessen.captured_queries) - len(referenz.captured_queries)
+
+    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 3), (False, 1)])
+    def test_zuwachs_beim_hinzufuegen(
+        self, mit_kontingent, erwartet, quota_facility, upload_target, staff_user, stage, settings
+    ):
+        """Mit Kontingent: Konfigurationsfrage + Sperre + Summe. Ohne: nur die
+        Konfigurationsfrage — Einrichtungen ohne Kontingent zahlen fast nichts."""
+        event, ft_file = upload_target
+        staged_list = stage(2)
+        if not mit_kontingent:
+            Settings.objects.filter(facility=quota_facility).update(max_storage_mb=None)
+            settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+
+        delta = self._messen(lambda i: commit_staged_upload(event, ft_file, staged_list[i], staff_user, sort_order=i))
+
+        assert delta == erwartet, f"Query-Zuwachs im Add-Pfad: {delta} statt {erwartet}"
+
+    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 4), (False, 2)])
+    def test_zuwachs_beim_ersetzen(
+        self, mit_kontingent, erwartet, quota_facility, upload_target, staff_user, occupy, stage, settings
+    ):
+        """Im Replace-Pfad kommt die Zeilensperre der Vorgaengerzeile hinzu —
+        der Preis der einheitlichen Sperr-Reihenfolge."""
+        event, ft_file = upload_target
+        vorgaenger = [occupy(CHUNK), occupy(CHUNK)]
+        staged_list = stage(2)
+        if not mit_kontingent:
+            Settings.objects.filter(facility=quota_facility).update(max_storage_mb=None)
+            settings.FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB = 0
+
+        delta = self._messen(
+            lambda i: commit_staged_upload(event, ft_file, staged_list[i], staff_user, supersedes=vorgaenger[i])
+        )
+
+        assert delta == erwartet, f"Query-Zuwachs im Replace-Pfad: {delta} statt {erwartet}"
+
+
+VIEW_MODULE_NAMES = ("events.py", "clients.py", "cases.py")
+ATTACHMENT_COMMIT_ENTRIES = ("finalize_staged_files", "apply_attachment_changes")
+
+
+def _with_context_names(node: ast.With) -> list[str]:
+    """Die Namen der Kontextmanager eines ``with`` — ``f()`` wie ``a.b()``."""
+    namen = []
+    for item in node.items:
+        call = item.context_expr
+        if isinstance(call, ast.Call):
+            func = call.func
+            if isinstance(func, ast.Name):
+                namen.append(func.id)
+            elif isinstance(func, ast.Attribute):
+                namen.append(func.attr)
+    return namen
+
+
+def _commit_call_sites(tree: ast.AST):
+    """``(name, zeile, [with-Namen von aussen nach innen])`` je Aufrufstelle."""
+    sites: list[tuple[str, int, list[list[str]]]] = []
+
+    def walk(node, stack):
+        if isinstance(node, ast.With):
+            stack = [*stack, _with_context_names(node)]
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.Call):
+                func = child.func
+                name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+                if name in ATTACHMENT_COMMIT_ENTRIES:
+                    sites.append((name, child.lineno, stack))
+            walk(child, stack)
+
+    walk(tree, [])
+    return sites
+
+
+@pytest.mark.architecture
+class TestAudRandAnJederAufrufstelle:
+    """Refs #2178 Fix-Runde 1: jede View-Aufrufstelle traegt den Audit-Rand.
+
+    Ein Aufrufer, der ``finalize_staged_files``/``apply_attachment_changes`` in
+    einer eigenen ``atomic()`` haelt und den Rand vergisst, verliert die
+    ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile wieder (die Ablehnung selbst bleibt —
+    die Ausnahme IST ein ``ValidationError``). Der Guard scannt die drei
+    Anlage-/Aenderungs-Views statt nur den Vertrag zu beschreiben.
+    """
+
+    def test_jede_view_aufrufstelle_liegt_in_einem_audit_rand(self):
+        views = pathlib.Path(__file__).resolve().parents[2] / "core" / "views"
+        gefunden = 0
+        for name in VIEW_MODULE_NAMES:
+            quelle = views / name
+            tree = ast.parse(quelle.read_text(encoding="utf-8"))
+            for aufruf, zeile, stack in _commit_call_sites(tree):
+                gefunden += 1
+                atomic_at = [i for i, namen in enumerate(stack) if "atomic" in namen]
+                rand_at = [i for i, namen in enumerate(stack) if "quota_backstop_audit_boundary" in namen]
+                assert atomic_at, f"{name}:{zeile} — {aufruf} ohne umgebende transaction.atomic()"
+                assert rand_at, (
+                    f"{name}:{zeile} — {aufruf} ohne quota_backstop_audit_boundary(); "
+                    "ohne den Rand geht die ATTACHMENT_QUOTA_EXCEEDED-Zeile im Rollback verloren"
+                )
+                assert min(rand_at) < min(atomic_at), (
+                    f"{name}:{zeile} — der Audit-Rand muss AUSSERHALB der Transaktion liegen, "
+                    "sonst rollt die Audit-Zeile mit zurueck"
+                )
+        assert gefunden == 6, f"erwartet werden sechs View-Aufrufstellen, gefunden: {gefunden}"
+
+
+@pytest.mark.django_db
+@pytest.mark.postgres
+class TestAuditIdempotenz:
+    """``write_audit`` schreibt genau einmal — auch bei verschachtelten Raendern."""
+
+    def test_zweiter_rand_schreibt_die_zeile_nicht_doppelt(self, quota_facility, upload_target, staff_user):
+        from core.services.file_vault.policy import StorageQuotaBackstopError
+        from core.services.file_vault.quota import StorageUsage
+
+        event, _ft = upload_target
+        exc = StorageQuotaBackstopError(
+            facility=quota_facility,
+            user=staff_user,
+            owner=event,
+            usage=StorageUsage(used_bytes=3 * MB, trash_bytes=0, limit_bytes=3 * MB),
+            requested_bytes=CHUNK,
+        )
+
+        # Reihenfolge: ``pytest.raises`` aussen, dann zwei geschachtelte Raender —
+        # der innere schreibt, der aeussere darf nicht noch einmal schreiben.
+        with pytest.raises(StorageQuotaBackstopError), quota_backstop_audit_boundary(), quota_backstop_audit_boundary():
+            raise exc
+
+        assert exc.audited
+        assert (
+            AuditLog.objects.filter(facility=quota_facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED).count()
+            == 1
+        )
+        # Fehlerklasse und Text sind die des Vorab-Checks (Views reagieren unveraendert).
+        assert isinstance(exc, ValidationError)
+        assert "Speicherkontingent der Einrichtung erschöpft" in exc.messages[0]
