@@ -1,6 +1,7 @@
 """Ausfuehrbare Guards fuer das Erstsetup-Skript."""
 
 import getpass
+import re
 import subprocess
 from pathlib import Path
 
@@ -13,6 +14,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "initial-setup.sh"
 PROD_COMPOSE = REPO_ROOT / "docker-compose.prod.yml"
 STAGING_COMPOSE = REPO_ROOT / "docker-compose.staging.yml"
+
+
+def _legacy_project_name(compose_path: Path = PROD_COMPOSE) -> str:
+    normalized = re.sub(r"[^a-z0-9_-]", "", compose_path.parent.name.lower())
+    return re.sub(r"^[^a-z0-9]+", "", normalized)
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -301,11 +307,37 @@ def test_backup_cron_accepts_this_installation(tmp_path: Path, cron_entry: str) 
     assert "Host-Cron-Eintrag fuer backup.sh gefunden" in result.stdout
 
 
-def test_foreign_pgdata_volume_prints_upgrade_warning(tmp_path: Path) -> None:
-    result, _, _ = _run_setup(tmp_path, volume_names="legacy-install_pgdata")
+def test_unrelated_pgdata_volume_does_not_print_upgrade_warning(tmp_path: Path) -> None:
+    result, _, _ = _run_setup(tmp_path, volume_names="nextcloud_pgdata")
     assert result.returncode == 0, result.stderr
-    assert "Bestandsinstallation: bisherigen Projektnamen" in result.stderr
-    assert "docker volume ls | grep pgdata" in result.stderr
+    assert "Bestandsinstallation" not in result.stderr
+    assert "COMPOSE_PROJECT_NAME=" not in result.stderr
+
+
+def test_legacy_default_pgdata_volume_prints_upgrade_suggestion(tmp_path: Path) -> None:
+    legacy_project = _legacy_project_name()
+    result, _, _ = _run_setup(tmp_path, volume_names=f"{legacy_project}_pgdata")
+    assert result.returncode == 0, result.stderr
+    assert f"Möglicherweise Bestandsinstallation: Volume `{legacy_project}_pgdata` gefunden" in result.stderr
+    assert f"COMPOSE_PROJECT_NAME={legacy_project}" in result.stderr
+    assert "bei einer Erstinstallation ignorieren" in result.stderr
+
+
+def test_active_pgdata_volume_suppresses_legacy_upgrade_suggestion(tmp_path: Path) -> None:
+    legacy_project = _legacy_project_name()
+    result, _, _ = _run_setup(
+        tmp_path,
+        volume_names=f"{legacy_project}_pgdata\nanlaufstelle-prod_pgdata",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Möglicherweise Bestandsinstallation" not in result.stderr
+
+
+def test_foreign_pgdata_volume_prints_upgrade_warning(tmp_path: Path) -> None:
+    legacy_project = _legacy_project_name()
+    result, _, _ = _run_setup(tmp_path, volume_names=f"{legacy_project}_pgdata")
+    assert result.returncode == 0, result.stderr
+    assert "Möglicherweise Bestandsinstallation" in result.stderr
 
 
 def test_setup_fixture_uses_the_real_production_compose() -> None:

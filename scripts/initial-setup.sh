@@ -211,21 +211,25 @@ info "Compose-Datei: ${COMPOSE_FILE}"
 info "Env-Datei:     ${ENV_FILE}"
 
 # Ein fester Top-Level-Compose-Name trennt neue Dev-/Prod-Volumes. Bei einem
-# Upgrade kann dadurch ein unter dem frueheren Verzeichnisnamen angelegtes
-# pgdata-Volume aus dem aktiven Projekt fallen. Die Daten bleiben erhalten;
-# der Betreiber muss aber den bisherigen Projektnamen explizit setzen.
+# Upgrade kann dadurch ein unter dem frueheren, von Compose normalisierten
+# Verzeichnisnamen angelegtes pgdata-Volume aus dem aktiven Projekt fallen.
+# Nur dieser eindeutige Kandidat ist ein sinnvoller Upgrade-Hinweis; Volumes
+# anderer Stacks duerfen auf einer Erstinstallation keine Warnung ausloesen.
 active_project_name="$(compose config 2>/dev/null | awk '$1 == "name:" { print $2; exit }')"
 if [[ -n "$active_project_name" ]]; then
-    foreign_pgdata_volume=""
+    compose_directory_name="$(basename "$(cd "$(dirname "$COMPOSE_FILE")" && pwd)")"
+    legacy_project_name="$(printf '%s' "$compose_directory_name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-' | sed 's/^[^a-z0-9]*//')"
+    active_pgdata_volume="${active_project_name}_pgdata"
+    legacy_pgdata_volume="${legacy_project_name}_pgdata"
+    active_pgdata_found=0
+    legacy_pgdata_found=0
     while IFS= read -r volume_name; do
-        if [[ "$volume_name" == *_pgdata && "$volume_name" != "${active_project_name}_pgdata" ]]; then
-            foreign_pgdata_volume="$volume_name"
-            break
-        fi
+        [[ "$volume_name" != "$active_pgdata_volume" ]] || active_pgdata_found=1
+        [[ -z "$legacy_project_name" || "$volume_name" != "$legacy_pgdata_volume" ]] || legacy_pgdata_found=1
     done < <(docker volume ls --format '{{.Name}}' 2>/dev/null || true)
-    if [[ -n "$foreign_pgdata_volume" ]]; then
-        warn "Volume ${foreign_pgdata_volume} gehoert nicht zum aktiven Compose-Projekt ${active_project_name}."
-        warn "Bestandsinstallation: bisherigen Projektnamen in COMPOSE_PROJECT_NAME eintragen (docker volume ls | grep pgdata)."
+    if [[ "$active_pgdata_found" == 0 && "$legacy_pgdata_found" == 1 ]]; then
+        printf -v upgrade_hint 'Möglicherweise Bestandsinstallation: Volume `%s` gefunden, das aktive Projekt `%s` hat noch kein pgdata-Volume. Handelt es sich um ein Upgrade, `COMPOSE_PROJECT_NAME=%s` in der .env eintragen; bei einer Erstinstallation ignorieren.' "$legacy_pgdata_volume" "$active_project_name" "$legacy_project_name"
+        warn "$upgrade_hint"
     fi
 fi
 
