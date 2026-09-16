@@ -15,51 +15,51 @@ indirekt abgedeckt schien. Diese Datei nutzt durchgaengig **plain**
 ``timestamp=``-Insert (der Append-Only-Trigger erlaubt INSERT, nur kein
 UPDATE/DELETE).
 
-**Zentraler Befund fuer die Triage:** ``src/anlaufstelle/settings/base.py``
-definiert **jedes** hier relevante ``BREACH_*``-Setting bereits mit demselben
-Zahlenwert, den ``_get_threshold(name, default)`` als Inline-Default traegt
-(z. B. ``BREACH_DETECTION_WINDOW_MINUTES = env_int(..., 60)`` in base.py:331
-vs. ``_get_threshold("BREACH_DETECTION_WINDOW_MINUTES", 60)`` im Code).
-``getattr(settings, name, default)`` liest den ``default``-Parameter NUR,
-wenn das Attribut auf dem Settings-Objekt fehlt — das ist hier NIE der Fall
-(base.py setzt es immer, ob per Env-Var oder eigenem Default). Der
-Inline-``default``-Wert selbst ist damit toter Code, ob ein Test das Setting
-per ``settings.X = ...``-Fixture ueberschreibt oder nicht. Mutationen, die
-NUR diesen Inline-Default veraendern (``60`` -> ``None``/``61`` etc.), sind
-folglich **aequivalent**. Mutationen, die den **Namen** des Settings
-verfaelschen (XX-Marker, Kleinschreibung), sind dagegen sehr wohl
-beobachtbar: wird der operatorseitig gesetzte Wert per
+**Settings-Defaults sind der Fallback-Vertrag, nicht totes Wissen (Nachtrag
+Nacharbeit 2, Konsistenz mit Batch ``breach_detection-b``):**
+``src/anlaufstelle/settings/base.py`` definiert zwar **jedes** hier
+relevante ``BREACH_*``-Setting mit demselben Zahlenwert, den
+``_get_threshold(name, default)`` als Inline-Default traegt (z. B.
+``BREACH_DETECTION_WINDOW_MINUTES = env_int(..., 60)`` in base.py:331 vs.
+``_get_threshold("BREACH_DETECTION_WINDOW_MINUTES", 60)`` im Code) — der
+Inline-Default ist deshalb aber KEIN totes Wissen, sondern der
+dokumentierte Fallback-Vertrag fuer eine FEHLENDE Einstellung (z. B. ein
+minimaler/unvollstaendiger ``.env`` ohne die ``BREACH_*``-Blocks). Er wird
+beobachtbar, sobald man das Setting vollstaendig entfernt (Muster aus
+``test_mutation_pins_094_credentials.py::
+test_scan_falls_back_to_module_default_when_setting_is_absent``, siehe
+``_delete_setting()`` unten): dann greift der lokale Default tatsaechlich,
+und ``None`` (-> ``TypeError`` bei ``int(None)``) bzw. der Off-by-One-Wert
+werden an der dokumentierten Grenze (Schwelle exakt am Default-Wert,
+Fenster exakt 0,5 min ueber dem Default) beobachtbar. Mutationen, die den
+**Namen** des Settings verfaelschen (XX-Marker, Kleinschreibung), sind
+unabhaengig davon beobachtbar: wird der operatorseitig gesetzte Wert per
 ``settings.X = <abweichender Wert>`` ueberschrieben, findet der Mutant das
-(falsch geschriebene) Attribut nicht mehr und faellt auf den — nun falschen
-— Inline-Default zurueck. Diese Technik traegt die meisten Pins unten.
+(falsch geschriebene) Attribut nicht mehr und faellt auf den — nun
+falschen — Inline-Default zurueck. Beide Techniken zusammen pinnen ALLE
+``_get_threshold``-Survivors dieses Batches als Klasse ``test``.
 
 Weitere empirisch verifizierte Aequivalenzen (Python-Shell-Nachweis im
-Bericht ``reports/m-pins-breach_detection-a-report.md``):
+Bericht ``reports/m-pins-breach_detection-a-report.md``) — diese ruhen auf
+dokumentierten, deterministischen Sprach-/Bibliotheks-/SQL-Standard-Regeln,
+NICHT auf beobachtetem, ungarantiertem Planer-/Ausfuehrungsverhalten:
 ``str.encode("UTF-8")`` == ``str.encode("utf-8")`` (Codec-Namen sind
-case-insensitiv); ``urllib.request.Request(..., headers={...})`` normalisiert
-jeden Header-Key ueber ``.capitalize()`` — ``"Content-Type"``,
+case-insensitiv, dokumentierte Codec-Registry-Normalisierung); ``urllib.
+request.Request(..., headers={...})`` normalisiert jeden Header-Key ueber
+``.capitalize()`` (CPython-Quellcode) — ``"Content-Type"``,
 ``"content-type"`` und ``"CONTENT-TYPE"`` ergeben alle denselben
 gespeicherten Key ``"Content-type"``; ``Request(..., data=<nicht None>,
-method=None)`` liefert ueber ``get_method()`` weiterhin ``"POST"`` (Fallback
-auf ``data is not None``); Postgres behandelt SQL-Keywords UND
-Custom-GUC-Parameternamen (``current_setting``/``set_config``) case-
-insensitiv (empirisch mit Gross-/Kleinschreibung gegengeprüft).
+method=None)`` liefert ueber ``get_method()`` weiterhin ``"POST"``
+(expliziter CPython-Quellcode-Zweig, Fallback auf ``data is not None``);
+Postgres behandelt SQL-Keywords (SQL-Standard-Keyword-Faltung) UND
+Custom-GUC-Parameternamen (``current_setting``/``set_config``,
+dokumentiertes ``guc.c``-Verhalten ueber ``pg_strcasecmp``) case-insensitiv
+(empirisch mit Gross-/Kleinschreibung gegengeprüft).
 
 **Nicht gepinnt (aequivalent):**
 
-*Redundante Settings-Defaults (siehe oben; base.py-Zeilen in Klammern):*
-``x__post_webhook__mutmut_6`` (BREACH_NOTIFICATION_WEBHOOK_URL, base.py:367,
-immer gesetzt — ``getattr``-Default entfernt aendert nichts);
-``x__detect_facility_action_burst__mutmut_3/8/11/16``,
-``x__detect_user_action_burst__mutmut_5/10/13/18`` (BREACH_DETECTION_WINDOW_
-MINUTES/_LONG_WINDOW_MINUTES, base.py:331/339);
-``x_detect_anonymous_login_bursts__mutmut_3/8/11/16/19/24``
-(BREACH_ANON_LOGIN_IP_THRESHOLD/_TOTAL_THRESHOLD/BREACH_DETECTION_WINDOW_
-MINUTES, base.py:359/360/331);
-``x_detect_mass_export__mutmut_14/19/21/26`` (BREACH_EXPORT_THRESHOLD/_LONG,
-base.py:333/348).
-
-*SQL-/GUC-Case-Insensitivitaet (empirisch verifiziert):*
+*SQL-/GUC-Case-Insensitivitaet (dokumentiertes, deterministisches
+Postgres-Verhalten, empirisch verifiziert):*
 ``x_run_system_detections__mutmut_6/7/14/15/21``.
 
 *urllib-``Request``-Method-Fallback (``data`` ist an dieser Call-Site immer
@@ -70,16 +70,32 @@ gesetzt):* ``x__post_webhook__mutmut_24/28``.
 *Header-Key-Normalisierung ueber ``.capitalize()``:*
 ``x__post_webhook__mutmut_34/35``.
 
-*GROUP-BY-Zeilenreihenfolge:* ``x__detect_user_action_burst__mutmut_50``
-(``continue`` -> ``break`` bei ``row["user"] is None``) — empirisch mit 4
-echten Usern + einer anonymen Burst-Zeile verifiziert: Postgres liefert die
-Gruppen ueber den indexierten ``user``-FK aufsteigend mit impliziten
-``NULLS LAST`` (Reihenfolge ``[u1, u2, u3, u4, None]``), die anonyme Zeile
-steht in der Praxis IMMER zuletzt — ``break`` hat dort keinen beobachtbaren
-Effekt gegenueber ``continue``. Ein Pin, der eine ANDERE Zeilenreihenfolge
-erzwingen wollte, muesste den Query-Plan gezielt verbiegen (z. B.
-``SET enable_indexscan = off``) und waere selbst nicht robust genug fuer
-einen belastbaren, nicht-flakigen Kill-Nachweis.
+**Nachtrag (Zweitreview, Teil 1):** ``x__detect_user_action_burst__mutmut_50``
+(``continue`` -> ``break`` bei ``row["user"] is None``) galt in einer
+frueheren Fassung als aequivalent, gestuetzt auf eine bloss BEOBACHTETE
+GROUP-BY-Zeilenreihenfolge ohne ``ORDER BY`` — das ist KEIN
+Aequivalenzbeweis (ein Hash-Aggregate kann bei groesseren Mengen jede
+Reihenfolge liefern). Korrigiert auf Klasse ``test`` (Prio 2), siehe
+``TestDetectUserActionBurstAnonymousGroupOrdering`` unten: die
+Iterationsreihenfolge wird per Verhaltens-Patch auf den Manager erzwungen
+(``AuditLog.objects.filter(...)`` liefert zusaetzlich
+``.order_by(F("user").asc(nulls_first=True))``), kein Text-/AST-Spy.
+
+**Nachtrag (Zweitreview, Teil 2):** die 19 Inline-Default-Mutanten der
+``_get_threshold``-Aufrufe (oben unter „Settings-Defaults sind der
+Fallback-Vertrag" beschrieben) galten ebenfalls als aequivalent
+(„toter Code") und wurden zur Konsistenz mit Batch ``breach_detection-b``
+und dem Repo-Praezedenzfall ``test_mutation_pins_094_credentials.py`` auf
+Klasse ``test`` (Prio 3) korrigiert und ueber ``_delete_setting()`` gepinnt
+(siehe die ``*Default``-Testklassen unten). Verbleibend sind **10**
+Aequivalenzen: 5 SQL-/GUC-Case-Faelle, 2 ``urllib``-Method-Faelle, 1
+Codec-Fall, 2 Header-Capitalize-Faelle — alle auf dokumentierten,
+deterministischen Sprach-/Bibliotheks-/SQL-Standard-Regeln (Codec-
+Normalisierung, ``str.capitalize()``, ``Request.get_method()``-Fallback,
+SQL-Keyword-Faltung, Postgres-GUC-Namensvergleich case-insensitiv)
+beruhend — NICHT auf beobachtetem, ungarantiertem
+Planer-/Ausfuehrungsverhalten; im Zweitreview erneut einzeln geprueft,
+keine weitere Korrektur noetig.
 """
 
 from __future__ import annotations
@@ -88,7 +104,9 @@ import urllib.error
 from datetime import timedelta
 
 import pytest
+from django.conf import settings as django_settings
 from django.db import connection, transaction
+from django.db.models import F
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -113,6 +131,29 @@ def _audit(action, *, facility=None, user=None, ip=None, ago_min=0):
     Trigger-Bypass noetig, wie ``test_mutation_1642_breach_detection.py``)."""
     ts = timezone.now() - timedelta(minutes=ago_min)
     return AuditLog.objects.create(action=action, facility=facility, user=user, ip_address=ip, timestamp=ts)
+
+
+def _bulk_audit(n, *, action, facility=None, user=None, ip=None, ago_min=0):
+    """Wie ``_audit``, aber ``n`` Zeilen auf einmal ueber ``bulk_create``
+    (Muster aus ``test_mutation_pins_099_breach_detection_b.py::_bulk_audit``)
+    — fuer Schwellen-Grenzwert-Pins, die exakt ``n`` Zeilen brauchen."""
+    ts = timezone.now() - timedelta(minutes=ago_min)
+    AuditLog.objects.bulk_create(
+        [AuditLog(facility=facility, user=user, action=action, ip_address=ip, timestamp=ts) for _ in range(n)]
+    )
+
+
+def _delete_setting(monkeypatch, name):
+    """Entfernt ``name`` vollstaendig aus den Django-Settings (Muster aus
+    ``test_mutation_pins_094_credentials.py`` bzw.
+    ``test_mutation_pins_099_breach_detection_b.py::_delete_setting``):
+    sowohl aus dem Instanz-``__dict__`` der ``LazySettings`` als auch aus
+    dem ``Settings``-Objekt dahinter (``_wrapped``) — erst dann greift
+    ``getattr(settings, name, default)`` wirklich den ``default``-Zweig,
+    weil ``settings/base.py`` die ``BREACH_*``-Konstanten sonst IMMER
+    setzt."""
+    monkeypatch.delitem(django_settings.__dict__, name, raising=False)
+    monkeypatch.delattr(django_settings._wrapped, name, raising=False)
 
 
 # ============================================================================
@@ -202,6 +243,19 @@ class TestPostWebhookRejectionLogging:
             assert _post_webhook({"kind": "x"}) is False
         messages = [r.getMessage() for r in caplog.records]
         assert messages == ["breach_webhook_failed: <urlopen error connection refused>"]
+
+
+class TestPostWebhookUrlSettingDefault:
+    def test_missing_webhook_url_setting_does_not_crash(self, monkeypatch):
+        """Killt ``x__post_webhook__mutmut_6`` (``getattr``-Default
+        entfernt, ``getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL")``
+        statt ``..., None)``): fehlt das Setting vollstaendig (z. B.
+        minimaler ``.env`` ohne den ``BREACH_*``-Block), liefert das
+        Original ``False`` (kein Webhook konfiguriert) — der Mutant wirft
+        ``AttributeError``, weil der 2-Arg-``getattr``-Aufruf ohne
+        Default-Fallback ein fehlendes Attribut nicht mehr abfaengt."""
+        _delete_setting(monkeypatch, "BREACH_NOTIFICATION_WEBHOOK_URL")
+        assert _post_webhook({"kind": "x"}) is False
 
 
 # ============================================================================
@@ -302,6 +356,41 @@ class TestDetectFacilityActionBurstWindow:
         assert findings == []
 
 
+class TestDetectFacilityActionBurstShortWindowDefault:
+    def test_default_short_window_matches_documented_60_minutes(self, facility, settings, monkeypatch):
+        """Killt ``x__detect_facility_action_burst__mutmut_3`` (Inline-
+        Default ``60`` -> ``None``, ``int(None)`` wirft ``TypeError``) und
+        ``_mutmut_8`` (Default ``61`` statt ``60``): das Setting wird
+        vollstaendig entfernt (Muster ``test_mutation_pins_094_
+        credentials.py``), damit der Inline-Default tatsaechlich greift.
+        Ein Eintrag 60,5 Minuten alt liegt knapp AUSSERHALB des
+        dokumentierten 60-Minuten-Fensters, aber INNERHALB des
+        Mutanten-Fensters (61 Minuten)."""
+        settings.BREACH_DETECTION_LONG_WINDOW_MINUTES = 1440
+        _delete_setting(monkeypatch, "BREACH_DETECTION_WINDOW_MINUTES")
+        _audit(AuditLog.Action.DELETE, facility=facility, ago_min=60.5)
+        findings = _detect_facility_action_burst(
+            facility, actions=(AuditLog.Action.DELETE,), kind="x", short_threshold=1, long_threshold=999999
+        )
+        assert findings == []
+
+
+class TestDetectFacilityActionBurstLongWindowDefault:
+    def test_default_long_window_matches_documented_1440_minutes(self, facility, settings, monkeypatch):
+        """Killt ``x__detect_facility_action_burst__mutmut_11`` (Inline-
+        Default ``1440`` -> ``None``) und ``_mutmut_16`` (Default ``1441``
+        statt ``1440``): Eintrag 1440,5 Minuten alt liegt knapp AUSSERHALB
+        des dokumentierten Long-Windows, aber INNERHALB des
+        Mutanten-Fensters (1441 Minuten)."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 1
+        _delete_setting(monkeypatch, "BREACH_DETECTION_LONG_WINDOW_MINUTES")
+        _audit(AuditLog.Action.DELETE, facility=facility, ago_min=1440.5)
+        findings = _detect_facility_action_burst(
+            facility, actions=(AuditLog.Action.DELETE,), kind="x", short_threshold=999999, long_threshold=1
+        )
+        assert findings == []
+
+
 # ============================================================================
 # _detect_user_action_burst — Zeitfenster-Namen, Query-Scope
 # ============================================================================
@@ -348,6 +437,81 @@ class TestDetectUserActionBurstWindow:
             facility, action=AuditLog.Action.LOGIN_FAILED, kind="x", short_threshold=999, long_threshold=1
         )
         assert findings == []
+
+
+class TestDetectUserActionBurstShortWindowDefault:
+    def test_default_short_window_matches_documented_60_minutes(self, facility, admin_user, settings, monkeypatch):
+        """Killt ``x__detect_user_action_burst__mutmut_5`` (Inline-Default
+        ``60`` -> ``None``) und ``_mutmut_10`` (Default ``61`` statt
+        ``60``): Setting entfernt, Eintrag 60,5 Minuten alt liegt knapp
+        AUSSERHALB des dokumentierten Fensters, aber INNERHALB des
+        Mutanten-Fensters."""
+        settings.BREACH_DETECTION_LONG_WINDOW_MINUTES = 1440
+        _delete_setting(monkeypatch, "BREACH_DETECTION_WINDOW_MINUTES")
+        _audit(AuditLog.Action.LOGIN_FAILED, facility=facility, user=admin_user, ago_min=60.5)
+        findings = _detect_user_action_burst(
+            facility, action=AuditLog.Action.LOGIN_FAILED, kind="x", short_threshold=1, long_threshold=999999
+        )
+        assert findings == []
+
+
+class TestDetectUserActionBurstLongWindowDefault:
+    def test_default_long_window_matches_documented_1440_minutes(self, facility, admin_user, settings, monkeypatch):
+        """Killt ``x__detect_user_action_burst__mutmut_13`` (Inline-Default
+        ``1440`` -> ``None``) und ``_mutmut_18`` (Default ``1441`` statt
+        ``1440``): Eintrag 1440,5 Minuten alt liegt knapp AUSSERHALB des
+        dokumentierten Long-Windows, aber INNERHALB des Mutanten-Fensters."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 1
+        _delete_setting(monkeypatch, "BREACH_DETECTION_LONG_WINDOW_MINUTES")
+        _audit(AuditLog.Action.LOGIN_FAILED, facility=facility, user=admin_user, ago_min=1440.5)
+        findings = _detect_user_action_burst(
+            facility, action=AuditLog.Action.LOGIN_FAILED, kind="x", short_threshold=999999, long_threshold=1
+        )
+        assert findings == []
+
+
+class TestDetectUserActionBurstAnonymousGroupOrdering:
+    def test_anonymous_group_first_does_not_drop_later_user_finding(self, facility, admin_user, settings, monkeypatch):
+        """Killt ``x__detect_user_action_burst__mutmut_50``
+        (``continue`` -> ``break`` bei ``row["user"] is None``): ohne
+        explizites ``ORDER BY`` ist die Zeilenreihenfolge des
+        ``.values("user").annotate(...)``-Gruppierungs-Query NICHT
+        garantiert (ein Hash-Aggregate kann bei groesseren Mengen jede
+        Reihenfolge liefern) — eine bloss beobachtete Reihenfolge ist
+        daher KEIN Aequivalenzbeweis. Dieser Pin erzwingt die
+        Iterationsreihenfolge stattdessen ueber einen Verhaltens-Patch auf
+        den Manager (kein Text-/AST-Spy auf den Query-Ausdruck): jeder
+        ``AuditLog.objects.filter(...)``-Aufruf liefert zusaetzlich
+        ``.order_by(F("user").asc(nulls_first=True))`` — ``user`` steht
+        ohnehin in der GROUP-BY-Liste, das Ordering bleibt durch die
+        ``.values()``/``.annotate()``-Kette hindurch als explizites
+        ``ORDER BY`` in der finalen SQL erhalten. Damit steht die anonyme
+        Gruppe (``user IS NULL``) GARANTIERT zuerst: Original
+        (``continue``) ueberspringt nur diese eine Zeile und findet danach
+        den echten User-Fund; Mutant (``break``) verlaesst die Schleife
+        sofort und verliert ihn komplett."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        settings.BREACH_DETECTION_LONG_WINDOW_MINUTES = 1440
+
+        real_filter = AuditLog.objects.filter
+
+        def _filter_ordered_by_user_nulls_first(*args, **kwargs):
+            return real_filter(*args, **kwargs).order_by(F("user").asc(nulls_first=True))
+
+        monkeypatch.setattr(AuditLog.objects, "filter", _filter_ordered_by_user_nulls_first)
+
+        # Anonyme (facility-gescopte) Gruppe zuerst angelegt — durch das
+        # erzwungene Ordering landet sie unabhaengig von der Anlage-
+        # Reihenfolge als ERSTE Zeile im Gruppierungs-Ergebnis.
+        _audit(AuditLog.Action.LOGIN_FAILED, facility=facility, user=None, ago_min=0)
+        _audit(AuditLog.Action.LOGIN_FAILED, facility=facility, user=admin_user, ago_min=0)
+
+        findings = _detect_user_action_burst(
+            facility, action=AuditLog.Action.LOGIN_FAILED, kind="x", short_threshold=1, long_threshold=999
+        )
+
+        assert len(findings) == 1
+        assert findings[0]["user_id"] == admin_user.pk
 
 
 # ============================================================================
@@ -439,6 +603,53 @@ class TestDetectAnonymousLoginBurstsWindow:
         assert detect_anonymous_login_bursts() == []
 
 
+class TestDetectAnonymousLoginBurstsIpThresholdDefault:
+    def test_default_ip_threshold_matches_documented_20(self, settings, monkeypatch):
+        """Killt ``x_detect_anonymous_login_bursts__mutmut_3`` (Inline-
+        Default ``20`` -> ``None``) und ``_mutmut_8`` (Default ``21``
+        statt ``20``): Setting entfernt, genau 20 Fehlversuche von EINER
+        IP — an der dokumentierten Grenze loest das Original aus, der
+        Mutant mit Default 21 (noch) nicht, der Mutant mit ``None``
+        crasht."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        settings.BREACH_ANON_LOGIN_TOTAL_THRESHOLD = 999999
+        _delete_setting(monkeypatch, "BREACH_ANON_LOGIN_IP_THRESHOLD")
+        _bulk_audit(20, action=AuditLog.Action.LOGIN_FAILED, user=None, ip="198.51.100.7")
+        findings = detect_anonymous_login_bursts()
+        assert len(findings) == 1
+        assert findings[0]["kind"] == "anonymous_login_burst"
+
+
+class TestDetectAnonymousLoginBurstsTotalThresholdDefault:
+    def test_default_total_threshold_matches_documented_100(self, settings, monkeypatch):
+        """Killt ``x_detect_anonymous_login_bursts__mutmut_11`` (Inline-
+        Default ``100`` -> ``None``) und ``_mutmut_16`` (Default ``101``
+        statt ``100``): Setting entfernt, genau 100 Fehlversuche von
+        EINER IP (Per-IP-Schwelle bewusst unerreichbar hoch), an der
+        dokumentierten Gesamtvolumen-Grenze."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        settings.BREACH_ANON_LOGIN_IP_THRESHOLD = 999999
+        _delete_setting(monkeypatch, "BREACH_ANON_LOGIN_TOTAL_THRESHOLD")
+        _bulk_audit(100, action=AuditLog.Action.LOGIN_FAILED, user=None, ip="198.51.100.7")
+        findings = detect_anonymous_login_bursts()
+        kinds = [f["kind"] for f in findings]
+        assert "anonymous_login_flood" in kinds
+
+
+class TestDetectAnonymousLoginBurstsWindowMinutesDefault:
+    def test_default_window_matches_documented_60_minutes(self, settings, monkeypatch):
+        """Killt ``x_detect_anonymous_login_bursts__mutmut_19`` (Inline-
+        Default ``60`` -> ``None``) und ``_mutmut_24`` (Default ``61``
+        statt ``60``): Eintrag 60,5 Minuten alt liegt knapp AUSSERHALB
+        des dokumentierten Fensters, aber INNERHALB des Mutanten-
+        Fensters."""
+        settings.BREACH_ANON_LOGIN_IP_THRESHOLD = 1
+        settings.BREACH_ANON_LOGIN_TOTAL_THRESHOLD = 999999
+        _delete_setting(monkeypatch, "BREACH_DETECTION_WINDOW_MINUTES")
+        _audit(AuditLog.Action.LOGIN_FAILED, user=None, ip="198.51.100.7", ago_min=60.5)
+        assert detect_anonymous_login_bursts() == []
+
+
 # ============================================================================
 # detect_mass_export — Long-Threshold-Wiring
 # ============================================================================
@@ -475,3 +686,35 @@ class TestDetectMassExportLongThreshold:
         findings = detect_mass_export(facility)
         assert len(findings) == 1
         assert findings[0]["threshold"] == 2
+
+
+class TestDetectMassExportShortThresholdDefault:
+    def test_default_short_threshold_matches_documented_10(self, facility, admin_user, settings, monkeypatch):
+        """Killt ``x_detect_mass_export__mutmut_14`` (Inline-Default
+        ``10`` -> ``None``) und ``_mutmut_19`` (Default ``11`` statt
+        ``10``): Setting entfernt, genau 10 Export-Aktionen — an der
+        dokumentierten Grenze loest das Original aus, der Mutant mit
+        Default 11 (noch) nicht, der Mutant mit ``None`` crasht."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        settings.BREACH_DETECTION_LONG_WINDOW_MINUTES = 1440
+        settings.BREACH_EXPORT_THRESHOLD_LONG = 999999
+        _delete_setting(monkeypatch, "BREACH_EXPORT_THRESHOLD")
+        _bulk_audit(10, action=AuditLog.Action.EXPORT, facility=facility, user=admin_user)
+        findings = detect_mass_export(facility)
+        assert len(findings) == 1
+
+
+class TestDetectMassExportLongThresholdDefault:
+    def test_default_long_threshold_matches_documented_30(self, facility, admin_user, settings, monkeypatch):
+        """Killt ``x_detect_mass_export__mutmut_21`` (Inline-Default
+        ``30`` -> ``None``) und ``_mutmut_26`` (Default ``31`` statt
+        ``30``): Setting entfernt, genau 30 Export-Aktionen ausserhalb
+        des Kurzfensters, aber innerhalb des Long-Windows — an der
+        dokumentierten Grenze."""
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 1
+        settings.BREACH_DETECTION_LONG_WINDOW_MINUTES = 1440
+        settings.BREACH_EXPORT_THRESHOLD = 999999
+        _delete_setting(monkeypatch, "BREACH_EXPORT_THRESHOLD_LONG")
+        _bulk_audit(30, action=AuditLog.Action.EXPORT, facility=facility, user=admin_user, ago_min=10)
+        findings = detect_mass_export(facility)
+        assert len(findings) == 1
