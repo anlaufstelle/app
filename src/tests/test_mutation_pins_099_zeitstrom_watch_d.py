@@ -7,35 +7,52 @@ Quelle: Vollmutation #2174, Batch ``zeitstrom_watch-d``
 ``_opaque_validator``, ``_page_etag`` (alle drei opake HMAC-Validatoren) und
 ``_tally_topology_projection`` (Datenprojektion der Strichlisten-Topologie).
 
-**Die drei HMAC-Validatoren** (43 Mutanten insgesamt) sind bewusst intransparent
+**Die drei HMAC-Validatoren** (44 Mutanten insgesamt) sind bewusst intransparent
 — kein Aufrufer darf sich auf einzelne Bytes des Rückgabewerts verlassen, nur
 auf Gleichheit/Ungleichheit. Trotzdem ändert JEDE Abweichung von der
 dokumentierten Quelle (die exakt benannten Dict-Schlüssel + der feste
-HMAC-Salt + ``sha256``) den vollständigen Rückgabewert — kein Fall ist
-„nirgendwo gelesen" (die Docs-Definition von ``equivalent``). Gepinnt wird
+HMAC-Salt + ``algorithm="sha256"``) den vollständigen Rückgabewert — kein Fall
+ist „nirgendwo gelesen" (die Docs-Definition von ``equivalent``). Gepinnt wird
 daher über eine **unabhängige Rekonstruktion**: Jeder Test baut dieselbe
-Quelle mit den EXAKTEN Feldnamen/Salt aus dem freigegebenen Quelltext nach und
-vergleicht sie auf Bytegleichheit mit dem tatsächlichen Rückgabewert. Das
-killt sowohl reine Schlüssel-Umbenennungen (Prio 2, internes
+Quelle mit den EXAKTEN Feldnamen/Salt/Algorithmus aus dem freigegebenen
+Quelltext nach und vergleicht sie auf Bytegleichheit mit dem tatsächlichen
+Rückgabewert. Das killt sowohl reine Schlüssel-Umbenennungen (Prio 2, internes
 Repräsentationsdetail) als auch die Mutanten, die ``str(user.pk)``/
 ``str(facility.pk)`` durch ``str(None)`` ersetzen (Prio 1: zwei User bzw. zwei
 Einrichtungen mit sonst gleichem State/Rolle/Sensitivitäten bekämen
 DENSELBEN Validator — die Bindung an die Identität, die diese Validatoren
-laut Docstring herstellen sollen, wäre aufgehoben) sowie die Salt-Mutationen
-(Prio 1: die Namensraum-Trennung der drei Validator-Familien geht verloren).
-
-Eine einzige Ausnahme ist ein echtes Äquivalenz-Urteil:
-``xǁ_page_etagǁ__mutmut_18`` hängt nur ein überflüssiges Komma an den
-``salted_hmac``-Aufruf — bytegleicher AST/Bytecode zum Original, siehe
-Klassen-Docstring unten.
+laut Docstring herstellen sollen, wäre aufgehoben), die Salt-Mutationen
+(Prio 1: die Namensraum-Trennung der drei Validator-Familien geht verloren)
+sowie das entfernte ``algorithm="sha256"``-Keyword in
+``xǁ_page_etagǁ__mutmut_18`` (Prio 1: ``salted_hmac`` fällt dann auf seinen
+Funktions-Default ``algorithm="sha1"`` zurück — ein schwächerer,
+40-stelliger statt 64-stelliger Digest; siehe Klassen-Docstring unten für die
+Korrektur des ursprünglichen Fehlurteils).
 
 **``_tally_topology_projection``** (17 Mutanten) ist reine Datenprojektion,
 keine HMAC-Funktion — hier wird echtes Verhalten (Sentinel-Wert, Spy auf die
 ``build_tally_summary``-Aufrufargumente, exakte Tupel-Form mit einem
-Pflicht- und einem optionalen Feld in kontrollierter Sortier-Reihenfolge)
-geprüft, keine Rekonstruktion. Zwei ``getattr``-Default-Mutanten
-(``__mutmut_21``/``__mutmut_24``) sind hier als echte Äquivalenz belegt,
-siehe Klassen-Docstring.
+Pflicht- und einem optionalen Feld in kontrollierter Sortier-Reihenfolge,
+sowie ein ``document_type`` ohne das prefetchte Attribut
+``_tally_policy_assignments``) geprüft, keine Rekonstruktion.
+
+**Zwei nachträgliche Korrekturen (Zweitgutachten, vom Orchestrator
+übernommen):** ``xǁ_tally_topology_projectionǁ__mutmut_21``/``__mutmut_24``
+(die beiden ``getattr``-Default-Mutanten) waren zunächst als Äquivalenz
+dokumentiert, weil ``document_type`` in JEDEM Aufrufpfad über
+``tally_eligibilities()``'s Prefetch ankommt, der das Attribut immer setzt.
+Beobachtbar wird das Default-Verhalten trotzdem, sobald ein Aufrufer
+``_tally_topology_projection`` mit einer selbst gebauten ``summary`` und
+einem ``document_type`` OHNE dieses Attribut aufruft (z. B. ein frischer
+``DocumentType.objects.get(...)``-Fetch ohne ``prefetch_related``) — ein
+legitimer Aufrufpfad über den öffentlichen ``summary=``-Parameter der
+Funktion. Beide Mutanten sind daher umklassifiziert auf ``test``/Prio 2,
+siehe ``test_document_type_ohne_prefetch_faellt_auf_getattr_default_zurueck``.
+``xǁ_page_etagǁ__mutmut_18`` war zunächst als reine Trailing-Komma-Äquivalenz
+dokumentiert — ein Lesefehler: der Diff gegen ``__mutmut_orig`` entfernt
+tatsächlich das komplette Keyword-Argument ``algorithm="sha256"``, nicht nur
+ein Komma (siehe oben). Alle 60 Mutanten der Batch sind damit als ``test``
+klassifiziert und gepinnt, keine ``equivalent``-Fälle mehr.
 
 Konventionen wie ``test_mutation_pins_099_tally.py``: lokaler ``_add_field``-
 Helfer (Bestandsdatei bleibt unangetastet), Fixtures aus ``conftest.py``,
@@ -159,7 +176,12 @@ class TestOpaqueValidator:
 
 
 class TestPageEtag:
-    """``_page_etag`` — 14 Mutanten: 13 ``test`` + 1 ``equivalent``."""
+    """``_page_etag`` — 14 Mutanten, alle als ``test`` gepinnt.
+
+    (``__mutmut_18`` ursprünglich fälschlich als ``equivalent``
+    dokumentiert — Korrektur nach Zweitgutachten, siehe Test-Docstring
+    unten und Moduldocstring.)
+    """
 
     def test_etag_entspricht_der_unabhaengig_nachgebauten_hmac(self, facility, staff_user):
         """Pins ``xǁ_page_etagǁ__mutmut_2/3`` (Schlüssel ``"user"``),
@@ -172,12 +194,18 @@ class TestPageEtag:
         bekämen dasselbe Seiten-ETag. ``__mutmut_13`` (Salt entfernt),
         ``__mutmut_19/20`` (Salt umbenannt/großgeschrieben).
 
-        ``__mutmut_18`` (``salted_hmac("core.zeitstrom.watch.page.v1",
-        _json(source), ).hexdigest()`` — ein überflüssiges Komma nach dem
-        zweiten Positionsargument) ist NICHT gepinnt: das Komma erzeugt
-        keinen AST-Unterschied zum Original (dieselbe Zwei-Argument-Liste,
-        derselbe Bytecode) — kein Aufrufer, auch kein noch so genauer Test,
-        kann diese Mutante vom Original unterscheiden. Echte Äquivalenz.
+        Ebenfalls Prio 1 — Korrektur nach Zweitgutachten: ``__mutmut_18``
+        (``salted_hmac("core.zeitstrom.watch.page.v1", _json(source),
+        ).hexdigest()``) wurde zunächst als reine Trailing-Komma-Äquivalenz
+        gelesen. Der Diff gegen ``__mutmut_orig`` zeigt aber: das komplette
+        Keyword-Argument ``algorithm="sha256"`` fehlt, nicht nur ein Komma.
+        ``salted_hmac`` fällt dadurch auf seinen Funktions-Default
+        ``algorithm="sha1"`` zurück (Django-Signatur:
+        ``salted_hmac(key_salt, value, secret=None, *, algorithm="sha1")``)
+        — ein anderer, schwächerer Hash mit 40- statt 64-stelligem Digest.
+        Diese Rekonstruktion hier verwendet explizit ``algorithm="sha256"``
+        und erkennt den SHA1-Digest der Mutante daher sofort als Mismatch
+        (Kill-Nachweis: 40 vs. 64 Hex-Zeichen im Assertion-Diff).
         """
         state = resolve_zeitstrom_state({}, facility)
         validators = {"feed": '"feed-validator"', "tally_topology": '"tally-validator"'}
@@ -224,7 +252,12 @@ def _state_for(*, live_context, target_date, is_live):
 
 
 class TestTallyTopologyProjection:
-    """``_tally_topology_projection`` — 17 Mutanten: 15 ``test`` + 2 ``equivalent``."""
+    """``_tally_topology_projection`` — 17 Mutanten: alle 17 ``test`` gepinnt.
+
+    (``__mutmut_21``/``__mutmut_24`` ursprünglich als ``equivalent``
+    dokumentiert, nach Zweitgutachten umklassifiziert — siehe Moduldocstring
+    und ``test_document_type_ohne_prefetch_faellt_auf_getattr_default_zurueck``.)
+    """
 
     def test_kein_tally_kontext_liefert_exakt_das_sentinel_tupel(self, facility, staff_user):
         """Pins ``xǁ_tally_topology_projectionǁ__mutmut_2``
@@ -292,18 +325,14 @@ class TestTallyTopologyProjection:
         Schichtwechsel — gleiche Zeilen, andere Schicht — bliebe der
         Validator unbeobachtbar stehen).
 
-        NICHT gepinnt (echte Äquivalenz): ``__mutmut_21`` (Default-Wert des
-        ``getattr`` von ``()`` auf ``None`` geändert) und ``__mutmut_24``
-        (Default-Argument komplett entfernt, ``getattr`` mit nur zwei
-        Argumenten). ``document_type`` stammt in JEDEM realen Aufrufpfad aus
-        ``tally_eligibilities()`` (via ``build_tally_summary`` /
-        ``_tally_static_candidate_queryset``), deren Prefetch
-        (``Prefetch("fields", ..., to_attr="_tally_policy_assignments")``)
-        das Attribut IMMER setzt — auch als leere Liste, nie ungesetzt. Der
-        ``getattr``-Lookup trifft daher in jedem erreichbaren Fall direkt,
-        der Default-Zweig ist toter Code; kein Aufrufer (auch kein Test ohne
-        künstlich präparierte ``document_type``-Objekte außerhalb dieses
-        Prefetch-Pfads) kann die beiden Mutanten vom Original unterscheiden.
+        ``__mutmut_21``/``__mutmut_24`` (der ``getattr``-Default für ein
+        ``document_type`` OHNE das prefetchte Attribut
+        ``_tally_policy_assignments``) sind hier NICHT abgedeckt — dieser
+        Test läuft ausschließlich über den Fallback ``build_tally_summary``,
+        der das Attribut per Prefetch immer setzt. Siehe
+        ``test_document_type_ohne_prefetch_faellt_auf_getattr_default_zurueck``
+        für den Aufrufpfad, der den fehlenden Attribut-Zustand tatsächlich
+        beobachtbar macht.
         """
         doc_type = make_document_type(
             facility=facility,
@@ -362,3 +391,65 @@ class TestTallyTopologyProjection:
             ),
         )
         assert result == expected
+
+    def test_document_type_ohne_prefetch_faellt_auf_getattr_default_zurueck(self, facility, staff_user):
+        """Pins ``xǁ_tally_topology_projectionǁ__mutmut_21`` (Default von
+        ``getattr(document_type, "_tally_policy_assignments", ())`` auf
+        ``None`` geändert) und ``__mutmut_24`` (das dritte Argument entfällt
+        komplett, ``getattr(document_type, "_tally_policy_assignments")``).
+
+        Nachbesserung nach Zweitgutachten: der andere Test in
+        dieser Klasse lässt ``document_type`` immer über den internen
+        ``build_tally_summary``-Fallback laufen, dessen
+        ``tally_eligibilities()``-Prefetch ``_tally_policy_assignments``
+        IMMER setzt — der Default-Zweig des ``getattr`` bliebe dort
+        tatsächlich unerreichbar. Der öffentliche ``summary=``-Parameter
+        erlaubt aber einen legitimen zweiten Aufrufpfad: ein Aufrufer kann
+        eine eigene ``summary`` mit einem ``document_type`` übergeben, das
+        NICHT über diesen Prefetch geladen wurde (hier: ein frischer
+        ``DocumentType.objects.get(...)``-Fetch, per ``hasattr`` verifiziert
+        ohne das Attribut). Auf diesem Pfad ist der Default-Wert sehr wohl
+        beobachtbar: das Original fängt den fehlenden Attribut-Zustand über
+        den ``()``-Default ab (leere Pflichtfeldliste, kein Fehler);
+        ``__mutmut_21`` liefert stattdessen ``None`` als Default, worüber die
+        Schleife (``for assignment in None:``) mit ``TypeError`` abstürzt;
+        ``__mutmut_24`` hat gar keinen Default mehr und wirft
+        ``AttributeError`` direkt aus dem ``getattr``. Beide Abstürze zählen
+        als ``rot`` im Kill-Nachweis — der Test selbst erwartet exakt das
+        stille, fehlerfreie Original-Verhalten (Prio 2: kein
+        Sicherheits-/Datenschutzproblem, aber eine echte Testlücke — ein
+        Aufrufer ohne Prefetch bekäme in Produktion einen unbehandelten
+        Absturz statt der dokumentierten leeren Pflichtfeldliste)."""
+        doc_type = make_document_type(
+            facility=facility,
+            name="Ohne Prefetch",
+            entity_type=DocumentType.EntityType.EVENT,
+            tally_enabled=True,
+            is_active=True,
+        )
+        _add_field(doc_type, name="Anzahl", field_type=FieldTemplate.FieldType.NUMBER, required=True, sort_order=0)
+        # Frischer Fetch OHNE prefetch_related -- traegt das Attribut nicht,
+        # anders als ein document_type aus tally_eligibilities().
+        unprefetched = DocumentType.objects.get(pk=doc_type.pk)
+        assert not hasattr(unprefetched, "_tally_policy_assignments")
+
+        live_context = _flat_live_context(time_filter=None, shift_date=date(2020, 1, 1))
+        state = _state_for(live_context=live_context, target_date=date(2020, 1, 1), is_live=True)
+        summary = {
+            "time_filter": None,
+            "shift_date": live_context.shift_date,
+            "window_start": live_context.window_start,
+            "window_end": live_context.window_end,
+            "rows": [{"document_type": unprefetched, "requires_number_input": False}],
+        }
+
+        result = _tally_topology_projection(facility, staff_user, state, summary=summary)
+
+        assert result == (
+            None,
+            None,
+            live_context.shift_date,
+            live_context.window_start,
+            live_context.window_end,
+            ((str(unprefetched.pk), unprefetched.name, False, ()),),
+        )
