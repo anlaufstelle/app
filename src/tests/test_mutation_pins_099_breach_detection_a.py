@@ -363,8 +363,7 @@ class TestRunSystemDetectionsGucPath:
         (``current_setting``/``set_config`` auf ``app.is_super_admin``)
         durchlaufen werden — sonst sehen die ``facility=NULL``-Reads unter
         RLS nichts (Refs #1368)."""
-        if connection.vendor != "postgresql":
-            pytest.skip("GUC-Pfad erfordert PostgreSQL")
+        assert connection.vendor == "postgresql", "Suite laeuft ausschliesslich auf PostgreSQL"
         with CaptureQueriesContext(connection) as ctx:
             run_system_detections()
         guc_queries = [q for q in ctx.captured_queries if "is_super_admin" in q["sql"]]
@@ -381,8 +380,7 @@ class TestRunSystemDetectionsGucPath:
         gesetztes GUC nach Freigabe eines Savepoints fuer den Rest der
         aeusseren Transaktion sichtbar bleibt, der explizite Restore also
         wirksam ist."""
-        if connection.vendor != "postgresql":
-            pytest.skip("GUC-Pfad erfordert PostgreSQL")
+        assert connection.vendor == "postgresql", "Suite laeuft ausschliesslich auf PostgreSQL"
         with transaction.atomic():
             with connection.cursor() as cur:
                 cur.execute("SELECT set_config('app.is_super_admin', 'true', false)")
@@ -399,8 +397,7 @@ class TestRunSystemDetectionsGucPath:
         bleibt ein Platzhalterwert auf der (gepoolten) Connection stehen,
         genau der GUC-Leak, den die Funktion laut Docstring verhindern
         soll."""
-        if connection.vendor != "postgresql":
-            pytest.skip("GUC-Pfad erfordert PostgreSQL")
+        assert connection.vendor == "postgresql", "Suite laeuft ausschliesslich auf PostgreSQL"
         with transaction.atomic():
             with connection.cursor() as cur:
                 cur.execute("SELECT set_config('app.is_super_admin', '', false)")
