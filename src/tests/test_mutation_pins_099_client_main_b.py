@@ -7,7 +7,7 @@ Batch ``main-b`` (Funktionen ``restore_client``, ``anonymize_client_now``,
 Quelle: Vollmutation #2174, Batch ``main-b``
 (``welle-l-0.99/reports/m-scratch/batch-main-b.json``,
 Triage ``welle-l-0.99/reports/m-scratch/pins-main-b/triage-099-main-b.json``). Die Batch hat 55
-Survivor-Mutanten; 47 sind Testlücken (``test``) und 8 ``equivalent``. Keine ``bug``-Urteile.
+Survivor-Mutanten; 50 sind Testlücken (``test``) und 5 ``equivalent``. Keine ``bug``-Urteile.
 
 * **Meldungs-VERLUST/-varianten an der Service-API (37 Mutanten, neun Guard-Stellen, neun
   Tests).** ``raise ValidationError(_(text))`` wird zu ``raise ValidationError(None)`` (Exception
@@ -22,18 +22,23 @@ Survivor-Mutanten; 47 sind Testlücken (``test``) und 8 ``equivalent``. Keine ``
   die Service-Funktion ohnehin fuer die begleitenden Prio-1/2-Mutanten vollstaendig ueber alle
   Zweige getestet werden muss.
 
-* **Scope-Filter-Verlust bei ``select_for_update()`` (zwei Mutanten, Prio 1).**
+* **Scope-Filter-Verlust bei ``select_for_update()`` (fünf Mutanten, Prio 1).**
   ``x_anonymize_client_now__mutmut_4`` und ``x_reject_client_deletion__mutmut_9`` entfernen den
   ``pk``-Teil eines ``.filter(pk=..., facility=...)``/``.get(pk=..., facility=...)`` — ohne ihn
   matcht die Abfrage JEDE Zeile der Einrichtung (kein ``ORDER BY``, siehe Regel „eine beobachtete
   Zeilenreihenfolge ist kein Äquivalenzbeweis"): ``anonymize_client_now`` würde eine ANDERE Person
   anonymisieren, ``reject_client_deletion`` wirft bei einem zweiten offenen Antrag
   ``MultipleObjectsReturned``. Die spiegelbildlichen ``facility``-Filter-Verlust-Mutanten
-  (``anonymize_client_now_mutmut_5``, ``reject_client_deletion_mutmut_10``,
-  ``create_or_get_client_deletion_request_mutmut_5``) sind dagegen ``equivalent``: ``pk`` ist ein
-  global eindeutiger UUID-Primärschlüssel, und ``Client.facility_id``/``DeletionRequest.facility``
-  werden im gesamten Repo nirgends nach dem Anlegen neu zugewiesen (repo-weiter Grep ohne Treffer)
-  — der zusätzliche ``facility``-Filter ist auf diesen Zeilen tautologisch.
+  (``x_anonymize_client_now__mutmut_5``, ``x_reject_client_deletion__mutmut_10``,
+  ``x_create_or_get_client_deletion_request__mutmut_5``) sind KEINE Äquivalente, sondern derselbe
+  Mandanten-Scope-Verlust am anderen Filterteil: der ``facility``-Filter beim gesperrten Reload ist
+  die App-seitige Mandantengrenze (RLS wird in der Testsuite nicht durchgesetzt) und schützt gegen
+  eine vom Aufrufer im Speicher gehaltene, von der DB abweichende Facility-Annahme — exakt das
+  Muster von ``x_approve_client_deletion__mutmut_15``/``…mutmut_31`` in Batch ``main-a``
+  (``src/tests/test_mutation_pins_099_client_main_a.py``): ``client.facility``/
+  ``deletion_request.facility`` wird NACH dem Laden manuell auf eine ANDERE Einrichtung gesetzt
+  (nicht gespeichert); das Original verwirft diese Annahme beim Reload (``DoesNotExist`` bzw.
+  ``locked is None``), die Mutante ignoriert sie und verarbeitet die echte Zeile trotzdem.
 
 * **Audit-Detail-/Attributionsverlust (fünf Mutanten, Prio 1).** ``restore_client`` und
   ``create_client`` übergeben ``None`` statt der handelnden Person an
@@ -186,9 +191,10 @@ class TestRestoreClientGuardMessages:
 
 
 class TestAnonymizeClientNowGuardMessages:
-    """Pins die Guard-Meldungen UND den ``pk``-Scope von ``anonymize_client_now``.
+    """Pins die Guard-Meldungen UND den ``pk``/``facility``-Scope von ``anonymize_client_now``.
 
     ``x_anonymize_client_now__mutmut_4`` (pk-Scope-Verlust),
+    ``…mutmut_5`` (facility-Scope-Verlust),
     ``…mutmut_7/8/9/10/11`` (locked-is-None-Guard),
     ``…mutmut_15`` (not-is_deleted-Guard, gleicher Wortlaut),
     ``…mutmut_21/22`` (anonymized_at-Terminal-Guard).
@@ -210,6 +216,30 @@ class TestAnonymizeClientNowGuardMessages:
         real_trashed.refresh_from_db()
         assert real_trashed.is_deleted is True
         assert real_trashed.anonymized_at is None
+
+    def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
+        self, second_facility, client_identified, staff_user
+    ):
+        """Pin: ``x_anonymize_client_now__mutmut_5`` — ``select_for_update().filter(pk=
+        client.pk, facility=client.facility_id)`` -> ``filter(pk=client.pk, )``
+        (facility-Filter entfernt). Gleiches Muster wie
+        ``x_approve_client_deletion__mutmut_15``/``…mutmut_31`` (Batch ``main-a``):
+        ``client.facility`` wird NACH dem Laden manuell auf eine ANDERE Einrichtung
+        gesetzt (nicht gespeichert) — eine im Speicher gehaltene, von der DB abweichende
+        Annahme des Aufrufers. Original: der gesperrte Reload filtert nach dieser (jetzt
+        falschen) Annahme und findet die Zeile nicht — lehnt ab. Mutant: der Reload
+        ignoriert die Annahme und anonymisiert die echte Zeile trotzdem.
+        """
+        client_identified.soft_delete(user=staff_user)
+        client_identified.facility = second_facility
+
+        with pytest.raises(ValidationError) as exc_info:
+            anonymize_client_now(client_identified, staff_user)
+
+        assert exc_info.value.messages == ["Nur Personen im Papierkorb können anonymisiert werden."]
+        real = Client.objects.get(pk=client_identified.pk)
+        assert real.is_deleted is True
+        assert real.anonymized_at is None
 
     def test_client_not_in_trash_refused_with_exact_message(self, client_identified, staff_user):
         with pytest.raises(ValidationError) as exc_info:
@@ -265,11 +295,12 @@ class TestAnonymizeClientNowGuardMessages:
 
 
 class TestRejectClientDeletionMessages:
-    """Pins die Guard-Meldungen, den ``pk``-Scope und ``reviewed_at`` von
+    """Pins die Guard-Meldungen, den ``pk``/``facility``-Scope und ``reviewed_at`` von
     ``reject_client_deletion``.
 
     ``x_reject_client_deletion__mutmut_2/3/4/5`` (Vier-Augen-Guard),
-    ``…mutmut_9`` (pk-Scope-Verlust), ``…mutmut_12/13/14/15/16`` (Merge-Antrag-Guard),
+    ``…mutmut_9`` (pk-Scope-Verlust), ``…mutmut_10`` (facility-Scope-Verlust),
+    ``…mutmut_12/13/14/15/16`` (Merge-Antrag-Guard),
     ``…mutmut_20/21`` (PENDING-Recheck-Guard), ``…mutmut_25`` (reviewed_at verloren).
     """
 
@@ -301,6 +332,29 @@ class TestRejectClientDeletionMessages:
         dr_b.refresh_from_db()
         assert dr_a.status == DeletionRequest.Status.REJECTED
         assert dr_b.status == DeletionRequest.Status.PENDING
+
+    def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
+        self, facility, second_facility, staff_user, lead_user
+    ):
+        """Pin: ``x_reject_client_deletion__mutmut_10`` — ``select_for_update().get(pk=
+        deletion_request.pk, facility=deletion_request.facility)`` -> ``get(pk=
+        deletion_request.pk, )`` (facility-Filter entfernt). Gleiches Muster wie
+        ``x_approve_client_deletion__mutmut_15`` (Batch ``main-a``):
+        ``deletion_request.facility`` wird NACH dem Laden manuell auf eine ANDERE
+        Einrichtung gesetzt (nicht gespeichert) — eine im Speicher gehaltene, von der DB
+        abweichende Annahme des Aufrufers. Original: der gesperrte Reload filtert nach
+        dieser (jetzt falschen) Annahme und findet die Zeile nicht — ``DoesNotExist``.
+        Mutant: der Reload ignoriert die Annahme und lehnt den Antrag trotzdem ab.
+        """
+        client = Client.objects.create(facility=facility, pseudonym="P-FacilityGuard")
+        dr, _created = create_or_get_client_deletion_request(client, staff_user, "Grund")
+        dr.facility = second_facility
+
+        with pytest.raises(DeletionRequest.DoesNotExist):
+            reject_client_deletion(dr, lead_user)
+
+        real = DeletionRequest.objects.get(pk=dr.pk)
+        assert real.status == DeletionRequest.Status.PENDING
 
     def test_merge_request_refused_with_exact_message(self, facility, staff_user, lead_user):
         target = Client.objects.create(facility=facility, pseudonym="Merge-Ziel")
@@ -349,10 +403,11 @@ class TestRejectClientDeletionMessages:
 
 
 class TestCreateOrGetClientDeletionRequestMessages:
-    """Pins die beiden Guard-Meldungen von ``create_or_get_client_deletion_request``.
+    """Pins die beiden Guard-Meldungen UND den ``facility``-Scope von
+    ``create_or_get_client_deletion_request``.
 
-    ``x_create_or_get_client_deletion_request__mutmut_9/10`` (merged_into-Guard),
-    ``…mutmut_14`` (is_deleted-Guard).
+    ``x_create_or_get_client_deletion_request__mutmut_5`` (facility-Scope-Verlust),
+    ``…mutmut_9/10`` (merged_into-Guard), ``…mutmut_14`` (is_deleted-Guard).
     """
 
     def test_merged_tombstone_is_refused_with_exact_message(self, facility, staff_user):
@@ -375,6 +430,27 @@ class TestCreateOrGetClientDeletionRequestMessages:
             create_or_get_client_deletion_request(client, staff_user, "Grund")
 
         assert exc_info.value.messages == ["Diese Person liegt bereits im Papierkorb."]
+
+    def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
+        self, facility, second_facility, staff_user
+    ):
+        """Pin: ``x_create_or_get_client_deletion_request__mutmut_5`` —
+        ``select_for_update().get(pk=client.pk, facility=client.facility_id)`` -> ``get(
+        pk=client.pk, )`` (facility-Filter entfernt). Gleiches Muster wie
+        ``x_approve_client_deletion__mutmut_31`` (Batch ``main-a``): ``client.facility``
+        wird NACH dem Laden manuell auf eine ANDERE Einrichtung gesetzt (nicht
+        gespeichert) — eine im Speicher gehaltene, von der DB abweichende Annahme des
+        Aufrufers. Original: der gesperrte Reload filtert nach dieser (jetzt falschen)
+        Annahme und findet die Zeile nicht — ``DoesNotExist``. Mutant: der Reload
+        ignoriert die Annahme und legt den Antrag trotzdem an.
+        """
+        client = Client.objects.create(facility=facility, pseudonym="P-CreateFacilityGuard")
+        client.facility = second_facility
+
+        with pytest.raises(Client.DoesNotExist):
+            create_or_get_client_deletion_request(client, staff_user, "Grund")
+
+        assert not DeletionRequest.objects.filter(target_id=client.pk).exists()
 
 
 # ---------------------------------------------------------------------------
