@@ -7,8 +7,8 @@ Quelle: Vollmutation #2174, Batch ``dashboard-3``
 Der Batch hat 70 Survivor-Mutanten ueber fuenf Module: ``release_log.py``
 (Freigabe-Uebersicht/K4a, 32), ``quick_templates.py`` (Event-Schnellvorlagen,
 17), ``disclosure.py`` (k-Anonymitaets-Rueckrechnung, 11), ``main.py``
-(Rollen-Arbeitszentralen, 8) und ``snapshot.py`` (2). 55 sind Testluecken
-(``test``), 15 sind ``equivalent`` (Begruendung jeweils im Test-Docstring
+(Rollen-Arbeitszentralen, 8) und ``snapshot.py`` (2). 54 sind Testluecken
+(``test``), 16 sind ``equivalent`` (Begruendung jeweils im Test-Docstring
 bzw. in der Triage-Datei — kein Fix, kein Pin).
 
 Gruppierung der gepinnten Tests (Funktion -> Mutanten):
