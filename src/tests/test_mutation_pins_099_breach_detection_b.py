@@ -38,19 +38,25 @@ Drei wiederkehrende Mutationsachsen in diesem Batch:
 * **Meldungs-Verlust** in ``_validate_webhook_url`` (``ValueError(f"...")``
   → ``ValueError(None)``): Standardblock-Klassifikationsregel — Klasse
   ``test``, Prio 3, exakte Assertion auf den Meldungstext.
+* **Erzwungene Iterationsreihenfolge** fuer
+  ``x_detect_distributed_login_attack__mutmut_41`` (``continue`` → ``break``
+  in der Zeile ``if row["user"] is None: continue``): eine BEOBACHTETE
+  Gruppierungsreihenfolge (z. B. per ``EXPLAIN`` oder ueber mehrere Laeufe)
+  ist KEIN Aequivalenzbeweis — der Planer kann bei anderer Datenmenge/
+  Statistik ein ``HashAggregate`` statt eines Sort-basierten
+  ``GroupAggregate`` waehlen, dessen Reihenfolge beliebig ist. Gepinnt per
+  Verhaltens-Injektion: ein Manager-Proxy ersetzt ``AuditLog.objects`` fuer
+  die Dauer des Tests und haengt an jedes ``.filter(...)`` deterministisch
+  ``.order_by(F("user").asc(nulls_first=True))`` an (Sortierschluessel ==
+  Group-By-Schluessel ``user`` aus ``.values("user")`` — das Ordering bleibt
+  nach dem Grouping erhalten), sodass die anonyme Gruppe GARANTIERT zuerst
+  iteriert wird. Szenario: anonyme Gruppe UND ein echter User je ueber der
+  IP-Schwelle — Original (``continue``) liefert den User-Fund, die Mutante
+  (``break``) verliert ihn, weil die Schleife bereits bei der ersten
+  (anonymen) Zeile abbricht.
 
-Zwei ``equivalent``-Urteile in diesem Batch:
+Ein ``equivalent``-Urteil in diesem Batch:
 
-* ``x_detect_distributed_login_attack__mutmut_41`` (``continue`` → ``break``
-  in der Zeile ``if row["user"] is None: continue``): der `EXPLAIN`-Plan der
-  Aggregat-Query sortiert ``Sort Key: user_id`` AUFSTEIGEND (Postgres-Default
-  fuer ASC ist ``NULLS LAST``, empirisch verifiziert per ``.explain()`` UND
-  per Kill-Lauf mit 3 realen Nutzern + 1 anonymer Gruppe ueber mehrere
-  Wiederholungen: die ``user IS NULL``-Gruppe wird IMMER als letzte
-  Iteration besucht). ``break`` auf der letzten Zeile verhaelt sich identisch
-  zu ``continue``, weil danach ohnehin nichts mehr folgt — kein Aufrufer kann
-  die beiden Varianten unterscheiden, solange der Query-Plan (kein Index auf
-  ``user_id``, Sort-basiertes ``GroupAggregate``) unveraendert bleibt.
 * ``x_record_system_finding__mutmut_13`` (Kwarg ``target_id=None,`` im
   ``audit_security_violation(...)``-Aufruf entfernt): ``audit_security_
   violation`` hat selbst ``target_id=None`` als Default (core/services/
@@ -66,6 +72,7 @@ from datetime import timedelta
 
 import pytest
 from django.conf import settings as django_settings
+from django.db.models import F
 from django.utils import timezone
 
 from core.models import AuditLog
@@ -116,6 +123,28 @@ def _delete_setting(monkeypatch, name):
     setzt."""
     monkeypatch.delitem(django_settings.__dict__, name, raising=False)
     monkeypatch.delattr(django_settings._wrapped, name, raising=False)
+
+
+class _OrderedFilterManager:
+    """Verhaltens-Pin-Proxy fuer ``AuditLog.objects``: haengt an jedes
+    ``.filter(...)`` deterministisch ``.order_by(F("user").asc(nulls_first=
+    True))`` an, delegiert alles andere unveraendert an den echten Manager.
+    Eine beobachtete Gruppierungsreihenfolge (EXPLAIN, mehrere Laeufe) ist
+    KEIN Aequivalenzbeweis — der Planer kann bei anderer Datenmenge ein
+    ``HashAggregate`` (beliebige Reihenfolge) statt eines Sort-basierten
+    ``GroupAggregate`` waehlen. Dieser Proxy erzwingt die Reihenfolge
+    stattdessen ueber ein explizites ``ORDER BY``, dessen Schluessel mit dem
+    nachfolgenden ``.values("user")``-Group-By-Schluessel identisch ist —
+    das Ordering bleibt deshalb nach dem Grouping erhalten."""
+
+    def __init__(self, real_manager):
+        self._real_manager = real_manager
+
+    def filter(self, *args, **kwargs):
+        return self._real_manager.filter(*args, **kwargs).order_by(F("user").asc(nulls_first=True))
+
+    def __getattr__(self, name):
+        return getattr(self._real_manager, name)
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +224,33 @@ class TestDistributedLoginAttackActionScope:
         for i in range(2):
             _audit(facility=facility, action=AuditLog.Action.EXPORT, user=admin_user, ip_address=f"203.0.113.{i}")
         assert detect_distributed_login_attack(facility) == []
+
+
+class TestDistributedLoginAttackAnonymousGroupOrdering:
+    def test_anonymous_group_first_does_not_drop_a_later_users_finding(
+        self, facility, admin_user, settings, monkeypatch
+    ):
+        """Pins ``x_detect_distributed_login_attack__mutmut_41``
+        (``if row["user"] is None: continue`` -> ``break``): die anonyme
+        (``user IS NULL``) Gruppe UND ein echter User liegen beide ueber der
+        IP-Schwelle. ``_OrderedFilterManager`` erzwingt, dass die anonyme
+        Gruppe ZUERST iteriert wird (``ORDER BY user ASC NULLS FIRST`` vor
+        dem Group-By-Schluessel ``user``). Original: ``continue``
+        ueberspringt nur die anonyme Zeile und liefert den Fund fuer
+        ``admin_user``. Mutante: ``break`` bricht die Schleife bereits bei
+        der ersten (anonymen) Zeile ab -- der spaeter iterierte,
+        tatsaechlich meldepflichtige Fund geht komplett verloren."""
+        settings.BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD = 2
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        for i in range(2):
+            _audit(facility=facility, action=AuditLog.Action.LOGIN_FAILED, user=None, ip_address=f"198.51.100.{i}")
+        for i in range(2):
+            _audit(facility=facility, action=AuditLog.Action.LOGIN_FAILED, user=admin_user, ip_address=f"203.0.113.{i}")
+
+        monkeypatch.setattr(AuditLog, "objects", _OrderedFilterManager(AuditLog.objects))
+
+        findings = detect_distributed_login_attack(facility)
+        assert [f["user_id"] for f in findings] == [admin_user.pk]
 
 
 # ---------------------------------------------------------------------------
