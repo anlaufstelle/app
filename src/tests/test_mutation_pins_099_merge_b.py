@@ -17,7 +17,7 @@ Vier wiederkehrende Mutationsachsen in diesem Batch:
   bzw. ``ValidationError(_(None))`` — beide werten zur Laufzeit identisch
   aus): die jeweilige ``if``-Bedingung bleibt unveraendert (kein Bypass), nur
   der Meldungstext wird woertlich ``"None"`` statt des deutschen Fehlertexts.
-  ``skip`` bleiben reine Gross-/Kleinschreibungs- bzw. ``"XX...XX"``-Wrap-
+  Mitgetoetet werden reine Gross-/Kleinschreibungs- bzw. ``"XX...XX"``-Wrap-
   Varianten DESSELBEN Wortlauts (reine i18n-Textvarianten ohne Hash-/
   Schluessel-/Vergleichsrolle, docs/testing/mutation-testing.md) — der exakte
   ``==``-Vergleich derselben Pin-Testfunktion toetet sie im selben Zug mit
@@ -150,7 +150,7 @@ class TestApproveClientMergeGuardMessages:
         None)`` bzw. ``ValidationError(_(None))`` statt des deutschen
         Vier-Augen-Texts (Zeile 260). Toetet im selben Zug (exakter
         ``==``-Vergleich) ``_4`` (XX-Marker), ``_5``/``_6`` (Klein-/
-        Grossschreibung) desselben Wortlauts — ``skip``, kein eigener Pin."""
+        Grossschreibung) desselben Wortlauts — mitgetoetet, kein eigener Pin."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
 
         with pytest.raises(ValidationError) as exc:
@@ -160,7 +160,7 @@ class TestApproveClientMergeGuardMessages:
 
     def test_reviewer_ohne_recht_meldet_den_richtigen_text(self, facility, source, target, staff_user, assistant_user):
         """Pins ``x_approve_client_merge__mutmut_8``/``_9`` (Zeile 262); toetet
-        mit ``_10``/``_11``/``_12`` (XX/Klein/Gross) — ``skip``."""
+        mit ``_10``/``_11``/``_12`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         assert assistant_user.can_confirm_deletion is False
 
@@ -172,7 +172,7 @@ class TestApproveClientMergeGuardMessages:
     def test_kein_zusammenfuehrungs_antrag_meldet_den_richtigen_text(self, facility, source, staff_user, admin_user):
         """Pins ``x_approve_client_merge__mutmut_19``/``_20`` (Zeile 268): ein
         reiner Loeschantrag (``merge_into`` ``None``) ist kein Merge-Antrag;
-        toetet mit ``_21``/``_22``/``_23`` (XX/Klein/Gross) — ``skip``."""
+        toetet mit ``_21``/``_22``/``_23`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_deletion(source, staff_user, "Reiner Löschantrag")
         assert dr.merge_into_id is None
 
@@ -186,7 +186,7 @@ class TestApproveClientMergeGuardMessages:
     ):
         """Pins ``x_approve_client_merge__mutmut_25``/``_26`` (Zeile 270): der
         Re-Check unter Lock greift bei einem bereits APPROVED-Antrag; toetet
-        mit ``_27``/``_28``/``_29`` (XX/Klein/Gross) — ``skip``."""
+        mit ``_27``/``_28``/``_29`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         approve_client_merge(dr, admin_user)
         dr.refresh_from_db()
@@ -239,7 +239,7 @@ class TestApproveClientMergeReloadTiesToItsOwnFacility:
 class TestRejectClientMergeGuardMessages:
     def test_reviewer_gleich_antragsteller_meldet_den_richtigen_text(self, facility, source, target, staff_user):
         """Pins ``x_reject_client_merge__mutmut_2``/``_3`` (Zeile 295); toetet
-        mit ``_4``/``_5``/``_6`` (XX/Klein/Gross) — ``skip``."""
+        mit ``_4``/``_5``/``_6`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
 
         with pytest.raises(ValidationError) as exc:
@@ -249,7 +249,7 @@ class TestRejectClientMergeGuardMessages:
 
     def test_kein_zusammenfuehrungs_antrag_meldet_den_richtigen_text(self, facility, source, staff_user, admin_user):
         """Pins ``x_reject_client_merge__mutmut_13``/``_14`` (Zeile 300); toetet
-        mit ``_15``/``_16``/``_17`` (XX/Klein/Gross) — ``skip``."""
+        mit ``_15``/``_16``/``_17`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_deletion(source, staff_user, "Reiner Löschantrag")
         assert dr.merge_into_id is None
 
@@ -262,7 +262,7 @@ class TestRejectClientMergeGuardMessages:
         self, facility, source, target, staff_user, admin_user
     ):
         """Pins ``x_reject_client_merge__mutmut_19``/``_20`` (Zeile 302); toetet
-        mit ``_21``/``_22``/``_23`` (XX/Klein/Gross) — ``skip``."""
+        mit ``_21``/``_22``/``_23`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         reject_client_merge(dr, admin_user)
         dr.refresh_from_db()
@@ -300,7 +300,7 @@ class TestRejectClientMergeReloadTiesToItsOwnFacility:
 class TestMergeClientsGuardMessages:
     def test_ohne_leitungsrecht_meldet_den_richtigen_text(self, facility, source, target, staff_user):
         """Pins ``x_merge_clients__mutmut_2``/``_3`` (Zeile 330); toetet mit
-        ``_4``/``_5``/``_6`` (XX/Klein/Gross) — ``skip``."""
+        ``_4``/``_5``/``_6`` (XX/Klein/Gross) — mitgetoetet."""
         assert staff_user.is_lead_or_admin is False
 
         with pytest.raises(ValidationError) as exc:
@@ -311,7 +311,7 @@ class TestMergeClientsGuardMessages:
     def test_vier_augen_pflicht_meldet_den_richtigen_text(self, facility, staff_user, lead_user):
         """Pins ``x_merge_clients__mutmut_16``/``_17`` (Zeile 334): eine der
         beiden Personen ist ``QUALIFIED`` -> Direkt-Merge gesperrt; toetet mit
-        ``_18``/``_19``/``_20`` (XX/Klein/Gross) — ``skip``."""
+        ``_18``/``_19``/``_20`` (XX/Klein/Gross) — mitgetoetet."""
         qualified_source = _qualified(facility, staff_user, "Pin099-MergeB-Qualifiziert")
         identified_target = _identified(facility, staff_user, "Pin099-MergeB-VierAugenZiel")
 
