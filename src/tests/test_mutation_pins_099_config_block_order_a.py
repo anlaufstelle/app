@@ -31,7 +31,30 @@ per Kill-Lauf unter jeder einzelnen Variante:
 * ``x__validate_id_set__mutmut_{9,11,12,13}`` — zentrale ID-Set-Meldung
   (direkter Funktionsaufruf, keine DB nötig).
 
-**Äquivalenz-Urteile (23 Mutanten, mit Begründung, kein Pin — Volltext je
+**Zweitreview-Korrektur (8 Mutanten von `equivalent` zu `test`/Prio 1):** die
+FINALEN ``.update()``-Aufrufe in ``_move_field_into_group``,
+``_move_field_to_top_level``, ``reorder_blocks`` und ``reorder_fields`` filtern
+zusätzlich zu ``pk=`` auf ``document_type=doc_type`` bzw.
+``field_group__isnull=True``. Die vorangehende Existenz-/ID-Set-Prüfung
+(``_validate_id_set`` bzw. die inline ``target_member_ids``/``.exists()``-Prüfung
+in ``_move_field_into_group``) läuft VOR ``transaction.atomic()`` und OHNE
+``select_for_update`` — das Fenster zwischen Prüfung und Schreiben ist damit
+ECHT (keine Implementierungs-Spitzfindigkeit): ändert sich der
+``document_type``/die Gruppen-Zugehörigkeit einer bereits validierten Zeile in
+genau diesem Fenster, ist der Filter der FINALEN ``.update()``-Zeile der
+EINZIGE verbleibende Schutz. Ursprünglich (erste Fassung dieser Datei) als
+``equivalent`` eingestuft ("dieselbe synchrone Transaktion, kein TOCTOU
+möglich") — das war falsch: die Prüfung sitzt VOR dem Atomic-Block, nicht
+darin, und ohne Zeilensperre. Betroffen: ``x__move_field_into_group__mutmut_55``,
+``x__move_field_to_top_level__mutmut_{57,63,64}``,
+``x_reorder_blocks__mutmut_{47,53,54}``, ``x_reorder_fields__mutmut_22`` — siehe
+die ``Toctou``-Testklassen unten (Pin: ``_install_atomic_race`` ersetzt das
+``transaction``-Attribut auf dem ``block_order``-Modul und schiebt eine
+bereits validierte Zeile GENAU beim Eintritt in ``transaction.atomic()`` aus
+dem gültigen Scope — Verhaltens-Pin über den tatsächlichen DB-Endzustand,
+kein Text-/Implementierungs-Spy).
+
+**Äquivalenz-Urteile (15 Mutanten, mit Begründung, kein Pin — Volltext je
 Mutant in der Triage-JSON):**
 
 * ``x__move_field_to_top_level__mutmut_45`` (``dtf.field_group_id = None``
@@ -52,18 +75,6 @@ Mutant in der Triage-JSON):**
   [self.model._meta.concrete_fields[0].attname]``); ``DocumentTypeField`` UND
   ``FieldGroup`` deklarieren ``id`` als erstes Feld. Empirisch verifiziert:
   ``str(queryset.query)`` ist für beide Varianten BYTE-IDENTISCH.
-* Redundante ``document_type=doc_type``-/``field_group__isnull=True``-Filter
-  auf den FINALEN ``.update()``-Aufrufen (7 Fundstellen, je nach der
-  vorangehenden ``_validate_id_set``-Zeile): die dort verwendete ID kommt
-  ausschließlich aus einer bereits mengen-exakt gegen einen korrekt
-  gescopten Bestand geprüften Liste (dieselbe synchrone Transaktion, kein
-  TOCTOU möglich) — der Filter der finalen Schreib-Query ist beweisbar
-  redundant. NICHT verwechseln mit den strukturell ANALOGEN Mutanten an den
-  VALIDIERUNGS-Zeilen selbst (``_move_field_into_group__mutmut_21``,
-  ``_move_field_to_top_level__mutmut_{29,30}``, ``reorder_blocks__mutmut_{25,26}``,
-  ``reorder_fields__mutmut_8``, ``_next_block_position__mutmut_{13,14}``) —
-  DORT ist der fehlende Filter die Wurzel der Prüfung selbst und wird
-  gepinnt (Prio 1/2).
 * ``CaseExpr``/``When``-Konstanten in ``block_ordered_dtf_queryset``, bei
   denen ``then`` fehlt (``_39``, Django-Default ``then=None``) oder
   ``then=2`` statt ``1`` ist (``_41``) UND ``default=0`` dabei UNVERÄNDERT
@@ -109,6 +120,7 @@ from django.db.models import QuerySet
 from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 
+import core.services.config.block_order as block_order_module
 from core.models import DocumentType, DocumentTypeField, FieldGroup, FieldTemplate
 from core.services.config import (
     _block_sort_key,
@@ -138,6 +150,31 @@ def _set_clause_column_count(sql: str) -> int:
     """Zaehlt die im SET-Teil eines UPDATE-Statements gesetzten Spalten."""
     set_part = sql.split(" SET ", 1)[1].split(" WHERE ", 1)[0]
     return set_part.count(",") + 1
+
+
+def _install_atomic_race(monkeypatch, mutate):
+    """Simuliert eine nebenlaeufige Aenderung IM Fenster zwischen der
+    (vor ``transaction.atomic()`` laufenden) Existenz-/ID-Set-Pruefung und den
+    darauf aufbauenden ``.update()``-Aufrufen — diese Pruefung sitzt NIE hinter
+    ``select_for_update``, das Fenster ist real (kein reines Implementierungs-
+    detail). Ersetzt NUR das ``transaction``-Attribut auf dem Modul-Objekt
+    ``core.services.config.block_order`` (nicht das globale ``django.db.
+    transaction`` — pytest-djangos eigene Transaktionsklammer bleibt
+    unberuehrt): ``mutate()`` laeuft, sobald der Code unter Test seinen
+    ``with transaction.atomic():``-Block betritt, GENAU an der Stelle, an der
+    im echten Betrieb eine zweite Anfrage dazwischenfunken koennte."""
+    import contextlib
+
+    real_transaction = block_order_module.transaction
+    real_atomic = real_transaction.atomic
+
+    @contextlib.contextmanager
+    def _racy_atomic(*args, **kwargs):
+        mutate()
+        with real_atomic(*args, **kwargs):
+            yield
+
+    monkeypatch.setattr(block_order_module, "transaction", SimpleNamespace(atomic=_racy_atomic))
 
 
 def _capture_order_by(monkeypatch):
@@ -309,6 +346,40 @@ class TestMoveFieldIntoGroupPersistence:
         assert _set_clause_column_count(field_group_updates[0]) == 1
 
 
+class TestMoveFieldIntoGroupToctou:
+    def test_member_update_scoped_to_doc_type_despite_race(self, req, facility, doc_type_contact, monkeypatch):
+        """Pin core.services.config.block_order.x__move_field_into_group__mutmut_55:
+        ``DocumentTypeField.objects.filter(pk=member_id, document_type=doc_type)
+        .update(sort_order=position)`` verliert seinen ``document_type``-Filter.
+        Die Mitglieder-Menge (``target_member_ids``) wird VOR
+        ``transaction.atomic()`` und OHNE ``select_for_update`` gelesen — wandert
+        ein bereits validiertes Mitglied in genau diesem Fenster zu einem
+        FREMDEN Dokumentationstyp, ist der ``document_type``-Filter der EINZIGE
+        Schutz, der die inzwischen fremde Zeile von der sort_order-Schreibung
+        ausschliesst (TOCTOU, beobachtbar am DB-Zustand)."""
+        grp_dst = FieldGroup.objects.create(document_type=doc_type_contact, name="Dst")
+        ft1 = FieldTemplate.objects.create(
+            facility=facility, name="Mitglied (toctou)", field_type=FieldTemplate.FieldType.TEXT
+        )
+        member1 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft1, field_group=grp_dst, sort_order=7
+        )
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ (into-group-toctou)")
+        moved = doc_type_contact.fields.filter(field_group__isnull=True).first()
+
+        def _race():
+            member1.document_type = other_dt
+            member1.save(update_fields=["document_type"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        move_field(req, doc_type_contact, moved.id, grp_dst.id, ordered_dtf_ids=[member1.id, moved.id])
+
+        member1.refresh_from_db()
+        assert member1.document_type_id == other_dt.id  # Race hat wirklich stattgefunden.
+        assert member1.sort_order == 7  # unveraendert — die verschobene Zeile darf NICHT mehr getroffen werden.
+
+
 # ---------------------------------------------------------------------------
 # _move_field_to_top_level — Validierungsumfang + Feldleerung + Persistenz
 # ---------------------------------------------------------------------------
@@ -418,6 +489,107 @@ class TestMoveFieldToTopLevelPersistence:
         assert _set_clause_column_count(field_group_updates[0]) == 1
 
 
+class TestMoveFieldToTopLevelToctou:
+    def test_group_update_scoped_to_doc_type_despite_race(self, req, facility, doc_type_contact, monkeypatch):
+        """Pin core.services.config.block_order.x__move_field_to_top_level__mutmut_57:
+        ``FieldGroup.objects.filter(pk=block_id, document_type=doc_type)
+        .update(sort_order=position)`` verliert seinen ``document_type``-Filter.
+        ``existing_group_ids`` wird VOR ``transaction.atomic()`` und OHNE
+        ``select_for_update`` gelesen — wandert die validierte Gruppe in
+        diesem Fenster zu einem FREMDEN Dokumentationstyp, ist der Filter der
+        einzige Schutz gegen ein Umschreiben ihrer sort_order (TOCTOU)."""
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="RaceGrp", sort_order=7)
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ (top-level-toctou-1)")
+        moved = doc_type_contact.fields.filter(field_group__isnull=True).first()
+        other_free = doc_type_contact.fields.exclude(pk=moved.pk).filter(field_group__isnull=True).first()
+
+        def _race():
+            grp.document_type = other_dt
+            grp.save(update_fields=["document_type"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        move_field(
+            req,
+            doc_type_contact,
+            moved.id,
+            None,
+            ordered_blocks=[("group", grp.id), ("field", moved.id), ("field", other_free.id)],
+        )
+
+        grp.refresh_from_db()
+        assert grp.document_type_id == other_dt.id  # Race hat wirklich stattgefunden.
+        assert grp.sort_order == 7  # unveraendert.
+
+    def test_free_field_update_scoped_to_doc_type_despite_race(self, req, facility, doc_type_contact, monkeypatch):
+        """Pin core.services.config.block_order.x__move_field_to_top_level__mutmut_63:
+        ``DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type,
+        field_group__isnull=True).update(...)`` verliert seinen
+        ``document_type``-Filter. Wandert ein bereits als frei validiertes
+        Feld in diesem Fenster zu einem FREMDEN Dokumentationstyp (bleibt
+        dabei frei), ist der ``document_type``-Filter der einzige Schutz
+        (TOCTOU)."""
+        moved = doc_type_contact.fields.get(field_template__name="Dauer")
+        other_free = doc_type_contact.fields.get(field_template__name="Notiz")
+        other_free.sort_order = 9
+        other_free.save(update_fields=["sort_order"])
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ (top-level-toctou-2)")
+
+        def _race():
+            other_free.document_type = other_dt
+            other_free.save(update_fields=["document_type"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        move_field(
+            req,
+            doc_type_contact,
+            moved.id,
+            None,
+            ordered_blocks=[("field", moved.id), ("field", other_free.id)],
+        )
+
+        other_free.refresh_from_db()
+        assert other_free.document_type_id == other_dt.id  # Race hat wirklich stattgefunden.
+        assert other_free.sort_order == 9  # unveraendert.
+
+    def test_free_field_update_stays_scoped_to_free_fields_despite_race(
+        self, req, facility, doc_type_contact, monkeypatch
+    ):
+        """Pin core.services.config.block_order.x__move_field_to_top_level__mutmut_64:
+        ``DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type,
+        field_group__isnull=True).update(...)`` verliert seinen
+        ``field_group__isnull=True``-Filter. Wandert ein bereits als frei
+        validiertes Feld in diesem Fenster in eine (andere) Gruppe DESSELBEN
+        Dokumentationstyps, ist ``field_group__isnull=True`` der einzige
+        Schutz gegen ein Umschreiben seiner sort_order — die dann als
+        INNERE Gruppenposition zu lesen ist, nicht als Top-Level-Block-
+        Position (TOCTOU)."""
+        race_grp = FieldGroup.objects.create(document_type=doc_type_contact, name="RaceGrp2", sort_order=2)
+        moved = doc_type_contact.fields.get(field_template__name="Dauer")
+        other_free = doc_type_contact.fields.get(field_template__name="Notiz")
+        other_free.sort_order = 9
+        other_free.save(update_fields=["sort_order"])
+
+        def _race():
+            other_free.field_group = race_grp
+            other_free.save(update_fields=["field_group"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        move_field(
+            req,
+            doc_type_contact,
+            moved.id,
+            None,
+            ordered_blocks=[("group", race_grp.id), ("field", moved.id), ("field", other_free.id)],
+        )
+
+        other_free.refresh_from_db()
+        assert other_free.field_group_id == race_grp.id  # Race hat wirklich stattgefunden.
+        assert other_free.sort_order == 9  # unveraendert.
+
+
 # ---------------------------------------------------------------------------
 # reorder_blocks — Validierungsumfang
 # ---------------------------------------------------------------------------
@@ -467,6 +639,92 @@ class TestReorderBlocksValidationScope:
         assert inner.field_group_id == grp.id
 
 
+class TestReorderBlocksToctou:
+    def test_group_update_scoped_to_doc_type_despite_race(self, req, facility, doc_type_contact, monkeypatch):
+        """Pin core.services.config.block_order.x_reorder_blocks__mutmut_47:
+        ``FieldGroup.objects.filter(pk=block_id, document_type=doc_type)
+        .update(sort_order=position)`` verliert seinen ``document_type``-Filter.
+        ``existing_group_ids`` wird VOR ``transaction.atomic()`` und OHNE
+        ``select_for_update`` gelesen — wandert die validierte Gruppe in
+        diesem Fenster zu einem FREMDEN Dokumentationstyp, ist der Filter der
+        einzige Schutz gegen ein Umschreiben ihrer sort_order (TOCTOU)."""
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="RaceGrp", sort_order=7)
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ (reorder-blocks-toctou-1)")
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+
+        def _race():
+            grp.document_type = other_dt
+            grp.save(update_fields=["document_type"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        reorder_blocks(req, doc_type_contact, [("group", grp.id), ("field", free[0].id), ("field", free[1].id)])
+
+        grp.refresh_from_db()
+        assert grp.document_type_id == other_dt.id  # Race hat wirklich stattgefunden.
+        assert grp.sort_order == 7  # unveraendert.
+
+    def test_free_field_update_scoped_to_doc_type_despite_race(self, req, facility, doc_type_contact, monkeypatch):
+        """Pin core.services.config.block_order.x_reorder_blocks__mutmut_53:
+        ``DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type,
+        field_group__isnull=True).update(...)`` verliert seinen
+        ``document_type``-Filter. Wandert ein bereits als frei validiertes
+        Feld in diesem Fenster zu einem FREMDEN Dokumentationstyp (bleibt
+        dabei frei), ist der ``document_type``-Filter der einzige Schutz
+        (TOCTOU)."""
+        dauer = doc_type_contact.fields.get(field_template__name="Dauer")
+        notiz = doc_type_contact.fields.get(field_template__name="Notiz")
+        notiz.sort_order = 9
+        notiz.save(update_fields=["sort_order"])
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ (reorder-blocks-toctou-2)")
+
+        def _race():
+            notiz.document_type = other_dt
+            notiz.save(update_fields=["document_type"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        reorder_blocks(req, doc_type_contact, [("field", dauer.id), ("field", notiz.id)])
+
+        notiz.refresh_from_db()
+        assert notiz.document_type_id == other_dt.id  # Race hat wirklich stattgefunden.
+        assert notiz.sort_order == 9  # unveraendert.
+
+    def test_free_field_update_stays_scoped_to_free_fields_despite_race(
+        self, req, facility, doc_type_contact, monkeypatch
+    ):
+        """Pin core.services.config.block_order.x_reorder_blocks__mutmut_54:
+        ``DocumentTypeField.objects.filter(pk=block_id, document_type=doc_type,
+        field_group__isnull=True).update(...)`` verliert seinen
+        ``field_group__isnull=True``-Filter. Wandert ein bereits als frei
+        validiertes Feld in diesem Fenster in eine Gruppe DESSELBEN
+        Dokumentationstyps, ist ``field_group__isnull=True`` der einzige
+        Schutz gegen ein Umschreiben seiner sort_order — die dann als INNERE
+        Gruppenposition zu lesen ist, nicht als Top-Level-Block-Position
+        (TOCTOU)."""
+        race_grp = FieldGroup.objects.create(document_type=doc_type_contact, name="RaceGrp3", sort_order=2)
+        dauer = doc_type_contact.fields.get(field_template__name="Dauer")
+        notiz = doc_type_contact.fields.get(field_template__name="Notiz")
+        notiz.sort_order = 9
+        notiz.save(update_fields=["sort_order"])
+
+        def _race():
+            notiz.field_group = race_grp
+            notiz.save(update_fields=["field_group"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        reorder_blocks(
+            req,
+            doc_type_contact,
+            [("group", race_grp.id), ("field", dauer.id), ("field", notiz.id)],
+        )
+
+        notiz.refresh_from_db()
+        assert notiz.field_group_id == race_grp.id  # Race hat wirklich stattgefunden.
+        assert notiz.sort_order == 9  # unveraendert.
+
+
 # ---------------------------------------------------------------------------
 # reorder_fields — Validierungsumfang
 # ---------------------------------------------------------------------------
@@ -501,6 +759,44 @@ class TestReorderFieldsValidationScope:
         d1.refresh_from_db()
         d2.refresh_from_db()
         assert (d2.sort_order, d1.sort_order) == (0, 1)
+
+
+class TestReorderFieldsToctou:
+    def test_member_update_scoped_to_doc_type_despite_race(self, req, facility, doc_type_contact, monkeypatch):
+        """Pin core.services.config.block_order.x_reorder_fields__mutmut_22:
+        ``DocumentTypeField.objects.filter(pk=dtf_id, document_type=doc_type)
+        .update(sort_order=position)`` verliert seinen ``document_type``-Filter
+        VOLLSTAENDIG (nicht nur eine Bedingung). ``existing_ids`` wird VOR
+        ``transaction.atomic()`` und OHNE ``select_for_update`` gelesen —
+        wandert ein bereits validiertes Gruppenmitglied in diesem Fenster zu
+        einem FREMDEN Dokumentationstyp, ist der Filter der einzige Schutz
+        gegen ein Umschreiben seiner sort_order (TOCTOU)."""
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="RF-Toctou")
+        ft1 = FieldTemplate.objects.create(
+            facility=facility, name="RF-Toctou-1", field_type=FieldTemplate.FieldType.TEXT
+        )
+        ft2 = FieldTemplate.objects.create(
+            facility=facility, name="RF-Toctou-2", field_type=FieldTemplate.FieldType.TEXT
+        )
+        d1 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft1, field_group=grp, sort_order=9
+        )
+        d2 = DocumentTypeField.objects.create(
+            document_type=doc_type_contact, field_template=ft2, field_group=grp, sort_order=1
+        )
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ (reorder-fields-toctou)")
+
+        def _race():
+            d1.document_type = other_dt
+            d1.save(update_fields=["document_type"])
+
+        _install_atomic_race(monkeypatch, _race)
+
+        reorder_fields(req, doc_type_contact, grp.id, [d2.id, d1.id])
+
+        d1.refresh_from_db()
+        assert d1.document_type_id == other_dt.id  # Race hat wirklich stattgefunden.
+        assert d1.sort_order == 9  # unveraendert.
 
 
 # ---------------------------------------------------------------------------
