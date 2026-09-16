@@ -102,7 +102,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Client, Event
+from core.models import Activity, AuditLog, Case, Client, Event, FieldTemplate
 from core.models.workitem import WorkItem
 from core.services.client.merge import approve_client_merge, merge_clients, request_client_merge, unmerge_client
 
@@ -510,6 +510,54 @@ class TestUnmergeAccountability:
             .first()
         )
         assert row.detail == {"old_stage": "qualified", "new_stage": "identified"}
+
+    def test_contact_stage_rollback_save_does_not_persist_a_pending_encryption_transform(
+        self, facility, source, target, doc_type_client_profile, staff_user, admin_user, lead_user
+    ):
+        """Pin: ``x_unmerge_client__mutmut_158`` — ``target.save(update_fields=
+        ["contact_stage", "updated_at"])`` verliert die Feldliste (->
+        ``update_fields=None``).
+
+        ``Client.save()`` (``core/models/client.py``) ruft VOR jedem Save
+        unbedingt ``_encrypt_sensitive_fields()`` (``core/models/mixins.py``)
+        auf — der Hook mutiert ``self.data_json`` IN-MEMORY, sobald ein
+        ``FieldTemplate`` nachtraeglich auf ``is_encrypted=True`` gestellt
+        wurde, waehrend die DB noch den Klartext traegt (z. B. eine
+        Einrichtung aktiviert die Verschluesselung fuer ein bestehendes
+        Feld). OB diese Transformation tatsaechlich persistiert, entscheidet
+        NICHT der Hook, sondern die ``update_fields``-Liste DIESES
+        Save-Aufrufs: Original (``["contact_stage", "updated_at"]``)
+        schreibt ``data_json`` gar nicht in die UPDATE-Anweisung — der
+        DB-Wert bleibt Klartext. Mutant (``update_fields=None``, voller
+        Save) schreibt ALLE Spalten inkl. der in-memory verschluesselten
+        ``data_json`` — der Klartext in der DB wird ueberschrieben.
+
+        Rohwerte bewusst per ``values_list(..., flat=True)`` gelesen (kein
+        Modell-Roundtrip, der selbst wieder ``_encrypt_sensitive_fields``
+        anstossen koennte).
+        """
+        target.document_type = doc_type_client_profile
+        target.data_json = {"wohnsituation": "Klartext vor Verschlüsselung"}
+        target.save()
+        raw_before = Client.objects.filter(pk=target.pk).values_list("data_json", flat=True).first()
+        assert raw_before["wohnsituation"] == "Klartext vor Verschlüsselung"
+
+        # Verschluesselung wird NACHTRAEGLICH aktiviert — die DB traegt noch
+        # den Klartext, der Save-Hook wuerde ihn ab jetzt verschluesseln.
+        FieldTemplate.objects.filter(facility=facility, name="Wohnsituation").update(is_encrypted=True)
+
+        source.contact_stage = Client.ContactStage.QUALIFIED
+        source.save()
+        dr = request_client_merge(source, target, staff_user, reason="Pin099-MergeA Vier-Augen (Verschlüsselung)")
+        approve_client_merge(dr, admin_user)
+        target.refresh_from_db()
+        assert target.contact_stage == Client.ContactStage.QUALIFIED
+        source.refresh_from_db()
+
+        unmerge_client(source, lead_user)
+
+        raw_after = Client.objects.filter(pk=target.pk).values_list("data_json", flat=True).first()
+        assert raw_after["wohnsituation"] == "Klartext vor Verschlüsselung"
 
     def test_client_unmerged_log_has_exact_message_and_structured_fields(self, source, target, lead_user, caplog):
         """Pin: ``x_unmerge_client__mutmut_198`` (Meldung -> ``None``),
