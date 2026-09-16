@@ -51,16 +51,19 @@ request.Request(..., headers={...})`` normalisiert jeden Header-Key ueber
 gespeicherten Key ``"Content-type"``; ``Request(..., data=<nicht None>,
 method=None)`` liefert ueber ``get_method()`` weiterhin ``"POST"``
 (expliziter CPython-Quellcode-Zweig, Fallback auf ``data is not None``);
-Postgres behandelt SQL-Keywords (SQL-Standard-Keyword-Faltung) UND
-Custom-GUC-Parameternamen (``current_setting``/``set_config``,
+Postgres behandelt SQL-Keywords (SQL-Standard-Keyword-Faltung) UND den
+Custom-GUC-**Parameternamen** (``current_setting``/``set_config``,
 dokumentiertes ``guc.c``-Verhalten ueber ``pg_strcasecmp``) case-insensitiv
-(empirisch mit Gross-/Kleinschreibung gegengeprüft).
+(empirisch mit Gross-/Kleinschreibung gegengeprüft) — das gilt NICHT fuer
+den **Value**-Parameter von ``set_config``: der wird als String-Literal
+UNVERAENDERT gespeichert (s. Nachtrag Teil 3 unten, ``mutmut_15``).
 
 **Nicht gepinnt (aequivalent):**
 
-*SQL-/GUC-Case-Insensitivitaet (dokumentiertes, deterministisches
-Postgres-Verhalten, empirisch verifiziert):*
-``x_run_system_detections__mutmut_6/7/14/15/21``.
+*SQL-Keyword-/GUC-Namens-Case-Insensitivitaet (dokumentiertes,
+deterministisches Postgres-Verhalten, empirisch verifiziert — betrifft NUR
+SQL-Keywords und den GUC-Namen, NICHT gespeicherte Value-String-Literale):*
+``x_run_system_detections__mutmut_6/7/14/21``.
 
 *urllib-``Request``-Method-Fallback (``data`` ist an dieser Call-Site immer
 gesetzt):* ``x__post_webhook__mutmut_24/28``.
@@ -87,15 +90,34 @@ Fallback-Vertrag" beschrieben) galten ebenfalls als aequivalent
 („toter Code") und wurden zur Konsistenz mit Batch ``breach_detection-b``
 und dem Repo-Praezedenzfall ``test_mutation_pins_094_credentials.py`` auf
 Klasse ``test`` (Prio 3) korrigiert und ueber ``_delete_setting()`` gepinnt
-(siehe die ``*Default``-Testklassen unten). Verbleibend sind **10**
-Aequivalenzen: 5 SQL-/GUC-Case-Faelle, 2 ``urllib``-Method-Faelle, 1
-Codec-Fall, 2 Header-Capitalize-Faelle — alle auf dokumentierten,
-deterministischen Sprach-/Bibliotheks-/SQL-Standard-Regeln (Codec-
-Normalisierung, ``str.capitalize()``, ``Request.get_method()``-Fallback,
-SQL-Keyword-Faltung, Postgres-GUC-Namensvergleich case-insensitiv)
+(siehe die ``*Default``-Testklassen unten).
+
+**Nachtrag (Familienreview, Teil 3):** ``x_run_system_detections__mutmut_15``
+(``set_config('app.is_super_admin', 'true', true)`` ->
+``SET_CONFIG('APP.IS_SUPER_ADMIN', 'TRUE', TRUE)``) galt als Teil der
+„SQL-/GUC-Case-Insensitivitaet"-Gruppe aequivalent — das war zu pauschal:
+die Gruppen-Verifikation deckte nur die Case-Insensitivitaet des
+**GUC-Namens** ab (empirisch mit ``set_config(..., 'true', ...)`` +
+``current_setting('APP.IS_SUPER_ADMIN', ...)`` getestet), NICHT die des
+**Value**-Parameters — und genau den aendert dieser Mutant zusaetzlich
+(``'true'`` -> ``'TRUE'``). Der Value wird von Postgres als String-Literal
+UNVERAENDERT gespeichert; die RLS-Policy aus Migration 0085 vergleicht
+``current_setting(...) = 'true'`` fallsensitiv. Korrigiert auf Klasse
+``test`` (Prio 1, sicherheitsrelevant — stiller RLS-Bypass-Verlust ohne
+Exception), siehe ``TestRunSystemDetectionsGucValueCase`` unten. Die
+uebrigen 4 Mutanten der Gruppe (``_6``/``_7``/``_14``/``_21``) aendern
+NUR SQL-Keywords bzw. den GUC-Namen, KEINEN Value-String — im selben
+Durchgang gegengeprueft, bleiben aequivalent.
+
+Verbleibend sind **9** Aequivalenzen: 4 SQL-Keyword-/GUC-Namens-Case-
+Faelle, 2 ``urllib``-Method-Faelle, 1 Codec-Fall, 2
+Header-Capitalize-Faelle — alle auf dokumentierten, deterministischen
+Sprach-/Bibliotheks-/SQL-Standard-Regeln (Codec-Normalisierung,
+``str.capitalize()``, ``Request.get_method()``-Fallback,
+SQL-Keyword-Faltung, Postgres-GUC-**Namens**vergleich case-insensitiv)
 beruhend — NICHT auf beobachtetem, ungarantiertem
-Planer-/Ausfuehrungsverhalten; im Zweitreview erneut einzeln geprueft,
-keine weitere Korrektur noetig.
+Planer-/Ausfuehrungsverhalten; mehrfach einzeln geprueft, keine weitere
+Korrektur noetig.
 """
 
 from __future__ import annotations
@@ -570,6 +592,44 @@ class TestRunSystemDetectionsGucPath:
                 cur.execute("SELECT current_setting('app.is_super_admin', true)")
                 restored = cur.fetchone()[0]
         assert restored == ""
+
+
+class TestRunSystemDetectionsGucValueCase:
+    def test_bypass_guc_value_matches_rls_policy_comparison(self, monkeypatch):
+        """Killt ``x_run_system_detections__mutmut_15``
+        (``set_config('app.is_super_admin', 'true', true)`` ->
+        ``SET_CONFIG('APP.IS_SUPER_ADMIN', 'TRUE', TRUE)``): anders als der
+        GUC-NAME (Postgres vergleicht Custom-GUC-Namen case-insensitiv,
+        s. ``run_system_detections__mutmut_7`` und die Äquivalenz-Liste)
+        wird der VALUE-String-Literal-Parameter von ``set_config``
+        UNVERAENDERT gespeichert — die RLS-Policy aus Migration 0085
+        vergleicht ``current_setting('app.is_super_admin', true) = 'true'``
+        FALLSENSITIV (Text-Gleichheit, keine Normalisierung). Setzt der
+        Mutant den Wert auf ``'TRUE'`` statt ``'true'``, verliert der
+        System-Scan den RLS-Bypass STILL (keine Exception) — die
+        ``facility IS NULL``-Reads (z. B. anonyme Login-Bursts) blieben
+        unter RLS unsichtbar. Ersetzt die reine Detektions-Schleife
+        ``_run_system_detections`` durch einen Spion, der GENAU zu dem
+        Zeitpunkt liest, an dem der Bypass laut Code aktiv sein MUSS
+        (direkt nach dem ``set_config``-Aufruf, auf derselben
+        Connection/Session — GUCs sind session-, nicht cursor-gescopt)."""
+        assert connection.vendor == "postgresql", "Suite laeuft ausschliesslich auf PostgreSQL"
+        captured = {}
+
+        def _fake_run_system_detections():
+            with connection.cursor() as cur:
+                cur.execute("SELECT current_setting('app.is_super_admin', true)")
+                captured["value"] = cur.fetchone()[0]
+            return []
+
+        monkeypatch.setattr(
+            "core.services.compliance.breach_detection._run_system_detections",
+            _fake_run_system_detections,
+        )
+
+        run_system_detections()
+
+        assert captured["value"] == "true"
 
 
 # ============================================================================
