@@ -147,7 +147,7 @@ class TestCurrentShiftProjectionScopeAndContent:
         Highlights (siehe Testklasse unten).
         """
         _full_day_filter(facility)
-        now = timezone.now()
+        now = timezone.localtime()
 
         contact_type = DocumentType.objects.create(facility=facility, name="Kontakt Pin", color="#111111")
         crisis_type = DocumentType.objects.create(
@@ -272,7 +272,7 @@ class TestCurrentShiftProjectionHighlightLimits:
         der Mutant alle elf.
         """
         _full_day_filter(facility, label="Ganztag Krisenlimit")
-        now = timezone.now()
+        now = timezone.localtime()
         crisis_type = DocumentType.objects.create(
             facility=facility,
             name="Krise Limit",
@@ -303,7 +303,7 @@ class TestCurrentShiftProjectionHighlightLimits:
         der Mutant alle elf.
         """
         _full_day_filter(facility, label="Ganztag Aufgabenlimit")
-        now = timezone.now()
+        now = timezone.localtime()
         tasks = []
         for i in range(11):
             task = WorkItem.objects.create(
