@@ -315,8 +315,8 @@ class TestSystemChainLatestLinkRawFlagLifecycle:
         """Killt ``__mutmut_42``/``_43`` (``_system_read_active.flag = True`` ->
         ``None``/``False`` VOR dem Raw-Select).
 
-        Verhaltens-Pin statt Schreibhistorie-Spy (Nachbesserung/Zweitgutachten
-         sol): ``__mutmut_65`` (``flag = False`` -> ``None`` im
+        Verhaltens-Pin statt Schreibhistorie-Spy (nach Zweitgutachten):
+        ``__mutmut_65`` (``flag = False`` -> ``None`` im
         ``finally`` NACHHER) wurde aus diesem Test entfernt und als
         ``equivalent`` eingestuft — die Flagge wird produktiv AUSSCHLIESSLICH
         booleschen in ``if getattr(_system_read_active, "flag", False):``
@@ -382,7 +382,7 @@ class TestSystemChainLatestLinkRawElevationValueCase:
         ``set_config('app.is_super_admin', 'true', true)`` -> ``SET_CONFIG(
         'APP.IS_SUPER_ADMIN', 'TRUE', TRUE)``.
 
-        Semantischer statt Text-Pin (Nachbesserung/Zweitgutachten  sol):
+        Semantischer statt Text-Pin (nach Zweitgutachten):
         ``__mutmut_46``/``_47``/``_54``/``_63`` (reine SQL-Schluesselwort-/
         Parameternamen-Gross-Kleinschreibung auf den drei GUC-Anweisungen)
         sind Postgres-seitig FUNKTIONAL aequivalent (empirisch verifiziert:
