@@ -7,8 +7,8 @@ Quelle: Vollmutation #2174, Batch ``dashboard-3``
 Der Batch hat 70 Survivor-Mutanten ueber fuenf Module: ``release_log.py``
 (Freigabe-Uebersicht/K4a, 32), ``quick_templates.py`` (Event-Schnellvorlagen,
 17), ``disclosure.py`` (k-Anonymitaets-Rueckrechnung, 11), ``main.py``
-(Rollen-Arbeitszentralen, 8) und ``snapshot.py`` (2). 54 sind Testluecken
-(``test``), 16 sind ``equivalent`` (Begruendung jeweils im Test-Docstring
+(Rollen-Arbeitszentralen, 8) und ``snapshot.py`` (2). 56 sind Testluecken
+(``test``), 14 sind ``equivalent`` (Begruendung jeweils im Test-Docstring
 bzw. in der Triage-Datei — kein Fix, kein Pin).
 
 Gruppierung der gepinnten Tests (Funktion -> Mutanten):
@@ -230,7 +230,7 @@ class TestOverlaps:
 
 
 # ---------------------------------------------------------------------------
-# disclosure.py — _resolved_margins, _bounds, findings (5 Testluecken)
+# disclosure.py — _resolved_margins, _bounds, findings (7 Testluecken)
 # ---------------------------------------------------------------------------
 
 
@@ -250,6 +250,37 @@ class TestResolvedMargins:
         )
         resolved = _resolved_margins([no_key, resolvable])
         assert resolved == {"total": 8}
+
+    def test_unresolvable_margin_is_recorded_under_its_own_key(self):
+        """Toetet mutmut_14 (``resolved.setdefault(partition.margin_key,
+        None)`` -> ``resolved.setdefault(None, None)``) UND mutmut_15
+        (-> ``resolved.setdefault(None)`` — ebenfalls der Schluessel ``None``,
+        nur mit implizitem statt explizitem zweiten Argument; ``dict.
+        setdefault`` hat ohnehin ``None`` als Default, das aendert an der
+        Schluessel-Verwechslung nichts). Der Rueckgabewert der Funktion ist
+        das VOLLSTAENDIGE Mapping, nicht nur das, was ein heutiger Aufrufer
+        per ``.get(margin_key)`` daraus liest. Eine Partition mit bekanntem
+        ``margin_key``, aber unbekanntem Margin UND nicht vollstaendig
+        publizierten Zellen (die Rekonstruktion ueber die Zellensumme greift
+        also nicht) muss den Platzhalter unter dem ECHTEN Schluessel ablegen:
+        ``{"total": None}``. Beide Mutanten legen ihn stattdessen unter dem
+        Literal ``None`` ab: ``{None: None}`` — ein beobachtbar anderer
+        Rueckgabewert, unabhaengig davon, wie heutige Aufrufer ihn lesen.
+        Der dritte Mutant dieser Gruppe, mutmut_16 (``resolved.setdefault
+        (partition.margin_key, )`` — RICHTIGER Schluessel, nur das
+        implizite ``None``-Default statt des expliziten), bleibt
+        ``equivalent``: ``dict.setdefault(key)`` hat laut Python-Doku
+        ohnehin ``None`` als Default, identisch zu ``setdefault(key,
+        None)``."""
+        partition = Partition(
+            name="p",
+            margin_key="total",
+            margin=None,
+            cells=(Cell(key="a", published=None, lo=1, hi=None),),
+        )
+        resolved = _resolved_margins([partition])
+        assert resolved == {"total": None}
+        assert set(resolved) == {"total"}
 
 
 class TestBounds:
