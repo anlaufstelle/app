@@ -409,6 +409,82 @@ class TestSuppressReportStatsUniqueClientsOverride:
         assert out["unique_clients"] == 20
 
 
+class TestSuppressStageDictContactStagePersonGatedZeroCellAtThreshold1:
+    """``_suppress_stage_dict``'s ``values``-Liste steuert in ``_local_partition``
+    NICHT nur die Opferwahl unter sichtbaren Kandidaten, sondern AUCH die
+    Intervall-Branchwahl fuer eine bereits unterdrueckte Zelle
+    (``value < threshold`` -> enges Intervall ``[lo, threshold-1]`` vs. sonst
+    unbeschraenktes ``[threshold, ∞)``).
+
+    NACHTRAG (Familienreview, Reviewer-Befund): killt
+    ``x__suppress_stage_dict__mutmut_7`` (``stage_dict[key] or 0`` ->
+    ``or 1``) — urspruenglich als ``equivalent`` eingestuft, weil die
+    Brute-Force-Pruefung nur bei Schwelle 5 lief, wo der Effekt nicht
+    sichtbar wird. Bei Schwelle 1 kippt der mutierte Wert einer echten
+    Nullzelle (``0 or 1`` = 1) die Bedingung ``value < threshold``
+    (``1 < 1`` ist False, waehrend ``0 < 1`` True ist): die Nullzelle
+    erscheint der Mutante als unbeschraenkt-hoch statt exakt ``[0, 0]``,
+    wodurch BEIDE verdeckten Zellen ein LEERES statt eines EXAKTEN
+    Intervalls liefern und der Fund fuer ``qualifiziert`` verlorengeht — der
+    nachgeschaltete K1-Guard (``apply_residual_guard``, laeuft in
+    ``suppress_report_stats`` in jedem Fall danach) holt das nicht nach.
+    Getestet ueber den vollstaendigen Suppressions-/Report-Pfad
+    (``suppress_report_stats``), nicht nur den isolierten Helfer.
+    """
+
+    def test_kontaktstufe_mit_nullzelle_bleibt_bei_schwelle_1_vollstaendig_unterdrueckt(self, facility):
+        Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
+        stats = {
+            "total_contacts": 2,
+            "unique_clients": 1,
+            "by_contact_stage": {"anonym": 0, "identifiziert": 1, "qualifiziert": 1},
+            "persons_by_contact_stage": {"anonym": 0, "identifiziert": 1, "qualifiziert": None},
+            "by_document_type": [{"name": "Beratung", "count": 2}],
+            "by_age_cluster": [{"cluster": "27_plus", "label": "27+", "count": 2, "persons": None}],
+        }
+
+        out = suppress_report_stats(facility, stats)
+
+        assert out["by_contact_stage"] == {"anonym": None, "identifiziert": None, "qualifiziert": None}
+
+
+class TestSuppressSmallAgeClusterPersonGatedZeroCellAtThreshold1:
+    """``_suppress_small``'s ``values``-Liste — dieselbe Bugklasse wie
+    ``_suppress_stage_dict``'s ``values`` (siehe
+    ``TestSuppressStageDictContactStagePersonGatedZeroCellAtThreshold1``),
+    hier ueber die K3-A1-Restzeile (``with_no_person_row``), deren Wert bei
+    W=0 ebenfalls eine echte Nullzelle ist.
+
+    NACHTRAG (eigener Nachzug im selben Durchgang wie der Reviewer-Befund,
+    gleiche Ursache): killt ``x__suppress_small__mutmut_8``
+    (``row.get(count_key) or 0`` -> ``or 1``) — ebenfalls urspruenglich als
+    ``equivalent`` eingestuft (Brute-Force nur bei Schwelle 5). Bei Schwelle 1
+    kippt die mutierte Restzeile (``0 or 1`` = 1) von der engen ``[0, 0]``-
+    in die unbeschraenkte ``[1, ∞)``-Branche und macht dadurch das Intervall
+    einer zweiten, gleichzeitig personenbedingt unterdrueckten Zelle leer
+    statt exakt. Getestet ueber den vollstaendigen Suppressions-/Report-Pfad
+    (``suppress_report_stats``), nicht nur den isolierten Helfer.
+    """
+
+    def test_altersgruppe_mit_nullzeile_bleibt_bei_schwelle_1_vollstaendig_unterdrueckt(self, facility):
+        Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
+        stats = {
+            "total_contacts": 7,
+            "unique_clients": 2,
+            "by_contact_stage": {"anonym": 0, "identifiziert": 0, "qualifiziert": 7},
+            "persons_by_contact_stage": {"anonym": 0, "identifiziert": 0, "qualifiziert": 2},
+            "by_document_type": [{"name": "Beratung", "count": 7}],
+            "by_age_cluster": [
+                {"cluster": "27_plus", "count": 5, "persons": 0},
+                {"cluster": "u18", "count": 2, "persons": 2},
+            ],
+        }
+
+        out = suppress_report_stats(facility, stats)
+
+        assert all(row["suppressed"] for row in out["by_age_cluster"])
+
+
 class TestSuppressStageDictAuditDetails:
     """Direkte Unit-Tests fuer ``_suppress_stage_dict`` (K2-Audit-Feinheiten).
 
