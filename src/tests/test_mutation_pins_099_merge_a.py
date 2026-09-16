@@ -42,7 +42,7 @@ der ``client_unmerged``-Logzeile (Pendant zu
 ``test_client_merge_workflow.py``, dort nur fuer die Merge-Richtung
 gepinnt).
 
-**Belegte Aequivalenzen (19 Mutanten, mit Diff + Testlauf unter der Mutante
+**Belegte Aequivalenzen (18 Mutanten, mit Diff + Testlauf unter der Mutante
 verifiziert — alle bleiben unter JEDEM Test dieser Datei gruen):**
 
 * ``x_unmerge_client__mutmut_57/59/64/66/71/73/78/80/85/87/92/94/97`` —
@@ -63,16 +63,28 @@ verifiziert — alle bleiben unter JEDEM Test dieser Datei gruen):**
   ``other`` zurueck) — ``event_filter`` ist an dieser Stelle IMMER frisch
   ``Q()`` (zwei Zeilen zuvor initialisiert), der Operator der ERSTEN
   Zuweisung ist deshalb folgenlos.
-* ``x_unmerge_client__mutmut_147/158/172`` — drei ``target.save(update_fields
-  =[...])``/``source.save(update_fields=["merged_into"])`` verlieren die
-  Feldliste (``update_fields=None`` = voller Save). ``Client.save()``
-  verschluesselt unbedingt und ruft dann ``super().save(*args, **kwargs)``
-  ohne weitere, von ``update_fields`` abhaengige Verzweigung; es gibt keinen
-  ``post_save``-Empfaenger auf ``Client``. An JEDER der drei Stellen weicht
-  der Python-Zustand des Objekts zum Zeitpunkt des Saves in KEINEM anderen
-  Feld von der DB ab (frisch unter ``_locked_clients`` geladen bzw. bereits
-  zuvor mit genau diesen Werten gespeichert) — ein voller Save schreibt
-  identische Werte.
+* ``x_unmerge_client__mutmut_147/158`` — zwei ``target.save(update_fields=
+  [...])`` verlieren die Feldliste (``update_fields=None`` = voller Save).
+  Drei Belege, warum das hier zustandsgleich bleibt: (1) ``target`` ist zum
+  Save-Zeitpunkt frisch geladen und per ``_locked_clients``
+  (``select_for_update()``) gesperrt — kein anderer Prozess kann dazwischen
+  eine andere Spalte geaendert haben, die ein voller Save ueberschreiben
+  koennte. (2) ``updated_at`` steht in BEIDEN Feldlisten bereits explizit
+  (``["document_type", "data_json", "updated_at"]`` bzw. ``["contact_stage",
+  "updated_at"]``) — das ``auto_now``-Feld wird also so oder so auf
+  denselben Zeitstempel gesetzt, ein voller Save bumpt hier nichts
+  zusaetzlich.
+  (3) kein anderes Feld von ``target`` weicht zum Save-Zeitpunkt vom
+  DB-Stand ab (``Client.save()`` verschluesselt unbedingt und ruft danach
+  ``super().save(*args, **kwargs)`` ohne weitere, von ``update_fields``
+  abhaengige Verzweigung; kein ``post_save``-Empfaenger auf ``Client``) — ein
+  voller Save schreibt an beiden Stellen identische Werte wie der gezielte.
+  ``x_unmerge_client__mutmut_172`` (``source.save(update_fields=
+  ["merged_into"])`` verliert die Feldliste) ist dagegen NICHT aequivalent:
+  ``updated_at`` fehlt in dieser Feldliste, ein voller Save wendet
+  ``auto_now`` trotzdem auf ALLE Felder an und bumpt ``source.updated_at``
+  zusaetzlich — beobachtbar, siehe ``TestUndoInventoryScoping::
+  test_source_merged_into_reset_leaves_updated_at_untouched`` unten.
 * ``x_unmerge_client__mutmut_216`` — ``getattr(user, "pk", None)`` verliert
   den Default. ``user`` ist an dieser Stelle immer eine echte, bereits durch
   ``user.is_lead_or_admin`` gelesene ``User``-Instanz — ``.pk`` existiert
@@ -84,6 +96,7 @@ kein Nachbau von Produktionslogik.
 """
 
 import logging
+from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -415,6 +428,32 @@ class TestUndoInventoryScoping:
 
         source.refresh_from_db()
         assert source.merged_into_id is None
+
+    def test_source_merged_into_reset_leaves_updated_at_untouched(self, source, target, lead_user):
+        """Pin: ``x_unmerge_client__mutmut_172`` — ``source.save(update_fields=
+        ["merged_into"])`` verliert die Feldliste (-> ``update_fields=None``).
+
+        ``Client.updated_at`` ist ``auto_now=True`` und NICHT in dieser
+        Feldliste — das Original laesst den Zeitstempel deshalb unberuehrt
+        (``auto_now`` wird nur fuer Felder angewandt, die explizit in
+        ``update_fields`` stehen). Mutant: der volle Save
+        (``update_fields=None``) wendet ``auto_now`` auf ALLE Felder an und
+        bumpt ``source.updated_at`` zusaetzlich — kuenstlich gealtert, um den
+        Unterschied beobachtbar zu machen (``source.restore()`` direkt danach
+        sperrt sich selbst wieder auf ``["is_deleted", "deleted_at",
+        "deleted_by"]`` und beruehrt ``updated_at`` ebenfalls nicht).
+        """
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        aged = source.updated_at - timedelta(days=1)
+        Client.objects.filter(pk=source.pk).update(updated_at=aged)
+        source.refresh_from_db()
+        assert source.updated_at == aged
+
+        unmerge_client(source, lead_user)
+
+        source.refresh_from_db()
+        assert source.updated_at == aged
 
 
 class TestUnmergeAccountability:
