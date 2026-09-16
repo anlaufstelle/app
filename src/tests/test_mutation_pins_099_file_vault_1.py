@@ -4,9 +4,13 @@ fuer den Batch ``file_vault-1``: ``core.services.file_vault.storage``,
 (verschluesselter Dateispeicher, Waisen-Bereinigung, Schluesselrotation).
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-file_vault-1.json`` (Triage
-``triage-099-file_vault-1.json``). 68 Survivor, davon 36 als ``test``
-klassifiziert und hier gepinnt (13 ``equivalent`` und 19 ``skip`` reine
-Logging-Mutanten sind in der Triage-Datei begruendet, kein Pin).
+``triage-099-file_vault-1.json``). 68 Survivor, davon 57 als ``test``
+klassifiziert und hier gepinnt (24 Pin-Tests, mehrere Mutanten je Pin;
+11 ``equivalent`` sind in der Triage-Datei begruendet, kein Pin; 0 ``skip`` —
+nach der Zweitreview-Nacharbeit gilt fuer Logging-Mutanten: Meldungs-/
+Argument-/Textverlust ist ``test`` (exakte ``caplog``-Assertion auf
+``record.getMessage()``), nur reine XX-Marker-/Gross-Klein-Varianten waeren
+``skip`` gewesen — hier toetet der Exakt-Vergleich sie ohnehin mit).
 
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
 keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
@@ -14,6 +18,7 @@ keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from datetime import date, datetime, timedelta
@@ -28,7 +33,9 @@ from core.models.mfa import EncryptedTOTPDevice
 from core.services.file_vault import (
     StagedUpload,
     cleanup_orphan_storage_files,
+    delete_attachment_file,
     encrypt_field,
+    get_attachment_path,
     get_original_filename,
     prepare_encrypted_upload,
     safe_decrypt,
@@ -317,6 +324,59 @@ class _AttachmentLike:
         self.original_filename_encrypted = original_filename_encrypted
 
 
+class _AttachmentPathLike:
+    """Minimaler Stellvertreter: ``get_attachment_path``/``delete_attachment_file``
+    lesen nur ``facility`` und ``storage_filename``."""
+
+    def __init__(self, facility, storage_filename):
+        self.facility = facility
+        self.storage_filename = storage_filename
+
+
+_STORAGE_LOGGER = "core.services.file_vault.storage"
+
+
+def test_delete_attachment_file_meldet_die_exakte_warnung_bei_fehlgeschlagenem_unlink(
+    caplog, settings, tmp_path, facility
+):
+    """Pins ``xǁdelete_attachment_fileǁ__mutmut_5`` (``logger.warning("...: %s",
+    path)`` -> ``logger.warning(None, path)``, kompletter Meldungsverlust),
+    ``_6`` (``%s``-Argument -> ``None``), ``_7`` (Formatstring entfernt, nur
+    der Pfad bleibt), ``_8`` (Pfad-Argument entfernt), ``_9``/``_10``/``_11``
+    (XX-Marker/Klein-/Grossschreibung inkl. ungueltigem ``%S``): ALLE
+    veraendern die tatsaechlich geloggte Warnung — die exakte Meldung inkl.
+    Pfad ist der einzige Hinweis im Betrieb, dass eine Attachment-Datei nicht
+    entfernt werden konnte."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    attachment = _AttachmentPathLike(facility, "ist-ein-verzeichnis.enc")
+    path = get_attachment_path(attachment)
+    path.mkdir(parents=True)  # ein Verzeichnis statt einer Datei -> unlink() scheitert mit OSError
+
+    with caplog.at_level(logging.WARNING, logger=_STORAGE_LOGGER):
+        delete_attachment_file(attachment)
+
+    records = [r for r in caplog.records if r.name == _STORAGE_LOGGER]
+    assert len(records) == 1
+    record = records[0]
+    assert record.levelno == logging.WARNING
+    assert record.getMessage() == f"Failed to delete attachment file: {path}"
+
+
+def test_delete_attachment_file_loggt_keine_warnung_wenn_die_datei_schon_fehlt(caplog, settings, tmp_path, facility):
+    """Pins ``xǁdelete_attachment_fileǁ__mutmut_3``/``_4`` (``missing_ok=True``
+    -> ``None``/``False``): fehlt die Datei bereits (haeufiger Normalfall bei
+    doppeltem Cleanup), bleibt das Original lautlos — die Mutanten werfen
+    ``FileNotFoundError``, fangen ihn als ``OSError`` und loggen eine
+    (unnoetige) Warnung."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    attachment = _AttachmentPathLike(facility, "existiert-nie.enc")
+
+    with caplog.at_level(logging.WARNING, logger=_STORAGE_LOGGER):
+        delete_attachment_file(attachment)
+
+    assert [r for r in caplog.records if r.name == _STORAGE_LOGGER] == []
+
+
 # ---------------------------------------------------------------------------
 # core.services.file_vault.cleanup — cleanup_orphan_storage_files
 # ---------------------------------------------------------------------------
@@ -387,6 +447,54 @@ def test_cleanup_orphan_loescht_niemals_eine_bekannte_attachment_datei(settings,
 
     assert deleted == 0
     assert path.exists()
+
+
+_CLEANUP_LOGGER = "core.services.file_vault.cleanup"
+
+
+def test_cleanup_orphan_meldet_den_exakten_erfolg_beim_loeschen_einer_waise(caplog, settings, tmp_path):
+    """Pins ``xǁcleanup_orphan_storage_filesǁ__mutmut_42`` (``%s``-Argument ->
+    ``None``), ``_43`` (Formatstring entfernt, nur der Pfad bleibt), ``_44``
+    (Pfad-Argument entfernt) und ``_45`` (XX-Marker): die geloggte
+    Erfolgsmeldung ist der einzige Betriebs-Nachweis, WELCHE Datei der
+    periodische Cron-Sweep entfernt hat."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    path = _write_enc(tmp_path, "alte-waise.enc", age_seconds=7200)
+
+    with caplog.at_level(logging.INFO, logger=_CLEANUP_LOGGER):
+        deleted = cleanup_orphan_storage_files()
+
+    assert deleted == 1
+    records = [r for r in caplog.records if r.name == _CLEANUP_LOGGER and r.levelno == logging.INFO]
+    assert len(records) == 1
+    assert records[0].getMessage() == f"cleanup_orphan_storage_files removed orphan: {path}"
+
+
+def test_cleanup_orphan_meldet_die_exakte_warnung_bei_fehlgeschlagenem_unlink(caplog, settings, tmp_path):
+    """Pins ``xǁcleanup_orphan_storage_filesǁ__mutmut_47`` (Meldung komplett
+    -> ``None``), ``_48``/``_49`` (je ein ``%s``-Argument -> ``None``),
+    ``_50`` (Formatstring entfernt), ``_51``/``_52`` (je ein Argument
+    entfernt) und ``_53``/``_54`` (XX-Marker/Grossschreibung inkl.
+    ungueltigem ``%S``): jede Variante veraendert die geloggte
+    Fehler-Diagnose (welche Datei, welcher OS-Fehler) — der einzige Hinweis
+    im Betrieb auf eine liegen gebliebene Waise."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    path = tmp_path / "kaputte-waise.enc"
+    path.mkdir()  # Verzeichnis statt Datei -> unlink() scheitert mit OSError
+    old_mtime = time.time() - 7200
+    os.utime(path, (old_mtime, old_mtime))
+
+    with caplog.at_level(logging.WARNING, logger=_CLEANUP_LOGGER):
+        deleted = cleanup_orphan_storage_files()
+
+    assert deleted == 0
+    records = [r for r in caplog.records if r.name == _CLEANUP_LOGGER and r.levelno == logging.WARNING]
+    assert len(records) == 1
+    prefix = f"cleanup_orphan_storage_files: {path} -> "
+    message = records[0].getMessage()
+    assert message.startswith(prefix)
+    suffix = message[len(prefix) :]
+    assert suffix not in ("", "None")
 
 
 # ---------------------------------------------------------------------------
