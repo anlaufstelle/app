@@ -215,7 +215,11 @@ info "Env-Datei:     ${ENV_FILE}"
 # Verzeichnisnamen angelegtes pgdata-Volume aus dem aktiven Projekt fallen.
 # Nur dieser eindeutige Kandidat ist ein sinnvoller Upgrade-Hinweis; Volumes
 # anderer Stacks duerfen auf einer Erstinstallation keine Warnung ausloesen.
-active_project_name="$(compose config 2>/dev/null | awk '$1 == "name:" { print $2; exit }')"
+# Erst vollstaendig einlesen, dann filtern: ein frueh endender Konsument (awk … exit)
+# liesse den Producer unter pipefail mit SIGPIPE (141) sterben — auf langsamen
+# Runnern reproduzierbar.
+compose_config_output="$(compose config 2>/dev/null)"
+active_project_name="$(awk '$1 == "name:" && !found { name = $2; found = 1 } END { print name }' <<<"$compose_config_output")"
 if [[ -n "$active_project_name" ]]; then
     compose_directory_name="$(basename "$(cd "$(dirname "$COMPOSE_FILE")" && pwd)")"
     legacy_project_name="$(printf '%s' "$compose_directory_name" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-' | sed 's/^[^a-z0-9]*//')"

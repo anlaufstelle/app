@@ -328,6 +328,45 @@ def _code_string_literals(source: str, tree: ast.AST) -> list[str]:
     return out
 
 
+_READ_ATTRS = frozenset({"read_text", "read_bytes", "open", "iterdir", "glob", "rglob", "stat", "is_file", "is_dir"})
+
+
+def _segment_path_literals(tree: ast.AST, skip: set[int]) -> list[str]:
+    """Pfade, die per ``/``-Operator aus String-Segmenten zusammengesetzt und
+    direkt gelesen werden.
+
+    ``(REPO_ROOT / "docs" / "dev" / "hand-checks.md").read_text()`` enthält
+    kein einzelnes Literal ``docs/dev/`` — genau diese Schreibweise ist dem
+    Guard vor 0.99 entgangen (Refs #2171: Stage-CI rot durch
+    ``FileNotFoundError``). Gezählt werden nur Ketten, auf denen unmittelbar
+    ein lesender Aufruf sitzt (``read_text``, ``open``, ``glob`` …); Ketten in
+    Ausschlusslisten oder reinen Zuweisungen bleiben unberührt. Die Segmente
+    werden in Reihenfolge mit ``/`` verbunden; da eine solche Kette am
+    Repo-Root beginnt, wird sie mit ``startswith`` gegen die Prefixe geprüft."""
+
+    def segments(node: ast.AST) -> list[str]:
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            return segments(node.left) + segments(node.right)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in skip:
+            return [node.value]
+        return []
+
+    out: list[str] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr not in _READ_ATTRS:
+            continue
+        chain = node.func.value
+        if not (isinstance(chain, ast.BinOp) and isinstance(chain.op, ast.Div)):
+            continue
+        parts = [part.strip("/") for part in segments(chain) if part]
+        if len(parts) < 2:
+            continue
+        out.append("/".join(parts))
+    return out
+
+
 def _gated_prefixes(source: str, prefixes: list[str]) -> set[str]:
     """Prefixe, für die die Datei ein Skip-Gate mit passendem Reason-Text hat.
 
@@ -356,7 +395,8 @@ def scan_file(path: Path, prefixes: list[str]) -> list[tuple[str, str]]:
         return [("<syntax>", f"{path}: nicht parsebar ({exc})")]
 
     code_strings = _code_string_literals(source, tree)
-    if not code_strings:
+    chain_paths = _segment_path_literals(tree, _docstring_node_ids(tree))
+    if not code_strings and not chain_paths:
         return []
 
     referenced: dict[str, str] = {}
@@ -364,6 +404,10 @@ def scan_file(path: Path, prefixes: list[str]) -> list[tuple[str, str]]:
         for prefix in prefixes:
             if prefix in literal and prefix not in referenced:
                 referenced[prefix] = literal
+    for chain in chain_paths:
+        for prefix in prefixes:
+            if chain.startswith(prefix) and prefix not in referenced:
+                referenced[prefix] = chain
     if not referenced:
         return []
 

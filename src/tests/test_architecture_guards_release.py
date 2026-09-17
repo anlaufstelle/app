@@ -121,6 +121,45 @@ def test_ungated_excluded_reference_is_detected(tmp_path: Path) -> None:
     assert excluded.split("/")[0] in (result.stdout + result.stderr)
 
 
+def test_segment_style_excluded_reference_is_detected(tmp_path: Path) -> None:
+    """``ROOT / "docs" / "dev" / …`` ohne Skip-Gate macht den Guard ROT (Refs #2171)."""
+    if not LEAK_SCRIPT.exists():
+        pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)")
+    excluded = _excluded_example_path()
+    chain = " / ".join(repr(part) for part in excluded.strip("/").split("/"))
+    offending = tmp_path / "test_segment_offender.py"
+    offending.write_text(
+        "from pathlib import Path\n\nROOT = Path(__file__).resolve().parents[2]\n\n\n"
+        f"def test_reads_stripped_file():\n    assert (ROOT / {chain}).read_text()\n",
+        encoding="utf-8",
+    )
+    result = _run(tmp_path)
+    assert result.returncode == 1, (
+        f"Guard hätte die segmentierte Referenz melden müssen:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+def test_segment_style_excluded_reference_with_skip_gate_passes(tmp_path: Path) -> None:
+    """Dieselbe segmentierte Referenz MIT Skip-Gate, dessen Reason den Prefix nennt, ist OK."""
+    if not LEAK_SCRIPT.exists():
+        pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)")
+    excluded = _excluded_example_path()
+    reason_prefix = _skip_reason_prefix()
+    chain = " / ".join(repr(part) for part in excluded.strip("/").split("/"))
+    gated = tmp_path / "test_segment_gated.py"
+    gated.write_text(
+        "from pathlib import Path\n\nimport pytest\n\nROOT = Path(__file__).resolve().parents[2]\n\n\n"
+        f"def test_reads_stripped_file():\n    p = ROOT / {chain}\n    if not p.exists():\n"
+        f"        pytest.skip({reason_prefix + ' nicht im Public-Snapshot'!r})\n    assert p.read_text()\n",
+        encoding="utf-8",
+    )
+    result = _run(tmp_path)
+    assert result.returncode == 0, (
+        "Guard hätte die gegatete segmentierte Referenz durchlassen müssen:\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
 def test_skip_gated_excluded_reference_passes(tmp_path: Path) -> None:
     """Dieselbe Referenz MIT passendem Skip-Gate (Reason nennt den Prefix) ist OK."""
     if not LEAK_SCRIPT.exists():

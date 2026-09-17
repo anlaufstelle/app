@@ -1,6 +1,7 @@
 """Ausfuehrbare Guards fuer das Erstsetup-Skript."""
 
 import getpass
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -172,7 +173,7 @@ def test_backup_directory_is_prepared_before_first_up(tmp_path: Path) -> None:
     result, commands, backup_dir = _run_setup(tmp_path)
     assert result.returncode == 0, result.stderr
     assert backup_dir.stat().st_mode & 0o7777 == 0o2750
-    assert backup_dir.stat().st_uid == 1000
+    assert backup_dir.stat().st_uid == os.getuid()
     assert backup_dir.stat().st_mode & 0o050 == 0o050
     assert backup_dir.stat().st_mode & 0o004 == 0
     assert f"install -d -m 2750 -o {getpass.getuser()} -g 1000" in commands
