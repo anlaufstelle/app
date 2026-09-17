@@ -1,6 +1,6 @@
 # Threat Model — Anlaufstelle (STRIDE-Lite)
 
-**Version:** v0.96.x · **Letzte Revision:** 2026-09-08 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691), Offline-Grenze aus [ADR-022](adr/022-offline-snapshot-keys.md) (#1411)
+**Version:** v0.99.x · **Letzte Revision:** 2026-09-17 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691), Offline-Grenze aus [ADR-022](adr/022-offline-snapshot-keys.md) (#1411)
 
 Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen internen Code-Audits (dev-only) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
 

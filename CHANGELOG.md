@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.99.0] - 2026-09-17
+
+Letzter Release-Kandidat vor 1.0: bündelt die Fix-Wellen 0.97–0.99 (Red-Team-Befunde B-12 bis B-20 geschlossen, Restore-/Drill-Härtung, Import-Übernahme unter Lock, MFA-Audit, Quick-Exit-Referrer, Speicherkontingent unter Nebenläufigkeit), die Dependabot-Sammel-Batches und die vollständige Mutations-Absicherung des Service- und Formular-Kerns (Vollmutation 28 502 Mutanten: forms 100 %, services 99,8 % nach Triage, 102 Pin-Testdateien).
+
 ### Security
 
 - **„Schnell verlassen“ verrät dem Sprungziel die Herkunft nicht mehr** (#2179) — Der Sprung auf die konfigurierte neutrale Adresse schickte dem Ziel — per Vorgabe ein Dritter — bisher die Herkunfts-Adresse der Installation als `Referer` mit (nur die Origin, ohne Pfad); in dessen Server-Log stand damit, dass unmittelbar zuvor die Instanz einer Beratungsstelle offen war. Genau diese eine Navigation läuft jetzt ohne `Referer`; die `Referrer-Policy` aller übrigen Links und Seiten bleibt unverändert. Lässt sich die Unterdrückung ausnahmsweise nicht setzen (gesperrtes Dokument), wird trotzdem unverzüglich gesprungen — mit einer festen, datenarmen Warnung in der Browser-Konsole, damit ein stiller Ausfall des Schutzes auffällt.
