@@ -122,25 +122,65 @@ def test_ungated_excluded_reference_is_detected(tmp_path: Path) -> None:
 
 
 def test_segment_style_excluded_reference_is_detected(tmp_path: Path) -> None:
-    """``ROOT / "docs" / "dev" / …`` ohne Skip-Gate macht den Guard ROT (Refs #2171)."""
+    """``ROOT / "docs" / "dev" / …`` mit direktem Lesezugriff und ohne Skip-Gate macht den Guard ROT (Refs #2171)."""
     if not LEAK_SCRIPT.exists():
         pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)")
     excluded = _excluded_example_path()
     chain = " / ".join(repr(part) for part in excluded.strip("/").split("/"))
     offending = tmp_path / "test_segment_offender.py"
     offending.write_text(
-        "from pathlib import Path\n\nROOT = Path(__file__).resolve().parents[2]\n\n\n"
-        f"def test_reads_stripped_file():\n    assert (ROOT / {chain}).read_text()\n",
+        "from pathlib import Path\n\nREPO_ROOT = Path(__file__).resolve().parents[2]\n\n\n"
+        f"def test_reads_stripped_file():\n    assert (REPO_ROOT / {chain}).read_text()\n",
+        encoding="utf-8",
+    )
+    result = _run(tmp_path)
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, f"Guard hätte die segmentierte Referenz melden müssen:\n{output}"
+    assert excluded.split("/")[0] in output
+    assert "test_segment_offender.py" in output
+    assert excluded.strip("/") in output
+
+
+def test_segment_style_directory_end_with_iterdir_is_detected(tmp_path: Path) -> None:
+    """Ein Kettenende auf dem gestrippten Verzeichnis selbst wird ebenfalls gemeldet.
+
+    Beispiel: ``(… / "docs" / "dev").iterdir()``."""
+    if not LEAK_SCRIPT.exists():
+        pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)")
+    excluded = _excluded_example_path()
+    directory = excluded.strip("/").rsplit("/", 1)[0]
+    chain = " / ".join(repr(part) for part in directory.split("/"))
+    offending = tmp_path / "test_segment_dir_offender.py"
+    offending.write_text(
+        "from pathlib import Path\n\nREPO_ROOT = Path(__file__).resolve().parents[2]\n\n\n"
+        f"def test_lists_stripped_dir():\n    assert list((REPO_ROOT / {chain}).iterdir())\n",
         encoding="utf-8",
     )
     result = _run(tmp_path)
     assert result.returncode == 1, (
-        f"Guard hätte die segmentierte Referenz melden müssen:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        f"Guard hätte das Verzeichnis-Kettenende melden müssen:\n{result.stdout}{result.stderr}"
     )
+    assert directory.split("/")[0] in (result.stdout + result.stderr)
+
+
+def test_segment_style_chain_from_tmp_path_is_not_a_repo_reference(tmp_path: Path) -> None:
+    """Dieselben Segmente ab ``tmp_path`` sind keine Repo-Referenz und bleiben grün."""
+    if not LEAK_SCRIPT.exists():
+        pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)")
+    excluded = _excluded_example_path()
+    chain = " / ".join(repr(part) for part in excluded.strip("/").split("/"))
+    harmless = tmp_path / "test_segment_tmp.py"
+    harmless.write_text(
+        "from pathlib import Path\n\n\n"
+        f"def test_reads_scratch_file(tmp_path: Path):\n    assert (tmp_path / {chain}).read_text()\n",
+        encoding="utf-8",
+    )
+    result = _run(tmp_path)
+    assert result.returncode == 0, f"Kette ab tmp_path darf nicht gemeldet werden:\n{result.stdout}{result.stderr}"
 
 
 def test_segment_style_excluded_reference_with_skip_gate_passes(tmp_path: Path) -> None:
-    """Dieselbe segmentierte Referenz MIT Skip-Gate, dessen Reason den Prefix nennt, ist OK."""
+    """Die direkt gelesene Kette MIT Skip-Gate, dessen Reason den Prefix nennt, ist OK."""
     if not LEAK_SCRIPT.exists():
         pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard-Quelle fehlt (Refs #1137)")
     excluded = _excluded_example_path()
@@ -148,9 +188,10 @@ def test_segment_style_excluded_reference_with_skip_gate_passes(tmp_path: Path) 
     chain = " / ".join(repr(part) for part in excluded.strip("/").split("/"))
     gated = tmp_path / "test_segment_gated.py"
     gated.write_text(
-        "from pathlib import Path\n\nimport pytest\n\nROOT = Path(__file__).resolve().parents[2]\n\n\n"
-        f"def test_reads_stripped_file():\n    p = ROOT / {chain}\n    if not p.exists():\n"
-        f"        pytest.skip({reason_prefix + ' nicht im Public-Snapshot'!r})\n    assert p.read_text()\n",
+        "from pathlib import Path\n\nimport pytest\n\nREPO_ROOT = Path(__file__).resolve().parents[2]\n\n\n"
+        f"def test_reads_stripped_file():\n    if not (REPO_ROOT / {chain}).exists():\n"
+        f"        pytest.skip({reason_prefix + ' nicht im Public-Snapshot'!r})\n"
+        f"    assert (REPO_ROOT / {chain}).read_text()\n",
         encoding="utf-8",
     )
     result = _run(tmp_path)

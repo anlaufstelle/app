@@ -200,7 +200,10 @@ def test_hand_check_builds_bad_sql_before_valid_sidecar_and_separates_control() 
 
 def test_changelog_has_one_fixed_bullet_per_ticket_position() -> None:
     if not (REPO_ROOT / "docs" / "dev" / "hand-checks.md").exists():
-        pytest.skip("Changelog-Refs sind im Public-Snapshot umgeschrieben — Guard nur im Dev-Repo relevant")
+        pytest.skip(
+            "docs/dev/hand-checks.md fehlt = Public-Snapshot; Changelog-Refs sind dort umgeschrieben "
+            "— Guard nur im Dev-Repo relevant"
+        )
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     fixed = changelog.split("### Fixed", maxsplit=1)[1].split("### Added", maxsplit=1)[0]
 

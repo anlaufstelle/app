@@ -113,6 +113,11 @@ def test_web_runtime_allowlist_passes_operator_values_to_compose(tmp_path: Path)
             "compose",
             "-f",
             str(PROD_PATH),
+            # Die maintenance-Services binden `env_file: .env` relativ zum
+            # Projektverzeichnis; ohne diese Angabe erwartet compose die .env im
+            # Repo-Root, die es nur in der Sandbox gibt (Stage-CI rot, Refs #2171).
+            "--project-directory",
+            str(tmp_path),
             "--env-file",
             str(env_file),
             "config",

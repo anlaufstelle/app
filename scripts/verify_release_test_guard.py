@@ -329,20 +329,42 @@ def _code_string_literals(source: str, tree: ast.AST) -> list[str]:
 
 
 _READ_ATTRS = frozenset({"read_text", "read_bytes", "open", "iterdir", "glob", "rglob", "stat", "is_file", "is_dir"})
+_ROOT_NAME = re.compile(r"(ROOT|REPO|BASE_DIR|PROJECT)", re.IGNORECASE)
+
+
+def _is_repo_root_expr(node: ast.AST) -> bool:
+    """Beginnt eine ``/``-Kette am Repo-Root?
+
+    Anerkannt werden Namen wie ``REPO_ROOT``/``ROOT``/``BASE_DIR`` sowie
+    ``Path(__file__)``-Ableitungen (``.parent``/``.parents[…]``/``.resolve()``).
+    Ketten ab ``tmp_path`` o. ä. sind keine Repo-Referenzen."""
+    if isinstance(node, ast.Name):
+        return bool(_ROOT_NAME.search(node.id))
+    if isinstance(node, ast.Attribute):
+        return _is_repo_root_expr(node.value)
+    if isinstance(node, ast.Subscript):
+        return _is_repo_root_expr(node.value)
+    if isinstance(node, ast.Call):
+        if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "__file__":
+            return True
+        return _is_repo_root_expr(node.func)
+    return False
 
 
 def _segment_path_literals(tree: ast.AST, skip: set[int]) -> list[str]:
-    """Pfade, die per ``/``-Operator aus String-Segmenten zusammengesetzt und
-    direkt gelesen werden.
+    """Pfade, die per ``/``-Operator aus String-Segmenten am Repo-Root
+    zusammengesetzt und direkt gelesen werden.
 
     ``(REPO_ROOT / "docs" / "dev" / "hand-checks.md").read_text()`` enthält
     kein einzelnes Literal ``docs/dev/`` — genau diese Schreibweise ist dem
     Guard vor 0.99 entgangen (Refs #2171: Stage-CI rot durch
-    ``FileNotFoundError``). Gezählt werden nur Ketten, auf denen unmittelbar
-    ein lesender Aufruf sitzt (``read_text``, ``open``, ``glob`` …); Ketten in
-    Ausschlusslisten oder reinen Zuweisungen bleiben unberührt. Die Segmente
-    werden in Reihenfolge mit ``/`` verbunden; da eine solche Kette am
-    Repo-Root beginnt, wird sie mit ``startswith`` gegen die Prefixe geprüft."""
+    ``FileNotFoundError``). Gezählt werden nur Ketten, die am Repo-Root
+    beginnen (``_is_repo_root_expr``) und auf denen unmittelbar ein lesender
+    Aufruf sitzt (``read_text``, ``open``, ``iterdir``, ``glob`` …); Ketten ab
+    ``tmp_path``, in Ausschlusslisten oder reinen Zuweisungen bleiben
+    unberührt. Die Segmente werden mit ``/`` verbunden; ein Kettenende auf
+    dem Verzeichnis selbst (``… / "docs" / "dev"``) wird mit Schluss-``/``
+    geliefert, damit es den slash-terminierten Prefix trifft."""
 
     def segments(node: ast.AST) -> list[str]:
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
@@ -350,6 +372,11 @@ def _segment_path_literals(tree: ast.AST, skip: set[int]) -> list[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in skip:
             return [node.value]
         return []
+
+    def leftmost(node: ast.AST) -> ast.AST:
+        while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            node = node.left
+        return node
 
     out: list[str] = []
     for node in ast.walk(tree):
@@ -360,10 +387,13 @@ def _segment_path_literals(tree: ast.AST, skip: set[int]) -> list[str]:
         chain = node.func.value
         if not (isinstance(chain, ast.BinOp) and isinstance(chain.op, ast.Div)):
             continue
-        parts = [part.strip("/") for part in segments(chain) if part]
-        if len(parts) < 2:
+        if not _is_repo_root_expr(leftmost(chain)):
             continue
-        out.append("/".join(parts))
+        parts = [part.strip("/") for part in segments(chain) if part]
+        if not parts:
+            continue
+        joined = "/".join(parts)
+        out.append(joined + "/" if node.func.attr in {"iterdir", "glob", "rglob", "is_dir"} else joined)
     return out
 
 
