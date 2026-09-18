@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Ungenutzten Schwellenwert-Parameter aus der K-Anonymisierungs-Primitive entfernt** (#2265) — `k_anonymize_client` las ihren Parameter `k` nie; die tatsächliche Schwellenprüfung lag und liegt ausschließlich bei `is_k_anonymous`, die der Aufrufer vorschaltet. Reine Aufräumarbeit ohne Verhaltensänderung.
+
 ### Docs
 
 - **Englische Screenshot-Dokumentation ins Sync-Gate aufgenommen** (#2252) — Ein Quell-Hash-Stempel und ein Regressionstest machen künftigen Drift zur deutschen Screenshot-Dokumentation sichtbar.

@@ -63,7 +63,7 @@ from core.services.compliance import is_k_anonymous, k_anonymize_client
 logger = logging.getLogger(__name__)
 
 
-def _k_anonymize_with_cascade(client, k):
+def _k_anonymize_with_cascade(client):
     """K-anonymisiert *client* und tilgt dieselbe PII-Kaskade wie der Hard-Pfad.
 
     ``k_anonymize_client`` ist bewusst client-only (Vertrag der Primitive);
@@ -71,6 +71,12 @@ def _k_anonymize_with_cascade(client, k):
     Fall-/Episoden-/Aufgaben-Kaskade aus #1094 mit — ``EventHistory``,
     ``DeletionRequest.reason`` und der damals gespeicherte Activity-Anzeigetext blieben Klartext,
     obwohl der Datensatz als ``k_anonymized=True`` gilt (Art. 17).
+
+    Refs #2265: reichte ``k`` bis hierher nur noch durch, um es an
+    ``k_anonymize_client`` weiterzugeben — die Primitive las den Parameter nie.
+    Mit dessen Entfernung waere ein eigener ``k``-Parameter hier derselbe tote
+    Durchreicher gewesen; die Schwellenpruefung (:func:`is_k_anonymous`) liegt
+    unveraendert beim Aufrufer (:func:`anonymize_clients`), VOR diesem Aufruf.
 
     ``event_ids`` kommen aus demselben Helfer wie im Hard-Pfad
     (``_event_ids_for_client``, Refs #1782) — bis dahin stand die Query hier
@@ -105,7 +111,7 @@ def _k_anonymize_with_cascade(client, k):
     """
     with transaction.atomic():
         event_ids = _event_ids_for_client(client)
-        k_anonymize_client(client, k=k)
+        k_anonymize_client(client)
         case_ids = _redact_cases_and_episodes(client)
         _redact_case_goals(case_ids)
         _redact_workitems(client)
@@ -164,9 +170,9 @@ def anonymize_clients(facility, dry_run):
 
     Honors ``Settings.retention_use_k_anonymization`` (Refs #780): when active
     on the facility, a client is k-anonymized via
-    :func:`_k_anonymize_with_cascade` with ``k=settings.k_anonymity_threshold``
-    **only if** its equivalence class
-    is already ``is_k_anonymous`` (bucket >= k). Under-populated buckets — and
+    :func:`_k_anonymize_with_cascade` **only if** its equivalence class
+    is already ``is_k_anonymous`` (checked with ``k=settings.k_anonymity_threshold``,
+    bucket >= k). Under-populated buckets — and
     the default (setting off) — take the classical ``Client.anonymize()`` hard
     path (Security-Review N5). Mixed runs audit both categories separately
     (``client_k_anonymized`` / ``client_anonymized``).
@@ -260,7 +266,7 @@ def anonymize_clients(facility, dry_run):
                 # Die Primitive bleibt unangetastet — die Kaskade, die den
                 # K-Anon-Modus auf dieselbe PII-Tilgung wie den Hard-Pfad hebt,
                 # liegt im Bridge-Layer (Refs #1094, #1750).
-                _k_anonymize_with_cascade(locked, k)
+                _k_anonymize_with_cascade(locked)
                 k_count += 1
             else:
                 locked.anonymize()

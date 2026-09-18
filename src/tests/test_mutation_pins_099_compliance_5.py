@@ -46,10 +46,12 @@ Nicht gepinnt (äquivalent, siehe Triage-Datei):
   ``"x".encode("utf-8") == "x".encode("UTF-8")`` liefert byte-identische
   Ausgabe (empirisch verifiziert), der SHA-256-Digest ist ununterscheidbar.
 * ``x_k_anonymize_client__mutmut_1`` (Default ``k: int = 5`` ->
-  ``k: int = 6``) — der Parameter ``k`` wird im Funktionskörper kein
-  einziges Mal gelesen; der einzige Produktionscaller
-  (``core/retention/anonymization.py:108``) übergibt ``k`` stets explizit.
-  Kein Aufrufer kann den Default-Wert beobachten.
+  ``k: int = 6``) — nicht mehr erzeugbar (Refs #2265): der Parameter ``k``
+  wurde entfernt, weil der Funktionskörper ihn kein einziges Mal las; die
+  Schwellenprüfung lag und liegt bei ``is_k_anonymous``, nicht bei
+  ``k_anonymize_client``. Historische Begründung des ursprünglichen
+  Nicht-Pinnens (vor der Entfernung): der einzige Produktionscaller übergab
+  ``k`` stets explizit, kein Aufrufer konnte den Default-Wert beobachten.
 * ``x__latest__mutmut_4`` (``core.services.compliance.cron``,
   ``.only("timestamp", "detail")`` -> ``.only("timestamp", )``) — keiner
   der vier Last-Run-Checks liest je ``entry.detail``, nur

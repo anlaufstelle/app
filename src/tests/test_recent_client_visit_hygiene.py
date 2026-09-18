@@ -128,7 +128,7 @@ class TestAnonymizationDeletesVisits:
 
         track_client_visit(staff_user, client_identified, facility)
 
-        _k_anonymize_with_cascade(client_identified, k=5)
+        _k_anonymize_with_cascade(client_identified)
 
         assert not RecentClientVisit.objects.filter(client=client_identified).exists()
 

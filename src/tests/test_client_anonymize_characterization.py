@@ -991,7 +991,7 @@ class TestKAnonBridgeDeletesFilesAtTransactionEnd:
         from core.models import Attachment
         from core.retention.anonymization import _k_anonymize_with_cascade
 
-        _k_anonymize_with_cascade(anonymize_file_fixture.client, k=5)
+        _k_anonymize_with_cascade(anonymize_file_fixture.client)
 
         for owner_type in ("client", "case"):
             attachment = anonymize_file_fixture.attachments[owner_type]
@@ -1005,7 +1005,7 @@ class TestKAnonBridgeDeletesFilesAtTransactionEnd:
         boom = RuntimeError("Bridge-Redaktion abgebrochen")
         with patch("core.retention.anonymization._redact_activities", side_effect=boom):
             with pytest.raises(RuntimeError, match="Bridge-Redaktion abgebrochen"):
-                _k_anonymize_with_cascade(anonymize_file_fixture.client, k=5)
+                _k_anonymize_with_cascade(anonymize_file_fixture.client)
 
         for owner_type in ("client", "case"):
             attachment = anonymize_file_fixture.attachments[owner_type]

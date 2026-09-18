@@ -17,7 +17,7 @@ class TestKAnonymizeClient:
     def test_k_anonymize_replaces_pseudonym_with_hash(self, client_identified):
         original_pseudonym = client_identified.pseudonym
 
-        k_anonymize_client(client_identified, k=5)
+        k_anonymize_client(client_identified)
         client_identified.refresh_from_db()
 
         assert client_identified.pseudonym != original_pseudonym
@@ -30,7 +30,7 @@ class TestKAnonymizeClient:
         client_identified.notes = "Sensible Notiz"
         client_identified.save(update_fields=["age_cluster", "notes"])
 
-        k_anonymize_client(client_identified, k=5)
+        k_anonymize_client(client_identified)
         client_identified.refresh_from_db()
 
         # age_cluster is the equivalence-class feature and must stay intact
@@ -42,10 +42,10 @@ class TestKAnonymizeClient:
 
     def test_k_anonymize_is_deterministic(self, client_identified):
         """Re-running k-anonymization produces the same bucket id."""
-        k_anonymize_client(client_identified, k=5)
+        k_anonymize_client(client_identified)
         first_pseudonym = client_identified.pseudonym
 
-        k_anonymize_client(client_identified, k=5)
+        k_anonymize_client(client_identified)
         client_identified.refresh_from_db()
 
         assert client_identified.pseudonym == first_pseudonym
@@ -56,7 +56,7 @@ class TestKAnonymizeClient:
         Refs #1893: der fruehere ``Client.k_anonymize()``-Wrapper ist entfallen;
         der Test prueft denselben Effekt direkt am Service.
         """
-        k_anonymize_client(client_identified, k=5)
+        k_anonymize_client(client_identified)
         client_identified.refresh_from_db()
 
         assert client_identified.pseudonym.startswith("anon-")

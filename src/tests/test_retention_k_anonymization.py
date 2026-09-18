@@ -7,9 +7,12 @@ Vier Cases:
 2. ``k=5`` mit <5 Klienten → ``is_k_anonymous`` liefert False.
 3. ``Settings.retention_use_k_anonymization=False`` (Default) → Pipeline ruft
    ``client.anonymize()`` (Hard-Anonymize), Pseudonym beginnt mit ``Gelöscht-``.
-4. ``Settings.retention_use_k_anonymization=True`` → Pipeline ruft
-   ``k_anonymize_client(client, k=facility.settings.k_anonymity_threshold)``,
-   Pseudonym beginnt mit ``anon-`` und ``k_anonymized=True``.
+4. ``Settings.retention_use_k_anonymization=True`` → Pipeline prueft zuerst
+   ``is_k_anonymous(client, k=facility.settings.k_anonymity_threshold)`` und
+   ruft dann ``k_anonymize_client(client)`` (Refs #2265: der Parameter ``k``
+   wurde dort entfernt, ungenutzt — die Schwelle wirkt ausschliesslich ueber
+   ``is_k_anonymous``), Pseudonym beginnt mit ``anon-`` und
+   ``k_anonymized=True``.
 """
 
 from __future__ import annotations

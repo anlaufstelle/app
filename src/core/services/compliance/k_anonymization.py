@@ -30,7 +30,7 @@ def _pseudonym_hash(client) -> str:
 
 
 @transaction.atomic
-def k_anonymize_client(client, k: int = 5):
+def k_anonymize_client(client):
     """Generalize identifying fields of ``client`` for k-anonymity.
 
     Generalization rules:
@@ -56,8 +56,13 @@ def k_anonymize_client(client, k: int = 5):
     Bedeutung mehr, wuerde den Typ aber per ``PROTECT`` dauerhaft blockieren.
     Die Nicht-Kaskade auf Cases/Episoden/Workitems bleibt davon unberuehrt.
 
-    The ``k`` parameter is passed through for call-site logging and can be
-    checked with :func:`is_k_anonymous` after generalization.
+    Refs #2265: der Funktionskoerper las den frueheren Parameter ``k`` an
+    keiner Stelle — die tatsaechliche Schwellenpruefung liegt und lag bei
+    :func:`is_k_anonymous`, die der Aufrufer VOR dieser Funktion einsetzt
+    (:func:`core.retention.anonymization.anonymize_clients`). Ein Default
+    ``k: int = 5`` suggerierte eine hier wirksame Schwelle, die es nie gab —
+    entfernt statt nachtraeglich angewendet, weil ein Anwenden neues Verhalten
+    waere (kein Ticket-Auftrag dafuer).
     """
     client.pseudonym = _pseudonym_hash(client)
     client.notes = ""

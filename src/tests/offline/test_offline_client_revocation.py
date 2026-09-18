@@ -63,7 +63,7 @@ class TestRevocationEntryIsWritten:
         """Der K-Anon-Retention-Pfad darf nicht hinter dem Hard-Pfad zurueckbleiben."""
         from core.retention.anonymization import _k_anonymize_with_cascade
 
-        _k_anonymize_with_cascade(client_identified, k=5)
+        _k_anonymize_with_cascade(client_identified)
 
         assert _revoked_pks(facility) == {client_identified.pk}
 
