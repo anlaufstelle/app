@@ -650,7 +650,7 @@ def enforce_activities(facility, settings_obj, now, dry_run):
 
 
 def enforce_handover_notes(facility, settings_obj, now, dry_run):
-    """Refs #2042 — Uebergabenotizen aelter als ``retention_handover_notes_days``
+    """Refs #2042/#2231 — Uebergabenotizen aelter als ``retention_handover_notes_days``
     endgueltig loeschen.
 
     Returns ``{"count": N}``.
@@ -661,13 +661,13 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
     ``audit_retention_decision``-Zeile nur, wenn wirklich etwas geloescht
     wurde.
 
-    **Bewusst ohne Legal-Hold-Zweig.** Ein Hold-Ziel-Typ
-    ``"ShiftHandoverNote"`` existiert nicht und wird in dieser Welle nicht
-    eingefuehrt: Holds sichern Personen-, Fall- und Ereignisakten fuer ein
-    laufendes Verfahren; die Schichtnotiz ist eine Dienstnotiz ohne
-    Personenbezug im Schema und traegt eine bewusst kurze Frist. Die Grenze
-    steht ausdruecklich im Hold-Kontrakt (``docs/security-notes.md``); ein
-    spaeterer Bedarf ist ein eigenes Ticket, kein stiller Nachbau.
+    **Bewusst und endgueltig ohne Legal-Hold-Zweig.** Uebergabenotizen sind
+    kein Hold-Zieltyp: Holds sichern Personen-, Fall- und Ereignisakten fuer
+    ein laufendes Verfahren; die Schichtnotiz ist eine Dienstnotiz ohne
+    Personenbezug im Schema und traegt eine einstellbare, bewusst kurze Frist.
+    Verfahrensrelevanter Inhalt ist innerhalb dieser Frist als Aktenvermerk am
+    zugehoerigen Fall zu dokumentieren. Die Grenze steht ausdruecklich im
+    Hold-Kontrakt (``docs/security-notes.md``).
 
     Der Stichtag laeuft ueber ``updated_at``: massgeblich ist die letzte
     fachliche Aenderung, nicht das Anlegen. Die Schluesselrotation fasst

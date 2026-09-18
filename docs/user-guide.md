@@ -208,6 +208,8 @@ Ganz oben in der Übergabe — noch vor den Statistiken — steht die **Übergab
 
 **Bitte keine Klarnamen.** Verwenden Sie dieselben Pseudonyme wie in der übrigen Dokumentation. Die Notiz ist verschlüsselt gespeichert und wird nach der von der Anwendungsbetreuung eingestellten Frist (Vorgabe: 90 Tage) automatisch gelöscht. Sie ist bewusst **nicht** Teil der Auskunft nach Art. 15 und **nicht** durchsuchbar.
 
+Ist ihr Inhalt für ein Verfahren wichtig, dokumentieren Sie ihn innerhalb dieser einstellbaren Frist als Aktenvermerk am zugehörigen Fall; die Übergabenotiz selbst lässt sich nicht durch einen Legal Hold schützen und wird nach Fristablauf endgültig gelöscht.
+
 Jede Änderung an einer Notiz erscheint im Audit-Log — protokolliert werden Schicht und Zeitpunkt, nie der Text selbst.
 
 ### Feed filtern

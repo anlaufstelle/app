@@ -1,4 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
+> Synchronization update 2026-09-18: the handover-note section now states the final no-hold boundary and the organizational step for procedure-relevant content (#2231).
 > Synchronization update 2026-09-15: initial 2FA setup now mirrors the mandatory backup-code acknowledgement and the increasing wait after repeated incorrect codes in the German guide (#2248).
 > Most recently synchronized on 2026-09-10 (§ 2 offline capture rejects the doubled hour with an explanatory message, #2187; § 4 merging duplicate clients: reverting a merge is not possible while a legal hold covers either record, #2200; § 2 the manual handover note above the shift statistics: who may write it, the editing window until the shift ends, the comparison of both versions when two people save at the same time, and its retention period, #2042).
 > Previously synchronized on 2026-09-08 (§ 2 capturing the doubled hour on the fall-back night -- the occurrence choice "Which of the two hours?", the timestamp being read-only when editing, and the spring-forward hour staying rejected, #2127; intro line opened to open consultation hours/advice centers, awareness teams, women's shelters, and youth work, #2140). Previously synchronized on 2026-09-07 (§ 1 quick exit and privacy screen, including the four named limits -- browser history, second window, dropped connection, and a stalled or failed deletion of the local key, #2136). Previously synchronized on 2026-09-02 (§ 2 shift filter and daylight-saving changes, #2057). Previously synchronized on 2026-09-02 (§ 7 self-withdrawal of a deletion request, #2092). Previously synchronized on 2026-08-24 (§ 3 authorized roles see decrypted before-values in event change history, #1961). Previously synchronized on 2026-08-22 (§ 10 deleting a case: the two paths, the trash, and what happens to assigned contacts, #1818). Previously synchronized on 2026-08-22 (§ 9 the System Admin creates the first facility in the Django admin -- the `/system/` area only displays it, #1894). Previously synchronized on 2026-08-15 (§ 2 tally opt-in and inline numeric capture, #1637, #1906).
@@ -213,6 +214,8 @@ At the very top of the handover -- before the statistics -- sits the **handover 
 **When two people write at once.** If two people create the first note of the same shift at the same moment, one of them wins. If the other one wrote the same text, nothing further happens. With a different text the page shows **both versions**: the one that was saved in the meantime at the top (with author and time), your own input below it in the text field -- nothing is lost. You then decide: **Use my input and replace** writes your text and replaces **exactly the version shown**, **Discard** keeps the saved one. Nothing is ever overwritten silently -- not even if the stored version changes again while you are comparing: in that case nothing is saved, and the version that is current by then is shown for another comparison, with your input unchanged in the field.
 
 **Please no real names.** Use the same pseudonyms as in the rest of the documentation. The note is stored encrypted and is deleted automatically after the retention period configured by the application administration (default: 90 days). It is deliberately **not** part of the Article 15 disclosure and **not** searchable.
+
+If its content matters to a procedure, record it as a case note on the relevant case within that configurable period; the handover note itself cannot be protected by a legal hold and is deleted permanently when the period expires.
 
 Every change to a note appears in the audit log -- shift and timestamp are recorded, never the text itself.
 
@@ -1024,4 +1027,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 4689485017725e0ccad75f28f96223abbba20ebf -->
+<!-- source-hash: 2ec525aa23bee835a1de4734b4d90f3b75669970 -->
