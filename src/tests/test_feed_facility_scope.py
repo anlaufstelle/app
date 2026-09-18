@@ -34,7 +34,13 @@ EVENT_TABLE_MARKER = 'FROM "core_event"'
 # ``core_event.facility_id`` bedienen. Ein ``facility_id`` auf der gejointen
 # ``core_documenttype`` (Alias ``U1``) waere wirkungslos und darf hier nicht
 # durchgehen.
-EVENT_ALIAS_RE = re.compile(r'FROM "core_event" (\w+)')
+#
+# Refs #1662: Django 6.1 quotet SQL-Aliase systematisch
+# (``FROM "core_event" "U0" … "U0"."facility_id"``). Der Guard akzeptiert
+# deshalb beide Schreibweisen — ohne dabei schwaecher zu werden: der Alias aus
+# dem FROM muss weiterhin EXAKT der Alias des Praedikats sein, und die quotierte
+# Variante des einen Alias trifft nie den anderen.
+EVENT_ALIAS_RE = re.compile(r'FROM "core_event" "?(\w+)"?')
 
 
 def _facility_predicate_uuid(subselect):
@@ -43,7 +49,10 @@ def _facility_predicate_uuid(subselect):
     if alias_match is None:
         return None
     alias = re.escape(alias_match.group(1))
-    match = re.search(rf'\b{alias}\."facility_id"\s*=\s*\'([0-9a-fA-F-]+)\'', subselect)
+    match = re.search(
+        rf'(?:"{alias}"|\b{alias})\."facility_id"\s*=\s*\'([0-9a-fA-F-]+)\'',
+        subselect,
+    )
     return uuid.UUID(match.group(1)) if match else None
 
 
@@ -156,6 +165,32 @@ class TestActivityVisibilitySubqueryFacilityScope:
 
         real = fake.replace('U1."facility_id"', 'U0."facility_id"')
         assert _facility_predicate_uuid(real) == uuid.UUID("11111111-1111-1111-1111-111111111111")
+
+    def test_matcher_handles_quoted_aliases_without_getting_weaker(self):
+        """Refs #1662: Ab Django 6.1 sind die Aliase gequotet.
+
+        Der Matcher muss die neue Schreibweise erkennen — und darf bei ihr
+        genauso streng bleiben: ein ``facility_id`` auf dem gejointen
+        ``"U1"`` ist weiterhin kein Treffer, und eine Query ganz ohne
+        ``facility_id`` auf ``core_event`` liefert weiterhin ``None``.
+        """
+        quoted_wrong_table = (
+            '(SELECT "U0"."id" AS "pk" FROM "core_event" "U0" '
+            'INNER JOIN "core_documenttype" "U1" ON ("U0"."document_type_id" = "U1"."id") '
+            'WHERE ("U1"."facility_id" = \'11111111-1111-1111-1111-111111111111\'::uuid '
+            "AND \"U1\".\"sensitivity\" IN ('normal', 'elevated')))"
+        )
+        assert _facility_predicate_uuid(quoted_wrong_table) is None
+
+        quoted_missing_predicate = (
+            '(SELECT "U0"."id" AS "pk" FROM "core_event" "U0" '
+            'INNER JOIN "core_documenttype" "U1" ON ("U0"."document_type_id" = "U1"."id") '
+            "WHERE \"U1\".\"sensitivity\" IN ('normal', 'elevated'))"
+        )
+        assert _facility_predicate_uuid(quoted_missing_predicate) is None
+
+        quoted_right_table = quoted_wrong_table.replace('"U1"."facility_id"', '"U0"."facility_id"')
+        assert _facility_predicate_uuid(quoted_right_table) == uuid.UUID("11111111-1111-1111-1111-111111111111")
 
 
 @pytest.mark.django_db
