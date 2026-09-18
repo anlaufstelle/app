@@ -346,6 +346,44 @@ def scrub_text(value):
         return SCRUBBED
 
 
+#: Fester Ersatztext fuer einen Teil, der sich nicht darstellen laesst
+#: (werfendes ``__repr__``/``__str__``, Zyklus, zu tiefe Verschachtelung).
+#: Bewusst ein Platzhalter und NIE der Rohwert: ein Fallback, der den
+#: ungescrubbten Wert durchreicht, waere genau das Leck, gegen das der Sink
+#: steht. Die spitzen Klammern halten ihn ausserdem aus ``_PATH_IN_TEXT``
+#: heraus (Idempotenz).
+UNREPRESENTABLE = "<nicht darstellbar>"
+
+#: Marker der Ersatzzeile. Erscheint an der Stelle, an der sonst die
+#: interpolierte Nachricht stuende.
+UNFORMATTABLE = "<Log-Zeile nicht formatierbar>"
+
+
+def _safe_repr(value):
+    """``repr(value)``, aber nie werfend.
+
+    Ein Objekt aus fremder Hand (Django reicht Exceptions und
+    Request-Attribute in die Log-Argumente) kann ein werfendes ``__repr__``
+    mitbringen — und ``str()`` faellt ohne eigenes ``__str__`` genau darauf
+    zurueck. Ohne diesen Ausweg bringt die Ersatzzeile den Formatter zu Fall,
+    den sie retten soll.
+    """
+    try:
+        return repr(value)
+    except Exception:
+        return f"<{type(value).__name__} {UNREPRESENTABLE}>"
+
+
+def _safe_args(args):
+    """Darstellung der Log-Argumente — elementweise, damit EIN kaputtes
+    Argument nicht die Darstellung aller anderen kostet."""
+    if isinstance(args, tuple):
+        return "(" + ", ".join(_safe_repr(item) for item in args) + ")"
+    if isinstance(args, dict):
+        return "{" + ", ".join(f"{_safe_repr(key)}: {_safe_repr(val)}" for key, val in args.items()) + "}"
+    return _safe_repr(args)
+
+
 def _emergency_line(record):
     """Ersatztext, wenn die Interpolation des Records scheitert.
 
@@ -356,11 +394,52 @@ def _emergency_line(record):
     Sicherheits-Sink waere ein Formatter-Fehler damit ein stiller Verlust
     des Nachweises. Vorlage und Argumente bleiben als Diagnose erhalten —
     sie laufen wie jede andere Zeile durch ``scrub_text``.
+
+    Refs #2228: Vorlage und Argumente werden ueber ``_safe_repr`` dargestellt.
+    Vorher rief die f-String-Konversion ``!r`` direkt ``repr()`` auf — genau
+    der Aufruf, an dem der Record eben gescheitert war.
     """
     return (
-        f"{record.levelname} <Log-Zeile nicht formatierbar> "
-        f"logger={record.name} msg={record.msg!r} args={record.args!r}"
+        f"{record.levelname} {UNFORMATTABLE} "
+        f"logger={record.name} msg={_safe_repr(record.msg)} args={_safe_args(record.args)}"
     )
+
+
+def _last_resort_line(record):
+    """Aeusserster, garantiert nichtwerfender Fallback beider Formatter.
+
+    Sie traegt nur Werte, die der Anwendungscode selbst setzt (Level und
+    Logger-Name) — keinen Rohtext aus Nachricht, Argumenten oder ``extra``.
+    Damit kann sie nichts leaken und braucht selbst keinen Scrub; die Zeile
+    bleibt aber als Nachweis erhalten, dass an dieser Stelle ein Ereignis
+    war.
+    """
+    level, name = _record_identity(record)
+    return f"{level} {UNFORMATTABLE} logger={name} inhalt={UNREPRESENTABLE}"
+
+
+def _record_identity(record):
+    """Level und Logger-Name eines Records — nie werfend."""
+    try:
+        level = str(record.levelname)
+    except Exception:
+        level = "UNKNOWN"
+    try:
+        name = str(record.name)
+    except Exception:
+        name = UNREPRESENTABLE
+    return level, name
+
+
+def _last_resort_json(record):
+    """Dasselbe als gueltige JSON-Zeile (siehe ``_last_resort_line``).
+
+    Gueltiges JSON ist hier Teil der Zusage: eine Log-Pipeline, die die Zeile
+    nicht parsen kann, verwirft sie — und damit waere der aeusserste
+    Schutzring wirkungslos.
+    """
+    level, name = _record_identity(record)
+    return json.dumps({"level": level, "logger": name, "message": UNFORMATTABLE}, ensure_ascii=False)
 
 
 def _record_message(record):
@@ -401,7 +480,13 @@ STRUCTURED_LOG_FIELDS = (
 )
 
 
-def _scrub_value(value):
+#: Schranke gegen zu tief verschachtelte strukturierte Felder. Die
+#: Whitelist-Felder sind flache Reports (CSP-Direktiven, IDs); alles darunter
+#: ist kein Diagnosewert mehr, sondern nur noch Arbeit fuer den Formatter.
+_MAX_STRUCTURED_DEPTH = 12
+
+
+def _scrub_value(value, _depth=0, _parents=()):
     """Wendet ``scrub_text()`` auf alle Strings in *value* an (auch verschachtelt).
 
     Die strukturierten Felder tragen teils fremdbestimmte Inhalte (CSP-
@@ -409,34 +494,65 @@ def _scrub_value(value):
     enthalten). Der Scrub darf deshalb nicht an der Message-Grenze enden —
     und seit #2228 auch nicht an der Muster-Grenze: ein Pfad-Token in einem
     strukturierten Feld ist derselbe Leak wie einer in der Message.
+
+    **Zyklenschutz** (Refs #2228): ein ``extra``-Wert kommt aus dem Aufrufer
+    und darf sich selbst enthalten (``d["self"] = d``). Ohne die Sperre lief
+    die Rekursion bis zum ``RecursionError`` — und der kostete die Zeile.
+    Gemerkt werden die ``id()`` der **umschliessenden** Container, nicht alle
+    je gesehenen: ein zweimal referenzierter (aber azyklischer) Teilbaum wird
+    weiterhin zweimal gescrubbt, statt als Zyklus zu gelten.
+
+    Auch die **Schluessel** laufen durch den Scrub: ein Dict aus fremder Hand
+    kann den Pfad im Schluessel tragen statt im Wert.
     """
     if isinstance(value, str):
         return scrub_text(value)
-    if isinstance(value, dict):
-        return {key: _scrub_value(val) for key, val in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_scrub_value(item) for item in value]
+    if isinstance(value, (dict, list, tuple)):
+        if _depth >= _MAX_STRUCTURED_DEPTH or id(value) in _parents:
+            return UNREPRESENTABLE
+        parents = (*_parents, id(value))
+        if isinstance(value, dict):
+            return {
+                _scrub_value(key, _depth + 1, parents): _scrub_value(val, _depth + 1, parents)
+                for key, val in value.items()
+            }
+        return [_scrub_value(item, _depth + 1, parents) for item in value]
     return value
+
+
+def _json_default(value):
+    """``default``-Hook von ``json.dumps`` — nie werfend.
+
+    ``str`` ist der Normalfall (eine UUID als ``user_id`` soll als UUID
+    lesbar bleiben); wirft auch ``str``, bleibt die sichere Darstellung.
+    """
+    try:
+        return str(value)
+    except Exception:
+        return _safe_repr(value)
 
 
 def _dump(value):
     """``json.dumps`` fuer Log-Werte — nie werfend.
 
-    ``default=str`` ist kein Komfort, sondern Fail-Safe: ein nicht
+    Der ``default``-Hook ist kein Komfort, sondern Fail-Safe: ein nicht
     serialisierbarer Wert (z.B. eine UUID als ``user_id``) wuerde sonst im
     Formatter einen ``TypeError`` werfen. ``logging`` faengt den im Handler
     ab, druckt "--- Logging error ---" und **verwirft den Record** — die
     Log-Zeile waere weg. Ein Formatter darf nie die Ursache dafuer sein,
     dass ein Ereignis nicht geloggt wird.
 
-    ``default=str`` deckt nicht serialisierbare *Werte* ab, nicht aber
-    nicht serialisierbare *Schluessel* (ein dict mit Objekt-Schluessel wirft
-    trotzdem). Der Ausweg ist derselbe: lieber das ``repr`` als keine Zeile.
+    Der Hook deckt nicht serialisierbare *Werte* ab, nicht aber nicht
+    serialisierbare *Schluessel* (ein dict mit Objekt-Schluessel wirft
+    trotzdem). Der Ausweg ist derselbe: lieber die sichere Darstellung des
+    Ganzen als keine Zeile — und die laeuft durch ``scrub_text``, weil ein
+    ``repr`` sonst genau die Werte zurueckbraechte, die der Scrub eben
+    entfernt hat.
     """
     try:
-        return json.dumps(value, ensure_ascii=False, default=str)
+        return json.dumps(value, ensure_ascii=False, default=_json_default)
     except Exception:
-        return json.dumps(repr(value), ensure_ascii=False)
+        return json.dumps(scrub_text(_safe_repr(value)), ensure_ascii=False)
 
 
 def _structured_fields(record):
@@ -489,6 +605,15 @@ class VerboseScrubbingFormatter(logging.Formatter):
         return f"{line} {rendered}"
 
     def format(self, record):
+        """Aeusserer Schutzring (Refs #2228): was hier auch scheitert, wird
+        zur konstanten Ersatzzeile — nie zu einer Ausnahme und nie zu
+        unmaskiertem Rohtext."""
+        try:
+            return self._format(record)
+        except Exception:
+            return _last_resort_line(record)
+
+    def _format(self, record):
         try:
             line = super().format(record)
         except Exception:
@@ -517,6 +642,16 @@ class JsonFormatter(logging.Formatter):
     """
 
     def format(self, record):
+        """Aeusserer Schutzring (Refs #2228) — siehe
+        ``VerboseScrubbingFormatter.format``. Der Fallback bleibt gueltiges
+        JSON, damit eine Log-Pipeline die Zeile nicht als Parse-Fehler
+        verwirft."""
+        try:
+            return self._format(record)
+        except Exception:
+            return _last_resort_json(record)
+
+    def _format(self, record):
         entry = {
             "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,

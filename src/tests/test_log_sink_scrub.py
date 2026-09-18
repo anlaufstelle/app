@@ -471,6 +471,18 @@ class _BrokenStr:
         return f"<Probe {INVITE_PATH}>"
 
 
+class _HostileRecord:
+    """Record-artiges Objekt, bei dem JEDER Attributzugriff wirft.
+
+    Kein realistischer Django-Record, sondern die Probe auf die Zusage
+    selbst: der aeusserste Fallback darf sich auf kein einziges Feld
+    verlassen koennen.
+    """
+
+    def __getattr__(self, item):
+        raise RuntimeError(f"Attribut {item} kaputt")
+
+
 def _cyclic_field():
     """Strukturiertes Feld mit Zyklus — ein Dict, das sich selbst enthaelt."""
     inner = {"document-uri": INVITE_URL}
@@ -555,3 +567,48 @@ class TestFormattersNeverRaiseOnHostileValues:
         """Auch als Schluessel (``json.dumps`` wirft, ``repr`` ebenfalls)."""
         record = _raw_record("Not Found: %s", (INVITE_PATH,), csp_violation={_BrokenRepr(): "x"})
         _assert_line_is_deliverable(record, formatter_name)
+
+    def test_path_in_structured_key_is_masked(self, formatter_name):
+        """Ein Schluessel aus fremder Hand kann den Pfad tragen, nicht der Wert."""
+        record = _raw_record("csp_violation", (), csp_violation={INVITE_URL: "blocked"})
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_broken_mapping_arguments(self, formatter_name):
+        """``logger.info("%(a)s", {"a": …})`` — ``args`` ist dann ein Dict."""
+        record = _raw_record("%(zahl)d Treffer", ({"zahl": _BrokenRepr()},))
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_sequence_arguments_that_are_no_tuple(self, formatter_name):
+        """``args`` als Liste — weder Tupel noch Mapping, und ``repr`` wirft."""
+        record = _raw_record("%s %s", [_BrokenRepr(), "x"])
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_record_without_usable_attributes(self, formatter_name):
+        """Ein Record-artiges Objekt, dessen Felder samt Level/Name werfen.
+
+        Damit faellt auch die Ersatzzeile aus — uebrig bleibt der aeusserste
+        Ring, der ohne jeden Record-Wert auskommen muss.
+        """
+        _assert_line_is_deliverable(_HostileRecord(), formatter_name)
+
+    def test_outer_fallback_when_the_scrub_itself_fails(self, formatter_name, monkeypatch):
+        """Der aeusserste Ring: selbst ein kaputter Scrub kostet die Zeile nicht.
+
+        ``scrub_text`` ist der letzte gemeinsame Schritt beider Formatter;
+        faellt er aus, bleibt nur noch die konstante Ersatzzeile. Sie traegt
+        Level und Logger-Namen und **keinen** Rohtext — ein Fallback, der den
+        ungescrubbten Wert durchreichte, waere schlimmer als die verlorene
+        Zeile.
+        """
+        import core.logging as core_logging
+
+        def boom(value):
+            raise RuntimeError("Scrub kaputt")
+
+        monkeypatch.setattr(core_logging, "scrub_text", boom)
+        record = _raw_record("Not Found: %s", (INVITE_PATH,))
+        line = _assert_line_is_deliverable(record, formatter_name)
+        assert "nicht formatierbar" in line
+        assert "django.request" in line, f"Logger-Bezug verloren: {line}"
+        if formatter_name == "json":
+            assert json.loads(line)["logger"] == REQUEST_LOGGER, "Die Ersatzzeile muss gueltiges JSON bleiben"
