@@ -446,3 +446,112 @@ class TestFormatterRobustness:
             record = _raw_record("Internal Server Error: %s", (INVITE_PATH,), exc_info=sys.exc_info())
         for line in _rendered_sink_lines(record):
             assert INVITE_TOKEN not in line, f"Token aus dem Traceback in der Sink-Zeile: {line}"
+
+
+class _BrokenRepr:
+    """Objekt, dessen ``__repr__`` (und damit auch ``str()``) wirft.
+
+    Ohne eigenes ``__str__`` faellt ``str()`` in der Stdlib auf ``__repr__``
+    zurueck — dieses Objekt bringt also BEIDE Darstellungswege zu Fall. Die
+    Ausnahme-Meldung traegt absichtlich ein Token: sie darf auf keinem Weg in
+    die Zeile geraten.
+    """
+
+    def __repr__(self):
+        raise RuntimeError(f"repr kaputt: {INVITE_PATH}")
+
+
+class _BrokenStr:
+    """``str()`` wirft, ``repr()`` traegt einen maskierungspflichtigen Pfad."""
+
+    def __str__(self):
+        raise RuntimeError(f"str kaputt: {INVITE_PATH}")
+
+    def __repr__(self):
+        return f"<Probe {INVITE_PATH}>"
+
+
+def _cyclic_field():
+    """Strukturiertes Feld mit Zyklus — ein Dict, das sich selbst enthaelt."""
+    inner = {"document-uri": INVITE_URL}
+    inner["self"] = inner
+    return inner
+
+
+def _self_referencing_list():
+    """Dieselbe Falle in Listenform (``_scrub_value`` laeuft auch dort)."""
+    items = [INVITE_URL]
+    items.append(items)
+    return items
+
+
+#: Name → (Formatter-Index in ``_configured_formatters()``).
+FORMATTER_INDEX = {"verbose": 0, "json": 1}
+
+
+def _assert_line_is_deliverable(record, formatter_name):
+    """Die Zeile entsteht, traegt kein Token und keinen Formatter-Traceback."""
+    formatter = _configured_formatters()[FORMATTER_INDEX[formatter_name]]
+    line = formatter.format(record)
+    assert isinstance(line, str) and line, f"{formatter_name}: keine Zeile entstanden"
+    assert INVITE_TOKEN not in line, f"{formatter_name}: Token in der Ersatzzeile: {line}"
+    assert SEARCH_TERM not in line, f"{formatter_name}: Query-Suchbegriff in der Ersatzzeile: {line}"
+    assert "Traceback (most recent call last)" not in line, (
+        f"{formatter_name}: der Formatter hat seinen eigenen Traceback ausgegeben: {line}"
+    )
+    assert "RuntimeError" not in line, f"{formatter_name}: Formatter-Ausnahme in der Zeile: {line}"
+    return line
+
+
+@pytest.mark.parametrize("formatter_name", sorted(FORMATTER_INDEX))
+class TestFormattersNeverRaiseOnHostileValues:
+    """Die harte Zusage: **kein** Wert im Record bringt einen Formatter zu Fall.
+
+    Seit #2228 laeuft die Maskierung fuer jede Zeile; ein werfender Formatter
+    kostet damit nicht nur eine beliebige Zeile, sondern potenziell die
+    Sicherheitszeile selbst (``logging`` faengt die Ausnahme im Handler ab,
+    druckt „--- Logging error ---" und **verwirft den Record**).
+
+    Der Ersatztext fuer einen nicht darstellbaren Teil ist fest; er darf nie
+    der unmaskierte Rohwert sein — sonst waere der Fallback selbst das Leck.
+    """
+
+    def test_broken_repr_argument(self, formatter_name):
+        """``%s`` auf ein Objekt, dessen Darstellung wirft."""
+        record = _raw_record("Not Found: %s", (_BrokenRepr(),))
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_broken_str_argument(self, formatter_name):
+        """``__str__`` wirft, ``__repr__`` traegt einen Pfad — der wird maskiert."""
+        record = _raw_record("Not Found: %s", (_BrokenStr(),))
+        line = _assert_line_is_deliverable(record, formatter_name)
+        assert "[scrubbed]" in line or MASKED_ROUTE in line, f"Pfad aus dem Ersatztext unmaskiert: {line}"
+
+    def test_broken_repr_message(self, formatter_name):
+        """Nicht-String-``msg``, dessen Darstellung wirft."""
+        record = _raw_record(_BrokenRepr(), ())
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_broken_percent_format_with_broken_repr(self, formatter_name):
+        """Kaputtes ``%``-Format UND kaputte Darstellung des Arguments."""
+        record = _raw_record("%d Treffer", (_BrokenRepr(),))
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_cyclic_structured_field(self, formatter_name):
+        """Zyklisches ``extra`` — die Rekursion darf nicht durchschlagen."""
+        record = _raw_record("csp_violation", (), csp_violation=_cyclic_field())
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_self_referencing_list_in_structured_field(self, formatter_name):
+        record = _raw_record("csp_violation", (), csp_violation=_self_referencing_list())
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_broken_repr_inside_structured_field(self, formatter_name):
+        """Ein nicht darstellbarer Wert im ``extra`` kostet die Zeile nicht."""
+        record = _raw_record("Not Found: %s", (INVITE_PATH,), csp_violation={"probe": _BrokenRepr()})
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_broken_repr_as_structured_key(self, formatter_name):
+        """Auch als Schluessel (``json.dumps`` wirft, ``repr`` ebenfalls)."""
+        record = _raw_record("Not Found: %s", (INVITE_PATH,), csp_violation={_BrokenRepr(): "x"})
+        _assert_line_is_deliverable(record, formatter_name)
