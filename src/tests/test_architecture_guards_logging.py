@@ -24,6 +24,7 @@ Regel im Handbuch und der fail-closed-Scrub des Sentry-Pfades.
 
 import ast
 import textwrap
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -77,19 +78,25 @@ ALLOWLIST = {
         "services/dashboard/snapshot.py",
         "create_or_update_snapshot",
         "name",
-    ): (
-        "``facility.name`` ist der Name der EINRICHTUNG (des Betreibers "
-        "selbst), kein Personenname: Klient*innen und Konten tauchen in "
-        "diesen beiden Zeilen nicht auf. Die Zeilen markieren einen "
-        "uebersprungenen Statistik-Backend-Lauf bzw. einen geschriebenen "
-        "Snapshot; in einer Installation mit mehreren Einrichtungen ist der "
-        "Name genau die Information, die den Ausfall zuordenbar macht. Auf "
-        "dem Weg zu einem Error-Tracker geht der Wert ohnehin nicht mit — "
-        "der Hook ersetzt die Zeile durch ihr Template (Refs #2198). "
-        "Verbesserungsmoeglichkeit (eigenes Ticket, Datei liegt ausserhalb "
-        "dieser Aenderung): ``facility_id`` im ``extra`` statt des Namens in "
-        "der Vorlage."
-    ),
+    ): {
+        # Genau die beiden begruendeten Aufrufe dieser Funktion. Ein dritter
+        # macht den Guard rot — die Begruendung gilt fuer diese Stellen, nicht
+        # fuer den Geltungsbereich.
+        "count": 2,
+        "reason": (
+            "``facility.name`` ist der Name der EINRICHTUNG (des Betreibers "
+            "selbst), kein Personenname: Klient*innen und Konten tauchen in "
+            "diesen beiden Zeilen nicht auf. Die Zeilen markieren einen "
+            "uebersprungenen Statistik-Backend-Lauf bzw. einen geschriebenen "
+            "Snapshot; in einer Installation mit mehreren Einrichtungen ist der "
+            "Name genau die Information, die den Ausfall zuordenbar macht. Auf "
+            "dem Weg zu einem Error-Tracker geht der Wert ohnehin nicht mit — "
+            "der Hook ersetzt die Zeile durch ihr Template (Refs #2198). "
+            "Verbesserungsmoeglichkeit (eigenes Ticket, Datei liegt ausserhalb "
+            "dieser Aenderung): ``facility_id`` im ``extra`` statt des Namens in "
+            "der Vorlage."
+        ),
+    },
 }
 
 
@@ -137,23 +144,28 @@ def _person_attributes(call):
 
 
 def find_person_attribute_logging(root):
-    """Fundstellen als Menge von ``(datei, geltungsbereich, attribut)``.
+    """Fundstellen als ``Counter`` ueber ``(datei, geltungsbereich, attribut)``.
 
     ``root`` ist parametrisiert, damit der Selbsttest gegen ``tmp_path``
     laeuft und nie Proben im echten Baum ablegt. Der Geltungsbereich ist der
     gepunktete Name der umschliessenden Klasse/Funktion (``<modul>`` fuer
     Aufrufe auf Modulebene) — bewusst statt einer Zeilennummer, die sich bei
     jeder Umformatierung verschiebt.
+
+    Refs #2227: Gezaehlt wird, wie oft der Schluessel vorkommt. Als blosse
+    Menge deckte ein Allowlist-Eintrag beliebig viele gleichartige Aufrufe
+    desselben Geltungsbereichs ab — die Begruendung galt dann fuer eine
+    Stelle, die niemand mehr gelesen hatte.
     """
     root = Path(root)
-    findings = set()
+    findings = Counter()
 
     def walk(node, scope, relative):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             scope = (*scope, node.name)
         if isinstance(node, ast.Call) and _is_logger_call(node):
             for attribute in _person_attributes(node):
-                findings.add((relative, ".".join(scope) or "<modul>", attribute))
+                findings[(relative, ".".join(scope) or "<modul>", attribute)] += 1
         for child in ast.iter_child_nodes(node):
             walk(child, scope, relative)
 
@@ -325,7 +337,7 @@ class TestAllowlistPinsTheNumberOfHits:
 
     def test_one_more_call_in_the_same_scope_turns_the_guard_red(self, tmp_path):
         """Der eigentliche Punkt: ein dritter Aufruf faellt auf."""
-        findings = self._findings(tmp_path, self.SOURCE + '\n    logger.info("Noch eine %s", facility.name)\n')
+        findings = self._findings(tmp_path, self.SOURCE + '    logger.info("Noch eine %s", facility.name)\n        ')
         allowlist = {("probe.py", "melden", "name"): {"count": 2, "reason": "Begruendung"}}
         assert allowlist_violations(findings, allowlist) == [(("probe.py", "melden", "name"), 3, 2)]
 
