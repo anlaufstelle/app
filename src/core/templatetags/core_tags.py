@@ -5,7 +5,7 @@ import json
 from django import template
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext as _
 
 register = template.Library()
@@ -76,6 +76,32 @@ def decrypt(value):
 
     if is_encrypted_value(value):
         return safe_decrypt(value, default="[verschlüsselt]")
+    return value
+
+
+@register.filter
+def display_dynamic_value(value):
+    """Rendert einen dynamischen Feldwert für die Detailanzeige (Refs #2243).
+
+    Gemeinsame Stelle für ``core/events/detail.html`` und
+    ``core/partials/dynamic_data_display.html`` — beide Templates rufen
+    diesen Filter statt ``field.value`` roh oder nur mit
+    ``default_if_none:""`` auszugeben.
+
+    - ``None`` (Refs #2220/#2224): unverändert wie zuvor ``default_if_none:""``
+      — rendert leer statt des Python-Literals „None".
+    - ``list`` (Refs #2243: ``multi_select`` ohne ``options_json`` liefert die
+      rohen Slugs statt gelabelter Strings — ``format_dynamic_display_value``
+      reicht sie unverändert durch): kommagetrennte, escapte Aufzählung statt
+      der Python-``repr()``-Darstellung (``['a']``).
+    - alles andere (bereits formatierte Strings, z. B. Select-Labels oder
+      „[Eingeschränkt]"): unverändert — Django escaped beim Rendern
+      automatisch.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return format_html_join(", ", "{}", ((item,) for item in value))
     return value
 
 

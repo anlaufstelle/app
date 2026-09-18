@@ -1,4 +1,4 @@
-"""Leere dynamische Feldwerte auf der Ereignis-Detailseite (Refs #2220).
+"""Leere dynamische Feldwerte auf der Ereignis-Detailseite (Refs #2220, #2243).
 
 Ein optionales Zahlenfeld, das beim Anlegen leer bleibt, landet als ``None`` im
 ``data_json`` (ein leeres ``IntegerField`` liefert ``None`` in ``cleaned_data``,
@@ -13,6 +13,10 @@ jeden Feldtyp und nicht nur den gemeldeten Fall.
 Sollwert ist ein LEERES Feld — genau das, was die Nachbarfelder derselben Gruppe
 „Erfasste Daten" mit ``""``/``[]`` heute schon rendern. Ein Gedankenstrich nur
 für ``None`` würde dieselbe Liste in zwei Leerdarstellungen spalten.
+
+#2243: ``multi_select`` ohne ``options_json`` rendert(e) die rohe
+Python-Listen-Repräsentation (``['a']`` → ``[&#x27;a&#x27;]``) statt einer
+lesbaren, kommagetrennten Aufzählung.
 """
 
 from __future__ import annotations
@@ -197,3 +201,65 @@ class TestEventDetailOrphanedNoneValue:
         assert "Nicht mehr zugeordnet" in content
         assert DD_WITH_NONE_LITERAL.search(content) is None
         assert field_value_html(content, "Dauer").strip() == ""
+
+
+@pytest.mark.django_db
+class TestEventDetailMultiSelectWithoutOptions:
+    """#2243: ``multi_select`` ohne ``options_json`` — über die config_ui
+
+    verifiziert erzeugbar (``FieldTemplateForm.clean_options_json`` erzwingt
+    für SELECT/MULTI_SELECT keine nicht-leere Optionsliste, ``src/core/forms/
+    config.py``) — rendert(e) vorher die rohe Python-Listen-Repräsentation
+    statt einer lesbaren, kommagetrennten Aufzählung.
+    """
+
+    def test_raw_list_does_not_render_python_repr(self, client, staff_user, facility, client_identified):
+        doc_type = make_document_type(facility=facility, name="Mehrfachauswahl ohne Optionen")
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Freie Mehrfachauswahl",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[],
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+        event = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={ft.slug: ["a", "b"]},
+            created_by=staff_user,
+        )
+
+        content = detail_content(client, staff_user, event)
+        dd_html = field_value_html(content, "Freie Mehrfachauswahl")
+
+        # Kein Python-repr() (weder roh noch HTML-escaped als &#x27;).
+        assert "[" not in dd_html and "]" not in dd_html
+        assert "&#x27;" not in dd_html
+        assert dd_html.strip() == "a, b"
+
+    def test_raw_list_values_are_escaped(self, client, staff_user, facility, client_identified):
+        """Kein ``safe`` — HTML-Metazeichen in Slugs werden escaped (Brief Punkt 1)."""
+        doc_type = make_document_type(facility=facility, name="Mehrfachauswahl escaping")
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Escaping-Feld",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[],
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+        event = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={ft.slug: ["<script>alert(1)</script>"]},
+            created_by=staff_user,
+        )
+
+        content = detail_content(client, staff_user, event)
+        dd_html = field_value_html(content, "Escaping-Feld")
+
+        assert "<script>" not in dd_html
+        assert "&lt;script&gt;" in dd_html

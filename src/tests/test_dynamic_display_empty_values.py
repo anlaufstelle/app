@@ -1,4 +1,4 @@
-"""Leere dynamische Feldwerte in Personen-/Fall-Detail und Auskunft (Refs #2224).
+"""Leere dynamische Feldwerte in Personen-/Fall-Detail und Auskunft (Refs #2224, #2243).
 
 Dieselbe Klasse wie auf der Ereignis-Detailseite (Refs #2220): ein optionales
 Zahlen-, Datums- oder Zeitfeld, das leer bleibt, liegt als ``None`` im
@@ -17,6 +17,9 @@ Geprüft werden die drei Flächen, die dieselben Anzeigewerte rendern:
 Sollwert ist auch hier ein LEERES Feld, konsistent zu den Nachbarfeldern, die
 mit ``""``/``[]`` schon heute leer rendern. Eine gespeicherte ``0`` ist ein
 echter Wert und bleibt sichtbar.
+
+#2243: ``multi_select`` ohne ``options_json`` rendert(e) im Partial ebenfalls
+die rohe Python-Listen-Repräsentation statt einer lesbaren Aufzählung.
 """
 
 from __future__ import annotations
@@ -240,3 +243,32 @@ class TestClientExportPdfEmptyValues:
 
         assert re.search(r"<th>WF number</th><td>\s*0\s*</td>", html) is not None
         assert "None" not in html
+
+
+@pytest.mark.django_db
+class TestClientDetailMultiSelectWithoutOptions:
+    """#2243 im gemeinsamen Partial: ``multi_select`` ohne ``options_json``."""
+
+    def test_raw_list_does_not_render_python_repr(self, client, lead_user, facility, client_identified):
+        doc_type = make_document_type(
+            facility=facility,
+            name="Personenprobe Mehrfachauswahl",
+            entity_type=DocumentType.EntityType.CLIENT,
+        )
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Freie Mehrfachauswahl",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[],
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+        client_identified.document_type = doc_type
+        client_identified.data_json = {ft.slug: ["a", "b"]}
+        client_identified.save()
+
+        content = detail_content(client, lead_user, "core:client_detail", client_identified.pk)
+        dd_html = field_value_html(content, "Freie Mehrfachauswahl")
+
+        assert "[" not in dd_html and "]" not in dd_html
+        assert "&#x27;" not in dd_html
+        assert dd_html.strip() == "a, b"

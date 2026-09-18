@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`multi_select`-Rohwerte ohne Optionen rendern lesbar statt als Python-Liste** (#2243) — Ein `multi_select`-Feld ohne konfigurierte Optionen zeigte auf den Detailseiten von Ereignis, Person und Fall die rohe, escapte Python-Listendarstellung (z. B. `[&#x27;a&#x27;]`) statt einer kommagetrennten Aufzählung; betroffen war der gemeinsame Anzeigefilter beider Detailseiten.
+
 ### Security
 
 - **Kettenprüfung kann einen fehlenden externen Anker als Fehler behandeln** (#2242) — Fehlt der außerhalb der Datenbank verankerte High-Water-Mark, gilt der Lauf bisher als Erstlauf und verankert den vorgefundenen Audit-Bestand still neu; nach einem fehlgeschlagenen Anker-Import auf einem wiederhergestellten Host könnte so ein abgeschnittener Bestand ohne Vergleich mit dem gesicherten Original grün werden. Die neue Option `--require-anchor` verlangt für **jede** geprüfte Kette einen verankerten Stand — ein Anker für eine andere Einrichtung genügt nicht — und lässt die Prüfung sonst abbrechen, bevor für irgendeine Kette ein neuer Anker oder der Prüf-Nachweis geschrieben wird; die Meldung nennt die betroffenen Einrichtungen datenminimiert per Kennnummer. Der Wiederherstellungs- und Drill-Ablauf im Notfallhandbuch sowie das Wiederherstellungs-Übungsskript nutzen die Option nach dem Anker-Import — eine gültig signierte, aber unvollständig verankerte Anker-Datei fällt der Übung damit auf, statt still durchzugehen; fehlt dem Übungsskript die Anker-Konfiguration, gilt der Schritt nicht mehr als erledigt. Eine leere, unlesbare oder strukturell unbrauchbare Anker-Datei endet außerdem in einer klaren Integritäts-Fehlermeldung statt in einem Programmabbruch mit technischer Fehlerspur. Ohne die Option bleibt die Erstlauf-Behandlung unverändert, der tägliche Betriebslauf ist nicht betroffen.

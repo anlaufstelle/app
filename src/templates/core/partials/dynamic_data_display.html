@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n core_tags %}
 
 {% comment %}
 Read-only-Anzeige dynamischer ``data_json``-Felder (M2/P7, Refs #1058, E18).
@@ -30,9 +30,14 @@ Refs #2224 (gleiche Regel wie #2220 auf der Ereignis-Detailseite): Ein leer
 gelassenes Zahlen-, Datums- oder Zeitfeld liegt als ``None`` im ``data_json``
 (ein leeres IntegerField gibt ``None``, ein leeres CharField ``""``), und die
 Anzeigeformatierung reicht es unveraendert durch — ohne Filter stand hier der
-Python-Literal „None". ``default_if_none`` und nicht ``default``: eine
-gespeicherte 0 ist ein echter Wert und muss stehen bleiben. Leer statt
-Gedankenstrich, weil die Nachbarfelder mit ``""``/``[]`` genauso rendern.
+Python-Literal „None". Leer statt Gedankenstrich, weil die Nachbarfelder mit
+``""``/``[]`` genauso rendern.
+
+Refs #2243: ``field.value`` laeuft durch den Filter
+``core_tags.display_dynamic_value`` statt ``default_if_none``. ``None``
+rendert weiterhin leer (unveraendertes Verhalten); eine rohe Python-Liste
+(``multi_select`` ohne ``options_json``) wird kommagetrennt und escaped
+ausgegeben statt als ``repr()``; alles andere bleibt unveraendert.
 {% endcomment %}
 
 {% if dynamic_document_type %}
@@ -71,7 +76,7 @@ Gedankenstrich, weil die Nachbarfelder mit ``""``/``[]`` genauso rendern.
                 </ul>
             </dd>
             {% else %}
-            <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value|default_if_none:"" }}</dd>
+            <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value|display_dynamic_value }}</dd>
             {% endif %}
         </div>
         {% endfor %}
@@ -102,7 +107,7 @@ Gedankenstrich, weil die Nachbarfelder mit ``""``/``[]`` genauso rendern.
                     </ul>
                 </dd>
                 {% else %}
-                <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value|default_if_none:"" }}</dd>
+                <dd class="text-[13px] {% if field.restricted %}text-ink-muted italic{% else %}text-ink-soft{% endif %} {% if field.is_sensitive %}font-semibold{% endif %} whitespace-pre-wrap">{{ field.value|display_dynamic_value }}</dd>
                 {% endif %}
             </div>
             {% endfor %}
