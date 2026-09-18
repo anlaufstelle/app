@@ -114,6 +114,115 @@ def _first_index(sequence, table):
     return sequence.index(table) if table in sequence else None
 
 
+#: Die Tabellen, deren Zeilensperren diese Ordnung regelt.
+_SPERR_TABELLEN = frozenset({"core_attachment", "core_client", "core_case", "core_event"})
+
+#: UUID-Literale stehen im Mitschnitt bereits eingesetzt (``connection.queries``).
+_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+
+#: Ein ``UPDATE`` sperrt seine Zeilen genauso wie ein ``SELECT … FOR UPDATE``.
+_UPDATE_RE = re.compile(r'\s*UPDATE "(?P<table>core_\w+)"', re.IGNORECASE)
+
+
+def _sperr_tabelle(sql):
+    """Die Tabelle, deren Zeilen diese Anweisung sperrt (oder ``None``)."""
+    if "FOR UPDATE" in sql.upper():
+        match = _FOR_UPDATE_RE.search(sql)
+    else:
+        match = _UPDATE_RE.match(sql)
+    if match is None:
+        return None
+    table = match.group("table")
+    return table if table in _SPERR_TABELLEN else None
+
+
+def _gesperrte_zeilen(sql):
+    """Die Zeilen, die diese Anweisung sperrt — als ``{(tabelle, kennung), …}``.
+
+    Gelesen wird ausschliesslich die ``WHERE``-Klausel: Werte aus ``SET`` sind
+    keine Sperrmenge. Anhangszeilen werden ueber ``pk`` UND ueber ``entry_id``
+    adressiert (die gebuendelte Vorsperre filtert auf die Kette, der
+    Vorgaenger-Lock auf die einzelne Zeile) — beide Formen werden auf dieselbe
+    Kennung, den ``pk`` der Zeile, aufgeloest. Was sich nicht aufloesen laesst
+    (Owner-/Facility-Fremdschluessel in derselben Klausel), bleibt als Rohwert
+    stehen und ist damit ueber alle Anweisungen hinweg dennoch vergleichbar.
+    """
+    table = _sperr_tabelle(sql)
+    if table is None:
+        return set()
+    _, _, where = sql.partition(" WHERE ")
+    werte = {wert.lower() for wert in _UUID_RE.findall(where)}
+    if not werte or table != "core_attachment":
+        return {(table, wert) for wert in werte}
+    from django.db.models import Q
+
+    from core.models.attachment import Attachment
+
+    zeilen: set = set()
+    getroffen: set = set()
+    for pk, entry_id in Attachment.objects.filter(Q(pk__in=werte) | Q(entry_id__in=werte)).values_list(
+        "pk", "entry_id"
+    ):
+        if str(pk) in werte or str(entry_id) in werte:
+            zeilen.add((table, str(pk)))
+            getroffen |= {str(pk), str(entry_id)} & werte
+    return zeilen | {(table, wert) for wert in werte - getroffen}
+
+
+def _sperrmengen(captured):
+    """``(vor dem ersten Ketten-Lock gesperrt, danach ERSTMALS gesperrt)``.
+
+    Das ist die eigentliche Zusage dieses Tickets: unter dem Ketten-Lock darf
+    keine Zeile ERSTMALS gesperrt werden. Ein erneutes Sperren einer bereits
+    gehaltenen Zeile wartet nie und ist deshalb zulaessig — es steht in der
+    ersten Menge und faellt aus der zweiten heraus.
+    """
+    vor: set = set()
+    nach: set = set()
+    kette_gesehen = False
+    for query in captured.captured_queries:
+        sql = query["sql"]
+        if "pg_advisory_xact_lock" in sql:
+            kette_gesehen = True
+            continue
+        zeilen = _gesperrte_zeilen(sql)
+        if kette_gesehen:
+            nach |= zeilen - vor
+        else:
+            vor |= zeilen
+    return vor, nach
+
+
+def _assert_keine_erstsperre_unter_der_kette(captured):
+    """Kernzusage: nach dem ersten Ketten-Lock kommt keine neue Zeile hinzu."""
+    _vor, nach = _sperrmengen(captured)
+    assert not nach, f"unter dem Ketten-Lock erstmals gesperrte Zeilen: {sorted(nach)}"
+
+
+def _assert_sperr_reihenfolge(captured, *, owner_table):
+    """Die VOLLSTAENDIGE Folge je Owner-Typ: Person -> Owner -> Anhang -> Protokoll.
+
+    Bei einem Personen-Owner faellt Stufe 1 mit der Owner-Zeile zusammen — eine
+    zweite Stufe gibt es dort nicht. Zusaetzlich zur Reihenfolge der ersten
+    Vorkommen wird die vollstaendige Sperrmenge geprueft (siehe
+    :func:`_sperrmengen`).
+    """
+    sequence = _lock_sequence(captured)
+    attachment_at = _first_index(sequence, "core_attachment")
+    chain_at = _first_index(sequence, CHAIN)
+    owner_at = _first_index(sequence, owner_table)
+    assert attachment_at is not None, f"Anhangszeilen wurden nicht gesperrt: {sequence}"
+    assert chain_at is not None, f"kein Ketten-Lock im Pfad: {sequence}"
+    assert owner_at is not None, f"{owner_table}-Zeile wurde nicht gesperrt: {sequence}"
+    if owner_table != "core_client":
+        person_at = _first_index(sequence, "core_client")
+        assert person_at is not None, f"Personenzeile wurde nicht gesperrt: {sequence}"
+        assert person_at < owner_at, f"Personenzeile gehoert vor die Owner-Zeile: {sequence}"
+    assert owner_at < attachment_at, f"Owner-Zeile gehoert vor die Anhangszeilen: {sequence}"
+    assert attachment_at < chain_at, f"Anhangszeilen gehoeren vor den Ketten-Lock: {sequence}"
+    _assert_keine_erstsperre_unter_der_kette(captured)
+
+
 def _statement_index(captured, predicate):
     """Index der ersten Abfrage, auf die ``predicate`` passt (oder ``None``)."""
     for index, query in enumerate(captured.captured_queries):
@@ -182,24 +291,9 @@ def _ersetze(facility, owner, field_template, user, vorgaenger):
 class TestSequenzReihenfolge:
     """Die Ordnung am ausgefuehrten SQL — deterministisch, ohne Timing."""
 
-    def _assert_reihenfolge(self, sequence, *, owner_table):
-        """Die VOLLSTAENDIGE Folge je Owner-Typ: Person -> Owner -> Anhang -> Protokoll.
-
-        Bei einem Personen-Owner faellt Stufe 1 mit der Owner-Zeile zusammen —
-        eine zweite Stufe gibt es dort nicht.
-        """
-        attachment_at = _first_index(sequence, "core_attachment")
-        chain_at = _first_index(sequence, CHAIN)
-        owner_at = _first_index(sequence, owner_table)
-        assert attachment_at is not None, f"Anhangszeilen wurden nicht gesperrt: {sequence}"
-        assert chain_at is not None, f"kein Ketten-Lock im Pfad: {sequence}"
-        assert owner_at is not None, f"{owner_table}-Zeile wurde nicht gesperrt: {sequence}"
-        if owner_table != "core_client":
-            person_at = _first_index(sequence, "core_client")
-            assert person_at is not None, f"Personenzeile wurde nicht gesperrt: {sequence}"
-            assert person_at < owner_at, f"Personenzeile gehoert vor die Owner-Zeile: {sequence}"
-        assert owner_at < attachment_at, f"Owner-Zeile gehoert vor die Anhangszeilen: {sequence}"
-        assert attachment_at < chain_at, f"Anhangszeilen gehoeren vor den Ketten-Lock: {sequence}"
+    def _assert_reihenfolge(self, captured, *, owner_table):
+        """Delegiert an :func:`_assert_sperr_reihenfolge` (Reihenfolge + Sperrmenge)."""
+        _assert_sperr_reihenfolge(captured, owner_table=owner_table)
 
     def test_ereignis_update_sperrt_zeilen_vor_dem_ketten_lock(self, client, staff_user, facility, client_identified):
         doc_type, ft_file, ft_text = _doc_type(
@@ -227,7 +321,7 @@ class TestSequenzReihenfolge:
                 },
             )
         assert resp.status_code == 302, resp.content
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_event")
+        self._assert_reihenfolge(captured, owner_table="core_event")
 
     def test_personen_update_sperrt_zeilen_vor_dem_ketten_lock(self, client, staff_user, facility):
         doc_type, ft_file, ft_text = _doc_type(
@@ -259,7 +353,7 @@ class TestSequenzReihenfolge:
                 },
             )
         assert resp.status_code == 302, resp.content
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_client")
+        self._assert_reihenfolge(captured, owner_table="core_client")
 
     def test_fall_update_sperrt_zeilen_vor_dem_ketten_lock(self, client, staff_user, facility, client_identified):
         doc_type, ft_file, ft_text = _doc_type(
@@ -291,7 +385,7 @@ class TestSequenzReihenfolge:
                 },
             )
         assert resp.status_code == 302, resp.content
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_case")
+        self._assert_reihenfolge(captured, owner_table="core_case")
 
     def test_endgueltiges_loeschen_sperrt_zeilen_vor_dem_ketten_lock(
         self, client, admin_user, facility, client_identified
@@ -317,7 +411,7 @@ class TestSequenzReihenfolge:
             resp = client.post(reverse("core:attachment_delete", kwargs={"pk": attachment.pk}))
         assert resp.status_code == 302, resp.content
 
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_event")
+        self._assert_reihenfolge(captured, owner_table="core_event")
 
     def test_typwechsel_sperrt_alle_ketten_geordnet_vor_dem_ersten_update(
         self, staff_user, facility, client_identified
@@ -429,7 +523,7 @@ class TestSequenzReihenfolge:
             )
         assert resp.status_code == 302, resp.content
         assert not person.attachments.filter(deleted_at__isnull=True).exists(), "der Typwechsel hat nichts verworfen"
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_client")
+        self._assert_reihenfolge(captured, owner_table="core_client")
 
     def test_fall_update_mit_typentfernung_sperrt_person_und_fall_zuerst(
         self, client, staff_user, facility, client_identified
@@ -463,7 +557,7 @@ class TestSequenzReihenfolge:
             )
         assert resp.status_code == 302, resp.content
         assert not case.attachments.filter(deleted_at__isnull=True).exists(), "der Typwechsel hat nichts verworfen"
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_case")
+        self._assert_reihenfolge(captured, owner_table="core_case")
 
     def test_direkter_soft_delete_sperrt_die_kette_geordnet_vor_dem_audit(
         self, staff_user, facility, client_identified
@@ -551,6 +645,7 @@ class TestSequenzReihenfolge:
         ]
         assert len(vorsperren) == 1, f"genau eine gebuendelte Vorsperre erwartet, gemessen: {len(vorsperren)}"
 
+    @pytest.mark.django_db(transaction=True)
     def test_direkter_replace_sperrt_die_personenzeile_vor_dem_ketten_lock(self, staff_user, facility):
         """Der Replace legt eine NEUE Anhangszeile mit Owner-FK an.
 
@@ -572,15 +667,18 @@ class TestSequenzReihenfolge:
         )
         vorgaenger = _attach(facility, person, ft_file, staff_user)
 
-        # BEWUSST ohne aeussere Transaktion: genau so nimmt dieser Einstieg den
-        # Ketten-Lock selbst und als ersten seiner Transaktion — nur davor
-        # laesst sich die Owner-Stufe ueberhaupt legen. Mit Aufrufer-
-        # Transaktion gilt der Batch-Vertrag (siehe die Guards der Views).
+        # BEWUSST ohne aeussere Transaktion und mit ECHTEM COMMIT
+        # (``transaction=True``): nur so findet die aufgeschobene Pruefung des
+        # Owner-Fremdschluessels wirklich statt — unter einer Testtransaktion
+        # kaeme sie nie zum Zug. Dieser Einstieg nimmt den Ketten-Lock selbst
+        # und als ersten seiner Transaktion; nur davor laesst sich die
+        # Owner-Stufe ueberhaupt legen.
         with CaptureQueriesContext(connection) as captured:
             _ersetze(facility, person, ft_file, staff_user, vorgaenger)
 
-        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_client")
+        self._assert_reihenfolge(captured, owner_table="core_client")
 
+    @pytest.mark.django_db(transaction=True)
     def test_direkter_upload_sperrt_die_owner_zeilen_vor_dem_ketten_lock(self, staff_user, facility, client_identified):
         """Dasselbe beim reinen Hinzufuegen: auch die neue Zeile traegt den Owner-FK."""
         doc_type, ft_file, _ft_text = _doc_type(
@@ -595,10 +693,11 @@ class TestSequenzReihenfolge:
             created_by=staff_user,
         )
 
-        # Ohne aeussere Transaktion — siehe Replace-Guard.
+        # Ohne aeussere Transaktion, mit echtem COMMIT — siehe Replace-Guard.
         with CaptureQueriesContext(connection) as captured:
             _attach(facility, event, ft_file, staff_user)
 
+        _assert_keine_erstsperre_unter_der_kette(captured)
         sequence = _lock_sequence(captured)
         person_at = _first_index(sequence, "core_client")
         owner_at = _first_index(sequence, "core_event")
@@ -936,3 +1035,198 @@ def test_endgueltiges_loeschen_bildet_keinen_zyklus_mit_gehaltener_personenzeile
     assert ergebnis.get("wert") is not None and ergebnis["wert"].status_code == 302, (
         f"Vernichtungspfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
     )
+
+
+def _beobachte_wartenden_pfad(gegen, pfad, *, haelt, kontext):
+    """Laesst ``pfad`` in einem Thread laufen, waehrend ``gegen`` eine Zeile haelt.
+
+    Zurueck kommen die Beobachtung der Sonde und das Ergebnis des Threads. Die
+    Gegenrichtung wird in jedem Fall geschlossen; jeder DB-Fehler wird am
+    SQLSTATE bewertet, bevor der Aufrufer die Beobachtung prueft.
+    """
+    thread = None
+    ergebnis: dict = {}
+    try:
+        gegen.halte_zeile(*haelt)
+        thread, ergebnis = _im_thread(pfad)
+        beobachtung = gegen.warte(ergebnis["pid"], time.monotonic() + RENDEZVOUS_DEADLINE)
+        gegen.nimm_ketten_lock()
+    finally:
+        gegen.schliesse()
+        if thread is not None:
+            thread.join(timeout=RENDEZVOUS_DEADLINE)
+
+    assert thread is not None and not thread.is_alive(), "Worker-Thread laeuft nach der Deadline weiter"
+    _bewerte_db_fehler(gegen.fehler, kontext="fremde Transaktion")
+    _bewerte_db_fehler(ergebnis.get("fehler"), kontext=kontext)
+    return beobachtung, ergebnis
+
+
+#: Fehlermeldung der beiden Zusagen unten — die Sonde probt zuerst den
+#: Ketten-Lock: kommt sie mit ``"kette"`` zurueck, hielt der beobachtete Pfad
+#: ihn bereits, waehrend er noch auf die Personenzeile wartete. Genau das ist
+#: die verkehrte Richtung.
+_ERST_ZEILE_DANN_KETTE = (
+    "der Vorgang muss an der Personenzeile warten, BEVOR er den Ketten-Lock haelt — beobachtet wurde: {}"
+)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_personen_typwechsel_ohne_upload_wartet_zuerst_auf_die_personenzeile(client, staff_user, facility):
+    """Wechsel auf einen ANDEREN konkreten Typ, ohne Upload.
+
+    Der Ziel-Typ traegt eigene Felder, der Batch ist also leer — verworfen wird
+    trotzdem die komplette alte Anhangsmenge, und der Bulk-Audit dieses
+    Verwerfens nimmt den Ketten-Lock. Nimmt der Vorgang die Personenzeile erst
+    danach (im ``update_client``), schliesst er gegen jeden Pfad, der die
+    Personenzeile haelt und danach den Ketten-Lock will, den Zyklus.
+    """
+    alt, ft_alt, _text_alt = _doc_type(facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Typ A")
+    neu, _ft_neu, text_neu = _doc_type(facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Typ B")
+    person = Client.objects.create(
+        facility=facility,
+        pseudonym="Sperr-Sonde Typwechsel",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        document_type=alt,
+        data_json={},
+        notes="alt",
+        created_by=staff_user,
+    )
+    _attach(facility, person, ft_alt, staff_user)
+    client.force_login(staff_user)
+
+    def pfad():
+        return client.post(
+            reverse("core:client_update", kwargs={"pk": person.pk}),
+            {
+                "pseudonym": "Sperr-Sonde Typwechsel",
+                "contact_stage": Client.ContactStage.IDENTIFIED,
+                "age_cluster": Client.AgeCluster.UNKNOWN,
+                "notes": "geaendert",
+                "document_type": str(neu.pk),
+                text_neu.slug: "neu",
+            },
+        )
+
+    beobachtung, ergebnis = _beobachte_wartenden_pfad(
+        _Gegenrichtung(facility.pk),
+        pfad,
+        haelt=("core_client", person.pk),
+        kontext="Typwechsel-Pfad Person",
+    )
+    assert beobachtung == "blockiert", _ERST_ZEILE_DANN_KETTE.format(beobachtung)
+    assert ergebnis.get("wert") is not None and ergebnis["wert"].status_code == 302, (
+        f"Typwechsel-Pfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
+    )
+    assert not person.attachments.filter(deleted_at__isnull=True).exists(), "der Typwechsel hat nichts verworfen"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_fall_typwechsel_ohne_upload_wartet_zuerst_auf_die_personenzeile(
+    client, staff_user, facility, client_identified
+):
+    """Dieselbe Zusage am Fall-Pfad — gehalten wird die Personenzeile (Stufe 1)."""
+    alt, ft_alt, _text_alt = _doc_type(facility, entity_type=DocumentType.EntityType.CASE, name="Fall Typ A")
+    neu, _ft_neu, text_neu = _doc_type(facility, entity_type=DocumentType.EntityType.CASE, name="Fall Typ B")
+    case = Case.objects.create(
+        facility=facility,
+        client=client_identified,
+        title="Sperr-Sonde Fall Typwechsel",
+        description="alt",
+        document_type=alt,
+        data_json={},
+        created_by=staff_user,
+    )
+    _attach(facility, case, ft_alt, staff_user)
+    client.force_login(staff_user)
+
+    def pfad():
+        return client.post(
+            reverse("core:case_update", kwargs={"pk": case.pk}),
+            {
+                "client": str(client_identified.pk),
+                "title": "Sperr-Sonde Fall Typwechsel",
+                "description": "geaendert",
+                "lead_user": "",
+                "document_type": str(neu.pk),
+                text_neu.slug: "neu",
+            },
+        )
+
+    beobachtung, ergebnis = _beobachte_wartenden_pfad(
+        _Gegenrichtung(facility.pk),
+        pfad,
+        haelt=("core_client", client_identified.pk),
+        kontext="Typwechsel-Pfad Fall",
+    )
+    assert beobachtung == "blockiert", _ERST_ZEILE_DANN_KETTE.format(beobachtung)
+    assert ergebnis.get("wert") is not None and ergebnis["wert"].status_code == 302, (
+        f"Typwechsel-Pfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
+    )
+    assert not case.attachments.filter(deleted_at__isnull=True).exists(), "der Typwechsel hat nichts verworfen"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_direkter_batch_in_aeusserer_transaktion_wartet_zuerst_auf_die_personenzeile(staff_user, facility):
+    """Der oeffentliche Batch-Einstieg OHNE vorgeschalteten View-Helfer.
+
+    ``apply_attachment_changes`` in einer Aufrufer-Transaktion ist ein
+    ausdruecklich unterstuetzter Service-Einstieg. Er fasst hier alle drei
+    Operationen an (Loeschen, Ersetzen, Hinzufuegen) und schreibt am Ende den
+    Marker auf die Personenzeile; die neuen Zeilen tragen zusaetzlich den
+    Owner-Fremdschluessel. Er muss seine Stufe 1 deshalb selbst nehmen, bevor
+    die erste Audit-Zeile den Ketten-Lock holt.
+    """
+    from core.services.attachments import apply_attachment_changes
+    from core.services.attachments.crud import replace_upload_key
+
+    doc_type, ft_file, _text = _doc_type(
+        facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Direktbatch"
+    )
+    person = Client.objects.create(
+        facility=facility,
+        pseudonym="Sperr-Sonde Direktbatch",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        document_type=doc_type,
+        data_json={},
+        created_by=staff_user,
+    )
+    zu_loeschen = _attach(facility, person, ft_file, staff_user)
+    zu_ersetzen = _attach(facility, person, ft_file, staff_user)
+    person.data_json = {
+        ft_file.slug: {
+            "__files__": True,
+            "entries": [{"id": str(zu_loeschen.pk), "sort": 0}, {"id": str(zu_ersetzen.pk), "sort": 1}],
+        }
+    }
+    person.save(update_fields=["data_json"])
+
+    def pfad():
+        dateien = {
+            ft_file.slug: [SimpleUploadedFile("zugang.pdf", PDF_MINIMAL, content_type="application/pdf")],
+            replace_upload_key(ft_file.slug, zu_ersetzen.entry_id): [
+                SimpleUploadedFile("ersatz.pdf", PDF_MINIMAL, content_type="application/pdf")
+            ],
+        }
+        with (
+            patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None),
+            transaction.atomic(),
+        ):
+            apply_attachment_changes(
+                person,
+                staff_user,
+                {f"{ft_file.slug}__remove": str(zu_loeschen.entry_id)},
+                {},
+                dateien,
+                doc_type,
+            )
+        return "fertig"
+
+    beobachtung, ergebnis = _beobachte_wartenden_pfad(
+        _Gegenrichtung(facility.pk),
+        pfad,
+        haelt=("core_client", person.pk),
+        kontext="direkter Batch",
+    )
+    assert beobachtung == "blockiert", _ERST_ZEILE_DANN_KETTE.format(beobachtung)
+    assert ergebnis.get("wert") == "fertig", f"der direkte Batch ist nicht durchgelaufen: {ergebnis!r}"
