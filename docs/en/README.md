@@ -3,6 +3,7 @@
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
 > Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only.
+> Synchronization update 2026-09-18: Clarified that the FAQ itself is the authoritative source for its content (#2253).
 > Synchronization update 2026-09-11: Added the accessibility audit to the German-only index (#2215).
 
 
@@ -65,7 +66,7 @@ Templates included:
 | [facility-export-schema.md](../facility-export-schema.md) | Full facility export (JSON, schema v1): field list, versioning rule, trash/anonymization boundaries, attachment hashes, `manage.py export_facility` (Refs #1060) |
 | [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
 | [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
-| [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
+| [faq.md](../faq.md) | Authoritative source for frequently asked questions about operations, troubleshooting, and organizational workflows |
 | [accessibility-audit.md](../accessibility-audit.md) | Accessibility audit evidence for WCAG 2.1 Level AA, including automated findings, remediation, and the screen-reader test protocol |
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
@@ -83,4 +84,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 372565d231ba85eea00d5b866d90948dc88fe5e4 -->
+<!-- source-hash: fb7328952369b6847f664d1246bd0c3e0a49e26d -->

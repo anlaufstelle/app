@@ -32,7 +32,7 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [admin-guide.md](admin-guide.md) | Betriebshandbuch: Installation, Backup/Restore, Monitoring, MFA, Retention, DSGVO | IT-Admins |
 | [user-guide.md](user-guide.md) | Benutzerhandbuch: Arbeitszentrale, Zeitstrom, Personen, Events, Suche, Export, Statistik, Rollen | Endanwender |
 | [screenshots.md](screenshots.md) | Bebilderter Rundgang durch die Oberfläche (Demo-Daten, pseudonymisiert); EN: [screenshots.en.md](screenshots.en.md) | Stakeholder, Endanwender |
-| [faq.md](faq.md) | Häufige Fragen — Betrieb, Troubleshooting, organisatorische Abläufe (synchron mit #474) | Admins, Endanwender |
+| [faq.md](faq.md) | Maßgebliche Quelle für häufige Fragen zu Betrieb, Troubleshooting und organisatorischen Abläufen | Admins, Endanwender |
 | [packages.md](packages.md) | Konfigurationspakete (YAML, Schema v1): Formatreferenz, Loader-Semantik, `manage.py load_package`, Pflegeregeln (Refs #1058, [ADR-037](adr/037-konfigurationspakete-dynamische-felder.md)) | IT-Admins, Konfigurations-Autor:innen |
 | [packages-beratungsstelle.md](packages-beratungsstelle.md) | Beratungsstelle-Paket: acht Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen (Refs #2145) | IT-Admins, Einrichtungsleitung |
 | [packages-awareness.md](packages-awareness.md) | Awareness-Paket: sieben Typen, Sensitivitätsmatrix, Berichte und Betreiber-Empfehlungen (Refs #2137) | IT-Admins, Awareness-Koordination |
