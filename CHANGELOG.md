@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Kettenprüfung kann einen fehlenden externen Anker als Fehler behandeln** (#2242) — Fehlt der außerhalb der Datenbank verankerte High-Water-Mark, gilt der Lauf bisher als Erstlauf und verankert den vorgefundenen Audit-Bestand still neu; nach einem fehlgeschlagenen Anker-Import auf einem wiederhergestellten Host könnte so ein abgeschnittener Bestand ohne Vergleich mit dem gesicherten Original grün werden. Die neue Option `--require-anchor` lässt die Prüfung in diesem Fall stattdessen abbrechen, ohne einen neuen Anker und ohne den Prüf-Nachweis zu schreiben; der Wiederherstellungs- und Drill-Ablauf im Notfallhandbuch nutzt sie nach dem Anker-Import. Ohne die Option bleibt das Verhalten unverändert, der tägliche Betriebslauf ist nicht betroffen.
+
 ### Changed
 
 - **Ungenutzten Schwellenwert-Parameter aus der K-Anonymisierungs-Primitive entfernt** (#2265) — `k_anonymize_client` las ihren Parameter `k` nie; die tatsächliche Schwellenprüfung lag und liegt ausschließlich bei `is_k_anonymous`, die der Aufrufer vorschaltet. Reine Aufräumarbeit ohne Verhaltensänderung.

@@ -123,6 +123,23 @@ class HighWaterMarkStore:
         """Gespeicherter ``{"count", "last_entry_hash"}``-Eintrag oder ``None``."""
         return self.chains.get(_chain_key(facility_id))
 
+    def has_anchors(self) -> bool:
+        """``True``, sobald mindestens EINE Kette einen Tail-Anker traegt.
+
+        Ein Store ohne jeden Anker ist genau der in :meth:`load` beschriebene
+        Erstlauf-Fall: es gibt nichts, wogegen die aktuelle Kette geprueft
+        werden koennte, und der naechste gruene Lauf verankert sie so, wie sie
+        gerade vorliegt. Betriebs-Ablaeufe, die einen *bestehenden* Anker
+        voraussetzen — etwa der Restore-/Drill-Ablauf nach dem HWM-Import —
+        erkennen hieran, dass der Erstlauf-Pfad greifen wuerde, und koennen
+        abbrechen, statt einen moeglicherweise unvollstaendigen Bestand neu zu
+        verankern (Refs #2242).
+
+        Bewusst ketten-uebergreifend: ein Anker fehlt einer *neuen* Facility
+        legitim, solange ueberhaupt verankert wurde.
+        """
+        return any((entry or {}).get("last_entry_hash") for entry in self.chains.values())
+
     def check(self, facility_id, present_hashes: set[str]) -> str | None:
         """Prueft die aktuelle Kette gegen den gespeicherten Tail-Anker.
 

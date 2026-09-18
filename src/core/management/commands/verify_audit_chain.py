@@ -20,13 +20,20 @@ fehlt der danglende Nachfolger. Dafuer braeuchte es einen extern verankerten
 High-Water-Mark (juengster ``entry_hash`` + Count ausserhalb der DB); ein bewusst
 offener Folge-Schritt.
 
+Ein fehlender externer Anker gilt standardmaessig als Erstlauf und wird nach
+gruenem Lauf still gesetzt. Wo ein Anker nachweislich vorhanden sein MUSS —
+etwa nach dem HWM-Import einer Wiederherstellung — erzwingt ``--require-anchor``
+stattdessen einen Abbruch (Refs #2242).
+
 Beispiel::
 
     python manage.py verify_audit_chain
+    python manage.py verify_audit_chain --require-anchor
 """
 
 from __future__ import annotations
 
+import os
 import sys
 
 from django.conf import settings
@@ -44,6 +51,45 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 class Command(BaseCommand):
     help = "Verifiziert die HMAC-Integritaetskette des AuditLog (Refs #1070)."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--require-anchor",
+            action="store_true",
+            help=(
+                "Bricht ab, wenn kein externer High-Water-Mark-Anker vorliegt, statt den Lauf als "
+                "Erstlauf zu behandeln und die aktuelle Kette neu zu verankern. Fuer Ablaeufe, in "
+                "denen ein Anker nachweislich vorhanden sein MUSS (Wiederherstellung, Drill) "
+                "(Refs #2242)."
+            ),
+        )
+
+    def _require_anchor(self, hwm_path: str, hwm) -> None:
+        """Fail-loud, wenn ``--require-anchor`` gesetzt ist, aber kein Anker existiert.
+
+        Ohne Anker verankert ein gruener Lauf die Kette so, wie sie gerade
+        vorliegt. Nach einem fehlgeschlagenen HWM-Import auf einem
+        wiederhergestellten Host waere das ein abgeschnittener, in sich
+        konsistenter Bestand — gruen verankert, ohne je gegen das gesicherte
+        Original geprueft worden zu sein. Deshalb VOR der Pruefung abbrechen:
+        so entsteht weder ein neuer Anker noch ein ``AUDIT_CHAIN_VERIFIED``-Marker.
+        """
+        prefix = "--require-anchor verlangt einen externen Audit-Anker, aber "
+        if not hwm_path:
+            raise CommandError(
+                prefix + "AUDIT_HWM_PATH ist nicht gesetzt — ohne Ankerpfad laesst sich ein "
+                "abgeschnittener Bestand nicht von einem Erstlauf unterscheiden."
+            )
+        if not os.path.exists(hwm_path):
+            raise CommandError(
+                prefix + f"die HWM-Datei {hwm_path!r} fehlt — Abbruch statt stillem Erstlauf "
+                "(ein unvollstaendig wiederhergestellter Audit-Bestand wuerde sonst neu verankert)."
+            )
+        if hwm is None or not hwm.has_anchors():
+            raise CommandError(
+                prefix + f"die HWM-Datei {hwm_path!r} enthaelt keinen verankerten Tail — "
+                "Abbruch statt stillem Erstlauf."
+            )
 
     def handle(self, *args, **options):
         # Refs #1070: Wie enforce_retention (Refs #1016 A1.1) fail-loud, statt
@@ -67,6 +113,12 @@ class Command(BaseCommand):
                 hwm = HighWaterMarkStore.load(hwm_path)
             except HwmIntegrityError as exc:
                 raise CommandError(str(exc)) from exc
+
+        # Refs #2242: Opt-in-Haertung. Der Default bleibt unveraendert (fehlender
+        # Anker = Erstlauf); nur mit ``--require-anchor`` ist ein fehlender Anker
+        # selbst schon ein Abbruchgrund.
+        if options.get("require_anchor"):
+            self._require_anchor(hwm_path, hwm)
 
         # System-Kette (facility=NULL) zuerst, dann jede Facility.
         targets: list = [None, *Facility.objects.all().order_by("name")]

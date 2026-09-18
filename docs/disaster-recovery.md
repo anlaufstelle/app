@@ -262,7 +262,7 @@ done
 
 ### Schritt 4b — Audit-HWM zurückspielen und Kette prüfen
 
-Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehörende HWM-Original aus `RESTORE_SET_DIR` nochmals fail-closed an `DJANGO_AUDIT_HWM_PATH` ablegen. Nicht pauschal die jüngste Datei verwenden. Ein fehlender Betriebsanker gilt der Software als Erstlauf; deshalb müssen Existenz, erfolgreicher Import und Byte-Identität **vor** `verify_audit_chain` belegt sein. Das Off-Site-Original bleibt unverändert. Die gesamte Folge ist eine `&&`-Kette; auch ein fehlgeschlagenes `stop cron` bricht sie ab:
+Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehörende HWM-Original aus `RESTORE_SET_DIR` nochmals fail-closed an `DJANGO_AUDIT_HWM_PATH` ablegen. Nicht pauschal die jüngste Datei verwenden. Ein fehlender Betriebsanker gilt der Software als Erstlauf; deshalb müssen Existenz, erfolgreicher Import und Byte-Identität **vor** `verify_audit_chain` belegt sein. Der abschließende Lauf trägt zusätzlich `--require-anchor` und bricht damit ab, falls trotz aller vorherigen Prüfungen kein Anker vorliegt — statt den wiederhergestellten Bestand ungeprüft als Erstlauf neu zu verankern. Das Off-Site-Original bleibt unverändert. Die gesamte Folge ist eine `&&`-Kette; auch ein fehlgeschlagenes `stop cron` bricht sie ab:
 
 ```bash
 HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
@@ -284,10 +284,10 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T \
 INSTALLED_HWM_SHA256="$(docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance \
   -c 'sha256sum "$DJANGO_AUDIT_HWM_PATH"' | awk '{print $1}')" && \
 test "$SOURCE_HWM_SHA256" = "$INSTALLED_HWM_SHA256" && \
-docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
+docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain --require-anchor
 ```
 
-Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten.
+Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten. Bricht der letzte Schritt mit `--require-anchor verlangt einen externen Audit-Anker` ab, hat der Import nicht gewirkt (falscher Pfad, leere oder ankerlose Datei): Schritt 4b wiederholen — das Kommando **nicht** ohne den Schalter nachziehen, weil es den Bestand dann ungeprüft neu verankert.
 
 ### Schritt 5 — Migrationen + Stack hochfahren
 
