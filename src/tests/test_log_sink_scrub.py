@@ -612,3 +612,157 @@ class TestFormattersNeverRaiseOnHostileValues:
         assert "django.request" in line, f"Logger-Bezug verloren: {line}"
         if formatter_name == "json":
             assert json.loads(line)["logger"] == REQUEST_LOGGER, "Die Ersatzzeile muss gueltiges JSON bleiben"
+
+
+# --- Billiger Negativpfad vor der Routenaufloesung (Refs #2228) -------------
+#
+# Die Pfadmaskierung loeste bis hierher fuer JEDE Zeile mit Pfad die Route auf
+# — auch fuer Pfade, unter denen der URLconf ueberhaupt nichts kennt. Das ist
+# der von aussen ausloesbare Fall (404-Flut mit immer neuen Pfaden): jeder
+# einzelne kostete einen vollstaendigen Durchlauf durch alle URL-Muster und
+# verdraengte ausserdem nuetzliche Eintraege aus dem Memoisierungs-Cache.
+#
+# Der Vorfilter darf die Zusage nicht schwaechen: was die Fassung ohne
+# Vorfilter maskiert, muss sie mit Vorfilter identisch maskieren. Genau das
+# prueft die Aequivalenz unten — Referenz ist dieselbe Funktion mit
+# abgeschaltetem Vorfilter.
+
+PATH_CONVERTER_SAMPLES = {
+    "uidb64": INVITE_UIDB64,
+    "token": INVITE_TOKEN,
+    "int": "42",
+    "str": "probe",
+    "slug": "eine-probe",
+    "uuid": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+    "path": "unter/pfad",
+}
+
+
+def _sample_for(part):
+    """Konkreter Wert fuer einen Routen-Platzhalter (``<int:pk>``)."""
+    converter, _, name = part.partition(":")
+    if not name:
+        converter, name = "", part
+    return PATH_CONVERTER_SAMPLES.get(converter) or PATH_CONVERTER_SAMPLES.get(name) or "probe"
+
+
+def _concrete_routes(patterns=None, prefix="", depth=0):
+    """Konkrete Pfade aus den echten URL-Mustern (Platzhalter eingesetzt).
+
+    Damit deckt der Aequivalenztest jede Routenklasse der Anwendung ab und
+    nicht nur die im Guard von Hand notierten Faelle.
+    """
+    import re as _re
+
+    from django.urls import URLPattern, URLResolver, get_resolver
+
+    if patterns is None:
+        patterns = get_resolver().url_patterns
+    if depth > 3:
+        return []
+    found = []
+    for entry in patterns:
+        route = getattr(getattr(entry, "pattern", None), "_route", None)
+        if route is None:
+            continue
+        full = prefix + route
+        if isinstance(entry, URLResolver):
+            found.extend(_concrete_routes(entry.url_patterns, full, depth + 1))
+        elif isinstance(entry, URLPattern):
+            found.append("/" + _re.sub(r"<([^>]+)>", lambda m: _sample_for(m.group(1)), full))
+    return found
+
+
+def _generated_paths(prefix, count=30):
+    """*count* Pfade derselben Klasse — jeder mit eigenem Token-Segment."""
+    return [f"{prefix}/{index:04d}{INVITE_TOKEN}/weiter{index}/" for index in range(count)]
+
+
+def _equivalence_sample():
+    """Alle Pfadklassen, ueber die der Aequivalenztest laeuft."""
+    routes = _concrete_routes()
+    assert len(routes) >= 30, f"Zu wenige echte Routen fuer den Aequivalenztest: {len(routes)}"
+    return {
+        "echte Routen (alle Klassen des URLconf)": routes,
+        "404 unter bekanntem Praefix": _generated_paths("/invite")
+        + _generated_paths("/login")
+        + _generated_paths("/mfa"),
+        "404 unter unbekanntem Praefix": _generated_paths("/gibt-es-nicht")
+        + _generated_paths("/xyz")
+        + _generated_paths("/static"),
+        "Dateipfade aus Tracebacks": [f"/srv/app/src/core/views/datei{i}.py" for i in range(30)],
+        "Guard-Faelle": [INVITE_PATH, MISSING_TOKEN_PATH, INVITE_URL, FOREIGN_URL, "/", "/login/", "/robots.txt"],
+    }
+
+
+class TestCheapNegativePathFilter:
+    """Der Vorfilter spart die Routenaufloesung — ohne die Zusage zu aendern."""
+
+    def test_unknown_top_level_segment_skips_route_resolution(self, monkeypatch):
+        """Kein registriertes erstes Segment ⇒ gar keine Aufloesung.
+
+        Das ist der extern ausloesbare Worst Case: fortlaufend neue 404-Pfade.
+        Maskiert wird trotzdem — ueber die Segment-Heuristik.
+        """
+        import core.logging as core_logging
+
+        calls = []
+        original = core_logging._resolved_route
+
+        def spy(resolver, path):
+            calls.append(path)
+            return original(resolver, path)
+
+        monkeypatch.setattr(core_logging, "_resolved_route", spy)
+        masked = core_logging.mask_url(f"/gibt-es-nicht/{INVITE_TOKEN}/weiter/")
+        assert INVITE_TOKEN not in masked
+        assert "[scrubbed]" in masked
+        assert calls == [], f"Routenaufloesung trotz unbekanntem Praefix: {calls}"
+
+    def test_known_top_level_segment_still_resolves(self, monkeypatch):
+        """Ein registriertes Praefix laeuft weiter durch die Aufloesung."""
+        import core.logging as core_logging
+
+        calls = []
+        original = core_logging._resolved_route
+
+        def spy(resolver, path):
+            calls.append(path)
+            return original(resolver, path)
+
+        monkeypatch.setattr(core_logging, "_resolved_route", spy)
+        assert core_logging.mask_url(INVITE_PATH) == MASKED_ROUTE
+        assert calls, "Der Vorfilter darf eine echte Route nicht wegfiltern"
+
+    @pytest.mark.parametrize("klasse", sorted(_equivalence_sample()))
+    def test_masking_is_equivalent_to_the_unfiltered_version(self, klasse, monkeypatch):
+        """Jeder Pfad wird mit Vorfilter genau so maskiert wie ohne.
+
+        Referenz ist dieselbe Implementierung mit abgeschaltetem Vorfilter
+        (``_top_level_segments`` liefert ``None`` = „nicht bestimmbar").
+        """
+        import core.logging as core_logging
+
+        paths = _equivalence_sample()[klasse]
+        with_filter = [core_logging.mask_url(path) for path in paths]
+
+        monkeypatch.setattr(core_logging, "_top_level_segments", lambda resolver: None)
+        core_logging._resolved_route.cache_clear()
+        without_filter = [core_logging.mask_url(path) for path in paths]
+
+        abweichungen = [
+            (path, mit, ohne) for path, mit, ohne in zip(paths, with_filter, without_filter, strict=True) if mit != ohne
+        ]
+        assert not abweichungen, f"Vorfilter aendert die Maskierung ({klasse}): {abweichungen[:5]}"
+
+    def test_filter_is_disabled_when_the_urlconf_is_not_analysable(self, monkeypatch):
+        """Laesst sich das erste Segment nicht bestimmen, faellt der Filter aus.
+
+        Fail-open ist hier richtig herum: der Filter darf nur Arbeit sparen,
+        nie eine Maskierung verhindern.
+        """
+        import core.logging as core_logging
+
+        monkeypatch.setattr(core_logging, "_top_level_segments", lambda resolver: None)
+        core_logging._resolved_route.cache_clear()
+        assert core_logging.mask_url(INVITE_PATH) == MASKED_ROUTE
