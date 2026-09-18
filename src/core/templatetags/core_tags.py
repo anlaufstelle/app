@@ -81,15 +81,18 @@ def decrypt(value):
 
 @register.filter
 def display_dynamic_value(value):
-    """Rendert einen dynamischen Feldwert für die Detailanzeige (Refs #2243).
+    """Rendert einen dynamischen Feldwert für die Detailanzeige (Refs #2243, #2244).
 
     Gemeinsame Stelle für ``core/events/detail.html`` und
     ``core/partials/dynamic_data_display.html`` — beide Templates rufen
     diesen Filter statt ``field.value`` roh oder nur mit
     ``default_if_none:""`` auszugeben.
 
-    - ``None`` (Refs #2220/#2224): unverändert wie zuvor ``default_if_none:""``
-      — rendert leer statt des Python-Literals „None".
+    - Leerwert (``None``/``""``/``[]``): visuell weiterhin leer (kein
+      sichtbarer Platzhalter — Refs #2220/#2224), aber ein ``sr-only``-Text
+      „Nicht angegeben" für Screenreader (Maintainer-Entscheid 2026-09-18,
+      #2244). Exporte/PDF und die Änderungshistorie rufen diesen Filter
+      NICHT auf und bleiben unverändert.
     - ``list`` (Refs #2243: ``multi_select`` ohne ``options_json`` liefert die
       rohen Slugs statt gelabelter Strings — ``format_dynamic_display_value``
       reicht sie unverändert durch): kommagetrennte, escapte Aufzählung statt
@@ -98,8 +101,8 @@ def display_dynamic_value(value):
       „[Eingeschränkt]"): unverändert — Django escaped beim Rendern
       automatisch.
     """
-    if value is None:
-        return ""
+    if value is None or value == "" or value == []:
+        return format_html('<span class="sr-only">{}</span>', _("Nicht angegeben"))
     if isinstance(value, list):
         return format_html_join(", ", "{}", ((item,) for item in value))
     return value

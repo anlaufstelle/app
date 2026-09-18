@@ -153,13 +153,14 @@
                 {# formatierung reicht es unveraendert durch — ohne Filter stand der  #}
                 {# Python-Literal „None" in der Gruppe. Leer statt Gedankenstrich,    #}
                 {# weil die Nachbarfelder mit ``""``/``[]`` genauso rendern.          #}
-                {# Refs #2243: ``core_tags.display_dynamic_value`` ersetzt            #}
+                {# Refs #2243/#2244: ``core_tags.display_dynamic_value`` ersetzt      #}
                 {# ``default_if_none`` — gleiche Stelle wie                           #}
-                {# ``core/partials/dynamic_data_display.html``. ``None`` rendert      #}
-                {# weiterhin leer (unveraendert); eine rohe Python-Liste              #}
-                {# (``multi_select`` ohne ``options_json``) wird kommagetrennt statt  #}
-                {# als ``repr()`` ausgegeben. Eine gespeicherte 0 ist ein echter Wert  #}
-                {# und bleibt stehen (gleiche Begruendung wie in                      #}
+                {# ``core/partials/dynamic_data_display.html``. Leerwert bleibt       #}
+                {# visuell leer, traegt aber einen ``sr-only``-Text „Nicht angegeben" #}
+                {# fuer Screenreader (Maintainer-Entscheid 2026-09-18); eine rohe     #}
+                {# Python-Liste (``multi_select`` ohne ``options_json``) wird         #}
+                {# kommagetrennt statt als ``repr()`` ausgegeben. Eine gespeicherte 0 #}
+                {# ist ein echter Wert und bleibt stehen (gleiche Begruendung wie in  #}
                 {# core/export/client_data_pdf.html, das diesen Filter NICHT nutzt).  #}
                 <dd class="text-sm font-medium {% if field.is_sensitive %}text-amber-700{% endif %}">
                     {{ field.value|display_dynamic_value }}

@@ -1,10 +1,11 @@
-"""E2E: multi_select-Rohwerte ohne Optionen (#2243).
+"""E2E: sr-only-Platzhalter „Nicht angegeben" (#2244) + multi_select-Rohwerte (#2243).
 
 Ergänzt ``test_accessibility.py::TestAxeDetailseiten``: jene Matrix scannt die
-Seed-Detailseiten allgemein, garantiert aber kein ``multi_select``-Feld ohne
-Optionen — genau der Randfall, den #2243 behebt. Diese Datei legt ihn gezielt
-an einem eigenen Dokumentationstyp an (kein Eingriff in den Seed) und prüft
-das sichtbare Markup auf der Ereignis-Detailseite.
+Seed-Detailseiten allgemein, garantiert aber weder ein LEERES dynamisches Feld
+noch ein ``multi_select``-Feld ohne Optionen — genau die beiden Randfälle, die
+#2243/#2244 beheben. Diese Datei legt beide gezielt an einem eigenen
+Dokumentationstyp an (kein Eingriff in den Seed) und prüft sowohl das
+sichtbare Markup als auch axe (WCAG) auf der Ereignis-Detailseite.
 
 Schreibt/verändert NICHTS am geteilten Seed — ``DocumentType``/``FieldTemplate``/
 ``Event`` sind Zusatzobjekte in der bestehenden Einrichtung des ersten Seed-
@@ -21,7 +22,9 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import expect
 
+from ._axe import assert_within_baseline, load_baseline, run_axe
 from ._helpers import django_shell
+from .test_accessibility import BASELINE_PATH
 
 pytestmark = [pytest.mark.e2e, pytest.mark.a11y]
 
@@ -29,9 +32,6 @@ pytestmark = [pytest.mark.e2e, pytest.mark.a11y]
 @pytest.fixture(scope="session")
 def placeholder_event_pk(e2e_env):
     """Ereignis mit einem leeren Textfeld und einem ``multi_select`` ohne Optionen.
-
-    Das leere Textfeld ist fuer den #2243-Fall hier ungenutzt, wird aber von
-    Folgetickets an derselben Stelle gebraucht (gleicher Dokumentationstyp).
 
     Muster aus ``test_accessibility.py::detail_pks`` (``django_shell`` statt
     Durchklicken): ``multi_select`` ohne Optionen lässt sich über das
@@ -69,9 +69,9 @@ def placeholder_event_pk(e2e_env):
 
 
 class TestDetailFieldPlaceholder:
-    """#2243: ``multi_select`` ohne Optionen zeigt eine lesbare Liste."""
+    """#2243 (rohe multi_select-Liste) + #2244 (sr-only „Nicht angegeben")."""
 
-    def test_raw_multiselect_renders_readable_list(self, authenticated_page, base_url, placeholder_event_pk):
+    def test_empty_field_and_raw_multiselect_render_correctly(self, authenticated_page, base_url, placeholder_event_pk):
         page = authenticated_page
         page.goto(f"{base_url}/events/{placeholder_event_pk}/", wait_until="domcontentloaded")
         expect(page.locator("#main-content h1")).to_be_visible(timeout=15000)
@@ -81,3 +81,21 @@ class TestDetailFieldPlaceholder:
         ms_dd = page.locator("dt:has-text('E2E Mehrfachauswahl ohne Optionen') + dd")
         expect(ms_dd).to_contain_text("a, b")
         expect(ms_dd).not_to_contain_text("[")
+
+        # #2244: das leere Textfeld bleibt visuell leer (kein sichtbarer
+        # Platzhalter), trägt aber den sr-only-Text „Nicht angegeben".
+        text_dd = page.locator("dt:has-text('E2E Leerfeld') + dd")
+        expect(text_dd.locator(".sr-only")).to_contain_text("Nicht angegeben")
+        expect(text_dd).to_contain_text("Nicht angegeben")
+
+    def test_no_new_axe_findings(self, authenticated_page, base_url, placeholder_event_pk):
+        page = authenticated_page
+        page.goto(f"{base_url}/events/{placeholder_event_pk}/", wait_until="domcontentloaded")
+        expect(page.locator("#main-content h1")).to_be_visible(timeout=15000)
+
+        baseline = load_baseline(BASELINE_PATH)
+        result = run_axe(page, base_url)
+        # Eigener page_key, NICHT in der Baseline ⇒ jeder critical/serious-Fund
+        # ist rot (Standardblock Punkt 59). Die geteilte Baseline-Datei bleibt
+        # unverändert (nur Lesezugriff über ``load_baseline``).
+        assert_within_baseline("event_detail_field_placeholder", result, baseline)

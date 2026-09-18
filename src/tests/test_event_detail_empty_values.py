@@ -1,4 +1,4 @@
-"""Leere dynamische Feldwerte auf der Ereignis-Detailseite (Refs #2220, #2243).
+"""Leere dynamische Feldwerte auf der Ereignis-Detailseite (Refs #2220, #2243, #2244).
 
 Ein optionales Zahlenfeld, das beim Anlegen leer bleibt, landet als ``None`` im
 ``data_json`` (ein leeres ``IntegerField`` liefert ``None`` in ``cleaned_data``,
@@ -10,9 +10,12 @@ Detailseite rendert den Anzeigewert roh, deshalb stand dort der Python-Literal
 oder Bestandsdaten kann es in jedem Feldtyp stehen. Die Tests prüfen deshalb
 jeden Feldtyp und nicht nur den gemeldeten Fall.
 
-Sollwert ist ein LEERES Feld — genau das, was die Nachbarfelder derselben Gruppe
-„Erfasste Daten" mit ``""``/``[]`` heute schon rendern. Ein Gedankenstrich nur
-für ``None`` würde dieselbe Liste in zwei Leerdarstellungen spalten.
+Sollwert ist ein visuell LEERES Feld — genau das, was die Nachbarfelder
+derselben Gruppe „Erfasste Daten" mit ``""``/``[]`` heute schon rendern. Ein
+Gedankenstrich nur für ``None`` würde dieselbe Liste in zwei Leerdarstellungen
+spalten. Seit dem Maintainer-Entscheid vom 2026-09-18 (#2244) trägt das leere
+Feld zusätzlich einen ``sr-only``-Text „Nicht angegeben" für Screenreader —
+das sichtbare Layout bleibt unverändert (Test via :func:`visible_only`).
 
 #2243: ``multi_select`` ohne ``options_json`` rendert(e) die rohe
 Python-Listen-Repräsentation (``['a']`` → ``[&#x27;a&#x27;]``) statt einer
@@ -37,6 +40,19 @@ DD_WITH_NONE_LITERAL = re.compile(r"<dd[^>]*>\s*None\s*</dd>")
 #: Feldtypen, die einen skalaren Anzeigewert rendern (FILE geht in den
 #: Marker-/Anhang-Zweig und trägt gar kein ``value``).
 VALUE_FIELD_TYPES = [ft for ft in FieldTemplate.FieldType.values if ft != FieldTemplate.FieldType.FILE]
+
+#: Der ``sr-only``-Platzhalter aus ``core_tags.display_dynamic_value`` (#2244).
+SR_ONLY_SPAN = re.compile(r'<span class="sr-only">[^<]*</span>')
+
+
+def visible_only(html: str) -> str:
+    """Sichtbarer Rest, nachdem der ``sr-only``-Platzhalter entfernt wurde.
+
+    Belegt, dass der #2244-Platzhalter das sichtbare Layout NICHT ändert —
+    nur den ``sr-only``-Span entfernt lässt sich die alte Leer-Erwartung
+    („nichts sichtbar") weiterprüfen.
+    """
+    return SR_ONLY_SPAN.sub("", html).strip()
 
 
 def field_value_html(content: str, label: str) -> str:
@@ -111,8 +127,11 @@ class TestEventDetailEmptyNumberField:
 
         content = detail_content(client, staff_user, event)
 
-        assert field_value_html(content, "Dauer").strip() == ""
-        assert field_value_html(content, "Notiz").strip() == ""
+        assert visible_only(field_value_html(content, "Dauer")) == ""
+        assert visible_only(field_value_html(content, "Notiz")) == ""
+        # #2244: der sr-only-Platzhalter ist da, aber unsichtbar (siehe oben).
+        assert "Nicht angegeben" in field_value_html(content, "Dauer")
+        assert "Nicht angegeben" in field_value_html(content, "Notiz")
 
     def test_number_field_with_value_still_renders_the_value(
         self, client, staff_user, facility, client_identified, doc_type_contact
@@ -131,6 +150,9 @@ class TestEventDetailEmptyNumberField:
 
         assert field_value_html(content, "Dauer").strip() == "0"
         assert field_value_html(content, "Notiz").strip() == "Testnotiz"
+        # #2244: echte Werte bekommen KEINEN „Nicht angegeben"-Platzhalter.
+        assert "Nicht angegeben" not in field_value_html(content, "Dauer")
+        assert "Nicht angegeben" not in field_value_html(content, "Notiz")
 
 
 @pytest.mark.django_db
@@ -157,8 +179,14 @@ class TestEventDetailNoneAcrossFieldTypes:
         assert label in content, "Das leere Feld muss weiterhin mit Beschriftung erscheinen"
         # BOOLEAN übersetzt ``None`` schon heute zu „Nein" — die übrigen Typen
         # reichen den Wert unverändert durch und müssen leer rendern.
-        expected = "Nein" if field_type == FieldTemplate.FieldType.BOOLEAN else ""
-        assert field_value_html(content, label).strip() == expected
+        dd_html = field_value_html(content, label)
+        if field_type == FieldTemplate.FieldType.BOOLEAN:
+            assert visible_only(dd_html) == "Nein"
+            assert "Nicht angegeben" not in dd_html
+        else:
+            assert visible_only(dd_html) == ""
+            # #2244: sr-only-Platzhalter für jeden leeren Feldtyp.
+            assert "Nicht angegeben" in dd_html
 
     def test_no_none_literal_anywhere_on_the_page(
         self, client, staff_user, facility, client_identified, doc_type_all_types
@@ -200,7 +228,8 @@ class TestEventDetailOrphanedNoneValue:
 
         assert "Nicht mehr zugeordnet" in content
         assert DD_WITH_NONE_LITERAL.search(content) is None
-        assert field_value_html(content, "Dauer").strip() == ""
+        assert visible_only(field_value_html(content, "Dauer")) == ""
+        assert "Nicht angegeben" in field_value_html(content, "Dauer")
 
 
 @pytest.mark.django_db
@@ -263,3 +292,37 @@ class TestEventDetailMultiSelectWithoutOptions:
 
         assert "<script>" not in dd_html
         assert "&lt;script&gt;" in dd_html
+
+
+@pytest.mark.django_db
+class TestEventDetailEmptyListValue:
+    """#2244: eine leer gespeicherte ``multi_select``-Auswahl (``[]``, keine
+
+    Checkbox angekreuzt) bekommt denselben ``sr-only``-Platzhalter wie
+    ``None`` — nicht nur der ``None``-Zweig des Filters, auch der
+    ``value == []``-Zweig ist ein eigener Leerfall.
+    """
+
+    def test_empty_list_value_renders_placeholder(self, client, staff_user, facility, client_identified):
+        doc_type = make_document_type(facility=facility, name="Mehrfachauswahl leer gewaehlt")
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Leer gewaehltes Feld",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[{"slug": "a", "label": "Alpha", "is_active": True}],
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
+        event = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={ft.slug: []},
+            created_by=staff_user,
+        )
+
+        content = detail_content(client, staff_user, event)
+        dd_html = field_value_html(content, "Leer gewaehltes Feld")
+
+        assert visible_only(dd_html) == ""
+        assert "Nicht angegeben" in dd_html

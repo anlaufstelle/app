@@ -1,4 +1,4 @@
-"""Leere dynamische Feldwerte in Personen-/Fall-Detail und Auskunft (Refs #2224, #2243).
+"""Leere dynamische Feldwerte in Personen-/Fall-Detail und Auskunft (Refs #2224, #2243, #2244).
 
 Dieselbe Klasse wie auf der Ereignis-Detailseite (Refs #2220): ein optionales
 Zahlen-, Datums- oder Zeitfeld, das leer bleibt, liegt als ``None`` im
@@ -14,9 +14,17 @@ Geprüft werden die drei Flächen, die dieselben Anzeigewerte rendern:
 * die Auskunft (PDF-HTML) über ``core/export/client_data_pdf.html`` —
   Stammdaten, Fälle, Fälle im Papierkorb und die Ereignis-Spalte „Daten".
 
-Sollwert ist auch hier ein LEERES Feld, konsistent zu den Nachbarfeldern, die
-mit ``""``/``[]`` schon heute leer rendern. Eine gespeicherte ``0`` ist ein
-echter Wert und bleibt sichtbar.
+Sollwert ist auch hier ein visuell LEERES Feld, konsistent zu den
+Nachbarfeldern, die mit ``""``/``[]`` schon heute leer rendern. Eine
+gespeicherte ``0`` ist ein echter Wert und bleibt sichtbar.
+
+Maintainer-Entscheid 2026-09-18 (#2244): Personen-/Fall-Detail bekommen für
+leere Felder zusätzlich einen ``sr-only``-Text „Nicht angegeben" (Filter
+``core_tags.display_dynamic_value``, gleiche Stelle wie das Ereignis-Detail).
+Die Auskunft (PDF-HTML, ``core/export/client_data_pdf.html``) nutzt diesen
+Filter NICHT und bleibt unverändert — das bleibt hier per Test belegt
+(``TestClientExportPdfEmptyValues`` prüft weiterhin nur auf Abwesenheit des
+Python-Literals, nicht auf den Platzhalter).
 
 #2243: ``multi_select`` ohne ``options_json`` rendert(e) im Partial ebenfalls
 die rohe Python-Listen-Repräsentation statt einer lesbaren Aufzählung.
@@ -38,6 +46,14 @@ DD_WITH_NONE_LITERAL = re.compile(r"<dd[^>]*>\s*None\s*</dd>")
 
 #: Feldtypen mit skalarem Anzeigewert (FILE geht in den Marker-/Anhang-Zweig).
 VALUE_FIELD_TYPES = [ft for ft in FieldTemplate.FieldType.values if ft != FieldTemplate.FieldType.FILE]
+
+#: Der ``sr-only``-Platzhalter aus ``core_tags.display_dynamic_value`` (#2244).
+SR_ONLY_SPAN = re.compile(r'<span class="sr-only">[^<]*</span>')
+
+
+def visible_only(html: str) -> str:
+    """Sichtbarer Rest ohne den ``sr-only``-Platzhalter (Layout-Nachweis #2244)."""
+    return SR_ONLY_SPAN.sub("", html).strip()
 
 
 def build_all_types_doc_type(facility, entity_type, name, label_prefix):
@@ -134,14 +150,21 @@ class TestClientDetailEmptyValues:
         content = detail_content(client, lead_user, "core:client_detail", client_with_empty_fields.pk)
 
         # BOOLEAN löst ``None`` schon heute zu „Nein" auf.
-        expected = "Nein" if field_type == FieldTemplate.FieldType.BOOLEAN else ""
-        assert field_value_html(content, f"PF {field_type}").strip() == expected
+        dd_html = field_value_html(content, f"PF {field_type}")
+        if field_type == FieldTemplate.FieldType.BOOLEAN:
+            assert visible_only(dd_html) == "Nein"
+            assert "Nicht angegeben" not in dd_html
+        else:
+            assert visible_only(dd_html) == ""
+            assert "Nicht angegeben" in dd_html
 
     def test_orphaned_field_renders_empty(self, client, lead_user, client_with_empty_fields):
         content = detail_content(client, lead_user, "core:client_detail", client_with_empty_fields.pk)
 
         assert "Nicht mehr zugeordnete Felder" in content
-        assert field_value_html(content, "PF verwaist").strip() == ""
+        dd_html = field_value_html(content, "PF verwaist")
+        assert visible_only(dd_html) == ""
+        assert "Nicht angegeben" in dd_html
 
     def test_stored_values_stay_visible(self, client, lead_user, facility, client_identified):
         """Gegenprobe: die gespeicherte 0 ist ein echter Wert."""
@@ -156,6 +179,9 @@ class TestClientDetailEmptyValues:
 
         assert field_value_html(content, "WF number").strip() == "0"
         assert field_value_html(content, "WF text").strip() == "Bestandswert"
+        # #2244: echte Werte bekommen KEINEN „Nicht angegeben"-Platzhalter.
+        assert "Nicht angegeben" not in field_value_html(content, "WF number")
+        assert "Nicht angegeben" not in field_value_html(content, "WF text")
 
 
 @pytest.mark.django_db
@@ -174,14 +200,18 @@ class TestCaseDetailEmptyValues:
     def test_empty_number_field_renders_empty(self, client, lead_user, case_with_empty_fields):
         content = detail_content(client, lead_user, "core:case_detail", case_with_empty_fields.pk)
 
-        assert field_value_html(content, "FF number").strip() == ""
-        assert field_value_html(content, "FF date").strip() == ""
+        assert visible_only(field_value_html(content, "FF number")) == ""
+        assert visible_only(field_value_html(content, "FF date")) == ""
+        assert "Nicht angegeben" in field_value_html(content, "FF number")
+        assert "Nicht angegeben" in field_value_html(content, "FF date")
 
     def test_orphaned_field_renders_empty(self, client, lead_user, case_with_empty_fields):
         content = detail_content(client, lead_user, "core:case_detail", case_with_empty_fields.pk)
 
         assert "Nicht mehr zugeordnete Felder" in content
-        assert field_value_html(content, "FF verwaist").strip() == ""
+        dd_html = field_value_html(content, "FF verwaist")
+        assert visible_only(dd_html) == ""
+        assert "Nicht angegeben" in dd_html
 
 
 @pytest.mark.django_db

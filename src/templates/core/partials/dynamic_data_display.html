@@ -33,11 +33,14 @@ Anzeigeformatierung reicht es unveraendert durch — ohne Filter stand hier der
 Python-Literal „None". Leer statt Gedankenstrich, weil die Nachbarfelder mit
 ``""``/``[]`` genauso rendern.
 
-Refs #2243: ``field.value`` laeuft durch den Filter
-``core_tags.display_dynamic_value`` statt ``default_if_none``. ``None``
-rendert weiterhin leer (unveraendertes Verhalten); eine rohe Python-Liste
-(``multi_select`` ohne ``options_json``) wird kommagetrennt und escaped
-ausgegeben statt als ``repr()``; alles andere bleibt unveraendert.
+Refs #2243/#2244: ``field.value`` laeuft durch den Filter
+``core_tags.display_dynamic_value`` statt ``default_if_none``. Er deckt drei
+Faelle ab: Leerwert (``None``/``""``/``[]``) bleibt visuell leer, traegt aber
+einen ``sr-only``-Text „Nicht angegeben" fuer Screenreader (Maintainer-
+Entscheid 2026-09-18); eine rohe Python-Liste (``multi_select`` ohne
+``options_json``) wird kommagetrennt und escaped ausgegeben statt als
+``repr()``; alles andere bleibt unveraendert. Eine gespeicherte 0 ist ein
+echter Wert und bleibt stehen (kein Leerfall).
 {% endcomment %}
 
 {% if dynamic_document_type %}
