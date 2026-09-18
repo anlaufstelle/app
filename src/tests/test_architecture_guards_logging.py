@@ -163,6 +163,26 @@ def find_person_attribute_logging(root):
     return findings
 
 
+def allowlist_violations(findings, allowlist):
+    """Abweichungen zwischen Fundstellen und Allowlist.
+
+    Liefert ``[(schluessel, gefunden, erwartet), …]``. Gemeldet wird jede
+    Abweichung in BEIDE Richtungen: eine nicht eingetragene Fundstelle
+    (erwartet 0), eine zusaetzliche Fundstelle an einer eingetragenen Stelle
+    (erwartet < gefunden) und ein Eintrag, dessen Fundstelle weggefallen ist
+    (gefunden < erwartet). Erst die Trefferzahl macht den mittleren Fall
+    sichtbar — sonst deckt eine einmal geschriebene Begruendung jeden
+    weiteren gleichartigen Aufruf im selben Geltungsbereich mit ab.
+    """
+    problems = []
+    for key in sorted(set(findings) | set(allowlist)):
+        found = findings.get(key, 0)
+        expected = allowlist.get(key, {}).get("count", 0)
+        if found != expected:
+            problems.append((key, found, expected))
+    return problems
+
+
 def _write(tmp_path, name, source):
     target = tmp_path / name
     target.write_text(textwrap.dedent(source), encoding="utf-8")
@@ -184,7 +204,7 @@ class TestScannerSelfCheck:
                 logger.info("Konto %s fehlt", user.pk)
             """,
         )
-        assert find_person_attribute_logging(tmp_path) == {("percent.py", "bad", "username")}
+        assert dict(find_person_attribute_logging(tmp_path)) == {("percent.py", "bad", "username"): 1}
 
     def test_fstring_parts(self, tmp_path):
         _write(
@@ -198,7 +218,7 @@ class TestScannerSelfCheck:
                 logger.warning(f"Konto {user.pk} gesperrt")
             """,
         )
-        assert find_person_attribute_logging(tmp_path) == {("fstring.py", "bad", "get_full_name")}
+        assert dict(find_person_attribute_logging(tmp_path)) == {("fstring.py", "bad", "get_full_name"): 1}
 
     def test_format_arguments(self, tmp_path):
         _write(
@@ -213,7 +233,7 @@ class TestScannerSelfCheck:
                     logger.error("Person {} fehlt".format(client.id))
             """,
         )
-        assert find_person_attribute_logging(tmp_path) == {("formatcall.py", "Service.bad", "pseudonym")}
+        assert dict(find_person_attribute_logging(tmp_path)) == {("formatcall.py", "Service.bad", "pseudonym"): 1}
 
     def test_extra_keyword(self, tmp_path):
         _write(
@@ -227,7 +247,7 @@ class TestScannerSelfCheck:
                 logger.info("Einladung versendet", extra={"user_pk": user.pk})
             """,
         )
-        assert find_person_attribute_logging(tmp_path) == {("extra.py", "bad", "email")}
+        assert dict(find_person_attribute_logging(tmp_path)) == {("extra.py", "bad", "email"): 1}
 
     def test_non_logger_receivers_and_plain_attribute_access_are_ignored(self, tmp_path):
         """Django-Messages sind Nutzermeldungen, kein Log-Sink.
@@ -246,7 +266,7 @@ class TestScannerSelfCheck:
                 return label
             """,
         )
-        assert find_person_attribute_logging(tmp_path) == set()
+        assert dict(find_person_attribute_logging(tmp_path)) == {}
 
     def test_module_level_and_alternative_logger_names(self, tmp_path):
         """``logging.warning``/``self.logger``/``_logger`` zaehlen ebenfalls."""
@@ -268,11 +288,55 @@ class TestScannerSelfCheck:
                 _logger.debug("Hilfe %s", user.display_name)
             """,
         )
-        assert find_person_attribute_logging(tmp_path) == {
-            ("variants.py", "<modul>", "name"),
-            ("variants.py", "Job.run", "last_name"),
-            ("variants.py", "helper", "display_name"),
+        assert dict(find_person_attribute_logging(tmp_path)) == {
+            ("variants.py", "<modul>", "name"): 1,
+            ("variants.py", "Job.run", "last_name"): 1,
+            ("variants.py", "helper", "display_name"): 1,
         }
+
+
+class TestAllowlistPinsTheNumberOfHits:
+    """Ein Allowlist-Eintrag deckt genau die begruendeten Aufrufe — nicht mehr.
+
+    Vorher war der Schluessel ``(Datei, Geltungsbereich, Attribut)`` eine
+    Menge: ein weiterer gleichartiger Aufruf im selben Geltungsbereich lief
+    unter derselben Begruendung mit, ohne dass ihn jemand gesehen haette.
+    Die erwartete Trefferzahl macht ihn sichtbar.
+    """
+
+    SOURCE = """
+        def melden(facility):
+            logger.info("Lauf uebersprungen %s", facility.name)
+            logger.info("Snapshot geschrieben %s", facility.name)
+        """
+
+    def _findings(self, tmp_path, source):
+        _write(tmp_path, "probe.py", source)
+        return find_person_attribute_logging(tmp_path)
+
+    def test_repeated_calls_in_one_scope_are_counted(self, tmp_path):
+        findings = self._findings(tmp_path, self.SOURCE)
+        assert dict(findings) == {("probe.py", "melden", "name"): 2}
+
+    def test_pinned_count_accepts_exactly_the_listed_hits(self, tmp_path):
+        findings = self._findings(tmp_path, self.SOURCE)
+        allowlist = {("probe.py", "melden", "name"): {"count": 2, "reason": "Begruendung"}}
+        assert allowlist_violations(findings, allowlist) == []
+
+    def test_one_more_call_in_the_same_scope_turns_the_guard_red(self, tmp_path):
+        """Der eigentliche Punkt: ein dritter Aufruf faellt auf."""
+        findings = self._findings(tmp_path, self.SOURCE + '\n    logger.info("Noch eine %s", facility.name)\n')
+        allowlist = {("probe.py", "melden", "name"): {"count": 2, "reason": "Begruendung"}}
+        assert allowlist_violations(findings, allowlist) == [(("probe.py", "melden", "name"), 3, 2)]
+
+    def test_unlisted_finding_is_reported_with_expectation_zero(self, tmp_path):
+        findings = self._findings(tmp_path, self.SOURCE)
+        assert allowlist_violations(findings, {}) == [(("probe.py", "melden", "name"), 2, 0)]
+
+    def test_entry_without_hits_is_reported_as_stale(self, tmp_path):
+        findings = self._findings(tmp_path, "def leer():\n    pass\n")
+        allowlist = {("weg.py", "alt", "name"): {"count": 1, "reason": "Begruendung"}}
+        assert allowlist_violations(findings, allowlist) == [(("weg.py", "alt", "name"), 0, 1)]
 
 
 class TestAppCodeHasNoPersonNamesInLogTemplates:
@@ -281,7 +345,7 @@ class TestAppCodeHasNoPersonNamesInLogTemplates:
     def test_no_unlisted_person_attribute_logging(self):
         if not APP_ROOT.exists():
             pytest.skip(f"{APP_ROOT} nicht vorhanden")
-        violations = sorted(find_person_attribute_logging(APP_ROOT) - set(ALLOWLIST))
+        violations = allowlist_violations(find_person_attribute_logging(APP_ROOT), ALLOWLIST)
         assert not violations, (
             "Log-Aufruf mit Personen-/Namensattribut im Argument. Der PII-Scrub "
             "schuetzt den eingesetzten Wert nur musterbasiert — ein Klarname "
@@ -290,7 +354,10 @@ class TestAppCodeHasNoPersonNamesInLogTemplates:
             "docs/admin-guide.md § 5.6. Echte Ausnahmen mit Begruendung in "
             "ALLOWLIST eintragen.\n"
             "Refs #2227.\n"
-            f"Betroffen (Datei, Geltungsbereich, Attribut): {violations}"
+            "Gemeldet wird auch ein ZUSAETZLICHER Aufruf an einer bereits "
+            "begruendeten Stelle: die Begruendung gilt fuer die dort "
+            "eingetragene Trefferzahl, nicht fuer den Geltungsbereich.\n"
+            f"Betroffen ((Datei, Geltungsbereich, Attribut), gefunden, erwartet): {violations}"
         )
 
     def test_allowlist_has_no_stale_entries(self):
@@ -298,9 +365,18 @@ class TestAppCodeHasNoPersonNamesInLogTemplates:
         if not APP_ROOT.exists():
             pytest.skip(f"{APP_ROOT} nicht vorhanden")
         findings = find_person_attribute_logging(APP_ROOT)
-        stale = sorted(entry for entry in ALLOWLIST if entry not in findings)
+        stale = sorted(entry for entry in ALLOWLIST if not findings.get(entry))
         assert not stale, f"ALLOWLIST-Eintraege ohne Fundstelle — bitte entfernen: {stale}"
 
+    def test_every_allowlist_entry_pins_a_positive_count(self):
+        """Ohne Trefferzahl waere der Eintrag wieder ein Freibrief."""
+        broken = sorted(
+            entry
+            for entry, listed in ALLOWLIST.items()
+            if not isinstance(listed.get("count"), int) or listed["count"] < 1
+        )
+        assert not broken, f"ALLOWLIST-Eintraege ohne erwartete Trefferzahl: {broken}"
+
     def test_every_allowlist_entry_carries_a_reason(self):
-        missing = sorted(entry for entry, reason in ALLOWLIST.items() if not (reason or "").strip())
+        missing = sorted(entry for entry, listed in ALLOWLIST.items() if not (listed.get("reason") or "").strip())
         assert not missing, f"ALLOWLIST-Eintraege ohne Begruendung: {missing}"
