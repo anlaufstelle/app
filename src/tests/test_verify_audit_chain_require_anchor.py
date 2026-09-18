@@ -182,9 +182,9 @@ class TestHwmStoreSchemaIsFailClosed:
     @pytest.mark.parametrize(
         ("chains", "label"),
         [
-            ({"system": "abc"}, "Skalar statt Eintrags-Dict"),
-            ({"system": {"count": 1, "last_entry_hash": 5}}, "Nicht-String-Tail"),
-            ("kaputt", "Skalar statt Ketten-Dict"),
+            ({"system": "abc"}, "Skalar statt Eintrags-Dict (Basis: AttributeError)"),
+            ({"system": {"count": 1, "last_entry_hash": 5}}, "truthy Nicht-String-Tail (Basis: TypeError)"),
+            ("kaputt", "Skalar statt Ketten-Dict (Basis: AttributeError)"),
         ],
     )
     def test_malformed_signed_store_is_command_error(self, settings, tmp_path, facility, staff_user, chains, label):
@@ -220,6 +220,23 @@ class TestHwmStoreSchemaIsFailClosed:
 
         assert _audit_state() == audit_before
 
+    @pytest.mark.parametrize("with_switch", [False, True])
+    def test_non_ascii_signature_is_command_error(self, settings, tmp_path, facility, staff_user, with_switch):
+        """Eine Signatur ausserhalb von ASCII erreichte bisher ``hmac.compare_digest``
+        und endete dort als ungefangener ``TypeError`` — mit wie ohne Schalter."""
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        Path(settings.AUDIT_HWM_PATH).write_text(json.dumps({"version": 1, "chains": {}, "sig": "ä"}), encoding="utf-8")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        audit_before = _audit_state()
+        hwm_before = _hwm_state(settings.AUDIT_HWM_PATH)
+        args = ["verify_audit_chain"] + (["--require-anchor"] if with_switch else [])
+
+        with pytest.raises(CommandError, match="Signatur ungueltig"):
+            call_command(*args)
+
+        assert _hwm_state(settings.AUDIT_HWM_PATH) == hwm_before
+        assert _audit_state() == audit_before
+
     def test_signature_error_still_wins_over_structure(self, settings, tmp_path):
         """Reihenfolge-Pin: Manipulationsverdacht schlaegt den Strukturbefund."""
         settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
@@ -229,6 +246,71 @@ class TestHwmStoreSchemaIsFailClosed:
 
         with pytest.raises(CommandError, match="Signatur ungueltig"):
             call_command("verify_audit_chain")
+
+
+@pytest.mark.django_db
+class TestDefaultStaysCompatible:
+    """Was am Stand vor der Anker-Pflicht OHNE Schalter lief, laeuft unveraendert.
+
+    Die Schema-Pruefung normalisiert ausschliesslich Eingaben, die vorher in
+    einem ungefangenen Traceback endeten. Gueltig signierte Stores mit
+    ``null``-Eintrag, leerem oder fehlendem Tail bzw. einem Zaehlstand in
+    fremdem Format wurden dagegen anstandslos verarbeitet — als Erstlauf
+    bzw. als regulaere Fortschreibung.
+    """
+
+    @pytest.mark.parametrize(
+        ("chains", "label"),
+        [
+            ({"system": None}, "Eintrag null"),
+            ({"system": {"count": 1, "last_entry_hash": None}}, "Tail null"),
+            ({"system": {"count": 1, "last_entry_hash": ""}}, "Tail leer"),
+            ({}, "leerer Store"),
+        ],
+    )
+    def test_previously_accepted_store_still_runs_green(self, settings, tmp_path, facility, staff_user, chains, label):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        HighWaterMarkStore(path=settings.AUDIT_HWM_PATH, chains=chains).save()
+        tail = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        tail.refresh_from_db()
+        markers_before = _marker_count()
+
+        call_command("verify_audit_chain")
+
+        assert _marker_count() == markers_before + 1, label
+        assert HighWaterMarkStore.load(settings.AUDIT_HWM_PATH).get(facility.pk)["last_entry_hash"] == tail.entry_hash
+
+    def test_foreign_count_format_with_valid_tail_still_advances(self, settings, tmp_path, facility, staff_user):
+        """Der Zaehlstand geht nur in die Bruchmeldung ein — sein Typ war nie ein Abbruchgrund."""
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        store = _anchor_all_chains(settings.AUDIT_HWM_PATH)
+        store.chains[str(facility.pk)]["count"] = "1"
+        store.save()
+        tail = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        tail.refresh_from_db()
+        markers_before = _marker_count()
+
+        call_command("verify_audit_chain")
+
+        assert _marker_count() == markers_before + 1
+        recorded = HighWaterMarkStore.load(settings.AUDIT_HWM_PATH).get(facility.pk)
+        assert recorded["last_entry_hash"] == tail.entry_hash
+
+    def test_switch_treats_unusable_entry_as_missing_anchor(self, settings, tmp_path, facility, staff_user):
+        """Trennung der Pfade: was der Default toleriert, ist mit Schalter ein fehlender Anker."""
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        store = _anchor_all_chains(settings.AUDIT_HWM_PATH)
+        store.chains["system"] = None
+        store.save()
+        audit_before = _audit_state()
+
+        with pytest.raises(CommandError, match=_ABORT) as excinfo:
+            call_command("verify_audit_chain", "--require-anchor")
+
+        assert "System" in str(excinfo.value)
+        assert _audit_state() == audit_before
 
 
 @pytest.mark.django_db
