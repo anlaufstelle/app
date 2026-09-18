@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Docs
+
+- **Englische Screenshot-Dokumentation ins Sync-Gate aufgenommen** (#2252) — Ein Quell-Hash-Stempel und ein Regressionstest machen künftigen Drift zur deutschen Screenshot-Dokumentation sichtbar.
+- **Assertion-Konventionen öffentlich verlinkt** (#2256) — Beide CONTRIBUTING-Spiegel führen Beitragende direkt zu den öffentlich ausgelieferten Regeln für präzise, mutationsfeste Assertions.
+- **Kontext-Kopf-Konvention für Beitragende auffindbar gemacht** (#2255) — Die CONTRIBUTING-Dokumentation verweist bei den Template-Konventionen auf die Regeln für Kontext-Köpfe und Rücklinke.
+- **Sprachleitlinie als aktiven Style-Guide verankert** (#2250) — Die Leitlinie nennt ihren verbindlichen Zweck, führt nur noch den offenen Begriffspunkt und ist aus der CONTRIBUTING-Dokumentation erreichbar.
+
 ## [0.99.0] - 2026-09-17
 
 Letzter Release-Kandidat vor 1.0: bündelt die Fix-Wellen 0.97–0.99 (Red-Team-Befunde B-12 bis B-20 geschlossen, Restore-/Drill-Härtung, Import-Übernahme unter Lock, MFA-Audit, Quick-Exit-Referrer, Speicherkontingent unter Nebenläufigkeit), die Dependabot-Sammel-Batches und die vollständige Mutations-Absicherung des Service- und Formular-Kerns (Vollmutation 28 502 Mutanten: forms 100 %, services 99,8 % nach Triage, 102 Pin-Testdateien).
@@ -57,10 +64,6 @@ Letzter Release-Kandidat vor 1.0: bündelt die Fix-Wellen 0.97–0.99 (Red-Team-
 
 ### Docs
 
-- **Englische Screenshot-Dokumentation ins Sync-Gate aufgenommen** (#2252) — Ein Quell-Hash-Stempel und ein Regressionstest machen künftigen Drift zur deutschen Screenshot-Dokumentation sichtbar.
-- **Assertion-Konventionen öffentlich verlinkt** (#2256) — Beide CONTRIBUTING-Spiegel führen Beitragende direkt zu den öffentlich ausgelieferten Regeln für präzise, mutationsfeste Assertions.
-- **Kontext-Kopf-Konvention für Beitragende auffindbar gemacht** (#2255) — Die CONTRIBUTING-Dokumentation verweist bei den Template-Konventionen auf die Regeln für Kontext-Köpfe und Rücklinke.
-- **Sprachleitlinie als aktiven Style-Guide verankert** (#2250) — Die Leitlinie nennt ihren verbindlichen Zweck, führt nur noch den offenen Begriffspunkt und ist aus der CONTRIBUTING-Dokumentation erreichbar.
 - **Betriebsdokumentation aus den Erstinstallations- und Restore-Re-Tests nachgezogen** (#2248) — 2FA-Ersteinrichtung, Backup-`umask`, anonymes Health-Payload, ClamAV-Ping und -Update-Log sowie die Restore-Drill-Variablen `COMPOSE_DIR` und `BACKUP_HOST_DIR` sind an den ausgelieferten Stand angeglichen.
 - **SMTP-Nachweis dokumentiert** (#2089) — Admin- und Betriebshandbuch nennen jetzt das Health-Signal `smtp` (reine TCP-Erreichbarkeit, kein Zustellnachweis) als drittes Diagnosemittel neben UI-Meldung und Web-Logs, die Release-Checkliste verweist auf das Protokoll aus dem SMTP-Drehbuch, und Djangos Bordmittel `sendtestemail` deckt die im Ticket vorgeschlagene Selbstprüfung bereits ab.
 - **Disaster-Recovery-Runbook gegen unvollständige Wiederherstellungen gehärtet** (#2222) — Satzgebundenes Manifest, verpflichtende Medien, Audit-Leerstand, atomarer Audit-HWM-Tausch, Off-Site-Retention, Wiederanlauf und Fresh-Host-Aufbau sind jetzt mit ausführbaren Betriebsregeln dokumentiert.
