@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Assertion-Konventionen öffentlich verlinkt** (#2256) — Beide CONTRIBUTING-Spiegel führen Beitragende direkt zu den öffentlich ausgelieferten Regeln für präzise, mutationsfeste Assertions.
 - **Kontext-Kopf-Konvention für Beitragende auffindbar gemacht** (#2255) — Die CONTRIBUTING-Dokumentation verweist bei den Template-Konventionen auf die Regeln für Kontext-Köpfe und Rücklinke.
 - **Sprachleitlinie als aktiven Style-Guide verankert** (#2250) — Die Leitlinie nennt ihren verbindlichen Zweck, führt nur noch den offenen Begriffspunkt und ist aus der CONTRIBUTING-Dokumentation erreichbar.
+- **Hold-Grenze für Übergabenotizen abschließend dokumentiert** (#2231) — Verfahrensrelevanter Inhalt wird innerhalb der einstellbaren Frist am Fall dokumentiert, da die Notiz selbst kein Hold-Zieltyp ist und endgültig verfällt.
+- **Performance-Budgets als lokale Referenz beschrieben** (#2254) — Self-Hoster und Beitragende erhalten einen lokalen Locust-Prüfweg ohne Verweis auf einen nicht ausgelieferten Workflow.
+- **FAQ als alleinige Quelle geklärt** (#2253) — Der Doku-Index verspricht keine ungesicherte Synchronität mit einem abgeschlossenen Ticket mehr.
+- **Run-Template an Checkpoint-Praxis angeglichen** (#2251) — Eine kompakte Vorlage für Rahmen, Profile, Anmerkungen und Freigabeentscheidung bildet die tatsächliche Checkpoint-Dokumentation ab.
+- **Historische PDF-Evaluation neutralisiert** (#2257) — Der Historisch-Kopf grenzt den abgelösten Entscheidungsstand klar ab und die Betriebsbeschreibung ist frei von hostingproduktspezifischen Annahmen.
+- **Abgeschlossene Entwicklungsdokumente disponiert** (#2249) — Ein einmaliges Evaluationsprotokoll ist entfernt, umgesetzte Offline-Spezifikationen sind als historischer Planungsstand archiviert und die weiter aktive Prüfkanal-Grundlage verweist auf ihren offenen Tracker.
 
 ## [0.99.0] - 2026-09-17
 
