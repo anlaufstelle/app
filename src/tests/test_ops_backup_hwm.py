@@ -392,7 +392,7 @@ def test_restore_drill_skips_hwm_when_not_configured_and_marks_restore(tmp_path:
     )
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen" in result.stdout
+    assert "SKIP - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)" in result.stdout
     assert "Schritt 7: Restore-Test im AuditLog dokumentiert" in result.stdout
     assert "mark_restore_verified" in docker_log.read_text(encoding="utf-8")
 
