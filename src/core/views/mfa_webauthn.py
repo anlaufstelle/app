@@ -79,12 +79,19 @@ class _RequireVerifiedSessionAndTOTPMixin:
     Options-Ausgabe bzw. Persistierung. Reihenfolge bewusst: zuerst die
     Session-Verifikation (die Sicherheitsgrenze, 403), dann die fachliche
     TOTP-Vorbedingung (400).
+
+    Der Session-Guard bleibt neben dem Vorcheck der Bibliothek erhalten (Refs
+    #2237): ``_check_user_verified`` schlaegt seit 0.10.3 zwar ebenfalls an,
+    aber nur fuer bereits eingeschriebene Konten
+    (``user_is_mfa_enrolled``). Ohne bestaetigtes Geraet schweigt er — dann ist
+    dieser Guard die einzige Schranke vor der Registrierung. Er traegt ausserdem
+    die deutsche Fehlermeldung und den App-Fehlercode.
     """
 
     def initial(self, request, *args, **kwargs):
-        # Preserve the app-level error contract before 0.10.3 performs its
-        # additional django-otp ``is_verified()`` check. ``super()`` still
-        # enforces that new upstream boundary for sessions whose app flag is set.
+        # Die Sicherheitsgrenze, VOR dem Vorcheck der Bibliothek in
+        # ``super().initial()`` — der fuer Konten ohne bestaetigtes Geraet nicht
+        # anschlaegt und dessen Fehlermeldung nicht die unsere ist.
         if not request.session.get("mfa_verified"):
             raise VerifiedSessionRequiredForPasskey(
                 detail=(
@@ -95,15 +102,13 @@ class _RequireVerifiedSessionAndTOTPMixin:
 
     def check_can_register(self):
         super().check_can_register()
-        # (1) Sicherheitsgrenze: Registrierung nur in bereits 2FA-verifizierter
-        # Session — sonst waere sie ein Bypass ueber die exempt /webauthn/-Route.
-        if not self.request.session.get("mfa_verified"):
-            raise VerifiedSessionRequiredForPasskey(
-                detail=(
-                    "Ein Passkey kann nur in einer bereits per zweitem Faktor bestätigten Sitzung hinzugefügt werden."
-                ),
-            )
-        # (2) Fachliche Vorbedingung: Passkey nur NEBEN TOTP.
+        # Die Sitzungs-Verifikation wird hier bewusst NICHT erneut geprueft
+        # (Refs #2237): ``check_can_register`` wird ausschliesslich aus
+        # ``RegistrationCeremonyMixin.initial()`` aufgerufen — also hinter dem
+        # Guard oben, der ``mfa_verified`` bereits erzwungen hat. Eine zweite
+        # Pruefung waere unerreichbar; ``test_mfa_guard_reachability.py`` haelt
+        # diese Reihenfolge fest.
+        # Fachliche Vorbedingung: Passkey nur NEBEN TOTP.
         if not self.request.user.has_confirmed_totp_device:
             raise TOTPRequiredForPasskey(
                 detail="Ein Passkey kann erst nach Einrichtung der Authenticator-App (TOTP) hinzugefügt werden.",

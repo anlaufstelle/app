@@ -20,12 +20,14 @@ import base64
 import io
 import json
 import logging
+from urllib.parse import urlsplit
 
 import qrcode
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -187,6 +189,13 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
             if raw_redirect_to and raw_redirect_to.startswith("/")
             else raw_redirect_to
         )
+        # Kein Ziel auf diese Seite selbst (Refs #2237): eine verifizierte
+        # Sitzung wird hier sofort weitergeleitet, ein solches ``next`` kostete
+        # also nur einen zusaetzlichen Redirect-Hop — und liesse sich
+        # verschachtelt zu einer Kette stapeln. Der Rollen-Default uebernimmt.
+        eigener_pfad = reverse("mfa_verify").rstrip("/")
+        if redirect_to and urlsplit(redirect_to).path.rstrip("/") == eigener_pfad:
+            redirect_to = None
         return resolve_post_login_url(request, redirect_to)
 
     def get(self, request, *args, **kwargs):

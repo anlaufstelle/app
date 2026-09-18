@@ -59,12 +59,13 @@ class MFAEnforcementMiddleware:
             redirect_url = self._required_redirect(request, user)
             if redirect_url is not None:
                 target = request.get_full_path()
-                if (
-                    redirect_url == "/mfa/verify/"
-                    and request.method == "GET"
-                    and not request.path.startswith("/mfa/")
-                    and target != "/"
-                ):
+                # ``next`` nur fuer GET-Ziele, die es zu bewahren lohnt. Eine
+                # eigene ``/mfa/``-Ausnahme braucht es hier nicht (Refs #2237):
+                # ``EXEMPT_URLS`` enthaelt ``/mfa/``, dieser Zweig ist fuer
+                # solche Pfade nicht erreichbar. Das Wurzelziel bleibt ohne
+                # ``next`` — es ist ohnehin der Rollen-Default, den
+                # ``resolve_post_login_url`` nach dem zweiten Faktor setzt.
+                if redirect_url == "/mfa/verify/" and request.method == "GET" and target != "/":
                     redirect_url = f"{redirect_url}?{urlencode({'next': target})}"
                 return redirect(redirect_url)
         return self.get_response(request)
