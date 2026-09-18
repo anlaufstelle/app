@@ -678,6 +678,18 @@ def _generated_paths(prefix, count=30):
     return [f"{prefix}/{index:04d}{INVITE_TOKEN}/weiter{index}/" for index in range(count)]
 
 
+#: Pfadklassen des Aequivalenztests. Die Namen stehen als Konstante, damit die
+#: Parametrisierung beim Einsammeln der Tests nicht den URLconf importiert —
+#: das faende sonst zur Sammelzeit statt, also vor der Datenbank-Freigabe.
+EQUIVALENCE_CLASSES = (
+    "404 unter bekanntem Praefix",
+    "404 unter unbekanntem Praefix",
+    "Dateipfade aus Tracebacks",
+    "Guard-Faelle",
+    "echte Routen (alle Klassen des URLconf)",
+)
+
+
 def _equivalence_sample():
     """Alle Pfadklassen, ueber die der Aequivalenztest laeuft."""
     routes = _concrete_routes()
@@ -734,7 +746,7 @@ class TestCheapNegativePathFilter:
         assert core_logging.mask_url(INVITE_PATH) == MASKED_ROUTE
         assert calls, "Der Vorfilter darf eine echte Route nicht wegfiltern"
 
-    @pytest.mark.parametrize("klasse", sorted(_equivalence_sample()))
+    @pytest.mark.parametrize("klasse", EQUIVALENCE_CLASSES)
     def test_masking_is_equivalent_to_the_unfiltered_version(self, klasse, monkeypatch):
         """Jeder Pfad wird mit Vorfilter genau so maskiert wie ohne.
 
@@ -743,7 +755,9 @@ class TestCheapNegativePathFilter:
         """
         import core.logging as core_logging
 
-        paths = _equivalence_sample()[klasse]
+        sample = _equivalence_sample()
+        assert set(sample) == set(EQUIVALENCE_CLASSES), "Pfadklassen und Parametrisierung auseinandergelaufen"
+        paths = sample[klasse]
         with_filter = [core_logging.mask_url(path) for path in paths]
 
         monkeypatch.setattr(core_logging, "_top_level_segments", lambda resolver: None)
@@ -766,3 +780,77 @@ class TestCheapNegativePathFilter:
         monkeypatch.setattr(core_logging, "_top_level_segments", lambda resolver: None)
         core_logging._resolved_route.cache_clear()
         assert core_logging.mask_url(INVITE_PATH) == MASKED_ROUTE
+
+
+class _FakePattern:
+    """Minimales ``URLPattern.pattern``-Double (nur ``_route``)."""
+
+    def __init__(self, route=None):
+        if route is not None:
+            self._route = route
+
+
+class _FakeEntry:
+    """Muster-Double: Blatt (ohne ``url_patterns``) oder ``include()``."""
+
+    def __init__(self, route=None, children=None):
+        self.pattern = _FakePattern(route)
+        if children is not None:
+            self.url_patterns = children
+
+
+class _FakeResolver:
+    def __init__(self, patterns):
+        self.url_patterns = patterns
+
+
+class _ExplodingResolver:
+    @property
+    def url_patterns(self):
+        raise RuntimeError("URLconf kaputt")
+
+
+class TestTopLevelSegmentAnalysis:
+    """Wann der Vorfilter greift — und wann er sich selbst abschaltet.
+
+    Fail-open ist Absicht: ein URLconf, dessen erstes Segment nicht
+    feststeht, darf keine Maskierung verhindern.
+    """
+
+    def _segments(self, patterns):
+        import core.logging as core_logging
+
+        return core_logging._top_level_segments(_FakeResolver(tuple(patterns)))
+
+    def test_static_heads_and_nested_include_without_prefix(self):
+        segments = self._segments(
+            [
+                _FakeEntry("robots.txt"),
+                _FakeEntry("invite/<uidb64>/<token>/"),
+                _FakeEntry("mfa/", children=(_FakeEntry("setup/"),)),
+                _FakeEntry("", children=(_FakeEntry("start/"), _FakeEntry(""))),
+            ]
+        )
+        assert segments == frozenset({"robots.txt", "invite", "mfa", "start", ""})
+
+    def test_pattern_without_route_disables_the_filter(self):
+        """``re_path``/Sprachpraefix — kein ``_route``, also keine Aussage."""
+        assert self._segments([_FakeEntry("start/"), _FakeEntry(None)]) is None
+
+    def test_placeholder_in_the_first_segment_disables_the_filter(self):
+        assert self._segments([_FakeEntry("<lang>/hilfe/")]) is None
+
+    def test_include_without_separating_slash_disables_the_filter(self):
+        """``path("api", include(...))`` — die Kinder setzen das Segment fort."""
+        assert self._segments([_FakeEntry("api", children=(_FakeEntry("v1/"),))]) is None
+
+    def test_deep_nesting_disables_the_filter(self):
+        entry = _FakeEntry("start/")
+        for _ in range(5):
+            entry = _FakeEntry("", children=(entry,))
+        assert self._segments([entry]) is None
+
+    def test_unreadable_urlconf_disables_the_filter(self):
+        import core.logging as core_logging
+
+        assert core_logging._top_level_segments(_ExplodingResolver()) is None

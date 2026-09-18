@@ -137,6 +137,83 @@ def _resolved_route(resolver, path):
         return None
 
 
+#: Wie tief ``_top_level_segments`` in ``include()``-Ketten ohne eigenes
+#: Praefix absteigt. Drei Ebenen decken die heutige Schachtelung
+#: (``anlaufstelle.urls`` → ``core.urls`` → deren Submodule) mit Reserve ab;
+#: darunter wird der Vorfilter abgeschaltet statt geraten.
+_MAX_URLCONF_DEPTH = 3
+
+
+@lru_cache(maxsize=8)
+def _top_level_segments(resolver):
+    """Erste Pfadsegmente, unter denen der URLconf ueberhaupt etwas kennt.
+
+    ``None`` heisst „nicht bestimmbar" und schaltet den Vorfilter ab
+    (fail-open: er darf Arbeit sparen, nie eine Maskierung verhindern).
+    Das passiert bei allem, was sich nicht auf ein festes erstes Segment
+    reduzieren laesst — ``re_path``, ein Sprachpraefix (``i18n_patterns``),
+    ein Platzhalter im ersten Segment oder ein ``include()`` ohne
+    abschliessenden Schraegstrich (dessen Kinder das Segment fortsetzen).
+
+    Der Resolver ist der Schluessel, nicht der URLconf-Name — dieselbe
+    Ueberlegung wie bei ``_resolved_route``.
+    """
+    try:
+        segments = _collect_segments(resolver.url_patterns, set(), 0)
+        return None if segments is None else frozenset(segments)
+    except Exception:
+        return None
+
+
+def _collect_segments(patterns, segments, depth):
+    """Rekursionsschritt von ``_top_level_segments`` (``None`` = Abbruch)."""
+    if depth > _MAX_URLCONF_DEPTH:
+        return None
+    for entry in patterns:
+        route = getattr(getattr(entry, "pattern", None), "_route", None)
+        if route is None:
+            return None
+        head = route.split("/", 1)[0]
+        if "<" in head:
+            return None
+        children = getattr(entry, "url_patterns", None)
+        if children is None:
+            # Blatt: der Pfad ist genau dieses Muster, das erste Segment steht
+            # damit fest (``robots.txt``, ``""`` fuer die Startseite).
+            segments.add(head)
+            continue
+        if head and not route.startswith(head + "/"):
+            # ``include()`` ohne trennenden Schraegstrich: die Kindmuster
+            # setzen dasselbe Segment fort, der Kopf steht nicht fest.
+            return None
+        if head:
+            segments.add(head)
+            continue
+        if _collect_segments(children, segments, depth + 1) is None:
+            return None
+    return segments
+
+
+def _may_resolve(resolver, path):
+    """Billiger Negativpfad vor der vollstaendigen Routenaufloesung.
+
+    Refs #2228: Ein Pfad, dessen erstes Segment in keinem Muster vorkommt,
+    kann nicht aufloesen — der Resolver wuerde ihn trotzdem gegen jedes
+    Muster halten. Genau dieser Fall ist von aussen frei vorgebbar (eine
+    404-Flut mit immer neuen Pfaden) und kostete je Zeile einen vollen
+    Durchlauf plus einen Eintrag im Memoisierungs-Cache, der nuetzliche
+    Eintraege verdraengt.
+
+    Die Zusage bleibt unveraendert: uebersprungen wird nur, was ohnehin
+    nicht aufgeloest haette — der Pfad laeuft danach wie jeder andere
+    unaufloesbare Pfad durch die Segment-Heuristik.
+    """
+    segments = _top_level_segments(resolver)
+    if segments is None:
+        return True
+    return path.lstrip("/").split("/", 1)[0] in segments
+
+
 def _resolve_route(path):
     """Route-Schema eines Pfades (``invite/<uidb64>/<token>/``) oder ``None``.
 
@@ -148,12 +225,16 @@ def _resolve_route(path):
 
     ``get_resolver(get_urlconf())`` ist genau das, was ``django.urls.resolve``
     intern tut; hier steht es ausgeschrieben, damit der Resolver in den
-    Cache-Schluessel von ``_resolved_route`` eingehen kann.
+    Cache-Schluessel von ``_resolved_route`` (und des Vorfilters) eingehen
+    kann.
     """
     from django.urls import get_resolver, get_urlconf
 
     try:
-        return _resolved_route(get_resolver(get_urlconf()), path)
+        resolver = get_resolver(get_urlconf())
+        if not _may_resolve(resolver, path):
+            return None
+        return _resolved_route(resolver, path)
     except Exception:
         return None
 
