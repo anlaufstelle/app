@@ -1,6 +1,6 @@
 # Performance Budgets (Refs #825)
 
-Schwellen für die nächtliche Last-Tests-Schicht ([Locust](https://locust.io/) auf der Seed-`large`-Datenbasis). Werte sind 95-Perzentil-Antwortzeiten in Millisekunden — überschreitet ein Endpoint sein Budget, scheitert der `perf-nightly`-Workflow.
+Diese Budgets sind Ziel- und Referenzwerte für Self-Hoster und Beitragende. Gemessen wird mit [Locust](https://locust.io/) gegen eine repräsentativ befüllte, isolierte Testumgebung; die Werte sind 95-Perzentil-Antwortzeiten in Millisekunden. Es gibt keine automatisierte CI-Durchsetzung.
 
 | Endpoint | Aufruf | Budget (p95) | Begründung |
 |---|---|---|---|
@@ -13,13 +13,16 @@ Schwellen für die nächtliche Last-Tests-Schicht ([Locust](https://locust.io/) 
 | PDF-Export | `GET /statistics/export/pdf/...` | **5000 ms** | WeasyPrint — synchron |
 | CSV-Export | `GET /statistics/export/csv/...` | **2000 ms** | Stream, aber alle Events ein Halbjahr |
 
-## Workflow
+## Lokale Prüfung
 
-> **Status (Stand 2026-06): Der `perf-nightly`-Workflow ist derzeit deaktiviert** (`disabled_manually` — wie alle CI-Workflows in diesem Repo; Gates laufen lokal via `make`). Der `schedule`-Trigger steht zwar weiter im YAML (`cron: "30 2 * * *"`), feuert aber nicht — der echte Status ist nur über `gh workflow list` sichtbar, nicht aus der Datei. Es gibt **kein** lokales `make`-Target für die Last-Tests (Locust läuft ausschließlich über diesen Workflow); die Budgets unten bleiben als Zielwerte gültig. Vor einer Reaktivierung: `gh workflow enable perf-nightly.yml`.
+Die Referenzmessung verwendet das mitgelieferte `locustfile.py`, fünf gleichzeitige Nutzer:innen, eine Spawn-Rate von eins und zwei Minuten Laufzeit. Gegen eine bereits gestartete lokale Testinstanz lautet der Aufruf:
 
-Der Nightly-Workflow (`.github/workflows/perf-nightly.yml`) startet einen seedgefüllten Container, fährt Locust headless gegen `localhost:8000` mit `--users 5 --spawn-rate 1 --run-time 2m --csv perf` und parst danach `perf_stats.csv`. Verletzte Budgets blocken den Job mit Exit-Code ≠ 0.
+```bash
+locust -f locustfile.py --host=http://localhost:8000 --headless \
+  --users 5 --spawn-rate 1 --run-time 2m --csv perf
+```
 
-Bei Verletzung erzeugt das Workflow-Step `Open issue on regression` (über [peter-evans/create-issue-from-file](https://github.com/peter-evans/create-issue-from-file)) ein neues Issue mit dem Diff zum letzten erfolgreichen Lauf. Slack-Alerts sind aktuell **nicht** verdrahtet — die Issue-Öffnung deckt den Inbound-Pfad.
+Die Spalte `95%` in `perf_stats.csv` wird anschließend mit der Tabelle oben oder der maschinenlesbaren Datei [`performance-budgets.json`](performance-budgets.json) verglichen. Self-Hoster können dieselbe Messung gegen ihre Staging-Umgebung fahren; Hardware, Datenmenge und Commit-SHA gehören zum Ergebnis, damit Messungen vergleichbar bleiben. Eine Überschreitung ist ein Untersuchungsanlass, kein automatisch erzwungenes Release-Gate.
 
 ## Budget-Updates
 
