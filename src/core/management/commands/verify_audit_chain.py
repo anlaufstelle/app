@@ -57,22 +57,29 @@ class Command(BaseCommand):
             "--require-anchor",
             action="store_true",
             help=(
-                "Bricht ab, wenn kein externer High-Water-Mark-Anker vorliegt, statt den Lauf als "
-                "Erstlauf zu behandeln und die aktuelle Kette neu zu verankern. Fuer Ablaeufe, in "
+                "Bricht ab, sobald auch nur eine der geprueften Ketten keinen externen "
+                "High-Water-Mark-Anker hat, statt sie als Erstlauf zu behandeln und neu zu "
+                "verankern. Fuer Ablaeufe, in "
                 "denen ein Anker nachweislich vorhanden sein MUSS (Wiederherstellung, Drill) "
                 "(Refs #2242)."
             ),
         )
 
-    def _require_anchor(self, hwm_path: str, hwm) -> None:
-        """Fail-loud, wenn ``--require-anchor`` gesetzt ist, aber kein Anker existiert.
+    def _require_anchor(self, hwm_path: str, hwm, targets: list) -> None:
+        """Fail-loud, wenn ``--require-anchor`` gesetzt ist, aber ein Anker fehlt.
 
         Ohne Anker verankert ein gruener Lauf die Kette so, wie sie gerade
         vorliegt. Nach einem fehlgeschlagenen HWM-Import auf einem
         wiederhergestellten Host waere das ein abgeschnittener, in sich
         konsistenter Bestand — gruen verankert, ohne je gegen das gesicherte
-        Original geprueft worden zu sein. Deshalb VOR der Pruefung abbrechen:
-        so entsteht weder ein neuer Anker noch ein ``AUDIT_CHAIN_VERIFIED``-Marker.
+        Original geprueft worden zu sein.
+
+        Verlangt wird ein Anker fuer JEDE tatsaechlich geprueffte Kette: ein
+        Anker fuer eine andere Einrichtung bewahrt die ankerlose Kette nicht
+        vor dem Erstlauf-Pfad. Die Entscheidung faellt alles-oder-nichts VOR
+        der Pruefung — so entsteht fuer keine Kette ein neuer Anker und auch
+        kein ``AUDIT_CHAIN_VERIFIED``-Marker. Die Meldung benennt die
+        betroffenen Einrichtungen datenminimiert per Primaerschluessel.
         """
         prefix = "--require-anchor verlangt einen externen Audit-Anker, aber "
         if not hwm_path:
@@ -85,10 +92,12 @@ class Command(BaseCommand):
                 prefix + f"die HWM-Datei {hwm_path!r} fehlt — Abbruch statt stillem Erstlauf "
                 "(ein unvollstaendig wiederhergestellter Audit-Bestand wuerde sonst neu verankert)."
             )
-        if hwm is None or not hwm.has_anchors():
+        missing = hwm.missing_anchors([None if facility is None else facility.pk for facility in targets])
+        if missing:
+            labels = ", ".join("System (facility=NULL)" if pk is None else f"Einrichtung #{pk}" for pk in missing)
             raise CommandError(
-                prefix + f"die HWM-Datei {hwm_path!r} enthaelt keinen verankerten Tail — "
-                "Abbruch statt stillem Erstlauf."
+                prefix + f"die HWM-Datei {hwm_path!r} enthaelt fuer {len(missing)} der {len(targets)} geprueften "
+                f"Kette(n) keinen verankerten Tail ({labels}) — Abbruch statt stillem Erstlauf."
             )
 
     def handle(self, *args, **options):
@@ -114,14 +123,15 @@ class Command(BaseCommand):
             except HwmIntegrityError as exc:
                 raise CommandError(str(exc)) from exc
 
-        # Refs #2242: Opt-in-Haertung. Der Default bleibt unveraendert (fehlender
-        # Anker = Erstlauf); nur mit ``--require-anchor`` ist ein fehlender Anker
-        # selbst schon ein Abbruchgrund.
-        if options.get("require_anchor"):
-            self._require_anchor(hwm_path, hwm)
-
         # System-Kette (facility=NULL) zuerst, dann jede Facility.
         targets: list = [None, *Facility.objects.all().order_by("name")]
+
+        # Refs #2242: Opt-in-Haertung. Der Default bleibt unveraendert (fehlender
+        # Anker = Erstlauf); nur mit ``--require-anchor`` ist ein fehlender Anker
+        # selbst schon ein Abbruchgrund — und zwar fuer jede der oben ermittelten
+        # Ketten, bevor der erste Schreibvorgang stattfindet.
+        if options.get("require_anchor"):
+            self._require_anchor(hwm_path, hwm, targets)
 
         broken = 0
         results: list = []

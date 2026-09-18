@@ -55,10 +55,32 @@ def _chain_key(facility_id) -> str:
     return "system" if facility_id is None else str(facility_id)
 
 
-def _sign(chains: dict) -> str:
+def _sign(chains: object) -> str:
     """HMAC-SHA256 ueber die kanonische Serialisierung des ``chains``-Dicts."""
     canonical = json.dumps(chains, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hmac.new(_get_audit_hash_key(), canonical, "sha256").hexdigest()
+
+
+def _validate_chains(chains: object, path: str) -> dict:
+    """Prueft das Store-Schema nach der Signatur — fail-closed statt Traceback.
+
+    Die Signatur bindet nur den *Inhalt*, nicht dessen Form: ein korrekt
+    signierter Store kann strukturell unbrauchbar sein (Skalar statt
+    Eintrags-Dict, Tail kein String). Ohne diese Pruefung schlaegt die
+    Auswertung erst weiter unten als ``AttributeError``/``TypeError`` auf —
+    fail-closed, aber ohne verwertbare Meldung fuer den Betrieb.
+    """
+    prefix = f"HWM-Datei {path!r}: Struktur ungueltig — "
+    if not isinstance(chains, dict):
+        raise HwmIntegrityError(prefix + "'chains' ist kein Objekt (Ketten-Schluessel -> Anker-Eintrag).")
+    for key, entry in chains.items():
+        if not isinstance(entry, dict):
+            raise HwmIntegrityError(prefix + f"Eintrag {key!r} ist kein Objekt.")
+        if not isinstance(entry.get("last_entry_hash", ""), str):
+            raise HwmIntegrityError(prefix + f"Eintrag {key!r} hat keinen Tail-Anker als Zeichenkette.")
+        if not isinstance(entry.get("count", 0), int):
+            raise HwmIntegrityError(prefix + f"Eintrag {key!r} hat keinen ganzzahligen Zaehlstand.")
+    return chains
 
 
 @dataclass
@@ -84,20 +106,33 @@ class HighWaterMarkStore:
         """Laedt den Store aus ``path``.
 
         Fehlende Datei ⇒ leerer Store (Erst-Lauf). Vorhandene Datei mit
-        ungueltiger Signatur ⇒ :class:`HwmIntegrityError` (fail-loud).
+        ungueltiger Signatur, unlesbarem Inhalt oder unbrauchbarer Struktur ⇒
+        :class:`HwmIntegrityError` (fail-loud). Die Signatur wird zuerst
+        geprueft: ein Manipulationsverdacht schlaegt jeden Strukturbefund.
         """
         store = cls(path=path, chains={})
         if not path or not os.path.exists(path):
             return store
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError) as exc:
+            raise HwmIntegrityError(
+                f"HWM-Datei {path!r}: nicht lesbar ({type(exc).__name__}) — eine leere, abgeschnittene "
+                "oder nicht zugaengliche Datei belegt keinen externen Audit-High-Water-Mark."
+            ) from exc
+        if not isinstance(data, dict):
+            raise HwmIntegrityError(
+                f"HWM-Datei {path!r}: Struktur ungueltig — die Datei enthaelt kein signiertes Objekt."
+            )
         chains = data.get("chains", {})
+        signature = data.get("sig", "")
         expected = _sign(chains)
-        if not hmac.compare_digest(expected, data.get("sig", "")):
+        if not isinstance(signature, str) or not hmac.compare_digest(expected, signature):
             raise HwmIntegrityError(
                 f"HWM-Datei {path!r}: Signatur ungueltig — Manipulationsverdacht am externen Audit-High-Water-Mark."
             )
-        store.chains = chains
+        store.chains = _validate_chains(chains, path)
         return store
 
     def save(self) -> None:
@@ -123,22 +158,26 @@ class HighWaterMarkStore:
         """Gespeicherter ``{"count", "last_entry_hash"}``-Eintrag oder ``None``."""
         return self.chains.get(_chain_key(facility_id))
 
-    def has_anchors(self) -> bool:
-        """``True``, sobald mindestens EINE Kette einen Tail-Anker traegt.
+    def missing_anchors(self, facility_ids: list) -> list:
+        """Alle uebergebenen Ketten OHNE verwendbaren Tail-Anker, Reihenfolge erhalten.
 
-        Ein Store ohne jeden Anker ist genau der in :meth:`load` beschriebene
-        Erstlauf-Fall: es gibt nichts, wogegen die aktuelle Kette geprueft
-        werden koennte, und der naechste gruene Lauf verankert sie so, wie sie
-        gerade vorliegt. Betriebs-Ablaeufe, die einen *bestehenden* Anker
-        voraussetzen — etwa der Restore-/Drill-Ablauf nach dem HWM-Import —
-        erkennen hieran, dass der Erstlauf-Pfad greifen wuerde, und koennen
-        abbrechen, statt einen moeglicherweise unvollstaendigen Bestand neu zu
-        verankern (Refs #2242).
+        Bewusst **je Kette** statt store-weit: fuer jede Kette ohne eigenen
+        Anker greift der in :meth:`load` beschriebene Erstlauf-Fall — es gibt
+        nichts, wogegen sie geprueft werden koennte, und der naechste gruene
+        Lauf verankert sie so, wie sie gerade vorliegt. Ein Anker fuer eine
+        *andere* Kette aendert daran nichts. Betriebs-Ablaeufe, die einen
+        bestehenden Anker voraussetzen — etwa der Restore-/Drill-Ablauf nach
+        dem HWM-Import — erkennen hieran, welche Ketten ungeprueft neu
+        verankert wuerden, und koennen abbrechen (Refs #2242).
 
-        Bewusst ketten-uebergreifend: ein Anker fehlt einer *neuen* Facility
-        legitim, solange ueberhaupt verankert wurde.
+        ``None`` steht wie ueberall fuer die System-Kette (``facility=NULL``).
         """
-        return any((entry or {}).get("last_entry_hash") for entry in self.chains.values())
+        missing = []
+        for facility_id in facility_ids:
+            entry = self.chains.get(_chain_key(facility_id))
+            if not isinstance(entry, dict) or not entry.get("last_entry_hash"):
+                missing.append(facility_id)
+        return missing
 
     def check(self, facility_id, present_hashes: set[str]) -> str | None:
         """Prueft die aktuelle Kette gegen den gespeicherten Tail-Anker.
