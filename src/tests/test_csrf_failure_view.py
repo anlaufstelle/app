@@ -35,6 +35,11 @@ class TestCSRFFailureView:
         wie der CSRF-403-nach-Login-Bug sind ohne ``reason`` nicht diagnostizierbar.
         Der User sieht das Log nicht — es geht ausschliesslich an DevOps.
 
+        Refs #2228 (bewusst nachgezogen): Der Login-Name ist aus der Zeile
+        verschwunden — die Konto-Zuordnung steht als ``user_pk`` im ``extra``,
+        wie in den Einladungs-Log-Zeilen. Der Scrub der Zeile selbst (Query
+        weg, Pfad-Token maskiert) ist in ``test_log_sink_scrub.py`` gepinnt.
+
         Mocked Logger statt ``caplog``: Der ``django.security.csrf``-Logger erbt
         von ``django`` mit ``propagate=False`` (settings/base.py), daher fängt
         caplog am Root nichts ab.
@@ -59,11 +64,13 @@ class TestCSRFFailureView:
         assert "referer=%s" in fmt
         assert "origin=%s" in fmt
         assert "htmx=%s" in fmt
-        # Positional args: (reason, path, referer, origin, htmx, user)
-        reason, path, referer, origin, htmx, user = args
+        assert "user=%s" not in fmt
+        # Positional args: (reason, path, referer, origin, htmx)
+        reason, path, referer, origin, htmx = args
         assert reason  # Django füllt reason mit "Origin checking failed - ..."
         assert path == "/login/"
         assert referer == "https://example.test/somewhere/"
         assert origin == "https://example.test"
         assert htmx is True
-        assert user == "anonymous"
+        # Ohne Anmeldung gibt es keine PK — das Feld bleibt weg.
+        assert mock_logger.warning.call_args.kwargs["extra"] == {}

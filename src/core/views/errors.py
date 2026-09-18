@@ -14,6 +14,8 @@ from django.utils.translation import gettext, gettext_noop
 from django.views.defaults import permission_denied as django_permission_denied
 from django_ratelimit.exceptions import Ratelimited
 
+from core.logging import mask_url
+
 logger = logging.getLogger("django.security.csrf")
 
 #: Hinweistext der 429-Antwort fuer HTMX-Aufrufer (Refs #1873).
@@ -74,14 +76,34 @@ def csrf_failure(request, reason=""):
     Production-Vorfaellen wie dem CSRF-403-nach-Login-Bug unverzichtbar.
     Der User sieht das Log nicht; es geht ausschliesslich an die
     Server-Logs.
+
+    Refs #2228: Diese Zeile ist ein eigener Sink — die Server-Logdatei —, und
+    sie lief bis dahin roh. Zwei Aenderungen heben sie auf denselben
+    Scrub-Vertrag wie den Sentry-Pfad:
+
+    * ``path``/``referer``/``origin`` laufen durch ``mask_url``: der
+      Query-Teil faellt (dort steht der Suchbegriff, und ein Suchbegriff ist
+      oft ein Klient*innen-Name), der Pfad wird gegen das Route-Schema
+      aufgeloest (``/invite/<uidb64>/<token>/`` statt des live nutzbaren
+      Tokens). Genau diese Zeile war der Anlass fuer die Pfad-Maskierung im
+      Freitext (Refs #2198) — nur griff sie bisher erst auf dem Weg zum
+      Tracker, nicht in der Logdatei.
+    * Statt des Login-Namens steht die User-PK im ``extra`` — dasselbe
+      ``user_pk``-Feld wie in den Einladungs-Log-Zeilen
+      (``core/services/security/invite.py``, Refs #1949). Ein Login-Name ist
+      in einer kleinen Einrichtung real-namensnah; die PK ordnet den Vorfall
+      genauso eindeutig einem Konto zu, ohne Personenbezug im Klartext. Ohne
+      Anmeldung bleibt das Feld weg — ``anonymous`` war ohnehin nur ein
+      Platzhalter, und das Fehlen des Feldes sagt dasselbe.
     """
+    user_pk = getattr(getattr(request, "user", None), "pk", None)
     logger.warning(
-        "CSRF failure reason=%r path=%s referer=%s origin=%s htmx=%s user=%s",
+        "CSRF failure reason=%r path=%s referer=%s origin=%s htmx=%s",
         reason,
-        request.path,
-        request.META.get("HTTP_REFERER", "-"),
-        request.META.get("HTTP_ORIGIN", "-"),
+        mask_url(request.path),
+        mask_url(request.META.get("HTTP_REFERER", "-")),
+        mask_url(request.META.get("HTTP_ORIGIN", "-")),
         request.headers.get("HX-Request") == "true",
-        getattr(getattr(request, "user", None), "username", "") or "anonymous",
+        extra={"user_pk": user_pk} if user_pk is not None else {},
     )
     return render(request, "403_csrf.html", status=403)

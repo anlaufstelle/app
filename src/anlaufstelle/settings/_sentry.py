@@ -22,12 +22,21 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from urllib.parse import unquote, urlsplit, urlunsplit
 
 # Denselben textbasierten PII-Scrubber wie der JSON-Log-Formatter benutzen
 # (DRY — core/logging.py exportiert ``scrub`` ausdrücklich für genau diesen
 # before_send-Hook). ``core`` hat ein leeres ``__init__`` und ``core.logging``
-# importiert nur die Stdlib, daher beim Settings-Load (vor Apps-Ready) sicher.
+# importiert modulweit nur die Stdlib, daher beim Settings-Load (vor
+# Apps-Ready) sicher.
+#
+# Refs #2228: Die Pfad-/Token-Maskierung liegt seither ebenfalls dort. Der
+# Server-Log-Sink (``core/views/errors.py``, ``core/views/csp_report.py``)
+# braucht exakt dieselbe Maskierung; eine zweite Implementierung wäre die
+# Drift, gegen die der gemeinsame Scrub-Vertrag steht. Die Aliasnamen halten
+# die hiesigen Aufrufstellen unverändert.
+from core.logging import SCRUBBED as _SCRUBBED
+from core.logging import mask_paths_in_text as _mask_paths_in_text
+from core.logging import mask_url as _mask_url
 from core.logging import scrub
 
 # Schlüssel-Fragmente, deren Werte maskiert werden (case-insensitiver
@@ -102,64 +111,12 @@ _EXACT_SENSITIVE_KEYS: frozenset[str] = frozenset(
     }
 )
 
-_SCRUBBED = "[scrubbed]"
-
 # Schlüssel, deren WERT eine URL ist (Refs #2198) — Header (``Referer``,
 # ``HX-Current-Url``) ebenso wie Breadcrumb-/Span-``data`` (``url``, ``uri``).
 # Sie matchen bewusst kein Fragment oben: ein pauschales ``[scrubbed]`` nähme
 # die Herkunftsseite und damit den halben Diagnosewert. Stattdessen laufen sie
 # durch ``_mask_url`` — Query weg, Pfad gegen das Route-Schema maskiert.
 _URL_VALUE_KEYS: frozenset[str] = frozenset({"url", "uri", "location", "referer", "referrer", "hx-current-url"})
-
-# Fallback-Heuristik für Pfade, die sich NICHT auflösen lassen (404-Routen —
-# genau die, über die Django „Not Found: …" loggt). Zwei Bedingungen, beide
-# nötig:
-#
-# 1. Das Segment besteht nur aus Token-Zeichen und ist mindestens so lang wie
-#    ein Django-Reset-Token-Hash. Der Doppelpunkt gehört dazu: der
-#    Recovery-Token entsteht über ``TimestampSigner.sign()`` und trägt
-#    ``<payload>:<timestamp>:<signatur>`` (``lockout_recovery.py``).
-# 2. Es trägt ein Token-Signal — einen langen zusammenhängenden Zeichenlauf
-#    (Hash/Base64) oder eben den Signer-Doppelpunkt.
-#
-# Ohne (2) verschwände auch jeder sprechende Slug ab 20 Zeichen hinter
-# ``[scrubbed]``; Overblocking kostet Diagnose, ohne Schutz zu bringen. Die
-# heutigen Token des Projekts erfüllen (2) alle: der Reset-/Invite-Token trägt
-# 32 Hex-Zeichen am Stück, der Recovery-Token Doppelpunkte.
-# ``%`` und ``/`` gehören in die Zeichenklasse: ein Browser schickt den
-# Recovery-Link prozentkodiert (``%3A`` statt ``:``), und ``%2F`` kann beim
-# Dekodieren einen Schrägstrich IN einem Segment erzeugen (Refs #2198).
-_TOKEN_SEGMENT = re.compile(r"^[A-Za-z0-9_.:~=+%/-]{20,}$")
-_TOKEN_SIGNAL = re.compile(r"[A-Za-z0-9]{16,}|:")
-
-# Prozentkodierung wird vor der Prüfung aufgelöst — begrenzt, damit eine
-# absichtlich tief verschachtelte Eingabe den Hook nicht beschäftigt. Drei
-# Runden decken einfache und doppelte Kodierung (``%253A``) ab.
-_MAX_DECODE_ROUNDS = 3
-
-# Pfad-artige Vorkommen in Freitext (Log-Messages, Span-Beschreibungen):
-# Django loggt „Not Found: /invite/<uidb64>/<token>/" als reine Nachricht, und
-# ``core/views/errors.py`` schreibt bei jedem CSRF-403 Pfad **und** Referer in
-# eine Zeile. Der optionale Query-Teil gehört mit in den Treffer, damit
-# ``_mask_url`` ihn abschneiden kann — sonst bliebe genau der Suchbegriff
-# stehen, gegen den ``query_string`` und der Header-Fix stehen.
-#
-# Zeichenklassen mit Bedacht: ``:`` und ``%`` gehören in den Pfad (Signer-Token,
-# klar oder prozentkodiert — ohne ``%`` bräche der Treffer an der ersten
-# ``%3A``-Sequenz ab und ließe den Rest des Tokens stehen), ``<``
-# und ``>`` nicht — ein bereits maskierter Pfad wird so nicht erneut angefasst
-# (Idempotenz). Im Query-Teil sind Klammern, Komma und Semikolon
-# ausgeschlossen, damit eine URL in Prosa nicht die Satzzeichen mitnimmt;
-# abschließende Satzzeichen trennt ``_mask_paths_in_text`` zusätzlich ab.
-# ``<``/``>`` sind im Query-Teil dagegen erlaubt: ``scrub()`` läuft VORHER und
-# hinterlässt dort seine Platzhalter (``?email=<email>``), die mit dem Query
-# verschwinden müssen. Preis: eine in spitze Klammern gesetzte URL
-# (``<https://…?q=x>``) verliert ihre schließende Klammer — selten in
-# Log-Prosa, und der Datenschutz wiegt schwerer.
-_PATH_IN_TEXT = re.compile(r"/[\w./:~%+-]+(?:\?[^\s\"'()\[\]{},;]*)?")
-
-# Satzzeichen, die am Ende eines Treffers zur Prosa gehören, nicht zur URL.
-_TRAILING_PUNCTUATION = ".,;:!?"
 
 # Personen-Schlüssel in Freitext-Logzeilen (Refs #2198, Zweitgutachten LECK 1).
 # ``core/views/errors.py`` protokolliert bei jedem CSRF-403 ``user=<Login>``;
@@ -189,176 +146,6 @@ _PERSON_KEY_VALUE = re.compile(
 # Diagnose-Information ist) seine Form.
 
 
-def _resolve_route(path: str) -> str | None:
-    """Route-Schema eines Pfades (``invite/<uidb64>/<token>/``) oder ``None``.
-
-    Der Import liegt bewusst in der Funktion: ``_sentry`` wird beim
-    Settings-Load importiert, da darf der URLconf noch nicht geladen werden.
-    Fehlschläge (``Resolver404`` auf 404-Pfaden, ein noch nicht bereiter
-    App-Registry-Zustand) sind der Normalfall, nicht die Ausnahme — sie führen
-    in die Heuristik, niemals in eine Exception aus dem ``before_send``-Hook.
-    """
-    from django.urls import resolve
-
-    try:
-        return resolve(path).route
-    except Exception:
-        return None
-
-
-def _script_prefixes() -> tuple[str, ...]:
-    """Mögliche Deployment-Präfixe, jeweils mit ``/`` am Anfang UND am Ende.
-
-    Das SDK baut ``request.url`` aus ``SCRIPT_NAME`` + ``PATH_INFO``
-    (``sentry_sdk/integrations/wsgi.py``), Djangos Resolver kennt aber nur
-    ``PATH_INFO``. Unter einer Subpath-Installation (``/prefix``) muss der
-    Präfix deshalb vor dem Auflösen weg — und danach wieder dran, sonst
-    verlöre das Event die Installationsbasis. ``get_script_prefix()`` ist der
-    Wert, den der Request-Handler gesetzt hat; ``FORCE_SCRIPT_NAME`` deckt den
-    Fall ab, dass der Hook außerhalb eines Requests läuft.
-    """
-    prefixes = ["/"]
-    try:
-        from django.conf import settings
-        from django.urls import get_script_prefix
-
-        candidates = (get_script_prefix(), getattr(settings, "FORCE_SCRIPT_NAME", None))
-    except Exception:
-        return ("/",)
-    for candidate in candidates:
-        if isinstance(candidate, str) and candidate.strip("/"):
-            prefixes.append("/" + candidate.strip("/") + "/")
-    # Reihenfolge erhalten, Dubletten raus.
-    return tuple(dict.fromkeys(prefixes))
-
-
-def _slash_variants(path: str) -> tuple[str, ...]:
-    """Der Pfad mit und ohne abschließenden Slash.
-
-    Ein Aufruf ohne Trailing-Slash (``/invite/uid/token``) löst gegen eine mit
-    Slash definierte Route nicht auf — Django würde im echten Request per
-    ``APPEND_SLASH`` umleiten, im Event steht aber die ursprüngliche Form.
-    """
-    if path.endswith("/"):
-        return (path, path[:-1]) if len(path) > 1 else (path,)
-    return (path, path + "/")
-
-
-def _mask_path(path: str) -> str:
-    """Maskiert Platzhalter-Segmente eines Pfades (Refs #2198).
-
-    Zuerst über das Route-Schema: ``/invite/MTIz…/cx1a2b-…/`` wird zu
-    ``/invite/<uidb64>/<token>/`` — konkrete Werte weg, Route (und damit die
-    Zuordnung zur View) erhalten. Probiert werden alle Kombinationen aus
-    Deployment-Präfix und Trailing-Slash. Löst nichts davon auf, greift die
-    Segment-Heuristik.
-    """
-    absolute = path.startswith("/")
-    lookup = path if absolute else "/" + path
-    for prefix in _script_prefixes():
-        if not lookup.startswith(prefix):
-            continue
-        # ``prefix`` endet auf "/", das der Rest wieder als Anfang braucht.
-        remainder = lookup[len(prefix) - 1 :]
-        for candidate in _slash_variants(remainder):
-            # Auch die dekodierte Form probieren: Djangos Resolver sieht im
-            # echten Request den dekodierten ``PATH_INFO``, ein ``Referer``
-            # trägt dagegen die kodierte Schreibweise.
-            for form in (candidate, _decoded_path(candidate)):
-                if form is None:
-                    continue
-                route = _resolve_route(form)
-                if route is not None:
-                    masked = prefix + route
-                    return masked if absolute else masked[1:]
-    return "/".join(_SCRUBBED if _is_token_segment(segment) else segment for segment in path.split("/"))
-
-
-def _decode_segment(segment: str) -> str:
-    """Prozentkodierung EINES Pfadsegments auflösen (begrenzt, Refs #2198).
-
-    Bewusst auf Segmentebene: ``unquote`` über den ganzen Pfad würde ``%2F``
-    zu einem Trenner machen und ein Token in zwei zu kurze Pseudo-Segmente
-    zerlegen.
-    """
-    decoded = segment
-    for _ in range(_MAX_DECODE_ROUNDS):
-        further = unquote(decoded)
-        if further == decoded:
-            break
-        decoded = further
-    return decoded
-
-
-def _is_token_segment(segment: str) -> bool:
-    """Sieht dieses Pfadsegment nach einem Geheimnis aus? (Refs #2198)
-
-    Geprüft werden die kodierte UND die dekodierte Form: ``7%3A…%3A…`` trägt
-    kein Doppelpunkt-Signal, die dekodierte Form dagegen schon — und die
-    Längenregel gilt für beide, damit weder die eine noch die andere
-    Schreibweise durchrutscht (fail-closed).
-    """
-    return any(
-        _TOKEN_SEGMENT.match(form) and _TOKEN_SIGNAL.search(form) for form in (segment, _decode_segment(segment))
-    )
-
-
-def _decoded_path(path: str) -> str | None:
-    """Pfad mit dekodierten Segmenten — oder ``None``, wenn nichts kodiert war.
-
-    Ein Segment, dessen dekodierte Form einen Schrägstrich enthält (``%2F``),
-    bleibt kodiert: es ist EIN Segment, kein Pfadstück (Entscheid: Segment bleibt kodiert).
-    """
-    segments = list(path.split("/"))
-    changed = False
-    for index, segment in enumerate(segments):
-        decoded = _decode_segment(segment)
-        if decoded != segment and "/" not in decoded:
-            segments[index] = decoded
-            changed = True
-    return "/".join(segments) if changed else None
-
-
-def _mask_url(value: Any) -> Any:
-    """Kappt Query/Fragment einer URL und maskiert Token im Pfad.
-
-    Arbeitet auf dem serialisierten String — im ``before_send``-Hook liegt kein
-    ``HttpRequest`` mehr vor. Absolute URLs (``scheme://host/…``),
-    protokollrelative (``//host/…``) und reine Pfade werden gleich behandelt.
-    """
-    if not isinstance(value, str) or "/" not in value:
-        return value
-    try:
-        split = urlsplit(value)
-    except ValueError:
-        # Unparsebare URL: fail-closed, lieber kein Diagnosewert als ein
-        # unbesehen durchgereichter String.
-        return _SCRUBBED
-    path = _mask_path(split.path) if split.path else split.path
-    return urlunsplit((split.scheme, split.netloc, path, "", ""))
-
-
-def _mask_paths_in_text(text: str) -> str:
-    """Maskiert URL-/Pfad-Vorkommen in Freitext (``Not Found: /invite/…/…/``).
-
-    Ein Treffer, der zu nichts zusammenschrumpft (z. B. das nackte ``//`` aus
-    einem ``https://``-Präfix ohne Host), bleibt stehen — der Scrubber darf
-    Text kürzen, aber nicht zerreißen.
-    """
-
-    def replace(match: re.Match[str]) -> str:
-        # Der Treffer beginnt immer mit "/" — das steht nicht in
-        # ``_TRAILING_PUNCTUATION``, ``raw`` bleibt also nie leer.
-        raw = match.group(0)
-        trailing = ""
-        while raw[-1] in _TRAILING_PUNCTUATION:
-            raw, trailing = raw[:-1], raw[-1] + trailing
-        masked = _mask_url(raw)
-        return (masked if masked else raw) + trailing
-
-    return _PATH_IN_TEXT.sub(replace, text)
-
-
 def _is_sensitive(key: Any) -> bool:
     if not isinstance(key, str):
         return False
@@ -376,12 +163,14 @@ def _is_url_key(key: Any) -> bool:
 def _scrub_text(value: Any) -> Any:
     """Textbasierten PII-Scrub auf Strings anwenden (Emails/Tokens/Passwörter).
 
-    Zusätzlich (Refs #2198) werden Pfad-Vorkommen maskiert: ``core.logging``
-    kennt nur ``key=value``-Muster und greift bei einem blanken Pfadsegment
-    nicht — genau so kommt aber der ``django.request``-Logger daher
+    Zusätzlich (Refs #2198) werden Pfad-Vorkommen maskiert: ``scrub()`` kennt
+    nur ``key=value``-Muster und greift bei einem blanken Pfadsegment nicht —
+    genau so kommt aber der ``django.request``-Logger daher
     („Not Found: /invite/<uidb64>/<token>/"), dessen rohe Message die
-    ``LoggingIntegration`` als Breadcrumb bzw. Event mitnimmt. ``core.logging``
-    bleibt dabei unverändert (dessen Fehlalarm-Grenztests gelten weiter).
+    ``LoggingIntegration`` als Breadcrumb bzw. Event mitnimmt. Der
+    Muster-Scrub selbst bleibt davon unberührt (dessen Fehlalarm-Grenztests
+    gelten weiter); die Maskierung liegt seit Refs #2228 neben ihm in
+    ``core.logging``.
     """
     if not isinstance(value, str):
         return value

@@ -61,6 +61,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.decorators import ratelimit
 
+from core.logging import mask_url
 from core.signals.audit import get_client_ip
 
 # Eigener Logger-Namespace ausserhalb von `core` — die Django-Log-Config in
@@ -112,6 +113,27 @@ _ALLOWED_VIOLATION_KEYS = frozenset(
 )
 _MAX_FIELD_LEN = 512
 
+# Refs #2228: Felder, deren Wert eine URL ist. Sie laufen zusaetzlich durch
+# ``mask_url`` — Query-Teil weg, Pfad gegen das Route-Schema aufgeloest. Ein
+# CSP-Verstoss auf ``/invite/<uidb64>/<token>/`` schrieb das live nutzbare
+# Token sonst in die Server-Logdatei; der Sentry-Pfad maskiert es seit
+# Refs #2198, der Log-Sink blieb roh. Die uebrigen Whitelist-Felder bleiben
+# unangetastet: ``original-policy`` ist die eigene Policy (kein Personenbezug,
+# und eine Maskierung machte sie unlesbar), die Zahlenfelder tragen keine URL.
+# Beide Schreibweisen der Report-Formate: kebab-case (CSP Level 2) und
+# camelCase (CSP Level 3 / Reporting API).
+_URL_VIOLATION_KEYS = frozenset(
+    {
+        "blocked-uri",
+        "document-uri",
+        "source-file",
+        "referrer",
+        "blockedURL",
+        "documentURL",
+        "sourceFile",
+    }
+)
+
 # Refs #1943: Obergrenze fuer geloggte Violations pro Request. Ein realer
 # Reporting-API-Batch traegt eine Handvoll verschiedener Verstoesse (der
 # Browser dedupliziert identische Reports je Dokument); 10 deckt das
@@ -140,6 +162,13 @@ def _sanitize_violation(violation):
     verworfen, Werte auf str/int koerziert und Strings von Steuerzeichen
     befreit sowie auf ``_MAX_FIELD_LEN`` gekappt. So landet nie rohes,
     Angreifer-kontrolliertes JSON im Log-``extra``.
+
+    Refs #2228: URL-tragende Felder (``_URL_VIOLATION_KEYS``) laufen danach
+    durch ``mask_url``. Reihenfolge mit Absicht — erst Steuerzeichen-Filter
+    und Laengen-Cap (der Wert kommt vom Browser und ist vom Betreiber der
+    blockierten Ressource beeinflussbar), dann die Maskierung auf dem
+    bereinigten String. Was die Detection braucht — welche Route, welche
+    Direktive —, bleibt erhalten.
     """
     if not isinstance(violation, dict):
         return {}
@@ -157,6 +186,8 @@ def _sanitize_violation(violation):
             continue  # Verschachtelung verwerfen
         elif value is None:
             continue
+        elif key in _URL_VIOLATION_KEYS:
+            sanitized[key] = mask_url(_sanitize_text(value))
         else:
             sanitized[key] = _sanitize_text(value)
     return sanitized

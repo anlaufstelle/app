@@ -273,12 +273,21 @@ class TestCSPReportReachesLogSink:
         assert "\n" not in line
 
     def test_formatters_scrub_pii_from_violation_details(self, client, csp_url, caplog):
-        """Die Report-URLs sind fremdbestimmt und koennen Credentials tragen —
-        der PII-Scrub muss auch auf den strukturierten Feldern greifen."""
+        """Die Report-Felder sind fremdbestimmt und koennen Credentials tragen —
+        der PII-Scrub muss auch auf den strukturierten Feldern greifen.
+
+        Refs #2228: Bei den URL-tragenden Feldern faellt der Query-Teil seither
+        ganz weg (``mask_url``), statt nur die bekannten Muster zu ersetzen —
+        die Erwartung ist deshalb verschaerft: kein ``password=<redacted>``
+        mehr, sondern gar kein Query. Dass der Muster-Scrub der Formatter auf
+        strukturierten Feldern greift, prueft ``script-sample``: ein
+        Whitelist-Feld ohne URL-Charakter, das die Maskierung nicht anfasst.
+        """
         payload = {
             "csp-report": {
                 "document-uri": "https://anlaufstelle.app/login?password=hunter2",
                 "blocked-uri": "https://evil.example.com/?mail=opfer@example.com",
+                "script-sample": "login(password=hunter2, mail=opfer@example.com)",
             }
         }
         assert self._post(client, csp_url, caplog, payload).status_code == 204
@@ -288,6 +297,9 @@ class TestCSPReportReachesLogSink:
         assert "opfer@example.com" not in rendered
         assert "password=<redacted>" in rendered
         assert "<email>" in rendered
+        # Der Query-Teil der URL-Felder ist weg, nicht nur maskiert.
+        assert record.csp_violation["document-uri"] == "https://anlaufstelle.app/login/"
+        assert record.csp_violation["blocked-uri"] == "https://evil.example.com/"
 
 
 @pytest.mark.django_db
@@ -378,7 +390,9 @@ class TestCSPReportControlCharacters:
         blocked = record.csp_violation["blocked-uri"]
         for char in ("\u202e", "\u200b", "\u2028"):
             assert char not in blocked
-        assert blocked == "https://evil.example/gpj.exe?x=1y=2"
+        # Refs #2228: Der Query-Teil faellt mit der URL-Maskierung ganz weg \u2014
+        # die Steuerzeichen-Erwartung bleibt davon unberuehrt.
+        assert blocked == "https://evil.example/gpj.exe"
         assert (
             record.csp_violation["document-uri"]
             == "https://anlaufstelle.app/klient-uebersicht/\u00e4\u00f6\u00fc\u00df"

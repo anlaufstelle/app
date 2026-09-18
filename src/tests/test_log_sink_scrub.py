@@ -72,6 +72,19 @@ def csrf_caplog(caplog):
         logger.removeHandler(caplog.handler)
 
 
+def _csrf_view_records(caplog):
+    """Nur die Zeilen aus ``csrf_failure`` — dedupliziert.
+
+    Auf demselben Logger schreibt auch Djangos ``log_response``
+    („Forbidden (…): …"), und der Capture-Handler haengt sowohl am Logger
+    selbst als auch an ``root``, sieht denselben Record also mehrfach.
+    Gefiltert wird deshalb auf die Vorlage dieser View, dedupliziert ueber
+    die Record-Identitaet.
+    """
+    matching = [rec for rec in caplog.records if str(rec.msg).startswith("CSRF failure")]
+    return list({id(rec): rec for rec in matching}.values())
+
+
 @pytest.fixture
 def csrf_user(facility):
     """Konto mit real-namensnahem Login — genau der Fall aus dem Ticket."""
@@ -104,7 +117,7 @@ class TestCSRFFailureLogSink:
         response = self._trigger(csrf_user)
         assert response.status_code == 403
 
-        records = [rec for rec in csrf_caplog.records if rec.name == CSRF_LOGGER]
+        records = _csrf_view_records(csrf_caplog)
         assert len(records) == 1, "Genau eine CSRF-Zeile erwartet"
         for line in _rendered_sink_lines(records[0]):
             assert LOGIN_NAME not in line, f"Login-Name in der Server-Logzeile: {line}"
@@ -116,7 +129,7 @@ class TestCSRFFailureLogSink:
         response = self._trigger(csrf_user)
         assert response.status_code == 403
 
-        record = next(rec for rec in csrf_caplog.records if rec.name == CSRF_LOGGER)
+        (record,) = _csrf_view_records(csrf_caplog)
         # Die Konto-Zuordnung bleibt — als PK, nicht als Login-Name.
         assert record.user_pk == csrf_user.pk
         for line in _rendered_sink_lines(record):
@@ -132,7 +145,7 @@ class TestCSRFFailureLogSink:
         response = client.post("/login/", {"username": "x", "password": "y"})
         assert response.status_code == 403
 
-        record = next(rec for rec in csrf_caplog.records if rec.name == CSRF_LOGGER)
+        (record,) = _csrf_view_records(csrf_caplog)
         assert getattr(record, "user_pk", None) is None
 
 
