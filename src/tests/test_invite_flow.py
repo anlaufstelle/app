@@ -1,16 +1,32 @@
 """Token-based invite flow tests (Refs #528)."""
 
+from smtplib import SMTPException
 from unittest.mock import patch
 
 import pytest
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.core.mail.backends.base import BaseEmailBackend
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from core.models import User
 from core.services.security import build_invite_url, invite_token_generator, send_invite_email
+
+
+class ExplodingEmailBackend(BaseEmailBackend):
+    """Mail-Backend, das jeden Versand mit einer SMTP-Exception quittiert.
+
+    Refs #1662: belegt den Fehlerpfad auf Backend-Ebene unter Django 6.1 —
+    ohne ``fail_silently`` darf ein Backend-Fehler NICHT verschluckt werden.
+    """
+
+    def send_messages(self, email_messages):
+        raise SMTPException("relay down")
+
+
+EXPLODING_MAILERS = {"default": {"BACKEND": "tests.test_invite_flow.ExplodingEmailBackend"}}
 
 
 @pytest.mark.django_db
@@ -107,6 +123,20 @@ class TestSendInviteEmail:
         body = mail.outbox[0].body
         assert "/invite/" in body
         assert "linkee" in body  # username included
+
+    def test_backend_error_propagates_instead_of_failing_silently(self, facility, settings):
+        """Refs #1662: ``fail_silently=False`` ist mit Django 6.1 entfallen (in 7.0
+        weg). Das Verhalten bleibt identisch: ein Backend-Fehler schlaegt durch
+        und wird NICHT still geschluckt, der Aufrufer sieht die Exception."""
+        settings.MAILERS = EXPLODING_MAILERS
+        user = User.objects.create_user(
+            username="explode",
+            email="explode@example.org",
+            facility=facility,
+        )
+        with pytest.raises(SMTPException):
+            send_invite_email(user)
+        assert mail.outbox == []
 
     def test_no_email_returns_false(self, facility):
         user = User.objects.create_user(

@@ -47,16 +47,21 @@ def _run_prod_import(env_overrides: dict[str, str], code: str = "import anlaufst
     )
 
 
+_DUMP_MAILER = (
+    "import json; from anlaufstelle.settings import prod; "
+    "print(json.dumps({'backend': prod.MAILERS['default']['BACKEND'], "
+    "**prod.MAILERS['default']['OPTIONS']}))"
+)
+
+
 def test_prod_reads_email_use_ssl() -> None:
     result = _run_prod_import(
         {**VALID_ENV, "EMAIL_USE_TLS": "false", "EMAIL_USE_SSL": "true"},
-        code=(
-            "import json; from anlaufstelle.settings import prod; "
-            "print(json.dumps({'tls': prod.EMAIL_USE_TLS, 'ssl': prod.EMAIL_USE_SSL}))"
-        ),
+        code=_DUMP_MAILER,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"tls": False, "ssl": True}
+    mailer = json.loads(result.stdout)
+    assert (mailer["use_tls"], mailer["use_ssl"]) == (False, True)
 
 
 def test_prod_rejects_tls_and_ssl_together() -> None:
@@ -64,3 +69,61 @@ def test_prod_rejects_tls_and_ssl_together() -> None:
     assert result.returncode != 0
     assert "EMAIL_USE_TLS" in result.stderr
     assert "EMAIL_USE_SSL" in result.stderr
+
+
+def test_prod_mailer_keeps_the_established_env_variable_names() -> None:
+    """Refs #1662: der Django-6.1-Umstieg (EMAIL_*-Settings -> MAILERS) laesst die
+    Betreiber-ENV unveraendert — eine bestehende ``.env`` bleibt gueltig."""
+    result = _run_prod_import(
+        {
+            **VALID_ENV,
+            "EMAIL_HOST": "mail.example.org",
+            "EMAIL_PORT": "2525",
+            "EMAIL_HOST_USER": "postbote",
+            "EMAIL_HOST_PASSWORD": "geheim",
+            "EMAIL_USE_TLS": "true",
+            "EMAIL_USE_SSL": "false",
+        },
+        code=_DUMP_MAILER,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "backend": "django.core.mail.backends.smtp.EmailBackend",
+        "host": "mail.example.org",
+        "port": 2525,
+        "username": "postbote",
+        "password": "geheim",
+        "use_tls": True,
+        "use_ssl": False,
+    }
+
+
+def test_prod_mailer_defaults_match_the_pre_migration_behaviour() -> None:
+    """Ohne gesetzte EMAIL_*-Variablen gelten dieselben Defaults wie vor dem
+    Umstieg: localhost:587, leere Credentials, STARTTLS an, SMTPS aus."""
+    result = _run_prod_import(VALID_ENV, code=_DUMP_MAILER)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "backend": "django.core.mail.backends.smtp.EmailBackend",
+        "host": "localhost",
+        "port": 587,
+        "username": "",
+        "password": "",
+        "use_tls": True,
+        "use_ssl": False,
+    }
+
+
+def test_prod_defines_no_deprecated_email_settings() -> None:
+    """``EMAIL_*``-Settings und ``MAILERS`` schliessen sich in Django 6.1 aus
+    (ImproperlyConfigured beim Settings-Import)."""
+    result = _run_prod_import(
+        VALID_ENV,
+        code=(
+            "from django.conf import DEPRECATED_EMAIL_SETTINGS; "
+            "from anlaufstelle.settings import prod; "
+            "print(sorted(n for n in DEPRECATED_EMAIL_SETTINGS if hasattr(prod, n)))"
+        ),
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "[]"

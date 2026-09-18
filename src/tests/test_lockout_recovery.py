@@ -8,12 +8,15 @@ Drei Pfade jenseits CLI/Admin-Action:
 
 from __future__ import annotations
 
+import logging
 import threading
+from smtplib import SMTPException
 from unittest import mock
 
 import pytest
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.core.mail.backends.base import BaseEmailBackend
 from django.db import close_old_connections, connection
 from django.test import Client as DjangoTestClient
 from django.urls import reverse
@@ -22,6 +25,16 @@ from django.utils.http import urlsafe_base64_encode
 
 from core.models import AuditLog
 from core.services.security import generate_backup_codes, is_locked
+
+
+class ExplodingEmailBackend(BaseEmailBackend):
+    """Mail-Backend, das jeden Versand mit einer SMTP-Exception quittiert (Refs #1662)."""
+
+    def send_messages(self, email_messages):
+        raise SMTPException("relay down")
+
+
+EXPLODING_MAILERS = {"default": {"BACKEND": "tests.test_lockout_recovery.ExplodingEmailBackend"}}
 
 
 def _lock_account(user, count: int = 10):
@@ -116,6 +129,34 @@ class TestRecoveryTokenFlow:
         message = mail.outbox[0]
         assert "lockedout@example.org" in message.to
         assert "/account/recovery/confirm/" in message.body
+
+    def test_backend_error_is_caught_and_logged_without_leaking_the_flow(self, client, staff_user, caplog, settings):
+        """Refs #1662: ``fail_silently=False`` ist mit Django 6.1 entfallen. Der
+        Fehlerpfad bleibt unveraendert der vorhandene ``try/except``: ein
+        Backend-Fehler wird geloggt, die Response bleibt anti-enumerativ
+        identisch, der Audit-Eintrag steht trotzdem. Der Fehler entsteht
+        bewusst im Mailer selbst — nicht per Patch auf ``send_mail`` —, damit
+        der Test das Nicht-Schlucken auf Backend-Ebene belegt."""
+        staff_user.email = "brokenrelay@example.org"
+        staff_user.save(update_fields=["email"])
+        _lock_account(staff_user)
+        settings.MAILERS = EXPLODING_MAILERS
+
+        with caplog.at_level(logging.ERROR, logger="core.views.lockout_recovery"):
+            response = client.post(
+                reverse("core:lockout_recovery_request"),
+                {"email": "brokenrelay@example.org"},
+            )
+
+        assert response.status_code == 302
+        assert response.url.endswith("/account/recovery/sent/")
+        assert len(mail.outbox) == 0
+        assert any("Recovery-Mail-Versand fehlgeschlagen" in record.message for record in caplog.records)
+        assert AuditLog.objects.filter(
+            user=staff_user,
+            action=AuditLog.Action.PASSWORD_RESET_REQUESTED,
+            detail__flow="lockout_recovery_token",
+        ).exists()
 
     def test_post_unknown_email_renders_same_response_no_mail(self, client, db):
         response = client.post(

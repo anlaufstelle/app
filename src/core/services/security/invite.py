@@ -123,7 +123,6 @@ def send_invite_email(user) -> bool:
         message=body,
         from_email=from_email,
         recipient_list=[user.email],
-        fail_silently=False,
     )
     # Keine PII im Log-Message — user_pk in extra, kein username/email.
     # Ausgegeben wird das Feld von beiden Formattern, weil es in

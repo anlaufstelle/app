@@ -227,7 +227,7 @@ class TestResendInvitationAdminAction:
             == "Einladung erneut senden (Setup-Link)"
         )
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_super_admin_resends_selected_super_admin_invite(self, rf, super_admin_user):
         invited = self._pending_user(
             username="admin_action_super",
@@ -254,7 +254,7 @@ class TestResendInvitationAdminAction:
             message.level == django_messages.SUCCESS and invited.email in str(message) for message in action_messages
         )
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_facility_admin_cannot_resend_super_admin_invite(self, rf, facility, admin_user):
         invited = self._pending_user(
             username="admin_action_forbidden_super",
@@ -276,7 +276,7 @@ class TestResendInvitationAdminAction:
             message.level == django_messages.WARNING and "nicht erlaubt" in str(message) for message in action_messages
         )
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_facility_admin_cannot_resend_foreign_facility_invite(self, rf, facility, admin_user, foreign_staff):
         foreign_staff.email = "foreign-pending@example.org"
         foreign_staff.must_change_password = True
@@ -299,7 +299,7 @@ class TestResendInvitationAdminAction:
             message.level == django_messages.WARNING and "nicht erlaubt" in str(message) for message in action_messages
         )
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_invalid_selected_accounts_warn_without_sending(self, rf, facility, super_admin_user):
         without_email = self._pending_user(
             username="admin_action_without_email",
@@ -330,7 +330,7 @@ class TestResendInvitationAdminAction:
         assert len(warnings) == 2
         assert all("noch nicht eingerichteten Zugang" in str(message) for message in warnings)
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_facility_admin_resends_own_facility_invite(self, rf, facility, admin_user):
         invited = self._pending_user(
             username="admin_action_facility",

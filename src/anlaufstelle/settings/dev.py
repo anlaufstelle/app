@@ -21,8 +21,10 @@ if not SECRET_KEY:  # noqa: F405
 if not DATABASES["default"]["PASSWORD"]:  # noqa: F405
     DATABASES["default"]["PASSWORD"] = "anlaufstelle"  # noqa: F405, S105
 
-# E-Mails in der Konsole ausgeben (kein SMTP nötig)
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# E-Mails in der Konsole ausgeben (kein SMTP nötig).
+# Seit Django 6.1 über ``MAILERS`` statt ``EMAIL_BACKEND`` (Refs #1662);
+# kaskadiert nach test.py und e2e.py.
+MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
 
 DEBUG = True
 

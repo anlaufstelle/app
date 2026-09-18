@@ -249,17 +249,40 @@ class TestHealthDetail:
         assert "smtp" in data
 
     def test_smtp_disabled_for_locmem_backend(self, detail_token, settings):
-        settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+        settings.MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}}
+        assert _detail_get().json()["smtp"]["status"] == "disabled"
+
+    def test_smtp_disabled_without_host(self, detail_token, settings):
+        """SMTP-Mailer ohne ``host``-OPTION bleibt ``disabled`` (Refs #1662)."""
+        settings.MAILERS = {"default": {"BACKEND": "django.core.mail.backends.smtp.EmailBackend"}}
         assert _detail_get().json()["smtp"]["status"] == "disabled"
 
     def test_smtp_unreachable_degrades(self, detail_token, settings):
-        settings.EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-        settings.EMAIL_HOST = "smtp.invalid.example"
-        settings.EMAIL_PORT = 25
+        settings.MAILERS = {
+            "default": {
+                "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+                "OPTIONS": {"host": "smtp.invalid.example", "port": 25},
+            }
+        }
         with patch("socket.create_connection", side_effect=OSError("offline")):
             data = _detail_get().json()
         assert data["smtp"]["status"] == "unreachable"
         assert data["status"] == "degraded"
+
+    def test_smtp_ok_reports_latency(self, detail_token, settings):
+        """Payload-Vertrag (Refs #1662): ``ok`` + ``latency_ms`` bleibt unveraendert."""
+        settings.MAILERS = {
+            "default": {
+                "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+                "OPTIONS": {"host": "smtp.example.org", "port": 2525},
+            }
+        }
+        with patch("socket.create_connection") as create:
+            create.return_value.__enter__.return_value.recv.return_value = b"220 ok"
+            data = _detail_get().json()
+        assert create.call_args.args[0] == ("smtp.example.org", 2525)
+        assert data["smtp"]["status"] == "ok"
+        assert isinstance(data["smtp"]["latency_ms"], int)
 
     def test_backup_age_field_populated_when_files_exist(self, detail_token, tmp_path, settings):
         settings.BACKUP_DIR = tmp_path

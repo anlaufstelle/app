@@ -13,6 +13,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.mail.handler import DEFAULT_MAILER_ALIAS
 from django.db import connection
 from django.http import JsonResponse
 from django.utils.crypto import constant_time_compare
@@ -136,14 +137,23 @@ def _check_smtp() -> dict:
     """SMTP CONNECT-Test mit kurzem Timeout. Returns ``{status, latency_ms?}``.
 
     Liefert ``status=disabled`` fuer Console-/Locmem-Backends oder leeren
-    EMAIL_HOST. Ein nicht erreichbarer Server -> ``status=unreachable`` plus
+    Host. Ein nicht erreichbarer Server -> ``status=unreachable`` plus
     Gesamtstatus ``degraded`` (Token-Invites scheitern lautlos sonst).
+
+    Konfigurationsquelle ist seit Django 6.1 ``settings.MAILERS["default"]``
+    (Refs #1662); die frueheren ``EMAIL_*``-Settings sind dort deprecated und
+    ab Django 7.0 entfernt. Der Payload-Vertrag (``smtp``-Feld, Werte
+    ``disabled``/``ok``/``unreachable``, optional ``latency_ms``) bleibt
+    unveraendert — docs/monitoring-guide.md.
     """
-    backend = getattr(settings, "EMAIL_BACKEND", "")
-    host = getattr(settings, "EMAIL_HOST", "")
+    mailer = getattr(settings, "MAILERS", {}).get(DEFAULT_MAILER_ALIAS, {})
+    # Fehlendes BACKEND heisst bei Django ``smtp`` (Default des Mailers).
+    backend = mailer.get("BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+    options = mailer.get("OPTIONS", {})
+    host = options.get("host", "")
     if "smtp" not in backend or not host:
         return {"status": "disabled"}
-    port = int(getattr(settings, "EMAIL_PORT", 25) or 25)
+    port = int(options.get("port") or 25)
     started = time.monotonic()
     try:
         with socket.create_connection((host, port), timeout=SMTP_TIMEOUT_SECONDS) as sock:

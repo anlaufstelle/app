@@ -5,8 +5,8 @@ Erbt von ``prod.py`` und uebernimmt alle Security-Defaults
 (HSTS, Secure-Cookies, ENCRYPTION_KEY-Pflicht, SUDO_MODE_ENABLED-Guard,
 ALLOWED_HOSTS-Pflicht, fail-closed checks).
 
-Einziger Unterschied zu prod: ``EMAIL_BACKEND`` faellt auf den
-Console-Backend zurueck. Auf dev.anlaufstelle.app brauchen wir keinen
+Einziger Unterschied zu prod: der ``MAILERS["default"]``-Backend faellt auf
+den Console-Backend zurueck. Auf dev.anlaufstelle.app brauchen wir keinen
 echten SMTP-Server — ausgehende Mails landen im stdout des web-Containers
 und sind ueber ``docker compose logs web`` einsehbar.
 
@@ -23,7 +23,9 @@ from urllib.parse import urlsplit
 
 from .prod import *  # noqa: F401, F403
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Seit Django 6.1 über ``MAILERS`` statt ``EMAIL_BACKEND`` (Refs #1662).
+# Ersetzt den aus prod.py geerbten SMTP-Mailer vollständig.
+MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
 
 # dev.anlaufstelle.app faehrt Welt-A-Backups (dump-*.pgc.enc); der
 # Health-Glob kennt nur Welt-B-Artefakte (*.sql.gz.enc) und wuerde deshalb

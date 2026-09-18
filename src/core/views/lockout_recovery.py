@@ -85,7 +85,6 @@ class LockoutRecoveryRequestView(FormView):
                     body,
                     settings.DEFAULT_FROM_EMAIL,
                     [email],
-                    fail_silently=False,
                 )
             except Exception:
                 logger.exception("Recovery-Mail-Versand fehlgeschlagen")

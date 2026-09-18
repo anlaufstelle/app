@@ -63,10 +63,18 @@ class TestDevLiveLoad:
 
     def test_email_backend_is_console(self):
         result = _run_devlive_import(
-            expr=("from anlaufstelle.settings.devlive import EMAIL_BACKEND;print(EMAIL_BACKEND)")
+            expr=("from anlaufstelle.settings.devlive import MAILERS;print(MAILERS['default']['BACKEND'])")
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "django.core.mail.backends.console.EmailBackend"
+
+    def test_console_mailer_carries_no_smtp_options(self):
+        """Der geerbte prod-SMTP-Mailer wird vollstaendig ersetzt (Refs #1662)."""
+        result = _run_devlive_import(
+            expr=("from anlaufstelle.settings.devlive import MAILERS;print(sorted(MAILERS['default']))")
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "['BACKEND']"
 
     def test_debug_is_false(self):
         result = _run_devlive_import(expr="from anlaufstelle.settings.devlive import DEBUG;print(DEBUG)")

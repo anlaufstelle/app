@@ -465,7 +465,7 @@ class TestUpdateUserAccess:
 
 
 class TestInviteAndUnlockActions:
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_super_admin_can_resend_super_admin_invite_and_revoke_password(self, super_admin_user):
         invited = User(
             username="pending_super_admin",
@@ -501,7 +501,7 @@ class TestInviteAndUnlockActions:
 
         assert not AuditLog.objects.filter(action=AuditLog.Action.USER_INVITE_SENT, user=invited).exists()
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(MAILERS={"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}})
     def test_any_user_resend_rejects_inactive_super_admin_without_side_effects(self, super_admin_user):
         super_admin_user.is_active = False
         super_admin_user.save(update_fields=["is_active"])
