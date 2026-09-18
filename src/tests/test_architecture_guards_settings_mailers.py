@@ -24,27 +24,33 @@ import ast
 from pathlib import Path
 
 import pytest
+from django import conf as django_conf
 
 pytestmark = pytest.mark.architecture
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Von Django 6.1 deprecatete Mail-Settings (Entfernung in 7.0). Zuweisungen an
-# diese Namen sind neben ``MAILERS`` verboten.
-DEPRECATED_EMAIL_SETTINGS = frozenset(
+# Statischer Fallback fuer kuenftige Django-Versionen, die das interne Attribut
+# nicht mehr anbieten. Der Selbsttest unten verhindert Drift gegen die aktuell
+# installierte Laufzeitmenge.
+STATIC_DEPRECATED_EMAIL_SETTINGS = frozenset(
     {
         "EMAIL_BACKEND",
+        "EMAIL_FILE_PATH",
         "EMAIL_HOST",
         "EMAIL_PORT",
         "EMAIL_HOST_USER",
         "EMAIL_HOST_PASSWORD",
+        "EMAIL_SSL_CERTFILE",
+        "EMAIL_SSL_KEYFILE",
         "EMAIL_USE_TLS",
         "EMAIL_USE_SSL",
         "EMAIL_TIMEOUT",
     }
 )
-# ``EMAIL_SSL_CERTFILE``/``EMAIL_SSL_KEYFILE`` und kuenftige Geschwister.
-DEPRECATED_EMAIL_PREFIX = "EMAIL_SSL_"
+DEPRECATED_EMAIL_SETTINGS = frozenset(
+    getattr(django_conf, "DEPRECATED_EMAIL_SETTINGS", STATIC_DEPRECATED_EMAIL_SETTINGS)
+)
 
 # Module, die ``MAILERS`` definieren, ohne selbst im Scan-Set zu liegen bzw.
 # deren Name die Herkunft eindeutig macht (``from …prod import *``).
@@ -52,7 +58,7 @@ _MAILERS_BASE_MODULES = frozenset({"prod", "base"})
 
 
 def _is_deprecated_email_setting(name: str) -> bool:
-    return name in DEPRECATED_EMAIL_SETTINGS or name.startswith(DEPRECATED_EMAIL_PREFIX)
+    return name in DEPRECATED_EMAIL_SETTINGS
 
 
 def settings_module_paths(root: Path) -> list[Path]:
@@ -91,23 +97,77 @@ def _assigned_names(tree: ast.Module) -> set[str]:
     return names
 
 
+def _target_names(target: ast.expr) -> list[tuple[str, int]]:
+    """Statische Namen eines Zuweisungsziels, inklusive Unpacking."""
+    if isinstance(target, ast.Name):
+        return [(target.id, target.lineno)]
+    if isinstance(target, (ast.List, ast.Tuple)):
+        return [name for element in target.elts for name in _target_names(element)]
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    if (
+        isinstance(target, ast.Subscript)
+        and isinstance(target.value, ast.Call)
+        and isinstance(target.value.func, ast.Name)
+        and target.value.func.id == "globals"
+        and not target.value.args
+        and not target.value.keywords
+        and isinstance(target.slice, ast.Constant)
+        and isinstance(target.slice.value, str)
+    ):
+        return [(target.slice.value, target.lineno)]
+    return []
+
+
+def _setattr_current_module_name(node: ast.Call, sys_names: set[str]) -> tuple[str, int] | None:
+    """Erkenne nur ``setattr(sys.modules[__name__], 'NAME', value)``."""
+    if not isinstance(node.func, ast.Name) or node.func.id != "setattr" or len(node.args) != 3 or node.keywords:
+        return None
+    owner, setting, _value = node.args
+    if (
+        not isinstance(owner, ast.Subscript)
+        or not isinstance(owner.value, ast.Attribute)
+        or owner.value.attr != "modules"
+        or not isinstance(owner.value.value, ast.Name)
+        or owner.value.value.id not in sys_names
+        or not isinstance(owner.slice, ast.Name)
+        or owner.slice.id != "__name__"
+        or not isinstance(setting, ast.Constant)
+        or not isinstance(setting.value, str)
+    ):
+        return None
+    return setting.value, node.lineno
+
+
 def _deprecated_assignments(tree: ast.Module) -> list[tuple[str, int]]:
     """``(Setting, Zeile)`` je Zuweisung an ein veraltetes ``EMAIL_*``-Setting.
 
     Auch verschachtelte Zuweisungen (``if``/``try``-Bloecke) zaehlen — Django
     sieht am Ende nur das Modul-Namespace-Dict.
     """
-    hits: list[tuple[str, int]] = []
+    sys_names = {
+        alias.asname or alias.name
+        for node in tree.body
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name == "sys"
+    }
+    candidates: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):
             targets = list(node.targets)
-        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+        elif (isinstance(node, ast.AnnAssign) and node.value is not None) or isinstance(
+            node, (ast.AugAssign, ast.NamedExpr)
+        ):
             targets = [node.target]
         for target in targets:
-            if isinstance(target, ast.Name) and _is_deprecated_email_setting(target.id):
-                hits.append((target.id, target.lineno))
-    return sorted(hits)
+            candidates.extend(_target_names(target))
+        if isinstance(node, ast.Call):
+            setattr_name = _setattr_current_module_name(node, sys_names)
+            if setattr_name is not None:
+                candidates.append(setattr_name)
+    return sorted((name, line) for name, line in candidates if _is_deprecated_email_setting(name))
 
 
 def scan_settings_modules(root: Path) -> dict[Path, list[tuple[str, int]]]:
@@ -273,3 +333,74 @@ class TestScannerSelfCheck:
             "from .prod import *\n\nEMAIL_SSL_CERTFILE = '/tmp/c.pem'\n",
         )
         assert module in scan_settings_modules(tmp_path)
+
+    @pytest.mark.parametrize(
+        ("source", "expected"),
+        [
+            ("EMAIL_HOST, other = ('smtp', 1)\n", [("EMAIL_HOST", 2)]),
+            ("[EMAIL_PORT, other] = [25, 1]\n", [("EMAIL_PORT", 2)]),
+            (
+                "(a, (EMAIL_HOST_USER, b)), *rest = (1, (2, 3)), 4\n",
+                [("EMAIL_HOST_USER", 2)],
+            ),
+            ("other = EMAIL_BACKEND = 'smtp'\n", [("EMAIL_BACKEND", 2)]),
+            ("EMAIL_USE_TLS: bool = True\n", [("EMAIL_USE_TLS", 2)]),
+            ("EMAIL_TIMEOUT += 1\n", [("EMAIL_TIMEOUT", 2)]),
+            ("(EMAIL_HOST := 'smtp')\n", [("EMAIL_HOST", 2)]),
+            ("globals()['EMAIL_HOST'] = 'smtp'\n", [("EMAIL_HOST", 2)]),
+            (
+                "import sys\nsetattr(sys.modules[__name__], 'EMAIL_HOST', 'smtp')\n",
+                [("EMAIL_HOST", 3)],
+            ),
+        ],
+        ids=[
+            "tuple-target",
+            "list-target",
+            "nested-starred-target",
+            "multiple-assignment",
+            "annotated-assignment",
+            "augmented-assignment",
+            "walrus",
+            "globals-subscript",
+            "setattr-current-module",
+        ],
+    )
+    def test_flags_all_assignment_forms(
+        self,
+        tmp_path: Path,
+        source: str,
+        expected: list[tuple[str, int]],
+    ) -> None:
+        self._base_tree(tmp_path)
+        module = self._write(
+            tmp_path,
+            "src/anlaufstelle/settings/probe.py",
+            "from .prod import *\n" + source,
+        )
+        assert scan_settings_modules(tmp_path).get(module) == expected
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "import os\n_host = os.environ.get('EMAIL_HOST', 'localhost')\n",
+            "import os\n_host = os.getenv('EMAIL_HOST', 'localhost')\n",
+            "options = {'EMAIL_HOST': 'localhost', 'EMAIL_TIMEOUT': 10}\n",
+            "message = 'EMAIL_HOST = localhost'\n# EMAIL_TIMEOUT = 10\n",
+            "EMAIL_USE_TLS: bool\n",
+        ],
+        ids=["os-environ-get", "os-getenv", "dict-keys", "strings-comments", "annotation-without-value"],
+    )
+    def test_allows_non_assignments(self, tmp_path: Path, source: str) -> None:
+        self._base_tree(tmp_path)
+        self._write(
+            tmp_path,
+            "src/anlaufstelle/settings/probe.py",
+            "from .prod import *\n" + source,
+        )
+        assert scan_settings_modules(tmp_path) == {}
+
+
+def test_static_deprecated_email_settings_cover_django_runtime() -> None:
+    """Der Fallback darf bei einer Django-Erweiterung nicht still veralten."""
+    runtime_names = frozenset(django_conf.DEPRECATED_EMAIL_SETTINGS)
+    assert runtime_names <= STATIC_DEPRECATED_EMAIL_SETTINGS
