@@ -117,8 +117,32 @@ def _first_index(sequence, table):
 #: Die Tabellen, deren Zeilensperren diese Ordnung regelt.
 _SPERR_TABELLEN = frozenset({"core_attachment", "core_client", "core_case", "core_event"})
 
-#: UUID-Literale stehen im Mitschnitt bereits eingesetzt (``connection.queries``).
-_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE)
+#: UUID-Literale stehen im Mitschnitt bereits eingesetzt (``connection.queries``)
+#: — PostgreSQL schreibt sie OHNE Bindestriche (``'ab12…'::uuid``), Python mit.
+#: Beide Formen werden auf die bindestrichlose Kleinschreibung normalisiert.
+_UUID_RE = re.compile(
+    r"\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\b",
+    re.IGNORECASE,
+)
+
+
+def _kennung(wert) -> str:
+    """Normalisierte Form eines UUID-Literals (ohne Bindestriche, klein)."""
+    return str(wert).replace("-", "").lower()
+
+
+#: ``pk -> entry_id`` jeder in diesem Modul angelegten Anhangszeile. Die
+#: Aufloesung braucht diese Tabelle, wo die Zeile am Ende des Pfades physisch
+#: getilgt ist (Vernichtung) — dann findet sie keine DB-Abfrage mehr, und
+#: Vorsperre (nach ``entry_id``) und spaetere Sperre (nach ``pk``) liessen sich
+#: nicht mehr als dieselbe Zeile erkennen.
+_ANHANG_KENNUNGEN: dict[str, str] = {}
+
+
+def _merke_anhang(attachment):
+    _ANHANG_KENNUNGEN[_kennung(attachment.pk)] = _kennung(attachment.entry_id)
+    return attachment
+
 
 #: Ein ``UPDATE`` sperrt seine Zeilen genauso wie ein ``SELECT … FOR UPDATE``.
 _UPDATE_RE = re.compile(r'\s*UPDATE "(?P<table>core_\w+)"', re.IGNORECASE)
@@ -151,7 +175,7 @@ def _gesperrte_zeilen(sql):
     if table is None:
         return set()
     _, _, where = sql.partition(" WHERE ")
-    werte = {wert.lower() for wert in _UUID_RE.findall(where)}
+    werte = {_kennung(wert) for wert in _UUID_RE.findall(where)}
     if not werte or table != "core_attachment":
         return {(table, wert) for wert in werte}
     from django.db.models import Q
@@ -160,12 +184,20 @@ def _gesperrte_zeilen(sql):
 
     zeilen: set = set()
     getroffen: set = set()
-    for pk, entry_id in Attachment.objects.filter(Q(pk__in=werte) | Q(entry_id__in=werte)).values_list(
-        "pk", "entry_id"
-    ):
-        if str(pk) in werte or str(entry_id) in werte:
-            zeilen.add((table, str(pk)))
-            getroffen |= {str(pk), str(entry_id)} & werte
+    for pk, entry_id in _ANHANG_KENNUNGEN.items():
+        treffer = {pk, entry_id} & werte
+        if treffer:
+            zeilen.add((table, pk))
+            getroffen |= treffer
+    offen = werte - getroffen
+    if offen:
+        for pk, entry_id in Attachment.objects.filter(Q(pk__in=offen) | Q(entry_id__in=offen)).values_list(
+            "pk", "entry_id"
+        ):
+            treffer = {_kennung(pk), _kennung(entry_id)} & offen
+            if treffer:
+                zeilen.add((table, _kennung(pk)))
+                getroffen |= treffer
     return zeilen | {(table, wert) for wert in werte - getroffen}
 
 
@@ -267,7 +299,7 @@ def _attach(facility, owner, field_template, user):
 
     upload = SimpleUploadedFile("probe.pdf", PDF_MINIMAL, content_type="application/pdf")
     with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
-        attachment = store_encrypted_file(facility, upload, field_template, owner, user)
+        attachment = _merke_anhang(store_encrypted_file(facility, upload, field_template, owner, user))
     data = dict(owner.data_json or {})
     data[field_template.slug] = {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}
     owner.data_json = data
@@ -281,7 +313,7 @@ def _ersetze(facility, owner, field_template, user, vorgaenger):
 
     upload = SimpleUploadedFile("probe-neu.pdf", PDF_MINIMAL, content_type="application/pdf")
     with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
-        return store_encrypted_file(facility, upload, field_template, owner, user, supersedes=vorgaenger)
+        return _merke_anhang(store_encrypted_file(facility, upload, field_template, owner, user, supersedes=vorgaenger))
 
 
 # ------------------------------------------------------- Sequenz-Guards ----
