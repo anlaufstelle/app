@@ -1,5 +1,7 @@
 # Screenshots — Anlaufstelle
 
+> Synchronization update 2026-09-18: this screenshot guide is now covered by the translation source-hash gate (#2252).
+
 > **[Deutsche Version](screenshots.md)** · back to the [README](../README.en.md)
 
 A full tour of Anlaufstelle. All images come from the demo environment
@@ -77,3 +79,8 @@ accompaniment from the counselling-service package (Zweigstelle Nord).
 | Timeline (mobile) | Work hub (mobile) |
 |:---:|:---:|
 | ![Timeline mobile](screenshots/zeitstrom-mobil-en.webp) | ![Work hub mobile](screenshots/arbeitszentrale-mobil-en.webp) |
+
+<!-- translation-source: docs/screenshots.md -->
+<!-- translation-version: v0.99.0 -->
+<!-- translation-date: 2026-09-18 -->
+<!-- source-hash: 0f40cb4da31edc66f42f28ca53b3dba4f5fbd109 -->

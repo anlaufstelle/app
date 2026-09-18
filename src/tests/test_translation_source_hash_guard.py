@@ -46,6 +46,7 @@ if not SCRIPT.exists():  # pragma: no cover - nur im mutants/-Tree
 PYPROJECT = '[project]\nname = "x"\nversion = "0.20.0"\n'
 DE_SOURCE = "# Quelle\n\nHallo Welt.\n"
 UNDER_TEST = "README.en.md"
+SCREENSHOTS_MIRROR = "docs/screenshots.en.md"
 
 
 def _load_translated_files() -> list[str]:
@@ -88,10 +89,11 @@ def _mirror(
     de_source: str = DE_SOURCE,
     source_hash: str | None,
     include_hash_marker: bool = True,
+    under_test: str = UNDER_TEST,
 ) -> Path:
     """Voll-Abbild: pyproject.toml, Script-Kopie, eine gemeinsame DE-Quelle
     ``source.md`` und fuer jeden TRANSLATED_FILES-Eintrag ein EN-Dokument. Alle
-    zeigen auf ``source.md``; alle bis auf ``UNDER_TEST`` bekommen einen
+    zeigen auf ``source.md``; alle bis auf ``under_test`` bekommen einen
     gueltigen Stempel, damit nur die Datei unter Test das Szenario bestimmt.
     """
     dest.mkdir(parents=True, exist_ok=True)
@@ -107,7 +109,7 @@ def _mirror(
     for rel in TRANSLATED_FILES:
         target = dest / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        if rel == UNDER_TEST:
+        if rel == under_test:
             content = _en_doc(source_hash, include_hash_marker=include_hash_marker)
         else:
             content = _en_doc(valid_hash)
@@ -157,6 +159,24 @@ def test_changed_source_fails_with_both_hashes(tmp_path: Path) -> None:
     assert "DE-Quelle" in combined and "EN-Sync" in combined
     assert stale in combined
     assert new_hash in combined
+
+
+def test_screenshots_mirror_drift_is_checked(tmp_path: Path) -> None:
+    """Der Screenshot-Spiegel gehoert zum Gate; kuenstlicher Drift wird rot."""
+    assert SCREENSHOTS_MIRROR in TRANSLATED_FILES
+    root = tmp_path / "repo"
+    stale = _stable_hash(tmp_path, DE_SOURCE)
+    _mirror(
+        root,
+        de_source="# Quelle\n\nGeaenderte Screenshots.\n",
+        source_hash=stale,
+        under_test=SCREENSHOTS_MIRROR,
+    )
+    result = _run(root)
+    combined = result.stdout + result.stderr
+    assert result.returncode == 1, combined
+    assert SCREENSHOTS_MIRROR in combined
+    assert "DE-Quelle" in combined
 
 
 def test_missing_source_hash_marker_fails(tmp_path: Path) -> None:

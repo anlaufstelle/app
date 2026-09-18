@@ -33,6 +33,7 @@ SOURCE_HASH_RE = re.compile(r"<!--\s*source-hash:\s*([0-9a-fA-F]+)\s*-->")
 TRANSLATED_FILES = [
     "README.en.md",
     "CONTRIBUTING.en.md",
+    "docs/screenshots.en.md",
     "docs/en/README.md",
     "docs/en/admin-guide.md",
     "docs/en/ops-runbook.md",

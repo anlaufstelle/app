@@ -57,6 +57,7 @@ Letzter Release-Kandidat vor 1.0: bündelt die Fix-Wellen 0.97–0.99 (Red-Team-
 
 ### Docs
 
+- **Englische Screenshot-Dokumentation ins Sync-Gate aufgenommen** (#2252) — Ein Quell-Hash-Stempel und ein Regressionstest machen künftigen Drift zur deutschen Screenshot-Dokumentation sichtbar.
 - **Assertion-Konventionen öffentlich verlinkt** (#2256) — Beide CONTRIBUTING-Spiegel führen Beitragende direkt zu den öffentlich ausgelieferten Regeln für präzise, mutationsfeste Assertions.
 - **Kontext-Kopf-Konvention für Beitragende auffindbar gemacht** (#2255) — Die CONTRIBUTING-Dokumentation verweist bei den Template-Konventionen auf die Regeln für Kontext-Köpfe und Rücklinke.
 - **Sprachleitlinie als aktiven Style-Guide verankert** (#2250) — Die Leitlinie nennt ihren verbindlichen Zweck, führt nur noch den offenen Begriffspunkt und ist aus der CONTRIBUTING-Dokumentation erreichbar.
