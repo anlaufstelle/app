@@ -231,6 +231,12 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 | `EMAIL_USE_TLS` | `True` | STARTTLS aktivieren. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Absenderadresse. |
 
+Seit Django 6.1 konfiguriert die Anwendung den Mailversand intern über
+Djangos `MAILERS`-Einstellung statt über die früheren `EMAIL_*`-Einstellungen.
+**Für den Betrieb ändert sich nichts:** die oben genannten Umgebungsvariablen
+heißen unverändert so und werden weiterhin aus der `.env` gelesen — eine
+bestehende `.env` bleibt ohne Anpassung gültig.
+
 **File-Vault Upload-Limits (#1268)**
 
 Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-Einrichtung konfigurierbaren `Settings.max_file_size_mb`).

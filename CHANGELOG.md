@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Ungenutzten Schwellenwert-Parameter aus der K-Anonymisierungs-Primitive entfernt** (#2265) — `k_anonymize_client` las ihren Parameter `k` nie; die tatsächliche Schwellenprüfung lag und liegt ausschließlich bei `is_k_anonymous`, die der Aufrufer vorschaltet. Reine Aufräumarbeit ohne Verhaltensänderung.
+- **Django 6.0 auf 6.1 angehoben, Mailversand auf `MAILERS` umgestellt** (#1662) — Die 6.0-Linie erhält seit August 2026 nur noch Sicherheitskorrekturen (Ende April 2027), 6.1 bis Dezember 2027; mit dem Sprung wandert die Mail-Konfiguration von den in 6.1 abgekündigten `EMAIL_*`-Einstellungen auf Djangos neue `MAILERS`-Einstellung. **Für Betreiber ändert sich nichts:** die Umgebungsvariablen (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `EMAIL_USE_SSL`, `DEFAULT_FROM_EMAIL`) heißen unverändert so, eine bestehende `.env` bleibt gültig, und das `smtp`-Feld unter `/health/` liefert dieselben Werte wie bisher. Betriebshinweis zum Umstieg: Django 6.1 ändert die Schlüssel des Seiten-/Fragment-Caches, der erste Aufruf nach dem Update ist daher ein Cache-Miss.
 
 ### Docs
 

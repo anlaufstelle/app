@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-18: the SMTP environment reference notes that the application configures email delivery through Django's `MAILERS` setting since Django 6.1 while the environment variable names stay unchanged (#1662).
 > Synchronization update 2026-09-15: § 2.3 the quick-exit target row now states that the target does not learn the origin of the jump (no `Referer` header) (#2179).
 > Synchronization update 2026-09-15: § 2.4 documents the Django-admin resend action for pending `super_admin` invitations (#2223).
 > Synchronization update 2026-09-15: mandatory backup-code acknowledgement and OTP throttling during initial 2FA setup, the manual backup umask, and the container-internal freshclam result log now mirror the German operator guidance (#2248).
@@ -243,6 +244,12 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 | `EMAIL_HOST_PASSWORD` | -- | SMTP password. |
 | `EMAIL_USE_TLS` | `True` | Enable STARTTLS. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Sender address. |
+
+Since Django 6.1 the application configures email delivery internally via
+Django's `MAILERS` setting instead of the former `EMAIL_*` settings.
+**Nothing changes for operators:** the environment variables above keep their
+names and are still read from `.env` — an existing `.env` stays valid without
+any change.
 
 **File Vault Upload Limits (#1268)**
 
@@ -2203,4 +2210,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: a96d180e2b4031fc9ef9b5125a7c1f8885c9eb9c -->
+<!-- source-hash: 6adb6b6276a69524a9be724822e7fbc8213a2a2f -->

@@ -2,7 +2,7 @@
 
 Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md) um operative Prozeduren fuer Deployment, Rollback, Cron-Jobs, Log-Analyse und Troubleshooting.
 
-**Stack:** Django 6.0 / Gunicorn / PostgreSQL 18 / Caddy 2 / Docker Compose
+**Stack:** Django 6.1 / Gunicorn / PostgreSQL 18 / Caddy 2 / Docker Compose
 
 ---
 
@@ -974,7 +974,10 @@ Ein voller RAM-Buffer statt Disk-Streaming (`FILE_UPLOAD_MAX_MEMORY_SIZE` sehr h
 
 ### 5.8 SMTP-Versand pruefen
 
-Der Produktionsbetrieb nutzt Djangos SMTP-Backend. Technisch ist keiner der
+Der Produktionsbetrieb nutzt Djangos SMTP-Backend, seit Django 6.1 ueber
+dessen `MAILERS`-Einstellung konfiguriert. Die Namen der Umgebungsvariablen
+sind davon **nicht** betroffen — eine bestehende `.env` bleibt unveraendert
+gueltig. Technisch ist keiner der
 `EMAIL_*`-Werte Pflicht — ohne Angabe gelten `EMAIL_HOST=localhost`, Port
 `587`, STARTTLS (`EMAIL_USE_TLS=True`) und der Absender
 `noreply@anlaufstelle.app`. Betrieblich, also fuer tatsaechliche Zustellung,

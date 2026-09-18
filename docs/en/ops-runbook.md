@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-18: stack line on Django 6.1 and § 5.8 states that production configures SMTP through Django's `MAILERS` setting since Django 6.1, with unchanged environment variable names (#1662).
 > Synchronization update 2026-09-15: the restore-drill guidance now documents the explicit `COMPOSE_DIR` handoff and the `.env`-only `BACKUP_HOST_DIR` source, and § 7.4 reads the freshclam result from the container log (#2248).
 > Synchronization update 2026-09-15: the production Compose healthcheck treats only `error`/HTTP 503 as unhealthy while `degraded` remains available and requires separate monitoring (#2173).
 > Synchronization update 2026-09-12: manifest-bound media requirements, empty-audit outcomes, both explicit restore-set selectors, atomic audit HWM installation, pre-rotation off-site transfer, exact manifest completeness checks, and idempotent cron log setup now mirror the German operator guidance (#2222).
@@ -12,7 +13,7 @@
 
 Operations manual for Anlaufstelle. Complements the [Admin Guide](admin-guide.md) with operational procedures for deployment, rollback, cron jobs, log analysis, and troubleshooting.
 
-**Stack:** Django 6.0 / Gunicorn / PostgreSQL 18 / Caddy 2 / Docker Compose
+**Stack:** Django 6.1 / Gunicorn / PostgreSQL 18 / Caddy 2 / Docker Compose
 
 ---
 
@@ -981,8 +982,10 @@ A full RAM buffer instead of disk streaming (setting `FILE_UPLOAD_MAX_MEMORY_SIZ
 
 ### 5.8 Checking SMTP Delivery
 
-Production uses Django's SMTP backend. None of the `EMAIL_*` values is
-technically required — without any set, `EMAIL_HOST=localhost`, port `587`,
+Production uses Django's SMTP backend, configured through Django's `MAILERS`
+setting since Django 6.1. The environment variable names are **not** affected
+by that — an existing `.env` stays valid unchanged. None of the `EMAIL_*`
+values is technically required — without any set, `EMAIL_HOST=localhost`, port `587`,
 STARTTLS (`EMAIL_USE_TLS=True`), and the sender `noreply@anlaufstelle.app`
 apply. Operationally, i.e. for actual delivery, `EMAIL_HOST` must point at the
 relay in `.env`; only set `EMAIL_PORT` and `EMAIL_USE_TLS` if they need to
@@ -2833,4 +2836,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-15 -->
-<!-- source-hash: b5c70d29f827694188278c0c132c8baf29c7b579 -->
+<!-- source-hash: 57d97792e16c1f3a104cb99db7e12d4f3d8c3f7d -->
