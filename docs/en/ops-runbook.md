@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-18: § 5.8 states that implicit TLS/SMTPS on port 465 is supported via `EMAIL_USE_SSL` and mutually exclusive with `EMAIL_USE_TLS` (#2267).
 > Synchronization update 2026-09-18: stack line on Django 6.1 and § 5.8 states that production configures SMTP through Django's `MAILERS` setting since Django 6.1, with unchanged environment variable names (#1662).
 > Synchronization update 2026-09-15: the restore-drill guidance now documents the explicit `COMPOSE_DIR` handoff and the `.env`-only `BACKUP_HOST_DIR` source, and § 7.4 reads the freshclam result from the container log (#2248).
 > Synchronization update 2026-09-15: the production Compose healthcheck treats only `error`/HTTP 503 as unhealthy while `degraded` remains available and requires separate monitoring (#2173).
@@ -990,9 +991,10 @@ STARTTLS (`EMAIL_USE_TLS=True`), and the sender `noreply@anlaufstelle.app`
 apply. Operationally, i.e. for actual delivery, `EMAIL_HOST` must point at the
 relay in `.env`; only set `EMAIL_PORT` and `EMAIL_USE_TLS` if they need to
 deviate from the default. `EMAIL_USE_TLS=True` negotiates **STARTTLS** on the
-configured port — implicit TLS/SMTPS (classically port 465, Django's
-`EMAIL_USE_SSL`) is currently **not wired up**: a relay offering only port 465
-cannot be connected to this application. If the relay requires authentication,
+configured port. For implicit TLS/SMTPS (classically port 465), set
+`EMAIL_USE_SSL='True'`, `EMAIL_USE_TLS='False'`, and `EMAIL_PORT=465` instead —
+a relay offering only port 465 can be connected that way. Both switches set to
+`True` at the same time are ruled out: startup then aborts with a message. If the relay requires authentication,
 `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` are needed too. `EXTERNAL_ORIGIN`
 must also contain the public base URL so that invitation and reset links are
 valid. The sender should be authorized for SPF, DKIM, and DMARC.
@@ -2835,5 +2837,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 57d97792e16c1f3a104cb99db7e12d4f3d8c3f7d -->
+<!-- translation-date: 2026-09-18 -->
+<!-- source-hash: a92f5dfd6b7fe2e25ab1a569721acc9dde1eea1c -->

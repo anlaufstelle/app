@@ -983,10 +983,11 @@ gueltig. Technisch ist keiner der
 `noreply@anlaufstelle.app`. Betrieblich, also fuer tatsaechliche Zustellung,
 muss `EMAIL_HOST` in `.env` auf das erreichbare Relay zeigen; `EMAIL_PORT` und
 `EMAIL_USE_TLS` nur setzen, wenn sie vom Default abweichen sollen.
-`EMAIL_USE_TLS=True` verhandelt **STARTTLS** auf dem konfigurierten Port —
-implizites TLS/SMTPS (klassisch Port 465, Djangos `EMAIL_USE_SSL`) ist derzeit
-**nicht verdrahtet**: ein Relay mit ausschliesslich Port 465 laesst sich mit
-dieser Anwendung nicht anbinden. Verlangt der Relay Authentifizierung, sind
+`EMAIL_USE_TLS=True` verhandelt **STARTTLS** auf dem konfigurierten Port. Fuer
+implizites TLS/SMTPS (klassisch Port 465) stattdessen `EMAIL_USE_SSL='True'`,
+`EMAIL_USE_TLS='False'` und `EMAIL_PORT=465` setzen — ein Relay mit
+ausschliesslich Port 465 laesst sich damit anbinden. Beide Schalter zugleich auf
+`True` sind ausgeschlossen: der Start bricht dann mit einer Meldung ab. Verlangt der Relay Authentifizierung, sind
 zusaetzlich `EMAIL_HOST_USER` und `EMAIL_HOST_PASSWORD` noetig. Fuer gueltige
 Einladungs- und Reset-Links muss ausserdem `EXTERNAL_ORIGIN` die oeffentliche
 Basis-URL enthalten. Der Absender soll fuer SPF, DKIM und DMARC autorisiert

@@ -228,7 +228,8 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 | `EMAIL_PORT` | `587` | SMTP-Port. |
 | `EMAIL_HOST_USER` || SMTP-Benutzer. |
 | `EMAIL_HOST_PASSWORD` || SMTP-Passwort. |
-| `EMAIL_USE_TLS` | `True` | STARTTLS aktivieren. |
+| `EMAIL_USE_TLS` | `True` | STARTTLS auf dem konfigurierten Port aushandeln (typisch Port 587). |
+| `EMAIL_USE_SSL` | `False` | Implizites TLS/SMTPS (typisch Port 465). Schließt `EMAIL_USE_TLS` aus — beide zugleich auf `True` lässt die Anwendung bewusst nicht starten. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Absenderadresse. |
 
 Seit Django 6.1 konfiguriert die Anwendung den Mailversand intern über
@@ -611,10 +612,12 @@ Pflicht — ohne Angabe startet die Anwendung mit `EMAIL_HOST=localhost`, Port
 `noreply@anlaufstelle.app`. Betrieblich, also für tatsächliche Zustellung,
 müssen Betreiber `EMAIL_HOST` auf ein erreichbares Relay setzen; `EMAIL_PORT`
 und `EMAIL_USE_TLS` nur anpassen, wenn sie vom Default abweichen sollen.
-`EMAIL_USE_TLS=True` verhandelt **STARTTLS** auf dem konfigurierten Port
-implizites TLS/SMTPS (klassisch Port 465, Djangos `EMAIL_USE_SSL`) ist derzeit
-**nicht verdrahtet**: ein Relay, das ausschließlich Port 465 anbietet, lässt
-sich mit dieser Anwendung nicht anbinden. Verlangt der Relay eine Anmeldung,
+`EMAIL_USE_TLS=True` verhandelt **STARTTLS** auf dem konfigurierten Port.
+Für implizites TLS/SMTPS (klassisch Port 465) setzen Betreiber stattdessen
+`EMAIL_USE_SSL='True'`, `EMAIL_USE_TLS='False'` und `EMAIL_PORT=465`; ein Relay
+mit ausschließlich Port 465 lässt sich also anbinden. Beide Schalter zugleich
+auf `True` sind ausgeschlossen: die Anwendung bricht den Start dann mit einer
+entsprechenden Meldung ab. Verlangt der Relay eine Anmeldung,
 sind zusätzlich `EMAIL_HOST_USER` und `EMAIL_HOST_PASSWORD` betrieblich
 notwendig. `DEFAULT_FROM_EMAIL` muss eine für SPF, DKIM und DMARC autorisierte
 Absenderdomain verwenden. Damit die Links in Einladungs- und Reset-Mails auf

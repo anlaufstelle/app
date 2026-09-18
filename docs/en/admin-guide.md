@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-18: the SMTP environment reference lists `EMAIL_USE_SSL` and the SMTP requirements state that implicit TLS/SMTPS on port 465 is supported and mutually exclusive with `EMAIL_USE_TLS` (#2267).
 > Synchronization update 2026-09-18: the SMTP environment reference notes that the application configures email delivery through Django's `MAILERS` setting since Django 6.1 while the environment variable names stay unchanged (#1662).
 > Synchronization update 2026-09-15: § 2.3 the quick-exit target row now states that the target does not learn the origin of the jump (no `Referer` header) (#2179).
 > Synchronization update 2026-09-15: § 2.4 documents the Django-admin resend action for pending `super_admin` invitations (#2223).
@@ -242,7 +243,8 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 | `EMAIL_PORT` | `587` | SMTP port. |
 | `EMAIL_HOST_USER` | -- | SMTP user. |
 | `EMAIL_HOST_PASSWORD` | -- | SMTP password. |
-| `EMAIL_USE_TLS` | `True` | Enable STARTTLS. |
+| `EMAIL_USE_TLS` | `True` | Negotiate STARTTLS on the configured port (typically port 587). |
+| `EMAIL_USE_SSL` | `False` | Implicit TLS/SMTPS (typically port 465). Mutually exclusive with `EMAIL_USE_TLS` — the application deliberately refuses to start with both set to `True`. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Sender address. |
 
 Since Django 6.1 the application configures email delivery internally via
@@ -625,10 +627,12 @@ port `587`, STARTTLS enabled (`EMAIL_USE_TLS=True`), and the sender
 `noreply@anlaufstelle.app`. Operationally, i.e. for actual delivery, operators
 must point `EMAIL_HOST` at a reachable relay; adjust `EMAIL_PORT` and
 `EMAIL_USE_TLS` only if they need to deviate from the default.
-`EMAIL_USE_TLS=True` negotiates **STARTTLS** on the configured port — implicit
-TLS/SMTPS (classically port 465, Django's `EMAIL_USE_SSL`) is currently **not
-wired up**: a relay that only offers port 465 cannot be connected to this
-application. If the relay requires authentication, `EMAIL_HOST_USER` and
+`EMAIL_USE_TLS=True` negotiates **STARTTLS** on the configured port. For
+implicit TLS/SMTPS (classically port 465), operators set `EMAIL_USE_SSL='True'`,
+`EMAIL_USE_TLS='False'`, and `EMAIL_PORT=465` instead; a relay that only offers
+port 465 can therefore be connected. Both switches set to `True` at the same
+time are ruled out: the application then aborts startup with a corresponding
+message. If the relay requires authentication, `EMAIL_HOST_USER` and
 `EMAIL_HOST_PASSWORD` are operationally required as well. `DEFAULT_FROM_EMAIL`
 must use a sender domain authorized for SPF, DKIM, and DMARC. `EXTERNAL_ORIGIN`
 must also be correct so that invitation and reset links point to the right
@@ -2209,5 +2213,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 6adb6b6276a69524a9be724822e7fbc8213a2a2f -->
+<!-- translation-date: 2026-09-18 -->
+<!-- source-hash: 6aaee6bd29a0beee711570121b324fc9a6f9e7c6 -->

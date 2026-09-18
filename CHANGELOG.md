@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **SMTPS-Anbindung (Port 465) korrekt dokumentiert** (#2267) — Admin-Handbuch und Betriebs-Runbook führen `EMAIL_USE_SSL` als unterstützten Schalter, der `EMAIL_USE_TLS` ausschließt; die frühere Aussage, implizites TLS sei nicht verdrahtet, entfällt.
 - **Englische Screenshot-Dokumentation ins Sync-Gate aufgenommen** (#2252) — Ein Quell-Hash-Stempel und ein Regressionstest machen künftigen Drift zur deutschen Screenshot-Dokumentation sichtbar.
 - **Assertion-Konventionen öffentlich verlinkt** (#2256) — Beide CONTRIBUTING-Spiegel führen Beitragende direkt zu den öffentlich ausgelieferten Regeln für präzise, mutationsfeste Assertions.
 - **Kontext-Kopf-Konvention für Beitragende auffindbar gemacht** (#2255) — Die CONTRIBUTING-Dokumentation verweist bei den Template-Konventionen auf die Regeln für Kontext-Köpfe und Rücklinke.
