@@ -463,7 +463,7 @@ if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
         fail "Schritt 2b: Kein Audit-HWM-Backup fuer den Restore-Satz (${HWM_FILE##*/})"
     elif dc run --rm -T -e POSTGRES_DB="$DRILL_DB" \
         -e DJANGO_AUDIT_HWM_PATH="$HWM_DRILL_CONTAINER_PATH" --entrypoint sh maintenance \
-        -c 'cat > "$DJANGO_AUDIT_HWM_PATH" && python manage.py shell -c "from core.services.audit.hwm import HighWaterMarkStore; import os; HighWaterMarkStore.load(os.environ['\''DJANGO_AUDIT_HWM_PATH'\''])" && python manage.py verify_audit_chain' \
+        -c 'cat > "$DJANGO_AUDIT_HWM_PATH" && python manage.py shell -c "from core.services.audit.hwm import HighWaterMarkStore; import os; HighWaterMarkStore.load(os.environ['\''DJANGO_AUDIT_HWM_PATH'\''])" && python manage.py verify_audit_chain --require-anchor' \
         < "$HWM_FILE" >"$HWM_VERIFY_OUT" 2>"$HWM_VERIFY_ERR"; then
         sed 's/^/       /' "$HWM_VERIFY_OUT"
         ok "Schritt 2b: Audit-HWM-Signatur verifiziert und gegen restaurierte Kette geprueft (${HWM_FILE##*/})"

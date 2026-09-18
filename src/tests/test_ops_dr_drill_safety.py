@@ -62,7 +62,7 @@ def test_drill_binds_hwm_to_dump_timestamp_and_restored_audit_chain() -> None:
     assert 'HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"' in hwm_step
     assert 'find "$BACKUP_DIR"' not in hwm_step
     assert '-e POSTGRES_DB="$DRILL_DB"' in hwm_step
-    assert "verify_audit_chain" in hwm_step
+    assert "verify_audit_chain --require-anchor" in hwm_step
     assert "Ausgewaehlter Restore-Satz:" in drill
     assert "${HWM_FILE##*/}" in hwm_step
     assert 'HWM_FILE="${BACKUP_FILE%/*}/audit_hwm-${BACKUP_TIMESTAMP}.json"' in restore
@@ -121,7 +121,11 @@ def test_drill_verifies_audit_chain_in_maintenance_context_and_logs_error() -> N
 
     assert "run --rm -T" in hwm_step
     assert "--entrypoint sh maintenance" in hwm_step
-    assert "python manage.py verify_audit_chain" in hwm_step
+    # Refs #2242: Der Anker kommt unmittelbar davor aus dem Backup-Satz. Ohne
+    # --require-anchor wuerde eine signaturgueltige, aber ankerlose HWM-Datei
+    # den Drill gruen passieren und den restaurierten Bestand still neu
+    # verankern — genau der Fall, den Schritt 2b ausschliessen soll.
+    assert "python manage.py verify_audit_chain --require-anchor" in hwm_step
     assert 'POSTGRES_DB="$DRILL_DB"' in hwm_step
     assert '< "$HWM_FILE"' in hwm_step
     assert '2>"$HWM_VERIFY_ERR"' in hwm_step
