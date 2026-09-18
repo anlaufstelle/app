@@ -182,7 +182,9 @@ def _lock_superseded_row(owner, supersedes) -> None:
     owner.attachments.select_for_update().filter(pk=supersedes.pk).values_list("pk", flat=True).first()
 
 
-def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
+def commit_staged_upload(
+    owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True, owner_rows_prelocked=False
+):
     """Persistiere Upload und Audit-Zeile atomar; Fehler raeumen die Datei auf.
 
     Reisst der Kontingent-Backstop (Refs #2178), traegt die Ausnahme die
@@ -215,6 +217,16 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
     Advisory-Lock des ersten, und ein gleichzeitiger
     :func:`soft_delete_attachment_chain` derselben Kette bildet einen
     Deadlock-Zyklus (SQLSTATE ``40P01``).
+
+    **Owner-Stufe (Refs #2260):** Die neue Zeile traegt den Owner-Fremd-
+    schluessel; dessen aufgeschobene Pruefung nimmt eine Sperre auf der
+    Owner-/Personenzeile erst zum COMMIT, also hinter dem Ketten-Lock. Dieser
+    Einstieg sperrt sie deshalb selbst vorweg. ``owner_rows_prelocked=True``
+    sagt: der BATCH-Einstieg des Aufrufers hat die Stufe fuer den ganzen
+    Vorgang bereits vor seinem ersten Audit-Write genommen
+    (:func:`~core.services.attachments.crud.lock_attachment_batch_before_audit`)
+    — eine Abfrage je Datei koennte die Ordnung dann nicht mehr herstellen und
+    wuerde nur die Haltedauer des Ketten-Locks verlaengern.
     """
     try:
         with transaction.atomic():
@@ -226,6 +238,7 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
                 supersedes=supersedes,
                 sort_order=sort_order,
                 audit=audit,
+                owner_rows_prelocked=owner_rows_prelocked,
             )
     except StorageQuotaBackstopError as exc:
         staged.output_path.unlink(missing_ok=True)
@@ -241,7 +254,9 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
         raise
 
 
-def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
+def _commit_staged_upload(
+    owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True, owner_rows_prelocked=False
+):
     """Persistiere eine per :func:`prepare_encrypted_upload` gestagte Datei als
     ``Attachment`` samt Audit-Zeile — schneller DB-Write (Refs #1345/#1960).
 
@@ -272,6 +287,21 @@ def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=Non
         # Cleanup-Garantie ausloesen wie ein DB-Fehler (#662) — sonst bliebe
         # die bereits verschluesselte ``.enc`` als Waise auf der Disk liegen.
         owner_field = owner_field_name(owner)
+        # SPERR-REIHENFOLGE Stufe 1 (Refs #2260): Owner-/Personenzeile. Der
+        # Insert unten traegt den Owner-Fremdschluessel; dessen Pruefung nimmt
+        # eine Sperre auf der Owner-Zeile — beim aufgeschobenen
+        # zusammengesetzten Schluessel erst zum COMMIT und damit HINTER dem
+        # Advisory-Lock der Einrichtung. Ein Pfad, der die Personenzeile haelt
+        # und danach den Ketten-Lock nimmt (Art.-18-Einschraenkung,
+        # Tilgungskaskade), schloss darueber den Zyklus. Gilt fuer BEIDE Modi:
+        # auch der reine Zugang legt eine Zeile mit Owner-FK an. Hielt der
+        # Aufrufer bereits eine Transaktion, hat er die Stufe laut Batch-Vertrag
+        # vor seinem ersten Audit-Write genommen (``owner_rows_prelocked``) —
+        # hier waere sie zu spaet und nur zusaetzliche Haltedauer.
+        if not owner_rows_prelocked:
+            from core.services.attachments.crud import lock_owner_rows_in_facility_order
+
+            lock_owner_rows_in_facility_order(owner)
         # SPERR-REIHENFOLGE (Refs #2178): (1) Attachment-Zeile, (2) Advisory-Lock
         # der Einrichtung (Kontingent = Audit-Hashkette, ein einziger Key).
         # Dieselbe Reihenfolge haelt ``soft_delete_attachment_chain`` ein (erst
@@ -390,7 +420,7 @@ def store_encrypted_file(
     )
 
 
-def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=None):
+def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=None, rows_prelocked=False):
     """Markiere alle Attachments einer Versionskette (entry_id) als soft-deleted.
 
     Für UI-Lösch-Aktionen (Stufe B, Refs #622). Physischer Disk-Cleanup
@@ -401,21 +431,32 @@ def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=Non
     ueber den geteilten Reverse-Accessor ``owner.attachments`` und ist damit
     automatisch owner-gescopt (AP2, Refs #1738).
 
-    **Sperr-Reihenfolge (Refs #2260):** Das ``UPDATE`` sperrt die Zeilen der
-    EINEN Kette und liegt VOR dem Audit-Write — also vor dem Ketten-Advisory-
-    Lock der Einrichtung; das ist die geforderte Richtung. Wer MEHRERE Ketten
-    in einer Transaktion soft-loescht, sperrt sie vorher gebuendelt und nach
-    ``pk`` geordnet (:func:`core.services.attachments.crud.lock_attachment_rows_in_facility_order`)
-    — sonst legte die Kettenreihenfolge des Aufrufers die Sperrfolge fest.
-    Beide Batch-Einstiege tun das: ``apply_attachment_changes`` ueber den
-    Batch-Vertrag, ``discard_type_switch_file_chains`` ueber die Vorsperre vor
-    seiner Schleife. Eine eigene Vorsperre je Einzelaufruf waere eine zweite
-    Abfrage pro Kette und damit genau das lineare Wachstum, das der
+    **Sperr-Reihenfolge (Refs #2260):** Eine Kette ist nicht EINE Zeile — das
+    ``UPDATE`` fasst alle Versionen an, und welche Zeile es zuerst sperrt,
+    entscheidet der Ausfuehrungsplan. Die ``pk``-Werte sind UUIDs und folgen
+    weder der Versions- noch der Heap-Reihenfolge; gegen einen gleichzeitigen
+    Pfad mit geordneter Vorsperre (Vernichtung, Batch) koennen sich zwei
+    Vorgaenge darueber verschraenken. Deshalb geht auch der Einzelpfad ueber
+    dieselbe gebuendelte, nach ``pk`` geordnete Vorsperre
+    (:func:`core.services.attachments.crud.lock_attachment_rows_in_facility_order`),
+    und die liegt vor dem Audit-Write, also vor dem Ketten-Advisory-Lock der
+    Einrichtung.
+
+    ``rows_prelocked=True`` sagt: der Aufrufer hat die Zeilen fuer den GANZEN
+    Vorgang bereits gebuendelt und geordnet gesperrt — dann entfaellt die
+    Abfrage hier. Genau das tun die beiden Batch-Einstiege
+    (``apply_attachment_changes`` ueber den Batch-Vertrag,
+    ``discard_type_switch_file_chains`` ueber die Vorsperre vor seiner
+    Schleife); eine Vorsperre je Kette waere dort das lineare Wachstum, das der
     Query-Count-Pin des Bulk-REMOVE ausschliesst.
 
     Returns: Anzahl der neu soft-deleted Attachments in der Kette.
     """
     with transaction.atomic():
+        if not rows_prelocked:
+            from core.services.attachments.crud import lock_attachment_rows_in_facility_order
+
+            lock_attachment_rows_in_facility_order(owner, [entry_id])
         qs = owner.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
         if audit and field is None:
             field = qs.values_list("field_template__slug", flat=True).first()

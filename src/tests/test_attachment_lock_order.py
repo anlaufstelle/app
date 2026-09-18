@@ -572,7 +572,11 @@ class TestSequenzReihenfolge:
         )
         vorgaenger = _attach(facility, person, ft_file, staff_user)
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        # BEWUSST ohne aeussere Transaktion: genau so nimmt dieser Einstieg den
+        # Ketten-Lock selbst und als ersten seiner Transaktion — nur davor
+        # laesst sich die Owner-Stufe ueberhaupt legen. Mit Aufrufer-
+        # Transaktion gilt der Batch-Vertrag (siehe die Guards der Views).
+        with CaptureQueriesContext(connection) as captured:
             _ersetze(facility, person, ft_file, staff_user, vorgaenger)
 
         self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_client")
@@ -591,7 +595,8 @@ class TestSequenzReihenfolge:
             created_by=staff_user,
         )
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        # Ohne aeussere Transaktion — siehe Replace-Guard.
+        with CaptureQueriesContext(connection) as captured:
             _attach(facility, event, ft_file, staff_user)
 
         sequence = _lock_sequence(captured)

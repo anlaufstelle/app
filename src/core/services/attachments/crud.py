@@ -202,7 +202,9 @@ def finalize_staged_files(owner, user, staged_by_slug, document_type):
             continue
         entries = []
         for idx, staged in enumerate(staged_list):
-            attachment = commit_staged_upload(owner, ft, staged, user, sort_order=idx)
+            attachment = commit_staged_upload(
+                owner, ft, staged, user, sort_order=idx, owner_rows_prelocked=connection.in_atomic_block
+            )
             entries.append({"id": str(attachment.pk), "sort": idx})
         owner.data_json[slug] = {"__files__": True, "entries": entries}
     owner.save(update_fields=["data_json"])
@@ -344,10 +346,15 @@ def stage_attachment_uploads(owner, user, request_files, file_fields, document_t
     return staged_by_key, staged_all
 
 
-def _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user):
+def _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user, *, rows_prelocked=False):
     """REMOVE-Schritt: hidden CSV ``<slug>__remove`` listet zu loeschende
     ``entry_id``-Werte -> ``soft_delete_attachment_chain``. Liefert die um die
-    geloeschten Entries bereinigte Entry-Liste."""
+    geloeschten Entries bereinigte Entry-Liste.
+
+    ``rows_prelocked`` reicht die Batch-Vorsperre durch: hat der Batch die
+    Zeilen bereits gebuendelt und nach ``pk`` geordnet gesperrt, spart sich
+    jeder Einzelaufruf seine eigene Abfrage — genau das lineare Wachstum, das
+    der Query-Count-Pin des Bulk-REMOVE ausschliesst (Refs #2260)."""
     from core.services.file_vault import soft_delete_attachment_chain
 
     remove_raw = request_post.get(f"{slug}__remove", "")
@@ -358,13 +365,15 @@ def _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner,
     for entry in current_entries:
         att = attachments_by_pk.get(str(entry["id"]))
         if att and str(att.entry_id) in remove_ids:
-            soft_delete_attachment_chain(owner, att.entry_id, user, field=slug)
+            soft_delete_attachment_chain(owner, att.entry_id, user, field=slug, rows_prelocked=rows_prelocked)
             continue
         filtered.append(entry)
     return filtered
 
 
-def _apply_replace(slug, current_entries, attachments_by_pk, staged_by_key, ft, owner, user):
+def _apply_replace(
+    slug, current_entries, attachments_by_pk, staged_by_key, ft, owner, user, *, owner_rows_prelocked=False
+):
     """REPLACE-Schritt: pro bestehendem Entry eine vorab gestagte Datei unter
     :func:`replace_upload_key` -> ``commit_staged_upload(supersedes=...)``.
     Liefert die (ggf. ersetzte) Entry-Liste. Reiner DB-Write (Refs #1956).
@@ -381,14 +390,16 @@ def _apply_replace(slug, current_entries, attachments_by_pk, staged_by_key, ft, 
             continue
         staged_list = staged_by_key.pop(replace_upload_key(slug, att.entry_id), None)
         if staged_list:
-            new_att = commit_staged_upload(owner, ft, staged_list[0], user, supersedes=att)
+            new_att = commit_staged_upload(
+                owner, ft, staged_list[0], user, supersedes=att, owner_rows_prelocked=owner_rows_prelocked
+            )
             updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
         else:
             updated_entries.append(entry)
     return updated_entries
 
 
-def _apply_add(slug, updated_entries, staged_by_key, ft, owner, user):
+def _apply_add(slug, updated_entries, staged_by_key, ft, owner, user, *, owner_rows_prelocked=False):
     """ADD-Schritt: alle unter dem Slug gestagten Dateien werden mit frischen
     ``entry_id`` angehaengt. Liefert die erweiterte Liste. Reiner DB-Write.
     Verbraucht den Slug-Schluessel aus ``staged_by_key`` (``pop``)."""
@@ -396,7 +407,9 @@ def _apply_add(slug, updated_entries, staged_by_key, ft, owner, user):
 
     base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
     for idx, staged in enumerate(staged_by_key.pop(slug, None) or []):
-        new_att = commit_staged_upload(owner, ft, staged, user, sort_order=base_sort + idx)
+        new_att = commit_staged_upload(
+            owner, ft, staged, user, sort_order=base_sort + idx, owner_rows_prelocked=owner_rows_prelocked
+        )
         updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
     return updated_entries
 
@@ -484,18 +497,23 @@ def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=
     """
     if not connection.in_atomic_block:
         return []
-    if lock_owner_rows:
-        _lock_owner_rows_in_canonical_order(owner)
     rows = owner.attachments.all()
     if entry_ids is not None:
         ids = sorted({str(entry_id) for entry_id in entry_ids if entry_id})
         if not ids:
+            # Leere Mutationsmenge: Stufe 1 bleibt ebenfalls aus. Wer keine
+            # Anhangszeile anfasst, bringt die beiden Sperrsorten nicht in
+            # dieselbe Transaktion und braucht die Ordnung nicht — eine Sperre
+            # hier waere neue Konkurrenz ohne Gegenwert (der Vertrag im
+            # Docstring: der reine ADD-Batch zahlt nichts).
             return []
         rows = rows.filter(entry_id__in=ids)
+    if lock_owner_rows:
+        lock_owner_rows_in_facility_order(owner)
     return list(rows.select_for_update().order_by("pk").values_list("pk", flat=True))
 
 
-def _lock_owner_rows_in_canonical_order(owner) -> None:
+def lock_owner_rows_in_facility_order(owner) -> None:
     """Stufe 1 der Ordnung: Personenzeile, dann die Owner-Zeile (ADR-050 D5.5).
 
     Dieselbe Richtung, die :func:`_lock_owner_row` fuer den Vernichtungspfad
@@ -508,9 +526,15 @@ def _lock_owner_rows_in_canonical_order(owner) -> None:
     die Pfade, die diese Zeilen ohnehin spaeter sperren (etwa das Art.-18-Gate
     oder der Optimistic-Locking-Reload), behalten ihre Sperre unveraendert und
     finden sie hier nur bereits gehalten vor.
+
+    Ohne offene Transaktion gibt es nichts vorzusperren (derselbe Vertrag wie
+    in :func:`lock_attachment_rows_in_facility_order`); ``select_for_update``
+    waere im Autocommit-Modus ein ``TransactionManagementError``.
     """
     from core.models.client import Client
 
+    if not connection.in_atomic_block:
+        return
     facility_id = owner.facility_id
     if owner.__class__.__name__ == "Client":
         Client.objects.for_facility(facility_id).filter(pk=owner.pk).select_for_update().only("pk").first()
@@ -535,15 +559,26 @@ def lock_attachment_batch_before_audit(owner, user, request_post, staged_by_key,
     ``data_json`` gibt die kuenftige Markerlage vor — derselbe Wert, den der
     Aufrufer an :func:`stage_attachment_uploads` gibt, damit Sperrmenge und
     Schreibmenge deckungsgleich bleiben.
+
+    **Typentfernung** (``document_type is None``) hat keinen Batch — aber sie
+    verwirft ueber :func:`discard_type_switch_file_chains` ALLE Ketten des
+    Owners und schreibt dafuer eine Bulk-Audit-Zeile, also den Ketten-Lock.
+    Die Owner-/Personenzeile sperrte in diesem Zweig erst das anschliessende
+    ``update_*`` — hinter dem Ketten-Lock und damit gegen die Ordnung. Sie
+    gehoert deshalb auch hier an den Anfang; die Anhangszeilen nimmt der
+    Discard selbst gebuendelt und geordnet.
     """
     if document_type is None:
+        lock_owner_rows_in_facility_order(owner)
         return
     file_field_states = list(_iter_file_fields(owner, user, document_type, data_json=data_json))
-    lock_attachment_rows_in_facility_order(
-        owner,
-        _batch_entry_ids(file_field_states, request_post, staged_by_key),
-        lock_owner_rows=True,
-    )
+    entry_ids = _batch_entry_ids(file_field_states, request_post, staged_by_key)
+    if not entry_ids and not _batch_legt_zeilen_an(file_field_states, staged_by_key):
+        # Reines Text-Update: keine Anhangsmutation, keine Sperre. Nur ein
+        # Batch, der Zeilen anfasst ODER anlegt, braucht die Ordnung.
+        return
+    lock_owner_rows_in_facility_order(owner)
+    lock_attachment_rows_in_facility_order(owner, entry_ids)
 
 
 def _batch_entry_ids(file_field_states, request_post, staged_by_key) -> set:
@@ -566,6 +601,21 @@ def _batch_entry_ids(file_field_states, request_post, staged_by_key) -> set:
             if str(att.entry_id) in remove_ids or replace_upload_key(slug, att.entry_id) in staged_by_key:
                 ids.add(att.entry_id)
     return ids
+
+
+def _batch_legt_zeilen_an(file_field_states, staged_by_key) -> bool:
+    """Legt dieser Batch eine NEUE Anhangszeile an (reiner ADD)?
+
+    Ein ADD fasst keine Bestandszeile an und taucht deshalb nicht in
+    :func:`_batch_entry_ids` auf — leer ist er trotzdem nicht: die neue Zeile
+    traegt den Owner-Fremdschluessel, und dessen (aufgeschobene) Pruefung nimmt
+    eine Sperre auf der Owner-/Personenzeile. Ohne Stufe 1 fiele die hinter den
+    Ketten-Lock des ``update_*`` (Refs #2260).
+
+    Die Schluessel eines Zugangs sind die reinen Feld-Slugs; Ersetzen legt
+    seine Schluessel unter :func:`replace_upload_key` ab.
+    """
+    return any(slug in staged_by_key for slug, *_rest in file_field_states)
 
 
 def apply_attachment_changes(owner, user, request_post, request_files, file_fields, document_type, staged_by_key=None):
@@ -619,10 +669,27 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
         # faellt die Zeilensperre des zweiten Commits hinter den Advisory-Lock
         # des ersten (siehe ``lock_batch_attachment_rows``).
         lock_batch_attachment_rows(owner, _batch_entry_ids(file_field_states, request_post, staged_pending))
+        # Genau die Bedingung, unter der die Vorsperre oben gelaufen ist
+        # (Refs #2260): ohne Aufrufer-Transaktion gibt es keine gebuendelte
+        # Sperre, und dann sperrt jeder Einzel-Soft-Delete seine Kette selbst.
+        rows_prelocked = connection.in_atomic_block
         for slug, ft, current_entries, attachments_by_pk in file_field_states:
-            current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user)
-            updated_entries = _apply_replace(slug, current_entries, attachments_by_pk, staged_pending, ft, owner, user)
-            updated_entries = _apply_add(slug, updated_entries, staged_pending, ft, owner, user)
+            current_entries = _apply_remove(
+                slug, current_entries, attachments_by_pk, request_post, owner, user, rows_prelocked=rows_prelocked
+            )
+            updated_entries = _apply_replace(
+                slug,
+                current_entries,
+                attachments_by_pk,
+                staged_pending,
+                ft,
+                owner,
+                user,
+                owner_rows_prelocked=rows_prelocked,
+            )
+            updated_entries = _apply_add(
+                slug, updated_entries, staged_pending, ft, owner, user, owner_rows_prelocked=rows_prelocked
+            )
 
             _write_file_marker(owner, slug, updated_entries)
 
@@ -927,7 +994,7 @@ def discard_type_switch_file_chains(owner, user):
         # einer je Kette, und alle Zeilen liegen vor dem Audit-Write unten.
         lock_attachment_rows_in_facility_order(owner, entry_ids)
         for entry_id in entry_ids:
-            soft_delete_attachment_chain(owner, entry_id, user, audit=False)
+            soft_delete_attachment_chain(owner, entry_id, user, audit=False, rows_prelocked=True)
         if entry_ids:
             audit_attachment_bulk_delete(
                 owner,
