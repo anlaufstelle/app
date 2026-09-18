@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](CONTRIBUTING.md)**
+> Synchronization update 2026-09-18: the Django badge and the coding conventions now name Django 6.1 (#1662).
 > Synchronization update 2026-09-18: the testing guidance now links to the public assertion conventions (#2256).
 > Synchronization update 2026-09-18: the template conventions now link to the context-header and back-link guidance (#2255).
 > Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
@@ -11,7 +12,7 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/)
-[![Django 6.0](https://img.shields.io/badge/django-6.0-green.svg)](https://www.djangoproject.com/)
+[![Django 6.1](https://img.shields.io/badge/django-6.1-green.svg)](https://www.djangoproject.com/)
 [![PostgreSQL 18](https://img.shields.io/badge/postgresql-18-blue.svg)](https://www.postgresql.org/)
 [![HTMX](https://img.shields.io/badge/htmx-%E2%9C%93-blue.svg)](https://htmx.org/)
 [![Alpine.js](https://img.shields.io/badge/alpine.js-%E2%9C%93-blue.svg)](https://alpinejs.dev/)
@@ -367,7 +368,7 @@ pkill -f gunicorn
 ### Python / Django
 
 - **Python 3.14** with full type hints where appropriate (codebase stays 3.13-compatible, see `requires-python`).
-- **Django 6.0+** — class-based views preferred, function views only for simple cases.
+- **Django 6.1+** — class-based views preferred, function views only for simple cases.
 - Business logic belongs in `core/services/`, not in views or models.
 - Models are split up: one model (or closely related models) per file under `core/models/`.
 - Role-based access control via mixins from `core/views/mixins.py` — available: `SuperAdminRequiredMixin` (only `/system/`), `FacilityAdminRequiredMixin` (admin of their own facility), `LeadOrAdminRequiredMixin`, `StaffRequiredMixin`, `AssistantOrAboveRequiredMixin`.
@@ -1001,4 +1002,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-18 -->
-<!-- source-hash: 651755cf4ce926dde424a0a1e9347c7915ad5f5a -->
+<!-- source-hash: 5b9004ca6bedae3727315f7ad6982d0f4931a9a9 -->

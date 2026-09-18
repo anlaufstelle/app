@@ -23,7 +23,7 @@
 **E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`, `test_security_hardening.py` 
 **Spezial-Setup:**
 - Login-Lockout-Test braucht 10 sequenzielle Fehlversuche innerhalb von 15 Min — IP-Rate-Limit (5/m) muss vorher umgangen werden (z.B. Cookie-Reset zwischen Bursts oder Limit per Settings hochsetzen).
-- Pwd-Reset-Test braucht `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` (dev/e2e-Default) oder MailHog für Token-Capture.
+- Pwd-Reset-Test braucht den Console-Mailer über `MAILERS` (`MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}` — dev/e2e-Default) oder MailHog für Token-Capture.
 - Seed-User: `admin`, `emma` (Leitung), `miriam` (Fachkraft), `lena` (Assistenz) — Passwort `anlaufstelle2026`. Quelle: `src/core/seed/constants.py`.
 
 ---
@@ -296,7 +296,7 @@
 |---------|-------|---------|--------|-----|
 | Auth | unauthentifiziert | C/F/S | ⚪ | `test_password_reset.py` |
 
-**Voraussetzung:** `EMAIL_BACKEND=console` (dev) oder MailHog erreichbar; `DJANGO_AUDIT_HASH_KEY` gesetzt (sonst SHA256-Fallback).
+**Voraussetzung:** Console-Mailer über `MAILERS` (dev-Default) oder MailHog erreichbar; `DJANGO_AUDIT_HASH_KEY` gesetzt (sonst SHA256-Fallback).
 
 **Vorbereitung:**
 - E-Mail von `miriam` ist befüllt (via Seed/Admin).

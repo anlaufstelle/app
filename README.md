@@ -212,7 +212,7 @@ Für Tailwind im Watch-Modus (`docker compose --profile tailwind up tailwind`), 
 
 | Komponente | Technologie |
 |---|---|
-| Backend | Django 6.0+, Python 3.14 |
+| Backend | Django 6.1+, Python 3.14 |
 | Frontend | HTMX + Alpine.js + Tailwind CSS |
 | Datenbank | PostgreSQL 18 |
 | Verschlüsselung | AES-128 (Fernet/MultiFernet, Detail in ADR-006/014) |

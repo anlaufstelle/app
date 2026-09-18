@@ -1,6 +1,7 @@
 > This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
+> Synchronization update 2026-09-18: the German source now names Django 6.1 as the backend stack version; this summary carries no stack section, and the release-history entry on the Django 6.0 migration stays as it is (#1662).
 > Most recently synchronized on 2026-09-11 (release-history wording: no deputy is currently designated, and the two entries framed around the EU regulation now name the actual governance state and the support/SBOM/advisory work, #2207).
 
 # Domain Concept Summary
@@ -299,5 +300,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 4889f1a6ee82f974b27eb182a3a98a66e0bb0005 -->
+<!-- translation-date: 2026-09-18 -->
+<!-- source-hash: 99f76d422291fe5571c56e471f34d82e1ab8417d -->

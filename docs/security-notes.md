@@ -1887,7 +1887,7 @@ Die beiden anfragebasierten Versandpfade für E-Mail-Accounts antworten für exi
 nicht existierende Adressen gleich (ein Redirect auf die bestätigende „gesendet"-Seite), unterscheiden
 sich aber **zeitlich**: `LockoutRecoveryRequestView.form_valid`
 ([`lockout_recovery.py`](../src/core/views/lockout_recovery.py)) versendet bei einem Treffer eine
-Recovery-Token-Mail via `send_mail(..., fail_silently=False)` synchron im Anfragepfad; die
+Recovery-Token-Mail via `send_mail(...)` synchron im Anfragepfad; die
 `RateLimitedPasswordResetView` ([`auth.py`](../src/core/views/auth.py)) versendet den
 Password-Reset-Link über Djangos `PasswordResetForm.save()` ebenfalls synchron. Über den echten
 SMTP-Transport ist der Unterschied zwischen Treffer (Tokenbau + Template-Render + SMTP-Versand, bei der

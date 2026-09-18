@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](README.md)**
+> Synchronization update 2026-09-18: the stack table now names Django 6.1 (#1662).
 > Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
 
 # Anlaufstelle
@@ -213,7 +214,7 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 | Component | Technology |
 |---|---|
-| Backend | Django 6.0+, Python 3.14 |
+| Backend | Django 6.1+, Python 3.14 |
 | Frontend | HTMX + Alpine.js + Tailwind CSS |
 | Database | PostgreSQL 18 |
 | Encryption | AES-128 (Fernet/MultiFernet, details in ADR-006/014) |
@@ -226,5 +227,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-11 -->
-<!-- source-hash: 4bc15f8514a9b3a7deda7e09b678000aec01915f -->
+<!-- translation-date: 2026-09-18 -->
+<!-- source-hash: e3985f57fe3c7733dc9ca52b364e4bf384db75bb -->

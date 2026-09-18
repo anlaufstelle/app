@@ -15,7 +15,7 @@ Implementierung).
 
 ## 1. Der Stack in einem Absatz
 
-Django 6.0 auf Python 3.14, PostgreSQL 18 als einzige Datenbank ([ADR-004](adr/004-postgresql-only.md)),
+Django 6.1 auf Python 3.14, PostgreSQL 18 als einzige Datenbank ([ADR-004](adr/004-postgresql-only.md)),
 Frontend server-gerendert mit HTMX + Alpine.js + Tailwind statt SPA
 ([ADR-003](adr/003-htmx-alpine-tailwind.md)). Kein Task-Queue-Broker: PDFs entstehen synchron
 im Request ([ADR-010](adr/010-sync-pdf-generation.md)), Hintergrundarbeit läuft als
