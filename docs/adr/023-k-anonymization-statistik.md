@@ -23,7 +23,7 @@ Anlaufstelle implementiert **k-Anonymisierung mit Default-Schwelle `k=5`** in [`
 
 - **Schwelle pro Einrichtung konfigurierbar**, Default `k=5`. Settings-Eintrag erlaubt Anpassung; eine Senkung unter `k=3` wird im UI als Risiko markiert.
 - **Aequivalenzklasse fuer Klienten:** `(facility, age_cluster, contact_stage)`. `count_clients_in_bucket(facility, age_cluster, contact_stage)` liefert die Bucket-Groesse; `is_k_anonymous(client, k)` prueft die Schwelle vor Generalisierung.
-- **Generalisierungs-Regeln** in `k_anonymize_client(client, k)`:
+- **Generalisierungs-Regeln** in `k_anonymize_client(client)`:
   - `pseudonym` → `anon-<sha256(pk)[:12]>` (deterministisch, nicht reversibel)
   - `notes` → `""` (Freitext leakt Identitaet)
   - `age_cluster` bleibt (bereits gebucketed)
