@@ -487,11 +487,11 @@ if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
     fi
     rm -f "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR"
 elif [[ "$DRILL_FORMAT" == "prod" ]]; then
-    # Refs #2242: Im Prod-Format kennt der Drill bereits Pflichtwerte
-    # (BACKUP_ENCRYPTION_KEY, POSTGRES_DB) und bricht ohne sie ab. Eine fehlende
-    # Anker-Konfiguration ist hier ebenso ein Fehler: ohne externen Anker belegt
-    # der Lauf gerade nicht, dass die restaurierte Kette vollstaendig ist.
-    fail "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — DJANGO_AUDIT_HWM_PATH fehlt in ${ENV_FILE}; ohne Anker belegt der Drill keine unversehrte Audit-Kette"
+    # Refs #2242: Der externe Anker ist ein Opt-in-Feature (DJANGO_AUDIT_HWM_PATH
+    # ist in .env.example auskommentiert). Ein fehlender Pfad bleibt deshalb kein
+    # Fehlschlag, wird aber nicht mehr als beilaeufige INFO-Zeile gefuehrt: der
+    # Schritt gilt als nicht geprueft und steht so auch im Ergebnisblock.
+    skip "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — DJANGO_AUDIT_HWM_PATH nicht gesetzt (${ENV_FILE}); dieser Lauf belegt keine unversehrte Audit-Kette"
 else
     skip "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — das dev-Backup-Format fuehrt keinen externen Audit-Anker mit"
 fi

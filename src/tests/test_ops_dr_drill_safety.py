@@ -135,18 +135,18 @@ def test_drill_verifies_audit_chain_in_maintenance_context_and_logs_error() -> N
 def test_unconfigured_anchor_check_is_never_silently_ok() -> None:
     """Ohne Anker-Konfiguration darf Schritt 2b nicht als erledigt durchgehen (Refs #2242).
 
-    Im Prod-Format kennt das Skript bereits Pflichtwerte (``BACKUP_ENCRYPTION_KEY``,
-    ``POSTGRES_DB``) und behandelt die fehlende Anker-Konfiguration daher als
-    Fehler; im dev-Format wird der Schritt ausdruecklich als uebersprungen
-    ausgewiesen statt stillschweigend ausgelassen.
+    Beide Formate weisen den nicht ausgefuehrten Schritt ausdruecklich als
+    uebersprungen aus — statt ihn als beilaeufige INFO-Zeile zu fuehren oder im
+    dev-Format ganz zu verschweigen. Der Prod-Zweig benennt zusaetzlich die
+    fehlende Variable samt Env-Datei.
     """
     drill = _script("restore-drill.sh")
     hwm_step = drill.split("# Schritt 2b:", maxsplit=1)[1].split("# Schritt 4:", maxsplit=1)[0]
     summary = drill.split("# Schritt 7:", maxsplit=1)[1]
     notice = "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)"
 
-    assert f'fail "{notice}' in hwm_step
-    assert f'skip "{notice}' in hwm_step
+    assert hwm_step.count(f'skip "{notice}') == 2
+    assert "DJANGO_AUDIT_HWM_PATH nicht gesetzt (${ENV_FILE})" in hwm_step
     assert "INFO - Schritt 2b" not in hwm_step
     assert "skip() {" in drill
     assert "DRILL_SKIPPED+=" in drill

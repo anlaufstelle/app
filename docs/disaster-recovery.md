@@ -416,13 +416,13 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   Schritt 2b des Prod-Drills kann dann nicht ausgeführt werden. Das ist kein
   Signaturnachweis, und dieser Drill darf nicht als vollständig grün
   protokolliert werden. Fehlt `DJANGO_AUDIT_HWM_PATH` in der
-  **rekonstruierten** `.env`, meldet Schritt 2b deshalb
-  `FAIL - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)`
-  und der Prod-Drill endet fehlgeschlagen — für diesen Drill die Variable
-  also setzen, damit die Signaturprüfung wirklich läuft. Im dev-Backup-Format
-  gibt es kein Anker-Artefakt; dort weist der Drill den Schritt als `SKIP` aus
-  und listet ihn im Ergebnisblock unter `Uebersprungen` — nicht geprüft, also
-  auch nicht bestanden.
+  **rekonstruierten** `.env`, meldet Schritt 2b
+  `SKIP - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)`
+  und erscheint im Ergebnisblock unter `Uebersprungen`; dasselbe gilt im
+  dev-Backup-Format, das kein Anker-Artefakt mitführt. Nicht geprüft ist nicht
+  bestanden: Ein solcher Lauf darf nicht als vollständig grüner Drill
+  protokolliert werden — für diesen Drill die Variable deshalb setzen, damit
+  die Signaturprüfung wirklich läuft.
 - Falls noch kein HWM existiert, ihn **vor dem Quellbackup** bewusst erzeugen:
   `docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain`.
   Der Lauf muss vollständig grün sein, erst dann ist der Anker geschrieben.
