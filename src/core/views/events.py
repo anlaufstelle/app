@@ -22,7 +22,12 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
 from core.models import Client, DocumentType, Event
-from core.services.attachments import quota_backstop_audit_boundary, stage_attachment_uploads, stage_uploads
+from core.services.attachments import (
+    lock_attachment_batch_before_audit,
+    quota_backstop_audit_boundary,
+    stage_attachment_uploads,
+    stage_uploads,
+)
 from core.services.case import get_case_or_none
 from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, assert_processing_allowed
@@ -1095,6 +1100,22 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                 # Rollback, statt mit ihm zu verschwinden.
                 with quota_backstop_audit_boundary():
                     with transaction.atomic():
+                        # Refs #2260: einrichtungsweite Sperr-Reihenfolge — die
+                        # Bestandszeilen dieses Batches werden VOR dem ersten
+                        # Audit-Write gesperrt. ``update_event`` nimmt mit seiner
+                        # AuditLog-Zeile den Ketten-Advisory-Lock der Einrichtung,
+                        # der bis zum Commit haelt; die Zeilensperren des
+                        # ``apply_attachment_changes`` darunter fielen sonst
+                        # dahinter und bildeten mit den Pfaden, die zuerst die
+                        # Zeile und danach den Ketten-Lock nehmen, einen Zyklus.
+                        lock_attachment_batch_before_audit(
+                            event,
+                            request.user,
+                            request.POST,
+                            staged_by_key,
+                            event.document_type,
+                            data_json=merged,
+                        )
                         update_event(
                             event,
                             request.user,

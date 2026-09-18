@@ -401,6 +401,18 @@ def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=Non
     ueber den geteilten Reverse-Accessor ``owner.attachments`` und ist damit
     automatisch owner-gescopt (AP2, Refs #1738).
 
+    **Sperr-Reihenfolge (Refs #2260):** Das ``UPDATE`` sperrt die Zeilen der
+    EINEN Kette und liegt VOR dem Audit-Write — also vor dem Ketten-Advisory-
+    Lock der Einrichtung; das ist die geforderte Richtung. Wer MEHRERE Ketten
+    in einer Transaktion soft-loescht, sperrt sie vorher gebuendelt und nach
+    ``pk`` geordnet (:func:`core.services.attachments.crud.lock_attachment_rows_in_facility_order`)
+    — sonst legte die Kettenreihenfolge des Aufrufers die Sperrfolge fest.
+    Beide Batch-Einstiege tun das: ``apply_attachment_changes`` ueber den
+    Batch-Vertrag, ``discard_type_switch_file_chains`` ueber die Vorsperre vor
+    seiner Schleife. Eine eigene Vorsperre je Einzelaufruf waere eine zweite
+    Abfrage pro Kette und damit genau das lineare Wachstum, das der
+    Query-Count-Pin des Bulk-REMOVE ausschliesst.
+
     Returns: Anzahl der neu soft-deleted Attachments in der Kette.
     """
     with transaction.atomic():

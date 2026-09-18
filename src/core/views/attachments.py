@@ -22,6 +22,7 @@ from core.retention.legal_holds import owner_has_active_hold
 from core.services.attachments import (
     AttachmentPurgeBlockedError,
     attachment_download_url,
+    lock_attachment_rows_in_facility_order,
     purge_attachment_chain,
 )
 from core.services.audit import log_audit_event
@@ -682,11 +683,21 @@ class AttachmentPurgeView(LeadOrAdminRequiredMixin, View):
         die Zeilen danach nicht mehr (``FOR UPDATE`` prueft die Sichtbarkeit
         nach dem Warten erneut) — er faellt auf ``0`` und schreibt nichts.
 
-        Bewusst ``len(list(...))`` statt ``.count()``: Django haengt an eine
-        Aggregat-Query **kein** ``FOR UPDATE`` an, der Zaehler haette gar nichts
-        gesperrt (mit Test gepinnt).
+        Bewusst die Laenge der gesperrten PK-Liste statt ``.count()``: Django
+        haengt an eine Aggregat-Query **kein** ``FOR UPDATE`` an, der Zaehler
+        haette gar nichts gesperrt (mit Test gepinnt).
+
+        Refs #2260: Die Sperren laufen ueber den gemeinsamen Helfer und damit in
+        der einrichtungsweiten Ordnung — erst die Personen- und die Owner-Zeile,
+        dann die Anhangszeilen in ``pk``-Reihenfolge. Beide Stufen lagen bisher
+        auseinander: die Anhangszeilen hier, die Owner-Zeilen erst im Service
+        hinter dem Audit-Write dieses Views. Ein Pfad, der die Personenzeile
+        haelt und danach den Ketten-Advisory-Lock nimmt (Tilgungskaskade,
+        Hold-Anlage), schloss damit einen Zyklus. Der Service sperrt dieselben
+        Zeilen weiterhin selbst — er findet sie jetzt bereits gehalten vor und
+        bleibt fuer den direkten Aufruf unveraendert sicher.
         """
-        return len(list(owner.attachments.select_for_update().filter(entry_id=entry_id).values_list("pk", flat=True)))
+        return len(lock_attachment_rows_in_facility_order(owner, [entry_id], lock_owner_rows=True))
 
     def get(self, request, pk):
         owner, attachment = self._resolve(request, pk)

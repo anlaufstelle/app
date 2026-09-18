@@ -45,6 +45,17 @@ def delete_attachments_for(owner):
     wuerde denselben fachlichen Vorgang N-mal als vermeintliche manuelle
     Anhang-Loeschung protokollieren.
     """
+    from core.services.attachments.crud import (  # noqa: PLC0415 — Zyklus vermeiden
+        lock_attachment_rows_in_facility_order,
+    )
+
+    # Refs #2260: einrichtungsweite Sperr-Reihenfolge. Die Loesch-/Anonymisie-
+    # rungskaskaden halten ihre Owner-Zeilen schon und auditieren erst danach —
+    # die Richtung stimmt also. Offen war die Ordnung INNERHALB der Anhangs-
+    # zeilen: ``DELETE`` sperrt sie in Planreihenfolge. Die vorgezogene,
+    # nach ``pk`` geordnete Sperre nimmt alle Zeilen des Owners in fester
+    # Ordnung, bevor die erste Datei faellt.
+    lock_attachment_rows_in_facility_order(owner, None)
     for attachment in owner.attachments.all():
         delete_attachment_file(attachment)
     owner.attachments.all().delete()

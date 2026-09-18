@@ -24,6 +24,7 @@ from core.services.attachments import (
     build_attachment_context,
     discard_type_switch_file_chains,
     finalize_staged_files,
+    lock_attachment_batch_before_audit,
     preserve_file_markers,
     quota_backstop_audit_boundary,
     stage_attachment_uploads,
@@ -778,6 +779,22 @@ class ClientUpdateView(StaffRequiredMixin, View):
             # Rollback, statt mit ihm zu verschwinden.
             with quota_backstop_audit_boundary():
                 with transaction.atomic():
+                    # Refs #2260: einrichtungsweite Sperr-Reihenfolge — die
+                    # Bestandszeilen dieses Batches werden VOR dem ersten
+                    # Audit-Write gesperrt. ``update_client`` nimmt mit seiner
+                    # AuditLog-Zeile den Ketten-Advisory-Lock der Einrichtung,
+                    # der bis zum Commit haelt; die Zeilensperren des
+                    # ``apply_attachment_changes`` darunter fielen sonst
+                    # dahinter und bildeten mit den Pfaden, die zuerst die
+                    # Zeile und danach den Ketten-Lock nehmen, einen Zyklus.
+                    lock_attachment_batch_before_audit(
+                        client,
+                        request.user,
+                        request.POST,
+                        staged_by_key,
+                        doc_type,
+                        data_json=fields.get("data_json"),
+                    )
                     if type_switched:
                         discard_type_switch_file_chains(client, request.user)
                     client = update_client(

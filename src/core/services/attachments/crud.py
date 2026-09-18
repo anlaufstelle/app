@@ -445,12 +445,105 @@ def lock_batch_attachment_rows(owner, entry_ids) -> None:
     greift ganze Ketten (``entry_id``): Ersetzen fasst die aktuelle Zeile an,
     Soft-Delete alle Zeilen der Kette.
     """
+    lock_attachment_rows_in_facility_order(owner, entry_ids)
+
+
+def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=False) -> list:
+    """Die EINE Umsetzung der einrichtungsweiten Sperr-Reihenfolge (Refs #2260).
+
+    Verbindliche Ordnung fuer jeden anhangsmutierenden Pfad einer Einrichtung:
+
+    1. Owner-/Personen-/Ereignis-Zeilen,
+    2. Attachment-Zeilen in aufsteigender ``pk``-Reihenfolge,
+    3. Ketten-Advisory-Lock des AuditLog (Audit-Schreiben) zuletzt.
+
+    Sie dehnt den Batch-Vertrag aus :func:`lock_batch_attachment_rows` auf die
+    uebrigen anhangsmutierenden Pfade aus. Jeder Pfad, der beide Sperrsorten
+    nimmt, nimmt sie damit in derselben Richtung; die Gegenrichtung ist der
+    Zyklus, den PostgreSQL mit SQLSTATE ``40P01`` aufloest.
+
+    Die Haltedauer des Ketten-Locks steigt dadurch nicht: er wird weiterhin
+    erst vom Audit-Write genommen und nicht ueber eine Kaskade vorgezogen —
+    diese Funktion nimmt ihn gar nicht, sie zieht nur die Zeilensperren VOR
+    ihn.
+
+    ``entry_ids`` ist die Menge der Ketten, die der Vorgang anfasst; ``None``
+    meint ALLE Zeilen des Owners (physischer Cleanup einer Loesch- oder
+    Anonymisierungskaskade). Eine leere Menge sperrt nichts — der reine
+    ADD-Batch zahlt weiterhin nichts.
+
+    ``lock_owner_rows=True`` nimmt Stufe 1 gleich mit; das brauchen die Pfade,
+    die ihre Owner-Zeilen sonst erst hinter dem eigenen Audit-Write sperrten.
+
+    **Nur mit offener Aufrufer-Transaktion** (Vertrag aus Refs #2178): ohne
+    ``atomic()`` gibt es nichts vorzusperren, jede Storage-Operation schuetzt
+    ihre Mutation dann selbst, und ``select_for_update`` waere im
+    Autocommit-Modus ein ``TransactionManagementError``.
+
+    Liefert die gesperrten Attachment-PKs in Sperr-Reihenfolge.
+    """
     if not connection.in_atomic_block:
+        return []
+    if lock_owner_rows:
+        _lock_owner_rows_in_canonical_order(owner)
+    rows = owner.attachments.all()
+    if entry_ids is not None:
+        ids = sorted({str(entry_id) for entry_id in entry_ids if entry_id})
+        if not ids:
+            return []
+        rows = rows.filter(entry_id__in=ids)
+    return list(rows.select_for_update().order_by("pk").values_list("pk", flat=True))
+
+
+def _lock_owner_rows_in_canonical_order(owner) -> None:
+    """Stufe 1 der Ordnung: Personenzeile, dann die Owner-Zeile (ADR-050 D5.5).
+
+    Dieselbe Richtung, die :func:`_lock_owner_row` fuer den Vernichtungspfad
+    nimmt und die der manuelle Ereignis-Loeschweg, die Hold-Anlage und die
+    Tilgungskaskaden bereits fahren (``core_client`` -> ``core_case``/
+    ``core_event``). Ein Owner ohne Personenbezug (anonymes Ereignis) hat
+    schlicht keine erste Stufe.
+
+    Doppeltes Sperren derselben Zeile in derselben Transaktion ist folgenlos —
+    die Pfade, die diese Zeilen ohnehin spaeter sperren (etwa das Art.-18-Gate
+    oder der Optimistic-Locking-Reload), behalten ihre Sperre unveraendert und
+    finden sie hier nur bereits gehalten vor.
+    """
+    from core.models.client import Client
+
+    facility_id = owner.facility_id
+    if owner.__class__.__name__ == "Client":
+        Client.objects.for_facility(facility_id).filter(pk=owner.pk).select_for_update().only("pk").first()
         return
-    ids = sorted({str(entry_id) for entry_id in entry_ids if entry_id})
-    if not ids:
+    client_id = getattr(owner, "client_id", None)
+    if client_id:
+        Client.objects.for_facility(facility_id).filter(pk=client_id).select_for_update().only("pk").first()
+    type(owner).objects.filter(pk=owner.pk, facility=facility_id).select_for_update().only("pk").first()
+
+
+def lock_attachment_batch_before_audit(owner, user, request_post, staged_by_key, document_type, data_json=None) -> None:
+    """Vorsperre fuer Aufrufer, die VOR dem Anhangs-Batch auditieren (Refs #2260).
+
+    Die drei Owner-Update-Pfade (Ereignis, Person, Fall) schreiben ihre
+    Audit-Zeile im ``update_*``-Service und lassen ``apply_attachment_changes``
+    erst danach laufen — die Zeilensperren des Batches fielen damit hinter den
+    Ketten-Advisory-Lock. Dieser Einstieg zieht genau die Sperrmenge des
+    spaeteren Batches vor den ``update_*``-Aufruf; die Sperre in
+    :func:`apply_attachment_changes` bleibt bestehen und findet die Zeilen dann
+    bereits gehalten vor (sie traegt weiterhin die Aufrufer ohne diesen Weg).
+
+    ``data_json`` gibt die kuenftige Markerlage vor — derselbe Wert, den der
+    Aufrufer an :func:`stage_attachment_uploads` gibt, damit Sperrmenge und
+    Schreibmenge deckungsgleich bleiben.
+    """
+    if document_type is None:
         return
-    list(owner.attachments.select_for_update().filter(entry_id__in=ids).order_by("pk").values_list("pk", flat=True))
+    file_field_states = list(_iter_file_fields(owner, user, document_type, data_json=data_json))
+    lock_attachment_rows_in_facility_order(
+        owner,
+        _batch_entry_ids(file_field_states, request_post, staged_by_key),
+        lock_owner_rows=True,
+    )
 
 
 def _batch_entry_ids(file_field_states, request_post, staged_by_key) -> set:
@@ -826,6 +919,13 @@ def discard_type_switch_file_chains(owner, user):
             .values_list("entry_id", flat=True)
             .distinct()
         )
+        # Refs #2260: einrichtungsweite Sperr-Reihenfolge. Ohne diese eine
+        # vorgezogene Abfrage legte die Reihenfolge der ``entry_ids`` fest, in
+        # welcher Folge die Schleife die Zeilen sperrt — zwei gleichzeitige
+        # Typwechsel desselben Owners koennten sich darueber verschraenken.
+        # Gebuendelt und nach ``pk`` geordnet kostet sie eine Abfrage statt
+        # einer je Kette, und alle Zeilen liegen vor dem Audit-Write unten.
+        lock_attachment_rows_in_facility_order(owner, entry_ids)
         for entry_id in entry_ids:
             soft_delete_attachment_chain(owner, entry_id, user, audit=False)
         if entry_ids:
