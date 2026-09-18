@@ -1,6 +1,7 @@
-# Sprachleitlinie — Klientel → Person
+# Sprachleitlinie
 
-> **Quelle:** [Issue #604](https://github.com/anlaufstelle/app/issues/604) (RFC adoptiert).
+> **Zweck:** Verbindliche Sprachregel für UI-Texte, Handbuch und Fachkonzept.
+> **Herkunft:** [Issue #604](https://github.com/anlaufstelle/app/issues/604) (RFC adoptiert).
 > **Geltung:** UI-Texte, Handbuch, Fachkonzept; **nicht** Modell-/API-Code (`Client` bleibt intern).
 
 ## Kurzfazit
@@ -135,10 +136,7 @@ Umbenannte Query-Werte bleiben dauerhaft als stille Aliasse akzeptiert (Bookmark
 
 ## Priorisierung (Umsetzungsreihenfolge)
 
-1. ~~**Klientel → Person** in UI und Handbuch ersetzen (siehe Sofortkorrekturen-Liste oben).~~ **Erledigt**; die Restklassen außerhalb der vier Sweep-Verzeichnisse (Reporting-Backends, VVT/Compliance, Modell-`help_text`s, Code-Kommentare, Glossar) sind mit Refs #1805 nachgezogen.
-2. ~~**qualifiziert / identifiziert** als Personenetiketten entpersonalisieren (Kontaktstufen statt Personenmerkmale).~~ **Erledigt 2026-08** (Refs #1805): umbenannt statt nur erklärt — sichtbare Labels sind _Nur Pseudonym_ / _Mit Zusatzangaben_, die Werte `identified`/`qualified` bleiben unverändert. Erklärt wird zusätzlich am Feld, am Badge (`title`) und über eine Legendenzeile je Liste.
-3. **obdachlos / wohnungslos** fachlich schärfen (Seed, Beispieltexte, Handbuch).
-4. ~~**Fall** strategisch prüfen~~ **Entschieden 2026-08** (Refs #1805): _Fall_ bleibt UI-Begriff — siehe „Nur intern verwenden“ und „Diskutable Begriffe“.
+1. **obdachlos / wohnungslos** fachlich schärfen (Seed, Beispieltexte, Handbuch).
 
 ## Quellen
 

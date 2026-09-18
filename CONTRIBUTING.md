@@ -371,6 +371,7 @@ pkill -f gunicorn
 - Business-Logik gehört in `core/services/`, nicht in Views oder Models.
 - Models sind aufgeteilt: ein Model (oder eng verwandte Models) pro Datei unter `core/models/`.
 - Rollen-Zugriffsschutz über Mixins aus `core/views/mixins.py` — verfügbar: `SuperAdminRequiredMixin` (nur `/system/`), `FacilityAdminRequiredMixin` (Admin der eigenen Facility), `LeadOrAdminRequiredMixin`, `StaffRequiredMixin`, `AssistantOrAboveRequiredMixin`.
+- Nutzergerichtete deutsche Texte folgen der verbindlichen [Sprachleitlinie](docs/sprachleitlinie.md).
 - Keine neuen Abhängigkeiten ohne vorherige Absprache einführen.
 
 ### Facility-Scoping & Row Level Security

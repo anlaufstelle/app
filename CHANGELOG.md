@@ -57,6 +57,7 @@ Letzter Release-Kandidat vor 1.0: bündelt die Fix-Wellen 0.97–0.99 (Red-Team-
 
 ### Docs
 
+- **Sprachleitlinie als aktiven Style-Guide verankert** (#2250) — Die Leitlinie nennt ihren verbindlichen Zweck, führt nur noch den offenen Begriffspunkt und ist aus der CONTRIBUTING-Dokumentation erreichbar.
 - **Betriebsdokumentation aus den Erstinstallations- und Restore-Re-Tests nachgezogen** (#2248) — 2FA-Ersteinrichtung, Backup-`umask`, anonymes Health-Payload, ClamAV-Ping und -Update-Log sowie die Restore-Drill-Variablen `COMPOSE_DIR` und `BACKUP_HOST_DIR` sind an den ausgelieferten Stand angeglichen.
 - **SMTP-Nachweis dokumentiert** (#2089) — Admin- und Betriebshandbuch nennen jetzt das Health-Signal `smtp` (reine TCP-Erreichbarkeit, kein Zustellnachweis) als drittes Diagnosemittel neben UI-Meldung und Web-Logs, die Release-Checkliste verweist auf das Protokoll aus dem SMTP-Drehbuch, und Djangos Bordmittel `sendtestemail` deckt die im Ticket vorgeschlagene Selbstprüfung bereits ab.
 - **Disaster-Recovery-Runbook gegen unvollständige Wiederherstellungen gehärtet** (#2222) — Satzgebundenes Manifest, verpflichtende Medien, Audit-Leerstand, atomarer Audit-HWM-Tausch, Off-Site-Retention, Wiederanlauf und Fresh-Host-Aufbau sind jetzt mit ausführbaren Betriebsregeln dokumentiert.

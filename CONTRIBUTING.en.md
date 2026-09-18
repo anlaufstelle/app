@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](CONTRIBUTING.md)**
+> Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
 
 # Contributing to Anlaufstelle
 
@@ -368,6 +369,7 @@ pkill -f gunicorn
 - Business logic belongs in `core/services/`, not in views or models.
 - Models are split up: one model (or closely related models) per file under `core/models/`.
 - Role-based access control via mixins from `core/views/mixins.py` — available: `SuperAdminRequiredMixin` (only `/system/`), `FacilityAdminRequiredMixin` (admin of their own facility), `LeadOrAdminRequiredMixin`, `StaffRequiredMixin`, `AssistantOrAboveRequiredMixin`.
+- User-facing German text follows the binding [language guidelines](docs/sprachleitlinie.md) (German).
 - Do not introduce new dependencies without prior discussion.
 
 ### Facility Scoping & Row Level Security
@@ -993,5 +995,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 71dc992e2ce261136e251174296c2713f0b87262 -->
+<!-- translation-date: 2026-09-18 -->
+<!-- source-hash: 5ec992683f38463cb1fc71b89bf41b8113694865 -->
