@@ -672,6 +672,8 @@ Die Gegenrichtung — eine bestehende Einrichtung vollständig als versioniertes
 
 ### Test-Driven Development (Unit/Service)
 
+Die Assertion-Konventionen beschreiben verbindlich, wie Tests Verhalten präzise und mutationsfest prüfen.
+
 Seit 2026-05-20 ist Test-Driven Development für die Unit-/Service-Schicht verpflichtend. Reihenfolge **vor** jeder Service-, Form-, Model- oder CBV-Änderung:
 
 1. **Red** — pytest-Test in der passenden Datei unter `src/tests/` schreiben, der das gewünschte Verhalten beschreibt, aber heute fehlschlägt. Test mit `pytest -x` ausführen und prüfen, dass er mit dem erwarteten `AssertionError` rot wird.

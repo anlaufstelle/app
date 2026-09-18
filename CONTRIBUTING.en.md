@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](CONTRIBUTING.md)**
+> Synchronization update 2026-09-18: the testing guidance now links to the public assertion conventions (#2256).
 > Synchronization update 2026-09-18: the template conventions now link to the context-header and back-link guidance (#2255).
 > Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
 
@@ -667,6 +668,8 @@ The reverse direction — exporting an entire existing facility as versioned JSO
 
 ### Test-Driven Development (Unit/Service)
 
+The assertion conventions define how tests check behaviour precisely and remain effective under mutation testing.
+
 As of 2026-05-20, test-driven development is mandatory for the unit/service layer. The required order **before** any service, form, model, or CBV change:
 
 1. **Red** — write a pytest test in the appropriate file under `src/tests/` that describes the desired behavior but fails today. Run it with `pytest -x` and confirm it fails with the expected `AssertionError`.
@@ -998,4 +1001,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-18 -->
-<!-- source-hash: f4c7d495b1fe601e7e74dc2186ceb7c8005b5c2f -->
+<!-- source-hash: 651755cf4ce926dde424a0a1e9347c7915ad5f5a -->
