@@ -165,10 +165,17 @@ DRILL_UNDETERMINED=0
 HWM_DRILL_CONTAINER_PATH="/tmp/audit_hwm-drill-$$.json"
 MEDIA_TMP_DIR=""
 MEDIA_LIST_FILE=""
+DRILL_SKIPPED=()
 ok() { echo "OK   - $*"; }
 fail() {
     echo "FAIL - $*"
     DRILL_FAILED=1
+}
+# Ein nicht ausgefuehrter Schritt ist kein bestandener Schritt: er erscheint nie
+# als OK und wird im Ergebnisblock namentlich als uebersprungen ausgewiesen.
+skip() {
+    echo "SKIP - $*"
+    DRILL_SKIPPED+=("$*")
 }
 
 dc() { "${COMPOSE[@]}" "$@"; }
@@ -480,7 +487,13 @@ if [[ "$DRILL_FORMAT" == "prod" && -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
     fi
     rm -f "$HWM_VERIFY_OUT" "$HWM_VERIFY_ERR"
 elif [[ "$DRILL_FORMAT" == "prod" ]]; then
-    echo "INFO - Schritt 2b: HWM nicht konfiguriert — uebersprungen (DJANGO_AUDIT_HWM_PATH nicht gesetzt)"
+    # Refs #2242: Im Prod-Format kennt der Drill bereits Pflichtwerte
+    # (BACKUP_ENCRYPTION_KEY, POSTGRES_DB) und bricht ohne sie ab. Eine fehlende
+    # Anker-Konfiguration ist hier ebenso ein Fehler: ohne externen Anker belegt
+    # der Lauf gerade nicht, dass die restaurierte Kette vollstaendig ist.
+    fail "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — DJANGO_AUDIT_HWM_PATH fehlt in ${ENV_FILE}; ohne Anker belegt der Drill keine unversehrte Audit-Kette"
+else
+    skip "Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration) — das dev-Backup-Format fuehrt keinen externen Audit-Anker mit"
 fi
 
 # Schritt 4: RLS-Policy-Check
@@ -583,6 +596,12 @@ if [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 ]]; then
     else
         fail "Schritt 7: mark_restore_verified fehlgeschlagen — Compliance-Check bleibt unknown"
     fi
+fi
+
+if [[ ${#DRILL_SKIPPED[@]} -gt 0 ]]; then
+    echo
+    echo "Uebersprungen (${#DRILL_SKIPPED[@]}) — nicht geprueft, daher auch nicht bestanden:"
+    printf '  - %s\n' "${DRILL_SKIPPED[@]}"
 fi
 
 if [[ "$DRILL_FAILED" -ne 0 ]]; then

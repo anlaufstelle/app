@@ -262,7 +262,7 @@ done
 
 ### Schritt 4b — Audit-HWM zurückspielen und Kette prüfen
 
-Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehörende HWM-Original aus `RESTORE_SET_DIR` nochmals fail-closed an `DJANGO_AUDIT_HWM_PATH` ablegen. Nicht pauschal die jüngste Datei verwenden. Ein fehlender Betriebsanker gilt der Software als Erstlauf; deshalb müssen Existenz, erfolgreicher Import und Byte-Identität **vor** `verify_audit_chain` belegt sein. Der abschließende Lauf trägt zusätzlich `--require-anchor` und bricht damit ab, falls trotz aller vorherigen Prüfungen kein Anker vorliegt — statt den wiederhergestellten Bestand ungeprüft als Erstlauf neu zu verankern. Das Off-Site-Original bleibt unverändert. Die gesamte Folge ist eine `&&`-Kette; auch ein fehlgeschlagenes `stop cron` bricht sie ab:
+Bevor irgendein Hintergrundjob startet, das zum gewählten Restore-Satz gehörende HWM-Original aus `RESTORE_SET_DIR` nochmals fail-closed an `DJANGO_AUDIT_HWM_PATH` ablegen. Dazu zählen auch selbst eingerichtete Zeitpläne außerhalb des `cron`-Sidecars (Host-Cron oder Timer, die `verify_audit_chain` aufrufen): Sie sind **vor** dem Restore anzuhalten und erst **nach** dem grünen Lauf mit `--require-anchor` wieder zu aktivieren, weil ein dazwischen laufender Standardaufruf ohne Schalter den vorgefundenen Bestand als Erstlauf neu verankern und damit die Herkunft des Ankers verwischen würde. Nicht pauschal die jüngste Datei verwenden. Ein fehlender Betriebsanker gilt der Software als Erstlauf; deshalb müssen Existenz, erfolgreicher Import und Byte-Identität **vor** `verify_audit_chain` belegt sein. Der abschließende Lauf trägt zusätzlich `--require-anchor` und bricht damit ab, falls trotz aller vorherigen Prüfungen kein Anker vorliegt — statt den wiederhergestellten Bestand ungeprüft als Erstlauf neu zu verankern. Das Off-Site-Original bleibt unverändert. Die gesamte Folge ist eine `&&`-Kette; auch ein fehlgeschlagenes `stop cron` bricht sie ab:
 
 ```bash
 HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
@@ -287,7 +287,7 @@ test "$SOURCE_HWM_SHA256" = "$INSTALLED_HWM_SHA256" && \
 docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain --require-anchor
 ```
 
-Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten. Bricht der letzte Schritt mit `--require-anchor verlangt einen externen Audit-Anker` ab, hat der Import nicht gewirkt (falscher Pfad, leere oder ankerlose Datei): Schritt 4b wiederholen — das Kommando **nicht** ohne den Schalter nachziehen, weil es den Bestand dann ungeprüft neu verankert.
+Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf ist zulässig. Er prüft den zurückgespielten Anker und schreibt anschließend die **Betriebsdatei** fort; deshalb bleibt das zurückgeholte Original separat und unverändert erhalten. Verlangt wird ein verankerter Stand für **jede** geprüfte Kette einschließlich der System-Kette; fehlt er auch nur für eine, bricht der Lauf ab und nennt die betroffenen Einrichtungen per Kennnummer, ohne für irgendeine Kette einen Anker zu schreiben. Bricht der letzte Schritt mit `--require-anchor verlangt einen externen Audit-Anker` ab, hat der Import nicht oder nicht vollständig gewirkt (falscher Pfad, leere, unlesbare, ankerlose oder nur teilweise verankerte Datei): Schritt 4b wiederholen — das Kommando **nicht** ohne den Schalter nachziehen, weil es den Bestand dann ungeprüft neu verankert.
 
 ### Schritt 5 — Migrationen + Stack hochfahren
 
@@ -413,13 +413,16 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   `scripts/ops/backup.sh` die signierte Datei tatsächlich offsite übertragen
   hat. Die rekonstruierte `.env` enthält außerdem den ursprünglichen
   `DJANGO_AUDIT_HASH_KEY`. Ohne gesetzten HWM-Pfad gibt es kein HWM-Artefakt;
-  Schritt 2b des Prod-Drills wird dann nicht ausgeführt. Das ist kein
+  Schritt 2b des Prod-Drills kann dann nicht ausgeführt werden. Das ist kein
   Signaturnachweis, und dieser Drill darf nicht als vollständig grün
   protokolliert werden. Fehlt `DJANGO_AUDIT_HWM_PATH` in der
-  **rekonstruierten** `.env`, wird Schritt 2b lediglich mit `INFO` übersprungen;
-  für diesen Drill die Variable deshalb setzen, damit die Signaturprüfung
-  wirklich läuft. Andernfalls gilt der HWM-Nachweis als NICHT PRÜFBAR, nicht
-  als bestanden.
+  **rekonstruierten** `.env`, meldet Schritt 2b deshalb
+  `FAIL - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)`
+  und der Prod-Drill endet fehlgeschlagen — für diesen Drill die Variable
+  also setzen, damit die Signaturprüfung wirklich läuft. Im dev-Backup-Format
+  gibt es kein Anker-Artefakt; dort weist der Drill den Schritt als `SKIP` aus
+  und listet ihn im Ergebnisblock unter `Uebersprungen` — nicht geprüft, also
+  auch nicht bestanden.
 - Falls noch kein HWM existiert, ihn **vor dem Quellbackup** bewusst erzeugen:
   `docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain`.
   Der Lauf muss vollständig grün sein, erst dann ist der Anker geschrieben.
