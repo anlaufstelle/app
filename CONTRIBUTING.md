@@ -436,6 +436,7 @@ Die Ruff-Konfiguration befindet sich in `pyproject.toml`.
 - HTMX für dynamische Interaktionen, Alpine.js für leichtgewichtige UI-Logik.
 - Tailwind CSS für Styling — keine eigenen CSS-Klassen anlegen, soweit möglich.
 - Barrierefreiheit (WCAG 2.1 AA) beachten.
+- Neue Objektseiten folgen der Konvention für Kontext-Kopf und Rücklinke.
 
 #### Vendored JS-Libraries aktualisieren (Refs #1076)
 

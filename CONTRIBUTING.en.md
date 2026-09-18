@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](CONTRIBUTING.md)**
+> Synchronization update 2026-09-18: the template conventions now link to the context-header and back-link guidance (#2255).
 > Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
 
 # Contributing to Anlaufstelle
@@ -434,6 +435,7 @@ The Ruff configuration is located in `pyproject.toml`.
 - HTMX for dynamic interactions, Alpine.js for lightweight UI logic.
 - Tailwind CSS for styling — avoid creating custom CSS classes where possible.
 - Adhere to accessibility standards (WCAG 2.1 AA).
+- New object pages follow the context-header and back-link convention (German, development documentation).
 
 #### Updating Vendored JS Libraries (Refs #1076)
 
@@ -996,4 +998,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.0 -->
 <!-- translation-date: 2026-09-18 -->
-<!-- source-hash: 5ec992683f38463cb1fc71b89bf41b8113694865 -->
+<!-- source-hash: f4c7d495b1fe601e7e74dc2186ceb7c8005b5c2f -->
