@@ -665,6 +665,24 @@ Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** �
 
 ---
 
+## Dependabot-Ignore für Django-Updates (Issue #2264)
+
+**Status:** Akzeptiertes, zeitlich begrenztes Restrisiko mit manueller Kompensation.
+
+Die Anwendung pinnt Django auf `Django>=6.1.1,<6.2`. In `.github/dependabot.yml` ignoriert Dependabot für `dependency-name: "django"` exakt die Update-Typen `version-update:semver-minor` und `version-update:semver-major`. Minor- und Major-Sprünge kommen deshalb nicht automatisch als Dependabot-PR; Patch-Bumps der gepinnten 6.1-Linie laufen über die Gruppe `django-stack` weiter automatisch.
+
+Das Restrisiko besteht vor allem darin, dass dieser Ignore das Ende des Security-Supports der gepinnten Linie still überdauert. Zusätzlich können Härtungen fehlen, die nur in einer späteren Minor-Linie erscheinen und nicht zurückportiert werden.
+
+Drei Netze kompensieren dieses Risiko:
+
+1. Dependabot-Alerts und Security-Updates sind auf dem Entwicklungs-Repository aktiv.
+2. Ein manueller Check sichtet monatlich die Django-Security-Releases und führt lokal `pip-audit -r requirements.txt` aus.
+3. Bei jedem Release-Cut läuft `pip-audit` im Release-Gate.
+
+Der Ignore muss **vor Dezember 2027**, also vor dem Ende des Security-Supports der Django-6.1-Linie, durch die [zweite Etappe des LTS-Umstiegs](https://github.com/anlaufstelle/app/issues/1662) abgelöst werden.
+
+---
+
 ## K-Anonymität gegen Re-Identifikation in Aggregaten (Issue #999)
 
 **Status:** Design-Entscheidung, produktiv verdrahtet.
