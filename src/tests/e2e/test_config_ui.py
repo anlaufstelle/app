@@ -852,19 +852,14 @@ class TestFieldBoardDragAndDrop:
             f"Drag-Elemente außerhalb des Viewports (handle y={hb['y']}, ziel y={tb['y']})"
         )
         page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + hb["height"] / 2)
-        page.mouse.down()
-        # Mehrstufige Bewegung, damit SortableJS die dragover-Events sieht.
-        # Ziel-Offset mit Untergrenze: eine leere Ziel-Liste ist nur
-        # min-h-[1.5rem] hoch — der Auftreffpunkt darf nicht auf der Kante liegen.
-        page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10), steps=25)
-        page.wait_for_timeout(300)
-        # Auf die Antwort des Sortable-onEnd-POST warten statt fest zu schlafen
-        # (Refs #1855): unter
-        # Host-Last dauert der Board-POST laenger als jede Pause, und der
-        # anschliessende ``goto()`` bricht einen noch laufenden POST ab — die
-        # Reihenfolge waere dann nie persistiert. Der Waiter muss VOR
-        # ``mouse.up()`` scharf sein, weil SortableJS ``onEnd`` genau daran
-        # haengt. Alle drei Board-Endpunkte
+        # Komplette Geste (down/move/up) läuft INNERHALB des Waiters auf die
+        # Antwort des Sortable-onEnd-POST statt fest zu schlafen (Refs
+        # #1855/#2235): unter Host-Last dauert der Board-POST länger als jede
+        # Pause, und der anschließende ``goto()`` bricht einen noch laufenden
+        # POST ab — die Reihenfolge wäre dann nie persistiert. Der Waiter
+        # muss VOR ``mouse.up()`` scharf sein, weil SortableJS ``onEnd``
+        # genau daran hängt; da er die gesamte Geste umschließt, kann keine
+        # Zwischenstufe ihn verpassen. Alle drei Board-Endpunkte
         # (``reorder/blocks``, ``reorder/fields``, ``reorder/move-field``)
         # liegen unter ``/reorder/`` — welcher feuert, entscheidet
         # ``config-sortable.js`` je nach Quell-/Ziel-Container.
@@ -872,6 +867,12 @@ class TestFieldBoardDragAndDrop:
             lambda r: "/reorder/" in r.url and r.request.method == "POST" and r.ok,
             timeout=15000,
         ):
+            page.mouse.down()
+            # Mehrstufige Bewegung, damit SortableJS die dragover-Events sieht.
+            # Ziel-Offset mit Untergrenze: eine leere Ziel-Liste ist nur
+            # min-h-[1.5rem] hoch — der Auftreffpunkt darf nicht auf der Kante liegen.
+            page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10), steps=25)
+            page.wait_for_timeout(300)
             page.mouse.up()
 
     @classmethod
