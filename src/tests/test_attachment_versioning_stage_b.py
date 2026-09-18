@@ -473,15 +473,27 @@ class TestApplyAttachmentChangesQueryCount:
         # die Lookup-Phase konstant: 1 Bulk-SELECT (``pk__in=ids``).
         # Die UPDATEs aus ``soft_delete_attachment_chain`` sind unabhaengig
         # davon und sind nicht Teil des N+1.
+        #
+        # Von den Lookups getrennt gezaehlt werden die Sperrabfragen
+        # (``FOR UPDATE``, Refs #2260): der Batch nimmt die ganze Menge einmal
+        # gebuendelt und nach ``pk`` geordnet vorweg, danach nimmt der
+        # Einzelpfad je Kette seine Sperre bedingungslos selbst — sie trifft
+        # bereits gehaltene Zeilen und wartet nicht. Diese Zahl ist bewusst
+        # nachgezogen und bleibt exakt festgenagelt (1 + je Kette eine).
         attachment_selects = [
             q["sql"]
             for q in ctx.captured_queries
             if "core_attachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
         ]
-        assert len(attachment_selects) <= 2, (
+        lookups = [sql for sql in attachment_selects if "for update" not in sql.lower()]
+        sperren = [sql for sql in attachment_selects if "for update" in sql.lower()]
+        assert len(lookups) <= 2, (
             f"REMOVE darf keinen SELECT-N+1 verursachen — gemessen: "
-            f"{len(attachment_selects)} SELECTs auf core_attachment bei 5 Entries.\n"
-            f"Queries: {attachment_selects}"
+            f"{len(lookups)} Lookup-SELECTs auf core_attachment bei 5 Entries.\n"
+            f"Queries: {lookups}"
+        )
+        assert len(sperren) == 6, (
+            f"erwartet: 1 gebuendelte Vorsperre + 1 Re-Lock je Kette (5), gemessen: {len(sperren)}.\nQueries: {sperren}"
         )
 
 

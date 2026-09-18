@@ -794,6 +794,13 @@ class ClientUpdateView(StaffRequiredMixin, View):
                         staged_by_key,
                         doc_type,
                         data_json=fields.get("data_json"),
+                        # Beim Typwechsel verwirft der naechste Schritt die
+                        # komplette alte Anhangsmenge und nimmt mit seiner
+                        # Bulk-Audit-Zeile den Ketten-Lock. Die Sperrmenge
+                        # dieses Vorgangs ist deshalb groesser als sein Batch:
+                        # sie umfasst die Bestandsketten, die im kuenftigen Typ
+                        # gar nicht mehr vorkommen.
+                        discards_existing_chains=type_switched,
                     )
                     if type_switched:
                         discard_type_switch_file_chains(client, request.user)

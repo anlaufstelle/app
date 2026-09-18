@@ -421,9 +421,12 @@ class TestSequenzReihenfolge:
         Sperrfolge fest — und zwei gleichzeitige Typwechsel desselben Owners
         koennten sich darueber verschraenken.
 
-        Erwartet wird GENAU EINE gebuendelte, nach ``pk`` geordnete Abfrage:
-        eine Vorsperre je Kette waere lineares Wachstum und damit der
-        Query-Count-Regress, den der Bulk-REMOVE-Pin ausschliesst.
+        Erwartet wird als ERSTE eine gebuendelte, nach ``pk`` geordnete Abfrage
+        ueber ALLE Ketten — vor der ersten Aenderung und vor dem Ketten-Lock.
+        Danach kommt je Kette die Sperre des Einzelpfads hinzu, der seine
+        Zeilen bedingungslos selbst nimmt: sie trifft bereits gehaltene Zeilen,
+        wartet also nicht. Genau diese Zahl wird festgenagelt (1 + je Kette
+        eine), damit unbemerktes Wachstum darueber hinaus auffaellt.
         """
         from core.services.attachments import discard_type_switch_file_chains
 
@@ -455,11 +458,14 @@ class TestSequenzReihenfolge:
         ]
         update_at = _statement_index(captured, lambda sql: sql.startswith('UPDATE "core_attachment"'))
         chain_at = _statement_index(captured, lambda sql: "pg_advisory_xact_lock" in sql)
-        assert len(vorsperren) == 1, f"genau eine gebuendelte Vorsperre erwartet, gemessen: {len(vorsperren)}"
+        assert len(vorsperren) == 3, (
+            f"erwartet: 1 gebuendelte Vorsperre + 1 Re-Lock je Kette (2), gemessen: {len(vorsperren)}"
+        )
         assert update_at is not None, "kein Soft-Delete-UPDATE im Pfad"
         assert chain_at is not None, "kein Ketten-Lock im Pfad"
-        assert vorsperren[0] < update_at, "die Vorsperre gehoert vor die erste Aenderung"
-        assert vorsperren[0] < chain_at, "die Vorsperre gehoert vor den Ketten-Lock"
+        assert vorsperren[0] < update_at, "die gebuendelte Vorsperre gehoert vor die erste Aenderung"
+        assert vorsperren[0] < chain_at, "die gebuendelte Vorsperre gehoert vor den Ketten-Lock"
+        _assert_keine_erstsperre_unter_der_kette(captured)
 
     def test_owner_cleanup_sperrt_die_zeilen_geordnet_vor_dem_delete(self, staff_user, facility, client_identified):
         """Der physische Cleanup der Loesch-/Anonymisierungskaskade loeschte
@@ -597,11 +603,13 @@ class TestSequenzReihenfolge:
         assert lock_at < update_at, "die Vorsperre gehoert vor die Aenderung"
         assert lock_at < chain_at, "die Vorsperre gehoert vor den Ketten-Lock"
 
-    def test_batch_remove_behaelt_genau_eine_gebuendelte_vorsperre(self, staff_user, facility, client_identified):
-        """Die Gegenprobe zum Einzelpfad: der Batch sperrt EINMAL gebuendelt.
+    def test_batch_remove_sperrt_gebuendelt_vor_den_einzelnen_relocks(self, staff_user, facility, client_identified):
+        """Die Gegenprobe zum Einzelpfad: der Batch sperrt ZUERST gebuendelt.
 
-        Eine Vorsperre je Kette im Einzelpfad waere lineares Wachstum — genau
-        der Regress, den der Query-Count-Pin des Bulk-REMOVE ausschliesst.
+        Die erste Abfrage nimmt die ganze Menge nach ``pk`` geordnet; erst
+        danach kommt je Kette die Sperre des Einzelpfads, die bereits gehaltene
+        Zeilen trifft und deshalb nicht wartet. Die Zahl ist festgenagelt
+        (1 + je Kette eine), damit Wachstum darueber hinaus auffaellt.
         """
         from core.services.attachments import apply_attachment_changes
 
@@ -643,7 +651,16 @@ class TestSequenzReihenfolge:
             for index, query in enumerate(captured.captured_queries)
             if _ORDERED_ATTACHMENT_LOCK_RE.search(query["sql"])
         ]
-        assert len(vorsperren) == 1, f"genau eine gebuendelte Vorsperre erwartet, gemessen: {len(vorsperren)}"
+        mutationen = [
+            index
+            for index, query in enumerate(captured.captured_queries)
+            if query["sql"].startswith('UPDATE "core_attachment"')
+        ]
+        assert len(vorsperren) == 3, (
+            f"erwartet: 1 gebuendelte Vorsperre + 1 Re-Lock je Kette (2), gemessen: {len(vorsperren)}"
+        )
+        assert mutationen and vorsperren[0] < mutationen[0], "die gebuendelte Vorsperre gehoert vor die erste Aenderung"
+        _assert_keine_erstsperre_unter_der_kette(captured)
 
     @pytest.mark.django_db(transaction=True)
     def test_direkter_replace_sperrt_die_personenzeile_vor_dem_ketten_lock(self, staff_user, facility):

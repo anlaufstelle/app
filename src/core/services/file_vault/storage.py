@@ -182,9 +182,7 @@ def _lock_superseded_row(owner, supersedes) -> None:
     owner.attachments.select_for_update().filter(pk=supersedes.pk).values_list("pk", flat=True).first()
 
 
-def commit_staged_upload(
-    owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True, owner_rows_prelocked=False
-):
+def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
     """Persistiere Upload und Audit-Zeile atomar; Fehler raeumen die Datei auf.
 
     Reisst der Kontingent-Backstop (Refs #2178), traegt die Ausnahme die
@@ -221,12 +219,12 @@ def commit_staged_upload(
     **Owner-Stufe (Refs #2260):** Die neue Zeile traegt den Owner-Fremd-
     schluessel; dessen aufgeschobene Pruefung nimmt eine Sperre auf der
     Owner-/Personenzeile erst zum COMMIT, also hinter dem Ketten-Lock. Dieser
-    Einstieg sperrt sie deshalb selbst vorweg. ``owner_rows_prelocked=True``
-    sagt: der BATCH-Einstieg des Aufrufers hat die Stufe fuer den ganzen
-    Vorgang bereits vor seinem ersten Audit-Write genommen
-    (:func:`~core.services.attachments.crud.lock_attachment_batch_before_audit`)
-    — eine Abfrage je Datei koennte die Ordnung dann nicht mehr herstellen und
-    wuerde nur die Haltedauer des Ketten-Locks verlaengern.
+    Einstieg sperrt sie deshalb selbst vorweg — bedingungslos und ohne sich
+    auf eine Behauptung des Aufrufers zu verlassen. Hat ein Batch-Einstieg die
+    Stufe fuer den ganzen Vorgang bereits genommen
+    (:func:`~core.services.attachments.crud.lock_batch_attachment_rows`),
+    findet diese Abfrage die Zeilen bereits gehalten vor: sie wartet nicht und
+    verlaengert die Haltedauer des Ketten-Locks um nichts als sich selbst.
     """
     try:
         with transaction.atomic():
@@ -238,7 +236,6 @@ def commit_staged_upload(
                 supersedes=supersedes,
                 sort_order=sort_order,
                 audit=audit,
-                owner_rows_prelocked=owner_rows_prelocked,
             )
     except StorageQuotaBackstopError as exc:
         staged.output_path.unlink(missing_ok=True)
@@ -254,9 +251,7 @@ def commit_staged_upload(
         raise
 
 
-def _commit_staged_upload(
-    owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True, owner_rows_prelocked=False
-):
+def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
     """Persistiere eine per :func:`prepare_encrypted_upload` gestagte Datei als
     ``Attachment`` samt Audit-Zeile — schneller DB-Write (Refs #1345/#1960).
 
@@ -294,14 +289,13 @@ def _commit_staged_upload(
         # Advisory-Lock der Einrichtung. Ein Pfad, der die Personenzeile haelt
         # und danach den Ketten-Lock nimmt (Art.-18-Einschraenkung,
         # Tilgungskaskade), schloss darueber den Zyklus. Gilt fuer BEIDE Modi:
-        # auch der reine Zugang legt eine Zeile mit Owner-FK an. Hielt der
-        # Aufrufer bereits eine Transaktion, hat er die Stufe laut Batch-Vertrag
-        # vor seinem ersten Audit-Write genommen (``owner_rows_prelocked``) —
-        # hier waere sie zu spaet und nur zusaetzliche Haltedauer.
-        if not owner_rows_prelocked:
-            from core.services.attachments.crud import lock_owner_rows_in_facility_order
+        # auch der reine Zugang legt eine Zeile mit Owner-FK an. Hat ein
+        # Batch-Einstieg die Stufe fuer den ganzen Vorgang bereits genommen,
+        # findet diese Abfrage die Zeilen gehalten vor und wartet nicht; eine
+        # Behauptung des Aufrufers, sie sei erfolgt, liesse sich nicht pruefen.
+        from core.services.attachments.crud import lock_owner_rows_in_facility_order
 
-            lock_owner_rows_in_facility_order(owner)
+        lock_owner_rows_in_facility_order(owner)
         # SPERR-REIHENFOLGE (Refs #2178): (1) Attachment-Zeile, (2) Advisory-Lock
         # der Einrichtung (Kontingent = Audit-Hashkette, ein einziger Key).
         # Dieselbe Reihenfolge haelt ``soft_delete_attachment_chain`` ein (erst
@@ -420,7 +414,7 @@ def store_encrypted_file(
     )
 
 
-def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=None, rows_prelocked=False):
+def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=None):
     """Markiere alle Attachments einer Versionskette (entry_id) als soft-deleted.
 
     Für UI-Lösch-Aktionen (Stufe B, Refs #622). Physischer Disk-Cleanup
@@ -442,21 +436,19 @@ def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=Non
     und die liegt vor dem Audit-Write, also vor dem Ketten-Advisory-Lock der
     Einrichtung.
 
-    ``rows_prelocked=True`` sagt: der Aufrufer hat die Zeilen fuer den GANZEN
-    Vorgang bereits gebuendelt und geordnet gesperrt — dann entfaellt die
-    Abfrage hier. Genau das tun die beiden Batch-Einstiege
-    (``apply_attachment_changes`` ueber den Batch-Vertrag,
-    ``discard_type_switch_file_chains`` ueber die Vorsperre vor seiner
-    Schleife); eine Vorsperre je Kette waere dort das lineare Wachstum, das der
-    Query-Count-Pin des Bulk-REMOVE ausschliesst.
+    Die Sperre laeuft bedingungslos — auch aus einem Batch heraus, der die
+    Zeilen bereits gebuendelt und geordnet gesperrt hat: sie findet sie dort
+    gehalten vor und wartet nicht, waehrend sich eine Behauptung des Aufrufers,
+    die Vorsperre sei erfolgt, nicht pruefen liesse. Stufe 1 gehoert dazu —
+    sonst stuende der Einzelpfad als einziger ohne Owner-Stufe da, sobald ein
+    Aufrufer den Owner in derselben Transaktion noch schreibt.
 
     Returns: Anzahl der neu soft-deleted Attachments in der Kette.
     """
     with transaction.atomic():
-        if not rows_prelocked:
-            from core.services.attachments.crud import lock_attachment_rows_in_facility_order
+        from core.services.attachments.crud import lock_attachment_rows_in_facility_order
 
-            lock_attachment_rows_in_facility_order(owner, [entry_id])
+        lock_attachment_rows_in_facility_order(owner, [entry_id], lock_owner_rows=True)
         qs = owner.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
         if audit and field is None:
             field = qs.values_list("field_template__slug", flat=True).first()
