@@ -378,6 +378,61 @@ class TestFormatterRobustness:
         assert json.loads(json_again)["message"] == f"Not Found: {masked}"
         assert masked in verbose_again
 
+    def test_structured_list_values_are_masked(self):
+        """Auch Listen in einem strukturierten Feld laufen durch die Maskierung."""
+        record = _raw_record("csp_violation", csp_violation={"scripts": [INVITE_URL]})
+        for line in _rendered_sink_lines(record):
+            assert INVITE_TOKEN not in line
+            assert SEARCH_TERM not in line
+
+    def test_unresolvable_urlconf_falls_back_to_the_heuristic(self, monkeypatch):
+        """Faellt die Routenaufloesung aus, greift die Segment-Heuristik.
+
+        Der Log-Sink laeuft auch in Zustaenden, in denen der URLconf nicht
+        (mehr) bereitsteht — dann darf die Maskierung weder werfen noch den
+        Pfad durchreichen.
+        """
+        import django.urls
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("kein URLconf")
+
+        monkeypatch.setattr(django.urls, "get_resolver", boom)
+        record = _raw_record("Not Found: %s", (INVITE_PATH,))
+        for line in _rendered_sink_lines(record):
+            assert INVITE_TOKEN not in line
+            assert "[scrubbed]" in line
+
+    def test_failing_masking_is_fail_closed(self, monkeypatch):
+        """Wirft die Maskierung selbst, geht der Platzhalter in den Sink."""
+        import core.logging as core_logging
+
+        def boom(text):
+            raise RuntimeError("Maskierung kaputt")
+
+        monkeypatch.setattr(core_logging, "mask_paths_in_text", boom)
+        record = _raw_record("Not Found: %s", (INVITE_PATH,))
+        for line in _rendered_sink_lines(record):
+            assert INVITE_TOKEN not in line
+            assert "[scrubbed]" in line
+
+    def test_unformattable_exc_info_does_not_break_the_line(self):
+        """Ein kaputtes ``exc_info`` kostet die Zeile nicht.
+
+        ``exc_info`` kommt vom Aufrufer (``log_message(..., exc_info=…)``);
+        ein Tripel mit unbrauchbarem Traceback bringt ``formatException``
+        zu Fall. Die Nachricht selbst bleibt erhalten und maskiert.
+        """
+        record = _raw_record(
+            "Internal Server Error: %s",
+            (INVITE_PATH,),
+            exc_info=(ValueError, ValueError("kaputt"), "kein Traceback"),
+        )
+        for line in _rendered_sink_lines(record):
+            assert isinstance(line, str)
+            assert INVITE_TOKEN not in line
+            assert "Internal Server Error" in line
+
     def test_exception_text_is_masked(self):
         """``exc_info`` traegt die Ausnahme-Argumente woertlich in die Zeile.
 
