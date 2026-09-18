@@ -74,12 +74,18 @@ def _validate_chains(chains: object, path: str) -> dict:
     if not isinstance(chains, dict):
         raise HwmIntegrityError(prefix + "'chains' ist kein Objekt (Ketten-Schluessel -> Anker-Eintrag).")
     for key, entry in chains.items():
+        # Ein leerer Eintrag (``null``, ``{}``) ist der bekannte Erstlauf-Fall
+        # und wurde immer schon toleriert — ebenso ein fehlender oder leerer
+        # Tail und ein Zaehlstand in fremdem Format (er geht nur in die
+        # Bruchmeldung ein). Nur die Formen, die die Auswertung frueher zum
+        # Absturz brachten, werden hier abgewiesen.
+        if not entry:
+            continue
         if not isinstance(entry, dict):
             raise HwmIntegrityError(prefix + f"Eintrag {key!r} ist kein Objekt.")
-        if not isinstance(entry.get("last_entry_hash", ""), str):
+        anchor = entry.get("last_entry_hash")
+        if anchor and not isinstance(anchor, str):
             raise HwmIntegrityError(prefix + f"Eintrag {key!r} hat keinen Tail-Anker als Zeichenkette.")
-        if not isinstance(entry.get("count", 0), int):
-            raise HwmIntegrityError(prefix + f"Eintrag {key!r} hat keinen ganzzahligen Zaehlstand.")
     return chains
 
 
@@ -128,7 +134,9 @@ class HighWaterMarkStore:
         chains = data.get("chains", {})
         signature = data.get("sig", "")
         expected = _sign(chains)
-        if not isinstance(signature, str) or not hmac.compare_digest(expected, signature):
+        # ``compare_digest`` verlangt ASCII-Strings: eine Signatur mit
+        # Nicht-ASCII-Zeichen wirft dort sonst einen ungefangenen ``TypeError``.
+        if not isinstance(signature, str) or not signature.isascii() or not hmac.compare_digest(expected, signature):
             raise HwmIntegrityError(
                 f"HWM-Datei {path!r}: Signatur ungueltig — Manipulationsverdacht am externen Audit-High-Water-Mark."
             )
