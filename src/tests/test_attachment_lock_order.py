@@ -75,10 +75,25 @@ _ORDERED_ATTACHMENT_LOCK_RE = re.compile(
 
 #: Obergrenze fuer jedes Warten in den Rendezvous-Guards (Sekunden). Kein Test
 #: wartet laenger; laeuft sie ab, gilt der beobachtete Zustand.
-RENDEZVOUS_DEADLINE = 8.0
+RENDEZVOUS_DEADLINE = 4.0
 
 #: PostgreSQL-SQLSTATE fuer „deadlock detected".
 DEADLOCK = "40P01"
+
+#: SQLSTATEs der DB-seitigen Zeitgrenzen (``lock_not_available``,
+#: ``query_canceled``). Sie sind der Rettungsanker, falls die Ordnung verletzt
+#: ist und der Deadlock-Detektor den Zyklus nicht aufloest: kein Test haengt,
+#: er faellt.
+TIMEOUT_SQLSTATES = frozenset({"55P03", "57014"})
+
+#: Jede Testverbindung bekommt ihre Zeitgrenzen DB-seitig — die Deadline im
+#: Python-Code begrenzt nur die Poll-Schleife, nicht ein blockierendes
+#: ``pg_advisory_xact_lock``. Die Sperrgrenze liegt ueber ``deadlock_timeout``
+#: (1 s), damit ein echter Zyklus als ``40P01`` sichtbar wird und nicht als
+#: Zeitgrenze.
+GEGEN_LOCK_TIMEOUT = "3000ms"
+WORKER_LOCK_TIMEOUT = "6000ms"
+WORKER_STATEMENT_TIMEOUT = "9000ms"
 
 
 def _lock_sequence(captured) -> list[str]:
@@ -151,6 +166,15 @@ def _attach(facility, owner, field_template, user):
     return attachment
 
 
+def _ersetze(facility, owner, field_template, user, vorgaenger):
+    """Haengt eine zweite Version an dieselbe Kette (Replace-Pfad)."""
+    from core.services.file_vault import store_encrypted_file
+
+    upload = SimpleUploadedFile("probe-neu.pdf", PDF_MINIMAL, content_type="application/pdf")
+    with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
+        return store_encrypted_file(facility, upload, field_template, owner, user, supersedes=vorgaenger)
+
+
 # ------------------------------------------------------- Sequenz-Guards ----
 
 
@@ -159,12 +183,21 @@ class TestSequenzReihenfolge:
     """Die Ordnung am ausgefuehrten SQL — deterministisch, ohne Timing."""
 
     def _assert_reihenfolge(self, sequence, *, owner_table):
+        """Die VOLLSTAENDIGE Folge je Owner-Typ: Person -> Owner -> Anhang -> Protokoll.
+
+        Bei einem Personen-Owner faellt Stufe 1 mit der Owner-Zeile zusammen —
+        eine zweite Stufe gibt es dort nicht.
+        """
         attachment_at = _first_index(sequence, "core_attachment")
         chain_at = _first_index(sequence, CHAIN)
         owner_at = _first_index(sequence, owner_table)
         assert attachment_at is not None, f"Anhangszeilen wurden nicht gesperrt: {sequence}"
         assert chain_at is not None, f"kein Ketten-Lock im Pfad: {sequence}"
         assert owner_at is not None, f"{owner_table}-Zeile wurde nicht gesperrt: {sequence}"
+        if owner_table != "core_client":
+            person_at = _first_index(sequence, "core_client")
+            assert person_at is not None, f"Personenzeile wurde nicht gesperrt: {sequence}"
+            assert person_at < owner_at, f"Personenzeile gehoert vor die Owner-Zeile: {sequence}"
         assert owner_at < attachment_at, f"Owner-Zeile gehoert vor die Anhangszeilen: {sequence}"
         assert attachment_at < chain_at, f"Anhangszeilen gehoeren vor den Ketten-Lock: {sequence}"
 
@@ -284,15 +317,7 @@ class TestSequenzReihenfolge:
             resp = client.post(reverse("core:attachment_delete", kwargs={"pk": attachment.pk}))
         assert resp.status_code == 302, resp.content
 
-        sequence = _lock_sequence(captured)
-        client_at = _first_index(sequence, "core_client")
-        attachment_at = _first_index(sequence, "core_attachment")
-        chain_at = _first_index(sequence, CHAIN)
-        assert client_at is not None, f"Personenzeile wurde nicht gesperrt: {sequence}"
-        assert attachment_at is not None, f"Anhangszeilen wurden nicht gesperrt: {sequence}"
-        assert chain_at is not None, f"kein Ketten-Lock im Pfad: {sequence}"
-        assert client_at < attachment_at, f"Personenzeile gehoert vor die Anhangszeilen: {sequence}"
-        assert attachment_at < chain_at, f"Anhangszeilen gehoeren vor den Ketten-Lock: {sequence}"
+        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_event")
 
     def test_typwechsel_sperrt_alle_ketten_geordnet_vor_dem_ersten_update(
         self, staff_user, facility, client_identified
@@ -369,11 +394,313 @@ class TestSequenzReihenfolge:
         assert delete_at is not None, "kein Attachment-DELETE im Pfad"
         assert lock_at < delete_at, "die Vorsperre gehoert vor das DELETE"
 
+    def test_personen_update_mit_typentfernung_sperrt_die_person_zuerst(self, client, staff_user, facility):
+        """Das Entfernen des Dokumentationstyps ist derselbe Schreibpfad.
+
+        Er verwirft ALLE Ketten der Person (``discard_type_switch_file_chains``)
+        und schreibt dafuer eine Bulk-Audit-Zeile — also den Ketten-Lock. Die
+        Personenzeile sperrte er bis dahin erst danach, im ``update_client``.
+        """
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Typentfernung"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Sperr-Sonde Typ",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=doc_type,
+            data_json={},
+            notes="alt",
+            created_by=staff_user,
+        )
+        _attach(facility, person, ft_file, staff_user)
+        client.force_login(staff_user)
+
+        with CaptureQueriesContext(connection) as captured:
+            resp = client.post(
+                reverse("core:client_update", kwargs={"pk": person.pk}),
+                {
+                    "pseudonym": "Sperr-Sonde Typ",
+                    "contact_stage": Client.ContactStage.IDENTIFIED,
+                    "age_cluster": Client.AgeCluster.UNKNOWN,
+                    "notes": "geaendert",
+                    "document_type": "",
+                },
+            )
+        assert resp.status_code == 302, resp.content
+        assert not person.attachments.filter(deleted_at__isnull=True).exists(), "der Typwechsel hat nichts verworfen"
+        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_client")
+
+    def test_fall_update_mit_typentfernung_sperrt_person_und_fall_zuerst(
+        self, client, staff_user, facility, client_identified
+    ):
+        """Dieselbe Luecke am Fall-Pfad — hier mit beiden Stufen der ersten Ordnung."""
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.CASE, name="Fall Typentfernung"
+        )
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Sperr-Sonde Fall Typ",
+            description="alt",
+            document_type=doc_type,
+            data_json={},
+            created_by=staff_user,
+        )
+        _attach(facility, case, ft_file, staff_user)
+        client.force_login(staff_user)
+
+        with CaptureQueriesContext(connection) as captured:
+            resp = client.post(
+                reverse("core:case_update", kwargs={"pk": case.pk}),
+                {
+                    "client": str(client_identified.pk),
+                    "title": "Sperr-Sonde Fall Typ",
+                    "description": "geaendert",
+                    "lead_user": "",
+                    "document_type": "",
+                },
+            )
+        assert resp.status_code == 302, resp.content
+        assert not case.attachments.filter(deleted_at__isnull=True).exists(), "der Typwechsel hat nichts verworfen"
+        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_case")
+
+    def test_direkter_soft_delete_sperrt_die_kette_geordnet_vor_dem_audit(
+        self, staff_user, facility, client_identified
+    ):
+        """Eine Kette ist nicht EINE Zeile.
+
+        Der direkte Service-Einstieg markierte alle Versionen mit einem
+        ungeordneten ``UPDATE``; dessen Sperrfolge legt der Ausfuehrungsplan
+        fest. Ein gleichzeitiger Pfad mit nach ``pk`` geordneter Vorsperre
+        (Vernichtung, Batch) kann sich damit verschraenken.
+        """
+        from core.services.file_vault import soft_delete_attachment_chain
+
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.EVENT, name="Ereignis Kette"
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        erste_version = _attach(facility, event, ft_file, staff_user)
+        _ersetze(facility, event, ft_file, staff_user, erste_version)
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+            assert soft_delete_attachment_chain(event, erste_version.entry_id, staff_user) == 2
+
+        lock_at = _ordered_attachment_lock_index(captured)
+        update_at = _statement_index(captured, lambda sql: sql.startswith('UPDATE "core_attachment"'))
+        chain_at = _statement_index(captured, lambda sql: "pg_advisory_xact_lock" in sql)
+        assert lock_at is not None, "keine nach PK geordnete Vorsperre vor dem Soft-Delete"
+        assert update_at is not None, "kein Soft-Delete-UPDATE im Pfad"
+        assert chain_at is not None, "kein Ketten-Lock im Pfad"
+        assert lock_at < update_at, "die Vorsperre gehoert vor die Aenderung"
+        assert lock_at < chain_at, "die Vorsperre gehoert vor den Ketten-Lock"
+
+    def test_batch_remove_behaelt_genau_eine_gebuendelte_vorsperre(self, staff_user, facility, client_identified):
+        """Die Gegenprobe zum Einzelpfad: der Batch sperrt EINMAL gebuendelt.
+
+        Eine Vorsperre je Kette im Einzelpfad waere lineares Wachstum — genau
+        der Regress, den der Query-Count-Pin des Bulk-REMOVE ausschliesst.
+        """
+        from core.services.attachments import apply_attachment_changes
+
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.EVENT, name="Ereignis Batch"
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        erste = _attach(facility, event, ft_file, staff_user)
+        zweite = _attach(facility, event, ft_file, staff_user)
+        event.data_json = {
+            ft_file.slug: {
+                "__files__": True,
+                "entries": [{"id": str(erste.pk), "sort": 0}, {"id": str(zweite.pk), "sort": 1}],
+            }
+        }
+        event.save(update_fields=["data_json"])
+        entfernen = f"{erste.entry_id},{zweite.entry_id}"
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+            apply_attachment_changes(
+                event,
+                staff_user,
+                {f"{ft_file.slug}__remove": entfernen},
+                {},
+                {},
+                doc_type,
+                staged_by_key={},
+            )
+
+        vorsperren = [
+            index
+            for index, query in enumerate(captured.captured_queries)
+            if _ORDERED_ATTACHMENT_LOCK_RE.search(query["sql"])
+        ]
+        assert len(vorsperren) == 1, f"genau eine gebuendelte Vorsperre erwartet, gemessen: {len(vorsperren)}"
+
+    def test_direkter_replace_sperrt_die_personenzeile_vor_dem_ketten_lock(self, staff_user, facility):
+        """Der Replace legt eine NEUE Anhangszeile mit Owner-FK an.
+
+        Deren Fremdschluesselpruefung nimmt eine Sperre auf der Owner-/Personen-
+        zeile — beim aufgeschobenen Schluessel erst zum Commit, also HINTER dem
+        Ketten-Lock. Ein Pfad, der die Personenzeile haelt und danach den
+        Ketten-Lock will (Art.-18-Einschraenkung), schliesst damit den Zyklus.
+        """
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Replace"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Sperr-Sonde Replace",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=doc_type,
+            data_json={},
+            created_by=staff_user,
+        )
+        vorgaenger = _attach(facility, person, ft_file, staff_user)
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+            _ersetze(facility, person, ft_file, staff_user, vorgaenger)
+
+        self._assert_reihenfolge(_lock_sequence(captured), owner_table="core_client")
+
+    def test_direkter_upload_sperrt_die_owner_zeilen_vor_dem_ketten_lock(self, staff_user, facility, client_identified):
+        """Dasselbe beim reinen Hinzufuegen: auch die neue Zeile traegt den Owner-FK."""
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.EVENT, name="Ereignis Upload"
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+            _attach(facility, event, ft_file, staff_user)
+
+        sequence = _lock_sequence(captured)
+        person_at = _first_index(sequence, "core_client")
+        owner_at = _first_index(sequence, "core_event")
+        chain_at = _first_index(sequence, CHAIN)
+        assert person_at is not None, f"Personenzeile wurde nicht gesperrt: {sequence}"
+        assert owner_at is not None, f"Ereigniszeile wurde nicht gesperrt: {sequence}"
+        assert chain_at is not None, f"kein Ketten-Lock im Pfad: {sequence}"
+        assert person_at < owner_at, f"Personenzeile gehoert vor die Ereigniszeile: {sequence}"
+        assert owner_at < chain_at, f"die Owner-Zeilen gehoeren vor den Ketten-Lock: {sequence}"
+
+    def test_leerer_batch_sperrt_keine_zeile(self, staff_user, facility):
+        """Ein reines Text-Update fasst keine Anhangszeile an — und sperrt nichts.
+
+        Die Vorsperre ist die Ausdehnung des Batch-Vertrags, keine neue
+        Konkurrenz: wer nichts ersetzt, loescht oder hinzufuegt, zahlt weiterhin
+        nichts.
+        """
+        from core.services.attachments.crud import lock_attachment_batch_before_audit
+
+        doc_type, _ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.CLIENT, name="Person leerer Batch"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Sperr-Sonde leer",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=doc_type,
+            data_json={},
+            created_by=staff_user,
+        )
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+            lock_attachment_batch_before_audit(person, staff_user, {}, {}, doc_type, data_json={})
+
+        gesperrt = [q["sql"] for q in captured.captured_queries if "FOR UPDATE" in q["sql"].upper()]
+        assert not gesperrt, f"der leere Batch hat gesperrt: {gesperrt}"
+
+    def test_batch_mit_neuer_datei_sperrt_die_owner_zeile(self, staff_user, facility):
+        """Gegenprobe zum leeren Batch: ein Batch MIT Upload ist nicht leer.
+
+        Er legt eine Anhangszeile mit Owner-FK an (siehe Replace-Guard) und
+        braucht die erste Stufe deshalb weiterhin vor dem Ketten-Lock des
+        ``update_*``.
+        """
+        from core.services.attachments.crud import lock_attachment_batch_before_audit
+
+        doc_type, ft_file, _ft_text = _doc_type(
+            facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Batch mit Datei"
+        )
+        person = Client.objects.create(
+            facility=facility,
+            pseudonym="Sperr-Sonde ADD",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            document_type=doc_type,
+            data_json={},
+            created_by=staff_user,
+        )
+
+        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+            # Der Staging-Schluessel eines Zugangs ist der reine Feld-Slug
+            # (Ersetzen benutzt ``replace_upload_key``); der Wert spielt fuer
+            # die Sperrmenge keine Rolle.
+            lock_attachment_batch_before_audit(
+                person, staff_user, {}, {ft_file.slug: ["gestagt"]}, doc_type, data_json={}
+            )
+
+        assert _first_index(_lock_sequence(captured), "core_client") is not None, (
+            "der Batch mit neuer Datei hat die Personenzeile nicht gesperrt"
+        )
+
 
 # ---------------------------------------------------- Rendezvous-Guards ----
 
 
-def _warte_auf_gegenseite(sonde_connection, facility_id, deadline_ends_at) -> str:
+def _setze_zeitgrenzen(dbconnection, *, lock_timeout, statement_timeout=None) -> None:
+    """Gibt der Verbindung DB-seitige Zeitgrenzen (muss im Autocommit laufen).
+
+    ``set_config(..., is_local=False)`` gilt fuer die Sitzung — im Autocommit
+    ueberlebt das jede spaetere Transaktion und jedes ``ROLLBACK`` der
+    Sondenschleife. Eine Zeitgrenze im Python-Code kann ein blockierendes
+    ``SELECT`` nicht beenden; diese hier kann es.
+    """
+    assert dbconnection.get_autocommit(), "Zeitgrenzen vor der ersten Transaktion setzen"
+    with dbconnection.cursor() as cur:
+        cur.execute("SELECT set_config('lock_timeout', %s, false)", [lock_timeout])
+        if statement_timeout is not None:
+            cur.execute("SELECT set_config('statement_timeout', %s, false)", [statement_timeout])
+
+
+def _sqlstate(exc):
+    """SQLSTATE der DB-Ausnahme hinter einem Django-``OperationalError``."""
+    return getattr(getattr(exc, "__cause__", None), "sqlstate", None)
+
+
+def _bewerte_db_fehler(fehler, *, kontext) -> None:
+    """Jeder Fehler wird am SQLSTATE bewertet — nichts gilt stillschweigend als Erfolg."""
+    if fehler is None:
+        return
+    zustand = _sqlstate(fehler)
+    if zustand == DEADLOCK:
+        pytest.fail(f"Sperr-Zyklus ({kontext}): SQLSTATE {DEADLOCK} — {fehler!r}")
+    if zustand in TIMEOUT_SQLSTATES:
+        pytest.fail(f"Warten lief in die Zeitgrenze ({kontext}): SQLSTATE {zustand} — Zyklusverdacht, {fehler!r}")
+    pytest.fail(f"unerwarteter Fehler ({kontext}): SQLSTATE {zustand} — {fehler!r}")
+
+
+def _warte_auf_gegenseite(sonde_connection, facility_id, worker_pid, deadline_ends_at) -> str:
     """Barriere fuer die zweite Transaktion — ohne unbegrenztes Warten.
 
     Die Sonde laeuft auf einer EIGENEN Verbindung und probt genau zwei
@@ -385,9 +712,11 @@ def _warte_auf_gegenseite(sonde_connection, facility_id, deadline_ends_at) -> st
       Geprobt wird mit ``pg_try_advisory_xact_lock`` auf demselben Schluessel,
       den ``assign_chain_fields`` nimmt; die Probe-Transaktion wird sofort
       zurueckgerollt und haelt selbst nichts.
-    * ``"blockiert"`` — ein Backend wartet auf die Transaktion eines anderen
-      (``locktype='transactionid'``), haengt also an der Zeile, die wir halten,
-      BEVOR es den Ketten-Lock genommen hat: die geforderte Richtung.
+    * ``"blockiert"`` — GENAU das Backend des Workers wartet auf die
+      Transaktion eines anderen (``locktype='transactionid'``), haengt also an
+      der Zeile, die wir halten, BEVOR es den Ketten-Lock genommen hat: die
+      geforderte Richtung. Die Probe ist an ``worker_pid`` gebunden; eine
+      beliebige andere Sitzung im Cluster darf den Test nicht gruen faerben.
 
     ``"deadline"`` heisst „nichts davon beobachtet" — der Aufrufer behandelt das
     als unschluessig und laesst den Test nicht stillschweigend gruen werden.
@@ -398,7 +727,10 @@ def _warte_auf_gegenseite(sonde_connection, facility_id, deadline_ends_at) -> st
         with sonde_connection.cursor() as cur:
             cur.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", [advisory_lock_name(facility_id)])
             frei = bool(cur.fetchone()[0])
-            cur.execute("SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'")
+            cur.execute(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid' AND pid = %s",
+                [worker_pid],
+            )
             wartet = cur.fetchone()[0]
         sonde_connection.rollback()
         if not frei:
@@ -409,10 +741,6 @@ def _warte_auf_gegenseite(sonde_connection, facility_id, deadline_ends_at) -> st
     return "deadline"
 
 
-def _ist_deadlock(exc) -> bool:
-    return getattr(exc, "__cause__", None) is not None and getattr(exc.__cause__, "sqlstate", None) == DEADLOCK
-
-
 class _Gegenrichtung:
     """Zweite Transaktion auf eigener Verbindung: haelt eine Zeile und will
     danach den Ketten-Lock — die Gegenrichtung zur geforderten Ordnung."""
@@ -420,8 +748,10 @@ class _Gegenrichtung:
     def __init__(self, facility_id):
         self.facility_id = facility_id
         self.conn = connections.create_connection("default")
+        _setze_zeitgrenzen(self.conn, lock_timeout=GEGEN_LOCK_TIMEOUT)
         self.conn.set_autocommit(False)
         self.sonde = connections.create_connection("default")
+        _setze_zeitgrenzen(self.sonde, lock_timeout=GEGEN_LOCK_TIMEOUT)
         self.sonde.set_autocommit(False)
         self.fehler = None
 
@@ -440,8 +770,8 @@ class _Gegenrichtung:
         except OperationalError as exc:
             self.fehler = exc
 
-    def warte(self, deadline_ends_at):
-        return _warte_auf_gegenseite(self.sonde, self.facility_id, deadline_ends_at)
+    def warte(self, worker_pid, deadline_ends_at):
+        return _warte_auf_gegenseite(self.sonde, self.facility_id, worker_pid, deadline_ends_at)
 
     def schliesse(self):
         """Gibt Zeilensperre und Ketten-Lock sicher frei — auch nach Fehlern."""
@@ -454,10 +784,32 @@ class _Gegenrichtung:
 
 
 def _im_thread(fn):
-    """Startet ``fn`` als Thread und sammelt Ergebnis bzw. Ausnahme ein."""
+    """Startet ``fn`` als Thread und sammelt Ergebnis bzw. Ausnahme ein.
+
+    Der Thread meldet zuerst seine Backend-PID (die Warteprobe der Sonde
+    braucht sie) und setzt seine DB-seitigen Zeitgrenzen; erst danach laeuft
+    ``fn``. Der Thread ist ein Daemon: bleibt er trotz aller Grenzen haengen,
+    faellt der Test am ``is_alive``-Check, haelt aber den Testlauf nicht auf.
+    """
     ergebnis: dict = {}
+    bereit = threading.Event()
 
     def runner():
+        try:
+            _setze_zeitgrenzen(
+                connection,
+                lock_timeout=WORKER_LOCK_TIMEOUT,
+                statement_timeout=WORKER_STATEMENT_TIMEOUT,
+            )
+            with connection.cursor() as cur:
+                cur.execute("SELECT pg_backend_pid()")
+                ergebnis["pid"] = cur.fetchone()[0]
+        except Exception as exc:  # noqa: BLE001 — der Test bewertet die Ausnahme
+            ergebnis["fehler"] = exc
+            connections.close_all()
+            return
+        finally:
+            bereit.set()
         try:
             ergebnis["wert"] = fn()
         except Exception as exc:  # noqa: BLE001 — der Test bewertet die Ausnahme
@@ -465,8 +817,10 @@ def _im_thread(fn):
         finally:
             connections.close_all()
 
-    thread = threading.Thread(target=runner)
+    thread = threading.Thread(target=runner, daemon=True)
     thread.start()
+    assert bereit.wait(RENDEZVOUS_DEADLINE), "Worker-Thread hat seine Backend-PID nicht gemeldet"
+    assert "pid" in ergebnis, f"Worker-Thread kam nicht bis zur Backend-PID: {ergebnis.get('fehler')!r}"
     return thread, ergebnis
 
 
@@ -513,20 +867,20 @@ def test_ereignis_update_bildet_keinen_zyklus_mit_gehaltener_anhangszeile(
             )
 
         thread, ergebnis = _im_thread(pfad)
-        beobachtung = gegen.warte(time.monotonic() + RENDEZVOUS_DEADLINE)
+        beobachtung = gegen.warte(ergebnis["pid"], time.monotonic() + RENDEZVOUS_DEADLINE)
         gegen.nimm_ketten_lock()
     finally:
         gegen.schliesse()
         if thread is not None:
             thread.join(timeout=RENDEZVOUS_DEADLINE)
 
+    assert thread is not None and not thread.is_alive(), "Worker-Thread laeuft nach der Deadline weiter"
     assert beobachtung != "deadline", "Rendezvous unschluessig — weder Ketten-Lock noch Zeilenwarten beobachtet"
-    assert gegen.fehler is None or not _ist_deadlock(gegen.fehler), (
-        f"Sperr-Zyklus: die fremde Transaktion wurde abgebrochen ({gegen.fehler})"
+    _bewerte_db_fehler(gegen.fehler, kontext="fremde Transaktion")
+    _bewerte_db_fehler(ergebnis.get("fehler"), kontext="Update-Pfad")
+    assert ergebnis.get("wert") is not None and ergebnis["wert"].status_code == 302, (
+        f"Update-Pfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
     )
-    pfad_fehler = ergebnis.get("fehler")
-    assert pfad_fehler is None or not _ist_deadlock(pfad_fehler), f"Sperr-Zyklus im Update-Pfad ({pfad_fehler})"
-    assert pfad_fehler is None, f"Update-Pfad abgebrochen: {pfad_fehler!r}"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -563,17 +917,17 @@ def test_endgueltiges_loeschen_bildet_keinen_zyklus_mit_gehaltener_personenzeile
             return client.post(reverse("core:attachment_delete", kwargs={"pk": attachment.pk}))
 
         thread, ergebnis = _im_thread(pfad)
-        beobachtung = gegen.warte(time.monotonic() + RENDEZVOUS_DEADLINE)
+        beobachtung = gegen.warte(ergebnis["pid"], time.monotonic() + RENDEZVOUS_DEADLINE)
         gegen.nimm_ketten_lock()
     finally:
         gegen.schliesse()
         if thread is not None:
             thread.join(timeout=RENDEZVOUS_DEADLINE)
 
+    assert thread is not None and not thread.is_alive(), "Worker-Thread laeuft nach der Deadline weiter"
     assert beobachtung != "deadline", "Rendezvous unschluessig — weder Ketten-Lock noch Zeilenwarten beobachtet"
-    assert gegen.fehler is None or not _ist_deadlock(gegen.fehler), (
-        f"Sperr-Zyklus: die fremde Transaktion wurde abgebrochen ({gegen.fehler})"
+    _bewerte_db_fehler(gegen.fehler, kontext="fremde Transaktion")
+    _bewerte_db_fehler(ergebnis.get("fehler"), kontext="Vernichtungspfad")
+    assert ergebnis.get("wert") is not None and ergebnis["wert"].status_code == 302, (
+        f"Vernichtungspfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
     )
-    pfad_fehler = ergebnis.get("fehler")
-    assert pfad_fehler is None or not _ist_deadlock(pfad_fehler), f"Sperr-Zyklus im Vernichtungspfad ({pfad_fehler})"
-    assert pfad_fehler is None, f"Vernichtungspfad abgebrochen: {pfad_fehler!r}"
