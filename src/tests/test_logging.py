@@ -224,18 +224,28 @@ def test_json_formatter_emits_csp_violation_extra():
 
 def test_json_formatter_scrubs_structured_string_values():
     """Strukturierte Felder koennen fremdbestimmte URLs tragen — der Scrub
-    darf nicht an der Message-Grenze aufhoeren."""
+    darf nicht an der Message-Grenze aufhoeren.
+
+    Refs #2228: Der Query-Teil einer URL faellt seither **ganz** weg, statt
+    nur die bekannten Muster darin zu ersetzen — ein Suchbegriff ist kein
+    Muster. Die Muster-Zusage selbst bleibt und wird am Freitextfeld
+    ``script-sample`` gepinnt, das keine URL traegt.
+    """
     formatter = JsonFormatter()
     record = _make_record(
         "csp_violation",
         level=logging.WARNING,
         extra={
-            "csp_violation": {"document-uri": "https://x.test/?password=hunter2"},
+            "csp_violation": {
+                "document-uri": "https://x.test/?password=hunter2",
+                "script-sample": "password=hunter2",
+            },
             "user_agent": "agent tester@example.com",
         },
     )
     data = json.loads(formatter.format(record))
-    assert data["csp_violation"]["document-uri"] == "https://x.test/?password=<redacted>"
+    assert data["csp_violation"]["document-uri"] == "https://x.test/"
+    assert data["csp_violation"]["script-sample"] == "password=<redacted>"
     assert data["user_agent"] == "agent <email>"
 
 

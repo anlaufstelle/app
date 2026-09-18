@@ -14,7 +14,7 @@ from django.utils.translation import gettext, gettext_noop
 from django.views.defaults import permission_denied as django_permission_denied
 from django_ratelimit.exceptions import Ratelimited
 
-from core.logging import mask_url
+from core.logging import mask_paths_in_text, mask_url
 
 logger = logging.getLogger("django.security.csrf")
 
@@ -88,6 +88,14 @@ def csrf_failure(request, reason=""):
       Tokens). Genau diese Zeile war der Anlass fuer die Pfad-Maskierung im
       Freitext (Refs #2198) — nur griff sie bisher erst auf dem Weg zum
       Tracker, nicht in der Logdatei.
+    * ``reason`` traegt bei Referer-/Origin-Ablehnung die **vollstaendige**
+      abgewiesene URL: Django setzt sie in ``REASON_BAD_REFERER`` bzw.
+      ``REASON_BAD_ORIGIN`` ein (``django/middleware/csrf.py``). Die
+      maskierten Einzelfelder ``referer=``/``origin=`` verhindern diese
+      zweite Kopie nicht — der Grund laeuft deshalb an der Quelle durch
+      ``mask_paths_in_text``. Die Fehlerklasse („Referer checking failed …
+      does not match any trusted origins.") bleibt dabei erhalten, nur
+      Query und Token-Segmente fallen weg.
     * Statt des Login-Namens steht die User-PK im ``extra`` — dasselbe
       ``user_pk``-Feld wie in den Einladungs-Log-Zeilen
       (``core/services/security/invite.py``, Refs #1949). Ein Login-Name ist
@@ -99,7 +107,7 @@ def csrf_failure(request, reason=""):
     user_pk = getattr(getattr(request, "user", None), "pk", None)
     logger.warning(
         "CSRF failure reason=%r path=%s referer=%s origin=%s htmx=%s",
-        reason,
+        mask_paths_in_text(reason) if isinstance(reason, str) else reason,
         mask_url(request.path),
         mask_url(request.META.get("HTTP_REFERER", "-")),
         mask_url(request.META.get("HTTP_ORIGIN", "-")),

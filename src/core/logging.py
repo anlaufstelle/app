@@ -19,6 +19,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
+from functools import lru_cache
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 # Regex-Muster für PII-Scrub. Absichtlich konservativ: lieber false-positiv
@@ -113,6 +114,29 @@ _PATH_IN_TEXT = re.compile(r"/[\w./:~%+-]+(?:\?[^\s\"'()\[\]{},;]*)?")
 _TRAILING_PUNCTUATION = ".,;:!?"
 
 
+@lru_cache(maxsize=4096)
+def _resolved_route(resolver, path):
+    """Memoisiertes ``resolver.resolve(path).route`` (auch die Fehlschläge).
+
+    Refs #2228: Seit die Maskierung an BEIDEN Formattern haengt, laeuft sie
+    fuer jede Log-Zeile — und eine erfolglose Aufloesung kostet einen
+    vollstaendigen Durchlauf durch alle URL-Muster. Wiederkehrende Pfade
+    (Routen der Anwendung, Dateipfade in Tracebacks) zahlen ihn damit genau
+    einmal.
+
+    Der **Resolver** ist Teil des Schluessels, nicht der URLconf-Name:
+    ``clear_url_caches()`` — das, was Django bei einem URLconf-Wechsel
+    (``override_settings(ROOT_URLCONF=…)``) ausloest — baut den Resolver neu,
+    der Schluessel wechselt damit automatisch. Ein veraltetes Route-Schema
+    kann so nicht zurueckkommen. Die Schranke deckelt den Speicher gegen
+    frei vorgebbare 404-Pfade.
+    """
+    try:
+        return resolver.resolve(path).route
+    except Exception:
+        return None
+
+
 def _resolve_route(path):
     """Route-Schema eines Pfades (``invite/<uidb64>/<token>/``) oder ``None``.
 
@@ -121,11 +145,15 @@ def _resolve_route(path):
     Fehlschläge (``Resolver404`` auf 404-Pfaden, ein noch nicht bereiter
     App-Registry-Zustand) sind der Normalfall, nicht die Ausnahme — sie führen
     in die Heuristik, niemals in eine Exception aus einem Log-/Scrub-Pfad.
+
+    ``get_resolver(get_urlconf())`` ist genau das, was ``django.urls.resolve``
+    intern tut; hier steht es ausgeschrieben, damit der Resolver in den
+    Cache-Schluessel von ``_resolved_route`` eingehen kann.
     """
-    from django.urls import resolve
+    from django.urls import get_resolver, get_urlconf
 
     try:
-        return resolve(path).route
+        return _resolved_route(get_resolver(get_urlconf()), path)
     except Exception:
         return None
 
@@ -285,6 +313,64 @@ def mask_paths_in_text(text):
     return _PATH_IN_TEXT.sub(replace, text)
 
 
+def scrub_text(value):
+    """Der vollstaendige Sink-Scrub EINER Zeichenkette: Muster **und** Pfade.
+
+    Die Reihenfolge ist dieselbe wie im Tracker-Pfad
+    (``settings/_sentry.py``): erst die Muster (Bearer/Mail/Passwort/
+    Token-Schluessel), dann die Pfad-/Token-Maskierung. ``scrub`` hinterlaesst
+    seine Platzhalter auch im Query-Teil (``?email=<email>``), den ``mask_url``
+    anschliessend ganz abschneidet — umgekehrt bliebe der Rest des Query
+    stehen.
+
+    Refs #2228: Bis dahin lief an den beiden konfigurierten Formattern nur
+    ``scrub``. Die Pfadmaskierung griff ausschliesslich auf dem Weg zum
+    Fehler-Tracker, nicht in der Logdatei — und damit gerade nicht fuer die
+    Zeilen, die Django selbst schreibt (``Forbidden (%s): %s`` mit dem rohen
+    Ablehnungsgrund, ``Not Found: %s`` mit dem rohen ``request.path``).
+
+    **Schnellpfad:** ohne ``/`` kann kein Pfad im Text stehen; die
+    Routenaufloesung entfaellt dann vollstaendig. Das ist der Normalfall
+    gewoehnlicher Log-Zeilen und haelt den Aufschlag der Maskierung klein.
+
+    **Fail-closed:** wirft die Maskierung wider Erwarten, geht der
+    Platzhalter in den Sink, nicht der Rohtext. Ein Scrubber, der im
+    Fehlerfall durchreicht, ist kein Scrubber.
+    """
+    if not isinstance(value, str) or not value:
+        return value
+    try:
+        scrubbed = scrub(value)
+        return mask_paths_in_text(scrubbed) if "/" in scrubbed else scrubbed
+    except Exception:
+        return SCRUBBED
+
+
+def _emergency_line(record):
+    """Ersatztext, wenn die Interpolation des Records scheitert.
+
+    ``record.getMessage()`` wirft bei jedem Missverhaeltnis zwischen Vorlage
+    und Argumenten (``"%d Treffer" % ("viele",)``, ein fehlendes Argument).
+    Ohne diesen Ausweg faengt ``logging`` die Ausnahme im Handler ab, druckt
+    "--- Logging error ---" und **verwirft den Record**: auf einem
+    Sicherheits-Sink waere ein Formatter-Fehler damit ein stiller Verlust
+    des Nachweises. Vorlage und Argumente bleiben als Diagnose erhalten —
+    sie laufen wie jede andere Zeile durch ``scrub_text``.
+    """
+    return (
+        f"{record.levelname} <Log-Zeile nicht formatierbar> "
+        f"logger={record.name} msg={record.msg!r} args={record.args!r}"
+    )
+
+
+def _record_message(record):
+    """``record.getMessage()``, aber nie werfend (siehe ``_emergency_line``)."""
+    try:
+        return record.getMessage()
+    except Exception:
+        return _emergency_line(record)
+
+
 # Strukturierte Zusatzfelder aus dem logging-``extra``, die BEIDE Formatter
 # ausgeben (Refs #1943). Bewusst eine Whitelist statt "alles aus
 # ``record.__dict__``": ein Log-Record traegt Dutzende interner Attribute,
@@ -316,14 +402,16 @@ STRUCTURED_LOG_FIELDS = (
 
 
 def _scrub_value(value):
-    """Wendet ``scrub()`` auf alle Strings in *value* an (auch verschachtelt).
+    """Wendet ``scrub_text()`` auf alle Strings in *value* an (auch verschachtelt).
 
     Die strukturierten Felder tragen teils fremdbestimmte Inhalte (CSP-
     Report-URLs koennen Query-Parameter mit Credentials/Mailadressen
-    enthalten). Der Scrub darf deshalb nicht an der Message-Grenze enden.
+    enthalten). Der Scrub darf deshalb nicht an der Message-Grenze enden —
+    und seit #2228 auch nicht an der Muster-Grenze: ein Pfad-Token in einem
+    strukturierten Feld ist derselbe Leak wie einer in der Message.
     """
     if isinstance(value, str):
-        return scrub(value)
+        return scrub_text(value)
     if isinstance(value, dict):
         return {key: _scrub_value(val) for key, val in value.items()}
     if isinstance(value, (list, tuple)):
@@ -340,8 +428,15 @@ def _dump(value):
     ab, druckt "--- Logging error ---" und **verwirft den Record** — die
     Log-Zeile waere weg. Ein Formatter darf nie die Ursache dafuer sein,
     dass ein Ereignis nicht geloggt wird.
+
+    ``default=str`` deckt nicht serialisierbare *Werte* ab, nicht aber
+    nicht serialisierbare *Schluessel* (ein dict mit Objekt-Schluessel wirft
+    trotzdem). Der Ausweg ist derselbe: lieber das ``repr`` als keine Zeile.
     """
-    return json.dumps(value, ensure_ascii=False, default=str)
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        return json.dumps(repr(value), ensure_ascii=False)
 
 
 def _structured_fields(record):
@@ -361,12 +456,19 @@ class VerboseScrubbingFormatter(logging.Formatter):
     (``verbose``) lief bisher ungescrubbt (Refs #1500). Dieser Formatter zieht
     die fertig formatierte Ausgabezeile — inklusive des von
     ``logging.Formatter.format`` automatisch angehängten Tracebacks — durch
-    denselben ``scrub()`` (Defense-in-Depth).
+    ``scrub_text()`` (Defense-in-Depth).
 
     Bewusst wird die *Ausgabe-Zeichenkette* gescrubbt, nicht der Record: so
     bleibt ``record.message``/``record.exc_text`` unverändert, und ein zweiter
     Handler am selben Record (z. B. der JSON-Handler) sieht keine doppelt
-    verarbeiteten Felder. ``scrub()`` ist zudem idempotent.
+    verarbeiteten Felder. ``scrub_text()`` ist zudem idempotent.
+
+    Refs #2228: ``scrub_text`` statt ``scrub`` — die Zeile traegt seither
+    auch bei Framework-Zeilen (``django.request``, ``django.security.csrf``)
+    keinen rohen Pfad mehr. Weil die Maskierung damit fuer JEDE Zeile laeuft,
+    faellt eine Ausnahme aus der Formatierung nicht mehr dem Aufrufer zur
+    Last: sie wird zur Ersatzzeile (``_emergency_line``), damit ein
+    kaputt interpolierter Record den Sink nicht um seine Zeile bringt.
     """
 
     def formatMessage(self, record):  # noqa: N802 — stdlib-Hook von logging.Formatter
@@ -387,14 +489,27 @@ class VerboseScrubbingFormatter(logging.Formatter):
         return f"{line} {rendered}"
 
     def format(self, record):
-        return scrub(super().format(record))
+        try:
+            line = super().format(record)
+        except Exception:
+            line = _emergency_line(record)
+        return scrub_text(line)
 
 
 class JsonFormatter(logging.Formatter):
     """Emit each log record as a single JSON line with PII scrubbing.
 
     Scrubbing läuft über ``message``, ``exception`` und die strukturierten
-    Zusatzfelder aus ``STRUCTURED_LOG_FIELDS``. Die IDs (``user_id``,
+    Zusatzfelder aus ``STRUCTURED_LOG_FIELDS`` — seit #2228 mit
+    ``scrub_text``, also einschliesslich der Pfad-/Token-Maskierung. Der
+    Traceback ist bewusst eingeschlossen: der Textformatter scrubbt die
+    fertige Zeile und kann den angehaengten Traceback gar nicht aussparen;
+    gaebe der JSON-Formatter hier die schwaechere Zusage, haenge der Schutz
+    am gewaehlten Ausgabeformat. Und der Traceback traegt die Argumente der
+    Ausnahme woertlich — eine Ausnahme mit Pfad/Token in der Meldung landet
+    damit im Sink (``log_message(..., exc_info=exception)``).
+
+    Die IDs (``user_id``,
     ``facility_id``, ``request_id``, ``user_pk``) sind per Design PII-arm und
     vom Scrub unberührt — sie referenzieren einen Datensatz, statt dessen
     Inhalt zu tragen; die CSP-Report-Felder sind es nicht — sie tragen
@@ -407,10 +522,13 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "module": record.module,
-            "message": scrub(record.getMessage()),
+            "message": scrub_text(_record_message(record)),
         }
         if record.exc_info and record.exc_info[0] is not None:
-            entry["exception"] = scrub(self.formatException(record.exc_info))
+            try:
+                entry["exception"] = scrub_text(self.formatException(record.exc_info))
+            except Exception:
+                entry["exception"] = SCRUBBED
         # Strukturierte Zusatzfelder aus ``extra`` (Django-Request-Attribute
         # und CSP-Violation-Details) — siehe ``STRUCTURED_LOG_FIELDS``.
         entry.update(_structured_fields(record))
