@@ -28,10 +28,25 @@ from core.services.security import generate_backup_codes, is_locked
 
 
 class ExplodingEmailBackend(BaseEmailBackend):
-    """Mail-Backend, das jeden Versand mit einer SMTP-Exception quittiert (Refs #1662)."""
+    """Mail-Backend, das jeden Versand mit einer SMTP-Exception quittiert (Refs #1662).
+
+    Respektiert ``fail_silently`` wie das echte SMTP-Backend: bei
+    ``fail_silently=True`` im Aufrufer wirft auch dieses Fake nicht mehr — der
+    Test wird dadurch rot, statt den Fehlerpfad-Nachweis zu verlieren.
+    """
+
+    def __init__(self, fail_silently=False, **kwargs):
+        # Wie Djangos echtes SMTP-Backend: ``fail_silently`` NICHT an
+        # ``super().__init__`` durchreichen (unter ``MAILERS`` wuerde das
+        # ``InvalidMailer: Unknown options 'fail_silently'`` ausloesen), sondern
+        # als eigenes Attribut fuehren.
+        super().__init__(**kwargs)
+        self.fail_silently = fail_silently
 
     def send_messages(self, email_messages):
-        raise SMTPException("relay down")
+        if not self.fail_silently:
+            raise SMTPException("relay down")
+        return 0
 
 
 EXPLODING_MAILERS = {"default": {"BACKEND": "tests.test_lockout_recovery.ExplodingEmailBackend"}}

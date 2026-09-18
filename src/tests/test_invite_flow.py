@@ -20,10 +20,25 @@ class ExplodingEmailBackend(BaseEmailBackend):
 
     Refs #1662: belegt den Fehlerpfad auf Backend-Ebene unter Django 6.1 —
     ohne ``fail_silently`` darf ein Backend-Fehler NICHT verschluckt werden.
+
+    Das Fake bildet das echte SMTP-Backend nach und respektiert
+    ``fail_silently``: wuerde der Aufrufer versehentlich ``fail_silently=True``
+    setzen, schluckt auch dieses Backend den Fehler — der Test wird dann rot,
+    statt den Regressionsschutz stillschweigend zu verlieren.
     """
 
+    def __init__(self, fail_silently=False, **kwargs):
+        # Wie Djangos echtes SMTP-Backend: ``fail_silently`` NICHT an
+        # ``super().__init__`` durchreichen (unter ``MAILERS`` wuerde das
+        # ``InvalidMailer: Unknown options 'fail_silently'`` ausloesen), sondern
+        # als eigenes Attribut fuehren.
+        super().__init__(**kwargs)
+        self.fail_silently = fail_silently
+
     def send_messages(self, email_messages):
-        raise SMTPException("relay down")
+        if not self.fail_silently:
+            raise SMTPException("relay down")
+        return 0
 
 
 EXPLODING_MAILERS = {"default": {"BACKEND": "tests.test_invite_flow.ExplodingEmailBackend"}}
