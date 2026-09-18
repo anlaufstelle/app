@@ -1,9 +1,11 @@
-# Untergrenze 6.0.8 wegen PYSEC-2026-3717/CVE-2026-15830 (GeoDjango-Rekursion
-# beim WKT/WKB-Parsing, DoS). Das Projekt nutzt contrib.gis nicht und ist damit
-# nicht angreifbar — die Untergrenze verhindert trotzdem, dass ein Neu-Lock
-# wieder auf die verwundbare 6.0.7 zurueckfaellt. Obergrenze <6.1: der
-# Minor-Sprung gehoert zum LTS-Umstieg (#1662), nicht in einen Patch-Release.
-Django>=6.0.8,<6.1
+# Untergrenze 6.1.1: Etappe 1 des LTS-Umstiegs (#1662) — 6.0 erhaelt seit
+# 2026-08-04 nur noch Security-Fixes (Ende April 2027), 6.1 laeuft bis
+# Dezember 2027. Die Untergrenze deckt zugleich PYSEC-2026-3717/CVE-2026-15830
+# ab (GeoDjango-Rekursion beim WKT/WKB-Parsing, DoS; contrib.gis ist nicht in
+# Benutzung) und verhindert, dass ein Neu-Lock auf eine 6.0-Version
+# zurueckfaellt. Obergrenze <6.2: der Sprung auf 6.2 LTS ist Etappe 2 und
+# fruehestens ab Mai 2027 vorgesehen.
+Django>=6.1.1,<6.2
 psycopg[binary]>=3.3.5
 gunicorn>=26.2.0
 whitenoise>=6.5
