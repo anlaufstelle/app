@@ -404,7 +404,12 @@ class TestFacilityStorageOverrunLockArgument:
         calls = []
         monkeypatch.setattr(quota_module, "lock_facility_storage", lambda facility_id: calls.append(facility_id))
         monkeypatch.setattr(quota_module, "_configured_limit_bytes", lambda f: 1000)
-        monkeypatch.setattr(quota_module, "_facility_totals", lambda f: (0, 0))
+        # Seit Refs #2259 liest ``facility_storage_overrun`` die Summe ueber den
+        # gemeinsamen Verbrauchsrechner (Anhaenge + offene Importdateien); der
+        # Stub ohne ``pk`` ist fuer dessen ImportJob-Abfrage kein gueltiger
+        # Mandant. Gepinnt wird hier weiterhin ausschliesslich das
+        # Sperr-Argument, nicht die Summenbildung.
+        monkeypatch.setattr(quota_module, "_enforcement_totals", lambda f: (0, 0))
 
         facility_storage_overrun(facility_stub, 10)
 

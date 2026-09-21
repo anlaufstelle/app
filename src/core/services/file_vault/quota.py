@@ -37,8 +37,11 @@ Platte und belegt Platz. Die Anzeige weist den Papierkorb-Anteil deshalb
 gesondert aus — er ist der Hebel, mit dem eine volle Einrichtung wieder Luft
 bekommt. Die **Anzeige** aus :func:`facility_storage_usage` bleibt
 Anhang-basiert. Offene ``ImportJob``-Quelldateien zaehlen bei der
-**Durchsetzung** als ``pending_bytes`` mit, bis der Lauf ``COMMITTED`` oder
-``ABORTED`` ist; sie sind temporaer und haengen an einem eigenen Modell.
+**Durchsetzung** mit, bis der Lauf ``COMMITTED`` oder ``ABORTED`` ist; sie
+sind temporaer und haengen an einem eigenen Modell. Beide Speicherpfade der
+Einrichtung — Anhang und CSV-Import — rechnen dafuer ueber DENSELBEN Zaehler
+(:func:`_enforcement_totals`, Refs #2259): zaehlte jeder nur seine eigene
+Sorte, liessen sich beide Kontingente nebeneinander ausschoepfen.
 
 Zwei Stufen, zwei Aufgaben
 ==========================
@@ -56,6 +59,10 @@ Die Durchsetzung haengt an zwei Stellen (Refs #2178):
    ``Nebenlaeufigkeit x max_file_size_mb`` (dynamisch belegt, Red-Team B-13).
    Serialisiert wird nur der kurze DB-Teil — Scan und Verschluesselung laufen
    weiterhin ohne jede Sperre.
+
+Der CSV-Import haengt seit Refs #2259 an genau denselben zwei Stufen und an
+derselben Sperre: sein ``job.save()`` laeuft im Transaktionsrahmen hinter
+:func:`~core.services.file_vault.policy.check_import_storage_quota_at_commit`.
 """
 
 from __future__ import annotations
@@ -199,6 +206,35 @@ def _facility_totals(facility) -> tuple[int, int]:
     return totals["used"] or 0, totals["trash"] or 0
 
 
+def _enforcement_totals(facility) -> tuple[int, int]:
+    """``(belegt, davon Papierkorb)`` fuer die **Durchsetzung** (Refs #2259).
+
+    Der EINE Verbrauchsrechner, an dem beide Backstops haengen: der der
+    Anhaenge (:func:`~core.services.file_vault.policy.check_storage_quota_at_commit`)
+    und der des CSV-Imports
+    (:func:`~core.services.file_vault.policy.check_import_storage_quota_at_commit`).
+    Belegt ist, was auf der Platte liegt — Anhangszeilen **und** die
+    Quelldateien der noch offenen Importlaeufe. Solange nur die Anhaenge
+    zaehlten, nahm jeder der beiden Pfade den jeweils anderen nicht wahr: ein
+    Anhang wurde angenommen, waehrend eine offene Importdatei zusaetzlich Platz
+    belegte, und umgekehrt (Befund #2259, Mischfall).
+
+    Die **Anzeige** bleibt anhangsbasiert (:func:`facility_storage_usage`):
+    offene Importdateien sind temporaer, haengen an einem eigenen Modell und
+    verschwinden mit der Uebernahme oder dem Abbruch des Laufs; eine Kachel,
+    die sie mitzaehlte, schwankte ohne Zutun der Fachkraft.
+
+    Der Zaehler der Importseite behaelt bewusst seinen Modulnamen
+    (``_pending_import_upload_bytes``) — die Mutations-Pins adressieren ihn
+    darueber. Der Import ist lokal, weil ``import_engine`` seinerseits ueber die
+    Upload-Policy in dieses Modul zeigt.
+    """
+    from core.services import import_engine  # noqa: PLC0415 — Zyklus vermeiden
+
+    used, trash = _facility_totals(facility)
+    return used + import_engine._pending_import_upload_bytes(facility), trash
+
+
 def facility_storage_usage(facility) -> StorageUsage:
     """Belegung und wirksames Kontingent einer Einrichtung (2 Queries).
 
@@ -285,12 +321,16 @@ def facility_storage_overrun(facility, additional_bytes: int) -> StorageUsage | 
     wirksames Kontingent zahlt weder Sperre noch Summen-Query. Das Limit ist
     Konfiguration und nicht umkaempft; umkaempft ist allein die Summe, und die
     wird erst nach dem Sperren gelesen (Refs #2178).
+
+    Gerechnet wird ueber :func:`_enforcement_totals` — Anhaenge **und** offene
+    Importdateien (Refs #2259). Beide Speicherpfade der Einrichtung entscheiden
+    damit auf derselben Summe und unter derselben Sperre.
     """
     limit_bytes = _configured_limit_bytes(facility)
     if limit_bytes is None:
         return None
 
     lock_facility_storage(getattr(facility, "pk", facility))
-    used, trash = _facility_totals(facility)
+    used, trash = _enforcement_totals(facility)
     usage = StorageUsage(used_bytes=used, trash_bytes=trash, limit_bytes=limit_bytes)
     return None if usage.fits(additional_bytes) else usage

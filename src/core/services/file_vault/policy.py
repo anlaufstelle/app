@@ -659,15 +659,21 @@ class StorageQuotaBackstopError(ValidationError):
 
     :meth:`write_audit` ist idempotent: es schreibt genau einmal, egal wie viele
     Raender die Ausnahme passiert.
+
+    ``target_type`` klassifiziert allein die Zielangabe der Audit-Zeile — wie
+    beim Vorab-Check (:func:`enforce_storage_quota`). Der Default ``Attachment``
+    haelt die Anhangspfade unveraendert; der CSV-Import setzt ``ImportJob``
+    (Refs #2259).
     """
 
-    def __init__(self, *, facility, user, owner, usage, requested_bytes: int):
+    def __init__(self, *, facility, user, owner, usage, requested_bytes: int, target_type: str = "Attachment"):
         super().__init__(storage_quota_message(usage))
         self.facility = facility
         self.user = user
         self.owner = owner
         self.usage = usage
         self.requested_bytes = requested_bytes
+        self.target_type = target_type
         self.audited = False
 
     def write_audit(self) -> None:
@@ -686,6 +692,7 @@ class StorageQuotaBackstopError(ValidationError):
             self.owner,
             usage=self.usage,
             requested_bytes=self.requested_bytes,
+            target_type=self.target_type,
         )
         self.audited = True
 
@@ -724,6 +731,44 @@ def check_storage_quota_at_commit(owner, user, additional_bytes: int) -> None:
             owner=owner,
             usage=usage,
             requested_bytes=additional_bytes,
+        )
+
+
+def check_import_storage_quota_at_commit(facility, user, additional_bytes: int) -> None:
+    """Derselbe Backstop fuer die CSV-Quelldatei eines Importlaufs (Refs #2259).
+
+    Der Importpfad speichert seinen ``ImportJob`` nicht ueber
+    ``storage.commit_staged_upload``, sondern selbst — er braucht deshalb einen
+    eigenen Einstieg, aber **keinen eigenen Mechanismus**: dieselbe Sperre
+    (ein einziger Advisory-Key je Einrichtung, siehe ``quota.storage_lock_name``),
+    dieselbe vollstaendige Summe (``quota._enforcement_totals``: Anhaenge plus
+    offene Importdateien) und dieselbe Ausnahme mit denselben Nutzdaten. Ein
+    zweiter Lock-Namensraum brauchte eine Lock-Reihenfolge, die die
+    Aufrufer-Transaktionen nicht einhalten koennen.
+
+    Unterschied zu :func:`check_storage_quota_at_commit` ist allein die
+    Herkunft der Bezugsgroessen: eine Importdatei hat keinen Owner (``None``,
+    wie beim Vorab-Check), die ``facility`` kommt deshalb direkt herein statt
+    aus ``owner.facility``. Die Audit-Zeile traegt ``target_type="ImportJob"``.
+
+    ``additional_bytes`` ist die Groesse der **verschluesselten** Datei, so wie
+    sie auf der Platte liegt und wie ``import_engine`` sie fuer offene Laeufe
+    spaeter wieder aufsummiert — nur so ist die Rechnung in sich geschlossen.
+
+    Raises:
+        StorageQuotaBackstopError: wenn die Datei nicht mehr hineinpasst.
+    """
+    from core.services.file_vault.quota import facility_storage_overrun  # noqa: PLC0415 — Zyklus vermeiden
+
+    usage = facility_storage_overrun(facility, additional_bytes)
+    if usage is not None:
+        raise StorageQuotaBackstopError(
+            facility=facility,
+            user=user,
+            owner=None,
+            usage=usage,
+            requested_bytes=additional_bytes,
+            target_type="ImportJob",
         )
 
 

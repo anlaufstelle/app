@@ -374,15 +374,26 @@ class TestMischfallOhneGleichzeitigkeit:
 class TestAuditRandUndSperrfolge:
     """Refs #2259: Rechenschaftsrand und Sperr-Reihenfolge des Importpfads."""
 
-    def test_unter_aufrufer_transaktion_auditiert_der_aeussere_rand(self, quota_facility, admin_user, anhang_zeile):
+    def test_unter_aufrufer_transaktion_auditiert_der_aeussere_rand(
+        self, quota_facility, admin_user, anhang_zeile, monkeypatch
+    ):
         """Mit eigener ``atomic()`` des Aufrufers traegt die Ausnahme die
         Nutzdaten nach oben — geschrieben wird am aeussersten Rand.
 
         Innerhalb der zurueckgerollten Transaktion geschrieben, verschwaende die
         Zeile mit ihr; deshalb ``quota_backstop_audit_boundary`` UM die
-        Transaktion (Muster Refs #2178).
+        Transaktion (Muster Refs #2178). Die Einrichtung laeuft erst NACH dem
+        Vorab-Check voll — sonst weist bereits dieser ab, und der Rand haette
+        nichts zu schreiben.
         """
-        anhang_zeile(LIMIT)
+        echtes_encrypt = import_engine.encrypt_file
+
+        def spaeter_belegen(quelle, ziel, *args, **kwargs):
+            ergebnis = echtes_encrypt(quelle, ziel, *args, **kwargs)
+            anhang_zeile(LIMIT)
+            return ergebnis
+
+        monkeypatch.setattr(import_engine, "encrypt_file", spaeter_belegen)
 
         with pytest.raises(ValidationError), quota_backstop_audit_boundary(), transaction.atomic():
             import_engine.store_import_upload(

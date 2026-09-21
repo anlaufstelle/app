@@ -70,7 +70,11 @@ from core.services.events import create_event
 # (``MEDIA_ROOT/<facility-pk>/``); ein zweiter Pfadbau hier waere eine stille
 # Drift-Quelle, sobald das Layout sich aendert.
 from core.services.file_vault import _facility_dir, decrypt_file_stream, encrypt_field, encrypt_file
-from core.services.file_vault.policy import enforce_storage_quota
+from core.services.file_vault.policy import (
+    StorageQuotaBackstopError,
+    check_import_storage_quota_at_commit,
+    enforce_storage_quota,
+)
 from core.services.system.field_types import get_spec
 
 logger = logging.getLogger(__name__)
@@ -402,6 +406,26 @@ def store_import_upload(
     schreiben, dann die Zeile persistieren. Scheitert der DB-Write, wird die
     Datei wieder entfernt (Muster ``file_vault.storage.commit_staged_upload``).
 
+    **Speicherkontingent in zwei Stufen** (Refs #2259, Muster Refs #2178): Der
+    Vorab-Check (:func:`~core.services.file_vault.policy.enforce_storage_quota`)
+    bleibt die billige Frühabweisung — lockfrei, vor der Verschluesselung. Er
+    **entscheidet nicht**: zwischen ihm und der Jobzeile liegt die
+    Verschluesselung, gleichzeitige Uploads sehen dort denselben alten Stand.
+    Entschieden wird unter der Sperre der Einrichtung unmittelbar vor
+    ``job.save()``
+    (:func:`~core.services.file_vault.policy.check_import_storage_quota_at_commit`).
+    Gerechnet wird dort ueber den gemeinsamen Verbrauchsrechner — Anhaenge
+    **und** offene Importdateien —, sodass beide Speicherpfade der Einrichtung
+    dieselbe Summe sehen. Die Ablehnung ist derselbe ``ValidationError`` mit
+    demselben Text wie der Vorab-Check; die Rechenschaftszeile
+    ``ATTACHMENT_QUOTA_EXCEEDED``/``ImportJob`` entsteht NACH dem Rollback.
+
+    **Sperrfolge:** Dieser Pfad sperrt keine Owner- oder Anhangszeilen (er legt
+    eine neue ``ImportJob``-Zeile an und fasst keine bestehende an); er nimmt
+    ausschliesslich den Ketten-/Kontingent-Lock der Einrichtung, und zwar als
+    LETZTE Sperre vor dem Insert — die einrichtungsweite Reihenfolge aus Refs
+    #2260 bleibt damit unverdreht.
+
     Der Originaldateiname wird NUR verschluesselt persistiert und taucht auch im
     Audit-Detail nicht auf — Dateinamen tragen in der Praxis Klientenbezug.
     """
@@ -437,7 +461,28 @@ def store_import_upload(
         job.storage_filename = storage_filename
         job.original_filename_encrypted = encrypt_field(getattr(uploaded_file, "name", "") or "import.csv")
         job.mapping_json = {"columns": {}, "delimiter": used_delimiter, "encoding": used_encoding}
-        job.save()
+        with transaction.atomic():
+            # #2259: fail-closed Backstop VOR der Jobzeile — dieselbe Stufe, die
+            # Anhaenge seit #2178 haben, und dieselbe Sperre der Einrichtung.
+            # Der Vorab-Check oben liegt ausserhalb jeder Transaktion und spart
+            # nur Arbeit: zwei gleichzeitige Uploads sehen dort denselben alten
+            # Stand und ueberziehen das Kontingent gemeinsam um eine ganze
+            # Importdatei. Gerechnet wird auf der TATSAECHLICHEN Groesse der
+            # verschluesselten Datei — genau der Groesse, die
+            # ``_pending_import_upload_bytes`` fuer offene Laeufe wieder
+            # aufsummiert.
+            check_import_storage_quota_at_commit(facility, user, output_path.stat().st_size)
+            job.save()
+    except StorageQuotaBackstopError as exc:
+        output_path.unlink(missing_ok=True)
+        if not connection.in_atomic_block:
+            # Kein Aufrufer-``atomic()`` mehr offen (der Regelfall im Wizard):
+            # der Rollback ist durch, die Rechenschaftszeile kann sofort und
+            # dauerhaft geschrieben werden. Sonst traegt die Ausnahme die
+            # Nutzdaten weiter nach oben und ``quota_backstop_audit_boundary``
+            # schreibt sie am aeussersten Rand (Muster #2178).
+            exc.write_audit()
+        raise
     except Exception:
         output_path.unlink(missing_ok=True)
         raise

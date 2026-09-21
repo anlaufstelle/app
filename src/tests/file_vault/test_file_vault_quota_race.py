@@ -701,12 +701,18 @@ class TestQueryBudget:
             commit(1)
         return len(gemessen.captured_queries) - len(referenz.captured_queries)
 
-    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 3), (False, 1)])
+    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 4), (False, 1)])
     def test_zuwachs_beim_hinzufuegen(
         self, mit_kontingent, erwartet, quota_facility, upload_target, staff_user, stage, settings
     ):
-        """Mit Kontingent: Konfigurationsfrage + Sperre + Summe. Ohne: nur die
-        Konfigurationsfrage — Einrichtungen ohne Kontingent zahlen fast nichts."""
+        """Mit Kontingent: Konfigurationsfrage + Sperre + Anhangs-Summe + offene
+        Importdateien. Ohne: nur die Konfigurationsfrage — Einrichtungen ohne
+        Kontingent zahlen fast nichts.
+
+        Die vierte Query ist der gemeinsame Verbrauchsrechner (Refs #2259):
+        seit der Backstop auch die offenen ``ImportJob``-Quelldateien mitzaehlt,
+        liest er sie unter derselben Sperre mit. Ohne Kontingent faellt sie
+        nicht an — die Konfigurationsfrage kommt davor."""
         event, ft_file = upload_target
         staged_list = stage(2)
         if not mit_kontingent:
@@ -717,12 +723,13 @@ class TestQueryBudget:
 
         assert delta == erwartet, f"Query-Zuwachs im Add-Pfad: {delta} statt {erwartet}"
 
-    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 4), (False, 2)])
+    @pytest.mark.parametrize(("mit_kontingent", "erwartet"), [(True, 5), (False, 2)])
     def test_zuwachs_beim_ersetzen(
         self, mit_kontingent, erwartet, quota_facility, upload_target, staff_user, occupy, stage, settings
     ):
         """Im Replace-Pfad kommt die Zeilensperre der Vorgaengerzeile hinzu —
-        der Preis der einheitlichen Sperr-Reihenfolge."""
+        der Preis der einheitlichen Sperr-Reihenfolge; dazu die Query des
+        gemeinsamen Verbrauchsrechners (Refs #2259)."""
         event, ft_file = upload_target
         vorgaenger = [occupy(CHUNK), occupy(CHUNK)]
         staged_list = stage(2)
