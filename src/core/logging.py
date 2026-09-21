@@ -500,16 +500,30 @@ def _last_resort_line(record):
 
 
 def _record_identity(record):
-    """Level und Logger-Name eines Records — nie werfend."""
+    """Level und Logger-Name eines Records — gescrubbt und nie werfend.
+
+    Beide Werte setzt der Anwendungscode, unverdaechtig sind sie deshalb
+    nicht: ein Logger-Name kann einen Pfad tragen
+    (``logging.getLogger(request.path)``). Der Scrub kostet hier fast
+    nichts — beide Werte sind kurz — und schliesst die letzte Stelle, an
+    der noch Rohtext in den Sink kaeme (Refs #2228).
+
+    Faellt der Scrub selbst aus, bleibt der feste Platzhalter: ein Wert,
+    fuer den niemand mehr buergen kann, gehoert nicht in die Zeile. Der
+    Diagnosewert geht dabei nur in genau diesem Ausfall verloren.
+    """
+    return (
+        _scrubbed_identity(record, "levelname", "UNKNOWN"),
+        _scrubbed_identity(record, "name", UNREPRESENTABLE),
+    )
+
+
+def _scrubbed_identity(record, attribute, fallback):
+    """Ein Identitaetsfeld des Records, gescrubbt — oder der Platzhalter."""
     try:
-        level = str(record.levelname)
+        return scrub_text(str(getattr(record, attribute)))
     except Exception:
-        level = "UNKNOWN"
-    try:
-        name = str(record.name)
-    except Exception:
-        name = UNREPRESENTABLE
-    return level, name
+        return fallback
 
 
 def _last_resort_json(record):
@@ -602,15 +616,32 @@ def _scrub_value(value, _depth=0, _parents=()):
 
 
 def _json_default(value):
-    """``default``-Hook von ``json.dumps`` — nie werfend.
+    """``default``-Hook von ``json.dumps`` — nie werfend, immer gescrubbt.
 
     ``str`` ist der Normalfall (eine UUID als ``user_id`` soll als UUID
     lesbar bleiben); wirft auch ``str``, bleibt die sichere Darstellung.
+
+    **Bytes** bekommen ihren eigenen Weg: ``str(b"/invite/…")`` erzeugt
+    sonst die ``b'…'``-Schreibweise des Rohwerts. Dekodiert wird mit
+    ``errors="replace"`` — ein nicht dekodierbares Byte darf die Zeile
+    nicht kosten.
+
+    Refs #2228: Das Ergebnis laeuft durch ``scrub_text``. Vorher reichte
+    diese Ausweichroute den Wert **roh** an ``json.dumps`` weiter: der
+    Scrub der strukturierten Felder greift nur auf ``str``-Werte, und der
+    gescrubbte Ausweg in ``_dump`` erst, wenn ``json.dumps`` selbst wirft.
+    Ein Bytes-Wert oder ein Objekt mit sprechendem ``__str__`` kam damit
+    ungescrubbt in die JSON-Zeile — die Textzeile scrubbt sich am Ende als
+    Ganzes, der JSON-Pfad hat diese zweite Chance nicht.
     """
     try:
-        return str(value)
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            text = bytes(value).decode("utf-8", errors="replace")
+        else:
+            text = str(value)
     except Exception:
-        return _safe_repr(value)
+        text = _safe_repr(value)
+    return scrub_text(text)
 
 
 def _dump(value):
