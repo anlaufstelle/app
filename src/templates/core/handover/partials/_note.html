@@ -99,7 +99,11 @@ autofocus — der Fokus landet wieder dort, wo er war.{% endcomment %}
             {% if block.author %}{% blocktrans with autor=block.author zeit=block.updated_at|date:"j. F Y, H:i" %}Zuletzt geändert von {{ autor }} am {{ zeit }}{% endblocktrans %} · {% endif %}{% blocktrans with grenze=block.editable_until|date:"j. F Y, H:i" %}Bearbeitung war bis {{ grenze }} möglich.{% endblocktrans %}
         </p>
         {% else %}
+        {% if block.kind == "current" and not block.shift.time_filter_id and not block.editable %}
+        <p class="text-[13px] text-ink-muted">{% trans "In dieser Dienstplan-Lücke läuft keine Schicht. Die Übergabe der zuletzt abgeschlossenen Schicht steht darüber und bleibt bis zum Ende der Folgeschicht bearbeitbar." %}</p>
+        {% else %}
         <p class="text-[13px] text-ink-muted">{% trans "Für diese Schicht wurde keine Übergabenotiz hinterlassen." %}</p>
+        {% endif %}
         {% endif %}
     </div>
     {% endfor %}

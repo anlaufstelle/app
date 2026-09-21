@@ -13,6 +13,7 @@ import pytest
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection
 from django.db.models import ProtectedError
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from core.models import AuditLog, ShiftHandoverNote, TimeFilter
@@ -452,6 +453,62 @@ class TestAnzeigeKontext:
         block = kontext["blocks"][0]
         assert block.author == str(staff_user)
         assert block.updated_at is not None
+
+
+@pytest.mark.django_db
+class TestHinweisInDienstplanluecke:
+    """Refs #2230: der leere Current-Block darf keine Schicht vortäuschen."""
+
+    @staticmethod
+    def _render(facility, staff_user, displayed_shift, *, now):
+        context = build_handover_note_context(facility, staff_user, displayed_shift, now=now)
+        return render_to_string(
+            "core/handover/partials/_note.html",
+            {
+                "handover_notes": context,
+                "handover_note_display": displayed_shift,
+            },
+        )
+
+    def test_luecke_erklaert_fehlende_laufende_schicht(self, facility, staff_user):
+        frueh = TimeFilter.objects.create(
+            facility=facility,
+            label="Frühdienst",
+            start_time=time(6, 0),
+            end_time=time(14, 0),
+            sort_order=0,
+        )
+        TimeFilter.objects.create(
+            facility=facility,
+            label="Spätdienst",
+            start_time=time(16, 0),
+            end_time=time(22, 0),
+            sort_order=1,
+        )
+
+        html = self._render(
+            facility,
+            staff_user,
+            Shift(date(2026, 6, 15), frueh),
+            now=_berlin(2026, 6, 15, 15, 0),
+        )
+
+        assert "In dieser Dienstplan-Lücke läuft keine Schicht." in html
+        assert "Für diese Schicht wurde keine Übergabenotiz hinterlassen." not in html
+
+    def test_deckende_schicht_behaelt_das_bestehende_formular(self, facility, staff_user, schichten):
+        tf_frueh, tf_spaet, _ = schichten
+
+        html = self._render(
+            facility,
+            staff_user,
+            Shift(date(2026, 6, 15), tf_frueh),
+            now=_berlin(2026, 6, 15, 15, 0),
+        )
+
+        assert "In dieser Dienstplan-Lücke läuft keine Schicht." not in html
+        assert f'name="time_filter" value="{tf_spaet.pk}"' in html
+        assert "Notiz speichern" in html
 
 
 # ---------------------------------------------------------------------------
