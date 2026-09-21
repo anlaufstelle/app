@@ -35,7 +35,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
 
-from core.logging import JsonFormatter, VerboseScrubbingFormatter
+from core.logging import UNREPRESENTABLE, JsonFormatter, VerboseScrubbingFormatter
 from core.models import AuditLog
 
 CSRF_LOGGER = "django.security.csrf"
@@ -609,9 +609,100 @@ class TestFormattersNeverRaiseOnHostileValues:
         record = _raw_record("Not Found: %s", (INVITE_PATH,))
         line = _assert_line_is_deliverable(record, formatter_name)
         assert "nicht formatierbar" in line
-        assert "django.request" in line, f"Logger-Bezug verloren: {line}"
+        # Faellt der Scrubber selbst aus, laesst sich auch der Logger-Name
+        # nicht mehr verbuergen — der Ring gibt fail-closed den festen
+        # Platzhalter aus statt eines ungeprueften Rohwerts. Dass der Name im
+        # Normalfall (Scrub intakt) erhalten bleibt, pinnt
+        # ``TestFallbackValuesAreScrubbed
+        # .test_the_outer_fallback_keeps_a_harmless_logger_name``.
+        assert REQUEST_LOGGER not in line, f"ungepruefter Logger-Name in der Ersatzzeile: {line}"
         if formatter_name == "json":
-            assert json.loads(line)["logger"] == REQUEST_LOGGER, "Die Ersatzzeile muss gueltiges JSON bleiben"
+            assert json.loads(line)["logger"] == UNREPRESENTABLE, "Die Ersatzzeile muss gueltiges JSON bleiben"
+        else:
+            assert f"logger={UNREPRESENTABLE}" in line, f"Fail-closed-Platzhalter fehlt: {line}"
+
+
+class _SensitiveStr:
+    """Objekt, dessen ``str()`` einen maskierungspflichtigen Wert traegt.
+
+    ``json.dumps`` kennt den Typ nicht und faellt auf den ``default``-Hook
+    zurueck — genau die Ausweichroute, die den Wert bisher roh in die Zeile
+    schrieb.
+    """
+
+    def __str__(self):
+        return INVITE_URL
+
+
+class _HostileIdentityRecord(_HostileRecord):
+    """Record-artig, aber Level und Logger-Name sind lesbar.
+
+    Jeder andere Attributzugriff wirft — beide Formatter landen damit im
+    aeussersten Schutzring, der genau diese zwei Werte ausgibt. Sie kommen
+    zwar aus dem Anwendungscode, sind aber nicht per se unverdaechtig: ein
+    Logger-Name kann einen Pfad tragen (``logging.getLogger(request.path)``).
+    """
+
+    def __init__(self, name, levelname):
+        self.name = name
+        self.levelname = levelname
+
+
+@pytest.mark.parametrize("formatter_name", sorted(FORMATTER_INDEX))
+class TestFallbackValuesAreScrubbed:
+    """Jeder **Ausweichwert** laeuft durch den Scrub (Refs #2228).
+
+    Nicht nur Message, Argumente und die Strings strukturierter Felder: auch
+    die Darstellungen, die erst entstehen, weil ein Wert sich nicht
+    serialisieren laesst (Bytes, ``str``/``repr``-Ausweichroute), und die
+    Identitaetswerte des aeussersten Schutzrings. Ein Ausweichwert, der den
+    Rohtext durchreicht, ist genau das Leck, gegen das der Sink steht — und
+    er trifft ausgerechnet den Fall, in dem schon etwas schiefgegangen ist.
+    """
+
+    def test_bytes_structured_field(self, formatter_name):
+        """Bytes sind kein ``str`` — der Scrub der Strings greift nicht."""
+        record = _raw_record("csp_violation", (), csp_violation=INVITE_URL.encode())
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_bytes_nested_in_a_structured_field(self, formatter_name):
+        record = _raw_record("csp_violation", (), csp_violation={"blocked-uri": [INVITE_URL.encode()]})
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_bytes_that_are_no_valid_utf8(self, formatter_name):
+        """Kaputte Bytes werden sicher dekodiert, statt die Zeile zu kosten."""
+        record = _raw_record("csp_violation", (), csp_violation=INVITE_URL.encode() + b"\xff\xfe")
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_object_with_sensitive_str(self, formatter_name):
+        """``str()`` gelingt und traegt den Wert — die Ausweichroute scrubbt."""
+        record = _raw_record("csp_violation", (), csp_violation=_SensitiveStr())
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_object_with_sensitive_repr_when_str_fails(self, formatter_name):
+        """``str()`` wirft, ``repr()`` traegt den Pfad — auch das wird maskiert."""
+        record = _raw_record("csp_violation", (), csp_violation={"probe": _BrokenStr()})
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_sensitive_value_in_the_log_arguments(self, formatter_name):
+        """Ein Bytes-Argument laeuft ueber ``%s`` in die Nachricht."""
+        record = _raw_record("Not Found: %s", (INVITE_URL.encode(),))
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_sensitive_identity_in_the_outer_fallback(self, formatter_name):
+        """Loggername und Level des aeussersten Rings laufen durch den Scrub."""
+        record = _HostileIdentityRecord(
+            name=f"django.request{INVITE_PATH}",
+            levelname=f"WARNING {INVITE_PATH}",
+        )
+        _assert_line_is_deliverable(record, formatter_name)
+
+    def test_the_outer_fallback_keeps_a_harmless_logger_name(self, formatter_name):
+        """Der Scrub kostet den Diagnosewert nicht: der Name bleibt stehen."""
+        record = _HostileIdentityRecord(name=REQUEST_LOGGER, levelname="WARNING")
+        line = _assert_line_is_deliverable(record, formatter_name)
+        assert REQUEST_LOGGER in line, f"Logger-Bezug verloren: {line}"
+        assert "WARNING" in line, f"Level verloren: {line}"
 
 
 # --- Billiger Negativpfad vor der Routenaufloesung (Refs #2228) -------------
