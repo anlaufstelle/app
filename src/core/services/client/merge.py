@@ -724,7 +724,7 @@ def unmerge_client(source, user):
             raise ValidationError(
                 _(
                     "Für eine der beiden Personen besteht eine Aufbewahrungssperre "
-                    "(Legal Hold) — Zusammenführen nicht möglich."
+                    "(Legal Hold) — Aufheben der Zusammenführung nicht möglich."
                 )
             )
     # Refs #2085: Gefragt wird der terminale Stempel, nicht das Anzeigefeld.

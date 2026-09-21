@@ -339,7 +339,8 @@ class TestTrashAndUnmerge:
         assert response.url == reverse("core:client_trash")
         texts = [str(message) for message in get_messages(response.wsgi_request)]
         assert texts == [
-            "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+            "Für eine der beiden Personen besteht eine Aufbewahrungssperre "
+            "(Legal Hold) — Aufheben der Zusammenführung nicht möglich."
         ]
         assert source.pseudonym not in texts[0]
         assert target.pseudonym not in texts[0]

@@ -810,7 +810,8 @@ class TestUnmergeUnderLegalHold:
     """
 
     HOLD_MESSAGE = (
-        "Für eine der beiden Personen besteht eine Aufbewahrungssperre (Legal Hold) — Zusammenführen nicht möglich."
+        "Für eine der beiden Personen besteht eine Aufbewahrungssperre "
+        "(Legal Hold) — Aufheben der Zusammenführung nicht möglich."
     )
 
     def _hold(self, facility, user, target_type, target_id):

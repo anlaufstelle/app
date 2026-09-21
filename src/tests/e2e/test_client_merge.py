@@ -114,6 +114,20 @@ def _seed_event(e2e_env, client_pk):
     return _shell(e2e_env, script)[-1].strip()
 
 
+def _seed_client_hold(e2e_env, client_pk):
+    """Aktiver Legal Hold auf einer Merge-Person für den Unmerge-Fehlerpfad."""
+    script = (
+        "from core.models import Client, LegalHold;"
+        " from core.models.user import User;"
+        f" c = Client.objects.get(pk='{client_pk}');"
+        " u = User.objects.get(username='emma');"
+        " LegalHold.objects.create(facility=c.facility, target_type='Client',"
+        " target_id=c.pk, reason='E2E: Unmerge gesperrt', created_by=u);"
+        " print('ok')"
+    )
+    _shell(e2e_env, script)
+
+
 def _seed_merge(e2e_env, source_pk, target_pk):
     """Zusammenführung über den Service — Setup für Papierkorb-/Undo-Tests.
 
@@ -299,6 +313,25 @@ class TestTrashAndUndo:
         admin.goto(f"{base_url}/clients/trash/")
         admin.wait_for_load_state("domcontentloaded")
         assert admin.locator(f"tr:has-text('{quelle}')").count() == 0
+
+    def test_legal_hold_names_the_blocked_unmerge_action(self, authenticated_page, base_url, e2e_env):
+        quelle, quelle_pk = _seed_client(e2e_env, stage="identified", prefix="Hold-Quelle")
+        _ziel, ziel_pk = _seed_client(e2e_env, stage="identified", prefix="Hold-Ziel")
+        _seed_merge(e2e_env, quelle_pk, ziel_pk)
+        _seed_client_hold(e2e_env, ziel_pk)
+
+        admin = authenticated_page
+        admin.goto(f"{base_url}/clients/trash/")
+        admin.wait_for_load_state("domcontentloaded")
+        zeile = admin.locator(f"tr:has-text('{quelle}')").first
+        zeile.wait_for(state="visible", timeout=30000)
+        admin.once("dialog", lambda dialog: dialog.accept())
+        zeile.locator("[data-testid='client-unmerge-btn']").click()
+        admin.wait_for_url(re.compile(r"/clients/trash/$"))
+
+        meldung = admin.locator("[role='status']").filter(has_text="Aufheben der Zusammenführung nicht möglich")
+        assert meldung.first.is_visible()
+        assert zeile.locator("[data-testid='client-unmerge-btn']").count() == 1
 
 
 class TestSimilarHintOnTheCreateForm:
