@@ -366,6 +366,7 @@ class TestClientExportPdfEmptyValues:
         assert "True" not in contacts
         assert "['beratung', 'wohnen']" not in contacts
 
+
 @pytest.mark.django_db
 class TestClientDetailMultiSelectWithoutOptions:
     """#2243 im gemeinsamen Partial: ``multi_select`` ohne ``options_json``."""
