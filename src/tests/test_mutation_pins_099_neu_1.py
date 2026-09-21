@@ -28,23 +28,27 @@ Module/Funktionen dieser Datei:
 
 **Wiederkehrendes Aequivalenz-Muster (``lock_batch_attachment_rows``,
 ``_lock_superseded_row``):** beide Funktionen materialisieren eine
-``select_for_update().values_list(...)``-Abfrage NUR fuer ihren
-Sperr-Seiteneffekt — das Ergebnis wird nirgends gelesen oder zurueckgegeben
-(``-> None``, kein ``return``-Statement). Mutationen an ``flat=`` (``None``/
-weggelassen/``False``) aendern lediglich die verworfene Python-Form des
-Ergebnisses (Tupel statt Skalar) — ``equivalent`` (maskierter interner
-Wert). Mutationen, die das POSITIONS-Argument ``"pk"`` entfernen
-(``values_list(flat=True)`` OHNE Feldname), crashen entgegen der
-urspruenglichen Vermutung NICHT mit ``TypeError``: Django faellt bei
+``select_for_update().values_list(...)``-Abfrage vor allem fuer ihren
+Sperr-Seiteneffekt. ``lock_batch_attachment_rows`` verwirft das Ergebnis
+vollstaendig (``-> None``, kein ``return``-Statement);
+``_lock_superseded_row`` gibt es seit der Zugehoerigkeits-Pruefung des
+Vorgaengers (Refs #2307) zurueck, sein einziger Aufrufer wertet daran aber
+ausschliesslich ``is None`` aus. Mutationen an ``flat=`` (``None``/
+weggelassen/``False``) aendern lediglich die Python-Form des Ergebnisses
+(Tupel statt Skalar) — beide Formen sind gleichermassen ``None`` bzw. nicht
+``None`` — ``equivalent`` (maskierter interner Wert). Mutationen, die das
+POSITIONS-Argument ``"pk"`` entfernen (``values_list(flat=True)`` OHNE
+Feldname), crashen entgegen der urspruenglichen Vermutung NICHT mit
+``TypeError``: Django faellt bei
 ``flat=True`` ohne Feldliste laut Quelltext (``django/db/models/query.py``,
 ``QuerySet.values_list``: ``elif not fields: fields =
 [self.model._meta.concrete_fields[0].attname]``) automatisch auf das ERSTE
 konkrete Modellfeld zurueck — bei ``Attachment`` ist das exakt ``id``, die
 PK (identisch mit ``"pk"``). Beide Fassungen waehlen also GENAU dieselbe
-Spalte; zusammen mit dem verworfenen Ergebnis ist auch das ``equivalent``
-(empirisch verifiziert: ein direkt dagegen geschriebener Pin blieb im
-Kill-Nachweis GRUEN unter der Mutante, siehe ``killmap.tsv`` — kein Pin in
-dieser Datei).
+Spalte; zusammen mit der allein auf ``is None`` geprueften Rueckgabe ist
+auch das ``equivalent`` (empirisch verifiziert: ein direkt dagegen
+geschriebener Pin blieb im Kill-Nachweis GRUEN unter der Mutante, siehe
+``killmap.tsv`` — kein Pin in dieser Datei).
 
 **Aequivalenz-Muster (``resend_invitation_for_any_user``, drei
 ``getattr(actor, <flag>, False)``-Defaults auf ``None`` statt ``False``):**
