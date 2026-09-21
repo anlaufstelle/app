@@ -211,6 +211,34 @@ class TestMfaPflichtOhneZweitenFaktor:
 class TestVerifyNextZiele:
     """Refs #2237: ``next=`` führt nur auf erlaubte interne Ziele."""
 
+    @pytest.mark.parametrize(
+        "ziel",
+        ["https://[", "//[", "http://[::1", "https://evil.example/\x00\\pfad"],
+    )
+    def test_malformierte_get_ziele_fallen_auf_rollen_default_zurueck(self, client, staff_user, ziel):
+        _make_totp(staff_user)
+        client.login(username="teststaff", password="testpass123")
+        _verify_session(client)
+
+        response = client.get("/mfa/verify/", {"next": ziel})
+
+        assert response.status_code == 302
+        assert response.url == "/"
+
+    @pytest.mark.parametrize(
+        "ziel",
+        ["https://[", "//[", "http://[::1", "https://evil.example/\x00\\pfad"],
+    )
+    def test_malformierte_post_ziele_fallen_auf_rollen_default_zurueck(self, client, staff_user, ziel):
+        _make_totp(staff_user)
+        client.login(username="teststaff", password="testpass123")
+        _verify_session(client)
+
+        response = client.post("/mfa/verify/", {"next": ziel})
+
+        assert response.status_code == 302
+        assert response.url == "/"
+
     def test_internes_ziel_bleibt_erhalten(self, client, staff_user):
         device = _make_totp(staff_user)
         client.login(username="teststaff", password="testpass123")
