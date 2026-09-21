@@ -194,8 +194,13 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
         # also nur einen zusaetzlichen Redirect-Hop — und liesse sich
         # verschachtelt zu einer Kette stapeln. Der Rollen-Default uebernimmt.
         eigener_pfad = reverse("mfa_verify").rstrip("/")
-        if redirect_to and urlsplit(redirect_to).path.rstrip("/") == eigener_pfad:
+        try:
+            ist_eigenes_ziel = redirect_to and urlsplit(redirect_to).path.rstrip("/") == eigener_pfad
+        except ValueError:
             redirect_to = None
+        else:
+            if ist_eigenes_ziel:
+                redirect_to = None
         return resolve_post_login_url(request, redirect_to)
 
     def get(self, request, *args, **kwargs):
