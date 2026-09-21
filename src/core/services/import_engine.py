@@ -55,6 +55,7 @@ from typing import Any, cast
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, IntegrityError, connection, transaction
+from django.db.models import ForeignKey
 from django.utils import timezone
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
@@ -389,6 +390,62 @@ def _parse_csv(text: str, delimiter: str) -> tuple[list[str], list[list[str]]]:
 # ---------------------------------------------------------------------------
 
 
+def _lock_job_fk_rows(job) -> None:
+    """Sichert die FK-Zielzeilen der Jobzeile — VOR dem Ketten-Lock (Refs #2259).
+
+    Django legt Fremdschluessel auf PostgreSQL ``DEFERRABLE INITIALLY
+    DEFERRED`` an: die Pruefung des Inserts laeuft erst beim COMMIT und nimmt
+    dort auf jede referenzierte Zeile eine ``FOR KEY SHARE``-Sperre. Ohne
+    Vorsperre faellt diese ERSTE Zeilensperre mitten in den bereits gehaltenen
+    Ketten-/Kontingent-Lock der Einrichtung — und dreht damit die
+    einrichtungsweite Ordnung „Zeilen vor Ketten-Lock" um (Refs #2260). Ein
+    Pfad, der eine dieser Zeilen schluesselaendernd haelt und danach seine
+    Rechenschaftszeile schreiben will (der Dokumentationstyp-Fallback im
+    Django-Admin: ``super().save_model()``, dann ``log_audit_event``),
+    schliesst so einen Zyklus, den PostgreSQL mit ``40P01`` aufloest.
+
+    Gesperrt wird deshalb hier — vor dem Ketten-Lock, in derselben Transaktion
+    wie der Insert, und zwar:
+
+    * **alle** FK-Ziele der Jobzeile, aus dem Modell abgeleitet statt
+      aufgezaehlt: Einrichtung, Dokumentationstyp und anlegende Person heute,
+      ein spaeter hinzukommender Fremdschluessel automatisch mit. Genau die
+      Zeilen, die die aufgeschobene Pruefung anfassen wird;
+    * in genau der Staerke, die der Insert braucht — ``FOR KEY SHARE`` per
+      Roh-SQL. ``select_for_update(no_key=True)`` waere ``FOR NO KEY UPDATE``
+      und damit staerker als noetig: zwei gleichzeitige Uploads desselben
+      Dokumentationstyps wuerden sich an der Typzeile gegenseitig aufhalten,
+      obwohl keiner von beiden sie aendert. ``FOR KEY SHARE`` vertraegt sich
+      mit sich selbst und blockiert nur gegen eine schluesselaendernde
+      Aenderung — dieselbe Aenderung, mit der auch der COMMIT kollidieren
+      wuerde;
+    * in fester Reihenfolge (Tabelle, PK), damit zwei Pfade mit
+      ueberlappenden Zielmengen sie nie gegenlaeufig nehmen.
+
+    Auf Nicht-PostgreSQL (SQLite) entfaellt die Sperre, wie der Advisory-Lock
+    in ``file_vault.quota.lock_facility_storage``.
+    """
+    if connection.vendor != "postgresql":
+        return
+    ziele = []
+    for field in ImportJob._meta.concrete_fields:
+        if not isinstance(field, ForeignKey):
+            continue
+        wert = getattr(job, field.attname)
+        if wert is None:
+            continue
+        # ``target_field`` ist die referenzierte Spalte selbst (der PK des
+        # Ziels) — genau die Zeile, die die FK-Pruefung sperrt.
+        ziel = field.target_field
+        ziele.append((ziel.model._meta.db_table, ziel.column, wert))
+    with connection.cursor() as cur:
+        for tabelle, spalte, wert in sorted(ziele, key=lambda eintrag: (eintrag[0], str(eintrag[2]))):
+            # Tabellen- und Spaltenname stammen aus dem Modell-Meta, nicht aus
+            # Eingaben; der Wert bleibt Parameter.
+            cur.execute(f'SELECT "{spalte}" FROM "{tabelle}" WHERE "{spalte}" = %s FOR KEY SHARE', [wert])  # noqa: S608
+            cur.fetchall()
+
+
 def store_import_upload(
     facility,
     user,
@@ -420,11 +477,15 @@ def store_import_upload(
     demselben Text wie der Vorab-Check; die Rechenschaftszeile
     ``ATTACHMENT_QUOTA_EXCEEDED``/``ImportJob`` entsteht NACH dem Rollback.
 
-    **Sperrfolge:** Dieser Pfad sperrt keine Owner- oder Anhangszeilen (er legt
-    eine neue ``ImportJob``-Zeile an und fasst keine bestehende an); er nimmt
-    ausschliesslich den Ketten-/Kontingent-Lock der Einrichtung, und zwar als
-    LETZTE Sperre vor dem Insert — die einrichtungsweite Reihenfolge aus Refs
-    #2260 bleibt damit unverdreht.
+    **Sperrfolge:** Dieser Pfad fasst keine bestehende Owner- oder
+    Anhangszeile an (er legt eine neue ``ImportJob``-Zeile an). Was er
+    unvermeidlich sperrt, sind die FK-Ziele dieser Zeile: die aufgeschobene
+    Fremdschluessel-Pruefung nimmt beim COMMIT auf jede von ihnen eine
+    ``FOR KEY SHARE``-Sperre. Genau deshalb steht :func:`_lock_job_fk_rows`
+    VOR dem Ketten-/Kontingent-Lock — so ist die einrichtungsweite Reihenfolge
+    „erst Zeilen, dann Ketten-Lock" (Refs #2260) eingehalten und unter dem
+    Ketten-Lock kommt keine erstmalige Zeilensperre mehr hinzu. Die Folge
+    lautet: FK-Zielzeilen → Ketten-/Kontingent-Lock → ``job.save()``.
 
     Der Originaldateiname wird NUR verschluesselt persistiert und taucht auch im
     Audit-Detail nicht auf — Dateinamen tragen in der Praxis Klientenbezug.
@@ -462,6 +523,10 @@ def store_import_upload(
         job.original_filename_encrypted = encrypt_field(getattr(uploaded_file, "name", "") or "import.csv")
         job.mapping_json = {"columns": {}, "delimiter": used_delimiter, "encoding": used_encoding}
         with transaction.atomic():
+            # #2259: die FK-Ziele der Jobzeile ZUERST — die aufgeschobene
+            # FK-Pruefung des Inserts sperrt sie sonst erstmals unter dem
+            # Ketten-Lock und dreht die einrichtungsweite Ordnung um.
+            _lock_job_fk_rows(job)
             # #2259: fail-closed Backstop VOR der Jobzeile — dieselbe Stufe, die
             # Anhaenge seit #2178 haben, und dieselbe Sperre der Einrichtung.
             # Der Vorab-Check oben liegt ausserhalb jeder Transaktion und spart
