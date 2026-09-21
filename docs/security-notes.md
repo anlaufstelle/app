@@ -679,6 +679,14 @@ Drei Netze kompensieren dieses Risiko:
 2. Ein manueller Check sichtet monatlich die Django-Security-Releases und führt lokal `pip-audit -r requirements.txt` aus.
 3. Bei jedem Release-Cut läuft `pip-audit` im Release-Gate.
 
+`pip-audit` speist sich aus OSV und der PyPI Advisory Database; GHSA-Einträge ohne
+PyPI-Spiegel können deshalb fehlen. So meldete es für `django-otp-webauthn==0.10.0`
+keinen Befund, obwohl
+[GHSA-8r76-c459-ww98](https://github.com/Stormbase/django-otp-webauthn/security/advisories/GHSA-8r76-c459-ww98)
+Versionen vor 0.10.3 betraf. Eine zweite Werkzeugkette im Release-Gate wird dafür nicht
+eingeführt: Die Dependabot-Alerts des Entwicklungs-Repositories dienen als Zweitquelle,
+ergänzt durch den monatlichen manuellen Check aus Punkt 2.
+
 Der Ignore muss **vor Dezember 2027**, also vor dem Ende des Security-Supports der Django-6.1-Linie, durch die [zweite Etappe des LTS-Umstiegs](https://github.com/anlaufstelle/app/issues/1662) abgelöst werden.
 
 ---
