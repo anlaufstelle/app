@@ -902,6 +902,13 @@ Das fügt eine Zeile `Signed-off-by: Vorname Nachname <email@example.org>` an di
 Commit-Message an. Pull Requests ohne Sign-off können wir nicht übernehmen; ein vergessenes
 Sign-off lässt sich mit `git commit --amend -s` bzw. `git rebase --signoff` nachholen.
 
+**Lokale Prüfung vor dem PR:** Prüfe alle vorgesehenen PR-Commits mit:
+
+    make dco-check RANGE=origin/main..HEAD
+
+Der Check läuft ausschließlich lokal. Es gibt keinen serverseitigen Zwang; ob die
+GitHub-DCO-App aktiviert wird, entscheidet der Maintainer.
+
 **Fremdmaterial:** Übernimm keinen Code und keine Texte aus Quellen, deren Lizenz nicht
 AGPL-kompatibel ist. Kennzeichne Übernahmen (Quelle + Lizenz) im Commit oder PR.
 

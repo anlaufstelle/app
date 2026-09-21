@@ -27,7 +27,7 @@ CI_LOCK_TIMEOUT ?= 14400
 # Lauf dann am Laufen, ohne dass jemand das Rezept patchen muss.
 AUDIT_LEVEL ?= moderate
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke test-a11y test-a11y-locked check deps-lock deps-check audit-js maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta mutation-skipped
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke test-a11y test-a11y-locked check deps-lock deps-check audit-js maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta mutation-skipped dco-check
 
 .PHONY: i18n-check i18n-update
 
@@ -146,6 +146,10 @@ docs-screens:
 lint:
 	$(PYTHON) -m ruff check src/ scripts/
 	$(PYTHON) -m ruff format --check src/ scripts/
+
+dco-check: RANGE ?= origin/main..HEAD
+dco-check:
+	$(PYTHON) scripts/dev/check_dco.py $(RANGE)
 
 # mypy auf core/services strikt, Rest mit permissiver Baseline (Refs #741).
 # Erweiterung modulweise via [[tool.mypy.overrides]] in pyproject.toml.

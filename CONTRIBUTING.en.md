@@ -3,6 +3,7 @@
 > Synchronization update 2026-09-18: the testing guidance now links to the public assertion conventions (#2256).
 > Synchronization update 2026-09-18: the template conventions now link to the context-header and back-link guidance (#2255).
 > Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
+> Synchronization update 2026-09-21: the DCO section now documents the local pre-PR range check (#2239).
 
 # Contributing to Anlaufstelle
 
@@ -898,6 +899,13 @@ This appends a line `Signed-off-by: First Last <email@example.org>` to the commi
 We cannot accept pull requests without a sign-off; a forgotten sign-off can be added with
 `git commit --amend -s` or `git rebase --signoff`.
 
+**Local check before opening the PR:** Check all intended PR commits with:
+
+    make dco-check RANGE=origin/main..HEAD
+
+The check runs locally only. There is no server-side enforcement; enabling the GitHub DCO
+app remains a maintainer decision.
+
 **Third-party material:** Do not include code or text from sources whose license is not
 AGPL-compatible. Mark any adopted material (source + license) in the commit or PR.
 
@@ -1001,5 +1009,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-18 -->
-<!-- source-hash: 5b9004ca6bedae3727315f7ad6982d0f4931a9a9 -->
+<!-- translation-date: 2026-09-21 -->
+<!-- source-hash: 396ef1fa51dc43c989726fffc13254c6d355811e -->

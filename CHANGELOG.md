@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Lokale DCO-Prüfung für Pull-Request-Commits** (#2239) — Ein lokales Make-Target prüft alle Nicht-Merge-Commits eines Git-Bereichs auf einen `Signed-off-by:`-Trailer und nennt fehlende Sign-offs mit Commit und Betreff.
+
 ### Changed
 
 - **Weiterleitung nach dem zweiten Faktor macht keinen Umweg mehr über die Verify-Seite** (#2237) — Zeigte das Weiterleitungsziel nach der Zwei-Faktor-Abfrage auf diese Abfrage selbst, kostete das eine zusätzliche Weiterleitung und ließ sich verschachtelt stapeln; solche Ziele werden jetzt verworfen und es geht direkt auf die Startseite der Rolle. Intern entfällt außerdem eine doppelt geführte Prüfung der Sitzungs-Verifikation vor der Passkey-Registrierung, die hinter der ersten Prüfung ohnehin nie mehr erreichbar war. An der Pflicht zum zweiten Faktor, an den erlaubten Weiterleitungszielen und an den Re-Authentifizierungs-Abfragen ändert sich nichts.
