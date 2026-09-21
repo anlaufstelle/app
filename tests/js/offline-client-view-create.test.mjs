@@ -12,6 +12,7 @@ beforeAll(async () => {
         },
     };
     await import("../../src/static/js/offline-form-fields.js");
+    await import("../../src/static/js/offline-messages.js");
     await import("../../src/static/js/offline-client-view.js");
     document.dispatchEvent(new Event("alpine:init"));
 });
@@ -51,7 +52,7 @@ describe("Offline-Akten-Create", () => {
 
         await component.saveCreate();
 
-        expect(component.dstError).toContain("zweimal");
+        expect(component.dstError).toBe(window.offlineFormFields.dstAmbiguousMessage);
         expect(markEventNew).not.toHaveBeenCalled();
         expect(document.activeElement).toBe(root.querySelector('[data-testid="offline-create-occurred-at"]'));
         root.remove();

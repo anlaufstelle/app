@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Offline-Hinweise bleiben bei einzelnen unbekannten Serverfeldern sichtbar** (#2238) — Die Konfliktliste blendet sichere Feldfehler nicht mehr vollständig aus, wenn ein einzelnes Feld oder ein Fehlercode unerwartet geformt ist; zugleich verwenden beide Offline-Erfassungsmasken denselben zentral gepflegten Hinweis für die doppelte Stunde der Zeitumstellung.
 - **`multi_select`-Rohwerte ohne Optionen rendern lesbar statt als Python-Liste** (#2243) — Ein `multi_select`-Feld ohne konfigurierte Optionen zeigte auf den Detailseiten von Ereignis, Person und Fall die rohe, escapte Python-Listendarstellung (z. B. `[&#x27;a&#x27;]`) statt einer kommagetrennten Aufzählung; betroffen war der gemeinsame Anzeigefilter beider Detailseiten.
 - **Unbekannter ClamAV-Signaturstand nennt den Diagnoseweg** (#2246) — Der Compliance-Status bleibt beim normalen Erstlauf `unknown`, zeigt aber den konkreten freshclam-Logbefehl zur Prüfung dauerhaft fehlender Signaturdaten.
 - **DSGVO-Auskunft zeigt Kontaktwerte lesbar und vollständig** (#2245) — Ja/Nein-Felder, Auswahloptionen und Mehrfachauswahlen erscheinen im PDF mit ihren fachlichen Labels und als lesbare Aufzählung statt als Python-Rohwerte; alle gespeicherten Einzelwerte bleiben enthalten.

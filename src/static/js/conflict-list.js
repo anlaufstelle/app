@@ -189,10 +189,10 @@
                 for (const field of Object.keys(parsed)) {
                     const codes = parsed[field];
                     if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(field) || !Array.isArray(codes) || !codes.length) {
-                        return [];
+                        continue;
                     }
                     if (codes.some((code) => typeof code !== "string" || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(code))) {
-                        return [];
+                        continue;
                     }
                     rows.push({ key: field, text: field + " (" + codes.join(", ") + ")" });
                 }

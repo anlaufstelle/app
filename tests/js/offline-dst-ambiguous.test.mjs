@@ -6,6 +6,7 @@ let eventCreateFactory;
 
 beforeAll(async () => {
     await import("../../src/static/js/offline-form-fields.js");
+    await import("../../src/static/js/offline-messages.js");
     helpers = window.offlineFormFields;
     const factories = {};
     globalThis.Alpine = {
@@ -19,6 +20,12 @@ beforeAll(async () => {
 });
 
 describe("isAmbiguousWallClock", () => {
+    it("liefert den zentralen DST-Hinweis unveraendert", () => {
+        expect(helpers.dstAmbiguousMessage).toBe(
+            "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal. Bitte online erfassen oder eine Uhrzeit außerhalb von 02:00–02:59 wählen.",
+        );
+    });
+
     it("erkennt 02:30 am Rueckfalltag Europe/Berlin als mehrdeutig", () => {
         expect(helpers.isAmbiguousWallClock("2026-10-25T02:30", "Europe/Berlin")).toBe(true);
     });
@@ -80,7 +87,7 @@ describe("isAmbiguousWallClock", () => {
 
         await component.saveCreate();
 
-        expect(component.dstError).toContain("zweimal");
+        expect(component.dstError).toBe(helpers.dstAmbiguousMessage);
         expect(markEventNew).not.toHaveBeenCalled();
         expect(document.activeElement).toBe(occurredAt);
         root.remove();

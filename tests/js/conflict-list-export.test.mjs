@@ -126,6 +126,55 @@ describe("#2187 — PII-freie Feldcodes im Dead-Letter-View-Model", () => {
         expect(item.hasFieldErrors).toBe(true);
     });
 
+    it("verwirft ein ungueltiges Feld, behaelt aber valide Geschwister", () => {
+        const item = deadItem(
+            JSON.stringify({
+                occurred_at_fold: ["fold_required"],
+                "notiz wert": ["invalid"],
+                dauer: ["min_value"],
+            }),
+        );
+        expect(item.fieldErrors).toEqual([
+            { key: "occurred_at_fold", text: "occurred_at_fold (fold_required)" },
+            { key: "dauer", text: "dauer (min_value)" },
+        ]);
+        expect(item.hasFieldErrors).toBe(true);
+    });
+
+    it("verwirft ein Feld mit ungueltigem Code, behaelt aber valide Geschwister", () => {
+        const item = deadItem(
+            JSON.stringify({ occurred_at_fold: ["fold_required"], notiz: ["Wert 02:30"], dauer: ["min_value"] }),
+        );
+        expect(item.fieldErrors).toEqual([
+            { key: "occurred_at_fold", text: "occurred_at_fold (fold_required)" },
+            { key: "dauer", text: "dauer (min_value)" },
+        ]);
+        expect(item.hasFieldErrors).toBe(true);
+    });
+
+    it("verwirft alle Felder, wenn jedes einzelne ungueltig ist", () => {
+        const item = deadItem(JSON.stringify({ "notiz wert": ["invalid"], dauer: ["Wert 02:30"] }));
+        expect(item.fieldErrors).toEqual([]);
+        expect(item.hasFieldErrors).toBe(false);
+    });
+
+    it("behaelt alle Felder, wenn keines ungueltig ist", () => {
+        const item = deadItem(JSON.stringify({ occurred_at: ["required"], dauer: ["min_value", "invalid"] }));
+        expect(item.fieldErrors).toEqual([
+            { key: "occurred_at", text: "occurred_at (required)" },
+            { key: "dauer", text: "dauer (min_value, invalid)" },
+        ]);
+        expect(item.hasFieldErrors).toBe(true);
+    });
+
+    it("zeigt ein unbekanntes, aber syntaktisch sicheres Server-Feld", () => {
+        const item = deadItem(JSON.stringify({ future_server_field: ["future_error_code"] }));
+        expect(item.fieldErrors).toEqual([
+            { key: "future_server_field", text: "future_server_field (future_error_code)" },
+        ]);
+        expect(item.hasFieldErrors).toBe(true);
+    });
+
     it("laesst Dead-Events ohne lastError generisch", () => {
         const item = deadItem("");
         expect(item.fieldErrors).toEqual([]);

@@ -21,6 +21,10 @@ pytestmark = pytest.mark.e2e
 
 AMBIGUOUS_WALL_CLOCK = "2026-10-25T02:30"
 UNAMBIGUOUS_WALL_CLOCK = "2026-10-25T03:30"
+DST_AMBIGUOUS_MESSAGE = (
+    "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal. Bitte online erfassen oder eine Uhrzeit außerhalb von "
+    "02:00–02:59 wählen."
+)
 
 
 def _shell(e2e_env, script):
@@ -121,7 +125,7 @@ class TestOfflineDoubleHour:
             alert = page.locator("#offline-event-occurred-at-error")
             expect(alert).to_be_visible()
             expect(alert).to_have_attribute("role", "alert")
-            expect(alert).to_contain_text("zweimal")
+            expect(alert).to_have_text(DST_AMBIGUOUS_MESSAGE)
             occurred_at = page.locator('[data-testid="offline-event-create-occurred-at"]')
             expect(occurred_at).to_be_focused()
             expect(occurred_at).to_have_attribute("aria-describedby", "offline-event-occurred-at-error")
@@ -174,7 +178,7 @@ class TestOfflineDoubleHour:
             alert = page.locator("#offline-create-occurred-at-error")
             expect(alert).to_be_visible()
             expect(alert).to_have_attribute("role", "alert")
-            expect(alert).to_contain_text("zweimal")
+            expect(alert).to_have_text(DST_AMBIGUOUS_MESSAGE)
             expect(occurred_at).to_be_focused()
             expect(occurred_at).to_have_attribute("aria-describedby", "offline-create-occurred-at-error")
             expect(occurred_at).to_have_attribute("aria-invalid", "true")

@@ -430,7 +430,7 @@
             _checkOccurredAt() {
                 if (!this.createOccurredAt || !window.offlineFormFields.isAmbiguousWallClock) return "";
                 if (window.offlineFormFields.isAmbiguousWallClock(this.createOccurredAt, this._appTimeZone)) {
-                    return "Diese Uhrzeit gibt es am Tag der Zeitumstellung zweimal. Bitte online erfassen oder eine Uhrzeit außerhalb von 02:00–02:59 wählen.";
+                    return window.offlineFormFields.dstAmbiguousMessage;
                 }
                 return "";
             },

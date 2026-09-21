@@ -146,6 +146,36 @@ def test_dead_event_shows_not_found_reason_and_discard_removes_it(browser, base_
         context.close()
 
 
+def test_dead_event_shows_safe_field_errors_when_one_server_field_is_invalid(authenticated_page, base_url):
+    """Ein unpassendes Server-Feld darf sichere Geschwister nicht verdecken."""
+    page = authenticated_page
+    _bootstrap_store(page, base_url)
+    event_pk = str(uuid.uuid4())
+    page.evaluate(
+        """async (args) => window.offlineStore.saveOfflineEdit({
+            pk: args.eventPk, clientPk: 'c-field-errors', occurredAt: '2026-01-01T00:00:00Z',
+            localStatus: 'dead',
+            data: {
+                formData: {}, documentTypeName: 'Kontakt', deadReason: 'invalid',
+                lastError: JSON.stringify({
+                    occurred_at_fold: ['fold_required'],
+                    'notiz wert': ['invalid'],
+                    dauer: ['min_value'],
+                }),
+            },
+        })""",
+        {"eventPk": event_pk},
+    )
+
+    page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+    field_errors = page.locator("[data-testid='dead-event-field-errors']").first
+    field_errors.wait_for(state="visible", timeout=10000)
+    text = field_errors.inner_text()
+    assert "occurred_at_fold (fold_required)" in text
+    assert "dauer (min_value)" in text
+    assert "notiz wert" not in text
+
+
 # ---------------------------------------------------------------------------
 # (a2) Refs #1394: 404/410 auf den CREATE-Replay (Event UND WorkItem) landet
 # als dead-Letter in der Liste — vorher deckte nur der Edit-Pfad (a) das ab;
