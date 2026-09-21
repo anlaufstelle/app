@@ -20,13 +20,13 @@ redis>=6.0
 # Major-Bump auf 50.0.0 wegen PYSEC-2026-3552 (pip-audit-Gate, v0.80.0-Schnitt);
 # 49.0.0 war mit #1129 verifiziert, der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
 cryptography>=50.0.0,<51
-python-dotenv>=1.0
+python-dotenv>=1.2.3
 # Obergrenze <71, damit ein Major-Bump (Dependabot) den PDF-Export nicht
 # ueberraschend bricht — insb. den SSRF-url_fetcher (Refs #1610, #1596).
 # 70.0 bewusst gezogen: CVE-2026-55073 (write_pdf() ignorierte den
 # uebergebenen url_fetcher in zwei Kanaelen), SSRF-/Export-Tests gegen 70.0 gruen.
 weasyprint>=70.0,<71
-django-unfold>=0.103.0
+django-unfold>=0.107.0
 django-csp>=4.0
 sentry-sdk[django]>=2.66.0
 pyclamd>=0.4.0

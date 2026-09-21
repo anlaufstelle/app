@@ -9,7 +9,7 @@ pip-licenses>=5.5.5
 # click zieht mutmut/pip-tools ein (CVE-2026-7246, Command-Injection in
 # click.edit()); idna kommt transitiv ueber requests (CVE-2026-45409, ReDoS in
 # idna.encode()).
-click>=8.3.3
+click>=8.5.0
 idna>=3.19
 pip>=26.2  # CVE-2026-13346 / GHSA-qwm4-qh6w-59xr (Refs #2116)
 pytest>=9.1.1
@@ -19,11 +19,11 @@ pytest-django>=4.13.0
 django-test-migrations>=1.6.0
 pytest-timeout>=2.3
 pytest-cov>=5.0
-playwright>=1.62.0
+playwright>=1.63.0
 pytest-playwright>=0.8.0
 pytest-xdist>=3.5
 filelock>=3.31.1
-mypy>=2.3.0
-django-stubs[compatible-mypy]>=6.0.9
+mypy>=2.3.1
+django-stubs[compatible-mypy]>=6.1.1
 # Mutation-Testing fuer core/services + core/forms (nightly, Refs #922/#923).
 mutmut>=3.7.0,<4.0
