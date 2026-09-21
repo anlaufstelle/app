@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Unbekannter ClamAV-Signaturstand nennt den Diagnoseweg** (#2246) — Der Compliance-Status bleibt beim normalen Erstlauf `unknown`, zeigt aber den konkreten freshclam-Logbefehl zur Prüfung dauerhaft fehlender Signaturdaten.
 - **DSGVO-Auskunft zeigt Kontaktwerte lesbar und vollständig** (#2245) — Ja/Nein-Felder, Auswahloptionen und Mehrfachauswahlen erscheinen im PDF mit ihren fachlichen Labels und als lesbare Aufzählung statt als Python-Rohwerte; alle gespeicherten Einzelwerte bleiben enthalten.
 
 ## [0.99.0] - 2026-09-17

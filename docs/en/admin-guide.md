@@ -1,5 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-18: § 5.6 states that the server log file now carries the same lines with masked URL paths -- query part dropped, route schema or token segments removed, the account as `user_pk` instead of the login name, in both output formats and in framework lines -- while the client IP of a CSP report stays readable (#2228).
+> Synchronization update 2026-09-21: the ClamAV troubleshooting section explains that an unknown signature age remains `unknown` during startup and that the dashboard shows the freshclam log command as its action hint (#2246).
 > Synchronization update 2026-09-18: the SMTP environment reference lists `EMAIL_USE_SSL` and the SMTP requirements state that implicit TLS/SMTPS on port 465 is supported and mutually exclusive with `EMAIL_USE_TLS` (#2267).
 > Synchronization update 2026-09-18: the SMTP environment reference notes that the application configures email delivery through Django's `MAILERS` setting since Django 6.1 while the environment variable names stay unchanged (#1662).
 > Synchronization update 2026-09-15: § 2.3 the quick-exit target row now states that the target does not learn the origin of the jump (no `Referer` header) (#2179).
@@ -1560,6 +1561,12 @@ docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
+If the signature age cannot yet be determined, the dashboard status remains
+`unknown`, avoiding a false warning during normal startup. The "ClamAV
+signature" row then shows the first command above as its action hint. If the
+state persists after startup, run it and inspect the log for DNS, download, or
+mirror errors.
+
 Signature downloads require the `clamav` service to have a working outbound network path (egress) to the signature server or configured mirror; that path was delivered with #2219. The update log must show a successful download. Repeated DNS/download errors require checking that egress path or the mirror. A green `clamdscan --version` healthcheck proves only that the binary starts, not that signatures are current; also inspect the displayed signature state in the compliance dashboard at `/system/compliance/`.
 
 ### Problem: TLS Certificate Is Not Issued
@@ -2214,5 +2221,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-18 -->
-<!-- source-hash: 81c1d302ddc3d50a589bdc012a1a7516d77c0339 -->
+<!-- source-hash: 4599af844adfcd92e2a376d5eac87624f5400d02 -->

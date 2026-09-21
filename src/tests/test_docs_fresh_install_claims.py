@@ -13,6 +13,15 @@ DOCUMENTS = (
     Path("docs/en/admin-guide.md"),
     Path("docs/monitoring-guide.md"),
 )
+CLAMAV_DOCUMENTS = (
+    Path("docs/admin-guide.md"),
+    Path("docs/ops-runbook.md"),
+    Path("docs/en/admin-guide.md"),
+    Path("docs/en/ops-runbook.md"),
+)
+CLAMAV_SIGNATURE_DIAGNOSTIC = (
+    "docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log"
+)
 FORBIDDEN_CLAIMS = (
     re.compile(r"noch ausstehenden", re.IGNORECASE),
     re.compile(r"Ziel ab Compose-Fix", re.IGNORECASE),
@@ -49,3 +58,10 @@ def test_scanner_detects_stale_fresh_install_claims(tmp_path: Path, claim: str) 
 
 def test_shipped_docs_do_not_describe_compose_fix_as_pending() -> None:
     assert _stale_claims(root=REPO_ROOT) == []
+
+
+@pytest.mark.parametrize("relative_path", CLAMAV_DOCUMENTS, ids=str)
+def test_clamav_signature_diagnostic_command_is_consistent(relative_path: Path) -> None:
+    text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+
+    assert CLAMAV_SIGNATURE_DIAGNOSTIC in text

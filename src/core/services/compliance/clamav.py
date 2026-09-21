@@ -38,6 +38,9 @@ def _clamav_checks() -> list[ComplianceCheck]:
                 status=ComplianceStatus.UNKNOWN,
                 message="Signatur-Datum nicht ermittelbar.",  # pragma: no mutate
                 detail=f"Version: {version}",
+                action_hint=(
+                    "docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log"
+                ),
             )
         elif age <= 7:
             signature = ComplianceCheck(

@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-21: § 7.4 explains that an unknown ClamAV signature age stays `unknown` during startup and that the compliance check shows the freshclam log command as its action hint (#2246).
 > Synchronization update 2026-09-18: § 5.8 states that implicit TLS/SMTPS on port 465 is supported via `EMAIL_USE_SSL` and mutually exclusive with `EMAIL_USE_TLS` (#2267).
 > Synchronization update 2026-09-18: stack line on Django 6.1 and § 5.8 states that production configures SMTP through Django's `MAILERS` setting since Django 6.1, with unchanged environment variable names (#1662).
 > Synchronization update 2026-09-15: the restore-drill guidance now documents the explicit `COMPOSE_DIR` handoff and the `.env`-only `BACKUP_HOST_DIR` source, and § 7.4 reads the freshclam result from the container log (#2248).
@@ -1397,6 +1398,11 @@ state:
 docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
+
+If the signature age cannot yet be determined during startup, the compliance
+status remains `unknown` instead of raising a warning. The check shows the first
+command above as its action hint. If `unknown` persists after startup, run the
+command and inspect the log for DNS, download, or mirror errors.
 
 Until an outbound update path or internal signature mirror is configured, the
 signature state remains frozen and the operational status remains open.
@@ -2837,5 +2843,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- translation-date: 2026-09-18 -->
-<!-- source-hash: a92f5dfd6b7fe2e25ab1a569721acc9dde1eea1c -->
+<!-- translation-date: 2026-09-21 -->
+<!-- source-hash: d33faa576f168caf1007e6912ff85cea70ae94ca -->

@@ -1543,6 +1543,12 @@ docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
+Kann das Signaturalter noch nicht ermittelt werden, bleibt der Dashboard-Status
+`unknown` — damit erzeugt der normale Erstlauf keine Fehlwarnung. Die Zeile
+„ClamAV-Signatur“ zeigt dann den ersten Befehl oben als Handlungshinweis. Bleibt
+der Zustand nach dem Anlauf bestehen, führen Sie ihn aus und prüfen Sie das
+Protokoll auf DNS-, Download- oder Mirror-Fehler.
+
 Der Signaturdownload setzt voraus, dass der `clamav`-Dienst einen funktionierenden ausgehenden Netzwerkpfad (Egress) zum Signaturserver beziehungsweise konfigurierten Mirror besitzt; dieser Pfad ist mit #2219 ausgeliefert. Das Update-Protokoll muss einen erfolgreichen Download zeigen. Wiederholte DNS-/Downloadfehler erfordern eine Prüfung dieses Egress-Pfads oder des Mirrors. Ein grüner `clamdscan --version`-Healthcheck belegt nur, dass das Binary startet, nicht dass die Signaturen aktuell sind; kontrollieren Sie den angezeigten Signaturstand zusätzlich im Compliance-Dashboard unter `/system/compliance/`.
 
 ### Problem: TLS-Zertifikat wird nicht ausgestellt

@@ -1394,6 +1394,12 @@ docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav
 docker compose -f docker-compose.prod.yml exec clamav clamdscan --version
 ```
 
+Ist das Signaturalter waehrend des Erstlaufs noch nicht ermittelbar, bleibt der
+Compliance-Status `unknown` statt eine Warnung auszuloesen. Der Check zeigt den
+ersten Befehl oben als Handlungshinweis. Bleibt `unknown` nach dem Anlauf
+bestehen, den Befehl ausfuehren und das Protokoll auf DNS-, Download- oder
+Mirror-Fehler pruefen.
+
 Bis ein ausgehender Update-Pfad oder ein interner Signatur-Mirror eingerichtet
 ist, bleibt der Signaturstand eingefroren und der Betriebszustand offen.
 

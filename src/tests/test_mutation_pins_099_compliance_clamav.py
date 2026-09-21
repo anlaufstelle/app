@@ -143,7 +143,11 @@ class TestSignatureDateUnknown:
     def test_signature_date_unknown_full_wording(self):
         """Pin: ``mutmut_61`` (``label`` -> ``None``), ``mutmut_62``
         (``category`` -> ``None`` — bricht die Kategorie-Gruppierung in
-        ``SystemComplianceView``), ``mutmut_64`` (``message`` -> ``None``)."""
+        ``SystemComplianceView``), ``mutmut_64`` (``message`` -> ``None``).
+
+        Bewusst nachgezogen fuer den Diagnosehinweis: Ohne den exakten Befehl
+        waere der neue Betreiberpfad aus dem UNKNOWN-Zweig wieder wirkungslos.
+        """
         p_ping, p_sig = _patch_virus_scan(ping=True, signature_info={"age_days": None, "version": None})
         with p_ping, p_sig:
             checks = compliance._clamav_checks()
@@ -155,6 +159,9 @@ class TestSignatureDateUnknown:
         assert signature.status == ComplianceStatus.UNKNOWN
         assert signature.message == "Signatur-Datum nicht ermittelbar."
         assert signature.detail == "Version: unbekannt"
+        assert signature.action_hint == (
+            "docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log"
+        )
 
 
 class TestSignatureFresh:

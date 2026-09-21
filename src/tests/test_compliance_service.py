@@ -403,6 +403,23 @@ class TestClamavChecks:
         sig = next(c for c in checks if c.key == "clamav_signature")
         assert sig.status == compliance.ComplianceStatus.WARNING
 
+    def test_unknown_signature_date_has_diagnostic_hint_and_stable_status(self):
+        """Unbekannt bleibt UNKNOWN, nennt aber den konkreten freshclam-Diagnoseweg."""
+        with (
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
+            patch(
+                "core.services.file_vault.virus_scan.signature_info",
+                return_value={"version": "1.4.0", "signature_date": None, "age_days": None},
+            ),
+        ):
+            checks = compliance._clamav_checks()
+
+        signature = next(c for c in checks if c.key == "clamav_signature")
+        assert signature.status == compliance.ComplianceStatus.UNKNOWN
+        assert signature.action_hint == (
+            "docker compose -f docker-compose.prod.yml exec clamav tail -n 30 /var/log/clamav/freshclam.log"
+        )
+
 
 @pytest.mark.django_db
 class TestRetentionChecks:
