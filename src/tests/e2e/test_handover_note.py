@@ -66,6 +66,11 @@ class TestHandoverHtmxErrorSwap:
         page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
         form = page.locator("[data-testid='handover-note-current'] form")
         expect(form).to_be_visible()
+        # Der Zeitstrom-Watch pollt beim Start sofort und ersetzt den Notizblock,
+        # solange kein Formular offen ist (Fokus oder geaenderter Entwurf). Ohne
+        # Fokus wuerde er das praeparierte Formular zwischen Feldmanipulation und
+        # Klick austauschen und der POST liefe mit gueltigen Koordinaten (200).
+        form.locator("textarea").focus()
         old_container = page.locator("#handover-note").element_handle()
         form.locator("input[name='time_filter']").evaluate("element => element.value = 'not-a-uuid'")
 
