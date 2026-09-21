@@ -27,14 +27,18 @@ Nebenlaeufigkeit auf eigenen DB-Verbindungen braucht (Muster
 from __future__ import annotations
 
 import io
+import re
 import threading
+import time
 import uuid
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection, connections, transaction
 from django.db.models import Sum
+from django.test import RequestFactory
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -42,6 +46,7 @@ from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldT
 from core.models.attachment import Attachment
 from core.services import import_engine
 from core.services.attachments.crud import quota_backstop_audit_boundary
+from core.services.audit import log_audit_event
 from core.services.file_vault import commit_staged_upload, encrypt_field, encrypt_file, prepare_encrypted_upload
 
 MB = 1024 * 1024
@@ -222,7 +227,7 @@ class TestGleichzeitigeImporte:
     """Refs #2259: zwei gleichzeitige CSV-Uploads am Limit — genau einer gewinnt."""
 
     def test_zwei_gleichzeitige_uploads_am_limit_gewinnt_nur_einer(
-        self, quota_facility, admin_user, offener_import, tmp_path
+        self, quota_facility, admin_user, offener_import, monkeypatch, tmp_path
     ):
         """Bestand ``Limit − Dateigroesse``, zwei zeitgleiche Uploads.
 
@@ -230,6 +235,16 @@ class TestGleichzeitigeImporte:
         Klartextgroesse und sieht denselben alten Stand). Entschieden wird erst
         unter der Sperre der Einrichtung, unmittelbar vor ``job.save()`` — der
         zweite Upload findet die Datei des ersten vor und wird abgewiesen.
+
+        **Die Barriere liegt IM Pfad, nicht davor**: Ein Treffpunkt vor
+        ``store_import_upload`` erzwingt das kritische Interleaving nicht — der
+        Scheduler darf den ersten Thread nach der Freigabe bis zum Ende
+        durchlaufen lassen, und der zweite wird dann schon vom **Vorab-Check**
+        abgewiesen. Genau eine Zeile, genau eine Rechenschaftszeile: die
+        ungefixte Basis bestuende den Test. Deshalb treffen sich beide Uploads
+        hier NACH ihrem Vorab-Check und VOR der Verschluesselung — ab da ist
+        fuer beide entschieden, dass der billige Check sie durchlaesst, und nur
+        noch der Backstop unter der Sperre kann das Rennen schliessen.
         """
         raw = _csv_bytes("RENNEN")
         enc = _verschluesselte_groesse(raw, tmp_path)
@@ -239,12 +254,21 @@ class TestGleichzeitigeImporte:
         ergebnisse: dict[int, object] = {}
         schutz = threading.Lock()
 
+        echter_vorab_check = import_engine.enforce_storage_quota
+
+        def vorab_check_dann_treffen(*args, **kwargs):
+            """Beobachtend: erst der echte Vorab-Check, dann der Treffpunkt."""
+            ergebnis = echter_vorab_check(*args, **kwargs)
+            barrier.wait()
+            return ergebnis
+
+        monkeypatch.setattr(import_engine, "enforce_storage_quota", vorab_check_dann_treffen)
+
         def worker(idx: int) -> None:
             try:
                 with connections["default"].cursor() as cur:
                     cur.execute(f"SET lock_timeout = {LOCK_TIMEOUT_MS}")
                     cur.execute(f"SET statement_timeout = {STATEMENT_TIMEOUT_MS}")
-                barrier.wait()
                 job = import_engine.store_import_upload(
                     quota_facility,
                     admin_user,
@@ -441,3 +465,484 @@ class TestAuditRandUndSperrfolge:
         from core.services.file_vault.quota import storage_lock_name
 
         assert storage_lock_name(quota_facility.pk) == advisory_lock_name(quota_facility.pk)
+
+
+# ------------------------------------------------------- Sperrfolge-Guards --
+#
+# Die AuditLog-Hashkette nimmt je Einrichtung einen transaktionsweiten
+# Advisory-Lock; denselben Schluessel nimmt der Kontingent-Backstop
+# (``quota.storage_lock_name``). Die einrichtungsweite Ordnung lautet deshalb:
+# **erst Zeilensperren, dann der Ketten-Lock** (Refs #2260). Der Insert der
+# Jobzeile bricht diese Ordnung, wenn er unter dem Ketten-Lock zum ERSTEN Mal
+# eine Zeile sperrt: PostgreSQL prueft die Fremdschluessel der neuen Zeile
+# ``DEFERRABLE INITIALLY DEFERRED``, also beim COMMIT — und nimmt dabei auf
+# jede FK-Zielzeile eine ``FOR KEY SHARE``-Sperre, mitten im gehaltenen
+# Ketten-Lock. Ein Pfad, der eine dieser Zeilen schluessselaendernd haelt und
+# danach den Ketten-Lock will (der Dokumentationstyp-Fallback im Django-Admin:
+# ``super().save_model()`` und danach ``log_audit_event``), schliesst damit
+# einen Zyklus, den PostgreSQL mit ``40P01`` aufloest.
+#
+# Zwei Sorten Guards, wie in ``test_attachment_lock_order.py``:
+# ein **Sequenz-Guard** am mitgeschnittenen SQL (ein Prozess, kein Timing) und
+# ein **Rendezvous-Guard**, der die Gegenrichtung tatsaechlich danebenstellt.
+
+#: Pseudo-Tabellenname fuer den Ketten-Advisory-Lock im Sperrmitschnitt.
+CHAIN = "audit_chain"
+
+#: Tabelle der Nutzerzeile — aus dem Modell, nicht getippt.
+USER_TABELLE = get_user_model()._meta.db_table
+
+#: Die FK-Ziele der ``ImportJob``-Zeile: Einrichtung, Dokumentationstyp,
+#: anlegende Person. Auf genau diese Zeilen nimmt die aufgeschobene
+#: FK-Pruefung ihre ``FOR KEY SHARE``-Sperren.
+FK_TABELLEN = frozenset({"core_facility", "core_documenttype", USER_TABELLE})
+
+#: Jede Sperrstaerke, die PostgreSQL auf Zeilenebene kennt.
+_SPERR_KLAUSEL = r"FOR (?:KEY SHARE|NO KEY UPDATE|SHARE|UPDATE)"
+_ZEILENSPERRE_RE = re.compile(rf'FROM "(?P<table>\w+)"[^;]*{_SPERR_KLAUSEL}', re.IGNORECASE | re.DOTALL)
+_UPDATE_RE = re.compile(r'\s*UPDATE "(?P<table>\w+)"', re.IGNORECASE)
+_DELETE_RE = re.compile(r'\s*DELETE FROM "(?P<table>\w+)"', re.IGNORECASE)
+_WHERE_ENDE_RE = re.compile(rf"\s+(?:{_SPERR_KLAUSEL}|ORDER BY|LIMIT|OFFSET|RETURNING)\b", re.IGNORECASE)
+
+#: Obergrenze fuer jedes Warten im Rendezvous-Guard (Sekunden).
+RENDEZVOUS_DEADLINE = 8.0
+
+#: PostgreSQL-SQLSTATE fuer „deadlock detected".
+DEADLOCK = "40P01"
+
+#: SQLSTATEs der DB-seitigen Zeitgrenzen (``lock_not_available``,
+#: ``query_canceled``) — der Rettungsanker, falls der Detektor den Zyklus
+#: nicht aufloest: kein Test haengt, er faellt.
+TIMEOUT_SQLSTATES = frozenset({"55P03", "57014"})
+
+#: Die Sperrgrenzen liegen ueber ``deadlock_timeout`` (1 s), damit ein echter
+#: Zyklus als ``40P01`` sichtbar wird und nicht als Zeitgrenze.
+GEGEN_LOCK_TIMEOUT = "4000ms"
+WORKER_LOCK_TIMEOUT = "9000ms"
+WORKER_STATEMENT_TIMEOUT = "14000ms"
+
+
+def _kennung(wert) -> str:
+    """Normalisierte Form eines PK-Werts (UUID ohne Bindestriche, klein)."""
+    return str(wert).replace("-", "").lower()
+
+
+def _sperr_tabelle(sql):
+    """Die FK-Zieltabelle, deren Zeilen diese Anweisung sperrt (oder ``None``)."""
+    if re.search(_SPERR_KLAUSEL, sql, re.IGNORECASE):
+        match = _ZEILENSPERRE_RE.search(sql)
+    elif _DELETE_RE.match(sql):
+        match = _DELETE_RE.match(sql)
+    else:
+        match = _UPDATE_RE.match(sql)
+    if match is None:
+        return None
+    table = match.group("table")
+    return table if table in FK_TABELLEN else None
+
+
+def _treffer_abfrage(sql):
+    """``(tabelle, SELECT auf DIESELBE Bedingung, Platzhalterzahl)`` oder ``None``.
+
+    Der Mitschnitt raet die gesperrten Zeilen NICHT aus den Literalen des
+    SQL-Textes: dieselbe ``WHERE``-Bedingung wird unmittelbar vor der Anweisung
+    als reines ``SELECT id`` gefahren, das Ergebnis ist die tatsaechliche
+    Treffermenge. Gelesen wird ab dem ersten ``WHERE``; alles ab der
+    Sperrklausel bzw. ``ORDER BY``/``LIMIT``/``OFFSET``/``RETURNING`` gehoert
+    nicht mehr zur Bedingung. Die Platzhalter der Bedingung sind die LETZTEN
+    ``n`` der Parameterliste (bei ``UPDATE`` stehen die ``SET``-Werte davor).
+    """
+    table = _sperr_tabelle(sql)
+    if table is None:
+        return None
+    _kopf, trenner, rest = sql.partition(" WHERE ")
+    if not trenner:
+        bedingung = "TRUE"
+    else:
+        ende = _WHERE_ENDE_RE.search(rest)
+        bedingung = rest[: ende.start()] if ende else rest
+    return (
+        table,
+        f'SELECT "{table}"."id" FROM "{table}" WHERE {bedingung} ORDER BY 1',  # noqa: S608 — feste Tabellennamen
+        bedingung.count("%s"),
+    )
+
+
+class _Sperrmitschnitt(CaptureQueriesContext):
+    """Query-Mitschnitt PLUS die TATSAECHLICH gesperrten Zeilen, in Reihenfolge.
+
+    Sperrt eine Anweisung Zeilen einer FK-Zieltabelle, wird dieselbe Bedingung
+    vorher als ``SELECT id`` gefahren und jeder Treffer als
+    ``(tabelle, kennung)`` protokolliert; der Ketten-Advisory-Lock kommt als
+    ``(CHAIN, None)`` in dieselbe Folge. Die Probe laeuft unter einem
+    Savepoint — ein Praedikat, das sich nicht isoliert ausfuehren laesst, wuerde
+    die umgebende Transaktion sonst unbrauchbar machen. Solche Faelle landen in
+    ``unaufloesbar`` und lassen die Zusagen hart scheitern; stillschweigend
+    gruen wird hier nichts.
+    """
+
+    def __init__(self, dbconnection=None):
+        super().__init__(dbconnection or connection)
+        self.ereignisse: list = []
+        self.unaufloesbar: list = []
+        self._aktiv = False
+        self._wrapper_cm = None
+
+    def __enter__(self):
+        self._wrapper_cm = self.connection.execute_wrapper(self._wrapper)
+        self._wrapper_cm.__enter__()
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_value, tb):
+        try:
+            return super().__exit__(exc_type, exc_value, tb)
+        finally:
+            self._wrapper_cm.__exit__(exc_type, exc_value, tb)
+
+    def _probe(self, dbconnection, probe_sql, werte):
+        with dbconnection.cursor() as cur:
+            cur.execute(probe_sql, werte)
+            return [zeile[0] for zeile in cur.fetchall()]
+
+    def _wrapper(self, execute, sql, params, many, context):
+        if self._aktiv or many:
+            return execute(sql, params, many, context)
+        if "pg_advisory_xact_lock" in sql:
+            self.ereignisse.append((CHAIN, None))
+            return execute(sql, params, many, context)
+        abfrage = _treffer_abfrage(sql)
+        if abfrage is None:
+            return execute(sql, params, many, context)
+        table, probe_sql, anzahl = abfrage
+        alle = list(params or ())
+        werte = alle[len(alle) - anzahl :] if anzahl else []
+        dbconnection = context["connection"]
+        self._aktiv = True
+        try:
+            if dbconnection.in_atomic_block:
+                with transaction.atomic():
+                    treffer = self._probe(dbconnection, probe_sql, werte)
+            else:
+                treffer = self._probe(dbconnection, probe_sql, werte)
+        except Exception as exc:  # noqa: BLE001 — der Test bewertet den Fehlschlag
+            self.unaufloesbar.append((probe_sql, repr(exc)))
+            treffer = []
+        finally:
+            self._aktiv = False
+        self.ereignisse.extend((table, _kennung(pk)) for pk in treffer)
+        return execute(sql, params, many, context)
+
+
+def _sperrmengen(mitschnitt):
+    """``(vor dem ersten Ketten-Lock gesperrt, danach ERSTMALS gesperrt)``.
+
+    Beide sind Listen in Erst-Sperrreihenfolge. Ein erneutes Sperren einer
+    bereits gehaltenen Zeile wartet nie und ist deshalb zulaessig — es steht in
+    der ersten Liste und faellt aus der zweiten heraus.
+    """
+    vor: list = []
+    nach: list = []
+    gesehen: set = set()
+    kette_gesehen = False
+    for tabelle, kennung in mitschnitt.ereignisse:
+        if tabelle == CHAIN:
+            kette_gesehen = True
+            continue
+        zeile = (tabelle, kennung)
+        if zeile in gesehen:
+            continue
+        gesehen.add(zeile)
+        (nach if kette_gesehen else vor).append(zeile)
+    return vor, nach
+
+
+def _setze_zeitgrenzen(dbconnection, *, lock_timeout, statement_timeout=None) -> None:
+    """Gibt der Verbindung DB-seitige Zeitgrenzen (muss im Autocommit laufen).
+
+    ``set_config(..., is_local=False)`` gilt fuer die Sitzung und ueberlebt
+    jede spaetere Transaktion. Eine Zeitgrenze im Python-Code kann ein
+    blockierendes ``SELECT`` nicht beenden; diese hier kann es.
+    """
+    assert dbconnection.get_autocommit(), "Zeitgrenzen vor der ersten Transaktion setzen"
+    with dbconnection.cursor() as cur:
+        cur.execute("SELECT set_config('lock_timeout', %s, false)", [lock_timeout])
+        if statement_timeout is not None:
+            cur.execute("SELECT set_config('statement_timeout', %s, false)", [statement_timeout])
+
+
+def _sqlstate(exc):
+    """SQLSTATE der DB-Ausnahme hinter einem Django-``OperationalError``."""
+    return getattr(getattr(exc, "__cause__", None), "sqlstate", None)
+
+
+def _bewerte_db_fehler(fehler, *, kontext) -> None:
+    """Jeder Fehler wird am SQLSTATE bewertet — nichts gilt stillschweigend als Erfolg."""
+    if fehler is None:
+        return
+    zustand = _sqlstate(fehler)
+    if zustand == DEADLOCK:
+        pytest.fail(f"Sperr-Zyklus ({kontext}): SQLSTATE {DEADLOCK} — {fehler!r}")
+    if zustand in TIMEOUT_SQLSTATES:
+        pytest.fail(f"Warten lief in die Zeitgrenze ({kontext}): SQLSTATE {zustand} — Zyklusverdacht, {fehler!r}")
+    pytest.fail(f"unerwarteter Fehler ({kontext}): SQLSTATE {zustand} — {fehler!r}")
+
+
+def _warte_auf_gegenseite(sonde, facility_id, worker_pid, deadline_ends_at) -> str:
+    """Beobachtet den Upload-Pfad von aussen — ohne unbegrenztes Warten.
+
+    Die Sonde laeuft auf einer EIGENEN Verbindung und probt genau zwei
+    Zustaende:
+
+    * ``"kette"`` — der Ketten-Advisory-Lock GENAU DIESER Einrichtung ist
+      vergeben. Der Upload haelt ihn also schon, bevor er die Typzeile
+      angefasst hat: die verkehrte Folge, der Zyklus steht. Geprobt wird mit
+      ``pg_try_advisory_xact_lock`` auf demselben Schluessel; die
+      Probe-Transaktion wird sofort zurueckgerollt und haelt selbst nichts.
+    * ``"blockiert"`` — GENAU das Backend des Uploads wartet auf die
+      Transaktion eines anderen (``locktype='transactionid'``), haengt also an
+      der gehaltenen Typzeile, BEVOR es den Ketten-Lock genommen hat: die
+      geforderte Richtung. Die Probe ist an ``worker_pid`` gebunden; eine
+      beliebige andere Sitzung darf den Test nicht gruen faerben.
+
+    ``"deadline"`` heisst „nichts davon beobachtet" — unschluessig, und der
+    Aufrufer laesst den Test dann nicht stillschweigend gruen werden.
+    """
+    from core.services.audit.chain import advisory_lock_name
+
+    while time.monotonic() < deadline_ends_at:
+        with sonde.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_xact_lock(hashtext(%s))", [advisory_lock_name(facility_id)])
+            frei = bool(cur.fetchone()[0])
+            cur.execute(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid' AND pid = %s",
+                [worker_pid],
+            )
+            wartet = cur.fetchone()[0]
+        sonde.rollback()
+        if not frei:
+            return "kette"
+        if wartet:
+            return "blockiert"
+        time.sleep(0.05)
+    return "deadline"
+
+
+def _im_thread(fn):
+    """Startet ``fn`` als Daemon-Thread und sammelt Ergebnis bzw. Ausnahme ein.
+
+    Der Thread meldet zuerst seine Backend-PID (die Warteprobe braucht sie) und
+    setzt seine DB-seitigen Zeitgrenzen; erst danach laeuft ``fn``. Bleibt er
+    trotz aller Grenzen haengen, faellt der Test am ``is_alive``-Check, haelt
+    aber den Testlauf nicht auf.
+    """
+    ergebnis: dict = {}
+    bereit = threading.Event()
+
+    def runner():
+        try:
+            _setze_zeitgrenzen(
+                connection,
+                lock_timeout=WORKER_LOCK_TIMEOUT,
+                statement_timeout=WORKER_STATEMENT_TIMEOUT,
+            )
+            with connection.cursor() as cur:
+                cur.execute("SELECT pg_backend_pid()")
+                ergebnis["pid"] = cur.fetchone()[0]
+        except Exception as exc:  # noqa: BLE001 — der Test bewertet die Ausnahme
+            ergebnis["fehler"] = exc
+            connections.close_all()
+            return
+        finally:
+            bereit.set()
+        try:
+            ergebnis["wert"] = fn()
+        except Exception as exc:  # noqa: BLE001 — der Test bewertet die Ausnahme
+            ergebnis["fehler"] = exc
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    assert bereit.wait(RENDEZVOUS_DEADLINE), "Thread hat seine Backend-PID nicht gemeldet"
+    assert "pid" in ergebnis, f"Thread kam nicht bis zur Backend-PID: {ergebnis.get('fehler')!r}"
+    return thread, ergebnis
+
+
+@pytest.fixture
+def doku_typ(quota_facility):
+    """Ein Dokumentationstyp der Einrichtung als FK-Ziel des Importlaufs."""
+    return DocumentType.objects.create(
+        facility=quota_facility,
+        name="Import-Zuordnung",
+        sensitivity=DocumentType.Sensitivity.NORMAL,
+        entity_type=DocumentType.EntityType.CLIENT,
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.postgres
+class TestSperrfolgeDerJobzeile:
+    """Refs #2259: unter dem Ketten-Lock wird keine Zeile ERSTMALS gesperrt."""
+
+    def test_fk_zielzeilen_werden_vor_dem_ketten_lock_gesperrt(self, quota_facility, admin_user, doku_typ):
+        """Sequenz-Guard am Mitschnitt: Einrichtung, Dokumentationstyp und
+        anlegende Person sind VOR dem Ketten-Lock gesperrt.
+
+        Die FK-Pruefung des Inserts laeuft ``DEFERRABLE INITIALLY DEFERRED``,
+        also serverseitig beim COMMIT — clientseitig ist sie nicht
+        mitzuschneiden. Mitschneidbar und deshalb die Zusage dieses Guards ist
+        die Vorsperre: Wer die FK-Zielzeilen VOR dem Ketten-Lock haelt, bei dem
+        findet die spaetere Pruefung nur noch bereits gehaltene Sperren vor und
+        wartet nicht. Fehlt die Vorsperre, nimmt der COMMIT die erste Sperre
+        unter dem Ketten-Lock — genau die verkehrte Folge.
+        """
+        with _Sperrmitschnitt() as mitschnitt:
+            import_engine.store_import_upload(
+                quota_facility,
+                admin_user,
+                _upload(_csv_bytes("SPERRFOLGE", rows=1)),
+                target_type=ImportJob.TargetType.CLIENT,
+                document_type=doku_typ,
+            )
+
+        assert not mitschnitt.unaufloesbar, f"Treffermenge nicht ermittelbar: {mitschnitt.unaufloesbar}"
+        sql = [q["sql"] for q in mitschnitt.captured_queries]
+        kette_at = [i for i, s in enumerate(sql) if "pg_advisory_xact_lock" in s]
+        insert_at = [i for i, s in enumerate(sql) if "INSERT INTO" in s and "core_importjob" in s]
+        assert kette_at, f"keine Einrichtungs-Sperre im Import-Speicherpfad: {sql!r}"
+        assert insert_at, f"kein ImportJob-Insert im Speicherpfad: {sql!r}"
+        assert kette_at[0] < insert_at[0], "die Sperre muss VOR dem Insert genommen werden"
+
+        vor, nach = _sperrmengen(mitschnitt)
+        assert not nach, f"unter dem Ketten-Lock erstmals gesperrte Zeilen: {nach}"
+        erwartet = {
+            ("core_facility", _kennung(quota_facility.pk)),
+            ("core_documenttype", _kennung(doku_typ.pk)),
+            (USER_TABELLE, _kennung(admin_user.pk)),
+        }
+        fehlend = erwartet - set(vor)
+        assert not fehlend, (
+            f"FK-Zielzeilen der Jobzeile ohne Vorsperre — der COMMIT sperrt sie erstmals unter dem "
+            f"Ketten-Lock: {sorted(fehlend)}; vorgesperrt wurde: {vor!r}"
+        )
+
+    def test_vorsperre_ist_kein_exklusiver_griff(self, quota_facility, admin_user, doku_typ):
+        """Die Vorsperre darf gleichzeitige Importe nicht serialisieren.
+
+        Der Insert selbst braucht auf den FK-Zielen nur ``FOR KEY SHARE``. Eine
+        staerkere Vorsperre (``FOR UPDATE``/``FOR NO KEY UPDATE``) waere mehr
+        als die Ordnung verlangt: zwei Uploads desselben Dokumentationstyps
+        wuerden sich an der Typzeile gegenseitig aufhalten, obwohl sie dort
+        nichts aendern.
+        """
+        with CaptureQueriesContext(connection) as ctx:
+            import_engine.store_import_upload(
+                quota_facility,
+                admin_user,
+                _upload(_csv_bytes("KEYSHARE", rows=1)),
+                target_type=ImportJob.TargetType.CLIENT,
+                document_type=doku_typ,
+            )
+
+        sperren = [q["sql"] for q in ctx.captured_queries if re.search(_SPERR_KLAUSEL, q["sql"], re.IGNORECASE)]
+        assert sperren, "keine Vorsperre auf den FK-Zielzeilen"
+        zu_stark = [s for s in sperren if not re.search(r"FOR KEY SHARE", s, re.IGNORECASE)]
+        assert not zu_stark, f"Vorsperre staerker als der Insert sie braucht: {zu_stark!r}"
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestRendezvousMitTypumbenennung:
+    """Refs #2259: Upload × Umbenennung des Dokumentationstyps — kein Zyklus."""
+
+    def test_upload_wartet_auf_die_typzeile_bevor_er_den_ketten_lock_nimmt(self, quota_facility, admin_user, doku_typ):
+        """Gegenrichtung: eine fremde Transaktion hat den Dokumentationstyp
+        umbenannt und will danach ihre Rechenschaftszeile schreiben.
+
+        Die Gegenseite stellt die beiden Schritte des Django-Admin-Fallbacks
+        nach, jeden mit dem echten Code: ``DocumentType.save()`` (das, was
+        ``super().save_model()`` ausfuehrt) und danach ``log_audit_event``
+        (die Rechenschaftszeile, die ``DocumentTypeAdmin.save_model``
+        anschliessend schreibt) — beides in EINER Transaktion, wie der
+        Admin-Change-View sie aufspannt. Dazwischen haelt eine Barriere, damit
+        die Beobachtung nicht vom Scheduler abhaengt.
+
+        Der Namenswechsel beruehrt den Unique-Key ``(facility, name)``;
+        PostgreSQL nimmt dafuer einen Zeilenlock, der mit ``FOR KEY SHARE``
+        unvertraeglich ist. Nimmt der Upload seinerseits zuerst den Ketten-Lock
+        und laesst erst den COMMIT die Typzeile sperren, schliesst sich der
+        Zyklus und PostgreSQL beendet einen der beiden mit ``40P01``.
+        """
+        anfrage = RequestFactory().post("/admin/core/documenttype/")
+        anfrage.user = admin_user
+        anfrage.current_facility = quota_facility
+        umbenannt = threading.Event()
+        weiter = threading.Event()
+
+        def umbenennen():
+            with transaction.atomic():
+                typ = DocumentType.objects.get(pk=doku_typ.pk)
+                typ.name = "Import-Zuordnung (umbenannt)"
+                typ.save()
+                umbenannt.set()
+                assert weiter.wait(RENDEZVOUS_DEADLINE), "Freigabe fuer den Rechenschafts-Schritt blieb aus"
+                log_audit_event(
+                    anfrage,
+                    AuditLog.Action.CONFIG_UPDATE,
+                    target_obj=typ,
+                    detail={"name": typ.name, "changed_fields": ["name"]},
+                    facility=quota_facility,
+                )
+            return typ.name
+
+        def hochladen():
+            return import_engine.store_import_upload(
+                quota_facility,
+                admin_user,
+                _upload(_csv_bytes("RENDEZVOUS", rows=1)),
+                target_type=ImportJob.TargetType.CLIENT,
+                document_type=doku_typ,
+            )
+
+        sonde = connections.create_connection("default")
+        _setze_zeitgrenzen(sonde, lock_timeout=GEGEN_LOCK_TIMEOUT)
+        sonde.set_autocommit(False)
+        threads: list = []
+        erg_umbenennung: dict = {}
+        erg_upload: dict = {}
+        try:
+            thread_a, erg_umbenennung = _im_thread(umbenennen)
+            threads.append(thread_a)
+            assert umbenannt.wait(RENDEZVOUS_DEADLINE), (
+                f"die Umbenennung hat die Typzeile nicht gesperrt: {erg_umbenennung.get('fehler')!r}"
+            )
+            thread_b, erg_upload = _im_thread(hochladen)
+            threads.append(thread_b)
+            beobachtung = _warte_auf_gegenseite(
+                sonde,
+                quota_facility.pk,
+                erg_upload["pid"],
+                time.monotonic() + RENDEZVOUS_DEADLINE,
+            )
+        finally:
+            weiter.set()
+            try:
+                sonde.rollback()
+            except Exception:  # noqa: BLE001 — die Verbindung wird ohnehin verworfen
+                pass
+            sonde.close()
+            for t in threads:
+                t.join(timeout=RENDEZVOUS_DEADLINE * 2)
+
+        assert not any(t.is_alive() for t in threads), "ein Thread laeuft nach der Deadline weiter"
+        _bewerte_db_fehler(erg_umbenennung.get("fehler"), kontext="Umbenennung")
+        _bewerte_db_fehler(erg_upload.get("fehler"), kontext="Import-Upload")
+        assert beobachtung == "blockiert", (
+            f"der Upload muss an der Typzeile warten, BEVOR er den Ketten-Lock haelt — beobachtet wurde: {beobachtung}"
+        )
+        assert isinstance(erg_upload.get("wert"), ImportJob), f"Upload nicht durchgelaufen: {erg_upload!r}"
+        assert erg_umbenennung.get("wert") == "Import-Zuordnung (umbenannt)"
+        assert ImportJob.objects.for_facility(quota_facility).count() == 1
+        assert AuditLog.objects.filter(
+            facility=quota_facility, action=AuditLog.Action.CONFIG_UPDATE, target_type="DocumentType"
+        ).exists(), "die Rechenschaftszeile der Umbenennung fehlt"
