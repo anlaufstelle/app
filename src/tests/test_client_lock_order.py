@@ -39,8 +39,17 @@ from core.models import Case, Client, DocumentType, Event, Facility, Organizatio
 #: Erkennung nicht an Django-Versionsdetails der SQL-Formatierung haengt.
 _CLIENT_LOCK_RE = re.compile(r'FROM "core_client"[^;]*FOR UPDATE', re.IGNORECASE | re.DOTALL)
 
-#: UUIDs erscheinen im ausgefuehrten SQL als Hex ohne Bindestriche.
-_UUID_RE = re.compile(r"'([0-9a-f]{32})'::uuid")
+#: Die Sperrordnung muss ausdruecklich auf der PK liegen und aufsteigen.
+_CLIENT_PK_ORDER_RE = re.compile(
+    r'ORDER BY\s+"core_client"\."id"\s+ASC(?=\s|,)',
+    re.IGNORECASE,
+)
+
+#: WHERE-Ausdruck einer Client-Sperre, um die Treffermenge vorab nachzustellen.
+_CLIENT_LOCK_WHERE_RE = re.compile(
+    r'FROM\s+"core_client"\s+WHERE\s+(?P<where>.*?)(?=\s+ORDER BY|\s+FOR UPDATE)',
+    re.IGNORECASE | re.DOTALL,
+)
 
 #: Lock-Zeitgrenze der Renn-Verbindungen: keine Seite wartet unbegrenzt.
 _LOCK_TIMEOUT = "20s"
@@ -59,18 +68,63 @@ def _client_lock_statements(captured):
     return [q["sql"] for q in captured.captured_queries if _CLIENT_LOCK_RE.search(q["sql"])]
 
 
-def _locked_client_ids(captured, among):
-    """Die gesperrten Personen-PKs (Hex) in Sperr-Reihenfolge.
+class _ClientLockCapture(CaptureQueriesContext):
+    """SQL-Mitschnitt plus Treffermenge jeder Client-Sperre vor Ausfuehrung.
 
-    Innerhalb eines Statements ist die Reihenfolge die der ``IN``-Liste; die
-    Datenbank sperrt sie in der ``ORDER BY``-Ordnung, die derselbe Helfer
-    setzt (beides wird gepinnt).
+    Die ``WHERE``-Bedingung wird mit denselben Parametern als ``SELECT id``
+    nachgestellt. Die Probe sortiert nach ``id``; damit prueft der Guard die
+    tatsaechlich von der Bedingung erfassten Zeilen statt die Darstellung der
+    Werte in einer ``IN``-Liste.
     """
-    wanted = {_hex(pk) for pk in among}
-    ids = []
-    for sql in _client_lock_statements(captured):
-        ids.extend(found for found in _UUID_RE.findall(sql) if found in wanted)
-    return ids
+
+    def __init__(self, dbconnection=None):
+        super().__init__(dbconnection or connection)
+        self.locked_client_ids: list[list[str]] = []
+        self._probing = False
+        self._wrapper_cm = None
+
+    def __enter__(self):
+        self._wrapper_cm = self.connection.execute_wrapper(self._wrapper)
+        self._wrapper_cm.__enter__()
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_value, tb):
+        try:
+            return super().__exit__(exc_type, exc_value, tb)
+        finally:
+            self._wrapper_cm.__exit__(exc_type, exc_value, tb)
+
+    def _wrapper(self, execute, sql, params, many, context):
+        if self._probing or many or not _CLIENT_LOCK_RE.search(sql):
+            return execute(sql, params, many, context)
+        match = _CLIENT_LOCK_WHERE_RE.search(sql)
+        assert match is not None, f"WHERE der Client-Sperre nicht aufloesbar: {sql}"
+        probe_sql = (
+            f'SELECT "core_client"."id" FROM "core_client" WHERE {match.group("where")} ORDER BY "core_client"."id" ASC'
+        )
+        self._probing = True
+        try:
+            with context["connection"].cursor() as cur:
+                cur.execute(probe_sql, params)
+                self.locked_client_ids.append([_hex(row[0]) for row in cur.fetchall()])
+        finally:
+            self._probing = False
+        return execute(sql, params, many, context)
+
+
+def _assert_ordered_client_lock(captured, among):
+    """Pinnt Anweisung, PK-Sortierung und tatsaechliche Treffermenge."""
+    statements = _client_lock_statements(captured)
+    assert len(statements) == 1, f"erwartet EIN gemeinsames Sperr-Statement, war: {len(statements)}"
+    statement = statements[0]
+    assert "FOR UPDATE" in statement.upper(), statement
+    assert _CLIENT_PK_ORDER_RE.search(statement), f"Client-Sperre nicht aufsteigend nach PK: {statement}"
+
+    assert len(captured.locked_client_ids) == 1, captured.locked_client_ids
+    expected = sorted(_hex(pk) for pk in among)
+    locked = captured.locked_client_ids[0]
+    assert locked == expected, f"tatsaechlich gesperrte Personen nicht PK-geordnet: {locked}"
+    return statement
 
 
 def _zwei_personen(facility, user):
@@ -107,13 +161,11 @@ class TestSequenzDerPersonensperren:
             created_by=staff_user,
         )
 
-        with CaptureQueriesContext(connection) as captured:
+        with _ClientLockCapture() as captured:
             with pytest.raises(ValidationError, match="Person des Ereignisses"):
                 assign_event_to_case(case, event, staff_user)
 
-        gesperrt = _locked_client_ids(captured, [kleiner.pk, groesser.pk])
-        assert set(gesperrt) == {_hex(kleiner.pk), _hex(groesser.pk)}, f"nicht beide Personen gesperrt: {gesperrt}"
-        assert gesperrt == sorted(gesperrt), f"Personensperren nicht in PK-Ordnung: {gesperrt}"
+        _assert_ordered_client_lock(captured, [kleiner.pk, groesser.pk])
 
     def test_fallzuordnung_nimmt_beide_sperren_in_einer_abfrage(self, facility, staff_user, doc_type_contact):
         """EIN Statement — zwei Einzelsperren lassen ein Fenster dazwischen."""
@@ -132,26 +184,21 @@ class TestSequenzDerPersonensperren:
             created_by=staff_user,
         )
 
-        with CaptureQueriesContext(connection) as captured:
+        with _ClientLockCapture() as captured:
             with pytest.raises(ValidationError):
                 assign_event_to_case(case, event, staff_user)
 
-        statements = _client_lock_statements(captured)
-        assert len(statements) == 1, f"erwartet EIN gemeinsames Sperr-Statement, war: {len(statements)}"
-        assert "ORDER BY" in statements[0].upper(), statements[0]
+        _assert_ordered_client_lock(captured, [kleiner.pk, groesser.pk])
 
     def test_zusammenfuehren_sperrt_beide_personen_in_pk_ordnung(self, facility, staff_user, lead_user):
         """Quelle(B) -> Ziel(A): auch hier faellt A zuerst."""
         from core.services.client import merge_clients
 
         kleiner, groesser = _zwei_personen(facility, staff_user)
-        with CaptureQueriesContext(connection) as captured:
+        with _ClientLockCapture() as captured:
             merge_clients(groesser, kleiner, lead_user)
 
-        gesperrt = _locked_client_ids(captured, [kleiner.pk, groesser.pk])
-        assert gesperrt[:2] == [_hex(kleiner.pk), _hex(groesser.pk)], f"Merge-Sperren nicht PK-geordnet: {gesperrt}"
-        statements = _client_lock_statements(captured)
-        assert "ORDER BY" in statements[0].upper(), statements[0]
+        _assert_ordered_client_lock(captured, [kleiner.pk, groesser.pk])
 
     def test_einschraenkungs_gate_sperrt_ueber_den_gemeinsamen_helfer(self, facility, staff_user, monkeypatch):
         """Auch die EINZELNE Sperre laeuft ueber den geordneten Helfer.
@@ -170,28 +217,42 @@ class TestSequenzDerPersonensperren:
             return original(refs, **kwargs)
 
         monkeypatch.setattr(restriction_module, "lock_clients", _mitschnitt)
-        with CaptureQueriesContext(connection) as captured:
+        with _ClientLockCapture() as captured:
             with transaction.atomic():
                 restriction_module.assert_processing_allowed(kleiner, lock=True)
 
         assert gesehen == [[str(kleiner.pk)]], f"Gate sperrt am Helfer vorbei: {gesehen}"
-        statements = _client_lock_statements(captured)
-        assert len(statements) == 1, f"erwartet genau eine Sperre, war: {len(statements)}"
-        assert "ORDER BY" in statements[0].upper(), statements[0]
+        _assert_ordered_client_lock(captured, [kleiner.pk])
 
     def test_einschraenkungs_gate_sperrt_mehrere_personen_geordnet(self, facility, staff_user):
         """Der Mehrfach-Einstieg des Gates: EIN Statement, PK-Ordnung."""
         from core.services.client.restriction import assert_processing_allowed_for
 
         kleiner, groesser = _zwei_personen(facility, staff_user)
-        with CaptureQueriesContext(connection) as captured:
+        with _ClientLockCapture() as captured:
             with transaction.atomic():
                 assert_processing_allowed_for([groesser, kleiner], lock=True)
 
-        statements = _client_lock_statements(captured)
-        assert len(statements) == 1, f"erwartet EIN gemeinsames Sperr-Statement, war: {len(statements)}"
-        gesperrt = _locked_client_ids(captured, [kleiner.pk, groesser.pk])
-        assert gesperrt == [_hex(kleiner.pk), _hex(groesser.pk)], f"nicht PK-geordnet: {gesperrt}"
+        _assert_ordered_client_lock(captured, [kleiner.pk, groesser.pk])
+
+    def test_guard_verwirft_absteigend_sortierten_helfer(self, facility, staff_user, monkeypatch):
+        """Negativbeleg: eine falsche Helfer-Sortierung darf nicht gruen sein."""
+        from core.services.client import restriction as restriction_module
+
+        kleiner, groesser = _zwei_personen(facility, staff_user)
+
+        def _falsch_sortiert(refs, **kwargs):
+            pks = [getattr(ref, "pk", ref) for ref in refs]
+            rows = Client.objects.filter(pk__in=pks).select_for_update().order_by("-pk")
+            return {row.pk: row for row in rows}
+
+        monkeypatch.setattr(restriction_module, "lock_clients", _falsch_sortiert)
+        with _ClientLockCapture() as captured:
+            with transaction.atomic():
+                restriction_module.assert_processing_allowed_for([kleiner, groesser], lock=True)
+
+        with pytest.raises(AssertionError, match="nicht aufsteigend nach PK"):
+            _assert_ordered_client_lock(captured, [kleiner.pk, groesser.pk])
 
     def test_gate_bleibt_ohne_personenbezug_abfragefrei(self, facility, staff_user):
         """``None`` ist kein Personenbezug — und darf nichts kosten."""
@@ -226,14 +287,12 @@ class TestPersonenSperrHelfer:
         from core.services.client.locking import lock_clients
 
         kleiner, groesser = _zwei_personen(facility, staff_user)
-        with CaptureQueriesContext(connection) as captured:
+        with _ClientLockCapture() as captured:
             with transaction.atomic():
                 locked = lock_clients([groesser, kleiner.pk, groesser.pk, None])
 
         assert set(locked) == {kleiner.pk, groesser.pk}
-        assert len(_client_lock_statements(captured)) == 1
-        gesperrt = _locked_client_ids(captured, [kleiner.pk, groesser.pk])
-        assert gesperrt == [_hex(kleiner.pk), _hex(groesser.pk)], gesperrt
+        _assert_ordered_client_lock(captured, [kleiner.pk, groesser.pk])
 
     def test_helfer_ohne_pks_fragt_nicht(self, facility, staff_user):
         from core.services.client.locking import lock_clients
@@ -326,6 +385,41 @@ def _wartet_auf_sperre(pid, deadline):
     return False
 
 
+def _haelt_clientzeilensperre(pid):
+    """Belegt PID-gebunden eine ausgefuehrte Zeilensperre auf ``core_client``.
+
+    PostgreSQL fuehrt unbestrittene Tupelsperren nicht einzeln in ``pg_locks``.
+    Die Kombination aus ``RowShareLock`` auf der konkreten Relation und dem
+    exklusiven Transaktions-ID-Lock belegt jedoch die sperrende Transaktion.
+    """
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                EXISTS (
+                    SELECT 1
+                    FROM pg_locks AS relation_lock
+                    JOIN pg_class ON pg_class.oid = relation_lock.relation
+                    WHERE relation_lock.pid = %s
+                      AND relation_lock.locktype = 'relation'
+                      AND relation_lock.mode = 'RowShareLock'
+                      AND relation_lock.granted
+                      AND pg_class.relname = 'core_client'
+                )
+                AND EXISTS (
+                    SELECT 1
+                    FROM pg_locks AS transaction_lock
+                    WHERE transaction_lock.pid = %s
+                      AND transaction_lock.locktype = 'transactionid'
+                      AND transaction_lock.mode = 'ExclusiveLock'
+                      AND transaction_lock.granted
+                )
+            """,
+            [pid, pid],
+        )
+        return cur.fetchone()[0]
+
+
 @pytest.mark.django_db(transaction=True)
 class TestRendezvousFallzuordnungGegenZusammenfuehren:
     """Der Zyklus aus dem Ticket — an zwei echten Verbindungen.
@@ -347,9 +441,15 @@ class TestRendezvousFallzuordnungGegenZusammenfuehren:
         from core.services.client import merge_clients
 
         facility, lead, staff, kleiner, groesser, case, event = renn_bestand
+        probe_eins = Client.objects.create(facility=facility, pseudonym="Rendezvous-1", created_by=staff)
+        probe_zwei = Client.objects.create(facility=facility, pseudonym="Rendezvous-2", created_by=staff)
         pid_box: dict[str, int] = {}
+        start_barriere = threading.Barrier(2)
+        barriere_passiert: set[str] = set()
         faden_1_bereit = threading.Event()
         faden_2_haelt_kleiner = threading.Event()
+        begegnung = threading.Event()
+        sperren_belegt: dict[str, bool] = {}
         ergebnis: dict[str, str] = {}
 
         def _merke(name, exc):
@@ -360,16 +460,24 @@ class TestRendezvousFallzuordnungGegenZusammenfuehren:
             try:
                 with transaction.atomic():
                     pid_box["eins"] = _backend_pid()
+                    list(Client.objects.select_for_update().filter(pk=probe_eins.pk).only("pk"))
+                    sperren_belegt["eins"] = _haelt_clientzeilensperre(pid_box["eins"])
+                    start_barriere.wait(timeout=_JOIN_TIMEOUT)
+                    barriere_passiert.add("eins")
                     faden_1_bereit.set()
                     # Faden 2 haelt bereits die kleinere Person; erst danach
                     # darf die Zuordnung ihre Sperren nehmen.
-                    faden_2_haelt_kleiner.wait(timeout=_JOIN_TIMEOUT)
+                    if not faden_2_haelt_kleiner.wait(timeout=_JOIN_TIMEOUT):
+                        raise AssertionError("Merge-Faden meldete seine erste fachliche Personensperre nicht")
                     assign_event_to_case(case, event, staff)
                 ergebnis["eins"] = "zugeordnet"
-            except ValidationError:
+            except ValidationError as exc:
                 # Die fachliche Zurueckweisung („unterschiedliche Personen") —
                 # sie faellt NACH den Sperren und ist der Normalfall.
-                ergebnis["eins"] = "personen-verschieden"
+                if "Person des Ereignisses" in str(exc):
+                    ergebnis["eins"] = "personen-verschieden"
+                else:
+                    _merke("eins", exc)
             except Exception as exc:  # noqa: BLE001
                 _merke("eins", exc)
             finally:
@@ -378,15 +486,22 @@ class TestRendezvousFallzuordnungGegenZusammenfuehren:
         def _zusammenfuehren():
             try:
                 with transaction.atomic():
-                    _backend_pid()
+                    pid_box["zwei"] = _backend_pid()
+                    list(Client.objects.select_for_update().filter(pk=probe_zwei.pk).only("pk"))
+                    sperren_belegt["zwei"] = _haelt_clientzeilensperre(pid_box["zwei"])
+                    start_barriere.wait(timeout=_JOIN_TIMEOUT)
+                    barriere_passiert.add("zwei")
                     # Die erste Sperre des Zusammenfuehrens in PK-Ordnung.
                     list(Client.objects.select_for_update().filter(pk=kleiner.pk).only("pk"))
                     faden_2_haelt_kleiner.set()
                     # Beobachtend abwarten, bis Faden 1 an einer Sperre haengt
                     # — ohne diesen Punkt entschiede die Maschinenlaune, wer
                     # zuerst kommt, und das Rennen waere kein Nachweis.
-                    faden_1_bereit.wait(timeout=_JOIN_TIMEOUT)
-                    _wartet_auf_sperre(pid_box.get("eins", -1), _WAIT_DEADLINE)
+                    if not faden_1_bereit.wait(timeout=_JOIN_TIMEOUT):
+                        raise AssertionError("Zuordnungs-Faden erreichte den Rennabschnitt nicht")
+                    if not _wartet_auf_sperre(pid_box.get("eins", -1), _WAIT_DEADLINE):
+                        raise AssertionError("Zuordnungs-Faden wartete nicht messbar auf die Personensperre")
+                    begegnung.set()
                     merge_clients(kleiner, groesser, lead)
                 ergebnis["zwei"] = "zusammengefuehrt"
             except ValidationError:
@@ -404,6 +519,9 @@ class TestRendezvousFallzuordnungGegenZusammenfuehren:
         faden_2.join(timeout=_JOIN_TIMEOUT)
 
         assert not faden_1.is_alive() and not faden_2.is_alive(), f"Verklemmung: {ergebnis}"
+        assert barriere_passiert == {"eins", "zwei"}, f"Rendezvous nicht beidseitig passiert: {barriere_passiert}"
+        assert sperren_belegt == {"eins": True, "zwei": True}, f"Personensperren am Rendezvous fehlen: {sperren_belegt}"
+        assert begegnung.is_set(), f"Ablaufe sind einander nicht an der Personensperre begegnet: {ergebnis}"
         deadlocks = [name for name, wert in ergebnis.items() if wert.startswith("deadlock")]
         assert not deadlocks, f"Sperrzyklus zwischen Fallzuordnung und Zusammenfuehren: {ergebnis}"
         assert ergebnis.get("eins") == "personen-verschieden", ergebnis
