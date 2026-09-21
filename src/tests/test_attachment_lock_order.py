@@ -36,6 +36,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from typing import NamedTuple
 from unittest.mock import patch
 
 import pytest
@@ -117,41 +118,34 @@ def _first_index(sequence, table):
 #: Die Tabellen, deren Zeilensperren diese Ordnung regelt.
 _SPERR_TABELLEN = frozenset({"core_attachment", "core_client", "core_case", "core_event"})
 
-#: UUID-Literale stehen im Mitschnitt bereits eingesetzt (``connection.queries``)
-#: — PostgreSQL schreibt sie OHNE Bindestriche (``'ab12…'::uuid``), Python mit.
-#: Beide Formen werden auf die bindestrichlose Kleinschreibung normalisiert.
-_UUID_RE = re.compile(
-    r"\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\b",
-    re.IGNORECASE,
-)
+#: Die Kennung einer Zeile im Mitschnitt — UUID ohne Bindestriche, klein.
+#: PostgreSQL und Python schreiben dieselbe UUID unterschiedlich; hier wird
+#: alles auf dieselbe Form gebracht.
 
 
 def _kennung(wert) -> str:
-    """Normalisierte Form eines UUID-Literals (ohne Bindestriche, klein)."""
+    """Normalisierte Form eines UUID-Werts (ohne Bindestriche, klein)."""
     return str(wert).replace("-", "").lower()
 
 
-#: ``pk -> entry_id`` jeder in diesem Modul angelegten Anhangszeile. Die
-#: Aufloesung braucht diese Tabelle, wo die Zeile am Ende des Pfades physisch
-#: getilgt ist (Vernichtung) — dann findet sie keine DB-Abfrage mehr, und
-#: Vorsperre (nach ``entry_id``) und spaetere Sperre (nach ``pk``) liessen sich
-#: nicht mehr als dieselbe Zeile erkennen.
-_ANHANG_KENNUNGEN: dict[str, str] = {}
-
-
-def _merke_anhang(attachment):
-    _ANHANG_KENNUNGEN[_kennung(attachment.pk)] = _kennung(attachment.entry_id)
-    return attachment
-
-
 #: Ein ``UPDATE`` sperrt seine Zeilen genauso wie ein ``SELECT … FOR UPDATE``.
+#: Ein ``DELETE`` ebenso — und es ist der Pfad, der die ``SET_NULL``-Kaskade auf
+#: fremde Vorgaengerzeilen ueberhaupt erst ausloest; er MUSS deshalb erfasst
+#: werden.
 _UPDATE_RE = re.compile(r'\s*UPDATE "(?P<table>core_\w+)"', re.IGNORECASE)
+_DELETE_RE = re.compile(r'\s*DELETE FROM "(?P<table>core_\w+)"', re.IGNORECASE)
+
+#: Alles, was HINTER der ``WHERE``-Klausel stehen kann und nicht mehr zur
+#: Bedingung gehoert.
+_WHERE_ENDE_RE = re.compile(r"\s+(?:FOR UPDATE|ORDER BY|LIMIT|OFFSET|RETURNING)\b", re.IGNORECASE)
 
 
 def _sperr_tabelle(sql):
     """Die Tabelle, deren Zeilen diese Anweisung sperrt (oder ``None``)."""
     if "FOR UPDATE" in sql.upper():
         match = _FOR_UPDATE_RE.search(sql)
+    elif _DELETE_RE.match(sql):
+        match = _DELETE_RE.match(sql)
     else:
         match = _UPDATE_RE.match(sql)
     if match is None:
@@ -160,75 +154,178 @@ def _sperr_tabelle(sql):
     return table if table in _SPERR_TABELLEN else None
 
 
-def _gesperrte_zeilen(sql):
-    """Die Zeilen, die diese Anweisung sperrt — als ``{(tabelle, kennung), …}``.
+def _treffer_abfrage(sql):
+    """``(tabelle, SELECT auf DIESELBE Bedingung, Platzhalterzahl, mutation)`` oder ``None``.
 
-    Gelesen wird ausschliesslich die ``WHERE``-Klausel: Werte aus ``SET`` sind
-    keine Sperrmenge. Anhangszeilen werden ueber ``pk`` UND ueber ``entry_id``
-    adressiert (die gebuendelte Vorsperre filtert auf die Kette, der
-    Vorgaenger-Lock auf die einzelne Zeile) — beide Formen werden auf dieselbe
-    Kennung, den ``pk`` der Zeile, aufgeloest. Was sich nicht aufloesen laesst
-    (Owner-/Facility-Fremdschluessel in derselben Klausel), bleibt als Rohwert
-    stehen und ist damit ueber alle Anweisungen hinweg dennoch vergleichbar.
+    ``mutation`` unterscheidet die reine Vorsperre (``SELECT … FOR UPDATE``) von
+    der schreibenden Anweisung (``UPDATE``/``DELETE``), die ihre Zeilen ebenfalls
+    sperrt — aber eben erst beim Schreiben. Genau diese Unterscheidung traegt die
+    Zusage „die Zeile stand in der VORSPERRE".
+
+    Der Mitschnitt darf die gesperrten Zeilen NICHT aus den Literalen des
+    SQL-Textes raten: ``UPDATE "core_attachment" SET superseded_by_id = NULL
+    WHERE superseded_by_id IN (H)`` nennt H — gesperrt wird aber die Zeile, die
+    AUF H zeigt. Deshalb wird dieselbe ``WHERE``-Bedingung unmittelbar vor der
+    Anweisung als reines ``SELECT id`` ausgefuehrt; das Ergebnis ist die
+    tatsaechliche Treffermenge.
+
+    Gelesen wird ab dem ersten ``WHERE``; alles ab ``FOR UPDATE``/``ORDER BY``/
+    ``LIMIT``/``OFFSET``/``RETURNING`` gehoert nicht mehr zur Bedingung. Die
+    Platzhalter stehen in Ausfuehrungsreihenfolge — die der Bedingung sind
+    folglich die LETZTEN ``n`` der Parameterliste (bei ``UPDATE`` stehen die
+    ``SET``-Werte davor).
     """
     table = _sperr_tabelle(sql)
     if table is None:
-        return set()
-    _, _, where = sql.partition(" WHERE ")
-    werte = {_kennung(wert) for wert in _UUID_RE.findall(where)}
-    if not werte or table != "core_attachment":
-        return {(table, wert) for wert in werte}
-    from django.db.models import Q
-
-    from core.models.attachment import Attachment
-
-    zeilen: set = set()
-    getroffen: set = set()
-    for pk, entry_id in _ANHANG_KENNUNGEN.items():
-        treffer = {pk, entry_id} & werte
-        if treffer:
-            zeilen.add((table, pk))
-            getroffen |= treffer
-    offen = werte - getroffen
-    if offen:
-        for pk, entry_id in Attachment.objects.filter(Q(pk__in=offen) | Q(entry_id__in=offen)).values_list(
-            "pk", "entry_id"
-        ):
-            treffer = {_kennung(pk), _kennung(entry_id)} & offen
-            if treffer:
-                zeilen.add((table, _kennung(pk)))
-                getroffen |= treffer
-    return zeilen | {(table, wert) for wert in werte - getroffen}
+        return None
+    mutation = "FOR UPDATE" not in sql.upper()
+    _kopf, trenner, rest = sql.partition(" WHERE ")
+    if not trenner:
+        bedingung = "TRUE"
+    else:
+        ende = _WHERE_ENDE_RE.search(rest)
+        bedingung = rest[: ende.start()] if ende else rest
+    return (
+        table,
+        f'SELECT "{table}"."id" FROM "{table}" WHERE {bedingung} ORDER BY 1',
+        bedingung.count("%s"),
+        mutation,
+    )
 
 
-def _sperrmengen(captured):
+class _Sperrmitschnitt(CaptureQueriesContext):
+    """Query-Mitschnitt PLUS die TATSAECHLICH gesperrten Zeilen, in Reihenfolge.
+
+    Der Wrapper haengt sich vor jede Anweisung der Verbindung. Sperrt sie Zeilen
+    (``SELECT … FOR UPDATE``, ``UPDATE``, ``DELETE`` auf eine der geregelten
+    Tabellen), wird DIESELBE Bedingung vorher als ``SELECT id`` gefahren und die
+    Treffer werden als ``(tabelle, kennung)`` in ``ereignisse`` protokolliert —
+    in Ausfuehrungsreihenfolge, je Anweisung nach ``id`` sortiert. Der
+    Ketten-Advisory-Lock kommt als ``(CHAIN, None)`` in dieselbe Folge.
+
+    Die Probe laeuft unter einem Savepoint: ein Prädikat, das sich nicht
+    isoliert ausfuehren laesst (Join-Alias), wuerde die umgebende Transaktion
+    sonst unbrauchbar machen. Solche Faelle landen in ``unaufloesbar`` und
+    lassen die Zusagen unten hart scheitern — stillschweigend gruen wird hier
+    nichts.
+    """
+
+    def __init__(self, dbconnection=None):
+        super().__init__(dbconnection or connection)
+        self.ereignisse: list = []
+        self.unaufloesbar: list = []
+        self._aktiv = False
+        self._wrapper_cm = None
+
+    def __enter__(self):
+        self._wrapper_cm = self.connection.execute_wrapper(self._wrapper)
+        self._wrapper_cm.__enter__()
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_value, tb):
+        try:
+            return super().__exit__(exc_type, exc_value, tb)
+        finally:
+            self._wrapper_cm.__exit__(exc_type, exc_value, tb)
+
+    def _probe(self, dbconnection, probe_sql, werte):
+        with dbconnection.cursor() as cur:
+            cur.execute(probe_sql, werte)
+            return [zeile[0] for zeile in cur.fetchall()]
+
+    def _wrapper(self, execute, sql, params, many, context):
+        if self._aktiv or many:
+            return execute(sql, params, many, context)
+        if "pg_advisory_xact_lock" in sql:
+            self.ereignisse.append((CHAIN, None, False))
+            return execute(sql, params, many, context)
+        abfrage = _treffer_abfrage(sql)
+        if abfrage is None:
+            return execute(sql, params, many, context)
+        table, probe_sql, anzahl, mutation = abfrage
+        alle = list(params or ())
+        werte = alle[len(alle) - anzahl :] if anzahl else []
+        dbconnection = context["connection"]
+        self._aktiv = True
+        try:
+            if dbconnection.in_atomic_block:
+                with transaction.atomic():
+                    treffer = self._probe(dbconnection, probe_sql, werte)
+            else:
+                treffer = self._probe(dbconnection, probe_sql, werte)
+        except Exception as exc:  # noqa: BLE001 — der Test bewertet den Fehlschlag
+            self.unaufloesbar.append((probe_sql, repr(exc)))
+            treffer = []
+        finally:
+            self._aktiv = False
+        self.ereignisse.extend((table, _kennung(pk), mutation) for pk in treffer)
+        return execute(sql, params, many, context)
+
+
+def _sperrmengen(mitschnitt):
     """``(vor dem ersten Ketten-Lock gesperrt, danach ERSTMALS gesperrt)``.
+
+    Beide sind **Listen** in Erst-Sperrreihenfolge, nicht Mengen: die Ordnung
+    innerhalb der Anhangszeilen ist selbst Teil der Zusage.
 
     Das ist die eigentliche Zusage dieses Tickets: unter dem Ketten-Lock darf
     keine Zeile ERSTMALS gesperrt werden. Ein erneutes Sperren einer bereits
     gehaltenen Zeile wartet nie und ist deshalb zulaessig — es steht in der
-    ersten Menge und faellt aus der zweiten heraus.
+    ersten Liste und faellt aus der zweiten heraus.
     """
-    vor: set = set()
-    nach: set = set()
+    vor: list = []
+    nach: list = []
+    gesehen: set = set()
     kette_gesehen = False
-    for query in captured.captured_queries:
-        sql = query["sql"]
-        if "pg_advisory_xact_lock" in sql:
+    for tabelle, kennung, _mutation in mitschnitt.ereignisse:
+        if tabelle == CHAIN:
             kette_gesehen = True
             continue
-        zeilen = _gesperrte_zeilen(sql)
-        if kette_gesehen:
-            nach |= zeilen - vor
-        else:
-            vor |= zeilen
+        zeile = (tabelle, kennung)
+        if zeile in gesehen:
+            continue
+        gesehen.add(zeile)
+        (nach if kette_gesehen else vor).append(zeile)
     return vor, nach
 
 
-def _assert_keine_erstsperre_unter_der_kette(captured):
+def _anhang_erstsperren(mitschnitt) -> list:
+    """Die Anhangszeilen in der Reihenfolge, in der sie ERSTMALS gesperrt werden."""
+    vor, nach = _sperrmengen(mitschnitt)
+    return [kennung for tabelle, kennung in [*vor, *nach] if tabelle == "core_attachment"]
+
+
+def _anhang_vorsperre(mitschnitt) -> list:
+    """Die Anhangszeilen, die eine reine SPERRABFRAGE vor der ersten Mutation nimmt.
+
+    ``UPDATE`` und ``DELETE`` sperren ihre Zeilen auch — aber erst im Moment des
+    Schreibens. Die Zusage dieses Tickets ist strenger: die vollstaendige
+    Schreibmenge gehoert VORHER in eine nach PK geordnete Sperrabfrage. Alles,
+    was erst die Mutation selbst erwischt, taucht hier nicht auf.
+    """
+    zeilen: list = []
+    gesehen: set = set()
+    for tabelle, kennung, mutation in mitschnitt.ereignisse:
+        if tabelle != "core_attachment":
+            continue
+        if mutation:
+            break
+        if kennung not in gesehen:
+            gesehen.add(kennung)
+            zeilen.append(kennung)
+    return zeilen
+
+
+def _assert_probe_vollstaendig(mitschnitt):
+    """Kein Prädikat blieb unausgewertet — sonst ist der Mitschnitt wertlos."""
+    assert not mitschnitt.unaufloesbar, f"Treffermenge nicht ermittelbar: {mitschnitt.unaufloesbar}"
+
+
+def _assert_keine_erstsperre_unter_der_kette(mitschnitt):
     """Kernzusage: nach dem ersten Ketten-Lock kommt keine neue Zeile hinzu."""
-    _vor, nach = _sperrmengen(captured)
-    assert not nach, f"unter dem Ketten-Lock erstmals gesperrte Zeilen: {sorted(nach)}"
+    _assert_probe_vollstaendig(mitschnitt)
+    _vor, nach = _sperrmengen(mitschnitt)
+    assert not nach, f"unter dem Ketten-Lock erstmals gesperrte Zeilen: {nach}"
 
 
 def _assert_sperr_reihenfolge(captured, *, owner_table):
@@ -299,7 +396,7 @@ def _attach(facility, owner, field_template, user):
 
     upload = SimpleUploadedFile("probe.pdf", PDF_MINIMAL, content_type="application/pdf")
     with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
-        attachment = _merke_anhang(store_encrypted_file(facility, upload, field_template, owner, user))
+        attachment = store_encrypted_file(facility, upload, field_template, owner, user)
     data = dict(owner.data_json or {})
     data[field_template.slug] = {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}
     owner.data_json = data
@@ -313,7 +410,92 @@ def _ersetze(facility, owner, field_template, user, vorgaenger):
 
     upload = SimpleUploadedFile("probe-neu.pdf", PDF_MINIMAL, content_type="application/pdf")
     with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
-        return _merke_anhang(store_encrypted_file(facility, upload, field_template, owner, user, supersedes=vorgaenger))
+        return store_encrypted_file(facility, upload, field_template, owner, user, supersedes=vorgaenger)
+
+
+class _Versionsstrang(NamedTuple):
+    """Ein ueber zwei Owner geteilter Versionsstrang (Ergebnis des Merges)."""
+
+    quelle: object
+    ziel: object
+    vorgaenger: object
+    kopf: object
+    feld: object
+    typ: object
+
+
+def _geteilter_versionsstrang(facility, staff_user, admin_user, *, versuche=8) -> _Versionsstrang:
+    """REPLACE + genehmigtes Zusammenfuehren — beides ueber den Produktivpfad.
+
+    Das Zusammenfuehren verschiebt nur die im FILE-Marker referenzierten
+    Zeilen; die superseded-Historie bleibt bewusst bei der Quelle. Danach zeigt
+    ``superseded_by`` ueber die Owner-Grenze, und jedes ``delete()`` auf den
+    Kopf am Ziel fasst per ``SET_NULL`` eine Zeile der Quelle an. Keine von
+    Hand gebaute Zeile: Anlegen, Ersetzen, Antrag und Genehmigung laufen
+    durch die Services.
+
+    Ersetzt wird so lange, bis der Kopf die GROESSERE PK hat. Nur dann ist die
+    Folge „erst der Kopf (Vorsperre), dann der Vorgaenger (SET_NULL)"
+    tatsaechlich absteigend — die Ordnungs-Zusage ist sonst nicht messbar,
+    weil PKs UUIDs sind.
+    """
+    from core.services.attachments import apply_attachment_changes
+    from core.services.attachments.crud import replace_upload_key
+    from core.services.client.merge import approve_client_merge, create_or_get_client_merge_request
+
+    doc_type, ft_file, _ft_text = _doc_type(
+        facility, entity_type=DocumentType.EntityType.CLIENT, name="Person Versionsstrang"
+    )
+    quelle = Client.objects.create(
+        facility=facility,
+        pseudonym="Sperr-Sonde Strang Quelle",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        document_type=doc_type,
+        data_json={},
+        created_by=staff_user,
+    )
+    ziel = Client.objects.create(
+        facility=facility,
+        pseudonym="Sperr-Sonde Strang Ziel",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        data_json={},
+        created_by=staff_user,
+    )
+    kopf = _attach(facility, quelle, ft_file, staff_user)
+    vorgaenger = kopf
+    for _versuch in range(versuche):
+        with (
+            patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None),
+            transaction.atomic(),
+        ):
+            apply_attachment_changes(
+                quelle,
+                staff_user,
+                {},
+                {
+                    replace_upload_key(ft_file.slug, kopf.entry_id): SimpleUploadedFile(
+                        "ersatz.pdf", PDF_MINIMAL, content_type="application/pdf"
+                    )
+                },
+                {},
+                doc_type,
+            )
+        quelle.refresh_from_db()
+        vorgaenger, kopf = kopf, quelle.attachments.get(entry_id=kopf.entry_id, is_current=True)
+        if _kennung(vorgaenger.pk) < _kennung(kopf.pk):
+            break
+    else:  # pragma: no cover — bei zufaelligen UUIDs praktisch unerreichbar
+        pytest.skip("kein Versionspaar mit aufsteigender PK-Folge erzeugt")
+
+    antrag, _neu = create_or_get_client_merge_request(quelle, ziel, staff_user, "Dublette")
+    approve_client_merge(antrag, admin_user)
+
+    kopf.refresh_from_db()
+    vorgaenger.refresh_from_db()
+    assert kopf.client_id == ziel.pk, "der Kopf ist nicht ans Ziel gewandert"
+    assert vorgaenger.client_id == quelle.pk, "die Historie ist nicht bei der Quelle geblieben"
+    assert vorgaenger.superseded_by_id == kopf.pk, "der Versionsstrang zeigt nicht ueber die Owner-Grenze"
+    return _Versionsstrang(quelle, ziel, vorgaenger, kopf, ft_file, doc_type)
 
 
 # ------------------------------------------------------- Sequenz-Guards ----
@@ -342,7 +524,7 @@ class TestSequenzReihenfolge:
         attachment = _attach(facility, event, ft_file, staff_user)
         client.force_login(staff_user)
 
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             resp = client.post(
                 reverse("core:event_update", kwargs={"pk": event.pk}),
                 {
@@ -371,7 +553,7 @@ class TestSequenzReihenfolge:
         attachment = _attach(facility, person, ft_file, staff_user)
         client.force_login(staff_user)
 
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             resp = client.post(
                 reverse("core:client_update", kwargs={"pk": person.pk}),
                 {
@@ -403,7 +585,7 @@ class TestSequenzReihenfolge:
         attachment = _attach(facility, case, ft_file, staff_user)
         client.force_login(staff_user)
 
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             resp = client.post(
                 reverse("core:case_update", kwargs={"pk": case.pk}),
                 {
@@ -439,7 +621,7 @@ class TestSequenzReihenfolge:
         attachment = _attach(facility, event, ft_file, admin_user)
         client.force_login(admin_user)
 
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             resp = client.post(reverse("core:attachment_delete", kwargs={"pk": attachment.pk}))
         assert resp.status_code == 302, resp.content
 
@@ -480,7 +662,7 @@ class TestSequenzReihenfolge:
         DocumentTypeField.objects.create(document_type=doc_type, field_template=zweites_feld, sort_order=2)
         _attach(facility, event, zweites_feld, staff_user)
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
             assert discard_type_switch_file_chains(event, staff_user) == 2
 
         vorsperren = [
@@ -517,7 +699,7 @@ class TestSequenzReihenfolge:
         )
         _attach(facility, event, ft_file, staff_user)
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
             delete_attachments_for(event)
 
         lock_at = _ordered_attachment_lock_index(captured)
@@ -525,6 +707,31 @@ class TestSequenzReihenfolge:
         assert lock_at is not None, "keine nach PK geordnete Vorsperre vor dem physischen Cleanup"
         assert delete_at is not None, "kein Attachment-DELETE im Pfad"
         assert lock_at < delete_at, "die Vorsperre gehoert vor das DELETE"
+
+    def test_owner_cleanup_sperrt_die_fremde_vorgaengerzeile_mit(self, staff_user, admin_user, facility):
+        """Cleanup am Ziel eines geteilten Versionsstrangs.
+
+        Die Loeschmenge des Cleanups ist owner-eigen — die Zeilen, die per
+        ``SET_NULL`` MITGESCHRIEBEN werden, sind es nicht. Sie gehoeren
+        trotzdem in dieselbe, nach PK geordnete Vorsperre: sonst ist die
+        erstmals gesperrte Anhangsmenge weder vollstaendig noch aufsteigend.
+        """
+        from core.services.file_vault import delete_attachments_for
+
+        strang = _geteilter_versionsstrang(facility, staff_user, admin_user)
+
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
+            delete_attachments_for(strang.ziel)
+
+        _assert_probe_vollstaendig(captured)
+        vorsperre = _anhang_vorsperre(captured)
+        assert _kennung(strang.kopf.pk) in vorsperre, f"die eigene Loeschmenge fehlt in der Vorsperre: {vorsperre}"
+        assert _kennung(strang.vorgaenger.pk) in vorsperre, (
+            f"die fremde Vorgaengerzeile steht nicht in der Vorsperre: {vorsperre}"
+        )
+        assert vorsperre == sorted(vorsperre), f"die Vorsperre ist nicht aufsteigend: {vorsperre}"
+        erstsperren = _anhang_erstsperren(captured)
+        assert erstsperren == sorted(erstsperren), f"die erstmalige Sperrmenge ist nicht aufsteigend: {erstsperren}"
 
     def test_personen_update_mit_typentfernung_sperrt_die_person_zuerst(self, client, staff_user, facility):
         """Das Entfernen des Dokumentationstyps ist derselbe Schreibpfad.
@@ -548,7 +755,7 @@ class TestSequenzReihenfolge:
         _attach(facility, person, ft_file, staff_user)
         client.force_login(staff_user)
 
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             resp = client.post(
                 reverse("core:client_update", kwargs={"pk": person.pk}),
                 {
@@ -582,7 +789,7 @@ class TestSequenzReihenfolge:
         _attach(facility, case, ft_file, staff_user)
         client.force_login(staff_user)
 
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             resp = client.post(
                 reverse("core:case_update", kwargs={"pk": case.pk}),
                 {
@@ -623,7 +830,7 @@ class TestSequenzReihenfolge:
         erste_version = _attach(facility, event, ft_file, staff_user)
         _ersetze(facility, event, ft_file, staff_user, erste_version)
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
             assert soft_delete_attachment_chain(event, erste_version.entry_id, staff_user) == 2
 
         lock_at = _ordered_attachment_lock_index(captured)
@@ -667,7 +874,7 @@ class TestSequenzReihenfolge:
         event.save(update_fields=["data_json"])
         entfernen = f"{erste.entry_id},{zweite.entry_id}"
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
             apply_attachment_changes(
                 event,
                 staff_user,
@@ -722,7 +929,7 @@ class TestSequenzReihenfolge:
         # kaeme sie nie zum Zug. Dieser Einstieg nimmt den Ketten-Lock selbst
         # und als ersten seiner Transaktion; nur davor laesst sich die
         # Owner-Stufe ueberhaupt legen.
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             _ersetze(facility, person, ft_file, staff_user, vorgaenger)
 
         self._assert_reihenfolge(captured, owner_table="core_client")
@@ -743,7 +950,7 @@ class TestSequenzReihenfolge:
         )
 
         # Ohne aeussere Transaktion, mit echtem COMMIT — siehe Replace-Guard.
-        with CaptureQueriesContext(connection) as captured:
+        with _Sperrmitschnitt() as captured:
             _attach(facility, event, ft_file, staff_user)
 
         _assert_keine_erstsperre_unter_der_kette(captured)
@@ -778,7 +985,7 @@ class TestSequenzReihenfolge:
             created_by=staff_user,
         )
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
             lock_attachment_batch_before_audit(person, staff_user, {}, {}, doc_type, data_json={})
 
         gesperrt = [q["sql"] for q in captured.captured_queries if "FOR UPDATE" in q["sql"].upper()]
@@ -805,7 +1012,7 @@ class TestSequenzReihenfolge:
             created_by=staff_user,
         )
 
-        with transaction.atomic(), CaptureQueriesContext(connection) as captured:
+        with transaction.atomic(), _Sperrmitschnitt() as captured:
             # Der Staging-Schluessel eines Zugangs ist der reine Feld-Slug
             # (Ersetzen benutzt ``replace_upload_key``); der Wert spielt fuer
             # die Sperrmenge keine Rolle.
@@ -1251,12 +1458,17 @@ def test_direkter_batch_in_aeusserer_transaktion_wartet_zuerst_auf_die_personenz
     person.save(update_fields=["data_json"])
 
     def pfad():
-        dateien = {
-            ft_file.slug: [SimpleUploadedFile("zugang.pdf", PDF_MINIMAL, content_type="application/pdf")],
-            replace_upload_key(ft_file.slug, zu_ersetzen.entry_id): [
-                SimpleUploadedFile("ersatz.pdf", PDF_MINIMAL, content_type="application/pdf")
-            ],
+        # REPLACE-Uploads liest ``stage_attachment_uploads`` aus ``request_files``
+        # (Schluessel aus :func:`replace_upload_key`, EINE Datei), ADD-Uploads aus
+        # ``file_fields`` (Schluessel = Slug, Liste). Lagen beide unter
+        # ``file_fields``, staget der REPLACE-Zweig nichts und der Guard fuhr nur
+        # den REMOVE-Pfad.
+        ersetzungen = {
+            replace_upload_key(ft_file.slug, zu_ersetzen.entry_id): SimpleUploadedFile(
+                "ersatz.pdf", PDF_MINIMAL, content_type="application/pdf"
+            )
         }
+        dateien = {ft_file.slug: [SimpleUploadedFile("zugang.pdf", PDF_MINIMAL, content_type="application/pdf")]}
         with (
             patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None),
             transaction.atomic(),
@@ -1265,10 +1477,12 @@ def test_direkter_batch_in_aeusserer_transaktion_wartet_zuerst_auf_die_personenz
                 person,
                 staff_user,
                 {f"{ft_file.slug}__remove": str(zu_loeschen.entry_id)},
-                {},
+                ersetzungen,
                 dateien,
                 doc_type,
             )
+        assert person.attachments.filter(superseded_by__isnull=False).exists(), "der REPLACE-Zweig lief nicht"
+        assert person.attachments.count() == 4, "ADD und REPLACE haben nicht beide eine Zeile angelegt"
         return "fertig"
 
     beobachtung, ergebnis = _beobachte_wartenden_pfad(
@@ -1279,3 +1493,44 @@ def test_direkter_batch_in_aeusserer_transaktion_wartet_zuerst_auf_die_personenz
     )
     assert beobachtung == "blockiert", _ERST_ZEILE_DANN_KETTE.format(beobachtung)
     assert ergebnis.get("wert") == "fertig", f"der direkte Batch ist nicht durchgelaufen: {ergebnis!r}"
+
+
+#: Fehlermeldung der Zusage unten. Die Sonde probt zuerst den Ketten-Lock:
+#: kommt sie mit ``"kette"`` zurueck, hielt der Vernichtungspfad ihn bereits,
+#: waehrend er noch auf die fremde Vorgaengerzeile wartete.
+_ERST_VORGAENGER_DANN_KETTE = (
+    "der Vorgang muss an der fremden Vorgaengerzeile warten, BEVOR er den Ketten-Lock haelt — beobachtet wurde: {}"
+)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_endgueltiges_loeschen_wartet_zuerst_auf_die_fremde_vorgaengerzeile(client, staff_user, admin_user, facility):
+    """Gegenrichtung 3: eine fremde Transaktion haelt die bei der QUELLE
+    verbliebene Vorgaengerzeile und will danach den Ketten-Lock.
+
+    Der Vernichtungspfad am Ziel sperrt nur seine eigene Kette, nimmt dann den
+    Ketten-Lock (Audit steht fachlich VOR dem Purge) und fasst die fremde
+    Vorgaengerzeile erst ueber die ``SET_NULL``-Kaskade des ``delete()`` an —
+    also ERSTMALS unter dem Ketten-Lock. Gegen eine Anonymisierung der
+    Quellperson, die genau diese Zeile haelt und danach ihr Abschluss-Audit
+    schreibt, ist das der Zyklus.
+    """
+    from core.models.attachment import Attachment
+
+    strang = _geteilter_versionsstrang(facility, staff_user, admin_user)
+    client.force_login(admin_user)
+
+    def pfad():
+        return client.post(reverse("core:attachment_delete", kwargs={"pk": strang.kopf.pk}))
+
+    beobachtung, ergebnis = _beobachte_wartenden_pfad(
+        _Gegenrichtung(facility.pk),
+        pfad,
+        haelt=("core_attachment", strang.vorgaenger.pk),
+        kontext="Vernichtungspfad mit geteiltem Versionsstrang",
+    )
+    assert beobachtung == "blockiert", _ERST_VORGAENGER_DANN_KETTE.format(beobachtung)
+    assert ergebnis.get("wert") is not None and ergebnis["wert"].status_code == 302, (
+        f"Vernichtungspfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
+    )
+    assert not Attachment.objects.filter(pk=strang.kopf.pk).exists(), "der Kopf wurde nicht vernichtet"
