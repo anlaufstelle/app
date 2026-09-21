@@ -45,6 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Legal-Hold-Meldung beim Aufheben einer Zusammenführung korrigiert** (#2262) — Die Abweisung benennt jetzt das tatsächlich versuchte Aufheben statt fälschlich das Zusammenführen.
+- **Ablehnung von Löschanträgen prüft das Bestätigungsrecht auch im Service** (#2233) — Direkte Service-Aufrufe können Ereignis-Löschanträge nur noch mit dem Recht „Löschbestätigung“ ablehnen; Rolle, Aufbewahrungssperre und View ändern diese Regel nicht.
 
 ## [0.99.0] - 2026-09-17
 

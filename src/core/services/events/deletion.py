@@ -175,9 +175,16 @@ def reject_deletion(deletion_request, reviewer):
     ``IntegrityError`` ab statt mit der deutschen Meldung, die jeder andere
     Reject-Weg liefert. Der Guard steht deshalb VOR der Sperre — kein
     Statuswechsel, kein Reviewer-Stempel, keine DELETION_REJECTED-Zeile.
+
+    Wie bei :func:`approve_deletion` entscheidet außerdem ausschließlich das
+    einzeln vergebbare Recht ``can_confirm_deletion`` — nicht die Rolle und
+    nicht nur das View-Gate. So bleibt der Service auch für direkte Aufrufer
+    die Quelle der Wahrheit.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
+    if not reviewer.can_confirm_deletion:
+        raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
     # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
     # die Zeile bis zum Commit dieser Transaktion.
     deletion_request = DeletionRequest.objects.select_for_update().get(

@@ -14,7 +14,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, DeletionRequest, Event, User
+from core.models import AuditLog, DeletionRequest, Event, LegalHold, User
 from core.services.events import approve_deletion, reject_deletion, request_deletion
 
 
@@ -79,6 +79,91 @@ class TestRightEnforcement:
         dr = request_deletion(event_qualified, lead_user, "Antrag")
         with pytest.raises(ValidationError, match="Löschbestätigung"):
             approve_deletion(dr, staff_user)
+
+    def test_reject_service_rejects_distinct_reviewer_without_right(self, staff_user, lead_user, event_qualified):
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+
+        with pytest.raises(ValidationError) as exc_info:
+            reject_deletion(dr, staff_user)
+
+        assert exc_info.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert dr.reviewed_by_id is None
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(dr.pk),
+        ).exists()
+
+    @pytest.mark.parametrize("role", list(User.Role.values))
+    @pytest.mark.parametrize("has_right", [False, True], ids=["without-right", "with-right"])
+    def test_reject_permission_depends_on_right_not_role(self, facility, lead_user, event_qualified, role, has_right):
+        reviewer = User.objects.create_user(
+            username=f"reject-{role}-{has_right}",
+            role=role,
+            facility=facility,
+            is_staff=True,
+            can_confirm_deletion=has_right,
+        )
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+
+        if not has_right:
+            with pytest.raises(ValidationError, match="Löschbestätigung"):
+                reject_deletion(dr, reviewer)
+        else:
+            reject_deletion(dr, reviewer)
+
+        dr.refresh_from_db()
+        expected = DeletionRequest.Status.REJECTED if has_right else DeletionRequest.Status.PENDING
+        assert dr.status == expected
+        assert dr.reviewed_by_id == (reviewer.pk if has_right else None)
+
+    def test_authorized_distinct_reviewer_can_reject_under_active_hold(
+        self, facility, lead_user, confirmer_staff, event_qualified
+    ):
+        hold = LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event_qualified.pk,
+            reason="Ermittlungsverfahren",
+            created_by=lead_user,
+        )
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+
+        reject_deletion(dr, confirmer_staff)
+
+        dr.refresh_from_db()
+        hold.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.REJECTED
+        assert dr.reviewed_by_id == confirmer_staff.pk
+        assert hold.dismissed_at is None
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            DeletionRequest.Status.APPROVED,
+            DeletionRequest.Status.REJECTED,
+            DeletionRequest.Status.WITHDRAWN,
+        ],
+    )
+    def test_authorized_distinct_reviewer_cannot_reject_decided_request(
+        self, lead_user, confirmer_staff, event_qualified, status
+    ):
+        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        DeletionRequest.objects.filter(pk=dr.pk).update(
+            status=status,
+            reviewed_by=confirmer_staff if status != DeletionRequest.Status.WITHDRAWN else None,
+            reviewed_at=timezone.now(),
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            reject_deletion(dr, confirmer_staff)
+
+        assert exc_info.value.messages == ["Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."]
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(dr.pk),
+        ).exists()
 
     def test_lead_without_right_gets_403_on_review(self, client, lead_user, staff_user, event_qualified):
         dr = request_deletion(event_qualified, staff_user, "Antrag")

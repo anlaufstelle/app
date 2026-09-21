@@ -498,6 +498,19 @@ class TestRejectDeletionMeldungen:
 
         assert excinfo.value.messages == ["Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."]
 
+    def test_fehlendes_recht_meldung_hat_exakten_wortlaut(
+        self, facility, client_qualified, doc_type_contact, staff_user
+    ):
+        """Pinnt den Rechte-Guard des Reject-Pfads mit seinem vollständigen Wortlaut."""
+        reviewer = _make_user(facility, role=User.Role.STAFF, suffix="reject-ohne-recht")
+        event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
+        dr = request_deletion(event, staff_user, "Antrag")
+
+        with translation.override("de"), pytest.raises(ValidationError) as excinfo:
+            reject_deletion(dr, reviewer)
+
+        assert excinfo.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+
     def test_bereits_bearbeitet_meldung_hat_exakten_wortlaut(
         self, facility, client_qualified, doc_type_contact, staff_user, lead_user
     ):
