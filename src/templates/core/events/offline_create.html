@@ -127,8 +127,9 @@
 
 {% block extra_js %}
 {# Ausgelagert wegen CSP (Refs #618). offline-store.js/offline-edit.js kommen  #}
-{# global aus base.html; offline-form-fields.js muss VOR offline-        #}
-{# create.js laden, das seine reinen Feld-Helfer nutzt. #}
+{# global aus base.html; offline-form-fields.js muss VOR offline-messages.js #}
+{# und dieses VOR offline-create.js laden, das beide Helfer nutzt. #}
 <script src="{% static 'js/offline-form-fields.js' %}"></script>
+<script src="{% static 'js/offline-messages.js' %}"></script>
 <script src="{% static 'js/offline-create.js' %}"></script>
 {% endblock %}

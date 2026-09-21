@@ -155,7 +155,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v47"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v48"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -163,7 +163,9 @@ class TestServiceWorkerCachesOfflineFallback:
             "#1059: Skip-Link und Formularsemantik aendern die Shell → v45; "
             "#2136: Quick-Exit-Knopf, Sichtblende und die neue precachte "
             "quick-exit.js aendern Shell und APP_SHELL → v46; "
-            "#2201: Runtime-Cache-Fehleintraege werden per v47 entfernt)."
+            "#2201: Runtime-Cache-Fehleintraege werden per v47 entfernt; "
+            "#2238: das neue Shell-Modul offline-messages.js wird mit v48 "
+            "atomar precached)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -183,9 +185,10 @@ class TestServiceWorkerCachesOfflineFallback:
     def test_sw_caches_offline_create_shells(self, client):
         """Refs #1523 (#1499): Die pk-losen Create-Shells (Event/WorkItem)
         werden offline IN-PLACE an /events/new/ bzw. /workitems/new/ serviert —
-        Shell-URLs und ihre Renderer (offline-create.js + der reine Feld-Helfer
-        offline-form-fields.js) muessen daher im APP_SHELL pre-cached sein, sonst
-        fehlt der Renderer im Kalt-Offline-Pfad nach einem SW-Update.
+        Shell-URLs und ihre Renderer (offline-create.js + die Helfer
+        offline-form-fields.js/offline-messages.js) muessen daher im APP_SHELL
+        pre-cached sein, sonst fehlt der Renderer im Kalt-Offline-Pfad nach
+        einem SW-Update.
         """
         response = client.get(reverse("service_worker"))
         body = response.content.decode()
@@ -194,6 +197,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert "/offline/workitem-shell/" in body, "WorkItem-Create-Shell fehlt im APP_SHELL."
         assert "/static/js/offline-create.js" in shell_block, "offline-create.js fehlt im APP_SHELL."
         assert "/static/js/offline-form-fields.js" in shell_block, "offline-form-fields.js fehlt im APP_SHELL."
+        assert "/static/js/offline-messages.js" in shell_block, "offline-messages.js fehlt im APP_SHELL."
 
     def test_sw_serves_create_shell_fallback_before_generic_offline(self, client):
         """Refs #1523 (#1499): Offline fallen /events/new/ und
@@ -703,7 +707,9 @@ class TestPrecachedShellBumpGuard:
     # den die Regel oben gilt: erst CACHE_NAME bumpen, dann Hash nachziehen.
     # Refs #2201: v46 -> v47 — die neue Runtime-Cache-Klassifikation verwirft
     # alte Fehlklassifikationen beim Activate.
-    _PINNED_CACHE_NAME = "anlaufstelle-v47"
+    # 2026-09-21, Refs #2238: v47 -> v48 — offline-messages.js erweitert den
+    # APP_SHELL; die neue Generation precacht den Modulverbund atomar.
+    _PINNED_CACHE_NAME = "anlaufstelle-v48"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -766,7 +772,9 @@ class TestPrecachedShellBumpGuard:
     # unveroeffentlichten Lauf (Welle J), steht in keinem Tag und keinem Deploy —
     # kein Geraet im Feld traegt v47, es gibt also keine Split-Brain-Generation,
     # gegen die ein Bump schuetzen wuerde (Praezedenz: #1805, #1828, #2136).
-    _PINNED_SHELL_HASH = "2f558341beb922af2ac9f4469f760bae675375404516b9527b418e3bda61e792"
+    # 2026-09-21, Refs #2238: Der Hash folgt dem v48-Bump und deckt die beiden
+    # neuen Script-Tags sowie offline-messages.js im APP_SHELL gemeinsam ab.
+    _PINNED_SHELL_HASH = "21a2707d85da9708ab90f477ff9053871390a5575fcf8223ed3ee7097472b184"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -1240,6 +1248,20 @@ class TestOfflineShellRendersAppTimeZone:
         assert f'data-testid="{testid}"' in body
         assert 'data-app-timezone="Europe/Berlin"' in body
         assert 'data-app-timezone=""' not in body
+
+    @pytest.mark.parametrize(
+        ("url_name", "consumer"),
+        [
+            ("core:offline_event_shell", "offline-create.js"),
+            ("core:offline_client_shell", "offline-client-view.js"),
+        ],
+    )
+    def test_shell_loads_offline_messages_before_consumer(self, client, url_name, consumer):
+        body = client.get(reverse(url_name)).content.decode()
+        field_helpers = body.index("offline-form-fields.js")
+        messages = body.index("offline-messages.js")
+        consumer_module = body.index(consumer)
+        assert field_helpers < messages < consumer_module
 
 
 @pytest.mark.django_db

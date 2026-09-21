@@ -94,7 +94,9 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Datei (quick-exit.js) und geaendertes Shell-Markup mit.
         # Refs #2201: v47 — die Runtime-Cache-Klassifikation (Origin + Pfad +
         # Content-Type) verwirft alte Falscheintraege ueber die Cache-Generation.
-        assert 'const CACHE_NAME = "anlaufstelle-v47";' in sw
+        # 2026-09-21, Refs #2238: v48 — offline-messages.js erweitert den
+        # APP_SHELL und wird mit dem Modulverbund atomar neu precached.
+        assert 'const CACHE_NAME = "anlaufstelle-v48";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):

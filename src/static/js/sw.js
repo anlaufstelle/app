@@ -160,7 +160,9 @@ importScripts("/static/js/url-patterns.js");
 // die Aktion "Schnell verlassen" waere offline genau dort tot, wo sie
 // gebraucht wird. Der Bump erzwingt Re-Install + Re-Precache.
 // Refs #2201: v46 -> v47, damit Bestandsgeraete die gehaertete Shell laden.
-const CACHE_NAME = "anlaufstelle-v47";
+// 2026-09-21, Refs #2238: v47 -> v48 -- offline-messages.js ist ein neues
+// Shell-Modul; der Bump erneuert die atomare Precache-Generation.
+const CACHE_NAME = "anlaufstelle-v48";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -272,6 +274,7 @@ const APP_SHELL = [
     // Kalt-Offline-Pfad (/events/new/, /workitems/new/) nach einem SW-Update
     // ohne Renderer.
     "/static/js/offline-form-fields.js",
+    "/static/js/offline-messages.js",
     "/static/js/offline-create.js",
     // Refs #1533 (#1499): Die pk-lose Personenlisten-Shell (offline_list.html)
     // rendert ueber offline-client-list.js; das Modul wird NUR vom Listen-Template
