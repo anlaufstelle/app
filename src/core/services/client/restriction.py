@@ -39,6 +39,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Client
 from core.services.audit import audit_client_event
+from core.services.client.locking import lock_clients
 
 #: Ablehnungsgrund fuer inhaltliche Schreibzugriffe auf eine eingeschraenkte
 #: Person. Getrennt von ``CLIENT_WRITE_REVOKED_MESSAGE`` gehalten, weil der
@@ -153,15 +154,47 @@ def assert_processing_allowed(client: Any, *, lock: bool = False) -> None:
         raise ValidationError(PROCESSING_RESTRICTED_MESSAGE)
 
 
+def assert_processing_allowed_for(clients: Any, *, lock: bool = False) -> None:
+    """Dasselbe Gate fuer MEHRERE Personenbezuege EINES Vorgangs (Refs #2268).
+
+    Faellt ein Vorgang auf zwei Personenzeilen (die Fallzuordnung prueft die
+    Person des Falls UND die des Ereignisses), darf er sie nicht nacheinander
+    sperren: zwei Einzelsperren fallen in der fachlichen Reihenfolge des
+    Aufrufers, und zwei Aufrufer mit vertauschten Rollen nehmen dieselben
+    Zeilen ueber Kreuz (Sperrzyklus ``40P01``). Mit ``lock=True`` nimmt
+    :func:`~core.services.client.locking.lock_clients` alle Zeilen in EINER
+    Abfrage in PK-Reihenfolge; die Einschraenkung wird danach auf den bereits
+    gesperrten Zeilen gelesen.
+
+    Die Meldung ist dieselbe wie beim Einzel-Gate und unabhaengig davon,
+    WELCHE der Personen eingeschraenkt ist — sie benennt den Zustand, nicht
+    die Person (Art.-18-Gate, Refs #2045). Ohne Sperre bleibt es beim
+    einzelnen, ungesperrten Lesen je Person.
+    """
+    if _ACTIVE_WORKFLOW.get() is not None:
+        return
+    if lock:
+        restricted = any(row.processing_restricted for row in lock_clients(clients).values())
+    else:
+        restricted = any(_restricted_flag(client) for client in clients)
+    if restricted:
+        raise ValidationError(PROCESSING_RESTRICTED_MESSAGE)
+
+
 def _restricted_flag(client: Any, *, lock: bool = False) -> bool:
-    """Liest die eine Spalte frisch aus der Datenbank (siehe Aufrufer)."""
+    """Liest die eine Spalte frisch aus der Datenbank (siehe Aufrufer).
+
+    ``lock=True`` laeuft ueber den gemeinsamen Personen-Sperrhelfer — auch fuer
+    die EINE Zeile. Eine zweite Sperr-Form neben ihm waere die naechste
+    Reihenfolge, die niemand mit den uebrigen vergleicht; der Preis ist eine
+    vollstaendig gelesene Zeile statt einer Spalte.
+    """
     client_id = getattr(client, "pk", client)
     if client_id is None:
         return False
-    rows = Client.objects.filter(pk=client_id)
     if lock:
-        rows = rows.select_for_update()
-    return bool(rows.values_list("processing_restricted", flat=True).first())
+        return any(row.processing_restricted for row in lock_clients([client_id]).values())
+    return bool(Client.objects.filter(pk=client_id).values_list("processing_restricted", flat=True).first())
 
 
 def is_processing_restricted(client: Any) -> bool:

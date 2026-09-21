@@ -280,14 +280,22 @@ def assign_event_to_case(case, event, user):
     zuordenbar. Ein erneutes Zuordnen desselben Falls ist ein No-Op und
     schreibt keine zweite Zeile.
     """
-    from core.services.client.restriction import assert_processing_allowed
+    from core.services.client.restriction import assert_processing_allowed_for
 
     # Art.-18-Gate (Refs #2045): geprueft werden BEIDE Personenbezuege — der
     # des Falls und der des Ereignisses. Sie koennen auseinanderfallen (etwa
     # ein anonymes Ereignis an einem personenlosen Fall), und eine
     # Einschraenkung auf einer der beiden Seiten verbietet die Zuordnung.
-    assert_processing_allowed(case.client_id, lock=True)
-    assert_processing_allowed(event.client_id, lock=True)
+    #
+    # BEIDE Zeilen in EINER Sperre, PK-geordnet (Refs #2268): die erste
+    # Fassung sperrte erst die Fallperson, dann die Ereignisperson — also in
+    # der fachlichen statt in der PK-Reihenfolge. Fuer zwei Personen A < B
+    # hielt Fall(B)/Ereignis(A) damit B und verlangte A, waehrend ein
+    # gleichzeitiges Zusammenfuehren A->B A hielt und B verlangte: ein
+    # Sperrzyklus, den PostgreSQL mit ``40P01`` aufloest. Die fachlichen
+    # Pruefungen — Einrichtung, Sichtbarkeit, „unterschiedliche Personen" —
+    # folgen unveraendert NACH dem Sperren.
+    assert_processing_allowed_for([case.client_id, event.client_id], lock=True)
     if event.facility_id != case.facility_id:
         raise ValueError(_("Ereignis gehört nicht zur selben Einrichtung wie der Fall."))
     if user is not None and not user_can_see_event(user, event):

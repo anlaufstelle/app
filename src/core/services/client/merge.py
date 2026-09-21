@@ -96,6 +96,7 @@ from core.models import Activity, Attachment, AuditLog, Case, Client, DocumentTy
 from core.models.workitem import DeletionRequest, WorkItem
 from core.retention.legal_holds import client_has_active_hold
 from core.services.audit import audit_client_event, audit_event
+from core.services.client.locking import lock_clients
 from core.services.client.main import get_pending_deletion_request, update_client_stage
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
@@ -363,10 +364,14 @@ def _locked_clients(source, target):
     # Vorgang ab, statt Daten zu verarbeiten. Sie zu blockieren liesse einen
     # offenen Antrag an einer eingeschraenkten Person unaufloesbar haengen.
 
-    # ``order_by("pk")`` ist Pflicht, nicht Kosmetik (Cross-Review-Runde 2):
-    # ohne deterministische Reihenfolge koennen zwei gleichzeitige Merges mit
+    # Die PK-Ordnung ist Pflicht, nicht Kosmetik (Cross-Review-Runde 2): ohne
+    # deterministische Reihenfolge koennen zwei gleichzeitige Merges mit
     # vertauschtem Quell-/Zielpaar dieselben zwei Zeilen ueber Kreuz sperren.
-    locked = {c.pk: c for c in Client.objects.select_for_update().filter(pk__in=[source.pk, target.pk]).order_by("pk")}
+    # Sie liegt seit Refs #2268 im gemeinsamen Personen-Sperrhelfer — dieselbe
+    # Ordnung, die auch Fallzuordnung und Art.-18-Gate nehmen. Bewusst OHNE
+    # Einrichtungs-Scope: die Einrichtungsgrenze zieht :func:`_validate_merge`
+    # mit eigener Meldung, ein Scope hier machte daraus ein „nicht gefunden".
+    locked = lock_clients([source.pk, target.pk])
     for client in locked.values():
         # Auf der bereits gesperrten, frisch gelesenen Zeile — kein zweiter
         # Lock noetig.

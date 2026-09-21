@@ -168,20 +168,21 @@ class TestCaseServicesTakeTheClientRowLock:
     def test_assign_event_to_case_sperrt_beide_personenzeilen(
         self, facility, staff_user, client_identified, doc_type_contact, case_open
     ):
-        """Pin: ``x_assign_event_to_case__mutmut_1`` (Fall-Person -> ``None``),
-        ``…__mutmut_2``/``…__mutmut_4``/``…__mutmut_5`` (Fall-Sperre entwertet),
-        ``…__mutmut_6`` (Ereignis-Person -> ``None``) und
-        ``…__mutmut_7``/``…__mutmut_9``/``…__mutmut_10`` (Ereignis-Sperre
-        entwertet).
+        """Pin: ``x_assign_event_to_case__mutmut_*`` — ein Personenbezug faellt
+        aus der Sperrmenge (``case.client_id``/``event.client_id`` -> ``None``)
+        oder die Sperre wird entwertet (``lock=None``/``lock=False``/Kwarg
+        weggelassen).
 
         Der Docstring zieht die Linie ausdruecklich: geprueft werden BEIDE
-        Personenbezuege. Damit die beiden Sperren unterscheidbar bleiben,
-        laeuft der Pin ueber das Personen-Mismatch (Fall-Person != Ereignis-
-        Person) — beide Gates laufen VOR dem Mismatch-Guard.
+        Personenbezuege. Damit beide Bezuege unterscheidbar bleiben, laeuft der
+        Pin ueber das Personen-Mismatch (Fall-Person != Ereignis-Person) — das
+        Gate laeuft VOR dem Mismatch-Guard.
 
-        Abweichung beim Mutanten: statt zwei Sperr-Anweisungen (erst die
-        Fall-Person, dann die Ereignis-Person) steht nur noch eine im
-        Mitschnitt.
+        Seit der PK-Sperrfolge (Refs #2268) fallen beide Sperren in EINER
+        Anweisung: die Fall- und die Ereignisperson nacheinander zu sperren
+        oeffnete ein Fenster fuer einen Sperrzyklus. Abweichung beim Mutanten:
+        im Mitschnitt fehlt eine der beiden PKs — oder die Sperr-Anweisung
+        ganz.
         """
         fremde_person = Client.objects.create(
             facility=facility,
@@ -202,9 +203,9 @@ class TestCaseServicesTakeTheClientRowLock:
                 assign_event_to_case(case_open, event, staff_user)
 
         locks = _locking_statements(captured, "core_client")
-        assert len(locks) == 2, f"erwartet GENAU zwei Client-Sperren, war: {locks}"
+        assert len(locks) == 1, f"erwartet GENAU eine gemeinsame Client-Sperre, war: {locks}"
         assert _pk_literal(client_identified) in locks[0], locks[0]
-        assert _pk_literal(fremde_person) in locks[1], locks[1]
+        assert _pk_literal(fremde_person) in locks[0], locks[0]
 
     def test_remove_event_from_case_sperrt_die_personenzeile(self, staff_user, client_identified, case_event):
         """Pin: ``x_remove_event_from_case__mutmut_2`` (``lock=None``),

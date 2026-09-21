@@ -918,9 +918,10 @@ class TestTenantModelScopeGuard:
             "``select_for_update()``-Reload per ``client_pk`` aus der zuvor ermittelten "
             "Kandidatenmenge der K-Anon-Bridge (Cron-Pfad, kein Request-Input)."
         ),
-        "client/merge.py:_locked_clients:Client": (
-            "Sperrt genau die beiden bereits aufgeloesten Merge-Partner (``source``/"
-            "``target``) in PK-Reihenfolge — Deadlock-Vermeidung, kein neuer Lookup."
+        "client/locking.py:lock_clients:Client": (
+            "Gemeinsamer Personen-Sperrhelfer (Refs #2268): sperrt genau die bereits "
+            "aufgeloesten PKs der Aufruferin in PK-Reihenfolge — Deadlock-Vermeidung, "
+            "kein neuer Lookup. Loest ``client/merge.py:_locked_clients:Client`` ab."
         ),
         "client/restriction.py:_restricted_flag:Client": (
             "Liest die eine Art.-18-Spalte frisch zur uebergebenen Personen-PK/-Instanz; "
