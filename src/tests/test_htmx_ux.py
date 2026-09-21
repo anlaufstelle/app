@@ -6,6 +6,8 @@ Laufzeitverhalten selbst (Toast bei 4xx/5xx, Spinner-Sichtbarkeit, geblockter
 2. Submit) ist client-seitig und wird in den E2E-Tests abgedeckt (manuell-first).
 """
 
+import json
+import re
 from pathlib import Path
 
 import pytest
@@ -22,6 +24,27 @@ class TestHtmxErrorHandlerWiring:
         client.force_login(staff_user)
         content = client.get(reverse("core:client_list")).content.decode()
         assert "js/htmx-errors.js" in content
+
+    def test_base_swaps_regular_4xx_without_overriding_the_local_target(self, client, staff_user):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_list")).content.decode()
+        match = re.search(r'<meta name="htmx-config" content=\'(?P<config>[^\']+)\'>', content)
+
+        assert match is not None
+        handling = json.loads(match.group("config"))["responseHandling"]
+        regular_4xx = next(rule for rule in handling if rule["code"] == "4..")
+        assert regular_4xx == {"code": "4..", "swap": True, "error": True}
+
+    @pytest.mark.parametrize("status", ["401", "403", "422", "429"])
+    def test_base_keeps_special_4xx_out_of_the_global_swap(self, client, staff_user, status):
+        client.force_login(staff_user)
+        content = client.get(reverse("core:client_list")).content.decode()
+        match = re.search(r'<meta name="htmx-config" content=\'(?P<config>[^\']+)\'>', content)
+
+        assert match is not None
+        handling = json.loads(match.group("config"))["responseHandling"]
+        first_match = next(rule for rule in handling if re.fullmatch(rule["code"], status))
+        assert first_match == {"code": status, "swap": False, "error": True}
 
 
 @pytest.mark.django_db

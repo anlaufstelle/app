@@ -24,6 +24,36 @@
     // ausgeliefert und kennt die Sprache des Nutzers nicht.
     var RATE_LIMITED = "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen.";
     var AUTO_DISMISS_MS = 6000;
+    // Refs #2232: Ein geswapptes 4xx-Partial enthaelt seine sichtbare
+    // Fehlermeldung bereits im fachlichen Ziel. htmx feuert wegen ``error:true``
+    // danach trotzdem responseError (wichtig fuer lokale Listener wie den
+    // Reorder-Reload). Nur DIESER globale Toast darf dann nicht zusaetzlich
+    // erscheinen. WeakSet bindet den Marker an genau die eine XHR-Instanz.
+    var swappedErrorResponses = new WeakSet();
+
+    function _swapStyleIsNone(detail) {
+        if (detail.swapOverride === "none") {
+            return true;
+        }
+        var elt = detail.requestConfig && detail.requestConfig.elt;
+        while (elt && elt.getAttribute) {
+            var value = elt.getAttribute("hx-swap") || elt.getAttribute("data-hx-swap");
+            if (value) {
+                return value.trim().split(/\s+/)[0] === "none";
+            }
+            elt = elt.parentElement;
+        }
+        return false;
+    }
+
+    document.body.addEventListener("htmx:beforeSwap", function (event) {
+        var detail = event && event.detail ? event.detail : {};
+        var xhr = detail.xhr;
+        var status = xhr && typeof xhr.status === "number" ? xhr.status : 0;
+        if (status >= 400 && status < 500 && detail.shouldSwap === true && !_swapStyleIsNone(detail)) {
+            swappedErrorResponses.add(xhr);
+        }
+    });
 
     /**
      * Wählt die Toast-Meldung. Kurze Klartext-Bodies (z.B. die 400er aus
@@ -169,6 +199,10 @@
     // Worker + Offline-Banner separat — daher hier bewusst nur responseError.)
     document.body.addEventListener("htmx:responseError", function (event) {
         var xhr = event && event.detail ? event.detail.xhr : null;
+        if (xhr && swappedErrorResponses.has(xhr)) {
+            swappedErrorResponses.delete(xhr);
+            return;
+        }
         if (_isFacilityArchived(xhr)) {
             _handleArchivedFacility();
             return;

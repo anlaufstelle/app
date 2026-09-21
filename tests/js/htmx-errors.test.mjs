@@ -64,4 +64,36 @@ describe("htmx-errors: bestehendes Verhalten bleibt", () => {
             GENERIC
         );
     });
+
+    it("zeigt keinen zusaetzlichen Toast fuer eine sichtbar eingewechselte 4xx-Antwort", () => {
+        const xhr = { status: 400, responseText: "Validierungsfehler" };
+        const target = document.createElement("div");
+        const detail = { xhr, target, shouldSwap: true, swapOverride: "outerHTML" };
+        let localHandlerCalls = 0;
+        const localHandler = () => {
+            localHandlerCalls += 1;
+        };
+        document.body.addEventListener("htmx:responseError", localHandler);
+
+        document.body.dispatchEvent(new CustomEvent("htmx:beforeSwap", { detail }));
+        document.body.dispatchEvent(new CustomEvent("htmx:responseError", { detail: { xhr } }));
+        document.body.removeEventListener("htmx:responseError", localHandler);
+
+        expect(document.getElementById("htmx-error-toast")).toBeNull();
+        expect(detail.target).toBe(target);
+        expect(localHandlerCalls).toBe(1);
+    });
+
+    it("behaelt den Fehler-Toast wenn hx-swap none keinen Inhalt sichtbar macht", () => {
+        const xhr = { status: 404, responseText: "" };
+
+        document.body.dispatchEvent(
+            new CustomEvent("htmx:beforeSwap", {
+                detail: { xhr, shouldSwap: true, swapOverride: "none" },
+            })
+        );
+        document.body.dispatchEvent(new CustomEvent("htmx:responseError", { detail: { xhr } }));
+
+        expect(document.getElementById("htmx-error-toast")).not.toBeNull();
+    });
 });

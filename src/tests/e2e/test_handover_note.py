@@ -59,6 +59,30 @@ def _speichern(page, block_testid, text):
     expect(page.locator(f"[data-testid='{block_testid}'] textarea")).to_have_value(text)
 
 
+class TestHandoverHtmxErrorSwap:
+    def test_real_400_response_replaces_the_handover_partial(self, authenticated_page, base_url, eine_laufende_schicht):
+        """Ein echter 400er zeigt seinen Partial-Fehler im bestehenden HTMX-Ziel."""
+        page = authenticated_page
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
+        form = page.locator("[data-testid='handover-note-current'] form")
+        expect(form).to_be_visible()
+        old_container = page.locator("#handover-note").element_handle()
+        form.locator("input[name='time_filter']").evaluate("element => element.value = 'not-a-uuid'")
+
+        with page.expect_response(
+            lambda response: (
+                "/uebergabe/notiz/" in response.url and response.request.method == "POST" and response.status == 400
+            )
+        ):
+            form.locator("button[type='submit']").click()
+
+        page.wait_for_function("node => !node.isConnected", arg=old_container, timeout=15000)
+        expect(page.locator("#handover-note [role='alert']")).to_contain_text(
+            "Die Schicht konnte nicht bestimmt werden"
+        )
+        expect(page.locator("[data-testid='htmx-error-toast']")).to_have_count(0)
+
+
 @pytest.fixture
 def leere_notizen(e2e_env):
     """Definierter Ausgangsstand: keine Notizen, Dienstplan wie geseedet.

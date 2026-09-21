@@ -25,8 +25,16 @@
     liefern von Alpine ``x-show`` materialisierte ``style``-Attribute. Der
     Kopierschritt war unter der CSP ohnehin wirkungslos; Alpine setzt seinen
     Sichtbarkeits-Zustand nach dem Swap selbst.
+
+    ``responseHandling`` (Refs #2232): regulaere 4xx-Antworten sind fachliche
+    HTMX-Partials und werden in das bereits vom ausloesenden Element bestimmte
+    Ziel eingewechselt. Die expliziten Regeln muessen vor ``4..`` stehen:
+    401/Login, 403/CSRF, 422/Offline-Formularvertrag und 429/Rate-Limit bleiben
+    Fehler ohne Swap. 5xx behaelt ebenfalls die htmx-Vorgabe ohne Swap. Kein
+    ``target`` in dieser Tabelle: lokale ``hx-target``-Werte und Listener
+    bleiben massgeblich.
     {% endcomment %}
-    <meta name="htmx-config" content='{"includeIndicatorStyles": false, "attributesToSettle": ["class", "width", "height"]}'>
+    <meta name="htmx-config" content='{"includeIndicatorStyles": false, "attributesToSettle": ["class", "width", "height"], "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "401", "swap": false, "error": true}, {"code": "403", "swap": false, "error": true}, {"code": "422", "swap": false, "error": true}, {"code": "429", "swap": false, "error": true}, {"code": "4..", "swap": true, "error": true}, {"code": "5..", "swap": false, "error": true}]}'>
     <script src="{% static 'js/htmx.min.js' %}" defer></script>
     {% comment %}
     Alpine-Komponenten MUESSEN vor alpine-csp.min.js geladen werden, damit
