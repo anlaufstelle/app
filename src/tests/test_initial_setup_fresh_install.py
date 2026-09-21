@@ -278,6 +278,19 @@ def test_deploy_failure_keeps_diagnosis_and_stops_followup_steps(tmp_path: Path)
     assert "Erstinbetriebnahme abgeschlossen" not in result.stdout
 
 
+def test_operator_hints_print_repo_paths_without_dot_prefix() -> None:
+    body = SCRIPT.read_text(encoding="utf-8")
+    hints = [
+        line.strip()
+        for line in body.splitlines()
+        if line.strip().startswith(("Andere Datei waehlen:", "Laengere Wartezeit:"))
+    ]
+
+    assert len(hints) == 3
+    assert all(hint.endswith(' scripts/initial-setup.sh"') for hint in hints)
+    assert all(" ./scripts/initial-setup.sh" not in hint for hint in hints)
+
+
 def test_backup_cron_rejects_a_missing_target(tmp_path: Path) -> None:
     result, _, _ = _run_setup(tmp_path, crontab="0 2 * * * /definitely-missing/scripts/ops/backup.sh")
     assert result.returncode == 0, result.stderr

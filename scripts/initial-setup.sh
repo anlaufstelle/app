@@ -137,14 +137,14 @@ docker compose version >/dev/null 2>&1 ||
 [[ -f "$COMPOSE_FILE" ]] ||
     fail "Compose-Datei nicht gefunden: ${COMPOSE_FILE}
   Erwartet im Repo-Root — liegt initial-setup.sh unter <repo>/scripts/?
-  Andere Datei waehlen: COMPOSE_FILE=docker-compose.staging.yml ENV_FILE=.env.staging ./scripts/initial-setup.sh"
+  Andere Datei waehlen: COMPOSE_FILE=docker-compose.staging.yml ENV_FILE=.env.staging scripts/initial-setup.sh"
 [[ -f "$ENV_FILE" ]] ||
     fail "Env-Datei nicht gefunden: ${ENV_FILE}
   Zuerst die passende Vorlage kopieren und ausfuellen (.env.example fuer prod,
   .env.staging.example fuer den Staging-Stack) — insbesondere DJANGO_SECRET_KEY,
   ENCRYPTION_KEY sowie das Drei-Rollen-Modell (POSTGRES_BOOTSTRAP_PASSWORD,
   POSTGRES_ADMIN_USER, POSTGRES_ADMIN_PASSWORD). Siehe docs/admin-guide.md § 1.
-  Andere Datei waehlen: ENV_FILE=.env.staging ./scripts/initial-setup.sh"
+  Andere Datei waehlen: ENV_FILE=.env.staging scripts/initial-setup.sh"
 
 # Refs #2086: Stacks, die den Health-Token an caddy durchreichen (heute:
 # staging), brauchen ihn NICHT-LEER. Caddy ersetzt `{$DJANGO_HEALTH_DETAIL_TOKEN}`
@@ -306,7 +306,7 @@ wait_for_service() {
         if ((waited >= WAIT_TIMEOUT)); then
             fail "Timeout (${WAIT_TIMEOUT}s): Service '${service}' wurde nicht bereit.
   Logs ansehen: docker compose -f ${COMPOSE_FILE} --env-file ${ENV_FILE} logs ${service}
-  Laengere Wartezeit: WAIT_TIMEOUT=600 ./scripts/initial-setup.sh"
+  Laengere Wartezeit: WAIT_TIMEOUT=600 scripts/initial-setup.sh"
         fi
         sleep 3
         waited=$((waited + 3))

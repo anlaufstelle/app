@@ -364,7 +364,7 @@ Erwartete (anonyme) Antwort — seit #1375 enthält sie **nur** das `status`-Fel
 {"status": "ok"}
 ```
 
-**Direkt nach der Installation normal:** Die MFA-Quote im Compliance-Dashboard bleibt kritisch, bis alle MFA-pflichtigen Konten ihren zweiten Faktor eingerichtet haben. Noch nie gelaufene Hintergrundjobs erscheinen zunächst als `unknown`: View-Refresh und Breach-Scan laufen erstmals zur nächsten Viertel- beziehungsweise halben Stunde, Retention/Audit-Prüfung/Orphan-Cleanup täglich ab 03:00 Uhr und Statistik-Snapshots am nächsten Monatsersten um 04:00 Uhr. Bleibt ein Zustand über seinen ersten planmäßigen Lauf hinaus bestehen, prüfen Sie `docker compose -f docker-compose.prod.yml logs cron`. Ein veralteter ClamAV-Signaturstand ist dagegen kein normaler Anlaufzustand.
+**Direkt nach der Installation normal:** Die MFA-Quote im Compliance-Dashboard bleibt kritisch, bis alle MFA-pflichtigen Konten ihren zweiten Faktor eingerichtet haben. Die Anzeige „Kritische Audit-Events (24h)“ kann nach einer frischen Ersteinrichtung ebenfalls warnen, weil die Ersteinrichtung selbst kritische Audit-Events erzeugt. Noch nie gelaufene Hintergrundjobs erscheinen zunächst als `unknown`: View-Refresh und Breach-Scan laufen erstmals zur nächsten Viertel- beziehungsweise halben Stunde, Retention/Audit-Prüfung/Orphan-Cleanup täglich ab 03:00 Uhr und Statistik-Snapshots am nächsten Monatsersten um 04:00 Uhr. Bleibt ein Zustand über seinen ersten planmäßigen Lauf hinaus bestehen, prüfen Sie `docker compose -f docker-compose.prod.yml logs cron`. Ein veralteter ClamAV-Signaturstand ist dagegen kein normaler Anlaufzustand.
 
 ---
 

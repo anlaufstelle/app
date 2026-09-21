@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-21: the fresh-install health-check note explains that “Critical audit events (24h)” can warn normally because initial setup itself creates critical audit events (#2247).
 > Synchronization update 2026-09-18: § 5.6 states that the server log file now carries the same lines with masked URL paths -- query part dropped, route schema or token segments removed, the account as `user_pk` instead of the login name, in both output formats and in framework lines -- while the client IP of a CSP report stays readable (#2228).
 > Synchronization update 2026-09-21: the ClamAV troubleshooting section explains that an unknown signature age remains `unknown` during startup and that the dashboard shows the freshclam log command as its action hint (#2246).
 > Synchronization update 2026-09-21: § 2.9 storage quotas -- the paragraph on what happens when the quota is reached now states that the second check under the facility lock applies to file attachments and CSV import files alike (#2259).
@@ -384,7 +385,7 @@ Expected (anonymous) response -- since #1375 it contains **only** the `status` f
 {"status": "ok"}
 ```
 
-**Normal immediately after installation:** The MFA quota in the compliance dashboard remains critical until every MFA-mandatory account has enrolled its second factor. Background jobs that have never run initially appear as `unknown`: view refresh and breach scan first run at the next quarter-hour and half-hour, retention/audit verification/orphan cleanup daily from 03:00, and statistics snapshots at 04:00 on the next first day of a month. If a state remains past its first scheduled run, inspect `docker compose -f docker-compose.prod.yml logs cron`. An outdated ClamAV signature set is not a normal startup state.
+**Normal immediately after installation:** The MFA quota in the compliance dashboard remains critical until every MFA-mandatory account has enrolled its second factor. “Critical audit events (24h)” can also show a warning after a fresh initial setup because the setup itself creates critical audit events. Background jobs that have never run initially appear as `unknown`: view refresh and breach scan first run at the next quarter-hour and half-hour, retention/audit verification/orphan cleanup daily from 03:00, and statistics snapshots at 04:00 on the next first day of a month. If a state remains past its first scheduled run, inspect `docker compose -f docker-compose.prod.yml logs cron`. An outdated ClamAV signature set is not a normal startup state.
 
 ---
 
@@ -2222,4 +2223,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- source-hash: b43e8f3bd0045d56c5dac90618a7cf0bd7c2102a -->
+<!-- source-hash: 6dbbde11639daa38a7832c6cc6931cb5e9fd85a6 -->

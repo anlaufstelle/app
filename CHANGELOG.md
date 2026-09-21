@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Fresh-Install-Ausgaben und Vorlagen vereinheitlicht** (#2247) — Pfadhinweise erscheinen ohne `./`, die normale Audit-Warnung nach der Ersteinrichtung ist erklärt, WeasyPrint protokolliert erst ab `WARNING` und `ALLOWED_HOSTS` ist in der Env-Vorlage quotiert.
 - **Offline-Hinweise bleiben bei einzelnen unbekannten Serverfeldern sichtbar** (#2238) — Die Konfliktliste blendet sichere Feldfehler nicht mehr vollständig aus, wenn ein einzelnes Feld oder ein Fehlercode unerwartet geformt ist; zugleich verwenden beide Offline-Erfassungsmasken denselben zentral gepflegten Hinweis für die doppelte Stunde der Zeitumstellung.
 - **Fachliche HTMX-Fehler erscheinen im vorgesehenen Formularbereich** (#2232) — Reguläre 4xx-Antworten wie eine ungültige Übergabenotiz wechseln ihren Fehlerinhalt jetzt in das lokale HTMX-Ziel ein, während Login-, CSRF-, Offline-Formular- und Rate-Limit-Fehler ihre bisherigen Sonderpfade behalten.
 - **Übergabenotizen erscheinen live bei anderen angemeldeten Personen** (#2229) — Der Übergabeblock übernimmt neue und geänderte Schichtnotizen über den bestehenden Zeitstrom-Watch ohne Seiten-Reload; ein fokussierter oder bereits veränderter eigener Entwurf wird dabei nie überschrieben.

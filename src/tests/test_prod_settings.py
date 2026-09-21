@@ -15,12 +15,34 @@ import sys
 from pathlib import Path
 
 import pytest
+from django.conf import settings
 from django.http import HttpResponse
 from django.middleware.security import SecurityMiddleware
 from django.test import RequestFactory, override_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
+
+
+def test_weasyprint_logger_suppresses_info_output() -> None:
+    logger = settings.LOGGING["loggers"]["weasyprint"]
+
+    assert logger == {
+        "handlers": ["console"],
+        "level": "WARNING",
+        "propagate": False,
+    }
+
+
+@pytest.mark.architecture
+def test_env_example_quotes_allowed_hosts() -> None:
+    line = next(
+        line
+        for line in (REPO_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+        if line.startswith("ALLOWED_HOSTS=")
+    )
+
+    assert line == "ALLOWED_HOSTS='anlaufstelle.app,www.anlaufstelle.app,localhost,127.0.0.1'"
 
 
 def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # noqa"):
@@ -618,7 +640,10 @@ def _active_env_assignments(path: Path) -> dict[str, str]:
         if not zeile or zeile.startswith("#") or "=" not in zeile:
             continue
         key, _, value = zeile.partition("=")
-        werte[key.strip()] = value.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        werte[key.strip()] = value
     return werte
 
 

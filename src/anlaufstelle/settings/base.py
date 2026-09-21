@@ -607,6 +607,11 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        "weasyprint": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
     },
 }
 
