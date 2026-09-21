@@ -23,13 +23,13 @@ Survivor-Mutanten; 50 sind Testlücken (``test``) und 5 ``equivalent``. Keine ``
   Zweige getestet werden muss.
 
 * **Scope-Filter-Verlust bei ``select_for_update()`` (fünf Mutanten, Prio 1).**
-  ``x_anonymize_client_now__mutmut_4`` und ``x_reject_client_deletion__mutmut_9`` entfernen den
+  ``x_anonymize_client_now__mutmut_4`` und ``x_reject_client_deletion__mutmut_14`` entfernen den
   ``pk``-Teil eines ``.filter(pk=..., facility=...)``/``.get(pk=..., facility=...)`` — ohne ihn
   matcht die Abfrage JEDE Zeile der Einrichtung (kein ``ORDER BY``, siehe Regel „eine beobachtete
   Zeilenreihenfolge ist kein Äquivalenzbeweis"): ``anonymize_client_now`` würde eine ANDERE Person
   anonymisieren, ``reject_client_deletion`` wirft bei einem zweiten offenen Antrag
   ``MultipleObjectsReturned``. Die spiegelbildlichen ``facility``-Filter-Verlust-Mutanten
-  (``x_anonymize_client_now__mutmut_5``, ``x_reject_client_deletion__mutmut_10``,
+  (``x_anonymize_client_now__mutmut_5``, ``x_reject_client_deletion__mutmut_15``,
   ``x_create_or_get_client_deletion_request__mutmut_5``) sind KEINE Äquivalente, sondern derselbe
   Mandanten-Scope-Verlust am anderen Filterteil: der ``facility``-Filter beim gesperrten Reload ist
   die App-seitige Mandantengrenze (RLS wird in der Testsuite nicht durchgesetzt) und schützt gegen
@@ -45,7 +45,7 @@ Survivor-Mutanten; 50 sind Testlücken (``test``) und 5 ``equivalent``. Keine ``
   ``audit_client_event``/``log_activity`` — der Nachweis, WER restauriert/angelegt hat, geht
   verloren. Drei Varianten von ``anonymize_client_now`` verlieren/verfälschen das
   ``deleted_at``-Feld im ``AuditLog.detail`` (Beginn der Aufbewahrungsfrist).
-  ``reject_client_deletion_mutmut_25`` setzt ``reviewed_at`` auf ``None`` statt des
+  ``reject_client_deletion_mutmut_30`` setzt ``reviewed_at`` auf ``None`` statt des
   Ablehnungszeitpunkts.
 
 * **``anonymize_client``-Innenaufruf-Log (zwei Mutanten, Prio 2).**
@@ -298,10 +298,11 @@ class TestRejectClientDeletionMessages:
     """Pins die Guard-Meldungen, den ``pk``/``facility``-Scope und ``reviewed_at`` von
     ``reject_client_deletion``.
 
-    ``x_reject_client_deletion__mutmut_2/3/4/5`` (Vier-Augen-Guard),
-    ``…mutmut_9`` (pk-Scope-Verlust), ``…mutmut_10`` (facility-Scope-Verlust),
-    ``…mutmut_12/13/14/15/16`` (Merge-Antrag-Guard),
-    ``…mutmut_20/21`` (PENDING-Recheck-Guard), ``…mutmut_25`` (reviewed_at verloren).
+    ``x_reject_client_deletion__mutmut_2/3/4/5`` (Antragsteller-Guard),
+    ``…mutmut_7/8/9/10`` (Bestätigungsrecht-Guard),
+    ``…mutmut_14`` (pk-Scope-Verlust), ``…mutmut_15`` (facility-Scope-Verlust),
+    ``…mutmut_17/18/19/20/21`` (Merge-Antrag-Guard),
+    ``…mutmut_25/26`` (PENDING-Recheck-Guard), ``…mutmut_30`` (reviewed_at verloren).
     """
 
     def test_self_review_refused_with_exact_message(self, facility, staff_user):
@@ -313,10 +314,21 @@ class TestRejectClientDeletionMessages:
 
         assert exc_info.value.messages == ["Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."]
 
+    def test_reviewer_without_confirmation_right_refused_with_exact_message(self, facility, staff_user, assistant_user):
+        """Pins ``x_reject_client_deletion__mutmut_7/8/9/10``: Verlust und
+        Verfälschungen der Meldung des Bestätigungsrecht-Guards."""
+        client = Client.objects.create(facility=facility, pseudonym="P-Kein-Recht")
+        dr, _created = create_or_get_client_deletion_request(client, staff_user, "Grund")
+
+        with pytest.raises(ValidationError) as exc_info:
+            reject_client_deletion(dr, assistant_user)
+
+        assert exc_info.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+
     def test_pk_scope_filter_prevents_a_different_pending_request_from_being_touched(
         self, facility, staff_user, lead_user
     ):
-        """Pins ``x_reject_client_deletion__mutmut_9`` (pk-Filter aus dem gesperrten Re-Fetch
+        """Pins ``x_reject_client_deletion__mutmut_14`` (pk-Filter aus dem gesperrten Re-Fetch
         entfernt): bei einem ZWEITEN offenen Antrag derselben Einrichtung darf nur der
         adressierte Antrag betroffen sein — ohne pk-Filter matcht ``.get(facility=...)`` beide
         Zeilen und wirft ``MultipleObjectsReturned``.
@@ -336,7 +348,7 @@ class TestRejectClientDeletionMessages:
     def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
         self, facility, second_facility, staff_user, lead_user
     ):
-        """Pin: ``x_reject_client_deletion__mutmut_10`` — ``select_for_update().get(pk=
+        """Pin: ``x_reject_client_deletion__mutmut_15`` — ``select_for_update().get(pk=
         deletion_request.pk, facility=deletion_request.facility)`` -> ``get(pk=
         deletion_request.pk, )`` (facility-Filter entfernt). Gleiches Muster wie
         ``x_approve_client_deletion__mutmut_15`` (Batch ``main-a``):

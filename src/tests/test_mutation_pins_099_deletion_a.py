@@ -320,10 +320,24 @@ class TestRejectCaseDeletionGuardMessage:
 
         assert exc.value.messages == ["Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."]
 
+    def test_reviewer_ohne_recht_meldet_den_richtigen_text(
+        self, facility, client_qualified, staff_user, assistant_user
+    ):
+        """Pins ``x_reject_case_deletion__mutmut_8``/``_9`` und tötet
+        ``_10``/``_11``/``_12``: Verlust und Verfälschungen der Meldung des
+        Bestätigungsrecht-Guards."""
+        case = _case(facility, client_qualified, staff_user, title="Kein Ablehnungsrecht")
+        dr = _dr(facility, case, staff_user, reason="Ohne Recht")
+
+        with pytest.raises(ValidationError) as exc:
+            reject_case_deletion(dr, assistant_user)
+
+        assert exc.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+
 
 class TestRejectCaseDeletionLookupZieltreue:
     def test_reject_stempelt_genau_den_uebergebenen_antrag(self, facility, client_qualified, staff_user, lead_user):
-        """Pins ``x_reject_case_deletion__mutmut_10``: ohne ``pk`` im Sperr-
+        """Pins ``x_reject_case_deletion__mutmut_16``: ohne ``pk`` im Sperr-
         Lookup wird irgendein Antrag der Einrichtung abgelehnt — bei zwei
         offenen Antraegen fliegt ``MultipleObjectsReturned``."""
         case_a = _case(facility, client_qualified, staff_user, title="Bleibt offen")
@@ -342,7 +356,7 @@ class TestRejectCaseDeletionLookupZieltreue:
     def test_reject_lookup_bleibt_an_die_antrags_einrichtung_gebunden(
         self, facility, other_facility, client_qualified, staff_user, lead_user
     ):
-        """Pins ``x_reject_case_deletion__mutmut_11``: faellt ``facility`` im
+        """Pins ``x_reject_case_deletion__mutmut_17``: faellt ``facility`` im
         Sperr-Lookup weg, laesst sich ein Antrag ablehnen, dessen Einrichtung
         nicht die des uebergebenen Objekts ist."""
         case = _case(facility, client_qualified, staff_user, title="Mandantengrenze")
@@ -358,7 +372,7 @@ class TestRejectCaseDeletionLookupZieltreue:
 
 class TestRejectCaseDeletionAuditTrail:
     def test_reviewed_at_wird_gesetzt(self, facility, client_qualified, staff_user, lead_user):
-        """Pins ``x_reject_case_deletion__mutmut_20``: ``reviewed_at`` bleibt
+        """Pins ``x_reject_case_deletion__mutmut_26``: ``reviewed_at`` bleibt
         ``None`` statt den Ablehnungszeitpunkt zu tragen."""
         case = _case(facility, client_qualified, staff_user, title="Zeitstempel")
         dr = _dr(facility, case, staff_user, reason="Zeitstempel")
@@ -371,7 +385,7 @@ class TestRejectCaseDeletionAuditTrail:
         assert dr.reviewed_at >= before
 
     def test_audit_zeile_traegt_den_reviewer(self, facility, client_qualified, staff_user, lead_user):
-        """Pins ``x_reject_case_deletion__mutmut_22``: ``audit_event`` bekommt
+        """Pins ``x_reject_case_deletion__mutmut_28``: ``audit_event`` bekommt
         ``user=None`` statt des Reviewers."""
         case = _case(facility, client_qualified, staff_user, title="Zuschreibung")
         dr = _dr(facility, case, staff_user, reason="Zuschreibung")
@@ -382,9 +396,9 @@ class TestRejectCaseDeletionAuditTrail:
         assert entry.user_id == lead_user.pk
 
     def test_audit_zeile_traegt_den_exakten_zieltyp(self, facility, client_qualified, staff_user, lead_user):
-        """Pins ``x_reject_case_deletion__mutmut_24`` (``None``), ``_30``
-        (Kwarg weggelassen), ``_33`` (``"XXDeletionRequestXX"``), ``_34``/
-        ``_35`` (klein-/grossgeschrieben)."""
+        """Pins ``x_reject_case_deletion__mutmut_30`` (``None``), ``_36``
+        (Kwarg weggelassen), ``_39`` (``"XXDeletionRequestXX"``), ``_40``/
+        ``_41`` (klein-/grossgeschrieben)."""
         case = _case(facility, client_qualified, staff_user, title="Zieltyp")
         dr = _dr(facility, case, staff_user, reason="Zieltyp")
 

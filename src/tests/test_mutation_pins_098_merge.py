@@ -135,11 +135,11 @@ class TestRejectAccountabilityAndAttribution:
     """
 
     def test_rejection_carries_full_accountability(self, facility, source, target, staff_user, admin_user):
-        """Pin: ``x_reject_client_merge__mutmut_25`` (``reviewed_by`` ->
-        ``None``), ``_26`` (``reviewed_at`` -> ``None``), ``_30``/``_36``/
-        ``_39``/``_40``/``_41`` (``target_type`` -> ``None``/entfernt/
+        """Pin: ``x_reject_client_merge__mutmut_31`` (``reviewed_by`` ->
+        ``None``), ``_32`` (``reviewed_at`` -> ``None``), ``_36``/``_42``/
+        ``_45``/``_46``/``_47`` (``target_type`` -> ``None``/entfernt/
         ``"XXDeletionRequestXX"``/``"deletionrequest"``/``"DELETIONREQUEST"``)
-        und ``_32``/``_38``/``_45``/``_48`` (``detail`` -> ``None``/entfernt/
+        und ``_38``/``_44``/``_51``/``_54`` (``detail`` -> ``None``/entfernt/
         ``target_client``bzw. ``merge_into`` -> ``str(None)``).
 
         Original: der Antrag traegt Reviewer und Zeitstempel, die

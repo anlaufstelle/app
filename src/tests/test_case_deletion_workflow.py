@@ -17,7 +17,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from core.models import Activity, Attachment, AuditLog, Case, Client, Episode, LegalHold
+from core.models import Activity, Attachment, AuditLog, Case, Client, Episode, LegalHold, User
 from core.models.outcome import Milestone, OutcomeGoal
 from core.models.workitem import DeletionRequest
 from core.services.case.deletion import (
@@ -263,6 +263,44 @@ class TestApproveCaseDeletion:
 
 
 class TestRejectCaseDeletion:
+    def test_service_rejects_distinct_reviewer_without_confirmation_right(self, case_open, staff_user, lead_user):
+        dr = request_case_deletion(case_open, lead_user, "Grund")
+
+        with pytest.raises(ValidationError) as exc_info:
+            reject_case_deletion(dr, staff_user)
+
+        assert exc_info.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert dr.reviewed_by_id is None
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(dr.pk),
+        ).exists()
+
+    @pytest.mark.parametrize("role", list(User.Role.values))
+    @pytest.mark.parametrize("has_right", [False, True], ids=["without-right", "with-right"])
+    def test_reject_permission_depends_on_right_not_role(self, facility, case_open, lead_user, role, has_right):
+        reviewer = User.objects.create_user(
+            username=f"case-reject-{role}-{has_right}",
+            role=role,
+            facility=facility,
+            is_staff=True,
+            can_confirm_deletion=has_right,
+        )
+        dr = request_case_deletion(case_open, lead_user, "Grund")
+
+        if has_right:
+            reject_case_deletion(dr, reviewer)
+        else:
+            with pytest.raises(ValidationError, match="Löschbestätigung"):
+                reject_case_deletion(dr, reviewer)
+
+        dr.refresh_from_db()
+        expected = DeletionRequest.Status.REJECTED if has_right else DeletionRequest.Status.PENDING
+        assert dr.status == expected
+        assert dr.reviewed_by_id == (reviewer.pk if has_right else None)
+
     def test_reject_sets_status_only(self, case_open, staff_user, lead_user):
         dr = request_case_deletion(case_open, staff_user, "Grund")
         reject_case_deletion(dr, lead_user)

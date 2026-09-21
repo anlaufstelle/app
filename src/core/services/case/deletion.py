@@ -265,6 +265,8 @@ def reject_case_deletion(deletion_request, reviewer):
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
+    if not reviewer.can_confirm_deletion:
+        raise ValidationError(_("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."))
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )

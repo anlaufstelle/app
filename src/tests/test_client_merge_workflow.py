@@ -19,7 +19,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Client, DocumentTypeField, Event, LegalHold, RecentClientVisit
+from core.models import Activity, AuditLog, Case, Client, DocumentTypeField, Event, LegalHold, RecentClientVisit, User
 from core.models.offline_revocation import OfflineClientRevocation
 from core.models.retention import RetentionProposal
 from core.models.workitem import DeletionRequest, WorkItem
@@ -446,6 +446,48 @@ class TestMergeFourEyes:
             action=AuditLog.Action.DELETION_REJECTED,
             target_id=str(dr.pk),
         ).exists()
+
+    def test_reject_service_rejects_distinct_reviewer_without_confirmation_right(
+        self, client_qualified, target, staff_user, lead_user
+    ):
+        dr = request_client_merge(client_qualified, target, lead_user, reason="Doppelt")
+
+        with pytest.raises(ValidationError) as exc_info:
+            reject_client_merge(dr, staff_user)
+
+        assert exc_info.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+        assert dr.reviewed_by_id is None
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.DELETION_REJECTED,
+            target_id=str(dr.pk),
+        ).exists()
+
+    @pytest.mark.parametrize("role", list(User.Role.values))
+    @pytest.mark.parametrize("has_right", [False, True], ids=["without-right", "with-right"])
+    def test_reject_permission_depends_on_right_not_role(
+        self, facility, client_qualified, target, lead_user, role, has_right
+    ):
+        reviewer = User.objects.create_user(
+            username=f"merge-reject-{role}-{has_right}",
+            role=role,
+            facility=facility,
+            is_staff=True,
+            can_confirm_deletion=has_right,
+        )
+        dr = request_client_merge(client_qualified, target, lead_user, reason="Doppelt")
+
+        if has_right:
+            reject_client_merge(dr, reviewer)
+        else:
+            with pytest.raises(ValidationError, match="Löschbestätigung"):
+                reject_client_merge(dr, reviewer)
+
+        dr.refresh_from_db()
+        expected = DeletionRequest.Status.REJECTED if has_right else DeletionRequest.Status.PENDING
+        assert dr.status == expected
+        assert dr.reviewed_by_id == (reviewer.pk if has_right else None)
 
     def test_rejected_request_blocks_neither_lookup_nor_new_request(
         self, client_qualified, target, staff_user, admin_user

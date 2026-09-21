@@ -147,8 +147,8 @@ class TestFourEyesReloadKeepsItsPrimaryKey:
         assert other_source.is_deleted is False
 
     def test_reject_decides_only_the_named_request(self, facility, source, target, staff_user, admin_user):
-        """Pin: ``x_reject_client_merge__mutmut_10`` — ``select_for_update().get(
-        pk=deletion_request.pk, facility=...)`` -> ``get(facility=...)`` (Zeile 297).
+        """Pin: ``x_reject_client_merge__mutmut_16`` — ``select_for_update().get(
+        pk=deletion_request.pk, facility=...)`` -> ``get(facility=...)``.
 
         Zwei PENDING-Merge-Antraege derselben Einrichtung. Original: nur der
         uebergebene Antrag wird REJECTED, und es entsteht genau EINE
@@ -318,13 +318,13 @@ class TestFourEyesAccountability:
         assert before <= dr.reviewed_at <= after
 
     def test_rejection_row_names_actor_and_facility(self, facility, source, target, staff_user, admin_user):
-        """Pin: ``x_reject_client_merge__mutmut_28`` (``user=reviewer`` ->
-        ``user=None``, Zeile 309) und ``x_reject_client_merge__mutmut_29``
-        (``facility=deletion_request.facility`` -> ``facility=None``, Zeile 310).
+        """Pin: ``x_reject_client_merge__mutmut_34`` (``user=reviewer`` ->
+        ``user=None``) und ``x_reject_client_merge__mutmut_35``
+        (``facility=deletion_request.facility`` -> ``facility=None``).
 
         Original: die ``DELETION_REJECTED``-Zeile traegt die entscheidende
-        Person und die Einrichtung. Mutant 28: ``user_id`` ist ``None``.
-        Mutant 29: ``facility_id`` ist ``None`` — die Zeile faellt aus jeder
+        Person und die Einrichtung. Mutant 34: ``user_id`` ist ``None``.
+        Mutant 35: ``facility_id`` ist ``None`` — die Zeile faellt aus jeder
         facility-gescopten Audit-Flaeche heraus, der Vorgang ist fuer die
         Einrichtung unsichtbar protokolliert.
         """

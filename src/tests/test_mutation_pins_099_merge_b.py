@@ -23,7 +23,7 @@ Vier wiederkehrende Mutationsachsen in diesem Batch:
   ``==``-Vergleich derselben Pin-Testfunktion toetet sie im selben Zug mit
   (im Kill-Nachweis einzeln verifiziert, keine eigenen Pins noetig).
 * **``facility`` aus dem TOCTOU-Reload entfernt** (``x_approve_client_merge
-  __mutmut_17``, ``x_reject_client_merge__mutmut_11``): ``select_for_update()
+  __mutmut_17``, ``x_reject_client_merge__mutmut_17``): ``select_for_update()
   .get(pk=deletion_request.pk, facility=deletion_request.facility)`` ->
   ``get(pk=deletion_request.pk, )``. Der Filter ist SELBSTREFERENZIELL (das
   Attribut kommt vom selben, bereits geladenen Objekt) — er faengt keine
@@ -247,9 +247,20 @@ class TestRejectClientMergeGuardMessages:
 
         assert exc.value.messages == ["Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."]
 
+    def test_reviewer_ohne_recht_meldet_den_richtigen_text(self, facility, source, target, staff_user, assistant_user):
+        """Pins ``x_reject_client_merge__mutmut_8``/``_9`` und tötet
+        ``_10``/``_11``/``_12``: Verlust und Verfälschungen der Meldung des
+        Bestätigungsrecht-Guards."""
+        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+
+        with pytest.raises(ValidationError) as exc:
+            reject_client_merge(dr, assistant_user)
+
+        assert exc.value.messages == ["Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."]
+
     def test_kein_zusammenfuehrungs_antrag_meldet_den_richtigen_text(self, facility, source, staff_user, admin_user):
-        """Pins ``x_reject_client_merge__mutmut_13``/``_14`` (Zeile 300); toetet
-        mit ``_15``/``_16``/``_17`` (XX/Klein/Gross) — mitgetoetet."""
+        """Pins ``x_reject_client_merge__mutmut_19``/``_20``; toetet mit
+        ``_21``/``_22``/``_23`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_deletion(source, staff_user, "Reiner Löschantrag")
         assert dr.merge_into_id is None
 
@@ -261,8 +272,8 @@ class TestRejectClientMergeGuardMessages:
     def test_bereits_entschiedener_antrag_meldet_den_richtigen_text(
         self, facility, source, target, staff_user, admin_user
     ):
-        """Pins ``x_reject_client_merge__mutmut_19``/``_20`` (Zeile 302); toetet
-        mit ``_21``/``_22``/``_23`` (XX/Klein/Gross) — mitgetoetet."""
+        """Pins ``x_reject_client_merge__mutmut_25``/``_26``; toetet mit
+        ``_27``/``_28``/``_29`` (XX/Klein/Gross) — mitgetoetet."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         reject_client_merge(dr, admin_user)
         dr.refresh_from_db()
@@ -278,9 +289,9 @@ class TestRejectClientMergeReloadTiesToItsOwnFacility:
     def test_reject_refuses_a_stale_facility_assumption(
         self, facility, second_facility, source, target, staff_user, admin_user
     ):
-        """Pin: ``x_reject_client_merge__mutmut_11`` — ``select_for_update().get(
+        """Pin: ``x_reject_client_merge__mutmut_17`` — ``select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility)`` -> ``get(
-        pk=deletion_request.pk, )`` (Zeile 297). Begruendung siehe
+        pk=deletion_request.pk, )``. Begruendung siehe
         ``TestApproveClientMergeReloadTiesToItsOwnFacility`` (spiegelbildlich)."""
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         dr.facility = second_facility
