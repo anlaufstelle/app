@@ -1300,6 +1300,33 @@ def export_client_data(client, facility, user):
     }
 
 
+def _format_pdf_event_data(events, facility):
+    """Ereigniswerte fuer das Auskunfts-PDF lesbar und verlustfrei formatieren.
+
+    Der JSON-Export bleibt bewusst slug-treu und maschinenlesbar. Fuer das
+    ausgehaendigte PDF werden dagegen dieselben fachlichen Labels wie in der
+    Oberflaeche verwendet. Eine Liste ohne konfigurierten Optionskatalog wird
+    lediglich lesbar verbunden; ihre einzelnen Werte bleiben unveraendert.
+    """
+    from core.models import FieldTemplate
+    from core.services.dynamic_data import format_dynamic_display_value
+
+    slugs = {slug for event in events for slug in event["data"]}
+    field_templates = {
+        field.slug: field for field in FieldTemplate.objects.for_facility(facility).filter(slug__in=slugs)
+    }
+    formatted_events = []
+    for event in events:
+        formatted_data = {}
+        for slug, value in event["data"].items():
+            displayed = format_dynamic_display_value(value, field_templates.get(slug))
+            if isinstance(displayed, list):
+                displayed = ", ".join(str(item) for item in displayed)
+            formatted_data[slug] = displayed
+        formatted_events.append({**event, "data": formatted_data})
+    return formatted_events
+
+
 def render_client_export_html(client, facility, user) -> str:
     """Die HTML-Stufe der Art.-15-PDF-Auskunft (Cross-Review-Befund 6).
 
@@ -1320,6 +1347,7 @@ def render_client_export_html(client, facility, user) -> str:
     """
     data = export_client_data(client, facility, user)
     context = {key: value for key, value in data.items() if key != "export_meta"}
+    context["events"] = _format_pdf_event_data(data["events"], facility)
     context["facility_name"] = data["export_meta"]["facility_name"]
     context["generated_at"] = timezone.now()
     return render_to_string("core/export/client_data_pdf.html", context)

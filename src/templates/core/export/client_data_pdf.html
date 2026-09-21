@@ -331,11 +331,10 @@
                 <td>{{ event.case|default:"-" }}</td>
                 <td>{{ event.episode|default:"-" }}</td>
                 <td>{{ event.created_by|default:"-" }}</td>
-                {% comment %}Refs #2224: Diese Spalte gibt ``event.data`` slug-treu aus
-                (``_gather_events``, bewusst OHNE FieldTemplate-Lookup) — anders als die
-                Zusatzfelder von Person und Fall laeuft der Wert hier nicht durch
-                ``format_dynamic_display_value``. Der ``None``-Filter gehoert deshalb
-                genauso hierher; ohne ihn stand „None" in der Auskunft.{% endcomment %}
+                {% comment %}Der JSON-Export bleibt slug-treu. Fuer das PDF formatiert
+                ``_format_pdf_event_data`` die Werte wie in der Oberflaeche (Optionslabels,
+                Ja/Nein und lesbare Listen). Der ``None``-Filter verhindert weiterhin den
+                Python-Literal „None" bei leeren Bestandswerten.{% endcomment %}
                 <td>
                     {% for key, value in event.data.items %}
                         <strong>{{ key }}:</strong> {{ value|default_if_none:"" }}{% if not forloop.last %}, {% endif %}

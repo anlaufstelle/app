@@ -274,6 +274,97 @@ class TestClientExportPdfEmptyValues:
         assert re.search(r"<th>WF number</th><td>\s*0\s*</td>", html) is not None
         assert "None" not in html
 
+    def test_event_values_are_readable_and_complete(self, facility, admin_user, staff_user, client_identified):
+        """Bool und Optionen sind lesbar, ohne einen gespeicherten Wert zu verlieren."""
+        doc_type = make_document_type(
+            facility=facility,
+            name="Lesbare Kontaktwerte",
+            entity_type=DocumentType.EntityType.EVENT,
+        )
+        field_specs = (
+            ("Einwilligung", FieldTemplate.FieldType.BOOLEAN, [], True, "Ja"),
+            (
+                "Dringlichkeit",
+                FieldTemplate.FieldType.SELECT,
+                [{"slug": "akut", "label": "Akut", "is_active": True}],
+                "akut",
+                "Akut",
+            ),
+            (
+                "Themen",
+                FieldTemplate.FieldType.MULTI_SELECT,
+                [
+                    {"slug": "beratung", "label": "Beratung", "is_active": True},
+                    {"slug": "wohnen", "label": "Wohnen", "is_active": True},
+                ],
+                ["beratung", "wohnen"],
+                "Beratung, Wohnen",
+            ),
+            (
+                "Freie Themen",
+                FieldTemplate.FieldType.MULTI_SELECT,
+                [],
+                ["offen", "wohnung"],
+                "offen, wohnung",
+            ),
+        )
+        stored_data = {}
+        expected_by_slug = {}
+        stored_value_set = set()
+        for sort_order, (name, field_type, options, stored, displayed) in enumerate(field_specs):
+            field = FieldTemplate.objects.create(
+                facility=facility,
+                name=name,
+                field_type=field_type,
+                options_json=options,
+            )
+            DocumentTypeField.objects.create(document_type=doc_type, field_template=field, sort_order=sort_order)
+            stored_data[field.slug] = stored
+            expected_by_slug[field.slug] = displayed
+            label_map = {option["slug"]: option["label"] for option in options}
+            for value in stored if isinstance(stored, list) else [stored]:
+                semantic_value = (
+                    ("Ja" if value else "Nein")
+                    if field_type == FieldTemplate.FieldType.BOOLEAN
+                    else label_map.get(value, str(value))
+                )
+                stored_value_set.add(semantic_value)
+
+        make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json=stored_data,
+            created_by=staff_user,
+        )
+
+        from core.services.client import export_client_data
+
+        raw_event = next(
+            event
+            for event in export_client_data(client_identified, facility, admin_user)["events"]
+            if event["document_type"] == doc_type.name
+        )
+        assert raw_event["data"] == stored_data
+
+        html = self._render(client_identified, facility, admin_user)
+        contacts = html.split("7. Kontakte", 1)[1].split("<h2>", 1)[0]
+        displayed_by_slug = {}
+        for slug in expected_by_slug:
+            match = re.search(
+                rf"<strong>{re.escape(slug)}:</strong>\s*(.*?)(?=,\s*<strong>|</td>)",
+                contacts,
+                re.DOTALL,
+            )
+            assert match is not None, f"Kontaktwert {slug!r} fehlt im PDF-HTML"
+            displayed_by_slug[slug] = match.group(1).strip()
+
+        assert displayed_by_slug == expected_by_slug
+        displayed_value_set = {token for displayed in displayed_by_slug.values() for token in displayed.split(", ")}
+        assert displayed_value_set == stored_value_set
+        assert "True" not in contacts
+        assert "['beratung', 'wohnen']" not in contacts
 
 @pytest.mark.django_db
 class TestClientDetailMultiSelectWithoutOptions:
