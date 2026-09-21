@@ -32,7 +32,24 @@ _SCRUB_PATTERNS = [
     # Token-Filter läuft.
     (re.compile(r"\b(Bearer|Basic)\s+[\w.\-+/=]+", re.IGNORECASE), r"\1 <redacted>"),
     # Email (RFC-5322-simplified).
-    (re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}"), "<email>"),
+    #
+    # Der Lookbehind ist der **linke Anker** (Refs #2269): ohne ihn begann
+    # die Suche in einem langen Zeichenlauf ohne Leerzeichen an JEDER
+    # Position erneut und las den Lauf jedes Mal bis zum Ende —
+    # quadratische Laufzeit, und der Scrub laeuft seit #2228 ueber jede
+    # Log-Zeile beider Formatter.
+    #
+    # Der Anker allein wuerde die Maskierung aendern: ein Treffer kann
+    # mitten in einem Zeichenlauf enden (``…@example.co.uk`` unmittelbar
+    # gefolgt von der naechsten Adresse), und die Suche setzt genau dort
+    # wieder an — der Anker haette sie dann bis zum Ende des Laufs
+    # gesperrt und den Rest der zweiten Adresse stehen lassen. Die
+    # Wiederholung ``(?:…)+`` faengt genau diesen Fall: direkt
+    # aneinandergrenzende Adressen werden in EINEM Treffer maskiert.
+    # Maskiert wird damit exakt derselbe Text wie vorher, nur mit einem
+    # Platzhalter statt mehreren — gepinnt in ``test_log_scrub_runtime.py``
+    # (Zeichenpositionen und Ergebnis).
+    (re.compile(r"(?<![\w.+-])(?:[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})+"), "<email>"),
     # password=xxx / passwort=xxx (URL-Query oder Debug-Messages).
     # Wertteil non-greedy bis zum nächsten Trenner (Whitespace, & im Query,
     # Quote oder Klammer) — sonst würde "password=hunter2&x=1" inklusive

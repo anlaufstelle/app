@@ -16,12 +16,20 @@ Zwei Zusagen werden hier gepinnt:
   absoluter Millisekunden-Wert: der haengt an der Maschine. Gemessen wird
   Best-of-5 auf gleichem Zeichenvolumen je Messung, damit weder ein
   Scheduler-Ausrutscher noch die Timer-Aufloesung das Urteil bestimmt.
-* **Maskierung** — die Umformung des Musters aendert das Ergebnis fuer
-  KEINE Eingabe. Verglichen wird gegen die Musterliste von vor dem Fix,
-  ueber die vorhandenen Guard-Faelle und ueber generierte Eingaben
-  (Adressen am Anfang/Ende/mittig, in Klammern und Anfuehrungszeichen,
-  mit Plus-/Punkt-Teilen, mit Unicode-Nachbarn, direkt aneinander, in
-  URLs und Query-Werten).
+* **Maskierung** — die Umformung maskiert exakt dieselben Zeichen wie
+  vorher. Verglichen wird gegen die Musterliste von vor dem Fix, ueber
+  die vorhandenen Guard-Faelle und ueber generierte Eingaben (Adressen am
+  Anfang/Ende/mittig, in Klammern und Anfuehrungszeichen, mit Plus-/
+  Punkt-Teilen, mit Unicode-Nachbarn, direkt aneinander, in URLs und
+  Query-Werten).
+
+  **Eine** Ausgabe-Abweichung ist bekannt und hier gepinnt: zwei ohne
+  Trennzeichen aneinandergrenzende Adressen ergaben frueher zwei
+  Platzhalter (``<email><email>``), jetzt einen. Maskiert sind dieselben
+  Zeichenpositionen — ohne die Wiederholung im Muster waere aus dem
+  zweiten Platzhalter dagegen wieder Klartext geworden (der Anker sperrt
+  den Wiedereinstieg mitten im Zeichenlauf). Das ist der Grund fuer die
+  ``(?:…)+``-Form.
 
 Die Aequivalenz deckt ``settings/_sentry.py`` mit ab: der Tracker-Pfad
 benutzt dieselben Funktionen dieses Moduls.
@@ -66,6 +74,35 @@ def _patterns_before_the_fix():
     ]
     assert sum(1 for _, repl in before if repl == "<email>") == 1, "Genau ein E-Mail-Muster erwartet"
     return before
+
+
+def _email_pattern_before_the_fix():
+    """Das E-Mail-Muster von vor dem Fix."""
+    return _EMAIL_BEFORE_THE_FIX
+
+
+def _email_pattern_now():
+    """Das heutige E-Mail-Muster aus der Produktivliste."""
+    treffer = [pattern for pattern, repl in _SCRUB_PATTERNS if repl == "<email>"]
+    assert len(treffer) == 1, "Genau ein E-Mail-Muster erwartet"
+    return treffer[0]
+
+
+def _masked_positions(pattern, text):
+    """Die Zeichenpositionen, die *pattern* in *text* maskiert."""
+    positionen = set()
+    for treffer in pattern.finditer(text):
+        positionen.update(range(*treffer.span()))
+    return positionen
+
+
+#: Mehrere unmittelbar aufeinanderfolgende Platzhalter zu einem.
+_ADJACENT_PLACEHOLDERS = re.compile(r"(?:<email>)+")
+
+
+def _collapsed(text):
+    """Ausgabe ohne die Information, WIE VIELE Platzhalter nebeneinander stehen."""
+    return _ADJACENT_PLACEHOLDERS.sub("<email>", text)
 
 
 def _scrub_before_the_fix(text):
@@ -166,14 +203,48 @@ class TestMaskingIsUnchanged:
         maskiert = [text for text in GENERATED_INPUTS if "<email>" in scrub(text)]
         assert len(maskiert) >= 150, f"nur {len(maskiert)} der {len(GENERATED_INPUTS)} Eingaben werden maskiert"
 
+    def test_the_email_pattern_masks_the_same_characters(self):
+        """Die harte Zusage: dieselben Zeichenpositionen, Eingabe fuer Eingabe.
+
+        Zeichenpositionen statt Ausgabetext, weil genau das die Zusage des
+        Tickets ist — was vorher maskiert war, bleibt maskiert, und es
+        kommt nichts hinzu. Die Zahl der Platzhalter ist demgegenueber
+        Darstellung.
+        """
+        vorher = _email_pattern_before_the_fix()
+        jetzt = _email_pattern_now()
+        abweichungen = [
+            (text, sorted(_masked_positions(vorher, text) ^ _masked_positions(jetzt, text)))
+            for text in ALL_INPUTS
+            if _masked_positions(vorher, text) != _masked_positions(jetzt, text)
+        ]
+        assert not abweichungen, f"{len(abweichungen)} Abweichung(en), erste: {abweichungen[0]!r}"
+
     def test_pattern_scrub_is_equivalent(self):
-        """``scrub`` liefert fuer jede Eingabe dasselbe wie vor dem Fix."""
+        """``scrub`` liefert dasselbe wie vor dem Fix — bis auf die Zahl der
+        direkt aneinandergrenzenden Platzhalter (siehe Modul-Docstring)."""
         abweichungen = [
             (text, _scrub_before_the_fix(text), scrub(text))
             for text in ALL_INPUTS
-            if _scrub_before_the_fix(text) != scrub(text)
+            if _collapsed(_scrub_before_the_fix(text)) != _collapsed(scrub(text))
         ]
         assert not abweichungen, f"{len(abweichungen)} Abweichung(en), erste: {abweichungen[0]!r}"
+
+    def test_the_known_difference_is_only_the_placeholder_count(self):
+        """Die bekannte Abweichung ist vorhanden, benannt und harmlos.
+
+        Ein Test, der die Abweichung nur wegkuerzt, verdeckt sie. Hier
+        steht, WELCHE Eingaben betroffen sind und dass der Unterschied
+        ausschliesslich in mehrfachen Platzhaltern besteht — nie in
+        wieder sichtbarem Klartext.
+        """
+        betroffen = [text for text in ALL_INPUTS if _scrub_before_the_fix(text) != scrub(text)]
+        assert betroffen, "Die Stichprobe muss den bekannten Fall enthalten, sonst belegt sie ihn nicht"
+        for text in betroffen:
+            alt, neu = _scrub_before_the_fix(text), scrub(text)
+            assert "<email><email>" in alt, f"unerwartete Abweichungsklasse: {text!r} -> {alt!r} / {neu!r}"
+            assert _collapsed(alt) == neu, f"mehr als die Platzhalterzahl geaendert: {text!r}"
+            assert neu.count("<email>") < alt.count("<email>")
 
     def test_sink_scrub_is_equivalent(self, monkeypatch):
         """Dasselbe fuer den vollstaendigen Sink-Scrub (Muster + Pfade).
@@ -186,7 +257,9 @@ class TestMaskingIsUnchanged:
         monkeypatch.setattr(core_logging, "_SCRUB_PATTERNS", _patterns_before_the_fix())
         alt = [scrub_text(text) for text in ALL_INPUTS]
         monkeypatch.undo()
-        abweichungen = [(text, a, n) for text, a, n in zip(ALL_INPUTS, alt, neu, strict=True) if a != n]
+        abweichungen = [
+            (text, a, n) for text, a, n in zip(ALL_INPUTS, alt, neu, strict=True) if _collapsed(a) != _collapsed(n)
+        ]
         assert not abweichungen, f"{len(abweichungen)} Abweichung(en), erste: {abweichungen[0]!r}"
 
     def test_scrub_stays_idempotent(self):
