@@ -510,6 +510,20 @@ class TestHinweisInDienstplanluecke:
         assert f'name="time_filter" value="{tf_spaet.pk}"' in html
         assert "Notiz speichern" in html
 
+    def test_kalenderfall_zeigt_notiz_ohne_lueckenhinweis(self, facility, staff_user):
+        gestern = Shift(date(2026, 6, 14), None)
+        save_note(facility, gestern, staff_user, "Notiz von gestern", now=_berlin(2026, 6, 14, 20, 0))
+
+        html = self._render(
+            facility,
+            staff_user,
+            Shift(date(2026, 6, 15), None),
+            now=_berlin(2026, 6, 15, 9, 0),
+        )
+
+        assert "In dieser Dienstplan-Lücke läuft keine Schicht." not in html
+        assert "Notiz von gestern" in html
+
 
 # ---------------------------------------------------------------------------
 # Fix-Runde 1 Cross-Review E-01…E-09)
