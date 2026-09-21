@@ -161,7 +161,17 @@ def prepare_encrypted_upload(facility, uploaded_file, user, *, owner=None, pendi
     )
 
 
-def _lock_superseded_row(owner, supersedes) -> None:
+class SupersedesOwnerMismatchError(ValueError):
+    """Der uebergebene Vorgaenger gehoert nicht zum Owner dieses Uploads.
+
+    ``ValueError`` als Basis, damit Bestandsaufrufer, die den fail-loud-Fehler
+    des Owner-Dispatchs (:func:`~core.models.attachment.owner_field_name`)
+    abfangen, diese Ablehnung unveraendert mitbekommen; die eigene Klasse
+    erlaubt daneben die gezielte Behandlung.
+    """
+
+
+def _lock_superseded_row(owner, supersedes):
     """Sperrt die abzuloesende ``Attachment``-Zeile — Schritt 1 der Reihenfolge.
 
     Der Replace-Pfad schreibt die Vorgaengerzeile erst am Ende
@@ -172,14 +182,16 @@ def _lock_superseded_row(owner, supersedes) -> None:
     ``SELECT … FOR UPDATE`` zieht sie an den Anfang und macht die Reihenfolge
     ueberall gleich (Refs #2178).
 
-    Ist die Zeile inzwischen physisch getilgt, sperrt das ``SELECT`` nichts —
-    das anschliessende ``save(update_fields=…)`` verhaelt sich unveraendert.
-
     Der Zugriff laeuft ueber den Reverse-Accessor des Owners (ADR-039 §2, wie
     ``soft_delete_attachment_chain``) — damit ist er owner- und facility-gescopt
     und sperrt nie eine fremde Zeile, selbst wenn eine falsche ``pk`` hereinkaeme.
+
+    Zurueckgegeben wird die ``pk`` der TATSAECHLICH gesperrten Zeile, sonst
+    ``None`` (fremder Owner, fremde Einrichtung oder physisch getilgte Zeile).
+    Der Aufrufer macht daran die Zugehoerigkeit des Vorgaengers fest (Refs
+    #2307) — die Behauptung des Aufrufers allein ist nicht pruefbar.
     """
-    owner.attachments.select_for_update().filter(pk=supersedes.pk).values_list("pk", flat=True).first()
+    return owner.attachments.select_for_update().filter(pk=supersedes.pk).values_list("pk", flat=True).first()
 
 
 def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None, sort_order=None, audit=True):
@@ -215,6 +227,13 @@ def commit_staged_upload(owner, field_template, staged, user, *, supersedes=None
     Advisory-Lock des ersten, und ein gleichzeitiger
     :func:`soft_delete_attachment_chain` derselben Kette bildet einen
     Deadlock-Zyklus (SQLSTATE ``40P01``).
+
+    **Zugehoerigkeit des Vorgaengers (Refs #2307):** Im Replace-Modus muss die
+    Vorsperre oben eine Zeile treffen. Tut sie es nicht — der Vorgaenger gehoert
+    einem anderen Owner (gleiche oder andere Einrichtung) oder ist physisch
+    getilgt —, bricht der Aufruf mit :class:`SupersedesOwnerMismatchError` ab,
+    noch VOR dem Advisory-Lock der Einrichtung: keine Zeile, keine Datei, keine
+    Rechenschaftszeile.
 
     **Owner-Stufe (Refs #2260):** Die neue Zeile traegt den Owner-Fremd-
     schluessel; dessen aufgeschobene Pruefung nimmt eine Sperre auf der
@@ -304,8 +323,21 @@ def _commit_staged_upload(owner, field_template, staged, user, *, supersedes=Non
         # ``supersedes.save()`` — gegen einen gleichzeitigen Soft-Delete
         # derselben Kette ein Deadlock-Zyklus (PostgreSQL bricht eine der beiden
         # Transaktionen mit SQLSTATE 40P01 ab).
-        if supersedes is not None:
-            _lock_superseded_row(owner, supersedes)
+        if supersedes is not None and _lock_superseded_row(owner, supersedes) is None:
+            # Zugehoerigkeit an der TATSAECHLICH gesperrten Zeile festgemacht
+            # (Refs #2307): die owner-gescopte Vorsperre trifft keine Zeile, wenn
+            # der Vorgaenger einem anderen Owner (gleiche oder andere
+            # Einrichtung) gehoert oder physisch getilgt ist. Ohne diesen Abbruch
+            # nahm der Upload danach den Ketten-Advisory-Lock und schrieb die
+            # Ersetzungsfelder trotzdem auf die fremde Zeile — erstmalige
+            # Zeilensperre UNTER dem Ketten-Lock (Gegenrichtung zur Reihenfolge
+            # oben) und eine Versionskette ueber Owner-Grenzen. Der Abbruch faellt
+            # deshalb VOR den Ketten-Lock; die gestagte Datei raeumt der
+            # ``except``-Zweig unten wie bei jedem anderen Fehler weg.
+            raise SupersedesOwnerMismatchError(
+                "Der abzuloesende Anhang gehoert nicht zum Owner dieses Uploads "
+                f"(supersedes={supersedes.pk!r}, owner={owner._meta.model_name}:{owner.pk!r})"
+            )
         # #2178 (Red-Team B-13): fail-closed Backstop VOR dem Insert — die Summe
         # ein zweites Mal lesen, diesmal unter der Sperre der Einrichtung. Der
         # Vorab-Check in ``prepare_encrypted_upload`` liegt ausserhalb jeder
