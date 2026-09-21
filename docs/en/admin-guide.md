@@ -1,6 +1,7 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-18: § 5.6 states that the server log file now carries the same lines with masked URL paths -- query part dropped, route schema or token segments removed, the account as `user_pk` instead of the login name, in both output formats and in framework lines -- while the client IP of a CSP report stays readable (#2228).
 > Synchronization update 2026-09-21: the ClamAV troubleshooting section explains that an unknown signature age remains `unknown` during startup and that the dashboard shows the freshclam log command as its action hint (#2246).
+> Synchronization update 2026-09-21: § 2.9 storage quotas -- the deliberate limit for CSV import files is gone: both storage paths decide under the same short per-facility lock and on the same total (file attachments plus open import files), so concurrent CSV uploads and the mixed case of an attachment and an import exceed the quota by 0 bytes, and the rejection is audited (#2259).
 > Synchronization update 2026-09-18: the SMTP environment reference lists `EMAIL_USE_SSL` and the SMTP requirements state that implicit TLS/SMTPS on port 465 is supported and mutually exclusive with `EMAIL_USE_TLS` (#2267).
 > Synchronization update 2026-09-18: the SMTP environment reference notes that the application configures email delivery through Django's `MAILERS` setting since Django 6.1 while the environment variable names stay unchanged (#1662).
 > Synchronization update 2026-09-15: § 2.3 the quick-exit target row now states that the target does not learn the origin of the jump (no `Referer` header) (#2179).
@@ -1142,9 +1143,7 @@ The **stricter** of the two always applies. If both are empty or `0`, the facili
 
 Several files of **one** form count together: the check knows about the files already processed in the same submission and rejects the one that would break the quota.
 
-**Concurrent uploads -- file attachments.** For attachments the quota holds even when arbitrarily many uploads of one facility run at the same time (#2178): the check before the virus scan only saves unnecessary work; the decision is made in the storage step, immediately before the attachment row is written -- there the attachment total is read a second time under a short per-facility lock. For attachments the quota is therefore exceeded by **0 bytes**. Virus scan and encryption still run without any lock; only the short database part is serialized. If an upload is rejected at that point, the practitioner sees the same message as usual, neither an encrypted file nor an attachment row is left behind, and the rejection appears in the audit log as "Storage quota exceeded".
-
-> **Limit (CSV import files):** The CSV import has **no** such second step -- only the check before saving decides there. Two concurrent imports at the quota can therefore jointly exceed it (by at most one import file, i.e. up to the per-file limit). Conversely, an open import file does **not** count towards the attachment total of that second step: an attachment can be accepted while an open import file occupies additional space. How large such a deviation can get depends on the **number and size of the import files open at the same time**; the per-file limit bounds only the single file, not their sum. Each deviation disappears once the corresponding import run is committed or aborted.
+**Concurrent uploads.** The quota holds even when arbitrarily many uploads of one facility run at the same time (#2178, #2259): the check before the virus scan, respectively before the import file is encrypted, only saves unnecessary work; the decision is made in the storage step, immediately before the attachment row or the import run is written -- there the total is read a second time under a short per-facility lock, across **file attachments and open CSV import files together**. The quota is therefore exceeded by **0 bytes**, including in the mixed case of an attachment and an import. Virus scan and encryption still run without any lock; only the short database part is serialized. If an upload is rejected at that point, the practitioner sees the same message as usual, neither an encrypted file nor a row is left behind, and the rejection appears in the audit log as "Storage quota exceeded".
 
 #### Safe Downloads (RFC 5987)
 
@@ -2221,4 +2220,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.0 -->
-<!-- source-hash: 4599af844adfcd92e2a376d5eac87624f5400d02 -->
+<!-- source-hash: adf94b382f9a530a91553b822b3b73071bcf152c -->
