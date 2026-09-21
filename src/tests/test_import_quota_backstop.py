@@ -946,3 +946,30 @@ class TestRendezvousMitTypumbenennung:
         assert AuditLog.objects.filter(
             facility=quota_facility, action=AuditLog.Action.CONFIG_UPDATE, target_type="DocumentType"
         ).exists(), "die Rechenschaftszeile der Umbenennung fehlt"
+
+
+def test_vorsperre_entfaellt_ohne_postgresql():
+    """Ohne PostgreSQL gibt es keine Zeilensperre — wie beim Advisory-Lock.
+
+    ``FOR KEY SHARE`` ist SQLite-Syntax fremd; der Vendor-Zweig ist deshalb
+    kein Schoenheitsfehler, sondern die Bedingung dafuer, dass der
+    Speicherpfad auf einem Nicht-PostgreSQL-Backend ueberhaupt laeuft. Die
+    Attrappe hat bewusst KEIN ``cursor`` — faellt der Zweig weg, scheitert
+    dieser Test sofort.
+    """
+
+    class _FremdesBackend:
+        vendor = "sqlite"
+
+    echte_verbindung = import_engine.connection
+    import_engine.connection = _FremdesBackend()
+    try:
+        import_engine._lock_job_fk_rows(
+            ImportJob(
+                facility_id=uuid.uuid4(),
+                created_by_id=1,
+                target_type=ImportJob.TargetType.CLIENT,
+            )
+        )
+    finally:
+        import_engine.connection = echte_verbindung
