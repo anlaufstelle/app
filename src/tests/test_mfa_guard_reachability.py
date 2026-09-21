@@ -230,11 +230,11 @@ class TestVerifyNextZiele:
         ["https://[", "//[", "http://[::1", "https://evil.example/\x00\\pfad"],
     )
     def test_malformierte_post_ziele_fallen_auf_rollen_default_zurueck(self, client, staff_user, ziel):
-        _make_totp(staff_user)
+        device = _make_totp(staff_user)
         client.login(username="teststaff", password="testpass123")
         _verify_session(client)
 
-        response = client.post("/mfa/verify/", {"next": ziel})
+        response = client.post("/mfa/verify/", {"token": _valid_totp(device), "next": ziel})
 
         assert response.status_code == 302
         assert response.url == "/"
