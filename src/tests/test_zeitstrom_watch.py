@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, TimeFilter, User, WorkItem
+from core.services.case.handover_note import current_shift, save_note
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
 from core.services.zeitstrom_watch import (
     build_zeitstrom_component_validator,
@@ -181,6 +182,51 @@ class TestZeitstromWatchHttpContract:
 
         assert response.json()["components"] == []
         assert response.json()["validators"] == {}
+
+    def test_uebergabenotiz_aendert_nur_ihren_validator(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        params = {"view": "uebergabe"}
+        first = _watch(client, params=params)
+
+        assert first.json()["components"] == ["handover_note"]
+        previous = first.json()["validators"]
+
+        save_note(facility, current_shift(facility), staff_user, "Frisch von Nutzer A")
+        changed = _watch(client, params=params, validators=previous)
+
+        assert changed.status_code == 200
+        assert changed.json()["components"] == ["handover_note"]
+        assert set(changed.json()["validators"]) == {"handover_note"}
+
+        unchanged = _watch(
+            client,
+            params=params,
+            etag=changed["ETag"],
+            validators=changed.json()["validators"],
+        )
+        assert unchanged.status_code == 304
+        assert unchanged.content == b""
+
+    def test_uebergabenotiz_followup_nutzt_bestehende_route(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        params = {"view": "uebergabe"}
+        watched = _watch(client, params=params)
+        validator = watched.json()["validators"]["handover_note"]
+        scope = _scope_for_client(client)
+
+        response = client.get(
+            reverse("core:handover_note"),
+            params,
+            headers={
+                "X-Zeitstrom-Watch": "1",
+                "X-Zeitstrom-Page-Scope": scope,
+                "If-Match": validator,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response["ETag"] == validator
+        assert 'id="handover-note"' in response.content.decode()
 
     def test_page_scope_is_opaque_and_facility_or_role_change_requires_reload(
         self,
@@ -1155,6 +1201,7 @@ class TestZeitstromWatchRefreshPartials:
         # Refs #1917: Hausverbote sind nicht mehr an den Seiten-Reload
         # gebunden — der Watcher kennt jetzt eine eigene Banner-URL.
         assert f'data-bans-url="{reverse("core:zeitstrom_bans_partial")}"' in content
+        assert f'data-handover-note-url="{reverse("core:handover_note")}"' in content
         assert 'id="zeitstrom-current-shift-slot"' in content
         assert 'id="zeitstrom-focus-box-slot"' in content
         assert content.index("zeitstrom-filter-state.js") < content.index("zeitstrom-live-watch.js")

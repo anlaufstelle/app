@@ -83,6 +83,18 @@ class TestHandoverHtmxErrorSwap:
         expect(page.locator("[data-testid='htmx-error-toast']")).to_have_count(0)
 
 
+def _als_zweite_person_speichern(e2e_env, text):
+    _shell(
+        e2e_env,
+        "from core.models import Facility, User;"
+        " from core.services.case.handover_note import current_shift, save_note;"
+        " f = Facility.objects.get(name='Hauptstelle');"
+        " u = User.objects.filter(facility=f, role=User.Role.LEAD, is_active=True).first();"
+        f" save_note(f, current_shift(f), u, {text!r});"
+        " print('ok')",
+    )
+
+
 @pytest.fixture
 def leere_notizen(e2e_env):
     """Definierter Ausgangsstand: keine Notizen, Dienstplan wie geseedet.
@@ -264,6 +276,36 @@ class TestSchichtnotizBearbeiten:
         )
         assert any(zeile.strip() == "target ShiftHandoverNote" for zeile in zeilen)
         assert any(zeile.strip() == "leak False" for zeile in zeilen)
+
+
+class TestSchichtnotizLiveRefresh:
+    def test_notiz_einer_zweiten_person_erscheint_ohne_reload(self, staff_page, base_url, leere_notizen, e2e_env):
+        page = staff_page
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
+        page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+        _als_zweite_person_speichern(e2e_env, "E2E-Live-Notiz von Nutzer A")
+        page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+        expect(page.locator("[data-testid='handover-note-current'] textarea")).to_have_value(
+            "E2E-Live-Notiz von Nutzer A"
+        )
+
+    def test_offener_entwurf_wird_vom_live_refresh_nie_ueberschrieben(
+        self, staff_page, base_url, leere_notizen, e2e_env
+    ):
+        page = staff_page
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
+        page.evaluate("() => window.zeitstromWatch.checkNow()")
+        textfeld = page.locator("[data-testid='handover-note-current'] textarea")
+        textfeld.fill("E2E-Ungespeicherter Entwurf")
+        alter_container = page.locator("#handover-note").element_handle()
+
+        _als_zweite_person_speichern(e2e_env, "E2E-Fremde neue Fassung")
+        page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+        expect(textfeld).to_have_value("E2E-Ungespeicherter Entwurf")
+        assert alter_container.evaluate("node => node.isConnected") is True
 
 
 class TestSchreibenBisZurFolgeschicht:

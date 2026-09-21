@@ -18,7 +18,15 @@ from core.services.compliance import user_can_see_field
 from core.services.events import build_tally_summary
 from core.services.zeitstrom_filters import ZeitstromState
 
-WATCH_COMPONENTS = ("feed", "tally_counts", "tally_topology", "current_shift", "focus_box", "bans")
+WATCH_COMPONENTS = (
+    "feed",
+    "tally_counts",
+    "tally_topology",
+    "current_shift",
+    "focus_box",
+    "bans",
+    "handover_note",
+)
 _COMPONENT_STATE_KEYS = {
     "feed": ("date", "time_filter", "type", "doc_type", "view"),
     "tally_counts": ("date", "time_filter", "view"),
@@ -28,6 +36,7 @@ _COMPONENT_STATE_KEYS = {
     # Das Banner zeigt immer die JETZT aktiven Hausverbote — unabhängig von
     # Datum/Filter (Refs #1917).
     "bans": (),
+    "handover_note": ("date", "time_filter", "view"),
 }
 
 
@@ -533,6 +542,35 @@ def _bans_projection(facility, user):
     return ban_revision_projection(facility, user)
 
 
+def _handover_note_projection(facility, user, state: ZeitstromState):
+    """Rendered note state; only its opaque HMAC leaves the watch endpoint."""
+
+    from core.services.case.handover_note import Shift, build_handover_note_context
+
+    displayed_shift = Shift(state.target_date, state.time_filter)
+    context = build_handover_note_context(facility, user, displayed_shift)
+    if context is None:
+        return None
+    return {
+        "can_write": context["can_write"],
+        "blocks": tuple(
+            (
+                block.kind,
+                block.shift.shift_date,
+                str(block.shift.time_filter_id or ""),
+                block.label,
+                block.range_label,
+                block.text,
+                block.author,
+                block.updated_at,
+                block.editable,
+                block.editable_until,
+            )
+            for block in context["blocks"]
+        ),
+    }
+
+
 def build_zeitstrom_component_validator(
     user,
     facility,
@@ -550,6 +588,7 @@ def build_zeitstrom_component_validator(
         "current_shift": lambda: _current_shift_projection(facility, user, state),
         "focus_box": lambda: _focus_box_projection(facility),
         "bans": lambda: _bans_projection(facility, user),
+        "handover_note": lambda: _handover_note_projection(facility, user, state),
     }
     if component not in projections:
         raise ValueError(f"Unknown Zeitstrom component: {component}")
@@ -582,10 +621,14 @@ def build_zeitstrom_watch_snapshot(
     """Compute fixed-query, user-visible component validators."""
 
     if state.is_handover:
-        component_names: tuple[str, ...] = ()
+        from core.services.case.handover_note import can_read_notes
+
+        component_names: tuple[str, ...] = ("handover_note",) if can_read_notes(user) else ()
     else:
         component_names = tuple(
-            name for name in WATCH_COMPONENTS if name != "tally_counts" or state.is_live_tally_context
+            name
+            for name in WATCH_COMPONENTS
+            if name != "handover_note" and (name != "tally_counts" or state.is_live_tally_context)
         )
 
     tally_summary = None

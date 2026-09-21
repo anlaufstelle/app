@@ -10,7 +10,7 @@ from uuid import UUID
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils import timezone
@@ -277,8 +277,48 @@ class HandoverNoteUpdateView(StaffRequiredMixin, View):
     automatische Uebergabe neu aufgeloest — dieselbe Quelle wie im GET.
     """
 
-    http_method_names = ["post"]
+    http_method_names = ["get", "post"]
     template_name = "core/handover/partials/_note.html"
+
+    def get(self, request):
+        """Return the existing note partial as a validated Watch follow-up."""
+
+        if request.headers.get("X-Zeitstrom-Watch") != "1":
+            return HttpResponseNotAllowed(["POST"])
+        if not _scope_matches_request(request):
+            return _reload_required(json_response=False)
+        with _consistent_watch_render():
+            now = timezone.localtime()
+            state = resolve_zeitstrom_state(
+                request.GET,
+                request.current_facility,
+                today=timezone.localdate(now),
+                now=now,
+            )
+            if not state.is_handover:
+                return _reload_required(json_response=False)
+            displayed_shift = Shift(state.target_date, state.time_filter)
+            context = {
+                "handover_notes": build_handover_note_context(
+                    request.current_facility,
+                    request.user,
+                    displayed_shift,
+                    now=now,
+                ),
+                "handover_note_display": displayed_shift,
+            }
+            response = render(request, self.template_name, context)
+            validator = build_zeitstrom_component_validator(
+                request.user,
+                request.current_facility,
+                state,
+                "handover_note",
+            )
+            response["ETag"] = validator
+            if validator not in parse_etags(request.headers.get("If-Match", "")):
+                response = HttpResponse(status=412)
+                response["ETag"] = validator
+            return _watch_cache_headers(response)
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):

@@ -22,6 +22,7 @@
         "current_shift",
         "focus_box",
         "bans",
+        "handover_note",
     ]);
 
     function defaultNavigate(url) {
@@ -346,6 +347,31 @@
             window.dispatchEvent(new CustomEvent("zeitstrom:tally-counts-updated"));
         }
 
+        function handoverFormIsOpen(target) {
+            return Array.from(target.querySelectorAll("form")).some(function (form) {
+                if (form.contains(document.activeElement)) return true;
+                return Array.from(form.querySelectorAll("textarea")).some(function (field) {
+                    return field.value !== field.defaultValue;
+                });
+            });
+        }
+
+        async function refreshHandoverNote(signal, expectedGeneration, expectedValidator) {
+            const current = document.getElementById("handover-note");
+            if (!current || handoverFormIsOpen(current)) return false;
+            const html = await htmlFollowup(root.dataset.handoverNoteUrl, signal, expectedValidator);
+            if (html === null || expectedGeneration !== generation || signal.aborted) return false;
+            // The user may have focused or changed the form while the request
+            // was in flight. The late response must not destroy that work.
+            if (handoverFormIsOpen(current)) return false;
+            const template = document.createElement("template");
+            template.innerHTML = html.trim();
+            const fresh = template.content.querySelector("#handover-note");
+            if (!fresh) throw new Error("ZeitstromHandoverNoteTarget");
+            swapRegion(current, fresh.outerHTML, "outerHTML");
+            return true;
+        }
+
         async function refreshChrome(component, signal, expectedGeneration, expectedValidator) {
             const config = {
                 current_shift: [root.dataset.currentShiftUrl, "zeitstrom-current-shift-slot"],
@@ -367,6 +393,9 @@
             if (component === "feed") return refreshFeed(signal, expectedGeneration, expectedValidator);
             if (component === "tally_counts") {
                 return refreshTallyCounts(signal, expectedGeneration, expectedValidator);
+            }
+            if (component === "handover_note") {
+                return refreshHandoverNote(signal, expectedGeneration, expectedValidator);
             }
             return refreshChrome(component, signal, expectedGeneration, expectedValidator);
         }
@@ -426,8 +455,9 @@
                 leaveSensitivePage(urlWithState(window.location.pathname));
                 return;
             }
+            let refreshResults;
             try {
-                await Promise.all(
+                refreshResults = await Promise.all(
                     components.map(function (component) {
                         return refreshComponent(
                             component,
@@ -453,10 +483,16 @@
                 return;
             }
             if (currentCycle.generation !== generation || currentCycle.controller.signal.aborted || stopped) return;
+            let skippedComponent = false;
             Object.entries(changedValidators).forEach(function ([component, value]) {
+                const index = components.indexOf(component);
+                if (refreshResults[index] === false) {
+                    skippedComponent = true;
+                    return;
+                }
                 if (typeof value === "string") validators[component] = value;
             });
-            pageEtag = response.headers.get("ETag") || "";
+            pageEtag = skippedComponent ? "" : response.headers.get("ETag") || "";
             failures = 0;
         }
 

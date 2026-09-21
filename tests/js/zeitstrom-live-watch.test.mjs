@@ -47,6 +47,7 @@ function renderDom() {
               data-feed-url="/partials/zeitstrom/feed/"
               data-tally-counts-url="/partials/zeitstrom/tally-counts/"
               data-current-shift-url="/partials/zeitstrom/current-shift/"
+              data-handover-note-url="/uebergabe/notiz/"
               data-focus-box-url="/partials/zeitstrom/focus-box/">
             <form id="zeitstrom-filter-state">
                 <input name="date" value="2026-08-16">
@@ -56,6 +57,7 @@ function renderDom() {
                 <input name="view" value="">
             </form>
             <div id="zeitstrom-bans-slot"></div>
+            <div id="handover-note"><form><textarea>Gespeicherter Stand</textarea></form></div>
             <div id="zeitstrom-current-shift-slot"></div>
             <div id="tally-panel-slot">
                 <div data-testid="tally-row-type-1">
@@ -133,6 +135,54 @@ beforeEach(() => {
 });
 
 describe("Zeitstrom live watch", () => {
+    it("refreshes an untouched handover note form", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                watchResponse(["handover_note"], { handover_note: '"note-v2"' }),
+            )
+            .mockResolvedValueOnce(
+                response({
+                    text: '<div id="handover-note"><form><textarea>Notiz von Nutzer A</textarea></form></div>',
+                    headers: { "Content-Type": "text/html", ETag: '"note-v2"' },
+                }),
+            );
+        const watcher = window.createZeitstromLiveWatch(
+            document.getElementById("zeitstrom-live-watch"),
+            { fetch: fetchMock, navigate },
+        );
+
+        await watcher.checkNow();
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(document.querySelector("#handover-note textarea").value).toBe("Notiz von Nutzer A");
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it("never overwrites a handover note form with an unsaved draft", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                watchResponse(["handover_note"], { handover_note: '"note-v2"' }),
+            );
+        const watcher = window.createZeitstromLiveWatch(
+            document.getElementById("zeitstrom-live-watch"),
+            { fetch: fetchMock, navigate },
+        );
+        const textarea = document.querySelector("#handover-note textarea");
+        const original = document.getElementById("handover-note");
+        textarea.value = "Mein ungespeicherter Entwurf";
+
+        await watcher.checkNow();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(original.isConnected).toBe(true);
+        expect(textarea.value).toBe("Mein ungespeicherter Entwurf");
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
     it("sends the opaque page scope on watch and follow-ups", async () => {
         const fetchMock = vi
             .fn()
