@@ -32,6 +32,7 @@ from contextlib import contextmanager
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import FieldTemplate
@@ -467,7 +468,7 @@ def lock_batch_attachment_rows(owner, entry_ids, *, creates_rows=False) -> None:
     lock_attachment_rows_in_facility_order(owner, entry_ids, lock_owner_rows=True)
 
 
-def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=False) -> list:
+def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=False, deletes_rows=False) -> list:
     """Die EINE Umsetzung der einrichtungsweiten Sperr-Reihenfolge (Refs #2260).
 
     Verbindliche Ordnung fuer jeden anhangsmutierenden Pfad einer Einrichtung:
@@ -506,7 +507,35 @@ def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=
     ihre Mutation dann selbst, und ``select_for_update`` waere im
     Autocommit-Modus ein ``TransactionManagementError``.
 
-    Liefert die gesperrten Attachment-PKs in Sperr-Reihenfolge.
+    ``deletes_rows=True`` sagt: dieser Vorgang LOESCHT die Zeilen. Dann gehoert
+    in die Vorsperre nicht nur die eigene Loeschmenge, sondern auch jede Zeile,
+    deren ``superseded_by`` in sie zeigt — auch die eines FREMDEN Owners.
+
+    Warum es die gibt: Ein Zusammenfuehren verschiebt nur die im FILE-Marker
+    referenzierten Zeilen; die ersetzte Vorgeschichte bleibt bewusst beim
+    abgebenden Datensatz (Marker-Invariante I-M1). Ein Versionsstrang kann
+    danach ueber zwei Owner laufen. ``superseded_by`` ist ein
+    ``SET_NULL``-Selbstbezug: Djangos Loeschsammler setzt ihn beim ``delete()``
+    per ``UPDATE`` auf ``NULL`` — ohne Owner-Filter. Diese Zeile wuerde also
+    erstmals gesperrt, NACHDEM der Vorgang den Ketten-Advisory-Lock haelt
+    (beim endgueltigen Loeschen steht das Protokoll fachlich vor der Tilgung);
+    ein Pfad, der jene Zeile haelt und danach den Ketten-Lock will
+    (Anonymisierung des abgebenden Datensatzes), schliesst damit den Zyklus.
+    Beim physischen Cleanup kommt hinzu, dass die erstmals gesperrte
+    Anhangsmenge nicht mehr aufsteigend ist, wenn die fremde Zeile die
+    kleinere PK hat.
+
+    EIN Schritt genuegt: die referenzierenden Zeilen werden nur AKTUALISIERT,
+    nicht geloescht — sie loesen ihrerseits keine Kaskade aus. Beide Mengen
+    werden in EINER gemeinsam nach ``pk`` sortierten Abfrage gesperrt, ueber
+    die Einrichtung des Owners gescopt und bewusst owner-uebergreifend. Die
+    Owner-/Personenzeile des fremden Datensatzes bleibt ungesperrt: die
+    Reihenfolge zweier Personenzeilen ist ein eigener Vorgang.
+
+    Liefert die gesperrten Attachment-PKs der EIGENEN Menge in
+    Sperr-Reihenfolge — bei ``deletes_rows=True`` also ohne die nur
+    mitgesperrten Fremdzeilen, damit Zaehlwerte des Aufrufers (etwa die
+    Versionszahl im Protokoll) weiterhin den eigenen Vorgang beschreiben.
     """
     if not connection.in_atomic_block:
         return []
@@ -522,7 +551,26 @@ def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=
     rows = owner.attachments.all()
     if ids is not None:
         rows = rows.filter(entry_id__in=ids)
-    return list(rows.select_for_update().order_by("pk").values_list("pk", flat=True))
+    if not deletes_rows:
+        return list(rows.select_for_update().order_by("pk").values_list("pk", flat=True))
+
+    from core.models.attachment import Attachment  # noqa: PLC0415 — Zyklus vermeiden
+
+    eigene = set(rows.values_list("pk", flat=True))
+    if not eigene:
+        return []
+    gesperrt = list(
+        Attachment.objects.filter(facility_id=owner.facility_id)
+        .filter(Q(pk__in=eigene) | Q(superseded_by_id__in=eigene))
+        .select_for_update()
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    # Nur die eigene Menge zurueck — und nur, soweit die Sperrabfrage sie nach
+    # dem Warten noch gesehen hat (``FOR UPDATE`` prueft die Sichtbarkeit
+    # erneut). Ein nebenlaeufig bereits vernichteter Strang faellt damit wie
+    # bisher auf 0.
+    return [pk for pk in gesperrt if pk in eigene]
 
 
 def lock_owner_rows_in_facility_order(owner) -> None:
@@ -915,6 +963,17 @@ def purge_attachment_chain(owner, entry_id):
             raise AttachmentPurgeBlockedError(
                 _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")
             )
+
+        # Refs #2260 (Fix-Runde 3): die vollstaendige Schreibmenge dieses
+        # Loeschens — die Kette selbst UND jede Zeile, deren ``superseded_by``
+        # in sie zeigt — in EINER nach ``pk`` geordneten Abfrage sperren, bevor
+        # das ``delete()`` seine ``SET_NULL``-Kaskade faehrt. Der View-Weg hat
+        # diese Zeilen ueber dieselbe Funktion bereits vor seinem Audit-Write
+        # gesperrt und findet sie hier gehalten vor; der DIREKTE Service-Aufruf
+        # bekommt die Ordnung so ebenfalls. Stufe 1 liegt bereits hinter uns
+        # (``assert_processing_allowed(lock=True)`` und
+        # :func:`_lock_owner_row`), deshalb ``lock_owner_rows=False``.
+        lock_attachment_rows_in_facility_order(owner, [entry_id], deletes_rows=True)
 
         _drop_purged_marker_entries(owner, {str(attachment.pk) for attachment in chain})
         owner.attachments.filter(entry_id=entry_id).delete()

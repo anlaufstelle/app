@@ -696,8 +696,17 @@ class AttachmentPurgeView(LeadOrAdminRequiredMixin, View):
         Hold-Anlage), schloss damit einen Zyklus. Der Service sperrt dieselben
         Zeilen weiterhin selbst — er findet sie jetzt bereits gehalten vor und
         bleibt fuer den direkten Aufruf unveraendert sicher.
+
+        Refs #2260 (Fix-Runde 3): ``deletes_rows=True``, weil dieser Vorgang die
+        Zeilen VERNICHTET. Die Vorsperre nimmt deshalb zusaetzlich jede Zeile
+        auf, deren ``superseded_by`` in die Kette zeigt — nach einem
+        Zusammenfuehren kann das eine Zeile eines anderen Datensatzes sein, die
+        das ``delete()`` sonst erst per ``SET_NULL``-Kaskade und damit erstmals
+        UNTER dem Ketten-Lock angefasst haette. Die Rueckgabe bleibt die eigene
+        Kette: die Versionszahl im Protokoll zaehlt diesen Vorgang, nicht die
+        mitgesperrte Vorgeschichte anderer.
         """
-        return len(lock_attachment_rows_in_facility_order(owner, [entry_id], lock_owner_rows=True))
+        return len(lock_attachment_rows_in_facility_order(owner, [entry_id], lock_owner_rows=True, deletes_rows=True))
 
     def get(self, request, pk):
         owner, attachment = self._resolve(request, pk)

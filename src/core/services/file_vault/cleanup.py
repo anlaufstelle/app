@@ -55,7 +55,16 @@ def delete_attachments_for(owner):
     # zeilen: ``DELETE`` sperrt sie in Planreihenfolge. Die vorgezogene,
     # nach ``pk`` geordnete Sperre nimmt alle Zeilen des Owners in fester
     # Ordnung, bevor die erste Datei faellt.
-    lock_attachment_rows_in_facility_order(owner, None)
+    #
+    # Fix-Runde 3: ``deletes_rows=True``. Die Loeschmenge ist owner-eigen, die
+    # per ``SET_NULL`` MITGESCHRIEBENEN Zeilen sind es nicht: nach einem
+    # Zusammenfuehren bleibt die ersetzte Vorgeschichte beim abgebenden
+    # Datensatz, waehrend der Kopf hier faellt. Jene Zeile kaeme sonst erst
+    # durch die Kaskade des ``delete()`` an die Reihe — ausserhalb der
+    # geordneten Vorsperre und damit in absteigender Folge, sobald sie die
+    # kleinere PK hat. ``lock_owner_rows`` bleibt aus: die Owner-Zeilen haelt
+    # die umgebende Loesch-/Anonymisierungskaskade bereits.
+    lock_attachment_rows_in_facility_order(owner, None, deletes_rows=True)
     for attachment in owner.attachments.all():
         delete_attachment_file(attachment)
     owner.attachments.all().delete()
