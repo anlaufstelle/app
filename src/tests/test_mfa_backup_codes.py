@@ -339,6 +339,11 @@ class TestMFABackupCodesView:
         session["mfa_setup_pending"] = True
         session.save()
 
+        # Refs #2287: Der Abschluss haengt am konkret autorisierten Geraet —
+        # ``MFASetupView.post`` legt dessen PK unter ``mfa_setup_device_pk`` ab.
+        session["mfa_setup_device_pk"] = device.pk
+        session.save()
+
         response = client.post("/mfa/backup-codes/", {"confirm_saved": "on"})
         assert response.status_code == 302
         assert response.url == "/mfa/settings/"

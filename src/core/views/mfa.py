@@ -59,6 +59,10 @@ logger = logging.getLogger(__name__)
 # Session-Key, unter dem die frisch generierten Backup-Codes fuer den
 # Anzeige-/Quittungs-Zwischenschritt liegen.
 _SESSION_BACKUP_CODES_KEY = "mfa_backup_codes"
+# Session-Key mit dem Primaerschluessel des Geraets, fuer das der laufende
+# Einrichtungsvorgang autorisiert wurde (Refs #2287). Der Setup-Abschluss
+# bestaetigt ausschliesslich dieses Geraet — nicht "irgendein" unbestaetigtes.
+_SESSION_SETUP_DEVICE_KEY = "mfa_setup_device_pk"
 
 
 def _store_session_backup_codes(request, codes: list[str]) -> None:
@@ -122,6 +126,34 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
 
     template_name = "auth/mfa_setup.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        """Refs #2287: Berechtigung fuer ALLE HTTP-Methoden gemeinsam pruefen.
+
+        Bisher gatete nur ``get`` den erneuten Einstieg. ``post`` baute den
+        Einrichtungskontext auch dann wieder auf, wenn laengst ein bestaetigter
+        zweiter Faktor existierte — eine bloss passwortauthentifizierte Sitzung
+        konnte damit ein zusaetzliches Geraet aktivieren, den bestehenden
+        Backup-Code-Satz ersetzen und sich ueber den Setup-Abschluss selbst auf
+        ``mfa_verified`` heben. Die MFA-Enforcement-Middleware greift hier
+        nicht: ``/mfa/`` steht in ihren ``EXEMPT_URLS``, damit die Zeremonie
+        erreichbar bleibt.
+
+        Ein erneutes Setup bei bestehendem Faktor ist ein **Faktorwechsel** und
+        verlangt deshalb eine MFA-verifizierte Sitzung. Bestandsfaktor ist TOTP
+        ODER Passkey (ADR-032, Refs #1492). Die Ablehnung folgt dem Muster von
+        ``MFASettingsView.dispatch`` (Refs #1590) bzw.
+        ``middleware/mfa.py::_required_redirect`` Case 2 — Weiterleitung nach
+        ``/mfa/verify/`` VOR dem Kontextaufbau, fuer GET und POST gleich. Ohne
+        bestaetigten Faktor bleibt das Erstsetup unveraendert erreichbar.
+        """
+        if (
+            request.user.is_authenticated
+            and request.user.has_confirmed_mfa_device
+            and not request.session.get("mfa_verified")
+        ):
+            return redirect("mfa_verify")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request, *args, **kwargs):
         if request.user.has_confirmed_totp_device:
             return redirect("mfa_settings")
@@ -156,6 +188,8 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
             codes = generate_backup_codes(request.user)
             _store_session_backup_codes(request, codes)
             request.session["mfa_setup_pending"] = True
+            # Refs #2287: Der Abschluss wird an genau dieses Geraet gebunden.
+            request.session[_SESSION_SETUP_DEVICE_KEY] = device.pk
             log_audit_event(
                 request,
                 AuditLog.Action.BACKUP_CODES_GENERATED,
@@ -379,9 +413,19 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
 
         # Quittung erteilt. Im Setup-Flow jetzt — und erst jetzt — 2FA aktivieren.
         if request.session.pop("mfa_setup_pending", False):
-            device = TOTPDevice.objects.filter(user=request.user, confirmed=False).first()
+            # Refs #2287: Nur das Geraet, fuer das dieser Vorgang autorisiert
+            # wurde, wird scharf geschaltet. Frueher genuegte "irgendein"
+            # unbestaetigtes Geraet des Kontos — damit liess sich der Abschluss
+            # auf ein fremd angelegtes Geraet umlenken.
+            device_pk = request.session.pop(_SESSION_SETUP_DEVICE_KEY, None)
+            device = (
+                TOTPDevice.objects.filter(user=request.user, pk=device_pk, confirmed=False).first()
+                if device_pk is not None
+                else None
+            )
             if device is None:
-                # Defensive: Pending-Marker ohne unbestätigtes Device → neu aufsetzen.
+                # Defensive: Pending-Marker ohne autorisiertes unbestätigtes
+                # Device (oder ohne Marker) → Einrichtung neu aufsetzen.
                 request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
                 return redirect("mfa_setup")
             device.confirmed = True
