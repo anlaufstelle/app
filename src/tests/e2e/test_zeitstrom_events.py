@@ -220,13 +220,15 @@ class TestEventErstellung:
         assert page.locator("dt:has-text('Fall')").count() == 0
 
     @pytest.mark.smoke
-    def test_empty_number_field_has_no_placeholder_in_detail(self, authenticated_page, base_url):
+    def test_empty_number_field_renders_no_python_literal_in_detail(self, authenticated_page, base_url):
         """Zahlenfeld leer lassen → Detail-Seite zeigt keinen Python-Literal (Refs #2220).
 
         Der Fall aus dem Installations-Trockenlauf: Beim ersten dokumentierten
         Kontakt bleibt das optionale Zahlenfeld „Dauer" leer. Ein leeres
         ``IntegerField`` liefert ``None`` (nicht ``""`` wie ein Textfeld), und die
-        Detailseite hat dieses ``None`` frueher woertlich gerendert.
+        Detailseite hat dieses ``None`` frueher woertlich gerendert. Seit #2244
+        steht an dieser Stelle der fuer Screenreader angesagte, sichtbar leere
+        Platzhalter „Nicht angegeben" — und sonst nichts.
         """
         page = authenticated_page
         page.goto(f"{base_url}/events/new/")
@@ -242,13 +244,15 @@ class TestEventErstellung:
 
         # Anchor-then-content wie in ``test_event_save_and_appears_in_detail``.
         page.locator("dt:has-text('Dauer')").first.wait_for(state="visible", timeout=30000)
-        # ``state="attached"`` statt ``visible``: ein leeres ``dd`` hat keine
-        # Hoehe und gilt Playwright deshalb als unsichtbar — genau der Zustand,
+        # ``state="attached"`` statt ``visible``: der ``dd`` traegt nur den
+        # sr-only-Platzhalter und hat keine sichtbare Hoehe — genau der Zustand,
         # den dieser Test als korrekt festschreibt. ``text_content`` liest den
-        # Knoten unabhaengig von der Sichtbarkeit.
+        # Knoten unabhaengig von der Sichtbarkeit; frueher stand hier ``None``.
         dauer_value = page.locator("dt:has-text('Dauer') + dd").first
         dauer_value.wait_for(state="attached", timeout=10000)
-        assert (dauer_value.text_content() or "").strip() == ""
+        rendered = (dauer_value.text_content() or "").strip()
+        assert rendered == "Nicht angegeben", rendered
+        expect(dauer_value.locator(".sr-only")).to_have_text("Nicht angegeben")
 
         # Gegenprobe: Die gefuellte Nachbarzelle steht weiterhin da.
         page.locator("dl").get_by_text("E2E ohne Dauer").first.wait_for(state="visible", timeout=5000)
