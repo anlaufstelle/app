@@ -8,12 +8,24 @@
     <title>{% trans "Demo-Bereich wählen" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     {% include "components/_document_head.html" %}
+    {# Refs #2285 Fix-Runde 1 (Ticket-Punkt 9 "ungespeicherte Arbeit"): derselbe #}
+    {# Krypto-/Offline-Verbund + dieselbe Reihenfolge wie login.html — noetig,  #}
+    {# damit demo-scenario-switch-guard.js unten vor jedem Start/Wechsel die    #}
+    {# ausstehenden Offline-Eintraege zaehlen kann (window.offlineStore).       #}
+    <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/url-patterns.js' %}"></script>
+    <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-db.js' %}"></script>
+    <script src="{% static 'js/offline-bundles.js' %}"></script>
+    <script src="{% static 'js/offline-revocations.js' %}"></script>
+    <script src="{% static 'js/offline-store.js' %}"></script>
 </head>
 {# Refs #2285: standalone Seite wie login.html — kein base.html (Bereichsauswahl #}
 {# ist der Einstieg VOR der ersten Anmeldung, aber auch der Wechsel-Zielort   #}
 {# fuer bereits angemeldete Demo-Konten; beides bleibt ohne die facility-     #}
 {# gescopte Navigation lesbar). #}
-<body class="min-h-screen p-6" data-testid="demo-scenario-select">
+<body class="min-h-screen p-6" data-testid="demo-scenario-select"
+      data-i18n-demo-switch-confirm="{% trans '{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?' %}">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
@@ -47,7 +59,7 @@
                 <p class="mt-2 text-[12px] text-ink-muted flex-1">{{ card.scenario.intro_hint }}</p>
 
                 {% if card.available %}
-                <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-4 space-y-2">
+                <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-4 space-y-2" data-demo-scenario-form>
                     {% csrf_token %}
                     <input type="hidden" name="scenario" value="{{ card.scenario.key }}">
                     <input type="hidden" name="role" value="{{ card.default_role }}">
@@ -61,7 +73,7 @@
                 {% if card.other_roles %}
                 <details class="mt-2" data-testid="demo-scenario-other-roles">
                     <summary class="cursor-pointer text-[12px] font-semibold text-ink-soft hover:underline">{% trans "Andere Rolle wählen" %}</summary>
-                    <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-2 space-y-1.5">
+                    <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-2 space-y-1.5" data-demo-scenario-form>
                         {% csrf_token %}
                         <input type="hidden" name="scenario" value="{{ card.scenario.key }}">
                         <fieldset class="space-y-1">
@@ -88,5 +100,6 @@
 
         {% include "components/_public_footer.html" with footer_compact=True %}
     </main>
+    <script src="{% static 'js/demo-scenario-switch-guard.js' %}" defer></script>
 </body>
 </html>
