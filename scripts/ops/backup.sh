@@ -81,8 +81,10 @@ if [[ "${1:-}" == "--verify" ]]; then
     # eines vollstaendig veroeffentlichten Laufs und bindet Dump, Medien und
     # Anker aneinander. Verify prueft damit exakt denselben Satz wie restore.sh
     # — kein Rueckfall auf lose oder fremde Einzelartefakte.
-    LATEST_MANIFEST=$(find "$DAILY_DIR" -maxdepth 1 -name "anlaufstelle_*.manifest" -type f 2>/dev/null \
-        | sort -r | head -n1)
+    # Kein "| head -n1": unter pipefail kann ein frueh schliessender Leser den
+    # Schreiber mit SIGPIPE (Exit 141) beenden. mapfile liest die Liste ganz.
+    mapfile -t MANIFEST_CANDIDATES < <(find "$DAILY_DIR" -maxdepth 1 -name "anlaufstelle_*.manifest" -type f 2>/dev/null | sort -r)
+    LATEST_MANIFEST="${MANIFEST_CANDIDATES[0]:-}"
 
     if [[ -z "$LATEST_MANIFEST" ]]; then
         echo "FEHLER: Kein signiertes Backup-Manifest in ${DAILY_DIR} gefunden."
