@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
 > Synchronization update 2026-09-22: Step 4 explains that the script now auto-detects `compose.legal.yml`/`compose.override.yml` and prints the file list it used, and that the first ClamAV start can take about three minutes to download signatures (#2309, #2312).
 > Synchronization update 2026-09-22: § 1 Step 2 states the length/character-set requirement once for `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` and names `openssl` as the primary command shared with `.env.example` (#2313).
@@ -406,7 +407,7 @@ Expected (anonymous) response -- since #1375 it contains **only** the `status` f
 {"status": "ok"}
 ```
 
-**Normal immediately after installation:** The MFA quota in the compliance dashboard remains critical until every MFA-mandatory account has enrolled its second factor. “Critical audit events (24h)” can also show a warning after a fresh initial setup because the setup itself creates critical audit events. Background jobs that have never run initially appear as `unknown`: view refresh and breach scan first run at the next quarter-hour and half-hour, retention/audit verification/orphan cleanup daily from 03:00, and statistics snapshots at 04:00 on the next first day of a month. If a state remains past its first scheduled run, inspect `docker compose -f docker-compose.prod.yml logs cron`. An outdated ClamAV signature set is not a normal startup state.
+**Normal immediately after installation:** The MFA quota in the compliance dashboard remains critical until every MFA-mandatory account has enrolled its second factor. “Critical audit events (24h)” can also show a warning after a fresh initial setup because the setup itself creates critical audit events. Background jobs that have never run initially appear as `unknown`: view refresh and breach scan first run at the next quarter-hour and half-hour, retention/audit verification/orphan cleanup daily from 03:00, and statistics snapshots at 04:00 on the next first day of a month. If a state remains past its first scheduled run, inspect `docker compose -f docker-compose.prod.yml logs cron`. An outdated ClamAV signature set is not a normal startup state. The “Admin DB role” card shows `unknown` in the web container with a pointer to the maintenance service — on a correctly installed instance this is the normal state because the admin credentials are deliberately absent from the web container (see § 5.5).
 
 ---
 
@@ -2246,4 +2247,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 8967cdb380858c3752cb8946bb896060b57903b4 -->
+<!-- source-hash: b4e97e435c2ec42c5a9de4cf748614a3e8f0acb6 -->
