@@ -361,7 +361,7 @@ def seed_events_bulk(
             created_by=staff_users[idx % len(staff_users)],
         )
 
-    # Ruling Fix-Runde 1 (Orchestrator, Nachtrag zu #2270): Phase 1 —
+    # Nachtrag zu #2270: Phase 1 —
     # Abdeckung PER KONSTRUKTION. Der vorherige rein gewichtete Zufallszug
     # liess seltene Typen (z. B. ``hausverbot``, Gewicht 0,2 von ~99,2)
     # zufaellig ganz ausfallen — ``test_seed.py`` erwartet aber

@@ -1,10 +1,9 @@
 """Template-Helfer fuer die Demo-Bereichsauswahl (Refs #2285).
 
-Eigene Datei statt Erweiterung von ``core/context_processors.py``: Letztere
-ist NICHT Teil der Besitzliste dieser Lane (TABU-Disziplin, Standardblock
-Regel 18/39) — ein Inclusion/Simple-Tag deckt denselben Bedarf (aktueller
-Bereich im Demo-Banner der ``base.html``-Shell), ohne eine geteilte, global
-wirkende Datei anzufassen, die andere Lanes ebenfalls nutzen.
+Eigene Datei statt Erweiterung von ``core/context_processors.py``: ein
+Inclusion/Simple-Tag deckt denselben Bedarf (aktueller Bereich im
+Demo-Banner der ``base.html``-Shell), ohne eine geteilte, global wirkende
+Datei anzufassen, die viele andere Stellen ebenfalls nutzen.
 """
 
 from django import template

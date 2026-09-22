@@ -38,7 +38,7 @@ from core.services.conditions import (
 from core.services.config import block_ordered_dtf_queryset
 
 # Direkter Import aus dem Submodul statt aus ``core.services.system``, damit
-# dessen ``__init__``-Re-Export-Liste (ausserhalb der Lane-Besitzliste)
+# dessen ``__init__``-Re-Export-Liste
 # unangetastet bleibt — ``TEXT``/``TEXTAREA`` sind dort bislang nicht
 # re-exportiert (nur ``FILE``/``MULTI_SELECT``/``NUMBER``/``SELECT``).
 from core.services.system.field_types import TEXT, TEXTAREA

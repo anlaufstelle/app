@@ -20,7 +20,7 @@ Pflicht zur Begründung nicht auf).
 
 ``facility_for_scenario``/``account_for`` bekommen NIE Werte aus
 Request-Parametern — der Name kommt ausschließlich aus dem serverseitigen
-Szenariokatalog (``core.seed.scenarios``, Lane F-2/#2279), Rolle und
+Szenariokatalog (``core.seed.scenarios``, Refs #2279), Rolle und
 Facility-Objekt sind zum Aufrufzeitpunkt bereits serverseitig validiert.
 """
 

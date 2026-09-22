@@ -7,7 +7,7 @@ existiert im URLconf immer (stabile ``reverse()``-Namen fuer Templates/Tests),
 verhaelt sich ausserhalb der Demo aber wie eine nicht existierende Seite.
 
 * ``DemoScenarioSelectView`` (GET, oeffentlich): zeigt die Karten des
-  fachlichen Szenariokatalogs (``core.seed.scenarios``, Lane F-2/#2279) und
+  fachlichen Szenariokatalogs (``core.seed.scenarios``, Refs #2279) und
   markiert nicht bereitgestellte/archivierte Bereiche als nicht verfuegbar.
   Ein ``?bereich=<key>``-Deep-Link waehlt NUR vor (Ticket-Punkt 8) — er
   fokussiert die Karte, loest aber keinen Login aus.
@@ -22,11 +22,10 @@ verhaelt sich ausserhalb der Demo aber wie eine nicht existierende Seite.
   ``next``-Parameter wird ausgewertet (Ticket-Punkt 8, „auf vorgesehene
   Demo-Seiten begrenzen").
 
-Bewusst KEIN Import von ``core.seed.scenarios`` auf Modulebene: die Datei
-ist Eigentum von Lane F-2 (#2279) und war zum Start dieser Lane noch nicht
-in den Baum gemerged (Besitzliste/TABU dieser Lane, ``src/core/seed/**``
-NUR über die dort dokumentierte Schnittstelle konsumieren, keine eigene
-Kopie). ``scenario_catalog()``/``_lookup_scenario()`` importieren daher
+Bewusst KEIN Import von ``core.seed.scenarios`` auf Modulebene: der
+Katalog (#2279) entstand parallel zu dieser Auswahl und wird NUR über die
+dort dokumentierte Schnittstelle konsumiert (keine eigene Kopie).
+``scenario_catalog()``/``_lookup_scenario()`` importieren daher
 weiterhin lazy zur Aufrufzeit und fangen ein fehlendes Modul ab — der
 Katalog liegt seit dem Rebase auf F-2s Merge-Stand jetzt im Baum, der
 Lazy-Import bleibt trotzdem stehen (kostet nichts, schützt vor einem
@@ -58,9 +57,9 @@ from core.models import User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
 from core.services.demo_scenarios import account_for, facility_for_scenario
 
-#: Refs #573/#1065 (``CustomLogoutView``, ``core/views/auth.py``, dort NUR als
-#: Vorbild referenziert/dupliziert — TABU-Regel dieser Lane verbietet eine
-#: Aenderung der bestehenden Abmeldung). Gleicher Wert wie beim Logout:
+#: Refs #573/#1065 (``CustomLogoutView``, ``core/views/auth.py``, dort als
+#: Vorbild; die bestehende Abmeldung bleibt unveraendert). Gleicher Wert wie
+#: beim Logout:
 #: "cookies" bleibt bewusst draussen, die neue Session-Cookie dieser Antwort
 #: soll tragen.
 CLEAR_SITE_DATA_VALUE = '"storage", "cache"'
@@ -137,8 +136,8 @@ def _stamp_session_timeout(request, facility):
     """Facility-Sitzungsfenster + absolutes Maximum stempeln.
 
     Dupliziert bewusst den engen Ausschnitt aus ``CustomLoginView.form_valid``
-    (``core/views/auth.py``, dort NUR Vorbild fuer die Abmelde-/Bereinigungs-
-    logik laut Besitzliste — hier fuer den analogen Login-Bootstrap ohne
+    (``core/views/auth.py``, dort Vorbild fuer die Abmelde-/Bereinigungs-
+    logik — hier fuer den analogen Login-Bootstrap ohne
     Passwortformular). Ohne den Stempel wuerde
     ``SessionIdleRefreshMiddleware`` beim naechsten Request ohnehin einen
     Default-Wert nachtragen (kein harter Fehler) — mit ihm gilt ab dem ersten

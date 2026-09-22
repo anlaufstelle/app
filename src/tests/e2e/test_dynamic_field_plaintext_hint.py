@@ -1,11 +1,8 @@
-"""E2E-Spec fuer #2272 — GESCHRIEBEN, NICHT GEFAHREN (Standardblock 46).
+"""E2E-Spec fuer #2272.
 
-Lane F-1 hat in dieser Welle KEIN Playwright-Recht (nur die eine benannte
-Playwright-Lane S-C darf E2E fahren, seriell unter dem globalen CI-Lock,
-Port 8844, ``POSTGRES_DB=anlaufstelle_e2e``). Diese Datei ist deshalb
-ausschliesslich GESCHRIEBEN worden — der Orchestrator fuehrt sie zu gegebener
-Zeit aus; ein axe-Nachweis fuer die betroffenen Seiten macht ebenfalls der
-Orchestrator (``make test-a11y-locked``), nicht diese Lane.
+Laeuft seriell unter dem globalen CI-Lock (Port 8844,
+``POSTGRES_DB=anlaufstelle_e2e``); der axe-Nachweis fuer die betroffenen
+Seiten laeuft getrennt (``make test-a11y-locked``).
 
 Prueft den zentralen, uebersetzbaren Klarnamenhinweis an dynamischen
 Text-/Textarea-Feldern (``core.forms.dynamic.build_dynamic_form_field``,
@@ -71,7 +68,7 @@ def _create_field_template_with_help_text(page, base_url, name, field_type, help
     (``config/field_templates/form.html`` rendert beide aus demselben
     generischen Feld-Loop, ``is_edit`` steuert nur Zusatzbloecke).
 
-    Fix-Runde 2: ``FieldTemplate.help_text`` ist ein ``models.CharField``
+    Hinweis: ``FieldTemplate.help_text`` ist ein ``models.CharField``
     (``core/models/field_template.py``, ``max_length=200``) — Django rendert
     ein ``ModelForm``-Feld ohne ``Meta.widgets``-Override nach dem
     Modellfeldtyp, ``CharField`` also als ``<input type="text">``
@@ -79,11 +76,10 @@ def _create_field_template_with_help_text(page, base_url, name, field_type, help
     (``core/forms/config.py``) ueberschreibt nur ``options_json`` und
     ``default_value`` — ``help_text`` bleibt beim Default. Der urspruengliche
     Selektor ``textarea#id_help_text`` lief deshalb in einen
-    Playwright-Timeout (Element existiert nicht); belegt am echten Lauf im
-    E2E-Log des Orchestrators (``playwright._impl._errors.TimeoutError:
-    Page.fill: ... waiting for locator("textarea#id_help_text")``,
-    ``/config/field-templates/new/``) und am gerenderten HTML (Scratch,
-    s. Bericht Fix-Runde 2)."""
+    Playwright-Timeout (Element existiert nicht); belegt am echten Lauf
+    (``playwright._impl._errors.TimeoutError: Page.fill: ... waiting for
+    locator("textarea#id_help_text")``, ``/config/field-templates/new/``)
+    und am gerenderten HTML."""
     page.goto(f"{base_url}{FIELDTEMPLATE_LIST}new/", wait_until="domcontentloaded")
     page.fill("input#id_name", name)
     page.select_option("select#id_field_type", value=field_type)

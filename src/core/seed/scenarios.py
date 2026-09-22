@@ -8,7 +8,7 @@ Stellen konsumiert:
 * ``dev-ops/deploy/demo-reseed.sh`` (stündlicher Reset auf
   ``demo.anlaufstelle.app``): ruft denselben ``--scale demo``-Zweig auf, es
   gibt keinen separaten Reset-Katalog.
-* Die Besucherauswahl aus #2285 (Lane F-3, TABU in dieser Lane): iteriert
+* Die Besucherauswahl aus #2285 (``core/views/demo_scenarios.py``): iteriert
   ``SCENARIOS`` für die Anzeige (Name/Beschreibung/Einstiegshinweis) und
   matcht die gewählte Facility über ``DemoScenario.facility_name`` gegen die
   vom Seed angelegte ``Facility`` — löst KEINEN Reseed aus, liest nur.
