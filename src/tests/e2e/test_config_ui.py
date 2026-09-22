@@ -33,10 +33,33 @@ FORM_SUBMIT = "form:has(#id_name) button[type='submit']"
 
 _DETAIL_RE = re.compile(r"/config/document-types/([0-9a-f-]+)/$")
 
+# Aufräum-Konvention (Refs #2324): Ein ``finally``-Block darf den Test NIE
+# mitten in einer Navigation verlassen. Der letzte Klick eines Cleanups ist
+# fast immer ein Formular-Submit — kehrt der Test unmittelbar nach dessen
+# ``commit`` zurueck, hat das neue Dokument noch keine Utility-World, und
+# ``context.storage_state()`` im Abbau der Page-Fixture faellt auf seine
+# interne Storage-State-Seite zurueck (eigene Page + Navigation auf den nackten
+# Origin). Diese interne Navigation laeuft in die echte App (302 auf
+# ``/login/``) und blockiert sporadisch endlos — ``storage_state()`` schickt
+# keinen Timeout, der Sync-API-Greenlet haengt bis zum harten
+# ``pytest-timeout``-Kill. Deshalb: nach dem letzten navigierenden Klick
+# IMMER ``wait_for_url`` + ``wait_for_load_state("load")``.
+
 
 def _cfg_name(kind: str) -> str:
     """Eindeutiger Wegwerf-Name mit ``E2E-CFG``-Präfix."""
     return f"E2E-CFG-{kind}-{uuid.uuid4().hex[:6]}"
+
+
+def _settle_after_delete(page) -> None:
+    """Den Redirect nach einem Loesch-Submit zu Ende laufen lassen (Refs #2324).
+
+    Siehe die Aufraeum-Konvention oben: ohne dieses Nachlaufen verlaesst der
+    Test seine Page mitten im Dokumentwechsel, und der Abbau der Page-Fixture
+    haengt sporadisch in ``context.storage_state()``.
+    """
+    page.wait_for_url(re.compile(r"/config/field-templates/$"))
+    page.wait_for_load_state("load")
 
 
 class TestFacilitySettingsHub:
@@ -543,6 +566,7 @@ class TestFieldTemplateCrud:
                         btn = page.locator('[data-testid="fieldtemplate-delete-confirm"]')
                         if btn.is_enabled():
                             btn.click()
+                            _settle_after_delete(page)
                 except Exception:
                     pass
 
@@ -602,6 +626,7 @@ class TestFieldTemplateCrud:
                         link.click()
                         page.wait_for_url(re.compile(r"/config/field-templates/[0-9a-f-]+/delete/$"))
                         page.locator('[data-testid="fieldtemplate-delete-confirm"]').click()
+                        _settle_after_delete(page)
                 except Exception:
                     pass
 
