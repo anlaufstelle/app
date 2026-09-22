@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-21 22:42+0200\n"
+"POT-Creation-Date: 2026-09-22 18:19+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12738,3 +12738,11 @@ msgstr "One of the two persons is subject to a legal hold — undoing the merge 
 #: src/templates/core/handover/partials/_note.html
 msgid "In dieser Dienstplan-Lücke läuft keine Schicht. Die Übergabe der zuletzt abgeschlossenen Schicht steht darüber und bleibt bis zum Ende der Folgeschicht bearbeitbar."
 msgstr "No shift is running in this roster gap. The handover of the most recently completed shift is shown above and remains editable until the end of the following shift."
+
+#: src/core/services/case/state_contract.py
+msgid "Diese Fallakte wurde gelöscht oder anonymisiert — ihr Status kann nicht mehr geändert werden."
+msgstr "This case file has been deleted or anonymized — its status can no longer be changed."
+
+#: src/core/services/case/state_contract.py
+msgid "Diese Fallakte steht für eine Statusänderung nicht mehr zur Verfügung — bitte die Seite neu laden."
+msgstr "This case file is no longer available for a status change — please reload the page."
