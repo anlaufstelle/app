@@ -2062,6 +2062,44 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 
 ---
 
+## MFA-Backup-Codes: Speicher- und Migrationsvertrag (Issues #2294, #2287)
+
+**Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und wie der Alt-Bestand ohne Hash abgebaut wird.
+
+### Was gespeichert wird
+
+`generate_backup_codes` ([`src/core/services/security/mfa.py`](../src/core/services/security/mfa.py)) erzeugt je Konto zehn Codes aus `secrets.token_urlsafe(16)` — 22 Zeichen, 128 Bit Entropie — und legt in `StaticToken.token` **nur** deren SHA-256-Hex-Digest ab, auf 16 Zeichen gekürzt (die Spalte von django-otp ist `CharField(max_length=16)`; 64 Bit Bild-Entropie bei 128-Bit-Eingabe sind für Pre-Image-Angriffe infeasibel). Der Klartext existiert genau einmal: in der Antwort an die einrichtende Person, zwischengelagert Fernet-verschlüsselt in der Sitzung (#1375).
+
+### Der Alt-Bestand — und warum der Direktvergleich fiel
+
+Die Hash-Speicherung kam mit #790. Eine **Migration, die bestehende Token-Zeilen nachträglich gehasht hätte, gibt es nicht** und kann es nicht geben: aus einer Klartext-Zeile ließe sich der Hash zwar bilden, aber die Umstellung war bewusst ohne Datenmigration angelegt. Konten, die ihre Codes vor #790 erhalten und seither nicht neu erzeugt haben, tragen deshalb weiterhin Klartext-Zeilen im Erzeugungsformat von damals: `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich.
+
+`verify_backup_code` suchte den Eingabewert dafür unverändert **neben** seinem Hash in derselben Spalte. Damit galt ein aus der Datenbank gelesener Token-Wert selbst als gültiges Geheimnis: wer eine noch unbenutzte Zeile lesen konnte, kam mit ihr durch den zweiten Faktor — über die Zwei-Faktor-Abfrage, die Sudo-Re-Authentifizierung und die Lockout-Selbsthilfe gleichermaßen. Der zugesagte Schutz der gehashten Speicherung war damit aufgehoben, obwohl der Einmalverbrauch weiter griff.
+
+Der Fallback prüft das Format jetzt **explizit** gegen genau dieses Erzeugungsmuster (`^[0-9a-f]{4}-[0-9a-f]{4}$`) und nimmt nur eine Eingabe dieser Form in den Direktvergleich auf. Ein gespeicherter Digest — 16 Hex-Zeichen, ohne Bindestrich — erfüllt die Form nicht und wird ausschließlich über seinen eigenen Hash gesucht, läuft also ins Leere. Der atomare Einmalverbrauch aus #2110 und der eine gemeinsame Throttle-Schritt aus #790 bleiben unverändert.
+
+### Übergangsfrist und Abschaltung
+
+Der Direktvergleich auf das Klartext-Format ist eine **Übergangsregel ohne Dauerzusage**. Sie endet, sobald der Alt-Bestand abgebaut ist; abgebaut wird er allein durch Nutzung:
+
+- Jedes „Codes neu erzeugen" (`MFARegenerateBackupCodesView`, selbst durch einen frischen Authenticator-Code gedeckt) ersetzt den gesamten Satz eines Kontos durch gehashte Codes.
+- Jede erneute Zwei-Faktor-Einrichtung erzeugt ebenfalls einen frischen, gehashten Satz.
+- Betreiberseitig prüfbar ist der Rest-Bestand über die Form der Zeilen: was einen Bindestrich enthält, ist noch nicht gehasht.
+
+**Abschaltbedingung:** Mit dem 1.0-Schnitt wird der Fallback entfernt, sobald keine Klartext-Zeile mehr existiert. Betreiber, die bis dahin noch Alt-Codes im Umlauf haben, lassen die betroffenen Konten einmal „Codes neu erzeugen" — danach ist der Vertrag eindeutig: in der Datenbank steht ausschließlich ein Digest, und kein Wert aus der Datenbank ist ein Anmeldecode.
+
+### Flankierend: erneute Einrichtung verlangt den Bestandsfaktor
+
+Zum selben Schutzgut gehört #2287: Die Einrichtungsseite gatete den erneuten Einstieg nur im `GET`-Zweig. Eine bloß passwortauthentifizierte Sitzung konnte den Einrichtungsvorgang deshalb per `POST` erneut durchlaufen — und dabei den vorhandenen Backup-Code-Satz ersetzen, also den Recovery-Anker des Kontos austauschen, ohne den bestehenden zweiten Faktor zu kennen. `MFASetupView.dispatch` prüft die Berechtigung jetzt für alle HTTP-Methoden gemeinsam; bei bestätigtem Bestandsfaktor (TOTP **oder** Passkey) und nicht verifizierter Sitzung geht es vor dem Kontextaufbau nach `/mfa/verify/`. Der Abschluss der Einrichtung hängt zusätzlich am Primärschlüssel des konkret autorisierten, unbestätigten Geräts statt an „irgendeinem" unbestätigten Gerät des Kontos.
+
+### Verifikation
+
+- Format- und Einstiegs-Guard (Service, Zwei-Faktor-Abfrage, Sudo, Lockout-Selbsthilfe): [`src/tests/test_mfa_backup_code_format_guard.py`](../src/tests/test_mfa_backup_code_format_guard.py)
+- Einrichtungs-Gate und Gerätebindung: [`src/tests/test_mfa_setup_reauth_guard.py`](../src/tests/test_mfa_setup_reauth_guard.py)
+- Hash-Speicherung, Klartext-Bestand, Einmalverbrauch und Parallelverbrauch: [`src/tests/test_mfa_backup_codes.py`](../src/tests/test_mfa_backup_codes.py)
+
+---
+
 ## Attachment-Pipeline owner-generisch: direkte RLS-Policy statt Join (Issue #1738)
 
 **Status:** umgesetzt mit Milestone 24 ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Migrationen `0129`–`0131`). Die Facility-Ableitung im Service-Layer bleibt Konvention + Pin-Test, kein DB-Constraint — bewusst, mit eigenem Härtungs-Issue.
