@@ -386,7 +386,7 @@ def test_restore_drill_reports_fail_for_missing_hwm_and_continues(tmp_path: Path
     assert "Schritt 3: Tabellen-Stichproben erfolgreich" in result.stdout
 
 
-def test_restore_drill_skips_hwm_when_not_configured_and_marks_restore(tmp_path: Path) -> None:
+def test_restore_drill_skips_hwm_when_not_configured_and_writes_no_proof(tmp_path: Path) -> None:
     _, docker_log, result = _restore_sandbox(
         tmp_path,
         hwm_payload=None,
@@ -396,8 +396,11 @@ def test_restore_drill_skips_hwm_when_not_configured_and_marks_restore(tmp_path:
     # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
     assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "SKIP - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)" in result.stdout
-    assert "Schritt 7: Restore-Test im AuditLog dokumentiert" in result.stdout
-    assert "mark_restore_verified" in docker_log.read_text(encoding="utf-8")
+    # Refs #2341: Ein Lauf mit Luecke schreibt keinen Compliance-Nachweis mehr —
+    # sonst stuende die Karte „Restore-Test" auf gruen, waehrend derselbe Lauf
+    # mit Exit-Code 2 ausdruecklich keinen vollstaendigen Nachweis behauptet.
+    assert "Schritt 7: Restore-Test im AuditLog dokumentiert" not in result.stdout
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
 
 
 def test_restore_drill_accepts_valid_hwm_signature(tmp_path: Path) -> None:
@@ -498,7 +501,10 @@ def test_restore_drill_timestamp_selects_requested_not_latest_set(tmp_path: Path
     assert "Drill gegen DB-Backup:" in result.stdout
     assert "anlaufstelle_2026-09-02_020000.sql.gz.enc" in result.stdout
     assert "anlaufstelle_2026-09-11_020000.sql.gz.enc" not in result.stdout
-    assert "mark_restore_verified" in docker_log.read_text(encoding="utf-8")
+    # Refs #2341: Der Lauf hat eine Luecke (Schritt 2b uebersprungen) und
+    # schreibt deshalb keinen Compliance-Nachweis; geprueft wird hier die
+    # Satzwahl, nicht der Nachweis.
+    assert "mark_restore_verified" not in docker_log.read_text(encoding="utf-8")
 
 
 def test_prod_sql_error_requires_on_error_stop_and_blocks_marker(tmp_path: Path) -> None:

@@ -582,13 +582,21 @@ fi
 
 # Schritt 7: Bei vollem Erfolg den Restore-Test im AuditLog dokumentieren.
 # Laeuft im web-Container (DSGVO Art. 32 lit. c: Wiederherstellbarkeit belegt).
-if [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 ]]; then
+#
+# Refs #2341: „Voller Erfolg" schliesst die uebersprungenen Pflichtschritte ein.
+# Ohne die Luecken-Zaehlung schrieb der Drill den Nachweis auch dann, wenn er im
+# selben Lauf mit Exit-Code 2 ausdruecklich KEINEN vollstaendigen Nachweis
+# behauptete (Refs #2316) — die Compliance-Karte „Restore-Test" sprang auf
+# gruen und widersprach dem Exit-Code des Skripts.
+if [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 && ${#DRILL_SKIPPED[@]} -eq 0 ]]; then
     NOTE="Restore-Drill $(date -u +%Y-%m-%dT%H:%MZ) gegen ${LATEST_DB##*/} -> ${DRILL_DB}"
     if dc exec -T web python manage.py mark_restore_verified --note "$NOTE" >/dev/null 2>&1; then
         ok "Schritt 7: Restore-Test im AuditLog dokumentiert (mark_restore_verified)"
     else
         fail "Schritt 7: mark_restore_verified fehlgeschlagen — Compliance-Check bleibt unknown"
     fi
+elif [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 ]]; then
+    echo "INFO - Schritt 7: kein Compliance-Nachweis geschrieben — ${#DRILL_SKIPPED[@]} Pflichtschritt(e) uebersprungen."
 fi
 
 if [[ ${#DRILL_SKIPPED[@]} -gt 0 ]]; then
@@ -616,6 +624,8 @@ fi
 if [[ ${#DRILL_SKIPPED[@]} -gt 0 ]]; then
     echo
     echo "DRILL MIT LUECKEN — die ausgefuehrten Schritte sind gruen, ${#DRILL_SKIPPED[@]} Pflichtschritt(e) wurden uebersprungen: kein vollstaendiger Nachweis."
+    echo "  Es wurde kein Compliance-Nachweis geschrieben (mark_restore_verified nicht ausgefuehrt) —"
+    echo "  der Compliance-Check 'Restore-Test' bleibt auf dem Stand des letzten vollstaendigen Laufs."
     echo "  Exit-Code 2 — Ursache der Luecke beheben (siehe Liste oben) und erneut fahren."
     exit 2
 fi

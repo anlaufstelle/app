@@ -414,7 +414,9 @@ def test_restore_drill_allows_database_only_manifest_without_media_hash(tmp_path
     # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
     assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "DB-only-Backup zulaessig" in result.stdout
-    assert "mark_restore_verified" in action_log.read_text(encoding="utf-8")
+    # Refs #2341: Eine Luecke im Lauf schreibt keinen Compliance-Nachweis mehr;
+    # geprueft wird hier, dass der DB-only-Satz nicht am Medien-Hash scheitert.
+    assert "mark_restore_verified" not in action_log.read_text(encoding="utf-8")
 
 
 def test_restore_drill_rejects_media_with_wrong_manifest_hash(tmp_path: Path) -> None:

@@ -640,7 +640,9 @@ Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind
   und nennt in seiner Banner-Zeile dasselbe Host-Verzeichnis wie Schritt 3.
   Exit-Code 2 (`DRILL MIT LUECKEN`) ist **kein** grüner Drill: er bedeutet, dass
   ein Pflichtschritt — in der Werkskonfiguration typischerweise die
-  Anker-Prüfung 2b — übersprungen wurde. Er
+  Anker-Prüfung 2b — übersprungen wurde; ein solcher Lauf schreibt auch keinen
+  Compliance-Nachweis, denn der Nachweis dokumentiert nur den vollständigen
+  Drill (#2341). Er
   bestätigt insbesondere Schritt 2b (HWM-Signatur), Schritt 3b
   (Vollständigkeit), Schritt 4 (RLS), Schritt 5 (`auditlog_immutable`) und
   Schritt 7 (`mark_restore_verified`).
