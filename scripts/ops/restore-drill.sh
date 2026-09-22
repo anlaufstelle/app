@@ -42,6 +42,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # BACKUP_ENCRYPTION_KEY fail-closed ab — geteilt mit backup.sh / restore.sh.
 # shellcheck source=scripts/ops/_backup_common.sh
 source "${SCRIPT_DIR}/_backup_common.sh"
+# Gemeinsame Satz-/Manifestpruefung, geteilt mit backup.sh --verify und
+# restore.sh (Refs #2290, #2292). Der Drill hatte hier frueher eine eigene
+# Kopie dieser Logik — und akzeptierte damit Saetze, die der Prueflauf und der
+# echte Restore ablehnen (z. B. ein im Manifest gebundenes, aber fehlendes
+# Anker-Artefakt oder ein Medien-Archiv, das der Satz gar nicht bindet).
+# shellcheck source=scripts/ops/lib/backup-set.sh
+source "${SCRIPT_DIR}/lib/backup-set.sh"
 
 # --- Backup-Format / Modus (OPS-05, Refs #1336) ---------------------------
 DRILL_FORMAT="${DRILL_FORMAT:-}"
@@ -215,7 +222,7 @@ fi
 # aufgebaut wurde.
 declare -A MANIFEST_COUNTS=()
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
-    MANIFEST_FILE="${LATEST_DB%.sql.gz.enc}.manifest"
+    MANIFEST_FILE="$(backup_set_manifest_path "$LATEST_DB")"
     if [[ ! -f "$MANIFEST_FILE" ]]; then
         fail "Schritt 0: Zeilenzahl-Manifest fehlt (${MANIFEST_FILE##*/})"
         exit 1
@@ -223,67 +230,48 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
         fail "Schritt 0: HMAC-Verifikation des Zeilenzahl-Manifests fehlgeschlagen (${MANIFEST_FILE##*/})"
         exit 1
     fi
-    MANIFEST_TIMESTAMP=""
-    MANIFEST_DB_SHA256=""
-    MANIFEST_MEDIA_SHA256=""
-    MANIFEST_HWM_SHA256=""
-    while IFS='=' read -r key value extra; do
-        if [[ -n "$extra" ]]; then
-            fail "Schritt 0: Zeilenzahl-Manifest ungueltig (${MANIFEST_FILE##*/})"
-            exit 1
-        fi
-        case "$key" in
-            table_core_*)
-                if [[ ! "$value" =~ ^[0-9]+$ ]]; then
-                    fail "Schritt 0: Zeilenzahl-Manifest ungueltig (${MANIFEST_FILE##*/})"
-                    exit 1
-                fi
-                MANIFEST_COUNTS["${key#table_}"]="$value"
-                ;;
-            backup_timestamp) MANIFEST_TIMESTAMP="$value" ;;
-            db_sha256) MANIFEST_DB_SHA256="$value" ;;
-            media_sha256) MANIFEST_MEDIA_SHA256="$value" ;;
-            hwm_sha256) MANIFEST_HWM_SHA256="$value" ;;
-            *) fail "Schritt 0: Unbekannter Manifest-Eintrag: ${key}"; exit 1 ;;
-        esac
-    done < "$MANIFEST_FILE"
-    for tbl in core_facility core_client core_event core_workitem core_auditlog core_attachment; do
-        if [[ ! -v "MANIFEST_COUNTS[$tbl]" ]]; then
-            fail "Schritt 0: Zeilenzahl-Manifest enthaelt ${tbl} nicht (${MANIFEST_FILE##*/})"
-            exit 1
-        fi
-    done
-    ACTUAL_DB_SHA256=$(sha256sum "$LATEST_DB" | awk '{print $1}')
-    MANIFEST_MEDIA_FILE="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
+    if ! backup_set_load "$MANIFEST_FILE" 2>&1; then
+        fail "Schritt 0: Backup-Satz nicht authentifizierbar (${MANIFEST_FILE##*/})"
+        exit 1
+    fi
+    # Authentifizierte Manifest-Werte unter den im Drill etablierten Namen
+    # bereitstellen (Diagnose, Ergebnisblock, spaetere Schritte).
+    MANIFEST_TIMESTAMP="$BACKUP_SET_TIMESTAMP"
+    MANIFEST_DB_SHA256="$BACKUP_SET_DB_SHA256"
+    MANIFEST_MEDIA_SHA256="$BACKUP_SET_MEDIA_SHA256"
+    MANIFEST_HWM_SHA256="$BACKUP_SET_HWM_SHA256"
+    MANIFEST_MEDIA_FILE="$(backup_set_media_path "$LATEST_DB")"
     MANIFEST_HWM_FILE="${BACKUP_DIR}/audit_hwm-${BACKUP_TIMESTAMP}.json"
+    # Selbstpruefung des Drills zusaetzlich zur Satzbibliothek: die Bibliothek
+    # bindet den Satz an den Dump-DATEINAMEN, der Drill leitet daraus aber auch
+    # die Namen der Medien- und Anker-Datei ab. Gingen beide je auseinander,
+    # pruefte der Drill Artefakte eines anderen Satzes.
+    ACTUAL_DB_SHA256=$(sha256sum "$LATEST_DB" | awk '{print $1}')
     if [[ "$MANIFEST_TIMESTAMP" != "$BACKUP_TIMESTAMP" ]]; then
         fail "Schritt 0: Manifest-Satzkennung passt nicht zum gewaehlten Dump (${MANIFEST_TIMESTAMP:-fehlt} != ${BACKUP_TIMESTAMP})"
         exit 1
-    elif [[ ! "$MANIFEST_DB_SHA256" =~ ^[0-9a-f]{64}$ || "$ACTUAL_DB_SHA256" != "$MANIFEST_DB_SHA256" ]]; then
+    elif [[ "$ACTUAL_DB_SHA256" != "$MANIFEST_DB_SHA256" ]]; then
         fail "Schritt 0: Manifest-Dump-Hash passt nicht zum gewaehlten Dump (${LATEST_DB##*/})"
         exit 1
     fi
-    if [[ -n "$MANIFEST_MEDIA_SHA256" ]]; then
-        if [[ ! "$MANIFEST_MEDIA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-            fail "Schritt 0: Manifest-Medien-Hash ist ungueltig (${MANIFEST_FILE##*/})"
-            exit 1
-        elif [[ ! -f "$MANIFEST_MEDIA_FILE" ]]; then
-            fail "Schritt 0: Satz unvollstaendig: Medien-Archiv fehlt (${MANIFEST_MEDIA_FILE##*/})"
-            exit 1
-        elif [[ ! -f "${MANIFEST_MEDIA_FILE}.hmac" ]]; then
-            fail "Schritt 0: Satz unvollstaendig: Medien-Sidecar fehlt (${MANIFEST_MEDIA_FILE##*/}.hmac)"
-            exit 1
-        elif [[ "$(sha256sum "$MANIFEST_MEDIA_FILE" | awk '{print $1}')" != "$MANIFEST_MEDIA_SHA256" ]]; then
-            fail "Schritt 0: Manifest-Medien-Hash passt nicht zum gewaehlten Satz (${MANIFEST_MEDIA_FILE##*/})"
-            exit 1
-        fi
+    # Ein vorhandenes Archiv wird immer mitgeprueft — auch wenn das Manifest
+    # keines bindet: dann ist es ein Fremdkoerper (identisch zu backup.sh --verify).
+    DRILL_MEDIA_ARG=""
+    if [[ -f "$MANIFEST_MEDIA_FILE" ]]; then
+        DRILL_MEDIA_ARG="$MANIFEST_MEDIA_FILE"
     fi
-    if [[ -n "$MANIFEST_HWM_SHA256" && -f "$MANIFEST_HWM_FILE" ]]; then
-        if [[ "$(sha256sum "$MANIFEST_HWM_FILE" | awk '{print $1}')" != "$MANIFEST_HWM_SHA256" ]]; then
-            fail "Schritt 0: Manifest-HWM-Hash passt nicht zum gewaehlten Satz (${MANIFEST_HWM_FILE##*/})"
-            exit 1
-        fi
+    if ! backup_set_verify_artifacts "$LATEST_DB" "$DRILL_MEDIA_ARG" "$MANIFEST_HWM_FILE" 2>&1; then
+        fail "Schritt 0: Backup-Satz nicht zusammengehoerig oder unvollstaendig (${MANIFEST_FILE##*/})"
+        exit 1
     fi
+    # Der Zeilenzahl-Abgleich (Schritt 3/3b) arbeitet weiter auf MANIFEST_COUNTS.
+    # Der Praefix-Strip bleibt stehen, damit die Uebernahme unabhaengig davon
+    # korrekt ist, ob die Bibliothek ihre Schluessel mit oder ohne ``table_``
+    # fuehrt.
+    for key in "${!BACKUP_SET_COUNTS[@]}"; do
+        value="${BACKUP_SET_COUNTS[$key]}"
+        MANIFEST_COUNTS["${key#table_}"]="$value"
+    done
     ok "Schritt 0: Zeilenzahl-Manifest authentifiziert (${MANIFEST_FILE##*/})"
 fi
 
