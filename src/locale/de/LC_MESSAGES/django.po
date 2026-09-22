@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 20:39+0200\n"
+"POT-Creation-Date: 2026-09-22 21:48+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -5601,17 +5601,9 @@ msgid ""
 msgstr ""
 "Synthetische Testdaten · Reset jede volle Stunde (nächster: %(reset)s Uhr)."
 
-#: src/templates/auth/_demo_credentials.html:14
-msgid "Schnellstart:"
-msgstr "Schnellstart:"
-
 #: src/templates/auth/_demo_credentials.html:16
 msgid "Passwort für alle:"
 msgstr "Passwort für alle:"
-
-#: src/templates/auth/_demo_credentials.html:19
-msgid "Alle Logins & Rollen"
-msgstr "Alle Logins & Rollen"
 
 #: src/templates/auth/_demo_credentials.html:43
 msgid "Was ist im Demo deaktiviert?"
@@ -12866,3 +12858,74 @@ msgstr "Antrag gehört zu einer anderen Einrichtung."
 #: src/templates/core/system/dashboard.html
 msgid "Zeitstempel liegt in der Zukunft — Alter nicht messbar"
 msgstr "Zeitstempel liegt in der Zukunft — Alter nicht messbar"
+
+#: src/templates/auth/demo_scenario_select.html:75
+msgid "Andere Rolle wählen"
+msgstr "Andere Rolle wählen"
+
+#: src/templates/base.html:198
+#, python-format
+msgid "Bereich: %(bereich)s"
+msgstr "Bereich: %(bereich)s"
+
+#: src/templates/auth/demo_scenario_select.html:70
+msgid "Demo starten"
+msgstr "Demo starten"
+
+#: src/templates/base.html:201
+msgid "Demo-Bereich wechseln"
+msgstr "Demo-Bereich wechseln"
+
+#: src/templates/auth/demo_scenario_select.html:8
+#: src/templates/auth/demo_scenario_select.html:37
+msgid "Demo-Bereich wählen"
+msgstr "Demo-Bereich wählen"
+
+#: src/core/views/demo_scenarios.py:210
+msgid "Diese Rolle ist für diesen Demo-Bereich nicht freigegeben."
+msgstr "Diese Rolle ist für diesen Demo-Bereich nicht freigegeben."
+
+#: src/core/views/demo_scenarios.py:219
+msgid "Dieser Demo-Bereich ist gerade nicht verfügbar (Reset läuft oder wird vorbereitet). Bitte gleich erneut versuchen."
+msgstr "Dieser Demo-Bereich ist gerade nicht verfügbar (Reset läuft oder wird vorbereitet). Bitte gleich erneut versuchen."
+
+#: src/core/views/demo_scenarios.py:202
+msgid "Dieser Demo-Bereich ist nicht verfügbar."
+msgstr "Dieser Demo-Bereich ist nicht verfügbar."
+
+#: src/templates/auth/_demo_credentials.html:14
+msgid "Einsatzbereich wählen und Demo starten"
+msgstr "Einsatzbereich wählen und Demo starten"
+
+#: src/templates/auth/demo_scenario_select.html:45
+msgid "Für diese Demo sind derzeit keine Bereiche hinterlegt."
+msgstr "Für diese Demo sind derzeit keine Bereiche hinterlegt."
+
+#: src/core/views/demo_scenarios.py:233
+msgid "Für diesen Demo-Bereich ist noch kein passendes Konto vorbereitet."
+msgstr "Für diesen Demo-Bereich ist noch kein passendes Konto vorbereitet."
+
+#: src/templates/auth/demo_scenario_select.html:94
+msgid "Gerade nicht verfügbar — Reset läuft oder wird vorbereitet. Bitte kurz erneut versuchen."
+msgstr "Gerade nicht verfügbar — Reset läuft oder wird vorbereitet. Bitte kurz erneut versuchen."
+
+#: src/templates/auth/demo_scenario_select.html:39
+msgid "Jede Karte ist eine eigene Beispieleinrichtung mit synthetischen Daten."
+msgstr "Jede Karte ist eine eigene Beispieleinrichtung mit synthetischen Daten."
+
+#: src/templates/auth/demo_scenario_select.html:88
+msgid "Mit gewählter Rolle starten"
+msgstr "Mit gewählter Rolle starten"
+
+#: src/templates/auth/demo_scenario_select.html:80
+msgid "Rolle für diesen Demo-Bereich"
+msgstr "Rolle für diesen Demo-Bereich"
+
+#: src/templates/auth/_demo_credentials.html:19
+msgid "Stattdessen manuell anmelden (alle Logins & Rollen)"
+msgstr "Stattdessen manuell anmelden (alle Logins & Rollen)"
+
+#: src/templates/auth/demo_scenario_select.html:28
+#, python-brace-format
+msgid "{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?"
+msgstr "{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?"
