@@ -251,3 +251,124 @@ class TestPublicFooterRendering:
         assert 'data-testid="app-version"' in body
         assert 'data-testid="footer-help"' in body
         assert "abcdef1" in body
+
+
+@pytest.mark.django_db
+class TestFooterVersionGateForPartiallyAuthenticatedSessions:
+    """Refs #2286: die Version haengt am Prädikat „Sitzung vollstaendig
+    angemeldet", nicht mehr an ``footer_authenticated and user.is_authenticated``.
+
+    Die Zustaende der Befundtabelle des Tickets:
+
+    * **B** Passwort geprueft, bestaetigtes Geraet, ``mfa_verified`` fehlt,
+    * **C** 2FA bewusst erzwungen (``mfa_required``), noch kein Geraet,
+    * **D** erzwungener Passwortwechsel.
+
+    Alle drei erreichen Seiten, die von ``base.html`` erben (404 und die
+    403-CSRF-Seite unter den von der MFA-Middleware ausgenommenen Praefixen,
+    in **C** zusaetzlich ``/mfa/settings/`` und ``/mfa/backup-codes/`` im
+    laufenden Setup). Dort darf weder ``app_version`` noch
+    ``SOURCE_CODE_VERSION`` noch der Hilfe-Link stehen.
+    """
+
+    SENTINEL = "abcdef1234567890"
+
+    @staticmethod
+    def _assert_no_version(body, label, sentinel):
+        assert "Quellcode" in body, f"{label}: AGPL-§13-Quellcode-Link fehlt (Refs #835)"
+        assert 'data-testid="app-version"' not in body, f"{label}: Versionsanzeige leakt (Refs #2286)"
+        assert 'data-testid="footer-help"' not in body, f"{label}: Hilfe-Link nur fuer vollstaendig Angemeldete"
+        assert sentinel[:7] not in body, f"{label}: SOURCE_CODE_VERSION leakt (Refs #2286)"
+
+    # --- Zustand B: zweiter Faktor offen -------------------------------------
+    @staticmethod
+    def _state_b(client, user):
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        TOTPDevice.objects.create(user=user, name="test", confirmed=True)
+        client.force_login(user)
+
+    def test_state_b_404_under_exempt_prefix_has_no_version(self, client, settings, staff_user):
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        self._state_b(client, staff_user)
+        response = client.get("/mfa/gibt-es-nicht/")
+        assert response.status_code == 404
+        self._assert_no_version(response.content.decode(), "B/404", self.SENTINEL)
+
+    def test_state_b_csrf_failure_page_has_no_version(self, settings, staff_user):
+        from django.test import Client
+
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        csrf_client = Client(enforce_csrf_checks=True)
+        self._state_b(csrf_client, staff_user)
+        response = csrf_client.post(reverse("mfa_verify"), {"token": "000000"})
+        assert response.status_code == 403
+        self._assert_no_version(response.content.decode(), "B/403-CSRF", self.SENTINEL)
+
+    # --- Zustand C: 2FA erzwungen, noch kein Geraet --------------------------
+    @staticmethod
+    def _state_c(client, user):
+        user.mfa_required = True
+        user.save(update_fields=["mfa_required"])
+        client.force_login(user)
+
+    def test_state_c_mfa_settings_page_has_no_version(self, client, settings, staff_user):
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        self._state_c(client, staff_user)
+        response = client.get(reverse("mfa_settings"))
+        assert response.status_code == 200
+        self._assert_no_version(response.content.decode(), "C//mfa/settings/", self.SENTINEL)
+
+    def test_state_c_backup_codes_during_setup_has_no_version(self, client, settings, staff_user):
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        self._state_c(client, staff_user)
+        session = client.session
+        session["mfa_backup_codes"] = ["code-eins", "code-zwei"]
+        session["mfa_setup_pending"] = True
+        session.save()
+        response = client.get(reverse("mfa_backup_codes"))
+        assert response.status_code == 200
+        self._assert_no_version(response.content.decode(), "C//mfa/backup-codes/", self.SENTINEL)
+
+    def test_state_c_404_under_exempt_prefix_has_no_version(self, client, settings, staff_user):
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        self._state_c(client, staff_user)
+        response = client.get("/mfa/gibt-es-nicht/")
+        assert response.status_code == 404
+        self._assert_no_version(response.content.decode(), "C/404", self.SENTINEL)
+
+    # --- Zustand D: erzwungener Passwortwechsel ------------------------------
+    @staticmethod
+    def _state_d(client, user):
+        user.must_change_password = True
+        user.save(update_fields=["must_change_password"])
+        client.force_login(user)
+
+    def test_state_d_404_under_exempt_prefix_has_no_version(self, client, settings, staff_user):
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        self._state_d(client, staff_user)
+        response = client.get("/login/gibt-es-nicht/")
+        assert response.status_code == 404
+        self._assert_no_version(response.content.decode(), "D/404", self.SENTINEL)
+
+    def test_state_d_csrf_failure_page_has_no_version(self, settings, staff_user):
+        from django.test import Client
+
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        csrf_client = Client(enforce_csrf_checks=True)
+        self._state_d(csrf_client, staff_user)
+        response = csrf_client.post(reverse("password_change"), {"old_password": "x"})
+        assert response.status_code == 403
+        self._assert_no_version(response.content.decode(), "D/403-CSRF", self.SENTINEL)
+
+    # --- Gegen-Check: vollstaendig angemeldet behaelt alles -------------------
+    def test_fully_authenticated_404_keeps_version(self, client, settings, staff_user):
+        """Der Fix darf die Fehlerseite einer vollstaendig angemeldeten
+        Sitzung nicht entkernen — sonst waere die Zusage trivial erfuellt."""
+        settings.SOURCE_CODE_VERSION = self.SENTINEL
+        client.force_login(staff_user)
+        response = client.get("/gibt-es-nicht/")
+        assert response.status_code == 404
+        body = response.content.decode()
+        assert 'data-testid="app-version"' in body
+        assert self.SENTINEL[:7] in body
