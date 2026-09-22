@@ -122,6 +122,10 @@ FACILITY_MISSING_EXEMPT_URLS = (
     "/csp-report/",
     "/impressum/",
     "/datenschutzerklaerung/",
+    # Demo-Bereichsauswahl (nur bei DEMO_MODE, sonst 404) — oeffentlich, PII-frei,
+    # exakte Pfade statt Praefix (Refs #2285)
+    "/demo/",
+    "/demo/start/",
 )
 
 #: Refs #2090: der ``/offline/``-Baum, Pfad fuer Pfad statt als Praefix.
