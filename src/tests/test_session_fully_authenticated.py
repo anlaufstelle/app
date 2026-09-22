@@ -121,6 +121,83 @@ class TestPredicateIsFreeOfSideEffects:
         assert session == {}
 
 
+class TestPredicateIsEvaluatedOncePerRequest:
+    """Refs #2314-Review: der Footer-Kontextprozessor läuft bei JEDEM Rendering.
+
+    Die Auswertung kostet ein bis drei Abfragen (ungecachte ``exists()``-
+    Properties für TOTP-/Passkey-Geräte, ggf. ``facility.settings``) — dieselbe
+    Arbeit, die die Middleware im selben Request schon geleistet hat.
+    """
+
+    @staticmethod
+    def _counting_required_redirect(monkeypatch, calls):
+        from core.middleware.mfa import MFAEnforcementMiddleware
+
+        original = MFAEnforcementMiddleware._required_redirect
+
+        def counting(request, user):
+            calls.append(request)
+            return original(request, user)
+
+        monkeypatch.setattr(MFAEnforcementMiddleware, "_required_redirect", staticmethod(counting))
+
+    def test_repeated_calls_on_one_request_evaluate_once(self, staff_user, monkeypatch):
+        calls: list = []
+        self._counting_required_redirect(monkeypatch, calls)
+        request = _request_for(staff_user)
+
+        assert session_fully_authenticated(request) is True
+        assert session_fully_authenticated(request) is True
+        assert session_fully_authenticated(request) is True
+
+        assert len(calls) == 1, f"Prädikat wurde {len(calls)}x je Request ausgewertet (erwartet: 1)"
+
+    def test_a_second_request_is_evaluated_again(self, staff_user, monkeypatch):
+        """Der Merker hängt am Request, nicht am Nutzer — sonst trüge eine
+        Antwort den Zustand einer anderen."""
+        calls: list = []
+        self._counting_required_redirect(monkeypatch, calls)
+
+        session_fully_authenticated(_request_for(staff_user))
+        session_fully_authenticated(_request_for(staff_user))
+
+        assert len(calls) == 2
+
+    def test_negative_result_is_cached_too(self, staff_user, monkeypatch):
+        """Auch ``False`` wird gemerkt — sonst zahlte gerade der teilangemeldete
+        Zustand (Fehlerseiten, 2FA-Einrichtung) den vollen Preis je Rendering."""
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        TOTPDevice.objects.create(user=staff_user, name="test", confirmed=True)
+        calls: list = []
+        self._counting_required_redirect(monkeypatch, calls)
+        request = _request_for(staff_user)
+
+        assert session_fully_authenticated(request) is False
+        assert session_fully_authenticated(request) is False
+
+        assert len(calls) == 1
+
+    def test_rendered_page_evaluates_the_predicate_at_most_once(self, client, staff_user, monkeypatch):
+        """Gegenprobe am echten Request: der Kontextprozessor darf die Arbeit
+        der Middleware nicht wiederholen."""
+        from core.services.security import session_state
+
+        evaluations: list = []
+        original = session_state._evaluate
+
+        def counting(request):
+            evaluations.append(request.path)
+            return original(request)
+
+        monkeypatch.setattr(session_state, "_evaluate", counting)
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+
+        assert response.status_code == 200
+        assert len(evaluations) <= 1, f"Prädikat wurde {len(evaluations)}x je Seitenaufruf ausgewertet"
+
+
 class TestHealthDetailGate:
     """Refs #2286 Befund 3/6: ``/health/`` liefert einer teil-authentifizierten
     Sitzung heute ``version`` **und** alle übrigen Detailfelder."""
