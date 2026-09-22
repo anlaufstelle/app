@@ -27,6 +27,14 @@ Was der Guard NICHT leistet (bewusst): Er verfolgt keinen Wert ueber
 Funktionsgrenzen, keine Container (Liste/Dict) und keinen Hilfsaufruf, der den
 Namen erst besorgt (``lookup_name(pk)``). Dagegen steht weiterhin die Regel im
 Handbuch und der fail-closed-Scrub des Sentry-Pfades.
+
+Und er ueberapproximiert bewusst: die Alias-Menge gilt fuer den GANZEN
+Geltungsbereich, nicht flusssensitiv. Ein Log-Aufruf VOR der Zuweisung wird
+deshalb ebenso gemeldet, und eine spaetere Neuzuweisung desselben Namens auf
+einen harmlosen Wert loescht den Alias nicht. Das ist die sichere Richtung —
+ein Guard, der eine Fundstelle uebersieht, ist wertlos; einer, der eine zu
+viel meldet, kostet eine begruendete Allowlist-Zeile. Wer hier haeufiger
+anstoesst, benennt den Namen um, statt den Guard flusssensitiv zu machen.
 """
 
 import ast
