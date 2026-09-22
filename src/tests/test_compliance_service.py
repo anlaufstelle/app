@@ -212,7 +212,26 @@ class TestDbRoleChecks:
         bypass_check = next(c for c in checks if c.key == "db_role_app_nobypassrls")
         assert bypass_check.status == compliance.ComplianceStatus.CRITICAL
 
-    def test_warning_when_admin_role_missing(self):
+    def test_neutral_when_admin_credentials_are_not_in_the_web_container(self, monkeypatch):
+        """Refs #2310: In der Web-Runtime liegen die Admin-Zugangsdaten per
+        Deployment-Design nicht vor (Refs #1962) — "nicht konfiguriert" ist
+        dort nicht von "nicht sichtbar" unterscheidbar und wird neutral
+        gemeldet, statt eine stehende Warnung zu erzeugen."""
+        monkeypatch.delenv("ANLAUFSTELLE_PROCESS_ROLE", raising=False)
+        app = _make_role_check("App", "anlaufstelle", actual_super=False, actual_bypassrls=False)
+        with patch(
+            "core.services.compliance.db_roles.check_db_roles",
+            return_value=([app], ["POSTGRES_ADMIN_USER ist nicht gesetzt"]),
+        ):
+            checks = compliance._db_role_checks()
+        admin_check = next(c for c in checks if c.key == "db_role_admin_missing")
+        assert admin_check.status == compliance.ComplianceStatus.UNKNOWN
+        assert "POSTGRES_ADMIN_USER" in (admin_check.detail or "")
+
+    def test_warning_when_admin_role_missing_in_the_maintenance_context(self, monkeypatch):
+        """Refs #2310: Im Wartungsdienst MUESSEN die Admin-Zugangsdaten
+        vorhanden sein — fehlen sie dort, bleibt es eine echte Warnung."""
+        monkeypatch.setenv("ANLAUFSTELLE_PROCESS_ROLE", "maintenance")
         app = _make_role_check("App", "anlaufstelle", actual_super=False, actual_bypassrls=False)
         with patch(
             "core.services.compliance.db_roles.check_db_roles",

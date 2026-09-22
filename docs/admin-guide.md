@@ -1442,6 +1442,8 @@ Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Mon
 
 Jeder Check liefert einen Status `ok` / `warning` / `critical` / `unknown`; ein einzelner Check-Fehler kippt das Dashboard nicht. Der Bereich ist **Super-Admins** vorbehalten (`facility_admin` erhält `403`). Die Frische-Schwellen der Hintergrundjobs und des Restore-Markers sind im [Ops-Runbook](ops-runbook.md) dokumentiert.
 
+**Admin-DB-Rolle: `unknown` ist hier der Normalzustand.** Die Admin-/Wartungsrolle lässt sich aus dem Web-Container heraus nicht prüfen — die Admin-Zugangsdaten liegen dort bewusst nicht vor (#1962: der `web`-Dienst bekommt eine ausdrückliche Environment-Allowlist ohne `POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD`). Der Check **Admin-DB-Rolle** steht deshalb auf einer korrekt installierten Instanz dauerhaft auf `unknown` (neutral, grau) und nennt als Prüfweg `docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles` — das ist **keine** Warnung und nichts, was sich „abstellen“ ließe (#2310). Existiert die Admin-Rolle dagegen mit falschem Attributprofil, meldet das Dashboard das unverändert als `critical`.
+
 ### 5.6 Error-Tracking & Datenminimierung
 
 Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird nur initialisiert, wenn `SENTRY_DSN` gesetzt ist ([`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)). Ohne DSN verlässt **keinerlei Telemetrie** die Installation — es gibt kein gehostetes Angebot dieses Projekts, die Datenresidenz liegt vollständig beim Betreiber. Ein Ausfall oder Fehlen des Trackers beeinträchtigt die Anwendung nicht; Fehler stehen weiterhin in den Server-Logs (siehe **Logging** in [§ 1](#1-installation-docker-compose)).

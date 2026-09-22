@@ -1000,21 +1000,29 @@ class TestDbRoleChecksBuildsCompleteCards:
             assert check.label.strip(), f"{key}: label darf nicht leer sein"
 
     def test_admin_missing_card_carries_message_detail_and_hint(self, monkeypatch):
-        """Toetet ``x__db_role_checks__mutmut_54`` (``label=None``),
-        ``__mutmut_57`` (``message=None``), ``__mutmut_59``
-        (``action_hint=None``), ``__mutmut_66`` (``action_hint``-kwarg
-        gestrichen) und ``__mutmut_70`` (Trennzeichen ``"; "`` -> ``"XX; XX"``).
+        """Pinnt Pflichtfelder + Wortlaut der "Admin-DB-Rolle"-Karte gegen
+        Feld-Verlust (``label``/``message``/``action_hint`` -> ``None``,
+        gestrichenes ``action_hint``-kwarg) und gegen ein zerschossenes
+        Trennzeichen (``"; "`` -> ``"XX; XX"``).
 
-        Die gelbe Karte "Admin-DB-Rolle fehlt" ist der einzige Hinweis darauf,
-        dass gar keine Wartungsrolle konfiguriert ist; ohne ``action_hint``
-        verschwindet der komplette "Empfohlen:"-Block und mit ihm der Zeiger
-        auf ``POSTGRES_ADMIN_USER``/``POSTGRES_ADMIN_PASSWORD``.
+        Die Karte ist der einzige Hinweis darauf, dass gar keine Wartungsrolle
+        konfiguriert ist; ohne ``action_hint`` verschwindet der komplette
+        "Empfohlen:"-Block und mit ihm der Zeiger auf den Wartungsdienst.
 
         Zwei Config-Errors statt einem: nur dann ist das Trennzeichen
         ueberhaupt beobachtbar. Der Wortlaut der echten Config-Error-Texte
         gehoert zu ``check_db_roles`` und wird hier bewusst nicht mitgepinnt —
         deshalb stehen hier neutrale Platzhalter.
+
+        Refs #2310: Die Karte wird seit 0.99.2 von
+        ``_db_role_admin_missing_check`` gebaut und ist in der Web-Runtime
+        NEUTRAL (``unknown``) statt gelb — im Web-Container fehlen die
+        Admin-Zugangsdaten per Deployment-Design. Der Wartungs-Kontext wird
+        hier bewusst ausgeschlossen (``ANLAUFSTELLE_PROCESS_ROLE`` geloescht),
+        damit der Pin nicht von der Umgebung des Testlaufs abhaengt; die
+        gelbe Gegenprobe steht in ``test_compliance_dashboard_dbrole_status``.
         """
+        monkeypatch.delenv("ANLAUFSTELLE_PROCESS_ROLE", raising=False)
         app = _app_role_check(_APP_ROLE, actual_super=False, actual_bypassrls=False)
         monkeypatch.setattr(
             db_roles,
@@ -1025,10 +1033,10 @@ class TestDbRoleChecksBuildsCompleteCards:
         checks = db_roles._db_role_checks()
 
         card = next(c for c in checks if c.key == "db_role_admin_missing")
-        assert card.status == ComplianceStatus.WARNING
+        assert card.status == ComplianceStatus.UNKNOWN
         assert card.label == "Admin-DB-Rolle"
         assert card.category == "Datenbank"
-        assert card.message == "Admin-/Maintenance-Rolle nicht konfiguriert."
+        assert card.message == "Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst."
         assert card.detail == "erster Konfigurationshinweis; zweiter Konfigurationshinweis"
         assert card.action_hint == (
             "Im web-Container nicht pruefbar — Prüfung über docker compose -f "

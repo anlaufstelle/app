@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
 > Synchronization update 2026-09-22: Step 4 explains that the script now auto-detects `compose.legal.yml`/`compose.override.yml` and prints the file list it used, and that the first ClamAV start can take about three minutes to download signatures (#2309, #2312).
 > Synchronization update 2026-09-22: § 1 Step 2 states the length/character-set requirement once for `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` and names `openssl` as the primary command shared with `.env.example` (#2313).
 > Synchronization update 2026-09-22: the SMTP environment reference explains that Django 6.1 requires an SMTP backend on production hosts (`check --deploy`, `mail.E001`), what happens without a reachable mail server, and that the console backend exists only in the live-dev and demo settings (#2326).
@@ -1464,6 +1465,8 @@ If AuditLog retention is set to `0` months in one or more facilities, the **Rete
 
 Each check returns a status of `ok` / `warning` / `critical` / `unknown`; a single failing check does not bring down the whole dashboard. The area is **super-admin only** (`facility_admin` receives a `403`). The freshness thresholds for background jobs and the restore marker are documented in the [Ops Runbook](../ops-runbook.md).
 
+**Admin DB role: `unknown` is the normal state here.** The admin/maintenance role cannot be checked from inside the web container -- the admin credentials are deliberately absent there (#1962: the `web` service receives an explicit environment allowlist without `POSTGRES_ADMIN_USER`/`POSTGRES_ADMIN_PASSWORD`). On a correctly installed instance the **Admin DB role** check therefore stays at `unknown` (neutral, grey) permanently and names `docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles` as the way to verify it -- this is **not** a warning and not something that could be "turned off" (#2310). If the admin role does exist but carries the wrong attribute profile, the dashboard still reports that as `critical`.
+
 ### 5.6 Error Tracking & Data Minimization
 
 Error tracking (Sentry-compatible) is **fully opt-in**: the SDK is initialized only when `SENTRY_DSN` is set ([`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)). Without a DSN, **no telemetry** leaves the installation -- there is no hosted offering of this project, so data residency rests entirely with the operator. An absent or unreachable tracker never affects the application; errors still land in the server logs (see **Logging** in [§ 1](#1-installation-docker-compose)).
@@ -2243,4 +2246,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 34a54a0533e8cb2495722ad5e968132cff858afb -->
+<!-- source-hash: 8967cdb380858c3752cb8946bb896060b57903b4 -->

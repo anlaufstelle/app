@@ -271,26 +271,75 @@ def _db_role_checks() -> list[ComplianceCheck]:
         elif rc.label == "Admin":
             out.append(_db_role_admin_check(rc))
 
-    # Config-Errors (z.B. POSTGRES_ADMIN_USER fehlt) als warning ausgeben —
-    # die Admin-Rolle ist nicht zwingend, aber DSGVO-konformes Self-Hosting
-    # erwartet eine separate Maintenance-Rolle.
+    # Config-Errors (z.B. POSTGRES_ADMIN_USER fehlt): ob das ein Befund oder
+    # nur die dokumentierte Secret-Grenze ist, entscheidet die Prozessrolle —
+    # siehe :func:`_db_role_admin_missing_check` (Refs #2310).
     if config_errors and not any(rc.label == "Admin" for rc in role_checks):
-        out.append(
-            ComplianceCheck(
-                key="db_role_admin_missing",
-                label="Admin-DB-Rolle",  # pragma: no mutate
-                category="Datenbank",  # pragma: no mutate
-                status=ComplianceStatus.WARNING,
-                message="Admin-/Maintenance-Rolle nicht konfiguriert.",  # pragma: no mutate
-                detail="; ".join(config_errors),
-                action_hint=(
-                    "Im web-Container nicht pruefbar — Prüfung über "
-                    "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles."
-                ),  # pragma: no mutate
-            )
-        )
+        out.append(_db_role_admin_missing_check(config_errors))
 
     return out
+
+
+# Refs #1962: Der ``web``-Dienst in docker-compose.prod.yml bekommt eine
+# explizite Environment-Allowlist OHNE ``POSTGRES_ADMIN_USER``/
+# ``POSTGRES_ADMIN_PASSWORD`` — die Admin-Zugangsdaten liegen absichtlich nur
+# im ``maintenance``-Pfad. ``ANLAUFSTELLE_PROCESS_ROLE`` trennt die beiden
+# Prozessrollen; der Default folgt ``anlaufstelle/settings/prod.py``
+# ("runtime"), damit Dev-/Testlaeufe ohne gesetzte Variable wie die Web-Runtime
+# bewertet werden.
+_MAINTENANCE_PROCESS_ROLE = "maintenance"  # pragma: no mutate
+
+
+def _runs_as_maintenance_process() -> bool:
+    """True, wenn dieser Prozess der Wartungsdienst ist (Refs #2310)."""
+    process_role = os.environ.get("ANLAUFSTELLE_PROCESS_ROLE", "runtime")  # pragma: no mutate
+    return process_role.strip().lower() == _MAINTENANCE_PROCESS_ROLE
+
+
+def _db_role_admin_missing_check(config_errors: list[str]) -> ComplianceCheck:
+    """Karte "keine Admin-/Maintenance-Rolle konfiguriert" (Refs #919, #2310).
+
+    Refs #2310: Bis 0.99.1 war das immer eine Warnung — und damit auf **jeder**
+    korrekt nach Anleitung installierten Instanz eine stehende gelbe Karte, denn
+    im Web-Container fehlen die Admin-Zugangsdaten per Deployment-Design
+    (Refs #1962). Die Rollenpruefung selbst laeuft im ``maintenance``-Dienst
+    (``manage.py check_db_roles``) und ist dort gruen; das Dashboard sieht deren
+    Ergebnis nicht. Eine Ampel, die dauerhaft gelb steht, wird ignoriert.
+
+    Deshalb: in der **Web-Runtime** ist "nicht konfiguriert" nicht
+    unterscheidbar von "nicht sichtbar" — der Status ist ``unknown`` (neutral),
+    der Text nennt den Wartungsdienst als Pruefweg. Im **Wartungs-Kontext**, wo
+    die Zugangsdaten vorhanden sein MUESSEN, bleibt es eine echte Warnung.
+
+    Der Deploy-Gate-Pfad ist davon unberuehrt: ``manage.py check_db_roles``
+    wertet ``check_db_roles()`` direkt aus und bricht weiterhin mit Exit 2 ab,
+    wenn die Admin-Rolle nicht konfiguriert ist.
+    """
+    if _runs_as_maintenance_process():
+        return ComplianceCheck(
+            key="db_role_admin_missing",
+            label="Admin-DB-Rolle",  # pragma: no mutate
+            category="Datenbank",  # pragma: no mutate
+            status=ComplianceStatus.WARNING,
+            message="Admin-/Maintenance-Rolle nicht konfiguriert.",  # pragma: no mutate
+            detail="; ".join(config_errors),
+            action_hint=(
+                "POSTGRES_ADMIN_USER und POSTGRES_ADMIN_PASSWORD in der .env setzen "
+                "(Drei-Rollen-Modell, docs/ops-runbook.md § 9)."
+            ),  # pragma: no mutate
+        )
+    return ComplianceCheck(
+        key="db_role_admin_missing",
+        label="Admin-DB-Rolle",  # pragma: no mutate
+        category="Datenbank",  # pragma: no mutate
+        status=ComplianceStatus.UNKNOWN,
+        message="Im Web-Container nicht prüfbar — Prüfung über den Wartungsdienst.",  # pragma: no mutate
+        detail="; ".join(config_errors),
+        action_hint=(
+            "Im web-Container nicht pruefbar — Prüfung über "
+            "docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles."
+        ),  # pragma: no mutate
+    )
 
 
 def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> ComplianceCheck:
