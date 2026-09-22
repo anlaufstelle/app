@@ -272,6 +272,12 @@ class TestAbfrageBudgetDerStatuswechsel:
 
     Die ``ContentType``-Abfrage des Zeitstroms wird vorher aufgewaermt: sie
     faellt je Prozess nur EINMAL an und gehoert nicht zum Budget des Pfades.
+
+    Die Zahl 12 gilt fuer einen **typlosen** Fall (die Fixtures tragen keinen
+    Dokumentationstyp): ``Case.save()`` ruft ``_encrypt_sensitive_fields()``,
+    das bei gesetztem ``document_type_id`` und nicht-leerem ``data_json``
+    zusaetzlich die Feldliste des Typs liest. Der Pin ist damit konservativ
+    und fixture-gebunden — er misst die Sperrkette, nicht die Verschluesselung.
     """
 
     @pytest.fixture(autouse=True)

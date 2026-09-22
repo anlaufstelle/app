@@ -39,6 +39,17 @@ Ordnung waere der ABBA-Zyklus, den ``40P01`` aufloest. Die Personensperre
 bleibt die EINE ``core_client``-Sperre dieser Pfade; die Zustandsspalten der
 Person werden danach auf der bereits gesperrten Zeile gelesen.
 
+**Voraussetzung der Ordnung.** Die ``core_client``-Sperre nimmt nicht dieses
+Modul, sondern ``assert_processing_allowed(..., lock=True)``; die
+Widerrufsspalten der Person werden danach auf genau dieser gesperrten Zeile
+gelesen. Das Gate kehrt aber **vor** dem Sperren zurueck, wenn ein
+Betroffenenrechte-Kontext offen ist (``_rectification_write``,
+``_deletion_workflow_write``) — dann faellt die erste Stufe weg und der Fall
+wuerde ohne vorangehende Personensperre genommen. Keine der fuenf
+Statusfunktionen wird heute aus einem dieser Kontexte gerufen (Produktivcode:
+nur die vier Views). Wer das aendert, muss die Personensperre hier
+ausdruecklich nachziehen, sonst geht die Ordnung still verloren.
+
 Die Zustandspruefung liegt bewusst im Service und nicht (nur) in der View:
 ``cases_with_live_client`` zieht die Grenze fuer den HTTP-Pfad, aber der
 Service ist die Single Source of Truth — Offline-Replay, Commands und
