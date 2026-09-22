@@ -41,7 +41,7 @@ class TestCompleteWorkflow:
         # Refs #748: Case.client ist Pflichtfeld — Person via Autocomplete auswählen
         autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
         autocomplete.click()
-        page.locator("[role='listbox']").wait_for(state="visible", timeout=5000)
+        page.locator("[role='listbox']").wait_for(state="visible")
         page.locator("[role='option']").first.click()
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
@@ -64,7 +64,7 @@ class TestCompleteWorkflow:
             goal_input.fill(f"WF-Ziel-{tag}")
             goal_input.press("Enter")
             # HTMX-Swap: das neue Ziel erscheint als Text-Knoten.
-            page.locator(f"text=WF-Ziel-{tag}").wait_for(state="visible", timeout=5000)
+            page.locator(f"text=WF-Ziel-{tag}").wait_for(state="visible")
 
         # --- 5. Event dokumentieren ---
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
@@ -72,7 +72,7 @@ class TestCompleteWorkflow:
         page.select_option('select[name="document_type"]', label="Kontakt")
         # Warte auf HTMX-Feldaktualisierung
         page.locator("#dynamic-fields input, #dynamic-fields textarea, #dynamic-fields select").first.wait_for(
-            state="attached", timeout=5000
+            state="attached"
         )
         page.locator("#event-submit-btn").click()
         # Sollte zum Event-Detail weiterleiten
@@ -115,7 +115,7 @@ class TestCompleteWorkflow:
             doc_type_select.select_option(index=1)
             # HTMX lädt dynamische Felder — auf min. ein Kind im Container warten.
             page.locator("#dynamic-fields input, #dynamic-fields textarea, #dynamic-fields select").first.wait_for(
-                state="attached", timeout=5000
+                state="attached"
             )
             # Zweiten Typ wählen — Felder sollten sich ändern
             doc_type_select.select_option(index=2)
@@ -124,7 +124,7 @@ class TestCompleteWorkflow:
             # erste input/textarea/select aktuell ist).
             page.wait_for_load_state("domcontentloaded")
             page.locator("#dynamic-fields input, #dynamic-fields textarea, #dynamic-fields select").first.wait_for(
-                state="attached", timeout=5000
+                state="attached"
             )
             # Seite sollte weiterhin funktional sein
             assert page.locator("#main-content").is_visible()
@@ -186,7 +186,7 @@ class TestIntegrationWorkflow:
 
         # Wait for autocomplete dropdown, then pick the suggestion
         ac_btn = page.locator(f"#client-autocomplete-list button:has-text('{pseudonym}')")
-        ac_btn.wait_for(state="visible", timeout=5000)
+        ac_btn.wait_for(state="visible")
         ac_btn.click()
 
         # Fill occurred_at and dynamic fields
