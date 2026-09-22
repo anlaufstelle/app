@@ -166,6 +166,73 @@ class TestLastBackupInfo:
         assert result is not None
         assert Path(result["path"]).name == complete.name
 
+    @pytest.mark.parametrize(
+        "damage",
+        ["kein_sidecar", "fehlende_tabelle", "keine_satzkennung", "kurzer_hash", "kaputte_zeile"],
+    )
+    def test_damaged_manifest_is_no_complete_set(self, tmp_path, damage):
+        """Jeder Vertragsbruch des Manifests schliesst den Satz aus (Refs #2291)."""
+        manifest = _write_backup_set(tmp_path / "daily", "2026-09-12_020000", with_media=False)
+        if damage == "kein_sidecar":
+            manifest.with_name(f"{manifest.name}.hmac").unlink()
+        else:
+            lines = manifest.read_text(encoding="utf-8").splitlines()
+            if damage == "fehlende_tabelle":
+                lines = [line for line in lines if not line.startswith("table_core_client=")]
+            elif damage == "keine_satzkennung":
+                lines = [line for line in lines if not line.startswith("backup_timestamp=")]
+            elif damage == "kurzer_hash":
+                lines = [line if not line.startswith("db_sha256=") else "db_sha256=abc" for line in lines]
+            else:
+                lines.append("eine zeile ohne trenner")
+            manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        assert system_health._is_complete_backup_set(manifest) is False
+        assert system_health.last_backup_info(tmp_path) is None
+
+    def test_missing_sidecar_of_a_referenced_artifact_breaks_the_set(self, tmp_path):
+        manifest = _write_backup_set(tmp_path / "daily", "2026-09-12_020000")
+        dump = manifest.with_name("anlaufstelle_2026-09-12_020000.sql.gz.enc")
+        dump.with_name(f"{dump.name}.hmac").unlink()
+
+        assert system_health._is_complete_backup_set(manifest) is False
+
+    def test_bound_audit_anchor_must_exist(self, tmp_path):
+        manifest = _write_backup_set(tmp_path / "daily", "2026-09-12_020000", with_media=False)
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8") + f"hwm_sha256={'c' * 64}\n",
+            encoding="utf-8",
+        )
+
+        assert system_health._is_complete_backup_set(manifest) is False
+
+        (manifest.parent / "audit_hwm-2026-09-12_020000.json").write_text("{}", encoding="utf-8")
+        assert system_health._is_complete_backup_set(manifest) is True
+
+    def test_blank_lines_in_the_manifest_are_tolerated(self, tmp_path):
+        manifest = _write_backup_set(tmp_path / "daily", "2026-09-12_020000", with_media=False)
+        manifest.write_text("\n" + manifest.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+        assert system_health._is_complete_backup_set(manifest) is True
+
+    def test_unreadable_manifest_is_no_complete_set(self, tmp_path, monkeypatch):
+        manifest = _write_backup_set(tmp_path / "daily", "2026-09-12_020000", with_media=False)
+
+        def boom(*args, **kwargs):
+            raise OSError("unlesbar")
+
+        monkeypatch.setattr(Path, "read_text", boom)
+        assert system_health._is_complete_backup_set(manifest) is False
+
+    def test_listing_failure_returns_none(self, tmp_path, monkeypatch):
+        _write_backup_set(tmp_path / "daily", "2026-09-12_020000")
+
+        def boom(*args, **kwargs):
+            raise OSError("kein Zugriff")
+
+        monkeypatch.setattr(Path, "rglob", boom)
+        assert system_health.last_backup_info(tmp_path) is None
+
     def test_marks_as_stale_when_older_than_threshold(self, tmp_path):
         """Satz aelter als ``BACKUP_STALE_THRESHOLD_HOURS`` -> ``is_stale=True``."""
         ancient = _write_backup_set(tmp_path / "daily", "2026-08-01_020000")
