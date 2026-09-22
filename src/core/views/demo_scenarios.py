@@ -169,8 +169,13 @@ class DemoScenarioSelectView(View):
 
     template_name = "auth/demo_scenario_select.html"
 
-    def get(self, request):
+    def dispatch(self, request, *args, **kwargs):
+        # Refs #2350: vor der Methodenverteilung, damit ausserhalb DEMO_MODE auch
+        # OPTIONS/PUT/DELETE/... mit 404 statt 200 bzw. 405 (mit ``Allow``) antworten.
         _demo_mode_or_404()
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request):
         preselect_scenario = _lookup_scenario(request.GET.get("bereich", ""))
         current_facility_id = None
         if request.user.is_authenticated:
@@ -190,12 +195,14 @@ class DemoScenarioStartView(View):
     per GET/Deep-Link, Ticket-Punkt 8).
     """
 
+    def dispatch(self, request, *args, **kwargs):
+        _demo_mode_or_404()  # Refs #2350, s. DemoScenarioSelectView.dispatch
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request):
-        _demo_mode_or_404()
         return redirect(SCENARIO_SELECT_URL_NAME)
 
     def post(self, request):
-        _demo_mode_or_404()
         scenario = _lookup_scenario(request.POST.get("scenario", ""))
         if scenario is None:
             messages.error(request, _("Dieser Demo-Bereich ist nicht verfügbar."))
