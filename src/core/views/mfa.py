@@ -155,6 +155,14 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
+        # Bewusst ein ANDERES Praedikat als im Gate oben: ``dispatch`` ist die
+        # Sicherheitsschranke und fragt nach IRGENDEINEM bestaetigten Faktor
+        # (``has_confirmed_mfa_device``); diese Zeile ist nur die Komfort-Weiche
+        # auf die Einstellungsseite und fragt nach dem TOTP-Geraet, das die
+        # Seite dort tatsaechlich anzeigt. Wer hier auf
+        # ``has_confirmed_mfa_device`` wechselt, schickt Passkey-Konten ohne
+        # TOTP in die Einstellungen statt ins faellige Erstsetup — Passkeys
+        # existieren nur NEBEN TOTP (ADR-032, ``check_can_register``).
         if request.user.has_confirmed_totp_device:
             return redirect("mfa_settings")
         return super().get(request, *args, **kwargs)
