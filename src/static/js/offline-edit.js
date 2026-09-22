@@ -216,6 +216,19 @@
         // stirbt nie still").
         const existing = await _store().getOfflineEvent(pk);
         const wasNew = Boolean(existing && existing.localStatus === "new");
+        // Refs #2293: Bei einer noch nie synchronisierten Neuanlage liegen die
+        // Create-Metadaten (Fall, Dokumentationstyp, Zeitpunkt, Idempotenz-
+        // Schluessel) AUSSCHLIESSLICH im gespeicherten Envelope — der
+        // Create-Replay (replayNewEvent) baut ``client``/``document_type``/
+        // ``case``/``occurred_at`` allein daraus. saveOfflineEdit ersetzt die
+        // Row vollstaendig (kein Merge), und die Bearbeiten-Oberflaeche kennt
+        // die Fall-Zuordnung gar nicht (sie steht in keinem normalisierten
+        // Anzeigefeld, das der Aufrufer zurueckgeben koennte). Ohne diese
+        // Uebernahme entfernt schon eine kleine Feldkorrektur VOR der ersten
+        // Synchronisation die bewusst gewaehlte Fall-Zuordnung — das Ereignis
+        // landet ausserhalb des Falls und fehlt im Fallverlauf.
+        const previous = (wasNew && existing.data) || {};
+        const occurredAt = opts.occurredAt || previous.occurredAt || (wasNew ? existing.occurredAt || "" : "");
         const data = {
             formData: formData,
             expectedUpdatedAt: token,
@@ -224,9 +237,9 @@
             // #1111: ``documentTypePk`` + ``occurredAt`` let the offline
             // viewer re-render and re-edit a still-unsynced event (the
             // clean bundle record is overwritten by this edit envelope).
-            documentTypeName: opts.documentTypeName || "",
-            documentTypePk: opts.documentTypePk || "",
-            occurredAt: opts.occurredAt || "",
+            documentTypeName: opts.documentTypeName || previous.documentTypeName || "",
+            documentTypePk: opts.documentTypePk || previous.documentTypePk || "",
+            occurredAt: occurredAt,
             // Refs #1111: bestehende Datei-Anhang-Marker (nicht editierbar)
             // fuer die Offline-Anzeige bewahren — werden in
             // normalizeOfflineEventRecord wieder in data_fields gemerged,
@@ -240,12 +253,16 @@
             // sonst schickt der naechste Replay ein ANDERES Idempotency-Key
             // mit und der Doppel-Anlage-Schutz fuer den ORIGINAL-Request
             // greift nicht mehr.
-            data.idempotencyKey = (existing.data && existing.data.idempotencyKey) || _uuid();
+            data.idempotencyKey = previous.idempotencyKey || _uuid();
+            // Refs #2293: Fall-Zuordnung der Neuanlage erhalten. Ein leerer
+            // Wert bleibt leer — ein Ereignis ohne Fall bekommt durch einen
+            // Re-Edit keinen.
+            data.casePk = opts.casePk || previous.casePk || "";
         }
         const record = {
             pk: pk,
-            clientPk: opts.clientPk || "",
-            occurredAt: opts.occurredAt || "",
+            clientPk: opts.clientPk || (wasNew ? existing.clientPk || "" : ""),
+            occurredAt: occurredAt,
             localStatus: wasNew ? "new" : opts.localStatus || "modified",
             data: data,
         };
@@ -522,7 +539,12 @@
         }
         const record = {
             pk: pk,
-            clientPk: opts.clientPk || "",
+            // Refs #2293 (gleiche Klasse wie im Event-Pfad): ein offline NEU
+            // angelegtes WorkItem replayt via /workitems/new/, wo ``client``
+            // ausschliesslich aus ``record.clientPk`` stammt — bleibt der
+            // Aufrufer ihn schuldig, aus der bestehenden Row uebernehmen
+            // statt ihn zu verlieren.
+            clientPk: opts.clientPk || (wasNew ? existing.clientPk || "" : ""),
             occurredAt: "",
             localStatus: wasNew ? "new" : "modified",
             data: data,

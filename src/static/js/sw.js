@@ -162,7 +162,7 @@ importScripts("/static/js/url-patterns.js");
 // Refs #2201: v46 -> v47, damit Bestandsgeraete die gehaertete Shell laden.
 // 2026-09-21, Refs #2238: v47 -> v48 -- offline-messages.js ist ein neues
 // Shell-Modul; der Bump erneuert die atomare Precache-Generation.
-const CACHE_NAME = "anlaufstelle-v48";
+const CACHE_NAME = "anlaufstelle-v49";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

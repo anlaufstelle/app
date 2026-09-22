@@ -96,7 +96,9 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Content-Type) verwirft alte Falscheintraege ueber die Cache-Generation.
         # 2026-09-21, Refs #2238: v48 — offline-messages.js erweitert den
         # APP_SHELL und wird mit dem Modulverbund atomar neu precached.
-        assert 'const CACHE_NAME = "anlaufstelle-v48";' in sw
+        # 2026-09-22, Refs #2293: v49 — die precachten Replay-Skripte
+        # (offline-edit.js) tragen die korrigierte Metadaten-Uebernahme.
+        assert 'const CACHE_NAME = "anlaufstelle-v49";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):
