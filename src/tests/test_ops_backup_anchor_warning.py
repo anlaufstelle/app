@@ -72,7 +72,9 @@ def test_prod_stack_carries_the_anchor_into_the_verifying_services() -> None:
     ``maintenance``-Dienst. Beide beziehen die vollstaendige ``.env`` (und damit
     den Ankerpfad) und sehen dasselbe ``media``-Volume unter ``/data``, in dem
     die signierte Datei liegt. Der HTTP-Dienst ``web`` hat bewusst nur eine
-    Allowlist und braucht den Anker nicht.
+    Allowlist; er fuehrt den Ankerpfad zwar darin (jede aktive Zeile der
+    Vorlage muss dort stehen — Drift-Guard aus Refs #1962), hat aber keinen
+    Leser dafuer. Diese Zeile ist reine Allowlist-Pflege, kein Funktionsweg.
     """
     services = yaml.safe_load(COMPOSE_PROD.read_text(encoding="utf-8"))["services"]
 

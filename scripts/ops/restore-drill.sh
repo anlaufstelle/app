@@ -223,6 +223,11 @@ fi
 declare -A MANIFEST_COUNTS=()
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
     MANIFEST_FILE="$(backup_set_manifest_path "$LATEST_DB")"
+    # Vorpruefung VOR der Bibliothek, bewusst doppelt: ``backup_set_load``
+    # authentifiziert das Manifest ebenfalls, meldet aber mit seinem eigenen
+    # Wortlaut. Der Drill soll die beiden Ursachen „Manifest fehlt" und
+    # „Signatur passt nicht" getrennt und in seiner Schritt-0-Sprache melden —
+    # danach uebernimmt die gemeinsame Satzpruefung.
     if [[ ! -f "$MANIFEST_FILE" ]]; then
         fail "Schritt 0: Zeilenzahl-Manifest fehlt (${MANIFEST_FILE##*/})"
         exit 1
