@@ -115,6 +115,39 @@ describe("attachGuard — Fall B: ausstehende Eintraege vorhanden", () => {
         confirmSpy.mockRestore();
     });
 
+    it("faellt bei fehlendem data-i18n-demo-switch-confirm auf einen generischen Text zurueck", async () => {
+        const form = makeForm();
+        document.body.removeAttribute("data-i18n-demo-switch-confirm");
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+        guard.attachGuard(form);
+
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+        await flushMicrotasks();
+
+        expect(confirmSpy).toHaveBeenCalledTimes(1);
+        const [msg] = confirmSpy.mock.calls[0];
+        expect(msg).toContain("3");
+        expect(msg.length).toBeGreaterThan(0);
+        expect(form.requestSubmit).toHaveBeenCalledTimes(1);
+        confirmSpy.mockRestore();
+    });
+
+    it("faellt bei leerem data-i18n-demo-switch-confirm ebenfalls auf den generischen Text zurueck (kein stiller Fail-Open)", async () => {
+        const form = makeForm();
+        document.body.setAttribute("data-i18n-demo-switch-confirm", "");
+        const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+        guard.attachGuard(form);
+
+        form.dispatchEvent(new Event("submit", { cancelable: true }));
+        await flushMicrotasks();
+
+        // confirm() MUSS aufgerufen werden, auch mit leerem Attribut --
+        // Ablehnung muss den Submit weiterhin verhindern.
+        expect(confirmSpy).toHaveBeenCalledTimes(1);
+        expect(form.requestSubmit).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
+    });
+
     it("der programmatische Re-Submit loest den Guard nicht erneut aus (kein Endlosloop)", async () => {
         const form = makeForm();
         vi.spyOn(window, "confirm").mockReturnValue(true);

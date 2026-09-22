@@ -26,6 +26,13 @@
 (function () {
     "use strict";
 
+    // Generischer Rueckfalltext, falls data-i18n-demo-switch-confirm auf der
+    // Seite fehlt oder leer ist: ohne ihn wuerde ein leeres Attribut den
+    // Bestaetigungsdialog bei count > 0 stillschweigend uebergehen (stiller
+    // statt sichtbarer Fail-Open). Deutsch als Default, wie die uebrigen
+    // literalen Skriptausgaben dieses Verbunds.
+    var FALLBACK_CONFIRM_TEXT = "{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?";
+
     function unsyncedEntryCount() {
         if (!window.offlineStore) return Promise.resolve(0);
         var events =
@@ -50,9 +57,9 @@
             unsyncedEntryCount()
                 .then(function (count) {
                     if (count > 0) {
-                        var template = document.body.getAttribute("data-i18n-demo-switch-confirm") || "";
+                        var template = document.body.getAttribute("data-i18n-demo-switch-confirm") || FALLBACK_CONFIRM_TEXT;
                         var msg = template.replace("{count}", String(count));
-                        if (msg && !window.confirm(msg)) return; // Abbruch
+                        if (!window.confirm(msg)) return; // Abbruch
                     }
                     bypass = true;
                     if (form.requestSubmit) form.requestSubmit();
