@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.99.1] - 2026-09-22
+
+Zusätzlicher Release-Kandidat vor 1.0 auf Django 6.1: bündelt die Django-Etappe 1 (6.0 → 6.1.1, Mailversand über `MAILERS`), die Sicherheits-Kleinposten der Folgewelle (einrichtungsweite Sperr-Reihenfolgen für Anhänge, Personen und Importe, Server-Log-Scrub, Audit-Anker-Pflicht, MFA-Weiterleitung), die Übergabe- und Oberflächenkorrekturen, die Dispositionen des Dokumentations-Audits, die Kosmetik aus dem Installations-Trockenlauf und den Dependabot-Sammel-Batch.
+
 ### Added
 
 - **Lokale DCO-Prüfung für Pull-Request-Commits** (#2239) — Ein lokales Make-Target prüft alle Nicht-Merge-Commits eines Git-Bereichs auf einen `Signed-off-by:`-Trailer und nennt fehlende Sign-offs mit Commit und Betreff.

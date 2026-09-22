@@ -86,6 +86,6 @@ Since 0.97 the handover shows one free-text field per shift -- what the outgoing
 Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, storage limitation, soft-delete strategies) → [glossary.md](glossary.md).
 
 <!-- translation-source: docs/datenschutz.md -->
-<!-- translation-version: v0.99.0 -->
+<!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-10 -->
 <!-- source-hash: 6163acf2c90a7e0824210be8f4ae9e637275444a -->

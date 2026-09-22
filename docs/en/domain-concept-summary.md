@@ -287,6 +287,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.1 (2026-09-22)
+
+- **Handover notes refresh live and explain roster gaps**: the handover block of the time stream now updates when another person saves a shift note, never overwriting an open draft, and states plainly when no shift is running in a roster gap while the last completed handover stays editable until the end of the following shift.
+- **Empty detail fields are announced**: text, choice and number fields without a value carry a screen-reader-only placeholder on the detail pages of events, persons and cases; exports, PDFs and the change history are unaffected.
+- **Platform**: Django 6.1 with the new `MAILERS` mail configuration; operator environment variables are unchanged. The concept document itself is unchanged in this release.
+
 ### v0.99.0 (2026-09-17)
 
 - **A counselor persona for walk-in advice centers**: § 5 adds Amira, who documents anonymous short contacts within seconds and hands cases on to specialist services visibly for the team.
@@ -299,6 +305,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.0 -->
+<!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-18 -->
 <!-- source-hash: 99f76d422291fe5571c56e471f34d82e1ab8417d -->
