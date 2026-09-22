@@ -615,8 +615,10 @@ class TestWorkItemReplayContract:
         nicht — der WorkItem-Track (#1398 P2) fehlt. Erwartung: der Replay
         eines offline neu angelegten WorkItems POSTet an ``/workitems/new/``
         mit allen ``WorkItemForm``-Feldern inkl. ``client`` (hidden pk) und
-        traegt den persistierten ``X-Idempotency-Key``; ein Redirect-Erfolg
-        raeumt den ``new``-Record ab (synced)."""
+        traegt den persistierten ``X-Idempotency-Key``; ein BESTAETIGTER Erfolg
+        raeumt den ``new``-Record ab (synced). Refs #2289: Bestaetigung ist der
+        Antwort-Header ``X-Offline-Replay-Result: saved`` der Schreib-View —
+        eine blosse Weiterleitung ist keine (Gegenprobe im selben Test)."""
         context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
         page = context.new_page()
         try:
@@ -625,15 +627,31 @@ class TestWorkItemReplayContract:
             user_pk = str(uuid.uuid4())
             captured = []
 
+            # Refs #2289: Der Server bestaetigt einem markierten Replay den
+            # festgeschriebenen Schreibvorgang mit ``200`` +
+            # ``X-Offline-Replay-Result: saved`` STATT mit dem Redirect (ein
+            # Header auf dem 302 waere fuer ``fetch`` unsichtbar — es sieht nur
+            # die Endantwort). Der Stub bildet genau das nach; Phase B unten
+            # stubbt die markerlose Weiterleitung.
+            mode = {"value": "confirmed"}
+
             def _handler(route):
                 captured.append(
                     {
                         "url": route.request.url,
                         "body": route.request.post_data or "",
                         "idem": route.request.headers.get("x-idempotency-key"),
+                        "replay": route.request.headers.get("x-offline-replay"),
                     }
                 )
-                route.fulfill(status=302, headers={"Location": "/workitems/"})
+                if mode["value"] == "confirmed":
+                    route.fulfill(
+                        status=200,
+                        headers={"X-Offline-Replay-Result": "saved", "Content-Type": "application/json"},
+                        body='{"status": "saved"}',
+                    )
+                else:
+                    route.fulfill(status=302, headers={"Location": "/workitems/"})
 
             page.route(re.compile(r"/workitems/new/"), _handler)
             result = page.evaluate(
@@ -667,8 +685,49 @@ class TestWorkItemReplayContract:
                 f"Der Replay muss den persistierten Idempotenz-Key senden: "
                 f"{captured[0]['idem']!r} != {result['idemKey']!r}"
             )
-            assert result["status"] == "synced", f"Redirect-Erfolg muss synced liefern: {result!r}"
+            assert captured[0]["replay"] == "1", (
+                f"Der Create-Replay muss sich als Replay ausweisen (X-Offline-Replay): {captured[0]!r}"
+            )
+            assert result["status"] == "synced", f"Bestaetigter Erfolg muss synced liefern: {result!r}"
             assert result["rowPresent"] is False, "Erfolg muss den new-Record abraeumen (clearOfflineEdit)"
+
+            # Refs #2289, Gegenprobe: eine Weiterleitung OHNE Bestaetigungsmarker
+            # ist kein Beleg fuer ein Schreiben (sie kann auf der Anmelde-,
+            # Zwei-Faktor- oder Passwortwechsel-Seite enden). Der Record bleibt
+            # liegen — mit unveraendertem Status UND Idempotenzschluessel, damit
+            # der naechste Versuch keine Doppelanlage erzeugt.
+            mode["value"] = "bare-redirect"
+            captured.clear()
+            unconfirmed = page.evaluate(
+                """async (args) => {
+                    const rec = await window.offlineEdit.markWorkItemNew(args.clientPk, {
+                        item_type: 'task', title: 'Ohne-Bestaetigung', priority: 'normal',
+                    });
+                    const r = await window.offlineEdit.replayModifiedEvent(rec, { replay: true });
+                    const row = await window.offlineStore.getOfflineEvent(rec.pk);
+                    return {
+                        status: r.status,
+                        rowPresent: !!row,
+                        localStatus: row && row.localStatus,
+                        idemKey: rec.data.idempotencyKey,
+                        storedIdemKey: row && row.data && row.data.idempotencyKey,
+                    };
+                }""",
+                {"clientPk": client_pk, "userPk": user_pk},
+            )
+            assert len(captured) == 1, f"Genau ein POST in der Gegenprobe erwartet: {captured!r}"
+            assert unconfirmed["status"] == "unconfirmed", (
+                f"Weiterleitung ohne Bestaetigungsmarker darf nicht als Erfolg gelten: {unconfirmed!r}"
+            )
+            assert unconfirmed["rowPresent"] is True, (
+                f"Der unbestaetigte Record muss lokal erhalten bleiben: {unconfirmed!r}"
+            )
+            assert unconfirmed["localStatus"] == "new", (
+                f"Der unbestaetigte Record bleibt eine Neuanlage: {unconfirmed!r}"
+            )
+            assert unconfirmed["storedIdemKey"] == unconfirmed["idemKey"], (
+                f"Der Idempotenzschluessel muss den unbestaetigten Versuch ueberleben: {unconfirmed!r}"
+            )
         finally:
             _purge(page)
             context.close()
@@ -678,7 +737,10 @@ class TestWorkItemReplayContract:
         und der Edit-Replay kennt nur die Event-URL. Erwartung: der Replay
         eines modifizierten WorkItems POSTet an ``/workitems/<pk>/edit/`` mit
         ``expected_updated_at`` (Token = WorkItem-``updated_at`` aus dem
-        Bundle); Erfolg markiert den Record ``clean`` (wie beim Event-Edit)."""
+        Bundle); BESTAETIGTER Erfolg markiert den Record ``clean`` (wie beim
+        Event-Edit). Refs #2289: eine Weiterleitung ohne
+        ``X-Offline-Replay-Result: saved`` ist kein Erfolg (Gegenprobe im
+        selben Test)."""
         context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
         page = context.new_page()
         try:
@@ -686,9 +748,21 @@ class TestWorkItemReplayContract:
             wi_pk = str(uuid.uuid4())
             captured = []
 
+            # Refs #2289 (wie im Create-Pfad): bestaetigter Erfolg = 200 +
+            # ``X-Offline-Replay-Result: saved``; Phase B stubbt die markerlose
+            # Weiterleitung.
+            mode = {"value": "confirmed"}
+
             def _handler(route):
                 captured.append({"url": route.request.url, "body": route.request.post_data or ""})
-                route.fulfill(status=302, headers={"Location": "/workitems/"})
+                if mode["value"] == "confirmed":
+                    route.fulfill(
+                        status=200,
+                        headers={"X-Offline-Replay-Result": "saved", "Content-Type": "application/json"},
+                        body='{"status": "saved"}',
+                    )
+                else:
+                    route.fulfill(status=302, headers={"Location": "/workitems/"})
 
             page.route(re.compile(r"/workitems/.*/edit/"), _handler)
             result = page.evaluate(
@@ -712,9 +786,43 @@ class TestWorkItemReplayContract:
                 f"Der Edit-Replay muss den Optimistic-Lock-Token senden: {captured[0]['body']!r}"
             )
             assert "title=Neuer-Titel" in captured[0]["body"]
-            assert result["status"] == "synced", f"Redirect-Erfolg muss synced liefern: {result!r}"
+            assert result["status"] == "synced", f"Bestaetigter Erfolg muss synced liefern: {result!r}"
             assert result["localStatus"] == "clean", (
                 f"Erfolg muss den Record auf clean setzen (sichtbar lassen, F-08): {result!r}"
+            )
+
+            # Refs #2289, Gegenprobe: Weiterleitung ohne Bestaetigungsmarker —
+            # die Aenderung darf NICHT auf clean wandern (sie waere aus dem
+            # Unsynced-Set raus, obwohl serverseitig nichts gespeichert wurde).
+            mode["value"] = "bare-redirect"
+            captured.clear()
+            other_pk = str(uuid.uuid4())
+            unconfirmed = page.evaluate(
+                """async (pk) => {
+                    const rec = await window.offlineEdit.markWorkItemModified(
+                        pk,
+                        { item_type: 'task', title: 'Ohne-Bestaetigung', priority: 'normal', recurrence: 'none' },
+                        { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
+                    );
+                    const r = await window.offlineEdit.replayModifiedEvent(rec, { replay: true });
+                    const row = await window.offlineStore.getOfflineEvent(pk);
+                    return {
+                        status: r.status,
+                        localStatus: row && row.localStatus,
+                        token: row && row.data.expectedUpdatedAt,
+                    };
+                }""",
+                other_pk,
+            )
+            assert len(captured) == 1, f"Genau ein POST in der Gegenprobe erwartet: {captured!r}"
+            assert unconfirmed["status"] == "unconfirmed", (
+                f"Weiterleitung ohne Bestaetigungsmarker darf nicht als Erfolg gelten: {unconfirmed!r}"
+            )
+            assert unconfirmed["localStatus"] == "modified", (
+                f"Die unbestaetigte Aenderung bleibt unsynchronisiert: {unconfirmed!r}"
+            )
+            assert unconfirmed["token"] == "2026-01-01T00:00:00Z", (
+                f"Der Optimistic-Lock-Token muss den unbestaetigten Versuch ueberleben: {unconfirmed!r}"
             )
         finally:
             _purge(page)
@@ -864,7 +972,9 @@ class TestWorkItemReplayContract:
         neu geminteten Key ersetzt. Pinnt den ``wasNew``-Zweig in
         ``markWorkItemModified`` (``offline-edit.js`` ~508-515:
         ``data.idempotencyKey = (existing.data && existing.data.idempotencyKey)
-        || _uuid()`` + ``localStatus: wasNew ? "new" : "modified"``)."""
+        || _uuid()`` + ``localStatus: wasNew ? "new" : "modified"``). Refs
+        #2289: zusaetzlich gepinnt, dass beides auch einen UNBESTAETIGTEN
+        Replay-Versuch (Weiterleitung ohne Marker) ueberlebt."""
         context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
         page = context.new_page()
         try:
@@ -872,9 +982,20 @@ class TestWorkItemReplayContract:
             client_pk = str(uuid.uuid4())
             captured = []
 
+            # Refs #2289: bestaetigter Erfolg = 200 + Marker (Phase A);
+            # Phase B unten stubbt die markerlose Weiterleitung.
+            mode = {"value": "confirmed"}
+
             def _handler(route):
                 captured.append({"url": route.request.url, "idem": route.request.headers.get("x-idempotency-key")})
-                route.fulfill(status=302, headers={"Location": "/workitems/"})
+                if mode["value"] == "confirmed":
+                    route.fulfill(
+                        status=200,
+                        headers={"X-Offline-Replay-Result": "saved", "Content-Type": "application/json"},
+                        body='{"status": "saved"}',
+                    )
+                else:
+                    route.fulfill(status=302, headers={"Location": "/workitems/"})
 
             # Nur /workitems/new/ gemockt: schlaegt der wasNew-Zweig fehl und
             # der Replay zielt (fehlerhaft) auf /workitems/<pk>/edit/, faengt
@@ -921,7 +1042,48 @@ class TestWorkItemReplayContract:
                 "Der Replay nach Re-Edit muss denselben X-Idempotency-Key senden wie die "
                 f"urspruengliche Neuanlage: {captured[0]!r} vs {result!r}"
             )
-            assert result["replayStatus"] == "synced", f"Redirect-Erfolg muss synced liefern: {result!r}"
+            assert result["replayStatus"] == "synced", f"Bestaetigter Erfolg muss synced liefern: {result!r}"
+
+            # Refs #2289, Gegenprobe: derselbe Re-Edit-Pfad gegen eine
+            # Weiterleitung OHNE Bestaetigungsmarker — Neuanlagenstatus UND
+            # Idempotenzschluessel muessen den unbestaetigten Versuch
+            # ueberleben, sonst entstuende beim naechsten Anlauf ein Duplikat.
+            mode["value"] = "bare-redirect"
+            captured.clear()
+            unconfirmed = page.evaluate(
+                """async (clientPk) => {
+                    const created = await window.offlineEdit.markWorkItemNew(clientPk, {
+                        item_type: 'task', title: 'Ohne-Bestaetigung', priority: 'normal',
+                    });
+                    const reedited = await window.offlineEdit.markWorkItemModified(
+                        created.pk,
+                        { item_type: 'task', title: 'Ohne-Bestaetigung, korrigiert', priority: 'important' },
+                        { clientPk: clientPk }
+                    );
+                    const r = await window.offlineEdit.replayModifiedEvent(reedited, { replay: true });
+                    const row = await window.offlineStore.getOfflineEvent(created.pk);
+                    return {
+                        replayStatus: r.status,
+                        originalIdemKey: created.data.idempotencyKey,
+                        localStatus: row && row.localStatus,
+                        idemKey: row && row.data && row.data.idempotencyKey,
+                    };
+                }""",
+                client_pk,
+            )
+            assert len(captured) == 1, f"Auch die Gegenprobe muss an /workitems/new/ gehen: {captured!r}"
+            assert unconfirmed["replayStatus"] == "unconfirmed", (
+                f"Weiterleitung ohne Bestaetigungsmarker darf nicht als Erfolg gelten: {unconfirmed!r}"
+            )
+            assert unconfirmed["localStatus"] == "new", (
+                f"Der unbestaetigte Re-Edit bleibt eine Neuanlage: {unconfirmed!r}"
+            )
+            assert unconfirmed["idemKey"] == unconfirmed["originalIdemKey"], (
+                f"Der Idempotenzschluessel muss den unbestaetigten Versuch ueberleben: {unconfirmed!r}"
+            )
+            assert captured[0]["idem"] == unconfirmed["originalIdemKey"], (
+                f"Auch der unbestaetigte Versuch sendet den urspruenglichen Schluessel: {captured[0]!r}"
+            )
         finally:
             _purge(page)
             context.close()
