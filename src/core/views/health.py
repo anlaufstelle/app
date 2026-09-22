@@ -193,6 +193,25 @@ def _check_backup_age() -> float | None:
     return info["age_hours"]
 
 
+def _check_backup_signal() -> dict:
+    """Backup-Zustand fuer ``/health/``: ein Verzeichnis-Scan, ein Urteil.
+
+    Refs #2342: Der Payload braucht neben dem Alter auch den Fall „Zeitstempel
+    in der Zukunft" — dort ist das Alter kein Messwert. Beides kommt aus
+    derselben Ableitung wie Systembereich und Compliance-Karte
+    (:func:`core.services.system.health.last_backup_info`); hier wird nur
+    uebersetzt, nicht gerechnet. Ein eigener zweiter Scan waere genau die
+    zweite Wahrheit, die Refs #2291 beseitigt hat.
+    """
+    info = last_backup_info()
+    if info is None:
+        return {"age_hours": None, "state": "missing"}
+    if info.get("in_future"):
+        return {"age_hours": None, "state": "future"}
+    age_hours = info["age_hours"]
+    return {"age_hours": age_hours, "state": "stale" if age_hours > BACKUP_WARN_HOURS else "ok"}
+
+
 def _check_stale_jobs() -> list[str]:
     """Refs #1335 (Scheduler-Doku-Haertung): Keys der Hintergrundjobs mit Status ``critical``.
 
@@ -404,20 +423,19 @@ class HealthView(View):
             status = _degrade(status, smtp_payload["status"] == "unreachable")
 
             # Backup-Alter (Refs #796), gecacht (A7.2).
-            backup_age = _cached_detail("health:backup_age", _check_backup_age, cache_alive=cache_alive)
-            payload["last_backup_age_hours"] = backup_age
+            backup_signal = _cached_detail("health:backup_age", _check_backup_signal, cache_alive=cache_alive)
+            backup_status = backup_signal["state"]
+            payload["last_backup_age_hours"] = backup_signal["age_hours"]
             backup_required = bool(getattr(settings, "HEALTH_BACKUP_REQUIRED", True))
             payload["backup_required"] = backup_required
-            if backup_age is None:
-                backup_status = "missing"
-            elif backup_age > BACKUP_WARN_HOURS:
-                backup_status = "stale"
-            else:
-                backup_status = "ok"
             payload["backup"] = backup_status
+            # Refs #2342: ``future`` degradet immer — ein nicht messbares Alter
+            # ist kein gesunder Zustand, unabhaengig von HEALTH_BACKUP_REQUIRED
+            # (die Option betrifft Installationen ohne Welt-B-Backups, nicht
+            # eine kaputte Systemuhr).
             status = _degrade(
                 status,
-                (backup_required and backup_status == "missing") or backup_status == "stale",
+                (backup_required and backup_status == "missing") or backup_status in {"stale", "future"},
             )
 
             # Disk-Frei (Refs #796), gecacht (A7.2).

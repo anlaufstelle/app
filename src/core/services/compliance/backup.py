@@ -30,6 +30,21 @@ def _backup_checks() -> list[ComplianceCheck]:
                 action_hint="settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren.",  # pragma: no mutate
             )
         ]
+    if info.get("in_future"):
+        # Refs #2342: Ein Zeitstempel in der Zukunft ist kein Messwert. Frueher
+        # ergab er ein negatives Alter, das unter jeder Schwelle blieb — die
+        # Karte stand auf gruen und nannte ein negatives Alter.
+        return [
+            ComplianceCheck(
+                key="backup_age",
+                label="Letztes Backup",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
+                status=ComplianceStatus.WARNING,
+                message="Zeitstempel der letzten Sicherung liegt in der Zukunft — das Alter ist nicht messbar.",  # pragma: no mutate  # noqa: E501
+                detail=f"{info['path']} (Zeitstempel: {info['mtime']:%Y-%m-%d %H:%M UTC})",
+                action_hint="Systemuhr/Zeitsynchronisation des Hosts und den Dateizeitstempel der Sicherung pruefen.",  # pragma: no mutate  # noqa: E501
+            )
+        ]
     age_hours = info["age_hours"]
     detail = f"{info['path']} (Alter: {age_hours:.1f}h)"
     # Refs #1872: Schwellen aus ``ops_thresholds`` (36 h / 48 h = 1,5 x / 2 x

@@ -183,8 +183,17 @@ def last_backup_info(backup_dir: str | os.PathLike | None = None) -> dict | None
     ist der Zustand ``None`` (= fehlend/unbekannt), nie „gesund".
 
     Returns dict mit ``path`` (Manifestpfad), ``mtime`` (timezone-aware
-    datetime), ``age_hours`` (float) und ``is_stale`` (bool: aelter als
-    ``BACKUP_STALE_THRESHOLD_HOURS``).
+    datetime), ``age_hours`` (float oder ``None``), ``in_future`` (bool) und
+    ``is_stale`` (bool).
+
+    Refs #2342: Ein Zeitstempel in der **Zukunft** (falsch gestellte Systemuhr,
+    Uhrensprung, per ``touch`` oder aus einem Archiv gesetzter Zeitstempel)
+    ergaebe ein negatives Alter. ``is_stale`` vergleicht gegen eine positive
+    Schwelle und bliebe damit ``False`` — eine Sicherung mit unbekanntem Alter
+    galt als die frischeste ueberhaupt. Ein negatives Alter ist kein Messwert:
+    ``age_hours`` ist dann ``None``, ``in_future`` ist ``True`` und
+    ``is_stale`` ist ``True`` (nie gruen). Die drei Anzeigen — Systembereich,
+    Compliance-Karte und ``/health/`` — lesen diesen einen Vertrag.
     """
     target = backup_dir if backup_dir is not None else getattr(settings, "BACKUP_DIR", None)
     if not target:
@@ -208,16 +217,33 @@ def last_backup_info(backup_dir: str | os.PathLike | None = None) -> dict | None
     if not candidates:
         return None
 
-    youngest = max(candidates, key=lambda p: p.stat().st_mtime)
-    mtime_ts = youngest.stat().st_mtime
-    mtime = datetime.fromtimestamp(mtime_ts, tz=UTC)
+    try:
+        # Die Auswahl der juengsten Datei und ihre Auswertung gehoeren in
+        # denselben Schutz wie das Listing: zwischen Filter und ``stat`` kann
+        # die Rotation des Backup-Skripts die Datei entfernen. Diese Funktion
+        # laeuft im Request-Cycle und darf ihn nie kippen (Refs #2342).
+        youngest = max(candidates, key=lambda p: p.stat().st_mtime)
+        mtime_ts = youngest.stat().st_mtime
+        mtime = datetime.fromtimestamp(mtime_ts, tz=UTC)
+    except Exception:
+        logger.exception("system_health: backup timestamp evaluation failed in %s", target_path)
+        return None
     now = datetime.now(tz=UTC)
     age = now - mtime
     age_hours = round(age / timedelta(hours=1), 1)
+    if age_hours < 0:
+        return {
+            "path": str(youngest),
+            "mtime": mtime,
+            "age_hours": None,
+            "in_future": True,
+            "is_stale": True,
+        }
     return {
         "path": str(youngest),
         "mtime": mtime,
         "age_hours": age_hours,
+        "in_future": False,
         "is_stale": age_hours > BACKUP_STALE_THRESHOLD_HOURS,
     }
 

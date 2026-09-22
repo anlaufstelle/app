@@ -104,6 +104,8 @@
                     <div class="text-[12px] text-ink-muted">
                         {% if health.backup == None %}
                         {% trans "Kein Backup gefunden" %}
+                        {% elif health.backup.in_future %}
+                        {% trans "Zeitstempel liegt in der Zukunft — Alter nicht messbar" %}
                         {% else %}
                         {% blocktrans with hours=health.backup.age_hours %}vor {{ hours }} Stunden{% endblocktrans %}
                         {% endif %}
@@ -111,7 +113,7 @@
                 </div>
             </div>
             <span class="text-[12px] font-semibold uppercase tracking-wider {% if health.backup == None or health.backup.is_stale %}text-orange-700{% else %}text-green-700{% endif %}">
-                {% if health.backup == None %}{% trans "Fehlt" %}{% elif health.backup.is_stale %}{% trans "Veraltet" %}{% else %}{% trans "OK" %}{% endif %}
+                {% if health.backup == None %}{% trans "Fehlt" %}{% elif health.backup.in_future %}{% trans "Unbekannt" %}{% elif health.backup.is_stale %}{% trans "Veraltet" %}{% else %}{% trans "OK" %}{% endif %}
             </span>
         </div>
 

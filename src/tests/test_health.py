@@ -78,6 +78,41 @@ def detail_token(settings):
     return DETAIL_TOKEN
 
 
+#: Pflichttabellen der Satzkennung (Vertrag aus ``scripts/ops/lib/backup-set.sh``).
+_BACKUP_SET_TABLES = (
+    "core_facility",
+    "core_client",
+    "core_event",
+    "core_workitem",
+    "core_auditlog",
+    "core_attachment",
+)
+
+
+def _publish_backup_set(backup_dir, timestamp="2026-01-01_020000"):
+    """Ein vollstaendig veroeffentlichter Backup-Satz (nur Datenbank).
+
+    Refs #2291: Seit der Satzpruefung zaehlt ein blosser ``*.sql.gz.enc``-Dump
+    NICHT mehr als Sicherung — ohne signiertes Manifest liefert
+    ``last_backup_info`` ``None``. Die beiden Backup-Alter-Faelle unten legten
+    frueher nur den Dump an und kamen allein deshalb durch, weil ein frueher
+    gelaufener Test noch einen Wert im geteilten Detail-Cache hinterlassen
+    hatte (isoliert waren sie rot). Refs #2342.
+    """
+    dump = backup_dir / f"anlaufstelle_{timestamp}.sql.gz.enc"
+    dump.write_bytes(b"dump")
+    dump.with_name(f"{dump.name}.hmac").write_text("a" * 64 + "\n", encoding="utf-8")
+    manifest = backup_dir / f"anlaufstelle_{timestamp}.manifest"
+    manifest.write_text(
+        "".join(f"table_{table}=1\n" for table in _BACKUP_SET_TABLES)
+        + f"backup_timestamp={timestamp}\n"
+        + f"db_sha256={'b' * 64}\n",
+        encoding="utf-8",
+    )
+    manifest.with_name(f"{manifest.name}.hmac").write_text("c" * 64 + "\n", encoding="utf-8")
+    return manifest
+
+
 def _detail_get(**extra):
     """GET /health/ mit gültigem Detail-Token -> voller Payload."""
     return Client().get("/health/", HTTP_X_HEALTH_TOKEN=DETAIL_TOKEN, **extra)
@@ -286,7 +321,7 @@ class TestHealthDetail:
 
     def test_backup_age_field_populated_when_files_exist(self, detail_token, tmp_path, settings):
         settings.BACKUP_DIR = tmp_path
-        (tmp_path / "anlaufstelle_2026-01-01.sql.gz.enc").write_bytes(b"x")
+        _publish_backup_set(tmp_path)
         assert _detail_get().json()["last_backup_age_hours"] is not None
 
     def test_backup_age_warns_above_48h(self, detail_token, tmp_path, settings):
@@ -294,10 +329,9 @@ class TestHealthDetail:
         from datetime import datetime, timedelta
 
         settings.BACKUP_DIR = tmp_path
-        old_file = tmp_path / "anlaufstelle_2026-01-01.sql.gz.enc"
-        old_file.write_bytes(b"x")
+        manifest = _publish_backup_set(tmp_path)
         ancient = (datetime.now() - timedelta(hours=72)).timestamp()
-        os_mod.utime(old_file, (ancient, ancient))
+        os_mod.utime(manifest, (ancient, ancient))
 
         data = _detail_get().json()
         assert data["last_backup_age_hours"] is not None
