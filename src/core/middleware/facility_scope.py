@@ -122,10 +122,6 @@ FACILITY_MISSING_EXEMPT_URLS = (
     "/csp-report/",
     "/impressum/",
     "/datenschutzerklaerung/",
-    # Demo-Bereichsauswahl (nur bei DEMO_MODE, sonst 404) — oeffentlich, PII-frei,
-    # exakte Pfade statt Praefix (Refs #2285)
-    "/demo/",
-    "/demo/start/",
 )
 
 #: Refs #2090: der ``/offline/``-Baum, Pfad fuer Pfad statt als Praefix.
@@ -153,6 +149,11 @@ FACILITY_MISSING_EXEMPT_PATHS = (
     "/offline/zeitstrom/",
     "/offline/conflicts/",
     "/offline/conflict-shell/",
+    # Demo-Bereichsauswahl (nur bei DEMO_MODE, sonst 404) — oeffentlich, PII-frei.
+    # Exakt statt Praefix, damit kuenftige Routen unter /demo/ nicht still aus
+    # dem Einrichtungs-Guard fallen (Refs #2285, #2351).
+    "/demo/",
+    "/demo/start/",
 )
 
 #: Refs #2090: Standalone-Seite ohne ``base.html`` — aus demselben Grund wie
