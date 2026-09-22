@@ -161,8 +161,13 @@ class TestUndoLaedtDenDokumentationstypInDerGleichenAbfrage:
         assert result.pk == event.pk
         # Empirisch bestimmtes Budget des unveraenderten Pfads (JOIN inklusive
         # document_type in der Event-Fetch-Query): eine zusaetzliche Abfrage
-        # ohne den JOIN ueberschreitet dieses Budget.
-        assert len(captured.captured_queries) <= 23, [q["sql"] for q in captured.captured_queries]
+        # ohne den JOIN ueberschreitet dieses Budget. Seit der einrichtungs-
+        # weiten Sperr-Reihenfolge der Anhangspfade (Refs #2260) nimmt
+        # ``delete_attachments_for`` im Loeschpfad EINE zusaetzliche, nach
+        # ``pk`` geordnete Vorsperre-Abfrage — auch ohne Anhaenge; das Budget
+        # folgt dieser bewussten Abfrage (24). Der Mutant ohne JOIN landet bei
+        # 25 und bleibt damit getoetet (Nachweis im Lane-Ledger der Welle).
+        assert len(captured.captured_queries) <= 24, [q["sql"] for q in captured.captured_queries]
 
 
 class TestReplayNachweisPrueftAktionUndZieltyp:
