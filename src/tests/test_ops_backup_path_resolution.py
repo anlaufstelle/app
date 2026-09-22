@@ -75,6 +75,8 @@ def _make_sandbox(tmp_path: Path, *, backup_env: str = "") -> tuple[Path, Path, 
     for name in ("backup.sh", "restore-drill.sh", "_backup_common.sh"):
         shutil.copy(OPS_DIR / name, ops / name)
         (ops / name).chmod(0o755)
+    # Gemeinsame Satzpruefung (Refs #2292): backup.sh sourct scripts/ops/lib/.
+    shutil.copytree(OPS_DIR / "lib", ops / "lib")
 
     # Stub-Compose im Repo-Root — muss existieren, sonst greift der COMPOSE_FILE-Guard.
     (root / "docker-compose.prod.yml").write_text("# stub\n", encoding="utf-8")

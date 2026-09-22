@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: § 6.6 notes that `backup.sh --verify` selects the set through its signed manifest and enforces the same set binding as the restore (#2292).
 > Synchronization update 2026-09-22: § 3.3 describes that a backup set is published only after a complete run (work directory, signed manifest last) and that the operational “last backup” state counts complete sets only (#2291).
 > Synchronization update 2026-09-22: § 2.3 follows the restore path that fills a fresh recovery database, verifies it against the signed manifest and switches over under write quiescence, keeps the previous database and requires the explicit confirmation switch (#2290, #2318).
 > Synchronization update 2026-09-22: § 5.8 explains the Django 6.1 deployment check `mail.E001` (SMTP backend required on production hosts, behaviour without a reachable relay, console backend only in the live-dev and demo settings) (#2326).
@@ -1248,7 +1249,7 @@ Both formats are restored as the Postgres superuser (`postgres`, via local socke
 | `dev-ops/deploy/backup.sh` (runs on `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (no HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh --dev` (glob `dump-*.pgc.enc`) |
 | `scripts/ops/backup.sh` (prod schema) in self-hoster deployments | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256** sidecars (Refs #1024) | database + media with sidecars, `*.manifest` with sidecar, optional timestamp-matched HWM | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod --timestamp <timestamp>` (manifest/HMAC checks before decrypt); `backup.sh --verify` remains a lightweight alternative |
 
-Why no cross-restore: The `--dev` branch searches by glob for `dump-*.pgc.enc` and pipes into `pg_restore` — a plain-SQL backup (`*.sql.gz.enc`) is simply not found this way and is also not a valid `pg_restore` archive. The `--prod` branch searches for `anlaufstelle_*.sql.gz.enc`, checks the `.hmac` sidecar, and restores via `gunzip | psql` — a `dump-*.pgc.enc` carries no sidecar (`backup_verify_hmac` aborts) and is binary format. A run against the wrong format therefore fails. Anyone who doesn't want to run a full drill uses `scripts/ops/backup.sh --verify` for the prod path (HMAC + probe decrypt + row comparison against the live DB).
+Why no cross-restore: The `--dev` branch searches by glob for `dump-*.pgc.enc` and pipes into `pg_restore` — a plain-SQL backup (`*.sql.gz.enc`) is simply not found this way and is also not a valid `pg_restore` archive. The `--prod` branch searches for `anlaufstelle_*.sql.gz.enc`, checks the `.hmac` sidecar, and restores via `gunzip | psql` — a `dump-*.pgc.enc` carries no sidecar (`backup_verify_hmac` aborts) and is binary format. A run against the wrong format therefore fails. Anyone who doesn't want to run a full drill uses `scripts/ops/backup.sh --verify` for the prod path (set selection through the signed manifest, the same set binding the restore enforces, HMAC + probe decrypt + row comparison against the live DB). If the manifest is missing or the media archive belongs to a different set, the run exits non-zero.
 
 **Version boundary:** For compatibility, `restore.sh` accepts an older-format backup without a
 manifest. The current prod drill requires the manifest and aborts in step 0
@@ -2879,4 +2880,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: f925d7d3e4475ae4be995e8e7294d806ba89bb9d -->
+<!-- source-hash: ac80237d6a4540158f8e29624922a452392670ba -->

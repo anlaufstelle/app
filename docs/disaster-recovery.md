@@ -43,7 +43,7 @@
 | Dateien | `*.sql.gz.enc` + `.hmac`, `*.manifest` + `.hmac`, `audit_hwm-*.json` |
 | Medien-Backup | `*_media.tar.gz.enc` + `.hmac`, `tar` aus dem `web`-Container |
 | Restore-Tool | `psql` über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) |
-| Restore-Drill | [`restore-drill.sh --prod --timestamp <timestamp>`](../scripts/ops/restore-drill.sh): Manifest-/HMAC-Prüfung + `gunzip \| psql` + exakter Sechs-Tabellen-Abgleich gegen das authentifizierte Manifest; `backup.sh --verify` bleibt eine leichtere Prüfung mit Live-DB-Vergleich |
+| Restore-Drill | [`restore-drill.sh --prod --timestamp <timestamp>`](../scripts/ops/restore-drill.sh): Manifest-/HMAC-Prüfung + `gunzip \| psql` + exakter Sechs-Tabellen-Abgleich gegen das authentifizierte Manifest; `backup.sh --verify` bleibt eine leichtere Prüfung: Satzauswahl über das signierte Manifest, dieselbe Satzbindung wie der Restore, dazu Probe-Restore und Live-DB-Vergleich |
 | Ablage (Default) | `<projekt>/backups/{daily,weekly,monthly}` |
 | Off-Site-Sync | `BACKUP_OFFSITE_TARGET` (rclone / `s3://` / scp) |
 

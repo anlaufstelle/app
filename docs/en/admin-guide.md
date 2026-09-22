@@ -3,6 +3,7 @@
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
 > Synchronization update 2026-09-22: Step 4 explains that the script now auto-detects `compose.legal.yml`/`compose.override.yml` and prints the file list it used, and that the first ClamAV start can take about three minutes to download signatures (#2309, #2312).
 > Synchronization update 2026-09-22: § 1 Step 2 states the length/character-set requirement once for `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` and names `openssl` as the primary command shared with `.env.example` (#2313).
+> Synchronization update 2026-09-22: § 3.2 describes that `backup.sh --verify` checks the signed set (set ID, dump and media binding) and fails instead of warning when the bound media archive is missing (#2292).
 > Synchronization update 2026-09-22: § 3.2 states that a backup set is published only after a complete run and that the “last backup” state counts complete sets only (#2291).
 > Synchronization update 2026-09-22: the SMTP environment reference explains that Django 6.1 requires an SMTP backend on production hosts (`check --deploy`, `mail.E001`), what happens without a reachable mail server, and that the console backend exists only in the live-dev and demo settings (#2326).
 > Synchronization update 2026-09-21: the fresh-install health-check note explains that “Critical audit events (24h)” can warn normally because initial setup itself creates critical audit events (#2247).
@@ -1284,7 +1285,7 @@ cd /opt/anlaufstelle
 sudo ./scripts/ops/backup.sh --verify
 ```
 
-The verification run validates the HMAC before decryption, restores the latest database dump into a temporary database, compares critical RLS tables with the live database, and checks the latest media archive. The more comprehensive quarterly restore drill is documented in [Ops Runbook § 6.6](../ops-runbook.md#66-backup-restore-drill-refs-720-739).
+The verification run selects the most recent **set** through its signed manifest, enforces that binding (set ID, dump hash, the bound media archive with its sidecar and hash — the same check the restore performs), validates the HMAC before decrypting, restores the database dump into a temporary database, compares critical RLS tables with the live database, and checks the media archive **of that same set**. Without a manifest, or with a missing or foreign media archive, the run ends with an error instead of a warning.
 
 ### 3.3 Recovery
 
@@ -2250,4 +2251,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 3d0b6ae6aa645ee798a48ecf207c13f38cd0848f -->
+<!-- source-hash: 1f1b219f553a5a0e63e8655371839a5e3fe0fd6e -->

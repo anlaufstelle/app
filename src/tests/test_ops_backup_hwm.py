@@ -40,6 +40,8 @@ def _backup_sandbox(tmp_path: Path) -> tuple[Path, Path, Path]:
     ops.mkdir(parents=True)
     for name in ("backup.sh", "_backup_common.sh"):
         shutil.copy(OPS_DIR / name, ops / name)
+    # Gemeinsame Satzpruefung (Refs #2292): backup.sh sourct scripts/ops/lib/.
+    shutil.copytree(OPS_DIR / "lib", ops / "lib")
     (root / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
     (root / ".env").write_text(
         "POSTGRES_USER=appuser\n"

@@ -1259,7 +1259,7 @@ cd /opt/anlaufstelle
 sudo ./scripts/ops/backup.sh --verify
 ```
 
-Der Prüflauf validiert den HMAC vor dem Entschlüsseln, stellt den jüngsten Datenbank-Dump in einer temporären Datenbank wieder her, vergleicht kritische RLS-Tabellen mit der Live-Datenbank und prüft das jüngste Medienarchiv. Der ausführlichere quartalsweise Restore-Drill ist im [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) beschrieben.
+Der Prüflauf wählt den jüngsten **Satz** über sein signiertes Manifest, erzwingt dessen Bindung (Satzkennung, Dump-Hash, gebundenes Medienarchiv samt Sidecar und Hash — dieselbe Prüfung wie beim Restore), validiert den HMAC vor dem Entschlüsseln, stellt den Datenbank-Dump in einer temporären Datenbank wieder her, vergleicht kritische RLS-Tabellen mit der Live-Datenbank und prüft das Medienarchiv **desselben Satzes**. Ohne Manifest, mit fehlendem oder fremdem Medienarchiv endet der Lauf mit einem Fehler statt mit einer Warnung. Der ausführlichere quartalsweise Restore-Drill ist im [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739) beschrieben.
 
 ### 3.3 Wiederherstellung
 

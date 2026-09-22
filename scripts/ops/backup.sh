@@ -34,6 +34,9 @@ fi
 # A4.3: Encrypt-then-MAC-Helfer (backup_write_hmac / backup_verify_hmac).
 # shellcheck source=scripts/ops/_backup_common.sh
 source "${SCRIPT_DIR}/_backup_common.sh"
+# Satz-/Manifestpruefung, geteilt mit restore.sh (Refs #2290, #2292).
+# shellcheck source=scripts/ops/lib/backup-set.sh
+source "${SCRIPT_DIR}/lib/backup-set.sh"
 
 # .env laden falls vorhanden
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
@@ -74,14 +77,30 @@ SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 if [[ "${1:-}" == "--verify" ]]; then
     DAILY_DIR="${BACKUP_HOST_DIR}/daily"
 
-    # Neuestes DB-Backup finden
-    LATEST_BACKUP=$(find "$DAILY_DIR" -name "*.sql.gz.enc" -type f 2>/dev/null \
+    # Satzauswahl ueber das signierte Manifest (Refs #2292): Es ist der Marker
+    # eines vollstaendig veroeffentlichten Laufs und bindet Dump, Medien und
+    # Anker aneinander. Verify prueft damit exakt denselben Satz wie restore.sh
+    # — kein Rueckfall auf lose oder fremde Einzelartefakte.
+    LATEST_MANIFEST=$(find "$DAILY_DIR" -maxdepth 1 -name "anlaufstelle_*.manifest" -type f 2>/dev/null \
         | sort -r | head -n1)
 
-    if [[ -z "$LATEST_BACKUP" ]]; then
-        echo "FEHLER: Kein DB-Backup in ${DAILY_DIR} gefunden."
+    if [[ -z "$LATEST_MANIFEST" ]]; then
+        echo "FEHLER: Kein signiertes Backup-Manifest in ${DAILY_DIR} gefunden."
         exit 1
     fi
+
+    LATEST_BACKUP="${LATEST_MANIFEST%.manifest}.sql.gz.enc"
+    if [[ ! -f "$LATEST_BACKUP" ]]; then
+        echo "FEHLER: Zum Manifest gehoerender DB-Dump fehlt: ${LATEST_BACKUP}"
+        exit 1
+    fi
+    LATEST_MEDIA="$(backup_set_media_path "$LATEST_BACKUP")"
+
+    echo "Verifiziere Backup-Satz: ${LATEST_MANIFEST##*/}"
+    backup_set_load "$LATEST_MANIFEST"
+    VERIFY_HWM_FILE="${DAILY_DIR}/audit_hwm-$(backup_set_timestamp_from_db_file "$LATEST_BACKUP").json"
+    backup_set_verify_artifacts "$LATEST_BACKUP" "$LATEST_MEDIA" "$VERIFY_HWM_FILE"
+    echo "Satzbindung bestaetigt (Satzkennung, Dump-Hash, gebundene Artefakte)."
 
     echo "Verifiziere DB-Backup: ${LATEST_BACKUP}"
 
@@ -149,10 +168,11 @@ if [[ "${1:-}" == "--verify" ]]; then
     echo "DB-Backup ist gueltig: ${LATEST_BACKUP}"
 
     # Medien-Backup integritaetspruefen — kein Restore noetig, nur tar-listen.
-    LATEST_MEDIA=$(find "$DAILY_DIR" -name "*_media.tar.gz.enc" -type f 2>/dev/null \
-        | sort -r | head -n1)
-    if [[ -z "$LATEST_MEDIA" ]]; then
-        echo "WARNUNG: Kein Medien-Backup in ${DAILY_DIR} gefunden."
+    # Existenz, Sidecar und Hash des Archivs hat die Satzpruefung oben bereits
+    # erzwungen; hier bleibt der Inhaltstest. Bindet das Manifest keine Medien,
+    # beschreibt es einen DB-only-Satz (Refs #2292).
+    if [[ -z "$BACKUP_SET_MEDIA_SHA256" ]]; then
+        echo "INFO: Der Satz bindet kein Medien-Archiv (DB-only-Satz) — nichts zu pruefen."
     else
         echo "Verifiziere Medien-Backup: ${LATEST_MEDIA}"
         backup_verify_hmac "$LATEST_MEDIA"
