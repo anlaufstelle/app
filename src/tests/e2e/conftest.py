@@ -178,10 +178,17 @@ def base_url(request, tmp_path_factory):
         env=worker_env,
         label="migrate --run-syncdb",
     )
+    # Refs #2285: ``E2E_SEED_SCALE=demo`` seedet den Szenariokatalog statt des
+    # Standard-E2E-Seeds (Vorbedingung der Demo-Bereichs-Spec, zusammen mit
+    # ``E2E_DEMO_MODE=1``); ohne Variable bleibt der bisherige Seed unveraendert.
+    seed_command = [python, "src/manage.py", "seed", "--flush"]
+    seed_scale = os.environ.get("E2E_SEED_SCALE", "")
+    if seed_scale:
+        seed_command += ["--scale", seed_scale]
     _run_or_die(
-        [python, "src/manage.py", "seed", "--flush"],
+        seed_command,
         env=worker_env,
-        label="seed --flush",
+        label=" ".join(seed_command[2:]),
     )
 
     # Alte gunicorn-Prozesse auf diesem Port beenden
