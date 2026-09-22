@@ -54,10 +54,14 @@ class RetentionApproveView(LeadOrAdminRequiredMixin, View):
         except ValidationError as exc:
             # Refs #2109: Aufbewahrungssperre oder zwischenzeitlich entschieden.
             # Antwortmuster wie beim doppelten Hold in ``RetentionHoldView``
-            # unten: 409 mit kurzem Klartext. htmx swappt bei 4xx bewusst nicht
-            # (die veraltete Karte bleibt stehen), und der globale
-            # ``htmx:responseError``-Toast (``static/js/htmx-errors.js``) zeigt
-            # den Antworttext, solange er kurz und markup-frei ist.
+            # unten: 409 mit kurzem Klartext. Refs #2321 (H-5): Seit der
+            # globalen 4xx-Swap-Regel (Refs #2232) wechselt htmx diesen
+            # Klartext an die Stelle der Vorschlagskarte ein — die veraltete
+            # Karte bleibt also NICHT mehr stehen, die Meldung steht dort, wo
+            # der Klick war. Der globale Toast aus ``static/js/htmx-errors.js``
+            # unterbleibt in diesem Fall bewusst (ein geswapptes 4xx traegt
+            # seine Meldung bereits sichtbar); er erscheint nur, wenn nicht
+            # geswappt wurde. Die Antwort bleibt deshalb kurz und markup-frei.
             return HttpResponse(exc.messages[0] if exc.messages else str(exc), status=409)
 
         annotate_urgency(proposal)

@@ -1,11 +1,17 @@
 /*
  * Globaler HTMX-Fehler-Handler (Refs #1016, Workstream C — C2).
  *
- * HTMX swappt bei 4xx/5xx-Antworten standardmäßig NICHT. Ohne Handler bleibt
- * eine fehlgeschlagene hx-Aktion für den Nutzer komplett unsichtbar — inkl.
- * der Klartext-400er aus retention.py / workitem_bulk.py ("Begründung ist
- * erforderlich." o.ä.), die heute still verschluckt werden. Dieser Handler
- * zeigt einen diskreten Fehler-Toast unten rechts.
+ * HTMX swappt bei 4xx/5xx-Antworten standardmäßig NICHT. Ohne Handler bliebe
+ * eine fehlgeschlagene hx-Aktion für den Nutzer komplett unsichtbar. Dieser
+ * Handler zeigt einen diskreten Fehler-Toast unten rechts.
+ *
+ * Refs #2232/#2321 (H-5): Für 4xx gilt inzwischen die Swap-Regel aus der
+ * ``responseHandling``-Tabelle in base.html — die fachlichen Klartext-400er
+ * und -409er aus retention.py / workitem_bulk.py ("Begründung ist
+ * erforderlich." o.ä.) landen also im auslösenden Ziel und tragen ihre
+ * Meldung selbst; der Toast unterbleibt dann (siehe ``swappedErrorResponses``
+ * weiter unten). Ohne Swap — 401/403/404/405/422/429 und alle 5xx — ist er
+ * der einzige Weg, auf dem der Fehlschlag sichtbar wird.
  *
  * Reine DOM-Manipulation, CSP-konform (kein Inline-Script, kein eval) — spiegelt
  * das Toast-Muster aus sw-register.js (_showUpdatePrompt). Single-Toast: ein
