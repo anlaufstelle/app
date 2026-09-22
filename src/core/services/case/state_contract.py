@@ -74,6 +74,18 @@ STATUS_CHANGE_GONE_MESSAGE = _(
 )
 
 
+def _present(row):
+    """Die Zeile — oder die Absage, wenn sie waehrend der Sperrwartezeit ging.
+
+    Der eine Ort, an dem aus einem ``None`` der Sperrabfragen die Meldung wird:
+    verschwundene Zeile, fremde Einrichtung oder ein Fall, den ein paralleles
+    Zusammenfuehren inzwischen an eine ANDERE Person gehaengt hat.
+    """
+    if row is None:
+        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
+    return row
+
+
 def _locked_case(case_pk, client_id) -> Case:
     """Sperrt Person -> Fall und liefert die frische, gepruefte Fallzeile."""
     from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
@@ -85,14 +97,17 @@ def _locked_case(case_pk, client_id) -> Case:
     assert_processing_allowed(client_id, lock=True)
     # 2. Widerrufszustand der Person auf der bereits gesperrten Zeile. Eine
     #    zweite ``select_for_update``-Form daneben waere eine zweite Ordnung
-    #    (Refs #2268), deshalb ein gewoehnliches Lesen unter der Sperre.
-    revoked = Client.objects.filter(pk=client_id).values_list("is_deleted", "is_active").first()
-    if revoked is None or revoked[0] or not revoked[1]:
+    #    (Refs #2268), deshalb ein gewoehnliches Lesen unter der Sperre. Fehlt
+    #    die Zeile ganz, gilt sie als widerrufen (fail-closed).
+    is_deleted, is_active = Client.objects.filter(pk=client_id).values_list("is_deleted", "is_active").first() or (
+        True,
+        False,
+    )
+    if is_deleted or not is_active:
         raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
-    # 3. Fallzeile sperren und den Personenbezug gegenpruefen.
-    locked = Case.objects.filter(pk=case_pk).select_for_update().first()
-    if locked is None or locked.client_id != client_id:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
+    # 3. Fallzeile sperren — der Personenbezug steht IN der Bedingung, damit
+    #    ein zwischenzeitlicher Wechsel nicht als Treffer durchgeht.
+    locked = _present(Case.objects.filter(pk=case_pk, client_id=client_id).select_for_update().first())
     if locked.is_deleted or locked.anonymized_at is not None:
         raise ValidationError(STATUS_CHANGE_REDACTED_MESSAGE)
     return locked
@@ -107,23 +122,17 @@ def lock_case_for_status_change(case) -> Case:
     Vorlesen und Sperren daran aendert, faengt die Gegenpruefung in
     :func:`_locked_case` ab.
     """
-    client_id = Case.objects.filter(pk=case.pk).values_list("client_id", flat=True).first()
-    if client_id is None:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
+    client_id = _present(Case.objects.filter(pk=case.pk).values_list("client_id", flat=True).first())
     return _locked_case(case.pk, client_id)
 
 
 def lock_goal_for_status_change(goal) -> OutcomeGoal:
     """Das Wirkungsziel fuer einen Statuswechsel — Person -> Fall -> Ziel."""
-    chain = OutcomeGoal.objects.filter(pk=goal.pk).values_list("case_id", "case__client_id").first()
-    if chain is None:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
-    case_pk, client_id = chain
+    case_pk, client_id = _present(
+        OutcomeGoal.objects.filter(pk=goal.pk).values_list("case_id", "case__client_id").first()
+    )
     _locked_case(case_pk, client_id)
-    locked = OutcomeGoal.objects.filter(pk=goal.pk, case_id=case_pk).select_for_update().first()
-    if locked is None:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
-    return locked
+    return _present(OutcomeGoal.objects.filter(pk=goal.pk, case_id=case_pk).select_for_update().first())
 
 
 def lock_milestone_for_status_change(milestone) -> Milestone:
@@ -134,18 +143,11 @@ def lock_milestone_for_status_change(milestone) -> Milestone:
     uebersprungene Stufe ist die naechste Reihenfolge, die niemand mit den
     uebrigen vergleicht.
     """
-    chain = (
+    goal_pk, case_pk, client_id = _present(
         Milestone.objects.filter(pk=milestone.pk)
         .values_list("goal_id", "goal__case_id", "goal__case__client_id")
         .first()
     )
-    if chain is None:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
-    goal_pk, case_pk, client_id = chain
     _locked_case(case_pk, client_id)
-    if OutcomeGoal.objects.filter(pk=goal_pk, case_id=case_pk).select_for_update().only("pk").first() is None:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
-    locked = Milestone.objects.filter(pk=milestone.pk, goal_id=goal_pk).select_for_update().first()
-    if locked is None:
-        raise ValidationError(STATUS_CHANGE_GONE_MESSAGE)
-    return locked
+    _present(OutcomeGoal.objects.filter(pk=goal_pk, case_id=case_pk).select_for_update().only("pk").first())
+    return _present(Milestone.objects.filter(pk=milestone.pk, goal_id=goal_pk).select_for_update().first())
