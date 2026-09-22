@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS, EVENT_TYPE_WEIGHTS
+from core.services.events.fields import stage_index
 from core.services.file_vault import encrypt_dynamic_data
 
 
@@ -239,6 +240,36 @@ def seed_events_bulk(
     for dt in doc_types:
         dt_data_templates[dt.slug] = build_data_template(dt)
 
+    # Refs #2270: Typen mit ``min_contact_stage`` duerfen im Bulk-Pfad weder
+    # anonym erzeugt noch einer Person unterhalb der geforderten Stufe
+    # zugeordnet werden — derselbe fachliche Vertrag wie
+    # ``services/events/crud.py:_validate_contact_stage`` (nur lesend
+    # referenziert; hier dupliziert, weil der Bulk-Pfad keine einzelnen
+    # ``ValidationError``s werfen kann/soll — er erzeugt in EINEM
+    # ``bulk_create`` statt einzelner ``create_event``-Aufrufe). Der
+    # zulaessige Personenkreis haengt nur von der (fixen) Client-Liste ab,
+    # nicht vom Zufallszug pro Ereignis, und wird deshalb einmalig VOR der
+    # Schleife bestimmt. Ein Typ ohne zulaessige Person kann in diesem Lauf
+    # KEINE zulaessige Kombination erfuellen und faellt komplett aus dem
+    # Ziehungstopf — dokumentierter Fallback statt einer fachlich
+    # unmoeglichen Kombination oder eines Ersatztyps.
+    eligible_clients_by_slug: dict[str, list[Client]] = {}
+    unsatisfiable_slugs: set[str] = set()
+    for dt in doc_types:
+        if not dt.min_contact_stage:
+            continue
+        required = stage_index(dt.min_contact_stage)
+        eligible = [c for c in clients if stage_index(c.contact_stage) >= required]
+        if eligible:
+            eligible_clients_by_slug[dt.slug] = eligible
+        else:
+            unsatisfiable_slugs.add(dt.slug)
+
+    if unsatisfiable_slugs:
+        doc_types = [dt for dt in doc_types if dt.slug not in unsatisfiable_slugs]
+    if not doc_types:
+        return 0
+
     # Ein einrichtungseigener Typ ohne Eintrag im gewaehlten Paket-Namensraum
     # faellt weiterhin auf den Default-Weight 5 zurueck.
     weights_table = EVENT_TYPE_WEIGHTS.get(package, {})
@@ -254,8 +285,15 @@ def seed_events_bulk(
     hausverbot_active_count = 0
     for i in range(to_create_count):
         doc_type = random.choices(doc_types, weights=weights, k=1)[0]
-        is_anonymous = random.random() < 0.15
-        client = None if is_anonymous else random.choice(clients)
+        if doc_type.min_contact_stage:
+            # Refs #2270: nie anonym, nur Personen aus dem vorab bestimmten
+            # zulaessigen Pool (siehe oben) — der Typ waere sonst gar nicht
+            # mehr im Ziehungstopf.
+            is_anonymous = False
+            client = random.choice(eligible_clients_by_slug[doc_type.slug])
+        else:
+            is_anonymous = random.random() < 0.15
+            client = None if is_anonymous else random.choice(clients)
         days_ago = weighted_days_ago(zeitraum)
         if days_ago == 0:
             hour, minute = random_time_of_day(max_hour=now.hour, max_minute=now.minute)
