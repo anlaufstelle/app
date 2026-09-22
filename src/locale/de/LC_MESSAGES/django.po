@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 18:54+0200\n"
+"POT-Creation-Date: 2026-09-22 19:45+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12854,3 +12854,7 @@ msgstr "Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert
 #, python-brace-format
 msgid "Passwortwechsel erforderlich – {count} Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen."
 msgstr "Passwortwechsel erforderlich – {count} Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen."
+
+#: src/core/forms/dynamic.py
+msgid "Bitte keine Klarnamen eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden."
+msgstr "Bitte keine Klarnamen eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden."

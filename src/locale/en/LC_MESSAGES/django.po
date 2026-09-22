@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 18:54+0200\n"
+"POT-Creation-Date: 2026-09-22 19:45+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12756,3 +12756,7 @@ msgstr "Sign-in required – {count} changes remain stored on this device. Sign 
 #, python-brace-format
 msgid "Passwortwechsel erforderlich – {count} Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen."
 msgstr "Password change required – {count} changes have not been transferred yet and cannot be transferred beforehand. Changing the password deletes the offline data stored on this device: save their content before you confirm the new password."
+
+#: src/core/forms/dynamic.py
+msgid "Bitte keine Klarnamen eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden."
+msgstr "Please don't enter real names — use pseudonyms as in the rest of the documentation."
