@@ -2072,7 +2072,7 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 
 ### Der Alt-Bestand — und warum der Direktvergleich fiel
 
-Die Hash-Speicherung kam mit #790. Eine **Migration, die bestehende Token-Zeilen nachträglich gehasht hätte, gibt es nicht** und kann es nicht geben: aus einer Klartext-Zeile ließe sich der Hash zwar bilden, aber die Umstellung war bewusst ohne Datenmigration angelegt. Konten, die ihre Codes vor #790 erhalten und seither nicht neu erzeugt haben, tragen deshalb weiterhin Klartext-Zeilen im Erzeugungsformat von damals: `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich.
+Die Hash-Speicherung kam mit #790. Eine **Migration, die bestehende Token-Zeilen nachträglich gehasht hätte, wurde bei der Umstellung nicht angelegt** — möglich wäre sie: die Verifikation bildet den Hash der Eingabe ohnehin immer, ein nachträglich gehashter Alt-Code verifiziert also unverändert weiter, und der Digest passt mit 16 Zeichen genau in die Spaltenbreite von `StaticToken.token`. Konten, die ihre Codes vor #790 erhalten und seither nicht neu erzeugt haben, tragen deshalb weiterhin Klartext-Zeilen im Erzeugungsformat von damals: `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich.
 
 `verify_backup_code` suchte den Eingabewert dafür unverändert **neben** seinem Hash in derselben Spalte. Damit galt ein aus der Datenbank gelesener Token-Wert selbst als gültiges Geheimnis: wer eine noch unbenutzte Zeile lesen konnte, kam mit ihr durch den zweiten Faktor — über die Zwei-Faktor-Abfrage, die Sudo-Re-Authentifizierung und die Lockout-Selbsthilfe gleichermaßen. Der zugesagte Schutz der gehashten Speicherung war damit aufgehoben, obwohl der Einmalverbrauch weiter griff.
 
@@ -2086,7 +2086,7 @@ Der Direktvergleich auf das Klartext-Format ist eine **Übergangsregel ohne Daue
 - Jede erneute Zwei-Faktor-Einrichtung erzeugt ebenfalls einen frischen, gehashten Satz.
 - Betreiberseitig prüfbar ist der Rest-Bestand über die Form der Zeilen: was einen Bindestrich enthält, ist noch nicht gehasht.
 
-**Abschaltbedingung:** Mit dem 1.0-Schnitt wird der Fallback entfernt, sobald keine Klartext-Zeile mehr existiert. Betreiber, die bis dahin noch Alt-Codes im Umlauf haben, lassen die betroffenen Konten einmal „Codes neu erzeugen" — danach ist der Vertrag eindeutig: in der Datenbank steht ausschließlich ein Digest, und kein Wert aus der Datenbank ist ein Anmeldecode.
+**Abschaltung — verbindlich:** Der Abbau über Nutzung allein ist nicht nachhaltbar (niemand misst den Rest-Bestand). Verbindlich geregelt ist die Abschaltung deshalb in #2327 (Meilenstein `release-1.0`): eine Datenmigration hasht alle verbliebenen Klartext-Zeilen, danach entfallen Formatprüfung und Direktvergleich **ersatzlos**. Bis dahin gilt die Zusage „kein Wert aus der Datenbank ist ein Anmeldecode" uneingeschränkt für gehashte Zeilen und — für den noch nicht migrierten Klartext-Bestand — in der abgeschwächten Form, dass nur eine Eingabe im historischen Erzeugungsformat überhaupt direkt verglichen wird. Betreiber können den Rest-Bestand vorher selbst abbauen, indem betroffene Konten einmal „Codes neu erzeugen".
 
 ### Flankierend: erneute Einrichtung verlangt den Bestandsfaktor
 
