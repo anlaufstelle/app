@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-22: the SMTP environment reference explains that Django 6.1 requires an SMTP backend on production hosts (`check --deploy`, `mail.E001`), what happens without a reachable mail server, and that the console backend exists only in the live-dev and demo settings (#2326).
 > Synchronization update 2026-09-21: the fresh-install health-check note explains that “Critical audit events (24h)” can warn normally because initial setup itself creates critical audit events (#2247).
 > Synchronization update 2026-09-18: § 5.6 states that the server log file now carries the same lines with masked URL paths -- query part dropped, route schema or token segments removed, the account as `user_pk` instead of the login name, in both output formats and in framework lines -- while the client IP of a CSP report stays readable (#2228).
 > Synchronization update 2026-09-21: the ClamAV troubleshooting section explains that an unknown signature age remains `unknown` during startup and that the dashboard shows the freshclam log command as its action hint (#2246).
@@ -258,6 +259,19 @@ Django's `MAILERS` setting instead of the former `EMAIL_*` settings.
 **Nothing changes for operators:** the environment variables above keep their
 names and are still read from `.env` — an existing `.env` stays valid without
 any change.
+
+**Django 6.1 requires an SMTP backend on production hosts** (#2326):
+the deployment check `python manage.py check --deploy`, which the web container
+runs on every start, aborts with the error `mail.E001` as soon as the default
+mailer is a development-only backend (console, file, in-memory, dummy). The
+production settings always use the SMTP backend, so startup does not depend on
+a reachable relay. **Without a reachable SMTP server** the application starts,
+but every invitation and password-reset e-mail fails on sending: **Verwaltung → Zugänge** shows the warning that the invitation could not be sent, `/health/`
+reports `unreachable` in the `smtp` field, and only the technical fallback via
+an initial password remains (see "SMTP requirements and troubleshooting" in the
+[token invite flow](#token-invite-flow-refs-528)). A console backend that only
+writes e-mails to the container log is provided solely in the live-dev and demo
+settings, where it is tied to an empty `EMAIL_HOST`.
 
 **File Vault Upload Limits (#1268)**
 
@@ -2223,4 +2237,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 6dbbde11639daa38a7832c6cc6931cb5e9fd85a6 -->
+<!-- source-hash: a6053efa0991b1edd74fa2846526c041518c74b0 -->

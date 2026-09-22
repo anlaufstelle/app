@@ -993,6 +993,20 @@ Einladungs- und Reset-Links muss ausserdem `EXTERNAL_ORIGIN` die oeffentliche
 Basis-URL enthalten. Der Absender soll fuer SPF, DKIM und DMARC autorisiert
 sein.
 
+**Deploy-Check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
+— der Web-Container fuehrt ihn bei jedem Start aus, siehe
+`docker-entrypoint.sh` — bricht mit `mail.E001` ab, wenn der Standard-Mailer
+ein Entwicklungs-Backend ist (Konsole, Datei, Arbeitsspeicher, Dummy). Die
+Produktiv-Einstellungen nutzen immer das SMTP-Backend; der Start setzt also
+ein SMTP-*Backend* voraus, nicht einen erreichbaren Server. Fehlt ein
+erreichbares Relay, startet die Anwendung, aber Einladungs- und Reset-Mails
+scheitern beim Versand: Warnung in **Verwaltung → Zugaenge**, `/health/`-Feld
+`smtp` = `unreachable`, Verbindungsfehler im Web-Log; Notfall-Weg ist das
+Initialpasswort ueber den Django-Admin (unten). Die Live-Dev- und
+Demo-Einstellungen (`devlive`, `demo`) schreiben Mails ohne `EMAIL_HOST` in
+das Container-Log und schalten nur dafuer `mail.E001` stumm — auf
+Produktivhosts ist das nicht vorgesehen.
+
 Vor dem ersten Onboarding die Beispieladresse ersetzen und Djangos
 Standard-Testmail aus dem laufenden Web-Container senden:
 

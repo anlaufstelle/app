@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: § 5.8 explains the Django 6.1 deployment check `mail.E001` (SMTP backend required on production hosts, behaviour without a reachable relay, console backend only in the live-dev and demo settings) (#2326).
 > Synchronization update 2026-09-21: § 7.4 explains that an unknown ClamAV signature age stays `unknown` during startup and that the compliance check shows the freshclam log command as its action hint (#2246).
 > Synchronization update 2026-09-18: § 5.8 states that implicit TLS/SMTPS on port 465 is supported via `EMAIL_USE_SSL` and mutually exclusive with `EMAIL_USE_TLS` (#2267).
 > Synchronization update 2026-09-18: stack line on Django 6.1 and § 5.8 states that production configures SMTP through Django's `MAILERS` setting since Django 6.1, with unchanged environment variable names (#1662).
@@ -999,6 +1000,18 @@ a relay offering only port 465 can be connected that way. Both switches set to
 `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` are needed too. `EXTERNAL_ORIGIN`
 must also contain the public base URL so that invitation and reset links are
 valid. The sender should be authorized for SPF, DKIM, and DMARC.
+
+**Deployment check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
+— the web container runs it on every start, see
+`docker-entrypoint.sh` — aborts with `mail.E001` when the default mailer is a
+development backend (console, file, in-memory, dummy). The production settings
+always use the SMTP backend, so startup requires an SMTP *backend*, not a
+reachable server. Without a reachable relay the application starts, but
+invitation and reset e-mails fail on sending: a warning in **Verwaltung → Zugänge**, `/health/` field `smtp` = `unreachable`, connection errors in the
+web log; the emergency path is the initial password via the Django admin
+(below). The live-dev and demo settings (`devlive`, `demo`) write e-mails to the
+container log when `EMAIL_HOST` is empty and silence `mail.E001` only for that
+case — this is not intended for production hosts.
 
 Before the first onboarding, replace the example address and send Django's
 standard test message from the running web container:
@@ -2843,5 +2856,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-21 -->
-<!-- source-hash: d33faa576f168caf1007e6912ff85cea70ae94ca -->
+<!-- translation-date: 2026-09-22 -->
+<!-- source-hash: 2e824be560eefee002a164bd59f928edc90ebffa -->

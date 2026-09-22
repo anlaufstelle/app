@@ -238,6 +238,22 @@ Djangos `MAILERS`-Einstellung statt über die früheren `EMAIL_*`-Einstellungen.
 heißen unverändert so und werden weiterhin aus der `.env` gelesen — eine
 bestehende `.env` bleibt ohne Anpassung gültig.
 
+**Django 6.1 setzt auf Produktivhosts ein SMTP-Backend voraus** (#2326):
+Der Deploy-Check `python manage.py check --deploy`, den der Web-Container bei
+jedem Start ausführt, bricht mit dem Fehler `mail.E001` ab, sobald der
+Standard-Mailer ein reines Entwicklungs-Backend ist (Konsole, Datei,
+Arbeitsspeicher, Dummy). Die Produktiv-Einstellungen verwenden immer das
+SMTP-Backend; der Start hängt also nicht davon ab, dass ein Relay erreichbar
+ist. **Ohne erreichbaren SMTP-Server** startet die Anwendung, aber jede
+Einladungs- und Passwort-Reset-Mail scheitert beim Versand: In
+**Verwaltung → Zugänge** erscheint die Warnung, dass die Einladung nicht
+versendet werden konnte, `/health/` meldet im Feld `smtp` den Wert
+`unreachable`, und es bleibt nur der technische Fallback über ein
+Initialpasswort (siehe „SMTP-Voraussetzungen und Fehlersuche" im
+[Token-Invite-Flow](#token-invite-flow-refs-528)). Ein Konsolen-Backend, das
+Mails nur ins Container-Log schreibt, ist ausschließlich in den Live-Dev- und
+Demo-Einstellungen vorgesehen und dort an ein leeres `EMAIL_HOST` gebunden.
+
 **File-Vault Upload-Limits (#1268)**
 
 Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-Einrichtung konfigurierbaren `Settings.max_file_size_mb`).
