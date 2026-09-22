@@ -2,6 +2,7 @@
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
 > Synchronization update 2026-09-22: § 7.1 states that the four security headers (`Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) are set by the application alone and no longer in the `Caddyfile`, and where to change them (#2314).
+> Synchronization update 2026-09-22: § 7.1 states that the four security headers (`Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) are set by the application alone and no longer in the `Caddyfile`, that they are present on every response including `/static/` files and the maintenance page, and where to change them (#2314).
 > Synchronization update 2026-09-22: Step 4 explains that the script now auto-detects `compose.legal.yml`/`compose.override.yml` and prints the file list it used, and that the first ClamAV start can take about three minutes to download signatures (#2309, #2312).
 > Synchronization update 2026-09-22: § 1 Step 2 states the length/character-set requirement once for `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` and names `openssl` as the primary command shared with `.env.example` (#2313).
 > Synchronization update 2026-09-22: § 3.2 describes that `backup.sh --verify` checks the signed set (set ID, dump and media binding) and fails instead of warning when the bound media archive is missing (#2292).
@@ -1740,7 +1741,7 @@ Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEY`
 
 **Transport encryption:** Caddy enforces HTTPS and automatically redirects HTTP to HTTPS.
 
-**Security headers -- the application is authoritative:** `Strict-Transport-Security` (`max-age=31536000; includeSubDomains; preload`), `X-Content-Type-Options` (`nosniff`), `X-Frame-Options` (`DENY`) and `Referrer-Policy` (`strict-origin-when-cross-origin`) are set by the application only -- the values live in [`src/anlaufstelle/settings/prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py). Change any of them (the HSTS duration, for instance) there. They are deliberately **no longer** in the `Caddyfile`: set in both places, they reached the client twice, and a change in one place appeared to have no effect (#2314). Caddy now sets only what the application does not -- currently `X-Robots-Tag`. The same separation has always applied to the Content Security Policy (§ 5.4). This way the headers also apply when you put the application behind a reverse proxy of your own.
+**Security headers -- the application is authoritative:** `Strict-Transport-Security` (`max-age=31536000; includeSubDomains; preload`), `X-Content-Type-Options` (`nosniff`), `X-Frame-Options` (`DENY`) and `Referrer-Policy` (`strict-origin-when-cross-origin`) are set by the application only -- the values live in [`src/anlaufstelle/settings/prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py). Change any of them (the HSTS duration, for instance) there. They are deliberately **no longer** in the `Caddyfile`: set in both places, they reached the client twice, and a change in one place appeared to have no effect (#2314). Caddy now sets only what the application does not -- currently `X-Robots-Tag`. The same separation has always applied to the Content Security Policy (§ 5.4). This way the headers also apply when you put the application behind a reverse proxy of your own. All four headers are present on **every** response from the application -- including files served from `/static/` and the maintenance page (HTTP 503), neither of which goes through the full processing chain.
 
 ### 7.2 Pseudonymization
 
@@ -2254,4 +2255,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 1152ea6c7b5def49d10cf1c5504d76f006760a0d -->
+<!-- source-hash: 3384939bb6ddc299576c30f14e2aad2969f4a2ff -->

@@ -149,6 +149,20 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # XFrameOptionsMiddleware direkt hinter SecurityMiddleware (Refs #2314):
+    # Antwort-Verarbeitung laeuft rueckwaerts durch die Liste, also erreicht
+    # eine Antwort nur die Middlewares, die VOR der kurzschliessenden stehen.
+    # Als letzter Eintrag sah diese Middleware deshalb weder die
+    # Wartungs-503 (MaintenanceModeMiddleware, zwei Zeilen weiter) noch die
+    # von WhiteNoise direkt ausgelieferten Static-Dateien — solange der
+    # mitgelieferte Reverse-Proxy den Header selbst setzte, fiel das nicht
+    # auf. Seit er dort entfernt ist (genau eine Quelle je Header), muss die
+    # Anwendung ihn auf JEDER Antwort liefern. Neben SecurityMiddleware
+    # (HSTS/nosniff/Referrer-Policy) ist das die Stelle, die jede Antwort
+    # passiert. Die Middleware braucht weder Session noch Auth noch
+    # aufgeloeste URL; das ``xframe_options_exempt``-Attribut haengt an der
+    # Antwort und bleibt unabhaengig von der Position wirksam.
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # MaintenanceModeMiddleware liegt direkt nach SecurityMiddleware,
     # damit sie 503 antworten kann, BEVOR Sessions/Auth/CSP geprueft
     # werden — ein laufendes Deploy darf nicht an einer Auth-Pruefung
@@ -190,7 +204,6 @@ MIDDLEWARE = [
     # Refs #1062: Demo-Guard nach MessageMiddleware (nutzt Flash-Messages),
     # No-Op ausserhalb DEMO_MODE.
     "core.middleware.demo_guard.DemoGuardMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
 ]
 
