@@ -33,10 +33,10 @@ Lazy-Import bleibt trotzdem stehen (kostet nichts, schützt vor einem
 künftigen erneuten Auseinanderlaufen der Lanes).
 
 Facility-/Konto-Lookup liegt in ``core.services.demo_scenarios``
-(``facility_for_scenario``/``account_for``, Fix-Runde 1): der Zweitgutachten-
-BLOCKER ``TestTenantModelScopeGuard`` verlangt Facility-Scope-Evidenz für
-JEDEN ``<Model>.objects``-Zugriff in ``core/views/**`` — dieser View-Layer
-fasst daher keine facility-tragenden Modelle mehr direkt an.
+(``facility_for_scenario``/``account_for``): ``TestTenantModelScopeGuard``
+verlangt Facility-Scope-Evidenz für JEDEN ``<Model>.objects``-Zugriff in
+``core/views/**`` — dieser View-Layer fasst daher keine facility-tragenden
+Modelle mehr direkt an.
 """
 
 from __future__ import annotations
@@ -101,9 +101,9 @@ def _default_role(scenario):
     Szenario sie anbietet, sonst die erste im Katalog hinterlegte Rolle
     (Katalogreihenfolge ist bewusst die "naheliegendste zuerst").
 
-    ``None`` bei einem Katalogeintrag OHNE Rollen (Datenfehler des Katalogs,
-    Zweitgutachten Sonnet: fail-closed statt ``IndexError`` im heissen Pfad).
-    Ein ``None``-Rueckgabewert macht die Karte in :func:`scenario_cards`
+    ``None`` bei einem Katalogeintrag OHNE Rollen (Datenfehler des Katalogs) —
+    fail-closed statt ``IndexError`` im heissen Pfad. Ein ``None``-Rueckgabewert
+    macht die Karte in :func:`scenario_cards`
     nicht verfuegbar und laesst ``DemoScenarioStartView.post`` denselben,
     bereits vorhandenen "Rolle nicht freigegeben"-Zweig nehmen (``None not
     in scenario.demo_roles`` ist bei leerem Tupel immer wahr) — kein

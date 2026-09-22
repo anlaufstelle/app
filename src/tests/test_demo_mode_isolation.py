@@ -1,10 +1,9 @@
 """Guard: ``DEMO_MODE`` ist ausschliesslich in ``settings/demo.py`` wahr (Refs #2285).
 
-Fix-Runde 1, Zweitgutachten Opus Hinweis H-5: der passwortlose Demo-
-Einstieg (``core/views/demo_scenarios.py``) ist NUR sicher, solange
-``DEMO_MODE`` in Produktions-/Live-Dev-/E2E-Einstellungen falsy bleibt —
-dafuer gab es bisher keinen Guard-Test, nur den Befund „genau eine
-Zuweisung, keine Env-Ableitung" aus dem Review selbst.
+Der passwortlose Demo-Einstieg (``core/views/demo_scenarios.py``) ist NUR
+sicher, solange ``DEMO_MODE`` in Produktions-/Live-Dev-/E2E-Einstellungen
+falsy bleibt — dafuer gab es bisher keinen Guard-Test, nur den Befund
+„genau eine Zuweisung, keine Env-Ableitung" bei der Code-Durchsicht.
 
 Gleiche Subprozess-Strategie wie ``test_devlive_settings.py``/
 ``test_demo_settings.py``: jedes Settings-Modul wird isoliert importiert,

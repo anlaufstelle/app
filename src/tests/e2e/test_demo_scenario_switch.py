@@ -203,8 +203,8 @@ class TestOldTabAfterSwitch:
     wie zwei Tabs desselben Browsers."""
 
     def test_stale_tab_reload_reflects_the_switch(self, base_url, browser):
-        """Fix-Runde 1 (Zweitgutachten Sonnet): scharfe Assertion statt
-        ``status in (200, 302)`` — Playwright-Contexts teilen sich den
+        """Scharfe Assertion statt ``status in (200, 302)`` — Playwright-
+        Contexts teilen sich den
         Cookie-Jar ueber alle Seiten hinweg (kein Per-Tab-Storage), daher
         traegt der ALTE Tab nach einem Reload automatisch das NEUE
         Sitzungscookie aus dem zweiten Tab. Der scharfe Nachweis ist deshalb

@@ -410,7 +410,7 @@ class TestDefaultRole:
 
     def test_fail_closed_on_empty_demo_roles(self):
         """Katalog-Datenfehler (leere ``demo_roles``): ``None`` statt
-        ``IndexError`` im heissen Pfad (Fix-Runde 1, Zweitgutachten Sonnet)."""
+        ``IndexError`` im heissen Pfad."""
         scenario = _scenario("x", facility_name="X", demo_roles=())
         assert views._default_role(scenario) is None
 
@@ -435,7 +435,7 @@ class TestScenarioCardsFailClosedOnEmptyRoles:
 
 
 class TestAccountForExcludesSuperusers:
-    """Fix-Runde 1, Zweitgutachten Opus Hinweis H-2: Verteidigung in der Tiefe."""
+    """Verteidigung in der Tiefe: ``account_for`` schliesst ``is_superuser`` aus."""
 
     def test_superuser_with_matching_facility_and_role_is_never_picked(self, kontaktladen_facility):
         from core.services.demo_scenarios import account_for

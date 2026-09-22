@@ -1,8 +1,7 @@
 """Facility-/Konto-Auflösung für die Demo-Bereichsauswahl (Refs #2285).
 
-Ausgelagert aus ``core.views.demo_scenarios`` (Fix-Runde 1, beide
-Zweitgutachten BLOCKER): ``TestTenantModelScopeGuard`` verlangt für
-``core/views/**`` einen erklärten Facility-Scope an jedem
+Ausgelagert aus ``core.views.demo_scenarios``: ``TestTenantModelScopeGuard``
+verlangt für ``core/views/**`` einen erklärten Facility-Scope an jedem
 ``<Model>.objects``-Zugriff auf ein facility-tragendes Modell — der
 Einrichtungs-Lookup hier hat strukturell KEINEN Scope, weil er selbst die
 Facility erst auflöst (pre-auth, kein ``request.current_facility``,
@@ -53,8 +52,8 @@ def account_for(facility: Facility, role: str) -> User | None:
     Team-Szenario mehrere Konten derselben Rolle seedet (z. B. zwei
     ``staff``-Konten) — stabil über die Seed-Erstellungsreihenfolge.
 
-    ``.exclude(is_superuser=True)`` (Zweitgutachten Opus, Hinweis H-2):
-    Verteidigung in der Tiefe. Der Seed setzt ``is_superuser`` bewusst nie
+    ``.exclude(is_superuser=True)`` als Verteidigung in der Tiefe: der Seed
+    setzt ``is_superuser`` bewusst nie
     (Refs #1271), der installationsweite ``super_admin`` trägt zusätzlich
     ``facility=None`` und wird vom ``facility=facility``-Filter bereits
     strukturell nie getroffen — der explizite Ausschluss macht das
