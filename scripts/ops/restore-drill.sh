@@ -102,8 +102,12 @@ resolve_prod_backup_dir() (
 PROD_ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
 _prod_backup_dir="$(resolve_prod_backup_dir "$PROD_ENV_FILE")"
 if [[ -z "$DRILL_FORMAT" ]]; then
-    _dev_hit=$(find "$DEV_BACKUP_DIR" -maxdepth 1 -name 'dump-*.pgc.enc' -type f 2>/dev/null | head -n1)
-    _prod_hit=$(find "$_prod_backup_dir" -maxdepth 1 -name 'anlaufstelle_*.sql.gz.enc' -type f 2>/dev/null | head -n1)
+    # Kein "| head -n1" unter pipefail (SIGPIPE-Gefahr): Liste ganz lesen, erstes Element nehmen.
+    mapfile -t _dev_hit_CANDIDATES < <(find "$DEV_BACKUP_DIR" -maxdepth 1 -name 'dump-*.pgc.enc' -type f 2>/dev/null)
+    _dev_hit="${_dev_hit_CANDIDATES[0]:-}"
+    # Kein "| head -n1" unter pipefail (SIGPIPE-Gefahr): Liste ganz lesen, erstes Element nehmen.
+    mapfile -t _prod_hit_CANDIDATES < <(find "$_prod_backup_dir" -maxdepth 1 -name 'anlaufstelle_*.sql.gz.enc' -type f 2>/dev/null)
+    _prod_hit="${_prod_hit_CANDIDATES[0]:-}"
     if [[ -n "$_dev_hit" && -n "$_prod_hit" ]]; then
         echo "FAIL - beide Backup-Formate gefunden (dev: $DEV_BACKUP_DIR, prod: $_prod_backup_dir)." >&2
         echo "       Format explizit waehlen: restore-drill.sh --dev | --prod" >&2
@@ -194,7 +198,9 @@ if [[ "$DRILL_FORMAT" == "prod" && -n "$BACKUP_TIMESTAMP" ]]; then
     LATEST_DB="${BACKUP_DIR}/anlaufstelle_${BACKUP_TIMESTAMP}.sql.gz.enc"
     echo "ACHTUNG - explizit gewaehlter Restore-Satz: ${BACKUP_TIMESTAMP}"
 else
-    LATEST_DB=$(find "$BACKUP_DIR" -maxdepth 1 -name "$BACKUP_GLOB" -type f 2>/dev/null | sort -r | head -n1)
+    # Kein "| head -n1" unter pipefail (SIGPIPE-Gefahr): Liste ganz lesen, erstes Element nehmen.
+    mapfile -t LATEST_DB_CANDIDATES < <(find "$BACKUP_DIR" -maxdepth 1 -name "$BACKUP_GLOB" -type f 2>/dev/null | sort -r)
+    LATEST_DB="${LATEST_DB_CANDIDATES[0]:-}"
     if [[ "$DRILL_FORMAT" == "prod" ]]; then
         echo "ACHTUNG - Ohne explizite Satzwahl wird der neueste Restore-Satz verwendet."
     fi
