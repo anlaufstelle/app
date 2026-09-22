@@ -280,6 +280,57 @@ def test_seed_demo_is_idempotent():
 
 
 @pytest.mark.django_db
+def test_seed_demo_flush_reseed_is_deterministic():
+    """Determinismus-Beleg: zwei UNABHÄNGIGE ``--flush --scale demo``-Läufe
+    (jeweils von einer geleerten DB aus) liefern je Szenario-Facility
+    identische Zählwerte für Konten, Personen, Ereignisse und Fälle — genau
+    die Eigenschaft, auf der der stündliche Demo-Reset beruht (Ticket-
+    Punkt 7: nach Reset sind alle Bereiche wieder vollständig UND
+    gleichwertig nutzbar).
+
+    Bewusst ANDERS als ``test_seed_demo_is_idempotent`` oben: dieser Test
+    prüft NICHT den bekannten, in ``test_seed.py``
+    (``test_seed_medium_doppellauf_ist_idempotent_fuer_zweigstelle_nord``)
+    dokumentierten Random-Drift, der nur bei einem ZWEITEN Lauf OHNE
+    ``--flush`` auf denselben (nicht geleerten) Bestand auftritt — dort
+    weichen die Zufallsaufrufe zwischen den Läufen ab, weil idempotente
+    Schritte beim zweiten Mal Arbeit überspringen. Hier startet JEDER Lauf
+    von einer geleerten DB (``--flush``): ``random.seed(42)`` läuft beide
+    Male durch dieselbe Aufrufsequenz, inklusive ``seed_clients_bulk``s
+    Pseudonym-Shuffle — die ``Client``-Zahl ist deshalb hier (anders als im
+    No-Flush-Fall) ebenfalls deterministisch und wird bewusst MIT geprüft
+    (empirisch verifiziert: 99/99 Clients, 660/660 Events über beide Läufe
+    identisch, siehe Bericht Fix-Runde 1).
+    """
+    from core.models import Case
+
+    def _counts_per_facility() -> dict[str, tuple[int, int, int, int]]:
+        return {
+            facility.name: (
+                User.objects.filter(facility=facility).count(),
+                Client.objects.filter(facility=facility).count(),
+                Event.objects.filter(facility=facility).count(),
+                Case.objects.filter(facility=facility).count(),
+            )
+            for facility in Facility.objects.all()
+        }
+
+    call_command("seed", scale="demo", flush=True)
+    facilities_first = set(Facility.objects.values_list("name", flat=True))
+    counts_first = _counts_per_facility()
+
+    call_command("seed", scale="demo", flush=True)
+    facilities_second = set(Facility.objects.values_list("name", flat=True))
+    counts_second = _counts_per_facility()
+
+    assert facilities_first == facilities_second == {scenario.facility_name for scenario in SCENARIOS}
+    assert counts_first == counts_second, (
+        f"Zählwerte (Users, Clients, Events, Cases) je Facility weichen zwischen zwei "
+        f"unabhängigen --flush --scale demo-Läufen ab: {counts_first} vs. {counts_second}"
+    )
+
+
+@pytest.mark.django_db
 def test_seed_demo_flush_restores_all_scenarios():
     """Wiederherstellung nach Reset: genau der Aufruf, den
     ``dev-ops/deploy/demo-reseed.sh`` stündlich fährt. Nach dem Reset sind
