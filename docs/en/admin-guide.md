@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-22: § 1 Step 2 states the length/character-set requirement once for `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` and names `openssl` as the primary command shared with `.env.example` (#2313).
 > Synchronization update 2026-09-22: the SMTP environment reference explains that Django 6.1 requires an SMTP backend on production hosts (`check --deploy`, `mail.E001`), what happens without a reachable mail server, and that the console backend exists only in the live-dev and demo settings (#2326).
 > Synchronization update 2026-09-21: the fresh-install health-check note explains that “Critical audit events (24h)” can warn normally because initial setup itself creates critical audit events (#2247).
 > Synchronization update 2026-09-18: § 5.6 states that the server log file now carries the same lines with masked URL paths -- query part dropped, route schema or token segments removed, the account as `user_pk` instead of the login name, in both output formats and in framework lines -- while the client IP of a CSP report stays readable (#2228).
@@ -136,6 +137,8 @@ docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:v0.96.0 \
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
+
+`DJANGO_SECRET_KEY` and `DJANGO_AUDIT_HASH_KEY` each need their own random value of at least 64 characters; the following command produces 64 Base64 characters from 48 bytes of randomness and is run **separately** for each key — the same command appears as a comment in `.env.example`:
 
 **Generate a secret key:**
 
@@ -2237,4 +2240,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: a6053efa0991b1edd74fa2846526c041518c74b0 -->
+<!-- source-hash: bb2c1b55e64e72c8831cbf9c3ad5d494dd9f8d8d -->

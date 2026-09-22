@@ -115,6 +115,8 @@ docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:v0.96.0 \
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
+`DJANGO_SECRET_KEY` und `DJANGO_AUDIT_HASH_KEY` brauchen je einen eigenen zufälligen Wert aus mindestens 64 Zeichen; das folgende Kommando liefert 64 Base64-Zeichen aus 48 Byte Zufall und wird für beide Schlüssel **getrennt** ausgeführt — derselbe Befehl steht auch als Kommentar in `.env.example`:
+
 **Secret Key generieren:**
 
 ```bash

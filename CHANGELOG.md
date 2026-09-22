@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Live-Dev- und Demo-Einstellungen starten unter Django 6.1 wieder ohne SMTP** (#2326) — Der neue Deploy-Check `mail.E001` von Django 6.1 lehnte das fest eingestellte Konsolen-Mail-Backend der Live-Dev-Einstellungen ab, sodass der Web-Container auf Hosts ohne SMTP in einer Neustart-Schleife blieb. Ohne `EMAIL_HOST` bleibt es beim Konsolen-Backend (Mails im Container-Log) und nur diese eine Prüfung ist dort stummgeschaltet; ist `EMAIL_HOST` gesetzt, gilt der SMTP-Versand wie in Produktion. Die Produktiv-Einstellungen sind unverändert und schalten die Prüfung nicht stumm; Admin-Handbuch und Betriebs-Runbook erklären, dass Django 6.1 auf Produktivhosts ein SMTP-Backend voraussetzt und was ohne erreichbaren Mailserver passiert.
 
+### Docs
+
+- **Schlüssel-Erzeugungsbefehle vereinheitlicht** (#2313) — Admin-Guide und `.env.example` nennen für `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` jetzt denselben primären Befehl (`openssl`); die bisherige Python-Alternative bleibt als ausdrücklich gleichwertig benannte Option erhalten.
+
 ### Security
 
 - **Erneute Zwei-Faktor-Einrichtung verlangt den bestehenden zweiten Faktor** (#2287) — Eine nur mit dem Passwort angemeldete Sitzung konnte trotz bereits bestätigtem zweiten Faktor (Authenticator oder Passkey) die Einrichtungsseite per Formularabsendung erneut durchlaufen, dabei ein zusätzliches Gerät aktivieren, den vorhandenen Satz Backup-Codes ersetzen und sich damit selbst als zwei-faktor-geprüft markieren. Die Einrichtungsseite prüft die Berechtigung jetzt für alle Zugriffsarten gemeinsam und leitet in diesem Fall auf die Zwei-Faktor-Abfrage; der Abschluss der Einrichtung gilt außerdem nur noch für genau das Gerät, für das der Vorgang gestartet wurde. Die erstmalige Einrichtung einschließlich Backup-Code-Bestätigung bleibt unverändert; eine beim Update bereits laufende, noch nicht quittierte Ersteinrichtung muss einmal neu begonnen werden (die Sitzung wird auf die Einrichtungsseite zurückgeführt).
