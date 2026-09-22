@@ -304,6 +304,15 @@ docker compose -f docker-compose.prod.yml run --rm -T maintenance \
 
 Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDIT_HASH_KEY` signiert wie der Anker selbst — er ist damit ausdrücklich, benannt und authentifiziert. Fehlende Datenbankzeilen allein sind **keine** Autorisierung: ohne diesen Nachweis bleibt die verwaiste Kette bei jedem weiteren Lauf ein Abbruchgrund. Abgewiesen wird die Stilllegung in vier Fällen: für die System-Kette (`system`) — sie gehört zu jeder Installation, und ohne ihren Anker gäbe es für den installationsweiten Bestand keine Truncation-Erkennung mehr, für eine Einrichtung, die noch im Bestand ist, für eine Kette, die noch Audit-Zeilen enthält, und für eine Kette ohne Anker.
 
+**Kehrt ein stillgelegter Bestand zurück?** Taucht eine Einrichtung mit derselben Kennnummer wieder auf — etwa nach einer Wiederherstellung aus einem älteren Stand, bricht der nächste Lauf ab, statt den signierten Stilllegungsnachweis stillschweigend zu ersetzen. Das ist zuerst ein Hinweis auf einen falschen oder unvollständigen Restore. Ist die Rückkehr gewollt, wird sie einmalig ausdrücklich quittiert:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+  verify_audit_chain --reactivate-chain <Kennnummer> --reactivate-reason "Träger übernimmt den Bestand erneut"
+```
+
+Der Lauf nennt den zurückgenommenen Nachweis mit Zeitpunkt und Begründung im Protokoll; die Kette gilt danach wieder als Erstlauf und wird vom nächsten grünen Lauf neu verankert.
+
 ### Schritt 5 — Migrationen + Stack hochfahren
 
 ```bash

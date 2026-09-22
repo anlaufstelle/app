@@ -87,6 +87,25 @@ class Command(BaseCommand):
             metavar="TEXT",
             help="Begruendung des Stilllegungsnachweises zu --retire-chain (Refs #2296).",
         )
+        parser.add_argument(
+            "--reactivate-chain",
+            action="append",
+            default=[],
+            metavar="KENNNUMMER",
+            dest="reactivate_chain",
+            help=(
+                "Nimmt den Stilllegungsnachweis der genannten Kette zurueck, weil ihr Bestand "
+                "bewusst zurueckkehrt. Nur zulaessig, wenn die Einrichtung wieder im Bestand ist "
+                "und ein Nachweis vorliegt; verlangt --reactivate-reason. Mehrfach angebbar "
+                "(Refs #2296)."
+            ),
+        )
+        parser.add_argument(
+            "--reactivate-reason",
+            default="",
+            metavar="TEXT",
+            help="Begruendung der Rueckname zu --reactivate-chain (Refs #2296).",
+        )
 
     def _chains_with_anchorable_tail(self) -> set:
         """Ketten-IDs, die ueberhaupt einen verankerbaren Tail besitzen koennen.
@@ -217,6 +236,47 @@ class Command(BaseCommand):
         for key in keys:
             self.stdout.write(self.style.WARNING(f"Kette {key} stillgelegt ({reason.strip()})."))
 
+    def _reactivate_chains(self, hwm_path: str, hwm, targets: list, keys: list, reason: str) -> None:
+        """Nimmt Stilllegungsnachweise zurueck (Refs #2296).
+
+        Der Gegenweg zu :meth:`_retire_chains`, damit ein fail-loud
+        gewordener Widerspruch (:meth:`HighWaterMarkStore.record`) aufloesbar
+        bleibt, ohne die signierte Datei von Hand zu bearbeiten. Er ist
+        genauso ausdruecklich und begruendet: die Kette wird benannt, der
+        Grund protokolliert, und die Datei bleibt signiert.
+
+        Abgewiesen wird die Ruecknahme, wenn die Einrichtung NICHT wieder im
+        Bestand ist (sonst entstuende genau der verwaiste Anker aus dem
+        Inventarabgleich) und wenn die Kette gar keinen Nachweis traegt.
+        """
+        if not hwm_path or hwm is None:
+            raise CommandError("--reactivate-chain braucht den externen Anker: AUDIT_HWM_PATH ist nicht gesetzt.")
+        if not reason.strip():
+            raise CommandError("--reactivate-chain verlangt eine Begruendung per --reactivate-reason.")
+        present = {str(facility.pk) for facility in targets if facility is not None}
+        for key in keys:
+            if key not in present:
+                raise CommandError(
+                    f"--reactivate-chain {key}: die Einrichtung ist nicht im Bestand — eine Kette ohne "
+                    "Bestand zurueckzuholen erzeugt genau den verwaisten Anker, den die Pruefung meldet."
+                )
+            entry = hwm.chains.get(key)
+            if not isinstance(entry, dict) or not entry.get("retired"):
+                raise CommandError(
+                    f"--reactivate-chain {key}: die HWM-Datei {hwm_path!r} enthaelt fuer diese Kette "
+                    "keinen Stilllegungsnachweis — es gibt nichts zurueckzunehmen."
+                )
+        for key in keys:
+            previous = hwm.reactivate(key)
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Stilllegung der Kette {key} zurueckgenommen ({reason.strip()}); "
+                    f"vorheriger Nachweis: seit {previous.get('retired')}, "
+                    f"Begruendung: {previous.get('reason') or 'keine'}."
+                )
+            )
+        hwm.save()
+
     def _check_inventory(self, hwm_path: str, hwm, targets: list) -> None:
         """Gleicht die extern verankerten Ketten gegen den DB-Bestand ab (Refs #2296).
 
@@ -278,6 +338,9 @@ class Command(BaseCommand):
         retire_keys = [str(value).strip() for value in options.get("retire_chain") or [] if str(value).strip()]
         if retire_keys:
             self._retire_chains(hwm_path, hwm, targets, retire_keys, options.get("retire_reason") or "")
+        back_keys = [str(value).strip() for value in options.get("reactivate_chain") or [] if str(value).strip()]
+        if back_keys:
+            self._reactivate_chains(hwm_path, hwm, targets, back_keys, options.get("reactivate_reason") or "")
         self._check_inventory(hwm_path, hwm, targets)
 
         # Refs #2242: Opt-in-Haertung. Der Default bleibt unveraendert (fehlender
@@ -310,9 +373,15 @@ class Command(BaseCommand):
 
         # Nur nach durchgehend gruenem Lauf den Anker fortschreiben.
         if hwm is not None:
-            for facility, result in results:
-                facility_id = None if facility is None else facility.pk
-                hwm.record(facility_id, result.rows_checked, result.last_entry_hash)
+            try:
+                for facility, result in results:
+                    facility_id = None if facility is None else facility.pk
+                    hwm.record(facility_id, result.rows_checked, result.last_entry_hash)
+            except HwmIntegrityError as exc:
+                # Refs #2296: ein zurueckgekehrter, zuvor stillgelegter Bestand.
+                # Abbruch VOR ``save`` und vor dem Erfolgsmarker — die Datei
+                # bleibt unveraendert, der Widerspruch bleibt sichtbar.
+                raise CommandError(str(exc)) from exc
             hwm.save()
 
         # Refs #1872: Last-Run-Marker fuer die Betriebsansicht. Bewusst erst

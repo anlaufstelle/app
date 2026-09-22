@@ -255,6 +255,18 @@ class HighWaterMarkStore:
             )
         return None
 
+    def reactivate(self, facility_id) -> dict:
+        """Nimmt den Stilllegungsnachweis einer Kette zurueck (Refs #2296).
+
+        Der Gegenweg zu :meth:`retire` fuer den Fall, dass ein stillgelegter
+        Bestand bewusst zurueckkehrt. Der Eintrag faellt weg, die Kette ist
+        danach wieder ein regulaerer Erstlauf-Fall und wird vom naechsten
+        gruenen Lauf neu verankert. Der zurueckgenommene Nachweis wird
+        zurueckgegeben, damit der Aufrufer ihn protokollieren kann — er
+        verschwindet nicht lautlos.
+        """
+        return self.chains.pop(_chain_key(facility_id), {}) or {}
+
     def record(self, facility_id, count: int, last_entry_hash: str | None) -> None:
         """Setzt den Anker der Kette auf den aktuellen Tail (In-Memory).
 
@@ -262,11 +274,31 @@ class HighWaterMarkStore:
         Tail legitim. Eine leere Kette ohne Tail (``last_entry_hash`` falsy)
         wird nicht verankert, damit ein spaeterer echter Tail nicht als „fehlend"
         gemeldet wird.
+
+        Ein vorhandener Stilllegungsnachweis (:meth:`retire`) ist fuer beide
+        Schreibpfade tabu (Refs #2296): Kehrt eine Kette mit derselben
+        Kennnummer zurueck, wuerde der neue Tail den signierten Nachweis
+        ueberschreiben und die leere Kette ihn sogar loeschen — die
+        dokumentierte Entfernung waere spurlos weg, und genau dieser Widerspruch
+        ist das Signal (unvollstaendige Wiederherstellung, alter Dump,
+        untergeschobener Bestand). Fail-loud statt stiller Ueberschreibung; der
+        ausdrueckliche Weg zurueck ist :meth:`reactivate`.
         """
+        key = _chain_key(facility_id)
+        existing = self.chains.get(key)
+        if isinstance(existing, dict) and existing.get("retired"):
+            raise HwmIntegrityError(
+                f"HWM-Datei {self.path!r}: Die Kette {key} traegt einen Stilllegungsnachweis "
+                f"(seit {existing.get('retired')}, Begruendung: {existing.get('reason') or 'keine'}), "
+                "ihr Bestand ist aber wieder da. Ein gruener Lauf wuerde den signierten Nachweis "
+                "stillschweigend ersetzen. Entweder ist die Wiederherstellung unvollstaendig oder aus "
+                "einem falschen Stand, oder die Kette kehrt bewusst zurueck — dann einmalig mit "
+                f"--reactivate-chain {key} --reactivate-reason <Text> fahren."
+            )
         if not last_entry_hash:
-            self.chains.pop(_chain_key(facility_id), None)
+            self.chains.pop(key, None)
             return
-        self.chains[_chain_key(facility_id)] = {
+        self.chains[key] = {
             "count": int(count),
             "last_entry_hash": last_entry_hash,
         }
