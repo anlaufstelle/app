@@ -56,14 +56,21 @@ def _series_from_admin_guide() -> list[str]:
     raise AssertionError("docs/admin-guide.md enthält keinen Aufbau der Compose-Dateireihe")
 
 
-def _bash_blocks(path: Path) -> list[tuple[int, str]]:
-    """Alle ```bash-Blöcke als (Startzeile, Inhalt)."""
+_SHELL_FENCES = {"```bash", "```console", "```sh"}
+# Kurzreferenzen stehen als ```text-Block da. Sie werden genauso kopiert wie ein
+# Shell-Block — der Erst-Befund dieser Lane uebersah sie, weil der Guard nur
+# Shell-Zaeune las.
+_COMMAND_FENCES = _SHELL_FENCES | {"```text"}
+
+
+def _fenced_blocks(path: Path, fences: set[str]) -> list[tuple[int, str]]:
+    """Alle Blöcke mit den genannten Zaun-Sprachen als (Startzeile, Inhalt)."""
     blocks: list[tuple[int, str]] = []
     current: list[str] | None = None
     start = 0
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if current is None:
-            if line.strip() in {"```bash", "```console", "```sh"}:
+            if line.strip() in fences:
                 current = []
                 start = number
         elif line.strip() == "```":
@@ -72,6 +79,35 @@ def _bash_blocks(path: Path) -> list[tuple[int, str]]:
         else:
             current.append(line)
     return blocks
+
+
+def _bash_blocks(path: Path) -> list[tuple[int, str]]:
+    """Nur die ausfuehrbaren Shell-Blöcke (Aufbau-Pflicht, ``bash -n``)."""
+    return _fenced_blocks(path, _SHELL_FENCES)
+
+
+def _command_blocks(path: Path) -> list[tuple[int, str]]:
+    """Alle kopierbaren Befehlsblöcke, auch die Kurzreferenzen."""
+    return _fenced_blocks(path, _COMMAND_FENCES)
+
+
+def _prose_commands(path: Path) -> list[tuple[int, str]]:
+    """Compose-Aufrufe im Fliesstext, als Inline-Code ausgezeichnet.
+
+    Auch ein Satz „Nach ``docker compose -f … up -d`` laufen …" wird kopiert.
+    """
+    hits: list[tuple[int, str]] = []
+    inside = False
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if line.strip().startswith("```"):
+            inside = not inside
+            continue
+        if inside:
+            continue
+        for span in re.findall(r"`([^`]+)`", line):
+            if _BASE_CALL in span:
+                hits.append((number, span))
+    return hits
 
 
 def _recreates_web(command: str) -> bool:
@@ -89,10 +125,13 @@ def _recreates_web(command: str) -> bool:
 @pytest.mark.parametrize("path", OPERATIONS_DOCS, ids=lambda path: str(path.relative_to(REPO_ROOT)))
 def test_no_web_recreate_uses_the_base_compose_file_alone(path: Path) -> None:
     offenders = []
-    for start, block in _bash_blocks(path):
+    for start, block in _command_blocks(path):
         for offset, line in enumerate(block.splitlines()):
             if _BASE_CALL in line and _recreates_web(line):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{start + offset + 1}: {line.strip()}")
+    for number, span in _prose_commands(path):
+        if _recreates_web(span):
+            offenders.append(f"{path.relative_to(REPO_ROOT)}:{number}: (Fliesstext) {span}")
 
     assert not offenders, "Diese Befehle erzeugen `web` ohne compose.legal.yml/compose.override.yml neu:\n" + "\n".join(
         offenders
@@ -158,4 +197,24 @@ def test_regex_helper_only_flags_web_recreating_calls() -> None:
     assert not _recreates_web(f"{_BASE_CALL} stop cron")
     assert not _recreates_web(f"{_BASE_CALL} exec web python manage.py check")
     assert not _recreates_web(f"{_BASE_CALL} run --rm maintenance check_db_roles")
+    assert not _recreates_web(f"{_BASE_CALL} ps")
+    assert not _recreates_web(f"{_BASE_CALL} logs -f web")
     assert re.search(r"compose", _BASE_CALL)
+
+
+def test_scanner_covers_short_reference_and_prose(tmp_path: Path) -> None:
+    """Selbsttest der Erweiterung: ```text-Block und Fliesstext werden gesehen."""
+    sample = tmp_path / "sample.md"
+    sample.write_text(
+        "Nach `" + _BASE_CALL + " up -d` laufen die Jobs.\n\n"
+        "```text\nStack starten    " + _BASE_CALL + " up -d\n```\n\n"
+        "```bash\n" + _BASE_CALL + " ps\n```\n",
+        encoding="utf-8",
+    )
+
+    assert [line for _, line in _command_blocks(sample)] != []
+    assert any(_recreates_web(line) for _, block in _command_blocks(sample) for line in block.splitlines())
+    assert any(_recreates_web(span) for _, span in _prose_commands(sample))
+    # Der Befehl im ```bash-Block ist kein Treffer — sonst waere der Selbsttest
+    # blind fuer falsch-positive Erweiterungen.
+    assert not any(_recreates_web(line) for _, block in _bash_blocks(sample) for line in block.splitlines())
