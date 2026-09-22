@@ -86,8 +86,13 @@ def _present(row):
     return row
 
 
-def _locked_case(case_pk, client_id) -> Case:
-    """Sperrt Person -> Fall und liefert die frische, gepruefte Fallzeile."""
+def _locked_case(case_pk, client_id, facility_id) -> Case:
+    """Sperrt Person -> Fall und liefert die frische, gepruefte Fallzeile.
+
+    ``facility_id`` scopt beide Abfragen auf die Einrichtung des Falls — die
+    Einrichtung ist unveraenderlich, der Filter also gratis, und er haelt die
+    Zugriffe innerhalb der Mandantengrenze (Muster ``_lock_case_chain``).
+    """
     from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
     from core.services.client.restriction import assert_processing_allowed
 
@@ -99,15 +104,17 @@ def _locked_case(case_pk, client_id) -> Case:
     #    zweite ``select_for_update``-Form daneben waere eine zweite Ordnung
     #    (Refs #2268), deshalb ein gewoehnliches Lesen unter der Sperre. Fehlt
     #    die Zeile ganz, gilt sie als widerrufen (fail-closed).
-    is_deleted, is_active = Client.objects.filter(pk=client_id).values_list("is_deleted", "is_active").first() or (
-        True,
-        False,
+    revoked = (
+        Client.objects.filter(pk=client_id, facility_id=facility_id).values_list("is_deleted", "is_active").first()
     )
+    is_deleted, is_active = revoked or (True, False)
     if is_deleted or not is_active:
         raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
     # 3. Fallzeile sperren — der Personenbezug steht IN der Bedingung, damit
     #    ein zwischenzeitlicher Wechsel nicht als Treffer durchgeht.
-    locked = _present(Case.objects.filter(pk=case_pk, client_id=client_id).select_for_update().first())
+    locked = _present(
+        Case.objects.filter(pk=case_pk, client_id=client_id, facility_id=facility_id).select_for_update().first()
+    )
     if locked.is_deleted or locked.anonymized_at is not None:
         raise ValidationError(STATUS_CHANGE_REDACTED_MESSAGE)
     return locked
@@ -122,16 +129,18 @@ def lock_case_for_status_change(case) -> Case:
     Vorlesen und Sperren daran aendert, faengt die Gegenpruefung in
     :func:`_locked_case` ab.
     """
-    client_id = _present(Case.objects.filter(pk=case.pk).values_list("client_id", flat=True).first())
-    return _locked_case(case.pk, client_id)
+    client_id, facility_id = _present(
+        Case.objects.filter(pk=case.pk, facility_id=case.facility_id).values_list("client_id", "facility_id").first()
+    )
+    return _locked_case(case.pk, client_id, facility_id)
 
 
 def lock_goal_for_status_change(goal) -> OutcomeGoal:
     """Das Wirkungsziel fuer einen Statuswechsel — Person -> Fall -> Ziel."""
-    case_pk, client_id = _present(
-        OutcomeGoal.objects.filter(pk=goal.pk).values_list("case_id", "case__client_id").first()
+    case_pk, client_id, facility_id = _present(
+        OutcomeGoal.objects.filter(pk=goal.pk).values_list("case_id", "case__client_id", "case__facility_id").first()
     )
-    _locked_case(case_pk, client_id)
+    _locked_case(case_pk, client_id, facility_id)
     return _present(OutcomeGoal.objects.filter(pk=goal.pk, case_id=case_pk).select_for_update().first())
 
 
@@ -143,11 +152,11 @@ def lock_milestone_for_status_change(milestone) -> Milestone:
     uebersprungene Stufe ist die naechste Reihenfolge, die niemand mit den
     uebrigen vergleicht.
     """
-    goal_pk, case_pk, client_id = _present(
+    goal_pk, case_pk, client_id, facility_id = _present(
         Milestone.objects.filter(pk=milestone.pk)
-        .values_list("goal_id", "goal__case_id", "goal__case__client_id")
+        .values_list("goal_id", "goal__case_id", "goal__case__client_id", "goal__case__facility_id")
         .first()
     )
-    _locked_case(case_pk, client_id)
+    _locked_case(case_pk, client_id, facility_id)
     _present(OutcomeGoal.objects.filter(pk=goal_pk, case_id=case_pk).select_for_update().only("pk").first())
     return _present(Milestone.objects.filter(pk=milestone.pk, goal_id=goal_pk).select_for_update().first())
