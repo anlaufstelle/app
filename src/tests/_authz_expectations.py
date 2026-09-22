@@ -75,6 +75,9 @@ EXPECTATIONS = (
     # erlaubten Rollen, anonymous_ok den anonymen Zugriff.
     E("demo_imprint", "public", get=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
     E("demo_privacy", "public", get=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
+    # Demo-Bereichsauswahl (nur bei DEMO_MODE; sonst 404 wie die Demo-Rechtstexte) — Refs #2285
+    E("demo_scenario_select", "public", get=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
+    E("demo_scenario_start", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
     E("set_language", "public", post=ALL_AUTH, anonymous_ok=True),
     E("password_reset", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True),
     E("password_reset_done", "public", get=ALL_AUTH, anonymous_ok=True),

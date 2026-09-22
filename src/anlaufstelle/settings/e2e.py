@@ -38,3 +38,7 @@ HEALTH_DISK_REQUIRED = False
 # Default-Logins MFA-frei bleiben. Der dedizierte enforced-Server (Refs #1019)
 # setzt ``E2E_MFA_ENFORCE_ROLES=1`` und prüft damit den Rollen-Redirect.
 MFA_ENFORCE_PRIVILEGED_ROLES = os.environ.get("E2E_MFA_ENFORCE_ROLES", "0") == "1"
+
+# Demo-Bereichsauswahl im E2E nur auf ausdrücklichen Schalter (Refs #2285): der
+# Standard-E2E-Lauf bleibt ohne Demo-Modus, die Demo-Specs skippen ohne den Schalter.
+DEMO_MODE = os.environ.get("E2E_DEMO_MODE", "0") == "1"
