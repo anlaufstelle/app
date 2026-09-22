@@ -1250,6 +1250,8 @@ Eintrag für tägliche Backups um 02:00 Uhr (vor den Retention-Läufen):
 
 In `/etc/crontab` wäre zusätzlich nach den fünf Zeitfeldern der Benutzer `root` erforderlich; kopieren Sie die Fünf-Feld-Zeile dort nicht unverändert hinein. Richten Sie für `/var/log/anlaufstelle-backup.log` außerdem eine wöchentliche Logrotation (zum Beispiel acht komprimierte Rotationen mit `copytruncate`) unter `/etc/logrotate.d/` ein.
 
+`backup.sh` erzeugt alle Dateien eines Laufs zunächst in einem verborgenen Arbeitsverzeichnis unterhalb von `daily/` und verschiebt sie erst nach dem vollständigen Lauf in das Tagesverzeichnis — das signierte Manifest zuletzt. Ein abgebrochener Lauf hinterlässt deshalb kein Artefakt; die Anzeige „Letztes Backup" in der Systemübersicht und im Compliance-Bereich zählt ausschließlich vollständige Sätze (Manifest samt der darin genannten Dateien) und bleibt sonst auf „Fehlt".
+
 Keinen zusätzlichen `find ... -delete`-Job einrichten: `backup.sh` rotiert Datenbank-, Medien- und HMAC-Dateien gemeinsam. Prüfen Sie regelmäßig das neueste Backup:
 
 ```bash

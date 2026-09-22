@@ -24,8 +24,12 @@ def test_restore_fails_closed_and_drill_uses_authenticated_manifest_counts() -> 
 
     # Refs #2290: der Import laeuft in die Wiederherstellungs-DB, nicht ins Ziel.
     assert 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$RESTORE_DB"' in restore
-    assert 'MANIFEST_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.manifest"' in backup
+    # Refs #2291: der Satz entsteht im Arbeitsverzeichnis und wird erst am Ende
+    # veroeffentlicht — das signierte Manifest als letztes Artefakt.
+    assert 'MANIFEST_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}.manifest"' in backup
     assert 'backup_write_hmac "$MANIFEST_FILE"' in backup
+    assert backup.index('backup_write_hmac "$MANIFEST_FILE"') < backup.index('publish_artifact "$MANIFEST_FILE"')
+    assert backup.index('publish_artifact "$BACKUP_FILE"') < backup.index('publish_artifact "$MANIFEST_FILE"')
     assert "EXPECTED_COUNT=" in completeness
     assert 'if [[ "$DRILL_FORMAT" == "prod" ]]' in completeness
     assert "LIVE_COUNT=" in completeness

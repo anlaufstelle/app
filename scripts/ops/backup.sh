@@ -176,9 +176,20 @@ MONTHLY_DIR="${BACKUP_HOST_DIR}/monthly"
 
 mkdir -p "$DAILY_DIR" "$WEEKLY_DIR" "$MONTHLY_DIR"
 
-BACKUP_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.sql.gz.enc"
-MEDIA_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}_media.tar.gz.enc"
-MANIFEST_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.manifest"
+# Erfolgsmetadaten erst nach vollstaendig erzeugtem Satz veroeffentlichen
+# (Refs #2291): Alle Artefakte entstehen in einem Arbeitsverzeichnis und werden
+# erst am Ende in das Tagesverzeichnis verschoben — das signierte Manifest als
+# letztes. Ein abgebrochener Lauf hinterlaesst dadurch KEIN Artefakt, das
+# Health-/Compliance-Anzeige als frisches Backup lesen koennten.
+WORK_DIR="${DAILY_DIR}/.in-progress-${TIMESTAMP}"
+rm -rf "$WORK_DIR"
+mkdir -p "$WORK_DIR"
+cleanup_work_dir() { rm -rf "$WORK_DIR"; }
+trap cleanup_work_dir EXIT
+
+BACKUP_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}.sql.gz.enc"
+MEDIA_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}_media.tar.gz.enc"
+MANIFEST_FILE="${WORK_DIR}/anlaufstelle_${TIMESTAMP}.manifest"
 
 # Absoluter Referenzstand fuer den Restore-Drill. Der Drill vergleicht den
 # Restore spaeter gegen diese Werte, nicht gegen eine moeglicherweise bereits
@@ -248,7 +259,7 @@ echo "Medien-Backup erstellt: $(du -h "$MEDIA_FILE" | cut -f1)"
 # wird aber sichtbar geloggt.
 HWM_FILE=""
 if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
-    HWM_FILE="${DAILY_DIR}/audit_hwm-${TIMESTAMP}.json"
+    HWM_FILE="${WORK_DIR}/audit_hwm-${TIMESTAMP}.json"
     if docker compose -f "$COMPOSE_FILE" exec -T cron cat "$DJANGO_AUDIT_HWM_PATH" > "$HWM_FILE"; then
         if [[ -s "$HWM_FILE" ]]; then
             echo "Audit-HWM gesichert: ${HWM_FILE}"
@@ -278,6 +289,24 @@ fi
     fi
 } >> "$MANIFEST_FILE"
 backup_write_hmac "$MANIFEST_FILE"
+
+# Veroeffentlichung: erst die Nutzartefakte, das signierte Manifest zuletzt.
+# Es ist der Marker fuer "Satz vollstaendig" — solange es fehlt, gilt der Satz
+# als nicht erfolgreich (Refs #2291).
+publish_artifact() {
+    local source="$1"
+    mv -f "$source" "${DAILY_DIR}/${source##*/}"
+    printf '%s/%s\n' "$DAILY_DIR" "${source##*/}"
+}
+BACKUP_FILE_HMAC="$(publish_artifact "${BACKUP_FILE}.hmac")"
+BACKUP_FILE="$(publish_artifact "$BACKUP_FILE")"
+MEDIA_FILE_HMAC="$(publish_artifact "${MEDIA_FILE}.hmac")"
+MEDIA_FILE="$(publish_artifact "$MEDIA_FILE")"
+if [[ -n "$HWM_FILE" ]]; then
+    HWM_FILE="$(publish_artifact "$HWM_FILE")"
+fi
+MANIFEST_FILE_HMAC="$(publish_artifact "${MANIFEST_FILE}.hmac")"
+MANIFEST_FILE="$(publish_artifact "$MANIFEST_FILE")"
 echo "Zeilenzahl-Manifest mit Satzbindung erstellt: ${MANIFEST_FILE}"
 
 # Weekly-/Monthly-Snapshots werden vor dem Off-Site-Abgleich angelegt, damit
@@ -287,8 +316,8 @@ DOM=$(date +%d)  # Tag des Monats
 
 # Sonntags → Weekly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
 if [[ "$DOW" -eq 7 ]]; then
-    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" \
-        "$MANIFEST_FILE" "$MANIFEST_FILE.hmac" "$WEEKLY_DIR/"
+    cp "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \
+        "$MANIFEST_FILE" "$MANIFEST_FILE_HMAC" "$WEEKLY_DIR/"
     if [[ -n "$HWM_FILE" ]]; then
         cp "$HWM_FILE" "$WEEKLY_DIR/"
     fi
@@ -297,8 +326,8 @@ fi
 
 # Am 1. des Monats → Monthly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
 if [[ "$DOM" -eq "01" ]]; then
-    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" \
-        "$MANIFEST_FILE" "$MANIFEST_FILE.hmac" "$MONTHLY_DIR/"
+    cp "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \
+        "$MANIFEST_FILE" "$MANIFEST_FILE_HMAC" "$MONTHLY_DIR/"
     if [[ -n "$HWM_FILE" ]]; then
         cp "$HWM_FILE" "$MONTHLY_DIR/"
     fi

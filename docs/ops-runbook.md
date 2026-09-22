@@ -376,6 +376,18 @@ nach `daily/`, `weekly/` und `monthly/`; der Prod-Zweig von
 bewusst ignoriert. Compose mountet `BACKUP_HOST_DIR` nach `BACKUP_DIR`,
 damit `/health/` dieselben Dateien sieht.
 
+**Veroeffentlichung eines Satzes:** Alle Artefakte eines Laufs entstehen in
+`daily/.in-progress-<Zeitstempel>/` und werden erst nach dem vollstaendigen
+Lauf ins Tagesverzeichnis verschoben — das signierte Manifest als letztes.
+Das Manifest ist damit der Erfolgsmarker: Die Systemuebersicht und der
+Compliance-Check „Letztes Backup" werten ausschliesslich Saetze aus, deren
+Manifest samt der darin referenzierten Dateien (Dump, HMAC-Sidecars, bei
+gebundenem `media_sha256` das Medienarchiv, bei gebundenem `hwm_sha256` der
+Audit-Anker) vorliegt. Ein abgebrochener Lauf laesst den Zustand auf
+„fehlt/unbekannt" stehen statt auf „aktuell". Ein liegengebliebenes
+`.in-progress-*`-Verzeichnis stammt von einem hart abgebrochenen Lauf und
+kann geloescht werden.
+
 **Voraussetzungen fuer den Cron-Eintrag:** Die folgenden Beispiele sind
 ausdruecklich fuer `sudo crontab -e`, also die fuenf Zeitfelder der
 **Root-Crontab**. Root wird empfohlen, weil `backup.sh` den Docker-Socket

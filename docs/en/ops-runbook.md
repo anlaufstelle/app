@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: § 3.3 describes that a backup set is published only after a complete run (work directory, signed manifest last) and that the operational “last backup” state counts complete sets only (#2291).
 > Synchronization update 2026-09-22: § 2.3 follows the restore path that fills a fresh recovery database, verifies it against the signed manifest and switches over under write quiescence, keeps the previous database and requires the explicit confirmation switch (#2290, #2318).
 > Synchronization update 2026-09-22: § 5.8 explains the Django 6.1 deployment check `mail.E001` (SMTP backend required on production hosts, behaviour without a reachable relay, console backend only in the live-dev and demo settings) (#2326).
 > Synchronization update 2026-09-21: § 7.4 explains that an unknown ClamAV signature age stays `unknown` during startup and that the compliance check shows the freshclam log command as its action hint (#2246).
@@ -388,6 +389,16 @@ branch of `restore-drill.sh` reads from the same `daily/` directory.
 `web` container (default: `/backups`) and is deliberately ignored by
 both host scripts. Compose mounts `BACKUP_HOST_DIR` at `BACKUP_DIR` so
 that `/health/` sees the same files.
+
+**Publishing a set:** Every artifact of a run is created inside
+`daily/.in-progress-<timestamp>/` and only moved into the daily directory once
+the run has completed — the signed manifest last. The manifest is therefore the
+success marker: the system overview and the "Last backup" compliance check only
+evaluate sets whose manifest and the files it references (dump, HMAC sidecars,
+the media archive if `media_sha256` is bound, the audit anchor if `hwm_sha256`
+is bound) are present. An aborted run leaves the state at "missing/unknown"
+instead of "current". A leftover `.in-progress-*` directory comes from a hard
+abort and can be deleted.
 
 **Prerequisites for the cron entry:** The following examples are explicitly
 for `sudo crontab -e`, i.e. the five time fields of the **root crontab**. Root
@@ -2868,4 +2879,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: a9b656221fbee0e0ee9f6e7cbada1652d024b4de -->
+<!-- source-hash: f925d7d3e4475ae4be995e8e7294d806ba89bb9d -->

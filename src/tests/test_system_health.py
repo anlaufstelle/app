@@ -101,8 +101,33 @@ class TestDiskUsage:
         assert result["percent_used"] is None
 
 
+def _write_backup_set(directory: Path, timestamp: str, *, with_media: bool = True) -> Path:
+    """Einen vollstaendigen, veroeffentlichten Backup-Satz anlegen (Refs #2291)."""
+    directory.mkdir(parents=True, exist_ok=True)
+    manifest = directory / f"anlaufstelle_{timestamp}.manifest"
+    lines = [f"table_{table}=1" for table in system_health.BACKUP_SET_TABLES]
+    lines.append(f"backup_timestamp={timestamp}")
+    lines.append(f"db_sha256={'a' * 64}")
+    dump = directory / f"anlaufstelle_{timestamp}.sql.gz.enc"
+    dump.write_bytes(b"dump")
+    dump.with_name(f"{dump.name}.hmac").write_text("sig", encoding="utf-8")
+    if with_media:
+        lines.append(f"media_sha256={'b' * 64}")
+        media = directory / f"anlaufstelle_{timestamp}_media.tar.gz.enc"
+        media.write_bytes(b"media")
+        media.with_name(f"{media.name}.hmac").write_text("sig", encoding="utf-8")
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    manifest.with_name(f"{manifest.name}.hmac").write_text("sig", encoding="utf-8")
+    return manifest
+
+
+def _age(path: Path, hours: float) -> None:
+    stamp = (datetime.now(tz=UTC) - timedelta(hours=hours)).timestamp()
+    os.utime(path, (stamp, stamp))
+
+
 class TestLastBackupInfo:
-    """``last_backup_info()`` — juengste Datei + Stale-Heuristik."""
+    """``last_backup_info()`` — juengster vollstaendiger Satz + Stale-Heuristik."""
 
     def test_returns_none_when_no_backup_dir(self, tmp_path):
         """Setting fehlt -> kein Backup-Info."""
@@ -116,34 +141,35 @@ class TestLastBackupInfo:
         result = system_health.last_backup_info(tmp_path)
         assert result is None
 
-    def test_returns_youngest_file(self, tmp_path):
-        """Jueneste Datei wird gefunden, ``age_hours`` ist eine Float."""
-        old = tmp_path / "old.sql.gz.enc"
-        old.write_bytes(b"x")
-        # Mtime auf vor 2 Tagen setzen.
-        old_mtime = (datetime.now(tz=UTC) - timedelta(hours=48)).timestamp()
-        os.utime(old, (old_mtime, old_mtime))
-
-        new = tmp_path / "new.sql.gz.enc"
-        new.write_bytes(b"y")
-        # frisches mtime — sollte jueneste Datei sein.
+    def test_returns_youngest_complete_set(self, tmp_path):
+        """Der juengste vollstaendige Satz wird gefunden, ``age_hours`` ist eine Float."""
+        older = _write_backup_set(tmp_path / "daily", "2026-09-10_020000")
+        _age(older, 48)
+        newer = _write_backup_set(tmp_path / "daily", "2026-09-12_020000")
 
         result = system_health.last_backup_info(tmp_path)
         assert result is not None
-        assert Path(result["path"]).name == "new.sql.gz.enc"
+        assert Path(result["path"]).name == newer.name
         assert isinstance(result["mtime"], datetime)
         assert result["age_hours"] >= 0
         # Frisches Backup ist nicht stale.
         assert result["is_stale"] is False
 
+    def test_incomplete_newer_set_does_not_displace_the_last_complete_one(self, tmp_path):
+        """Refs #2291: ein angefangener Satz ist kein Backup — auch nicht das juengste."""
+        complete = _write_backup_set(tmp_path / "daily", "2026-09-10_020000")
+        _age(complete, 5)
+        broken = tmp_path / "daily" / "anlaufstelle_2026-09-12_020000.manifest"
+        broken.write_text("", encoding="utf-8")
+
+        result = system_health.last_backup_info(tmp_path)
+        assert result is not None
+        assert Path(result["path"]).name == complete.name
+
     def test_marks_as_stale_when_older_than_threshold(self, tmp_path):
-        """Datei aelter als ``BACKUP_STALE_THRESHOLD_HOURS`` -> ``is_stale=True``."""
-        ancient = tmp_path / "ancient.sql.gz.enc"
-        ancient.write_bytes(b"z")
-        ancient_mtime = (
-            datetime.now(tz=UTC) - timedelta(hours=system_health.BACKUP_STALE_THRESHOLD_HOURS + 5)
-        ).timestamp()
-        os.utime(ancient, (ancient_mtime, ancient_mtime))
+        """Satz aelter als ``BACKUP_STALE_THRESHOLD_HOURS`` -> ``is_stale=True``."""
+        ancient = _write_backup_set(tmp_path / "daily", "2026-08-01_020000")
+        _age(ancient, system_health.BACKUP_STALE_THRESHOLD_HOURS + 5)
 
         result = system_health.last_backup_info(tmp_path)
         assert result is not None

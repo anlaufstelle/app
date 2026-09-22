@@ -99,15 +99,89 @@ def disk_usage(path: str | os.PathLike | None = None) -> dict:
         }
 
 
+# Pflichttabellen des Zeilenzahl-Manifests aus ``scripts/ops/backup.sh``.
+# Ein Manifest ohne diese Zeilen beschreibt keinen auswertbaren Satz.
+BACKUP_SET_TABLES = (
+    "core_facility",
+    "core_client",
+    "core_event",
+    "core_workitem",
+    "core_auditlog",
+    "core_attachment",
+)
+
+_SHA256_HEX_LENGTH = 64
+
+
+def _parse_backup_manifest(manifest: Path) -> dict[str, str] | None:
+    """Manifest als ``key=value``-Abbildung oder ``None`` bei Unlesbarkeit."""
+    try:
+        raw = manifest.read_text(encoding="utf-8")
+    except Exception:
+        logger.exception("system_health: backup manifest unreadable: %s", manifest)
+        return None
+    values: dict[str, str] = {}
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        key, separator, value = line.partition("=")
+        if not separator:
+            return None
+        values[key] = value
+    return values
+
+
+def _is_complete_backup_set(manifest: Path) -> bool:
+    """True, wenn das Manifest einen vollstaendig veroeffentlichten Satz beschreibt.
+
+    Vertrag (identisch zu ``scripts/ops/lib/backup-set.sh``): signiertes,
+    nicht-leeres Manifest mit Satzkennung, Dump-Hash und den Zeilenzahlen aller
+    Pflichttabellen; die referenzierten Artefakte liegen daneben. Die Hashes
+    selbst prueft diese Funktion NICHT — sie laeuft im Request-Cycle und darf
+    keine Gigabytes lesen; das tun ``backup.sh --verify`` und ``restore.sh``.
+    """
+    if not manifest.is_file() or manifest.stat().st_size == 0:
+        return False
+    if not manifest.with_name(f"{manifest.name}.hmac").is_file():
+        return False
+    values = _parse_backup_manifest(manifest)
+    if values is None:
+        return False
+    if any(f"table_{table}" not in values for table in BACKUP_SET_TABLES):
+        return False
+    timestamp = values.get("backup_timestamp", "")
+    db_sha256 = values.get("db_sha256", "")
+    if not timestamp or len(db_sha256) != _SHA256_HEX_LENGTH:
+        return False
+
+    base = manifest.with_suffix("")
+    required = [base.with_name(f"{base.name}.sql.gz.enc")]
+    if values.get("media_sha256"):
+        required.append(base.with_name(f"{base.name}_media.tar.gz.enc"))
+    for artifact in required:
+        if not artifact.is_file() or artifact.stat().st_size == 0:
+            return False
+        sidecar = artifact.with_name(f"{artifact.name}.hmac")
+        if not sidecar.is_file() or sidecar.stat().st_size == 0:
+            return False
+    if values.get("hwm_sha256"):
+        anchor = manifest.with_name(f"audit_hwm-{timestamp}.json")
+        if not anchor.is_file() or anchor.stat().st_size == 0:
+            return False
+    return True
+
+
 def last_backup_info(backup_dir: str | os.PathLike | None = None) -> dict | None:
-    """Liefert Infos zum juengsten Backup-File oder ``None``.
+    """Liefert Infos zum juengsten VOLLSTAENDIGEN Backup-Satz oder ``None``.
 
-    Heuristik: jueneste Datei (rekursiv) im konfigurierten
-    ``settings.BACKUP_DIR``. Wenn weder Argument noch Setting verfuegbar
-    sind oder das Verzeichnis leer ist, gibt es kein Backup.
+    Refs #2291: Frueher galt die juengste beliebige Datei im Backup-Verzeichnis
+    als Sicherung — auch das leere Manifest, das ein gescheiterter Lauf
+    hinterliess. Bewertet wird jetzt ausschliesslich ein veroeffentlichter Satz:
+    signiertes Manifest plus die darin referenzierten Artefakte. Gibt es keinen,
+    ist der Zustand ``None`` (= fehlend/unbekannt), nie „gesund".
 
-    Returns dict mit ``path`` (str), ``mtime`` (timezone-aware datetime),
-    ``age_hours`` (float) und ``is_stale`` (bool: aelter als
+    Returns dict mit ``path`` (Manifestpfad), ``mtime`` (timezone-aware
+    datetime), ``age_hours`` (float) und ``is_stale`` (bool: aelter als
     ``BACKUP_STALE_THRESHOLD_HOURS``).
     """
     target = backup_dir if backup_dir is not None else getattr(settings, "BACKUP_DIR", None)
@@ -117,9 +191,15 @@ def last_backup_info(backup_dir: str | os.PathLike | None = None) -> dict | None
     if not target_path.exists() or not target_path.is_dir():
         return None
     try:
-        # Rekursiv alle Dateien — Backup-Skripte legen oft pro Datum
-        # eigene Subdirs an (z.B. ``backups/2026/05/...``).
-        candidates = [p for p in target_path.rglob("*") if p.is_file()]
+        # Rekursiv: Backup-Skripte legen pro Retention-Stufe eigene Unterordner
+        # an. Arbeitsverzeichnisse laufender/abgebrochener Laeufe beginnen mit
+        # einem Punkt und zaehlen nie als Satz.
+        candidates = [
+            manifest
+            for manifest in target_path.rglob("*.manifest")
+            if not any(part.startswith(".") for part in manifest.relative_to(target_path).parts)
+            and _is_complete_backup_set(manifest)
+        ]
     except Exception:
         logger.exception("system_health: backup directory listing failed for %s", target_path)
         return None

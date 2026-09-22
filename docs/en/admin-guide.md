@@ -3,6 +3,7 @@
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
 > Synchronization update 2026-09-22: Step 4 explains that the script now auto-detects `compose.legal.yml`/`compose.override.yml` and prints the file list it used, and that the first ClamAV start can take about three minutes to download signatures (#2309, #2312).
 > Synchronization update 2026-09-22: § 1 Step 2 states the length/character-set requirement once for `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` and names `openssl` as the primary command shared with `.env.example` (#2313).
+> Synchronization update 2026-09-22: § 3.2 states that a backup set is published only after a complete run and that the “last backup” state counts complete sets only (#2291).
 > Synchronization update 2026-09-22: the SMTP environment reference explains that Django 6.1 requires an SMTP backend on production hosts (`check --deploy`, `mail.E001`), what happens without a reachable mail server, and that the console backend exists only in the live-dev and demo settings (#2326).
 > Synchronization update 2026-09-21: the fresh-install health-check note explains that “Critical audit events (24h)” can warn normally because initial setup itself creates critical audit events (#2247).
 > Synchronization update 2026-09-18: § 5.6 states that the server log file now carries the same lines with masked URL paths -- query part dropped, route schema or token segments removed, the account as `user_pk` instead of the login name, in both output formats and in framework lines -- while the client IP of a CSP report stays readable (#2228).
@@ -1274,6 +1275,8 @@ Entry for a daily backup at 02:00, before retention jobs:
 
 `/etc/crontab` additionally requires the username `root` after the five time fields; do not copy the five-field line there unchanged. Also configure weekly rotation for `/var/log/anlaufstelle-backup.log` (for example eight compressed rotations with `copytruncate`) under `/etc/logrotate.d/`.
 
+`backup.sh` creates all files of a run in a hidden work directory below `daily/` and moves them into the daily directory only after the run has completed — the signed manifest last. An aborted run therefore leaves no artifact behind; the “Last backup” state in the system overview and in the compliance area counts complete sets only (a manifest together with the files it names) and otherwise stays on “missing”.
+
 Do not add a separate `find ... -delete` job: `backup.sh` rotates database, media, and HMAC files together. Verify the latest backup regularly:
 
 ```bash
@@ -2247,4 +2250,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: b4e97e435c2ec42c5a9de4cf748614a3e8f0acb6 -->
+<!-- source-hash: 3d0b6ae6aa645ee798a48ecf207c13f38cd0848f -->
