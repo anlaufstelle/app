@@ -43,8 +43,9 @@ Person werden danach auf der bereits gesperrten Zeile gelesen.
 Modul, sondern ``assert_processing_allowed(..., lock=True)``; die
 Widerrufsspalten der Person werden danach auf genau dieser gesperrten Zeile
 gelesen. Das Gate kehrt aber **vor** dem Sperren zurueck, wenn ein
-Betroffenenrechte-Kontext offen ist (``_rectification_write``,
-``_deletion_workflow_write``) — dann faellt die erste Stufe weg und der Fall
+Betroffenenrechte-Kontext offen ist (die beiden internen Ausstiege der
+Restriktions-Schnittstelle fuer Berichtigung und Loeschworkflow) — dann faellt
+die erste Stufe weg und der Fall
 wuerde ohne vorangehende Personensperre genommen. Keine der fuenf
 Statusfunktionen wird heute aus einem dieser Kontexte gerufen (Produktivcode:
 nur die vier Views). Wer das aendert, muss die Personensperre hier
