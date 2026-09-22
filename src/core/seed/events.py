@@ -1,6 +1,7 @@
 """Event seeding: fixed demo events for ``small`` scale, bulk for the others."""
 
 import copy
+import logging
 import random
 from datetime import date, timedelta
 
@@ -10,6 +11,8 @@ from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS, EVENT_TYPE_WEIGHTS
 from core.services.events.fields import compute_event_search_text, stage_index
 from core.services.file_vault import encrypt_dynamic_data
+
+logger = logging.getLogger(__name__)
 
 
 def random_time_of_day(max_hour: int | None = None, max_minute: int | None = None) -> tuple[int, int]:
@@ -266,6 +269,17 @@ def seed_events_bulk(
             unsatisfiable_slugs.add(dt.slug)
 
     if unsatisfiable_slugs:
+        # Ruling Fix-Runde 1 (Nachtrag zu #2270): der Ausschluss selbst war
+        # schon vorher korrekt (keine unzulaessige Kombination) — er lief nur
+        # STILL. Ohne Log-Zeile war ein fehlender Typ am Ergebnis nicht von
+        # einem echten Fehler zu unterscheiden.
+        logger.warning(
+            "seed_events_bulk: Facility %s - Typ(en) %s ohne zulaessige Person "
+            "uebersprungen (min_contact_stage nicht erfuellbar mit der "
+            "vorhandenen Client-Liste)",
+            facility.pk,
+            sorted(unsatisfiable_slugs),
+        )
         doc_types = [dt for dt in doc_types if dt.slug not in unsatisfiable_slugs]
     if not doc_types:
         return 0
@@ -282,9 +296,19 @@ def seed_events_bulk(
     if not staff_users:
         staff_users = users
     batch: list[Event] = []
-    hausverbot_active_count = 0
-    for i in range(to_create_count):
-        doc_type = random.choices(doc_types, weights=weights, k=1)[0]
+    # Mutable Zaehler statt lokaler Variable: von ``_build_event`` (Closure)
+    # ueber BEIDE Phasen (Abdeckung + Zufallsauffuellung) hinweg geteilt.
+    hausverbot_active_count = [0]
+
+    def _build_event(doc_type: DocumentType, idx: int) -> Event:
+        """Ein einzelnes Event fuer ``doc_type`` bauen (Person/Anonymitaet,
+        Zeitpunkt, Daten, Suchindex) — Ruling Fix-Runde 1: aus der
+        Zieh-Schleife herausgezogen, damit Phase 1 (Abdeckung je Typ, feste
+        Reihenfolge) und Phase 2 (gewichtete Zufallsauffuellung) dieselbe
+        Erzeugungslogik teilen. Der Zufallsfluss innerhalb EINES Ereignisses
+        (Person/Zeitpunkt/Inhalt) bleibt unveraendert — nur die AUSWAHL DES
+        TYPS ist in Phase 1 nicht mehr zufaellig.
+        """
         client: Client | None
         if doc_type.min_contact_stage:
             # Refs #2270: nie anonym, nur Personen aus dem vorab bestimmten
@@ -309,36 +333,61 @@ def seed_events_bulk(
 
         # Bans realistic: most expired, max 2 active (grund from pool)
         if doc_type.system_type == "ban":
-            if hausverbot_active_count < 2 and random.random() < 0.15:
+            if hausverbot_active_count[0] < 2 and random.random() < 0.15:
                 data_json["aktiv"] = True
                 data_json["bis"] = (today + timedelta(days=random.randint(7, 90))).isoformat()
-                hausverbot_active_count += 1
+                hausverbot_active_count[0] += 1
             else:
                 data_json["aktiv"] = False
                 data_json["bis"] = (today - timedelta(days=random.randint(30, 365))).isoformat()
 
-        batch.append(
-            Event(
-                facility=facility,
-                client=client,
-                document_type=doc_type,
-                occurred_at=occurred,
-                data_json=data_json,
-                # Refs #2271: ``bulk_create`` loest KEIN ``pre_save``-Signal
-                # aus (``core.signals.event_search`` greift nur bei
-                # ``Event.save()``) — der GIN-trgm-Suchindex bliebe sonst
-                # leer. Die zentrale Berechnung deshalb hier direkt vorab,
-                # auf dem noch UNVERSCHLUESSELTEN ``data_json`` (dieselbe
-                # Reihenfolge wie in ``create_event``).
-                # ``compute_event_search_text`` schliesst verschluesselte/
-                # erhoehte Felder selbst ueber die ``FieldTemplate``-
-                # Metadaten aus — unabhaengig davon, ob der Wert zu diesem
-                # Zeitpunkt schon verschluesselt ist.
-                search_text=compute_event_search_text(data_json, doc_type),
-                is_anonymous=is_anonymous,
-                created_by=staff_users[i % len(staff_users)],
-            )
+        return Event(
+            facility=facility,
+            client=client,
+            document_type=doc_type,
+            occurred_at=occurred,
+            data_json=data_json,
+            # Refs #2271: ``bulk_create`` loest KEIN ``pre_save``-Signal aus
+            # (``core.signals.event_search`` greift nur bei ``Event.save()``)
+            # — der GIN-trgm-Suchindex bliebe sonst leer. Die zentrale
+            # Berechnung deshalb hier direkt vorab, auf dem noch
+            # UNVERSCHLUESSELTEN ``data_json`` (dieselbe Reihenfolge wie in
+            # ``create_event``). ``compute_event_search_text`` schliesst
+            # verschluesselte/erhoehte Felder selbst ueber die
+            # ``FieldTemplate``-Metadaten aus — unabhaengig davon, ob der
+            # Wert zu diesem Zeitpunkt schon verschluesselt ist.
+            search_text=compute_event_search_text(data_json, doc_type),
+            is_anonymous=is_anonymous,
+            created_by=staff_users[idx % len(staff_users)],
         )
+
+    # Ruling Fix-Runde 1 (Orchestrator, Nachtrag zu #2270): Phase 1 —
+    # Abdeckung PER KONSTRUKTION. Der vorherige rein gewichtete Zufallszug
+    # liess seltene Typen (z. B. ``hausverbot``, Gewicht 0,2 von ~99,2)
+    # zufaellig ganz ausfallen — ``test_seed.py`` erwartet aber
+    # ausdruecklich, dass JEDER Paket-Typ an jeder Einrichtung mindestens
+    # ein Ereignis bekommt (fachlich richtiger Vertrag, der zuvor nur
+    # zufaellig am konkreten ``random.seed(42)`` aus ``seed.handle()`` hing).
+    # Jeder verbleibende (zulaessige) Typ bekommt in FESTER, nach Slug
+    # sortierter Reihenfolge zuerst GENAU EIN Ereignis; erst danach fuellt
+    # die gewichtete Zufallsziehung den Rest bis ``to_create_count`` auf.
+    # Gesamtzahl bleibt exakt ``to_create_count``, der RNG-Seed ist
+    # unangetastet — beide Phasen ziehen aus demselben ``random``-Strom,
+    # das Ergebnis bleibt fuer einen festen Seed reproduzierbar (Determinismus-
+    # Test aus #2270 bleibt gruen).
+    idx = 0
+    for doc_type in sorted(doc_types, key=lambda dt: dt.slug):
+        if idx >= to_create_count:
+            break
+        batch.append(_build_event(doc_type, idx))
+        idx += 1
+
+    # Phase 2: gewichtete Zufallsauffuellung fuer den Rest (unveraendertes
+    # Verhalten ausserhalb der Typ-Auswahl-Reihenfolge).
+    while idx < to_create_count:
+        doc_type = random.choices(doc_types, weights=weights, k=1)[0]
+        batch.append(_build_event(doc_type, idx))
+        idx += 1
 
     if batch:
         for event in batch:

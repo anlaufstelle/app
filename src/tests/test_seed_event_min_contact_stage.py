@@ -228,3 +228,38 @@ class TestSeedEventMinContactStage:
         second_run = _snapshot()
 
         assert first_run == second_run
+
+    def test_every_eligible_package_type_appears_at_least_once_regardless_of_seed(self, facility):
+        """Ruling Fix-Runde 1 (Orchestrator, Nachtrag zu #2270): Typabdeckung
+        ist STRUKTURELL garantiert — nicht nur eine Eigenschaft eines
+        guenstigen ``random.seed``-Werts. Macht
+        ``test_seed.py::TestSharedMediumSeed::test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ``
+        unabhaengig vom fest codierten Seed 42 in ``management/commands/seed.py``:
+        vorher war ``hausverbot`` (Gewicht 0,2 von ~99,2 im Standard-/
+        Beratungsstelle-Paket) nur mit GLUECK bei einem bestimmten Seed
+        dabei. Zwei verschiedene, willkuerliche Seed-Werte pruefen das —
+        JEDER im Standardpaket erzeugbare Typ (alle haben hier eine
+        zulaessige Person, da 6 Clients auf Stufe 'qualified' stehen) muss
+        in JEDEM Lauf mindestens einmal vorkommen."""
+        users = seed_users(facility, 0)
+        staff_user = users[0]
+        clients = _make_clients(facility, staff_user, n_identified=6, n_qualified=6)
+        # VOLLER Standardkatalog (nicht auf zwei Typen eingedampft) — die
+        # Abdeckungszusage gilt fuer ALLE Typen des Pakets.
+        seed_doc_types.seed_document_types(facility, package="default")
+        expected_slugs = set(
+            DocumentType.objects.filter(facility=facility, entity_type=DocumentType.EntityType.EVENT).values_list(
+                "slug", flat=True
+            )
+        )
+        assert len(expected_slugs) > 1, "Testaufbau: Standardkatalog muss mehrere Event-Typen liefern"
+
+        for seed_value in (2270, 987654):
+            Event.objects.filter(facility=facility).delete()
+            random.seed(seed_value)
+            created = seed_events_bulk(facility, users, clients, CFG, package="default")
+            assert created == EVENTS_PER_FACILITY
+
+            created_slugs = set(Event.objects.filter(facility=facility).values_list("document_type__slug", flat=True))
+            missing = expected_slugs - created_slugs
+            assert not missing, f"Seed {seed_value}: Typ(en) ohne jedes Ereignis: {sorted(missing)}"
