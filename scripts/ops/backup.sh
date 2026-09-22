@@ -99,7 +99,13 @@ if [[ "${1:-}" == "--verify" ]]; then
     echo "Verifiziere Backup-Satz: ${LATEST_MANIFEST##*/}"
     backup_set_load "$LATEST_MANIFEST"
     VERIFY_HWM_FILE="${DAILY_DIR}/audit_hwm-$(backup_set_timestamp_from_db_file "$LATEST_BACKUP").json"
-    backup_set_verify_artifacts "$LATEST_BACKUP" "$LATEST_MEDIA" "$VERIFY_HWM_FILE"
+    # Ein vorhandenes Archiv wird immer mitgeprueft — auch wenn das Manifest
+    # keines bindet: dann ist es ein Fremdkoerper und der Lauf faellt durch.
+    VERIFY_MEDIA_ARG=""
+    if [[ -f "$LATEST_MEDIA" ]]; then
+        VERIFY_MEDIA_ARG="$LATEST_MEDIA"
+    fi
+    backup_set_verify_artifacts "$LATEST_BACKUP" "$VERIFY_MEDIA_ARG" "$VERIFY_HWM_FILE"
     echo "Satzbindung bestaetigt (Satzkennung, Dump-Hash, gebundene Artefakte)."
 
     echo "Verifiziere DB-Backup: ${LATEST_BACKUP}"
@@ -202,8 +208,14 @@ mkdir -p "$DAILY_DIR" "$WEEKLY_DIR" "$MONTHLY_DIR"
 # letztes. Ein abgebrochener Lauf hinterlaesst dadurch KEIN Artefakt, das
 # Health-/Compliance-Anzeige als frisches Backup lesen koennten.
 WORK_DIR="${DAILY_DIR}/.in-progress-${TIMESTAMP}"
-rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR"
+# Kein ``-p``: existiert das Arbeitsverzeichnis schon, laeuft ein zweiter
+# Backup-Lauf derselben Sekunde — dann lieber hier abbrechen, als dessen
+# Artefakte zu ueberschreiben.
+if ! mkdir "$WORK_DIR" 2>/dev/null; then
+    echo "ERROR: Arbeitsverzeichnis existiert bereits: ${WORK_DIR}"
+    echo "  Laeuft ein zweiter Backup-Lauf? Sonst Rest eines hart abgebrochenen Laufs — Verzeichnis pruefen und entfernen."
+    exit 1
+fi
 cleanup_work_dir() { rm -rf "$WORK_DIR"; }
 trap cleanup_work_dir EXIT
 

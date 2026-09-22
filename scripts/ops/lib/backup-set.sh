@@ -114,6 +114,15 @@ backup_set_verify_artifacts() {
         return 1
     fi
 
+    # Ein Manifest ohne Medien-Hash beschreibt einen DB-only-Satz. Ein trotzdem
+    # vorhandenes/uebergebenes Archiv gehoert dann NICHT zu diesem Satz: der
+    # HMAC allein beweist nichts (derselbe Schluessel signiert jedes Archiv
+    # derselben Installation) — genau der Mischsatz, den diese Datei verhindert.
+    if [[ -z "$BACKUP_SET_MEDIA_SHA256" && -n "$media_file" ]]; then
+        echo "FEHLER: Der Satz bindet kein Medien-Archiv — ${media_file} gehoert nicht zu diesem Satz." >&2
+        return 1
+    fi
+
     if [[ -n "$BACKUP_SET_MEDIA_SHA256" ]]; then
         if [[ ! "$BACKUP_SET_MEDIA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
             echo "FEHLER: Manifest-Medien-Hash ist ungueltig." >&2

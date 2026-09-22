@@ -154,7 +154,7 @@ def _run(root: Path, bindir: Path, action_log: Path, db_backup: Path, media_back
     env.update(overrides)
     args = ["bash", str(root / "scripts" / "ops" / "restore.sh")]
     if env.pop("TEST_LEGACY_SWITCH", "0") == "1":
-        args.append("--allow-unsigned-legacy")
+        args.append("--allow-missing-manifest")
     args.append(str(db_backup))
     if media_backup is not None:
         args.append(str(media_backup))
@@ -255,7 +255,7 @@ def test_legacy_set_without_manifest_is_refused_and_names_the_switch(tmp_path: P
     result = _run(root, bindir, action_log, db_backup, media_backup)
 
     assert result.returncode != 0
-    assert "--allow-unsigned-legacy" in result.stderr
+    assert "--allow-missing-manifest" in result.stderr
     assert _lines(action_log) == []
 
 
@@ -267,7 +267,7 @@ def test_legacy_set_restores_with_the_emergency_switch_and_says_what_is_missing(
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "ACHTUNG" in result.stdout
-    assert "ohne signiertes Manifest" in result.stdout
+    assert "KEIN signiertes Manifest" in result.stdout
     assert "RESTORE-SATZ WIEDERHERGESTELLT" in result.stdout
     # Kein stiller Erfolg: der Lauf nennt die fehlende Satzbindung noch einmal.
     assert result.stdout.rstrip().splitlines()[-1].startswith("HINWEIS: Altsatz-Modus")

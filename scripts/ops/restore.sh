@@ -40,18 +40,21 @@ source "${SCRIPT_DIR}/lib/backup-set.sh"
 # alle Vorpruefungen lesen nichts mehr von stdin, und JEDER zerstoerende Schritt
 # liegt hinter der Bestaetigung.
 ASSUME_YES=0
+ALLOW_MISSING_MANIFEST=0
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --yes) ASSUME_YES=1; shift ;;
+        --allow-missing-manifest) ALLOW_MISSING_MANIFEST=1; shift ;;
         --) shift; POSITIONAL+=("$@"); break ;;
-        --*) echo "Fehler: unbekannte Option: $1 (erlaubt: --yes)" >&2; exit 1 ;;
+        --*) echo "Fehler: unbekannte Option: $1 (erlaubt: --yes, --allow-missing-manifest)" >&2; exit 1 ;;
         *) POSITIONAL+=("$1"); shift ;;
     esac
 done
 if [[ ${#POSITIONAL[@]} -lt 1 || ${#POSITIONAL[@]} -gt 2 ]]; then
-    echo "Verwendung: $0 [--yes] <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
-    echo "  --yes            Bestaetigung ohne Rueckfrage (alternativ RESTORE_CONFIRM=ja)"
+    echo "Verwendung: $0 [--yes] [--allow-missing-manifest] <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
+    echo "  --yes                     Bestaetigung ohne Rueckfrage (alternativ RESTORE_CONFIRM=ja)"
+    echo "  --allow-missing-manifest   Notfall: Satz ohne Manifest (vor 0.99.2) ohne Satzbindung einspielen"
     exit 1
 fi
 
@@ -81,9 +84,35 @@ backup_require_real_key
 # Sidecar und Hash. Dieselbe Pruefung fuehrt ``backup.sh --verify`` aus, damit
 # Verify und Restore nicht auseinanderlaufen (Refs #2290, #2292).
 MANIFEST_FILE="$(backup_set_manifest_path "$BACKUP_FILE")"
-echo "Prüfe Integrität und Bindung des Backup-Satzes (Manifest, HMAC)..."
-backup_set_load "$MANIFEST_FILE"
-backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE"
+LEGACY_SET=0
+if [[ ! -f "$MANIFEST_FILE" ]]; then
+    # Saetze aus backup.sh tragen seit 0.99.1 ein signiertes Manifest. Aeltere
+    # Weekly-/Monthly-Saetze (Aufbewahrung 28/90 Tage) haben keins — ohne einen
+    # ausdruecklichen Notfall-Schalter waeren sie mit diesem Werkzeug gar nicht
+    # mehr wiederherstellbar.
+    if [[ "$ALLOW_MISSING_MANIFEST" -ne 1 ]]; then
+        echo "FEHLER: Pflicht-Manifest des Backup-Satzes fehlt: ${MANIFEST_FILE}" >&2
+        echo "  Ohne Manifest gibt es keine Satzbindung (Zeitstempel, Dump-/Medien-Hashes) und keinen" >&2
+        echo "  Zeilenzahl-Abgleich. Nur fuer Altsaetze von vor 0.99.2 und nur bewusst:" >&2
+        echo "    $0 --allow-missing-manifest ${BACKUP_FILE} [medien-archiv]" >&2
+        exit 1
+    fi
+    LEGACY_SET=1
+    if [[ -n "$MEDIA_FILE" ]]; then
+        # Ohne Manifest bleibt nur die Namenskonvention als Satzbindung: das
+        # Archiv muss denselben Zeitstempel tragen wie der Dump.
+        LEGACY_MEDIA_EXPECTED="$(backup_set_media_path "$BACKUP_FILE")"
+        if [[ "${MEDIA_FILE##*/}" != "${LEGACY_MEDIA_EXPECTED##*/}" ]]; then
+            echo "FEHLER: Medien-Archiv traegt einen anderen Zeitstempel als der Dump: ${MEDIA_FILE##*/}" >&2
+            echo "  Erwartet: ${LEGACY_MEDIA_EXPECTED##*/} — im Altsatz-Modus ist der Dateiname die einzige Satzbindung." >&2
+            exit 1
+        fi
+    fi
+else
+    echo "Prüfe Integrität und Bindung des Backup-Satzes (Manifest, HMAC)..."
+    backup_set_load "$MANIFEST_FILE"
+    backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE"
+fi
 MANIFEST_MEDIA_SHA256="$BACKUP_SET_MEDIA_SHA256"
 
 if [[ -n "$MEDIA_FILE" && ! -f "$MEDIA_FILE" ]]; then
@@ -98,6 +127,11 @@ BACKUP_TIMESTAMP="${BACKUP_FILE##*/}"
 BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP#anlaufstelle_}"
 BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP%.sql.gz.enc}"
 HWM_FILE=""
+if [[ -z "${DJANGO_AUDIT_HWM_PATH:-}" && -n "$BACKUP_SET_HWM_SHA256" ]]; then
+    echo "WARNUNG: Der Satz enthaelt einen Audit-Anker, dieser Host hat aber keinen Ankerpfad konfiguriert." >&2
+    echo "  DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — der Anker wird NICHT eingespielt; die Audit-Kette gilt" >&2
+    echo "  nach dem Restore als unverankert (docs/disaster-recovery.md § 6 Schritt 4b)." >&2
+fi
 if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
     if [[ "${BACKUP_FILE##*/}" != "anlaufstelle_${BACKUP_TIMESTAMP}.sql.gz.enc" ]]; then
         echo "FEHLER: DB-Backup-Dateiname enthaelt keinen auswertbaren Zeitstempel fuer den Audit-HWM." >&2
@@ -238,6 +272,12 @@ if [[ -n "$MEDIA_FILE" ]]; then
     fi
 fi
 
+if [[ "$LEGACY_SET" -eq 1 ]]; then
+    echo "ACHTUNG: Altsatz-Modus — dieser Satz hat KEIN signiertes Manifest."
+    echo "  Es gibt keine Satzbindung (Zeitstempel/Hashes ueber Dump, Medien und Anker) und keinen"
+    echo "  Zeilenzahl-Abgleich gegen einen Referenzstand. Geprueft werden nur die HMAC-Sidecars."
+    echo "  Nach dem Restore die Vollstaendigkeit von Hand pruefen (docs/disaster-recovery.md § 7)."
+fi
 echo "WARNUNG: Die Datenbank '${POSTGRES_DB}' wird auf den Backup-Stand umgeschaltet!"
 echo "Wiederherstellungs-DB: ${RESTORE_DB} (wird gefuellt und verifiziert)"
 echo "Bisheriger Stand bleibt als: ${OLD_DB}"
@@ -269,8 +309,34 @@ fi
 
 RESTORE_DB_CREATED=0
 SWITCHED=0
+SWITCH_PENDING=0
+OLD_DB_KEPT=0
+MEDIA_STAGED=0
 cleanup_restore_db() {
-    if [[ "$RESTORE_DB_CREATED" -eq 1 && "$SWITCHED" -eq 0 ]]; then
+    if [[ "$SWITCHED" -eq 1 ]]; then
+        return
+    fi
+    if [[ "$MEDIA_STAGED" -eq 1 ]]; then
+        media_exec rm -rf "$MEDIA_STAGE" > /dev/null 2>&1 || true
+    fi
+    if [[ "$SWITCH_PENDING" -eq 1 ]]; then
+        # Abbruch (auch per Signal) zwischen den beiden Umbenennungen: der
+        # verifizierte Stand ist das Wertvollste im Spiel und wird NICHT
+        # verworfen. Stattdessen den bisherigen Stand zurueckholen.
+        echo "ABBRUCH waehrend der Umschaltung — der verifizierte Stand bleibt als '${RESTORE_DB}' erhalten." >&2
+        if [[ "$OLD_DB_KEPT" -eq 1 ]]; then
+            if db_psql -d postgres -c "ALTER DATABASE \"${OLD_DB}\" RENAME TO \"${POSTGRES_DB}\";" > /dev/null 2>&1; then
+                echo "Bisheriger Stand wurde unter '${POSTGRES_DB}' zurueckgeholt." >&2
+            else
+                echo "Rueckholen nicht moeglich (evtl. war die Sicherung noch nicht aktiv) — von Hand pruefen:" >&2
+                echo "  ALTER DATABASE \"${OLD_DB}\" RENAME TO \"${POSTGRES_DB}\";" >&2
+            fi
+        fi
+        echo "Alternativ den verifizierten Stand aktivieren:" >&2
+        echo "  ALTER DATABASE \"${RESTORE_DB}\" RENAME TO \"${POSTGRES_DB}\";" >&2
+        return
+    fi
+    if [[ "$RESTORE_DB_CREATED" -eq 1 ]]; then
         echo "Raeume Wiederherstellungs-Datenbank '${RESTORE_DB}' auf..." >&2
         db_psql -d postgres -c "DROP DATABASE IF EXISTS \"${RESTORE_DB}\";" > /dev/null 2>&1 || true
     fi
@@ -299,6 +365,10 @@ echo "DB-Import abgeschlossen."
 
 # Verifikation gegen den signierten Referenzstand. Erfolg wird erst nach diesem
 # Abgleich gemeldet; ein unvollstaendiger Import fuehrt nie zur Umschaltung.
+if [[ "$LEGACY_SET" -eq 1 ]]; then
+    echo "Altsatz-Modus: kein Manifest — der eingespielte Stand wird gegen KEINEN Referenzstand geprueft."
+    VERIFY_FAILED=0
+else
 echo "Verifiziere den eingespielten Stand gegen das Manifest..."
 VERIFY_FAILED=0
 for tbl in "${BACKUP_SET_TABLES[@]}"; do
@@ -320,6 +390,7 @@ if [[ "$VERIFY_FAILED" -ne 0 ]]; then
     exit 1
 fi
 echo "Verifikation bestanden: Wiederherstellungsstand entspricht dem Manifest."
+fi
 
 # Medien-Staging (Refs #720): neben dem aktiven App-Pfad entpacken und jede
 # Anhangzeile des WIEDERHERGESTELLTEN Stands gegen das Staging pruefen. Der
@@ -333,6 +404,7 @@ if [[ -n "$MEDIA_FILE" ]]; then
 
     media_exec rm -rf "$MEDIA_STAGE" "$MEDIA_OLD"
     media_exec mkdir -p "$MEDIA_STAGE"
+    MEDIA_STAGED=1
     echo "Entpacke Medien-Backup nach ${MEDIA_STAGE} ..."
     if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE" \
         | gunzip \
@@ -379,13 +451,15 @@ docker compose -f "$COMPOSE_FILE" stop web cron < /dev/null
 MEDIA_EXEC_CTX="maintenance"
 db_psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('${POSTGRES_DB}', '${RESTORE_DB}') AND pid <> pg_backend_pid();" > /dev/null
 
-OLD_DB_KEPT=0
 TARGET_EXISTS=$(db_psql -d postgres -t -A -c "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}';" 2>/dev/null \
     | tr -d '[:space:]' || true)
+SWITCH_PENDING=1
 if [[ "$TARGET_EXISTS" == "1" ]]; then
     echo "Sichere bisherigen Datenbankstand als '${OLD_DB}' ..."
-    db_psql -d postgres -c "ALTER DATABASE \"${POSTGRES_DB}\" RENAME TO \"${OLD_DB}\";" > /dev/null
+    # Flag VOR der Umbenennung: ein Abbruch unmittelbar danach darf den
+    # Rueckholpfad nicht verlieren (der Trap prueft die Sicherung ohnehin).
     OLD_DB_KEPT=1
+    db_psql -d postgres -c "ALTER DATABASE \"${POSTGRES_DB}\" RENAME TO \"${OLD_DB}\";" > /dev/null
 fi
 echo "Schalte auf den verifizierten Wiederherstellungsstand um..."
 if ! db_psql -d postgres -c "ALTER DATABASE \"${RESTORE_DB}\" RENAME TO \"${POSTGRES_DB}\";" > /dev/null; then
@@ -396,6 +470,7 @@ if ! db_psql -d postgres -c "ALTER DATABASE \"${RESTORE_DB}\" RENAME TO \"${POST
     exit 1
 fi
 SWITCHED=1
+SWITCH_PENDING=0
 echo "DB-Wiederherstellung abgeschlossen."
 
 if [[ -n "$HWM_FILE" ]]; then
@@ -425,6 +500,7 @@ if [[ -n "$MEDIA_FILE" ]]; then
         echo "FEHLER: Validierter Medienbestand konnte nicht aktiviert werden." >&2
         exit 1
     fi
+    MEDIA_STAGED=0
     echo "Medien-Wiederherstellung abgeschlossen."
 fi
 
@@ -434,3 +510,6 @@ if [[ "$OLD_DB_KEPT" -eq 1 ]]; then
 fi
 echo "Hinweis: web- und cron-Container sind gestoppt (Schreibruhe) — Migrationen fahren, dann Stack starten."
 echo "RESTORE-SATZ WIEDERHERGESTELLT: ${BACKUP_TIMESTAMP}"
+if [[ "$LEGACY_SET" -eq 1 ]]; then
+    echo "HINWEIS: Altsatz-Modus — ohne Manifest ist dieser Lauf KEIN vollstaendiger Satznachweis (keine Satzbindung, kein Zeilenabgleich)."
+fi

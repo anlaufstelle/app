@@ -239,10 +239,13 @@ def test_changelog_has_one_fixed_bullet_per_ticket_position() -> None:
             "— Guard nur im Dev-Repo relevant"
         )
     # Der Guard darf nicht vom Release-Stand abhaengen: beim Cut wandern die
-    # Bullets aus ``[Unreleased]`` in den Versionsblock (Lehre 88).
+    # Bullets aus ``[Unreleased]`` in den Versionsblock (Lehre 88). Die Aussage
+    # "die Bullets stehen unter ### Fixed" bleibt erhalten: es wird ueber ALLE
+    # Fixed-Abschnitte summiert, nicht ueber die ganze Datei.
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    fixed_sections = [part.split("###", maxsplit=1)[0] for part in changelog.split("### Fixed")[1:]]
 
-    assert changelog.count("[#2221]") == 7
+    assert sum(section.count("[#2221]") for section in fixed_sections) == 7
 
 
 def test_prod_drill_accepts_explicit_backup_timestamp() -> None:

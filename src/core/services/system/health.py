@@ -134,11 +134,13 @@ def _parse_backup_manifest(manifest: Path) -> dict[str, str] | None:
 def _is_complete_backup_set(manifest: Path) -> bool:
     """True, wenn das Manifest einen vollstaendig veroeffentlichten Satz beschreibt.
 
-    Vertrag (identisch zu ``scripts/ops/lib/backup-set.sh``): signiertes,
-    nicht-leeres Manifest mit Satzkennung, Dump-Hash und den Zeilenzahlen aller
-    Pflichttabellen; die referenzierten Artefakte liegen daneben. Die Hashes
-    selbst prueft diese Funktion NICHT — sie laeuft im Request-Cycle und darf
-    keine Gigabytes lesen; das tun ``backup.sh --verify`` und ``restore.sh``.
+    Vertrag (Teilmenge von ``scripts/ops/lib/backup-set.sh``): nicht-leeres
+    Manifest MIT vorhandenem ``.hmac``-Sidecar, Satzkennung, Dump-Hash und den
+    Zeilenzahlen aller Pflichttabellen; die referenzierten Artefakte liegen
+    daneben. Geprueft wird nur die EXISTENZ des Sidecars, nicht die Signatur,
+    und keine Hashes: der HMAC-Schluessel liegt nicht im web-Container, und die
+    Funktion laeuft im Request-Cycle und darf keine Gigabytes lesen. Signatur
+    und Hashes pruefen ``backup.sh --verify`` und ``restore.sh``.
     """
     if not manifest.is_file() or manifest.stat().st_size == 0:
         return False

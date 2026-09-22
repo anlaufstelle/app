@@ -33,7 +33,20 @@ REAL_OPENSSL = shutil.which("openssl")
 
 # Kommandos, die den vorhandenen Zielbestand veraendern. Keines davon darf ohne
 # Bestaetigung im Aktionsprotokoll auftauchen.
-DESTRUCTIVE_MARKERS = ("dropdb", "createdb", "ON_ERROR_STOP=1 --single-transaction", " mv ", "rm -rf")
+DESTRUCTIVE_MARKERS = (
+    "dropdb",
+    "createdb",
+    "DROP DATABASE",
+    "CREATE DATABASE",
+    "RENAME TO",
+    "ON_ERROR_STOP=1 --single-transaction",
+    " mv ",
+    "rm -rf",
+)
+# Dienste anzuhalten ist im dokumentierten Block eine bewusste Vorarbeit des
+# Betreibers (der Block stoppt web/cron selbst); ein direkter Skriptaufruf ohne
+# Bestaetigung darf dagegen auch das nicht tun.
+SERVICE_MARKERS = ("stop web cron",)
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -175,11 +188,11 @@ def _run_block(root: Path, bindir: Path, action_log: Path, block: str, tmp_path:
     )
 
 
-def _destructive_entries(action_log: Path) -> list[str]:
+def _destructive_entries(action_log: Path, markers: tuple[str, ...] = DESTRUCTIVE_MARKERS) -> list[str]:
     return [
         line
         for line in action_log.read_text(encoding="utf-8").splitlines()
-        if any(marker in line for marker in DESTRUCTIVE_MARKERS)
+        if any(marker in line for marker in markers)
     ]
 
 
@@ -206,6 +219,7 @@ def test_documented_block_without_switch_stops_before_every_destructive_step(tmp
     result = _run_block(root, bindir, action_log, stripped, tmp_path, stdin=subprocess.DEVNULL)
 
     assert result.returncode != 0
+    # Der Block stoppt web/cron selbst — gemeint sind die Datenschritte.
     assert _destructive_entries(action_log) == []
 
 
@@ -272,4 +286,4 @@ def test_missing_or_negative_answer_fails_closed(tmp_path: Path, answer: str) ->
     )
 
     assert result.returncode != 0
-    assert _destructive_entries(action_log) == []
+    assert _destructive_entries(action_log, DESTRUCTIVE_MARKERS + SERVICE_MARKERS) == []

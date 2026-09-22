@@ -1245,10 +1245,23 @@ Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust
 
 Warum kein Cross-Restore: Der `--dev`-Zweig sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Der `--prod`-Zweig sucht `anlaufstelle_*.sql.gz.enc`, prueft den `.hmac`-Sidecar und spielt via `gunzip | psql` ein — ein `dump-*.pgc.enc` traegt keinen Sidecar (`backup_verify_hmac` bricht ab) und ist Binaerformat. Ein Lauf gegen das jeweils fremde Format schlaegt also fehl. Wer keinen vollen Drill fahren will, nutzt fuer den Prod-Pfad `scripts/ops/backup.sh --verify` (Satzauswahl ueber das signierte Manifest, Satzbindung wie beim Restore, HMAC + Probe-Decrypt + Zeilenabgleich gegen die Live-DB). Fehlt das Manifest oder gehoert das Medienarchiv zu einem anderen Satz, endet der Lauf mit Exit != 0.
 
-**Versionsgrenze:** `restore.sh` akzeptiert aus Kompatibilitaetsgruenden ein
-Altbackup ohne Manifest. Der aktuelle Prod-Drill verlangt das Manifest dagegen
-zwingend und bricht in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Ein solcher
-Altsatz kann den heutigen Vollstaendigkeitsnachweis daher nicht erbringen.
+**Versionsgrenze (geaendert in 0.99.2):** Das signierte Manifest ist fuer
+`restore.sh` jetzt **Pflicht** — ohne Manifest gibt es keine Satzbindung
+(Zeitstempel, Dump-/Medien-Hashes) und keinen Zeilenzahl-Abgleich, und der Lauf
+bricht ab. Saetze aus Versionen vor 0.99.1 tragen kein Manifest; Weekly- und
+Monthly-Saetze werden 28 bzw. 90 Tage gehalten, solche Altsaetze koennen also
+noch in der Ablage liegen. Fuer sie gibt es den ausdruecklichen Notfall-Schalter
+`./scripts/ops/restore.sh --allow-missing-manifest <dump> [medien]`: Er wirkt nur,
+wenn gar kein Manifest existiert (ein vorhandenes Manifest wird immer erzwungen),
+verlangt dieselbe Bestaetigung wie jeder Restore, prueft weiterhin die
+HMAC-Sidecars von Dump und Medien, bindet das Medienarchiv ueber den Zeitstempel
+im Dateinamen an den Dump und ersetzt den Manifest-Abgleich durch eine deutliche
+Warnung vor der Bestaetigung sowie eine `HINWEIS: Altsatz-Modus`-Zeile am Ende.
+Nach so einem Restore die Vollstaendigkeit von Hand pruefen
+([Disaster-Recovery §7](disaster-recovery.md#7-smoke-verifikation-nach-restore)).
+`backup.sh --verify` und `restore-drill.sh --prod` verlangen das Manifest
+unveraendert zwingend; ein Altsatz kann den Vollstaendigkeitsnachweis daher
+nicht erbringen.
 
 Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
 

@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: the version boundary states that the signed manifest is mandatory for `restore.sh` and describes the `--allow-missing-manifest` emergency switch for sets created before 0.99.1 (#2290).
 > Synchronization update 2026-09-22: § 6.6/§ 6.7 document the drill exit codes — a run with skipped mandatory steps ends with exit code 2 and a closing line that is not a success (#2316).
 > Synchronization update 2026-09-22: § 6.6 notes that `backup.sh --verify` selects the set through its signed manifest and enforces the same set binding as the restore (#2292).
 > Synchronization update 2026-09-22: § 3.3 describes that a backup set is published only after a complete run (work directory, signed manifest last) and that the operational “last backup” state counts complete sets only (#2291).
@@ -1252,10 +1253,20 @@ Both formats are restored as the Postgres superuser (`postgres`, via local socke
 
 Why no cross-restore: The `--dev` branch searches by glob for `dump-*.pgc.enc` and pipes into `pg_restore` — a plain-SQL backup (`*.sql.gz.enc`) is simply not found this way and is also not a valid `pg_restore` archive. The `--prod` branch searches for `anlaufstelle_*.sql.gz.enc`, checks the `.hmac` sidecar, and restores via `gunzip | psql` — a `dump-*.pgc.enc` carries no sidecar (`backup_verify_hmac` aborts) and is binary format. A run against the wrong format therefore fails. Anyone who doesn't want to run a full drill uses `scripts/ops/backup.sh --verify` for the prod path (set selection through the signed manifest, the same set binding the restore enforces, HMAC + probe decrypt + row comparison against the live DB). If the manifest is missing or the media archive belongs to a different set, the run exits non-zero.
 
-**Version boundary:** For compatibility, `restore.sh` accepts an older-format backup without a
-manifest. The current prod drill requires the manifest and aborts in step 0
-with `Zeilenzahl-Manifest fehlt` when it is absent. Such an older set therefore
-cannot provide today's completeness evidence.
+**Version boundary (changed in 0.99.2):** The signed manifest is now **mandatory**
+for `restore.sh` — without it there is no set binding (timestamp, dump/media
+hashes) and no row-count comparison, and the run aborts. Sets created before
+0.99.1 carry no manifest; weekly and monthly sets are kept for 28 and 90 days, so
+such older sets may still be in the store. For them there is an explicit
+emergency switch `./scripts/ops/restore.sh --allow-missing-manifest <dump> [media]`:
+it only takes effect when no manifest exists at all (an existing manifest is
+always enforced), requires the same confirmation as any restore, still checks the
+HMAC sidecars of dump and media, binds the media archive to the dump through the
+timestamp in its filename, and replaces the manifest comparison with a clear
+warning before the confirmation plus a `HINWEIS: Altsatz-Modus` line at the end.
+After such a restore, verify completeness manually (Disaster Recovery §7, German).
+`backup.sh --verify` and `restore-drill.sh --prod` still require the manifest, so
+an older set cannot provide the completeness evidence.
 
 The backup files are `0600` and owned by root — therefore run **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
@@ -2881,4 +2892,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: a66e6a796a1aae652f6535b954309f4ce2c57a0e -->
+<!-- source-hash: 3acff6bdbc9a2261e0d4b20e659ba1c8c69e00d2 -->
