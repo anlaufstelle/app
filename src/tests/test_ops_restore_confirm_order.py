@@ -222,7 +222,7 @@ def test_restore_script_confirms_before_any_destructive_command() -> None:
     restore = (OPS_DIR / "restore.sh").read_text(encoding="utf-8")
     confirm_index = restore.index("RESTORE_CONFIRMED=1")
 
-    for marker in ("dropdb", "createdb", "ON_ERROR_STOP=1 --single-transaction"):
+    for marker in ("--single-transaction", "RENAME TO", "stop web cron"):
         assert restore.index(marker) > confirm_index, f"{marker} steht vor der Bestaetigung"
 
 

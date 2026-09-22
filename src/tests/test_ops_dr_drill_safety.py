@@ -22,7 +22,8 @@ def test_restore_fails_closed_and_drill_uses_authenticated_manifest_counts() -> 
     drill = _script("restore-drill.sh")
     completeness = drill.split("# Schritt 3b:", maxsplit=1)[1].split("# Schritt 4:", maxsplit=1)[0]
 
-    assert 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$POSTGRES_DB"' in restore
+    # Refs #2290: der Import laeuft in die Wiederherstellungs-DB, nicht ins Ziel.
+    assert 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$RESTORE_DB"' in restore
     assert 'MANIFEST_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}.manifest"' in backup
     assert 'backup_write_hmac "$MANIFEST_FILE"' in backup
     assert "EXPECTED_COUNT=" in completeness
@@ -37,7 +38,10 @@ def test_media_restore_stages_archive_at_app_path_and_checks_every_attachment() 
     assert 'tar -C "$MEDIA_STAGE" --strip-components=1 -xf -' in restore
     assert "SELECT facility_id, storage_filename FROM core_attachment" in restore
     assert 'test -f "${MEDIA_STAGE}/$attachment_path"' in restore
-    assert restore.index('mv "$MEDIA_STAGE" "$MEDIA_ROOT_CONTAINER"') < restore.index('rm -rf "$MEDIA_OLD"')
+    # Refs #2290: der Tausch laeuft als ein sh-Aufruf im maintenance-Container.
+    switch = restore.split("# Medien-Aktivierung", maxsplit=1)[1]
+    assert switch.index('mv "$stage" "$live"') < switch.index('rm -rf "$old"')
+    assert restore.index("SELECT facility_id, storage_filename") < restore.index("# Medien-Aktivierung")
 
 
 def test_offsite_sync_covers_all_retention_tiers_before_rotation() -> None:

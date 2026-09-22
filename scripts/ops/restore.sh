@@ -29,6 +29,9 @@ fi
 # A4.3: Encrypt-then-MAC-Helfer (backup_verify_hmac).
 # shellcheck source=scripts/ops/_backup_common.sh
 source "${SCRIPT_DIR}/_backup_common.sh"
+# Satz-/Manifestpruefung, geteilt mit ``backup.sh --verify`` (Refs #2290, #2292).
+# shellcheck source=scripts/ops/lib/backup-set.sh
+source "${SCRIPT_DIR}/lib/backup-set.sh"
 
 # Bestaetigung (Refs #2318): Ein per Pipe zugefuehrtes "ja" wurde frueher von
 # einem vorgelagerten ``docker compose exec -T``-Aufruf verbraucht; die Kette
@@ -73,39 +76,15 @@ fi
 MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/data/media}"
 backup_require_real_key
 
-# Ein vorhandenes Manifest ist Teil des authentifizierten Backup-Satzes. Wenn
-# es einen Medien-Hash enthaelt, sind Medien-Archiv und Sidecar verpflichtend;
-# nur ein Manifest ohne Medien-Hash beschreibt einen DB-only-Satz.
-MANIFEST_FILE="${BACKUP_FILE%.sql.gz.enc}.manifest"
-MANIFEST_MEDIA_SHA256=""
-if [[ -f "$MANIFEST_FILE" ]]; then
-    echo "Prüfe Integrität des Backup-Manifests (HMAC)..."
-    backup_verify_hmac "$MANIFEST_FILE"
-    while IFS='=' read -r key value extra; do
-        if [[ -n "$extra" ]]; then
-            echo "FEHLER: Backup-Manifest ungueltig: ${MANIFEST_FILE}" >&2
-            exit 1
-        fi
-        if [[ "$key" == "media_sha256" ]]; then
-            MANIFEST_MEDIA_SHA256="$value"
-        fi
-    done < "$MANIFEST_FILE"
-    if [[ -n "$MANIFEST_MEDIA_SHA256" ]]; then
-        if [[ ! "$MANIFEST_MEDIA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-            echo "FEHLER: Manifest-Medien-Hash ist ungueltig: ${MANIFEST_FILE}" >&2
-            exit 1
-        elif [[ -z "$MEDIA_FILE" || ! -f "$MEDIA_FILE" ]]; then
-            echo "FEHLER: Satz unvollstaendig: Medien-Archiv fehlt." >&2
-            exit 1
-        elif [[ ! -f "${MEDIA_FILE}.hmac" ]]; then
-            echo "FEHLER: Satz unvollstaendig: Medien-Sidecar fehlt: ${MEDIA_FILE}.hmac" >&2
-            exit 1
-        elif [[ "$(sha256sum "$MEDIA_FILE" | awk '{print $1}')" != "$MANIFEST_MEDIA_SHA256" ]]; then
-            echo "FEHLER: Manifest-Medien-Hash passt nicht zum gewaehlten Satz: ${MEDIA_FILE}" >&2
-            exit 1
-        fi
-    fi
-fi
+# Der Backup-Satz wird als Ganzes authentifiziert: signiertes Manifest,
+# Satzkennung, Dump-Hash und — sofern im Manifest gebunden — Medien-Archiv samt
+# Sidecar und Hash. Dieselbe Pruefung fuehrt ``backup.sh --verify`` aus, damit
+# Verify und Restore nicht auseinanderlaufen (Refs #2290, #2292).
+MANIFEST_FILE="$(backup_set_manifest_path "$BACKUP_FILE")"
+echo "Prüfe Integrität und Bindung des Backup-Satzes (Manifest, HMAC)..."
+backup_set_load "$MANIFEST_FILE"
+backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE"
+MANIFEST_MEDIA_SHA256="$BACKUP_SET_MEDIA_SHA256"
 
 if [[ -n "$MEDIA_FILE" && ! -f "$MEDIA_FILE" ]]; then
     echo "Fehler: Medien-Backup-Datei nicht gefunden: $MEDIA_FILE"
@@ -136,6 +115,8 @@ if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
         echo "FEHLER: Zum DB-Backup gehoerender Audit-HWM ist leer: ${HWM_FILE}" >&2
         exit 1
     fi
+    # Der Anker ist Teil des signierten Satzes (Refs #2290).
+    backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE" "$HWM_FILE"
 fi
 
 # Der Plain-SQL-Dump enthaelt OWNER-TO-/FORCE-RLS-Statements und COPY in
@@ -143,6 +124,42 @@ fi
 # DDL-Owner-Recht). Bootstrap-Superuser via Local-Socket-Trust im
 # db-Container — wie scripts/ops/restore-drill.sh (Review N4).
 SU_USER="${POSTGRES_SUPERUSER:-postgres}"
+
+# Wiederherstellungsweg (Refs #2290): Der Plain-SQL-Dump enthaelt keine
+# Bereinigungsanweisungen. In eine bereits migrierte Zielinstallation
+# eingespielt, kollidieren seine CREATE-Anweisungen mit den vorhandenen
+# Objekten; der Import bricht ab. Deshalb wird IMMER zuerst eine frische
+# Wiederherstellungs-Datenbank gefuellt und gegen das Manifest verifiziert —
+# erst danach wird unter Schreibruhe umgeschaltet (Rename). Der bisherige
+# Bestand bleibt als eigene Datenbank erhalten und wird nicht geloescht.
+SWITCH_STAMP="$(date +%Y%m%d%H%M%S)"
+RESTORE_DB="${POSTGRES_DB}_restore_$$"
+OLD_DB="${POSTGRES_DB}_vor_restore_${SWITCH_STAMP}"
+for candidate in "$RESTORE_DB" "$OLD_DB"; do
+    if [[ ${#candidate} -gt 63 ]]; then
+        echo "FEHLER: Abgeleiteter Datenbankname ist laenger als 63 Zeichen: ${candidate}" >&2
+        echo "  POSTGRES_DB kuerzen — PostgreSQL schneidet laengere Namen ab." >&2
+        exit 1
+    fi
+done
+
+# Alle Steuerabfragen laufen ohne stdin, damit sie keine durchgereichte
+# Bestaetigung aufbrauchen (Refs #2318).
+db_psql() {
+    docker compose -f "$COMPOSE_FILE" exec -T db \
+        psql -v ON_ERROR_STOP=1 -U "$SU_USER" "$@" < /dev/null
+}
+
+# Medien-Kommandos laufen vor der Schreibruhe im laufenden web-Container und
+# danach in einem Einweg-``maintenance``-Container (web ist dann gestoppt).
+MEDIA_EXEC_CTX="web"
+media_exec() {
+    if [[ "$MEDIA_EXEC_CTX" == "web" ]]; then
+        docker compose -f "$COMPOSE_FILE" exec -T web "$@" < /dev/null
+    else
+        docker compose -f "$COMPOSE_FILE" run --rm --entrypoint "$1" -T maintenance "${@:2}" < /dev/null
+    fi
+}
 
 validate_or_install_hwm() {
     local mode="$1"
@@ -221,7 +238,10 @@ if [[ -n "$MEDIA_FILE" ]]; then
     fi
 fi
 
-echo "WARNUNG: Die Datenbank '${POSTGRES_DB}' wird überschrieben!"
+echo "WARNUNG: Die Datenbank '${POSTGRES_DB}' wird auf den Backup-Stand umgeschaltet!"
+echo "Wiederherstellungs-DB: ${RESTORE_DB} (wird gefuellt und verifiziert)"
+echo "Bisheriger Stand bleibt als: ${OLD_DB}"
+echo "Schreibruhe: web- und cron-Container werden vor der Umschaltung gestoppt."
 echo "DB-Backup:    ${BACKUP_FILE}"
 if [[ -n "$HWM_FILE" ]]; then
     echo "Audit-HWM:    ${HWM_FILE}"
@@ -247,34 +267,135 @@ fi
 
 # --- Ab hier beginnen die zerstoerenden Schritte (Refs #2318) --------------
 
-# Zielvorbereitung: erst Schreibruhe herstellen, dann die Ziel-Datenbank neu
-# anlegen. Beides stand frueher als Kopiervorlage in der DR-Doku VOR dem Aufruf
-# dieses Skripts und lief damit vor jeder Bestaetigung.
-echo "Bereite Ziel-Datenbank '${POSTGRES_DB}' vor (Verbindungen beenden, DB neu anlegen)..."
-docker compose -f "$COMPOSE_FILE" exec -T db \
-    psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d postgres \
-    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB}' AND pid <> pg_backend_pid();" \
-    < /dev/null > /dev/null
-docker compose -f "$COMPOSE_FILE" exec -T db sh -c '
-    set -eu
-    su_user="$1"; target="$2"; owner="$3"
-    dropdb -U "$su_user" --if-exists "$target"
-    if [ -n "$owner" ]; then
-        createdb -U "$su_user" -O "$owner" "$target"
-    else
-        createdb -U "$su_user" "$target"
+RESTORE_DB_CREATED=0
+SWITCHED=0
+cleanup_restore_db() {
+    if [[ "$RESTORE_DB_CREATED" -eq 1 && "$SWITCHED" -eq 0 ]]; then
+        echo "Raeume Wiederherstellungs-Datenbank '${RESTORE_DB}' auf..." >&2
+        db_psql -d postgres -c "DROP DATABASE IF EXISTS \"${RESTORE_DB}\";" > /dev/null 2>&1 || true
     fi
-' sh "$SU_USER" "$POSTGRES_DB" "${POSTGRES_ADMIN_USER:-}" < /dev/null
+}
+trap cleanup_restore_db EXIT
 
-# DB restore — beide HMAC-Sidecars wurden in der Vorpruefung verifiziert.
-echo "Stelle DB-Backup wieder her..."
-# Direkt vor der Nutzung erneut pruefen, damit die interaktive Wartezeit das
-# Pruef-Nutzungs-Fenster nicht unnoetig vergroessert (Refs #2195).
+echo "Lege Wiederherstellungs-Datenbank '${RESTORE_DB}' an..."
+db_psql -d postgres -c "DROP DATABASE IF EXISTS \"${RESTORE_DB}\";" > /dev/null
+RESTORE_DB_CREATED=1
+if [[ -n "${POSTGRES_ADMIN_USER:-}" ]]; then
+    db_psql -d postgres -c "CREATE DATABASE \"${RESTORE_DB}\" OWNER \"${POSTGRES_ADMIN_USER}\";" > /dev/null
+else
+    db_psql -d postgres -c "CREATE DATABASE \"${RESTORE_DB}\";" > /dev/null
+fi
+
+# DB-Import in die Wiederherstellungs-DB — beide HMAC-Sidecars wurden in der
+# Vorpruefung verifiziert. Direkt vor der Nutzung erneut pruefen, damit die
+# interaktive Wartezeit das Pruef-Nutzungs-Fenster nicht vergroessert (Refs #2195).
+echo "Stelle DB-Backup in '${RESTORE_DB}' wieder her..."
 backup_verify_hmac "$BACKUP_FILE"
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE" \
     | gunzip \
     | docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$POSTGRES_DB"
+        psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$RESTORE_DB"
+echo "DB-Import abgeschlossen."
+
+# Verifikation gegen den signierten Referenzstand. Erfolg wird erst nach diesem
+# Abgleich gemeldet; ein unvollstaendiger Import fuehrt nie zur Umschaltung.
+echo "Verifiziere den eingespielten Stand gegen das Manifest..."
+VERIFY_FAILED=0
+for tbl in "${BACKUP_SET_TABLES[@]}"; do
+    RESTORED_COUNT=$(db_psql -d "$RESTORE_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null \
+        | tr -d '[:space:]' || true)
+    EXPECTED_COUNT="${BACKUP_SET_COUNTS[$tbl]}"
+    if [[ ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
+        echo "  FEHLER ${tbl}: im Wiederherstellungsstand nicht abfragbar."
+        VERIFY_FAILED=1
+    elif [[ "$RESTORED_COUNT" -ne "$EXPECTED_COUNT" ]]; then
+        echo "  FEHLER ${tbl}: Restore=${RESTORED_COUNT}, Manifest=${EXPECTED_COUNT}."
+        VERIFY_FAILED=1
+    else
+        echo "  OK ${tbl}: ${RESTORED_COUNT} Zeilen (Manifest ${EXPECTED_COUNT})."
+    fi
+done
+if [[ "$VERIFY_FAILED" -ne 0 ]]; then
+    echo "FEHLER: Wiederhergestellter Stand passt nicht zum Manifest — keine Umschaltung." >&2
+    exit 1
+fi
+echo "Verifikation bestanden: Wiederherstellungsstand entspricht dem Manifest."
+
+# Medien-Staging (Refs #720): neben dem aktiven App-Pfad entpacken und jede
+# Anhangzeile des WIEDERHERGESTELLTEN Stands gegen das Staging pruefen. Der
+# bisherige Bestand bleibt bis zur Aktivierung unangetastet.
+if [[ -n "$MEDIA_FILE" ]]; then
+    MEDIA_STAGE="${MEDIA_ROOT_CONTAINER}.restore.$$"
+    MEDIA_OLD="${MEDIA_ROOT_CONTAINER}.old.$$"
+
+    echo "Prüfe Integrität des Medien-Backups erneut unmittelbar vor der Nutzung (HMAC)..."
+    backup_verify_hmac "$MEDIA_FILE"
+
+    media_exec rm -rf "$MEDIA_STAGE" "$MEDIA_OLD"
+    media_exec mkdir -p "$MEDIA_STAGE"
+    echo "Entpacke Medien-Backup nach ${MEDIA_STAGE} ..."
+    if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE" \
+        | gunzip \
+        | docker compose -f "$COMPOSE_FILE" exec -T web \
+            tar -C "$MEDIA_STAGE" --strip-components=1 -xf -; then
+        media_exec rm -rf "$MEDIA_STAGE"
+        echo "FEHLER: Medien-Backup konnte nicht vollstaendig entpackt werden." >&2
+        exit 1
+    fi
+
+    # Jede restaurierte Anhangzeile muss am konfigurierten App-Pfad eine Datei
+    # besitzen. Erst nach diesem fail-closed Abgleich wird der Bestand getauscht.
+    ATTACHMENT_PATHS=$(db_psql -d "$RESTORE_DB" -t -A \
+        -F '|' -c "SELECT facility_id, storage_filename FROM core_attachment ORDER BY facility_id, storage_filename;")
+    while IFS='|' read -r facility_id storage_filename; do
+        [[ -z "$facility_id" && -z "$storage_filename" ]] && continue
+        attachment_path="${facility_id}/${storage_filename}"
+        case "$attachment_path" in
+            /* | ../* | */../* | */..)
+                media_exec rm -rf "$MEDIA_STAGE"
+                echo "FEHLER: Unsicherer Anhangpfad in core_attachment: ${attachment_path}" >&2
+                exit 1
+                ;;
+        esac
+        if [[ -z "$facility_id" || -z "$storage_filename" || "$facility_id" == */* || "$storage_filename" == */* ]]; then
+            media_exec rm -rf "$MEDIA_STAGE"
+            echo "FEHLER: Ungueltiger Anhangpfad in core_attachment: ${attachment_path}" >&2
+            exit 1
+        fi
+        if ! media_exec test -f "${MEDIA_STAGE}/$attachment_path"; then
+            media_exec rm -rf "$MEDIA_STAGE"
+            echo "FEHLER: Datei fuer DB-Anhang fehlt im Medien-Backup: ${attachment_path}" >&2
+            exit 1
+        fi
+    done <<< "$ATTACHMENT_PATHS"
+fi
+
+# --- Schreibruhe + Umschaltung ---------------------------------------------
+# Erst jetzt wird der bisherige Bestand angefasst. Ohne gestoppte Schreiber
+# schlaegt das Umbenennen an offenen Verbindungen fehl — und ein Schreibzugriff
+# zwischen Pruefung und Umschaltung waere nach dem Restore verloren.
+echo "Stoppe schreibende Dienste (Schreibruhe fuer die Umschaltung)..."
+docker compose -f "$COMPOSE_FILE" stop web cron < /dev/null
+MEDIA_EXEC_CTX="maintenance"
+db_psql -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('${POSTGRES_DB}', '${RESTORE_DB}') AND pid <> pg_backend_pid();" > /dev/null
+
+OLD_DB_KEPT=0
+TARGET_EXISTS=$(db_psql -d postgres -t -A -c "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}';" 2>/dev/null \
+    | tr -d '[:space:]' || true)
+if [[ "$TARGET_EXISTS" == "1" ]]; then
+    echo "Sichere bisherigen Datenbankstand als '${OLD_DB}' ..."
+    db_psql -d postgres -c "ALTER DATABASE \"${POSTGRES_DB}\" RENAME TO \"${OLD_DB}\";" > /dev/null
+    OLD_DB_KEPT=1
+fi
+echo "Schalte auf den verifizierten Wiederherstellungsstand um..."
+if ! db_psql -d postgres -c "ALTER DATABASE \"${RESTORE_DB}\" RENAME TO \"${POSTGRES_DB}\";" > /dev/null; then
+    if [[ "$OLD_DB_KEPT" -eq 1 ]]; then
+        db_psql -d postgres -c "ALTER DATABASE \"${OLD_DB}\" RENAME TO \"${POSTGRES_DB}\";" > /dev/null || true
+    fi
+    echo "FEHLER: Umschalten auf den Wiederherstellungsstand fehlgeschlagen — Ziel unveraendert." >&2
+    exit 1
+fi
+SWITCHED=1
 echo "DB-Wiederherstellung abgeschlossen."
 
 if [[ -n "$HWM_FILE" ]]; then
@@ -283,72 +404,33 @@ if [[ -n "$HWM_FILE" ]]; then
     echo "Audit-HWM wiederhergestellt: ${HWM_FILE##*/}"
 fi
 
-# Medien-Restore (Refs #720)
+# Medien-Aktivierung: ein einziger Tausch im Medien-Volume, mit Ruecknahme bei
+# Fehlschlag. Laeuft im maintenance-Container, weil web fuer die Schreibruhe
+# gestoppt ist.
 if [[ -n "$MEDIA_FILE" ]]; then
-    MEDIA_STAGE="${MEDIA_ROOT_CONTAINER}.restore.$$"
-    MEDIA_OLD="${MEDIA_ROOT_CONTAINER}.old.$$"
-
-    echo "Prüfe Integrität des Medien-Backups erneut unmittelbar vor der Nutzung (HMAC)..."
-    backup_verify_hmac "$MEDIA_FILE"
-
-    # Zuerst neben dem aktiven App-Pfad entpacken. Der bisherige Bestand bleibt
-    # bis zur vollstaendigen Extraktion und zum DB-/Datei-Abgleich unangetastet.
-    docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE" "$MEDIA_OLD"
-    docker compose -f "$COMPOSE_FILE" exec -T web mkdir -p "$MEDIA_STAGE"
-    echo "Entpacke Medien-Backup nach ${MEDIA_STAGE} ..."
-    if ! openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE" \
-        | gunzip \
-        | docker compose -f "$COMPOSE_FILE" exec -T web \
-            tar -C "$MEDIA_STAGE" --strip-components=1 -xf -; then
-        docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE"
-        echo "FEHLER: Medien-Backup konnte nicht vollstaendig entpackt werden." >&2
-        exit 1
-    fi
-
-    # Jede restaurierte Anhangzeile muss am konfigurierten App-Pfad eine Datei
-    # besitzen. Erst nach diesem fail-closed Abgleich wird der Bestand getauscht.
-    ATTACHMENT_PATHS=$(docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d "$POSTGRES_DB" -t -A \
-        -F '|' -c "SELECT facility_id, storage_filename FROM core_attachment ORDER BY facility_id, storage_filename;")
-    while IFS='|' read -r facility_id storage_filename; do
-        [[ -z "$facility_id" && -z "$storage_filename" ]] && continue
-        attachment_path="${facility_id}/${storage_filename}"
-        case "$attachment_path" in
-            /* | ../* | */../* | */..)
-                docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE"
-                echo "FEHLER: Unsicherer Anhangpfad in core_attachment: ${attachment_path}" >&2
-                exit 1
-                ;;
-        esac
-        if [[ -z "$facility_id" || -z "$storage_filename" || "$facility_id" == */* || "$storage_filename" == */* ]]; then
-            docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE"
-            echo "FEHLER: Ungueltiger Anhangpfad in core_attachment: ${attachment_path}" >&2
+    if ! docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh -T maintenance -c '
+        set -eu
+        stage="$1"; live="$2"; old="$3"
+        if [ -e "$live" ]; then
+            mv "$live" "$old"
+        fi
+        if ! mv "$stage" "$live"; then
+            if [ -e "$old" ]; then
+                mv "$old" "$live"
+            fi
             exit 1
         fi
-        if ! docker compose -f "$COMPOSE_FILE" exec -T web \
-            test -f "${MEDIA_STAGE}/$attachment_path"; then
-            docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE"
-            echo "FEHLER: Datei fuer DB-Anhang fehlt im Medien-Backup: ${attachment_path}" >&2
-            exit 1
-        fi
-    done <<< "$ATTACHMENT_PATHS"
-
-    HAD_OLD_MEDIA=0
-    if docker compose -f "$COMPOSE_FILE" exec -T web test -e "$MEDIA_ROOT_CONTAINER"; then
-        docker compose -f "$COMPOSE_FILE" exec -T web mv "$MEDIA_ROOT_CONTAINER" "$MEDIA_OLD"
-        HAD_OLD_MEDIA=1
-    fi
-    if ! docker compose -f "$COMPOSE_FILE" exec -T web mv "$MEDIA_STAGE" "$MEDIA_ROOT_CONTAINER"; then
-        if [[ "$HAD_OLD_MEDIA" -eq 1 ]]; then
-            docker compose -f "$COMPOSE_FILE" exec -T web mv "$MEDIA_OLD" "$MEDIA_ROOT_CONTAINER" || true
-        fi
+        rm -rf "$old"
+    ' sh "$MEDIA_STAGE" "$MEDIA_ROOT_CONTAINER" "$MEDIA_OLD" < /dev/null; then
         echo "FEHLER: Validierter Medienbestand konnte nicht aktiviert werden." >&2
         exit 1
-    fi
-    if [[ "$HAD_OLD_MEDIA" -eq 1 ]]; then
-        docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_OLD"
     fi
     echo "Medien-Wiederherstellung abgeschlossen."
 fi
 
+if [[ "$OLD_DB_KEPT" -eq 1 ]]; then
+    echo "Bisheriger Datenbankstand gesichert als: ${OLD_DB}"
+    echo "  Nach erfolgreicher Abnahme loeschbar: DROP DATABASE \"${OLD_DB}\";"
+fi
+echo "Hinweis: web- und cron-Container sind gestoppt (Schreibruhe) — Migrationen fahren, dann Stack starten."
 echo "RESTORE-SATZ WIEDERHERGESTELLT: ${BACKUP_TIMESTAMP}"

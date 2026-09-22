@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: § 2.3 follows the restore path that fills a fresh recovery database, verifies it against the signed manifest and switches over under write quiescence, keeps the previous database and requires the explicit confirmation switch (#2290, #2318).
 > Synchronization update 2026-09-22: § 5.8 explains the Django 6.1 deployment check `mail.E001` (SMTP backend required on production hosts, behaviour without a reachable relay, console backend only in the live-dev and demo settings) (#2326).
 > Synchronization update 2026-09-21: § 7.4 explains that an unknown ClamAV signature age stays `unknown` during startup and that the compliance check shows the freshclam log command as its action hint (#2246).
 > Synchronization update 2026-09-18: § 5.8 states that implicit TLS/SMTPS on port 465 is supported via `EMAIL_USE_SSL` and mutually exclusive with `EMAIL_USE_TLS` (#2267).
@@ -232,21 +233,31 @@ state first.
 Last resort when a migration rollback is not possible:
 
 ```bash
-# 1. Stop the stack
-docker compose -f docker-compose.prod.yml down
+# 1. Pause background jobs; db and web stay up for the restore and the media
+docker compose -f docker-compose.prod.yml stop cron
+docker compose -f docker-compose.prod.yml up -d db web
 
-# 2. Restore the backup — DB plus optionally media
-./scripts/ops/restore.sh \
+# 2. Restore the backup — DB plus optionally media.
+#    restore.sh fills a fresh recovery database, verifies it against the signed
+#    manifest and only then switches over while writers are stopped; the previous
+#    state stays behind as <POSTGRES_DB>_vor_restore_<timestamp>.
+#    Without --yes (or RESTORE_CONFIRM=ja) the run aborts before any change.
+./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
 # 3. Set the old image tag in docker-compose.prod.yml
 
-# 4. Start the stack
+# 4. Start the stack (restore.sh leaves web and cron stopped)
 docker compose -f docker-compose.prod.yml up -d
 
 # 5. Verify
 curl -sf https://$DOMAIN/health/
+
+# 6. Only after a successful acceptance check: drop the preserved previous state
+docker compose -f docker-compose.prod.yml exec -T db \
+    psql -U "${POSTGRES_SUPERUSER:-postgres}" -d postgres \
+    -c 'DROP DATABASE "anlaufstelle_vor_restore_<timestamp>";'
 ```
 
 **Note on media (Refs #720):** The `media:` volume in
@@ -2857,4 +2868,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: 2e824be560eefee002a164bd59f928edc90ebffa -->
+<!-- source-hash: a9b656221fbee0e0ee9f6e7cbada1652d024b4de -->

@@ -94,6 +94,8 @@ def _make_sandbox(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     for name in ("restore.sh", "restore-drill.sh", "_backup_common.sh"):
         shutil.copy(OPS_DIR / name, ops / name)
         (ops / name).chmod(0o755)
+    # Gemeinsame Satzpruefung (Refs #2290): restore.sh sourct scripts/ops/lib/.
+    shutil.copytree(OPS_DIR / "lib", ops / "lib")
     (root / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
     (root / ".env").write_text(
         "POSTGRES_USER=appuser\n"
@@ -512,10 +514,25 @@ if [[ "$*" == *" exec -T db psql "* ]]; then
         printf '%s\\n' "$ATTACHMENT_ROWS"
     elif [[ "$*" == *"SELECT storage_filename"* ]]; then
         printf '%s\\n' "${ATTACHMENT_ROWS#*|}"
+    elif [[ "$*" == *"FROM pg_database"* ]]; then
+        printf '1\\n'
+    elif [[ "$*" == *"SELECT COUNT(*)"* ]]; then
+        printf '1\\n'
     else
         cat >/dev/null
     fi
     exit 0
+fi
+if [[ "$*" == *" run --rm --entrypoint sh -T maintenance "* ]]; then
+    while [[ "$1" != "-c" ]]; do shift; done
+    script="$2"
+    shift 2
+    mapped=()
+    for arg in "$@"; do
+        mapped+=("${arg//$CONTAINER_MEDIA_ROOT/$HOST_MEDIA_ROOT}")
+    done
+    /bin/sh -c "$script" "${mapped[@]}"
+    exit $?
 fi
 if [[ "$*" == *" exec -T web "* ]]; then
     while [[ "$1" != "web" ]]; do shift; done
@@ -605,6 +622,10 @@ if [[ "$*" == *" run --rm --entrypoint sh -T maintenance "* ]]; then
     exit $?
 fi
 if [[ "$*" == *" exec -T db psql "* ]]; then
+    if [[ "$*" == *"SELECT COUNT(*)"* ]]; then
+        printf '1\\n'
+        exit 0
+    fi
     cat >/dev/null
     exit 0
 fi

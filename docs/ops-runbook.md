@@ -219,21 +219,31 @@ klaeren.
 Letzter Ausweg, wenn Migration-Rollback nicht moeglich:
 
 ```bash
-# 1. Stack stoppen
-docker compose -f docker-compose.prod.yml down
+# 1. Hintergrundjobs anhalten; db und web bleiben fuer Restore und Medien noetig
+docker compose -f docker-compose.prod.yml stop cron
+docker compose -f docker-compose.prod.yml up -d db web
 
-# 2. Backup wiederherstellen — DB plus optional Medien
-./scripts/ops/restore.sh \
+# 2. Backup wiederherstellen — DB plus optional Medien.
+#    restore.sh fuellt eine frische Wiederherstellungs-Datenbank, verifiziert sie
+#    gegen das signierte Manifest und schaltet erst danach unter Schreibruhe um;
+#    der bisherige Stand bleibt als <POSTGRES_DB>_vor_restore_<Zeitstempel> liegen.
+#    Ohne --yes (oder RESTORE_CONFIRM=ja) bricht der Lauf vor jeder Aenderung ab.
+./scripts/ops/restore.sh --yes \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
 # 3. Altes Image-Tag in docker-compose.prod.yml setzen
 
-# 4. Stack starten
+# 4. Stack starten (restore.sh laesst web und cron gestoppt)
 docker compose -f docker-compose.prod.yml up -d
 
 # 5. Verifizieren
 curl -sf https://$DOMAIN/health/
+
+# 6. Erst nach erfolgreicher Abnahme den gesicherten Vorstand entfernen
+docker compose -f docker-compose.prod.yml exec -T db \
+    psql -U "${POSTGRES_SUPERUSER:-postgres}" -d postgres \
+    -c 'DROP DATABASE "anlaufstelle_vor_restore_<Zeitstempel>";'
 ```
 
 **Hinweis Medien (Refs #720):** Das `media:`-Volume in
