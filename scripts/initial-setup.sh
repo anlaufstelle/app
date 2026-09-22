@@ -83,6 +83,21 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 if [[ "$COMPOSE_FILE" != /* ]]; then
     COMPOSE_FILE="${PROJECT_DIR}/${COMPOSE_FILE}"
 fi
+# Refs #2309: docs/admin-guide.md fuehrt `compose.legal.yml` (Pflichtangaben)
+# und `compose.override.yml` (weitere lokale Anpassungen) als vorgesehenen
+# Erweiterungsweg ein und baut in JEDEM Recreate-Beispiel die volle
+# Dateiliste `-f docker-compose.prod.yml -f compose.legal.yml -f
+# compose.override.yml` auf. Eine vor der Erstinbetriebnahme angelegte
+# Zusatzdatei blieb beim Erststart bislang wirkungslos, weil dieses Skript
+# nur COMPOSE_FILE einsetzte. Deshalb: beide Dateien automatisch im selben
+# Verzeichnis wie COMPOSE_FILE erkennen und in fester Reihenfolge anhaengen.
+COMPOSE_FILES=("$COMPOSE_FILE")
+compose_extra_dir="$(dirname "$COMPOSE_FILE")"
+for compose_extra_file in "${compose_extra_dir}/compose.legal.yml" "${compose_extra_dir}/compose.override.yml"; do
+    if [[ -f "$compose_extra_file" ]]; then
+        COMPOSE_FILES+=("$compose_extra_file")
+    fi
+done
 ENV_FILE="${ENV_FILE:-.env}"
 if [[ "$ENV_FILE" != /* ]]; then
     ENV_FILE="${PROJECT_DIR}/${ENV_FILE}"
@@ -109,7 +124,7 @@ fail() {
     exit 1
 }
 
-compose() { docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
+compose() { local compose_flags=() compose_file; for compose_file in "${COMPOSE_FILES[@]}"; do compose_flags+=(-f "$compose_file"); done; docker compose "${compose_flags[@]}" --env-file "$ENV_FILE" "$@"; }
 
 # `exec -T` (kein TTY) — fuer alle nicht-interaktiven manage.py-Aufrufe.
 manage() { compose exec -T web python manage.py "$@"; }
@@ -207,8 +222,8 @@ if caddy_requires_health_token; then
   Wert erzeugen: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
 fi
 
-info "Compose-Datei: ${COMPOSE_FILE}"
-info "Env-Datei:     ${ENV_FILE}"
+info "Compose-Dateien: ${COMPOSE_FILES[*]}"
+info "Env-Datei:        ${ENV_FILE}"
 
 # Ein fester Top-Level-Compose-Name trennt neue Dev-/Prod-Volumes. Bei einem
 # Upgrade kann dadurch ein unter dem frueheren, von Compose normalisierten
@@ -337,6 +352,10 @@ compose run --rm --entrypoint=/app/docker-migrate.sh maintenance
 
 step "3/6  Vollen Stack starten"
 compose up -d
+# Refs #2312: die Erstladung der Virensignaturen kann beim allerersten Start
+# mehrere Minuten ohne Zwischenausgabe dauern — ohne diesen Hinweis wirkt der
+# Lauf wie ein Haenger statt wie ein normaler, nur laengerer Warteschritt.
+info "Warte auf Virenscanner (Signatur-Erstladung kann beim allerersten Start mehrere Minuten dauern) und auf 'web'..."
 wait_for_service web
 info "Anwendung laeuft."
 
