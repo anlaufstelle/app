@@ -4,6 +4,8 @@ Aus :file:`views/cases.py` abgetrennt — alle HTMX-Endpoints, die den
 `goals_section`-Partial neu rendern.
 """
 
+from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -29,6 +31,23 @@ def _goals_context(case):
     """Return goals with prefetched milestones for a case."""
     goals = case.goals.prefetch_related("milestones").all()
     return {"case": case, "goals": goals}
+
+
+def _abgelehnt(exc):
+    """Die fachliche Absage einer HTMX-Aktion — 409 mit kurzem Klartext.
+
+    Refs #2295: Der Zustandsvertrag (getilgte oder geloeschte Fallakte) und
+    das aeltere Art.-18-Gate werfen eine deutsche ``ValidationError``. Fing
+    sie niemand, wurde daraus ein HTTP 500.
+
+    Antwortmuster wie ``RetentionApproveView`` (Refs #2109): htmx wechselt
+    4xx-Antworten nicht ein, die veraltete Kachel bleibt also stehen, und der
+    globale ``htmx:responseError``-Toast (``static/js/htmx-errors.js``) zeigt
+    den Antworttext — solange er kurz und markup-frei ist. Deshalb genau die
+    EINE Meldung und kein gerendertes Partial; die globale 4xx-Swap-Regel
+    bleibt unberuehrt.
+    """
+    return HttpResponse(exc.messages[0] if exc.messages else str(exc), status=409)
 
 
 class GoalCreateView(StaffRequiredMixin, View):
@@ -63,10 +82,13 @@ class GoalToggleView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
-        if goal.is_achieved:
-            unachieve_goal(goal)
-        else:
-            achieve_goal(goal)
+        try:
+            if goal.is_achieved:
+                unachieve_goal(goal)
+            else:
+                achieve_goal(goal)
+        except ValidationError as exc:
+            return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -90,7 +112,10 @@ class MilestoneToggleView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
-        toggle_milestone(milestone)
+        try:
+            toggle_milestone(milestone)
+        except ValidationError as exc:
+            return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 

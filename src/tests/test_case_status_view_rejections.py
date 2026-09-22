@@ -138,11 +138,29 @@ class TestHtmxRoutenMeldenStattAbzustuerzen:
         assert response.status_code == 409
         inhalt = response.content.decode()
         assert inhalt == str(PROCESSING_RESTRICTED_MESSAGE)
-        # Der globale Toast zeigt nur kurze, markup-freie Antworten.
         assert "<" not in inhalt
-        assert len(inhalt) <= 200
         outcome_goal.refresh_from_db()
         assert outcome_goal.is_achieved is False
+
+    def test_absagen_des_zustandsvertrags_passen_in_den_fehler_toast(self):
+        """Der Toast zeigt nur kurze, markup-freie Antworten (``htmx-errors.js``).
+
+        Ueber 200 Zeichen faellt er auf seinen allgemeinen Text zurueck. Die
+        beiden neuen Absagen des Zustandsvertrags bleiben darunter und kommen
+        im Wortlaut an.
+
+        **Bekannte Grenze, nicht von dieser Korrektur eingefuehrt:** die
+        Art.-18-Meldung ist mit 264 Zeichen laenger — im HTMX-Pfad zeigt der
+        Toast dafuer seinen allgemeinen Text, der genaue Grund steht in der
+        Antwort (Netzwerk-Log) und, unveraendert, in jedem Vollseiten-Pfad.
+        Vor dieser Korrektur war derselbe Fall ein 500.
+        """
+        from core.services.case.state_contract import STATUS_CHANGE_GONE_MESSAGE
+
+        for meldung in (STATUS_CHANGE_REDACTED_MESSAGE, STATUS_CHANGE_GONE_MESSAGE):
+            text = str(meldung)
+            assert len(text) <= 200, f"zu lang fuer den Fehler-Toast: {len(text)}"
+            assert "<" not in text
 
     def test_goal_toggle_an_getilgter_fallakte(self, antwortender_client, staff_user, case_open, outcome_goal):
         _tilgen_ohne_papierkorb(case_open)

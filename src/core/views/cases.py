@@ -740,7 +740,15 @@ class CaseCloseView(LeadOrAdminRequiredMixin, View):
 
     def post(self, request, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=pk)
-        close_case(case, request.user)
+        try:
+            close_case(case, request.user)
+        except ValidationError as exc:
+            # Refs #2288: Der Zustandsvertrag und das aeltere Art.-18-Gate
+            # lehnen mit einer deutschen Meldung ab — ungefangen wurde daraus
+            # eine Fehlerseite ohne Grund (500). Die Absage gehoert an die
+            # Stelle, an der der Knopf gedrueckt wurde.
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            return redirect("core:case_detail", pk=case.pk)
         messages.success(request, _("Fall wurde geschlossen."))
         return redirect("core:case_detail", pk=case.pk)
 
@@ -754,7 +762,12 @@ class CaseReopenView(LeadOrAdminRequiredMixin, View):
 
     def post(self, request, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=pk)
-        reopen_case(case, request.user)
+        try:
+            reopen_case(case, request.user)
+        except ValidationError as exc:
+            # Refs #2288, Spiegel von ``CaseCloseView``.
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            return redirect("core:case_detail", pk=case.pk)
         messages.success(request, _("Fall wurde wiedereröffnet."))
         return redirect("core:case_detail", pk=case.pk)
 
