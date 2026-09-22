@@ -39,6 +39,7 @@ from core.views._json_contracts import (
     _wants_json_response,
     _wants_raw_json_response,
 )
+from core.views._offline_replay import saved_confirmation
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     IdempotentCreateMixin,
@@ -273,8 +274,13 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
     idempotency_scope = "workitem_create"
 
     def on_idempotent_hit(self, request, hit):
-        # Replay trifft bereits angelegtes WorkItem → dasselbe Ziel wie beim
-        # Original-Erfolg (Inbox), statt ein Duplikat zu erzeugen.
+        # Replay trifft bereits angelegtes WorkItem → dem Offline-Replay den
+        # Bestaetigungsmarker geben (Refs #2289: ein Idempotenz-Treffer belegt
+        # einen bereits festgeschriebenen Schreibvorgang), sonst dasselbe Ziel
+        # wie beim Original-Erfolg (Inbox), statt ein Duplikat zu erzeugen.
+        confirmation = saved_confirmation(request, hit.pk)
+        if confirmation is not None:
+            return confirmation
         return redirect("core:workitem_inbox")
 
     def get(self, request):
@@ -362,6 +368,10 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
                         .first()
                     )
                     if existing:
+                        # Refs #2289: bereits festgeschrieben (Parallel-Replay).
+                        confirmation = saved_confirmation(request, existing.pk)
+                        if confirmation is not None:
+                            return confirmation
                         return redirect("core:workitem_inbox")
                 raise
             # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
@@ -370,6 +380,12 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
             # macht eine Key-Kollision mit anderem Body erkennbar. No-op ohne
             # Schlüssel.
             self.remember_idempotency(request, idem_key, idem_payload_hash, workitem.pk)
+            # Refs #2289: belastbare Erfolgsbestaetigung fuer den
+            # Offline-Replay statt des Redirects (siehe EventCreateView) —
+            # bewusst VOR ``messages.success``.
+            confirmation = saved_confirmation(request, workitem.pk)
+            if confirmation is not None:
+                return confirmation
             messages.success(request, _("Aufgabe wurde erstellt."))
             return redirect("core:workitem_inbox")
 
@@ -494,6 +510,11 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                     return _workitem_conflict_response(workitem, expected_updated_at)
                 messages.error(request, e.message if hasattr(e, "message") else str(e))
                 return redirect("core:workitem_update", pk=workitem.pk)
+            # Refs #2289: belastbare Erfolgsbestaetigung fuer den
+            # Offline-Replay statt des Redirects (siehe EventCreateView).
+            confirmation = saved_confirmation(request, workitem.pk)
+            if confirmation is not None:
+                return confirmation
             messages.success(request, _("Aufgabe wurde aktualisiert."))
             return redirect("core:workitem_inbox")
 

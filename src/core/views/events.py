@@ -86,6 +86,7 @@ from core.views._json_contracts import (
     _wants_json_response,
     _wants_raw_json_response,
 )
+from core.views._offline_replay import saved_confirmation
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     IdempotentCreateMixin,
@@ -203,8 +204,13 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         return render(request, "core/events/create.html", context)
 
     def on_idempotent_hit(self, request, hit):
-        # Replay trifft bereits angelegtes Event → Redirect auf das Original
-        # (die generische Queue folgt exakt dem Original-Erfolg).
+        # Replay trifft bereits angelegtes Event → dem Offline-Replay den
+        # Bestaetigungsmarker geben (Refs #2289: ein Idempotenz-Treffer belegt
+        # einen bereits festgeschriebenen Schreibvorgang), sonst Redirect auf
+        # das Original.
+        confirmation = saved_confirmation(request, hit.pk)
+        if confirmation is not None:
+            return confirmation
         return redirect("core:event_detail", pk=hit.pk)
 
     def get(self, request):
@@ -335,6 +341,10 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             if existing:
                 if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, request):
                     return _idempotency_mismatch_response()
+                # Refs #2289: wie on_idempotent_hit — bereits festgeschrieben.
+                confirmation = saved_confirmation(request, existing.pk)
+                if confirmation is not None:
+                    return confirmation
                 return redirect("core:event_detail", pk=existing.pk)
 
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
@@ -477,6 +487,10 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                         if existing:
                             if has_idempotency_payload_mismatch(existing.idempotency_payload_hash, request):
                                 return _idempotency_mismatch_response()
+                            # Refs #2289: bereits festgeschrieben (Parallel-Replay).
+                            confirmation = saved_confirmation(request, existing.pk)
+                            if confirmation is not None:
+                                return confirmation
                             return redirect("core:event_detail", pk=existing.pk)
                     raise
         except ValidationError as e:
@@ -496,6 +510,16 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         # zweites Event zu erzeugen. Der Payload-Hash (N14) macht dabei eine
         # Key-Kollision mit anderem Body erkennbar. No-op ohne Schlüssel.
         self.remember_idempotency(request, idem_key, idem_payload_hash, event.pk)
+
+        # Refs #2289: Der Offline-Replay bekommt die belastbare Bestaetigung
+        # (200 + ``X-Offline-Replay-Result: saved``) STATT des Redirects — ein
+        # Header auf dem 302 waere fuer ``fetch`` unsichtbar, und eine
+        # Flash-Meldung wuerde erst bei der naechsten echten Seitenansicht
+        # auftauchen. Bewusst VOR ``messages.success`` und vor der
+        # Serienerfassungs-Weiche.
+        confirmation = saved_confirmation(request, event.pk)
+        if confirmation is not None:
+            return confirmation
 
         # Serienerfassung (Refs #1349): „Speichern & nächster Kontakt" leitet
         # zurück auf das leere Formular mit vorgewähltem Dokumentationstyp,
@@ -1168,6 +1192,11 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                     for staged in staged_all:
                         staged.output_path.unlink(missing_ok=True)
 
+            # Refs #2289: belastbare Erfolgsbestaetigung fuer den
+            # Offline-Replay statt des Redirects (siehe EventCreateView).
+            confirmation = saved_confirmation(request, event.pk)
+            if confirmation is not None:
+                return confirmation
             messages.success(request, _("Ereignis wurde aktualisiert."))
             return redirect("core:event_detail", pk=event.pk)
 

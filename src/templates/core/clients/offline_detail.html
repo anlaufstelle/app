@@ -29,6 +29,21 @@
         </span>
     </div>
 
+    {# Refs #2289: Weiterleitungen zur Anmeldung, zur Zwei-Faktor-Abfrage oder #}
+    {# zum Passwortwechsel sind kein Speichererfolg. offline-edit.js schaltet   #}
+    {# diesen Hinweis ueber das window-Event ``offline-auth-pending`` sichtbar  #}
+    {# und setzt den uebersetzten Text mit der Zahl der lokal wartenden         #}
+    {# Aenderungen ein (Platzhalter ``{count}``, Muster wie detail.html).       #}
+    {# Bewusst ohne Alpine-Bindung: der Hinweis muss auch dann erscheinen, wenn #}
+    {# der Replay aus einer anderen Ansicht heraus laeuft.                      #}
+    <div data-offline-auth-pending hidden
+         data-testid="offline-auth-pending"
+         role="status" aria-live="polite"
+         data-auth-pending-text="{% trans 'Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert. Melden Sie sich erneut an; danach wird die Übertragung fortgesetzt.' %}"
+         class="mb-4 rounded-[10px] border border-yellow-200 bg-yellow-50 p-4">
+        <p class="text-sm text-yellow-900" data-offline-auth-pending-text></p>
+    </div>
+
     <template x-if="loading">
         <div class="py-8 text-center text-ink-muted" data-testid="offline-loading">
             {% trans "Lade Offline-Daten..." %}

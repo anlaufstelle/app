@@ -1,4 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
+> Synchronization update 2026-09-22: § 8 now states that a sign-in, second-factor or password-change request during the transfer is not a save -- the transfer pauses, local entries stay, and it continues without duplicates after signing in (#2289).
 > Synchronization update 2026-09-18: the handover-note section now states the final no-hold boundary and the organizational step for procedure-relevant content (#2231).
 > Synchronization update 2026-09-15: initial 2FA setup now mirrors the mandatory backup-code acknowledgement and the increasing wait after repeated incorrect codes in the German guide (#2248).
 > Most recently synchronized on 2026-09-10 (§ 2 offline capture rejects the doubled hour with an explanatory message, #2187; § 4 merging duplicate clients: reverting a merge is not possible while a legal hold covers either record, #2200; § 2 the manual handover note above the shift statistics: who may write it, the editing window until the shift ends, the comparison of both versions when two people save at the same time, and its retention period, #2042).
@@ -789,6 +790,8 @@ If an event was edited online (by someone else) and offline (by you) at the same
 
 > **Important -- avoid data loss:** **Logout** and **password change** delete the locally stored offline data -- always **sync first** before signing out or changing your password. After a period of inactivity, offline access is **locked** for security reasons; after signing in again, any not-yet-synced entries become available again. Simply **closing the tab**, however, deletes nothing. If you have not-yet-synced entries when changing your password, Anlaufstelle warns you before you submit, showing the number of affected entries.
 
+> **Sign-in required during the transfer:** If the server asks for a new sign-in, for the second factor or for a password change while syncing, that does **not** count as saved -- the transfer pauses, every not-yet-transferred entry stays unchanged on your device, and the offline view says so, including the number. Sign in again; the transfer then continues without duplicate entries.
+
 > **No file attachments offline:** Events with file attachments **cannot** be saved offline. For security reasons, no unencrypted file blobs are stored in the browser. In that case, record the event without the file first and attach the file once you are back online.
 
 ---
@@ -1026,5 +1029,5 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-15 -->
-<!-- source-hash: 2ec525aa23bee835a1de4734b4d90f3b75669970 -->
+<!-- translation-date: 2026-09-22 -->
+<!-- source-hash: 213ac57505df6fa323112012ed47d29302b2e906 -->

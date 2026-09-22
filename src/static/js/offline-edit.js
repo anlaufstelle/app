@@ -6,9 +6,12 @@
  * the edited state into IndexedDB under `localStatus: "modified"` plus the
  * `expected_updated_at` token from the cached copy. When the network returns
  * we replay the edit against `/events/<pk>/edit/` with an
- * `Accept: application/json` header; the server honours that with either a
- * redirect (success) or a 409 JSON body (conflict) that we stash back into
- * IndexedDB under `localStatus: "conflict"` for the merge UI to pick up.
+ * `Accept: application/json` header plus the replay marker
+ * `X-Offline-Replay: 1`; the server honours that with either the
+ * confirmation marker `X-Offline-Replay-Result: saved` (success, Refs #2289
+ * — a bare redirect no longer counts, it may end on the login/MFA/password
+ * page) or a 409 JSON body (conflict) that we stash back into IndexedDB
+ * under `localStatus: "conflict"` for the merge UI to pick up.
  *
  * This module deliberately does NOT use the generic queue — offline edits
  * must round-trip through a dedicated replay because they need to read the
@@ -107,6 +110,77 @@
         return response;
     }
 
+    /*
+     * Refs #2289 — Vertrag „Erfolgsbestaetigung" des Offline-Replays.
+     *
+     * (1) Erfolg NUR mit Marker: ein Schreibvorgang gilt ausschliesslich dann
+     *     als gespeichert, wenn die Antwort auf den mit ``X-Offline-Replay: 1``
+     *     markierten Request den Bestaetigungsmarker
+     *     ``X-Offline-Replay-Result: saved`` traegt. Den setzen allein die
+     *     Create-/Edit-Endpunkte NACH einem festgeschriebenen Schreibvorgang
+     *     (oder bei einem Idempotenz-Treffer auf einen bereits
+     *     festgeschriebenen). Eine blosse Weiterleitung belegt gar nichts:
+     *     ``fetch`` folgt ihr transparent, und die Endantwort kann die
+     *     Anmelde-, Zwei-Faktor- oder Passwortwechsel-Seite sein.
+     * (2) Ausstehende Authentifizierung: Antworten, die auf ``/login/``,
+     *     ``/mfa/`` (Setup UND Verify), ``/password-change/`` oder
+     *     ``/password-reset/`` fuehren — als gefolgter Redirect, als
+     *     ``HX-Redirect``-Header oder als ``Location`` eines ungefolgten 3xx —
+     *     lassen die lokalen Daten UNVERAENDERT und halten den Batch an.
+     *
+     * Bis #2289 galt jede Weiterleitung ausser ``/login/`` als Erfolg: die
+     * MFA-Middleware leitet Schreibanfragen VOR der View nach ``/mfa/setup/``
+     * bzw. ``/mfa/verify/`` um (z.B. nach einer waehrend der Offline-Phase
+     * geaenderten Pflicht), die Speicherung fand nie statt — und der
+     * Create-Replay loeschte die lokale Neuanlage trotzdem.
+     *
+     * Dieselben Praedikate liegen wortgleich in offline-queue.js (die beiden
+     * Module teilen bewusst keinen Namensraum, siehe _csrfFromMeta/_postForm);
+     * tests/js/offline-replay-auth.test.mjs haelt beide Fassungen deckungsgleich.
+     */
+    const AUTH_PENDING_PREFIXES = ["/login/", "/mfa/", "/password-change/", "/password-reset/"];
+    const REPLAY_RESULT_HEADER = "X-Offline-Replay-Result";
+    const REPLAY_RESULT_SAVED = "saved";
+
+    function _responseHeader(response, name) {
+        try {
+            if (!response || !response.headers || typeof response.headers.get !== "function") return null;
+            return response.headers.get(name);
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    function _isAuthPendingTarget(rawUrl) {
+        if (!rawUrl) return false;
+        let path;
+        try {
+            path = new URL(rawUrl, window.location.origin).pathname;
+        } catch (_e) {
+            path = String(rawUrl);
+        }
+        // Ein Ziel ohne abschliessenden Schraegstrich (``/mfa``) zaehlt mit.
+        const normalized = path.endsWith("/") ? path : path + "/";
+        return AUTH_PENDING_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+    }
+
+    function _isAuthPendingResponse(response) {
+        if (!response) return false;
+        if (response.redirected && _isAuthPendingTarget(response.url)) return true;
+        // Refs #1419: die HtmxSession-Middleware kann einen Auth-Bounce fuer
+        // HTMX-Requests als ``200 + HX-Redirect`` statt als 302 liefern.
+        if (_isAuthPendingTarget(_responseHeader(response, "HX-Redirect"))) return true;
+        // Ungefolgtes 3xx (defensiv — der Replay folgt Redirects sonst).
+        if (response.status >= 300 && response.status < 400) {
+            if (_isAuthPendingTarget(_responseHeader(response, "Location"))) return true;
+        }
+        return false;
+    }
+
+    function _isSavedConfirmed(response) {
+        return _responseHeader(response, REPLAY_RESULT_HEADER) === REPLAY_RESULT_SAVED;
+    }
+
     function _eventEditUrl(eventPk) {
         return "/events/" + encodeURIComponent(eventPk) + "/edit/";
     }
@@ -147,6 +221,73 @@
             })
             .catch(() => {});
     }
+
+    /*
+     * Refs #2289: Nutzerhinweis „Anmeldung erforderlich".
+     *
+     * Die Klassifikation liegt in beiden Replay-Modulen, die Darstellung
+     * bewusst nur hier: offline-edit.js laedt auf JEDER Seite mit
+     * Offline-Faehigkeit (base.html UND offline_base.html) und zwar NACH
+     * offline-queue.js. Beide Module melden den Zustand ueber das
+     * window-Event ``offline-auth-pending`` (detail: {pending, count}); der
+     * Empfaenger unten schaltet jedes ``[data-offline-auth-pending]``-Element
+     * sichtbar und setzt den uebersetzten Text aus dessen
+     * ``data-auth-pending-text`` (Platzhalter ``{count}`` — Muster wie
+     * offline-client-badge.js/detail.html). Ohne solches Element passiert
+     * nichts; die Module bleiben seitenunabhaengig.
+     */
+    async function _countLocalPending() {
+        let total = 0;
+        try {
+            total += (await _store().countUnsyncedEvents()) || 0;
+        } catch (_e) {
+            /* Zaehler bleibt bei dem, was sich lesen liess */
+        }
+        try {
+            const store = _store();
+            if (typeof store.countQueueByStatus === "function") {
+                const breakdown = (await store.countQueueByStatus()) || {};
+                total += breakdown.pending || 0;
+            }
+        } catch (_e) {
+            /* dito */
+        }
+        return total;
+    }
+
+    function _signalAuthPending(pending) {
+        const active = Boolean(pending);
+        _countLocalPending()
+            .then((count) => {
+                window.dispatchEvent(
+                    new CustomEvent("offline-auth-pending", { detail: { pending: active, count: count } })
+                );
+            })
+            .catch(() => {});
+    }
+
+    function _renderAuthPending(active, count) {
+        let nodes;
+        try {
+            nodes = document.querySelectorAll("[data-offline-auth-pending]");
+        } catch (_e) {
+            return;
+        }
+        nodes.forEach((node) => {
+            const template = node.getAttribute("data-auth-pending-text") || "";
+            if (template) {
+                const target = node.querySelector("[data-offline-auth-pending-text]") || node;
+                target.textContent = template.replace("{count}", String(count));
+            }
+            if (active) node.removeAttribute("hidden");
+            else node.setAttribute("hidden", "hidden");
+        });
+    }
+
+    window.addEventListener("offline-auth-pending", (event) => {
+        const detail = (event && event.detail) || {};
+        _renderAuthPending(Boolean(detail.pending), detail.count || 0);
+    });
 
     /*
      * Read the optimistic-lock token (`updated_at`) of the cached event.
@@ -347,20 +488,31 @@
      * Erfolg raeumt den Record ab, 404/410 dead-lettert ihn.
      */
     async function _classifyCreateResponse(record, response, options) {
-        // Refs #1351 (Bug #2): Ein Redirect auf /login/ ist KEIN Erfolg —
-        // die Session ist waehrend des Offline-Fensters abgelaufen und fetch
-        // folgt dem 302 transparent bis zur Login-Seite. Ohne diesen Guard
-        // wuerde der nie serverseitig angelegte Record hier als "synced"
-        // geloescht (stiller Datenverlust). Record UNVERAENDERT lassen, kein
-        // clearOfflineEdit; der Aufrufer (replayAllModifiedEvents) bricht den
-        // Batch ab (symmetrisch zur generischen Queue, HTTP-Replay-Contract).
-        if (response.redirected && response.url.includes("/login/")) {
+        // Refs #1351 (Bug #2) / #2289: Eine Weiterleitung zur Anmeldung, zur
+        // Zwei-Faktor-Abfrage oder zum Passwortwechsel ist KEIN Erfolg — die
+        // Speicherung fand nie statt, fetch folgt dem 302 aber transparent bis
+        // zur Auth-Seite. Ohne diesen Guard wuerde der nie serverseitig
+        // angelegte Record hier als "synced" geloescht (stiller Datenverlust).
+        // Record UNVERAENDERT lassen, kein clearOfflineEdit; der Aufrufer
+        // (replayAllModifiedEvents) haelt den Batch an (symmetrisch zur
+        // generischen Queue, HTTP-Replay-Contract).
+        if (_isAuthPendingResponse(response)) {
+            _signalAuthPending(true);
             return { status: "auth-pending" };
         }
-        if (response.redirected || response.status === 302) {
+        // Refs #2289: Erfolg ausschliesslich mit Serverbestaetigung.
+        if (_isSavedConfirmed(response)) {
+            _signalAuthPending(false);
             await _store().clearOfflineEdit(record.pk);
             _fireCountEvent();
             return { status: "synced" };
+        }
+        if (response.redirected || response.status === 302) {
+            // Refs #2289: Weiterleitung ohne Bestaetigungsmarker — kein Beleg
+            // fuer ein Schreiben. Record BEHALTEN (der Idempotenzschluessel
+            // verhindert eine Doppelanlage, falls doch geschrieben wurde) und
+            // den Batch anhalten: jeder weitere Record traefe dieselbe Lage.
+            return { status: "unconfirmed", statusCode: response.status };
         }
         if (response.status === 403) {
             // Refs #1394: 403 bleibt "revoked" (kann CSRF-/Rate-Limit-/
@@ -631,24 +783,28 @@
             return { status: "network-error" };
         }
 
-        // Refs #1351 (Bug #2): symmetrisch zu replayNewEvent — ein Redirect auf
-        // /login/ ist KEIN Erfolg, sondern eine waehrend des Offline-Fensters
-        // abgelaufene Session (fetch folgt dem 302 transparent bis zur
-        // Login-Seite). Ohne diesen Guard wuerde der Erfolgszweig unten den
+        // Refs #1351 (Bug #2) / #2289: symmetrisch zu replayNewEvent — eine
+        // Weiterleitung zur Anmeldung, zur Zwei-Faktor-Abfrage oder zum
+        // Passwortwechsel ist KEIN Erfolg (fetch folgt dem 302 transparent bis
+        // zur Auth-Seite). Ohne diesen Guard wuerde der Erfolgszweig unten den
         // nie serverseitig gespeicherten Edit auf "clean" setzen (raus aus dem
-        // Unsynced-Set = stiller Datenverlust bei blossem Session-Ablauf).
+        // Unsynced-Set = stiller Datenverlust bei blossem Session-Ablauf bzw.
+        // bei einer waehrend der Offline-Phase geaenderten MFA-Pflicht).
         // Record UNVERAENDERT lassen; der Aufrufer (replayAllModifiedEvents)
-        // bricht den Batch ab (HTTP-Replay-Contract, constraints.md Z.29).
-        if (response.redirected && response.url.includes("/login/")) {
+        // haelt den Batch an (HTTP-Replay-Contract, constraints.md Z.29).
+        if (_isAuthPendingResponse(response)) {
+            _signalAuthPending(true);
             return { status: "auth-pending" };
         }
 
-        // Erfolg ist NUR ein echtes Speichern: der Server bestaetigt mit einem
-        // Redirect (302), dem fetch folgt -> response.redirected. Ein blankes 200
-        // ist KEIN Erfolg — Refs #1111: ein ungueltiges Formular kam frueher als
-        // 200 (re-rendertes Formular) zurueck und wurde faelschlich als "synced"
-        // verworfen (stiller Datenverlust). Der Server liefert dafuer jetzt 422.
-        if (response.redirected || response.status === 302) {
+        // Refs #2289: Erfolg ist NUR ein belegtes Speichern — die Antwort auf
+        // den Replay traegt den Bestaetigungsmarker der Schreib-View. Ein
+        // blankes 200 ist KEIN Erfolg (Refs #1111: ein ungueltiges Formular kam
+        // frueher als re-rendertes 200 zurueck und wurde faelschlich als
+        // "synced" verworfen; der Server liefert dafuer jetzt 422), und eine
+        // blosse Weiterleitung ebenfalls nicht mehr.
+        if (_isSavedConfirmed(response)) {
+            _signalAuthPending(false);
             // F-08 (#1111): synchronisiertes Event SICHTBAR lassen statt loeschen —
             // sonst verschwindet es aus der Offline-Ansicht, wenn ein
             // Geschwister-Edit desselben Klienten noch offen ist (revalidate
@@ -658,6 +814,13 @@
             await _store().updateEventLocalStatus(record.pk, "clean");
             _fireCountEvent();
             return { status: "synced" };
+        }
+        if (response.redirected || response.status === 302) {
+            // Refs #2289: Weiterleitung ohne Bestaetigungsmarker — kein Beleg
+            // fuer ein Schreiben (unbekanntes Zwischenziel, aelterer Server).
+            // Edit BEHALTEN statt ihn auf "clean" zu setzen; der Aufrufer
+            // haelt den Batch an.
+            return { status: "unconfirmed", statusCode: response.status };
         }
         if (response.status === 409) {
             // Refs #1351/#1385 (M8/Task 4): der Server liefert 409 in ZWEI
@@ -759,7 +922,11 @@
                 result.status === "network-error" ||
                 result.status === "offline" ||
                 result.status === "ratelimited" ||
-                result.status === "auth-pending"
+                result.status === "auth-pending" ||
+                // Refs #2289: unbestaetigte Weiterleitung — dieselbe Lage
+                // traefe jeden weiteren Record; anhalten statt blind
+                // weiterzuschreiben.
+                result.status === "unconfirmed"
             ) {
                 break;
             }
@@ -818,5 +985,12 @@
         replayAllModifiedEvents: replayAllModifiedEvents,
         enqueueConflictForReview: enqueueConflictForReview,
         refreshCounts: _fireCountEvent,
+        // Refs #2289 (TST, Muster wie offlineQueue._backoffFor/_isReady): die
+        // sicherheitskritischen Klassifikations-Praedikate isoliert testbar —
+        // tests/js/offline-replay-auth.test.mjs haelt sie deckungsgleich mit
+        // den wortgleichen Fassungen in offline-queue.js.
+        _isAuthPendingTarget: _isAuthPendingTarget,
+        _isAuthPendingResponse: _isAuthPendingResponse,
+        _isSavedConfirmed: _isSavedConfirmed,
     };
 })();

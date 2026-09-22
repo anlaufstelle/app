@@ -13,10 +13,17 @@
  *     lives in `replayQueue`): 409 -> `localStatus: "conflict"` (excluded
  *     from auto-replay); 422/400/404/410 -> `localStatus: "dead"`
  *     (dead-letter, no Head-of-Line-Blocking — the next queued record is
- *     still sent); 403 -> one CSRF-refresh retry, then dead; a Login-
- *     redirect mid-batch (session expired) halts the loop WITHOUT deleting
- *     the record ("auth-pending"); an unexpected bare 200 also becomes dead
- *     instead of being silently treated as success.
+ *     still sent); 403 -> one CSRF-refresh retry, then dead; an auth
+ *     redirect mid-batch (Refs #2289: login, MFA setup/verify or password
+ *     change — followed redirect, ``HX-Redirect`` header or the ``Location``
+ *     of an unfollowed 3xx) halts the loop WITHOUT deleting the record
+ *     ("auth-pending"); an unexpected bare 200 also becomes dead instead of
+ *     being silently treated as success.
+ *   - replay success (Refs #2289): a write only counts as saved when the
+ *     response carries the server's confirmation marker
+ *     ``X-Offline-Replay-Result: saved``. Queue targets without marker
+ *     support (workitem status, tally, audit note export) keep the previous
+ *     redirect/HTMX contract — but only after the auth classification.
  *   - 429 replay: exponential backoff via `retryAfter` + batch abort
  *     (rate-limit is user-global, not per-record).
  *   - 5xx replay: exponential backoff via `retryAfter`, batch abort.
@@ -76,6 +83,95 @@
         // /login/-HTML (#1330/#1332). Bei !ok/Netzfehler null — der 403-Retry
         // in replayQueue unterbleibt dann sauber (kein stale-Token-Retry).
         return window.csrfUtils ? window.csrfUtils.refresh() : null;
+    }
+
+    /*
+     * Refs #2289 — Vertrag „Erfolgsbestaetigung" (wortgleich in
+     * offline-edit.js; die beiden Module teilen bewusst keinen Namensraum,
+     * siehe _csrfFromMeta/_refreshCsrf. tests/js/offline-replay-auth.test.mjs
+     * haelt beide Fassungen deckungsgleich):
+     *
+     * (1) Erfolg NUR mit Marker ``X-Offline-Replay-Result: saved``, den allein
+     *     die Schreib-Endpunkte NACH einem festgeschriebenen Schreibvorgang
+     *     setzen. Fuer Queue-Ziele OHNE Markerunterstuetzung (Status-Wechsel,
+     *     Strichliste, Audit-Notiz-Export) bleibt der bisherige Redirect-/
+     *     HTMX-Kontrakt in Kraft — aber erst NACH der Auth-Klassifikation.
+     * (2) Antworten, die auf ``/login/``, ``/mfa/`` (Setup UND Verify),
+     *     ``/password-change/`` oder ``/password-reset/`` fuehren — gefolgter
+     *     Redirect, ``HX-Redirect``-Header oder ``Location`` eines ungefolgten
+     *     3xx — lassen die Zeile UNVERAENDERT und halten den Batch an.
+     *
+     * Bis #2289 pruefte die Queue nur ``/login/``: eine MFA-Weiterleitung
+     * (Pflicht waehrend der Offline-Phase geaendert, abgelaufene
+     * Einrichtungsfrist) galt als Erfolg und die Zeile wurde geloescht.
+     */
+    const AUTH_PENDING_PREFIXES = ["/login/", "/mfa/", "/password-change/", "/password-reset/"];
+    const REPLAY_RESULT_HEADER = "X-Offline-Replay-Result";
+    const REPLAY_RESULT_SAVED = "saved";
+
+    function _responseHeader(response, name) {
+        try {
+            if (!response || !response.headers || typeof response.headers.get !== "function") return null;
+            return response.headers.get(name);
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    function _isAuthPendingTarget(rawUrl) {
+        if (!rawUrl) return false;
+        let path;
+        try {
+            path = new URL(rawUrl, self.location.origin).pathname;
+        } catch (_e) {
+            path = String(rawUrl);
+        }
+        // Ein Ziel ohne abschliessenden Schraegstrich (``/mfa``) zaehlt mit.
+        const normalized = path.endsWith("/") ? path : path + "/";
+        return AUTH_PENDING_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+    }
+
+    function _isAuthPendingResponse(response) {
+        if (!response) return false;
+        if (response.redirected && _isAuthPendingTarget(response.url)) return true;
+        // Refs #1419: die HtmxSession-Middleware kann einen Auth-Bounce fuer
+        // HTMX-Requests als ``200 + HX-Redirect`` statt als 302 liefern.
+        if (_isAuthPendingTarget(_responseHeader(response, "HX-Redirect"))) return true;
+        // Ungefolgtes 3xx (defensiv — der Replay folgt Redirects sonst).
+        if (response.status >= 300 && response.status < 400) {
+            if (_isAuthPendingTarget(_responseHeader(response, "Location"))) return true;
+        }
+        return false;
+    }
+
+    function _isSavedConfirmed(response) {
+        return _responseHeader(response, REPLAY_RESULT_HEADER) === REPLAY_RESULT_SAVED;
+    }
+
+    // Refs #2289: Zustand an die Darstellung melden — der Empfaenger des
+    // window-Events sitzt in offline-edit.js (laedt auf denselben Seiten,
+    // direkt nach diesem Modul).
+    function _signalAuthPending(pending) {
+        const active = Boolean(pending);
+        Promise.resolve()
+            .then(async () => {
+                let count = 0;
+                try {
+                    const breakdown = (await _store().countQueueByStatus()) || {};
+                    count += breakdown.pending || 0;
+                } catch (_e) {
+                    /* Zaehler bleibt bei dem, was sich lesen liess */
+                }
+                try {
+                    count += (await _store().countUnsyncedEvents()) || 0;
+                } catch (_e) {
+                    /* dito */
+                }
+                window.dispatchEvent(
+                    new CustomEvent("offline-auth-pending", { detail: { pending: active, count: count } })
+                );
+            })
+            .catch(() => {});
     }
 
     async function _updateQueueCount() {
@@ -275,6 +371,14 @@
         });
     }
 
+    // Refs #2289: jede erfolgreich uebertragene Zeile beendet zugleich den
+    // Hinweis „Anmeldung erforderlich" — es ist wieder belegt geschrieben
+    // worden.
+    async function _deleteQueueRowAsSuccess(record) {
+        _signalAuthPending(false);
+        await _store().deleteRow("queue", record.id);
+    }
+
     async function replayQueue() {
         if (!navigator.onLine) return;
         await window.crypto_session?.awaitReady?.();
@@ -328,9 +432,25 @@
                 // Schleife anhalten OHNE zu loeschen (Middleware reicht
                 // Replays inzwischen den rohen 302 durch — Root-Cause-Fix —,
                 // dieser Zweig ist das Netz gegen die stille Loesch-Klasse).
-                const hxRedirect = response.headers.get("HX-Redirect");
-                if (response.ok && hxRedirect && hxRedirect.includes("/login/")) {
+                // Refs #1419 / #2289: Auth-Klassifikation VOR jeder
+                // Erfolgsdeutung — gefolgter Redirect, HX-Redirect (die
+                // HtmxSession-Middleware wandelt den Auth-302 fuer
+                // HTMX-Requests in ``200 + HX-Redirect``) und ungefolgtes 3xx,
+                // je auf /login/, /mfa/, /password-change/, /password-reset/.
+                // Zeile bleibt UNVERAENDERT (kein attempts++, kein
+                // Statuswechsel) — ein stiller Verwurf waere Datenverlust —,
+                // und die gesamte Schleife haelt an: jeder weitere Record
+                // kassierte dieselbe Weiterleitung.
+                if (_isAuthPendingResponse(response)) {
+                    _signalAuthPending(true);
                     break;
+                }
+                // Refs #2289: belastbare Serverbestaetigung = Erfolg. Sie
+                // kommt von den Create-/Edit-Endpunkten (Ereignis, Aufgabe)
+                // NACH einem festgeschriebenen Schreibvorgang.
+                if (response.ok && _isSavedConfirmed(response)) {
+                    await _deleteQueueRowAsSuccess(record);
+                    continue;
                 }
                 // Refs #1351/#1384: Klassifikation exakt nach der
                 // HTTP-Replay-Contract-Tabelle (Plan-Kopf) — kein
@@ -338,20 +458,20 @@
                 // Record an, `continue` zum naechsten Record statt `break`
                 // der gesamten Schleife), ausser bei 429/5xx/auth-pending/
                 // Netzfehler (die betreffen die gesamte Session/Verbindung).
-                if (response.ok && response.redirected && !response.url.includes("/login/")) {
-                    // Erfolg (Redirect-Kontrakt).
-                    await _store().deleteRow("queue", record.id);
-                } else if (response.ok && response.redirected && response.url.includes("/login/")) {
-                    // auth-pending: Session waehrend des Batches abgelaufen.
-                    // Row bleibt UNVERAENDERT (kein attempts++, kein
-                    // Statuswechsel) — ein stiller Verwurf waere ein
-                    // Datenverlust. Die gesamte Schleife haelt an: jeder
-                    // weitere Record wuerde denselben Login-Redirect kassieren.
-                    break;
+                if (response.ok && response.redirected) {
+                    // Erfolg (Redirect-Kontrakt) — Refs #2289 nur noch fuer die
+                    // Queue-Ziele OHNE Markerunterstuetzung (Status-Wechsel,
+                    // Strichliste, Audit-Notiz-Export). Jede Weiterleitung zur
+                    // Anmeldung, zur Zwei-Faktor-Abfrage oder zum
+                    // Passwortwechsel ist oben bereits als "ausstehende
+                    // Authentifizierung" abgefangen (Zeile bleibt, Batch haelt
+                    // an); die markertragenden Create-/Edit-Endpunkte kommen
+                    // ebenfalls nicht hier an.
+                    await _deleteQueueRowAsSuccess(record);
                 } else if (response.ok && !response.redirected && _hasHxRequestHeader(record)) {
                     // Erfolg (HTMX-Partial-Kontrakt): ein 200 ohne Redirect
                     // ist fuer einen HX-Request-Submit der normale Erfolgsfall.
-                    await _store().deleteRow("queue", record.id);
+                    await _deleteQueueRowAsSuccess(record);
                 } else if (response.ok && !response.redirected) {
                     // Nach B4 antworten alle bekannten Fehlerpfade mit
                     // 409/422 — ein nacktes 200 ausserhalb des HTMX-Kontrakts
@@ -491,5 +611,11 @@
         _backoffFor: _backoffFor,
         _refreshCsrf: _refreshCsrf,
         _isReady: _isReady,
+        // Refs #2289: Klassifikations-Praedikate des Erfolgsbestaetigungs-
+        // Vertrags — tests/js/offline-replay-auth.test.mjs haelt sie
+        // deckungsgleich mit den Fassungen in offline-edit.js.
+        _isAuthPendingTarget: _isAuthPendingTarget,
+        _isAuthPendingResponse: _isAuthPendingResponse,
+        _isSavedConfirmed: _isSavedConfirmed,
     };
 })();

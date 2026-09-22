@@ -155,7 +155,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v48"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v49"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -165,7 +165,10 @@ class TestServiceWorkerCachesOfflineFallback:
             "quick-exit.js aendern Shell und APP_SHELL → v46; "
             "#2201: Runtime-Cache-Fehleintraege werden per v47 entfernt; "
             "#2238: das neue Shell-Modul offline-messages.js wird mit v48 "
-            "atomar precached)."
+            "atomar precached; #2293/#2289: die precachten Replay-Skripte "
+            "offline-edit.js und offline-queue.js tragen die korrigierte "
+            "Metadaten-Uebernahme und den Vertrag der Erfolgsbestaetigung → "
+            "v49, zusammen mit dem Hinweis in der precachten Offline-Akte)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -709,7 +712,13 @@ class TestPrecachedShellBumpGuard:
     # alte Fehlklassifikationen beim Activate.
     # 2026-09-21, Refs #2238: v47 -> v48 — offline-messages.js erweitert den
     # APP_SHELL; die neue Generation precacht den Modulverbund atomar.
-    _PINNED_CACHE_NAME = "anlaufstelle-v48"
+    # 2026-09-22, Refs #2293/#2289: v48 -> v49 — die precachten Replay-Skripte
+    # (offline-edit.js, offline-queue.js) tragen die korrigierte
+    # Metadaten-Uebernahme der Neuanlage und den Vertrag der
+    # Erfolgsbestaetigung; die Offline-Akte bekommt zusaetzlich den Hinweis
+    # „Anmeldung erforderlich". Beides ist ausgeliefertes Markup bzw.
+    # Precache-Inhalt: erst CACHE_NAME bumpen, dann Hash nachziehen.
+    _PINNED_CACHE_NAME = "anlaufstelle-v49"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -774,7 +783,9 @@ class TestPrecachedShellBumpGuard:
     # gegen die ein Bump schuetzen wuerde (Praezedenz: #1805, #1828, #2136).
     # 2026-09-21, Refs #2238: Der Hash folgt dem v48-Bump und deckt die beiden
     # neuen Script-Tags sowie offline-messages.js im APP_SHELL gemeinsam ab.
-    _PINNED_SHELL_HASH = "21a2707d85da9708ab90f477ff9053871390a5575fcf8223ed3ee7097472b184"
+    # 2026-09-22, Refs #2289: Der Hash folgt dem v49-Bump und deckt den neuen
+    # Hinweisblock „Anmeldung erforderlich" in core/clients/offline_detail.html ab.
+    _PINNED_SHELL_HASH = "96381e6e9cdd8a60aece72f45401d1baea084308d54eb43617b7b39d6bd2bf0c"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
