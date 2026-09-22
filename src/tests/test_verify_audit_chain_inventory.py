@@ -38,7 +38,7 @@ from django.db import connection, transaction
 from core.management.commands.verify_audit_chain import Command as VerifyAuditChainCommand
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
-from core.services.audit.hwm import HighWaterMarkStore
+from core.services.audit.hwm import HighWaterMarkStore, HwmIntegrityError
 from core.services.system import bypass_replication_triggers
 
 pytestmark = pytest.mark.django_db
@@ -307,6 +307,125 @@ class TestRetirementIsAnExplicitAuthenticatedProof:
 
         with pytest.raises(CommandError, match="AUDIT_HWM_PATH"):
             call_command("verify_audit_chain", "--retire-chain", str(facility.pk), "--retire-reason", "Test")
+
+
+@pytest.mark.django_db
+class TestRetirementSurvivesAReturningFacility:
+    """Ein signierter Stilllegungsnachweis wird nicht stillschweigend ueberschrieben.
+
+    Kehrt eine Einrichtung mit derselben Kennnummer zurueck — nach einer
+    unvollstaendigen Wiederherstellung, einem aelteren Dump oder absichtlich —,
+    steht sie wieder im Inventar. Ohne Schutz haette der naechste gruene Lauf
+    den Nachweis ueberschrieben (neuer Tail) oder entfernt (leere Kette), und
+    die dokumentierte Entfernung waere spurlos weg.
+    """
+
+    def _retired_state(self, settings, tmp_path, facility, staff_user):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        _anchor_all_chains(settings.AUDIT_HWM_PATH)
+        retired_pk = facility.pk
+        organization = facility.organization
+        _drop_facility(facility)
+        call_command("verify_audit_chain", "--retire-chain", str(retired_pk), "--retire-reason", "Schliessung")
+        return retired_pk, organization
+
+    def test_returning_facility_fails_loud_instead_of_overwriting(self, settings, tmp_path, facility, staff_user):
+        _require_postgres()
+        retired_pk, organization = self._retired_state(settings, tmp_path, facility, staff_user)
+        Facility.objects.create(pk=retired_pk, organization=organization, name="Zurueck")
+        hwm_before = _hwm_state(settings.AUDIT_HWM_PATH)
+        markers_before = _marker_count()
+
+        with pytest.raises(CommandError, match="Stilllegungsnachweis"):
+            call_command("verify_audit_chain")
+
+        assert _hwm_state(settings.AUDIT_HWM_PATH) == hwm_before, "Der Nachweis bleibt unveraendert stehen"
+        assert _marker_count() == markers_before, "Kein Erfolgsmarker ueber einem offenen Widerspruch"
+
+    def test_reactivation_clears_the_proof_and_lets_the_chain_anchor_again(
+        self, settings, tmp_path, facility, staff_user
+    ):
+        _require_postgres()
+        retired_pk, organization = self._retired_state(settings, tmp_path, facility, staff_user)
+        returned = Facility.objects.create(pk=retired_pk, organization=organization, name="Zurueck")
+        markers_before = _marker_count()
+
+        call_command(
+            "verify_audit_chain",
+            "--reactivate-chain",
+            str(retired_pk),
+            "--reactivate-reason",
+            "Traeger uebernimmt den Bestand erneut",
+        )
+
+        assert _marker_count() == markers_before + 1
+        store = HighWaterMarkStore.load(settings.AUDIT_HWM_PATH)
+        assert store.get(returned.pk) is None, "Leere Kette bleibt unverankert — aber ohne Nachweis-Rest"
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=returned)
+        call_command("verify_audit_chain")
+        assert HighWaterMarkStore.load(settings.AUDIT_HWM_PATH).get(returned.pk)["last_entry_hash"]
+
+    def test_reactivating_an_absent_facility_is_refused(self, settings, tmp_path, facility, staff_user):
+        _require_postgres()
+        retired_pk, _ = self._retired_state(settings, tmp_path, facility, staff_user)
+        hwm_before = _hwm_state(settings.AUDIT_HWM_PATH)
+
+        with pytest.raises(CommandError, match="nicht im Bestand"):
+            call_command("verify_audit_chain", "--reactivate-chain", str(retired_pk), "--reactivate-reason", "Test")
+
+        assert _hwm_state(settings.AUDIT_HWM_PATH) == hwm_before
+
+    def test_reactivating_a_chain_without_proof_is_refused(self, settings, tmp_path, facility, staff_user):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        _anchor_all_chains(settings.AUDIT_HWM_PATH)
+
+        with pytest.raises(CommandError, match="keinen Stilllegungsnachweis"):
+            call_command("verify_audit_chain", "--reactivate-chain", str(facility.pk), "--reactivate-reason", "Test")
+
+    def test_reactivation_requires_a_reason(self, settings, tmp_path, facility, staff_user):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        _anchor_all_chains(settings.AUDIT_HWM_PATH)
+
+        with pytest.raises(CommandError, match="--reactivate-reason"):
+            call_command("verify_audit_chain", "--reactivate-chain", str(facility.pk))
+
+
+class TestRecordProtectsTheRetirementProof:
+    """Store-Ebene: beide Schreibpfade von ``record`` schuetzen den Nachweis."""
+
+    def _store(self) -> HighWaterMarkStore:
+        return HighWaterMarkStore(
+            path="",
+            chains={"a": {"count": 3, "retired": "2026-09-22T00:00:00+00:00", "reason": "Schliessung"}},
+        )
+
+    def test_overwrite_with_a_new_tail_is_refused(self):
+        store = self._store()
+
+        with pytest.raises(HwmIntegrityError, match="Stilllegungsnachweis"):
+            store.record("a", 4, "neuer-tail")
+
+        assert store.chains["a"]["retired"]
+
+    def test_silent_pop_for_an_empty_chain_is_refused(self):
+        store = self._store()
+
+        with pytest.raises(HwmIntegrityError, match="Stilllegungsnachweis"):
+            store.record("a", 0, None)
+
+        assert store.chains["a"]["retired"]
+
+    def test_normal_chains_are_unaffected(self):
+        store = HighWaterMarkStore(path="", chains={"b": {"count": 1, "last_entry_hash": "alt"}})
+
+        store.record("b", 2, "neu")
+        store.record("c", 0, None)
+
+        assert store.chains["b"] == {"count": 2, "last_entry_hash": "neu"}
+        assert "c" not in store.chains
 
 
 class TestAnchoredChainKeys:
