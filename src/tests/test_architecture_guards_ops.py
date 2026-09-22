@@ -159,15 +159,21 @@ class TestPublicBackupScriptsRlsRoles:
         assert superuser_call is not None, (
             'Die alte Zusicherung bleibt bestehen: Restore-Pipe muss psql als "$SU_USER" aufrufen (Review N4).'
         )
+        # Refs #2290: Das Ziel des Imports ist die frische Wiederherstellungs-DB;
+        # ON_ERROR_STOP und --single-transaction bleiben Pflicht.
         call = re.search(
-            r'psql\s+-v\s+ON_ERROR_STOP=1\s+--single-transaction\s+-U\s+"\$SU_USER"\s+"\$POSTGRES_DB"',
+            r'psql\s+-v\s+ON_ERROR_STOP=1\s+--single-transaction\s+-U\s+"\$SU_USER"\s+"\$RESTORE_DB"',
             flat,
         )
         assert call is not None, (
             "Restore-Pipe in restore.sh muss psql -v ON_ERROR_STOP=1 --single-transaction "
-            '-U "$SU_USER" "$POSTGRES_DB" nutzen — ohne ON_ERROR_STOP bleibt ein Fehler mitten '
+            '-U "$SU_USER" "$RESTORE_DB" nutzen — ohne ON_ERROR_STOP bleibt ein Fehler mitten '
             "im Dump unbemerkt, ohne --single-transaction bleibt ein abgebrochener Restore "
             "teilweise angewendet statt atomar zurueckgerollt (Refs #2221, verschaerft aus Review N4)."
+        )
+        assert re.search(r'ALTER DATABASE\s+\\"\$\{RESTORE_DB\}\\"\s+RENAME TO', flat) is not None, (
+            "Die Umschaltung auf das Ziel muss per Umbenennung der verifizierten "
+            "Wiederherstellungs-DB erfolgen (Refs #2290)."
         )
 
 
@@ -1422,21 +1428,19 @@ class TestRestoreHmacBeforeDestructiveActions:
         flat = _flat_script(self._RESTORE)
         db_hmac_positions = [match.start() for match in re.finditer(r'backup_verify_hmac "\$BACKUP_FILE"', flat)]
         media_hmac_positions = [match.start() for match in re.finditer(r'backup_verify_hmac "\$MEDIA_FILE"', flat)]
-        confirm_pos = flat.find('read -rp "Fortfahren? (ja/nein): " CONFIRM')
+        # Refs #2318: Die Bestaetigung beginnt mit dem Schalter-/Antwort-Block.
+        confirm_pos = flat.find("RESTORE_CONFIRMED=0")
         db_decrypt_pos = flat.find(
             'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE"'
         )
-        psql_pos = flat.find('psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$POSTGRES_DB"')
-        media_stage_prep_pos = flat.find(
-            'docker compose -f "$COMPOSE_FILE" exec -T web rm -rf "$MEDIA_STAGE" "$MEDIA_OLD"'
-        )
+        psql_pos = flat.find('psql -v ON_ERROR_STOP=1 --single-transaction -U "$SU_USER" "$RESTORE_DB"')
+        media_stage_prep_pos = flat.find('media_exec rm -rf "$MEDIA_STAGE" "$MEDIA_OLD"')
         media_decrypt_pos = flat.find(
             'openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE"'
         )
         attachment_check_pos = flat.find("SELECT facility_id, storage_filename FROM core_attachment")
-        media_swap_pos = flat.find(
-            'docker compose -f "$COMPOSE_FILE" exec -T web mv "$MEDIA_STAGE" "$MEDIA_ROOT_CONTAINER"'
-        )
+        # Refs #2290: der Bestandstausch laeuft als ein sh-Aufruf unter Schreibruhe.
+        media_swap_pos = flat.find('mv "$stage" "$live"')
 
         assert len(db_hmac_positions) == 2
         assert len(media_hmac_positions) == 2
