@@ -43,6 +43,15 @@ SMTP_TIMEOUT_SECONDS = 2
 # einen SMTP-Handshake + Filesystem-Scan auslösen.
 _DETAIL_CACHE_TTL_SECONDS = 15
 
+# Refs #2348: Refs #2342 änderte die Form dieses gecachten Werts von
+# ``float | None`` auf ein ``dict`` (Zustand + Alter), ohne den Schlüssel zu
+# wechseln. Ein im Deploy-Fenster noch vorhandener Eintrag der Vorversion
+# hätte den detail-berechtigten Pfad mit 500 kippen können (s.
+# ``_cached_backup_signal``). Der ``:v2``-Suffix sorgt dafür, dass ein
+# künftiger Formwechsel denselben Schutz braucht — nicht nur den isinstance-
+# Rückfall.
+_BACKUP_SIGNAL_CACHE_KEY = "health:backup_signal:v2"
+
 
 def _detail_authorized(request) -> bool:
     """A7.1 (Refs #1024): Darf dieser Caller die Health-Detailfelder sehen?
@@ -283,6 +292,31 @@ def _cached_detail(key: str, producer, *, cache_alive: bool):
     return cache.get_or_set(key, producer, _DETAIL_CACHE_TTL_SECONDS)
 
 
+def _cached_backup_signal(*, cache_alive: bool) -> dict:
+    """Backup-Signal gecacht — robust gegen eine fremde Cache-Form (Refs #2348).
+
+    Refs #2342 änderte die Form dieses gecachten Werts von ``float | None``
+    auf ein ``dict`` (Zustand + Alter), ohne den Schlüssel zu wechseln. Ein im
+    Deploy-Fenster noch vorhandener Eintrag der Vorversion (``12.5`` bzw.
+    ``None``) hätte beim Zugriff auf ``["state"]`` eine ``TypeError``
+    geworfen — der detail-berechtigte Pfad von ``/health/`` wäre mit 500
+    ausgestiegen. Zwei Verteidigungslinien statt einer: ein versionierter
+    Schlüssel (``_BACKUP_SIGNAL_CACHE_KEY``), der einen alten Eintrag gar
+    nicht erst trifft, UND ein ``isinstance``-Rückfall auf „nicht gecacht"
+    für jede andere fremde Form — die Zusage „kippt nie den Request-Cycle"
+    (s. ``_cached_detail``) gilt auch für einen Cache-Eintrag, den diese
+    Instanz nicht selbst geschrieben hat.
+    """
+    if not cache_alive:
+        return _check_backup_signal()
+    cached = cache.get(_BACKUP_SIGNAL_CACHE_KEY)
+    if isinstance(cached, dict) and "state" in cached and "age_hours" in cached:
+        return cached
+    value = _check_backup_signal()
+    cache.set(_BACKUP_SIGNAL_CACHE_KEY, value, _DETAIL_CACHE_TTL_SECONDS)
+    return value
+
+
 def _check_disk_free_pct() -> float | None:
     """Freier Speicher (in %) auf MEDIA_ROOT; ``None`` falls nicht messbar."""
     media_root = getattr(settings, "MEDIA_ROOT", "")
@@ -422,8 +456,9 @@ class HealthView(View):
             payload["smtp"] = smtp_payload
             status = _degrade(status, smtp_payload["status"] == "unreachable")
 
-            # Backup-Alter (Refs #796), gecacht (A7.2).
-            backup_signal = _cached_detail("health:backup_age", _check_backup_signal, cache_alive=cache_alive)
+            # Backup-Alter (Refs #796), gecacht (A7.2; Refs #2348: eigener,
+            # versionierter Schluessel + Formpruefung, siehe _cached_backup_signal).
+            backup_signal = _cached_backup_signal(cache_alive=cache_alive)
             backup_status = backup_signal["state"]
             payload["last_backup_age_hours"] = backup_signal["age_hours"]
             backup_required = bool(getattr(settings, "HEALTH_BACKUP_REQUIRED", True))
