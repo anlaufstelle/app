@@ -5,10 +5,11 @@ Erbt von ``prod.py`` und uebernimmt alle Security-Defaults
 (HSTS, Secure-Cookies, ENCRYPTION_KEY-Pflicht, SUDO_MODE_ENABLED-Guard,
 ALLOWED_HOSTS-Pflicht, fail-closed checks).
 
-Einziger Unterschied zu prod: der ``MAILERS["default"]``-Backend faellt auf
-den Console-Backend zurueck. Auf dev.anlaufstelle.app brauchen wir keinen
-echten SMTP-Server — ausgehende Mails landen im stdout des web-Containers
-und sind ueber ``docker compose logs web`` einsehbar.
+Einziger Unterschied zu prod: ohne ``EMAIL_HOST`` faellt der
+``MAILERS["default"]``-Backend auf die Konsole zurueck. Auf dev.anlaufstelle.app
+gibt es standardmaessig keinen SMTP-Server — ausgehende Mails landen dann im
+stdout des web-Containers und sind ueber ``docker compose logs web``
+einsehbar. Ist ``EMAIL_HOST`` gesetzt, gilt der SMTP-Mailer aus prod.
 
 Nicht zu verwechseln mit ``settings/dev.py`` (lokale Entwicklung,
 DEBUG=True, console-mail, dev-DB).
@@ -24,8 +25,20 @@ from urllib.parse import urlsplit
 from .prod import *  # noqa: F401, F403
 
 # Seit Django 6.1 über ``MAILERS`` statt ``EMAIL_BACKEND`` (Refs #1662).
-# Ersetzt den aus prod.py geerbten SMTP-Mailer vollständig.
-MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
+#
+# Django 6.1 wertet ein Entwicklungs-Backend (console/locmem/filebased/dummy)
+# im ``MAILERS["default"]`` unter ``check --deploy`` als Fehler ``mail.E001``,
+# und der Image-Entrypoint faehrt genau diesen Check vor dem Gunicorn-Start.
+# Ein fest verdrahtetes Konsolen-Backend liess dev deshalb nicht mehr starten
+# (Refs #2326). Darum: Konsole NUR, wenn kein ``EMAIL_HOST`` gesetzt ist — und
+# nur dann wird ``mail.E001`` stummgeschaltet, weil der Befund hier gewollt ist
+# (kein SMTP auf dem Host, Mails bewusst ins Log). Mit ``EMAIL_HOST`` bleibt der
+# aus prod.py geerbte SMTP-Mailer samt Optionen unveraendert und der Check
+# scharf; so laesst sich der SMTP-Versand auch auf dev nachweisen (Refs #2089).
+# Ein leerer Wert zaehlt als ungesetzt (Compose/dotenv reichen Leerstrings durch).
+if not os.environ.get("EMAIL_HOST"):
+    MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
+    SILENCED_SYSTEM_CHECKS = ["mail.E001"]
 
 # dev.anlaufstelle.app faehrt Welt-A-Backups (dump-*.pgc.enc); der
 # Health-Glob kennt nur Welt-B-Artefakte (*.sql.gz.enc) und wuerde deshalb

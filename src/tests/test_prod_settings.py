@@ -918,3 +918,28 @@ class TestProdHealthDiskRequired:
 
     def test_env_can_disable_requirement(self):
         assert self._resolved("false") == "False"
+
+
+class TestProdMailerDeployCheck:
+    """Refs #2326: prod bleibt beim SMTP-Mailer und darf Djangos 6.1-Deploy-Check
+    ``mail.E001`` NICHT stummschalten — die Ausnahme fuer Hosts ohne SMTP lebt
+    allein in ``devlive`` (und damit ``demo``)."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+        "ALLOWED_HOSTS": "example.org",
+    }
+
+    @pytest.mark.parametrize("email_host", ["", "smtp.example.org"], ids=["ohne-EMAIL_HOST", "mit-EMAIL_HOST"])
+    def test_prod_smtp_mailer_und_mail_e001_scharf(self, email_host):
+        result = _run_prod_import(
+            {**self._VALID_ENV, "EMAIL_HOST": email_host},
+            code=(
+                "import anlaufstelle.settings.prod as p;"
+                "print(p.MAILERS['default']['BACKEND'], 'mail.E001' in getattr(p, 'SILENCED_SYSTEM_CHECKS', []))"
+            ),
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip().splitlines()[-1] == "django.core.mail.backends.smtp.EmailBackend False"

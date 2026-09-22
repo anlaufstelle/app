@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Live-Dev- und Demo-Einstellungen starten unter Django 6.1 wieder ohne SMTP** (#2326) — Der neue Deploy-Check `mail.E001` von Django 6.1 lehnte das fest eingestellte Konsolen-Mail-Backend der Live-Dev-Einstellungen ab, sodass der Web-Container auf Hosts ohne SMTP in einer Neustart-Schleife blieb. Ohne `EMAIL_HOST` bleibt es beim Konsolen-Backend (Mails im Container-Log) und nur diese eine Prüfung ist dort stummgeschaltet; ist `EMAIL_HOST` gesetzt, gilt der SMTP-Versand wie in Produktion. Die Produktiv-Einstellungen sind unverändert und schalten die Prüfung nicht stumm; Admin-Handbuch und Betriebs-Runbook erklären, dass Django 6.1 auf Produktivhosts ein SMTP-Backend voraussetzt und was ohne erreichbaren Mailserver passiert.
+
 ## [0.99.1] - 2026-09-22
 
 Zusätzlicher Release-Kandidat vor 1.0 auf Django 6.1: bündelt die Django-Etappe 1 (6.0 → 6.1.1, Mailversand über `MAILERS`), die Sicherheits-Kleinposten der Folgewelle (einrichtungsweite Sperr-Reihenfolgen für Anhänge, Personen und Importe, Server-Log-Scrub, Audit-Anker-Pflicht, MFA-Weiterleitung), die Übergabe- und Oberflächenkorrekturen, die Dispositionen des Dokumentations-Audits, die Kosmetik aus dem Installations-Trockenlauf und den Dependabot-Sammel-Batch.

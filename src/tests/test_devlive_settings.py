@@ -32,7 +32,7 @@ _VALID_ENV = {
 }
 
 
-def _run_devlive_import(env_overrides=None, expr="import anlaufstelle.settings.devlive  # noqa"):
+def _devlive_env(env_overrides=None):
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(SRC_DIR),
@@ -47,9 +47,25 @@ def _run_devlive_import(env_overrides=None, expr="import anlaufstelle.settings.d
     env.update(_VALID_ENV)
     if env_overrides:
         env.update(env_overrides)
+    return env
+
+
+def _run_devlive_import(env_overrides=None, expr="import anlaufstelle.settings.devlive  # noqa"):
     return subprocess.run(
         [sys.executable, "-c", expr],
-        env=env,
+        env=_devlive_env(env_overrides),
+        capture_output=True,
+        text=True,
+        cwd=str(REPO_ROOT),
+    )
+
+
+def _run_devlive_check_deploy(env_overrides=None):
+    """``manage.py check --deploy`` unter devlive — derselbe Aufruf wie im
+    Image-Entrypoint (``docker-entrypoint.sh``) vor dem Gunicorn-Start."""
+    return subprocess.run(
+        [sys.executable, str(SRC_DIR / "manage.py"), "check", "--deploy"],
+        env=_devlive_env(env_overrides),
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -221,3 +237,70 @@ class TestDevLiveUmami:
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "False False"
+
+
+class TestDevLiveMailerDeployCheck:
+    """Refs #2326: Django 6.1 wertet ein Entwicklungs-Backend im
+    ``MAILERS["default"]`` unter ``check --deploy`` als Fehler ``mail.E001``.
+    Der Image-Entrypoint faehrt genau diesen Check, sodass dev.anlaufstelle.app
+    (kein SMTP, ``.env`` ohne ``EMAIL_*``) mit dem festen Konsolen-Backend
+    nicht mehr startete. devlive faellt deshalb nur ohne ``EMAIL_HOST`` auf die
+    Konsole zurueck und schaltet ausschliesslich dafuer ``mail.E001`` stumm;
+    mit ``EMAIL_HOST`` bleibt der SMTP-Mailer aus prod erhalten (SMTP-Nachweis
+    auf dev, Refs #2089) und der Check bleibt scharf.
+    """
+
+    _SMTP_ENV = {"EMAIL_HOST": "smtp.example.org", "EMAIL_PORT": "2525"}
+
+    # MEDIA_ROOT ausserhalb von BASE_DIR, sonst bricht ``core.E002`` den
+    # Deploy-Check unabhaengig vom Mailer ab (Refs #1453).
+    @staticmethod
+    def _deploy_env(tmp_path, extra=None):
+        return {"MEDIA_ROOT": str(tmp_path / "media"), **(extra or {})}
+
+    def test_ohne_email_host_konsole_und_nur_mail_e001_stumm(self):
+        result = _run_devlive_import(
+            expr=(
+                "from anlaufstelle.settings.devlive import MAILERS, SILENCED_SYSTEM_CHECKS;"
+                "print(MAILERS['default']['BACKEND'], sorted(SILENCED_SYSTEM_CHECKS))"
+            )
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "django.core.mail.backends.console.EmailBackend ['mail.E001']"
+
+    def test_leerer_email_host_zaehlt_als_ungesetzt(self):
+        """Compose/dotenv reichen unbelegte Variablen als Leerstring durch."""
+        result = _run_devlive_import(
+            {"EMAIL_HOST": ""},
+            expr="from anlaufstelle.settings.devlive import MAILERS;print(MAILERS['default']['BACKEND'])",
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "django.core.mail.backends.console.EmailBackend"
+
+    def test_mit_email_host_smtp_wie_prod_ohne_stummschaltung(self):
+        result = _run_devlive_import(
+            self._SMTP_ENV,
+            expr=(
+                "import anlaufstelle.settings.devlive as d;"
+                "m=d.MAILERS['default'];"
+                "print(m['BACKEND'], m['OPTIONS']['host'], m['OPTIONS']['port'],"
+                "'mail.E001' in getattr(d, 'SILENCED_SYSTEM_CHECKS', []))"
+            ),
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "django.core.mail.backends.smtp.EmailBackend smtp.example.org 2525 False"
+
+    def test_check_deploy_ohne_email_host_ist_gruen(self, tmp_path):
+        result = _run_devlive_check_deploy(self._deploy_env(tmp_path))
+        ausgabe = result.stdout + result.stderr
+        assert result.returncode == 0, ausgabe
+        assert "mail.E001" not in ausgabe
+        # Der Check laeuft weiterhin — er ist stummgeschaltet, nicht verschwunden.
+        assert "(1 silenced)" in ausgabe, ausgabe
+
+    def test_check_deploy_mit_email_host_ist_gruen_und_schaltet_nichts_stumm(self, tmp_path):
+        result = _run_devlive_check_deploy(self._deploy_env(tmp_path, self._SMTP_ENV))
+        ausgabe = result.stdout + result.stderr
+        assert result.returncode == 0, ausgabe
+        assert "mail.E001" not in ausgabe
+        assert "(0 silenced)" in ausgabe, ausgabe
