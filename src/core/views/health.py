@@ -24,6 +24,7 @@ from django_ratelimit.decorators import ratelimit
 from core.services import ops_thresholds
 from core.services.compliance import ComplianceStatus, cron_job_checks
 from core.services.file_vault import ping as clamav_ping
+from core.services.security.session_state import session_fully_authenticated
 from core.services.system import rls_bypass_for_read
 
 logger = logging.getLogger(__name__)
@@ -46,14 +47,20 @@ def _detail_authorized(request) -> bool:
     """A7.1 (Refs #1024): Darf dieser Caller die Health-Detailfelder sehen?
 
     True für interne/Token-Caller (Header ``X-Health-Token`` == gesetztes
-    ``HEALTH_DETAIL_TOKEN``) oder authentifizierte Sessions. Anonyme Caller
-    bekommen nur den schlanken Liveness-Payload.
+    ``HEALTH_DETAIL_TOKEN``) oder vollständig angemeldete Sessions. Anonyme
+    Caller bekommen nur den schlanken Liveness-Payload.
+
+    Refs #2286: Der Sitzungspfad prüft ``session_fully_authenticated`` statt der
+    blossen Anmeldung. ``/health/`` steht in den ``EXEMPT_URLS`` der
+    MFA-Middleware — wer nur das Passwort besitzt, sah hier bis dahin Version,
+    Backup-Alter, Plattenplatz, SMTP-Zustand und hängende Jobs, also genau den
+    Betriebszustand, den der zweite Faktor abdecken soll. Der Token-Pfad bleibt
+    unverändert: er hat mit dem Anmeldezustand nichts zu tun.
     """
     token = getattr(settings, "HEALTH_DETAIL_TOKEN", "") or ""
     if token and constant_time_compare(request.headers.get("X-Health-Token", ""), token):
         return True
-    user = getattr(request, "user", None)
-    return bool(user and user.is_authenticated)
+    return session_fully_authenticated(request)
 
 
 def _degrade(status: str, condition) -> str:

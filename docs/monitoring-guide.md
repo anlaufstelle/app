@@ -42,7 +42,7 @@ Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängi
 **Als „intern" gilt ein Aufrufer, wenn** entweder
 
 - der Header `X-Health-Token` exakt dem konfigurierten `DJANGO_HEALTH_DETAIL_TOKEN` entspricht (Konstantzeit-Vergleich, [`settings/base.py`](../src/anlaufstelle/settings/base.py) L40 → `HEALTH_DETAIL_TOKEN`), **oder**
-- der Request eine authentifizierte Session trägt (`request.user.is_authenticated`).
+- der Request eine **vollständig angemeldete** Session trägt: authentifiziert, kein offener zweiter Faktor und kein erzwungener Passwortwechsel ([`core/services/security/session_state.py`](../src/core/services/security/session_state.py)). Eine Session, die nur das Passwort geprüft hat, bekommt den anonymen Liveness-Payload — `/health/` ist von der 2FA-Erzwingung ausgenommen und gäbe sonst den Betriebszustand vor dem zweiten Faktor preis.
 
 ```bash
 # Anonyme Liveness (externes Monitoring):
@@ -52,7 +52,7 @@ curl -s https://$DOMAIN/health/
 curl -s -H "X-Health-Token: $DJANGO_HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/
 ```
 
-> Ist `DJANGO_HEALTH_DETAIL_TOKEN` **nicht** gesetzt, gibt es **keinen** Token-Pfad — Detailfelder sehen dann nur eingeloggte Sessions. Externes Monitoring bleibt auf dem Liveness-Payload.
+> Ist `DJANGO_HEALTH_DETAIL_TOKEN` **nicht** gesetzt, gibt es **keinen** Token-Pfad — Detailfelder sehen dann nur vollständig angemeldete Sessions. Externes Monitoring bleibt auf dem Liveness-Payload.
 
 ---
 

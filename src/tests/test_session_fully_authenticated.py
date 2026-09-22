@@ -148,12 +148,19 @@ class TestHealthDetailGate:
         response = client.get(reverse("health"))
         self._assert_lean_payload(response.json(), "C//health/")
 
-    def test_state_d_gets_lean_payload(self, client, staff_user):
+    def test_state_d_never_reaches_the_payload(self, client, staff_user):
+        """Zustand D kommt an ``/health/`` gar nicht an: anders als die
+        MFA-Middleware nimmt ``ForcePasswordChangeMiddleware`` den Pfad nicht
+        aus, die Antwort ist die Umleitung auf den Passwortwechsel. Der
+        Detail-Payload ist damit auf diesem Weg unerreichbar — festgehalten,
+        damit eine spaetere Ausnahme fuer ``/health/`` nicht unbemerkt eine
+        Luecke aufmacht."""
         staff_user.must_change_password = True
         staff_user.save(update_fields=["must_change_password"])
         client.force_login(staff_user)
         response = client.get(reverse("health"))
-        self._assert_lean_payload(response.json(), "D//health/")
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/password-change/")
 
     def test_fully_authenticated_session_keeps_details(self, client, staff_user):
         client.force_login(staff_user)

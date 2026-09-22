@@ -7,14 +7,18 @@
 {#                                                                              #}
 {# Zwei explizite Schalter, beide Default AUS:                                  #}
 {#                                                                              #}
-{# * ``footer_authenticated`` — Versions-, Build- und Hilfe-Anzeige. NUR        #}
-{#   base.html setzt ihn: dort ist die Sitzung vollstaendig authentifiziert.    #}
-{#   mfa_login.html/mfa_setup.html/password_change.html sind zwar eingeloggt,   #}
-{#   aber vor dem 2FA-Nachweis bzw. dem erzwungenen Passwortwechsel — dort      #}
-{#   bleibt die Version aus (Fingerprinting, Refs #1901/#1050). Die zusaetz-    #}
-{#   liche ``user.is_authenticated``-Pruefung ist KEINE Redundanz: 403/404/     #}
-{#   403_csrf erben von base.html und sind anonym erreichbar (Refs #1901,       #}
-{#   gepinnt von test_source_code_version_hidden_on_404).                       #}
+{# * ``footer_authenticated`` — LAYOUT-Schalter der Versions-, Build- und     #}
+{#   Hilfe-Anzeige. NUR base.html setzt ihn; die Vollbild-/Offline-Layouts     #}
+{#   bleiben auch fuer vollstaendig Angemeldete versionslos (Refs #2102).      #}
+{# * ``session_fully_authenticated`` — das SICHERHEITS-Gate (Refs #2286, aus   #}
+{#   dem Kontextprozessor ``core.context_processors.source_code``): authen-    #}
+{#   tifiziert UND kein offener zweiter Faktor UND kein erzwungener Passwort-  #}
+{#   wechsel — dieselbe Logik wie MFA-/Passwortwechsel-Middleware. Bis #2286   #}
+{#   gatete die blosse Anmeldung; die ist schon nach dem Passwortschritt       #}
+{#   wahr, weshalb die von base.html geerbten Seiten (404.html, 403.html,      #}
+{#   403_csrf.html, /mfa/settings/, /mfa/backup-codes/) einer teil-authenti-   #}
+{#   fizierten Sitzung Version und Build-Stand zeigten (Fingerprinting,        #}
+{#   Linie aus Refs #1050/#1901/#2102).                                        #}
 {# * ``legal_links_external`` — wird an components/_legal_links.html            #}
 {#   durchgereicht (target=_blank fuer die Vollbild-Layouts).                   #}
 {#                                                                              #}
@@ -26,19 +30,19 @@
     <span aria-hidden="true" class="mx-1.5">·</span>
     {# AGPL §13: Source-Link fuer Network-Use-Disclosure. Refs #835: Forks/Self-Hoster MUESSEN SOURCE_CODE_URL setzen. #}
     <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
-    {% if footer_authenticated and user.is_authenticated and SOURCE_CODE_VERSION %}
+    {% if footer_authenticated and session_fully_authenticated and SOURCE_CODE_VERSION %}
     <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
     {% endif %}
     <span aria-hidden="true" class="mx-1.5">·</span>
     <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
-    {% if footer_authenticated and user.is_authenticated %}
+    {% if footer_authenticated and session_fully_authenticated %}
     <span aria-hidden="true" class="mx-1.5">·</span>
     <a href="{% url 'core:help_overview' %}" class="hover:underline" data-testid="footer-help">{% trans "Hilfe" %}</a>
     {% endif %}
     {# Oeffentliche Rechtstexte der Demo oder der selbst gehosteten Instanz (Refs #2076). #}
     {% include "components/_legal_links.html" with legal_links_external=legal_links_external %}
     {# Refs #1050: deployte Version nur fuer Eingeloggte (Login-Seite bleibt bewusst versionslos). #}
-    {% if footer_authenticated and user.is_authenticated and app_version %}
+    {% if footer_authenticated and session_fully_authenticated and app_version %}
     <span aria-hidden="true" class="mx-1.5">·</span>
     <span data-testid="app-version">v{{ app_version }}{% if app_build %} ({{ app_build|truncatechars:18 }}){% endif %}</span>
     {% endif %}

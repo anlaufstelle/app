@@ -41,13 +41,26 @@ def source_code(request):
     fuer den AGPL-§13-Footer. Wird in jedem Template gerendert.
     Refs #1050: zusaetzlich app_version/app_build fuer die
     Versionsanzeige im eingeloggten Footer.
+
+    Refs #2286: ``session_fully_authenticated`` ist das Sicherheits-Gate der
+    Versions-/Build-/Hilfe-Anzeige. Die Werte selbst bleiben im Kontext (der
+    AGPL-Quellcode-Link braucht ``SOURCE_CODE_URL`` auf jeder Seite, und der
+    Footer-Baustein beweist per Test, dass er sie ohne Gate nicht ausgibt) —
+    ausgegeben werden sie nur noch, wenn die Sitzung vollstaendig angemeldet
+    ist: authentifiziert, kein offener zweiter Faktor, kein erzwungener
+    Passwortwechsel. Vorher genuegte ``user.is_authenticated``, und damit
+    sahen 404-/403-CSRF-Seiten und die 2FA-Einrichtung die Version schon vor
+    dem zweiten Faktor.
     """
+    from core.services.security.session_state import session_fully_authenticated
+
     app_version, app_build = _app_version_info()
     return {
         "SOURCE_CODE_URL": settings.SOURCE_CODE_URL,
         "SOURCE_CODE_VERSION": settings.SOURCE_CODE_VERSION,
         "app_version": app_version,
         "app_build": app_build,
+        "session_fully_authenticated": session_fully_authenticated(request),
     }
 
 

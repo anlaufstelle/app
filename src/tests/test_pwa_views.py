@@ -788,7 +788,17 @@ class TestPrecachedShellBumpGuard:
     # components/_offline_auth_pending.html im gemeinsamen Bannerstapel von
     # offline_base.html (und base.html), weil der Replay auf jeder Seite laeuft;
     # der Guard hasht Include-Ziele seit #1845 rekursiv mit.
-    _PINNED_SHELL_HASH = "3964714b42d1ff3aee2cb076a36f9974dd2c7ff5e6f32962dde1447062b15da9"
+    # 2026-09-22, Refs #2286: components/_public_footer.html gatet die Versions-,
+    # Build- und Hilfe-Anzeige jetzt ueber ``session_fully_authenticated`` statt
+    # ueber die blosse Anmeldung; dazu ein neu gefasster Kommentarblock. Fuer die
+    # precachte Shell aendert sich am AUSGELIEFERTEN Markup nichts: offline_base.html
+    # bindet den Baustein bewusst OHNE ``footer_authenticated`` ein (Refs #2102), die
+    # Bedingung ist also in beiden Fassungen schon am ersten Glied falsch, und
+    # Django-Kommentare erreichen den Draht nie. Damit ist das der Fall aus
+    # #1900/#1805 — NUR Hash nachziehen, KEIN CACHE_NAME-Bump. Belegt durch
+    # test_version_display.py::TestPublicFooterRendering::
+    # test_anonymous_pages_show_source_link_but_no_version[core:offline_client_list_shell].
+    _PINNED_SHELL_HASH = "ca06719e6ef4a973d5a1f8e038557b131f2d5f594686dce692c59642252e3550"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
