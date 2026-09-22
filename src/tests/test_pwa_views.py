@@ -784,8 +784,11 @@ class TestPrecachedShellBumpGuard:
     # 2026-09-21, Refs #2238: Der Hash folgt dem v48-Bump und deckt die beiden
     # neuen Script-Tags sowie offline-messages.js im APP_SHELL gemeinsam ab.
     # 2026-09-22, Refs #2289: Der Hash folgt dem v49-Bump und deckt den neuen
-    # Hinweisblock „Anmeldung erforderlich" in core/clients/offline_detail.html ab.
-    _PINNED_SHELL_HASH = "96381e6e9cdd8a60aece72f45401d1baea084308d54eb43617b7b39d6bd2bf0c"
+    # Hinweisblock „Anmeldung erforderlich" ab — er liegt als
+    # components/_offline_auth_pending.html im gemeinsamen Bannerstapel von
+    # offline_base.html (und base.html), weil der Replay auf jeder Seite laeuft;
+    # der Guard hasht Include-Ziele seit #1845 rekursiv mit.
+    _PINNED_SHELL_HASH = "3964714b42d1ff3aee2cb076a36f9974dd2c7ff5e6f32962dde1447062b15da9"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

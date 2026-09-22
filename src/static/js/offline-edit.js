@@ -64,7 +64,19 @@
                 // Der Service Worker reicht markierte Requests network-only durch
                 // (kein Re-Intercept/Re-Queue) — sonst faenge er A's eigenen
                 // Replay bei >6s erneut ab (Doppelkanal + spurious dead-letter).
-                "X-Offline-Replay": "1",
+                //
+                // Refs #2289: Der WERT ist die Protokollversion des Replays.
+                // "2" heisst: dieser Client versteht die Erfolgsbestaetigung
+                // (``X-Offline-Replay-Result: saved``) und erwartet sie STATT
+                // des Redirects. Ein Geraet mit vorgehaltenem v48-Precache
+                // sendet weiterhin "1" und bekommt vom neuen Server byte-gleich
+                // den bisherigen Redirect-Kontrakt — sonst deutete das alte
+                // Skript die 200-Bestaetigung als "invalid"/"error" und meldete
+                // tatsaechlich gespeicherte Arbeit dauerhaft als
+                // unsynchronisiert. Das SW-Update haengt an einem Nutzerklick
+                // (sw.js: skipWaiting nur auf SKIP_WAITING), die Umstellung
+                // muss also schnittfrei sein.
+                "X-Offline-Replay": REPLAY_PROTOCOL_VERSION,
             },
             extraHeaders || {}
         );
@@ -139,6 +151,13 @@
      * tests/js/offline-replay-auth.test.mjs haelt beide Fassungen deckungsgleich.
      */
     const AUTH_PENDING_PREFIXES = ["/login/", "/mfa/", "/password-change/", "/password-reset/"];
+    // Refs #2289: Zielklassen fuer die Anzeige. Der erzwungene Passwortwechsel
+    // ist KEIN blosses "melde dich neu an": er rotiert den Schluessel-Salt, der
+    // lokale Bestand wird danach unlesbar und purgt (crypto.js) — und vorher
+    // uebertragen laesst er sich nicht, weil JEDER Schreib-Replay genau auf
+    // /password-change/ bounct. Die Anzeige braucht deshalb die Ursache.
+    const AUTH_PENDING_PASSWORD_PREFIXES = ["/password-change/", "/password-reset/"];
+    const REPLAY_PROTOCOL_VERSION = "2";
     const REPLAY_RESULT_HEADER = "X-Offline-Replay-Result";
     const REPLAY_RESULT_SAVED = "saved";
 
@@ -151,8 +170,9 @@
         }
     }
 
-    function _isAuthPendingTarget(rawUrl) {
-        if (!rawUrl) return false;
+    /** "login" | "password-change" | null — die Zielklasse eines Pfades. */
+    function _authPendingKind(rawUrl) {
+        if (!rawUrl) return null;
         let path;
         try {
             path = new URL(rawUrl, window.location.origin).pathname;
@@ -161,20 +181,37 @@
         }
         // Ein Ziel ohne abschliessenden Schraegstrich (``/mfa``) zaehlt mit.
         const normalized = path.endsWith("/") ? path : path + "/";
-        return AUTH_PENDING_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+        if (!AUTH_PENDING_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return null;
+        return AUTH_PENDING_PASSWORD_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+            ? "password-change"
+            : "login";
+    }
+
+    function _isAuthPendingTarget(rawUrl) {
+        return _authPendingKind(rawUrl) !== null;
+    }
+
+    /** Zielklasse der Antwort oder null (die drei Kanaele in fester Reihenfolge). */
+    function _authPendingResponseKind(response) {
+        if (!response) return null;
+        if (response.redirected) {
+            const kind = _authPendingKind(response.url);
+            if (kind) return kind;
+        }
+        // Refs #1419: die HtmxSession-Middleware kann einen Auth-Bounce fuer
+        // HTMX-Requests als ``200 + HX-Redirect`` statt als 302 liefern.
+        const hxKind = _authPendingKind(_responseHeader(response, "HX-Redirect"));
+        if (hxKind) return hxKind;
+        // Ungefolgtes 3xx (defensiv — der Replay folgt Redirects sonst).
+        if (response.status >= 300 && response.status < 400) {
+            const locationKind = _authPendingKind(_responseHeader(response, "Location"));
+            if (locationKind) return locationKind;
+        }
+        return null;
     }
 
     function _isAuthPendingResponse(response) {
-        if (!response) return false;
-        if (response.redirected && _isAuthPendingTarget(response.url)) return true;
-        // Refs #1419: die HtmxSession-Middleware kann einen Auth-Bounce fuer
-        // HTMX-Requests als ``200 + HX-Redirect`` statt als 302 liefern.
-        if (_isAuthPendingTarget(_responseHeader(response, "HX-Redirect"))) return true;
-        // Ungefolgtes 3xx (defensiv — der Replay folgt Redirects sonst).
-        if (response.status >= 300 && response.status < 400) {
-            if (_isAuthPendingTarget(_responseHeader(response, "Location"))) return true;
-        }
-        return false;
+        return _authPendingResponseKind(response) !== null;
     }
 
     function _isSavedConfirmed(response) {
@@ -255,18 +292,20 @@
         return total;
     }
 
-    function _signalAuthPending(pending) {
+    function _signalAuthPending(pending, kind) {
         const active = Boolean(pending);
         _countLocalPending()
             .then((count) => {
                 window.dispatchEvent(
-                    new CustomEvent("offline-auth-pending", { detail: { pending: active, count: count } })
+                    new CustomEvent("offline-auth-pending", {
+                        detail: { pending: active, count: count, kind: active ? kind || "login" : null },
+                    })
                 );
             })
             .catch(() => {});
     }
 
-    function _renderAuthPending(active, count) {
+    function _renderAuthPending(active, count, kind) {
         let nodes;
         try {
             nodes = document.querySelectorAll("[data-offline-auth-pending]");
@@ -274,7 +313,15 @@
             return;
         }
         nodes.forEach((node) => {
-            const template = node.getAttribute("data-auth-pending-text") || "";
+            // Refs #2289: Der Passwortwechsel-Zweig traegt einen eigenen Text —
+            // „melden Sie sich erneut an, dann geht es weiter" waere dort falsch
+            // (der Wechsel loescht den lokalen Bestand). Fehlt das Attribut,
+            // bleibt der allgemeine Text.
+            const attribute =
+                kind === "password-change" && node.hasAttribute("data-auth-pending-password-text")
+                    ? "data-auth-pending-password-text"
+                    : "data-auth-pending-text";
+            const template = node.getAttribute(attribute) || "";
             if (template) {
                 const target = node.querySelector("[data-offline-auth-pending-text]") || node;
                 target.textContent = template.replace("{count}", String(count));
@@ -286,7 +333,7 @@
 
     window.addEventListener("offline-auth-pending", (event) => {
         const detail = (event && event.detail) || {};
-        _renderAuthPending(Boolean(detail.pending), detail.count || 0);
+        _renderAuthPending(Boolean(detail.pending), detail.count || 0, detail.kind);
     });
 
     /*
@@ -496,9 +543,10 @@
         // Record UNVERAENDERT lassen, kein clearOfflineEdit; der Aufrufer
         // (replayAllModifiedEvents) haelt den Batch an (symmetrisch zur
         // generischen Queue, HTTP-Replay-Contract).
-        if (_isAuthPendingResponse(response)) {
-            _signalAuthPending(true);
-            return { status: "auth-pending" };
+        const authKind = _authPendingResponseKind(response);
+        if (authKind) {
+            _signalAuthPending(true, authKind);
+            return { status: "auth-pending", authKind: authKind };
         }
         // Refs #2289: Erfolg ausschliesslich mit Serverbestaetigung.
         if (_isSavedConfirmed(response)) {
@@ -792,9 +840,10 @@
         // bei einer waehrend der Offline-Phase geaenderten MFA-Pflicht).
         // Record UNVERAENDERT lassen; der Aufrufer (replayAllModifiedEvents)
         // haelt den Batch an (HTTP-Replay-Contract, constraints.md Z.29).
-        if (_isAuthPendingResponse(response)) {
-            _signalAuthPending(true);
-            return { status: "auth-pending" };
+        const authKind = _authPendingResponseKind(response);
+        if (authKind) {
+            _signalAuthPending(true, authKind);
+            return { status: "auth-pending", authKind: authKind };
         }
 
         // Refs #2289: Erfolg ist NUR ein belegtes Speichern — die Antwort auf
@@ -991,6 +1040,8 @@
         // den wortgleichen Fassungen in offline-queue.js.
         _isAuthPendingTarget: _isAuthPendingTarget,
         _isAuthPendingResponse: _isAuthPendingResponse,
+        _authPendingKind: _authPendingKind,
+        _authPendingResponseKind: _authPendingResponseKind,
         _isSavedConfirmed: _isSavedConfirmed,
     };
 })();

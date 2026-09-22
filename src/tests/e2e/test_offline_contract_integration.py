@@ -390,7 +390,9 @@ class TestReplayMarker:
                 }""",
                 wi_url,
             )
-            assert markers == ["1"], f"Der Queue-Replay muss X-Offline-Replay: 1 senden: {markers!r}"
+            assert markers == ["2"], (
+                f"Der Queue-Replay muss X-Offline-Replay: 2 senden (Refs #2289, Protokollversion): {markers!r}"
+            )
         finally:
             _purge(page)
             context.close()
@@ -685,7 +687,7 @@ class TestWorkItemReplayContract:
                 f"Der Replay muss den persistierten Idempotenz-Key senden: "
                 f"{captured[0]['idem']!r} != {result['idemKey']!r}"
             )
-            assert captured[0]["replay"] == "1", (
+            assert captured[0]["replay"] == "2", (
                 f"Der Create-Replay muss sich als Replay ausweisen (X-Offline-Replay): {captured[0]!r}"
             )
             assert result["status"] == "synced", f"Bestaetigter Erfolg muss synced liefern: {result!r}"

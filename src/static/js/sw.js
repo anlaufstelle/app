@@ -162,6 +162,10 @@ importScripts("/static/js/url-patterns.js");
 // Refs #2201: v46 -> v47, damit Bestandsgeraete die gehaertete Shell laden.
 // 2026-09-21, Refs #2238: v47 -> v48 -- offline-messages.js ist ein neues
 // Shell-Modul; der Bump erneuert die atomare Precache-Generation.
+// 2026-09-22, Refs #2293/#2289: v48 -> v49 — die precachten Replay-Skripte
+// (offline-edit.js, offline-queue.js) tragen die korrigierte Metadaten-
+// Uebernahme der Neuanlage und den Vertrag der Erfolgsbestaetigung; die
+// precachte Shell bekommt den Hinweis „Anmeldung erforderlich".
 const CACHE_NAME = "anlaufstelle-v49";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump

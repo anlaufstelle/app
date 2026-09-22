@@ -23,13 +23,23 @@ from django.utils import timezone
 from core.models import Event, WorkItem
 from core.views._offline_replay import (
     OFFLINE_REPLAY_HEADER,
+    OFFLINE_REPLAY_PROTOCOL_CONFIRMED,
     OFFLINE_REPLAY_RESULT_HEADER,
     OFFLINE_REPLAY_RESULT_SAVED,
     is_offline_replay,
     saved_confirmation,
+    wants_saved_confirmation,
 )
 
+# Replay der Protokollversion 2 — nur diese Fassung versteht die Bestätigung.
 REPLAY_HEADERS = {
+    "HTTP_X_OFFLINE_REPLAY": OFFLINE_REPLAY_PROTOCOL_CONFIRMED,
+    "HTTP_ACCEPT": "application/json",
+}
+
+# Bestandsgerät mit dem Precache vor 0.99.2: sendet den alten Markerwert und
+# muss byte-gleich den bisherigen Redirect-Kontrakt bekommen (Rollout-Schnitt).
+LEGACY_REPLAY_HEADERS = {
     "HTTP_X_OFFLINE_REPLAY": "1",
     "HTTP_ACCEPT": "application/json",
 }
@@ -56,12 +66,19 @@ def _assert_saved(response, expected_pk=None):
 
 class TestMarkerHelper:
     def test_is_offline_replay_reads_the_request_marker(self, rf):
+        assert is_offline_replay(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "2"})) is True
         assert is_offline_replay(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "1"})) is True
         assert is_offline_replay(rf.post("/events/new/")) is False
 
+    def test_only_the_confirmed_protocol_version_wants_the_marker(self, rf):
+        assert wants_saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "2"})) is True
+        assert wants_saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "1"})) is False
+        assert wants_saved_confirmation(rf.post("/events/new/")) is False
+
     def test_saved_confirmation_only_answers_marked_requests(self, rf):
         assert saved_confirmation(rf.post("/events/new/"), "pk-1") is None
-        response = saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "1"}), "pk-1")
+        assert saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "1"}), "pk-1") is None
+        response = saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "2"}), "pk-1")
         assert response is not None
         _assert_saved(response, "pk-1")
 
@@ -69,6 +86,7 @@ class TestMarkerHelper:
         assert OFFLINE_REPLAY_HEADER == "X-Offline-Replay"
         assert OFFLINE_REPLAY_RESULT_HEADER == "X-Offline-Replay-Result"
         assert OFFLINE_REPLAY_RESULT_SAVED == "saved"
+        assert OFFLINE_REPLAY_PROTOCOL_CONFIRMED == "2"
 
 
 @pytest.mark.django_db
@@ -164,6 +182,91 @@ class TestEventReplayConfirmation:
         )
         assert response.status_code == 409
         assert response.headers.get(OFFLINE_REPLAY_RESULT_HEADER) is None
+
+
+@pytest.mark.django_db
+class TestLegacyReplayKeepsTheOldContract:
+    """Rollout-Schnitt: Bestandsgeräte behalten bis zum SW-Update ihren Kontrakt.
+
+    Das Service-Worker-Update hängt an einer Nutzerbestätigung (ADR-030 §4),
+    auf Bestandsgeräten läuft nach dem Deploy also weiter das alte Skript. Es
+    kennt die Bestätigung nicht und würde eine ``200``-Antwort als ungültiges
+    Formular bzw. transienten Fehler deuten — gespeicherte Arbeit erschiene
+    dauerhaft als „nicht synchronisiert".
+    """
+
+    def test_event_create_with_the_old_marker_keeps_its_redirect(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            _event_payload(doc_type_contact, client_identified),
+            **LEGACY_REPLAY_HEADERS,
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/events/")
+        assert response.headers.get(OFFLINE_REPLAY_RESULT_HEADER) is None
+        assert Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).count() == 1
+
+    def test_event_update_with_the_old_marker_keeps_its_redirect(self, client, staff_user, sample_event):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {
+                "occurred_at": timezone.localtime(sample_event.occurred_at).strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "30",
+                "expected_updated_at": sample_event.updated_at.isoformat(),
+            },
+            **LEGACY_REPLAY_HEADERS,
+        )
+        assert response.status_code == 302
+        assert response.headers.get(OFFLINE_REPLAY_RESULT_HEADER) is None
+
+    def test_workitem_create_with_the_old_marker_keeps_its_redirect(self, client, staff_user, client_identified):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "client": str(client_identified.pk),
+                "item_type": WorkItem.ItemType.TASK,
+                "title": "Alt-Client-Aufgabe",
+                "priority": WorkItem.Priority.NORMAL,
+            },
+            **LEGACY_REPLAY_HEADERS,
+        )
+        assert response.status_code == 302
+        assert response.headers.get(OFFLINE_REPLAY_RESULT_HEADER) is None
+        assert WorkItem.objects.filter(title="Alt-Client-Aufgabe").count() == 1
+
+    def test_workitem_update_with_the_old_marker_keeps_its_redirect(self, client, staff_user, sample_workitem):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            {
+                "item_type": sample_workitem.item_type,
+                "title": "Alt-Client-Korrektur",
+                "priority": sample_workitem.priority,
+                "expected_updated_at": sample_workitem.updated_at.isoformat(),
+            },
+            **LEGACY_REPLAY_HEADERS,
+        )
+        assert response.status_code == 302
+        assert response.headers.get(OFFLINE_REPLAY_RESULT_HEADER) is None
+
+    def test_repeated_old_marker_replay_still_deduplicates(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Der Idempotenz-Schutz gilt fuer beide Protokollversionen."""
+        client.force_login(staff_user)
+        payload = _event_payload(doc_type_contact, client_identified)
+        headers = dict(LEGACY_REPLAY_HEADERS, HTTP_X_IDEMPOTENCY_KEY="22222222-2222-4222-8222-222222222222")
+        first = client.post(reverse("core:event_create"), payload, **headers)
+        second = client.post(reverse("core:event_create"), payload, **headers)
+        assert first.status_code == 302
+        assert second.status_code == 302
+        assert second.headers.get(OFFLINE_REPLAY_RESULT_HEADER) is None
+        assert Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).count() == 1
 
 
 @pytest.mark.django_db

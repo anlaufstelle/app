@@ -106,6 +106,14 @@
      * Einrichtungsfrist) galt als Erfolg und die Zeile wurde geloescht.
      */
     const AUTH_PENDING_PREFIXES = ["/login/", "/mfa/", "/password-change/", "/password-reset/"];
+    // Refs #2289 (wortgleich in offline-edit.js): der erzwungene
+    // Passwortwechsel rotiert den Schluessel-Salt und loescht den lokalen
+    // Bestand — die Anzeige braucht die Zielklasse, nicht nur „ausstehend".
+    const AUTH_PENDING_PASSWORD_PREFIXES = ["/password-change/", "/password-reset/"];
+    // Protokollversion des Replays: "2" = dieser Client erwartet die
+    // Erfolgsbestaetigung STATT des Redirects. Alte Clients (v48-Precache)
+    // senden "1" und behalten den bisherigen Redirect-Kontrakt.
+    const REPLAY_PROTOCOL_VERSION = "2";
     const REPLAY_RESULT_HEADER = "X-Offline-Replay-Result";
     const REPLAY_RESULT_SAVED = "saved";
 
@@ -118,8 +126,9 @@
         }
     }
 
-    function _isAuthPendingTarget(rawUrl) {
-        if (!rawUrl) return false;
+    /** "login" | "password-change" | null — die Zielklasse eines Pfades. */
+    function _authPendingKind(rawUrl) {
+        if (!rawUrl) return null;
         let path;
         try {
             path = new URL(rawUrl, self.location.origin).pathname;
@@ -128,20 +137,37 @@
         }
         // Ein Ziel ohne abschliessenden Schraegstrich (``/mfa``) zaehlt mit.
         const normalized = path.endsWith("/") ? path : path + "/";
-        return AUTH_PENDING_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+        if (!AUTH_PENDING_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return null;
+        return AUTH_PENDING_PASSWORD_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+            ? "password-change"
+            : "login";
+    }
+
+    function _isAuthPendingTarget(rawUrl) {
+        return _authPendingKind(rawUrl) !== null;
+    }
+
+    /** Zielklasse der Antwort oder null (die drei Kanaele in fester Reihenfolge). */
+    function _authPendingResponseKind(response) {
+        if (!response) return null;
+        if (response.redirected) {
+            const kind = _authPendingKind(response.url);
+            if (kind) return kind;
+        }
+        // Refs #1419: die HtmxSession-Middleware kann einen Auth-Bounce fuer
+        // HTMX-Requests als ``200 + HX-Redirect`` statt als 302 liefern.
+        const hxKind = _authPendingKind(_responseHeader(response, "HX-Redirect"));
+        if (hxKind) return hxKind;
+        // Ungefolgtes 3xx (defensiv — der Replay folgt Redirects sonst).
+        if (response.status >= 300 && response.status < 400) {
+            const locationKind = _authPendingKind(_responseHeader(response, "Location"));
+            if (locationKind) return locationKind;
+        }
+        return null;
     }
 
     function _isAuthPendingResponse(response) {
-        if (!response) return false;
-        if (response.redirected && _isAuthPendingTarget(response.url)) return true;
-        // Refs #1419: die HtmxSession-Middleware kann einen Auth-Bounce fuer
-        // HTMX-Requests als ``200 + HX-Redirect`` statt als 302 liefern.
-        if (_isAuthPendingTarget(_responseHeader(response, "HX-Redirect"))) return true;
-        // Ungefolgtes 3xx (defensiv — der Replay folgt Redirects sonst).
-        if (response.status >= 300 && response.status < 400) {
-            if (_isAuthPendingTarget(_responseHeader(response, "Location"))) return true;
-        }
-        return false;
+        return _authPendingResponseKind(response) !== null;
     }
 
     function _isSavedConfirmed(response) {
@@ -151,7 +177,7 @@
     // Refs #2289: Zustand an die Darstellung melden — der Empfaenger des
     // window-Events sitzt in offline-edit.js (laedt auf denselben Seiten,
     // direkt nach diesem Modul).
-    function _signalAuthPending(pending) {
+    function _signalAuthPending(pending, kind) {
         const active = Boolean(pending);
         Promise.resolve()
             .then(async () => {
@@ -168,7 +194,9 @@
                     /* dito */
                 }
                 window.dispatchEvent(
-                    new CustomEvent("offline-auth-pending", { detail: { pending: active, count: count } })
+                    new CustomEvent("offline-auth-pending", {
+                        detail: { pending: active, count: count, kind: active ? kind || "login" : null },
+                    })
                 );
             })
             .catch(() => {});
@@ -329,7 +357,7 @@
         // damit der Service Worker A's EIGENEN Replay network-only durchreicht
         // (kein Re-Intercept/Re-Queue) — sonst faenge er ihn bei >6s erneut ab
         // (Doppelkanal + spurious dead-letter).
-        headers["X-Offline-Replay"] = "1";
+        headers["X-Offline-Replay"] = REPLAY_PROTOCOL_VERSION;
         // Refs #1419 (Bugfix, analog zum Idempotency-Key oben): die
         // SW-Allowlist friert den x-csrftoken des Erstversuchs
         // KLEINGESCHRIEBEN im Record ein. Zusammen mit dem frischen
@@ -441,8 +469,9 @@
                 // Statuswechsel) — ein stiller Verwurf waere Datenverlust —,
                 // und die gesamte Schleife haelt an: jeder weitere Record
                 // kassierte dieselbe Weiterleitung.
-                if (_isAuthPendingResponse(response)) {
-                    _signalAuthPending(true);
+                const authKind = _authPendingResponseKind(response);
+                if (authKind) {
+                    _signalAuthPending(true, authKind);
                     break;
                 }
                 // Refs #2289: belastbare Serverbestaetigung = Erfolg. Sie
@@ -616,6 +645,8 @@
         // deckungsgleich mit den Fassungen in offline-edit.js.
         _isAuthPendingTarget: _isAuthPendingTarget,
         _isAuthPendingResponse: _isAuthPendingResponse,
+        _authPendingKind: _authPendingKind,
+        _authPendingResponseKind: _authPendingResponseKind,
         _isSavedConfirmed: _isSavedConfirmed,
     };
 })();

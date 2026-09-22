@@ -188,6 +188,55 @@ describe("#2289 — Pfadklassifikation", () => {
     });
 });
 
+describe("#2289 — versionierter Replay-Marker (Rollout-Schnitt)", () => {
+    it("sendet die Protokollversion 2 im Create-/Edit-Replay", async () => {
+        const record = newRecord(eventPkA);
+        rows.set(record.pk, record);
+        const fetchMock = vi.fn(async () => resp({ headers: SAVED }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await window.offlineEdit.replayModifiedEvent(record, { replay: true });
+
+        expect(fetchMock.mock.calls[0][1].headers["X-Offline-Replay"]).toBe("2");
+    });
+
+    it("sendet die Protokollversion 2 im Queue-Replay", async () => {
+        queueRows.push(queueRecord());
+        const fetchMock = vi.fn(async () => resp({ ok: true, status: 200 }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await window.offlineQueue.replayQueue();
+
+        expect(fetchMock.mock.calls[0][1].headers["X-Offline-Replay"]).toBe("2");
+    });
+});
+
+describe("#2289 — Zielklasse der ausstehenden Authentifizierung", () => {
+    it.each([
+        ["/login/", "login"],
+        ["/mfa/setup/", "login"],
+        ["/mfa/verify/?next=/events/new/", "login"],
+        ["/password-change/", "password-change"],
+        ["/password-reset/", "password-change"],
+        ["/events/" + eventPkA + "/", null],
+    ])("klassifiziert %s als %s", (target, expected) => {
+        expect(window.offlineEdit._authPendingKind(target)).toBe(expected);
+        expect(window.offlineQueue._authPendingKind(target)).toBe(expected);
+    });
+
+    it("reicht die Zielklasse aus der Antwort durch", async () => {
+        const record = newRecord(eventPkA);
+        rows.set(record.pk, record);
+        vi.stubGlobal("fetch", vi.fn(async () => resp(followedTo("/password-change/"))));
+        const result = await window.offlineEdit.replayModifiedEvent(record, { replay: true });
+        expect(result).toEqual({ status: "auth-pending", authKind: "password-change" });
+
+        vi.stubGlobal("fetch", vi.fn(async () => resp(hxRedirectTo("/mfa/verify/"))));
+        const second = await window.offlineEdit.replayModifiedEvent(record, { replay: true });
+        expect(second).toEqual({ status: "auth-pending", authKind: "login" });
+    });
+});
+
 describe("#2289 — Create-Replay (Neuanlagen)", () => {
     it.each([
         ["Login (gefolgt)", followedTo("/login/?next=/events/new/")],
@@ -404,7 +453,10 @@ describe("#2289 — Hinweis „Anmeldung erforderlich\"", () => {
     function mountHint() {
         document.body.innerHTML =
             '<div data-offline-auth-pending hidden data-testid="offline-auth-pending" ' +
-            "data-auth-pending-text=\"Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert.\">" +
+            "data-auth-pending-text=\"Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert. " +
+            'Melden Sie sich erneut an; danach wird die Übertragung fortgesetzt." ' +
+            "data-auth-pending-password-text=\"Passwortwechsel erforderlich – {count} Änderungen sind noch nicht " +
+            'übertragen.">' +
             "<p data-offline-auth-pending-text></p></div>";
         return document.querySelector("[data-offline-auth-pending]");
     }
@@ -423,6 +475,39 @@ describe("#2289 — Hinweis „Anmeldung erforderlich\"", () => {
             "Anmeldung erforderlich"
         );
         expect(hint.querySelector("[data-offline-auth-pending-text]").textContent).toContain("2");
+    });
+
+    it("zeigt beim erzwungenen Passwortwechsel den eigenen Hinweis", async () => {
+        const hint = mountHint();
+        rows.set(eventPkA, newRecord(eventPkA));
+        vi.stubGlobal("fetch", vi.fn(async () => resp(followedTo("/password-change/"))));
+
+        await window.offlineEdit.replayModifiedEvent(rows.get(eventPkA), { replay: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const text = hint.querySelector("[data-offline-auth-pending-text]").textContent;
+        expect(hint.hasAttribute("hidden")).toBe(false);
+        expect(text).toContain("Passwortwechsel erforderlich");
+        expect(text).toContain("1");
+        expect(text).not.toContain("danach wird die Übertragung fortgesetzt");
+    });
+
+    it("faellt ohne eigenen Passwort-Text auf den allgemeinen Hinweis zurueck", async () => {
+        document.body.innerHTML =
+            '<div data-offline-auth-pending hidden ' +
+            'data-auth-pending-text="Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert.">' +
+            "<p data-offline-auth-pending-text></p></div>";
+        const hint = document.querySelector("[data-offline-auth-pending]");
+        rows.set(eventPkA, newRecord(eventPkA));
+        vi.stubGlobal("fetch", vi.fn(async () => resp(followedTo("/password-change/"))));
+
+        await window.offlineEdit.replayModifiedEvent(rows.get(eventPkA), { replay: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(hint.hasAttribute("hidden")).toBe(false);
+        expect(hint.querySelector("[data-offline-auth-pending-text]").textContent).toContain(
+            "Anmeldung erforderlich"
+        );
     });
 
     it("blendet den Hinweis nach einer bestaetigten Uebertragung wieder aus", async () => {

@@ -354,11 +354,20 @@ class TestZZOfflineAuthRedirectReplay:
                 timeout_s=40.0,
                 desc="die Offline-Aenderung ist serverseitig angekommen",
             )
+            # Settle-Fenster: ``_wait_until`` kehrt beim ERSTEN Treffer zurueck —
+            # ein verspaetet ankommendes Duplikat (zweiter Drain-Lauf, Retry)
+            # wuerde sonst nur zufaellig auffallen. Der Zaehler muss ueber
+            # mehrere Runden stabil bleiben.
+            for _ in range(4):
+                time.sleep(1.0)
+                assert _server_event_count_for_client(e2e_env, client_pk) == events_before + 1, (
+                    "Nach dem Drain darf kein zweites Ereignis entstehen (Idempotenz)"
+                )
+                assert _server_update_count(e2e_env, event_pk) == updates_before + 1, (
+                    "Die Aenderung darf nicht ein zweites Mal geschrieben werden"
+                )
             assert _server_event_count_for_case(e2e_env, case_pk) == 1, (
                 "Die Neuanlage muss genau einmal und am gewaehlten Fall ankommen"
-            )
-            assert _server_event_count_for_client(e2e_env, client_pk) == events_before + 1, (
-                "Nach dem Drain darf kein zweites Ereignis entstanden sein (Idempotenz)"
             )
         finally:
             _purge_offline(page)

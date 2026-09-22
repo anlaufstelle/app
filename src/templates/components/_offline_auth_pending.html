@@ -1,0 +1,28 @@
+{% load i18n %}
+{# Refs #2289: Hinweis „Authentifizierung ausstehend".                        #}
+{#                                                                            #}
+{# Weiterleitungen zur Anmeldung, zur Zwei-Faktor-Abfrage oder zum            #}
+{# Passwortwechsel sind kein Speichererfolg — die Übertragung pausiert und    #}
+{# die lokalen Änderungen bleiben liegen. offline-edit.js schaltet diesen     #}
+{# Block über das window-Event ``offline-auth-pending`` sichtbar und setzt    #}
+{# den übersetzten Text mit der Zahl der lokal wartenden Änderungen ein       #}
+{# (Platzhalter ``{count}``, Muster wie core/clients/detail.html).            #}
+{#                                                                            #}
+{# Bewusst ohne Alpine-Bindung und im gemeinsamen Bannerstapel beider         #}
+{# Basistemplates: der Replay läuft auf JEDER Seite (base.html UND            #}
+{# offline_base.html laden offline-queue.js + offline-edit.js), nicht nur in  #}
+{# der Offline-Akte.                                                          #}
+{#                                                                            #}
+{# Der erzwungene Passwortwechsel bekommt einen EIGENEN Text: er rotiert den  #}
+{# Schlüssel-Salt, der lokale Bestand wird danach unlesbar und aufgeräumt —   #}
+{# „melden Sie sich erneut an, dann geht es weiter" führte hier in den        #}
+{# Verlust. Vorher übertragen lässt sich nichts, weil jeder Schreib-Replay    #}
+{# genau auf /password-change/ umgeleitet wird.                               #}
+<div data-offline-auth-pending hidden
+     data-testid="offline-auth-pending"
+     role="status" aria-live="polite"
+     class="bg-yellow-600 text-white text-center text-sm py-2 px-3"
+     data-auth-pending-text="{% trans 'Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert. Melden Sie sich erneut an; danach wird die Übertragung fortgesetzt.' %}"
+     data-auth-pending-password-text="{% trans 'Passwortwechsel erforderlich – {count} Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen.' %}">
+    <span data-offline-auth-pending-text></span>
+</div>

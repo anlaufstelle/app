@@ -170,6 +170,8 @@
                     <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
                 </a>
             </div>
+            {# Refs #2289: Hinweis „Authentifizierung ausstehend" (Übertragung pausiert). #}
+            {% include "components/_offline_auth_pending.html" %}
         </div>
     </div>
 
