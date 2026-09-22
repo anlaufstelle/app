@@ -85,6 +85,7 @@ backup_require_real_key
 # Verify und Restore nicht auseinanderlaufen (Refs #2290, #2292).
 MANIFEST_FILE="$(backup_set_manifest_path "$BACKUP_FILE")"
 LEGACY_SET=0
+LEGACY_HWM_HINT=""
 if [[ ! -f "$MANIFEST_FILE" ]]; then
     # Saetze aus backup.sh tragen seit 0.99.1 ein signiertes Manifest. Aeltere
     # Weekly-/Monthly-Saetze (Aufbewahrung 28/90 Tage) haben keins — ohne einen
@@ -141,16 +142,34 @@ if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
     if [[ "$BACKUP_FILE" != */* ]]; then
         HWM_FILE="./audit_hwm-${BACKUP_TIMESTAMP}.json"
     fi
-    if [[ ! -f "$HWM_FILE" ]]; then
-        echo "FEHLER: Zum DB-Backup gehoerender Audit-HWM fehlt: ${HWM_FILE}" >&2
-        exit 1
+    if [[ "$LEGACY_SET" -eq 1 ]]; then
+        # Ohne Manifest gibt es keine kryptografische Bindung des Ankers an den
+        # Satz — nur den Zeitstempel im Dateinamen. Ein fehlender Anker ist hier
+        # deshalb kein Abbruchgrund (der Satz kennt gar keinen), wird aber laut
+        # gemeldet und steht am Ende noch einmal in der Abschlussausgabe.
+        if [[ ! -s "$HWM_FILE" ]]; then
+            echo "WARNUNG: Altsatz ohne Manifest: kein zum Dump gehoerender Audit-Anker (${HWM_FILE##*/}) gefunden." >&2
+            echo "  Der Anker wird NICHT eingespielt; die Audit-Kette bleibt unverankert." >&2
+            echo "  Schritt 4b der Disaster-Recovery-Anleitung manuell nachziehen." >&2
+            HWM_FILE=""
+            LEGACY_HWM_HINT="Kein zugehoeriger Audit-Anker eingespielt — Audit-Kette unverankert, Schritt 4b manuell nachziehen."
+        else
+            echo "WARNUNG: Altsatz ohne Manifest: der Audit-Anker ${HWM_FILE##*/} wird nur ueber den" >&2
+            echo "  Zeitstempel im Dateinamen zugeordnet — es gibt keine Hash-Bindung an diesen Satz." >&2
+            LEGACY_HWM_HINT="Audit-Anker nur ueber den Dateinamen zugeordnet (keine Hash-Bindung an den Satz) — Schritt 4b pruefen."
+        fi
+    else
+        if [[ ! -f "$HWM_FILE" ]]; then
+            echo "FEHLER: Zum DB-Backup gehoerender Audit-HWM fehlt: ${HWM_FILE}" >&2
+            exit 1
+        fi
+        if [[ ! -s "$HWM_FILE" ]]; then
+            echo "FEHLER: Zum DB-Backup gehoerender Audit-HWM ist leer: ${HWM_FILE}" >&2
+            exit 1
+        fi
+        # Der Anker ist Teil des signierten Satzes (Refs #2290).
+        backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE" "$HWM_FILE"
     fi
-    if [[ ! -s "$HWM_FILE" ]]; then
-        echo "FEHLER: Zum DB-Backup gehoerender Audit-HWM ist leer: ${HWM_FILE}" >&2
-        exit 1
-    fi
-    # Der Anker ist Teil des signierten Satzes (Refs #2290).
-    backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE" "$HWM_FILE"
 fi
 
 # Der Plain-SQL-Dump enthaelt OWNER-TO-/FORCE-RLS-Statements und COPY in
@@ -313,11 +332,14 @@ SWITCH_PENDING=0
 OLD_DB_KEPT=0
 MEDIA_STAGED=0
 cleanup_restore_db() {
-    if [[ "$SWITCHED" -eq 1 ]]; then
-        return
-    fi
+    # Zuerst das Staging: es muss auch dann verschwinden, wenn die Umschaltung
+    # schon gelaufen ist und erst die Medienaktivierung scheitert (oder ein
+    # Signal danach kommt).
     if [[ "$MEDIA_STAGED" -eq 1 ]]; then
         media_exec rm -rf "$MEDIA_STAGE" > /dev/null 2>&1 || true
+    fi
+    if [[ "$SWITCHED" -eq 1 ]]; then
+        return
     fi
     if [[ "$SWITCH_PENDING" -eq 1 ]]; then
         # Abbruch (auch per Signal) zwischen den beiden Umbenennungen: der
@@ -512,4 +534,7 @@ echo "Hinweis: web- und cron-Container sind gestoppt (Schreibruhe) — Migration
 echo "RESTORE-SATZ WIEDERHERGESTELLT: ${BACKUP_TIMESTAMP}"
 if [[ "$LEGACY_SET" -eq 1 ]]; then
     echo "HINWEIS: Altsatz-Modus — ohne Manifest ist dieser Lauf KEIN vollstaendiger Satznachweis (keine Satzbindung, kein Zeilenabgleich)."
+    if [[ -n "$LEGACY_HWM_HINT" ]]; then
+        echo "HINWEIS: ${LEGACY_HWM_HINT}"
+    fi
 fi

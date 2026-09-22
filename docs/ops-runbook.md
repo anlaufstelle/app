@@ -1259,6 +1259,11 @@ im Dateinamen an den Dump und ersetzt den Manifest-Abgleich durch eine deutliche
 Warnung vor der Bestaetigung sowie eine `HINWEIS: Altsatz-Modus`-Zeile am Ende.
 Nach so einem Restore die Vollstaendigkeit von Hand pruefen
 ([Disaster-Recovery §7](disaster-recovery.md#7-smoke-verifikation-nach-restore)).
+Ist ein Ankerpfad konfiguriert (`DJANGO_AUDIT_HWM_PATH`), ordnet der Altsatz-Modus
+eine daneben liegende `audit_hwm-<Zeitstempel>.json` nur ueber den Dateinamen zu
+und sagt das auch; fehlt sie, bricht der Lauf **nicht** ab, sondern warnt und
+nennt den unverankerten Zustand am Ende noch einmal — Schritt 4b der
+Disaster-Recovery-Anleitung ist dann von Hand nachzuziehen.
 `backup.sh --verify` und `restore-drill.sh --prod` verlangen das Manifest
 unveraendert zwingend; ein Altsatz kann den Vollstaendigkeitsnachweis daher
 nicht erbringen.

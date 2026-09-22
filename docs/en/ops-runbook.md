@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: the version boundary also covers the emergency mode with a configured audit anchor path (filename-only match, warning instead of abort when the anchor is missing) (#2290).
 > Synchronization update 2026-09-22: the version boundary states that the signed manifest is mandatory for `restore.sh` and describes the `--allow-missing-manifest` emergency switch for sets created before 0.99.1 (#2290).
 > Synchronization update 2026-09-22: § 6.6/§ 6.7 document the drill exit codes — a run with skipped mandatory steps ends with exit code 2 and a closing line that is not a success (#2316).
 > Synchronization update 2026-09-22: § 6.6 notes that `backup.sh --verify` selects the set through its signed manifest and enforces the same set binding as the restore (#2292).
@@ -1265,6 +1266,10 @@ HMAC sidecars of dump and media, binds the media archive to the dump through the
 timestamp in its filename, and replaces the manifest comparison with a clear
 warning before the confirmation plus a `HINWEIS: Altsatz-Modus` line at the end.
 After such a restore, verify completeness manually (Disaster Recovery §7, German).
+When an anchor path is configured (`DJANGO_AUDIT_HWM_PATH`), the emergency mode matches a
+neighbouring `audit_hwm-<timestamp>.json` by filename only and says so; if it is absent the
+run does **not** abort but warns and repeats the unanchored state at the end — step 4b of the
+disaster recovery guide then has to be done manually.
 `backup.sh --verify` and `restore-drill.sh --prod` still require the manifest, so
 an older set cannot provide the completeness evidence.
 
@@ -2892,4 +2897,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: 3acff6bdbc9a2261e0d4b20e659ba1c8c69e00d2 -->
+<!-- source-hash: e8d489054be649ff065bfc0a2c8b334e6621d269 -->
