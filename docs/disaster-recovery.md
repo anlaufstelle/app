@@ -417,6 +417,32 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
   Governance-Entscheidung für das Solo-Maintainer-Modell geschlossen. Im
   Protokoll steht deshalb als Schlüsselquelle „Maintainer-`.env`-Kopie", nicht
   „Escrow".
+- Der gewählte Quellsatz enthält **mindestens einen Vault-Anhang** und
+  **mindestens einen feldverschlüsselten Fachdatensatz je benötigter
+  Schlüsselgeneration** aus `ENCRYPTION_KEYS`. Ohne beides sind der in
+  [§ 7](#7-smoke-verifikation-nach-restore) geforderte Vault-Download samt
+  Metadatenabgleich und die fachliche Stichprobe je Generation nicht belegbar,
+  obwohl sie unten Erfolgskriterium sind — der Drill wäre dann nicht vollständig
+  grün zu protokollieren (#2320).
+  Die Prüfung gehört **vor** das Quellbackup, mit der RLS-umgehenden Admin-Rolle
+  auf der Quellinstallation:
+
+  ```bash
+  cd /opt/anlaufstelle
+  docker compose -f docker-compose.prod.yml exec -T db \
+    psql -U "$POSTGRES_ADMIN_USER" -d "$POSTGRES_DB" -tAc \
+    "SELECT count(*) FROM core_attachment;"
+  ```
+
+  Der Wert muss größer als 0 sein. Für die Schlüsselgenerationen notieren Sie je
+  Generation aus `ENCRYPTION_KEYS` einen konkreten, vor dem Backup damit
+  verschlüsselten Datensatz (Fall- oder Personenkennung) im Protokoll; die
+  Generation lässt sich nicht aus der Datenbank ablesen, sie ergibt sich aus dem
+  Zeitpunkt des letzten Schreibens im Verhältnis zur jeweiligen
+  Schlüsselrotation ([admin-guide § 2 „Schlüssel-Rotation (`ENCRYPTION_KEYS`)"](admin-guide.md#schlüssel-rotation-encryption_keys)). Enthält der Bestand
+  keinen passenden Datensatz, legen Sie vor dem Quellbackup je Generation einen
+  Testdatensatz mit Anhang an. Nach dem Restore wird genau diese Liste
+  abgearbeitet.
 - Vor dem Quellbackup wurden mit `POSTGRES_SUPERUSER` oder der RLS-umgehenden
   Admin-Rolle Referenzzahlen für `core_facility`, `core_client`, `core_event`,
   `core_workitem`, `core_auditlog` und `core_attachment` erhoben und die fachlichen Schreibzugriffe sowie
