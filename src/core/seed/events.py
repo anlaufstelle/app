@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS, EVENT_TYPE_WEIGHTS
-from core.services.events.fields import stage_index
+from core.services.events.fields import compute_event_search_text, stage_index
 from core.services.file_vault import encrypt_dynamic_data
 
 
@@ -323,6 +323,17 @@ def seed_events_bulk(
                 document_type=doc_type,
                 occurred_at=occurred,
                 data_json=data_json,
+                # Refs #2271: ``bulk_create`` loest KEIN ``pre_save``-Signal
+                # aus (``core.signals.event_search`` greift nur bei
+                # ``Event.save()``) — der GIN-trgm-Suchindex bliebe sonst
+                # leer. Die zentrale Berechnung deshalb hier direkt vorab,
+                # auf dem noch UNVERSCHLUESSELTEN ``data_json`` (dieselbe
+                # Reihenfolge wie in ``create_event``).
+                # ``compute_event_search_text`` schliesst verschluesselte/
+                # erhoehte Felder selbst ueber die ``FieldTemplate``-
+                # Metadaten aus — unabhaengig davon, ob der Wert zu diesem
+                # Zeitpunkt schon verschluesselt ist.
+                search_text=compute_event_search_text(data_json, doc_type),
                 is_anonymous=is_anonymous,
                 created_by=staff_users[i % len(staff_users)],
             )
