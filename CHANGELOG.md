@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Demo-Szenariokatalog inklusive Solo-Betrieb** (#2279) — Ein neuer `--scale demo`-Seed stellt sechs eigenständige Beispieleinrichtungen (Kontaktladen, Beratungsstelle, Solo-Betrieb, Awareness, Jugendarbeit, Frauenhaus) gleichzeitig mit überschaubarer Datenmenge bereit, unabhängig vom bisherigen `large`-Datenvolumen; der stündliche Demo-Reset nutzt denselben Katalog.
+
 ### Fixed
 
 - **Anmelde-, Zwei-Faktor- und Passwortwechsel-Weiterleitungen gelten nicht mehr als erfolgreiche Offline-Übertragung** (#2289) — Verlangte der Server beim Übertragen offline erfasster Arbeit eine erneute Anmeldung, die Bestätigung des zweiten Faktors oder einen Passwortwechsel, werteten Neuanlage, Änderung und allgemeine Warteschlange die Weiterleitung als Erfolg und verwarfen die nie gespeicherten lokalen Daten. Ein Übertragungsvorgang gilt jetzt nur noch mit ausdrücklicher Serverbestätigung als gespeichert; bei einer Anmeldeanforderung pausiert die Übertragung, alle lokalen Einträge bleiben erhalten, die Offline-Ansicht weist mit Anzahl darauf hin, und nach der Anmeldung läuft die Übertragung ohne doppelte Einträge weiter.

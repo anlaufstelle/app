@@ -234,26 +234,28 @@ es wird nichts angewendet, auch nicht für die übrigen Typen):
 
 **Scale-Profile im Überblick:**
 
-| Daten | `small` (Default) | `medium` | `large` |
-|---|---|---|---|
-| Einrichtungen | 1 | 2 | 5 |
-| Pakete je Einrichtung (Refs #2148) | Hauptstelle: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` |
-| Users (gesamt) | 7 (1 super_admin + 6 facility-User) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) |
-| Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 |
-| Clients / Einrichtung | 7 | 40 | 500 |
-| Events / Einrichtung | 25 | 750 | 10.000 |
-| Cases | 3 | 12 | 50 |
-| Episoden || 20 | 80 |
-| Wirkungsziele || 15 | 60 |
-| Meilensteine / Ziel || 3 | 4 |
-| WorkItems | 5 | 25 | 100 |
-| Quick-Vorlagen / Einrichtung | 6 | 6 | 6 |
-| DeletionRequests || 5 | 15 |
-| RetentionProposals | 4 | 6 | 12 |
-| Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
-| Zeitraum | 80 Tage | 365 Tage | 3 Jahre |
+| Daten | `small` (Default) | `medium` | `large` | `demo` |
+|---|---|---|---|---|
+| Einrichtungen | 1 | 2 | 5 | 6 (Szenario-Katalog, Refs #2279) |
+| Pakete je Einrichtung (Refs #2148) | Hauptstelle: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` | `core.seed.scenarios.SCENARIOS`: Kontaktladen Wärmestube `default`, Beratungsstelle Falkenweg `beratungsstelle`, Beratungspraxis Lindenhof (Solo) `beratungsstelle`, Awareness-Team Nachtfalter `awareness`, Jugendtreff Wilhelmshöhe `jugendarbeit`, Frauenhaus Amalie `frauenhaus` |
+| Users (gesamt) | 7 (1 super_admin + 6 facility-User) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) | 33 (1 super_admin + 5×6 Team + 2 Solo) |
+| Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 (Solo-Facility: 2 — Fachkraft + Vertretung) |
+| Clients / Einrichtung | 7 | 40 | 500 | 18 (Solo: 9) |
+| Events / Einrichtung | 25 | 750 | 10.000 | 120 (Solo: 60) |
+| Cases | 3 | 12 | 50 | 6 (Solo: 4) |
+| Episoden || 20 | 80 | 8 (Solo: 4) |
+| Wirkungsziele || 15 | 60 | 6 (Solo: 3) |
+| Meilensteine / Ziel || 3 | 4 | 3 (Solo: 2) |
+| WorkItems | 5 | 25 | 100 | 12 (Solo: 8) |
+| Quick-Vorlagen / Einrichtung | 6 | 6 | 6 | 6 |
+| DeletionRequests || 5 | 15 | 2 (Solo: 1) |
+| RetentionProposals | 4 | 6 | 12 | 3 (Solo: 2) |
+| Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | ~5 (30 %) (Solo: ~3) |
+| Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 270 Tage |
 
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
+>
+> **`demo`** (Refs #2279) stellt alle sechs Demo-Szenarien (einschließlich Solo-Betrieb) gleichzeitig bereit, unabhängig vom Datenvolumen der übrigen Profile — Quelle ist ausschließlich `core.seed.scenarios.SCENARIOS`. Wird von `dev-ops/deploy/demo-reseed.sh` (stündlicher Reset auf `demo.anlaufstelle.app`) verwendet, ist aber auch lokal nutzbar (`python src/manage.py seed --scale demo`).
 
 Seed-Zugangsdaten: Passwort `anlaufstelle2026`, 7 Logins (Username → Rolle): `superadmin` → `super_admin` (keine `facility`-Zuordnung), `admin` → `facility_admin`, `emma` → `lead`, `miriam` → `staff`, `markus` → `staff`, `lena` → `assistant`, `felix` → `assistant`. Alle außer `superadmin` hängen an der Default-Einrichtung.
 

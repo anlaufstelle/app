@@ -4,6 +4,7 @@
 > Synchronization update 2026-09-18: the template conventions now link to the context-header and back-link guidance (#2255).
 > Synchronization update 2026-09-18: the coding conventions now link to the binding German-language guidelines (#2250).
 > Synchronization update 2026-09-21: the DCO section now documents the local pre-PR range check (#2239).
+> Synchronization update 2026-09-22: the scale profiles table now includes the `demo` profile with all six demo scenarios (#2279).
 
 # Contributing to Anlaufstelle
 
@@ -236,26 +237,28 @@ applied, not even for the remaining types):
 
 **Scale profiles overview:**
 
-| Data | `small` (default) | `medium` | `large` |
-|---|---|---|---|
-| Facilities | 1 | 2 | 5 |
-| Packages per facility (Refs #2148) | Main facility: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` |
-| Users (total) | 7 (1 super_admin + 6 facility users) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) |
-| Users / facility | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 |
-| Clients / facility | 7 | 40 | 500 |
-| Events / facility | 25 | 750 | 10,000 |
-| Cases | 3 | 12 | 50 |
-| Episodes || 20 | 80 |
-| Impact goals || 15 | 60 |
-| Milestones / goal || 3 | 4 |
-| WorkItems | 5 | 25 | 100 |
-| Quick Templates / facility | 6 | 6 | 6 |
-| DeletionRequests || 5 | 15 |
-| RetentionProposals | 4 | 6 | 12 |
-| Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
-| Time span | 80 days | 365 days | 3 years |
+| Data | `small` (default) | `medium` | `large` | `demo` |
+|---|---|---|---|---|
+| Facilities | 1 | 2 | 5 | 6 (scenario catalogue, Refs #2279) |
+| Packages per facility (Refs #2148) | Main facility: `default` | + Zweigstelle Nord: `beratungsstelle` | + Zweigstelle Süd: `awareness`, Außenstelle Ost: `jugendarbeit`, Außenstelle West: `frauenhaus` | `core.seed.scenarios.SCENARIOS`: Kontaktladen Wärmestube `default`, Beratungsstelle Falkenweg `beratungsstelle`, Beratungspraxis Lindenhof (solo) `beratungsstelle`, Awareness-Team Nachtfalter `awareness`, Jugendtreff Wilhelmshöhe `jugendarbeit`, Frauenhaus Amalie `frauenhaus` |
+| Users (total) | 7 (1 super_admin + 6 facility users) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) | 33 (1 super_admin + 5×6 team + 2 solo) |
+| Users / facility | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 (solo facility: 2 — case worker + backup) |
+| Clients / facility | 7 | 40 | 500 | 18 (solo: 9) |
+| Events / facility | 25 | 750 | 10,000 | 120 (solo: 60) |
+| Cases | 3 | 12 | 50 | 6 (solo: 4) |
+| Episodes || 20 | 80 | 8 (solo: 4) |
+| Impact goals || 15 | 60 | 6 (solo: 3) |
+| Milestones / goal || 3 | 4 | 3 (solo: 2) |
+| WorkItems | 5 | 25 | 100 | 12 (solo: 8) |
+| Quick Templates / facility | 6 | 6 | 6 | 6 |
+| DeletionRequests || 5 | 15 | 2 (solo: 1) |
+| RetentionProposals | 4 | 6 | 12 | 3 (solo: 2) |
+| Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | ~5 (30 %) (solo: ~3) |
+| Time span | 80 days | 365 days | 3 years | 270 days |
 
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
+>
+> **`demo`** (Refs #2279) provides all six demo scenarios (including solo operation) at once, independent of the data volume used by the other profiles — the sole source is `core.seed.scenarios.SCENARIOS`. Used by `dev-ops/deploy/demo-reseed.sh` (hourly reset on `demo.anlaufstelle.app`), but also usable locally (`python src/manage.py seed --scale demo`).
 
 Seed credentials: password `anlaufstelle2026`, 7 logins (username → role): `superadmin` → `super_admin` (no facility assignment), `admin` → `facility_admin`, `emma` → `lead`, `miriam` → `staff`, `markus` → `staff`, `lena` → `assistant`, `felix` → `assistant`. All except `superadmin` belong to the default facility.
 
@@ -1009,5 +1012,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-21 -->
-<!-- source-hash: 396ef1fa51dc43c989726fffc13254c6d355811e -->
+<!-- translation-date: 2026-09-22 -->
+<!-- source-hash: 28ba85dc8f1fee534ef06f9036328d14aeece3b9 -->
