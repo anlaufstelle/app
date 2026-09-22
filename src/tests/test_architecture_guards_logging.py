@@ -16,10 +16,17 @@ Docstring melden. Gesucht werden Aufrufe eines Loggers, in deren Argumenten
 (einschliesslich ``extra=``, f-String-Teilen und ``.format()``-Argumenten) ein
 Attributzugriff auf ein Personen-/Namensfeld steht.
 
-Was der Guard NICHT leistet (bewusst): Er sieht nur den direkten
-Attributzugriff im Aufruf. Ein ueber eine Zwischenvariable oder einen
-Hilfsaufruf eingesetzter Name bleibt unsichtbar — dagegen steht weiterhin die
-Regel im Handbuch und der fail-closed-Scrub des Sentry-Pfades.
+Seit Refs #2321 (H-2) sieht der Scan zusaetzlich die **Zwischenvariable**:
+``n = user.username; logger.warning("%s", n)`` wird gemeldet. Die Verfolgung
+ist bewusst einfach und lokal — Zuweisungen ``<name> = <ausdruck mit
+Personenattribut>`` im selben Geltungsbereich (verschachtelte Funktionen und
+Klassen bilden ihren eigenen). Das deckt die Schreibweise ab, die beim
+Umformulieren einer gemeldeten Zeile als naechstes entsteht.
+
+Was der Guard NICHT leistet (bewusst): Er verfolgt keinen Wert ueber
+Funktionsgrenzen, keine Container (Liste/Dict) und keinen Hilfsaufruf, der den
+Namen erst besorgt (``lookup_name(pk)``). Dagegen steht weiterhin die Regel im
+Handbuch und der fail-closed-Scrub des Sentry-Pfades.
 """
 
 import ast
@@ -97,6 +104,66 @@ ALLOWLIST = {
             "der Vorlage."
         ),
     },
+    # Refs #2321 (H-2): erst die Verfolgung der Zwischenvariablen macht diese
+    # drei Stellen sichtbar — der Name steht nicht im Aufruf selbst, sondern in
+    # der kurz vorher gebauten Meldung.
+    (
+        "management/commands/create_statistics_snapshots.py",
+        "Command.handle",
+        "name",
+    ): {
+        "count": 1,
+        "reason": (
+            "``facility.name`` ist der Name der EINRICHTUNG, kein Personenname — "
+            "dieselbe Begruendung wie beim Snapshot-Eintrag oben. Die Zeile meldet "
+            "eine uebersprungene bzw. gescheiterte Einrichtung; in einer Installation "
+            "mit mehreren Einrichtungen ist der Name genau das, was den Ausfall "
+            "zuordenbar macht. Auf dem Weg zu einem Error-Tracker geht der Wert nicht "
+            "mit — der Hook ersetzt die Zeile durch ihr Template (Refs #2198). Sichtbar "
+            "geworden ist die Stelle erst mit der Verfolgung der Zwischenvariablen "
+            "(Refs #2321, H-2): der Name wandert ueber die kurz vorher gebaute Meldung "
+            "in die Vorlage. Verbesserungsmoeglichkeit (eigenes Ticket, Datei liegt "
+            "ausserhalb dieser Aenderung): ``facility_id`` im ``extra``."
+        ),
+    },
+    (
+        "management/commands/create_statistics_snapshots.py",
+        "Command._report_failure",
+        "name",
+    ): {
+        "count": 1,
+        "reason": (
+            "``facility.name`` ist der Name der EINRICHTUNG, kein Personenname — "
+            "dieselbe Begruendung wie beim Snapshot-Eintrag oben. Die Zeile meldet "
+            "eine uebersprungene bzw. gescheiterte Einrichtung; in einer Installation "
+            "mit mehreren Einrichtungen ist der Name genau das, was den Ausfall "
+            "zuordenbar macht. Auf dem Weg zu einem Error-Tracker geht der Wert nicht "
+            "mit — der Hook ersetzt die Zeile durch ihr Template (Refs #2198). Sichtbar "
+            "geworden ist die Stelle erst mit der Verfolgung der Zwischenvariablen "
+            "(Refs #2321, H-2): der Name wandert ueber die kurz vorher gebaute Meldung "
+            "in die Vorlage. Verbesserungsmoeglichkeit (eigenes Ticket, Datei liegt "
+            "ausserhalb dieser Aenderung): ``facility_id`` im ``extra``."
+        ),
+    },
+    (
+        "management/commands/enforce_retention.py",
+        "Command._warn_missing_settings",
+        "name",
+    ): {
+        "count": 1,
+        "reason": (
+            "``facility.name`` ist der Name der EINRICHTUNG, kein Personenname — "
+            "dieselbe Begruendung wie beim Snapshot-Eintrag oben. Die Zeile meldet "
+            "eine uebersprungene bzw. gescheiterte Einrichtung; in einer Installation "
+            "mit mehreren Einrichtungen ist der Name genau das, was den Ausfall "
+            "zuordenbar macht. Auf dem Weg zu einem Error-Tracker geht der Wert nicht "
+            "mit — der Hook ersetzt die Zeile durch ihr Template (Refs #2198). Sichtbar "
+            "geworden ist die Stelle erst mit der Verfolgung der Zwischenvariablen "
+            "(Refs #2321, H-2): der Name wandert ueber die kurz vorher gebaute Meldung "
+            "in die Vorlage. Verbesserungsmoeglichkeit (eigenes Ticket, Datei liegt "
+            "ausserhalb dieser Aenderung): ``facility_id`` im ``extra``."
+        ),
+    },
 }
 
 
@@ -127,20 +194,72 @@ def _is_logger_call(node):
     return lowered in {"logging", "log"} or lowered.endswith("logger") or lowered.endswith("_log")
 
 
-def _person_attributes(call):
+def _person_attributes(call, aliases=None):
     """Personen-/Namensattribute in den Argumenten eines Aufrufs.
 
     ``ast.walk`` ueber jedes Argument deckt alle im Ticket genannten Formen in
     einem Durchgang ab: ``%s``-Positionsargumente, f-String-Teile
     (``JoinedStr``/``FormattedValue``), die Argumente eines
     ``"…".format(…)``-Aufrufs und die Werte in ``extra={…}`` (Keyword).
+
+    Refs #2321 (H-2): ``aliases`` sind die lokalen Variablen, die im selben
+    Geltungsbereich aus einem Personenattribut befuellt wurden. Ohne sie blieb
+    ``n = user.username; logger.warning("%s", n)`` unsichtbar — also genau die
+    Schreibweise, in die eine gemeldete Zeile beim Umformulieren rutscht.
+    Gemeldet wird das urspruengliche Attribut, damit Fundstelle und Allowlist
+    dieselbe Sprache sprechen.
     """
+    aliases = aliases or {}
     found = set()
     for argument in [*call.args, *(keyword.value for keyword in call.keywords)]:
         for node in ast.walk(argument):
             if isinstance(node, ast.Attribute) and node.attr in PERSON_ATTRIBUTES:
                 found.add(node.attr)
+            elif isinstance(node, ast.Name) and node.id in aliases:
+                found.add(aliases[node.id])
     return found
+
+
+def _scope_body(node):
+    """Direkte Kinder eines Geltungsbereichs OHNE verschachtelte Bereiche.
+
+    Eine verschachtelte Funktion/Klasse bringt ihre eigenen Namen mit; wuerden
+    deren Zuweisungen mitgezaehlt, meldete der Guard Stellen, an denen der Name
+    gar nicht sichtbar ist.
+    """
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        yield from ast.walk(child)
+
+
+def _person_aliases(scope_node):
+    """Lokale Namen, die aus einem Personenattribut befuellt werden.
+
+    Erfasst ``n = user.username``, die Mehrfachzuweisung ``a = b =
+    client.pseudonym`` und ``n: str = user.get_full_name()``. Erweiterungen
+    (``+=``) und Entpackungen bleiben absichtlich aussen vor: dort ist der Wert
+    schon zusammengesetzt, und die Verfolgung waere nicht mehr "einfach".
+    """
+    aliases = {}
+    for node in _scope_body(scope_node):
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        else:
+            continue
+        attributes = {
+            inner.attr
+            for inner in ast.walk(value)
+            if isinstance(inner, ast.Attribute) and inner.attr in PERSON_ATTRIBUTES
+        }
+        if not attributes:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name):
+                aliases[target.id] = sorted(attributes)[0]
+    return aliases
 
 
 def find_person_attribute_logging(root):
@@ -160,18 +279,23 @@ def find_person_attribute_logging(root):
     root = Path(root)
     findings = Counter()
 
-    def walk(node, scope, relative):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            scope = (*scope, node.name)
+    def walk(node, scope, relative, aliases):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module)):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                scope = (*scope, node.name)
+            # Refs #2321 (H-2): die geerbten Namen bleiben sichtbar (eine
+            # innere Funktion sieht die aeussere Zuweisung), die eigenen kommen
+            # dazu.
+            aliases = {**aliases, **_person_aliases(node)}
         if isinstance(node, ast.Call) and _is_logger_call(node):
-            for attribute in _person_attributes(node):
+            for attribute in _person_attributes(node, aliases):
                 findings[(relative, ".".join(scope) or "<modul>", attribute)] += 1
         for child in ast.iter_child_nodes(node):
-            walk(child, scope, relative)
+            walk(child, scope, relative, aliases)
 
     for path in sorted(root.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        walk(tree, (), path.relative_to(root).as_posix())
+        walk(tree, (), path.relative_to(root).as_posix(), {})
     return findings
 
 
@@ -305,6 +429,99 @@ class TestScannerSelfCheck:
             ("variants.py", "Job.run", "last_name"): 1,
             ("variants.py", "helper", "display_name"): 1,
         }
+
+
+class TestIntermediateVariablesAreFollowed:
+    """Refs #2321 (H-2): ``n = user.username; logger.warning("%s", n)``.
+
+    Bis dahin sah der Scan nur den direkten Attributzugriff im Aufruf — eine
+    gemeldete Zeile war also durch schlichtes Zwischenspeichern zu umgehen.
+    """
+
+    def test_local_variable_carries_the_attribute(self, tmp_path):
+        _write(
+            tmp_path,
+            "indirect.py",
+            """
+            def bad(user):
+                n = user.username
+                logger.warning("Konto %s fehlt", n)
+            """,
+        )
+        assert dict(find_person_attribute_logging(tmp_path)) == {("indirect.py", "bad", "username"): 1}
+
+    def test_fstring_message_built_before_the_call(self, tmp_path):
+        """Die Form, die im echten Baum vorkommt: erst die Meldung bauen,
+        dann die fertige Meldung loggen."""
+        _write(
+            tmp_path,
+            "message.py",
+            """
+            def bad(facility):
+                message = f"Keine Einstellungen fuer '{facility.name}', uebersprungen."
+                logger.warning("job: %s", message)
+            """,
+        )
+        assert dict(find_person_attribute_logging(tmp_path)) == {("message.py", "bad", "name"): 1}
+
+    def test_annotated_assignment_counts(self, tmp_path):
+        _write(
+            tmp_path,
+            "annotated.py",
+            """
+            def bad(user):
+                n: str = user.get_full_name()
+                logger.info("%s", n)
+            """,
+        )
+        assert dict(find_person_attribute_logging(tmp_path)) == {("annotated.py", "bad", "get_full_name"): 1}
+
+    def test_unrelated_variable_stays_invisible(self, tmp_path):
+        _write(
+            tmp_path,
+            "clean.py",
+            """
+            def good(user):
+                n = user.pk
+                logger.info("Konto %s fehlt", n)
+            """,
+        )
+        assert dict(find_person_attribute_logging(tmp_path)) == {}
+
+    def test_alias_of_a_sibling_scope_does_not_leak(self, tmp_path):
+        """Ein gleichnamiger Name in einer ANDEREN Funktion faerbt nicht ab —
+        sonst meldete der Guard Stellen, an denen der Wert gar nicht steht."""
+        _write(
+            tmp_path,
+            "scopes.py",
+            """
+            def bad(user):
+                n = user.username
+                logger.warning("%s", n)
+
+
+            def good(request):
+                n = request.path
+                logger.info("%s", n)
+            """,
+        )
+        assert dict(find_person_attribute_logging(tmp_path)) == {("scopes.py", "bad", "username"): 1}
+
+    def test_outer_scope_alias_is_visible_inside(self, tmp_path):
+        _write(
+            tmp_path,
+            "nested.py",
+            """
+            def outer(user):
+                n = user.username
+
+                def inner():
+                    logger.warning("%s", n)
+
+                inner()
+            """,
+        )
+        assert dict(find_person_attribute_logging(tmp_path)) == {("nested.py", "outer.inner", "username"): 1}
 
 
 class TestAllowlistPinsTheNumberOfHits:
