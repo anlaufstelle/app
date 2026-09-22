@@ -201,6 +201,74 @@ class TestDynamicDataFormFieldBuild:
 
 
 @pytest.mark.django_db
+class TestDynamicFieldPlaintextHint:
+    """Regression fuer #2272: dynamische TEXT-/TEXTAREA-Felder tragen einen
+    zentralen, uebersetzbaren Klarnamenhinweis — mit ODER ohne konfigurierten
+    fachlichen Hilfetext, aber ohne Doppeltext. Andere Feldtypen (Zahl,
+    Auswahl, Datum, Datei, …) bekommen KEINEN Hinweis (der Klarnamen-Fall
+    betrifft nur echte Freitexteingaben).
+
+    Deckt Ereignis-, Personen- und Fallformular gemeinsam ab, weil alle drei
+    ``DynamicDataForm``/``build_dynamic_form_field`` ohne eigene Feldlogik
+    erben (``DynamicEventDataForm``/``DynamicClientDataForm``/
+    ``DynamicCaseDataForm`` sind leere Huellen, siehe Klassendoc oben)."""
+
+    def test_hint_appears_for_text_and_textarea_without_configured_help_text(self, facility, all_types_doctype):
+        form = DynamicDataForm(document_type=all_types_doctype, facility=facility)
+        for slug in ("text", "bereich"):
+            help_text = str(form.fields[slug].help_text)
+            assert help_text, f"{slug}: kein Klarnamenhinweis trotz fehlendem konfiguriertem Hilfetext"
+            assert "klarnamen" in help_text.lower()
+
+    def test_no_hint_for_non_text_field_types(self, facility, all_types_doctype):
+        form = DynamicDataForm(document_type=all_types_doctype, facility=facility)
+        for slug in ("zahl", "datum", "uhrzeit", "ja-nein", "auswahl", "mehrfach"):
+            help_text = str(form.fields[slug].help_text or "")
+            assert "klarnamen" not in help_text.lower(), f"{slug}: unerwarteter Klarnamenhinweis an Nicht-Freitextfeld"
+
+    def test_configured_help_text_is_preserved_alongside_the_hint(self, facility):
+        dt_obj = DocumentType.objects.create(facility=facility, name="Mit Hilfetext")
+        _assign(
+            dt_obj,
+            _ft(facility, "Anliegen", FieldType.TEXTAREA, help_text="Kurz das Anliegen der Person zusammenfassen."),
+            sort_order=0,
+        )
+
+        form = DynamicDataForm(document_type=dt_obj, facility=facility)
+        help_text = str(form.fields["anliegen"].help_text)
+        assert "Kurz das Anliegen der Person zusammenfassen." in help_text
+        assert "klarnamen" in help_text.lower()
+
+    def test_hint_not_duplicated_when_configured_help_text_already_warns(self, facility):
+        """Kein Doppeltext: hat der fachliche Hilfetext das Wort „Klarnamen“
+        bereits selbst (z. B. eine handgepflegte Warnung), haengt der
+        zentrale Hinweis nichts mehr an."""
+        existing = "Bitte hier keine Klarnamen eintragen, nur das Kuerzel."
+        dt_obj = DocumentType.objects.create(facility=facility, name="Bereits gewarnt")
+        _assign(
+            dt_obj,
+            _ft(facility, "Vermerk", FieldType.TEXT, help_text=existing),
+            sort_order=0,
+        )
+
+        form = DynamicDataForm(document_type=dt_obj, facility=facility)
+        help_text = str(form.fields["vermerk"].help_text)
+        assert help_text == existing
+        assert help_text.lower().count("klarnamen") == 1
+
+    def test_notiz_slug_from_default_package_gets_the_hint_via_rendering_path(self, facility):
+        """#2272-Belegstelle: ``notiz`` im Standardpaket hat keinen
+        ``help_text`` (``core/packages/default.yaml``) — der Hinweis muss
+        trotzdem am RENDERING-Pfad selbst ankommen (nicht nur ueber eine
+        YAML-Ergaenzung), weil Bestandskataloge unangetastet bleiben."""
+        dt_obj = DocumentType.objects.create(facility=facility, name="Kontakt-artig")
+        _assign(dt_obj, _ft(facility, "Notiz", FieldType.TEXTAREA), sort_order=0)
+
+        form = DynamicDataForm(document_type=dt_obj, facility=facility)
+        assert "klarnamen" in str(form.fields["notiz"].help_text).lower()
+
+
+@pytest.mark.django_db
 class TestFileFieldsAreBuiltForEveryEntity:
     """**Anforderungsaenderung M24/AP4** (Refs #1738, ADR-039 §9).
 

@@ -37,7 +37,25 @@ from core.services.conditions import (
 )
 from core.services.config import block_ordered_dtf_queryset
 
+# Direkter Import aus dem Submodul statt aus ``core.services.system``, damit
+# dessen ``__init__``-Re-Export-Liste (ausserhalb der Lane-Besitzliste)
+# unangetastet bleibt — ``TEXT``/``TEXTAREA`` sind dort bislang nicht
+# re-exportiert (nur ``FILE``/``MULTI_SELECT``/``NUMBER``/``SELECT``).
+from core.services.system.field_types import TEXT, TEXTAREA
+
 logger = logging.getLogger(__name__)
+
+# Refs #2272: zentraler, uebersetzbarer Klarnamenhinweis fuer dynamische
+# Text-/Textarea-Felder. Die Website verspricht einen aktiven Hinweis, keine
+# Klarnamen in Freitextfelder einzutragen; das Standardfeld ``notiz``
+# (core/packages/default.yaml) hat z. B. KEINEN konfigurierten ``help_text``
+# und faengt die Zusage bislang nicht auf. Wird in
+# :func:`build_dynamic_form_field` an TEXT/TEXTAREA-Felder angehaengt —
+# konfigurierte fachliche Hilfetexte bleiben erhalten (kein Doppeltext, wenn
+# sie das Wort "Klarnamen" bereits selbst enthalten).
+DYNAMIC_FIELD_PLAINTEXT_HINT = _(
+    "Bitte keine Klarnamen eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden."
+)
 
 
 def document_type_label(document_type: DocumentType) -> str:
@@ -167,6 +185,18 @@ def build_dynamic_form_field(ft, initial_data):
         kwargs_copy["max_value"] = ft.max_value
     if ft.help_text:
         kwargs_copy["help_text"] = ft.help_text
+
+    # Refs #2272: Klarnamenhinweis an JEDEM dynamischen Text-/Textarea-Feld
+    # verankern — unabhaengig davon, ob ein fachlicher Hilfetext konfiguriert
+    # ist (Formular-Fallback im Rendering-Pfad selbst statt einer reinen
+    # YAML-Ergaenzung, die Bestandskataloge nicht erreichen wuerde). Ein
+    # bereits vorhandener Hilfetext, der das Wort "Klarnamen" selbst schon
+    # enthaelt, bekommt den Hinweis NICHT ein zweites Mal angehaengt.
+    if ft.field_type in (TEXT, TEXTAREA):
+        existing_help_text = str(kwargs_copy.get("help_text") or "")
+        if "klarnamen" not in existing_help_text.lower():
+            hint = str(DYNAMIC_FIELD_PLAINTEXT_HINT)
+            kwargs_copy["help_text"] = f"{existing_help_text} {hint}".strip() if existing_help_text else hint
 
     if ft.field_type in (SELECT, MULTI_SELECT):
         kwargs_copy["choices"] = _select_choices(ft, initial_data, SELECT)

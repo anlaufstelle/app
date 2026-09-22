@@ -307,7 +307,11 @@ class TestDynamicEventDataFormInit:
             ],
         )
         form = DynamicEventDataForm(document_type=dt, facility=facility)
-        assert form.fields[ft.slug].help_text == "Bitte praezise."
+        # Bewusst nachgezogen (Ticket-Auftrag #2272): TEXT/TEXTAREA-Felder
+        # bekommen zusaetzlich zum konfigurierten Hilfetext den zentralen
+        # Klarnamenhinweis angehaengt (kein Doppeltext, aber auch kein
+        # Ersatz) — der konfigurierte Text bleibt vollstaendig enthalten.
+        assert "Bitte praezise." in str(form.fields[ft.slug].help_text)
 
     def test_field_order_follows_sort_order(self, facility):
         """``DocumentTypeField.sort_order`` bestimmt die Reihenfolge."""
@@ -705,7 +709,11 @@ class TestBuildDynamicFieldHelper:
         ft = self._ft(facility, name="Anliegen", field_type=FieldTemplate.FieldType.TEXT, help_text="Hinweis")
         field = _build_dynamic_field(ft, None)
         assert field.label == "Anliegen"
-        assert field.help_text == "Hinweis"
+        # Bewusst nachgezogen (Ticket-Auftrag #2272): siehe
+        # test_help_text_propagated_when_set oben — der konfigurierte
+        # Hilfetext bleibt vollstaendig erhalten, der zentrale
+        # Klarnamenhinweis kommt fuer TEXT/TEXTAREA zusaetzlich dazu.
+        assert "Hinweis" in str(field.help_text)
 
     def test_initial_data_wins_over_default(self, facility):
         from core.forms.events import _build_dynamic_field
