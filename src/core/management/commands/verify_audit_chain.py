@@ -23,7 +23,9 @@ offener Folge-Schritt.
 Ein fehlender externer Anker gilt standardmaessig als Erstlauf und wird nach
 gruenem Lauf still gesetzt. Wo ein Anker nachweislich vorhanden sein MUSS —
 etwa nach dem HWM-Import einer Wiederherstellung — erzwingt ``--require-anchor``
-stattdessen einen Abbruch (Refs #2242).
+stattdessen einen Abbruch (Refs #2242). Ketten ohne Zeilen sind davon
+ausgenommen: sie haben keinen Tail, den ein Lauf verankern koennte, und gelten
+als trivial verankert (Refs #2317).
 
 Beispiel::
 
@@ -57,12 +59,32 @@ class Command(BaseCommand):
             "--require-anchor",
             action="store_true",
             help=(
-                "Bricht ab, sobald auch nur eine der geprueften Ketten keinen externen "
-                "High-Water-Mark-Anker hat, statt sie als Erstlauf zu behandeln und neu zu "
-                "verankern. Fuer Ablaeufe, in "
+                "Bricht ab, sobald auch nur eine der geprueften Ketten MIT INHALT keinen "
+                "externen High-Water-Mark-Anker hat, statt sie als Erstlauf zu behandeln und neu "
+                "zu verankern. Eine Kette ohne Zeilen hat keinen verankerbaren Tail und gilt als "
+                "trivial verankert (Refs #2317). Fuer Ablaeufe, in "
                 "denen ein Anker nachweislich vorhanden sein MUSS (Wiederherstellung, Drill) "
                 "(Refs #2242)."
             ),
+        )
+
+    def _chains_with_anchorable_tail(self) -> set:
+        """Ketten-IDs, die ueberhaupt einen verankerbaren Tail besitzen koennen.
+
+        Refs #2317: Eine Kette ohne verkettete Zeile hat keinen Tail — es gibt
+        nichts zu verankern, und :meth:`HighWaterMarkStore.record` entfernt
+        einen Eintrag ohne Tail ausdruecklich wieder. Eine angelegte, noch
+        unbenutzte Einrichtung kann deshalb NIE einen Anker bekommen; ohne
+        diese Unterscheidung bliebe ``--require-anchor`` genau nach der
+        Erstinbetriebnahme dauerhaft rot.
+
+        ``None`` steht wie ueberall fuer die System-Kette (``facility=NULL``).
+        """
+        return set(
+            AuditLog.objects.exclude(entry_hash="")
+            .exclude(entry_hash__isnull=True)
+            .values_list("facility_id", flat=True)
+            .distinct()
         )
 
     def _require_anchor(self, hwm_path: str, hwm, targets: list) -> None:
@@ -74,12 +96,20 @@ class Command(BaseCommand):
         konsistenter Bestand — gruen verankert, ohne je gegen das gesicherte
         Original geprueft worden zu sein.
 
-        Verlangt wird ein Anker fuer JEDE tatsaechlich geprueffte Kette: ein
-        Anker fuer eine andere Einrichtung bewahrt die ankerlose Kette nicht
-        vor dem Erstlauf-Pfad. Die Entscheidung faellt alles-oder-nichts VOR
-        der Pruefung — so entsteht fuer keine Kette ein neuer Anker und auch
-        kein ``AUDIT_CHAIN_VERIFIED``-Marker. Die Meldung benennt die
-        betroffenen Einrichtungen datenminimiert per Primaerschluessel.
+        Verlangt wird ein Anker fuer JEDE tatsaechlich geprueffte Kette mit
+        Inhalt: ein Anker fuer eine andere Einrichtung bewahrt die ankerlose
+        Kette nicht vor dem Erstlauf-Pfad. **Leere Ketten gelten als trivial
+        verankert** (Refs #2317) — nicht als Aufweichung, sondern weil sie
+        keinen Tail haben, den irgendein Lauf verankern koennte. Die Haertung
+        bleibt dabei vollstaendig: Ankerpfad und Ankerdatei muessen weiterhin
+        vorhanden sein, und eine Kette, die einen Anker HAT und trotzdem leer
+        ist, faellt in der anschliessenden Pruefung als Tail-Truncation /
+        whole-chain wipe auf.
+
+        Die Entscheidung faellt alles-oder-nichts VOR der Pruefung — so
+        entsteht fuer keine Kette ein neuer Anker und auch kein
+        ``AUDIT_CHAIN_VERIFIED``-Marker. Die Meldung benennt die betroffenen
+        Einrichtungen datenminimiert per Primaerschluessel.
         """
         prefix = "--require-anchor verlangt einen externen Audit-Anker, aber "
         if not hwm_path:
@@ -92,12 +122,15 @@ class Command(BaseCommand):
                 prefix + f"die HWM-Datei {hwm_path!r} fehlt — Abbruch statt stillem Erstlauf "
                 "(ein unvollstaendig wiederhergestellter Audit-Bestand wuerde sonst neu verankert)."
             )
-        missing = hwm.missing_anchors([None if facility is None else facility.pk for facility in targets])
+        anchorable = self._chains_with_anchorable_tail()
+        relevant = [None if facility is None else facility.pk for facility in targets]
+        relevant = [facility_id for facility_id in relevant if facility_id in anchorable]
+        missing = hwm.missing_anchors(relevant)
         if missing:
             labels = ", ".join("System (facility=NULL)" if pk is None else f"Einrichtung #{pk}" for pk in missing)
             raise CommandError(
-                prefix + f"die HWM-Datei {hwm_path!r} enthaelt fuer {len(missing)} der {len(targets)} geprueften "
-                f"Kette(n) keinen verankerten Tail ({labels}) — Abbruch statt stillem Erstlauf."
+                prefix + f"die HWM-Datei {hwm_path!r} enthaelt fuer {len(missing)} der {len(relevant)} geprueften "
+                f"Kette(n) mit Inhalt keinen verankerten Tail ({labels}) — Abbruch statt stillem Erstlauf."
             )
 
     def handle(self, *args, **options):
