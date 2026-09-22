@@ -59,6 +59,47 @@ SCALE_CONFIG = {
         "zeitraum_days": 1000,
         "attachment_ratio": 0.25,
     },
+    # Refs #2279: Datenvolumen fuer den Szenario-Katalog (``--scale demo``,
+    # ``core.seed.scenarios.SCENARIOS``) — bewusst UNABHAENGIG von den
+    # obigen Profilen. "facilities" ist hier nur dokumentarisch (Anzahl
+    # Katalog-Eintraege); der Facility-Zweig fuer ``scale == "demo"`` in
+    # ``core.management.commands.seed`` iteriert ueber ``SCENARIOS``, nicht
+    # ueber ``range(cfg["facilities"])``. Ueberschaubare Menge je Facility,
+    # damit ALLE sechs Bereiche gleichzeitig bereitstehen, ohne ``large``
+    # vorauszusetzen (Ticket-Punkt 3).
+    "demo": {
+        "facilities": 6,
+        "users_per_facility": 6,
+        "clients_per_facility": 18,
+        "events_per_facility": 120,
+        "cases": 6,
+        "episodes": 8,
+        "goals": 6,
+        "milestones_per_goal": 3,
+        "work_items": 12,
+        "deletion_requests": 2,
+        "retention_proposals": 3,
+        "zeitraum_days": 270,
+        "attachment_ratio": 0.3,
+    },
+    # Refs #2279: reduziertes Profil NUR fuer die Solo-Facility innerhalb
+    # von ``--scale demo`` (``DemoScenario.solo``) — kleineres, aber
+    # plausibles Ein-Personen-Pensum statt eines Team-Volumens.
+    "demo_solo": {
+        "facilities": 1,
+        "users_per_facility": 2,
+        "clients_per_facility": 9,
+        "events_per_facility": 60,
+        "cases": 4,
+        "episodes": 4,
+        "goals": 3,
+        "milestones_per_goal": 2,
+        "work_items": 8,
+        "deletion_requests": 1,
+        "retention_proposals": 2,
+        "zeitraum_days": 270,
+        "attachment_ratio": 0.3,
+    },
 }
 
 # Facility names used when creating more than one facility.
