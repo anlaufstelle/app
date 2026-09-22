@@ -152,6 +152,10 @@ def _sandbox(tmp_path: Path, **set_options: bool) -> tuple[Path, Path, Path]:
             {"bind_media": False, "write_media": True, "bind_hwm": False, "write_hwm": False},
         ),
         (
+            "Manifest bindet keinen Audit-Anker, es liegt trotzdem einer daneben",
+            {"bind_media": False, "write_media": False, "bind_hwm": False, "write_hwm": True},
+        ),
+        (
             "Manifest enthaelt eine Zeile ohne Schluessel",
             {
                 "bind_media": False,
