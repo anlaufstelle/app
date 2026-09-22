@@ -88,6 +88,12 @@ elif [[ "$*" == *" exec -T db psql "* ]]; then
     else
         cat >/dev/null
     fi
+elif [[ "$*" == *" run --rm --entrypoint sh -T maintenance "* ]]; then
+    cat >/dev/null
+    if [[ "${TEST_MEDIA_ACTIVATION_FAIL:-0}" == "1" && "$*" == *'mv "$stage" "$live"'* ]]; then
+        printf 'mv: Zugriff verweigert\n' >&2
+        exit 1
+    fi
 elif [[ "$*" == *" run --rm "* || "$*" == *" exec -T web "* ]]; then
     cat >/dev/null
 fi
@@ -319,3 +325,78 @@ def test_abort_between_the_two_renames_keeps_the_verified_state(tmp_path: Path) 
     assert rollback, lines[switch:]
     assert "Umschaltung" in result.stderr
     assert f"{TARGET_DB}_restore_" in result.stderr
+
+
+ANCHOR_PATH = "/data/audit_hwm.json"
+
+
+def _anchor_beside_dump(db_backup: Path) -> Path:
+    anchor = db_backup.with_name(f"audit_hwm-{TIMESTAMP}.json")
+    anchor.write_text('{"version":1,"chains":{},"sig":"x"}', encoding="utf-8")
+    return anchor
+
+
+def test_legacy_set_with_configured_anchor_path_and_matching_anchor(tmp_path: Path) -> None:
+    """Altsatz + konfigurierter Ankerpfad: Zuordnung nur ueber den Dateinamen."""
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    _legacy_set(db_backup.parent)
+    _anchor_beside_dump(db_backup)
+
+    result = _run(
+        root,
+        bindir,
+        action_log,
+        db_backup,
+        media_backup,
+        TEST_LEGACY_SWITCH="1",
+        DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH,
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "Zeitstempel im Dateinamen" in result.stderr
+    assert "RESTORE-SATZ WIEDERHERGESTELLT" in result.stdout
+    assert "HINWEIS: Audit-Anker nur ueber den Dateinamen" in result.stdout
+
+
+def test_legacy_set_without_anchor_file_warns_instead_of_aborting(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    _legacy_set(db_backup.parent)
+
+    result = _run(
+        root,
+        bindir,
+        action_log,
+        db_backup,
+        media_backup,
+        TEST_LEGACY_SWITCH="1",
+        DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH,
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "kein zum Dump gehoerender Audit-Anker" in result.stderr
+    assert "Schritt 4b" in result.stderr
+    # Kein stiller Erfolg: der fehlende Anker steht auch in der Abschlussausgabe.
+    assert "HINWEIS: Kein zugehoeriger Audit-Anker" in result.stdout
+
+
+def test_set_with_manifest_still_requires_its_anchor(tmp_path: Path) -> None:
+    """Regelfall bleibt fail-closed: mit Manifest und Ankerpfad ist der Anker Pflicht."""
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+
+    result = _run(root, bindir, action_log, db_backup, media_backup, DJANGO_AUDIT_HWM_PATH=ANCHOR_PATH)
+
+    assert result.returncode != 0
+    assert "Audit-HWM fehlt" in result.stderr
+    assert _lines(action_log) == []
+
+
+def test_failed_media_activation_cleans_up_the_staging(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+
+    result = _run(root, bindir, action_log, db_backup, media_backup, TEST_MEDIA_ACTIVATION_FAIL="1")
+
+    assert result.returncode != 0
+    lines = _lines(action_log)
+    swap = _index(lines, 'mv "$stage" "$live"')
+    cleanup = [line for line in lines[swap + 1 :] if "--entrypoint rm -T maintenance" in line and ".restore." in line]
+    assert cleanup, lines[swap:]
