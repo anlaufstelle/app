@@ -1,4 +1,5 @@
 > **[Deutsche Version / German version](README.md)**
+> Synchronization update 2026-09-22: § Production installation names the mandatory-information step (imprint, privacy policy) with a link to the admin guide and notes the 404 until it is set up (#2311).
 > Synchronization update 2026-09-18: the stack table now names Django 6.1 (#1662).
 > Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
 
@@ -155,6 +156,8 @@ User manual, admin manual, and domain concept are available in the [docs/](docs/
 
 Obtain the complete production source with `git clone https://github.com/anlaufstelle/app.git /opt/anlaufstelle`; individual Compose files are insufficient. Copy `.env.example` to `.env` there, fill in the mandatory values (keys, database roles, `ALLOWED_HOSTS` including `localhost,127.0.0.1` for the container health check), and run the first-time setup with `./scripts/initial-setup.sh`. The authoritative step-by-step guide — prerequisites, migration path, first sign-in via `create_super_admin`, backups, and operations — is [docs/en/admin-guide.md § 1](docs/en/admin-guide.md#1-installation-docker-compose).
 
+Then set up the **mandatory information** (imprint, privacy policy): until then, `/impressum/` and `/datenschutzerklaerung/` return 404, because Anlaufstelle deliberately ships no boilerplate text. Setup: [docs/en/admin-guide.md § 2 "Configure Mandatory Information (Imprint/Privacy)"](docs/en/admin-guide.md#configure-mandatory-information-imprintprivacy).
+
 The quick start further down is **not** a production path: it loads demo data and deliberately binds to `127.0.0.1` only.
 
 ---
@@ -227,5 +230,5 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-18 -->
-<!-- source-hash: 20e25cce294b17c5704d350a7e25bcc105e3225a -->
+<!-- translation-date: 2026-09-22 -->
+<!-- source-hash: c18ea81670735fd883ad803cabf8d730ab50a2c2 -->

@@ -153,6 +153,8 @@ Benutzerhandbuch, Admin-Handbuch und Fachkonzept finden Sie im [docs/](docs/)-Ve
 
 Beziehen Sie den vollständigen Produktionsstand per `git clone https://github.com/anlaufstelle/app.git /opt/anlaufstelle`; einzelne Compose-Dateien reichen nicht aus. Kopieren Sie dort `.env.example` nach `.env`, setzen Sie die Pflichtwerte (Schlüssel, Datenbank-Rollen, `ALLOWED_HOSTS` samt `localhost,127.0.0.1` für den Container-Healthcheck) und starten Sie die Erstinbetriebnahme mit `./scripts/initial-setup.sh`. Den maßgeblichen Schritt-für-Schritt-Weg — Voraussetzungen, Migrationspfad, Erstanmeldung über `create_super_admin`, Backup und Betrieb — beschreibt [docs/admin-guide.md § 1](docs/admin-guide.md#1-installation-docker-compose).
 
+Hinterlegen Sie danach die **Pflichtangaben** (Impressum, Datenschutzerklärung): Bis dahin liefern `/impressum/` und `/datenschutzerklaerung/` 404, weil Anlaufstelle bewusst keine Mustertexte ausliefert. Einrichtung: [docs/admin-guide.md § 2 „Pflichtangaben (Impressum/Datenschutz) einrichten"](docs/admin-guide.md#pflichtangaben-impressumdatenschutz-einrichten).
+
 Der Quick-Start weiter unten ist **kein** Produktionsweg: Er lädt Demodaten und bindet bewusst nur auf `127.0.0.1`.
 
 ---

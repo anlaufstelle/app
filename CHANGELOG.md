@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Schlüssel-Erzeugungsbefehle vereinheitlicht** (#2313) — Admin-Guide und `.env.example` nennen für `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` jetzt denselben primären Befehl (`openssl`); die bisherige Python-Alternative bleibt als ausdrücklich gleichwertig benannte Option erhalten.
+- **README nennt die Pflichtangaben-Einrichtung nach der Installation** (#2311) — Der Produktionsabschnitt verweist jetzt auf den Admin-Guide-Abschnitt zu Impressum/Datenschutzerklärung und nennt den 404, bis diese eingerichtet sind.
 
 ### Security
 
