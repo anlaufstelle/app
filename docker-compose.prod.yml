@@ -214,6 +214,10 @@ services:
       DJANGO_INVITE_TOKEN_TIMEOUT: ${DJANGO_INVITE_TOKEN_TIMEOUT:-259200}
       DJANGO_PASSWORD_RESET_TIMEOUT: ${DJANGO_PASSWORD_RESET_TIMEOUT:-7200}
       DJANGO_HEALTH_DETAIL_TOKEN: ${DJANGO_HEALTH_DETAIL_TOKEN-}
+      # Refs #2315: Ankerpfad ist ab Werk gesetzt und gehoert damit zur
+      # dokumentierten Runtime-Allowlist. Geschrieben wird die Datei von
+      # cron/maintenance (verify_audit_chain); web sieht dasselbe /data-Volume.
+      DJANGO_AUDIT_HWM_PATH: ${DJANGO_AUDIT_HWM_PATH-}
       SUDO_MODE_TTL_SECONDS: ${SUDO_MODE_TTL_SECONDS:-900}
       MAINTENANCE_FLAG_FILE: ${MAINTENANCE_FLAG_FILE-}
       MAINTENANCE_ALLOW_IPS: ${MAINTENANCE_ALLOW_IPS-}
