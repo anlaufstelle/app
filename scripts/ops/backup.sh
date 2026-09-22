@@ -296,17 +296,17 @@ if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
         if [[ -s "$HWM_FILE" ]]; then
             echo "Audit-HWM gesichert: ${HWM_FILE}"
         else
-            echo "INFO: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} ist leer — kein HWM-Artefakt gesichert."
+            echo "WARNUNG: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} ist leer — kein HWM-Artefakt gesichert." >&2
             rm -f "$HWM_FILE"
             HWM_FILE=""
         fi
     else
-        echo "INFO: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} fehlt oder ist nicht lesbar — DB-/Medien-Backup bleibt gueltig."
+        echo "WARNUNG: Audit-HWM unter ${DJANGO_AUDIT_HWM_PATH} fehlt oder ist nicht lesbar — DB-/Medien-Backup bleibt gueltig." >&2
         rm -f "$HWM_FILE"
         HWM_FILE=""
     fi
 else
-    echo "INFO: DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — kein Audit-HWM-Artefakt gesichert."
+    echo "WARNUNG: DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — kein Audit-HWM-Artefakt gesichert." >&2
 fi
 
 # Satzbindung: Die signierte Nutzlast nennt den ausgewaehlten Zeitstempel und
@@ -472,4 +472,21 @@ else
     find "$WEEKLY_DIR" -name "audit_hwm-*.json" -mtime +28 -delete
     find "$MONTHLY_DIR" -name "audit_hwm-*.json" -mtime +90 -delete
     echo "Rotation abgeschlossen."
+fi
+
+# Abschlussblock (Refs #2315): Ein Satz ohne Audit-Anker ist technisch gueltig,
+# aber betrieblich unvollstaendig — der Fresh-Host-Drill konnte Schritt 4b der
+# Wiederherstellung deshalb nie ausfuehren. Das darf nicht als beilaeufige
+# INFO-Zeile im Log untergehen.
+if [[ -z "$HWM_FILE" ]]; then
+    {
+        echo "WARNUNG: Dieser Backup-Satz enthaelt KEINEN Audit-Anker (audit_hwm-<Zeitstempel>.json)."
+        echo "  Folge: Schritt 4b der Wiederherstellung (Audit-Anker zurueckspielen und"
+        echo "  'verify_audit_chain --require-anchor') ist mit diesem Satz nicht ausfuehrbar,"
+        echo "  und der Prod-Restore-Drill fuehrt Schritt 2b als uebersprungen."
+        echo "  Abhilfe: DJANGO_AUDIT_HWM_PATH in .env setzen (Vorgabe: /data/audit_hwm.json),"
+        echo "  Stack neu erstellen, einen gruenen 'verify_audit_chain'-Lauf abwarten und"
+        echo "  danach erneut sichern. Siehe docs/admin-guide.md (Backup) und"
+        echo "  docs/disaster-recovery.md Schritt 4b."
+    } >&2
 fi

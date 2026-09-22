@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-22: § 3.1 adds `DJANGO_AUDIT_HWM_PATH` to the `.env` prerequisites and the mandatory step that creates the audit anchor before the first backup, so that a set contains all seven files (#2315).
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
 > Synchronization update 2026-09-22: § 7.1 states that the four security headers (`Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) are set by the application alone and no longer in the `Caddyfile`, and where to change them (#2314).
@@ -1249,7 +1250,18 @@ Prerequisites in `.env`:
 - `POSTGRES_DB` and `POSTGRES_USER` for the database connection,
 - `POSTGRES_ADMIN_USER` and `POSTGRES_ADMIN_PASSWORD` for the complete dump,
 - a random, separately escrowed `BACKUP_ENCRYPTION_KEY`,
-- `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#complete-environment-variable-reference)).
+- `BACKUP_HOST_DIR` as the base directory on the host; the script writes exclusively there and ignores `BACKUP_DIR`, which is used only as the container mount target (see the [environment table](#complete-environment-variable-reference)),
+- `DJANGO_AUDIT_HWM_PATH` as the location of the audit anchor; `.env.example` ships `/data/audit_hwm.json` active out of the box.
+
+**Mandatory step before the first backup — create the audit anchor.** The audit anchor is the signed file outside the database that makes truncation of the most recent entries and a wiped chain detectable in the first place. `backup.sh` can only include it once it exists, and it is created by the first green run of the chain verification. After starting the stack, therefore run that verification **once** and check the result before you create the first backup:
+
+```bash
+cd /opt/anlaufstelle
+docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
+docker compose -f docker-compose.prod.yml exec -T cron test -s /data/audit_hwm.json
+```
+
+The second command exits with code 0 as soon as the anchor is present. A complete backup set then consists of **seven** files: database dump and media archive with one `.hmac` sidecar each, the signed `.manifest` plus its `.hmac`, and `audit_hwm-<timestamp>.json`. Without the anchor the backup still completes, but it warns explicitly — and the recovery step “restore the audit anchor and verify the chain” ([Disaster Recovery § 6 Step 4b](../disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)) cannot be performed with such a set.
 
 Root's cron needs write access, while `appuser` in the container (UID/GID 1000) must be able to read and traverse the directory so that health and compliance checks can find the backups. Before setup, create the configured `BACKUP_HOST_DIR` as `root:1000` with mode `2750`, exactly as in [Step 4](#step-4-start-the-stack). `initial-setup.sh` runs without `sudo`, accepts a correct existing directory, and does not change its owner or group; if the contract is violated, it aborts before the first `up` with the correction command documented there. `umask 0027` preserves group readability for new content without making backups world-readable.
 
@@ -2255,4 +2267,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 3384939bb6ddc299576c30f14e2aad2969f4a2ff -->
+<!-- source-hash: eaa4e26308eccb445500037265d61b14170f1ad1 -->

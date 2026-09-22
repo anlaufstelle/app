@@ -1,7 +1,7 @@
 > **[Deutsche Version / German version](README.md)**
 > Synchronization update 2026-09-22: § Production installation names the mandatory-information step (imprint, privacy policy) with a link to the admin guide and notes the 404 until it is set up (#2311).
 > Synchronization update 2026-09-18: the stack table now names Django 6.1 (#1662).
-> Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
+> Synchronization update 2026-09-22 (§ Production installation: the audit anchor must be created before the first backup, #2315). Most recently synchronized on 2026-09-11 (§ Production installation: complete source acquisition, initial setup sequence, production prerequisites, and explicit Compose file for backup operations, #2218). Previously synchronized on 2026-09-11 (§ Contributing: contributions are explicitly welcome and the path into the maintainer team is described in GOVERNANCE.md, #2207).
 
 # Anlaufstelle
 
@@ -158,6 +158,8 @@ Obtain the complete production source with `git clone https://github.com/anlaufs
 
 Then set up the **mandatory information** (imprint, privacy policy): until then, `/impressum/` and `/datenschutzerklaerung/` return 404, because Anlaufstelle deliberately ships no boilerplate text. Setup: [docs/en/admin-guide.md § 2 "Configure Mandatory Information (Imprint/Privacy)"](docs/en/admin-guide.md#configure-mandatory-information-imprintprivacy).
 
+Create the audit anchor once before the **first backup**: `.env.example` ships `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` active out of the box, but the file itself is only created by the first green run of the chain verification. Without it a backup set contains six instead of seven files, and a later recovery cannot verify the audit chain against the backed-up original. The mandatory step is described in [docs/en/admin-guide.md § 3.1 "Encrypted Database and Media Backup"](docs/en/admin-guide.md#31-encrypted-database-and-media-backup).
+
 The quick start further down is **not** a production path: it loads demo data and deliberately binds to `127.0.0.1` only.
 
 ---
@@ -231,4 +233,4 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: c18ea81670735fd883ad803cabf8d730ab50a2c2 -->
+<!-- source-hash: edc7f9d225a839cb7c2665d787198bae691e1d1b -->

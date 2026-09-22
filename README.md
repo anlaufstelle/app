@@ -155,6 +155,8 @@ Beziehen Sie den vollständigen Produktionsstand per `git clone https://github.c
 
 Hinterlegen Sie danach die **Pflichtangaben** (Impressum, Datenschutzerklärung): Bis dahin liefern `/impressum/` und `/datenschutzerklaerung/` 404, weil Anlaufstelle bewusst keine Mustertexte ausliefert. Einrichtung: [docs/admin-guide.md § 2 „Pflichtangaben (Impressum/Datenschutz) einrichten"](docs/admin-guide.md#pflichtangaben-impressumdatenschutz-einrichten).
 
+Legen Sie vor dem **ersten Backup** einmalig den Audit-Anker an: `.env.example` liefert `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` ab Werk aktiv aus, die Datei selbst entsteht aber erst mit dem ersten grünen Lauf der Ketten-Verifikation. Ohne sie enthält der Backup-Satz sechs statt sieben Dateien und die Wiederherstellung kann die Audit-Kette später nicht gegen das gesicherte Original prüfen. Der Pflichtschritt steht in [docs/admin-guide.md § 3.1 „Verschlüsselte Datenbank- und Mediensicherung"](docs/admin-guide.md#31-verschlüsselte-datenbank--und-mediensicherung).
+
 Der Quick-Start weiter unten ist **kein** Produktionsweg: Er lädt Demodaten und bindet bewusst nur auf `127.0.0.1`.
 
 ---

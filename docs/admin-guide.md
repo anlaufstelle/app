@@ -1221,7 +1221,18 @@ Voraussetzungen in `.env`:
 - `POSTGRES_DB` und `POSTGRES_USER` für die Datenbankverbindung,
 - `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` für den vollständigen Dump,
 - ein zufälliger, separat verwahrter `BACKUP_ENCRYPTION_KEY`,
-- `BACKUP_HOST_DIR` als Basisverzeichnis auf dem Host; das Skript schreibt ausschließlich dorthin und ignoriert das nur als Container-Mount-Ziel verwendete `BACKUP_DIR` (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)).
+- `BACKUP_HOST_DIR` als Basisverzeichnis auf dem Host; das Skript schreibt ausschließlich dorthin und ignoriert das nur als Container-Mount-Ziel verwendete `BACKUP_DIR` (siehe [ENV-Tabelle](#vollständige-umgebungsvariablen-referenz)),
+- `DJANGO_AUDIT_HWM_PATH` als Ablage des Audit-Ankers; `.env.example` liefert `/data/audit_hwm.json` ab Werk aktiv aus.
+
+**Pflichtschritt vor dem ersten Backup — Audit-Anker anlegen.** Der Audit-Anker ist die signierte Datei außerhalb der Datenbank, mit der sich das Abschneiden der jüngsten Einträge und eine geleerte Kette überhaupt erst erkennen lassen. `backup.sh` kann sie nur sichern, wenn sie existiert, und sie entsteht erst mit dem ersten grünen Lauf der Ketten-Verifikation. Fahren Sie deshalb nach dem Stack-Start **einmal** diesen Lauf und prüfen Sie das Ergebnis, bevor Sie das erste Backup erstellen:
+
+```bash
+cd /opt/anlaufstelle
+docker compose -f docker-compose.prod.yml run --rm -T maintenance verify_audit_chain
+docker compose -f docker-compose.prod.yml exec -T cron test -s /data/audit_hwm.json
+```
+
+Der zweite Befehl endet mit Exit-Code 0, sobald der Anker vorhanden ist. Ein vollständiger Backup-Satz besteht danach aus **sieben** Dateien: Datenbank-Dump und Medienarchiv mit je einem `.hmac`-Sidecar, das signierte `.manifest` samt `.hmac` und `audit_hwm-<Zeitstempel>.json`. Fehlt der Anker, läuft das Backup zwar durch, warnt aber ausdrücklich — und der Wiederherstellungsschritt „Audit-Anker zurückspielen und Kette prüfen" ([Disaster-Recovery § 6 Schritt 4b](disaster-recovery.md#schritt-4b--audit-hwm-zurückspielen-und-kette-prüfen)) ist mit einem solchen Satz nicht ausführbar.
 
 Der root-Cron braucht Schreibrecht, während `appuser` im Container (UID/GID 1000) das Verzeichnis lesen und durchqueren muss, damit Health- und Compliance-Prüfungen die Sicherungen finden. Legen Sie das konfigurierte `BACKUP_HOST_DIR` deshalb vor dem Setup als `root:1000` mit Modus `2750` an, genau wie in [Schritt 4](#schritt-4-stack-starten). `initial-setup.sh` läuft ohne `sudo`, akzeptiert den korrekten Bestand und ändert dessen Eigentümer oder Gruppe nicht; bei Abweichungen bricht es vor dem ersten `up` mit dem dort dokumentierten Korrekturbefehl ab. `umask 0027` erhält die Gruppenlesbarkeit neuer Inhalte, ohne Sicherungen weltlesbar zu machen.
 
