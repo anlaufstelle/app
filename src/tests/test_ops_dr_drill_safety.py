@@ -230,10 +230,11 @@ def test_changelog_has_one_fixed_bullet_per_ticket_position() -> None:
             "docs/dev/hand-checks.md fehlt = Public-Snapshot; Changelog-Refs sind dort umgeschrieben "
             "— Guard nur im Dev-Repo relevant"
         )
+    # Der Guard darf nicht vom Release-Stand abhaengen: beim Cut wandern die
+    # Bullets aus ``[Unreleased]`` in den Versionsblock (Lehre 88).
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    fixed = changelog.split("### Fixed", maxsplit=1)[1].split("### Added", maxsplit=1)[0]
 
-    assert fixed.count("[#2221]") == 7
+    assert changelog.count("[#2221]") == 7
 
 
 def test_prod_drill_accepts_explicit_backup_timestamp() -> None:
