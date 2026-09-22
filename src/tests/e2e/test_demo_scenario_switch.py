@@ -1,31 +1,27 @@
 """E2E: Demo-Bereichsauswahl + Bereichswechsel (Refs #2285).
 
-**Geschrieben, NICHT gefahren** (Standardblock Punkt 46/Briefing F-3) — der
-Orchestrator fährt diese Datei seriell unter dem globalen CI-Lock, NACH dem
-Merge von Lane F-2 (#2279, Szenariokatalog) und dieser Lane, UND nachdem der
-E2E-Server tatsächlich mit ``DEMO_MODE=True`` UND einem `--scale demo`-Seed
-läuft.
+Laeuft nur gegen einen E2E-Server im Demo-Modus mit Szenariokatalog. Beide
+Vorbedingungen stellen die E2E-Fixtures ueber Umgebungsvariablen her:
 
-**Zwei Vorbedingungen, die diese Lane NICHT selbst herstellen kann** (siehe
-Bericht, Abschnitt „Nicht gefahren/nicht verifiziert"):
+1. ``E2E_DEMO_MODE=1`` — ``anlaufstelle.settings.e2e`` schaltet damit
+   ``DEMO_MODE`` ein; ohne den Schalter liefern ``/demo/`` und
+   ``/demo/start/`` 404.
+2. ``E2E_SEED_SCALE=demo`` — die E2E-Datenbank wird mit dem Szenariokatalog
+   (``seed --scale demo``) statt des Standard-Seeds befuellt, damit die
+   fachlichen Bereiche (Kontaktladen, Solo-Betrieb, …) tatsaechlich existieren.
 
-1. ``anlaufstelle.settings.e2e`` setzt ``DEMO_MODE`` bisher NICHT (die Datei
-   ist nicht Teil der Besitzliste dieser Lane) — ohne einen Schalter
-   (analog dem bestehenden ``E2E_MFA_ENFORCE_ROLES``-Muster in
-   ``settings/e2e.py``) liefern ``/demo/`` und ``/demo/start/`` dort 404.
-2. Die E2E-Datenbank (``anlaufstelle_e2e``) braucht ``--scale demo``
-   (Lane F-2s Szenariokatalog) statt des Standard-Seeds, damit die
-   fachlichen Bereiche (Kontaktladen, Solo-Betrieb, …) tatsächlich existieren.
+Aufruf::
+
+    E2E_DEMO_MODE=1 E2E_SEED_SCALE=demo pytest src/tests/e2e/test_demo_scenario_switch.py -m e2e
 
 Jede Testklasse ueberspringt sich SELBST (``pytest.skip``), wenn ``/demo/``
-nicht 200 liefert — Anlaufen gegen eine Umgebung ohne diese beiden
-Vorbedingungen bricht damit nicht hart ab, sondern meldet ehrlich, dass die
-Vorbedingung fehlt (Standardblock Regel 25).
+nicht 200 liefert — gegen eine Umgebung ohne diese Vorbedingungen bricht die
+Spec nicht hart ab, sondern meldet, dass die Vorbedingung fehlt.
 
-Deckt aus dem Briefing (Ticket-Punkte 1/2/4/5/8/9): Bereichsauswahl vor der
-ersten Anmeldung, Start ohne Zugangsdaten in der Alltagsrolle, jederzeit
-erreichbarer Wechsel über das Demo-Banner, unabhaengige Besuchersitzungen,
-Erkennen eines Wechsels in einem zweiten Tab derselben Sitzung.
+Deckt ab: Bereichsauswahl vor der ersten Anmeldung, Start ohne Zugangsdaten in
+der Alltagsrolle, jederzeit erreichbarer Wechsel ueber das Demo-Banner,
+unabhaengige Besuchersitzungen, Erkennen eines Wechsels in einem zweiten Tab
+derselben Sitzung.
 """
 
 import pytest
@@ -51,9 +47,8 @@ def _demo_enabled(base_url, browser):
 def demo_mode_or_skip(base_url, browser):
     if not _demo_enabled(base_url, browser):
         pytest.skip(
-            "DEMO_MODE/--scale demo-Vorbedingung nicht erfuellt (settings/e2e.py "
-            "braucht einen Schalter, s. Moduldocstring) — Spec geschrieben, aber "
-            "in dieser Umgebung nicht ausfuehrbar."
+            "Demo-Vorbedingung nicht erfuellt (E2E_DEMO_MODE=1 und E2E_SEED_SCALE=demo, "
+            "s. Moduldocstring) — Spec in dieser Umgebung nicht ausfuehrbar."
         )
 
 
