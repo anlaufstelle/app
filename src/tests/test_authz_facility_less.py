@@ -101,3 +101,27 @@ def test_facility_less_account_never_sees_a_server_error(client, exp, method, re
         assert status == 403, f"{url} [{method}]: Systembereich erwartet 403 aus dem Rollen-Gate, bekam {status}"
     else:
         assert status in (403, 404), f"{url} [{method}]: erwartet 403/404, bekam {status}"
+
+
+@pytest.mark.django_db
+def test_demo_routes_are_exact_exemptions_not_a_prefix(client, facility_less_admin):
+    """Refs #2351: ``/demo/`` und ``/demo/start/`` stehen in der exakt geprueften Liste.
+
+    Ein Nachbarpfad unter derselben Wurzel bleibt fuer einrichtungslose Konten
+    gesperrt — sonst fiele jede kuenftige Route unter ``/demo/`` still aus dem
+    Einrichtungs-Guard heraus.
+    """
+    from core.middleware.facility_scope import (
+        FACILITY_MISSING_EXEMPT_PATHS,
+        FACILITY_MISSING_EXEMPT_URLS,
+        FACILITY_MISSING_TEMPLATE,
+    )
+
+    assert "/demo/" in FACILITY_MISSING_EXEMPT_PATHS
+    assert "/demo/start/" in FACILITY_MISSING_EXEMPT_PATHS
+    assert not any(prefix.startswith("/demo") for prefix in FACILITY_MISSING_EXEMPT_URLS)
+
+    client.force_login(facility_less_admin)
+    response = client.get("/demo/x/")
+    assert response.status_code == 403
+    assert FACILITY_MISSING_TEMPLATE in [template.name for template in response.templates]

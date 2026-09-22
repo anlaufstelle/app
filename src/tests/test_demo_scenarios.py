@@ -130,6 +130,15 @@ class TestDemoModeGating:
     def test_start_view_get_404_without_demo_mode(self, client):
         assert client.get(reverse("demo_scenario_start")).status_code == 404
 
+    @pytest.mark.parametrize("url_name", ["demo_scenario_select", "demo_scenario_start"])
+    @pytest.mark.parametrize("method", ["options", "head", "put", "patch", "delete", "trace"])
+    def test_every_method_404_without_demo_mode(self, client, url_name, method):
+        """Refs #2350: die Pruefung sitzt in ``dispatch`` — ohne ``DEMO_MODE`` verraet
+        keine Methode die Route (kein 200 auf OPTIONS, kein 405 mit ``Allow``-Kopf)."""
+        response = getattr(client, method)(reverse(url_name))
+        assert response.status_code == 404
+        assert not response.has_header("Allow")
+
 
 # ---------------------------------------------------------------------------
 # Auswahlseite: nur bereitgestellte/aktive Bereiche, Deep-Link waehlt nur vor.
