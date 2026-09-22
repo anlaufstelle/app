@@ -9,6 +9,7 @@ from core.models import Activity, AuditLog
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.audit import audit_event
 from core.services.audit.diff import changed_fields_vs_db
+from core.services.case.state_contract import lock_goal_for_status_change, lock_milestone_for_status_change
 from core.services.dashboard import log_activity
 
 logger = logging.getLogger(__name__)
@@ -87,27 +88,42 @@ def update_goal(goal, user, title=None, description=None):
 
 @transaction.atomic
 def achieve_goal(goal):
-    """Mark a goal as achieved. Idempotent — returns early if already achieved."""
-    from core.services.client.restriction import assert_processing_allowed
+    """Mark a goal as achieved. Idempotent — returns early if already achieved.
 
-    assert_processing_allowed(goal.case.client_id, lock=True)
-    if goal.is_achieved:
-        return goal
-    goal.is_achieved = True
-    goal.achieved_at = timezone.localdate()
-    goal.save()
+    Refs #2295: Entschieden wird auf der FRISCH unter Sperre gelesenen Zeile,
+    geschrieben werden nur die beiden Statusspalten. Die uebergebene Instanz
+    stammt aus einem Lesevorgang von vor dem Klick; ein voller ``save()`` auf
+    ihr holte die von ``redact_case_goals`` bereits getilgten Freitexte
+    zurueck. Auch die Idempotenz haengt daran: ``goal.is_achieved`` der alten
+    Instanz beantwortet nicht, ob das Ziel INZWISCHEN erreicht ist.
+
+    Das Art.-18-Gate und die Zustandspruefung liegen im Zustandsvertrag
+    (:mod:`core.services.case.state_contract`), der dafuer dieselbe
+    Personensperre nimmt wie zuvor.
+    """
+    locked = lock_goal_for_status_change(goal)
+    if not locked.is_achieved:
+        locked.is_achieved = True
+        locked.achieved_at = timezone.localdate()
+        locked.save(update_fields=["is_achieved", "achieved_at"])
+    goal.refresh_from_db()
     return goal
 
 
 @transaction.atomic
 def unachieve_goal(goal):
-    """Mark a goal as not achieved."""
-    from core.services.client.restriction import assert_processing_allowed
+    """Mark a goal as not achieved.
 
-    assert_processing_allowed(goal.case.client_id, lock=True)
-    goal.is_achieved = False
-    goal.achieved_at = None
-    goal.save()
+    Spiegel von :func:`achieve_goal` — einschliesslich Zustandsvertrag und
+    spaltengenauem Schreiben (Refs #2295). Bewusst ohne Idempotenz-Ausstieg:
+    die Ruecknahme eines nicht erreichten Ziels ist ein No-op auf denselben
+    zwei Spalten.
+    """
+    locked = lock_goal_for_status_change(goal)
+    locked.is_achieved = False
+    locked.achieved_at = None
+    locked.save(update_fields=["is_achieved", "achieved_at"])
+    goal.refresh_from_db()
     return goal
 
 
@@ -128,17 +144,23 @@ def create_milestone(goal, title, sort_order=0):
 
 @transaction.atomic
 def toggle_milestone(milestone):
-    """Toggle milestone completion. Sets/clears completed_at accordingly."""
-    from core.services.client.restriction import assert_processing_allowed
+    """Toggle milestone completion. Sets/clears completed_at accordingly.
 
-    assert_processing_allowed(milestone.goal.case.client_id, lock=True)
-    if milestone.is_completed:
-        milestone.is_completed = False
-        milestone.completed_at = None
+    Refs #2295: Umgeschaltet wird der FRISCH unter Sperre gelesene Stand —
+    eine Umschaltung, die den Stand der alten Instanz fortschreibt, kehrt bei
+    zwei gleichzeitigen Klicks zweimal dieselbe Richtung um. Geschrieben
+    werden nur die beiden Statusspalten; der Meilenstein-Titel ist
+    klientenbezogener Freitext, den die Tilgung ersetzt (``redact_case_goals``).
+    """
+    locked = lock_milestone_for_status_change(milestone)
+    if locked.is_completed:
+        locked.is_completed = False
+        locked.completed_at = None
     else:
-        milestone.is_completed = True
-        milestone.completed_at = timezone.localdate()
-    milestone.save()
+        locked.is_completed = True
+        locked.completed_at = timezone.localdate()
+    locked.save(update_fields=["is_completed", "completed_at"])
+    milestone.refresh_from_db()
     return milestone
 
 
