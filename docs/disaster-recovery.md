@@ -345,11 +345,15 @@ docker compose -f docker-compose.prod.yml exec -T db \
   psql -U $POSTGRES_USER -d $POSTGRES_DB -tAc "SELECT count(*) FROM core_facility;"
 ```
 
-**Health-Detail nur per Session:** Im ausgelieferten Prod-Stack erreicht `DJANGO_HEALTH_DETAIL_TOKEN` den `web`-Container nicht. Den Detail-Payload deshalb in einer angemeldeten Browser-Session als `super_admin` prüfen. Der dortige Fernet-Roundtrip verschlüsselt und entschlüsselt nur einen **frischen** Wert; `"encryption_key": "ok"` beweist nicht, dass der wiederhergestellte Bestand mit allen benötigten Schlüsselgenerationen lesbar ist.
+**Health-Detail per Token (regulärer Prüfweg):** `DJANGO_HEALTH_DETAIL_TOKEN` erreicht den `web`-Container im ausgelieferten Prod-Stack sehr wohl — `docker-compose.prod.yml` reicht die Variable über die HTTP-Runtime-Allowlist durch; `.env.example` liefert sie lediglich **leer** aus (#2319, Variablen-Eintrag im [Admin-Handbuch § 1](admin-guide.md#vollständige-umgebungsvariablen-referenz)). Für Drill und laufendes Monitoring ist der Token deshalb der reguläre Weg zum Detail-Payload: In der rekonstruierten `.env` einen starken Wert setzen, `web` mit dem vollständigen Dateisatz neu erstellen und den Header senden:
+
+```bash
+curl -sf -H "X-Health-Token: $DJANGO_HEALTH_DETAIL_TOKEN" https://$DOMAIN/health/ | python3 -m json.tool
+```
+
+Ist der Token bewusst nicht gesetzt, gibt es keinen Token-Pfad; dann als **Alternative** den Detail-Payload in einer angemeldeten Browser-Session als `super_admin` prüfen. Beide Wege liefern dieselben Felder (Feld-Referenz: [monitoring-guide.md](monitoring-guide.md)). In beiden Fällen gilt: Der dortige Fernet-Roundtrip verschlüsselt und entschlüsselt nur einen **frischen** Wert; `"encryption_key": "ok"` beweist nicht, dass der wiederhergestellte Bestand mit allen benötigten Schlüsselgenerationen lesbar ist.
 
 Für jede benötigte Generation in `ENCRYPTION_KEYS` mindestens einen bereits vor dem Backup damit verschlüsselten Datensatz in der App öffnen und lesbaren Klartext bestätigen. Zusätzlich einen echten Vault-Anhang herunterladen, öffnen und seinen Dateinamen sowie seine Byte-Größe mit den wiederhergestellten DB-Metadaten abgleichen. Die Tabelle führt keine Prüfsumme; der echte Download ist daher unverzichtbar.
-
-Felder/Codes des Endpoints im Detail: [monitoring-guide.md](monitoring-guide.md).
 
 **Restore dokumentieren (DSGVO Art. 32 Abs. 1 lit. c):** Nach erfolgreichem Recovery den Wiederherstellungs-Nachweis ins AuditLog schreiben — analog zum Restore-Drill:
 
