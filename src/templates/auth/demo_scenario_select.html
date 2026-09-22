@@ -25,7 +25,10 @@
 {# fuer bereits angemeldete Demo-Konten; beides bleibt ohne die facility-     #}
 {# gescopte Navigation lesbar). #}
 <body class="min-h-screen p-6" data-testid="demo-scenario-select"
-      data-i18n-demo-switch-confirm="{% trans '{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?' %}">
+      data-i18n-demo-switch-confirm="{% trans '{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?' %}"
+      {# Refs #2060: Diese Seite laedt offline-db.js — ohne das Attribut faellt der #}
+      {# Versionskonflikt-Hinweis auf den deutschen Rueckfall zurueck. #}
+      data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>

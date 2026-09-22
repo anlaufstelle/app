@@ -150,6 +150,9 @@ class TestPublicFooterRendering:
         "auth/lockout_recovery_invalid.html",
         "registration/password_reset_confirm.html",
     )
+    # Anonym erreichbar, existiert aber nur bei ``DEMO_MODE`` (Refs #2285):
+    # eigener Test mit eingeschaltetem Demo-Modus.
+    _DEMO_ROUTES = {"demo_scenario_select": "auth/demo_scenario_select.html"}
 
     def test_every_footer_document_is_covered(self):
         """Vollstaendigkeits-Assert gegen den Architektur-Scanner.
@@ -167,6 +170,7 @@ class TestPublicFooterRendering:
             | set(self._GATED_ROUTES.values())
             | set(self._AUTHENTICATED_ROUTES.values())
             | set(self._RENDERED_TEMPLATES)
+            | set(self._DEMO_ROUTES.values())
         )
         assert covered == expected, (
             "Footer-Renderingtests und Template-Inventar sind auseinandergelaufen.\n"
@@ -183,6 +187,18 @@ class TestPublicFooterRendering:
 
     @pytest.mark.parametrize("url_name", sorted(_ANONYMOUS_ROUTES))
     def test_anonymous_pages_show_source_link_but_no_version(self, client, settings, url_name):
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        response = client.get(reverse(url_name))
+        assert response.status_code == 200
+        body = response.content.decode()
+        self._assert_footer_without_version(body, url_name)
+        assert "abcdef1" not in body, f"{url_name}: SOURCE_CODE_VERSION leakt anonym (Refs #1901)"
+
+    @pytest.mark.django_db
+    @pytest.mark.parametrize("url_name", sorted(_DEMO_ROUTES))
+    def test_demo_pages_show_source_link_but_no_version(self, client, settings, url_name):
+        """Refs #2285: die Demo-Bereichsauswahl ist anonym, aber nur bei ``DEMO_MODE`` vorhanden."""
+        settings.DEMO_MODE = True
         settings.SOURCE_CODE_VERSION = "abcdef1234567890"
         response = client.get(reverse(url_name))
         assert response.status_code == 200

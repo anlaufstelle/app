@@ -75,6 +75,9 @@ class TestNoLoadPathStaysSilent:
         "auth/password_change.html",
         "offline_base.html",
         "offline.html",
+        # Refs #2285: Demo-Bereichsauswahl (Standalone-Dokument, laedt offline-db.js
+        # fuer die Warnung vor ungespeicherter Offline-Arbeit).
+        "auth/demo_scenario_select.html",
     )
 
     def test_every_layout_loading_offline_db_is_accounted_for(self):
