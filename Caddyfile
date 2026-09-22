@@ -78,10 +78,13 @@ www.{$DOMAIN} {
     }
 
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
+        # Refs #2314: Strict-Transport-Security, X-Content-Type-Options,
+        # X-Frame-Options und Referrer-Policy stehen hier NICHT mehr — sie
+        # kamen sonst doppelt beim Client an (Caddy setzt sie vor dem Proxy-
+        # Durchlauf, Django noch einmal in der Antwort). Massgeblich ist die
+        # Anwendung (src/anlaufstelle/settings/prod.py): so gilt der Header
+        # auch hinter einem fremden Reverse-Proxy und beim direkten Zugriff.
+        # Guard: src/tests/test_security_headers_single_source.py.
         # X-Robots-Tag (A7.4, Refs #1024): Anlaufstelle ist eine geschlossene
         # Fachsoftware mit sensiblen Daten — keine Suchmaschinen-Indizierung
         # erwünscht (gilt auch für Staging/Dev-Deployments). Default noindex/

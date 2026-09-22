@@ -1711,7 +1711,9 @@ Sensible Felder in der Datenbank werden mit dem `ENCRYPTION_KEY` verschlüsselt 
 
 **Schlüsselrotation:** Eine automatische Schlüsselrotation ist aktuell nicht implementiert. Sichern Sie den Schlüssel redundant und getrennt vom Datenbank-Backup.
 
-**Transportverschlüsselung:** Caddy erzwingt HTTPS mit HSTS (`max-age=31536000`). HTTP wird automatisch auf HTTPS weitergeleitet.
+**Transportverschlüsselung:** Caddy erzwingt HTTPS und leitet HTTP automatisch auf HTTPS weiter.
+
+**Sicherheits-Header — maßgeblich ist die Anwendung:** `Strict-Transport-Security` (`max-age=31536000; includeSubDomains; preload`), `X-Content-Type-Options` (`nosniff`), `X-Frame-Options` (`DENY`) und `Referrer-Policy` (`strict-origin-when-cross-origin`) setzt ausschließlich die Anwendung — die Werte stehen in [`src/anlaufstelle/settings/prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py). Wer eine dieser Vorgaben ändern will (etwa die HSTS-Dauer), ändert sie dort. Im `Caddyfile` stehen sie bewusst **nicht** mehr: gesetzt an beiden Stellen kamen sie beim Client doppelt an, und eine Änderung an einer Stelle schien wirkungslos (#2314). Caddy setzt nur noch, was die Anwendung nicht setzt — derzeit `X-Robots-Tag`. Dieselbe Trennung gilt seit jeher für die Content-Security-Policy (§ 5.4). Damit gelten die Header auch dann, wenn Sie die Anwendung hinter einen eigenen Reverse-Proxy stellen.
 
 ### 7.2 Pseudonymisierung
 
