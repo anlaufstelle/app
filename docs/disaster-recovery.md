@@ -197,7 +197,7 @@ docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 
 
 ### Schritt 4 — DB-Backup entschlüsseln + wiederherstellen
 
-`restore.sh` leert die Ziel-Datenbank nicht, und der Dump enthält kein `--clean`. Ein Wiederanlauf ist deshalb nur in eine **frisch angelegte, leere Ziel-DB** zulässig. Vorher alle schreibenden Dienste stoppen und verbliebene Verbindungen beenden. DB-Neuanlage, Start des für den Medientransport benötigten `web`-Containers und der vollständige Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt:
+`restore.sh` bereitet das Ziel selbst vor: es beendet die verbliebenen Verbindungen zur Ziel-Datenbank und legt sie neu an — aber **erst nach der Bestätigung**. Nicht-interaktiv wird die Bestätigung mit `--yes` (gleichwertig: `RESTORE_CONFIRM=ja`) gegeben; ohne sie bricht das Skript ab, bevor irgendein Bestand verändert wird. Das Stoppen der schreibenden Dienste, der Start des für den Medientransport benötigten `web`-Containers und der Restore sind als eine Fehlerkette verbunden; scheitert ein Glied, wird nicht fortgesetzt:
 
 ```bash
 cd /opt/anlaufstelle
@@ -210,13 +210,9 @@ RESTORE_SET_DIR="$BACKUP_HOST_DIR/daily"
 set -o pipefail
 
 docker compose -f docker-compose.prod.yml stop web cron && \
-docker compose -f docker-compose.prod.yml exec -T db psql -U "${POSTGRES_SUPERUSER:-postgres}" -d postgres -v ON_ERROR_STOP=1 \
-  -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB}' AND pid <> pg_backend_pid();" && \
-docker compose -f docker-compose.prod.yml exec -T db sh -c \
-  'dropdb -U postgres --if-exists "$POSTGRES_DB" && createdb -U postgres -O "$ADMIN_DB_USER" "$POSTGRES_DB"' && \
 docker compose -f docker-compose.prod.yml up -d web && \
-./scripts/ops/restore.sh "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" \
-                         "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" \
+./scripts/ops/restore.sh --yes "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" \
+                               "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" \
   | tee /tmp/anlaufstelle-restore.log
 ```
 

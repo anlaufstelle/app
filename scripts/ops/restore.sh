@@ -30,13 +30,30 @@ fi
 # shellcheck source=scripts/ops/_backup_common.sh
 source "${SCRIPT_DIR}/_backup_common.sh"
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-    echo "Verwendung: $0 <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
+# Bestaetigung (Refs #2318): Ein per Pipe zugefuehrtes "ja" wurde frueher von
+# einem vorgelagerten ``docker compose exec -T``-Aufruf verbraucht; die Kette
+# brach danach ab — nachdem die Ziel-Datenbank bereits geleert war. Deshalb
+# gibt es jetzt einen expliziten Schalter (``--yes`` bzw. ``RESTORE_CONFIRM=ja``),
+# alle Vorpruefungen lesen nichts mehr von stdin, und JEDER zerstoerende Schritt
+# liegt hinter der Bestaetigung.
+ASSUME_YES=0
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --yes) ASSUME_YES=1; shift ;;
+        --) shift; POSITIONAL+=("$@"); break ;;
+        --*) echo "Fehler: unbekannte Option: $1 (erlaubt: --yes)" >&2; exit 1 ;;
+        *) POSITIONAL+=("$1"); shift ;;
+    esac
+done
+if [[ ${#POSITIONAL[@]} -lt 1 || ${#POSITIONAL[@]} -gt 2 ]]; then
+    echo "Verwendung: $0 [--yes] <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
+    echo "  --yes            Bestaetigung ohne Rueckfrage (alternativ RESTORE_CONFIRM=ja)"
     exit 1
 fi
 
-BACKUP_FILE="$1"
-MEDIA_FILE="${2:-}"
+BACKUP_FILE="${POSITIONAL[0]}"
+MEDIA_FILE="${POSITIONAL[1]:-}"
 
 if [[ ! -f "$BACKUP_FILE" ]]; then
     echo "Fehler: DB-Backup-Datei nicht gefunden: $BACKUP_FILE"
@@ -180,8 +197,10 @@ if [[ -n "$MEDIA_FILE" ]]; then
     # Ein Sentinel hinter dem Wert verhindert, dass die Kommandosubstitution
     # abschliessende Zeilenumbrueche entfernt und ein abweichender Pfad als
     # gleich durchgeht (Refs https://github.com/anlaufstelle/app/issues/2024).
+    # ``< /dev/null``: die Vorpruefung darf eine per Pipe zugefuehrte Bestaetigung
+    # nicht aufbrauchen (Refs #2318).
     if ! MEDIA_ROOT_EFFECTIVE=$(timeout 30s docker compose -f "$COMPOSE_FILE" exec -T web \
-        sh -c 'printf "%s@" "$MEDIA_ROOT"') || [[ "$MEDIA_ROOT_EFFECTIVE" != *@ ]]; then
+        sh -c 'printf "%s@" "$MEDIA_ROOT"' < /dev/null) || [[ "$MEDIA_ROOT_EFFECTIVE" != *@ ]]; then
         echo "FEHLER: MEDIA_ROOT des web-Containers konnte nicht ermittelt werden." >&2
         echo "  MEDIA_ROOT='<nicht ermittelbar>', MEDIA_ROOT_CONTAINER='${MEDIA_ROOT_CONTAINER}'." >&2
         echo "  Werte in ${PROJECT_DIR}/.env pruefen und angleichen." >&2
@@ -211,12 +230,41 @@ if [[ -n "$MEDIA_FILE" ]]; then
     echo "WARNUNG: Der MEDIA_ROOT-Inhalt wird ueberschrieben!"
     echo "Medien-Backup: ${MEDIA_FILE}"
 fi
-read -rp "Fortfahren? (ja/nein): " CONFIRM
-
-if [[ "$CONFIRM" != "ja" ]]; then
-    echo "Abgebrochen."
-    exit 0
+RESTORE_CONFIRMED=0
+if [[ "$ASSUME_YES" -eq 1 || "${RESTORE_CONFIRM:-}" == "ja" ]]; then
+    echo "Bestaetigung liegt vor (--yes bzw. RESTORE_CONFIRM=ja)."
+    RESTORE_CONFIRMED=1
+elif read -r -t "${RESTORE_CONFIRM_TIMEOUT:-300}" -p "Fortfahren? (ja/nein): " CONFIRM \
+    && [[ "$CONFIRM" == "ja" ]]; then
+    RESTORE_CONFIRMED=1
 fi
+
+if [[ "$RESTORE_CONFIRMED" -ne 1 ]]; then
+    echo "Abgebrochen — ohne Bestaetigung wird nichts veraendert." >&2
+    echo "  Nicht-interaktiv: --yes uebergeben oder RESTORE_CONFIRM=ja setzen." >&2
+    exit 1
+fi
+
+# --- Ab hier beginnen die zerstoerenden Schritte (Refs #2318) --------------
+
+# Zielvorbereitung: erst Schreibruhe herstellen, dann die Ziel-Datenbank neu
+# anlegen. Beides stand frueher als Kopiervorlage in der DR-Doku VOR dem Aufruf
+# dieses Skripts und lief damit vor jeder Bestaetigung.
+echo "Bereite Ziel-Datenbank '${POSTGRES_DB}' vor (Verbindungen beenden, DB neu anlegen)..."
+docker compose -f "$COMPOSE_FILE" exec -T db \
+    psql -v ON_ERROR_STOP=1 -U "$SU_USER" -d postgres \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB}' AND pid <> pg_backend_pid();" \
+    < /dev/null > /dev/null
+docker compose -f "$COMPOSE_FILE" exec -T db sh -c '
+    set -eu
+    su_user="$1"; target="$2"; owner="$3"
+    dropdb -U "$su_user" --if-exists "$target"
+    if [ -n "$owner" ]; then
+        createdb -U "$su_user" -O "$owner" "$target"
+    else
+        createdb -U "$su_user" "$target"
+    fi
+' sh "$SU_USER" "$POSTGRES_DB" "${POSTGRES_ADMIN_USER:-}" < /dev/null
 
 # DB restore — beide HMAC-Sidecars wurden in der Vorpruefung verifiziert.
 echo "Stelle DB-Backup wieder her..."

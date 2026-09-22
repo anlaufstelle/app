@@ -227,7 +227,9 @@ def test_valid_sidecars_are_checked_before_destructive_actions(tmp_path: Path) -
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     actions = action_log.read_text(encoding="utf-8").splitlines()
     hmac_positions = [index for index, line in enumerate(actions) if line.startswith("hmac ")]
-    psql_pos = next(index for index, line in enumerate(actions) if " psql " in line)
+    # Refs #2318: die erste psql-Zeile ist seit der Zielvorbereitung im Skript das
+    # Beenden der Verbindungen; der Guard meint den Import selbst.
+    psql_pos = next(index for index, line in enumerate(actions) if "--single-transaction" in line)
     media_delete_pos = next(index for index, line in enumerate(actions) if "rm -rf" in line)
     assert len(hmac_positions) == 5
     assert hmac_positions[0] < hmac_positions[1] < hmac_positions[2] < hmac_positions[3] < psql_pos
