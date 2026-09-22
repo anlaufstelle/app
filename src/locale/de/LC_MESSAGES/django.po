@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 20:13+0200\n"
+"POT-Creation-Date: 2026-09-22 20:39+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12862,3 +12862,7 @@ msgstr "Bitte keine Klarnamen eintragen — Pseudonyme wie in der übrigen Dokum
 #: src/core/services/case/deletion.py
 msgid "Antrag gehört zu einer anderen Einrichtung."
 msgstr "Antrag gehört zu einer anderen Einrichtung."
+
+#: src/templates/core/system/dashboard.html
+msgid "Zeitstempel liegt in der Zukunft — Alter nicht messbar"
+msgstr "Zeitstempel liegt in der Zukunft — Alter nicht messbar"
