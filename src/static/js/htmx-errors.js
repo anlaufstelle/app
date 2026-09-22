@@ -46,10 +46,29 @@
         return false;
     }
 
+    /*
+     * Refs #2321 (H-4): 404 und 405 fallen seit #2232 unter die
+     * ``4..``-Swap-Regel — und das passt fuer beide nicht. Eine 404 liefert
+     * ein ganzes HTML-Dokument (Fehlerseite), das in ein kleines fachliches
+     * Ziel eingewechselt wuerde; eine 405 hat einen leeren Rumpf und LEERT
+     * das Ziel. Kein Datenabfluss, aber ein Oberflaechenzustand, aus dem die
+     * Nutzerin ohne Neuladen nicht herauskommt. Beide werden deshalb wie 403
+     * gefuehrt: kein Swap, dafuer der globale Fehler-Toast (der unten genau
+     * dann erscheint, wenn NICHT geswappt wurde).
+     *
+     * Die Regel steht hier und nicht in der ``responseHandling``-Tabelle von
+     * base.html, damit sie fuer jedes Layout gilt, das diese Datei laedt.
+     */
+    var NEVER_SWAPPED_STATUSES = [404, 405];
+
     document.body.addEventListener("htmx:beforeSwap", function (event) {
         var detail = event && event.detail ? event.detail : {};
         var xhr = detail.xhr;
         var status = xhr && typeof xhr.status === "number" ? xhr.status : 0;
+        if (NEVER_SWAPPED_STATUSES.indexOf(status) !== -1) {
+            detail.shouldSwap = false;
+            return;
+        }
         if (status >= 400 && status < 500 && detail.shouldSwap === true && !_swapStyleIsNone(detail)) {
             swappedErrorResponses.add(xhr);
         }
