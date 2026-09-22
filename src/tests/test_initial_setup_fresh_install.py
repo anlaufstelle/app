@@ -160,6 +160,75 @@ def test_prod_compose_accepts_an_empty_optional_health_token(tmp_path: Path) -> 
     assert " up -d db" in commands
 
 
+def _install_dir_with_compose(tmp_path: Path, *, extra_files: tuple[str, ...] = ()) -> Path:
+    """Kopiert die echte Produktions-Compose-Datei in ein eigenes Verzeichnis
+    und legt dort die angegebenen Zusatzdateien an (Refs #2309)."""
+    install_dir = tmp_path / "install"
+    install_dir.mkdir()
+    compose_path = install_dir / "docker-compose.prod.yml"
+    compose_path.write_text(PROD_COMPOSE.read_text(encoding="utf-8"), encoding="utf-8")
+    for name in extra_files:
+        (install_dir / name).write_text("services:\n  web: {}\n", encoding="utf-8")
+    return compose_path
+
+
+def test_present_legal_and_override_files_are_appended_to_every_compose_call(
+    tmp_path: Path,
+) -> None:
+    """Refs #2309: Admin-Guide und Recreate-Beispiele bauen die Dateiliste
+    `-f docker-compose.prod.yml -f compose.legal.yml -f compose.override.yml`
+    auf, sobald die beiden Zusatzdateien vorhanden sind — initial-setup.sh
+    darf hinter dieser Zusage nicht zurueckbleiben."""
+    compose_path = _install_dir_with_compose(tmp_path, extra_files=("compose.legal.yml", "compose.override.yml"))
+    legal_path = compose_path.parent / "compose.legal.yml"
+    override_path = compose_path.parent / "compose.override.yml"
+
+    result, commands, _ = _run_setup(tmp_path, compose_path=compose_path)
+
+    assert result.returncode == 0, result.stderr
+    assert f" -f {compose_path} -f {legal_path} -f {override_path} --env-file" in commands
+    assert f"Compose-Dateien: {compose_path} {legal_path} {override_path}" in result.stdout
+
+
+def test_missing_legal_and_override_files_use_only_the_base_compose_file(
+    tmp_path: Path,
+) -> None:
+    """Gegenprobe: ohne Zusatzdateien bleibt das Verhalten unveraendert —
+    genau eine Compose-Datei, wie vor #2309."""
+    compose_path = _install_dir_with_compose(tmp_path)
+
+    result, commands, _ = _run_setup(tmp_path, compose_path=compose_path)
+
+    assert result.returncode == 0, result.stderr
+    assert f" -f {compose_path} --env-file" in commands
+    assert "compose.legal.yml" not in commands
+    assert "compose.override.yml" not in commands
+    assert f"Compose-Dateien: {compose_path}" in result.stdout
+
+
+def test_only_the_present_extra_compose_file_is_appended(tmp_path: Path) -> None:
+    """Nur `compose.legal.yml` vorhanden — `compose.override.yml` bleibt aussen vor."""
+    compose_path = _install_dir_with_compose(tmp_path, extra_files=("compose.legal.yml",))
+    legal_path = compose_path.parent / "compose.legal.yml"
+
+    result, commands, _ = _run_setup(tmp_path, compose_path=compose_path)
+
+    assert result.returncode == 0, result.stderr
+    assert f" -f {compose_path} -f {legal_path} --env-file" in commands
+    assert "compose.override.yml" not in commands
+    assert f"Compose-Dateien: {compose_path} {legal_path}" in result.stdout
+
+
+def test_stack_step_prints_a_clamav_signature_wait_hint(tmp_path: Path) -> None:
+    """Refs #2312: die Erstladung der Virensignaturen kann mehrere Minuten
+    ohne Zwischenausgabe dauern — der Lauf soll dabei nicht wie ein Haenger
+    wirken."""
+    result, _, _ = _run_setup(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "Virenscanner" in result.stdout
+    assert "Signatur" in result.stdout
+
+
 def test_staging_compose_requires_the_caddy_health_token(tmp_path: Path) -> None:
     if not STAGING_COMPOSE.exists():
         pytest.skip("docker-compose.staging.yml fehlt in diesem Baum — Staging-Guard nicht anwendbar")
