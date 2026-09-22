@@ -26,6 +26,7 @@ from core.services.compliance import ComplianceStatus, cron_job_checks
 from core.services.file_vault import ping as clamav_ping
 from core.services.security.session_state import session_fully_authenticated
 from core.services.system import rls_bypass_for_read
+from core.services.system.health import last_backup_info
 
 logger = logging.getLogger(__name__)
 
@@ -175,16 +176,21 @@ def _check_smtp() -> dict:
 
 
 def _check_backup_age() -> float | None:
-    """Alter (in Stunden) des juengsten Backup-Files; ``None`` falls keine Backups."""
-    backup_dir = Path(getattr(settings, "BACKUP_DIR", "")) if getattr(settings, "BACKUP_DIR", "") else None
-    if backup_dir is None or not backup_dir.exists():
+    """Alter (in Stunden) der letzten Sicherung; ``None`` falls keine vorliegt.
+
+    Refs #2291: Die Ableitung ist dieselbe wie im Systembereich und in der
+    Compliance-Zeile — :func:`core.services.system.health.last_backup_info`.
+    Vorher scannte diese Funktion das Verzeichnis selbst (juengste
+    ``*.sql.gz.enc``-Datei). Zwei Ableitungen ueber dasselbe Verzeichnis
+    heissen zwei Anzeigen, die einander widersprechen koennen: ``/health/``
+    meldete "kein Backup", waehrend ``/system/`` dieselbe Lage als frisch
+    auswies (oder umgekehrt). Was als letzte Sicherung zaehlt, entscheidet
+    ab jetzt genau eine Stelle.
+    """
+    info = last_backup_info()
+    if info is None:
         return None
-    candidates = list(backup_dir.rglob("*.sql.gz.enc"))
-    if not candidates:
-        return None
-    youngest_mtime = max(p.stat().st_mtime for p in candidates)
-    age_hours = (time.time() - youngest_mtime) / 3600.0
-    return round(age_hours, 1)
+    return info["age_hours"]
 
 
 def _check_stale_jobs() -> list[str]:
