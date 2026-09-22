@@ -81,7 +81,13 @@ def caddy_header_names(source: str) -> set[str]:
 
 @pytest.mark.parametrize("filename", CADDYFILES)
 def test_caddyfile_does_not_repeat_application_headers(filename):
-    source = (REPO_ROOT / filename).read_text(encoding="utf-8")
+    path = REPO_ROOT / filename
+    if not path.exists():
+        # Der Release-Build strippt die Nicht-Produktions-Konfigurationen
+        # (Caddyfile.dev, Caddyfile.demo, Caddyfile.staging) aus dem oeffentlichen
+        # Snapshot — dort ist der Guard gegenstandslos (Refs #1137, #1047).
+        pytest.skip("Caddyfile.dev/Caddyfile.demo/Caddyfile.staging nicht im Public-Snapshot")
+    source = path.read_text(encoding="utf-8")
     duplicated = sorted(caddy_header_names(source) & APP_OWNED_HEADERS)
     assert not duplicated, (
         f"{filename} setzt Header, die bereits die Anwendung setzt: {duplicated}. "
