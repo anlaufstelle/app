@@ -616,5 +616,16 @@ if [[ "$DRILL_UNDETERMINED" -ne 0 ]]; then
     exit 1
 fi
 
+# Uebersprungene Pflichtschritte sind kein Erfolg (Refs #2316): In der
+# Werkskonfiguration (kein Ankerpfad) blieb Schritt 2b ungeprueft, der Lauf
+# endete aber mit Exit 0 — die Alarmregel des Runbooks (Exit != 0) schlug nie
+# an und die fehlende Ankerpruefung blieb unsichtbar. Eigener Exit-Code 2.
+if [[ ${#DRILL_SKIPPED[@]} -gt 0 ]]; then
+    echo
+    echo "DRILL MIT LUECKEN — die ausgefuehrten Schritte sind gruen, ${#DRILL_SKIPPED[@]} Pflichtschritt(e) wurden uebersprungen: kein vollstaendiger Nachweis."
+    echo "  Exit-Code 2 — Ursache der Luecke beheben (siehe Liste oben) und erneut fahren."
+    exit 2
+fi
+
 echo
 echo "Drill erfolgreich abgeschlossen — Restore verifiziert und dokumentiert."

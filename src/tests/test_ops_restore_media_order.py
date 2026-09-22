@@ -349,7 +349,8 @@ def test_restore_drill_extracts_and_reports_matching_media_archive(tmp_path: Pat
         timeout=30,
     )
 
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
+    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "anlaufstelle_2026-09-10_020000_media.tar.gz.enc: 2 Dateien, 9 Bytes, HMAC ok" in result.stdout
     assert list(media_tmp.iterdir()) == []
 
@@ -410,7 +411,8 @@ def test_restore_drill_allows_database_only_manifest_without_media_hash(tmp_path
         timeout=30,
     )
 
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
+    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "DB-only-Backup zulaessig" in result.stdout
     assert "mark_restore_verified" in action_log.read_text(encoding="utf-8")
 

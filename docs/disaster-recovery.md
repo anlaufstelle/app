@@ -575,8 +575,12 @@ Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind
   den DB-Metadaten überein. Jedes `degraded` bleibt ein `FAIL`.
 - Jede Anhangzeile besitzt ihre Datei am App-`MEDIA_ROOT`; fehlt eine Datei, ist
   der Restore unvollständig.
-- `restore-drill.sh --prod` endet mit Exit-Code 0, meldet keine `FAIL`-Zeile und
-  nennt in seiner Banner-Zeile dasselbe Host-Verzeichnis wie Schritt 3. Er
+- `restore-drill.sh --prod` endet mit **Exit-Code 0** und der Abschlusszeile
+  `Drill erfolgreich abgeschlossen`, meldet keine `FAIL`- und keine `SKIP`-Zeile
+  und nennt in seiner Banner-Zeile dasselbe Host-Verzeichnis wie Schritt 3.
+  Exit-Code 2 (`DRILL MIT LUECKEN`) ist **kein** grüner Drill: er bedeutet, dass
+  ein Pflichtschritt — in der Werkskonfiguration typischerweise die
+  Anker-Prüfung 2b — übersprungen wurde. Er
   bestätigt insbesondere Schritt 2b (HWM-Signatur), Schritt 3b
   (Vollständigkeit), Schritt 4 (RLS), Schritt 5 (`auditlog_immutable`) und
   Schritt 7 (`mark_restore_verified`).

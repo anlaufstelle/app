@@ -173,7 +173,8 @@ def _assert_backup_and_drill_use_daily_dir(root: Path, docker_log: Path, fake_bi
         timeout=60,
     )
 
-    assert restore_result.returncode == 0, (
+    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
+    assert restore_result.returncode == 2, (
         f"restore-drill.sh scheiterte (rc={restore_result.returncode}).\n"
         f"STDOUT:\n{restore_result.stdout}\nSTDERR:\n{restore_result.stderr}"
     )

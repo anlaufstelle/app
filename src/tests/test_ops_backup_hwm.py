@@ -393,7 +393,8 @@ def test_restore_drill_skips_hwm_when_not_configured_and_marks_restore(tmp_path:
         hwm_configured=False,
     )
 
-    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
+    assert result.returncode == 2, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert "SKIP - Schritt 2b: Audit-Anker NICHT geprueft (keine Anker-Konfiguration)" in result.stdout
     assert "Schritt 7: Restore-Test im AuditLog dokumentiert" in result.stdout
     assert "mark_restore_verified" in docker_log.read_text(encoding="utf-8")
@@ -491,7 +492,8 @@ def test_restore_drill_timestamp_selects_requested_not_latest_set(tmp_path: Path
         add_newer_backup=True,
     )
 
-    assert result.returncode == 0, result.stdout
+    # Refs #2316: ohne Anker-Konfiguration ist Schritt 2b ein SKIP -> Exit-Code 2.
+    assert result.returncode == 2, result.stdout
     assert "explizit gewaehlter Restore-Satz: 2026-09-02_020000" in result.stdout
     assert "Drill gegen DB-Backup:" in result.stdout
     assert "anlaufstelle_2026-09-02_020000.sql.gz.enc" in result.stdout
