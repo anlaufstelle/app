@@ -207,3 +207,14 @@ def test_database_only_set_without_media_binding_passes(tmp_path: Path) -> None:
 
     assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     assert f"anlaufstelle_{OLD_SET}_media.tar.gz.enc" not in result.stdout
+
+
+def test_media_archive_not_bound_by_the_manifest_is_rejected(tmp_path: Path) -> None:
+    """DB-only-Manifest, aber ein Medienarchiv desselben Zeitstempels liegt da."""
+    root, bindir, daily = _sandbox(tmp_path)
+    _write_manifest(daily, NEW_SET, media=None)
+
+    result = _verify(tmp_path, root, bindir)
+
+    assert result.returncode != 0
+    assert "bindet kein Medien-Archiv" in result.stdout + result.stderr

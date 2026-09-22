@@ -69,7 +69,11 @@ printf 'docker %s\\n' "$*" >> "$ACTION_LOG"
 if [[ "$*" == *" exec -T web sh -c "* ]]; then
     MEDIA_ROOT="${TEST_WEB_MEDIA_ROOT-/data/media}" sh -c "${@: -1}"
 elif [[ "$*" == *" exec -T db psql "* ]]; then
-    if [[ "$*" == *"FROM pg_database"* ]]; then
+    if [[ "$*" == *'RENAME TO "anlaufstelle_vor_restore_'* && "${TEST_ABORT_IN_SWITCH:-0}" == "1" ]]; then
+        # Abbruch (SIGTERM) genau zwischen den beiden Umbenennungen.
+        kill -TERM "$PPID"
+        exit 0
+    elif [[ "$*" == *"FROM pg_database"* ]]; then
         printf '%s\\n' "${TEST_TARGET_EXISTS-1}"
     elif [[ "$*" == *"SELECT facility_id, storage_filename"* ]]; then
         printf '1|alpha.bin\\n'
@@ -148,7 +152,10 @@ def _run(root: Path, bindir: Path, action_log: Path, db_backup: Path, media_back
     env.pop("DJANGO_AUDIT_HWM_PATH", None)
     env.update({"PATH": f"{bindir}:{env['PATH']}", "ACTION_LOG": str(action_log), "RESTORE_CONFIRM": "ja"})
     env.update(overrides)
-    args = ["bash", str(root / "scripts" / "ops" / "restore.sh"), str(db_backup)]
+    args = ["bash", str(root / "scripts" / "ops" / "restore.sh")]
+    if env.pop("TEST_LEGACY_SWITCH", "0") == "1":
+        args.append("--allow-unsigned-legacy")
+    args.append(str(db_backup))
     if media_backup is not None:
         args.append(str(media_backup))
     return subprocess.run(args, capture_output=True, text=True, env=env, cwd=root, timeout=90, stdin=subprocess.DEVNULL)
@@ -233,3 +240,82 @@ def test_fresh_target_without_existing_database_needs_no_backup_copy(tmp_path: P
     lines = _lines(action_log)
     assert not [line for line in lines if f'ALTER DATABASE "{TARGET_DB}" RENAME TO' in line]
     assert [line for line in lines if f'RENAME TO "{TARGET_DB}";' in line]
+
+
+def _legacy_set(daily: Path) -> None:
+    """Satz ohne Manifest — wie vor 0.99.2 erzeugte Weekly-/Monthly-Sätze."""
+    (daily / f"anlaufstelle_{TIMESTAMP}.manifest").unlink()
+    (daily / f"anlaufstelle_{TIMESTAMP}.manifest.hmac").unlink()
+
+
+def test_legacy_set_without_manifest_is_refused_and_names_the_switch(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    _legacy_set(db_backup.parent)
+
+    result = _run(root, bindir, action_log, db_backup, media_backup)
+
+    assert result.returncode != 0
+    assert "--allow-unsigned-legacy" in result.stderr
+    assert _lines(action_log) == []
+
+
+def test_legacy_set_restores_with_the_emergency_switch_and_says_what_is_missing(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    _legacy_set(db_backup.parent)
+
+    result = _run(root, bindir, action_log, db_backup, media_backup, TEST_LEGACY_SWITCH="1")
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "ACHTUNG" in result.stdout
+    assert "ohne signiertes Manifest" in result.stdout
+    assert "RESTORE-SATZ WIEDERHERGESTELLT" in result.stdout
+    # Kein stiller Erfolg: der Lauf nennt die fehlende Satzbindung noch einmal.
+    assert result.stdout.rstrip().splitlines()[-1].startswith("HINWEIS: Altsatz-Modus")
+
+
+def test_legacy_media_of_another_set_is_refused(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    _legacy_set(db_backup.parent)
+    foreign = media_backup.with_name("anlaufstelle_2026-09-01_020000_media.tar.gz.enc")
+    media_backup.rename(foreign)
+    media_backup.with_name(f"{media_backup.name}.hmac").rename(foreign.with_name(f"{foreign.name}.hmac"))
+
+    result = _run(root, bindir, action_log, db_backup, foreign, TEST_LEGACY_SWITCH="1")
+
+    assert result.returncode != 0
+    assert "Zeitstempel" in result.stderr
+    assert _lines(action_log) == []
+
+
+def test_media_archive_without_manifest_binding_is_refused(tmp_path: Path) -> None:
+    """DB-only-Satz + beliebiges Medienarchiv darf nicht durchlaufen (Satzbindung)."""
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+    manifest = db_backup.with_name(f"anlaufstelle_{TIMESTAMP}.manifest")
+    lines = [line for line in manifest.read_text(encoding="utf-8").splitlines() if not line.startswith("media_sha256=")]
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _sign(manifest)
+
+    result = _run(root, bindir, action_log, db_backup, media_backup)
+
+    assert result.returncode != 0
+    assert "bindet kein Medien-Archiv" in result.stderr
+    assert _lines(action_log) == []
+
+
+def test_abort_between_the_two_renames_keeps_the_verified_state(tmp_path: Path) -> None:
+    root, bindir, action_log, db_backup, media_backup = _sandbox(tmp_path)
+
+    result = _run(root, bindir, action_log, db_backup, media_backup, TEST_ABORT_IN_SWITCH="1")
+
+    assert result.returncode != 0
+    lines = _lines(action_log)
+    assert [line for line in lines if f'ALTER DATABASE "{TARGET_DB}" RENAME TO "{TARGET_DB}_vor_restore_' in line]
+    # Der verifizierte Wiederherstellungsstand wird NICHT verworfen ...
+    drops = [index for index, line in enumerate(lines) if f'DROP DATABASE IF EXISTS "{TARGET_DB}_restore_' in line]
+    switch = _index(lines, f'RENAME TO "{TARGET_DB}_vor_restore_')
+    assert all(index < switch for index in drops)
+    # ... und der bisherige Stand kommt unter den Zielnamen zurueck.
+    rollback = [line for line in lines[switch + 1 :] if f'RENAME TO "{TARGET_DB}";' in line]
+    assert rollback, lines[switch:]
+    assert "Umschaltung" in result.stderr
+    assert f"{TARGET_DB}_restore_" in result.stderr
