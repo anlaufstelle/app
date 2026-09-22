@@ -22,7 +22,7 @@ Verhalten am Ergebnis messen und nicht an seiner Mechanik:
 * **Die geschriebenen Spalten** (``update_fields``). Ein Mutant, der die
   Liste weglaesst, schreibt wieder die ganze Zeile — genau der Befund.
 * **Das Abfrage-Budget** der fuenf Pfade. Die Sperrkette kostet Abfragen;
-  ohne Pin waechst sie beim naechsten Zusatz unbemerkt weiter (R-T18).
+  ohne Pin waechst sie beim naechsten Zusatz unbemerkt weiter.
 """
 
 import re
@@ -257,7 +257,7 @@ class TestUebergebeneInstanzBleibtDerRueckgabewert:
 
 @pytest.mark.django_db
 class TestAbfrageBudgetDerStatuswechsel:
-    """R-T18: die Sperrkette kostet Abfragen — die Zahl steht fest.
+    """Die Sperrkette kostet Abfragen — die Zahl steht fest.
 
     Fallpfad (12): Personenbezug vorlesen · Personensperre (Art.-18-Gate) ·
     Widerrufsspalten der Person · Fallzeile sperren · ``UPDATE core_case`` ·
