@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Live-Dev- und Demo-Einstellungen starten unter Django 6.1 wieder ohne SMTP** (#2326) — Der neue Deploy-Check `mail.E001` von Django 6.1 lehnte das fest eingestellte Konsolen-Mail-Backend der Live-Dev-Einstellungen ab, sodass der Web-Container auf Hosts ohne SMTP in einer Neustart-Schleife blieb. Ohne `EMAIL_HOST` bleibt es beim Konsolen-Backend (Mails im Container-Log) und nur diese eine Prüfung ist dort stummgeschaltet; ist `EMAIL_HOST` gesetzt, gilt der SMTP-Versand wie in Produktion. Die Produktiv-Einstellungen sind unverändert und schalten die Prüfung nicht stumm; Admin-Handbuch und Betriebs-Runbook erklären, dass Django 6.1 auf Produktivhosts ein SMTP-Backend voraussetzt und was ohne erreichbaren Mailserver passiert.
+- **Erststart erkennt vorhandene Legal-/Override-Compose-Datei automatisch** (#2309) — `initial-setup.sh` startete bislang nur mit der Basis-Compose-Datei; eine vor der Erstinbetriebnahme angelegte `compose.legal.yml` oder `compose.override.yml` blieb dadurch wirkungslos, obwohl Admin-Guide und alle Recreate-Beispiele die volle Dateiliste voraussetzen. Das Skript hängt beide Dateien jetzt automatisch an und nennt die tatsächlich verwendete Liste in der Ausgabe.
+- **Erstladung der Virensignaturen ist jetzt erklärt** (#2312) — Der Erststart hielt beim Start des Virenscanners bislang minutenlang ohne Zwischenausgabe; das Skript meldet jetzt, dass die Signatur-Erstladung mehrere Minuten dauern kann, und der Admin-Guide nennt den Prüfbefehl `docker compose … logs clamav`.
 
 ### Docs
 
