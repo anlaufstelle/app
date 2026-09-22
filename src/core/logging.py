@@ -784,8 +784,14 @@ class JsonFormatter(logging.Formatter):
         entry = {
             "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
-            "logger": record.name,
-            "module": record.module,
+            # Refs #2321 (H-1): Logger-Name und Modul laufen durch denselben
+            # Scrub wie im aeussersten Fallback (``_record_identity``). Beide
+            # Werte setzt der Anwendungscode; ein dynamisch gebildeter Name
+            # (``logging.getLogger(request.path)``) traegt Rohtext. Der Aufwand
+            # ist vernachlaessigbar — beide Werte sind kurz —, und es war die
+            # letzte Stelle dieses Formatters, an der Rohtext in den Sink kam.
+            "logger": _scrubbed_identity(record, "name", UNREPRESENTABLE),
+            "module": _scrubbed_identity(record, "module", UNREPRESENTABLE),
             "message": scrub_text(_record_message(record)),
         }
         if record.exc_info and record.exc_info[0] is not None:
