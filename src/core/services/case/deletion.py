@@ -270,6 +270,15 @@ def reject_case_deletion(deletion_request, reviewer):
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )
+    # Refs #2321 (H-3): Einrichtungsgrenze auch fuer den REVIEWER. Bisher
+    # scopete der Service nur auf die Einrichtung des ANTRAGS — wer das Recht
+    # 'Loeschbestaetigung' hat, konnte einen fremden Antrag entscheiden.
+    # Ueber HTTP unerreichbar (die View scopet), in Produktion von RLS
+    # getragen; der Service ist hier wie beim Vier-Augen-Prinzip die Single
+    # Source of Truth. Geprueft wird gegen die FRISCH GESPERRTE Zeile, nicht
+    # gegen die mitgegebene Annahme, und vor jedem Schreibzugriff.
+    if reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
     deletion_request.status = DeletionRequest.Status.REJECTED
