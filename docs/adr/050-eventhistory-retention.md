@@ -319,6 +319,20 @@ Gepinnt wird die Ordnung am ausgeführten SQL in `TestActivityLockOrder` ([`src/
 - **−** Zwei weitere Regler in den Einrichtungs-Einstellungen (M-1 hat für D2 + D3 entschieden, M-7 für Stufe 2), mit Pflicht zum Abgleich von Verarbeitungsverzeichnis und Löschkonzept.
 - **−** Die Anzeige- und Auskunfts-Lücken aus D6 müssen vor dem ersten Sweep geschlossen sein; sie sind heute latent und werden durch diese Änderung akut.
 
+### Nachtrag zu D5.5 — Zustandsvertrag bei Statuswechseln (2026-09-22)
+
+Die Sperrreihenfolge beantwortet, **in welcher Ordnung** Zeilen genommen werden. Sie beantwortet nicht, **ob** an einer Zeile überhaupt noch geschrieben werden darf. Genau diese zweite Frage fehlte den Statuswechseln der Fallakte: `close_case`/`reopen_case` (#2288) sowie `achieve_goal`/`unachieve_goal`/`toggle_milestone` (#2295) speicherten die Instanz, die die View vor dem Klick gelesen hatte — vollständig. Fiel in das Fenster dazwischen eine Bearbeitung, ein Soft-Delete oder die Tilgung (`redact_case_content`/`redact_case_goals`, beide zugleich Kaskadenschritt der Personen-Anonymisierung), dann schrieb der Save die alten Freitexte **und** die alten Zustandsmerkmale (`is_deleted`, `deleted_at`, `anonymized_at`) zurück.
+
+Der Vertrag lautet: **gelöscht oder anonymisiert ⇒ keine Statusmutation.** Er wird in [`services/case/state_contract.py`](../../src/core/services/case/state_contract.py) durchgesetzt, und zwar auf dem **frisch unter Sperre gelesenen** Stand, nicht auf der übergebenen Instanz — Person nach Art. 18 eingeschränkt, Person im Papierkorb/anonymisiert, Fall im Papierkorb/anonymisiert oder Zeile verschwunden bzw. Fall zwischenzeitlich an eine andere Person gehängt: jeweils `ValidationError`, kein Schreibvorgang, keine Audit-Zeile, kein Zeitstrom-Eintrag. Erst danach wird der Status geschrieben, spaltengenau über `update_fields` (Status plus zugehörige Zeitspalte). `update_fields` allein wäre nur die halbe Antwort: es hält die Spalten klein, lässt eine getilgte Akte aber weiter Statuswechsel annehmen.
+
+Die kanonische Ordnung bekommt dafür zwei Glieder unterhalb des Falls:
+
+> **`core_client` → `core_case` → `core_outcomegoal` → `core_milestone` → `core_event` → `core_retentionproposal` → `core_eventhistory` → `core_auditlog` → `core_activity`**
+
+Wirkungsziel und Meilenstein stehen **nach** dem Fall (beide hängen über `case`/`goal` an ihm) und **vor** dem Ereignis; zwischen den beiden Zweigen ist die Ordnung frei, weil kein Pfad Ziel- und Ereigniszeilen zugleich nimmt — die Festlegung kostet nichts und erspart die nächste Einzelfallentscheidung. Die Personenzeile bleibt die erste Stufe und wird weiterhin über den gemeinsamen PK-geordneten Helfer `lock_clients` genommen (#2268), den das Art.-18-Gate mit `lock=True` ohnehin verwendet; eine zweite `select_for_update`-Form neben ihm wäre eine zweite Ordnung. Der Meilenstein-Pfad sperrt die Zielzeile mit, obwohl er sie nicht schreibt: eine übersprungene Stufe ist die nächste Reihenfolge, die niemand mit den übrigen vergleicht.
+
+Gepinnt wird der Vertrag in [`src/tests/test_case_status_redaction_guard.py`](../../src/tests/test_case_status_redaction_guard.py) und [`src/tests/test_goal_status_redaction_guard.py`](../../src/tests/test_goal_status_redaction_guard.py) — letzteres mit einem Rendezvous beider Reihenfolgen (Redaktion vor bzw. nach dem Statuswechsel) auf zwei echten Verbindungen, beobachtend nach dem Muster von [`test_client_lock_order.py`](../../src/tests/test_client_lock_order.py).
+
 ## Alternatives considered
 
 - **Nichts tun.** Verworfen: der Befund aus §5 ist kein Wachstumsthema, sondern eine unterlaufene Frist — er wird ohne Eingriff nicht kleiner, sondern wächst mit jedem Fristablauf.

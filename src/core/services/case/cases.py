@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Case, DocumentType
 from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
+from core.services.case.state_contract import lock_case_for_status_change
 from core.services.compliance import user_can_see_event
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
@@ -210,53 +211,66 @@ def close_case(case, user):
     """Close a case + AuditLog + Activity.
 
     Art.-18-Gate (Refs #2045): Fall-Operationen sind fachliche Nutzung der
-    Personendaten, nicht blosse Speicherung.
-    """
-    from core.services.client.restriction import assert_processing_allowed
+    Personendaten, nicht blosse Speicherung. Das Gate liegt seit Refs #2288 im
+    Zustandsvertrag (:mod:`core.services.case.state_contract`) — zusammen mit
+    der Personensperre, die es ohnehin nimmt.
 
-    assert_processing_allowed(case.client_id, lock=True)
-    case.status = Case.Status.CLOSED
-    case.closed_at = timezone.now()
-    case.save()
+    Refs #2288: Geschrieben wird die FRISCH unter Sperre gelesene Zeile, und
+    von ihr nur der Status samt Zeitspalte. Die uebergebene Instanz stammt aus
+    einem Lesevorgang von vor dem Klick; ein voller ``save()`` auf ihr schrieb
+    Titel, Beschreibung, ``data_json`` und die Loeschmerkmale einer
+    zwischenzeitlichen Tilgung zurueck. Sie bekommt am Ende den neuen Stand
+    und bleibt das zurueckgegebene Objekt (Muster ``anonymize_case_now``).
+    """
+    locked = lock_case_for_status_change(case)
+    locked.status = Case.Status.CLOSED
+    locked.closed_at = timezone.now()
+    locked.save(update_fields=["status", "closed_at", "updated_at"])
     audit_event(
         AuditLog.Action.CASE_CLOSE,
         user=user,
-        facility=case.facility,
-        target_obj=case,
+        facility=locked.facility,
+        target_obj=locked,
     )
     log_activity(
-        facility=case.facility,
+        facility=locked.facility,
         actor=user,
         verb=Activity.Verb.UPDATED,
-        target=case,
+        target=locked,
         action=Activity.Action.CASE_CLOSED,
     )
+    case.refresh_from_db()
     return case
 
 
 @transaction.atomic
 def reopen_case(case, user):
-    """Reopen a previously closed case + AuditLog + Activity."""
-    from core.services.client.restriction import assert_processing_allowed
+    """Reopen a previously closed case + AuditLog + Activity.
 
-    # Art.-18-Gate (Refs #2045), Spiegel von ``close_case``.
-    assert_processing_allowed(case.client_id, lock=True)
-    case.status = Case.Status.OPEN
-    case.closed_at = None
-    case.save()
+    Spiegel von :func:`close_case` — einschliesslich des Zustandsvertrags
+    (Refs #2288). Ein Statuswechsel ist kein Wiederherstellen: eine Akte im
+    Papierkorb kommt ueber :func:`~core.services.case.deletion.restore_case`
+    zurueck, mit eigener Pruefung und eigener Audit-Zeile, nicht ueber das
+    Nullen von ``is_deleted`` durch einen vollen Save.
+    """
+    locked = lock_case_for_status_change(case)
+    locked.status = Case.Status.OPEN
+    locked.closed_at = None
+    locked.save(update_fields=["status", "closed_at", "updated_at"])
     audit_event(
         AuditLog.Action.CASE_REOPEN,
         user=user,
-        facility=case.facility,
-        target_obj=case,
+        facility=locked.facility,
+        target_obj=locked,
     )
     log_activity(
-        facility=case.facility,
+        facility=locked.facility,
         actor=user,
         verb=Activity.Verb.REOPENED,
-        target=case,
+        target=locked,
         action=Activity.Action.CASE_REOPENED,
     )
+    case.refresh_from_db()
     return case
 
 
