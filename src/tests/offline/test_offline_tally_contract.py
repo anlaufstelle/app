@@ -101,7 +101,7 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Metadaten-Uebernahme (#2293) und den Vertrag der Erfolgsbestaetigung
         # (#2289); die precachte Shell bekommt den Hinweis „Anmeldung
         # erforderlich" (#2289).
-        assert 'const CACHE_NAME = "anlaufstelle-v49";' in sw
+        assert 'const CACHE_NAME = "anlaufstelle-v50";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):

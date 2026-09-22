@@ -166,7 +166,7 @@ importScripts("/static/js/url-patterns.js");
 // (offline-edit.js, offline-queue.js) tragen die korrigierte Metadaten-
 // Uebernahme der Neuanlage und den Vertrag der Erfolgsbestaetigung; die
 // precachte Shell bekommt den Hinweis „Anmeldung erforderlich".
-const CACHE_NAME = "anlaufstelle-v49";
+const CACHE_NAME = "anlaufstelle-v50";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

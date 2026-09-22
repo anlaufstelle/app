@@ -155,7 +155,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v49"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v50"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -718,7 +718,7 @@ class TestPrecachedShellBumpGuard:
     # Erfolgsbestaetigung; die Offline-Akte bekommt zusaetzlich den Hinweis
     # „Anmeldung erforderlich". Beides ist ausgeliefertes Markup bzw.
     # Precache-Inhalt: erst CACHE_NAME bumpen, dann Hash nachziehen.
-    _PINNED_CACHE_NAME = "anlaufstelle-v49"
+    _PINNED_CACHE_NAME = "anlaufstelle-v50"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -798,7 +798,7 @@ class TestPrecachedShellBumpGuard:
     # #1900/#1805 — NUR Hash nachziehen, KEIN CACHE_NAME-Bump. Belegt durch
     # test_version_display.py::TestPublicFooterRendering::
     # test_anonymous_pages_show_source_link_but_no_version[core:offline_client_list_shell].
-    _PINNED_SHELL_HASH = "ca06719e6ef4a973d5a1f8e038557b131f2d5f594686dce692c59642252e3550"
+    _PINNED_SHELL_HASH = "20033fc82d48a9d1804cb85ab0aef004d6145488661fcd49ca38eec3de613b74"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
