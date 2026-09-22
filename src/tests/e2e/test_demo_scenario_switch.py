@@ -203,6 +203,14 @@ class TestOldTabAfterSwitch:
     wie zwei Tabs desselben Browsers."""
 
     def test_stale_tab_reload_reflects_the_switch(self, base_url, browser):
+        """Fix-Runde 1 (Zweitgutachten Sonnet): scharfe Assertion statt
+        ``status in (200, 302)`` — Playwright-Contexts teilen sich den
+        Cookie-Jar ueber alle Seiten hinweg (kein Per-Tab-Storage), daher
+        traegt der ALTE Tab nach einem Reload automatisch das NEUE
+        Sitzungscookie aus dem zweiten Tab. Der scharfe Nachweis ist deshalb
+        nicht der Statuscode, sondern der tatsaechliche Banner-Inhalt: der
+        alte Tab zeigt nach dem Reload den ZWEITEN Bereich, nicht mehr den
+        ersten — "erkennt den Wechsel" im Wortsinn (Ticket-Punkt 9)."""
         context = browser.new_context(locale="de-DE")
         try:
             page_old_tab = context.new_page()
@@ -211,6 +219,7 @@ class TestOldTabAfterSwitch:
             if cards.count() < 2:
                 pytest.skip("Weniger als zwei Demo-Bereiche im Katalog — Wechsel nicht pruefbar.")
             first_key = cards.nth(0).get_attribute("data-scenario-key")
+            first_name = cards.nth(0).locator("h2").inner_text().strip()
             cards.nth(0).locator("[data-testid='demo-scenario-start']").click()
             page_old_tab.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
 
@@ -220,19 +229,24 @@ class TestOldTabAfterSwitch:
             page_new_tab = context.new_page()
             page_new_tab.goto(f"{base_url}/demo/")
             cards = page_new_tab.locator("[data-testid='demo-scenario-card']")
+            second_name = None
             for i in range(cards.count()):
                 if cards.nth(i).get_attribute("data-scenario-key") != first_key:
+                    second_name = cards.nth(i).locator("h2").inner_text().strip()
                     cards.nth(i).locator("[data-testid='demo-scenario-start']").click()
                     break
+            assert second_name is not None
             page_new_tab.wait_for_url(lambda url: "/demo/" not in url, timeout=10000)
 
-            # Alter Tab neu laden: kontrolliertes Verhalten statt eines
-            # stillen Mischzustands — die Seite laedt entweder mit dem neuen
-            # Bereichskontext neu, oder das Reset-Session-Cookie fuehrt zu
-            # einem Login-Redirect. Beides ist "kein stiller Weiterbetrieb im
-            # alten Bereich"; harte Assertion auf das Nicht-Fehlschlagen des
-            # Reloads selbst.
-            response = page_old_tab.reload()
-            assert response is not None and response.status in (200, 302)
+            # Alter Tab neu laden: der geteilte Cookie-Jar traegt bereits die
+            # neue Sitzung — der Banner muss jetzt den ZWEITEN Bereich zeigen,
+            # NICHT mehr den ersten (kein stiller Weiterbetrieb im alten
+            # Bereich, kein Mischzustand).
+            page_old_tab.reload()
+            banner = page_old_tab.locator("[data-testid='demo-current-scenario']")
+            banner.wait_for(timeout=10000)
+            banner_text = banner.inner_text()
+            assert second_name in banner_text, f"Banner zeigt nicht den neuen Bereich: {banner_text!r}"
+            assert first_name not in banner_text, f"Banner zeigt noch den alten Bereich: {banner_text!r}"
         finally:
             context.close()
