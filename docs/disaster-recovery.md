@@ -209,8 +209,12 @@ BACKUP_HOST_DIR="/opt/anlaufstelle/drill-backups/$RESTORE_TIMESTAMP"
 RESTORE_SET_DIR="$BACKUP_HOST_DIR/daily"
 set -o pipefail
 
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 docker compose -f docker-compose.prod.yml stop web cron && \
-docker compose -f docker-compose.prod.yml up -d web && \
+docker compose "${compose_files[@]}" up -d web && \
 ./scripts/ops/restore.sh --yes "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" \
                                "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" \
   | tee /tmp/anlaufstelle-restore.log
@@ -307,8 +311,12 @@ Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDI
 # dass App-Rolle = NOSUPERUSER/NOBYPASSRLS und Admin = BYPASSRLS (Refs #1002).
 docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
 
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Vollständigen Stack samt mitgeliefertem cron-Sidecar hochfahren.
-docker compose -f docker-compose.prod.yml up -d
+docker compose "${compose_files[@]}" up -d
 ```
 
 Retention, Audit-Verifikation, Snapshots, Bereinigung, Breach-Erkennung und MV-Refresh laufen ab Werk im `cron`-Sidecar aus `deploy/crontab`. Zusätzlich ist **nur der Host-Cron für `scripts/ops/backup.sh`** nach [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) einzurichten — auf einem Wegwerfhost aber erst nach dem vollständig grünen Drill-Nachweis. Keine weiteren Host-Cronzeilen für die Sidecar-Jobs anlegen, sonst laufen sie doppelt.

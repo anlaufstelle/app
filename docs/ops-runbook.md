@@ -77,9 +77,13 @@ docker compose -f docker-compose.prod.yml pull web
 docker compose -f docker-compose.prod.yml run --rm \
     --entrypoint=/app/docker-migrate.sh maintenance
 
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # 3. Stack neu starten (web + caddy, DB bleibt).
 #    Entrypoint laeuft jetzt nur noch collectstatic + gunicorn.
-docker compose -f docker-compose.prod.yml up -d web caddy
+docker compose "${compose_files[@]}" up -d web caddy
 ```
 
 **Erwartete Downtime:** ~3-5 Sekunden (nur Gunicorn-Restart). Migrationen laufen vorab im One-Shot-Job — der Web-Container faehrt erst hoch, wenn das Schema bereit ist. Bei mehreren Web-Replicas wartet keine mehr auf den Migrate-Lock.
@@ -144,8 +148,12 @@ Wenn die neue Version Anwendungsfehler hat, aber die Migrationen rueckwaertskomp
 # 1. In docker-compose.prod.yml das Image-Tag pinnen
 #    image: ghcr.io/anlaufstelle/app:v1.2.3   (vorherige Version)
 
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # 2. Stack neu starten
-docker compose -f docker-compose.prod.yml up -d web
+docker compose "${compose_files[@]}" up -d web
 
 # 3. Verifizieren
 curl -sf https://$DOMAIN/health/
@@ -221,7 +229,11 @@ Letzter Ausweg, wenn Migration-Rollback nicht moeglich:
 ```bash
 # 1. Hintergrundjobs anhalten; db und web bleiben fuer Restore und Medien noetig
 docker compose -f docker-compose.prod.yml stop cron
-docker compose -f docker-compose.prod.yml up -d db web
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d db web
 
 # 2. Backup wiederherstellen — DB plus optional Medien.
 #    restore.sh fuellt eine frische Wiederherstellungs-Datenbank, verifiziert sie
@@ -235,7 +247,7 @@ docker compose -f docker-compose.prod.yml up -d db web
 # 3. Altes Image-Tag in docker-compose.prod.yml setzen
 
 # 4. Stack starten (restore.sh laesst web und cron gestoppt)
-docker compose -f docker-compose.prod.yml up -d
+docker compose "${compose_files[@]}" up -d
 
 # 5. Verifizieren
 curl -sf https://$DOMAIN/health/
@@ -865,7 +877,11 @@ Der Env-Weg ist kein Docker-Secret: Im `redis`-Container steht das Passwort als 
 Zum Passwortwechsel den Wert ändern und Redis plus die dauerhaft laufenden Konsumenten neu erzeugen; der Cache enthält nur regenerierbare Daten. `maintenance` ist profilgebunden und übernimmt den neuen Wert bei seinem nächsten Ad-hoc-Start:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d redis web cron
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d redis web cron
 ```
 
 **Fallback (unverändert): `DatabaseCache`.**
@@ -879,7 +895,11 @@ REDIS_URL=
 ```
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --scale redis=0
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d --scale redis=0
 ```
 
 **Externes Redis** statt des mitgelieferten: `REDIS_URL` in der `.env` auf den eigenen Endpunkt zeigen lassen (`redis://:passwort@redis.internal:6379/1`) und dessen Credentials selbst in diese URL eintragen. Ein gesetztes `REDIS_PASSWORD` wirkt bei expliziter `REDIS_URL` nur noch auf den ungenutzten mitgelieferten Service. Der Compose-Wert ist nur ein Fallback für nicht gesetzte Variablen; der mitgelieferte Service kann dann wie oben auf 0 skaliert werden.
@@ -1178,7 +1198,11 @@ make maintenance-on
 
 # Deploy / Migration ausfuehren
 docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d
 
 # Deaktivieren (File-Flag entfernen)
 make maintenance-off
@@ -1334,7 +1358,11 @@ docker compose -f docker-compose.prod.yml exec web \
 
 # 2. Stack neu erzeugen (Containers loeschen — Volume bleibt)
 docker compose -f docker-compose.prod.yml down
-docker compose -f docker-compose.prod.yml up -d
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d
 
 # 3. Sentinel ueberprueft Volume-Persistenz
 docker compose -f docker-compose.prod.yml exec web \
@@ -2820,7 +2848,11 @@ docker compose -f docker-compose.prod.yml exec -T db sh -c \
 
 # 8. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
 docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
-docker compose -f docker-compose.prod.yml up -d web caddy
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+docker compose "${compose_files[@]}" up -d web caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # 9. Maintenance-Mode aus. Arbeits-Dump enthaelt KLARTEXT-Daten — sofort loeschen;
@@ -2844,8 +2876,12 @@ docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
 docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
     tar xzf /from/pgdata-pg16.tar.gz -C /to
 
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # 3. Stack hochfahren + Health
-docker compose -f docker-compose.prod.yml up -d
+docker compose "${compose_files[@]}" up -d
 ```
 
 ### 13.3 dev.anlaufstelle.app — Daten wegwerfbar
