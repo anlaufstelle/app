@@ -23,16 +23,20 @@ verhaelt sich ausserhalb der Demo aber wie eine nicht existierende Seite.
   Demo-Seiten begrenzen").
 
 Bewusst KEIN Import von ``core.seed.scenarios`` auf Modulebene: die Datei
-ist Eigentum von Lane F-2 (#2279) und zum Start dieser Lane noch nicht in
-den Baum gemerged (Besitzliste/TABU dieser Lane, ``src/core/seed/**``
+ist Eigentum von Lane F-2 (#2279) und war zum Start dieser Lane noch nicht
+in den Baum gemerged (Besitzliste/TABU dieser Lane, ``src/core/seed/**``
 NUR über die dort dokumentierte Schnittstelle konsumieren, keine eigene
 Kopie). ``scenario_catalog()``/``_lookup_scenario()`` importieren daher
-lazy zur Aufrufzeit und fangen ein fehlendes Modul ab — vor dem Merge von
-F-2 zeigt die Auswahlseite den leeren Zustand ("noch keine Bereiche"),
-DANACH ohne weitere Code-Aenderung den echten Katalog. Ohne diesen
-Lazy-Import wuerde ein fehlendes ``core.seed.scenarios`` das komplette
-URLconf (``anlaufstelle/urls.py`` importiert diese Datei) und damit JEDE
-andere Route der Welle N zum Absturz bringen.
+weiterhin lazy zur Aufrufzeit und fangen ein fehlendes Modul ab — der
+Katalog liegt seit dem Rebase auf F-2s Merge-Stand jetzt im Baum, der
+Lazy-Import bleibt trotzdem stehen (kostet nichts, schützt vor einem
+künftigen erneuten Auseinanderlaufen der Lanes).
+
+Facility-/Konto-Lookup liegt in ``core.services.demo_scenarios``
+(``facility_for_scenario``/``account_for``, Fix-Runde 1): der Zweitgutachten-
+BLOCKER ``TestTenantModelScopeGuard`` verlangt Facility-Scope-Evidenz für
+JEDEN ``<Model>.objects``-Zugriff in ``core/views/**`` — dieser View-Layer
+fasst daher keine facility-tragenden Modelle mehr direkt an.
 """
 
 from __future__ import annotations
@@ -50,8 +54,9 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_FREQUENT
 from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
-from core.models import Facility, User
+from core.models import User
 from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
+from core.services.demo_scenarios import account_for, facility_for_scenario
 
 #: Refs #573/#1065 (``CustomLogoutView``, ``core/views/auth.py``, dort NUR als
 #: Vorbild referenziert/dupliziert — TABU-Regel dieser Lane verbietet eine
@@ -94,35 +99,32 @@ def _demo_mode_or_404():
 def _default_role(scenario):
     """Alltagsrolle als Voreinstellung (Ticket-Punkt 4): STAFF, sofern das
     Szenario sie anbietet, sonst die erste im Katalog hinterlegte Rolle
-    (Katalogreihenfolge ist bewusst die "naheliegendste zuerst")."""
+    (Katalogreihenfolge ist bewusst die "naheliegendste zuerst").
+
+    ``None`` bei einem Katalogeintrag OHNE Rollen (Datenfehler des Katalogs,
+    Zweitgutachten Sonnet: fail-closed statt ``IndexError`` im heissen Pfad).
+    Ein ``None``-Rueckgabewert macht die Karte in :func:`scenario_cards`
+    nicht verfuegbar und laesst ``DemoScenarioStartView.post`` denselben,
+    bereits vorhandenen "Rolle nicht freigegeben"-Zweig nehmen (``None not
+    in scenario.demo_roles`` ist bei leerem Tupel immer wahr) — kein
+    Sonderfall im Start-Pfad noetig."""
+    if not scenario.demo_roles:
+        return None
     if User.Role.STAFF in scenario.demo_roles:
         return User.Role.STAFF
     return scenario.demo_roles[0]
-
-
-def _facility_state(scenario):
-    """``(facility, available)`` — ``available`` deckt sowohl "noch nicht
-    seeded"/"Reset laeuft gerade" (kein passender Facility-Datensatz, Ticket-
-    Punkt 3) als auch "archiviert" (``is_active=False``) ab. Beide Faelle
-    bekommen dieselbe, verstaendliche Behandlung auf der Auswahlseite — kein
-    stiller Einstieg in einen nicht bereitgestellten Bereich."""
-    try:
-        facility = Facility.objects.get(name=scenario.facility_name)
-    except Facility.DoesNotExist:
-        return None, False
-    return facility, facility.is_active
 
 
 def scenario_cards(current_facility_id=None):
     """Anzeige-Datensaetze fuer die Auswahlseite, EINE Quelle fuer GET+POST."""
     cards = []
     for scenario in scenario_catalog():
-        facility, available = _facility_state(scenario)
+        facility, available = facility_for_scenario(scenario)
         default_role = _default_role(scenario)
         cards.append(
             {
                 "scenario": scenario,
-                "available": available,
+                "available": available and default_role is not None,
                 "is_current": bool(facility and current_facility_id and facility.pk == current_facility_id),
                 "default_role": default_role,
                 "other_roles": tuple(role for role in scenario.demo_roles if role != default_role),
@@ -209,7 +211,7 @@ class DemoScenarioStartView(View):
             select_url = reverse(SCENARIO_SELECT_URL_NAME)
             return redirect(f"{select_url}?bereich={scenario.key}")
 
-        facility, available = _facility_state(scenario)
+        facility, available = facility_for_scenario(scenario)
         if not available:
             messages.error(
                 request,
@@ -222,11 +224,11 @@ class DemoScenarioStartView(View):
 
         # Fest zugeordnetes Demo-Konto je Facility+Rolle (Ticket-Punkt 5):
         # NIE die facility-Zuordnung eines Kontos umschreiben, nur ein
-        # bestehendes, zu Szenario+Rolle passendes Konto anmelden.
-        # ``order_by("pk")`` macht die Auswahl deterministisch, wenn ein
-        # Team-Szenario mehrere Konten derselben Rolle seedet (z. B. zwei
-        # ``staff``-Konten) — stabil ueber Erstellungsreihenfolge.
-        user = User.objects.filter(facility=facility, role=role, is_active=True).order_by("pk").first()
+        # bestehendes, zu Szenario+Rolle passendes Konto anmelden. Lookup
+        # ausgelagert in core.services.demo_scenarios (Fix-Runde 1,
+        # TestTenantModelScopeGuard) — deterministisch, kein Konto aus
+        # Request-Parametern.
+        user = account_for(facility, role)
         if user is None:
             messages.error(request, _("Für diesen Demo-Bereich ist noch kein passendes Konto vorbereitet."))
             return redirect(SCENARIO_SELECT_URL_NAME)

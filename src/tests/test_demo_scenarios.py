@@ -408,6 +408,57 @@ class TestDefaultRole:
         scenario = _scenario("x", facility_name="X", demo_roles=(User.Role.FACILITY_ADMIN, User.Role.LEAD))
         assert views._default_role(scenario) == User.Role.FACILITY_ADMIN
 
+    def test_fail_closed_on_empty_demo_roles(self):
+        """Katalog-Datenfehler (leere ``demo_roles``): ``None`` statt
+        ``IndexError`` im heissen Pfad (Fix-Runde 1, Zweitgutachten Sonnet)."""
+        scenario = _scenario("x", facility_name="X", demo_roles=())
+        assert views._default_role(scenario) is None
+
+
+class TestScenarioCardsFailClosedOnEmptyRoles:
+    def test_card_with_no_roles_is_marked_unavailable(self, demo_mode, monkeypatch, kontaktladen_facility):
+        """Eine Facility existiert und ist aktiv, aber der Katalogeintrag hat
+        keine Rollen — die Karte darf trotzdem nicht als startbar gelten."""
+        broken = _scenario("broken", facility_name=kontaktladen_facility.name, demo_roles=())
+        monkeypatch.setattr(views, "scenario_catalog", lambda: (broken,))
+        cards = views.scenario_cards()
+        assert cards[0]["available"] is False
+        assert cards[0]["default_role"] is None
+
+    def test_start_with_no_roles_in_catalog_is_rejected(self, client, demo_mode, monkeypatch, kontaktladen_facility):
+        broken = _scenario("broken", facility_name=kontaktladen_facility.name, demo_roles=())
+        monkeypatch.setattr(views, "scenario_catalog", lambda: (broken,))
+        monkeypatch.setattr(views, "_lookup_scenario", lambda key: broken if key == "broken" else None)
+        response = client.post(reverse("demo_scenario_start"), {"scenario": "broken"})
+        assert response.status_code == 302
+        assert "_auth_user_id" not in client.session
+
+
+class TestAccountForExcludesSuperusers:
+    """Fix-Runde 1, Zweitgutachten Opus Hinweis H-2: Verteidigung in der Tiefe."""
+
+    def test_superuser_with_matching_facility_and_role_is_never_picked(self, kontaktladen_facility):
+        from core.services.demo_scenarios import account_for
+
+        superuser = User.objects.create_user(
+            username="kl_super",
+            role=User.Role.STAFF,
+            facility=kontaktladen_facility,
+            is_staff=True,
+            is_superuser=True,
+        )
+        regular = User.objects.create_user(
+            username="kl_regular",
+            role=User.Role.STAFF,
+            facility=kontaktladen_facility,
+            is_staff=True,
+        )
+        # order_by("pk") waehlte ohne den Ausschluss den zuerst angelegten —
+        # hier bewusst den Superuser zuerst anlegen, damit der Test bei einer
+        # entfernten .exclude(is_superuser=True) rot wuerde.
+        assert superuser.pk < regular.pk
+        assert account_for(kontaktladen_facility, User.Role.STAFF) == regular
+
 
 class TestBanner:
     def test_current_scenario_name_empty_outside_demo_mode(self, rf, staff_user):

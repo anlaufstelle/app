@@ -893,6 +893,13 @@ class TestTenantModelScopeGuard:
         "security/lockout_recovery.py:verify_recovery_token:User": (
             "Aufloesung der PK aus einem signierten Recovery-Token — pre-auth."
         ),
+        "demo_scenarios.py:facility_for_scenario:Facility": (
+            "Demo-Bereichsauswahl (Refs #2285): loest die Facility zu einem Szenario "
+            "AUF — der Name kommt ausschliesslich aus dem serverseitigen Katalog "
+            "(core.seed.scenarios, Refs #2279), nie aus Request-Parametern, und laeuft "
+            "pre-auth (kein request.current_facility). Strukturell identisch zu "
+            "security/lockout_recovery.py:verify_recovery_token:User oben."
+        ),
         "security/login_lockout.py:is_locked:User": (
             "``select_for_update()``-Reload des bereits aufgeloesten Users per eigener "
             "PK (Lock-Reihenfolge, Refs #1000) — kein Request-Input."
