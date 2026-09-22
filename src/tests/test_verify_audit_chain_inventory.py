@@ -35,6 +35,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection, transaction
 
+from core.management.commands.verify_audit_chain import Command as VerifyAuditChainCommand
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
 from core.services.audit.hwm import HighWaterMarkStore
@@ -242,6 +243,50 @@ class TestRetirementIsAnExplicitAuthenticatedProof:
             call_command("verify_audit_chain", "--retire-chain", str(retired_pk))
 
         assert _hwm_state(settings.AUDIT_HWM_PATH) == hwm_before
+
+    def test_retiring_the_system_chain_is_refused(self, settings, tmp_path, facility, staff_user):
+        """Die System-Kette gehoert zu jeder Installation — sie wird nie stillgelegt.
+
+        Sie hat keine Einrichtung, steht also nie im DB-Inventar der
+        Einrichtungen; ohne eigene Pruefung passiert sie die Existenzpruefung
+        immer. Eine stillgelegte System-Kette bedeutet: kein Tail-Anker mehr
+        fuer die installationsweite Kette und damit keine
+        Truncation-Erkennung, ohne dass je ein Bestand entfernt wurde.
+        """
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        _anchor_all_chains(settings.AUDIT_HWM_PATH)
+        hwm_before = _hwm_state(settings.AUDIT_HWM_PATH)
+        markers_before = _marker_count()
+
+        with pytest.raises(CommandError, match="System-Kette"):
+            call_command("verify_audit_chain", "--retire-chain", "system", "--retire-reason", "Test")
+
+        assert _hwm_state(settings.AUDIT_HWM_PATH) == hwm_before, "Der System-Anker bleibt unveraendert"
+        assert _marker_count() == markers_before
+        assert HighWaterMarkStore.load(settings.AUDIT_HWM_PATH).get(None)["last_entry_hash"]
+
+    def test_retiring_a_chain_that_still_has_rows_is_refused(self, settings, tmp_path, facility, staff_user):
+        """Tiefenverteidigung: eine Kette MIT Zeilen wird nicht stillgelegt.
+
+        Ueber ``handle`` ist dieser Zustand heute nicht erreichbar — faellt die
+        Einrichtung weg, nimmt die Fremdschluessel-Kaskade ihre Audit-Zeilen
+        mit. Die Pruefung darf sich darauf aber nicht verlassen: sie ist die
+        eigentliche Zusage (stillgelegt wird nur ein Bestand, der wirklich weg
+        ist). Deshalb wird die Methode hier direkt mit einer Inventarliste
+        aufgerufen, die die Einrichtung nicht enthaelt.
+        """
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        _anchor_all_chains(settings.AUDIT_HWM_PATH)
+        store = HighWaterMarkStore.load(settings.AUDIT_HWM_PATH)
+        assert store.get(facility.pk), "Vorbedingung: die Kette ist verankert und hat Zeilen"
+        command = VerifyAuditChainCommand()
+
+        with pytest.raises(CommandError, match="Audit-Zeilen"):
+            command._retire_chains(settings.AUDIT_HWM_PATH, store, [None], [str(facility.pk)], "Test")
+
+        assert store.get(facility.pk)["last_entry_hash"], "Der Anker bleibt unveraendert"
 
     def test_retiring_an_unanchored_chain_is_refused(self, settings, tmp_path, facility):
         """Ohne Anker gibt es nichts stillzulegen — kein stiller Freibrief."""
