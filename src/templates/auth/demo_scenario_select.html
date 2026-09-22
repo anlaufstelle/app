@@ -1,0 +1,92 @@
+{% load i18n static demo_scenarios %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% trans "Demo-Bereich wählen" %} — Anlaufstelle</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% include "components/_document_head.html" %}
+</head>
+{# Refs #2285: standalone Seite wie login.html — kein base.html (Bereichsauswahl #}
+{# ist der Einstieg VOR der ersten Anmeldung, aber auch der Wechsel-Zielort   #}
+{# fuer bereits angemeldete Demo-Konten; beides bleibt ohne die facility-     #}
+{# gescopte Navigation lesbar). #}
+<body class="min-h-screen p-6" data-testid="demo-scenario-select">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-[880px] mx-auto">
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-xl bg-accent flex items-center justify-center mx-auto mb-4">
+                <svg aria-hidden="true" class="w-6 h-6" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75"/></svg>
+            </div>
+            <h1 class="text-2xl font-bold text-ink">{% trans "Demo-Bereich wählen" %}</h1>
+            <p class="text-[13px] text-ink-muted mt-1">
+                {% trans "Jede Karte ist eine eigene Beispieleinrichtung mit synthetischen Daten." %}
+            </p>
+        </div>
+
+        {% if not scenario_cards %}
+        <div class="bg-amber-50 border border-amber-300 rounded-[10px] p-4 text-[13px] text-amber-900" role="status">
+            {% trans "Für diese Demo sind derzeit keine Bereiche hinterlegt." %}
+        </div>
+        {% endif %}
+
+        <div class="grid gap-4 sm:grid-cols-2" role="list">
+            {% for card in scenario_cards %}
+            <section role="listitem" class="bg-surface border border-subtle rounded-[10px] p-5 flex flex-col{% if not card.available %} opacity-60{% endif %}" data-testid="demo-scenario-card" data-scenario-key="{{ card.scenario.key }}">
+                <h2 class="text-[15px] font-bold text-ink">
+                    {{ card.scenario.display_name }}
+                    {% if card.is_current %}
+                    <span class="ml-1 align-middle text-[11px] font-semibold uppercase tracking-[0.05em] text-accent" data-testid="demo-scenario-current">{% trans "aktuell" %}</span>
+                    {% endif %}
+                </h2>
+                <p class="mt-1 text-[13px] text-ink-soft">{{ card.scenario.description }}</p>
+                <p class="mt-2 text-[12px] text-ink-muted flex-1">{{ card.scenario.intro_hint }}</p>
+
+                {% if card.available %}
+                <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-4 space-y-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="scenario" value="{{ card.scenario.key }}">
+                    <input type="hidden" name="role" value="{{ card.default_role }}">
+                    <button type="submit"
+                            {% if card.scenario.key == preselect_key %}autofocus{% endif %}
+                            class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]"
+                            data-testid="demo-scenario-start">
+                        {% trans "Demo starten" %}
+                    </button>
+                </form>
+                {% if card.other_roles %}
+                <details class="mt-2" data-testid="demo-scenario-other-roles">
+                    <summary class="cursor-pointer text-[12px] font-semibold text-ink-soft hover:underline">{% trans "Andere Rolle wählen" %}</summary>
+                    <form method="post" action="{% url 'demo_scenario_start' %}" class="mt-2 space-y-1.5">
+                        {% csrf_token %}
+                        <input type="hidden" name="scenario" value="{{ card.scenario.key }}">
+                        <fieldset class="space-y-1">
+                            <legend class="sr-only">{% trans "Rolle für diesen Demo-Bereich" %}</legend>
+                            {% for role in card.other_roles %}
+                            <label class="flex items-center gap-2 text-[12px] text-ink">
+                                <input type="radio" name="role" value="{{ role }}">
+                                {{ role|demo_role_label }}
+                            </label>
+                            {% endfor %}
+                        </fieldset>
+                        <button type="submit" class="text-[12px] font-semibold text-accent hover:underline">{% trans "Mit gewählter Rolle starten" %}</button>
+                    </form>
+                </details>
+                {% endif %}
+                {% else %}
+                <p class="mt-4 text-[12px] font-semibold text-amber-800" role="status" data-testid="demo-scenario-unavailable">
+                    {% trans "Gerade nicht verfügbar — Reset läuft oder wird vorbereitet. Bitte kurz erneut versuchen." %}
+                </p>
+                {% endif %}
+            </section>
+            {% endfor %}
+        </div>
+
+        {% include "components/_public_footer.html" with footer_compact=True %}
+    </main>
+</body>
+</html>

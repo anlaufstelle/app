@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n static demo_scenarios %}
 <!DOCTYPE html>
 {# Refs #808: lang dynamisch aus dem aktiven Sprach-Code (i18n-Context-Processor). #}
 <html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
@@ -183,9 +183,18 @@
         {# 2FA-Setup-Reminder — Countdown der Grace-Frist (Refs #689). #}
         {% include "partials/_mfa_setup_reminder.html" %}
         {# Demo-Banner — kennzeichnet synthetische Daten + naechsten Reset (Refs #1062). #}
+        {# Refs #2285: aktueller Bereich + Wechsel-Link, Tag aus templatetags/demo_scenarios.py #}
+        {# (KEINE Erweiterung von context_processors.py — TABU dieser Lane, s. dort). #}
         {% if demo_mode %}
         <div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-[13px] py-1.5 px-4" data-testid="demo-banner">
             {% blocktrans with reset=demo_next_reset|time:"H:i" %}Demo — synthetische Daten, Reset jede volle Stunde (nächster: {{ reset }} Uhr). E-Mails &amp; Admin-Funktionen deaktiviert.{% endblocktrans %}
+            {% demo_current_scenario_name as demo_current_scenario %}
+            {% if demo_current_scenario %}
+            <span aria-hidden="true" class="text-amber-400">·</span>
+            <span data-testid="demo-current-scenario">{% blocktrans with bereich=demo_current_scenario %}Bereich: {{ bereich }}{% endblocktrans %}</span>
+            {% endif %}
+            <span aria-hidden="true" class="text-amber-400">·</span>
+            <a href="{% url 'demo_scenario_select' %}" class="font-semibold underline hover:no-underline" data-testid="demo-scenario-switch-link">{% trans "Demo-Bereich wechseln" %}</a>
         </div>
         {% endif %}
         <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">

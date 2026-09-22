@@ -1,0 +1,246 @@
+"""Demo-Bereichsauswahl und Bereichswechsel (Refs #2285).
+
+Zwei Views, beide ausschliesslich bei ``DEMO_MODE`` erreichbar (Ticket-
+Punkt 7) — ausserhalb liefern sie 404, dieselbe Doktrin wie
+``DemoImprintView``/``DemoPrivacyView`` (``core/views/legal.py``): die Route
+existiert im URLconf immer (stabile ``reverse()``-Namen fuer Templates/Tests),
+verhaelt sich ausserhalb der Demo aber wie eine nicht existierende Seite.
+
+* ``DemoScenarioSelectView`` (GET, oeffentlich): zeigt die Karten des
+  fachlichen Szenariokatalogs (``core.seed.scenarios``, Lane F-2/#2279) und
+  markiert nicht bereitgestellte/archivierte Bereiche als nicht verfuegbar.
+  Ein ``?bereich=<key>``-Deep-Link waehlt NUR vor (Ticket-Punkt 8) — er
+  fokussiert die Karte, loest aber keinen Login aus.
+* ``DemoScenarioStartView`` (POST, CSRF-geschuetzt): validiert Szenario- und
+  Rollen-Schluessel serverseitig gegen den Katalog (kein frei waehlbares
+  Konto aus Request-Parametern, Ticket-Punkt 7) und meldet die Sitzung per
+  ``django.contrib.auth.login`` auf dem fest zugeordneten Demo-Konto an.
+  Django cycelt/flusht dabei die Session (``login()``: neuer User-Pk -> ``
+  session.flush()``) — ein Bereichswechsel verliert damit automatisch die
+  alte Sitzung, OHNE eine ``facility``-Zuordnung umzuschreiben (Ticket-Punkt
+  5/9). Das Weiterleitungsziel ist fest ``settings.LOGIN_REDIRECT_URL`` — kein
+  ``next``-Parameter wird ausgewertet (Ticket-Punkt 8, „auf vorgesehene
+  Demo-Seiten begrenzen").
+
+Bewusst KEIN Import von ``core.seed.scenarios`` auf Modulebene: die Datei
+ist Eigentum von Lane F-2 (#2279) und zum Start dieser Lane noch nicht in
+den Baum gemerged (Besitzliste/TABU dieser Lane, ``src/core/seed/**``
+NUR über die dort dokumentierte Schnittstelle konsumieren, keine eigene
+Kopie). ``scenario_catalog()``/``_lookup_scenario()`` importieren daher
+lazy zur Aufrufzeit und fangen ein fehlendes Modul ab — vor dem Merge von
+F-2 zeigt die Auswahlseite den leeren Zustand ("noch keine Bereiche"),
+DANACH ohne weitere Code-Aenderung den echten Katalog. Ohne diesen
+Lazy-Import wuerde ein fehlendes ``core.seed.scenarios`` das komplette
+URLconf (``anlaufstelle/urls.py`` importiert diese Datei) und damit JEDE
+andere Route der Welle N zum Absturz bringen.
+"""
+
+from __future__ import annotations
+
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import login as auth_login
+from django.http import Http404
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.utils.translation import gettext as _
+from django.views import View
+from django_ratelimit.decorators import ratelimit
+
+from core.constants import RATELIMIT_FREQUENT
+from core.middleware.session_idle import ABSOLUTE_DEADLINE_KEY, LAST_RENEWAL_KEY
+from core.models import Facility, User
+from core.models.settings import DEFAULT_SESSION_ABSOLUTE_HOURS
+
+#: Refs #573/#1065 (``CustomLogoutView``, ``core/views/auth.py``, dort NUR als
+#: Vorbild referenziert/dupliziert — TABU-Regel dieser Lane verbietet eine
+#: Aenderung der bestehenden Abmeldung). Gleicher Wert wie beim Logout:
+#: "cookies" bleibt bewusst draussen, die neue Session-Cookie dieser Antwort
+#: soll tragen.
+CLEAR_SITE_DATA_VALUE = '"storage", "cache"'
+
+SCENARIO_SELECT_URL_NAME = "demo_scenario_select"
+
+
+def scenario_catalog():
+    """Der Szenario-Katalog aus F-2 (#2279) — leer, solange nicht gemerged."""
+    try:
+        from core.seed.scenarios import SCENARIOS
+    except ModuleNotFoundError:
+        return ()
+    return SCENARIOS
+
+
+def _lookup_scenario(key):
+    """Ein Szenario per Schluessel, ``None`` bei unbekanntem/fehlendem Katalog."""
+    if not key:
+        return None
+    try:
+        from core.seed.scenarios import get_scenario
+    except ModuleNotFoundError:
+        return None
+    try:
+        return get_scenario(key)
+    except KeyError:
+        return None
+
+
+def _demo_mode_or_404():
+    if not getattr(settings, "DEMO_MODE", False):
+        raise Http404
+
+
+def _default_role(scenario):
+    """Alltagsrolle als Voreinstellung (Ticket-Punkt 4): STAFF, sofern das
+    Szenario sie anbietet, sonst die erste im Katalog hinterlegte Rolle
+    (Katalogreihenfolge ist bewusst die "naheliegendste zuerst")."""
+    if User.Role.STAFF in scenario.demo_roles:
+        return User.Role.STAFF
+    return scenario.demo_roles[0]
+
+
+def _facility_state(scenario):
+    """``(facility, available)`` — ``available`` deckt sowohl "noch nicht
+    seeded"/"Reset laeuft gerade" (kein passender Facility-Datensatz, Ticket-
+    Punkt 3) als auch "archiviert" (``is_active=False``) ab. Beide Faelle
+    bekommen dieselbe, verstaendliche Behandlung auf der Auswahlseite — kein
+    stiller Einstieg in einen nicht bereitgestellten Bereich."""
+    try:
+        facility = Facility.objects.get(name=scenario.facility_name)
+    except Facility.DoesNotExist:
+        return None, False
+    return facility, facility.is_active
+
+
+def scenario_cards(current_facility_id=None):
+    """Anzeige-Datensaetze fuer die Auswahlseite, EINE Quelle fuer GET+POST."""
+    cards = []
+    for scenario in scenario_catalog():
+        facility, available = _facility_state(scenario)
+        default_role = _default_role(scenario)
+        cards.append(
+            {
+                "scenario": scenario,
+                "available": available,
+                "is_current": bool(facility and current_facility_id and facility.pk == current_facility_id),
+                "default_role": default_role,
+                "other_roles": tuple(role for role in scenario.demo_roles if role != default_role),
+            }
+        )
+    return cards
+
+
+def _stamp_session_timeout(request, facility):
+    """Facility-Sitzungsfenster + absolutes Maximum stempeln.
+
+    Dupliziert bewusst den engen Ausschnitt aus ``CustomLoginView.form_valid``
+    (``core/views/auth.py``, dort NUR Vorbild fuer die Abmelde-/Bereinigungs-
+    logik laut Besitzliste — hier fuer den analogen Login-Bootstrap ohne
+    Passwortformular). Ohne den Stempel wuerde
+    ``SessionIdleRefreshMiddleware`` beim naechsten Request ohnehin einen
+    Default-Wert nachtragen (kein harter Fehler) — mit ihm gilt ab dem ersten
+    Request sofort das facility-spezifische Fenster, identisch zum
+    Passwort-Login.
+    """
+    from django.utils import timezone
+
+    absolute_hours = DEFAULT_SESSION_ABSOLUTE_HOURS
+    if facility is not None:
+        try:
+            facility_settings = facility.settings
+            timeout = facility_settings.session_timeout_minutes * 60
+            request.session.set_expiry(timeout)
+            absolute_hours = facility_settings.session_absolute_hours
+        except facility._meta.model.settings.RelatedObjectDoesNotExist:
+            pass
+    now = timezone.now().timestamp()
+    request.session[LAST_RENEWAL_KEY] = now
+    request.session[ABSOLUTE_DEADLINE_KEY] = now + absolute_hours * 3600
+    # MFA bleibt in DEMO_MODE global ausgeschaltet (MFA_ENFORCE_PRIVILEGED_ROLES
+    # = False, settings/demo.py) — dieses Flag ist damit wirkungslos, wird aber
+    # aus Konsistenz zum normalen Login-Session-Zuschnitt gesetzt.
+    request.session["mfa_verified"] = False
+
+
+class DemoScenarioSelectView(View):
+    """GET /demo/ — Bereichsauswahl (Ticket-Punkt 1/2/8)."""
+
+    template_name = "auth/demo_scenario_select.html"
+
+    def get(self, request):
+        _demo_mode_or_404()
+        preselect_scenario = _lookup_scenario(request.GET.get("bereich", ""))
+        current_facility_id = None
+        if request.user.is_authenticated:
+            current_facility_id = getattr(getattr(request.user, "facility", None), "pk", None)
+        context = {
+            "scenario_cards": scenario_cards(current_facility_id),
+            "preselect_key": preselect_scenario.key if preselect_scenario else "",
+        }
+        return render(request, self.template_name, context)
+
+
+@method_decorator(ratelimit(key="ip", rate=RATELIMIT_FREQUENT, method="POST", block=True), name="post")
+class DemoScenarioStartView(View):
+    """POST /demo/start/ — Demo-Start bzw. Bereichs-/Rollenwechsel.
+
+    GET existiert nur als harmloser Redirect zurueck zur Auswahl (kein Login
+    per GET/Deep-Link, Ticket-Punkt 8).
+    """
+
+    def get(self, request):
+        _demo_mode_or_404()
+        return redirect(SCENARIO_SELECT_URL_NAME)
+
+    def post(self, request):
+        _demo_mode_or_404()
+        scenario = _lookup_scenario(request.POST.get("scenario", ""))
+        if scenario is None:
+            messages.error(request, _("Dieser Demo-Bereich ist nicht verfügbar."))
+            return redirect(SCENARIO_SELECT_URL_NAME)
+
+        role = request.POST.get("role") or _default_role(scenario)
+        # Serverseitige Pruefung gegen den Katalog (Ticket-Punkt 7): kein frei
+        # waehlbares Konto aus Request-Parametern. ``role`` muss eine der fuer
+        # DIESES Szenario tatsaechlich angelegten Rollen sein.
+        if role not in scenario.demo_roles:
+            messages.error(request, _("Diese Rolle ist für diesen Demo-Bereich nicht freigegeben."))
+            select_url = reverse(SCENARIO_SELECT_URL_NAME)
+            return redirect(f"{select_url}?bereich={scenario.key}")
+
+        facility, available = _facility_state(scenario)
+        if not available:
+            messages.error(
+                request,
+                _(
+                    "Dieser Demo-Bereich ist gerade nicht verfügbar (Reset läuft "
+                    "oder wird vorbereitet). Bitte gleich erneut versuchen."
+                ),
+            )
+            return redirect(SCENARIO_SELECT_URL_NAME)
+
+        # Fest zugeordnetes Demo-Konto je Facility+Rolle (Ticket-Punkt 5):
+        # NIE die facility-Zuordnung eines Kontos umschreiben, nur ein
+        # bestehendes, zu Szenario+Rolle passendes Konto anmelden.
+        # ``order_by("pk")`` macht die Auswahl deterministisch, wenn ein
+        # Team-Szenario mehrere Konten derselben Rolle seedet (z. B. zwei
+        # ``staff``-Konten) — stabil ueber Erstellungsreihenfolge.
+        user = User.objects.filter(facility=facility, role=role, is_active=True).order_by("pk").first()
+        if user is None:
+            messages.error(request, _("Für diesen Demo-Bereich ist noch kein passendes Konto vorbereitet."))
+            return redirect(SCENARIO_SELECT_URL_NAME)
+
+        # ``authenticate()`` entfaellt bewusst — es gibt kein Passwort in
+        # diesem Ablauf, Vertrauensanker ist die serverseitige Szenario-/
+        # Rollen-Pruefung oben. ``login()`` erkennt einen Wechsel des
+        # angemeldeten Nutzers selbst (anderer User-Pk als die evtl. schon
+        # laufende Demo-Sitzung) und flusht/cycelt die Session dafuer intern
+        # — eine alte Sitzung ueberlebt den Wechsel nicht (Ticket-Punkt 9).
+        user.backend = "django.contrib.auth.backends.ModelBackend"
+        auth_login(request, user)
+        _stamp_session_timeout(request, facility)
+
+        response = redirect(settings.LOGIN_REDIRECT_URL)
+        response["Clear-Site-Data"] = CLEAR_SITE_DATA_VALUE
+        return response
