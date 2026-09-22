@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 18:19+0200\n"
+"POT-Creation-Date: 2026-09-22 18:54+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12844,3 +12844,13 @@ msgstr "Diese Fallakte wurde gelöscht oder anonymisiert — ihr Status kann nic
 #: src/core/services/case/state_contract.py
 msgid "Diese Fallakte steht für eine Statusänderung nicht mehr zur Verfügung — bitte die Seite neu laden."
 msgstr "Diese Fallakte steht für eine Statusänderung nicht mehr zur Verfügung — bitte die Seite neu laden."
+
+#: src/templates/components/_offline_auth_pending.html:25
+#, python-brace-format
+msgid "Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert. Melden Sie sich erneut an; danach wird die Übertragung fortgesetzt."
+msgstr "Anmeldung erforderlich – {count} Änderungen bleiben lokal gespeichert. Melden Sie sich erneut an; danach wird die Übertragung fortgesetzt."
+
+#: src/templates/components/_offline_auth_pending.html:26
+#, python-brace-format
+msgid "Passwortwechsel erforderlich – {count} Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen."
+msgstr "Passwortwechsel erforderlich – {count} Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen."
