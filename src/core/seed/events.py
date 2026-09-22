@@ -285,6 +285,7 @@ def seed_events_bulk(
     hausverbot_active_count = 0
     for i in range(to_create_count):
         doc_type = random.choices(doc_types, weights=weights, k=1)[0]
+        client: Client | None
         if doc_type.min_contact_stage:
             # Refs #2270: nie anonym, nur Personen aus dem vorab bestimmten
             # zulaessigen Pool (siehe oben) — der Typ waere sonst gar nicht
