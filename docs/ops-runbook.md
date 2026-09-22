@@ -311,8 +311,8 @@ Der `cron`-Service in
 faehrt dasselbe App-Image wie `web`, startet darin aber statt Gunicorn den
 Cron-Daemon **supercronic** und arbeitet die Job-Definitionen aus
 [`deploy/crontab`](https://github.com/anlaufstelle/app/blob/main/deploy/crontab)
-ab (read-only in den Container gemountet). Nach
-`docker compose -f docker-compose.prod.yml up -d` laufen
+ab (read-only in den Container gemountet). Nach dem Stack-Start mit der
+vollständigen Compose-Dateiliste ([§ 1.2](#12-deploy-schritte)) laufen
 Retention, Audit-Ketten-Verifikation, Snapshots, Orphan-Cleanup,
 Session-Bereinigung, Breach-Detection und MV-Refresh ohne weitere Einrichtung.
 
@@ -2929,7 +2929,7 @@ Snapshot Testlauf docker compose -f docker-compose.prod.yml exec web python mana
 MV-Refresh docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
 RLS-Session-Var pruefen psql -c "SELECT current_setting('app.current_facility_id', true);"
 Stack stoppen docker compose -f docker-compose.prod.yml down
-Stack starten docker compose -f docker-compose.prod.yml up -d
+Stack starten docker compose "${compose_files[@]}" up -d (Dateiliste: § 1.2)
 Lock-Files regenerieren make deps-lock
 Lock-File-Drift prüfen make deps-check
 ```

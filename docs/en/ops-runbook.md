@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-22: the quick reference and the cron-sidecar paragraph also name the full Compose file list instead of the base file alone (#2309).
 > Synchronization update 2026-09-22: every command block that creates the `web` container now builds the full Compose file list (base, `compose.legal.yml`, `compose.override.yml`) instead of naming the base file alone (#2309).
 > Synchronization update 2026-09-22: the version boundary also covers the emergency mode with a configured audit anchor path (filename-only match, warning instead of abort when the anchor is missing) (#2290).
 > Synchronization update 2026-09-22: the version boundary states that the signed manifest is mandatory for `restore.sh` and describes the `--allow-missing-manifest` emergency switch for sets created before 0.99.1 (#2290).
@@ -331,8 +332,8 @@ The `cron` service in
 runs the same app image as `web`, but starts the cron daemon **supercronic**
 inside it instead of Gunicorn, and works through the job definitions from
 [`deploy/crontab`](https://github.com/anlaufstelle/app/blob/main/deploy/crontab)
-(mounted read-only into the container). After
-`docker compose -f docker-compose.prod.yml up -d`,
+(mounted read-only into the container). After starting the stack with the
+full Compose file list ([§ 1.2](#12-deploy-steps)),
 retention, audit chain verification, snapshots, orphan cleanup,
 session cleanup, breach detection, and MV refresh run without any further setup.
 
@@ -2926,7 +2927,7 @@ Snapshot dry run docker compose -f docker-compose.prod.yml exec web python manag
 MV refresh docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
 Check RLS session var psql -c "SELECT current_setting('app.current_facility_id', true);"
 Stop the stack docker compose -f docker-compose.prod.yml down
-Start the stack docker compose -f docker-compose.prod.yml up -d
+Start the stack docker compose "${compose_files[@]}" up -d (file list: § 1.2)
 Regenerate lock files make deps-lock
 Check lock-file drift make deps-check
 ```
@@ -2934,4 +2935,4 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: c8b06c8ee1990d6c8bdb5f9c09086eb8be699bba -->
+<!-- source-hash: ffee86e4e432dce2a7bfd2506b5275ac4fcda342 -->
