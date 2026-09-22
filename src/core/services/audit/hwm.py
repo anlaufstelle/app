@@ -93,7 +93,10 @@ def _validate_chains(chains: object, path: str) -> dict:
 class HighWaterMarkStore:
     """Signierter, datei-basierter HWM-Store fuer die Audit-Ketten.
 
-    ``chains`` bildet ``chain_key -> {"count": int, "last_entry_hash": str}`` ab.
+    ``chains`` bildet ``chain_key -> {"count": int, "last_entry_hash": str}`` ab;
+    eine per :meth:`retire` stillgelegte Kette traegt stattdessen
+    ``{"retired": <ISO-Zeitpunkt>, "reason": str, "count": int}`` und damit
+    keinen Tail-Anker mehr (Refs #2296).
     In-Memory geladen; Aenderungen (:meth:`record`) werden erst mit
     :meth:`save` atomar persistiert.
     """
@@ -186,6 +189,46 @@ class HighWaterMarkStore:
             if not isinstance(entry, dict) or not entry.get("last_entry_hash"):
                 missing.append(facility_id)
         return missing
+
+    def anchored_chain_keys(self) -> list[str]:
+        """Alle Ketten-Schluessel mit **aktivem** externen Tail-Anker.
+
+        Refs #2296: Der Store ist die einzige Instanz, die eine verankerte
+        Kette ueberdauert, wenn ihr Bestand aus der Datenbank verschwindet.
+        ``verify_audit_chain`` gleicht diese Liste gegen das DB-Inventar ab —
+        ein Anker ohne zugehoerige Einrichtung ist eine Inventarabweichung,
+        kein stiller Normalfall.
+
+        Nicht gelistet werden Eintraege ohne verwendbaren Tail (Erstlauf-Fall,
+        siehe :meth:`missing_anchors`) und Ketten mit
+        :meth:`retire`-Stilllegungsnachweis: deren Bestand DARF fehlen, weil
+        die Entfernung ausdruecklich und — ueber die Signatur der Datei —
+        authentifiziert festgehalten wurde.
+        """
+        keys = []
+        for key, entry in self.chains.items():
+            if not isinstance(entry, dict) or entry.get("retired"):
+                continue
+            if entry.get("last_entry_hash"):
+                keys.append(key)
+        return keys
+
+    def retire(self, facility_id, *, reason: str, at: str) -> None:
+        """Ersetzt den Anker einer Kette durch einen Stilllegungsnachweis.
+
+        Der Nachweis ist die einzige Form, in der ein fehlender Bestand
+        legitim sein kann: er nennt Zeitpunkt und Begruendung, und er wird mit
+        :meth:`save` unter demselben ``AUDIT_HASH_KEY`` signiert wie der Anker
+        selbst. Wer ihn schreibt, muss den Schluessel besitzen — fehlende
+        DB-Zeilen allein autorisieren nichts. Der Tail-Anker faellt dabei weg:
+        die Kette ist abgeschlossen, nicht fortgeschrieben.
+        """
+        entry = self.chains.get(_chain_key(facility_id))
+        previous_count = entry.get("count") if isinstance(entry, dict) else None
+        record: dict = {"retired": at, "reason": reason}
+        if previous_count is not None:
+            record["count"] = previous_count
+        self.chains[_chain_key(facility_id)] = record
 
     def check(self, facility_id, present_hashes: set[str]) -> str | None:
         """Prueft die aktuelle Kette gegen den gespeicherten Tail-Anker.

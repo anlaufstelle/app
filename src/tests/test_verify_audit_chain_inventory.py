@@ -43,7 +43,7 @@ from core.services.system import bypass_replication_triggers
 pytestmark = pytest.mark.django_db
 
 # Eindeutiger Anteil der Abbruchmeldung des Inventarabgleichs.
-_INVENTORY = "fehlen im aktuellen Datenbankbestand"
+_INVENTORY = "im aktuellen Datenbankbestand fehlen"
 _RETIRE = "Stilllegungsnachweis"
 
 
@@ -83,9 +83,7 @@ class TestOrphanedAnchorIsAnInventoryBreak:
     """Verankerte Kette ohne Einrichtung ⇒ Abbruch statt Erfolgsmeldung."""
 
     @pytest.mark.parametrize("with_switch", [False, True])
-    def test_removed_facility_with_surviving_anchor_aborts(
-        self, settings, tmp_path, facility, staff_user, with_switch
-    ):
+    def test_removed_facility_with_surviving_anchor_aborts(self, settings, tmp_path, facility, staff_user, with_switch):
         _require_postgres()
         settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
         audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)

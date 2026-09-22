@@ -40,11 +40,12 @@ import sys
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
 from core.services.audit.chain import verify_chain
-from core.services.audit.hwm import HighWaterMarkStore, HwmIntegrityError
+from core.services.audit.hwm import HighWaterMarkStore, HwmIntegrityError, _chain_key
 
 # Refs #1070: zentrale Fail-Loud-Pruefung in services/system/_db_admin — als
 # Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -66,6 +67,25 @@ class Command(BaseCommand):
                 "denen ein Anker nachweislich vorhanden sein MUSS (Wiederherstellung, Drill) "
                 "(Refs #2242)."
             ),
+        )
+        parser.add_argument(
+            "--retire-chain",
+            action="append",
+            default=[],
+            metavar="KENNNUMMER",
+            dest="retire_chain",
+            help=(
+                "Legt die genannte Einrichtungskette im externen Anker ausdruecklich still, statt "
+                "ihren verwaisten Anker als Inventarabweichung zu melden. Nur zulaessig, wenn die "
+                "Einrichtung tatsaechlich nicht mehr im Bestand ist und ihre Kette verankert war; "
+                "verlangt --retire-reason. Mehrfach angebbar (Refs #2296)."
+            ),
+        )
+        parser.add_argument(
+            "--retire-reason",
+            default="",
+            metavar="TEXT",
+            help="Begruendung des Stilllegungsnachweises zu --retire-chain (Refs #2296).",
         )
 
     def _chains_with_anchorable_tail(self) -> set:
@@ -133,6 +153,79 @@ class Command(BaseCommand):
                 f"Kette(n) mit Inhalt keinen verankerten Tail ({labels}) — Abbruch statt stillem Erstlauf."
             )
 
+    def _retire_chains(self, hwm_path: str, hwm, targets: list, keys: list, reason: str) -> None:
+        """Schreibt den authentifizierten Stilllegungsnachweis (Refs #2296).
+
+        Eine endgueltig entfernte Einrichtung ist fachlich moeglich — aber die
+        Abwesenheit ihrer DB-Zeilen ist selbst KEINE Autorisierung dafuer:
+        genau so sieht auch der Angriff aus. Der Nachweis muss deshalb
+        ausdruecklich (die Kennnummer wird genannt), begruendet und
+        authentifiziert sein: er landet in der mit ``AUDIT_HASH_KEY``
+        signierten Ankerdatei, die ohne diesen Schluessel nicht schreibbar ist.
+
+        Abgewiesen wird die Stilllegung, solange die Einrichtung noch im
+        Bestand ist (sie waere sonst ein Weg, eine lebende Kette aus der
+        Pruefung zu nehmen) und wenn die Kette gar keinen Anker hat (dann gibt
+        es nichts stillzulegen).
+        """
+        if not hwm_path or hwm is None:
+            raise CommandError(
+                "--retire-chain braucht den externen Anker: AUDIT_HWM_PATH ist nicht gesetzt — "
+                "ohne signierte Ankerdatei laesst sich kein Stilllegungsnachweis hinterlegen."
+            )
+        if not reason.strip():
+            raise CommandError("--retire-chain verlangt eine Begruendung per --retire-reason.")
+        present = {str(facility.pk) for facility in targets if facility is not None}
+        anchored = set(hwm.anchored_chain_keys())
+        for key in keys:
+            if key in present:
+                raise CommandError(
+                    f"--retire-chain {key}: die Einrichtung existiert weiterhin im Bestand — eine "
+                    "lebende Kette wird nicht stillgelegt."
+                )
+            if key not in anchored:
+                raise CommandError(
+                    f"--retire-chain {key}: die HWM-Datei {hwm_path!r} enthaelt fuer diese Kette "
+                    "keinen verankerten Tail — es gibt nichts stillzulegen."
+                )
+        at = timezone.now().isoformat()
+        for key in keys:
+            hwm.retire(key, reason=reason.strip(), at=at)
+        # Sofort persistieren: der Nachweis soll auch dann stehen, wenn die
+        # anschliessende Kettenpruefung rot endet.
+        hwm.save()
+        for key in keys:
+            self.stdout.write(self.style.WARNING(f"Kette {key} stillgelegt ({reason.strip()})."))
+
+    def _check_inventory(self, hwm_path: str, hwm, targets: list) -> None:
+        """Gleicht die extern verankerten Ketten gegen den DB-Bestand ab (Refs #2296).
+
+        Die Prueflist entstand bisher ausschliesslich aus System-Kette und
+        vorhandenen Einrichtungen. Eine Einrichtung, die aus der Datenbank
+        verschwindet, verschwindet damit auch aus der Pruefung — ihr gueltiger
+        externer Anker blieb unbeachtet, und der Lauf meldete vollstaendige
+        Integritaet samt Erfolgsmarker. Genau das ist das Bild nach einer
+        unvollstaendigen Wiederherstellung oder einem DB-Owner-Eingriff.
+
+        Die Pruefung laeuft unabhaengig von ``--require-anchor`` und VOR jedem
+        Schreibvorgang: kein Erfolgsmarker, keine Fortschreibung der
+        Ankerdatei. Sie meldet datenminimiert die Kennnummern.
+        """
+        if hwm is None:
+            return
+        known = {_chain_key(None)} | {_chain_key(facility.pk) for facility in targets if facility is not None}
+        orphans = [key for key in hwm.anchored_chain_keys() if key not in known]
+        if orphans:
+            labels = ", ".join(f"Einrichtung #{key}" for key in orphans)
+            raise CommandError(
+                f"Die HWM-Datei {hwm_path!r} verankert {len(orphans)} Kette(n), die im aktuellen "
+                f"Datenbankbestand fehlen ({labels}). Abbruch statt Vollstaendigkeitsmeldung — ein "
+                "verankerter Bestand, der nicht mehr da ist, ist ein Integritaetsbefund und keine "
+                "Autorisierung. War die Entfernung beabsichtigt, den Lauf einmalig mit "
+                "--retire-chain <Kennnummer> --retire-reason <Text> fahren; das hinterlegt den "
+                "authentifizierten Stilllegungsnachweis in der signierten Ankerdatei."
+            )
+
     def handle(self, *args, **options):
         # Refs #1070: Wie enforce_retention (Refs #1016 A1.1) fail-loud, statt
         # RLS-blind 0 Zeilen zu pruefen und faelschlich „Alle Audit-Ketten intakt"
@@ -158,6 +251,14 @@ class Command(BaseCommand):
 
         # System-Kette (facility=NULL) zuerst, dann jede Facility.
         targets: list = [None, *Facility.objects.all().order_by("name")]
+
+        # Refs #2296: Erst den ausdruecklichen Stilllegungsnachweis verbuchen,
+        # dann Anker gegen DB-Bestand abgleichen — beides VOR jeder Pruefung
+        # und jedem Schreibvorgang.
+        retire_keys = [str(value).strip() for value in options.get("retire_chain") or [] if str(value).strip()]
+        if retire_keys:
+            self._retire_chains(hwm_path, hwm, targets, retire_keys, options.get("retire_reason") or "")
+        self._check_inventory(hwm_path, hwm, targets)
 
         # Refs #2242: Opt-in-Haertung. Der Default bleibt unveraendert (fehlender
         # Anker = Erstlauf); nur mit ``--require-anchor`` ist ein fehlender Anker

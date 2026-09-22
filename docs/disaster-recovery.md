@@ -289,6 +289,15 @@ Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf 
 
 **Einrichtung mit leerer Audit-Kette.** Eine angelegte, aber noch nicht benutzte Einrichtung hat keine Audit-Zeile und damit keinen Tail, den ein Lauf verankern könnte. Solche Ketten gelten dem Kommando als trivial verankert und lassen `--require-anchor` grün durch (#2317); sie erscheinen deshalb nicht in der Abbruchmeldung. Das ist keine Lücke: Sobald eine solche Kette ihre erste Zeile bekommt, verankert der nächste grüne Lauf sie, und eine Kette, für die bereits ein Anker existiert und die trotzdem leer ist, bleibt ein roter Integritätsfehler (Tail-Truncation / whole-chain wipe). Nicht zu verwechseln mit dem umgekehrten Fall aus #2296: dort **fehlt** die Einrichtung im wiederhergestellten Bestand, während ihr Anker noch in der HWM-Datei steht — das ist eine Inventarabweichung und bricht den Lauf ab, auch ohne den Schalter.
 
+**Verankerte Kette ohne Einrichtung (Inventarabweichung).** Bricht der Lauf mit `verankert N Kette(n), die im aktuellen Datenbankbestand fehlen` ab, beschreibt der zurückgespielte Anker mehr Einrichtungen als die wiederhergestellte Datenbank enthält. Im Wiederherstellungsfall ist das zunächst ein **Hinweis auf einen unvollständigen Restore** — zuerst prüfen, ob DB-Dump und Anker zum selben Satz gehören (gleicher Zeitstempel, Manifest-Abgleich aus [Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)) und ob der Dump vollständig eingespielt wurde. Erst wenn die Entfernung der Einrichtung nachweislich beabsichtigt war (endgültige Schließung, Trägerwechsel), den Lauf **einmalig** mit einem ausdrücklichen Stilllegungsnachweis fahren:
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm -T maintenance \
+  verify_audit_chain --retire-chain <Kennnummer> --retire-reason "Endgültige Schließung, Bestand übergeben"
+```
+
+Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDIT_HASH_KEY` signiert wie der Anker selbst — er ist damit ausdrücklich, benannt und authentifiziert. Fehlende Datenbankzeilen allein sind **keine** Autorisierung: ohne diesen Nachweis bleibt die verwaiste Kette bei jedem weiteren Lauf ein Abbruchgrund. Eine Einrichtung, die noch im Bestand ist, lässt sich nicht stilllegen, und eine Kette ohne Anker ebenso wenig.
+
 ### Schritt 5 — Migrationen + Stack hochfahren
 
 ```bash
