@@ -51,6 +51,44 @@ def _state(*, target_date, time_filter, view=""):
     )
 
 
+def _tally_weitergabe(monkeypatch, facility, user, komponente, *, heute):
+    """Baut den Watch-Snapshot fuer GENAU EINE Strichlisten-Komponente.
+
+    Gemeldet werden die beobachtbaren Wirkungen des Zweigs: mit welchem
+    ``context`` ``build_tally_summary`` gerufen wurde und welche
+    ``tally_summary`` beim Komponenten-Validator ankam.
+    """
+
+    state = _state(target_date=heute, time_filter=None)
+    assert state.is_live_tally_context
+
+    zusammenfassung = {
+        "time_filter": None,
+        "shift_date": heute,
+        "window_start": None,
+        "window_end": None,
+        "rows": [],
+    }
+    summary_aufrufe = []
+    validator_aufrufe = []
+
+    def _summary_spy(facility_arg, user_arg, *, context=None):
+        summary_aufrufe.append(context)
+        return zusammenfassung
+
+    def _validator_spy(user_arg, facility_arg, state_arg, component, *, tally_summary=None):
+        validator_aufrufe.append((component, tally_summary))
+        return f"validator:{component}"
+
+    monkeypatch.setattr(zeitstrom_watch, "WATCH_COMPONENTS", (komponente,))
+    monkeypatch.setattr(zeitstrom_watch, "build_tally_summary", _summary_spy)
+    monkeypatch.setattr(zeitstrom_watch, "build_zeitstrom_component_validator", _validator_spy)
+
+    build_zeitstrom_watch_snapshot(user, facility, state)
+
+    return state, zusammenfassung, summary_aufrufe, validator_aufrufe
+
+
 class TestBuildZeitstromWatchSnapshotLiveContext:
     def test_live_context_fliesst_in_die_tally_summary(self, monkeypatch, facility, staff_user):
         """Pin: ``x_build_zeitstrom_watch_snapshot__mutmut_18`` und
@@ -193,3 +231,68 @@ class TestHandoverNoteProjectionTimeFilterId:
         projizierte_ids = [eintrag[2] for eintrag in ergebnis["blocks"]]
         assert projizierte_ids == [str(zeitfilter.pk), ""]
         assert "None" not in projizierte_ids
+
+
+class TestBuildZeitstromWatchSnapshotTallyKomponentenwahl:
+    """Der Zweig, der die Strichlisten-Zusammenfassung EINMAL vorberechnet,
+    muss BEIDE Strichlisten-Komponenten einzeln erkennen — nicht nur ihr
+    gemeinsames Auftreten.
+    """
+
+    def test_zaehlwerk_allein_erhaelt_die_vorberechnete_zusammenfassung(self, monkeypatch, facility, staff_user):
+        """Pin: ``x_build_zeitstrom_watch_snapshot__mutmut_18`` — der Name der
+        Zaehlwerk-Komponente in der Komponenten-Abfrage wird verfremdet und
+        trifft damit keine angeforderte Komponente mehr.
+
+        Ist die Zaehlwerk-Komponente die EINZIGE angeforderte Komponente, so
+        wird die Zusammenfassung unter dem Mutanten gar nicht mehr
+        vorberechnet: ``build_tally_summary`` wird im Snapshot-Aufbau nicht
+        gerufen und der Komponenten-Validator erhaelt ``None`` statt der
+        Zusammenfassung zum aufgelosten Live-Kontext. Original: genau ein
+        Aufruf mit ``state.live_context``, dessen Ergebnis an den Validator
+        durchgereicht wird.
+        """
+        import datetime
+
+        heute = datetime.date(2026, 1, 15)
+
+        state, zusammenfassung, summary_aufrufe, validator_aufrufe = _tally_weitergabe(
+            monkeypatch,
+            facility,
+            staff_user,
+            "tally_counts",
+            heute=heute,
+        )
+
+        assert summary_aufrufe == [state.live_context]
+        assert validator_aufrufe == [("tally_counts", zusammenfassung)]
+        assert validator_aufrufe[0][1] is zusammenfassung
+
+    def test_aufbau_allein_erhaelt_die_vorberechnete_zusammenfassung(self, monkeypatch, facility, staff_user):
+        """Pin: ``x_build_zeitstrom_watch_snapshot__mutmut_21`` — der Name der
+        Aufbau-Komponente in der Komponenten-Abfrage wird in eine andere
+        Schreibweise gedreht und trifft damit keine angeforderte Komponente
+        mehr.
+
+        Ist die Aufbau-Komponente die EINZIGE angeforderte Komponente, so
+        unterbleibt unter dem Mutanten die Vorberechnung: ``build_tally_summary``
+        wird im Snapshot-Aufbau nicht gerufen und der Komponenten-Validator
+        erhaelt ``None`` statt der Zusammenfassung zum aufgelosten
+        Live-Kontext. Original: genau ein Aufruf mit ``state.live_context``,
+        dessen Ergebnis an den Validator durchgereicht wird.
+        """
+        import datetime
+
+        heute = datetime.date(2026, 1, 15)
+
+        state, zusammenfassung, summary_aufrufe, validator_aufrufe = _tally_weitergabe(
+            monkeypatch,
+            facility,
+            staff_user,
+            "tally_topology",
+            heute=heute,
+        )
+
+        assert summary_aufrufe == [state.live_context]
+        assert validator_aufrufe == [("tally_topology", zusammenfassung)]
+        assert validator_aufrufe[0][1] is zusammenfassung
