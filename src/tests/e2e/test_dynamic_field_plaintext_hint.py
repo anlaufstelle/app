@@ -69,11 +69,25 @@ def _create_field_template_with_help_text(page, base_url, name, field_type, help
     ``help_text`` in DERSELBEN Anlage — das Feld steht auf dem Anlage-
     Formular genauso wie auf dem Bearbeiten-Formular
     (``config/field_templates/form.html`` rendert beide aus demselben
-    generischen Feld-Loop, ``is_edit`` steuert nur Zusatzbloecke)."""
+    generischen Feld-Loop, ``is_edit`` steuert nur Zusatzbloecke).
+
+    Fix-Runde 2: ``FieldTemplate.help_text`` ist ein ``models.CharField``
+    (``core/models/field_template.py``, ``max_length=200``) — Django rendert
+    ein ``ModelForm``-Feld ohne ``Meta.widgets``-Override nach dem
+    Modellfeldtyp, ``CharField`` also als ``<input type="text">``
+    (``forms.TextInput``), NICHT als ``<textarea>``. ``FieldTemplateForm.Meta.widgets``
+    (``core/forms/config.py``) ueberschreibt nur ``options_json`` und
+    ``default_value`` — ``help_text`` bleibt beim Default. Der urspruengliche
+    Selektor ``textarea#id_help_text`` lief deshalb in einen
+    Playwright-Timeout (Element existiert nicht); belegt am echten Lauf im
+    E2E-Log des Orchestrators (``playwright._impl._errors.TimeoutError:
+    Page.fill: ... waiting for locator("textarea#id_help_text")``,
+    ``/config/field-templates/new/``) und am gerenderten HTML (Scratch,
+    s. Bericht Fix-Runde 2)."""
     page.goto(f"{base_url}{FIELDTEMPLATE_LIST}new/", wait_until="domcontentloaded")
     page.fill("input#id_name", name)
     page.select_option("select#id_field_type", value=field_type)
-    page.fill("textarea#id_help_text", help_text)
+    page.fill("input#id_help_text", help_text)
     page.locator(FORM_SUBMIT).click()
     page.wait_for_url(re.compile(r"/config/field-templates/$"))
 
