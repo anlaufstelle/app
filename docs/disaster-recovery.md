@@ -302,7 +302,7 @@ docker compose -f docker-compose.prod.yml run --rm -T maintenance \
   verify_audit_chain --retire-chain <Kennnummer> --retire-reason "Endgültige Schließung, Bestand übergeben"
 ```
 
-Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDIT_HASH_KEY` signiert wie der Anker selbst — er ist damit ausdrücklich, benannt und authentifiziert. Fehlende Datenbankzeilen allein sind **keine** Autorisierung: ohne diesen Nachweis bleibt die verwaiste Kette bei jedem weiteren Lauf ein Abbruchgrund. Eine Einrichtung, die noch im Bestand ist, lässt sich nicht stilllegen, und eine Kette ohne Anker ebenso wenig.
+Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDIT_HASH_KEY` signiert wie der Anker selbst — er ist damit ausdrücklich, benannt und authentifiziert. Fehlende Datenbankzeilen allein sind **keine** Autorisierung: ohne diesen Nachweis bleibt die verwaiste Kette bei jedem weiteren Lauf ein Abbruchgrund. Abgewiesen wird die Stilllegung in vier Fällen: für die System-Kette (`system`) — sie gehört zu jeder Installation, und ohne ihren Anker gäbe es für den installationsweiten Bestand keine Truncation-Erkennung mehr, für eine Einrichtung, die noch im Bestand ist, für eine Kette, die noch Audit-Zeilen enthält, und für eine Kette ohne Anker.
 
 ### Schritt 5 — Migrationen + Stack hochfahren
 

@@ -163,10 +163,18 @@ class Command(BaseCommand):
         authentifiziert sein: er landet in der mit ``AUDIT_HASH_KEY``
         signierten Ankerdatei, die ohne diesen Schluessel nicht schreibbar ist.
 
-        Abgewiesen wird die Stilllegung, solange die Einrichtung noch im
-        Bestand ist (sie waere sonst ein Weg, eine lebende Kette aus der
-        Pruefung zu nehmen) und wenn die Kette gar keinen Anker hat (dann gibt
-        es nichts stillzulegen).
+        Abgewiesen wird die Stilllegung
+        * der System-Kette (``facility=NULL``) — sie gehoert zu JEDER
+          Installation, hat keine Einrichtung im Inventar und passierte die
+          Bestandspruefung deshalb immer; stillgelegt haette sie keinen
+          Tail-Anker mehr und damit keine Truncation-Erkennung;
+        * solange die Einrichtung noch im Bestand ist (sie waere sonst ein Weg,
+          eine lebende Kette aus der Pruefung zu nehmen);
+        * solange die Kette ueberhaupt noch Audit-Zeilen hat — das ist die
+          eigentliche Zusage, und sie darf sich nicht darauf verlassen, dass
+          die Fremdschluessel-Kaskade die Zeilen mitnimmt;
+        * wenn die Kette gar keinen Anker hat (dann gibt es nichts
+          stillzulegen).
         """
         if not hwm_path or hwm is None:
             raise CommandError(
@@ -177,11 +185,23 @@ class Command(BaseCommand):
             raise CommandError("--retire-chain verlangt eine Begruendung per --retire-reason.")
         present = {str(facility.pk) for facility in targets if facility is not None}
         anchored = set(hwm.anchored_chain_keys())
+        populated = {_chain_key(facility_id) for facility_id in self._chains_with_anchorable_tail()}
         for key in keys:
+            if key == _chain_key(None):
+                raise CommandError(
+                    f"--retire-chain {key}: die System-Kette laesst sich nicht stilllegen — sie "
+                    "gehoert zu jeder Installation, und ohne ihren Tail-Anker gaebe es fuer den "
+                    "installationsweiten Bestand keine Truncation-Erkennung mehr."
+                )
             if key in present:
                 raise CommandError(
                     f"--retire-chain {key}: die Einrichtung existiert weiterhin im Bestand — eine "
                     "lebende Kette wird nicht stillgelegt."
+                )
+            if key in populated:
+                raise CommandError(
+                    f"--retire-chain {key}: die Kette enthaelt weiterhin Audit-Zeilen — stillgelegt "
+                    "wird nur ein Bestand, der nachweislich nicht mehr da ist."
                 )
             if key not in anchored:
                 raise CommandError(
