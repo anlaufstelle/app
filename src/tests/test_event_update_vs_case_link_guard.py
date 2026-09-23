@@ -251,3 +251,36 @@ class TestEventFormStateToken:
         state = event_form_state_token(sample_event)
         ghost = Event(pk=uuid.uuid4())
         assert _event_form_state_unchanged(ghost, state) is False
+
+
+@pytest.mark.django_db
+class TestFormStateRescueOnlyForLiveEvents:
+    """Die Rettung gilt nur für ein lebendes Ereignis.
+
+    Zuordnen hebt ``updated_at`` an, ohne eine Spalte des Fingerabdrucks zu
+    ändern. Liegt das Ereignis danach im Papierkorb, darf der passende
+    Versions-Mismatch trotzdem nicht aufgelöst werden: der Papierkorb setzt
+    ``is_deleted`` und leert ``data_json`` — beides steht im Fingerabdruck.
+    """
+
+    @pytest.mark.parametrize("link_first", [True, False])
+    def test_edit_after_parallel_link_and_trash_is_rejected(self, staff_user, sample_event, case_open, link_first):
+        from core.services.events import soft_delete_event
+        from core.services.events.crud import event_form_state_token
+
+        loaded = Event.objects.get(pk=sample_event.pk)
+        version = loaded.updated_at.isoformat()
+        state = event_form_state_token(loaded)
+        if link_first:
+            assign_event_to_case(case_open, Event.objects.get(pk=sample_event.pk), staff_user)
+        soft_delete_event(Event.objects.get(pk=sample_event.pk), staff_user)
+        histories_before = EventHistory.objects.filter(event=sample_event).count()
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_event(loaded, staff_user, dict(NEW_DATA), expected_updated_at=version, expected_form_state=state)
+
+        assert excinfo.value.code == "version_conflict"
+        stored = Event._base_manager.get(pk=sample_event.pk)
+        assert stored.is_deleted
+        assert stored.data_json == {}, "Ein Ereignis im Papierkorb darf keinen neuen Inhalt bekommen"
+        assert EventHistory.objects.filter(event=sample_event).count() == histories_before

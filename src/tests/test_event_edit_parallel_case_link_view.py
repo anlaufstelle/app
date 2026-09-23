@@ -126,3 +126,27 @@ class TestEventEditSurvivesParallelCaseLink:
         parser = _HiddenInputs()
         parser.feed(response.content.decode())
         assert parser.values.get("expected_form_state") == hidden["expected_form_state"]
+
+    def test_invalid_post_keeps_the_rendered_form_state_after_parallel_edit(self, client, staff_user, sample_event):
+        """Tab B ändert die Notiz zwischen Laden und ungültigem POST aus Tab A.
+
+        Die Neu-Anzeige muss den Fingerabdruck aus Tab A weitertragen — nicht
+        einen aus dem inzwischen geänderten Datenbankstand neu berechneten.
+        """
+        from core.services.events.crud import event_form_state_token
+
+        client.force_login(staff_user)
+        hidden = _render(client, sample_event)
+        update_event(Event.objects.get(pk=sample_event.pk), staff_user, {"dauer": 15, "notiz": "Aus Tab B"})
+        current_state = event_form_state_token(Event.objects.get(pk=sample_event.pk))
+        assert current_state != hidden["expected_form_state"]
+
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}), _payload(hidden, dauer="x")
+        )
+
+        assert response.status_code == 200
+        parser = _HiddenInputs()
+        parser.feed(response.content.decode())
+        assert parser.values.get("expected_form_state") == hidden["expected_form_state"]
+        assert parser.values.get("expected_form_state") != current_state

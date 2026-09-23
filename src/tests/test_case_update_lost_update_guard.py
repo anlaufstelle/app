@@ -18,12 +18,21 @@ import uuid
 from html.parser import HTMLParser
 
 import pytest
+from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import Client as HttpClient
 from django.urls import reverse
 
-from core.models import Case
-from core.services.case import close_case, reopen_case, update_case
+from core.models import AuditLog, Case
+from core.services.case import (
+    anonymize_case_now,
+    approve_case_deletion,
+    close_case,
+    reopen_case,
+    request_case_deletion,
+    soft_delete_case,
+    update_case,
+)
 
 CONFLICT_TEXT = "zwischenzeitlich bearbeitet"
 
@@ -339,3 +348,174 @@ class TestInvalidCaseRerenderKeepsFormState:
         parser.feed(response.content.decode())
         assert parser.values.get("expected_form_state"), "Formular muss den Stand der Formularfelder tragen"
         assert parser.values.get("expected_form_state") == hidden.get("expected_form_state")
+
+    def test_invalid_post_keeps_the_rendered_form_state_after_parallel_edit(self, client, staff_user, described_case):
+        """Tab B ändert den Titel zwischen Laden und ungültigem POST aus Tab A.
+
+        Die Neu-Anzeige muss den Fingerabdruck aus Tab A weitertragen — nicht
+        einen aus dem inzwischen geänderten Datenbankstand neu berechneten,
+        der die fremde Änderung beim nächsten Speichern als „unverändert“
+        ausgäbe.
+        """
+        from core.services.case.cases import case_form_state_token
+
+        client.force_login(staff_user)
+        hidden = _render_edit_form(client, described_case)
+        snapshot = Case.objects.get(pk=described_case.pk)
+        update_case(Case.objects.get(pk=described_case.pk), staff_user, title="Titel aus Tab B")
+        current_state = case_form_state_token(Case.objects.get(pk=described_case.pk))
+        assert current_state != hidden["expected_form_state"]
+
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": described_case.pk}),
+            _form_payload(snapshot, hidden, title=""),
+        )
+
+        assert response.status_code == 200
+        parser = _HiddenInputs()
+        parser.feed(response.content.decode())
+        assert parser.values.get("expected_form_state") == hidden["expected_form_state"]
+        assert parser.values.get("expected_form_state") != current_state
+
+
+def _trash(case, staff_user, lead_user, route):
+    """Legt den Fall über einen der beiden fachlichen Löschwege in den Papierkorb."""
+    fresh = Case.objects.get(pk=case.pk)
+    if route == "direct":
+        soft_delete_case(fresh, staff_user)
+    else:
+        approve_case_deletion(request_case_deletion(fresh, staff_user, "Doppelt angelegt"), lead_user)
+    assert Case._base_manager.get(pk=case.pk).is_deleted
+
+
+def _case_update_audits(case):
+    return AuditLog.objects.filter(action=AuditLog.Action.CASE_UPDATE, target_id=str(case.pk)).count()
+
+
+@pytest.mark.django_db
+class TestFormStateRescueOnlyForLiveCases:
+    """Die Rettung per Fingerabdruck gilt nur für eine lebende Akte.
+
+    Schließen hebt ``updated_at`` an, der Papierkorb nur die Löschmerkmale —
+    beide lassen die Formularfelder unverändert. Nach „schließen, dann in den
+    Papierkorb“ passt der Fingerabdruck deshalb weiterhin; geschrieben werden
+    darf trotzdem nicht, denn die Akte gibt es fachlich nicht mehr.
+    """
+
+    @pytest.mark.parametrize("route", ["direct", "four_eyes"])
+    def test_close_then_trash_is_rejected_despite_matching_form_state(self, staff_user, lead_user, case_open, route):
+        from core.services.case.cases import case_form_state_token
+        from core.services.case.state_contract import CASE_WRITE_REDACTED_MESSAGE
+
+        loaded = Case.objects.get(pk=case_open.pk)
+        stale_version = loaded.updated_at.isoformat()
+        state = case_form_state_token(loaded)
+        close_case(Case.objects.get(pk=case_open.pk), lead_user)
+        _trash(case_open, staff_user, lead_user, route)
+        audits_before = _case_update_audits(case_open)
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_case(
+                loaded,
+                staff_user,
+                expected_updated_at=stale_version,
+                expected_form_state=state,
+                title="Neuer Inhalt nach Papierkorb",
+            )
+
+        assert excinfo.value.messages == [str(CASE_WRITE_REDACTED_MESSAGE)]
+        stored = Case._base_manager.get(pk=case_open.pk)
+        assert stored.title == "Offener Fall", "Eine Akte im Papierkorb darf keinen neuen Inhalt bekommen"
+        assert stored.is_deleted
+        assert _case_update_audits(case_open) == audits_before
+
+    def test_trash_without_version_change_is_rejected(self, staff_user, lead_user, case_open):
+        from core.services.case.state_contract import CASE_WRITE_REDACTED_MESSAGE
+
+        loaded = Case.objects.get(pk=case_open.pk)
+        _trash(case_open, staff_user, lead_user, "direct")
+        current_version = Case._base_manager.get(pk=case_open.pk).updated_at.isoformat()
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_case(loaded, staff_user, expected_updated_at=current_version, title="Neu")
+
+        assert excinfo.value.messages == [str(CASE_WRITE_REDACTED_MESSAGE)]
+        assert Case._base_manager.get(pk=case_open.pk).title == "Offener Fall"
+
+    def test_anonymized_case_is_rejected(self, staff_user, lead_user, admin_user, case_open):
+        from core.services.case.cases import case_form_state_token
+        from core.services.case.state_contract import CASE_WRITE_REDACTED_MESSAGE
+
+        loaded = Case.objects.get(pk=case_open.pk)
+        stale_version = loaded.updated_at.isoformat()
+        state = case_form_state_token(loaded)
+        close_case(Case.objects.get(pk=case_open.pk), lead_user)
+        _trash(case_open, staff_user, lead_user, "direct")
+        anonymize_case_now(Case._base_manager.get(pk=case_open.pk), admin_user)
+        redacted_title = Case._base_manager.get(pk=case_open.pk).title
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_case(
+                loaded,
+                staff_user,
+                expected_updated_at=stale_version,
+                expected_form_state=state,
+                title="Neu",
+            )
+
+        assert excinfo.value.messages == [str(CASE_WRITE_REDACTED_MESSAGE)]
+        assert Case._base_manager.get(pk=case_open.pk).title == redacted_title
+
+    def test_close_only_is_still_rescued(self, staff_user, lead_user, case_open):
+        """Gegenprobe: ohne Papierkorb greift die Rettung wie zugesagt."""
+        from core.services.case.cases import case_form_state_token
+
+        loaded = Case.objects.get(pk=case_open.pk)
+        stale_version = loaded.updated_at.isoformat()
+        state = case_form_state_token(loaded)
+        close_case(Case.objects.get(pk=case_open.pk), lead_user)
+
+        update_case(
+            loaded,
+            staff_user,
+            expected_updated_at=stale_version,
+            expected_form_state=state,
+            title="Neuer Inhalt",
+        )
+
+        stored = Case.objects.get(pk=case_open.pk)
+        assert stored.title == "Neuer Inhalt"
+        assert stored.status == Case.Status.CLOSED
+
+    def test_form_post_after_close_then_trash_is_rejected(self, client, monkeypatch, staff_user, lead_user, case_open):
+        """Oberflächenweg: Schließen und Papierkorb committen zwischen dem
+        Laden des Falls durch die Bearbeiten-Ansicht und dem Speichern."""
+        import core.views.cases as case_views
+        from core.services.case.state_contract import CASE_WRITE_REDACTED_MESSAGE
+
+        client.force_login(staff_user)
+        hidden = _render_edit_form(client, case_open)
+        snapshot = Case.objects.get(pk=case_open.pk)
+        original = case_views.get_scoped_object
+        calls = []
+
+        def _hooked(*args, **kwargs):
+            obj = original(*args, **kwargs)
+            if not calls:
+                calls.append(obj.pk)
+                close_case(Case.objects.get(pk=obj.pk), lead_user)
+                _trash(obj, staff_user, lead_user, "direct")
+            return obj
+
+        monkeypatch.setattr(case_views, "get_scoped_object", _hooked)
+
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case_open.pk}),
+            _form_payload(snapshot, hidden, title="Neuer Inhalt nach Papierkorb"),
+        )
+
+        assert calls, "Der Papierkorb muss zwischen Laden und Speichern gelegen haben"
+        assert response.status_code == 302
+        assert response.url != reverse("core:case_detail", kwargs={"pk": case_open.pk})
+        assert str(CASE_WRITE_REDACTED_MESSAGE) in [str(m) for m in get_messages(response.wsgi_request)]
+        assert Case._base_manager.get(pk=case_open.pk).title == "Offener Fall"
