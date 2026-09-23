@@ -941,3 +941,103 @@ describe("Sichtschutz", () => {
         expect(document.activeElement.id).toBe("im-inhalt");
     });
 });
+
+// Refs #2352: Nach dem Schnell-Verlassen darf keine noch laufende Anfrage der
+// alten Seite eine eigene Navigation (Login-Weiterleitung) starten — sie
+// wuerde die Navigation zur neutralen Seite ueberschreiben.
+describe("Schnell verlassen gegen spaete Antworten der alten Seite", () => {
+    function htmxEvent(elt, name, detail = {}) {
+        const event = new CustomEvent(name, { bubbles: true, cancelable: true, detail: { elt, ...detail } });
+        elt.dispatchEvent(event);
+        return event;
+    }
+
+    afterEach(() => {
+        delete window.__logoutInFlight;
+        delete window.htmx;
+    });
+
+    it("setzt die Logout-Marke, die zeitstrom-live-watch.js und sw-register.js lesen", async () => {
+        const { replace } = await freshLoad({ dataset: online() });
+        const before = Date.now();
+
+        document.getElementById("quick-exit-button").click();
+
+        expect(typeof window.__logoutInFlight).toBe("number");
+        expect(window.__logoutInFlight).toBeGreaterThanOrEqual(before);
+        await tick();
+        expect(replace).toHaveBeenCalledTimes(1);
+        // Direkt vor der Navigation aufgefrischt: das Fenster der Leser laeuft
+        // ab der Navigation, nicht ab dem Klick.
+        expect(Date.now() - window.__logoutInFlight).toBeLessThan(10_000);
+    });
+
+    it("verwirft eine HTMX-Antwort, die nach dem Ausloesen eintrifft (HX-Redirect)", async () => {
+        await freshLoad({ dataset: online() });
+        const poller = document.getElementById("im-inhalt");
+        expect(htmxEvent(poller, "htmx:beforeRequest").defaultPrevented).toBe(false);
+
+        document.getElementById("quick-exit-button").click();
+
+        const onLoad = htmxEvent(poller, "htmx:beforeOnLoad");
+        expect(onLoad.defaultPrevented).toBe(true);
+    });
+
+    it("laesst HTMX-Antworten vor dem Ausloesen unangetastet", async () => {
+        await freshLoad({ dataset: online() });
+        const poller = document.getElementById("im-inhalt");
+        expect(htmxEvent(poller, "htmx:beforeOnLoad").defaultPrevented).toBe(false);
+    });
+
+    it("startet nach dem Ausloesen keine neue HTMX-Anfrage mehr", async () => {
+        await freshLoad({ dataset: online() });
+        const poller = document.getElementById("im-inhalt");
+
+        document.getElementById("quick-exit-button").click();
+
+        expect(htmxEvent(poller, "htmx:beforeRequest").defaultPrevented).toBe(true);
+    });
+
+    it("bricht laufende HTMX-Anfragen ab — und abgeschlossene nicht", async () => {
+        await freshLoad({ dataset: online() });
+        const trigger = vi.fn();
+        window.htmx = { trigger };
+        const laufend = document.getElementById("im-inhalt");
+        const fertig = document.getElementById("nav-link");
+        htmxEvent(laufend, "htmx:beforeRequest");
+        htmxEvent(fertig, "htmx:beforeRequest");
+        htmxEvent(fertig, "htmx:afterRequest");
+
+        document.getElementById("quick-exit-button").click();
+
+        expect(trigger).toHaveBeenCalledTimes(1);
+        expect(trigger).toHaveBeenCalledWith(laufend, "htmx:abort");
+    });
+
+    it("bricht auch ohne htmx-Objekt per Ereignis mit elt-Detail ab", async () => {
+        await freshLoad({ dataset: online() });
+        const laufend = document.getElementById("im-inhalt");
+        const seen = [];
+        document.body.addEventListener("htmx:abort", (event) => seen.push(event.detail && event.detail.elt));
+        htmxEvent(laufend, "htmx:beforeRequest");
+
+        document.getElementById("quick-exit-button").click();
+
+        expect(seen).toEqual([laufend]);
+    });
+
+    it("verlaesst auch dann, wenn der Abbruch wirft", async () => {
+        const { replace } = await freshLoad({ dataset: online() });
+        window.htmx = {
+            trigger: () => {
+                throw new Error("kaputt");
+            },
+        };
+        htmxEvent(document.getElementById("im-inhalt"), "htmx:beforeRequest");
+
+        document.getElementById("quick-exit-button").click();
+        await tick();
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+    });
+});

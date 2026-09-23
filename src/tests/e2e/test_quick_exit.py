@@ -304,6 +304,95 @@ class TestSchnellVerlassen:
         finally:
             context.close()
 
+    def test_spaete_antwort_der_alten_seite_ueberschreibt_die_zielseite_nicht(
+        self, browser, base_url, e2e_env, default_quick_exit
+    ):
+        """Refs https://github.com/anlaufstelle/app/issues/2352.
+
+        Ein Poll der Startseite (Zeitstrom) ist beim Schnell-Verlassen noch
+        unterwegs. Seine Antwort kommt erst NACH dem serverseitigen Logout —
+        also als Weiterleitung auf ``/login/`` — und NACHDEM die Navigation zur
+        neutralen Seite schon begonnen hat. Ohne Schutz startet die alte Seite
+        daraufhin ihre eigene Navigation zum Login und bricht damit die zur
+        Zielseite ab: im Fenster stuende die Anmeldeseite der Anwendung.
+
+        Deterministisch statt lastabhaengig: Poll und Zielseite werden per
+        Route gehalten und in genau der schaedlichen Reihenfolge freigegeben —
+        erst die echte Serverantwort auf den Poll (nach dem Logout), dann
+        ~1,5 s Zeit fuer die alte Seite, darauf zu reagieren, dann die
+        Zielseite.
+        """
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        gehaltene_polls = []
+        gehaltenes_ziel = []
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.locator("#zeitstrom-live-watch").wait_for(state="attached", timeout=15000)
+
+            page.route(
+                re.compile(r"/api/v1/zeitstrom/watch/|/partials/zeitstrom/"),
+                lambda route: gehaltene_polls.append(route),
+            )
+            page.route(EXIT_TARGET_GLOB, lambda route: gehaltenes_ziel.append(route))
+
+            # Einen Poll anstossen (``focus`` -> ``pollImmediately``) und warten,
+            # bis er an der Route haengt. Laeuft noch der Poll des Seitenaufbaus,
+            # greift der Anstoss erst beim naechsten Versuch.
+            ende = time.monotonic() + 20.0
+            while not gehaltene_polls and time.monotonic() < ende:
+                page.evaluate("() => window.dispatchEvent(new Event('focus'))")
+                page.wait_for_timeout(500)
+            assert gehaltene_polls, "Vorbedingung: kein Zeitstrom-Poll unterwegs — die Startseite pollt nicht."
+
+            page.keyboard.press("Control+Shift+X")
+
+            # Die Navigation zur Zielseite hat begonnen (haengt an der Route).
+            ende = time.monotonic() + 10.0
+            while not gehaltenes_ziel and time.monotonic() < ende:
+                page.wait_for_timeout(50)
+            assert gehaltenes_ziel, "Das Schnell-Verlassen hat die Navigation zur Zielseite nicht gestartet."
+
+            # Der Logout-Beacon ist serverseitig angekommen.
+            ende = time.monotonic() + 10.0
+            abgemeldet = False
+            while not abgemeldet and time.monotonic() < ende:
+                probe = context.request.get(f"{base_url}/clients/", max_redirects=0)
+                abgemeldet = probe.status == 302 and "/login/" in probe.headers.get("location", "")
+                if not abgemeldet:
+                    page.wait_for_timeout(100)
+            assert abgemeldet, "Vorbedingung: der Logout ist serverseitig nicht angekommen."
+
+            # Jetzt die echte (nach dem Logout gebildete) Serverantwort auf den
+            # gehaltenen Poll durchreichen — und der alten Seite Zeit geben.
+            for route in gehaltene_polls:
+                try:
+                    route.fulfill(response=route.fetch(max_redirects=0))
+                except Exception:  # abgebrochene Anfrage: nichts mehr zuzustellen
+                    pass
+            page.wait_for_timeout(1500)
+
+            for route in gehaltenes_ziel:
+                try:
+                    route.fulfill(status=200, content_type="text/html; charset=utf-8", body=STUB_HTML)
+                except Exception:  # Navigation wurde bereits abgebrochen
+                    pass
+
+            ende = time.monotonic() + 15.0
+            while "wikipedia.org" not in page.url and time.monotonic() < ende:
+                page.wait_for_timeout(100)
+            assert "wikipedia.org" in page.url, (
+                f"Das Schnell-Verlassen endete auf {page.url!r} statt auf der neutralen Zielseite — "
+                "eine spaete Antwort der alten Seite hat die Navigation ueberschrieben."
+            )
+            assert "/login/" not in page.url
+            page.wait_for_load_state("domcontentloaded")
+            assert STUB_MARKER in page.content()
+            _assert_session_ended(page, base_url)
+        finally:
+            context.close()
+
 
 class TestTastaturpfad:
     """WCAG 2.1.1: Der Knopf ist das erste Tab-Ziel nach dem Skip-Link."""
