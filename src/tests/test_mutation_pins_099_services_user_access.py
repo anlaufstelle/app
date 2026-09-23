@@ -14,7 +14,7 @@ Argumente: Groß-/Kleinschreibung, ``XX…XX``-Marker, ganze Meldung durch
 fließt nirgends in Hash/Validator/Vergleich/E-Mail-Inhalt ein (siehe Bericht
 für die vollständige Liste).
 
-**Durch Lane F-1 (#2223) überholt:** ``_deliver_invitation`` protokollierte im
+**Durch #2223 überholt:** ``_deliver_invitation`` protokollierte im
 Mutantenbaum (Stand 25685845) noch mit ``logger.exception(<Text>, extra=…)``;
 F-1 hat das auf ``logger.error(<Text>, extra=…, exc_info=False)`` umgestellt
 (fail-closed, keine Backend-Interna im Log). Neun Survivor-Mutanten
@@ -332,7 +332,7 @@ class TestListUserAccessSortierungUndSperrstatus:
 
 class TestDeliverInvitationMeldetVersandfehlerAlsFehlschlag:
     """``xǁ_deliver_invitationǁ__mutmut_12`` — der ``except``-Zweig bleibt seit
-    Lane F-1 (#2223) unveraendert bei ``return False``; nur die Protokoll-
+    #2223 unveraendert bei ``return False``; nur die Protokoll-
     Zeile davor wurde durch den fail-closed-Umbau ersetzt (neun weitere
     Survivor-Mutanten dieser Funktion mutieren ausschließlich diese inzwischen
     andere Zeile und sind ``skip``, siehe Bericht)."""

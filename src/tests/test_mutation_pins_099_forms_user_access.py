@@ -1,6 +1,6 @@
 """Mutation-Pins Welle L (0.99) — ``core.forms.user_access`` (Vollmutation #2174).
 
-Batch ``forms-1`` (Lane M, Refs #2174, Refs #2193). 27 Survivors in
+Batch ``forms-1`` (Refs #2174, Refs #2193). 27 Survivors in
 ``_UserAccessForm.__init__`` (10), ``_UserAccessForm.clean_role`` (11) und
 ``UserAccessUpdateForm.clean_is_active`` (6) — alle drei Methoden sind die
 Berechtigungs-Waechter des Zugaenge-Reiters (#1871): kein Konto darf sich

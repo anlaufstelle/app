@@ -75,7 +75,7 @@ class TestMobileBottomBarAriaCurrent:
         assert "aria-current" not in _opening_tag(content, "mobile-nav-clients")
 
     def test_workitems_slot_is_marked_on_its_own_page(self, client, staff_user):
-        """Der vierte Link-Zweig — bis Fix-Runde 1 nur negativ mitgeprueft.
+        """Der vierte Link-Zweig — zuvor nur negativ mitgeprueft.
 
         Die vier Slots sind ausgeschriebenes Markup (eigene Pixelform,
         22px-Icon, Label, Overdue-Badge), kein Schleifen-Partial: jeder Zweig

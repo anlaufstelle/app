@@ -630,7 +630,7 @@ class TestEnforceHandoverNotes:
             note=encrypt_field("Freitext"),
             author=staff_user,
             updated_by=staff_user,
-            # Refs #2042 (E-01): die Fenstergrenzen sind seit Fix-Runde 1
+            # Refs #2042 (E-01): die Fenstergrenzen sind inzwischen
             # Pflichtfelder. Fuer die Retention selbst spielen sie keine Rolle
             # — massgeblich ist ``updated_at`` —, sie muessen aber plausibel
             # gesetzt sein.

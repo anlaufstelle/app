@@ -42,7 +42,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
 def test_missing_token_message_exact_wording(sample_workitem):
-    """Vollstaendiger Zweig-Nachweis fuer ``missing_token`` (Briefing-Auftrag
+    """Vollstaendiger Zweig-Nachweis fuer ``missing_token`` (Testauftrag
     security-1n nennt alle vier ausloesenden Eingaben mit Exakt-Assertion
     auf Text UND ``code``). Kein Survivor dieses Batches liegt in diesem
     Zweig — die missing_token-Mutanten ``_4``/``_8``/``_9``/``_10``/``_11``

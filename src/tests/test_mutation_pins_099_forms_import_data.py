@@ -1,6 +1,6 @@
 """Mutation-Pins Welle L (0.99) — ``core.forms.import_data`` (Vollmutation #2174).
 
-Batch ``forms-1`` (Lane M, Refs #2174, Refs #2193). 29 Survivors in
+Batch ``forms-1`` (Refs #2174, Refs #2193). 29 Survivors in
 ``ImportUploadForm.__init__`` (4) und ``ImportUploadForm.clean`` (25). Alle
 29 sind echte Testluecken (``test``, 19× Prio 2 fachliches Verhalten, 10×
 Prio 3 Darstellung/Text) — die fuenf Pins unten killen sie vollstaendig.

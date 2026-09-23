@@ -16,7 +16,8 @@ Spalten synchronisiert (``status``, ``result_json``, ``storage_filename``,
 ``original_filename_encrypted``, ``mapping_json``, ``document_type_id``,
 ``target_type`` — siehe Docstring von ``_lock_job``); alle ÜBRIGEN Spalten der
 Instanz — allen voran ``created_by`` — bleiben der View-Snapshot des
-Aufrufers, selbst UNTER dem Zeilen-Lock. Standardblock 9(1)(a) greift damit:
+Aufrufers, selbst UNTER dem Zeilen-Lock. Die Regel fuer nicht-frisch
+geladene Zeilen greift damit:
 die Zeile ist zwar gesperrt, aber NICHT vollständig frisch geladen. Ein
 voller Save (``update_fields=None``) der Mutante schreibt diese veralteten
 Spalten zurück und annulliert eine währenddessen erfolgte Neuzuordnung des

@@ -8,7 +8,7 @@ Fall-Operationen, Episoden, Ziele, Aufgaben, Merge und der endgueltige
 Anhang-Purge offen blieben. Die Akzeptanzforderung „schreibgeschuetzt
 ausserhalb des Berichtigungsflows" war damit nicht erfuellt.
 
-**Die fachliche Trennlinie** (Orchestrator-Ruling, hier als Testmatrix):
+**Die fachliche Trennlinie** (Entscheid, hier als Testmatrix):
 
 * **Blockiert** — fachliche Nutzung und Aenderung: Ereignis anlegen/aendern/
   direkt loeschen, CSV-Import, Fall-Operationen, Episoden/Ziele/Meilensteine,

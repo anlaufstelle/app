@@ -75,7 +75,7 @@ def _make_event(facility):
 
 def _handover_window(shift_date):
     """Pflicht-Fensterspalten einer Schichtnotiz (Refs #2042, E-01) — fuer die
-    Rotation ohne fachliche Bedeutung, seit Fix-Runde 1 aber nicht mehr
+    Rotation ohne fachliche Bedeutung, aber inzwischen nicht mehr
     nullbar (analog ``test_reencrypt_fields.py::_handover_window``)."""
     return {
         "window_start": timezone.make_aware(datetime.combine(shift_date, dt_time.min)),

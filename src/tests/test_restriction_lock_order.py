@@ -1,7 +1,7 @@
 """Kanonische Sperr-Reihenfolge Client → WorkItem (Cross-Review-Runde 2).
 
 Das Art.-18-Gate nimmt in Schreibpfaden eine Sperre auf die `Client`-Zeile.
-Fix-Runde 1 behauptete im Bericht, die Reihenfolge sei „Client zuerst, überall
+Eine fruehere Annahme behauptete, die Reihenfolge sei „Client zuerst, überall
 gleich" — das war falsch: die Aufgaben-Pfade sperrten erst das WorkItem und
 lasen den Client danach, während der Merge-Pfad umgekehrt vorging. Daraus
 entstand ein realer Deadlock-Zyklus:
@@ -11,7 +11,7 @@ entstand ein realer Deadlock-Zyklus:
 
 Diese Tests pinnen die jetzt festgelegte Reihenfolge **am ausgeführten SQL**,
 nicht an einer Zusage im Kommentar — dieselbe Disziplin wie bei der
-advisory-lock-Ordnung aus der 0.88-Lane-3-Lehre. Ein Pfad, der die Reihenfolge
+advisory-lock-Ordnung aus Lehre 3 der 0.88-Reihe. Ein Pfad, der die Reihenfolge
 wieder umdreht, wird rot.
 
 Ergänzend ein Query-Count-Pin für den heißesten Pfad: das Gate kostet
@@ -201,7 +201,7 @@ class TestGateQueryCost:
     def test_update_workitem_query_count_is_pinned(self, facility, client_identified, staff_user):
         """Der heißeste der neu gegateten Pfade.
 
-        Kein Budget-Test um seiner selbst willen: Fix-Runde 1 lud den
+        Kein Budget-Test um seiner selbst willen: der urspruengliche Code lud den
         Personenbezug dreimal (ungesperrter Guard-Read, Client-Abfrage des
         Gates, zweiter gesperrter Read im ``client``-Zweig). Diese Schranke
         hält die Bereinigung fest — steigt sie wieder, ist die Redundanz zurück.

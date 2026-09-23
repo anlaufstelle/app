@@ -936,7 +936,7 @@ class TestNumberRangeTriState:
         assert report.errors == []
         assert report.field_templates.unchanged == ["dauer", "notiz"]
         assert FieldTemplate.objects.get(slug="dauer").min_value == 5
-        # Betreiber-Sichtbarkeit (Controller-Ruling Review-Runde 1, Refs #1934):
+        # Betreiber-Sichtbarkeit (Controller-Entscheid, Refs #1934):
         # gilt identisch im Dry-Run — derselbe Code-Pfad, derselbe Report.
         assert [identifier for identifier, _message in report.preserved] == ["dauer"]
         assert "min_value=5" in report.preserved[0][1]
@@ -945,8 +945,8 @@ class TestNumberRangeTriState:
 
 @pytest.mark.django_db
 class TestNumberRangePreservedVisibility:
-    """Betreiber-Sichtbarkeit ohne Dauerwarnung (Controller-Ruling
-    Review-Runde 1, Refs #1934): der Report muss „unverändert, weil der
+    """Betreiber-Sichtbarkeit ohne Dauerwarnung (Controller-Entscheid,
+    Refs #1934): der Report muss „unverändert, weil der
     Schlüssel fehlt (Bestand erhalten)" von „unverändert, weil Paket- und
     Bestandswert gleich sind" unterscheidbar machen — als eigener, jeden Lauf
     frisch berechneter ``report.preserved``-Bucket, NICHT als ``warnings``-
@@ -972,14 +972,14 @@ class TestNumberRangePreservedVisibility:
         # bereits 0 -> wertgleich) NICHT.
         assert [identifier for identifier, _message in report.preserved] == ["dauer"]
         assert "min_value=5" in report.preserved[0][1]
-        # Kein Umweg ueber die Warnungen -- exakt die per Ruling geforderte
+        # Kein Umweg ueber die Warnungen -- exakt die fachlich geforderte
         # Trennung von der abgelehnten Dauerwarnung.
         assert report.warnings == []
 
     def test_no_preserved_entry_when_nothing_to_preserve(self, facility):
         """Der haeufigste Fall (Paket verwaltet keine Grenze, es existiert
         keine zu erhaltende) darf NICHT im preserved-Report auftauchen --
-        sonst waere es genau die per Ruling abgelehnte Dauerwarnung."""
+        sonst waere es genau die fachlich abgelehnte Dauerwarnung."""
         report = _load(facility, _raw())
         assert report.preserved == []
 

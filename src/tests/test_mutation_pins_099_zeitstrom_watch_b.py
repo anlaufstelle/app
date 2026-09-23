@@ -12,8 +12,7 @@ Einrichtung, die als Kachel angezeigt werden). Andere Funktionen desselben
 Moduls (``_current_shift_projection`` in Batch a, ``_feed_projection``,
 ``_tally_counts_projection``, ``_tally_topology_projection``,
 ``_bans_projection`` u. a. in den Schwester-Batches c/d/e) gehören fremden
-Worktrees/Lanes — laut Standardblock 19/39 TABU für mich (nicht gelesen,
-nicht angefasst).
+Testdateien — bewusst nicht gelesen, nicht angefasst.
 
 ``_focus_box_projection`` baut aus offenen/laufenden ``WorkItem``-Zeilen der
 Einrichtung eine nach ``due_date_bucket``/``due_date``/``priority_order``/

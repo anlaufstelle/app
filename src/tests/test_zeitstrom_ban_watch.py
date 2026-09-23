@@ -710,7 +710,7 @@ class TestZeitstromWatchBans:
     def test_rename_with_only_dormant_bans_keeps_etag_and_304(
         self, request, client, lead_user, facility, client_identified, high_ban_doc_type, role_fixture
     ):
-        """Trigger-Seitenkanal (Fix-Runde #1917): die sichtbare Umbenennung
+        """Trigger-Seitenkanal (Refs #1917): die sichtbare Umbenennung
         einer Person mit ausschließlich schlafenden/abgelaufenen Bans ändert
         das Banner für KEINE Rolle — der Poll muss byte-identisch bleiben
         (304, gleicher ETag), sonst verrät der No-op-Fetch verborgene

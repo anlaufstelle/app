@@ -25,11 +25,11 @@ Vier Mutationsachsen in diesem Batch:
 * **Audit-Inhalt exakt falsch** in ``audit_attachment_upload`` (MIME-
   Fallback per ``or``/``and``-Praezedenz bzw. Text-/Gross-Klein-Variante) und
   in ``audit_attachment_quota_exceeded`` (Byte-MB-Divisor bzw. Rundungs-
-  Nachkommastellen): Standardblock-Regel "Audit-Inhalt/-Scope und
+  Nachkommastellen): die Klassifikationsregel "Audit-Inhalt/-Scope und
   Grenzwerte exakt pinnen" — Klasse ``test``, Prio 1, exakte Assertion auf
   den geschriebenen ``detail``-Wert.
 * **Meldungs-Wortlaut** in ``storage_warning`` (XX-Marker-/Gross-Klein-
-  Varianten desselben Satzes): Standardblock-Klassifikationsregel Meldungen
+  Varianten desselben Satzes): die Klassifikationsregel fuer Meldungen
   — Klasse ``test``, Prio 3, exakter String-Vergleich des vollstaendigen
   Warnsatzes toetet alle drei Varianten mit einer Assertion.
 * **Inline-Default eines Settings-Lesers** in ``_configured_limit_bytes``

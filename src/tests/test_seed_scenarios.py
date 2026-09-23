@@ -203,7 +203,7 @@ class TestSeedDemoScale:
         )
 
     def test_every_facility_has_at_least_one_event_per_own_event_document_type(self, _demo_seed_class):
-        """Zusage aus Lane F-1 (Refs #2270/#2279-Zusatz): je Einrichtung ×
+        """Zusage aus #2270/#2279-Zusatz: je Einrichtung ×
         Paket-Typ mindestens ein Ereignis — gilt unverändert für alle sechs
         Szenario-Facilities, auch wenn zwei davon (Solo/Beratungsstelle)
         dasselbe Fachpaket teilen."""
@@ -266,7 +266,7 @@ def test_seed_demo_is_idempotent():
     ``random.*()``-Aufrufe konsumieren, driftet der Zufallsstand vor dem
     Mischen auseinander und ein zweiter Lauf kann zusätzliche Personen
     anlegen. Nicht Teil von #2279 (``clients.py`` ist nicht in der
-    Besitzliste dieser Lane) — hier nur reproduziert, nicht "gefixt"."""
+    Aenderungsumfang dieses Tickets) — hier nur reproduziert, nicht "gefixt"."""
     call_command("seed", scale="demo")
     facilities_first = Facility.objects.count()
     users_first = User.objects.count()
@@ -300,7 +300,7 @@ def test_seed_demo_flush_reseed_is_deterministic():
     Pseudonym-Shuffle — die ``Client``-Zahl ist deshalb hier (anders als im
     No-Flush-Fall) ebenfalls deterministisch und wird bewusst MIT geprüft
     (empirisch verifiziert: 99/99 Clients, 660/660 Events über beide Läufe
-    identisch, siehe Bericht Fix-Runde 1).
+    identisch).
     """
     from core.models import Case
 
@@ -384,7 +384,7 @@ def test_seed_demo_choice_is_additive_small_scale_still_default():
 
 
 def test_demo_scenario_type_is_exported_for_lane_f3():
-    """Schnittstellen-Vertrag für #2285 (Lane F-3, hier nur dokumentiert):
+    """Schnittstellen-Vertrag für #2285 (hier nur dokumentiert):
     ``DemoScenario`` ist ein oeffentlich importierbarer Typ mit den fuer die
     Auswahlseite benoetigten Feldern."""
     scenario = SCENARIOS[0]

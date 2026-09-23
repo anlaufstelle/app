@@ -47,7 +47,7 @@ def _handover_window():
     """Pflicht-Fenstergrenzen einer Schichtnotiz (Refs #2042, E-01).
 
     Fuer die Rotation ohne Belang — sie fasst nur die ``note``-Spalte an —,
-    aber seit Fix-Runde 1 nicht mehr nullbar.
+    aber inzwischen nicht mehr nullbar.
     """
     heute = timezone.localdate()
     return {

@@ -28,7 +28,7 @@ auf eine zufaellig passende UUID-Reihenfolge angewiesen zu sein.
 reihenfolge gepinnt, sondern ueber die tatsaechlich aufgerufene Sortierkette
 selbst (``_capture_order_by``, Spy auf ``QuerySet.order_by`` — Muster
 ``test_mutation_pins_098_client_export.py::TestOrderedAttachmentsOrderByClause``).
-Orchestrator-Ruling (Konsistenz mit Batch ``facility_export-b``): ein
+Bewusste Festlegung (Konsistenz mit Batch ``facility_export-b``): ein
 fehlender ``pk``-Tiebreak macht die Export-Reihenfolge bei Gleichstand
 unspezifiziert — das ist beobachtbares Verhalten, auch wenn eine konkrete
 Postgres-Planner-Wahl den Unterschied im Ergebnis nicht zuverlaessig zeigt.
@@ -78,7 +78,7 @@ def _pk_order(queryset, pks):
 def _capture_order_by(monkeypatch):
     """Zeichnet jeden ``QuerySet.order_by()``-Aufruf als ``(Modell, Argumente)`` auf.
 
-    Orchestrator-Ruling (Konsistenz mit Batch ``facility_export-b``): ein
+    Bewusste Festlegung (Konsistenz mit Batch ``facility_export-b``): ein
     fehlender ``pk``-Tiebreak am Ende einer Sortierkette macht die
     Export-Reihenfolge bei Gleichstand UNSPEZIFIZIERT — das ist beobachtbares
     Verhalten, auch wenn eine konkrete Postgres-Version/Planner-Wahl den
@@ -252,7 +252,7 @@ class TestBuildConfigurationOrdering:
 class TestBuildConfigurationOrderByClauses:
     def test_all_four_querysets_keep_the_pk_tiebreak(self, facility, monkeypatch):
         """Pins ``x__build_configuration__mutmut_7``/``_19``/``_31``/``_43``
-        (Orchestrator-Ruling zur Konsistenz mit Batch ``facility_export-b``):
+        (bewusste Festlegung zur Konsistenz mit Batch ``facility_export-b``):
         der ``pk``-Tiebreak am Ende jeder der vier ``order_by``-Ketten
         (Dokumentationstypen, Feldvorlagen, Feldgruppen, Feldbedingungen)
         entfaellt. Ohne ihn ist die Export-Reihenfolge bei Gleichstand auf
@@ -407,7 +407,7 @@ class TestGatherAttachments:
         assert str(deleted.pk) not in ids
 
     def test_order_by_keeps_the_pk_tiebreak(self, facility, sample_event, monkeypatch):
-        """Pins ``x__gather_attachments__mutmut_9`` (Orchestrator-Ruling zur
+        """Pins ``x__gather_attachments__mutmut_9`` (bewusste Festlegung zur
         Konsistenz mit Batch ``facility_export-b``): der ``pk``-Tiebreak am
         Ende von ``order_by("sort_order","created_at","pk")`` entfaellt.
         Plan-unabhaengiger Nachweis auf der tatsaechlich aufgerufenen

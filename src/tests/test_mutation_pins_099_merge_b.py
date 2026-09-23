@@ -59,7 +59,7 @@ eine Testklasse je Familie, jeder Test nennt seine Mutanten in der Docstring
 samt der Abweichung, Zusicherungen vergleichen EXAKT (``==``/``is``), nie per
 Teilstring; ``pytest.mark.django_db`` modulweit + ``_encryption_key``-Fixture
 (Lehre 112); Fixtures aus ``src/tests/conftest.py`` bzw. lokale Helfer
-(keine Importe aus fremden Pin-Dateien, TABU-Disziplin).
+(keine Importe aus fremden Pin-Dateien).
 """
 
 from __future__ import annotations
@@ -122,8 +122,8 @@ def stranger(facility, staff_user):
 def _blind_first_call(real_lookup):
     """Nur der ERSTE Aufruf sieht nichts — simuliert die Race-Luecke zwischen
     Vorab-Check und echtem Insert (Muster ``test_deletion_request_race_
-    idempotency.py``, hier lokal kopiert — TABU-Disziplin fuer fremde
-    Testdateien, keine Importe).
+    idempotency.py``, hier lokal kopiert — bewusst ohne Importe aus fremden
+    Testdateien).
     """
     state = {"first": True}
 
