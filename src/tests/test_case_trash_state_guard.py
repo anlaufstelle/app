@@ -108,3 +108,52 @@ class TestApprovedPath:
         approve_case_deletion(dr, lead_user)
         assert _snapshot(case_open)["is_deleted"] is True
         assert _trash_audit_count(case_open) == 1
+
+
+class TestDirekterLoeschwegUeberHttp:
+    """Das Zustandsrennen zwischen View-Lesung und Service endet nicht im Serverfehler.
+
+    Die View lädt den Fall gescopet; wird er danach (zweiter Tab, zweite
+    Person) in den Papierkorb gelegt oder getilgt, weist der Service ihn an der
+    gesperrten Zeile ab. Die Antwort ist eine Weiterleitung mit Meldung, der
+    Fall bleibt unverändert, es entsteht keine zweite Audit-Zeile.
+    """
+
+    @pytest.fixture
+    def rennen_nach_dem_laden(self, monkeypatch):
+        from core.views.case_deletion import CaseDeleteRequestView
+
+        original = CaseDeleteRequestView._load
+        zustand = {}
+
+        def laden_und_dann_aendern(view, request, pk):
+            geladen = original(view, request, pk)
+            _set_state(geladen, **zustand)
+            return geladen
+
+        monkeypatch.setattr(CaseDeleteRequestView, "_load", laden_und_dann_aendern)
+        return zustand
+
+    @pytest.mark.parametrize(
+        ("deleted", "anonymized", "meldung"),
+        [(True, False, _PAPIERKORB), (False, True, _GETILGT)],
+        ids=["papierkorb", "getilgt"],
+    )
+    def test_post_meldet_den_konflikt(
+        self, client, case_open, staff_user, rennen_nach_dem_laden, deleted, anonymized, meldung
+    ):
+        from django.contrib import messages
+        from django.contrib.messages import get_messages
+        from django.urls import reverse
+
+        rennen_nach_dem_laden.update(deleted=deleted, anonymized=anonymized)
+        client.force_login(staff_user)
+        client.raise_request_exception = False
+
+        response = client.post(reverse("core:case_delete_request", kwargs={"pk": case_open.pk}))
+
+        assert response.status_code == 302
+        assert response["Location"] == reverse("core:case_list")
+        gemeldet = [(m.level, str(m)) for m in get_messages(response.wsgi_request)]
+        assert gemeldet == [(messages.ERROR, meldung)]
+        assert _trash_audit_count(case_open) == 0
