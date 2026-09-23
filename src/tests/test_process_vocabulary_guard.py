@@ -226,17 +226,12 @@ class TestRealTreeHasNoUnresolvedProcessVocabulary:
                 if _is_pending(relpath):
                     continue
                 unresolved.append(hit._replace(relpath=relpath))
-        assert unresolved == [], (
-            "Arbeitsablauf-Jargon in ausgelieferten Dateien gefunden (Refs #2349):\n"
-            + "\n".join(f"{h.relpath}:{h.lineno} [{h.word}] {h.line}" for h in unresolved)
+        assert unresolved == [], "Arbeitsablauf-Jargon in ausgelieferten Dateien gefunden (Refs #2349):\n" + "\n".join(
+            f"{h.relpath}:{h.lineno} [{h.word}] {h.line}" for h in unresolved
         )
 
     def test_pending_files_patterns_match_something_on_disk(self) -> None:
         """Verwaiste ``_PENDING_FILES``-Muster (Pfad existiert nicht mehr)
         sollen auffallen, statt stillschweigend nutzlos zu bleiben."""
-        stale = [
-            pattern
-            for pattern in _PENDING_FILES
-            if not any(REPO_ROOT.glob(pattern))
-        ]
+        stale = [pattern for pattern in _PENDING_FILES if not any(REPO_ROOT.glob(pattern))]
         assert stale == [], f"verwaiste _PENDING_FILES-Muster (nichts existiert mehr): {stale}"
