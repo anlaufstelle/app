@@ -230,3 +230,45 @@ describe("controllerchange: kein Auto-Reload waehrend eines Logouts", () => {
         expect(h.reload).toHaveBeenCalledTimes(1);
     });
 });
+
+// Refs #2360: die bisherigen Faelle oben setzen die Marke VOR dem
+// controllerchange, also bevor ``_reloadIfSafe()`` ueberhaupt startet.
+// ``_reloadIfSafe()`` liest die Marke aber nur EINMAL am Einstieg und wartet
+// danach auf den asynchronen ``_queuePending()`` (IndexedDB-Zaehlung der
+// Offline-Warteschlange) — startet ein Schnell-Verlassen ERST waehrend
+// dieses Wartens, sah der anschliessende ``_doReload()`` die Marke bisher
+// nie.
+describe("controllerchange: Logout-Marke kann waehrend _queuePending() gesetzt werden (Refs #2360)", () => {
+    it("unterdrueckt den Reload, wenn die Marke erst waehrend des Warteschlangen-Checks gesetzt wird", async () => {
+        const h = await freshLoad({ controlled: true });
+        window.offlineQueue = {
+            getQueueCount: () =>
+                Promise.resolve().then(() => {
+                    // Das Schnell-Verlassen setzt die Marke MITTEN im
+                    // asynchronen Zwischenschritt — vor der ersten
+                    // Marken-Pruefung in ``_reloadIfSafe()`` war sie noch nicht da.
+                    window.__logoutInFlight = Date.now();
+                    return 0;
+                }),
+        };
+
+        h.sw.controller = { scriptURL: "http://localhost/sw.js?v=2" };
+        h.dispatch("controllerchange");
+        await settle();
+
+        expect(h.reload).not.toHaveBeenCalled();
+    });
+
+    it("Kontrollfall: laedt weiterhin neu, wenn waehrenddessen KEINE Marke gesetzt wird", async () => {
+        const h = await freshLoad({ controlled: true });
+        window.offlineQueue = {
+            getQueueCount: () => Promise.resolve().then(() => 0),
+        };
+
+        h.sw.controller = { scriptURL: "http://localhost/sw.js?v=2" };
+        h.dispatch("controllerchange");
+        await settle();
+
+        expect(h.reload).toHaveBeenCalledTimes(1);
+    });
+});

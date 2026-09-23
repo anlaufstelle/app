@@ -58,6 +58,7 @@ describe("HTMX-Zustellweg", () => {
 
     afterEach(() => {
         delete window.facilityArchivedPurge;
+        delete window.__logoutInFlight;
     });
 
     it("purgt bei markierter 403, zeigt KEINEN Toast und verlaesst die Oberflaeche", async () => {
@@ -84,6 +85,35 @@ describe("HTMX-Zustellweg", () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    // Refs #2360: ``_handleArchivedFacility`` startete den Purge und rief den
+    // Reload danach UNGEPRUEFT auf. Setzt ein Schnell-Verlassen die
+    // Logout-Marke (``window.__logoutInFlight``, Vertrag aus sw-register.js)
+    // erst waehrend des laufenden Purges, sah der Reload sie bisher nie.
+    it("unterdrueckt den Reload, wenn die Logout-Marke erst waehrend des Purges gesetzt wird", async () => {
+        run = vi.fn(async () => {
+            // Das Schnell-Verlassen setzt die Marke MITTEN im asynchronen
+            // Purge — vor dem Dispatch war sie noch nicht da.
+            window.__logoutInFlight = Date.now();
+        });
+        window.facilityArchivedPurge = { run: run };
+
+        dispatchResponseError(fakeXhr({ status: 403, archived: true }));
+
+        await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+        // Kurz nachschwingen lassen, damit ``.then()`` nach dem Purge sicher
+        // gelaufen ist — ein NICHT aufgerufener Reload hat keine eigene
+        // Warte-Bedingung, auf die ``vi.waitFor`` warten koennte.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(window.location.reload).not.toHaveBeenCalled();
+    });
+
+    it("Kontrollfall: verlaesst die Oberflaeche weiterhin, wenn waehrenddessen KEINE Marke gesetzt wird", async () => {
+        dispatchResponseError(fakeXhr({ status: 403, archived: true }));
+
+        await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(window.location.reload).toHaveBeenCalledTimes(1));
     });
 
     it("purgt NICHT bei einer 403 ohne Marker und zeigt den Toast (Refs #1354)", async () => {
