@@ -18,6 +18,8 @@ from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from django.conf import settings
 from django.test.signals import setting_changed
 
+from core.services.file_vault.keyring import split_key_ring
+
 if TYPE_CHECKING:
     # Nur fuer Typannotationen (PEP 563 macht sie ohnehin lazy) — kein
     # Laufzeit-Import noetig. Analog ``core/services/conditions.py``: hier
@@ -42,9 +44,9 @@ def _get_keys():
     Checks ENCRYPTION_KEYS (comma-separated) first, then falls back to
     ENCRYPTION_KEY (single key) for backward compatibility.
     """
-    keys_str = getattr(settings, "ENCRYPTION_KEYS", "")
-    if keys_str:
-        return [k.strip() for k in keys_str.split(",") if k.strip()]
+    keys = split_key_ring(getattr(settings, "ENCRYPTION_KEYS", ""))
+    if keys:
+        return keys
 
     single_key = getattr(settings, "ENCRYPTION_KEY", "")
     if single_key:

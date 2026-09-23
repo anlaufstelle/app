@@ -39,6 +39,8 @@ from urllib.parse import urlsplit
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
+from core.services.file_vault.keyring import split_key_ring
+
 # Realistische Topologien: 0 (kein Proxy), 1 (Caddy), 2 (CDN → Caddy). Ab 3
 # vorgeschalteten „vertrauenswürdigen" Hops ist eine Fehlkonfiguration deutlich
 # wahrscheinlicher als ein echtes 3-Proxy-Setup — dann lieber einmal warnen.
@@ -336,7 +338,7 @@ def check_encryption_single_key_deprecated(app_configs, **kwargs):
         return messages
 
     einzel = str(getattr(settings, "ENCRYPTION_KEY", "") or "").strip()
-    ring = str(getattr(settings, "ENCRYPTION_KEYS", "") or "").strip(" ,")
+    ring = split_key_ring(getattr(settings, "ENCRYPTION_KEYS", ""))
     if einzel and not ring:
         messages.append(
             Warning(

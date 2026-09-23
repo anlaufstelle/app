@@ -318,12 +318,23 @@ else:
 # django-ratelimit gegen den shared Cache laufen lassen (statt LocMem-Default).
 RATELIMIT_USE_CACHE = "default"
 
+
 # --- Encryption Key (mandatory in production) ---
 # Akzeptiert ENCRYPTION_KEYS (Plural, MultiFernet-Rotation) oder ENCRYPTION_KEY (Singular, Legacy).
 # Mindestens eins muss gesetzt sein.
-if not _IS_COLLECTSTATIC and not (ENCRYPTION_KEY or ENCRYPTION_KEYS):  # noqa: F405
+def _split_encryption_key_ring(value):
+    """Pure settings-time twin of ``file_vault.keyring.split_key_ring``.
+
+    Importing the service package while this settings module is still loading
+    would import model-dependent modules before Django's app registry is ready.
+    """
+    return [entry.strip() for entry in (value or "").split(",") if entry.strip()]
+
+
+_encryption_key_ring = _split_encryption_key_ring(ENCRYPTION_KEYS)  # noqa: F405
+if not _IS_COLLECTSTATIC and not (ENCRYPTION_KEY or _encryption_key_ring):  # noqa: F405
     raise ImproperlyConfigured(
-        "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
+        "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS) und ENCRYPTION_KEY ist nicht gesetzt. "
         'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
 
