@@ -17,7 +17,7 @@ SRC_DIR = REPO_ROOT / "src"
 KEY = "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE="
 
 
-def _prod_import(*, single_key: str) -> subprocess.CompletedProcess[str]:
+def _prod_import(*, single_key: str, key_ring: str = " , ") -> subprocess.CompletedProcess[str]:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(SRC_DIR),
@@ -31,7 +31,7 @@ def _prod_import(*, single_key: str) -> subprocess.CompletedProcess[str]:
         "DJANGO_SECRET_KEY": "x" * 50,
         "ALLOWED_HOSTS": "example.org",
         "ENCRYPTION_KEY": single_key,
-        "ENCRYPTION_KEYS": " , ",
+        "ENCRYPTION_KEYS": key_ring,
         "DJANGO_AUDIT_HASH_KEY": "y" * 50,
         "POSTGRES_ADMIN_USER": "",
         "POSTGRES_ADMIN_PASSWORD": "",
@@ -83,9 +83,8 @@ def test_system_check_treats_separator_only_ring_as_unset(single_key, expected_i
 
 
 def test_system_check_uses_shared_ring_splitter():
-    from core.services.file_vault.keyring import split_key_ring
-
     from core import checks
+    from core.services.file_vault.keyring import split_key_ring
 
     assert checks.split_key_ring is split_key_ring
 
@@ -95,6 +94,13 @@ def test_prod_startgate_rejects_separator_only_ring_without_single_key():
 
     assert result.returncode != 0
     assert "Schlüsselring enthält keinen Schlüssel" in result.stderr
+
+
+def test_prod_startgate_keeps_missing_key_message_when_nothing_is_set():
+    result = _prod_import(single_key="", key_ring="")
+
+    assert result.returncode != 0
+    assert "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein." in result.stderr
 
 
 def test_prod_startgate_accepts_separator_only_ring_with_single_key():
