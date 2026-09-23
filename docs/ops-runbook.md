@@ -1294,6 +1294,13 @@ Disaster-Recovery-Anleitung ist dann von Hand nachzuziehen.
 unveraendert zwingend; ein Altsatz kann den Vollstaendigkeitsnachweis daher
 nicht erbringen.
 
+**Restore eines ankerlosen Altsatzes bei konfiguriertem Ankerpfad:** In der
+`.env` `DJANGO_AUDIT_HWM_PATH` fuer genau den Lauf voruebergehend leeren,
+`restore.sh --allow-missing-manifest …` ausfuehren und den urspruenglichen Wert
+wieder einsetzen, bevor der Stack neu startet. Der Lauf stellt keinen
+Audit-Anker wieder her; deshalb entfaellt sein Compliance-Nachweis und darf
+nicht nachtraeglich mit `mark_restore_verified` als erbracht markiert werden.
+
 Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`). Der Prod-Zweig liest `BACKUP_HOST_DIR` ausschließlich aus der `.env` im Compose-Verzeichnis; ein gleichnamiger Wert im `sudo env`-Praefix wird beim Laden der Datei ueberschrieben und ist daher kein Override. Liegt die Installation nicht unter dem Default `/opt/anlaufstelle`, muss `COMPOSE_DIR` auf das Verzeichnis mit `.env` und `docker-compose.prod.yml` zeigen:
 
 ```bash

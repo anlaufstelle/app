@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-23: § 6.6 explains how to restore an anchorless older set on a host with `DJANGO_AUDIT_HWM_PATH` configured and states that this run provides no compliance evidence (#2362).
 > Synchronization update 2026-09-23: § 9 names 29 as the current count of RLS-covered facility-scoped tables, matching the test-derived source of truth (#2330).
 > Synchronization update 2026-09-23: § 1.1 adds the note on the deprecated single key (`core.W005`) and the migration path to `ENCRYPTION_KEYS` (#2240).
 > Synchronization update 2026-09-22: § 6.6/§ 6.7 state that a drill with skipped mandatory steps writes no compliance proof (#2341).
@@ -1303,6 +1304,13 @@ run does **not** abort but warns and repeats the unanchored state at the end —
 disaster recovery guide then has to be done manually.
 `backup.sh --verify` and `restore-drill.sh --prod` still require the manifest, so
 an older set cannot provide the completeness evidence.
+
+**Restoring an anchorless older set when an anchor path is configured:** Temporarily
+clear `DJANGO_AUDIT_HWM_PATH` in `.env` for exactly this run, execute
+`restore.sh --allow-missing-manifest …`, and restore the original value before
+starting the stack again. This run does not restore an audit anchor; it therefore
+provides no compliance evidence and must not subsequently be marked as proven with
+`mark_restore_verified`.
 
 The backup files are `0600` and owned by root — therefore run **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
@@ -2940,5 +2948,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-23 -->
-<!-- source-hash: 91994240b16bda8a8ceed8f16df238a90beba31a -->
+<!-- source-hash: f3372695e9c82b3752010a3aa79161ad0b79b3bb -->
 <!-- translation-date: 2026-09-22 -->
