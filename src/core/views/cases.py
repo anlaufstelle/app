@@ -5,6 +5,7 @@ Meilensteine in :file:`views/case_goals.py` (Refs #605).
 """
 
 import logging
+from contextlib import suppress
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -42,7 +43,7 @@ from core.services.case import (
     update_case,
 )
 from core.services.case.cases import EventNotOnExpectedCaseError
-from core.services.client import get_client_or_none
+from core.services.client import resolve_writable_client
 from core.services.compliance import get_visible_event_or_404, user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
@@ -300,10 +301,19 @@ class CaseCreateView(StaffRequiredMixin, View):
         client_id = request.GET.get("client")
         client_pseudonym = ""
         if client_id:
-            form.fields["client"].initial = client_id
-            client_obj = get_client_or_none(facility, client_id)
+            client_obj = None
+            with suppress(ValidationError):
+                client_obj = resolve_writable_client(
+                    facility,
+                    client_id,
+                    missing_error=_("Person existiert nicht."),
+                )
             if client_obj:
+                client_id = str(client_obj.pk)
+                form.fields["client"].initial = client_id
                 client_pseudonym = client_obj.pseudonym
+            else:
+                client_id = ""
 
         context = {
             "form": form,

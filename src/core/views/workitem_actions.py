@@ -4,6 +4,7 @@ Abgeteilt von :file:`views/workitems.py`. Die Inbox- und Detail-Views
 bleiben dort, weil sie reine Read-Pfade sind.
 """
 
+from contextlib import suppress
 from datetime import timedelta
 
 from django.contrib import messages
@@ -31,7 +32,7 @@ from core.services.case import (
     update_workitem_status,
 )
 from core.services.case.workitems import workitem_form_state_token
-from core.services.client import get_client_or_none
+from core.services.client import resolve_writable_client
 from core.services.scoping import get_scoped_object
 from core.utils.formatting import isoformat_or_none
 from core.views._json_contracts import (
@@ -291,8 +292,15 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
         client_id = request.GET.get("client")
         client_pseudonym = ""
         if client_id:
-            client = get_client_or_none(facility, client_id)
+            client = None
+            with suppress(ValidationError):
+                client = resolve_writable_client(
+                    facility,
+                    client_id,
+                    missing_error=_("Ungültige Person-ID"),  # pragma: no mutate
+                )
             if client:
+                client_id = str(client.pk)
                 client_pseudonym = client.pseudonym
             else:
                 client_id = ""

@@ -29,7 +29,7 @@ from core.services.attachments import (
     stage_uploads,
 )
 from core.services.case import get_case_or_none
-from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none, resolve_writable_client
+from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, resolve_writable_client
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, assert_processing_allowed
 from core.services.compliance import (
     get_visible_event_or_404,
@@ -148,6 +148,18 @@ def _prefill_owner(meta_form, facility, client_id, case_id):
     if client_id:
         meta_form.fields["client"].initial = client_id
     return client_id
+
+
+def _resolve_event_client(facility, client_id):
+    """Person nur übernehmen, wenn sie im Schreibpfad noch zulässig ist."""
+    if client_id:
+        with suppress(ValidationError):
+            return resolve_writable_client(
+                facility,
+                client_id,
+                missing_error=_("Person existiert nicht."),  # pragma: no mutate
+            )
+    return None
 
 
 def _event_conflict_response(user, event, client_expected, *, error="conflict"):
@@ -293,6 +305,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             get_templates_for_document_type(request.user, facility, default_doc_type) if default_doc_type else []
         )
 
+        client = _resolve_event_client(facility, client_id)
+        client_id = str(client.pk) if client else ""
         context = {
             "meta_form": meta_form,
             "data_form": data_form,
@@ -311,7 +325,6 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             "serienerfassung": serienerfassung,
         }
 
-        client = get_client_or_none(facility, client_id)
         if client:
             context["client_pseudonym"] = client.pseudonym
 
@@ -374,15 +387,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             # anonymisierte und eingeschraenkte Personen durch und belegte sie
             # erneut vor, obwohl der naechste Speicherversuch sie abweist.
             # Nicht aufloesbar ⇒ leere Auswahl, wie in den uebrigen Zweigen.
-            client_obj = None
             posted_client = request.POST.get("client", "")
-            if posted_client:
-                with suppress(ValidationError):
-                    client_obj = resolve_writable_client(
-                        facility,
-                        posted_client,
-                        missing_error=_("Person existiert nicht."),  # pragma: no mutate
-                    )
+            client_obj = _resolve_event_client(facility, posted_client)
             client_id = str(client_obj.pk) if client_obj else ""
             client_pseudonym = client_obj.pseudonym if client_obj else ""
 
@@ -511,6 +517,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                     # obwohl der Ablehnungsgrund nichts mit der Personenwahl
                     # selbst zu tun hat.
                     add_dynamic_service_errors(data_form, e, restricted_keys)
+                    client = _resolve_event_client(facility, client.pk if client else None)
                     return self._invalid_response(
                         request,
                         data_form,
@@ -553,6 +560,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             # ersetzt alles andere generisch. Raw-JSON-Contract: _invalid_response
             # (Refs #1831).
             add_dynamic_service_errors(meta_form, e, restricted_keys)
+            client = _resolve_event_client(facility, client.pk if client else None)
             return self._invalid_response(
                 request,
                 meta_form,
