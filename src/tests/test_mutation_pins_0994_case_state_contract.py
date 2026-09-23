@@ -14,10 +14,12 @@ Gruppen:
 
 Eine entfallene Bedingung faellt im Ergebnis nur auf, wenn eine zweite Zeile
 passt. Deshalb halten die Pins je Abfrage die Bedingungen fest, die sie
-tragen muss — erkannt an Tabelle, Sperrmarker und den Parametern der
-Bedingungen, nicht an Projektion, Reihenfolge oder Literalform; ``= x`` und
-``IN (x)`` gelten gleich. Die ``pk``-Varianten sind zusaetzlich am Ergebnis
-belegt: die
+tragen muss — erkannt an Tabelle, Sperrart und den Parametern der
+Filterbedingungen in der WHERE-Klausel, nicht an Projektion, Reihenfolge oder
+Literalform; ``= x`` und ``IN (x)`` gelten gleich. Wo die Produktion mit
+``select_for_update()`` sperrt, verlangen die Pins ``FOR UPDATE`` — eine
+schwaechere Sperrart (``FOR SHARE``/``FOR KEY SHARE``) ist kein Ersatz. Die
+``pk``-Varianten sind zusaetzlich am Ergebnis belegt: die
 Standardsortierung der Modelle stellt die falsche Zeile nach vorn, sodass ein
 Filter ohne ``pk`` sie liefern wuerde. Wettlaeufe werden deterministisch im
 Art.-18-Gate bzw. direkt nach der Fallsperre nachgestellt — zwischen dem
@@ -43,7 +45,12 @@ from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 pytestmark = pytest.mark.django_db
 
 _FROM = re.compile(r'\bFROM\s+"(\w+)"', re.IGNORECASE)
-_SPERRE = re.compile(r"\bFOR\s+(?:NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\b", re.IGNORECASE)
+_SPERRE = re.compile(r"\bFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\b", re.IGNORECASE)
+_WHERE = re.compile(r"\bWHERE\b", re.IGNORECASE)
+_WHERE_ENDE = re.compile(
+    r"\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FOR\s+(?:NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE))\b",
+    re.IGNORECASE,
+)
 _PLATZHALTER = re.compile(
     r'"(\w+)"\s*\.\s*"(\w+)"\s*(?:=\s*%s|IN\s*\(((?:\s*%s\s*,?)+)\))|%s',
     re.IGNORECASE,
@@ -58,31 +65,77 @@ def _wert(wert):
         return str(wert)
 
 
+def _tiefen(sql):
+    """Klammertiefe je Zeichen; Klammern in Bezeichnern (``"..."``) und Literalen (``'...'``) zaehlen nicht."""
+    tiefen, tiefe, quote = [], 0, None
+    for zeichen in sql:
+        if quote:
+            if zeichen == quote:
+                quote = None
+        elif zeichen in "\"'":
+            quote = zeichen
+        elif zeichen == "(":
+            tiefe += 1
+        elif zeichen == ")":
+            tiefe -= 1
+        tiefen.append(tiefe)
+    return tiefen
+
+
+def _erster_auf_ebene_null(muster, sql, tiefen, ab=0):
+    return next((m for m in muster.finditer(sql, ab) if tiefen[m.start()] == 0), None)
+
+
+def _where_bereich(sql):
+    """``(anfang, ende)`` der WHERE-Klausel der aeusseren Abfrage, sonst ``None``."""
+    tiefen = _tiefen(sql)
+    where = _erster_auf_ebene_null(_WHERE, sql, tiefen)
+    if where is None:
+        return None
+    ende = _erster_auf_ebene_null(_WHERE_ENDE, sql, tiefen, where.end())
+    return where.end(), ende.start() if ende else len(sql)
+
+
 class _Abfrage:
-    """Eine ausgefuehrte Abfrage: Tabelle, Sperrmarker und ihre Parameter-Bedingungen.
+    """Eine ausgefuehrte Abfrage: Tabelle, Sperrart und ihre Filterbedingungen.
 
     Gelesen wird die Abfrage VOR der Debug-Formatierung (SQL mit Platzhaltern
-    plus Parameter). Die SELECT-Projektion, die Reihenfolge der Bedingungen und
-    die Literalform der Werte spielen damit keine Rolle; ``spalte = x`` und
-    ``spalte IN (x, ...)`` ergeben gleichermassen die Wertemenge der Spalte.
+    plus Parameter). Die Parameter werden ueber das ganze SQL der Reihe nach
+    zugeordnet; als Filterbedingung zaehlt aber nur ein Vergleich in der
+    WHERE-Klausel der aeusseren Abfrage (nach ``WHERE``, vor
+    ``ORDER BY``/``LIMIT``/``FOR ...``). Ein Vergleich in der Projektion
+    (``SELECT ("t"."facility_id" = %s) AS ...``) filtert keine Zeile und
+    zaehlt nicht. Die Projektion, die Reihenfolge der Bedingungen und die
+    Literalform der Werte spielen keine Rolle.
+
+    Unterstuetzte Praedikatform: je Spalte ``"t"."spalte" = %s`` oder
+    ``"t"."spalte" IN (%s, ...)``, die Bedingungen UND-verknuepft; daraus
+    ergibt sich die Wertemenge der Spalte. Mehrere Bedingungen auf DERSELBEN
+    Spalte werden vereinigt, nicht geschnitten: ``id = a AND id IN (a, b)``
+    ergibt ``{a, b}`` und gilt NICHT als Einschraenkung auf ``a``. ODER-
+    Verknuepfungen und Negationen werden nicht ausgewertet — die geprueften
+    Abfragen des Zustandsvertrags verwenden sie nicht.
     """
 
     def __init__(self, sql, params):
         self.sql = sql
         treffer = _FROM.search(sql)
         self.tabelle = treffer.group(1) if treffer else None
-        self.sperrt = bool(_SPERRE.search(sql))
+        sperre = _SPERRE.search(sql)
+        self.sperrart = " ".join(sperre.group(1).upper().split()) if sperre else None
+        self.sperrt = self.sperrart is not None
         self.bedingungen = {}
+        bereich = _where_bereich(sql)
         werte = iter(params or ())
         for match in _PLATZHALTER.finditer(sql):
             tabelle, spalte, liste = match.groups()
             anzahl = liste.count("%s") if liste else 1
             gelesen = [_wert(next(werte)) for _ in range(anzahl)]
-            if tabelle:
+            if tabelle and bereich and bereich[0] <= match.start() < bereich[1]:
                 self.bedingungen.setdefault(f"{tabelle}.{spalte}", set()).update(gelesen)
 
     def traegt(self, **erwartet):
-        """Traegt die Abfrage je Spalte genau diese Wertemenge (``=`` oder ``IN``)?"""
+        """Traegt die WHERE-Klausel je Spalte genau diese Wertemenge (``=`` oder ``IN``)?"""
         return all(
             self.bedingungen.get(f"{self.tabelle}.{spalte}") == {_wert(w) for w in werte}
             for spalte, werte in erwartet.items()
@@ -249,6 +302,7 @@ class TestLockGoalForWrite:
             sc.lock_goal_for_write(outcome_goal)
         sperren = abfragen.sperren("core_outcomegoal")
         assert sperren
+        assert all(a.sperrart == "UPDATE" for a in sperren)
         assert all(a.traegt(id=[outcome_goal.pk], case_id=[outcome_goal.case_id]) for a in sperren)
 
     def test_liefert_das_adressierte_ziel(self, case_open, staff_user):
@@ -312,10 +366,12 @@ class TestLockEventForCaseLink:
         # Fallsperre (_80, _81): jede Sperre auf core_case genau die beteiligten Faelle in der Einrichtung
         fallsperren = abfragen.sperren("core_case")
         assert fallsperren
+        assert all(a.sperrart == "UPDATE" for a in fallsperren)
         assert all(a.traegt(id=[case_open.pk, ziel.pk], facility_id=[facility.pk]) for a in fallsperren)
         # Ereignissperre (_103, _105)
         ereignissperren = abfragen.sperren("core_event")
         assert ereignissperren
+        assert all(a.sperrart == "UPDATE" for a in ereignissperren)
         assert all(
             a.traegt(
                 id=[sample_event.pk],
@@ -389,6 +445,7 @@ class TestLockEventForCaseLink:
             sc.lock_event_for_case_link(sample_event, case_open)
         fallsperren = abfragen.sperren("core_case")
         assert fallsperren
+        assert all(a.sperrart == "UPDATE" for a in fallsperren)
         assert all(a.traegt(id=[case_open.pk]) for a in fallsperren)
         assert all(unbeteiligt.pk.hex not in a.bedingungen.get("core_case.id", set()) for a in fallsperren)
 
@@ -448,5 +505,39 @@ class TestMitschnitt:
             [einrichtung, b, a],
         )
         assert abfrage.sperrt
+        assert abfrage.sperrart == "UPDATE"
         assert abfrage.traegt(id=[a, b], facility_id=[einrichtung])
         assert not abfrage.traegt(id=[a])
+
+    def test_vergleich_in_der_projektion_ist_kein_filter(self):
+        """Negativprobe: ein Vergleich in der SELECT-Liste filtert keine Zeile."""
+        a, b, einrichtung = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        abfrage = _Abfrage(
+            'SELECT ("core_case"."facility_id" = %s) AS "same_facility" FROM "core_case" '
+            'WHERE "core_case"."id" IN (%s,%s) FOR UPDATE',
+            [einrichtung, a, b],
+        )
+        assert abfrage.traegt(id=[a, b])
+        assert not abfrage.traegt(id=[a, b], facility_id=[einrichtung])
+        assert "core_case.facility_id" not in abfrage.bedingungen
+
+    @pytest.mark.parametrize(
+        "art", ["FOR UPDATE", 'FOR UPDATE OF "core_case"', "FOR NO KEY UPDATE", "FOR SHARE", "FOR KEY SHARE"]
+    )
+    def test_sperrart_wird_unterschieden(self, art):
+        """Nur ``FOR UPDATE`` (auch mit ``OF``) ist die Schreibsperre von ``select_for_update()``."""
+        abfrage = _Abfrage(f'SELECT * FROM "core_case" WHERE "core_case"."id" = %s {art}', [uuid.uuid4()])
+        assert abfrage.sperrt
+        assert (abfrage.sperrart == "UPDATE") is (art.startswith("FOR UPDATE"))
+
+    def test_unterstuetzte_praedikatformen(self):
+        """Positivprobe der verlangten Formen: ``= x``, ``IN (x)`` und ``IN (x, y)`` bei zwei beteiligten Zeilen."""
+        x, y = uuid.uuid4(), uuid.uuid4()
+        gleich = _Abfrage('SELECT * FROM "core_case" WHERE "core_case"."id" = %s', [x])
+        einzeln = _Abfrage('SELECT * FROM "core_case" WHERE "core_case"."id" IN (%s)', [x])
+        paar = _Abfrage('SELECT * FROM "core_case" WHERE "core_case"."id" IN (%s, %s)', [x, y])
+        assert gleich.traegt(id=[x])
+        assert einzeln.traegt(id=[x])
+        assert paar.traegt(id=[x, y])
+        assert not paar.traegt(id=[x])
+        assert not gleich.traegt(id=[x, y])
