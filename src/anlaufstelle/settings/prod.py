@@ -333,9 +333,15 @@ def _split_encryption_key_ring(value):
 
 _encryption_key_ring = _split_encryption_key_ring(ENCRYPTION_KEYS)  # noqa: F405
 if not _IS_COLLECTSTATIC and not (ENCRYPTION_KEY or _encryption_key_ring):  # noqa: F405
+    if ENCRYPTION_KEYS:  # noqa: F405
+        _encryption_key_error = (
+            "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS) und ENCRYPTION_KEY ist nicht gesetzt. "
+        )
+    else:
+        _encryption_key_error = "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
     raise ImproperlyConfigured(
-        "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS) und ENCRYPTION_KEY ist nicht gesetzt. "
-        'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+        _encryption_key_error
+        + 'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
 
 # --- Audit-Hash-Key (mandatory in production) (A4.2, Refs #1024 / #1016) ---
