@@ -126,6 +126,16 @@ class Command(BaseCommand):
             .distinct()
         )
 
+    def _save_hwm(self, hwm) -> None:
+        """Persist the external anchor with an actionable operator error."""
+        try:
+            hwm.save()
+        except ValueError as exc:
+            raise CommandError(
+                f"AUDIT_HWM_PATH ist ungueltig: {exc} Einen Pfad ohne '..'-Komponenten "
+                "konfigurieren und verify_audit_chain erneut ausfuehren."
+            ) from exc
+
     def _require_anchor(self, hwm_path: str, hwm, targets: list) -> None:
         """Fail-loud, wenn ``--require-anchor`` gesetzt ist, aber ein Anker fehlt.
 
@@ -232,7 +242,7 @@ class Command(BaseCommand):
             hwm.retire(key, reason=reason.strip(), at=at)
         # Sofort persistieren: der Nachweis soll auch dann stehen, wenn die
         # anschliessende Kettenpruefung rot endet.
-        hwm.save()
+        self._save_hwm(hwm)
         for key in keys:
             self.stdout.write(self.style.WARNING(f"Kette {key} stillgelegt ({reason.strip()})."))
 
@@ -275,7 +285,7 @@ class Command(BaseCommand):
                     f"Begruendung: {previous.get('reason') or 'keine'}."
                 )
             )
-        hwm.save()
+        self._save_hwm(hwm)
 
     def _check_inventory(self, hwm_path: str, hwm, targets: list) -> None:
         """Gleicht die extern verankerten Ketten gegen den DB-Bestand ab (Refs #2296).
@@ -382,7 +392,7 @@ class Command(BaseCommand):
                 # Abbruch VOR ``save`` und vor dem Erfolgsmarker — die Datei
                 # bleibt unveraendert, der Widerspruch bleibt sichtbar.
                 raise CommandError(str(exc)) from exc
-            hwm.save()
+            self._save_hwm(hwm)
 
         # Refs #1872: Last-Run-Marker fuer die Betriebsansicht. Bewusst erst
         # HIER — nach dem ``sys.exit(1)``-Zweig und nach dem HWM-Fortschreiben:
