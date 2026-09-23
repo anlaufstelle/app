@@ -190,3 +190,81 @@ class TestRemoveViewBindsToUrlCase:
         )
         assert response.status_code == 200
         assert Event.objects.get(pk=sample_event.pk).case_id is None
+
+
+class TestRemoveBindsToUrlCaseUnderLock:
+    """Die Bindung an den URL-Fall haelt auch, wenn das Ereignis NACH der View-Pruefung umgehaengt wird.
+
+    Die View prueft ``event.case_id`` ungesperrt. Haengt ein regulaerer
+    paralleler Aufruf das Ereignis danach, aber vor der Sperre im Service an
+    Fall B, darf der POST fuer Fall A es nicht aus B loesen: der Service
+    vergleicht den erwarteten Fall mit der FRISCH GESPERRTEN Zeile und bricht
+    vor jedem Schreiben ab. Nachgestellt wird das Zeitfenster deterministisch,
+    indem das Umhaengen zwischen View-Pruefung und Service-Aufruf laeuft.
+    """
+
+    def _umhaengen_vor_der_sperre(self, monkeypatch, zielfall, staff_user):
+        """Haengt das Ereignis um, nachdem die View geprueft hat und bevor der Service sperrt.
+
+        Das Umhaengen laeuft als eigener, regulaerer Service-Aufruf VOR der
+        Transaktion des Loesens — so, wie ein paralleler Request committet.
+        """
+        from core.services.case import assign_event_to_case
+        from core.views import cases as case_views
+
+        echt = case_views.remove_event_from_case
+
+        def umhaengen_dann_loesen(event, *args, **kwargs):
+            assign_event_to_case(zielfall, Event.objects.get(pk=event.pk), staff_user)
+            return echt(event, *args, **kwargs)
+
+        monkeypatch.setattr(case_views, "remove_event_from_case", umhaengen_dann_loesen)
+
+    def test_view_umhaengen_zwischen_pruefung_und_sperre(
+        self, client, monkeypatch, facility, client_identified, case_open, sample_event, staff_user
+    ):
+        from core.services.case import assign_event_to_case
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+        fall_b = Case.objects.create(
+            facility=facility, client=client_identified, title="Fall B", status=Case.Status.OPEN
+        )
+        client.force_login(staff_user)
+        self._umhaengen_vor_der_sperre(monkeypatch, fall_b, staff_user)
+
+        response = client.post(
+            reverse("core:case_remove_event", kwargs={"pk": case_open.pk, "event_pk": sample_event.pk}),
+        )
+
+        assert response.status_code == 404
+        assert Event.objects.get(pk=sample_event.pk).case_id == fall_b.pk
+        assert not AuditLog.objects.filter(action=AuditLog.Action.CASE_EVENT_REMOVED).exists()
+
+    def test_service_mit_erwartetem_fall(self, facility, client_identified, case_open, sample_event, staff_user):
+        from core.services.case import assign_event_to_case, remove_event_from_case
+
+        fall_b = Case.objects.create(
+            facility=facility, client=client_identified, title="Fall B", status=Case.Status.OPEN
+        )
+        assign_event_to_case(fall_b, sample_event, staff_user)
+        vorher = _zaehler()
+        with pytest.raises(ValidationError):
+            remove_event_from_case(Event.objects.get(pk=sample_event.pk), staff_user, expected_case=case_open)
+        assert Event.objects.get(pk=sample_event.pk).case_id == fall_b.pk
+        assert _zaehler() == vorher
+
+    def test_service_mit_erwartetem_fall_ereignis_ohne_fall(self, case_open, sample_event, staff_user):
+        from core.services.case import remove_event_from_case
+
+        vorher = _zaehler()
+        with pytest.raises(ValidationError):
+            remove_event_from_case(Event.objects.get(pk=sample_event.pk), staff_user, expected_case=case_open)
+        assert _zaehler() == vorher
+
+    def test_service_mit_passendem_erwartetem_fall_loest(self, case_open, sample_event, staff_user):
+        from core.services.case import assign_event_to_case, remove_event_from_case
+
+        assign_event_to_case(case_open, sample_event, staff_user)
+        remove_event_from_case(Event.objects.get(pk=sample_event.pk), staff_user, expected_case=case_open)
+        assert Event.objects.get(pk=sample_event.pk).case_id is None
+        assert AuditLog.objects.filter(action=AuditLog.Action.CASE_EVENT_REMOVED).count() == 1
