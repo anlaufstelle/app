@@ -34,8 +34,8 @@ from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from core.models import Client, Event, RetentionProposal, WorkItem
-from core.retention.enforcement import _lock_event_and_recheck_hold
+from core.models import Client, Event, RetentionProposal, ShiftHandoverNote, WorkItem
+from core.retention.enforcement import _lock_event_and_recheck_hold, enforce_handover_notes
 from core.retention.proposals import (
     TARGET_BINDING_CHANGED_MESSAGE,
     _lock_target_rows_for_approval,
@@ -57,11 +57,21 @@ def _sperr_abfragen(queries):
     return [q["sql"] for q in queries if "FOR UPDATE" in q["sql"]]
 
 
+def _filtert_einrichtung(sql):
+    """``True``, wenn die WHERE-Klausel (nicht nur die Spaltenliste) die Einrichtung nennt."""
+    _, _, where = sql.partition(" WHERE ")
+    return '"facility_id"' in where
+
+
+def _sperren_auf(queries, tabelle):
+    return [sql for sql in _sperr_abfragen(queries) if f'"{tabelle}"' in sql]
+
+
 def _assert_jede_sperre_gescopet(queries, erwartete_anzahl):
     sperren = _sperr_abfragen(queries)
     assert len(sperren) == erwartete_anzahl, sperren
     for sql in sperren:
-        assert '"facility_id"' in sql, sql
+        assert _filtert_einrichtung(sql), sql
 
 
 @pytest.fixture
@@ -137,7 +147,7 @@ class TestVorschlagZielzeilen:
                     _lock_target_rows_for_approval(vorschlag)
             assert excinfo.value.messages == [str(TARGET_BINDING_CHANGED_MESSAGE)]
             for sql in _sperr_abfragen(ctx.captured_queries):
-                assert '"facility_id"' in sql, sql
+                assert _filtert_einrichtung(sql), sql
 
     def test_genehmigung_bleibt_moeglich(self, facility, lead_user, ereignis):
         vorschlag = _vorschlag(facility, ereignis)
@@ -250,3 +260,63 @@ class TestAufgabeAusserhalbDerEinrichtungWirdNichtGeschrieben:
         aufgabe = _aufgabe(facility, None, staff_user)
         update_workitem(aufgabe, staff_user, title="Neuer Titel")
         assert WorkItem.objects.get(pk=aufgabe.pk).title == "Neuer Titel"
+
+
+class TestVorabLesungDerAufgabe:
+    """Die ungesperrte Vorab-Lesung des Personenbezugs in ``update_workitem`` ist gescopet.
+
+    Sie bestimmt, welche Personenzeile vor der Aufgabe gesperrt wird. Las sie
+    per Primärschlüssel ohne Einrichtung, sperrte eine Instanz mit verfälschter
+    Einrichtung die Person einer fremden Aufgabe, bevor die Bearbeitung
+    abgewiesen wurde.
+    """
+
+    def test_fremde_aufgabe_sperrt_keine_person(self, facility, staff_user, fremde_aufgabe):
+        fremde_aufgabe.facility_id = facility.pk
+        with CaptureQueriesContext(connection) as ctx, pytest.raises(ValidationError):
+            update_workitem(fremde_aufgabe, staff_user, title="Überschrieben")
+        assert _sperren_auf(ctx.captured_queries, "core_client") == []
+        assert WorkItem.objects.get(pk=fremde_aufgabe.pk).title == "Rückruf"
+
+    def test_eigene_aufgabe_sperrt_ihre_person(self, eigene_aufgabe, staff_user):
+        with CaptureQueriesContext(connection) as ctx:
+            update_workitem(eigene_aufgabe, staff_user, title="Neuer Titel")
+        assert _sperren_auf(ctx.captured_queries, "core_client")
+        assert WorkItem.objects.get(pk=eigene_aufgabe.pk).title == "Neuer Titel"
+
+
+# ---------------------------------------------------------------------------
+# core.retention.enforcement.enforce_handover_notes
+# ---------------------------------------------------------------------------
+
+
+def _alte_notiz(facility, user):
+    from datetime import date, datetime, time
+
+    from core.services.file_vault import encrypt_field
+
+    tag = date(2026, 1, 1)
+    notiz = ShiftHandoverNote.objects.create(
+        facility=facility,
+        shift_date=tag,
+        time_filter=None,
+        note=encrypt_field("Freitext"),
+        author=user,
+        updated_by=user,
+        window_start=timezone.make_aware(datetime.combine(tag, time.min)),
+        window_end=timezone.make_aware(datetime.combine(tag, time.max)),
+        editable_until=timezone.make_aware(datetime.combine(tag + timedelta(days=1), time.max)),
+    )
+    ShiftHandoverNote.objects.filter(pk=notiz.pk).update(updated_at=timezone.now() - timedelta(days=400))
+    return notiz
+
+
+class TestUebergabenotizSperre:
+    def test_sperre_traegt_den_einrichtungsfilter(self, facility, staff_user, settings_obj):
+        notiz = _alte_notiz(facility, staff_user)
+        with CaptureQueriesContext(connection) as ctx:
+            assert enforce_handover_notes(facility, settings_obj, timezone.now(), dry_run=False) == {"count": 1}
+        sperren = _sperren_auf(ctx.captured_queries, "core_shifthandovernote")
+        assert len(sperren) == 1
+        assert _filtert_einrichtung(sperren[0]), sperren[0]
+        assert not ShiftHandoverNote.objects.filter(pk=notiz.pk).exists()
