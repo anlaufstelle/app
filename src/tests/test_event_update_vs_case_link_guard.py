@@ -284,3 +284,145 @@ class TestFormStateRescueOnlyForLiveEvents:
         assert stored.is_deleted
         assert stored.data_json == {}, "Ein Ereignis im Papierkorb darf keinen neuen Inhalt bekommen"
         assert EventHistory.objects.filter(event=sample_event).count() == histories_before
+
+
+def _history_and_audit(event):
+    return (
+        EventHistory.objects.filter(event=event, action=EventHistory.Action.UPDATE).count(),
+        AuditLog.objects.filter(action=AuditLog.Action.EVENT_UPDATE, target_id=str(event.pk)).count(),
+    )
+
+
+@pytest.fixture
+def empty_event_at_month_start(facility, client_identified, doc_type_contact, staff_user):
+    """Ein leeres Ereignis, datiert auf den Monatsersten 00:00 (lokal).
+
+    Die Anonymisierung der Person leert ``data_json`` und generalisiert
+    ``occurred_at`` auf genau diesen Wert — an diesem Ereignis ändert sie
+    also keine Spalte des Fingerabdrucks, hebt aber ``updated_at`` an.
+    """
+    from django.utils import timezone
+
+    local = timezone.localtime()
+    month_start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return Event.objects.create(
+        facility=facility,
+        client=client_identified,
+        document_type=doc_type_contact,
+        occurred_at=month_start,
+        data_json={},
+        created_by=staff_user,
+    )
+
+
+@pytest.mark.django_db
+class TestFormStateRescueOnlyForLivePersons:
+    """Die Rettung gilt nur, solange die Person des Ereignisses lebt.
+
+    Anonymisierung und Papierkorb der Person ändern am Ereignis keine Spalte
+    des Fingerabdrucks — der Zustand der Person muss deshalb vor der Rettung
+    frisch und unter Sperre geprüft werden.
+    """
+
+    def test_edit_after_person_anonymization_is_rejected(
+        self, staff_user, admin_user, empty_event_at_month_start, client_identified
+    ):
+        from core.services.client import anonymize_client
+        from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
+        from core.services.events.crud import event_form_state_token
+
+        event = empty_event_at_month_start
+        loaded = Event.objects.get(pk=event.pk)
+        version = loaded.updated_at.isoformat()
+        state = event_form_state_token(loaded)
+        anonymize_client(client_identified, admin_user)
+        after = Event._base_manager.get(pk=event.pk)
+        assert after.updated_at.isoformat() != version, "Vorbedingung: die Tilgung hebt updated_at an"
+        assert event_form_state_token(after) == state, "Vorbedingung: der Fingerabdruck bleibt gleich"
+        counts_before = _history_and_audit(event)
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_event(loaded, staff_user, dict(NEW_DATA), expected_updated_at=version, expected_form_state=state)
+
+        assert excinfo.value.messages == [str(CLIENT_WRITE_REVOKED_MESSAGE)]
+        assert Event._base_manager.get(pk=event.pk).data_json == {}
+        assert _history_and_audit(event) == counts_before
+
+    def test_edit_after_link_and_person_trash_is_rejected(
+        self, staff_user, lead_user, sample_event, case_open, client_identified
+    ):
+        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
+        from core.services.events.crud import event_form_state_token
+
+        loaded = Event.objects.get(pk=sample_event.pk)
+        version = loaded.updated_at.isoformat()
+        state = event_form_state_token(loaded)
+        data_before = Event.objects.get(pk=sample_event.pk).data_json
+        assign_event_to_case(case_open, Event.objects.get(pk=sample_event.pk), staff_user)
+        approve_client_deletion(request_client_deletion(client_identified, staff_user, "Doppelt angelegt"), lead_user)
+        counts_before = _history_and_audit(sample_event)
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_event(loaded, staff_user, dict(NEW_DATA), expected_updated_at=version, expected_form_state=state)
+
+        assert excinfo.value.messages == [str(CLIENT_WRITE_REVOKED_MESSAGE)]
+        assert Event._base_manager.get(pk=sample_event.pk).data_json == data_before
+        assert _history_and_audit(sample_event) == counts_before
+
+    def test_live_person_and_parallel_link_is_still_rescued(self, staff_user, sample_event, case_open):
+        """Gegenprobe: lebende Person, nur parallele Zuordnung — die Rettung greift."""
+        from core.services.events.crud import event_form_state_token
+
+        loaded = Event.objects.get(pk=sample_event.pk)
+        version = loaded.updated_at.isoformat()
+        state = event_form_state_token(loaded)
+        assign_event_to_case(case_open, Event.objects.get(pk=sample_event.pk), staff_user)
+
+        update_event(loaded, staff_user, dict(NEW_DATA), expected_updated_at=version, expected_form_state=state)
+
+        fresh = Event.objects.get(pk=sample_event.pk)
+        assert fresh.data_json["notiz"] == NEW_DATA["notiz"]
+        assert fresh.case_id == case_open.pk
+
+
+@pytest.mark.django_db
+class TestEventEditWithoutTokenChecksState:
+    """Ohne Versions-Token (klassisches Formular) prüft der Service den Zustand trotzdem."""
+
+    def test_edit_without_token_after_parallel_trash_is_rejected(self, staff_user, sample_event):
+        from core.services.events import soft_delete_event
+
+        loaded = Event.objects.get(pk=sample_event.pk)
+        soft_delete_event(Event.objects.get(pk=sample_event.pk), staff_user)
+        counts_before = _history_and_audit(sample_event)
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_event(loaded, staff_user, dict(NEW_DATA))
+
+        from core.services.events.crud import EVENT_EDIT_DELETED_MESSAGE
+
+        assert excinfo.value.messages == [str(EVENT_EDIT_DELETED_MESSAGE)]
+        assert Event._base_manager.get(pk=sample_event.pk).data_json == {}
+        assert _history_and_audit(sample_event) == counts_before
+
+    def test_edit_without_token_after_person_trash_is_rejected(
+        self, staff_user, lead_user, sample_event, client_identified
+    ):
+        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
+
+        loaded = Event.objects.get(pk=sample_event.pk)
+        data_before = loaded.data_json
+        approve_client_deletion(request_client_deletion(client_identified, staff_user, "Doppelt angelegt"), lead_user)
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_event(loaded, staff_user, dict(NEW_DATA))
+
+        assert excinfo.value.messages == [str(CLIENT_WRITE_REVOKED_MESSAGE)]
+        assert Event._base_manager.get(pk=sample_event.pk).data_json == data_before
+
+    def test_edit_without_token_on_live_event_is_saved(self, staff_user, sample_event):
+        update_event(Event.objects.get(pk=sample_event.pk), staff_user, dict(NEW_DATA))
+
+        assert Event.objects.get(pk=sample_event.pk).data_json["notiz"] == NEW_DATA["notiz"]

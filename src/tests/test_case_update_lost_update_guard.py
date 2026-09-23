@@ -519,3 +519,54 @@ class TestFormStateRescueOnlyForLiveCases:
         assert response.url != reverse("core:case_detail", kwargs={"pk": case_open.pk})
         assert str(CASE_WRITE_REDACTED_MESSAGE) in [str(m) for m in get_messages(response.wsgi_request)]
         assert Case._base_manager.get(pk=case_open.pk).title == "Offener Fall"
+
+    def test_rejection_for_trashed_case_shows_message_instead_of_404(
+        self, client, monkeypatch, staff_user, lead_user, case_open
+    ):
+        """Die Absage landet nicht auf der Bearbeiten-Seite einer Akte, die es
+        nicht mehr gibt (404), sondern auf einer Seite mit der Vertragsmeldung."""
+        import core.views.cases as case_views
+        from core.services.case.state_contract import CASE_WRITE_REDACTED_MESSAGE
+
+        client.force_login(staff_user)
+        hidden = _render_edit_form(client, case_open)
+        snapshot = Case.objects.get(pk=case_open.pk)
+        original = case_views.get_scoped_object
+        calls = []
+
+        def _hooked(*args, **kwargs):
+            obj = original(*args, **kwargs)
+            if not calls:
+                calls.append(obj.pk)
+                close_case(Case.objects.get(pk=obj.pk), lead_user)
+                _trash(obj, staff_user, lead_user, "direct")
+            return obj
+
+        monkeypatch.setattr(case_views, "get_scoped_object", _hooked)
+
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case_open.pk}),
+            _form_payload(snapshot, hidden, title="Neuer Inhalt nach Papierkorb"),
+            follow=True,
+        )
+
+        assert calls
+        assert response.status_code == 200, "Die Absage darf nicht in einer 404-Seite enden"
+        assert response.redirect_chain[-1][0] != reverse("core:case_update", kwargs={"pk": case_open.pk})
+        assert str(CASE_WRITE_REDACTED_MESSAGE) in response.content.decode()
+        assert Case._base_manager.get(pk=case_open.pk).title == "Offener Fall"
+
+    def test_conflict_on_live_case_still_returns_to_the_form(self, client, staff_user, described_case):
+        """Normalpfad: ein Konflikt an einer lebenden Akte führt weiter zurück ins Formular."""
+        client.force_login(staff_user)
+        hidden = _render_edit_form(client, described_case)
+        snapshot = Case.objects.get(pk=described_case.pk)
+        update_case(Case.objects.get(pk=described_case.pk), staff_user, title="Titel aus Tab B")
+
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": described_case.pk}),
+            _form_payload(snapshot, hidden, description="Aus Tab A"),
+        )
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:case_update", kwargs={"pk": described_case.pk})
