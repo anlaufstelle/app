@@ -25,6 +25,7 @@ Lesarten von „Backup vorhanden" und ist auf beiden Ständen ein Treffer.
 import pytest
 
 from core.services.system.health import last_backup_info
+from core.views.health import _check_backup_signal
 
 pytestmark = pytest.mark.django_db
 
@@ -73,7 +74,7 @@ class TestHealthBackupAgeUsesTheSystemDerivation:
         info = last_backup_info()
 
         assert info is not None, "Ein vollständig veröffentlichter Satz muss als Backup gelten."
-        assert info["age_hours"] is not None
+        assert _check_backup_signal()["age_hours"] == info["age_hours"]
 
     def test_partial_artifact_is_not_a_backup(self, tmp_path, settings):
         """Ein leeres Manifest ohne Dump ist kein vollständiger Satz."""
@@ -100,11 +101,11 @@ class TestHealthBackupAgeUsesTheSystemDerivation:
 
         assert info is None
 
-    def test_health_view_has_no_obsolete_age_helper(self):
-        """Der Health-Endpunkt darf keine zweite Backup-Ableitung behalten."""
-        import core.views.health as health_view
+    def test_health_signal_delegates_missing_state(self, monkeypatch):
+        """Der Health-Endpunkt folgt der gemeinsamen Backup-Ableitung."""
+        monkeypatch.setattr("core.views.health.last_backup_info", lambda: None)
 
-        assert not hasattr(health_view, "_check_backup_age")
+        assert _check_backup_signal() == {"age_hours": None, "state": "missing"}
 
     def test_missing_directory_stays_none(self, tmp_path, settings):
         settings.BACKUP_DIR = tmp_path / "gibt-es-nicht"
