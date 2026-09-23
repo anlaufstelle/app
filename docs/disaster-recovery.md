@@ -613,7 +613,8 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    nicht hochgefahren, weil `clamav` auf dem isolierten Drill-Host mangels
    Update-Pfad nie „healthy" meldet (siehe [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)).
    Mit `docker compose -f docker-compose.prod.yml ps web` prüfen und bei Bedarf
-   `docker compose -f docker-compose.prod.yml up -d web` erneut ausführen;
+   mit der vollständigen Compose-Dateiliste aus [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
+   (`docker compose "${compose_files[@]}" up -d web`) erneut ausführen;
    bleibt `web` wegen `clamav` im Zustand „created", den ClamAV-Health-Status
    nach [ops-runbook § 7.4](ops-runbook.md#74-datenbank-updates-signaturen) klären, bevor
    `restore-drill.sh --prod` läuft. Diese Prüfung ist ein Doku-Nachzug
