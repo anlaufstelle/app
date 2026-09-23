@@ -11,9 +11,12 @@ Ein ausdrueckliches ``order_by`` ersetzt ``Meta.ordering`` vollstaendig; ohne
 ueberlassen. Damit das nicht vom Zufall der Datenbank abhaengt, zwingt der
 Pin die Gegenreihenfolge: fehlt der Name unter den Sortierschluesseln der
 Abfrage, haengt ein Abfrage-Wrapper ``name DESC`` an — genau die Reihenfolge,
-die eine Datenbank ohne Zweitschluessel liefern duerfte. Gleichwertige
-Umsetzungen bleiben gruen: ``name`` als Zweitschluessel mit weiteren
-Schluesseln dahinter ebenso wie eine Sortierung des Ergebnisses in Python.
+die eine Datenbank ohne Zweitschluessel liefern duerfte. Abfragen, die selbst
+nach dem Namen sortieren, laesst der Wrapper unveraendert; eine Sortierung in
+Python beruehrt er nie. Gepinnt ist allein das Ergebnis: gleichwertige
+Umsetzungen (``name`` als Zweitschluessel mit weiteren Schluesseln dahinter,
+Namenssortierung in der Datenbank plus stabile Python-Sortierung nach
+``sort_order``, vollstaendige Python-Sortierung) bleiben gruen.
 """
 
 import re
@@ -46,7 +49,11 @@ def _schluessel(sql):
 
 
 class _Gegenreihenfolge(list):
-    """Haengt ``name DESC`` an, wenn die Vorlagen-Abfrage den Namen nicht sortiert; merkt sich das SQL."""
+    """Haengt ``name DESC`` an, wenn die Vorlagen-Abfrage den Namen nicht sortiert; merkt sich das SQL.
+
+    Das gemerkte SQL dient nur dem Nachweis, dass der Wrapper aktiv war — an
+    seine Sortierschluessel bindet sich der Pin nicht.
+    """
 
     def __call__(self, execute, sql, params, many, context):
         if 'FROM "core_quicktemplate"' in sql:
@@ -74,15 +81,5 @@ class TestListTemplatesForUser:
         gegen = _Gegenreihenfolge()
         with connection.execute_wrapper(gegen):
             namen = [t.name for t in list_templates_for_user(staff_user, facility)]
+        assert gegen, "die Vorlagen-Abfrage lief nicht durch den Wrapper"
         assert namen == ["Omega", "Alpha", "Zeta"]
-        # Sortiert die Abfrage selbst nach dem Namen, dann nachrangig zu
-        # ``sort_order`` und beide aufsteigend; weitere Schluessel dahinter
-        # sind frei.
-        for sql in gegen:
-            schluessel = _schluessel(sql)
-            ausdruecke = [ausdruck for ausdruck, _ in schluessel]
-            if _NAME in ausdruecke:
-                rang = ausdruecke.index(_NAME)
-                assert rang >= 1
-                assert schluessel[rang - 1] == ('"core_quicktemplate"."sort_order"', "ASC")
-                assert schluessel[rang][1] == "ASC"
