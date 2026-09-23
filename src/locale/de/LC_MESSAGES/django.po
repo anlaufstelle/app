@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-22 21:48+0200\n"
+"POT-Creation-Date: 2026-09-23 11:00+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -4466,15 +4466,6 @@ msgid ""
 msgstr ""
 "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, da eine "
 "Mindest-Kontaktstufe vorausgesetzt wird."
-
-#: src/core/services/events/crud.py:102
-#, python-format
-msgid ""
-"Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle "
-"Stufe ist '%(actual_stage)s'."
-msgstr ""
-"Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle "
-"Stufe ist '%(actual_stage)s'."
 
 #: src/core/services/events/crud.py:145
 msgid "Der Dokumentationstyp ist nicht für Ereignisse vorgesehen."
@@ -12929,3 +12920,24 @@ msgstr "Stattdessen manuell anmelden (alle Logins & Rollen)"
 #, python-brace-format
 msgid "{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?"
 msgstr "{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?"
+
+#: src/core/services/case/state_contract.py:102
+msgid "Diese Fallakte wurde gelöscht oder anonymisiert — sie kann nicht mehr geändert werden."
+msgstr "Diese Fallakte wurde gelöscht oder anonymisiert — sie kann nicht mehr geändert werden."
+
+#: src/core/services/case/state_contract.py:104
+msgid "Diese Fallakte hat sich inzwischen geändert — bitte die Seite neu laden."
+msgstr "Diese Fallakte hat sich inzwischen geändert — bitte die Seite neu laden."
+
+#: src/core/services/case/state_contract.py:110
+msgid "Dieses Ereignis wurde gelöscht — seine Fallzuordnung kann nicht mehr geändert werden."
+msgstr "Dieses Ereignis wurde gelöscht — seine Fallzuordnung kann nicht mehr geändert werden."
+
+#: src/core/services/case/state_contract.py:114
+msgid "Dieses Ereignis hat sich inzwischen geändert — bitte die Seite neu laden."
+msgstr "Dieses Ereignis hat sich inzwischen geändert — bitte die Seite neu laden."
+
+#: src/core/services/events/crud.py:106
+#, python-format
+msgid "Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'. Die Kontaktstufe lässt sich in den Personen-Stammdaten anheben."
+msgstr "Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'. Die Kontaktstufe lässt sich in den Personen-Stammdaten anheben."
