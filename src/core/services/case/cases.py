@@ -14,6 +14,7 @@ from core.services.audit import apply_allowlisted_update, audit_event, check_upd
 from core.services.case.state_contract import (
     EVENT_WRITE_GONE_MESSAGE,
     lock_case_for_status_change,
+    lock_case_for_write,
     lock_event_for_case_link,
 )
 from core.services.compliance import user_can_see_event
@@ -208,6 +209,13 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     Konflikt. Ohne Fingerabdruck (Default) gilt der Versionsvertrag
     unveraendert.
 
+    Die Rettung gilt nur fuer eine lebende Akte: VOR der Versionspruefung
+    laeuft der Zustandsvertrag (:func:`~core.services.case.state_contract.lock_case_for_write`)
+    auf der frisch gesperrten Zeile. Eine Akte im Papierkorb, eine getilgte
+    Akte oder die Akte einer Person im Papierkorb lehnt er mit seiner Meldung
+    ab — der Papierkorb aendert keine Formularspalte, nach „schliessen, dann
+    in den Papierkorb" passte der Fingerabdruck sonst weiterhin.
+
     Ursprungs-Pinning (Refs #1786): ``client`` ist **kein** Update-Feld mehr.
     Die Personenzuordnung eines Falls entsteht beim Anlegen und ist danach
     unveränderlich — ein nachträglicher Wechsel würde den kompletten
@@ -217,11 +225,16 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     Strikt: JEDER ``client``-Kwarg fliegt raus, auch der unveränderte Wert —
     die Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     """
-    from core.services.client.restriction import assert_processing_allowed
-
-    # Art.-18-Gate (Refs #2045) VOR dem Versions-Guard: die Rechtslage gilt
-    # unabhaengig davon, ob das Formular aktuell war (Muster ``update_client``).
-    assert_processing_allowed(case.client_id, lock=True)
+    # Zustandsvertrag VOR dem Versions-Guard: Sperrfolge Person -> Fall, darin
+    # das Art.-18-Gate (Refs #2045 — die Rechtslage gilt unabhaengig davon, ob
+    # das Formular aktuell war, Muster ``update_client``), der Widerruf der
+    # Person und der Loesch-/Tilgungszustand des Falls auf der frisch
+    # gesperrten Zeile. Die Instanz stammt aus einem Lesevorgang vor der
+    # Sperre; ohne diese Pruefung schriebe die Fingerabdruck-Rettung unten
+    # neuen Inhalt in eine Akte, die parallel geschlossen und in den
+    # Papierkorb gelegt wurde (der Papierkorb hebt ``updated_at`` nicht an und
+    # aendert keine Formularspalte).
+    lock_case_for_write(case)
     try:
         check_version_conflict(case, expected_updated_at)
     except ValidationError as exc:
