@@ -161,15 +161,15 @@ und Badge sagen, WAS beantragt ist (und wohin zusammengeführt würde).{% endcom
     </a>
     {# Refs #2045: Einschränken ohne laufenden Antrag (Art. 18 Abs. 1 lit. b–d). #}
     {% if not client.processing_restricted %}
-    <form method="post" action="{% url 'core:client_restrict_processing' client.pk %}" class="flex items-center gap-2">
+    <form method="post" action="{% url 'core:client_restrict_processing' client.pk %}" class="flex flex-wrap items-center gap-2">
         {% csrf_token %}
         <label class="sr-only" for="processing-restriction-reason">{% trans "Grund der Einschränkung" %}</label>
-        <select id="processing-restriction-reason" name="reason" class="text-[12px] border border-subtle rounded px-2 py-1 bg-surface">
+        <select id="processing-restriction-reason" name="reason" class="w-full sm:w-auto text-[12px] border border-subtle rounded px-2 py-1 bg-surface">
             {% for value, label in restriction_reasons %}
             <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
         </select>
-        <button type="submit" class="font-semibold text-accent underline hover:no-underline" data-testid="client-processing-restrict-submit">
+        <button type="submit" class="inline-flex items-center min-h-[44px] md:min-h-0 font-semibold text-accent underline hover:no-underline" data-testid="client-processing-restrict-submit">
             {% trans "Verarbeitung einschränken" %}
         </button>
     </form>
