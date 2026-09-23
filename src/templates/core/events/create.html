@@ -129,7 +129,7 @@
                         {% endfor %}
                     </select>
                     {% if meta_form.document_type.errors %}
-                    {# Refs #2154 (R-A-4): role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. Nachgezogen nach dem L8-Merge (vorher fehlend). #}
+                    {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. Nachtraeglich ergaenzt (vorher fehlend). #}
                     <div role="alert">
                         <ul id="id_document_type-error" role="list" class="mt-1 text-sm text-red-600">
                             {% for error in meta_form.document_type.errors %}<li>{{ error }}</li>{% endfor %}
@@ -236,7 +236,7 @@
                     </template>
                 </select>
                 {% if meta_form.case.errors %}
-                {# Refs #2154 (R-A-4): role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. Nachgezogen nach dem L8-Merge (vorher fehlend). #}
+                {# Refs #2154: role="alert" auf <ul> ueberschreibt die Listenrolle — s. components/_form_field.html. Nachtraeglich ergaenzt (vorher fehlend). #}
                 <div role="alert">
                     <ul id="id_case-error" role="list" class="mt-1 text-sm text-red-600">
                         {% for error in meta_form.case.errors %}<li>{{ error }}</li>{% endfor %}

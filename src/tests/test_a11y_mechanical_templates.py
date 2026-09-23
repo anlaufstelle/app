@@ -119,9 +119,9 @@ def test_static_backup_code_note_is_not_an_alert() -> None:
 
 @pytest.mark.parametrize("error_id", ["id_document_type-error", "id_case-error"])
 def test_event_create_document_type_and_case_errors_are_real_lists(error_id: str) -> None:
-    """Refs #2154 (R-A-4): nach dem L8-Merge nachgezogen.
+    """Refs #2154: nachtraeglich ergaenzt.
 
-    Bis zum L8-Merge lagen diese zwei Stellen ausserhalb des Scopes (fremdes
+    Diese zwei Stellen lagen zunaechst ausserhalb des bearbeiteten Bereichs (fremdes
     Template) und blieben bewusst unangetastet (die Restluecke war real
     belegt, nicht nur behauptet). Jetzt gilt fuer sie dasselbe
     Muster wie fuer die uebrigen 13 Fundstellen der Fehlerklasse: ``role="alert"``

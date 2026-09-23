@@ -2,7 +2,7 @@
 (Vollmutation #2174, Refs #2193).
 
 ``core.forms.config`` ist auf drei Batches a/b/c verteilt (andere Funktionen,
-andere Lanes) — diese Datei deckt ausschließlich die 70 Survivors aus
+andere Dateien) — diese Datei deckt ausschließlich die 70 Survivors aus
 ``config-b``: ``FieldConditionForm.__init__`` (15, davon 1 äquivalent),
 ``FieldConditionForm.clean`` (10), ``FieldTemplateForm.clean`` (12),
 ``FieldTemplateForm.clean_name`` (2), ``ReportKeyFormMixin._report_key_choices``

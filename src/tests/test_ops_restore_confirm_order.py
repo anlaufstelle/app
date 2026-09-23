@@ -2,7 +2,7 @@
 
 Der in ``docs/disaster-recovery.md`` § 6 Schritt 4 gedruckte Befehlsblock wird
 programmatisch aus der committeten Datei extrahiert und genau so gefahren
-(Standardblock 24). Ersetzt werden ausschliesslich die drei hostabhaengigen
+(ausgelieferter Wortlaut statt Arbeitsfassung). Ersetzt werden ausschliesslich die drei hostabhaengigen
 Platzhalter (`/opt/anlaufstelle`, die Host-Backup-Ablage und der Log-Pfad);
 jede andere Zeile laeuft im Wortlaut der Auslieferung.
 """

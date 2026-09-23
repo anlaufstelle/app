@@ -61,31 +61,6 @@ _DEFAULT_EXCLUDED_DIR_NAMES = frozenset({"staticfiles", "media", "__pycache__", 
 # laesst. Die eigene Datei ist deshalb vom Real-Baum-Lauf ausgenommen.
 _SELF_RELPATH = "tests/test_process_vocabulary_guard.py"
 
-# Dateien ausserhalb des Aenderungsumfangs dieses Tickets: sie gehoeren zu
-# Paketen, die zum Zeitpunkt dieses Sweeps noch nicht integriert waren.
-# Muster werden per ``PurePosixPath.match`` gegen den repo-relativen Pfad
-# gepruft; sie werden mit dem naechsten Integrationsschritt bereinigt.
-_PENDING_FILES = (
-    "src/anlaufstelle/settings/base.py",
-    "src/core/views/health.py",
-    "src/core/checks.py",
-    "src/tests/test_ops_*.py",
-    "src/tests/test_security_headers_single_source.py",
-    "src/tests/test_system_checks.py",
-    "src/tests/test_initial_setup_fresh_install*.py",
-    "src/tests/test_compose*.py",
-    # Zusaetzlich beim Bau dieses Guards gefundene Wortformen (Mehrzahl/
-    # zusammengesetzte Form), die ausserhalb des fuer dieses Ticket
-    # erhobenen Bestands lagen — werden in einem eigenen Durchgang
-    # bereinigt.
-    "src/core/services/facility_bootstrap.py",
-    "src/tests/test_mutation_pins_097_events_deletion.py",
-    "src/tests/test_mutation_pins_097_tally_undo.py",
-    "src/tests/test_mutation_pins_099_forms_config_b.py",
-    "src/tests/test_mutation_pins_099_forms_config_c.py",
-    "src/tests/test_mutation_pins_099_handover.py",
-)
-
 
 class Hit(NamedTuple):
     relpath: str
@@ -94,23 +69,13 @@ class Hit(NamedTuple):
     line: str
 
 
-def _is_pending(relpath: str) -> bool:
-    posix = Path(relpath).as_posix()
-    return any(Path(posix).match(pattern) for pattern in _PENDING_FILES)
-
-
 def scan_process_vocabulary(
     root: Path,
     *,
     extensions: tuple[str, ...] = _DEFAULT_EXTENSIONS,
     excluded_dir_names: frozenset[str] = _DEFAULT_EXCLUDED_DIR_NAMES,
 ) -> list[Hit]:
-    """Scannt ``root`` rekursiv nach Arbeitsablauf-Jargon.
-
-    Reine Baumsuche ohne Seiteneffekte — Aufrufer entscheiden, ob/wie
-    ``_PENDING_FILES`` beruecksichtigt wird (Proben in Tests wollen das
-    i. d. R. NICHT, der echte Lauf gegen ``src/`` schon).
-    """
+    """Scannt ``root`` rekursiv nach Arbeitsablauf-Jargon (reine Baumsuche ohne Seiteneffekte)."""
     hits: list[Hit] = []
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         if path.suffix not in extensions:
@@ -222,16 +187,7 @@ class TestRealTreeHasNoUnresolvedProcessVocabulary:
             for hit in scan_process_vocabulary(root):
                 if root_name == "src" and hit.relpath == _SELF_RELPATH:
                     continue
-                relpath = f"{root_name}/{hit.relpath}"
-                if _is_pending(relpath):
-                    continue
-                unresolved.append(hit._replace(relpath=relpath))
+                unresolved.append(hit._replace(relpath=f"{root_name}/{hit.relpath}"))
         assert unresolved == [], "Arbeitsablauf-Jargon in ausgelieferten Dateien gefunden (Refs #2349):\n" + "\n".join(
             f"{h.relpath}:{h.lineno} [{h.word}] {h.line}" for h in unresolved
         )
-
-    def test_pending_files_patterns_match_something_on_disk(self) -> None:
-        """Verwaiste ``_PENDING_FILES``-Muster (Pfad existiert nicht mehr)
-        sollen auffallen, statt stillschweigend nutzlos zu bleiben."""
-        stale = [pattern for pattern in _PENDING_FILES if not any(REPO_ROOT.glob(pattern))]
-        assert stale == [], f"verwaiste _PENDING_FILES-Muster (nichts existiert mehr): {stale}"

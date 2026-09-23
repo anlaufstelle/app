@@ -25,7 +25,7 @@ Drei Themen:
 * **Die Vorschau-Fremdschlüssel der Highlights.** Acht Mutanten entfernen je einen
   Namen aus einem ``.select_related(...)``-Aufruf auf ``crisis_events``/``ban_events``/
   ``urgent_tasks`` (``…__mutmut_6/7/8``, ``…26/27/28``, ``…45/46``). Verlorene
-  Abfragezahl ist laut Äquivalenzregel des Briefings ausdrücklich KEIN Äquivalenzbeweis —
+  Abfragezahl ist laut Äquivalenzregel ausdrücklich KEIN Äquivalenzbeweis —
   gepinnt per Query-Zählung (``CaptureQueriesContext``): mit vollständigem
   ``select_related`` kostet der Folgezugriff auf die entfernten Felder null zusätzliche
   Queries, ohne eines der drei Felder mindestens eine zusätzliche Query je betroffenem
@@ -122,8 +122,8 @@ class TestCollectStatsEventsByType:
 class TestCollectHighlightsSelectRelated:
     def test_highlight_objekte_liefern_fremdschluessel_ohne_zusatzquery(self, facility, client_identified, staff_user):
         """Pins acht Mutanten in drei ``.select_related(...)``-Aufrufen von
-        ``_collect_highlights`` — verlorene Abfragezahl ist laut Äquivalenzregel des
-        Briefings ausdrücklich kein Äquivalenzbeweis:
+        ``_collect_highlights`` — verlorene Abfragezahl ist laut Äquivalenzregel
+        ausdrücklich kein Äquivalenzbeweis:
 
         * ``x__collect_highlights__mutmut_6/7/8`` (``crisis_events`` verliert
           ``document_type``/``client``/``created_by``): geprüft per Folgezugriff NACH dem

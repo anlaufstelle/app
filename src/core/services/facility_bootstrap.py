@@ -142,7 +142,7 @@ class ComfortDefs:
     quick_templates: tuple[QuickTemplateDef, ...]
 
 
-# Paket-Lanen ergaenzen ihre QuickTemplates in getrennten Bloecken; die
+# Jedes Paket ergaenzt seine QuickTemplates in einem getrennten Block; die
 # Leerzeilen sind deshalb bewusst formatter-stabil und minimieren Merge-Konflikte.
 # fmt: off
 PACKAGE_COMFORT: dict[str, ComfortDefs] = {

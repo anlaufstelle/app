@@ -5,7 +5,7 @@ Refs https://github.com/anlaufstelle/app/issues/2193.
 
 Modul: ``core.forms.config`` (Familie ``forms``). Das Modul ist auf drei
 Batches ``config-a``/``config-b``/``config-c`` verteilt (andere Funktionen,
-andere Lanes) — diese Datei deckt ausschließlich die ``config-c``-Batch ab:
+andere Dateien) — diese Datei deckt ausschließlich die ``config-c``-Batch ab:
 5 Survivor-Mutanten aus ``FieldGroupForm.clean_name`` (2),
 ``DocumentTypeFieldAddForm.__init__`` (2) und ``FieldTemplateForm.__init__``
 (1). Die vollständige Triage (Klasse ``test``/``skip``/``equivalent``/``bug``

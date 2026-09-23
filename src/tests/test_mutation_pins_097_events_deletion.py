@@ -54,7 +54,7 @@ from core.services.events import approve_deletion, reject_deletion, request_dele
 # ``_encryption_key`` ist Pflicht: ``approve_deletion`` laeuft ueber
 # ``soft_delete_event`` in den Anhang-/File-Vault-Pfad, und der Mutantenbaum
 # hat keine ``.env`` — ohne die Fixture waeren die Pins dort aus dem falschen
-# Grund rot (Lehre der parallelen Pin-Lanen der Welle J).
+# Grund rot (Erfahrung aus frueheren Pin-Dateien).
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 
