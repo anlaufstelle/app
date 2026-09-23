@@ -740,6 +740,12 @@ class CaseUpdateView(StaffRequiredMixin, View):
             # Ereignis-Pfad (#1936).
             safe_messages = add_dynamic_service_errors(data_form, e, restricted)
             messages.error(request, "; ".join(safe_messages))
+            # Refs #2378: Hat der Zustandsvertrag abgelehnt, weil die Akte
+            # inzwischen im Papierkorb liegt, getilgt ist oder ihre Person
+            # widerrufen wurde, antwortet die Bearbeiten-Seite mit 404 — die
+            # Meldung ginge dort verloren. Dann zur Fallliste.
+            if not cases_with_live_client().filter(pk=case.pk).exists():
+                return redirect("core:case_list")
             return redirect("core:case_update", pk=case.pk)
         finally:
             # Refs #1345/#1956: Committet die Transaktion nicht (Rollback,
