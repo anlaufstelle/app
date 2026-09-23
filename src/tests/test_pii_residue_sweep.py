@@ -299,7 +299,7 @@ def maximal_pii_graph(facility, admin_user, lead_user):
         title="RESIDUEPROBE-Wirkungsziel",
         description="RESIDUEPROBE-Zielbeschreibung",
     )
-    create_milestone(goal, title="RESIDUEPROBE-Meilenstein")
+    create_milestone(goal, admin_user, title="RESIDUEPROBE-Meilenstein")
 
     # 3d) Fall schliessen — schreibt eine Activity mit Target = **Case** und dem
     #     Falltitel im ``summary``. ``_redact_activities`` filterte bis #1751

@@ -2,8 +2,10 @@
 
 import logging
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog
 from core.models.outcome import Milestone, OutcomeGoal
@@ -141,9 +143,27 @@ def unachieve_goal(goal):
     return goal
 
 
+def _assert_actor_facility(user, facility_id) -> None:
+    """Die Einrichtung des Akteurs muss die der Akte sein (Refs #2358, Muster Refs #2364).
+
+    Die Views scopen den Fall bereits, in Produktion traegt RLS mit — der
+    Service ist aber die Single Source of Truth und zieht die Grenze selbst.
+    Fail-closed: ein Akteur ohne Einrichtung wird abgewiesen. Geprueft wird
+    VOR jeder Sperre: die Einrichtung einer Akte ist unveraenderlich, die
+    Pruefung braucht also keinen frischen Stand und sperrt nichts ueber die
+    Mandantengrenze hinweg. ``facility_id is None`` (Zeile nicht mehr
+    vorhanden) ueberlaesst die Absage dem Zustandsvertrag.
+    """
+    if facility_id is not None and getattr(user, "facility_id", None) != facility_id:
+        raise ValidationError(_("Fall gehört zu einer anderen Einrichtung."))
+
+
 @transaction.atomic
-def create_milestone(goal, title, sort_order=0):
+def create_milestone(goal, user, title, sort_order=0):
     """Create a new Milestone for a goal.
+
+    ``user`` ist der Akteur (Refs #2358): seine Einrichtung wird vor jeder
+    Sperre gegen die der Akte geprueft (:func:`_assert_actor_facility`).
 
     Refs #2358: Vor dem Schreiben laeuft der Zustandsvertrag (Person -> Fall
     -> Ziel, frisch und gesperrt; :func:`lock_goal_for_write`) — wie bei der
@@ -152,6 +172,9 @@ def create_milestone(goal, title, sort_order=0):
     Papierkorb, eine getilgte Akte und die Akte einer Person im Papierkorb ab.
     Ohne ihn liess sich dort noch Meilenstein-Freitext anlegen.
     """
+    _assert_actor_facility(
+        user, OutcomeGoal.objects.filter(pk=goal.pk).values_list("case__facility_id", flat=True).first()
+    )
     locked_goal = lock_goal_for_write(goal)
     milestone = Milestone(
         goal=locked_goal,
@@ -197,8 +220,12 @@ def delete_milestone(milestone, user):
     Das Art.-18-Gate ist die erste Stufe des Vertrags; zusaetzlich lehnt er
     eine Akte im Papierkorb, eine getilgte Akte, die Akte einer Person im
     Papierkorb und einen inzwischen verschwundenen Meilenstein ab — ohne
-    Audit- und Zeitstrom-Zeile.
+    Audit- und Zeitstrom-Zeile. Davor, ohne Sperre, die Einrichtung des
+    Akteurs (:func:`_assert_actor_facility`).
     """
+    _assert_actor_facility(
+        user, Milestone.objects.filter(pk=milestone.pk).values_list("goal__case__facility_id", flat=True).first()
+    )
     locked = lock_milestone_for_write(milestone)
     case = locked.goal.case
     facility = case.facility

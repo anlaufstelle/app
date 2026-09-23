@@ -628,7 +628,7 @@ class TestGoalServicesTakeTheClientRowLock:
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"
         assert _pk_literal(client_identified) in locks[0], locks[0]
 
-    def test_create_milestone_sperrt_die_personenzeile(self, client_identified, outcome_goal):
+    def test_create_milestone_sperrt_die_personenzeile(self, client_identified, outcome_goal, staff_user):
         """Pin: ``x_create_milestone__mutmut_2`` (Person -> ``None``),
         ``…__mutmut_3`` (``lock=None``), ``…__mutmut_5`` (Kwarg weggelassen)
         und ``…__mutmut_6`` (``lock=False``).
@@ -637,7 +637,7 @@ class TestGoalServicesTakeTheClientRowLock:
         Mitschnitt — beim ``None``-Mutanten entfaellt die Abfrage ganz.
         """
         with CaptureQueriesContext(connection) as captured:
-            create_milestone(outcome_goal, "Erstgespräch geführt")
+            create_milestone(outcome_goal, staff_user, "Erstgespräch geführt")
 
         locks = _locking_statements(captured, "core_client")
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"

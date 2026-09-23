@@ -110,7 +110,7 @@ class MilestoneCreateView(StaffRequiredMixin, View):
         title = request.POST.get("title", "").strip()
         if title:
             try:
-                create_milestone(goal=goal, title=title)
+                create_milestone(goal=goal, user=request.user, title=title)
             except ValidationError as exc:
                 # Refs #2358: Absage des Zustandsvertrags wie bei
                 # ``MilestoneToggleView`` — 409 statt HTTP 500.

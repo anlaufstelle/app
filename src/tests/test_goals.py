@@ -88,7 +88,7 @@ class TestGoalService:
         assert unachieved.achieved_at is None
 
     def test_create_milestone(self, outcome_goal, staff_user):
-        ms = create_milestone(goal=outcome_goal, title="Schritt 1")
+        ms = create_milestone(goal=outcome_goal, user=staff_user, title="Schritt 1")
         assert ms.pk is not None
         assert ms.title == "Schritt 1"
         assert ms.goal == outcome_goal
@@ -96,7 +96,7 @@ class TestGoalService:
         assert ms.sort_order == 0
 
     def test_create_milestone_with_sort_order(self, outcome_goal, staff_user):
-        ms = create_milestone(goal=outcome_goal, title="Schritt 2", sort_order=5)
+        ms = create_milestone(goal=outcome_goal, user=staff_user, title="Schritt 2", sort_order=5)
         assert ms.sort_order == 5
 
     def test_toggle_milestone_complete(self, milestone, staff_user):

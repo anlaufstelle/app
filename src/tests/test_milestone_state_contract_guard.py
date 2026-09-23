@@ -93,7 +93,7 @@ class TestServiceZustandsvertrag:
         spuren = _spuren()
 
         with pytest.raises(ValidationError) as excinfo:
-            create_milestone(altes_ziel, "Neuer Meilenstein")
+            create_milestone(altes_ziel, staff_user, "Neuer Meilenstein")
 
         assert _meldung(excinfo) == [str(meldung)]
         assert _spuren() == spuren
@@ -129,8 +129,8 @@ class TestServiceZustandsvertrag:
 
 
 class TestServiceNormalpfad:
-    def test_create_an_lebender_akte(self, outcome_goal):
-        m = create_milestone(OutcomeGoal.objects.get(pk=outcome_goal.pk), "Neuer Meilenstein", sort_order=3)
+    def test_create_an_lebender_akte(self, outcome_goal, staff_user):
+        m = create_milestone(OutcomeGoal.objects.get(pk=outcome_goal.pk), staff_user, "Neuer Meilenstein", sort_order=3)
         frisch = Milestone.objects.get(pk=m.pk)
         assert frisch.goal_id == outcome_goal.pk
         assert frisch.title == "Neuer Meilenstein"
