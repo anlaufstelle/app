@@ -155,7 +155,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v51"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v52"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -721,7 +721,7 @@ class TestPrecachedShellBumpGuard:
     # 2026-09-23, Refs #2352: v50 -> v51 — das precachte quick-exit.js legt
     # beim Schnell-Verlassen die alte Seite still; nur Modulinhalt, das
     # Shell-Markup (und damit der Hash) bleibt unveraendert.
-    _PINNED_CACHE_NAME = "anlaufstelle-v51"
+    _PINNED_CACHE_NAME = "anlaufstelle-v52"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -801,7 +801,7 @@ class TestPrecachedShellBumpGuard:
     # #1900/#1805 — NUR Hash nachziehen, KEIN CACHE_NAME-Bump. Belegt durch
     # test_version_display.py::TestPublicFooterRendering::
     # test_anonymous_pages_show_source_link_but_no_version[core:offline_client_list_shell].
-    _PINNED_SHELL_HASH = "20033fc82d48a9d1804cb85ab0aef004d6145488661fcd49ca38eec3de613b74"
+    _PINNED_SHELL_HASH = "50770ecab0c0d1021d2fc98eaa535f2847f8d4a94940e55e0e0ccac50f6e2492"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
