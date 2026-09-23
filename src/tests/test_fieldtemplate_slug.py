@@ -34,7 +34,7 @@ class TestSlugGeneration:
 
 @pytest.mark.django_db
 class TestSlugTruncation:
-    """Fix-Runde 1 (Refs #1058, B-3): der modulweite ``generate_unique_slug``-
+    """Refs #1058, B-3: der modulweite ``generate_unique_slug``-
     Helfer (extrahiert aus dem vormaligen ``FieldTemplate._generate_unique_slug``
     im Rahmen von M2/DocumentType.slug) truncatiert jetzt auf 120 Zeichen VOR
     dem Counter-Suffix. Vorher hatte ``_generate_unique_slug`` KEINE

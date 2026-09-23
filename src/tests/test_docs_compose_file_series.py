@@ -58,7 +58,7 @@ def _series_from_admin_guide() -> list[str]:
 
 _SHELL_FENCES = {"```bash", "```console", "```sh"}
 # Kurzreferenzen stehen als ```text-Block da. Sie werden genauso kopiert wie ein
-# Shell-Block — der Erst-Befund dieser Lane uebersah sie, weil der Guard nur
+# Shell-Block — der urspruengliche Guard uebersah sie, weil er nur
 # Shell-Zaeune las.
 _COMMAND_FENCES = _SHELL_FENCES | {"```text"}
 

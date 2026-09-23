@@ -4,13 +4,13 @@ Eigene Datei, weil der Nachweis ``django_db(transaction=True)`` braucht: zwei
 echte Verbindungen sehen einander nur, wenn wirklich committet wird — im
 Transaktions-Rollback der uebrigen Tests gaebe es das Rennen nicht.
 
-**Beobachtend gebaut** (Standardblock 36, Lehre 36): zwei Faeden, eine Barriere
+**Beobachtend gebaut**: zwei Faeden, eine Barriere
 direkt nach den beiden leeren Lookups, endliche Wartezeit, Auswertung NACH dem
 Rennen — kein ``assert`` im gesperrten Fenster.
 
 Der Befund: ``select_for_update().first()`` sperrt keine Zeile, die es noch
-nicht gibt. Beide Faeden lesen ``None`` und legen an; der zweite lief bis
-Fix-Runde 1 in einen ungefangenen ``IntegrityError`` (HTTP 500). Erwartet wird
+nicht gibt. Beide Faeden lesen ``None`` und legen an; der zweite lief anfangs
+in einen ungefangenen ``IntegrityError`` (HTTP 500). Erwartet wird
 jetzt: genau EINE Zeile, und der unterlegene Aufruf endet fachlich — bei
 gleichem Text still erfolgreich, bei abweichendem Text mit einer
 ``ValidationError``, die den Konflikt benennt.

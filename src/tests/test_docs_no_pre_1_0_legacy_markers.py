@@ -86,8 +86,8 @@ def scan_markers(root: Path) -> list[Hit]:
 # Migrations-/Bestandsinstallations-Aussage sind, sondern (a) Code-
 # Identifier, die im Text zitiert werden, (b) evergreen-technisches
 # Vokabular, das mit der Anlaufstelle-Version nichts zu tun hat, oder (c)
-# einen Anker, dessen Umbenennung eine TABU-Datei ausserhalb dieser Lane
-# gebrochen haette. Format: relpath -> [(Teilstring der Zeile, Begruendung)].
+# einen Anker, dessen Umbenennung eine ausserhalb des Sweep-Scopes liegende
+# Datei gebrochen haette. Format: relpath -> [(Teilstring der Zeile, Begruendung)].
 _ALLOWLIST: dict[str, list[tuple[str, str]]] = {
     "docs/ops-runbook.md": [
         (
@@ -96,7 +96,7 @@ _ALLOWLIST: dict[str, list[tuple[str, str]]] = {
             "'#96-rollout-der-runtime-owner-rollentrennung-auf-bestandsinstallationen-a14' "
             "wird von docs/threat-model.md sowie von der dev-only "
             "Dev-Deployment-Dokumentation referenziert; letztere ist fuer "
-            "diesen Sweep TABU, eine Umbenennung haette dort einen toten "
+            "diesen Sweep nicht im Scope, eine Umbenennung haette dort einen toten "
             "Anker hinterlassen. Der Abschnitt beschreibt zudem eine "
             "Rollentrennungs-Reparatur, die auf JEDER fehlkonfigurierten "
             "Installation auftreten kann (z. B. nach einem Dump/Restore ohne "

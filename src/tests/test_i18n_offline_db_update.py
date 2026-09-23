@@ -12,7 +12,7 @@ Sein Text kommt ueber denselben ``data-i18n-*``-Kanal am ``<body>`` wie der
 Service-Worker-Update-Toast (Refs #1412) — geliefert allerdings von genau EINEM
 der fuenf Layouts, die ``offline-db.js`` laden: ``base.html``.
 
-Fix-Runde 1 (Cross-Review): Ohne Label blieb der Toast stumm, und zwar
+Cross-Review: Ohne Label blieb der Toast stumm, und zwar
 ausgerechnet dort, wo die Meldung am noetigsten ist — Anmeldung,
 Passwortwechsel, terminaler Offline-Fallback und die precachten In-Place-Shells
 (``offline_base.html``, das den ``CACHE_NAME``-Bump braucht und deshalb dem
@@ -56,7 +56,7 @@ class TestTheLayoutCarriesTheLabel:
 
 
 class TestNoLoadPathStaysSilent:
-    """Fix-Runde 1: Die Meldung darf auf KEINEM Ladepfad ausfallen.
+    """Die Meldung darf auf KEINEM Ladepfad ausfallen.
 
     Seit dem ``anlaufstelle-v42``-Bump (0.90-Merge-Punkt, O-1) liefern ALLE
     fuenf Layouts das uebersetzte Dataset-Label; der Rueckfall im Modul bleibt

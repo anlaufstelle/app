@@ -614,7 +614,7 @@ class TestUnbekannteSensitivityGates:
     def test_unbekannte_feld_sensitivity_landet_nicht_im_suchindex(
         self, facility, admin_user, assistant_user, lead_user, staff_user, client_identified
     ):
-        """Dritte Sichtbarkeits-Wahrheit: der Suchindex (Refs #1991, Fix-Runde 1).
+        """Dritte Sichtbarkeits-Wahrheit: der Suchindex (Refs #1991).
 
         ``compute_event_search_text`` entscheidet ueber eine Mengen-
         Zugehoerigkeit (``sensitivity in {elevated, high}``) statt ueber den

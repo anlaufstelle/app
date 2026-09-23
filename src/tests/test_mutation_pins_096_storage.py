@@ -23,7 +23,7 @@ des Mutations-Deltas v0.96.0: 26 bestaetigte Testluecken in drei Familien.
   Metadaten-Strip, Fernet).
 * **``detected_mime``-Durchreichung** (4 der 21 Mutanten, gesondert begruendet)
   — ``enforce_image_limits``/``strip_image_metadata`` bekommen den verifizierten
-  libmagic-MIME als fuenftes Argument (#2128, Fix-Runde 1/N-1). Faellt es weg
+  libmagic-MIME als fuenftes Argument (#2128, N-1). Faellt es weg
   oder auf ``None``, entscheidet wieder allein die Dateiendung: der
   Decompression-Bomb-Pixelcap und der EXIF/GPS-Strip greifen fuer Inhalte, deren
   Endungsfamilie nicht passt, nicht mehr. Gepinnt wird daher zusaetzlich die

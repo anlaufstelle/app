@@ -58,7 +58,7 @@ AUSSCHLIESSLICH als empirischer Aequivalenz-Nachweis (bleiben unter den betroffe
   (``mutmut_26``) sowie sechs Platzhalter-Leck-/``None``-Mutanten an den beiden
   Historien-Monatsfeldern (``mutmut_59``/``60``/``61``/``64``/``65``/``66``) sind ``test``.
 * ``get_document_list``: vier Dict-Schluessel-Mutanten (``mutmut_3``/``4``/``7``/``8``) sind
-  ``test`` (Standardblock-Regel 9(7): abweichender Schluessel eines zurueckgegebenen Mappings).
+  ``test`` (abweichender Schluessel eines zurueckgegebenen Mappings).
 
 **``export.py`` (6 Mutanten, ein Test) und ``targets.py`` (5 Mutanten, ein Test):**
 
@@ -341,7 +341,7 @@ class TestGetDocumentListSchluessel:
         """Pins vier Dict-Schluessel-Mutanten (``x_get_document_list__mutmut_3``/``…_7``:
         ``XX``-Marker auf ``"name"``/``"article"``; ``…_4``/``…_8``: Grossschreibung
         ``"NAME"``/``"ARTICLE"``) — ein abweichender Schluessel im zurueckgegebenen
-        Mapping ist laut Standardblock-Regel 9(7) unabhaengig davon zu pinnen, was
+        Mapping ist unabhaengig davon zu pinnen, was
         heutige Aufrufer lesen."""
         result = get_document_list()
 

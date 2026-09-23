@@ -12,7 +12,7 @@ Papierkorb-Eintrag ohne Zeitpunkt und ohne Auslöser. Bulk-Pfade
 mit erfasst; heute existiert kein solcher Pfad, der Guard hält das fest.
 
 Der Scanner ist über ``root=`` parametrisiert und legt **keine** Proben im
-echten Baum ab (Standardblock 3): die Negativfälle laufen gegen ``tmp_path``.
+echten Baum ab: die Negativfälle laufen gegen ``tmp_path``.
 """
 
 import ast

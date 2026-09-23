@@ -951,7 +951,7 @@ class TestCaseUpdateOptimisticLockingAndAudit:
 
 
 # ---------------------------------------------------------------------------
-# Deaktivierter, aber zugewiesener Dokumentationstyp (P7-Fix-Runde 1, E-10)
+# Deaktivierter, aber zugewiesener Dokumentationstyp (P7, E-10)
 # ---------------------------------------------------------------------------
 
 
@@ -1374,7 +1374,7 @@ class TestCaseFieldsPartial:
 
 
 # ---------------------------------------------------------------------------
-# Partial + inaktiver Ist-Typ des bearbeiteten Falls (P7-Fix-Runde 2, E-12)
+# Partial + inaktiver Ist-Typ des bearbeiteten Falls (P7, E-12)
 # ---------------------------------------------------------------------------
 
 

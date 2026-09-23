@@ -52,7 +52,7 @@ EXEMPT_CATEGORIES = frozenset({"public", "auth-flow"})
 # mit Issue-URL. Muster wie ``test_authz_matrix.KNOWN_GAPS`` — ``strict=True``,
 # damit ein stillschweigend behobener Eintrag auffaellt. Eine 5xx-Zeile in
 # ``public``/``auth-flow`` waere ein Defekt unter ``views/``/``services/`` und
-# damit ausserhalb dieser Lane; sie gehoert hierher UND in ein Folge-Ticket,
+# damit ausserhalb dieses Moduls; sie gehoert hierher UND in ein Folge-Ticket,
 # NICHT in eine abgeschwaechte Assertion.
 KNOWN_FACILITY_LESS_GAPS: dict[tuple[str, str], str] = {}
 

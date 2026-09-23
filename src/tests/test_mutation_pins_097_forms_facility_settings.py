@@ -6,8 +6,9 @@ Refs https://github.com/anlaufstelle/app/issues/2042.
 Anlass (R-CP-1): Das Mutations-Delta BASE=v0.96.0 auf ``bb2673e1`` weist der
 Familie ``forms`` 26/41 = 63,4 % aus und reisst damit die Delta-Policy
 (§ 0.5, Refs https://github.com/anlaufstelle/app/issues/1953) von 85 %.
-Einziges Delta-Modul der Familie ist ``core.forms.facility_settings`` — Lane E
-hat dort das Feld „Aufbewahrung Uebergabenotizen (Tage)" in die Gruppe
+Einziges Delta-Modul der Familie ist ``core.forms.facility_settings`` — eine
+vorangegangene Aenderung hat dort das Feld „Aufbewahrung Uebergabenotizen
+(Tage)" in die Gruppe
 „Datenschutz und Fristen" eingehaengt. Alle 41 Mutanten sitzen in
 ``FacilitySettingsForm.__init__``; die 15 Survivors betreffen ausschliesslich
 die Aufbereitung des Feldes ``default_document_type``.

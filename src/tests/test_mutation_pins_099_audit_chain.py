@@ -33,7 +33,7 @@ hier gepinnten Survivor-Klassen:
    ``'TRUE'`` bricht die Elevation lautlos.
 3. **Verifikation** (``verify_chain``): der ``(timestamp, id)``-Tiebreak ist
    fuer Zeilen mit identischem Zeitstempel NICHT aequivalent zu ``timestamp``
-   allein (Standardblock: Sortier-/pk-Tiebreak-Mutanten sind nie aequivalent);
+   allein (Sortier-/pk-Tiebreak-Mutanten sind nie aequivalent);
    ``continue``/``break`` bei einer unverketteten Bestandszeile entscheidet,
    ob der Scan nach einer Luecke WEITERLAEUFT (richtig) oder lautlos ABBRICHT
    (Tampering in allen Folgezeilen bliebe unentdeckt).

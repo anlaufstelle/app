@@ -276,7 +276,7 @@ class TestAlpineCspCompatibilityGuard:
     # CSP-Parser wertet nur EINEN Ausdruck aus, solche Keywords sind immer
     # ein Statement, nie ein Ausdruck. ``\b`` verhindert Treffer auf
     # Identifiern, die nur mit dem Keyword beginnen (``forceRefresh()``,
-    # ``constructor``, ...). Refs #1763 Review Fix-Runde 1.
+    # ``constructor``, ...). Refs #1763.
     _STATEMENT_KEYWORD = re.compile(r"^\s*(?:if|for|while|return|var|let|const)\b")
 
     @staticmethod
@@ -284,7 +284,7 @@ class TestAlpineCspCompatibilityGuard:
         """True bei einem Komma AUSSERHALB von Klammern/Brackets (Komma-
         Operator-Sequenz wie ``a(), b()``) — Argument-Kommas innerhalb eines
         einzelnen Aufrufs (``foo(a, b)``) bleiben erlaubt, weil sie zu genau
-        einem Ausdruck gehoeren. Refs #1763 Review Fix-Runde 1.
+        einem Ausdruck gehoeren. Refs #1763.
 
         Refs #1775: String-Literale werden uebersprungen. Ohne das meldete
         ``$dispatch('toast', 'a, b')`` — Komma IM Literal, Klammer-Tiefe egal —
@@ -345,7 +345,7 @@ class TestAlpineCspCompatibilityGuard:
         (if/for/while/return/var/let/const) und Top-Level-Komma-Sequenzen
         sowie Zuweisungen. Methodenaufrufe mit Argumenten, ``$dispatch(...)``
         und ternaere Ausdruecke bleiben erlaubt — sie sind ein einzelner
-        Ausdruck. Refs #1763 (inkl. Review Fix-Runde 1: Event-Namen mit
+        Ausdruck. Refs #1763 (Event-Namen mit
         ``:`` wie ``htmx:after-swap`` wurden vorher gar nicht erst erkannt,
         und ein Inline-``if (...)`` ohne ``;``/``=`` schlug durch).
         """
@@ -372,7 +372,7 @@ class TestAlpineCspCompatibilityGuard:
         )
 
     def test_event_handler_name_regex_matches_colon_events(self):
-        """Review Fix-Runde 1 (#1763): Event-Namen mit ``:`` (HTMX-Custom-
+        """(#1763) Event-Namen mit ``:`` (HTMX-Custom-
         Events wie ``htmx:after-swap``) muessen als Event-Handler erkannt
         werden — sonst greift die Statement-Erkennung oben gar nicht erst.
         Beide Formen sind die empirischen #1747-Regressionsfixtures aus dem
@@ -487,8 +487,8 @@ class TestAlpineCspCompatibilityGuard:
         )
 
     def test_duplicate_colon_event_name_is_detected(self):
-        """Review Fix-Runde 2 (#1763): dieselbe ':'-Luecke wie bei
-        ``_ALPINE_EVENT_HANDLER`` (Fix-Runde 1) bestand auch im Namensmuster
+        """(#1763) Dieselbe ':'-Luecke wie bei
+        ``_ALPINE_EVENT_HANDLER`` bestand auch im Namensmuster
         der Duplikat-Regel — ein doppelt gebundenes kolon-benanntes
         Custom-Event (HTMX-Events wie ``htmx:after-swap``) entging der
         Pruefung, weil ``:`` im Attributnamen nicht Teil der Zeichenklasse
@@ -1447,7 +1447,7 @@ class TestContextHelpLabelGuard:
     (``{% include "components/_context_help.html" %}``). Ein Ziel ueber eine
     Variable (``{% include help_tpl %}``, die zur Laufzeit auf die Komponente
     zeigen koennte) bleibt ausserhalb dieser Policy — der Zielname laesst
-    sich statisch nicht auflösen (Cross-Review Fix-Runde 1, Minor-Befund).
+    sich statisch nicht auflösen (Minor-Befund).
     """
 
     _TEMPLATES_DIR = Path("src/templates")
@@ -1468,7 +1468,7 @@ class TestContextHelpLabelGuard:
         wiederverwendet, weil ``_analyze`` die Token-Zeile verwirft
         (``_StandaloneDocument`` prueft nur binaer "eingebunden ja/nein");
         dieser Guard braucht ``Datei:Zeile`` in der Fehlermeldung
-        (Cross-Review Fix-Runde 1, Important-Befund).
+        (Important-Befund).
 
         Nur LITERALE Include-Ziele werden erfasst — ``bits[1]`` muss ein in
         Anfuehrungszeichen stehendes Literal sein, keine Variable.
@@ -1515,8 +1515,8 @@ class TestContextHelpLabelGuard:
         if not self._TEMPLATES_DIR.exists():
             pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
         includes = list(self._context_help_includes())
-        # Die Labelverletzung wird VOR der Anzahlprüfung gemeldet (Cross-Review
-        # Fix-Runde 1, Important-Befund): eine neue Einbindung ohne
+        # Die Labelverletzung wird VOR der Anzahlprüfung gemeldet
+        # (Important-Befund): eine neue Einbindung ohne
         # summary_label soll als klare Datei:Zeile-Verletzung auffallen, nicht
         # zuerst hinter einer Anzahlabweichung verschwinden.
         violations = [f"{rel}:{line}" for rel, line, params in includes if not self._has_summary_label(params)]
@@ -1545,7 +1545,7 @@ class TestContextHelpLabelGuard:
         assert not self._has_summary_label(includes[0][2])
 
     def test_scanner_reports_file_and_line_for_missing_summary_label(self, tmp_path):
-        """Cross-Review Fix-Runde 1 (Important): eine Verletzung muss als ``Datei:Zeile`` identifizierbar sein.
+        """(Important): eine Verletzung muss als ``Datei:Zeile`` identifizierbar sein.
 
         Die Einbindung steht bewusst NICHT in Zeile 1 — sonst koennte eine
         hartcodierte ``:1`` die Probe still bestehen, ohne dass die

@@ -285,7 +285,7 @@ class TestGetPendingCaseDeletionRequestPreload:
         ``delete_request_confirm.html`` lesen
         ``pending_deletion_request.requested_by.display_name`` direkt aus dem
         Rueckgabewert dieser Funktion — ``select_related(None)`` loescht die
-        JOIN-Vorladung ersatzlos (Standardblock-Regel: kein Nachweis "kein
+        JOIN-Vorladung ersatzlos (kein Nachweis "kein
         Leser" moeglich, also Query-Zaehl-Pin statt ``equivalent``).
 
         Original: genau 1 Query (JOIN preloaded ``requested_by``).

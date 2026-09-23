@@ -2447,7 +2447,7 @@ class TestStagingStackRoleSeparation:
 
 
 class TestStagingStackFailClosedRolePosture:
-    """Refs #2086 (Fix-Runde 1): Die Rollentrennung muss fail-closed sein.
+    """Refs #2086: Die Rollentrennung muss fail-closed sein.
 
     Der erste Wurf verdrahtete den Soll-Pfad korrekt, liess aber jede
     Fehlkonfiguration durch: ``APP_DB_USER=postgres`` oder App-Rolle ==
@@ -2567,7 +2567,7 @@ class TestStagingStackFailClosedRolePosture:
 
 
 class TestStagingEnvFileIsParametrisable:
-    """Refs #2086 (Fix-Runde 1): ``ENV_FILE`` war nur halb verdrahtet.
+    """Refs #2086: ``ENV_FILE`` war nur halb verdrahtet.
 
     ``scripts/initial-setup.sh`` bewarb eine frei waehlbare Env-Datei und
     reichte sie als ``--env-file`` durch — das steuert bei Compose aber nur
@@ -2652,7 +2652,7 @@ class TestStagingEnvFileIsParametrisable:
 
 
 class TestStagingExposureIsGatedOnRolePosture:
-    """Refs #2086 (Fix-Runde 2): ``unhealthy`` allein sperrt keinen laufenden Caddy.
+    """Refs #2086: ``unhealthy`` allein sperrt keinen laufenden Caddy.
 
     Die Runtime-Probe im ``web``-Healthcheck schliesst den **kalten** Start:
     Caddy wartet dort ueber ``depends_on.condition: service_healthy``. Beim
@@ -2744,7 +2744,7 @@ class TestStagingExposureIsGatedOnRolePosture:
 
 
 class TestCaddyReverseProxySubdirectivesExist:
-    """Refs #2086 (Fix-Runde 3): eine erfundene ``reverse_proxy``-Subdirektive
+    """Refs #2086: eine erfundene ``reverse_proxy``-Subdirektive
     verhindert den Caddy-Start, und kein Test der Suite sah das.
 
     ``health_request_header`` klingt plausibel, existiert in Caddy 2 aber nicht.
@@ -2765,7 +2765,7 @@ class TestCaddyReverseProxySubdirectivesExist:
     # (modules/caddyhttp/reverseproxy/caddyfile.go). Kommt eine echte Direktive
     # dazu, gehoert sie hier ergaenzt — der Fehlertext sagt das.
     #
-    # Refs #2086, Fix-Runde 4: Die erste Fassung dieser Liste war in beide
+    # Refs #2086: Die erste Fassung dieser Liste war in beide
     # Richtungen falsch. Sie liess `buffer_requests`/`buffer_responses`/
     # `max_buffer_size` durch (vom 2.11.4-Parser NICHT akzeptiert, in Caddy 2
     # durch `request_buffers`/`response_buffers` ersetzt) und haette
@@ -2882,7 +2882,7 @@ class TestCaddyReverseProxySubdirectivesExist:
         assert set(self._reverse_proxy_subdirectives(probe)) - self._KNOWN == set()
 
     def test_whitelist_matches_the_pinned_parser(self) -> None:
-        """Refs #2086, Fix-Runde 4: die Liste war in beide Richtungen falsch.
+        """Refs #2086: die Liste war in beide Richtungen falsch.
 
         Die drei Caddy-1-Namen duerfen nicht mehr durchgehen, die fuenf
         gueltigen 2.11.4-Namen nicht mehr als unbekannt gelten.
@@ -2900,9 +2900,10 @@ class TestCaddyReverseProxySubdirectivesExist:
 
 
 class TestInitialSetupGuardsTheHealthToken:
-    """Refs #2086 (Fix-Runde 5): der Erstsetup faengt die eigene neue Falle ab.
+    """Refs #2086: der Erstsetup faengt die eigene neue Falle ab.
 
-    Diese Lane hat einen Fehlermodus neu eingefuehrt: Caddy ersetzt
+    Die Preflight-Pruefung faengt einen Fehlermodus ab, den die Adaption selbst
+    einfuehrt: Caddy ersetzt
     ``{$DJANGO_HEALTH_DETAIL_TOKEN}`` beim Adaptieren der Caddyfile. Ist der
     Wert leer, bricht die Adaption ab und der Reverse-Proxy startet gar nicht
     erst. Ohne Preflight sieht eine Operatorin davon nur einen Stack, der nicht
@@ -2989,7 +2990,7 @@ exit 0
         assert result.returncode != 0
         assert self._TOKEN in result.stderr
 
-    # Refs #2086, Fix-Runde 6: Die Schreibweisen sind NICHT aus dem Kopf
+    # Refs #2086: Die Schreibweisen sind NICHT aus dem Kopf
     # gegriffen, sondern mit `docker compose config --format json` gegen eine
     # Wegwerf-Compose gemessen. Links steht, was Compose dem caddy-Service
     # tatsaechlich uebergibt.

@@ -69,7 +69,7 @@ def test_day_bounds_handles_dst_and_year_boundaries(day, expected_start_utc, exp
 
 # --- Shared fixtures for the boundary probes ---------------------------------
 #
-# Refs #2029, Fix-Runde 2: Die Erwartungsmenge wird IMMER unabhaengig vom
+# Refs #2029: Die Erwartungsmenge wird IMMER unabhaengig vom
 # Produktionscode aus dem alten ``timestamp__date``-Lookup gebaut und
 # zusaetzlich mit benannten Off-by-one-Proben belegt. Ein
 # ``timestamp__lt`` -> ``timestamp__lte`` an einer der beiden Filterstellen

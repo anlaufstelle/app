@@ -617,7 +617,7 @@ class TestSerializeDocumentType:
           Feldschema eines HIGH-Typs — Feldnamen, Hilfetexte,
           Auswahloptionen — den Server Richtung IndexedDB an Rollen, die den
           Typ online nicht einmal sehen duerfen.
-        * **C — Feld-Override NIEDRIGER als der Typ** (Fix-Runde 1, vom
+        * **C — Feld-Override NIEDRIGER als der Typ** (vom
           adversarialen Verify nachgereicht). A und B pinnen nur, DASS beide
           Argumente ankommen, nicht WIE sie verrechnet werden: die Mutante
           ``user_can_see_field(user, field.sensitivity or doc_type.sensitivity)``
@@ -659,7 +659,7 @@ class TestSerializeDocumentType:
         # von der gepinnten Filterwirkung.
         assert [f["slug"] for f in _serialize_document_type(lead_user, dt_high)["fields"]] == [ft_inherit.slug]
 
-        # Richtung C (Refs #1998, Fix-Runde 1): TYP-Stufe HIGH, Feld mit
+        # Richtung C (Refs #1998): TYP-Stufe HIGH, Feld mit
         # ausdruecklich NIEDRIGEREM Override. ``max`` gewinnt, der Override
         # senkt NICHT — sonst waere „sensitivity=normal" am Feld ein
         # Generalschluessel fuer das Schema eines HIGH-Typs.

@@ -36,8 +36,8 @@ Drei wiederkehrende Mutationsachsen in diesem Batch:
   Off-by-One-Wert wird beobachtbar (Exception bzw. abweichende
   Schwelle/Fensterlaenge).
 * **Meldungs-Verlust** in ``_validate_webhook_url`` (``ValueError(f"...")``
-  → ``ValueError(None)``): Standardblock-Klassifikationsregel — Klasse
-  ``test``, Prio 3, exakte Assertion auf den Meldungstext.
+  → ``ValueError(None)``): Klasse ``test``, Prio 3, exakte Assertion auf
+  den Meldungstext.
 * **Erzwungene Iterationsreihenfolge** fuer
   ``x_detect_distributed_login_attack__mutmut_41`` (``continue`` → ``break``
   in der Zeile ``if row["user"] is None: continue``): eine BEOBACHTETE
@@ -441,7 +441,7 @@ class TestAlreadyReportedSystemActionScope:
 
 
 # ---------------------------------------------------------------------------
-# _validate_webhook_url — Meldungs-Verlust (Standardblock-Klassifikationsregel)
+# _validate_webhook_url — Meldungs-Verlust
 # ---------------------------------------------------------------------------
 
 

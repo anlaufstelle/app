@@ -6,7 +6,7 @@ Auswertung des Flags lieferte null Treffer: die Middleware setzte
 ``User.is_active``. Eine „archivierte" Einrichtung arbeitete damit voll weiter —
 Nutzerinnen meldeten sich an, dokumentierten, exportierten.
 
-Der Entscheid ist **erzwingen, nicht entfernen** (Orchestrator, Welle B). Zwei
+Der Entscheid ist **erzwingen, nicht entfernen**. Zwei
 Ebenen, beide hier gepinnt:
 
 1. **Login** weist Nutzerinnen einer archivierten Einrichtung mit klarer
@@ -374,7 +374,7 @@ class TestAdminGuideDokumentiertDieHardDeleteFussfalle:
         assert "Clear-Site-Data" in text
 
     def test_restrisiko_ist_ehrlich_beschrieben(self):
-        """Cross-Review Fix-Runde 2: „nach 48 h ist alles weg" war zu
+        """Cross-Review: „nach 48 h ist alles weg" war zu
         optimistisch. Die TTL verwirft nur den Server-Spiegel; ungesyncte
         Arbeit überlebt bewusst, und der Idle-Wipe entfernt bei ihr allein den
         Schlüssel (Refs #1353)."""

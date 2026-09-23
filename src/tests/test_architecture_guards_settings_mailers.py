@@ -250,7 +250,7 @@ class TestNoDeprecatedEmailSettingsBesidesMailers:
 
 
 class TestScannerSelfCheck:
-    """Selbsttest gegen ``tmp_path`` — nie Proben im echten Baum (Standardblock 3)."""
+    """Selbsttest gegen ``tmp_path`` — nie Proben im echten Baum."""
 
     def _write(self, root: Path, relative: str, source: str) -> Path:
         path = root / relative

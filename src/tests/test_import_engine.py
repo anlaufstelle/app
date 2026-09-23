@@ -250,7 +250,7 @@ class TestStoreImportUpload:
 
     @pytest.mark.parametrize("fmt", ["BMP", "TIFF", "JPEG", "PNG", "GIF", "WEBP"])
     def test_rejects_binary_image_payloads(self, facility, admin_user, media_root, fmt):
-        """Refs #2128 (Fix-Runde 1): Der Import-Wizard verschluesselt Rohbytes
+        """Refs #2128: Der Import-Wizard verschluesselt Rohbytes
         direkt (``encrypt_file``) und umgeht damit die File-Vault-Pipeline —
         also auch die Metadaten-Bereinigung. Bislang begrenzte ihn serverseitig
         nichts auf CSV: ein BMP oder TIFF laesst sich als CP1252 dekodieren und

@@ -222,7 +222,7 @@ class TestAnonymizeClientNowUnterDerAppRolle:
     def _roles(self, db):
         """Beide Rollen vor **und** nach dem Test wegraeumen (F-15): eine
         stehengebliebene cluster-globale Rolle risse den naechsten Lauf — auch
-        den einer fremden Lane — mit ``role already exists``."""
+        den eines anderen Testmoduls — mit ``role already exists``."""
         self._drop_role(self._app_role)
         self._create_role(self._app_role)
         try:

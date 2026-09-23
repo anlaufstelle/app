@@ -910,7 +910,7 @@ def _deadlock_error():
 
 @pytest.mark.django_db
 class TestDeadlockRetry:
-    """Fix-Runde 1, Finding 7 (ADR-050 D5.5): Erkennung ueber SQLSTATE, nicht ueber Text."""
+    """Erkennung ueber SQLSTATE, nicht ueber Text (ADR-050 D5.5)."""
 
     def test_deadlock_wird_erkannt_und_mit_backoff_wiederholt(self, monkeypatch, facility):
         from core.retention import eventhistory as module
@@ -1000,7 +1000,7 @@ class TestDeadlockRetry:
 
 @pytest.mark.django_db
 class TestDryRunHonoursHolds:
-    """Fix-Runde 1, Finding 6: der Dry-run muss dasselbe sagen wie der echte Lauf."""
+    """Der Dry-run muss dasselbe sagen wie der echte Lauf."""
 
     def test_gehaltenes_ereignis_erscheint_als_zurueckgestellt_nicht_als_zu_redigieren(
         self, facility, settings_obj, admin_user, staff_user, event_with_history
@@ -1078,7 +1078,7 @@ def _age_redaction(event, *, days):
 
 @pytest.mark.django_db
 class TestLatenessSurvivesStageTwo:
-    """Fix-Runde 1, Finding 4: „frühere Fassungen nicht mehr vollständig verfügbar".
+    """„frühere Fassungen nicht mehr vollständig verfügbar".
 
     Das Merkmal hing an einer noch VORHANDENEN Zeile mit ``redacted_at``. Genau
     die loescht Stufe 2 — danach meldete ein neuer Hold faelschlich
@@ -1152,7 +1152,7 @@ class TestLatenessSurvivesStageTwo:
 
 @pytest.mark.django_db
 class TestManualDeleteLockOrder:
-    """Fix-Runde 1, Finding 3: M-9 war gegenueber einer konkurrierenden Hold-Anlage TOCTOU-anfaellig."""
+    """M-9 war gegenueber einer konkurrierenden Hold-Anlage TOCTOU-anfaellig."""
 
     def test_event_zeile_wird_vor_der_hold_lesung_gesperrt(
         self, facility, staff_user, client_identified, doc_type_contact
@@ -1195,7 +1195,7 @@ class TestManualDeleteLockOrder:
 
 @pytest.mark.django_db
 class TestClientHoldsAreHard:
-    """Fix-Runde 1, Finding 5: der Personen-Hold bekommt denselben Koordinationspunkt.
+    """Der Personen-Hold bekommt denselben Koordinationspunkt.
 
     Bisher prueft der Sweep Client-Holds zwar, aber ohne gemeinsame Sperre: eine
     Client-Hold-Transaktion konnte nach ``_held_event_ids`` committen, waehrend
@@ -1457,7 +1457,7 @@ class TestCaseHoldsAreHardToo:
 
 @pytest.mark.django_db
 class TestBacklogMigrationHonoursHolds(_BacklogMigrationClassState):
-    """Fix-Runde 1, Finding 1 (Critical): die Bestandsmigration war hold-blind.
+    """Kritisch: die Bestandsmigration war hold-blind.
 
     Ein vor dem Upgrade geloeschtes, gehaltenes Ereignis haette beim Deploy
     irreversibel seine Historieninhalte verloren — und zwar ausgerechnet beim
@@ -1607,7 +1607,7 @@ class TestBacklogMigrationHonoursHolds(_BacklogMigrationClassState):
 
 @pytest.mark.django_db
 class TestLatenessDetectsLegacyMarkers:
-    """Fix-Runde 2, Finding B: Alt-Redaktionen tragen den Marker, aber kein ``redacted_at``.
+    """Alt-Redaktionen tragen den Marker, aber kein ``redacted_at``.
 
     ``_redact_event_history`` (Art. 17 / K-Anon) ersetzt beide Payloads durch
     ``{"_redacted": True, "anonymized": True}``, stempelt aber nichts — der
@@ -1681,7 +1681,7 @@ class TestLatenessDetectsLegacyMarkers:
 
 @pytest.mark.django_db
 class TestApprovedDeletionTakesClientLock:
-    """Fix-Runde 2, Finding D: der genehmigte Vier-Augen-Weg umging die Client-Sperre.
+    """Der genehmigte Vier-Augen-Weg umging die Client-Sperre.
 
     ``_deletion_workflow_write()`` laesst ``assert_processing_allowed`` sofort
     zurueckkehren (Art.-17 gilt waehrend einer Art.-18-Einschraenkung weiter) —
@@ -1760,7 +1760,7 @@ class TestApprovedDeletionTakesClientLock:
 
 @pytest.mark.django_db
 class TestSweepRevalidatesClientBinding:
-    """Fix-Runde 2, Finding C: der Event->Client-Bezug wird nach der Sperre revalidiert.
+    """Der Event->Client-Bezug wird nach der Sperre revalidiert.
 
     Die Zuordnung wurde vor saemtlichen Sperren gelesen. Ein Merge kann das
     Ereignis waehrend der Sperrwartezeit auf einen anderen, ungesperrten
@@ -1831,7 +1831,7 @@ class TestSweepRevalidatesClientBinding:
 
 @pytest.mark.django_db
 class TestBacklogMigrationChecksHoldsPerBatch(_BacklogMigrationClassState):
-    """Fix-Runde 2, Finding A (Critical): das Live-Deploy-Rennen der Migration.
+    """Kritisch: das Live-Deploy-Rennen der Migration.
 
     Migrationen laufen dokumentiert VOR dem Rolling-Restart, waehrend der
     Webprozess noch bedient (ops-runbook § 3). Ein einmaliger Hold-Snapshot mit
@@ -1916,7 +1916,7 @@ class TestBacklogMigrationChecksHoldsPerBatch(_BacklogMigrationClassState):
 
 @pytest.mark.django_db(transaction=True)
 class TestBacklogMigrationExecutorRun:
-    """Fix-Runde 2, Finding E: ein Hold-Fall durch den ECHTEN Migrations-Uebergang.
+    """Ein Hold-Fall durch den ECHTEN Migrations-Uebergang.
 
     Die uebrigen Migrationstests rufen die Arbeitsfunktion direkt. Das prueft
     die Logik, aber nicht den Weg, den ``migrate`` tatsaechlich nimmt — inklusive
@@ -1979,7 +1979,7 @@ class TestBacklogMigrationExecutorRun:
 
 @pytest.mark.django_db
 class TestMarkerRecognitionNeedsTheFlag:
-    """Fix-Runde 3, Punkt 1: ``anonymized`` allein ist kein Redaktionsbeleg.
+    """``anonymized`` allein ist kein Redaktionsbeleg.
 
     ``anonymized`` ist **kein reservierter Feld-Slug** — ein Dokumentationstyp
     darf ein gewoehnliches Ja/Nein-Feld dieses Namens fuehren. Wurde es mit
@@ -2023,7 +2023,7 @@ class TestMarkerRecognitionNeedsTheFlag:
 
 @pytest.mark.django_db
 class TestDeleteRevalidatesClientBinding:
-    """Fix-Runde 3, Punkt 2: der Loeschservice revalidiert den Client-Bezug.
+    """Der Loeschservice revalidiert den Client-Bezug.
 
     ``approve_deletion`` laedt das Ereignis ungesperrt; ``soft_delete_event``
     sperrte danach den Client aus dieser womoeglich veralteten Instanz. Gewinnt
@@ -2130,7 +2130,7 @@ class TestDeleteRevalidatesClientBinding:
 
 
 class TestRedactionMarkerInventory:
-    """Fix-Runde 3, Punkt 4: Architektur-Guard fuer die Markerformen.
+    """Architektur-Guard fuer die Markerformen.
 
     Der „ein Redaktionsschreiber"-Guard sucht nach ``redacted_at=`` — einen
     dritten, UNGESTEMPELTEN Redaktionsschreiber (Marker im Payload, kein

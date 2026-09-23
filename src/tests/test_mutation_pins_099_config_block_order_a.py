@@ -3,14 +3,14 @@
 
 Quelle: ``welle-l-0.99/reports/m-scratch/batch-block_order-a.json``
 (Triage ``pins-block_order-a/triage-099-block_order-a.json``). Das Modul ist
-auf zwei Batches a/b verteilt (andere Funktionen, andere Lane) — diese Datei
+auf zwei Batches a/b verteilt (andere Funktionen, unabhaengig bearbeitet) — diese Datei
 deckt AUSSCHLIESSLICH die Batch-``block_order-a``-Funktionen ab (``pin_suffix``
 ``a``): ``_move_field_into_group`` (17 Survivors), ``block_ordered_dtf_queryset``
 (14), ``_move_field_to_top_level`` (9), ``reorder_blocks`` (7), ``move_field``
 (5), ``_validate_id_set`` (4), ``_block_sort_key`` (4), ``dtf_block_sort_key``
 (4), ``reorder_fields`` (3), ``_next_block_position`` (2).
 
-**Meldungsfamilien (Standardblock/Briefing, exakte statt Teilstring-Vergleiche):**
+**Meldungsfamilien (exakte statt Teilstring-Vergleiche):**
 je betroffener Meldung EIN Pin mit exaktem ``exc.value.args``-Vergleich —
 dieser eine Vergleich schlägt gleichermaßen auf den Meldungsverlust-Mutanten
 (``ValueError(None)``, Klasse ``test``/Prio 3) WIE auf dessen ``XX``-Marker-/

@@ -13,19 +13,19 @@ Deckt:
    zuordenbar (Schicht 1 = Paketformat, Schicht 3 = stille Formular-
    Auslassung — beide Bestand).
 4. Den ``entity_type``-Badge in Liste/Detail.
-5. (Fix-Runde 1, V-1) Die Live-Vorschau wählt jetzt die passende
+5. (V-1) Die Live-Vorschau wählt jetzt die passende
    ``*_fields_partial``-URL nach ``entity_type`` statt hart auf
    ``event_fields_partial`` zu zeigen (vormals dokumentierte 404-Lücke,
    ``TestLivePreviewEntityTypeGapDocumented`` — durch
    ``TestLivePreviewEntityTypeAware`` ersetzt).
-6. (Fix-Runde 1, V-2) Die Delete-Confirm-Seite zeigt jetzt Client-/Case-
+6. (V-2) Die Delete-Confirm-Seite zeigt jetzt Client-/Case-
    Zähler + Warnbox + deaktivierten Löschen-Button, analog ``event_count``.
 
 Nutzt ausschließlich Bestandsfixtures (``doc_type_contact``/
 ``doc_type_client_profile``/``doc_type_case_form``/``client_identified``/
 ``case_open``, alle aus ``conftest.py``). Die Datei-Scope-Beschränkung aus der
 ersten P9-Runde (``core/urls.py``/``_authz_expectations.py``/``conftest.py``
-= P8-Hoheitsgebiet) ist für diese Fix-Runde vom Controller aufgehoben (P8 ist
+= P8-Hoheitsgebiet) ist inzwischen aufgehoben (P8 ist
 fertig, berührt ``views/config``/Config-Templates nicht) — die neuen Tests
 nutzen zusätzlich ``core:client_fields_partial``/``core:case_fields_partial``
 (P7/P8, jetzt via ``git merge m2-p8`` im Worktree verfügbar) sowie
@@ -388,7 +388,7 @@ class TestEntityTypeBadge:
 
 
 # ---------------------------------------------------------------------------
-# Live-Vorschau — entity_type-Weiche (P9-Fix-Runde 1, V-1, Refs #1058)
+# Live-Vorschau — entity_type-Weiche (P9, V-1, Refs #1058)
 # ---------------------------------------------------------------------------
 
 
@@ -396,7 +396,7 @@ class TestEntityTypeBadge:
 class TestLivePreviewEntityTypeAware:
     """Ersetzt die vormals dokumentierte Lücke (ehem.
     ``TestLivePreviewEntityTypeGapDocumented`` — 404 für client/case, s. P9-
-    Report/Fix-Runde 1, V-1): Die Live-Vorschau wählt die hx-get-URL jetzt nach
+    Report/V-1): Die Live-Vorschau wählt die hx-get-URL jetzt nach
     ``doc_type.entity_type`` — ``client_fields_partial``/``case_fields_partial``
     (P7/P8) statt hart ``event_fields_partial``. Alle drei Partials rendern
     dasselbe geteilte Template (``core/partials/dynamic_fields.html``) und
@@ -447,7 +447,7 @@ class TestLivePreviewEntityTypeAware:
 
 
 # ---------------------------------------------------------------------------
-# Delete-Confirm-Vorwarnung — Client-/Case-Zähler (P9-Fix-Runde 1, V-2, Refs #1058)
+# Delete-Confirm-Vorwarnung — Client-/Case-Zähler (P9, V-2, Refs #1058)
 # ---------------------------------------------------------------------------
 
 

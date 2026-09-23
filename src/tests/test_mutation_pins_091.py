@@ -765,7 +765,7 @@ class TestDistributedLoginDefaultThreshold:
 # vollstaendig abgedeckt (7 von 7), ``external_report._escalate`` bis auf
 # zwei. Nur fuer die zwei Ueberlebenden steht hier ein Pin; die uebrigen
 # werden NICHT nachgebaut, weil ein zweiter Test fuer einen bereits toten
-# Mutanten nichts nachweist. Die Einzelergebnisse stehen im Lane-Bericht.
+# Mutanten nichts nachweist.
 
 
 class TestEscalateReportsOnlyRealProgress:

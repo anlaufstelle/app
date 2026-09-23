@@ -108,7 +108,7 @@ class TestComputeEventSearchText:
         assert text == ""
 
     def test_excludes_unknown_sensitivity_field(self, facility):
-        """Refs #1991 (Fix-Runde 1): unbekannte Werte fail-closed statt indexiert.
+        """Refs #1991: unbekannte Werte fail-closed statt indexiert.
 
         Der Filter fragte nach Mengen-Zugehoerigkeit
         (``sensitivity in {elevated, high}``) und nicht nach dem Rang — ein

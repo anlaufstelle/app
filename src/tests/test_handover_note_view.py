@@ -1,4 +1,4 @@
-"""HTTP-Ebene der Schichtnotiz (Refs #2042, Fix-Runde 1 nach Review).
+"""HTTP-Ebene der Schichtnotiz (Refs #2042).
 
 Eigene Datei, weil diese Faelle den Django-Test-Client brauchen und mit der
 **echten** Uhr laufen: die View zieht ``now`` aus ``timezone.localtime()`` und
@@ -146,7 +146,7 @@ class TestAnzeigekontextNachDemSpeichern:
 
 @pytest.mark.django_db
 class TestKaputteSchichtparameter:
-    """E-06: kontrollierte Antwort statt HTTP 500 — und seit Fix-Runde 2 mit 400.
+    """E-06: kontrollierte Antwort statt HTTP 500 — und inzwischen mit 400.
 
     Der Statuscode ist bewusst auf malformte Koordinaten beschraenkt; fachliche
     Ausgaenge bleiben bei 200 (Begruendung in ``HandoverNoteUpdateView._render``).
@@ -243,7 +243,7 @@ class TestRollenGateUeberHttp:
         )
         client.force_login(staff_user)
         antwort = _post(client, shift_date=heute.isoformat(), time_filter=str(fremd.pk), note="Fremd")
-        # Seit Fix-Runde 2 ebenfalls 400: eine gueltige UUID aus einer FREMDEN
+        # Ebenfalls 400: eine gueltige UUID aus einer FREMDEN
         # Einrichtung ist genauso wenig aus der eigenen Oberflaeche erreichbar
         # wie eine kaputte. Die Antwort unterscheidet die beiden Faelle nicht —
         # sie verraet damit auch nicht, ob es den Zeitfilter anderswo gibt.

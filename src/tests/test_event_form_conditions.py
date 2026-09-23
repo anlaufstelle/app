@@ -41,7 +41,7 @@ Operator = FieldCondition.Operator
 
 
 # ---------------------------------------------------------------------------
-# Lokale Helfer / Fixtures (conftest ist TABU — P6)
+# Lokale Helfer / Fixtures (bewusst nicht in conftest, P6)
 # ---------------------------------------------------------------------------
 
 

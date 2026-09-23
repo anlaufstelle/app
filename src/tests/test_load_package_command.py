@@ -97,8 +97,8 @@ class TestRoundtrip:
         assert "unverändert" in output
 
     def test_preserved_number_range_gets_its_own_report_line(self, tmp_path, facility):
-        """Betreiber-Sichtbarkeit ohne Dauerwarnung (Controller-Ruling
-        Review-Runde 1, Refs #1934): eine per Konfigurationsoberfläche
+        """Betreiber-Sichtbarkeit ohne Dauerwarnung (Refs #1934): eine per
+        Konfigurationsoberfläche
         gesetzte Grenze, die das Paket nicht erwähnt, bekommt in der
         CLI-Ausgabe eine eigene, konkrete Zeile — außerhalb von
         "Warnungen"."""

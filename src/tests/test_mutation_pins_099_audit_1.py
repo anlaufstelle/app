@@ -128,7 +128,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
 #: ``FOR UPDATE``-Statements verraten die Zeilensperre; Muster wie
 #: ``test_mutation_pins_099_deletion_a.py`` (nicht importiert — eigene Kopie,
-#: TABU-Disziplin für fremde Testdateien).
+#: Pin-Dateien bleiben bewusst voneinander unabhaengig).
 _LOCK_RE = re.compile(r'FROM "(?P<table>core_\w+)"[^;]*FOR UPDATE', re.IGNORECASE | re.DOTALL)
 
 
@@ -169,7 +169,7 @@ _MARKER = {"__file__": True, "attachment_id": "11111111-1111-1111-1111-111111111
 class TestGetAuditHashKeyGoldenSchluesselableitung:
     """``_get_audit_hash_key``: bevorzugt ``AUDIT_HASH_KEY``, sonst
     ``SHA256(SECRET_KEY)``. Golden-Rekonstruktion unabhängig vom
-    Produktionscode (Standardblock 72)."""
+    Produktionscode."""
 
     def test_bevorzugt_konfigurierten_audit_hash_key(self, settings):
         """Pins ``x__get_audit_hash_key__mutmut_1`` (``raw = None``), ``_2``
@@ -379,7 +379,7 @@ class TestAuditSystemViewTargetTypeDefault:
         """Pin ``x_audit_system_view__mutmut_1``: ``target_type: str = ""`` →
         ``target_type: str = "XXXX"``. Ohne explizites ``target_type`` würde
         die persistierte ``AuditLog``-Zeile ``target_type="XXXX"`` statt
-        ``""`` tragen — ein verfälschtes Audit-Feld (Standardblock 72)."""
+        ``""`` tragen — ein verfälschtes Audit-Feld."""
         request = _authenticated_request(rf, staff_user)
         entry = audit_system_view(request, AuditLog.Action.SYSTEM_VIEW)
         assert entry.target_type == ""

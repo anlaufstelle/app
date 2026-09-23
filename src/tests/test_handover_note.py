@@ -526,7 +526,7 @@ class TestHinweisInDienstplanluecke:
 
 
 # ---------------------------------------------------------------------------
-# Fix-Runde 1 Cross-Review E-01…E-09)
+# Cross-Review E-01…E-09
 # ---------------------------------------------------------------------------
 
 
@@ -534,7 +534,7 @@ class TestHinweisInDienstplanluecke:
 class TestFensterGrenzenSindPersistiert:
     """E-01 (BLOCKER): eine geschlossene Notiz bleibt geschlossen.
 
-    Bis Fix-Runde 1 wurde das Fenster bei JEDEM Zugriff aus den *gegenwaertig
+    Anfangs wurde das Fenster bei JEDEM Zugriff aus den *gegenwaertig
     aktiven* Zeitfiltern neu gerechnet. Wer den Spaetdienst deaktivierte, riss
     damit das Editierfenster einer laengst abgeschlossenen Fruehschicht wieder
     auf. Die Grenzen gehoeren deshalb an die Zeile, nicht an die Konfiguration.
@@ -792,7 +792,7 @@ class TestDstFensterendeInDerGrenzstunde:
 
 
 # ---------------------------------------------------------------------------
-# Fix-Runde 2 Re-Review E-12/E-13)
+# Re-Review E-12/E-13
 # ---------------------------------------------------------------------------
 
 

@@ -175,7 +175,7 @@ class TestTallyAssignmentQuerysetBlockOrder:
     def test_pk_breaks_complete_ties_deterministically(self, facility):
         """Pin: x__tally_assignment_queryset__mutmut_15 — abschliessendes ``"pk"`` entfaellt.
 
-        Fix-Runde 1 Review): der urspruengliche Pin verliess sich auf
+        Review: der urspruengliche Pin verliess sich auf
         die REIHENFOLGE dreier Zeilen mit identischem
         ``block_pos``/``block_is_free``/``sort_order`` und tötete den Mutanten
         damit nicht zuverlaessig — ohne einen ORDER-BY-Schluessel ist die

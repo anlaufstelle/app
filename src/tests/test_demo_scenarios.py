@@ -1,13 +1,14 @@
 """Regressionen fuer die Demo-Bereichsauswahl + den Bereichswechsel (Refs #2285).
 
-``core.seed.scenarios`` (Lane F-2, #2279) ist zum Zeitpunkt dieser Lane noch
+``core.seed.scenarios`` (#2279) ist zum Zeitpunkt dieser Aenderung noch
 nicht gemerged — ``core.views.demo_scenarios`` importiert den Katalog daher
 lazy und faellt ohne ihn auf einen leeren Katalog zurueck (s. dortiger
 Docstring). Diese Tests patchen ``scenario_catalog``/``_lookup_scenario``
 direkt mit einem kleinen, lokalen Test-Double, das die von F-2 DOKUMENTIERTE
 Schnittstelle (``key``/``display_name``/``description``/``package``/
 ``facility_name``/``demo_roles``/``intro_hint``/``solo``) nachbildet — KEINE
-Kopie des echten Katalogs (TABU laut Briefing), nur seine Form fuer den Test.
+Kopie des echten Katalogs (bewusst keine 1:1-Kopie, um Test und
+Produktivkatalog nicht zu koppeln), nur seine Form fuer den Test.
 """
 
 from types import SimpleNamespace
@@ -264,8 +265,7 @@ class TestScenarioStartView:
         Fallback: hier EXISTIERT ein passendes ``lead``-Konto fuer die Facility
         — verboten ist es einzig, weil das (bewusst enger gefasste) Szenario
         die Rolle nicht in ``demo_roles`` fuehrt. Ohne die Pruefung in
-        ``DemoScenarioStartView.post`` waere dieser Test rot (Standardblock
-        Regel 36/69: Rot-Nachweis siehe Bericht)."""
+        ``DemoScenarioStartView.post`` waere dieser Test rot."""
         User.objects.create_user(
             username="kl_lead_restricted",
             role=User.Role.LEAD,

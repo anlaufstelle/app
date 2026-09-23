@@ -518,7 +518,7 @@ class TestRlsBypassKontextUnterNichtBypassRolle:
         """Rolle vor **und** nach dem Test wegraeumen; GUC exakt restaurieren.
 
         Eine stehengebliebene cluster-globale Rolle risse den naechsten Lauf —
-        auch den einer fremden Lane — mit ``role already exists``. Die
+        auch den eines anderen Testmoduls — mit ``role already exists``. Die
         Session-GUC wird auf ihren Vorwert zurueckgesetzt (Idiom aus
         ``_db_admin.rls_bypass_for_read``), weil die Connection von Folgetests
         im selben Prozess weiterbenutzt wird.

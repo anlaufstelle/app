@@ -217,7 +217,7 @@ class TestBackfillFunction:
         slugs = {dt.name: dt.slug for dt in DocumentType.objects.filter(facility=facility)}
         assert slugs == {"Alpha": "alpha", "Beta": "beta"}
         assert DocumentType.objects.get(facility=other_facility, name="Alpha").slug == "alpha"
-        # B-5 (Fix-Runde 1): entity_type="event" ist der AddField-Default aus
+        # B-5: entity_type="event" ist der AddField-Default aus
         # Migration 0117 — hier ueber Zeilen belegt, die (wie echter Bestand
         # vor 0117) ohne explizites entity_type angelegt wurden.
         for dt in DocumentType.objects.filter(facility=facility):
@@ -240,7 +240,7 @@ class TestBackfillFunction:
 
     @pytest.mark.django_db
     def test_backfill_orders_by_name_not_physical_insert_order(self, facility):
-        """B-2 (Fix-Runde 1): pinnt, WELCHE Zeile bei einer Kollision den
+        """B-2: pinnt, WELCHE Zeile bei einer Kollision den
         Basis-Slug bekommt — waere ``order_by("facility_id", "name", "id")``
         im Backfill entfernt/veraendert, wuerde dieser Test kippen. Beide Namen
         slugifizieren zu "zeta-typ"; bewusst in der zur order_by-Zielreihenfolge

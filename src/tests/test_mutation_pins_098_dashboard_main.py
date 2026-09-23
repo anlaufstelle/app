@@ -38,8 +38,8 @@ entfaellt aus dem User-Filter der Nutzer-Query) ist BEREITS getoetet — der
 Bestandstest ``test_mutation_pins_096_dashboard.py::
 TestFacilityAdminDashboardScope::test_inaktive_nutzer_der_eigenen_
 einrichtung_zaehlen_nicht`` legt einen inaktiven Nutzer an und prueft
-``users_total == 1``; das faellt bereits ohne neuen Pin (Kill-Nachweis im
-Lane-Bericht). Kein Test dafuer in dieser Datei.
+``users_total == 1``; das faellt bereits ohne neuen Pin. Kein Test dafuer
+in dieser Datei.
 """
 
 from __future__ import annotations

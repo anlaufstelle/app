@@ -12,7 +12,7 @@ Zwei Sicherungen, absichtlich beide (Refs #2042, Befund E-10):
 
 * ``transaction=False`` — die Test-Transaktion rollt am Testende alles zurueck.
 * ein ``finally``, das ausdruecklich auf die zu Testbeginn ermittelten
-  ``graph.leaf_nodes()`` zurueckmigriert. Bis Fix-Runde 1 behauptete der
+  ``graph.leaf_nodes()`` zurueckmigriert. Anfangs behauptete der
   Docstring das, der Code migrierte aber nur auf das fest kodierte ``0180``.
   Solange 0180 das Blatt ist, ist beides dasselbe — bei der naechsten
   Migration waere es das nicht mehr, und ein abgebrochener Test liesse das
