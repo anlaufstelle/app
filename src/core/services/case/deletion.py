@@ -152,10 +152,29 @@ def _move_case_to_trash(case, user, **detail):
     Setzt ``is_deleted`` ueber die Mixin-Methode (die zugleich ``deleted_at``
     fuellt — ohne das liefe der Fall nie in den Fristablauf), schreibt die
     ``CASE_SOFT_DELETED``-Zeile und den Zeitstrom-Eintrag.
+
+    Refs #2373: Der Zustand wird an der FRISCH GESPERRTEN Fallzeile gelesen
+    (mit Einrichtungsfilter), nicht an der mitgegebenen Instanz — die kann aus
+    einem Lesevorgang von vor Minuten stammen. Ein zweiter Soft-Delete setzte
+    sonst ``deleted_at`` neu (die Papierkorb-Frist begaenne von vorn) und
+    schriebe eine zweite Audit-Zeile; ein getilgter Fall (``anonymized_at``)
+    ist endgueltig und wird nicht mehr verschoben. Die Sperrreihenfolge bleibt
+    die bisherige: auch vorher nahm das ``UPDATE`` des Soft-Deletes die
+    Fallzeile an genau dieser Stelle. Beide Aufrufer stehen in einer
+    ``transaction.atomic``.
     """
+    callers_case = case
+    case = Case.objects.select_for_update().get(pk=callers_case.pk, facility_id=callers_case.facility_id)
     if case.is_deleted:
         raise ValidationError(_("Der Fall liegt bereits im Papierkorb."))
+    if case.anonymized_at is not None:
+        raise ValidationError(_("Der Fall wurde bereits endgültig anonymisiert."))
     case.soft_delete(user=user)
+    # Die Instanz des Aufrufers mitziehen: die View arbeitet nach dem
+    # Verschieben mit ihr weiter und bekommt sie zurueck.
+    callers_case.is_deleted = case.is_deleted
+    callers_case.deleted_at = case.deleted_at
+    callers_case.deleted_by = case.deleted_by
     audit_event(
         AuditLog.Action.CASE_SOFT_DELETED,
         user=user,
@@ -170,7 +189,7 @@ def _move_case_to_trash(case, user, **detail):
         target=case,
         action=Activity.Action.CASE_TRASHED,
     )
-    return case
+    return callers_case
 
 
 @transaction.atomic
