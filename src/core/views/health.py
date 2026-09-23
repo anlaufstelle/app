@@ -313,9 +313,13 @@ def _is_backup_signal(value: object) -> bool:
         return False
     if isinstance(age_hours, bool) or not isinstance(age_hours, (int, float)):
         return False
-    if not math.isfinite(age_hours) or age_hours < 0:
+    try:
+        normalized_age_hours = float(age_hours)
+    except (OverflowError, TypeError, ValueError):
         return False
-    return state == ("stale" if age_hours > BACKUP_WARN_HOURS else "ok")
+    if not math.isfinite(normalized_age_hours) or normalized_age_hours < 0:
+        return False
+    return state == ("stale" if normalized_age_hours > BACKUP_WARN_HOURS else "ok")
 
 
 def _cached_backup_signal(*, cache_alive: bool) -> dict:
