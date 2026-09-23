@@ -25,6 +25,7 @@ bestehenden Bindungs-Nachprüfungen der Funktionen ab.
 from datetime import timedelta
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
@@ -35,6 +36,8 @@ from core.retention.proposals import _lock_target_rows_for_approval, approve_pro
 from core.services.case.workitems import (
     _form_state_unchanged,
     _locked_client_id,
+    update_workitem,
+    update_workitem_status,
     workitem_form_state_token,
 )
 
@@ -174,3 +177,38 @@ class TestAufgabenSperre:
             assert _locked_client_id(eigene_aufgabe) == client_identified.pk
             assert _form_state_unchanged(eigene_aufgabe, token) is True
         _assert_jede_sperre_gescopet(ctx.captured_queries, 2)
+
+
+@pytest.fixture
+def fremde_personenlose_aufgabe(second_facility, second_facility_user):
+    return _aufgabe(second_facility, None, second_facility_user)
+
+
+class TestAufgabeAusserhalbDerEinrichtungWirdNichtGeschrieben:
+    """Eine fehlende Zeile im Einrichtungs-Scope darf nicht wie „personenlos“ weiterlaufen.
+
+    Bei einer personenlosen fremden Aufgabe liefern die Vorab-Lesung und eine
+    verfehlte Sperre beide „keine Person“ — der Vergleich der beiden hielt die
+    Bearbeitung deshalb nicht auf, und die nachgelagerte Schreibung erreichte
+    die fremde Zeile.
+    """
+
+    def test_bearbeiten_bricht_ab_ohne_zu_schreiben(self, facility, staff_user, fremde_personenlose_aufgabe):
+        fremde_personenlose_aufgabe.facility_id = facility.pk
+        with pytest.raises(ValidationError):
+            update_workitem(fremde_personenlose_aufgabe, staff_user, title="Überschrieben")
+        gespeichert = WorkItem.objects.get(pk=fremde_personenlose_aufgabe.pk)
+        assert gespeichert.title == "Rückruf"
+        assert gespeichert.facility_id != facility.pk
+
+    def test_statuswechsel_schreibt_nicht(self, facility, staff_user, fremde_personenlose_aufgabe):
+        fremde_personenlose_aufgabe.facility_id = facility.pk
+        with pytest.raises((ValidationError, WorkItem.DoesNotExist)):
+            update_workitem_status(fremde_personenlose_aufgabe, WorkItem.Status.DONE, staff_user)
+        gespeichert = WorkItem.objects.get(pk=fremde_personenlose_aufgabe.pk)
+        assert gespeichert.status == WorkItem.Status.OPEN
+
+    def test_eigene_personenlose_aufgabe_bleibt_bearbeitbar(self, facility, staff_user):
+        aufgabe = _aufgabe(facility, None, staff_user)
+        update_workitem(aufgabe, staff_user, title="Neuer Titel")
+        assert WorkItem.objects.get(pk=aufgabe.pk).title == "Neuer Titel"
