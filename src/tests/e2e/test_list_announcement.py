@@ -155,7 +155,7 @@ class TestListAnnouncementTotal:
         assert page.evaluate("document.activeElement.getAttribute('name')") == "q"
 
 
-# Befund MITTEL (a-codex-review.md § C): die kleine
+# Befund MITTEL: die kleine
 # ``small``-Scale-Seed-Groesse (<= 7 Klientel, DEFAULT_PAGE_SIZE = 25) laesst
 # ``paginator.count`` und die Zahl sichtbarer Zeilen in JEDEM bisherigen Test
 # zufaellig zusammenfallen — eine fehlerhafte Reimplementierung mit
