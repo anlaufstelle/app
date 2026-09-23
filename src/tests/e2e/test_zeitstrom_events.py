@@ -30,7 +30,7 @@ def _select_doc_type_and_await_swap(page, label):
     Muster ``test_file_vault.select_doc_type_and_wait``, Refs #1797), dann auf
     die Antwort warten und zuletzt darauf, dass kein gestempelter Knoten mehr
     haengt. Erst danach ist ein ``fill`` gegen einen ausstehenden Swap sicher
-    Review, Refs #1855).
+    (Review, Refs #1855).
     """
     page.evaluate(
         "() => document.querySelectorAll('#dynamic-fields > *').forEach((el) => el.setAttribute('data-pre-swap', '1'))"

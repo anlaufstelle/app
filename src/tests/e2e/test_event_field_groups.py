@@ -24,7 +24,7 @@ COLLAPSIBLE_TOGGLE = '#dynamic-fields button:has(span:has-text("Leistungen & Not
 # Genau die Karte, die den obigen Toggle traegt. ``#dynamic-fields [x-data]``
 # waere der Partial-Wurzelknoten ``conditionEvaluator`` — dessen Initialisierung
 # sagt nichts ueber die spaeter angeklickte ``collapsibleGroup``-Karte aus
-# Review, Refs #1855).
+# (Review, Refs #1855).
 COLLAPSIBLE_CARD = (
     "#dynamic-fields [x-data='collapsibleGroup']:has(button:has(span:has-text(\"Leistungen & Notizen\")))"
 )

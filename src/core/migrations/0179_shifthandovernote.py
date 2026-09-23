@@ -14,7 +14,7 @@ Drei Operationen, alle von ``makemigrations`` erzeugt (``--check`` danach leer):
   ``nulls_distinct=False`` (Postgres 15+), damit die Ganztags-Schicht
   (``time_filter IS NULL``) nicht beliebig viele Notizen desselben Tages zulaesst.
 
-**Befunde E-01/E-02.** Diese Migration wurde im Worktree neu
+**Review-Befunde E-01/E-02.** Diese Migration wurde im Worktree neu
 erzeugt, bevor sie irgendwo gemergt war — der Migrationsslot bleibt 0179/0180:
 
 * ``window_start``/``window_end``/``editable_until`` frieren die zur Anlagezeit
