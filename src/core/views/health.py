@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import math
 import os
 import shutil
 import smtplib
@@ -292,6 +293,31 @@ def _cached_detail(key: str, producer, *, cache_alive: bool):
     return cache.get_or_set(key, producer, _DETAIL_CACHE_TTL_SECONDS)
 
 
+def _is_backup_signal(value: object) -> bool:
+    """Genau die Formen, die :func:`_check_backup_signal` selbst erzeugt.
+
+    Nicht nur die Schluessel, auch die Werte (Refs #2343): ``missing``/
+    ``future`` ohne Alter, ``ok``/``stale`` mit einer endlichen, nicht
+    negativen Zahl, deren Schwellenurteil zum Zustand passt. Ein
+    formgueltiger, aber erfundener Eintrag im geteilten Cache — unbekannter
+    Zustand, negatives oder textuelles Alter, ein nicht serialisierbares
+    Objekt — wird damit neu berechnet statt in die Betriebsauskunft
+    durchgereicht.
+    """
+    if not isinstance(value, dict) or set(value) != {"state", "age_hours"}:
+        return False
+    state, age_hours = value["state"], value["age_hours"]
+    if state in ("missing", "future"):
+        return age_hours is None
+    if state not in ("ok", "stale"):
+        return False
+    if isinstance(age_hours, bool) or not isinstance(age_hours, (int, float)):
+        return False
+    if not math.isfinite(age_hours) or age_hours < 0:
+        return False
+    return state == ("stale" if age_hours > BACKUP_WARN_HOURS else "ok")
+
+
 def _cached_backup_signal(*, cache_alive: bool) -> dict:
     """Backup-Signal gecacht — robust gegen eine fremde Cache-Form (Refs #2348).
 
@@ -310,7 +336,7 @@ def _cached_backup_signal(*, cache_alive: bool) -> dict:
     if not cache_alive:
         return _check_backup_signal()
     cached = cache.get(_BACKUP_SIGNAL_CACHE_KEY)
-    if isinstance(cached, dict) and "state" in cached and "age_hours" in cached:
+    if _is_backup_signal(cached):
         return cached
     value = _check_backup_signal()
     cache.set(_BACKUP_SIGNAL_CACHE_KEY, value, _DETAIL_CACHE_TTL_SECONDS)
