@@ -9,7 +9,12 @@ from core.models import Activity, AuditLog
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.audit import audit_event
 from core.services.audit.diff import changed_fields_vs_db
-from core.services.case.state_contract import lock_goal_for_status_change, lock_milestone_for_status_change
+from core.services.case.state_contract import (
+    lock_case_for_write,
+    lock_goal_for_status_change,
+    lock_goal_for_write,
+    lock_milestone_for_status_change,
+)
 from core.services.dashboard import log_activity
 
 logger = logging.getLogger(__name__)
@@ -21,12 +26,16 @@ def create_goal(case, user, title, description=""):
 
     Art.-18-Gate (Refs #2045): Wirkungsziele und Meilensteine sind Inhalt der
     Fallakte — ihre Bearbeitung ist fachliche Nutzung, nicht Speicherung.
-    """
-    from core.services.client.restriction import assert_processing_allowed
 
-    assert_processing_allowed(case.client_id, lock=True)
+    Refs #2329: Das Gate allein liess ein neues Ziel an einer Akte im
+    Papierkorb oder an einer bereits getilgten Akte zu. Angelegt wird jetzt
+    nur an der FRISCH unter Sperre gelesenen und geprueften Fallzeile
+    (Zustandsvertrag, :mod:`core.services.case.state_contract`) — dieselbe
+    Personensperre wie zuvor, danach der Fall.
+    """
+    locked_case = lock_case_for_write(case)
     goal = OutcomeGoal(
-        case=case,
+        case=locked_case,
         title=title,
         description=description,
         created_by=user,
@@ -53,10 +62,14 @@ def update_goal(goal, user, title=None, description=None):
 
     ``OutcomeGoal`` fuehrt kein ``updated_at``; es gibt hier folgerichtig
     keinen Versionskonflikt-Check.
-    """
-    from core.services.client.restriction import assert_processing_allowed
 
-    assert_processing_allowed(goal.case.client_id, lock=True)
+    Refs #2329: Vor jedem Schreiben laeuft der Zustandsvertrag
+    (Person -> Fall -> Ziel, frisch und gesperrt). Ohne ihn schrieb die
+    Bearbeitung Freitext in ein Ziel, dessen Text die Tilgung
+    (``redact_case_goals``) gerade ersetzt hatte. Der Vertrag laeuft auch vor
+    dem No-Op — wie zuvor das Art.-18-Gate.
+    """
+    lock_goal_for_write(goal)
     fields = {}
     if title is not None:
         fields["title"] = title

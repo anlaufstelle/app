@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Case, DocumentType
 from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
-from core.services.case.state_contract import lock_case_for_status_change
+from core.services.case.state_contract import lock_case_for_status_change, lock_event_for_case_link
 from core.services.compliance import user_can_see_event
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
@@ -294,43 +294,41 @@ def assign_event_to_case(case, event, user):
     zuordenbar. Ein erneutes Zuordnen desselben Falls ist ein No-Op und
     schreibt keine zweite Zeile.
     """
-    from core.services.client.restriction import assert_processing_allowed_for
-
-    # Art.-18-Gate (Refs #2045): geprueft werden BEIDE Personenbezuege — der
-    # des Falls und der des Ereignisses. Sie koennen auseinanderfallen (etwa
-    # ein anonymes Ereignis an einem personenlosen Fall), und eine
-    # Einschraenkung auf einer der beiden Seiten verbietet die Zuordnung.
-    #
-    # BEIDE Zeilen in EINER Sperre, PK-geordnet (Refs #2268): die erste
-    # Fassung sperrte erst die Fallperson, dann die Ereignisperson — also in
-    # der fachlichen statt in der PK-Reihenfolge. Fuer zwei Personen A < B
-    # hielt Fall(B)/Ereignis(A) damit B und verlangte A, waehrend ein
-    # gleichzeitiges Zusammenfuehren A->B A hielt und B verlangte: ein
-    # Sperrzyklus, den PostgreSQL mit ``40P01`` aufloest. Die fachlichen
-    # Pruefungen — Einrichtung, Sichtbarkeit, „unterschiedliche Personen" —
-    # folgen unveraendert NACH dem Sperren.
-    assert_processing_allowed_for([case.client_id, event.client_id], lock=True)
+    # Einrichtung zuerst: sie ist an Fall und Ereignis unveraenderlich, die
+    # Pruefung braucht also keinen frischen Stand — und kein Sperren ueber die
+    # Mandantengrenze hinweg.
     if event.facility_id != case.facility_id:
         raise ValueError(_("Ereignis gehört nicht zur selben Einrichtung wie der Fall."))
-    if user is not None and not user_can_see_event(user, event):
+    # Art.-18-Gate (Refs #2045) und Zustandsvertrag (Refs #2329) in EINEM
+    # Schritt: geprueft werden ALLE Personenbezuege — der des Ereignisses und
+    # der beider Faelle —, in EINER PK-geordneten Sperre (Refs #2268: zwei
+    # Einzelsperren in fachlicher Reihenfolge waren ein Sperrzyklus mit einem
+    # gleichzeitigen Zusammenfuehren). Danach die Faelle, zuletzt das Ereignis
+    # selbst, jeweils frisch gelesen (:func:`lock_event_for_case_link`).
+    #
+    # Entschieden und geschrieben wird auf der FRISCHEN Zeile: die
+    # uebergebene Instanz stammt aus einem Lesevorgang von vor dem Klick. Ein
+    # voller ``save()`` auf ihr schrieb ``data_json`` und ``search_text`` von
+    # damals zurueck — ueber eine zwischenzeitliche Tilgung, einen
+    # Papierkorb-Schritt oder eine regulaere Bearbeitung hinweg.
+    # Die Pruefungen „anonymes Ereignis" und „andere Person" laufen im
+    # Vertrag selbst, direkt nach den Personensperren.
+    locked, target, _previous = lock_event_for_case_link(event, case)
+    if user is not None and not user_can_see_event(user, locked):
         raise ValidationError(_("Ereignis ist für diese Rolle nicht sichtbar."))
-    if case.client_id is not None:
-        if event.is_anonymous or event.client_id is None:
-            raise ValidationError(
-                _("Anonyme Ereignisse können nicht an einen Fall mit zugeordneter Person gehängt werden.")
-            )
-        if event.client_id != case.client_id:
-            raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
-    previous_case_id = event.case_id
-    if previous_case_id == case.pk:
+    previous_case_id = locked.case_id
+    if previous_case_id == target.pk:
+        event.refresh_from_db()
         return event
-    event.case = case
-    event.save()
+    locked.case = target
+    # Nur die Zuordnung (und ihr Zeitstempel): die uebrigen Spalten gehoeren
+    # der Bearbeitung und der Tilgung, nicht der Zuordnung.
+    locked.save(update_fields=["case", "updated_at"])
     audit_event(
         AuditLog.Action.CASE_EVENT_ASSIGNED,
         user=user,
-        facility=case.facility,
-        target_obj=event,
+        facility=target.facility,
+        target_obj=locked,
         # Nur UUIDs ins detail (Refs #1751): der Falltitel ist Freitext, den die
         # Anonymisierung ueberschreibt — im append-only Log ueberlebte er sie.
         # ``previous_case_id`` steht nur beim Umhaengen: das loest das Ereignis
@@ -338,10 +336,11 @@ def assign_event_to_case(case, event, user):
         # entstuende — ohne den Schluessel bliebe der Abgang unbelegt. Beide
         # Zweige sind literale Dicts, damit der statische Schluessel-Guard
         # (``TestAuditDetailKeyInventory``, Refs #1944) sie sieht.
-        detail={"case_id": str(case.pk), "previous_case_id": str(previous_case_id)}
+        detail={"case_id": str(target.pk), "previous_case_id": str(previous_case_id)}
         if previous_case_id is not None
-        else {"case_id": str(case.pk)},
+        else {"case_id": str(target.pk)},
     )
+    event.refresh_from_db()
     return event
 
 
@@ -355,21 +354,23 @@ def remove_event_from_case(event, user):
     aus dem das Ereignis geloest wurde; ohne ihn waere nach dem Schreiben nicht
     mehr feststellbar, welche Akte betroffen war.
     """
-    from core.services.client.restriction import assert_processing_allowed
-
-    # Art.-18-Gate (Refs #2045): das Loesen aendert den Fallzusammenhang eines
-    # Kontakts — inhaltliche Aenderung, nicht Speicherung.
-    assert_processing_allowed(event.client_id, lock=True)
-    previous_case = event.case
+    # Art.-18-Gate (Refs #2045) und Zustandsvertrag (Refs #2329): das Loesen
+    # aendert den Fallzusammenhang eines Kontakts — inhaltliche Aenderung,
+    # nicht Speicherung — und die Akte, aus der es geloest wird. Sperrfolge,
+    # frische Zeile und spaltengenaues Schreiben wie in
+    # :func:`assign_event_to_case`.
+    locked, _target, previous_case = lock_event_for_case_link(event)
     if previous_case is None:
+        event.refresh_from_db()
         return event
-    event.case = None
-    event.save()
+    locked.case = None
+    locked.save(update_fields=["case", "updated_at"])
     audit_event(
         AuditLog.Action.CASE_EVENT_REMOVED,
         user=user,
         facility=previous_case.facility,
-        target_obj=event,
+        target_obj=locked,
         detail={"case_id": str(previous_case.pk)},
     )
+    event.refresh_from_db()
     return event
