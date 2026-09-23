@@ -12,12 +12,11 @@ Der Guard formuliert genau diese Invariante: **Was Verify ablehnt, akzeptiert
 auch der Drill nicht.** Geprueft wird sie fuer jeden bekannten Abweichungsfall
 gegen dieselbe Bibliotheksfunktion, die der Prueflauf benutzt.
 
-**Offener, bewusst nicht hier gedeckter Fall:** Ein Medien-Archiv, das der Satz
-gar nicht bindet, ist ein Fehler — eine nicht gebundene ``audit_hwm-<TS>.json``
-daneben dagegen nicht. Die Asymmetrie sitzt in ``backup-set.sh`` selbst und
-betrifft Prueflauf, Restore und Drill gleichermaessen; sie aufzuloesen verlangt
-Anpassungen an Testdateien ausserhalb dieser Lane und ist deshalb gemeldet
-statt hier erzwungen.
+**Symmetrie Medien-Archiv / Audit-Anker (Refs #2340):** Ein Medien-Archiv,
+das der Satz nicht bindet, ist ein Fehler — ebenso eine vorhandene
+``audit_hwm-<TS>.json``, deren Hash das Manifest nicht traegt. ``backup.sh``
+erzeugt diese Kombination nie; liegt sie vor, gehoert die Datei nicht zu
+diesem Satz. Ein Satz ganz ohne Ankerdatei bleibt dagegen gueltig.
 """
 
 from __future__ import annotations
@@ -159,6 +158,10 @@ def _sandbox(tmp_path: Path, **set_options: bool) -> tuple[Path, Path, Path]:
             {"bind_media": False, "write_media": True, "bind_hwm": False, "write_hwm": False},
         ),
         (
+            "Manifest bindet keinen Audit-Anker, es liegt trotzdem einer daneben",
+            {"bind_media": False, "write_media": False, "bind_hwm": False, "write_hwm": True},
+        ),
+        (
             "Manifest enthaelt eine Zeile ohne Schluessel",
             {
                 "bind_media": False,
@@ -180,6 +183,31 @@ def test_drill_rejects_every_set_the_verify_path_rejects(tmp_path: Path, label: 
     assert drill.returncode != 0, f"Der Drill darf keinen Satz annehmen, den der Prueflauf ablehnt ({label})"
     assert "Schritt 0" in drill.stdout, f"Der Abbruch gehoert in Schritt 0 ({label})"
     assert "authentifiziert" not in drill.stdout, f"Kein OK fuer einen abgelehnten Satz ({label})"
+
+
+def test_unbound_anchor_is_rejected_with_its_reason(tmp_path: Path) -> None:
+    """Die Meldung nennt den Grund — wie beim ungebundenen Medien-Archiv."""
+    _compose_dir, ops, db_file = _sandbox(tmp_path, bind_media=False, write_media=False, bind_hwm=False, write_hwm=True)
+
+    verify = _verify_rejects(ops, db_file)
+
+    assert verify.returncode != 0, verify.stderr
+    assert "bindet keinen Audit-Anker" in verify.stderr, verify.stderr
+
+
+def test_set_without_anchor_file_stays_valid(tmp_path: Path) -> None:
+    """Gegenprobe: ein Satz ohne gebundenen und ohne vorhandenen Anker ist gueltig.
+
+    Die Aufrufer reichen den abgeleiteten Ankerpfad immer durch, auch wenn dort
+    keine Datei liegt — abgewiesen wird nur eine VORHANDENE ungebundene Datei.
+    """
+    _compose_dir, ops, db_file = _sandbox(
+        tmp_path, bind_media=False, write_media=False, bind_hwm=False, write_hwm=False
+    )
+
+    verify = _verify_rejects(ops, db_file)
+
+    assert verify.returncode == 0, f"{verify.stdout}\n{verify.stderr}"
 
 
 def test_drill_accepts_the_set_the_verify_path_accepts(tmp_path: Path) -> None:
