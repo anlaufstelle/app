@@ -815,6 +815,17 @@ class AttachmentPurgeView(LeadOrAdminRequiredMixin, View):
             self._audit_blocked_attempt(request, owner, attachment, audit_names)
             messages.error(request, str(exc))
             return redirect("core:attachment_list")
+        except ValidationError as exc:
+            # Refs #2379: Die Vorsperre in ``_lock_chain`` lehnt ab, wenn der
+            # Fall/das Ereignis zwischen Bindungslesung und Personensperre an
+            # eine andere Person gehaengt wurde (Zusammenfuehren). Die
+            # Transaktion ist zu diesem Zeitpunkt vor Audit und Purge
+            # zurueckgerollt — nichts ist geloescht, nichts protokolliert.
+            # Bewusst KEIN Sperr-Protokoll wie beim Legal Hold: gescheitert
+            # ist hier keine Sperre, sondern ein veralteter Stand; derselbe
+            # Ausgang wie das Art.-18-Gate oben (Meldung + Weiterleitung).
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("core:attachment_list")
 
         if not versions:
             messages.info(request, _("Diese Datei wurde bereits endgültig gelöscht."))
