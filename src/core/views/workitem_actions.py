@@ -548,5 +548,10 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # Refs #2331: den mitgeschickten Stand weiterreichen, nicht neu
             # berechnen — ``_post_clean()`` hat die Instanz bereits mutiert.
             "form_state_token": request.POST.get("expected_form_state", ""),
+            # Refs #2361: ebenso den Versions-Token aus dem ersten Laden. Die
+            # Instanz stammt aus DIESEM Request; ihr ``updated_at`` enthaelt
+            # bereits jede zwischenzeitliche Aenderung eines anderen Vorgangs,
+            # und der naechste Speicherversuch wuerde sie still ueberschreiben.
+            "expected_updated_at": request.POST.get("expected_updated_at", ""),
         }
         return render(request, "core/workitems/form.html", context)
