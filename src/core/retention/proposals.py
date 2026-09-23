@@ -332,9 +332,17 @@ def _lock_target_rows_for_approval(proposal):
     client_id = row["client_id"]
     if client_id is not None:
         # Refs #2377: auch die Personenzeile nur in der Einrichtung des
-        # Vorschlags sperren. Fehlt sie dort (zwischenzeitlich entfernt), faellt
-        # das unten in der Bindungs-Nachpruefung auf.
-        Client.objects.filter(pk=client_id, facility=proposal.facility_id).select_for_update().only("pk").first()
+        # Vorschlags sperren. Trifft die Sperre keine Zeile, ist die Bindung
+        # nicht gesperrt — auch dann, wenn sie sich danach nicht aendert: der
+        # zusammengesetzte Fremdschluessel Ereignis/Person wird erst am
+        # Transaktionsende geprueft, innerhalb der Transaktion kann das
+        # Ereignis auf eine fremde Person zeigen. Behandelt wie eine
+        # geaenderte Bindung.
+        locked_client = (
+            Client.objects.filter(pk=client_id, facility=proposal.facility_id).select_for_update().only("pk").first()
+        )
+        if locked_client is None:
+            raise ValidationError(TARGET_BINDING_CHANGED_MESSAGE)
     Event.objects.filter(pk=proposal.target_id, facility=proposal.facility_id).select_for_update().only("pk").first()
     # Bindung NACH der Ereignissperre revalidieren: gewinnt parallel ein Merge
     # und haengt das Ereignis an eine andere Person, haetten wir deren Zeile nie

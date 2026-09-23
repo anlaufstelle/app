@@ -107,7 +107,14 @@ def _lock_event_and_recheck_hold(facility, pk):
         # ``client_id`` ist ``None`` bei anonymen Ereignissen — dort gibt es
         # keine Personenzeile und nichts zu koordinieren (Muster
         # ``crud._lock_client_row``).
-        Client.objects.filter(pk=client_id, facility=facility).select_for_update().only("pk").first()
+        locked_client = Client.objects.filter(pk=client_id, facility=facility).select_for_update().only("pk").first()
+        if locked_client is None:
+            # Refs #2377: keine Personenzeile dieser Einrichtung gesperrt —
+            # zwischenzeitlich entfernt oder (innerhalb der Transaktion, der
+            # zusammengesetzte Fremdschluessel prueft erst am Ende) fremd
+            # gebunden. Ohne gesperrte Person kein verlaesslicher Hold-Blick:
+            # ueberspringen, der naechste Lauf liest neu.
+            return None, False
     # Ereigniszeile sperren, DANN erst voll laden: ``select_for_update`` mit
     # ``select_related`` sperrte sonst zusaetzlich die ``core_documenttype``-
     # Zeile — ein Sperrobjekt ausserhalb der kanonischen Ordnung.
