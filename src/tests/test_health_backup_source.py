@@ -1,12 +1,11 @@
 """Refs #2291: ``/health/`` und der Systembereich leiten den Backup-Zustand
 aus DERSELBEN Quelle ab.
 
-``core/views/health.py::_check_backup_age`` scannte das Backup-Verzeichnis
-selbst (jüngste ``*.sql.gz.enc``-Datei), während
-``core/services/system/health.py::last_backup_info`` die Grundlage der Anzeige
-im Systembereich und der Compliance-Zeile ist. Zwei Ableitungen über dasselbe
-Verzeichnis heißt: zwei Anzeigen, die einander widersprechen können — genau
-das, was Betreiber im Fehlerfall in die Irre führt.
+``core/services/system/health.py::last_backup_info`` ist die gemeinsame
+Grundlage der Anzeige im Systembereich, der Compliance-Zeile und des
+Health-Endpunkts. Eine zusätzliche Altersfunktion in der View wäre eine zweite
+Ableitung über dasselbe Verzeichnis und könnte Betreiber im Fehlerfall in die
+Irre führen.
 
 Der Guard pinnt die gemeinsame Ableitung, **nicht** eine bestimmte Heuristik:
 was ``last_backup_info`` als letztes Backup gelten lässt, gilt auch für
@@ -26,7 +25,6 @@ Lesarten von „Backup vorhanden" und ist auf beiden Ständen ein Treffer.
 import pytest
 
 from core.services.system.health import last_backup_info
-from core.views.health import _check_backup_age
 
 pytestmark = pytest.mark.django_db
 
@@ -67,35 +65,26 @@ def _publish_complete_set(backup_dir, timestamp=_TIMESTAMP):
     return manifest
 
 
-class TestHealthBackupAgeSharesTheSystemDerivation:
-    def test_complete_backup_is_seen_identically_by_both_paths(self, tmp_path, settings):
+class TestHealthBackupAgeUsesTheSystemDerivation:
+    def test_complete_backup_has_a_measurable_age(self, tmp_path, settings):
         settings.BACKUP_DIR = tmp_path
         _publish_complete_set(tmp_path)
 
         info = last_backup_info()
-        age = _check_backup_age()
 
         assert info is not None, "Ein vollständig veröffentlichter Satz muss als Backup gelten."
-        assert age == info["age_hours"]
+        assert info["age_hours"] is not None
 
-    def test_partial_artifact_is_judged_identically_by_both_paths(self, tmp_path, settings):
-        """Teilprodukt (hier: ein leeres Manifest ohne Dump) — die beiden
-        Anzeigen dürfen sich nicht widersprechen. WELCHES Urteil richtig ist,
-        entscheidet ``last_backup_info``; ``/health/`` folgt ihm."""
+    def test_partial_artifact_is_not_a_backup(self, tmp_path, settings):
+        """Ein leeres Manifest ohne Dump ist kein vollständiger Satz."""
         settings.BACKUP_DIR = tmp_path
         (tmp_path / "anlaufstelle_2026-01-01.manifest").write_text("", encoding="utf-8")
 
         info = last_backup_info()
-        age = _check_backup_age()
 
-        assert (info is None) == (age is None), (
-            "/health/ und der Systembereich bewerten dasselbe Backup-Verzeichnis "
-            f"unterschiedlich: last_backup_info={info!r}, _check_backup_age={age!r} (Refs #2291)"
-        )
-        if info is not None:
-            assert age == info["age_hours"]
+        assert info is None
 
-    def test_dump_without_manifest_is_judged_identically(self, tmp_path, settings):
+    def test_dump_without_manifest_is_not_a_backup(self, tmp_path, settings):
         """Ein Dump ohne veröffentlichtes Manifest ist kein Satz.
 
         Auf dem Stand mit der Satz-Prüfung lautet das gemeinsame Urteil beider
@@ -108,25 +97,15 @@ class TestHealthBackupAgeSharesTheSystemDerivation:
         (daily / f"anlaufstelle_{_TIMESTAMP}.sql.gz.enc").write_bytes(b"dump")
 
         info = last_backup_info()
-        age = _check_backup_age()
 
-        assert (info is None) == (age is None), (
-            "Dump ohne Manifest: /health/ und der Systembereich urteilen unterschiedlich "
-            f"(last_backup_info={info!r}, _check_backup_age={age!r}, Refs #2291)"
-        )
-        if info is not None:
-            assert age == info["age_hours"]
+        assert info is None
 
-    def test_health_has_no_second_derivation(self, tmp_path, settings, monkeypatch):
-        """Kernzusage: ``_check_backup_age`` rechnet nicht selbst. Sagt die
-        gemeinsame Funktion „kein Backup", sagt ``/health/`` dasselbe — auch
-        wenn im Verzeichnis ein vollständiger Satz liegt."""
-        settings.BACKUP_DIR = tmp_path
-        _publish_complete_set(tmp_path)
-        monkeypatch.setattr("core.views.health.last_backup_info", lambda: None, raising=False)
+    def test_health_view_has_no_obsolete_age_helper(self):
+        """Der Health-Endpunkt darf keine zweite Backup-Ableitung behalten."""
+        import core.views.health as health_view
 
-        assert _check_backup_age() is None
+        assert not hasattr(health_view, "_check_backup_age")
 
     def test_missing_directory_stays_none(self, tmp_path, settings):
         settings.BACKUP_DIR = tmp_path / "gibt-es-nicht"
-        assert _check_backup_age() is None
+        assert last_backup_info() is None

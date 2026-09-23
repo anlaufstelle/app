@@ -29,7 +29,6 @@ import pytest
 from core.services.compliance._types import ComplianceStatus
 from core.services.compliance.backup import _backup_checks
 from core.services.system.health import last_backup_info
-from core.views.health import _check_backup_age
 
 pytestmark = pytest.mark.django_db
 
@@ -105,14 +104,14 @@ class TestFutureTimestampIsItsOwnState:
         assert data["last_backup_age_hours"] is None, "Kein negativer Messwert im Monitoring-Payload"
         assert data["status"] != "ok", "Ein unbekanntes Backup-Alter darf die Ampel nicht gruen lassen"
 
-    def test_health_has_no_second_derivation_for_the_future_case(self, tmp_path, settings):
-        """``_check_backup_age`` bleibt am gemeinsamen Urteil, statt selbst zu rechnen."""
+    def test_shared_derivation_has_no_age_for_the_future_case(self, tmp_path, settings):
+        """Der gemeinsame Service liefert für die Zukunft keinen Messwert."""
         settings.BACKUP_DIR = tmp_path
         _set_future_mtime(_publish_complete_set(tmp_path))
 
         info = last_backup_info()
 
-        assert _check_backup_age() == info["age_hours"] is None
+        assert info["age_hours"] is None
 
 
 class TestNormalAgesAreUnchanged:
