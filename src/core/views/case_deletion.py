@@ -124,7 +124,17 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
             except ValidationError as exc:
                 messages.error(request, "; ".join(exc.messages))
                 return redirect("core:case_detail", pk=case.pk)
-            soft_delete_case(case, request.user)
+            try:
+                soft_delete_case(case, request.user)
+            except ValidationError as exc:
+                # Refs #2373: der Service prueft den Zustand an der gesperrten
+                # Fallzeile. Liegt der Fall seit dem Laden oben schon im
+                # Papierkorb oder ist er getilgt, ist das ein Konflikt mit einer
+                # parallelen Aenderung — Meldung statt Serverfehler. Ziel ist
+                # die Fall-Liste: die Fallakte eines Falls im Papierkorb ist
+                # nicht mehr erreichbar.
+                messages.error(request, "; ".join(exc.messages))
+                return redirect("core:case_list")
             messages.success(
                 request,
                 _(
