@@ -74,7 +74,7 @@ from core.services.events import (
     undo_tally_event,
     update_event,
 )
-from core.services.events.crud import event_form_state_token
+from core.services.events.crud import event_form_state_token, lock_event_for_edit
 from core.services.events.fields import file_marker_slugs
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
@@ -1200,6 +1200,15 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                 # Rollback, statt mit ihm zu verschwinden.
                 with quota_backstop_audit_boundary():
                     with transaction.atomic():
+                        # Refs #2359: Person -> Ereignis als ERSTE Sperre, mit der
+                        # frisch gelesenen Bindung. Die Anhangs-Vorsperre darunter
+                        # leitet die Person aus der Instanz ab — nach einem
+                        # parallelen Zusammenfuehren waere das die alte Person,
+                        # und ``update_event`` sperrte die neue erst hinter dem
+                        # Ereignis (Zyklus mit der Fallzuordnung, die Person ->
+                        # Fall -> Ereignis sperrt). Der Helfer gleicht die Instanz
+                        # an; alle folgenden Sperren finden beide Zeilen gehalten.
+                        lock_event_for_edit(event)
                         # Refs #2260: einrichtungsweite Sperr-Reihenfolge — die
                         # Bestandszeilen dieses Batches werden VOR dem ersten
                         # Audit-Write gesperrt. ``update_event`` nimmt mit seiner

@@ -292,7 +292,7 @@ def _event_form_state_unchanged(event, expected_form_state):
 EVENT_EDIT_DELETED_MESSAGE = _("Dieses Ereignis wurde gelöscht — es kann nicht mehr bearbeitet werden.")
 
 
-def _lock_event_for_edit(event):
+def lock_event_for_edit(event):
     """Person -> Ereignis sperren und den FRISCHEN Zustand beider pruefen (Refs #2359, #2378).
 
     Die Instanz stammt aus einem Lesevorgang vor der Sperre. Zwei Zustaende
@@ -315,6 +315,19 @@ def _lock_event_for_edit(event):
     Hat ein paralleles Zusammenfuehren das Ereignis inzwischen an eine andere
     Person gehaengt, deren Zeile wir nicht gesperrt haben: Abbruch statt
     Nachsperren (Muster ``lock_event_for_case_link``).
+
+    **Erste Sperre des Vorgangs** (Refs #2359): Wer vor der Bearbeitung
+    weitere Zeilen dieses Ereignisses sperrt (die Anhangs-Vorsperre in
+    ``EventUpdateView.post``), ruft diesen Helfer ZUERST. Die Vorsperre leitet
+    die Person aus ``event.client_id`` ab; nach einem Zusammenfuehren traegt die
+    Instanz dort noch die alte Person. Liefe sie zuerst, hielte der Vorgang
+    bereits das Ereignis, wenn dieser Helfer die frisch gelesene Person
+    sperrt — eine Kante Ereignis -> Person gegen eine parallele Fallzuordnung
+    (Person -> Fall -> Ereignis). Deshalb gleicht der Helfer die Bindung der
+    Instanz an die gesperrte Person an: alle folgenden Sperren finden Person
+    und Ereignis bereits gehalten vor. Ein zweiter Aufruf in derselben
+    Transaktion (``update_event``) liest dieselbe Bindung und sperrt nichts
+    Neues.
     """
     from core.services.case.state_contract import EVENT_WRITE_GONE_MESSAGE, _raise_if_clients_revoked
     from core.services.client.restriction import assert_processing_allowed
@@ -335,6 +348,8 @@ def _lock_event_for_edit(event):
         raise ValidationError(EVENT_WRITE_GONE_MESSAGE)
     if is_deleted:
         raise ValidationError(EVENT_EDIT_DELETED_MESSAGE)
+    if event.client_id != client_id:
+        event.client_id = client_id
 
 
 @transaction.atomic
@@ -385,7 +400,7 @@ def update_event(
     # zusammen mit dem Widerruf der Person und dem Papierkorb des Ereignisses,
     # beide frisch unter Sperre gelesen — die Fingerabdruck-Rettung unten gilt
     # damit nur fuer ein lebendes Ereignis einer lebenden Person.
-    _lock_event_for_edit(event)
+    lock_event_for_edit(event)
     try:
         check_version_conflict(event, expected_updated_at, require_token=require_version_token)
     except ValidationError as exc:
