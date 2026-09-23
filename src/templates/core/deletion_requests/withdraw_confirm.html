@@ -54,7 +54,7 @@ Gefahren-Signal waere irrefuehrend.{% endcomment %}
         </dl>
     </div>
 
-    <form method="post" class="flex items-center space-x-3">
+    <form method="post" class="flex flex-wrap items-center gap-3">
         {% csrf_token %}
         <button type="submit" class="px-4 py-2 bg-amber-700 text-white text-sm font-medium rounded-md hover:bg-amber-800"
                 data-testid="deletion-withdraw-submit">

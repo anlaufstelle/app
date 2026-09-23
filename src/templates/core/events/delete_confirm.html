@@ -51,7 +51,7 @@
         </div>
         {% endif %}
 
-        <div class="flex items-center space-x-3">
+        <div class="flex flex-wrap items-center gap-3">
             {% if event.client and event.client.contact_stage == "qualified" %}
             <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700" data-testid="event-delete-confirm">
                 {% trans "Löschantrag stellen" %}

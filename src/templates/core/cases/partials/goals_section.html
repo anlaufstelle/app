@@ -39,7 +39,7 @@
                                   aria-label="{% trans 'Beschreibung (optional)' %}"
                                   class="w-full text-sm border border-subtle rounded px-2 py-1 focus:outline-hidden focus:ring-1 focus:ring-accent"
                                   placeholder="{% trans 'Beschreibung (optional)' %}">{{ goal.description }}</textarea>
-                        <div class="flex items-center space-x-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <button type="submit" class="text-sm bg-accent text-white px-3 py-1 rounded hover:bg-accent">
                                 {% trans "Speichern" %}
                             </button>
@@ -158,7 +158,7 @@
               hx-post="{% url 'core:goal_create' case_pk=case.pk %}"
               hx-target="#goals-section"
               hx-swap="outerHTML"
-              class="flex items-center space-x-2">
+              class="flex flex-wrap items-center gap-2">
             {% csrf_token %}
             <input type="text" name="title" placeholder="{% trans 'Neues Wirkungsziel' %}" required
                    aria-label="{% trans 'Neues Wirkungsziel' %}"

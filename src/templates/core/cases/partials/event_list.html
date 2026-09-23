@@ -5,7 +5,7 @@
     {% for event in events %}
     <div class="flex items-center justify-between bg-surface border border-subtle rounded-[10px] p-3">
         <a href="{% url 'core:event_detail' event.pk %}" class="flex-1 hover:text-accent">
-            <div class="flex items-center space-x-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <span class="text-sm text-ink-muted font-mono">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-light text-accent">
                     {{ event.document_type.name }}

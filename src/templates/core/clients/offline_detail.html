@@ -20,7 +20,7 @@
      data-wi-prio-important="{% trans 'Wichtig' %}"
      data-wi-prio-urgent="{% trans 'Dringend' %}">
 
-    <div class="mb-4 flex items-center space-x-2">
+    <div class="mb-4 flex flex-wrap items-center gap-2">
         <span class="badge bg-yellow-100 text-yellow-800">
             {% trans "Offline-Ansicht" %}
         </span>
@@ -97,7 +97,7 @@
 
             <div class="mb-6">
                 <h1 class="text-[22px] font-bold text-ink" x-text="data.client.pseudonym" data-testid="offline-pseudonym"></h1>
-                <div class="mt-1 flex items-center space-x-3">
+                <div class="mt-1 flex flex-wrap items-center gap-3">
                     <span class="badge bg-green-100 text-green-800"
                           x-text="data.client.contact_stage_display"></span>
                     <span class="text-sm text-ink-muted" x-text="data.client.age_cluster_display"></span>
@@ -196,7 +196,7 @@
                         <template x-for="event in data.events" :key="event.pk">
                             <div class="block card p-4" data-testid="offline-event">
                                 <div class="flex items-center justify-between">
-                                    <div class="flex items-center space-x-3">
+                                    <div class="flex flex-wrap items-center gap-3">
                                         <span class="text-sm text-ink-muted font-mono" x-text="event.occurred_at_fmt"></span>
                                         <span class="badge bg-accent-light text-accent"
                                               x-text="event.document_type_name"></span>
@@ -222,7 +222,7 @@
                                             </a>
                                         </template>
                                     </div>
-                                    <div class="flex items-center space-x-3">
+                                    <div class="flex flex-wrap items-center gap-3">
                                         <span class="text-xs text-ink-muted" x-text="event.created_by_display"></span>
                                         {# Offline-Edit-Einstieg (Refs #1111): nur wo der Replay durchginge; event.can_edit_ui in load() vorberechnet (CSP-Guard verbietet Method-Calls in x-if). #}
                                         <template x-if="event.can_edit_ui">

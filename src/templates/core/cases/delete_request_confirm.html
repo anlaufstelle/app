@@ -84,7 +84,7 @@
         </div>
         {% endif %}
 
-        <div class="flex items-center space-x-3 pt-2">
+        <div class="flex flex-wrap items-center gap-3 pt-2">
             <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700" data-testid="case-delete-submit">
                 {% if requires_four_eyes %}{% trans "Löschantrag stellen" %}{% else %}{% trans "In den Papierkorb verschieben" %}{% endif %}
             </button>
