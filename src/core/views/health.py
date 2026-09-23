@@ -185,24 +185,6 @@ def _check_smtp() -> dict:
         return {"status": "unreachable"}
 
 
-def _check_backup_age() -> float | None:
-    """Alter (in Stunden) der letzten Sicherung; ``None`` falls keine vorliegt.
-
-    Refs #2291: Die Ableitung ist dieselbe wie im Systembereich und in der
-    Compliance-Zeile — :func:`core.services.system.health.last_backup_info`.
-    Vorher scannte diese Funktion das Verzeichnis selbst (juengste
-    ``*.sql.gz.enc``-Datei). Zwei Ableitungen ueber dasselbe Verzeichnis
-    heissen zwei Anzeigen, die einander widersprechen koennen: ``/health/``
-    meldete "kein Backup", waehrend ``/system/`` dieselbe Lage als frisch
-    auswies (oder umgekehrt). Was als letzte Sicherung zaehlt, entscheidet
-    ab jetzt genau eine Stelle.
-    """
-    info = last_backup_info()
-    if info is None:
-        return None
-    return info["age_hours"]
-
-
 def _check_backup_signal() -> dict:
     """Backup-Zustand fuer ``/health/``: ein Verzeichnis-Scan, ein Urteil.
 
