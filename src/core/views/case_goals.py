@@ -109,7 +109,12 @@ class MilestoneCreateView(StaffRequiredMixin, View):
         goal = get_object_or_404(OutcomeGoal, pk=goal_pk, case=case)
         title = request.POST.get("title", "").strip()
         if title:
-            create_milestone(goal=goal, title=title)
+            try:
+                create_milestone(goal=goal, title=title)
+            except ValidationError as exc:
+                # Refs #2358: Absage des Zustandsvertrags wie bei
+                # ``MilestoneToggleView`` — 409 statt HTTP 500.
+                return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -134,5 +139,9 @@ class MilestoneDeleteView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
-        delete_milestone(milestone, request.user)
+        try:
+            delete_milestone(milestone, request.user)
+        except ValidationError as exc:
+            # Refs #2358, Spiegel von ``MilestoneCreateView``.
+            return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))

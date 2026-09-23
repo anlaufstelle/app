@@ -14,6 +14,7 @@ from core.services.case.state_contract import (
     lock_goal_for_status_change,
     lock_goal_for_write,
     lock_milestone_for_status_change,
+    lock_milestone_for_write,
 )
 from core.services.dashboard import log_activity
 
@@ -142,12 +143,18 @@ def unachieve_goal(goal):
 
 @transaction.atomic
 def create_milestone(goal, title, sort_order=0):
-    """Create a new Milestone for a goal."""
-    from core.services.client.restriction import assert_processing_allowed
+    """Create a new Milestone for a goal.
 
-    assert_processing_allowed(goal.case.client_id, lock=True)
+    Refs #2358: Vor dem Schreiben laeuft der Zustandsvertrag (Person -> Fall
+    -> Ziel, frisch und gesperrt; :func:`lock_goal_for_write`) — wie bei der
+    Anlage eines Ziels. Das Art.-18-Gate ist darin enthalten (erste Stufe,
+    dieselbe Personensperre); zusaetzlich lehnt der Vertrag eine Akte im
+    Papierkorb, eine getilgte Akte und die Akte einer Person im Papierkorb ab.
+    Ohne ihn liess sich dort noch Meilenstein-Freitext anlegen.
+    """
+    locked_goal = lock_goal_for_write(goal)
     milestone = Milestone(
-        goal=goal,
+        goal=locked_goal,
         title=title,
         sort_order=sort_order,
     )
@@ -183,13 +190,19 @@ def delete_milestone(milestone, user):
 
     Milestones are lightweight, but the deletion is still a state-changing
     operation that must be auditable.
-    """
-    from core.services.client.restriction import assert_processing_allowed
 
-    case = milestone.goal.case
-    assert_processing_allowed(case.client_id, lock=True)
+    Refs #2358: Geloescht wird die FRISCH unter dem Zustandsvertrag gesperrte
+    Zeile (Person -> Fall -> Ziel -> Meilenstein,
+    :func:`lock_milestone_for_write`) — nicht die Instanz von vor dem Klick.
+    Das Art.-18-Gate ist die erste Stufe des Vertrags; zusaetzlich lehnt er
+    eine Akte im Papierkorb, eine getilgte Akte, die Akte einer Person im
+    Papierkorb und einen inzwischen verschwundenen Meilenstein ab — ohne
+    Audit- und Zeitstrom-Zeile.
+    """
+    locked = lock_milestone_for_write(milestone)
+    case = locked.goal.case
     facility = case.facility
-    milestone_pk = str(milestone.pk)
+    milestone_pk = str(locked.pk)
     audit_event(
         AuditLog.Action.MILESTONE_DELETE,
         user=user,
@@ -206,7 +219,7 @@ def delete_milestone(milestone, user):
         facility=facility,
         actor=user,
         verb=Activity.Verb.DELETED,
-        target=milestone,
+        target=locked,
         action=Activity.Action.MILESTONE_DELETED,
     )
-    milestone.delete()
+    locked.delete()

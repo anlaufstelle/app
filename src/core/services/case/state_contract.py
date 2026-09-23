@@ -367,3 +367,39 @@ def lock_event_for_case_link(event, target_case=None) -> tuple[Event, Case | Non
         raise ValidationError(EVENT_WRITE_REDACTED_MESSAGE)
     target = cases[target_case.pk] if target_case is not None else None
     return locked_event, target, cases.get(previous_case_id)
+
+
+def lock_milestone_for_write(milestone) -> Milestone:
+    """Der Meilenstein fuer seine Loeschung — Person -> Fall -> Ziel -> Meilenstein (Refs #2358).
+
+    Derselbe Vertrag und dieselbe Sperrfolge wie
+    :func:`lock_milestone_for_status_change`, nur mit den Meldungen fuer
+    Schreibvorgaenge, die keinen Status wechseln (Muster
+    :func:`lock_goal_for_write`). Die Loeschung eines Meilensteins aendert den
+    Inhalt der Akte und schreibt Audit- und Zeitstrom-Zeile; an einer Akte im
+    Papierkorb, einer getilgten Akte oder der Akte einer Person im Papierkorb
+    waere das eine Aenderung an einem Datensatz, den es fachlich nicht mehr
+    gibt. Die Anlage eines Meilensteins nimmt :func:`lock_goal_for_write` —
+    einen Meilenstein, der gesperrt werden koennte, gibt es dort noch nicht.
+    """
+    goal_pk, case_pk, client_id, facility_id = _present(
+        Milestone.objects.filter(pk=milestone.pk)
+        .values_list("goal_id", "goal__case_id", "goal__case__client_id", "goal__case__facility_id")
+        .first(),
+        CASE_WRITE_GONE_MESSAGE,
+    )
+    _locked_case(
+        case_pk,
+        client_id,
+        facility_id,
+        redacted_message=CASE_WRITE_REDACTED_MESSAGE,
+        gone_message=CASE_WRITE_GONE_MESSAGE,
+    )
+    _present(
+        OutcomeGoal.objects.filter(pk=goal_pk, case_id=case_pk).select_for_update().only("pk").first(),
+        CASE_WRITE_GONE_MESSAGE,
+    )
+    return _present(
+        Milestone.objects.filter(pk=milestone.pk, goal_id=goal_pk).select_for_update().first(),
+        CASE_WRITE_GONE_MESSAGE,
+    )
