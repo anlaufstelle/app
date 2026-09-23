@@ -13,8 +13,11 @@ Gruppen:
   Ereignissperre verlieren je eine Bedingung.
 
 Eine entfallene Bedingung faellt im Ergebnis nur auf, wenn eine zweite Zeile
-passt. Deshalb halten die Pins die WHERE-Bedingungen der Abfragen exakt fest
-und belegen die ``pk``-Varianten zusaetzlich am Ergebnis: die
+passt. Deshalb halten die Pins je Abfrage die Bedingungen fest, die sie
+tragen muss — erkannt an Tabelle, Sperrmarker und den Parametern der
+Bedingungen, nicht an Projektion, Reihenfolge oder Literalform; ``= x`` und
+``IN (x)`` gelten gleich. Die ``pk``-Varianten sind zusaetzlich am Ergebnis
+belegt: die
 Standardsortierung der Modelle stellt die falsche Zeile nach vorn, sodass ein
 Filter ohne ``pk`` sie liefern wuerde. Wettlaeufe werden deterministisch im
 Art.-18-Gate bzw. direkt nach der Fallsperre nachgestellt — zwischen dem
@@ -22,12 +25,13 @@ ungesperrten Vorlesen und der Sperre der naechsten Stufe.
 """
 
 import re
+import uuid
+from contextlib import contextmanager
 from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import connection
-from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import Case, Client, Event
@@ -38,31 +42,73 @@ from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 
 pytestmark = pytest.mark.django_db
 
-_BEDINGUNG = re.compile(r'"(\w+)"\."(\w+)" = \'([0-9a-f]{32})\'::uuid')
-_VORLESEN_FALL = 'SELECT "core_case"."client_id" AS "client_id", "core_case"."facility_id" AS "facility_id" FROM'
-_ZIELSPERRE = 'SELECT "core_outcomegoal".'
-_VORLESEN_EREIGNIS = 'SELECT "core_event"."facility_id" AS "facility_id", '
-_ZIELFALL_LESEN = 'SELECT "core_case"."client_id" AS "client_id" FROM "core_case" WHERE'
-_FALLSPERRE = 'SELECT "core_case"."is_deleted", '
-_EREIGNISSPERRE = 'SELECT "core_event"."id", '
-_IN_LISTE = re.compile(r'"(\w+)"\."(\w+)" IN \(([^)]*)\)')
-_UUID = re.compile(r"'([0-9a-f]{32})'::uuid")
+_FROM = re.compile(r'\bFROM\s+"(\w+)"', re.IGNORECASE)
+_SPERRE = re.compile(r"\bFOR\s+(?:NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\b", re.IGNORECASE)
+_PLATZHALTER = re.compile(
+    r'"(\w+)"\s*\.\s*"(\w+)"\s*(?:=\s*%s|IN\s*\(((?:\s*%s\s*,?)+)\))|%s',
+    re.IGNORECASE,
+)
 
 
-def _bedingungen(sql):
-    """Die ``Spalte = UUID``-Bedingungen der WHERE-Klausel als Menge."""
-    where = sql.split(" WHERE ", 1)[1]
-    return {(f"{t}.{c}", v) for t, c, v in _BEDINGUNG.findall(where)}
+def _wert(wert):
+    """UUID-Werte normalisiert (Objekt, Text mit oder ohne Bindestriche), sonst ``str``."""
+    try:
+        return uuid.UUID(str(wert)).hex
+    except ValueError:
+        return str(wert)
 
 
-def _in_bedingungen(sql):
-    """Die ``Spalte IN (...)``-Bedingungen der WHERE-Klausel als ``{spalte: {uuid, ...}}``."""
-    where = sql.split(" WHERE ", 1)[1]
-    return {f"{t}.{c}": set(_UUID.findall(werte)) for t, c, werte in _IN_LISTE.findall(where)}
+class _Abfrage:
+    """Eine ausgefuehrte Abfrage: Tabelle, Sperrmarker und ihre Parameter-Bedingungen.
+
+    Gelesen wird die Abfrage VOR der Debug-Formatierung (SQL mit Platzhaltern
+    plus Parameter). Die SELECT-Projektion, die Reihenfolge der Bedingungen und
+    die Literalform der Werte spielen damit keine Rolle; ``spalte = x`` und
+    ``spalte IN (x, ...)`` ergeben gleichermassen die Wertemenge der Spalte.
+    """
+
+    def __init__(self, sql, params):
+        self.sql = sql
+        treffer = _FROM.search(sql)
+        self.tabelle = treffer.group(1) if treffer else None
+        self.sperrt = bool(_SPERRE.search(sql))
+        self.bedingungen = {}
+        werte = iter(params or ())
+        for match in _PLATZHALTER.finditer(sql):
+            tabelle, spalte, liste = match.groups()
+            anzahl = liste.count("%s") if liste else 1
+            gelesen = [_wert(next(werte)) for _ in range(anzahl)]
+            if tabelle:
+                self.bedingungen.setdefault(f"{tabelle}.{spalte}", set()).update(gelesen)
+
+    def traegt(self, **erwartet):
+        """Traegt die Abfrage je Spalte genau diese Wertemenge (``=`` oder ``IN``)?"""
+        return all(
+            self.bedingungen.get(f"{self.tabelle}.{spalte}") == {_wert(w) for w in werte}
+            for spalte, werte in erwartet.items()
+        )
 
 
-def _abfragen(ctx, praefix):
-    return [q["sql"] for q in ctx.captured_queries if q["sql"].startswith(praefix)]
+class _Mitschnitt(list):
+    """Schneidet jede Abfrage samt Parametern mit (``connection.execute_wrapper``)."""
+
+    def __call__(self, execute, sql, params, many, context):
+        if not many:
+            self.append(_Abfrage(sql, params))
+        return execute(sql, params, many, context)
+
+    def lesungen(self, tabelle):
+        return [a for a in self if a.tabelle == tabelle and not a.sperrt]
+
+    def sperren(self, tabelle):
+        return [a for a in self if a.tabelle == tabelle and a.sperrt]
+
+
+@contextmanager
+def _mitschnitt():
+    mitschnitt = _Mitschnitt()
+    with connection.execute_wrapper(mitschnitt):
+        yield mitschnitt
 
 
 def _meldungen(exc_info):
@@ -158,13 +204,11 @@ class TestLockCaseForWrite:
     def test_vorlesen_traegt_pk_und_einrichtung(self, case_open):
         """x_lock_case_for_write__mutmut_12 (``pk`` faellt weg), _13
         (``facility_id`` faellt weg)."""
-        with CaptureQueriesContext(connection) as ctx:
+        with _mitschnitt() as abfragen:
             sc.lock_case_for_write(case_open)
-        (vorlesen,) = _abfragen(ctx, _VORLESEN_FALL)
-        assert _bedingungen(vorlesen) == {
-            ("core_case.id", case_open.pk.hex),
-            ("core_case.facility_id", case_open.facility_id.hex),
-        }
+        assert any(
+            a.traegt(id=[case_open.pk], facility_id=[case_open.facility_id]) for a in abfragen.lesungen("core_case")
+        )
 
     def test_aelterer_fall_neben_neuerem_fall_einer_anderen_person(
         self, facility, client_identified, andere_person, staff_user
@@ -201,14 +245,11 @@ class TestLockGoalForWrite:
     def test_zielsperre_traegt_pk_und_fall(self, outcome_goal):
         """x_lock_goal_for_write__mutmut_35 (``pk`` faellt weg), _36
         (``case_id`` faellt weg)."""
-        with CaptureQueriesContext(connection) as ctx:
+        with _mitschnitt() as abfragen:
             sc.lock_goal_for_write(outcome_goal)
-        sperren = [q for q in _abfragen(ctx, _ZIELSPERRE) if q.endswith("FOR UPDATE")]
-        assert len(sperren) == 1
-        assert _bedingungen(sperren[0]) == {
-            ("core_outcomegoal.id", outcome_goal.pk.hex),
-            ("core_outcomegoal.case_id", outcome_goal.case_id.hex),
-        }
+        sperren = abfragen.sperren("core_outcomegoal")
+        assert sperren
+        assert all(a.traegt(id=[outcome_goal.pk], case_id=[outcome_goal.case_id]) for a in sperren)
 
     def test_liefert_das_adressierte_ziel(self, case_open, staff_user):
         """x_lock_goal_for_write__mutmut_35: ohne ``pk`` kaeme das neueste
@@ -251,37 +292,39 @@ class TestLockEventForCaseLink:
         (Person in der Ereignissperre). Umhaengen von einem Fall an einen
         zweiten, damit die Fallsperre zwei Zeilen traegt.
 
-        Fuer _81 ist die WHERE-Bedingung der einzige Beleg: einen bisherigen
-        Fall aus einer fremden Einrichtung laesst der zusammengesetzte
-        Fremdschluessel ``(case_id, facility_id)`` des Ereignisses gar nicht
-        zu, und der Zielfall ist bereits in der Zielfall-Lesung
-        einrichtungsgeprueft."""
+        Fuer _81 ist dieser Pin ein ausdruecklicher Scoping-Vertrag
+        (Tiefenverteidigung), kein Nachweis eines ausgefuehrten fremden
+        Zugriffs: der Zielfall ist bereits in der Zielfall-Lesung
+        einrichtungsgeprueft, und der zusammengesetzte Fremdschluessel
+        ``(case_id, facility_id)`` des Ereignisses schliesst einen
+        einrichtungsfremden bisherigen Fall fuer jeden committeten Zustand
+        aus. Er ist ``DEFERRABLE INITIALLY DEFERRED`` — innerhalb einer
+        offenen Transaktion ist ein solcher Bezug voruebergehend moeglich;
+        die Fallsperre bleibt deshalb selbst auf die Einrichtung begrenzt."""
         ziel = _fall(facility, client_identified, staff_user, alter_tage=1)
         Event.objects.filter(pk=sample_event.pk).update(case=case_open)
-        with CaptureQueriesContext(connection) as ctx:
+        with _mitschnitt() as abfragen:
             sc.lock_event_for_case_link(sample_event, ziel)
-        (vorlesen,) = _abfragen(ctx, _VORLESEN_EREIGNIS)
-        assert _bedingungen(vorlesen) == {
-            ("core_event.id", sample_event.pk.hex),
-            ("core_event.facility_id", facility.pk.hex),
-        }
-        (zielfall,) = _abfragen(ctx, _ZIELFALL_LESEN)
-        assert _bedingungen(zielfall) == {
-            ("core_case.id", ziel.pk.hex),
-            ("core_case.facility_id", facility.pk.hex),
-        }
-        (fallsperre,) = _abfragen(ctx, _FALLSPERRE)
-        assert fallsperre.endswith("FOR UPDATE")
-        assert _bedingungen(fallsperre) == {("core_case.facility_id", facility.pk.hex)}
-        assert _in_bedingungen(fallsperre) == {"core_case.id": {case_open.pk.hex, ziel.pk.hex}}
-        (ereignissperre,) = _abfragen(ctx, _EREIGNISSPERRE)
-        assert ereignissperre.endswith("FOR UPDATE")
-        assert _bedingungen(ereignissperre) == {
-            ("core_event.id", sample_event.pk.hex),
-            ("core_event.facility_id", facility.pk.hex),
-            ("core_event.client_id", client_identified.pk.hex),
-            ("core_event.case_id", case_open.pk.hex),
-        }
+        # Vorlesen des Ereignisses (_18, _19)
+        assert any(a.traegt(id=[sample_event.pk], facility_id=[facility.pk]) for a in abfragen.lesungen("core_event"))
+        # Zielfall-Lesung (_45, _46)
+        assert any(a.traegt(id=[ziel.pk], facility_id=[facility.pk]) for a in abfragen.lesungen("core_case"))
+        # Fallsperre (_80, _81): jede Sperre auf core_case genau die beteiligten Faelle in der Einrichtung
+        fallsperren = abfragen.sperren("core_case")
+        assert fallsperren
+        assert all(a.traegt(id=[case_open.pk, ziel.pk], facility_id=[facility.pk]) for a in fallsperren)
+        # Ereignissperre (_103, _105)
+        ereignissperren = abfragen.sperren("core_event")
+        assert ereignissperren
+        assert all(
+            a.traegt(
+                id=[sample_event.pk],
+                facility_id=[facility.pk],
+                client_id=[client_identified.pk],
+                case_id=[case_open.pk],
+            )
+            for a in ereignissperren
+        )
 
     def test_aelteres_ereignis_neben_neuerem_einer_anderen_person(
         self, facility, client_identified, andere_person, staff_user, doc_type_contact
@@ -330,10 +373,10 @@ class TestLockEventForCaseLink:
         die Zielfall-Lesung die fremde Person, sperrt sie und meldet 'Person
         passt nicht' — erwartet ist GONE vor jeder Sperre."""
         fremder_fall = _fall(other_facility, fremde_person, staff_user, alter_tage=0)
-        with CaptureQueriesContext(connection) as ctx, pytest.raises(ValidationError) as exc:
+        with _mitschnitt() as abfragen, pytest.raises(ValidationError) as exc:
             sc.lock_event_for_case_link(sample_event, fremder_fall)
         assert _meldungen(exc) == [str(sc.CASE_WRITE_GONE_MESSAGE)]
-        assert [q["sql"] for q in ctx.captured_queries if "FOR UPDATE" in q["sql"]] == []
+        assert [a.sql for a in abfragen if a.sperrt] == []
 
     def test_fallsperre_umfasst_nur_die_beteiligten_faelle(
         self, facility, client_identified, andere_person, staff_user, case_open, sample_event
@@ -342,12 +385,12 @@ class TestLockEventForCaseLink:
         Fallsperre jeden Fall der Einrichtung — hier auch den unbeteiligten
         Fall der anderen Person."""
         unbeteiligt = _fall(facility, andere_person, staff_user, alter_tage=0)
-        with CaptureQueriesContext(connection) as ctx:
+        with _mitschnitt() as abfragen:
             sc.lock_event_for_case_link(sample_event, case_open)
-        (fallsperre,) = _abfragen(ctx, _FALLSPERRE)
-        gesperrt = _in_bedingungen(fallsperre).get("core_case.id", set())
-        assert gesperrt == {case_open.pk.hex}
-        assert unbeteiligt.pk.hex not in gesperrt
+        fallsperren = abfragen.sperren("core_case")
+        assert fallsperren
+        assert all(a.traegt(id=[case_open.pk]) for a in fallsperren)
+        assert all(unbeteiligt.pk.hex not in a.bedingungen.get("core_case.id", set()) for a in fallsperren)
 
     def test_liefert_das_adressierte_ereignis(
         self, facility, client_identified, staff_user, doc_type_contact, case_open
@@ -375,3 +418,35 @@ class TestLockEventForCaseLink:
         with pytest.raises(ValidationError) as exc:
             sc.lock_event_for_case_link(sample_event)
         assert _meldungen(exc) == [str(sc.EVENT_WRITE_GONE_MESSAGE)]
+
+
+class TestMitschnitt:
+    """Positivproben des Mitschnitts: gleichwertige Formulierungen gelten gleich."""
+
+    def test_gleichheit_und_einelementige_in_liste_sind_gleichwertig(self):
+        pk, einrichtung = uuid.uuid4(), uuid.uuid4()
+        gleichheit = _Abfrage(
+            'SELECT "core_case"."client_id" FROM "core_case" '
+            'WHERE ("core_case"."id" = %s AND "core_case"."facility_id" = %s)',
+            [pk, str(einrichtung)],
+        )
+        in_liste = _Abfrage(
+            'SELECT "core_case"."facility_id", "core_case"."client_id" AS "c" FROM "core_case" '
+            'WHERE ("core_case"."facility_id" IN (%s) AND "core_case"."id"=%s)',
+            [str(einrichtung), pk.hex],
+        )
+        for abfrage in (gleichheit, in_liste):
+            assert abfrage.tabelle == "core_case"
+            assert not abfrage.sperrt
+            assert abfrage.traegt(id=[pk], facility_id=[einrichtung])
+
+    def test_sperrmarker_und_in_liste_mehrerer_werte(self):
+        a, b, einrichtung = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        abfrage = _Abfrage(
+            'SELECT * FROM "core_case" WHERE "core_case"."facility_id" = %s AND "core_case"."id" IN (%s, %s) '
+            "ORDER BY 1 FOR UPDATE",
+            [einrichtung, b, a],
+        )
+        assert abfrage.sperrt
+        assert abfrage.traegt(id=[a, b], facility_id=[einrichtung])
+        assert not abfrage.traegt(id=[a])
