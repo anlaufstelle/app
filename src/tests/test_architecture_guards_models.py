@@ -934,14 +934,6 @@ class TestTenantModelScopeGuard:
             "Liest die eine Art.-18-Spalte frisch zur uebergebenen Personen-PK/-Instanz; "
             "die Person hat der Aufrufer bereits gescopt aufgeloest (Refs #2045)."
         ),
-        "client/restriction.py:restrict_processing:Client": (
-            "``select_for_update().get(pk=client.pk)`` — Reload der EIGENEN Zeile unter "
-            "der Sperre, damit der Zustand nicht vom Minuten alten Formular-Objekt kommt."
-        ),
-        "client/restriction.py:lift_processing_restriction:Client": (
-            "Gegenstueck zu ``restrict_processing``: Reload der eigenen Zeile unter der "
-            "Sperre vor dem Aufheben der Einschraenkung."
-        ),
         "events/crud.py:_lock_client_row:Client": (
             "Koordinationspunkt ADR-050 D2: sperrt die Personenzeile zur ``client_id`` "
             "des bereits gescopten Ereignisses — reine Sperre, liest nur ``pk``."
