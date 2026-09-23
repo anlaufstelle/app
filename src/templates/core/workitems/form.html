@@ -14,6 +14,7 @@
         {% include "core/_form_errors.html" %}
         {% if workitem %}
         <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
+        {% if form_state_token %}<input type="hidden" name="expected_form_state" value="{{ form_state_token }}">{% endif %}
         {% endif %}
 
         <div class="card p-5 space-y-4">

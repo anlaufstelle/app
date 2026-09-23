@@ -248,3 +248,114 @@ class TestJsonEditContractUnchanged:
         assert response.json()["error"] == "missing-token"
         urgent_workitem.refresh_from_db()
         assert urgent_workitem.priority == WorkItem.Priority.URGENT
+
+
+@pytest.mark.django_db
+class TestFormStateService:
+    """Service-Ebene: der Fingerabdruck löst NUR einen reinen Versions-Mismatch auf."""
+
+    def test_token_ignores_status_but_tracks_form_fields(self, staff_user, urgent_workitem):
+        from core.services.case.workitems import workitem_form_state_token
+
+        before = workitem_form_state_token(urgent_workitem)
+        urgent_workitem.status = WorkItem.Status.DONE
+        assert workitem_form_state_token(urgent_workitem) == before
+        urgent_workitem.priority = WorkItem.Priority.NORMAL
+        assert workitem_form_state_token(urgent_workitem) != before
+
+    def test_service_applies_edit_when_only_status_changed(self, staff_user, urgent_workitem):
+        from core.services.case import update_workitem_status
+        from core.services.case.workitems import workitem_form_state_token
+
+        stale_version = urgent_workitem.updated_at.isoformat()
+        state = workitem_form_state_token(urgent_workitem)
+        update_workitem_status(WorkItem.objects.get(pk=urgent_workitem.pk), WorkItem.Status.DONE, staff_user)
+
+        update_workitem(
+            urgent_workitem,
+            staff_user,
+            expected_updated_at=stale_version,
+            expected_form_state=state,
+            priority=WorkItem.Priority.IMPORTANT,
+        )
+        urgent_workitem.refresh_from_db()
+        assert urgent_workitem.status == WorkItem.Status.DONE
+        assert urgent_workitem.priority == WorkItem.Priority.IMPORTANT
+
+    @pytest.mark.parametrize("state", [None, "", "falscher-fingerabdruck", 42])
+    def test_service_without_matching_state_keeps_conflict(self, staff_user, urgent_workitem, state):
+        from django.core.exceptions import ValidationError
+
+        from core.services.case import update_workitem_status
+
+        stale_version = urgent_workitem.updated_at.isoformat()
+        update_workitem_status(WorkItem.objects.get(pk=urgent_workitem.pk), WorkItem.Status.DONE, staff_user)
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_workitem(
+                urgent_workitem,
+                staff_user,
+                expected_updated_at=stale_version,
+                expected_form_state=state,
+                priority=WorkItem.Priority.IMPORTANT,
+            )
+        assert excinfo.value.code == "version_conflict"
+        urgent_workitem.refresh_from_db()
+        assert urgent_workitem.priority == WorkItem.Priority.URGENT
+
+    def test_invalid_token_is_not_rescued_by_form_state(self, staff_user, urgent_workitem):
+        from django.core.exceptions import ValidationError
+
+        from core.services.case.workitems import workitem_form_state_token
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_workitem(
+                urgent_workitem,
+                staff_user,
+                expected_updated_at="kein-zeitstempel",
+                expected_form_state=workitem_form_state_token(urgent_workitem),
+                priority=WorkItem.Priority.IMPORTANT,
+            )
+        assert excinfo.value.code == "invalid_token"
+
+    def test_missing_required_token_is_not_rescued_by_form_state(self, staff_user, urgent_workitem):
+        from django.core.exceptions import ValidationError
+
+        from core.services.case.workitems import workitem_form_state_token
+
+        with pytest.raises(ValidationError) as excinfo:
+            update_workitem(
+                urgent_workitem,
+                staff_user,
+                expected_updated_at=None,
+                require_version_token=True,
+                expected_form_state=workitem_form_state_token(urgent_workitem),
+                priority=WorkItem.Priority.IMPORTANT,
+            )
+        assert excinfo.value.code == "missing_token"
+
+    def test_vanished_row_is_no_match(self, urgent_workitem):
+        from core.services.case.workitems import _form_state_unchanged, workitem_form_state_token
+
+        state = workitem_form_state_token(urgent_workitem)
+        ghost = WorkItem(pk=__import__("uuid").uuid4(), title=urgent_workitem.title)
+        assert _form_state_unchanged(ghost, state) is False
+
+
+@pytest.mark.django_db
+class TestInvalidRerenderKeepsFormState:
+    def test_invalid_post_rerenders_the_posted_form_state(self, client, staff_user, urgent_workitem):
+        client.force_login(staff_user)
+        hidden = _render_edit_form(client, urgent_workitem)
+        snapshot = WorkItem.objects.get(pk=urgent_workitem.pk)
+
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": urgent_workitem.pk}),
+            _form_payload(snapshot, hidden, title=""),
+        )
+
+        assert response.status_code == 200
+        parser = _HiddenInputs()
+        parser.feed(response.content.decode())
+        assert parser.values.get("expected_form_state") == hidden.get("expected_form_state")
+        assert parser.values.get("expected_form_state"), "Formular muss den Stand der Formularfelder tragen"

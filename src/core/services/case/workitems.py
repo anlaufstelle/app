@@ -17,6 +17,7 @@ aufgeloest.
 """
 
 import calendar
+import json
 import logging
 from datetime import date, timedelta
 
@@ -25,6 +26,7 @@ from django.db import transaction
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
 from django.http import QueryDict
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import WORKITEM_INBOX_CAP, WORKITEM_RECENT_DONE_PREVIEW
@@ -374,6 +376,67 @@ def _locked_client_id(workitem):
     )
 
 
+# Spalten, die das Bearbeiten-Formular zeigt oder mitschickt (Refs #2331) —
+# ``attname``-Form, damit Instanz und ``values()`` dieselben Werte liefern.
+# ``status``/``completed_at`` stehen bewusst NICHT darin: sie aendert nur der
+# Status-Pfad, und ein paralleler Statuswechsel ist kein Konflikt mit dem
+# Formular.
+WORKITEM_FORM_STATE_FIELDS = (
+    "item_type",
+    "title",
+    "description",
+    "priority",
+    "due_date",
+    "remind_at",
+    "recurrence",
+    "assigned_to_id",
+    "client_id",
+)
+
+
+def _form_state_token_from_values(pk, values):
+    payload = json.dumps(
+        {field: values.get(field) for field in WORKITEM_FORM_STATE_FIELDS},
+        sort_keys=True,
+        default=str,
+    )
+    return salted_hmac("core.workitem.form_state", f"{pk}|{payload}", algorithm="sha256").hexdigest()
+
+
+def workitem_form_state_token(workitem):
+    """Fingerabdruck der Formularfelder zum Renderzeitpunkt (Refs #2331).
+
+    Das Bearbeiten-Formular traegt ihn versteckt mit. Ein HMAC statt der
+    Klartextwerte: das Formular soll keinen zweiten, manipulierbaren Satz
+    Feldwerte mitschicken, und der Wert verraet nichts ueber den Inhalt.
+    Wer ihn faelscht, erreicht hoechstens, was ein Neuladen mit anschliessendem
+    Speichern ohnehin erlaubt — Status, Sperren und Personenbezug laufen
+    unabhaengig davon durch ihre eigenen Pruefungen.
+    """
+    values = {field: getattr(workitem, field) for field in WORKITEM_FORM_STATE_FIELDS}
+    return _form_state_token_from_values(workitem.pk, values)
+
+
+def _form_state_unchanged(workitem, expected_form_state):
+    """``True``, wenn seit dem Rendern kein Formularfeld geaendert wurde.
+
+    Liest die Zeile unter Row-Lock (``update_workitem`` haelt ihn bereits;
+    ``select_for_update`` ist innerhalb derselben Transaktion ein No-op).
+    """
+    if not expected_form_state or not isinstance(expected_form_state, str):
+        return False
+    current = (
+        type(workitem)
+        ._base_manager.select_for_update()
+        .filter(pk=workitem.pk)
+        .values(*WORKITEM_FORM_STATE_FIELDS)
+        .first()
+    )
+    if current is None:
+        return False
+    return constant_time_compare(_form_state_token_from_values(workitem.pk, current), expected_form_state)
+
+
 def _log_workitem_update(workitem, user, changed_fields):
     """Write a single AuditLog entry for a WorkItem bulk field update."""
     audit_event(
@@ -511,7 +574,15 @@ def create_workitem(facility, user, *, client=None, **data):
 
 
 @transaction.atomic
-def update_workitem(workitem, user, *, expected_updated_at=None, require_version_token=False, **fields):
+def update_workitem(
+    workitem,
+    user,
+    *,
+    expected_updated_at=None,
+    require_version_token=False,
+    expected_form_state=None,
+    **fields,
+):
     """Update a work item with activity logging and audit logging.
 
     Accepts allowed fields (item_type, title, description, priority, due_date,
@@ -527,6 +598,15 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
     Clients müssen dadurch einen Token mitschicken, während der klassische
     HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
+
+    ``expected_form_state`` (Refs #2331): Fingerabdruck der Formularfelder zum
+    Renderzeitpunkt (:func:`workitem_form_state_token`). Weicht nur
+    ``updated_at`` ab, die Formularfelder in der Datenbank aber nicht — etwa
+    weil parallel nur der Status gewechselt wurde —, ist das kein Konflikt mit
+    dem Formular: die Eingabe wird gespeichert, der parallele Status bleibt.
+    Jede parallele Aenderung eines Formularfelds bleibt ein Konflikt. Ohne
+    Fingerabdruck (Default, JSON-/Offline-Replay) gilt der Versionsvertrag
+    unveraendert.
 
     Ursprungs-Pinning (Refs #1786, Maintainer-Entscheid 2026-08-05): Anders
     als beim Fall (dort strikt) bleibt bei der Aufgabe das nachträgliche
@@ -572,7 +652,13 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     db_client_id = _locked_client_id(workitem)
     if db_client_id != current_client_id:
         raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
-    check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
+    try:
+        check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
+    except ValidationError as exc:
+        # Nur der echte Versions-Mismatch darf per Fingerabdruck aufgeloest
+        # werden — fehlender oder ungueltiger Token bleiben Fehler.
+        if exc.code != "version_conflict" or not _form_state_unchanged(workitem, expected_form_state):
+            raise
     # Allowlist (Refs #734-Muster, Refs #1786): bis hierher war
     # ``update_workitem`` eine von ZWEI der vier Update-Services ohne Allowlist —
     # jedes durchgereichte Feld landete blind im ``setattr``. Die verbliebene

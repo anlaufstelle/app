@@ -30,6 +30,7 @@ from core.services.case import (
     update_workitem,
     update_workitem_status,
 )
+from core.services.case.workitems import workitem_form_state_token
 from core.services.client import get_client_or_none
 from core.services.scoping import get_scoped_object
 from core.utils.formatting import isoformat_or_none
@@ -435,6 +436,9 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             "client_locked": bool(workitem.client),
             "client_id": str(workitem.client.pk) if workitem.client else "",
             "client_pseudonym": workitem.client.pseudonym if workitem.client else "",
+            # Refs #2331: Stand der Formularfelder zum Renderzeitpunkt — damit
+            # ein paralleler reiner Statuswechsel die Eingabe nicht verwirft.
+            "form_state_token": workitem_form_state_token(workitem),
         }
         return render(request, "core/workitems/form.html", context)
 
@@ -465,11 +469,16 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # gesetzter Person weist ``update_workitem`` jeden ``client``-Kwarg
             # ab — auch das stille ``None`` eines Formulars ohne Personenfeld.
             pin_kwargs = {} if pinned_client else {"client": form.cleaned_data.get("client")}
+            # Refs #2331: der Fingerabdruck der Formularfelder gilt nur fuer den
+            # klassischen Formular-Pfad. JSON-/HTMX-Clients (Offline-Replay)
+            # behalten ihren Versionsvertrag unveraendert: jeder Mismatch = 409.
+            expected_form_state = None if wants_json else (request.POST.get("expected_form_state") or None)
             try:
                 update_workitem(
                     workitem,
                     request.user,
                     expected_updated_at=expected_updated_at,
+                    expected_form_state=expected_form_state,
                     **pin_kwargs,
                     # Refs #1351 Task 7 (analog #1338 bei Events): JSON-/
                     # Offline-Replay-Clients müssen den Versions-Token
@@ -536,5 +545,8 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             "client_locked": bool(pinned_client),  # Refs #1786
             "client_id": request.POST.get("client", ""),
             "client_pseudonym": "",
+            # Refs #2331: den mitgeschickten Stand weiterreichen, nicht neu
+            # berechnen — ``_post_clean()`` hat die Instanz bereits mutiert.
+            "form_state_token": request.POST.get("expected_form_state", ""),
         }
         return render(request, "core/workitems/form.html", context)

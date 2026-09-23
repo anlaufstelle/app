@@ -7,6 +7,8 @@ import uuid
 
 import pytest
 
+from tests.e2e._selectors import action_bar
+
 pytestmark = pytest.mark.e2e
 
 
@@ -41,6 +43,55 @@ def _create_overdue_task_for(username: str, title: str, e2e_env) -> str:
         check=True,
     )
     return result.stdout.strip().splitlines()[-1]
+
+
+def _create_urgent_task_for(username: str, title: str, e2e_env) -> str:
+    """Offene Aufgabe mit Priorität „Dringend“, ``created_by``/``assigned_to`` = ``username``."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "--no-imports",
+            "-c",
+            (
+                "from core.models import User, WorkItem; "
+                f"u = User.objects.get(username='{username}'); "
+                "wi = WorkItem.objects.create(facility=u.facility, created_by=u, "
+                f"assigned_to=u, title='{title}', priority='urgent', status='open', "
+                "item_type='task', description='Langer Text, der nicht verloren gehen darf.'); "
+                "print(wi.pk)"
+            ),
+        ],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip().splitlines()[-1]
+
+
+def _read_status_and_priority(pk: str, e2e_env) -> tuple[str, str]:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "--no-imports",
+            "-c",
+            (
+                "from core.models import WorkItem; "
+                f"wi = WorkItem.objects.get(pk='{pk}'); "
+                "print(wi.status + '|' + wi.priority)"
+            ),
+        ],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    status, priority = result.stdout.strip().splitlines()[-1].split("|")
+    return status, priority
 
 
 def _cleanup_task_by_title(title: str, e2e_env) -> None:
@@ -319,4 +370,40 @@ class TestWorkItemEditPermissions:
             resp = assistant_page.goto(f"{base_url}/workitems/{wi_pk}/edit/")
             assert resp.status == 403
         finally:
+            _cleanup_task_by_title(title, e2e_env)
+
+
+class TestWorkItemEditParallelStatusChange:
+    """Refs #2331: Bearbeiten-Formular in Tab A, Statuswechsel in Tab B."""
+
+    def test_priority_edit_survives_status_change_in_other_tab(self, staff_page, base_url, e2e_env):
+        tab_a = staff_page
+        title = f"E2E-Parallel-{uuid.uuid4().hex[:6]}"
+        wi_pk = _create_urgent_task_for("miriam", title, e2e_env)
+        tab_b = tab_a.context.new_page()
+        try:
+            # Tab A: Formular öffnen, noch nicht speichern.
+            tab_a.goto(f"{base_url}/workitems/{wi_pk}/edit/")
+            tab_a.wait_for_load_state("domcontentloaded")
+            assert tab_a.locator('select[name="priority"]').input_value() == "urgent"
+
+            # Tab B: „Als erledigt markieren“ bestätigen.
+            tab_b.goto(f"{base_url}/workitems/{wi_pk}/")
+            tab_b.wait_for_load_state("domcontentloaded")
+            tab_b.once("dialog", lambda dialog: dialog.accept())
+            action_bar(tab_b, "workitem").locator("button:has-text('Als erledigt markieren')").click()
+            tab_b.locator("text=Abgeschlossen am:").wait_for(state="visible", timeout=10000)
+            assert _read_status_and_priority(wi_pk, e2e_env) == ("done", "urgent")
+
+            # Tab A: nur die Priorität ändern und speichern.
+            tab_a.bring_to_front()
+            tab_a.select_option('select[name="priority"]', value="normal")
+            tab_a.locator("#main-content button[type='submit']").click()
+            tab_a.wait_for_url(f"{base_url}/workitems/")
+            tab_a.wait_for_load_state("domcontentloaded")
+            assert tab_a.locator("text=zwischenzeitlich bearbeitet").count() == 0
+
+            assert _read_status_and_priority(wi_pk, e2e_env) == ("done", "normal")
+        finally:
+            tab_b.close()
             _cleanup_task_by_title(title, e2e_env)
