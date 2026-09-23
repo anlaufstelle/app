@@ -216,7 +216,7 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
     SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP#anlaufstelle_}"
     SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP%.sql.gz.enc}"
     BACKUP_TIMESTAMP="$SELECTED_TIMESTAMP"
-    CURRENT_TIMESTAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+    CURRENT_TIMESTAMP="$(date +%Y-%m-%d_%H%M%S)"
     if [[ "$BACKUP_TIMESTAMP" > "$CURRENT_TIMESTAMP" ]]; then
         echo "WARNUNG: Ausgewaehlter Backup-Satz hat einen Zeitstempel in der Zukunft (moegliche Uhrzeit-Drift); er wird trotzdem geprueft." >&2
     fi

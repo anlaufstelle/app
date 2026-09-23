@@ -94,7 +94,7 @@ if [[ "${1:-}" == "--verify" ]]; then
     SELECTED_TIMESTAMP="${LATEST_MANIFEST##*/}"
     SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP#anlaufstelle_}"
     SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP%.manifest}"
-    CURRENT_TIMESTAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+    CURRENT_TIMESTAMP="$(date +%Y-%m-%d_%H%M%S)"
     if [[ "$SELECTED_TIMESTAMP" > "$CURRENT_TIMESTAMP" ]]; then
         echo "WARNUNG: Ausgewaehlter Backup-Satz hat einen Zeitstempel in der Zukunft (moegliche Uhrzeit-Drift); er wird trotzdem geprueft." >&2
     fi
