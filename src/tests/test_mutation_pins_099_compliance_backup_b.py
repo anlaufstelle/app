@@ -23,7 +23,7 @@ vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt zu jedem
 Text-Literal zusaetzlich die Variante ``"XX<text>XX"``, die ein
 ``in``-Vergleich ueberleben wuerde). Je Zweig EIN Test, der alle sieben
 Felder exakt prueft — toetet damit alle Feld-Survivors dieses Zweigs in
-einem Lauf (mehrere Mutanten je Test, wie im Briefing vorgesehen).
+einem Lauf (mehrere Mutanten je Test, wie vorgesehen).
 
 Produktions-Konsumenten von ``ComplianceCheck.key``/``.category`` bei
 **genau** dieser Funktion (Begruendung der Prio-1-Einstufung einzelner

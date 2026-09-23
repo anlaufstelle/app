@@ -208,15 +208,15 @@ def _raw_queue_count(page):
 
 
 def _dispatch_online_and_await_sync(page):
-    """Dispatch reconnect and await the orchestrator's real completion event."""
+    """Dispatch reconnect and await the syncOrchestrator's real completion event."""
     return page.evaluate(
         """async () => {
-            const orchestrator = window.syncOrchestrator;
+            const syncOrchestrator = window.syncOrchestrator;
             const store = window.offlineStore;
-            if (!orchestrator || !store) {
+            if (!syncOrchestrator || !store) {
                 return {error: 'sync-runtime-missing'};
             }
-            const eventName = orchestrator.SYNC_FINISHED_EVENT || 'offline-sync-finished';
+            const eventName = syncOrchestrator.SYNC_FINISHED_EVENT || 'offline-sync-finished';
             return await new Promise((resolve) => {
                 let settled = false;
                 const finish = async (timedOut, detail = null) => {
@@ -275,7 +275,7 @@ class TestColdStartShellAssets:
     CACHE_NAME-Pin) und test_sw_robustness.py::
     test_precache_includes_offline_sync_core_assets (echter Cache-Inhalt
     direkt nach Install). Hier abgesichert: das reale Offline-Rendering der
-    Shells (graceful Hinweis, Orchestrator, mobile Bottom-Nav) bricht nicht.
+    Shells (graceful Hinweis, Sync-Orchestrator, mobile Bottom-Nav) bricht nicht.
     """
 
     def test_cold_offline_client_shell_renders_graceful_notice(self, browser, base_url):
@@ -435,7 +435,7 @@ class TestMidSessionCaptureRoundtrip:
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
             sync = _dispatch_online_and_await_sync(page)
             assert not sync.get("error"), f"Sync-Runtime fehlt nach Reconnect: {sync!r}"
-            assert not sync["timedOut"], f"Orchestrator-Abschluss fehlt nach Reconnect: {sync!r}"
+            assert not sync["timedOut"], f"Sync-Orchestrator-Abschluss fehlt nach Reconnect: {sync!r}"
             assert sync["queue"] == [], f"Queue nach abgeschlossenem Reconnect nicht leer: {sync!r}"
             assert _server_workitem_state(e2e_env, title) == "STANDALONE", (
                 f"Aufgabe '{title}' fehlt nach abgeschlossenem Reconnect: {sync!r}"

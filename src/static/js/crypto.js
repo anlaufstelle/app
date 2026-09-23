@@ -278,7 +278,7 @@
      * laufende Sync-Sequenz serialisiert sein — sonst raeumt der Wipe unter dem
      * einen Tab weg, was ein anderer Tab gerade replayt (TOCTOU #1324 ueber
      * Tabs). Daher unter den origin-weiten Web Lock des Sync-Orchestrators. Ist
-     * der Orchestrator nicht geladen (Login-/Shell-Seiten, alte Engine ohne
+     * der Sync-Orchestrator nicht geladen (Login-/Shell-Seiten, alte Engine ohne
      * navigator.locks), laeuft die Kette direkt — heutiges Verhalten.
      *
      * Kein Import-Zyklus: Zugriff nur via ``window.syncOrchestrator?.…``.
@@ -354,7 +354,7 @@
     // gueltiges Krypto-Material, sodass die laufende Sequenz sauber zu Ende
     // laeuft (kein transienter No-op-Neuversuch, Refs #1393). Haelt der Tab
     // keinen Lock, laeuft der Drop praktisch sofort. Ohne
-    // navigator.locks/Orchestrator faellt ``_runExclusive`` auf direkte
+    // navigator.locks/Sync-Orchestrator faellt ``_runExclusive`` auf direkte
     // Ausfuehrung zurueck (heutiges Verhalten) — dort feuert mangels
     // BroadcastChannel ohnehin nie ein key-cleared.
     function _onOrchestratorMessage(msg) {
@@ -435,14 +435,14 @@
             // Ein echter IndexedDB-Roundtrip ist ein Macrotask — wenn er
             // aufloest, ist die synchrone <script>-Kette (inkl.
             // sync-orchestrator.js) gelaufen. (Nur im Boot-Fenster fuellig — ist
-            // der Orchestrator schon geladen, entfaellt der Extra-Read.)
+            // der Sync-Orchestrator schon geladen, entfaellt der Extra-Read.)
             await _idbGet(ACTIVITY_KEY);
             orch = window.syncOrchestrator;
         }
         if (orch && orch.isLockHeld && orch.isLockHeld()) {
             return _enforceIdleWipeLocked(); // (1) reentrant → direkt
         }
-        // (2) frei → unter dem Lock serialisieren. Ohne Orchestrator/
+        // (2) frei → unter dem Lock serialisieren. Ohne Sync-Orchestrator/
         // navigator.locks (Login-/Shell-Seiten, alte Engines) faellt
         // ``_runExclusive`` auf direkte Ausfuehrung zurueck — heutiges Verhalten.
         return _runExclusive(_enforceIdleWipeLocked);
@@ -512,8 +512,8 @@
         // hier duplizierte DOMContentLoaded/naechster-Tick-Retry-Geruest ist
         // durch die Pending-Liste ersetzt, die sync-orchestrator.js beim Laden
         // draint (und danach als Sofort-Registrierung uebernimmt). Ist der
-        // Orchestrator bereits da (Test-Harness, abweichende Reihenfolge),
-        // wird direkt registriert. Auf Seiten ohne Orchestrator (Login/Shell)
+        // Sync-Orchestrator bereits da (Test-Harness, abweichende Reihenfolge),
+        // wird direkt registriert. Auf Seiten ohne Sync-Orchestrator (Login/Shell)
         // bleibt der Eintrag folgenlos liegen — das ist der dokumentierte
         // "kein BroadcastChannel → skip"-Fallback.
         if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {

@@ -16,8 +16,8 @@ Funktionen desselben Moduls (``_build_entities``, ``_build_configuration``,
 ``_serialize_attachment``, ``build_facility_export``,
 ``_serialize_field_condition``, ``_serialize_facility``,
 ``_attachment_sha256``, ``_decrypt_data_json``, ``_uuid_str``) gehören den
-Schwester-Batches a/b/d, eigenen Worktrees/Lanes — Standardblock 19/39 TABU,
-nicht gelesen, nicht angefasst.
+Schwester-Batches a/b/d in eigenen Testdateien — bewusst nicht gelesen,
+nicht angefasst.
 
 Alle 65 Mutanten dieser Batch sind mechanische Dict-Key-Umbenennungen
 (mutmut-String-Marker ``XX…XX``/Großschreibung) oder Argument-Ersetzungen

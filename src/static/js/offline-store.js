@@ -748,7 +748,7 @@
             // koordiniert dessen requestSync-Sequenz purgeExpired+revalidate hinter
             // dem origin-weiten Web Lock — hier nichts tun (sonst liefe die
             // Re-Validierung doppelt/unkoordiniert). Nur als Fallback auf Seiten
-            // OHNE Orchestrator (offline-Shell/Login) direkt re-validieren wie bisher.
+            // OHNE Sync-Orchestrator (offline-Shell/Login) direkt re-validieren wie bisher.
             if (window.syncOrchestrator && window.syncOrchestrator.requestSync) return;
             try {
                 // Refs #1352: ready() VOR hasSessionKey() abwarten — sonst
@@ -765,7 +765,7 @@
                 // gueltigem Schluessel holt beides nach.
                 if (hasKey) {
                     await purgeExpired(Date.now());
-                    // Refs #1760: auch im Orchestrator-losen Fallback zuerst die
+                    // Refs #1760: auch im Sync-Orchestrator-losen Fallback zuerst die
                     // Widerrufe anwenden — sonst haette eine Offline-Shell
                     // (ohne base.html) keinen Zugang zum Signal und zeigte eine
                     // anonymisierte Person bis zum TTL-Ablauf weiter.
@@ -773,7 +773,7 @@
                     // leben seit dem Split in Schwester-Modulen — als freie
                     // Bezeichner waeren sie hier ein ReferenceError, den der
                     // try/catch STILL schluckte (Art.-17-Purge tot auf den
-                    // Seiten ohne Orchestrator). Aufloesung zur Callzeit ueber
+                    // Seiten ohne Sync-Orchestrator). Aufloesung zur Callzeit ueber
                     // die Fassade; gepinnt in offline-store-split.test.mjs.
                     await window.offlineStore.applyClientRevocations();
                     await window.offlineStore.revalidateCachedClients();

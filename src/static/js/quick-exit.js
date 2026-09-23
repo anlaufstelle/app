@@ -474,9 +474,9 @@
      */
     function _broadcastKeyCleared() {
         try {
-            var orchestrator = window.syncOrchestrator;
-            if (orchestrator && typeof orchestrator.broadcast === "function") {
-                orchestrator.broadcast({ type: "key-cleared" });
+            var syncOrchestrator = window.syncOrchestrator;
+            if (syncOrchestrator && typeof syncOrchestrator.broadcast === "function") {
+                syncOrchestrator.broadcast({ type: "key-cleared" });
             }
         } catch (_e) {
             // best-effort — ohne BroadcastChannel ist das ohnehin ein No-op.

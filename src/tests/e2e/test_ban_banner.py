@@ -270,7 +270,7 @@ class TestHausverbotBannerLiveWatch:
 
     def test_watcher_converges_ban_lift_and_reinstate_without_reload(self, staff_page, base_url, e2e_env):
         # Refs #1917: bewusst dieselbe Person wie die uebrigen Tests dieser
-        # Datei. ``Regen-55`` ist tabu — dessen gesaeter Ban-Grund ist Fixture
+        # Datei. ``Regen-55`` ist gesperrt — dessen gesaeter Ban-Grund ist Fixture
         # von ``test_security_hardening.py::TestBanReasonVisibility``, und
         # diese Datei laeuft alphabetisch vorher.
         event_pk, pseudonym, restore = _seed_active_ban(e2e_env)

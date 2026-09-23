@@ -212,7 +212,7 @@
                         }
                     );
                     // KEIN Online-Dispatch hier: der Startup-Drain/Sync-
-                    // Orchestrator repliziert beim naechsten Online-Kontakt.
+                    // Sync-Orchestrator repliziert beim naechsten Online-Kontakt.
                     this.saved = true;
                 } catch (e) {
                     // eslint-disable-next-line no-console

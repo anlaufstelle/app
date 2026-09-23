@@ -82,7 +82,7 @@ def _reconnect_via_online_event(page):
     page.context.set_offline(False)
     # Chromium feuert beim Umschalten je nach Version bereits ein natives
     # Event. Das zusätzliche Event macht die Journey deterministisch; der
-    # produktive Orchestrator koalesziert beide Signale vor dem Queue-Replay.
+    # produktive Sync-Orchestrator koalesziert beide Signale vor dem Queue-Replay.
     page.evaluate("window.dispatchEvent(new Event('online'))")
 
 

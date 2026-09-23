@@ -276,7 +276,7 @@ class HighWaterMarkStore:
         gemeldet wird.
 
         Ein vorhandener Stilllegungsnachweis (:meth:`retire`) ist fuer beide
-        Schreibpfade tabu (Refs #2296): Kehrt eine Kette mit derselben
+        Schreibpfade gesperrt (Refs #2296): Kehrt eine Kette mit derselben
         Kennnummer zurueck, wuerde der neue Tail den signierten Nachweis
         ueberschreiben und die leere Kette ihn sogar loeschen — die
         dokumentierte Entfernung waere spurlos weg, und genau dieser Widerspruch

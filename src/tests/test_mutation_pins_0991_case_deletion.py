@@ -11,15 +11,15 @@ die ``DELETION_REJECTED``-Zeile fliesst (dieselbe Einordnung wie
 ``x_approve_case_deletion__mutmut_40`` in ``test_mutation_pins_099_deletion_a.py``,
 dort fuer den Genehmigungspfad bereits gepinnt).
 
-**S-B- UND S-D-Ueberschneidung (Nachlauf noetig):** Lane S-B liest
-Bausteine aus diesem Modul (``redact_case_goals``); Lane S-D (Ticket
+**S-B- UND S-D-Ueberschneidung (Nachlauf noetig):** Die Aenderung S-B liest
+Bausteine aus diesem Modul (``redact_case_goals``); die Aenderung S-D (Ticket
 2321/H-3) aendert ``reject_case_deletion`` SELBST (Einrichtungsgrenze des
 Reviewers). Der Kill-Nachweis dieser Datei gilt fuer den Stand VOR beiden
-Merges — der Orchestrator wiederholt ihn nach dem S-B- UND dem S-D-Merge.
+Merges — er wird nach dem S-B- UND dem S-D-Merge wiederholt.
 
 Konvention wie ``src/tests/test_mutation_pins_099_deletion_a.py``
-(``_case``/``_dr``-Helfer identisch nachgebaut, TABU-Disziplin fuer fremde
-Testdateien — keine Importe von dort).
+(``_case``/``_dr``-Helfer identisch nachgebaut, bewusst keine Importe aus
+fremden Testdateien).
 """
 
 import pytest

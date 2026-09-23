@@ -7,7 +7,7 @@ Quelle: Vollmutation #2174, Batch ``chain-b``
 
 Das Modul ``core.services.audit.chain`` ist auf zwei Vollmutations-Batches
 verteilt: ``chain-a`` (``_canonical_payload``, ``_system_chain_latest_link_raw``,
-``verify_chain``, ``_checkpoint_boundaries`` — eigene Pin-Datei, eigene Lane)
+``verify_chain``, ``_checkpoint_boundaries`` — eigene Pin-Datei)
 und dieser Batch ``chain-b`` (``assign_chain_fields``, ``_canonical_timestamp``,
 ``_latest_link``, ``compute_entry_hash``, ``advisory_lock_name``,
 ``advisory_lock_id``).

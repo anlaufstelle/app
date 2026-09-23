@@ -11,7 +11,7 @@ Dieser Mutant hatte bereits einen Pin in
 (``TestCreatedAtBreaksFullTies::test_newer_item_sorts_first_when_bucket_due_date_and_priority_are_all_equal``).
 Im Kill-Nachweis-Rerun überlebte die Mutante jedoch — der bestehende Pin ist
 unter der Mutante NICHT deterministisch rot. Diese Datei ersetzt ihn NICHT
-(bestehende Pin-Dateien bleiben laut Briefing unangetastet), sondern ergänzt
+(bestehende Pin-Dateien bleiben unangetastet), sondern ergänzt
 zwei unabhängige, tatsächlich deterministische Pins.
 
 **Warum der alte Pin flackert (empirisch verifiziert, Lehre 137, Scratch-

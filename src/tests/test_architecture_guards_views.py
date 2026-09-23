@@ -626,7 +626,7 @@ class TestClientCaseViewMirrorParity:
     # ist Drift — vgl. :meth:`test_render_context_key_sets_stay_congruent`.
     _RENDER_CONTEXT_CASE_ONLY_KEYS = ("client_locked", "client_id", "client_pseudonym")
 
-    # Orchestrator-freigegebene Ausnahme (Refs #2044): Nur Personen besitzen
+    # Bewusste Ausnahme (Refs #2044): Nur Personen besitzen
     # ein Pseudonym und damit einen Rename-Warnzustand. Der Fall-Zwilling hat
     # fachlich keinen entsprechenden Kontext-Schluessel.
     _RENDER_CONTEXT_CLIENT_ONLY_KEYS = ("pseudonym_changed",)

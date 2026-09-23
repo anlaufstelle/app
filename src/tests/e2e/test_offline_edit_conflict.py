@@ -446,7 +446,7 @@ class TestOfflineReeditOfNewEvent:
             # POST ⇒ genau EIN Server-Event; die Cache-basierte Server-Idempotenz
             # (F-09/#1109, LocMem pro gunicorn-Worker) muss den Doppel-Submit gar
             # nicht mehr abfangen. Flaked dieser Test wieder auf 2, ist das ein
-            # ECHTES Signal ueber den Orchestrator (Lock/Koaleszenz greift nicht)
+            # ECHTES Signal ueber den Sync-Orchestrator (Lock/Koaleszenz greift nicht)
             # — dann debuggen, nicht wieder lockern.
             page.wait_for_timeout(500)
             notes = _server_client_event_notes(e2e_env, client_pk)

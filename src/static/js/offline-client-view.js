@@ -739,7 +739,7 @@
             // requestSync-Lauf (anderer Tab / online-Event) kollidiert und ein
             // Record doppelt gespielt wird. runExclusive reicht den Rueckgabewert
             // durch, sodass das lastSyncResult-Feedback (_reflectReplay) erhalten
-            // bleibt. Fallback ohne Orchestrator: direkter Aufruf wie bisher.
+            // bleibt. Fallback ohne Sync-Orchestrator: direkter Aufruf wie bisher.
             async _replayExclusive(record) {
                 const replay = () => window.offlineEdit.replayModifiedEvent(record);
                 if (window.syncOrchestrator && window.syncOrchestrator.runExclusive) {

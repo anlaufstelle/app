@@ -184,7 +184,7 @@
         {% include "partials/_mfa_setup_reminder.html" %}
         {# Demo-Banner — kennzeichnet synthetische Daten + naechsten Reset (Refs #1062). #}
         {# Refs #2285: aktueller Bereich + Wechsel-Link, Tag aus templatetags/demo_scenarios.py #}
-        {# (KEINE Erweiterung von context_processors.py — TABU dieser Lane, s. dort). #}
+        {# (KEINE Erweiterung von context_processors.py — der Tag liefert den Wert gezielt nur hier, s. dort). #}
         {% if demo_mode %}
         <div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-[13px] py-1.5 px-4" data-testid="demo-banner">
             {% blocktrans with reset=demo_next_reset|time:"H:i" %}Demo — synthetische Daten, Reset jede volle Stunde (nächster: {{ reset }} Uhr). E-Mails &amp; Admin-Funktionen deaktiviert.{% endblocktrans %}

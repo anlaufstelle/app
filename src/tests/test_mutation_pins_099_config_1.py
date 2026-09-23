@@ -41,7 +41,7 @@ bzw. ``pytest.raises`` ohne Textpruefung) — diese Datei fasst
 ``test_config_service.py`` NICHT an, sondern deckt dieselben Szenarien mit
 einem zusaetzlichen, eigenen Pin ab.
 
-**Schreib-Scope-Regressionen (Klasse ``test``, Standardblock-Regel 9):**
+**Schreib-Scope-Regressionen (Klasse ``test``, Klassifikationsregel):**
 
 * ``x_set_field_template_active__mutmut_2``: ``save(update_fields=["is_active"])``
   -> ``update_fields=None``. Der Aufrufer (View) laedt ``field_template``

@@ -139,7 +139,7 @@ class TestSyncOrchestrator:
     """Refs #1351/#1383: navigator.locks + BroadcastChannel-Koordination."""
 
     def test_multi_tab_online_replays_record_exactly_once(self, browser, base_url, _login_storage_state):
-        """Gegen den heutigen Code ROT: ohne Orchestrator feuern beide Tabs ihren
+        """Gegen den heutigen Code ROT: ohne Sync-Orchestrator feuern beide Tabs ihren
         eigenen ``online``-Replay unkoordiniert — beide sehen den Queue-Record,
         bevor der andere ihn geloescht hat → 2 POSTs. Der Origin-weite Web Lock
         serialisiert die Laeufe: der zweite Tab findet nach dem Lock nichts mehr
@@ -184,7 +184,7 @@ class TestSyncOrchestrator:
             # GREEN: beide Tabs vollstaendig zur Ruhe kommen lassen. requestSync
             # koalesziert in den ggf. noch laufenden Lauf und resolved erst nach
             # dessen Abschluss (leere Queue → kein weiterer POST). RED (kein
-            # Orchestrator) uebersprungen — dort haben die beiden konkurrierenden
+            # Sync-Orchestrator) uebersprungen — dort haben die beiden konkurrierenden
             # Replays bereits gepostet, die Queue-Leere oben genuegt als Barriere.
             has_orch = page1.evaluate("() => !!(window.syncOrchestrator && window.syncOrchestrator.requestSync)")
             if has_orch:
@@ -297,7 +297,7 @@ class TestSyncOrchestrator:
                 }"""
             )
 
-            # Tab A: ein echter (leerer) Sync-Lauf ueber den Orchestrator —
+            # Tab A: ein echter (leerer) Sync-Lauf ueber den Sync-Orchestrator —
             # broadcastet am Ende IMMER sync-finished, unabhaengig davon, ob
             # ueberhaupt etwas zu replayen war.
             page_a.evaluate("async () => { await window.syncOrchestrator.requestSync('test'); }")

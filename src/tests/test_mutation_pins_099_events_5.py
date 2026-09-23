@@ -166,7 +166,7 @@ class TestUndoLaedtDenDokumentationstypInDerGleichenAbfrage:
         # ``delete_attachments_for`` im Loeschpfad EINE zusaetzliche, nach
         # ``pk`` geordnete Vorsperre-Abfrage — auch ohne Anhaenge; das Budget
         # folgt dieser bewussten Abfrage (24). Der Mutant ohne JOIN landet bei
-        # 25 und bleibt damit getoetet (Nachweis im Lane-Ledger der Welle).
+        # 25 und bleibt damit getoetet (empirisch nachgewiesen).
         assert len(captured.captured_queries) <= 24, [q["sql"] for q in captured.captured_queries]
 
 

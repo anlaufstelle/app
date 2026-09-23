@@ -152,8 +152,8 @@ class TestZZPasswordChangeUnsyncedGuard:
         orig_hash = _password_hash("emma", e2e_env)
         # Vorher-Session als ruhenden Cookie-Snapshot einfrieren (wie die
         # conftest-Storage-States). Der Kontext wird SOFORT geschlossen:
-        # eine offen gehaltene Seite feuert Hintergrund-Requests (Sync-
-        # Orchestrator/Polling), und ein Request im Fenster zwischen
+        # eine offen gehaltene Seite feuert Hintergrund-Requests
+        # (Sync-Orchestrator/Polling), und ein Request im Fenster zwischen
         # Passwortwechsel und Hash-Restore flusht die Session serverseitig
         # endgültig (django.contrib.auth.get_user bei Hash-Mismatch).
         pre_context = browser.new_context(locale="de-DE")

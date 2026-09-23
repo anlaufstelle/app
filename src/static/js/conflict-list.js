@@ -304,7 +304,7 @@
             // im Dialog gezeigten Server-Stand setzen, Row reaktivieren und
             // den Sync sofort anstossen (statt auf das naechste
             // online-Event zu warten). Faellt auf den direkten replayQueue
-            // zurueck, wenn der Orchestrator (base.html) nicht geladen ist.
+            // zurueck, wenn der Sync-Orchestrator (base.html) nicht geladen ist.
             async reapplyQueueEntry(id) {
                 await this._act(async () => {
                     await window.offlineStore.reapplyQueueEntryWithServerVersion(id);

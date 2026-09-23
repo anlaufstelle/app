@@ -38,7 +38,7 @@ Zwei Themen:
 
 Alle Exakt-Vergleiche (nie Teilstring/``pytest.raises(match=…)``) — sonst uebersieht der Test den
 mutmut-Marker ``XX…XX``, weil der Original-Wortlaut als Teilstring in der markierten Variante
-weiterhin vorkommt (Lehre aus fruehen Lane-M-Batches dieser Welle).
+weiterhin vorkommt (Lehre aus fruehen Batches dieser Testreihe).
 """
 
 from __future__ import annotations

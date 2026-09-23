@@ -709,7 +709,7 @@ class TestApplyAdd:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestApplyAttachmentChanges:
-    """Der Orchestrator reicht ``user`` an alle vier Schritte durch — und speichert feld-gescopt."""
+    """Die steuernde Funktion reicht ``user`` an alle vier Schritte durch — und speichert feld-gescopt."""
 
     def test_eigenes_staging_laeuft_unter_dem_echten_user(
         self, staff_user, sample_event, ft_file_hoch, dt_nur_hoch, medienordner

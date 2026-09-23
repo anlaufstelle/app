@@ -9,10 +9,10 @@ den standardmaessigen (ungesperrten) Aufrufpfad bestimmt, und eine
 ``restricted``-Zusicherung im ``lock=False``-Zweig, deren Wegfall den
 Verarbeitungsschutz OHNE Fehlermeldung umgeht.
 
-**S-B-Ueberschneidung (Nachlauf noetig):** Lane S-B liest Bausteine aus
+**S-B-Ueberschneidung (Nachlauf noetig):** Die Aenderung S-B liest Bausteine aus
 ``client/locking.py`` (``lock_clients``), das dieses Modul importiert. Der
-Kill-Nachweis dieser Datei gilt fuer den Stand VOR dem S-B-Merge — der
-Orchestrator wiederholt ihn danach.
+Kill-Nachweis dieser Datei gilt fuer den Stand VOR dem S-B-Merge — er wird
+danach wiederholt.
 
 Konvention wie ``src/tests/test_mutation_pins_094_attachments_crud.py``:
 echte Model-Objekte, Zusicherungen exakt.

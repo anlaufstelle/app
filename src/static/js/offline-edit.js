@@ -1,5 +1,5 @@
 /*
- * Offline-Edit Orchestrator (Stage 3, Refs #575, #572).
+ * Offline-Edit Sync-Orchestrator (Stage 3, Refs #575, #572).
  *
  * Bridges the offline-read-cache (Stage 2) and the generic offline-queue
  * (Stage 1): when the user edits an event while offline, this module writes
@@ -989,7 +989,7 @@
     window.addEventListener("online", () => {
         // M6 (Refs #1351/#1383): siehe sync-orchestrator.js — der Orchestrator
         // haelt den einzigen koordinierten Replay-Trigger (origin-weiter Lock,
-        // Multi-Tab). Fallback ohne Orchestrator: direkt replayen wie bisher.
+        // Multi-Tab). Fallback ohne Sync-Orchestrator: direkt replayen wie bisher.
         if (window.syncOrchestrator && window.syncOrchestrator.requestSync) return;
         replayAllModifiedEvents();
     });

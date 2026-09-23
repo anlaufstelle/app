@@ -247,7 +247,7 @@ class TestRevocationOnSync:
             _anonymize(e2e_env, revoked_pk)
             assert _revocation_rows(e2e_env, revoked_pk) == "1"
 
-            # 4. Naechster Sync (Orchestrator-Sequenz, Widerruf laeuft als
+            # 4. Naechster Sync (Sync-Orchestrator-Sequenz, Widerruf laeuft als
             #    ERSTER Schritt — vor jedem Replay).
             page.evaluate("async () => { await window.syncOrchestrator.requestSync('e2e'); }")
 

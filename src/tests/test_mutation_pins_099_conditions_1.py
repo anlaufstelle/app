@@ -65,7 +65,7 @@ per Fuzz-Test ueber 2000 Zufallsgraphen) — Details in der Triage-Begruendung.
   behandelt) bedeutet das effektiv ``== black``: die DFS rekursiert nie mehr
   in unbesuchte, dafuer in bereits fertige Knoten.
 * ``x_build_conditions_payload__mutmut_4`` / ``_18`` / ``_19`` (Prio 2,
-  Standardblock Regel 9/72 — Abfragezahl ist ein zulaessiges
+  Klassifikationsregel: Abfragezahl ist ein zulaessiges
   Unterscheidungsmerkmal): je ein verlorenes ``select_related``-Argument
   (``None`` statt ``"field_template"`` bzw. je eine der beiden
   ``FieldCondition``-Joins) fuehrt zu zusaetzlichen Lazy-Load-Queries
@@ -201,8 +201,8 @@ class TestBuildConditionsPayloadQueryCount:
         ``depends_on_field``-Join). Alle drei Mutanten aendern den Rueckgabewert
         NICHT, wohl aber die ausgefuehrte Query-Zahl (N+1 beim Zugriff auf
         ``dtf.field_template`` bzw. ``condition.target_field.field_template``/
-        ``condition.depends_on_field.field_template``) — Standardblock Regel
-        9/72: Abfragezahl ist ein zulaessiges Unterscheidungsmerkmal, keine
+        ``condition.depends_on_field.field_template``) — Klassifikationsregel:
+        Abfragezahl ist ein zulaessiges Unterscheidungsmerkmal, keine
         Aequivalenz. Mit vollem select_related bleibt es bei exakt 2 Queries
         (DocumentTypeField-Join + FieldCondition-Join); jeder der drei
         Mutanten treibt die Zahl auf 4 (je 2 zusaetzliche Lazy-Load-Queries)."""

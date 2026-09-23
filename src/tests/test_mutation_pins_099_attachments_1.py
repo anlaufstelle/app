@@ -528,7 +528,7 @@ class TestBuildPriorVersionsTerminatesOnACycle:
         HINTER dem Startpunkt (``a -> b -> c -> b``) wird vom Original nach
         der zweiten Runde erkannt und beendet — die Mutante erkennt ihn nicht
         und laeuft endlos (``pytest.mark.timeout`` als Deadline-Pin, Lehre
-        gemaess Briefing-Regel fuer Endlosschleifen-Mutanten)."""
+        gemaess der Regel fuer Endlosschleifen-Mutanten)."""
         a = _attach(file_event, ft_file, staff_user, name="a.pdf")
         b = _attach(file_event, ft_file, staff_user, name="b.pdf")
         c = _attach(file_event, ft_file, staff_user, name="c.pdf")

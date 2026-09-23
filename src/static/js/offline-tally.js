@@ -431,7 +431,7 @@
     }
 
     async function renderRevalidatedSnapshot(detail) {
-        // Der zentrale Orchestrator hat Facility-Bundle und Queue bereits in
+        // Der zentrale Sync-Orchestrator hat Facility-Bundle und Queue bereits in
         // derselben exklusiven Sequenz versoehnt. Hier nur daraus rendern —
         // kein zweiter Bundle-GET und kein eigener Sync-Rerun.
         const status = detail && detail.facilityRevalidation;
@@ -655,7 +655,7 @@
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", function () {
             refreshOnlinePanel();
-            // In der Produktreihenfolge ist der Orchestrator jetzt geladen.
+            // In der Produktreihenfolge ist der Sync-Orchestrator jetzt geladen.
             // Nur echte Alt-/Teilseiten ohne ihn erhalten einen eigenen,
             // koaleszierten Online-Fallback.
             installOrchestratorFallback();

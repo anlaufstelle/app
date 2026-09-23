@@ -58,7 +58,7 @@ verifiziert):**
   Rückgabewert von ``_get_keys()`` nie.
 - ``encrypt_field.__mutmut_9``/``_11``: ``.encode("utf-8")``/``.decode("utf-8")``
   → ``"UTF-8"``. Python-Codec-Namen sind case-insensitiv
-  (``codecs.lookup("UTF-8") == codecs.lookup("utf-8")``) — Standardblock-Regel
+  (``codecs.lookup("UTF-8") == codecs.lookup("utf-8")``) — die Klassifikationsregel
   „Codec-Namen-Case" ist explizit als äquivalent benannt.
 - ``encrypt_file.__mutmut_18``/``_109``: dieselbe Codec-Case-Äquivalenz für
   die beiden ``str``→``bytes``-Konvertierungen in ``encrypt_file``.

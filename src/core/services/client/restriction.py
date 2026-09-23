@@ -115,7 +115,7 @@ def _deletion_workflow_write() -> Iterator[None]:
     benannten Ausstieg: die Genehmigung eines Vier-Augen-Loeschantrags ruft
     dieselben Services.
 
-    Die Abgrenzung bleibt die des Orchestrator-Rulings: Art. 17 gilt waehrend
+    Die Abgrenzung folgt der fachlichen Linie: Art. 17 gilt waehrend
     der Einschraenkung weiter, die Einzelentscheidung ohne zweite Person nicht.
     """
     with _workflow_write("deletion_request"):
