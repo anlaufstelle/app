@@ -10,6 +10,7 @@ from core.forms.dynamic import DynamicDataForm
 from core.forms.dynamic import document_type_label as _document_type_label
 from core.forms.mixins import PinnedClientMixin, TailwindFormMixin
 from core.models import Case, DocumentType, User
+from core.services.case.cases import case_form_state_token
 
 
 class DynamicCaseDataForm(DynamicDataForm):
@@ -91,6 +92,17 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         # unterscheidet Anlage und Bearbeitung also NICHT; dafuer ist
         # ``_state.adding`` zustaendig.
         is_editing = bool(self.instance and self.instance.pk and not self.instance._state.adding)
+        # Refs #2359: Fingerabdruck der Formularfelder zum Renderzeitpunkt, als
+        # verstecktes ``expected_form_state`` im Template. Beim ersten Laden aus
+        # der unveraenderten Instanz; bei der Neu-Anzeige nach ungueltiger
+        # Eingabe der mitgeschickte Wert — ``_post_clean`` hat die Instanz dann
+        # bereits mutiert, ein Neuberechnen saehe die neue Eingabe.
+        self.form_state_token = ""
+        if is_editing:
+            if self.is_bound:
+                self.form_state_token = str(self.data.get("expected_form_state", ""))
+            else:
+                self.form_state_token = case_form_state_token(self.instance)
 
         doc_type_field = self.fields["document_type"]
         doc_type_field.required = False

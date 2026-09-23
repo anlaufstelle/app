@@ -42,7 +42,7 @@ from core.services.case import (
     reopen_case,
     update_case,
 )
-from core.services.case.cases import EventNotOnExpectedCaseError, case_form_state_token
+from core.services.case.cases import EventNotOnExpectedCaseError
 from core.services.client import resolve_writable_client
 from core.services.compliance import get_visible_event_or_404, user_can_see_document_type
 from core.services.dynamic_data import (
@@ -461,7 +461,6 @@ class CaseUpdateView(StaffRequiredMixin, View):
         client_id,
         client_pseudonym,
         expected_updated_at,
-        form_state_token,
     ):
         """Render-Kontext des Bearbeiten-Formulars (Refs #1830).
 
@@ -482,9 +481,6 @@ class CaseUpdateView(StaffRequiredMixin, View):
         * ``client_id``/``client_pseudonym`` — im GET aus dem gepinnten
           ``case.client``, im POST-Re-Render aus ``request.POST`` (die Person
           ist dort kein Update-Feld mehr, Refs #1786).
-        * ``form_state_token`` (Refs #2359) — im GET aus dem geladenen Fall,
-          im POST-Re-Render der mitgeschickte Wert: ``_post_clean`` hat die
-          Instanz dort bereits mutiert.
         """
         return {
             "form": form,
@@ -502,15 +498,11 @@ class CaseUpdateView(StaffRequiredMixin, View):
             # M24/AP4 (Refs #1738): in JEDEM Render-Zweig — sonst verschwinden
             # bestehende Anhang-Zeilen beim Re-Render aus dem Formular.
             "existing_attachments": build_attachment_context(case),
-            # Refs #2359: Stand der Formularfelder zum Renderzeitpunkt — damit
-            # ein paralleles Schliessen/Wiedereroeffnen die Eingabe nicht verwirft.
-            "form_state_token": form_state_token,
         }
 
     def get(self, request, pk):
         facility = request.current_facility
         case = get_scoped_object(cases_with_live_client().select_related("document_type"), request, pk=pk)
-        form_state_token = case_form_state_token(case)
         form = CaseForm(instance=case, facility=facility, user=request.user, pinned_client=case.client)
         type_locked = _lock_invisible_document_type(request, case, form)
         if case.client:
@@ -534,7 +526,6 @@ class CaseUpdateView(StaffRequiredMixin, View):
             client_id=str(case.client.pk) if case.client else "",
             client_pseudonym=case.client.pseudonym if case.client else "",
             expected_updated_at=case.updated_at.isoformat(),
-            form_state_token=form_state_token,
         )
         return render(request, "core/cases/form.html", context)
 
@@ -590,7 +581,6 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 client_id=request.POST.get("client", ""),
                 client_pseudonym="",
                 expected_updated_at=request.POST.get("expected_updated_at", ""),
-                form_state_token=request.POST.get("expected_form_state", ""),
             )
             return render(request, "core/cases/form.html", context)
 
@@ -633,7 +623,6 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     client_id=request.POST.get("client", ""),
                     client_pseudonym="",
                     expected_updated_at=request.POST.get("expected_updated_at", ""),
-                    form_state_token=request.POST.get("expected_form_state", ""),
                 )
                 return render(request, "core/cases/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
@@ -692,7 +681,8 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 )
 
             expected_updated_at = request.POST.get("expected_updated_at") or None
-            # Refs #2359: Fingerabdruck der Formularfelder zum Renderzeitpunkt.
+            # Refs #2359: Fingerabdruck der Formularfelder zum Renderzeitpunkt
+            # (``CaseForm.form_state_token``, versteckt im Formular).
             expected_form_state = request.POST.get("expected_form_state") or None
             # Refs #2178: Der Rand fuer die Kontingent-Rechenschaft liegt UM die
             # Transaktion. Reisst das Speicherkontingent erst im Commit, rollt der
