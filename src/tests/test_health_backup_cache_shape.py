@@ -73,3 +73,84 @@ class TestLegacyCacheShapeNeverKillsTheRequest:
 
         assert data["backup"] == "missing"
         assert data["last_backup_age_hours"] is None
+
+
+class _NichtSerialisierbar:
+    """Pickle-faehig (kommt so durch den Cache), aber nicht JSON-serialisierbar."""
+
+
+class TestFormValidButInventedEntryIsNotPassedThrough:
+    """Ein formgueltiger, aber erfundener Eintrag wird nicht uebernommen.
+
+    Die Formpruefung sah nur ``dict`` + zwei Schluessel. Wer in den geteilten
+    Cache schreiben kann, konnte so einen erfundenen Zustand, ein negatives
+    oder beliebiges Alter in die Betriebsauskunft legen — oder mit einem nicht
+    serialisierbaren Wert den Request-Cycle kippen. Gebunden wird jetzt an die
+    Werte: ``state`` aus der bekannten Werteliste, ``age_hours`` passend dazu
+    (``None`` bzw. eine nicht negative Zahl). Sonst: neu berechnen.
+    """
+
+    @pytest.mark.parametrize(
+        "entry",
+        [
+            {"state": "grossartig", "age_hours": -5},
+            {"state": "ok", "age_hours": -5},
+            {"state": "ok", "age_hours": "<script>alert(1)</script>"},
+            {"state": "ok", "age_hours": True},
+            {"state": "ok", "age_hours": None},
+            {"state": "missing", "age_hours": 12.0},
+            {"state": "future", "age_hours": 0.5},
+            {"state": "ok", "age_hours": float("nan")},
+        ],
+        ids=[
+            "erfundener-zustand",
+            "negatives-alter",
+            "text-als-alter",
+            "bool-als-alter",
+            "ok-ohne-alter",
+            "missing-mit-alter",
+            "future-mit-alter",
+            "nan-als-alter",
+        ],
+    )
+    def test_invented_entry_falls_back_to_fresh_computation(self, settings, tmp_path, entry):
+        from core.views.health import _BACKUP_SIGNAL_CACHE_KEY
+
+        settings.HEALTH_DETAIL_TOKEN = DETAIL_TOKEN
+        settings.BACKUP_DIR = tmp_path  # kein Backup vorhanden -> "missing"
+        settings.HEALTH_BACKUP_REQUIRED = False
+        cache.set(_BACKUP_SIGNAL_CACHE_KEY, entry, 15)
+
+        response = _detail_get()
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["backup"] == "missing"
+        assert data["last_backup_age_hours"] is None
+
+    def test_non_serialisable_age_does_not_500(self, settings, tmp_path):
+        from core.views.health import _BACKUP_SIGNAL_CACHE_KEY
+
+        settings.HEALTH_DETAIL_TOKEN = DETAIL_TOKEN
+        settings.BACKUP_DIR = tmp_path
+        settings.HEALTH_BACKUP_REQUIRED = False
+        cache.set(_BACKUP_SIGNAL_CACHE_KEY, {"state": "ok", "age_hours": _NichtSerialisierbar()}, 15)
+
+        response = _detail_get()
+
+        assert response.status_code == 200, response.content
+        assert response.json()["backup"] == "missing"
+
+    def test_consistent_entry_is_still_served_from_the_cache(self, settings, tmp_path):
+        """Gegenprobe: ein stimmiger Eintrag bleibt ein Cache-Treffer."""
+        from core.views.health import _BACKUP_SIGNAL_CACHE_KEY
+
+        settings.HEALTH_DETAIL_TOKEN = DETAIL_TOKEN
+        settings.BACKUP_DIR = tmp_path
+        settings.HEALTH_BACKUP_REQUIRED = False
+        cache.set(_BACKUP_SIGNAL_CACHE_KEY, {"state": "stale", "age_hours": 99.5}, 15)
+
+        data = _detail_get().json()
+
+        assert data["backup"] == "stale"
+        assert data["last_backup_age_hours"] == 99.5
