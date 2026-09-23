@@ -138,6 +138,7 @@ BACKUP_TIMESTAMP="${BACKUP_TIMESTAMP%.sql.gz.enc}"
 HWM_FILE=""
 if [[ -z "${DJANGO_AUDIT_HWM_PATH:-}" && -n "$BACKUP_SET_HWM_SHA256" ]]; then
     echo "WARNUNG: Der Satz enthaelt einen Audit-Anker, dieser Host hat aber keinen Ankerpfad konfiguriert." >&2
+    echo "  Die Vorpruefung lief ohne Audit-Anker; der gebundene Anker wurde nicht geprueft." >&2
     echo "  DJANGO_AUDIT_HWM_PATH ist nicht gesetzt — der Anker wird NICHT eingespielt; die Audit-Kette gilt" >&2
     echo "  nach dem Restore als unverankert (docs/disaster-recovery.md § 6 Schritt 4b)." >&2
 fi
@@ -176,9 +177,6 @@ if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
             exit 1
         fi
         # Der Anker ist Teil des signierten Satzes (Refs #2290).
-        if [[ -n "$BACKUP_SET_HWM_SHA256" ]]; then
-            echo "WARNUNG: Die Vorpruefung lief ohne Audit-Anker; die vollstaendige Satzpruefung erfolgt mit dem gebundenen Anker." >&2
-        fi
         backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE" "$HWM_FILE"
     fi
 fi
