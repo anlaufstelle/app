@@ -41,6 +41,14 @@
         return typeof startedAt === "number" && Date.now() - startedAt < LOGOUT_NAV_GRACE_MS;
     }
 
+    // Refs #2352: quick-exit.js setzt diese Marke beim Schnell-Verlassen und
+    // meldet ``quick-exit:leaving``. Anders als die Logout-Marke ist sie
+    // unbefristet: das Dokument wird verlassen, egal wie lange die Zielseite
+    // laedt — kein Poll mehr und keine eigene Navigation nach /login/.
+    function quickExitLeaving() {
+        return window.__quickExitLeaving === true;
+    }
+
     function createZeitstromLiveWatch(root, options) {
         options = options || {};
         const fetchRequest = options.fetch || window.fetch.bind(window);
@@ -111,6 +119,7 @@
         function canPoll() {
             return (
                 !stopped &&
+                !quickExitLeaving() &&
                 pageActive &&
                 document.visibilityState === "visible" &&
                 navigator.onLine !== false
@@ -170,7 +179,7 @@
             // Partial-URL. Der schutzrelevante Teil ist oben schon passiert
             // (Polling aus, sensible Inhalte raus); die Navigation selbst
             // erledigt der Logout.
-            if (logoutNavInFlight()) return;
+            if (quickExitLeaving() || logoutNavInFlight()) return;
             navigate(url);
         }
 
@@ -709,9 +718,16 @@
             schedule();
         }
 
+        function onQuickExitLeaving() {
+            // ``stop`` bricht den laufenden fetch per AbortController ab und
+            // raeumt den Timer; ``stopped`` verhindert jede Neuplanung.
+            stop();
+        }
+
         function start() {
             if (started || stopped) return;
             started = true;
+            document.addEventListener("quick-exit:leaving", onQuickExitLeaving);
             document.addEventListener("visibilitychange", onVisibilityChange);
             window.addEventListener("online", onOnline);
             window.addEventListener("offline", onOffline);

@@ -130,6 +130,20 @@
         window.__logoutInFlight = Date.now();
     }
 
+    // Refs #2352: Die Logout-Marke oben ist bewusst befristet. Laedt die
+    // Zielseite laenger, liefe ein spaeter Poll der alten Seite trotzdem nach
+    // /login/. Darum zusaetzlich eine unbefristete Marke plus ein Ereignis:
+    // Pollende Module (zeitstrom-live-watch.js) stoppen darauf sofort und
+    // dauerhaft — das Dokument wird ohnehin verlassen.
+    function _announceLeaving() {
+        window.__quickExitLeaving = true;
+        try {
+            document.dispatchEvent(new CustomEvent("quick-exit:leaving"));
+        } catch (err) {
+            // best-effort — die Marke oben wird vor jedem Poll ohnehin gelesen.
+        }
+    }
+
     /** Nur http/https navigieren — ``javascript:``/``data:`` waeren XSS.
      *
      * Der Wert kommt zwar aus einem validierten Settings-Feld, laeuft aber
@@ -549,6 +563,7 @@
         // tragen, die ungeschuetzt ankaeme.
         _exiting = true;
         _markLogoutNavigation();
+        _announceLeaving();
         _abortHtmxRequests();
         _showOverlay("exit");
         _shield(true);
