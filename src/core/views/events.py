@@ -74,6 +74,7 @@ from core.services.events import (
     undo_tally_event,
     update_event,
 )
+from core.services.events.crud import event_form_state_token
 from core.services.events.fields import file_marker_slugs
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
@@ -1131,6 +1132,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             "expected_updated_at": event.updated_at.isoformat(),
             "existing_attachments": build_attachment_context(event),
             "back_link": _event_back_link(event),
+            # Refs #2359: Stand des Ereignisses zum Renderzeitpunkt — damit ein
+            # paralleles Zuordnen/Loesen am Fall die Eingabe nicht verwirft.
+            "form_state_token": event_form_state_token(event),
         }
         return render(request, "core/events/edit.html", context)
 
@@ -1164,6 +1168,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
 
             expected_updated_at = request.POST.get("expected_updated_at")
             wants_json = _wants_json_response(request)
+            # Refs #2359: der Fingerabdruck gilt nur fuer den klassischen
+            # Formular-Pfad. JSON-/HTMX-Clients (Offline-Replay) behalten ihren
+            # Versionsvertrag unveraendert: jeder Mismatch = 409.
+            expected_form_state = None if wants_json else (request.POST.get("expected_form_state") or None)
             # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
             # Refs #1956: Scan + Fernet-Verschluesselung liegen als Staging VOR
             # dem atomic — im Block faellt nur noch der schnelle DB-Write an.
@@ -1213,6 +1221,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                             request.user,
                             merged,
                             expected_updated_at=expected_updated_at,
+                            expected_form_state=expected_form_state,
                             # Refs #1338: JSON-/Offline-Replay-Clients müssen den
                             # Versions-Token mitschicken (kein stilles Last-Write-
                             # Wins mehr). Der klassische HTML-Formular-Pfad bleibt
@@ -1289,6 +1298,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # Anhang-Zeilen beim invalid-POST-Re-Render aus dem Formular.
             "existing_attachments": build_attachment_context(event),
             "back_link": _event_back_link(event),
+            # Refs #2359: den mitgeschickten Stand weiterreichen, nicht neu
+            # berechnen — sonst zaehlte eine zwischenzeitliche Aenderung schon
+            # zum Renderstand.
+            "form_state_token": request.POST.get("expected_form_state", ""),
         }
         return render(request, "core/events/edit.html", context)
 

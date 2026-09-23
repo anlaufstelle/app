@@ -34,6 +34,7 @@
     <form method="post" enctype="multipart/form-data" class="space-y-4" data-offline-enctype-downgrade>
         {% csrf_token %}
         <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">
+        {% if form_state_token %}<input type="hidden" name="expected_form_state" value="{{ form_state_token }}">{% endif %}
 
         {% if data_form.fields %}
         {% comment %}
