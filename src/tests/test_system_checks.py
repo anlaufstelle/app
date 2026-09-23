@@ -351,3 +351,50 @@ class TestRedisCachePasswordCheck:
         assert message.msg == "Eine Redis-Cache-URL ist syntaktisch ungültig."
         assert "REDIS_URL" in message.hint
         assert "supergeheim" not in f"{message.msg} {message.hint}"
+
+
+class TestEncryptionSingleKeyDeprecation:
+    """Refs #2240: Einzelschluessel-Betrieb (nur ``ENCRYPTION_KEY``) ist abgekuendigt.
+
+    Die Verschluesselung selbst bleibt unveraendert; der Check macht die
+    Abkuendigung beim Start sichtbar und verweist auf die Migration zum
+    Schluesselring ``ENCRYPTION_KEYS``.
+    """
+
+    _KEY = "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE="
+
+    @staticmethod
+    def _check():
+        from core import checks
+
+        return checks.check_encryption_single_key_deprecated(None)
+
+    @override_settings(DEBUG=False, ENCRYPTION_KEY=_KEY, ENCRYPTION_KEYS="")
+    def test_single_key_only_warns(self):
+        messages = self._check()
+        assert _ids(messages) == {"core.W005"}
+        (message,) = messages
+        assert "ENCRYPTION_KEY" in message.msg
+        assert "ENCRYPTION_KEYS" in message.hint
+        assert "admin-guide" in message.hint
+        assert self._KEY not in f"{message.msg} {message.hint}"
+
+    @pytest.mark.parametrize("single_key", [_KEY, ""], ids=["beide", "nur-ring"])
+    def test_key_ring_set_never_warns(self, single_key):
+        with override_settings(DEBUG=False, ENCRYPTION_KEY=single_key, ENCRYPTION_KEYS=self._KEY):
+            assert "core.W005" not in _ids(self._check())
+
+    @override_settings(DEBUG=True, ENCRYPTION_KEY=_KEY, ENCRYPTION_KEYS="")
+    def test_debug_skips_check(self):
+        """Lokale Entwicklung arbeitet bewusst mit dem Einzelschluessel."""
+        assert self._check() == []
+
+    @override_settings(DEBUG=False, ENCRYPTION_KEY="", ENCRYPTION_KEYS="")
+    def test_no_key_at_all_is_not_this_checks_business(self):
+        assert self._check() == []
+
+    @override_settings(DEBUG=False, ENCRYPTION_KEY=_KEY, ENCRYPTION_KEYS="")
+    def test_warning_is_registered(self):
+        from django.core.checks import run_checks
+
+        assert "core.W005" in {m.id for m in run_checks()}
