@@ -599,7 +599,7 @@ if [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 && ${#DRILL_SKIPPED[@
     if dc exec -T web python manage.py mark_restore_verified --note "$NOTE" >/dev/null 2>&1; then
         ok "Schritt 7: Restore-Test im AuditLog dokumentiert (mark_restore_verified)"
     else
-        fail "Schritt 7: mark_restore_verified fehlgeschlagen — Compliance-Check bleibt unknown"
+        fail "Schritt 7: mark_restore_verified fehlgeschlagen — Compliance-Check bleibt unknown (wahrscheinlich weil der web-Container nicht laeuft oder nicht healthy ist; siehe Runbook)"
     fi
 elif [[ "$DRILL_FAILED" -eq 0 && "$DRILL_UNDETERMINED" -eq 0 ]]; then
     echo "INFO - Schritt 7: kein Compliance-Nachweis geschrieben — ${#DRILL_SKIPPED[@]} Pflichtschritt(e) uebersprungen."
