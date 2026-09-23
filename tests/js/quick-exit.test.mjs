@@ -954,6 +954,7 @@ describe("Schnell verlassen gegen spaete Antworten der alten Seite", () => {
 
     afterEach(() => {
         delete window.__logoutInFlight;
+        delete window.__quickExitLeaving;
         delete window.htmx;
     });
 
@@ -970,6 +971,28 @@ describe("Schnell verlassen gegen spaete Antworten der alten Seite", () => {
         // Direkt vor der Navigation aufgefrischt: das Fenster der Leser laeuft
         // ab der Navigation, nicht ab dem Klick.
         expect(Date.now() - window.__logoutInFlight).toBeLessThan(10_000);
+    });
+
+    it("meldet das Verlassen sofort und unbefristet an andere Module der Seite", async () => {
+        const { replace } = await freshLoad({ dataset: online() });
+        const heard = vi.fn();
+        document.addEventListener("quick-exit:leaving", heard);
+        try {
+            document.getElementById("quick-exit-button").click();
+
+            // Synchron beim Ausloesen, nicht erst nach dem Schluessel-Loeschen.
+            expect(heard).toHaveBeenCalledTimes(1);
+            expect(window.__quickExitLeaving).toBe(true);
+            await tick();
+            expect(replace).toHaveBeenCalledTimes(1);
+            // Keine Frist: die Marke steht auch lange nach der Navigation.
+            vi.useFakeTimers();
+            vi.advanceTimersByTime(60_000);
+            expect(window.__quickExitLeaving).toBe(true);
+        } finally {
+            vi.useRealTimers();
+            document.removeEventListener("quick-exit:leaving", heard);
+        }
     });
 
     it("verwirft eine HTMX-Antwort, die nach dem Ausloesen eintrifft (HX-Redirect)", async () => {

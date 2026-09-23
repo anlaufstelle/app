@@ -1359,4 +1359,72 @@ describe("Zeitstrom live watch", () => {
             delete window.__logoutInFlight;
         }
     });
+
+    it("stoppt beim Schnell-Verlassen sofort und dauerhaft — auch nach Ablauf der Logout-Marke", async () => {
+        const navigate = vi.fn();
+        const pending = deferred();
+        const fetchMock = vi.fn().mockReturnValue(pending.promise);
+        window.__logoutInFlight = Date.now();
+        try {
+            const watcher = window.createZeitstromLiveWatch(
+                document.getElementById("zeitstrom-live-watch"),
+                { fetch: fetchMock, navigate },
+            );
+            watcher.start();
+            await flush();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            const signal = fetchMock.mock.calls[0][1].signal;
+
+            document.dispatchEvent(new CustomEvent("quick-exit:leaving"));
+
+            // Der laufende Poll ist abgebrochen, kein neuer ist geplant.
+            expect(signal.aborted).toBe(true);
+            expect(watcher.isStopped()).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+
+            // Die Zielseite laedt langsam: die befristete Marke laeuft ab,
+            // bevor das Dokument ersetzt ist.
+            vi.advanceTimersByTime(11_000);
+            pending.resolve(response({ redirected: true, url: "http://localhost/login/" }));
+            await flush();
+            window.dispatchEvent(new Event("focus"));
+            document.dispatchEvent(new Event("visibilitychange"));
+            window.dispatchEvent(new Event("online"));
+            await watcher.checkNow();
+            vi.advanceTimersByTime(120_000);
+            await flush();
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(navigate).not.toHaveBeenCalled();
+        } finally {
+            delete window.__logoutInFlight;
+        }
+    });
+
+    it("pollt und navigiert nicht mehr, sobald die Schnell-Verlassen-Marke steht", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi.fn().mockResolvedValue(
+            response({ redirected: true, url: "http://localhost/login/" }),
+        );
+        // Befristete Logout-Marke laengst abgelaufen, die unbefristete steht.
+        window.__logoutInFlight = Date.now() - 11_000;
+        window.__quickExitLeaving = true;
+        try {
+            const watcher = window.createZeitstromLiveWatch(
+                document.getElementById("zeitstrom-live-watch"),
+                { fetch: fetchMock, navigate },
+            );
+            watcher.start();
+            await watcher.checkNow();
+            vi.advanceTimersByTime(120_000);
+            await flush();
+
+            expect(fetchMock).not.toHaveBeenCalled();
+            expect(navigate).not.toHaveBeenCalled();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            delete window.__logoutInFlight;
+            delete window.__quickExitLeaving;
+        }
+    });
 });
