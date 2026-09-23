@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 11:00+0200\n"
+"POT-Creation-Date: 2026-09-23 22:03+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12843,3 +12843,28 @@ msgstr "This event has changed in the meantime — please reload the page."
 #, python-format
 msgid "Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'. Die Kontaktstufe lässt sich in den Personen-Stammdaten anheben."
 msgstr "Person must have at least contact stage '%(required_stage)s'; current stage is '%(actual_stage)s'. The contact stage can be raised in the person's master data."
+
+#: src/core/retention/proposals.py:262
+msgid "Löschvorschlag gehört zu einer anderen Einrichtung."
+msgstr "Deletion proposal belongs to a different facility."
+
+#: src/core/services/case/cases.py:394 src/core/services/case/deletion.py:151
+#: src/core/services/case/goals.py:158
+msgid "Fall gehört zu einer anderen Einrichtung."
+msgstr "Case belongs to a different facility."
+
+#: src/core/services/case/cases.py:478
+msgid "Ereignis gehört zu einer anderen Einrichtung."
+msgstr "Event belongs to a different facility."
+
+#: src/core/services/case/workitems.py:678
+msgid "Aufgabe gehört zu einer anderen Einrichtung."
+msgstr "Task belongs to a different facility."
+
+#: src/core/services/client/restriction.py:231
+msgid "Person gehört zu einer anderen Einrichtung."
+msgstr "Person belongs to a different facility."
+
+#: src/core/services/events/crud.py:292
+msgid "Dieses Ereignis wurde gelöscht — es kann nicht mehr bearbeitet werden."
+msgstr "This event has been deleted — it can no longer be edited."
