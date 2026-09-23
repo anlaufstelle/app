@@ -173,10 +173,9 @@ class TestRealTreeHasNoUnresolvedProcessVocabulary:
     """Der eigentliche Guard: der ausgelieferte Baum bleibt sauber, damit
     der Bestand aus Ticket 2349 nicht wieder waechst."""
 
-    # deploy/ hat beim Bau dieses Guards 0 Treffer gezeigt und ist deshalb
-    # zusaetzlich zu src/ im Scope; docs/, dev-ops/ und scripts/ haben noch
-    # bestehende Treffer und bleiben ausserhalb (siehe Bericht).
-    _SCAN_ROOTS = ("src", "deploy")
+    # Alle Verzeichnisse mit ausgeliefertem Code oder begleitender
+    # Dokumentation werden gemeinsam geprüft.
+    _SCAN_ROOTS = ("src", "deploy", "docs", "dev-ops", "scripts")
 
     def test_no_unresolved_process_vocabulary_remains(self) -> None:
         unresolved: list[Hit] = []
