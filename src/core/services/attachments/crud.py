@@ -146,7 +146,7 @@ def stage_uploads(facility, user, file_fields) -> Iterator[StagedUploadBatch]:
     staged_all: list = []
     staged_by_slug: dict[str, list] = {}
     batch: StagedUploadBatch | None = None
-    # Refs #2129 (Fix-Runde 1, R-L7a-5): laufende Summe der bereits gestagten
+    # Refs #2129 (R-L7a-5): laufende Summe der bereits gestagten
     # Dateien. Sie existieren noch als KEINE ``Attachment``-Zeile — ohne diesen
     # Offset saehe jede Datei desselben Submits denselben alten DB-Verbrauch,
     # und ein einzelnes Formular koennte das Kontingent mit bis zu
@@ -310,7 +310,7 @@ def stage_attachment_uploads(owner, user, request_files, file_fields, document_t
     facility = owner.facility
     staged_by_key: dict[str, list] = {}
     staged_all: list = []
-    # Refs #2129 (Fix-Runde 1, R-L7a-5): eine laufende Summe fuer den GANZEN
+    # Refs #2129 (R-L7a-5): eine laufende Summe fuer den GANZEN
     # Request — REPLACE- und ADD-Uploads eines Submits zaehlen gemeinsam gegen
     # das Kontingent (siehe ``stage_uploads``). Ersetzte Vorversionen bleiben
     # bis zur physischen Tilgung auf der Platte und zaehlen ohnehin weiter.
@@ -450,7 +450,7 @@ def lock_batch_attachment_rows(owner, entry_ids, *, creates_rows=False, user=Non
     verschraenken. Leere Menge = keine Abfrage (der reine ADD-Batch zahlt
     nichts).
 
-    **Nur mit offener Aufrufer-Transaktion** (Refs #2178, Fix-Runde 3): Ohne
+    **Nur mit offener Aufrufer-Transaktion** (Refs #2178): Ohne
     ``atomic()`` des Aufrufers gibt es nichts vorzusperren — dann oeffnet jede
     Storage-Operation ihre eigene kurze Transaktion, schuetzt ihre Mutation
     selbst und gibt Zeilensperre wie Advisory-Lock sofort wieder frei; ueber
@@ -793,7 +793,7 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
     sperrt :func:`lock_batch_attachment_rows` vor dem ersten Schreibvorgang alle
     Ketten, die dieser Vorgang ersetzt oder loescht — erst danach laufen
     REMOVE/REPLACE/ADD und damit der erste Advisory-Lock der Einrichtung. **Ohne
-    aeussere Transaktion entfaellt die Vorsperre** (Fix-Runde 3): dort schuetzt
+    aeussere Transaktion entfaellt die Vorsperre**: dort schuetzt
     jede Storage-Operation ihre Mutation in ihrer eigenen kurzen Transaktion,
     niemand haelt einen Lock ueber mehrere Operationen, und
     ``select_for_update`` waere im Autocommit-Modus ein Abbruch.
@@ -903,7 +903,7 @@ def _drop_purged_marker_entries(owner, purged_pks):
 def _lock_owner_row(owner):
     """Sperrt die Zeile des Anhang-Owners — zweite Stufe der kanonischen Ordnung.
 
-    Refs #2123 (kimi-k3 B-1, Fix-Runde 1): ``assert_processing_allowed(...,
+    Refs #2123 (Befund B-1): ``assert_processing_allowed(...,
     lock=True)`` sperrt ausschliesslich ``core_client``. Die **direkte**
     Ereignis-Hold-Anlage (``_lock_event_and_check_redaction``) sperrt aber nur
     ``core_event`` und fasst die Personenzeile nie an — zwischen Purge und
@@ -915,14 +915,14 @@ def _lock_owner_row(owner):
 
     Reihenfolge: ``core_client`` (schon gehalten) -> ``core_event`` bzw.
     ``core_case`` — genau die kanonische Ordnung aus ADR-050 D5.5. Ein
-    Inversions-Risiko entsteht nicht: die Ereignis-Hold-Anlage nimmt seit
-    Fix-Runde 2 dieselbe Richtung (``core_client`` -> ``core_event``), die
+    Inversions-Risiko entsteht nicht: die Ereignis-Hold-Anlage nimmt inzwischen
+    dieselbe Richtung (``core_client`` -> ``core_event``), die
     Fall-Hold-Anlage ebenso (``core_client`` -> ``core_case`` -> ``core_event``).
 
     Fuer einen **Personen**-Owner ist nichts zu tun: seine Zeile haelt das
     Art.-18-Gate bereits. Dass ``owner_has_active_hold`` dort zusaetzlich jeden
-    Ereignis-Hold der Person mitzaehlt, deckt seit Refs #2144/#2123
-    (Fix-Runde 2) die Hold-Anlage selbst ab: ``_lock_event_and_check_redaction``
+    Ereignis-Hold der Person mitzaehlt, deckt seit Refs #2144/#2123 auch
+    die Hold-Anlage selbst ab: ``_lock_event_and_check_redaction``
     sperrt jetzt ebenfalls zuerst die Personenzeile. Dieser Helfer muss deshalb
     keine fremden Ereigniszeilen nachsperren — das waere eine unbegrenzte
     Sperrmenge.
@@ -1016,12 +1016,11 @@ def purge_attachment_chain(owner, entry_id):
         # Personen- und (als erste Stufe) der Fall-Hold-Anlage —, und
         # :func:`_lock_owner_row` die Zeile des Owners selbst. Die zweite Stufe
         # ist noetig, weil ein Hold auf den Owner SELBST (Ereignis, Fall) sonst
-        # kein gemeinsames Sperrobjekt mit dem Purge haette (kimi-k3 B-1,
-        # Fix-Runde 1).
+        # kein gemeinsames Sperrobjekt mit dem Purge haette (Befund B-1).
         #
         # „Kein Hold" ist an dieser Stelle stabil, weil JEDE Hold-Anlage
         # (Ereignis, Person, Fall, Aktivitaet) die Personenzeile als erstes
-        # Glied sperrt — seit Refs #2144/#2123 (Fix-Runde 2) auch die direkte
+        # Glied sperrt — seit Refs #2144/#2123 auch die direkte
         # Ereignis-Hold-Anlage. Das ist der Grund, warum die transitive Menge
         # zaehlt, die ``owner_has_active_hold`` bei Personen- und Fall-Ownern
         # zusaetzlich prueft (Ereignis- und Fall-Holds der Person): sie alle
@@ -1037,7 +1036,7 @@ def purge_attachment_chain(owner, entry_id):
                 _("Für diesen Datensatz besteht ein aktiver Legal Hold — die Datei darf nicht vernichtet werden.")
             )
 
-        # Refs #2260 (Fix-Runde 3): die vollstaendige Schreibmenge dieses
+        # Refs #2260: die vollstaendige Schreibmenge dieses
         # Loeschens — die Kette selbst UND jede Zeile, deren ``superseded_by``
         # in sie zeigt — in EINER nach ``pk`` geordneten Abfrage sperren, bevor
         # das ``delete()`` seine ``SET_NULL``-Kaskade faehrt. Der View-Weg hat

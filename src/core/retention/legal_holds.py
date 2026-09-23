@@ -16,7 +16,7 @@ from core.services.events.history_diff import is_redaction_marker
 
 
 def _row_content_is_gone(row) -> bool:
-    """Hat DIESE Fassung ihre Werte verloren? (Fix-Runde 2, Finding B)
+    """Hat DIESE Fassung ihre Werte verloren? (Finding B)
 
     ``redacted_at`` allein reicht nicht: die Art.-17-/K-Anon-Kaskade
     (``_redact_event_history``) ersetzt beide Payloads durch
@@ -244,8 +244,8 @@ def _lock_event_and_check_redaction(facility, target_id):
     ``READ COMMITTED`` ein Hold zwischen dessen ``SELECT`` und ``COMMIT``
     entstehen kann.
 
-    **Die Personenzeile kommt zuerst** (Refs #2144/#2123, Re-Review zur
-    Fix-Runde 1). Die Ereigniszeile allein reicht nicht, weil ein Ereignis-Hold
+    **Die Personenzeile kommt zuerst** (Refs #2144/#2123). Die Ereigniszeile
+    allein reicht nicht, weil ein Ereignis-Hold
     nicht nur ueber sein Ereignis wirkt: ``client_has_active_hold`` zaehlt ihn
     fuer die ganze **Person** mit, ``exclude_cases_with_active_holds`` fuer
     deren **Faelle**, und ``owner_has_active_hold`` prueft ihn deshalb auch beim

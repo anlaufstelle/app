@@ -71,7 +71,7 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
             # voellig unbeteiligten Aenderung.
             readonly = (*readonly, "report_key")
         if obj:
-            # Fix-Runde 1 (Refs #1058, B-1): slug/entity_type sind nach dem
+            # Refs #1058, B-1: slug/entity_type sind nach dem
             # Anlegen unveraenderlich (Guard in DocumentType.save()). Ohne
             # readonly waeren beide im Change-ModelForm editierbar — Django
             # schliesst readonly_fields dagegen von modelform_factory aus
@@ -147,7 +147,7 @@ class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
         request._doctype_parent_obj = obj
         form = super().get_form(request, obj, **kwargs)
         if obj is None:
-            # Fix-Runde 1 (Refs #1058, B-1, Zweitwirkung): slug ist beim
+            # Refs #1058, B-1, Zweitwirkung: slug ist beim
             # Anlegen kein readonly-Feld (es existiert ja noch kein Wert), war
             # aber als normales (Pflicht-)Feld im Add-ModelForm vorhanden — ein
             # Admin haette ihn von Hand tippen muessen statt die Model-
@@ -240,7 +240,7 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
         deckte die echten Aenderungen unter Rauschen zu. Die Erfolgsmeldung
         zaehlt damit ebenfalls die echten Aenderungen.
 
-        Fix-Runde 1 (Cross-Review) — **Transaktionsklammer, Zeilensperren,
+        Cross-Review — **Transaktionsklammer, Zeilensperren,
         Rueckgabezahl**: Vorher standen Snapshot, unbedingtes ``update()`` und
         Audit-Writes ungeschuetzt nebeneinander. Moeglich waren dadurch eine
         Umschaltung ohne Audit (Fehler beim Write), doppelte Auditzeilen bei
@@ -253,7 +253,7 @@ class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
         weicht sie ab, wird das laut geloggt, statt es stillschweigend
         wegzuwerfen.
 
-        Fix-Runde 2/3 (Re-Review) — **Ordnung nach dem tatsaechlichen
+        Re-Review — **Ordnung nach dem tatsaechlichen
         Advisory-Lock-Key**: Jeder Audit-Insert nimmt in
         ``services/audit/chain.py`` einen **transaktionsweiten** Advisory-Lock
         PRO FACILITY, der bis zum Commit gehalten wird — in dieser Klammer

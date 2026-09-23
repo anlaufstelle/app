@@ -210,7 +210,7 @@ def _pending_import_upload_bytes(facility) -> int:
     return total
 
 
-# Byte-Signaturen bekannter Binaerformate (#2128, Fix-Runde 1).
+# Byte-Signaturen bekannter Binaerformate (#2128).
 #
 # Warum ueberhaupt hier: ``store_import_upload`` verschluesselt die Rohbytes
 # direkt (``encrypt_file``) und umgeht damit die komplette File-Vault-Pipeline —
@@ -304,7 +304,7 @@ def _read_upload(uploaded_file) -> bytes:
         raise ValidationError(
             _("Die Datei ist zu groß (maximal %(mb)s MB).") % {"mb": MAX_BYTES // (1024 * 1024)},
         )
-    # #2128 (Fix-Runde 1): erst hier, nach der Groessenpruefung — die Signatur
+    # #2128: erst hier, nach der Groessenpruefung — die Signatur
     # zu lesen setzt die Bytes voraus, und eine Riesendatei soll dafuer nicht
     # in den RAM.
     _reject_binary_upload(raw)

@@ -113,7 +113,7 @@ class Command(BaseCommand):
                 (FACILITY_NAMES[idx], FACILITY_PACKAGES[idx], cfg, seed_users) for idx in range(int(cfg["facilities"]))
             ]
 
-        # Refs #2148 (R-L5c-7, Fix-Runde 1 Punkt 3): ALLE fuer dieses Profil
+        # Refs #2148 (R-L5c-7, Punkt 3): ALLE fuer dieses Profil
         # benoetigten Pakete VOR der ersten Facility-Anlage gegen den Katalog
         # aufloesen — noch vor ``--flush``. Ein fehlendes Domaenen-Paket (z. B.
         # ein neues, noch nicht gemergtes Paket) darf weder eine halb

@@ -231,8 +231,7 @@ class DemoScenarioStartView(View):
         # Fest zugeordnetes Demo-Konto je Facility+Rolle (Ticket-Punkt 5):
         # NIE die facility-Zuordnung eines Kontos umschreiben, nur ein
         # bestehendes, zu Szenario+Rolle passendes Konto anmelden. Lookup
-        # ausgelagert in core.services.demo_scenarios (Fix-Runde 1,
-        # TestTenantModelScopeGuard) — deterministisch, kein Konto aus
+        # ausgelagert in core.services.demo_scenarios (# TestTenantModelScopeGuard) — deterministisch, kein Konto aus
         # Request-Parametern.
         user = account_for(facility, role)
         if user is None:

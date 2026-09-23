@@ -170,7 +170,7 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
     dekodieren. Nicht-Bild-Uploads werden uebersprungen; fuer sie bleiben
     Extension-/Magic-/Virus-Checks zustaendig.
 
-    Refs #2128 (Fix-Runde 1, R-L7a-6): „Bild oder nicht" entscheidet jetzt der
+    Refs #2128 (R-L7a-6): „Bild oder nicht" entscheidet jetzt der
     per Magic-Bytes **erkannte** Typ ODER die Endung — nicht mehr die Endung
     allein. Ein JPEG unter ``foto.docx`` umging sonst den Pixel-Cap komplett.
     ``detected_mime`` ist optional, damit Bestandsaufrufer ohne Sniff-Ergebnis
@@ -495,7 +495,7 @@ def enforce_magic_bytes(facility, uploaded_file, owner, user):
             allowed=sorted(allowed_strong),
         )
 
-    # #2128 (Fix-Runde 1, R-L7a-6): Inhalts- an Endungsfamilie binden.
+    # #2128 (R-L7a-6): Inhalts- an Endungsfamilie binden.
     # Der Gleichheits-Zweig unten laesst jede Datei durch, deren erkannter Typ
     # dem deklarierten entspricht — ohne den Inhalt je an die Endung zu binden.
     # Ein JPEG mit korrekt deklariertem ``image/jpeg`` unter der per Default
@@ -583,7 +583,7 @@ def enforce_storage_quota(
     Betriebszustand, kein Angriff. Die Rechenschaftsspur ist eine eigene
     ``ATTACHMENT_QUOTA_EXCEEDED``-Zeile.
 
-    ``pending_bytes`` (Refs #2129, Fix-Runde 1, R-L7a-5) traegt die Summe der
+    ``pending_bytes`` (Refs #2129, R-L7a-5) traegt die Summe der
     Dateien, die im SELBEN Request bereits gestagt, aber noch nicht als
     ``Attachment``-Zeile persistiert sind. Ohne diesen Offset sah jede Datei
     eines Formular-Submits denselben alten DB-Verbrauch: ein einzelner Submit
@@ -825,7 +825,7 @@ def run_virus_scan(facility, uploaded_file, owner, user):
 # aus ``Settings.allowed_file_types`` heraus.
 _METADATA_STRIP_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "tif", "tiff"})
 
-# Dieselbe Menge auf der MIME-Seite (#2128, Fix-Runde 1, R-L7a-6). Massgeblich
+# Dieselbe Menge auf der MIME-Seite (#2128, R-L7a-6). Massgeblich
 # ist der per Magic-Bytes ERKANNTE Typ; die Endung entscheidet nur noch dort,
 # wo libmagic nichts Belastbares liefert (``application/octet-stream``).
 _METADATA_STRIP_MIMES = frozenset({"image/jpeg", "image/jpg", "image/png", "image/webp", "image/tiff"})
@@ -865,7 +865,7 @@ def _webp_is_lossless(stream) -> bool:
     Stream: je Chunk werden nur 8 Byte Kopf gelesen, die Nutzlast wird
     uebersprungen (RIFF polstert auf gerade Laenge). Ein Praefix-Scan waere
     falsch — ein zulaessiges ICC-/EXIF-/XMP-Chunk vor dem Bilddatenstrom kann
-    beliebig gross sein (Refs #2128, Fix-Runde 1: bei 70 kB ICC lag ``VP8L``
+    beliebig gross sein (Refs #2128: bei 70 kB ICC lag ``VP8L``
     bei Offset 70 038 und wurde uebersehen).
 
     Bei animierten Dateien steckt der Datenstrom im ``ANMF``-Chunk hinter
@@ -914,7 +914,7 @@ def _image_save_kwargs(save_format: str, source, webp_lossless: bool = False) ->
     Kompression der Quelle, damit ein LZW-Scan nicht unkomprimiert aufgeblasen
     wird.
 
-    **ICC-Profil (Fix-Runde 1):** Die JPEG- und WebP-Encoder von Pillow lesen
+    **ICC-Profil:** Die JPEG- und WebP-Encoder von Pillow lesen
     das Profil ausschliesslich aus den Save-Argumenten — ein Profil in
     ``im.info`` ignorieren sie. Die Zusage aus R-L7a-1 („ICC-Profil bleibt")
     galt deshalb nur fuer PNG und TIFF, deren Encoder auf ``im.info``
@@ -977,7 +977,7 @@ def strip_image_metadata(facility, uploaded_file, owner, user, detected_mime=Non
     ohne PNG-Textchunks, ohne XMP/IPTC.
 
     Massgeblich ist der per Magic-Bytes **erkannte** Typ (``detected_mime``),
-    nicht die Endung (Refs #2128, Fix-Runde 1, R-L7a-6). Die Endung entscheidet
+    nicht die Endung (Refs #2128, R-L7a-6). Die Endung entscheidet
     nur noch, wenn libmagic nichts Belastbares liefert
     (``application/octet-stream``) — dann faellt die Stufe auf
     :data:`_METADATA_STRIP_EXTENSIONS` zurueck und Pillow hat das letzte Wort.

@@ -156,7 +156,7 @@ class ClientForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelFo
                 from core.services.compliance import allowed_sensitivities_for_user
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
-            # Refs #1058 (P7-Fix-Runde): Der AKTUELL zugewiesene Typ bleibt
+            # Refs #1058 (P7): Der AKTUELL zugewiesene Typ bleibt
             # waehlbar, auch wenn er zwischenzeitlich deaktiviert wurde. Ohne
             # diese Ausnahme faellt er aus dem Queryset, das Select zeigt
             # „— Kein Typ —" vorausgewaehlt, und ein ganz normaler Submit
@@ -170,7 +170,7 @@ class ClientForm(_FacilityScopedPseudonymMixin, TailwindFormMixin, forms.ModelFo
             qs = DocumentType.objects.none()
         doc_type_field.queryset = qs  # type: ignore[attr-defined]
 
-        # Refs #1058 (P7-Fix-Runde 2): Beim BEARBEITEN traegt das HTMX-Nachladen
+        # Refs #1058 (P7): Beim BEARBEITEN traegt das HTMX-Nachladen
         # die PK der Person mit. Nur damit kann die Partial-View den inaktiven
         # Ist-Typ genauso durchlassen wie das Queryset oben — sonst antwortet
         # sie 404, HTMX swapt bei 4xx nicht, und im DOM bleiben die Felder eines

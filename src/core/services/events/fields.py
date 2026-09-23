@@ -82,7 +82,7 @@ def compute_event_search_text(data_json, document_type):
     aufgenommen — der Index soll keine Daten exponieren, die ein User
     ueber das normale Detail-View nicht sehen darf.
 
-    Refs #1991 (Fix-Runde 1): Der Sensitivity-Test laeuft ueber die zentrale
+    Refs #1991: Der Sensitivity-Test laeuft ueber die zentrale
     ``sensitivity_rank`` statt ueber eine Mengen-Zugehoerigkeit. Die alte
     Formulierung (``ft.sensitivity in {elevated, high}``) fragte, ob der Wert
     zu den bekannten HOHEN Stufen gehoert — ein Wert ausserhalb von

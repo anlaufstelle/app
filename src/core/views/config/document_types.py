@@ -246,7 +246,7 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         event_count = Event.objects.filter(document_type=doc_type).count()
-        # P9-Fix-Runde 1 (V-2, Refs #1058): Client.document_type/Case.document_type
+        # P9 (V-2, Refs #1058): Client.document_type/Case.document_type
         # sind seit M2 ebenfalls PROTECT (wie Event.document_type) — die
         # Vorab-Warnung muss dieselben Blocker zeigen wie der eigentliche
         # Löschversuch (config_service.delete_document_type), sonst sieht der

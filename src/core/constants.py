@@ -109,7 +109,7 @@ RATELIMIT_FREQUENT = "120/h"
 # naechsten Online-Event = 40 GETs/h bestimmungsgemaesser Gebrauch — das
 # vorher geteilte RATELIMIT_BULK_ACTION (30/h) war zu knapp.
 RATELIMIT_OFFLINE_BUNDLE = "120/h"
-# Refs #1760 (Fix-Runde 1): eigenes Limit fuer die Offline-Widerrufsliste.
+# Refs #1760: eigenes Limit fuer die Offline-Widerrufsliste.
 # Bewusst NICHT ``RATELIMIT_OFFLINE_BUNDLE`` mitbenutzt, aus zwei Gruenden:
 #
 # (a) **Anderes Lastprofil.** Der Bundle-Fetch ist eine bewusste Nutzeraktion

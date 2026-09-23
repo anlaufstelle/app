@@ -56,7 +56,7 @@ def delete_attachments_for(owner):
     # nach ``pk`` geordnete Sperre nimmt alle Zeilen des Owners in fester
     # Ordnung, bevor die erste Datei faellt.
     #
-    # Fix-Runde 3: ``deletes_rows=True``. Die Loeschmenge ist owner-eigen, die
+    # ``deletes_rows=True``: Die Loeschmenge ist owner-eigen, die
     # per ``SET_NULL`` MITGESCHRIEBENEN Zeilen sind es nicht: nach einem
     # Zusammenfuehren bleibt die ersetzte Vorgeschichte beim abgebenden
     # Datensatz, waehrend der Kopf hier faellt. Jene Zeile kaeme sonst erst

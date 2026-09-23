@@ -94,7 +94,7 @@ def lead_dashboard_context(user, facility) -> dict:
         "pending_retention_proposals": pending_retention_proposals,
         "last_snapshot": last_snapshot,
         "storage_usage": storage_usage,
-        # Refs #2129 (Fix-Runde 1): Der Warnzustand darf nicht allein an der
+        # Refs #2129: Der Warnzustand darf nicht allein an der
         # Textfarbe haengen (WCAG 1.4.1) — derselbe Satz wie in der
         # Warnliste der Anwendungsbetreuung, aus einer Quelle.
         "storage_warning": storage_warning(storage_usage),

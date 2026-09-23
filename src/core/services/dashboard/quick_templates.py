@@ -13,8 +13,8 @@ def list_templates_for_user(user, facility):
 
     Der User sieht ein Template nur, wenn er den zugehörigen ``DocumentType``
     sehen darf (Role-Sensitivity-Cap). So erscheinen Templates für
-    ELEVATED/HIGH-DocTypes nicht für Assistenzen. M2 (Refs #1058, Fix-Runde 1
-    F-2): zusätzlich nur Templates, deren ``DocumentType.entity_type=event``
+    ELEVATED/HIGH-DocTypes nicht für Assistenzen. M2 (Refs #1058, F-2):
+    zusätzlich nur Templates, deren ``DocumentType.entity_type=event``
     ist — Quick-Templates sind ein Event-Recording-Feature; ein Template auf
     einem client-/case-Typ fällt aus der Liste, als gäbe es es nicht.
 
@@ -113,7 +113,7 @@ def get_template_for_user(user, facility, template_id):
 
     Gibt ``None`` zurück, wenn das Template in einer anderen Facility liegt,
     inaktiv ist, der User den zugehörigen DocumentType nicht sehen darf, oder
-    (M2, Refs #1058, Fix-Runde 1 F-2) der DocumentType kein Event-Typ ist —
+    (M2, Refs #1058, F-2) der DocumentType kein Event-Typ ist —
     ein client-/case-Typ-Template wirkt für den Aufrufer wie „kein Template",
     exakt das Fallback-Verhalten von :func:`core.services.events.context.resolve_default_document_type`.
     """
@@ -135,7 +135,7 @@ def get_template_for_user(user, facility, template_id):
 def get_templates_for_document_type(user, facility, document_type):
     """Liefert sichtbare aktive Templates für genau einen DocumentType.
 
-    M2 (Refs #1058, Fix-Runde 1 F-2): ``document_type`` muss zusätzlich ein
+    M2 (Refs #1058, F-2): ``document_type`` muss zusätzlich ein
     Event-Typ sein — Defense-in-Depth, konsistent mit den beiden anderen
     Funktionen dieses Moduls (der einzige heutige Aufrufer,
     ``EventCreateView.get``, uebergibt ohnehin nur bereits entity_type-

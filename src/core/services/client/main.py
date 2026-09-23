@@ -730,7 +730,7 @@ def anonymize_client(client, user=None):
     Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
     """
-    # Refs #1917 (Fix-Runde): Banner-Wirkung VOR der Kaskade festhalten —
+    # Refs #1917: Banner-Wirkung VOR der Kaskade festhalten —
     # ``_redact_live_events`` leert die Event-``data_json``, danach wäre die
     # Person nie mehr als Banner-Eintrag erkennbar und der Bump fiele
     # fälschlich aus. Der Bump selbst folgt als letzter Schritt (s. u.).
@@ -1197,8 +1197,8 @@ def create_or_get_client_deletion_request(client, user, reason):
     * ``is_deleted`` — dasselbe Argument ohne Merge: ein zweiter Weg in
       denselben Papierkorb, der beim Genehmigen die Frist zurueckdreht.
 
-    Beides wird auf der **frisch gesperrten** Zeile geprueft (Cross-Review
-    Lane 2), nicht auf der uebergebenen Instanz: zwischen dem Lookup der View
+    Beides wird auf der **frisch gesperrten** Zeile geprueft (Cross-Review),
+    nicht auf der uebergebenen Instanz: zwischen dem Lookup der View
     und diesem Aufruf kann eine Zusammenfuehrung committen, und der Guard
     liefe dann auf einem veralteten Objekt ins Leere. Der Lock ist derselbe
     wie in ``approve_client_deletion``/``_locked_clients`` — Antrag,

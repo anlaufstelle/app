@@ -50,7 +50,7 @@ nicht Teil der Partition ist. ``build_dataset`` behaelt die bezifferte Fassung
 fuer die interne Pruefung (Panel-Vorschau und Export sehen sie nie).
 
 **K4a — dieser Bericht ist eine echte Verfeinerung des Sachberichts, und das
-muss man wissen** (Refs #1770, Analyse #1742; Fix-Runde 1 zu #1754).
+muss man wissen** (Refs #1770, Analyse #1742; #1754).
 
 Fuer dieselbe Einrichtung und denselben Zeitraum gilt konstruktionsbedingt:
 

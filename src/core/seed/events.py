@@ -269,7 +269,7 @@ def seed_events_bulk(
             unsatisfiable_slugs.add(dt.slug)
 
     if unsatisfiable_slugs:
-        # Ruling Fix-Runde 1 (Nachtrag zu #2270): der Ausschluss selbst war
+        # Nachtrag zu #2270: der Ausschluss selbst war
         # schon vorher korrekt (keine unzulaessige Kombination) — er lief nur
         # STILL. Ohne Log-Zeile war ein fehlender Typ am Ergebnis nicht von
         # einem echten Fehler zu unterscheiden.
@@ -302,7 +302,7 @@ def seed_events_bulk(
 
     def _build_event(doc_type: DocumentType, idx: int) -> Event:
         """Ein einzelnes Event fuer ``doc_type`` bauen (Person/Anonymitaet,
-        Zeitpunkt, Daten, Suchindex) — Ruling Fix-Runde 1: aus der
+        Zeitpunkt, Daten, Suchindex) — aus der
         Zieh-Schleife herausgezogen, damit Phase 1 (Abdeckung je Typ, feste
         Reihenfolge) und Phase 2 (gewichtete Zufallsauffuellung) dieselbe
         Erzeugungslogik teilen. Der Zufallsfluss innerhalb EINES Ereignisses

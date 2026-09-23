@@ -7,7 +7,7 @@ sieben Rotationspfade samt RLS-Guard-Kontext im Command selbst. Der Command
 behaelt Argument-Parsing, den RLS-Bypass-Guard und die Ausgabe; hier lebt nur
 noch, WAS rotiert wird.
 
-Refs #2042 (Lane E): ``ShiftHandoverNote`` ist der achte Rotationspfad — eine
+Refs #2042: ``ShiftHandoverNote`` ist der achte Rotationspfad — eine
 verschluesselte Freitextspalte mit eigener, kurzer Aufbewahrungsfrist. Sie
 rotiert wie die Wertpaare der Berichtigungsantraege, aber ohne ``updated_at``
 mitzuschreiben: an dem Zeitstempel haengt die Loeschfrist.

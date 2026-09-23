@@ -107,7 +107,7 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
                 from core.services.compliance import allowed_sensitivities_for_user
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
-            # Refs #1058 (P7-Fix-Runde 1, Entscheid E-10): Der AKTUELL
+            # Refs #1058 (P7, Entscheid E-10): Der AKTUELL
             # zugewiesene Typ bleibt waehlbar, auch wenn er zwischenzeitlich
             # deaktiviert wurde. Ohne diese Ausnahme faellt er aus dem Queryset,
             # das Select zeigt „— Kein Typ —" vorausgewaehlt, und ein ganz
@@ -121,7 +121,7 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             qs = DocumentType.objects.none()
         doc_type_field.queryset = qs  # type: ignore[attr-defined]
 
-        # Refs #1058 (P7-Fix-Runde 2, Entscheid E-12): Beim BEARBEITEN traegt das
+        # Refs #1058 (P7, Entscheid E-12): Beim BEARBEITEN traegt das
         # HTMX-Nachladen die PK des Falls mit. Nur damit kann die Partial-View
         # den inaktiven Ist-Typ genauso durchlassen wie das Queryset oben —
         # sonst antwortet sie 404, HTMX swapt bei 4xx nicht, und im DOM bleiben

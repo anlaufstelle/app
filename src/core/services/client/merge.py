@@ -174,7 +174,7 @@ def create_or_get_client_merge_request(source, target, user, reason):
     strenger als der direkte (eine Zweitperson mit ``can_confirm_deletion``
     entscheidet) — er umgeht also kein Schutzniveau.
     """
-    # Art.-18-Gate (Refs #2045): der Merge-ANTRAG war bis zur Fix-Runde 2
+    # Art.-18-Gate (Refs #2045): der Merge-ANTRAG war anfangs
     # ungegatet. Anders als ein Art.-17-Loeschantrag ist die Zusammenfuehrung
     # kein Betroffenenrecht, sondern eine Aktenfuehrungs-Entscheidung der
     # Einrichtung — sie darf waehrend bestrittener Richtigkeit nicht einmal

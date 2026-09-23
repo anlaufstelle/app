@@ -126,7 +126,7 @@ def _rerender_data_form(
     personen-/ereignis-gebundener oder nicht sichtbarer Typ ⇒ leeres Formular
     (kein Leak, kein Fehler).
 
-    ``allow_inactive_pk`` (P7-Fix-Runde 1, E-10): der AKTUELL zugewiesene Typ des
+    ``allow_inactive_pk`` (P7, E-10): der AKTUELL zugewiesene Typ des
     bearbeiteten Falls darf inaktiv sein und bleibt trotzdem waehlbar
     (``CaseForm``-Queryset). Damit der Re-Render eines ungueltigen Formulars
     dessen Eingaben nicht verschluckt, ist genau diese eine PK von der
@@ -841,7 +841,7 @@ class CaseFieldsPartialView(StaffRequiredMixin, View):
     STAFF_PLUS (das Event-Partial ist ASSISTANT_PLUS, weil die Kontakterfassung
     Assistenzen offensteht).
 
-    **Optionaler ``case``-Parameter** (P7-Fix-Runde 2, Entscheid E-12): Beim
+    **Optionaler ``case``-Parameter** (P7, Entscheid E-12): Beim
     Bearbeiten eines Falls haengt das Select die PK des bearbeiteten Falls an
     (``?document_type=…&case=…``). Ist der angefragte Typ genau der **bereits
     zugewiesene**, darf er auch inaktiv sein — exakt die Queryset-Ausnahme aus

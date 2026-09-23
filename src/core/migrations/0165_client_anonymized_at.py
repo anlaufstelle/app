@@ -12,8 +12,8 @@ Gegenstueck.
 letztes Mal durch die Tilgung — eine ueberfluessige Auditzeile je
 Alt-Tombstone.
 
-**Warum das Praefix allein NICHT als Erkennungsmerkmal taugt** (Cross-Review
-Lane 2): ``Gelöscht-`` ist fuer Benutzereingaben nicht reserviert —
+**Warum das Praefix allein NICHT als Erkennungsmerkmal taugt** (Cross-Review):
+``Gelöscht-`` ist fuer Benutzereingaben nicht reserviert —
 ``ClientForm.clean_pseudonym`` (``core/forms/clients.py``) prueft nur die
 Eindeutigkeit. Eine **lebende** Person darf also legitim ``Gelöscht-Test``
 heissen. Wuerde der Backfill sie stempeln, naehme er sie nach ihrer spaeteren,

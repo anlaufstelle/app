@@ -142,7 +142,7 @@ _PERSON_KEY_VALUE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 # ``user=%s`` in einem Log-Template ist selbst kein Wert — der Platzhalter
-# bleibt stehen, sonst verlöre das Template (das seit Fix-Runde 4 die einzige
+# bleibt stehen, sonst verlöre das Template (das inzwischen die einzige
 # Diagnose-Information ist) seine Form.
 
 
@@ -330,7 +330,7 @@ def _scrub_logentry(event: dict) -> None:
     ``message`` durch den Scrub — also ausgerechnet das Feld ohne Werte.
     ``params`` kann Liste ODER Mapping sein (``logger.info("%(a)s", {...})``).
 
-    Refs #2198, Fix-Runde 4 (Entscheid fail-closed): Der Scrub ist **fail-closed** statt
+    Refs #2198 (Entscheid fail-closed): Der Scrub ist **fail-closed** statt
     musterbasiert. Ein Muster kann eine nackte Zeichenfolge nicht als Klarnamen
     erkennen — `logger.exception("… (facility=%s …)", …, facility.name, …)`
     (`services/dashboard/snapshot.py`) trug den Einrichtungsnamen sonst
@@ -373,7 +373,7 @@ def _scrub_spans(event: dict) -> None:
 
 
 def _breadcrumb_data_from_record(record: Any) -> dict[str, str]:
-    """Baut die ``data`` eines Log-Breadcrumbs NEU (Refs #2198, Fix-Runde 5).
+    """Baut die ``data`` eines Log-Breadcrumbs NEU (Refs #2198).
 
     ``BreadcrumbHandler._extra_from_record`` kippt jedes Nicht-Standard-Attribut
     eines ``LogRecord`` nach ``data`` — und ``logger``, ``level`` und
@@ -395,7 +395,7 @@ def _breadcrumb_data_from_record(record: Any) -> dict[str, str]:
 
 
 def before_breadcrumb(crumb: dict | None, hint: dict | None = None) -> dict | None:
-    """Reduziert Log-Breadcrumbs auf ihr Format-Template (Refs #2198, Fix-Runde 4).
+    """Reduziert Log-Breadcrumbs auf ihr Format-Template (Refs #2198).
 
     ``BreadcrumbHandler`` baut aus jedem Log-Record ab INFO einen Breadcrumb
     mit ``message = record.message`` — der **interpolierten** Zeile — und

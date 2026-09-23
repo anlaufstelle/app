@@ -111,7 +111,7 @@ gilt genau dann, wenn der rueckrechenbare Wert selbst keine Kleinstfallzahl ist,
 und ein Pin auf >= *k* Personen ist keine.
 
 **K4a — dieses Backend publiziert Zahlen, die der Bestands-Guard als „nie
-publiziert" modelliert** (Refs #1770; Fix-Runde 1 zu #1754).
+publiziert" modelliert** (Refs #1770; #1754).
 
 :func:`~core.services.dashboard.external_report._person_partition_cells` baut die
 Personen-Partition der Bestandsartefakte mit ``published=None`` fuer **jede**

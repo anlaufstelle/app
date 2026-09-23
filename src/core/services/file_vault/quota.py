@@ -126,7 +126,7 @@ class StorageUsage:
     @property
     def is_near_limit(self) -> bool:
         """Ist die Warnschwelle erreicht? Vergleich auf dem **ungerundeten**
-        Byte-Verhaeltnis (Refs #2129, Fix-Runde 1).
+        Byte-Verhaeltnis (Refs #2129).
 
         Vorher lief der Vergleich ueber :attr:`percent_used` — also ueber eine
         bereits kaufmaennisch gerundete Ganzzahl. 89,6 % wurden damit zu 90 und
@@ -151,7 +151,7 @@ class StorageUsage:
 def storage_warning(usage: StorageUsage) -> str | None:
     """Der Warnsatz ab :data:`WARN_THRESHOLD_PERCENT` — ``None`` darunter.
 
-    **Ein** msgid fuer beide Rollen (Refs #2129, Fix-Runde 1): Die
+    **Ein** msgid fuer beide Rollen (Refs #2129): Die
     Anwendungsbetreuung sieht ihn in der ``settings_warnings``-Liste des
     Verwaltungs-Hubs, die Leitung als Hinweistext in ihrer Arbeitszentrale.
     Zwei getrennte Formulierungen wuerden auseinanderdriften — und im
@@ -274,7 +274,7 @@ def storage_lock_name(facility_id) -> str:
       ihn bis zum Commit.
     * Zeilensperren sind davon unberuehrt — fuer sie gilt die Reihenfolge
       „Zeile vor Advisory-Lock", die ``storage._lock_superseded_row`` im
-      Replace-Pfad herstellt (Refs #2178, Fix-Runde 1).
+      Replace-Pfad herstellt (Refs #2178).
 
     Abgeleitet wird der Name ausschliesslich ueber
     :func:`~core.services.audit.chain.advisory_lock_name` — eine zweite,

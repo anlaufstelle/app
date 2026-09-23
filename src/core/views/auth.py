@@ -328,7 +328,7 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         leitet auf den tokenfreien ``set-password``-Pfad um. Ab diesem Moment
         darf die Sitzung ein neues Passwort setzen, ohne den Link je gesehen zu
         haben — ein vorher entwendetes oder zurueckgelassenes Cookie erbt genau
-        das (Cross-Review Fix-Runde 1, Ruling R-A1-10).
+        das (Cross-Review, R-A1-10).
 
         Erkannt wird der Uebergang am neu erschienenen Session-Eintrag, statt
         die Token-Pruefung der Elternklasse zu duplizieren (eine zweite Kopie
@@ -339,7 +339,7 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         Sitzung unter der alten ID, die das Token traegt.
 
         Das ``finally`` ist dabei die eigentliche Sicherheitszusage und kein
-        Stilmittel (Ruling R-A1-12): die Elternklasse schreibt das Token und
+        Stilmittel (R-A1-12): die Elternklasse schreibt das Token und
         baut ERST DANACH den Redirect. Wirft dieser Schritt — der Reviewer hat
         es ueber einen ueberlangen, weiterhin dekodierbaren Reset-Pfad und den
         daraus folgenden ``DisallowedRedirect`` gezeigt —, entsteht trotzdem

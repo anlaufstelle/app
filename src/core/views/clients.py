@@ -141,7 +141,7 @@ def _rerender_data_form(
     inaktiver, ereignis-/fall-gebundener oder nicht sichtbarer Typ ⇒ leeres
     Formular (kein Leak, kein Fehler).
 
-    ``allow_inactive_pk`` (P7-Fix-Runde): der AKTUELL zugewiesene Typ der
+    ``allow_inactive_pk`` (P7): der AKTUELL zugewiesene Typ der
     bearbeiteten Person darf inaktiv sein und bleibt trotzdem waehlbar
     (``ClientForm``-Queryset). Damit der Re-Render eines ungueltigen Formulars
     dessen Eingaben nicht verschluckt, ist genau diese eine PK von der
@@ -912,7 +912,7 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
     STAFF_PLUS (das Event-Partial ist ASSISTANT_PLUS, weil die Kontakterfassung
     Assistenzen offensteht).
 
-    **Optionaler ``client``-Parameter** (P7-Fix-Runde 2, Refs #1058): Beim
+    **Optionaler ``client``-Parameter** (P7, Refs #1058): Beim
     Bearbeiten einer Person haengt das Select die PK der bearbeiteten Person an
     (``?document_type=…&client=…``). Ist der angefragte Typ genau der **bereits
     zugewiesene**, darf er auch inaktiv sein — exakt die Queryset-Ausnahme aus
@@ -948,7 +948,7 @@ class ClientFieldsPartialView(StaffRequiredMixin, View):
         IDOR-Fenster — und STAFF_PLUS darf Personen der eigenen Einrichtung
         ohnehin lesen.
 
-        ``is_deleted=False`` (Refs #1758, Fix-Runde): der ``FacilityScopedManager``
+        ``is_deleted=False`` (Refs #1758): der ``FacilityScopedManager``
         filtert Papierkorb-Zeilen ausdruecklich NICHT (``models/managers.py``) —
         der Scope muss hier explizit stehen, genau wie in Detail
         (``ClientDetailView``) und Bearbeiten (``ClientUpdateView.get/post``,

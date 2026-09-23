@@ -192,7 +192,7 @@ def advisory_lock_name(facility_id) -> str:
 def advisory_lock_id(facility_id) -> int | None:
     """Der **tatsaechliche** Advisory-Lock-Key einer Facility (``hashtext``-Wert).
 
-    Refs #2019/#2023 (Re-Review Fix-Runde 3): Wer mehrere Facility-Locks in
+    Refs #2019/#2023 (Re-Review): Wer mehrere Facility-Locks in
     einer Transaktion haelt, muss sie in global gleicher Reihenfolge erwerben.
     Nach ``facility_id`` zu ordnen genuegt dafuer **nicht**: gesperrt wird
     ``hashtext(name)``, und ``hashtext`` liefert nur 32 Bit, bildet UUIDs also

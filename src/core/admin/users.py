@@ -125,7 +125,7 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
     jeder Sammelklick eine Zeile je bereits pflichtigem Konto — Audit-Rauschen,
     das die echten Änderungen zudeckt.
 
-    Fix-Runde 1 (Cross-Review) — **Transaktionsklammer + Zeilensperren**:
+    Cross-Review — **Transaktionsklammer + Zeilensperren**:
     Django umschliesst Admin-Actions NICHT automatisch mit
     ``transaction.atomic``. Ohne eigene Klammer blieb ein Flip bestehen, dessen
     Audit-Zeile scheiterte, und bei mehreren Konten entstand ein partiell
@@ -136,7 +136,7 @@ def enforce_mfa_for_selected_users(modeladmin, request, queryset):
     serialisiert den zweiten Klick; danach filtert sein Re-Filter die bereits
     umgestellten Konten korrekt heraus.
 
-    Fix-Runde 2/3 (Re-Review) — **Ordnung nach dem tatsaechlichen
+    Re-Review — **Ordnung nach dem tatsaechlichen
     Advisory-Lock-Key**: Jeder Audit-Insert nimmt in
     ``services/audit/chain.py`` einen **transaktionsweiten** Advisory-Lock PRO
     FACILITY (``pg_advisory_xact_lock``), der bis zum Commit gehalten wird —
@@ -467,7 +467,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         von den drei Selbstbedienungs-Wegen. Kein neuer ``Action``-Wert und
         damit keine Migration.
 
-        Fix-Runde 1 (Cross-Review) — **Transaktionsklammer + Zeilensperre**:
+        Cross-Review — **Transaktionsklammer + Zeilensperre**:
         Diese Django-Sonder-View laeuft weder ueber ``changeform_view`` noch
         unter ``ATOMIC_REQUESTS`` (im Repo nicht gesetzt). Ohne eigene Klammer
         blieb ein Passwortwechsel bestehen, dessen Audit-Insert scheiterte —
@@ -479,7 +479,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         ``select_for_update`` auf der Zielzeile ab: Passwortwechsel und
         Audit-Zeile committen gemeinsam oder gar nicht.
 
-        Fix-Runde 2 (Re-Review), Deadlock-Betrachtung: Dieser Pfad ist vom
+        Re-Review, Deadlock-Betrachtung: Dieser Pfad ist vom
         Cross-Facility-Deadlock der Bulk-Aktionen **nicht** betroffen. Er
         behandelt genau EIN Zielkonto, schreibt also genau EINE Audit-Zeile und
         nimmt damit genau EINEN Facility-Advisory-Lock

@@ -89,7 +89,7 @@ def create_episode(case, user, *, title, description="", started_at=None):
     direkt gerufen; damit gab es keinen Ort fuer das Art.-18-Gate ausser der
     View selbst — und ein View-Check ist genau das, was der Re-Review an den
     Loeschpfaden beanstandet hat. Diese duenne Naht gibt dem Gate den Platz im
-    Service, ohne die Modell-Methode (fremde Lane) anzufassen: Status-Guard und
+    Service, ohne die Modell-Methode (fremdes Modul) anzufassen: Status-Guard und
     Feldsemantik bleiben unveraendert dort.
     """
     from core.services.client.restriction import assert_processing_allowed

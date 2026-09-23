@@ -300,7 +300,7 @@ def _bundle_document_types(user, facility, events) -> list[DocumentType]:
     (dieselbe ``allowed_sensitivities_for_user``-Grenze), sodass die Union
     keinen zusaetzlichen Leak oeffnen kann.
 
-    M2 (Refs #1058, Fix-Runde 1 F-1): zusaetzlich ``entity_type=EVENT`` —
+    M2 (Refs #1058, F-1): zusaetzlich ``entity_type=EVENT`` —
     ohne den Filter koennte ein client-/case-Typ im Offline-Create-Picker
     auftauchen; ein darauf basierender Replay-POST auf ``event_create``
     wuerde vom (bereits entity_type-gefilterten) ``EventMetaForm`` als
@@ -458,7 +458,7 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
     # Typen (echtes Derivat des Online-Create-Formulars). Der bestehende
     # ``user_can_see_field``-Filter in ``_serialize_document_type`` bleibt die
     # zweite (Feld-EBENEN-)Grenze.
-    # M2 (Refs #1058, Fix-Runde 1 F-1): zusaetzlich ``entity_type=EVENT`` —
+    # M2 (Refs #1058, F-1): zusaetzlich ``entity_type=EVENT`` —
     # exakt dieselbe Begruendung wie im Client-Bundle oben (build_client_
     # offline_bundle): ohne den Filter koennte ein client-/case-Typ im
     # personenlosen Offline-Create-Picker landen und einen Replay-POST auf

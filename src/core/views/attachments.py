@@ -697,7 +697,7 @@ class AttachmentPurgeView(LeadOrAdminRequiredMixin, View):
         Zeilen weiterhin selbst — er findet sie jetzt bereits gehalten vor und
         bleibt fuer den direkten Aufruf unveraendert sicher.
 
-        Refs #2260 (Fix-Runde 3): ``deletes_rows=True``, weil dieser Vorgang die
+        Refs #2260: ``deletes_rows=True``, weil dieser Vorgang die
         Zeilen VERNICHTET. Die Vorsperre nimmt deshalb zusaetzlich jede Zeile
         auf, deren ``superseded_by`` in die Kette zeigt — nach einem
         Zusammenfuehren kann das eine Zeile eines anderen Datensatzes sein, die

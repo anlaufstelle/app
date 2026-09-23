@@ -57,14 +57,14 @@ def seed_document_types(facility: Facility, *, package: str = "default") -> Pack
     Refs #2148 (R-L5c-1): generalisiert vom reinen Standardkatalog auf jedes
     mitgelieferte Paket — läuft für JEDEN Paketnamen (inkl. ``"default"``)
     ueber denselben Katalog-Reader (:func:`~core.packages.catalog.parse_catalog_package`),
-    den auch ``setup_facility``/``load_package`` nutzen (Fix-Runde 1, MITTEL A:
+    den auch ``setup_facility``/``load_package`` nutzen (MITTEL A:
     kein Sonderpfad mehr ueber :mod:`core.packages.default_catalog`). Ein
     unbekannter Paketname (z. B. ein Domaenen-Paket, das noch nicht im Katalog
     liegt) schlaegt **fail-loud** als
     :class:`~core.packages.catalog.UnknownPackageError` durch — kein stiller
     Fallback auf den Standardkatalog.
 
-    Refs #2148 (R-L5c-6, Fix-Runde 1 HOCH A): „Ersatz, kein Zusatz" gilt auch
+    Refs #2148 (R-L5c-6, HOCH A): „Ersatz, kein Zusatz" gilt auch
     im Seed. Ein Domaenen-Paket (``package != "default"``) darf nur gegen eine
     Einrichtung OHNE fremden Katalog laufen — sonst blieben Default-Reste
     (Typen/Felder, die das neue Paket nicht kennt) neben den neuen Paket-Typen

@@ -286,7 +286,7 @@ def _schicht_unbestimmbar() -> ValidationError:
 def assert_shift_date_supported(shift: Shift, *, today=None) -> None:
     """Datumsbereich pruefen, BEVOR irgendetwas gerechnet wird (E-06).
 
-    ``shift_date`` kam bis Fix-Runde 1 ungeprueft aus dem POST. Ein
+    ``shift_date`` kam anfangs ungeprueft aus dem POST. Ein
     syntaktisch gueltiges ``9999-12-31`` liess die Folgetags-Rechnung in einen
     ``OverflowError`` laufen — HTTP 500 statt einer Fachmeldung.
     """
@@ -300,7 +300,7 @@ def assert_shift_identity(facility, shift: Shift, *, time_filters: list[TimeFilt
 
     ``time_filter = NULL`` ist laut R-E-2/R-E-4 der Kalenderfall — „diese
     Einrichtung hat keine Schichten". Der POST akzeptierte einen leeren Filter
-    bis Fix-Runde 1 bedingungslos und legte damit neben den echten Schichten
+    anfangs bedingungslos und legte damit neben den echten Schichten
     eine zweite, in der Uebergabe unsichtbare Schreibidentitaet an.
 
     Gilt nur fuer die **Neuanlage**: eine Notiz, die entstand, als es noch
@@ -474,7 +474,7 @@ def save_note(
             # Savepoint um genau diesen INSERT: ``select_for_update`` sperrt
             # keine Zeile, die es noch nicht gibt — zwei Faeden koennen beide
             # ``None`` lesen. Die UniqueConstraint haelt die Daten sauber, aber
-            # der Verlierer bekam bis Fix-Runde 1 einen ungefangenen
+            # der Verlierer bekam anfangs einen ungefangenen
             # ``IntegrityError`` (HTTP 500). Refs #2042, E-05.
             with transaction.atomic():
                 note = ShiftHandoverNote.objects.create(

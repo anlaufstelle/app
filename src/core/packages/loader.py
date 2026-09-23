@@ -117,7 +117,7 @@ class PackageReport:
     ``errors``/``warnings``/``preserved`` sind global (nicht je Objektart) und
     tragen denselben Bezeichner als ersten Tupel-Eintrag.
 
-    ``preserved`` (Refs #1934, Controller-Ruling Review-Runde 1) ist **keine**
+    ``preserved`` (Refs #1934) ist **keine**
     Warnung — bewusst ein eigener Bucket statt eines weiteren Eintrags in
     ``warnings``. Eine Warnung bei jedem fehlenden Tri-State-Schlüssel würde
     jeden gewöhnlichen Lauf zuspammen, bei dem ein Paket Grenzen einfach nicht
@@ -813,8 +813,8 @@ def _warn_on_field_sensitivity_downgrade(
 def _note_preserved_number_range(
     existing: FieldTemplate, template_def: FieldTemplateDef, report: PackageReport, identifier: str
 ) -> None:
-    """Betreiber-Sichtbarkeit für den Tri-State (Refs #1934, Controller-Ruling
-    Review-Runde 1) — bewusst **keine** Warnung.
+    """Betreiber-Sichtbarkeit für den Tri-State (Refs #1934) — bewusst
+    **keine** Warnung.
 
     Eine Warnung "Schlüssel fehlt" würde jeden Lauf zuspammen, bei dem ein
     Paket Grenzen einfach nicht verwaltet — der Normalfall für die meisten

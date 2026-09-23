@@ -234,7 +234,7 @@ class Command(BaseCommand):
             self._write_bucket("aktualisiert", section.updated)
             self._write_bucket("unverändert", section.unchanged)
 
-        # Refs #1934, Controller-Ruling Review-Runde 1: eigener, neutral
+        # Refs #1934: eigener, neutral
         # eingefaerbter Abschnitt statt einer weiteren Warnung — sonst wuerde
         # das im Normalfall (Paket verwaltet keine Grenze) jeden Lauf
         # zuspammen. Kein ``style``-Callable: die Zeile ist Information, kein
