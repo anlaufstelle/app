@@ -469,8 +469,30 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                     # dynamische Formular, damit ein sichtbares Feld markiert wird
                     # und ein unsichtbares nur die generische Meldung ergibt.
                     # Raw-JSON-Contract: _invalid_response (Refs #1831).
+                    #
+                    # Refs #2345: derselbe Zweig faengt auch die
+                    # nicht-feldbezogenen Validierungsfehler aus ``create_event``
+                    # (u. a. ``_validate_contact_stage`` — die Mindest-
+                    # Kontaktstufen-Ablehnung). ``client`` ist hier bereits die
+                    # aufgeloeste ``Client``-Instanz aus
+                    # ``meta_form.cleaned_data`` (oder ``None``); ohne
+                    # ``client_id``/``client_pseudonym`` im Kontext startet der
+                    # Alpine-Autocomplete (``data-initial-client-id``/
+                    # ``-pseudonym`` am ``<form>``) mit leerem ``selectedId`` und
+                    # der versteckte ``client``-Input verliert die Zuordnung,
+                    # obwohl der Ablehnungsgrund nichts mit der Personenwahl
+                    # selbst zu tun hat.
                     add_dynamic_service_errors(data_form, e, restricted_keys)
-                    return self._invalid_response(request, data_form, {"meta_form": meta_form, "data_form": data_form})
+                    return self._invalid_response(
+                        request,
+                        data_form,
+                        {
+                            "meta_form": meta_form,
+                            "data_form": data_form,
+                            "client_id": str(client.pk) if client else "",
+                            "client_pseudonym": client.pseudonym if client else "",
+                        },
+                    )
                 except IntegrityError as exc:
                     # R6 (Refs #1443, Prädikat in views/mixins.py): NUR der
                     # Idempotenz-Unique-Constraint darf als Duplikat gelten; dann

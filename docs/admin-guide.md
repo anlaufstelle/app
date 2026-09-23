@@ -490,6 +490,8 @@ Anschließend sind Organisation, Einrichtung, Standardeinstellungen, der **Stand
 
 > **Alles-oder-nichts:** Der Lauf ist eine einzige Datenbank-Transaktion. Bricht er ab (falsche DB-Rolle, unterbrochene Verbindung, Konflikt beim Katalog), bleibt **nichts** halb Angelegtes zurück — auch der Admin-Benutzer nicht. Der Befehl kann nach Behebung unverändert wiederholt werden.
 
+> **Mindest-Kontaktstufe im Standardkatalog:** Der Dokumentationstyp „Beratungsgespräch“ verlangt mindestens die Kontaktstufe „Mit Zusatzangaben“ — eine frisch angelegte Person startet dagegen mit „Nur Pseudonym“. Der erste Dokumentationsversuch für diesen Typ wird deshalb abgelehnt, bis die Kontaktstufe an der Person angehoben wurde; das erneut angezeigte Formular nennt Ort und Weg der Abhilfe.
+
 > **Wiederholungslauf lässt einen vorhandenen Katalog in Ruhe:** Trägt die Einrichtung bereits Dokumentationstypen oder Feldvorlagen (zweiter Lauf, im Django-Admin angelegte Einrichtung), spielt der Befehl den Standardkatalog **nicht** ein. Im Admin gepflegte Namen, Sortierungen, Farben, Symbole und Sichtbarkeiten bleiben damit unverändert; der Befehl sagt das am Ende und nennt `load_package --default` als den Weg, den Auslieferungsstand bewusst nachzuziehen.
 
 > **Opt-out `--no-default-package`:** Wer den Standardkatalog nicht will (eigenes Konfigurationspaket, komplett eigene Typen), hängt `--no-default-package` an. Die Einrichtung startet dann **ohne** Dokumentationstypen und ist erst dokumentierbar, nachdem ein Paket geladen wurde (siehe [docs/packages.md](packages.md)). Der Befehl weist am Ende ausdrücklich darauf hin.

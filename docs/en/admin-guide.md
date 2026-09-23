@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-22: § 3.1 adds `DJANGO_AUDIT_HWM_PATH` to the `.env` prerequisites and the mandatory step that creates the audit anchor before the first backup, so that a set contains all seven files (#2315).
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
@@ -517,6 +518,8 @@ The script interactively prompts for:
 Afterwards, the organization, facility, default settings, the **default catalog of documentation types**, the three **default shifts** (early, late, night), two **quick templates** on the "Kontakt" type, and the first `facility_admin` user are created. The facility is usable right away: without at least one documentation type, the type selector would be empty and not a single contact could be recorded.
 
 > **All or nothing:** The run is a single database transaction. If it aborts (wrong DB role, dropped connection, catalog conflict), **nothing** half-created is left behind -- not even the admin user. Once the cause is fixed, the command can simply be repeated.
+
+> **Minimum contact level in the default catalog:** The "Beratungsgespräch" (counseling session) documentation type requires at least the contact level "with additional details" -- a freshly created person, by contrast, starts at "pseudonym only". The first documentation attempt for this type is therefore rejected until the person's contact level has been raised; the redisplayed form states where and how to fix it.
 
 > **A repeat run leaves an existing catalog alone:** If the facility already carries documentation types or field templates (second run, facility created in the Django admin), the command does **not** apply the default catalog. Names, sort orders, colors, icons, and visibility levels maintained in the admin therefore stay untouched; the command says so at the end and points to `load_package --default` as the way to deliberately pull in the shipped state.
 
@@ -2267,4 +2270,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: eaa4e26308eccb445500037265d61b14170f1ad1 -->
+<!-- source-hash: b324d48e91acf24ca152a3bf57fc8e3ebfdce93c -->

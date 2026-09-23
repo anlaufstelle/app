@@ -308,8 +308,18 @@ document.addEventListener("alpine:init", () => {
                     this._initCommon();
                     this._casesForClientUrl = this.$el.dataset.casesForClientUrl || "";
                     this._initialCaseId = this.$el.dataset.initialCaseId || "";
-                    // Stage initial pruefen + ggf. Cases laden
-                    this.updateAnonymousAllowed(this.$refs.docTypeSelect);
+                    // Stage initial NUR berechnen (kein Clear, Refs #2345):
+                    // ``data-initial-client-id``/``-pseudonym`` kommen vom
+                    // Server bereits geprueft — etwa die nach einer
+                    // Mindest-Kontaktstufen-Ablehnung wiederhergestellte
+                    // Zuordnung (``views/events.py``, derselbe Dokumentations-
+                    // typ steht dabei bereits fest). Die volle
+                    // ``updateAnonymousAllowed`` mit ihrem Clear-Nebeneffekt
+                    // bleibt dem echten Typwechsel unten (``htmx:beforeRequest``)
+                    // vorbehalten — nur DORT hat der Browser keine Ahnung, ob
+                    // die zuvor gewaehlte Person die neu verlangte Stufe
+                    // erreicht.
+                    this._updateStageInfo(this.$refs.docTypeSelect);
                     if (this.selectedId) {
                         this.loadCasesForClient(this.selectedId);
                     }
@@ -371,7 +381,11 @@ document.addEventListener("alpine:init", () => {
                     if (this.minStage) params.set("min_stage", this.minStage);
                     return `${this._autocompleteUrl}?${params.toString()}`;
                 },
-                updateAnonymousAllowed(selectEl) {
+                // Refs #2345: reine Berechnung OHNE Clear-Nebeneffekt — von
+                // ``init()`` UND von ``updateAnonymousAllowed()`` genutzt, damit
+                // beide dieselbe Ableitung aus dem aktuell gewaehlten <option>
+                // teilen.
+                _updateStageInfo(selectEl) {
                     if (!selectEl) return;
                     const opt = selectEl.options[selectEl.selectedIndex];
                     this.anonymousAllowed = !opt || !opt.dataset.minStage;
@@ -381,6 +395,10 @@ document.addEventListener("alpine:init", () => {
                     // damit benennbar, ohne etwas ueber die gefilterte Menge zu
                     // verraten.
                     this.minStageLabel = (opt && opt.dataset.minStageLabel) || "";
+                },
+                updateAnonymousAllowed(selectEl) {
+                    if (!selectEl) return;
+                    this._updateStageInfo(selectEl);
                     if (this.minStage && this.selectedId) {
                         this._fetchGen++;
                         this.selectedId = "";

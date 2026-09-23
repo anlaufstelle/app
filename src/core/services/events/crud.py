@@ -106,7 +106,8 @@ def _validate_contact_stage(document_type, client, is_anonymous):
                 "Person muss mindestens die Kontaktstufe "
                 "'%(required_stage)s' "
                 "haben, aktuelle Stufe ist "
-                "'%(actual_stage)s'."
+                "'%(actual_stage)s'. "
+                "Die Kontaktstufe lässt sich in den Personen-Stammdaten anheben."
             )
             % {
                 # Refs #1805: beide Seiten als Anzeige-Label. Vorher stand
@@ -115,6 +116,9 @@ def _validate_contact_stage(document_type, client, is_anonymous):
                 # deutsches Label in einem Satz.
                 "required_stage": Client.ContactStage(document_type.min_contact_stage).label,
                 "actual_stage": client.get_contact_stage_display(),
+                # Refs #2345: der Rohtext nennt seit hier auch den Weg zur
+                # Abhilfe (wo die Kontaktstufe geaendert wird) — bisher
+                # nannte die Meldung nur den Grund der Ablehnung.
             }
         )
 
