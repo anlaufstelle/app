@@ -16,9 +16,12 @@ gueltig bleiben.
 
 from __future__ import annotations
 
+import json
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, EventHistory, FieldTemplate
@@ -225,8 +228,73 @@ def create_event(
     return event
 
 
+# Inhalts- und Zustandsspalten, gegen die ein Bearbeiten-Formular seinen
+# Stand festhaelt (Refs #2359) — ``attname``-Form, damit Instanz und
+# ``values()`` dieselben Werte liefern. ``case_id`` steht bewusst NICHT darin:
+# Zuordnen und Loesen (:func:`~core.services.case.cases.assign_event_to_case`,
+# :func:`~core.services.case.cases.remove_event_from_case`) aendern nur diese
+# Spalte, und das Formular zeigt sie nicht. Jede andere Aenderung, die
+# ``updated_at`` anhebt (Bearbeitung, Papierkorb, Tilgung beim Anonymisieren),
+# aendert eine der hier gelisteten Spalten und bleibt ein Konflikt.
+EVENT_FORM_STATE_FIELDS = (
+    "data_json",
+    "search_text",
+    "document_type_id",
+    "client_id",
+    "episode_id",
+    "occurred_at",
+    "is_anonymous",
+    "is_deleted",
+)
+
+
+def _event_form_state_token_from_values(pk, values):
+    payload = json.dumps(
+        {field: values.get(field) for field in EVENT_FORM_STATE_FIELDS},
+        sort_keys=True,
+        default=str,
+    )
+    return salted_hmac("core.event.form_state", f"{pk}|{payload}", algorithm="sha256").hexdigest()
+
+
+def event_form_state_token(event):
+    """Fingerabdruck des Ereignisstands zum Renderzeitpunkt (Refs #2359).
+
+    Muster ``workitem_form_state_token``: ein HMAC statt der Klartextwerte,
+    damit das Formular keinen zweiten, manipulierbaren Satz Feldwerte
+    mitschickt und der Wert nichts ueber den Inhalt verraet. Wer ihn
+    faelscht, erreicht hoechstens, was ein Neuladen mit anschliessendem
+    Speichern ohnehin erlaubt. Zu berechnen auf der unveraenderten, aus der
+    Datenbank gelesenen Instanz.
+    """
+    values = {field: getattr(event, field) for field in EVENT_FORM_STATE_FIELDS}
+    return _event_form_state_token_from_values(event.pk, values)
+
+
+def _event_form_state_unchanged(event, expected_form_state):
+    """``True``, wenn seit dem Rendern nur ``case``/``updated_at`` wechselten.
+
+    Liest die Zeile unter Row-Lock (``check_version_conflict`` haelt ihn in
+    derselben Transaktion bereits; ``select_for_update`` ist dann ein No-op).
+    """
+    if not expected_form_state or not isinstance(expected_form_state, str):
+        return False
+    current = Event._base_manager.select_for_update().filter(pk=event.pk).values(*EVENT_FORM_STATE_FIELDS).first()
+    if current is None:
+        return False
+    return constant_time_compare(_event_form_state_token_from_values(event.pk, current), expected_form_state)
+
+
 @transaction.atomic
-def update_event(event, user, data_json, expected_updated_at=None, require_version_token=False, **kwargs):
+def update_event(
+    event,
+    user,
+    data_json,
+    expected_updated_at=None,
+    require_version_token=False,
+    expected_form_state=None,
+    **kwargs,
+):
     """Update an event + EventHistory(UPDATE).
 
     Refs #734: nutzt zentrale ``check_version_conflict`` statt eigenem
@@ -237,6 +305,15 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
     Clients müssen dadurch einen Token mitschicken, während der klassische
     HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
+
+    ``expected_form_state`` (Refs #2359): Fingerabdruck des Ereignisstands zum
+    Renderzeitpunkt (:func:`event_form_state_token`). Weicht nur
+    ``updated_at`` ab, weil parallel ausschliesslich die Fallzuordnung
+    gesetzt oder geloest wurde, ist das kein Konflikt mit dem Formular: die
+    Eingabe wird gespeichert, die parallele Zuordnung bleibt. Jede andere
+    parallele Aenderung bleibt ein Konflikt; ein fehlender oder ungueltiger
+    Versions-Token wird nie gerettet. Ohne Fingerabdruck (Default,
+    JSON-/Offline-Replay) gilt der Versionsvertrag unveraendert.
 
     Allowlist (Refs #1789): ``**kwargs`` bleibt in der Signatur, die Menge der
     erlaubten Felder ist aber **leer**. ``update_event`` war die letzte der
@@ -255,7 +332,13 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     # die Anhang-Aenderungen traegt. VOR dem Versions-Guard: die Rechtslage
     # gilt unabhaengig davon, ob das Formular aktuell war.
     assert_processing_allowed(event.client_id, lock=True)
-    check_version_conflict(event, expected_updated_at, require_token=require_version_token)
+    try:
+        check_version_conflict(event, expected_updated_at, require_token=require_version_token)
+    except ValidationError as exc:
+        # Nur der echte Versions-Mismatch darf per Fingerabdruck aufgeloest
+        # werden — fehlender oder ungueltiger Token bleiben Fehler.
+        if exc.code != "version_conflict" or not _event_form_state_unchanged(event, expected_form_state):
+            raise
     # Läuft ZUERST (Muster ``update_case``/``update_workitem``): die
     # Mass-Assignment-Prüfung darf weder vom Diff noch von der
     # ``data_json``-Validierung abhängen — ein abgewiesener Kwarg darf
@@ -283,7 +366,13 @@ def update_event(event, user, data_json, expected_updated_at=None, require_versi
     # Ein-Zeilen-Aenderung ist (Symmetrie zu den drei Geschwister-Services).
     for k, v in kwargs.items():  # pragma: no cover
         setattr(event, k, v)
-    event.save()
+    # Refs #2359: nur die Spalten dieser Bearbeitung schreiben. Die Instanz
+    # stammt aus einem Lesevorgang VOR der Sperre; ein voller ``save()`` setzte
+    # eine dazwischen committete Fallzuordnung (oder ihr Loesen) still auf den
+    # alten Stand zurueck. ``search_text`` muss in der Liste stehen, sonst
+    # persistiert Django den neu berechneten Suchindex nicht (Muster
+    # ``soft_delete_event``).
+    event.save(update_fields=["data_json", "search_text", "updated_at", *kwargs])
     EventHistory.objects.create(
         event=event,
         changed_by=user,
