@@ -58,7 +58,11 @@ class GoalCreateView(StaffRequiredMixin, View):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         title = request.POST.get("title", "").strip()
         if title:
-            create_goal(case=case, user=request.user, title=title)
+            try:
+                create_goal(case=case, user=request.user, title=title)
+            except ValidationError as exc:
+                # Refs #2329: gesperrte, geloeschte oder getilgte Akte.
+                return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
@@ -71,7 +75,11 @@ class GoalUpdateView(StaffRequiredMixin, View):
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         title = request.POST.get("title", "").strip() or None
         description = request.POST.get("description")
-        update_goal(goal, request.user, title=title, description=description)
+        try:
+            update_goal(goal, request.user, title=title, description=description)
+        except ValidationError as exc:
+            # Refs #2329, Spiegel von ``GoalCreateView``.
+            return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
 
 
