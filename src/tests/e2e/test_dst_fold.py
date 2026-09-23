@@ -54,7 +54,7 @@ EVENT_DETAIL_URL = re.compile(r"/events/[0-9a-f-]+/$")
 
 # Der axe-Schluessel dieser Seite steht NICHT in ``a11y_baseline.json`` — der
 # Grenzfall darf gar keinen critical/serious-Verstoss erzeugen. Die Baseline
-# wird nur abgebaut, nie erweitert (Standardblock 39/59).
+# wird nur abgebaut, nie erweitert.
 AXE_PAGE_KEY = "event_create_fold_choice"
 
 

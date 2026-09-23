@@ -175,7 +175,7 @@ def record_report(report_path: Path | None, page_key: str, result: AxeResult) ->
     """Alle Violations einer Seite ins Report-Artefakt schreiben (Merge-on-write).
 
     Nur aktiv, wenn ``AXE_REPORT_PATH`` gesetzt ist. Das Artefakt ist die
-    Grundlage fuer den Audit-Fan-out (Lane B1) UND die Quelle, aus der die
+    Grundlage fuer den Audit-Fan-out UND die Quelle, aus der die
     Baseline in Commit 3 gepinnt wird — deshalb traegt es JEDE Impact-Stufe,
     nicht nur die Gate-relevanten.
 

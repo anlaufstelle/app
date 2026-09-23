@@ -67,7 +67,7 @@ class TestBackendMetadaten:
         assert backend.snapshot_enabled is False
 
     def test_population_ist_faelle_im_zeitraum(self, backend):
-        """Fix-Runde 1 (Refs #1754): frueher ``PERSONS`` — sachlich falsch.
+        """Refs #1754: frueher ``PERSONS`` — sachlich falsch.
         ``PERSONS`` ist definiert als „Personen mit mindestens einem Ereignis im
         Zeitraum"; ein Fall setzt aber kein Ereignis voraus, und
         ``offene_faelle_aktuell`` hat gar keinen Zeitraumbezug. Der Ausweis muss
@@ -316,7 +316,7 @@ class TestPrepareExport:
         assert prepared.summary["offene_faelle_aktuell"] is None
 
     def test_momentaufnahme_hinweis_erreicht_das_artefakt(self, backend, facility):
-        """I1 (Fix-Runde 1): Die Kennzeichnung von ``offene_faelle_aktuell`` als
+        """I1: Die Kennzeichnung von ``offene_faelle_aktuell`` als
         Stichtagszahl darf nicht nur im Docstring stehen — die Empfaengerin
         liest den Docstring nie. Der Hinweis ist datenunabhaengig (immer da,
         egal welche Zahlen) und ziffernfrei (sonst publizierte er selbst eine

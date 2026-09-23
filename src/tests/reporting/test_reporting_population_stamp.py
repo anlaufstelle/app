@@ -201,7 +201,7 @@ class TestGrundgesamtheitInDenArtefakten:
         assert len(set(texte)) == len(texte), texte
 
     def test_fall_und_hausverbots_backends_nennen_ihre_eigene_menge(self):
-        """Refs #1754 (Fix-Runde 1): ``PERSONS``/``ALL_EVENTS`` waren dort
+        """Refs #1754: ``PERSONS``/``ALL_EVENTS`` waren dort
         sachlich falsch — ein Fall setzt kein Ereignis voraus, und zwei der drei
         Hausverbots-Zahlen ignorieren ``occurred_at`` voellig."""
         from core.reporting.data_source import BANS_IN_PERIOD, CASES_IN_PERIOD

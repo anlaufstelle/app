@@ -446,7 +446,7 @@ class TestStatementTimeout:
 
 
 class TestExportBrichtNieNachDenHeadernAb:
-    """Fix-Runde 1 / H1: der CSV-Renderer streamt — nichts Backend-Eigenes darf mitstreamen.
+    """H1: der CSV-Renderer streamt — nichts Backend-Eigenes darf mitstreamen.
 
     Cross-Review zu Refs #2070  + kimi-k3) hat reproduziert, dass ein
     Backend, das den ``DatasetResult``-Vertrag bricht, **mid-stream** wirft:
@@ -584,7 +584,7 @@ class TestExportBrichtNieNachDenHeadernAb:
 
 
 class TestSachberichtPdfIsoliert:
-    """Fix-Runde 1 / M1: der hybride Sachbericht-PDF-Pfad ruft ``build_dataset`` selbst.
+    """M1: der hybride Sachbericht-PDF-Pfad ruft ``build_dataset`` selbst.
 
     ``SampleReport1ExportView`` geht nicht ueber ``export_dataset``, sondern
     ueber ``generate_sample_report_1_pdf`` →

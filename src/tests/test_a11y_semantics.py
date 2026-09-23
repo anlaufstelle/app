@@ -336,7 +336,7 @@ def time_filters(facility):
 class TestTimeFilterTabs:
     """A11Y-017/008 — der aktive Zeitfilter war rein visuell.
 
-    Ruling R-B2p-10: bewusst KEIN ARIA-Tab-Pattern. ``role="tablist"``/``role="tab"``
+    R-B2p-10: bewusst KEIN ARIA-Tab-Pattern. ``role="tablist"``/``role="tab"``
     versprechen ein Composite-Widget (Roving-Tabindex, Pfeilnavigation,
     zugeordnetes ``tabpanel``), das diese unabhaengigen HTMX-Filterknoepfe nicht
     liefern. Der Auswahlzustand steht deshalb in ``aria-pressed`` am ``<button>``.
@@ -577,7 +577,7 @@ class TestAutocompleteErrorWiring:
     def test_error_free_renderings_keep_their_attribute_sequence(
         self, client, staff_user, client_identified, route, expect_required
     ):
-        """Die TABU-Aenderung darf die drei Bestandsrenderings nicht verschieben.
+        """Der Fix darf die drei Bestandsrenderings nicht verschieben.
 
         Gepinnt wird die Attributfolge der Combobox — inklusive der Aussage,
         dass OHNE Fehler weder ``aria-invalid`` noch ``aria-describedby``

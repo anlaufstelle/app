@@ -259,8 +259,8 @@ class TestSchnellVerlassen:
 
         Der Fall ist eine **Positivkontrolle nur zusammen mit einem Rot-Lauf**:
         Dass er ohne die Unterdrueckung wirklich scheitert, zeigt erst ein Lauf
-        gegen ein ``quick-exit.js`` ohne ``_suppressReferrer()`` (Anleitung im
-        Lane-Bericht). Eine DOM-Assertion allein ersetzt diesen Nachweis nicht.
+        gegen ein ``quick-exit.js`` ohne ``_suppressReferrer()`` (siehe oben).
+        Eine DOM-Assertion allein ersetzt diesen Nachweis nicht.
         """
         kopfzeilen = []
         context = browser.new_context(locale="de-DE")
@@ -577,7 +577,7 @@ class TestOfflineSmoke:
             )
 
             # R-L3-9: Der persistente Schluessel muss nach dem Dokumentwechsel
-            # weg sein. Bis zur Fix-Runde 1 startete ``clearSessionKey`` nur und
+            # weg sein. Anfangs startete ``clearSessionKey`` nur und
             # ``location.replace`` riss den Kontext mitten in der
             # IndexedDB-Transaktion weg — die naechste Offline-Shell haette den
             # Schluessel wieder geladen und die Bestaende erneut entschluesselt.

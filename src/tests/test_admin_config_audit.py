@@ -154,7 +154,7 @@ class TestDocumentTypeAdminFallbackAudit:
 
 
 class TestFieldTemplateBulkAtomicity:
-    """Fix-Runde 1 (Cross-Review): der Bulk-Schalter ist alles-oder-nichts.
+    """Cross-Review: der Bulk-Schalter ist alles-oder-nichts.
 
     ``_bulk_set_active`` materialisierte erst die betroffenen Vorlagen, feuerte
     dann ein unbedingtes ``update()`` und schrieb danach die Auditzeilen —
@@ -222,7 +222,7 @@ class TestFieldTemplateBulkAtomicity:
         assert _config_entries(schon_inaktiv).count() == 0
 
 
-# --- Fix-Runde 2: kanonische Lock-Reihenfolge ueber Facilities hinweg -------
+# --- Kanonische Lock-Reihenfolge ueber Facilities hinweg -------
 #
 # Begruendung wie bei der MFA-Sammelaktion: jeder Audit-Insert nimmt in
 # ``services/audit/chain.py`` einen transaktionsweiten Advisory-Lock PRO

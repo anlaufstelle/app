@@ -538,7 +538,7 @@ class TestE2ESeedFacilityGuard:
     ``User.objects.get(username="admin").facility``; die übrigen 16 Seeds
     (#2166) an ``Facility.objects.get(name="Hauptstelle")``.
 
-    Fix-Runde 1 Review): der ursprüngliche Scan traf nur unmittelbar
+    Review: der ursprüngliche Scan traf nur unmittelbar
     unter ``src/tests/e2e/`` liegende ``test_*.py`` — ein neuer Seed in
     ``conftest.py``, ``_helpers.py`` oder einem künftigen Unterverzeichnis
     wäre unentdeckt geblieben. Der Scan läuft jetzt rekursiv über ALLE

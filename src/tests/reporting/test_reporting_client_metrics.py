@@ -290,7 +290,7 @@ class TestPrepareExport:
         faellt, weil eine Altersgruppe personenbedingt unterdrueckt ist
         (``drop_person_margin_on_person_suppression``, Auflage 1 zu K0-b).
 
-        Anforderungsaenderung (Fix-Runde 1, Refs #1754): frueher pinnte dieser
+        Anforderungsaenderung (Refs #1754): frueher pinnte dieser
         Fall ``aktive_personen == 6``. Das war die Divergenz zur
         Bestands-Doktrin, die fuer genau diese Partition (Σ Personen je
         Altersgruppe = aktive Personen) in allen drei Bestandsartefakten laeuft.

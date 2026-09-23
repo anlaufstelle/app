@@ -107,7 +107,7 @@ class TestEnforceMfaBulkActionAudit:
 
 
 class TestEnforceMfaBulkActionAtomicity:
-    """Fix-Runde 1 (Cross-Review): der Bulk-Lauf ist alles-oder-nichts.
+    """Cross-Review: der Bulk-Lauf ist alles-oder-nichts.
 
     Django umschliesst Admin-Actions NICHT automatisch mit
     ``transaction.atomic``. Ohne eigene Klammer blieb ein MFA-Flip bestehen,
@@ -150,7 +150,7 @@ class TestEnforceMfaBulkActionAtomicity:
         assert sperren, "Der Re-Filter muss die betroffenen Konten per select_for_update sperren"
 
 
-# --- Fix-Runde 2: kanonische Lock-Reihenfolge ueber Facilities hinweg -------
+# --- Kanonische Lock-Reihenfolge ueber Facilities hinweg -------
 #
 # Jeder Audit-Insert nimmt in ``services/audit/chain.py`` einen
 # transaktionsweiten Advisory-Lock PRO FACILITY

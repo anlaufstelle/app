@@ -161,7 +161,7 @@ class _FakeClamd:
 
     def _handle(self, conn):
         # Endliche Wartezeit statt unendlichem Blockieren: ein haengender
-        # Handler duerfte den Testlauf nie aufhalten (Standardblock 22).
+        # Handler duerfte den Testlauf nie aufhalten.
         conn.settimeout(20)
         try:
             if self.mode == "down":
@@ -215,7 +215,7 @@ def _close_quietly(conn):
 def _stop_process(proc):
     """gunicorn garantiert beenden: SIGTERM → wait(10) → SIGKILL → wait().
 
-    Review Fix-Runde 1: Der Teardown schickte nur ``SIGTERM`` und wartete
+    Review: Der Teardown schickte nur ``SIGTERM`` und wartete
     ohne Fallback. Endet der Prozess nicht in zehn Sekunden, scheiterte der
     Teardown und der Server konnte auf Port ``base_url+200`` weiterlaufen; im
     Startfehler-Pfad blieb er ausserdem unreaped. Beides ist Shared-State-Muell
@@ -248,7 +248,7 @@ def clamav_base_url(base_url, e2e_env, fake_clamd):
     und startet nur einen zusaetzlichen gunicorn — analog ``enforced_base_url``
     (``conftest.py``).
 
-    Portwahl: ``base_url``-Port + 200. Das Briefing schlug ``8848 + worker_num``
+    Portwahl: ``base_url``-Port + 200. Ein frueherer Vorschlag nutzte ``8848 + worker_num``
     vor; das kollidiert ab vier xdist-Workern mit den ``base_url``-Ports
     (8844+n). Der Abstand +200 ist per Konstruktion kollisionsfrei und folgt der
     bestehenden Konvention (``enforced_base_url`` = +100).

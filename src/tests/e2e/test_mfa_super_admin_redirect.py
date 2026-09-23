@@ -1,7 +1,6 @@
 """Super-Admin reaches the system dashboard after TOTP verification.
 
-Refs #2206. The lane writes this regression spec; the orchestrator runs it
-serially against the dedicated E2E database.
+Refs #2206. Runs serially against the dedicated E2E database.
 """
 
 import re

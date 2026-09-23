@@ -11,8 +11,7 @@ Schreibt/verändert NICHTS am geteilten Seed — ``DocumentType``/``FieldTemplat
 ``Event`` sind Zusatzobjekte in der bestehenden Einrichtung des ersten Seed-
 Klienten, analog zu ``detail_pks`` in ``test_accessibility.py``.
 
-FÄHRT NICHT dieser Agent — nur die EINE Playwright-Lane des Orchestrators
-unter dem globalen CI-Lock (Standardblock Punkt 46). Kommando (seriell, Port
+Serieller Lauf unter dem globalen CI-Lock. Kommando (seriell, Port
 8844, ``POSTGRES_DB=anlaufstelle_e2e``):
 ``.venv/bin/python -m pytest src/tests/e2e/test_detail_field_placeholder.py -q -p no:cacheprovider``
 """
@@ -96,6 +95,6 @@ class TestDetailFieldPlaceholder:
         baseline = load_baseline(BASELINE_PATH)
         result = run_axe(page, base_url)
         # Eigener page_key, NICHT in der Baseline ⇒ jeder critical/serious-Fund
-        # ist rot (Standardblock Punkt 59). Die geteilte Baseline-Datei bleibt
+        # ist rot. Die geteilte Baseline-Datei bleibt
         # unverändert (nur Lesezugriff über ``load_baseline``).
         assert_within_baseline("event_detail_field_placeholder", result, baseline)

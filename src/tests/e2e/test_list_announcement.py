@@ -155,7 +155,7 @@ class TestListAnnouncementTotal:
         assert page.evaluate("document.activeElement.getAttribute('name')") == "q"
 
 
-# Fix-Runde 1 Review MITTEL, a-codex-review.md § C): die kleine
+# Befund MITTEL (a-codex-review.md § C): die kleine
 # ``small``-Scale-Seed-Groesse (<= 7 Klientel, DEFAULT_PAGE_SIZE = 25) laesst
 # ``paginator.count`` und die Zahl sichtbarer Zeilen in JEDEM bisherigen Test
 # zufaellig zusammenfallen — eine fehlerhafte Reimplementierung mit
@@ -209,7 +209,7 @@ print(p.num_pages)
 
 
 class TestListAnnouncementAcrossMultiplePages:
-    """Refs #2155, Fix-Runde 1: Gesamtwert != sichtbare Zeilen, echt bewiesen."""
+    """Refs #2155: Gesamtwert != sichtbare Zeilen, echt bewiesen."""
 
     @pytest.fixture(autouse=True)
     def _bulk_clients(self, e2e_env):

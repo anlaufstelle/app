@@ -431,7 +431,7 @@
     }
 
     /*
-     * Refs #1760 (Fix-Runde 1): winziger, UNVERSCHLUESSELTER Key-Value-Zugriff auf
+     * Refs #1760: winziger, UNVERSCHLUESSELTER Key-Value-Zugriff auf
      * die `meta`-Tabelle — wie `storagePersist` bewusst im Klartext: die Werte
      * sind reine Steuer-Metadaten (Booleans/Zeitstempel) ohne jeden Personenbezug,
      * dafuer lohnt sich kein Crypto-Overhead, und sie muessen auch OHNE

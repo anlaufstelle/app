@@ -254,7 +254,7 @@ class TestFacilityBundleDocTypeSensitivityFilter:
 
 @pytest.mark.django_db
 class TestFacilityBundleDocTypeEntityTypeFilter:
-    """M2 (Refs #1058, Fix-Runde 1 F-1): der DocType-Katalog des Facility-
+    """M2 (Refs #1058, F-1): der DocType-Katalog des Facility-
     Bundles muss zusaetzlich zum Sensitivity-Filter (``TestFacilityBundleDocTypeSensitivityFilter``)
     ``entity_type=event`` durchsetzen — spiegelbildlich zum Online-
     ``EventMetaForm`` (``forms/events.py``). Ohne den Filter koennte ein

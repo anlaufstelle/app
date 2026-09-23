@@ -205,7 +205,7 @@ class TestFacilityStorageUsage:
         assert usage.is_near_limit is True
 
     def test_schwelle_vergleicht_ungerundet(self, facility_with_settings, existing_bytes, settings):
-        """Refs #2129 (Fix-Runde 1): Die Schwelle wurde bisher auf der
+        """Refs #2129: Die Schwelle wurde bisher auf der
         **gerundeten** Prozentzahl geprueft — 89,6 % rundeten auf 90 und
         loesten die Warnung aus, obwohl sie noch nicht faellig war. Der
         Vergleich laeuft jetzt auf dem Byte-Verhaeltnis."""
@@ -369,7 +369,7 @@ class TestQuotaDurchsetzung:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestQuotaImSelbenRequest:
-    """Refs #2129 (Fix-Runde 1, R-L7a-5 / Review-Befund B2).
+    """Refs #2129 (R-L7a-5 / Review-Befund B2).
 
     ``stage_uploads``/``stage_attachment_uploads`` stagen alle Dateien eines
     Formular-Submits, BEVOR irgendeine davon als ``Attachment``-Zeile
@@ -552,7 +552,7 @@ class TestSichtbarkeit:
     def test_leitungs_dashboard_zeigt_einen_warntext_nicht_nur_farbe(
         self, facility_with_settings, lead_user, existing_bytes, settings
     ):
-        """Refs #2129 (Fix-Runde 1): Bei Erreichen der Schwelle wechselte im
+        """Refs #2129: Bei Erreichen der Schwelle wechselte im
         Lead-Dashboard nur die Textfarbe — der Warnzustand war rein farblich
         codiert (WCAG 1.4.1) und der geforderte Hinweistext fehlte."""
         from core.services.dashboard import lead_dashboard_context

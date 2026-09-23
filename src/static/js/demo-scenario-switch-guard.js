@@ -1,6 +1,6 @@
 /*
  * Warnt vor ungespeicherter Offline-Arbeit beim Demo-Start/-Wechsel (Refs
- * #2285, Fix-Runde 1, Ticket-Punkt 9: "Ungespeicherte Arbeit vorher
+ * #2285, Ticket-Punkt 9: "Ungespeicherte Arbeit vorher
  * nachvollziehbar behandeln; weder still verlieren noch übertragen").
  *
  * Gleiche Zaehl-/Bestaetigungs-Mechanik wie auth-bootstrap.js

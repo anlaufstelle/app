@@ -410,7 +410,7 @@ class TestWebpVerlustfreiErkennung:
         assert _webp_is_lossless(io.BytesIO(_webp_with_exif())) is False
 
     def test_grosser_chunk_vor_dem_bilddatenstrom_wird_uebersprungen(self):
-        """Der Kern der Fix-Runde: ``VP8L`` liegt hinter einem 70-kB-ICC-Chunk.
+        """Grenzfall: ``VP8L`` liegt hinter einem 70-kB-ICC-Chunk.
         Ein Praefix-Scan haette hier ``False`` gesagt."""
         from core.services.file_vault.policy import _webp_is_lossless
 
@@ -512,7 +512,7 @@ class TestSaveArgumenteJeFormat:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestBildUnterNichtBildEndung:
-    """Refs #2128 (Fix-Runde 1, R-L7a-6): Die Bereinigung darf nicht an der
+    """Refs #2128 (R-L7a-6): Die Bereinigung darf nicht an der
     Dateiendung haengen.
 
     Ein JPEG mit korrekt deklariertem ``image/jpeg`` unter der standardmaessig

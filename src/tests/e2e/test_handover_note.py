@@ -32,13 +32,13 @@ def _shell(e2e_env, script):
 def _speichern(page, block_testid, text):
     """Text eintragen, speichern und auf den **tatsaechlich vollzogenen** Swap warten.
 
-    **Warte-Falle** (Refs #2042, Fix-Runde 1): ``expect_response`` kehrt zurueck,
+    **Warte-Falle** (Refs #2042): ``expect_response`` kehrt zurueck,
     sobald die ANTWORT da ist — htmx hat den Container zu diesem Zeitpunkt noch
     nicht ersetzt. Wer direkt danach das naechste Mal ``fill``t, schreibt in ein
     Textfeld, das der Swap gleich darauf verwirft; der zweite Klick schickte
     dann den ALTEN Text zurueck.
 
-    **Nachbesserung Fix-Runde 2** Befund E-14): Auf „Statusmeldung
+    **Nachbesserung** (Befund E-14): Auf „Statusmeldung
     vorhanden" und „Feldwert stimmt" zu warten genuegt nicht — beim ZWEITEN
     Speichern steht die Statusmeldung schon vom ersten im DOM, und ``fill``
     hat den erwarteten Feldwert bereits vor dem Request gesetzt. Beide
@@ -316,7 +316,7 @@ class TestSchichtnotizLiveRefresh:
 class TestSchreibenBisZurFolgeschicht:
     """E-11: der zusammenhaengende Ablauf, den die Einzelfaelle nicht abdecken.
 
-    Schreiben und Anzeigen in der Folgeschicht wurden bis Fix-Runde 1 getrennt
+    Schreiben und Anzeigen in der Folgeschicht wurden zunaechst getrennt
     geprueft — genau in dieser Luecke sassen die Befunde E-03 und E-04.
     """
 
@@ -325,7 +325,7 @@ class TestSchreibenBisZurFolgeschicht:
     ):
         """E-11: der **tatsaechliche** Wechsel in die Folgeschicht.
 
-        Fix-Runde 1 hat das nicht belegt: dort wurden nach dem Speichern
+        Der fruehere Test hat das nicht belegt: dort wurden nach dem Speichern
         dieselben Koordinaten wieder angesteuert — weder Serverzeit noch
         laufende Schicht wechselten, und die Notiz stand weiterhin im
         ``current``-Block.

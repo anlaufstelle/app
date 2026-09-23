@@ -1,8 +1,8 @@
 /*
  * Zustellung des Archivierungs-Purges ausserhalb der Bundle-Revalidierung
- * (Refs #2067, Cross-Review Finding 1 — Rest aus Fix-Runde 1).
+ * (Refs #2067, Cross-Review Finding 1).
  *
- * Fix-Runde 1 hat die Sperr-403 maschinenlesbar markiert
+ * Die Sperr-403 wurde maschinenlesbar markiert
  * (``X-Facility-Archived: 1``) und ``revalidateCachedClient`` /
  * ``revalidateCachedFacility`` darauf purgen lassen. Damit war genau EIN
  * Zustellweg abgedeckt: eine laufende Bundle-Revalidierung. Normale

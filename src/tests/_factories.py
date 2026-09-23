@@ -1,7 +1,7 @@
 """Schlanke Objekt-Factories fuer die drei haeufigsten Inline-Creates
 (``Event``, ``DocumentType``, ``Client``) in der Testsuite (Refs #1839 E5b).
 
-Kein factory-boy (YAGNI, Standardblock 61) — nur duenne Wrapper um
+Kein factory-boy (YAGNI) — nur duenne Wrapper um
 ``Model.objects.create(...)``, die genau die je Modell fast immer
 gesetzten Pflichtfelder als benannte Parameter erzwingen und alles
 Uebrige unveraendert per ``**overrides`` durchreichen. Keine impliziten

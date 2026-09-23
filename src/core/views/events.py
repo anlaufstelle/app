@@ -1336,7 +1336,7 @@ class EventDeleteView(StaffRequiredMixin, View):
             messages.info(request, _("Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."))
         else:
             # Art.-18-Vorabpruefung (Refs #2045) — freundliche Meldung, NICHT
-            # das Gate. Die verbindliche Grenze zieht seit Fix-Runde 2
+            # das Gate. Die verbindliche Grenze zieht inzwischen
             # ``soft_delete_event`` selbst, unter der Client-Zeilensperre und in
             # derselben Transaktion wie die Loeschung; dieser Zweig erspart der
             # Nutzerin nur die Fehlerseite. (Eine aeltere Fassung dieses

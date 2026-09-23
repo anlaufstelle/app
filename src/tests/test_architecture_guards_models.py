@@ -152,7 +152,7 @@ def _tenant_model_names() -> frozenset[str]:
 # z.B. untauglich, weil ``is_superuser=True`` es als Teilstring enthaelt und
 # damit eine deploymentweite Abfrage faelschlich blessen wuerde.
 #
-# Refs #2132 (Cross-Review Fix-Runde 1): Die Substring-Suche laeuft ueber den
+# Refs #2132 (Cross-Review): Die Substring-Suche laeuft ueber den
 # Quelltext OHNE String-Literale (``_blanked_source``) — sonst blesst ein
 # ``Value("case=")`` in der Kette den Zugriff. Das leere QuerySet ist keine
 # Token-Evidenz mehr, sondern eine strukturelle Regel
@@ -197,7 +197,7 @@ _SCOPE_EVIDENCE = (
 
 #: Relationale Evidenz-Tokens: sie zaehlen nur mit einem Lookup-Pfad, der einen
 #: OBJEKTBEZUG herstellt (``client__facility=…``, ``client__in=…``). Refs #2132
-#: (Cross-Review Fix-Runde 1).
+#: (Cross-Review).
 _RELATION_EVIDENCE = frozenset(
     {
         "facility__",
@@ -251,7 +251,7 @@ _NON_SCOPING_LOOKUPS = frozenset(
 #: Ein QuerySet, das aus nichts als ``Model.objects.none()`` besteht, liefert per
 #: Definition keine Zeile (Fail-closed-Platzhalter der Formulare). Sobald die
 #: Kette weitergeht — ``none().union(Model.objects.all())`` — gilt das nicht mehr,
-#: deshalb die Vollmatch-Regel statt eines Tokens (Cross-Review Fix-Runde 1).
+#: deshalb die Vollmatch-Regel statt eines Tokens (Cross-Review).
 _EMPTY_QUERYSET_CHAIN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\.objects\.none\(\)")
 
 #: Lookup-Pfad hinter einem relationalen Token (``client__facility__id``).
@@ -352,8 +352,8 @@ def _evidence_source(parents: dict, node: "ast.AST") -> str:
     sonst wuerde ein Nachbar-Argument (``log(request.user, Client.objects.all())``)
     die Kette faelschlich blessen.
 
-    String-Literale werden geleert (:func:`_blanked_source`, Cross-Review
-    Fix-Runde 1), damit ein ``Value("case=")`` in der Kette keine Evidenz
+    String-Literale werden geleert (:func:`_blanked_source`), damit ein
+    ``Value("case=")`` in der Kette keine Evidenz
     vortaeuscht.
     """
     top = _chain_top(parents, node)
@@ -729,7 +729,7 @@ class TestTenantModelScopeGuard:
         assert not find_unscoped_tenant_access(tmp_path)
 
     def test_empty_queryset_union_evasion_is_detected(self, tmp_path):
-        """``none()`` blesst NUR die ganze Kette (Cross-Review Fix-Runde 1, Refs #2132).
+        """``none()`` blesst NUR die ganze Kette (Cross-Review, Refs #2132).
 
         ``Client.objects.none().union(Client.objects.all())`` liefert alle Personen
         aller Einrichtungen — der Freibrief des leeren QuerySets darf sich nicht auf
@@ -767,7 +767,7 @@ class TestTenantModelScopeGuard:
         assert not find_unscoped_tenant_access(tmp_path)
 
     def test_evidence_inside_a_string_literal_does_not_count(self, tmp_path):
-        """Ein Token im String-Literal ist keine Evidenz (Cross-Review Fix-Runde 1)."""
+        """Ein Token im String-Literal ist keine Evidenz (Cross-Review)."""
         (tmp_path / "offender.py").write_text(
             "from django.db.models import Value\n\n"
             "from core.models import Case\n\n"

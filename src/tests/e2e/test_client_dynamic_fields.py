@@ -14,7 +14,7 @@ Handrunde, nicht vorab. Abgedeckt sind zwei Flüsse:
       (kein Seed-Ereignistyp) und der Ereignis-Picker zeigt die Personen-Typen nicht.
 
   (2) **Regression E-11/E-12** ``test_inactive_assigned_type_survives_switch_away_and_back``
-      (P7-Fix-Runde 2): Ist-Typ einer Person nachträglich deaktiviert → das Select bietet
+      (P7): Ist-Typ einer Person nachträglich deaktiviert → das Select bietet
       ihn weiter an, markiert mit „(deaktiviert)"; ein Wechsel weg auf einen anderen Typ
       und **zurück** liefert vom Partial ``200`` mit den eigenen Feldern (vor dem Fix:
       404 → HTMX swapt bei 4xx nicht → im DOM blieben die Felder des anderen Typs →
@@ -217,7 +217,7 @@ def switch_document_type(page, *, entity="clients", label=None, value=None, expe
     Status geprüft — ein 4xx ist der Kern des E-12-Regressionsfalls: HTMX swapt
     dann NICHT, und ohne diese Assertion sähe man nur die Folgefehler.
 
-    Review Fix-Runde 1 (Refs #1855): Die Antwort allein ist noch KEIN
+    Review (Refs #1855): Die Antwort allein ist noch KEIN
     Swap. Deshalb werden die Alt-Knoten vor dem Wechsel gestempelt und nach der
     Antwort ihr Verschwinden abgewartet — erst danach ist ein ``fill`` sicher.
     Bei erwartetem 4xx entfaellt das, weil htmx dann bewusst nicht swapt.
@@ -239,7 +239,7 @@ def switch_document_type(page, *, entity="clients", label=None, value=None, expe
 def fill_dynamic_field(page, selector, value):
     """Ein HTMX-nachgeladenes Feld befüllen — EINMAL, nach synchronisiertem Swap.
 
-    Review Fix-Runde 1 (Refs #1855): Hier stand eine Poll-Schleife, deren
+    Review (Refs #1855): Hier stand eine Poll-Schleife, deren
     Prädikat selbst ``fill`` aufrief und den Wert sofort danach las — sie war
     schon beim ersten Durchlauf wahr und damit gar keine Barriere. Die
     Synchronisation gehört an den Swap (``switch_document_type``); hier bleibt
@@ -395,7 +395,7 @@ class TestClientDynamicFields:
 
 
 class TestInactiveAssignedClientType:
-    """P7-Fix-Runde 2: der deaktivierte Ist-Typ übersteht Weg-und-Zurück im Select."""
+    """P7: der deaktivierte Ist-Typ übersteht Weg-und-Zurück im Select."""
 
     def test_inactive_assigned_type_survives_switch_away_and_back(self, authenticated_page, base_url):
         page = authenticated_page

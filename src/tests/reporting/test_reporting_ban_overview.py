@@ -101,7 +101,7 @@ class TestBackendMetadaten:
         assert backend.snapshot_enabled is False
 
     def test_population_ist_hausverbote_im_zeitraum(self, backend):
-        """Fix-Runde 1 (Refs #1754): frueher ``ALL_EVENTS`` — sachlich falsch.
+        """Refs #1754: frueher ``ALL_EVENTS`` — sachlich falsch.
         Gezaehlt werden nur Hausverbots-Ereignisse, und zwei der drei Zahlen
         ignorieren ``occurred_at`` voellig (Stichtag bzw. Ablaufdatum)."""
         assert backend.population == BANS_IN_PERIOD
@@ -373,7 +373,7 @@ class TestPrepareExport:
         assert prepared.summary["aktiv_aktuell"] is None
 
     def test_momentaufnahme_hinweis_erreicht_das_artefakt(self, backend, facility):
-        """I1 (Fix-Runde 1): ``aktiv_aktuell`` ist eine Stichtagszahl — die
+        """I1: ``aktiv_aktuell`` ist eine Stichtagszahl — die
         Kennzeichnung muss im Artefakt stehen, nicht nur im Docstring.
         Datenunabhaengig, ziffernfrei, Severity ``info``."""
         leer = backend.prepare_export(facility, _rohergebnis())

@@ -257,7 +257,7 @@ def _per_hour(rate: str) -> int:
 
 
 class TestRevocationEndpointRateLimit:
-    """Refs #1760 (Fix-Runde 1, Befund 2b): eigenes, grosszuegiges Limit.
+    """Refs #1760 (Befund 2b): eigenes, grosszuegiges Limit.
 
     Der Widerrufs-Poll laeuft pro Seitenaufbau (die App nutzt kein hx-boost),
     client-seitig gedrosselt auf einen Lauf pro Minute — also bis zu 60/h allein

@@ -30,7 +30,7 @@ def _select_doc_type_and_await_swap(page, label):
     Muster ``test_file_vault.select_doc_type_and_wait``, Refs #1797), dann auf
     die Antwort warten und zuletzt darauf, dass kein gestempelter Knoten mehr
     haengt. Erst danach ist ein ``fill`` gegen einen ausstehenden Swap sicher
-    Review Fix-Runde 1, Refs #1855).
+    Review, Refs #1855).
     """
     page.evaluate(
         "() => document.querySelectorAll('#dynamic-fields > *').forEach((el) => el.setAttribute('data-pre-swap', '1'))"
@@ -46,7 +46,7 @@ def _select_doc_type_and_await_swap(page, label):
 def _fill_after_htmx_swap(page, selector, value):
     """Ein HTMX-nachgeladenes Feld befuellen — EINMAL, nach synchronisiertem Swap.
 
-    Review Fix-Runde 1 (Refs #1855): Hier stand eine Poll-Schleife, deren
+    Review (Refs #1855): Hier stand eine Poll-Schleife, deren
     Praedikat selbst ``fill`` aufrief und den Wert sofort danach las — sie war
     schon beim ersten Durchlauf wahr und damit gar keine Barriere gegen einen
     noch ausstehenden Swap. Die Synchronisation gehoert an den Typ-Wechsel

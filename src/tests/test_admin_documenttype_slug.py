@@ -1,5 +1,4 @@
-"""DocumentTypeAdmin — slug/entity_type Immutabilität im Admin-UI (Fix-Runde 1,
-Refs #1058, Review-Befund B-1).
+"""DocumentTypeAdmin — slug/entity_type Immutabilität im Admin-UI (Refs #1058, Review-Befund B-1).
 
 Vor dem Fix waren ``slug``/``entity_type`` im Change-ModelForm editierbar —
 eine Änderung über die Admin-UI ließ ``DocumentType.save()``s

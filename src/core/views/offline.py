@@ -195,7 +195,7 @@ class OfflineClientRevocationsView(AssistantOrAboveRequiredMixin, View):
     einen Datenabfluss zu dokumentieren (gleiche Abwaegung wie beim
     audit-freien 304-Zweig der Bundle-Views).
 
-    Fix-Runde 1 (Befund 2b): **eigenes**, grosszuegiges Rate-Limit
+    Befund 2b: **eigenes**, grosszuegiges Rate-Limit
     (``RATELIMIT_OFFLINE_REVOCATIONS``) statt der Bundle-Rate. Der Poll laeuft
     bei jedem Seitenaufbau (kein hx-boost) und vor jedem Sync — mit 120/h waere
     eine intensive Dokumentationsstunde am Limit, und ein abgewiesener (429)

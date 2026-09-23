@@ -119,7 +119,7 @@ class TestAdminPasswordChangeAudit:
 
 
 class TestAdminPasswordChangeAtomicity:
-    """Fix-Runde 1 (Cross-Review): Passwortwechsel und Audit sind untrennbar.
+    """Cross-Review: Passwortwechsel und Audit sind untrennbar.
 
     Djangos ``user_change_password`` ist eine Sonder-View — sie laeuft weder
     ueber ``changeform_view`` noch unter ``ATOMIC_REQUESTS`` (im Repo nicht

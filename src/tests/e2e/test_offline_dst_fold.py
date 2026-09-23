@@ -1,7 +1,6 @@
 """E2E-Spec: doppelte Stunde in der Offline-Erfassung (Refs #2187).
 
-Die Specs werden in dieser Lane nur geschrieben. Der Orchestrator fährt sie
-später seriell unter dem globalen E2E-Lock.
+Laeuft seriell unter dem globalen E2E-Lock.
 """
 
 from __future__ import annotations

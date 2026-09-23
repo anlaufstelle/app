@@ -11,7 +11,7 @@
  * Stilklassen werden dabei vom vorherigen aktiven Tab entfernt und auf den
  * gerade angeklickten Tab gesetzt.
  *
- * Refs #1059 (A11Y-017/008, Ruling R-B2p-10): Die Leiste selbst wird beim
+ * Refs #1059 (A11Y-017/008, R-B2p-10): Die Leiste selbst wird beim
  * Umschalten NICHT neu gerendert (der Swap trifft die Feed-Liste). Was hier
  * nicht mitgezogen wird, bleibt also auf dem Server-Stand stehen - deshalb
  * wandern ``aria-pressed`` (der Auswahlzustand war vorher rein visuell) und

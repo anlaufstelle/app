@@ -356,7 +356,7 @@ class TestKontingentGegenNebenlaeufigeUploads:
     def test_jede_ablehnung_hinterlaesst_eine_dauerhafte_audit_zeile(
         self, anzahl, plaetze, aufrufer, quota_facility, upload_target, staff_user, occupy, stage
     ):
-        """Refs #2178 Fix-Runde 1: die Auditspur haengt nicht an der Aufruferform.
+        """Refs #2178: die Auditspur haengt nicht an der Aufruferform.
 
         Drei Aufruferformen, die es im Baum wirklich gibt: der direkte
         Service-Aufruf (Seed/Tests), der Regelfall unter einer
@@ -527,7 +527,7 @@ def _run_threads(targets):
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
 class TestSperrReihenfolge:
-    """Refs #2178 Fix-Runde 1: (1) Attachment-Zeile, (2) Advisory-Lock — ueberall.
+    """Refs #2178: (1) Attachment-Zeile, (2) Advisory-Lock — ueberall.
 
     Der Replace-Pfad schreibt die Vorgaengerzeile erst am Ende. Nahm er den
     Advisory-Lock der Einrichtung davor (Kontingent-Backstop), stand er in
@@ -598,7 +598,7 @@ class TestSperrReihenfolge:
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
 class TestKontingentAuditImViewPfad:
-    """Refs #2178 Fix-Runde 1: die Rechenschaftszeile ueberlebt den echten
+    """Refs #2178: die Rechenschaftszeile ueberlebt den echten
     View-Rollback — gepruft am Request, nicht nur am Service.
 
     Der Vorab-Check wird fuer diese Faelle stillgelegt. Er ist im echten Rennen
@@ -677,7 +677,7 @@ class TestKontingentAuditImViewPfad:
 @pytest.mark.django_db
 @pytest.mark.postgres
 class TestQueryBudget:
-    """Refs #2178 Fix-Runde 1: der Zuwachs wird als GESAMTZAHL festgenagelt.
+    """Refs #2178: der Zuwachs wird als GESAMTZAHL festgenagelt.
 
     Referenz ist der Commit-Pfad mit stillgelegtem Backstop (Kontingent-Pruefung
     UND Zeilensperre) — also der Stand vor #2178.
@@ -783,7 +783,7 @@ def _commit_call_sites(tree: ast.AST):
 
 @pytest.mark.architecture
 class TestAudRandAnJederAufrufstelle:
-    """Refs #2178 Fix-Runde 1: jede View-Aufrufstelle traegt den Audit-Rand.
+    """Refs #2178: jede View-Aufrufstelle traegt den Audit-Rand.
 
     Ein Aufrufer, der ``finalize_staged_files``/``apply_attachment_changes`` in
     einer eigenen ``atomic()`` haelt und den Rand vergisst, verliert die
@@ -850,7 +850,7 @@ class TestAuditIdempotenz:
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
 class TestBatchSperrReihenfolge:
-    """Refs #2178 Fix-Runde 2: der Batch-Einstieg sperrt VOR dem ersten Commit.
+    """Refs #2178: der Batch-Einstieg sperrt VOR dem ersten Commit.
 
     Ein einzelner ``commit_staged_upload`` sperrt seine Vorgaengerzeile selbst.
     Setzt ein Aufrufer aber MEHRERE Commits in derselben Transaktion ab, genuegt
@@ -959,7 +959,7 @@ class TestBatchSperrReihenfolge:
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.postgres
 class TestAutocommitServiceVertrag:
-    """Refs #2178 Fix-Runde 3: der transaktionslose Service-Einstieg bleibt nutzbar.
+    """Refs #2178: der transaktionslose Service-Einstieg bleibt nutzbar.
 
     ``apply_attachment_changes`` oeffnet keine eigene Transaktion. Fuer Aufrufer
     **ohne** aeussere Transaktion (dokumentierter Bequemlichkeitsmodus, direkte

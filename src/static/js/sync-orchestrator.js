@@ -312,7 +312,7 @@
     // Revalidierung aller Klienten nach sich.
     //
     // GATE: alle VIER Bestaende zaehlen, die ``applyClientRevocations``
-    // tatsaechlich tilgt (Fix-Runde 1, Befund 1 — vorher nur clients+queue).
+    // tatsaechlich tilgt (Befund 1 — vorher nur clients+queue).
     // Die beiden fehlenden Faelle waren real erreichbar und dauerhaft blind:
     //   * ``drafts``-only — ein Autosave-Entwurf ueberlebt sowohl den
     //     TTL-Purge als auch "Person aus Offline entfernen"; deshalb zaehlt das
@@ -332,7 +332,7 @@
     // Alle vier sind Zaehlungen auf Klartext-Index-Spalten — kein Session-Key
     // noetig.
     //
-    // DROSSEL (Fix-Runde 1, Befund 2a): Die App nutzt kein hx-boost, jede
+    // DROSSEL (Befund 2a): Die App nutzt kein hx-boost, jede
     // Navigation ist ein voller Seitenaufbau — ungedrosselt feuerte der Poll
     // also pro Klick gegen das Rate-Limit des Endpoints. Ein Zeitstempel in
     // ``meta`` (Klartext, kein PII, ohne Session-Key lesbar) deckelt den

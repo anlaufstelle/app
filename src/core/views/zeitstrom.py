@@ -459,7 +459,7 @@ class HandoverNoteUpdateView(StaffRequiredMixin, View):
         4xx-Antworten also **nicht** ein. Ein 400 auf einem Ergebnis, das die
         Fachkraft lesen muss, waere im HTMX-Pfad eine stumme Antwort. Die
         globale htmx-Konfiguration liegt in ``base.html`` und damit ausserhalb
-        dieser Lane; der Fall ist im Bericht als bewusste Grenze vermerkt. Fuer
+        dieses Moduls; dieser Fall bleibt hier bewusst unbehandelt. Fuer
         den 400er bleibt der nicht-HTMX-Pfad (das Formular traegt ``action``)
         sichtbar, und der Client-Fehler ist im Netzwerk-Log eindeutig.
         """
