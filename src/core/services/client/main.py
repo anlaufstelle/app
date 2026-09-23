@@ -1262,6 +1262,12 @@ def approve_client_deletion(deletion_request, reviewer):
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )
+    # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
+    # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
+    # Geprueft gegen die FRISCH GESPERRTE Zeile und vor jedem Schreibzugriff;
+    # die Guards davor (Vier-Augen, Recht) behalten Reihenfolge und Wortlaut.
+    if reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
     # Refs #1876: Ein Merge-Antrag (gesetztes ``merge_into``) darf nicht als
     # blosser Loeschantrag genehmigt werden — die Quelle landete im
     # Papierkorb, ohne dass irgendetwas zum Ziel wandert. Genehmigung nur
