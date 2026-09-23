@@ -186,3 +186,51 @@ class TestInvalidRerenderKeepsVersionToken:
         )
 
         assert response.status_code == 422
+
+
+@pytest.mark.django_db
+class TestInvalidRerenderWithoutVersionToken:
+    """Randfall: der ungültige Versuch trug keinen Versions-Token.
+
+    Die Neu-Anzeige darf dann keinen frischen Token erzeugen — leer bleibt
+    leer. Sonst verschafft ein ungültiger Zwischenversuch einem Absenden
+    ohne Token nachträglich den aktuellen Stand und hebelt die
+    Konfliktprüfung aus.
+    """
+
+    def _invalid_then_valid(self, client, staff_user, workitem, **headers):
+        client.force_login(staff_user)
+        hidden = _load_form(client, workitem)
+        snapshot = WorkItem.objects.get(pk=workitem.pk)
+        _change_title_in_other_tab(staff_user, workitem)
+        hidden["expected_updated_at"] = ""
+
+        invalid = client.post(_edit_url(workitem), _form_payload(snapshot, hidden, title=""), **headers)
+        assert invalid.status_code == 200
+        rerendered = _hidden_values(invalid)
+        assert rerendered.get("expected_updated_at") == "", "Neu-Anzeige darf keinen frischen Token erzeugen"
+
+        return client.post(_edit_url(workitem), _form_payload(snapshot, rerendered, title="Titel aus Tab A"), **headers)
+
+    def test_htmx_submit_without_token_stays_rejected(self, client, staff_user, workitem):
+        response = self._invalid_then_valid(client, staff_user, workitem, HTTP_HX_REQUEST="true")
+
+        assert response.status_code == 409
+        assert response.json()["error"] == "missing-token"
+        workitem.refresh_from_db()
+        assert workitem.title == "Titel aus Tab B", "Parallele Änderung darf nicht überschrieben werden"
+
+    def test_html_submit_without_token_keeps_unchecked_save(self, client, staff_user, workitem):
+        """Klassisches HTML ohne Token speichert ohne Versionsprüfung.
+
+        Das ist das bestehende, beabsichtigte Verhalten des Formularpfads
+        (kein Pflicht-Token außerhalb von JSON/HTMX) und wird hier nur als
+        Randfall festgehalten: die Neu-Anzeige ändert daran nichts — sie
+        erfindet insbesondere keinen Token, den der Browser nie hatte.
+        """
+        response = self._invalid_then_valid(client, staff_user, workitem)
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:workitem_inbox")
+        workitem.refresh_from_db()
+        assert workitem.title == "Titel aus Tab A"
