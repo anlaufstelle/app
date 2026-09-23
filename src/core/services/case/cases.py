@@ -1,10 +1,12 @@
 """Service layer for Case CRUD and event assignment."""
 
+import json
 import logging
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Case, DocumentType
@@ -136,8 +138,59 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
     return case
 
 
+# Spalten, die das Bearbeiten-Formular zeigt oder mitschickt (Refs #2359) —
+# ``attname``-Form, damit Instanz und ``values()`` dieselben Werte liefern.
+# ``status``/``closed_at`` stehen bewusst NICHT darin: sie aendern nur
+# :func:`close_case`/:func:`reopen_case`, und ein paralleler Statuswechsel ist
+# kein Konflikt mit dem Formular.
+CASE_FORM_STATE_FIELDS = (
+    "title",
+    "description",
+    "lead_user_id",
+    "document_type_id",
+    "data_json",
+)
+
+
+def _case_form_state_token_from_values(pk, values):
+    payload = json.dumps(
+        {field: values.get(field) for field in CASE_FORM_STATE_FIELDS},
+        sort_keys=True,
+        default=str,
+    )
+    return salted_hmac("core.case.form_state", f"{pk}|{payload}", algorithm="sha256").hexdigest()
+
+
+def case_form_state_token(case):
+    """Fingerabdruck der Formularfelder zum Renderzeitpunkt (Refs #2359).
+
+    Das Bearbeiten-Formular traegt ihn versteckt mit (Muster
+    ``workitem_form_state_token``). Ein HMAC statt der Klartextwerte: das
+    Formular soll keinen zweiten, manipulierbaren Satz Feldwerte mitschicken,
+    und der Wert verraet nichts ueber den Inhalt. Wer ihn faelscht, erreicht
+    hoechstens, was ein Neuladen mit anschliessendem Speichern ohnehin
+    erlaubt.
+    """
+    values = {field: getattr(case, field) for field in CASE_FORM_STATE_FIELDS}
+    return _case_form_state_token_from_values(case.pk, values)
+
+
+def _case_form_state_unchanged(case, expected_form_state):
+    """``True``, wenn seit dem Rendern kein Formularfeld geaendert wurde.
+
+    Liest die Zeile unter Row-Lock (``check_version_conflict`` haelt ihn in
+    derselben Transaktion bereits; ``select_for_update`` ist dann ein No-op).
+    """
+    if not expected_form_state or not isinstance(expected_form_state, str):
+        return False
+    current = Case._base_manager.select_for_update().filter(pk=case.pk).values(*CASE_FORM_STATE_FIELDS).first()
+    if current is None:
+        return False
+    return constant_time_compare(_case_form_state_token_from_values(case.pk, current), expected_form_state)
+
+
 @transaction.atomic
-def update_case(case, user, *, expected_updated_at=None, **fields):
+def update_case(case, user, *, expected_updated_at=None, expected_form_state=None, **fields):
     """Update mutable fields on a case (title, description, lead_user,
     document_type, data_json).
 
@@ -145,6 +198,15 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
 
     ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
     DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
+
+    ``expected_form_state`` (Refs #2359): Fingerabdruck der Formularfelder zum
+    Renderzeitpunkt (:func:`case_form_state_token`). Weicht nur
+    ``updated_at`` ab, die Formularfelder in der Datenbank aber nicht — weil
+    parallel nur geschlossen oder wiedereroeffnet wurde —, ist das kein
+    Konflikt mit dem Formular: die Eingabe wird gespeichert, der parallele
+    Status bleibt. Jede parallele Aenderung eines Formularfelds bleibt ein
+    Konflikt. Ohne Fingerabdruck (Default) gilt der Versionsvertrag
+    unveraendert.
 
     Ursprungs-Pinning (Refs #1786): ``client`` ist **kein** Update-Feld mehr.
     Die Personenzuordnung eines Falls entsteht beim Anlegen und ist danach
@@ -160,7 +222,13 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
     # Art.-18-Gate (Refs #2045) VOR dem Versions-Guard: die Rechtslage gilt
     # unabhaengig davon, ob das Formular aktuell war (Muster ``update_client``).
     assert_processing_allowed(case.client_id, lock=True)
-    check_version_conflict(case, expected_updated_at)
+    try:
+        check_version_conflict(case, expected_updated_at)
+    except ValidationError as exc:
+        # Nur der echte Versions-Mismatch darf per Fingerabdruck aufgeloest
+        # werden — ein ungueltiger Token bleibt ein Fehler.
+        if exc.code != "version_conflict" or not _case_form_state_unchanged(case, expected_form_state):
+            raise
     # Allowlist (Refs #734, #1786): Verhindert Mass-Assignment durch
     # versehentlich durchgereichte Felder. Läuft ZUERST — die
     # Mass-Assignment-Prüfung darf nicht vom Diff abhängen (Muster
