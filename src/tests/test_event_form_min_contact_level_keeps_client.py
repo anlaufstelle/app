@@ -24,7 +24,7 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
-from core.models import Client, DocumentType
+from core.models import Client, DocumentType, DocumentTypeField, FieldTemplate
 
 
 @pytest.mark.django_db
@@ -45,6 +45,20 @@ class TestEventFormMinContactLevelKeepsClient:
             pseudonym="Nur-Pseudo-01",
             created_by=staff_user,
         )
+
+    @pytest.fixture
+    def doc_type_required_field(self, facility):
+        """Kein Mindest-Kontaktstufen-Fehler — die Ablehnung kommt hier vom
+        dynamischen Formular selbst (Pflichtfeld leer), Refs #2345."""
+        doc_type = DocumentType.objects.create(facility=facility, name="Pflichtfeld-Pflicht")
+        field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Pflichtangabe",
+            field_type=FieldTemplate.FieldType.TEXT,
+            is_required=True,
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=field, sort_order=0)
+        return doc_type
 
     def _post(self, client, doc_type, client_obj, *, occurred_at="2026-09-23T10:00"):
         return client.post(
@@ -90,3 +104,19 @@ class TestEventFormMinContactLevelKeepsClient:
         assert 'value="2026-09-23T11:15"' in html
         assert f'<option value="{doc_type_min_stage.pk}"' in html
         assert "selected" in html.split(f'<option value="{doc_type_min_stage.pk}"', 1)[1].split("</option>", 1)[0]
+
+    def test_client_selection_survives_dynamic_form_rejection(
+        self, client, staff_user, doc_type_required_field, client_pseudonym_only
+    ):
+        """Refs #2345: dieselbe Zuordnungs-Zusage gilt auch, wenn NICHT die
+        Mindest-Kontaktstufe, sondern ein Pflichtfeld des dynamischen
+        Formulars die Ablehnung ausloest (``not data_form.is_valid()``-Zweig,
+        ``views/events.py``). Das gemeldete Pflichtfeld bleibt bewusst leer."""
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_required_field, client_pseudonym_only)
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert "Dieses Feld ist zwingend erforderlich" in html or "erforderlich" in html
+
+        assert f'data-initial-client-id="{client_pseudonym_only.pk}"' in html
+        assert f'data-initial-pseudonym="{client_pseudonym_only.pseudonym}"' in html

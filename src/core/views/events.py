@@ -417,7 +417,21 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
         restricted_keys = remove_restricted_fields(request.user, doc_type, data_form)
 
         if not data_form.is_valid():
-            return self._invalid_response(request, data_form, {"meta_form": meta_form, "data_form": data_form})
+            # Refs #2345: derselbe Kontext-Nachtrag wie im ``except
+            # ValidationError``-Zweig unten — ``meta_form`` ist an dieser
+            # Stelle bereits gueltig, ``cleaned_data`` also verfuegbar, ohne
+            # dass die Person hier erneut aus der DB aufgeloest werden muss.
+            client = meta_form.cleaned_data.get("client")
+            return self._invalid_response(
+                request,
+                data_form,
+                {
+                    "meta_form": meta_form,
+                    "data_form": data_form,
+                    "client_id": str(client.pk) if client else "",
+                    "client_pseudonym": client.pseudonym if client else "",
+                },
+            )
 
         # Refs #1423 (N11): ``EventMetaForm.clean_client`` loest die UUID
         # bereits facility-scoped gegen die DB auf und liefert eine
