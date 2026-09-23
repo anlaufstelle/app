@@ -13,8 +13,8 @@
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
         {% if workitem %}
-        {# Neu-Anzeige nach ungueltiger Eingabe: der mitgeschickte Token hat Vorrang vor dem aktuellen Stand (Refs #2361). #}
-        <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at|default:workitem.updated_at.isoformat }}">
+        {# Token aus dem View-Kontext: beim ersten Laden der aktuelle Stand, bei der Neu-Anzeige der mitgeschickte Wert (Refs #2361). #}
+        <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">
         {% if form_state_token %}<input type="hidden" name="expected_form_state" value="{{ form_state_token }}">{% endif %}
         {% endif %}
 

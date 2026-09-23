@@ -439,6 +439,10 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # Refs #2331: Stand der Formularfelder zum Renderzeitpunkt — damit
             # ein paralleler reiner Statuswechsel die Eingabe nicht verwirft.
             "form_state_token": workitem_form_state_token(workitem),
+            # Refs #2361: Versions-Token des ersten Ladens. Nur HIER aus der
+            # Instanz — die Neu-Anzeige nach ungueltiger Eingabe reicht den
+            # mitgeschickten Wert durch und erzeugt nie einen neuen.
+            "expected_updated_at": workitem.updated_at.isoformat(),
         }
         return render(request, "core/workitems/form.html", context)
 
@@ -552,6 +556,8 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             # Instanz stammt aus DIESEM Request; ihr ``updated_at`` enthaelt
             # bereits jede zwischenzeitliche Aenderung eines anderen Vorgangs,
             # und der naechste Speicherversuch wuerde sie still ueberschreiben.
+            # Leer bleibt leer: ein fehlender Token wird nicht nachgeliefert,
+            # sonst entginge ein HTMX-Absenden ohne Token der Ablehnung.
             "expected_updated_at": request.POST.get("expected_updated_at", ""),
         }
         return render(request, "core/workitems/form.html", context)
