@@ -293,7 +293,8 @@ class TestSuccessfulConsumeWritesTheDeviceExactlyOnce:
         Pin: ``x_verify_backup_code__mutmut_26`` — ``set_last_used_timestamp(commit=False)`` -> ``commit=True``
 
         Aufgezeichnet wird nur der Consume (die Geraete-Anlage laeuft vor dem
-        Recorder). Original: genau ein Save ``[(False, True, None)]``. Beide
+        Recorder). Original: genau ein Save mit den drei geaenderten Spalten
+        (seit Refs #2355 spaltengenau statt ``None``). Beide
         Mutanten fuegen davor einen weiteren vollstaendigen Save ein
         (``ThrottlingMixin.throttle_reset`` bzw.
         ``TimestampMixin.set_last_used_timestamp`` rufen bei ``commit=True``
@@ -304,7 +305,9 @@ class TestSuccessfulConsumeWritesTheDeviceExactlyOnce:
         with _record_device_saves() as saves:
             assert verify_backup_code(mfa_pin_user, codes[0]) is True
 
-        assert saves == [(False, True, None)]
+        assert saves == [
+            (False, True, frozenset({"throttling_failure_timestamp", "throttling_failure_count", "last_used_at"}))
+        ]
 
 
 # ---------------------------------------------------------------------------

@@ -151,7 +151,10 @@ def verify_backup_code(user, token: str) -> bool:
 
     device.throttle_reset(commit=False)
     device.set_last_used_timestamp(commit=False)
-    device.save()
+    # Refs #2355: nur die Spalten, die die beiden Helfer setzen. Die Instanz
+    # ist nicht gesperrt gelesen; ein voller ``save()`` schriebe jede weitere
+    # Spalte des Geraets mit dem Stand von vor dem Lesen zurueck.
+    device.save(update_fields=["throttling_failure_timestamp", "throttling_failure_count", "last_used_at"])
     return True
 
 
