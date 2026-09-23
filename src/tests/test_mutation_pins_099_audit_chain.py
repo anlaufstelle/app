@@ -75,7 +75,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 # Selbstabschaltung in DIESE Datei hineinziehen und JEDEN Test hier unter
 # JEDEM Mutanten als nicht ausgefuehrt erscheinen lassen (empirisch
 # verifiziert: "no tests collected"). Die RLS-durchsetzende Rollen-Fixture
-# (``rls_test_role``) bleibt deshalb fuer Mutation-Pins tabu — s.
+# (``rls_test_role``) bleibt deshalb fuer Mutation-Pins ausgeschlossen — s.
 # ``TestSystemChainLatestLinkRawElevationValueCase`` unten fuer die
 # Spy-Alternative.
 

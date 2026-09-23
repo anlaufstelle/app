@@ -250,7 +250,7 @@ class TestGetTemplateForUser:
         assert get_template_for_user(staff_user, facility, template.pk) is None
 
     def test_client_type_template_not_returned(self, facility, staff_user):
-        """M2 (Refs #1058, Fix-Runde 1 F-2): ein Template auf einem
+        """M2 (Refs #1058, Nachtrag F-2): ein Template auf einem
         client-/case-Typ wirkt wie „kein Template" (analog zum
         E21-Fix in resolve_default_document_type)."""
         client_dt = DocumentType.objects.create(

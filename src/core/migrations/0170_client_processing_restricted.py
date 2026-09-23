@@ -10,8 +10,8 @@
 # Die ``AlterField`` auf ``auditlog.action`` gehoert bewusst in DIESELBE
 # Migration: die beiden neuen Choice-Werte (``processing_restricted``,
 # ``processing_restriction_lifted``) sind Teil desselben Vorgangs und duerfen
-# nicht in einer eigenen Nummer landen, die der Orchestrator getrennt
-# umhaengen muesste.
+# nicht in einer eigenen Nummer landen, die spaeter separat umgehaengt
+# werden muesste.
 
 import django.db.models.deletion
 from django.conf import settings

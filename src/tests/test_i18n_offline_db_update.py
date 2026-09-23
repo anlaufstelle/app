@@ -15,8 +15,8 @@ der fuenf Layouts, die ``offline-db.js`` laden: ``base.html``.
 Cross-Review: Ohne Label blieb der Toast stumm, und zwar
 ausgerechnet dort, wo die Meldung am noetigsten ist — Anmeldung,
 Passwortwechsel, terminaler Offline-Fallback und die precachten In-Place-Shells
-(``offline_base.html``, das den ``CACHE_NAME``-Bump braucht und deshalb dem
-Orchestrator gehoert). Das Modul traegt deshalb einen deutschen Rueckfall-Text
+(``offline_base.html``, das den ``CACHE_NAME``-Bump braucht). Das Modul traegt
+deshalb einen deutschen Rueckfall-Text
 als dokumentierte Ausnahme nach dem Muster von ``htmx-errors.js``; das
 uebersetzte Template-Label gewinnt, wo es existiert.
 

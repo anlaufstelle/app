@@ -1937,7 +1937,7 @@ class TestDemoDeployTreeSync:
 
     def test_guard_rejects_the_service_users_home_itself(self, tmp_path: Path) -> None:
         """Das Home des Service-Users ist absolut, zweisegmentig, sonderzeichenfrei
-        und kein Systemverzeichnis — eine Denylist bekannter Tabu-Pfade laesst es
+        und kein Systemverzeichnis — eine Denylist bekannter gesperrter Pfade laesst es
         also durch. Ein ``rsync --delete`` dorthin loescht aber alles im Home, was
         nicht im Build-Kontext steht, darunter ``.ssh/authorized_keys``: genau der
         Schluessel, den das Server-Bootstrap dort ablegt. Ein einziger Lauf mit
