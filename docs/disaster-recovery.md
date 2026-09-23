@@ -153,6 +153,15 @@ aws s3 sync s3://bucket/path/daily "$RESTORE_SET_DIR" --exclude "*" --include "a
 scp "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc.hmac" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc.hmac" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.manifest" "user@host:/path/daily/anlaufstelle_${RESTORE_TIMESTAMP}.manifest.hmac" "user@host:/path/daily/audit_hwm-${RESTORE_TIMESTAMP}.json" "$RESTORE_SET_DIR/"
 ```
 
+Direkt danach zählen, ob alle sieben Dateien angekommen sind (`.sql.gz.enc` + `.hmac`, `_media.tar.gz.enc` + `.hmac`, `.manifest` + `.hmac`, `audit_hwm-<ts>.json`):
+
+```bash
+ls -1 "$RESTORE_SET_DIR" | wc -l   # erwartet: 7
+ls -1 "$RESTORE_SET_DIR"
+```
+
+Weicht die Zahl ab, fehlt mindestens eine Datei oder der Übertrag ist unvollständig — vor dem Restore-Lauf ergänzen, nicht mit `--allow-missing-manifest` überspielen. Zusätzlich `backup.sh --verify` gegen genau diesen Zeitstempel als Pflichtschritt **vor** dem eigentlichen Restore fahren — die leichtere Prüfung aus der Tabelle oben (Satzauswahl über das signierte Manifest, Probe-Restore, Live-DB-Vergleich) deckt Inhaltsfehler ab, die eine reine Dateizählung nicht findet.
+
 **Immer den vollständigen Sieben-Dateien-Satz holen.** Ohne einen benötigten Sidecar verweigern Restore bzw. Drill die Prüfung. Backups aus Versionen vor 0.99.1 liegen noch ohne Manifest vor. Seit 0.99.2 ist das Manifest für `restore.sh` **Pflicht**; ohne Manifest bricht der Restore ab und nennt den Notfall-Schalter `--allow-missing-manifest`, der einen solchen Altsatz ohne Satzbindung und ohne Zeilenzahl-Abgleich einspielt (Warnung vor der Bestätigung, Hinweiszeile am Ende, Medienarchiv nur mit passendem Zeitstempel). `backup.sh --verify` und `restore-drill.sh --prod` verlangen das Manifest weiterhin zwingend und brechen in Schritt 0 mit `Zeilenzahl-Manifest fehlt` ab. Ein solches Altbackup kann deshalb nicht den heutigen Vollständigkeitsnachweis liefern und bleibt im Drill **OFFEN**.
 
 Nach jedem Backup den **Off-Site-Bestand selbst** abgleichen: alle sieben Dateien des gewählten Zeitstempels müssen am erwarteten Zielpfad vorhanden sein. Der Exit-Code allein genügt nicht; insbesondere endet der erste Off-Site-Fehler bewusst noch mit Exit-Code 0. Regelmäßig zusätzlich prüfen, dass Ziel-Retention und Object Lock die vereinbarte Aufbewahrung tatsächlich abbilden.
@@ -234,7 +243,7 @@ Die Medienprüfungen haben getrennte Aussagen:
 2. **Archivtreue:** Größe und Inhalt der verschlüsselten `.enc`-Dateien werden gegen das zuvor per HMAC authentifizierte Archiv geprüft. Weil der aktivierte Bestand durch atomaren `mv` unmittelbar aus genau diesem Staging stammt, darf zwischen Probe und Aktivierung kein neuer Upload oder Job laufen.
 3. **Klartextmetadaten:** Originalname und `core_attachment.file_size` gehören zum entschlüsselten Download, nicht zur verschlüsselten `.enc`-Datei auf Disk. Dieser Abgleich erfolgt erst in der Downloadprobe aus §7.
 
-Für die Archivtreue das bereits authentifizierte Medienarchiv erneut HMAC-prüfen, in `/tmp` des laufenden `web`-Containers probeentpacken und SHA-256 plus Größe jedes weiterhin verschlüsselten Anhangs mit dem aktivierten `MEDIA_ROOT` vergleichen:
+Für die Archivtreue das bereits authentifizierte Medienarchiv erneut HMAC-prüfen und probeentpacken, dann SHA-256 plus Größe jedes weiterhin verschlüsselten Anhangs mit dem aktivierten `MEDIA_ROOT` vergleichen. `web` und `cron` bleiben dabei durchgehend gestoppt (siehe „`web` und `cron` bleiben nach dem Lauf gestoppt" oben) — der Block startet `web` **nicht** neu, sondern nutzt denselben Einweg-`maintenance`-Container, den `restore.sh` selbst nach der Schreibruhe für Medien-Kommandos verwendet (`media_exec()` mit `MEDIA_EXEC_CTX=maintenance`, [`scripts/ops/restore.sh:206-213`](../scripts/ops/restore.sh)):
 
 ```bash
 MEDIA_ARCHIVE="$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc"
@@ -242,17 +251,19 @@ MEDIA_VERIFY_DIR="/tmp/media-verify-$RESTORE_TIMESTAMP"
 set -o pipefail
 source ./scripts/ops/_backup_common.sh
 backup_verify_hmac "$MEDIA_ARCHIVE" && \
-docker compose -f docker-compose.prod.yml exec -T web sh -c 'rm -rf "$1" && mkdir -p "$1"' sh "$MEDIA_VERIFY_DIR" && \
+docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance -c 'rm -rf "$1" && mkdir -p "$1"' sh "$MEDIA_VERIFY_DIR" && \
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_ARCHIVE" \
   | gunzip \
-  | docker compose -f docker-compose.prod.yml exec -T web tar -C "$MEDIA_VERIFY_DIR" --strip-components=1 -xf - && \
-docker compose -f docker-compose.prod.yml exec -T web sh -c '
+  | docker compose -f docker-compose.prod.yml run --rm --entrypoint tar -T maintenance -C "$MEDIA_VERIFY_DIR" --strip-components=1 -xf - && \
+docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance -c '
   cd "$1" && find . -type f -exec sha256sum {} + | sort -k2 > /tmp/media-archive.sha256 &&
   cd "$2" && find . -type f -exec sha256sum {} + | sort -k2 > /tmp/media-live.sha256 &&
   cmp /tmp/media-archive.sha256 /tmp/media-live.sha256
 ' sh "$MEDIA_VERIFY_DIR" "$MEDIA_ROOT" && \
-docker compose -f docker-compose.prod.yml exec -T web rm -rf "$MEDIA_VERIFY_DIR"
+docker compose -f docker-compose.prod.yml run --rm --entrypoint sh -T maintenance -c 'rm -rf "$1"' sh "$MEDIA_VERIFY_DIR"
 ```
+
+Der Block darf zwischen Probe und der bereits erfolgten Aktivierung (siehe oben) keinen neuen Upload oder Job zulassen (siehe „Archivtreue" oben); weil der Vergleich ausschließlich im Einweg-`maintenance`-Container läuft, bleibt `web` dabei ohne Widerspruch zum vorherigen Absatz gestoppt.
 
 Unmittelbar nach dem Restore und **vor** Audit-Kettenprüfung, Migrationen, Jobs oder Browserzugriff die sechs Manifesttabellen mit einer RLS-umgehenden Rolle zählen. Derselbe Befehl wird auf der Quelle während der Schreibruhe ausgeführt; seine Ausgabe muss mit Ziel und authentifiziertem Manifest übereinstimmen:
 
@@ -554,7 +565,10 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    DB-/Medien-Dateien, Manifest, ihre drei `.hmac`-Sidecars und die HWM-Datei müssen denselben
    Backup-Zeitstempel tragen. Vor dem Weitergehen genau diesen Sieben-Dateien-Satz
    festhalten; Dateinamensgleichheit ersetzt weder Schreibruhe noch den späteren
-   Inhaltsabgleich.
+   Inhaltsabgleich. Zählprobe wie in [§5](#5-off-site-backup-beschaffen)
+   beschrieben ausführen (`ls -1 "$RESTORE_SET_DIR" | wc -l` erwartet `7`) und
+   `backup.sh --verify` gegen `$RESTORE_TIMESTAMP` als Pflichtschritt vor dem
+   Restore-Lauf im Protokoll vermerken.
 4. [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)
    fortsetzen: Ziel-DB frisch und leer anlegen, Pfade abgleichen und Welt-B-DB
    sowie Medien über `restore.sh` aus dem gerade befüllten Verzeichnis
@@ -588,7 +602,25 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
    `super_admin` erhält hier 403) je benötigter Schlüsselgeneration einen
    wiederhergestellten Datensatz öffnen und einen echten Vault-Anhang
    herunterladen; nur Metadaten und Ergebnis, keine Inhalte protokollieren.
-6. Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
+6. **Vor diesem Schritt `web` als laufend bestätigen:** `restore-drill.sh --prod`
+   dokumentiert seinen Restore-Test in Schritt 7 über
+   `dc exec -T web python manage.py mark_restore_verified` — läuft `web` nicht,
+   meldet Schritt 7 nur `FAIL - Schritt 7: mark_restore_verified fehlgeschlagen
+   — Compliance-Check bleibt unknown`, ohne den Grund zu nennen. `web` kann an
+   dieser Stelle aus zwei Gründen nicht laufen: Entweder wurde es seit
+   Schritt 4/§6 Schritt 5 nicht wieder gestartet, oder `docker compose up -d`
+   hat es wegen der `depends_on: clamav: condition: service_healthy`-Kopplung
+   nicht hochgefahren, weil `clamav` auf dem isolierten Drill-Host mangels
+   Update-Pfad nie „healthy" meldet (siehe [§6 Schritt 4](#schritt-4--db-backup-entschlüsseln--wiederherstellen)).
+   Mit `docker compose -f docker-compose.prod.yml ps web` prüfen und bei Bedarf
+   `docker compose -f docker-compose.prod.yml up -d web` erneut ausführen;
+   bleibt `web` wegen `clamav` im Zustand „created", den ClamAV-Health-Status
+   nach [ops-runbook § 7.4](ops-runbook.md#74-datenbank-updates-signaturen) klären, bevor
+   `restore-drill.sh --prod` läuft. Diese Prüfung ist ein Doku-Nachzug
+   `restore-drill.sh` selbst nennt den Grund seines Schritt-7-`FAIL` bisher
+   nicht; eine Skriptänderung, die die Ursache in der Meldung benennt, ist ein
+   offener Folgepunkt außerhalb dieser Doku-Aktualisierung.
+   Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
    als Root gegen das Prod-Format fahren. `COMPOSE_DIR` muss dabei auf das in
    Schritt 1 vorbereitete Installationsverzeichnis mit `.env` und
    `docker-compose.prod.yml` zeigen. Der Drill liest die
@@ -698,6 +730,8 @@ DB + DB-HMAC vorhanden: JA / NEIN
 Medien + Medien-HMAC vorhanden: JA / NEIN
 Manifest + Manifest-HMAC vorhanden: JA / NEIN
 Audit-HWM vorhanden: JA / NEIN
+Sieben-Dateien-Satz vollständig (Zählprobe `ls -1 | wc -l` = 7): JA / NEIN
+backup.sh --verify vor dem Restore-Lauf: OK / FAIL
 Off-Site-Rückholung auf drittem Rechner ohne Prod-Host: OK / FAIL
 DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
 DJANGO_AUDIT_HWM_PATH in rekonstruierter .env gesetzt: JA / NEIN
