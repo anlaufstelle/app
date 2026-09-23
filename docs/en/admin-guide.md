@@ -1,5 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
+> Synchronization update 2026-09-23: § 7.1 states that the maintenance page (HTTP 503) also carries the Content Security Policy (#2339).
 > Synchronization update 2026-09-22: § 3.1 adds `DJANGO_AUDIT_HWM_PATH` to the `.env` prerequisites and the mandatory step that creates the audit anchor before the first backup, so that a set contains all seven files (#2315).
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
@@ -1756,7 +1757,7 @@ Sensitive fields in the database are stored encrypted using the `ENCRYPTION_KEY`
 
 **Transport encryption:** Caddy enforces HTTPS and automatically redirects HTTP to HTTPS.
 
-**Security headers -- the application is authoritative:** `Strict-Transport-Security` (`max-age=31536000; includeSubDomains; preload`), `X-Content-Type-Options` (`nosniff`), `X-Frame-Options` (`DENY`) and `Referrer-Policy` (`strict-origin-when-cross-origin`) are set by the application only -- the values live in [`src/anlaufstelle/settings/prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py). Change any of them (the HSTS duration, for instance) there. They are deliberately **no longer** in the `Caddyfile`: set in both places, they reached the client twice, and a change in one place appeared to have no effect (#2314). Caddy now sets only what the application does not -- currently `X-Robots-Tag`. The same separation has always applied to the Content Security Policy (§ 5.4). This way the headers also apply when you put the application behind a reverse proxy of your own. All four headers are present on **every** response from the application -- including files served from `/static/` and the maintenance page (HTTP 503), neither of which goes through the full processing chain.
+**Security headers -- the application is authoritative:** `Strict-Transport-Security` (`max-age=31536000; includeSubDomains; preload`), `X-Content-Type-Options` (`nosniff`), `X-Frame-Options` (`DENY`) and `Referrer-Policy` (`strict-origin-when-cross-origin`) are set by the application only -- the values live in [`src/anlaufstelle/settings/prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py). Change any of them (the HSTS duration, for instance) there. They are deliberately **no longer** in the `Caddyfile`: set in both places, they reached the client twice, and a change in one place appeared to have no effect (#2314). Caddy now sets only what the application does not -- currently `X-Robots-Tag`. The same separation has always applied to the Content Security Policy (§ 5.4). This way the headers also apply when you put the application behind a reverse proxy of your own. All four headers are present on **every** response from the application -- including files served from `/static/` and the maintenance page (HTTP 503), neither of which goes through the full processing chain. The Content Security Policy is present on the maintenance page as well -- the same policy as on every other page (#2339).
 
 ### 7.2 Pseudonymization
 
@@ -2270,4 +2271,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: b324d48e91acf24ca152a3bf57fc8e3ebfdce93c -->
+<!-- source-hash: 255e368ef7adfc4ebe3a6168be05524ecc73bc4b -->

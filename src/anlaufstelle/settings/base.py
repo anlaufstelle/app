@@ -153,7 +153,7 @@ MIDDLEWARE = [
     # Antwort-Verarbeitung laeuft rueckwaerts durch die Liste, also erreicht
     # eine Antwort nur die Middlewares, die VOR der kurzschliessenden stehen.
     # Als letzter Eintrag sah diese Middleware deshalb weder die
-    # Wartungs-503 (MaintenanceModeMiddleware, zwei Zeilen weiter) noch die
+    # Wartungs-503 (MaintenanceModeMiddleware, weiter unten) noch die
     # von WhiteNoise direkt ausgelieferten Static-Dateien — solange der
     # mitgelieferte Reverse-Proxy den Header selbst setzte, fiel das nicht
     # auf. Seit er dort entfernt ist (genau eine Quelle je Header), muss die
@@ -163,11 +163,15 @@ MIDDLEWARE = [
     # aufgeloeste URL; das ``xframe_options_exempt``-Attribut haengt an der
     # Antwort und bleibt unabhaengig von der Position wirksam.
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # MaintenanceModeMiddleware liegt direkt nach SecurityMiddleware,
-    # damit sie 503 antworten kann, BEVOR Sessions/Auth/CSP geprueft
-    # werden — ein laufendes Deploy darf nicht an einer Auth-Pruefung
-    # haengen bleiben. Refs #700.
-    "core.middleware.maintenance.MaintenanceModeMiddleware",
+    # Die CSP-Kette steht VOR MaintenanceModeMiddleware (Refs #2339): aus
+    # demselben Grund wie XFrameOptionsMiddleware erreicht die Wartungs-503
+    # nur die Middlewares davor — hinter der Wartungs-Middleware kam die
+    # Wartungsseite ohne Content-Security-Policy an. Keine der drei braucht
+    # Session, Auth oder aufgeloeste URL: CSPMiddleware setzt den Header aus
+    # den Settings, AdminCSPRelaxMiddleware prueft nur das Pfad-Praefix,
+    # DemoUmamiCSPRelaxMiddleware liest ``request.user`` defensiv per
+    # ``getattr`` und bleibt ohne Nutzerobjekt (kurzgeschlossene Antwort)
+    # strikt.
     # AdminCSPRelaxMiddleware muss VOR CSPMiddleware stehen, damit sie in
     # Outbound-Reihenfolge den von CSPMiddleware gesetzten Header noch ändern
     # kann (Django ruft Response-Verarbeitung in umgekehrter Listen-Reihenfolge).
@@ -177,6 +181,11 @@ MIDDLEWARE = [
     # auf der Demo, Post-Login, fuer den Umami-Host. Refs #1604.
     "core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware",
     "csp.middleware.CSPMiddleware",
+    # MaintenanceModeMiddleware liegt direkt hinter den Header-Middlewares,
+    # damit sie 503 antworten kann, BEVOR Sessions/Auth geprueft werden —
+    # ein laufendes Deploy darf nicht an einer Auth-Pruefung haengen
+    # bleiben. Refs #700.
+    "core.middleware.maintenance.MaintenanceModeMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
