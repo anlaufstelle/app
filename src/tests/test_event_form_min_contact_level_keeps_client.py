@@ -21,7 +21,10 @@ Personenbezug.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.models import Client, DocumentType, DocumentTypeField, FieldTemplate
@@ -59,6 +62,14 @@ class TestEventFormMinContactLevelKeepsClient:
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=field, sort_order=0)
         return doc_type
+
+    @pytest.fixture
+    def doc_type_plain(self, facility):
+        """Weder Mindest-Kontaktstufe noch Pflichtfeld — dient allein dazu,
+        die inneren Ablehnungspfade zu umgehen und den aeusseren
+        ``except ValidationError``-Zweig (Policy-/Virus-Reject VOR der
+        Transaktion, ``views/events.py``) zu erreichen. Refs #2345."""
+        return DocumentType.objects.create(facility=facility, name="Ohne-Einschraenkung")
 
     def _post(self, client, doc_type, client_obj, *, occurred_at="2026-09-23T10:00"):
         return client.post(
@@ -104,6 +115,33 @@ class TestEventFormMinContactLevelKeepsClient:
         assert 'value="2026-09-23T11:15"' in html
         assert f'<option value="{doc_type_min_stage.pk}"' in html
         assert "selected" in html.split(f'<option value="{doc_type_min_stage.pk}"', 1)[1].split("</option>", 1)[0]
+
+    def test_client_selection_survives_policy_reject_before_transaction(
+        self, client, staff_user, doc_type_plain, client_pseudonym_only, monkeypatch
+    ):
+        """Refs #2345: der aeussere ``except ValidationError``-Zweig
+        (Policy-/Virus-Reject VOR der Transaktion, ``views/events.py`` —
+        der Aufruf ``with stage_uploads(...) as staged:`` ist dort direkt
+        umschlossen) verlor die Personenzuordnung ebenfalls, weil sein
+        ``_invalid_response``-Aufruf keinen ``client_id``/``client_pseudonym``-
+        Kontext trug. ``stage_uploads`` wird hier durch einen Context-Manager
+        ersetzt, der beim Betreten eine ``ValidationError`` wirft — derselbe
+        Fehlerpfad wie ein realer Policy-/Virenscan-Reject."""
+
+        @contextmanager
+        def _reject_stage_uploads(*args, **kwargs):
+            raise ValidationError("Policy-Reject (Testdouble)")
+            yield  # pragma: no cover — nie erreicht, macht die Funktion zum Generator
+
+        monkeypatch.setattr("core.views.events.stage_uploads", _reject_stage_uploads)
+
+        client.force_login(staff_user)
+        response = self._post(client, doc_type_plain, client_pseudonym_only)
+        assert response.status_code == 200
+        html = response.content.decode()
+
+        assert f'data-initial-client-id="{client_pseudonym_only.pk}"' in html
+        assert f'data-initial-pseudonym="{client_pseudonym_only.pseudonym}"' in html
 
     def test_client_selection_survives_dynamic_form_rejection(
         self, client, staff_user, doc_type_required_field, client_pseudonym_only

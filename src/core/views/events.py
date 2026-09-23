@@ -539,7 +539,16 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             # ersetzt alles andere generisch. Raw-JSON-Contract: _invalid_response
             # (Refs #1831).
             add_dynamic_service_errors(meta_form, e, restricted_keys)
-            return self._invalid_response(request, meta_form, {"meta_form": meta_form, "data_form": data_form})
+            return self._invalid_response(
+                request,
+                meta_form,
+                {
+                    "meta_form": meta_form,
+                    "data_form": data_form,
+                    "client_id": str(client.pk) if client else "",
+                    "client_pseudonym": client.pseudonym if client else "",
+                },
+            )
 
         # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel merken,
         # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein
