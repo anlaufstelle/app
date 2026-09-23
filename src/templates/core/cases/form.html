@@ -30,7 +30,7 @@
         {% csrf_token %}
         {% include "core/_form_errors.html" %}
         {% if is_edit and case %}
-        <input type="hidden" name="expected_updated_at" value="{{ case.updated_at.isoformat }}">
+        <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">
         {% endif %}
 
         <div class="card p-5 space-y-4">

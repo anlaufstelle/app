@@ -579,7 +579,17 @@ class ClientUpdateView(StaffRequiredMixin, View):
     ``.enc`` auf Disk).
     """
 
-    def _render_context(self, client, form, data_form, *, data_json, original_document_type_id, type_locked):
+    def _render_context(
+        self,
+        client,
+        form,
+        data_form,
+        *,
+        data_json,
+        original_document_type_id,
+        type_locked,
+        expected_updated_at,
+    ):
         """Render-Kontext des Bearbeiten-Formulars (Refs #1830).
 
         Reine Zusammenfassung der vormals drei wortgleichen Kontext-Bloecke
@@ -603,6 +613,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
             "data_form": data_form,
             "client": client,
             "is_edit": True,
+            "expected_updated_at": expected_updated_at,
             "dynamic_values_at_risk": _values_at_risk(client, data_json, type_locked=type_locked),
             "original_document_type_id": original_document_type_id,
             # M24/AP4 (Refs #1738): bestehende Anhaenge samt Ersetzen-/Entfernen-
@@ -632,6 +643,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
             data_json=client.data_json,
             original_document_type_id=client.document_type_id,
             type_locked=type_locked,
+            expected_updated_at=client.updated_at.isoformat(),
         )
         return render(request, "core/clients/form.html", context)
 
@@ -673,6 +685,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                 data_json=old_data,
                 original_document_type_id=old_doc_type_id,
                 type_locked=type_locked,
+                expected_updated_at=request.POST.get("expected_updated_at", ""),
             )
             return render(request, "core/clients/form.html", context)
 
@@ -710,6 +723,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     data_json=old_data,
                     original_document_type_id=old_doc_type_id,
                     type_locked=type_locked,
+                    expected_updated_at=request.POST.get("expected_updated_at", ""),
                 )
                 return render(request, "core/clients/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)

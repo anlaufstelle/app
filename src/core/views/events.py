@@ -1128,6 +1128,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         context = {
             "event": event,
             "data_form": data_form,
+            "expected_updated_at": event.updated_at.isoformat(),
             "existing_attachments": build_attachment_context(event),
             "back_link": _event_back_link(event),
         }
@@ -1281,6 +1282,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         context = {
             "event": event,
             "data_form": data_form,
+            # Den Stand aus dem fehlgeschlagenen Versuch beibehalten: die
+            # Instanz kann bereits eine parallele Änderung enthalten.
+            "expected_updated_at": request.POST.get("expected_updated_at", ""),
             # Refs #1056 (P4): wie im GET-Pfad — sonst verschwinden bestehende
             # Anhang-Zeilen beim invalid-POST-Re-Render aus dem Formular.
             "existing_attachments": build_attachment_context(event),

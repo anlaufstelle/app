@@ -36,19 +36,28 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
         ensure_settings_for_facility(request.current_facility)
         return Settings.objects.get(facility=request.current_facility)
 
-    def _render(self, request, form, *, status=200):
-        return render(request, self.template_name, {"form": form}, status=status)
+    def _render(self, request, form, *, expected_updated_at, status=200):
+        return render(
+            request,
+            self.template_name,
+            {"form": form, "expected_updated_at": expected_updated_at},
+            status=status,
+        )
 
     def get(self, request):
         settings_obj = self._settings(request)
         form = FacilitySettingsForm(instance=settings_obj, facility=request.current_facility)
-        return self._render(request, form)
+        return self._render(request, form, expected_updated_at=settings_obj.updated_at.isoformat())
 
     def post(self, request):
         settings_obj = self._settings(request)
         form = FacilitySettingsForm(request.POST, instance=settings_obj, facility=request.current_facility)
         if not form.is_valid():
-            return self._render(request, form)
+            return self._render(
+                request,
+                form,
+                expected_updated_at=request.POST.get("expected_updated_at", ""),
+            )
 
         # ``ModelForm._post_clean`` schreibt die bereinigten Werte bereits auf
         # ``instance`` (ohne DB-Save). Der Audit-Service braucht dagegen den
@@ -64,7 +73,15 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
         except ValidationError as exc:
             form.add_error(None, exc)
             status = 409 if getattr(exc, "code", None) == "version_conflict" else 200
-            return self._render(request, form, status=status)
+            # Nach einer Konfliktanzeige ist der aktuelle Stand die bewusste
+            # Ausgangsbasis für den nächsten Versuch; ``refresh_from_db`` oben
+            # bleibt deshalb maßgeblich.
+            return self._render(
+                request,
+                form,
+                expected_updated_at=settings_obj.updated_at.isoformat(),
+                status=status,
+            )
 
         messages.success(request, _("Einstellungen wurden gespeichert."))
         return redirect("core:facility_settings")

@@ -460,6 +460,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
         type_locked,
         client_id,
         client_pseudonym,
+        expected_updated_at,
     ):
         """Render-Kontext des Bearbeiten-Formulars (Refs #1830).
 
@@ -491,6 +492,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
             "client_locked": bool(case.client),
             "client_id": client_id,
             "client_pseudonym": client_pseudonym,
+            "expected_updated_at": expected_updated_at,
             "dynamic_values_at_risk": _values_at_risk(case, data_json, type_locked=type_locked),
             "original_document_type_id": original_document_type_id,
             # M24/AP4 (Refs #1738): in JEDEM Render-Zweig — sonst verschwinden
@@ -523,6 +525,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
             type_locked=type_locked,
             client_id=str(case.client.pk) if case.client else "",
             client_pseudonym=case.client.pseudonym if case.client else "",
+            expected_updated_at=case.updated_at.isoformat(),
         )
         return render(request, "core/cases/form.html", context)
 
@@ -577,6 +580,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                 type_locked=type_locked,
                 client_id=request.POST.get("client", ""),
                 client_pseudonym="",
+                expected_updated_at=request.POST.get("expected_updated_at", ""),
             )
             return render(request, "core/cases/form.html", context)
 
@@ -618,6 +622,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
                     type_locked=type_locked,
                     client_id=request.POST.get("client", ""),
                     client_pseudonym="",
+                    expected_updated_at=request.POST.get("expected_updated_at", ""),
                 )
                 return render(request, "core/cases/form.html", context)
             file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)

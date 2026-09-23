@@ -13,7 +13,7 @@
 
     <form method="post" class="space-y-5" novalidate>
         {% csrf_token %}
-        <input type="hidden" name="expected_updated_at" value="{{ form.instance.updated_at.isoformat }}">
+        <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">
         {% include "core/_form_errors.html" %}
 
         {% for title, fields in form.grouped_fields %}
