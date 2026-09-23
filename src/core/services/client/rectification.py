@@ -226,8 +226,14 @@ def request_rectification(client: Client, user: Any, field_path: str, new_value:
 
 
 def _guard_reviewable(rr: RectificationRequest, reviewer: Any) -> None:
-    """Gemeinsame Guards 1–3 von Genehmigung und Ablehnung, in fester Reihenfolge.
+    """Gemeinsame Guards 0–3 von Genehmigung und Ablehnung, in fester Reihenfolge.
 
+    0. Einrichtungsgrenze (Refs #2354) — der Reviewer gehoert zur Einrichtung
+       des Antrags. Wie in den uebrigen Vier-Augen-Services (Refs #2321,
+       #2338) direkt nach der Sperre des Antrags und vor der Statuspruefung:
+       einer fremden Leitung verraet die Antwort damit auch nicht, ob der
+       Antrag schon entschieden ist. Fail-closed — ohne Einrichtung keine
+       Pruefung.
     1. Status ``PENDING`` — ein abgeschlossener Antrag ist kein Vorgang mehr.
     2. Selbst-Review verboten (Vier-Augen-Prinzip; der DB-CheckConstraint ist
        der Backstop, diese Meldung die verstaendliche Fassung).
@@ -235,6 +241,8 @@ def _guard_reviewable(rr: RectificationRequest, reviewer: Any) -> None:
        in der View, damit auch Nicht-Formular-Aufrufer (Command, kuenftiger
        Replay) ihn passieren muessen.
     """
+    if getattr(reviewer, "facility_id", None) != rr.facility_id:
+        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
     if rr.status != RectificationRequest.Status.PENDING:
         raise ValidationError(_("Dieser Berichtigungsantrag ist bereits abgeschlossen."))
     if rr.requested_by_id is not None and rr.requested_by_id == reviewer.pk:
@@ -249,7 +257,7 @@ def approve_rectification(rr: RectificationRequest, reviewer: Any, review_note: 
 
     Guard-Reihenfolge (jeder Schritt einzeln getestet):
 
-    1.–3. :func:`_guard_reviewable` (Status, Selbst-Review, Rolle).
+    0.–3. :func:`_guard_reviewable` (Einrichtung, Status, Selbst-Review, Rolle).
     3a. **Widerruf der Person.** Wurde sie zwischen Antrag und Pruefung in den
        Papierkorb gelegt (``is_deleted``) oder anonymisiert (``is_active=False``),
        schriebe die Genehmigung frischen Klartext in einen bereits redigierten
