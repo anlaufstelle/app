@@ -76,6 +76,14 @@ fi
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
+if [[ ! "$POSTGRES_DB" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "FEHLER: POSTGRES_DB darf nur Buchstaben, Ziffern und Unterstriche enthalten." >&2
+    exit 1
+fi
+if [[ -n "${POSTGRES_ADMIN_USER:-}" && ! "$POSTGRES_ADMIN_USER" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "FEHLER: POSTGRES_ADMIN_USER darf nur Buchstaben, Ziffern und Unterstriche enthalten." >&2
+    exit 1
+fi
 MEDIA_ROOT_CONTAINER="${MEDIA_ROOT_CONTAINER:-/data/media}"
 backup_require_real_key
 
