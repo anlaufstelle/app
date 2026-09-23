@@ -146,7 +146,7 @@ stehen, statt in der Zeile oben unterzugehen.
    der zweite Tab behält im Regelfall keinen brauchbaren Schlüssel mehr, sein bereits
    gerendertes Markup aber in **jedem** Fall. **Gegenmaßnahme organisatorisch:** zweite
    Fenster schließen und das Gerät nicht unbeaufsichtigt lassen.
-3. **Verlorener Logout-Beacon.** Der Logout ist per Ruling fire-and-forget (R-L3-3): Es
+3. **Verlorener Logout-Beacon.** Der Logout ist bewusst fire-and-forget (Entscheidung R-L3-3): Es
    wird nicht auf die Antwort gewartet, damit die Navigation nicht am Netz hängt. Reißt
    die Verbindung genau in diesem Moment (`sendBeacon` liefert `false` **und** der
    `fetch`-Fallback stirbt), überlebt die **Server-Sitzung**; ein späterer, neuer Aufruf
@@ -187,10 +187,10 @@ stehen, statt in der Zeile oben unterzugehen.
    bewusst ausgeschlossen) — deshalb die organisatorische Empfehlung, das Gerät nach dem
    Verlassen nicht unbeaufsichtigt zu lassen.
 
-**Was die Prüfrunden geschlossen haben:** Bis zur Fix-Runde 1 riss `location.replace` die
+**Was die Prüfrunden geschlossen haben:** Bis zur ersten Korrekturrunde riss `location.replace` die
 IndexedDB-Transaktion mitten im Löschen ab, ohne dass überhaupt gewartet wurde — der
 Schlüssel blieb im Normalfall liegen, nicht nur im Ausnahmefall. Der E2E-Fall liest die
-Schlüsselzeile deshalb **nach** dem Dokumentwechsel. Bis zur Fix-Runde 3 konnte ein
+Schlüsselzeile deshalb **nach** dem Dokumentwechsel. Bis zur dritten Korrekturrunde konnte ein
 gescheiterter Delete zudem als Erfolg durchgehen und einen `key-cleared`-Broadcast
 auslösen, der den Schlüssel in einem Fremd-Tab über `_applyKeyCleared` sogar **wieder
 verankert** hätte; das schließt der Melde- und Rücklesepfad aus Punkt 4. Seit

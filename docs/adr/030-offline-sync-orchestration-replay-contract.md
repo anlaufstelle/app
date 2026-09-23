@@ -15,7 +15,7 @@ Die P0-Runde (S1, #1352–#1356) hat die stillen Discard-Pfade geschlossen. Dies
 
 ### 1. Sync-Orchestrierung: ein Lauf pro Origin, nicht pro Tab
 
-Alle Replay-/Revalidierungs-Trigger (die früher drei unkoordinierten `online`-Listener plus Direkt-Replays aus Speichervorgängen) laufen durch **einen** Orchestrator (`src/static/js/sync-orchestrator.js`):
+Alle Replay-/Revalidierungs-Trigger (die früher drei unkoordinierten `online`-Listener plus Direkt-Replays aus Speichervorgängen) laufen durch den **Sync-Orchestrator** (`src/static/js/sync-orchestrator.js`):
 
 - **Exklusiver Web Lock** `"anlaufstelle-offline-mutex"` (`navigator.locks`) umschließt jede Sync-Sequenz. Über Tabs hinweg läuft damit zu jeder Zeit höchstens eine Sequenz; parallele Trigger werden serialisiert und finden nichts mehr zu tun (billige No-ops) statt zu duplizieren.
 - **Feste Sequenz-Reihenfolge:** `replayQueue` → `replayAllModifiedEvents` → (nur bei `hasSessionKey()`) `purgeExpired` + `revalidateCachedClients` — Writes vor Revalidierung.
@@ -50,7 +50,7 @@ Die Kern-Invariante aus S1 wird festgeschrieben und um den `dead`-Zustand erweit
 
 ### 4. Service-Worker-Rolle
 
-Der Service Worker koordiniert **kein** Replay (der tote Background-Sync-/`REPLAY_QUEUE`-Pfad ist entfernt; Koordination liegt allein beim Orchestrator/Web-Lock). Er reicht Mutations-Requests durch bzw. queued sie bei Netzfehler/Timeout, mit Fetch-Timeouts gegen Lie-Fi und client-genauem ACK-Routing (#1386). Neue SW-Versionen übernehmen erst nach Nutzer-Bestätigung (Update-Gate).
+Der Service Worker koordiniert **kein** Replay (der tote Background-Sync-/`REPLAY_QUEUE`-Pfad ist entfernt; Koordination liegt allein beim Sync-Orchestrator/Web-Lock). Er reicht Mutations-Requests durch bzw. queued sie bei Netzfehler/Timeout, mit Fetch-Timeouts gegen Lie-Fi und client-genauem ACK-Routing (#1386). Neue SW-Versionen übernehmen erst nach Nutzer-Bestätigung (Update-Gate).
 
 Zwei Grenz-Invarianten sichern die SW→Queue-Naht (sonst bricht der Idempotenz- bzw. Klassifikations-Contract genau hier, unbemerkt von den Einzelschicht-Tests): (a) **Idempotenz-Key-Teilung** — der SW vergibt beim Erstversuch genau **einen** `X-Idempotency-Key` (übernimmt einen bereits client-gesetzten, sonst frisch), setzt ihn identisch auf den Netz-Erstversuch **und** in die persistierte Queue-Row und führt `x-idempotency-key` in seiner Header-Allowlist; so dedupliziert der Server einen Slow-Commit (SW-Timeout < Gunicorn-Timeout) gegen den späteren Replay statt zwei Objekte anzulegen. (b) **Replay-Marker** — alle client-getriebenen Replays (generische Queue und Offline-Edit) tragen `X-Offline-Replay: 1`; der SW reicht markierte Requests network-only durch und re-queued sie **nicht**, damit ein langsamer Replay nicht als vermeintlicher Netzfehler erneut abgefangen wird (Doppelkanal/Spurious-Dead-Letter).
 
@@ -66,6 +66,6 @@ Zwei Grenz-Invarianten sichern die SW→Queue-Naht (sonst bricht der Idempotenz-
 ## Alternatives considered
 
 - **Leader-Election per BroadcastChannel statt Web Lock.** Verworfen: aufwendiger und fehleranfälliger (Leader-Tod, Wahl-Races) als der vom Browser garantierte exklusive Lock; BroadcastChannel bleibt für Zustands-Benachrichtigung, nicht für gegenseitigen Ausschluss.
-- **Background Sync API für Replay.** Verworfen (YAGNI, #1351): uneinheitliche Browser-Unterstützung, und der tatsächliche Trigger (`online` + Orchestrator) deckt den Bedarf; der tote Handler wurde entfernt statt reaktiviert.
+- **Background Sync API für Replay.** Verworfen (YAGNI, #1351): uneinheitliche Browser-Unterstützung, und der tatsächliche Trigger (`online` + Sync-Orchestrator) deckt den Bedarf; der tote Handler wurde entfernt statt reaktiviert.
 - **Serverseitige Idempotenz per DB-Unique-Constraint statt Cache-Dedup.** Zurückgestellt: der Cache-Dedup mit 72-h-TTL schließt das #1329-Fenster; eine atomare DB-Constraint (die auch konkurrierende Replays desselben Keys über mehrere Worker deduplizierte) ist als Folge-Härtung vermerkt.
 - **`dead`-Records nach Frist automatisch verwerfen.** Verworfen: widerspricht der Kern-Invariante; dauerhaft nicht zustellbare Arbeit gehört der Fachkraft angezeigt, nicht vom System entsorgt.

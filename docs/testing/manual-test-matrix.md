@@ -503,7 +503,7 @@ make tailwind-build                      # styles.css muss gebaut sein, sonst SW
 make test-e2e-webkit-smoke               # SERIELL (RAM-Limit), Marker: "e2e and offline_smoke"
 ```
 
-Deckt die Offline-Kernsuite (`test_pwa_offline`, `test_sync_orchestrator`, `test_offline_deadletter_ui`) unter WebKit ab. Grün ⇒ Service-Worker-Lebenszyklus, Web-Locks-Orchestrator und Dead-Letter-Kern funktionieren auf der WebKit-Engine. **Nicht** Teil von `make ci` (bewusst seltener Lauf, `make ci` lässt `e2e` aus).
+Deckt die Offline-Kernsuite (`test_pwa_offline`, `test_sync_orchestrator`, `test_offline_deadletter_ui`) unter WebKit ab. Grün ⇒ Service-Worker-Lebenszyklus, Web-Locks-Sync-Orchestrator und Dead-Letter-Kern funktionieren auf der WebKit-Engine. **Nicht** Teil von `make ci` (bewusst seltener Lauf, `make ci` lässt `e2e` aus).
 
 ### G.1 — Voraussetzungen (iOS)
 

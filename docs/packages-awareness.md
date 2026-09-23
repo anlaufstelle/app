@@ -38,7 +38,7 @@ Keiner der sieben Typen verlangt eine Mindest-Kontaktstufe. Auch Gewaltvorfall u
 | `vermittlung` | `vermittelt-an` (Sanität, Psy-Support, Security, Taxi / Safe Home, Sonstiges), `veranstaltung` |
 | `notiz` | `notiz` |
 
-Das gesamte Paket enthält bewusst **kein Datei-Feld**. Fotos von betroffenen Personen sind tabu; Vorfälle werden kategorisiert und notwendige Freitexte verschlüsselt dokumentiert.
+Das gesamte Paket enthält bewusst **kein Datei-Feld**. Fotos von betroffenen Personen dürfen nicht gespeichert werden; Vorfälle werden kategorisiert und notwendige Freitexte verschlüsselt dokumentiert.
 
 ## Sensitivität und Rollen
 
