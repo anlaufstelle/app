@@ -91,6 +91,14 @@ if [[ "${1:-}" == "--verify" ]]; then
         exit 1
     fi
 
+    SELECTED_TIMESTAMP="${LATEST_MANIFEST##*/}"
+    SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP#anlaufstelle_}"
+    SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP%.manifest}"
+    CURRENT_TIMESTAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+    if [[ "$SELECTED_TIMESTAMP" > "$CURRENT_TIMESTAMP" ]]; then
+        echo "WARNUNG: Ausgewaehlter Backup-Satz hat einen Zeitstempel in der Zukunft (moegliche Uhrzeit-Drift); er wird trotzdem geprueft." >&2
+    fi
+
     LATEST_BACKUP="${LATEST_MANIFEST%.manifest}.sql.gz.enc"
     if [[ ! -f "$LATEST_BACKUP" ]]; then
         echo "FEHLER: Zum Manifest gehoerender DB-Dump fehlt: ${LATEST_BACKUP}"

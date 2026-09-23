@@ -216,6 +216,10 @@ if [[ "$DRILL_FORMAT" == "prod" ]]; then
     SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP#anlaufstelle_}"
     SELECTED_TIMESTAMP="${SELECTED_TIMESTAMP%.sql.gz.enc}"
     BACKUP_TIMESTAMP="$SELECTED_TIMESTAMP"
+    CURRENT_TIMESTAMP="$(date -u +%Y-%m-%d_%H%M%S)"
+    if [[ "$BACKUP_TIMESTAMP" > "$CURRENT_TIMESTAMP" ]]; then
+        echo "WARNUNG: Ausgewaehlter Backup-Satz hat einen Zeitstempel in der Zukunft (moegliche Uhrzeit-Drift); er wird trotzdem geprueft." >&2
+    fi
     MEDIA_FILE="${LATEST_DB%.sql.gz.enc}_media.tar.gz.enc"
     echo "Ausgewaehlter Restore-Satz: DB=${LATEST_DB##*/}, Medien=${MEDIA_FILE##*/}, HWM=audit_hwm-${BACKUP_TIMESTAMP}.json"
 else
