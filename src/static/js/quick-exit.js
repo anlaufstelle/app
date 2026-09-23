@@ -51,6 +51,85 @@
         return document.body;
     }
 
+    // --- Spaete Antworten der alten Seite (Refs #2352) ----------------------
+    //
+    // Zwischen Logout und dem Festschreiben der Zielseite laeuft die alte Seite
+    // noch. Eine Anfrage, die in diesem Fenster antwortet, sieht bereits den
+    // ausgeloggten Server — und dessen Antwort ist eine Weiterleitung auf
+    // ``/login/``. Folgt die alte Seite ihr (HTMX per ``HX-Redirect``, der
+    // Zeitstrom-Watch per ``location.assign``), BRICHT diese Navigation die zur
+    // neutralen Seite ab: im Fenster stuende die Anmeldeseite der Anwendung.
+    //
+    // Deshalb gilt ab dem Ausloesen: laufende HTMX-Anfragen werden abgebrochen,
+    // neue nicht mehr gestartet, und eine trotzdem eintreffende Antwort wird
+    // vor jeder Verarbeitung verworfen (``htmx:beforeOnLoad`` laeuft VOR der
+    // Auswertung von ``HX-Redirect``/``HX-Location``/``HX-Refresh``). Fuer die
+    // fetch-basierten Leser setzt ``quickExit`` die bestehende Logout-Marke
+    // ``window.__logoutInFlight`` (Vertrag aus sw-register.js), bei der
+    // zeitstrom-live-watch.js nicht mehr selbst navigiert.
+    //
+    // Die Listener haengen sofort beim Laden (Capture am ``document``), nicht
+    // erst in ``init``: nur so ist jede Anfrage erfasst, die danach startet.
+    var _exiting = false;
+    var _inflight = [];
+
+    function _htmxElt(event) {
+        return (event.detail && event.detail.elt) || event.target;
+    }
+
+    document.addEventListener(
+        "htmx:beforeRequest",
+        function (event) {
+            if (_exiting) {
+                event.preventDefault();
+                return;
+            }
+            var elt = _htmxElt(event);
+            if (elt && _inflight.indexOf(elt) === -1) _inflight.push(elt);
+        },
+        true
+    );
+
+    document.addEventListener(
+        "htmx:afterRequest",
+        function (event) {
+            var index = _inflight.indexOf(_htmxElt(event));
+            if (index !== -1) _inflight.splice(index, 1);
+        },
+        true
+    );
+
+    document.addEventListener(
+        "htmx:beforeOnLoad",
+        function (event) {
+            if (_exiting) event.preventDefault();
+        },
+        true
+    );
+
+    function _abortHtmxRequests() {
+        var pending = _inflight.slice();
+        _inflight = [];
+        pending.forEach(function (elt) {
+            try {
+                // htmx haengt seinen Abbruch-Handler an ``body`` und liest das
+                // Element aus ``detail.elt`` — ``htmx.trigger`` setzt es, der
+                // Fallback baut dasselbe Ereignis von Hand.
+                if (window.htmx && typeof window.htmx.trigger === "function") {
+                    window.htmx.trigger(elt, "htmx:abort");
+                } else {
+                    elt.dispatchEvent(new CustomEvent("htmx:abort", { bubbles: true, detail: { elt: elt } }));
+                }
+            } catch (_e) {
+                // best-effort — ``htmx:beforeOnLoad`` verwirft die Antwort ohnehin.
+            }
+        });
+    }
+
+    function _markLogoutNavigation() {
+        window.__logoutInFlight = Date.now();
+    }
+
     /** Nur http/https navigieren — ``javascript:``/``data:`` waeren XSS.
      *
      * Der Wert kommt zwar aus einem validierten Settings-Feld, laeuft aber
@@ -465,6 +544,12 @@
     /** Gibt ein Promise zurueck, das nach der Navigation aufloest (fuer Tests). */
     function quickExit() {
         var target = _config().url;
+        // Refs #2352: zuerst die alte Seite stilllegen — bevor der Logout
+        // ueberhaupt losgeht, kann keine ihrer Antworten eine Login-Weiterleitung
+        // tragen, die ungeschuetzt ankaeme.
+        _exiting = true;
+        _markLogoutNavigation();
+        _abortHtmxRequests();
         _showOverlay("exit");
         _shield(true);
         _logout();
@@ -475,6 +560,10 @@
                 _warnKeyDropFailed(status);
             }
             _suppressReferrer();
+            // Marke auffrischen: das Fenster ihrer Leser soll ab der Navigation
+            // laufen, nicht ab dem Ausloesen (das Warten oben kostet bis zu
+            // ``KEY_DROP_TIMEOUT_MS``).
+            _markLogoutNavigation();
             window.location.replace(target);
         });
     }

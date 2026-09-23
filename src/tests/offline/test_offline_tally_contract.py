@@ -101,7 +101,9 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Metadaten-Uebernahme (#2293) und den Vertrag der Erfolgsbestaetigung
         # (#2289); die precachte Shell bekommt den Hinweis „Anmeldung
         # erforderlich" (#2289).
-        assert 'const CACHE_NAME = "anlaufstelle-v50";' in sw
+        # 2026-09-23, Refs #2352: v51 — das precachte quick-exit.js legt beim
+        # Schnell-Verlassen die alte Seite still.
+        assert 'const CACHE_NAME = "anlaufstelle-v51";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):

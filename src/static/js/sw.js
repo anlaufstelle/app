@@ -166,7 +166,11 @@ importScripts("/static/js/url-patterns.js");
 // (offline-edit.js, offline-queue.js) tragen die korrigierte Metadaten-
 // Uebernahme der Neuanlage und den Vertrag der Erfolgsbestaetigung; die
 // precachte Shell bekommt den Hinweis „Anmeldung erforderlich".
-const CACHE_NAME = "anlaufstelle-v50";
+// 2026-09-23, Refs #2352: v50 -> v51 -- das precachte quick-exit.js legt beim
+// Schnell-Verlassen die alte Seite still (HTMX-Abbruch, Logout-Marke), damit
+// keine spaete Antwort die Navigation zur neutralen Seite ueberschreibt. Der
+// Bump bringt das geaenderte Modul auf Bestandsgeraete.
+const CACHE_NAME = "anlaufstelle-v51";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
