@@ -26,6 +26,7 @@ import re
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
@@ -33,6 +34,7 @@ from django.urls import reverse
 
 from core.models import Case, Client, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.attachments import crud
+from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, EVENT_WRITE_GONE_MESSAGE
 from core.services.client.merge import merge_clients
 
 pytestmark = pytest.mark.postgres
@@ -154,6 +156,83 @@ class TestVorsperreNachZusammenfuehrung:
         assert [tabelle for tabelle, _sql in sperren] == ["core_client", "core_case"]
         assert person.pk.hex in sperren[0][1]
         assert veraltet.client_id == person.pk
+
+
+class _BindungWechseltVorDerPersonensperre:
+    """Haengt den Owner um, unmittelbar bevor die erste Personensperre laeuft.
+
+    Bildet den Ablauf nach, in dem ein paralleles Zusammenfuehren zwischen
+    der frischen Bindungslesung und der Personensperre committet: die
+    gelesene Person ist beim Sperren bereits nicht mehr die Person des Owners.
+    """
+
+    def __init__(self, owner_model, owner_pk, andere_person):
+        self.owner_model = owner_model
+        self.owner_pk = owner_pk
+        self.andere_person = andere_person
+        self.ausgeloest = False
+
+    def __call__(self, execute, sql, params, many, context):
+        if not self.ausgeloest and 'FROM "core_client"' in sql and "FOR UPDATE" in sql.upper():
+            self.ausgeloest = True
+            self.owner_model.objects.filter(pk=self.owner_pk).update(client=self.andere_person)
+        return execute(sql, params, many, context)
+
+
+class TestBindungswechselWaehrendDerVorsperre:
+    """Wechsel zwischen Lesung und Personensperre: ablehnen, nicht nachsperren."""
+
+    @pytest.mark.parametrize("owner_art", ["fall", "ereignis"])
+    def test_wechsel_wird_abgelehnt_ohne_zweite_personensperre(self, owner_art, facility, staff_user, doc_type_contact):
+        from django.utils import timezone
+
+        gelesen = _person(facility, staff_user, "Wechsel-P")
+        andere = _person(facility, staff_user, "Wechsel-R")
+        if owner_art == "fall":
+            owner = Case.objects.create(facility=facility, client=gelesen, title="Fall", created_by=staff_user)
+            meldung = CASE_WRITE_GONE_MESSAGE
+        else:
+            owner = Event.objects.create(
+                facility=facility,
+                client=gelesen,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            meldung = EVENT_WRITE_GONE_MESSAGE
+        wechsel = _BindungWechseltVorDerPersonensperre(type(owner), owner.pk, andere)
+
+        with CaptureQueriesContext(connection) as ctx, transaction.atomic():
+            with connection.execute_wrapper(wechsel), pytest.raises(ValidationError) as abgelehnt:
+                crud.lock_owner_rows_in_facility_order(owner)
+
+        assert wechsel.ausgeloest, "Die Personensperre muss gelaufen sein"
+        assert str(meldung) in abgelehnt.value.messages
+        personensperren = [sql for tabelle, sql in _zeilensperren(ctx.captured_queries) if tabelle == "core_client"]
+        assert len(personensperren) == 1, "Keine zweite Person in derselben Transaktion nachsperren"
+        assert gelesen.pk.hex in personensperren[0]
+        assert andere.pk.hex not in personensperren[0]
+
+
+class TestZaehlprobeStabileBindung:
+    """Stabile Bindung: dieselben Zeilensperren wie ohne Frischlesung, eine Lesung mehr."""
+
+    def test_zwei_sperren_und_eine_lesung(self, facility, staff_user):
+        person = _person(facility, staff_user, "Zaehl-X")
+        case = Case.objects.create(facility=facility, client=person, title="Fall", created_by=staff_user)
+
+        with CaptureQueriesContext(connection) as ctx, transaction.atomic():
+            crud.lock_owner_rows_in_facility_order(case)
+
+        sqls = [q["sql"] for q in ctx.captured_queries if "SAVEPOINT" not in q["sql"]]
+        sperren = _zeilensperren(ctx.captured_queries)
+        assert [tabelle for tabelle, _sql in sperren] == ["core_client", "core_case"]
+        lesungen = [sql for sql in sqls if "FOR UPDATE" not in sql.upper()]
+        assert len(lesungen) == 1, lesungen
+        assert lesungen[0].startswith('SELECT "core_case"."client_id"')
+        assert 'FROM "core_case"' in lesungen[0]
+        assert len(sqls) == 3
 
 
 class TestFallBearbeitungNachZusammenfuehrung:
