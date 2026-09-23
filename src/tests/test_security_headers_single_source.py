@@ -22,6 +22,10 @@ Zwei Zusagen, beide hier geprüft:
    Caddy den Header für jede Antwort des Site-Blocks setzte, fiel das nicht
    auf. Deshalb steht ``XFrameOptionsMiddleware`` seit Refs #2314 direkt hinter
    ``SecurityMiddleware`` statt am Ende der Liste.
+
+Dazu kommt die ``Content-Security-Policy`` (Refs #2339): auch sie gehoert auf
+die Wartungs-503, deshalb steht die CSP-Kette ebenfalls vor der
+Wartungs-Middleware.
 """
 
 import json
@@ -233,6 +237,59 @@ def test_maintenance_503_carries_all_four_headers(tmp_path, prod_security_settin
         _assert_all_four_headers(response, prod_security_settings, "Wartungs-503")
     finally:
         MaintenanceModeMiddleware._cache = None
+
+
+@pytest.mark.django_db
+def test_maintenance_503_carries_the_content_security_policy(tmp_path, prod_security_settings):
+    """Die Wartungs-503 traegt dieselbe Richtlinie wie eine regulaere Seite.
+
+    Die CSP-Middleware stand hinter der Wartungs-Middleware; deren 503 kehrte
+    zurueck, bevor sie lief — die Wartungsseite kam ohne CSP beim Client an.
+    Verglichen wird mit der Login-Seite: gleiche Richtlinie, kein Sonderweg.
+    """
+    from core.middleware.maintenance import MaintenanceModeMiddleware
+
+    with override_settings(**prod_security_settings):
+        reference = Client().get(reverse("login"), secure=True)
+    expected = reference.get("Content-Security-Policy")
+    assert expected, "Referenzseite ohne Content-Security-Policy — Guard waere gegenstandslos"
+
+    flag_file = tmp_path / "maintenance.flag"
+    flag_file.write_text("", encoding="utf-8")
+    MaintenanceModeMiddleware._cache = None
+    try:
+        with override_settings(MAINTENANCE_FLAG_FILE=str(flag_file), **prod_security_settings):
+            response = Client().get("/clients/", secure=True)
+        assert response.status_code == 503, "Wartungsmodus war nicht aktiv"
+        delivered = [name.lower() for name, _value in response.items()]
+        assert delivered.count("content-security-policy") == 1, (
+            "Wartungs-503: Content-Security-Policy kommt "
+            f"{delivered.count('content-security-policy')}x (erwartet: genau 1)."
+        )
+        assert response["Content-Security-Policy"] == expected
+    finally:
+        MaintenanceModeMiddleware._cache = None
+
+
+def test_csp_middlewares_run_before_the_maintenance_middleware():
+    """Strukturelle Absicherung: die CSP-Kette steht vor der Wartungs-Middleware.
+
+    Die Relax-Middlewares bleiben dabei VOR ``CSPMiddleware`` (sie schreiben
+    deren Header ausgangsseitig um).
+    """
+    from django.conf import settings
+
+    order = list(settings.MIDDLEWARE)
+    maintenance = order.index("core.middleware.maintenance.MaintenanceModeMiddleware")
+    csp = order.index("csp.middleware.CSPMiddleware")
+    for relax in (
+        "core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware",
+        "core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware",
+    ):
+        assert order.index(relax) < csp, f"{relax} muss vor CSPMiddleware stehen."
+    assert csp < maintenance, (
+        "CSPMiddleware muss VOR MaintenanceModeMiddleware stehen, sonst traegt die Wartungs-503 keine CSP."
+    )
 
 
 def test_clickjacking_middleware_runs_before_the_short_circuiting_ones():
