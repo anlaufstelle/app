@@ -105,14 +105,29 @@ openssl rand -hex 24
 **Verschlüsselungsschlüssel generieren (ohne Host-Python):**
 
 ```bash
-docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:v0.96.0 \
+docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:latest \
   -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-`v0.96.0` ist hier ein Beispielwert. Verwenden Sie denselben Release-Tag, den Sie laut [`APP_VERSION`](#vollständige-umgebungsvariablen-referenz) für `docker-compose.prod.yml` gewählt haben; verfügbare Tags stehen auf der [Release-Seite](https://github.com/anlaufstelle/app/releases). Der Entrypoint-Override ist erforderlich. Falls auf dem Host optional `python3` samt Modul `cryptography` installiert ist, erzeugt folgender Alternativbefehl denselben Schlüssel:
+`latest` ist hier ein Beispielwert für einen tatsächlich veröffentlichten Tag. Ob ein Tag aktuell pullbar ist, zeigt `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (Exit-Code 0 = veröffentlicht) oder die [GHCR-Paketseite](https://github.com/anlaufstelle/app/pkgs/container/app). Vor dem 1.0-Cut werden Release-Kandidaten NICHT in die Registry veröffentlicht — der in `docker-compose.prod.yml` unter [`APP_VERSION`](#vollständige-umgebungsvariablen-referenz) gewählte Stand existiert dort deshalb regelmäßig nicht; verwenden Sie in diesem Fall das im folgenden Abschnitt lokal gebaute Image. Der Entrypoint-Override ist erforderlich. Falls auf dem Host optional `python3` samt Modul `cryptography` installiert ist, erzeugt folgender Alternativbefehl denselben Schlüssel:
 
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+**Image lokal aus dem Dockerfile bauen (ohne Registry-Zugriff):**
+
+Vor dem 1.0-Cut werden Release-Kandidaten nicht veröffentlicht; wer denselben Stand wie `docker-compose.prod.yml` ohne Registry-Zugriff verwenden möchte, baut das Image aus dem mitgelieferten `Dockerfile` im Installationsverzeichnis:
+
+```bash
+docker build -t ghcr.io/anlaufstelle/app:local .
+```
+
+Setzen Sie anschließend `APP_VERSION='local'` in der `.env` und wiederholen Sie den Verschlüsselungsschlüssel-Schritt mit dem lokal gebauten Tag:
+
+```bash
+docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:local \
+  -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 `DJANGO_SECRET_KEY` und `DJANGO_AUDIT_HASH_KEY` brauchen je einen eigenen zufälligen Wert aus mindestens 64 Zeichen; das folgende Kommando liefert 64 Base64-Zeichen aus 48 Byte Zufall und wird für beide Schlüssel **getrennt** ausgeführt — derselbe Befehl steht auch als Kommentar in `.env.example`:
@@ -301,7 +316,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | `FILE_UPLOAD_TEMP_DIR` | Django-Default (`tempfile.gettempdir()`) | Verzeichnis für den Klartext-Zwischenpuffer von Uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, bevor sie in den File-Vault verschlüsselt werden (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In den mitgelieferten Compose-Dateien fest auf `/tmp` (tmpfs/RAM) gesetzt — [Ops-Runbook § 5.7a](ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Read-only Mount-Ziel im Container; Health-Endpoint und Backup-Zeile im Systembereich lesen daraus das Backup-Alter. Die Host-Skripte ignorieren diese Variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Basisverzeichnis auf dem Host; relative Werte werden gegen den Repository-Root aufgelöst. `backup.sh` schreibt darunter nach `daily/`, `weekly/` und `monthly/`; `restore-drill.sh` liest aus `daily/`. Compose mountet dieses Verzeichnis read-only nach `BACKUP_DIR`, damit der Container dieselben Dateien sieht. |
-| `APP_VERSION` | `dev` | Release-Tag des von `docker-compose.prod.yml` gewählten App-Images, z. B. `v0.96.0`; verfügbare Tags stehen auf der [Release-Seite](https://github.com/anlaufstelle/app/releases). `/health/` weist den Wert im `version`-Detailfeld aus (nur für Token-/authentifizierte Caller). |
+| `APP_VERSION` | `dev` | Release-Tag des von `docker-compose.prod.yml` gewählten App-Images, z. B. `latest` oder ein lokal gebauter Tag (siehe [„Image lokal aus dem Dockerfile bauen"](#1-installation-docker-compose)); ob ein Tag in der Registry veröffentlicht ist, prüft `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (Exit-Code 0 = veröffentlicht) oder die [GHCR-Paketseite](https://github.com/anlaufstelle/app/pkgs/container/app) — Release-Kandidaten vor dem 1.0-Cut sind dort NICHT veröffentlicht. `/health/` weist den Wert im `version`-Detailfeld aus (nur für Token-/authentifizierte Caller). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
 
 ### Schritt 3: Caddyfile prüfen

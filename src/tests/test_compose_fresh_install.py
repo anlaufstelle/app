@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -230,3 +231,38 @@ def test_env_example_defines_empty_redis_password_without_warning_noise() -> Non
 def test_prod_compose_mentions_legal_override_for_recreates() -> None:
     text = PROD_PATH.read_text(encoding="utf-8")
     assert "-f compose.legal.yml" in text
+
+
+def test_compose_app_version_default_matches_release_version() -> None:
+    pyproject_text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    version_match = re.search(r'(?m)^version = "([^"]+)"', pyproject_text)
+    assert version_match, "keine version-Zeile in pyproject.toml gefunden"
+    expected_tag = f"v{version_match.group(1)}"
+
+    compose_text = PROD_PATH.read_text(encoding="utf-8")
+    defaults = re.findall(r"\$\{APP_VERSION:-([^}]+)\}", compose_text)
+    assert len(defaults) == 3, defaults
+    assert all(default == expected_tag for default in defaults), defaults
+
+
+def test_prod_compose_explains_registry_lookup_at_each_image_line() -> None:
+    text = PROD_PATH.read_text(encoding="utf-8")
+    assert "docker manifest inspect ghcr.io/anlaufstelle/app" in text
+    lines = text.splitlines()
+    image_line_indices = [
+        index for index, line in enumerate(lines) if line.strip().startswith("image: ghcr.io/anlaufstelle/app:")
+    ]
+    assert len(image_line_indices) == 3, image_line_indices
+    for index in image_line_indices:
+        preceding_line = lines[index - 1].strip()
+        assert preceding_line.startswith("#"), lines[max(0, index - 3) : index]
+
+
+def test_admin_guide_documents_registry_lookup_and_local_build_path() -> None:
+    de = (REPO_ROOT / "docs" / "admin-guide.md").read_text(encoding="utf-8")
+    en = (REPO_ROOT / "docs" / "en" / "admin-guide.md").read_text(encoding="utf-8")
+    for text in (de, en):
+        assert "docker manifest inspect ghcr.io/anlaufstelle/app:<tag>" in text
+        assert "docker build -t ghcr.io/anlaufstelle/app:local ." in text
+        assert "docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:local" in text
+        assert "ghcr.io/anlaufstelle/app:v0.96.0" not in text

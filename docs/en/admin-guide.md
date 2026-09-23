@@ -2,6 +2,7 @@
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
 > Synchronization update 2026-09-23: § 7.1 states that the maintenance page (HTTP 503) also carries the Content Security Policy (#2339).
+> Synchronization update 2026-09-23: § 1 replaces the unpublished `v0.96.0` example tag with `latest` plus a lookup hint (`docker manifest inspect`, GHCR package page) and adds a documented path to build the image locally from the Dockerfile for release candidates that are not published before the 1.0 cut (#2308).
 > Synchronization update 2026-09-23: § 2 quotes the `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` template values in single quotes, matching the quoting rule in § 1 step 2 (#2344).
 > Synchronization update 2026-09-22: § 3.1 adds `DJANGO_AUDIT_HWM_PATH` to the `.env` prerequisites and the mandatory step that creates the audit anchor before the first backup, so that a set contains all seven files (#2315).
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
@@ -140,14 +141,29 @@ openssl rand -hex 24
 **Generate an encryption key (without host Python):**
 
 ```bash
-docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:v0.96.0 \
+docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:latest \
   -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-`v0.96.0` is an example value. Use the same release tag that you selected via [`APP_VERSION`](#full-environment-variable-reference) for `docker-compose.prod.yml`; available tags are listed on the [releases page](https://github.com/anlaufstelle/app/releases). The entrypoint override is required. If the host optionally has `python3` and the `cryptography` module installed, this alternative command generates the same key:
+`latest` is an example value for a tag that is actually published. Whether a tag is currently pullable is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app). Before the 1.0 cut, release candidates are NOT published to the registry — the state selected under [`APP_VERSION`](#full-environment-variable-reference) in `docker-compose.prod.yml` therefore regularly does not exist there; in that case use the locally built image from the following section. The entrypoint override is required. If the host optionally has `python3` and the `cryptography` module installed, this alternative command generates the same key:
 
 ```bash
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+**Build the image locally from the Dockerfile (without registry access):**
+
+Before the 1.0 cut, release candidates are not published; anyone who wants the same state as `docker-compose.prod.yml` without registry access builds the image from the delivered `Dockerfile` in the installation directory:
+
+```bash
+docker build -t ghcr.io/anlaufstelle/app:local .
+```
+
+Then set `APP_VERSION='local'` in the `.env` file and repeat the encryption key step with the locally built tag:
+
+```bash
+docker run --rm --entrypoint python ghcr.io/anlaufstelle/app:local \
+  -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 `DJANGO_SECRET_KEY` and `DJANGO_AUDIT_HASH_KEY` each need their own random value of at least 64 characters; the following command produces 64 Base64 characters from 48 bytes of randomness and is run **separately** for each key — the same command appears as a comment in `.env.example`:
@@ -333,7 +349,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `FILE_UPLOAD_TEMP_DIR` | Django default (`tempfile.gettempdir()`) | Directory for the plaintext staging buffer of uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, before they are encrypted into the file vault (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). Pinned to `/tmp` (tmpfs/RAM) in the shipped Compose files -- [ops runbook § 5.7a](../ops-runbook.md). |
 | `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Read-only mount target inside the container; the health endpoint and the backup row in the system area read the backup age from it. The host scripts ignore this variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Base directory on the host; relative values are resolved against the repository root. `backup.sh` writes to `daily/`, `weekly/`, and `monthly/` below it; `restore-drill.sh` reads from `daily/`. Compose mounts this directory read-only onto `BACKUP_DIR`, so the container sees the same files. |
-| `APP_VERSION` | `dev` | Release tag of the app image selected by `docker-compose.prod.yml`, e.g. `v0.96.0`; available tags are listed on the [releases page](https://github.com/anlaufstelle/app/releases). `/health/` exposes the value in the `version` detail field (token/authenticated callers only). |
+| `APP_VERSION` | `dev` | Release tag of the app image selected by `docker-compose.prod.yml`, e.g. `latest` or a locally built tag (see ["Build the image locally from the Dockerfile"](#1-installation-docker-compose)); whether a tag is published to the registry is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app) — release candidates before the 1.0 cut are NOT published there. `/health/` exposes the value in the `version` detail field (token/authenticated callers only). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, GDPR export). |
 
 ### Step 3: Review the Caddyfile
@@ -2281,4 +2297,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 8340bd4e2462aecfeba9d1948d0c66a7dcf661f3 -->
+<!-- source-hash: 078b5c0308e1de5e72a261360627ddab98e547b2 -->
