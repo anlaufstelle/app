@@ -142,6 +142,15 @@ backup_set_verify_artifacts() {
         fi
     fi
 
+    # Symmetrisch zum Medien-Archiv: bindet das Manifest keinen Audit-Anker,
+    # gehoert eine trotzdem vorhandene Ankerdatei nicht zu diesem Satz. Die
+    # Aufrufer reichen den abgeleiteten Pfad immer durch — abgewiesen wird nur
+    # eine Datei, die dort tatsaechlich liegt.
+    if [[ -z "$BACKUP_SET_HWM_SHA256" && -n "$hwm_file" && -e "$hwm_file" ]]; then
+        echo "FEHLER: Der Satz bindet keinen Audit-Anker — ${hwm_file} gehoert nicht zu diesem Satz." >&2
+        return 1
+    fi
+
     # Der Audit-Anker wird nur geprueft, wenn der Aufrufer einen Pfad nennt:
     # ein Zielhost ohne konfigurierten Anker (DJANGO_AUDIT_HWM_PATH leer) bringt
     # keinen mit, und der Restore entscheidet darueber selbst.
