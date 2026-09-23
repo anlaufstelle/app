@@ -641,7 +641,15 @@ def update_workitem(
     # dann die WorkItem-Sperre. Der Instanz-Wert taugt dafuer NICHT: bei einem
     # ``ModelForm`` hat ``_post_clean()`` ``workitem.client_id`` bereits auf den
     # geposteten Wert mutiert (Muster #1613).
-    current_client_id = type(workitem)._base_manager.filter(pk=workitem.pk).values_list("client_id", flat=True).first()
+    # Refs #2377: auch diese Lesung nur in der Einrichtung der Aufgabe — sonst
+    # sperrte eine Instanz mit verfaelschter Einrichtung die Person einer
+    # fremden Aufgabe, bevor die gescopte Aufgabensperre unten abweist.
+    current_client_id = (
+        type(workitem)
+        ._base_manager.filter(pk=workitem.pk, facility_id=workitem.facility_id)
+        .values_list("client_id", flat=True)
+        .first()
+    )
     # BEIDE Personenbezuege gehoeren VOR die WorkItem-Sperre (Re-Review 2):
     # der bisherige und — bei einer Zuordnung ``None -> Person`` — der neue.
     # Die erste Fassung sperrte den neuen Client erst im ``client``-Zweig

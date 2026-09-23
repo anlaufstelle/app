@@ -697,7 +697,12 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
     deleted = 0
     for pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
-            note = ShiftHandoverNote.objects.select_for_update().filter(pk=pk, updated_at__lt=cutoff).first()
+            # Refs #2377: die Sperre bleibt an die Einrichtung des Laufs gebunden.
+            note = (
+                ShiftHandoverNote.objects.select_for_update()
+                .filter(pk=pk, facility=facility, updated_at__lt=cutoff)
+                .first()
+            )
             if note is None:
                 # Zwischen Sammeln und Sperren geaendert oder geloescht: der
                 # naechste Lauf entscheidet neu. Ein Hard-Delete auf einen
