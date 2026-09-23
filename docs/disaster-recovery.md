@@ -121,6 +121,8 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 > **Stand: noch nicht verdrahtet — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet).** Es gibt **kein** automatisches Key-Escrow im Code. Organisatorisch **müssen** mindestens `BACKUP_ENCRYPTION_KEY`, die vollständige `ENCRYPTION_KEYS`-Historie, `DJANGO_AUDIT_HASH_KEY`, `DJANGO_SECRET_KEY` und der **aktuelle** Satz `POSTGRES_PASSWORD`/`POSTGRES_ADMIN_PASSWORD`/`POSTGRES_BOOTSTRAP_PASSWORD` an einem vom Prod-Host **physisch/logisch getrennten** Ort liegen (Passwort-Manager des Trägers, versiegelter Umschlag im Safe, o. Ä.). `DJANGO_SECRET_KEY` ist im Gegensatz zu den Verschlüsselungs- und Audit-Schlüsseln ersetzbar, beendet dann aber bestehende Sessions und macht alte Signaturen ungültig. Ein Schlüssel, der nur in der `.env` desselben Hosts liegt, der verloren geht, schützt nicht vor Totalverlust — er **garantiert** den Datenverlust. Die DB-Passwörter sind auf einem fabrikfrischen Cluster zwar technisch neu wählbar; für Diagnose, Rotation und Recovery am vorhandenen Cluster muss der Eskrow aber dem aktuellen Login-Stand entsprechen.
 >
 > Zum getrennt gesicherten Recovery-Material gehört außerdem der **Zugang zum Off-Site-Ziel**: bei scp die SSH-Identität des ausführenden Kontos samt `known_hosts`, bei rclone die passende `rclone.conf`, bei S3 die benötigten AWS-Credentials. Die Rückholung muss ohne den verlorenen Prod-Host möglich sein.
+>
+> **Fachkonto samt zweitem Faktor (#2346):** Ein `super_admin`-Konto hat keinen Zugriff auf Einrichtungsdaten (403) und kann deshalb den in [§7](#7-smoke-verifikation-nach-restore) geforderten Fachdatensatz nicht öffnen und keinen Vault-Anhang im Browser herunterladen — `super_admin` erfüllt `FacilityAdminRequiredMixin` nicht und kann nach dem Restore auch kein Fachkonto per UI neu einladen oder zurücksetzen. Zum Eskrow-Material gehört deshalb zusätzlich ein Fachkonto mit Einrichtungszugriff (mindestens `facility_admin`) samt zweitem Faktor: entweder das TOTP-Secret (bzw. dessen QR-Provisioning-URI) oder ein vollständiger Satz Backup-Codes, getrennt vom Prod-Host verwahrt wie die übrigen Schlüssel oben.
 
 ---
 
@@ -487,6 +489,14 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
 - Ein `super_admin`-Browser-Testkonto für den Session-Zugriff auf den
   Health-Detail-Payload ist verfügbar. Secrets, Passwörter, vollständige `.env`-Inhalte und
   personenbezogene Stichprobendaten werden nie ins Drill-Protokoll kopiert.
+- Zusätzlich ist ein **Fachkonto** (mindestens `facility_admin`, Zugriff auf die
+  Einrichtung des Testdatensatzes aus [§ 7](#7-smoke-verifikation-nach-restore))
+  samt zweitem Faktor aus dem Eskrow-Material ([§ 4.4](#44-wo-die-schlüssel-liegen-sollten--eskrow))
+  verfügbar: TOTP-Secret/Provisioning-URI oder ein vollständiger Satz
+  Backup-Codes. `super_admin` erhält 403 auf Einrichtungsdaten und kann weder
+  den geforderten Fachdatensatz öffnen noch den Vault-Anhang im Browser
+  herunterladen — ohne dieses Fachkonto ist der fachliche Nachweis aus § 7
+  nicht erbringbar und der Drill nicht vollständig grün protokollierbar.
 - Die Off-Site-Rückholung wurde von einem **dritten Rechner** ohne Zutun des
   Prod-Hosts getestet; Zugangsmaterial und `known_hosts` stammen aus dem
   getrennt gesicherten Recovery-Bestand.
@@ -573,10 +583,11 @@ Produktivhost wird dabei weder als Restore-Ziel noch als Testdatenbank benutzt.
 5. Die fünf Infrastruktur- und Datenprüfungen aus
    [§7](#7-smoke-verifikation-nach-restore) in der dort vorgegebenen Reihenfolge
    ausführen. Beim Health-Aufruf in der angemeldeten `super_admin`-Session müssen
-   mindestens `status: ok` und `encryption_key: ok` erscheinen. Danach je
-   benötigter Schlüsselgeneration einen wiederhergestellten Datensatz öffnen
-   und einen echten Vault-Anhang herunterladen; nur Metadaten und Ergebnis,
-   keine Inhalte protokollieren.
+   mindestens `status: ok` und `encryption_key: ok` erscheinen. Danach mit dem
+   Fachkonto aus den Vorbedingungen (Einrichtungszugriff, zweiter Faktor
+   `super_admin` erhält hier 403) je benötigter Schlüsselgeneration einen
+   wiederhergestellten Datensatz öffnen und einen echten Vault-Anhang
+   herunterladen; nur Metadaten und Ergebnis, keine Inhalte protokollieren.
 6. Anschließend die vollständige [§6.6-Verifikation](ops-runbook.md#66-backup-restore-drill-refs-720-739)
    als Root gegen das Prod-Format fahren. `COMPOSE_DIR` muss dabei auf das in
    Schritt 1 vorbereitete Installationsverzeichnis mit `.env` und
@@ -691,6 +702,7 @@ Off-Site-Rückholung auf drittem Rechner ohne Prod-Host: OK / FAIL
 DJANGO_AUDIT_HWM_PATH war am Quellhost gesetzt: JA / NEIN
 DJANGO_AUDIT_HWM_PATH in rekonstruierter .env gesetzt: JA / NEIN
 Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
+Fachkonto samt zweitem Faktor (TOTP/Backup-Codes) aus Eskrow verfügbar: JA / NEIN
 
 §6 Schritt 1 Host-Härtung: OK / FAIL — Notiz:
 §6 Schritt 2 Release + .env: OK / FAIL — Notiz:
@@ -703,6 +715,7 @@ Schlüsselquelle: Maintainer-.env-Kopie (kein Escrow)
 §7 RLS: OK / FAIL — Anzahl:
 §7 Health status / encryption_key: OK / FAIL — Werte:
 §7 offene Migrationen: OK / FAIL — Anzahl:
+§7 Fachkonto-Login (Einrichtungszugriff, zweiter Faktor): OK / FAIL
 §7 Datenstichprobe je Schlüsselgeneration: OK / FAIL — keine Inhalte notieren
 §7 Vault-Download, Dateiname und Größe: OK / FAIL — keine Inhalte notieren
 §7 DB-/Medien-Vollständigkeit am App-Pfad: OK / FAIL
