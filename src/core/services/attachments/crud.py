@@ -635,6 +635,11 @@ def lock_owner_rows_in_facility_order(owner) -> None:
     ``core_event``). Ein Owner ohne Personenbezug (anonymes Ereignis) hat
     schlicht keine erste Stufe.
 
+    Die Person eines Fall- oder Ereignis-Owners kommt nicht aus der
+    uebergebenen Instanz, sondern aus der Owner-Zeile selbst (Refs #2379):
+    :func:`_lock_current_owner_person` liest die Bindung frisch, sperrt diese
+    Person und zieht ``owner.client_id`` nach.
+
     Doppeltes Sperren derselben Zeile in derselben Transaktion ist folgenlos —
     die Pfade, die diese Zeilen ohnehin spaeter sperren (etwa das Art.-18-Gate
     oder der Optimistic-Locking-Reload), behalten ihre Sperre unveraendert und
@@ -652,10 +657,54 @@ def lock_owner_rows_in_facility_order(owner) -> None:
     if owner.__class__.__name__ == "Client":
         Client.objects.for_facility(facility_id).filter(pk=owner.pk).select_for_update().only("pk").first()
         return
-    client_id = getattr(owner, "client_id", None)
-    if client_id:
-        Client.objects.for_facility(facility_id).filter(pk=client_id).select_for_update().only("pk").first()
+    if getattr(owner, "client_id", None):
+        _lock_current_owner_person(owner, facility_id)
     type(owner).objects.filter(pk=owner.pk, facility=facility_id).select_for_update().only("pk").first()
+
+
+#: Obergrenze fuer das Nachlesen der Personenbindung in
+#: :func:`_lock_current_owner_person`. Jede weitere Runde braucht eine
+#: Zusammenfuehrung, die genau zwischen Lesen und Sperren abschliesst.
+_PERSON_BINDING_ROUNDS = 3
+
+
+def _lock_current_owner_person(owner, facility_id) -> None:
+    """Sperrt die Person, an der die Owner-Zeile JETZT haengt, und zieht die Instanz nach.
+
+    Die Owner-Instanz stammt aus einem Lesevorgang vor der Transaktion. Eine
+    zwischenzeitlich abgeschlossene Zusammenfuehrung P -> Q setzt Fall und
+    Ereignis per Queryset-Update auf Q um, die Instanz zeigt aber weiter auf
+    P. Wer dann P sperrt, sperrt die abgegebene Person; Q fiele beim naechsten
+    Schritt desselben Vorgangs (Art.-18-Gate im ``update_*``-Service,
+    :func:`apply_attachment_changes`) hinter die Owner-Zeile — gegen die
+    Ordnung ``core_client`` -> ``core_case``/``core_event`` (ADR-050 D5.5).
+
+    Deshalb: Bindung frisch und einrichtungsgescopt lesen, diese Person
+    sperren, Bindung erneut lesen. Laeuft eine Zusammenfuehrung gerade, haelt
+    sie die Personenzeile bis zum Commit; die Sperre wartet, und erst die
+    naechste Lesung sieht die neue Bindung. Stimmt sie mit der gesperrten
+    Person ueberein, steht die Bindung — sie kann sich ohne diese
+    Personenzeile nicht mehr aendern. Alle Personensperren fallen damit VOR
+    die Owner-Zeile.
+
+    Die Instanz bekommt die gesperrte Person, damit die folgenden Schritte
+    dieselbe Zeile treffen. Ist die Owner-Zeile nicht (mehr) sichtbar, bleibt
+    es bei der Person der Instanz; das Verschwinden meldet der spaetere
+    Schreibschritt selbst.
+    """
+    from core.models.client import Client
+
+    gesperrt = None
+    for _runde in range(_PERSON_BINDING_ROUNDS):
+        zeile = type(owner).objects.filter(pk=owner.pk, facility=facility_id).values_list("client_id").first()
+        aktuell = owner.client_id if zeile is None else zeile[0]
+        if aktuell == gesperrt:
+            break
+        if aktuell:
+            Client.objects.for_facility(facility_id).filter(pk=aktuell).select_for_update().only("pk").first()
+        gesperrt = aktuell
+    if gesperrt and gesperrt != owner.client_id:
+        owner.client_id = gesperrt
 
 
 def open_chain_entry_ids(owner) -> list:

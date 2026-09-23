@@ -140,6 +140,21 @@ class TestVorsperreNachZusammenfuehrung:
         assert person.pk.hex in sperren[0][1]
         assert case.client_id == person.pk
 
+    def test_unsichtbare_owner_zeile_sperrt_die_person_der_instanz(self, facility, staff_user):
+        """Ohne sichtbare Owner-Zeile bleibt es bei der Person der Instanz."""
+        person = _person(facility, staff_user, "Vorsperre-Y")
+        case = Case.objects.create(facility=facility, client=person, title="Fall", created_by=staff_user)
+        veraltet = Case.objects.get(pk=case.pk)
+        Case.objects.filter(pk=case.pk).delete()
+
+        with CaptureQueriesContext(connection) as ctx, transaction.atomic():
+            crud.lock_owner_rows_in_facility_order(veraltet)
+
+        sperren = _zeilensperren(ctx.captured_queries)
+        assert [tabelle for tabelle, _sql in sperren] == ["core_client", "core_case"]
+        assert person.pk.hex in sperren[0][1]
+        assert veraltet.client_id == person.pk
+
 
 class TestFallBearbeitungNachZusammenfuehrung:
     """HTTP-Weg: Merge nach dem Laden des Falls, vor der Transaktion der View."""
