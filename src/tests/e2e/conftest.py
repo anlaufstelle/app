@@ -380,9 +380,9 @@ def _storage_state_cache():
     return {}
 
 
-def _session_cookie_value(state) -> str:
-    """Wert des ``sessionid``-Cookies aus einem Playwright-Storage-State."""
-    for cookie in state.get("cookies", []):
+def _session_cookie_value(cookies) -> str:
+    """Wert des ``sessionid``-Cookies aus einer Playwright-Cookie-Liste."""
+    for cookie in cookies:
         if cookie.get("name") == "sessionid":
             return cookie.get("value") or ""
     return ""
@@ -428,19 +428,25 @@ def _sync_storage_state(cache, username, context) -> None:
     if entry is None:
         return
     try:
-        state = context.storage_state()
+        # ``context.cookies()`` statt ``context.storage_state()``: Letzteres
+        # laedt bei einer Page ohne Utility-World (Test endet mitten in einer
+        # Navigation) intern eine Storage-State-Seite nach, faellt auf den
+        # nackten Origin zurueck (302 auf ``/login/``) und bleibt dort ohne
+        # Timeout sporadisch haengen. ``cookies()`` liest die Cookies direkt
+        # aus dem Kontext, ohne eigene Navigation.
+        cookies = context.cookies()
     except Exception:
         # Kontext/Browser schon zu oder abgestuerzt: konservativ verwerfen.
         cache.pop(username, None)
         return
-    if _session_cookie_value(state):
-        # Nur die Cookies uebernehmen: ``context.storage_state()`` traegt auch
-        # ``origins`` (localStorage) — z. B. die Einklapp-Einstellung des
-        # Zeitstroms. Die wanderte sonst als Snapshot in jeden folgenden Kontext
-        # desselben Nutzers und machte ``test_zeitstrom_collapse`` reihenfolge-
-        # abhaengig rot (Voll-Lauf Welle J). Der Login-Snapshot selbst ist
-        # reines Cookie-JSON; localStorage gehoert jedem Kontext allein.
-        cache[username] = (entry[0], {"cookies": state.get("cookies", []), "origins": []})
+    if _session_cookie_value(cookies):
+        # Nur die Cookies uebernehmen, kein ``origins``-Eintrag (localStorage)
+        # — z. B. die Einklapp-Einstellung des Zeitstroms. Die wanderte sonst
+        # als Snapshot in jeden folgenden Kontext desselben Nutzers und machte
+        # ``test_zeitstrom_collapse`` reihenfolgeabhaengig rot (Voll-Lauf
+        # Welle J). Der Login-Snapshot selbst ist reines Cookie-JSON;
+        # localStorage gehoert jedem Kontext allein.
+        cache[username] = (entry[0], {"cookies": cookies, "origins": []})
     else:
         cache.pop(username, None)
 
