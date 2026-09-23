@@ -134,7 +134,7 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
     """Shared helper for bulk actions on retention proposals.
 
     Subclasses must define:
-    - action_fn: callable(proposals, user, **kwargs) -> int
+    - action_fn: callable(proposals, user, **kwargs) -> int | (int, int)
     - allowed_statuses: iterable of RetentionProposal.Status values
     """
 
@@ -156,6 +156,35 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
             )
         )
 
+    def _apply_per_proposal(self, proposals, user, extra_kwargs):
+        """Aktion je Vorschlag in einem eigenen Savepoint; liefert ``(verarbeitet, uebersprungen)``.
+
+        Refs #2109, #2373: Geladen wird oben ohne Sperre. Entscheidet eine
+        andere Leitung einen Vorschlag zwischen Laden und Aktion, weisen alle
+        drei Dienste ihn unter der Zeilensperre mit ``ValidationError`` ab —
+        Zurueckstellen und Ablehnen ebenso wie das Genehmigen. Dieser eine
+        Vorschlag rollt nur sich selbst zurueck und zaehlt als uebersprungen;
+        die uebrigen werden in einer gemeinsamen Transaktion bearbeitet (wie
+        in ``bulk_approve_proposals``). ``bulk_approve_proposals`` liefert
+        bereits ein Paar, die Schwestern eine blanke Zahl — beides wird
+        zusammengezaehlt.
+        """
+        action = type(self).action_fn
+        count = 0
+        skipped = 0
+        with transaction.atomic():
+            for proposal in proposals:
+                try:
+                    with transaction.atomic():
+                        result = action([proposal], user, **extra_kwargs)
+                except ValidationError:
+                    skipped += 1
+                    continue
+                done, not_done = result if isinstance(result, tuple) else (result, 0)
+                count += done
+                skipped += not_done
+        return count, skipped
+
     def post(self, request):
         ids = self._get_proposal_ids(request)
         if not ids:
@@ -166,11 +195,7 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
             return HttpResponseBadRequest(_("Keine gültigen Vorschläge gefunden."))
 
         extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
-        result = type(self).action_fn(proposals, request.user, **extra_kwargs)
-        # Refs #2109: ``bulk_approve_proposals`` liefert seit dem Hold-/Status-
-        # Re-Check ``(verarbeitet, uebersprungen)``; Defer und Reject koennen
-        # nicht scheitern und bleiben bei einer blanken Zahl.
-        count, skipped = result if isinstance(result, tuple) else (result, 0)
+        count, skipped = self._apply_per_proposal(proposals, request.user, extra_kwargs)
         message = ngettext(
             "%(count)d Löschvorschlag aktualisiert.",
             "%(count)d Löschvorschläge aktualisiert.",
