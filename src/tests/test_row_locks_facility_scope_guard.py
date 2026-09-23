@@ -34,6 +34,7 @@ from core.models import Client, Event, RetentionProposal, WorkItem
 from core.retention.enforcement import _lock_event_and_recheck_hold
 from core.retention.proposals import _lock_target_rows_for_approval, approve_proposal
 from core.services.case.workitems import (
+    WORKITEM_ROW_MISSING,
     _form_state_unchanged,
     _locked_client_id,
     update_workitem,
@@ -163,7 +164,7 @@ class TestAufgabenSperre:
         Einrichtung zeigt, öffnet die fremde Zeile nicht."""
         fremde_aufgabe.facility_id = facility.pk
         with transaction.atomic():
-            assert _locked_client_id(fremde_aufgabe) is None
+            assert _locked_client_id(fremde_aufgabe) is WORKITEM_ROW_MISSING
 
     def test_fremde_zeile_gilt_nicht_als_unveraendert(self, facility, fremde_aufgabe):
         token = workitem_form_state_token(fremde_aufgabe)

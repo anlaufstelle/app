@@ -353,6 +353,13 @@ def _next_due_date(current: date, recurrence: str) -> date | None:
     return None
 
 
+#: Rueckgabe von :func:`_locked_client_id`, wenn die Aufgabenzeile in der
+#: Einrichtung der Aufgabe fehlt. Bewusst verschieden von ``None`` (= Aufgabe
+#: ohne Person): eine fremde personenlose Aufgabe darf nicht als „unveraendert
+#: personenlos" weiterlaufen (Refs #2377).
+WORKITEM_ROW_MISSING = object()
+
+
 def _locked_client_id(workitem):
     """Frischer ``client_id``-Stand der Zeile **unter Row-Lock** (Refs #1786).
 
@@ -362,21 +369,24 @@ def _locked_client_id(workitem):
     Callers — der Lock haelt bis zum Commit, der spaetere Diff-Read greift also
     auf dieselbe gesperrte Zeile.
 
-    ``None`` heisst „keine Person zugeordnet"; eine nicht (mehr) vorhandene Zeile
-    liefert dasselbe. Das ist hier fail-safe genug: ``update_workitem`` arbeitet
-    ausschliesslich auf persistierten Aufgaben, und das anschliessende ``save()``
-    wuerde eine fehlende Zeile ohnehin neu schreiben.
+    ``None`` heisst „keine Person zugeordnet".
 
-    Refs #2377: gesperrt wird nur in der Einrichtung der Aufgabe; eine Zeile
-    einer anderen Einrichtung gilt wie eine fehlende.
+    Refs #2377: gesperrt wird nur in der Einrichtung der Aufgabe. Fehlt die
+    Zeile dort — nicht (mehr) vorhanden oder einer anderen Einrichtung —,
+    kommt :data:`WORKITEM_ROW_MISSING` zurueck, nie ``None``: sonst liefe eine
+    fremde personenlose Aufgabe als „personenlos, unveraendert" weiter bis zur
+    Schreibung.
     """
-    return (
+    row = (
         type(workitem)
         ._base_manager.select_for_update()
         .filter(pk=workitem.pk, facility_id=workitem.facility_id)
-        .values_list("client_id", flat=True)
+        .values_list("pk", "client_id")
         .first()
     )
+    if row is None:
+        return WORKITEM_ROW_MISSING
+    return row[1]
 
 
 # Spalten, die das Bearbeiten-Formular zeigt oder mitschickt (Refs #2331) —
@@ -654,6 +664,10 @@ def update_workitem(
     # ehrlicher, als die Sperr-Reihenfolge fuer den Randfall umzudrehen und ein
     # Deadlock-Fenster zu oeffnen.
     db_client_id = _locked_client_id(workitem)
+    if db_client_id is WORKITEM_ROW_MISSING:
+        # Refs #2377: keine Zeile im Einrichtungs-Scope — abbrechen, bevor ein
+        # nachgelagerter Zugriff (Diff-Lesung, Schreibung) sie per PK erreicht.
+        raise ValidationError(_("Aufgabe gehört zu einer anderen Einrichtung."))
     if db_client_id != current_client_id:
         raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
     try:
