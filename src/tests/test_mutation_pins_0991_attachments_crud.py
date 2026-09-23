@@ -142,6 +142,26 @@ def owner2(facility, client_identified, doc_type_contact, staff_user):
     )
 
 
+@pytest.fixture
+def anonymes_ereignis(facility, doc_type_contact, staff_user):
+    """Ereignis OHNE Personenbezug — die Vorsperre sperrt nur die Owner-Zeile.
+
+    Refs #2379: Owner mit Person nehmen den Helfer mit frischer
+    Bindungslesung; die Owner-Sperre ohne Personenbezug erreicht nur ein
+    Owner ohne ``client_id``.
+    """
+    from django.utils import timezone
+
+    return Event.objects.create(
+        facility=facility,
+        client=None,
+        is_anonymous=True,
+        document_type=doc_type_contact,
+        occurred_at=timezone.now(),
+        created_by=staff_user,
+    )
+
+
 @pytest.fixture(autouse=True)
 def medienordner(settings, tmp_path):
     """``MEDIA_ROOT`` je Test isolieren — echte ``.enc``-Dateien, kein Projektbaum."""
@@ -377,29 +397,31 @@ class TestLockBatchAttachmentRows:
 
 
 class TestLockOwnerRowsInFacilityOrder:
-    def test_sperrt_exakt_die_eigene_owner_zeile(self, sample_event, owner2):
+    def test_sperrt_exakt_die_eigene_owner_zeile(self, anonymes_ereignis, owner2):
         """Pin: ``x_lock_owner_rows_in_facility_order__mutmut_28`` — der
         ``pk=owner.pk``-Filter der Owner-Sperre (``type(owner).objects.filter(
         pk=owner.pk, facility=facility_id)``) entfaellt.
 
         Zwei Ereignisse derselben Einrichtung. Original: die ``FOR
-        UPDATE``-Query traegt ``sample_event.pk`` UND ``facility_id`` als
+        UPDATE``-Query traegt ``anonymes_ereignis.pk`` UND ``facility_id`` als
         Parameter. Mutant: nur noch ``facility_id`` — potenziell jede
         Ereigniszeile der Einrichtung statt der eigenen.
+
+        Refs #2379: bewusst ein Owner OHNE Person — nur er erreicht diese
+        Owner-Sperre; die Sperre mit Bindungsbedingung (Owner mit Person)
+        pinnt ``test_mutation_pins_0994_attachments_crud.py``.
         """
-        assert owner2.pk != sample_event.pk
+        assert owner2.pk != anonymes_ereignis.pk
 
         mitschnitt = _Mitschnitt()
         with connection.execute_wrapper(mitschnitt.wrapper), transaction.atomic():
-            lock_owner_rows_in_facility_order(sample_event)
+            lock_owner_rows_in_facility_order(anonymes_ereignis)
 
         sperrend = _for_update_queries(mitschnitt, table="core_event")
         assert len(sperrend) == 1
         _sql, params = sperrend[0]
         werte = sorted(str(p) for p in params)
-        # Refs #2379: die Owner-Sperre traegt zusaetzlich die frisch gelesene
-        # Person als Bindungsbedingung.
-        assert werte == sorted([str(sample_event.pk), str(sample_event.facility_id), str(sample_event.client_id)])
+        assert werte == sorted([str(anonymes_ereignis.pk), str(anonymes_ereignis.facility_id)])
 
 
 # ---------------------------------------------------------------------------

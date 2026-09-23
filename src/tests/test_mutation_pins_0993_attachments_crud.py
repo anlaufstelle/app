@@ -174,17 +174,27 @@ class _OwnerOhnePersonenbezug:
 class TestLockOwnerRowsInFacilityOrder:
     def test_owner_zeile_mit_pk_und_einrichtung(self, sample_event):
         """x_lock_owner_rows_in_facility_order__mutmut_28 (``pk`` faellt weg ->
-        beliebige Zeile der Einrichtung) und _29 (Einrichtung faellt weg)."""
+        beliebige Zeile der Einrichtung) und _29 (Einrichtung faellt weg).
+
+        Refs #2379: bewusst ein Ereignis OHNE Person — nur ein solcher Owner
+        erreicht diese Owner-Sperre; die Sperre mit Bindungsbedingung pinnt
+        ``test_mutation_pins_0994_attachments_crud.py``."""
+        anonym = Event.objects.create(
+            facility=sample_event.facility,
+            client=None,
+            is_anonymous=True,
+            document_type=sample_event.document_type,
+            occurred_at=sample_event.occurred_at,
+            created_by=sample_event.created_by,
+        )
         with CaptureQueriesContext(connection) as ctx:
-            crud.lock_owner_rows_in_facility_order(sample_event)
+            crud.lock_owner_rows_in_facility_order(anonym)
         sperren = [q["sql"] for q in ctx.captured_queries if q["sql"].startswith('SELECT "core_event"."id" FROM')]
         assert len(sperren) == 1
         assert sperren[0].endswith("FOR UPDATE")
         assert _bedingungen(sperren[0]) == {
-            ("core_event.id", sample_event.pk.hex),
-            ("core_event.facility_id", sample_event.facility_id.hex),
-            # Refs #2379: Bindungsbedingung auf die frisch gelesene Person.
-            ("core_event.client_id", sample_event.client_id.hex),
+            ("core_event.id", anonym.pk.hex),
+            ("core_event.facility_id", anonym.facility_id.hex),
         }
 
     def test_owner_ohne_client_attribut_bricht_nicht_ab(self, sample_event):

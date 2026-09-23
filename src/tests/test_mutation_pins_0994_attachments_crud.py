@@ -8,6 +8,11 @@ Gruppen:
 * ``lock_batch_attachment_rows`` — ``creates_rows`` folgt nicht mehr den
   Feldvorlagen (reines Ersetzen) bzw. verliert den Parameter.
 * ``_new_row_fk_values`` — ohne anlegende Person bricht die Ableitung ab.
+* ``_lock_current_owner_person_then_owner`` (Refs #2379) — Owner mit Person:
+  Bindung einmal lesen, diese Person zuerst sperren, dann die Owner-Zeile mit
+  ``pk``, Einrichtung UND ``client_id``; Ablehnung mit der Meldung des
+  Owner-Typs bei Bindungswechsel, Instanz nachziehen. Abfragen per
+  ``CaptureQueriesContext`` mitgeschnitten (Bedingungen exakt).
 
 Eine neue Anhangszeile traegt Einrichtung, Owner, Feldvorlage und anlegende
 Person als Fremdschluessel. Diese Pins sind eine Zielmengen- und
@@ -20,9 +25,12 @@ Einrichtung — belegen sie nicht; den haelt der Reihenfolgenachweis in
 ``test_attachment_lock_order.py`` fest.
 """
 
+import re
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection, transaction
+from django.test.utils import CaptureQueriesContext
 
 from core.models import DocumentType, DocumentTypeField, FieldTemplate
 from core.services.attachments import crud
@@ -184,3 +192,136 @@ class TestNewRowFkValues:
                 ("core_facility", str(sample_event.facility_id)),
             }
         ]
+
+
+# ---------------------------------------------------------------------------
+# _lock_current_owner_person_then_owner — Vorsperre bei Owner mit Person
+# ---------------------------------------------------------------------------
+
+_BEDINGUNG = re.compile(r'"(\w+)"\."(\w+)" = \'([0-9a-f]{32})\'::uuid')
+
+
+def _bedingungen(sql):
+    """UUID-Gleichheiten der WHERE-Klausel als Menge ``(tabelle.spalte, hex)``."""
+    where = sql.split(" WHERE ", 1)[1]
+    return {(f"{t}.{c}", v) for t, c, v in _BEDINGUNG.findall(where)}
+
+
+def _abfragen(ctx):
+    """``(tabelle, sperrt, sql)`` je Abfrage in Reihenfolge, ohne Savepoints."""
+    zeilen = []
+    for q in ctx.captured_queries:
+        sql = q["sql"]
+        if "SAVEPOINT" in sql or " FROM " not in sql:
+            continue
+        tabelle = sql.split(" FROM ", 1)[1].split(" ", 1)[0].strip('"')
+        zeilen.append((tabelle, sql.upper().endswith("FOR UPDATE"), sql))
+    return zeilen
+
+
+def _person(facility, user, pseudonym):
+    from core.models import Client
+
+    return Client.objects.create(
+        facility=facility, contact_stage=Client.ContactStage.IDENTIFIED, pseudonym=pseudonym, created_by=user
+    )
+
+
+class _WechselVorDerPersonensperre:
+    """Haengt den Owner unmittelbar vor der ersten Personensperre um."""
+
+    def __init__(self, owner, andere):
+        self.owner = owner
+        self.andere = andere
+        self.ausgeloest = False
+
+    def __call__(self, execute, sql, params, many, context):
+        if not self.ausgeloest and 'FROM "core_client"' in sql and "FOR UPDATE" in sql.upper():
+            self.ausgeloest = True
+            type(self.owner).objects.filter(pk=self.owner.pk).update(client=self.andere)
+        return execute(sql, params, many, context)
+
+
+class TestVorsperreOwnerMitPerson:
+    """Refs #2379: Owner mit Person — Bindung einmal lesen, Person, dann Owner mit Bindung sperren."""
+
+    def test_lesung_personensperre_owner_sperre_exakt(self, sample_event):
+        """Reihenfolge und Bedingungen exakt: (1) Bindungslesung mit ``pk`` +
+        Einrichtung, ungesperrt; (2) Personensperre mit ``pk`` + Einrichtung;
+        (3) Owner-Sperre mit ``pk``, Einrichtung UND ``client_id``.
+
+        Toetet u. a.: Wegfall von ``pk``/Einrichtung in Lesung, Personensperre
+        oder Owner-Sperre, Wegfall der Bindungsbedingung, Owner vor Person."""
+        with CaptureQueriesContext(connection) as ctx, transaction.atomic():
+            crud.lock_owner_rows_in_facility_order(sample_event)
+        abfragen = _abfragen(ctx)
+        assert [(tabelle, sperrt) for tabelle, sperrt, _sql in abfragen] == [
+            ("core_event", False),
+            ("core_client", True),
+            ("core_event", True),
+        ]
+        lesung, person, owner = (sql for _t, _s, sql in abfragen)
+        assert lesung.startswith('SELECT "core_event"."client_id"')
+        assert _bedingungen(lesung) == {
+            ("core_event.id", sample_event.pk.hex),
+            ("core_event.facility_id", sample_event.facility_id.hex),
+        }
+        assert _bedingungen(person) == {
+            ("core_client.id", sample_event.client_id.hex),
+            ("core_client.facility_id", sample_event.facility_id.hex),
+        }
+        assert _bedingungen(owner) == {
+            ("core_event.id", sample_event.pk.hex),
+            ("core_event.facility_id", sample_event.facility_id.hex),
+            ("core_event.client_id", sample_event.client_id.hex),
+        }
+
+    def test_frische_bindung_statt_instanz_und_nachziehen(self, sample_event, staff_user):
+        """Die Instanz zeigt noch auf P, die Zeile schon auf Q: gesperrt wird Q,
+        danach traegt die Instanz Q. Toetet: Person aus der Instanz statt aus
+        der Lesung, Wegfall des Nachziehens."""
+        neu = _person(sample_event.facility, staff_user, "Pin-Q")
+        alt_id = sample_event.client_id
+        type(sample_event).objects.filter(pk=sample_event.pk).update(client=neu)
+        with CaptureQueriesContext(connection) as ctx, transaction.atomic():
+            crud.lock_owner_rows_in_facility_order(sample_event)
+        sperren = [sql for tabelle, sperrt, sql in _abfragen(ctx) if sperrt]
+        assert ("core_client.id", neu.pk.hex) in _bedingungen(sperren[0])
+        assert ("core_event.client_id", neu.pk.hex) in _bedingungen(sperren[1])
+        assert all(alt_id.hex not in sql for sql in sperren)
+        assert sample_event.client_id == neu.pk
+
+    @pytest.mark.parametrize("owner_art", ["fall", "ereignis"])
+    def test_bindungswechsel_wird_mit_meldung_des_owner_typs_abgelehnt(
+        self, owner_art, sample_event, case_open, staff_user
+    ):
+        """Wechsel zwischen Lesung und Personensperre: Owner-Sperre trifft
+        nichts -> ``ValidationError`` mit der Meldung des Owner-Typs; die
+        Instanz bleibt auf der gelesenen Person. Toetet: Wegfall der
+        Ablehnung, vertauschte/umgekehrte Ablehnungsbedingung, falsche
+        Meldungswahl."""
+        from django.core.exceptions import ValidationError
+
+        from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, EVENT_WRITE_GONE_MESSAGE
+
+        owner = case_open if owner_art == "fall" else sample_event
+        meldung = CASE_WRITE_GONE_MESSAGE if owner_art == "fall" else EVENT_WRITE_GONE_MESSAGE
+        gelesen = owner.client_id
+        wechsel = _WechselVorDerPersonensperre(owner, _person(owner.facility, staff_user, "Pin-R"))
+        with transaction.atomic(), connection.execute_wrapper(wechsel), pytest.raises(ValidationError) as abgelehnt:
+            crud.lock_owner_rows_in_facility_order(owner)
+        assert wechsel.ausgeloest
+        assert abgelehnt.value.messages == [str(meldung)]
+        assert owner.client_id == gelesen
+
+    def test_unsichtbare_owner_zeile_wird_nicht_abgelehnt(self, sample_event):
+        """Zeile schon bei der Lesung weg: keine Ablehnung, Sperre auf der
+        Person der Instanz. Toetet: Ablehnung ohne die Bedingung „Zeile war
+        sichtbar“ (``and`` -> ``or``, Bedingung entfaellt)."""
+        person_id = sample_event.client_id
+        type(sample_event).objects.filter(pk=sample_event.pk).delete()
+        with CaptureQueriesContext(connection) as ctx, transaction.atomic():
+            assert crud.lock_owner_rows_in_facility_order(sample_event) is None
+        sperren = [sql for tabelle, sperrt, sql in _abfragen(ctx) if sperrt]
+        assert ("core_client.id", person_id.hex) in _bedingungen(sperren[0])
+        assert sample_event.client_id == person_id
