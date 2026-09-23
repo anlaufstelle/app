@@ -48,7 +48,7 @@ def _get_keys():
     if keys:
         return keys
 
-    single_key = getattr(settings, "ENCRYPTION_KEY", "")
+    single_key = str(getattr(settings, "ENCRYPTION_KEY", "") or "").strip()
     if single_key:
         return [single_key]
 

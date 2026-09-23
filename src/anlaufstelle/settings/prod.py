@@ -332,7 +332,8 @@ def _split_encryption_key_ring(value):
 
 
 _encryption_key_ring = _split_encryption_key_ring(ENCRYPTION_KEYS)  # noqa: F405
-if not _IS_COLLECTSTATIC and not (ENCRYPTION_KEY or _encryption_key_ring):  # noqa: F405
+_encryption_single_key = str(ENCRYPTION_KEY or "").strip()  # noqa: F405
+if not _IS_COLLECTSTATIC and not (_encryption_single_key or _encryption_key_ring):
     if ENCRYPTION_KEYS:  # noqa: F405
         _encryption_key_error = (
             "Schlüsselring enthält keinen Schlüssel (ENCRYPTION_KEYS) und ENCRYPTION_KEY ist nicht gesetzt. "
