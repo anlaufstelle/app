@@ -299,6 +299,14 @@ def assign_event_to_case(case, event, user):
     # Mandantengrenze hinweg.
     if event.facility_id != case.facility_id:
         raise ValueError(_("Ereignis gehört nicht zur selben Einrichtung wie der Fall."))
+    # Refs #2364: und die aufrufende Person gehoert zu genau dieser
+    # Einrichtung. Die Views scopen Fall und Ereignis bereits, in Produktion
+    # traegt RLS mit — der Service ist aber die Single Source of Truth und
+    # zieht die Grenze selbst, wie die Vier-Augen-Services (Refs #2338).
+    # Fail-closed: ohne Einrichtung keine Zuordnung. Vor jeder Sperre, damit
+    # nichts ueber die Mandantengrenze hinweg gesperrt wird.
+    if getattr(user, "facility_id", None) != case.facility_id:
+        raise ValidationError(_("Fall gehört zu einer anderen Einrichtung."))
     # Art.-18-Gate (Refs #2045) und Zustandsvertrag (Refs #2329) in EINEM
     # Schritt: geprueft werden ALLE Personenbezuege — der des Ereignisses und
     # der beider Faelle —, in EINER PK-geordneten Sperre (Refs #2268: zwei
@@ -359,6 +367,12 @@ def remove_event_from_case(event, user):
     # nicht Speicherung — und die Akte, aus der es geloest wird. Sperrfolge,
     # frische Zeile und spaltengenaues Schreiben wie in
     # :func:`assign_event_to_case`.
+    #
+    # Refs #2364: Einrichtungsgrenze der aufrufenden Person zuerst — die
+    # Einrichtung des Ereignisses ist unveraenderlich, die Pruefung braucht
+    # also keinen frischen Stand und sperrt nichts ueber die Grenze hinweg.
+    if getattr(user, "facility_id", None) != event.facility_id:
+        raise ValidationError(_("Ereignis gehört zu einer anderen Einrichtung."))
     locked, _target, previous_case = lock_event_for_case_link(event)
     if previous_case is None:
         event.refresh_from_db()

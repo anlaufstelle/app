@@ -813,6 +813,12 @@ class CaseRemoveEventView(StaffRequiredMixin, View):
         facility = request.current_facility
         case = get_scoped_object(cases_with_live_client(), request, pk=pk)
         event = get_visible_event_or_404(request.user, facility, event_pk)
+        # Refs #2364: geloest wird nur vom Fall, den die URL benennt. Haengt
+        # das Ereignis an einem anderen Fall (oder an keinem), ist die Aktion
+        # fuer diesen Fall gegenstandslos — 404 statt Loesen vom tatsaechlich
+        # zugeordneten Fall.
+        if event.case_id != case.pk:
+            raise Http404
         try:
             remove_event_from_case(event, request.user)
         except ValidationError as exc:
