@@ -401,8 +401,8 @@ class TestWindowIsOpen:
 
     def test_schliesst_die_neuanlage_exakt_am_eingefrorenen_schichtbeginn(self):
         """Toetet mutmut_4 (``<=`` statt ``<`` beim Schichtbeginn-Vergleich)
-        — Grenzfall-Mutante (Standardblock 72: Zeitfenster-Logik mit festen
-        ``now``-Werten). Am Instant ``now == window_start`` ist die Schicht
+        — Grenzfall-Mutante (Zeitfenster-Logik mit festen ``now``-Werten). Am
+        Instant ``now == window_start`` ist die Schicht
         laut Original bereits begonnen (strenges ``<``); die Mutante sperrt
         genau diesen Instant faelschlich."""
         beginn = _berlin(2026, 6, 15, 6, 0)

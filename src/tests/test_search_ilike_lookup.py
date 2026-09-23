@@ -96,7 +96,7 @@ def test_event_search_queryset_uses_ilike():
 def _captured_client_sql(ctx):
     """SQL of the captured statements that actually read ``core_client``.
 
-    Refs #2027, Fix-Runde 2: Die beiden folgenden Tests haben frueher auf einem
+    Refs #2027: Die beiden folgenden Tests haben frueher auf einem
     HANDGEBAUTEN Queryset assertiert — ein Revert der Produktionsstelle auf
     ``__icontains`` blieb dabei gruen. Jetzt laeuft der echte Code, und gepinnt
     wird die SQL, die er tatsaechlich absetzt.

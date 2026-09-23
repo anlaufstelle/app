@@ -25,8 +25,8 @@ Vier Achsen dieses Batches:
   Mehr-Mandanten-Fairness) — Prio 1.
 * **Binaererkennung** (``_binary_kind``): Grenzwert der RIFF-Laengenpruefung
   und der ``errors=``-Parameter des Subtyp-Decodes sind Teil der
-  #2128-Abwehr gegen Bild-/Office-Uploads im Import-Pfad — laut Briefing
-  bindend Prio 1. Die reine Fallback-Beschriftung ("RIFF") bei leerem Subtyp
+  #2128-Abwehr gegen Bild-/Office-Uploads im Import-Pfad — bindend Prio 1.
+  Die reine Fallback-Beschriftung ("RIFF") bei leerem Subtyp
   ist dagegen nur Berichtstext (Prio 3).
 * **Zeit-Koerzierung** (``_coerce_time``): der Fall-Through von
   ``time.fromisoformat`` auf die manuellen Formate (``"9:30"`` ohne
@@ -57,8 +57,8 @@ Django-Quelltext exakt ``timezone.make_aware(parsed, get_current_timezone())``
 entferntes ``commit=False`` ist der Funktionsdefault von ``run_import``.
 ``abort_import``s ``update_fields``-Verlust ist equivalent (Save bleibt
 INNERHALB der Lock-Klammer, ``updated_at`` steht in der Liste, kein
-abweichender Zwischenzustand — alle drei Bedingungen aus Standardblock
-9(1) negativ); ``commit_import``s Verlust dagegen ist ``test``, weil dieser
+abweichender Zwischenzustand — alle drei Bedingungen dafuer negativ);
+``commit_import``s Verlust dagegen ist ``test``, weil dieser
 Save NACH dem ``with transaction.atomic()``-Block liegt (Lost-Update-Fenster).
 
 Konventionen wie ``test_mutation_pins_099_audit_1.py``: Zusicherungen
@@ -410,7 +410,7 @@ class TestCommitImportUpdateFields:
     -Klammer (Kommentar im Quelltext: „Bewusst NACH dem atomic-Block"). In
     diesem Fenster kann eine andere Verarbeitung dieselbe Zeile aendern — ein
     Verlust der Feldliste (volles ``save()``) ueberschriebe das mit dem
-    veralteten In-Memory-Stand (Standardblock 9(1)(a), Lost Update).
+    veralteten In-Memory-Stand (Lost Update).
     """
 
     def test_commit_does_not_clobber_a_concurrent_mapping_change(self, facility, admin_user, media_root, monkeypatch):

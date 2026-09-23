@@ -587,7 +587,7 @@ class TestLogMessagePathScrubbing:
         message = scrubbed["breadcrumbs"]["values"][0]["message"]
         assert "path=/invite/<uidb64>/<token>/" in message
         assert f"referer={HOST}/clients/ origin=" in message
-        # Refs #2198 (verschärft, Fix-Runde 3): der Login-Name am Zeilenende
+        # Refs #2198 (verschärft): der Login-Name am Zeilenende
         # ist seit dem Personen-Schlüssel-Scrub ebenfalls weg.
         assert message.endswith("htmx=False user=[scrubbed]")
 
@@ -1066,7 +1066,7 @@ class TestLogentryFields:
         assert "klient@example.org" not in dumped
         logentry = scrubbed["logentry"]
         assert logentry["message"] == template
-        # Refs #2198 (verschärft, Fix-Runde 4): statt die interpolierte
+        # Refs #2198 (verschärft): statt die interpolierte
         # Zeile zu scrubben, wird sie durch das Template ersetzt und die
         # Argumente werden geleert — fail-closed statt musterbasiert.
         assert logentry["formatted"] == template
@@ -1088,7 +1088,7 @@ class TestLogentryFields:
         dumped = serialized(scrubbed)
         assert INVITE_TOKEN not in dumped
         assert SEARCH_TERM not in dumped
-        # Verschärft (Fix-Runde 4): ein Mapping-``params`` wird als leeres
+        # Verschärft: ein Mapping-``params`` wird als leeres
         # Mapping zurückgegeben, nicht mehr feldweise gescrubbt.
         assert scrubbed["logentry"]["params"] == {}
         assert scrubbed["logentry"]["formatted"] == scrubbed["logentry"]["message"]
@@ -1228,7 +1228,7 @@ class TestClientAddressInBreadcrumbData:
         assert scrubbed["extra"][key] == "harmlos"
 
 
-# --- Fix-Runde 4: fail-closed statt musterbasiert -------------------
+# --- Fail-closed statt musterbasiert -------------------
 # Der Bestands-Carrier aus ``core/services/dashboard/snapshot.py:87-92``,
 # wortgetreu — das ist die Zeile, an der sich der Fix messen lassen muss.
 SNAPSHOT_TEMPLATE = "create_or_update_snapshot: Backend %s uebersprungen (facility=%s year=%d month=%d)"
@@ -1261,7 +1261,7 @@ class TestLogentryIsReducedToItsTemplate:
     ``logger.exception("… (facility=%s …)", …, facility.name, …)`` schreibt den
     Einrichtungsnamen in ``logentry.formatted`` UND in ``logentry.params``.
     Musterbasiertes Scrubben kann eine nackte Zeichenfolge nicht erkennen —
-    deshalb (Entscheid Fix-Runde 4) fail-closed: ``formatted`` wird durch das Template ersetzt,
+    deshalb fail-closed: ``formatted`` wird durch das Template ersetzt,
     ``params`` geleert. Der Diagnosewert bleibt über Template + Logger-Name.
     """
 
@@ -1328,7 +1328,7 @@ class TestLogentryIsReducedToItsTemplate:
 
 
 class TestBeforeBreadcrumbHook:
-    """Fix-Runde 4 (b): Log-Breadcrumbs werden auf ihr Template reduziert.
+    """Log-Breadcrumbs werden auf ihr Template reduziert.
 
     ``BreadcrumbHandler`` baut ``{"type": "log", "category": <logger>,
     "message": record.message, "data": _extra_from_record(record)}`` — die
@@ -1353,7 +1353,7 @@ class TestBeforeBreadcrumbHook:
         assert FACILITY_NAME not in json.dumps(result, default=str)
         assert result["message"] == SNAPSHOT_TEMPLATE
         assert result["category"] == "core.services.dashboard.snapshot"
-        # Refs #2198 (verschärft, Fix-Runde 5): ``data`` wird NICHT aus
+        # Refs #2198 (verschärft): ``data`` wird NICHT aus
         # dem Breadcrumb übernommen, sondern aus dem Record neu gebaut — auch
         # ``logger`` im mitgelieferten ``data`` ist frei befüllbar.
         assert result["data"] == {"logger": "core.services.dashboard.snapshot", "level": "ERROR"}

@@ -12,8 +12,8 @@ den Test — genau der Moment, in dem aus der Ausnahme wieder ein
 Generalschluessel wuerde.
 
 Der Scanner ist bewusst ueber ``root=`` parametrisiert und wird gegen einen
-``tmp_path``-Baum selbst mitgeprueft (Standardblock-Regel: Scanner-Tests legen
-NIE Proben in den echten Quellbaum).
+``tmp_path``-Baum selbst mitgeprueft (Scanner-Tests legen NIE Proben in
+den echten Quellbaum).
 """
 
 from pathlib import Path

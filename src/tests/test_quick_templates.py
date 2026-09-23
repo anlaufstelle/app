@@ -170,7 +170,7 @@ class TestListTemplatesForUser:
         assert list_templates_for_user(staff_user, facility) == []
 
     def test_client_type_template_hidden(self, facility, staff_user):
-        """M2 (Refs #1058, Fix-Runde 1 F-2): ein Template auf einem
+        """M2 (Refs #1058, F-2): ein Template auf einem
         client-/case-Typ ist kein Event-Recording-Feature und fällt aus der
         Liste — unabhängig von der Sensitivity-Berechtigung des Users."""
         client_dt = DocumentType.objects.create(
@@ -343,7 +343,7 @@ class TestEventCreateWithTemplate:
         assert response.context["applied_template"] is None
 
     def test_event_create_client_type_template_ignored_no_field_leak(self, client, staff_user, facility):
-        """M2 (Refs #1058, Fix-Runde 1 F-2): ``?template=<client-Typ-Template>``
+        """M2 (Refs #1058, F-2): ``?template=<client-Typ-Template>``
         darf weder den Typ vorwaehlen noch dessen Feldlabels im
         ``DynamicEventDataForm`` vorrendern — wirkt wie ein unbekanntes
         Template (``applied_template`` bleibt ``None``)."""
@@ -387,7 +387,7 @@ class TestGetTemplatesForDocumentType:
         assert result == []
 
     def test_client_type_doctype_returns_empty(self, facility, staff_user):
-        """M2 (Refs #1058, Fix-Runde 1 F-2): Defense-in-Depth — auch ein
+        """M2 (Refs #1058, F-2): Defense-in-Depth — auch ein
         direkt uebergebener client-Typ liefert keine Templates."""
         client_dt = DocumentType.objects.create(
             facility=facility,

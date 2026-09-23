@@ -1117,7 +1117,7 @@ class TestActivityLockOrder:
 
 
 # ---------------------------------------------------------------------------
-# Refs #2123 (Fix-Runde 1, kimi-k3 B-1) — der Purge braucht die OWNER-Zeile
+# Refs #2123 (kimi-k3 B-1) — der Purge braucht die OWNER-Zeile
 # ---------------------------------------------------------------------------
 
 
@@ -1176,9 +1176,9 @@ def _committed_purge_bestand(owner_art="ereignis", *, mit_person=True):
 
 @pytest.mark.django_db
 class TestAttachmentPurgeSperrtDieOwnerZeile:
-    """Ordnungs-Pin (kimi-k3 B-1): ``core_client`` -> ``core_event`` im Purge.
+    """Ordnungs-Pin (Befund B-1): ``core_client`` -> ``core_event`` im Purge.
 
-    Der Purge sperrte bis zur Fix-Runde 1 ausschliesslich ``core_client`` (ueber
+    Der Purge sperrte zunaechst ausschliesslich ``core_client`` (ueber
     das Art.-18-Gate). Die **direkte** Ereignis-Hold-Anlage
     (``_lock_event_and_check_redaction``) sperrt aber nur ``core_event`` und
     fasst die Personenzeile nie an — zwischen beiden gab es also gar kein
@@ -1256,10 +1256,10 @@ class TestAttachmentPurgeUndDirekterEreignisHold:
     Gefahren wird das fuer alle drei Owner-Arten, weil ``owner_has_active_hold``
     dieselbe Hold-Menge prueft: bei einem **Personen**- oder **Fall**-Owner
     zaehlt es ueber ``client_has_active_hold`` auch jeden Ereignis-Hold der
-    Person mit. Fuer diese transitive Menge reichte die Owner-Sperre aus
-    Fix-Runde 1 nicht — die Ereignis-Hold-Anlage sperrte nur ``core_event`` und
-    traf damit weder ``core_client`` noch ``core_case``. Seit Fix-Runde 2
-    verankert JEDE Hold-Anlage an der Personenzeile (Refs #2144, #2123).
+    Person mit. Fuer diese transitive Menge reichte die Owner-Sperre anfangs
+    nicht — die Ereignis-Hold-Anlage sperrte nur ``core_event`` und traf damit
+    weder ``core_client`` noch ``core_case``. Inzwischen verankert JEDE
+    Hold-Anlage an der Personenzeile (Refs #2144, #2123).
 
     Kein ``assert`` im gesperrten Fenster (Lehre 36, woertlich): auch die
     Harness-Vorbedingung „Faden B ist gestartet" wird nur notiert und erst nach

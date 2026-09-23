@@ -53,7 +53,7 @@ def _capture_order_by(model_name: str, call) -> list[tuple]:
     Planunabhaengig: prueft das tatsaechlich an ``order_by()`` uebergebene
     Argument-Tupel, NICHT die von Postgres zurueckgelieferte Zeilenreihenfolge
     (die ist bei Gleichstand ohne vollstaendigen Tiebreak implementierungs-
-    abhaengig und kein Aequivalenzbeweis, Standardblock Regel 3).
+    abhaengig und kein Aequivalenzbeweis).
     """
     calls: list[tuple] = []
     original = QuerySet.order_by
@@ -248,8 +248,8 @@ class TestBundleDocumentTypesOrderBy:
     """Killt ``x__bundle_document_types__mutmut_4/_5``: der ``order_by(
     "sort_order", "name")``-Aufruf verliert je Mutant eines der beiden
     Sortierkriterien. Spy auf ``QuerySet.order_by`` statt beobachteter
-    Zeilenreihenfolge (Standardblock Regel 3 — Gleichstand ohne
-    vollstaendigen Tiebreak ist implementierungsabhaengig)."""
+    Zeilenreihenfolge (Gleichstand ohne vollstaendigen Tiebreak ist
+    implementierungsabhaengig)."""
 
     def test_order_by_call_carries_sort_order_and_name(self, facility, staff_user):
         calls = _capture_order_by("DocumentType", lambda: _bundle_document_types(staff_user, facility, []))

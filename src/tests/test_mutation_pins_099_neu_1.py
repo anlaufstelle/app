@@ -145,8 +145,7 @@ def _capture_order_by(call) -> list[tuple[str, tuple]]:
 
     Planunabhaengig: prueft die tatsaechlich am Python-Aufruf uebergebenen
     Sortierkriterien, NICHT die von Postgres zurueckgelieferte
-    Zeilenreihenfolge (Standardblock, Muster aus
-    ``test_mutation_pins_099_facility_export_b.py``).
+    Zeilenreihenfolge (Muster aus ``test_mutation_pins_099_facility_export_b.py``).
     """
     calls: list[tuple[str, tuple]] = []
     original = QuerySet.order_by
@@ -269,8 +268,8 @@ class TestGatherEventHistoryOrdering:
         ``.order_by("pk")``): die chronologische Reihenfolge (neueste
         Aenderung zuerst) der Auskunfts-Historie (Art. 15 DSGVO Export)
         ist Teil des dokumentierten Vertrags. Planunabhaengige
-        Introspektion (Standardblock: eine beobachtete Zeilenreihenfolge
-        ist kein Aequivalenzbeweis)."""
+        Introspektion (eine beobachtete Zeilenreihenfolge ist kein
+        Aequivalenzbeweis)."""
         calls = _capture_order_by(lambda: _gather_event_history([1, 2]))
 
         assert _last_order_by(calls, "EventHistory") == ("-changed_at", "pk")
@@ -345,7 +344,7 @@ class TestCleanupOrphanStorageFilesContinuesPastKnownEntries:
         Cron-Sweep nicht komplett abbrechen — sonst bleiben verwaiste
         personenbezogene Dateien liegen (Datenschutz/Speicherminimierung,
         #662). Reihenfolge LEGAL ERZWUNGEN per ``Path.rglob``-Spion
-        (Standardblock: eine beobachtete Dateisystem-Reihenfolge ist kein
+        (eine beobachtete Dateisystem-Reihenfolge ist kein
         Aequivalenzbeweis)."""
         settings.MEDIA_ROOT = str(tmp_path)
         event = _make_event(facility)
@@ -431,8 +430,7 @@ class TestLockFacilityStorage:
         Haelfte der Fail-loud-``RuntimeError``-Meldung) und ``mutmut_10``
         (zweite Haelfte in GROSSBUCHSTABEN): nicht uebersetzter
         Ausnahmetext (kein ``_()``), den reale Aufrufer im Log/Traceback
-        sehen -> volle exakte Zusicherung statt ``match=`` (Standardblock
-        9(8))."""
+        sehen -> volle exakte Zusicherung statt ``match=``."""
         monkeypatch.setattr(connection, "in_atomic_block", False)
 
         with pytest.raises(RuntimeError) as excinfo:
@@ -550,7 +548,7 @@ class TestResendInvitationForAnyUserMeldungUndSchreibScope:
     def test_permission_denied_message_is_exact(self, staff_user):
         """Toetet ``mutmut_33`` (Meldung -> ``None``), ``mutmut_34``
         (XX-Marker um den GESAMTEN Text — nicht per ``_()`` uebersetzt,
-        keine Skip-Ausnahme, Standardblock 9(8)) und ``mutmut_35``/``_36``
+        keine Skip-Ausnahme) und ``mutmut_35``/``_36``
         (Klein-/Grossschreibung, ebenfalls kein i18n-String)."""
         with pytest.raises(PermissionDenied) as excinfo:
             resend_invitation_for_any_user(types.SimpleNamespace(), actor=staff_user, ip_address=None)

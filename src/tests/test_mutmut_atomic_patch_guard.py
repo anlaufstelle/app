@@ -215,7 +215,7 @@ SYNTHETISCHE_QUELLE = (
 def _erzeuge_mutantenquelle(tmp_path: Path):
     """Die synthetische Probe durch mutmut schicken — Datei liegt in ``tmp_path``.
 
-    Nie im echten Baum ablegen (Standardblock 3): der Mutations-Scanner laeuft
+    Nie im echten Baum ablegen: der Mutations-Scanner laeuft
     ueber ``src/`` und wuerde die Probe sonst mitzaehlen.
     """
     quelle = tmp_path / "probe_atomic_dienst.py"
@@ -233,7 +233,7 @@ def test_trampolin_wird_nicht_zusaetzlich_in_atomic_gewickelt(runner, mutmut_unv
     (``test_restriction_lock_order.py::TestGateQueryCost``) messen das als
     16 statt 14 Queries und reissen den Stats-Lauf.
 
-    Verteilung laut Ruling: Trampolin UNdekoriert, Kopien (``_orig`` +
+    Verteilung: Trampolin UNdekoriert, Kopien (``_orig`` +
     Mutanten) behalten ``@transaction.atomic`` — das ist der Code unter Test.
     """
     runner._patch_mutmut_atomic_decorators()

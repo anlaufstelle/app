@@ -1,6 +1,6 @@
 """Pin-Tests Welle L (release-0.99) — Survivors in ``core.services.compliance.mfa``.
 
-Ticket-Auftrag #2174/#2193 (Lane M, Batch **compliance-4**): 35 Survivors aus
+Ticket-Auftrag #2174/#2193 (Batch **compliance-4**): 35 Survivors aus
 dem Vollmutations-Lauf (Prüfstand 25685845, Basis main e3c125e6). Liste:
 ``/work/wellen/welle-l-0.99/reports/m-scratch/batch-compliance-4.json``.
 Quelle der Mutanten-Rümpfe: Mutantenbaum

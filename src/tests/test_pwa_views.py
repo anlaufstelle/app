@@ -736,11 +736,11 @@ class TestPrecachedShellBumpGuard:
     # der Kommentar-Fall aus #1900/#1805, sondern der Fall, fuer den die Regel
     # oben "erst CACHE_NAME bumpen, dann Hash nachziehen" gilt.
     #
-    # Integrationscommit des Orchestrators (Welle F): CACHE_NAME in
-    # src/static/js/sw.js von "anlaufstelle-v43" auf "anlaufstelle-v44" gebumpt
-    # und _PINNED_CACHE_NAME oben mitgezogen (sw.js war fuer die Lane L3c TABU).
+    # CACHE_NAME in src/static/js/sw.js wurde von "anlaufstelle-v43" auf
+    # "anlaufstelle-v44" gebumpt und _PINNED_CACHE_NAME oben synchron
+    # mitgezogen (die beiden muessen im selben Commit wandern).
     #
-    # Refs #2102 (Fix-Runde 2, R-L3c-12): components/_document_head.html hat den
+    # Refs #2102 (R-L3c-12): components/_document_head.html hat den
     # Schalter head_fixed_paths bekommen, damit 500/503 ohne Static-Manifest
     # rendern. NUR der Hash wird nachgezogen, KEIN v45 — aus zwei Gruenden,
     # beide belegt statt behauptet:
@@ -758,7 +758,7 @@ class TestPrecachedShellBumpGuard:
     # main-Ziel; die rekursiv gehashten Offline-Formular-Partials erhalten
     # eindeutige Label-/Feld-Beziehungen und Live-Regionen. Anders als der
     # reine Kommentar-/Whitespace-Fall oben aendert das ausgeliefertes Markup.
-    # Fix-Runde #1059: Der Skip-Link der eigenstaendig gestylten Offline-Seite
+    # Refs #1059: Der Skip-Link der eigenstaendig gestylten Offline-Seite
     # erhaelt seine Fokusregeln im bereits CSP-gehashten Inline-Block. Der Hash
     # wird auf den finalen Inhalt derselben unveroeffentlichten v45-Generation
     # nachgezogen; es existiert keine ausgelieferte Zwischen-v45 im Feld.

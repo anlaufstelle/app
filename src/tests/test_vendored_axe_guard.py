@@ -156,7 +156,7 @@ class TestVendoredAxeIsCspCompatible:
 
 
 class TestGuardHelpers:
-    """Negativtests der Parser gegen ``tmp_path`` (Standardblock 3).
+    """Negativtests der Parser gegen ``tmp_path``.
 
     Die Helfer bekommen ihren Text als Argument — es wird nie eine Sonde in den
     echten Baum gelegt.

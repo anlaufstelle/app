@@ -16,8 +16,7 @@ Django-Admin-Formularen nicht mehr am ``default_value``-Feld angezeigt.
 Deshalb pinnen die ``*_exact_message``-Tests hier den vollständigen
 ``message_dict`` (Schlüssel UND Wortlaut) statt nur ``pytest.raises``; das
 tötet als Nebeneffekt auch die reinen ``XX…XX``/Groß-Klein-Textvarianten
-(mutmut-Marker), ohne die von ``pytest.raises(match=…)`` uebersehen würden
-(Standardblock 26).
+(mutmut-Marker), ohne die von ``pytest.raises(match=…)`` uebersehen würden.
 
 * **``x__validate_number__mutmut_7``/``…_8``/``…_9``**: Textvarianten der
   Meldung "Default-Wert muss eine ganze Zahl sein." — gepinnt über den

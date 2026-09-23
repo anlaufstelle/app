@@ -371,7 +371,7 @@ def _test_seed_medium_zweigstelle_nord_krise_nutzt_nur_eigene_options(_medium_se
 def _test_seed_medium_zweigstelle_nord_sachbericht_ohne_unknown_report_keys(_medium_seed):
     """R-L5c-5: der Beispiel-Sachbericht meldet fuer die Zweigstelle Nord
     keinen ``unknown_report_keys``- UND keinen ``unmapped_system_types``-Befund
-    (Fix-Runde 1 MITTEL B) — alle 8 Typen sind ueber einen ``report_key``
+    (MITTEL B) — alle 8 Typen sind ueber einen ``report_key``
     gebunden UND jeder Typ mit ``system_type`` ist im Sachbericht abgebildet."""
     from datetime import timedelta
 
@@ -438,8 +438,7 @@ def test_seed_medium_doppellauf_ist_idempotent_fuer_zweigstelle_nord():
     ``random.*()``-Aufrufe konsumieren (idempotente Schritte ueberspringen
     beim zweiten Lauf Arbeit), driftet der Zufallszustand vor dem Mischen
     auseinander und der zweite Lauf legt zusaetzliche Personen an. Das ist
-    **vorbestehendes** Verhalten (Fix-Runde 1, Bericht-Punkt 8), nicht Teil
-    von #2148 — siehe Bericht-Abschnitt „Fix-Runde 1"."""
+    **vorbestehendes** Verhalten, nicht Teil von #2148."""
     from core.models import Event, QuickTemplate
 
     call_command("seed", scale="medium")
@@ -461,7 +460,7 @@ def test_seed_medium_doppellauf_ist_idempotent_fuer_zweigstelle_nord():
 
 @pytest.mark.django_db
 def test_seed_document_types_upgrade_from_default_to_beratungsstelle_fails_loud():
-    """R-L5c-6 (Fix-Runde 1 HOCH A/Punkt 5): eine Einrichtung, die (wie vor
+    """R-L5c-6 (HOCH A/Punkt 5): eine Einrichtung, die (wie vor
     #2148) bereits mit dem Standardkatalog ausgestattet ist, darf NICHT still
     auf ein Domaenen-Paket „upgegradet" werden — das liesse Default-Reste
     (Typen/Felder, die ``beratungsstelle`` nicht kennt) neben den neuen
@@ -487,13 +486,13 @@ def test_seed_document_types_upgrade_from_default_to_beratungsstelle_fails_loud(
 # Scale: large — Pakete je Einrichtung (Refs #2148, R-L5c-1/R-L5c-7)
 #
 # `core.packages.catalog.list_packages()` findet nur tatsaechlich vorhandene
-# YAMLs — solange ein Domaenen-Paket (z. B. frauenhaus/L4) noch parallel in
-# einer anderen Lane entsteht, fehlt es hier. Die Tests unten sind bewusst
+# YAMLs — solange ein Domaenen-Paket (z. B. frauenhaus/L4) noch nicht im Baum
+# liegt, fehlt es hier. Die Tests unten sind bewusst
 # so gebaut, dass sie unabhaengig vom jeweiligen Merge-Stand funktionieren
 # (pytest.skip mit Grund je fehlendem Paket) UND automatisch schaerfer werden,
 # sobald mehr Pakete vorliegen — ohne Codeaenderung.
 #
-# Seit Fix-Runde 1 (R-L5c-7, Punkt 3) loest ``seed`` ALLE fuer ein Scale-Profil
+# ``seed`` loest seit R-L5c-7 (Punkt 3) ALLE fuer ein Scale-Profil
 # benoetigten Pakete VOR der ersten Facility-Anlage auf: fehlt EINES, bricht
 # der GESAMTE Lauf ab, BEVOR irgendeine Einrichtung entsteht — auch fuer
 # Indizes, deren eigenes Paket verfuegbar waere. Ein echter
@@ -510,7 +509,7 @@ def test_seed_document_types_upgrade_from_default_to_beratungsstelle_fails_loud(
 @pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_large_missing_package_creates_no_new_facility(monkeypatch):
-    """R-L5c-7 (Fix-Runde 2 Punkt 3): fehlt ein ``FACILITY_PACKAGES``-Eintrag
+    """R-L5c-7 (Punkt 3): fehlt ein ``FACILITY_PACKAGES``-Eintrag
     im Katalog, bricht der Lauf VOR der ersten Facility-Anlage ab — weder ein
     halb ausgestatteter Bestand noch ueberhaupt eine neue Einrichtung, UND
     bereits vorhandene Bestandsdaten bleiben unangetastet (der Lauf mit
@@ -522,8 +521,8 @@ def test_seed_large_missing_package_creates_no_new_facility(monkeypatch):
     ``from core.packages.catalog import list_packages`` dort bindet) statt
     ueber einen realen Katalog-Luecken-Zustand: dieser Test bleibt dadurch
     dauerhaft scharf, unabhaengig davon, ob gerade alle fuenf Domaenen-Pakete
-    im Repo vorliegen (Fix-Runde 1 hatte hier faelschlich per ``pytest.skip``
-    aufgegeben, sobald frauenhaus gemergt war — Re-Review Punkt 3)."""
+    im Repo vorliegen (ein frueherer Stand hatte hier faelschlich per
+    ``pytest.skip`` aufgegeben, sobald frauenhaus gemergt war)."""
     import core.management.commands.seed as seed_command
     from core.models import Event
     from core.packages.catalog import list_packages as real_list_packages
@@ -626,7 +625,7 @@ def _seed_one_package_facility(org, facility_name: str, package_name: str, idx: 
     ],
 )
 def _test_seed_large_facility_matches_its_package_catalog_exactly(_large_seed, idx, facility_name, package_name):
-    """R-L5c-2-Pflicht-Guard (Fix-Runde 1 HOCH B): jede Facility traegt GENAU
+    """R-L5c-2-Pflicht-Guard (HOCH B): jede Facility traegt GENAU
     die Typ-Slugs ihres Pakets (keine Default-/Fremdtypen), jeder Typ bekommt
     mindestens ein Ereignis, und JEDER select-/multi_select-Wert in den
     erzeugten ``data_json`` ist eine gueltige Option DESSELBEN Pakets — auch
@@ -1113,7 +1112,7 @@ def test_reseed_after_catalog_rename_keeps_same_fieldgroup_row(monkeypatch):
     basis_pk = basis.pk
 
     renamed = _renamed_catalog(doc_type_slug="kontakt", group_slug="basisdaten", new_group_name="Stammdaten")
-    # Fix-Runde 1 (MITTEL A): ``seed_document_types`` laeuft jetzt fuer JEDEN
+    # MITTEL A: ``seed_document_types`` laeuft jetzt fuer JEDEN
     # Paketnamen (inkl. "default") ueber ``core.packages.catalog.parse_catalog_package``,
     # das intern das MODULGLOBALE ``load_package_data`` von ``catalog.py`` aufruft
     # — genau dort wird gepatcht, nicht mehr am alten ``doc_types``-Re-Export.

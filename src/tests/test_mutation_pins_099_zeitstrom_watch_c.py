@@ -11,8 +11,7 @@ Block-Reihenfolge bringt). Das Modul ist auf fuenf Batches a–e verteilt
 (andere Funktionen, andere Lanes) — diese Datei deckt AUSSCHLIESSLICH die
 oben genannten zwei Funktionen ab (``pin_suffix`` ``c``).
 
-**Mehrere Mutanten je Test** (Standardblock, "mehrere Mutanten je Test
-erlaubt"): wo mehrere Survivors dieselbe beobachtbare Wirkung haben (z. B.
+**Mehrere Mutanten je Test**: wo mehrere Survivors dieselbe beobachtbare Wirkung haben (z. B.
 "Zeitfenster-Untergrenze entfaellt" und "Zeitfenster-Obergrenze entfaellt"
 zusammen mit "kompletter Zeitfilter faellt auf Ganztag zurueck"), pruefen
 die Tests die exakte Ergebnismenge einmal mit mehreren, bewusst grenz-
@@ -671,7 +670,7 @@ class TestVisibleFieldConfigsOrderByColumns:
         """Pins ``x__visible_field_configs__mutmut_{13,14,15,16,17}``: je eine
         der fuenf ``order_by``-Spalten (``document_type_id``, ``block_pos``,
         ``block_is_free``, ``sort_order``, ``id``) fehlte einzeln. Spy auf
-        ``QuerySet.order_by`` (Standardblock 72) statt Ergebnisreihenfolge."""
+        ``QuerySet.order_by`` statt Ergebnisreihenfolge."""
         doc_type = make_document_type(facility=facility, name="OrderBy-Spalten")
         calls = _capture_order_by(monkeypatch)
 

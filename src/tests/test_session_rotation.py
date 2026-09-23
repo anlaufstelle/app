@@ -14,15 +14,14 @@ Acht Rotationsorte werden hier abgesichert:
 4. WebAuthn-Assertion (``WebAuthnAuthenticationCompleteView.complete_auth``),
 5. Sudo-Grant (``core.services.security.sudo_mode.enter_sudo``),
 6. Passwort-Reset-/Invite-Token-Uebergang (``CustomPasswordResetConfirmView``
-   und die davon erbende ``InviteConfirmView``) — Ruling R-A1-10 aus
-   Fix-Runde 1: Django legt das gepruefte Token in die BESTEHENDE Session und
-   leitet auf den tokenfreien Pfad um; ohne Rotation kann ein vorher kopiertes
-   Cookie damit das Passwort setzen,
+   und die davon erbende ``InviteConfirmView``): Django legt das gepruefte
+   Token in die BESTEHENDE Session und leitet auf den tokenfreien Pfad um;
+   ohne Rotation kann ein vorher kopiertes Cookie damit das Passwort setzen,
 7. Backup-Code-Regenerierung (``MFARegenerateBackupCodesView.post``) und
-8. Setup-Verify (``MFASetupView.post``) — Ruling R-A1-14 aus Fix-Runde 3:
-   beide legen nach einem erfolgreichen TOTP-Nachweis frische Klartext-Codes in
-   die Sitzung; ohne Rotation liest ein vorher entwendetes Cookie sie mit und
-   hebt sich beim Regenerate-Pfad damit selbst auf ``mfa_verified``.
+8. Setup-Verify (``MFASetupView.post``): beide legen nach einem erfolgreichen
+   TOTP-Nachweis frische Klartext-Codes in die Sitzung; ohne Rotation liest ein
+   vorher entwendetes Cookie sie mit und hebt sich beim Regenerate-Pfad damit
+   selbst auf ``mfa_verified``.
 
 Je Ort drei Zusagen: **rotiert** (alte ID weg, alter Cookie abgemeldet),
 **erhaelt** (Fristen-, Login- und OTP-Sessiondaten ueberleben), **rotiert nicht
@@ -106,7 +105,7 @@ def _login(client, username: str, password: str) -> str:
 
 # Bewusst NICHT der Modell-Default (30 Min): nur so beweist der Vergleich, dass
 # ``_session_expiry`` die Rotation ueberlebt und nicht bloss zufaellig auf
-# ``SESSION_COOKIE_AGE`` zurueckfaellt (Fix-Runde 1, Befund 4).
+# ``SESSION_COOKIE_AGE`` zurueckfaellt.
 NON_DEFAULT_TIMEOUT_MINUTES = 45
 
 
@@ -385,7 +384,7 @@ def _arm_webauthn_challenge(client) -> None:
 class TestRotationAtWebAuthnAssertion:
     """``WebAuthnAuthenticationCompleteView`` — ueber den ECHTEN Endpunkt.
 
-    Fix-Runde 1, Befund 2: der erste Entwurf ersetzte die komplette
+    Befund 2: der erste Entwurf ersetzte die komplette
     Elternmethode und arbeitete auf einer kuenstlichen, nie angemeldeten
     Session — damit war der Nachweis „alter Cookie abgemeldet" (R-A1-3) an
     diesem Ort nicht erbracht. Jetzt laeuft der echte
@@ -440,7 +439,7 @@ class TestRotationAtWebAuthnAssertion:
         _assert_old_cookie_is_dead(old_key, session.session_key)
 
     def test_failed_assertion_with_armed_challenge_audits_without_rotating(self, client, staff_user):
-        """Echter Assertion-Fehler (Fix-Runde 1, Befund 3).
+        """Echter Assertion-Fehler (Befund 3).
 
         Die Ceremony laeuft bis in ``check_device_usable`` und scheitert dort an
         einem deaktivierten Credential — ``CredentialDisabled`` gehoert NICHT zu
@@ -619,7 +618,7 @@ class TestRotationAtSudoGrant:
 class TestRotationAtPasswordResetTokenHandover:
     """``CustomPasswordResetConfirmView.dispatch`` und ``InviteConfirmView``.
 
-    Fix-Runde 1, Befund 1 (BLOCKER): Django speichert das gepruefte Token unter
+    Befund 1 (BLOCKER): Django speichert das gepruefte Token unter
     ``_password_reset_token`` in der bestehenden Session und leitet auf den
     tokenfreien ``set-password``-Pfad um. Das ist eine Rechteanhebung — die
     Sitzung darf danach ein neues Passwort setzen. Ohne Rotation erbt ein vor
@@ -727,7 +726,7 @@ class TestRotationAtPasswordResetTokenHandover:
 
 @pytest.mark.django_db
 class TestRotationSurvivesExceptionAfterTokenWrite:
-    """Fix-Runde 2, Ruling R-A1-12: die Rotation muss ausnahmesicher sein.
+    """Die Rotation muss ausnahmesicher sein.
 
     Djangos ``PasswordResetConfirmView.dispatch`` schreibt das gueltige Token in
     die Sitzung und baut ERST DANACH den Redirect. Wirft dieser Schritt (oder
@@ -833,9 +832,7 @@ def _codes_in_backup_page(client) -> list[str]:
 
 @pytest.mark.django_db
 class TestRotationBeforeStoringFreshBackupCodes:
-    """Fix-Runde 3, Ruling R-A1-14 (Re-Review N1/N2).
-
-    Frische Backup-Codes liegen zwischen Erzeugung und Quittung im Klartext in
+    """Frische Backup-Codes liegen zwischen Erzeugung und Quittung im Klartext in
     der Sitzung und werden von ``/mfa/backup-codes/`` angezeigt. Erzeugt werden
     sie nur nach einem **erfolgreichen TOTP-Nachweis** — das ist eine
     Rechteanhebung im Sinne von R-A1-1. Ohne Rotation liest ein vorher
@@ -914,9 +911,7 @@ class TestRotationBeforeStoringFreshBackupCodes:
 
 @pytest.mark.django_db
 class TestResetConfirmKeepsLoginNotRequiredMarker:
-    """Fix-Runde 3, Re-Review N3.
-
-    ``View.as_view()`` kopiert ``cls.dispatch.__dict__`` auf die View-Funktion.
+    """``View.as_view()`` kopiert ``cls.dispatch.__dict__`` auf die View-Funktion.
     Djangos ``PasswordResetConfirmView`` markiert ihr ``dispatch`` per
     ``login_not_required`` mit ``login_required = False`` — genau das ging durch
     den eigenen ``dispatch``-Override verloren. Ohne die Markierung wuerde eine

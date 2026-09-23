@@ -160,7 +160,7 @@ class TestSeedEventMinContactStage:
         assert not Event.objects.filter(facility=facility).exists()
 
     def test_bulk_seed_is_deterministic_for_a_fixed_seed_value(self, facility):
-        """Gate-Pflicht (Standardblock Punkt 69/Briefing): zweimaliger Lauf mit
+        """Gate-Pflicht: zweimaliger Lauf mit
         identischem ``random.seed`` liefert ein identisches Multiset an
         Ereignissen. Deckt in einem Rutsch auch #2271 ab (``search_text`` ist
         Teil des Vergleichs).
@@ -230,7 +230,7 @@ class TestSeedEventMinContactStage:
         assert first_run == second_run
 
     def test_every_eligible_package_type_appears_at_least_once_regardless_of_seed(self, facility):
-        """Ruling Fix-Runde 1 (Orchestrator, Nachtrag zu #2270): Typabdeckung
+        """Nachtrag zu #2270: Typabdeckung
         ist STRUKTURELL garantiert — nicht nur eine Eigenschaft eines
         guenstigen ``random.seed``-Werts. Macht
         ``test_seed.py::TestSharedMediumSeed::test_seed_medium_zweigstelle_nord_hat_ereignisse_je_paket_typ``

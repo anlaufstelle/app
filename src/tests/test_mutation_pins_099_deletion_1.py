@@ -61,9 +61,9 @@ Guard-Zeile, jeder Test nennt seine Mutanten in der Docstring,
 Zusicherungen vergleichen EXAKT (``==``), nie per Teilstring (mutmut erzeugt
 ``"XX<text>XX"``-Varianten, die ein Substring-Match uebersehen wuerde);
 Fixtures kommen aus ``src/tests/conftest.py``; ``event_qualified``/
-``own_request`` sind eine eigene, modul-lokale Kopie (TABU-Disziplin fuer
-fremde Testdateien, Muster ``test_deletion_request_withdraw.py`` — dort NICHT
-importiert). ``_encryption_key`` liegt modulweit an (Lehre 112) — der
+``own_request`` sind eine eigene, modul-lokale Kopie (bewusst nicht aus
+``test_deletion_request_withdraw.py`` importiert, um Pin-Dateien voneinander
+unabhaengig zu halten). ``_encryption_key`` liegt modulweit an (Lehre 112) — der
 Mutantenbaum hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``.
 """
 

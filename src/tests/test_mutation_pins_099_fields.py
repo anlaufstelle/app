@@ -16,7 +16,7 @@ Quelle: ``welle-l-0.99/reports/m-scratch/batch-forms-3.json`` (Triage
 ``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
 keine ``.env`` und damit keinen ``ENCRYPTION_KEY``. Diese Datei braucht
 keine Datenbank (reine Feld-Konstruktion) — der Marker steht trotzdem
-gemaess Briefing.
+aus Konsistenzgruenden mit den Schwesterdateien.
 """
 
 from __future__ import annotations

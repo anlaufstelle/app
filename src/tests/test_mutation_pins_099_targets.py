@@ -7,7 +7,7 @@ hat 6 Survivor-Mutanten in ``target_q`` — alle drei Fehlerzweige der Funktion 
 wortgleich den Meldungstext ``"target_ids muss ausschließlich UUID-Werte enthalten."``, den
 Bestandstest ``test_targets.py::test_target_q_rejects_non_uuid_target_ids`` prüft aber nur per
 ``pytest.raises(match=...)``. ``match`` ist eine Teilstring-/Regex-Suche und übersieht daher den
-mutmut-String-Marker ``XX…XX`` (Standardblock 72) — die drei so mutierten Meldungen (mutmut_4,
+mutmut-String-Marker ``XX…XX`` — die drei so mutierten Meldungen (mutmut_4,
 mutmut_10, mutmut_16) überleben den Bestandstest unbemerkt. Der dritte Fehlerzweig (``except
 TypeError`` beim ``tuple(target_ids)``-Aufruf mit nicht-iterierbaren ``target_ids``, z. B. einem
 ``int``) wird von KEINEM Bestandstest ausgelöst — dort überleben zusätzlich eine Ersetzung durch

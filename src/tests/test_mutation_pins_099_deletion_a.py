@@ -41,7 +41,7 @@ Vier wiederkehrende Mutationsachsen in diesem Batch:
   verloren oder wird verfaelscht. ``target_type`` hat laut Grep-Nachweis
   (``detect_mass_client_destruction``/``_detect_facility_action_burst``,
   ``core/services/compliance/breach_detection.py``) KEINEN Leser, der danach
-  filtert — trotzdem zaehlt der Wert als Audit-Detail (Standardblock 72) und
+  filtert — trotzdem zaehlt der Wert als Audit-Detail und
   wird deshalb exakt gepinnt, nicht als ``skip`` behandelt. ``user=None``
   bleibt Prio 2 (die Zeile bleibt unter der Einrichtung sichtbar, nur ohne
   Akteur); ``facility=None`` auf der ``CASE_RESTORED``-Zeile ist Prio 1 — die
@@ -123,7 +123,7 @@ def _dr(facility, case, user, *, reason):
 
 #: ``FOR UPDATE``-Statements verraten die Zeilensperre; Muster wie
 #: ``test_mutation_pins_097_case_rest.py`` (nicht importiert — eigene Kopie,
-#: TABU-Disziplin fuer fremde Testdateien).
+#: Pin-Dateien bleiben bewusst voneinander unabhaengig).
 _LOCK_RE = re.compile(r'FROM "(?P<table>core_\w+)"[^;]*FOR UPDATE', re.IGNORECASE | re.DOTALL)
 
 
@@ -292,7 +292,7 @@ class TestApproveCaseDeletionAuditTrail:
         """Pins ``x_approve_case_deletion__mutmut_42`` (``None``), ``_48``
         (Kwarg weggelassen, faellt ebenfalls auf ``None``), ``_51``
         (``"XXDeletionRequestXX"``), ``_52``/``_53`` (klein-/grossgeschrieben):
-        ``target_type`` ist Audit-Detail (Standardblock 72), kein reiner
+        ``target_type`` ist Audit-Detail, kein reiner
         Anzeigetext — exakt gepinnt statt als i18n-``skip`` behandelt."""
         case = _case(facility, client_qualified, staff_user, title="Zieltyp")
         dr = _dr(facility, case, staff_user, reason="Zieltyp")

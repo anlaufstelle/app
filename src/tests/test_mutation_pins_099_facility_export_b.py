@@ -51,7 +51,7 @@ zusaetzlich im Set), die Wertevergleiche daneben toeten die
   komplette Ordering-Testfamilie (primaer UND Tiebreak, alle sechs
   Entity-Querysets plus die Milestone-Prefetch-Queryset) wurde deshalb auf
   die planunabhaengige Introspektion umgestellt statt nur die eine
-  gemeldete Zeile zu reparieren (Standardblock 27: dieselbe Fehlerklasse
+  gemeldete Zeile zu reparieren (dieselbe Fehlerklasse
   einmal gefunden ⇒ repo-/dateiweit sweepen).
 * **N+1 / ``select_related``/``prefetch_related``** — ``.prefetch_related(None)``
   statt ``Prefetch("milestones", ...)`` macht ``goal.milestones.all()`` je

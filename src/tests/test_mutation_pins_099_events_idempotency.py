@@ -19,7 +19,7 @@ Getoetete Mutanten (voller ``x...__mutmut_N``-Name, Modul
   ``ensure_ascii=False`` oder die Schluesselnamen ``"post"``/``"files"``
   aendern sich. Die kanonische Form ist die Eingabe des HMAC-Fingerprints
   (N14/#1942) — jede Formaenderung aendert den Hash-Input und muss darum
-  EXAKT gepinnt sein (Standardblock 72: Text, der in den Hash einfliesst,
+  EXAKT gepinnt sein (Text, der in den Hash einfliesst,
   wird gepinnt statt geskippt). Bestehende Tests
   (``src/tests/offline/test_offline_sync_idempotency.py::TestPayloadFingerprint``)
   vergleichen nur relative Gleichheit/Ungleichheit zwischen Fingerprints,

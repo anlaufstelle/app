@@ -14,7 +14,7 @@ Options-Werte des einen Pakets in ein anderes leaken, das sie gar nicht kennt.
 Dieser Test macht sowohl die Slug-Kopplung als auch die Options-Trennung
 byte-genau falsifizierbar.
 
-**Geltungsbereich (Fix-Runde 1, Punkt 4):** diese Datei prueft ausschliesslich
+**Geltungsbereich (Punkt 4):** diese Datei prueft ausschliesslich
 die PAKETE mit handgeschriebenen Pools (``default``, ``beratungsstelle`` —
 alle Schluessel von ``EVENT_DATA_POOLS``/``EVENT_TYPE_WEIGHTS``). Die drei
 NICHT gepoolten Fallback-Pakete (``awareness``, ``jugendarbeit``,

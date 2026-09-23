@@ -20,7 +20,7 @@ from core.services.file_vault.storage import StagedUpload
 class _FakeStaged:
     """StagedUpload-Double mit Datei in einem tmp-Verzeichnis.
 
-    Refs #2129 (Fix-Runde 1): traegt zusaetzlich ``file_size`` — die
+    Refs #2129: traegt zusaetzlich ``file_size`` — die
     Staging-Schleife summiert die bereits gestagten Byte auf und reicht sie als
     ``pending_bytes`` an die naechste Kontingent-Pruefung weiter.
     """
@@ -78,7 +78,7 @@ class TestStageUploadsHappyPath:
         assert all(s.output_path.exists() for s in created), "commit() muss die .enc-Dateien erhalten"
 
     def test_kontingent_offset_waechst_ueber_den_ganzen_batch(self, tmp_path, facility_stub, patch_prepare):
-        """Refs #2129 (Fix-Runde 1, R-L7a-5): Jede weitere Datei desselben
+        """Refs #2129 (R-L7a-5): Jede weitere Datei desselben
         Submits muss die bereits gestagten Byte als ``pending_bytes`` sehen —
         sonst prueft jede Datei gegen denselben alten DB-Verbrauch, und ein
         einzelnes Formular reisst das Kontingent deterministisch.
