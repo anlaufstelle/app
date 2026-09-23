@@ -2,6 +2,7 @@
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
 > Synchronization update 2026-09-23: § 7.1 states that the maintenance page (HTTP 503) also carries the Content Security Policy (#2339).
+> Synchronization update 2026-09-23: § 2 quotes the `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` template values in single quotes, matching the quoting rule in § 1 step 2 (#2344).
 > Synchronization update 2026-09-22: § 3.1 adds `DJANGO_AUDIT_HWM_PATH` to the `.env` prerequisites and the mandatory step that creates the audit anchor before the first backup, so that a set contains all seven files (#2315).
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
 > Synchronization update 2026-09-22: § 5.5 explains that the Admin DB role check stays `unknown` on a correctly installed instance because the admin credentials are deliberately absent from the web container, and that a wrong attribute profile is still reported as `critical` (#2310).
@@ -436,8 +437,8 @@ Publicly reachable self-hosted instances need their own mandatory information un
 Create both texts as UTF-8 files on the host, for example at `./legal/impressum.md` and `./legal/datenschutz.md`. Then set both paths as seen from the web container:
 
 ```dotenv
-LEGAL_IMPRINT_FILE=/run/legal/impressum.md
-LEGAL_PRIVACY_FILE=/run/legal/datenschutz.md
+LEGAL_IMPRINT_FILE='/run/legal/impressum.md'
+LEGAL_PRIVACY_FILE='/run/legal/datenschutz.md'
 ```
 
 Because `docker-compose.prod.yml` only passes explicitly allowlisted runtime variables to the web container, add a local `compose.legal.yml` next to `.env`:
@@ -2280,4 +2281,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 9e949e22e1bbee3af8f6d93b37cc7bb5d51dad5d -->
+<!-- source-hash: 8340bd4e2462aecfeba9d1948d0c66a7dcf661f3 -->

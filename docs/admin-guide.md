@@ -405,8 +405,8 @@ Selbst gehostete, öffentlich erreichbare Instanzen benötigen eigene Angaben na
 Legen Sie beide Texte als UTF-8-Dateien auf dem Host ab, zum Beispiel unter `./legal/impressum.md` und `./legal/datenschutz.md`. Setzen Sie anschließend die beiden Pfade aus Sicht des Web-Containers:
 
 ```dotenv
-LEGAL_IMPRINT_FILE=/run/legal/impressum.md
-LEGAL_PRIVACY_FILE=/run/legal/datenschutz.md
+LEGAL_IMPRINT_FILE='/run/legal/impressum.md'
+LEGAL_PRIVACY_FILE='/run/legal/datenschutz.md'
 ```
 
 Da `docker-compose.prod.yml` nur ausdrücklich freigegebene Laufzeitvariablen an den Web-Container weitergibt, ergänzen Sie dafür eine lokale `compose.legal.yml` neben der `.env`:

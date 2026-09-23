@@ -50,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Wiederherstellungsanleitung nennt den Token-Prüfweg für die Health-Details** (#2319) — Die Anleitung behauptete, `DJANGO_HEALTH_DETAIL_TOKEN` erreiche den Web-Container im ausgelieferten Produktions-Stack nicht; tatsächlich wird die Variable durchgereicht und nur leer vorbelegt. Der Token ist damit der reguläre Prüfweg für Drill und Monitoring, die angemeldete Sitzung die Alternative.
 - **Schlüssel-Erzeugungsbefehle vereinheitlicht** (#2313) — Admin-Guide und `.env.example` nennen für `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` jetzt denselben primären Befehl (`openssl`); die bisherige Python-Alternative bleibt als ausdrücklich gleichwertig benannte Option erhalten.
 - **README nennt die Pflichtangaben-Einrichtung nach der Installation** (#2311) — Der Produktionsabschnitt verweist jetzt auf den Admin-Guide-Abschnitt zu Impressum/Datenschutzerklärung und nennt den 404, bis diese eingerichtet sind.
+- **Rechtstext-Pfade in Admin-Guide und `.env.example` quotiert** (#2344) — Der Vorlagenblock für `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` in Admin-Guide § 2 (DE + EN) und in `.env.example` folgt jetzt der eigenen Quotierungsregel aus § 1 Schritt 2 (einfache Anführungszeichen).
 
 ### Security
 
