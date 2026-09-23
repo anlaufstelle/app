@@ -10,10 +10,14 @@ Gruppen:
 * ``_new_row_fk_values`` — ohne anlegende Person bricht die Ableitung ab.
 
 Eine neue Anhangszeile traegt Einrichtung, Owner, Feldvorlage und anlegende
-Person als Fremdschluessel; deren ``FOR KEY SHARE`` muss vor dem Ketten-Lock
-fallen. Die Pins schneiden die Zielliste am Aufruf von ``lock_fk_targets``
-mit (Werte exakt) und laufen in einer offenen Transaktion, weil die
-Vorsperre nur dort greift.
+Person als Fremdschluessel. Diese Pins sind eine Zielmengen- und
+Default-Pruefung: sie schneiden die Zielmenge am Aufruf von
+``lock_fk_targets`` mit (Tabelle und Wert exakt) und halten fest, WELCHE
+Ziele die Vorsperre bekommt und dass sie ueberhaupt aufgerufen wird. Sie
+laufen in einer offenen Transaktion, weil die Vorsperre nur dort greift.
+Den zeitlichen Vertrag — die Vorsperre faellt vor den Ketten-Lock der
+Einrichtung — belegen sie nicht; den haelt der Reihenfolgenachweis in
+``test_attachment_lock_order.py`` fest.
 """
 
 import pytest
@@ -61,7 +65,7 @@ def _mit_bestand(owner, ft, user):
 
 @pytest.fixture
 def fk_spy(monkeypatch):
-    """Schneidet jede Zielliste mit, die an ``lock_fk_targets`` geht."""
+    """Schneidet die Zielmenge jedes Aufrufs von ``lock_fk_targets`` mit (ohne Spalte und Reihenfolge)."""
     aufrufe = []
     original = crud.lock_fk_targets
 
