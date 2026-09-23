@@ -176,6 +176,9 @@ if [[ -n "${DJANGO_AUDIT_HWM_PATH:-}" ]]; then
             exit 1
         fi
         # Der Anker ist Teil des signierten Satzes (Refs #2290).
+        if [[ -n "$BACKUP_SET_HWM_SHA256" ]]; then
+            echo "WARNUNG: Die Vorpruefung lief ohne Audit-Anker; die vollstaendige Satzpruefung erfolgt mit dem gebundenen Anker." >&2
+        fi
         backup_set_verify_artifacts "$BACKUP_FILE" "$MEDIA_FILE" "$HWM_FILE"
     fi
 fi
