@@ -17,6 +17,23 @@ from tests.test_ops_backup_verify_set_binding import _sandbox as _backup_sandbox
 pytestmark = pytest.mark.architecture
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _require_timezone_data() -> None:
+    offsets = {
+        timezone: subprocess.run(
+            ["date", "+%z"],
+            capture_output=True,
+            check=True,
+            env={"TZ": timezone},
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        for timezone in ("Europe/Berlin", "UTC")
+    }
+    if offsets["Europe/Berlin"] == offsets["UTC"]:
+        pytest.fail("tzdata fehlt")
+
+
 def _timestamp(timezone: str, hours: int = 0) -> str:
     result = subprocess.run(
         ["date", f"--date={hours:+d} hours", "+%Y-%m-%d_%H%M%S"],

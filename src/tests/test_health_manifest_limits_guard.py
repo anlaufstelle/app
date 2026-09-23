@@ -61,11 +61,11 @@ def test_candidate_limit_keeps_newest_set(tmp_path: Path, monkeypatch):
     newest = "2026-09-12_020000"
     _publish_complete_set(tmp_path, newest)
 
-    original_rglob = Path.rglob
+    original_glob = Path.glob
     monkeypatch.setattr(
         Path,
-        "rglob",
-        lambda self, pattern: iter(sorted(original_rglob(self, pattern))),
+        "glob",
+        lambda self, pattern: iter(sorted(original_glob(self, pattern))),
     )
 
     info = health.last_backup_info(tmp_path)

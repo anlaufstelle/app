@@ -15,6 +15,7 @@ def test_normal_bound_anchor_restore_has_no_unchecked_warning(tmp_path: Path):
     result, _, _ = _run_hwm_restore(tmp_path, _signed_hwm_payload(tmp_path))
 
     assert result.returncode == 0, result.stderr
+    assert "Vorpruefung lief ohne Audit-Anker" not in result.stderr
     assert "Anker wurde nicht geprueft" not in result.stderr
 
 
