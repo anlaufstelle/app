@@ -114,7 +114,6 @@ BACKUP_SET_TABLES = (
 _SHA256_HEX_LENGTH = 64
 MAX_BACKUP_MANIFEST_BYTES = 1024 * 1024
 MAX_BACKUP_MANIFESTS = 256
-MAX_BACKUP_MANIFEST_RELATIVE_PARTS = 2
 
 
 def _parse_backup_manifest(manifest: Path) -> dict[str, str] | None:
@@ -144,22 +143,20 @@ def _parse_backup_manifest(manifest: Path) -> dict[str, str] | None:
 
 def _backup_manifest_candidates(target_path: Path) -> Iterator[Path]:
     """Yield a bounded set of manifests from root and retention directories."""
-    discovered = 0
-    for manifest in target_path.rglob("*.manifest"):
-        if discovered >= MAX_BACKUP_MANIFESTS:
-            logger.warning(
-                "system_health: backup manifest candidate limit %d reached in %s",
-                MAX_BACKUP_MANIFESTS,
-                target_path,
-            )
-            return
-        discovered += 1
-        relative_parts = manifest.relative_to(target_path).parts
-        if len(relative_parts) > MAX_BACKUP_MANIFEST_RELATIVE_PARTS:
-            continue
-        if any(part.startswith(".") for part in relative_parts):
-            continue
-        yield manifest
+    candidates = [*target_path.glob("*.manifest"), *target_path.glob("*/*.manifest")]
+    candidates = [
+        manifest
+        for manifest in candidates
+        if not any(part.startswith(".") for part in manifest.relative_to(target_path).parts)
+    ]
+    candidates.sort(key=lambda manifest: manifest.name, reverse=True)
+    if len(candidates) > MAX_BACKUP_MANIFESTS:
+        logger.warning(
+            "system_health: backup manifest candidate limit %d reached in %s",
+            MAX_BACKUP_MANIFESTS,
+            target_path,
+        )
+    yield from candidates[:MAX_BACKUP_MANIFESTS]
 
 
 def _is_complete_backup_set(manifest: Path) -> bool:
