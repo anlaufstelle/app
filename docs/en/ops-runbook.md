@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-23: § 9 names 29 as the current count of RLS-covered facility-scoped tables, matching the test-derived source of truth (#2330).
 > Synchronization update 2026-09-22: § 6.6/§ 6.7 state that a drill with skipped mandatory steps writes no compliance proof (#2341).
 > Synchronization update 2026-09-22: the quick reference and the cron-sidecar paragraph also name the full Compose file list instead of the base file alone (#2309).
 > Synchronization update 2026-09-22: every command block that creates the `web` container now builds the full Compose file list (base, `compose.legal.yml`, `compose.override.yml`) instead of naming the base file alone (#2309).
@@ -1646,7 +1647,7 @@ scope must therefore be restricted accordingly.
 ## 9. Row Level Security (RLS)
 
 PostgreSQL RLS on all facility-scoped tables (currently
-**25**, enforced test-derived —
+**29**, enforced test-derived —
 [`test_rls.py`](../../src/tests/test_rls.py)) protects
 against cross-facility leaks (defense-in-depth below the Django scoping
 layer). The set of tables grows with every new facility-scoped model; a fixed
@@ -2935,5 +2936,5 @@ Check lock-file drift make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-22 -->
-<!-- source-hash: ef590a71a7f3293d73f101ce2f718ba4aba3d581 -->
+<!-- translation-date: 2026-09-23 -->
+<!-- source-hash: 3292074f43211ebb9beceb88418917e679ca2fbb -->

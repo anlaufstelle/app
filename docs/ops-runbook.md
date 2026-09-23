@@ -1640,7 +1640,7 @@ müssen entsprechend restriktiv sein.
 ## 9. Row Level Security (RLS)
 
 PostgreSQL-RLS ist auf allen facility-gescopten Tabellen (derzeit
-**25**, per Test ableitungsbasiert erzwungen —
+**29**, per Test ableitungsbasiert erzwungen —
 [`test_rls.py`](../src/tests/test_rls.py)) gegen Cross-Facility-Leaks
 abgesichert (Defense-in-Depth unterhalb der Django-Scoping-Schicht). Die
 Tabellenmenge waechst mit jedem neuen facility-gescopten Model; eine feste
