@@ -184,7 +184,14 @@ def _write_prod_backup(
     timestamp: str = "2026-09-02_020000",
     *,
     audit_count: int = 1,
+    hwm_payload: str | None = None,
 ) -> None:
+    """Legt einen Satz an, wie ``backup.sh`` ihn erzeugt.
+
+    Mit ``hwm_payload`` liegt die Ankerdatei daneben UND das Manifest bindet
+    ihren Hash — eine Ankerdatei ohne Bindung erzeugt ``backup.sh`` nie, und
+    die Satzpruefung weist sie ab (Refs #2340).
+    """
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_file = backup_dir / f"anlaufstelle_{timestamp}.sql.gz.enc"
     encrypted = subprocess.run(
@@ -204,11 +211,15 @@ def _write_prod_backup(
         payload = "".join(f"table_{table}={audit_count if table == 'core_auditlog' else 1}\n" for table in tables)
         payload += f"backup_timestamp={timestamp}\n"
         payload += f"db_sha256={hashlib.sha256(backup_file.read_bytes()).hexdigest()}\n"
+        if hwm_payload is not None:
+            payload += f"hwm_sha256={hashlib.sha256(hwm_payload.encode('utf-8')).hexdigest()}\n"
     else:
         payload = "".join(f"{table}=1\n" for table in tables)
     manifest.write_text(payload, encoding="utf-8")
     manifest_signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
     manifest.with_name(f"{manifest.name}.hmac").write_text(f"{manifest_signature}\n", encoding="utf-8")
+    if hwm_payload is not None:
+        (backup_dir / f"audit_hwm-{timestamp}.json").write_text(hwm_payload, encoding="utf-8")
 
 
 def _restore_sandbox(
@@ -225,7 +236,7 @@ def _restore_sandbox(
 ) -> tuple[Path, Path, subprocess.CompletedProcess]:
     compose_dir = tmp_path / "restore-root"
     backup_dir = compose_dir / "backups" / "daily"
-    _write_prod_backup(backup_dir, audit_count=audit_count)
+    _write_prod_backup(backup_dir, audit_count=audit_count, hwm_payload=hwm_payload)
     if add_newer_backup:
         _write_prod_backup(backup_dir, "2026-09-11_020000")
     if foreign_manifest:
@@ -240,8 +251,6 @@ def _restore_sandbox(
         derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
         signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
         manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
-    if hwm_payload is not None:
-        (backup_dir / "audit_hwm-2026-09-02_020000.json").write_text(hwm_payload, encoding="utf-8")
     env_lines = [
         f"BACKUP_ENCRYPTION_KEY={BACKUP_KEY}",
         "POSTGRES_DB=anlaufstelle",

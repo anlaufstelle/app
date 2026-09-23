@@ -192,6 +192,20 @@ def _rewrite_manifest_media_hash(manifest: Path, value: str | None) -> None:
     manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
 
 
+def _bind_manifest_hwm(manifest: Path, payload: bytes) -> None:
+    """Bindet den Anker ans Manifest, wie ``backup.sh`` es tut (Refs #2340).
+
+    Eine Ankerdatei neben einem Manifest ohne ``hwm_sha256`` gehoert nicht zum
+    Satz und wird von der Satzpruefung abgewiesen.
+    """
+    lines = [line for line in manifest.read_text(encoding="utf-8").splitlines() if not line.startswith("hwm_sha256=")]
+    lines.append(f"hwm_sha256={hashlib.sha256(payload).hexdigest()}")
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    derived = hashlib.sha256(f"anlaufstelle-backup-hmac-v1:{BACKUP_KEY}".encode()).hexdigest()
+    signature = hmac.new(derived.encode(), manifest.read_bytes(), hashlib.sha256).hexdigest()
+    manifest.with_name(f"{manifest.name}.hmac").write_text(f"{signature}\n", encoding="utf-8")
+
+
 def _run_restore(
     root: Path, env: dict[str, str], db_backup: Path, media_backup: Path | None
 ) -> subprocess.CompletedProcess[str]:
@@ -644,6 +658,7 @@ def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = Fal
     _rewrite_manifest_media_hash(manifest, None)
     hwm_source = db_backup.parent / "audit_hwm-2026-09-10_020000.json"
     hwm_source.write_bytes(payload)
+    _bind_manifest_hwm(manifest, payload)
     hwm_target = tmp_path / "audit_hwm.json"
     hwm_target.write_bytes(b"old-anchor")
     with (root / ".env").open("a", encoding="utf-8") as env_file:
