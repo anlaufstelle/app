@@ -72,7 +72,7 @@ ANHANG_C_END = "<!-- ANHANG-C:END -->"
 # Form, damit ``--check`` byte-idempotent bleibt und nicht gegen eine
 # manuelle Nachbearbeitung der erzeugten Dateien anläuft.
 #
-# Refs #1058 (M2/P13, Fix-Runde): Die referenzierten Nummern (#909, #916,
+# Refs #1058 (M2/P13, Korrekturrunde): Die referenzierten Nummern (#909, #916,
 # #1071) sind Tickets des **Entwicklungs-Trackers**, nicht des oeffentlichen
 # Spiegel-Repos — dort existieren sie unter diesen Nummern nicht. Die
 # uebrige Doku verlinkt konsistent ``anlaufstelle/app`` (siehe
