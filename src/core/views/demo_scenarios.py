@@ -29,7 +29,7 @@ dort dokumentierte Schnittstelle konsumiert (keine eigene Kopie).
 weiterhin lazy zur Aufrufzeit und fangen ein fehlendes Modul ab — der
 Katalog liegt seit dem Rebase auf F-2s Merge-Stand jetzt im Baum, der
 Lazy-Import bleibt trotzdem stehen (kostet nichts, schützt vor einem
-künftigen erneuten Auseinanderlaufen der Lanes).
+künftigen erneuten Auseinanderlaufen zwischen parallelen Aenderungen).
 
 Facility-/Konto-Lookup liegt in ``core.services.demo_scenarios``
 (``facility_for_scenario``/``account_for``): ``TestTenantModelScopeGuard``

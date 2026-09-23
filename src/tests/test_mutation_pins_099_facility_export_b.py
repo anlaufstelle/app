@@ -2,7 +2,7 @@
 (Vollmutation #2174, Refs #2193).
 
 ``core.services.system.facility_export`` ist auf vier Batches a/b/c/d verteilt
-(andere Funktionen, andere Lanes) — diese Datei deckt ausschließlich die 62
+(andere Funktionen, andere Testdateien) — diese Datei deckt ausschließlich die 62
 Survivors aus ``facility_export-b`` (Liste: ``/work/wellen/welle-l-0.99/
 reports/m-scratch/batch-facility_export-b.json``): ``_serialize_case`` (25),
 ``_build_entities`` (19), ``_serialize_client`` (18).

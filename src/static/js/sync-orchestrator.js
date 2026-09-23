@@ -35,7 +35,7 @@
  *   - BroadcastChannel: fehlt -> ``broadcast`` ist ein No-op, ``onMessage``
  *     feuert nie (kein Cross-Tab-Signal, sonst unveraendert).
  *
- * Kein Import-Zyklus: der Orchestrator greift ausschliesslich via
+ * Kein Import-Zyklus: der Sync-Orchestrator greift ausschliesslich via
  * ``window.offlineQueue?.…`` / ``window.offlineEdit?.…`` / ``window.offlineStore?.…``
  * / ``window.crypto_session?.…`` zu (Duck-Typing wie der Bestand); crypto.js
  * greift seinerseits via ``window.syncOrchestrator?.…`` zu. Lade-reihenfolge-
@@ -232,12 +232,12 @@
             } while (_rerun);
             // Same-tab hat beim BroadcastChannel bewusst kein Eigen-Echo.
             // Deshalb den lokalen Abschluss als DOM-Lifecycle-Event melden;
-            // Feature-Scripts koennen diesen bereits VOR dem Orchestrator
+            // Feature-Scripts koennen diesen bereits VOR dem Sync-Orchestrator
             // abonnieren. Der verschluesselte Facility-Snapshot ist hier
             // schon genau einmal innerhalb der Sequenz revalidiert.
             _dispatchSyncFinished(facilityRevalidation);
             // Danach: Cross-Tab-Badges (M8/Task 4) refreshen lassen. Der
-            // empfangende Orchestrator spiegelt die Nachricht in dasselbe
+            // empfangende Sync-Orchestrator spiegelt die Nachricht in dasselbe
             // DOM-Event seines Tabs.
             broadcast({ type: "sync-finished", facilityRevalidation: facilityRevalidation });
         } finally {
@@ -413,7 +413,7 @@
         SYNC_FINISHED_EVENT: SYNC_FINISHED_EVENT,
     };
 
-    // Refs #1828: Vor dem Orchestrator geladene Module (base.html: crypto.js,
+    // Refs #1828: Vor dem Sync-Orchestrator geladene Module (base.html: crypto.js,
     // offline-queue.js, offline-edit.js) koennen ihren Cross-Tab-Empfaenger
     // beim Laden nicht direkt registrieren (window.syncOrchestrator existiert
     // noch nicht) und legen ihn stattdessen in window.syncOrchestratorPending.

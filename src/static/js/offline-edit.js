@@ -987,7 +987,7 @@
     // offline-queue.js so that an edit never gets silently retried by the
     // generic queue (which cannot handle the 409 body).
     window.addEventListener("online", () => {
-        // M6 (Refs #1351/#1383): siehe sync-orchestrator.js — der Orchestrator
+        // M6 (Refs #1351/#1383): siehe sync-orchestrator.js — der Sync-Orchestrator
         // haelt den einzigen koordinierten Replay-Trigger (origin-weiter Lock,
         // Multi-Tab). Fallback ohne Sync-Orchestrator: direkt replayen wie bisher.
         if (window.syncOrchestrator && window.syncOrchestrator.requestSync) return;

@@ -16,8 +16,7 @@ Meldungs-Zeichenkette habe keinen weiteren Leser. Die Familienreview hat
 das widerlegt: ``src/core/views/_dynamic_errors.py:55`` liest
 ``error.messages`` und gibt sie in ``src/core/views/clients.py:805`` an die
 Oberflaeche aus — ein Meldungs-Verlust ist dort direkt beobachtbar. Alle 7
-Mutanten dieses Batches sind daher ``test``, Prio 3 (Meldungs-Verlust-Regel
-des Briefings).
+Mutanten dieses Batches sind daher ``test``, Prio 3 (Meldungs-Verlust-Regel).
 
 ``check_version_conflict`` fuehrt in den ``invalid_token``-/
 ``version_conflict``-Zweigen IMMER ``select_for_update()`` aus —

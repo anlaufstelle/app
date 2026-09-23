@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99, Refs #2174 / #2193) — Vollmutation-Rerun,
 Batch ``neu-1``: 47 NEUE Survivor aus dem Kill-Nachweis-Rerun auf dem
 Endbaum (main ``a608ba0e``) in zehn Funktionen ueber sieben Module, die seit
-dem Pruefstand ``25685845`` durch Fix-Lanes geaendert und deshalb neu
+dem Pruefstand ``25685845`` durch parallele Aenderungen geaendert und deshalb neu
 mutiert wurden (Mutantennummern haben sich gegenueber den alten Batches
 verschoben — jede Mutante wurde am Diff gegen ``__mutmut_orig`` IM AKTUELLEN
 Baum gelesen).

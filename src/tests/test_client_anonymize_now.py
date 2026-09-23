@@ -185,7 +185,7 @@ class TestAnonymizeClientNowUnterDerAppRolle:
     """
 
     # Refs #1479 (TST-03) / F-15: Postgres-Rollen sind cluster-global — alle
-    # Lanes und xdist-Worker teilen sich denselben Namensraum, obwohl jede
+    # Parallele Testlaeufe und xdist-Worker teilen sich denselben Namensraum, obwohl jede
     # Datenbank getrennt ist. Ohne Suffix kollidieren zwei Laeufe beim
     # CREATE/DROP ROLE.
     @property

@@ -748,7 +748,7 @@ class TestCheckpointBoundariesUnauthenticatedRowsDoNotAbortTheScan:
         Ergebnis. Unter JEDEM der beiden Mutanten bricht die Schleife VOR (c)
         ab -> die legitime Grenze fehlt -> ``verify_chain`` wuerde einen
         echten, durch (c) gedeckten Pruning-Sprung faelschlich als Bruch
-        melden (Checkpoint-Grenzen-Abschwaechung im Sinne des Standardblocks).
+        melden (Checkpoint-Grenzen-Abschwaechung im Sinne der Klassifikationsregel).
         """
         now = timezone.now()
         unhashed = AuditLog(

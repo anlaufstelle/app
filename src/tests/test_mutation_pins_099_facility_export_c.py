@@ -5,7 +5,7 @@ Refs https://github.com/anlaufstelle/app/issues/2193.
 
 Modul: ``core.services.system.facility_export`` (Familie ``services.system``).
 Das Modul ist auf vier Batches ``facility_export-a``/``-b``/``-c``/``-d``
-verteilt (andere Funktionen, andere Lanes; a und b laufen parallel) — diese
+verteilt (andere Funktionen, andere Testdateien; a und b laufen parallel) — diese
 Datei deckt ausschließlich die ``facility_export-c``-Batch ab: 65
 Survivor-Mutanten aus den fünf Entity-Serialisierern ``_serialize_episode``
 (15), ``_serialize_field_template`` (14), ``_serialize_goal`` (14),

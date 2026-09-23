@@ -17,7 +17,7 @@ zwei echte POSTs:
 Der Sichtbarkeitswechsel ist rein serverseitig (kein JavaScript, kein
 ``hidden``-Attribut): ausserhalb des Grenzfalls existiert das Select gar nicht
 erst im DOM. Genau deshalb tragen die Tests hier auch den a11y-Nachweis des
-Tickets (Regel Milestone release-0.96: UI-Lanen weisen selbst nach) —
+Tickets (Regel Milestone release-0.96: UI-Aenderungen weisen selbst nach) —
 Tastaturpfad, Fokus nach dem Re-Display und ein axe-Smoke auf dem Formular im
 Grenzfenster.
 """

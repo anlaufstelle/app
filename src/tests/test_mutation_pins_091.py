@@ -324,7 +324,7 @@ class TestLogAuditEventSuperAdminGuc:
     Mutations-Scope; gepinnt wird hier die **Aufrufstelle** im Service.
 
     **Bewusst ohne die ``rls_test_role``-Fixturen** aus
-    ``tests/test_rls_functional.py`` (die § 4.6 des Briefings vorschlug):
+    ``tests/test_rls_functional.py`` (wie in § 4.6 vorgeschlagen):
     jenes Modul ruft bei gesetztem ``MUTANT_UNDER_TEST`` ein
     ``pytest.skip(allow_module_level=True)`` (Refs #1388) — ein Import von
     dort wuerde **diese ganze Datei** in jeder mutmut-Phase ueberspringen und

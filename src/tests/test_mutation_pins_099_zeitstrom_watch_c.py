@@ -8,7 +8,7 @@ Ereignissen/Aktivitaeten/Aufgaben/Hausverboten je Zeitfenster und Typ-Filter)
 und ``_visible_field_configs`` (die je Anfrage EINE gebuendelte Metadaten-
 Abfrage, die dynamische Felder nach Sichtbarkeits-Rang filtert und in eine
 Block-Reihenfolge bringt). Das Modul ist auf fuenf Batches a–e verteilt
-(andere Funktionen, andere Lanes) — diese Datei deckt AUSSCHLIESSLICH die
+(andere Funktionen, andere Testdateien) — diese Datei deckt AUSSCHLIESSLICH die
 oben genannten zwei Funktionen ab (``pin_suffix`` ``c``).
 
 **Mehrere Mutanten je Test**: wo mehrere Survivors dieselbe beobachtbare Wirkung haben (z. B.
