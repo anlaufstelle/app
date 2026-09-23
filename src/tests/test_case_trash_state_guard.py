@@ -18,6 +18,8 @@ from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import AuditLog, Case, DeletionRequest
@@ -157,3 +159,72 @@ class TestDirekterLoeschwegUeberHttp:
         gemeldet = [(m.level, str(m)) for m in get_messages(response.wsgi_request)]
         assert gemeldet == [(messages.ERROR, meldung)]
         assert _trash_audit_count(case_open) == 0
+
+
+_FREMDER_FALL = "Fall gehört zu einer anderen Einrichtung."
+_FREMDER_ANTRAG = "Antrag gehört zu einer anderen Einrichtung."
+
+
+def _fremde_leitung(second_facility, username):
+    from core.models import User
+
+    return User.objects.create_user(
+        username=username,
+        role=User.Role.LEAD,
+        facility=second_facility,
+        is_staff=True,
+        can_confirm_deletion=True,
+    )
+
+
+def _sperren_auf(queries, tabelle):
+    return [q["sql"] for q in queries if "FOR UPDATE" in q["sql"] and f'FROM "{tabelle}"' in q["sql"]]
+
+
+class TestEinrichtungDerHandelndenPerson:
+    """Einrichtungsgrenze der handelnden Person vor der ersten Sperre.
+
+    Der direkte Löschweg prüfte die Einrichtung der handelnden Person gar
+    nicht; die Genehmigung prüfte sie erst nach der Sperre des Antrags. Über
+    HTTP scopet die View; der Service ist trotzdem die Single Source of Truth.
+    """
+
+    def test_fremde_person_loescht_nicht_direkt(self, case_open, second_facility):
+        fremd = _fremde_leitung(second_facility, "fremd-direkt")
+        with CaptureQueriesContext(connection) as ctx:
+            _assert_refused(lambda: soft_delete_case(case_open, fremd), case_open, _FREMDER_FALL)
+        assert [q for q in ctx.captured_queries if "FOR UPDATE" in q["sql"]] == []
+
+    def test_person_ohne_einrichtung_loescht_nicht_direkt(self, case_open, staff_user):
+        staff_user.facility = None
+        _assert_refused(lambda: soft_delete_case(case_open, staff_user), case_open, _FREMDER_FALL)
+
+    def test_instanz_mit_verfaelschter_einrichtung_oeffnet_keinen_fremden_fall(
+        self, case_open, second_facility, staff_user
+    ):
+        """Die Grenze gilt für die Fallzeile in der Datenbank, nicht für die Instanz im Speicher."""
+        fremd = _fremde_leitung(second_facility, "fremd-instanz")
+        case_open.facility_id = second_facility.pk
+        vorher = Case.objects.filter(pk=case_open.pk).values(*_SPALTEN).get()
+        with CaptureQueriesContext(connection) as ctx, pytest.raises(ValidationError) as excinfo:
+            soft_delete_case(case_open, fremd)
+        assert excinfo.value.messages == [_FREMDER_FALL]
+        assert Case.objects.filter(pk=case_open.pk).values(*_SPALTEN).get() == vorher
+        # Auch die Person des fremden Falls wird nicht gesperrt.
+        assert [q for q in ctx.captured_queries if "FOR UPDATE" in q["sql"]] == []
+
+    def test_genehmigung_prueft_die_einrichtung_vor_der_antragssperre(self, case_open, staff_user, second_facility):
+        dr = _pending_request(case_open, staff_user)
+        fremd = _fremde_leitung(second_facility, "fremd-genehmigung")
+        with CaptureQueriesContext(connection) as ctx:
+            _assert_refused(lambda: approve_case_deletion(dr, fremd), case_open, _FREMDER_ANTRAG)
+        assert _sperren_auf(ctx.captured_queries, "core_deletionrequest") == []
+        dr.refresh_from_db()
+        assert dr.status == DeletionRequest.Status.PENDING
+
+    def test_genehmigung_ohne_einrichtung_wird_abgewiesen(self, case_open, staff_user, lead_user):
+        dr = _pending_request(case_open, staff_user)
+        lead_user.facility = None
+        with CaptureQueriesContext(connection) as ctx:
+            _assert_refused(lambda: approve_case_deletion(dr, lead_user), case_open, _FREMDER_ANTRAG)
+        assert _sperren_auf(ctx.captured_queries, "core_deletionrequest") == []
