@@ -230,7 +230,7 @@ class TestLastBackupInfo:
         def boom(*args, **kwargs):
             raise OSError("kein Zugriff")
 
-        monkeypatch.setattr(Path, "rglob", boom)
+        monkeypatch.setattr(Path, "glob", boom)
         assert system_health.last_backup_info(tmp_path) is None
 
     def test_marks_as_stale_when_older_than_threshold(self, tmp_path):

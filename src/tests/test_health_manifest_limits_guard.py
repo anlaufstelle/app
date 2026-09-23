@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
 from core.services.system import health
+from tests.test_health_backup_source import _publish_complete_set
 
 pytestmark = pytest.mark.django_db
 
@@ -49,3 +51,24 @@ def test_normal_manifest_still_parses(tmp_path: Path):
         "backup_timestamp": "2026-09-23_120000",
         "db_sha256": "abc",
     }
+
+
+def test_candidate_limit_keeps_newest_set(tmp_path: Path, monkeypatch):
+    start = date(2025, 1, 1)
+    for offset in range(300):
+        timestamp = (start + timedelta(days=offset)).strftime("%Y-%m-%d") + "_020000"
+        _publish_complete_set(tmp_path, timestamp)
+    newest = "2026-09-12_020000"
+    _publish_complete_set(tmp_path, newest)
+
+    original_rglob = Path.rglob
+    monkeypatch.setattr(
+        Path,
+        "rglob",
+        lambda self, pattern: iter(sorted(original_rglob(self, pattern))),
+    )
+
+    info = health.last_backup_info(tmp_path)
+
+    assert info is not None
+    assert newest in info["path"]
