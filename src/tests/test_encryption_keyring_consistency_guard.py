@@ -107,3 +107,26 @@ def test_prod_startgate_accepts_separator_only_ring_with_single_key():
     result = _prod_import(single_key=KEY)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_prod_startgate_rejects_whitespace_only_single_key():
+    result = _prod_import(single_key="   ", key_ring="")
+
+    assert result.returncode != 0
+    assert "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein." in result.stderr
+
+
+def test_runtime_treats_whitespace_only_single_key_as_unset():
+    from core.services.file_vault.encryption import _get_keys
+
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY="   "):
+        assert _get_keys() == []
+
+
+def test_system_check_treats_whitespace_only_single_key_as_unset():
+    from core.checks import check_encryption_single_key_deprecated
+
+    with override_settings(DEBUG=False, ENCRYPTION_KEYS="", ENCRYPTION_KEY="   "):
+        messages = check_encryption_single_key_deprecated(None)
+
+    assert messages == []
