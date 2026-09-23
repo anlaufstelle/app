@@ -2,58 +2,75 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import hmac
-import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from tests.test_ops_backup_hwm import AUDIT_KEY, _restore_sandbox
+from tests.test_ops_backup_verify_set_binding import _encrypt, _media_payload, _verify, _write_manifest
 from tests.test_ops_backup_verify_set_binding import _sandbox as _backup_sandbox
-from tests.test_ops_backup_verify_set_binding import _verify
 
 pytestmark = pytest.mark.architecture
 
 
-def _put_clock_before_fixture_timestamps(tmp_path: Path, monkeypatch) -> None:
-    bindir = tmp_path / "clock-bin"
-    bindir.mkdir()
-    date = bindir / "date"
-    date.write_text(
-        """#!/usr/bin/env bash
-if [[ "$*" == *"+%Y-%m-%d_%H%M%S"* ]]; then
-    printf '2026-01-01_000000\n'
-else
-    /bin/date "$@"
-fi
-""",
-        encoding="utf-8",
+def _timestamp(timezone: str, hours: int = 0) -> str:
+    result = subprocess.run(
+        ["date", f"--date={hours:+d} hours", "+%Y-%m-%d_%H%M%S"],
+        capture_output=True,
+        check=True,
+        env={"TZ": timezone},
+        text=True,
+        timeout=10,
     )
-    date.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    return result.stdout.strip()
 
 
-def test_backup_verify_accepts_future_named_set_with_warning(tmp_path: Path, monkeypatch):
-    _put_clock_before_fixture_timestamps(tmp_path, monkeypatch)
-    root, bindir, _ = _backup_sandbox(tmp_path)
+@pytest.mark.parametrize("timezone", ["UTC", "Europe/Berlin"])
+@pytest.mark.parametrize("hours, expects_warning", [(0, False), (3, True)])
+def test_backup_verify_uses_local_set_clock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    timezone: str,
+    hours: int,
+    expects_warning: bool,
+) -> None:
+    monkeypatch.setenv("TZ", timezone)
+    timestamp = _timestamp(timezone, hours)
+    root, bindir, daily = _backup_sandbox(tmp_path)
+    dump = daily / f"anlaufstelle_{timestamp}.sql.gz.enc"
+    media = daily / f"anlaufstelle_{timestamp}_media.tar.gz.enc"
+    _encrypt(gzip.compress(b"new dump"), dump)
+    _encrypt(_media_payload("new.bin"), media)
+    _write_manifest(daily, timestamp, media=media)
 
     result = _verify(tmp_path, root, bindir)
 
     assert result.returncode == 0, result.stderr
-    assert "Zeitstempel in der Zukunft" in result.stderr
-    assert "wird trotzdem geprueft" in result.stderr
+    assert ("Zeitstempel in der Zukunft" in result.stderr) is expects_warning
 
 
-def test_restore_drill_accepts_future_named_set_with_warning(tmp_path: Path, monkeypatch):
-    _put_clock_before_fixture_timestamps(tmp_path, monkeypatch)
+@pytest.mark.parametrize("timezone", ["UTC", "Europe/Berlin"])
+@pytest.mark.parametrize("hours, expects_warning", [(0, False), (3, True)])
+def test_restore_drill_uses_local_set_clock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    timezone: str,
+    hours: int,
+    expects_warning: bool,
+) -> None:
+    monkeypatch.setenv("TZ", timezone)
+    timestamp = _timestamp(timezone, hours)
     signature = hmac.new(AUDIT_KEY.encode(), b"{}", hashlib.sha256).hexdigest()
 
     _, _, result = _restore_sandbox(
         tmp_path,
         hwm_payload=f'{{"version":1,"chains":{{}},"sig":"{signature}"}}',
+        source_timestamp=timestamp,
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Zeitstempel in der Zukunft" in result.stderr
-    assert "wird trotzdem geprueft" in result.stderr
+    assert ("Zeitstempel in der Zukunft" in result.stderr) is expects_warning

@@ -233,10 +233,16 @@ def _restore_sandbox(
     foreign_manifest: bool = False,
     sql_error: bool = False,
     audit_count: int = 1,
+    source_timestamp: str = "2026-09-02_020000",
 ) -> tuple[Path, Path, subprocess.CompletedProcess]:
     compose_dir = tmp_path / "restore-root"
     backup_dir = compose_dir / "backups" / "daily"
-    _write_prod_backup(backup_dir, audit_count=audit_count, hwm_payload=hwm_payload)
+    _write_prod_backup(
+        backup_dir,
+        source_timestamp,
+        audit_count=audit_count,
+        hwm_payload=hwm_payload,
+    )
     if add_newer_backup:
         _write_prod_backup(backup_dir, "2026-09-11_020000")
     if foreign_manifest:
