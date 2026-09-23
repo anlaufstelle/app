@@ -308,3 +308,79 @@ class TestFallBearbeitungNachZusammenfuehrung:
         sperren = _zeilensperren(ctx.captured_queries[ab_index[0] :])
         assert any(tabelle == "core_attachment" for tabelle, _sql in sperren)
         _assert_frische_person_zuerst(sperren, alt=alt, neu=neu, owner_table="core_case")
+
+
+class TestEndgueltigesLoeschenBeiBindungswechsel:
+    """HTTP-Weg ``attachment_delete``: der Bindungswechsel in der Vorsperre endet kontrolliert.
+
+    Die Vorsperre lehnt einen Wechsel der Person zwischen Lesung und Sperre
+    mit ``ValidationError`` ab. Der Loeschpfad ruft sie innerhalb seiner
+    Transaktion auf; die Ablehnung muss dort als Meldung mit Weiterleitung
+    ankommen — kein Serverfehler, keine Datei weg, kein Loesch- und kein
+    Aufbewahrungssperren-Protokoll.
+    """
+
+    @pytest.mark.parametrize("owner_art", ["fall", "ereignis"])
+    def test_wechsel_endet_mit_meldung_statt_serverfehler(self, owner_art, client, facility, staff_user, lead_user):
+        from django.utils import timezone
+
+        from core.models import AuditLog
+        from core.models.attachment import Attachment
+        from core.services.file_vault import get_attachment_path, store_encrypted_file
+
+        gelesen = _person(facility, staff_user, "Loeschen-P")
+        andere = _person(facility, staff_user, "Loeschen-R")
+        ft_file = FieldTemplate.objects.create(
+            facility=facility, name="Anhang Loeschen", field_type=FieldTemplate.FieldType.FILE
+        )
+        if owner_art == "fall":
+            doc_type = DocumentType.objects.create(
+                facility=facility, name="Fall Loeschen", entity_type=DocumentType.EntityType.CASE
+            )
+            owner = Case.objects.create(
+                facility=facility,
+                client=gelesen,
+                title="Loesch-Sonde Fall",
+                document_type=doc_type,
+                data_json={},
+                created_by=staff_user,
+            )
+            meldung = CASE_WRITE_GONE_MESSAGE
+        else:
+            doc_type = DocumentType.objects.create(
+                facility=facility, name="Ereignis Loeschen", entity_type=DocumentType.EntityType.EVENT
+            )
+            owner = Event.objects.create(
+                facility=facility,
+                client=gelesen,
+                document_type=doc_type,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            meldung = EVENT_WRITE_GONE_MESSAGE
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_file, sort_order=0)
+        upload = SimpleUploadedFile("loeschen.pdf", PDF_MINIMAL, content_type="application/pdf")
+        with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
+            attachment = store_encrypted_file(facility, upload, ft_file, owner, staff_user)
+        owner.data_json = {ft_file.slug: {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}}
+        owner.save(update_fields=["data_json"])
+        pfad = get_attachment_path(attachment)
+        protokoll_vorher = set(AuditLog.objects.values_list("pk", flat=True))
+        wechsel = _BindungWechseltVorDerPersonensperre(type(owner), owner.pk, andere)
+
+        client.force_login(lead_user)
+        with connection.execute_wrapper(wechsel):
+            resp = client.post(reverse("core:attachment_delete", kwargs={"pk": attachment.pk}))
+
+        assert wechsel.ausgeloest, "Die Personensperre der Vorsperre muss gelaufen sein"
+        assert resp.status_code == 302, resp.status_code
+        assert resp.url == reverse("core:attachment_list")
+        meldungen = [str(m) for m in list(resp.wsgi_request._messages)]
+        assert meldungen == [str(meldung)]
+        assert pfad.exists(), "Die Datei darf nicht verschwinden"
+        assert Attachment.objects.filter(entry_id=attachment.entry_id).count() == 1
+        neue_protokolle = AuditLog.objects.exclude(pk__in=protokoll_vorher)
+        assert not neue_protokolle.filter(
+            action__in=[AuditLog.Action.ATTACHMENT_DELETE, AuditLog.Action.LEGAL_HOLD]
+        ).exists()
