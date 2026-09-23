@@ -652,7 +652,13 @@ exit 0
     )
 
 
-def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = False):
+def _run_hwm_restore(
+    tmp_path: Path,
+    payload: bytes,
+    *,
+    hwm_configured: bool = True,
+    stream_fails: bool = False,
+):
     root, bindir, action_log, db_backup, _ = _make_sandbox(tmp_path)
     manifest = db_backup.with_name("anlaufstelle_2026-09-10_020000.manifest")
     _rewrite_manifest_media_hash(manifest, None)
@@ -661,13 +667,13 @@ def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = Fal
     _bind_manifest_hwm(manifest, payload)
     hwm_target = tmp_path / "audit_hwm.json"
     hwm_target.write_bytes(b"old-anchor")
-    with (root / ".env").open("a", encoding="utf-8") as env_file:
-        env_file.write("DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json\n")
+    if hwm_configured:
+        with (root / ".env").open("a", encoding="utf-8") as env_file:
+            env_file.write("DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json\n")
     _install_hwm_restore_docker(bindir)
     env = _base_env(root, bindir, action_log)
     env.update(
         {
-            "DJANGO_AUDIT_HWM_PATH": "/data/audit_hwm.json",
             "HOST_HWM_TARGET": str(hwm_target),
             "HWM_CALL_COUNT": str(tmp_path / "hwm-calls"),
             "PYTHON_BIN": str(Path(os.sys.executable)),
@@ -677,6 +683,10 @@ def _run_hwm_restore(tmp_path: Path, payload: bytes, *, stream_fails: bool = Fal
             "TEST_HWM_STREAM_FAIL": "1" if stream_fails else "0",
         }
     )
+    if hwm_configured:
+        env["DJANGO_AUDIT_HWM_PATH"] = "/data/audit_hwm.json"
+    else:
+        env.pop("DJANGO_AUDIT_HWM_PATH", None)
     result = subprocess.run(
         ["bash", str(root / "scripts" / "ops" / "restore.sh"), str(db_backup)],
         input="ja\n",
