@@ -36,7 +36,8 @@ Pflicht- und einem optionalen Feld in kontrollierter Sortier-Reihenfolge,
 sowie ein ``document_type`` ohne das prefetchte Attribut
 ``_tally_policy_assignments``) geprüft, keine Rekonstruktion.
 
-**Zwei nachträgliche Korrekturen (Zweitgutachten, übernommen):** ``xǁ_tally_topology_projectionǁ__mutmut_21``/``__mutmut_24``
+**Zwei nachträgliche Korrekturen (Zweitgutachten, übernommen):**
+``xǁ_tally_topology_projectionǁ__mutmut_21``/``__mutmut_24``
 (die beiden ``getattr``-Default-Mutanten) waren zunächst als Äquivalenz
 dokumentiert, weil ``document_type`` in JEDEM Aufrufpfad über
 ``tally_eligibilities()``'s Prefetch ankommt, der das Attribut immer setzt.
