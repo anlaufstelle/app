@@ -42,6 +42,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from django.db.models.query import QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -123,22 +124,25 @@ class TestPriorityOrderWithinSameDueDateTier:
 class TestCreatedAtBreaksFullTies:
     """``order_by(..., "-created_at")`` als letzter Tie-Break."""
 
-    def test_newer_item_sorts_first_when_bucket_due_date_and_priority_are_all_equal(self, facility, staff_user):
+    def test_query_declares_created_at_as_final_tiebreak(self, facility, staff_user, monkeypatch):
         """Killt ``x_build_focus_box__mutmut_10`` (``-created_at`` faellt aus
-        dem ``order_by()``-Tupel). Zwei Aufgaben sind in ``due_date_bucket``,
-        ``due_date`` UND ``priority_order`` vollstaendig gleich (beide
-        ueberfaellig am selben Tag, beide NORMAL) — ohne den expliziten
-        Tie-Break waere die Reihenfolge nicht mehr durch den Code garantiert
-        (Postgres liefert dann Scan-Reihenfolge statt „neueste zuerst").
+        dem ``order_by()``-Tupel). Der Spy prüft den SQL-Vertrag direkt und
+        hängt deshalb nicht von einer zufälligen Index-Reihenfolge ab.
         """
         today = timezone.localdate()
-        first = _make_item(facility, staff_user, title="Zuerst angelegt", due_date=today - timedelta(days=1))
-        second = _make_item(facility, staff_user, title="Danach angelegt", due_date=today - timedelta(days=1))
+        _make_item(facility, staff_user, title="Überfällig", due_date=today - timedelta(days=1))
+        calls: list[tuple[object, ...]] = []
+        original_order_by = QuerySet.order_by
 
-        box = build_focus_box(facility)
+        def record_order_by(self, *fields):
+            calls.append(fields)
+            return original_order_by(self, *fields)
 
-        overdue = _group(box, "overdue")
-        assert [wi.title for wi in overdue["items"]] == [second.title, first.title]
+        monkeypatch.setattr(QuerySet, "order_by", record_order_by)
+
+        build_focus_box(facility)
+
+        assert ("due_date_bucket", "due_date", "priority_order", "-created_at") in calls
 
 
 class TestFocusBoxLimitPicksTheRightEightTasks:
