@@ -257,6 +257,44 @@ _APPROVABLE_STATUSES = (
     RetentionProposal.Status.DEFERRED,
 )
 
+#: Meldung, wenn die handelnde Person nicht zur Einrichtung des Vorschlags
+#: gehoert — Wortlaut wie in den Vier-Augen-Services (Refs #2321, #2338).
+PROPOSAL_OTHER_FACILITY_MESSAGE = _("Löschvorschlag gehört zu einer anderen Einrichtung.")
+
+
+def _assert_actor_facility(proposal, user):
+    """Einrichtungsgrenze der handelnden Person (Refs #2373).
+
+    Ueber HTTP scopet die View, in Produktion traegt die Zeilensicherheit; der
+    Service ist trotzdem die Single Source of Truth, wie bei den
+    Vier-Augen-Services. Geprueft wird vor jeder Sperre und vor der
+    Statuspruefung — einer fremden Leitung verraet die Antwort damit nicht, ob
+    der Vorschlag schon entschieden ist. Fail-closed: ohne Einrichtung keine
+    Entscheidung.
+    """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != proposal.facility_id:
+        raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
+
+
+def _lock_open_proposal(proposal, user):
+    """Vorschlag fuer Zurueckstellen/Ablehnen: Einrichtung, Sperre, Status (Refs #2373).
+
+    Dieselbe Sequenz wie bei der Genehmigung (:func:`_lock_check_and_mark_approved`),
+    ohne deren Zielzeilen-Sperre — Zurueckstellen und Ablehnen loeschen nichts,
+    ein Hold auf dem Ziel steht ihnen nicht entgegen. Die Zeile wird mit
+    Einrichtungsfilter NEU geladen und gesperrt; entschieden wird an ihrem
+    Status, nicht an der (moeglicherweise Minuten alten) Instanz des Aufrufers.
+    Ein genehmigter, gehaltener oder abgelehnter Vorschlag ist abgeschlossen und
+    wird nicht mehr ueberschrieben. Der Aufrufer muss innerhalb einer
+    ``transaction.atomic()`` stehen.
+    """
+    _assert_actor_facility(proposal, user)
+    locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
+    if locked is None or locked.status not in _APPROVABLE_STATUSES:
+        raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+    return locked
+
 
 def _lock_target_rows_for_approval(proposal):
     """Sperrt Ziel-Person und Ziel-Ereignis — der gemeinsame Anker mit der Hold-Anlage.
@@ -389,6 +427,9 @@ def approve_proposal(proposal, user):
     Menge) einen spaeteren, legitimen Vorschlag fuer dasselbe Ziel blockieren
     wuerde.
     """
+    # Refs #2373: Einrichtungsgrenze der handelnden Person vor jeder Sperre —
+    # der Auto-Approve-Zweig hat keine handelnde Person und prueft sie nicht.
+    _assert_actor_facility(proposal, user)
     # Refs #2122: Sperre, Re-Checks und der Statuswechsel liegen im gemeinsamen
     # Helfer — der Auto-Approve-Zweig fuhr sie frueher gar nicht.
     locked = _lock_check_and_mark_approved(proposal)
@@ -411,18 +452,27 @@ def approve_proposal(proposal, user):
 
 @transaction.atomic
 def defer_proposal(proposal, user, days=30):
-    """Defer a retention proposal by `days` (default 30) — sets DEFERRED status."""
+    """Defer a retention proposal by `days` (default 30) — sets DEFERRED status.
+
+    Refs #2373: nur ein offener Vorschlag (``PENDING``/``DEFERRED``) der eigenen
+    Einrichtung, entschieden unter der Zeilensperre (:func:`_lock_open_proposal`).
+    """
+    locked = _lock_open_proposal(proposal, user)
     deferred_until = timezone.localdate() + timedelta(days=days)
-    proposal.status = RetentionProposal.Status.DEFERRED
-    proposal.deferred_until = deferred_until
+    locked.status = RetentionProposal.Status.DEFERRED
+    locked.deferred_until = deferred_until
     # Refs #1022 (B2): DB-atomares Increment statt In-Memory-Read-Modify-
     # Write — zwei zeitgleiche Defers duerfen kein Increment verlieren
-    # (Lost-Update). ``status``/``deferred_until`` bleiben Last-Write-Wins
-    # (fachlich unkritisch). ``refresh_from_db`` materialisiert den
-    # F()-Ausdruck fuer den Audit-Eintrag unten.
-    proposal.defer_count = F("defer_count") + 1
-    proposal.save(update_fields=["status", "deferred_until", "defer_count"])
-    proposal.refresh_from_db(fields=["defer_count"])
+    # (Lost-Update). Seit Refs #2373 serialisiert zusaetzlich die Zeilensperre.
+    # ``refresh_from_db`` materialisiert den F()-Ausdruck fuer den
+    # Audit-Eintrag unten.
+    locked.defer_count = F("defer_count") + 1
+    locked.save(update_fields=["status", "deferred_until", "defer_count"])
+    locked.refresh_from_db(fields=["defer_count"])
+    # Die Instanz des Aufrufers mitziehen (Muster :func:`approve_proposal`).
+    proposal.status = locked.status
+    proposal.deferred_until = locked.deferred_until
+    proposal.defer_count = locked.defer_count
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,
@@ -440,9 +490,16 @@ def defer_proposal(proposal, user, days=30):
 
 @transaction.atomic
 def reject_proposal(proposal, user):
-    """Reject a retention proposal — marks it as REJECTED, no deletion will occur."""
-    proposal.status = RetentionProposal.Status.REJECTED
-    proposal.save(update_fields=["status"])
+    """Reject a retention proposal — marks it as REJECTED, no deletion will occur.
+
+    Refs #2373: nur ein offener Vorschlag (``PENDING``/``DEFERRED``) der eigenen
+    Einrichtung, entschieden unter der Zeilensperre (:func:`_lock_open_proposal`).
+    """
+    locked = _lock_open_proposal(proposal, user)
+    locked.status = RetentionProposal.Status.REJECTED
+    locked.save(update_fields=["status"])
+    # Die Instanz des Aufrufers mitziehen (Muster :func:`approve_proposal`).
+    proposal.status = locked.status
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,
@@ -467,8 +524,7 @@ def bulk_approve_proposals(proposals, user):
     umschliesst jede Zeile ein eigener Savepoint: der Treffer rollt nur sich
     selbst zurueck, der Rest committet, und der Aufrufer meldet die
     uebersprungenen als eigene Zahl. Die Schwestern ``bulk_defer_proposals``/
-    ``bulk_reject_proposals`` bleiben bei ``int`` — ihre Einzelaktionen koennen
-    nicht scheitern.
+    ``bulk_reject_proposals`` bleiben bei ``int`` und ohne Savepoint je Zeile.
     """
     count = 0
     skipped = 0
@@ -488,6 +544,11 @@ def bulk_defer_proposals(proposals, user, days=30):
     """Defer multiple proposals in a single transaction.
 
     Returns count of processed proposals.
+
+    Refs #2373: jede Zeile durchlaeuft die Pruefung von :func:`defer_proposal`.
+    Scheitert eine, bricht die Sammelaktion als Ganzes ab und rollt die bereits
+    bearbeiteten Zeilen zurueck — dasselbe Verhalten wie bei jedem anderen
+    Fehler in der Schleife; kein stilles Ueberspringen.
     """
     count = 0
     for proposal in proposals:
@@ -501,6 +562,9 @@ def bulk_reject_proposals(proposals, user):
     """Reject multiple proposals in a single transaction.
 
     Returns count of processed proposals.
+
+    Refs #2373: wie :func:`bulk_defer_proposals` — Pruefung je Zeile, Abbruch
+    mit Rollback beim ersten Fehler.
     """
     count = 0
     for proposal in proposals:
