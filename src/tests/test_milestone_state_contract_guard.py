@@ -238,3 +238,58 @@ class TestViewsNormalpfad:
         response = client.post(reverse("core:milestone_delete", kwargs={"case_pk": case_open.pk, "pk": m.pk}), **HTMX)
         assert response.status_code == 200
         assert not Milestone.objects.filter(pk=m.pk).exists()
+
+
+_FALL_FREMD = "Fall gehört zu einer anderen Einrichtung."
+
+
+@pytest.fixture
+def fremde_fachkraft(second_facility):
+    from core.models import User
+
+    return User.objects.create_user(
+        username="fremdfachkraft-meilenstein", role=User.Role.LEAD, facility=second_facility, is_staff=True
+    )
+
+
+@pytest.fixture
+def fachkraft_ohne_einrichtung():
+    from core.models import User
+
+    return User.objects.create_user(
+        username="ohneeinrichtung-meilenstein", role=User.Role.LEAD, facility=None, is_staff=True
+    )
+
+
+class TestAkteurAusFremderEinrichtung:
+    """Refs #2358 (Nachzug): Anlage und Loeschung pruefen die Einrichtung des Akteurs selbst.
+
+    Die Views scopen den Fall bereits, in Produktion traegt RLS mit; der
+    Service ist aber die Single Source of Truth (Muster der Fallzuordnung).
+    Fail-closed: ein Akteur ohne Einrichtung wird ebenso abgewiesen. Keine
+    Anlage, keine Loeschung, keine Audit- und keine Zeitstrom-Zeile.
+    """
+
+    @pytest.mark.parametrize("akteur", ["fremde_fachkraft", "fachkraft_ohne_einrichtung"])
+    def test_create_milestone(self, request, akteur, outcome_goal):
+        user = request.getfixturevalue(akteur)
+        spuren = _spuren()
+        with pytest.raises(ValidationError) as excinfo:
+            create_milestone(goal=OutcomeGoal.objects.get(pk=outcome_goal.pk), user=user, title="Fremd")
+        assert _meldung(excinfo) == [_FALL_FREMD]
+        assert _spuren() == spuren
+        assert not Milestone.objects.filter(goal_id=outcome_goal.pk).exists()
+
+    @pytest.mark.parametrize("akteur", ["fremde_fachkraft", "fachkraft_ohne_einrichtung"])
+    def test_delete_milestone(self, request, akteur, milestone):
+        user = request.getfixturevalue(akteur)
+        spuren = _spuren()
+        with pytest.raises(ValidationError) as excinfo:
+            delete_milestone(Milestone.objects.get(pk=milestone.pk), user)
+        assert _meldung(excinfo) == [_FALL_FREMD]
+        assert _spuren() == spuren
+        assert Milestone.objects.filter(pk=milestone.pk).exists()
+
+    def test_eigene_einrichtung_legt_an(self, outcome_goal, staff_user):
+        m = create_milestone(goal=OutcomeGoal.objects.get(pk=outcome_goal.pk), user=staff_user, title="Eigen")
+        assert Milestone.objects.filter(pk=m.pk, goal_id=outcome_goal.pk).exists()
