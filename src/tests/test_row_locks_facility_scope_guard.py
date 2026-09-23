@@ -15,13 +15,17 @@ wird zweierlei: eine Zeile einer fremden Einrichtung wird weder geliefert noch
 weiterverarbeitet, und jede ``FOR UPDATE``-Abfrage der Funktion trägt den
 Einrichtungsfilter — eine fremde Zeile wird also auch nicht gesperrt.
 
-Eine Ereigniszeile kann nicht auf eine Person einer anderen Einrichtung zeigen
-(zusammengesetzter Fremdschlüssel ``core_event_client_facility_fk``). Für die
-Personensperren am Ziel-Ereignis bleibt deshalb nur der strukturelle Nachweis
-über die Abfragen; eine zwischenzeitlich fehlende Personenzeile fangen die
-bestehenden Bindungs-Nachprüfungen der Funktionen ab.
+Eine Ereigniszeile kann im endgültigen Transaktionszustand nicht auf eine
+Person einer anderen Einrichtung zeigen (zusammengesetzter Fremdschlüssel
+``core_event_client_facility_fk``). Der Fremdschlüssel ist aber
+``DEFERRABLE INITIALLY DEFERRED``: innerhalb derselben Transaktion ist die
+fremde Bindung herstellbar. Die Personensperren am Ziel-Ereignis werden
+deshalb auch verhaltensseitig geprüft — mit einer vorübergehend fremden
+Bindung, die vor der Constraint-Prüfung (``SET CONSTRAINTS … IMMEDIATE``)
+wieder repariert wird.
 """
 
+import contextlib
 from datetime import timedelta
 
 import pytest
@@ -32,7 +36,11 @@ from django.utils import timezone
 
 from core.models import Client, Event, RetentionProposal, WorkItem
 from core.retention.enforcement import _lock_event_and_recheck_hold
-from core.retention.proposals import _lock_target_rows_for_approval, approve_proposal
+from core.retention.proposals import (
+    TARGET_BINDING_CHANGED_MESSAGE,
+    _lock_target_rows_for_approval,
+    approve_proposal,
+)
 from core.services.case.workitems import (
     WORKITEM_ROW_MISSING,
     _form_state_unchanged,
@@ -78,6 +86,20 @@ def ereignis(facility, client_identified, doc_type_contact, staff_user):
     )
 
 
+@contextlib.contextmanager
+def _voruebergehend_fremd_gebunden(ereignis, fremde_person):
+    """Bindet das Ereignis innerhalb der Transaktion an eine fremde Person und repariert danach."""
+    original = ereignis.client_id
+    with transaction.atomic():
+        Event.objects.filter(pk=ereignis.pk).update(client_id=fremde_person.pk)
+        try:
+            yield
+        finally:
+            Event.objects.filter(pk=ereignis.pk).update(client_id=original)
+            with connection.cursor() as cursor:
+                cursor.execute("SET CONSTRAINTS core_event_client_facility_fk IMMEDIATE")
+
+
 def _vorschlag(facility, event):
     return RetentionProposal.objects.create(
         facility=facility,
@@ -107,6 +129,16 @@ def _aufgabe(facility, client, user):
 
 
 class TestVorschlagZielzeilen:
+    def test_voruebergehend_fremde_person_wird_wie_fehlend_abgewiesen(self, facility, ereignis, fremde_person):
+        vorschlag = _vorschlag(facility, ereignis)
+        with _voruebergehend_fremd_gebunden(ereignis, fremde_person):
+            with transaction.atomic(), CaptureQueriesContext(connection) as ctx:
+                with pytest.raises(ValidationError) as excinfo:
+                    _lock_target_rows_for_approval(vorschlag)
+            assert excinfo.value.messages == [str(TARGET_BINDING_CHANGED_MESSAGE)]
+            for sql in _sperr_abfragen(ctx.captured_queries):
+                assert '"facility_id"' in sql, sql
+
     def test_genehmigung_bleibt_moeglich(self, facility, lead_user, ereignis):
         vorschlag = _vorschlag(facility, ereignis)
         approve_proposal(vorschlag, lead_user)
@@ -134,6 +166,11 @@ class TestDurchsetzungSperre:
         with transaction.atomic(), CaptureQueriesContext(connection) as ctx:
             _lock_event_and_recheck_hold(second_facility, ereignis.pk)
         assert _sperr_abfragen(ctx.captured_queries) == []
+
+    def test_voruebergehend_fremde_person_wird_uebersprungen(self, facility, ereignis, fremde_person):
+        with _voruebergehend_fremd_gebunden(ereignis, fremde_person):
+            with transaction.atomic():
+                assert _lock_event_and_recheck_hold(facility, ereignis.pk) == (None, False)
 
     def test_eigenes_ereignis_wird_gesperrt_geliefert(self, facility, ereignis):
         with transaction.atomic(), CaptureQueriesContext(connection) as ctx:
