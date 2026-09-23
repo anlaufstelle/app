@@ -29,7 +29,7 @@ from core.services.attachments import (
     stage_uploads,
 )
 from core.services.case import get_case_or_none
-from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none
+from core.services.client import CLIENT_WRITE_REVOKED_MESSAGE, get_client_or_none, resolve_writable_client
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, assert_processing_allowed
 from core.services.compliance import (
     get_visible_event_or_404,
@@ -367,9 +367,23 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
             # (HTML). Änderungen am 422-Contract folglich HIER und in
             # ``_invalid_response`` nachziehen.
 
-            # Preserve client selection on validation error
-            client_id = request.POST.get("client", "")
-            client_obj = get_client_or_none(facility, client_id)
+            # Preserve client selection on validation error — aber nur fuer
+            # eine Person, die auch beim Speichern angenommen wuerde (Refs
+            # #2365). Derselbe Resolver wie ``EventMetaForm.clean_client``:
+            # der reine Einrichtungs-Lookup liess Personen im Papierkorb,
+            # anonymisierte und eingeschraenkte Personen durch und belegte sie
+            # erneut vor, obwohl der naechste Speicherversuch sie abweist.
+            # Nicht aufloesbar ⇒ leere Auswahl, wie in den uebrigen Zweigen.
+            client_obj = None
+            posted_client = request.POST.get("client", "")
+            if posted_client:
+                with suppress(ValidationError):
+                    client_obj = resolve_writable_client(
+                        facility,
+                        posted_client,
+                        missing_error=_("Person existiert nicht."),  # pragma: no mutate
+                    )
+            client_id = str(client_obj.pk) if client_obj else ""
             client_pseudonym = client_obj.pseudonym if client_obj else ""
 
             # Re-render dynamic fields for selected document type
