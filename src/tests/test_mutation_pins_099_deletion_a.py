@@ -208,13 +208,20 @@ class TestApproveCaseDeletionLookupZieltreue:
         """Pins ``x_approve_case_deletion__mutmut_17``: faellt die ``facility``-
         Scopung des Sperr-Lookups weg, genuegt die PK — der Antrag wird ohne
         Mandantengrenze nachgeladen. Das Original findet unter der fremden
-        Einrichtung nichts und bricht mit ``DoesNotExist`` ab."""
+        Einrichtung nichts und bricht mit ``DoesNotExist`` ab.
+
+        Refs #2373: Die Einrichtung der handelnden Person wird seitdem schon VOR
+        der Sperre gegen die Instanz geprueft. Damit der Lookup selbst erreicht
+        wird, liegt die DB-Zeile in der fremden Einrichtung und die Instanz im
+        Speicher zeigt auf die Einrichtung der handelnden Person — der Mutant
+        laedt dann die fremde Zeile und scheitert erst an der Pruefung unter
+        der Sperre (``ValidationError`` statt ``DoesNotExist``)."""
         case = _case(facility, client_qualified, staff_user, title="Mandantengrenze")
-        dr = _dr(facility, case, staff_user, reason="Art.-17-Antrag")
-        # Nur die IN-MEMORY-Instanz zeigt auf die fremde Einrichtung; die
-        # DB-Zeile bleibt unveraendert. Genau diese Instanz liefert dem
-        # Lookup seinen ``facility``-Filter.
-        dr.facility = other_facility
+        dr = _dr(other_facility, case, staff_user, reason="Art.-17-Antrag")
+        # Nur die IN-MEMORY-Instanz zeigt auf die Einrichtung der handelnden
+        # Person; die DB-Zeile bleibt in der fremden. Genau diese Instanz
+        # liefert dem Lookup seinen ``facility``-Filter.
+        dr.facility = facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
             approve_case_deletion(dr, lead_user)

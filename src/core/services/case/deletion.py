@@ -146,6 +146,11 @@ def create_or_get_case_deletion_request(case, user, reason):
 # ---------------------------------------------------------------------------
 
 
+#: Meldung, wenn der Fall nicht in der Einrichtung der handelnden Person liegt —
+#: Wortlaut wie in den uebrigen Fall-Services (Refs #2373).
+CASE_OTHER_FACILITY_MESSAGE = _("Fall gehört zu einer anderen Einrichtung.")
+
+
 def _move_case_to_trash(case, user, **detail):
     """Gemeinsamer Kern beider Loeschwege (direkt und genehmigt).
 
@@ -164,7 +169,11 @@ def _move_case_to_trash(case, user, **detail):
     ``transaction.atomic``.
     """
     callers_case = case
-    case = Case.objects.select_for_update().get(pk=callers_case.pk, facility_id=callers_case.facility_id)
+    case = Case.objects.select_for_update().filter(pk=callers_case.pk, facility_id=callers_case.facility_id).first()
+    if case is None:
+        # Keine Fallzeile in der Einrichtung — die Grenze melden statt eines
+        # ``DoesNotExist`` (Refs #2373).
+        raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
     if case.is_deleted:
         raise ValidationError(_("Der Fall liegt bereits im Papierkorb."))
     if case.anonymized_at is not None:
@@ -211,7 +220,18 @@ def soft_delete_case(case, user):
     """
     from core.services.client.restriction import assert_processing_allowed
 
-    assert_processing_allowed(case.client_id, lock=True)
+    # Refs #2373: Einrichtungsgrenze der handelnden Person VOR der ersten
+    # Sperre, fail-closed ohne Einrichtung — und gegen die Fallzeile in der
+    # Datenbank, nicht nur gegen die Instanz im Speicher. Der Personenbezug
+    # fuer das Art.-18-Gate kommt aus derselben gescopten Lesung, damit auch
+    # die Personenzeile eines fremden Falls nicht gesperrt wird.
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != case.facility_id:
+        raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
+    row = Case.objects.filter(pk=case.pk, facility_id=actor_facility_id).values("client_id").first()
+    if row is None:
+        raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
+    assert_processing_allowed(row["client_id"], lock=True)
     if case_requires_four_eyes(case):
         raise ValidationError(_("Für Fälle einer Person mit Zusatzangaben ist ein Löschantrag mit Bestätigung nötig."))
     return _move_case_to_trash(case, user, trigger="direct")
@@ -234,6 +254,10 @@ def approve_case_deletion(deletion_request, reviewer):
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
     if not reviewer.can_confirm_deletion:
         raise ValidationError(_("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."))
+    # Refs #2373: Einrichtungsgrenze schon VOR der Antragssperre (fail-closed
+    # ohne Einrichtung); unter der Sperre wird sie unten erneut geprueft.
+    if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
 
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
