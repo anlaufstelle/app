@@ -285,6 +285,58 @@ def _event_form_state_unchanged(event, expected_form_state):
     return constant_time_compare(_event_form_state_token_from_values(event.pk, current), expected_form_state)
 
 
+#: Das Ereignis liegt inzwischen im Papierkorb. Seine Inhalte sind dort
+#: bereits geleert (``soft_delete_event``); eine Bearbeitung schriebe neuen
+#: Inhalt in einen geloeschten Datensatz. Der Weg zurueck ist das
+#: Wiederherstellen.
+EVENT_EDIT_DELETED_MESSAGE = _("Dieses Ereignis wurde gelöscht — es kann nicht mehr bearbeitet werden.")
+
+
+def _lock_event_for_edit(event):
+    """Person -> Ereignis sperren und den FRISCHEN Zustand beider pruefen (Refs #2359, #2378).
+
+    Die Instanz stammt aus einem Lesevorgang vor der Sperre. Zwei Zustaende
+    aendern sich dazwischen, ohne dass Versions-Token oder Fingerabdruck sie
+    zuverlaessig anzeigen: der Widerruf der Person (Papierkorb hebt am
+    Ereignis nichts an; die Tilgung leert ``data_json`` und generalisiert
+    ``occurred_at`` — an einem bereits leeren, auf den Monatsersten datierten
+    Ereignis aendert sie keine Spalte des Fingerabdrucks, hebt aber
+    ``updated_at``) und — ohne Versions-Token — der Papierkorb des Ereignisses
+    selbst. Deshalb wird beides VOR der Versionspruefung und unabhaengig vom
+    Token geprueft.
+
+    **Sperrfolge** ``core_client -> core_event`` (ADR-050 D5.5): die
+    Personenzeile ueber das Art.-18-Gate (Meldung und Reihenfolge der
+    uebrigen Schreibpfade), danach ihr Widerrufszustand auf der gesperrten
+    Zeile (derselbe Helfer wie im Zustandsvertrag der Fallakte), zuletzt die
+    Ereigniszeile mit der Person in der Bedingung. Den Fall sperrt die
+    Bearbeitung nicht — sie liest und schreibt ihn nicht, und die
+    Fallzuordnung darf sich parallel aendern (``EVENT_FORM_STATE_FIELDS``).
+    Hat ein paralleles Zusammenfuehren das Ereignis inzwischen an eine andere
+    Person gehaengt, deren Zeile wir nicht gesperrt haben: Abbruch statt
+    Nachsperren (Muster ``lock_event_for_case_link``).
+    """
+    from core.services.case.state_contract import EVENT_WRITE_GONE_MESSAGE, _raise_if_clients_revoked
+    from core.services.client.restriction import assert_processing_allowed
+
+    binding = Event._base_manager.filter(pk=event.pk, facility_id=event.facility_id).values_list("client_id").first()
+    if binding is None:
+        raise ValidationError(EVENT_WRITE_GONE_MESSAGE)
+    client_id = binding[0]
+    assert_processing_allowed(client_id, lock=True)
+    _raise_if_clients_revoked([client_id] if client_id is not None else [], event.facility_id)
+    is_deleted = (
+        Event._base_manager.filter(pk=event.pk, facility_id=event.facility_id, client_id=client_id)
+        .select_for_update()
+        .values_list("is_deleted", flat=True)
+        .first()
+    )
+    if is_deleted is None:
+        raise ValidationError(EVENT_WRITE_GONE_MESSAGE)
+    if is_deleted:
+        raise ValidationError(EVENT_EDIT_DELETED_MESSAGE)
+
+
 @transaction.atomic
 def update_event(
     event,
@@ -323,15 +375,17 @@ def update_event(
     ``data_json``. Ein künftiges Update-Feld muss deshalb bewusst in
     ``allowed`` eingetragen werden, statt still durchzurutschen.
     """
-    from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
 
     # Art.-18-Gate (Refs #2045): Das Bearbeiten eines bestehenden Ereignisses
     # ist inhaltliche Aenderung. Der Guard liegt im Service und nicht nur in
     # ``EventUpdateView.dispatch``, weil derselbe Weg den Offline-Replay und
     # die Anhang-Aenderungen traegt. VOR dem Versions-Guard: die Rechtslage
-    # gilt unabhaengig davon, ob das Formular aktuell war.
-    assert_processing_allowed(event.client_id, lock=True)
+    # gilt unabhaengig davon, ob das Formular aktuell war. Seit Refs #2359
+    # zusammen mit dem Widerruf der Person und dem Papierkorb des Ereignisses,
+    # beide frisch unter Sperre gelesen — die Fingerabdruck-Rettung unten gilt
+    # damit nur fuer ein lebendes Ereignis einer lebenden Person.
+    _lock_event_for_edit(event)
     try:
         check_version_conflict(event, expected_updated_at, require_token=require_version_token)
     except ValidationError as exc:

@@ -259,8 +259,10 @@ class TestFormStateRescueOnlyForLiveEvents:
 
     Zuordnen hebt ``updated_at`` an, ohne eine Spalte des Fingerabdrucks zu
     ändern. Liegt das Ereignis danach im Papierkorb, darf der passende
-    Versions-Mismatch trotzdem nicht aufgelöst werden: der Papierkorb setzt
-    ``is_deleted`` und leert ``data_json`` — beides steht im Fingerabdruck.
+    Versions-Mismatch trotzdem nicht aufgelöst werden. Der Service prüft den
+    Papierkorb vor der Versionsprüfung und antwortet mit der eigenen Meldung;
+    unabhängig davon setzt der Papierkorb ``is_deleted`` und leert
+    ``data_json`` — beides steht im Fingerabdruck.
     """
 
     @pytest.mark.parametrize("link_first", [True, False])
@@ -279,7 +281,9 @@ class TestFormStateRescueOnlyForLiveEvents:
         with pytest.raises(ValidationError) as excinfo:
             update_event(loaded, staff_user, dict(NEW_DATA), expected_updated_at=version, expected_form_state=state)
 
-        assert excinfo.value.code == "version_conflict"
+        from core.services.events.crud import EVENT_EDIT_DELETED_MESSAGE
+
+        assert excinfo.value.messages == [str(EVENT_EDIT_DELETED_MESSAGE)]
         stored = Event._base_manager.get(pk=sample_event.pk)
         assert stored.is_deleted
         assert stored.data_json == {}, "Ein Ereignis im Papierkorb darf keinen neuen Inhalt bekommen"
