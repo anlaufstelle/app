@@ -251,6 +251,14 @@
 
     function _doReload() {
         if (reloaded) return;
+        // Refs #2360: der Aufrufer prueft die Logout-Marke ggf. VOR einem
+        // asynchronen Zwischenschritt (_queuePending()) — startet ein
+        // Schnell-Verlassen erst waehrend dieses Wartens, bekommt der Reload
+        // die Marke sonst nie zu sehen. Deshalb hier, unmittelbar vor dem
+        // tatsaechlichen Reload, ein letztes Mal pruefen; das deckt zugleich
+        // den direkten Aufruf aus dem ``_userRequestedReload``-Pfad ab, ohne
+        // den bestehenden Guard in ``_reloadIfSafe`` zu duplizieren.
+        if (_logoutNavInFlight()) return;
         reloaded = true;
         window.location.reload();
     }

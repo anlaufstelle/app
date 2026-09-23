@@ -160,6 +160,18 @@
      */
     var ARCHIVED_HEADER = "X-Facility-Archived";
 
+    // Refs #2360 (Vertrag aus sw-register.js, Refs #1951): dieselbe
+    // Logout-Marke (``window.__logoutInFlight``) wie beim SW-Reload-Gate —
+    // ein Schnell-Verlassen, das waehrend des asynchronen Purges unten
+    // (``_purgeOfflineState()``) startet, darf den anschliessenden Reload
+    // nicht mehr auslösen; die Weiterleitung nach ``/login/`` hat Vorrang.
+    var _LOGOUT_NAV_GRACE_MS = 10000;
+
+    function _logoutNavInFlight() {
+        var startedAt = window.__logoutInFlight;
+        return typeof startedAt === "number" && Date.now() - startedAt < _LOGOUT_NAV_GRACE_MS;
+    }
+
     function _isFacilityArchived(xhr) {
         if (!xhr || xhr.status !== 403 || typeof xhr.getResponseHeader !== "function") {
             return false;
@@ -211,6 +223,10 @@
         _purgeOfflineState()
             .catch(function () {})
             .then(function () {
+                // Refs #2360: unmittelbar vor dem Reload noch einmal
+                // pruefen — die Marke kann sich waehrend des Purges
+                // (asynchron) geaendert haben.
+                if (_logoutNavInFlight()) return;
                 try {
                     window.location.reload();
                 } catch (_e) {
