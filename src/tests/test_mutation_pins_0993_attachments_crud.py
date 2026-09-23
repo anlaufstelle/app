@@ -183,6 +183,8 @@ class TestLockOwnerRowsInFacilityOrder:
         assert _bedingungen(sperren[0]) == {
             ("core_event.id", sample_event.pk.hex),
             ("core_event.facility_id", sample_event.facility_id.hex),
+            # Refs #2379: Bindungsbedingung auf die frisch gelesene Person.
+            ("core_event.client_id", sample_event.client_id.hex),
         }
 
     def test_owner_ohne_client_attribut_bricht_nicht_ab(self, sample_event):

@@ -397,7 +397,9 @@ class TestLockOwnerRowsInFacilityOrder:
         assert len(sperrend) == 1
         _sql, params = sperrend[0]
         werte = sorted(str(p) for p in params)
-        assert werte == sorted([str(sample_event.pk), str(sample_event.facility_id)])
+        # Refs #2379: die Owner-Sperre traegt zusaetzlich die frisch gelesene
+        # Person als Bindungsbedingung.
+        assert werte == sorted([str(sample_event.pk), str(sample_event.facility_id), str(sample_event.client_id)])
 
 
 # ---------------------------------------------------------------------------

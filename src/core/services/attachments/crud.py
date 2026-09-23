@@ -637,8 +637,10 @@ def lock_owner_rows_in_facility_order(owner) -> None:
 
     Die Person eines Fall- oder Ereignis-Owners kommt nicht aus der
     uebergebenen Instanz, sondern aus der Owner-Zeile selbst (Refs #2379):
-    :func:`_lock_current_owner_person` liest die Bindung frisch, sperrt diese
-    Person und zieht ``owner.client_id`` nach.
+    :func:`_lock_current_owner_person_then_owner` liest die Bindung einmal
+    frisch, sperrt diese Person, dann die Owner-Zeile mit dieser Person in der
+    Bedingung, lehnt einen Bindungswechsel ab und zieht ``owner.client_id``
+    nach.
 
     Doppeltes Sperren derselben Zeile in derselben Transaktion ist folgenlos —
     die Pfade, die diese Zeilen ohnehin spaeter sperren (etwa das Art.-18-Gate
@@ -658,18 +660,20 @@ def lock_owner_rows_in_facility_order(owner) -> None:
         Client.objects.for_facility(facility_id).filter(pk=owner.pk).select_for_update().only("pk").first()
         return
     if getattr(owner, "client_id", None):
-        _lock_current_owner_person(owner, facility_id)
+        _lock_current_owner_person_then_owner(owner, facility_id)
+        return
     type(owner).objects.filter(pk=owner.pk, facility=facility_id).select_for_update().only("pk").first()
 
 
-#: Obergrenze fuer das Nachlesen der Personenbindung in
-#: :func:`_lock_current_owner_person`. Jede weitere Runde braucht eine
-#: Zusammenfuehrung, die genau zwischen Lesen und Sperren abschliesst.
-_PERSON_BINDING_ROUNDS = 3
+def _owner_changed_message(owner):
+    """Die Meldung „inzwischen geaendert" des Owner-Typs (Fall bzw. Ereignis)."""
+    from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, EVENT_WRITE_GONE_MESSAGE
+
+    return CASE_WRITE_GONE_MESSAGE if owner.__class__.__name__ == "Case" else EVENT_WRITE_GONE_MESSAGE
 
 
-def _lock_current_owner_person(owner, facility_id) -> None:
-    """Sperrt die Person, an der die Owner-Zeile JETZT haengt, und zieht die Instanz nach.
+def _lock_current_owner_person_then_owner(owner, facility_id) -> None:
+    """Person, an der die Owner-Zeile JETZT haengt, dann die Owner-Zeile sperren (Refs #2379).
 
     Die Owner-Instanz stammt aus einem Lesevorgang vor der Transaktion. Eine
     zwischenzeitlich abgeschlossene Zusammenfuehrung P -> Q setzt Fall und
@@ -679,32 +683,40 @@ def _lock_current_owner_person(owner, facility_id) -> None:
     :func:`apply_attachment_changes`) hinter die Owner-Zeile — gegen die
     Ordnung ``core_client`` -> ``core_case``/``core_event`` (ADR-050 D5.5).
 
-    Deshalb: Bindung frisch und einrichtungsgescopt lesen, diese Person
-    sperren, Bindung erneut lesen. Laeuft eine Zusammenfuehrung gerade, haelt
-    sie die Personenzeile bis zum Commit; die Sperre wartet, und erst die
-    naechste Lesung sieht die neue Bindung. Stimmt sie mit der gesperrten
-    Person ueberein, steht die Bindung — sie kann sich ohne diese
-    Personenzeile nicht mehr aendern. Alle Personensperren fallen damit VOR
-    die Owner-Zeile.
+    Ablauf (Muster ``lock_event_for_edit``): die Bindung EINMAL frisch und
+    einrichtungsgescopt lesen, genau diese Person sperren, dann die
+    Owner-Zeile MIT dieser Person in der Bedingung sperren. Hat sich die
+    Bindung zwischen Lesung und Sperre geaendert (ein Zusammenfuehren
+    committet gerade) oder ist die Zeile verschwunden, trifft die Owner-Sperre
+    nichts: Abbruch mit der Meldung des Owner-Typs. Bewusst KEIN Nachsperren
+    der neuen Person — eine zweite Personensperre in derselben Transaktion
+    folgte der Bindungshistorie statt einer festen Ordnung und koennte mit
+    einem parallelen Aufheben der Zusammenfuehrung einen Zyklus bilden.
+    Solange diese Transaktion die Owner-Zeile haelt, kann sich die Bindung
+    nicht mehr aendern.
 
     Die Instanz bekommt die gesperrte Person, damit die folgenden Schritte
-    dieselbe Zeile treffen. Ist die Owner-Zeile nicht (mehr) sichtbar, bleibt
-    es bei der Person der Instanz; das Verschwinden meldet der spaetere
-    Schreibschritt selbst.
+    dieselbe Zeile treffen. Ist die Owner-Zeile schon bei der Lesung nicht
+    sichtbar, bleibt es beim bisherigen Verhalten: Sperre auf der Person der
+    Instanz, das Verschwinden meldet der spaetere Schreibschritt selbst.
     """
     from core.models.client import Client
 
-    gesperrt = None
-    for _runde in range(_PERSON_BINDING_ROUNDS):
-        zeile = type(owner).objects.filter(pk=owner.pk, facility=facility_id).values_list("client_id").first()
-        aktuell = owner.client_id if zeile is None else zeile[0]
-        if aktuell == gesperrt:
-            break
-        if aktuell:
-            Client.objects.for_facility(facility_id).filter(pk=aktuell).select_for_update().only("pk").first()
-        gesperrt = aktuell
-    if gesperrt and gesperrt != owner.client_id:
-        owner.client_id = gesperrt
+    zeile = type(owner).objects.filter(pk=owner.pk, facility=facility_id).values_list("client_id").first()
+    client_id = owner.client_id if zeile is None else zeile[0]
+    if client_id:
+        Client.objects.for_facility(facility_id).filter(pk=client_id).select_for_update().only("pk").first()
+    gesperrt = (
+        type(owner)
+        .objects.filter(pk=owner.pk, facility=facility_id, client_id=client_id)
+        .select_for_update()
+        .only("pk")
+        .first()
+    )
+    if gesperrt is None and zeile is not None:
+        raise ValidationError(_owner_changed_message(owner))
+    if owner.client_id != client_id:
+        owner.client_id = client_id
 
 
 def open_chain_entry_ids(owner) -> list:
