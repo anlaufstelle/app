@@ -95,7 +95,10 @@ def _lock_event_and_recheck_hold(facility, pk):
     # Personenbezug ungesperrt vorlesen: die Personenzeile ist die erste Stufe
     # der kanonischen Ordnung und muss VOR der Ereigniszeile gesperrt werden,
     # ihre pk steht aber nur am Ereignis.
-    row = Event.objects.filter(pk=pk).values("client_id").first()
+    # Refs #2377: jede Lesung und Sperre an die Einrichtung des Laufs gebunden —
+    # eine Zeile einer anderen Einrichtung gilt wie eine fehlende als
+    # „ueberspringen" und wird nicht gesperrt.
+    row = Event.objects.filter(pk=pk, facility=facility).values("client_id").first()
     if row is None:
         # Zeile hart entfernt — nichts zu leeren, nichts zurueckzustellen.
         return None, False
@@ -104,12 +107,12 @@ def _lock_event_and_recheck_hold(facility, pk):
         # ``client_id`` ist ``None`` bei anonymen Ereignissen — dort gibt es
         # keine Personenzeile und nichts zu koordinieren (Muster
         # ``crud._lock_client_row``).
-        Client.objects.filter(pk=client_id).select_for_update().only("pk").first()
+        Client.objects.filter(pk=client_id, facility=facility).select_for_update().only("pk").first()
     # Ereigniszeile sperren, DANN erst voll laden: ``select_for_update`` mit
     # ``select_related`` sperrte sonst zusaetzlich die ``core_documenttype``-
     # Zeile — ein Sperrobjekt ausserhalb der kanonischen Ordnung.
-    Event.objects.filter(pk=pk).select_for_update().only("pk").first()
-    event = Event.objects.select_related("document_type").filter(pk=pk).first()
+    Event.objects.filter(pk=pk, facility=facility).select_for_update().only("pk").first()
+    event = Event.objects.select_related("document_type").filter(pk=pk, facility=facility).first()
     if event is None:
         return None, False
     # Der ``is_deleted``-Re-Check, den der Loop bisher gar nicht hatte: der

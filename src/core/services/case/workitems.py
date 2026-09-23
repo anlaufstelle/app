@@ -366,11 +366,14 @@ def _locked_client_id(workitem):
     liefert dasselbe. Das ist hier fail-safe genug: ``update_workitem`` arbeitet
     ausschliesslich auf persistierten Aufgaben, und das anschliessende ``save()``
     wuerde eine fehlende Zeile ohnehin neu schreiben.
+
+    Refs #2377: gesperrt wird nur in der Einrichtung der Aufgabe; eine Zeile
+    einer anderen Einrichtung gilt wie eine fehlende.
     """
     return (
         type(workitem)
         ._base_manager.select_for_update()
-        .filter(pk=workitem.pk)
+        .filter(pk=workitem.pk, facility_id=workitem.facility_id)
         .values_list("client_id", flat=True)
         .first()
     )
@@ -422,13 +425,14 @@ def _form_state_unchanged(workitem, expected_form_state):
 
     Liest die Zeile unter Row-Lock (``update_workitem`` haelt ihn bereits;
     ``select_for_update`` ist innerhalb derselben Transaktion ein No-op).
+    Wie :func:`_locked_client_id` nur in der Einrichtung der Aufgabe (Refs #2377).
     """
     if not expected_form_state or not isinstance(expected_form_state, str):
         return False
     current = (
         type(workitem)
         ._base_manager.select_for_update()
-        .filter(pk=workitem.pk)
+        .filter(pk=workitem.pk, facility_id=workitem.facility_id)
         .values(*WORKITEM_FORM_STATE_FIELDS)
         .first()
     )
