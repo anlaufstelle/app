@@ -198,7 +198,15 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 | Name | Default | Beschreibung |
 |---|---|---|
 | `ENCRYPTION_KEYS` || Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
-| `ENCRYPTION_KEY` || Einzelschlüssel-Betrieb (Alternative zu `ENCRYPTION_KEYS`); Schlüsselring bevorzugt. Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
+| `ENCRYPTION_KEY` || Einzelschlüssel-Betrieb (Alternative zu `ENCRYPTION_KEYS`); **abgekündigt**, Schlüsselring bevorzugt. Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
+
+**Einzelschlüssel → Schlüsselring migrieren:** Ist nur `ENCRYPTION_KEY` gesetzt, meldet `python manage.py check --deploy` die Warnung `core.W005` (#2240). Der Einzelschlüssel funktioniert unverändert weiter; nach Version 1.0 entfällt er, dann ist `ENCRYPTION_KEYS` die einzige unterstützte Variable. Umstellen, ohne Daten neu zu verschlüsseln:
+
+1. Den bisherigen Wert von `ENCRYPTION_KEY` unverändert als ersten und einzigen Eintrag in `ENCRYPTION_KEYS` übernehmen: `ENCRYPTION_KEYS=<bisheriger-wert>`.
+2. `ENCRYPTION_KEY` aus der `.env` entfernen.
+3. Den Webdienst mit dem vollständigen Compose-Dateisatz (wie oben in diesem Abschnitt) neu erstellen und `python manage.py check --deploy` im Web-Container ausführen — `core.W005` erscheint nicht mehr.
+
+Derselbe Schlüssel entschlüsselt danach alle vorhandenen Daten; eine spätere Rotation folgt dem Abschnitt „Schlüssel-Rotation (`ENCRYPTION_KEYS`)“.
 
 **Virus-Scan (ClamAV, #524)**
 

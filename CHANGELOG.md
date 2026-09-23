@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Demo-Szenariokatalog inklusive Solo-Betrieb** (#2279) — Ein neuer `--scale demo`-Seed stellt sechs eigenständige Beispieleinrichtungen (Kontaktladen, Beratungsstelle, Solo-Betrieb, Awareness, Jugendarbeit, Frauenhaus) gleichzeitig mit überschaubarer Datenmenge bereit, unabhängig vom bisherigen `large`-Datenvolumen; der stündliche Demo-Reset nutzt denselben Katalog.
 - **Demo-Bereichsauswahl statt Benutzername/Passwort** (#2285) — Auf der öffentlichen Demo wählen Besucherinnen jetzt zuerst einen fachlichen Einsatzbereich (z. B. Kontaktladen, Solo-Betrieb) und starten ohne Zugangsdaten in der passenden Alltagsrolle; ein jederzeit erreichbarer „Demo-Bereich wechseln“-Link führt zurück zur Auswahl. Wirkt nur bei `DEMO_MODE` und setzt den Szenariokatalog aus #2279 voraus.
 
+### Changed
+
+- **Einzelschlüssel-Betrieb der Feldverschlüsselung abgekündigt** (#2240) — Ist nur `ENCRYPTION_KEY` statt des Schlüsselrings `ENCRYPTION_KEYS` gesetzt, meldet `manage.py check --deploy` jetzt die Warnung `core.W005`; die Verschlüsselung funktioniert unverändert weiter (kein Breaking Change), die Variable entfällt erst nach Version 1.0. Der Admin-Guide beschreibt die Umstellung ohne Neuverschlüsselung: bisherigen Wert nach `ENCRYPTION_KEYS` übernehmen, `ENCRYPTION_KEY` entfernen, neu starten.
+
 ### Fixed
 
 - **Personenzuordnung bleibt nach Ablehnung wegen Mindestkontaktstufe erhalten** (#2345) — Lehnte die Ereigniserfassung eine Person mangels Mindestkontaktstufe (z. B. „Beratungsgespräch“) ab, blieben beim erneut angezeigten Formular alle Eingaben außer der Personenzuordnung erhalten, und die Meldung nannte den Grund, aber nicht den Weg zur Abhilfe. Die Zuordnung bleibt jetzt sichtbar gesetzt, die Meldung nennt zusätzlich, dass sich die Kontaktstufe in den Personen-Stammdaten anheben lässt.

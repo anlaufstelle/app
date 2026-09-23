@@ -62,6 +62,8 @@ for var in POSTGRES_BOOTSTRAP_PASSWORD POSTGRES_ADMIN_USER POSTGRES_ADMIN_PASSWO
 done
 ```
 
+> **Einzelschlüssel abgekündigt (#2240):** Meldet `python manage.py check --deploy` die Warnung `core.W005`, läuft die Instanz noch mit `ENCRYPTION_KEY` statt mit dem Schlüsselring `ENCRYPTION_KEYS`. Das Update ist davon nicht betroffen; vor der Entfernung nach Version 1.0 den Wert unverändert nach `ENCRYPTION_KEYS` übernehmen und `ENCRYPTION_KEY` entfernen — Anleitung im [Admin-Guide, Abschnitt „Einzelschlüssel → Schlüsselring migrieren“](admin-guide.md#vollständige-umgebungsvariablen-referenz).
+
 ### 1.2 Deploy-Schritte
 
 Refs #802 (C-34): Migrationen laufen als separater One-Shot-Job **vor** dem Rolling-Restart. Der Web-Entrypoint macht nur noch `collectstatic` + `gunicorn` — keine Migrationen mehr.

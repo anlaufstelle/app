@@ -1,5 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
+> Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
 > Synchronization update 2026-09-23: § 7.1 states that the maintenance page (HTTP 503) also carries the Content Security Policy (#2339).
 > Synchronization update 2026-09-22: § 3.1 adds `DJANGO_AUDIT_HWM_PATH` to the `.env` prerequisites and the mandatory step that creates the audit anchor before the first backup, so that a set contains all seven files (#2315).
 > Synchronization update 2026-09-22: the fresh-install health-check note adds that the “Admin DB role” card is `unknown` in the web container by design and points to the maintenance service (#2310).
@@ -231,7 +232,15 @@ Anlaufstelle separates three DB roles: a hardcoded `postgres` bootstrap superuse
 | Name | Default | Description |
 |---|---|---|
 | `ENCRYPTION_KEYS` | -- | Comma-separated list of Fernet keys. The **first** key is the write key (new data is encrypted with it); all others are read-only (decrypt fallback during rotation). |
-| `ENCRYPTION_KEY` | -- | Single-key operation (alternative to `ENCRYPTION_KEYS`); a key ring is preferred. At least one of the two variables must be set in production; otherwise the app refuses to start. |
+| `ENCRYPTION_KEY` | -- | Single-key operation (alternative to `ENCRYPTION_KEYS`); **deprecated**, a key ring is preferred. At least one of the two variables must be set in production; otherwise the app refuses to start. |
+
+**Migrating from a single key to a key ring:** If only `ENCRYPTION_KEY` is set, `python manage.py check --deploy` reports the warning `core.W005` (#2240). The single key keeps working unchanged; it will be removed after version 1.0, after which `ENCRYPTION_KEYS` is the only supported variable. To switch over without re-encrypting any data:
+
+1. Copy the current value of `ENCRYPTION_KEY` unchanged as the first and only entry into `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=<previous-value>`.
+2. Remove `ENCRYPTION_KEY` from `.env`.
+3. Recreate the web service with the full set of Compose files (as described earlier in this section) and run `python manage.py check --deploy` in the web container -- `core.W005` no longer appears.
+
+The same key then decrypts all existing data; a later rotation follows the section "Key Rotation (`ENCRYPTION_KEYS`)".
 
 **Virus Scanning (ClamAV, #524)**
 
@@ -2271,4 +2280,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 255e368ef7adfc4ebe3a6168be05524ecc73bc4b -->
+<!-- source-hash: 9e949e22e1bbee3af8f6d93b37cc7bb5d51dad5d -->

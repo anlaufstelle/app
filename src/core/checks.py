@@ -24,6 +24,8 @@ hinzugekommene Kopplung ``hops > 1`` ohne Proxy-Vertrauen bekommt darum die
 neue ID ``core.W003``, der unbrauchbare Bereich die neue ID ``core.E003``.
 ``core.W004`` bezeichnet seit #2002 einen Redis-Cache ohne Passwort.
 ``core.E004`` bezeichnet seit #2002 eine syntaktisch ungültige Redis-Cache-URL.
+``core.W005`` bezeichnet seit #2240 den abgekündigten Einzelschlüssel-Betrieb
+(nur ``ENCRYPTION_KEY``, kein ``ENCRYPTION_KEYS``).
 """
 
 from __future__ import annotations
@@ -314,6 +316,39 @@ def check_redis_cache_requires_password(app_configs, **kwargs):
                     "Passwort bleibt allein die Docker-Netzgrenze als Zugriffsschutz."
                 ),
                 id="core.W004",
+            )
+        )
+    return messages
+
+
+@register()
+def check_encryption_single_key_deprecated(app_configs, **kwargs):
+    """Warnt beim Einzelschlüssel-Betrieb (Refs #2240).
+
+    Nur ``ENCRYPTION_KEY`` gesetzt, kein Schlüsselring ``ENCRYPTION_KEYS``:
+    der Betrieb funktioniert unverändert weiter, ist aber abgekündigt und
+    wird nach 1.0 entfernt. Der Schlüsselwert erscheint nie in der Meldung.
+    Ohne jeden Schlüssel greift der Startabbruch in ``settings/prod.py``,
+    nicht dieser Check.
+    """
+    messages = []
+    if settings.DEBUG or "collectstatic" in sys.argv:
+        return messages
+
+    einzel = str(getattr(settings, "ENCRYPTION_KEY", "") or "").strip()
+    ring = str(getattr(settings, "ENCRYPTION_KEYS", "") or "").strip(" ,")
+    if einzel and not ring:
+        messages.append(
+            Warning(
+                "Die Feldverschlüsselung läuft im abgekündigten Einzelschlüssel-Betrieb (nur ENCRYPTION_KEY gesetzt).",
+                hint=(
+                    "Übernimm den Wert von ENCRYPTION_KEY unverändert als einzigen Eintrag in "
+                    "ENCRYPTION_KEYS, entferne ENCRYPTION_KEY aus der .env und starte neu; "
+                    "Details: docs/admin-guide.md, Abschnitt „Einzelschlüssel → Schlüsselring "
+                    "migrieren“. Bis zur Entfernung nach 1.0 funktioniert der Einzelschlüssel "
+                    "unverändert."
+                ),
+                id="core.W005",
             )
         )
     return messages

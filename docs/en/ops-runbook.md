@@ -1,5 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
 > Synchronization update 2026-09-23: § 9 names 29 as the current count of RLS-covered facility-scoped tables, matching the test-derived source of truth (#2330).
+> Synchronization update 2026-09-23: § 1.1 adds the note on the deprecated single key (`core.W005`) and the migration path to `ENCRYPTION_KEYS` (#2240).
 > Synchronization update 2026-09-22: § 6.6/§ 6.7 state that a drill with skipped mandatory steps writes no compliance proof (#2341).
 > Synchronization update 2026-09-22: the quick reference and the cron-sidecar paragraph also name the full Compose file list instead of the base file alone (#2309).
 > Synchronization update 2026-09-22: every command block that creates the `web` container now builds the full Compose file list (base, `compose.legal.yml`, `compose.override.yml`) instead of naming the base file alone (#2309).
@@ -85,6 +86,8 @@ for var in POSTGRES_BOOTSTRAP_PASSWORD POSTGRES_ADMIN_USER POSTGRES_ADMIN_PASSWO
     esac
 done
 ```
+
+> **Single key deprecated (#2240):** If `python manage.py check --deploy` reports the warning `core.W005`, the instance still runs with `ENCRYPTION_KEY` instead of the key ring `ENCRYPTION_KEYS`. The update itself is not affected; before the removal after version 1.0, copy the value unchanged into `ENCRYPTION_KEYS` and remove `ENCRYPTION_KEY` -- see the [admin guide, "Migrating from a single key to a key ring"](admin-guide.md#full-environment-variable-reference).
 
 ### 1.2 Deploy Steps
 
@@ -2937,4 +2940,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-23 -->
-<!-- source-hash: 3292074f43211ebb9beceb88418917e679ca2fbb -->
+<!-- source-hash: 91994240b16bda8a8ceed8f16df238a90beba31a -->
+<!-- translation-date: 2026-09-22 -->
