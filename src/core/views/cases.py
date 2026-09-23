@@ -41,6 +41,7 @@ from core.services.case import (
     reopen_case,
     update_case,
 )
+from core.services.case.cases import EventNotOnExpectedCaseError
 from core.services.client import get_client_or_none
 from core.services.compliance import get_visible_event_or_404, user_can_see_document_type
 from core.services.dynamic_data import (
@@ -820,7 +821,12 @@ class CaseRemoveEventView(StaffRequiredMixin, View):
         if event.case_id != case.pk:
             raise Http404
         try:
-            remove_event_from_case(event, request.user)
+            remove_event_from_case(event, request.user, expected_case=case)
+        except EventNotOnExpectedCaseError:
+            # Refs #2364: dieselbe Bindung unter der Sperre — ein Umhaengen
+            # zwischen der Pruefung oben und der Sperre im Service endet wie
+            # die Vorpruefung, ohne Loesen und ohne Audit-Zeile.
+            raise Http404 from None
         except ValidationError as exc:
             # Refs #2329, Spiegel von ``CaseAssignEventView``.
             return case_goals_abgelehnt(exc)

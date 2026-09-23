@@ -9,7 +9,11 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Case, DocumentType
 from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
-from core.services.case.state_contract import lock_case_for_status_change, lock_event_for_case_link
+from core.services.case.state_contract import (
+    EVENT_WRITE_GONE_MESSAGE,
+    lock_case_for_status_change,
+    lock_event_for_case_link,
+)
 from core.services.compliance import user_can_see_event
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
@@ -352,9 +356,27 @@ def assign_event_to_case(case, event, user):
     return event
 
 
+class EventNotOnExpectedCaseError(ValidationError):
+    """Das Ereignis haengt (unter der Sperre gelesen) nicht am erwarteten Fall.
+
+    Refs #2364: eigene Klasse, damit die View daraus dieselbe 404 macht wie
+    bei ihrer ungesperrten Vorpruefung — alle uebrigen Absagen des
+    Zustandsvertrags bleiben 409.
+    """
+
+
 @transaction.atomic
-def remove_event_from_case(event, user):
+def remove_event_from_case(event, user, *, expected_case=None):
     """Remove an event from its case + AuditLog.
+
+    ``expected_case`` (Refs #2364) bindet das Loesen an einen bestimmten Fall
+    — die View reicht den Fall aus der URL durch. Verglichen wird mit der
+    FRISCH GESPERRTEN Zeile: haengt das Ereignis inzwischen an einem anderen
+    oder an keinem Fall, bricht der Service vor jedem Schreiben mit
+    :class:`EventNotOnExpectedCaseError` ab. Die ungesperrte Pruefung der View
+    allein liess ein Umhaengen zwischen Pruefung und Sperre durch — der POST
+    fuer Fall A loeste das Ereignis dann aus Fall B. Ohne ``expected_case``
+    bleibt das bisherige Verhalten (Loesen vom jeweils zugeordneten Fall).
 
     Refs #1959: ``user`` ist neu — der Service hatte ihn gar nicht, eine
     Audit-Zeile ohne Akteur waere als Nachweis wertlos. Ein Ereignis ohne Fall
@@ -374,6 +396,8 @@ def remove_event_from_case(event, user):
     if getattr(user, "facility_id", None) != event.facility_id:
         raise ValidationError(_("Ereignis gehört zu einer anderen Einrichtung."))
     locked, _target, previous_case = lock_event_for_case_link(event)
+    if expected_case is not None and locked.case_id != expected_case.pk:
+        raise EventNotOnExpectedCaseError(EVENT_WRITE_GONE_MESSAGE)
     if previous_case is None:
         event.refresh_from_db()
         return event
