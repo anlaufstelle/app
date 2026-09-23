@@ -16,6 +16,7 @@ import os
 import shutil
 import sys
 import tomllib
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -111,11 +112,21 @@ BACKUP_SET_TABLES = (
 )
 
 _SHA256_HEX_LENGTH = 64
+MAX_BACKUP_MANIFEST_BYTES = 1024 * 1024
+MAX_BACKUP_MANIFESTS = 256
+MAX_BACKUP_MANIFEST_RELATIVE_PARTS = 2
 
 
 def _parse_backup_manifest(manifest: Path) -> dict[str, str] | None:
     """Manifest als ``key=value``-Abbildung oder ``None`` bei Unlesbarkeit."""
     try:
+        if manifest.stat().st_size > MAX_BACKUP_MANIFEST_BYTES:
+            logger.warning(
+                "system_health: backup manifest exceeds %d bytes: %s",
+                MAX_BACKUP_MANIFEST_BYTES,
+                manifest,
+            )
+            return None
         raw = manifest.read_text(encoding="utf-8")
     except Exception:
         logger.exception("system_health: backup manifest unreadable: %s", manifest)
@@ -129,6 +140,26 @@ def _parse_backup_manifest(manifest: Path) -> dict[str, str] | None:
             return None
         values[key] = value
     return values
+
+
+def _backup_manifest_candidates(target_path: Path) -> Iterator[Path]:
+    """Yield a bounded set of manifests from root and retention directories."""
+    discovered = 0
+    for manifest in target_path.rglob("*.manifest"):
+        if discovered >= MAX_BACKUP_MANIFESTS:
+            logger.warning(
+                "system_health: backup manifest candidate limit %d reached in %s",
+                MAX_BACKUP_MANIFESTS,
+                target_path,
+            )
+            return
+        discovered += 1
+        relative_parts = manifest.relative_to(target_path).parts
+        if len(relative_parts) > MAX_BACKUP_MANIFEST_RELATIVE_PARTS:
+            continue
+        if any(part.startswith(".") for part in relative_parts):
+            continue
+        yield manifest
 
 
 def _is_complete_backup_set(manifest: Path) -> bool:
@@ -202,14 +233,12 @@ def last_backup_info(backup_dir: str | os.PathLike | None = None) -> dict | None
     if not target_path.exists() or not target_path.is_dir():
         return None
     try:
-        # Rekursiv: Backup-Skripte legen pro Retention-Stufe eigene Unterordner
+        # Backup-Skripte legen pro Retention-Stufe genau eine Unterordner-Ebene
         # an. Arbeitsverzeichnisse laufender/abgebrochener Laeufe beginnen mit
-        # einem Punkt und zaehlen nie als Satz.
+        # einem Punkt und zaehlen nie als Satz. Anzahl und Tiefe bleiben
+        # begrenzt, weil die Auswertung im Request-Cycle laeuft.
         candidates = [
-            manifest
-            for manifest in target_path.rglob("*.manifest")
-            if not any(part.startswith(".") for part in manifest.relative_to(target_path).parts)
-            and _is_complete_backup_set(manifest)
+            manifest for manifest in _backup_manifest_candidates(target_path) if _is_complete_backup_set(manifest)
         ]
     except Exception:
         logger.exception("system_health: backup directory listing failed for %s", target_path)
