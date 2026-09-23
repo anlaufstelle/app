@@ -407,3 +407,70 @@ class TestWorkItemEditParallelStatusChange:
         finally:
             tab_b.close()
             _cleanup_task_by_title(title, e2e_env)
+
+
+def _read_title(pk: str, e2e_env) -> str:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "--no-imports",
+            "-c",
+            (f"from core.models import WorkItem; print(WorkItem.objects.get(pk='{pk}').title)"),
+        ],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    return result.stdout.strip().splitlines()[-1]
+
+
+class TestWorkItemEditRerenderKeepsConflict:
+    """Refs #2361: Neu-Anzeige nach ungültiger Eingabe verliert den Konflikt nicht."""
+
+    def test_title_change_in_other_tab_survives_invalid_then_valid_submit(self, staff_page, base_url, e2e_env):
+        tab_a = staff_page
+        title = f"E2E-Rerender-{uuid.uuid4().hex[:6]}"
+        title_b = f"{title}-TabB"
+        wi_pk = _create_urgent_task_for("miriam", title, e2e_env)
+        edit_url = f"{base_url}/workitems/{wi_pk}/edit/"
+        tab_b = tab_a.context.new_page()
+        try:
+            # Tab A: Formular öffnen, noch nicht speichern.
+            tab_a.goto(edit_url)
+            tab_a.wait_for_load_state("domcontentloaded")
+
+            # Tab B: denselben Titel über das Formular ändern und speichern.
+            tab_b.goto(edit_url)
+            tab_b.wait_for_load_state("domcontentloaded")
+            tab_b.fill('input[name="title"]', title_b)
+            tab_b.locator("#main-content button[type='submit']").click()
+            tab_b.wait_for_url(f"{base_url}/workitems/")
+            assert _read_title(wi_pk, e2e_env) == title_b
+
+            # Tab A: leeren Titel absenden (Browser-Pflichtfeldprüfung aus,
+            # damit der Server die ungültige Eingabe erneut anzeigt).
+            tab_a.bring_to_front()
+            title_input = tab_a.locator('input[name="title"]')
+            title_input.evaluate("el => el.removeAttribute('required')")
+            title_input.fill("")
+            with tab_a.expect_response(lambda r: r.url == edit_url and r.request.method == "POST") as resp:
+                tab_a.locator("#main-content button[type='submit']").click()
+            assert resp.value.status == 200
+            tab_a.wait_for_load_state("domcontentloaded")
+
+            # Tab A: gültigen Titel eintragen und erneut speichern.
+            tab_a.fill('input[name="title"]', f"{title}-TabA")
+            with tab_a.expect_response(lambda r: r.url == edit_url and r.request.method == "POST") as resp:
+                tab_a.locator("#main-content button[type='submit']").click()
+            assert resp.value.status == 302, "Konflikt führt per Redirect zurück ins Formular"
+            tab_a.locator("text=zwischenzeitlich bearbeitet").wait_for(state="visible", timeout=10000)
+
+            assert _read_title(wi_pk, e2e_env) == title_b
+        finally:
+            tab_b.close()
+            _cleanup_task_by_title(title, e2e_env)
+            _cleanup_task_by_title(title_b, e2e_env)
