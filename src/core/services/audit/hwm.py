@@ -150,14 +150,18 @@ class HighWaterMarkStore:
         """Schreibt den Store signiert und atomar (temp + ``os.replace``)."""
         if not self.path:
             return
+        raw_path = os.fspath(self.path)
+        if ".." in raw_path.split(os.sep):
+            raise ValueError("HWM-Pfad darf keine '..'-Komponente enthalten.")
+        normalized_path = os.path.abspath(os.path.normpath(raw_path))
         payload = {"version": _VERSION, "chains": self.chains, "sig": _sign(self.chains)}
-        directory = os.path.dirname(os.path.abspath(self.path))
+        directory = os.path.dirname(normalized_path)
         os.makedirs(directory, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=directory, prefix=".hwm-", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 json.dump(payload, fh, sort_keys=True, separators=(",", ":"))
-            os.replace(tmp, self.path)
+            os.replace(tmp, normalized_path)
         except BaseException:
             with contextlib.suppress(OSError):
                 os.unlink(tmp)
