@@ -55,7 +55,6 @@ from typing import Any, cast
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, IntegrityError, connection, transaction
-from django.db.models import ForeignKey
 from django.utils import timezone
 from django.utils.translation import gettext
 from django.utils.translation import gettext_lazy as _
@@ -76,6 +75,7 @@ from core.services.file_vault.policy import (
     check_import_storage_quota_at_commit,
     enforce_storage_quota,
 )
+from core.services.fk_locks import fk_lock_targets, fk_values_of, lock_fk_targets
 from core.services.system.field_types import get_spec
 
 logger = logging.getLogger(__name__)
@@ -427,23 +427,9 @@ def _lock_job_fk_rows(job) -> None:
     """
     if connection.vendor != "postgresql":
         return
-    ziele = []
-    for field in ImportJob._meta.concrete_fields:
-        if not isinstance(field, ForeignKey):
-            continue
-        wert = getattr(job, field.attname)
-        if wert is None:
-            continue
-        # ``target_field`` ist die referenzierte Spalte selbst (der PK des
-        # Ziels) — genau die Zeile, die die FK-Pruefung sperrt.
-        ziel = field.target_field
-        ziele.append((ziel.model._meta.db_table, ziel.column, wert))
-    with connection.cursor() as cur:
-        for tabelle, spalte, wert in sorted(ziele, key=lambda eintrag: (eintrag[0], str(eintrag[2]))):
-            # Tabellen- und Spaltenname stammen aus dem Modell-Meta, nicht aus
-            # Eingaben; der Wert bleibt Parameter.
-            cur.execute(f'SELECT "{spalte}" FROM "{tabelle}" WHERE "{spalte}" = %s FOR KEY SHARE', [wert])  # noqa: S608
-            cur.fetchall()
+    # Ableitung und Sperre liegen im gemeinsamen Helfer (Refs #2337): der
+    # Anhangspfad nimmt dieselben Ziele auf demselben Weg.
+    lock_fk_targets(fk_lock_targets(ImportJob, fk_values_of(job)))
 
 
 def store_import_upload(

@@ -37,6 +37,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import FieldTemplate
 from core.services.dynamic_data import build_field_template_lookup, is_file_marker, normalize_file_marker
+from core.services.fk_locks import fk_lock_targets, lock_fk_targets
 
 
 @contextmanager
@@ -420,7 +421,7 @@ def _write_file_marker(owner, slug, updated_entries):
         del owner.data_json[slug]
 
 
-def lock_batch_attachment_rows(owner, entry_ids, *, creates_rows=False) -> None:
+def lock_batch_attachment_rows(owner, entry_ids, *, creates_rows=False, user=None, field_templates=()) -> None:
     """Die Vorsperre eines Anhangs-Batches: Stufe 1 und Stufe 2 der Ordnung (#2178).
 
     Sperrt die Owner-/Personenzeilen und anschliessend ALLE Bestandszeilen der
@@ -462,10 +463,62 @@ def lock_batch_attachment_rows(owner, entry_ids, *, creates_rows=False) -> None:
     Die Sperre laeuft ueber den Reverse-Accessor des Owners (ADR-039 §2) und
     greift ganze Ketten (``entry_id``): Ersetzen fasst die aktuelle Zeile an,
     Soft-Delete alle Zeilen der Kette.
+
+    **FK-Ziele der neuen Zeilen** (Refs #2337), im Anschluss an Stufe 1 und 2
+    und noch vor jedem Ketten-Lock: Legt der Batch
+    Zeilen an (``creates_rows`` oder ``field_templates`` nicht leer — auch
+    Ersetzen legt eine neue Version an), nimmt er zusaetzlich ``FOR KEY
+    SHARE`` auf JEDES Fremdschluessel-Ziel, das der Insert traegt: Einrichtung,
+    Owner, Feldvorlage, anlegende Person. Die Ziele leitet
+    :mod:`core.services.fk_locks` aus dem Modell ab — derselbe Helfer wie im
+    Importpfad (``_lock_job_fk_rows``); ein spaeter hinzukommender
+    Fremdschluessel ist damit in beiden Pfaden dabei. Ohne diese Stufe nahm
+    erst die aufgeschobene FK-Pruefung beim COMMIT diese Sperren — hinter dem
+    Ketten-Lock. ``field_templates`` sind die Vorlagen der Felder, die eine
+    Zeile bekommen; ``user`` ist die anlegende Person.
     """
+    field_templates = list(field_templates)
+    creates_rows = creates_rows or bool(field_templates)
     if not entry_ids and not creates_rows:
         return
     lock_attachment_rows_in_facility_order(owner, entry_ids, lock_owner_rows=True)
+    if creates_rows and connection.in_atomic_block:
+        lock_fk_targets(_new_row_fk_targets(owner, user, field_templates))
+
+
+def _new_row_fk_targets(owner, user, field_templates) -> list:
+    """Die FK-Ziele aller Anhangszeilen, die ein Batch anlegen wird (Refs #2337).
+
+    ``_new_row_fk_values`` benennt die Werte, die der Insert ausdruecklich
+    setzt; alle uebrigen Fremdschluessel des Modells traegt er mit ihrem
+    Default, und genau so leitet :func:`~core.services.fk_locks.fk_lock_targets`
+    sie ab. Die Einzelmengen werden vereinigt und neu sortiert, damit die
+    gemeinsame Menge in EINER Reihenfolge (Tabelle, dann PK) gesperrt wird.
+    """
+    from core.models.attachment import Attachment  # noqa: PLC0415 — Zyklus vermeiden
+
+    targets: set = set()
+    for field_template in field_templates or [None]:
+        targets.update(fk_lock_targets(Attachment, _new_row_fk_values(owner, user, field_template)))
+    return sorted(targets, key=lambda entry: (entry[0], str(entry[2])))
+
+
+def _new_row_fk_values(owner, user, field_template) -> dict:
+    """Die Fremdschluesselwerte, die ``commit_staged_upload`` einer neuen Zeile gibt.
+
+    Einrichtung aus dem Owner (ADR-039 §2), der EINE Owner-Fremdschluessel,
+    Feldvorlage und anlegende Person. Die beiden anderen Owner-Spalten und
+    ``superseded_by`` bleiben beim Insert leer. Welche Fremdschluessel hier
+    stehen muessen, haelt ``test_fk_lock_targets_guard`` gegen das Modell fest.
+    """
+    from core.models.attachment import owner_field_name  # noqa: PLC0415 — Zyklus vermeiden
+
+    return {
+        "facility_id": owner.facility_id,
+        f"{owner_field_name(owner)}_id": owner.pk,
+        "field_template_id": getattr(field_template, "pk", None),
+        "created_by_id": getattr(user, "pk", None),
+    }
 
 
 def lock_attachment_rows_in_facility_order(owner, entry_ids, *, lock_owner_rows=False, deletes_rows=False) -> list:
@@ -652,10 +705,12 @@ def lock_attachment_batch_before_audit(
     """
     entry_ids: set = set()
     creates_rows = False
+    new_row_templates: list = []
     if document_type is not None:
         file_field_states = list(_iter_file_fields(owner, user, document_type, data_json=data_json))
         entry_ids = _batch_entry_ids(file_field_states, request_post, staged_by_key)
         creates_rows = _batch_legt_zeilen_an(file_field_states, staged_by_key)
+        new_row_templates = _batch_new_row_templates(file_field_states, staged_by_key)
     if discards_existing_chains:
         # Die zu verwerfende Menge steht nicht im kuenftigen Typ — sie kommt
         # aus dem Bestand. Hat der Owner gar keine offene Kette, verwirft der
@@ -665,7 +720,9 @@ def lock_attachment_batch_before_audit(
         entry_ids = set(entry_ids) | set(open_chain_entry_ids(owner))
     # Reines Text-Update: keine Anhangsmutation, keine Sperre. Nur ein Batch,
     # der Zeilen anfasst ODER anlegt, braucht die Ordnung.
-    lock_batch_attachment_rows(owner, entry_ids, creates_rows=creates_rows)
+    lock_batch_attachment_rows(
+        owner, entry_ids, creates_rows=creates_rows, user=user, field_templates=new_row_templates
+    )
 
 
 def _batch_entry_ids(file_field_states, request_post, staged_by_key) -> set:
@@ -703,6 +760,20 @@ def _batch_legt_zeilen_an(file_field_states, staged_by_key) -> bool:
     seine Schluessel unter :func:`replace_upload_key` ab.
     """
     return any(slug in staged_by_key for slug, *_rest in file_field_states)
+
+
+def _batch_new_row_templates(file_field_states, staged_by_key) -> list:
+    """Die Feldvorlagen der Felder, die in diesem Batch eine NEUE Zeile bekommen.
+
+    Zugang (reiner Slug) wie Ersetzen (:func:`replace_upload_key`) legen eine
+    Zeile an — beide tragen die Feldvorlage als Fremdschluessel (Refs #2337).
+    """
+    templates = []
+    for slug, field_template, _entries, attachments_by_pk in file_field_states:
+        replaces = any(replace_upload_key(slug, att.entry_id) in staged_by_key for att in attachments_by_pk.values())
+        if slug in staged_by_key or replaces:
+            templates.append(field_template)
+    return templates
 
 
 def apply_attachment_changes(owner, user, request_post, request_files, file_fields, document_type, staged_by_key=None):
@@ -763,6 +834,8 @@ def apply_attachment_changes(owner, user, request_post, request_files, file_fiel
             owner,
             _batch_entry_ids(file_field_states, request_post, staged_pending),
             creates_rows=_batch_legt_zeilen_an(file_field_states, staged_pending),
+            user=user,
+            field_templates=_batch_new_row_templates(file_field_states, staged_pending),
         )
         for slug, ft, current_entries, attachments_by_pk in file_field_states:
             current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, owner, user)

@@ -144,3 +144,83 @@ class TestAnhangspfad:
             lock_attachment_batch_before_audit(event, staff_user, {}, {}, dt, data_json={})
 
         assert mitschnitt.key_share() == []
+
+
+class TestAbleitung:
+    """Der gemeinsame Helfer selbst — Default-Ableitung, Dubletten, Reihenfolge, Vendor."""
+
+    def test_fehlender_wert_nimmt_den_modell_default(self, monkeypatch, facility):
+        from core.services.fk_locks import fk_lock_targets
+
+        _haenge_fk_an(monkeypatch, Attachment, facility.organization_id)
+        targets = fk_lock_targets(Attachment, {"facility_id": facility.pk})
+        assert targets == [
+            ("core_facility", "id", facility.pk),
+            ("core_organization", "id", facility.organization_id),
+        ]
+
+    def test_leere_werte_sperren_nichts(self):
+        from core.services.fk_locks import fk_lock_targets
+
+        assert fk_lock_targets(ImportJob, {"facility_id": None, "created_by_id": None, "document_type_id": None}) == []
+
+    def test_ohne_postgresql_keine_abfrage(self, monkeypatch):
+        from core.services import fk_locks
+
+        class _FremdesBackend:
+            vendor = "sqlite"
+
+        monkeypatch.setattr(fk_locks, "connection", _FremdesBackend())
+        fk_locks.lock_fk_targets([("core_facility", "id", "egal")])
+
+    def test_neue_zeilen_mehrerer_felder_werden_vereinigt_und_sortiert(self, facility, staff_user, sample_event):
+        from core.services.attachments.crud import _new_row_fk_targets
+
+        ft_a = FieldTemplate.objects.create(facility=facility, name="FK-A", field_type=FieldTemplate.FieldType.FILE)
+        ft_b = FieldTemplate.objects.create(facility=facility, name="FK-B", field_type=FieldTemplate.FieldType.FILE)
+        targets = _new_row_fk_targets(sample_event, staff_user, [ft_b, ft_a, ft_a])
+        tabellen = [(t[0], str(t[2])) for t in targets]
+        assert tabellen == sorted(tabellen)
+        assert [t for t in tabellen if t[0] == "core_fieldtemplate"] == sorted(
+            [("core_fieldtemplate", str(ft_a.pk)), ("core_fieldtemplate", str(ft_b.pk))]
+        )
+        assert tabellen.count(("core_facility", str(facility.pk))) == 1
+
+
+class TestAnhangsInventar:
+    """Welche Fremdschluessel der Insert ausdruecklich setzt, steht an EINER Stelle.
+
+    Alle uebrigen traegt er mit ihrem Default — und genau so leitet der Helfer
+    sie ab. Kommt am Modell ein Fremdschluessel hinzu, den der Insert
+    ausdruecklich setzt, muss er in ``_new_row_fk_values`` stehen; dieser Test
+    zwingt zu der Entscheidung.
+    """
+
+    def test_jeder_fremdschluessel_ist_zugeordnet(self, sample_event, staff_user):
+        from django.db.models import ForeignKey
+
+        from core.services.attachments.crud import _new_row_fk_values
+
+        modell = {f.attname for f in Attachment._meta.get_fields() if isinstance(f, ForeignKey)}
+        gesetzt = set(_new_row_fk_values(sample_event, staff_user, None))
+        beim_insert_leer = {"client_id", "case_id", "superseded_by_id"}
+        assert modell == gesetzt | beim_insert_leer
+
+
+class TestErsetzenLegtAuchEineZeileAn:
+    def test_ersetzen_liefert_die_feldvorlage(self, facility):
+        from core.services.attachments.crud import _batch_new_row_templates, replace_upload_key
+
+        class _Kette:
+            entry_id = "kette-1"
+
+        ft_neu = FieldTemplate(facility=facility, name="neu")
+        ft_ersetzt = FieldTemplate(facility=facility, name="ersetzt")
+        ft_still = FieldTemplate(facility=facility, name="still")
+        states = [
+            ("neu", ft_neu, [], {}),
+            ("ersetzt", ft_ersetzt, [], {"a": _Kette()}),
+            ("still", ft_still, [], {"b": _Kette()}),
+        ]
+        staged = {"neu": ["x"], replace_upload_key("ersetzt", "kette-1"): ["y"]}
+        assert _batch_new_row_templates(states, staged) == [ft_neu, ft_ersetzt]

@@ -333,6 +333,12 @@ Wirkungsziel und Meilenstein stehen **nach** dem Fall (beide hängen über `case
 
 Gepinnt wird der Vertrag in [`src/tests/test_case_status_redaction_guard.py`](../../src/tests/test_case_status_redaction_guard.py) und [`src/tests/test_goal_status_redaction_guard.py`](../../src/tests/test_goal_status_redaction_guard.py) — letzteres mit einem Rendezvous beider Reihenfolgen (Redaktion vor bzw. nach dem Statuswechsel) auf zwei echten Verbindungen, beobachtend nach dem Muster von [`test_client_lock_order.py`](../../src/tests/test_client_lock_order.py).
 
+### Nachtrag zu D5.5 — Fallzuordnung, Zielpflege und FK-Vorsperre (2026-09-23)
+
+**Zustandsvertrag.** Derselbe Vertrag gilt seit #2329 für die übrigen Schreibvorgänge an der Fallakte: `assign_event_to_case`/`remove_event_from_case` sperren alle beteiligten Personen in einer PK-geordneten Abfrage, danach Ziel- **und** abgebenden Fall in PK-Ordnung, zuletzt die Ereigniszeile (`core_client` → `core_case` → `core_event`, eine Teilfolge der Gesamtordnung) und schreiben nur die Zuordnungsspalte samt `updated_at`; `create_goal`/`update_goal` nehmen `core_client` → `core_case` (→ `core_outcomegoal`). Ein Ereignis im Papierkorb gilt dabei wie eine getilgte Akte.
+
+**FK-Vorsperre.** Eine neue Zeile nimmt über die aufgeschobene Fremdschlüssel-Prüfung beim COMMIT `FOR KEY SHARE` auf jedes referenzierte Ziel — hinter dem Ketten-/Kontingent-Lock, wenn niemand sie vorher genommen hat (#2259/#2260). Import- und Anhangspfad nehmen diese Ziele deshalb **vor** dem Ketten-Lock über denselben Helfer [`services/fk_locks.py`](../../src/core/services/fk_locks.py) (#2337): die Ziele werden aus dem Modell abgeleitet (ausdrücklich gesetzte Werte, für alle übrigen Fremdschlüssel der Modell-Default), in der Stärke `FOR KEY SHARE` und in der festen Reihenfolge Tabelle, dann PK. Im Anhangspfad nimmt `lock_batch_attachment_rows` sie im Anschluss an Owner-/Personenzeile und Bestandszeilen, noch vor dem ersten Ketten-Lock, und nur für Batches, die eine Zeile anlegen (Zugang oder Ersetzen). Ein später hinzukommender Fremdschlüssel ist damit in beiden Pfaden automatisch dabei; welche Werte der Anhangs-Insert ausdrücklich setzt, hält ein Inventar-Test gegen das Modell fest. Gepinnt in [`src/tests/test_fk_lock_targets_guard.py`](../../src/tests/test_fk_lock_targets_guard.py).
+
 ## Alternatives considered
 
 - **Nichts tun.** Verworfen: der Befund aus §5 ist kein Wachstumsthema, sondern eine unterlaufene Frist — er wird ohne Eingriff nicht kleiner, sondern wächst mit jedem Fristablauf.
