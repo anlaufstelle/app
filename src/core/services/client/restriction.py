@@ -213,6 +213,25 @@ def _require_staff(user: Any, message: Any) -> None:
         raise ValidationError(message)
 
 
+def _lock_client_of_actor_facility(client: Client, user: Any) -> Client:
+    """Sperrt die Personenzeile — nur innerhalb der Einrichtung der handelnden Person (Refs #2373).
+
+    Der Einrichtungsfilter sitzt IM Sperr-Lookup: eine fremde Zeile wird weder
+    gesperrt noch gelesen, auch wenn die mitgegebene Instanz im Speicher eine
+    andere Einrichtung behauptet. Wie in den uebrigen Vier-Augen-Services
+    (Refs #2321, #2338) greift die Grenze vor der Zustandspruefung — die
+    Antwort verraet einer fremden Einrichtung nicht, ob eine Einschraenkung
+    besteht. Fail-closed: ohne Einrichtung keine Aenderung.
+    """
+    actor_facility_id = getattr(user, "facility_id", None)
+    locked = None
+    if actor_facility_id is not None:
+        locked = Client.objects.select_for_update().filter(pk=client.pk, facility_id=actor_facility_id).first()
+    if locked is None:
+        raise ValidationError(_("Person gehört zu einer anderen Einrichtung."))
+    return locked
+
+
 @transaction.atomic
 def restrict_processing(client: Client, user: Any, *, reason: str) -> Client:
     """Setzt den Sperrvermerk (idempotent).
@@ -232,7 +251,7 @@ def restrict_processing(client: Client, user: Any, *, reason: str) -> Client:
     # zwei gleichzeitige Vorgaenge beide, ueberschreiben gegenseitig
     # Provenienz und Zeitpunkt und schreiben ZWEI Audit-Zeilen — die
     # dokumentierte Idempotenz waere eine blosse Absichtserklaerung.
-    client = Client.objects.select_for_update().get(pk=client.pk)
+    client = _lock_client_of_actor_facility(client, user)
     if client.processing_restricted:
         return client
 
@@ -265,6 +284,8 @@ def lift_processing_restriction(client: Client, user: Any) -> Client:
 
     1. **Rolle** — Fachkraft und hoeher; unter ``staff`` gibt es keinen
        Schreibpfad an der Person, also auch keinen an ihrer Einschraenkung.
+    1a. **Einrichtung** — die Person wird nur innerhalb der Einrichtung der
+       handelnden Person gesperrt und gelesen (Refs #2373).
     2. **Zustand** — ohne gesetzten Vermerk gibt es nichts aufzuheben; ein
        stiller No-op erzeugte sonst eine Audit-Zeile ohne Vorgang.
     3. **Vier-Augen** — wer eingeschraenkt hat, hebt nicht allein wieder auf.
@@ -277,7 +298,7 @@ def lift_processing_restriction(client: Client, user: Any) -> Client:
     # haengt hier die Vier-Augen-Regel am frisch gelesenen
     # ``processing_restricted_by`` — auf einem stalen Objekt entschiede sie
     # anhand einer laengst ueberholten Provenienz.
-    client = Client.objects.select_for_update().get(pk=client.pk)
+    client = _lock_client_of_actor_facility(client, user)
     if not client.processing_restricted:
         raise ValidationError(_("Für diese Person ist die Verarbeitung nicht eingeschränkt."))
     if not user.is_lead_or_admin and client.processing_restricted_by_id == user.pk:
