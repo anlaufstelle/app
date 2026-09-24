@@ -63,6 +63,9 @@ class EventMetaForm(TailwindFormMixin, PinnedClientMixin, forms.Form):
     document_type = forms.ModelChoiceField(
         queryset=DocumentType.objects.none(),
         label=_("Dokumentationstyp"),  # pragma: no mutate
+        # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
+        empty_label=_("— Bitte auswählen —"),
         widget=forms.Select(
             attrs={
                 "hx-get": "",  # wird im View gesetzt

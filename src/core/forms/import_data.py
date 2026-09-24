@@ -54,6 +54,9 @@ class ImportUploadForm(TailwindFormMixin, forms.Form):
         required=False,
         label=_("Dokumentationstyp"),
         help_text=_("Liefert die Zusatzfelder als Zuordnungsziele. Für Ereignisse Pflicht."),
+        # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
+        empty_label=_("— Kein Typ —"),
     )
     source_file = forms.FileField(
         label=_("CSV-Datei"),

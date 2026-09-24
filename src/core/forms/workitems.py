@@ -103,6 +103,9 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
                 ],
             ).order_by("username")
         self.fields["assigned_to"].required = False
+        # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
+        self.fields["assigned_to"].empty_label = _("— Nicht zugewiesen —")  # type: ignore[attr-defined]
         self.fields["description"].required = False
         # Recurrence has a DB default (NONE) — allow omitting it in POST.
         self.fields["recurrence"].required = False

@@ -80,6 +80,9 @@ class CaseForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
                 role__in=[User.Role.STAFF, User.Role.LEAD, User.Role.FACILITY_ADMIN],
             )
         self.fields["lead_user"].required = False
+        # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
+        self.fields["lead_user"].empty_label = _("— Niemand —")  # type: ignore[attr-defined]
 
         # M2 P8 (Refs #1058): Typ-Auswahl 1:1 nach dem Personen-Muster
         # (``ClientForm``, P7) — facility-scoped, nur aktive Typen, nur

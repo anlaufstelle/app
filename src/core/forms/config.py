@@ -676,6 +676,9 @@ class DocumentTypeFieldAddForm(TailwindFormMixin, forms.Form):
     field_template = forms.ModelChoiceField(
         queryset=FieldTemplate.objects.none(),
         label=_("Feldvorlage"),
+        # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
+        empty_label=_("— Bitte auswählen —"),
     )
     field_group = forms.ModelChoiceField(
         queryset=FieldGroup.objects.none(),
@@ -750,11 +753,15 @@ class FieldConditionForm(TailwindFormMixin, forms.Form):
     target_field = forms.ModelChoiceField(
         queryset=DocumentTypeField.objects.none(),
         label=_("Zielfeld"),
+        # Refs #2381: Django 6.1 faellt ohne eigenes ``empty_label`` auf den
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") zurueck.
+        empty_label=_("— Bitte auswählen —"),
         widget=forms.Select(attrs={"data-testid": "condition-target"}),
     )
     depends_on_field = forms.ModelChoiceField(
         queryset=DocumentTypeField.objects.none(),
         label=_("Quellfeld"),
+        empty_label=_("— Bitte auswählen —"),
         widget=forms.Select(attrs={"data-testid": "condition-source"}),
     )
     # Reines Validierungsfeld: gerendert wird der Operator über das
