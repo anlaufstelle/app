@@ -155,7 +155,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v52"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v53"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -168,7 +168,9 @@ class TestServiceWorkerCachesOfflineFallback:
             "atomar precached; #2293/#2289: die precachten Replay-Skripte "
             "offline-edit.js und offline-queue.js tragen die korrigierte "
             "Metadaten-Uebernahme und den Vertrag der Erfolgsbestaetigung → "
-            "v49, zusammen mit dem Hinweis in der precachten Offline-Akte)."
+            "v49, zusammen mit dem Hinweis in der precachten Offline-Akte; "
+            "#2383: die precachte Offline-Personenansicht hebt drei "
+            "Textknoepfe auf 44px Mindesthoehe an → v53)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -721,7 +723,11 @@ class TestPrecachedShellBumpGuard:
     # 2026-09-23, Refs #2352: v50 -> v51 — das precachte quick-exit.js legt
     # beim Schnell-Verlassen die alte Seite still; nur Modulinhalt, das
     # Shell-Markup (und damit der Hash) bleibt unveraendert.
-    _PINNED_CACHE_NAME = "anlaufstelle-v52"
+    # 2026-09-24, Refs #2383: v52 -> v53 — offline_detail.html hebt drei
+    # Textknoepfe (Ereignis-Bearbeiten, Aufgabe-erstellen, Aufgabe-Bearbeiten)
+    # auf 44px Mindesthoehe an. Aendert gerendertes Shell-Markup => Bump +
+    # Hash gemeinsam nachgezogen.
+    _PINNED_CACHE_NAME = "anlaufstelle-v53"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -801,7 +807,10 @@ class TestPrecachedShellBumpGuard:
     # #1900/#1805 — NUR Hash nachziehen, KEIN CACHE_NAME-Bump. Belegt durch
     # test_version_display.py::TestPublicFooterRendering::
     # test_anonymous_pages_show_source_link_but_no_version[core:offline_client_list_shell].
-    _PINNED_SHELL_HASH = "50770ecab0c0d1021d2fc98eaa535f2847f8d4a94940e55e0e0ccac50f6e2492"
+    # 2026-09-24, Refs #2383: offline_detail.html (eine der neun
+    # _SHELL_TEMPLATES) hebt drei Textknoepfe auf 44px Mindesthoehe an —
+    # gerendertes Markup geaendert, Hash zusammen mit v53 nachgezogen.
+    _PINNED_SHELL_HASH = "55bf46abb78a1c3939ee6288cc18751c89cfa176319e30b0635ce4c23eabc252"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

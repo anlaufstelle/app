@@ -170,7 +170,10 @@ importScripts("/static/js/url-patterns.js");
 // Schnell-Verlassen die alte Seite still (HTMX-Abbruch, Logout-Marke), damit
 // keine spaete Antwort die Navigation zur neutralen Seite ueberschreibt. Der
 // Bump bringt das geaenderte Modul auf Bestandsgeraete.
-const CACHE_NAME = "anlaufstelle-v52";
+// 2026-09-24, Refs #2383: v52 -> v53 -- die precachte Offline-Personenansicht
+// (offline_detail.html) hebt drei Textknoepfe auf 44px Mindesthoehe an. Der
+// Bump bringt das geaenderte Markup auf Bestandsgeraete.
+const CACHE_NAME = "anlaufstelle-v53";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
