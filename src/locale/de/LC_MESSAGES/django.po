@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 22:03+0200\n"
+"POT-Creation-Date: 2026-09-24 17:05+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12966,3 +12966,37 @@ msgstr "Person gehört zu einer anderen Einrichtung."
 #: src/core/services/events/crud.py:292
 msgid "Dieses Ereignis wurde gelöscht — es kann nicht mehr bearbeitet werden."
 msgstr "Dieses Ereignis wurde gelöscht — es kann nicht mehr bearbeitet werden."
+
+#: src/core/forms/cases.py:85
+msgid "— Niemand —"
+msgstr "— Niemand —"
+
+#: src/core/forms/config.py:281
+msgid "— Kein Systemtyp —"
+msgstr "— Kein Systemtyp —"
+
+#: src/core/forms/config.py:285
+msgid "— Keine Angabe —"
+msgstr "— Keine Angabe —"
+
+#: src/core/forms/config.py:530
+msgid "— Vom Dokumentationstyp erben —"
+msgstr "— Vom Dokumentationstyp erben —"
+
+#: src/core/forms/config.py:702 src/core/forms/config.py:779
+#: src/core/forms/config.py:785 src/core/forms/events.py:68
+msgid "— Bitte auswählen —"
+msgstr "— Bitte auswählen —"
+
+#: src/core/forms/workitems.py:108
+msgid "— Nicht zugewiesen —"
+msgstr "— Nicht zugewiesen —"
+
+#: src/templates/core/settings/form.html:23
+msgid "Das Formular zeigt jetzt den aktuellen Stand."
+msgstr "Das Formular zeigt jetzt den aktuellen Stand."
+
+#: src/templates/core/settings/form.html:25
+#, python-format
+msgid "Nicht übernommen wurde Ihre Eingabe bei: %(fields)s."
+msgstr "Nicht übernommen wurde Ihre Eingabe bei: %(fields)s."
