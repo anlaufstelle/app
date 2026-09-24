@@ -4,6 +4,7 @@ import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import IntegrityError
+from django.http import HttpResponse
 
 from core.services.events.idempotency import (
     get_idempotent_result,
@@ -300,6 +301,34 @@ class FilteredPaginatedListMixin(PaginatedListMixin):
         if extra_params:
             params.update(extra_params)
         return urlencode({k: v for k, v in params.items() if v})
+
+
+def htmx_absage(message) -> HttpResponse:
+    """Die fachliche Absage einer HTMX-Aktion: 409, kurzer Klartext, kein Swap.
+
+    Fuer Kaesten und Kacheln, die nach der Absage unveraendert sichtbar
+    bleiben sollen — etwa der Kasten „Wirkungsziele“ mit seinen Meilensteinen
+    oder die Ereignisliste eines Falls. Refs #2358: Seit der globalen
+    4xx-Swap-Regel in ``base.html`` (``responseHandling``, Refs #2232)
+    wechselt htmx jede 4xx-Antwort in das ``hx-target`` des ausloesenden
+    Elements ein. Eine fachliche Absage (Einschraenkung nach Art. 18,
+    Zustandsvertrag der Fallakte) ist aber kein Partial: eingewechselt
+    ersetzte der Klartext den ganzen Kasten, und dessen Inhalt war erst nach
+    dem Neuladen wieder sichtbar.
+
+    ``HX-Reswap: none`` schaltet den Swap fuer genau diese Antwort ab — der
+    Kasten bleibt mit seinem bisherigen Inhalt stehen. Weil nicht
+    eingewechselt wurde, zeigt der globale ``htmx:responseError``-Toast
+    (``static/js/htmx-errors.js``) den Antworttext als Hinweis. Deshalb genau
+    EINE kurze, markup-freie Meldung.
+
+    Wo die Meldung bewusst an die Stelle des geklickten Elements treten soll
+    (Vorschlagskarte im Loeschfristen-Dashboard, Refs #2321), bleibt es beim
+    einfachen 409 ohne diesen Header.
+    """
+    response = HttpResponse(message, status=409)
+    response["HX-Reswap"] = "none"
+    return response
 
 
 class HTMXPartialMixin:

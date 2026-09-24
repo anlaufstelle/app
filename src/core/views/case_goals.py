@@ -5,7 +5,6 @@ Aus :file:`views/cases.py` abgetrennt — alle HTMX-Endpoints, die den
 """
 
 from django.core.exceptions import ValidationError
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -24,7 +23,7 @@ from core.services.case import (
     update_goal,
 )
 from core.services.scoping import get_scoped_object
-from core.views.mixins import StaffRequiredMixin
+from core.views.mixins import StaffRequiredMixin, htmx_absage
 
 
 def _goals_context(case):
@@ -40,14 +39,12 @@ def _abgelehnt(exc):
     das aeltere Art.-18-Gate werfen eine deutsche ``ValidationError``. Fing
     sie niemand, wurde daraus ein HTTP 500.
 
-    Antwortmuster wie ``RetentionApproveView`` (Refs #2109): htmx wechselt
-    4xx-Antworten nicht ein, die veraltete Kachel bleibt also stehen, und der
-    globale ``htmx:responseError``-Toast (``static/js/htmx-errors.js``) zeigt
-    den Antworttext — solange er kurz und markup-frei ist. Deshalb genau die
-    EINE Meldung und kein gerendertes Partial; die globale 4xx-Swap-Regel
-    bleibt unberuehrt.
+    Refs #2358: Die Antwort baut :func:`core.views.mixins.htmx_absage` — mit
+    ``HX-Reswap: none``, denn die globale 4xx-Swap-Regel wuerde den Klartext
+    sonst an die Stelle des ganzen Kastens „Wirkungsziele“ setzen. So bleibt
+    der Kasten stehen, und der globale Fehler-Toast zeigt die Meldung.
     """
-    return HttpResponse(exc.messages[0] if exc.messages else str(exc), status=409)
+    return htmx_absage(exc.messages[0] if exc.messages else str(exc))
 
 
 class GoalCreateView(StaffRequiredMixin, View):
