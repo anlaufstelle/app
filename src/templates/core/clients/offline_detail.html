@@ -227,7 +227,7 @@
                                         {# Offline-Edit-Einstieg (Refs #1111): nur wo der Replay durchginge; event.can_edit_ui in load() vorberechnet (CSP-Guard verbietet Method-Calls in x-if). #}
                                         <template x-if="event.can_edit_ui">
                                             <button type="button" @click="startEdit(event)"
-                                                    class="text-xs text-accent hover:underline"
+                                                    class="inline-flex items-center min-h-[44px] md:min-h-0 text-xs text-accent hover:underline"
                                                     :data-testid="'offline-edit-btn-' + event.pk">
                                                 {% trans "Bearbeiten" %}
                                             </button>
@@ -350,7 +350,7 @@
                     <div class="mb-3" data-testid="offline-wi-create">
                         <template x-if="!creatingWorkItem">
                             <button type="button" @click="startCreateWorkItem" x-show="canCreateWorkItem"
-                                    class="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+                                    class="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-0 text-sm text-accent hover:underline"
                                     data-testid="offline-new-workitem-btn">
                                 <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                 {% trans "Aufgabe erstellen" %}
@@ -418,7 +418,7 @@
                                         </template>
                                         <template x-if="wi.can_edit_ui">
                                             <button type="button" @click="startEditWorkItem(wi)"
-                                                    class="text-xs text-accent hover:underline"
+                                                    class="inline-flex items-center min-h-[44px] md:min-h-0 text-xs text-accent hover:underline"
                                                     :data-testid="'offline-wi-edit-btn-' + wi.pk">
                                                 {% trans "Bearbeiten" %}
                                             </button>
