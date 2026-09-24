@@ -130,14 +130,16 @@
             // ``fixed`` ohne ``bottom`` den Toast an seine statische Position
             // unter dem Seitenende — die Absage bliebe unsichtbar. Die
             // sichtbarkeitskritischen Eigenschaften stehen deshalb zusaetzlich
-            // inline (CSSOM, von der CSP nicht betroffen); die Klassen bleiben
-            // fuehrend.
+            // inline (CSSOM, von der CSP nicht betroffen). Diese Inline-Werte
+            // sind bewusst fuehrend und entsprechen den Klassenwerten
+            // (bottom-4/right-4 = 1rem, z-50, bg-red-600, text-white); die
+            // Klassen tragen die uebrige Gestaltung.
             toast.style.position = "fixed";
             toast.style.bottom = "1rem";
             toast.style.right = "1rem";
             toast.style.zIndex = "50";
             toast.style.backgroundColor = "#dc2626"; // red-600
-            toast.style.color = "#ffffff";
+            toast.style.color = "#fff"; // text-white
 
             var text = document.createElement("span");
             text.className = "text-sm flex-grow";

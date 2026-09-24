@@ -136,7 +136,7 @@ describe("htmx-errors: Toast bleibt ohne Tailwind-Klassen sichtbar", () => {
         expect(toast.style.color).toBe("rgb(255, 255, 255)");
     });
 
-    it("behaelt die Klassen als fuehrende Gestaltung", () => {
+    it("behaelt die Klassen fuer die uebrige Gestaltung", () => {
         respond(409, "Absage");
         const toast = document.getElementById("htmx-error-toast");
 
