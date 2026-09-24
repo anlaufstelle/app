@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
 import pytest
 from django.test import override_settings
 from django.urls import reverse
 
 from core.forms.facility_settings import FacilitySettingsForm
 from core.models import AuditLog, DocumentType, Settings
+from core.services.system import update_settings
 
 EDITABLE_FIELDS = {
     "facility_full_name",
@@ -180,3 +183,106 @@ class TestFacilitySettingsView:
         content = client.get(reverse("core:verwaltung_uebersicht")).content.decode()
 
         assert content.count(f'href="{reverse("core:facility_settings")}"') >= 2
+
+
+class _SubmittedForm(HTMLParser):
+    """Sammelt die Werte, die ein Browser beim Absenden des Formulars schicken wuerde."""
+
+    def __init__(self):
+        super().__init__()
+        self.data: dict[str, str] = {}
+        self._select: str | None = None
+        self._textarea: str | None = None
+
+    def handle_starttag(self, tag, attrs):
+        attr = dict(attrs)
+        name = attr.get("name")
+        if tag == "input" and name and name != "csrfmiddlewaretoken":
+            if attr.get("type") == "checkbox":
+                if "checked" in attr:
+                    self.data[name] = attr.get("value") or "on"
+            else:
+                self.data[name] = attr.get("value") or ""
+        elif tag == "select" and name:
+            self._select = name
+            self.data.setdefault(name, "")
+        elif tag == "option" and self._select and "selected" in attr:
+            self.data[self._select] = attr.get("value") or ""
+        elif tag == "textarea" and name:
+            self._textarea = name
+            self.data[name] = ""
+
+    def handle_endtag(self, tag):
+        if tag == "select":
+            self._select = None
+        elif tag == "textarea":
+            self._textarea = None
+
+    def handle_data(self, data):
+        if self._textarea:
+            self.data[self._textarea] += data
+
+
+def _submitted_values(response) -> dict[str, str]:
+    parser = _SubmittedForm()
+    parser.feed(response.content.decode())
+    return parser.data
+
+
+@pytest.mark.django_db
+class TestFacilitySettingsConflictRerender:
+    """Nach einer Konfliktmeldung zeigt das Formular den aktuellen Stand (Refs #2371)."""
+
+    def _conflict_response(self, client, admin_user, settings_obj):
+        client.force_login(admin_user)
+        stale = _post_data(settings_obj)
+        update_settings(
+            Settings.objects.get(pk=settings_obj.pk),
+            admin_user,
+            facility_full_name="Parallel gespeichert",
+        )
+        stale["facility_full_name"] = "Stand aus Tab A"
+        return client.post(reverse("core:facility_settings"), stale)
+
+    def test_conflict_rerender_shows_current_values_and_current_token(self, client, admin_user, settings_obj):
+        response = self._conflict_response(client, admin_user, settings_obj)
+
+        assert response.status_code == 409
+        settings_obj.refresh_from_db()
+        values = _submitted_values(response)
+        assert values["facility_full_name"] == "Parallel gespeichert"
+        assert values["expected_updated_at"] == settings_obj.updated_at.isoformat()
+        assert "zwischenzeitlich bearbeitet" in response.content.decode()
+
+    def test_conflict_hint_names_discarded_fields_only(self, client, admin_user, settings_obj):
+        response = self._conflict_response(client, admin_user, settings_obj)
+
+        content = response.content.decode()
+        assert response.status_code == 409
+        assert response.context["conflict_fields"] == ["Vollständiger Name"]
+        assert "Nicht übernommen wurde Ihre Eingabe bei: Vollständiger Name" in content
+        assert "Stand aus Tab A" not in content
+
+    def test_resubmitting_conflict_form_keeps_parallel_change(self, client, admin_user, settings_obj):
+        response = self._conflict_response(client, admin_user, settings_obj)
+        assert response.status_code == 409
+
+        again = client.post(reverse("core:facility_settings"), _submitted_values(response))
+
+        assert again.status_code == 302
+        settings_obj.refresh_from_db()
+        assert settings_obj.facility_full_name == "Parallel gespeichert"
+
+    def test_unreadable_token_keeps_input_and_is_no_conflict(self, client, admin_user, settings_obj):
+        client.force_login(admin_user)
+        data = _post_data(settings_obj)
+        data["expected_updated_at"] = "kein-zeitstempel"
+        data["facility_full_name"] = "Eigene Eingabe"
+
+        response = client.post(reverse("core:facility_settings"), data)
+
+        assert response.status_code == 200
+        assert "conflict_fields" not in response.context
+        assert _submitted_values(response)["facility_full_name"] == "Eigene Eingabe"
+        settings_obj.refresh_from_db()
+        assert settings_obj.facility_full_name != "Eigene Eingabe"

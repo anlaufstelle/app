@@ -36,12 +36,38 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
         ensure_settings_for_facility(request.current_facility)
         return Settings.objects.get(facility=request.current_facility)
 
-    def _render(self, request, form, *, expected_updated_at, status=200):
+    def _render(self, request, form, *, expected_updated_at):
         return render(
             request,
             self.template_name,
             {"form": form, "expected_updated_at": expected_updated_at},
-            status=status,
+        )
+
+    def _render_conflict(self, request, stale_form, exc):
+        """Konfliktanzeige mit dem aktuellen Stand statt der veralteten Eingabe.
+
+        Das neu gerenderte Formular ist ungebunden und traegt die Werte aus der
+        Datenbank samt passendem Versions-Token. Wer danach speichert, hat den
+        aktuellen Stand gesehen; die eigene, nicht uebernommene Eingabe wird
+        feldweise benannt, damit sie nicht unbemerkt verloren geht.
+        """
+        current = self._settings(request)
+        conflict_fields = [
+            str(stale_form.fields[name].label)
+            for name in stale_form.fields
+            if stale_form.cleaned_data[name] != getattr(current, name)
+        ]
+        form = FacilitySettingsForm(instance=current, facility=request.current_facility)
+        return render(
+            request,
+            self.template_name,
+            {
+                "form": form,
+                "expected_updated_at": current.updated_at.isoformat(),
+                "conflict_messages": exc.messages,
+                "conflict_fields": conflict_fields,
+            },
+            status=409,
         )
 
     def get(self, request):
@@ -71,16 +97,13 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
                 **{name: form.cleaned_data[name] for name in form.fields},
             )
         except ValidationError as exc:
+            if getattr(exc, "code", None) == "version_conflict":
+                return self._render_conflict(request, form, exc)
             form.add_error(None, exc)
-            status = 409 if getattr(exc, "code", None) == "version_conflict" else 200
-            # Nach einer Konfliktanzeige ist der aktuelle Stand die bewusste
-            # Ausgangsbasis für den nächsten Versuch; ``refresh_from_db`` oben
-            # bleibt deshalb maßgeblich.
             return self._render(
                 request,
                 form,
                 expected_updated_at=settings_obj.updated_at.isoformat(),
-                status=status,
             )
 
         messages.success(request, _("Einstellungen wurden gespeichert."))

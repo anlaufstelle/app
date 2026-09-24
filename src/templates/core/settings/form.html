@@ -15,6 +15,17 @@
         {% csrf_token %}
         <input type="hidden" name="expected_updated_at" value="{{ expected_updated_at }}">
         {% include "core/_form_errors.html" %}
+        {% if conflict_messages %}
+        <div class="bg-red-50 border border-red-200 rounded-[10px] p-3 mb-3" role="alert">
+            {% for message in conflict_messages %}
+            <p class="text-[13px] text-red-700">{{ message }}</p>
+            {% endfor %}
+            <p class="text-[13px] text-red-700">{% trans "Das Formular zeigt jetzt den aktuellen Stand." %}</p>
+            {% if conflict_fields %}
+            <p class="text-[13px] text-red-700">{% blocktrans with fields=conflict_fields|join:", " %}Nicht übernommen wurde Ihre Eingabe bei: {{ fields }}.{% endblocktrans %}</p>
+            {% endif %}
+        </div>
+        {% endif %}
 
         {% for title, fields in form.grouped_fields %}
         <fieldset class="card p-5 space-y-4">
