@@ -537,14 +537,16 @@
         // zusaetzlich inline — fehlen die nur hier verwendeten Klassen in der
         // ausgelieferten styles.css, laege der Toast sonst unter dem
         // Seitenende. Die Inline-Werte sind bewusst fuehrend und entsprechen
-        // den Klassenwerten (bottom-4/right-4 = 1rem, z-50, bg-red-600,
-        // text-white); die Klassen tragen die uebrige Gestaltung.
+        // den Klassenwerten (bottom-4/right-4 = 1rem, z-50; Farben ueber die
+        // Theme-Variablen von bg-red-600/text-white, Hex nur als Rueckfall,
+        // etwa auf Seiten ohne styles.css); die Klassen tragen die uebrige
+        // Gestaltung.
         toast.style.position = "fixed";
         toast.style.bottom = "1rem";
         toast.style.right = "1rem";
         toast.style.zIndex = "50";
-        toast.style.backgroundColor = "#dc2626"; // red-600
-        toast.style.color = "#fff"; // text-white
+        toast.style.backgroundColor = "var(--color-red-600, #dc2626)"; // bg-red-600
+        toast.style.color = "var(--color-white, #fff)"; // text-white
 
         const text = document.createElement("span");
         text.className = "text-sm";

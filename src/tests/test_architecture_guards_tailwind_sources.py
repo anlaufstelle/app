@@ -27,7 +27,6 @@ Der Guard prüft:
 
 from __future__ import annotations
 
-import fnmatch
 import json
 import posixpath
 import re
@@ -144,27 +143,43 @@ def node_stage_copy_sources(root: Path) -> list[str]:
     return [source for source, target, expected in node_stage_copies(root) if target == expected]
 
 
-def dockerignore_patterns(root: Path) -> list[str]:
-    """Ausschlussmuster der ``.dockerignore`` (Kommentare und Ausnahmen ``!`` übergangen)."""
+def dockerignore_rules(root: Path) -> list[tuple[str, bool]]:
+    """Regeln der ``.dockerignore`` als ``(Muster, schließt aus)`` in Dateireihenfolge.
+
+    ``!``-Zeilen nehmen zuvor Ausgeschlossenes wieder auf; wie bei Docker
+    entscheidet die letzte passende Regel.
+    """
     path = root / ".dockerignore"
     if not path.exists():
         return []
-    patterns = []
+    rules = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
-        if not line or line.startswith(("#", "!")):
+        if not line or line.startswith("#"):
             continue
-        patterns.append(line.strip("/"))
-    return patterns
+        excludes = not line.startswith("!")
+        pattern = line.lstrip("!").strip().strip("/")
+        if pattern:
+            rules.append((pattern, excludes))
+    return rules
 
 
-def _ignored_by(path: str, pattern: str) -> bool:
-    """Trifft das Muster den Pfad, eines seiner Elternverzeichnisse oder etwas darin?"""
+def _rule_matches(path: str, pattern: str) -> bool:
+    """Trifft das Muster den Pfad oder eines seiner Elternverzeichnisse?
+
+    ``*`` überspringt wie bei Docker keinen ``/``, ``**`` beliebig viele Ebenen.
+    """
     segments = path.split("/")
-    for depth in range(1, len(segments) + 1):
-        if fnmatch.fnmatchcase("/".join(segments[:depth]), pattern):
-            return True
-    return pattern.startswith(path + "/")
+    return any(PurePosixPath("/".join(segments[:depth])).full_match(pattern) for depth in range(1, len(segments) + 1))
+
+
+def _dockerignore_exclusion(path: str, rules: list[tuple[str, bool]]) -> str | None:
+    """Das ausschließende Muster, falls die letzte passende Regel den Pfad ausschließt."""
+    verdict = None
+    for pattern, excludes in rules:
+        if _rule_matches(path, pattern):
+            verdict = pattern if excludes else None
+    return verdict
 
 
 def _glob_base(glob: str) -> str:
@@ -203,6 +218,23 @@ def _is_scanned(path: str, globs: list[str]) -> bool:
     return _matches(path, included) and not _matches(path, excluded)
 
 
+def scanned_files(root: Path, globs: list[str]) -> list[str]:
+    """Alle vorhandenen Dateien, die Tailwind über die ``content``-Globs liest."""
+    found: dict[str, None] = {}
+    for glob in globs:
+        if glob.startswith("!"):
+            continue
+        for pattern in _expand_braces(glob):
+            base = root / _glob_base(pattern)
+            if not base.is_dir():
+                continue
+            for path in sorted(base.rglob("*")):
+                relative = path.relative_to(root).as_posix()
+                if path.is_file() and _is_scanned(relative, globs):
+                    found[relative] = None
+    return list(found)
+
+
 def js_files_with_dom_classes(root: Path) -> list[str]:
     """JavaScript-Dateien unter ``src/static/js``, die Klassen an DOM-Knoten setzen.
 
@@ -232,9 +264,11 @@ def tailwind_source_violations(root: Path) -> list[str]:
     sources = node_stage_copy_sources(root)
     bases = [_glob_base(pattern) for glob in included for pattern in _expand_braces(glob)]
     class_files = js_files_with_dom_classes(root)
-    for pattern in dockerignore_patterns(root):
-        for path in dict.fromkeys([*bases, *class_files]):
-            if _ignored_by(path, pattern):
+    rules = dockerignore_rules(root)
+    if rules:
+        for path in dict.fromkeys([*bases, *scanned_files(root, globs), *class_files]):
+            pattern = _dockerignore_exclusion(path, rules)
+            if pattern is not None:
                 violations.append(f".dockerignore-Muster {pattern!r} entfernt {path!r} aus dem Build-Kontext")
     for glob in included:
         for pattern in _expand_braces(glob):
@@ -258,6 +292,15 @@ _CONFIG_WITH_JS = """module.exports = {
     "./src/static/js/**/*.js",
   ],
   theme: {},
+};
+"""
+
+_CONFIG_WITHOUT_MIN_JS = """module.exports = {
+  content: [
+    "./src/templates/**/*.html",
+    "./src/static/js/**/*.js",
+    "!./src/static/js/**/*.min.js",
+  ],
 };
 """
 
@@ -420,6 +463,8 @@ class TestTailwindSourcesConfigParsing:
             tailwind_content_globs(root)
 
     def test_skips_without_tailwind_package(self, tmp_path: Path) -> None:
+        if shutil.which("node") is None:
+            pytest.skip("node nicht gefunden — die Tailwind-Config lässt sich nur mit Node auswerten")
         config = "const t = require('tailwindcss/defaultTheme');\n" + _CONFIG_WITH_JS
         root = _probe(tmp_path, config, _DOCKERFILE_WITH_JS)
         with pytest.raises(pytest.skip.Exception, match="npm ci"):
@@ -458,8 +503,7 @@ class TestTailwindSourcesBuildContext:
         root = _probe(tmp_path, _CONFIG_WITH_JS, _DOCKERFILE_WITH_JS)
         (root / ".dockerignore").write_text("node_modules\nsrc/static/js/toast.js\n", encoding="utf-8")
         assert tailwind_source_violations(root) == [
-            ".dockerignore-Muster 'src/static/js/toast.js' entfernt 'src/static/js' aus dem Build-Kontext",
-            ".dockerignore-Muster 'src/static/js/toast.js' entfernt 'src/static/js/toast.js' aus dem Build-Kontext",
+            ".dockerignore-Muster 'src/static/js/toast.js' entfernt 'src/static/js/toast.js' aus dem Build-Kontext"
         ]
 
     def test_dockerignored_content_directory_is_reported(self, tmp_path: Path) -> None:
@@ -475,6 +519,32 @@ class TestTailwindSourcesBuildContext:
         assert ".dockerignore-Muster 'src/static/js/*.js' entfernt 'src/static/js/toast.js' aus dem Build-Kontext" in (
             tailwind_source_violations(root)
         )
+
+    def test_reinclusion_lifts_an_earlier_exclusion(self, tmp_path: Path) -> None:
+        root = _probe(tmp_path, _CONFIG_WITH_JS, _DOCKERFILE_WITH_JS)
+        (root / ".dockerignore").write_text("src/static/js/*.js\n!src/static/js/*.js\n", encoding="utf-8")
+        assert tailwind_source_violations(root) == []
+
+    def test_last_matching_rule_wins(self, tmp_path: Path) -> None:
+        root = _probe(tmp_path, _CONFIG_WITH_JS, _DOCKERFILE_WITH_JS)
+        (root / ".dockerignore").write_text("!src/static/js/toast.js\nsrc/static/js/*.js\n", encoding="utf-8")
+        assert ".dockerignore-Muster 'src/static/js/*.js' entfernt 'src/static/js/toast.js' aus dem Build-Kontext" in (
+            tailwind_source_violations(root)
+        )
+
+    def test_vendor_files_outside_the_scan_may_be_dockerignored(self, tmp_path: Path) -> None:
+        root = _probe(tmp_path, _CONFIG_WITHOUT_MIN_JS, _DOCKERFILE_WITH_JS)
+        (root / ".dockerignore").write_text("src/static/js/vendor/\n", encoding="utf-8")
+        assert tailwind_source_violations(root) == []
+
+    def test_dockerignored_scanned_vendor_class_file_is_reported(self, tmp_path: Path) -> None:
+        root = _probe(tmp_path, _CONFIG_WITHOUT_MIN_JS, _DOCKERFILE_WITH_JS)
+        (root / "src" / "static" / "js" / "vendor" / "widget.js").write_text(_TOAST_JS, encoding="utf-8")
+        (root / ".dockerignore").write_text("src/static/js/vendor/\n", encoding="utf-8")
+        assert tailwind_source_violations(root) == [
+            ".dockerignore-Muster 'src/static/js/vendor' entfernt 'src/static/js/vendor/widget.js' "
+            "aus dem Build-Kontext"
+        ]
 
     def test_unrelated_dockerignore_entries_are_fine(self, tmp_path: Path) -> None:
         root = _probe(tmp_path, _CONFIG_WITH_JS, _DOCKERFILE_WITH_JS)

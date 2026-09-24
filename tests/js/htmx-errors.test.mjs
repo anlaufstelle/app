@@ -132,8 +132,8 @@ describe("htmx-errors: Toast bleibt ohne Tailwind-Klassen sichtbar", () => {
         expect(toast.style.bottom).toBe("1rem");
         expect(toast.style.right).toBe("1rem");
         expect(toast.style.zIndex).toBe("50");
-        expect(toast.style.backgroundColor).toBe("rgb(220, 38, 38)");
-        expect(toast.style.color).toBe("rgb(255, 255, 255)");
+        expect(toast.style.backgroundColor).toBe("var(--color-red-600, #dc2626)");
+        expect(toast.style.color).toBe("var(--color-white, #fff)");
     });
 
     it("behaelt die Klassen fuer die uebrige Gestaltung", () => {
