@@ -16,6 +16,7 @@ englischen Substrings — sowie ``required`` und den unveränderten Leerwert
 from __future__ import annotations
 
 import pytest
+from django.urls import reverse
 
 from core.forms.cases import CaseForm
 from core.forms.config import (
@@ -120,3 +121,24 @@ class TestSelectPlaceholderIsGerman:
         _assert_blank_option(html, "— Vom Dokumentationstyp erben —")
         assert '<option value="normal">Normal</option>' in html
         assert '<option value="high">Hoch</option>' in html
+
+
+@pytest.mark.django_db
+class TestEventCreatePagePlaceholder:
+    """Refs #2381: ``events/create.html`` rendert das Dokumentationstyp-Select
+    selbst (eigene ``<option>``-Schleife mit ``data-min-stage``) und übernimmt
+    das ``empty_label`` aus ``EventMetaForm`` deshalb nicht — die Leer-Option
+    steht im Template und muss denselben deutschen Platzhalter tragen.
+    """
+
+    def test_document_type_select_uses_german_placeholder(self, client, staff_user, doc_type_contact):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create"))
+        assert response.status_code == 200
+        html = response.content.decode()
+        start = html.index('name="document_type"')
+        select = html[start : html.index("</select>", start)]
+        assert '<option value="">— Bitte auswählen —</option>' in select
+        assert "---------" not in select
+        assert ENGLISH_PLACEHOLDER not in select
+        assert f'value="{doc_type_contact.pk}"' in select

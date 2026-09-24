@@ -120,7 +120,7 @@
                             nach dem Swap sind die neuen Felder regulaer aktiv.{% endcomment %}
                             hx-disabled-elt="#dynamic-fields-fence"
                             hx-include="[name='document_type']">
-                        <option value="">---------</option>
+                        <option value="">{% translate "— Bitte auswählen —" %}</option>
                         {% for dt in meta_form.document_type.field.queryset %}
                         <option value="{{ dt.pk }}"
                                 data-min-stage="{{ dt.min_contact_stage|default:'' }}"
