@@ -14,6 +14,7 @@ Einzige Ausnahme ist der Fachbegriff des Offline-Sync-Moduls
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import NamedTuple
 
@@ -69,15 +70,40 @@ class Hit(NamedTuple):
     line: str
 
 
+def _candidate_files(root: Path) -> list[Path]:
+    """Versionierte Dateien unter ``root`` (Git), sonst alle regulaeren Dateien."""
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "-z", "--", "."],
+            cwd=root,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        proc = None
+    if proc is not None and proc.returncode == 0:
+        files = [root / rel for rel in proc.stdout.decode("utf-8").split("\0") if rel]
+        return [p for p in files if p.is_file()]
+    return [p for p in root.rglob("*") if p.is_file()]
+
+
 def scan_process_vocabulary(
     root: Path,
     *,
     extensions: tuple[str, ...] = _DEFAULT_EXTENSIONS,
     excluded_dir_names: frozenset[str] = _DEFAULT_EXCLUDED_DIR_NAMES,
 ) -> list[Hit]:
-    """Scannt ``root`` rekursiv nach Arbeitsablauf-Jargon (reine Baumsuche ohne Seiteneffekte)."""
+    """Scannt ``root`` rekursiv nach Arbeitsablauf-Jargon (reine Baumsuche ohne Seiteneffekte).
+
+    Liegt ``root`` in einem Git-Arbeitsbaum, werden nur versionierte Dateien geprueft:
+    lokale, per ``.gitignore`` ausgeschlossene Ablagen (z. B. persoenliche Planungsnotizen
+    unter ``docs/``) gehoeren nicht zum ausgelieferten Baum und duerfen den Guard nicht
+    reissen. Ausserhalb eines Git-Baums (Proben unter ``tmp_path``) bleibt es bei der
+    reinen Dateisystemsuche.
+    """
     hits: list[Hit] = []
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+    for path in sorted(_candidate_files(root)):
         if path.suffix not in extensions:
             continue
         relparts = path.relative_to(root).parts
