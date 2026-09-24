@@ -1,17 +1,21 @@
 /*
  * Globaler HTMX-Fehler-Handler (Refs #1016, Workstream C — C2).
  *
- * HTMX swappt bei 4xx/5xx-Antworten standardmäßig NICHT. Ohne Handler bliebe
- * eine fehlgeschlagene hx-Aktion für den Nutzer komplett unsichtbar. Dieser
- * Handler zeigt einen diskreten Fehler-Toast unten rechts.
+ * Ohne Handler bliebe eine fehlgeschlagene hx-Aktion, deren Antwort nicht
+ * eingewechselt wird, für den Nutzer komplett unsichtbar. Dieser Handler
+ * zeigt dann einen diskreten Fehler-Toast unten rechts.
  *
- * Refs #2232/#2321 (H-5): Für 4xx gilt inzwischen die Swap-Regel aus der
- * ``responseHandling``-Tabelle in base.html — die fachlichen Klartext-400er
- * und -409er aus retention.py / workitem_bulk.py ("Begründung ist
- * erforderlich." o.ä.) landen also im auslösenden Ziel und tragen ihre
- * Meldung selbst; der Toast unterbleibt dann (siehe ``swappedErrorResponses``
- * weiter unten). Ohne Swap — 401/403/404/405/422/429 und alle 5xx — ist er
- * der einzige Weg, auf dem der Fehlschlag sichtbar wird.
+ * Refs #2232/#2321: Für 4xx gilt die Swap-Regel aus der
+ * ``responseHandling``-Tabelle in base.html — fachliche 4xx-Partials und
+ * -Klartexte (z. B. die 409 der Vorschlagskarte in retention.py) landen im
+ * auslösenden Ziel und tragen ihre Meldung selbst; der Toast unterbleibt
+ * dann (siehe ``swappedErrorResponses`` weiter unten). Ausnahme: Antworten
+ * mit ``HX-Reswap: none`` (Refs #2358, ``htmx_absage`` in
+ * core/views/mixins.py, z. B. die Absage bei Wirkungszielen und
+ * Meilensteinen) werden nicht eingewechselt — der Kasten bleibt stehen, und
+ * der Toast zeigt die Meldung. Ohne Swap — 401/403/404/405/422/429, alle
+ * 5xx und ``HX-Reswap: none`` — ist er der einzige Weg, auf dem der
+ * Fehlschlag sichtbar wird.
  *
  * Reine DOM-Manipulation, CSP-konform (kein Inline-Script, kein eval) — spiegelt
  * das Toast-Muster aus sw-register.js (_showUpdatePrompt). Single-Toast: ein
@@ -30,6 +34,11 @@
     // ausgeliefert und kennt die Sprache des Nutzers nicht.
     var RATE_LIMITED = "Zu viele Anfragen in kurzer Zeit. Bitte kurz warten und es erneut versuchen.";
     var AUTO_DISMISS_MS = 6000;
+    // Refs #2358: Obergrenze für Klartext-Bodies, die der Toast wörtlich
+    // zeigt. Fachliche Absagen mit ``HX-Reswap: none`` erreichen die Nutzerin
+    // nur hier; die Art.-18-Meldung ist länger als die frühere Grenze von 200
+    // Zeichen. Längere Bodies fallen weiter auf die Standardmeldung zurück.
+    var MAX_PLAIN_TEXT_LENGTH = 400;
     // Refs #2232: Ein geswapptes 4xx-Partial enthaelt seine sichtbare
     // Fehlermeldung bereits im fachlichen Ziel. htmx feuert wegen ``error:true``
     // danach trotzdem responseError (wichtig fuer lokale Listener wie den
@@ -96,7 +105,7 @@
         var status = xhr && typeof xhr.status === "number" ? xhr.status : 0;
         try {
             var body = xhr && xhr.responseText ? xhr.responseText.trim() : "";
-            if (body && body.length <= 200 && body.indexOf("<") === -1) {
+            if (body && body.length <= MAX_PLAIN_TEXT_LENGTH && body.indexOf("<") === -1) {
                 return body;
             }
         } catch (_e) {

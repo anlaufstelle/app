@@ -97,3 +97,24 @@ describe("htmx-errors: bestehendes Verhalten bleibt", () => {
         expect(document.getElementById("htmx-error-toast")).not.toBeNull();
     });
 });
+
+// Refs #2358: Fachliche Absagen mit ``HX-Reswap: none`` (z. B. die
+// Art.-18-Meldung bei Meilensteinen, 264 Zeichen) erreichen die Nutzerin
+// ausschliesslich ueber diesen Toast. Die Grenze fuer Klartext-Bodies liegt
+// deshalb bei 400 Zeichen; laengere Bodies fallen weiter auf die
+// Standardmeldung zurueck.
+describe("htmx-errors: laengere fachliche Absagen", () => {
+    it("zeigt einen markup-freien Klartext mit 264 Zeichen an", () => {
+        const meldung = "A".repeat(264);
+        expect(respond(409, meldung)).toBe(meldung);
+    });
+
+    it("zeigt einen markup-freien Klartext mit genau 400 Zeichen an", () => {
+        const meldung = "B".repeat(400);
+        expect(respond(409, meldung)).toBe(meldung);
+    });
+
+    it("faellt bei 401 Zeichen auf die Standardmeldung zurueck", () => {
+        expect(respond(409, "C".repeat(401))).toBe(GENERIC);
+    });
+});
