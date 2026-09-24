@@ -18,6 +18,10 @@ from core.services.security import RequireSudoModeMixin
 from core.services.system import update_settings
 from core.views.mixins import FacilityAdminRequiredMixin
 
+# Fehlercodes aus ``check_version_conflict``, die ohne Speichern auf den
+# aktuellen Stand zurueckfuehren.
+_TOKEN_ERROR_CODES = frozenset({"missing_token", "invalid_token", "version_conflict"})
+
 
 @method_decorator(
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
@@ -85,6 +89,20 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
                 expected_updated_at=request.POST.get("expected_updated_at", ""),
             )
 
+        # Ohne Versions-Token liesse ``update_settings`` die Konfliktpruefung
+        # aus. Auf diesem Formularweg ist der Token deshalb Pflicht: fehlt er,
+        # wird nichts gespeichert, sondern der aktuelle Stand angezeigt.
+        expected_updated_at = request.POST.get("expected_updated_at", "")
+        if not expected_updated_at:
+            return self._render_conflict(
+                request,
+                form,
+                ValidationError(
+                    _("Für diese Änderung ist ein Versions-Token erforderlich."),
+                    code="missing_token",
+                ),
+            )
+
         # ``ModelForm._post_clean`` schreibt die bereinigten Werte bereits auf
         # ``instance`` (ohne DB-Save). Der Audit-Service braucht dagegen den
         # echten Vorher-Zustand fuer Snapshot und Optimistic Locking.
@@ -93,18 +111,18 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
             update_settings(
                 settings_obj,
                 request.user,
-                expected_updated_at=request.POST.get("expected_updated_at") or None,
+                expected_updated_at=expected_updated_at,
                 **{name: form.cleaned_data[name] for name in form.fields},
             )
         except ValidationError as exc:
-            if getattr(exc, "code", None) == "version_conflict":
+            # Ein veralteter, unlesbarer oder zeitzonenloser Token darf nie zu
+            # einer Neuanzeige fuehren, die die alte Eingabe mit einem gueltigen
+            # Token verbindet — sonst ueberschriebe das naechste Speichern eine
+            # zwischenzeitliche Aenderung still.
+            if getattr(exc, "code", None) in _TOKEN_ERROR_CODES:
                 return self._render_conflict(request, form, exc)
             form.add_error(None, exc)
-            return self._render(
-                request,
-                form,
-                expected_updated_at=settings_obj.updated_at.isoformat(),
-            )
+            return self._render(request, form, expected_updated_at=expected_updated_at)
 
         messages.success(request, _("Einstellungen wurden gespeichert."))
         return redirect("core:facility_settings")

@@ -273,16 +273,58 @@ class TestFacilitySettingsConflictRerender:
         settings_obj.refresh_from_db()
         assert settings_obj.facility_full_name == "Parallel gespeichert"
 
-    def test_unreadable_token_keeps_input_and_is_no_conflict(self, client, admin_user, settings_obj):
+    @pytest.mark.parametrize(
+        "token",
+        [None, "", "kein-zeitstempel", "2026-01-01T00:00:00"],
+        ids=["fehlend", "leer", "unlesbar", "ohne-zeitzone"],
+    )
+    def test_missing_or_unusable_token_is_treated_as_conflict(self, client, admin_user, settings_obj, token):
+        client.force_login(admin_user)
+        stale = _post_data(settings_obj)
+        update_settings(
+            Settings.objects.get(pk=settings_obj.pk),
+            admin_user,
+            facility_full_name="Parallel gespeichert",
+        )
+        stale["facility_full_name"] = "Stand aus Tab A"
+        if token is None:
+            del stale["expected_updated_at"]
+        else:
+            stale["expected_updated_at"] = token
+
+        response = client.post(reverse("core:facility_settings"), stale)
+
+        assert response.status_code == 409
+        settings_obj.refresh_from_db()
+        assert settings_obj.facility_full_name == "Parallel gespeichert"
+        values = _submitted_values(response)
+        assert values["facility_full_name"] == "Parallel gespeichert"
+        assert values["expected_updated_at"] == settings_obj.updated_at.isoformat()
+        assert "Nicht übernommen wurde Ihre Eingabe bei: Vollständiger Name" in response.content.decode()
+
+        again = client.post(reverse("core:facility_settings"), values)
+
+        assert again.status_code == 302
+        settings_obj.refresh_from_db()
+        assert settings_obj.facility_full_name == "Parallel gespeichert"
+
+    def test_other_service_error_keeps_input_with_submitted_token(self, client, admin_user, settings_obj, monkeypatch):
+        from django.core.exceptions import ValidationError
+
+        import core.views.facility_settings as view_module
+
+        def _reject(*args, **kwargs):
+            raise ValidationError("Fachlich abgelehnt", code="rejected")
+
+        monkeypatch.setattr(view_module, "update_settings", _reject)
         client.force_login(admin_user)
         data = _post_data(settings_obj)
-        data["expected_updated_at"] = "kein-zeitstempel"
         data["facility_full_name"] = "Eigene Eingabe"
 
         response = client.post(reverse("core:facility_settings"), data)
 
         assert response.status_code == 200
-        assert "conflict_fields" not in response.context
-        assert _submitted_values(response)["facility_full_name"] == "Eigene Eingabe"
-        settings_obj.refresh_from_db()
-        assert settings_obj.facility_full_name != "Eigene Eingabe"
+        values = _submitted_values(response)
+        assert values["facility_full_name"] == "Eigene Eingabe"
+        assert values["expected_updated_at"] == data["expected_updated_at"]
+        assert "Fachlich abgelehnt" in response.content.decode()
