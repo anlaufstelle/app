@@ -69,7 +69,7 @@ from core.models import AuditLog, User
 from core.services.audit import audit_event, log_audit_event
 from core.services.security.login_lockout import unlock
 from core.services.security.sudo_mode import clear_sudo
-from core.signals.audit import get_client_ip
+from core.signals.audit import _set_session_vars, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -220,9 +220,45 @@ def revoke_credentials(user, *, reason, request=None) -> None:
         # „von wo kam die Entsperrung" beantwortet. ``get_client_ip`` loest sie
         # spoofing-resistent ueber ``TRUSTED_PROXY_HOPS`` auf und liefert fuer
         # den request-losen Service-/CLI-Kontext weiterhin ``None``.
+        #
+        # Der Unlock schreibt ueber den request-losen ``audit_event``-Helper —
+        # fuer den anonymen Reset-/Invite-Request muessen die RLS-GUCs vorher
+        # auf den Ziel-Kontext stehen (siehe Helper-Docstring).
+        _sync_rls_context_for_anonymous_request(user, request)
         unlock(user, unlocked_by=None, ip_address=get_client_ip(request), trigger=str(grund))
     if effects.write_audit:
         _write_audit(user, grund, request)
+
+
+def _sync_rls_context_for_anonymous_request(user, request) -> None:
+    """Setzt die RLS-Session-GUCs auf den Ziel-User, wenn der Request anonym ist.
+
+    Reset und Invite laufen ohne Login: ``FacilityScopeMiddleware`` hat
+    ``app.current_facility_id``/``app.is_super_admin`` fuer den anonymen
+    Request auf ``''`` gestellt. ``unlock`` schreibt LOGIN_UNLOCK ueber den
+    request-losen Helper ``audit_event``, der — anders als ``log_audit_event``
+    (Security R3) — keinen GUC-Sync kennt. Unter der NOBYPASSRLS-App-Rolle
+    verletzte der INSERT damit die WITH-CHECK-Policy (Migration 0085), und zwar
+    NACH dem bereits gespeicherten Passwort: 500er statt Weiterleitung, weder
+    Unlock- noch CREDENTIALS_REVOKED-Zeile, ein aktiver Lockout blieb trotz
+    Reset bestehen (Refs #2391). Dasselbe Muster setzt
+    ``consume_recovery_token`` vor seinem Unlock (Refs #2111).
+
+    Authentifizierte Requests (Passwortwechsel) bleiben unberuehrt: dort tragen
+    die GUCs bereits den Kontext der handelnden Person, und ein Umschalten auf
+    den Ziel-User waere fuer eine super_admin-Session ein Kontextverlust. Ohne
+    Request (Service-/CLI-Kontext) gibt es keine Middleware-Vorbelegung zu
+    korrigieren — dort verantwortet der Aufrufer den DB-Kontext selbst.
+    """
+    if request is None:
+        return
+    request_user = getattr(request, "user", None)
+    if request_user is not None and getattr(request_user, "is_authenticated", False):
+        return
+    _set_session_vars(
+        getattr(user, "facility", None),
+        is_super_admin=bool(getattr(user, "is_super_admin", False)),
+    )
 
 
 def _write_audit(user, reason: RevocationReason, request) -> None:
