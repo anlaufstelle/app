@@ -5,6 +5,9 @@ module.exports = {
   content: [
     "./src/templates/**/*.html",
     "./src/core/**/*.py",
+    // Klassen per JavaScript erzeugter Elemente (Hinweis-Toasts, Offline-
+    // Ansichten); das Dockerfile kopiert das Verzeichnis in die Node-Stufe.
+    "./src/static/js/**/*.js",
   ],
   // Hinweis (Refs #1480): Der frühere `safelist`-Key (dynamische Badge-/
   // Fälligkeits-Farben) ist entfernt — Tailwind v4 unterstützt `safelist` in der

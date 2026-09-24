@@ -141,6 +141,23 @@ describe("offline-db version mismatch", () => {
         expect(document.getElementById(TOAST_ID).getAttribute("role")).toBe("alert");
     });
 
+    it("stays on screen without the Tailwind classes", async () => {
+        // Refs #2387 (Muster #1386): die Klassen stehen nur hier im
+        // JavaScript; fehlen sie in der ausgelieferten CSS, laege der Toast
+        // unter dem Seitenende. Die sichtbarkeitskritischen Eigenschaften
+        // stehen deshalb zusaetzlich inline am Element.
+        await loadOfflineDb(() => Promise.reject(versionError()));
+
+        const toast = document.getElementById(TOAST_ID);
+        expect(toast.style.position).toBe("fixed");
+        expect(toast.style.bottom).toBe("1rem");
+        expect(toast.style.right).toBe("1rem");
+        expect(toast.style.zIndex).toBe("50");
+        expect(toast.style.backgroundColor).toBe("rgb(220, 38, 38)");
+        expect(toast.style.color).toBe("rgb(255, 255, 255)");
+        expect(toast.className).toContain("fixed bottom-4 right-4 z-50");
+    });
+
     it("is dismissible", async () => {
         await loadOfflineDb(() => Promise.reject(versionError()));
 

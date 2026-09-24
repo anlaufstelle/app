@@ -533,6 +533,16 @@
         toast.className =
             "fixed bottom-4 right-4 z-50 max-w-sm bg-red-600 text-white " +
             "rounded-lg shadow-lg p-4 flex items-center gap-3";
+        // Refs #2387 (Muster #1386): sichtbarkeitskritische Eigenschaften
+        // zusaetzlich inline — fehlen die nur hier verwendeten Klassen in der
+        // ausgelieferten styles.css, laege der Toast sonst unter dem
+        // Seitenende. Die Klassen bleiben fuehrend.
+        toast.style.position = "fixed";
+        toast.style.bottom = "1rem";
+        toast.style.right = "1rem";
+        toast.style.zIndex = "50";
+        toast.style.backgroundColor = "#dc2626"; // red-600
+        toast.style.color = "#ffffff";
 
         const text = document.createElement("span");
         text.className = "text-sm";

@@ -125,6 +125,19 @@
             toast.className =
                 "fixed bottom-4 right-4 z-50 max-w-sm bg-red-600 text-white " +
                 "rounded-lg shadow-lg p-4 flex items-start gap-3";
+            // Refs #2387 (Muster #1386): Diese Klassen stehen nur hier im
+            // JavaScript. Fehlen sie in der ausgelieferten styles.css, legt
+            // ``fixed`` ohne ``bottom`` den Toast an seine statische Position
+            // unter dem Seitenende — die Absage bliebe unsichtbar. Die
+            // sichtbarkeitskritischen Eigenschaften stehen deshalb zusaetzlich
+            // inline (CSSOM, von der CSP nicht betroffen); die Klassen bleiben
+            // fuehrend.
+            toast.style.position = "fixed";
+            toast.style.bottom = "1rem";
+            toast.style.right = "1rem";
+            toast.style.zIndex = "50";
+            toast.style.backgroundColor = "#dc2626"; // red-600
+            toast.style.color = "#ffffff";
 
             var text = document.createElement("span");
             text.className = "text-sm flex-grow";

@@ -29,6 +29,10 @@ WORKDIR /build
 COPY package.json package-lock.json tailwind.config.js ./
 COPY src/templates/ src/templates/
 COPY src/core/ src/core/
+# Per JavaScript erzeugte Elemente (Hinweis-Toasts, Offline-Ansichten) tragen
+# Klassen, die nur in src/static/js/ stehen — ohne diese Quellen fehlen sie
+# in der ausgelieferten styles.css (Refs #2387).
+COPY src/static/js/ src/static/js/
 COPY src/static/css/input.css src/static/css/input.css
 RUN npm ci && npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
 

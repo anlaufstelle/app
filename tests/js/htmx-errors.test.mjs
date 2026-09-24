@@ -118,3 +118,29 @@ describe("htmx-errors: laengere fachliche Absagen", () => {
         expect(respond(409, "C".repeat(401))).toBe(GENERIC);
     });
 });
+
+// Refs #2387 (Muster #1386): Die Klassen des Toasts stehen nur hier im
+// JavaScript. Fehlen sie in der ausgelieferten CSS, legt ``position: fixed``
+// ohne ``bottom`` den Toast unter das Seitenende. Die sichtbarkeitskritischen
+// Eigenschaften stehen deshalb zusaetzlich inline am Element.
+describe("htmx-errors: Toast bleibt ohne Tailwind-Klassen sichtbar", () => {
+    it("traegt Position, Ebene und Farben als Inline-Stil", () => {
+        respond(409, "Absage");
+        const toast = document.getElementById("htmx-error-toast");
+
+        expect(toast.style.position).toBe("fixed");
+        expect(toast.style.bottom).toBe("1rem");
+        expect(toast.style.right).toBe("1rem");
+        expect(toast.style.zIndex).toBe("50");
+        expect(toast.style.backgroundColor).toBe("rgb(220, 38, 38)");
+        expect(toast.style.color).toBe("rgb(255, 255, 255)");
+    });
+
+    it("behaelt die Klassen als fuehrende Gestaltung", () => {
+        respond(409, "Absage");
+        const toast = document.getElementById("htmx-error-toast");
+
+        expect(toast.className).toContain("fixed bottom-4 right-4 z-50");
+        expect(toast.className).toContain("bg-red-600 text-white");
+    });
+});
