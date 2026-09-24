@@ -273,6 +273,18 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # #1886 noch nicht senden: Anlage nutzt den Modell-Default, Bearbeitung
         # behaelt die vorhandene Position statt sie still auf 0 zu setzen.
         self.fields["sort_order"].required = False
+        # Refs #2381: ``system_type``/``min_contact_stage`` sind Modellfelder
+        # mit ``blank=True`` — Django erzeugt daraus ein ``TypedChoiceField``
+        # mit einer Leer-Option, deren Text ohne eigene Angabe auf Djangos
+        # unuebersetzten Blank-Choice-Text ("- Select an option -") faellt.
+        self.fields["system_type"].choices = [
+            (value, _("— Kein Systemtyp —") if value == "" else label)
+            for value, label in self.fields["system_type"].choices
+        ]
+        self.fields["min_contact_stage"].choices = [
+            (value, _("— Keine Angabe —") if value == "" else label)
+            for value, label in self.fields["min_contact_stage"].choices
+        ]
         # Neuobjekt: facility aus dem Scope an die Instanz binden, damit
         # form.save() (Service) den richtigen Mandanten schreibt.
         if facility is not None and self.instance.facility_id is None:
@@ -509,6 +521,15 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # Entfernen/Umbenennen einer verwendeten Option zu warnen (#1875).
         self.used_option_slugs_attr = " ".join(sorted(used_option_slugs or ()))
         self._setup_report_key(get_field_key_vocabulary())
+        # Refs #2381: ``sensitivity`` ist am Modell ``blank=True`` — Django
+        # erzeugt daraus ein ``TypedChoiceField`` mit einer Leer-Option, deren
+        # Text ohne eigene Angabe auf Djangos unuebersetzten Blank-Choice-Text
+        # ("- Select an option -") faellt. Leer heisst hier "erbt vom
+        # Dokumentationstyp" (Modell-Hilfetext) — der Platzhalter sagt das.
+        self.fields["sensitivity"].choices = [
+            (value, _("— Vom Dokumentationstyp erben —") if value == "" else label)
+            for value, label in self.fields["sensitivity"].choices
+        ]
 
     def clean(self):
         """E-J (Refs #1849), vierter Weg: der Schlüssel wird NACHTRÄGLICH gesetzt.
