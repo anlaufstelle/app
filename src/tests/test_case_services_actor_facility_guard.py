@@ -18,7 +18,8 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, User
-from core.services.case import close_case, create_case, reopen_case, update_case
+from core.models.outcome import OutcomeGoal
+from core.services.case import close_case, create_case, create_goal, reopen_case, update_case
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
@@ -156,3 +157,18 @@ class TestReopenCase:
 
         assert Case.objects.get(pk=case_closed.pk).status == Case.Status.OPEN
         assert AuditLog.objects.filter(action=AuditLog.Action.CASE_REOPEN, target_id=str(case_closed.pk)).count() == 1
+
+
+class TestCreateGoal:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, case_open):
+        user = request.getfixturevalue(akteur)
+
+        _abgewiesen_ohne_sperre(lambda: create_goal(Case.objects.get(pk=case_open.pk), user, "Fremd"))
+
+        assert not OutcomeGoal.objects.filter(case_id=case_open.pk).exists()
+
+    def test_eigene_einrichtung_legt_an(self, case_open, staff_user):
+        ziel = create_goal(Case.objects.get(pk=case_open.pk), staff_user, "Neu")
+
+        assert OutcomeGoal.objects.get(pk=ziel.pk).title == "Neu"
