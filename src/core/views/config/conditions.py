@@ -270,10 +270,10 @@ def _resolve_source_dtf(request, pk):
     ``ConditionOperatorInputView.get`` (#1715/E19): ``DocumentType`` per
     ``pk``+facility (IDOR → 404), dann ``depends_on_field``/``source``-Alias
     als Quell-DTF-UUID, 400 bei fehlendem/ungültigem Wert. Rückgabe entweder
-    ``(doc_type, dtf, operator)`` oder eine fertige HTMX-Absage (400 +
-    ``HX-Reswap: none``, Refs #2385: beide Views swappen in einen Slot, ein
-    roher Klartext ersetzte ihn sonst) — die Aufrufstelle unterscheidet per
-    ``isinstance``.
+    ``(doc_type, dtf, operator)`` or a ready-made HTMX rejection (400 +
+    ``HX-Reswap: none``; Refs #2385: both views swap into a slot, and a raw
+    plain-text response would otherwise replace it) — the caller
+    distinguishes via ``isinstance``.
     """
     doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
     source_raw = request.GET.get("depends_on_field") or request.GET.get("source") or ""
