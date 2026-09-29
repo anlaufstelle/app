@@ -1,6 +1,6 @@
 """Custom ``handler500``: non-sensitive reference id and operator contact (Refs #1904).
 
-Djangos default 500 handling renders ``500.html`` with no context and no
+Django's default 500 handling renders ``500.html`` with no context and no
 request-derived information at all. This adds a random reference id (also
 written to the server log) and an optional operator contact, without
 introducing any database access or request-derived data into the response —

@@ -1,9 +1,9 @@
-"""Custom Error-Views (Refs #358, #699, #970, #1354, #1904).
+"""Custom error views (Refs #358, #699, #970, #1354, #1904).
 
-Hier liegen Views, die Djangos Built-in-Error-Pages ersetzen — die
-CSRF-Failure-View, der ``handler403`` (Ratelimited → 429) und der
-``handler500`` (Referenz-ID + Betreuungskontakt). 400/404 nutzen weiterhin
-Djangos Auto-Resolution via Templates ohne View-Override.
+This module holds views that replace Django's built-in error pages — the
+CSRF failure view, ``handler403`` (Ratelimited -> 429), and ``handler500``
+(reference id + operator contact). 400/404 still use Django's
+auto-resolution via templates, without a view override.
 """
 
 import logging
