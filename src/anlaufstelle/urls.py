@@ -121,3 +121,6 @@ urlpatterns = [
 # wird auf 429 gemappt statt als 403 ausgeliefert — der Offline-Client deutet
 # 403 als Rechteentzug und purgt lokale Bundles. Echte 403 bleiben unveraendert.
 handler403 = "core.views.errors.permission_denied"
+# Refs #1904: adds a non-sensitive reference id (also written to the server
+# log) and the configured operator contact to the default 500 page.
+handler500 = "core.views.errors.server_error"

@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Demo-Szenariokatalog inklusive Solo-Betrieb** (#2279) — Ein neuer `--scale demo`-Seed stellt sechs eigenständige Beispieleinrichtungen (Kontaktladen, Beratungsstelle, Solo-Betrieb, Awareness, Jugendarbeit, Frauenhaus) gleichzeitig mit überschaubarer Datenmenge bereit, unabhängig vom bisherigen `large`-Datenvolumen; der stündliche Demo-Reset nutzt denselben Katalog.
 - **Demo-Bereichsauswahl statt Benutzername/Passwort** (#2285) — Auf der öffentlichen Demo wählen Besucherinnen jetzt zuerst einen fachlichen Einsatzbereich (z. B. Kontaktladen, Solo-Betrieb) und starten ohne Zugangsdaten in der passenden Alltagsrolle; ein jederzeit erreichbarer „Demo-Bereich wechseln“-Link führt zurück zur Auswahl. Wirkt nur bei `DEMO_MODE` und setzt den Szenariokatalog aus #2279 voraus.
 - **Hilfe-Übersicht verlinkt Benutzerhandbuch und FAQ** (#1904) — `/hilfe/` verweist jetzt zusätzlich auf das ausführliche Benutzerhandbuch und die FAQ des öffentlichen Repositorys; beide Links folgen `SOURCE_CODE_URL`, öffnen in einem neuen Tab und zeigen bei englischer Oberfläche das englische Handbuch.
+- **Serverfehlerseite nennt Referenz-ID und Betreuungskontakt** (#1904) — Ein Serverfehler zeigt jetzt eine nicht sensitive Referenz-ID; dieselbe ID steht in der zugehörigen Log-Zeile, und ein optional konfigurierter Kontakt der Anwendungsbetreuung (`SUPPORT_CONTACT`) wird angezeigt.
 
 ### Changed
 

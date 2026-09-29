@@ -756,6 +756,14 @@ DEMO_LEGAL_PRIVACY_URL = ""
 LEGAL_IMPRINT_FILE = os.environ.get("LEGAL_IMPRINT_FILE") or None
 LEGAL_PRIVACY_FILE = os.environ.get("LEGAL_PRIVACY_FILE") or None
 
+# Operator contact shown on the 500 page next to the reference id (Refs
+# #1904). Free text (an email address or phone number) of the application's
+# support/operations team; empty (the default) shows a generic sentence
+# instead of a dead link. An email address gets a "mailto:" link, anything
+# else is shown as plain text. No facility or account data — a single
+# installation-wide setting.
+SUPPORT_CONTACT = os.environ.get("SUPPORT_CONTACT", "")
+
 # --- Django Unfold ---
 
 UNFOLD = {

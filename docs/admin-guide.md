@@ -162,6 +162,7 @@ Die folgenden Tabellen dokumentieren App-Settings und Betriebsvariablen (siehe [
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT` | aus `.env` an `web` durchgereicht; die App-Rolle bleibt RLS-beschränkt |
 | `ENCRYPTION_KEYS`/`ENCRYPTION_KEY`, `CLAMAV_ENABLED`, `CLAMAV_PORT`, `CLAMAV_TIMEOUT` | aus `.env` an `web` durchgereicht |
 | `SENTRY_DSN`, `SENTRY_TRACES_SAMPLE_RATE`, `EMAIL_*`, `DEFAULT_FROM_EMAIL` | aus `.env` an `web` durchgereicht |
+| `SUPPORT_CONTACT` | aus `.env` an `web` durchgereicht; leer = allgemeiner Verweis auf die Anwendungsbetreuung der Einrichtung auf der Serverfehlerseite |
 | `DJANGO_SETTINGS_MODULE`, `POSTGRES_HOST`, `CLAMAV_HOST` | `DJANGO_SETTINGS_MODULE` und `POSTGRES_HOST` sind in `docker-compose.prod.yml` fest auf `anlaufstelle.settings.prod` und `db` gesetzt; `CLAMAV_HOST` ist über `.env` konfigurierbar |
 | `DJANGO_HEALTH_DETAIL_TOKEN`, `LOG_FORMAT`, `FILE_VAULT_MAX_UPLOAD_BYTES`, `FILE_VAULT_MAX_UPLOAD_FILES`, `FILE_VAULT_MAX_IMAGE_PIXELS`, `FILE_VAULT_MAX_ARCHIVE_BYTES`, `FILE_VAULT_MAX_ARCHIVE_RATIO`, `FILE_VAULT_MAX_ARCHIVE_ENTRIES`, `FILE_VAULT_DEFAULT_FACILITY_QUOTA_MB`, `MAINTENANCE_FLAG_FILE`, `MAINTENANCE_ALLOW_IPS`, `MAINTENANCE_CACHE_TTL`, `MAINTENANCE_RETRY_AFTER`, `SUDO_MODE_TTL_SECONDS`, `DJANGO_INVITE_TOKEN_TIMEOUT`, `DJANGO_PASSWORD_RESET_TIMEOUT` | aus `.env` an `web` durchgereicht |
 | `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` | nur `maintenance`/Initialisierung, bewusst **nicht** `web` |
@@ -1737,6 +1738,20 @@ docker system df -v | grep pgdata
 3. **Auch ohne sichtbare Unterdrückung bleibt eine Grenze:** Die Zusicherung gilt je Artefakt und je Zeitraum, nicht über mehrere Herausgaben hinweg — siehe [§ 8, „Herausgabe von Berichten: was Sie wissen müssen"](#8-statistik-snapshots-materialized-view).
 
 > **Wichtig:** Das Herabsetzen der Schwelle ist eine Datenschutz-Entscheidung, kein Bedienschritt. Sie gilt für alle Berichte, die das Haus verlassen; dokumentieren Sie die Änderung entsprechend — im Audit-Log erscheint sie als „Einstellungen geändert" mit Alt- und Neu-Wert ([§ 7.4](#74-audit-log)).
+
+### Problem: Nutzer melden einen Serverfehler mit Referenz-ID
+
+**Symptom:** Eine Nutzerin meldet eine Fehlerseite mit einer Referenz wie `A1B2-C3D4-E5F6`, ggf. zusammen mit dem angezeigten Kontakthinweis.
+
+Dieselbe Referenz-ID steht in der zugehörigen Server-Log-Zeile (strukturiertes Feld `request_id`), ohne Konto- oder Einrichtungsbezug:
+
+```bash
+docker compose -f docker-compose.prod.yml logs web | grep "<ID>"
+```
+
+Das funktioniert unabhängig vom `LOG_FORMAT`: Im Text-Log steht `request_id="<ID>"` hinter der Meldung, im JSON-Log (`LOG_FORMAT=json`) im Feld `request_id`.
+
+Der angezeigte Kontakt stammt aus der Umgebungsvariable `SUPPORT_CONTACT` (leer = allgemeiner Verweis auf die Anwendungsbetreuung der Einrichtung, ohne toten Link). Ist zusätzlich Sentry eingerichtet (`SENTRY_DSN`), entsteht zum selben Vorfall in aller Regel auch ein Sentry-Event — die Referenz-ID der Fehlerseite ist damit aber **nicht** automatisch verknüpft; ordnen Sie beide über den Zeitpunkt und den in Sentry sichtbaren Request-Pfad einander zu.
 
 ### Diagnose-Befehle auf einen Blick
 

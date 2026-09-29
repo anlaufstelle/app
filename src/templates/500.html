@@ -85,6 +85,14 @@
         <p class="error-code">500</p>
         <h1 class="error-title">{% trans "Serverfehler" %}</h1>
         <p class="error-message">{% trans "Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut." %}</p>
+        <p class="error-message">{% trans "Referenz-ID" %}: <code>{{ reference_id }}</code></p>
+        {% if contact.href %}
+        <p class="error-message">{% blocktrans with contact_href=contact.href contact_text=contact.text %}Nennen Sie diese Referenz-ID, falls Sie sich an <a href="{{ contact_href }}">{{ contact_text }}</a> wenden.{% endblocktrans %}</p>
+        {% elif contact.text %}
+        <p class="error-message">{% blocktrans with contact_text=contact.text %}Nennen Sie diese Referenz-ID, falls Sie sich an {{ contact_text }} wenden.{% endblocktrans %}</p>
+        {% else %}
+        <p class="error-message">{% trans "Wenden Sie sich mit dieser Referenz-ID an die Anwendungsbetreuung Ihrer Einrichtung." %}</p>
+        {% endif %}
         <div>
             <a href="/" class="back-link">{% trans "Zurück zur Startseite" %}</a>
         </div>
