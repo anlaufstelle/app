@@ -225,6 +225,13 @@ def update_case(case, user, *, expected_updated_at=None, expected_form_state=Non
     Strikt: JEDER ``client``-Kwarg fliegt raus, auch der unveränderte Wert —
     die Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     """
+    # Einrichtungsgrenze der handelnden Person zuerst (Muster
+    # :func:`assign_event_to_case`): die Einrichtung einer Akte ist
+    # unveraenderlich, die Pruefung braucht keinen frischen Stand und sperrt
+    # nichts ueber die Mandantengrenze hinweg. Fail-closed: ohne Einrichtung
+    # keine Bearbeitung.
+    if getattr(user, "facility_id", None) != case.facility_id:
+        raise ValidationError(_("Fall gehört zu einer anderen Einrichtung."))
     # Zustandsvertrag VOR dem Versions-Guard: Sperrfolge Person -> Fall, darin
     # das Art.-18-Gate (Refs #2045 — die Rechtslage gilt unabhaengig davon, ob
     # das Formular aktuell war, Muster ``update_client``), der Widerruf der
