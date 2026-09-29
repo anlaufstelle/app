@@ -15,6 +15,7 @@ verändern.
 
 import io
 import re
+from contextlib import contextmanager
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -546,3 +547,95 @@ class TestOhneOwnerKontext:
 
         assert not [a for a in aufzeichnung if a.liest("core_eventhistory")]
         assert _snapshot() == vorher
+
+
+@contextmanager
+def _non_owner_with_rls_bypass(role, facility, via):
+    """Run as *role* with an RLS bypass, but without owning ``core_eventhistory``.
+
+    ``via="session_variable"`` sets ``app.is_super_admin=true`` — a custom
+    setting any role may set for itself. ``via="bypassrls"`` grants the role
+    attribute for the duration of the test transaction only.
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT current_setting('app.is_super_admin', true)")
+        previous = cur.fetchone()[0] or ""
+        if via == "bypassrls":
+            cur.execute(f"ALTER ROLE {role} BYPASSRLS")
+    try:
+        with as_rls_role(role, facility_id=facility.pk):
+            if via == "session_variable":
+                with connection.cursor() as cur:
+                    cur.execute("SELECT set_config('app.is_super_admin', 'true', true)")
+            yield
+    finally:
+        with connection.cursor() as cur:
+            cur.execute("SELECT set_config('app.is_super_admin', %s, true)", [previous])
+            if via == "bypassrls":
+                cur.execute(f"ALTER ROLE {role} NOBYPASSRLS")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("via", ["session_variable", "bypassrls"])
+class TestNonOwnerWithRlsBypass:
+    """A connection that reads past RLS is not yet the maintenance role.
+
+    The session variable ``app.is_super_admin`` (or a role with BYPASSRLS)
+    lets a connection read every history row, but only the owner of
+    ``core_eventhistory`` may open its append-only trigger. Without that
+    ownership the dry run used to read the payloads and report findings the
+    apply run could never heal, and the apply run failed only at the trigger
+    DDL. Both must refuse before a single history or event row is read.
+    """
+
+    @pytest.mark.parametrize("args", [(), ("--dry-run",), ("--apply",)], ids=["default", "dry-run", "apply"])
+    @pytest.mark.parametrize("scoped", [False, True], ids=["all-facilities", "one-facility"])
+    def test_command_refuses_before_reading(
+        self,
+        bestand,
+        facility,
+        rls_test_role,  # noqa: F811
+        via,
+        args,
+        scoped,
+    ):
+        from core.services.system import current_connection_owns, has_rls_bypass_context
+
+        before = _snapshot()
+        audits = AuditLog.objects.count()
+        if scoped:
+            args = (*args, "--facility", facility.name)
+
+        with _non_owner_with_rls_bypass(rls_test_role, facility, via):
+            assert has_rls_bypass_context()
+            assert not current_connection_owns("core_eventhistory")
+            with mitschnitt() as recorded:
+                with pytest.raises(CommandError, match="owner"):
+                    _run(*args)
+
+        assert not [q for q in recorded if q.liest("core_eventhistory") or q.liest("core_event")]
+        assert _snapshot() == before
+        assert AuditLog.objects.count() == audits
+
+    @pytest.mark.parametrize("dry_run", [True, False], ids=["dry-run", "apply"])
+    def test_service_refuses_before_reading(
+        self,
+        bestand,
+        facility,
+        rls_test_role,  # noqa: F811
+        via,
+        dry_run,
+    ):
+        from core.retention import eventhistory, eventhistory_repair
+
+        before = _snapshot()
+        audits = AuditLog.objects.count()
+
+        with _non_owner_with_rls_bypass(rls_test_role, facility, via):
+            with mitschnitt() as recorded:
+                with pytest.raises(eventhistory.OwnerContextMissingError, match="owner"):
+                    eventhistory_repair.repair_eventhistory_redaction(facility, dry_run=dry_run)
+
+        assert not [q for q in recorded if q.liest("core_eventhistory") or q.liest("core_event")]
+        assert _snapshot() == before
+        assert AuditLog.objects.count() == audits
