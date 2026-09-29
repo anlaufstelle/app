@@ -19,6 +19,7 @@ aufgeloest.
 import calendar
 import json
 import logging
+import uuid
 from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
@@ -692,6 +693,8 @@ def update_workitem(
     # dann die WorkItem-Sperre. Der Instanz-Wert taugt dafuer NICHT: bei einem
     # ``ModelForm`` hat ``_post_clean()`` ``workitem.client_id`` bereits auf den
     # geposteten Wert mutiert (Muster #1613).
+    # Einrichtungsgrenze der handelnden Person vor jeder Lesung und Sperre.
+    _assert_actor_in_facility(user, workitem.facility_id)
     # Refs #2377: auch diese Lesung nur in der Einrichtung der Aufgabe — sonst
     # sperrte eine Instanz mit verfaelschter Einrichtung die Person einer
     # fremden Aufgabe, bevor die gescopte Aufgabensperre unten abweist.
@@ -715,8 +718,18 @@ def update_workitem(
     pending_client_ids = {current_client_id}
     if "client" in fields:
         pending_client_ids.add(getattr(fields["client"], "pk", fields["client"]))
-    for client_id in sorted(cid for cid in pending_client_ids if cid is not None):
+    locked_client_ids = sorted(cid for cid in pending_client_ids if cid is not None)
+    for client_id in locked_client_ids:
         assert_processing_allowed(client_id, lock=True)
+    # Widerrufszustand des bisherigen UND des neuen Personenbezugs auf den eben
+    # gesperrten Zeilen: eine Person im Papierkorb, deaktiviert oder
+    # zusammengefuehrt nimmt keine geaenderten Aufgabendaten mehr an.
+    # Ein roher Primaerschluessel (Offline-Replay, JSON) wird dafuer in die Form
+    # der Datenbank gebracht, sonst gaelte eine lebende Person als widerrufen.
+    _raise_if_clients_revoked(
+        [cid if isinstance(cid, uuid.UUID) else uuid.UUID(str(cid)) for cid in locked_client_ids],
+        workitem.facility_id,
+    )
     # Erst jetzt die WorkItem-Zeile sperren. Ein Auseinanderlaufen zwischen dem
     # ungesperrten Vorab-Lesen und dem gesperrten Stand ist ein echter
     # Nebenlaeufigkeits-Konflikt: ihn hier abzuweisen ist billiger und
@@ -729,6 +742,10 @@ def update_workitem(
         raise ValidationError(_("Aufgabe gehört zu einer anderen Einrichtung."))
     if db_client_id != current_client_id:
         raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
+    # Loeschzustand der eben gesperrten Aufgabenzeile — ein gewoehnliches Lesen
+    # unter der Sperre; der Manager blendet geloeschte Aufgaben nicht aus.
+    if type(workitem)._base_manager.filter(pk=workitem.pk, facility_id=workitem.facility_id, is_deleted=True).exists():
+        raise ValidationError(WORKITEM_DELETED_MESSAGE)
     try:
         check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
     except ValidationError as exc:

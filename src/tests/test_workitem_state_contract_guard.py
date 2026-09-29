@@ -53,8 +53,7 @@ def _assert_refused(aufruf, meldung):
 
 def _person_vor_aufgabe(m):
     folge = m.sperrfolge()
-    if "core_workitem" in folge:
-        assert "core_client" in folge, folge
+    if "core_workitem" in folge and "core_client" in folge:
         assert folge.index("core_client") < folge.index("core_workitem"), folge
     return folge
 
@@ -236,4 +235,5 @@ class TestBearbeiten:
         WorkItem.objects.filter(pk=workitem.pk).update(is_deleted=True, deleted_at=timezone.now())
         m = _assert_refused(lambda: update_workitem(workitem, staff_user, title="Neu"), WORKITEM_DELETED_MESSAGE)
         assert WorkItem.objects.get(pk=workitem.pk).title == "Alt"
-        assert _person_vor_aufgabe(m)[-1] == "core_workitem"
+        erwartet = ["core_client", "core_workitem"] if mit_person else ["core_workitem"]
+        assert _person_vor_aufgabe(m) == erwartet
