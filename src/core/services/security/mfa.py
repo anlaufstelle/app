@@ -25,6 +25,7 @@ gelesenen Token-Wert. Speicher- und Migrationsvertrag stehen in
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 
 from django.db import transaction
@@ -40,6 +41,15 @@ BACKUP_DEVICE_NAME = "backup"
 # bleibt unsegmentiert (kein xxxx-xxxx) — neue Codes sind "Geheimnis-Strings"
 # zum Copy-Paste. Wer Lesbarkeit will, kann beim Display-Layer formatieren.
 _CODE_BYTES = 16
+# Refs #2328: die Formen, in denen ein Backup-Code gueltig sein kann. Der
+# aktuelle Code ist ``token_urlsafe(_CODE_BYTES)`` (22 Zeichen aus dem
+# URL-safe-Alphabet); das historische Format ``xxxx-xxxx`` hat die Migration
+# 0181 als Hash abgelegt. Keine der beiden Formen ist eine reine Ziffernfolge —
+# ``verify_totp_or_backup`` trennt daran TOTP-Code und Backup-Code.
+_BACKUP_CODE_FORMS = (
+    re.compile(r"[A-Za-z0-9_-]{22}"),
+    re.compile(r"[0-9a-f]{4}-[0-9a-f]{4}"),
+)
 
 
 def _generate_code() -> str:
@@ -156,18 +166,38 @@ def current_totp_device(user) -> TOTPDevice | None:
     return TOTPDevice.objects.filter(user=user, confirmed=True).order_by("-pk").first()
 
 
+def _has_totp_form(token: str, device: TOTPDevice) -> bool:
+    """Genau so viele ASCII-Ziffern, wie das Geraet Stellen hat."""
+    return len(token) == device.digits and token.isascii() and token.isdigit()
+
+
+def _has_backup_code_form(token: str) -> bool:
+    return any(form.fullmatch(token) for form in _BACKUP_CODE_FORMS)
+
+
 def verify_totp_or_backup(user, token: str) -> bool:
     """Verifiziert einen frischen TOTP-Token ODER Backup-Code (A3.2, Refs #1024).
 
-    Reihenfolge: erst das geltende ``TOTPDevice`` (``current_totp_device``; ``verify_token`` ist
-    single-use je Zeitfenster + gedrosselt), dann Backup-Code. Genutzt vom
-    Sudo-Mode-Re-Auth, wenn der User 2FA aktiv hat — ein über eine gestohlene
-    Session erbeutetes Passwort allein soll sensible Aktionen nicht freischalten.
+    Genutzt vom Sudo-Mode-Re-Auth, wenn der User 2FA aktiv hat — ein über eine
+    gestohlene Session erbeutetes Passwort allein soll sensible Aktionen nicht
+    freischalten.
+
+    Refs #2328: Die Form der Eingabe waehlt den EINEN Pruefweg, bevor ein Geraet
+    beruehrt wird. Ein TOTP-Code geht nur an das geltende ``TOTPDevice``
+    (``current_totp_device``; ``verify_token`` ist single-use je Zeitfenster +
+    gedrosselt), ein Backup-Code nur an ``verify_backup_code`` (eigene Drossel).
+    Frueher ging jede Eingabe zuerst an das TOTP-Geraet: jeder Backup-Code
+    zaehlte dort als Fehlversuch, und wer Sudo mit Backup-Codes bestaetigte,
+    sperrte sich schrittweise den naechsten gueltigen TOTP-Code. Eine Eingabe
+    ohne eine der beiden Formen kann kein Weg annehmen; sie wird abgewiesen,
+    ohne ein Geraet zu beruehren.
     """
     token = (token or "").strip().replace(" ", "")
     if not token:
         return False
+    if _has_backup_code_form(token):
+        return verify_backup_code(user, token)
     device = current_totp_device(user)
-    if device is not None and device.verify_token(token):
-        return True
-    return verify_backup_code(user, token)
+    if device is not None and _has_totp_form(token, device):
+        return device.verify_token(token)
+    return False
