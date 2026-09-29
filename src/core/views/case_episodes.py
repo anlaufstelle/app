@@ -98,14 +98,11 @@ class EpisodeCreateView(StaffRequiredMixin, View):
                     started_at=form.cleaned_data["started_at"],
                 )
             except ValidationError as exc:
+                # Auch der inzwischen geschlossene Fall: der Dienst lehnt am
+                # FRISCH gesperrten Stand ab und kennzeichnet das selbst. Kein
+                # erneuter Blick auf den Fall — der kann inzwischen wieder
+                # offen sein. Jede andere Ausnahme bleibt ein Fehler.
                 return _abgesagt(request, case, _meldung(exc))
-            except ValueError:
-                # Die Statuspruefung der Modell-Methode sieht den FRISCH
-                # gesperrten Fall: inzwischen geschlossen. Jede andere
-                # ``ValueError`` bleibt ein Fehler und wird nicht verdeckt.
-                if Case.objects.filter(pk=case.pk, facility_id=case.facility_id, status=Case.Status.OPEN).exists():
-                    raise
-                return _abgesagt(request, case, str(_("Episoden können nur für offene Fälle erstellt werden.")))
             messages.success(request, _("Episode wurde erstellt."))
             return redirect("core:case_detail", pk=case.pk)
         context = _episode_context(case, form, is_edit=False)

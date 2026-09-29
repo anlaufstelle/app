@@ -22,6 +22,7 @@ import logging
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Episode
 from core.services.audit import audit_event
@@ -29,6 +30,9 @@ from core.services.audit.diff import changed_fields_vs_db
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, lock_case_for_write
 
 logger = logging.getLogger(__name__)
+
+# Wortlaut wie die Vorpruefung der View und die Statuspruefung am Modell.
+EPISODE_CASE_NOT_OPEN_MESSAGE = _("Episoden können nur für offene Fälle erstellt werden.")
 
 #: Allowlist (Muster ``update_case``, Refs #734/#1786): verhindert
 #: Mass-Assignment durch versehentlich durchgereichte Felder — insbesondere
@@ -147,14 +151,22 @@ def create_episode(case, user, *, title, description="", started_at=None):
     gesperrt; :func:`~core.services.case.state_contract.lock_case_for_write`)
     — darin das Art.-18-Gate, der Widerruf der Person und Papierkorb/Tilgung
     des Falls. Die Instanz des Aufrufers stammt aus einem Lesevorgang vor der
-    Sperre; angelegt wird deshalb an der FRISCH gesperrten Fallzeile, und auch
-    die Statuspruefung der Modell-Methode sieht so den aktuellen Stand statt
-    eines inzwischen geschlossenen Falls.
+    Sperre; angelegt wird deshalb an der FRISCH gesperrten Fallzeile.
+
+    Ist der Fall dort nicht (mehr) offen, lehnt der Dienst mit
+    :data:`EPISODE_CASE_NOT_OPEN_MESSAGE` als ``ValidationError`` ab — am
+    gesperrten Stand, vor der Modell-Methode. Die Absage traegt ihre Ursache
+    so selbst: der Aufrufer muss sie nicht nachtraeglich aus einem erneuten,
+    ungesperrten Blick auf den Fall erraten (der Fall kann inzwischen wieder
+    offen sein), und die ``ValueError`` der Modell-Methode bleibt ein
+    Programmfehler.
     """
     from core.services.case.goals import _assert_actor_facility
 
     _assert_actor_facility(user, case.facility_id)
     locked_case = lock_case_for_write(case)
+    if locked_case.status != locked_case.Status.OPEN:
+        raise ValidationError(EPISODE_CASE_NOT_OPEN_MESSAGE)
     return locked_case.create_episode(user=user, title=title, description=description, started_at=started_at)
 
 
