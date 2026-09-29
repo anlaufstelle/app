@@ -365,10 +365,20 @@ class TestRejectCaseDeletionLookupZieltreue:
     ):
         """Pins ``x_reject_case_deletion__mutmut_17``: faellt ``facility`` im
         Sperr-Lookup weg, laesst sich ein Antrag ablehnen, dessen Einrichtung
-        nicht die des uebergebenen Objekts ist."""
+        nicht die des uebergebenen Objekts ist.
+
+        Refs #2374: Die Einrichtung der handelnden Person wird seitdem schon VOR
+        der Sperre gegen die Instanz geprueft (wie bei der Genehmigung). Damit
+        der Lookup selbst erreicht wird, liegt die DB-Zeile in der fremden
+        Einrichtung und die Instanz im Speicher zeigt auf die Einrichtung der
+        handelnden Person — der Mutant laedt dann die fremde Zeile und scheitert
+        erst an der Pruefung unter der Sperre (``ValidationError`` statt
+        ``DoesNotExist``)."""
         case = _case(facility, client_qualified, staff_user, title="Mandantengrenze")
-        dr = _dr(facility, case, staff_user, reason="Art.-17-Antrag")
-        dr.facility = other_facility
+        dr = _dr(other_facility, case, staff_user, reason="Art.-17-Antrag")
+        # Nur die IN-MEMORY-Instanz zeigt auf die Einrichtung der handelnden
+        # Person; die DB-Zeile bleibt in der fremden.
+        dr.facility = facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
             reject_case_deletion(dr, lead_user)
