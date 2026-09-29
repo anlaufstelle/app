@@ -237,3 +237,44 @@ class TestBearbeiten:
         assert WorkItem.objects.get(pk=workitem.pk).title == "Alt"
         erwartet = ["core_client", "core_workitem"] if mit_person else ["core_workitem"]
         assert _person_vor_aufgabe(m) == erwartet
+
+
+class TestStatuswechsel:
+    """Auch mit Wiederholung: keine Folgeaufgabe an einer widerrufenen Person oder geloeschten Aufgabe."""
+
+    def _wiederkehrend(self, facility, user, person):
+        return _geladen(
+            facility,
+            user,
+            person=person,
+            recurrence=WorkItem.Recurrence.WEEKLY,
+            due_date=timezone.localdate(),
+        )
+
+    @pytest.mark.parametrize("art", WIDERRUFE)
+    def test_widerrufene_person(self, facility, client_identified, staff_user, art):
+        from core.services.case import update_workitem_status
+
+        workitem = self._wiederkehrend(facility, staff_user, client_identified)
+        _widerrufen(client_identified, art)
+        m = _assert_refused(
+            lambda: update_workitem_status(workitem, WorkItem.Status.DONE, staff_user), CLIENT_WRITE_REVOKED_MESSAGE
+        )
+        zeile = WorkItem.objects.get(pk=workitem.pk)
+        assert (zeile.status, zeile.recurrence_duplicated_at) == (WorkItem.Status.OPEN, None)
+        assert _person_vor_aufgabe(m)[:1] == ["core_client"]
+
+    @pytest.mark.parametrize("mit_person", [True, False], ids=["mit_person", "ohne_person"])
+    def test_geloeschte_aufgabe(self, facility, client_identified, staff_user, mit_person):
+        from core.services.case import update_workitem_status
+        from core.services.case.workitems import WORKITEM_DELETED_MESSAGE
+
+        workitem = self._wiederkehrend(facility, staff_user, client_identified if mit_person else None)
+        WorkItem.objects.filter(pk=workitem.pk).update(is_deleted=True, deleted_at=timezone.now())
+        m = _assert_refused(
+            lambda: update_workitem_status(workitem, WorkItem.Status.DONE, staff_user), WORKITEM_DELETED_MESSAGE
+        )
+        zeile = WorkItem.objects.get(pk=workitem.pk)
+        assert (zeile.status, zeile.recurrence_duplicated_at) == (WorkItem.Status.OPEN, None)
+        erwartet = ["core_client", "core_workitem"] if mit_person else ["core_workitem"]
+        assert _person_vor_aufgabe(m) == erwartet

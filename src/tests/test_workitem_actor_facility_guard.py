@@ -169,3 +169,22 @@ class TestBearbeiten:
         update_workitem(workitem, staff_user, title="Neu")
         assert WorkItem.objects.get(pk=workitem.pk).title == "Neu"
         assert _zaehler() == (vorher[0], vorher[1] + 1, vorher[2] + 1)
+
+
+class TestStatuswechsel:
+    @pytest.mark.parametrize("akteur", AKTEURE, indirect=True)
+    @pytest.mark.parametrize("mit_person", [True, False], ids=["mit_person", "ohne_person"])
+    def test_abgewiesen(self, facility, client_identified, staff_user, akteur, mit_person):
+        from core.services.case import update_workitem_status
+
+        person = client_identified if mit_person else None
+        workitem = _aufgabe(facility, staff_user, client=person)
+        _assert_refused(lambda: update_workitem_status(workitem, WorkItem.Status.DONE, akteur))
+        assert WorkItem.objects.get(pk=workitem.pk).status == WorkItem.Status.OPEN
+
+    def test_gegenprobe_eigene_einrichtung(self, facility, client_identified, staff_user):
+        from core.services.case import update_workitem_status
+
+        workitem = _aufgabe(facility, staff_user, client=client_identified)
+        update_workitem_status(workitem, WorkItem.Status.DONE, staff_user)
+        assert WorkItem.objects.get(pk=workitem.pk).status == WorkItem.Status.DONE
