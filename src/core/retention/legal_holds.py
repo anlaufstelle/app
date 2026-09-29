@@ -542,11 +542,7 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     ``PROPOSAL_OTHER_ACTIVE_MESSAGE``), and the whole creation rolls back. Any
     other integrity error propagates unchanged.
     """
-    from core.retention.proposals import (
-        PROPOSAL_ALREADY_DECIDED_MESSAGE,
-        PROPOSAL_OTHER_FACILITY_MESSAGE,
-        _assert_actor_facility,
-    )
+    from core.retention.proposals import PROPOSAL_ALREADY_DECIDED_MESSAGE, _assert_actor_facility
 
     _assert_actor_facility(proposal, user)
     holdable_statuses = (
@@ -576,8 +572,10 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         )
         locked = next((row for row in target_proposals if row.pk == proposal.pk), None)
         if locked is None:
-            # The row is not (or no longer) in the facility of the instance.
-            raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
+            # The row is gone (or no longer matches the instance) since the
+            # facility check above -- the answer of the other proposal
+            # decisions for a proposal that is no longer open.
+            raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
         if locked.status == RetentionProposal.Status.HELD:
             raise ValidationError(PROPOSAL_ALREADY_HELD_MESSAGE)
         if locked.status not in holdable_statuses:

@@ -214,7 +214,10 @@ class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
         with pytest.raises(ValidationError) as excinfo:
             create_legal_hold(retention_proposal, lead_user, "Gerichtsverfahren")
 
-        assert "gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        # The locked read is facility-scoped: the moved row is as absent as a
+        # removed one (under row-level security it is invisible), so it gets
+        # the neutral answer of the other proposal decisions.
+        assert "bereits bearbeitet" in str(excinfo.value)
         assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
         assert not _audit_zeilen("legal_hold_created").exists()
 
