@@ -820,8 +820,22 @@ def reactivate_deferred_proposals(facility):
             )
             auto_approved += 1
         else:
-            proposal.status = RetentionProposal.Status.PENDING
-            proposal.save(update_fields=["status"])
+            # Refs #2374: Die Auswahl oben ist ungesperrt gelesen. Eine
+            # Hold-Anlage, eine Entscheidung oder eine erneute Zurueckstellung
+            # kann den Vorschlag seither geaendert haben — entschieden wird
+            # deshalb an der gesperrten Zeile (Muster ``_lock_open_proposal``).
+            # Nur ein weiterhin zurueckgestellter, faelliger Vorschlag wird
+            # reaktiviert; jeder andere bleibt unveraendert und ohne Audit-Zeile.
+            locked = RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=facility).first()
+            if (
+                locked is None
+                or locked.status != RetentionProposal.Status.DEFERRED
+                or locked.deferred_until is None
+                or locked.deferred_until > today
+            ):
+                continue
+            locked.status = RetentionProposal.Status.PENDING
+            locked.save(update_fields=["status"])
             audit_retention_decision(
                 proposal.facility,
                 target_type=proposal.target_type,
@@ -829,7 +843,7 @@ def reactivate_deferred_proposals(facility):
                 action=AuditLog.Action.DELETE,
                 category="retention_proposal_reactivated",
                 retention_category=proposal.retention_category,
-                defer_count=proposal.defer_count,
+                defer_count=locked.defer_count,
             )
             reactivated += 1
 
