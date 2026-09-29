@@ -12,7 +12,6 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -153,7 +152,17 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         return url
 
     def _load_workitems(self, request, ids):
-        return list(WorkItem.objects.for_facility(request.current_facility).filter(pk__in=ids))
+        # Refs #2385: preserve the caller's original selection order (the
+        # submitted `workitem_ids` order) instead of the DB's arbitrary
+        # `pk__in` order, so a later forbidden-batch redirect can list the
+        # refused items in the order they were picked. The lock order taken
+        # further down the call chain (`_locked_workitems`, deadlock
+        # avoidance) is independent of this list's order and stays
+        # deterministic-by-pk, unaffected by this change.
+        by_pk = {wi.pk: wi for wi in WorkItem.objects.for_facility(request.current_facility).filter(pk__in=ids)}
+        seen = set()
+        ordered_ids = [pk for pk in ids if pk not in seen and not seen.add(pk)]
+        return [by_pk[pk] for pk in ordered_ids if pk in by_pk]
 
     def perform_action(self, request, workitems):  # pragma: no cover - overridden
         raise NotImplementedError
@@ -161,7 +170,12 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
     def post(self, request):
         ids = self._get_workitem_ids(request)
         if not ids:
-            return HttpResponseBadRequest(_("Keine Aufgaben ausgewählt."))
+            # Refs #2385: inbox.html submits this via a plain form (no
+            # `hx-*`) — a raw 400 text response would replace the whole
+            # inbox page with that plain text instead of showing it as a
+            # flash above the (unchanged) list.
+            messages.error(request, _("Keine Aufgaben ausgewählt."))
+            return self._inbox_redirect(request)
 
         # Refs #2035: Die Auswahl kam ungecappt aus dem POST und ging roh in
         # ``filter(pk__in=…)`` — die IN-Liste war allein durch Djangos
@@ -177,9 +191,10 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         # sichtbaren auswaehlen" hoechstens drei Statuskoerbe à
         # WORKITEM_INBOX_CAP umfasst (Begruendung an der Konstante).
         if len(ids) > WORKITEM_BULK_MAX_IDS:
-            return HttpResponseBadRequest(
-                _("Zu viele Aufgaben ausgewählt (maximal %(max)d).") % {"max": WORKITEM_BULK_MAX_IDS}
+            messages.error(
+                request, _("Zu viele Aufgaben ausgewählt (maximal %(max)d).") % {"max": WORKITEM_BULK_MAX_IDS}
             )
+            return self._inbox_redirect(request)
 
         # Vorvalidierung VOR dem ORM-Zugriff (Muster aus
         # ``core.views.config.reorder``): ein kaputter Wert wuerde in
@@ -190,11 +205,13 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         try:
             ids = _parse_workitem_ids(ids)
         except ValueError:
-            return HttpResponseBadRequest(_("Ungültige ID im Payload."))
+            messages.error(request, _("Ungültige ID im Payload."))
+            return self._inbox_redirect(request)
 
         workitems = self._load_workitems(request, ids)
         if not workitems:
-            return HttpResponseBadRequest(_("Keine gültigen Aufgaben gefunden."))
+            messages.error(request, _("Keine gültigen Aufgaben gefunden."))
+            return self._inbox_redirect(request)
 
         # Ownership-Check pro Item — Bulk-Route darf nicht feiner erlauben als
         # die Single-Route (Refs #583). Sobald ein Item nicht mutierbar ist,
@@ -207,7 +224,8 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         try:
             count = self.perform_action(request, workitems)
         except BulkValidationError:
-            return HttpResponseBadRequest(self.invalid_input_message)
+            messages.error(request, self.invalid_input_message)
+            return self._inbox_redirect(request)
         except WorkItemBatchForbiddenError as exc:
             # The service decides ownership again at the locked rows; an item
             # reassigned or re-owned since the check above gets the same answer.

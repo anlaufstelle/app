@@ -623,8 +623,14 @@ def _locked_workitems(workitems, user):
     # Permission at the locked rows: the view checks ownership beforehand on
     # rows read without a lock. A work item reassigned or re-owned in between
     # refuses the whole batch before the first write or audit row.
-    forbidden_ids = [item.pk for item in locked if not can_user_mutate_workitem(user, item)]
-    if forbidden_ids:
+    forbidden_pks = {item.pk for item in locked if not can_user_mutate_workitem(user, item)}
+    if forbidden_pks:
+        # Refs #2385: `pks` keeps the caller's original selection order (the
+        # view's `workitem_ids` order); `locked` above stays pk-sorted for
+        # deadlock avoidance. Only the returned list's order changes here —
+        # the redirect lists these as `forbidden=<pk>` parameters and the
+        # inbox re-marks the refused selection in the order it was picked.
+        forbidden_ids = [pk for pk in pks if pk in forbidden_pks]
         raise WorkItemBatchForbiddenError(forbidden_ids)
 
     # REVALIDIERUNG (Re-Review 2): Zwischen dem ungesperrten Vorab-Lesen und
