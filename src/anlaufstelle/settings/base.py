@@ -148,6 +148,27 @@ INSTALLED_APPS = [
 # --- Middleware ---
 
 MIDDLEWARE = [
+    # The policy chain is the outermost part of the list (Refs #1904). A
+    # middleware that answers by itself hands its response only to the
+    # middlewares in front of it (response processing runs through the list
+    # in reverse). SecurityMiddleware answers some requests itself — the
+    # HTTP -> HTTPS redirect (301) and, while building it, the rejection of an
+    # unknown host (400) — so the policy has to sit in front of it; the same
+    # holds for the maintenance 503 (Refs #2339) and files served directly by
+    # WhiteNoise further down. None of the three needs session, auth or a
+    # resolved URL: CSPMiddleware builds the header from the settings (no
+    # nonce in the policy), AdminCSPRelaxMiddleware only checks the path
+    # prefix, DemoUmamiCSPRelaxMiddleware reads ``request.user`` defensively
+    # via ``getattr`` and stays strict without a user object (short-circuited
+    # response).
+    # AdminCSPRelaxMiddleware must stay in front of CSPMiddleware so that it
+    # can still rewrite the header CSPMiddleware set on the way out.
+    "core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware",
+    # DemoUmamiCSPRelaxMiddleware likewise in front of CSPMiddleware (header
+    # rewrite on the way out). No-op outside DEMO_MODE — relaxes the policy
+    # only on the demo, after login, for the Umami host. Refs #1604.
+    "core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware",
+    "csp.middleware.CSPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     # XFrameOptionsMiddleware direkt hinter SecurityMiddleware (Refs #2314):
     # Antwort-Verarbeitung laeuft rueckwaerts durch die Liste, also erreicht
@@ -163,24 +184,6 @@ MIDDLEWARE = [
     # aufgeloeste URL; das ``xframe_options_exempt``-Attribut haengt an der
     # Antwort und bleibt unabhaengig von der Position wirksam.
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # Die CSP-Kette steht VOR MaintenanceModeMiddleware (Refs #2339): aus
-    # demselben Grund wie XFrameOptionsMiddleware erreicht die Wartungs-503
-    # nur die Middlewares davor — hinter der Wartungs-Middleware kam die
-    # Wartungsseite ohne Content-Security-Policy an. Keine der drei braucht
-    # Session, Auth oder aufgeloeste URL: CSPMiddleware setzt den Header aus
-    # den Settings, AdminCSPRelaxMiddleware prueft nur das Pfad-Praefix,
-    # DemoUmamiCSPRelaxMiddleware liest ``request.user`` defensiv per
-    # ``getattr`` und bleibt ohne Nutzerobjekt (kurzgeschlossene Antwort)
-    # strikt.
-    # AdminCSPRelaxMiddleware muss VOR CSPMiddleware stehen, damit sie in
-    # Outbound-Reihenfolge den von CSPMiddleware gesetzten Header noch ändern
-    # kann (Django ruft Response-Verarbeitung in umgekehrter Listen-Reihenfolge).
-    "core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware",
-    # DemoUmamiCSPRelaxMiddleware ebenfalls VOR CSPMiddleware (Header-Rewrite in
-    # Outbound-Reihenfolge). No-Op ausserhalb DEMO_MODE — lockert die CSP nur
-    # auf der Demo, Post-Login, fuer den Umami-Host. Refs #1604.
-    "core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware",
-    "csp.middleware.CSPMiddleware",
     # MaintenanceModeMiddleware liegt direkt hinter den Header-Middlewares,
     # damit sie 503 antworten kann, BEVOR Sessions/Auth geprueft werden —
     # ein laufendes Deploy darf nicht an einer Auth-Pruefung haengen

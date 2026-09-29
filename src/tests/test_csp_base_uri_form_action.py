@@ -15,7 +15,9 @@ Two promises, both checked against the *delivered* header:
 1. **Every kind of response** carries both directives with exactly these
    values: regular pages (anonymous and signed in), the error pages 403, CSRF
    403, 404 and 500, the maintenance 503, the admin login (with its CSP
-   relaxations active) and a demo page with analytics enabled. The header is
+   relaxations active), a demo page with analytics enabled and the answers
+   ``SecurityMiddleware`` gives by itself (HTTP -> HTTPS redirect 301,
+   unknown host 400) — without any other header changing. The header is
    split into directives and the tokens are compared exactly — a substring
    match over the whole header would also accept ``form-action 'self' *``.
 2. **Exactly one source:** the policy comes from
@@ -502,3 +504,111 @@ class TestSingleSourceScannersCatchProbes:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('response["Content-Security-Policy"] = "x"\n', encoding="utf-8")
         assert production_modules_writing_the_policy(tmp_path, [helper, other]) == ["src/core/other.py:1"]
+
+
+# --- Promise 1, continued: answers produced before the rest of the chain ------
+#
+# ``SecurityMiddleware`` answers some requests itself: the HTTP -> HTTPS
+# redirect (301, ``SECURE_SSL_REDIRECT``, active in prod and inherited by the
+# devlive and demo overlays) and, while building that redirect, the rejection
+# of an unknown ``Host`` header (400). Django hands such a short-circuited
+# response only to the middlewares listed *before* the one that produced it,
+# so the policy chain has to sit in front of ``SecurityMiddleware``.
+
+SECURITY_MIDDLEWARE = "django.middleware.security.SecurityMiddleware"
+CLICKJACKING_MIDDLEWARE = "django.middleware.clickjacking.XFrameOptionsMiddleware"
+POLICY_CHAIN = (
+    "core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware",
+    "core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware",
+    "csp.middleware.CSPMiddleware",
+)
+
+#: Settings under which ``SecurityMiddleware`` answers early, as in prod.
+_EARLY_ANSWER_SETTINGS = {
+    "SECURE_SSL_REDIRECT": True,
+    "SECURE_HSTS_SECONDS": 3600,
+    "ALLOWED_HOSTS": ["testserver"],
+    "DEBUG": False,
+}
+
+_UNKNOWN_HOST = "unknown-host.example"
+
+
+def _probe(kind: str):
+    """One request per kind of answer, sent through the configured chain."""
+    with silenced_logger("django.security.DisallowedHost"):
+        if kind == "https redirect":
+            return Client().get("/login/")
+        if kind == "unknown host":
+            return Client().get("/login/", HTTP_HOST=_UNKNOWN_HOST)
+        if kind == "login page":
+            return Client().get("/login/", secure=True)
+        if kind == "unknown path":
+            return Client().get("/no-such-page/", secure=True)
+    raise AssertionError(f"unknown probe {kind!r}")
+
+
+def _non_policy_headers(response) -> list[tuple[str, str]]:
+    return sorted((name.lower(), value) for name, value in response.items() if name.lower() not in CSP_HEADER_NAMES)
+
+
+def layout_with_policy_behind_clickjacking(middleware: list[str]) -> list[str]:
+    """The previous layout: policy chain directly behind the clickjacking middleware."""
+    rest = [entry for entry in middleware if entry not in POLICY_CHAIN]
+    anchor = rest.index(CLICKJACKING_MIDDLEWARE) + 1
+    return [*rest[:anchor], *POLICY_CHAIN, *rest[anchor:]]
+
+
+@pytest.mark.django_db
+class TestEarlyAnswers:
+    @pytest.mark.parametrize(("kind", "status"), [("https redirect", 301), ("unknown host", 400)])
+    def test_early_answer_carries_the_full_policy(self, kind, status):
+        with override_settings(**_EARLY_ANSWER_SETTINGS):
+            reference = _probe("login page")
+            response = _probe(kind)
+        assert reference.status_code == 200
+        assert response.status_code == status, f"{kind}: expected {status}, got {response.status_code}"
+        enforced = assert_base_and_form_locked(response, kind)
+        # Complete policy, not just the two directives: the same header a
+        # regular page carries.
+        assert enforced == reference.headers[ENFORCED_HEADER], kind
+        if kind == "https redirect":
+            assert response["Location"] == "https://testserver/login/"
+
+    def test_unknown_host_without_redirect_carries_the_policy(self):
+        settings = {**_EARLY_ANSWER_SETTINGS, "SECURE_SSL_REDIRECT": False}
+        with override_settings(**settings):
+            response = _probe("unknown host")
+        assert response.status_code == 400
+        assert_base_and_form_locked(response, "unknown host, no redirect")
+
+    @pytest.mark.parametrize("kind", ["https redirect", "unknown host", "login page", "unknown path"])
+    def test_moving_the_chain_changes_no_other_header(self, kind):
+        """Only the policy is new; every other header is identical and single."""
+        from django.conf import settings
+
+        with override_settings(**_EARLY_ANSWER_SETTINGS):
+            current = _probe(kind)
+            with override_settings(MIDDLEWARE=layout_with_policy_behind_clickjacking(list(settings.MIDDLEWARE))):
+                previous = _probe(kind)
+        assert current.status_code == previous.status_code, kind
+        assert _non_policy_headers(current) == _non_policy_headers(previous), kind
+        names = [name.lower() for name, _value in current.items()]
+        assert len(names) == len(set(names)), f"{kind}: duplicated header in {names}"
+        assert_base_and_form_locked(current, kind)
+
+
+def test_policy_chain_wraps_the_security_middleware():
+    """Structural guard: the chain sits in front of ``SecurityMiddleware``.
+
+    The relax middlewares stay in front of ``CSPMiddleware`` (they rewrite
+    its header on the way out).
+    """
+    from django.conf import settings
+
+    order = list(settings.MIDDLEWARE)
+    positions = [order.index(entry) for entry in POLICY_CHAIN]
+    assert positions == sorted(positions), "relax middlewares must stay in front of CSPMiddleware"
+    assert positions[-1] < order.index(SECURITY_MIDDLEWARE), (
+        "CSPMiddleware must run before SecurityMiddleware, otherwise its 301/400 answers carry no policy."
+    )
