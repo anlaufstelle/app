@@ -92,3 +92,41 @@ class TestUpdateEvent:
             event=live_event, action=EventHistory.Action.UPDATE, changed_by=staff_user
         ).exists()
         assert AuditLog.objects.filter(action=AuditLog.Action.EVENT_UPDATE, target_id=str(live_event.pk)).exists()
+
+
+class TestCreateEvent:
+    @pytest.mark.parametrize("actor", _ACTORS)
+    @pytest.mark.parametrize("shape", ["anonymous", "person", "person_with_case"])
+    def test_foreign_actor_is_refused_before_any_lock(
+        self, request, actor, shape, facility, doc_type_contact, client_identified, case_open
+    ):
+        user = request.getfixturevalue(actor)
+        client = None if shape == "anonymous" else client_identified
+        case = case_open if shape == "person_with_case" else None
+
+        _refused_before_any_lock(
+            lambda: create_event(
+                facility=facility,
+                user=user,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={"dauer": 15},
+                client=client,
+                is_anonymous=client is None,
+                case=case,
+            )
+        )
+
+    def test_local_actor_creates(self, facility, staff_user, doc_type_contact, client_identified, case_open):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+            client=client_identified,
+            case=case_open,
+        )
+
+        assert Event.objects.filter(pk=event.pk, created_by=staff_user, case_id=case_open.pk).exists()
+        assert AuditLog.objects.filter(action=AuditLog.Action.EVENT_CREATE, target_id=str(event.pk)).exists()
