@@ -117,28 +117,50 @@ def create_or_get_case_deletion_request(case, user, reason):
     Idempotent: laeuft bereits ein PENDING-Antrag, wird dieser zurueckgegeben
     und **kein** zweites Audit-Event geschrieben (Muster #932) — die
     ``DELETION_REQUESTED``-Zeile existiert vom ersten Aufruf.
+
+    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
+    Sperre geprueft (fail-closed ohne Einrichtung). Danach sperrt der Dienst
+    Person -> Fall (-> Ereignisse) ueber dieselbe Kette wie Wiederherstellen
+    und Sofort-Tilgung und liest den Zustand an der GESPERRTEN Fallzeile
+    (Muster ``create_or_get_client_deletion_request``): ein Fall, der seit dem
+    Laden in den Papierkorb gelegt oder endgueltig anonymisiert wurde, bekommt
+    keinen Antrag mehr. Eine Einschraenkung nach Art. 18 DSGVO steht dem
+    Antrag bewusst NICHT entgegen — er schreibt nichts am Fall.
     """
-    existing = get_pending_case_deletion_request(case)
-    if existing is not None:
-        return existing, False
-    dr = DeletionRequest.objects.create(
-        facility=case.facility,
-        target_type=DeletionRequest.TargetType.CASE,
-        target_id=case.pk,
-        reason=reason,
-        requested_by=user,
-    )
-    audit_event(
-        action=AuditLog.Action.DELETION_REQUESTED,
-        user=user,
-        facility=case.facility,
-        target_type="DeletionRequest",
-        target_id=str(dr.pk),
-        # Refs #1093: ``reason`` nicht ins detail duplizieren — er lebt in
-        # DeletionRequest.reason (ueber target_id=dr.pk erreichbar).
-        detail={"target_case": str(case.pk)},
-    )
-    return dr, True
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != case.facility_id:
+        raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
+    with transaction.atomic():
+        locked = _lock_case_chain(actor_facility_id, case.pk)
+        if locked is None:
+            # Zeile nicht (mehr) in der Einrichtung oder waehrend der
+            # Sperrwartezeit an eine andere Person gehaengt.
+            raise ValidationError(_("Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."))
+        if locked.is_deleted:
+            raise ValidationError(_("Der Fall liegt bereits im Papierkorb."))
+        if locked.anonymized_at is not None:
+            raise ValidationError(_("Der Fall wurde bereits endgültig anonymisiert."))
+        existing = get_pending_case_deletion_request(locked)
+        if existing is not None:
+            return existing, False
+        dr = DeletionRequest.objects.create(
+            facility=case.facility,
+            target_type=DeletionRequest.TargetType.CASE,
+            target_id=case.pk,
+            reason=reason,
+            requested_by=user,
+        )
+        audit_event(
+            action=AuditLog.Action.DELETION_REQUESTED,
+            user=user,
+            facility=case.facility,
+            target_type="DeletionRequest",
+            target_id=str(dr.pk),
+            # Refs #1093: ``reason`` nicht ins detail duplizieren — er lebt in
+            # DeletionRequest.reason (ueber target_id=dr.pk erreichbar).
+            detail={"target_case": str(case.pk)},
+        )
+        return dr, True
 
 
 # ---------------------------------------------------------------------------

@@ -91,6 +91,19 @@ class TestLoeschantragEntscheidetAmGesperrtenFall:
         assert not _antraege(case_open).exists()
         assert not _antrags_audit().exists()
 
+    def test_fallzeile_in_anderer_einrichtung_der_datenbank_bekommt_keinen_antrag(
+        self, case_open, staff_user, second_facility
+    ):
+        """Die Instanz nennt die Einrichtung der Fachkraft, die Zeile liegt in
+        einer anderen — entschieden wird an der Zeile."""
+        Case.objects.filter(pk=case_open.pk).update(facility=second_facility)
+
+        with pytest.raises(ValidationError):
+            create_or_get_case_deletion_request(case_open, staff_user, "Auf Wunsch der Person")
+
+        assert not _antraege(case_open).exists()
+        assert not _antrags_audit().exists()
+
     def test_sperrt_person_vor_fall(self, case_open, staff_user):
         with mitschnitt() as aufzeichnung:
             create_or_get_case_deletion_request(case_open, staff_user, "Auf Wunsch der Person")
