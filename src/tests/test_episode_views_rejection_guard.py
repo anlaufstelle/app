@@ -157,3 +157,18 @@ class TestFallNachDerVorpruefungGeschlossen:
 
         _abgesagt(response, htmx, _NUR_OFFENE, reverse("core:case_detail", kwargs={"pk": case_open.pk}))
         assert _episodenbestand(case_open.pk) == vorher
+
+
+def test_andere_valueerror_beim_anlegen_bleibt_ein_fehler(antwortender_client, monkeypatch, case_open, episode):
+    """Gegenprobe: nur die Statuspruefung am inzwischen geschlossenen Fall wird zur Meldung."""
+    import core.views.case_episodes as episoden_views
+
+    def _unerwartet(*args, **kwargs):
+        raise ValueError("unerwartet")
+
+    monkeypatch.setattr(episoden_views, "create_episode", _unerwartet)
+
+    response = _post(antwortender_client, _anlegen, case_open, episode, False)
+
+    assert response.status_code == 500
+    assert _meldungen(response) == []

@@ -4,6 +4,7 @@ Aus :file:`views/cases.py` abgetrennt, damit Case-CRUD schlank bleibt.
 """
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -17,7 +18,7 @@ from core.models.episode import Episode
 from core.services.case import cases_with_live_client, update_episode
 from core.services.case.episodes import close_episode, create_episode
 from core.services.scoping import get_scoped_object
-from core.views.mixins import StaffRequiredMixin
+from core.views.mixins import StaffRequiredMixin, htmx_absage
 from core.views.utils import object_back_link
 
 
@@ -37,6 +38,33 @@ def _episode_context(case, form, *, is_edit: bool, episode=None) -> dict:
     if episode is not None:
         context["episode"] = episode
     return context
+
+
+def _abgesagt(request, case, meldung):
+    """Die Absage des Dienstes — als Meldung, nicht als HTTP 500.
+
+    Die View prueft den Fall vorab; entschieden wird aber erst im Dienst, unter
+    Sperre und am frischen Stand (Art.-18-Gate, Zustandsvertrag der Fallakte,
+    beim Anlegen die Statuspruefung). Was die Vorpruefung nicht kennt oder was
+    sich seither geaendert hat, endet dort mit einer Absage.
+
+    HTMX-Aufruf: :func:`~core.views.mixins.htmx_absage` (409, ``HX-Reswap:
+    none``) wie die Aktionen an Wirkungszielen und Meilensteinen. Formular-POST:
+    Flash-Meldung und Redirect auf die Fallseite wie beim Schliessen eines
+    Falls — liegt die Akte inzwischen im Papierkorb oder ist ihre Person
+    widerrufen, auf die Fallliste, denn die Fallseite antwortete dann mit 404
+    und die Meldung ginge verloren (Muster ``CaseUpdateView``).
+    """
+    if request.headers.get("HX-Request") == "true":
+        return htmx_absage(meldung)
+    messages.error(request, meldung)
+    if not cases_with_live_client().filter(pk=case.pk).exists():
+        return redirect("core:case_list")
+    return redirect("core:case_detail", pk=case.pk)
+
+
+def _meldung(exc):
+    return exc.messages[0] if exc.messages else str(exc)
 
 
 class EpisodeCreateView(StaffRequiredMixin, View):
@@ -61,13 +89,23 @@ class EpisodeCreateView(StaffRequiredMixin, View):
 
         form = EpisodeForm(request.POST)
         if form.is_valid():
-            create_episode(
-                case,
-                request.user,
-                title=form.cleaned_data["title"],
-                description=form.cleaned_data.get("description", ""),
-                started_at=form.cleaned_data["started_at"],
-            )
+            try:
+                create_episode(
+                    case,
+                    request.user,
+                    title=form.cleaned_data["title"],
+                    description=form.cleaned_data.get("description", ""),
+                    started_at=form.cleaned_data["started_at"],
+                )
+            except ValidationError as exc:
+                return _abgesagt(request, case, _meldung(exc))
+            except ValueError:
+                # Die Statuspruefung der Modell-Methode sieht den FRISCH
+                # gesperrten Fall: inzwischen geschlossen. Jede andere
+                # ``ValueError`` bleibt ein Fehler und wird nicht verdeckt.
+                if Case.objects.filter(pk=case.pk, facility_id=case.facility_id, status=Case.Status.OPEN).exists():
+                    raise
+                return _abgesagt(request, case, str(_("Episoden können nur für offene Fälle erstellt werden.")))
             messages.success(request, _("Episode wurde erstellt."))
             return redirect("core:case_detail", pk=case.pk)
         context = _episode_context(case, form, is_edit=False)
@@ -97,11 +135,14 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
             # Instanz laengst mutiert, ein Diff danach faende nie eine
             # Aenderung und schriebe nie ``EPISODE_UPDATE``. Der Service diffed
             # gegen den DB-Stand und schreibt die Audit-Zeile.
-            update_episode(
-                episode,
-                request.user,
-                **{field: form.cleaned_data[field] for field in EpisodeForm.Meta.fields},
-            )
+            try:
+                update_episode(
+                    episode,
+                    request.user,
+                    **{field: form.cleaned_data[field] for field in EpisodeForm.Meta.fields},
+                )
+            except ValidationError as exc:
+                return _abgesagt(request, case, _meldung(exc))
             messages.success(request, _("Episode wurde aktualisiert."))
             return redirect("core:case_detail", pk=case.pk)
         context = _episode_context(case, form, is_edit=True, episode=episode)
@@ -118,6 +159,9 @@ class EpisodeCloseView(StaffRequiredMixin, View):
     def post(self, request, case_pk, pk):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        close_episode(episode, request.user)
+        try:
+            close_episode(episode, request.user)
+        except ValidationError as exc:
+            return _abgesagt(request, case, _meldung(exc))
         messages.success(request, _("Episode wurde abgeschlossen."))
         return redirect("core:case_detail", pk=case.pk)
