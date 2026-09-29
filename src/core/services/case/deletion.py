@@ -608,8 +608,14 @@ def anonymize_case_now(case, user):
     # Papierkorb", „noch nicht getilgt" und „kein Hold" stabile Aussagen und
     # nicht der Stand von vorhin. ``anonymize_case`` traegt selbst
     # ``@transaction.atomic``; das ist hier ein Savepoint, kein zweiter Commit.
+    # Refs #2374: Einrichtungsgrenze der handelnden Person VOR der Sperrkette
+    # (fail-closed ohne Einrichtung); die Kette laeuft danach in der
+    # Einrichtung der handelnden Person, nicht in der der Instanz.
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != case.facility_id:
+        raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
     with transaction.atomic():
-        locked = _lock_case_chain(case.facility_id, case.pk)
+        locked = _lock_case_chain(actor_facility_id, case.pk)
         if locked is None or not locked.is_deleted:
             # Zeile verschwunden, fremde Einrichtung oder waehrend der
             # Sperrwartezeit wiederhergestellt/umgehaengt — dieselbe Antwort wie
