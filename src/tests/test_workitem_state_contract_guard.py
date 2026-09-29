@@ -194,3 +194,46 @@ class TestSammelaktionUeberDieView:
         assert meldungen == [str(WORKITEM_DELETED_MESSAGE)]
         assert _stand(items) == vorher
         assert AuditLog.objects.count() == audit_vorher
+
+
+def _geladen(facility, user, *, person=None, title="Alt", **extra):
+    """Eine Aufgabe, wie ein Formular sie laedt — danach aendert sich die Datenbank."""
+    workitem = WorkItem.objects.create(facility=facility, client=person, created_by=user, title=title, **extra)
+    return WorkItem.objects.get(pk=workitem.pk)
+
+
+class TestBearbeiten:
+    @pytest.mark.parametrize("art", WIDERRUFE)
+    def test_widerrufene_person(self, facility, client_identified, staff_user, art):
+        from core.services.case import update_workitem
+
+        workitem = _geladen(facility, staff_user, person=client_identified)
+        _widerrufen(client_identified, art)
+        m = _assert_refused(lambda: update_workitem(workitem, staff_user, title="Neu"), CLIENT_WRITE_REVOKED_MESSAGE)
+        assert WorkItem.objects.get(pk=workitem.pk).title == "Alt"
+        assert _person_vor_aufgabe(m)[:1] == ["core_client"]
+
+    @pytest.mark.parametrize("art", WIDERRUFE)
+    def test_zuordnung_zu_widerrufener_person(self, facility, client_identified, staff_user, art):
+        from core.services.case import update_workitem
+
+        workitem = _geladen(facility, staff_user)
+        _widerrufen(client_identified, art)
+        m = _assert_refused(
+            lambda: update_workitem(workitem, staff_user, client=client_identified, title="Neu"),
+            CLIENT_WRITE_REVOKED_MESSAGE,
+        )
+        zeile = WorkItem.objects.get(pk=workitem.pk)
+        assert (zeile.client_id, zeile.title) == (None, "Alt")
+        assert _person_vor_aufgabe(m)[:1] == ["core_client"]
+
+    @pytest.mark.parametrize("mit_person", [True, False], ids=["mit_person", "ohne_person"])
+    def test_geloeschte_aufgabe(self, facility, client_identified, staff_user, mit_person):
+        from core.services.case import update_workitem
+        from core.services.case.workitems import WORKITEM_DELETED_MESSAGE
+
+        workitem = _geladen(facility, staff_user, person=client_identified if mit_person else None)
+        WorkItem.objects.filter(pk=workitem.pk).update(is_deleted=True, deleted_at=timezone.now())
+        m = _assert_refused(lambda: update_workitem(workitem, staff_user, title="Neu"), WORKITEM_DELETED_MESSAGE)
+        assert WorkItem.objects.get(pk=workitem.pk).title == "Alt"
+        assert _person_vor_aufgabe(m)[-1] == "core_workitem"

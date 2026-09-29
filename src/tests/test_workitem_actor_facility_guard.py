@@ -146,3 +146,26 @@ class TestSammeldienste:
         nachher = _stand(items)
         assert all(nachher[pk] != vorher[pk] for pk in vorher)
         assert AuditLog.objects.count() == audit_vorher + 2
+
+
+class TestBearbeiten:
+    """Echte, unverfaelschte Aufgabe der eigenen Einrichtung — fremd ist nur die handelnde Person."""
+
+    @pytest.mark.parametrize("akteur", AKTEURE, indirect=True)
+    @pytest.mark.parametrize("mit_person", [True, False], ids=["mit_person", "ohne_person"])
+    def test_abgewiesen(self, facility, client_identified, staff_user, akteur, mit_person):
+        from core.services.case import update_workitem
+
+        person = client_identified if mit_person else None
+        workitem = _aufgabe(facility, staff_user, client=person, title="Alt")
+        _assert_refused(lambda: update_workitem(workitem, akteur, title="Neu"))
+        assert WorkItem.objects.get(pk=workitem.pk).title == "Alt"
+
+    def test_gegenprobe_eigene_einrichtung(self, facility, client_identified, staff_user):
+        from core.services.case import update_workitem
+
+        workitem = _aufgabe(facility, staff_user, client=client_identified, title="Alt")
+        vorher = _zaehler()
+        update_workitem(workitem, staff_user, title="Neu")
+        assert WorkItem.objects.get(pk=workitem.pk).title == "Neu"
+        assert _zaehler() == (vorher[0], vorher[1] + 1, vorher[2] + 1)
