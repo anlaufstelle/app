@@ -137,6 +137,14 @@ class TestVeralteteInstanz:
 
         assert messages == [_MERGED_MESSAGE]
 
+    def test_zeile_ohne_datenbankstand_wird_abgewiesen(self, admin_user, facility):
+        ghost = Client(facility=facility, pseudonym="Nie gespeichert", is_deleted=True)
+
+        messages, _ = _refuse(ghost, admin_user)
+
+        assert messages == ["Person nicht gefunden."]
+        assert not AuditLog.objects.filter(action=AuditLog.Action.CLIENT_RESTORED).exists()
+
     def test_veraltete_lebende_instanz_wird_trotzdem_wiederhergestellt(self, admin_user, client_trashed):
         """Umgekehrt: die Instanz sieht noch „aktiv", die Datenbank sagt „Papierkorb" — der frische Stand zaehlt."""
         stale = Client.objects.get(pk=client_trashed.pk)

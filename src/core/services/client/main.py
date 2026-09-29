@@ -21,6 +21,7 @@ from core.services.audit import (
     audit_event,
     check_update_allowlist,
 )
+from core.services.client.locking import lock_clients
 from core.services.client.restriction import assert_processing_allowed
 from core.services.client.targets import client_activity_targets_q, client_legal_hold_targets_q
 from core.services.dashboard import log_activity
@@ -35,6 +36,13 @@ logger = logging.getLogger(__name__)
 
 _REDACTED_HISTORY_MARKER = build_anonymization_marker()
 _CLIENT_DOCUMENT_TYPE_ERROR = _("Der Dokumentationstyp ist nicht für Personen vorgesehen.")
+
+#: Einrichtungsgrenze der handelnden Person in den Personen-Diensten. Derselbe
+#: Wortlaut wie im Art.-18-Gate (``restriction.py``) — eine Meldung fuer
+#: dieselbe Aussage. Geprueft wird fail-closed (ohne Einrichtung keine
+#: Aenderung) und VOR der ersten Sperre: eine fremde Einrichtung erfaehrt
+#: nichts ueber den Zustand der Akte und haelt keine ihrer Zeilen fest.
+CLIENT_OTHER_FACILITY_MESSAGE = _("Person gehört zu einer anderen Einrichtung.")
 
 
 def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
@@ -1382,22 +1390,36 @@ def restore_client(client, user):
     hat der Fall-Pfad seit ADR-044 (``restore_case``); dort stand als Begründung
     für die Auslassung hier, die Person habe ihr ``is_active=False`` als
     Backstop — das ist ein Anzeigefilter, keine Invariante.
+
+    Die drei Zustandspruefungen laufen an der GESPERRT NEU GELESENEN Zeile,
+    nicht an der uebergebenen Instanz: zwischen dem Laden der Papierkorb-Liste
+    und dem Klick kann die Person bereits wiederhergestellt, endgueltig
+    anonymisiert oder zusammengefuehrt worden sein. Die Sperre haelt bis zum
+    Commit; die Eingabeinstanz wird danach auf den geschriebenen Stand gezogen.
     """
-    if client.merged_into_id is not None:
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != client.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
+    locked = lock_clients([client.pk], facility=actor_facility_id).get(client.pk)
+    if locked is None:  # Personen-Zeilen werden redigiert, nie geloescht
+        raise ValidationError(_("Person nicht gefunden."))
+    if locked.merged_into_id is not None:
         raise ValidationError(
             _(
                 "Diese Person wurde mit einer anderen zusammengeführt — "
                 "Wiederherstellen nur über das Aufheben der Zusammenführung."
             )
         )
-    if not client.is_deleted:
+    if not locked.is_deleted:
         raise ValidationError("Person ist nicht im Papierkorb.")
-    if client.anonymized_at is not None:
+    if locked.anonymized_at is not None:
         raise ValidationError(_("Diese Person wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."))
-    client.restore()
+    locked.restore()
+    for field in ("is_deleted", "deleted_at", "deleted_by_id"):
+        setattr(client, field, getattr(locked, field))
     # Refs #1093: kein Pseudonym ins detail (= target_id-Dublette).
     audit_client_event(
-        client,
+        locked,
         user,
         AuditLog.Action.CLIENT_RESTORED,
     )
