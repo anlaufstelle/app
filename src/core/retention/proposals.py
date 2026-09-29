@@ -737,19 +737,32 @@ def reactivate_deferred_proposals(facility):
         # (``auto_approve and ... >= max_defer_count``) kurzschliesst (Refs #1011).
         auto_approve = False
 
-    due_proposals = RetentionProposal.objects.filter(
-        facility=facility,
-        status=RetentionProposal.Status.DEFERRED,
-        deferred_until__lte=today,
+    due_proposals = list(
+        RetentionProposal.objects.filter(
+            facility=facility,
+            status=RetentionProposal.Status.DEFERRED,
+            deferred_until__lte=today,
+        )
+    )
+    auto_approve_pks = {p.pk for p in due_proposals if auto_approve and p.defer_count >= max_defer_count}
+    # Refs #2374: Die Audit-Zeile des ersten Vorschlags haelt die Audit-Kette
+    # bis zum Ende des Laufs. Zielanker der Auto-Genehmigungen und alle
+    # faelligen Vorschlaege deshalb vorab sperren (Muster
+    # ``bulk_approve_proposals``) — auch die Reaktivierung sperrt mit ihrem
+    # ``UPDATE`` eine Vorschlagszeile.
+    binding_changed = _lock_selection(
+        facility.pk, due_proposals, targets_of=[p for p in due_proposals if p.pk in auto_approve_pks]
     )
 
     for proposal in due_proposals:
-        if auto_approve and proposal.defer_count >= max_defer_count:
+        if proposal.pk in auto_approve_pks:
             # Refs #2122: Eigener Savepoint je Vorschlag (Muster
             # ``bulk_approve_proposals``) — ein gehaltener Vorschlag darf den
             # Rest des Laufs nicht zurueckrollen.
             try:
                 with transaction.atomic():
+                    if proposal.pk in binding_changed:
+                        raise ValidationError(TARGET_BINDING_CHANGED_MESSAGE)
                     _lock_check_and_mark_approved(proposal)
             except ValidationError:
                 # Der Vorschlag bleibt DEFERRED (Status unveraendert, keine

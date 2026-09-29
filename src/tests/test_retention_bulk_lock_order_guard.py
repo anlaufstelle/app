@@ -396,9 +396,18 @@ class TestZweiSammelaktionenMitGegenlaeufigerAuswahlVerklemmenSichNicht:
 
 @pytest.mark.django_db
 class TestGeaenderteZuordnungWaehrendDerSperre:
-    def test_vorschlag_mit_umgehaengtem_ereignis_zaehlt_als_uebersprungen(self, facility, lead_user, doc_type_contact):
+    @pytest.mark.parametrize("weg", ["sammelgenehmigung", "auto_genehmigung"])
+    def test_vorschlag_mit_umgehaengtem_ereignis_zaehlt_als_uebersprungen(
+        self, facility, lead_user, doc_type_contact, weg
+    ):
         """Hängt ein paralleler Vorgang ein Ereignis der Auswahl an eine andere Person, während die
-        Sammelgenehmigung die Personen sperrt, wird dieser Vorschlag nicht genehmigt — die übrigen schon."""
+        Genehmigung die Personen sperrt, wird dieser Vorschlag nicht genehmigt — die übrigen schon."""
+        if weg == "auto_genehmigung":
+            Settings.objects.update_or_create(
+                facility=facility,
+                defaults={"retention_auto_approve_after_defer": True, "retention_max_defer_count": 2},
+            )
+            facility.refresh_from_db()
         personen = [
             Client.objects.create(
                 facility=facility, pseudonym=f"Zuordnung-{n}", contact_stage=Client.ContactStage.IDENTIFIED
@@ -422,6 +431,11 @@ class TestGeaenderteZuordnungWaehrendDerSperre:
                 target_id=ereignis.pk,
                 deletion_due_at=date.today() + timedelta(days=5),
                 retention_category="identified",
+                status=RetentionProposal.Status.DEFERRED
+                if weg == "auto_genehmigung"
+                else RetentionProposal.Status.PENDING,
+                deferred_until=timezone.localdate() - timedelta(days=1),
+                defer_count=3,
             )
             for ereignis in ereignisse
         ]
@@ -430,12 +444,16 @@ class TestGeaenderteZuordnungWaehrendDerSperre:
                 "core_client",
                 lambda: Event.objects.filter(pk=ereignisse[0].pk).update(client=personen[2]),
             )
-            ergebnis = bulk_approve_proposals(vorschlaege, lead_user)
+            if weg == "auto_genehmigung":
+                ergebnis = reactivate_deferred_proposals(facility)
+            else:
+                ergebnis = bulk_approve_proposals(vorschlaege, lead_user)
 
         assert aufzeichnung.offene_schranken() == []
-        assert ergebnis == (1, 1)
+        assert ergebnis == ((0, 1) if weg == "auto_genehmigung" else (1, 1))
         stati = [RetentionProposal.objects.get(pk=v.pk).status for v in vorschlaege]
-        assert stati == [RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED]
+        assert stati == [vorschlaege[0].status, RetentionProposal.Status.APPROVED]
         assert not AuditLog.objects.filter(
-            target_id=str(ereignisse[0].pk), detail__category="retention_proposal_approved"
+            target_id=str(ereignisse[0].pk),
+            detail__category__in=["retention_proposal_approved", "retention_proposal_auto_approved"],
         ).exists()
