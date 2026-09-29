@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 15:33+0200\n"
+"POT-Creation-Date: 2026-09-29 15:41+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12914,3 +12914,24 @@ msgstr "Handover note belongs to a different facility."
 #: src/core/services/case/workitems.py:44
 msgid "Diese Aufgabe wurde gelöscht — sie kann nicht mehr geändert werden."
 msgstr "This task has been deleted — it can no longer be changed."
+
+#: src/core/retention/legal_holds.py:20
+msgid "Aufbewahrungssperre gehört zu einer anderen Einrichtung."
+msgstr "Legal hold belongs to a different facility."
+
+#: src/core/retention/legal_holds.py:25
+msgid "Diese Aufbewahrungssperre wurde zwischenzeitlich bereits aufgehoben — bitte die Übersicht neu laden."
+msgstr "This legal hold has already been lifted in the meantime — please reload the overview."
+
+#: src/core/retention/legal_holds.py:32
+msgid "Die Personenzuordnung des Falls wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+msgstr "The person assigned to this case has changed in the meantime — please reload the page."
+
+#: src/core/retention/legal_holds.py:44
+msgid "Für dieses Ereignis liegt ein weiterer offener Löschvorschlag vor — bitte die Übersicht neu laden und den Hold dort anlegen."
+msgstr "Another open deletion proposal exists for this event — please reload the overview and place the hold on that one."
+
+#: src/core/services/case/deletion.py:138
+#: src/core/services/case/deletion.py:406
+msgid "Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+msgstr "The case has changed in the meantime — please reload the page."

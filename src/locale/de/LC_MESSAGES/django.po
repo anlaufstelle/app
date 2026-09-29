@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 15:33+0200\n"
+"POT-Creation-Date: 2026-09-29 15:41+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13012,3 +13012,24 @@ msgstr "Übergabenotiz gehört zu einer anderen Einrichtung."
 #: src/core/services/case/workitems.py:44
 msgid "Diese Aufgabe wurde gelöscht — sie kann nicht mehr geändert werden."
 msgstr "Diese Aufgabe wurde gelöscht — sie kann nicht mehr geändert werden."
+
+#: src/core/retention/legal_holds.py:20
+msgid "Aufbewahrungssperre gehört zu einer anderen Einrichtung."
+msgstr "Aufbewahrungssperre gehört zu einer anderen Einrichtung."
+
+#: src/core/retention/legal_holds.py:25
+msgid "Diese Aufbewahrungssperre wurde zwischenzeitlich bereits aufgehoben — bitte die Übersicht neu laden."
+msgstr "Diese Aufbewahrungssperre wurde zwischenzeitlich bereits aufgehoben — bitte die Übersicht neu laden."
+
+#: src/core/retention/legal_holds.py:32
+msgid "Die Personenzuordnung des Falls wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+msgstr "Die Personenzuordnung des Falls wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+
+#: src/core/retention/legal_holds.py:44
+msgid "Für dieses Ereignis liegt ein weiterer offener Löschvorschlag vor — bitte die Übersicht neu laden und den Hold dort anlegen."
+msgstr "Für dieses Ereignis liegt ein weiterer offener Löschvorschlag vor — bitte die Übersicht neu laden und den Hold dort anlegen."
+
+#: src/core/services/case/deletion.py:138
+#: src/core/services/case/deletion.py:406
+msgid "Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+msgstr "Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
