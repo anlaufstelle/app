@@ -615,16 +615,21 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --apply # heilen
 
-# Dieselbe Pruefung fuer Ereignisse, Personen und Faelle (Refs #2188): bis
-# v0.95.0 konnte die Rotation auch data_json eines geloeschten Ereignisses,
-# einer anonymisierten Person oder eines anonymisierten Falls mit den alten
-# Werten zurueckschreiben. --target all prueft Person, Fall, Ereignis und
-# Historie in dieser Reihenfolge (einzeln: --target client|case|event|
-# eventhistory; ohne --target nur die Historie). --apply leert data_json wie
-# die regulaere Redaktion, laesst Loesch-/Anonymisierungszeitpunkt stehen und
-# schreibt je Zeile einen Nachweis (DELETE, Kategorie event_repaired,
-# client_repaired bzw. case_repaired). Die Verbindung MUSS jede gepruefte
-# Tabelle besitzen — sonst fail-loud vor dem ersten Lesen.
+# Dieselbe Pruefung fuer Ereignisse, Personen, Faelle und Berichtigungs-
+# antraege (Refs #2188): bis v0.95.0 konnte die Rotation auch data_json eines
+# geloeschten Ereignisses, einer anonymisierten Person oder eines
+# anonymisierten Falls sowie die vier Wertspalten der Berichtigungsantraege
+# einer anonymisierten Person mit den alten Werten zurueckschreiben.
+# --target all prueft Person, Berichtigungsantrag, Fall, Ereignis und
+# Historie in dieser Reihenfolge (einzeln: --target client|rectification|
+# case|event|eventhistory; ohne --target nur die Historie). --apply leert
+# data_json bzw. die Wertspalten des Antrags wie die regulaere Redaktion bzw.
+# Anonymisierung, laesst Loesch-/Anonymisierungs-, Antrags- und
+# Pruefzeitpunkt stehen und schreibt je Zeile einen Nachweis (DELETE,
+# Kategorie event_repaired, client_repaired, case_repaired bzw.
+# rectification_repaired). Die Verbindung MUSS jede gepruefte Tabelle
+# besitzen, bei Antraegen auch core_client — sonst fail-loud vor dem ersten
+# Lesen.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --target all # Trockenlauf
 docker compose -f docker-compose.prod.yml run --rm maintenance \

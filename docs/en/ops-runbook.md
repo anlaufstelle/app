@@ -1,5 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
+> Synchronization update 2026-09-29: § 3.5 adds the rectification requests of anonymized persons to the check and repair (`--target rectification`, part of `--target all`, #2188).
 > Synchronization update 2026-09-29: § 6.5a uses the persistent production flag path from the host and documents the system page as the second control path (#1904).
 > Synchronization update 2026-09-29: § 4 documents the bounded Compose container logs, their effect on `docker compose logs`, and site-specific overrides (#1904).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188).
@@ -641,15 +642,20 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --apply # repair
 
-# The same check for events, persons and cases (Refs #2188): up to v0.95.0
-# the rotation could also write the old values back into data_json of a
-# deleted event, an anonymized person or an anonymized case. --target all
-# checks person, case, event and history in this order (individually:
-# --target client|case|event|eventhistory; without --target the history
-# only). --apply empties data_json like the regular redaction, keeps the
-# deletion/anonymization timestamp and writes one proof per row (DELETE,
-# category event_repaired, client_repaired or case_repaired). The connection
-# MUST own every table it checks — otherwise fail-loud before the first read.
+# The same check for events, persons, cases and rectification requests
+# (Refs #2188): up to v0.95.0 the rotation could also write the old values
+# back into data_json of a deleted event, an anonymized person or an
+# anonymized case, and into the four value columns of the rectification
+# requests of an anonymized person. --target all checks person,
+# rectification request, case, event and history in this order
+# (individually: --target client|rectification|case|event|eventhistory;
+# without --target the history only). --apply empties data_json or the
+# request's value columns like the regular redaction or anonymization, keeps
+# the deletion/anonymization, request and review timestamps and writes one
+# proof per row (DELETE, category event_repaired, client_repaired,
+# case_repaired or rectification_repaired). The connection MUST own every
+# table it checks, for requests also core_client — otherwise fail-loud
+# before the first read.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --target all # dry run
 docker compose -f docker-compose.prod.yml run --rm maintenance \
@@ -2996,5 +3002,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: b95de6458b97d549f4cbc8f7120d94d4b12fe784 -->
+<!-- source-hash: 08aaf045b6403546858847f2555a95f8e3ab1601 -->
 <!-- translation-date: 2026-09-22 -->
