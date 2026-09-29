@@ -360,7 +360,12 @@ def reopen_case(case, user):
     Papierkorb kommt ueber :func:`~core.services.case.deletion.restore_case`
     zurueck, mit eigener Pruefung und eigener Audit-Zeile, nicht ueber das
     Nullen von ``is_deleted`` durch einen vollen Save.
+
+    Davor die Einrichtungsgrenze der handelnden Person — vor jeder Sperre,
+    fail-closed (Muster :func:`assign_event_to_case`).
     """
+    if getattr(user, "facility_id", None) != case.facility_id:
+        raise ValidationError(_("Fall gehört zu einer anderen Einrichtung."))
     locked = lock_case_for_status_change(case)
     locked.status = Case.Status.OPEN
     locked.closed_at = None
