@@ -9,9 +9,12 @@ Nutzerweg im echten Browser:
    auf die Einstellungsseite.
 3. Der Faktorwechsel selbst ist fuer ein TOTP-Konto kein Link der Oberflaeche,
    sondern ein ``POST /mfa/setup/``. Der Test schickt ihn als Formular aus der
-   Einstellungsseite ab: der erste POST mit ungueltigem Code zeigt QR-Code und
-   Secret eines neuen Geraets, ab dort laeuft die Einrichtung ueber die
-   Oberflaeche bis zur Quittung der neuen Backup-Codes.
+   Einstellungsseite ab: der erste POST ohne Code zeigt QR-Code und Secret
+   eines neuen Geraets, ab dort laeuft die Einrichtung ueber die Oberflaeche
+   bis zur Quittung der neuen Backup-Codes. Bewusst ohne Code: ein
+   Fehlversuch (etwa ``000000``) sperrt das neue Geraet nach django-otp fuer
+   eine Sekunde, der gueltige Code aus dem Browser kaeme zu frueh und wuerde
+   als ungueltig abgewiesen.
 4. Gegenprobe ohne Sudo: derselbe POST landet auf der Sudo-Seite, es entsteht
    kein neues Geraet.
 5. Gegenprobe Erstsetup: ein Konto ohne Faktor sieht die Einrichtung direkt,
@@ -203,7 +206,8 @@ class TestZZMFAFactorChangeSudo:
                 _confirm_sudo(page, codes[1])
                 page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
 
-                _submit_setup_post(page, "000000")
+                # Ohne Code: kein Pruefversuch, also keine Sperre am neuen Geraet.
+                _submit_setup_post(page, "")
                 page.wait_for_url(re.compile(r"/mfa/setup/"), timeout=10000)
                 _finish_setup_from_setup_page(page)
             finally:
