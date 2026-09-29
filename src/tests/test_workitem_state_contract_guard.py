@@ -324,3 +324,27 @@ class TestFolgeaufgabe:
         WorkItem.objects.filter(pk=quelle.pk).update(is_deleted=True, deleted_at=timezone.now())
         _assert_refused(lambda: duplicate_recurring_workitem(quelle, staff_user), WORKITEM_DELETED_MESSAGE)
         assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is None
+
+    def test_umgehaengte_quelle(self, facility, client_identified, staff_user):
+        """Die Instanz traegt noch die alte Person — die gesperrte Zeile eine andere."""
+        from core.services.case import duplicate_recurring_workitem
+
+        quelle = _erledigt_wiederkehrend(facility, staff_user, client_identified)
+        andere = Client.objects.create(facility=facility, pseudonym="Andere Person", created_by=staff_user)
+        WorkItem.objects.filter(pk=quelle.pk).update(client=andere)
+        _assert_refused(
+            lambda: duplicate_recurring_workitem(quelle, staff_user),
+            "Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert.",
+        )
+        assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is None
+
+    def test_verfaelschte_einrichtung_der_instanz(self, facility, second_facility, staff_user):
+        """Die Zeile liegt in einer anderen Einrichtung, die Instanz behauptet die eigene."""
+        from core.services.case import duplicate_recurring_workitem
+
+        quelle = _erledigt_wiederkehrend(second_facility, None, None)
+        quelle.facility_id = facility.pk
+        _assert_refused(
+            lambda: duplicate_recurring_workitem(quelle, staff_user), "Aufgabe gehört zu einer anderen Einrichtung."
+        )
+        assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is None
