@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -652,8 +652,24 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             raise PermissionDenied
         if not eligibility.eligible:
             message = " ".join(str(reason) for reason in eligibility.reason_messages)
-            return eligibility, HttpResponseBadRequest(message)
+            return eligibility, message
         return eligibility, None
+
+    def _document_type_error_response(self, request, message, params):
+        """Refuse in place for HTMX; a full navigation gets message + redirect.
+
+        Mirrors ``TallyUndoView.post`` (Refs #2385): the "+1"/cancel links and
+        the value form all carry ``hx-get``/``hx-post`` with an ``hx-target``
+        that swaps a single card (``#tally-action-<pk>``/``#tally-row-<pk>``).
+        A raw ``HttpResponseBadRequest`` swapped into that target replaced the
+        whole card with plain text; a full page navigation (JS disabled, the
+        anchor's own ``href``, or a native form submit) showed the same plain
+        text as the entire page instead of returning to the Zeitstrom view.
+        """
+        if request.headers.get("HX-Request"):
+            return htmx_absage(message, status=400)
+        messages.error(request, message)
+        return redirect(safe_redirect_path(params.get("next")))
 
     @staticmethod
     def _filter_state(params, live_context, *, request_is_live):
@@ -787,7 +803,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
     def _live_context_error(cls, request, params, live_context):
         if cls._request_matches_live_context(request, params, live_context):
             return None
-        return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
+        return str(_("Anonyme Kontakte im aktuellen Zeitfenster"))
 
     @staticmethod
     def _tally_context_values(live_context):
@@ -802,12 +818,14 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
         live_context = current_tally_context(facility)
 
         if request.GET.get("cancel"):
-            eligibility, error_response = self._resolve_document_type(request, request.GET)
-            if error_response is not None:
-                return error_response
+            eligibility, message = self._resolve_document_type(request, request.GET)
+            if message is not None:
+                return self._document_type_error_response(request, message, request.GET)
             doc_type = eligibility.document_type
             if not eligibility.required_number_fields:
-                return HttpResponseBadRequest(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe."))
+                return self._document_type_error_response(
+                    request, str(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe.")), request.GET
+                )
             request_is_live = self._request_matches_live_context(request, request.GET, live_context)
             summary = build_tally_summary(facility, request.user, context=live_context)
             row = next(
@@ -815,7 +833,11 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 None,
             )
             if row is None:
-                return HttpResponseBadRequest(_("Dieser Dokumentationstyp kann nicht per Strichliste erfasst werden."))
+                return self._document_type_error_response(
+                    request,
+                    str(_("Dieser Dokumentationstyp kann nicht per Strichliste erfasst werden.")),
+                    request.GET,
+                )
             filter_state = self._filter_state(request.GET, live_context, request_is_live=request_is_live)
             context = {
                 "row": row,
@@ -839,15 +861,17 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 context,
             )
 
-        if error_response := self._live_context_error(request, request.GET, live_context):
-            return error_response
-        eligibility, error_response = self._resolve_document_type(request, request.GET)
-        if error_response is not None:
-            return error_response
+        if message := self._live_context_error(request, request.GET, live_context):
+            return self._document_type_error_response(request, message, request.GET)
+        eligibility, message = self._resolve_document_type(request, request.GET)
+        if message is not None:
+            return self._document_type_error_response(request, message, request.GET)
         doc_type = eligibility.document_type
         required_fields = eligibility.required_number_fields
         if not required_fields:
-            return HttpResponseBadRequest(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe."))
+            return self._document_type_error_response(
+                request, str(_("Dieser Dokumentationstyp benötigt keine Wert-Eingabe.")), request.GET
+            )
 
         idempotency_key = normalize_idempotency_key(request.GET.get("idempotency_key"))
 
@@ -882,8 +906,14 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             )
         except ValueError:
             if not request_is_live:
-                return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
-            return HttpResponseBadRequest(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."))
+                return self._document_type_error_response(
+                    request, str(_("Anonyme Kontakte im aktuellen Zeitfenster")), request.POST
+                )
+            return self._document_type_error_response(
+                request,
+                str(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich.")),
+                request.POST,
+            )
 
         payload_hash = payload_fingerprint(request)
         hit = get_idempotent_result(TALLY_IDEMPOTENCY_SCOPE, request.user.pk, idempotency_key)
@@ -899,7 +929,11 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             except ValidationError:
                 event = None
             if event is None:
-                return HttpResponseBadRequest(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich."))
+                return self._document_type_error_response(
+                    request,
+                    str(_("Idempotenz-Schlüssel fehlt, ist ungültig oder widersprüchlich.")),
+                    request.POST,
+                )
             if has_idempotency_payload_mismatch(event.idempotency_payload_hash, request):
                 return _idempotency_mismatch_response()
             return self._success_response(request, facility, event, live_context, request_is_live=request_is_live)
@@ -913,10 +947,12 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
                 return _idempotency_mismatch_response()
             return self._success_response(request, facility, existing, live_context, request_is_live=request_is_live)
         if not request_is_live:
-            return HttpResponseBadRequest(_("Anonyme Kontakte im aktuellen Zeitfenster"))
-        eligibility, error_response = self._resolve_document_type(request, request.POST)
-        if error_response is not None:
-            return error_response
+            return self._document_type_error_response(
+                request, str(_("Anonyme Kontakte im aktuellen Zeitfenster")), request.POST
+            )
+        eligibility, message = self._resolve_document_type(request, request.POST)
+        if message is not None:
+            return self._document_type_error_response(request, message, request.POST)
         doc_type = eligibility.document_type
         required_fields = eligibility.required_number_fields
 
