@@ -533,11 +533,15 @@ class TestServerErrorSupportContactAcrossAllStacks:
     the boundary guard above never reaches.
 
     ``docker-compose.staging.yml``, ``docker-compose.demo.yml``, their
-    example env files, and the entire ``dev-ops/`` tree (the private Barbara
-    stack) are stripped from the public release snapshot
-    (``dev-ops/release/build-release.sh``); a stack or example file missing
-    for that reason is skipped rather than failed, the same way the existing
-    pull-policy and env-template guards already handle it.
+    example env files (``dev-ops/release/build-release.sh:324-329``), and
+    the entire ``dev-ops/`` tree (``build-release.sh:285``, covering the
+    private Barbara stack) are stripped from the public release snapshot. A
+    missing path is only ever treated as that legitimate strip — and
+    skipped — when the tree under test also lacks ``dev-ops/`` itself, the
+    strip's own unconditional removal marker (see ``_file_status`` below).
+    Every one of these paths is tracked in the development tree, so
+    deleting or renaming one there still fails the guard instead of
+    silently skipping it (Refs #1904).
     """
 
     # Refs #1904: the setting(s) settings/base.py reads from the environment
@@ -563,6 +567,55 @@ class TestServerErrorSupportContactAcrossAllStacks:
         ),
     )
 
+    # Paths dev-ops/release/build-release.sh physically removes from the
+    # public release snapshot. An entry with no trailing slash also covers
+    # everything nested under it (e.g. "dev-ops" covers the Barbara stack's
+    # compose and example files, which never get their own entry here).
+    _STRIPPED_FROM_RELEASE_SNAPSHOT = (
+        "docker-compose.staging.yml",  # build-release.sh:324
+        "docker-compose.demo.yml",  # build-release.sh:325
+        ".env.demo.example",  # build-release.sh:328
+        ".env.staging.example",  # build-release.sh:329
+        "dev-ops",  # build-release.sh:285 (rm -rf "$RELEASE_DIR/dev-ops")
+    )
+
+    _PRESENT = "present"
+    _LEGITIMATELY_STRIPPED = "stripped"
+    _UNEXPECTEDLY_MISSING = "missing"
+
+    @classmethod
+    def _is_on_the_release_strip_list(cls, rel_path: Path) -> bool:
+        """Whether ``rel_path`` is (or lives under) a path build-release.sh
+        strips from the public release snapshot."""
+        key = rel_path.as_posix()
+        return any(key == prefix or key.startswith(f"{prefix}/") for prefix in cls._STRIPPED_FROM_RELEASE_SNAPSHOT)
+
+    @staticmethod
+    def _dev_tree_marker_present(root: Path) -> bool:
+        """``dev-ops/`` is removed in full by the release build
+        (build-release.sh:285) and only by it — never partially, never for
+        any other reason. Its presence under ``root`` is therefore what
+        distinguishes the tracked development tree from an already-stripped
+        release snapshot."""
+        return (root / "dev-ops").exists()
+
+    @classmethod
+    def _file_status(cls, root: Path, rel_path: Path) -> str:
+        """Classify a tracked stack/example path under ``root``.
+
+        Returns ``_PRESENT`` when it exists. Returns
+        ``_LEGITIMATELY_STRIPPED`` only when it is missing, it is on the
+        release strip list, AND ``root`` itself also lacks ``dev-ops/``
+        (proving this is a genuine stripped snapshot, not the development
+        tree). Returns ``_UNEXPECTEDLY_MISSING`` for every other absence —
+        the caller must fail on that, not skip (Refs #1904).
+        """
+        if (root / rel_path).exists():
+            return cls._PRESENT
+        if cls._is_on_the_release_strip_list(rel_path) and not cls._dev_tree_marker_present(root):
+            return cls._LEGITIMATELY_STRIPPED
+        return cls._UNEXPECTEDLY_MISSING
+
     @staticmethod
     def _web_environment(compose_path: Path) -> dict:
         services = yaml.safe_load(compose_path.read_text(encoding="utf-8"))["services"]
@@ -581,8 +634,14 @@ class TestServerErrorSupportContactAcrossAllStacks:
 
     @pytest.mark.parametrize("compose_path,example_path", _STACKS)
     def test_error_page_settings_reach_the_web_container(self, compose_path: Path, example_path: Path | None) -> None:
-        if not compose_path.exists():
+        status = self._file_status(Path(), compose_path)
+        if status == self._LEGITIMATELY_STRIPPED:
             pytest.skip(f"{compose_path} is stripped from the public release snapshot (Refs #1904).")
+        assert status == self._PRESENT, (
+            f"{compose_path} is missing from the development tree — none of the six "
+            "web-starting stacks may be missing here, only in an already-stripped "
+            "release snapshot (Refs #1904)."
+        )
         environment = self._web_environment(compose_path)
         missing = self._ERROR_PAGE_ENV_SETTINGS - set(environment)
         assert not missing, (
@@ -596,8 +655,14 @@ class TestServerErrorSupportContactAcrossAllStacks:
     ) -> None:
         if example_path is None:
             pytest.skip(f"{compose_path} has no example env file of its own (Refs #1904).")
-        if not example_path.exists():
+        status = self._file_status(Path(), example_path)
+        if status == self._LEGITIMATELY_STRIPPED:
             pytest.skip(f"{example_path} is stripped from the public release snapshot (Refs #1904).")
+        assert status == self._PRESENT, (
+            f"{example_path} is missing from the development tree — none of these example "
+            "env files may be missing here, only in an already-stripped release snapshot "
+            "(Refs #1904)."
+        )
         documented = set(re.findall(r"^([A-Z][A-Z0-9_]*)=", example_path.read_text(encoding="utf-8"), re.MULTILINE))
         missing = self._ERROR_PAGE_ENV_SETTINGS - documented
         assert not missing, f"{example_path}: missing documentation for {sorted(missing)} (Refs #1904)."
