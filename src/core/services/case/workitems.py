@@ -22,7 +22,7 @@ import logging
 import uuid
 from datetime import date, timedelta
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
 from django.http import QueryDict
@@ -870,6 +870,10 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
     Refs #906: Status-/completed_at-/auto-assign-/Recurrence-Logik teilt
     sich mit dem Bulk-Pfad ueber ``_apply_status_transition`` und
     ``_maybe_duplicate_recurring``.
+
+    ``can_user_mutate_workitem`` wird an der gesperrten Zeile entschieden
+    (``PermissionDenied``), damit die View die Aufgabe nicht vor der Person
+    sperren muss.
     """
     from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
@@ -897,6 +901,11 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
     # erzeugt damit auch keine Folgeaufgabe.
     if locked.is_deleted:
         raise ValidationError(WORKITEM_DELETED_MESSAGE)
+    # Berechtigung am gesperrten Stand: die View prueft vorab ohne Sperre (eine
+    # Aufgabensperre dort stuende VOR der Personensperre). Eine inzwischen
+    # einer anderen Person zugewiesene Aufgabe wird hier abgewiesen.
+    if not can_user_mutate_workitem(user, locked):
+        raise PermissionDenied(_("Keine Berechtigung für diese Aufgabe."))
     check_version_conflict(locked, expected_updated_at, require_token=require_version_token)
     old_status = locked.status
 

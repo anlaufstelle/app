@@ -8,7 +8,7 @@ from contextlib import suppress
 from datetime import timedelta
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -208,17 +208,16 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         if replay_response is not None:
             return replay_response
 
-        # Permission-Check + Service-Call innerhalb derselben Transaktion,
-        # damit das gelockte Objekt aus dem Service-Layer zurueckgegeben
-        # wird und kein parallel laufender Request den Stand zwischen
-        # Check und Update veraendern kann (Refs #129 Teil A, Refs #733).
+        # Permission-Check + Service-Call innerhalb derselben Transaktion; das
+        # gelockte Objekt kommt aus dem Service-Layer zurueck (Refs #129
+        # Teil A, Refs #733). Die Aufgabe wird hier NICHT gesperrt: der Dienst
+        # sperrt Person vor Aufgabe, eine Aufgabensperre davor stuende gegen
+        # diese Reihenfolge. Die Vorpruefung hier liefert die schnelle Absage;
+        # entschieden wird die Berechtigung erneut an der gesperrten Zeile
+        # (``PermissionDenied`` aus dem Dienst -> dieselbe 403-Antwort).
         try:
             with transaction.atomic():
-                workitem = get_scoped_object(
-                    WorkItem.objects.select_for_update(),
-                    request,
-                    pk=pk,
-                )
+                workitem = get_scoped_object(WorkItem, request, pk=pk)
                 if not can_user_mutate_workitem(request.user, workitem):
                     return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
 
@@ -229,6 +228,8 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
                     expected_updated_at=expected_updated_at,
                     require_version_token=wants_raw_json,
                 )
+        except PermissionDenied:
+            return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
         except ValidationError as e:
             # Refs #1419 (analog WorkItemUpdateView/#1338): der Offline-Replay
             # braucht den 409 mit Server-Stand, damit der Konflikt in der
