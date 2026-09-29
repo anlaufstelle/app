@@ -298,18 +298,25 @@ class TestRejectClientMergeGuardMessages:
 
 
 class TestRejectClientMergeReloadTiesToItsOwnFacility:
-    def test_reject_refuses_a_stale_facility_assumption(
-        self, facility, second_facility, source, target, staff_user, admin_user
-    ):
+    def test_reject_refuses_a_stale_facility_assumption(self, facility, second_facility, source, target, staff_user):
         """Pin: ``x_reject_client_merge__mutmut_17`` — ``select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility)`` -> ``get(
         pk=deletion_request.pk, )``. Begruendung siehe
-        ``TestApproveClientMergeReloadTiesToItsOwnFacility`` (spiegelbildlich)."""
+        ``TestApproveClientMergeReloadTiesToItsOwnFacility`` (spiegelbildlich,
+        auch die pruefende Person aus der angenommenen Einrichtung)."""
+        from core.models import User
+
+        reviewer = User.objects.create_user(
+            username="pin099_merge_ablehnung_angenommen",
+            role=User.Role.FACILITY_ADMIN,
+            facility=second_facility,
+            can_confirm_deletion=True,
+        )
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
-            reject_client_merge(dr, admin_user)
+            reject_client_merge(dr, reviewer)
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING
