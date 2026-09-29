@@ -31,6 +31,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 
 from core.models import AuditLog, ShiftHandoverNote, TimeFilter
 from core.services.audit import audit_event
@@ -393,6 +394,12 @@ def _ist_schichtkonflikt(exc: IntegrityError) -> bool:
     return _SHIFT_UNIQUE_CONSTRAINT in str(exc)
 
 
+#: Die handelnde Person gehoert nicht zur Einrichtung der Schicht — oder die
+#: Schicht traegt gar keine Einrichtung. ``can_write_notes`` prueft nur die
+#: Rolle; die Einrichtungsgrenze zieht der Dienst selbst (fail-closed).
+NOTE_FOREIGN_FACILITY_MESSAGE = gettext_lazy("Übergabenotiz gehört zu einer anderen Einrichtung.")
+
+
 @transaction.atomic
 def save_note(
     facility,
@@ -412,6 +419,13 @@ def save_note(
     now = now or timezone.localtime()
     if not can_write_notes(user):
         raise PermissionDenied(_("Übergabenotizen sind Fachkräften, Leitung und Anwendungsbetreuung vorbehalten."))
+    # Einrichtungsgrenze der handelnden Person vor jeder Sperre: die View
+    # liefert die Einrichtung aus der Sitzung, in Produktion traegt die
+    # Zeilensicherheit mit — der Dienst zieht die Grenze trotzdem selbst.
+    # Fail-closed: ohne Einrichtung auf einer der beiden Seiten kein Schreiben.
+    facility_id = getattr(facility, "pk", None)
+    if facility_id is None or getattr(user, "facility_id", None) != facility_id:
+        raise ValidationError(NOTE_FOREIGN_FACILITY_MESSAGE)
     assert_shift_date_supported(shift)
 
     inhalt = (text or "").strip()
