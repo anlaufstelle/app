@@ -603,6 +603,52 @@ class TestServerErrorSupportContactAcrossAllStacks:
         assert not missing, f"{example_path}: missing documentation for {sorted(missing)} (Refs #1904)."
 
 
+class TestServerErrorSupportContactGuardFailsClosed:
+    """Refs #1904: locks in that
+    ``TestServerErrorSupportContactAcrossAllStacks._file_status`` only ever
+    classifies a missing stack/example path as a legitimate release strip
+    when the tree under test also lacks the strip's own removal marker
+    (``dev-ops/``, build-release.sh:285) — never merely because the path
+    happens to be one build-release.sh strips. Without that second check, a
+    deleted or renamed stack/example path in the (tracked) development tree
+    made the guard above skip instead of fail.
+    """
+
+    _NEVER_STRIPPED = Path("docker-compose.dev.yml")
+    _ALWAYS_STRIPPED = Path("docker-compose.demo.yml")
+
+    def test_a_never_stripped_stack_missing_in_the_dev_tree_fails_closed(self, tmp_path: Path) -> None:
+        (tmp_path / "dev-ops").mkdir()
+        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._NEVER_STRIPPED)
+        assert status == TestServerErrorSupportContactAcrossAllStacks._UNEXPECTEDLY_MISSING, (
+            f"a tree with dev-ops/ present is the development tree; a missing "
+            f"{self._NEVER_STRIPPED} there must fail, not be classified {status!r} (Refs #1904)."
+        )
+
+    def test_a_release_stripped_stack_missing_in_the_dev_tree_still_fails_closed(self, tmp_path: Path) -> None:
+        (tmp_path / "dev-ops").mkdir()
+        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._ALWAYS_STRIPPED)
+        assert status == TestServerErrorSupportContactAcrossAllStacks._UNEXPECTEDLY_MISSING, (
+            f"{self._ALWAYS_STRIPPED} missing from a tree that still has dev-ops/ is a "
+            f"development-tree deletion, not a release strip — must fail, not be classified "
+            f"{status!r} (Refs #1904)."
+        )
+
+    def test_a_release_stripped_stack_is_recognised_once_dev_ops_is_also_gone(self, tmp_path: Path) -> None:
+        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._ALWAYS_STRIPPED)
+        assert status == TestServerErrorSupportContactAcrossAllStacks._LEGITIMATELY_STRIPPED, (
+            f"{self._ALWAYS_STRIPPED} missing from a tree that also lacks dev-ops/ is exactly "
+            f"the release-snapshot case that must be skipped, got {status!r} (Refs #1904)."
+        )
+
+    def test_a_never_stripped_stack_still_fails_closed_without_the_dev_ops_marker(self, tmp_path: Path) -> None:
+        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._NEVER_STRIPPED)
+        assert status == TestServerErrorSupportContactAcrossAllStacks._UNEXPECTEDLY_MISSING, (
+            f"{self._NEVER_STRIPPED} is never on the release strip list; a missing copy must "
+            f"still fail even without dev-ops/ present, got {status!r} (Refs #1904)."
+        )
+
+
 class TestReadmeQuickStart:
     """Refs #1894/#1977/#1062: Der Compose-Quick-Start muss wirklich funktionieren.
 
