@@ -392,7 +392,7 @@ describe("#1760 — Entwuerfe zu einer widerrufenen Person", () => {
 // (window.dispatchEvent), damit alle drei Aufrufer (sync-orchestrator.js x2,
 // offline-store.js) dieselbe Quelle teilen, ohne selbst geaendert zu werden.
 describe("#2382 — Widerruf als Ereignis", () => {
-    it("feuert genau EIN Ereignis mit Zaehlwerten und den betroffenen pks, wenn eine lokal bekannte Person und ein gequeuter Eintrag getroffen werden", async () => {
+    it("feuert genau EIN Ereignis mit ausschliesslich Zaehlwerten, wenn eine lokal bekannte Person und ein gequeuter Eintrag getroffen werden", async () => {
         await store.saveClientBundle(bundle(PK_A, "Falke"));
         await store.putEncrypted("queue", {
             url: "https://x.test/events/new/",
@@ -408,12 +408,15 @@ describe("#2382 — Widerruf als Ereignis", () => {
 
         window.removeEventListener("offline-client-revocations-applied", handler);
         expect(seen).toHaveLength(1);
+        // Datensparsamkeit (Refs #2382): das Ereignis nennt KEINE
+        // Personen-Identifikatoren mehr, nur Zaehlwerte — `detail` traegt
+        // ausschliesslich diese drei Schluessel, insbesondere KEIN `pks`.
         expect(seen[0].detail).toEqual({
             purgedClients: result.purgedClients,
             purgedQueueEntries: result.purgedQueueEntries,
             purgedDrafts: result.purgedDrafts,
-            pks: [PK_A.toLowerCase()],
         });
+        expect(seen[0].detail.pks).toBeUndefined();
         expect(seen[0].detail.purgedClients).toBe(1);
         expect(seen[0].detail.purgedQueueEntries).toBe(1);
     });

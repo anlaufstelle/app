@@ -137,8 +137,8 @@ class TestRevocationPendingNoticeReplacedWhileViewOpen:
     def test_discards_pending_notice_and_rebuilds_after_reconnect(self, browser, base_url, e2e_env):
         client_pk, event_pk, pseudonym = _seed_client_with_event(e2e_env)
 
-        # Refs Standardblock 104: Offline-Kontexte IMMER mit fester Zeitzone —
-        # der Offline-Spiegel zeigt sonst die Browser-Zeitzone.
+        # Offline-Kontexte IMMER mit fester Zeitzone anlegen — der Offline-
+        # Spiegel zeigt sonst die Browser-Zeitzone statt der Server-Zeit.
         context = browser.new_context(locale="de-DE", timezone_id="Europe/Berlin")
         page = context.new_page()
         page.set_default_timeout(30000)
