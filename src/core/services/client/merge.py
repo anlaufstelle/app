@@ -713,9 +713,17 @@ def unmerge_client(source, user):
 
     Unter einer aktiven Aufbewahrungssperre auf Ziel ODER Quelle wird ebenfalls
     abgewiesen (Refs #2200) — Begruendung am Guard unten.
+
+    Die Einrichtung der handelnden Leitung wird direkt nach der Rollenpruefung
+    verglichen (fail-closed) — vor der Zustandspruefung, damit eine fremde
+    Leitung nicht erfaehrt, ob die Person zusammengefuehrt ist, und vor jeder
+    Lesung oder Sperre.
     """
     if not user.is_lead_or_admin:
         raise ValidationError(_("Nur die Leitung darf eine Zusammenführung aufheben."))
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != source.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     if source.merged_into_id is None:
         raise ValidationError(_("Diese Person ist nicht zusammengeführt."))
     target = Client.objects.get(pk=source.merged_into_id, facility=source.facility)
