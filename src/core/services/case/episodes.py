@@ -25,6 +25,7 @@ from django.db import transaction
 from core.models import AuditLog
 from core.services.audit import audit_event
 from core.services.audit.diff import changed_fields_vs_db
+from core.services.case.state_contract import lock_case_for_write
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +92,21 @@ def create_episode(case, user, *, title, description="", started_at=None):
     Loeschpfaden beanstandet hat. Diese duenne Naht gibt dem Gate den Platz im
     Service, ohne die Modell-Methode (fremdes Modul) anzufassen: Status-Guard und
     Feldsemantik bleiben unveraendert dort.
-    """
-    from core.services.client.restriction import assert_processing_allowed
 
-    assert_processing_allowed(case.client_id, lock=True)
-    return case.create_episode(user=user, title=title, description=description, started_at=started_at)
+    Zuerst die Einrichtungsgrenze der handelnden Person (vor jeder Sperre,
+    fail-closed), dann der Zustandsvertrag (Person -> Fall, frisch und
+    gesperrt; :func:`~core.services.case.state_contract.lock_case_for_write`)
+    — darin das Art.-18-Gate, der Widerruf der Person und Papierkorb/Tilgung
+    des Falls. Die Instanz des Aufrufers stammt aus einem Lesevorgang vor der
+    Sperre; angelegt wird deshalb an der FRISCH gesperrten Fallzeile, und auch
+    die Statuspruefung der Modell-Methode sieht so den aktuellen Stand statt
+    eines inzwischen geschlossenen Falls.
+    """
+    from core.services.case.goals import _assert_actor_facility
+
+    _assert_actor_facility(user, case.facility_id)
+    locked_case = lock_case_for_write(case)
+    return locked_case.create_episode(user=user, title=title, description=description, started_at=started_at)
 
 
 @transaction.atomic
