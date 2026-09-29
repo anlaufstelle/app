@@ -515,6 +515,10 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                     recurrence=form.cleaned_data.get("recurrence") or WorkItem.Recurrence.NONE,
                     assigned_to=form.cleaned_data.get("assigned_to"),
                 )
+            except PermissionDenied:
+                # Permission decided again at the locked row (reassigned or
+                # re-owned since the check above) -> the same 403 answer.
+                return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
             except ValidationError as e:
                 # Refs #1351 Task 7: JSON/HTMX-Clients erhalten einen 409 mit
                 # dem aktuellen Server-Stand, damit der Offline-Konflikt

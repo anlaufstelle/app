@@ -29,6 +29,7 @@ from core.services.case import (
     bulk_update_workitem_priority,
     bulk_update_workitem_status,
 )
+from core.services.case.workitems import WorkItemBatchForbiddenError
 from core.views.mixins import AssistantOrAboveRequiredMixin
 from core.views.workitems import can_user_mutate_workitem
 
@@ -201,44 +202,16 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         # "5 aktualisiert"-Erfolgsmeldung zu erzeugen.
         forbidden = [wi for wi in workitems if not can_user_mutate_workitem(request.user, wi)]
         if forbidden:
-            # Refs #1136: Konkrete statt pauschaler Meldung. Seit #1125 zeigt die
-            # Inbox bei explizitem Filter ("Alle"/Person) auch fremd-zugewiesene
-            # Aufgaben an und macht sie per "Alle sichtbaren auswählen"
-            # auswählbar. Eine Fachkraft wählt sie dadurch unbeabsichtigt mit
-            # aus; die alte Pauschalmeldung "Keine Berechtigung für ausgewählte
-            # Aufgaben." erklärte nicht, *welche* Einschränkung greift. Wir
-            # nennen die Anzahl der blockierenden (fremd-zugewiesenen) Items von
-            # der Gesamtauswahl, damit gezielt abgewählt werden kann. Die
-            # Alles-oder-nichts-Semantik bleibt: es wird nichts verändert.
-            n = len(forbidden)
-            message = ngettext(
-                "%(forbidden)d der %(total)d ausgewählten Aufgaben ist einer "
-                "anderen Person zugewiesen und kann nicht per Sammelaktion "
-                "geändert werden. Bitte diese Aufgabe abwählen.",
-                "%(forbidden)d der %(total)d ausgewählten Aufgaben sind anderen "
-                "Personen zugewiesen und können nicht per Sammelaktion geändert "
-                "werden. Bitte diese Aufgaben abwählen.",
-                n,
-            ) % {"forbidden": n, "total": len(workitems)}
-            # Refs #1148: Diese fachliche Meldung NICHT mehr als nackte
-            # ``HttpResponseForbidden``-Textseite ausliefern — das erschien als
-            # leere weiße Seite mit Text in der Ecke und wirkte wie ein
-            # technischer Abbruch. Stattdessen — wie der Erfolgsfall — als
-            # Flash-Hinweis in die (gefilterte) Inbox zurückleiten, damit der
-            # Hinweis als Alert oberhalb der Aufgabenliste erscheint und die
-            # Nutzerin im Arbeitskontext bleibt. ``warning`` statt ``success``,
-            # weil nichts geändert wurde (Alles-oder-nichts, Refs #583).
-            messages.warning(request, message)
-            # Refs #1148 (Folge-Feedback): Die zuvor getroffene Auswahl der
-            # blockierenden Items in das Redirect-Ziel durchreichen, damit die
-            # Inbox sie wieder markiert/hervorhebt und die Nutzerin sie direkt
-            # abwaehlen kann — statt die Auswahl kommentarlos zu verlieren.
-            return self._inbox_redirect(request, forbidden_ids=[wi.pk for wi in forbidden])
+            return self._forbidden_redirect(request, [wi.pk for wi in forbidden], total=len(workitems))
 
         try:
             count = self.perform_action(request, workitems)
         except BulkValidationError:
             return HttpResponseBadRequest(self.invalid_input_message)
+        except WorkItemBatchForbiddenError as exc:
+            # The service decides ownership again at the locked rows; an item
+            # reassigned or re-owned since the check above gets the same answer.
+            return self._forbidden_redirect(request, exc.workitem_ids, total=len(workitems))
         except ValidationError as exc:
             # Fachliche Absage des Dienstes am gesperrten Stand (Art. 18,
             # geloeschte Person oder Aufgabe, fremde Einrichtung). Der Dienst
@@ -251,6 +224,42 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         messages.success(request, _("%(count)d Aufgaben aktualisiert.") % {"count": count})
 
         return self._inbox_redirect(request)
+
+    def _forbidden_redirect(self, request, forbidden_ids, *, total):
+        """Refuse the whole batch: warning plus the refused selection marked in the inbox."""
+        # Refs #1136: Konkrete statt pauschaler Meldung. Seit #1125 zeigt die
+        # Inbox bei explizitem Filter ("Alle"/Person) auch fremd-zugewiesene
+        # Aufgaben an und macht sie per "Alle sichtbaren auswählen"
+        # auswählbar. Eine Fachkraft wählt sie dadurch unbeabsichtigt mit
+        # aus; die alte Pauschalmeldung "Keine Berechtigung für ausgewählte
+        # Aufgaben." erklärte nicht, *welche* Einschränkung greift. Wir
+        # nennen die Anzahl der blockierenden (fremd-zugewiesenen) Items von
+        # der Gesamtauswahl, damit gezielt abgewählt werden kann. Die
+        # Alles-oder-nichts-Semantik bleibt: es wird nichts verändert.
+        n = len(forbidden_ids)
+        message = ngettext(
+            "%(forbidden)d der %(total)d ausgewählten Aufgaben ist einer "
+            "anderen Person zugewiesen und kann nicht per Sammelaktion "
+            "geändert werden. Bitte diese Aufgabe abwählen.",
+            "%(forbidden)d der %(total)d ausgewählten Aufgaben sind anderen "
+            "Personen zugewiesen und können nicht per Sammelaktion geändert "
+            "werden. Bitte diese Aufgaben abwählen.",
+            n,
+        ) % {"forbidden": n, "total": total}
+        # Refs #1148: Diese fachliche Meldung NICHT mehr als nackte
+        # ``HttpResponseForbidden``-Textseite ausliefern — das erschien als
+        # leere weiße Seite mit Text in der Ecke und wirkte wie ein
+        # technischer Abbruch. Stattdessen — wie der Erfolgsfall — als
+        # Flash-Hinweis in die (gefilterte) Inbox zurückleiten, damit der
+        # Hinweis als Alert oberhalb der Aufgabenliste erscheint und die
+        # Nutzerin im Arbeitskontext bleibt. ``warning`` statt ``success``,
+        # weil nichts geändert wurde (Alles-oder-nichts, Refs #583).
+        messages.warning(request, message)
+        # Refs #1148 (Folge-Feedback): Die zuvor getroffene Auswahl der
+        # blockierenden Items in das Redirect-Ziel durchreichen, damit die
+        # Inbox sie wieder markiert/hervorhebt und die Nutzerin sie direkt
+        # abwaehlen kann — statt die Auswahl kommentarlos zu verlieren.
+        return self._inbox_redirect(request, forbidden_ids=forbidden_ids)
 
     def _inbox_redirect(self, request, forbidden_ids=None):
         """Redirect in die gefilterte Inbox-Sicht — HTMX-bewusst.

@@ -44,6 +44,19 @@ logger = logging.getLogger(__name__)
 WORKITEM_DELETED_MESSAGE = _("Diese Aufgabe wurde gelöscht — sie kann nicht mehr geändert werden.")
 
 
+class WorkItemBatchForbiddenError(PermissionDenied):
+    """At the locked rows, the actor may not change some work items of a batch.
+
+    Carries the refused primary keys, so the caller can answer exactly like its
+    own ownership check before the service (same message, same marked
+    selection).
+    """
+
+    def __init__(self, workitem_ids):
+        super().__init__()
+        self.workitem_ids = list(workitem_ids)
+
+
 def _assert_actor_in_facility(user, facility_id) -> None:
     """Die handelnde Person muss der Einrichtung der Aufgabe angehoeren.
 
@@ -544,6 +557,10 @@ def _locked_workitems(workitems, user):
     gesperrten Personen (Papierkorb, deaktiviert, zusammengefuehrt), nach der
     Aufgabensperre der Loeschzustand der gesperrten Aufgaben. Beides weist wie
     das Art.-18-Gate den ganzen Stapel ab statt ihn teilweise auszufuehren.
+
+    Permission: after the deletion state, ``can_user_mutate_workitem`` is
+    decided at every locked row; any refused item raises
+    :class:`WorkItemBatchForbiddenError` for the whole batch.
     """
     from core.services.client.restriction import assert_processing_allowed
 
@@ -577,11 +594,25 @@ def _locked_workitems(workitems, user):
     # Sperre); ohne Personenbezug im Stapel keine Abfrage.
     _raise_if_clients_revoked(client_ids, facility_id)
 
-    locked = list(WorkItem.objects.select_for_update().filter(pk__in=pks, facility_id=facility_id).order_by("pk"))
+    # Creator and assignee are joined into the same statement, so the
+    # permission check below costs no query per item; only the work item rows
+    # are locked (``of=("self",)``), never the user rows.
+    locked = list(
+        WorkItem.objects.select_for_update(of=("self",))
+        .select_related("created_by", "assigned_to")
+        .filter(pk__in=pks, facility_id=facility_id)
+        .order_by("pk")
+    )
     # Eine inzwischen geloeschte Aufgabe wird nicht mehr geaendert — gelesen
     # an der gesperrten Zeile, der Manager blendet geloeschte nicht aus.
     if any(item.is_deleted for item in locked):
         raise ValidationError(WORKITEM_DELETED_MESSAGE)
+    # Permission at the locked rows: the view checks ownership beforehand on
+    # rows read without a lock. A work item reassigned or re-owned in between
+    # refuses the whole batch before the first write or audit row.
+    forbidden_ids = [item.pk for item in locked if not can_user_mutate_workitem(user, item)]
+    if forbidden_ids:
+        raise WorkItemBatchForbiddenError(forbidden_ids)
 
     # REVALIDIERUNG (Re-Review 2): Zwischen dem ungesperrten Vorab-Lesen und
     # dem Erhalt der WorkItem-Sperre kann eine Zuordnung gewechselt haben — die
@@ -744,8 +775,22 @@ def update_workitem(
         raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
     # Loeschzustand der eben gesperrten Aufgabenzeile — ein gewoehnliches Lesen
     # unter der Sperre; der Manager blendet geloeschte Aufgaben nicht aus.
-    if type(workitem)._base_manager.filter(pk=workitem.pk, facility_id=workitem.facility_id, is_deleted=True).exists():
+    # The same read carries creator and assignee (joined, no extra query): the
+    # instance cannot serve here, ``_post_clean()`` has already put the posted
+    # assignee on it.
+    locked_state = (
+        type(workitem)
+        ._base_manager.select_related("created_by", "assigned_to")
+        .only("pk", "is_deleted", "created_by", "assigned_to")
+        .get(pk=workitem.pk, facility_id=workitem.facility_id)
+    )
+    if locked_state.is_deleted:
         raise ValidationError(WORKITEM_DELETED_MESSAGE)
+    # Permission at the locked state: the view checks it beforehand without a
+    # lock. A work item reassigned or re-owned in between is refused here,
+    # before any write or audit row.
+    if not can_user_mutate_workitem(user, locked_state):
+        raise PermissionDenied(_("Keine Berechtigung für diese Aufgabe."))
     try:
         check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
     except ValidationError as exc:
