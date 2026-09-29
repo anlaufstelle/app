@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 17:05+0200\n"
+"POT-Creation-Date: 2026-09-29 12:31+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12902,3 +12902,7 @@ msgstr "The form now shows the current values."
 #, python-format
 msgid "Nicht übernommen wurde Ihre Eingabe bei: %(fields)s."
 msgstr "Your input was not applied for: %(fields)s."
+
+#: src/templates/core/clients/offline_detail.html:43
+msgid "Diese Person ist nicht mehr verfügbar. Nicht übertragene Änderungen wurden verworfen."
+msgstr "This person is no longer available. Changes that had not been transferred were discarded."
