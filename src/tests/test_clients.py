@@ -337,19 +337,27 @@ class TestUpdateClientService:
         """#1789-Folge (Review-Befund): Ein staler Save darf eine parallel
         committete Loeschung nicht reaktivieren — Soft-Delete-Spalten liegen
         ausserhalb der Allowlist und bumpen ``updated_at`` nicht, das
-        optimistische Locking sieht sie daher nicht."""
+        optimistische Locking sieht sie daher nicht.
+
+        Seit dem Zustandsvertrag des Bearbeitens nimmt die inzwischen
+        geloeschte Person auch die Notiz nicht mehr an: der Dienst liest den
+        Zustand der gesperrten Zeile und lehnt mit der Widerrufsmeldung ab."""
         from django.utils import timezone
 
         stale = Client._base_manager.get(pk=client_identified.pk)
         Client._base_manager.filter(pk=client_identified.pk).update(
             is_deleted=True, deleted_at=timezone.now(), is_active=False
         )
-        update_client(stale, staff_user, notes="Nur Notiz")
+        with pytest.raises(ValidationError) as excinfo:
+            update_client(stale, staff_user, notes="Nur Notiz")
+        assert excinfo.value.messages == [
+            "Diese Person wurde gelöscht oder anonymisiert — es können keine Daten mehr zu ihr gespeichert werden."
+        ]
         refreshed = Client._base_manager.get(pk=client_identified.pk)
         assert refreshed.is_deleted is True
         assert refreshed.deleted_at is not None
         assert refreshed.is_active is False
-        assert refreshed.notes == "Nur Notiz"
+        assert refreshed.notes != "Nur Notiz"
 
     def test_update_client_erhaelt_parallele_redaktion(self, client_identified, staff_user):
         """Ein parallel redigiertes Pseudonym uebersteht einen stalen Save,

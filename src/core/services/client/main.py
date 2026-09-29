@@ -890,8 +890,22 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     dieselbe Zeile danach nur noch erneut. Den Ausstieg fuer den
     Berichtigungs-Flow oeffnet ein modul-privater Kontext, kein Argument
     dieser Funktion (Cross-Review-Befund 4).
+
+    Nach dem Gate wird der Zustand der inzwischen gesperrten Zeile frisch
+    gelesen (ohne zweite Sperranweisung): eine zusammengefuehrte, im Papierkorb
+    liegende oder anonymisierte Person nimmt keine neuen Nutzdaten mehr an —
+    auch ohne Versions-Token, also unabhaengig vom optimistischen Guard, und
+    mit der Zustandsmeldung statt der Konfliktmeldung. Praedikat und Meldung
+    wie :func:`resolve_writable_client`.
     """
     assert_processing_allowed(client, lock=True)
+    merged_into_id, is_deleted, is_active = (
+        Client.objects.filter(pk=client.pk).values_list("merged_into_id", "is_deleted", "is_active").get()
+    )
+    if merged_into_id is not None:
+        raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
+    if is_deleted or not is_active:
+        raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
     check_version_conflict(client, expected_updated_at)
     if old_stage is None:
         old_stage = client.contact_stage
