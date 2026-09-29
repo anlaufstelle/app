@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, User
-from core.services.case import close_case, create_case, update_case
+from core.services.case import close_case, create_case, reopen_case, update_case
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
@@ -138,3 +138,21 @@ class TestCloseCase:
 
         assert Case.objects.get(pk=case_open.pk).status == Case.Status.CLOSED
         assert AuditLog.objects.filter(action=AuditLog.Action.CASE_CLOSE, target_id=str(case_open.pk)).count() == 1
+
+
+class TestReopenCase:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, case_closed):
+        user = request.getfixturevalue(akteur)
+        vorher = Case.objects.values_list("status", "closed_at").get(pk=case_closed.pk)
+
+        _abgewiesen_ohne_sperre(lambda: reopen_case(Case.objects.get(pk=case_closed.pk), user))
+
+        assert Case.objects.values_list("status", "closed_at").get(pk=case_closed.pk) == vorher
+        assert not AuditLog.objects.filter(action=AuditLog.Action.CASE_REOPEN, target_id=str(case_closed.pk)).exists()
+
+    def test_eigene_einrichtung_eroeffnet_wieder(self, case_closed, staff_user):
+        reopen_case(Case.objects.get(pk=case_closed.pk), staff_user)
+
+        assert Case.objects.get(pk=case_closed.pk).status == Case.Status.OPEN
+        assert AuditLog.objects.filter(action=AuditLog.Action.CASE_REOPEN, target_id=str(case_closed.pk)).count() == 1
