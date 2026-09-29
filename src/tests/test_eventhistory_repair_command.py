@@ -244,6 +244,39 @@ class TestHeilung:
         assert row.data_after == build_anonymization_marker()
         assert _repair_audits().count() == 1
 
+    def test_anlage_einer_anonymisierten_person_behaelt_null(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        _hit_before, hit_after = _hit_payloads()
+        pk = _row(
+            facility,
+            staff_user,
+            doc_type_contact,
+            client=client_identified,
+            before=None,
+            after=hit_after,
+            redacted_at=timezone.now(),
+        )
+        Client.objects.filter(pk=client_identified.pk).update(anonymized_at=timezone.now())
+
+        _run("--apply")
+
+        row = EventHistory.objects.get(pk=pk)
+        assert row.data_before is None
+        assert row.data_after == build_anonymization_marker()
+
+    def test_leere_nutzlast_mit_zeitstempel_ist_kein_fund(self, facility, staff_user, doc_type_contact):
+        """Eine leere Spalte traegt keine Werte — sie ist kein Fund, auch wenn
+        die Datenbank sie nicht als Marker erkennt."""
+        pk = _row(facility, staff_user, doc_type_contact, before=None, after={}, redacted_at=timezone.now())
+        vorher = _snapshot()
+
+        output = _run("--apply")
+
+        assert _count(_facility_line(output, facility), "gefunden") == 0
+        assert _snapshot()[str(pk)] == vorher[str(pk)]
+        assert _repair_audits().count() == 0
+
     def test_zweiter_lauf_findet_nichts_und_schreibt_nichts(self, bestand, facility):
         _run("--apply")
         vorher = _snapshot()
@@ -408,6 +441,34 @@ class TestSperrenUndRennen:
 
         assert _snapshot() == vorher
         assert _repair_audits().count() == 0
+
+    def test_bypass_oeffnet_nur_die_historie_nie_das_audit(self, bestand):
+        """Auf ``core_auditlog`` nimmt die Heilung keine Tabellensperre, nur das
+        ``ROW EXCLUSIVE`` ihrer eigenen Nachweis-Zeilen — dieselbe Ordnung wie
+        jeder schreibende Request, damit kein Verklemmungszyklus entsteht
+        (ADR-050 D5.5). Beobachtet an den Sperren, die die Sitzung beim ersten
+        Nachweis haelt."""
+        gesehen = []
+
+        def on_audit(sender, instance, created, **kwargs):
+            if created and not gesehen:
+                with connection.cursor() as cur:
+                    cur.execute(
+                        "SELECT c.relname, l.mode FROM pg_locks l JOIN pg_class c ON c.oid = l.relation "
+                        "WHERE l.pid = pg_backend_pid() AND l.granted "
+                        "AND c.relname IN ('core_auditlog', 'core_eventhistory')"
+                    )
+                    gesehen.append(set(cur.fetchall()))
+
+        post_save.connect(on_audit, sender=AuditLog, weak=False)
+        try:
+            _run("--apply")
+        finally:
+            post_save.disconnect(on_audit, sender=AuditLog)
+
+        (sperren,) = gesehen
+        assert ("core_eventhistory", "ShareRowExclusiveLock") in sperren
+        assert ("core_auditlog", "ShareRowExclusiveLock") not in sperren
 
 
 @pytest.mark.django_db

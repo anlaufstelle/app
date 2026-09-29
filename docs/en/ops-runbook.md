@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188).
 > Synchronization update 2026-09-29: § 5.8 documents that the dev Compose stack passes mail variables to `web` and how to verify SMTP handoff (#2388).
 > Synchronization update 2026-09-29: § 3.1 documents the per-run media cleanup budget, fair continuation, dry-run behavior, and reported counters (#2376).
 > Synchronization update 2026-09-23: § 6.6 explains how to restore an anchorless older set on a host with `DJANGO_AUDIT_HWM_PATH` configured and states that this run provides no compliance evidence (#2362).
@@ -621,6 +622,21 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
   purge_orphan_field_data --dry-run # preview
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   purge_orphan_field_data # execute
+
+# Repair event history rows that carry a redaction timestamp but no redaction
+# marker (Refs #2188, related #2177). Run once after the update if key
+# rotation (reencrypt_fields) and the retention run may have run at the same
+# time in the past: such rows count as redacted but carry encrypted values
+# again, and no retention run touches them any more. Without a switch it is a
+# dry run (counts per facility, changes nothing, exit code 0 even with
+# findings); --apply repairs under a row lock and writes one proof per row
+# (EVENT_HISTORY_REDACTED, category eventhistory_repaired). Rows under a
+# legal hold are counted but deferred. MUST run with the admin DB role
+# (BYPASSRLS and table owner) — otherwise fail-loud.
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction # dry run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction --apply # repair
 
 # Facility export (Refs #1060, M4 / GDPR Art. 20): a facility's complete domain
 # data as a versioned JSON (schema v1, reference
@@ -2958,5 +2974,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: 17f2887b0045608a29d5ddc6a8849494ff2262ba -->
+<!-- source-hash: 69ec3125b20468a6deb301e0ae8fb6fa0b2258db -->
 <!-- translation-date: 2026-09-22 -->

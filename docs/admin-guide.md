@@ -1850,6 +1850,12 @@ Beide Vorgabewerte entsprechen `auditlog_retention_months`: Historie und Audit-L
 
 Der erste Lauf nach dem Update kann länger dauern als gewohnt: Er arbeitet den Altbestand der Fassungen lebender Ereignisse ab. Die Fassungen bereits gelöschter Ereignisse hat die Migration schon erledigt.
 
+**Einmalige Prüfung nach dem Update: Fassungen mit Redaktionszeitpunkt, aber mit Werten** (#2188). Vor Version 0.96 konnte eine Schlüsselrotation (`reencrypt_fields`), die gleichzeitig mit dem Aufbewahrungslauf lief, eine gerade redigierte Fassung mit einer neu verschlüsselten Kopie ihrer alten Werte überschreiben (#2177). Die Fassung gilt dann weiter als redigiert, trägt aber wieder Inhalte — und weil jeder Lauf nur noch nicht redigierte Fassungen anfasst, holt kein Aufbewahrungslauf sie nach. Konnten Schlüsselrotation und `enforce_retention` bei Ihnen früher gleichzeitig laufen, prüfen Sie den Bestand einmalig mit `repair_eventhistory_redaction`:
+
+- **Zuerst der Trockenlauf** (Aufruf ohne Schalter): Er zählt je Einrichtung die betroffenen Fassungen und die davon wegen Legal Hold zurückgestellten, ändert nichts und endet auch bei Funden mit Exit-Code 0. Meldet er überall 0, ist nichts weiter zu tun.
+- **Dann die Heilung mit `--apply`:** Die betroffenen Fassungen bekommen unter Zeilensperre den Redaktionsvermerk, den der Aufbewahrungslauf damals geschrieben hat (bei einer anonymisierten Person den Anonymisierungsvermerk). Der Zeitpunkt der ursprünglichen Redaktion bleibt stehen, die Frist der Stufe 2 verschiebt sich also nicht. Jede geheilte Fassung hinterlässt einen eigenen Nachweis im Audit-Log (Aktion „Ereignis-Historie redigiert", Kategorie `eventhistory_repaired`). Fassungen unter Legal Hold bleiben unverändert; ein erneuter Aufruf nach dem Ende des Holds heilt sie. Ein zweiter Lauf findet 0.
+- **Nur mit der Admin-DB-Rolle** (Wartungsdienst, wie `enforce_retention`): Unter der App-Rolle bricht das Command ab, statt einen sauberen Bestand zu melden. Die Aufrufe stehen im [Betriebshandbuch § 3.5](ops-runbook.md#35-manuelle-ausfuehrung).
+
 #### K-Anonymisierung statt Hard-Delete
 
 Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung** aktiviert werden (Refs #535).

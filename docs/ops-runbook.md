@@ -599,6 +599,22 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   purge_orphan_field_data # ausfuehren
 
+# Historienzeilen mit Redaktionszeitpunkt, aber ohne Redaktionsvermerk heilen
+# (Refs #2188, Bezug #2177). Einmalig nach dem Update, wenn Schluessel-
+# rotation (reencrypt_fields) und Aufbewahrungslauf frueher gleichzeitig
+# gelaufen sein koennen: solche Zeilen gelten als redigiert, tragen aber
+# wieder verschluesselte Werte, und kein Aufbewahrungslauf fasst sie mehr an.
+# Ohne Schalter ein Trockenlauf (zaehlt je Einrichtung, aendert nichts,
+# Exit-Code 0 auch bei Funden); --apply heilt unter Zeilensperre und schreibt
+# je Zeile einen Nachweis (EVENT_HISTORY_REDACTED, Kategorie
+# eventhistory_repaired). Zeilen unter Legal Hold werden gezaehlt, aber
+# zurueckgestellt. MUSS mit der Admin-DB-Rolle laufen (BYPASSRLS und
+# Tabelleneigentuemer) — sonst fail-loud.
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction # Trockenlauf
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction --apply # heilen
+
 # Facility-Export (Refs #1060, M4 / DSGVO Art. 20): kompletter fachlicher
 # Datenbestand EINER Einrichtung als versioniertes JSON (Schema v1, Referenz
 # docs/facility-export-schema.md). MUSS mit der Admin-DB-Rolle laufen

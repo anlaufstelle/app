@@ -1,4 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
+> Synchronization update 2026-09-29: § 7.3 "Retention of the Event History" adds the one-time check and repair of history versions that carry a redaction timestamp but still hold values (`repair_eventhistory_redaction`, #2188).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that setting up 2FA again while a confirmed factor exists requires sudo mode, first-time setup does not, and the backup-code pages require a session confirmed with the second factor (#2328).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
@@ -1885,6 +1886,12 @@ Both defaults match `auditlog_retention_months`: the history and the audit log a
 
 The first run after the update may take longer than usual: it works through the backlog of versions of living events. The versions of already deleted events were handled by the migration.
 
+**One-time check after the update: versions with a redaction timestamp that still carry values** (#2188). Before version 0.96, a key rotation (`reencrypt_fields`) running at the same time as the retention run could overwrite a version that had just been redacted with a freshly encrypted copy of its old values (#2177). Such a version still counts as redacted but carries contents again — and because every run only touches versions that are not yet redacted, no retention run catches up on it. If key rotation and `enforce_retention` could have run at the same time on your installation in the past, check the data once with `repair_eventhistory_redaction`:
+
+- **Dry run first** (call without a switch): it counts the affected versions per facility and how many of them are deferred because of a legal hold, changes nothing and exits with code 0 even when it finds some. If it reports 0 everywhere, nothing else needs to be done.
+- **Then repair with `--apply`:** under a row lock, the affected versions receive the redaction marker the retention run wrote back then (the anonymization marker for an anonymized person). The timestamp of the original redaction stays, so the stage 2 period does not shift. Every repaired version leaves its own entry in the audit log (action "Event history redacted", category `eventhistory_repaired`). Versions under a legal hold stay unchanged; a later call after the hold ends repairs them. A second run finds 0.
+- **Admin DB role only** (maintenance service, like `enforce_retention`): under the app role the command aborts instead of reporting clean data. The calls are listed in the [operations runbook § 3.5](ops-runbook.md#35-manual-execution).
+
 #### K-Anonymization Instead of Hard Delete
 
 As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs #535).
@@ -2300,4 +2307,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: b323b7dfccb82e3630bcdab50d819ef4f5651e1f -->
+<!-- source-hash: 1ed6b32e5ce937cdea706c1f4eca82f5ca1d3527 -->

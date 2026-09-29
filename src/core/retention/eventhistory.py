@@ -80,6 +80,13 @@ CATEGORY_CHRONICLE_EXPIRED = "eventhistory_chronicle_expired"
 # anderes ist als der Ablauf einer Frist — im Nachweis muss das unterscheidbar
 # bleiben.
 CATEGORY_ANONYMIZED_CLIENT = "eventhistory_anonymized_client"
+# Refs #2188: nachtraegliche Heilung einer Zeile, die ``redacted_at`` trug, deren
+# Nutzlast aber wieder Werte statt des Markers enthielt (Altbestand vor dem
+# Rotations-Fix aus #2177). Eigene Kategorie, weil das keine neue Redaktion
+# ist, sondern die Wiederherstellung einer frueheren — ``redacted_at`` bleibt
+# stehen, und der Nachweis muss erklaeren, warum sich die Zeile trotzdem
+# geaendert hat.
+CATEGORY_REPAIRED = "eventhistory_repaired"
 
 
 class OwnerContextMissingError(RuntimeError):
