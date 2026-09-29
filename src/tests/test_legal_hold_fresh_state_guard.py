@@ -13,8 +13,8 @@ from django.core.exceptions import ValidationError
 from django.db import DatabaseError
 from django.urls import reverse
 
-from core.models import AuditLog, LegalHold, RetentionProposal, User
-from core.retention.legal_holds import create_legal_hold, dismiss_legal_hold
+from core.models import AuditLog, Case, Client, LegalHold, RetentionProposal, User
+from core.retention.legal_holds import create_hold_for_target, create_legal_hold, dismiss_legal_hold
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -201,3 +201,48 @@ class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
         assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
         retention_proposal.refresh_from_db()
         assert retention_proposal.status == RetentionProposal.Status.REJECTED
+
+
+class TestFallHoldPrueftDieBindungAnDerGesperrtenFallzeile:
+    """Der Fall-Zweig liest die Personen-ID des Falls ungesperrt vor, weil die
+    Personenzeile in der kanonischen Ordnung vor der Fallzeile gesperrt wird.
+    Haengt ein paralleler Vorgang den Fall waehrend der Sperrwartezeit an eine
+    andere Person, haette der Hold die falsche Person als Anker — die Bindung
+    wird deshalb an der gesperrten Fallzeile geprueft, wie im Ereignis-Zweig."""
+
+    @pytest.fixture
+    def andere_person(self, facility, staff_user):
+        return Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Andere-Person-01",
+            created_by=staff_user,
+        )
+
+    def test_nach_der_personensperre_umgehaengter_fall_bekommt_keinen_hold(
+        self, facility, case_open, andere_person, lead_user
+    ):
+        with mitschnitt() as aufzeichnung:
+            aufzeichnung.nach_sperre(
+                "core_client", lambda: Case.objects.filter(pk=case_open.pk).update(client=andere_person)
+            )
+            with pytest.raises(ValidationError) as excinfo:
+                create_hold_for_target(
+                    facility, target_type="Case", target_id=case_open.pk, user=lead_user, reason="Verfahren"
+                )
+
+        assert aufzeichnung.offene_schranken() == []
+        assert "Personenzuordnung des Falls" in str(excinfo.value)
+        assert not LegalHold.objects.filter(target_id=case_open.pk).exists()
+        assert not _audit_zeilen("legal_hold_created").exists()
+
+    def test_unveraenderte_bindung_sperrt_person_fall_ereignisse_in_dieser_folge(
+        self, facility, case_open, sample_event, lead_user
+    ):
+        with mitschnitt() as aufzeichnung:
+            create_hold_for_target(
+                facility, target_type="Case", target_id=case_open.pk, user=lead_user, reason="Verfahren"
+            )
+
+        assert aufzeichnung.sperrfolge()[:3] == ["core_client", "core_case", "core_event"]
+        assert LegalHold.objects.filter(target_id=case_open.pk, dismissed_at__isnull=True).count() == 1

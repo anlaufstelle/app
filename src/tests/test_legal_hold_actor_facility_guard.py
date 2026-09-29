@@ -12,7 +12,7 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, LegalHold, RetentionProposal, User
-from core.retention.legal_holds import create_legal_hold, dismiss_legal_hold
+from core.retention.legal_holds import create_hold_for_target, create_legal_hold, dismiss_legal_hold
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -136,4 +136,42 @@ class TestHoldAnlageAmVorschlagPrueftDieEinrichtungDerLeitung:
         assert hold.created_by_id == lead_user.pk
         retention_proposal.refresh_from_db()
         assert retention_proposal.status == RetentionProposal.Status.HELD
+        assert _audit_zeilen("legal_hold_created").count() == 1
+
+
+#: Je Hold-Zweig mit Zielsperre ein lokales Ziel (Fixture-Name).
+_LOKALE_ZIELE = {"Client": "client_identified", "Case": "case_open", "Event": "sample_event"}
+
+
+class TestHoldAnlageAmZielPrueftDieEinrichtungDerLeitung:
+    """Die Einrichtung, in der der Hold entsteht, ist die der Leitung — die
+    Ziel-ID darf dagegen frei sein (auch eine unbekannte oder fremde Zeile
+    bleibt zulaessig, dort gibt es nur nichts zu koordinieren)."""
+
+    @pytest.mark.parametrize("akteur", _FREMDE_AKTEURE)
+    @pytest.mark.parametrize("target_type", sorted(_LOKALE_ZIELE))
+    def test_fremde_oder_einrichtungslose_leitung_sperrt_und_schreibt_nichts(
+        self, request, akteur, target_type, facility
+    ):
+        ziel = request.getfixturevalue(_LOKALE_ZIELE[target_type])
+        user = request.getfixturevalue(akteur)
+
+        with mitschnitt() as aufzeichnung, pytest.raises(ValidationError) as excinfo:
+            create_hold_for_target(facility, target_type=target_type, target_id=ziel.pk, user=user, reason="Verfahren")
+
+        assert "Aufbewahrungssperre gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        assert aufzeichnung.sperrfolge() == []
+        assert not LegalHold.objects.filter(target_id=ziel.pk).exists()
+        assert not _audit_zeilen("legal_hold_created").exists()
+
+    @pytest.mark.parametrize("target_type", sorted(_LOKALE_ZIELE))
+    def test_leitung_der_einrichtung_legt_den_hold_an(self, request, target_type, facility, lead_user):
+        ziel = request.getfixturevalue(_LOKALE_ZIELE[target_type])
+
+        hold = create_hold_for_target(
+            facility, target_type=target_type, target_id=ziel.pk, user=lead_user, reason="Verfahren"
+        )
+
+        assert hold.facility_id == facility.pk
+        assert hold.created_by_id == lead_user.pk
         assert _audit_zeilen("legal_hold_created").count() == 1
