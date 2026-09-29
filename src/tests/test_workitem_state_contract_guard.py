@@ -278,3 +278,49 @@ class TestStatuswechsel:
         assert (zeile.status, zeile.recurrence_duplicated_at) == (WorkItem.Status.OPEN, None)
         erwartet = ["core_client", "core_workitem"] if mit_person else ["core_workitem"]
         assert _person_vor_aufgabe(m) == erwartet
+
+
+def _erledigt_wiederkehrend(facility, user, person):
+    return _geladen(
+        facility,
+        user,
+        person=person,
+        status=WorkItem.Status.DONE,
+        recurrence=WorkItem.Recurrence.WEEKLY,
+        due_date=timezone.localdate(),
+    )
+
+
+class TestFolgeaufgabe:
+    """Wiederholung und Marker werden an der gesperrten Quellzeile entschieden, nicht an der Instanz."""
+
+    def test_veraltete_zweite_instanz_erzeugt_keine_zweite_folgeaufgabe(self, facility, client_identified, staff_user):
+        from core.services.case import duplicate_recurring_workitem
+
+        erste = _erledigt_wiederkehrend(facility, staff_user, client_identified)
+        zweite = WorkItem.objects.get(pk=erste.pk)
+        assert duplicate_recurring_workitem(erste, staff_user) is not None
+        vorher = _zaehler()
+        with mitschnitt() as m:
+            assert duplicate_recurring_workitem(zweite, staff_user) is None
+        assert _zaehler() == vorher
+        assert _person_vor_aufgabe(m) == ["core_client", "core_workitem"]
+
+    @pytest.mark.parametrize("art", WIDERRUFE)
+    def test_widerrufene_person(self, facility, client_identified, staff_user, art):
+        from core.services.case import duplicate_recurring_workitem
+
+        quelle = _erledigt_wiederkehrend(facility, staff_user, client_identified)
+        _widerrufen(client_identified, art)
+        m = _assert_refused(lambda: duplicate_recurring_workitem(quelle, staff_user), CLIENT_WRITE_REVOKED_MESSAGE)
+        assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is None
+        assert _person_vor_aufgabe(m)[:1] == ["core_client"]
+
+    def test_geloeschte_quelle(self, facility, client_identified, staff_user):
+        from core.services.case import duplicate_recurring_workitem
+        from core.services.case.workitems import WORKITEM_DELETED_MESSAGE
+
+        quelle = _erledigt_wiederkehrend(facility, staff_user, client_identified)
+        WorkItem.objects.filter(pk=quelle.pk).update(is_deleted=True, deleted_at=timezone.now())
+        _assert_refused(lambda: duplicate_recurring_workitem(quelle, staff_user), WORKITEM_DELETED_MESSAGE)
+        assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is None

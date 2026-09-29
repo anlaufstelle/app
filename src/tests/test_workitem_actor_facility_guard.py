@@ -188,3 +188,35 @@ class TestStatuswechsel:
         workitem = _aufgabe(facility, staff_user, client=client_identified)
         update_workitem_status(workitem, WorkItem.Status.DONE, staff_user)
         assert WorkItem.objects.get(pk=workitem.pk).status == WorkItem.Status.DONE
+
+
+def _erledigt_wiederkehrend(facility, user, person):
+    from django.utils import timezone
+
+    return _aufgabe(
+        facility,
+        user,
+        client=person,
+        status=WorkItem.Status.DONE,
+        recurrence=WorkItem.Recurrence.WEEKLY,
+        due_date=timezone.localdate(),
+    )
+
+
+class TestFolgeaufgabe:
+    @pytest.mark.parametrize("akteur", AKTEURE, indirect=True)
+    @pytest.mark.parametrize("mit_person", [True, False], ids=["mit_person", "ohne_person"])
+    def test_abgewiesen(self, facility, client_identified, staff_user, akteur, mit_person):
+        from core.services.case import duplicate_recurring_workitem
+
+        quelle = _erledigt_wiederkehrend(facility, staff_user, client_identified if mit_person else None)
+        _assert_refused(lambda: duplicate_recurring_workitem(quelle, akteur))
+        assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is None
+
+    def test_gegenprobe_eigene_einrichtung(self, facility, client_identified, staff_user):
+        from core.services.case import duplicate_recurring_workitem
+
+        quelle = _erledigt_wiederkehrend(facility, staff_user, client_identified)
+        folge = duplicate_recurring_workitem(quelle, staff_user)
+        assert folge is not None and folge.facility_id == facility.pk
+        assert WorkItem.objects.get(pk=quelle.pk).recurrence_duplicated_at is not None
