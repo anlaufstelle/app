@@ -9,7 +9,9 @@ der Einrichtung geht durch.
 """
 
 import pytest
+from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, DeletionRequest, User
@@ -129,6 +131,46 @@ class TestLoeschantragEntscheidetAmGesperrtenFall:
 
         assert angelegt is True
         assert _antrags_audit().count() == 1
+
+
+class TestLoeschantragsFormularBeiParallelerAenderung:
+    """Die Absage des Dienstes erreicht die Oberfläche als Meldung, nicht als Serverfehler.
+
+    Zwischen dem Laden der Fallakte in der View und der Fallsperre im Dienst
+    legt eine parallele Anfrage den Fall in den Papierkorb oder tilgt ihn —
+    hergestellt direkt nach der Personensperre des Dienstes.
+    """
+
+    @pytest.mark.parametrize(
+        ("zwischenstand", "meldung"),
+        [("papierkorb", "bereits im Papierkorb"), ("anonymisiert", "endgültig anonymisiert")],
+        ids=["papierkorb", "anonymisiert"],
+    )
+    def test_nach_der_personensperre_geloeschter_fall_endet_mit_meldung(
+        self, client, case_open, staff_user, zwischenstand, meldung
+    ):
+        # Person mit Zusatzangaben: der Weg über den Vier-Augen-Antrag.
+        Client.objects.filter(pk=case_open.client_id).update(contact_stage=Client.ContactStage.QUALIFIED)
+        felder = {"papierkorb": {"is_deleted": True, "deleted_at": timezone.now()}}.get(
+            zwischenstand, {"anonymized_at": timezone.now()}
+        )
+        client.force_login(staff_user)
+        client.raise_request_exception = False
+
+        with mitschnitt() as aufzeichnung:
+            aufzeichnung.nach_sperre("core_client", lambda: Case.objects.filter(pk=case_open.pk).update(**felder))
+            antwort = client.post(
+                reverse("core:case_delete_request", kwargs={"pk": case_open.pk}),
+                {"reason": "Auf Wunsch der Person"},
+            )
+
+        assert aufzeichnung.offene_schranken() == []
+        assert antwort.status_code == 302
+        assert antwort["Location"] == reverse("core:case_list")
+        meldungen = [str(m) for m in get_messages(antwort.wsgi_request)]
+        assert any(meldung in m for m in meldungen), meldungen
+        assert not _antraege(case_open).exists()
+        assert not _antrags_audit().exists()
 
 
 class TestSofortTilgungPrueftDieEinrichtungDesAdmins:
