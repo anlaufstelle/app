@@ -35,7 +35,11 @@ def create_goal(case, user, title, description=""):
     nur an der FRISCH unter Sperre gelesenen und geprueften Fallzeile
     (Zustandsvertrag, :mod:`core.services.case.state_contract`) — dieselbe
     Personensperre wie zuvor, danach der Fall.
+
+    Davor die Einrichtungsgrenze der handelnden Person
+    (:func:`_assert_actor_facility`, vor jeder Sperre, fail-closed).
     """
+    _assert_actor_facility(user, case.facility_id)
     locked_case = lock_case_for_write(case)
     goal = OutcomeGoal(
         case=locked_case,
