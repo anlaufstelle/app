@@ -16,14 +16,21 @@ actually locked (taken from the executed SQL, not from its wording).
 import pytest
 from django.core.exceptions import ValidationError
 
-from core.models import AuditLog, DeletionRequest, User
-from core.services.events.deletion import create_or_get_event_deletion_request, request_deletion
+from core.models import AuditLog, DeletionRequest, Event, User
+from core.services.events.deletion import (
+    approve_deletion,
+    create_or_get_event_deletion_request,
+    reject_deletion,
+    request_deletion,
+)
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
 
 _EVENT_OTHER_FACILITY = "Ereignis gehört zu einer anderen Einrichtung."
+_REQUEST_OTHER_FACILITY = "Antrag gehört zu einer anderen Einrichtung."
 _REQUESTERS = ["foreign_staff", "facilityless_staff"]
+_REVIEWERS = ["foreign_reviewer", "facilityless_reviewer"]
 
 
 @pytest.fixture
@@ -33,6 +40,28 @@ def facilityless_staff():
         role=User.Role.STAFF,
         facility=None,
         is_staff=True,
+    )
+
+
+@pytest.fixture
+def foreign_reviewer(second_facility):
+    return User.objects.create_user(
+        username="foreign-deletion-reviewer",
+        role=User.Role.LEAD,
+        facility=second_facility,
+        is_staff=True,
+        can_confirm_deletion=True,
+    )
+
+
+@pytest.fixture
+def facilityless_reviewer():
+    return User.objects.create_user(
+        username="facilityless-deletion-reviewer",
+        role=User.Role.LEAD,
+        facility=None,
+        is_staff=True,
+        can_confirm_deletion=True,
     )
 
 
@@ -60,6 +89,10 @@ def _refused_before_any_lock(call, message):
     assert excinfo.value.messages == [message]
     assert _traces() == before
     assert recording.sperrfolge() == []
+
+
+def _request_state(deletion_request):
+    return DeletionRequest.objects.values("status", "reviewed_by_id", "reviewed_at").get(pk=deletion_request.pk)
 
 
 class TestRequestDeletion:
@@ -91,3 +124,39 @@ class TestRequestDeletion:
         assert deletion_request.requested_by == staff_user
         assert deletion_request.status == DeletionRequest.Status.PENDING
         assert AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).count() == audit_before + 1
+
+
+class TestApproveDeletion:
+    @pytest.mark.parametrize("actor", _REVIEWERS)
+    def test_foreign_reviewer_is_refused_before_any_lock(self, request, actor, sample_event, pending_request):
+        reviewer = request.getfixturevalue(actor)
+        before = _request_state(pending_request)
+
+        _refused_before_any_lock(lambda: approve_deletion(pending_request, reviewer), _REQUEST_OTHER_FACILITY)
+
+        assert _request_state(pending_request) == before
+        assert Event.objects.get(pk=sample_event.pk).is_deleted is False
+
+    def test_local_reviewer_approves(self, lead_user, sample_event, pending_request):
+        approve_deletion(pending_request, lead_user)
+
+        assert _request_state(pending_request)["status"] == DeletionRequest.Status.APPROVED
+        assert Event.objects.get(pk=sample_event.pk).is_deleted is True
+
+
+class TestRejectDeletion:
+    @pytest.mark.parametrize("actor", _REVIEWERS)
+    def test_foreign_reviewer_is_refused_before_any_lock(self, request, actor, sample_event, pending_request):
+        reviewer = request.getfixturevalue(actor)
+        before = _request_state(pending_request)
+
+        _refused_before_any_lock(lambda: reject_deletion(pending_request, reviewer), _REQUEST_OTHER_FACILITY)
+
+        assert _request_state(pending_request) == before
+        assert Event.objects.get(pk=sample_event.pk).is_deleted is False
+
+    def test_local_reviewer_rejects(self, lead_user, sample_event, pending_request):
+        reject_deletion(pending_request, lead_user)
+
+        assert _request_state(pending_request)["status"] == DeletionRequest.Status.REJECTED
+        assert Event.objects.get(pk=sample_event.pk).is_deleted is False
