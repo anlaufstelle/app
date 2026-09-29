@@ -42,7 +42,7 @@ from core.services.dashboard import (
 )
 from core.services.system import export_events_csv, generate_report_pdf, generate_sample_report_1_pdf
 from core.utils.downloads import safe_download_response
-from core.views.mixins import ExportRangeMixin, HTMXPartialMixin, LeadOrAdminRequiredMixin, log_export
+from core.views.mixins import ExportRangeMixin, HTMXPartialMixin, LeadOrAdminRequiredMixin, htmx_absage, log_export
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,10 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
         try:
             period_state = parse_statistics_period(request.GET, today)
         except InvalidStatisticsPeriodError as exc:
-            return HttpResponse(str(exc), status=400)
+            # Refs #2385: Die Zeitraum-Pills/Report-Karten wechseln per HTMX in
+            # #statistics-content — ein blosses 400 (vorher) ersetzte das ganze
+            # Dashboard durch den Klartext (Fehlerklasse #2358).
+            return htmx_absage(str(exc), status=400)
 
         # Refs #1804 (Entscheid F3): Bei gesetztem Doktyp-Filter faellt der
         # Snapshot-Pfad weg — Monats-Aggregate kennen keine Zerlegung nach

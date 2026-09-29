@@ -5,7 +5,7 @@ from datetime import date
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
+from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -26,7 +26,7 @@ from core.services.retention import (
     dismiss_legal_hold,
 )
 from core.services.scoping import get_scoped_object
-from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
+from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin, htmx_absage
 
 
 class RetentionDashboardView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
@@ -85,7 +85,11 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
 
         reason = request.POST.get("reason", "").strip()
         if not reason:
-            return HttpResponseBadRequest(_("Begründung ist erforderlich."))
+            # Refs #2385: Das Hold-Formular wechselt per HTMX in
+            # #proposal-<pk> (hx-swap="outerHTML") — ein blosses 400 (vorher)
+            # ersetzte die ganze Vorschlagskarte durch den Klartext, noch
+            # bevor ueberhaupt ein Hold existiert (Fehlerklasse #2358).
+            return htmx_absage(_("Begründung ist erforderlich."), status=400)
 
         expires_at_str = request.POST.get("expires_at", "").strip()
         expires_at = None
@@ -93,7 +97,7 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
             try:
                 expires_at = date.fromisoformat(expires_at_str)
             except ValueError:
-                return HttpResponseBadRequest(_("Ungültiges Datum."))
+                return htmx_absage(_("Ungültiges Datum."), status=400)
 
         try:
             # Savepoint, damit ein IntegrityError an der Unique-Constraint
@@ -188,11 +192,15 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
     def post(self, request):
         ids = self._get_proposal_ids(request)
         if not ids:
-            return HttpResponseBadRequest(_("Keine Vorschläge ausgewählt."))
+            # Refs #2385: Die Massenaktions-Buttons haben kein hx-target — der
+            # Klartext wechselte (vorher) in den Button selbst (innerHTML) und
+            # blieb dort ueber den naechsten, unabhaengigen Selektionszustand
+            # hinaus stehen (Fehlerklasse #2358).
+            return htmx_absage(_("Keine Vorschläge ausgewählt."), status=400)
 
         proposals = self._load_proposals(request, ids)
         if not proposals:
-            return HttpResponseBadRequest(_("Keine gültigen Vorschläge gefunden."))
+            return htmx_absage(_("Keine gültigen Vorschläge gefunden."), status=400)
 
         extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
         count, skipped = self._apply_per_proposal(proposals, request.user, extra_kwargs)

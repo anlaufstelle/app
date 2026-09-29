@@ -303,16 +303,18 @@ class FilteredPaginatedListMixin(PaginatedListMixin):
         return urlencode({k: v for k, v in params.items() if v})
 
 
-def htmx_absage(message) -> HttpResponse:
-    """Die fachliche Absage einer HTMX-Aktion: 409, kurzer Klartext, kein Swap.
+def htmx_absage(message, status=409) -> HttpResponse:
+    """Die fachliche Absage einer HTMX-Aktion: kurzer Klartext, kein Swap.
 
     Fuer Kaesten und Kacheln, die nach der Absage unveraendert sichtbar
-    bleiben sollen — etwa der Kasten „Wirkungsziele“ mit seinen Meilensteinen
-    oder die Ereignisliste eines Falls. Refs #2358: Seit der globalen
-    4xx-Swap-Regel in ``base.html`` (``responseHandling``, Refs #2232)
-    wechselt htmx jede 4xx-Antwort in das ``hx-target`` des ausloesenden
-    Elements ein. Eine fachliche Absage (Einschraenkung nach Art. 18,
-    Zustandsvertrag der Fallakte) ist aber kein Partial: eingewechselt
+    bleiben sollen — etwa der Kasten „Wirkungsziele“ mit seinen Meilensteinen,
+    die Ereignisliste eines Falls, das Statistik-Dashboard oder die
+    Vorschlagskarte einer Loeschfrist-Formularvalidierung. Refs #2358: Seit
+    der globalen 4xx-Swap-Regel in ``base.html`` (``responseHandling``, Refs
+    #2232) wechselt htmx jede 4xx-Antwort in das ``hx-target`` des
+    ausloesenden Elements ein. Eine fachliche Absage (Einschraenkung nach
+    Art. 18, Zustandsvertrag der Fallakte, ungueltiger Statistik-Zeitraum,
+    fehlende Hold-Begruendung ...) ist aber kein Partial: eingewechselt
     ersetzte der Klartext den ganzen Kasten, und dessen Inhalt war erst nach
     dem Neuladen wieder sichtbar.
 
@@ -322,11 +324,17 @@ def htmx_absage(message) -> HttpResponse:
     (``static/js/htmx-errors.js``) den Antworttext als Hinweis. Deshalb genau
     EINE kurze, markup-freie Meldung.
 
+    ``status`` faellt auf 409 zurueck (bisheriges Verhalten, alle
+    Bestandsaufrufer). Refs #2385: Formular-/Parametervalidierung antwortet
+    fachlich mit 400 — beide Statuscodes durchlaufen dieselbe ``4..``-Zeile
+    der ``responseHandling``-Tabelle und damit denselben Swap-Mechanismus.
+
     Wo die Meldung bewusst an die Stelle des geklickten Elements treten soll
-    (Vorschlagskarte im Loeschfristen-Dashboard, Refs #2321), bleibt es beim
-    einfachen 409 ohne diesen Header.
+    (Vorschlagskarte im Loeschfristen-Dashboard bei aktivem Hold bzw.
+    Doppel-Klick, Refs #2321), bleibt es beim einfachen 409 ohne diesen
+    Header.
     """
-    response = HttpResponse(message, status=409)
+    response = HttpResponse(message, status=status)
     response["HX-Reswap"] = "none"
     return response
 
