@@ -69,6 +69,26 @@ def _event(facility, client, document_type, user, *, note):
     )
 
 
+@pytest.fixture
+def assumed_facility_reviewer(other_facility):
+    """A reviewer of the facility the request only claims in memory.
+
+    The facility boundary of the reviewer is drawn before the request row is
+    locked and compares with that claim; a reviewer of the claimed facility
+    passes it, so the call reaches the locking lookup, which has to discard the
+    claim on its own.
+    """
+    from core.models import User
+
+    return User.objects.create_user(
+        username="pin097-assumed-facility-reviewer",
+        role=User.Role.LEAD,
+        facility=other_facility,
+        is_staff=True,
+        can_confirm_deletion=True,
+    )
+
+
 class TestApproveDeletionLookupZieltreue:
     def test_approve_laedt_genau_den_uebergebenen_antrag_nach(
         self, facility, client_qualified, doc_type_contact, staff_user, lead_user
@@ -99,7 +119,7 @@ class TestApproveDeletionLookupZieltreue:
         assert event_a.is_deleted is False
 
     def test_approve_lookup_bleibt_an_die_antrags_einrichtung_gebunden(
-        self, facility, other_facility, client_qualified, doc_type_contact, staff_user, lead_user
+        self, facility, other_facility, client_qualified, doc_type_contact, staff_user, assumed_facility_reviewer
     ):
         """Pins ``x_approve_deletion__mutmut_15``: faellt die facility-Scopung
         des Sperr-Lookups weg, genuegt die PK — der Antrag wird ohne
@@ -114,7 +134,7 @@ class TestApproveDeletionLookupZieltreue:
         dr.facility = other_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
-            approve_deletion(dr, lead_user)
+            approve_deletion(dr, assumed_facility_reviewer)
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING
@@ -188,7 +208,7 @@ class TestRejectDeletionLookupZieltreue:
         assert dr_a.reviewed_at is None
 
     def test_reject_lookup_bleibt_an_die_antrags_einrichtung_gebunden(
-        self, facility, other_facility, client_qualified, doc_type_contact, staff_user, lead_user
+        self, facility, other_facility, client_qualified, doc_type_contact, staff_user, assumed_facility_reviewer
     ):
         """Pins ``x_reject_deletion__mutmut_5``: faellt die facility-Scopung
         weg, laesst sich ein Antrag sperren und ablehnen, dessen Einrichtung
@@ -198,7 +218,7 @@ class TestRejectDeletionLookupZieltreue:
         dr.facility = other_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
-            reject_deletion(dr, lead_user)
+            reject_deletion(dr, assumed_facility_reviewer)
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING

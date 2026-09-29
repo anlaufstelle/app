@@ -122,18 +122,23 @@ def approve_deletion(deletion_request, reviewer):
     # nicht nur in der View).
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
+    # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
+    # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
+    # Die Guards davor (Vier-Augen, Recht) behalten Reihenfolge und Wortlaut.
+    #
+    # Checked before the request row is locked and before any write, so
+    # nothing is locked across the tenant boundary; a reviewer without a
+    # facility never matches. The locking lookup below is bound to this very
+    # facility, so the locked row belongs to the reviewer's facility by
+    # construction.
+    if reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
 
     # Refs #1376 (I9): facility-scoped Lookup wahrt die RLS-Scopung, der Lock
     # haelt die Zeile bis zum Commit dieser Transaktion.
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )
-    # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
-    # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
-    # Geprueft gegen die FRISCH GESPERRTE Zeile und vor jedem Schreibzugriff;
-    # die Guards davor (Vier-Augen, Recht) behalten Reihenfolge und Wortlaut.
-    if reviewer.facility_id != deletion_request.facility_id:
-        raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
@@ -195,20 +200,25 @@ def reject_deletion(deletion_request, reviewer):
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
-    # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
-    # die Zeile bis zum Commit dieser Transaktion.
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
     # Refs #2321 (H-3): Einrichtungsgrenze auch fuer den REVIEWER. Bisher
     # scopete der Service nur auf die Einrichtung des ANTRAGS — wer das Recht
     # 'Loeschbestaetigung' hat, konnte einen fremden Antrag entscheiden.
     # Ueber HTTP unerreichbar (die View scopet), in Produktion von RLS
     # getragen; der Service ist hier wie beim Vier-Augen-Prinzip die Single
-    # Source of Truth. Geprueft wird gegen die FRISCH GESPERRTE Zeile, nicht
-    # gegen die mitgegebene Annahme, und vor jedem Schreibzugriff.
+    # Source of Truth.
+    #
+    # Checked before the request row is locked and before any write, so
+    # nothing is locked across the tenant boundary; a reviewer without a
+    # facility never matches. The locking lookup below is bound to this very
+    # facility, so the locked row belongs to the reviewer's facility by
+    # construction.
     if reviewer.facility_id != deletion_request.facility_id:
         raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
+    # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
+    # die Zeile bis zum Commit dieser Transaktion.
+    deletion_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
     deletion_request.status = DeletionRequest.Status.REJECTED
