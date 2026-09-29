@@ -94,7 +94,7 @@ class TestEveryStatusChangeWithTwoGenerationsPrecedesTheAuditChain:
         timeline, hold = record_timeline(
             older.facility_id,
             {"older": older.pk, "current": current.pk},
-            lambda: create_legal_hold(_fresh(older), lead_user, "Gerichtsverfahren"),
+            lambda: create_legal_hold(_fresh(older), lead_user, "court proceedings"),
             on_audit_chain=lambda: free_at_audit_chain.extend(
                 immediately_lockable(
                     [("older", RetentionProposal, older.pk), ("current", RetentionProposal, current.pk)]
@@ -137,7 +137,7 @@ class TestEveryStatusChangeWithTwoGenerationsPrecedesTheAuditChain:
             RetentionProposal.objects.filter(pk=current.pk).update(
                 deferred_until=timezone.localdate() - timedelta(days=1)
             )
-        hold = create_legal_hold(_fresh(current), lead_user, "Verfahren") if way == "dismiss_hold" else None
+        hold = create_legal_hold(_fresh(current), lead_user, "proceedings") if way == "dismiss_hold" else None
         ways = {
             "approve": lambda: approve_proposal(_fresh(current), lead_user),
             "defer": lambda: defer_proposal(_fresh(current), lead_user),
@@ -167,13 +167,13 @@ class TestARemainingActiveProposalRefusesTheHold:
         if current_status == RetentionProposal.Status.DEFERRED:
             defer_proposal(current, lead_user)
         elif current_status == RetentionProposal.Status.HELD:
-            create_legal_hold(current, lead_user, "Verfahren")
+            create_legal_hold(current, lead_user, "proceedings")
         holds_before = list(_active_holds(older).values_list("pk", flat=True))
         audit_rows_before = _hold_audit_rows(older).count()
 
         with pytest.raises(ValidationError, match=message):
             with transaction.atomic():
-                create_legal_hold(_fresh(older), lead_user, "Zweite Sperre")
+                create_legal_hold(_fresh(older), lead_user, "second hold")
 
         assert _fresh(older).status == RetentionProposal.Status.APPROVED
         assert _fresh(current).status == current_status
@@ -184,7 +184,7 @@ class TestARemainingActiveProposalRefusesTheHold:
         older, current = _two_generations(retention_proposal, lead_user)
         client.force_login(lead_user)
 
-        response = client.post(reverse("core:retention_hold", args=[older.pk]), {"reason": "Verfahren"})
+        response = client.post(reverse("core:retention_hold", args=[older.pk]), {"reason": "proceedings"})
 
         assert response.status_code == 409
         assert OTHER_ACTIVE_PROPOSAL_TEXT in response.content.decode()
@@ -228,11 +228,11 @@ class TestHoldOnTheOlderAndDecisionOnTheNewerProposalDoNotDeadlock:
                         "core_retentionproposal",
                         lambda: park_until_the_other_session_waits(signal, decision_session),
                     )
-                    return create_legal_hold(_fresh(older), lead_user, "Verfahren")
+                    return create_legal_hold(_fresh(older), lead_user, "proceedings")
             assert signal.wait(timeout=30), "the decision never wrote its status"
             # The same bracket as ``RetentionHoldView.post``.
             with transaction.atomic():
-                return create_legal_hold(_fresh(older), lead_user, "Verfahren")
+                return create_legal_hold(_fresh(older), lead_user, "proceedings")
 
         run_threads(
             [

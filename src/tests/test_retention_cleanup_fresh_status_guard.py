@@ -27,7 +27,7 @@ from core.retention.proposals import (
 from tests._retention_race_helpers import AfterFirstRead, run_threads, session_thread
 
 _CHANGES = {
-    "hold": lambda proposal, user: create_legal_hold(proposal, user, "Verfahren"),
+    "hold": lambda proposal, user: create_legal_hold(proposal, user, "proceedings"),
     "defer": lambda proposal, user: defer_proposal(proposal, user),
     "reject": lambda proposal, user: reject_proposal(proposal, user),
     "approve": lambda proposal, user: approve_proposal(proposal, user),
