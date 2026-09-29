@@ -173,6 +173,9 @@ def create_event(
     """
     from core.services.client.restriction import assert_processing_allowed
 
+    # The facility of the acting person comes first — before the person row
+    # lock of the gate below and before any target is compared with the facility.
+    _assert_actor_in_facility(user, facility.pk)
     assert_processing_allowed(client, lock=True)
     # Refs #1058 (Review-Haertung, Defense-in-Depth): analog zum Guard in
     # ``create_client``/``create_case`` (core.services.client.main /
