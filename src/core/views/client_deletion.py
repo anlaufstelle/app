@@ -101,6 +101,14 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         try:
             with transaction.atomic():
                 _dr, created = create_or_get_client_deletion_request(client, request.user, reason)
+        except ValidationError as exc:
+            # Der Dienst prueft die Person unter der Zeilensperre erneut: wurde
+            # sie seit dem Lookup oben zusammengefuehrt oder in den Papierkorb
+            # gelegt, lehnt er ab. Die Meldung gehoert auf die Seite, nicht in
+            # ein 500 (Muster ``ClientRestoreView``). Die Akte selbst ist dann
+            # nicht mehr erreichbar — deshalb zurueck auf die Personenliste.
+            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            return redirect("core:client_list")
         except IntegrityError as exc:
             if not is_pending_deletion_request_conflict(exc):
                 raise
