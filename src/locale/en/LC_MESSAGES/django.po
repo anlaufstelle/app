@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 12:31+0200\n"
+"POT-Creation-Date: 2026-09-29 14:56+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12906,3 +12906,7 @@ msgstr "Your input was not applied for: %(fields)s."
 #: src/templates/core/clients/offline_detail.html:43
 msgid "Diese Person ist nicht mehr verfügbar. Nicht übertragene Änderungen wurden verworfen."
 msgstr "This person is no longer available. Changes that had not been transferred were discarded."
+
+#: src/core/services/case/handover_note.py:400
+msgid "Übergabenotiz gehört zu einer anderen Einrichtung."
+msgstr "Handover note belongs to a different facility."
