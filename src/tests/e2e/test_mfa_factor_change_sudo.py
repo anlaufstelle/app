@@ -2,8 +2,8 @@
 
 Nutzerweg im echten Browser:
 
-1. Konto mit bestaetigtem TOTP-Geraet und Backup-Codes (per Shell geseedet),
-   Anmeldung mit Passwort und Backup-Code.
+1. Konto mit bestaetigtem TOTP-Geraet (bekanntes Secret) und Backup-Codes
+   (per Shell geseedet), Anmeldung mit Passwort und dem Code dieses Geraets.
 2. ``/mfa/setup/`` fuehrt auf die Sudo-Seite (``next`` = ``/mfa/setup/``);
    nach Passwort und einem weiteren Backup-Code geht es fuer ein TOTP-Konto
    auf die Einstellungsseite.
@@ -15,6 +15,11 @@ Nutzerweg im echten Browser:
    Fehlversuch (etwa ``000000``) sperrt das neue Geraet nach django-otp fuer
    eine Sekunde, der gueltige Code aus dem Browser kaeme zu frueh und wuerde
    als ungueltig abgewiesen.
+   Danach meldet sich das Konto mit dem Code des neuen Geraets an, der Code
+   des alten Geraets wird abgewiesen, und in der Datenbank steht nur noch das
+   neue Geraet. Reihenfolge bewusst: erst der gueltige Code, dann der
+   abgewiesene — ein Fehlversuch drosselt das geltende Geraet kurz, danach
+   folgt kein gueltiger Code mehr.
 4. Gegenprobe ohne Sudo: derselbe POST landet auf der Sudo-Seite, es entsteht
    kein neues Geraet.
 5. Gegenprobe Erstsetup: ein Konto ohne Faktor sieht die Einrichtung direkt,
@@ -28,6 +33,7 @@ import base64
 import re
 import subprocess
 import sys
+import time
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -38,6 +44,8 @@ from ._helpers import SEED_PASSWORD
 pytestmark = pytest.mark.e2e
 
 USERNAME = "felix"  # kein Storage-State-Konto der E2E-Fixtures
+OLD_KEY_HEX = "a" * 40  # Secret des Bestandsgeraets, damit der Test dessen Codes kennt
+OLD_SECRET = base64.b32encode(bytes.fromhex(OLD_KEY_HEX)).decode("ascii").rstrip("=")
 
 
 def _shell(e2e_env, code: str) -> str:
@@ -55,14 +63,14 @@ def _seed_totp_with_codes(e2e_env) -> list[str]:
     """Bestaetigtes TOTP-Geraet + frische Backup-Codes; gibt die Codes zurueck."""
     stdout = _shell(
         e2e_env,
-        "from core.models import User; "
+        "from core.models import User, EncryptedTOTPDevice; "
         "from django_otp.plugins.otp_totp.models import TOTPDevice; "
         "from django_otp.plugins.otp_static.models import StaticDevice; "
         "from core.services.security import generate_backup_codes; "
         f"u = User.objects.get(username='{USERNAME}'); "
         "TOTPDevice.objects.filter(user=u).delete(); "
         "StaticDevice.objects.filter(user=u).delete(); "
-        "TOTPDevice.objects.create(user=u, name='bestand', confirmed=True); "
+        f"EncryptedTOTPDevice.objects.create(user=u, name='bestand', confirmed=True, key='{OLD_KEY_HEX}'); "
         "print('CODES|' + '|'.join(generate_backup_codes(u)))",
     )
     lines = [line for line in stdout.splitlines() if line.startswith("CODES|")]
@@ -107,9 +115,24 @@ def _device_state(e2e_env, old_code: str | None = None) -> tuple[int, int, bool]
     return int(confirmed), int(unconfirmed), old_code_stored == "True"
 
 
-def _totp_code(base32_secret: str) -> str:
+def _confirmed_device_names(e2e_env) -> list[str]:
+    stdout = _shell(
+        e2e_env,
+        "from core.models import User; "
+        "from django_otp.plugins.otp_totp.models import TOTPDevice; "
+        f"u = User.objects.get(username='{USERNAME}'); "
+        "print('NAMES|' + '|'.join(TOTPDevice.objects.filter(user=u, confirmed=True).values_list('name', flat=True)))",
+    )
+    line = [entry for entry in stdout.splitlines() if entry.startswith("NAMES|")][-1]
+    return [name for name in line.split("|")[1:] if name]
+
+
+def _totp_code(base32_secret: str, steps_ahead: int = 0) -> str:
+    """``steps_ahead=1``: Code des naechsten Zeitfensters (liegt in der Toleranz)."""
     padded = base32_secret + "=" * (-len(base32_secret) % 8)
-    return f"{TOTP(base64.b32decode(padded)).token():06d}"
+    totp = TOTP(base64.b32decode(padded))
+    totp.time = time.time() + steps_ahead * totp.step
+    return f"{totp.token():06d}"
 
 
 def _new_context(browser):
@@ -134,6 +157,17 @@ def _login(page, base_url, backup_code: str | None = None) -> None:
     backup_input.fill(backup_code)
     page.locator("[data-testid='mfa-verify-button']").click()
     page.wait_for_url(lambda url: "/mfa/verify/" not in url, timeout=10000)
+
+
+def _login_with_totp(page, base_url, code: str) -> None:
+    """Passwort, dann ``code`` im TOTP-Feld von ``/mfa/verify/`` absenden."""
+    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+    page.fill("#id_username", USERNAME)
+    page.fill("#id_password", SEED_PASSWORD)
+    page.click("button[type=submit]")
+    page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=10000)
+    page.locator("[data-testid='mfa-token-input']").fill(code)
+    page.locator("[data-testid='mfa-verify-button']").click()
 
 
 def _assert_on_sudo_page_for_setup(page) -> None:
@@ -173,8 +207,11 @@ def _submit_setup_post(page, token: str) -> None:
     )
 
 
-def _finish_setup_from_setup_page(page) -> None:
-    """Auf der Setup-Seite: Code aus dem Secret, Backup-Codes quittieren, Einstellungen."""
+def _finish_setup_from_setup_page(page) -> str:
+    """Auf der Setup-Seite: Code aus dem Secret, Backup-Codes quittieren, Einstellungen.
+
+    Gibt das Secret des neuen Geraets zurueck.
+    """
     page.locator("[data-testid='mfa-qrcode']").wait_for(state="visible", timeout=5000)
     secret = (page.locator("[data-testid='mfa-secret']").text_content() or "").strip()
     assert re.fullmatch(r"[A-Z2-7]+", secret), secret
@@ -187,6 +224,7 @@ def _finish_setup_from_setup_page(page) -> None:
     page.locator("[data-testid='backup-codes-continue']").click()
     page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
     assert "Aktiv" in page.locator("[data-testid='mfa-status']").inner_text()
+    return secret
 
 
 class TestZZMFAFactorChangeSudo:
@@ -198,7 +236,9 @@ class TestZZMFAFactorChangeSudo:
         try:
             context, page = _new_context(browser)
             try:
-                _login(page, base_url, backup_code=codes[0])
+                # Vor dem Wechsel gilt der Code des Bestandsgeraets.
+                _login_with_totp(page, base_url, _totp_code(OLD_SECRET))
+                page.wait_for_url(lambda url: "/mfa/verify/" not in url, timeout=10000)
 
                 page.goto(f"{base_url}/mfa/setup/", wait_until="domcontentloaded")
                 _assert_on_sudo_page_for_setup(page)
@@ -209,9 +249,31 @@ class TestZZMFAFactorChangeSudo:
                 # Ohne Code: kein Pruefversuch, also keine Sperre am neuen Geraet.
                 _submit_setup_post(page, "")
                 page.wait_for_url(re.compile(r"/mfa/setup/"), timeout=10000)
-                _finish_setup_from_setup_page(page)
+                new_secret = _finish_setup_from_setup_page(page)
             finally:
                 context.close()
+
+            # Nach dem Wechsel: der Code des neuen Geraets meldet an ...
+            context, page = _new_context(browser)
+            try:
+                _login_with_totp(page, base_url, _totp_code(new_secret, steps_ahead=1))
+                page.wait_for_url(lambda url: "/mfa/verify/" not in url, timeout=10000)
+            finally:
+                context.close()
+
+            # ... der des alten Geraets nicht mehr.
+            context, page = _new_context(browser)
+            try:
+                _login_with_totp(page, base_url, _totp_code(OLD_SECRET))
+                message = page.locator("#mfa-login-message")
+                message.wait_for(state="visible", timeout=10000)
+                assert "ungültig" in message.inner_text()
+                assert urlsplit(page.url).path == "/mfa/verify/", page.url
+            finally:
+                context.close()
+
+            names = _confirmed_device_names(e2e_env)
+            assert len(names) == 1 and "bestand" not in names, names
 
             confirmed, unconfirmed, old_code_stored = _device_state(e2e_env, old_code=codes[2])
             assert confirmed == 1, "Das ersetzte Geraet muss mit der Quittung entfernt sein"
