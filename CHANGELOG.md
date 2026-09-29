@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Trockenlauf der Historien-Aufbewahrung zählt wie der echte Lauf** (#2188) — `enforce_retention --dry-run` meldete Historienzeilen als „zu redigieren“, obwohl eine Aufbewahrungssperre am Fall sie im echten Lauf zurückstellt. Trockenlauf und Lauf entscheiden jetzt nach derselben Regel; die Vorschau nennt die Zahlen, die der Lauf danach erzeugt.
 - **Mail-Variablen im Dev-Compose** (#2388) — Der Dev-Webcontainer erhält die konfigurierten SMTP-Variablen, sodass Versand per `.env.dev` geprüft und genutzt werden kann.
 - **Seed-Flush nach Personen-Zusammenführungen** (#2389) — `seed --flush` löscht zusammengeführte Personen wieder vollständig, und ein fehlgeschlagener stündlicher Demo-Reset wird mit Zeitstempel und Exit-Code sichtbar.
 - **Episoden bei eingeschränkter Verarbeitung oder gerade geänderter Fallakte werden sauber abgewiesen** (#2374) — Das Anlegen, Bearbeiten oder Abschließen einer Episode bei einer Person mit eingeschränkter Verarbeitung (Art. 18 DSGVO) endete mit einem Serverfehler; ebenso, wenn die Fallakte unmittelbar vor dem Speichern in den Papierkorb gelegt oder anonymisiert bzw. der Fall beim Anlegen gerade geschlossen wurde. Jetzt führt die Aktion mit der Meldung zum Grund zurück auf die Fallseite – oder auf die Fallliste, wenn die Akte inzwischen im Papierkorb liegt, und keine Episode wird angelegt oder geändert.
