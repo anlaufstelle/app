@@ -56,7 +56,7 @@ def open_request(request, facility, staff_user, sample_event, client_identified,
             Client.objects.create(
                 facility=facility,
                 contact_stage=Client.ContactStage.IDENTIFIED,
-                pseudonym="Merge-Ziel-01",
+                pseudonym="Merge-Target-01",
                 created_by=staff_user,
             ),
         ),
@@ -66,7 +66,7 @@ def open_request(request, facility, staff_user, sample_event, client_identified,
         target_type=target_type,
         target_id=target_id,
         merge_into=merge_into,
-        reason="Versehentlich gestellt",
+        reason="Filed by mistake",
         requested_by=staff_user,
     )
 

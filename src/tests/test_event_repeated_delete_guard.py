@@ -88,7 +88,7 @@ def _qualified_event(facility, client_qualified, doc_type_contact, staff_user):
         client=client_qualified,
         document_type=doc_type_contact,
         occurred_at=timezone.now(),
-        data_json={"dauer": 30, "notiz": "Antrag"},
+        data_json={"dauer": 30, "notiz": "request"},
         created_by=staff_user,
     )
 
@@ -224,7 +224,7 @@ class TestApprovalOfARequestForAnAlreadyDeletedEvent:
     @pytest.fixture
     def open_request(self, facility, client_qualified, doc_type_contact, staff_user, lead_user):
         event = _qualified_event(facility, client_qualified, doc_type_contact, staff_user)
-        request, created = create_or_get_event_deletion_request(event, staff_user, "Doppelt erfasst")
+        request, created = create_or_get_event_deletion_request(event, staff_user, "Recorded twice")
         assert created
         soft_delete_event(event, lead_user)
         return request, event
