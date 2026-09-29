@@ -179,7 +179,7 @@ importScripts("/static/js/url-patterns.js");
 // only a new generation drops every precache and runtime entry stored with the
 // earlier policy. A policy change always needs a bump (guard:
 // TestPrecachedShellBumpGuard::test_policy_change_requires_cache_name_bump).
-const CACHE_NAME = "anlaufstelle-v55";
+const CACHE_NAME = "anlaufstelle-v56";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
