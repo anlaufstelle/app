@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-09-29: § 5.8 documents that the dev Compose stack passes mail variables to `web` and how to verify SMTP handoff (#2388).
 > Synchronization update 2026-09-23: § 6.6 explains how to restore an anchorless older set on a host with `DJANGO_AUDIT_HWM_PATH` configured and states that this run provides no compliance evidence (#2362).
 > Synchronization update 2026-09-23: § 9 names 29 as the current count of RLS-covered facility-scoped tables, matching the test-derived source of truth (#2330).
 > Synchronization update 2026-09-23: § 1.1 adds the note on the deprecated single key (`core.W005`) and the migration path to `ENCRYPTION_KEYS` (#2240).
@@ -1054,6 +1055,14 @@ a relay offering only port 465 can be connected that way. Both switches set to
 `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` are needed too. `EXTERNAL_ORIGIN`
 must also contain the public base URL so that invitation and reset links are
 valid. The sender should be authorized for SPF, DKIM, and DMARC.
+
+The dev stack now passes these mail variables through to `web`. For SMTP on
+dev, set `EMAIL_HOST` (and credentials when needed) in `.env.dev`; when
+`EMAIL_HOST` is empty, `devlive` continues to write mail to the console. After
+startup, verify the handoff with
+`docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T web env | grep '^EMAIL_HOST='`.
+With the detail token, `/health/` must report `smtp` as `ok` or `unreachable`,
+not `disabled`.
 
 **Deployment check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
 — the web container runs it on every start, see
@@ -2948,5 +2957,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-23 -->
-<!-- source-hash: f3372695e9c82b3752010a3aa79161ad0b79b3bb -->
+<!-- source-hash: 114c9ea10b871d391a781292006c33b3ad33c28d -->
 <!-- translation-date: 2026-09-22 -->

@@ -1037,6 +1037,14 @@ Einladungs- und Reset-Links muss ausserdem `EXTERNAL_ORIGIN` die oeffentliche
 Basis-URL enthalten. Der Absender soll fuer SPF, DKIM und DMARC autorisiert
 sein.
 
+Der Dev-Stack reicht diese Mail-Variablen jetzt an `web` durch. Fuer SMTP auf
+dev genuegt `EMAIL_HOST` (und bei Bedarf Zugangsdaten) in `.env.dev`; bleibt
+`EMAIL_HOST` leer, schreibt `devlive` weiterhin in die Konsole. Nach dem Start
+laesst sich die Durchreichung mit
+`docker compose -f docker-compose.dev.yml --env-file .env.dev exec -T web env | grep '^EMAIL_HOST='`
+pruefen. Mit Detail-Token muss `/health/` im Feld `smtp` dann `ok` oder
+`unreachable` statt `disabled` melden.
+
 **Deploy-Check `mail.E001` (Django 6.1, #2326):** `python manage.py check --deploy`
 — der Web-Container fuehrt ihn bei jedem Start aus, siehe
 `docker-entrypoint.sh` — bricht mit `mail.E001` ab, wenn der Standard-Mailer
