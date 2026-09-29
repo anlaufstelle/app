@@ -502,6 +502,35 @@ function _withHeader(request, name, value) {
     return new Request(request.clone(), { headers: headers });
 }
 
+// Refs #1904: responses this worker builds itself (offline HTMX banner, flash
+// fragments of the write path) never pass through Django and therefore get no
+// Content-Security-Policy from the server's middleware chain. They adopt the
+// policy of the precached offline home instead — a response the server built
+// from its one policy source, refreshed with every precache generation — so
+// this script keeps no copy of the policy. Without that source in the cache
+// (evicted, lookup failed, header missing) the response falls back to a strict
+// minimal policy, never to none. base-uri and form-action are listed
+// explicitly because they do not fall back to default-src.
+const POLICY_HEADER = "Content-Security-Policy";
+const REPORT_ONLY_POLICY_HEADER = "Content-Security-Policy-Report-Only";
+const FALLBACK_POLICY = "default-src 'none'; base-uri 'none'; form-action 'none'";
+
+async function _withServerPolicy(response) {
+    let source;
+    try {
+        source = await caches.match(OFFLINE_FALLBACK_URL);
+    } catch (_e) {
+        source = undefined;
+    }
+    const policy = source ? source.headers.get(POLICY_HEADER) : null;
+    response.headers.set(POLICY_HEADER, policy || FALLBACK_POLICY);
+    const reportOnly = policy ? source.headers.get(REPORT_ONLY_POLICY_HEADER) : null;
+    if (reportOnly) {
+        response.headers.set(REPORT_ONLY_POLICY_HEADER, reportOnly);
+    }
+    return response;
+}
+
 // Refs #1828: gemeinsame Flash-Response des Schreibpfads (vorher dreimal
 // dupliziert). Rendert das #flash-messages-Fragment, das HTMX via
 // HX-Retarget/HX-Reswap an die Standard-Flash-Stelle swappt. ``tone`` waehlt
@@ -520,17 +549,20 @@ function _flashResponse(text, opts) {
         },
         opts.headers || {}
     );
-    return new Response(
-        '<div id="flash-messages">' +
-            '<div class="rounded-md ' +
-            tone.box +
-            ' p-4 mb-4">' +
-            '<p class="text-sm ' +
-            tone.text +
-            '">' +
-            text +
-            "</p></div></div>",
-        { status: opts.status, statusText: opts.statusText, headers: headers }
+    // Refs #1904: resolves to the response carrying the server policy.
+    return _withServerPolicy(
+        new Response(
+            '<div id="flash-messages">' +
+                '<div class="rounded-md ' +
+                tone.box +
+                ' p-4 mb-4">' +
+                '<p class="text-sm ' +
+                tone.text +
+                '">' +
+                text +
+                "</p></div></div>",
+            { status: opts.status, statusText: opts.statusText, headers: headers }
+        )
     );
 }
 
@@ -877,16 +909,20 @@ self.addEventListener("fetch", (event) => {
                     // aktualisierten Daten erschienen waeren, ist die
                     // naheliegendste, layoutneutrale Antwort. Bewusst KEIN
                     // _flashResponse (anderes Fragment, kein Retargeting).
-                    return new Response(
-                        '<div class="rounded-md bg-yellow-50 p-4" role="status" data-testid="offline-partial-banner">' +
-                            '<p class="text-sm text-yellow-800">' +
-                            SW_I18N.partialBanner +
-                            "</p>" +
-                            "</div>",
-                        {
-                            status: 200,
-                            headers: { "Content-Type": "text/html; charset=utf-8" },
-                        }
+                    // Refs #1904: carries the server policy of the cached
+                    // offline home (see _withServerPolicy).
+                    return _withServerPolicy(
+                        new Response(
+                            '<div class="rounded-md bg-yellow-50 p-4" role="status" data-testid="offline-partial-banner">' +
+                                '<p class="text-sm text-yellow-800">' +
+                                SW_I18N.partialBanner +
+                                "</p>" +
+                                "</div>",
+                            {
+                                status: 200,
+                                headers: { "Content-Type": "text/html; charset=utf-8" },
+                            }
+                        )
                     );
                 }
                 for (const route of SHELL_ROUTES) {
