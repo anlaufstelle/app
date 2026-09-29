@@ -57,6 +57,7 @@ from core.retention.eventhistory import (
     CATEGORY_REPAIRED,
     MAX_ATTEMPTS,
     RETRY_BACKOFF_SECONDS,
+    OwnerContextMissingError,
     _is_deadlock,
     _require_owner_context,
     lock_and_partition_events,
@@ -65,7 +66,9 @@ from core.retention.eventhistory import (
 from core.retention.legal_holds import get_active_hold_target_ids
 from core.services.audit import audit_retention_decision
 from core.services.events.history_diff import REDACTION_FLAG, build_anonymization_marker, is_redaction_marker
-from core.services.system import bypass_replication_triggers
+from core.services.system import bypass_replication_triggers, current_connection_owns
+
+HISTORY_TABLE = "core_eventhistory"
 
 
 @dataclass
@@ -167,6 +170,26 @@ def _held_event_ids_unlocked(holds, event_ids):
     )
 
 
+def _require_table_owner() -> None:
+    """Refuse unless the connection owns ``core_eventhistory`` — before any read.
+
+    An RLS bypass alone is not the maintenance role: the session variable
+    ``app.is_super_admin`` can be set by any role, and a BYPASSRLS role need
+    not own the table. Such a connection reads every history payload, but it
+    cannot open the append-only trigger — the dry run would report findings
+    that the apply run can never heal, and the apply run would fail only at
+    the trigger DDL. Ownership (or membership in the owner role) is exactly
+    what the repair needs, so it is checked first, in both modes.
+    """
+    if not current_connection_owns(HISTORY_TABLE):
+        raise OwnerContextMissingError(
+            f"Event history repair needs a connection that owns {HISTORY_TABLE} "
+            "(admin/owner database role); an RLS bypass via BYPASSRLS or the "
+            "app.is_super_admin session variable is not enough. Aborted before "
+            "reading any history row."
+        )
+
+
 def _anonymization_marker(payload):
     """Wie :func:`redaction_marker`, aber mit dem Marker der Art.-17-Kaskade."""
     if not payload or is_redaction_marker(payload):
@@ -240,6 +263,7 @@ def repair_eventhistory_redaction(facility, *, dry_run=True, batch_size=BATCH_SI
     faelschlich einen sauberen Bestand.
     """
     _require_owner_context()
+    _require_table_owner()
     total = RepairResult()
     holds = _active_holds(facility) if dry_run else None
     for rows in _damaged_pages(facility, batch_size):

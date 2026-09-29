@@ -27,10 +27,11 @@ Bestand zu melden.
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Facility
-from core.retention.eventhistory_repair import RepairResult, repair_eventhistory_redaction
+from core.retention.eventhistory_repair import HISTORY_TABLE, RepairResult, repair_eventhistory_redaction
 
 # Als Modul-Name re-exportiert, damit Tests die Pruefung auf Command-Ebene
 # patchen koennen (Muster ``cleanup_orphan_storage_files``).
+from core.services.system import current_connection_owns as _current_connection_owns
 from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 
@@ -66,6 +67,15 @@ class Command(BaseCommand):
                 "Bypass-Kontext (weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). "
                 "Abbruch — sonst saehe die Erkennung 0 Zeilen und meldete faelschlich einen "
                 "sauberen Bestand. Mit der Admin-DB-Rolle erneut aufrufen."
+            )
+        # A bypass is not ownership: without owning the history table the dry
+        # run would read payloads it can never heal. Checked before any read.
+        if not _current_connection_owns(HISTORY_TABLE):
+            raise CommandError(
+                f"The database connection does not own {HISTORY_TABLE}. An RLS bypass "
+                "(BYPASSRLS or the app.is_super_admin session variable) is not enough: "
+                "only the owner can repair history rows. Aborted before reading any "
+                "history row. Run again with the admin/owner database role."
             )
         if options["dry_run"] and options["apply"]:
             raise CommandError("--dry-run und --apply schliessen einander aus.")
