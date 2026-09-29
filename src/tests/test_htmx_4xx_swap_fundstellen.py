@@ -163,7 +163,7 @@ class TestWorkItemStatusUpdateInvalidStatus:
     """``WorkItemStatusUpdateView.post`` — invalid status swaps into
     ``#workitem-<pk>`` (``_workitem_row.html``, ``hx-swap="outerHTML"``)."""
 
-    def test_htmx_absage_ohne_swap(self, client, staff_user, workitem_open):
+    def test_htmx_rejection_without_swap(self, client, staff_user, workitem_open):
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
@@ -174,7 +174,7 @@ class TestWorkItemStatusUpdateInvalidStatus:
         workitem_open.refresh_from_db()
         assert workitem_open.status == "open"
 
-    def test_ohne_htmx_unveraendert(self, client, staff_user, workitem_open):
+    def test_without_htmx_unchanged(self, client, staff_user, workitem_open):
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),

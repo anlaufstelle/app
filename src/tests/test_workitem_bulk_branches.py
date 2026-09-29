@@ -44,10 +44,10 @@ class TestWorkItemBulkStatusViewHTMX:
 @pytest.mark.django_db
 class TestWorkItemBulkPriorityValidation:
     def test_invalid_priority_redirects_with_message(self, client, staff_user, workitem):
-        """Line 107: Priority nicht in ``WorkItem.Priority.values`` -> Redirect
-        + Flash (bewusst nachgezogen, Ticket-Auftrag #2385: vormals
-        400-Klartext — ``inbox.html`` ruft diese View ueber ein gewoehnliches
-        Formular ohne ``hx-*`` auf)."""
+        """Line 107: priority not in ``WorkItem.Priority.values`` -> redirect
+        + flash (deliberately backported, ticket #2385: previously a
+        plain-text 400 — ``inbox.html`` calls this view via an ordinary
+        form without ``hx-*``)."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_bulk_priority"),
@@ -60,9 +60,9 @@ class TestWorkItemBulkPriorityValidation:
 @pytest.mark.django_db
 class TestWorkItemBulkAssignUnknownUser:
     def test_unknown_assignee_redirects_with_message(self, client, staff_user, workitem):
-        """Lines 123-124: ``User.DoesNotExist`` -> Redirect + Flash mit
-        "Unbekannte Benutzerin/Benutzer" (bewusst nachgezogen, Ticket-Auftrag
-        #2385: vormals 400-Klartext)."""
+        """Lines 123-124: ``User.DoesNotExist`` -> redirect + flash with
+        "Unbekannte Benutzerin/Benutzer" (deliberately backported, ticket
+        #2385: previously a plain-text 400)."""
         import uuid
 
         client.force_login(staff_user)

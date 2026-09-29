@@ -96,9 +96,9 @@ class TestReorderBlocks:
         url = reverse("core:config_reorder_blocks", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"blocks": ["nicht-eine-uuid"]}, HTTP_HX_REQUEST="true")
         assert response.status_code == 400
-        # Refs #2385: postBatch() swapt die Antwort in #field-board
-        # (hx-swap="outerHTML") — ohne HX-Reswap: none ersetzte der Klartext
-        # das ganze Board.
+        # Refs #2385: postBatch() swaps the response into #field-board
+        # (hx-swap="outerHTML") — without HX-Reswap: none, the plain text
+        # used to replace the whole board.
         assert response["HX-Reswap"] == "none"
 
     def test_broken_kind_prefix_is_400(self, client, admin_user, doc_type_contact):

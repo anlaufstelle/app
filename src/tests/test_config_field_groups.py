@@ -99,9 +99,9 @@ class TestFieldAdd:
     def test_add_with_foreign_group_redirects_with_message_and_creates_nothing(
         self, client, admin_user, facility, doc_type_contact, field_template
     ):
-        # Gruppe eines ANDEREN doc_type (gleiche Einrichtung) → Absage (Service-Semantik).
-        # Refs #2385: ein natives Formular-Submit (kein HX-Request) bekommt die
-        # Absage nicht mehr als Ganzseiten-Klartext, sondern Meldung + Redirect.
+        # Group of an OTHER doc_type (same facility) → rejection (service semantics).
+        # Refs #2385: a native form submit (no HX-Request) no longer gets the
+        # rejection as a full-page plain-text response, but a message + redirect.
         client.force_login(admin_user)
         other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremde Gruppe")
@@ -116,9 +116,9 @@ class TestFieldAdd:
     def test_add_with_malformed_group_id_redirects_with_message_not_500(
         self, client, admin_user, doc_type_contact, field_template
     ):
-        # Nicht-UUID im field_group-POST → Absage statt 500. Djangos UUIDField
-        # wirft beim Query-Ausführen eine ValidationError (NICHT ValueError);
-        # roh in den pk-Filter gefüttert wäre das ein ungefangener 500.
+        # Non-UUID in the field_group POST → rejection instead of 500. Django's
+        # UUIDField raises a ValidationError (NOT ValueError) when the query
+        # runs; fed raw into the pk filter, that would be an uncaught 500.
         client.force_login(admin_user)
         url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"field_template": str(field_template.pk), "field_group": "garbage"})

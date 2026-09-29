@@ -620,9 +620,9 @@ class TestOperatorInputPartial:
         url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type_contact.pk})
         response = client.get(url)
         assert response.status_code == 400
-        # Refs #2385: der Aufrufer swapt per hx-get in .condition-operator-slot
-        # (hx-swap="outerHTML") — ohne HX-Reswap: none ersetzte der Klartext
-        # den Slot.
+        # Refs #2385: the caller swaps via hx-get into .condition-operator-slot
+        # (hx-swap="outerHTML") — without HX-Reswap: none, the plain text
+        # used to replace the slot.
         assert response["HX-Reswap"] == "none"
 
     def test_garbage_source_is_bad_request(self, client, admin_user, doc_type_contact):
@@ -784,9 +784,9 @@ class TestValueInputPartial:
         url = reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk})
         response = client.get(url)
         assert response.status_code == 400
-        # Refs #2385: der Aufrufer swapt per hx-get in .condition-value-slot
-        # (hx-swap="outerHTML") — ohne HX-Reswap: none ersetzte der Klartext
-        # den Slot.
+        # Refs #2385: the caller swaps via hx-get into .condition-value-slot
+        # (hx-swap="outerHTML") — without HX-Reswap: none, the plain text
+        # used to replace the slot.
         assert response["HX-Reswap"] == "none"
 
     def test_value_input_root_is_slot_wrapper(self, client, admin_user, doc_type_contact):

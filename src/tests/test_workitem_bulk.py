@@ -183,11 +183,11 @@ class TestBulkViews:
             assert wi.assigned_to is None
 
     def test_bulk_no_ids_redirects_with_message(self, client, staff_user):
-        """Refs #2385: ein gewöhnliches Formular (kein ``hx-*`` in
-        ``inbox.html``) bekäme sonst eine Ganzseiten-Klartextantwort statt der
-        Inbox zurück — jetzt Redirect + Flash wie die übrigen Absagen dieser
-        View-Familie (bewusst nachgezogen, Ticket-Auftrag #2385: die
-        Assertion prüfte zuvor den rohen 400-Klartext)."""
+        """Refs #2385: an ordinary form (no ``hx-*`` in ``inbox.html``) would
+        otherwise get a full-page plain-text response instead of the inbox
+        back — now redirect + flash like the other rejections in this view
+        family (deliberately backported, ticket #2385: the assertion
+        previously checked the raw 400 plain text)."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_bulk_status"),
@@ -198,8 +198,8 @@ class TestBulkViews:
         assert "Keine Aufgaben ausgewählt." in str(list(get_messages(response.wsgi_request))[-1])
 
     def test_bulk_invalid_status_redirects_with_message(self, client, staff_user, workitems_open):
-        """Bewusst nachgezogen (Ticket-Auftrag #2385): vormals 400-Klartext,
-        jetzt Redirect + Flash (siehe ``test_bulk_no_ids_redirects_with_message``)."""
+        """Deliberately backported (ticket #2385): previously a plain-text
+        400, now redirect + flash (see ``test_bulk_no_ids_redirects_with_message``)."""
         client.force_login(staff_user)
         ids = [str(wi.pk) for wi in workitems_open]
         response = client.post(
@@ -213,10 +213,10 @@ class TestBulkViews:
             assert wi.status == WorkItem.Status.OPEN
 
     def test_bulk_facility_scope_enforced(self, client, staff_user, second_facility, workitems_open):
-        """WorkItems aus anderer Facility dürfen nicht verändert werden.
+        """WorkItems from another facility must not be mutated.
 
-        Bewusst nachgezogen (Ticket-Auftrag #2385): vormals 400-Klartext,
-        jetzt Redirect + Flash (siehe ``test_bulk_no_ids_redirects_with_message``)."""
+        Deliberately backported (ticket #2385): previously a plain-text 400,
+        now redirect + flash (see ``test_bulk_no_ids_redirects_with_message``)."""
         other_user = workitems_open[0].created_by  # staff_user belongs to facility
         foreign_wi = WorkItem.objects.create(
             facility=second_facility,
@@ -231,7 +231,7 @@ class TestBulkViews:
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": ids, "status": "done"},
         )
-        # Keine passenden Items (foreign_wi ist gescoped weg) -> Redirect + Flash
+        # No matching items (foreign_wi is scoped away) -> redirect + flash
         assert response.status_code == 302
         assert "Keine gültigen Aufgaben gefunden." in str(list(get_messages(response.wsgi_request))[-1])
         foreign_wi.refresh_from_db()
@@ -342,12 +342,12 @@ class TestBulkViews:
         assert foreign.status == WorkItem.Status.OPEN
 
     def test_bulk_status_view_empty_workitem_ids_field_redirects_with_message(self, client, staff_user, workitems_open):
-        """Explizite leere ID-Liste (``workitem_ids=[]``) → Redirect + Flash.
+        """Explicit empty ID list (``workitem_ids=[]``) → redirect + flash.
 
-        Ergänzt ``test_bulk_no_ids_redirects_with_message`` (der das Feld
-        komplett weglässt) um den Fall, dass das Feld vorhanden aber leer ist
-        (Refs #591, WP1). Bewusst nachgezogen (Ticket-Auftrag #2385): vormals
-        400-Klartext."""
+        Complements ``test_bulk_no_ids_redirects_with_message`` (which omits
+        the field entirely) with the case where the field is present but
+        empty (Refs #591, WP1). Deliberately backported (ticket #2385):
+        previously a plain-text 400."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_bulk_status"),
@@ -1019,10 +1019,10 @@ class TestBulkForbiddenPreservesSelection:
     def test_forbidden_redirect_preserves_original_selection_order(
         self, client, facility, staff_user, lead_user, assistant_user
     ):
-        """Refs #2385: mehrere blockierende Items erscheinen im
-        ``forbidden``-Redirect in der ursprünglichen Auswahlreihenfolge (dem
-        ``workitem_ids``-Feld), nicht in der DB-Lesereihenfolge — sonst würde
-        die Inbox die Auswahl in vertauschter Reihenfolge markieren."""
+        """Refs #2385: several blocking items appear in the ``forbidden``
+        redirect in the original selection order (the ``workitem_ids``
+        field), not the DB read order — otherwise the inbox would mark the
+        selection in a swapped order."""
         first = self._foreign(facility, staff_user, lead_user)
         second = self._foreign(facility, staff_user, lead_user)
         third = self._foreign(facility, staff_user, lead_user)
@@ -1148,15 +1148,16 @@ class TestBulkSelectionCap:
     def test_oversize_selection_redirects_with_message_and_mutates_nothing(
         self, client, staff_user, workitems_open, url_name, extra
     ):
-        """Auswahl > Cap → Redirect + Flash mit der eigenen Meldung, ohne
-        jede Mutation.
+        """Selection > cap → redirect + flash with its own message, without
+        any mutation.
 
-        Die drei **echten** IDs muessen mit in der Liste stehen: ohne sie fiele
-        der Request schon heute in den bestehenden Absage-Pfad ``"Keine
-        gueltigen Aufgaben gefunden."`` und der Test waere vor wie nach dem
-        Fix gruen. Bewusst nachgezogen (Ticket-Auftrag #2385): vormals
-        400-Klartext statt Redirect (``inbox.html`` ruft diese Views ueber
-        gewoehnliche Formulare ohne ``hx-*`` auf).
+        The three **real** IDs must be included in the list: without them
+        the request would already fall into the existing rejection path
+        ``"Keine gueltigen Aufgaben gefunden."`` today, and the test would be
+        green both before and after the fix. Deliberately backported
+        (ticket #2385): previously a plain-text 400 instead of a redirect
+        (``inbox.html`` calls these views via ordinary forms without
+        ``hx-*``).
         """
         client.force_login(staff_user)
         ids = [str(wi.pk) for wi in workitems_open] + [str(uuid.uuid4()) for _ in range(WORKITEM_BULK_MAX_IDS)]
@@ -1193,9 +1194,9 @@ class TestBulkSelectionCap:
             assert wi.status == WorkItem.Status.DONE
 
     def test_malformed_uuid_redirects_with_message_not_500(self, client, staff_user, workitems_open):
-        """Ein kaputter ID-Wert → Redirect + Flash statt 500, nichts wird
-        veraendert. Bewusst nachgezogen (Ticket-Auftrag #2385): vormals
-        400-Klartext statt Redirect."""
+        """A broken ID value → redirect + flash instead of 500, nothing gets
+        changed. Deliberately backported (ticket #2385): previously a
+        plain-text 400 instead of a redirect."""
         client.force_login(staff_user)
 
         response = client.post(

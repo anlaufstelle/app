@@ -69,18 +69,18 @@ def _ensure_pending_proposal(e2e_env):
 
 
 def _ensure_number_tally_type(e2e_env):
-    """Legt EINEN Dokumentationstyp mit Zahlen-Pflichtfeld für die Strichliste an.
+    """Creates ONE document type with a required number field for the tally.
 
-    Eigene Wegwerfdaten (Kennung im Namen) statt Bestandstypen, damit die
-    Karte auf der Zeitstrom-Seite eindeutig per Testid gefunden wird — Muster
-    ``_ensure_pending_proposal`` oben.
+    Own throwaway data (a marker in the name) instead of existing types, so
+    the card on the Zeitstrom page is found unambiguously by testid — the
+    same pattern as ``_ensure_pending_proposal`` above.
     """
-    kennung = uuid.uuid4().hex[:8]
+    suffix = uuid.uuid4().hex[:8]
     code = (
         "from core.models import DocumentType, DocumentTypeField, Facility, FieldTemplate; "
         "f = Facility.objects.get(name='Hauptstelle'); "
-        f"dt = DocumentType.objects.create(facility=f, name='HTMX4XX-Zahl-{kennung}', tally_enabled=True); "
-        f"ft = FieldTemplate.objects.create(facility=f, name='Ausgabe-{kennung}', "
+        f"dt = DocumentType.objects.create(facility=f, name='HTMX4XX-Number-{suffix}', tally_enabled=True); "
+        f"ft = FieldTemplate.objects.create(facility=f, name='Output-{suffix}', "
         "  field_type=FieldTemplate.FieldType.NUMBER, is_required=True); "
         "DocumentTypeField.objects.create(document_type=dt, field_template=ft); "
         "print('doc_type=' + str(dt.pk))"
@@ -97,7 +97,7 @@ def _ensure_number_tally_type(e2e_env):
 
 
 def _disable_tally_opt_in(e2e_env, document_type_pk):
-    """Simuliert eine Konfigurationsänderung in einem parallelen Tab/Fenster."""
+    """Simulates a configuration change in a parallel tab/window."""
     code = (
         "from core.models import DocumentType; "
         f"DocumentType.objects.filter(pk='{document_type_pk}').update(tally_enabled=False)"
@@ -108,22 +108,22 @@ def _disable_tally_opt_in(e2e_env, document_type_pk):
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, f"Seed-Mutation fehlgeschlagen: {result.stderr}\n{result.stdout}"
+    assert result.returncode == 0, f"Seed mutation failed: {result.stderr}\n{result.stdout}"
 
 
-class TestTallyAbbrechenFuerDeaktiviertenTypBleibtStehen:
-    def test_absage_laesst_karte_stehen_und_zeigt_hinweis(self, lead_page, base_url, e2e_env):
+class TestTallyCancelForDisabledTypeStaysInPlace:
+    def test_rejection_leaves_card_in_place_and_shows_notice(self, lead_page, base_url, e2e_env):
         document_type_pk = _ensure_number_tally_type(e2e_env)
         page = lead_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
-        karte = page.locator(f"#tally-action-{document_type_pk}")
-        expect(karte).to_be_visible(timeout=5000)
-        karte.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
-        cancel_link = karte.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
+        card = page.locator(f"#tally-action-{document_type_pk}")
+        expect(card).to_be_visible(timeout=5000)
+        card.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
+        cancel_link = card.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
         expect(cancel_link).to_be_visible(timeout=5000)
 
-        # Ein anderer Tab deaktiviert den Typ, während das Werte-Formular offen bleibt.
+        # Another tab disables the type while the value form stays open.
         _disable_tally_opt_in(e2e_env, document_type_pk)
 
         with page.expect_response(lambda r: "cancel=1" in r.url) as info:
@@ -133,11 +133,11 @@ class TestTallyAbbrechenFuerDeaktiviertenTypBleibtStehen:
         assert response.status == 400, response.status
         assert response.headers.get("hx-reswap") == "none"
 
-        # Die Karte ist nicht durch den Meldungstext ersetzt worden — das
-        # Werte-Formular ist weiterhin da (kein Swap wegen HX-Reswap: none).
-        expect(karte).to_be_visible(timeout=5000)
+        # The card was not replaced by the message text — the value form is
+        # still there (no swap, thanks to HX-Reswap: none).
+        expect(card).to_be_visible(timeout=5000)
         expect(cancel_link).to_be_visible()
-        assert "nicht für die Strichliste freigegeben" not in karte.inner_text()
+        assert "nicht für die Strichliste freigegeben" not in card.inner_text()
 
         toast = page.locator(_TOAST)
         expect(toast).to_be_visible(timeout=5000)

@@ -1,23 +1,23 @@
-"""HTMX-Absagen der Strichlisten-Erfassung (Refs #2385).
+"""HTMX rejections of the tally capture (Refs #2385).
 
-``TallyIncrementView`` (``core/views/events.py``) bediente vor diesem Fix
-jede fachliche Ablehnung ausschliesslich mit einem rohen
-``HttpResponseBadRequest``. Die "+1"-Karte und ihr Werte-Formular hängen an
-``hx-get``/``hx-post`` mit ``hx-target``/``hx-swap="outerHTML"``
-(``tally_action.html``, ``tally_inline_form.html``) — seit der globalen
-4xx-Swap-Regel (``responseHandling`` in ``base.html``, Refs #2232) ersetzte
-der Klartext also die Karte, statt als Toast zu erscheinen; ein Klick ohne
-HTMX (der ``href``-Fallback der Links bzw. ein natives Formular-Submit) sah
-denselben Klartext als vollstaendige Seite.
+Before this fix, ``TallyIncrementView`` (``core/views/events.py``) answered
+every business rejection solely with a raw ``HttpResponseBadRequest``. The
+"+1" card and its value form hang off ``hx-get``/``hx-post`` with
+``hx-target``/``hx-swap="outerHTML"`` (``tally_action.html``,
+``tally_inline_form.html``) — since the global 4xx swap rule
+(``responseHandling`` in ``base.html``, Refs #2232), the plain text therefore
+replaced the card instead of appearing as a toast; a click without HTMX (the
+links' ``href`` fallback, or a native form submit) saw the same plain text as
+a full page.
 
-Die Sammelstelle ``TallyIncrementView._document_type_error_response``
-entscheidet jetzt je Request: mit ``HX-Request`` bleibt es bei ``htmx_absage``
-(400 + ``HX-Reswap: none``, die Karte bleibt stehen), ohne den Header eine
-``messages``-Meldung + Redirect zur Ausgangsseite (analog zum bereits
-umgestellten ``TallyUndoView.post``). Alle neun Fundstellen der View laufen
-durch denselben Helfer; die Tests unten belegen je einzigartigem Meldungstext
-den HTMX-Zweig und zusaetzlich den Redirect-Zweig fuer GET (cancel- und
-Normal-Branch) und POST.
+The shared helper ``TallyIncrementView._document_type_error_response`` now
+decides per request: with ``HX-Request`` it still uses ``htmx_absage`` (400 +
+``HX-Reswap: none``, the card stays in place); without the header, a
+``messages`` notice + redirect to the originating page (mirroring the
+already-converted ``TallyUndoView.post``). All nine spots in the view run
+through this same helper; the tests below cover the HTMX branch for each
+unique message text, plus the redirect branch for GET (cancel and normal
+branch) and POST.
 """
 
 from datetime import UTC, datetime
@@ -41,7 +41,7 @@ def _direct_type(facility, name="Direktkontakt"):
 
 @pytest.mark.django_db
 class TestTallyIncrementHtmxRefusal:
-    """HX-Request-Zweig: 400 bleibt, ``HX-Reswap: none`` verhindert den Swap."""
+    """HX-Request branch: 400 stays, ``HX-Reswap: none`` prevents the swap."""
 
     def test_stale_live_context_on_get_refuses_in_place(self, client, facility, staff_user):
         document_type = _direct_type(facility)
@@ -145,7 +145,7 @@ class TestTallyIncrementHtmxRefusal:
 
 @pytest.mark.django_db
 class TestTallyIncrementPlainNavigationRedirect:
-    """Ohne ``HX-Request``: Meldung + Redirect statt Ganzseiten-Klartext."""
+    """Without ``HX-Request``: notice + redirect instead of a full-page plain-text response."""
 
     def test_cancel_for_type_without_value_fields_redirects_with_message(self, client, facility, staff_user):
         document_type = _direct_type(facility)
