@@ -594,6 +594,10 @@ Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (
 
 > **Zugriff:** Statistik und Exporte sind nur für **Leitungen** und **Administratoren** verfügbar.
 
+### CSV-Daten importieren
+
+Der Import-Assistent für Personen und Ereignisse ist nur für die **Anwendungsbetreuung** verfügbar. Sie finden die vollständige Schritt-für-Schritt-Anleitung mit Dateigrenzen, Zuordnung, Probelauf, Übernahme und Abbruch im [Admin-Handbuch § 2.12 „Import-Assistent"](admin-guide.md#212-import-assistent).
+
 ### Statistik-Dashboard
 
 1. Navigieren Sie zu **Statistik** (`/statistics/`).

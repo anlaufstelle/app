@@ -18,6 +18,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
    - 2.9 [Encrypted File Vault & Virus-Scanning](#29-encrypted-file-vault--virus-scanning)
    - 2.10 [Offline-Modus & Streetwork (M6A)](#210-offline-modus--streetwork-m6a)
    - 2.11 [CSV-Import und -Export: Formelschutz](#211-csv-import-und--export-formelschutz)
+   - 2.12 [Import-Assistent](#212-import-assistent)
 3. [Backup und Wiederherstellung](#3-backup-und-wiederherstellung)
 4. [Updates](#4-updates)
    - 4.1 [Veröffentlichungen verfolgen](#41-veröffentlichungen-verfolgen)
@@ -1228,6 +1229,19 @@ Seit #1945 greift der Schutz auch, wenn vor dem Formelzeichen **unsichtbare Zeic
 Die Berichts-Exporte in **JSON und XML** sanitisieren bewusst nicht — dort gibt es keinen Formel-Kontext, und CSV-Escapes würden die maschinenlesbaren Werte verfälschen.
 
 Relevante Dateien: [`src/core/services/system/export.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/system/export.py) (`_sanitize_csv_cell`), [`src/core/services/import_engine.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/import_engine.py).
+
+### 2.12 Import-Assistent
+
+Der Import-Assistent unter **Datenimport** (`/import/`) übernimmt CSV-Dateien in Personen oder Ereignisse. Er ist ausschließlich für die Rolle **Anwendungsbetreuung** sichtbar. Eine Datei darf höchstens 5 MB und 1.000 nicht leere Datenzeilen umfassen; die erste Zeile muss eindeutige, nicht leere Spaltenüberschriften enthalten. Unterstützt werden UTF-8 und Windows-1252 sowie Semikolon, Komma oder Tabulator als Trennzeichen; Zeichensatz und Trennzeichen lassen sich automatisch erkennen oder ausdrücklich auswählen. Für Ereignisse ist ein aktiver Dokumentationstyp Pflicht.
+
+Der Assistent führt durch vier Schritte:
+
+1. **Datei:** Wählen Sie Personen oder Ereignisse als Ziel, bei Ereignissen den Dokumentationstyp, und laden Sie die CSV-Datei hoch.
+2. **Zuordnung:** Ordnen Sie jede benötigte Quellspalte einem Zielfeld zu. Nicht zugeordnete Spalten werden ignoriert; fünf Beispielwerte helfen bei der Auswahl. Für Personen ist das Pseudonym Pflicht, für Ereignisse sind Zeitpunkt und Personenpseudonym Pflicht. Aktive Zusatzfelder des gewählten Dokumentationstyps stehen ebenfalls zur Auswahl, Dateifelder jedoch nicht.
+3. **Probelauf:** Der Assistent prüft sämtliche Zeilen, speichert aber noch keine Fachdaten. Die Übersicht nennt Datenzeilen, voraussichtlich angelegte Datensätze und Fehler; die Fehlerliste verwendet die Zeilennummer der Tabellenkalkulation einschließlich Kopfzeile. Korrigieren Sie eine fehlerhafte Datei und laden Sie sie neu hoch.
+4. **Übernahme:** **Jetzt übernehmen** erscheint nur nach einem fehlerfreien Probelauf. Die Übernahme ist atomar: Tritt inzwischen ein Fehler auf, wird kein Datensatz gespeichert. Anschließend wird die hochgeladene Quelldatei gelöscht.
+
+Mit **Import abbrechen** schließen Sie einen noch offenen Lauf und löschen dessen Quelldatei, ohne Fachdaten zu übernehmen. Upload, erfolgreiche Übernahme und Abbruch werden im Audit-Log protokolliert; die Importübersicht bewahrt Status, Zähler und Fehlerbericht des Laufs. Beachten Sie beim Vorbereiten der Datei außerdem den [Formelschutz und seine Round-trip-Grenze aus § 2.11](#211-csv-import-und--export-formelschutz).
 
 ---
 

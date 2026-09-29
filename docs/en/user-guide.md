@@ -1,4 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
+> Synchronization update 2026-09-29: § 7 links the facility-admin CSV import wizard guide (#1904).
 > Synchronization update 2026-09-22: § 8 now states that a sign-in, second-factor or password-change request during the transfer is not a save -- the transfer pauses, local entries stay, and it continues without duplicates after signing in; a forced password change is called out as the exception that wipes the local offline data (#2289).
 > Synchronization update 2026-09-18: the handover-note section now states the final no-hold boundary and the organizational step for procedure-relevant content (#2231).
 > Synchronization update 2026-09-15: initial 2FA setup now mirrors the mandatory backup-code acknowledgement and the increasing wait after repeated incorrect codes in the German guide (#2248).
@@ -602,6 +603,10 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
 
 > **Access:** Statistics and exports are only available to **leads** and **administrators**.
 
+### Import CSV Data
+
+The import wizard for people and events is available only to **facility admins**. See [Admin Guide § 2.12 "Import Wizard"](admin-guide.md#212-import-wizard) for the complete step-by-step instructions covering file limits, mapping, dry run, commit, and abort.
+
 ### Statistics Dashboard
 
 1. Navigate to **Statistics** (`/statistics/`).
@@ -1030,4 +1035,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: cdda54d19a21b9b7a893521f166c680f0b65d88e -->
+<!-- source-hash: d106b5db532fe3dea1046755f9b7bde16e69ff76 -->

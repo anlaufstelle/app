@@ -35,6 +35,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 17. [Wie funktionieren Aufbewahrungsfristen?](#17-wie-funktionieren-aufbewahrungsfristen)
 18. [Welche automatisierten Scripts gibt es?](#18-welche-automatisierten-scripts-gibt-es)
 18a. [Wo finde ich eine Anleitung zu den Berichten (Reports)?](#18a-wo-finde-ich-eine-anleitung-zu-den-berichten-reports)
+18b. [Wie importiere ich Personen oder Ereignisse aus einer CSV-Datei?](#18b-wie-importiere-ich-personen-oder-ereignisse-aus-einer-csv-datei)
 
 **E. Fehlermeldungen**
 19. [Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?](#19-was-bedeutet-datensatz-wurde-zwischenzeitlich-geändert)
@@ -684,6 +685,10 @@ Die Design-Entscheidung dahinter: [ADR-038 — Reporting-Backends als Plugin-Sys
 - [`src/core/views/statistics.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/statistics.py) — Dashboard, Vorschau, Download-Routen
 
 > **Englisch:** User-Guide, Admin-Guide und die Plugin-Anleitung gibt es auch unter [`docs/en/`](en/) — diese FAQ nicht.
+
+### 18b. Wie importiere ich Personen oder Ereignisse aus einer CSV-Datei?
+
+Der CSV-Import ist ausschließlich für die Rolle **Anwendungsbetreuung** verfügbar. [Admin-Handbuch § 2.12 „Import-Assistent"](admin-guide.md#212-import-assistent) erklärt Dateiformat und Grenzen sowie die Schritte Datei, Zuordnung, Probelauf, Übernahme und Abbruch. Prüfen Sie die Fehlerliste vollständig, bevor Sie einen fehlerfreien Lauf übernehmen.
 
 ---
 
