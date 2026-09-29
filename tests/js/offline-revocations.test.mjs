@@ -384,3 +384,90 @@ describe("#1760 — Entwuerfe zu einer widerrufenen Person", () => {
         expect(await store.db.drafts.count()).toBe(0);
     });
 });
+
+// Refs #2382: Die Offline-Personenansicht hoerte bisher nur auf
+// "offline-unsynced-count"/"offline-conflict-count" (offline-edit.js) — ein
+// Widerruf lief an ihr vorbei, obwohl der lokale Bestand schon geloescht war.
+// applyClientRevocations meldet sein Ergebnis jetzt als EIN globales Ereignis
+// (window.dispatchEvent), damit alle drei Aufrufer (sync-orchestrator.js x2,
+// offline-store.js) dieselbe Quelle teilen, ohne selbst geaendert zu werden.
+describe("#2382 — Widerruf als Ereignis", () => {
+    it("feuert genau EIN Ereignis mit Zaehlwerten und den betroffenen pks, wenn eine lokal bekannte Person und ein gequeuter Eintrag getroffen werden", async () => {
+        await store.saveClientBundle(bundle(PK_A, "Falke"));
+        await store.putEncrypted("queue", {
+            url: "https://x.test/events/new/",
+            createdAt: Date.now(),
+            data: { method: "POST", body: "client=" + PK_A + "&notiz=Klartext", headers: {} },
+        });
+        mockRevocationFetch(revocationPayload([PK_A]));
+        const seen = [];
+        const handler = (ev) => seen.push(ev);
+        window.addEventListener("offline-client-revocations-applied", handler);
+
+        const result = await store.applyClientRevocations();
+
+        window.removeEventListener("offline-client-revocations-applied", handler);
+        expect(seen).toHaveLength(1);
+        expect(seen[0].detail).toEqual({
+            purgedClients: result.purgedClients,
+            purgedQueueEntries: result.purgedQueueEntries,
+            purgedDrafts: result.purgedDrafts,
+            pks: [PK_A.toLowerCase()],
+        });
+        expect(seen[0].detail.purgedClients).toBe(1);
+        expect(seen[0].detail.purgedQueueEntries).toBe(1);
+    });
+
+    it("feuert kein Ereignis bei leerer Widerrufsliste", async () => {
+        mockRevocationFetch(revocationPayload([]));
+        const handler = vi.fn();
+        window.addEventListener("offline-client-revocations-applied", handler);
+
+        await store.applyClientRevocations();
+
+        window.removeEventListener("offline-client-revocations-applied", handler);
+        expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("feuert kein Ereignis bei Transportfehler", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => {
+                throw new Error("offline");
+            })
+        );
+        const handler = vi.fn();
+        window.addEventListener("offline-client-revocations-applied", handler);
+
+        await store.applyClientRevocations();
+
+        window.removeEventListener("offline-client-revocations-applied", handler);
+        expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("feuert kein Ereignis bei Rate-Limit (429)", async () => {
+        mockRevocationFetch(null, { ok: false, status: 429 });
+        const handler = vi.fn();
+        window.addEventListener("offline-client-revocations-applied", handler);
+
+        await store.applyClientRevocations();
+
+        window.removeEventListener("offline-client-revocations-applied", handler);
+        expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("feuert kein Ereignis, wenn die Liste nicht-leer ist, aber lokal nichts trifft", async () => {
+        // PK_A ist weder als Client noch in Queue/Entwuerfen lokal bekannt.
+        mockRevocationFetch(revocationPayload([PK_A]));
+        const handler = vi.fn();
+        window.addEventListener("offline-client-revocations-applied", handler);
+
+        const result = await store.applyClientRevocations();
+
+        window.removeEventListener("offline-client-revocations-applied", handler);
+        expect(result.purgedClients).toBe(0);
+        expect(result.purgedQueueEntries).toBe(0);
+        expect(result.purgedDrafts).toBe(0);
+        expect(handler).not.toHaveBeenCalled();
+    });
+});
