@@ -2,7 +2,8 @@
 
 Die Kaskade der Anonymisierung schreibt die Person, ihre Faelle und ihre
 Ereignisse — im Sofortpfad ebenso wie in der naechtlichen Tilgung aus dem
-Papierkorb. Die projektweite Ordnung fuer diese drei Tabellen ist
+Papierkorb und in der Anonymisierung ueber die Aufbewahrungslaeufe (Hart- und
+K-Anonymisierungspfad). Die projektweite Ordnung fuer diese drei Tabellen ist
 Person -> Fall -> Ereignis — dieselbe, die die Fall-Hold-Anlage und die
 Fall-Tilgung nehmen. Eine Zeile gilt dabei als genommen, sobald eine
 Anweisung sie sperrt: ein ``SELECT ... FOR UPDATE`` ebenso wie ein ``UPDATE``
@@ -22,7 +23,8 @@ import pytest
 from django.db import connection, transaction
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, Event
+from core.models import AuditLog, Case, Client, Event, Settings
+from core.retention.anonymization import anonymize_clients
 from core.services.client import anonymize_client_now, anonymize_eligible_soft_deleted_clients
 from tests._row_lock_helpers import mitschnitt
 
@@ -121,3 +123,58 @@ class TestSperrfolgeDerNaechtlichenTilgung:
         assert _erste_zugriffe(abfragen) == []
         person.refresh_from_db()
         assert person.anonymized_at is None
+
+
+@pytest.fixture
+def person_without_live_events(client_identified, case_open, case_event):
+    """Person mit Fall, deren Ereignisse alle geloescht sind — Kandidat der Aufbewahrungslaeufe."""
+    Event.objects.filter(pk=case_event.pk).update(is_deleted=True)
+    return client_identified
+
+
+class TestSperrfolgeDerAufbewahrungslaeufe:
+    def test_hartpfad_fall_vor_ereignis(self, person_without_live_events, facility, settings_obj, case_open):
+        person = person_without_live_events
+
+        with mitschnitt() as abfragen:
+            ergebnis = anonymize_clients(facility, dry_run=False)
+
+        assert _erste_zugriffe(abfragen) == list(_KETTE)
+        assert ergebnis == {"count": 1, "skipped_holds": 0}
+        person.refresh_from_db()
+        assert person.pseudonym.startswith("Gelöscht-")
+        assert person.k_anonymized is False
+        assert Case.objects.filter(pk=case_open.pk).exists()
+
+    def test_k_anonymisierung_fall_vor_ereignis(self, person_without_live_events, facility, case_open):
+        person = person_without_live_events
+        Settings.objects.create(facility=facility, retention_use_k_anonymization=True, k_anonymity_threshold=5)
+        # Eine ehrlich besetzte Aequivalenzklasse (>= k); ohne Ereignisse sind
+        # die Genossen selbst keine Kandidaten.
+        for nummer in range(4):
+            Client.objects.create(
+                facility=facility,
+                pseudonym=f"Peer-{nummer}",
+                age_cluster=person.age_cluster,
+                contact_stage=person.contact_stage,
+            )
+
+        with mitschnitt() as abfragen:
+            ergebnis = anonymize_clients(facility, dry_run=False)
+
+        assert _erste_zugriffe(abfragen) == list(_KETTE)
+        assert ergebnis == {"count": 1, "skipped_holds": 0}
+        person.refresh_from_db()
+        assert person.k_anonymized is True
+        assert Case.objects.filter(pk=case_open.pk).exists()
+
+    def test_gegenprobe_probelauf_sperrt_und_schreibt_nichts(self, person_without_live_events, facility, settings_obj):
+        person = person_without_live_events
+
+        with mitschnitt() as abfragen:
+            ergebnis = anonymize_clients(facility, dry_run=True)
+
+        assert ergebnis == {"count": 1, "skipped_holds": 0}
+        assert _erste_zugriffe(abfragen) == []
+        person.refresh_from_db()
+        assert not person.pseudonym.startswith("Gelöscht-")

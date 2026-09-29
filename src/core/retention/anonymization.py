@@ -58,6 +58,7 @@ from core.services.client import (
     _redact_workitems,
     _revoke_offline_bundles,
 )
+from core.services.client.main import _lock_client_case_rows
 from core.services.compliance import is_k_anonymous, k_anonymize_client
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,9 @@ def anonymize_clients(facility, dry_run):
     Minuten — ein in dieser Zeit angeordneter Hold erreichte die bereits
     eingesammelten Personen nicht mehr, sie wurden trotzdem irreversibel
     redigiert (Spoliation). Deshalb je Person: eigene Transaktion, Zeilensperre
-    auf ``core_client``, Ereigniszeilen darunter (``_lock_client_event_rows`` —
+    auf ``core_client``, darunter die Fallzeilen (``_lock_client_case_rows`` —
+    beide Kaskaden schreiben die Faelle, und die Ordnung ist Person -> Fall ->
+    Ereignis) und danach die Ereigniszeilen (``_lock_client_event_rows`` —
     ein Ereignis-Hold koordiniert ueber ``core_event``, nicht ueber
     ``core_client``), und ALLE Vorbedingungen erneut auf der gesperrten Zeile.
     Exakt die Sequenz des Nacht-Pendants
@@ -240,6 +243,9 @@ def anonymize_clients(facility, dry_run):
                 continue
             if locked.pseudonym.startswith("Gelöscht-"):
                 continue
+            # Person -> Fall -> Ereignis: die Faelle vor den Ereignissen, obwohl
+            # beide Kaskaden sie erst spaeter schreiben.
+            _lock_client_case_rows(locked)
             _lock_client_event_rows(locked)
             # Die Eintrittsbedingung des Querysets unter der Sperre erneut
             # pruefen: ein waehrend des Laufs angelegtes oder wiederhergestelltes
