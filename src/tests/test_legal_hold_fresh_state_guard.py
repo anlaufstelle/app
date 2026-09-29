@@ -117,9 +117,17 @@ class TestHoldAufhebenLiestDenHoldGesperrtNeu:
 
 
 class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
-    @pytest.mark.parametrize("zwischenstand", [RetentionProposal.Status.REJECTED, RetentionProposal.Status.HELD])
+    @pytest.mark.parametrize(
+        ("zwischenstand", "meldung"),
+        [
+            (RetentionProposal.Status.REJECTED, "bereits bearbeitet"),
+            # Gehalten heißt: für den Vorschlag besteht bereits eine Sperre —
+            # dieselbe Meldung wie bisher beim Doppelklick.
+            (RetentionProposal.Status.HELD, "existiert bereits ein aktiver Hold"),
+        ],
+    )
     def test_zwischenzeitlich_entschiedener_vorschlag_bekommt_keinen_hold(
-        self, retention_proposal, lead_user, zwischenstand
+        self, retention_proposal, lead_user, zwischenstand, meldung
     ):
         veraltet = RetentionProposal.objects.get(pk=retention_proposal.pk)
         RetentionProposal.objects.filter(pk=retention_proposal.pk).update(status=zwischenstand)
@@ -127,7 +135,7 @@ class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
         with pytest.raises(ValidationError) as excinfo:
             create_legal_hold(veraltet, lead_user, "Gerichtsverfahren")
 
-        assert "bereits bearbeitet" in str(excinfo.value)
+        assert meldung in str(excinfo.value)
         assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
         assert not _audit_zeilen("legal_hold_created").exists()
         retention_proposal.refresh_from_db()
@@ -139,8 +147,9 @@ class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
         """Der reguläre Zustand ``held``: der erste Hold ist angelegt und aktiv.
 
         Die zweite Anlage (Doppelklick, zweites Fenster) entscheidet am
-        gesperrt gelesenen Vorschlag — mit derselben Meldung wie jeder andere
-        entschiedene Vorschlag, nicht erst an der Eindeutigkeit der Hold-Zeile.
+        gesperrt gelesenen Vorschlag — als fachliche Absage, nicht erst an der
+        Eindeutigkeit der Hold-Zeile.
+        Die Meldung nennt den bestehenden Hold.
         """
         veraltet = RetentionProposal.objects.get(pk=retention_proposal.pk)
         erster = create_legal_hold(retention_proposal, lead_user, "Erstes Verfahren")
@@ -148,7 +157,7 @@ class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
         with pytest.raises(ValidationError) as excinfo:
             create_legal_hold(veraltet, lead_user, "Zweiter Klick")
 
-        assert "bereits bearbeitet" in str(excinfo.value)
+        assert "existiert bereits ein aktiver Hold" in str(excinfo.value)
         aktive = LegalHold.objects.filter(target_id=retention_proposal.target_id, dismissed_at__isnull=True)
         assert list(aktive) == [erster]
         assert _audit_zeilen("legal_hold_created").count() == 1
