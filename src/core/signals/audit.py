@@ -163,7 +163,7 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
     _set_session_vars(facility, is_super_admin=is_super)
 
     if facility is None:
-        logger.info("Login fehlgeschlagen ohne Facility: username=%s", username)
+        logger.info("Failed login without facility", extra={"user_pk": user.pk} if user is not None else None)
         AuditLog.objects.create(
             user=user,
             action=AuditLog.Action.LOGIN_FAILED,
