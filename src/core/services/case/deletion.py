@@ -359,12 +359,34 @@ def restore_case(case, user):
     eine inhaltsleere Huelle zurueck in ``cases_with_live_client()`` — also in
     Fallliste, Detail und Statistik. Die Person hat gegen denselben Fehlgriff
     ihr ``is_active=False`` als Backstop; der Fall braucht den Guard hier.
+
+    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
+    Sperre geprueft (fail-closed ohne Einrichtung). Danach nimmt der Dienst
+    dieselbe Sperrkette wie die Sofort-Tilgung — Person -> Fall ->
+    Ereignisse, innerhalb der Einrichtung der handelnden Person — und liest
+    „im Papierkorb" und „nicht endgueltig anonymisiert" an der GESPERRTEN
+    Fallzeile: die mitgegebene Instanz stammt aus der Papierkorb-Liste und
+    kann veraltet sein. Die Kette statt nur der Fallzeile, weil sie mit der
+    Sofort-Tilgung und der Fall-Hold-Anlage denselben ersten Anker teilt; eine
+    zeitgleiche Tilgung wartet damit auf das Wiederherstellen (oder
+    umgekehrt), statt es zu ueberholen.
     """
-    if not case.is_deleted:
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != case.facility_id:
+        raise ValidationError(CASE_OTHER_FACILITY_MESSAGE)
+    locked = _lock_case_chain(actor_facility_id, case.pk)
+    if locked is None:
+        # Zeile nicht (mehr) in der Einrichtung oder waehrend der
+        # Sperrwartezeit an eine andere Person gehaengt — nichts schreiben.
+        raise ValidationError(_("Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."))
+    if not locked.is_deleted:
         raise ValidationError(_("Der Fall liegt nicht im Papierkorb."))
-    if case.anonymized_at is not None:
+    if locked.anonymized_at is not None:
         raise ValidationError(_("Der Fall wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."))
-    case.restore()
+    locked.restore()
+    # Die Instanz des Aufrufers bekommt den frischen Stand der Zeile — auch
+    # einen zwischenzeitlich geaenderten Personenbezug.
+    case.refresh_from_db()
     audit_event(
         AuditLog.Action.CASE_RESTORED,
         user=user,
