@@ -105,7 +105,7 @@ class TestTallyEncryptedQueueAndSchemaContract:
         # Schnell-Verlassen die alte Seite still.
         # 2026-09-24, Refs #2383: v53 — die precachte Offline-Personenansicht
         # hebt drei Textknoepfe auf 44px Mindesthoehe an.
-        assert 'const CACHE_NAME = "anlaufstelle-v53";' in sw
+        assert 'const CACHE_NAME = "anlaufstelle-v54";' in sw
         assert '"/static/js/offline-tally.js"' in sw
 
     def test_old_facility_bundles_remain_fail_closed(self):
