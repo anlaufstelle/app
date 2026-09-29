@@ -21,7 +21,7 @@ je Einrichtung kennt:
   Genehmigungsschritt ein beliebiges Ereignis der Einrichtung, ohne
   ``facility`` ein Ereignis einer FREMDEN Einrichtung.
 
-Gepinnte Mutanten (Mutantenbaum ``/work/anlaufstelle/mutants``, Stand
+Gepinnte Mutanten (Mutantenbaum ``mutants/``, Stand
 f5272d3e):
 
 * ``x_approve_deletion__mutmut_14`` — ``get(pk=…, facility=…)`` -> ``get(facility=…)``

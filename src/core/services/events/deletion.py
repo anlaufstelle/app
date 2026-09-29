@@ -122,9 +122,9 @@ def approve_deletion(deletion_request, reviewer):
     # nicht nur in der View).
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
-    # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
-    # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
-    # Die Guards davor (Vier-Augen, Recht) behalten Reihenfolge und Wortlaut.
+    # Refs #2338: same facility boundary as on the reject side (Refs #2321) —
+    # even more urgent here, because an approval destroys data. The guards
+    # above (four-eyes principle, permission) keep their order and wording.
     #
     # Checked before the request row is locked and before any write, so
     # nothing is locked across the tenant boundary; a reviewer without a
