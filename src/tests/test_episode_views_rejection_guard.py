@@ -17,6 +17,13 @@ antwortet die View wie ihre Geschwister:
 
 In jedem Fall entsteht oder aendert sich keine Episode.
 
+Welche Antwort die Fachkraft bekommt, entscheidet die Absage selbst — der
+Stand, den der Dienst unter Sperre gesehen hat —, nicht ein spaeterer Blick
+der View auf den Fall. Ein Fall, der zwischen Absage und Antwort wieder
+geoeffnet wird, macht aus der Absage keinen Serverfehler; ein Fall, der in
+dieser Luecke geschlossen wird, macht aus einem unerwarteten Fehler keine
+Absage.
+
 Der parallele Vorgang wird direkt nach der Vorpruefung der View in die
 Datenbank geschrieben (Muster ``test_case_update_lost_update_guard.py``) —
 ausserhalb der Transaktion des Dienstes, wie ein bereits bestaetigter
@@ -157,6 +164,87 @@ class TestFallNachDerVorpruefungGeschlossen:
 
         _abgesagt(response, htmx, _NUR_OFFENE, reverse("core:case_detail", kwargs={"pk": case_open.pk}))
         assert _episodenbestand(case_open.pk) == vorher
+
+
+@pytest.fixture
+def nach_der_anlage(monkeypatch):
+    """Haengt eine Aenderung des Bestands hinter einen gescheiterten Dienstaufruf der Anlage.
+
+    Der Dienst laeuft echt. Wirft er, wird die Aenderung geschrieben, nachdem
+    seine Transaktion mit der Ausnahme verlassen ist und bevor die View die
+    Ausnahme behandelt — wie ein Vorgang einer anderen Sitzung genau in dieser
+    Luecke. Liefert die Liste der Ausnahmen, die der Dienst geworfen hat.
+    """
+    import core.views.case_episodes as episoden_views
+
+    original = episoden_views.create_episode
+    geworfen = []
+
+    def _einhaengen(aenderung):
+        def _anlage(case, *args, **kwargs):
+            try:
+                return original(case, *args, **kwargs)
+            except Exception as exc:
+                geworfen.append(exc)
+                aenderung(case)
+                raise
+
+        monkeypatch.setattr(episoden_views, "create_episode", _anlage)
+        return geworfen
+
+    return _einhaengen
+
+
+def _schliessen(fall):
+    Case.objects.filter(pk=fall.pk).update(status=Case.Status.CLOSED, closed_at=timezone.now())
+
+
+def _wieder_oeffnen(fall):
+    Case.objects.filter(pk=fall.pk).update(status=Case.Status.OPEN, closed_at=None)
+
+
+class TestFallNachDerAbsageWiederGeoeffnet:
+    """Die Absage gilt dem Stand, den der Dienst unter Sperre gesehen hat.
+
+    Der Fall ist beim Anlegen geschlossen, wird aber zwischen der Absage des
+    Dienstes und ihrer Behandlung in der View wieder geoeffnet (regulaerer
+    Pfad: Wiedereroeffnen durch eine andere Sitzung). Die Fachkraft bekommt
+    trotzdem die Absage, keinen Serverfehler.
+    """
+
+    @pytest.mark.parametrize("htmx", MODI)
+    def test_absage_bleibt_eine_meldung(self, antwortender_client, nach_vorpruefung, nach_der_anlage, htmx, case_open):
+        vorher = _episodenbestand(case_open.pk)
+        nach_vorpruefung(_schliessen)
+        geworfen = nach_der_anlage(_wieder_oeffnen)
+
+        response = _post(antwortender_client, _anlegen, case_open, None, htmx)
+
+        _abgesagt(response, htmx, _NUR_OFFENE, reverse("core:case_detail", kwargs={"pk": case_open.pk}))
+        assert _episodenbestand(case_open.pk) == vorher
+        assert len(geworfen) == 1
+        assert Case.objects.get(pk=case_open.pk).status == Case.Status.OPEN
+
+
+@pytest.mark.parametrize("htmx", MODI)
+def test_unerwarteter_fehler_bei_inzwischen_geschlossenem_fall_bleibt_ein_fehler(
+    antwortender_client, monkeypatch, htmx, case_open
+):
+    """Gegenprobe: ein zwischenzeitlich geschlossener Fall macht aus einem fremden Fehler keine Absage."""
+    import core.views.case_episodes as episoden_views
+
+    def _unerwartet(case, *args, **kwargs):
+        _schliessen(case)
+        raise ValueError("unerwartet")
+
+    monkeypatch.setattr(episoden_views, "create_episode", _unerwartet)
+    vorher = _episodenbestand(case_open.pk)
+
+    response = _post(antwortender_client, _anlegen, case_open, None, htmx)
+
+    assert response.status_code == 500
+    assert _meldungen(response) == []
+    assert _episodenbestand(case_open.pk) == vorher
 
 
 def test_andere_valueerror_beim_anlegen_bleibt_ein_fehler(antwortender_client, monkeypatch, case_open, episode):

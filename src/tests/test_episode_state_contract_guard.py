@@ -139,10 +139,10 @@ class TestCreateEpisode:
         fall = Case.objects.get(pk=case_open.pk)
         Case.objects.filter(pk=fall.pk).update(status=Case.Status.CLOSED, closed_at=timezone.now())
 
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             create_episode(fall, staff_user, title="Zu spaet")
 
-        assert str(excinfo.value) == "Episoden können nur für offene Fälle erstellt werden."
+        assert excinfo.value.messages == ["Episoden können nur für offene Fälle erstellt werden."]
         assert not Episode.objects.filter(case_id=case_open.pk).exists()
 
     def test_eigene_einrichtung_legt_an_der_gesperrten_akte_an(self, case_open, staff_user):
