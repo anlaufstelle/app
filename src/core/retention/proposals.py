@@ -872,11 +872,24 @@ def get_dashboard_proposals(facility):
     return grouped
 
 
+#: The statuses the cleanup removes once the event is gone. A held, deferred
+#: or rejected proposal stays.
+_STALE_CLEANUP_STATUSES = (RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED)
+
+
 def cleanup_stale_proposals(facility):
-    """Remove proposals for events that have already been deleted."""
+    """Remove proposals for events that have already been deleted.
+
+    Refs #2374: The selection is read without locks. A hold, a deferral or a
+    rejection can change a selected proposal before it is deleted, so the
+    deletion decides at the locked rows: the selected proposals are locked in
+    primary-key order, and only those still in ``_STALE_CLEANUP_STATUSES`` are
+    deleted and counted. A proposal held in the meantime keeps its dashboard
+    card. The cleanup writes no audit row and locks nothing else.
+    """
     pending_proposals = RetentionProposal.objects.for_facility(facility).filter(
         target_type=RetentionProposal.TargetType.EVENT,
-        status__in=[RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED],
+        status__in=_STALE_CLEANUP_STATUSES,
     )
 
     stale_ids = []
@@ -884,10 +897,18 @@ def cleanup_stale_proposals(facility):
         if not Event.objects.filter(pk=proposal.target_id, is_deleted=False).exists():
             stale_ids.append(proposal.pk)
 
-    if stale_ids:
-        RetentionProposal.objects.filter(pk__in=stale_ids).delete()
-
-    return len(stale_ids)
+    if not stale_ids:
+        return 0
+    with transaction.atomic():
+        still_stale = list(
+            RetentionProposal.objects.select_for_update()
+            .filter(pk__in=stale_ids, facility=facility, status__in=_STALE_CLEANUP_STATUSES)
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
+        if still_stale:
+            RetentionProposal.objects.filter(pk__in=still_stale).delete()
+    return len(still_stale)
 
 
 def build_proposal_details(event):
