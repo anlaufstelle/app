@@ -90,6 +90,9 @@ def flush_seed_data() -> None:
         with connection.cursor() as cursor:
             cursor.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
         Event.objects.all().delete()
+        # Beim vollstaendigen Leeren aller Personen verliert der Tombstone-Verweis
+        # seinen Zweck. Ausserhalb dieses Flushs bleibt PROTECT bewusst bestehen.
+        Client.objects.filter(merged_into__isnull=False).update(merged_into=None)
         Client.objects.all().delete()
         DocumentTypeField.objects.all().delete()
         DocumentType.objects.all().delete()
