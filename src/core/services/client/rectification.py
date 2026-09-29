@@ -302,17 +302,16 @@ def approve_rectification(rr: RectificationRequest, reviewer: Any, review_note: 
        Genehmigung verschluesselter Felder unmoeglich (und bei unverschluesselten
        Feldern faelschlich "grün").
 
-    Der Antrag wird innerhalb der Transaktion per ``select_for_update()`` neu
-    geladen (TOCTOU-Muster aus ``approve_client_deletion``, Refs #1376), damit
-    zwei zeitgleiche Genehmigungen nicht beide anwenden. **Die Client-Zeile wird
-    dabei mitgesperrt:** Guard 3a und Guard 5 lesen sie, und ohne Lock beruhten
-    beide auf einem stalen Snapshot — zwischen dem Lesen und dem Lock in
-    ``update_client`` koennte eine parallele Transaktion die Person in den
-    Papierkorb legen, anonymisieren oder den Wert aendern, ohne dass ein Guard
-    das noch saehe. ``of=("self",)`` ist dabei Pflicht und nicht Kosmetik:
-    ``document_type`` ist ``null=True``, ``select_related`` erzeugt also einen
-    LEFT OUTER JOIN, und ein nacktes ``FOR UPDATE`` bricht unter Postgres an
-    dessen nullable Seite. Lock order person -> request, the same as the
+    The request is reloaded with ``select_for_update()`` inside the transaction
+    (TOCTOU pattern of ``approve_client_deletion``, Refs #1376) so that two
+    simultaneous approvals do not both apply. **The client row is locked as
+    well:** guards 3a and 5 read it, and without a lock both would rely on a
+    stale snapshot -- between that read and the lock in ``update_client`` a
+    parallel transaction could move the person to the trash, anonymise it or
+    change the value without any guard noticing. ``of=("self",)`` is required,
+    not cosmetic: ``document_type`` is ``null=True``, so ``select_related``
+    produces a LEFT OUTER JOIN, and a bare ``FOR UPDATE`` fails in PostgreSQL
+    on its nullable side. Lock order person -> request, the same as the
     anonymisation (see :func:`_lock_client_then_request`).
     """
     rr, client = _lock_client_then_request(rr, reviewer, Client.objects.select_related("document_type"))

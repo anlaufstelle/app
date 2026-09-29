@@ -12,7 +12,7 @@ Je Service: eine Leitung aus fremder oder ohne Einrichtung wird mit
 derselben Meldung wie in den anderen Vier-Augen-Services abgewiesen; der
 Antrag bleibt offen, die Person unveraendert, es entsteht keine Audit-Zeile.
 The facility boundary comes before the other checks and, as there, before any
-row lock; it is repeated on the locked request. Der Gegen-Check mit der eigenen Leitung geht durch.
+row lock; it is repeated on the locked request. A lead of the own facility still passes.
 """
 
 import pytest
