@@ -165,6 +165,42 @@ def _episodenstand(episode_id):
     return Episode.objects.filter(pk=episode_id).values_list("title", "description", "ended_at").get()
 
 
+def _episode_entfernt(episode_id):
+    """Die Episodenzeile ist physisch weg; die Instanz des Aufrufers bleibt bestehen."""
+    Episode.objects.filter(pk=episode_id).delete()
+
+
+class TestFehlendeEpisode:
+    """Eine Episode, die schon beim Vorlesen fehlt, endet vor jeder Zeilensperre.
+
+    Ohne Episodenzeile gibt es keine Einrichtung, mit der sich die handelnde
+    Person vergleichen liesse. Die Absage muss deshalb schon an dieser Stelle
+    fallen — sonst naehme eine Fachkraft aus einer anderen Einrichtung (oder
+    ohne Einrichtung) die Personen- und Fallsperre einer fremden Akte, bevor
+    der Aufruf scheitert. Dieselbe Absage gilt fuer die eigene Einrichtung.
+    """
+
+    @pytest.mark.parametrize("akteur", [*_AKTEURE, "staff_user"])
+    def test_bearbeiten(self, request, akteur, episode):
+        user = request.getfixturevalue(akteur)
+        alt = Episode.objects.select_related("case").get(pk=episode.pk)
+        _episode_entfernt(episode.pk)
+
+        _abgewiesen(lambda: update_episode(alt, user, title="Fehlt"), CASE_WRITE_GONE_MESSAGE, [])
+
+        assert not Episode.objects.filter(pk=episode.pk).exists()
+
+    @pytest.mark.parametrize("akteur", [*_AKTEURE, "staff_user"])
+    def test_abschliessen(self, request, akteur, episode):
+        user = request.getfixturevalue(akteur)
+        alt = Episode.objects.select_related("case").get(pk=episode.pk)
+        _episode_entfernt(episode.pk)
+
+        _abgewiesen(lambda: close_episode(alt, user), CASE_WRITE_GONE_MESSAGE, [])
+
+        assert not Episode.objects.filter(pk=episode.pk).exists()
+
+
 class TestUpdateEpisode:
     @pytest.mark.parametrize("akteur", _AKTEURE)
     def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, episode):
