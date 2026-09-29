@@ -451,7 +451,7 @@ class TestTargetSelection:
         output = _run("--target", "all", "--apply")
 
         totals = [line.split("]")[0] + "]" for line in output.splitlines() if "] Total:" in line]
-        assert totals == ["[client]", "[case]", "[event]", "[eventhistory]"]
+        assert totals == ["[client]", "[rectification]", "[case]", "[event]", "[eventhistory]"]
         for builder in builders:
             assert _count(_line(output, builder.target, facility), "repaired") == 1
             assert _audits(builder).count() == 1
