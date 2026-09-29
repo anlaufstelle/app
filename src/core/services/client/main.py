@@ -914,7 +914,10 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     assert_processing_allowed(client, lock=True)
     merged_into_id, is_deleted, is_active = (
-        Client.objects.filter(pk=client.pk).values_list("merged_into_id", "is_deleted", "is_active").get()
+        Client.objects.for_facility(actor_facility_id)
+        .filter(pk=client.pk)
+        .values_list("merged_into_id", "is_deleted", "is_active")
+        .get()
     )
     if merged_into_id is not None:
         raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
