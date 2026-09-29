@@ -12,7 +12,7 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, LegalHold, RetentionProposal, User
-from core.retention.legal_holds import dismiss_legal_hold
+from core.retention.legal_holds import create_legal_hold, dismiss_legal_hold
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -110,3 +110,30 @@ class TestHoldAufhebenPrueftDieEinrichtungDerLeitung:
         proposal.refresh_from_db()
         assert proposal.status == RetentionProposal.Status.PENDING
         assert _audit_zeilen("legal_hold_dismissed").count() == 1
+
+
+class TestHoldAnlageAmVorschlagPrueftDieEinrichtungDerLeitung:
+    @pytest.mark.parametrize("akteur", _FREMDE_AKTEURE)
+    def test_fremde_oder_einrichtungslose_leitung_wird_vor_jeder_sperre_abgewiesen(
+        self, request, akteur, retention_proposal
+    ):
+        user = request.getfixturevalue(akteur)
+
+        with mitschnitt() as aufzeichnung, pytest.raises(ValidationError) as excinfo:
+            create_legal_hold(retention_proposal, user, "Gerichtsverfahren")
+
+        assert "Löschvorschlag gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        # Weder der Zielanker (Person, Ereignis) noch der Vorschlag wurden gesperrt.
+        assert aufzeichnung.sperrfolge() == []
+        assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
+        assert not _audit_zeilen("legal_hold_created").exists()
+        retention_proposal.refresh_from_db()
+        assert retention_proposal.status == RetentionProposal.Status.PENDING
+
+    def test_leitung_der_einrichtung_legt_den_hold_an(self, retention_proposal, lead_user):
+        hold = create_legal_hold(retention_proposal, lead_user, "Gerichtsverfahren")
+
+        assert hold.created_by_id == lead_user.pk
+        retention_proposal.refresh_from_db()
+        assert retention_proposal.status == RetentionProposal.Status.HELD
+        assert _audit_zeilen("legal_hold_created").count() == 1

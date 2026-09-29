@@ -10,6 +10,7 @@ Speicher.
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import DatabaseError
 from django.urls import reverse
 
 from core.models import AuditLog, LegalHold, RetentionProposal, User
@@ -113,3 +114,90 @@ class TestHoldAufhebenLiestDenHoldGesperrtNeu:
         assert hold.dismissed_at == erster_zeitpunkt
         assert hold.dismissed_by_id == lead_user.pk
         assert _audit_zeilen("legal_hold_dismissed").count() == 1
+
+
+class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
+    @pytest.mark.parametrize("zwischenstand", [RetentionProposal.Status.REJECTED, RetentionProposal.Status.HELD])
+    def test_zwischenzeitlich_entschiedener_vorschlag_bekommt_keinen_hold(
+        self, retention_proposal, lead_user, zwischenstand
+    ):
+        veraltet = RetentionProposal.objects.get(pk=retention_proposal.pk)
+        RetentionProposal.objects.filter(pk=retention_proposal.pk).update(status=zwischenstand)
+
+        with pytest.raises(ValidationError) as excinfo:
+            create_legal_hold(veraltet, lead_user, "Gerichtsverfahren")
+
+        assert "bereits bearbeitet" in str(excinfo.value)
+        assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
+        assert not _audit_zeilen("legal_hold_created").exists()
+        retention_proposal.refresh_from_db()
+        assert retention_proposal.status == zwischenstand
+
+    @pytest.mark.parametrize(
+        "zwischenstand",
+        [RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED, RetentionProposal.Status.DEFERRED],
+    )
+    def test_noch_moegliche_loeschung_laesst_sich_jederzeit_anhalten(
+        self, retention_proposal, lead_user, zwischenstand
+    ):
+        veraltet = RetentionProposal.objects.get(pk=retention_proposal.pk)
+        RetentionProposal.objects.filter(pk=retention_proposal.pk).update(status=zwischenstand)
+
+        hold = create_legal_hold(veraltet, lead_user, "Gerichtsverfahren")
+
+        assert hold.dismissed_at is None
+        retention_proposal.refresh_from_db()
+        assert retention_proposal.status == RetentionProposal.Status.HELD
+        assert veraltet.status == RetentionProposal.Status.HELD
+        assert _audit_zeilen("legal_hold_created").count() == 1
+
+    def test_vorschlag_wird_nach_dem_zielanker_gesperrt(self, retention_proposal, lead_user):
+        with mitschnitt() as aufzeichnung:
+            create_legal_hold(retention_proposal, lead_user, "Gerichtsverfahren")
+
+        folge = aufzeichnung.sperrfolge()
+        assert "core_retentionproposal" in folge, folge
+        assert folge.index("core_client") < folge.index("core_event") < folge.index("core_retentionproposal"), folge
+
+    def test_scheitert_der_vorschlags_write_bleibt_weder_hold_noch_audit_zurueck(
+        self, retention_proposal, lead_user, monkeypatch
+    ):
+        def _schreibfehler(self, *args, **kwargs):
+            raise DatabaseError("Vorschlag nicht schreibbar")
+
+        monkeypatch.setattr(RetentionProposal, "save", _schreibfehler)
+
+        with pytest.raises(DatabaseError):
+            create_legal_hold(retention_proposal, lead_user, "Gerichtsverfahren")
+
+        assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
+        assert not _audit_zeilen("legal_hold_created").exists()
+
+    def test_vorschlag_in_anderer_einrichtung_der_datenbank_bekommt_keinen_hold(
+        self, retention_proposal, lead_user, second_facility
+    ):
+        """Die Instanz nennt die Einrichtung der Leitung, die Zeile liegt
+        inzwischen in einer anderen — entschieden wird an der Zeile."""
+        RetentionProposal.objects.filter(pk=retention_proposal.pk).update(facility=second_facility)
+
+        with pytest.raises(ValidationError) as excinfo:
+            create_legal_hold(retention_proposal, lead_user, "Gerichtsverfahren")
+
+        assert "gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
+        assert not _audit_zeilen("legal_hold_created").exists()
+
+    def test_post_auf_entschiedenen_vorschlag_antwortet_409_ohne_hold(self, client, retention_proposal, lead_user):
+        RetentionProposal.objects.filter(pk=retention_proposal.pk).update(status=RetentionProposal.Status.REJECTED)
+        client.force_login(lead_user)
+
+        antwort = client.post(
+            reverse("core:retention_hold", kwargs={"pk": retention_proposal.pk}),
+            {"reason": "Gerichtsverfahren"},
+        )
+
+        assert antwort.status_code == 409
+        assert "bereits bearbeitet" in antwort.content.decode()
+        assert not LegalHold.objects.filter(target_id=retention_proposal.target_id).exists()
+        retention_proposal.refresh_from_db()
+        assert retention_proposal.status == RetentionProposal.Status.REJECTED
