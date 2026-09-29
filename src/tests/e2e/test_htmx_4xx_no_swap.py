@@ -111,37 +111,61 @@ def _disable_tally_opt_in(e2e_env, document_type_pk):
     assert result.returncode == 0, f"Seed mutation failed: {result.stderr}\n{result.stdout}"
 
 
+def _retire_document_type(e2e_env, document_type_pk):
+    """Removes a throwaway document type created for this file's own tests.
+
+    Refs #2385: an ACTIVE event-entity-type document type is part of the
+    shared per-facility catalogue that other offline-create tests read (e.g.
+    ``test_offline_auth_redirect_replay.py`` picks an option by position).
+    Leaving it active after this test would reorder that catalogue for every
+    later test sharing the same E2E database — the same isolation duty
+    ``_cleanup_user`` covers there for a mutated user, just for a document
+    type here.
+    """
+    code = f"from core.models import DocumentType; DocumentType.objects.filter(pk='{document_type_pk}').delete()"
+    result = subprocess.run(
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Cleanup failed: {result.stderr}\n{result.stdout}"
+
+
 class TestTallyCancelForDisabledTypeStaysInPlace:
     def test_rejection_leaves_card_in_place_and_shows_notice(self, lead_page, base_url, e2e_env):
         document_type_pk = _ensure_number_tally_type(e2e_env)
-        page = lead_page
-        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        try:
+            page = lead_page
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
-        card = page.locator(f"#tally-action-{document_type_pk}")
-        expect(card).to_be_visible(timeout=5000)
-        card.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
-        cancel_link = card.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
-        expect(cancel_link).to_be_visible(timeout=5000)
+            card = page.locator(f"#tally-action-{document_type_pk}")
+            expect(card).to_be_visible(timeout=5000)
+            card.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
+            cancel_link = card.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
+            expect(cancel_link).to_be_visible(timeout=5000)
 
-        # Another tab disables the type while the value form stays open.
-        _disable_tally_opt_in(e2e_env, document_type_pk)
+            # Another tab disables the type while the value form stays open.
+            _disable_tally_opt_in(e2e_env, document_type_pk)
 
-        with page.expect_response(lambda r: "cancel=1" in r.url) as info:
-            cancel_link.click()
-        response = info.value
+            with page.expect_response(lambda r: "cancel=1" in r.url) as info:
+                cancel_link.click()
+            response = info.value
 
-        assert response.status == 400, response.status
-        assert response.headers.get("hx-reswap") == "none"
+            assert response.status == 400, response.status
+            assert response.headers.get("hx-reswap") == "none"
 
-        # The card was not replaced by the message text — the value form is
-        # still there (no swap, thanks to HX-Reswap: none).
-        expect(card).to_be_visible(timeout=5000)
-        expect(cancel_link).to_be_visible()
-        assert "nicht für die Strichliste freigegeben" not in card.inner_text()
+            # The card was not replaced by the message text — the value form is
+            # still there (no swap, thanks to HX-Reswap: none).
+            expect(card).to_be_visible(timeout=5000)
+            expect(cancel_link).to_be_visible()
+            assert "nicht für die Strichliste freigegeben" not in card.inner_text()
 
-        toast = page.locator(_TOAST)
-        expect(toast).to_be_visible(timeout=5000)
-        expect(toast).to_contain_text("nicht für die Strichliste freigegeben")
+            toast = page.locator(_TOAST)
+            expect(toast).to_be_visible(timeout=5000)
+            expect(toast).to_contain_text("nicht für die Strichliste freigegeben")
+        finally:
+            _retire_document_type(e2e_env, document_type_pk)
 
 
 class TestStatisticsUngueltigerZeitraumBleibtStehen:
