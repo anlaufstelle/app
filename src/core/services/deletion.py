@@ -79,7 +79,17 @@ def withdraw_deletion_request(deletion_request, user):
     Wirft ``ValidationError``, wenn der Antrag nicht (mehr) der eigene oder
     nicht mehr ``PENDING`` ist. In beiden Fällen entsteht **kein**
     Audit-Eintrag — zurückgezogen wurde ja nichts.
+
+    A person outside the facility of the request, or without any facility
+    (fail-closed), is refused before the request row is locked — even the
+    requester herself after a move to another facility. The facility of a
+    request never changes, and the locking lookup below is bound to that very
+    facility, so the locked row belongs to the person's facility by
+    construction.
     """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != deletion_request.facility_id:
+        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
     # Facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt die Zeile
     # bis zum Commit dieser Transaktion.
     dr = DeletionRequest.objects.select_for_update().get(

@@ -87,6 +87,10 @@ class TestWithdrawLockLookup:
         # muss an der Einrichtungsgrenze scheitern, nicht an der PK vorbeigehen.
         mismatched = DeletionRequest.objects.get(pk=foreign_request.pk)
         mismatched.facility_id = facility.pk
+        # The requester now belongs to the facility the instance names, so the
+        # facility check before the lock lets the call through (Refs #2374) and
+        # only the scoped lookup keeps it away from the row of the other one.
+        second_facility_user.facility = facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
             withdraw_deletion_request(mismatched, second_facility_user)
