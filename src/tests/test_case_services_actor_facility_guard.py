@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, User
 from core.models.outcome import OutcomeGoal
-from core.services.case import close_case, create_case, create_goal, reopen_case, update_case
+from core.services.case import close_case, create_case, create_goal, reopen_case, update_case, update_goal
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
@@ -172,3 +172,23 @@ class TestCreateGoal:
         ziel = create_goal(Case.objects.get(pk=case_open.pk), staff_user, "Neu")
 
         assert OutcomeGoal.objects.get(pk=ziel.pk).title == "Neu"
+
+
+class TestUpdateGoal:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, outcome_goal):
+        user = request.getfixturevalue(akteur)
+        vorher = OutcomeGoal.objects.values_list("title", "description").get(pk=outcome_goal.pk)
+
+        _abgewiesen_ohne_sperre(
+            lambda: update_goal(OutcomeGoal.objects.get(pk=outcome_goal.pk), user, title="Fremd", description="Fremd")
+        )
+
+        assert OutcomeGoal.objects.values_list("title", "description").get(pk=outcome_goal.pk) == vorher
+        assert not AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).exists()
+
+    def test_eigene_einrichtung_schreibt(self, outcome_goal, staff_user):
+        update_goal(OutcomeGoal.objects.get(pk=outcome_goal.pk), staff_user, title="Neu")
+
+        assert OutcomeGoal.objects.get(pk=outcome_goal.pk).title == "Neu"
+        assert AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count() == 1
