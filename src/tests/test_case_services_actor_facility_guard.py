@@ -15,9 +15,11 @@ tatsaechlich gesperrten Tabellen (am ausgefuehrten SQL, nicht am Wortlaut).
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, User
-from core.services.case import update_case
+from core.models import Activity, AuditLog, Case, Client, User
+from core.services.case import create_case, update_case
+from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -71,3 +73,50 @@ class TestUpdateCase:
 
         assert Case.objects.get(pk=case_open.pk).title == "Neu"
         assert AuditLog.objects.filter(action=AuditLog.Action.CASE_UPDATE, target_id=str(case_open.pk)).count() == 1
+
+
+class TestCreateCase:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, facility, client_identified):
+        user = request.getfixturevalue(akteur)
+        person = Client.objects.get(pk=client_identified.pk)
+
+        _abgewiesen_ohne_sperre(lambda: create_case(facility, user, person, "Fremd"))
+
+        assert not Case.objects.filter(client_id=client_identified.pk).exists()
+
+    @pytest.mark.parametrize(
+        "widerruf",
+        [
+            pytest.param({"is_deleted": True}, id="person-papierkorb"),
+            pytest.param({"is_active": False}, id="person-anonymisiert"),
+        ],
+    )
+    def test_widerrufene_person_wird_an_der_gesperrten_zeile_abgewiesen(
+        self, widerruf, facility, client_identified, staff_user
+    ):
+        """Die Instanz stammt aus einem Lesevorgang vor der Sperre.
+
+        Papierkorb (auch die Quelle einer Zusammenfuehrung landet dort) oder
+        Anonymisierung danach: kein Fall, keine Protokollzeile, gesperrt wurde
+        nur die Personenzeile.
+        """
+        person = Client.objects.get(pk=client_identified.pk)
+        if widerruf.get("is_deleted"):
+            widerruf = {**widerruf, "deleted_at": timezone.now()}
+        Client.objects.filter(pk=person.pk).update(**widerruf)
+        spuren = _spuren()
+
+        with mitschnitt() as m, pytest.raises(ValidationError) as excinfo:
+            create_case(facility, staff_user, person, "Widerrufen")
+
+        assert excinfo.value.messages == [CLIENT_WRITE_REVOKED_MESSAGE]
+        assert _spuren() == spuren
+        assert m.sperrfolge() == ["core_client"]
+        assert not Case.objects.filter(client_id=client_identified.pk).exists()
+
+    def test_eigene_einrichtung_legt_an(self, facility, client_identified, staff_user):
+        fall = create_case(facility, staff_user, Client.objects.get(pk=client_identified.pk), "Neu")
+
+        assert Case.objects.get(pk=fall.pk).title == "Neu"
+        assert AuditLog.objects.filter(action=AuditLog.Action.CASE_CREATE, target_id=str(fall.pk)).count() == 1
