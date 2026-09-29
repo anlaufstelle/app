@@ -23,6 +23,8 @@ from core.services.file_vault.audit import (
     log_attachment_violation,
 )
 from core.services.file_vault.cleanup import (
+    DEFAULT_ORPHAN_CLEANUP_BUDGET,
+    OrphanCleanupResult,
     cleanup_orphan_storage_files,
     delete_attachments_for,
 )
@@ -68,9 +70,11 @@ from core.services.file_vault.virus_scan import (
 
 __all__ = [
     "CHUNK_SIZE",
+    "DEFAULT_ORPHAN_CLEANUP_BUDGET",
     "EncryptionError",
     "EncryptionKeyMissing",
     "FILE_FORMAT_VERSION",
+    "OrphanCleanupResult",
     "ScanResult",
     "StagedUpload",
     "VirusScannerUnavailableError",

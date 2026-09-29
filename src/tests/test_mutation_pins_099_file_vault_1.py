@@ -23,6 +23,7 @@ import os
 import time
 from datetime import date, datetime, timedelta
 from datetime import time as dt_time
+from pathlib import Path
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -470,7 +471,7 @@ def test_cleanup_orphan_meldet_den_exakten_erfolg_beim_loeschen_einer_waise(capl
     assert records[0].getMessage() == f"cleanup_orphan_storage_files removed orphan: {path}"
 
 
-def test_cleanup_orphan_meldet_die_exakte_warnung_bei_fehlgeschlagenem_unlink(caplog, settings, tmp_path):
+def test_cleanup_orphan_meldet_die_exakte_warnung_bei_fehlgeschlagenem_unlink(caplog, monkeypatch, settings, tmp_path):
     """Pins ``xǁcleanup_orphan_storage_filesǁ__mutmut_47`` (Meldung komplett
     -> ``None``), ``_48``/``_49`` (je ein ``%s``-Argument -> ``None``),
     ``_50`` (Formatstring entfernt), ``_51``/``_52`` (je ein Argument
@@ -480,9 +481,17 @@ def test_cleanup_orphan_meldet_die_exakte_warnung_bei_fehlgeschlagenem_unlink(ca
     im Betrieb auf eine liegen gebliebene Waise."""
     settings.MEDIA_ROOT = str(tmp_path)
     path = tmp_path / "kaputte-waise.enc"
-    path.mkdir()  # Verzeichnis statt Datei -> unlink() scheitert mit OSError
+    path.write_bytes(b"ciphertext")
     old_mtime = time.time() - 7200
     os.utime(path, (old_mtime, old_mtime))
+    original_unlink = Path.unlink
+
+    def fail_target_unlink(candidate, *args, **kwargs):
+        if candidate == path:
+            raise OSError("simulierter unlink-Fehler")
+        return original_unlink(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_target_unlink)
 
     with caplog.at_level(logging.WARNING, logger=_CLEANUP_LOGGER):
         deleted = cleanup_orphan_storage_files()

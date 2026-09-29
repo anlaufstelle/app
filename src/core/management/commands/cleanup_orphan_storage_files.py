@@ -12,11 +12,12 @@ einen periodischen Cron, z. B. einmal pro Tag.
 
     python manage.py cleanup_orphan_storage_files
     python manage.py cleanup_orphan_storage_files --min-age-seconds 7200
+    python manage.py cleanup_orphan_storage_files --budget 5000 --dry-run
 """
 
 from django.core.management.base import BaseCommand, CommandError
 
-from core.services.file_vault import cleanup_orphan_storage_files
+from core.services.file_vault import DEFAULT_ORPHAN_CLEANUP_BUDGET, cleanup_orphan_storage_files
 
 # Refs #1016/#1554: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -37,6 +38,20 @@ class Command(BaseCommand):
                 "noch keinen DB-Eintrag haben. Default: 3600 (1h)."
             ),
         )
+        parser.add_argument(
+            "--budget",
+            type=int,
+            default=DEFAULT_ORPHAN_CLEANUP_BUDGET,
+            help=(
+                "Hoechstzahl der je Lauf geprueften .enc-Dateien. Muss positiv "
+                f"sein. Default: {DEFAULT_ORPHAN_CLEANUP_BUDGET}."
+            ),
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Nur pruefen; keine Datei loeschen und den Fortsetzungspunkt nicht veraendern.",
+        )
 
     def handle(self, *args, **options):
         # Refs #1554 / #1016 A1.1: Wie enforce_retention/verify_audit_chain fail-loud.
@@ -53,9 +68,34 @@ class Command(BaseCommand):
                 "verschluesselte Datei als Orphan loeschen (Refs #1554 / #1016 A1.1; "
                 "ops-runbook §9)."
             )
-        min_age = options["min_age_seconds"]
-        deleted = cleanup_orphan_storage_files(min_age_seconds=min_age)
-        if deleted:
-            self.stdout.write(self.style.SUCCESS(f"Geloescht: {deleted} Orphan-Datei(en)."))
+        budget = options["budget"]
+        if budget < 1:
+            raise CommandError("--budget muss mindestens 1 sein.")
+
+        result = cleanup_orphan_storage_files(
+            min_age_seconds=options["min_age_seconds"],
+            budget=budget,
+            dry_run=options["dry_run"],
+        )
+        if result.state_warning:
+            self.stdout.write(self.style.WARNING(f"Hinweis: {result.state_warning}"))
+
+        self.stdout.write(
+            "Geprueft: "
+            f"{result.checked}; Loeschkandidaten: {result.deletion_candidates}; "
+            f"geloescht: {result.deleted}; "
+            f"uebersprungen (referenziert): {result.skipped_referenced}; "
+            f"uebersprungen (zu jung): {result.skipped_young}; Fehler: {result.errors}."
+        )
+        self.stdout.write(f"Fortgesetzt bei: {result.continued_at or 'Anfang'}.")
+        if result.tree_complete:
+            if result.dry_run:
+                self.stdout.write("Baum vollstaendig durchlaufen; Fortsetzungspunkt im Trockenlauf unveraendert.")
+            else:
+                self.stdout.write("Baum vollstaendig durchlaufen; Fortsetzungspunkt zurueckgesetzt.")
         else:
-            self.stdout.write("Keine Orphans gefunden.")
+            self.stdout.write(f"Naechster Start: {result.next_start}.")
+        if result.dry_run:
+            self.stdout.write(
+                "Trockenlauf: Es wurden keine Dateien geloescht und der Fortsetzungspunkt wurde nicht veraendert."
+            )

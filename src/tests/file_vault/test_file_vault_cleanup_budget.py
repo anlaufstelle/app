@@ -6,6 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,7 +25,7 @@ def _write_enc(root: Path, relative_path: str, *, age_seconds: int = 7200) -> Pa
 
 
 def _run_cleanup(*, min_age_seconds: int = 3600, budget: int = 10_000, dry_run: bool = False):
-    return cleanup_module.run_orphan_storage_cleanup(
+    return cleanup_module.cleanup_orphan_storage_files(
         min_age_seconds=min_age_seconds,
         budget=budget,
         dry_run=dry_run,
@@ -32,11 +33,20 @@ def _run_cleanup(*, min_age_seconds: int = 3600, budget: int = 10_000, dry_run: 
 
 
 @pytest.fixture(autouse=True)
-def _empty_reference_set(monkeypatch):
-    monkeypatch.setattr(cleanup_module, "_known_storage_filenames", lambda: set(), raising=False)
+def reference_names(monkeypatch):
+    names: set[str] = set()
+    monkeypatch.setattr(
+        cleanup_module.Attachment.objects,
+        "values_list",
+        lambda *args, **kwargs: tuple(names),
+    )
+    import_jobs = MagicMock()
+    import_jobs.exclude.return_value.exclude.return_value.values_list.return_value = ()
+    monkeypatch.setattr(cleanup_module.ImportJob, "objects", import_jobs)
+    return names
 
 
-def test_budgetierte_laeufe_decken_grossen_baum_fair_ab(monkeypatch, settings, tmp_path):
+def test_budgetierte_laeufe_decken_grossen_baum_fair_ab(reference_names, settings, tmp_path):
     settings.MEDIA_ROOT = str(tmp_path)
     all_paths: set[str] = set()
     referenced_paths: set[str] = set()
@@ -59,7 +69,7 @@ def test_budgetierte_laeufe_decken_grossen_baum_fair_ab(monkeypatch, settings, t
                 else:
                     old_orphan_paths.add(relative)
 
-    monkeypatch.setattr(cleanup_module, "_known_storage_filenames", lambda: known_names)
+    reference_names.update(known_names)
     budget = (len(all_paths) + 1) // 2
 
     first = _run_cleanup(budget=budget)
@@ -80,12 +90,12 @@ def test_budgetierte_laeufe_decken_grossen_baum_fair_ab(monkeypatch, settings, t
     assert third.continued_at == expected_first_remaining
 
 
-def test_kleiner_baum_wird_in_einem_lauf_vollstaendig_bereinigt(monkeypatch, settings, tmp_path):
+def test_kleiner_baum_wird_in_einem_lauf_vollstaendig_bereinigt(reference_names, settings, tmp_path):
     settings.MEDIA_ROOT = str(tmp_path)
     old_orphan = _write_enc(tmp_path, "a/old-orphan.enc", age_seconds=7200)
     young_orphan = _write_enc(tmp_path, "b/young-orphan.enc", age_seconds=0)
     referenced = _write_enc(tmp_path, "c/referenced.enc", age_seconds=7200)
-    monkeypatch.setattr(cleanup_module, "_known_storage_filenames", lambda: {referenced.name})
+    reference_names.add(referenced.name)
 
     result = _run_cleanup(budget=10)
 
@@ -103,11 +113,12 @@ def test_kleiner_baum_wird_in_einem_lauf_vollstaendig_bereinigt(monkeypatch, set
     assert json.loads((tmp_path / STATE_FILENAME).read_text(encoding="utf-8")) == {"after": None}
 
 
-def test_beschaedigter_fortsetzungspunkt_startet_mit_hinweis_von_vorn(settings, tmp_path):
+@pytest.mark.parametrize("raw_state", ["", "kein json"])
+def test_beschaedigter_fortsetzungspunkt_startet_mit_hinweis_von_vorn(settings, tmp_path, raw_state):
     settings.MEDIA_ROOT = str(tmp_path)
     _write_enc(tmp_path, "a.enc")
     _write_enc(tmp_path, "b.enc")
-    (tmp_path / STATE_FILENAME).write_text("kein json", encoding="utf-8")
+    (tmp_path / STATE_FILENAME).write_text(raw_state, encoding="utf-8")
 
     result = _run_cleanup(budget=1, dry_run=True)
 

@@ -343,7 +343,7 @@ class TestCleanupOrphanStorageFilesContinuesPastKnownEntries:
         einer echten Waise in der Scan-Reihenfolge darf den periodischen
         Cron-Sweep nicht komplett abbrechen — sonst bleiben verwaiste
         personenbezogene Dateien liegen (Datenschutz/Speicherminimierung,
-        #662). Reihenfolge LEGAL ERZWUNGEN per ``Path.rglob``-Spion
+        #662). Reihenfolge LEGAL ERZWUNGEN per Traversierungs-Spion
         (eine beobachtete Dateisystem-Reihenfolge ist kein
         Aequivalenzbeweis)."""
         settings.MEDIA_ROOT = str(tmp_path)
@@ -360,7 +360,16 @@ class TestCleanupOrphanStorageFilesContinuesPastKnownEntries:
         orphan_path.write_bytes(b"ciphertext")
         os.utime(orphan_path, (old_mtime, old_mtime))
 
-        monkeypatch.setattr(cleanup_module.Path, "rglob", lambda self, pattern: iter([known_path, orphan_path]))
+        monkeypatch.setattr(
+            cleanup_module,
+            "_iter_encrypted_files",
+            lambda root: iter(
+                [
+                    (known_path.relative_to(root).as_posix(), known_path),
+                    (orphan_path.relative_to(root).as_posix(), orphan_path),
+                ]
+            ),
+        )
 
         deleted = cleanup_orphan_storage_files()
 
