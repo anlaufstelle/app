@@ -116,3 +116,31 @@ class TestVeralteteInstanz:
 
         assert excinfo.value.messages == [_REVOKED_MESSAGE]
         _assert_unchanged(person)
+
+
+class TestSperreAnDerEinrichtungDerHandelndenPerson:
+    """Schon die erste Personensperre ist an die Einrichtung der handelnden Person gebunden.
+
+    Ordnet die Datenbank die Person inzwischen einer anderen Einrichtung zu als
+    die uebergebene Instanz, sperrt der Aufruf die fremde Zeile nicht — er
+    findet sie nicht (wie bisher ``DoesNotExist``) und schreibt nichts.
+    """
+
+    def test_abweichender_datenbankstand_sperrt_keine_fremde_zeile(self, staff_user, person, facility, second_facility):
+        Client.objects.filter(pk=person.pk).update(facility=second_facility)
+
+        with mitschnitt() as abfragen, pytest.raises(Client.DoesNotExist):
+            update_client(person, staff_user, notes="Nachtrag, der nie ankommen darf")
+
+        client_locks = abfragen.sperren("core_client")
+        assert client_locks
+        assert all(zugriff.traegt(facility_id=[facility.pk]) for zugriff in client_locks), client_locks
+        _assert_unchanged(person)
+
+    def test_gegenprobe_erste_sperre_traegt_die_einrichtung(self, staff_user, person, facility):
+        with mitschnitt() as abfragen:
+            update_client(person, staff_user, notes="Neuer Stand")
+
+        assert abfragen.sperrfolge()[0] == "core_client"
+        assert abfragen.sperren("core_client")[0].traegt(facility_id=[facility.pk])
+        assert Client.objects.get(pk=person.pk).notes == "Neuer Stand"

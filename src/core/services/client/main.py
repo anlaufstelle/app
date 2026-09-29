@@ -898,30 +898,31 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     Berichtigungs-Flow oeffnet ein modul-privater Kontext, kein Argument
     dieser Funktion (Cross-Review-Befund 4).
 
-    Nach dem Gate wird der Zustand der inzwischen gesperrten Zeile frisch
-    gelesen (ohne zweite Sperranweisung): eine zusammengefuehrte, im Papierkorb
-    liegende oder anonymisierte Person nimmt keine neuen Nutzdaten mehr an —
-    auch ohne Versions-Token, also unabhaengig vom optimistischen Guard, und
-    mit der Zustandsmeldung statt der Konfliktmeldung. Praedikat und Meldung
-    wie :func:`resolve_writable_client`.
+    Vor der ersten Sperre steht die Einrichtungsgrenze der handelnden Person
+    (fail-closed). Sie gilt auch fuer die Berichtigung: dort handelt die
+    pruefende Person, die zur Einrichtung des Antrags gehoert. Schon die erste
+    Sperre ist an diese Einrichtung gebunden: ordnet die Datenbank die Person
+    inzwischen einer anderen zu als die uebergebene Instanz, wird keine fremde
+    Zeile gesperrt, und der Aufruf endet wie bei einer fehlenden Zeile mit
+    ``Client.DoesNotExist``. Das Art.-18-Gate laeuft danach auf der bereits
+    gehaltenen Zeile.
 
-    Davor, vor der ersten Sperre, steht die Einrichtungsgrenze der handelnden
-    Person (fail-closed). Sie gilt auch fuer die Berichtigung: dort handelt die
-    pruefende Person, die zur Einrichtung des Antrags gehoert.
+    Der Zustand wird an der gesperrten Zeile gelesen: eine zusammengefuehrte,
+    im Papierkorb liegende oder anonymisierte Person nimmt keine neuen
+    Nutzdaten mehr an — auch ohne Versions-Token, also unabhaengig vom
+    optimistischen Guard, und mit der Zustandsmeldung statt der
+    Konfliktmeldung. Praedikat und Meldung wie :func:`resolve_writable_client`.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != client.facility_id:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
-    assert_processing_allowed(client, lock=True)
-    merged_into_id, is_deleted, is_active = (
-        Client.objects.for_facility(actor_facility_id)
-        .filter(pk=client.pk)
-        .values_list("merged_into_id", "is_deleted", "is_active")
-        .get()
-    )
-    if merged_into_id is not None:
+    locked = lock_clients([client.pk], facility=actor_facility_id).get(client.pk)
+    if locked is None:
+        raise Client.DoesNotExist("Client matching query does not exist.")
+    assert_processing_allowed(locked, lock=True)
+    if locked.merged_into_id is not None:
         raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
-    if is_deleted or not is_active:
+    if locked.is_deleted or not locked.is_active:
         raise ValidationError(CLIENT_WRITE_REVOKED_MESSAGE)
     check_version_conflict(client, expected_updated_at)
     if old_stage is None:
