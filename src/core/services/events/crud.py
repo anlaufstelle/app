@@ -66,6 +66,22 @@ def apply_attachment_changes(event, user, request_post, request_files, file_fiel
     )
 
 
+#: The acting person belongs to another facility than the event, or to none.
+#: Same message as the case link services use for an event.
+_EVENT_OTHER_FACILITY_MESSAGE = _("Ereignis gehört zu einer anderen Einrichtung.")
+
+
+def _assert_actor_in_facility(user, facility_id):
+    """Refuse an acting person outside the event's facility — before any row lock.
+
+    The facility of an event never changes, so the check needs no fresh read
+    and locks nothing across the tenant boundary. A person without a facility,
+    or no person at all, is refused as well (fail-closed).
+    """
+    if getattr(user, "facility_id", None) != facility_id:
+        raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
+
+
 def _validate_case_assignment(facility, case, client, is_anonymous):
     """Refs #1160: Fall-Zuordnung pruefen (Facility-Scope, Person-Match,
     Anonymitaets-Ausschluss). Wirkungs-identisch zum frueheren Inline-Block."""
@@ -415,6 +431,9 @@ def update_event(
     """
     from core.services.security import check_version_conflict
 
+    # The facility of the acting person comes first — before the first row
+    # lock taken by ``lock_event_for_edit`` below.
+    _assert_actor_in_facility(user, event.facility_id)
     # Art.-18-Gate (Refs #2045): Das Bearbeiten eines bestehenden Ereignisses
     # ist inhaltliche Aenderung. Der Guard liegt im Service und nicht nur in
     # ``EventUpdateView.dispatch``, weil derselbe Weg den Offline-Replay und
