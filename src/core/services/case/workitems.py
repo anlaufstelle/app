@@ -393,6 +393,19 @@ def _next_due_date(current: date, recurrence: str) -> date | None:
 WORKITEM_ROW_MISSING = object()
 
 
+def _client_pk(value):
+    """Primary key of a ``client`` argument in the form the database returns.
+
+    Accepts an instance, a UUID or its text form (offline replay, JSON);
+    ``None`` stays ``None``. Without this, a text key compares unequal to the
+    stored UUID and cannot be sorted together with it.
+    """
+    pk = getattr(value, "pk", value)
+    if pk is None or isinstance(pk, uuid.UUID):
+        return pk
+    return uuid.UUID(str(pk))
+
+
 def _locked_client_id(workitem):
     """Frischer ``client_id``-Stand der Zeile **unter Row-Lock** (Refs #1786).
 
@@ -748,19 +761,15 @@ def update_workitem(
     # in ``_locked_clients``).
     pending_client_ids = {current_client_id}
     if "client" in fields:
-        pending_client_ids.add(getattr(fields["client"], "pk", fields["client"]))
+        pending_client_ids.add(_client_pk(fields["client"]))
     locked_client_ids = sorted(cid for cid in pending_client_ids if cid is not None)
     for client_id in locked_client_ids:
         assert_processing_allowed(client_id, lock=True)
     # Widerrufszustand des bisherigen UND des neuen Personenbezugs auf den eben
     # gesperrten Zeilen: eine Person im Papierkorb, deaktiviert oder
     # zusammengefuehrt nimmt keine geaenderten Aufgabendaten mehr an.
-    # Ein roher Primaerschluessel (Offline-Replay, JSON) wird dafuer in die Form
-    # der Datenbank gebracht, sonst gaelte eine lebende Person als widerrufen.
-    _raise_if_clients_revoked(
-        [cid if isinstance(cid, uuid.UUID) else uuid.UUID(str(cid)) for cid in locked_client_ids],
-        workitem.facility_id,
-    )
+    # A raw text key is already in database form here (``_client_pk``).
+    _raise_if_clients_revoked(locked_client_ids, workitem.facility_id)
     # Erst jetzt die WorkItem-Zeile sperren. Ein Auseinanderlaufen zwischen dem
     # ungesperrten Vorab-Lesen und dem gesperrten Stand ist ein echter
     # Nebenlaeufigkeits-Konflikt: ihn hier abzuweisen ist billiger und
@@ -829,8 +838,7 @@ def update_workitem(
         # Diff-Read und das ``save()`` unten. ``db_client_id`` stammt aus dem
         # gesperrten Lesestand oben — kein zweiter Lookup (Re-Review:
         # Doppel-Query-Redundanz).
-        new_client = fields["client"]
-        new_pk = getattr(new_client, "pk", new_client)
+        new_pk = _client_pk(fields["client"])
         # Der neue Personenbezug ist bereits oben gesperrt und gegatet — eine
         # personenlose Aufgabe einer eingeschraenkten Person ZUZUORDNEN ist
         # neue inhaltliche Verarbeitung und genau der Fall, den das
