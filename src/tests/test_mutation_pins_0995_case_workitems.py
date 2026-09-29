@@ -13,19 +13,17 @@ Gruppen:
 Alle drei fallen nur auf, wenn eine zweite Aufgabe derselben Einrichtung
 existiert. Die Nachbaraufgabe ist deshalb die neuere (Standardsortierung
 ``-created_at`` stellt sie nach vorn) und gehoert je nach Pin einer anderen
-Person oder traegt dieselben Formularwerte. Zusaetzlich halten die Pins die
-Bedingungen der Abfragen fest — erkannt an Tabelle, Sperrart und den
-Parametern der Filterbedingungen in der WHERE-Klausel, nicht an Projektion,
-Reihenfolge oder Literalform.
+Person oder traegt dieselben Formularwerte. Zusaetzlich halten die Pins fest,
+welche Zeilen die Abfragen lesen bzw. sperren (``tests._row_lock_helpers``:
+PostgreSQL plant die mitgeschnittene Anweisung; massgeblich sind gesperrte
+Tabelle, Sperrart und die Filterwerte je Spalte, nicht Alias, Quoting,
+Projektion, Reihenfolge oder Literalform). Welche Person das Art.-18-Gate
+prueft, zeigt die beobachtete Sperre der Personenzeile, nicht der Aufrufpfad.
 """
 
-import re
-import uuid
-from contextlib import contextmanager
 from datetime import timedelta
 
 import pytest
-from django.db import connection
 from django.utils import timezone
 
 from core.models import Client, WorkItem
@@ -35,115 +33,9 @@ from core.services.case.workitems import (
     update_workitem,
     workitem_form_state_token,
 )
-from core.services.client import restriction
+from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
-
-_FROM = re.compile(r'\bFROM\s+"(\w+)"', re.IGNORECASE)
-_SPERRE = re.compile(r"\bFOR\s+(NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE)\b", re.IGNORECASE)
-_WHERE = re.compile(r"\bWHERE\b", re.IGNORECASE)
-_WHERE_ENDE = re.compile(
-    r"\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FOR\s+(?:NO\s+KEY\s+UPDATE|UPDATE|KEY\s+SHARE|SHARE))\b",
-    re.IGNORECASE,
-)
-_PLATZHALTER = re.compile(
-    r'"(\w+)"\s*\.\s*"(\w+)"\s*(?:=\s*%s|IN\s*\(((?:\s*%s\s*,?)+)\))|%s',
-    re.IGNORECASE,
-)
-
-
-def _wert(wert):
-    """UUID-Werte normalisiert (Objekt, Text mit oder ohne Bindestriche), sonst ``str``."""
-    try:
-        return uuid.UUID(str(wert)).hex
-    except ValueError:
-        return str(wert)
-
-
-def _tiefen(sql):
-    """Klammertiefe je Zeichen; Klammern in Bezeichnern und Literalen zaehlen nicht."""
-    tiefen, tiefe, quote = [], 0, None
-    for zeichen in sql:
-        if quote:
-            if zeichen == quote:
-                quote = None
-        elif zeichen in "\"'":
-            quote = zeichen
-        elif zeichen == "(":
-            tiefe += 1
-        elif zeichen == ")":
-            tiefe -= 1
-        tiefen.append(tiefe)
-    return tiefen
-
-
-def _erster_auf_ebene_null(muster, sql, tiefen, ab=0):
-    return next((m for m in muster.finditer(sql, ab) if tiefen[m.start()] == 0), None)
-
-
-def _where_bereich(sql):
-    """``(anfang, ende)`` der WHERE-Klausel der aeusseren Abfrage, sonst ``None``."""
-    tiefen = _tiefen(sql)
-    where = _erster_auf_ebene_null(_WHERE, sql, tiefen)
-    if where is None:
-        return None
-    ende = _erster_auf_ebene_null(_WHERE_ENDE, sql, tiefen, where.end())
-    return where.end(), ende.start() if ende else len(sql)
-
-
-class _Abfrage:
-    """Eine ausgefuehrte Abfrage: Tabelle, Sperrart und ihre Filterbedingungen.
-
-    Als Filterbedingung zaehlt nur ein Vergleich ``"t"."spalte" = %s`` bzw.
-    ``IN (%s, ...)`` in der WHERE-Klausel der aeusseren Abfrage; Projektion,
-    Reihenfolge der Bedingungen und Literalform der Werte spielen keine Rolle.
-    """
-
-    def __init__(self, sql, params):
-        self.sql = sql
-        treffer = _FROM.search(sql)
-        self.tabelle = treffer.group(1) if treffer else None
-        sperre = _SPERRE.search(sql)
-        self.sperrart = " ".join(sperre.group(1).upper().split()) if sperre else None
-        self.sperrt = self.sperrart is not None
-        self.bedingungen = {}
-        bereich = _where_bereich(sql)
-        werte = iter(params or ())
-        for match in _PLATZHALTER.finditer(sql):
-            tabelle, spalte, liste = match.groups()
-            anzahl = liste.count("%s") if liste else 1
-            gelesen = [_wert(next(werte)) for _ in range(anzahl)]
-            if tabelle and bereich and bereich[0] <= match.start() < bereich[1]:
-                self.bedingungen.setdefault(f"{tabelle}.{spalte}", set()).update(gelesen)
-
-    def traegt(self, **erwartet):
-        """Traegt die WHERE-Klausel je Spalte genau diese Wertemenge (``=`` oder ``IN``)?"""
-        return all(
-            self.bedingungen.get(f"{self.tabelle}.{spalte}") == {_wert(w) for w in werte}
-            for spalte, werte in erwartet.items()
-        )
-
-
-class _Mitschnitt(list):
-    """Schneidet jede Abfrage samt Parametern mit (``connection.execute_wrapper``)."""
-
-    def __call__(self, execute, sql, params, many, context):
-        if not many:
-            self.append(_Abfrage(sql, params))
-        return execute(sql, params, many, context)
-
-    def lesungen(self, tabelle):
-        return [a for a in self if a.tabelle == tabelle and not a.sperrt]
-
-    def sperren(self, tabelle):
-        return [a for a in self if a.tabelle == tabelle and a.sperrt]
-
-
-@contextmanager
-def _mitschnitt():
-    mitschnitt = _Mitschnitt()
-    with connection.execute_wrapper(mitschnitt):
-        yield mitschnitt
 
 
 def _aufgabe(facility, client, user, *, alter_tage, titel="Aufgabe"):
@@ -177,30 +69,27 @@ class TestUpdateWorkitem:
     """``update_workitem``: das Vorlesen des Personenbezugs vor dem Art.-18-Gate."""
 
     def test_gate_sperrt_nur_die_person_der_adressierten_aufgabe(
-        self, eigene_und_nachbar, staff_user, client_identified, monkeypatch
+        self, eigene_und_nachbar, staff_user, client_identified
     ):
         """x_update_workitem__mutmut_9: ohne ``pk`` liest das Vorlesen die
         Person der neueren Nachbaraufgabe, das Gate sperrt die falsche Person
-        und die Aufgabensperre weist mit 'Personenzuordnung ... geaendert' ab."""
+        und die Aufgabensperre weist mit 'Personenzuordnung ... geaendert' ab.
+        Beobachtet: die Aenderung landet, gesperrt wird nur die Personenzeile
+        der adressierten Aufgabe."""
         eigene, _ = eigene_und_nachbar
-        gesehen = []
-        original = restriction.assert_processing_allowed
-
-        def _gate(client, *, lock=False):
-            gesehen.append(getattr(client, "pk", client))
-            return original(client, lock=lock)
-
-        monkeypatch.setattr(restriction, "assert_processing_allowed", _gate)
-        update_workitem(eigene, staff_user, title="Neu")
-        assert gesehen == [client_identified.pk]
+        with mitschnitt() as abfragen:
+            update_workitem(eigene, staff_user, title="Neu")
         eigene.refresh_from_db()
         assert eigene.title == "Neu"
+        personensperren = abfragen.sperren("core_client")
+        assert personensperren
+        assert all(a.traegt(id=[client_identified.pk]) for a in personensperren)
 
     def test_vorlesen_traegt_pk_und_einrichtung(self, sample_workitem, staff_user):
         """x_update_workitem__mutmut_9: das ungesperrte Vorlesen der Aufgabe
         filtert auf ``pk`` und Einrichtung (eine Aufgabe allein — die Abfrage,
         nicht ihr Ergebnis, traegt den Nachweis)."""
-        with _mitschnitt() as abfragen:
+        with mitschnitt() as abfragen:
             update_workitem(sample_workitem, staff_user, title="Neu")
         assert any(
             a.traegt(id=[sample_workitem.pk], facility_id=[sample_workitem.facility_id])
@@ -221,7 +110,7 @@ class TestLockedClientId:
         """x__locked_client_id__mutmut_8: ``FOR UPDATE`` auf genau die
         adressierte Aufgabe in ihrer Einrichtung."""
         eigene, _ = eigene_und_nachbar
-        with _mitschnitt() as abfragen:
+        with mitschnitt() as abfragen:
             _locked_client_id(eigene)
         sperren = abfragen.sperren("core_workitem")
         assert sperren
@@ -262,7 +151,7 @@ class TestFormStateUnchanged:
         """x__form_state_unchanged__mutmut_8: ``FOR UPDATE`` auf genau die
         adressierte Aufgabe in ihrer Einrichtung."""
         eigene, _ = eigene_und_nachbar
-        with _mitschnitt() as abfragen:
+        with mitschnitt() as abfragen:
             _form_state_unchanged(eigene, workitem_form_state_token(eigene))
         sperren = abfragen.sperren("core_workitem")
         assert sperren
