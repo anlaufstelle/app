@@ -55,10 +55,8 @@ import re
 import sys
 from pathlib import Path
 
-# Beobachtetes Vokabular: Security/Added/Changed/Fixed/Docs stehen so in
-# AGENTS.md; Removed und Performance sind gelebte Praxis (siehe Docstring
-# oben) und deshalb mit aufgenommen. Deprecated ist Keep-a-Changelog-Standard
-# und bislang ungenutzt, aber als Minimum vorgesehen.
+# Documented vocabulary plus categories retained from established releases.
+# The operator-actions section records mandatory deployment follow-up explicitly.
 ALLOWED_SECTIONS: frozenset[str] = frozenset(
     {
         "Added",
@@ -69,6 +67,7 @@ ALLOWED_SECTIONS: frozenset[str] = frozenset(
         "Security",
         "Docs",
         "Performance",
+        "Erforderliche Betreiber-Aktionen",
     }
 )
 
