@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Event, EventHistory, User
-from core.services.events.crud import create_event, update_event
+from core.services.events.crud import create_event, soft_delete_event, update_event
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -46,6 +46,18 @@ def live_event(facility, staff_user, doc_type_contact, client_identified):
         occurred_at=timezone.now(),
         data_json={"dauer": 15},
         client=client_identified,
+    )
+
+
+@pytest.fixture
+def anonymous_event(facility, staff_user, doc_type_contact):
+    return create_event(
+        facility=facility,
+        user=staff_user,
+        document_type=doc_type_contact,
+        occurred_at=timezone.now(),
+        data_json={"dauer": 5},
+        is_anonymous=True,
     )
 
 
@@ -130,3 +142,28 @@ class TestCreateEvent:
 
         assert Event.objects.filter(pk=event.pk, created_by=staff_user, case_id=case_open.pk).exists()
         assert AuditLog.objects.filter(action=AuditLog.Action.EVENT_CREATE, target_id=str(event.pk)).exists()
+
+
+class TestSoftDeleteEvent:
+    _EVENTS = {"person": "live_event", "anonymous": "anonymous_event", "attachment": "sample_event"}
+
+    @pytest.mark.parametrize("actor", _ACTORS)
+    @pytest.mark.parametrize("shape", ["person", "anonymous", "attachment"])
+    def test_foreign_actor_is_refused_before_any_lock(self, request, actor, shape):
+        user = request.getfixturevalue(actor)
+        event = request.getfixturevalue(self._EVENTS[shape])
+        attachment = request.getfixturevalue("authz_attachment") if shape == "attachment" else None
+        before = _stored(event.pk)
+        stale = Event.objects.get(pk=event.pk)
+
+        _refused_before_any_lock(lambda: soft_delete_event(stale, user))
+
+        assert _stored(event.pk) == before
+        if attachment is not None:
+            assert type(attachment).objects.filter(pk=attachment.pk).exists()
+
+    def test_local_actor_deletes(self, staff_user, live_event):
+        soft_delete_event(Event.objects.get(pk=live_event.pk), staff_user)
+
+        assert Event.objects.filter(pk=live_event.pk, is_deleted=True, deleted_by=staff_user).exists()
+        assert AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(live_event.pk)).exists()
