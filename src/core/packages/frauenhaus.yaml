@@ -141,6 +141,7 @@ field_templates:
     is_required: true
     is_encrypted: false
     sensitivity: ""
+    help_text: Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.
 
   - slug: datum
     name: Datum
@@ -211,6 +212,7 @@ field_templates:
     field_type: textarea
     is_encrypted: false
     sensitivity: ""
+    help_text: Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.
 
 document_types:
   - slug: anfrage

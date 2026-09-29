@@ -49,6 +49,7 @@ field_templates:
     field_type: textarea
     is_encrypted: false
     sensitivity: ""
+    help_text: Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.
 
   - slug: leistungen
     name: Leistungen
@@ -135,6 +136,7 @@ field_templates:
     is_required: true
     is_encrypted: false
     sensitivity: ""
+    help_text: Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.
 
   - slug: datum
     name: Datum

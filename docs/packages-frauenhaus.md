@@ -67,12 +67,15 @@ Felder erben mindestens die Sensitivität ihres Typs. Die folgende Matrix nennt 
 | Beratung | `dauer`, `naechster-schritt` | elevated | **nicht sichtbar** | sichtbar | sichtbar | sichtbar |
 | Beratung | `thema`, `vereinbarungen`, `scan-dokument` | **high** | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
 | Gefährdungslage | `ausloeser`, `notiz-gefaehrdung`, `eskalationskanal` | **high** | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
-| Begleitung | `ziel`, `datum`, `uhrzeit` | normal | sichtbar | sichtbar | sichtbar | sichtbar |
+| Begleitung | `ziel` (unverschlüsselt, Hinweis am Feld) | normal | sichtbar | sichtbar | sichtbar | sichtbar |
+| Begleitung | `datum`, `uhrzeit` | normal | sichtbar | sichtbar | sichtbar | sichtbar |
 | Begleitung | `notiz-begleitung` | **high** | **nicht sichtbar** | **nicht sichtbar** | sichtbar | sichtbar |
 | Schutzmaßnahme | `art`, `gueltig-bis` | elevated | **nicht sichtbar** | sichtbar | sichtbar | sichtbar |
 | Wohnungswechsel | `von-nach`, `datum` | normal | sichtbar | sichtbar | sichtbar | sichtbar |
 | Vermittlung | `vermittelt-an` | normal | sichtbar | sichtbar | sichtbar | sichtbar |
-| Notiz | `notiz` | normal | sichtbar | sichtbar | sichtbar | sichtbar |
+| Notiz | `notiz` (unverschlüsselt, Hinweis am Feld) | normal | sichtbar | sichtbar | sichtbar | sichtbar |
+
+`ziel` und `notiz` sind für alle Rollen sichtbar und werden unverschlüsselt gespeichert. Deshalb steht an beiden Feldern der Hinweis „Keine Adressen, Klarnamen oder Verfahrensdaten eintragen — Pseudonyme wie in der übrigen Dokumentation verwenden.“ Gefährdungs- und Begleitdetails gehören stattdessen in die verschlüsselten Felder `notiz-gefaehrdung` beziehungsweise `notiz-begleitung`. Das verbleibende Risiko ordnet [„Klartext-Freitexte ausserhalb des Sensitivity-Modells“](security-notes.md#klartext-freitexte-ausserhalb-des-sensitivity-modells-issue-716) ein.
 
 Damit sind Auslöser und Eskalationskanal einer Gefährdungslage trotz unverschlüsselter Kategoriewerte niemals unterhalb `lead` sichtbar. Freitext und Dateiinhalt mit eigener `sensitivity: high` werden zusätzlich feldverschlüsselt gespeichert.
 
@@ -96,6 +99,7 @@ Diese Einstellungen sind nicht Teil des Paketformats und werden nicht automatisc
 - Die vorbereiteten Zeitfenster „Frühdienst“, „Spätdienst“ und „Nachtdienst“ an den tatsächlichen 24/7-Schichtbetrieb anpassen.
 - Die Schnellvorlagen „Telefonische Anfrage Unterbringung“ und „Belegstand vermerkt“ fachlich prüfen. Nur die erste Vorlage setzt `kontaktweg: telefon` und `anliegen: unterbringung` vorab; Vorbelegungen sind ausschließlich an Typen mit Sensitivität `normal` zulässig.
 - Empfang als `assistant`, Fachkräfte als `staff` und die für Gefährdungslagen zuständigen Personen als `lead` oder `facility_admin` einrichten.
+- Bestehende Einrichtungen erhalten den Feldhinweis beim erneuten Einspielen des Pakets: zuerst `python src/manage.py load_package --package frauenhaus --facility <uuid> --dry-run` prüfen, danach denselben Befehl ohne `--dry-run` ausführen.
 
 Es gibt keine Seed-Automatik für Betreiber-Settings oder Rollen. Retention, erlaubte Dateitypen, k-Anonymität, Mitschauen-Schutz und Benutzerrollen werden nach dem Einspielen bewusst durch die Anwendungsbetreuung festgelegt.
 
