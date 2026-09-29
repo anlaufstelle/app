@@ -880,35 +880,56 @@ _STALE_CLEANUP_STATUSES = (RetentionProposal.Status.PENDING, RetentionProposal.S
 def cleanup_stale_proposals(facility):
     """Remove proposals for events that have already been deleted.
 
-    Refs #2374: The selection is read without locks. A hold, a deferral or a
-    rejection can change a selected proposal before it is deleted, so the
-    deletion decides at the locked rows: the selected proposals are locked in
-    primary-key order, and only those still in ``_STALE_CLEANUP_STATUSES`` are
-    deleted and counted. A proposal held in the meantime keeps its dashboard
-    card. The cleanup writes no audit row and locks nothing else.
+    Refs #2374: The selection is read without locks and only names the
+    candidates. Each candidate is decided in its own transaction at locked
+    rows: first the event row — the target anchor every decision on a proposal
+    takes before the proposal —, then the proposal row. The proposal is
+    deleted only if the event is still missing or in the trash and the
+    proposal is still in ``_STALE_CLEANUP_STATUSES``: a proposal held,
+    deferred or rejected in the meantime stays, and so does the proposal of an
+    event that is back in the live set. The event row is locked without a
+    condition on ``is_deleted``, so a change still in progress is waited for
+    and its result decides.
+
+    One candidate at a time, in event order: the cleanup holds at most one
+    event row and never waits for an event while holding a proposal of
+    another one, so it cannot close a cycle with a way that locks several
+    events. It locks no person row (the decision depends on the event row
+    alone) and writes no audit row. Returns the number of proposals actually
+    deleted.
     """
     pending_proposals = RetentionProposal.objects.for_facility(facility).filter(
         target_type=RetentionProposal.TargetType.EVENT,
         status__in=_STALE_CLEANUP_STATUSES,
     )
 
-    stale_ids = []
+    candidates = []
     for proposal in pending_proposals.iterator():
         if not Event.objects.filter(pk=proposal.target_id, is_deleted=False).exists():
-            stale_ids.append(proposal.pk)
+            candidates.append((proposal.target_id, proposal.pk))
 
-    if not stale_ids:
-        return 0
-    with transaction.atomic():
-        still_stale = list(
-            RetentionProposal.objects.select_for_update()
-            .filter(pk__in=stale_ids, facility=facility, status__in=_STALE_CLEANUP_STATUSES)
-            .order_by("pk")
-            .values_list("pk", flat=True)
-        )
-        if still_stale:
-            RetentionProposal.objects.filter(pk__in=still_stale).delete()
-    return len(still_stale)
+    removed = 0
+    for target_id, proposal_pk in sorted(candidates):
+        with transaction.atomic():
+            event_is_deleted = (
+                Event.objects.select_for_update()
+                .filter(pk=target_id, facility=facility)
+                .values_list("is_deleted", flat=True)
+                .first()
+            )
+            if event_is_deleted is False:
+                continue
+            still_stale = (
+                RetentionProposal.objects.select_for_update()
+                .filter(pk=proposal_pk, facility=facility, status__in=_STALE_CLEANUP_STATUSES)
+                .values_list("pk", flat=True)
+                .first()
+            )
+            if still_stale is None:
+                continue
+            RetentionProposal.objects.filter(pk=still_stale).delete()
+            removed += 1
+    return removed
 
 
 def build_proposal_details(event):
