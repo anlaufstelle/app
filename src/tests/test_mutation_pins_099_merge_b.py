@@ -203,9 +203,7 @@ class TestApproveClientMergeReloadTiesToItsOwnFacility:
     bereits geladene Instanz — eine gezielt veraltete Annahme, kein fremder
     Datensatz."""
 
-    def test_approve_refuses_a_stale_facility_assumption(
-        self, facility, second_facility, source, target, staff_user, admin_user
-    ):
+    def test_approve_refuses_a_stale_facility_assumption(self, facility, second_facility, source, target, staff_user):
         """Pin: ``x_approve_client_merge__mutmut_17`` — ``select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility)`` -> ``get(
         pk=deletion_request.pk, )`` (Zeile 264).
@@ -217,12 +215,26 @@ class TestApproveClientMergeReloadTiesToItsOwnFacility:
         (``DoesNotExist``). Mutant: der Reload ignoriert die Annahme
         komplett und laedt die echte Zeile trotzdem — die Genehmigung liefe
         durch, obwohl der Aufrufer von einer anderen Einrichtung ausging.
+
+        Die pruefende Person gehoert zur ANGENOMMENEN Einrichtung: die
+        Einrichtungsgrenze vor der Antragssperre vergleicht mit der Annahme und
+        laesst den Aufruf bis zum gesperrten Reload durch, der die Annahme
+        verwirft (Mutant: Reload gelingt, die Grenze unter der Sperre meldet
+        die fremde Einrichtung statt ``DoesNotExist``).
         """
+        from core.models import User
+
+        reviewer = User.objects.create_user(
+            username="pin099_merge_leitung_angenommen",
+            role=User.Role.FACILITY_ADMIN,
+            facility=second_facility,
+            can_confirm_deletion=True,
+        )
         dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
-            approve_client_merge(dr, admin_user)
+            approve_client_merge(dr, reviewer)
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING

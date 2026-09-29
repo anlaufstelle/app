@@ -272,6 +272,11 @@ def approve_client_merge(deletion_request, reviewer):
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
     if not reviewer.can_confirm_deletion:
         raise ValidationError(_("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."))
+    # Einrichtungsgrenze schon VOR der Antragssperre (fail-closed ohne
+    # Einrichtung): eine fremde pruefende Person haelt den Antrag nicht fest.
+    # Unter der Sperre wird sie unten an der frischen Zeile erneut geprueft.
+    if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
 
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
