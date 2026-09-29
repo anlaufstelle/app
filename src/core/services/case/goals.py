@@ -115,8 +115,14 @@ def update_goal(goal, user, title=None, description=None):
 
 
 @transaction.atomic
-def achieve_goal(goal):
+def achieve_goal(goal, user):
     """Mark a goal as achieved. Idempotent — returns early if already achieved.
+
+    ``user`` ist die handelnde Person: ihre Einrichtung wird vor jeder Sperre
+    gegen die der Akte geprueft (:func:`_assert_actor_facility`, fail-closed;
+    die Einrichtung kommt aus einer ungesperrten Wertelesung, Muster
+    :func:`update_goal`). Fehlt das Ziel schon dort, weist der Zustandsvertrag
+    es beim Vorlesen ab — ebenfalls vor jeder Sperre.
 
     Refs #2295: Entschieden wird auf der FRISCH unter Sperre gelesenen Zeile,
     geschrieben werden nur die beiden Statusspalten. Die uebergebene Instanz
@@ -129,6 +135,9 @@ def achieve_goal(goal):
     (:mod:`core.services.case.state_contract`), der dafuer dieselbe
     Personensperre nimmt wie zuvor.
     """
+    _assert_actor_facility(
+        user, OutcomeGoal.objects.filter(pk=goal.pk).values_list("case__facility_id", flat=True).first()
+    )
     locked = lock_goal_for_status_change(goal)
     if not locked.is_achieved:
         locked.is_achieved = True
@@ -139,14 +148,17 @@ def achieve_goal(goal):
 
 
 @transaction.atomic
-def unachieve_goal(goal):
+def unachieve_goal(goal, user):
     """Mark a goal as not achieved.
 
-    Spiegel von :func:`achieve_goal` — einschliesslich Zustandsvertrag und
-    spaltengenauem Schreiben (Refs #2295). Bewusst ohne Idempotenz-Ausstieg:
-    die Ruecknahme eines nicht erreichten Ziels ist ein No-op auf denselben
-    zwei Spalten.
+    Spiegel von :func:`achieve_goal` — einschliesslich Einrichtungsgrenze der
+    handelnden Person, Zustandsvertrag und spaltengenauem Schreiben (Refs
+    #2295). Bewusst ohne Idempotenz-Ausstieg: die Ruecknahme eines nicht
+    erreichten Ziels ist ein No-op auf denselben zwei Spalten.
     """
+    _assert_actor_facility(
+        user, OutcomeGoal.objects.filter(pk=goal.pk).values_list("case__facility_id", flat=True).first()
+    )
     locked = lock_goal_for_status_change(goal)
     locked.is_achieved = False
     locked.achieved_at = None
@@ -198,7 +210,7 @@ def create_milestone(goal, user, title, sort_order=0):
 
 
 @transaction.atomic
-def toggle_milestone(milestone):
+def toggle_milestone(milestone, user):
     """Toggle milestone completion. Sets/clears completed_at accordingly.
 
     Refs #2295: Umgeschaltet wird der FRISCH unter Sperre gelesene Stand —
@@ -206,7 +218,15 @@ def toggle_milestone(milestone):
     zwei gleichzeitigen Klicks zweimal dieselbe Richtung um. Geschrieben
     werden nur die beiden Statusspalten; der Meilenstein-Titel ist
     klientenbezogener Freitext, den die Tilgung ersetzt (``redact_case_goals``).
+
+    Davor, ohne Sperre, die Einrichtung der handelnden Person
+    (:func:`_assert_actor_facility`, Muster :func:`delete_milestone`); ein
+    schon beim Vorlesen fehlender Meilenstein endet im Zustandsvertrag, bevor
+    eine Zeile gesperrt wird.
     """
+    _assert_actor_facility(
+        user, Milestone.objects.filter(pk=milestone.pk).values_list("goal__case__facility_id", flat=True).first()
+    )
     locked = lock_milestone_for_status_change(milestone)
     if locked.is_completed:
         locked.is_completed = False

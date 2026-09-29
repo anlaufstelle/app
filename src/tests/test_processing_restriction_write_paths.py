@@ -195,17 +195,17 @@ class TestCaseSubObjectsBlocked:
         with pytest.raises(ValidationError):
             update_goal(outcome_goal, staff_user, title="Umbenannt")
 
-    def test_achieve_goal_blocked(self, outcome_goal, restricted_client):
+    def test_achieve_goal_blocked(self, outcome_goal, restricted_client, staff_user):
         from core.services.case.goals import achieve_goal
 
         with pytest.raises(ValidationError):
-            achieve_goal(outcome_goal)
+            achieve_goal(outcome_goal, staff_user)
 
-    def test_toggle_milestone_blocked(self, milestone, restricted_client):
+    def test_toggle_milestone_blocked(self, milestone, restricted_client, staff_user):
         from core.services.case.goals import toggle_milestone
 
         with pytest.raises(ValidationError):
-            toggle_milestone(milestone)
+            toggle_milestone(milestone, staff_user)
 
     def test_delete_milestone_blocked(self, milestone, restricted_client, staff_user):
         from core.services.case.goals import delete_milestone

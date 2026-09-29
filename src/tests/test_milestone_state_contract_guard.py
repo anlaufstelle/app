@@ -122,7 +122,7 @@ class TestServiceZustandsvertrag:
         spuren = _spuren()
 
         with pytest.raises(ValidationError) as excinfo:
-            toggle_milestone(alter_meilenstein)
+            toggle_milestone(alter_meilenstein, staff_user)
 
         assert _meldung(excinfo) == [str(status_meldung)]
         assert _spuren() == spuren

@@ -62,12 +62,12 @@ def _zweite_instanz(obj):
 class TestZielstatusSchreibtRedigiertesNichtZurueck:
     """Nach einer Redaktion darf kein Statuswechsel den Freitext zurueckholen."""
 
-    def test_achieve_goal_schreibt_den_redigierten_titel_nicht_zurueck(self, outcome_goal):
+    def test_achieve_goal_schreibt_den_redigierten_titel_nicht_zurueck(self, outcome_goal, staff_user):
         alte_instanz = _zweite_instanz(outcome_goal)
         alter_titel = alte_instanz.title
         redact_case_goals([outcome_goal.case_id])
 
-        achieve_goal(alte_instanz)
+        achieve_goal(alte_instanz, staff_user)
 
         frisch = OutcomeGoal.objects.get(pk=outcome_goal.pk)
         assert frisch.title == _ZIEL_MARKER, f"alter Titel zurueckgeschrieben: {frisch.title!r}"
@@ -76,12 +76,12 @@ class TestZielstatusSchreibtRedigiertesNichtZurueck:
         assert frisch.is_achieved is True
         assert frisch.achieved_at == timezone.localdate()
 
-    def test_unachieve_goal_schreibt_den_redigierten_titel_nicht_zurueck(self, outcome_goal):
-        achieve_goal(outcome_goal)
+    def test_unachieve_goal_schreibt_den_redigierten_titel_nicht_zurueck(self, outcome_goal, staff_user):
+        achieve_goal(outcome_goal, staff_user)
         alte_instanz = _zweite_instanz(outcome_goal)
         redact_case_goals([outcome_goal.case_id])
 
-        unachieve_goal(alte_instanz)
+        unachieve_goal(alte_instanz, staff_user)
 
         frisch = OutcomeGoal.objects.get(pk=outcome_goal.pk)
         assert frisch.title == _ZIEL_MARKER, f"alter Titel zurueckgeschrieben: {frisch.title!r}"
@@ -89,24 +89,24 @@ class TestZielstatusSchreibtRedigiertesNichtZurueck:
         assert frisch.is_achieved is False
         assert frisch.achieved_at is None
 
-    def test_toggle_milestone_schreibt_den_redigierten_titel_nicht_zurueck(self, milestone):
+    def test_toggle_milestone_schreibt_den_redigierten_titel_nicht_zurueck(self, milestone, staff_user):
         alte_instanz = _zweite_instanz(milestone)
         redact_case_goals([milestone.goal.case_id])
 
-        toggle_milestone(alte_instanz)
+        toggle_milestone(alte_instanz, staff_user)
 
         frisch = Milestone.objects.get(pk=milestone.pk)
         assert frisch.title == _MEILENSTEIN_MARKER, f"alter Titel zurueckgeschrieben: {frisch.title!r}"
         assert frisch.is_completed is True
         assert frisch.completed_at == timezone.localdate()
 
-    def test_toggle_milestone_haelt_auch_den_zieltitel_redigiert(self, milestone):
+    def test_toggle_milestone_haelt_auch_den_zieltitel_redigiert(self, milestone, staff_user):
         """Der Meilenstein-Pfad laeuft ueber ``milestone.goal`` — auch dessen
         Zeile darf er nicht anfassen."""
         alte_instanz = _zweite_instanz(milestone)
         redact_case_goals([milestone.goal.case_id])
 
-        toggle_milestone(alte_instanz)
+        toggle_milestone(alte_instanz, staff_user)
 
         assert OutcomeGoal.objects.values_list("title", flat=True).get(pk=milestone.goal_id) == _ZIEL_MARKER
 
@@ -119,18 +119,18 @@ class TestZielstatusUeberschreibtRegulaereAenderungenNicht:
         alte_instanz = _zweite_instanz(outcome_goal)
         update_goal(outcome_goal, staff_user, title="Parallel geschaerftes Ziel", description="Parallel ergaenzt")
 
-        achieve_goal(alte_instanz)
+        achieve_goal(alte_instanz, staff_user)
 
         frisch = OutcomeGoal.objects.get(pk=outcome_goal.pk)
         assert frisch.title == "Parallel geschaerftes Ziel"
         assert frisch.description == "Parallel ergaenzt"
         assert frisch.is_achieved is True
 
-    def test_toggle_milestone_ueberschreibt_den_parallel_geaenderten_titel_nicht(self, milestone):
+    def test_toggle_milestone_ueberschreibt_den_parallel_geaenderten_titel_nicht(self, milestone, staff_user):
         alte_instanz = _zweite_instanz(milestone)
         Milestone.objects.filter(pk=milestone.pk).update(title="Parallel umbenannt")
 
-        toggle_milestone(alte_instanz)
+        toggle_milestone(alte_instanz, staff_user)
 
         frisch = Milestone.objects.get(pk=milestone.pk)
         assert frisch.title == "Parallel umbenannt"
@@ -147,7 +147,7 @@ class TestGetilgteFallakteLehntStatuswechselAb:
         anonymize_case_now(case_open, admin_user)
 
         with pytest.raises(ValidationError):
-            achieve_goal(alte_instanz)
+            achieve_goal(alte_instanz, staff_user)
 
         frisch = OutcomeGoal.objects.get(pk=outcome_goal.pk)
         assert frisch.is_achieved is False
@@ -155,13 +155,13 @@ class TestGetilgteFallakteLehntStatuswechselAb:
         assert frisch.title == _ZIEL_MARKER
 
     def test_unachieve_goal_an_getilgter_fallakte_wird_abgelehnt(self, outcome_goal, case_open, staff_user, admin_user):
-        achieve_goal(outcome_goal)
+        achieve_goal(outcome_goal, staff_user)
         alte_instanz = _zweite_instanz(outcome_goal)
         soft_delete_case(case_open, staff_user)
         anonymize_case_now(case_open, admin_user)
 
         with pytest.raises(ValidationError):
-            unachieve_goal(alte_instanz)
+            unachieve_goal(alte_instanz, staff_user)
 
         frisch = OutcomeGoal.objects.get(pk=outcome_goal.pk)
         assert frisch.is_achieved is True
@@ -173,7 +173,7 @@ class TestGetilgteFallakteLehntStatuswechselAb:
         anonymize_case_now(case_open, admin_user)
 
         with pytest.raises(ValidationError):
-            toggle_milestone(alte_instanz)
+            toggle_milestone(alte_instanz, staff_user)
 
         frisch = Milestone.objects.get(pk=milestone.pk)
         assert frisch.is_completed is False
@@ -186,7 +186,7 @@ class TestGetilgteFallakteLehntStatuswechselAb:
         soft_delete_case(case_open, staff_user)
 
         with pytest.raises(ValidationError):
-            achieve_goal(alte_instanz)
+            achieve_goal(alte_instanz, staff_user)
 
         assert OutcomeGoal.objects.values_list("is_achieved", flat=True).get(pk=outcome_goal.pk) is False
 
@@ -257,7 +257,7 @@ class TestRendezvousRedaktionGegenStatuswechsel:
     """
 
     def test_a_redaktion_vor_dem_statuswechsel(self, renn_bestand):
-        _facility, _staff, _person, case, goal = renn_bestand
+        _facility, staff, _person, case, goal = renn_bestand
         geladen = threading.Event()
         redigiert = threading.Event()
         ergebnis: dict[str, str] = {}
@@ -268,7 +268,7 @@ class TestRendezvousRedaktionGegenStatuswechsel:
                 geladen.set()
                 if not redigiert.wait(timeout=_JOIN_TIMEOUT):
                     raise AssertionError("Redaktions-Faden meldete seinen Commit nicht")
-                achieve_goal(alte_instanz)
+                achieve_goal(alte_instanz, staff)
                 ergebnis["status"] = "gewechselt"
             except ValidationError:
                 ergebnis["status"] = "abgelehnt"
@@ -307,7 +307,7 @@ class TestRendezvousRedaktionGegenStatuswechsel:
         assert frisch.is_achieved is True
 
     def test_b_statuswechsel_haelt_die_sperre_vor_der_redaktion(self, renn_bestand):
-        _facility, _staff, _person, case, goal = renn_bestand
+        _facility, staff, _person, case, goal = renn_bestand
         pid_box: dict[str, int] = {}
         status_geschrieben = threading.Event()
         redaktion_bereit = threading.Event()
@@ -323,7 +323,7 @@ class TestRendezvousRedaktionGegenStatuswechsel:
             try:
                 with transaction.atomic():
                     _backend_pid()
-                    achieve_goal(OutcomeGoal.objects.get(pk=goal.pk))
+                    achieve_goal(OutcomeGoal.objects.get(pk=goal.pk), staff)
                     status_geschrieben.set()
                     # Erst freigeben, wenn die Redaktion messbar wartet — ohne
                     # diesen Punkt entschiede die Maschinenlaune die Ordnung.

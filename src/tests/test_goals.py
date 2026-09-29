@@ -69,21 +69,21 @@ class TestGoalService:
         assert updated.title == original_title
 
     def test_achieve_goal(self, outcome_goal, staff_user):
-        achieved = achieve_goal(outcome_goal)
+        achieved = achieve_goal(outcome_goal, staff_user)
         assert achieved.is_achieved is True
         assert achieved.achieved_at == timezone.localdate()
 
     def test_achieve_goal_idempotent(self, outcome_goal, staff_user):
-        achieve_goal(outcome_goal)
+        achieve_goal(outcome_goal, staff_user)
         outcome_goal.refresh_from_db()
         original_date = outcome_goal.achieved_at
         # Call again — should be idempotent
-        result = achieve_goal(outcome_goal)
+        result = achieve_goal(outcome_goal, staff_user)
         assert result.achieved_at == original_date
 
     def test_unachieve_goal(self, outcome_goal, staff_user):
-        achieve_goal(outcome_goal)
-        unachieved = unachieve_goal(outcome_goal)
+        achieve_goal(outcome_goal, staff_user)
+        unachieved = unachieve_goal(outcome_goal, staff_user)
         assert unachieved.is_achieved is False
         assert unachieved.achieved_at is None
 
@@ -100,13 +100,13 @@ class TestGoalService:
         assert ms.sort_order == 5
 
     def test_toggle_milestone_complete(self, milestone, staff_user):
-        toggled = toggle_milestone(milestone)
+        toggled = toggle_milestone(milestone, staff_user)
         assert toggled.is_completed is True
         assert toggled.completed_at == timezone.localdate()
 
     def test_toggle_milestone_uncomplete(self, milestone, staff_user):
-        toggle_milestone(milestone)  # complete
-        toggled = toggle_milestone(milestone)  # uncomplete
+        toggle_milestone(milestone, staff_user)  # complete
+        toggled = toggle_milestone(milestone, staff_user)  # uncomplete
         assert toggled.is_completed is False
         assert toggled.completed_at is None
 
@@ -304,7 +304,7 @@ class TestGoalToggleView:
         assert outcome_goal.is_achieved is True
 
     def test_toggle_goal_unachieve(self, client, staff_user, case_open, outcome_goal):
-        achieve_goal(outcome_goal)
+        achieve_goal(outcome_goal, staff_user)
         client.force_login(staff_user)
         response = client.post(
             reverse(
@@ -395,7 +395,7 @@ class TestMilestoneToggleView:
         assert milestone.completed_at is not None
 
     def test_toggle_milestone_uncomplete(self, client, staff_user, case_open, milestone):
-        toggle_milestone(milestone)  # complete first
+        toggle_milestone(milestone, staff_user)  # complete first
         client.force_login(staff_user)
         response = client.post(
             reverse(

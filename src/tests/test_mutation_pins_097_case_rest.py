@@ -599,7 +599,7 @@ class TestGoalServicesTakeTheClientRowLock:
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"
         assert _pk_literal(client_identified) in locks[0], locks[0]
 
-    def test_achieve_goal_sperrt_die_personenzeile(self, client_identified, outcome_goal):
+    def test_achieve_goal_sperrt_die_personenzeile(self, client_identified, outcome_goal, staff_user):
         """Pin: ``x_achieve_goal__mutmut_2`` (``lock=None``), ``…__mutmut_4``
         (Kwarg weggelassen) und ``…__mutmut_5`` (``lock=False``).
 
@@ -607,13 +607,13 @@ class TestGoalServicesTakeTheClientRowLock:
         Mitschnitt.
         """
         with CaptureQueriesContext(connection) as captured:
-            achieve_goal(outcome_goal)
+            achieve_goal(outcome_goal, staff_user)
 
         locks = _locking_statements(captured, "core_client")
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"
         assert _pk_literal(client_identified) in locks[0], locks[0]
 
-    def test_unachieve_goal_sperrt_die_personenzeile(self, client_identified, outcome_goal):
+    def test_unachieve_goal_sperrt_die_personenzeile(self, client_identified, outcome_goal, staff_user):
         """Pin: ``x_unachieve_goal__mutmut_1`` (Person -> ``None``),
         ``…__mutmut_2`` (``lock=None``), ``…__mutmut_4`` (Kwarg weggelassen)
         und ``…__mutmut_5`` (``lock=False``).
@@ -622,7 +622,7 @@ class TestGoalServicesTakeTheClientRowLock:
         Mitschnitt — beim ``None``-Mutanten entfaellt die Abfrage ganz.
         """
         with CaptureQueriesContext(connection) as captured:
-            unachieve_goal(outcome_goal)
+            unachieve_goal(outcome_goal, staff_user)
 
         locks = _locking_statements(captured, "core_client")
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"
@@ -643,7 +643,7 @@ class TestGoalServicesTakeTheClientRowLock:
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"
         assert _pk_literal(client_identified) in locks[0], locks[0]
 
-    def test_toggle_milestone_sperrt_die_personenzeile(self, client_identified, milestone):
+    def test_toggle_milestone_sperrt_die_personenzeile(self, client_identified, milestone, staff_user):
         """Pin: ``x_toggle_milestone__mutmut_2`` (``lock=None``),
         ``…__mutmut_4`` (Kwarg weggelassen) und ``…__mutmut_5``
         (``lock=False``).
@@ -652,7 +652,7 @@ class TestGoalServicesTakeTheClientRowLock:
         Mitschnitt.
         """
         with CaptureQueriesContext(connection) as captured:
-            toggle_milestone(milestone)
+            toggle_milestone(milestone, staff_user)
 
         locks = _locking_statements(captured, "core_client")
         assert len(locks) == 1, f"erwartet GENAU eine Client-Sperre, war: {locks}"

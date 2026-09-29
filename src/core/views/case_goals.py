@@ -89,9 +89,9 @@ class GoalToggleView(StaffRequiredMixin, View):
         goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
         try:
             if goal.is_achieved:
-                unachieve_goal(goal)
+                unachieve_goal(goal, request.user)
             else:
-                achieve_goal(goal)
+                achieve_goal(goal, request.user)
         except ValidationError as exc:
             return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))
@@ -123,7 +123,7 @@ class MilestoneToggleView(StaffRequiredMixin, View):
         case = get_scoped_object(cases_with_live_client(), request, pk=case_pk)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
         try:
-            toggle_milestone(milestone)
+            toggle_milestone(milestone, request.user)
         except ValidationError as exc:
             return _abgelehnt(exc)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))

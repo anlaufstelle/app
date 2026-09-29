@@ -127,19 +127,19 @@ class TestWortlautUndZweigeDesZustandsvertrags:
 
         assert _meldung(fehler) == _VERSCHWUNDEN
 
-    def test_verschwundene_zielzeile_nennt_die_eigene_meldung(self, outcome_goal):
+    def test_verschwundene_zielzeile_nennt_die_eigene_meldung(self, outcome_goal, staff_user):
         OutcomeGoal.objects.filter(pk=outcome_goal.pk).delete()
 
         with pytest.raises(ValidationError) as fehler:
-            achieve_goal(outcome_goal)
+            achieve_goal(outcome_goal, staff_user)
 
         assert _meldung(fehler) == _VERSCHWUNDEN
 
-    def test_verschwundene_meilensteinzeile_nennt_die_eigene_meldung(self, milestone):
+    def test_verschwundene_meilensteinzeile_nennt_die_eigene_meldung(self, milestone, staff_user):
         Milestone.objects.filter(pk=milestone.pk).delete()
 
         with pytest.raises(ValidationError) as fehler:
-            toggle_milestone(milestone)
+            toggle_milestone(milestone, staff_user)
 
         assert _meldung(fehler) == _VERSCHWUNDEN
 
@@ -160,21 +160,21 @@ class TestSperrreihenfolgeDerStatuswechsel:
 
         assert _gesperrte_tabellen(captured) == ["core_client", "core_case"]
 
-    def test_achieve_goal_sperrt_person_fall_ziel(self, outcome_goal):
+    def test_achieve_goal_sperrt_person_fall_ziel(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
-            achieve_goal(outcome_goal)
+            achieve_goal(outcome_goal, staff_user)
 
         assert _gesperrte_tabellen(captured) == ["core_client", "core_case", "core_outcomegoal"]
 
-    def test_unachieve_goal_sperrt_person_fall_ziel(self, outcome_goal):
+    def test_unachieve_goal_sperrt_person_fall_ziel(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
-            unachieve_goal(outcome_goal)
+            unachieve_goal(outcome_goal, staff_user)
 
         assert _gesperrte_tabellen(captured) == ["core_client", "core_case", "core_outcomegoal"]
 
-    def test_toggle_milestone_sperrt_person_fall_ziel_meilenstein(self, milestone):
+    def test_toggle_milestone_sperrt_person_fall_ziel_meilenstein(self, milestone, staff_user):
         with CaptureQueriesContext(connection) as captured:
-            toggle_milestone(milestone)
+            toggle_milestone(milestone, staff_user)
 
         assert _gesperrte_tabellen(captured) == [
             "core_client",
@@ -209,26 +209,26 @@ class TestGeschriebeneSpalten:
         reopen_case(case_closed, staff_user)
         assert gesehen == [["status", "closed_at", "updated_at"]]
 
-    def test_achieve_goal_schreibt_nur_die_beiden_statusspalten(self, outcome_goal, monkeypatch):
+    def test_achieve_goal_schreibt_nur_die_beiden_statusspalten(self, outcome_goal, monkeypatch, staff_user):
         gesehen = self._spion(monkeypatch, OutcomeGoal)
-        achieve_goal(outcome_goal)
+        achieve_goal(outcome_goal, staff_user)
         assert gesehen == [["is_achieved", "achieved_at"]]
 
-    def test_unachieve_goal_schreibt_nur_die_beiden_statusspalten(self, outcome_goal, monkeypatch):
+    def test_unachieve_goal_schreibt_nur_die_beiden_statusspalten(self, outcome_goal, monkeypatch, staff_user):
         gesehen = self._spion(monkeypatch, OutcomeGoal)
-        unachieve_goal(outcome_goal)
+        unachieve_goal(outcome_goal, staff_user)
         assert gesehen == [["is_achieved", "achieved_at"]]
 
-    def test_toggle_milestone_schreibt_nur_die_beiden_statusspalten(self, milestone, monkeypatch):
+    def test_toggle_milestone_schreibt_nur_die_beiden_statusspalten(self, milestone, monkeypatch, staff_user):
         gesehen = self._spion(monkeypatch, Milestone)
-        toggle_milestone(milestone)
+        toggle_milestone(milestone, staff_user)
         assert gesehen == [["is_completed", "completed_at"]]
 
-    def test_achieve_goal_schreibt_beim_zweiten_aufruf_gar_nicht(self, outcome_goal, monkeypatch):
+    def test_achieve_goal_schreibt_beim_zweiten_aufruf_gar_nicht(self, outcome_goal, monkeypatch, staff_user):
         """Pin: der Idempotenz-Ausstieg entscheidet am FRISCHEN Stand."""
-        achieve_goal(outcome_goal)
+        achieve_goal(outcome_goal, staff_user)
         gesehen = self._spion(monkeypatch, OutcomeGoal)
-        achieve_goal(OutcomeGoal.objects.get(pk=outcome_goal.pk))
+        achieve_goal(OutcomeGoal.objects.get(pk=outcome_goal.pk), staff_user)
         assert gesehen == []
 
 
@@ -245,10 +245,10 @@ class TestUebergebeneInstanzBleibtDerRueckgabewert:
         assert case_open.status == Case.Status.CLOSED
         assert case_open.title == "Parallel umbenannt"
 
-    def test_toggle_milestone_liefert_die_uebergebene_instanz_frisch_zurueck(self, milestone):
+    def test_toggle_milestone_liefert_die_uebergebene_instanz_frisch_zurueck(self, milestone, staff_user):
         Milestone.objects.filter(pk=milestone.pk).update(title="Parallel umbenannt")
 
-        ergebnis = toggle_milestone(milestone)
+        ergebnis = toggle_milestone(milestone, staff_user)
 
         assert ergebnis is milestone
         assert milestone.is_completed is True
@@ -266,9 +266,10 @@ class TestAbfrageBudgetDerStatuswechsel:
     Audit-Zeile · ``INSERT`` der Aktivitaet · ``refresh_from_db`` der
     uebergebenen Instanz.
 
-    Zielpfad (7): Kette vorlesen · Personensperre · Widerrufsspalten ·
+    Zielpfad (8): Einrichtung der Akte vorlesen (Grenze der handelnden
+    Person, ungesperrt) · Kette vorlesen · Personensperre · Widerrufsspalten ·
     Fallzeile sperren · Zielzeile sperren · ``UPDATE`` · ``refresh_from_db``.
-    Der Meilenstein (8) sperrt die Zielzeile zusaetzlich.
+    Der Meilenstein (9) sperrt die Zielzeile zusaetzlich.
 
     Die ``ContentType``-Abfrage des Zeitstroms wird vorher aufgewaermt: sie
     faellt je Prozess nur EINMAL an und gehoert nicht zum Budget des Pfades.
@@ -296,17 +297,17 @@ class TestAbfrageBudgetDerStatuswechsel:
             reopen_case(case_closed, staff_user)
         assert len(_fachliche_abfragen(captured)) == 12
 
-    def test_achieve_goal_budget(self, outcome_goal):
+    def test_achieve_goal_budget(self, outcome_goal, staff_user):
         with CaptureQueriesContext(connection) as captured:
-            achieve_goal(outcome_goal)
-        assert len(_fachliche_abfragen(captured)) == 7
-
-    def test_unachieve_goal_budget(self, outcome_goal):
-        with CaptureQueriesContext(connection) as captured:
-            unachieve_goal(outcome_goal)
-        assert len(_fachliche_abfragen(captured)) == 7
-
-    def test_toggle_milestone_budget(self, milestone):
-        with CaptureQueriesContext(connection) as captured:
-            toggle_milestone(milestone)
+            achieve_goal(outcome_goal, staff_user)
         assert len(_fachliche_abfragen(captured)) == 8
+
+    def test_unachieve_goal_budget(self, outcome_goal, staff_user):
+        with CaptureQueriesContext(connection) as captured:
+            unachieve_goal(outcome_goal, staff_user)
+        assert len(_fachliche_abfragen(captured)) == 8
+
+    def test_toggle_milestone_budget(self, milestone, staff_user):
+        with CaptureQueriesContext(connection) as captured:
+            toggle_milestone(milestone, staff_user)
+        assert len(_fachliche_abfragen(captured)) == 9
