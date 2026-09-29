@@ -704,6 +704,18 @@ CONTENT_SECURITY_POLICY = {
         "font-src": ["'self'"],
         "connect-src": ["'self'"],
         "frame-ancestors": ["'none'"],
+        # base-uri 'none' (Refs #1904): no template uses <base>. An injected
+        # <base href> would re-point every relative URL of the page (scripts,
+        # form targets, links) to a foreign origin, so none is allowed.
+        "base-uri": ["'none'"],
+        # form-action 'self' (Refs #1904): forms and `formaction` buttons may
+        # only submit to this origin; Chromium also checks redirects that
+        # follow a submit. An injected form cannot send typed-in data (e.g. a
+        # password) to a foreign host. An operator who needs a form that
+        # posts to another origin extends this list here, in the one source
+        # of the policy, never in the reverse proxy (a second CSP header
+        # there would only tighten the policy, never widen it).
+        "form-action": ["'self'"],
         # CSP-Reporting (Refs #684, Refs #733): Browser POSTet Violations
         # an /csp-report/ — strukturiertes Logging als WARNING fuer
         # Detection. Der Endpoint ist rate-limited (10/min/IP) und

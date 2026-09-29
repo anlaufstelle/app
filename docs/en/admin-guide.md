@@ -4,6 +4,7 @@
 > Synchronization update 2026-09-29: § 2.7 states that after setting up 2FA again only the new TOTP device's code is accepted, no longer the previous device's (#2328).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that adding a passkey requires sudo mode and that the settings page leads through the sudo page first (#2328).
 > Synchronization update 2026-09-29: § 7.3 "Retention of the Event History" adds the one-time check and repair of history versions that carry a redaction timestamp but still hold values (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target`).
+> Synchronization update 2026-09-29: § 5.4 adds the `base-uri 'none'` and `form-action 'self'` directives (effect, typical browser message on a violation, where to extend the policy) (#1904).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that setting up 2FA again while a confirmed factor exists requires sudo mode, first-time setup does not, and the backup-code pages require a session confirmed with the second factor (#2328).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
@@ -1506,6 +1507,8 @@ The Content Security Policy (CSP) is set **centrally in Django** via [`django-cs
 
 **Exception `/admin-mgmt/*` (Django admin):** django-unfold loads its own Alpine build that uses `new AsyncFunction()`-based evaluation for the Cmd+K search and therefore cannot initialize without `'unsafe-eval'`. The [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) therefore appends `'unsafe-eval'` **per request only for admin routes** -- which are additionally protected by the MFA gate and the `facility_admin` (or `super_admin`) role. Outside the admin, the strict global policy stays active.
 
+**`base-uri 'none'` and `form-action 'self'`** (#1904): The policy forbids every `<base>` element -- an injected `<base href>` would otherwise re-point all relative URLs of the page to a foreign origin -- and allows form targets, including `formaction` buttons, only on the application's own origin; Chromium also checks redirects that follow a submit. Both directives apply to every page including the error and maintenance pages and stay unchanged in the admin area. A violation shows up in the browser console (Chromium) as `Sending form data to '…' violates the following Content Security Policy directive: "form-action 'self'"` or `Refused to set the document's base URI to '…' because it violates the following Content Security Policy directive: "base-uri 'none'"`; the form is not submitted, and the browser reports the violation to `/csp-report/` (log entry `csp_violation`). If an installation needs a form that posts to another origin (for example an external sign-in or payment portal), add that origin to `form-action` in `CONTENT_SECURITY_POLICY` in `settings/base.py` -- not in the reverse proxy: a second CSP header there only narrows the policy further and never widens it.
+
 **Typical error patterns in the browser console:**
 
 - `Refused to execute inline script because it violates the following Content Security Policy directive` -- inline `<script>` block in a template. Move the script to a static JS file or include it via a nonce-aware template tag.
@@ -2321,4 +2324,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: c9da23da35d3e5921fd2f0f564588cfecdafd3d8 -->
+<!-- source-hash: b523cb623305ad39aef06eba1efeccf98c1de560 -->
