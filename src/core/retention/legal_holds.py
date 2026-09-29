@@ -25,6 +25,13 @@ LEGAL_HOLD_ALREADY_DISMISSED_MESSAGE = _(
     "Diese Aufbewahrungssperre wurde zwischenzeitlich bereits aufgehoben — bitte die Übersicht neu laden."
 )
 
+#: Meldung, wenn ein paralleler Vorgang den Fall waehrend der Sperrwartezeit an
+#: eine andere Person gehaengt hat (Gegenstueck zu
+#: ``TARGET_BINDING_CHANGED_MESSAGE`` fuer Ereignisse, Refs #2374).
+CASE_BINDING_CHANGED_MESSAGE = _(
+    "Die Personenzuordnung des Falls wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+)
+
 
 def _row_content_is_gone(row) -> bool:
     """Hat DIESE Fassung ihre Werte verloren? (Finding B)
@@ -236,7 +243,14 @@ def _lock_case_and_check_history(facility, target_id):
     # im Papierkorb ist genau der Halt, auf dem Refs #2123 aufbaut.
     if person is not None:
         _assert_not_merge_tombstone(person)
-    Case.objects.filter(facility=facility, pk=target_id).select_for_update().only("pk").first()
+    # Refs #2374: Inversions-Schutz wie im Ereignis-Zweig — die Bindung wird
+    # auf der gesperrten Fallzeile revalidiert. Haengt ein paralleler Vorgang
+    # den Fall waehrend der Sperrwartezeit an eine ANDERE Person, waeren deren
+    # Zeile und Ereignisse nie gesperrt worden; bewusst Abbruch statt
+    # Nachsperren, die anordnende Person laedt neu.
+    locked_case = Case.objects.filter(facility=facility, pk=target_id).select_for_update().only("pk", "client").first()
+    if locked_case is not None and locked_case.client_id != client_id:
+        raise ValidationError(CASE_BINDING_CHANGED_MESSAGE)
     # Die Ereigniszeilen der Person mit unter dieselbe Sperre: ein
     # Ereignis-Hold koordiniert ueber ``core_event``, und der Sofortpfad haelt
     # beide Stufen (``_lock_client_event_rows``).
@@ -403,7 +417,15 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
     ``LEGAL_HOLD``-Audit-Zeile. Ein stiller Hold, der Vollstaendigkeit
     suggeriert, waere die schlechtere Antwort: die Spoliationsfrage muss
     spaeter beantwortbar sein.
+
+    Refs #2374: Der Hold entsteht in der Einrichtung der handelnden Person —
+    sie wird vor jeder Zielsperre mit ``facility`` verglichen (fail-closed ohne
+    Einrichtung). Die Ziel-ID bleibt davon unberuehrt frei: ein Ziel, das diese
+    Einrichtung nicht kennt, ist weiterhin kein Fehler.
     """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != facility.pk:
+        raise ValidationError(LEGAL_HOLD_OTHER_FACILITY_MESSAGE)
     with transaction.atomic():
         # Alle Hold-Ziele mit Historien-Bezug bekommen denselben
         # Koordinationspunkt und dasselbe Verspaetungsmerkmal (Cross-Review
