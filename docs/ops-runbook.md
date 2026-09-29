@@ -1236,22 +1236,25 @@ Vor und waehrend Migrations/Deploys den Stack auf 503 schalten, damit
 User eine konsistente Custom-Page sehen statt Connection-Errors.
 
 ```bash
-# Aktivieren (File-Flag wird angelegt)
-make maintenance-on
-
-# Deploy / Migration ausfuehren
-docker compose -f docker-compose.prod.yml pull
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# Aktivieren (File-Flag im persistenten Web-Volume anlegen)
+docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
+
+# Deploy / Migration ausfuehren
+docker compose "${compose_files[@]}" pull
 docker compose "${compose_files[@]}" up -d
 
-# Deaktivieren (File-Flag entfernen)
-make maintenance-off
+# Deaktivieren (dieselbe File-Flag im neu angelegten Web-Container entfernen)
+docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
 ```
 
-`make maintenance-on/off` nutzt `$MAINTENANCE_FLAG_FILE` (Env-Var) oder Default `/tmp/anlaufstelle.maintenance`. Whitelist:
+Der Produktions-Stack setzt `MAINTENANCE_FLAG_FILE` ohne weitere Konfiguration auf `/data/anlaufstelle.maintenance`. Der Pfad liegt im benannten `media`-Volume, ist für `appuser` beschreibbar und übersteht deshalb das Neuanlegen von `web`; `make maintenance-on/off` berührt nur das Host-Dateisystem und ist für diesen Stack nicht geeignet. Ein bereits in `.env` gesetzter Wert überschreibt den Standard weiterhin, muss aber ein beschreibbarer, persistenter **Container-Pfad** sein. Alternativ schaltet eine Systemadministration den Modus unter `/system/maintenance/` ein oder aus; die Seite schreibt dieselbe Datei.
+
+Whitelist:
 
 - `/health/` und `/static/...` bleiben erreichbar (Loadbalancer / Reverse-Proxy)
 - `MAINTENANCE_ALLOW_IPS` (komma-separiert) erlaubt Ops-Zugriff via `X-Forwarded-For` — z.B. fuer den eigenen Admin-Laptop waehrend des Wartungsfensters

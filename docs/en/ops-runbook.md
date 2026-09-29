@@ -1,5 +1,6 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
+> Synchronization update 2026-09-29: § 6.5a uses the persistent production flag path from the host and documents the system page as the second control path (#1904).
 > Synchronization update 2026-09-29: § 4 documents the bounded Compose container logs, their effect on `docker compose logs`, and site-specific overrides (#1904).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188).
 > Synchronization update 2026-09-29: § 5.8 documents that the dev Compose stack passes mail variables to `web` and how to verify SMTP handoff (#2388).
@@ -1255,22 +1256,25 @@ Before and during migrations/deploys, switch the stack to 503 so
 users see a consistent custom page instead of connection errors.
 
 ```bash
-# Activate (creates a file flag)
-make maintenance-on
-
-# Run the deploy / migration
-docker compose -f docker-compose.prod.yml pull
 # Full Compose file list in fixed order (admin-guide § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
+# Activate (create the file flag in the persistent web volume)
+docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
+
+# Run the deploy / migration
+docker compose "${compose_files[@]}" pull
 docker compose "${compose_files[@]}" up -d
 
-# Deactivate (removes the file flag)
-make maintenance-off
+# Deactivate (remove the same file flag in the recreated web container)
+docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
 ```
 
-`make maintenance-on/off` uses `$MAINTENANCE_FLAG_FILE` (env var) or defaults to `/tmp/anlaufstelle.maintenance`. Whitelist:
+Without additional configuration, the production stack sets `MAINTENANCE_FLAG_FILE` to `/data/anlaufstelle.maintenance`. This path is on the named `media` volume, is writable by `appuser`, and therefore survives recreation of `web`; `make maintenance-on/off` only touches the host filesystem and is not suitable for this stack. A value already set in `.env` continues to override the default, but it must be a writable, persistent **container path**. Alternatively, a system administrator can enable or disable the mode at `/system/maintenance/`; the page writes the same file.
+
+Whitelist:
 
 - `/health/` and `/static/...` stay reachable (load balancer / reverse proxy)
 - `MAINTENANCE_ALLOW_IPS` (comma-separated) allows ops access via `X-Forwarded-For` — e.g. for your own admin laptop during the maintenance window
@@ -2992,5 +2996,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: cad994b95c0007a0b208539191d0becc547d855c -->
+<!-- source-hash: b95de6458b97d549f4cbc8f7120d94d4b12fe784 -->
 <!-- translation-date: 2026-09-22 -->

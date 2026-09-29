@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Erforderliche Betreiber-Aktionen
 
 - **Compose-Logrotation übernehmen** (#1904) — Die aktualisierte Compose-Datei auf den Host übernehmen und `docker compose … up -d` ausführen, damit die Container mit den neuen Loggrenzen neu angelegt werden.
+- **Wartungsmodus-Pfad prüfen** (#1904) — Einen in `.env` gesetzten Host-Pfad für `MAINTENANCE_FLAG_FILE` entfernen oder auf den persistenten Container-Pfad `/data/anlaufstelle.maintenance` umstellen.
 
 ### Added
 
@@ -26,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Wartungsmodus übersteht das Neuanlegen des Webcontainers** (#1904) — Der Produktions-Stack verwendet ab Werk dieselbe beschreibbare Flag-Datei im persistenten Daten-Volume für Host-Befehl, Systemseite und Middleware.
 - **Medienbaum-Aufräumung meldet einen nicht speicherbaren Fortsetzungspunkt verständlich** (#2376) — Scheitert das atomare Schreiben des Fortsetzungspunkts, nennt das Kommando jetzt Pfad und Ursache als Bedienfehler, nachdem es die Zählwerte des abgeschlossenen Laufs ausgegeben hat.
 - **Abhängigkeits-Prüflauf meldet Erzeugungsfehler zuverlässig** (#1904) — Das Prüfziel für die Lock-Dateien meldet einen gescheiterten Erzeugungslauf jetzt als Fehler und stellt die vorhandenen Dateien wieder her.
 - **Trockenlauf der Historien-Aufbewahrung zählt wie der echte Lauf** (#2188) — `enforce_retention --dry-run` meldete Historienzeilen als „zu redigieren“, obwohl eine Aufbewahrungssperre am Fall sie im echten Lauf zurückstellt. Trockenlauf und Lauf entscheiden jetzt nach derselben Regel; die Vorschau nennt die Zahlen, die der Lauf danach erzeugt.

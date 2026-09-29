@@ -297,7 +297,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `MAINTENANCE_FLAG_FILE` | — (leer = aus) | Pfad einer Flag-Datei; solange sie existiert, antwortet die App mit HTTP 503. Ohne Wert ist die Middleware No-Op. |
+| `MAINTENANCE_FLAG_FILE` | `/data/anlaufstelle.maintenance` (Prod-Compose) | Beschreibbarer, persistenter Container-Pfad der Flag-Datei; solange sie existiert, antwortet die App mit HTTP 503. Ein eigener Wert in `.env` muss ebenfalls im Container erreichbar sein; bestehende Host-Pfade entfernen oder auf einen persistenten Container-Pfad umstellen. |
 | `MAINTENANCE_ALLOW_IPS` || Komma-separierte IP-Liste für Ops-Zugriff während der Wartung. |
 | `MAINTENANCE_CACHE_TTL` | `5` | Caching-Dauer (Sekunden) der Flag-Datei-Prüfung. |
 | `MAINTENANCE_RETRY_AFTER` | `600` | Wert des `Retry-After`-Headers (Sekunden) bei aktivem Wartungsmodus. |
