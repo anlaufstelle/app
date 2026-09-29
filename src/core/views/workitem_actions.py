@@ -46,6 +46,7 @@ from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     IdempotentCreateMixin,
     StaffRequiredMixin,
+    htmx_absage,
     is_idempotency_conflict,
 )
 from core.views.utils import safe_redirect_path
@@ -186,6 +187,16 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
         new_status = request.POST.get("status")
         # Refs #819: Django bietet Status.values als Liste an.
         if new_status not in WorkItem.Status.values:
+            # Refs #2385: the inbox row buttons (`_workitem_row.html`,
+            # `hx-post` + `hx-target="#workitem-<pk>"` +
+            # `hx-swap="outerHTML"`) would otherwise swap this plain text
+            # into the row itself (error class #2358). The second caller
+            # (`_actions.html`, a plain form on the detail page) only ever
+            # submits hard-coded, valid status values — that branch stays
+            # defensive and practically unreachable, so it is left
+            # unchanged.
+            if request.headers.get("HX-Request") == "true":
+                return htmx_absage(_("Ungültiger Status"), status=400)
             return HttpResponseBadRequest(_("Ungültiger Status"))
 
         wants_raw_json = _wants_raw_json_response(request)
