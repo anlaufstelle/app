@@ -1703,6 +1703,10 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
             # ein spaeterer Lauf holt sie nach. Die Ereigniszeilen kommen
             # (Cross-Review Runde 1) mit unter die Sperre — ein Ereignis-Hold
             # koordiniert ueber ``core_event``, nicht ueber ``core_client``.
+            # Person -> Fall -> Ereignis wie im Sofortpfad: die Faelle vor den
+            # Ereignissen, obwohl die Kaskade sie erst spaeter schreibt
+            # (``_lock_client_case_rows``).
+            _lock_client_case_rows(client)
             _lock_client_event_rows(client)
             if client_has_active_hold(client):
                 continue

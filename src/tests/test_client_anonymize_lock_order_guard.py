@@ -1,7 +1,8 @@
-"""Sofort-Anonymisierung: Sperrfolge Person -> Fall -> Ereignis.
+"""Anonymisierung einer Person: Sperrfolge Person -> Fall -> Ereignis.
 
-Die Kaskade der Sofort-Anonymisierung schreibt die Person, ihre Faelle und
-ihre Ereignisse. Die projektweite Ordnung fuer diese drei Tabellen ist
+Die Kaskade der Anonymisierung schreibt die Person, ihre Faelle und ihre
+Ereignisse — im Sofortpfad ebenso wie in der naechtlichen Tilgung aus dem
+Papierkorb. Die projektweite Ordnung fuer diese drei Tabellen ist
 Person -> Fall -> Ereignis — dieselbe, die die Fall-Hold-Anlage und die
 Fall-Tilgung nehmen. Eine Zeile gilt dabei als genommen, sobald eine
 Anweisung sie sperrt: ein ``SELECT ... FOR UPDATE`` ebenso wie ein ``UPDATE``
@@ -15,12 +16,14 @@ Die gesperrten bzw. geschriebenen Tabellen liefert der Plan von PostgreSQL
 
 import json
 import re
+from datetime import timedelta
 
 import pytest
 from django.db import connection, transaction
+from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, Event
-from core.services.client import anonymize_client_now
+from core.services.client import anonymize_client_now, anonymize_eligible_soft_deleted_clients
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -81,3 +84,40 @@ class TestSperrfolgeDerSofortAnonymisierung:
         assert folge[0] == "core_client"
         assert folge.index("core_client") < folge.index("core_event")
         assert Client.objects.get(pk=client_identified.pk).anonymized_at is not None
+
+
+@pytest.fixture
+def expired_trashed_person(trashed_person_with_case_and_event):
+    """Person im Papierkorb, deren Frist abgelaufen ist — Kandidat der naechtlichen Tilgung."""
+    person = trashed_person_with_case_and_event
+    Client.objects.filter(pk=person.pk).update(deleted_at=timezone.now() - timedelta(days=400))
+    person.refresh_from_db()
+    return person
+
+
+class TestSperrfolgeDerNaechtlichenTilgung:
+    def test_fall_vor_ereignis(self, expired_trashed_person, facility, settings_obj, case_open, case_event):
+        person = expired_trashed_person
+
+        with mitschnitt() as abfragen:
+            count = anonymize_eligible_soft_deleted_clients(facility, settings_obj)
+
+        assert _erste_zugriffe(abfragen) == list(_KETTE)
+        # Auswahl, Zaehlwert, Kaskade und Audit wie bisher.
+        assert count == 1
+        person.refresh_from_db()
+        assert person.anonymized_at is not None
+        assert Case.objects.filter(pk=case_open.pk).exists()
+        assert Event.objects.filter(pk=case_event.pk).exists()
+        assert AuditLog.objects.filter(action=AuditLog.Action.CLIENT_ANONYMIZED, target_id=str(person.pk)).count() == 1
+
+    def test_gegenprobe_probelauf_sperrt_und_schreibt_nichts(self, expired_trashed_person, facility, settings_obj):
+        person = expired_trashed_person
+
+        with mitschnitt() as abfragen:
+            count = anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=True)
+
+        assert count == 1
+        assert _erste_zugriffe(abfragen) == []
+        person.refresh_from_db()
+        assert person.anonymized_at is None
