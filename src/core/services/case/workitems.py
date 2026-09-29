@@ -968,41 +968,58 @@ def duplicate_recurring_workitem(workitem, user):
     """
     from core.services.client.restriction import assert_processing_allowed
 
+    # Einrichtungsgrenze der handelnden Person vor jeder Lesung und Sperre.
+    _assert_actor_in_facility(user, workitem.facility_id)
     # Art.-18-Gate (Refs #2045): Die Folgeaufgabe wird mit DEMSELBEN
     # Personenbezug neu angelegt — eine Neuanlage, kein Fortschreiben. Ohne
     # Guard entstand an einer eingeschraenkten Person auf dem DONE-Uebergang
     # (einzeln wie im Stapel) eine frische Aufgabe.
     assert_processing_allowed(workitem.client_id, lock=True)
-    if not workitem.recurrence or workitem.recurrence == WorkItem.Recurrence.NONE:
+    # Eine widerrufene Person (Papierkorb, deaktiviert, zusammengefuehrt)
+    # bekommt keine neue Aufgabe — gelesen an der eben gesperrten Zeile.
+    _raise_if_clients_revoked([workitem.client_id] if workitem.client_id is not None else [], workitem.facility_id)
+    # Quellaufgabe gesperrt und einrichtungsgebunden neu lesen (Person vor
+    # Aufgabe). Wiederholung und Marker entscheidet die frische Zeile, nicht die
+    # Instanz des Aufrufers: eine zweite, veraltete Instanz saehe den Marker
+    # sonst leer und legte eine zweite Folgeaufgabe an. In der Kette aus dem
+    # Statuswechsel haelt der Aufrufer die Sperre bereits.
+    source = WorkItem.objects.select_for_update().filter(pk=workitem.pk, facility_id=workitem.facility_id).first()
+    if source is None:
+        raise ValidationError(_("Aufgabe gehört zu einer anderen Einrichtung."))
+    if source.client_id != workitem.client_id:
+        raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
+    if source.is_deleted:
+        raise ValidationError(WORKITEM_DELETED_MESSAGE)
+    if not source.recurrence or source.recurrence == WorkItem.Recurrence.NONE:
         return None
 
     # Refs #596: Idempotency guard — skip if a follow-up was already produced.
-    if workitem.recurrence_duplicated_at is not None:
+    if source.recurrence_duplicated_at is not None:
         return None
 
-    reference_date = workitem.due_date or timezone.localdate()
-    new_due_date = _next_due_date(reference_date, workitem.recurrence)
+    reference_date = source.due_date or timezone.localdate()
+    new_due_date = _next_due_date(reference_date, source.recurrence)
     if new_due_date is None:
         return None
 
     new_remind_at = None
-    if workitem.remind_at and workitem.due_date:
+    if source.remind_at and source.due_date:
         # Preserve the reminder offset relative to the due date.
-        offset = workitem.due_date - workitem.remind_at
+        offset = source.due_date - source.remind_at
         new_remind_at = new_due_date - offset
 
     new_workitem = WorkItem.objects.create(
-        facility=workitem.facility,
+        facility_id=source.facility_id,
         created_by=user,
-        client=workitem.client,
-        assigned_to=workitem.assigned_to,
-        item_type=workitem.item_type,
-        title=workitem.title,
-        description=workitem.description,
-        priority=workitem.priority,
+        client_id=source.client_id,
+        assigned_to_id=source.assigned_to_id,
+        item_type=source.item_type,
+        title=source.title,
+        description=source.description,
+        priority=source.priority,
         due_date=new_due_date,
         remind_at=new_remind_at,
-        recurrence=workitem.recurrence,
+        recurrence=source.recurrence,
         status=WorkItem.Status.OPEN,
     )
     log_activity(
@@ -1013,9 +1030,11 @@ def duplicate_recurring_workitem(workitem, user):
         action=Activity.Action.WORKITEM_RECURRENCE_CREATED,
     )
     # Refs #596: Mark the source so a subsequent DONE transition does not
-    # duplicate again. Persist within the same atomic block.
-    workitem.recurrence_duplicated_at = timezone.now()
-    workitem.save(update_fields=["recurrence_duplicated_at"])
+    # duplicate again. Persist within the same atomic block — an der
+    # gesperrten Zeile; die Instanz des Aufrufers erhaelt denselben Stand.
+    source.recurrence_duplicated_at = timezone.now()
+    source.save(update_fields=["recurrence_duplicated_at"])
+    workitem.recurrence_duplicated_at = source.recurrence_duplicated_at
     return new_workitem
 
 
