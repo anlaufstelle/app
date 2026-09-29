@@ -30,6 +30,10 @@ from core.models import AuditLog
 from core.models import EncryptedTOTPDevice as TOTPDevice
 from core.services.security import is_locked, verify_backup_code
 from core.services.security.mfa import _hash_code
+from tests.test_rls_functional import (  # noqa: F401
+    as_rls_role,
+    rls_test_role,
+)
 
 ALT_CODE = "abcd-1234"
 
@@ -153,3 +157,93 @@ class TestCleartextRowRejectedInLockoutRecovery:
         assert is_locked(staff_user) is True
         assert device.token_set.count() == 1
         assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK).exists()
+
+
+@pytest.mark.django_db
+class TestBackupCodeWritePathsUnderRlsRole:
+    """Die Schreibpfade der Backup-Code-Pruefung unter NOSUPERUSER/NOBYPASSRLS.
+
+    Beide Einstiege laufen ohne vollwertig angemeldete Sitzung: ``/mfa/verify/``
+    nach dem Passwort-Login (``mfa_verified`` fehlt noch), die Lockout-Recovery
+    ganz anonym. Sie schreiben AuditLog-Zeilen — mit dem migrierten Code als
+    Hash-Zeile, dem Zustand nach der Datenmigration.
+    """
+
+    def test_verify_with_migrated_code_writes_audit_with_account_facility(
+        self,
+        client,
+        staff_user,
+        rls_test_role,  # noqa: F811
+    ):
+        _confirmed_totp(staff_user)
+        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        client.force_login(staff_user)
+
+        with as_rls_role(rls_test_role, facility_id=staff_user.facility_id):
+            response = client.post("/mfa/verify/", {"mode": "backup", "token": ALT_CODE})
+
+        assert response.status_code == 302
+        assert client.session.get("mfa_verified") is True
+        assert device.token_set.count() == 0
+        entry = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.BACKUP_CODES_USED)
+        assert entry.facility_id == staff_user.facility_id
+
+    def test_verify_with_migrated_code_writes_audit_for_account_without_facility(
+        self,
+        client,
+        super_admin_user,
+        rls_test_role,  # noqa: F811
+    ):
+        _confirmed_totp(super_admin_user)
+        _backup_device(super_admin_user, _hash_code(ALT_CODE))
+        client.force_login(super_admin_user)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            response = client.post("/mfa/verify/", {"mode": "backup", "token": ALT_CODE})
+
+        assert response.status_code == 302
+        assert client.session.get("mfa_verified") is True
+        entry = AuditLog.objects.get(user=super_admin_user, action=AuditLog.Action.BACKUP_CODES_USED)
+        assert entry.facility_id is None
+
+    def test_rejected_cleartext_row_writes_failure_audit(
+        self,
+        client,
+        staff_user,
+        rls_test_role,  # noqa: F811
+    ):
+        _confirmed_totp(staff_user)
+        device = _backup_device(staff_user, ALT_CODE)
+        client.force_login(staff_user)
+
+        with as_rls_role(rls_test_role, facility_id=staff_user.facility_id):
+            response = client.post("/mfa/verify/", {"mode": "backup", "token": ALT_CODE})
+
+        assert response.status_code == 200
+        assert client.session.get("mfa_verified") is not True
+        assert device.token_set.count() == 1
+        entry = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.MFA_FAILED)
+        assert entry.facility_id == staff_user.facility_id
+
+    def test_lockout_recovery_with_migrated_code_writes_unlock_anonymously(
+        self,
+        client,
+        staff_user,
+        rls_test_role,  # noqa: F811
+    ):
+        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        _lock_account(staff_user)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            response = client.post(
+                reverse("core:lockout_recovery_backup_code"),
+                {"username": staff_user.username, "backup_code": ALT_CODE},
+            )
+
+        assert response.status_code == 302
+        assert is_locked(staff_user) is False
+        assert device.token_set.count() == 0
+        unlock = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK)
+        assert unlock.facility_id == staff_user.facility_id
+        used = AuditLog.objects.get(user=staff_user, action=AuditLog.Action.BACKUP_CODES_USED)
+        assert used.facility_id == staff_user.facility_id
