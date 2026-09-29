@@ -1555,6 +1555,12 @@ def anonymize_client_now(client, user):
     # Transaktion. ALLE Lesungen liegen bewusst DANACH: erst dann sind
     # „im Papierkorb", „noch nicht getilgt" und „kein Hold" stabile Aussagen
     # und nicht der Stand von vorhin.
+    #
+    # Davor die Einrichtungsgrenze der handelnden Person (fail-closed): eine
+    # fremde Einrichtung sperrt die Zeile nicht und tilgt nichts.
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != client.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     locked = Client.objects.select_for_update().filter(pk=client.pk, facility=client.facility_id).first()
     if locked is None:
         # Die Zeile ist verschwunden (harte Loeschung, fremde Einrichtung) —

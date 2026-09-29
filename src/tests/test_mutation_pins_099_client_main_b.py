@@ -218,7 +218,7 @@ class TestAnonymizeClientNowGuardMessages:
         assert real_trashed.anonymized_at is None
 
     def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
-        self, second_facility, client_identified, staff_user
+        self, second_facility, client_identified, staff_user, second_facility_user
     ):
         """Pin: ``x_anonymize_client_now__mutmut_5`` — ``select_for_update().filter(pk=
         client.pk, facility=client.facility_id)`` -> ``filter(pk=client.pk, )``
@@ -229,12 +229,16 @@ class TestAnonymizeClientNowGuardMessages:
         Annahme des Aufrufers. Original: der gesperrte Reload filtert nach dieser (jetzt
         falschen) Annahme und findet die Zeile nicht — lehnt ab. Mutant: der Reload
         ignoriert die Annahme und anonymisiert die echte Zeile trotzdem.
+
+        Die handelnde Person gehoert zur ANGENOMMENEN Einrichtung: die
+        Einrichtungsgrenze vor der Sperre vergleicht mit der Annahme und laesst
+        den Aufruf bis zum gesperrten Reload durch, der die Annahme verwirft.
         """
         client_identified.soft_delete(user=staff_user)
         client_identified.facility = second_facility
 
         with pytest.raises(ValidationError) as exc_info:
-            anonymize_client_now(client_identified, staff_user)
+            anonymize_client_now(client_identified, second_facility_user)
 
         assert exc_info.value.messages == ["Nur Personen im Papierkorb können anonymisiert werden."]
         real = Client.objects.get(pk=client_identified.pk)
