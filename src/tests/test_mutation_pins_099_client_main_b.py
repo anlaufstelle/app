@@ -444,7 +444,7 @@ class TestCreateOrGetClientDeletionRequestMessages:
         assert exc_info.value.messages == ["Diese Person liegt bereits im Papierkorb."]
 
     def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
-        self, facility, second_facility, staff_user
+        self, facility, second_facility, second_facility_user
     ):
         """Pin: ``x_create_or_get_client_deletion_request__mutmut_5`` —
         ``select_for_update().get(pk=client.pk, facility=client.facility_id)`` -> ``get(
@@ -455,12 +455,16 @@ class TestCreateOrGetClientDeletionRequestMessages:
         Aufrufers. Original: der gesperrte Reload filtert nach dieser (jetzt falschen)
         Annahme und findet die Zeile nicht — ``DoesNotExist``. Mutant: der Reload
         ignoriert die Annahme und legt den Antrag trotzdem an.
+
+        Die antragstellende Person gehoert zur ANGENOMMENEN Einrichtung: die
+        Einrichtungsgrenze vor der Sperre vergleicht mit der Annahme und laesst
+        den Aufruf bis zum gesperrten Reload durch, der die Annahme verwirft.
         """
         client = Client.objects.create(facility=facility, pseudonym="P-CreateFacilityGuard")
         client.facility = second_facility
 
         with pytest.raises(Client.DoesNotExist):
-            create_or_get_client_deletion_request(client, staff_user, "Grund")
+            create_or_get_client_deletion_request(client, second_facility_user, "Grund")
 
         assert not DeletionRequest.objects.filter(target_id=client.pk).exists()
 

@@ -1242,7 +1242,13 @@ def create_or_get_client_deletion_request(client, user, reason):
 
     Der View-Filter ``is_deleted=False`` ersetzt diesen Guard nicht: der
     Service ist die SSoT, und er liest vor dem Rennen.
+
+    Vor der Sperre steht die Einrichtungsgrenze der antragstellenden Person
+    (fail-closed): eine fremde Einrichtung haelt die Personenzeile nicht fest.
     """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != client.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     client = Client.objects.select_for_update().get(pk=client.pk, facility=client.facility_id)
     if client.merged_into_id is not None:
         raise ValidationError(_("Diese Person ist bereits zusammengeführt."))
