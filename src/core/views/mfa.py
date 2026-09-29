@@ -513,10 +513,10 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
                 request,
                 AuditLog.Action.MFA_ENABLED,
                 target_obj=request.user,
-                # Beim Faktorwechsel zusaetzlich die Zahl der ersetzten Geraete
-                # (wie ``passkeys_removed`` bei MFA_DISABLED); die erstmalige
-                # Einrichtung schreibt das Detail unveraendert.
-                detail={"event": "mfa_setup_confirmed", **({"count": replaced} if replaced else {})},
+                # Refs #2328: ``count`` = Zahl der mit der Quittung entfernten
+                # TOTP-Geraete (wie ``passkeys_removed`` bei MFA_DISABLED) —
+                # 0 bei der erstmaligen Einrichtung, ab 1 beim Faktorwechsel.
+                detail={"event": "mfa_setup_confirmed", "count": replaced},
                 facility=getattr(request.user, "facility", None),
             )
             messages.success(request, _("Zwei-Faktor-Authentifizierung aktiviert."))

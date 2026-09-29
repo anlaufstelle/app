@@ -17,7 +17,7 @@ Vertrag:
 * Ein abgebrochener Wechsel (neues Geraet nie quittiert) laesst das bisherige
   Geraet bestehen und gueltig.
 * Das Audit der Quittung (``MFA_ENABLED``) nennt die Zahl der entfernten
-  Geraete; die erstmalige Einrichtung schreibt es unveraendert.
+  Geraete unter ``count`` — 0 bei der erstmaligen Einrichtung.
 """
 
 from __future__ import annotations
@@ -215,10 +215,10 @@ class TestAbortedChangeChangesNothing:
 
 
 @pytest.mark.django_db
-class TestFirstSetupIsUnchanged:
+class TestFirstSetupRemovesNothing:
     def test_first_setup_audit_detail(self, client, staff_user):
         client.force_login(staff_user)
         neu = _complete_change(client, staff_user)
         assert _confirmed(staff_user) == [neu.pk]
         entries = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED)
-        assert [entry.detail for entry in entries] == [{"event": "mfa_setup_confirmed"}]
+        assert [entry.detail for entry in entries] == [{"event": "mfa_setup_confirmed", "count": 0}]
