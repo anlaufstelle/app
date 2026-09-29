@@ -17,8 +17,10 @@ wenn der User noch nicht oder nicht mehr in SudoMode ist.
 from __future__ import annotations
 
 import time
+from urllib.parse import urlencode
 
 from django.conf import settings
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
 
@@ -65,6 +67,8 @@ def clear_sudo(request) -> None:
 # gilt: ``RequireSudoModeMixin`` (per-View, nach dem Login-/Rollen-Gate)
 # GEHOERT AUF
 #   * Auth-Schwaechung (MFA-Disable),
+#   * Faktorwechsel (erneutes MFA-Setup bei bestehendem Faktor; bedingt ueber
+#     ``sudo_redirect_if_required``, Refs #2328),
 #   * Bulk-/Rohdaten-Exporte (Klienten-PII Art. 15/20, Cross-Facility-
 #     Audit-Export inkl. IP-Adressen),
 #   * destruktive installationsweite Toggles (Wartungsmodus, Konto-Unlock).
@@ -97,3 +101,25 @@ class RequireSudoModeMixin:
             return super().dispatch(request, *args, **kwargs)
         sudo_url = reverse("sudo_mode") + f"?next={request.get_full_path()}"
         return redirect(sudo_url)
+
+
+def sudo_redirect_if_required(request) -> HttpResponseRedirect | None:
+    """Sudo-Weiterleitung fuer eine bedingte Pruefung — oder ``None``.
+
+    Refs #2328: fuer Views, die Sudo nur unter einer Bedingung verlangen und
+    deshalb den ``RequireSudoModeMixin`` nicht tragen koennen —
+    ``MFASetupView`` verlangt Sudo beim Faktorwechsel, nicht beim Erstsetup.
+    Die Bedingung prueft der Aufrufer; hier gilt dieselbe Semantik wie in
+    ``RequireSudoModeMixin.dispatch``: Setting-Toggle ``SUDO_MODE_ENABLED``
+    (Default aktiv), anonyme Anfrage und laufendes Sudo-Fenster ergeben
+    ``None``, sonst geht es auf ``/sudo/`` mit ``next`` = voller Pfad samt
+    Query. Anders als im Mixin ist ``next`` URL-kodiert, damit eine Query mit
+    mehreren Parametern den Sudo-Schritt vollstaendig uebersteht.
+    """
+    if not getattr(settings, "SUDO_MODE_ENABLED", True):
+        return None
+    if not request.user.is_authenticated:
+        return None
+    if is_in_sudo(request):
+        return None
+    return HttpResponseRedirect(reverse("sudo_mode") + "?" + urlencode({"next": request.get_full_path()}))

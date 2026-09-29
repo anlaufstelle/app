@@ -317,7 +317,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | `BACKUP_DIR` | `/backups` (Compose-Stack), sonst `<Repo>/backups` | Read-only Mount-Ziel im Container; Health-Endpoint und Backup-Zeile im Systembereich lesen daraus das Backup-Alter. Die Host-Skripte ignorieren diese Variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Basisverzeichnis auf dem Host; relative Werte werden gegen den Repository-Root aufgelöst. `backup.sh` schreibt darunter nach `daily/`, `weekly/` und `monthly/`; `restore-drill.sh` liest aus `daily/`. Compose mountet dieses Verzeichnis read-only nach `BACKUP_DIR`, damit der Container dieselben Dateien sieht. |
 | `APP_VERSION` | `dev` | Release-Tag des von `docker-compose.prod.yml` gewählten App-Images, z. B. `latest` oder ein lokal gebauter Tag (siehe [„Image lokal aus dem Dockerfile bauen"](#1-installation-docker-compose)); ob ein Tag in der Registry veröffentlicht ist, prüft `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (Exit-Code 0 = veröffentlicht) oder die [GHCR-Paketseite](https://github.com/anlaufstelle/app/pkgs/container/app) — Release-Kandidaten vor dem 1.0-Cut sind dort NICHT veröffentlicht. `/health/` weist den Wert im `version`-Detailfeld aus (nur für Token-/authentifizierte Caller). |
-| `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
+| `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, erneute 2FA-Einrichtung bei bestehendem Faktor, DSGVO-Export). |
 
 ### Schritt 3: Caddyfile prüfen
 
@@ -997,6 +997,8 @@ Wenn eine Mitarbeiterin ihr Authenticator-Gerät verliert, muss ein Administrato
 Es gibt zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte. Anschließend muss er über die Pflicht-Checkbox bestätigen, dass er die Codes sicher gespeichert hat; erst dann ist das TOTP-Gerät bestätigt und die Einrichtung abgeschlossen. Verlässt er die Seite vorher, führt der nächste Aufruf wieder zu `/mfa/setup/`. Am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
 
 `django-otp` drosselt TOTP- und Backup-Code-Prüfungen nach mehreren Fehlversuchen zunehmend. Während der daraus folgenden Wartezeit kann auch ein korrekter Code abgewiesen werden; vor einem Reset deshalb die Sperrfrist abwarten und nicht unmittelbar weiterprobieren.
+
+**Erneute Einrichtung bei bestehendem Faktor** (#2328): Wer bereits einen bestätigten zweiten Faktor (TOTP oder Passkey) hat und `/mfa/setup/` erneut aufruft oder absendet, bestätigt zuerst im Sudo-Modus sein Passwort (bei TOTP zusätzlich einen aktuellen Code) — wie beim Deaktivieren der 2FA und beim Löschen eines Passkeys — und landet danach wieder auf `/mfa/setup/`. Eine solche Einrichtung legt ein weiteres TOTP-Gerät an und ersetzt den Backup-Code-Satz. Die Backup-Code-Seiten (`/mfa/backup-codes/` und das Neuerzeugen) verlangen bei bestehendem Faktor außerdem eine mit dem zweiten Faktor bestätigte Sitzung. Die erstmalige Einrichtung bleibt ohne Sudo-Schritt.
 
 #### Account-Lockout
 

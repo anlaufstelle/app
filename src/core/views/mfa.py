@@ -51,6 +51,7 @@ from core.services.security import (
     verify_backup_code,
 )
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
+from core.services.security.sudo_mode import sudo_redirect_if_required
 from core.views.auth import resolve_post_login_url
 from core.views.utils import object_back_link, safe_redirect_path
 
@@ -145,6 +146,17 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         ``middleware/mfa.py::_required_redirect`` Case 2 — Weiterleitung nach
         ``/mfa/verify/`` VOR dem Kontextaufbau, fuer GET und POST gleich. Ohne
         bestaetigten Faktor bleibt das Erstsetup unveraendert erreichbar.
+
+        Refs #2328: Ein Faktorwechsel verlangt zusaetzlich Sudo — dieselbe
+        Schutzhoehe wie ``MFADisableView`` und ``MFAPasskeyDeleteView``. Sonst
+        reichte ein entwendetes, bereits verifiziertes Sitzungs-Cookie, um dem
+        Konto einen eigenen zweiten Faktor unterzuschieben und den
+        Backup-Code-Satz zu ersetzen. Der ``RequireSudoModeMixin`` passt hier
+        nicht, weil er das Erstsetup nicht ausnehmen kann; die Pruefung sitzt
+        deshalb bedingt NACH dem ``mfa_verified``-Gate (eine nicht verifizierte
+        Sitzung sieht nie die Sudo-Seite) und gilt fuer jede Methode. ``next``
+        fuehrt zurueck auf ``/mfa/setup/``: ein Passkey-Konto ohne TOTP landet
+        in der Einrichtung, ein TOTP-Konto auf der Einstellungsseite (``get``).
         """
         if (
             request.user.is_authenticated
@@ -152,6 +164,10 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
             and not request.session.get("mfa_verified")
         ):
             return redirect("mfa_verify")
+        if request.user.is_authenticated and request.user.has_confirmed_mfa_device:
+            sudo_redirect = sudo_redirect_if_required(request)
+            if sudo_redirect is not None:
+                return sudo_redirect
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
