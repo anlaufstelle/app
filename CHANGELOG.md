@@ -83,6 +83,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Schlüssel-Erzeugungsbefehle vereinheitlicht** (#2313) — Admin-Guide und `.env.example` nennen für `DJANGO_SECRET_KEY`/`DJANGO_AUDIT_HASH_KEY` jetzt denselben primären Befehl (`openssl`); die bisherige Python-Alternative bleibt als ausdrücklich gleichwertig benannte Option erhalten.
 - **README nennt die Pflichtangaben-Einrichtung nach der Installation** (#2311) — Der Produktionsabschnitt verweist jetzt auf den Admin-Guide-Abschnitt zu Impressum/Datenschutzerklärung und nennt den 404, bis diese eingerichtet sind.
 - **Rechtstext-Pfade in Admin-Guide und `.env.example` quotiert** (#2344) — Der Vorlagenblock für `LEGAL_IMPRINT_FILE`/`LEGAL_PRIVACY_FILE` in Admin-Guide § 2 (DE + EN) und in `.env.example` folgt jetzt der eigenen Quotierungsregel aus § 1 Schritt 2 (einfache Anführungszeichen); dieselbe Regel gilt jetzt auch für die Vorlagenwerte `EXTERNAL_ORIGIN` und `SENTRY_DSN`.
+- **Release-Ankündigungen sind abonnierbar dokumentiert** (#1904) — Das Admin-Handbuch verlinkt die GitHub-Release-Seite und ihren Atom-Feed, empfiehlt ein Prüfintervall und verweist vor Updates auf die erforderlichen Betreiber-Aktionen.
 
 ### Security
 
@@ -663,7 +664,6 @@ Sammel-Release (Pre-Release) — zwischen v0.91.0 und diesem Schnitt wurde kein 
 
 ### Docs
 
-- **Release-Ankündigungen sind abonnierbar dokumentiert** (#1904) — Das Admin-Handbuch verlinkt die GitHub-Release-Seite und ihren Atom-Feed, empfiehlt ein Prüfintervall und verweist vor Updates auf die erforderlichen Betreiber-Aktionen.
 - **Handbücher beschreiben die Berichtsauswahl wieder so, wie sie aussieht** (#1804) — User-Guide (DE/EN) und der neue FAQ-Eintrag 18a erklärten die Berichte weiterhin über ein Dropdown „unterhalb der Diagramme" und nannten CSV/JSON/XML als Formate. Tatsächlich liegt die Auswahl seit dem Statistik-Umbau als Kartenliste im eigenen Reiter „Datensatz-Berichte", und der Sachbericht bringt dort zusätzlich einen PDF-Export mit — der Knopf auf der Übersicht ist weggefallen. Ergänzt sind außerdem der über die Reiter mitgeführte Zeitraum und die erhaltene Berichtsauswahl beim Zeitraum-Wechsel.
 - **Sprachleitlinie: „Fall" ist entschieden, Kontaktstufen-Zeile fortgeschrieben** (#1805) — die offene Prioritätenliste führte „Fall strategisch prüfen" und „qualifiziert/identifiziert entpersonalisieren"; beide sind jetzt als entschieden bzw. erledigt vermerkt. Glossar (DE + EN) beschreibt die Kontaktstufen mit den neuen Labels und weist die unveränderten Werte aus; der Eintrag „Client" trug noch „Person/Klientel im System".
 - **Admin-Handbuch: Falschaussage zu einer Aufbewahrungsfrist für Fälle korrigiert** (#1822) — DE und EN behaupteten, Personen **und Fälle** unterlägen den einrichtungsweiten Fristen aus den Einstellungen; tatsächlich fasst der Aufbewahrungslauf Fälle an keiner Stelle an, ihre Inhalte werden erst mit der Anonymisierung der zugehörigen Person redigiert ([ADR-039](docs/adr/039-owner-generische-dateianhaenge.md) § 6) — die DSFA-Vorlage sagte das bereits korrekt, der Admin-Guide widersprach ihr.
