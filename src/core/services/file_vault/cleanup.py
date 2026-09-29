@@ -136,6 +136,16 @@ class OrphanCleanupResult(int):
         return len(self.checked_paths)
 
 
+class CleanupCursorWriteError(Exception):
+    """Carry a completed cleanup result when its cursor cannot be persisted."""
+
+    def __init__(self, state_path: Path, result: OrphanCleanupResult, cause: OSError) -> None:
+        super().__init__(str(cause))
+        self.state_path = state_path
+        self.result = result
+        self.cause = cause
+
+
 def _iter_encrypted_files(directory: Path, relative_directory: Path = Path()) -> Iterator[tuple[str, Path]]:
     """Liefere ``.enc``-Dateien in stabiler, komponentenweise sortierter Reihenfolge.
 
@@ -312,11 +322,7 @@ def cleanup_orphan_storage_files(
             logger.warning("cleanup_orphan_storage_files: %s -> %s", enc_file, exc)
 
     tree_complete = next_start is None
-    if not dry_run:
-        after = None if tree_complete else checked_paths[-1]
-        _write_cleanup_cursor(state_path, after)
-
-    return OrphanCleanupResult(
+    result = OrphanCleanupResult(
         checked_paths=tuple(checked_paths),
         deleted=deleted,
         deletion_candidates=deletion_candidates,
@@ -329,3 +335,11 @@ def cleanup_orphan_storage_files(
         state_warning=state_warning,
         dry_run=dry_run,
     )
+    if not dry_run:
+        after = None if tree_complete else checked_paths[-1]
+        try:
+            _write_cleanup_cursor(state_path, after)
+        except OSError as exc:
+            raise CleanupCursorWriteError(state_path, result, exc) from exc
+
+    return result

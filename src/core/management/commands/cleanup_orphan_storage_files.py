@@ -18,6 +18,7 @@ einen periodischen Cron, z. B. einmal pro Tag.
 from django.core.management.base import BaseCommand, CommandError
 
 from core.services.file_vault import DEFAULT_ORPHAN_CLEANUP_BUDGET, cleanup_orphan_storage_files
+from core.services.file_vault.cleanup import CleanupCursorWriteError
 
 # Refs #1016/#1554: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -72,11 +73,16 @@ class Command(BaseCommand):
         if budget < 1:
             raise CommandError("--budget muss mindestens 1 sein.")
 
-        result = cleanup_orphan_storage_files(
-            min_age_seconds=options["min_age_seconds"],
-            budget=budget,
-            dry_run=options["dry_run"],
-        )
+        cursor_write_error = None
+        try:
+            result = cleanup_orphan_storage_files(
+                min_age_seconds=options["min_age_seconds"],
+                budget=budget,
+                dry_run=options["dry_run"],
+            )
+        except CleanupCursorWriteError as exc:
+            result = exc.result
+            cursor_write_error = exc
         if result.state_warning:
             self.stdout.write(self.style.WARNING(f"Hinweis: {result.state_warning}"))
 
@@ -87,6 +93,10 @@ class Command(BaseCommand):
             f"uebersprungen (referenziert): {result.skipped_referenced}; "
             f"uebersprungen (zu jung): {result.skipped_young}; Fehler: {result.errors}."
         )
+        if cursor_write_error is not None:
+            raise CommandError(
+                f"Could not write cleanup cursor at {cursor_write_error.state_path}: {cursor_write_error.cause}"
+            ) from cursor_write_error
         self.stdout.write(f"Fortgesetzt bei: {result.continued_at or 'Anfang'}.")
         if result.tree_complete:
             if result.dry_run:
