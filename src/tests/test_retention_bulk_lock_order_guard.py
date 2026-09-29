@@ -392,3 +392,50 @@ class TestZweiSammelaktionenMitGegenlaeufigerAuswahlVerklemmenSichNicht:
                 AuditLog.objects.filter(target_id=str(vorschlag.target_id), detail__category=kategorie).count()
                 == audit_zeilen_je_vorschlag
             )
+
+
+@pytest.mark.django_db
+class TestGeaenderteZuordnungWaehrendDerSperre:
+    def test_vorschlag_mit_umgehaengtem_ereignis_zaehlt_als_uebersprungen(self, facility, lead_user, doc_type_contact):
+        """Hängt ein paralleler Vorgang ein Ereignis der Auswahl an eine andere Person, während die
+        Sammelgenehmigung die Personen sperrt, wird dieser Vorschlag nicht genehmigt — die übrigen schon."""
+        personen = [
+            Client.objects.create(
+                facility=facility, pseudonym=f"Zuordnung-{n}", contact_stage=Client.ContactStage.IDENTIFIED
+            )
+            for n in range(3)
+        ]
+        ereignisse = [
+            Event.objects.create(
+                facility=facility,
+                client=person,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now() - timedelta(days=400),
+                data_json={},
+            )
+            for person in personen[:2]
+        ]
+        vorschlaege = [
+            RetentionProposal.objects.create(
+                facility=facility,
+                target_type=RetentionProposal.TargetType.EVENT,
+                target_id=ereignis.pk,
+                deletion_due_at=date.today() + timedelta(days=5),
+                retention_category="identified",
+            )
+            for ereignis in ereignisse
+        ]
+        with mitschnitt() as aufzeichnung:
+            aufzeichnung.nach_sperre(
+                "core_client",
+                lambda: Event.objects.filter(pk=ereignisse[0].pk).update(client=personen[2]),
+            )
+            ergebnis = bulk_approve_proposals(vorschlaege, lead_user)
+
+        assert aufzeichnung.offene_schranken() == []
+        assert ergebnis == (1, 1)
+        stati = [RetentionProposal.objects.get(pk=v.pk).status for v in vorschlaege]
+        assert stati == [RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED]
+        assert not AuditLog.objects.filter(
+            target_id=str(ereignisse[0].pk), detail__category="retention_proposal_approved"
+        ).exists()

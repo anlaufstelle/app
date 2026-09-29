@@ -523,6 +523,93 @@ def reject_proposal(proposal, user):
     return proposal
 
 
+def _actor_selection(proposals, user):
+    """Die Vorschlaege der Auswahl, die in der Einrichtung der handelnden Person liegen.
+
+    Nur sie werden vorab gesperrt: ein fremder Vorschlag wird in der Schleife
+    vor jeder Sperre abgewiesen (:func:`_assert_actor_facility`), und eine
+    Person ohne Einrichtung sperrt nichts.
+    """
+    facility_id = getattr(user, "facility_id", None)
+    return facility_id, [p for p in proposals if facility_id is not None and p.facility_id == facility_id]
+
+
+def _lock_selection_targets(facility_id, proposals):
+    """Sperrt Personen und Ereignisse einer Auswahl — alle Personen, dann alle Ereignisse, je nach pk.
+
+    Das Gegenstueck zu :func:`_lock_target_rows_for_approval` fuer mehrere
+    Vorschlaege, in derselben kanonischen Ordnung (Person vor Ereignis): die
+    Bindung wird ungesperrt vorgelesen, die Ereigniszeilen liefern sie unter
+    der Sperre ein zweites Mal. Rueckgabe: die pks der Vorschlaege, deren
+    Person sich dabei geaendert hat oder nicht in der Einrichtung gesperrt
+    werden konnte. Sie werden nicht entschieden — die neue Person
+    nachzusperren hiesse, eine Person nach dem Ereignis und womoeglich unter
+    gehaltener Audit-Kette zu sperren.
+    """
+    bindung = dict(
+        Event.objects.filter(pk__in={p.target_id for p in proposals}, facility=facility_id).values_list(
+            "pk", "client_id"
+        )
+    )
+    client_ids = sorted({client_id for client_id in bindung.values() if client_id is not None})
+    locked_clients = set(
+        Client.objects.select_for_update()
+        .filter(pk__in=client_ids, facility=facility_id)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    locked_bindung = dict(
+        Event.objects.select_for_update()
+        .filter(pk__in=sorted(bindung), facility=facility_id)
+        .order_by("pk")
+        .values_list("pk", "client_id")
+    )
+    changed = set()
+    for proposal in proposals:
+        if proposal.target_id not in bindung:
+            # Kein Ereignis dieser Einrichtung — wie im Einzelweg nichts zu sperren.
+            continue
+        client_id = bindung[proposal.target_id]
+        client_locked = client_id is None or client_id in locked_clients
+        if not client_locked or locked_bindung.get(proposal.target_id) != client_id:
+            changed.add(proposal.pk)
+    return changed
+
+
+def _lock_selection(facility_id, proposals, *, targets_of=()):
+    """Sperrt eine ganze Auswahl, bevor die erste Entscheidung ihre Audit-Zeile schreibt.
+
+    Refs #2374: Jeder Einzelweg sperrt Zielanker → Vorschlag → Audit-Kette.
+    Eine Sammelaktion schreibt die Audit-Zeile des ersten Vorschlags — und
+    haelt damit die Audit-Kette der Einrichtung bis zum Ende der Transaktion —,
+    bevor sie den zweiten bearbeitet. Saehe sie dessen Zeilen erst dann,
+    wartete sie mit der Kette in der Hand auf eine Zeile, die eine
+    Hold-Anlage oder eine zweite Sammelaktion haelt, waehrend diese auf die
+    Kette wartet: eine Verklemmung. Deshalb hier vorab, in der Folge der
+    Einzelwege: die Zielanker der Vorschlaege aus ``targets_of`` (alle
+    Personen, dann alle Ereignisse), dann alle Vorschlaege — je nach pk
+    geordnet, damit sich zwei Sammelaktionen mit ueberlappender Auswahl in
+    beliebiger Reihenfolge nicht gegenseitig blockieren. Die Einzelwege in der
+    Schleife sperren danach nur noch Zeilen, die die Transaktion schon haelt.
+
+    Eine einzelne Entscheidung sperrt ohnehin in dieser Folge; unter zwei
+    Vorschlaegen bleibt es deshalb beim Einzelweg. Rueckgabe wie
+    :func:`_lock_selection_targets`. Der Aufrufer muss innerhalb einer
+    ``transaction.atomic()`` stehen.
+    """
+    pks = sorted({proposal.pk for proposal in proposals})
+    if len(pks) < 2:
+        return set()
+    changed = _lock_selection_targets(facility_id, targets_of) if targets_of else set()
+    list(
+        RetentionProposal.objects.select_for_update()
+        .filter(pk__in=pks, facility=facility_id)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    return changed
+
+
 @transaction.atomic
 def bulk_approve_proposals(proposals, user):
     """Approve multiple proposals — je Zeile ein Savepoint.
@@ -536,10 +623,22 @@ def bulk_approve_proposals(proposals, user):
     selbst zurueck, der Rest committet, und der Aufrufer meldet die
     uebersprungenen als eigene Zahl. Die Schwestern ``bulk_defer_proposals``/
     ``bulk_reject_proposals`` bleiben bei ``int`` und ohne Savepoint je Zeile.
+
+    Refs #2374: Personen, Ereignisse und Vorschlaege der ganzen Auswahl werden
+    vor der ersten Genehmigung in der aeusseren Transaktion gesperrt
+    (:func:`_lock_selection`); ein zurueckgerollter Savepoint gibt sie nicht
+    frei. Ein Vorschlag, dessen Personenzuordnung sich waehrend dieser Sperre
+    geaendert hat, zaehlt als uebersprungen — wie im Einzelweg.
     """
+    proposals = list(proposals)
+    facility_id, own = _actor_selection(proposals, user)
+    binding_changed = _lock_selection(facility_id, own, targets_of=own)
     count = 0
     skipped = 0
     for proposal in proposals:
+        if proposal.pk in binding_changed:
+            skipped += 1
+            continue
         try:
             with transaction.atomic():
                 approve_proposal(proposal, user)
@@ -560,7 +659,15 @@ def bulk_defer_proposals(proposals, user, days=30):
     Scheitert eine, bricht die Sammelaktion als Ganzes ab und rollt die bereits
     bearbeiteten Zeilen zurueck — dasselbe Verhalten wie bei jedem anderen
     Fehler in der Schleife; kein stilles Ueberspringen.
+
+    Refs #2374: Alle Vorschlaege der Auswahl werden vor der ersten
+    Audit-Zeile gesperrt (:func:`_lock_selection`) — sonst sperrte die
+    Schleife den naechsten Vorschlag unter der Audit-Kette, die der vorige
+    schon haelt.
     """
+    proposals = list(proposals)
+    facility_id, own = _actor_selection(proposals, user)
+    _lock_selection(facility_id, own)
     count = 0
     for proposal in proposals:
         defer_proposal(proposal, user, days=days)
@@ -576,7 +683,13 @@ def bulk_reject_proposals(proposals, user):
 
     Refs #2373: wie :func:`bulk_defer_proposals` — Pruefung je Zeile, Abbruch
     mit Rollback beim ersten Fehler.
+
+    Refs #2374: alle Vorschlaege der Auswahl vor der ersten Audit-Zeile
+    gesperrt, wie bei :func:`bulk_defer_proposals`.
     """
+    proposals = list(proposals)
+    facility_id, own = _actor_selection(proposals, user)
+    _lock_selection(facility_id, own)
     count = 0
     for proposal in proposals:
         reject_proposal(proposal, user)
