@@ -10,7 +10,7 @@ UI-Validierung (Widget-CSS, freundliche Unique-Fehler, Immutabilitäten).
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -29,6 +29,12 @@ from core.services.conditions import (
     VALUELESS_OPERATORS,
     parse_condition_value,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    # Stub-only-Alias, zur Laufzeit nicht vorhanden — nur fuer Typannotationen.
+    from django.utils.functional import _StrOrPromise
 
 
 def validate_slugifiable_name(name: str) -> str:
@@ -64,6 +70,19 @@ def validate_slugifiable_name(name: str) -> str:
             % {"name": name, "slug": slug_base(name)}
         )
     return name
+
+
+def label_blank_choice(field: forms.Field, blank_label: _StrOrPromise) -> None:
+    """Beschriftet die Leer-Option eines Auswahlfelds (Refs #2381).
+
+    Fuer Modellfelder mit ``blank=True`` und ``choices`` erzeugt Django ein
+    ``TypedChoiceField`` mit einer Leer-Option, deren Text ohne eigene Angabe
+    auf Djangos unuebersetzten Blank-Choice-Text ("- Select an option -")
+    faellt. Alle uebrigen Optionen bleiben unveraendert.
+    """
+    choice_field = cast(forms.ChoiceField, field)
+    choices = cast("Iterable[tuple[Any, Any]]", choice_field.choices)
+    choice_field.choices = [(value, blank_label if value == "" else label) for value, label in choices]
 
 
 class ReportKeyFormMixin:
@@ -277,14 +296,8 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # mit ``blank=True`` — Django erzeugt daraus ein ``TypedChoiceField``
         # mit einer Leer-Option, deren Text ohne eigene Angabe auf Djangos
         # unuebersetzten Blank-Choice-Text ("- Select an option -") faellt.
-        self.fields["system_type"].choices = [
-            (value, _("— Kein Systemtyp —") if value == "" else label)
-            for value, label in self.fields["system_type"].choices
-        ]
-        self.fields["min_contact_stage"].choices = [
-            (value, _("— Keine Angabe —") if value == "" else label)
-            for value, label in self.fields["min_contact_stage"].choices
-        ]
+        label_blank_choice(self.fields["system_type"], _("— Kein Systemtyp —"))
+        label_blank_choice(self.fields["min_contact_stage"], _("— Keine Angabe —"))
         # Neuobjekt: facility aus dem Scope an die Instanz binden, damit
         # form.save() (Service) den richtigen Mandanten schreibt.
         if facility is not None and self.instance.facility_id is None:
@@ -526,10 +539,7 @@ class FieldTemplateForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # Text ohne eigene Angabe auf Djangos unuebersetzten Blank-Choice-Text
         # ("- Select an option -") faellt. Leer heisst hier "erbt vom
         # Dokumentationstyp" (Modell-Hilfetext) — der Platzhalter sagt das.
-        self.fields["sensitivity"].choices = [
-            (value, _("— Vom Dokumentationstyp erben —") if value == "" else label)
-            for value, label in self.fields["sensitivity"].choices
-        ]
+        label_blank_choice(self.fields["sensitivity"], _("— Vom Dokumentationstyp erben —"))
 
     def clean(self):
         """E-J (Refs #1849), vierter Weg: der Schlüssel wird NACHTRÄGLICH gesetzt.
