@@ -16,6 +16,7 @@ from core.models import AuditLog, Case, Client, DeletionRequest, User
 from core.services.case.deletion import (
     anonymize_case_now,
     create_or_get_case_deletion_request,
+    reject_case_deletion,
     request_case_deletion,
 )
 from tests._row_lock_helpers import mitschnitt
@@ -148,3 +149,53 @@ class TestSofortTilgungPrueftDieEinrichtungDesAdmins:
 
         assert case_trashed.anonymized_at is not None
         assert Case.objects.filter(pk=case_trashed.pk, anonymized_at__isnull=False).exists()
+
+
+@pytest.fixture
+def fremde_leitung(second_facility):
+    return _konto("loeschung_fremde_leitung", User.Role.LEAD, second_facility)
+
+
+@pytest.fixture
+def leitung_ohne_einrichtung(db):
+    return _konto("loeschung_leitung_ohne_einrichtung", User.Role.LEAD, None)
+
+
+@pytest.fixture
+def offener_fallantrag(facility, case_open, staff_user):
+    return DeletionRequest.objects.create(
+        facility=facility,
+        target_type=DeletionRequest.TargetType.CASE,
+        target_id=case_open.pk,
+        status=DeletionRequest.Status.PENDING,
+        requested_by=staff_user,
+        reason="Auf Wunsch der Person",
+    )
+
+
+class TestAblehnungPrueftDieEinrichtungVorDerAntragssperre:
+    """Wie bei der Genehmigung: die Einrichtungsgrenze greift schon VOR der
+    Sperre des Antrags; unter der Sperre wird sie erneut geprueft."""
+
+    @pytest.mark.parametrize("akteur", ["fremde_leitung", "leitung_ohne_einrichtung"])
+    def test_fremde_oder_einrichtungslose_leitung_sperrt_den_antrag_nicht(self, request, akteur, offener_fallantrag):
+        user = request.getfixturevalue(akteur)
+
+        with mitschnitt() as aufzeichnung, pytest.raises(ValidationError) as excinfo:
+            reject_case_deletion(offener_fallantrag, user)
+
+        assert "Antrag gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        assert aufzeichnung.sperren("core_deletionrequest") == []
+        offener_fallantrag.refresh_from_db()
+        assert offener_fallantrag.status == DeletionRequest.Status.PENDING
+        assert offener_fallantrag.reviewed_by_id is None
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_REJECTED).exists()
+
+    def test_leitung_der_einrichtung_lehnt_unter_der_antragssperre_ab(self, offener_fallantrag, lead_user):
+        with mitschnitt() as aufzeichnung:
+            reject_case_deletion(offener_fallantrag, lead_user)
+
+        assert [z.traegt(id=[offener_fallantrag.pk]) for z in aufzeichnung.sperren("core_deletionrequest")] == [True]
+        offener_fallantrag.refresh_from_db()
+        assert offener_fallantrag.status == DeletionRequest.Status.REJECTED
+        assert offener_fallantrag.reviewed_by_id == lead_user.pk
