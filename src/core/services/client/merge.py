@@ -97,7 +97,11 @@ from core.models.workitem import DeletionRequest, WorkItem
 from core.retention.legal_holds import client_has_active_hold
 from core.services.audit import audit_client_event, audit_event
 from core.services.client.locking import lock_clients
-from core.services.client.main import get_pending_deletion_request, update_client_stage
+from core.services.client.main import (
+    CLIENT_OTHER_FACILITY_MESSAGE,
+    get_pending_deletion_request,
+    update_client_stage,
+)
 from core.services.dashboard import log_activity
 from core.services.dynamic_data import clean_dynamic_data
 from core.services.targets import TARGET_CLIENT, target_q
@@ -343,9 +347,16 @@ def merge_clients(source, target, user):
     hier im Service (SSoT), nicht nur in der View: die Staffelung wird auf den
     frisch gesperrten Zeilen geprueft, damit eine parallele Hoeherstufung das
     Vier-Augen-Gebot nicht unterlaeuft.
+
+    Die Einrichtung der handelnden Leitung wird vor der ersten Sperre gegen die
+    Quelle verglichen (fail-closed); dass das Ziel zur selben Einrichtung
+    gehoert, prueft :func:`_validate_merge` mit eigener Meldung.
     """
     if not user.is_lead_or_admin:
         raise ValidationError(_("Nur die Leitung darf Personen direkt zusammenführen."))
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != source.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     source, target = _locked_clients(source, target)
     if merge_requires_four_eyes(source, target):
         raise ValidationError(
