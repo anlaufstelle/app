@@ -42,10 +42,21 @@ def _episode_facility_id(episode):
 
     Die Einrichtung einer Akte ist unveraenderlich; der Vergleich mit der
     Einrichtung der handelnden Person braucht also keinen frischen Stand und
-    sperrt nichts ueber die Mandantengrenze hinweg. ``None`` (Zeile nicht
-    mehr vorhanden) ueberlaesst die Absage dem Zustandsvertrag.
+    sperrt nichts ueber die Mandantengrenze hinweg.
+
+    Fehlt die Episodenzeile, endet der Aufruf HIER — vor jeder Sperre und
+    fuer jede handelnde Person. Ohne Zeile gibt es keine Einrichtung zum
+    Vergleichen; liefe der Aufruf weiter, naehme auch eine Fachkraft aus
+    einer anderen Einrichtung erst die Personen- und Fallsperre der Akte,
+    bevor der Zustandsvertrag die fehlende Episode bemerkt (Muster
+    :func:`~core.services.case.state_contract.lock_goal_for_write`). Eine
+    Episode im Papierkorb bleibt Sache der gesperrten Neulesung — der Marker
+    kann sich bis dahin noch aendern.
     """
-    return Episode.objects.filter(pk=episode.pk).values_list("case__facility_id", flat=True).first()
+    facility_id = Episode.objects.filter(pk=episode.pk).values_list("case__facility_id", flat=True).first()
+    if facility_id is None:
+        raise ValidationError(CASE_WRITE_GONE_MESSAGE)
+    return facility_id
 
 
 def _lock_episode_for_write(episode) -> Episode:
