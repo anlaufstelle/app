@@ -818,7 +818,14 @@ def create_client(facility, user, **data):
     :func:`_normalize_document_type_kwarg` faengt dabei auch die
     ``document_type_id=<pk>``-Schreibweise ab, die sonst am Guard vorbei direkt
     an ``Client(...)`` durchgereicht wuerde.
+
+    Die handelnde Person muss zur Einrichtung gehoeren, in der die Person
+    entsteht (fail-closed) — das gilt auch fuer den Import, dessen Laeufe
+    immer eine startende Person tragen.
     """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != facility.pk:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     document_type = _normalize_document_type_kwarg(data)
     data["data_json"] = clean_dynamic_data(
         facility,
