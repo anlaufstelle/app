@@ -203,6 +203,10 @@
         const recordPksLower = await _localRecordPksOfRevoked(revokedLower);
 
         let purgedClients = 0;
+        // Refs #2382: die pks der lokal tatsaechlich getroffenen Personen —
+        // einzige Grundlage fuer den Abgleich der Offline-Personenansicht
+        // (siehe _fireRevocationEvent unten), NICHT die volle Server-Liste.
+        const purgedClientPks = [];
         for (const pk of pks) {
             const key = String(pk);
             const known = await db.clients.where("pk").equals(key).count();
@@ -212,11 +216,49 @@
             // Aufloesung zur Callzeit ueber die Fassade (wie purgeExpiredBundles
             // in offline-db.js).
             await window.offlineStore.removeOfflineClient(key, { force: true });
-            if (known) purgedClients += 1;
+            if (known) {
+                purgedClients += 1;
+                purgedClientPks.push(key.toLowerCase());
+            }
         }
 
         const extra = await _purgeRevokedQueueAndDrafts(revokedLower.concat(recordPksLower));
-        return { status: "ok", purgedClients: purgedClients, ...extra };
+        const result = { status: "ok", purgedClients: purgedClients, ...extra };
+        _fireRevocationEvent(result, purgedClientPks);
+        return result;
+    }
+
+    /*
+     * Refs #2382: EINE Quelle fuer alle drei Aufrufer (sync-orchestrator.js
+     * Sync-Sequenz + Boot-Check, offline-store.js Fallback-Listener) statt
+     * eines eigenen Signals je Aufrufer. Der bisherige Zustand liess das
+     * Ergebnis von applyClientRevocations verworfen liegen — die offene
+     * Offline-Personenansicht einer gerade widerrufenen Person erfuhr nichts
+     * davon und zeigte weiter das (inzwischen falsche) "wird synchronisiert".
+     *
+     * DATENSPARSAMKEIT: ``detail`` traegt ausschliesslich Zaehlwerte und die
+     * widerrufenen UUIDs (keine Pseudonyme/Inhalte) — reine Identifikatoren,
+     * die die Ansicht ohnehin schon aus der URL kennt.
+     *
+     * Feuert NUR, wenn tatsaechlich etwas geloescht wurde — eine leere Liste,
+     * ein Transportfehler oder ein Rate-Limit (alle drei liefern ``empty``
+     * unveraendert) lassen den Bestand unangetastet und damit auch keine
+     * offene Ansicht betroffen; ebenso eine nicht-leere Liste, die lokal auf
+     * nichts trifft (rein remote bekannte Personen).
+     */
+    function _fireRevocationEvent(result, purgedClientPks) {
+        const changed = result.purgedClients > 0 || result.purgedQueueEntries > 0 || result.purgedDrafts > 0;
+        if (!changed || typeof window === "undefined" || !window.dispatchEvent) return;
+        window.dispatchEvent(
+            new CustomEvent("offline-client-revocations-applied", {
+                detail: {
+                    purgedClients: result.purgedClients,
+                    purgedQueueEntries: result.purgedQueueEntries,
+                    purgedDrafts: result.purgedDrafts,
+                    pks: purgedClientPks,
+                },
+            })
+        );
     }
 
     // Refs #1838: Export dieser Datei auf die EINE Fassade (siehe offline-db.js).

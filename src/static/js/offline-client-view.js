@@ -93,10 +93,17 @@
                 this._onCount = this._onCountChange.bind(this);
                 window.addEventListener("offline-unsynced-count", this._onCount);
                 window.addEventListener("offline-conflict-count", this._onCount);
+                // Refs #2382: Widerruf traf bisher an dieser Ansicht vorbei —
+                // applyClientRevocations meldet sein Ergebnis jetzt als eigenes
+                // Ereignis (offline-revocations.js), unabhängig vom Unsynced-/
+                // Konflikt-Zähler (der Bestand ist ja schon lokal gelöscht).
+                this._onRevoked = this._onRevocationsApplied.bind(this);
+                window.addEventListener("offline-client-revocations-applied", this._onRevoked);
             },
             destroy() {
                 window.removeEventListener("offline-unsynced-count", this._onCount);
                 window.removeEventListener("offline-conflict-count", this._onCount);
+                window.removeEventListener("offline-client-revocations-applied", this._onRevoked);
             },
             // CSP-konforme Wrapper-Methoden — kein ``data.events.length`` Inline.
             get hasEvents() {
@@ -319,6 +326,15 @@
             // manuelle Entscheidung in der Konflikt-/Dead-Letter-Liste.
             get showDead() {
                 return this.lastSyncResult === "dead";
+            },
+            // Refs #2382: die Person wurde WÄHREND diese Ansicht offen war
+            // serverseitig anonymisiert und lokal vollständig verworfen (nicht
+            // nur eine einzelne Änderung abgelehnt wie showRevoked/showDead).
+            // Nach dem Neuaufbau (_onRevocationsApplied → load()) ist
+            // ``available`` bereits false — der Hinweis erklärt in der dann
+            // sichtbaren showUnavailable-Ansicht, WARUM.
+            get showDiscarded() {
+                return this.lastSyncResult === "discarded";
             },
             get conflictHref() {
                 return "/offline/conflicts/" + this.lastSyncPk + "/";
@@ -768,6 +784,22 @@
                 // Reentrancy-Schutz: nicht mitten in einem load() neu starten.
                 if (this.loading) return;
                 await this._reconcile();
+            },
+            // Refs #2382: reagiert NUR, wenn die gerade offene Person unter den
+            // widerrufenen ist — offline-revocations.js purgt den Bestand
+            // bereits vollständig, ein erneutes revalidateCachedClient (wie in
+            // _reconcile) wäre für eine anonymisierte Person unnötiger
+            // Netzverkehr. Direktes load() genügt: getOfflineClient findet
+            // nichts mehr → available wird false, der Hinweis erscheint in der
+            // showUnavailable-Ansicht.
+            async _onRevocationsApplied(evt) {
+                if (this.loading) return;
+                if (!this._pk) return;
+                const pks = (evt && evt.detail && evt.detail.pks) || [];
+                const mine = pks.some((pk) => String(pk).toLowerCase() === String(this._pk).toLowerCase());
+                if (!mine) return;
+                this.lastSyncResult = "discarded";
+                await this.load();
             },
         }));
     });
