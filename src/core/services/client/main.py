@@ -897,7 +897,14 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     auch ohne Versions-Token, also unabhaengig vom optimistischen Guard, und
     mit der Zustandsmeldung statt der Konfliktmeldung. Praedikat und Meldung
     wie :func:`resolve_writable_client`.
+
+    Davor, vor der ersten Sperre, steht die Einrichtungsgrenze der handelnden
+    Person (fail-closed). Sie gilt auch fuer die Berichtigung: dort handelt die
+    pruefende Person, die zur Einrichtung des Antrags gehoert.
     """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != client.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     assert_processing_allowed(client, lock=True)
     merged_into_id, is_deleted, is_active = (
         Client.objects.filter(pk=client.pk).values_list("merged_into_id", "is_deleted", "is_active").get()
