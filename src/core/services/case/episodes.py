@@ -155,8 +155,17 @@ def close_episode(episode, user):
     Modell-Methode ihn nicht braucht: der Aufrufer soll den Vorgang wie jede
     andere Mutation als Service-Aufruf mit Akteur schreiben, nicht als
     stillen ORM-Zugriff.
-    """
-    from core.services.client.restriction import assert_processing_allowed
 
-    assert_processing_allowed(episode.case.client_id, lock=True)
-    return episode.close()
+    Einrichtungsgrenze und Zustandsvertrag wie bei :func:`update_episode`.
+    Abgeschlossen wird die FRISCH gesperrte Zeile: die uebergebene Instanz
+    stammt aus einem Lesevorgang vor der Sperre, ihr ``ended_at`` sagt nicht,
+    ob die Episode INZWISCHEN abgeschlossen ist — ein parallel gesetztes Ende
+    bliebe sonst nicht stehen. Die Instanz des Aufrufers bekommt am Ende den
+    neuen Stand und bleibt das zurueckgegebene Objekt (Muster ``close_case``).
+    """
+    from core.services.case.goals import _assert_actor_facility
+
+    _assert_actor_facility(user, _episode_facility_id(episode))
+    _lock_episode_for_write(episode).close()
+    episode.refresh_from_db()
+    return episode
