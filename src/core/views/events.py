@@ -92,6 +92,7 @@ from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     IdempotentCreateMixin,
     StaffRequiredMixin,
+    htmx_absage,
     is_idempotency_conflict,
     is_pending_deletion_request_conflict,
 )
@@ -1002,6 +1003,16 @@ class TallyUndoView(AssistantOrAboveRequiredMixin, View):
             # Wie ``get_visible_event_or_404``: keine Unterscheidung zwischen
             # gefälschtem, fremdem, abgelaufenem oder inzwischen geändertem Event.
             raise Http404 from exc
+        except ValidationError as exc:
+            # The delete service refuses under its row locks (a legal hold on
+            # the entry) and names the cause itself; the entry stays in place.
+            # htmx: the short refusal without a swap, so the tally row stays as
+            # it is. Any other error propagates.
+            message = "; ".join(exc.messages)
+            if request.headers.get("HX-Request"):
+                return htmx_absage(message)
+            messages.error(request, message)
+            return redirect(safe_redirect_path(request.POST.get("next")))
 
         next_url = safe_redirect_path(request.POST.get("next"))
         if not request.headers.get("HX-Request"):
