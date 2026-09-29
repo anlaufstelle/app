@@ -200,6 +200,13 @@ def create_or_get_client_merge_request(source, target, user, reason):
     # Aufrufe sahen beide ``existing=None``. Muster und Reihenfolge sind jetzt
     # identisch zu ``create_or_get_client_deletion_request``: sperren, lesen,
     # entscheiden, schreiben — alles in EINER Transaktion.
+    #
+    # Davor die Einrichtungsgrenze der antragstellenden Person (fail-closed):
+    # eine fremde Einrichtung sperrt keine der beiden Personenzeilen. Das Ziel
+    # prueft ``_validate_merge`` gegen die Quelle.
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != source.facility_id:
+        raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     source, target = _locked_clients(source, target)
     existing = get_pending_merge_request(source)
     if existing is not None and existing.merge_into_id == target.pk:
