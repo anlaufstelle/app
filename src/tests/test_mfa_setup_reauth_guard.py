@@ -155,7 +155,14 @@ class TestSetupGateWithConfirmedPasskeyOnly:
 
 @pytest.mark.django_db
 class TestSetupCompletionIsBoundToAuthorisedDevice:
-    """(c) Der Setup-Abschluss haengt am konkret autorisierten Geraet."""
+    """(c) Der Setup-Abschluss haengt am konkret autorisierten Geraet.
+
+    Refs #2328: Die Faelle laufen im Erstsetup (kein bestaetigter Faktor). Mit
+    Bestandsfaktor erreicht eine nicht verifizierte Sitzung die Quittung gar
+    nicht mehr — das ``dispatch``-Gate leitet vorher nach ``/mfa/verify/``
+    (``test_mfa_backup_views_dispatch_gate.py``). Hier bleibt die
+    Geraetebindung im Rumpf der View selbst unter Beobachtung.
+    """
 
     @staticmethod
     def _seed_pending_backup_codes(client, codes):
@@ -168,7 +175,6 @@ class TestSetupCompletionIsBoundToAuthorisedDevice:
 
     def test_ack_without_device_marker_does_not_confirm_any_device(self, client, staff_user):
         """Ohne Sitzungsmarker fuer das autorisierte Geraet kein Abschluss."""
-        bestand = _confirmed_totp(staff_user)
         pending = _unconfirmed_totp(staff_user)
         _login_password_only(client)
         self._seed_pending_backup_codes(client, ["Aaaaaaaaaaaaaaaaaaaaaa"])
@@ -178,7 +184,6 @@ class TestSetupCompletionIsBoundToAuthorisedDevice:
         assert response.status_code == 302
         assert response.url == SETUP_URL
         pending.refresh_from_db()
-        bestand.refresh_from_db()
         assert pending.confirmed is False
         assert client.session.get("mfa_verified") is not True
         assert client.session.get("mfa_setup_pending") is not True
@@ -186,7 +191,6 @@ class TestSetupCompletionIsBoundToAuthorisedDevice:
 
     def test_ack_with_stale_device_marker_does_not_confirm_other_device(self, client, staff_user):
         """Der Marker zeigt auf ein verschwundenes Geraet — kein Ersatz-Geraet."""
-        _confirmed_totp(staff_user)
         fremd = _unconfirmed_totp(staff_user, name="fremd")
         _login_password_only(client)
         self._seed_pending_backup_codes(client, ["Bbbbbbbbbbbbbbbbbbbbbb"])

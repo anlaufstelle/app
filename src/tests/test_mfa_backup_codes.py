@@ -375,10 +375,21 @@ class TestMFABackupCodesView:
 
 @pytest.mark.django_db
 class TestMFARegenerate:
+    """Neuerzeugen aus einer MFA-verifizierten Sitzung (Refs #2328: nur diese
+    erreicht die Route; eine nicht verifizierte leitet das ``dispatch``-Gate
+    nach ``/mfa/verify/``, siehe ``test_mfa_backup_views_dispatch_gate.py``)."""
+
+    @staticmethod
+    def _login_verified(client):
+        client.login(username="teststaff", password="testpass123")
+        session = client.session
+        session["mfa_verified"] = True
+        session.save()
+
     def test_regenerate_rejected_on_invalid_totp(self, client, staff_user):
         TOTPDevice.objects.create(user=staff_user, name="default", confirmed=True)
         first = generate_backup_codes(staff_user)
-        client.login(username="teststaff", password="testpass123")
+        self._login_verified(client)
 
         response = client.post(
             "/mfa/backup-codes/regenerate/",
@@ -396,7 +407,7 @@ class TestMFARegenerate:
     def test_regenerate_rotates_codes_on_valid_totp(self, client, staff_user):
         device = TOTPDevice.objects.create(user=staff_user, name="default", confirmed=True)
         first = generate_backup_codes(staff_user)
-        client.login(username="teststaff", password="testpass123")
+        self._login_verified(client)
 
         token = oath_totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)
         response = client.post(

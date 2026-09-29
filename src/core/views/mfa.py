@@ -386,6 +386,29 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
 
     template_name = "auth/mfa_backup_codes.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        """Refs #2328: Berechtigung fuer ALLE HTTP-Methoden gemeinsam pruefen.
+
+        Die Seite zeigt frisch erzeugte Klartext-Codes und schaltet mit der
+        Quittung eine laufende Einrichtung scharf. Ihre Sicherheit hing bisher
+        allein an Sitzungsmarkern, die an anderer Stelle gesetzt werden. Die
+        MFA-Enforcement-Middleware greift hier nicht: ``/mfa/`` steht in ihren
+        ``EXEMPT_URLS``, damit die Zeremonie erreichbar bleibt.
+
+        Dieselbe Klausel wie ``MFASetupView.dispatch`` (Refs #2287): bei
+        bestaetigtem Bestandsfaktor (TOTP ODER Passkey, ADR-032) und nicht
+        verifizierter Sitzung geht es VOR dem Kontextaufbau nach
+        ``/mfa/verify/``, fuer GET und POST gleich. Das Erstsetup bleibt
+        erreichbar — sein Geraet ist bis zur Quittung unbestaetigt.
+        """
+        if (
+            request.user.is_authenticated
+            and request.user.has_confirmed_mfa_device
+            and not request.session.get("mfa_verified")
+        ):
+            return redirect("mfa_verify")
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request, *args, **kwargs):
         codes = _read_session_backup_codes(request)
         if not codes:
@@ -471,6 +494,28 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
     Nur per POST; TOTP-Code-Bestätigung ist im Frontend Teil des Flows
     (über den Regenerate-Dialog in mfa_settings.html).
     """
+
+    def dispatch(self, request, *args, **kwargs):
+        """Refs #2328: Berechtigung fuer ALLE HTTP-Methoden gemeinsam pruefen.
+
+        Ein neuer Satz ersetzt den Recovery-Anker des Kontos. Bisher schuetzte
+        ihn nur der frische TOTP-Code im ``post``; eine nicht verifizierte
+        Sitzung erreichte die View trotzdem, und ``/mfa/`` ist von der
+        MFA-Enforcement-Middleware ausgenommen (``EXEMPT_URLS``).
+
+        Dieselbe Klausel wie ``MFASetupView.dispatch`` (Refs #2287): bei
+        bestaetigtem Bestandsfaktor (TOTP ODER Passkey, ADR-032) und nicht
+        verifizierter Sitzung geht es nach ``/mfa/verify/`` — fuer jede
+        Methode, also auch vor der ``405`` auf ``GET``. Eine verifizierte
+        Sitzung erhaelt auf ``GET`` weiterhin ``405``.
+        """
+        if (
+            request.user.is_authenticated
+            and request.user.has_confirmed_mfa_device
+            and not request.session.get("mfa_verified")
+        ):
+            return redirect("mfa_verify")
+        return super().dispatch(request, *args, **kwargs)
 
     @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
