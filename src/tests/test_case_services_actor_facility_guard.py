@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, User
-from core.services.case import create_case, update_case
+from core.services.case import close_case, create_case, update_case
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
@@ -120,3 +120,21 @@ class TestCreateCase:
 
         assert Case.objects.get(pk=fall.pk).title == "Neu"
         assert AuditLog.objects.filter(action=AuditLog.Action.CASE_CREATE, target_id=str(fall.pk)).count() == 1
+
+
+class TestCloseCase:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, case_open):
+        user = request.getfixturevalue(akteur)
+
+        _abgewiesen_ohne_sperre(lambda: close_case(Case.objects.get(pk=case_open.pk), user))
+
+        frisch = Case.objects.get(pk=case_open.pk)
+        assert (frisch.status, frisch.closed_at) == (Case.Status.OPEN, None)
+        assert not AuditLog.objects.filter(action=AuditLog.Action.CASE_CLOSE, target_id=str(case_open.pk)).exists()
+
+    def test_eigene_einrichtung_schliesst(self, case_open, staff_user):
+        close_case(Case.objects.get(pk=case_open.pk), staff_user)
+
+        assert Case.objects.get(pk=case_open.pk).status == Case.Status.CLOSED
+        assert AuditLog.objects.filter(action=AuditLog.Action.CASE_CLOSE, target_id=str(case_open.pk)).count() == 1
