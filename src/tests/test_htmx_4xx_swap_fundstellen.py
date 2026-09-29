@@ -31,10 +31,24 @@ Gegenproben unten sichern das gegen eine versehentliche Umstellung ab.
 import pytest
 from django.urls import reverse
 
-from core.models import RetentionProposal
+from core.models import RetentionProposal, WorkItem
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
 _MAX_PLAIN_TEXT_LENGTH = 400  # Refs #2358, static/js/htmx-errors.js
+
+
+@pytest.fixture
+def workitem_open(facility, client_identified, staff_user):
+    # Copied from test_workitems_inbox_and_status.py: pytest does not
+    # discover file-specific fixtures across test modules (Refs #1130).
+    return WorkItem.objects.create(
+        facility=facility,
+        client=client_identified,
+        created_by=staff_user,
+        title="Offene Aufgabe",
+        status=WorkItem.Status.OPEN,
+        priority=WorkItem.Priority.NORMAL,
+    )
 
 
 def _assert_absage_ohne_swap(response, status):
@@ -142,6 +156,31 @@ class TestBulkActionMixinUngueltigeAuswahl:
             **HTMX,
         )
         _assert_absage_ohne_swap(response, 400)
+
+
+@pytest.mark.django_db
+class TestWorkItemStatusUpdateInvalidStatus:
+    """``WorkItemStatusUpdateView.post`` — invalid status swaps into
+    ``#workitem-<pk>`` (``_workitem_row.html``, ``hx-swap="outerHTML"``)."""
+
+    def test_htmx_absage_ohne_swap(self, client, staff_user, workitem_open):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "invalid"},
+            **HTMX,
+        )
+        _assert_absage_ohne_swap(response, 400)
+        workitem_open.refresh_from_db()
+        assert workitem_open.status == "open"
+
+    def test_ohne_htmx_unveraendert(self, client, staff_user, workitem_open):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "invalid"},
+        )
+        _assert_ohne_htmx_unveraendert(response, 400, "Ungültiger Status")
 
 
 @pytest.mark.django_db
