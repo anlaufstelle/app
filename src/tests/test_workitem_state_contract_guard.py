@@ -103,3 +103,94 @@ class TestAnlegenUeberDieView:
         assert response.status_code == 422
         assert response.json()["errors"]["__all__"][0]["message"] == str(CLIENT_WRITE_REVOKED_MESSAGE)
         assert not WorkItem.objects.filter(title="Neu im Rennen").exists()
+
+
+SAMMELDIENSTE = ["status", "prioritaet", "zuweisung"]
+
+
+def _sammelaufruf(dienst, items, user, zustaendig):
+    from core.services.case import bulk_assign_workitems, bulk_update_workitem_priority, bulk_update_workitem_status
+
+    if dienst == "status":
+        return bulk_update_workitem_status(items, user, WorkItem.Status.DONE)
+    if dienst == "prioritaet":
+        return bulk_update_workitem_priority(items, user, WorkItem.Priority.URGENT)
+    return bulk_assign_workitems(items, user, zustaendig)
+
+
+def _stand(items):
+    return list(
+        WorkItem.objects.filter(pk__in=[w.pk for w in items])
+        .order_by("pk")
+        .values_list("pk", "status", "priority", "assigned_to_id", "updated_at")
+    )
+
+
+def _stapel(facility, person, user):
+    return [
+        WorkItem.objects.create(facility=facility, client=person, created_by=user, title="Mit Person"),
+        WorkItem.objects.create(facility=facility, created_by=user, title="Ohne Person"),
+    ]
+
+
+class TestSammeldienste:
+    """Ein widerrufener oder geloeschter Teil weist den ganzen Stapel ab — kein Teilerfolg."""
+
+    @pytest.mark.parametrize("art", WIDERRUFE)
+    @pytest.mark.parametrize("dienst", SAMMELDIENSTE)
+    def test_widerrufene_person_im_stapel(self, facility, client_identified, staff_user, lead_user, dienst, art):
+        items = _stapel(facility, client_identified, staff_user)
+        vorher = _stand(items)
+        _widerrufen(client_identified, art)
+        m = _assert_refused(lambda: _sammelaufruf(dienst, items, staff_user, lead_user), CLIENT_WRITE_REVOKED_MESSAGE)
+        assert _stand(items) == vorher
+        assert _person_vor_aufgabe(m)[:1] == ["core_client"]
+
+    @pytest.mark.parametrize("dienst", SAMMELDIENSTE)
+    def test_geloeschte_aufgabe_im_stapel(self, facility, client_identified, staff_user, lead_user, dienst):
+        from core.services.case.workitems import WORKITEM_DELETED_MESSAGE
+
+        items = _stapel(facility, client_identified, staff_user)
+        WorkItem.objects.filter(pk=items[1].pk).update(is_deleted=True, deleted_at=timezone.now())
+        vorher = _stand(items)
+        m = _assert_refused(lambda: _sammelaufruf(dienst, items, staff_user, lead_user), WORKITEM_DELETED_MESSAGE)
+        assert _stand(items) == vorher
+        assert _person_vor_aufgabe(m) == ["core_client", "core_workitem"]
+
+
+class TestSammelaktionUeberDieView:
+    """Die Sammel-Views melden die Absage des Dienstes in der Inbox statt mit HTTP 500."""
+
+    @pytest.mark.parametrize("htmx", [False, True], ids=["formular", "htmx"])
+    @pytest.mark.parametrize(
+        ("url", "daten"),
+        [
+            ("core:workitem_bulk_status", {"status": "done"}),
+            ("core:workitem_bulk_priority", {"priority": "urgent"}),
+            ("core:workitem_bulk_assign", {"assigned_to": ""}),
+        ],
+        ids=["status", "prioritaet", "zuweisung"],
+    )
+    def test_geloeschte_aufgabe_in_der_auswahl(
+        self, client, facility, client_identified, staff_user, lead_user, url, daten, htmx
+    ):
+        from django.contrib.messages import get_messages
+
+        from core.services.case.workitems import WORKITEM_DELETED_MESSAGE
+
+        items = _stapel(facility, client_identified, staff_user)
+        WorkItem.objects.filter(pk__in=[w.pk for w in items]).update(assigned_to=lead_user)
+        WorkItem.objects.filter(pk=items[1].pk).update(is_deleted=True, deleted_at=timezone.now())
+        vorher = _stand(items)
+        audit_vorher = AuditLog.objects.count()
+        client.force_login(lead_user)
+        header = {"HTTP_HX_REQUEST": "true"} if htmx else {}
+        response = client.post(reverse(url), {"workitem_ids": [str(w.pk) for w in items], **daten}, **header)
+        assert response.status_code == 302
+        assert response.url.startswith(reverse("core:workitem_inbox"))
+        if htmx:
+            assert response["HX-Redirect"] == response.url
+        meldungen = [str(msg) for msg in get_messages(response.wsgi_request)]
+        assert meldungen == [str(WORKITEM_DELETED_MESSAGE)]
+        assert _stand(items) == vorher
+        assert AuditLog.objects.count() == audit_vorher

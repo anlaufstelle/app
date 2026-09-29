@@ -85,3 +85,64 @@ class TestAnlegen:
         workitem = create_workitem(facility, staff_user, client=person, title="Neu")
         assert workitem.facility_id == facility.pk
         assert _zaehler() == (vorher[0] + 1, vorher[1] + 1, vorher[2] + 1)
+
+
+SAMMELDIENSTE = ["status", "prioritaet", "zuweisung"]
+
+
+def _sammelaufruf(dienst, items, user, zustaendig):
+    from core.services.case import bulk_assign_workitems, bulk_update_workitem_priority, bulk_update_workitem_status
+
+    if dienst == "status":
+        return bulk_update_workitem_status(items, user, WorkItem.Status.DONE)
+    if dienst == "prioritaet":
+        return bulk_update_workitem_priority(items, user, WorkItem.Priority.URGENT)
+    return bulk_assign_workitems(items, user, zustaendig)
+
+
+def _stand(items):
+    return {
+        pk: (status, priority, assigned_to_id)
+        for pk, status, priority, assigned_to_id in WorkItem.objects.filter(pk__in=[w.pk for w in items])
+        .order_by("pk")
+        .values_list("pk", "status", "priority", "assigned_to_id")
+    }
+
+
+class TestSammeldienste:
+    """Alle drei Sammeldienste teilen den Sperrhelfer — die Grenze gilt fuer den ganzen Stapel."""
+
+    @pytest.mark.parametrize("akteur", AKTEURE, indirect=True)
+    @pytest.mark.parametrize("dienst", SAMMELDIENSTE)
+    def test_lokaler_stapel_fremder_akteur(self, facility, client_identified, staff_user, lead_user, akteur, dienst):
+        items = [
+            _aufgabe(facility, staff_user, client=client_identified, title="Mit Person"),
+            _aufgabe(facility, staff_user, title="Ohne Person"),
+        ]
+        vorher = _stand(items)
+        _assert_refused(lambda: _sammelaufruf(dienst, items, akteur, lead_user))
+        assert _stand(items) == vorher
+
+    @pytest.mark.parametrize("dienst", SAMMELDIENSTE)
+    def test_mischstapel_mit_fremder_aufgabe(
+        self, facility, second_facility, client_identified, staff_user, lead_user, dienst
+    ):
+        lokal = _aufgabe(facility, staff_user, client=client_identified, title="Lokal")
+        fremd = _aufgabe(second_facility, None, title="Fremd")
+        items = [lokal, fremd]
+        vorher = _stand(items)
+        _assert_refused(lambda: _sammelaufruf(dienst, items, staff_user, lead_user))
+        assert _stand(items) == vorher
+
+    @pytest.mark.parametrize("dienst", SAMMELDIENSTE)
+    def test_gegenprobe_eigene_einrichtung(self, facility, client_identified, staff_user, lead_user, dienst):
+        items = [
+            _aufgabe(facility, staff_user, client=client_identified, title="Mit Person"),
+            _aufgabe(facility, staff_user, title="Ohne Person"),
+        ]
+        vorher = _stand(items)
+        audit_vorher = AuditLog.objects.count()
+        assert _sammelaufruf(dienst, items, staff_user, lead_user) == 2
+        nachher = _stand(items)
+        assert all(nachher[pk] != vorher[pk] for pk in vorher)
+        assert AuditLog.objects.count() == audit_vorher + 2
