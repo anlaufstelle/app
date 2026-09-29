@@ -164,10 +164,12 @@ class TestUndoLaedtDenDokumentationstypInDerGleichenAbfrage:
         # ohne den JOIN ueberschreitet dieses Budget. Seit der einrichtungs-
         # weiten Sperr-Reihenfolge der Anhangspfade (Refs #2260) nimmt
         # ``delete_attachments_for`` im Loeschpfad EINE zusaetzliche, nach
-        # ``pk`` geordnete Vorsperre-Abfrage — auch ohne Anhaenge; das Budget
-        # folgt dieser bewussten Abfrage (24). Der Mutant ohne JOIN landet bei
-        # 25 und bleibt damit getoetet (empirisch nachgewiesen).
-        assert len(captured.captured_queries) <= 24, [q["sql"] for q in captured.captured_queries]
+        # ``pk`` geordnete Vorsperre-Abfrage — auch ohne Anhaenge.
+        # Since the delete path also reads the deletion state at the locked
+        # event row (Refs #2374), the budget follows that deliberate read as
+        # well (25). The mutant without the JOIN lands at 26 and stays killed
+        # (checked by hand).
+        assert len(captured.captured_queries) <= 25, [q["sql"] for q in captured.captured_queries]
 
 
 class TestReplayNachweisPrueftAktionUndZieltyp:

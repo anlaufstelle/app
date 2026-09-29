@@ -708,14 +708,16 @@ class TestDeletionEdgeCases:
         response = client.get(reverse("core:deletion_review", kwargs={"pk": dr.pk}))
         assert response.status_code == 200
 
-        # POST approve should also work (approve_deletion fetches by pk)
+        # POST approve is refused: the event already lies in the trash and is
+        # not deleted a second time; the request stays open for a decision.
         response = client.post(
             reverse("core:deletion_review", kwargs={"pk": dr.pk}),
             {"action": "approve"},
         )
         assert response.status_code == 302
+        assert response.url == reverse("core:deletion_request_list")
         dr.refresh_from_db()
-        assert dr.status == DeletionRequest.Status.APPROVED
+        assert dr.status == DeletionRequest.Status.PENDING
 
     def test_event_without_client_direct_deletion(self, client, staff_user, facility, doc_type_contact):
         """Event with no client (not anonymous, just no client) gets direct deletion."""
