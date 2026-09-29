@@ -194,6 +194,29 @@ class TestSammelaktionUeberDieView:
         assert _stand(items) == vorher
         assert AuditLog.objects.count() == audit_vorher
 
+    @pytest.mark.parametrize("htmx", [False, True], ids=["formular", "htmx"])
+    def test_eingeschraenkte_person_in_der_auswahl(self, client, facility, client_identified, staff_user, htmx):
+        """Art. 18: die Sammelaktion meldet die Einschraenkung, statt mit HTTP 500 zu enden."""
+        from django.contrib.messages import get_messages
+
+        from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, restrict_processing
+
+        items = _stapel(facility, client_identified, staff_user)
+        restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+        client.force_login(staff_user)
+        vorher = _stand(items)
+        audit_vorher = AuditLog.objects.count()
+        header = {"HTTP_HX_REQUEST": "true"} if htmx else {}
+        response = client.post(
+            reverse("core:workitem_bulk_priority"),
+            {"workitem_ids": [str(w.pk) for w in items], "priority": "urgent"},
+            **header,
+        )
+        assert response.status_code == 302
+        assert [str(msg) for msg in get_messages(response.wsgi_request)] == [str(PROCESSING_RESTRICTED_MESSAGE)]
+        assert _stand(items) == vorher
+        assert AuditLog.objects.count() == audit_vorher
+
 
 def _geladen(facility, user, *, person=None, title="Alt", **extra):
     """Eine Aufgabe, wie ein Formular sie laedt — danach aendert sich die Datenbank."""
