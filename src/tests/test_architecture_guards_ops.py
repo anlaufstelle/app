@@ -632,86 +632,222 @@ class TestServerErrorSupportContactAcrossAllStacks:
             "dev-ops/deploy/barbara/docker-compose.barbara.yml",
         ]
 
-    @pytest.mark.parametrize("compose_path,example_path", _STACKS)
-    def test_error_page_settings_reach_the_web_container(self, compose_path: Path, example_path: Path | None) -> None:
-        status = self._file_status(Path(), compose_path)
-        if status == self._LEGITIMATELY_STRIPPED:
+    @classmethod
+    def _assert_error_page_settings_reach_the_web_container(cls, root: Path, compose_path: Path) -> None:
+        """Body of ``test_error_page_settings_reach_the_web_container``,
+        taking the tree root explicitly so it can run against a synthetic
+        tree under ``tmp_path`` as well as the real repository (Refs
+        #1904)."""
+        status = cls._file_status(root, compose_path)
+        if status == cls._LEGITIMATELY_STRIPPED:
             pytest.skip(f"{compose_path} is stripped from the public release snapshot (Refs #1904).")
-        assert status == self._PRESENT, (
+        assert status == cls._PRESENT, (
             f"{compose_path} is missing from the development tree — none of the six "
             "web-starting stacks may be missing here, only in an already-stripped "
             "release snapshot (Refs #1904)."
         )
-        environment = self._web_environment(compose_path)
-        missing = self._ERROR_PAGE_ENV_SETTINGS - set(environment)
+        environment = cls._web_environment(root / compose_path)
+        missing = cls._ERROR_PAGE_ENV_SETTINGS - set(environment)
         assert not missing, (
             f"{compose_path}: web is missing the 500-page setting(s) {sorted(missing)} "
             "in its environment list (Refs #1904)."
         )
 
     @pytest.mark.parametrize("compose_path,example_path", _STACKS)
-    def test_error_page_settings_are_documented_in_the_example_env(
-        self, compose_path: Path, example_path: Path | None
+    def test_error_page_settings_reach_the_web_container(self, compose_path: Path, example_path: Path | None) -> None:
+        self._assert_error_page_settings_reach_the_web_container(Path(), compose_path)
+
+    @classmethod
+    def _assert_error_page_settings_are_documented_in_the_example_env(
+        cls, root: Path, compose_path: Path, example_path: Path | None
     ) -> None:
+        """Body of ``test_error_page_settings_are_documented_in_the_example_env``,
+        taking the tree root explicitly so it can run against a synthetic
+        tree under ``tmp_path`` as well as the real repository (Refs
+        #1904)."""
         if example_path is None:
             pytest.skip(f"{compose_path} has no example env file of its own (Refs #1904).")
-        status = self._file_status(Path(), example_path)
-        if status == self._LEGITIMATELY_STRIPPED:
+        status = cls._file_status(root, example_path)
+        if status == cls._LEGITIMATELY_STRIPPED:
             pytest.skip(f"{example_path} is stripped from the public release snapshot (Refs #1904).")
-        assert status == self._PRESENT, (
+        assert status == cls._PRESENT, (
             f"{example_path} is missing from the development tree — none of these example "
             "env files may be missing here, only in an already-stripped release snapshot "
             "(Refs #1904)."
         )
-        documented = set(re.findall(r"^([A-Z][A-Z0-9_]*)=", example_path.read_text(encoding="utf-8"), re.MULTILINE))
-        missing = self._ERROR_PAGE_ENV_SETTINGS - documented
+        documented = set(
+            re.findall(r"^([A-Z][A-Z0-9_]*)=", (root / example_path).read_text(encoding="utf-8"), re.MULTILINE)
+        )
+        missing = cls._ERROR_PAGE_ENV_SETTINGS - documented
         assert not missing, f"{example_path}: missing documentation for {sorted(missing)} (Refs #1904)."
+
+    @pytest.mark.parametrize("compose_path,example_path", _STACKS)
+    def test_error_page_settings_are_documented_in_the_example_env(
+        self, compose_path: Path, example_path: Path | None
+    ) -> None:
+        self._assert_error_page_settings_are_documented_in_the_example_env(Path(), compose_path, example_path)
 
 
 class TestServerErrorSupportContactGuardFailsClosed:
-    """Refs #1904: locks in that
-    ``TestServerErrorSupportContactAcrossAllStacks._file_status`` only ever
-    classifies a missing stack/example path as a legitimate release strip
-    when the tree under test also lacks the strip's own removal marker
-    (``dev-ops/``, build-release.sh:285) — never merely because the path
-    happens to be one build-release.sh strips. Without that second check, a
-    deleted or renamed stack/example path in the (tracked) development tree
-    made the guard above skip instead of fail.
+    """Refs #1904: exercises the two real guard methods above (compose
+    environment, example-env documentation) against synthetic trees built
+    under ``tmp_path`` — not only the private ``_file_status`` classifier —
+    so the assertions below observe the guards' actual fail/skip behavior.
+
+    A tree is only ever treated as a published release snapshot when NONE
+    of the paths build-release.sh strips that this guard does not itself
+    check are present: ``dev-ops/`` (build-release.sh:285), ``docs/dev/``
+    (build-release.sh:287), ``CLAUDE.md`` (build-release.sh:305) and
+    ``AGENTS.md`` (build-release.sh:306). These four removals are
+    independent of each other — the build never leaves one behind while
+    removing the others for some other reason — so any single survivor
+    proves the tree under test is the (tracked) development tree, not an
+    already-stripped snapshot, and a missing tracked stack/example file
+    there must fail, never skip. A tree with none of these four markers and
+    no ``src/`` either carries no positive evidence of being a real
+    published release tree, so it is not recognised as one: it fails too.
     """
 
-    _NEVER_STRIPPED = Path("docker-compose.dev.yml")
-    _ALWAYS_STRIPPED = Path("docker-compose.demo.yml")
+    _ALL_STACKS = TestServerErrorSupportContactAcrossAllStacks._STACKS
 
-    def test_a_never_stripped_stack_missing_in_the_dev_tree_fails_closed(self, tmp_path: Path) -> None:
-        (tmp_path / "dev-ops").mkdir()
-        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._NEVER_STRIPPED)
-        assert status == TestServerErrorSupportContactAcrossAllStacks._UNEXPECTEDLY_MISSING, (
-            f"a tree with dev-ops/ present is the development tree; a missing "
-            f"{self._NEVER_STRIPPED} there must fail, not be classified {status!r} (Refs #1904)."
+    @staticmethod
+    def _write_compliant_stack(root: Path, compose_path: Path, example_path: Path | None) -> None:
+        """Write one compose file (and its example env file, if given)
+        under ``root``, already satisfying the support-contact contract
+        this guard checks."""
+        full_compose = root / compose_path
+        full_compose.parent.mkdir(parents=True, exist_ok=True)
+        full_compose.write_text(
+            "services:\n  web:\n    environment:\n      SUPPORT_CONTACT: ${SUPPORT_CONTACT-}\n",
+            encoding="utf-8",
         )
+        if example_path is not None:
+            full_example = root / example_path
+            full_example.parent.mkdir(parents=True, exist_ok=True)
+            full_example.write_text("SUPPORT_CONTACT=\n", encoding="utf-8")
 
-    def test_a_release_stripped_stack_missing_in_the_dev_tree_still_fails_closed(self, tmp_path: Path) -> None:
-        (tmp_path / "dev-ops").mkdir()
-        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._ALWAYS_STRIPPED)
-        assert status == TestServerErrorSupportContactAcrossAllStacks._UNEXPECTEDLY_MISSING, (
-            f"{self._ALWAYS_STRIPPED} missing from a tree that still has dev-ops/ is a "
-            f"development-tree deletion, not a release strip — must fail, not be classified "
-            f"{status!r} (Refs #1904)."
-        )
+    @classmethod
+    def _build_complete_development_tree(cls, root: Path) -> None:
+        """A synthetic development tree: every marker plus every tracked
+        stack/example file present and contract-compliant."""
+        (root / "src").mkdir(parents=True, exist_ok=True)
+        (root / "docs" / "dev").mkdir(parents=True, exist_ok=True)
+        (root / "CLAUDE.md").write_text("development instructions\n", encoding="utf-8")
+        (root / "AGENTS.md").write_text("development instructions\n", encoding="utf-8")
+        for compose_path, example_path in cls._ALL_STACKS:
+            cls._write_compliant_stack(root, compose_path, example_path)
 
-    def test_a_release_stripped_stack_is_recognised_once_dev_ops_is_also_gone(self, tmp_path: Path) -> None:
-        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._ALWAYS_STRIPPED)
-        assert status == TestServerErrorSupportContactAcrossAllStacks._LEGITIMATELY_STRIPPED, (
-            f"{self._ALWAYS_STRIPPED} missing from a tree that also lacks dev-ops/ is exactly "
-            f"the release-snapshot case that must be skipped, got {status!r} (Refs #1904)."
-        )
+    @classmethod
+    def _build_published_release_tree(cls, root: Path) -> None:
+        """A synthetic release snapshot: none of the four markers, only the
+        stack/example files build-release.sh does not strip."""
+        (root / "src").mkdir(parents=True, exist_ok=True)
+        guard = TestServerErrorSupportContactAcrossAllStacks
+        for compose_path, example_path in cls._ALL_STACKS:
+            if guard._is_on_the_release_strip_list(compose_path):
+                continue
+            cls._write_compliant_stack(root, compose_path, example_path)
 
-    def test_a_never_stripped_stack_still_fails_closed_without_the_dev_ops_marker(self, tmp_path: Path) -> None:
-        status = TestServerErrorSupportContactAcrossAllStacks._file_status(tmp_path, self._NEVER_STRIPPED)
-        assert status == TestServerErrorSupportContactAcrossAllStacks._UNEXPECTEDLY_MISSING, (
-            f"{self._NEVER_STRIPPED} is never on the release strip list; a missing copy must "
-            f"still fail even without dev-ops/ present, got {status!r} (Refs #1904)."
-        )
+    @staticmethod
+    def _run_guard(root: Path, compose_path: Path, example_path: Path | None) -> dict[str, str]:
+        """Run both real guard methods against ``root`` and report each
+        outcome as ``"passed"``, ``"failed"`` or ``"skipped"`` — a skip
+        inside either guard method must never abort this test itself."""
+        guard = TestServerErrorSupportContactAcrossAllStacks
+        checks = {
+            "compose": lambda: guard._assert_error_page_settings_reach_the_web_container(root, compose_path),
+            "example": lambda: guard._assert_error_page_settings_are_documented_in_the_example_env(
+                root, compose_path, example_path
+            ),
+        }
+        outcomes = {}
+        for name, check in checks.items():
+            try:
+                check()
+            except AssertionError:
+                outcomes[name] = "failed"
+            except pytest.skip.Exception:
+                outcomes[name] = "skipped"
+            else:
+                outcomes[name] = "passed"
+        return outcomes
+
+    def test_case_1_complete_development_tree_passes(self, tmp_path: Path) -> None:
+        self._build_complete_development_tree(tmp_path)
+        for compose_path, example_path in self._ALL_STACKS:
+            outcomes = self._run_guard(tmp_path, compose_path, example_path)
+            assert outcomes["compose"] == "passed", (compose_path, outcomes)
+            if example_path is not None:
+                assert outcomes["example"] == "passed", (example_path, outcomes)
+
+    @pytest.mark.parametrize(
+        "compose_path",
+        [
+            Path("docker-compose.dev.yml"),
+            Path("docker-compose.demo.yml"),
+            Path("docker-compose.staging.yml"),
+            Path("dev-ops/deploy/barbara/docker-compose.barbara.yml"),
+        ],
+    )
+    def test_case_2_one_missing_compose_file_fails_in_the_development_tree(
+        self, tmp_path: Path, compose_path: Path
+    ) -> None:
+        self._build_complete_development_tree(tmp_path)
+        (tmp_path / compose_path).unlink()
+        outcomes = self._run_guard(tmp_path, compose_path, None)
+        assert outcomes["compose"] == "failed", outcomes
+
+    def test_case_3_missing_dev_ops_alone_does_not_identify_a_release(self, tmp_path: Path) -> None:
+        # Refs #1904 review (Gegenfall): dev-ops/ is gone, but AGENTS.md and
+        # docs/dev/ — both removed by the same release build — still stand.
+        # That combination is not a finished release strip, so the two
+        # Barbara paths it took with it must fail here, not skip.
+        self._build_complete_development_tree(tmp_path)
+        shutil.rmtree(tmp_path / "dev-ops")
+        compose_path, example_path = self._ALL_STACKS[-1]
+        outcomes = self._run_guard(tmp_path, compose_path, example_path)
+        assert outcomes == {"compose": "failed", "example": "failed"}, outcomes
+
+    @pytest.mark.parametrize(
+        "example_path",
+        [
+            Path(".env.dev.example"),
+            Path(".env.demo.example"),
+            Path(".env.staging.example"),
+            Path(".env.example"),
+            Path("dev-ops/deploy/barbara/.env.barbara.example"),
+        ],
+    )
+    def test_case_4_one_missing_example_env_fails_in_the_development_tree(
+        self, tmp_path: Path, example_path: Path
+    ) -> None:
+        self._build_complete_development_tree(tmp_path)
+        (tmp_path / example_path).unlink()
+        outcomes = self._run_guard(tmp_path, Path("docker-compose.yml"), example_path)
+        assert outcomes["example"] == "failed", outcomes
+
+    def test_case_5_published_release_tree_skips_only_the_stripped_files(self, tmp_path: Path) -> None:
+        self._build_published_release_tree(tmp_path)
+        guard = TestServerErrorSupportContactAcrossAllStacks
+        for compose_path, example_path in self._ALL_STACKS:
+            outcomes = self._run_guard(tmp_path, compose_path, example_path)
+            expected_compose = "skipped" if guard._is_on_the_release_strip_list(compose_path) else "passed"
+            assert outcomes["compose"] == expected_compose, (compose_path, outcomes)
+            if example_path is not None:
+                expected_example = "skipped" if guard._is_on_the_release_strip_list(example_path) else "passed"
+                assert outcomes["example"] == expected_example, (example_path, outcomes)
+
+    def test_case_6_remaining_stack_without_the_setting_fails_in_the_release_tree(self, tmp_path: Path) -> None:
+        self._build_published_release_tree(tmp_path)
+        (tmp_path / "docker-compose.dev.yml").write_text("services:\n  web:\n    environment: {}\n", encoding="utf-8")
+        outcomes = self._run_guard(tmp_path, Path("docker-compose.dev.yml"), Path(".env.dev.example"))
+        assert outcomes["compose"] == "failed", outcomes
+
+    def test_case_7_empty_tree_fails_instead_of_being_treated_as_a_release(self, tmp_path: Path) -> None:
+        # Nothing at all under tmp_path: no markers, but also no src/ — so
+        # this must not be accepted as a published release tree either.
+        outcomes = self._run_guard(tmp_path, Path("docker-compose.demo.yml"), Path(".env.demo.example"))
+        assert outcomes == {"compose": "failed", "example": "failed"}, outcomes
 
 
 class TestReadmeQuickStart:
