@@ -75,7 +75,7 @@ Gruppierung der gepinnten Tests:
   ``test_mutation_pins_099_workitems_b.py``
   (``TestLockedWorkitemsSkipLogging``).
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``)
+``_encryption_key`` liegt modulweit an: der Mutantenbaum (``mutants/`` im Checkout)
 hat keine ``.env`` und damit keinen ``ENCRYPTION_KEY``; ohne die Fixture waeren
 die Pins dort aus dem FALSCHEN Grund rot.
 """

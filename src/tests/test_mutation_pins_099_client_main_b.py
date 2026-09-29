@@ -92,7 +92,7 @@ Survivor-Mutanten; 50 sind Testlücken (``test``) und 5 ``equivalent``. Keine ``
   byte-identisch zu ``values_list("pk", flat=True)`` — kein ``TypeError``, keine andere
   Ergebnisliste; ein zunächst geschriebener Pin blieb unter dieser Mutante grün.
 
-``_encryption_key`` liegt modulweit an: der Mutantenbaum (``/work/anlaufstelle/mutants``) hat
+``_encryption_key`` liegt modulweit an: der Mutantenbaum (``mutants/`` im Checkout) hat
 keine ``.env`` und damit keinen ``ENCRYPTION_KEY``; ohne die Fixture wären die Pins dort aus dem
 FALSCHEN Grund rot.
 """
