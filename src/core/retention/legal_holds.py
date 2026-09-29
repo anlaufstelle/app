@@ -14,6 +14,17 @@ from core.models import Activity, AuditLog, Case, Client, Event, EventHistory, L
 from core.services.audit import audit_retention_decision
 from core.services.events.history_diff import is_redaction_marker
 
+#: Meldung, wenn die handelnde Person nicht zur Einrichtung des Holds gehoert
+#: bzw. nicht zu der, in der er angelegt werden soll — Wortlaut wie in den
+#: uebrigen Diensten mit Einrichtungsgrenze (Refs #2374).
+LEGAL_HOLD_OTHER_FACILITY_MESSAGE = _("Aufbewahrungssperre gehört zu einer anderen Einrichtung.")
+
+#: Meldung, wenn der Hold seit dem Laden der Uebersicht bereits aufgehoben
+#: wurde (Stil ``PROPOSAL_ALREADY_DECIDED_MESSAGE``, Refs #2374).
+LEGAL_HOLD_ALREADY_DISMISSED_MESSAGE = _(
+    "Diese Aufbewahrungssperre wurde zwischenzeitlich bereits aufgehoben — bitte die Übersicht neu laden."
+)
+
 
 def _row_content_is_gone(row) -> bool:
     """Hat DIESE Fassung ihre Werte verloren? (Finding B)
@@ -463,28 +474,51 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
 
 @transaction.atomic
 def dismiss_legal_hold(hold, user):
-    """Dismiss a legal hold and revert the proposal to pending."""
-    hold.dismissed_at = timezone.now()
-    hold.dismissed_by = user
-    hold.save(update_fields=["dismissed_at", "dismissed_by"])
+    """Hebt einen Legal Hold auf und stellt den gehaltenen Vorschlag auf ``pending`` zurueck.
+
+    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
+    Sperre geprueft (fail-closed ohne Einrichtung), danach wird die Hold-Zeile
+    gesperrt und innerhalb dieser Einrichtung neu gelesen. Die mitgegebene
+    Instanz kann aus einer Uebersicht von vor Minuten stammen: ist der Hold
+    inzwischen aufgehoben, endet der Aufruf mit einer Meldung. Akteur und
+    Zeitpunkt der ersten Aufhebung bleiben dann stehen, es entsteht keine
+    zweite Audit-Zeile — und ein Vorschlag, den inzwischen ein NEUER Hold
+    haelt, wird nicht zurueckgestellt.
+    """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != hold.facility_id:
+        raise ValidationError(LEGAL_HOLD_OTHER_FACILITY_MESSAGE)
+    locked = LegalHold.objects.select_for_update().filter(pk=hold.pk, facility_id=actor_facility_id).first()
+    if locked is None:
+        # Die Zeile liegt in der Datenbank nicht (mehr) in der Einrichtung der
+        # handelnden Person — entschieden wird an der Zeile, nicht am Speicher.
+        raise ValidationError(LEGAL_HOLD_OTHER_FACILITY_MESSAGE)
+    if locked.dismissed_at is not None:
+        raise ValidationError(LEGAL_HOLD_ALREADY_DISMISSED_MESSAGE)
+    locked.dismissed_at = timezone.now()
+    locked.dismissed_by = user
+    locked.save(update_fields=["dismissed_at", "dismissed_by"])
+    # Die Instanz des Aufrufers mitziehen: die View arbeitet danach mit ihr weiter.
+    hold.dismissed_at = locked.dismissed_at
+    hold.dismissed_by = locked.dismissed_by
 
     # Revert associated proposal to pending
     RetentionProposal.objects.filter(
-        facility=hold.facility,
-        target_type=hold.target_type,
-        target_id=hold.target_id,
+        facility_id=locked.facility_id,
+        target_type=locked.target_type,
+        target_id=locked.target_id,
         status=RetentionProposal.Status.HELD,
     ).update(status=RetentionProposal.Status.PENDING)
 
     audit_retention_decision(
         hold.facility,
-        target_type=hold.target_type,
-        target_id=hold.target_id,
+        target_type=locked.target_type,
+        target_id=locked.target_id,
         action=AuditLog.Action.LEGAL_HOLD,
         category="legal_hold_dismissed",
         user=user,
-        hold_id=str(hold.pk),
-        reason=hold.reason,
+        hold_id=str(locked.pk),
+        reason=locked.reason,
     )
 
 

@@ -289,7 +289,13 @@ class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
     def post(self, request, pk):
         hold = get_scoped_object(LegalHold, request, pk=pk)
 
-        dismiss_legal_hold(hold, request.user)
+        try:
+            dismiss_legal_hold(hold, request.user)
+        except ValidationError as exc:
+            # Refs #2374: Hold zwischenzeitlich bereits aufgehoben (zweiter
+            # Klick, zweites Fenster) — Antwortmuster wie ``RetentionApproveView``:
+            # 409 mit kurzem, markup-freiem Klartext statt eines 500.
+            return HttpResponse(exc.messages[0] if exc.messages else str(exc), status=409)
 
         # Find the associated proposal
         proposal = (

@@ -82,6 +82,23 @@ class TestHoldAufhebenPrueftDieEinrichtungDerLeitung:
         assert proposal.status == RetentionProposal.Status.HELD
         assert not _audit_zeilen("legal_hold_dismissed").exists()
 
+    def test_grenze_gilt_fuer_die_zeile_in_der_datenbank_nicht_fuer_die_instanz(
+        self, gehaltener_vorschlag, lead_user, second_facility
+    ):
+        """Die Instanz im Speicher nennt die Einrichtung der Leitung, die Zeile
+        in der Datenbank liegt in einer anderen — entschieden wird an der
+        Zeile."""
+        hold, _proposal = gehaltener_vorschlag
+        LegalHold.objects.filter(pk=hold.pk).update(facility=second_facility)
+
+        with pytest.raises(ValidationError) as excinfo:
+            dismiss_legal_hold(hold, lead_user)
+
+        assert "gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        hold.refresh_from_db()
+        assert hold.dismissed_at is None
+        assert not _audit_zeilen("legal_hold_dismissed").exists()
+
     def test_leitung_der_einrichtung_hebt_den_hold_auf(self, gehaltener_vorschlag, lead_user):
         hold, proposal = gehaltener_vorschlag
 
