@@ -152,12 +152,12 @@ class TestEventCreatePagePlaceholder:
 
 @pytest.mark.django_db
 class TestDynamicSelectFieldPlaceholderIsGerman:
-    """Refs #2381 (Nachtrag): Auswahlfelder aus Feldvorlagen (dynamische Felder
-    eines Dokumentationstyps, ``core.forms.dynamic._select_choices``) zeigten
-    als Leer-Option weiterhin den Rohtext ``"---------"`` — anders als die
-    festen Auswahlfelder aus dem ersten Sweep oben. Diese Leer-Option kommt
-    NICHT aus Djangos ``BLANK_CHOICE_LABEL`` (kein ``ModelChoiceField``), war
-    also von den beiden Sweeps oben nicht erfasst.
+    """Refs #2381 (follow-up): select fields sourced from field templates
+    (dynamic fields of a document type, ``core.forms.dynamic._select_choices``)
+    still showed the raw text ``"---------"`` as their empty option — unlike
+    the fixed select fields from the first sweep above. This empty option
+    does NOT come from Django's ``BLANK_CHOICE_LABEL`` (no ``ModelChoiceField``),
+    so it was not covered by either sweep above.
     """
 
     def _doc_type_with_select_fields(self, facility):
@@ -194,8 +194,8 @@ class TestDynamicSelectFieldPlaceholderIsGerman:
         assert '<option value="">' not in html
 
     def test_select_field_label_is_english_under_translation_override(self, facility):
-        """Byte-gleich zur vorhandenen msgid: unter aktivem ``en``-Katalog
-        greift dieselbe Übersetzung wie beim Dokumentationstyp-Feld."""
+        """Byte-identical to the existing msgid: with the ``en`` catalog
+        active, the same translation applies as for the document-type field."""
         doc_type, select_field, _multi = self._doc_type_with_select_fields(facility)
         form = DynamicDataForm(document_type=doc_type, facility=facility)
         with translation.override("en"):
@@ -205,17 +205,17 @@ class TestDynamicSelectFieldPlaceholderIsGerman:
 
 @pytest.mark.django_db
 class TestOfflineFormsPlaceholderIsGerman:
-    """Refs #2381 (Nachtrag): die beiden Offline-Formulare (Personenansicht,
-    Ereignis-Erfassung) rendern die Leer-Option der dynamischen Auswahlfelder
-    als feste ``<option>`` im Alpine-Template — hartcodiert deutsch statt aus
-    einer Übersetzung, deshalb bisher der Rohtext ``"---------"``."""
+    """Refs #2381 (follow-up): the two offline forms (client view, event
+    capture) render the empty option of dynamic select fields as a fixed
+    ``<option>`` in the Alpine template — hardcoded German instead of coming
+    from a translation, which is why they used to show the raw text
+    ``"---------"``."""
 
     def test_offline_client_shell_select_options(self, client):
-        """``OfflineClientShellView`` (core/views/offline.py) rendert
-        ``offline_detail.html`` mit ZWEI eigenständigen ``field.isSelect``-
-        Blöcken: dem eingebundenen Erfassungs-Select aus
-        ``_offline_event_fields.html`` (kommt im Template zuerst) und dem
-        eigenen Bearbeiten-Select (kommt danach)."""
+        """``OfflineClientShellView`` (core/views/offline.py) renders
+        ``offline_detail.html`` with TWO independent ``field.isSelect``
+        blocks: the included capture select from ``_offline_event_fields.html``
+        (comes first in the template) and its own edit select (comes after)."""
         response = client.get(reverse("core:offline_client_shell"))
         assert response.status_code == 200
         body = response.content.decode()
@@ -232,19 +232,75 @@ class TestOfflineFormsPlaceholderIsGerman:
         assert '<option value="">— Bitte auswählen —</option>' in second_block
 
     def test_offline_event_create_shell_select_options(self, client):
-        """``OfflineEventCreateShellView`` rendert ``offline_create.html`` mit
-        dem eingebundenen ``_offline_event_fields.html``."""
+        """``OfflineEventCreateShellView`` renders ``offline_create.html``
+        with the included ``_offline_event_fields.html``."""
         response = client.get(reverse("core:offline_event_shell"))
         assert response.status_code == 200
         body = response.content.decode()
         assert ">---------<" not in body
         assert '<option value="">— Bitte auswählen —</option>' in body
 
+    def test_offline_client_shell_select_options_are_english_for_en_preferring_user(self, client, staff_user):
+        """The offline templates use ``{% trans %}`` (see
+        ``_offline_event_fields.html`` / ``offline_detail.html``), so the
+        empty option is real, catalog-backed translation, not hardcoded
+        German — verified here on the rendered result. ``translation.override``
+        has no effect on a response fetched through the test client: for an
+        unauthenticated request, ``UserLanguageMiddleware`` (Refs #670) runs
+        after Django's ``LocaleMiddleware`` and activates
+        ``settings.LANGUAGE_CODE`` regardless of any surrounding override.
+        The app's actual language switch is ``User.preferred_language``, so
+        that is what this test drives instead."""
+        staff_user.preferred_language = "en"
+        staff_user.save(update_fields=["preferred_language"])
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:offline_client_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert ">---------<" not in body
+        assert "— Bitte auswählen —" not in body
+
+        first = body.index('x-if="field.isSelect"')
+        first_block = body[first : body.index("</template>", first)]
+        assert "offline-create-input-" in first_block
+        assert '<option value="">— Please select —</option>' in first_block
+
+        second = body.index('x-if="field.isSelect"', first + 1)
+        second_block = body[second : body.index("</template>", second)]
+        assert "offline-edit-input-" in second_block
+        assert '<option value="">— Please select —</option>' in second_block
+
+    def test_offline_event_create_shell_select_options_are_english_for_en_preferring_user(self, client, staff_user):
+        """Same translation check as above, for the standalone event-capture
+        shell. See the docstring above for why ``User.preferred_language``
+        rather than ``translation.override`` drives the language here."""
+        staff_user.preferred_language = "en"
+        staff_user.save(update_fields=["preferred_language"])
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:offline_event_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert ">---------<" not in body
+        assert "— Bitte auswählen —" not in body
+        assert '<option value="">— Please select —</option>' in body
+
 
 class TestOfflineSelectTemplateSourceScanner:
-    """Refs #2381 (Nachtrag): Quelltext-Scanner mit Djangos eigenem ``Lexer``
-    statt Regex — prüft die Template-Quelldateien direkt, unabhängig vom
-    Rendering-Kontext (kein DB-Zugriff nötig)."""
+    """Refs #2381 (follow-up): source scanner using Django's own ``Lexer``
+    instead of regex — checks the template source files directly,
+    independent of the rendering context (no DB access needed).
+
+    Only the raw-dash-placeholder guard lives here. A guard that additionally
+    pinned the empty option to a specific ``{% trans %}`` block tag was
+    removed: :class:`TestOfflineFormsPlaceholderIsGerman` above now renders
+    both templates under both the German default and an English-preferring
+    user and asserts on the exact translated text in each case, which proves
+    the actual translation contract end to end and would catch a functionally
+    equivalent tag (e.g. ``blocktrans``) just as well — without pinning the
+    template to one specific tag name.
+    """
 
     _TEMPLATES = (
         Path("src/templates/core/clients/offline_detail.html"),
@@ -257,13 +313,3 @@ class TestOfflineSelectTemplateSourceScanner:
             for token in Lexer(source).tokenize():
                 if token.token_type is TokenType.TEXT:
                     assert "---------" not in token.contents, f"{path}: {token.contents!r}"
-
-    def test_empty_option_is_a_trans_block_tag(self):
-        for path in self._TEMPLATES:
-            source = path.read_text(encoding="utf-8")
-            trans_contents = [
-                token.contents
-                for token in Lexer(source).tokenize()
-                if token.token_type is TokenType.BLOCK and token.split_contents()[:1] == ["trans"]
-            ]
-            assert any("— Bitte auswählen —" in contents for contents in trans_contents), path
