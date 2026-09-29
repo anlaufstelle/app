@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 15:41+0200\n"
+"POT-Creation-Date: 2026-09-29 19:44+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12935,3 +12935,47 @@ msgstr "Another open deletion proposal exists for this event — please reload t
 #: src/core/services/case/deletion.py:406
 msgid "Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
 msgstr "The case has changed in the meantime — please reload the page."
+
+#: src/core/services/events/crud.py:769
+msgid "Dieses Ereignis liegt bereits im Papierkorb."
+msgstr "This event is already in the trash."
+
+#: src/core/views/errors.py:189
+#, python-format
+msgid "Serverfehler. Bitte versuchen Sie es später erneut. Referenz-ID: %(reference_id)s"
+msgstr "Server error. Please try again later. Reference ID: %(reference_id)s"
+
+#: src/templates/500.html:88
+msgid "Referenz-ID"
+msgstr "Reference ID"
+
+#: src/templates/500.html:90
+#, python-format
+msgid "Nennen Sie diese Referenz-ID, falls Sie sich an <a href=\"%(contact_href)s\">%(contact_text)s</a> wenden."
+msgstr "State this reference ID if you contact <a href=\"%(contact_href)s\">%(contact_text)s</a>."
+
+#: src/templates/500.html:92
+#, python-format
+msgid "Nennen Sie diese Referenz-ID, falls Sie sich an %(contact_text)s wenden."
+msgstr "State this reference ID if you contact %(contact_text)s."
+
+#: src/templates/500.html:94
+msgid "Wenden Sie sich mit dieser Referenz-ID an die Anwendungsbetreuung Ihrer Einrichtung."
+msgstr "Contact your facility's application support and state this reference ID."
+
+#: src/templates/core/help/overview.html:37
+msgid "Ausführliche Anleitungen"
+msgstr "Detailed guides"
+
+#: src/templates/core/help/overview.html:40
+msgid "Benutzerhandbuch"
+msgstr "User guide"
+
+#: src/templates/core/help/overview.html:40
+#: src/templates/core/help/overview.html:43
+msgid "öffnet in neuem Tab"
+msgstr "opens in a new tab"
+
+#: src/templates/core/help/overview.html:43
+msgid "Häufig gestellte Fragen (FAQ)"
+msgstr "Frequently asked questions (FAQ)"

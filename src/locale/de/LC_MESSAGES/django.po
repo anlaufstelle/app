@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 15:41+0200\n"
+"POT-Creation-Date: 2026-09-29 19:44+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13033,3 +13033,47 @@ msgstr "Für dieses Ereignis liegt ein weiterer offener Löschvorschlag vor — 
 #: src/core/services/case/deletion.py:406
 msgid "Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
 msgstr "Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
+
+#: src/core/services/events/crud.py:769
+msgid "Dieses Ereignis liegt bereits im Papierkorb."
+msgstr "Dieses Ereignis liegt bereits im Papierkorb."
+
+#: src/core/views/errors.py:189
+#, python-format
+msgid "Serverfehler. Bitte versuchen Sie es später erneut. Referenz-ID: %(reference_id)s"
+msgstr "Serverfehler. Bitte versuchen Sie es später erneut. Referenz-ID: %(reference_id)s"
+
+#: src/templates/500.html:88
+msgid "Referenz-ID"
+msgstr "Referenz-ID"
+
+#: src/templates/500.html:90
+#, python-format
+msgid "Nennen Sie diese Referenz-ID, falls Sie sich an <a href=\"%(contact_href)s\">%(contact_text)s</a> wenden."
+msgstr "Nennen Sie diese Referenz-ID, falls Sie sich an <a href=\"%(contact_href)s\">%(contact_text)s</a> wenden."
+
+#: src/templates/500.html:92
+#, python-format
+msgid "Nennen Sie diese Referenz-ID, falls Sie sich an %(contact_text)s wenden."
+msgstr "Nennen Sie diese Referenz-ID, falls Sie sich an %(contact_text)s wenden."
+
+#: src/templates/500.html:94
+msgid "Wenden Sie sich mit dieser Referenz-ID an die Anwendungsbetreuung Ihrer Einrichtung."
+msgstr "Wenden Sie sich mit dieser Referenz-ID an die Anwendungsbetreuung Ihrer Einrichtung."
+
+#: src/templates/core/help/overview.html:37
+msgid "Ausführliche Anleitungen"
+msgstr "Ausführliche Anleitungen"
+
+#: src/templates/core/help/overview.html:40
+msgid "Benutzerhandbuch"
+msgstr "Benutzerhandbuch"
+
+#: src/templates/core/help/overview.html:40
+#: src/templates/core/help/overview.html:43
+msgid "öffnet in neuem Tab"
+msgstr "öffnet in neuem Tab"
+
+#: src/templates/core/help/overview.html:43
+msgid "Häufig gestellte Fragen (FAQ)"
+msgstr "Häufig gestellte Fragen (FAQ)"
