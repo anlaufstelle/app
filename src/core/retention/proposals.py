@@ -610,6 +610,28 @@ def _lock_selection(facility_id, proposals, *, targets_of=()):
     return changed
 
 
+def lock_bulk_selection(proposals, user, *, with_targets=False):
+    """Sperrt die Auswahl einer Sammelentscheidung vorab — fuer Aufrufer mit eigener Schleife je Vorschlag.
+
+    Refs #2374: Die Sammel-Views der Oberflaeche (``_BulkActionMixin`` in
+    ``core/views/retention.py``) entscheiden je Vorschlag in einem eigenen
+    Savepoint und rufen dafuer den Sammel-Dienst mit nur einem Vorschlag auf —
+    der Dienst sieht die Auswahl nie als Ganzes. Dieselbe Vorabsperre wie in
+    :func:`bulk_approve_proposals` (``with_targets=True``: Personen, Ereignisse,
+    Vorschlaege) bzw. :func:`bulk_defer_proposals`/:func:`bulk_reject_proposals`
+    (nur Vorschlaege), hier fuer die aeussere Transaktion des Aufrufers. Nur
+    Vorschlaege der Einrichtung der handelnden Person werden gesperrt
+    (:func:`_actor_selection`).
+
+    Rueckgabe: die pks der Vorschlaege, deren Personenzuordnung sich waehrend
+    der Sperre geaendert hat (nur mit ``with_targets``); der Aufrufer
+    entscheidet sie nicht. Der Aufrufer muss innerhalb einer
+    ``transaction.atomic()`` stehen.
+    """
+    facility_id, own = _actor_selection(proposals, user)
+    return _lock_selection(facility_id, own, targets_of=own if with_targets else ())
+
+
 @transaction.atomic
 def bulk_approve_proposals(proposals, user):
     """Approve multiple proposals — je Zeile ein Savepoint.

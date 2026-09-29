@@ -15,6 +15,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_BULK_ACTION, RATELIMIT_MUTATION
 from core.models import LegalHold, RetentionProposal
+from core.retention.proposals import lock_bulk_selection
 from core.services.retention import (
     annotate_urgency,
     approve_proposal,
@@ -153,6 +154,9 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
         RetentionProposal.Status.DEFERRED,
     )
     extra_kwargs_fn = None  # Optional: callable(request) -> dict
+    #: Sperrt die Aktion vorab auch Person und Ereignis je Vorschlag (die
+    #: Zielanker der Hold-Anlage)? Nur die Genehmigung prueft den Hold am Ziel.
+    lock_targets = False
 
     def _get_proposal_ids(self, request):
         ids = request.POST.getlist("proposal_ids") or request.POST.getlist("proposal_ids[]")
@@ -177,12 +181,27 @@ class _BulkActionMixin(LeadOrAdminRequiredMixin):
         in ``bulk_approve_proposals``). ``bulk_approve_proposals`` liefert
         bereits ein Paar, die Schwestern eine blanke Zahl — beides wird
         zusammengezaehlt.
+
+        Refs #2374: Die Audit-Zeile des ersten Vorschlags haelt die Audit-Kette
+        der Einrichtung bis zum Ende der Transaktion. Die ganze Auswahl wird
+        deshalb vorher in der aeusseren Transaktion gesperrt
+        (:func:`~core.retention.proposals.lock_bulk_selection`, dieselbe
+        Vorabsperre wie in den Sammel-Diensten) — sonst naehme die Schleife die
+        Zeilen des naechsten Vorschlags unter gehaltener Kette und verklemmte
+        sich mit einer Hold-Anlage oder einer zweiten Sammelaktion. Ein
+        zurueckgerollter Savepoint gibt diese Sperren nicht frei. Ein
+        Vorschlag, dessen Personenzuordnung sich waehrend der Sperre geaendert
+        hat, zaehlt als uebersprungen — wie im Einzelweg.
         """
         action = type(self).action_fn
         count = 0
         skipped = 0
         with transaction.atomic():
+            binding_changed = lock_bulk_selection(proposals, user, with_targets=self.lock_targets)
             for proposal in proposals:
+                if proposal.pk in binding_changed:
+                    skipped += 1
+                    continue
                 try:
                     with transaction.atomic():
                         result = action([proposal], user, **extra_kwargs)
@@ -247,6 +266,7 @@ class RetentionBulkApproveView(_BulkActionMixin, View):
     """Bulk-approve retention proposals."""
 
     action_fn = staticmethod(bulk_approve_proposals)
+    lock_targets = True
     allowed_statuses = (
         RetentionProposal.Status.PENDING,
         RetentionProposal.Status.DEFERRED,
