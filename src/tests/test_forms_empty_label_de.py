@@ -15,8 +15,12 @@ englischen Substrings — sowie ``required`` und den unveränderten Leerwert
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+from django.template.base import Lexer, TokenType
 from django.urls import reverse
+from django.utils import translation
 
 from core.forms.cases import CaseForm
 from core.forms.config import (
@@ -25,9 +29,11 @@ from core.forms.config import (
     FieldConditionForm,
     FieldTemplateForm,
 )
+from core.forms.dynamic import DynamicDataForm
 from core.forms.events import EventMetaForm
 from core.forms.import_data import ImportUploadForm
 from core.forms.workitems import WorkItemForm
+from core.models import DocumentType, DocumentTypeField, FieldTemplate
 
 ENGLISH_PLACEHOLDER = "Select an option"
 
@@ -142,3 +148,122 @@ class TestEventCreatePagePlaceholder:
         assert "---------" not in select
         assert ENGLISH_PLACEHOLDER not in select
         assert f'value="{doc_type_contact.pk}"' in select
+
+
+@pytest.mark.django_db
+class TestDynamicSelectFieldPlaceholderIsGerman:
+    """Refs #2381 (Nachtrag): Auswahlfelder aus Feldvorlagen (dynamische Felder
+    eines Dokumentationstyps, ``core.forms.dynamic._select_choices``) zeigten
+    als Leer-Option weiterhin den Rohtext ``"---------"`` — anders als die
+    festen Auswahlfelder aus dem ersten Sweep oben. Diese Leer-Option kommt
+    NICHT aus Djangos ``BLANK_CHOICE_LABEL`` (kein ``ModelChoiceField``), war
+    also von den beiden Sweeps oben nicht erfasst.
+    """
+
+    def _doc_type_with_select_fields(self, facility):
+        doc_type = DocumentType.objects.create(facility=facility, name="Mit Auswahlfeld")
+        select_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Kategorie",
+            field_type=FieldTemplate.FieldType.SELECT,
+            options_json=[{"slug": "a", "label": "Alpha", "is_active": True}],
+        )
+        multi_select_field = FieldTemplate.objects.create(
+            facility=facility,
+            name="Tags",
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[{"slug": "x", "label": "X", "is_active": True}],
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=select_field, sort_order=0)
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=multi_select_field, sort_order=1)
+        return doc_type, select_field, multi_select_field
+
+    def test_select_field_choice_and_render(self, facility):
+        doc_type, select_field, _multi = self._doc_type_with_select_fields(facility)
+        form = DynamicDataForm(document_type=doc_type, facility=facility)
+        choices = list(form.fields[select_field.slug].choices)
+        assert choices[0] == ("", "— Bitte auswählen —")
+        html = str(form[select_field.slug])
+        assert "---------" not in html
+        _assert_blank_option(html, "— Bitte auswählen —")
+
+    def test_multi_select_field_has_no_empty_option(self, facility):
+        doc_type, _select, multi_select_field = self._doc_type_with_select_fields(facility)
+        form = DynamicDataForm(document_type=doc_type, facility=facility)
+        html = str(form[multi_select_field.slug])
+        assert '<option value="">' not in html
+
+    def test_select_field_label_is_english_under_translation_override(self, facility):
+        """Byte-gleich zur vorhandenen msgid: unter aktivem ``en``-Katalog
+        greift dieselbe Übersetzung wie beim Dokumentationstyp-Feld."""
+        doc_type, select_field, _multi = self._doc_type_with_select_fields(facility)
+        form = DynamicDataForm(document_type=doc_type, facility=facility)
+        with translation.override("en"):
+            html = str(form[select_field.slug])
+        assert '<option value="" selected>— Please select —</option>' in html
+
+
+@pytest.mark.django_db
+class TestOfflineFormsPlaceholderIsGerman:
+    """Refs #2381 (Nachtrag): die beiden Offline-Formulare (Personenansicht,
+    Ereignis-Erfassung) rendern die Leer-Option der dynamischen Auswahlfelder
+    als feste ``<option>`` im Alpine-Template — hartcodiert deutsch statt aus
+    einer Übersetzung, deshalb bisher der Rohtext ``"---------"``."""
+
+    def test_offline_client_shell_select_options(self, client):
+        """``OfflineClientShellView`` (core/views/offline.py) rendert
+        ``offline_detail.html`` mit ZWEI eigenständigen ``field.isSelect``-
+        Blöcken: dem eingebundenen Erfassungs-Select aus
+        ``_offline_event_fields.html`` (kommt im Template zuerst) und dem
+        eigenen Bearbeiten-Select (kommt danach)."""
+        response = client.get(reverse("core:offline_client_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert ">---------<" not in body
+
+        first = body.index('x-if="field.isSelect"')
+        first_block = body[first : body.index("</template>", first)]
+        assert "offline-create-input-" in first_block
+        assert '<option value="">— Bitte auswählen —</option>' in first_block
+
+        second = body.index('x-if="field.isSelect"', first + 1)
+        second_block = body[second : body.index("</template>", second)]
+        assert "offline-edit-input-" in second_block
+        assert '<option value="">— Bitte auswählen —</option>' in second_block
+
+    def test_offline_event_create_shell_select_options(self, client):
+        """``OfflineEventCreateShellView`` rendert ``offline_create.html`` mit
+        dem eingebundenen ``_offline_event_fields.html``."""
+        response = client.get(reverse("core:offline_event_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert ">---------<" not in body
+        assert '<option value="">— Bitte auswählen —</option>' in body
+
+
+class TestOfflineSelectTemplateSourceScanner:
+    """Refs #2381 (Nachtrag): Quelltext-Scanner mit Djangos eigenem ``Lexer``
+    statt Regex — prüft die Template-Quelldateien direkt, unabhängig vom
+    Rendering-Kontext (kein DB-Zugriff nötig)."""
+
+    _TEMPLATES = (
+        Path("src/templates/core/clients/offline_detail.html"),
+        Path("src/templates/core/clients/_offline_event_fields.html"),
+    )
+
+    def test_no_text_token_carries_the_raw_dash_placeholder(self):
+        for path in self._TEMPLATES:
+            source = path.read_text(encoding="utf-8")
+            for token in Lexer(source).tokenize():
+                if token.token_type is TokenType.TEXT:
+                    assert "---------" not in token.contents, f"{path}: {token.contents!r}"
+
+    def test_empty_option_is_a_trans_block_tag(self):
+        for path in self._TEMPLATES:
+            source = path.read_text(encoding="utf-8")
+            trans_contents = [
+                token.contents
+                for token in Lexer(source).tokenize()
+                if token.token_type is TokenType.BLOCK and token.split_contents()[:1] == ["trans"]
+            ]
+            assert any("— Bitte auswählen —" in contents for contents in trans_contents), path

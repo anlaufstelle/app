@@ -169,7 +169,7 @@ class TestDynamicEventDataFormInit:
         assert isinstance(form.fields[ft.slug], MultipleFileField)
 
     def test_select_field_prepends_empty_choice(self, facility):
-        """SELECT bekommt ``("", "---------")`` als erste Choice."""
+        """SELECT bekommt ``("", "— Bitte auswählen —")`` als erste Choice."""
         dt, [ft] = _make_doc_type_with_fields(
             facility,
             [
@@ -185,7 +185,7 @@ class TestDynamicEventDataFormInit:
         )
         form = DynamicEventDataForm(document_type=dt, facility=facility)
         choices = form.fields[ft.slug].choices
-        assert choices[0] == ("", "---------")
+        assert choices[0] == ("", "— Bitte auswählen —")
         assert ("a", "Alpha") in choices
         assert ("b", "Beta") in choices
 
@@ -205,7 +205,7 @@ class TestDynamicEventDataFormInit:
         )
         form = DynamicEventDataForm(document_type=dt, facility=facility)
         choices = list(form.fields[ft.slug].choices)
-        assert ("", "---------") not in choices
+        assert all(value != "" for value, _label in choices)
         assert ("x", "X") in choices
 
     def test_inactive_option_re_added_when_in_initial(self, facility):
@@ -619,7 +619,7 @@ class TestSelectChoicesHelper:
             options_json=[{"slug": "a", "label": "Alpha", "is_active": True}],
         )
         choices = _select_choices(ft, None, SELECT)
-        assert choices[0] == ("", "---------")
+        assert choices[0] == ("", "— Bitte auswählen —")
         assert ("a", "Alpha") in choices
 
     def test_multi_select_no_empty_choice(self, facility):
@@ -632,7 +632,7 @@ class TestSelectChoicesHelper:
             options_json=[{"slug": "x", "label": "X", "is_active": True}],
         )
         choices = _select_choices(ft, None, SELECT)
-        assert ("", "---------") not in choices
+        assert all(value != "" for value, _label in choices)
         assert ("x", "X") in choices
 
     def test_inactive_option_readded_when_in_initial(self, facility):

@@ -149,7 +149,7 @@ class TestDynamicDataFormFieldBuild:
 
     def test_select_gets_empty_option_multi_select_does_not(self, facility, all_types_doctype):
         form = DynamicDataForm(document_type=all_types_doctype, facility=facility)
-        assert list(form.fields["auswahl"].choices)[0] == ("", "---------")
+        assert list(form.fields["auswahl"].choices)[0] == ("", "— Bitte auswählen —")
         assert [value for value, _label in form.fields["mehrfach"].choices] == ["x", "y"]
 
     def test_without_document_type_no_fields(self, facility):

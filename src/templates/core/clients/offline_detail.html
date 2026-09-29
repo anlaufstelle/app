@@ -288,7 +288,7 @@
                                                             :id="'offline-edit-field-' + field.slug"
                                                             class="w-full rounded-md border-subtle text-sm"
                                                             :data-testid="'offline-edit-input-' + field.slug">
-                                                        <option value="">---------</option>
+                                                        <option value="">{% trans "— Bitte auswählen —" %}</option>
                                                         <template x-for="opt in field.options" :key="opt.value">
                                                             <option :value="opt.value" x-text="opt.label"></option>
                                                         </template>
