@@ -56,7 +56,7 @@ from core.models import AuditLog, Client, Event, EventHistory
 # 24 Monaten rund zehn Tage zu frueh (Refs #1024), und zwei Fristen mit
 # demselben Vorgabewert duerfen nicht unterschiedlich rechnen.
 from core.retention.audit_pruning import _months_before
-from core.retention.legal_holds import get_active_hold_target_ids, get_active_hold_target_ids_for_facilities
+from core.retention.legal_holds import get_active_hold_target_ids_for_facilities
 from core.services.audit import audit_retention_decision
 from core.services.events.history_diff import build_field_redaction_marker, is_redaction_marker
 from core.services.system import bypass_replication_triggers, has_rls_bypass_context
@@ -173,6 +173,32 @@ def _lock_rows(model, ids):
     )
 
 
+def _active_hold_sets(facility_ids):
+    """Active event, person and case holds of *facility_ids* — the three hold kinds of the history."""
+    return (
+        get_active_hold_target_ids_for_facilities(facility_ids, "Event"),
+        get_active_hold_target_ids_for_facilities(facility_ids, "Client"),
+        get_active_hold_target_ids_for_facilities(facility_ids, "Case"),
+    )
+
+
+def _held_by_active_hold(assignments, holds):
+    """The one hold rule for history rows: an event, person OR case hold defers the event.
+
+    *assignments* maps an event pk to its ``(client_id, case_id)`` as the
+    caller read it — under lock in :func:`lock_and_partition_events`, without
+    locks in the dry run. Both decide through this function, so the preview
+    cannot announce a redaction that the real run then defers (Refs #2197,
+    #2188).
+    """
+    held_events, held_clients, held_cases = holds
+    return {
+        pk
+        for pk, (client_id, case_id) in assignments.items()
+        if pk in held_events or client_id in held_clients or case_id in held_cases
+    }
+
+
 def lock_and_partition_events(event_ids):
     """Sperrt Personen- und Ereigniszeilen einer Charge und teilt sie in drei Mengen.
 
@@ -242,14 +268,10 @@ def lock_and_partition_events(event_ids):
     locked_events -= moved
 
     facility_ids = {snapshot[pk][0] for pk in locked_events}
-    held_events = get_active_hold_target_ids_for_facilities(facility_ids, "Event")
-    held_clients = get_active_hold_target_ids_for_facilities(facility_ids, "Client")
-    held_cases = get_active_hold_target_ids_for_facilities(facility_ids, "Case")
-    held = set()
-    for pk in locked_events:
-        client_id, case_id = current.get(pk, (None, None))
-        if pk in held_events or client_id in held_clients or case_id in held_cases:
-            held.add(pk)
+    held = _held_by_active_hold(
+        {pk: current.get(pk, (None, None)) for pk in locked_events},
+        _active_hold_sets(facility_ids),
+    )
 
     skipped = set(event_ids) - locked_events - held
     return locked_events - held, held, skipped
@@ -533,11 +555,16 @@ def _held_event_ids_unlocked(facility, event_ids):
     legen. Der echte Lauf nutzt stattdessen
     :func:`lock_and_partition_events`.
     """
-    held = set(event_ids) & get_active_hold_target_ids(facility, "Event")
-    held_clients = get_active_hold_target_ids(facility, "Client")
-    if held_clients:
-        held |= set(Event.objects.filter(pk__in=event_ids, client_id__in=held_clients).values_list("pk", flat=True))
-    return held
+    # Same hold kinds and same rule as the real run — a case hold included.
+    # Assignments are read without locks; nothing is written here.
+    holds = _active_hold_sets({facility.pk})
+    if not any(holds):
+        return set()
+    assignments = {
+        pk: (client_id, case_id)
+        for pk, client_id, case_id in Event.objects.filter(pk__in=event_ids).values_list("pk", "client_id", "case_id")
+    }
+    return _held_by_active_hold(assignments, holds)
 
 
 def _count_without_held(facility, *rows_querysets):

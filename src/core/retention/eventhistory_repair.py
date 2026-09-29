@@ -58,12 +58,12 @@ from core.retention.eventhistory import (
     MAX_ATTEMPTS,
     RETRY_BACKOFF_SECONDS,
     OwnerContextMissingError,
+    _held_event_ids_unlocked,
     _is_deadlock,
     _require_owner_context,
     lock_and_partition_events,
     redaction_marker,
 )
-from core.retention.legal_holds import get_active_hold_target_ids
 from core.services.audit import audit_retention_decision
 from core.services.events.history_diff import REDACTION_FLAG, build_anonymization_marker, is_redaction_marker
 from core.services.system import bypass_replication_triggers, current_connection_owns
@@ -142,32 +142,6 @@ def _damaged_pages(facility, batch_size):
             return
         yield [row for row in rows if row_needs_repair(row)]
         last_pk = rows[-1].pk
-
-
-def _active_holds(facility):
-    return (
-        get_active_hold_target_ids(facility, "Event"),
-        get_active_hold_target_ids(facility, "Client"),
-        get_active_hold_target_ids(facility, "Case"),
-    )
-
-
-def _held_event_ids_unlocked(holds, event_ids):
-    """Hold-Lesung ohne Sperren fuer den Trockenlauf — Ereignis, Person UND Fall.
-
-    Dieselben drei Hold-Arten wie :func:`lock_and_partition_events`; der
-    Trockenlauf soll keine Heilung ankuendigen, die der echte Lauf
-    zurueckstellt. Ohne Sperren, weil eine lesende Vorschau keine Zeilen-
-    sperren auf produktive Ereignisse legen soll.
-    """
-    held_events, held_clients, held_cases = holds
-    if not (held_events or held_clients or held_cases):
-        return set()
-    return set(
-        Event.objects.filter(pk__in=event_ids)
-        .filter(Q(pk__in=held_events) | Q(client_id__in=held_clients) | Q(case_id__in=held_cases))
-        .values_list("pk", flat=True)
-    )
 
 
 def _require_table_owner() -> None:
@@ -265,13 +239,13 @@ def repair_eventhistory_redaction(facility, *, dry_run=True, batch_size=BATCH_SI
     _require_owner_context()
     _require_table_owner()
     total = RepairResult()
-    holds = _active_holds(facility) if dry_run else None
     for rows in _damaged_pages(facility, batch_size):
         if not rows:
             continue
         total.found += len(rows)
-        if holds is not None:
-            held = _held_event_ids_unlocked(holds, {row.event_id for row in rows})
+        if dry_run:
+            # The retention dry run's hold rule — the same one the heal applies under lock.
+            held = _held_event_ids_unlocked(facility, {row.event_id for row in rows})
             total.deferred += sum(1 for row in rows if row.event_id in held)
             continue
         total.merge(_heal_batch_with_retry(facility, rows))
