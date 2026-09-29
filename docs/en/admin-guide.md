@@ -1,5 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-29: § 7.3 "Retention of the Event History" adds the one-time check and repair of history versions that carry a redaction timestamp but still hold values (`repair_eventhistory_redaction`, #2188).
+> Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that adding a passkey requires sudo mode and that the settings page leads through the sudo page first (#2328).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that setting up 2FA again while a confirmed factor exists requires sudo mode, first-time setup does not, and the backup-code pages require a session confirmed with the second factor (#2328).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
@@ -352,7 +353,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | `BACKUP_DIR` | `/backups` (Compose stack), otherwise `<repo>/backups` | Read-only mount target inside the container; the health endpoint and the backup row in the system area read the backup age from it. The host scripts ignore this variable. |
 | `BACKUP_HOST_DIR` | `./backups` | Base directory on the host; relative values are resolved against the repository root. `backup.sh` writes to `daily/`, `weekly/`, and `monthly/` below it; `restore-drill.sh` reads from `daily/`. Compose mounts this directory read-only onto `BACKUP_DIR`, so the container sees the same files. |
 | `APP_VERSION` | `dev` | Release tag of the app image selected by `docker-compose.prod.yml`, e.g. `latest` or a locally built tag (see ["Build the image locally from the Dockerfile"](#1-installation-docker-compose)); whether a tag is published to the registry is shown by `docker manifest inspect ghcr.io/anlaufstelle/app:<tag>` (exit code 0 = published) or the [GHCR package page](https://github.com/anlaufstelle/app/pkgs/container/app) — release candidates before the 1.0 cut are NOT published there. `/health/` exposes the value in the `version` detail field (token/authenticated callers only). |
-| `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, setting up 2FA again while a factor exists, GDPR export). |
+| `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, setting up 2FA again while a factor exists, adding a passkey, GDPR export). |
 
 ### Step 3: Review the Caddyfile
 
@@ -1032,7 +1033,7 @@ There are also **backup codes as a second factor** for exactly this recovery cas
 
 `django-otp` increasingly throttles TOTP and backup-code checks after multiple failed attempts. A correct code can also be rejected during the resulting waiting period; before resetting the device, wait for the lockout interval instead of immediately trying more codes.
 
-**Setting up again while a factor exists** (#2328): a user who already has a confirmed second factor (TOTP or passkey) and opens or submits `/mfa/setup/` again first re-confirms their password in sudo mode (with TOTP, also a current code) -- as when disabling 2FA or deleting a passkey -- and then returns to `/mfa/setup/`. Such a setup adds another TOTP device and replaces the backup-code set. With an existing factor, the backup-code pages (`/mfa/backup-codes/` and regeneration) also require a session confirmed with the second factor. First-time setup does not include a sudo step.
+**Setting up again while a factor exists** (#2328): a user who already has a confirmed second factor (TOTP or passkey) and opens or submits `/mfa/setup/` again first re-confirms their password in sudo mode (with TOTP, also a current code) -- as when disabling 2FA or deleting a passkey -- and then returns to `/mfa/setup/`. Such a setup adds another TOTP device and replaces the backup-code set. With an existing factor, the backup-code pages (`/mfa/backup-codes/` and regeneration) also require a session confirmed with the second factor. First-time setup does not include a sudo step. Adding a passkey also requires sudo mode: without an open sudo window, "Passkey hinzufügen" (add passkey) in the 2FA settings first leads to the sudo page and then back to the settings.
 
 #### Account Lockout
 
@@ -2307,4 +2308,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 1ed6b32e5ce937cdea706c1f4eca82f5ca1d3527 -->
+<!-- source-hash: d06f874e246e752eecf50eafd6dbe05beab7217e -->

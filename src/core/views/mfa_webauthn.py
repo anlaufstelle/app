@@ -21,6 +21,8 @@ zwei sicherheitskritischen Glue-Punkte, die die Bibliothek allein nicht kennt:
   unverifizierte Session einen neuen Authenticator einschleusen. (2) sorgt dafuer,
   dass der Backup-Code-Recovery-Anker (an der TOTP-Einrichtung gesetzt) existiert
   und niemand passkey-only ohne Wiederherstellungspfad ausgesperrt wird.
+  Besteht bereits ein Faktor, verlangt die Registrierung zusaetzlich Sudo
+  (Refs #2328) — wie das Loeschen eines Passkeys.
 
 Kein passwordless Login: ``OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN`` ist False und
 der ``WebAuthnBackend`` ist nicht in ``AUTHENTICATION_BACKENDS`` — die Ceremonies
@@ -42,6 +44,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
+from core.services.security.sudo_mode import is_sudo_required
 from core.views.auth import resolve_post_login_url
 
 
@@ -60,6 +63,23 @@ class VerifiedSessionRequiredForPasskey(exceptions.OTPWebAuthnApiError):
     default_code = "mfa_verification_required"
 
 
+class SudoRequiredForPasskey(exceptions.OTPWebAuthnApiError):
+    """Passkey-Registrierung ohne Sudo bei bestehendem Faktor abgelehnt (403).
+
+    Refs #2328: Ein Passkey ist ein weiterer, dauerhafter zweiter Faktor —
+    dieselbe Schutzhoehe wie der TOTP-Faktorwechsel (``MFASetupView``), das
+    Loeschen eines Passkeys und das Abschalten der MFA. Sonst reichte ein
+    entwendetes, bereits verifiziertes Sitzungs-Cookie, um dem Konto einen
+    eigenen Passkey unterzuschieben. JSON statt Weiterleitung, weil die
+    Zeremonie per ``fetch`` laeuft; die Einstellungsseite bietet den
+    Sudo-Schritt vorab als Link an, der Fehler greift nur, wenn das Fenster
+    zwischen Seitenaufbau und Klick ablaeuft.
+    """
+
+    status_code = 403
+    default_code = "sudo_required"
+
+
 class TOTPRequiredForPasskey(exceptions.OTPWebAuthnApiError):
     """Passkey-Registrierung ohne bestaetigtes TOTP-Geraet abgelehnt (400).
 
@@ -72,13 +92,13 @@ class TOTPRequiredForPasskey(exceptions.OTPWebAuthnApiError):
 
 
 class _RequireVerifiedSessionAndTOTPMixin:
-    """Gated die Passkey-Registrierung an verifizierte Session UND TOTP-Geraet.
+    """Gated die Passkey-Registrierung an verifizierte Session, Sudo UND TOTP-Geraet.
 
     ``check_can_register`` wird von den Registrierungs-Ceremony-Views (Begin und
     Complete) in ``initial()`` aufgerufen — der Guard greift also VOR jeder
     Options-Ausgabe bzw. Persistierung. Reihenfolge bewusst: zuerst die
-    Session-Verifikation (die Sicherheitsgrenze, 403), dann die fachliche
-    TOTP-Vorbedingung (400).
+    Session-Verifikation (die Sicherheitsgrenze, 403), bei bestehendem Faktor
+    Sudo (403, Refs #2328), dann die fachliche TOTP-Vorbedingung (400).
 
     Der Session-Guard bleibt neben dem Vorcheck der Bibliothek erhalten (Refs
     #2237): ``_check_user_verified`` schlaegt seit 0.10.3 zwar ebenfalls an,
@@ -96,6 +116,18 @@ class _RequireVerifiedSessionAndTOTPMixin:
             raise VerifiedSessionRequiredForPasskey(
                 detail=(
                     "Ein Passkey kann nur in einer bereits per zweitem Faktor bestätigten Sitzung hinzugefügt werden."
+                ),
+            )
+        # Refs #2328: Besteht schon ein Faktor, ist der Passkey ein weiterer —
+        # das verlangt Sudo. Zweite Sicherheitsgrenze, NACH dem MFA-Nachweis
+        # (eine nicht verifizierte Sitzung sieht nie die Sudo-Schranke) und VOR
+        # der fachlichen TOTP-Vorbedingung. Ohne bestaetigten Faktor keine
+        # Sudo-Pflicht.
+        if request.user.has_confirmed_mfa_device and is_sudo_required(request):
+            raise SudoRequiredForPasskey(
+                detail=(
+                    "Bitte bestätige zuerst dein Passwort und deinen zweiten Faktor: "
+                    "Lade die Seite neu und wähle „Passkey hinzufügen“."
                 ),
             )
         return super().initial(request, *args, **kwargs)

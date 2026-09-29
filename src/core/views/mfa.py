@@ -51,7 +51,7 @@ from core.services.security import (
     verify_backup_code,
 )
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
-from core.services.security.sudo_mode import sudo_redirect_if_required
+from core.services.security.sudo_mode import is_sudo_required, sudo_redirect_if_required, sudo_url
 from core.views.auth import resolve_post_login_url
 from core.views.utils import object_back_link, safe_redirect_path
 
@@ -376,6 +376,12 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
 
         context["passkeys"] = list(WebAuthnCredential.objects.filter(user=user, confirmed=True).order_by("created_at"))
         context["can_add_passkey"] = context["has_device"]
+        # Refs #2328: Ein weiterer Passkey verlangt Sudo. Ohne laufendes
+        # Sudo-Fenster bietet die Seite statt der Zeremonie den Sudo-Schritt
+        # an, der hierher zurueckfuehrt — sonst lehnte der Server die per
+        # ``fetch`` gestartete Registrierung erst nach dem Klick ab.
+        context["passkey_needs_sudo"] = context["can_add_passkey"] and is_sudo_required(self.request)
+        context["passkey_sudo_url"] = sudo_url(reverse("mfa_settings"))
         # Refs #1802: die 2FA-Seite liegt auf der Konto-Ebene, nicht in einem
         # Navigationsbereich — ihre Heimat ist das eigene Profil. Bisher stand
         # der Rueckweg als HTML-Entity-Pfeil in der Fusszeile.

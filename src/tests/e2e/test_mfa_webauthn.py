@@ -1,8 +1,9 @@
 """E2E: Passkey/WebAuthn als zweiter Faktor (ADR-032, Refs #1492).
 
 Voller Round-Trip gegen einen Chrome-CDP-Virtual-Authenticator:
-TOTP einrichten (Passkey ist nur NEBEN TOTP möglich) → Passkey registrieren →
-abmelden → mit Passkey verifizieren → Dashboard.
+TOTP einrichten (Passkey ist nur NEBEN TOTP möglich) → Sudo-Schritt über den
+Link der Einstellungsseite (ein weiterer Faktor verlangt Sudo, Refs #2328) →
+Passkey registrieren → abmelden → mit Passkey verifizieren → Dashboard.
 
 Wichtig zur Origin/RP-ID: Der E2E-Server lauscht auf ``127.0.0.1:<port>``, die
 Relying-Party-ID der e2e-Settings ist aber ``localhost`` (Browser behandeln
@@ -81,16 +82,34 @@ def _login(page, base, username="admin", password=SEED_PASSWORD):
     page.wait_for_url(lambda url: "/login/" not in url, timeout=15000)
 
 
-def _setup_totp(page, base):
-    """Vollständiger TOTP-Setup inkl. Backup-Code-Quittung → bestätigtes Device."""
+def _setup_totp(page, base) -> list[str]:
+    """Vollständiger TOTP-Setup inkl. Backup-Code-Quittung → bestätigtes Device.
+
+    Gibt die angezeigten Backup-Codes zurück — der Sudo-Schritt danach braucht
+    einen zweiten Faktor, und ein TOTP-Code aus demselben Zeitfenster wie der
+    Setup-Code wäre als Wiederholung verbraucht.
+    """
     page.goto(f"{base}/mfa/setup/", wait_until="domcontentloaded")
     page.locator("[data-testid='mfa-qrcode']").wait_for(state="visible", timeout=5000)
     secret = (page.locator("[data-testid='mfa-secret']").text_content() or "").strip()
     page.locator("[data-testid='mfa-token-input']").fill(_generate_totp_code(secret))
     page.locator("[data-testid='mfa-confirm-button']").click()
     page.wait_for_url(re.compile(r"/mfa/backup-codes/"), timeout=10000)
+    entries = page.locator("[data-testid='backup-codes-list'] li").all_text_contents()
+    codes = [entry.strip() for entry in entries]
     page.locator("[data-testid='backup-codes-confirm']").check()
     page.locator("[data-testid='backup-codes-continue']").click()
+    page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
+    return codes
+
+
+def _confirm_sudo_from_settings(page, backup_code: str) -> None:
+    """Link „Passkey hinzufügen“ ohne Sudo → Sudo-Seite → zurück auf die Einstellungen."""
+    page.locator("[data-testid='passkey-sudo-link']").click()
+    page.wait_for_url(re.compile(r"/sudo/"), timeout=10000)
+    page.fill("input[name='password']", SEED_PASSWORD)
+    page.fill("input[name='otp_token']", backup_code)
+    page.locator("form:has(input[name='password']) button[type='submit']").click()
     page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
 
 
@@ -108,7 +127,7 @@ class TestZZMfaWebAuthn:
         browser = browser_type.launch(**browser_type_launch_args)
         console_msgs: list[str] = []
         try:
-            context = browser.new_context(locale="de-DE")
+            context = browser.new_context(locale="de-DE", timezone_id="Europe/Berlin")
             try:
                 page = context.new_page()
                 page.set_default_timeout(30000)
@@ -135,10 +154,12 @@ class TestZZMfaWebAuthn:
                 )
 
                 _login(page, base)
-                _setup_totp(page, base)
+                backup_codes = _setup_totp(page, base)
 
-                # --- Passkey registrieren ---
+                # --- Sudo-Schritt (ein weiterer Faktor), danach Passkey registrieren ---
                 page.goto(f"{base}/mfa/settings/", wait_until="domcontentloaded")
+                assert page.locator("[data-testid='passkey-register-button']").count() == 0
+                _confirm_sudo_from_settings(page, backup_codes[0])
                 register_btn = page.locator("[data-testid='passkey-register-button']")
                 register_btn.wait_for(state="visible", timeout=5000)
                 with page.expect_response(re.compile(r"/webauthn/registration/complete/")) as resp_info:

@@ -116,10 +116,32 @@ def sudo_redirect_if_required(request) -> HttpResponseRedirect | None:
     Query. Anders als im Mixin ist ``next`` URL-kodiert, damit eine Query mit
     mehreren Parametern den Sudo-Schritt vollstaendig uebersteht.
     """
+    if not is_sudo_required(request):
+        return None
+    return HttpResponseRedirect(sudo_url(request.get_full_path()))
+
+
+def is_sudo_required(request) -> bool:
+    """True, wenn eine sudo-pflichtige Aktion jetzt erst den Sudo-Schritt braucht.
+
+    Dieselbe Semantik wie ``RequireSudoModeMixin.dispatch``: bei abgeschaltetem
+    Setting-Toggle, anonymer Anfrage oder laufendem Sudo-Fenster ``False``.
+    Fuer Endpunkte, die statt einer Weiterleitung einen JSON-Fehler liefern
+    (Passkey-Registrierung, Refs #2328), und fuer Seiten, die den Sudo-Schritt
+    vorab als Link anbieten.
+    """
     if not getattr(settings, "SUDO_MODE_ENABLED", True):
-        return None
+        return False
     if not request.user.is_authenticated:
-        return None
-    if is_in_sudo(request):
-        return None
-    return HttpResponseRedirect(reverse("sudo_mode") + "?" + urlencode({"next": request.get_full_path()}))
+        return False
+    return not is_in_sudo(request)
+
+
+def sudo_url(next_path: str) -> str:
+    """URL der Sudo-Seite mit URL-kodiertem ``next``.
+
+    Kodiert, damit ein Ziel mit mehreren Query-Parametern, ``#`` oder ``%``
+    den Sudo-Schritt vollstaendig uebersteht. Ob das Ziel akzeptiert wird,
+    entscheidet die Sudo-Seite (nur eigene Pfade).
+    """
+    return reverse("sudo_mode") + "?" + urlencode({"next": next_path})

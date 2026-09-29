@@ -122,7 +122,15 @@
                 </p>
                 {% endif %}
 
-                {% if can_add_passkey %}
+                {% if can_add_passkey and passkey_needs_sudo %}
+                <a href="{{ passkey_sudo_url }}" data-testid="passkey-sudo-link"
+                   class="inline-flex items-center px-4 py-2 border border-accent text-sm font-medium rounded-md text-accent hover:bg-canvas">
+                    {% trans "Passkey hinzufügen" %}
+                </a>
+                <p class="mt-2 text-sm text-ink-muted" data-testid="passkey-sudo-hint">
+                    {% trans "Vorher bestätigst du dein Passwort und deinen zweiten Faktor." %}
+                </p>
+                {% elif can_add_passkey %}
                 {# CSP-striktes Registrierungs-Bundle (kein Inline/eval), self-hosted. #}
                 <div id="passkey-registration-placeholder"></div>
                 <template id="passkey-registration-available-template">
