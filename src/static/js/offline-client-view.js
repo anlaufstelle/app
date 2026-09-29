@@ -726,7 +726,12 @@
                     this.editError = this._formatReplayErrors(result && result.errors);
                     this.lastSyncResult = "invalid";
                 } else if (status === "offline" || status === "network-error" || status === "no-key") {
-                    this.lastSyncResult = "pending";
+                    // Refs #2385: a revocation that arrived during this
+                    // replay (_checkRevocationDiscarded, Refs #2382) has
+                    // already fully purged the person — this transient sync
+                    // result must not overwrite the "discarded" state with
+                    // the misleading "pending" again.
+                    if (this.lastSyncResult !== "discarded") this.lastSyncResult = "pending";
                 } else if (status === "revoked") {
                     // Refs #1351/#1385 (M8/Task 4): 403 beim Edit-Replay — kein
                     // transienter Fehler, sondern eine Ablehnung (Rechte/Sitzung).
