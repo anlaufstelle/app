@@ -13,7 +13,11 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, DeletionRequest, User
-from core.services.case.deletion import create_or_get_case_deletion_request, request_case_deletion
+from core.services.case.deletion import (
+    anonymize_case_now,
+    create_or_get_case_deletion_request,
+    request_case_deletion,
+)
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -35,6 +39,11 @@ def _konto(username, role, facility):
 @pytest.fixture
 def fachkraft_ohne_einrichtung(db):
     return _konto("loeschung_fachkraft_ohne_einrichtung", User.Role.STAFF, None)
+
+
+@pytest.fixture
+def fremder_admin(second_facility):
+    return _konto("loeschung_fremder_admin", User.Role.FACILITY_ADMIN, second_facility)
 
 
 def _antraege(case):
@@ -119,3 +128,23 @@ class TestLoeschantragEntscheidetAmGesperrtenFall:
 
         assert angelegt is True
         assert _antrags_audit().count() == 1
+
+
+class TestSofortTilgungPrueftDieEinrichtungDesAdmins:
+    @pytest.mark.parametrize("akteur", ["fremder_admin", "facility_less_admin"])
+    def test_fremder_oder_einrichtungsloser_admin_sperrt_und_tilgt_nichts(self, request, akteur, case_trashed):
+        user = request.getfixturevalue(akteur)
+
+        with mitschnitt() as aufzeichnung, pytest.raises(ValidationError) as excinfo:
+            anonymize_case_now(case_trashed, user)
+
+        assert "Fall gehört zu einer anderen Einrichtung" in str(excinfo.value)
+        assert aufzeichnung.sperrfolge() == []
+        stand = Case.objects.filter(pk=case_trashed.pk).values("is_deleted", "anonymized_at", "title").get()
+        assert stand == {"is_deleted": True, "anonymized_at": None, "title": "Fall im Papierkorb"}
+
+    def test_admin_der_einrichtung_tilgt_den_fall(self, case_trashed, admin_user):
+        anonymize_case_now(case_trashed, admin_user)
+
+        assert case_trashed.anonymized_at is not None
+        assert Case.objects.filter(pk=case_trashed.pk, anonymized_at__isnull=False).exists()
