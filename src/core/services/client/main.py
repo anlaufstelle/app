@@ -1281,6 +1281,27 @@ def create_or_get_client_deletion_request(client, user, reason):
     return dr, True
 
 
+def _lock_client_then_deletion_request(deletion_request):
+    """Lock the target person row, then the deletion request row, and return the locked request.
+
+    The anonymisation cascades (``anonymize_client`` and the k-anonymisation
+    bridge of the retention run) lock the person first and write the person's
+    deletion requests afterwards; the retention run also reaches persons
+    outside the trash, so a pending request can meet it. Taking the request
+    first here could deadlock against them. The unlocked, facility-scoped read
+    of the target keeps the answer for an unknown request (``DoesNotExist``).
+    The caller checks the request on the locked row and re-reads the person
+    under the lock it already holds.
+    """
+    target_id = (
+        DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+        .values_list("target_id", flat=True)
+        .get()
+    )
+    lock_clients([target_id], facility=deletion_request.facility_id)
+    return DeletionRequest.objects.select_for_update().get(pk=deletion_request.pk, facility=deletion_request.facility)
+
+
 @transaction.atomic
 def approve_client_deletion(deletion_request, reviewer):
     """Genehmigt einen Client-Löschantrag und führt den Soft-Delete aus.
@@ -1295,6 +1316,10 @@ def approve_client_deletion(deletion_request, reviewer):
     neu geladen und der Status erneut geprueft, damit zwei zeitgleiche
     Approve-Aufrufe fuer denselben (noch PENDING gelesenen) Antrag nicht
     beide den Soft-Delete ausloesen.
+
+    Lock order: the target person row first, then the request
+    (:func:`_lock_client_then_deletion_request`), the same order the
+    anonymisation takes.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
@@ -1308,11 +1333,10 @@ def approve_client_deletion(deletion_request, reviewer):
     if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
         raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
 
-    # Refs #1376 (I9): facility-scoped Lookup wahrt die RLS-Scopung, der Lock
-    # haelt die Zeile bis zum Commit dieser Transaktion.
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
+    # Refs #1376: the person row first, then the request (see the helper). The
+    # facility-scoped lookups keep the RLS scoping; both locks hold until this
+    # transaction commits.
+    deletion_request = _lock_client_then_deletion_request(deletion_request)
     # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
     # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
     # Geprueft gegen die FRISCH GESPERRTE Zeile und vor jedem Schreibzugriff;

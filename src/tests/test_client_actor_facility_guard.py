@@ -158,4 +158,7 @@ class TestLoeschantragEntscheiden:
         pending_request.refresh_from_db()
         assert pending_request.status != DeletionRequest.Status.PENDING
         assert pending_request.reviewed_by_id == lead_user.pk
-        assert abfragen.sperrfolge()[0] == "core_deletionrequest"
+        # The approval locks the target person before the request (same order
+        # as the anonymisation); the rejection locks only the request.
+        expected_first_lock = "core_client" if service is approve_client_deletion else "core_deletionrequest"
+        assert abfragen.sperrfolge()[0] == expected_first_lock
