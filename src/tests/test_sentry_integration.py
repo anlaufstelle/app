@@ -34,11 +34,11 @@ from anlaufstelle.urls import InviteConfirmView
 INVITE_UID = "MTIzNDU2Nzg5"
 INVITE_TOKEN = "cx1a2b-8f9e0d1c2b3a49586c7d8e9f0a1b2c3d"
 
-# sentry-sdk 2.66.1 ruft in ``integrations/django/views.py`` das unter
-# Python 3.14 deprecatete ``asyncio.iscoroutinefunction`` auf. Das schlägt nur
-# durch, wenn die DjangoIntegration wirklich aktiv ist (also genau hier) und
-# ``filterwarnings = ["error"]`` gilt. Bewusst eng auf diese eine Meldung
-# begrenzt statt als globales Ignore in ``pyproject.toml``.
+# Some supported sentry-sdk/Python combinations emit the
+# ``asyncio.iscoroutinefunction`` deprecation while DjangoIntegration is
+# active. Keep this exception limited to that exact warning under
+# warnings-as-errors; it can be removed once every supported combination uses
+# the inspect replacement.
 SDK_PY314_DEPRECATION = "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning"
 
 
