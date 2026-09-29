@@ -21,7 +21,7 @@ from django.utils import timezone
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.audit import audit_event
 from core.services.client.restriction import _deletion_workflow_write
-from core.services.events.crud import soft_delete_event
+from core.services.events.crud import _assert_actor_in_facility, soft_delete_event
 
 
 def get_pending_event_deletion_request(event):
@@ -65,6 +65,10 @@ def create_or_get_event_deletion_request(event, user, reason):
     (Refs #932) — der DELETION_REQUESTED-Eintrag existiert bereits vom
     ersten Aufruf.
     """
+    # The facility of the requesting person comes first — before the lookup of
+    # a running request and before anything is written (fail-closed without a
+    # facility). The same check guards the event services.
+    _assert_actor_in_facility(user, event.facility_id)
     existing = get_pending_event_deletion_request(event)
     if existing is not None:
         return existing, False
