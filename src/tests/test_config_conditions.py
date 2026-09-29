@@ -618,12 +618,19 @@ class TestOperatorInputPartial:
     def test_missing_source_is_bad_request(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type_contact.pk})
-        assert client.get(url).status_code == 400
+        response = client.get(url)
+        assert response.status_code == 400
+        # Refs #2385: der Aufrufer swapt per hx-get in .condition-operator-slot
+        # (hx-swap="outerHTML") — ohne HX-Reswap: none ersetzte der Klartext
+        # den Slot.
+        assert response["HX-Reswap"] == "none"
 
     def test_garbage_source_is_bad_request(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
         url = reverse("core:config_condition_operator_input", kwargs={"pk": doc_type_contact.pk})
-        assert client.get(url, {"depends_on_field": "keine-uuid", "operator": "equals"}).status_code == 400
+        response = client.get(url, {"depends_on_field": "keine-uuid", "operator": "equals"})
+        assert response.status_code == 400
+        assert response["HX-Reswap"] == "none"
 
     def test_source_alias_supported(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
@@ -777,6 +784,10 @@ class TestValueInputPartial:
         url = reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk})
         response = client.get(url)
         assert response.status_code == 400
+        # Refs #2385: der Aufrufer swapt per hx-get in .condition-value-slot
+        # (hx-swap="outerHTML") — ohne HX-Reswap: none ersetzte der Klartext
+        # den Slot.
+        assert response["HX-Reswap"] == "none"
 
     def test_value_input_root_is_slot_wrapper(self, client, admin_user, doc_type_contact):
         """Bug 1: Die Swap-Antwort trägt `.condition-value-slot` an der WURZEL.

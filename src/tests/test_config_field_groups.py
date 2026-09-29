@@ -96,28 +96,53 @@ class TestFieldAdd:
         assert b"field-add-errors" in response.content
         assert DocumentTypeField.objects.filter(document_type=doc_type_contact).count() == before
 
-    def test_add_with_foreign_group_is_400_and_creates_nothing(
+    def test_add_with_foreign_group_redirects_with_message_and_creates_nothing(
         self, client, admin_user, facility, doc_type_contact, field_template
     ):
-        # Gruppe eines ANDEREN doc_type (gleiche Einrichtung) → 400 (Service-Semantik).
+        # Gruppe eines ANDEREN doc_type (gleiche Einrichtung) → Absage (Service-Semantik).
+        # Refs #2385: ein natives Formular-Submit (kein HX-Request) bekommt die
+        # Absage nicht mehr als Ganzseiten-Klartext, sondern Meldung + Redirect.
         client.force_login(admin_user)
         other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ")
         foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremde Gruppe")
         url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"field_template": str(field_template.pk), "field_group": str(foreign_grp.pk)})
-        assert response.status_code == 400
+        assert response.status_code == 302
+        assert "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp." in _messages(response)
         assert not DocumentTypeField.objects.filter(
             document_type=doc_type_contact, field_template=field_template
         ).exists()
 
-    def test_add_with_malformed_group_id_is_400_not_500(self, client, admin_user, doc_type_contact, field_template):
-        # Nicht-UUID im field_group-POST → HTTP 400. Djangos UUIDField wirft
-        # beim Query-Ausführen eine ValidationError (NICHT ValueError); roh in
-        # den pk-Filter gefüttert wäre das ein ungefangener 500.
+    def test_add_with_malformed_group_id_redirects_with_message_not_500(
+        self, client, admin_user, doc_type_contact, field_template
+    ):
+        # Nicht-UUID im field_group-POST → Absage statt 500. Djangos UUIDField
+        # wirft beim Query-Ausführen eine ValidationError (NICHT ValueError);
+        # roh in den pk-Filter gefüttert wäre das ein ungefangener 500.
         client.force_login(admin_user)
         url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"field_template": str(field_template.pk), "field_group": "garbage"})
+        assert response.status_code == 302
+        assert "Ungültige Feldgruppen-ID." in _messages(response)
+        assert not DocumentTypeField.objects.filter(
+            document_type=doc_type_contact, field_template=field_template
+        ).exists()
+
+    def test_add_with_foreign_group_via_htmx_refuses_in_place(
+        self, client, admin_user, facility, doc_type_contact, field_template
+    ):
+        client.force_login(admin_user)
+        other_dt = DocumentType.objects.create(facility=facility, name="Anderer Typ")
+        foreign_grp = FieldGroup.objects.create(document_type=other_dt, name="Fremde Gruppe")
+        url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(
+            url,
+            {"field_template": str(field_template.pk), "field_group": str(foreign_grp.pk)},
+            HTTP_HX_REQUEST="true",
+        )
         assert response.status_code == 400
+        assert response["HX-Reswap"] == "none"
+        assert "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp." in response.content.decode()
         assert not DocumentTypeField.objects.filter(
             document_type=doc_type_contact, field_template=field_template
         ).exists()

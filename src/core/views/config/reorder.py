@@ -32,7 +32,6 @@ Rollen jeden Status außer 5xx/403/404, verbotene Rollen scheitern schon am
 import logging
 import uuid
 
-from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -40,7 +39,7 @@ from django.views import View
 from core.models import DocumentType
 from core.services import config as config_service
 from core.views.config.document_types import board_response
-from core.views.mixins import FacilityAdminRequiredMixin
+from core.views.mixins import FacilityAdminRequiredMixin, htmx_absage
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +91,13 @@ class ConfigReorderBlocksView(FacilityAdminRequiredMixin, View):
         try:
             ordered_blocks = _parse_blocks(request.POST.getlist("blocks"))
         except ValueError:
-            return HttpResponseBadRequest(_("Ungültiger Block-Wert im Payload."))
+            return htmx_absage(_("Ungültiger Block-Wert im Payload."), status=400)
         if not ordered_blocks:
-            return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
+            return htmx_absage(_("Keine Reihenfolge übergeben."), status=400)
         try:
             config_service.reorder_blocks(request, doc_type, ordered_blocks)
         except ValueError as exc:
-            return HttpResponseBadRequest(str(exc))
+            return htmx_absage(str(exc), status=400)
         return board_response(request, doc_type)
 
 
@@ -111,13 +110,13 @@ class ConfigReorderFieldsView(FacilityAdminRequiredMixin, View):
             group_id = _parse_optional_group(request.POST.get("group"))
             ordered_ids = _parse_uuids(request.POST.getlist("order"))
         except ValueError:
-            return HttpResponseBadRequest(_("Ungültige ID im Payload."))
+            return htmx_absage(_("Ungültige ID im Payload."), status=400)
         if not ordered_ids:
-            return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
+            return htmx_absage(_("Keine Reihenfolge übergeben."), status=400)
         try:
             config_service.reorder_fields(request, doc_type, group_id, ordered_ids)
         except ValueError as exc:
-            return HttpResponseBadRequest(str(exc))
+            return htmx_absage(str(exc), status=400)
         return board_response(request, doc_type)
 
 
@@ -134,35 +133,35 @@ class ConfigMoveFieldView(FacilityAdminRequiredMixin, View):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         moved_raw = request.POST.get("moved")
         if not moved_raw:
-            return HttpResponseBadRequest(_("Kein zu verschiebendes Feld übergeben."))
+            return htmx_absage(_("Kein zu verschiebendes Feld übergeben."), status=400)
         try:
             moved_id = uuid.UUID(moved_raw)
             target_group_id = _parse_optional_group(request.POST.get("group"))
         except ValueError:
-            return HttpResponseBadRequest(_("Ungültige ID im Payload."))
+            return htmx_absage(_("Ungültige ID im Payload."), status=400)
 
         if target_group_id is not None:
             # Ziel = Gruppe: DTF-Innen-Reihenfolge über ``order``.
             try:
                 ordered_ids = _parse_uuids(request.POST.getlist("order"))
             except ValueError:
-                return HttpResponseBadRequest(_("Ungültige ID im Payload."))
+                return htmx_absage(_("Ungültige ID im Payload."), status=400)
             if not ordered_ids:
-                return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
+                return htmx_absage(_("Keine Reihenfolge übergeben."), status=400)
             try:
                 config_service.move_field(request, doc_type, moved_id, target_group_id, ordered_dtf_ids=ordered_ids)
             except ValueError as exc:
-                return HttpResponseBadRequest(str(exc))
+                return htmx_absage(str(exc), status=400)
         else:
             # Ziel = Top-Level: gemischte Blockreihenfolge über ``blocks``.
             try:
                 ordered_blocks = _parse_blocks(request.POST.getlist("blocks"))
             except ValueError:
-                return HttpResponseBadRequest(_("Ungültiger Block-Wert im Payload."))
+                return htmx_absage(_("Ungültiger Block-Wert im Payload."), status=400)
             if not ordered_blocks:
-                return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
+                return htmx_absage(_("Keine Reihenfolge übergeben."), status=400)
             try:
                 config_service.move_field(request, doc_type, moved_id, None, ordered_blocks=ordered_blocks)
             except ValueError as exc:
-                return HttpResponseBadRequest(str(exc))
+                return htmx_absage(str(exc), status=400)
         return board_response(request, doc_type)

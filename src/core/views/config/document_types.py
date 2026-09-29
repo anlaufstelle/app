@@ -15,7 +15,6 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Count, IntegerField, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
-from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -40,6 +39,7 @@ from core.views.mixins import (
     FacilityAdminRequiredMixin,
     HTMXPartialMixin,
     PaginatedListMixin,
+    htmx_absage,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,6 +82,21 @@ def board_response(request, doc_type, *, add_form=None, group_form=None, retarge
         messages.success(request, message)
     if error is not None:
         messages.error(request, error)
+    return redirect("core:config_doctype_detail", pk=doc_type.pk)
+
+
+def _field_add_error_response(request, doc_type, message):
+    """Refuse the raw-payload checks of ``ConfigDocTypeFieldAddView`` in place.
+
+    These run before ``DocumentTypeFieldAddForm`` exists (payload sanity, not
+    a form field), so they cannot ride ``board_response``'s ``add_form`` path
+    the way the sibling ``ValidationError`` branch does; ``board_response``
+    only surfaces ``error`` on its redirect branch, never inside the
+    re-rendered HX partial (see its docstring).
+    """
+    if request.headers.get("HX-Request") == "true":
+        return htmx_absage(message, status=400)
+    messages.error(request, message)
     return redirect("core:config_doctype_detail", pk=doc_type.pk)
 
 
@@ -319,14 +334,16 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
             try:
                 group_uuid = uuid.UUID(group_pk)
             except (ValueError, TypeError):
-                return HttpResponseBadRequest(_("Ungültige Feldgruppen-ID."))
+                return _field_add_error_response(request, doc_type, str(_("Ungültige Feldgruppen-ID.")))
             foreign_group = (
                 FieldGroup.objects.filter(pk=group_uuid, document_type__facility=request.current_facility)
                 .exclude(document_type=doc_type)
                 .first()
             )
             if foreign_group is not None:
-                return HttpResponseBadRequest(_("Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."))
+                return _field_add_error_response(
+                    request, doc_type, str(_("Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."))
+                )
 
         form = DocumentTypeFieldAddForm(request.POST, doc_type=doc_type)
         if not form.is_valid():
@@ -339,7 +356,7 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
         try:
             config_service.add_field_to_doctype(request, doc_type, field_template, field_group=field_group)
         except ValueError as exc:
-            return HttpResponseBadRequest(str(exc))
+            return _field_add_error_response(request, doc_type, str(exc))
         except ValidationError as exc:
             form.add_error("field_template", exc)
             return board_response(

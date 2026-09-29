@@ -96,6 +96,10 @@ class TestReorderBlocks:
         url = reverse("core:config_reorder_blocks", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"blocks": ["nicht-eine-uuid"]}, HTTP_HX_REQUEST="true")
         assert response.status_code == 400
+        # Refs #2385: postBatch() swapt die Antwort in #field-board
+        # (hx-swap="outerHTML") — ohne HX-Reswap: none ersetzte der Klartext
+        # das ganze Board.
+        assert response["HX-Reswap"] == "none"
 
     def test_broken_kind_prefix_is_400(self, client, admin_user, doc_type_contact):
         f0, _f1 = _free_ids(doc_type_contact)
@@ -155,6 +159,7 @@ class TestReorderFields:
         url = reverse("core:config_reorder_fields", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"group": "kaputt", "order": [str(dtfs[0].pk)]}, HTTP_HX_REQUEST="true")
         assert response.status_code == 400
+        assert response["HX-Reswap"] == "none"
 
     def test_empty_post_is_400(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
@@ -244,6 +249,7 @@ class TestMoveField:
             url, {"moved": "kaputt", "group": "", "blocks": ["field:kaputt"]}, HTTP_HX_REQUEST="true"
         )
         assert response.status_code == 400
+        assert response["HX-Reswap"] == "none"
 
     def test_top_level_empty_blocks_is_400(self, client, admin_user, doc_type_contact):
         grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Src")

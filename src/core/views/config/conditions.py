@@ -19,7 +19,7 @@ import uuid
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import HttpResponseBadRequest
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -36,7 +36,7 @@ from core.views.config._context import (
     operator_input_context_for_form,
     prepare_condition_form,
 )
-from core.views.mixins import FacilityAdminRequiredMixin
+from core.views.mixins import FacilityAdminRequiredMixin, htmx_absage
 
 logger = logging.getLogger(__name__)
 
@@ -270,18 +270,20 @@ def _resolve_source_dtf(request, pk):
     ``ConditionOperatorInputView.get`` (#1715/E19): ``DocumentType`` per
     ``pk``+facility (IDOR → 404), dann ``depends_on_field``/``source``-Alias
     als Quell-DTF-UUID, 400 bei fehlendem/ungültigem Wert. Rückgabe entweder
-    ``(doc_type, dtf, operator)`` oder eine fertige 400-Antwort — die
-    Aufrufstelle unterscheidet per ``isinstance``.
+    ``(doc_type, dtf, operator)`` oder eine fertige HTMX-Absage (400 +
+    ``HX-Reswap: none``, Refs #2385: beide Views swappen in einen Slot, ein
+    roher Klartext ersetzte ihn sonst) — die Aufrufstelle unterscheidet per
+    ``isinstance``.
     """
     doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
     source_raw = request.GET.get("depends_on_field") or request.GET.get("source") or ""
     operator = request.GET.get("operator", "")
     if not source_raw:
-        return HttpResponseBadRequest(_("Kein Quellfeld angegeben."))
+        return htmx_absage(_("Kein Quellfeld angegeben."), status=400)
     try:
         source_uuid = uuid.UUID(source_raw)
     except (ValueError, TypeError):
-        return HttpResponseBadRequest(_("Ungültige Quellfeld-ID."))
+        return htmx_absage(_("Ungültige Quellfeld-ID."), status=400)
     dtf = get_object_or_404(DocumentTypeField, pk=source_uuid, document_type=doc_type)
     return doc_type, dtf, operator
 
@@ -298,7 +300,7 @@ class ConditionValueInputView(FacilityAdminRequiredMixin, View):
 
     def get(self, request, pk):
         result = _resolve_source_dtf(request, pk)
-        if isinstance(result, HttpResponseBadRequest):
+        if isinstance(result, HttpResponse):
             return result
         _doc_type, dtf, operator = result
         return render(
@@ -325,7 +327,7 @@ class ConditionOperatorInputView(FacilityAdminRequiredMixin, View):
 
     def get(self, request, pk):
         result = _resolve_source_dtf(request, pk)
-        if isinstance(result, HttpResponseBadRequest):
+        if isinstance(result, HttpResponse):
             return result
         doc_type, dtf, operator = result
         return render(
