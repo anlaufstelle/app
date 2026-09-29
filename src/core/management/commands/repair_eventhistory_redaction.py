@@ -26,10 +26,14 @@ Bestand zu melden.
 ``--target`` (Refs #2188) extends the check to the same damage on events,
 persons and cases: until v0.95.0 the rotation could also write ``data_json``
 back into a soft-deleted event, an anonymised person or an anonymised case.
-``--target all`` runs person, case, event and event history in this order.
-Without ``--target`` the command checks the event history only, as before.
-The role requirement applies per table: the connection must bypass RLS and
-own every table it repairs.
+``--target rectification`` checks the rectification requests of anonymised
+persons: the anonymisation sets their four value columns to NULL, and the
+rotation could write them back the same way.
+``--target all`` runs person, rectification request, case, event and event
+history in this order. Without ``--target`` the command checks the event
+history only, as before. The role requirement applies per table: the
+connection must bypass RLS and own every table it repairs (for rectification
+requests also the persons table, whose anonymisation state selects them).
 
     python manage.py repair_eventhistory_redaction --target all
     python manage.py repair_eventhistory_redaction --target all --apply
@@ -48,17 +52,19 @@ from core.services.system import has_rls_bypass_context as _has_rls_bypass_conte
 
 TARGET_HISTORY = "eventhistory"
 TARGET_ALL = "all"
-#: Every stock with its table and repair, in the canonical order person -> case -> event -> history.
+#: Every stock with the tables it must own and its repair, in the canonical order
+#: person (then its rectification requests) -> case -> event -> history.
 STEPS = {
     **{target: (TABLES[target], repair) for target, repair in REPAIRS.items()},
-    TARGET_HISTORY: (HISTORY_TABLE, repair_eventhistory_redaction),
+    TARGET_HISTORY: ((HISTORY_TABLE,), repair_eventhistory_redaction),
 }
 
 
 class Command(BaseCommand):
     help = (
         "Finds rows marked as redacted that carry values again — the event history by default, "
-        "events, persons and cases with --target — and repairs them with --apply (default: dry run)."
+        "events, persons, cases and rectification requests with --target — and repairs them "
+        "with --apply (default: dry run)."
     )
 
     def add_arguments(self, parser):
@@ -67,8 +73,8 @@ class Command(BaseCommand):
             choices=[*STEPS, TARGET_ALL],
             default=TARGET_HISTORY,
             help=(
-                "Stock to check: eventhistory (default), client, case, event, or all "
-                "(client, case, event, eventhistory in this order)."
+                "Stock to check: eventhistory (default), client, rectification, case, event, "
+                "or all (client, rectification, case, event, eventhistory in this order)."
             ),
         )
         parser.add_argument(
@@ -159,7 +165,8 @@ class Command(BaseCommand):
                 "before reading any row — detection would otherwise see no row and falsely report "
                 "clean data. Run again with the admin database role."
             )
-        not_owned = [STEPS[step][0] for step in steps if not _current_connection_owns(STEPS[step][0])]
+        tables = dict.fromkeys(table for step in steps for table in STEPS[step][0])
+        not_owned = [table for table in tables if not _current_connection_owns(table)]
         if not_owned:
             raise CommandError(
                 f"The database connection does not own {', '.join(not_owned)}. An RLS bypass "

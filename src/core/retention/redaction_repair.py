@@ -1,4 +1,6 @@
-"""Repair events, persons and cases whose redaction a key rotation undid (Refs #2188, related #2177).
+"""Repair events, persons, cases and rectification requests whose redaction a key rotation undid.
+
+Refs #2188, related #2177.
 
 **The damage.** Until v0.95.0 the key rotation wrote ``data_json`` of events,
 persons and cases back without a row lock and without comparing it with the
@@ -15,6 +17,10 @@ rows by that state, not by their content:
 * **person** — ``anonymized_at`` set; the nightly anonymisation filters
   ``anonymized_at IS NULL``.
 * **case** — ``anonymized_at`` set; the case anonymisation filters the same.
+* **rectification request** — its person is anonymised (``anonymized_at``
+  set). The anonymisation sets ``old_value``, ``new_value``, ``reason`` and
+  ``review_note`` to NULL; the rotation wrote these four columns back the same
+  way (v0.80.0 to v0.95.0) and the anonymisation never runs twice.
 
 **Detection** checks the content: a row is damaged when it is in its done
 state and ``data_json`` still carries values. The database pre-filters on
@@ -31,17 +37,26 @@ repairs (person -> case -> event, then the hold check), re-reads the row under
 the lock and repairs it only if it is still damaged (compare-and-swap), and
 writes one audit entry per repaired row after all locks of the step: action
 ``DELETE``, as the retention run uses for these tables, with its own category.
+
+A rectification request is damaged when its person is anonymised and at least
+one of the four columns is not NULL. The repair writes the anonymisation's own
+``update()`` of the four columns to NULL; every other column — status,
+reviewer, ``created_at``, ``reviewed_at`` — stays, as the anonymisation leaves
+it. The step takes the anonymisation's lock chain (person -> cases -> events),
+checks the person's hold like the anonymisation does, then locks and re-reads
+the requests.
 """
 
 from __future__ import annotations
 
 import time
+from collections import defaultdict
 from collections.abc import Callable, Iterable
 
 from django.db import OperationalError, transaction
 from django.db.models import Q
 
-from core.models import AuditLog, Case, Client, Event
+from core.models import AuditLog, Case, Client, Event, RectificationRequest
 from core.retention.eventhistory import (
     BATCH_SIZE,
     MAX_ATTEMPTS,
@@ -68,13 +83,22 @@ COMMAND_NAME = "repair_eventhistory_redaction"
 EVENT_TABLE = "core_event"
 CLIENT_TABLE = "core_client"
 CASE_TABLE = "core_case"
+RECTIFICATION_TABLE = "core_rectificationrequest"
 
 CATEGORY_EVENT_REPAIRED = "event_repaired"
 CATEGORY_CLIENT_REPAIRED = "client_repaired"
 CATEGORY_CASE_REPAIRED = "case_repaired"
+CATEGORY_RECTIFICATION_REPAIRED = "rectification_repaired"
 
 #: An event is done when it is soft-deleted or belongs to an anonymised person.
 EVENT_DONE = Q(is_deleted=True) | Q(client__anonymized_at__isnull=False)
+
+#: The value columns of a rectification request that the anonymisation sets to NULL.
+RECTIFICATION_COLUMNS = ("old_value", "new_value", "reason", "review_note")
+#: SQL pre-filter: at least one of them is not NULL.
+RECTIFICATION_CARRIES_VALUES = (
+    Q(old_value__isnull=False) | Q(new_value__isnull=False) | Q(reason__isnull=False) | Q(review_note__isnull=False)
+)
 
 _REPAIRED, _DEFERRED, _SKIPPED = "repaired", "deferred", "skipped"
 
@@ -285,10 +309,101 @@ def repair_case_redaction(facility, *, dry_run=True, batch_size=BATCH_SIZE) -> R
     )
 
 
-#: Repairs in the canonical lock order person -> case -> event.
+# -- rectification requests -------------------------------------------------------
+
+
+def _carries_values(values) -> bool:
+    """The final word on a request: any of the four columns still holds a value."""
+    return any(value is not None for value in values)
+
+
+def _damaged_requests(queryset, batch_size):
+    """Damaged requests page by page as ``(pk, person pk)`` (keyset over ``pk``, no open cursor)."""
+    queryset = (
+        queryset.filter(RECTIFICATION_CARRIES_VALUES)
+        .order_by("pk")
+        .values_list("pk", "target_client_id", *RECTIFICATION_COLUMNS)
+    )
+    last_pk = None
+    while True:
+        page = queryset if last_pk is None else queryset.filter(pk__gt=last_pk)
+        rows = list(page[:batch_size])
+        if not rows:
+            return
+        yield [(pk, client_pk) for pk, client_pk, *values in rows if _carries_values(values)]
+        last_pk = rows[-1][0]
+
+
+def _heal_requests(facility, client_pk, pks) -> RepairResult:
+    """Person -> cases -> events locked like the anonymisation, then hold, then lock and swap the requests."""
+    result = RepairResult()
+    with transaction.atomic():
+        client = Client.objects.select_for_update().filter(pk=client_pk, facility=facility).first()
+        if client is None or client.anonymized_at is None:
+            result.skipped = len(pks)
+            return result
+        _lock_client_case_rows(client)
+        _lock_client_event_rows(client)
+        if client_has_active_hold(client):
+            result.deferred = len(pks)
+            return result
+        requests = RectificationRequest.objects.filter(pk__in=pks, facility=facility, target_client_id=client_pk)
+        list(requests.select_for_update().order_by("pk").values_list("pk", flat=True))
+        targets = [
+            pk
+            for pk, *values in requests.order_by("pk").values_list("pk", *RECTIFICATION_COLUMNS)
+            if _carries_values(values)
+        ]
+        if targets:
+            # The anonymisation's own write (``_redact_rectification_requests``).
+            RectificationRequest.objects.filter(pk__in=targets).update(**dict.fromkeys(RECTIFICATION_COLUMNS))
+        for pk in targets:
+            _audit(facility, "RectificationRequest", CATEGORY_RECTIFICATION_REPAIRED, pk)
+        result.repaired = len(targets)
+        result.skipped = len(pks) - len(targets)
+    return result
+
+
+def repair_rectification_redaction(facility, *, dry_run=True, batch_size=BATCH_SIZE) -> RepairResult:
+    """Find (and with ``dry_run=False`` repair) damaged rectification requests of *facility*.
+
+    Detection reads the requests and their persons' anonymisation state, so the
+    connection must own both tables. One transaction per person and page.
+    """
+    for table in (RECTIFICATION_TABLE, CLIENT_TABLE):
+        _require_repair_context(table)
+    total = RepairResult()
+    candidates = RectificationRequest.objects.filter(facility=facility, target_client__anonymized_at__isnull=False)
+    for rows in _damaged_requests(candidates, batch_size):
+        if not rows:
+            continue
+        total.found += len(rows)
+        by_person = defaultdict(list)
+        for pk, client_pk in rows:
+            by_person[client_pk].append(pk)
+        if dry_run:
+            # The same hold rule the repair applies under lock: person, its events or cases.
+            persons = Client.objects.filter(pk__in=by_person)
+            free = set(exclude_clients_with_active_holds(persons, facility).values_list("pk", flat=True))
+            total.deferred += sum(len(pks) for client_pk, pks in by_person.items() if client_pk not in free)
+            continue
+        for client_pk, pks in by_person.items():
+            total.merge(_with_deadlock_retry(_heal_requests, facility, client_pk, pks))
+    return total
+
+
+#: Repairs in the canonical lock order person -> case -> event. The requests hang
+#: on the person alone and take the person's lock chain, so they follow the person.
 REPAIRS = {
     "client": repair_client_redaction,
+    "rectification": repair_rectification_redaction,
     "case": repair_case_redaction,
     "event": repair_event_redaction,
 }
-TABLES = {"client": CLIENT_TABLE, "case": CASE_TABLE, "event": EVENT_TABLE}
+#: The tables each repair must own: the repaired one, for requests also the persons.
+TABLES = {
+    "client": (CLIENT_TABLE,),
+    "rectification": (RECTIFICATION_TABLE, CLIENT_TABLE),
+    "case": (CASE_TABLE,),
+    "event": (EVENT_TABLE,),
+}

@@ -193,7 +193,8 @@ class TestRepair:
 
         output = _run("--target", TARGET, "--apply", "--facility", other.name)
 
-        assert _count(_line(output, TARGET, other), "repaired") == 1
+        line = _line(output, TARGET, other)
+        assert (_count(line, "found"), _count(line, "repaired"), _count(line, "skipped")) == (1, 1, 0)
         assert f"Facility '{facility.name}'" not in output
         assert _table_snapshot(TABLE)[str(own)] == before[str(own)]
         assert _row_state(TABLE, foreign) == stock.reference[foreign]
