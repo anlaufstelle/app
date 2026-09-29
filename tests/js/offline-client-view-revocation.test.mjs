@@ -250,7 +250,7 @@ describe("#2382 — Offline-Personenansicht reagiert auf den Widerruf", () => {
     });
 });
 
-// Refs #2385: follow-up finding from the #2382 lane (u-bericht.md:186) —
+// Refs #2385: follow-up to the offline revocation fix (#2382) —
 // checked whether the remaining ``lastSyncResult = "pending"`` assignments
 // are missing a "discarded" state the same way the revocation itself was.
 // The four offline branches in saveCreate/saveEdit/saveCreateWorkItem/
