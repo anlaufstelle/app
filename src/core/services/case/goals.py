@@ -75,7 +75,15 @@ def update_goal(goal, user, title=None, description=None):
     Bearbeitung Freitext in ein Ziel, dessen Text die Tilgung
     (``redact_case_goals``) gerade ersetzt hatte. Der Vertrag laeuft auch vor
     dem No-Op — wie zuvor das Art.-18-Gate.
+
+    Davor die Einrichtungsgrenze der handelnden Person
+    (:func:`_assert_actor_facility`, vor jeder Sperre, fail-closed); die
+    Einrichtung der Akte kommt aus einer ungesperrten Wertelesung (Muster
+    :func:`create_milestone`).
     """
+    _assert_actor_facility(
+        user, OutcomeGoal.objects.filter(pk=goal.pk).values_list("case__facility_id", flat=True).first()
+    )
     lock_goal_for_write(goal)
     fields = {}
     if title is not None:
