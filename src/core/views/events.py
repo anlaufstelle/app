@@ -1402,7 +1402,16 @@ class EventDeleteView(StaffRequiredMixin, View):
             except ValidationError as exc:
                 messages.error(request, "; ".join(exc.messages))
                 return redirect("core:event_detail", pk=event.pk)
-            soft_delete_event(event, request.user)
+            try:
+                soft_delete_event(event, request.user)
+            except ValidationError as exc:
+                # The service decides under the person and event row locks and
+                # names the cause itself (legal hold, a person binding changed
+                # by a parallel merge, a restriction set after the check above). No
+                # second look at the event: every refusal leaves it in place,
+                # so its page is the way back. Any other error propagates.
+                messages.error(request, "; ".join(exc.messages))
+                return redirect("core:event_detail", pk=event.pk)
             messages.success(request, _("Ereignis wurde gelöscht."))
 
         return redirect("core:zeitstrom")
