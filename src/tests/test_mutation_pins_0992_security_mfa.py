@@ -13,11 +13,11 @@ koennte:
   sonst nur in den Guards auffallen, nicht in der Gegenrichtung),
 * die **Gerätebindung** des Setup-Abschlusses greift genau auf das
   unbestaetigte, autorisierte Geraet — nicht auf ein bereits bestaetigtes,
-* die **Formatpruefung** des Klartext-Fallbacks ist exakt (Laenge, Position des
-  Bindestrichs, Hex-Alphabet, Kleinschreibung) und nicht „irgendwie
-  code-foermig",
-* der **Throttle-Schritt** bleibt genau einer je Fehlversuch, obwohl die
-  Kandidatenliste jetzt variable Laenge hat.
+* eine **Klartext-Zeile** im Altformat wird von keiner Eingabeform getroffen —
+  weder exakt noch als Beinahe-Treffer. Bis Refs #2327 galt hier eine exakte
+  Formatpruefung des Klartext-Fallbacks; seit der Datenmigration 0181 gibt es
+  den Fallback nicht mehr, die Ablehnung ist damit fuer jede Form verbindlich,
+* der **Throttle-Schritt** bleibt genau einer je Fehlversuch.
 """
 
 from __future__ import annotations
@@ -140,8 +140,8 @@ class TestSetupCompletionDeviceBinding:
 
 
 @pytest.mark.django_db
-class TestLegacyFormatCheckIsExact:
-    """Refs #2294: Die Formatpruefung ist exakt, nicht „ungefaehr"."""
+class TestCleartextRowIsNeverCompared:
+    """Refs #2294, #2327: Eine Klartext-Zeile ist fuer keine Eingabeform ein Treffer."""
 
     @staticmethod
     def _device_with_cleartext(user, token: str) -> StaticDevice:
@@ -149,9 +149,11 @@ class TestLegacyFormatCheckIsExact:
         StaticToken.objects.create(device=device, token=token)
         return device
 
-    def test_exact_historic_format_still_verifies(self, staff_user):
-        self._device_with_cleartext(staff_user, "abcd-1234")
-        assert verify_backup_code(staff_user, "abcd-1234") is True
+    def test_exact_historic_format_is_rejected(self, staff_user):
+        """Bis Refs #2327 der Positivfall des Fallbacks — jetzt abgelehnt."""
+        device = self._device_with_cleartext(staff_user, "abcd-1234")
+        assert verify_backup_code(staff_user, "abcd-1234") is False
+        assert device.token_set.count() == 1
 
     @pytest.mark.parametrize(
         "eingabe",
@@ -185,17 +187,17 @@ class TestLegacyFormatCheckIsExact:
         assert verify_backup_code(staff_user, "Ffffffffffffffffffffff") is True
 
     def test_single_throttle_increment_per_miss(self, staff_user):
-        """Refs #790/#2294: Die variable Kandidatenliste bleibt EIN Fehlversuch."""
+        """Refs #790/#2294: Jede Eingabeform kostet genau EINEN Fehlversuch."""
         generate_backup_codes(staff_user)
         device = StaticDevice.objects.get(user=staff_user, name="backup")
 
-        # Klartext-foermige Eingabe: zwei Kandidaten in EINER Query.
+        # Eingabe im Altformat: ein Hash-Kandidat in EINER Query.
         assert verify_backup_code(staff_user, "abcd-1234") is False
         device.refresh_from_db()
         assert device.throttling_failure_count == 1
 
         device.throttle_reset()
-        # Nicht klartext-foermige Eingabe: ein Kandidat — gleicher Preis.
+        # Eingabe im 22-Zeichen-Format: ebenfalls ein Kandidat — gleicher Preis.
         assert verify_backup_code(staff_user, "Gggggggggggggggggggggg") is False
         device.refresh_from_db()
         assert device.throttling_failure_count == 1

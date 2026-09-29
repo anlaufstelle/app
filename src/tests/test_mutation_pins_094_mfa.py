@@ -59,15 +59,20 @@ from core.models import User
 from core.services.security.mfa import (
     BACKUP_CODES_COUNT,
     BACKUP_DEVICE_NAME,
+    _hash_code,
     generate_backup_codes,
     remaining_backup_codes,
     verify_backup_code,
     verify_totp_or_backup,
 )
 
-#: Ein Alt-Code im Pre-#790-Cleartext-Format (``xxxx-xxxx``). Er wird hier nur
-#: als *Koeder* gebraucht: die Pins pruefen, dass er NICHT verifiziert, weil das
-#: tragende Geraet den falschen Namen bzw. keine Bestaetigung hat.
+#: Ein Alt-Code im Pre-#790-Format (``xxxx-xxxx``). Er wird hier nur als
+#: *Koeder* gebraucht: die Pins pruefen, dass er NICHT verifiziert, weil das
+#: tragende Geraet den falschen Namen bzw. keine Bestaetigung hat. Seit der
+#: Datenmigration 0181 (Refs #2327) liegt er — wie jeder Code — nur als Hash in
+#: der Tabelle; der Koeder wird deshalb als ``_hash_code(LEGACY_CODE)``
+#: gespeichert, sonst verifizierte er auch beim Mutanten nicht und der Pin
+#: waere wirkungslos.
 LEGACY_CODE = "abcd-1234"
 
 
@@ -245,7 +250,7 @@ class TestBackupDeviceIsBoundToNameAndConfirmation:
         ist, und LOESCHT ihn dabei (``token_set.count()`` faellt auf ``0``).
         """
         other = StaticDevice.objects.create(user=mfa_pin_user, name="other", confirmed=True)
-        StaticToken.objects.create(device=other, token=LEGACY_CODE)
+        StaticToken.objects.create(device=other, token=_hash_code(LEGACY_CODE))
         assert StaticDevice.objects.filter(user=mfa_pin_user).count() == 1
 
         assert verify_backup_code(mfa_pin_user, LEGACY_CODE) is False
@@ -264,7 +269,7 @@ class TestBackupDeviceIsBoundToNameAndConfirmation:
         (``test_mutation_pins_091.py``), fuer ``verify_backup_code`` fehlte er.
         """
         device = StaticDevice.objects.create(user=mfa_pin_user, name=BACKUP_DEVICE_NAME, confirmed=False)
-        StaticToken.objects.create(device=device, token=LEGACY_CODE)
+        StaticToken.objects.create(device=device, token=_hash_code(LEGACY_CODE))
 
         assert verify_backup_code(mfa_pin_user, LEGACY_CODE) is False
         assert device.token_set.count() == 1

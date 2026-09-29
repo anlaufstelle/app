@@ -2062,9 +2062,9 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 
 ---
 
-## MFA-Backup-Codes: Speicher- und Migrationsvertrag (Issues #2294, #2287)
+## MFA-Backup-Codes: Speicher- und Migrationsvertrag (Issues #2294, #2287, #2327)
 
-**Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und wie der Alt-Bestand ohne Hash abgebaut wird.
+**Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und wie der Alt-Bestand ohne Hash abgebaut wurde.
 
 ### Was gespeichert wird
 
@@ -2072,21 +2072,20 @@ Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/djang
 
 ### Der Alt-Bestand — und warum der Direktvergleich fiel
 
-Die Hash-Speicherung kam mit #790. Eine **Migration, die bestehende Token-Zeilen nachträglich gehasht hätte, wurde bei der Umstellung nicht angelegt** — möglich wäre sie: die Verifikation bildet den Hash der Eingabe ohnehin immer, ein nachträglich gehashter Alt-Code verifiziert also unverändert weiter, und der Digest passt mit 16 Zeichen genau in die Spaltenbreite von `StaticToken.token`. Konten, die ihre Codes vor #790 erhalten und seither nicht neu erzeugt haben, tragen deshalb weiterhin Klartext-Zeilen im Erzeugungsformat von damals: `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich.
+Die Hash-Speicherung kam mit #790. Eine **Migration, die bestehende Token-Zeilen nachträglich gehasht hätte, wurde bei der Umstellung nicht angelegt** — möglich war sie: die Verifikation bildet den Hash der Eingabe ohnehin immer, ein nachträglich gehashter Alt-Code verifiziert also unverändert weiter, und der Digest passt mit 16 Zeichen genau in die Spaltenbreite von `StaticToken.token`. Konten, die ihre Codes vor #790 erhalten und seither nicht neu erzeugt hatten, trugen deshalb weiterhin Klartext-Zeilen im Erzeugungsformat von damals: `f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"`, also genau zweimal vier Kleinbuchstaben-Hex mit Bindestrich.
 
 `verify_backup_code` suchte den Eingabewert dafür unverändert **neben** seinem Hash in derselben Spalte. Damit galt ein aus der Datenbank gelesener Token-Wert selbst als gültiges Geheimnis: wer eine noch unbenutzte Zeile lesen konnte, kam mit ihr durch den zweiten Faktor — über die Zwei-Faktor-Abfrage, die Sudo-Re-Authentifizierung und die Lockout-Selbsthilfe gleichermaßen. Der zugesagte Schutz der gehashten Speicherung war damit aufgehoben, obwohl der Einmalverbrauch weiter griff.
 
-Der Fallback prüft das Format jetzt **explizit** gegen genau dieses Erzeugungsmuster (`^[0-9a-f]{4}-[0-9a-f]{4}$`) und nimmt nur eine Eingabe dieser Form in den Direktvergleich auf. Ein gespeicherter Digest — 16 Hex-Zeichen, ohne Bindestrich — erfüllt die Form nicht und wird ausschließlich über seinen eigenen Hash gesucht, läuft also ins Leere. Der atomare Einmalverbrauch aus #2110 und der eine gemeinsame Throttle-Schritt aus #790 bleiben unverändert.
+Mit #2294 prüfte der Fallback das Format zunächst **explizit** gegen genau dieses Erzeugungsmuster (`^[0-9a-f]{4}-[0-9a-f]{4}$`) und nahm nur eine Eingabe dieser Form in den Direktvergleich auf; ein gespeicherter Digest — 16 Hex-Zeichen, ohne Bindestrich — lief damit ins Leere. Seit #2327 gibt es den Direktvergleich nicht mehr (nächster Abschnitt): `verify_backup_code` sucht ausschließlich den Hash der Eingabe. Der atomare Einmalverbrauch aus #2110 und der eine Throttle-Schritt je Fehlversuch aus #790 bleiben unverändert.
 
-### Übergangsfrist und Abschaltung
+### Abschaltung — erledigt
 
-Der Direktvergleich auf das Klartext-Format ist eine **Übergangsregel ohne Dauerzusage**. Sie endet, sobald der Alt-Bestand abgebaut ist; abgebaut wird er allein durch Nutzung:
+Der Direktvergleich auf das Klartext-Format war eine **Übergangsregel ohne Dauerzusage**; der Abbau allein über Nutzung („Codes neu erzeugen", erneute Einrichtung) war nicht nachhaltbar, weil niemand den Rest-Bestand gemessen hat. Mit #2327 ist er abgeschaltet:
 
-- Jedes „Codes neu erzeugen" (`MFARegenerateBackupCodesView`, selbst durch einen frischen Authenticator-Code gedeckt) ersetzt den gesamten Satz eines Kontos durch gehashte Codes.
-- Jede erneute Zwei-Faktor-Einrichtung erzeugt ebenfalls einen frischen, gehashten Satz.
-- Betreiberseitig prüfbar ist der Rest-Bestand über die Form der Zeilen: was einen Bindestrich enthält, ist noch nicht gehasht.
-
-**Abschaltung — verbindlich:** Der Abbau über Nutzung allein ist nicht nachhaltbar (niemand misst den Rest-Bestand). Verbindlich geregelt ist die Abschaltung deshalb in #2327 (Meilenstein `release-1.0`): eine Datenmigration hasht alle verbliebenen Klartext-Zeilen, danach entfallen Formatprüfung und Direktvergleich **ersatzlos**. Bis dahin gilt die Zusage „kein Wert aus der Datenbank ist ein Anmeldecode" uneingeschränkt für gehashte Zeilen und — für den noch nicht migrierten Klartext-Bestand — in der abgeschwächten Form, dass nur eine Eingabe im historischen Erzeugungsformat überhaupt direkt verglichen wird. Betreiber können den Rest-Bestand vorher selbst abbauen, indem betroffene Konten einmal „Codes neu erzeugen". Ausdrücklich: Eine noch nicht migrierte Zeile im Altformat (`xxxx-xxxx`, mit Bindestrich) **ist** der Code im Klartext — wer sie aus der Datenbank oder einem Datenbank-Backup lesen kann, kann sie bis zur Migration aus #2327 als Anmeldecode verwenden. Diese Restwirkung endet spätestens mit `release-1.0`; wer sie früher beenden will, lässt die betroffenen Konten ihre Codes neu erzeugen.
+- Die Datenmigration `0181_hash_cleartext_backup_codes` ersetzt jede Zeile des Backup-Geräts (`StaticDevice.name == "backup"`) im Format `^[0-9a-f]{4}-[0-9a-f]{4}$` durch den SHA-256-Präfix des Klartexts. Sie ist idempotent (ein Hash erfüllt das Altformat nie) und schreibt die Zahl der gehashten Zeilen in den `migrate`-Output (`[0181_hash_cleartext_backup_codes] <n> Klartext-Backup-Code(s) gehasht.`) — damit ist der Rest-Bestand je Instanz einmal gemessen. Tokens anderer statischer Geräte fasst sie nicht an: die vergleicht django-otp selbst im Klartext.
+- Ein alter Code verifiziert danach unverändert über den Hash-Kandidaten; betroffene Konten merken von der Umstellung nichts. Die Eingabe ohne Bindestrich normalisiert die Zwei-Faktor-Abfrage weiterhin auf `xxxx-xxxx`.
+- Formatprüfung und Direktvergleich sind in `verify_backup_code` **ersatzlos entfallen**. Die Zusage „kein Wert aus der Datenbank ist ein Anmeldecode" gilt damit uneingeschränkt: auch eine Klartext-Zeile, die am Migrationsweg vorbei in die Tabelle gelangt, ist kein gültiger Code (sie wird abgelehnt, bleibt liegen und zählt als Fehlversuch).
+- Ein Restore aus einem Dump von vor `0181` durchläuft die Migration beim nächsten `migrate` erneut. Die Migration hat keinen Rückweg (ein Hash ist nicht umkehrbar); ein älterer Anwendungsstand verifiziert die gehashten Zeilen trotzdem, weil er den Hash-Kandidaten immer mitsucht.
 
 ### Flankierend: erneute Einrichtung verlangt den Bestandsfaktor
 
@@ -2096,7 +2095,9 @@ Zum selben Schutzgut gehört #2287: Die Einrichtungsseite gatete den erneuten Ei
 
 - Format- und Einstiegs-Guard (Service, Zwei-Faktor-Abfrage, Sudo, Lockout-Selbsthilfe): [`src/tests/test_mfa_backup_code_format_guard.py`](../src/tests/test_mfa_backup_code_format_guard.py)
 - Einrichtungs-Gate und Gerätebindung: [`src/tests/test_mfa_setup_reauth_guard.py`](../src/tests/test_mfa_setup_reauth_guard.py)
-- Hash-Speicherung, Klartext-Bestand, Einmalverbrauch und Parallelverbrauch: [`src/tests/test_mfa_backup_codes.py`](../src/tests/test_mfa_backup_codes.py)
+- Hash-Speicherung, migrierter Alt-Code, Einmalverbrauch und Parallelverbrauch: [`src/tests/test_mfa_backup_codes.py`](../src/tests/test_mfa_backup_codes.py)
+- Abschaltung des Klartext-Vergleichs (Service und alle drei Einstiege): [`src/tests/test_mfa_backup_code_cleartext_removed_guard.py`](../src/tests/test_mfa_backup_code_cleartext_removed_guard.py)
+- Datenmigration `0181` (Hash, Umfang, Idempotenz, Zählzeile, eingefrorene Hash-Funktion): [`src/tests/migrations/test_0181_hash_cleartext_backup_codes.py`](../src/tests/migrations/test_0181_hash_cleartext_backup_codes.py)
 
 ---
 

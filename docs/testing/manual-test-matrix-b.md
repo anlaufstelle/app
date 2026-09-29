@@ -416,7 +416,7 @@
 **E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`, `test_security_hardening.py` 
 **Spezial-Setup:**
 - TOTP-Code-Generierung im Test: `pyotp` mit gleichem Secret wie QR-Code (Base32-decoded aus `device.bin_key`).
-- Backup-Codes: 22-Zeichen URL-safe Base64 (case-sensitive!) ab Refs #790. Legacy-Format `xxxx-xxxx` (8 Hex + Dash) wird beim Verify toleriert.
+- Backup-Codes: 22-Zeichen URL-safe Base64 (case-sensitive!) ab Refs #790. Alte Codes im Format `xxxx-xxxx` (8 Hex + Dash) hat die Datenmigration `0181` gehasht (Refs #2327); sie verifizieren weiter über den Hash, auch ohne Bindestrich eingegeben. Eine ungehashte Klartext-Zeile in der Datenbank ist kein gültiger Code.
 - `MFADisableView` ist `RequireSudoModeMixin` — vor Disable muss Sudo-Mode aktiv sein.
 - `request.user.is_mfa_enforced` = `True`, wenn `User.mfa_required=True` ODER `facility.settings.mfa_enforced_facility_wide=True`.
 

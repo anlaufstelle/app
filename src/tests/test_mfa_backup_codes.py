@@ -62,15 +62,20 @@ class TestBackupCodesService:
                 "Klartext-Backup-Code im DB-Token-Field gefunden — Hash-Storage greift nicht."
             )
 
-    def test_legacy_cleartext_codes_still_verify(self, staff_user):
-        """Refs #790: Pre-Migration Codes (xxxx-xxxx, Cleartext-Storage) muessen
-        weiterhin verifizieren, damit User mit alten Codes nicht ausgesperrt
-        sind, bis sie regenerieren."""
+    def test_migrated_legacy_codes_still_verify(self, staff_user):
+        """Refs #790, #2327: Codes aus der Zeit vor der Hash-Speicherung
+        (xxxx-xxxx) muessen weiterhin verifizieren, damit Konten mit alten
+        Codes nicht ausgesperrt sind. Die Datenmigration 0181 hat ihre
+        Klartext-Zeilen gehasht — der alte Code trifft den Hash-Kandidaten.
+        Die Ablehnung einer ungehashten Klartext-Zeile pinnt
+        ``test_mfa_backup_code_cleartext_removed_guard.py``."""
         from django_otp.plugins.otp_static.models import StaticToken
 
+        from core.services.security.mfa import _hash_code
+
         device = StaticDevice.objects.create(user=staff_user, name="backup", confirmed=True)
-        # Simuliere alten Cleartext-Eintrag.
-        StaticToken.objects.create(device=device, token="abcd-1234")
+        # Alt-Code im Zustand nach der Migration 0181.
+        StaticToken.objects.create(device=device, token=_hash_code("abcd-1234"))
 
         assert verify_backup_code(staff_user, "abcd-1234") is True
         # Single-use bleibt erhalten.
@@ -104,7 +109,7 @@ class TestBackupCodesService:
         assert verify_backup_code(staff_user, None) is False
 
     def test_unknown_code_increments_throttle_exactly_once(self, staff_user):
-        """Refs #790: Hash- und Legacy-Lookup zaehlen zusammen als ein Miss."""
+        """Refs #790: Ein Fehlversuch kostet genau einen Throttle-Schritt."""
         generate_backup_codes(staff_user)
         device = StaticDevice.objects.get(user=staff_user, name="backup")
 
@@ -233,16 +238,20 @@ class TestMFAVerifyWithBackupCode:
     def test_legacy_8hex_without_dash_normalised(self, client, staff_user):
         """Legacy-Codes (8-Zeichen-Hex ohne Bindestrich) werden zu xxxx-xxxx
         normalisiert — Refs #790 erhaelt diese Convenience nur fuer Codes,
-        die das alte Format zweifellos erfuellen.
+        die das alte Format zweifellos erfuellen. Refs #2327: der alte Code
+        liegt nach der Migration 0181 gehasht vor; die Normalisierung muss
+        genau die Form treffen, deren Hash gespeichert ist.
         """
         from django_otp.plugins.otp_static.models import StaticToken
 
+        from core.services.security.mfa import _hash_code
+
         self._setup_confirmed_totp(staff_user)
-        # Legacy-Token direkt anlegen (Cleartext, Pre-#790-Aera).
+        # Alt-Code (Pre-#790-Aera) im Zustand nach der Migration 0181.
         device = StaticDevice.objects.get_or_create(user=staff_user, name="backup", defaults={"confirmed": True})[0]
         device.confirmed = True
         device.save(update_fields=["confirmed"])
-        StaticToken.objects.create(device=device, token="abcd-1234")
+        StaticToken.objects.create(device=device, token=_hash_code("abcd-1234"))
         client.login(username="teststaff", password="testpass123")
 
         response = client.post(

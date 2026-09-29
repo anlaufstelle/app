@@ -12,25 +12,19 @@ SHA-256-Hashes der Codes. Damit ist ein DB-Leak nicht mehr aequivalent
 zur Kompromittierung der Backup-Codes (Pre-Image-Angriffe gegen 128-Bit-
 Eingaben sind infeasibel).
 
-Backwards-Kompat (Refs #2294): Es gibt **keine** Migration, die bestehende
-Token-Zeilen gehasht haette — Konten, die ihre Codes vor der Umstellung auf
-Hash-Speicherung erhalten und seither nicht neu erzeugt haben, tragen also
-weiterhin Klartext-Zeilen im ``xxxx-xxxx``-Format. Der Fallback dafuer bleibt,
-greift aber nur nach **expliziter Formatpruefung** gegen ``_LEGACY_CODE_RE``
-(genau das historische Erzeugungsformat: zweimal vier Kleinbuchstaben-Hex mit
-Bindestrich). Zuvor wurde der Eingabewert unveraendert mitgesucht; damit galt
-ein aus der Datenbank gelesener Token-Wert selbst als gueltiges Geheimnis und
-der zugesagte Schutz der gehashten Speicherung war aufgehoben. Ein
-hashfoermiger Eingabewert wird nie direkt verglichen. Beim naechsten
-``Codes neu erzeugen``-Lauf werden Klartext-Zeilen durch gehashte
-128-Bit-Codes ersetzt; Uebergangsfrist und Abschaltung stehen in
+Klartext-Altbestand (Refs #2294, #2327): Codes aus der Zeit vor der
+Hash-Speicherung lagen im historischen ``xxxx-xxxx``-Format im Klartext in der
+Token-Spalte. Die Datenmigration ``0181_hash_cleartext_backup_codes`` hat diesen
+Restbestand durch die Hashes ersetzt; ein alter Code verifiziert seither ueber
+denselben Hash-Kandidaten wie ein neuer. Einen Klartext-Vergleich gibt es
+nicht mehr — weder fuer den Eingabewert noch fuer einen aus der Datenbank
+gelesenen Token-Wert. Speicher- und Migrationsvertrag stehen in
 ``docs/security-notes.md``.
 """
 
 from __future__ import annotations
 
 import hashlib
-import re
 import secrets
 
 from django.db import transaction
@@ -46,13 +40,6 @@ BACKUP_DEVICE_NAME = "backup"
 # bleibt unsegmentiert (kein xxxx-xxxx) — neue Codes sind "Geheimnis-Strings"
 # zum Copy-Paste. Wer Lesbarkeit will, kann beim Display-Layer formatieren.
 _CODE_BYTES = 16
-# Refs #2294: EXAKT das historische Erzeugungsformat aus der Einfuehrung der
-# Backup-Codes — ``f"{secrets.token_hex(2)}-{secrets.token_hex(2)}"``, also
-# zweimal vier Kleinbuchstaben-Hex mit Bindestrich. Nur ein Eingabewert dieser
-# Form darf ueberhaupt gegen die Klartext-Zeilen der Alt-Bestaende geprueft
-# werden. Ein gespeicherter Hash (16 Hex-Zeichen, ohne Bindestrich) erfuellt
-# diese Form nicht und ist damit kein Kandidat fuer den Direktvergleich.
-_LEGACY_CODE_RE = re.compile(r"^[0-9a-f]{4}-[0-9a-f]{4}$")
 
 
 def _generate_code() -> str:
@@ -113,16 +100,16 @@ def remaining_backup_codes(user) -> int:
 def verify_backup_code(user, token: str) -> bool:
     """Consume a backup code. Returns True on success.
 
-    Refs #790: prueft den Input gegen Hash- UND Cleartext-Lookup in EINER
-    DB-Query — damit ein einzelner Throttle-Increment greift, statt zweier
-    aufeinanderfolgender ``verify_token``-Aufrufe (die unter
-    ThrottlingMixin nach 1 Miss bereits 1s Delay verlangen). Single-use
-    bleibt erhalten, indem der Treffer direkt geloescht wird.
+    Refs #790: der Eingabewert wird ausschliesslich ueber seinen Hash
+    gesucht, in EINER DB-Query — ein Fehlversuch kostet genau einen
+    Throttle-Increment. Single-use bleibt erhalten, indem der Treffer direkt
+    geloescht wird.
 
-    Refs #2294: Der Cleartext-Lookup gilt ausschliesslich fuer Eingaben im
-    historischen ``xxxx-xxxx``-Format (``_LEGACY_CODE_RE``). Jeder andere
-    Eingabewert — insbesondere ein aus der Datenbank gelesener Token-Wert —
-    wird nur noch ueber seinen Hash gesucht und faellt damit durch.
+    Refs #2294, #2327: Es gibt keinen Klartext-Vergleich. Der Altbestand im
+    ``xxxx-xxxx``-Format ist durch die Datenmigration ``0181`` gehasht; eine
+    Klartext-Zeile, die am Migrationsweg vorbei in der Tabelle liegt, ist kein
+    gueltiger Code, und ein aus der Datenbank gelesener Token-Wert faellt als
+    Eingabe ebenfalls durch (sein Hash steht nirgends).
     """
     if not token:
         return False
@@ -134,17 +121,11 @@ def verify_backup_code(user, token: str) -> bool:
     if not verify_allowed:
         return False
 
-    hashed = _hash_code(token)
-    candidates = [hashed]
-    if _LEGACY_CODE_RE.fullmatch(token):
-        # Alt-Bestand ohne Hash-Migration (Refs #2294): nur eine Eingabe im
-        # historischen Erzeugungsformat darf ueberhaupt direkt verglichen werden.
-        candidates.append(token)
     # Atomarer Consume (Refs #2110): Der DELETE selbst entscheidet, welcher
     # parallele Aufruf gewinnt. ``generate_backup_codes`` ersetzt das Set
-    # vollstaendig, daher mischt ein Device nie Hash- und Legacy-Cleartext-
-    # Zeilen desselben Codes; der Filter kann hoechstens einen Treffer loeschen.
-    deleted, _ = device.token_set.filter(token__in=candidates).delete()
+    # vollstaendig und ein Satz enthaelt jeden Code nur einmal; der Filter
+    # trifft also hoechstens eine Zeile.
+    deleted, _ = device.token_set.filter(token=_hash_code(token)).delete()
     if deleted == 0:
         device.throttle_increment()
         return False
