@@ -214,7 +214,7 @@ class TestZZMFAFactorChangeSudo:
                 context.close()
 
             confirmed, unconfirmed, old_code_stored = _device_state(e2e_env, old_code=codes[2])
-            assert confirmed == 2
+            assert confirmed == 1, "Das ersetzte Geraet muss mit der Quittung entfernt sein"
             assert unconfirmed == 0
             assert old_code_stored is False, "Der alte Backup-Code-Satz muss ersetzt sein"
         finally:

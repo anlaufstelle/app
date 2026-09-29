@@ -26,6 +26,7 @@ import qrcode
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -402,6 +403,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
     Bestätigung
 
     * schaltet im Setup-Flow das ``TOTPDevice`` scharf (``confirmed=True``) und
+      entfernt beim Faktorwechsel das ersetzte Geraet (Refs #2328) und
     * räumt die Codes aus der Session (danach keine Wiederanzeige mehr).
 
     Solange nicht quittiert wurde, bleibt der Setup-Status unvollständig: das
@@ -483,8 +485,19 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
                 # Device (oder ohne Marker) → Einrichtung neu aufsetzen.
                 request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
                 return redirect("mfa_setup")
-            device.confirmed = True
-            device.save(update_fields=["confirmed"])
+            # Refs #2328: Mit der Quittung wird das neue Geraet wirksam und
+            # ersetzt das bisherige — in derselben Transaktion verschwindet
+            # jedes andere bestaetigte TOTP-Geraet des Kontos. Danach hat das
+            # Konto genau eines; das ersetzte bleibt nicht als ungepruefte,
+            # bestaetigte Zeile samt Secret stehen. Unbestaetigte Geraete und
+            # Passkeys bleiben unberuehrt; bricht der Wechsel vor der Quittung
+            # ab, gilt das bisherige Geraet unveraendert weiter.
+            with transaction.atomic():
+                device.confirmed = True
+                device.save(update_fields=["confirmed"])
+                replaced, _info = (
+                    TOTPDevice.objects.filter(user=request.user, confirmed=True).exclude(pk=device.pk).delete()
+                )
             # Refs #2034: Der Setup-Abschluss ist die erste Rechteanhebung der
             # Sitzung (2FA aktiv + verifiziert) — Rotation vor dem Flag. Der
             # Abbau von ``mfa_setup_pending`` oben wandert mit.
@@ -500,7 +513,10 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
                 request,
                 AuditLog.Action.MFA_ENABLED,
                 target_obj=request.user,
-                detail={"event": "mfa_setup_confirmed"},
+                # Beim Faktorwechsel zusaetzlich die Zahl der ersetzten Geraete
+                # (wie ``passkeys_removed`` bei MFA_DISABLED); die erstmalige
+                # Einrichtung schreibt das Detail unveraendert.
+                detail={"event": "mfa_setup_confirmed", **({"count": replaced} if replaced else {})},
                 facility=getattr(request.user, "facility", None),
             )
             messages.success(request, _("Zwei-Faktor-Authentifizierung aktiviert."))

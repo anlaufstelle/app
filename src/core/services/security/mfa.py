@@ -157,7 +157,9 @@ def current_totp_device(user) -> TOTPDevice | None:
     aelteste (niedrigste pk) — der Code des neuen Geraets wurde bei Anmeldung,
     Sudo und Neuerzeugen nie geprueft, das alte blieb allein gueltig. Ab der
     Bestaetigung gilt das neue Geraet und ersetzt das alte, wie der neue
-    Backup-Code-Satz den alten.
+    Backup-Code-Satz den alten; die Quittung (``MFABackupCodesView.post``)
+    entfernt das ersetzte Geraet in derselben Transaktion. Mehrere bestaetigte
+    Geraete gibt es danach nur noch im Altbestand von vor dieser Regel.
 
     Genau EIN Geraet, nicht alle: django-otp raet von der Pruefung gegen jedes
     Geraet ab (``match_token``), weil dann jeder Fehlschlag jedes Geraet
