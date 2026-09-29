@@ -205,12 +205,26 @@ class TestApproveClientDeletionReloadTiesToItsOwnFacility:
         ANDERE Einrichtung gesetzt (nicht gespeichert). Original: der Reload
         filtert erneut nach dieser (jetzt falschen) Annahme und findet die
         Zeile nicht. Mutant: der Reload ignoriert die Annahme und laedt die
-        echte Zeile trotzdem."""
+        echte Zeile trotzdem.
+
+        Die pruefende Person gehoert zur ANGENOMMENEN Einrichtung: die
+        Einrichtungsgrenze vor der Antragssperre vergleicht mit der Annahme und
+        laesst den Aufruf bis zum gesperrten Reload durch, der die Annahme
+        verwirft (Mutant: Reload gelingt, die Grenze unter der Sperre meldet
+        die fremde Einrichtung statt ``DoesNotExist``)."""
+        from core.models import User
+
+        reviewer = User.objects.create_user(
+            username="pin099_leitung_angenommen",
+            role=User.Role.LEAD,
+            facility=second_facility,
+            can_confirm_deletion=True,
+        )
         dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
-            approve_client_deletion(dr, lead_user)
+            approve_client_deletion(dr, reviewer)
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING

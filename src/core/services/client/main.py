@@ -1298,6 +1298,11 @@ def approve_client_deletion(deletion_request, reviewer):
     # nicht nur in der View).
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
+    # Einrichtungsgrenze schon VOR der Antragssperre (fail-closed ohne
+    # Einrichtung): eine fremde pruefende Person haelt den Antrag nicht fest.
+    # Unter der Sperre wird sie unten an der frischen Zeile erneut geprueft.
+    if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
 
     # Refs #1376 (I9): facility-scoped Lookup wahrt die RLS-Scopung, der Lock
     # haelt die Zeile bis zum Commit dieser Transaktion.
