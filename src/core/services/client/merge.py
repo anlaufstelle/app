@@ -255,6 +255,13 @@ def create_or_get_client_merge_request(source, target, user, reason):
     return dr, True
 
 
+_MERGE_REQUEST_LOCK_ATTEMPTS = 3
+
+
+class _MergeRequestPersonsChangedError(Exception):
+    """The locked request names other persons than the ones locked before it."""
+
+
 def _lock_persons_then_merge_request(deletion_request):
     """Lock the source and target person rows, then the request row, and return the locked request.
 
@@ -269,14 +276,36 @@ def _lock_persons_then_merge_request(deletion_request):
     request checks, so the answers keep their order. The unlocked,
     facility-scoped read keeps the answer for an unknown request
     (``DoesNotExist``).
+
+    The persons are read without a lock, and the target (``merge_into``) can
+    still be edited. If the locked request names other persons than the ones
+    just locked, the missing person is NOT locked under the held request: the
+    savepoint is rolled back, which releases the request and person locks of
+    this attempt, and the lock starts over on the current persons. After
+    ``_MERGE_REQUEST_LOCK_ATTEMPTS`` changed reads the approval is refused as
+    changed in the meantime.
     """
-    person_ids = (
-        DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
-        .values_list("target_id", "merge_into_id")
-        .get()
+    for _attempt in range(_MERGE_REQUEST_LOCK_ATTEMPTS):
+        person_ids = (
+            DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+            .values_list("target_id", "merge_into_id")
+            .get()
+        )
+        try:
+            with transaction.atomic():
+                lock_clients(person_ids, facility=deletion_request.facility_id)
+                locked_request = DeletionRequest.objects.select_for_update().get(
+                    pk=deletion_request.pk, facility=deletion_request.facility
+                )
+                if (locked_request.target_id, locked_request.merge_into_id) != person_ids:
+                    raise _MergeRequestPersonsChangedError
+                return locked_request
+        except _MergeRequestPersonsChangedError:
+            continue
+    raise ValidationError(
+        _("Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."),
+        code="version_conflict",
     )
-    lock_clients(person_ids, facility=deletion_request.facility_id)
-    return DeletionRequest.objects.select_for_update().get(pk=deletion_request.pk, facility=deletion_request.facility)
 
 
 @transaction.atomic
@@ -298,7 +327,9 @@ def approve_client_merge(deletion_request, reviewer):
 
     Lock order: both person rows first, then the request
     (:func:`_lock_persons_then_merge_request`), the same order the
-    anonymisation takes.
+    anonymisation takes. A request whose persons change while they are being
+    locked is locked again on the current persons, and refused after repeated
+    changes.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
