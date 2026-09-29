@@ -1,4 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
+> Synchronization update 2026-09-29: the intro links this guide and the FAQ to their in-app entry point (#1904).
 > Synchronization update 2026-09-29: § 7 links the facility-admin CSV import wizard guide (#1904).
 > Synchronization update 2026-09-22: § 8 now states that a sign-in, second-factor or password-change request during the transfer is not a save -- the transfer pauses, local entries stay, and it continues without duplicates after signing in; a forced password change is called out as the exception that wipes the local offline data (#2289).
 > Synchronization update 2026-09-18: the handover-note section now states the final no-hold boundary and the organizational step for procedure-relevant content (#2231).
@@ -10,6 +11,8 @@
 # Anlaufstelle -- User Guide
 
 This guide is intended for social workers, managers, and assistants working in open consultation hours and advice centers, drop-in centers, emergency shelters, awareness teams, women's shelters, youth work, and other low-threshold social service facilities that use Anlaufstelle.
+
+This guide and the [FAQ](../faq.md) are linked inside the application under "Help" (`/hilfe/`) (Refs #1904).
 
 ---
 
@@ -1035,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: d106b5db532fe3dea1046755f9b7bde16e69ff76 -->
+<!-- source-hash: 511ce5f26ab4fc588ebfbe0324b1a84c65faeed9 -->

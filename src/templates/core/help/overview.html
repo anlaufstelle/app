@@ -26,5 +26,23 @@
         <p class="text-sm text-ink-muted">{% trans "Für diese Rolle sind keine weiteren Hilfebereiche verfügbar." %}</p>
         {% endfor %}
     </div>
+
+    {# Refs #1904: link to the full user guide and FAQ shipped in the public #}
+    {# repository, in addition to the short in-app orientation above. Both   #}
+    {# follow SOURCE_CODE_URL, exactly like the license link in the footer,  #}
+    {# so a fork's own mirror is linked automatically. The FAQ has no        #}
+    {# English translation yet, so it stays on the German source document    #}
+    {# for both UI languages. #}
+    <div class="mt-6 pt-4 border-t border-subtle">
+        <h2 class="text-base font-semibold text-ink mb-2">{% trans "Ausführliche Anleitungen" %}</h2>
+        <ul class="text-sm space-y-1">
+            <li>
+                <a href="{{ SOURCE_CODE_URL }}/blob/main/{% if LANGUAGE_CODE == 'en' %}docs/en/user-guide.md{% else %}docs/user-guide.md{% endif %}" rel="noopener" target="_blank" class="text-accent hover:underline">{% trans "Benutzerhandbuch" %}<span class="sr-only"> ({% trans "öffnet in neuem Tab" %})</span></a>
+            </li>
+            <li>
+                <a href="{{ SOURCE_CODE_URL }}/blob/main/docs/faq.md" rel="noopener" target="_blank" class="text-accent hover:underline">{% trans "Häufig gestellte Fragen (FAQ)" %}<span class="sr-only"> ({% trans "öffnet in neuem Tab" %})</span></a>
+            </li>
+        </ul>
+    </div>
 </div>
 {% endblock %}

@@ -2,6 +2,8 @@
 
 Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in offenen Sprechstunden und Beratungsstellen, Kontaktläden, Notschlafstellen, Awareness-Teams, Frauenhäusern, der Jugendarbeit und anderen niedrigschwelligen sozialen Einrichtungen, die mit Anlaufstelle arbeiten.
 
+Dieses Handbuch und die [FAQ](faq.md) sind innerhalb der Anwendung unter „Hilfe" (`/hilfe/`) verlinkt (Refs #1904).
+
 ---
 
 ## Inhaltsverzeichnis
