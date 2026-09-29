@@ -66,7 +66,7 @@ def _second_event(event):
         client=event.client,
         document_type=event.document_type,
         occurred_at=timezone.now(),
-        data_json={"dauer": 5},
+        data_json={},
         created_by=event.created_by,
     )
 
