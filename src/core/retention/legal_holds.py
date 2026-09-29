@@ -458,17 +458,56 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
 
 
 def create_legal_hold(proposal, user, reason, expires_at=None):
-    """Create a legal hold and set the proposal to held status."""
-    hold = create_hold_for_target(
-        proposal.facility,
-        target_type=proposal.target_type,
-        target_id=proposal.target_id,
-        user=user,
-        reason=reason,
-        expires_at=expires_at,
+    """Legt einen Legal Hold auf das Ziel eines Vorschlags an und setzt ihn auf ``HELD``.
+
+    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
+    Sperre geprueft (fail-closed ohne Einrichtung, derselbe Helfer wie beim
+    Genehmigen). Zielanker, Hold, Audit-Zeile und Statuswechsel liegen in EINER
+    Transaktion: scheitert der Vorschlags-Write, bleibt kein Hold ohne
+    gehaltenen Vorschlag zurueck.
+
+    Der Vorschlag wird NACH dem Zielanker gesperrt neu gelesen — dieselbe
+    Ordnung wie bei der Genehmigung (Person -> Ereignis -> Vorschlag); die
+    Gegenordnung waere ein Sperrzyklus mit ihr. Ein Hold darf eine noch
+    moegliche Loeschung jederzeit anhalten (``pending``, ``deferred`` und auch
+    ``approved`` vor dem naechsten Loeschlauf); abgewiesen werden ein bereits
+    gehaltener und ein abgelehnter Vorschlag — dort gibt es nichts anzuhalten.
+    Der Statuswechsel geschieht an der gesperrten Zeile, die Instanz des
+    Aufrufers wird nachgezogen.
+    """
+    from core.retention.proposals import (
+        PROPOSAL_ALREADY_DECIDED_MESSAGE,
+        PROPOSAL_OTHER_FACILITY_MESSAGE,
+        _assert_actor_facility,
     )
-    proposal.status = RetentionProposal.Status.HELD
-    proposal.save(update_fields=["status"])
+
+    _assert_actor_facility(proposal, user)
+    haltbare_status = (
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.APPROVED,
+        RetentionProposal.Status.DEFERRED,
+    )
+    with transaction.atomic():
+        hold = create_hold_for_target(
+            proposal.facility,
+            target_type=proposal.target_type,
+            target_id=proposal.target_id,
+            user=user,
+            reason=reason,
+            expires_at=expires_at,
+        )
+        locked = (
+            RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
+        )
+        if locked is None:
+            # Die Zeile liegt in der Datenbank nicht (mehr) in der Einrichtung
+            # der Instanz — der eben angelegte Hold rollt mit zurueck.
+            raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
+        if locked.status not in haltbare_status:
+            raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+        locked.status = RetentionProposal.Status.HELD
+        locked.save(update_fields=["status"])
+        proposal.status = locked.status
     return hold
 
 

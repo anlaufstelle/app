@@ -117,6 +117,11 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
                 _("Für diesen Vorschlag existiert bereits ein aktiver Hold."),
                 status=409,
             )
+        except ValidationError as exc:
+            # Refs #2374: Vorschlag zwischenzeitlich abgelehnt oder schon
+            # gehalten — Antwortmuster wie ``RetentionApproveView``: 409 mit
+            # kurzem, markup-freiem Klartext statt eines 500.
+            return HttpResponse(exc.messages[0] if exc.messages else str(exc), status=409)
 
         # Refresh proposal from DB
         proposal.refresh_from_db()
