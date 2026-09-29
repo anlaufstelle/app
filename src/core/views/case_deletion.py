@@ -185,6 +185,14 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
                 ),
             )
             return redirect("core:case_detail", pk=pk)
+        except ValidationError as exc:
+            # Refs #2374: der Dienst entscheidet an der gesperrten Fallzeile.
+            # Liegt der Fall seit dem Laden oben im Papierkorb, ist er getilgt
+            # oder haengt an einer anderen Person, ist das ein Konflikt mit
+            # einer parallelen Aenderung — Meldung statt Serverfehler, Ziel wie
+            # im direkten Zweig oben die Fall-Liste.
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("core:case_list")
         if not created:
             # Refs #2015 (Re-Review): bestehender Antrag vom Service — dieselbe
             # Antwort wie beim Erstfund oben, keine falsche Erfolgsmeldung.
