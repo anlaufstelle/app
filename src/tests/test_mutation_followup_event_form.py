@@ -169,7 +169,7 @@ class TestDynamicEventDataFormInit:
         assert isinstance(form.fields[ft.slug], MultipleFileField)
 
     def test_select_field_prepends_empty_choice(self, facility):
-        """SELECT bekommt ``("", "— Bitte auswählen —")`` als erste Choice."""
+        """SELECT gets ``("", "— Bitte auswählen —")`` as its first choice."""
         dt, [ft] = _make_doc_type_with_fields(
             facility,
             [
