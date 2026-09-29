@@ -21,12 +21,14 @@ gesperrten Tabellen in ihrer Reihenfolge (am ausgefuehrten SQL, nicht am
 Wortlaut der Anweisung).
 """
 
+from datetime import timedelta
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, Episode, User
-from core.services.case.episodes import create_episode, update_episode
+from core.services.case.episodes import close_episode, create_episode, update_episode
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, CASE_WRITE_REDACTED_MESSAGE
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
@@ -225,3 +227,64 @@ class TestUpdateEpisode:
         assert m.sperrfolge()[:3] == [_PERSON, _FALL, _EPISODE]
         assert _episodenstand(episode.pk)[0] == "Neu"
         assert AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count() == 1
+
+
+class TestCloseEpisode:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, episode):
+        user = request.getfixturevalue(akteur)
+
+        _abgewiesen(lambda: close_episode(Episode.objects.get(pk=episode.pk), user), _FALL_FREMD, [])
+
+        assert _episodenstand(episode.pk)[2] is None
+
+    @pytest.mark.parametrize(("zustand", "meldung", "sperrfolge"), AKTENZUSTAENDE)
+    def test_veraltete_akte_wird_abgewiesen(self, zustand, meldung, sperrfolge, episode, staff_user):
+        alt = Episode.objects.select_related("case").get(pk=episode.pk)
+        zustand(alt.case_id, alt.case.client_id)
+
+        _abgewiesen(lambda: close_episode(alt, staff_user), meldung, sperrfolge)
+
+        assert _episodenstand(episode.pk)[2] is None
+
+    def test_geloeschte_episode_wird_abgewiesen(self, episode, staff_user):
+        alt = Episode.objects.get(pk=episode.pk)
+        _episode_geloescht(episode.pk)
+
+        _abgewiesen(lambda: close_episode(alt, staff_user), CASE_WRITE_GONE_MESSAGE, [_PERSON, _FALL, _EPISODE])
+
+        assert _episodenstand(episode.pk)[2] is None
+
+    def test_umhaengen_zwischen_vorlesen_und_sperre(self, episode, staff_user, andere_person):
+        alt = Episode.objects.get(pk=episode.pk)
+        spuren = _spuren()
+        with mitschnitt() as m, pytest.raises(ValidationError) as excinfo:
+            _umhaengen_nach_personensperre(m, alt.case_id, andere_person)
+            close_episode(alt, staff_user)
+        assert m.offene_schranken() == []
+        assert excinfo.value.messages == [CASE_WRITE_GONE_MESSAGE]
+        assert _spuren() == spuren
+        assert _episodenstand(episode.pk)[2] is None
+
+    def test_parallel_abgeschlossene_episode_behaelt_ihr_ende(self, episode, staff_user):
+        """Entschieden wird am frischen Stand: ein zwischenzeitliches Ende wird nicht ueberschrieben."""
+        alt = Episode.objects.get(pk=episode.pk)
+        frueheres_ende = timezone.now().date() - timedelta(days=3)
+        Episode.objects.filter(pk=episode.pk).update(ended_at=frueheres_ende)
+
+        ergebnis = close_episode(alt, staff_user)
+
+        assert _episodenstand(episode.pk)[2] == frueheres_ende
+        assert ergebnis.ended_at == frueheres_ende
+
+    def test_eigene_einrichtung_schliesst_nach_der_sperrfolge(self, episode, staff_user):
+        alt = Episode.objects.get(pk=episode.pk)
+
+        with mitschnitt() as m:
+            ergebnis = close_episode(alt, staff_user)
+
+        assert m.sperrfolge()[:3] == [_PERSON, _FALL, _EPISODE]
+        heute = timezone.now().date()
+        assert _episodenstand(episode.pk)[2] == heute
+        assert ergebnis is alt
+        assert alt.ended_at == heute
