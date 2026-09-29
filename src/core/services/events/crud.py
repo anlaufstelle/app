@@ -173,6 +173,29 @@ def create_event(
     if client and client.facility_id != facility.pk:
         raise ValueError("Client gehört nicht zur Facility")
     _validate_case_assignment(facility, case, client, is_anonymous)
+    if case is not None:
+        # The case instance stems from a read before this transaction. Lock it
+        # person -> case (the gate above already holds the person row) and
+        # re-check it under the lock: trash, anonymisation and a revoked person
+        # end with the message of the case write contract. The event's person
+        # stands in the lock condition, so a case that meanwhile belongs to
+        # another person is refused instead of locking that person's row
+        # outside the canonical order. Facility and person in the condition
+        # also mean the assignment rules checked above hold for the locked row;
+        # the event is attached to that row.
+        from core.services.case.state_contract import (
+            CASE_WRITE_GONE_MESSAGE,
+            CASE_WRITE_REDACTED_MESSAGE,
+            _locked_case,
+        )
+
+        case = _locked_case(
+            case.pk,
+            client.pk,
+            facility.pk,
+            redacted_message=CASE_WRITE_REDACTED_MESSAGE,
+            gone_message=CASE_WRITE_GONE_MESSAGE,
+        )
 
     if user is not None and not user_can_see_document_type(user, document_type):
         raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))
