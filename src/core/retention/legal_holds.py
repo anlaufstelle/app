@@ -37,6 +37,14 @@ CASE_BINDING_CHANGED_MESSAGE = _(
 #: Doppelklick, die die Vorschlagskarte an ihrer Stelle zeigt (Refs #2374).
 PROPOSAL_ALREADY_HELD_MESSAGE = _("Für diesen Vorschlag existiert bereits ein aktiver Hold.")
 
+#: Message when a hold is requested on an approved proposal while a newer
+#: proposal of the same target is still open or deferred (Refs #2374). Only one
+#: proposal per target may be active; the hold belongs on the open one.
+PROPOSAL_OTHER_ACTIVE_MESSAGE = _(
+    "Für dieses Ereignis liegt ein weiterer offener Löschvorschlag vor — "
+    "bitte die Übersicht neu laden und den Hold dort anlegen."
+)
+
 
 def _row_content_is_gone(row) -> bool:
     """Hat DIESE Fassung ihre Werte verloren? (Finding B)
@@ -434,6 +442,11 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
     der Aufrufer in ``before_write`` sperrt, liegt damit wie bei jeder
     Vorschlagsentscheidung VOR der Audit-Kette. Wirft ``before_write``, entsteht
     weder Hold noch Audit-Zeile.
+
+    ``before_write`` may also write rows of its own (``create_legal_hold``
+    writes the proposal status there). Such a write, including any uniqueness
+    check the database runs for it, then waits before the audit chain is
+    taken, never while it is held.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != facility.pk:
@@ -494,31 +507,33 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
 
 
 def create_legal_hold(proposal, user, reason, expires_at=None):
-    """Legt einen Legal Hold auf das Ziel eines Vorschlags an und setzt ihn auf ``HELD``.
+    """Places a legal hold on the target of a proposal and sets the proposal to ``HELD``.
 
-    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
-    Sperre geprueft (fail-closed ohne Einrichtung, derselbe Helfer wie beim
-    Genehmigen). Zielanker, Hold, Audit-Zeile und Statuswechsel liegen in EINER
-    Transaktion: scheitert der Vorschlags-Write, bleibt kein Hold ohne
-    gehaltenen Vorschlag zurueck.
+    Refs #2374: The facility boundary of the acting person is checked before
+    any lock (fail-closed without a facility, the same helper as for
+    approving). Target anchor, proposal status, hold row and audit row share
+    ONE transaction: if a write fails, no hold remains without a held proposal.
 
-    Sperrfolge: Zielanker (Person -> Ereignis) -> Vorschlag -> Audit-Kette —
-    dieselbe wie bei Genehmigen, Zurueckstellen und Ablehnen. Der Vorschlag
-    wird deshalb unter dem Zielanker, aber VOR Hold-Zeile und Audit-Zeile
-    gesperrt neu gelesen und geprueft (``before_write`` von
-    :func:`create_hold_for_target`). Laege die Vorschlagssperre hinter der
-    Audit-Zeile, hielte die Hold-Anlage die Audit-Kette, waehrend sie auf eine
-    Entscheidung wartet, die den Vorschlag haelt und ihrerseits auf die
-    Audit-Kette wartet — eine Verklemmung.
+    Lock order: target anchor (person -> event) -> every proposal of the
+    target -> audit chain, the order of approving, deferring and rejecting.
+    Everything that concerns the proposals happens under the target anchor but
+    BEFORE the hold row and the audit row (``before_write`` of
+    :func:`create_hold_for_target`): every proposal of the target is locked in
+    primary-key order, re-read and checked, and the status write — including
+    the uniqueness check of ``unique_active_retention_proposal`` — is done.
+    That check can wait for a transaction that is deciding a newer proposal of
+    the same target. Behind the audit row the hold would wait while holding
+    the audit chain, and that decision waits for the audit chain before it
+    commits: a deadlock.
 
-    Ein Hold darf eine noch moegliche Loeschung jederzeit anhalten
-    (``pending``, ``deferred`` und auch ``approved`` vor dem naechsten
-    Loeschlauf); abgewiesen werden ein bereits gehaltener und ein abgelehnter
-    Vorschlag — dort gibt es nichts anzuhalten. Die Absage kommt am gesperrten
-    Status, bevor eine Hold-Zeile entsteht: auch die zweite Anlage auf einen
-    gehaltenen Vorschlag endet mit einer Meldung, die den bestehenden Hold
-    nennt, nicht an der Eindeutigkeit der Hold-Zeile. Der Statuswechsel geschieht an der gesperrten Zeile, die
-    Instanz des Aufrufers wird nachgezogen.
+    A hold may stop a deletion that is still possible (``pending``,
+    ``deferred`` and also ``approved`` before the next deletion run). It is
+    refused on a proposal that is already held or rejected — there is nothing
+    to stop — and on an approved proposal while a newer proposal of the same
+    target is still active: only one proposal per target may be active, so the
+    hold belongs on that one (an existing hold is named as such). Every refusal
+    happens at the locked rows, before any row is written. The status changes
+    on the locked row; the caller's instance is updated afterwards.
     """
     from core.retention.proposals import (
         PROPOSAL_ALREADY_DECIDED_MESSAGE,
@@ -527,26 +542,45 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     )
 
     _assert_actor_facility(proposal, user)
-    haltbare_status = (
+    holdable_statuses = (
         RetentionProposal.Status.PENDING,
         RetentionProposal.Status.APPROVED,
         RetentionProposal.Status.DEFERRED,
     )
-    gesperrt = None
+    #: The statuses of ``unique_active_retention_proposal``.
+    active_statuses = (
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.HELD,
+        RetentionProposal.Status.DEFERRED,
+    )
+    locked = None
 
-    def _vorschlag_sperren_und_pruefen():
-        nonlocal gesperrt
-        gesperrt = (
-            RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
+    def _lock_target_proposals_and_mark_held():
+        nonlocal locked
+        target_proposals = list(
+            RetentionProposal.objects.select_for_update()
+            .filter(
+                facility=proposal.facility_id,
+                target_type=proposal.target_type,
+                target_id=proposal.target_id,
+            )
+            .order_by("pk")
         )
-        if gesperrt is None:
-            # Die Zeile liegt in der Datenbank nicht (mehr) in der Einrichtung
-            # der Instanz.
+        locked = next((row for row in target_proposals if row.pk == proposal.pk), None)
+        if locked is None:
+            # The row is not (or no longer) in the facility of the instance.
             raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
-        if gesperrt.status == RetentionProposal.Status.HELD:
+        if locked.status == RetentionProposal.Status.HELD:
             raise ValidationError(PROPOSAL_ALREADY_HELD_MESSAGE)
-        if gesperrt.status not in haltbare_status:
+        if locked.status not in holdable_statuses:
             raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+        competing = [row for row in target_proposals if row.pk != locked.pk and row.status in active_statuses]
+        if any(row.status == RetentionProposal.Status.HELD for row in competing):
+            raise ValidationError(PROPOSAL_ALREADY_HELD_MESSAGE)
+        if competing:
+            raise ValidationError(PROPOSAL_OTHER_ACTIVE_MESSAGE)
+        locked.status = RetentionProposal.Status.HELD
+        locked.save(update_fields=["status"])
 
     with transaction.atomic():
         hold = create_hold_for_target(
@@ -556,11 +590,9 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
             user=user,
             reason=reason,
             expires_at=expires_at,
-            before_write=_vorschlag_sperren_und_pruefen,
+            before_write=_lock_target_proposals_and_mark_held,
         )
-        gesperrt.status = RetentionProposal.Status.HELD
-        gesperrt.save(update_fields=["status"])
-        proposal.status = gesperrt.status
+    proposal.status = locked.status
     return hold
 
 
