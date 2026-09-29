@@ -1382,6 +1382,10 @@ def reject_client_deletion(deletion_request, reviewer):
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
+    # Einrichtungsgrenze schon VOR der Antragssperre (fail-closed ohne
+    # Einrichtung); unter der Sperre wird sie unten erneut geprueft.
+    if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
+        raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
     # Refs #2012: facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt
     # die Zeile bis zum Commit dieser Transaktion.
     deletion_request = DeletionRequest.objects.select_for_update().get(

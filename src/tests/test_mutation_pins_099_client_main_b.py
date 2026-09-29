@@ -350,7 +350,7 @@ class TestRejectClientDeletionMessages:
         assert dr_b.status == DeletionRequest.Status.PENDING
 
     def test_facility_reload_guard_discards_a_stale_in_memory_facility_assumption(
-        self, facility, second_facility, staff_user, lead_user
+        self, facility, second_facility, staff_user
     ):
         """Pin: ``x_reject_client_deletion__mutmut_15`` — ``select_for_update().get(pk=
         deletion_request.pk, facility=deletion_request.facility)`` -> ``get(pk=
@@ -361,13 +361,27 @@ class TestRejectClientDeletionMessages:
         abweichende Annahme des Aufrufers. Original: der gesperrte Reload filtert nach
         dieser (jetzt falschen) Annahme und findet die Zeile nicht — ``DoesNotExist``.
         Mutant: der Reload ignoriert die Annahme und lehnt den Antrag trotzdem ab.
+
+        Die pruefende Person gehoert zur ANGENOMMENEN Einrichtung: die
+        Einrichtungsgrenze vor der Antragssperre vergleicht mit der Annahme und
+        laesst den Aufruf bis zum gesperrten Reload durch, der die Annahme
+        verwirft (Mutant: Reload gelingt, die Grenze unter der Sperre meldet
+        die fremde Einrichtung statt ``DoesNotExist``).
         """
+        from core.models import User
+
+        reviewer = User.objects.create_user(
+            username="pin099_leitung_angenommen_b",
+            role=User.Role.LEAD,
+            facility=second_facility,
+            can_confirm_deletion=True,
+        )
         client = Client.objects.create(facility=facility, pseudonym="P-FacilityGuard")
         dr, _created = create_or_get_client_deletion_request(client, staff_user, "Grund")
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
-            reject_client_deletion(dr, lead_user)
+            reject_client_deletion(dr, reviewer)
 
         real = DeletionRequest.objects.get(pk=dr.pk)
         assert real.status == DeletionRequest.Status.PENDING
