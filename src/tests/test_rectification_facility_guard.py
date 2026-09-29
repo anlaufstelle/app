@@ -11,8 +11,8 @@ im Test ist RLS nicht aktiv, der Service ist also die einzige Grenze.
 Je Service: eine Leitung aus fremder oder ohne Einrichtung wird mit
 derselben Meldung wie in den anderen Vier-Augen-Services abgewiesen; der
 Antrag bleibt offen, die Person unveraendert, es entsteht keine Audit-Zeile.
-Die Einrichtungsgrenze steht vor den uebrigen Pruefungen — wie dort direkt
-nach der Sperre des Antrags. Der Gegen-Check mit der eigenen Leitung geht durch.
+The facility boundary comes before the other checks and, as there, before any
+row lock; it is repeated on the locked request. Der Gegen-Check mit der eigenen Leitung geht durch.
 """
 
 import pytest

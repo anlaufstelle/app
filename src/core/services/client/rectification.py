@@ -225,15 +225,46 @@ def request_rectification(client: Client, user: Any, field_path: str, new_value:
     return rr
 
 
+def _guard_reviewer_facility(rr: RectificationRequest, reviewer: Any) -> None:
+    """Facility boundary (Refs #2354): the reviewer belongs to the request's facility.
+
+    Fail-closed -- a reviewer without a facility never matches. Same message as
+    in the other four-eyes services (Refs #2321, #2338).
+    """
+    if getattr(reviewer, "facility_id", None) != rr.facility_id:
+        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
+
+
+def _lock_client_then_request(rr: RectificationRequest, reviewer: Any, clients) -> tuple[RectificationRequest, Client]:
+    """Lock the person row, then the request row, and run guards 0-3 on the locked request.
+
+    The anonymisation and the redaction repair lock the person first and write
+    the person's requests afterwards; taking the request first here could
+    deadlock against them. The unlocked, facility-scoped read of the target
+    keeps the answer for an unknown request (``DoesNotExist``) and lets the
+    reviewer's facility be refused before any row is locked, like the other
+    four-eyes services; :func:`_guard_reviewable` repeats that check on the
+    locked row.
+    """
+    target_client_id = (
+        RectificationRequest.objects.filter(pk=rr.pk, facility=rr.facility)
+        .values_list("target_client_id", flat=True)
+        .get()
+    )
+    _guard_reviewer_facility(rr, reviewer)
+    client = clients.select_for_update(of=("self",)).get(pk=target_client_id, facility=rr.facility)
+    rr = RectificationRequest.objects.select_for_update().get(pk=rr.pk, facility=rr.facility)
+    _guard_reviewable(rr, reviewer)
+    return rr, client
+
+
 def _guard_reviewable(rr: RectificationRequest, reviewer: Any) -> None:
     """Gemeinsame Guards 0–3 von Genehmigung und Ablehnung, in fester Reihenfolge.
 
-    0. Einrichtungsgrenze (Refs #2354) — der Reviewer gehoert zur Einrichtung
-       des Antrags. Wie in den uebrigen Vier-Augen-Services (Refs #2321,
-       #2338) direkt nach der Sperre des Antrags und vor der Statuspruefung:
-       einer fremden Leitung verraet die Antwort damit auch nicht, ob der
-       Antrag schon entschieden ist. Fail-closed — ohne Einrichtung keine
-       Pruefung.
+    0. Facility boundary (Refs #2354), see :func:`_guard_reviewer_facility`.
+       Checked before any row lock and again here on the locked request, ahead
+       of the status check: a reviewer from another facility does not learn
+       whether the request has already been decided.
     1. Status ``PENDING`` — ein abgeschlossener Antrag ist kein Vorgang mehr.
     2. Selbst-Review verboten (Vier-Augen-Prinzip; der DB-CheckConstraint ist
        der Backstop, diese Meldung die verstaendliche Fassung).
@@ -241,8 +272,7 @@ def _guard_reviewable(rr: RectificationRequest, reviewer: Any) -> None:
        in der View, damit auch Nicht-Formular-Aufrufer (Command, kuenftiger
        Replay) ihn passieren muessen.
     """
-    if getattr(reviewer, "facility_id", None) != rr.facility_id:
-        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
+    _guard_reviewer_facility(rr, reviewer)
     if rr.status != RectificationRequest.Status.PENDING:
         raise ValidationError(_("Dieser Berichtigungsantrag ist bereits abgeschlossen."))
     if rr.requested_by_id is not None and rr.requested_by_id == reviewer.pk:
@@ -282,17 +312,10 @@ def approve_rectification(rr: RectificationRequest, reviewer: Any, review_note: 
     das noch saehe. ``of=("self",)`` ist dabei Pflicht und nicht Kosmetik:
     ``document_type`` ist ``null=True``, ``select_related`` erzeugt also einen
     LEFT OUTER JOIN, und ein nacktes ``FOR UPDATE`` bricht unter Postgres an
-    dessen nullable Seite. Die Sperrreihenfolge (Antrag → Person) ist dieselbe
-    wie in ``approve_client_deletion`` — kein neues Deadlock-Risiko.
+    dessen nullable Seite. Lock order person -> request, the same as the
+    anonymisation (see :func:`_lock_client_then_request`).
     """
-    rr = RectificationRequest.objects.select_for_update().get(pk=rr.pk, facility=rr.facility)
-    _guard_reviewable(rr, reviewer)
-
-    client = (
-        Client.objects.select_for_update(of=("self",))
-        .select_related("document_type")
-        .get(pk=rr.target_client_id, facility=rr.facility)
-    )
+    rr, client = _lock_client_then_request(rr, reviewer, Client.objects.select_related("document_type"))
     if client.is_deleted or not client.is_active:
         # Lazy-Import: ``main`` importiert dieses Modul nicht, aber der
         # Paket-``__init__`` bindet beide — der funktionslokale Import haelt die
@@ -388,11 +411,9 @@ def reject_rectification(rr: RectificationRequest, reviewer: Any, review_note: s
     Pruefvermerk auf die bereits redigierte Zeile und entwertete die
     ADR-041-Zusage rueckwirkend. Der Client wird dafuer mitgesperrt, damit eine
     parallel laufende Anonymisierung nicht zwischen Guard und ``save()`` faellt.
+    Lock order person -> request, as in :func:`approve_rectification`.
     """
-    rr = RectificationRequest.objects.select_for_update().get(pk=rr.pk, facility=rr.facility)
-    _guard_reviewable(rr, reviewer)
-
-    client = Client.objects.select_for_update(of=("self",)).get(pk=rr.target_client_id, facility=rr.facility)
+    rr, client = _lock_client_then_request(rr, reviewer, Client.objects.all())
     if client.is_deleted or not client.is_active:
         from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 
