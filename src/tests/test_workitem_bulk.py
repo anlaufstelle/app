@@ -182,25 +182,41 @@ class TestBulkViews:
             wi.refresh_from_db()
             assert wi.assigned_to is None
 
-    def test_bulk_no_ids_returns_400(self, client, staff_user):
+    def test_bulk_no_ids_redirects_with_message(self, client, staff_user):
+        """Refs #2385: ein gewöhnliches Formular (kein ``hx-*`` in
+        ``inbox.html``) bekäme sonst eine Ganzseiten-Klartextantwort statt der
+        Inbox zurück — jetzt Redirect + Flash wie die übrigen Absagen dieser
+        View-Familie (bewusst nachgezogen, Ticket-Auftrag #2385: die
+        Assertion prüfte zuvor den rohen 400-Klartext)."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_bulk_status"),
             {"status": "done"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 302
+        assert response.url.startswith(reverse("core:workitem_inbox"))
+        assert "Keine Aufgaben ausgewählt." in str(list(get_messages(response.wsgi_request))[-1])
 
-    def test_bulk_invalid_status_returns_400(self, client, staff_user, workitems_open):
+    def test_bulk_invalid_status_redirects_with_message(self, client, staff_user, workitems_open):
+        """Bewusst nachgezogen (Ticket-Auftrag #2385): vormals 400-Klartext,
+        jetzt Redirect + Flash (siehe ``test_bulk_no_ids_redirects_with_message``)."""
         client.force_login(staff_user)
         ids = [str(wi.pk) for wi in workitems_open]
         response = client.post(
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": ids, "status": "bogus"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 302
+        assert "Ungültiger Status" in str(list(get_messages(response.wsgi_request))[-1])
+        for wi in workitems_open:
+            wi.refresh_from_db()
+            assert wi.status == WorkItem.Status.OPEN
 
     def test_bulk_facility_scope_enforced(self, client, staff_user, second_facility, workitems_open):
-        """WorkItems aus anderer Facility dürfen nicht verändert werden."""
+        """WorkItems aus anderer Facility dürfen nicht verändert werden.
+
+        Bewusst nachgezogen (Ticket-Auftrag #2385): vormals 400-Klartext,
+        jetzt Redirect + Flash (siehe ``test_bulk_no_ids_redirects_with_message``)."""
         other_user = workitems_open[0].created_by  # staff_user belongs to facility
         foreign_wi = WorkItem.objects.create(
             facility=second_facility,
@@ -215,8 +231,9 @@ class TestBulkViews:
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": ids, "status": "done"},
         )
-        # Keine passenden Items (foreign_wi ist gescoped weg) -> 400
-        assert response.status_code == 400
+        # Keine passenden Items (foreign_wi ist gescoped weg) -> Redirect + Flash
+        assert response.status_code == 302
+        assert "Keine gültigen Aufgaben gefunden." in str(list(get_messages(response.wsgi_request))[-1])
         foreign_wi.refresh_from_db()
         assert foreign_wi.status == WorkItem.Status.OPEN
 
@@ -324,18 +341,20 @@ class TestBulkViews:
         assert own.status == WorkItem.Status.OPEN
         assert foreign.status == WorkItem.Status.OPEN
 
-    def test_bulk_status_view_empty_workitem_ids_field_returns_400(self, client, staff_user, workitems_open):
-        """Explizite leere ID-Liste (``workitem_ids=[]``) → 400.
+    def test_bulk_status_view_empty_workitem_ids_field_redirects_with_message(self, client, staff_user, workitems_open):
+        """Explizite leere ID-Liste (``workitem_ids=[]``) → Redirect + Flash.
 
-        Ergänzt ``test_bulk_no_ids_returns_400`` (der das Feld komplett
-        weglässt) um den Fall, dass das Feld vorhanden aber leer ist
-        (Refs #591, WP1)."""
+        Ergänzt ``test_bulk_no_ids_redirects_with_message`` (der das Feld
+        komplett weglässt) um den Fall, dass das Feld vorhanden aber leer ist
+        (Refs #591, WP1). Bewusst nachgezogen (Ticket-Auftrag #2385): vormals
+        400-Klartext."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": [], "status": "done"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 302
+        assert "Keine Aufgaben ausgewählt." in str(list(get_messages(response.wsgi_request))[-1])
 
 
 @pytest.mark.django_db
@@ -997,6 +1016,28 @@ class TestBulkForbiddenPreservesSelection:
         assert f"forbidden={foreign.pk}" in response.url
         assert f"forbidden={own.pk}" not in response.url
 
+    def test_forbidden_redirect_preserves_original_selection_order(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Refs #2385: mehrere blockierende Items erscheinen im
+        ``forbidden``-Redirect in der ursprünglichen Auswahlreihenfolge (dem
+        ``workitem_ids``-Feld), nicht in der DB-Lesereihenfolge — sonst würde
+        die Inbox die Auswahl in vertauschter Reihenfolge markieren."""
+        first = self._foreign(facility, staff_user, lead_user)
+        second = self._foreign(facility, staff_user, lead_user)
+        third = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        submitted_order = [third.pk, first.pk, second.pk]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(pk) for pk in submitted_order], "status": "done"},
+        )
+        assert response.status_code == 302
+        forbidden_params = [
+            part.split("=")[1] for part in response.url.split("?", 1)[1].split("&") if part.startswith("forbidden=")
+        ]
+        assert forbidden_params == [str(pk) for pk in submitted_order]
+
     def test_forbidden_htmx_redirect_carries_blocking_ids(
         self, client, facility, staff_user, lead_user, assistant_user
     ):
@@ -1104,14 +1145,18 @@ class TestBulkSelectionCap:
     ]
 
     @pytest.mark.parametrize(("url_name", "extra"), ENDPOINTS)
-    def test_oversize_selection_returns_400_and_mutates_nothing(
+    def test_oversize_selection_redirects_with_message_and_mutates_nothing(
         self, client, staff_user, workitems_open, url_name, extra
     ):
-        """Auswahl > Cap → 400 mit der eigenen Meldung, ohne jede Mutation.
+        """Auswahl > Cap → Redirect + Flash mit der eigenen Meldung, ohne
+        jede Mutation.
 
         Die drei **echten** IDs muessen mit in der Liste stehen: ohne sie fiele
-        der Request schon heute in den bestehenden 400-Pfad ``"Keine gueltigen
-        Aufgaben gefunden."`` und der Test waere vor wie nach dem Fix gruen.
+        der Request schon heute in den bestehenden Absage-Pfad ``"Keine
+        gueltigen Aufgaben gefunden."`` und der Test waere vor wie nach dem
+        Fix gruen. Bewusst nachgezogen (Ticket-Auftrag #2385): vormals
+        400-Klartext statt Redirect (``inbox.html`` ruft diese Views ueber
+        gewoehnliche Formulare ohne ``hx-*`` auf).
         """
         client.force_login(staff_user)
         ids = [str(wi.pk) for wi in workitems_open] + [str(uuid.uuid4()) for _ in range(WORKITEM_BULK_MAX_IDS)]
@@ -1119,8 +1164,8 @@ class TestBulkSelectionCap:
 
         response = client.post(reverse(url_name), {"workitem_ids": ids, **extra})
 
-        assert response.status_code == 400
-        assert "Zu viele" in response.content.decode()
+        assert response.status_code == 302
+        assert "Zu viele" in str(list(get_messages(response.wsgi_request))[-1])
         for wi in workitems_open:
             wi.refresh_from_db()
             assert wi.status == WorkItem.Status.OPEN
@@ -1147,8 +1192,10 @@ class TestBulkSelectionCap:
             wi.refresh_from_db()
             assert wi.status == WorkItem.Status.DONE
 
-    def test_malformed_uuid_returns_400_not_500(self, client, staff_user, workitems_open):
-        """Ein kaputter ID-Wert → 400 statt 500, und nichts wird veraendert."""
+    def test_malformed_uuid_redirects_with_message_not_500(self, client, staff_user, workitems_open):
+        """Ein kaputter ID-Wert → Redirect + Flash statt 500, nichts wird
+        veraendert. Bewusst nachgezogen (Ticket-Auftrag #2385): vormals
+        400-Klartext statt Redirect."""
         client.force_login(staff_user)
 
         response = client.post(
@@ -1156,7 +1203,7 @@ class TestBulkSelectionCap:
             {"workitem_ids": [str(workitems_open[0].pk), "nicht-eine-uuid"], "status": "done"},
         )
 
-        assert response.status_code == 400
-        assert "Ungültige ID im Payload." in response.content.decode()
+        assert response.status_code == 302
+        assert "Ungültige ID im Payload." in str(list(get_messages(response.wsgi_request))[-1])
         workitems_open[0].refresh_from_db()
         assert workitems_open[0].status == WorkItem.Status.OPEN

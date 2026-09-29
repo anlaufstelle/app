@@ -10,6 +10,7 @@ Refs #949.
 """
 
 import pytest
+from django.contrib.messages import get_messages
 from django.urls import reverse
 
 
@@ -42,21 +43,26 @@ class TestWorkItemBulkStatusViewHTMX:
 
 @pytest.mark.django_db
 class TestWorkItemBulkPriorityValidation:
-    def test_invalid_priority_returns_400(self, client, staff_user, workitem):
-        """Line 107: Priority nicht in ``WorkItem.Priority.values`` -> 400."""
+    def test_invalid_priority_redirects_with_message(self, client, staff_user, workitem):
+        """Line 107: Priority nicht in ``WorkItem.Priority.values`` -> Redirect
+        + Flash (bewusst nachgezogen, Ticket-Auftrag #2385: vormals
+        400-Klartext — ``inbox.html`` ruft diese View ueber ein gewoehnliches
+        Formular ohne ``hx-*`` auf)."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:workitem_bulk_priority"),
             {"workitem_ids": [str(workitem.pk)], "priority": "ULTRA_HIGH"},
         )
-        assert response.status_code == 400
-        assert b"Priorit" in response.content  # "Ungültige Priorität"
+        assert response.status_code == 302
+        assert "Priorit" in str(list(get_messages(response.wsgi_request))[-1])  # "Ungültige Priorität"
 
 
 @pytest.mark.django_db
 class TestWorkItemBulkAssignUnknownUser:
-    def test_unknown_assignee_returns_400(self, client, staff_user, workitem):
-        """Lines 123-124: ``User.DoesNotExist`` -> 400 mit "Unbekannte Benutzerin/Benutzer"."""
+    def test_unknown_assignee_redirects_with_message(self, client, staff_user, workitem):
+        """Lines 123-124: ``User.DoesNotExist`` -> Redirect + Flash mit
+        "Unbekannte Benutzerin/Benutzer" (bewusst nachgezogen, Ticket-Auftrag
+        #2385: vormals 400-Klartext)."""
         import uuid
 
         client.force_login(staff_user)
@@ -64,8 +70,8 @@ class TestWorkItemBulkAssignUnknownUser:
             reverse("core:workitem_bulk_assign"),
             {"workitem_ids": [str(workitem.pk)], "assigned_to": str(uuid.uuid4())},
         )
-        assert response.status_code == 400
-        assert b"Unbekannte" in response.content
+        assert response.status_code == 302
+        assert "Unbekannte" in str(list(get_messages(response.wsgi_request))[-1])
 
 
 @pytest.mark.django_db
