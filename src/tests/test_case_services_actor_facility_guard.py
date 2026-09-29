@@ -18,8 +18,19 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, User
-from core.models.outcome import OutcomeGoal
-from core.services.case import close_case, create_case, create_goal, reopen_case, update_case, update_goal
+from core.models.outcome import Milestone, OutcomeGoal
+from core.services.case import (
+    achieve_goal,
+    close_case,
+    create_case,
+    create_goal,
+    reopen_case,
+    toggle_milestone,
+    unachieve_goal,
+    update_case,
+    update_goal,
+)
+from core.services.case.state_contract import STATUS_CHANGE_GONE_MESSAGE
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
@@ -192,3 +203,102 @@ class TestUpdateGoal:
 
         assert OutcomeGoal.objects.get(pk=outcome_goal.pk).title == "Neu"
         assert AuditLog.objects.filter(action=AuditLog.Action.GOAL_UPDATE, target_id=str(outcome_goal.pk)).count() == 1
+
+
+_PERSON, _FALL, _ZIEL, _MEILENSTEIN = "core_client", "core_case", "core_outcomegoal", "core_milestone"
+
+
+def _fehlend_abgewiesen(aufruf):
+    """Das Objekt fehlt schon beim Vorlesen: Absage des Zustandsvertrags, keine Sperre, keine Spur."""
+    spuren = _spuren()
+    with mitschnitt() as m, pytest.raises(ValidationError) as excinfo:
+        aufruf()
+    assert excinfo.value.messages == [STATUS_CHANGE_GONE_MESSAGE]
+    assert _spuren() == spuren
+    assert m.sperrfolge() == []
+
+
+def _zielstatus(goal_id):
+    return OutcomeGoal.objects.values_list("is_achieved", "achieved_at").get(pk=goal_id)
+
+
+def _ziel_mit_status(goal_id, erreicht):
+    OutcomeGoal.objects.filter(pk=goal_id).update(
+        is_achieved=erreicht, achieved_at=timezone.localdate() if erreicht else None
+    )
+    return OutcomeGoal.objects.get(pk=goal_id)
+
+
+#: (Dienst, Ausgangsstatus ``is_achieved``)
+_ZIELSTATUSWECHSEL = [
+    pytest.param(achieve_goal, False, id="erreichen"),
+    pytest.param(unachieve_goal, True, id="zuruecknehmen"),
+]
+
+
+class TestGoalStatus:
+    """Erreichen und Zuruecknehmen eines Wirkungsziels."""
+
+    @pytest.mark.parametrize(("dienst", "erreicht"), _ZIELSTATUSWECHSEL)
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, dienst, erreicht, outcome_goal):
+        user = request.getfixturevalue(akteur)
+        ziel = _ziel_mit_status(outcome_goal.pk, erreicht)
+        vorher = _zielstatus(outcome_goal.pk)
+
+        _abgewiesen_ohne_sperre(lambda: dienst(ziel, user))
+
+        assert _zielstatus(outcome_goal.pk) == vorher
+
+    @pytest.mark.parametrize(("dienst", "erreicht"), _ZIELSTATUSWECHSEL)
+    @pytest.mark.parametrize("akteur", [*_AKTEURE, "staff_user"])
+    def test_fehlendes_ziel_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, dienst, erreicht, outcome_goal):
+        user = request.getfixturevalue(akteur)
+        ziel = _ziel_mit_status(outcome_goal.pk, erreicht)
+        OutcomeGoal.objects.filter(pk=outcome_goal.pk).delete()
+
+        _fehlend_abgewiesen(lambda: dienst(ziel, user))
+
+        assert not OutcomeGoal.objects.filter(pk=outcome_goal.pk).exists()
+
+    @pytest.mark.parametrize(("dienst", "erreicht"), _ZIELSTATUSWECHSEL)
+    def test_eigene_einrichtung_wechselt_den_status(self, dienst, erreicht, outcome_goal, staff_user):
+        ziel = _ziel_mit_status(outcome_goal.pk, erreicht)
+
+        with mitschnitt() as m:
+            dienst(ziel, staff_user)
+
+        assert m.sperrfolge()[:3] == [_PERSON, _FALL, _ZIEL]
+        assert _zielstatus(outcome_goal.pk)[0] is (not erreicht)
+
+
+def _meilensteinstatus(milestone_id):
+    return Milestone.objects.values_list("is_completed", "completed_at").get(pk=milestone_id)
+
+
+class TestToggleMilestone:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, milestone):
+        user = request.getfixturevalue(akteur)
+        vorher = _meilensteinstatus(milestone.pk)
+
+        _abgewiesen_ohne_sperre(lambda: toggle_milestone(Milestone.objects.get(pk=milestone.pk), user))
+
+        assert _meilensteinstatus(milestone.pk) == vorher
+
+    @pytest.mark.parametrize("akteur", [*_AKTEURE, "staff_user"])
+    def test_fehlender_meilenstein_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, milestone):
+        user = request.getfixturevalue(akteur)
+        alt = Milestone.objects.get(pk=milestone.pk)
+        Milestone.objects.filter(pk=milestone.pk).delete()
+
+        _fehlend_abgewiesen(lambda: toggle_milestone(alt, user))
+
+        assert not Milestone.objects.filter(pk=milestone.pk).exists()
+
+    def test_eigene_einrichtung_schaltet_um(self, milestone, staff_user):
+        with mitschnitt() as m:
+            toggle_milestone(Milestone.objects.get(pk=milestone.pk), staff_user)
+
+        assert m.sperrfolge()[:4] == [_PERSON, _FALL, _ZIEL, _MEILENSTEIN]
+        assert _meilensteinstatus(milestone.pk) == (True, timezone.localdate())
