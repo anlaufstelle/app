@@ -127,6 +127,7 @@ services:
       # Siehe ``init``: leer heisst "Schluessel aus ``localstate`` nehmen".
       ENCRYPTION_KEY: "${ENCRYPTION_KEY:-}"
       LOCAL_ENCRYPTION_KEY_FILE: /home/appuser/encryption.key
+      SUPPORT_CONTACT: ${SUPPORT_CONTACT-}
     depends_on:
       db:
         condition: service_healthy
