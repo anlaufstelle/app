@@ -546,21 +546,35 @@ deps-lock:
 	$(PYTHON) -m piptools compile --generate-hashes --allow-unsafe --no-strip-extras --resolver=backtracking \
 		--output-file=requirements-dev.txt requirements-dev.in
 
-# Verifiziert, dass requirements*.txt aktuell zu requirements*.in ist.
-# Schlägt fehl, wenn ein Regen erforderlich wäre — wird in CI genutzt.
-# Ansatz: Datei sichern, regenerieren, mit git-diff vergleichen, Original wiederherstellen.
+# Verify regenerated dependency locks without leaving generated files behind.
+# Compilation failures and content drift are distinct non-zero outcomes.
 deps-check:
-	@cp requirements.txt requirements.txt.bak && \
-		cp requirements-dev.txt requirements-dev.txt.bak && \
-		$(PYTHON) -m piptools compile --generate-hashes --quiet --no-strip-extras --resolver=backtracking \
-			--output-file=requirements.txt requirements.in >/dev/null && \
-		$(PYTHON) -m piptools compile --generate-hashes --allow-unsafe --quiet --no-strip-extras --resolver=backtracking \
-			--output-file=requirements-dev.txt requirements-dev.in >/dev/null && \
-		drift=0; \
+	@cleanup() { \
+			if [ -f requirements.txt.bak ]; then mv requirements.txt.bak requirements.txt; fi; \
+			if [ -f requirements-dev.txt.bak ]; then mv requirements-dev.txt.bak requirements-dev.txt; fi; \
+		}; \
+	trap cleanup EXIT HUP INT TERM; \
+	cp requirements.txt requirements.txt.bak || exit $$?; \
+	cp requirements-dev.txt requirements-dev.txt.bak || exit $$?; \
+	drift=0; \
+	$(PYTHON) -m piptools compile --generate-hashes --quiet --no-strip-extras --resolver=backtracking \
+		--output-file=requirements.txt requirements.in >/dev/null; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		echo "pip-tools compile for requirements.in failed with exit code $$status." >&2; \
+		exit $$status; \
+	fi; \
+	$(PYTHON) -m piptools compile --generate-hashes --allow-unsafe --quiet --no-strip-extras --resolver=backtracking \
+		--output-file=requirements-dev.txt requirements-dev.in >/dev/null; \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		echo "pip-tools compile for requirements-dev.in failed with exit code $$status." >&2; \
+		exit $$status; \
+	fi; \
 		diff -u requirements.txt.bak requirements.txt || drift=1; \
 		diff -u requirements-dev.txt.bak requirements-dev.txt || drift=1; \
-		mv requirements.txt.bak requirements.txt && \
-		mv requirements-dev.txt.bak requirements-dev.txt && \
+		cleanup; \
+		trap - EXIT HUP INT TERM; \
 		if [ $$drift -ne 0 ]; then \
 			echo "Lock-Files sind nicht aktuell — 'make deps-lock' ausführen."; \
 			exit 1; \

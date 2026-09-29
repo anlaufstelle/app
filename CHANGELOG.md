@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Abhängigkeits-Prüflauf meldet Erzeugungsfehler zuverlässig** (#1904) — Das Prüfziel für die Lock-Dateien meldet einen gescheiterten Erzeugungslauf jetzt als Fehler und stellt die vorhandenen Dateien wieder her.
 - **Trockenlauf der Historien-Aufbewahrung zählt wie der echte Lauf** (#2188) — `enforce_retention --dry-run` meldete Historienzeilen als „zu redigieren“, obwohl eine Aufbewahrungssperre am Fall sie im echten Lauf zurückstellt. Trockenlauf und Lauf entscheiden jetzt nach derselben Regel; die Vorschau nennt die Zahlen, die der Lauf danach erzeugt.
 - **Mail-Variablen im Dev-Compose** (#2388) — Der Dev-Webcontainer erhält die konfigurierten SMTP-Variablen, sodass Versand per `.env.dev` geprüft und genutzt werden kann.
 - **Seed-Flush nach Personen-Zusammenführungen** (#2389) — `seed --flush` löscht zusammengeführte Personen wieder vollständig, und ein fehlgeschlagener stündlicher Demo-Reset wird mit Zeitstempel und Exit-Code sichtbar.
