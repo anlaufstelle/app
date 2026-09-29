@@ -20,6 +20,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
    - 2.11 [CSV-Import und -Export: Formelschutz](#211-csv-import-und--export-formelschutz)
 3. [Backup und Wiederherstellung](#3-backup-und-wiederherstellung)
 4. [Updates](#4-updates)
+   - 4.1 [Veröffentlichungen verfolgen](#41-veröffentlichungen-verfolgen)
 5. [Monitoring](#5-monitoring)
    - 5.4 [CSP-Debugging](#54-csp-debugging)
    - 5.5 [Compliance-Dashboard](#55-compliance-dashboard)
@@ -1338,7 +1339,13 @@ docker compose "${compose_files[@]}" up -d
 
 ## 4. Updates
 
-### 4.1 Neues Image ziehen und Stack aktualisieren
+### 4.1 Veröffentlichungen verfolgen
+
+Neue veröffentlichte Versionen erscheinen auf der [GitHub-Release-Seite](https://github.com/anlaufstelle/app/releases); deren [Atom-Feed](https://github.com/anlaufstelle/app/releases.atom) lässt sich ohne GitHub-Konto in einem Feed-Reader abonnieren. Mit einem GitHub-Konto kann unter **Beobachten → Benutzerdefiniert → Veröffentlichungen** ausschließlich dieser Hinweis abonniert werden. Prüfen Sie den Kanal empfohlen einmal pro Woche und immer vor einem geplanten Update. Lesen Sie vor jeder Aktualisierung im CHANGELOG des Zielstands besonders den Abschnitt **„Erforderliche Betreiber-Aktionen“** und arbeiten Sie ihn vor beziehungsweise während des Deployments ab.
+
+Bis zum 1.0-Cut sind neue öffentliche Veröffentlichungen ausgesetzt; die Release-Seite und der Feed zeigen deshalb nur tatsächlich bereits veröffentlichte Stände und nicht jeden internen Release-Kandidaten.
+
+### 4.2 Neues Image ziehen und Stack aktualisieren
 
 Migrationen laufen als separater One-Shot-Job **vor** dem Neustart des `web`-Dienstes — dieser führt beim Start selbst keine Migrationen mehr aus (Refs #802). Details siehe die kanonische Quelle [`docs/ops-runbook.md` § 1.2](ops-runbook.md#12-deploy-schritte).
 
@@ -1369,12 +1376,12 @@ Mit eingerichteter Zusatzdatei verwenden Sie denselben oben aufgebauten vollstä
 docker compose "${compose_files[@]}" logs web --tail=50
 ```
 
-### 4.2 Vor einem Update
+### 4.3 Vor einem Update
 
 - Erstellen und verifizieren Sie immer eine aktuelle Datenbank- und Mediensicherung (siehe [Abschnitte 3.1–3.2](#31-verschlüsselte-datenbank--und-mediensicherung)).
 - Lesen Sie das Changelog zu Breaking Changes und erforderlichen Konfigurationsänderungen.
 
-### 4.3 Rollback
+### 4.4 Rollback
 
 Falls nach einem Update Probleme auftreten:
 
