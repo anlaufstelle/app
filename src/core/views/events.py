@@ -1418,10 +1418,15 @@ class EventDeleteView(StaffRequiredMixin, View):
             except ValidationError as exc:
                 # The service decides under the person and event row locks and
                 # names the cause itself (legal hold, a person binding changed
-                # by a parallel merge, a restriction set after the check above). No
-                # second look at the event: every refusal leaves it in place,
+                # by a parallel merge, a restriction set after the check above,
+                # a parallel request that deleted the event first). No second
+                # look at the event: an event deleted in the meantime has no
+                # page any more, so that refusal leads to the overview like a
+                # deletion does; every other refusal leaves the event in place,
                 # so its page is the way back. Any other error propagates.
                 messages.error(request, "; ".join(exc.messages))
+                if getattr(exc, "code", None) == "event_already_deleted":
+                    return redirect("core:zeitstrom")
                 return redirect("core:event_detail", pk=event.pk)
             messages.success(request, _("Ereignis wurde gelöscht."))
 
