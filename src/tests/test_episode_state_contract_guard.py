@@ -26,7 +26,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, Episode, User
-from core.services.case.episodes import create_episode
+from core.services.case.episodes import create_episode, update_episode
 from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, CASE_WRITE_REDACTED_MESSAGE
 from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
@@ -153,3 +153,75 @@ class TestCreateEpisode:
         frisch = Episode.objects.get(pk=episode.pk)
         assert (frisch.case_id, frisch.title, frisch.description) == (case_open.pk, "Neu", "Text")
         assert frisch.created_by_id == staff_user.pk
+
+
+def _episode_geloescht(episode_id):
+    Episode.objects.filter(pk=episode_id).update(is_deleted=True, deleted_at=timezone.now())
+
+
+def _episodenstand(episode_id):
+    return Episode.objects.filter(pk=episode_id).values_list("title", "description", "ended_at").get()
+
+
+class TestUpdateEpisode:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremder_akteur_wird_vor_jeder_sperre_abgewiesen(self, request, akteur, episode):
+        user = request.getfixturevalue(akteur)
+        vorher = _episodenstand(episode.pk)
+
+        _abgewiesen(lambda: update_episode(Episode.objects.get(pk=episode.pk), user, title="Fremd"), _FALL_FREMD, [])
+
+        assert _episodenstand(episode.pk) == vorher
+
+    def test_unzulaessiges_feld_behaelt_vorrang_vor_der_einrichtungsgrenze(self, episode, fremde_fachkraft):
+        with pytest.raises(ValueError, match="darf nicht aktualisiert werden"):
+            update_episode(Episode.objects.get(pk=episode.pk), fremde_fachkraft, case=None)
+
+    @pytest.mark.parametrize(("zustand", "meldung", "sperrfolge"), AKTENZUSTAENDE)
+    def test_veraltete_akte_wird_abgewiesen(self, zustand, meldung, sperrfolge, episode, staff_user):
+        alt = Episode.objects.select_related("case").get(pk=episode.pk)
+        vorher = _episodenstand(episode.pk)
+        zustand(alt.case_id, alt.case.client_id)
+
+        _abgewiesen(lambda: update_episode(alt, staff_user, title="Veraltet"), meldung, sperrfolge)
+
+        assert _episodenstand(episode.pk) == vorher
+
+    def test_geloeschte_episode_wird_abgewiesen(self, episode, staff_user):
+        alt = Episode.objects.get(pk=episode.pk)
+        vorher = _episodenstand(episode.pk)
+        _episode_geloescht(episode.pk)
+
+        _abgewiesen(
+            lambda: update_episode(alt, staff_user, title="Geloescht"),
+            CASE_WRITE_GONE_MESSAGE,
+            [_PERSON, _FALL, _EPISODE],
+        )
+
+        assert _episodenstand(episode.pk) == vorher
+
+    def test_umhaengen_zwischen_vorlesen_und_sperre(self, episode, staff_user, andere_person):
+        alt = Episode.objects.get(pk=episode.pk)
+        vorher = _episodenstand(episode.pk)
+        spuren = _spuren()
+        with mitschnitt() as m, pytest.raises(ValidationError) as excinfo:
+            _umhaengen_nach_personensperre(m, alt.case_id, andere_person)
+            update_episode(alt, staff_user, title="Umgehaengt")
+        assert m.offene_schranken() == []
+        assert excinfo.value.messages == [CASE_WRITE_GONE_MESSAGE]
+        assert _spuren() == spuren
+        assert _episodenstand(episode.pk) == vorher
+
+    def test_aufruf_ohne_felder_laeuft_nach_dem_vertrag(self, episode, staff_user):
+        alt = Episode.objects.select_related("case").get(pk=episode.pk)
+        _fall_im_papierkorb(alt.case_id, alt.case.client_id)
+
+        _abgewiesen(lambda: update_episode(alt, staff_user), CASE_WRITE_REDACTED_MESSAGE, [_PERSON, _FALL])
+
+    def test_eigene_einrichtung_schreibt_nach_der_sperrfolge(self, episode, staff_user):
+        with mitschnitt() as m:
+            update_episode(Episode.objects.get(pk=episode.pk), staff_user, title="Neu")
+
+        assert m.sperrfolge()[:3] == [_PERSON, _FALL, _EPISODE]
+        assert _episodenstand(episode.pk)[0] == "Neu"
+        assert AuditLog.objects.filter(action=AuditLog.Action.EPISODE_UPDATE, target_id=str(episode.pk)).count() == 1
