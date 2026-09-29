@@ -28,6 +28,7 @@ from unfold.forms import AuthenticationForm as UnfoldAuthenticationForm
 from unfold.sites import UnfoldAdminSite
 
 from core.services.security import is_in_sudo
+from core.services.security.sudo_mode import sudo_url
 
 
 def _admin_login_username_key(group, request):
@@ -255,7 +256,10 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
             and getattr(settings, "SUDO_MODE_ENABLED", True)
             and not is_in_sudo(request)
         ):
-            return redirect(f"/sudo/?next={request.get_full_path()}")
+            # Refs #2328: ``next`` kodiert — der Pfad der Admin-Anmeldung
+            # traegt selbst ein kodiertes ``next`` mit Query, das sonst beim
+            # Sudo-Schritt zerfiele.
+            return redirect(sudo_url(request.get_full_path()))
         return super().login(request, extra_context)
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from html.parser import HTMLParser
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from django.test import override_settings
@@ -122,7 +123,7 @@ class TestFacilitySettingsView:
 
         assert response.status_code == 302
         assert response.url.startswith(reverse("sudo_mode"))
-        assert "next=/verwaltung/einstellungen/" in response.url
+        assert parse_qs(urlsplit(response.url).query)["next"] == ["/verwaltung/einstellungen/"]
 
     def test_post_updates_through_service_and_writes_one_minimized_audit_row(self, client, admin_user, settings_obj):
         client.force_login(admin_user)

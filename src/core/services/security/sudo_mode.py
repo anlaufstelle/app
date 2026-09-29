@@ -83,8 +83,9 @@ def clear_sudo(request) -> None:
 class RequireSudoModeMixin:
     """View-Mixin: redirected zu ``/sudo/`` wenn nicht im SudoMode.
 
-    Der ``next``-Query-Parameter zeigt auf die Originalseite, sodass
-    nach erfolgreicher Re-Auth direkt dorthin zurueckgesprungen wird.
+    Der ``next``-Query-Parameter zeigt auf die Originalseite (URL-kodiert,
+    ``sudo_url``), sodass nach erfolgreicher Re-Auth direkt dorthin
+    zurueckgesprungen wird.
     Reihenfolge: nach LoginRequiredMixin/Role-Mixin (sonst sieht der
     Anonymous-Pfad zuerst die Sudo-Form).
     """
@@ -99,8 +100,9 @@ class RequireSudoModeMixin:
             return super().dispatch(request, *args, **kwargs)
         if is_in_sudo(request):
             return super().dispatch(request, *args, **kwargs)
-        sudo_url = reverse("sudo_mode") + f"?next={request.get_full_path()}"
-        return redirect(sudo_url)
+        # Refs #2328: ``next`` kodiert — sonst endete das Ziel nach dem
+        # Sudo-Schritt am zweiten Query-Parameter.
+        return redirect(sudo_url(request.get_full_path()))
 
 
 def sudo_redirect_if_required(request) -> HttpResponseRedirect | None:
@@ -113,8 +115,7 @@ def sudo_redirect_if_required(request) -> HttpResponseRedirect | None:
     ``RequireSudoModeMixin.dispatch``: Setting-Toggle ``SUDO_MODE_ENABLED``
     (Default aktiv), anonyme Anfrage und laufendes Sudo-Fenster ergeben
     ``None``, sonst geht es auf ``/sudo/`` mit ``next`` = voller Pfad samt
-    Query. Anders als im Mixin ist ``next`` URL-kodiert, damit eine Query mit
-    mehreren Parametern den Sudo-Schritt vollstaendig uebersteht.
+    Query, URL-kodiert (``sudo_url``).
     """
     if not is_sudo_required(request):
         return None
