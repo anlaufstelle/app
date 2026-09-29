@@ -249,3 +249,71 @@ describe("#2382 — Offline-Personenansicht reagiert auf den Widerruf", () => {
         root.remove();
     });
 });
+
+// Refs #2385: follow-up finding from the #2382 lane (u-bericht.md:186) —
+// checked whether the remaining ``lastSyncResult = "pending"`` assignments
+// are missing a "discarded" state the same way the revocation itself was.
+// The four offline branches in saveCreate/saveEdit/saveCreateWorkItem/
+// saveEditWorkItem are harmless (applyClientRevocations only fires the event
+// after a SUCCESSFUL fetch, so never while genuinely offline). Only
+// ``_reflectReplay`` can race with a revocation arriving in the meantime: the
+// replay was already running (navigator.onLine), the revocation arrives
+// while it's in flight and fully discards the person, but the long-running
+// replay then overwrites the freshly set "discarded" state with "pending"
+// again.
+describe("Refs #2385 — a later-arriving replay result no longer overwrites 'discarded'", () => {
+    it("keeps 'discarded' when a revocation arriving during the replay finishes before its network failure", async () => {
+        const root = componentRoot();
+        const component = makeComponent(root);
+        component.lastSyncResult = "pending";
+
+        let getCalls = 0;
+        window.offlineClient = {
+            getOfflineClient: vi.fn(async () => {
+                getCalls += 1;
+                // 1st call: saveEdit()'s own immediate reload ("not
+                // synchronized yet") — the revocation hasn't happened yet.
+                if (getCalls === 1) {
+                    return { pk: PK_X, events: [], cases: [], workitems: [], documentTypes: [] };
+                }
+                // From the 2nd call on (the revocation recheck and its own
+                // rebuild): the person is already purged.
+                return null;
+            }),
+        };
+
+        let resolveReplay;
+        const replayPromise = new Promise((resolve) => {
+            resolveReplay = resolve;
+        });
+        window.offlineEdit = {
+            markEventModified: vi.fn(async () => ({ pk: "event-1" })),
+            replayModifiedEvent: vi.fn(() => replayPromise),
+        };
+        Object.defineProperty(window.navigator, "onLine", { configurable: true, value: true });
+
+        const ev = {
+            pk: "event-1",
+            data_fields: {},
+            occurred_at: "",
+            document_type_name: "",
+            document_type_pk: "",
+            updated_at: "",
+        };
+        const savePromise = component.saveEdit(ev);
+        await vi.waitFor(() => expect(window.offlineEdit.replayModifiedEvent).toHaveBeenCalled());
+
+        // The revocation arrives WHILE the replay is still in flight, and
+        // completes fully before the replay fails.
+        fireRevocation();
+        await vi.waitFor(() => expect(component.lastSyncResult).toBe("discarded"));
+
+        // Only AFTER that does the long-running replay attempt fail on the
+        // network — the person no longer exists locally at this point.
+        resolveReplay({ status: "network-error" });
+        await savePromise;
+
+        expect(component.lastSyncResult).toBe("discarded");
+        root.remove();
+    });
+});
