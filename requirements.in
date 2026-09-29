@@ -26,9 +26,9 @@ python-dotenv>=1.2.3
 # 70.0 bewusst gezogen: CVE-2026-55073 (write_pdf() ignorierte den
 # uebergebenen url_fetcher in zwei Kanaelen), SSRF-/Export-Tests gegen 70.0 gruen.
 weasyprint>=70.0,<71
-django-unfold>=0.107.0
+django-unfold>=0.108.0
 django-csp>=4.0
-sentry-sdk[django]>=2.66.0
+sentry-sdk[django]>=2.70.0
 pyclamd>=0.4.0
 django-otp>=1.7.3
 # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Zieht
