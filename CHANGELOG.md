@@ -821,7 +821,7 @@ Auf 0.23.0 folgte unmittelbar 0.80.0; dazwischen wurden keine Versionen veröffe
 ### Erforderliche Betreiber-Aktionen
 
 - **Host-Crontab bereinigen** (#794) — Siehe den Hinweis im Eintrag „Hintergrundjobs laufen ab Werk“; die sechs nun containerseitigen Jobs vor dem ersten Start des Sidecars aus der Host-Crontab entfernen.
-- **Redis-Ressourcen einplanen** (#795) — Siehe den Hinweis im Eintrag „Redis als Standard-Cache-Backend im prod-Compose“; rund 512 MB zusätzlichen Arbeitsspeicher vorsehen oder Redis ausdrücklich deaktivieren.
+- **Redis-Ressourcen berücksichtigen** (#795) — Siehe den Hinweis im Eintrag „Redis als Standard-Cache-Backend im prod-Compose“; rund 512 MB zusätzlichen Arbeitsspeicher vorsehen oder Redis ausdrücklich deaktivieren.
 - **Datenbank-Ownership umziehen** (#1026) — Siehe den Hinweis im Security-Eintrag zur getrennten Runtime-DB-Rolle; auf bestehenden Installationen den einmaligen Ownership-Umzug aus dem Runbook ausführen.
 
 ### Added
