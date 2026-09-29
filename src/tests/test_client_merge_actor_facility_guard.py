@@ -219,7 +219,10 @@ class TestZusammenfuehrungsAntragEntscheiden:
         pending_merge_request.refresh_from_db()
         assert pending_merge_request.status != DeletionRequest.Status.PENDING
         assert pending_merge_request.reviewed_by_id == lead_user.pk
-        assert abfragen.sperrfolge()[0] == "core_deletionrequest"
+        # The approval locks both persons before the request (same order as
+        # the anonymisation); the rejection locks only the request.
+        expected_first_lock = "core_client" if service is approve_client_merge else "core_deletionrequest"
+        assert abfragen.sperrfolge()[0] == expected_first_lock
 
 
 # ---------------------------------------------------------------------------

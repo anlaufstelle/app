@@ -255,6 +255,30 @@ def create_or_get_client_merge_request(source, target, user, reason):
     return dr, True
 
 
+def _lock_persons_then_merge_request(deletion_request):
+    """Lock the source and target person rows, then the request row, and return the locked request.
+
+    The anonymisation cascades (``anonymize_client`` and the k-anonymisation
+    bridge of the retention run) lock a person first and write the deletion
+    requests that name this person as their target afterwards -- a merge
+    request names its source. The retention run also reaches persons outside
+    the trash, so a pending merge request can meet it. Taking the request
+    first here could deadlock against them. Both persons are locked in one
+    statement in PK order, like :func:`_locked_clients`; the processing
+    restriction gate and the fresh reads stay with that helper after the
+    request checks, so the answers keep their order. The unlocked,
+    facility-scoped read keeps the answer for an unknown request
+    (``DoesNotExist``).
+    """
+    person_ids = (
+        DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+        .values_list("target_id", "merge_into_id")
+        .get()
+    )
+    lock_clients(person_ids, facility=deletion_request.facility_id)
+    return DeletionRequest.objects.select_for_update().get(pk=deletion_request.pk, facility=deletion_request.facility)
+
+
 @transaction.atomic
 def approve_client_merge(deletion_request, reviewer):
     """Genehmigt einen Merge-Antrag und fuehrt die Zusammenfuehrung aus.
@@ -271,6 +295,10 @@ def approve_client_merge(deletion_request, reviewer):
     Alt-Duplikate darf keinen Breach-Alarm ausloesen (Modul-Docstring).
     Dasselbe Muster faehrt der Personen-Loeschpfad (nur die Domaenen-Zeile,
     anders als der Ereignis-/Fall-Pfad).
+
+    Lock order: both person rows first, then the request
+    (:func:`_lock_persons_then_merge_request`), the same order the
+    anonymisation takes.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
@@ -282,9 +310,8 @@ def approve_client_merge(deletion_request, reviewer):
     if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
         raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
 
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
+    # Both person rows first, then the request (see the helper).
+    deletion_request = _lock_persons_then_merge_request(deletion_request)
     # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
     # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
     # Geprueft gegen die FRISCH GESPERRTE Zeile und vor jedem Schreibzugriff;
