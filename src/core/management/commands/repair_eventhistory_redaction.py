@@ -22,26 +22,55 @@ Bestand zu melden.
     python manage.py repair_eventhistory_redaction
     python manage.py repair_eventhistory_redaction --facility "Hauptstelle"
     python manage.py repair_eventhistory_redaction --apply
+
+``--target`` (Refs #2188) extends the check to the same damage on events,
+persons and cases: until v0.95.0 the rotation could also write ``data_json``
+back into a soft-deleted event, an anonymised person or an anonymised case.
+``--target all`` runs person, case, event and event history in this order.
+Without ``--target`` the command checks the event history only, as before.
+The role requirement applies per table: the connection must bypass RLS and
+own every table it repairs.
+
+    python manage.py repair_eventhistory_redaction --target all
+    python manage.py repair_eventhistory_redaction --target all --apply
 """
 
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Facility
 from core.retention.eventhistory_repair import HISTORY_TABLE, RepairResult, repair_eventhistory_redaction
+from core.retention.redaction_repair import REPAIRS, TABLES
 
 # Als Modul-Name re-exportiert, damit Tests die Pruefung auf Command-Ebene
 # patchen koennen (Muster ``cleanup_orphan_storage_files``).
 from core.services.system import current_connection_owns as _current_connection_owns
 from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
+TARGET_HISTORY = "eventhistory"
+TARGET_ALL = "all"
+#: Every stock with its table and repair, in the canonical order person -> case -> event -> history.
+STEPS = {
+    **{target: (TABLES[target], repair) for target, repair in REPAIRS.items()},
+    TARGET_HISTORY: (HISTORY_TABLE, repair_eventhistory_redaction),
+}
+
 
 class Command(BaseCommand):
     help = (
-        "Findet Zeilen der Ereignis-Historie, die als redigiert ausgewiesen sind, aber wieder "
-        "Werte tragen, und heilt sie mit --apply (Standard: Trockenlauf)."
+        "Finds rows marked as redacted that carry values again — the event history by default, "
+        "events, persons and cases with --target — and repairs them with --apply (default: dry run)."
     )
 
     def add_arguments(self, parser):
+        parser.add_argument(
+            "--target",
+            choices=[*STEPS, TARGET_ALL],
+            default=TARGET_HISTORY,
+            help=(
+                "Stock to check: eventhistory (default), client, case, event, or all "
+                "(client, case, event, eventhistory in this order)."
+            ),
+        )
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -60,6 +89,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if options["target"] != TARGET_HISTORY:
+            self._handle_target(options)
+            return
         # Refs #1016 A1.1: fail-loud VOR dem ersten Lesen, auch im Trockenlauf.
         if not _has_rls_bypass_context():
             raise CommandError(
@@ -113,4 +145,65 @@ class Command(BaseCommand):
         return (
             f"gefunden {result.found}, geheilt {result.repaired}, "
             f"zurückgestellt (Legal Hold) {result.deferred}, übersprungen {result.skipped}"
+        )
+
+    def _handle_target(self, options):
+        """``--target``: the same checks per selected table, English output with a stock label."""
+        target = options["target"]
+        steps = list(STEPS) if target == TARGET_ALL else [target]
+        # Fail loud before the first read, in the dry run as well.
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "The check runs as an RLS-filtered app role without bypass context (neither a "
+                "SUPERUSER/BYPASSRLS role nor the app.is_super_admin session variable). Aborted "
+                "before reading any row — detection would otherwise see no row and falsely report "
+                "clean data. Run again with the admin database role."
+            )
+        not_owned = [STEPS[step][0] for step in steps if not _current_connection_owns(STEPS[step][0])]
+        if not_owned:
+            raise CommandError(
+                f"The database connection does not own {', '.join(not_owned)}. An RLS bypass "
+                "(BYPASSRLS or the app.is_super_admin session variable) is not enough: only the "
+                "owner can repair these rows. Aborted before reading any row. Run again with the "
+                "admin/owner database role."
+            )
+        if options["dry_run"] and options["apply"]:
+            raise CommandError("--dry-run and --apply are mutually exclusive.")
+        dry_run = not options["apply"]
+
+        facilities = Facility.objects.order_by("name")
+        facility_name = options["facility"]
+        if facility_name:
+            facilities = facilities.filter(name=facility_name)
+            if not facilities.exists():
+                raise CommandError(f"Facility '{facility_name}' not found.")
+
+        overall = RepairResult()
+        for step in steps:
+            repair = STEPS[step][1]
+            total = RepairResult()
+            for facility in facilities:
+                result = repair(facility, dry_run=dry_run)
+                total.merge(result)
+                self.stdout.write(f"[{step}] Facility '{facility.name}': {self._english_counts(result, dry_run)}.")
+            self.stdout.write(f"[{step}] Total: {self._english_counts(total, dry_run)}.")
+            overall.merge(total)
+
+        if dry_run:
+            self.stdout.write("Dry run — nothing changed. Run again with --apply to repair (admin DB role).")
+            return
+        if overall.deferred:
+            self.stdout.write("A later run repairs deferred rows once the legal hold ends.")
+        if overall.skipped:
+            self.stdout.write(
+                "Skipped rows were locked or have been redacted meanwhile; a later run checks them again."
+            )
+
+    @staticmethod
+    def _english_counts(result, dry_run):
+        if dry_run:
+            return f"found {result.found}, of which deferred (legal hold) {result.deferred}"
+        return (
+            f"found {result.found}, repaired {result.repaired}, "
+            f"deferred (legal hold) {result.deferred}, skipped {result.skipped}"
         )

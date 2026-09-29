@@ -615,6 +615,21 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --apply # heilen
 
+# Dieselbe Pruefung fuer Ereignisse, Personen und Faelle (Refs #2188): bis
+# v0.95.0 konnte die Rotation auch data_json eines geloeschten Ereignisses,
+# einer anonymisierten Person oder eines anonymisierten Falls mit den alten
+# Werten zurueckschreiben. --target all prueft Person, Fall, Ereignis und
+# Historie in dieser Reihenfolge (einzeln: --target client|case|event|
+# eventhistory; ohne --target nur die Historie). --apply leert data_json wie
+# die regulaere Redaktion, laesst Loesch-/Anonymisierungszeitpunkt stehen und
+# schreibt je Zeile einen Nachweis (DELETE, Kategorie event_repaired,
+# client_repaired bzw. case_repaired). Die Verbindung MUSS jede gepruefte
+# Tabelle besitzen — sonst fail-loud vor dem ersten Lesen.
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction --target all # Trockenlauf
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction --target all --apply # heilen
+
 # Facility-Export (Refs #1060, M4 / DSGVO Art. 20): kompletter fachlicher
 # Datenbestand EINER Einrichtung als versioniertes JSON (Schema v1, Referenz
 # docs/facility-export-schema.md). MUSS mit der Admin-DB-Rolle laufen

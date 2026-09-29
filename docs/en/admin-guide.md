@@ -3,6 +3,7 @@
 > Synchronization update 2026-09-29: § 7.3 "Retention of the Event History" adds the one-time check and repair of history versions that carry a redaction timestamp but still hold values (`repair_eventhistory_redaction`, #2188).
 > Synchronization update 2026-09-29: § 2.7 states that after setting up 2FA again only the new TOTP device's code is accepted, no longer the previous device's (#2328).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that adding a passkey requires sudo mode and that the settings page leads through the sudo page first (#2328).
+> Synchronization update 2026-09-29: § 7.3 "Retention of the Event History" adds the one-time check and repair of history versions that carry a redaction timestamp but still hold values (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target`).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that setting up 2FA again while a confirmed factor exists requires sudo mode, first-time setup does not, and the backup-code pages require a session confirmed with the second factor (#2328).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
 > Synchronization update 2026-09-23: § 1.2 marks `ENCRYPTION_KEY` as deprecated and adds the migration from a single key to a key ring (`core.W005`, #2240).
@@ -1897,6 +1898,14 @@ The first run after the update may take longer than usual: it works through the 
 - **Then repair with `--apply`:** under a row lock, the affected versions receive the redaction marker the retention run wrote back then (the anonymization marker for an anonymized person). The timestamp of the original redaction stays, so the stage 2 period does not shift. Every repaired version leaves its own entry in the audit log (action "Event history redacted", category `eventhistory_repaired`). Versions under a legal hold stay unchanged; a later call after the hold ends repairs them. A second run finds 0.
 - **Admin DB role only** (maintenance service, like `enforce_retention`): under the app role the command aborts instead of reporting clean data. The calls are listed in the [operations runbook § 3.5](ops-runbook.md#35-manual-execution).
 
+**The same check for events, persons and cases** (#2188). Up to version 0.95, key rotation also wrote the additional fields of events, persons and cases back without a row lock. If it ran at the same time as a deletion or anonymization, a deleted event, an anonymized person or an anonymized case could get its old values back in freshly encrypted form. The record then stays deleted or anonymized — and because every run only touches records that are not yet done, none catches up on it. With `repair_eventhistory_redaction --target all` the same command checks these three stocks in addition to the history, in the order person, case, event, history; individually with `--target client`, `case`, `event` or `eventhistory`. Without `--target` it checks the history only, as before.
+
+- **Dry run and `--apply` as above.** The output is in English and reports `found`, `repaired`, `deferred (legal hold)` and `skipped` per stock and facility.
+- **The repair restores exactly the state that deletion or anonymization leaves:** empty additional fields, and for an event also an empty search index. The deletion or anonymization timestamp stays. The not yet deleted event of an anonymized person is checked as well, because the anonymization empties its content too.
+- **Legal hold as on the respective deletion path:** an event stays unchanged under a hold on the event, its person or its case; a person under a hold on the person, one of their events or one of their cases; a case under a hold on the case, one of its events or its person.
+- **Every repaired row leaves its own entry** in the audit log (action "Deletion", category `event_repaired`, `client_repaired` or `case_repaired`). If a run repairs many rows in one facility at once, the mass deletion detection (`BREACH_DELETE_THRESHOLD`) may fire — that is then this run.
+- **The connection must own every table it checks** (admin DB role). An RLS bypass alone is not enough; without ownership the command aborts before it reads a single row.
+
 #### K-Anonymization Instead of Hard Delete
 
 As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs #535).
@@ -2312,4 +2321,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: 0ca8a5dc2aa0a3cce0129a7ba55383b440f772d5 -->
+<!-- source-hash: c9da23da35d3e5921fd2f0f564588cfecdafd3d8 -->

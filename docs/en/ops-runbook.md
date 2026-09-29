@@ -1,5 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
-> Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188).
+> Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
 > Synchronization update 2026-09-29: § 5.8 documents that the dev Compose stack passes mail variables to `web` and how to verify SMTP handoff (#2388).
 > Synchronization update 2026-09-29: § 3.1 documents the per-run media cleanup budget, fair continuation, dry-run behavior, and reported counters (#2376).
 > Synchronization update 2026-09-23: § 6.6 explains how to restore an anchorless older set on a host with `DJANGO_AUDIT_HWM_PATH` configured and states that this run provides no compliance evidence (#2362).
@@ -637,6 +637,20 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction # dry run
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   repair_eventhistory_redaction --apply # repair
+
+# The same check for events, persons and cases (Refs #2188): up to v0.95.0
+# the rotation could also write the old values back into data_json of a
+# deleted event, an anonymized person or an anonymized case. --target all
+# checks person, case, event and history in this order (individually:
+# --target client|case|event|eventhistory; without --target the history
+# only). --apply empties data_json like the regular redaction, keeps the
+# deletion/anonymization timestamp and writes one proof per row (DELETE,
+# category event_repaired, client_repaired or case_repaired). The connection
+# MUST own every table it checks — otherwise fail-loud before the first read.
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction --target all # dry run
+docker compose -f docker-compose.prod.yml run --rm maintenance \
+  repair_eventhistory_redaction --target all --apply # repair
 
 # Facility export (Refs #1060, M4 / GDPR Art. 20): a facility's complete domain
 # data as a versioned JSON (schema v1, reference
@@ -2974,5 +2988,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: 69ec3125b20468a6deb301e0ae8fb6fa0b2258db -->
+<!-- source-hash: fd835c5c1361f85547922281a306f088fcc71feb -->
 <!-- translation-date: 2026-09-22 -->
