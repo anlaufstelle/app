@@ -126,9 +126,9 @@ def _select_choices(ft, initial_data, select_type):
     bei SELECT wird die Leer-Option vorangestellt. Wirkungs-identisch zum
     frueheren Inline-Block in :meth:`DynamicDataForm.__init__`.
 
-    Refs #2381 (Nachtrag): die Leer-Option traegt denselben deutschen
-    Platzhalter wie das feste Dokumentationstyp-Feld
-    (:class:`core.forms.events.EventMetaForm`) statt des Rohtexts
+    Refs #2381 (follow-up): the empty option now carries the same German
+    placeholder as the fixed document-type field
+    (:class:`core.forms.events.EventMetaForm`) instead of the raw text
     ``"---------"``.
     """
     choices = [("", _("— Bitte auswählen —"))] + list(ft.choices) if ft.field_type == select_type else list(ft.choices)
