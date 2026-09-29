@@ -515,6 +515,94 @@ class TestDeploymentDbSecretBoundary:
             )
 
 
+class TestServerErrorSupportContactAcrossAllStacks:
+    """Refs #1904: the 500-page operator contact must reach every stack that
+    runs this application, not only the ones an example env file happens to
+    document already.
+
+    ``TestDeploymentDbSecretBoundary`` above only walks
+    ``_deployment_compose_paths()`` (prod, dev, and demo when present) and,
+    in ``test_documented_runtime_variables_stay_in_allowlist``, derives its
+    expected variable set from each stack's own example env file. Both
+    choices leave it blind here: staging, the private Barbara stack, and the
+    local quick-start stack are never visited at all, and a variable missing
+    from *both* the compose file and its example file looks consistent
+    instead of broken. This guard pins the setting explicitly, independent
+    of any example file, and walks every stack whose ``web`` service starts
+    this Django application directly by path — including the three stacks
+    the boundary guard above never reaches.
+
+    ``docker-compose.staging.yml``, ``docker-compose.demo.yml``, their
+    example env files, and the entire ``dev-ops/`` tree (the private Barbara
+    stack) are stripped from the public release snapshot
+    (``dev-ops/release/build-release.sh``); a stack or example file missing
+    for that reason is skipped rather than failed, the same way the existing
+    pull-policy and env-template guards already handle it.
+    """
+
+    # Refs #1904: the setting(s) settings/base.py reads from the environment
+    # purely to render the 500 page (see core/views/errors.py, _support_contact).
+    # Hardcoded on purpose: deriving this from an example env file would only
+    # ever be as complete as that file, which is exactly the gap this guard
+    # closes.
+    _ERROR_PAGE_ENV_SETTINGS = frozenset({"SUPPORT_CONTACT"})
+
+    # Every compose file whose web service starts this application, paired
+    # with the example env file that documents its runtime variables (None
+    # when the stack has no example file of its own — the local quick-start
+    # stack below hardcodes its non-secret values inline).
+    _STACKS = (
+        (Path("docker-compose.yml"), None),
+        (Path("docker-compose.dev.yml"), Path(".env.dev.example")),
+        (Path("docker-compose.demo.yml"), Path(".env.demo.example")),
+        (Path("docker-compose.staging.yml"), Path(".env.staging.example")),
+        (Path("docker-compose.prod.yml"), Path(".env.example")),
+        (
+            Path("dev-ops/deploy/barbara/docker-compose.barbara.yml"),
+            Path("dev-ops/deploy/barbara/.env.barbara.example"),
+        ),
+    )
+
+    @staticmethod
+    def _web_environment(compose_path: Path) -> dict:
+        services = yaml.safe_load(compose_path.read_text(encoding="utf-8"))["services"]
+        return services["web"].get("environment", {})
+
+    def test_all_six_web_starting_stacks_are_covered(self) -> None:
+        """Guards the guard: this list must not silently shrink again."""
+        assert [str(path) for path, _example in self._STACKS] == [
+            "docker-compose.yml",
+            "docker-compose.dev.yml",
+            "docker-compose.demo.yml",
+            "docker-compose.staging.yml",
+            "docker-compose.prod.yml",
+            "dev-ops/deploy/barbara/docker-compose.barbara.yml",
+        ]
+
+    @pytest.mark.parametrize("compose_path,example_path", _STACKS)
+    def test_error_page_settings_reach_the_web_container(self, compose_path: Path, example_path: Path | None) -> None:
+        if not compose_path.exists():
+            pytest.skip(f"{compose_path} is stripped from the public release snapshot (Refs #1904).")
+        environment = self._web_environment(compose_path)
+        missing = self._ERROR_PAGE_ENV_SETTINGS - set(environment)
+        assert not missing, (
+            f"{compose_path}: web is missing the 500-page setting(s) {sorted(missing)} "
+            "in its environment list (Refs #1904)."
+        )
+
+    @pytest.mark.parametrize("compose_path,example_path", _STACKS)
+    def test_error_page_settings_are_documented_in_the_example_env(
+        self, compose_path: Path, example_path: Path | None
+    ) -> None:
+        if example_path is None:
+            pytest.skip(f"{compose_path} has no example env file of its own (Refs #1904).")
+        if not example_path.exists():
+            pytest.skip(f"{example_path} is stripped from the public release snapshot (Refs #1904).")
+        documented = set(re.findall(r"^([A-Z][A-Z0-9_]*)=", example_path.read_text(encoding="utf-8"), re.MULTILINE))
+        missing = self._ERROR_PAGE_ENV_SETTINGS - documented
+        assert not missing, f"{example_path}: missing documentation for {sorted(missing)} (Refs #1904)."
+
+
 class TestReadmeQuickStart:
     """Refs #1894/#1977/#1062: Der Compose-Quick-Start muss wirklich funktionieren.
 
