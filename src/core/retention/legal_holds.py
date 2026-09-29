@@ -6,7 +6,7 @@ gegen Loeschung; orthogonal zu Vorschlaegen und Enforcement).
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -534,6 +534,13 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     hold belongs on that one (an existing hold is named as such). Every refusal
     happens at the locked rows, before any row is written. The status changes
     on the locked row; the caller's instance is updated afterwards.
+
+    The lock cannot see a proposal that a proposal run inserts for the same
+    target and has not committed yet. The status write then waits for it and
+    fails on ``unique_active_retention_proposal``; exactly that conflict is
+    answered like a visible competing proposal (``ValidationError`` with
+    ``PROPOSAL_OTHER_ACTIVE_MESSAGE``), and the whole creation rolls back. Any
+    other integrity error propagates unchanged.
     """
     from core.retention.proposals import (
         PROPOSAL_ALREADY_DECIDED_MESSAGE,
@@ -553,6 +560,7 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         RetentionProposal.Status.HELD,
         RetentionProposal.Status.DEFERRED,
     )
+    active_proposal_constraint = "unique_active_retention_proposal"
     locked = None
 
     def _lock_target_proposals_and_mark_held():
@@ -580,7 +588,20 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         if competing:
             raise ValidationError(PROPOSAL_OTHER_ACTIVE_MESSAGE)
         locked.status = RetentionProposal.Status.HELD
-        locked.save(update_fields=["status"])
+        try:
+            with transaction.atomic():
+                locked.save(update_fields=["status"])
+        except IntegrityError as exc:
+            # A proposal run inserted a new active proposal of the target after
+            # the lock above; the database waited for it and refuses a second
+            # active proposal. That is the competition refused above, only not
+            # visible yet — same answer, and the caller's transaction rolls
+            # back without a hold or an audit row. The cause is the database's
+            # own verdict on this write, not a second read.
+            diagnostics = getattr(exc.__cause__, "diag", None)
+            if getattr(diagnostics, "constraint_name", None) != active_proposal_constraint:
+                raise
+            raise ValidationError(PROPOSAL_OTHER_ACTIVE_MESSAGE) from exc
 
     with transaction.atomic():
         hold = create_hold_for_target(
