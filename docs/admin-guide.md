@@ -1456,6 +1456,8 @@ docker compose -f docker-compose.prod.yml logs -f web
 docker stats
 ```
 
+Die Container-Logs sind in allen mitgelieferten Compose-Dateien begrenzt und rotieren automatisch; Werte, Wirkung und Anpassung beschreibt das [Betriebshandbuch § 4](ops-runbook.md#4-log-analyse).
+
 ### 5.4 CSP-Debugging
 
 Die Content-Security-Policy (CSP) wird **zentral in Django** über [`django-csp`](https://django-csp.readthedocs.io/) gesetzt (siehe [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py), `CONTENT_SECURITY_POLICY`). Die frühere redundante CSP-Konfiguration im Caddyfile wurde entfernt — nur so ist sichergestellt, dass App- und Reverse-Proxy-Policy nicht auseinanderlaufen.

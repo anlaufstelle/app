@@ -1,5 +1,7 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
 > Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188), and the same check for deleted events and anonymized persons and cases (`--target all`).
+> Synchronization update 2026-09-29: § 4 documents the bounded Compose container logs, their effect on `docker compose logs`, and site-specific overrides (#1904).
+> Synchronization update 2026-09-29: § 3.5 adds the one-time dry run and repair of event history rows that carry a redaction timestamp but no redaction marker (`repair_eventhistory_redaction`, #2188).
 > Synchronization update 2026-09-29: § 5.8 documents that the dev Compose stack passes mail variables to `web` and how to verify SMTP handoff (#2388).
 > Synchronization update 2026-09-29: § 3.1 documents the per-run media cleanup budget, fair continuation, dry-run behavior, and reported counters (#2376).
 > Synchronization update 2026-09-23: § 6.6 explains how to restore an anchorless older set on a host with `DJANGO_AUDIT_HWM_PATH` configured and states that this run provides no compliance evidence (#2362).
@@ -744,6 +746,8 @@ docker compose -f docker-compose.prod.yml logs -f db
 # Logs since a specific point in time
 docker compose -f docker-compose.prod.yml logs --since="2026-03-30T08:00:00" web
 ```
+
+The delivered Compose files use the `json-file` driver with `max-size: "10m"` and `max-file: "5"` for every service, limiting each service's container log to approximately 50 MB. `docker compose logs` exposes only this current and rotated set; older container log lines are discarded. To use different limits, add a dedicated `logging` block for each affected service in `compose.override.yml`, then recreate that container with `docker compose … up -d`.
 
 ### 4.2 JSON Logging Format
 
@@ -2988,5 +2992,5 @@ Check lock-file drift make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.1 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: fd835c5c1361f85547922281a306f088fcc71feb -->
+<!-- source-hash: cad994b95c0007a0b208539191d0becc547d855c -->
 <!-- translation-date: 2026-09-22 -->

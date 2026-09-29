@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
-- Keine.
+- **Compose-Logrotation übernehmen** (#1904) — Die aktualisierte Compose-Datei auf den Host übernehmen und `docker compose … up -d` ausführen, damit die Container mit den neuen Loggrenzen neu angelegt werden.
 
 ### Added
 
@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Hinweis an den Freitextfeldern „Ziel“ und „Notiz“** (#2181) — Frauenhaus, Beratungsstelle und Standardkatalog zeigen an beiden unverschlüsselten Freitextfeldern den Hinweis, keine Adressen, Klarnamen oder Verfahrensdaten einzutragen; bestehende Einrichtungen erhalten ihn beim erneuten Einspielen des Pakets.
+- **Container-Logs sind in allen Compose-Stacks begrenzt** (#1904) — Jeder Dienst rotiert sein Container-Log nach 10 MB und bewahrt höchstens fünf Dateien auf, statt den verfügbaren Plattenplatz unbegrenzt zu belegen.
 - **Paket-Sichtbarkeit scheitert beim Release sichtbar** (#1904) — Ein fehlendes Sichtbarkeits-Secret oder ein Fehler beim Umschalten des Containerpakets macht den abschließenden Release-Schritt jetzt rot und nennt den manuellen Weg über die Paketeinstellungen.
 - **Abhängigkeiten aktualisiert (Dependabot-Sammel-Batch)** ([#2393](https://github.com/anlaufstelle/app/pull/2393), [#2394](https://github.com/anlaufstelle/app/pull/2394), [#2395](https://github.com/anlaufstelle/app/pull/2395), [#2396](https://github.com/anlaufstelle/app/pull/2396), [#2397](https://github.com/anlaufstelle/app/pull/2397), [#2398](https://github.com/anlaufstelle/app/pull/2398), [#2400](https://github.com/anlaufstelle/app/pull/2400), [#2401](https://github.com/anlaufstelle/app/pull/2401)) — `django-test-migrations` 1.6.0 → 1.7.0, `django-unfold` 0.107.0 → 0.108.0, `sentry-sdk[django]` 2.66.1 → 2.70.0, `ruff` 0.16.7 → 0.16.9, `idna` 3.19 → 3.20, `filelock` 3.32.4 → 4.0.3, `htmx.org` 2.0.10 → 2.0.11 und `@alpinejs/csp` 3.17.3 → 3.17.4 sowie der GitHub-Actions-Pin für CodeQL 4.38.1 → 4.38.2; `undici` 7.29.0 → 7.30.0 (GHSA-3wwx-pv8p-q78v, nur Test-Werkzeugkette); `jsdom` 29.1.1 → 30.1.1 bleibt offen, weil die JavaScript-Tests mit Node 20.19 nicht starten.
 - **Medienbaum-Aufräumung arbeitet mit festem Laufbudget** (#2376) — Der periodische Lauf prüft pro Aufruf höchstens 10.000 verschlüsselte Dateien, setzt beim nächsten Lauf fair fort und bietet einen zustandsneutralen Trockenlauf; ein einzelner Lauf deckt große Medienbäume daher nicht mehr zwingend vollständig ab.

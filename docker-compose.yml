@@ -14,10 +14,17 @@
 # Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden — dort
 # gibt es weder Auto-Seed noch ``SEED_ALLOWED``; die Ersteinrichtung laeuft ueber
 # ``manage.py create_super_admin`` (docs/admin-guide.md § 1).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 name: anlaufstelle-dev
 
 services:
   db:
+    logging: *default-logging
     image: postgres:18-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa
     environment:
       POSTGRES_DB: anlaufstelle
@@ -45,6 +52,7 @@ services:
   # Demo-Stacks migrieren weiterhin ueber den getrennten One-Shot-Job
   # ``docker-migrate.sh`` und seeden nie automatisch.
   init:
+    logging: *default-logging
     build: .
     # Gemeinsames Tag mit ``web``: derselbe Build-Kontext, dasselbe Image —
     # ohne ``image:`` legte Compose zwei getrennte Tags an und baute zweimal.
@@ -81,6 +89,7 @@ services:
         condition: service_healthy
 
   web:
+    logging: *default-logging
     build: .
     image: anlaufstelle-local:latest
     # ./src:/app verdeckt den Image-Entrypoint. Dev startet deshalb bewusst
@@ -139,6 +148,7 @@ services:
       retries: 3
 
   tailwind:
+    logging: *default-logging
     image: node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
     working_dir: /app
     volumes:
@@ -148,6 +158,7 @@ services:
       - tailwind
 
   clamav:
+    logging: *default-logging
     image: clamav/clamav:stable@sha256:6f4a9e7d616ffc8d1070200fe35ac860735fdd522161a1043f94856e6ee13c28
     # Opt-in per Profil (Refs #1062): ``CLAMAV_ENABLED`` ist im lokalen
     # web-Dienst ungesetzt, der Scanner also ohnehin unbenutzt. Als

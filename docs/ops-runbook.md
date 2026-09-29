@@ -723,6 +723,8 @@ docker compose -f docker-compose.prod.yml logs -f db
 docker compose -f docker-compose.prod.yml logs --since="2026-03-30T08:00:00" web
 ```
 
+Die mitgelieferten Compose-Dateien verwenden für jeden Dienst den Treiber `json-file` mit `max-size: "10m"` und `max-file: "5"`; damit belegt das Container-Log je Dienst höchstens ungefähr 50 MB. `docker compose logs` zeigt nur diesen aktuellen und rotierten Bestand, ältere Container-Logzeilen werden verworfen. Abweichende Grenzen lassen sich in `compose.override.yml` je Dienst mit einem eigenen `logging`-Block setzen; anschließend muss der betroffene Container mit `docker compose … up -d` neu angelegt werden.
+
 ### 4.2 JSON-Logging-Format
 
 Mit `LOG_FORMAT=json` in `.env` gibt Django strukturierte JSON-Logs aus:
