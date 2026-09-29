@@ -150,22 +150,24 @@ def verify_backup_code(user, token: str) -> bool:
 
 
 def current_totp_device(user) -> TOTPDevice | None:
-    """Das geltende bestaetigte TOTP-Geraet des Kontos: das zuletzt eingerichtete.
+    """The account's TOTP device that every check point verifies: the oldest confirmed one.
 
-    Refs #2328: Ein Faktorwechsel richtet ein neues Geraet ein, die Quittung
-    der neuen Backup-Codes bestaetigt es. ``.first()`` ohne Ordering nahm das
-    aelteste (niedrigste pk) — der Code des neuen Geraets wurde bei Anmeldung,
-    Sudo und Neuerzeugen nie geprueft, das alte blieb allein gueltig. Ab der
-    Bestaetigung gilt das neue Geraet und ersetzt das alte, wie der neue
-    Backup-Code-Satz den alten; die Quittung (``MFABackupCodesView.post``)
-    entfernt das ersetzte Geraet in derselben Transaktion. Mehrere bestaetigte
-    Geraete gibt es danach nur noch im Altbestand von vor dieser Regel.
+    Refs #2328: sign-in, sudo (and with it the admin area) and backup-code
+    regeneration all call this helper. Up to v0.99.1 they took ``.first()`` on
+    an unordered queryset, i.e. the lowest primary key; accounts that ended up
+    with several confirmed devices have been signing in with that device ever
+    since, so it stays the one that counts -- an update must not lock them
+    out. A factor change does not depend on this order: its confirmation step
+    checks the code against the new, still unconfirmed device, and the
+    acknowledgement of the new backup codes (``MFABackupCodesView.post``)
+    confirms it and removes every other confirmed TOTP device in the same
+    transaction. After a completed change the account has exactly one.
 
-    Genau EIN Geraet, nicht alle: django-otp raet von der Pruefung gegen jedes
-    Geraet ab (``match_token``), weil dann jeder Fehlschlag jedes Geraet
-    drosselt — wer ein Geraet benutzt, sperrte schrittweise das andere.
+    Exactly ONE device, not all of them: django-otp advises against checking
+    every device (``match_token``), because each failure then throttles every
+    device -- using one device would gradually lock the other.
     """
-    return TOTPDevice.objects.filter(user=user, confirmed=True).order_by("-pk").first()
+    return TOTPDevice.objects.filter(user=user, confirmed=True).order_by("pk").first()
 
 
 def _has_totp_form(token: str, device: TOTPDevice) -> bool:
