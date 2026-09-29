@@ -68,6 +68,82 @@ def _ensure_pending_proposal(e2e_env):
     return pks[0]
 
 
+def _ensure_number_tally_type(e2e_env):
+    """Legt EINEN Dokumentationstyp mit Zahlen-Pflichtfeld für die Strichliste an.
+
+    Eigene Wegwerfdaten (Kennung im Namen) statt Bestandstypen, damit die
+    Karte auf der Zeitstrom-Seite eindeutig per Testid gefunden wird — Muster
+    ``_ensure_pending_proposal`` oben.
+    """
+    kennung = uuid.uuid4().hex[:8]
+    code = (
+        "from core.models import DocumentType, DocumentTypeField, Facility, FieldTemplate; "
+        "f = Facility.objects.get(name='Hauptstelle'); "
+        f"dt = DocumentType.objects.create(facility=f, name='HTMX4XX-Zahl-{kennung}', tally_enabled=True); "
+        f"ft = FieldTemplate.objects.create(facility=f, name='Ausgabe-{kennung}', "
+        "  field_type=FieldTemplate.FieldType.NUMBER, is_required=True); "
+        "DocumentTypeField.objects.create(document_type=dt, field_template=ft); "
+        "print('doc_type=' + str(dt.pk))"
+    )
+    result = subprocess.run(
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+    )
+    pks = [ln.removeprefix("doc_type=") for ln in result.stdout.splitlines() if ln.startswith("doc_type=")]
+    assert len(pks) == 1, f"Seed failed: {result.stderr}\n{result.stdout}"
+    return pks[0]
+
+
+def _disable_tally_opt_in(e2e_env, document_type_pk):
+    """Simuliert eine Konfigurationsänderung in einem parallelen Tab/Fenster."""
+    code = (
+        "from core.models import DocumentType; "
+        f"DocumentType.objects.filter(pk='{document_type_pk}').update(tally_enabled=False)"
+    )
+    result = subprocess.run(
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Seed-Mutation fehlgeschlagen: {result.stderr}\n{result.stdout}"
+
+
+class TestTallyAbbrechenFuerDeaktiviertenTypBleibtStehen:
+    def test_absage_laesst_karte_stehen_und_zeigt_hinweis(self, lead_page, base_url, e2e_env):
+        document_type_pk = _ensure_number_tally_type(e2e_env)
+        page = lead_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+
+        karte = page.locator(f"#tally-action-{document_type_pk}")
+        expect(karte).to_be_visible(timeout=5000)
+        karte.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
+        cancel_link = karte.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
+        expect(cancel_link).to_be_visible(timeout=5000)
+
+        # Ein anderer Tab deaktiviert den Typ, während das Werte-Formular offen bleibt.
+        _disable_tally_opt_in(e2e_env, document_type_pk)
+
+        with page.expect_response(lambda r: "cancel=1" in r.url) as info:
+            cancel_link.click()
+        response = info.value
+
+        assert response.status == 400, response.status
+        assert response.headers.get("hx-reswap") == "none"
+
+        # Die Karte ist nicht durch den Meldungstext ersetzt worden — das
+        # Werte-Formular ist weiterhin da (kein Swap wegen HX-Reswap: none).
+        expect(karte).to_be_visible(timeout=5000)
+        expect(cancel_link).to_be_visible()
+        assert "nicht für die Strichliste freigegeben" not in karte.inner_text()
+
+        toast = page.locator(_TOAST)
+        expect(toast).to_be_visible(timeout=5000)
+        expect(toast).to_contain_text("nicht für die Strichliste freigegeben")
+
+
 class TestStatisticsUngueltigerZeitraumBleibtStehen:
     def test_absage_laesst_dashboard_stehen_und_zeigt_hinweis(self, lead_page, base_url):
         page = lead_page

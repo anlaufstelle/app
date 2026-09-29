@@ -6,6 +6,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
+from django.contrib.messages import get_messages
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -299,8 +300,12 @@ class TestTallyLiveContextView:
                 {"document_type": document_type.pk, "date": "2026-06-20"},
             )
 
-        assert response.status_code == 400
-        assert "Anonyme Kontakte im aktuellen Zeitfenster" in response.content.decode()
+        # Refs #2385: a plain navigation (no HX-Request) no longer gets the
+        # refusal as a full-page plain-text body; it returns to the app with
+        # the message on the messages framework instead.
+        assert response.status_code == 302
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        assert "Anonyme Kontakte im aktuellen Zeitfenster" in messages
 
     @pytest.mark.parametrize(
         ("raw_params", "is_live"),
@@ -357,9 +362,13 @@ class TestTallyLiveContextView:
                 HTTP_HX_REQUEST="true",
             )
 
-        expected_status = 200 if is_live else 400
-        assert get_response.status_code == expected_status
-        assert post_response.status_code == expected_status
+        # Refs #2385: the GET link has no HX-Request header on a plain
+        # navigation, so its refusal redirects instead of returning the old
+        # full-page plain-text 400; the HX-driven POST keeps its 400.
+        expected_get_status = 200 if is_live else 302
+        expected_post_status = 200 if is_live else 400
+        assert get_response.status_code == expected_get_status
+        assert post_response.status_code == expected_post_status
         assert Event.objects.filter(document_type=direct_type).count() == int(is_live)
 
     @pytest.mark.parametrize(
