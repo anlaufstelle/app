@@ -13,6 +13,7 @@ from core.models import Activity, AuditLog, Case, DocumentType
 from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
 from core.services.case.state_contract import (
     EVENT_WRITE_GONE_MESSAGE,
+    _raise_if_clients_revoked,
     lock_case_for_status_change,
     lock_case_for_write,
     lock_event_for_case_link,
@@ -103,11 +104,21 @@ def create_case(facility, user, client, title, description="", lead_user=None, d
         raise ValidationError(_("Fälle müssen einer Person zugeordnet sein."))
     if client.facility_id != facility.pk:
         raise ValueError(_("Person gehört nicht zur Einrichtung."))
+    # Einrichtungsgrenze der handelnden Person vor jeder Sperre (Muster
+    # :func:`assign_event_to_case`); fail-closed ohne Einrichtung.
+    if getattr(user, "facility_id", None) != facility.pk:
+        raise ValidationError(_("Fall gehört zu einer anderen Einrichtung."))
     from core.services.client.restriction import assert_processing_allowed
 
     # Art.-18-Gate (Refs #2045): ein neuer Fall ist neue inhaltliche
     # Verarbeitung, nicht Speicherung des Bestands.
     assert_processing_allowed(client, lock=True)
+    # Widerruf der Person auf der eben gesperrten Zeile: die Instanz stammt
+    # aus einem Lesevorgang vor der Sperre. Eine Person im Papierkorb (auch
+    # die Quelle einer Zusammenfuehrung) oder eine anonymisierte Person
+    # bekommt keinen neuen Fall. Gelesen, nicht erneut gesperrt — eine zweite
+    # Sperrform daneben waere eine zweite Ordnung.
+    _raise_if_clients_revoked([client.pk], facility.pk)
     if lead_user and lead_user.facility_id != facility.pk:
         raise ValueError(_("Fallverantwortlicher gehört nicht zur Einrichtung."))
 
