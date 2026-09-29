@@ -380,7 +380,7 @@ def _lock_activity_and_check(facility, target_id):
     return False
 
 
-def create_hold_for_target(facility, *, target_type, target_id, user, reason, expires_at=None):
+def create_hold_for_target(facility, *, target_type, target_id, user, reason, expires_at=None, before_write=None):
     """Legt einen Legal Hold OHNE Retention-Vorschlag an (Refs #1818, ADR-044 §5).
 
     ``LegalHold.target_type`` ist ein freies ``CharField`` ohne ``choices`` —
@@ -422,6 +422,13 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
     sie wird vor jeder Zielsperre mit ``facility`` verglichen (fail-closed ohne
     Einrichtung). Die Ziel-ID bleibt davon unberuehrt frei: ein Ziel, das diese
     Einrichtung nicht kennt, ist weiterhin kein Fehler.
+
+    ``before_write`` (optional, ohne Argumente) laeuft unter dem Zielanker,
+    aber VOR Hold-Zeile und Audit-Zeile. Die Audit-Zeile nimmt die Sperre der
+    Audit-Kette der Einrichtung und haelt sie bis zum Transaktionsende; was
+    der Aufrufer in ``before_write`` sperrt, liegt damit wie bei jeder
+    Vorschlagsentscheidung VOR der Audit-Kette. Wirft ``before_write``, entsteht
+    weder Hold noch Audit-Zeile.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != facility.pk:
@@ -448,6 +455,8 @@ def create_hold_for_target(facility, *, target_type, target_id, user, reason, ex
             already_redacted = _lock_activity_and_check(facility, target_id)
         else:
             already_redacted = False
+        if before_write is not None:
+            before_write()
         hold = LegalHold.objects.create(
             facility=facility,
             target_type=target_type,
@@ -488,14 +497,23 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     Transaktion: scheitert der Vorschlags-Write, bleibt kein Hold ohne
     gehaltenen Vorschlag zurueck.
 
-    Der Vorschlag wird NACH dem Zielanker gesperrt neu gelesen — dieselbe
-    Ordnung wie bei der Genehmigung (Person -> Ereignis -> Vorschlag); die
-    Gegenordnung waere ein Sperrzyklus mit ihr. Ein Hold darf eine noch
-    moegliche Loeschung jederzeit anhalten (``pending``, ``deferred`` und auch
-    ``approved`` vor dem naechsten Loeschlauf); abgewiesen werden ein bereits
-    gehaltener und ein abgelehnter Vorschlag — dort gibt es nichts anzuhalten.
-    Der Statuswechsel geschieht an der gesperrten Zeile, die Instanz des
-    Aufrufers wird nachgezogen.
+    Sperrfolge: Zielanker (Person -> Ereignis) -> Vorschlag -> Audit-Kette —
+    dieselbe wie bei Genehmigen, Zurueckstellen und Ablehnen. Der Vorschlag
+    wird deshalb unter dem Zielanker, aber VOR Hold-Zeile und Audit-Zeile
+    gesperrt neu gelesen und geprueft (``before_write`` von
+    :func:`create_hold_for_target`). Laege die Vorschlagssperre hinter der
+    Audit-Zeile, hielte die Hold-Anlage die Audit-Kette, waehrend sie auf eine
+    Entscheidung wartet, die den Vorschlag haelt und ihrerseits auf die
+    Audit-Kette wartet — eine Verklemmung.
+
+    Ein Hold darf eine noch moegliche Loeschung jederzeit anhalten
+    (``pending``, ``deferred`` und auch ``approved`` vor dem naechsten
+    Loeschlauf); abgewiesen werden ein bereits gehaltener und ein abgelehnter
+    Vorschlag — dort gibt es nichts anzuhalten. Die Absage kommt am gesperrten
+    Status, bevor eine Hold-Zeile entsteht: auch die zweite Anlage auf einen
+    gehaltenen Vorschlag endet mit der Meldung, nicht an der Eindeutigkeit der
+    Hold-Zeile. Der Statuswechsel geschieht an der gesperrten Zeile, die
+    Instanz des Aufrufers wird nachgezogen.
     """
     from core.retention.proposals import (
         PROPOSAL_ALREADY_DECIDED_MESSAGE,
@@ -509,6 +527,20 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
         RetentionProposal.Status.APPROVED,
         RetentionProposal.Status.DEFERRED,
     )
+    gesperrt = None
+
+    def _vorschlag_sperren_und_pruefen():
+        nonlocal gesperrt
+        gesperrt = (
+            RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
+        )
+        if gesperrt is None:
+            # Die Zeile liegt in der Datenbank nicht (mehr) in der Einrichtung
+            # der Instanz.
+            raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
+        if gesperrt.status not in haltbare_status:
+            raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
+
     with transaction.atomic():
         hold = create_hold_for_target(
             proposal.facility,
@@ -517,19 +549,11 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
             user=user,
             reason=reason,
             expires_at=expires_at,
+            before_write=_vorschlag_sperren_und_pruefen,
         )
-        locked = (
-            RetentionProposal.objects.select_for_update().filter(pk=proposal.pk, facility=proposal.facility_id).first()
-        )
-        if locked is None:
-            # Die Zeile liegt in der Datenbank nicht (mehr) in der Einrichtung
-            # der Instanz — der eben angelegte Hold rollt mit zurueck.
-            raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
-        if locked.status not in haltbare_status:
-            raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
-        locked.status = RetentionProposal.Status.HELD
-        locked.save(update_fields=["status"])
-        proposal.status = locked.status
+        gesperrt.status = RetentionProposal.Status.HELD
+        gesperrt.save(update_fields=["status"])
+        proposal.status = gesperrt.status
     return hold
 
 
