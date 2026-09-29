@@ -537,11 +537,15 @@ class TestServerErrorSupportContactAcrossAllStacks:
     the entire ``dev-ops/`` tree (``build-release.sh:285``, covering the
     private Barbara stack) are stripped from the public release snapshot. A
     missing path is only ever treated as that legitimate strip — and
-    skipped — when the tree under test also lacks ``dev-ops/`` itself, the
-    strip's own unconditional removal marker (see ``_file_status`` below).
-    Every one of these paths is tracked in the development tree, so
-    deleting or renaming one there still fails the guard instead of
-    silently skipping it (Refs #1904).
+    skipped — when the tree under test also carries none of the other,
+    independent paths the same release build strips and this guard does not
+    itself check: ``docs/dev/`` (build-release.sh:287) and ``AGENTS.md``
+    (build-release.sh:306) (see
+    ``_dev_tree_marker_present`` and ``_file_status`` below). A single one
+    of those surviving is proof enough that the tree is the (tracked)
+    development tree, not a stripped snapshot. Every one of these paths is
+    tracked in the development tree, so deleting or renaming one there
+    still fails the guard instead of silently skipping it (Refs #1904).
     """
 
     # Refs #1904: the setting(s) settings/base.py reads from the environment
@@ -590,14 +594,39 @@ class TestServerErrorSupportContactAcrossAllStacks:
         key = rel_path.as_posix()
         return any(key == prefix or key.startswith(f"{prefix}/") for prefix in cls._STRIPPED_FROM_RELEASE_SNAPSHOT)
 
-    @staticmethod
-    def _dev_tree_marker_present(root: Path) -> bool:
-        """``dev-ops/`` is removed in full by the release build
-        (build-release.sh:285) and only by it — never partially, never for
-        any other reason. Its presence under ``root`` is therefore what
-        distinguishes the tracked development tree from an already-stripped
-        release snapshot."""
-        return (root / "dev-ops").exists()
+    # Paths build-release.sh also removes in full, independently of each
+    # other and of the stack/example paths above, that this guard does not
+    # itself check the presence of. Each is removed unconditionally and for
+    # no other reason, so any single survivor proves the tree under test is
+    # the tracked development tree, not an already-stripped release
+    # snapshot — even if some of the stack/example paths above are missing
+    # too (Refs #1904).
+    _DEV_TREE_MARKERS = (
+        Path("dev-ops"),  # build-release.sh:285 (rm -rf "$RELEASE_DIR/dev-ops")
+        Path("docs/dev"),  # build-release.sh:287 (rm -rf "$RELEASE_DIR/docs/dev")
+        Path("AGENTS.md"),  # build-release.sh:306 (rm -f  "$RELEASE_DIR/AGENTS.md")
+    )
+
+    @classmethod
+    def _dev_tree_marker_present(cls, root: Path) -> bool:
+        """Whether ``root`` still carries at least one of ``_DEV_TREE_MARKERS``.
+
+        Each of those paths is removed in full by the release build and
+        only by it — never partially, never for any other reason — so any
+        single survivor already proves ``root`` is the tracked development
+        tree, not an already-stripped release snapshot. Checking only one
+        of them (historically just ``dev-ops/``) let the others' continued
+        presence go unnoticed and made a merely deleted or renamed
+        ``dev-ops/`` in the development tree look like a finished release
+        strip (Refs #1904)."""
+        # Their names stand literally on this line because
+        # verify_release_test_guard.py expects the excluded prefix right on
+        # the .exists() guard line (Refs #1137): dev-ops/ / docs/dev/ /
+        # AGENTS.md.
+        return any(
+            (root / marker).exists()  # dev-ops/ / docs/dev/ / AGENTS.md
+            for marker in cls._DEV_TREE_MARKERS
+        )
 
     @classmethod
     def _file_status(cls, root: Path, rel_path: Path) -> str:
@@ -605,14 +634,21 @@ class TestServerErrorSupportContactAcrossAllStacks:
 
         Returns ``_PRESENT`` when it exists. Returns
         ``_LEGITIMATELY_STRIPPED`` only when it is missing, it is on the
-        release strip list, AND ``root`` itself also lacks ``dev-ops/``
-        (proving this is a genuine stripped snapshot, not the development
-        tree). Returns ``_UNEXPECTEDLY_MISSING`` for every other absence —
-        the caller must fail on that, not skip (Refs #1904).
+        release strip list, ``root`` itself also lacks every one of
+        ``_DEV_TREE_MARKERS``, AND ``root`` still contains ``src/`` — the
+        positive evidence that ``root`` is a real (if stripped) published
+        source tree rather than an empty directory that merely happens to
+        lack every marker. Returns ``_UNEXPECTEDLY_MISSING`` for every
+        other absence — the caller must fail on that, not skip (Refs
+        #1904).
         """
         if (root / rel_path).exists():
             return cls._PRESENT
-        if cls._is_on_the_release_strip_list(rel_path) and not cls._dev_tree_marker_present(root):
+        if (
+            cls._is_on_the_release_strip_list(rel_path)
+            and not cls._dev_tree_marker_present(root)
+            and (root / "src").exists()
+        ):
             return cls._LEGITIMATELY_STRIPPED
         return cls._UNEXPECTEDLY_MISSING
 
@@ -697,13 +733,13 @@ class TestServerErrorSupportContactGuardFailsClosed:
     A tree is only ever treated as a published release snapshot when NONE
     of the paths build-release.sh strips that this guard does not itself
     check are present: ``dev-ops/`` (build-release.sh:285), ``docs/dev/``
-    (build-release.sh:287), ``CLAUDE.md`` (build-release.sh:305) and
-    ``AGENTS.md`` (build-release.sh:306). These four removals are
+    (build-release.sh:287) and ``AGENTS.md`` (build-release.sh:306).
+    These three removals are
     independent of each other — the build never leaves one behind while
     removing the others for some other reason — so any single survivor
     proves the tree under test is the (tracked) development tree, not an
     already-stripped snapshot, and a missing tracked stack/example file
-    there must fail, never skip. A tree with none of these four markers and
+    there must fail, never skip. A tree with none of these three markers and
     no ``src/`` either carries no positive evidence of being a real
     published release tree, so it is not recognised as one: it fails too.
     """
@@ -732,14 +768,13 @@ class TestServerErrorSupportContactGuardFailsClosed:
         stack/example file present and contract-compliant."""
         (root / "src").mkdir(parents=True, exist_ok=True)
         (root / "docs" / "dev").mkdir(parents=True, exist_ok=True)
-        (root / "CLAUDE.md").write_text("development instructions\n", encoding="utf-8")
         (root / "AGENTS.md").write_text("development instructions\n", encoding="utf-8")
         for compose_path, example_path in cls._ALL_STACKS:
             cls._write_compliant_stack(root, compose_path, example_path)
 
     @classmethod
     def _build_published_release_tree(cls, root: Path) -> None:
-        """A synthetic release snapshot: none of the four markers, only the
+        """A synthetic release snapshot: none of the three markers, only the
         stack/example files build-release.sh does not strip."""
         (root / "src").mkdir(parents=True, exist_ok=True)
         guard = TestServerErrorSupportContactAcrossAllStacks
@@ -798,7 +833,7 @@ class TestServerErrorSupportContactGuardFailsClosed:
         assert outcomes["compose"] == "failed", outcomes
 
     def test_case_3_missing_dev_ops_alone_does_not_identify_a_release(self, tmp_path: Path) -> None:
-        # Refs #1904 review (Gegenfall): dev-ops/ is gone, but AGENTS.md and
+        # Refs #1904 (counter-case): dev-ops/ is gone, but AGENTS.md and
         # docs/dev/ — both removed by the same release build — still stand.
         # That combination is not a finished release strip, so the two
         # Barbara paths it took with it must fail here, not skip.
