@@ -104,6 +104,10 @@ const uploadRequest = () =>
         headers: { "Content-Type": "multipart/form-data; boundary=x", "HX-Request": "true" },
     });
 
+// Refs #1904: offline, without a cached copy, the asset branch answers with an
+// empty 503 it builds itself.
+const assetRequest = () => new Request(`${ORIGIN}/static/js/htmx.min.js`);
+
 const queuedWriteRequest = () =>
     new Request(`${ORIGIN}/events/new/`, {
         method: "POST",
@@ -151,6 +155,21 @@ describe("synthetic responses adopt the server policy of the cached shell", () =
         expect(response.headers.get("Content-Security-Policy")).toBe(SERVER_POLICY);
         expect(response.headers.get("HX-Retarget")).toBe("#flash-messages");
     });
+
+    it("empty 503 of an uncached asset carries the policy of the cached offline home", async () => {
+        const handlers = workerContext(
+            cachesWithShell({
+                "Content-Security-Policy": SERVER_POLICY,
+                "Content-Security-Policy-Report-Only": SERVER_REPORT_ONLY,
+            })
+        );
+        const response = await respond(handlers, assetRequest());
+        expect(response.status).toBe(503);
+        expect(response.statusText).toBe("offline");
+        expect(await response.text()).toBe("");
+        expect(response.headers.get("Content-Security-Policy")).toBe(SERVER_POLICY);
+        expect(response.headers.get("Content-Security-Policy-Report-Only")).toBe(SERVER_REPORT_ONLY);
+    });
 });
 
 describe("without the source in the cache the policy falls back, never to none", () => {
@@ -179,6 +198,37 @@ describe("without the source in the cache the policy falls back, never to none",
         const response = await respond(handlers, uploadRequest());
         expect(response.status).toBe(503);
         expect(directives(response.headers.get("Content-Security-Policy"))).toContain("default-src 'none'");
+    });
+
+    // The asset branch looks up the asset itself first; only the lookup of
+    // the policy source fails here, the asset is simply not cached.
+    const assetFallbacks = [
+        ...fallbacks.slice(0, 2),
+        [
+            "policy source lookup fails",
+            () => ({
+                ...cachesWithShell(null),
+                match: vi.fn(async (key) => {
+                    const url = typeof key === "string" ? key : key.url;
+                    if (url === OFFLINE_HOME) {
+                        throw new Error("broken");
+                    }
+                    return undefined;
+                }),
+            }),
+        ],
+    ];
+
+    it.each(assetFallbacks)("empty asset 503: %s", async (_label, makeCaches) => {
+        const handlers = workerContext(makeCaches());
+        const response = await respond(handlers, assetRequest());
+        expect(response.status).toBe(503);
+        expect(await response.text()).toBe("");
+        const policy = directives(response.headers.get("Content-Security-Policy"));
+        expect(policy).toContain("default-src 'none'");
+        expect(policy).toContain("base-uri 'none'");
+        expect(policy).toContain("form-action 'none'");
+        expect(response.headers.get("Content-Security-Policy-Report-Only")).toBeNull();
     });
 });
 

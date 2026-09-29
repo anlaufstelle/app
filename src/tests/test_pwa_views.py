@@ -1198,7 +1198,9 @@ class TestServiceWorkerRobustness:
         ``undefined`` auf statt einer erklaerenden Response. Refs #1351,
         Refs #1386."""
         body = self._sw_body(client)
-        assert 'cached ?? new Response("", { status: 503, statusText: "offline" })' in body
+        # Refs #1904: tightened, not weakened — the same empty 503 now also
+        # carries the server policy (behaviour: tests/js/sw-synthetic-response-policy.test.mjs).
+        assert 'cached ?? _withServerPolicy(new Response("", { status: 503, statusText: "offline" }))' in body
 
     def test_ack_routing_targets_requesting_client(self, client):
         """Dieser Test ist gegen den heutigen Code ROT: ``requestQueueAck``

@@ -509,11 +509,12 @@ function _withHeader(request, name, value) {
 }
 
 // Refs #1904: responses this worker builds itself (offline HTMX banner, flash
-// fragments of the write path) never pass through Django and therefore get no
-// Content-Security-Policy from the server's middleware chain. They adopt the
-// policy of the precached offline home instead — a response the server built
-// from its one policy source, refreshed with every precache generation — so
-// this script keeps no copy of the policy. Without that source in the cache
+// fragments of the write path, the empty 503 of an uncached asset) never pass
+// through Django and therefore get no Content-Security-Policy from the
+// server's middleware chain. They adopt the policy of the precached offline
+// home instead — a response the server built from its one policy source,
+// refreshed with every precache generation — so this script keeps no copy of
+// the policy. Without that source in the cache
 // (evicted, lookup failed, header missing) the response falls back to a strict
 // minimal policy, never to none. base-uri and form-action are listed
 // explicitly because they do not fall back to default-src.
@@ -877,7 +878,9 @@ self.addEventListener("fetch", (event) => {
                     // Netz (Timeout/Fehler) lieferte respondWith(undefined)
                     // einen ungueltigen Response (Browser-Netzwerkfehler statt
                     // einer erklaerenden 503).
-                    .catch(() => cached ?? new Response("", { status: 503, statusText: "offline" }));
+                    // Refs #1904: this empty 503 is built here as well and
+                    // carries the server policy like every synthetic answer.
+                    .catch(() => cached ?? _withServerPolicy(new Response("", { status: 503, statusText: "offline" })));
                 return cached || networkFetch;
             })
         );
