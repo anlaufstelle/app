@@ -16,8 +16,14 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Client, Event, User
-from core.services.client import merge_clients, unmerge_client
+from core.models import Activity, AuditLog, Client, DeletionRequest, Event, User
+from core.services.client import (
+    approve_client_merge,
+    create_or_get_client_merge_request,
+    merge_clients,
+    reject_client_merge,
+    unmerge_client,
+)
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -156,3 +162,61 @@ class TestAufhebenDerZusammenfuehrung:
         assert row.merged_into_id is None
         assert source_event.client_id == merged_source.pk
         assert abfragen.sperrfolge()[0] == "core_client"
+
+
+class TestZusammenfuehrungsAntragStellen:
+    @pytest.mark.parametrize("akteur", ["foreign_staff", "facility_less_admin"])
+    def test_fremde_person_stellt_keinen_antrag(self, request, akteur, source, target):
+        user = request.getfixturevalue(akteur)
+
+        messages, abfragen = _refused(lambda: create_or_get_client_merge_request(source, target, user, "Fremd"))
+
+        assert messages == [_FACILITY_MESSAGE]
+        assert abfragen.sperrfolge() == []
+        assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).exists()
+
+    def test_gegenprobe_lokale_fachkraft_stellt_antrag(self, staff_user, source, target):
+        with mitschnitt() as abfragen:
+            dr, created = create_or_get_client_merge_request(source, target, staff_user, "Doppelt")
+
+        assert created is True
+        assert dr.merge_into_id == target.pk
+        assert abfragen.sperrfolge()[0] == "core_client"
+
+
+@pytest.fixture
+def pending_merge_request(facility, staff_user, source, target):
+    return DeletionRequest.objects.create(
+        facility=facility,
+        target_type=DeletionRequest.TargetType.CLIENT,
+        target_id=source.pk,
+        reason="Pruefsonde",
+        requested_by=staff_user,
+        merge_into=target,
+    )
+
+
+@pytest.mark.parametrize("service", [approve_client_merge, reject_client_merge], ids=["genehmigen", "ablehnen"])
+class TestZusammenfuehrungsAntragEntscheiden:
+    @pytest.mark.parametrize("akteur", _AKTEURE)
+    def test_fremde_pruefende_sperrt_den_antrag_nicht(self, request, service, akteur, pending_merge_request, source):
+        user = request.getfixturevalue(akteur)
+
+        messages, abfragen = _refused(lambda: service(pending_merge_request, user))
+
+        assert messages == ["Antrag gehört zu einer anderen Einrichtung."]
+        assert abfragen.sperrfolge() == []
+        pending_merge_request.refresh_from_db()
+        assert pending_merge_request.status == DeletionRequest.Status.PENDING
+        assert pending_merge_request.reviewed_by_id is None
+        assert Client.objects.get(pk=source.pk).merged_into_id is None
+
+    def test_gegenprobe_lokale_leitung_entscheidet(self, service, lead_user, pending_merge_request):
+        with mitschnitt() as abfragen:
+            service(pending_merge_request, lead_user)
+
+        pending_merge_request.refresh_from_db()
+        assert pending_merge_request.status != DeletionRequest.Status.PENDING
+        assert pending_merge_request.reviewed_by_id == lead_user.pk
+        assert abfragen.sperrfolge()[0] == "core_deletionrequest"
