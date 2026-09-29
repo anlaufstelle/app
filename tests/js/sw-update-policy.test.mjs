@@ -3,7 +3,9 @@
 // were fetched with, so the update path has to replace them: install fetches
 // the whole precache anew, activate deletes every cache that does not belong
 // to the current generation. The guard runs the real sw.js lifecycle against
-// an in-memory Cache Storage and does not depend on the concrete cache name.
+// an in-memory Cache Storage. Activation keeps the runtime cache of an
+// unchanged generation, so a policy change needs a new CACHE_NAME; the last
+// test pins the generation that was shipped with the earlier policy.
 //
 // Real sw.js code in a VM context (pattern: sw-precache-selfheal.test.mjs).
 import { readFileSync } from "node:fs";
@@ -21,6 +23,13 @@ const NEW_POLICY = "default-src 'self'; frame-ancestors 'none'; base-uri 'none';
 
 // A cache generation name that can never be the current one.
 const PREVIOUS_GENERATION = "anlaufstelle-v0";
+// The last cache generation shipped with the policy before base-uri and
+// form-action (fixed history, not the current name). Devices updating from it
+// still hold its runtime cache with responses stored under that policy.
+const LAST_GENERATION_WITH_EARLIER_POLICY = "anlaufstelle-v54";
+// Loaded on every page (base.html), fetched at runtime, not precached.
+const RUNTIME_ASSET = "/static/js/htmx.min.js";
+const RUNTIME_ASSET_BODY = "/* runtime asset stored with the earlier policy */";
 
 function absolute(request) {
     return typeof request === "string" ? new URL(request, ORIGIN).href : request.url;
@@ -283,5 +292,35 @@ describe("service worker update replaces responses stored with an earlier policy
 
         expect(await storedPolicies(storage)).toEqual(before);
         expect(await storage.keys()).toEqual([worker.cacheName]);
+    });
+
+    it("runtime entry stored with the earlier policy is not served after the update", async () => {
+        const net = network();
+        const storage = new MemoryCacheStorage(net.fetchImpl);
+        const worker = loadWorker(storage, net.fetchImpl);
+        expect(worker.appShell).not.toContain(RUNTIME_ASSET);
+        // Installation of the generation shipped with the earlier policy: its
+        // precache plus a legitimate runtime asset, both under that policy.
+        await seed(storage, LAST_GENERATION_WITH_EARLIER_POLICY, worker.appShell, OLD_POLICY);
+        const runtime = await storage.open(`${LAST_GENERATION_WITH_EARLIER_POLICY}-runtime`);
+        await runtime.put(
+            RUNTIME_ASSET,
+            new Response(RUNTIME_ASSET_BODY, {
+                headers: { "Content-Type": "application/javascript", "Content-Security-Policy": OLD_POLICY },
+            })
+        );
+
+        await lifecycle(worker.handlers, "install");
+        await lifecycle(worker.handlers, "activate");
+
+        expect((await storedPolicies(storage)).filter(([, , policy]) => policy !== NEW_POLICY)).toEqual([]);
+        // Offline and online (stale-while-revalidate answers a cache hit
+        // first): the old entry is gone, neither answer is the stored one.
+        for (const online of [false, true]) {
+            net.state.online = online;
+            const response = await respond(worker.handlers, new Request(`${ORIGIN}${RUNTIME_ASSET}`));
+            expect(response.headers.get("Content-Security-Policy"), `online=${online}`).not.toBe(OLD_POLICY);
+            expect(await response.text(), `online=${online}`).not.toBe(RUNTIME_ASSET_BODY);
+        }
     });
 });

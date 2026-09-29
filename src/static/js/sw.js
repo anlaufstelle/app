@@ -173,7 +173,13 @@ importScripts("/static/js/url-patterns.js");
 // 2026-09-24, Refs #2383: v52 -> v53 -- die precachte Offline-Personenansicht
 // (offline_detail.html) hebt drei Textknoepfe auf 44px Mindesthoehe an. Der
 // Bump bringt das geaenderte Markup auf Bestandsgeraete.
-const CACHE_NAME = "anlaufstelle-v54";
+// 2026-09-29, Refs #1904: v54 -> v55 -- the delivered Content-Security-Policy
+// gains base-uri/form-action. Cached responses keep the headers they were
+// stored with, and activate keeps both caches of an unchanged generation, so
+// only a new generation drops every precache and runtime entry stored with the
+// earlier policy. A policy change always needs a bump (guard:
+// TestPrecachedShellBumpGuard::test_policy_change_requires_cache_name_bump).
+const CACHE_NAME = "anlaufstelle-v55";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

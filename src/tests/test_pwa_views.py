@@ -155,7 +155,8 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v54"' in body, (
+        # Refs #1904: v55 drops runtime entries stored with the earlier policy.
+        assert 'CACHE_NAME = "anlaufstelle-v55"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -727,7 +728,13 @@ class TestPrecachedShellBumpGuard:
     # Textknoepfe (Ereignis-Bearbeiten, Aufgabe-erstellen, Aufgabe-Bearbeiten)
     # auf 44px Mindesthoehe an. Aendert gerendertes Shell-Markup => Bump +
     # Hash gemeinsam nachgezogen.
-    _PINNED_CACHE_NAME = "anlaufstelle-v54"
+    # 2026-09-29, Refs #1904: v54 -> v55 — the delivered policy gains
+    # base-uri/form-action. Cached responses keep the headers they were stored
+    # with, and activate keeps the runtime cache of an unchanged generation, so
+    # only a new generation drops every entry stored with the earlier policy.
+    # The shell hash is unchanged (no template, no APP_SHELL change); the policy
+    # fingerprint below is pinned together with this name.
+    _PINNED_CACHE_NAME = "anlaufstelle-v55"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
@@ -811,6 +818,12 @@ class TestPrecachedShellBumpGuard:
     # _SHELL_TEMPLATES) hebt drei Textknoepfe auf 44px Mindesthoehe an —
     # gerendertes Markup geaendert, Hash zusammen mit v53 nachgezogen.
     _PINNED_SHELL_HASH = "1a5a7a7ac55fd7df2f15ec005d2ba36d155ffb5110a0c255f2ce63ecb00c0583"
+    # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
+    # delivers with the precached offline home (see _policy_fingerprint). Every
+    # precached shell and every runtime entry keeps the policy it was stored
+    # with; a policy change reaches existing devices only with a new
+    # CACHE_NAME. Pinned together with _PINNED_CACHE_NAME above.
+    _PINNED_POLICY_FINGERPRINT = "17fffaf933ec8beb7fcb503babd0d33a3dbd304a29f6f5c2e13787fea69880b7"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -904,6 +917,62 @@ class TestPrecachedShellBumpGuard:
             "_PINNED_CACHE_NAME und _PINNED_SHELL_HASH in "
             "TestPrecachedShellBumpGuard (src/tests/test_pwa_views.py) auf "
             "die neuen Werte aktualisieren."
+        )
+
+    # Both policy headers, in a fixed order; an absent header counts as empty.
+    _POLICY_HEADERS = ("Content-Security-Policy", "Content-Security-Policy-Report-Only")
+
+    @staticmethod
+    def _normalized_policy(value: str) -> str:
+        # django-csp emits the directives in no stable order (it differs between
+        # processes); neither directive nor source order carries meaning in CSP.
+        directives = []
+        for part in value.split(";"):
+            tokens = part.split()
+            if tokens:
+                directives.append(" ".join([tokens[0], *sorted(tokens[1:])]))
+        return "; ".join(sorted(directives))
+
+    @classmethod
+    def _policy_fingerprint(cls, response) -> str:
+        payload = "\x00".join(
+            f"{name}\x00{cls._normalized_policy(response.headers.get(name, ''))}" for name in cls._POLICY_HEADERS
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @pytest.mark.django_db
+    def test_policy_change_requires_cache_name_bump(self, client):
+        """Refs #1904: a changed policy must come with a new cache generation.
+
+        The service worker serves precached shells and runtime assets with the
+        headers they were stored with. Activation keeps both caches of an
+        unchanged generation, and a pure settings change does not even alter
+        the worker script. Without a CACHE_NAME bump, existing devices would
+        keep answering with the earlier policy.
+        """
+        from core.views.pwa import _read_service_worker
+
+        _read_service_worker.cache_clear()
+        current_cache_name = self._current_cache_name(_read_service_worker())
+        response = client.get(reverse("offline_fallback"))
+        assert response.status_code == 200
+        assert response.headers.get("Content-Security-Policy"), (
+            "The precached offline home must carry the server policy; synthetic worker responses adopt it."
+        )
+        current_fingerprint = self._policy_fingerprint(response)
+
+        assert (current_cache_name, current_fingerprint) == (
+            self._PINNED_CACHE_NAME,
+            self._PINNED_POLICY_FINGERPRINT,
+        ), (
+            "The delivered Content-Security-Policy and/or CACHE_NAME changed without "
+            "updating the pinned pair (Refs #1904). Cached shells and runtime "
+            "assets keep the policy they were stored with; existing devices get "
+            "the new policy only from a new cache generation.\n"
+            "Fix: (1) bump CACHE_NAME in src/static/js/sw.js, (2) update "
+            "_PINNED_CACHE_NAME, _PINNED_SHELL_HASH and _PINNED_POLICY_FINGERPRINT "
+            "in TestPrecachedShellBumpGuard (src/tests/test_pwa_views.py) to the "
+            "new values."
         )
 
     def test_shell_hash_covers_included_partials(self):
