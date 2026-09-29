@@ -52,6 +52,7 @@ from core.services.security.login_lockout import (
 from core.services.security.mfa import (
     BACKUP_CODES_COUNT,
     _hash_code,
+    current_totp_device,
     generate_backup_codes,
     remaining_backup_codes,
     verify_backup_code,
@@ -97,6 +98,7 @@ __all__ = [
     "generate_backup_codes",
     "get_external_origin",
     "invite_token_generator",
+    "current_totp_device",
     "is_encrypted_totp_key",
     "is_in_sudo",
     "is_locked",

@@ -1,5 +1,6 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
 > Synchronization update 2026-09-29: § 7.3 "Retention of the Event History" adds the one-time check and repair of history versions that carry a redaction timestamp but still hold values (`repair_eventhistory_redaction`, #2188).
+> Synchronization update 2026-09-29: § 2.7 states that after setting up 2FA again only the new TOTP device's code is accepted, no longer the previous device's (#2328).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that adding a passkey requires sudo mode and that the settings page leads through the sudo page first (#2328).
 > Synchronization update 2026-09-29: the `SUDO_MODE_TTL_SECONDS` row and § 2.7 add that setting up 2FA again while a confirmed factor exists requires sudo mode, first-time setup does not, and the backup-code pages require a session confirmed with the second factor (#2328).
 > Synchronization update 2026-09-23: the initial-setup section adds a note that the default catalog's "Beratungsgespräch" type requires the contact level "with additional details", which a freshly created person does not yet have (#2345).
@@ -1033,7 +1034,7 @@ There are also **backup codes as a second factor** for exactly this recovery cas
 
 `django-otp` increasingly throttles TOTP and backup-code checks after multiple failed attempts. A correct code can also be rejected during the resulting waiting period; before resetting the device, wait for the lockout interval instead of immediately trying more codes.
 
-**Setting up again while a factor exists** (#2328): a user who already has a confirmed second factor (TOTP or passkey) and opens or submits `/mfa/setup/` again first re-confirms their password in sudo mode (with TOTP, also a current code) -- as when disabling 2FA or deleting a passkey -- and then returns to `/mfa/setup/`. Such a setup adds another TOTP device and replaces the backup-code set. With an existing factor, the backup-code pages (`/mfa/backup-codes/` and regeneration) also require a session confirmed with the second factor. First-time setup does not include a sudo step. Adding a passkey also requires sudo mode: without an open sudo window, "Passkey hinzufügen" (add passkey) in the 2FA settings first leads to the sudo page and then back to the settings.
+**Setting up again while a factor exists** (#2328): a user who already has a confirmed second factor (TOTP or passkey) and opens or submits `/mfa/setup/` again first re-confirms their password in sudo mode (with TOTP, also a current code) -- as when disabling 2FA or deleting a passkey -- and then returns to `/mfa/setup/`. Such a setup adds a new TOTP device and replaces the backup-code set; once the new codes are acknowledged, sign-in, sudo and backup-code regeneration accept only the new device's code, no longer the previous one's. With an existing factor, the backup-code pages (`/mfa/backup-codes/` and regeneration) also require a session confirmed with the second factor. First-time setup does not include a sudo step. Adding a passkey also requires sudo mode: without an open sudo window, "Passkey hinzufügen" (add passkey) in the 2FA settings first leads to the sudo page and then back to the settings.
 
 #### Account Lockout
 
@@ -2308,4 +2309,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.1 -->
-<!-- source-hash: d06f874e246e752eecf50eafd6dbe05beab7217e -->
+<!-- source-hash: d438f8e3cb7bcbbfb9bef464d3e49f32242b8a24 -->

@@ -139,10 +139,27 @@ def verify_backup_code(user, token: str) -> bool:
     return True
 
 
+def current_totp_device(user) -> TOTPDevice | None:
+    """Das geltende bestaetigte TOTP-Geraet des Kontos: das zuletzt eingerichtete.
+
+    Refs #2328: Ein Faktorwechsel richtet ein neues Geraet ein, die Quittung
+    der neuen Backup-Codes bestaetigt es. ``.first()`` ohne Ordering nahm das
+    aelteste (niedrigste pk) — der Code des neuen Geraets wurde bei Anmeldung,
+    Sudo und Neuerzeugen nie geprueft, das alte blieb allein gueltig. Ab der
+    Bestaetigung gilt das neue Geraet und ersetzt das alte, wie der neue
+    Backup-Code-Satz den alten.
+
+    Genau EIN Geraet, nicht alle: django-otp raet von der Pruefung gegen jedes
+    Geraet ab (``match_token``), weil dann jeder Fehlschlag jedes Geraet
+    drosselt — wer ein Geraet benutzt, sperrte schrittweise das andere.
+    """
+    return TOTPDevice.objects.filter(user=user, confirmed=True).order_by("-pk").first()
+
+
 def verify_totp_or_backup(user, token: str) -> bool:
     """Verifiziert einen frischen TOTP-Token ODER Backup-Code (A3.2, Refs #1024).
 
-    Reihenfolge: erst das bestätigte ``TOTPDevice`` (``verify_token`` ist
+    Reihenfolge: erst das geltende ``TOTPDevice`` (``current_totp_device``; ``verify_token`` ist
     single-use je Zeitfenster + gedrosselt), dann Backup-Code. Genutzt vom
     Sudo-Mode-Re-Auth, wenn der User 2FA aktiv hat — ein über eine gestohlene
     Session erbeutetes Passwort allein soll sensible Aktionen nicht freischalten.
@@ -150,7 +167,7 @@ def verify_totp_or_backup(user, token: str) -> bool:
     token = (token or "").strip().replace(" ", "")
     if not token:
         return False
-    device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+    device = current_totp_device(user)
     if device is not None and device.verify_token(token):
         return True
     return verify_backup_code(user, token)

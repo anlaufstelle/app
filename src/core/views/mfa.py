@@ -46,6 +46,7 @@ from core.services.audit import log_audit_event
 from core.services.security import (
     BACKUP_CODES_COUNT,
     RequireSudoModeMixin,
+    current_totp_device,
     generate_backup_codes,
     remaining_backup_codes,
     verify_backup_code,
@@ -283,7 +284,8 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         token = (request.POST.get("token") or "").strip().replace(" ", "")
         mode = request.POST.get("mode", "totp")
-        device = TOTPDevice.objects.filter(user=request.user, confirmed=True).first()
+        # Refs #2328: das geltende Geraet (nach einem Faktorwechsel das neue).
+        device = current_totp_device(request.user)
         if device is None:
             return redirect("mfa_setup")
         facility = getattr(request.user, "facility", None)
@@ -545,7 +547,7 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
         if not user.has_confirmed_totp_device:
             return redirect("mfa_setup")
         token = (request.POST.get("token") or "").strip().replace(" ", "")
-        device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+        device = current_totp_device(user)
         if device is None or not token or not device.verify_token(token):
             messages.error(
                 request,
