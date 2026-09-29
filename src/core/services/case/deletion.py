@@ -276,20 +276,20 @@ def approve_case_deletion(deletion_request, reviewer):
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
     if not reviewer.can_confirm_deletion:
         raise ValidationError(_("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip)."))
-    # Refs #2373: Einrichtungsgrenze schon VOR der Antragssperre (fail-closed
-    # ohne Einrichtung); unter der Sperre wird sie unten erneut geprueft.
+    # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
+    # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
+    # Die Guards davor (Vier-Augen, Recht) behalten Reihenfolge und Wortlaut.
+    # Refs #2373: geprueft schon VOR der Antragssperre (fail-closed ohne
+    # Einrichtung) und damit vor jedem Schreibzugriff. Die Sperre liest die
+    # Zeile danach nur in genau dieser Einrichtung; liegt sie inzwischen in
+    # einer anderen, wird sie nicht gefunden. Ein zweiter Vergleich an der
+    # gesperrten Zeile koennte deshalb nie anschlagen.
     if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
         raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
 
     deletion_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )
-    # Refs #2338: dieselbe Einrichtungsgrenze wie auf der Reject-Seite
-    # (Refs #2321) — hier sogar dringlicher, weil die Genehmigung zerstoert.
-    # Geprueft gegen die FRISCH GESPERRTE Zeile und vor jedem Schreibzugriff;
-    # die Guards davor (Vier-Augen, Recht) behalten Reihenfolge und Wortlaut.
-    if reviewer.facility_id != deletion_request.facility_id:
-        raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
 
