@@ -203,10 +203,6 @@
         const recordPksLower = await _localRecordPksOfRevoked(revokedLower);
 
         let purgedClients = 0;
-        // Refs #2382: die pks der lokal tatsaechlich getroffenen Personen —
-        // einzige Grundlage fuer den Abgleich der Offline-Personenansicht
-        // (siehe _fireRevocationEvent unten), NICHT die volle Server-Liste.
-        const purgedClientPks = [];
         for (const pk of pks) {
             const key = String(pk);
             const known = await db.clients.where("pk").equals(key).count();
@@ -218,13 +214,12 @@
             await window.offlineStore.removeOfflineClient(key, { force: true });
             if (known) {
                 purgedClients += 1;
-                purgedClientPks.push(key.toLowerCase());
             }
         }
 
         const extra = await _purgeRevokedQueueAndDrafts(revokedLower.concat(recordPksLower));
         const result = { status: "ok", purgedClients: purgedClients, ...extra };
-        _fireRevocationEvent(result, purgedClientPks);
+        _fireRevocationEvent(result);
         return result;
     }
 
@@ -236,9 +231,11 @@
      * Offline-Personenansicht einer gerade widerrufenen Person erfuhr nichts
      * davon und zeigte weiter das (inzwischen falsche) "wird synchronisiert".
      *
-     * DATENSPARSAMKEIT: ``detail`` traegt ausschliesslich Zaehlwerte und die
-     * widerrufenen UUIDs (keine Pseudonyme/Inhalte) — reine Identifikatoren,
-     * die die Ansicht ohnehin schon aus der URL kennt.
+     * DATENSPARSAMKEIT: ``detail`` traegt ausschliesslich Zaehlwerte, keine
+     * Personen-Identifikatoren. Eine offene Offline-Personenansicht kennt
+     * ihre eigene pk bereits aus der URL und prueft nach diesem Signal selbst
+     * lokal in IndexedDB nach, ob ihr Datensatz noch vorhanden ist (siehe
+     * offline-client-view.js) — das Ereignis muss dafuer niemanden nennen.
      *
      * Feuert NUR, wenn tatsaechlich etwas geloescht wurde — eine leere Liste,
      * ein Transportfehler oder ein Rate-Limit (alle drei liefern ``empty``
@@ -246,7 +243,7 @@
      * offene Ansicht betroffen; ebenso eine nicht-leere Liste, die lokal auf
      * nichts trifft (rein remote bekannte Personen).
      */
-    function _fireRevocationEvent(result, purgedClientPks) {
+    function _fireRevocationEvent(result) {
         const changed = result.purgedClients > 0 || result.purgedQueueEntries > 0 || result.purgedDrafts > 0;
         if (!changed || typeof window === "undefined" || !window.dispatchEvent) return;
         window.dispatchEvent(
@@ -255,7 +252,6 @@
                     purgedClients: result.purgedClients,
                     purgedQueueEntries: result.purgedQueueEntries,
                     purgedDrafts: result.purgedDrafts,
-                    pks: purgedClientPks,
                 },
             })
         );

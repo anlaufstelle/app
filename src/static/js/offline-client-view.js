@@ -40,6 +40,12 @@
             // "synced" | "conflict" | "error".
             lastSyncResult: "",
             lastSyncPk: "",
+            // Refs #2382: Das Widerrufssignal ist einmalig (kein Zaehler, der
+            // regelmaessig wiederkehrt). Trifft es waehrend eines laufenden
+            // load() ein, darf es nicht kommentarlos verworfen werden — dieses
+            // Flag merkt es vor, load() prueft es nach seinem Abschluss
+            // garantiert nach (siehe load()/_onRevocationsApplied unten).
+            _revocationCheckPending: false,
             // Refs #1323: Offline-Erfassung eines neuen Ereignisses.
             creating: false,
             createDocTypePk: "",
@@ -232,6 +238,14 @@
                     this.available = false;
                 } finally {
                     this.loading = false;
+                    // Refs #2382: ein waehrend dieses load() eingegangenes
+                    // Widerrufssignal jetzt garantiert nachholen — sonst bliebe
+                    // der veraltete Sync-Hinweis stehen, obwohl der Bestand
+                    // laengst geloescht ist (Boot-/Reconnect-Race).
+                    if (this._revocationCheckPending) {
+                        this._revocationCheckPending = false;
+                        await this._checkRevocationDiscarded();
+                    }
                 }
             },
             formatTs(iso) {
@@ -785,19 +799,38 @@
                 if (this.loading) return;
                 await this._reconcile();
             },
-            // Refs #2382: reagiert NUR, wenn die gerade offene Person unter den
-            // widerrufenen ist — offline-revocations.js purgt den Bestand
-            // bereits vollständig, ein erneutes revalidateCachedClient (wie in
-            // _reconcile) wäre für eine anonymisierte Person unnötiger
-            // Netzverkehr. Direktes load() genügt: getOfflineClient findet
-            // nichts mehr → available wird false, der Hinweis erscheint in der
-            // showUnavailable-Ansicht.
-            async _onRevocationsApplied(evt) {
-                if (this.loading) return;
+            // Refs #2382: das Ereignis nennt aus Datensparsamkeit keine
+            // Personen mehr (siehe offline-revocations.js) — ob die gerade
+            // offene Person betroffen ist, prueft diese Ansicht daher selbst
+            // lokal in IndexedDB nach (_checkRevocationDiscarded), statt einer
+            // mitgelieferten pk-Liste zu vertrauen.
+            // Reentrancy: laeuft bereits ein load(), wird die Nachpruefung nur
+            // vorgemerkt — load() holt sie in seinem finally-Zweig garantiert
+            // nach, das einmalige Signal geht so nie verloren.
+            async _onRevocationsApplied() {
                 if (!this._pk) return;
-                const pks = (evt && evt.detail && evt.detail.pks) || [];
-                const mine = pks.some((pk) => String(pk).toLowerCase() === String(this._pk).toLowerCase());
-                if (!mine) return;
+                if (this.loading) {
+                    this._revocationCheckPending = true;
+                    return;
+                }
+                await this._checkRevocationDiscarded();
+            },
+            // Prueft, ob die gerade offene Person noch im lokalen Bestand ist.
+            // Fehlt sie (offline-revocations.js purgt vollstaendig, bevor das
+            // Ereignis feuert), war sie die widerrufene Person: eigener
+            // "verworfen"-Zustand statt eines erneuten Netzverkehrs (die
+            // Person ist bereits vollstaendig geloescht, revalidateCachedClient
+            // wie in _reconcile waere unnoetig) plus Neuaufbau per load(). Ist
+            // sie noch da, war eine ANDERE Person betroffen — unveraendert.
+            async _checkRevocationDiscarded() {
+                if (!this._pk || !window.offlineClient) return;
+                let cached = null;
+                try {
+                    cached = await window.offlineClient.getOfflineClient(this._pk);
+                } catch (_e) {
+                    cached = null;
+                }
+                if (cached) return;
                 this.lastSyncResult = "discarded";
                 await this.load();
             },
