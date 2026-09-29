@@ -20,12 +20,13 @@ keinen Vergleichsstempel fuer Optimistic Locking.
 
 import logging
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from core.models import AuditLog
+from core.models import AuditLog, Episode
 from core.services.audit import audit_event
 from core.services.audit.diff import changed_fields_vs_db
-from core.services.case.state_contract import lock_case_for_write
+from core.services.case.state_contract import CASE_WRITE_GONE_MESSAGE, lock_case_for_write
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +37,48 @@ logger = logging.getLogger(__name__)
 _UPDATABLE_FIELDS = frozenset({"title", "description", "started_at", "ended_at"})
 
 
+def _episode_facility_id(episode):
+    """Einrichtung der Akte einer Episode — ungesperrt gelesen.
+
+    Die Einrichtung einer Akte ist unveraenderlich; der Vergleich mit der
+    Einrichtung der handelnden Person braucht also keinen frischen Stand und
+    sperrt nichts ueber die Mandantengrenze hinweg. ``None`` (Zeile nicht
+    mehr vorhanden) ueberlaesst die Absage dem Zustandsvertrag.
+    """
+    return Episode.objects.filter(pk=episode.pk).values_list("case__facility_id", flat=True).first()
+
+
+def _lock_episode_for_write(episode) -> Episode:
+    """Die Episode fuer einen Schreibvorgang — Person -> Fall -> Episode, frisch und gesperrt.
+
+    Person und Fall laufen durch den Zustandsvertrag
+    (:func:`~core.services.case.state_contract.lock_case_for_write`): darin
+    das Art.-18-Gate, der Widerruf der Person und Papierkorb/Tilgung des
+    Falls. Danach die Episodenzeile, der Fallbezug steht IN der Bedingung.
+    Fehlt sie oder liegt sie im Papierkorb, ist sie nicht mehr die Episode,
+    auf die sich der Aufruf bezieht — Absage wie bei einer verschwundenen
+    Fallzeile.
+    """
+    lock_case_for_write(episode.case)
+    locked = Episode.objects.filter(pk=episode.pk, case_id=episode.case_id).select_for_update().first()
+    if locked is None or locked.is_deleted:
+        raise ValidationError(CASE_WRITE_GONE_MESSAGE)
+    return locked
+
+
 @transaction.atomic
 def update_episode(episode, user, **fields):
     """Update mutable fields on an episode + AuditLog (nur bei echtem Diff).
 
     Art.-18-Gate (Refs #2045): Episoden-Freitexte sind Inhalt der Fallakte —
     ihre Bearbeitung ist fachliche Nutzung, nicht Speicherung.
+
+    Nach der Allowlist die Einrichtungsgrenze der handelnden Person (vor
+    jeder Sperre, fail-closed), dann der Zustandsvertrag Person -> Fall ->
+    Episode (:func:`_lock_episode_for_write`, das Art.-18-Gate eingeschlossen).
+    Die Instanz stammt aus einem Lesevorgang vor der Sperre; ohne den Vertrag
+    schriebe die Bearbeitung Freitext an eine Akte im Papierkorb, an eine
+    getilgte Akte oder an eine geloeschte Episode.
 
     Gibt die Episode zurueck. Ohne ``fields`` ist der Aufruf ein No-Op; ein
     Aufruf, der nur bereits gespeicherte Werte setzt, schreibt keine
@@ -53,9 +90,10 @@ def update_episode(episode, user, **fields):
     for key in fields:
         if key not in _UPDATABLE_FIELDS:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
-    from core.services.client.restriction import assert_processing_allowed
+    from core.services.case.goals import _assert_actor_facility
 
-    assert_processing_allowed(episode.case.client_id, lock=True)
+    _assert_actor_facility(user, _episode_facility_id(episode))
+    _lock_episode_for_write(episode)
     if not fields:
         return episode
 
