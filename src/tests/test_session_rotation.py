@@ -822,6 +822,13 @@ class TestRotationSurvivesExceptionAfterTokenWrite:
 # --- 7./8. Frische Backup-Codes nach TOTP-Nachweis (R-A1-14) ---------------
 
 
+def _mark_mfa_verified(client) -> None:
+    """Sitzung als MFA-verifiziert markieren, ohne die Session-ID zu wechseln."""
+    session = client.session
+    session["mfa_verified"] = True
+    session.save()
+
+
 def _codes_in_backup_page(client) -> list[str]:
     """Klartext-Backup-Codes, die ``/mfa/backup-codes/`` diesem Client zeigt."""
     response = client.get("/mfa/backup-codes/")
@@ -844,8 +851,13 @@ class TestRotationBeforeStoringFreshBackupCodes:
     def test_regenerate_rotates_before_storing_codes(self, client, staff_user):
         """Ort 7 — ``MFARegenerateBackupCodesView.post``."""
         device = _confirmed_totp(staff_user)
-        # Bewusst OHNE ``mfa_verified``: genau dieser Cookie soll gesperrt bleiben.
         old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        # Refs #2328: die Route erreicht nur eine MFA-verifizierte Sitzung (das
+        # ``dispatch``-Gate leitet sonst nach ``/mfa/verify/``). Der Cookie davor
+        # soll nach dem Neuerzeugen trotzdem tot sein und keine Codes sehen.
+        # Er traegt damit selbst ``mfa_verified``: ohne Rotation saehe er die
+        # frischen Codes, die Asserts unten bleiben also scharf.
+        _mark_mfa_verified(client)
         stolen = _client_with_stolen_cookie(old_key)
 
         response = client.post("/mfa/backup-codes/regenerate/", {"token": _valid_token(device)})
@@ -886,6 +898,7 @@ class TestRotationBeforeStoringFreshBackupCodes:
         """Gegenprobe: ohne gueltigen TOTP-Code kein Recht, keine Codes, keine Rotation."""
         _confirmed_totp(staff_user)
         old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        _mark_mfa_verified(client)
 
         response = client.post("/mfa/backup-codes/regenerate/", {"token": "000000"})
 
