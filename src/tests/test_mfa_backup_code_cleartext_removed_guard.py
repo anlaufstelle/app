@@ -1,0 +1,155 @@
+"""Guard: der Klartext-Vergleich fuer Backup-Codes ist abgeschaltet (Refs #2327).
+
+Die Datenmigration ``0181_hash_cleartext_backup_codes`` hasht den Restbestand an
+Klartext-Zeilen im historischen Format ``xxxx-xxxx``. Danach vergleicht
+``verify_backup_code`` ausschliesslich den Hash des Eingabewerts; eine
+Klartext-Zeile, die am Migrationsweg vorbei in der Tabelle liegt (Restore eines
+Alt-Dumps, Direktschreibzugriff), ist kein gueltiger Code mehr:
+
+* der Aufruf liefert ``False``,
+* die Zeile bleibt liegen (nichts wird verbraucht),
+* der Fehlversuch zaehlt in die Drosselung des Geraets.
+
+Abgedeckt sind der Service und alle drei Einstiege, die ihn erreichen
+(``grep -rn 'verify_backup_code\\|verify_totp_or_backup' src/core``):
+``MFAVerifyView.post`` (``mode=backup``), ``SudoModeView.post`` ueber
+``verify_totp_or_backup`` und ``LockoutRecoveryBackupCodeView``.
+
+Gegenprobe: derselbe alte Code als Hash-Zeile — der Zustand nach der
+Migration — verifiziert weiterhin, auch in der bindestrichlosen
+Eingabeform, die ``MFAVerifyView`` normalisiert.
+"""
+
+from __future__ import annotations
+
+import pytest
+from django.urls import reverse
+from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
+
+from core.models import AuditLog
+from core.models import EncryptedTOTPDevice as TOTPDevice
+from core.services.security import is_locked, verify_backup_code
+from core.services.security.mfa import _hash_code
+
+ALT_CODE = "abcd-1234"
+
+
+def _backup_device(user, token: str) -> StaticDevice:
+    device = StaticDevice.objects.create(user=user, name="backup", confirmed=True)
+    StaticToken.objects.create(device=device, token=token)
+    return device
+
+
+def _confirmed_totp(user):
+    return TOTPDevice.objects.create(user=user, name="totp", confirmed=True)
+
+
+def _lock_account(user, count: int = 10):
+    for _ in range(count):
+        AuditLog.objects.create(
+            user=user,
+            facility=user.facility,
+            action=AuditLog.Action.LOGIN_FAILED,
+            detail={"username": user.username},
+        )
+
+
+@pytest.mark.django_db
+class TestCleartextRowIsNoCredential:
+    """Service-Ebene: eine Klartext-Zeile im Altformat wird nie direkt verglichen."""
+
+    def test_cleartext_row_is_rejected(self, staff_user):
+        _backup_device(staff_user, ALT_CODE)
+        assert verify_backup_code(staff_user, ALT_CODE) is False
+
+    def test_cleartext_row_stays_in_place(self, staff_user):
+        device = _backup_device(staff_user, ALT_CODE)
+        verify_backup_code(staff_user, ALT_CODE)
+        assert list(device.token_set.values_list("token", flat=True)) == [ALT_CODE]
+
+    def test_rejection_counts_as_one_throttle_failure(self, staff_user):
+        device = _backup_device(staff_user, ALT_CODE)
+        verify_backup_code(staff_user, ALT_CODE)
+        device.refresh_from_db()
+        assert device.throttling_failure_count == 1
+        assert device.last_used_at is None
+
+    def test_migrated_row_verifies_exactly_once(self, staff_user):
+        """Gegenprobe: nach der Migration liegt der Hash — der alte Code gilt."""
+        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        assert verify_backup_code(staff_user, ALT_CODE) is True
+        assert verify_backup_code(staff_user, ALT_CODE) is False
+        assert device.token_set.count() == 0
+
+
+@pytest.mark.django_db
+class TestCleartextRowRejectedInMfaVerifyView:
+    """Einstieg 1: ``/mfa/verify/`` im Backup-Modus."""
+
+    def test_cleartext_row_does_not_verify_session(self, client, staff_user):
+        _confirmed_totp(staff_user)
+        device = _backup_device(staff_user, ALT_CODE)
+        assert client.login(username="teststaff", password="testpass123")
+
+        response = client.post("/mfa/verify/", {"mode": "backup", "token": ALT_CODE})
+
+        assert response.status_code == 200
+        assert client.session.get("mfa_verified") is not True
+        assert device.token_set.count() == 1
+        assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.BACKUP_CODES_USED).exists()
+        assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_FAILED).exists()
+
+    @pytest.mark.parametrize("eingabe", [ALT_CODE, "abcd1234", "ABCD1234"])
+    def test_migrated_row_verifies_session(self, client, staff_user, eingabe):
+        """Gegenprobe inkl. Normalisierung der View (``abcd1234`` -> ``abcd-1234``)."""
+        _confirmed_totp(staff_user)
+        device = _backup_device(staff_user, _hash_code(ALT_CODE))
+        assert client.login(username="teststaff", password="testpass123")
+
+        response = client.post("/mfa/verify/", {"mode": "backup", "token": eingabe})
+
+        assert response.status_code == 302
+        assert client.session.get("mfa_verified") is True
+        assert device.token_set.count() == 0
+
+
+@pytest.mark.django_db
+class TestCleartextRowRejectedInSudoMode:
+    """Einstieg 2: Sudo-Reauthentifizierung ueber ``verify_totp_or_backup``."""
+
+    def test_cleartext_row_does_not_grant_sudo(self, client, staff_user):
+        _confirmed_totp(staff_user)
+        device = _backup_device(staff_user, ALT_CODE)
+        assert client.login(username="teststaff", password="testpass123")
+        session = client.session
+        session["mfa_verified"] = True
+        session.save()
+
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "testpass123", "otp_token": ALT_CODE, "next": "/"},
+        )
+
+        assert response.status_code == 403
+        assert client.session.get("sudo_until") is None
+        assert device.token_set.count() == 1
+
+
+@pytest.mark.django_db
+class TestCleartextRowRejectedInLockoutRecovery:
+    """Einstieg 3: Lockout-Recovery per Backup-Code."""
+
+    def test_cleartext_row_does_not_unlock(self, client, staff_user):
+        device = _backup_device(staff_user, ALT_CODE)
+        _lock_account(staff_user)
+        assert is_locked(staff_user) is True
+
+        response = client.post(
+            reverse("core:lockout_recovery_backup_code"),
+            {"username": staff_user.username, "backup_code": ALT_CODE},
+        )
+
+        assert response.status_code == 200
+        assert is_locked(staff_user) is True
+        assert device.token_set.count() == 1
+        assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK).exists()
