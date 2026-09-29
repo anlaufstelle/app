@@ -765,7 +765,7 @@ def soft_delete_event(event, user, *, source=None):
     # The deletion state comes from the locked row, not from the instance: a
     # stale instance or a second request that waited on the locks above would
     # otherwise stamp, record and audit the same deletion again.
-    if Event.objects.filter(pk=event.pk).values_list("is_deleted", flat=True).first():
+    if Event.objects.filter(pk=event.pk, facility_id=event.facility_id).values_list("is_deleted", flat=True).first():
         raise ValidationError(_("Dieses Ereignis liegt bereits im Papierkorb."), code="event_already_deleted")
     # Refs #2197 (Cross-Review-Runde 1): die Bindung kommt aus der gesperrten
     # Zeile, nicht aus der womoeglich veralteten Instanz — sonst prueft der
