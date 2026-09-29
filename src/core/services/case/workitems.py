@@ -874,6 +874,8 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
     from core.services.client.restriction import assert_processing_allowed
     from core.services.security import check_version_conflict
 
+    # Einrichtungsgrenze der handelnden Person vor jeder Lesung und Sperre.
+    _assert_actor_in_facility(user, workitem.facility_id)
     # Innerhalb der Transaktion neu laden + locken — Facility-Filter
     # explizit, damit RLS- und Tenant-Isolation greifen.
     # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (Modul-Docstring).
@@ -885,9 +887,16 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
         .first()
     )
     assert_processing_allowed(current_client_id, lock=True)
+    # Widerrufszustand der eben gesperrten Person (Papierkorb, deaktiviert,
+    # zusammengefuehrt); ohne Personenbezug keine Abfrage.
+    _raise_if_clients_revoked([current_client_id] if current_client_id is not None else [], workitem.facility_id)
     locked = WorkItem.objects.select_for_update().get(pk=workitem.pk, facility_id=workitem.facility_id)
     if locked.client_id != current_client_id:
         raise ValidationError(_("Die Personenzuordnung der Aufgabe wurde zwischenzeitlich geändert."))
+    # Eine inzwischen geloeschte Aufgabe wechselt den Status nicht mehr — und
+    # erzeugt damit auch keine Folgeaufgabe.
+    if locked.is_deleted:
+        raise ValidationError(WORKITEM_DELETED_MESSAGE)
     check_version_conflict(locked, expected_updated_at, require_token=require_version_token)
     old_status = locked.status
 
