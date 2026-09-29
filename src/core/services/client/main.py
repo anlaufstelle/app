@@ -1508,6 +1508,29 @@ def _lock_client_event_rows(client):
     )
 
 
+def _lock_client_case_rows(client):
+    """Sperrt die Fallzeilen der Person — zwischen Person und Ereignissen.
+
+    Die Kaskade der Anonymisierung schreibt die Faelle der Person
+    (``_redact_cases_and_episodes``) und danach ihre Ereignisse. Ohne eigene
+    Sperre nahm sie die Fallzeilen erst mit diesem Schreiben — nachdem
+    :func:`_lock_client_event_rows` die Ereigniszeilen schon hielt. Die
+    kanonische Ordnung ist aber Person -> Fall -> Ereignis, dieselbe, die die
+    Fall-Hold-Anlage und die Fall-Tilgung nehmen; die Gegenordnung liefe mit
+    ihnen in einen Sperrzyklus. Gesperrt werden die Faelle, die die Kaskade
+    gleich schreibt, in ``pk``-Ordnung; vorgezogen wird nur der Zeitpunkt.
+    """
+    from core.models.case import Case
+
+    list(
+        Case.objects.for_facility(client.facility_id)
+        .filter(client_id=client.pk)
+        .order_by("pk")
+        .select_for_update()
+        .only("pk")
+    )
+
+
 @transaction.atomic
 def anonymize_client_now(client, user):
     """Anonymisiert eine Person im Papierkorb sofort — auf Admin-Anforderung.
@@ -1583,6 +1606,9 @@ def anonymize_client_now(client, user):
     if locked.anonymized_at is not None:
         raise ValidationError(_("Diese Person wurde bereits endgültig anonymisiert."))
 
+    # Person -> Fall -> Ereignis: die Faelle vor den Ereignissen, obwohl die
+    # Kaskade sie erst spaeter schreibt (``_lock_client_case_rows``).
+    _lock_client_case_rows(locked)
     _lock_client_event_rows(locked)
 
     if client_has_active_hold(locked):
