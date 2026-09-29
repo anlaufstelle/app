@@ -164,7 +164,7 @@ class TestUndoLaedtDenDokumentationstypInDerGleichenAbfrage:
         # ohne den JOIN ueberschreitet dieses Budget. Seit der einrichtungs-
         # weiten Sperr-Reihenfolge der Anhangspfade (Refs #2260) nimmt
         # ``delete_attachments_for`` im Loeschpfad EINE zusaetzliche, nach
-        # ``pk`` geordnete Vorsperre-Abfrage — auch ohne Anhaenge.
+        # ``pk``-ordered pre-lock query — even without attachments.
         # Since the delete path also reads the deletion state at the locked
         # event row (Refs #2374), the budget follows that deliberate read as
         # well (25). The mutant without the JOIN lands at 26 and stays killed
