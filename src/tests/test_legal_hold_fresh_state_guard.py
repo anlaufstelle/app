@@ -133,6 +133,28 @@ class TestHoldAnlageAmVorschlagLiestDenVorschlagGesperrtNeu:
         retention_proposal.refresh_from_db()
         assert retention_proposal.status == zwischenstand
 
+    def test_zweite_anlage_auf_den_gehaltenen_vorschlag_wird_mit_meldung_abgewiesen(
+        self, retention_proposal, lead_user
+    ):
+        """Der reguläre Zustand ``held``: der erste Hold ist angelegt und aktiv.
+
+        Die zweite Anlage (Doppelklick, zweites Fenster) entscheidet am
+        gesperrt gelesenen Vorschlag — mit derselben Meldung wie jeder andere
+        entschiedene Vorschlag, nicht erst an der Eindeutigkeit der Hold-Zeile.
+        """
+        veraltet = RetentionProposal.objects.get(pk=retention_proposal.pk)
+        erster = create_legal_hold(retention_proposal, lead_user, "Erstes Verfahren")
+
+        with pytest.raises(ValidationError) as excinfo:
+            create_legal_hold(veraltet, lead_user, "Zweiter Klick")
+
+        assert "bereits bearbeitet" in str(excinfo.value)
+        aktive = LegalHold.objects.filter(target_id=retention_proposal.target_id, dismissed_at__isnull=True)
+        assert list(aktive) == [erster]
+        assert _audit_zeilen("legal_hold_created").count() == 1
+        retention_proposal.refresh_from_db()
+        assert retention_proposal.status == RetentionProposal.Status.HELD
+
     @pytest.mark.parametrize(
         "zwischenstand",
         [RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED, RetentionProposal.Status.DEFERRED],
