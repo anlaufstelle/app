@@ -32,6 +32,11 @@ CASE_BINDING_CHANGED_MESSAGE = _(
     "Die Personenzuordnung des Falls wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."
 )
 
+#: Meldung, wenn fuer den Vorschlag bereits ein Hold besteht (Status
+#: ``held``) — derselbe Wortlaut wie die Absage der Hold-View beim
+#: Doppelklick, die die Vorschlagskarte an ihrer Stelle zeigt (Refs #2374).
+PROPOSAL_ALREADY_HELD_MESSAGE = _("Für diesen Vorschlag existiert bereits ein aktiver Hold.")
+
 
 def _row_content_is_gone(row) -> bool:
     """Hat DIESE Fassung ihre Werte verloren? (Finding B)
@@ -511,8 +516,8 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     Loeschlauf); abgewiesen werden ein bereits gehaltener und ein abgelehnter
     Vorschlag — dort gibt es nichts anzuhalten. Die Absage kommt am gesperrten
     Status, bevor eine Hold-Zeile entsteht: auch die zweite Anlage auf einen
-    gehaltenen Vorschlag endet mit der Meldung, nicht an der Eindeutigkeit der
-    Hold-Zeile. Der Statuswechsel geschieht an der gesperrten Zeile, die
+    gehaltenen Vorschlag endet mit einer Meldung, die den bestehenden Hold
+    nennt, nicht an der Eindeutigkeit der Hold-Zeile. Der Statuswechsel geschieht an der gesperrten Zeile, die
     Instanz des Aufrufers wird nachgezogen.
     """
     from core.retention.proposals import (
@@ -538,6 +543,8 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
             # Die Zeile liegt in der Datenbank nicht (mehr) in der Einrichtung
             # der Instanz.
             raise ValidationError(PROPOSAL_OTHER_FACILITY_MESSAGE)
+        if gesperrt.status == RetentionProposal.Status.HELD:
+            raise ValidationError(PROPOSAL_ALREADY_HELD_MESSAGE)
         if gesperrt.status not in haltbare_status:
             raise ValidationError(PROPOSAL_ALREADY_DECIDED_MESSAGE)
 
