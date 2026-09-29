@@ -525,7 +525,7 @@ def _maybe_duplicate_recurring(workitem, user, new_status) -> None:
     duplicate_recurring_workitem(workitem, user)
 
 
-def _locked_workitems(workitems):
+def _locked_workitems(workitems, user):
     """Refs #1022 (B2): Items innerhalb der Transaktion per
     ``select_for_update`` neu laden+locken — deterministisch nach ``pk``
     geordnet zur Deadlock-Vermeidung —, damit die Bulk-Pfade auf frischem
@@ -533,9 +533,22 @@ def _locked_workitems(workitems):
     geladenen Instanzen. Spiegelt den Single-Pfad ``update_workitem_status``
     (Refs #129/#733). Facility-/Tenant-Isolation greift ueber RLS (GUC im
     Request-Kontext) und die View-Vorfilterung.
+
+    Einrichtungsgrenze: jede Aufgabe des Stapels muss in der Einrichtung der
+    handelnden Person liegen. Geprueft wird vor der ersten Lesung und Sperre,
+    fail-closed fuer den ganzen Stapel; beide Lesungen tragen die Einrichtung
+    zusaetzlich, damit eine verfaelschte Instanz nichts Fremdes erreicht.
+
+    Zustandsvertrag: nach den Personensperren der Widerrufszustand der
+    gesperrten Personen (Papierkorb, deaktiviert, zusammengefuehrt), nach der
+    Aufgabensperre der Loeschzustand der gesperrten Aufgaben. Beides weist wie
+    das Art.-18-Gate den ganzen Stapel ab statt ihn teilweise auszufuehren.
     """
     from core.services.client.restriction import assert_processing_allowed
 
+    for workitem in workitems:
+        _assert_actor_in_facility(user, workitem.facility_id)
+    facility_id = getattr(user, "facility_id", None)
     pks = [w.pk for w in workitems]
     # KANONISCHE SPERR-REIHENFOLGE: Client VOR WorkItem (Modul-Docstring).
     # Die Personenbezuege werden dafuer UNGESPERRT vorgelesen — sie bestimmen
@@ -544,7 +557,11 @@ def _locked_workitems(workitems):
     # gleichzeitige Stapel mit ueberlappender Personenmenge dieselbe
     # Reihenfolge nehmen und einander nicht ueber Kreuz blockieren.
     client_ids = sorted(
-        {cid for cid in WorkItem.objects.filter(pk__in=pks).values_list("client_id", flat=True) if cid is not None}
+        {
+            cid
+            for cid in WorkItem.objects.filter(pk__in=pks, facility_id=facility_id).values_list("client_id", flat=True)
+            if cid is not None
+        }
     )
     # Art.-18-Gate (Refs #2045) am gemeinsamen Chokepoint der drei Bulk-Pfade
     # (Status/Prioritaet/Zuweisung) — einmal hier statt dreimal kopiert.
@@ -555,8 +572,15 @@ def _locked_workitems(workitems):
     # gelesenen ``client_id`` koennen sich also nicht mehr aendern.
     for client_id in client_ids:
         assert_processing_allowed(client_id, lock=True)
+    # Widerrufszustand auf den eben gesperrten Personenzeilen (ohne zweite
+    # Sperre); ohne Personenbezug im Stapel keine Abfrage.
+    _raise_if_clients_revoked(client_ids, facility_id)
 
-    locked = list(WorkItem.objects.select_for_update().filter(pk__in=pks).order_by("pk"))
+    locked = list(WorkItem.objects.select_for_update().filter(pk__in=pks, facility_id=facility_id).order_by("pk"))
+    # Eine inzwischen geloeschte Aufgabe wird nicht mehr geaendert — gelesen
+    # an der gesperrten Zeile, der Manager blendet geloeschte nicht aus.
+    if any(item.is_deleted for item in locked):
+        raise ValidationError(WORKITEM_DELETED_MESSAGE)
 
     # REVALIDIERUNG (Re-Review 2): Zwischen dem ungesperrten Vorab-Lesen und
     # dem Erhalt der WorkItem-Sperre kann eine Zuordnung gewechselt haben — die
@@ -980,7 +1004,7 @@ def bulk_update_workitem_status(workitems, user, status):
         raise ValueError(f"Invalid status: {status}")
 
     count = 0
-    for workitem in _locked_workitems(workitems):
+    for workitem in _locked_workitems(workitems, user):
         # Refs #906: gemeinsame Transition-Logik mit dem Single-Pfad. Bulk
         # uebernimmt kein Auto-Assign (Designentscheidung, Refs #593).
         if not _apply_status_transition(workitem, status, user, auto_assign=False):
@@ -1006,7 +1030,7 @@ def bulk_update_workitem_priority(workitems, user, priority):
         raise ValueError(f"Invalid priority: {priority}")
 
     count = 0
-    for workitem in _locked_workitems(workitems):
+    for workitem in _locked_workitems(workitems, user):
         if workitem.priority == priority:
             continue
         workitem.priority = priority
@@ -1023,7 +1047,7 @@ def bulk_assign_workitems(workitems, user, assignee_or_none):
     ``assignee_or_none=None`` removes the assignment. Returns the processed count.
     """
     count = 0
-    for workitem in _locked_workitems(workitems):
+    for workitem in _locked_workitems(workitems, user):
         if workitem.assigned_to_id == (assignee_or_none.pk if assignee_or_none else None):
             continue
         workitem.assigned_to = assignee_or_none

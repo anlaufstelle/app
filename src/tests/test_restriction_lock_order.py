@@ -287,7 +287,7 @@ class TestBulkRevalidation:
 
         monkeypatch.setattr(restriction_module, "assert_processing_allowed", _reassign_then_check)
 
-        checked = _locked_workitems([item])
+        checked = _locked_workitems([item], staff_user)
         assert fired["done"], "das Rennen wurde nicht ausgelöst"
         assert checked == [], "umgehängte Aufgabe wurde nicht übersprungen"
 
@@ -298,14 +298,14 @@ class TestBulkRevalidation:
         from core.services.case.workitems import _locked_workitems
 
         item = create_workitem(facility, staff_user, title="Ohne Person")
-        assert [w.pk for w in _locked_workitems([item])] == [item.pk]
+        assert [w.pk for w in _locked_workitems([item], staff_user)] == [item.pk]
 
     def test_untouched_workitem_still_passes(self, facility, client_identified, staff_user):
         from core.services.case import create_workitem
         from core.services.case.workitems import _locked_workitems
 
         item = create_workitem(facility, staff_user, client=client_identified, title="A")
-        assert [w.pk for w in _locked_workitems([item])] == [item.pk]
+        assert [w.pk for w in _locked_workitems([item], staff_user)] == [item.pk]
 
 
 @pytest.mark.django_db(transaction=True)

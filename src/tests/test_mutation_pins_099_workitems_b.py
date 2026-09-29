@@ -164,7 +164,7 @@ class TestLockedWorkitemsSkipLogging:
 
         logger_name = "core.services.case.workitems"
         with caplog.at_level(logging.WARNING, logger=logger_name):
-            checked = _locked_workitems([wi_gate, wi_free])
+            checked = _locked_workitems([wi_gate, wi_free], staff_user)
 
         assert fired["done"], "das Rennen wurde nicht ausgeloest"
         assert [item.pk for item in checked] == [wi_free.pk]
@@ -187,7 +187,7 @@ class TestLockedWorkitemsSkipLogging:
 
         logger_name = "core.services.case.workitems"
         with caplog.at_level(logging.WARNING, logger=logger_name):
-            checked = _locked_workitems([wi_a, wi_b])
+            checked = _locked_workitems([wi_a, wi_b], staff_user)
 
         assert {item.pk for item in checked} == {wi_a.pk, wi_b.pk}
         assert [record for record in caplog.records if record.name == logger_name] == []

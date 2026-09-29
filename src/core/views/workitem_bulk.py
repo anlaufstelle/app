@@ -11,6 +11,7 @@ import uuid
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -238,6 +239,14 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
             count = self.perform_action(request, workitems)
         except BulkValidationError:
             return HttpResponseBadRequest(self.invalid_input_message)
+        except ValidationError as exc:
+            # Fachliche Absage des Dienstes am gesperrten Stand (Art. 18,
+            # geloeschte Person oder Aufgabe, fremde Einrichtung). Der Dienst
+            # weist den ganzen Stapel ab — wie bei der Ownership-Absage oben
+            # als Hinweis in die Inbox statt als 500.
+            for message in exc.messages:
+                messages.error(request, message)
+            return self._inbox_redirect(request)
 
         messages.success(request, _("%(count)d Aufgaben aktualisiert.") % {"count": count})
 

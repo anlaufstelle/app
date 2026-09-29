@@ -181,9 +181,9 @@ class TestSammelaktionUeberDieView:
         items = _stapel(facility, client_identified, staff_user)
         WorkItem.objects.filter(pk__in=[w.pk for w in items]).update(assigned_to=lead_user)
         WorkItem.objects.filter(pk=items[1].pk).update(is_deleted=True, deleted_at=timezone.now())
+        client.force_login(lead_user)
         vorher = _stand(items)
         audit_vorher = AuditLog.objects.count()
-        client.force_login(lead_user)
         header = {"HTTP_HX_REQUEST": "true"} if htmx else {}
         response = client.post(reverse(url), {"workitem_ids": [str(w.pk) for w in items], **daten}, **header)
         assert response.status_code == 302

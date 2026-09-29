@@ -905,10 +905,6 @@ class TestTenantModelScopeGuard:
             "PK (Lock-Reihenfolge, Refs #1000) — kein Request-Input."
         ),
         # --- (2) Reload/Sperre per bereits serverseitig aufgeloester PK ----
-        "case/workitems.py:_locked_workitems:WorkItem": (
-            "Kanonische Sperr-Reihenfolge (Client vor WorkItem): ``pks`` kommt aus der "
-            "bereits gescopten ``workitems``-Liste des Aufrufers, nicht aus dem Request."
-        ),
         "client/main.py:_delete_event_attachments_for_client:Event": (
             "``event_ids`` stammt aus der Loeschkaskade der bereits aufgeloesten Person "
             "(Anhang-Abraeumung, M24/Refs #1738) — serverseitig erzeugte ID-Menge."
