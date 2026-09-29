@@ -33,9 +33,28 @@ from core.constants import WORKITEM_INBOX_CAP, WORKITEM_RECENT_DONE_PREVIEW
 from core.models import Activity, AuditLog, WorkItem
 from core.models.user import User
 from core.services.audit import apply_allowlisted_update, audit_event, check_update_allowlist
+from core.services.case.state_contract import _raise_if_clients_revoked
 from core.services.dashboard import log_activity
 
 logger = logging.getLogger(__name__)
+
+#: Die Aufgabe liegt im Papierkorb. Eine Aenderung waere eine Aenderung an
+#: einem geloeschten Datensatz; der Weg zurueck ist das Wiederherstellen.
+WORKITEM_DELETED_MESSAGE = _("Diese Aufgabe wurde gelöscht — sie kann nicht mehr geändert werden.")
+
+
+def _assert_actor_in_facility(user, facility_id) -> None:
+    """Die handelnde Person muss der Einrichtung der Aufgabe angehoeren.
+
+    Ueber HTTP scopen die Views bereits, in Produktion traegt zusaetzlich die
+    Zeilensicherheit — der Dienst zieht die Grenze trotzdem selbst, damit ein
+    direkter Aufruf sie nicht umgeht. Fail-closed fuer eine Person ohne
+    Einrichtung. Der Vergleich kostet keine Abfrage und steht deshalb vor der
+    ersten Lesung und Sperre.
+    """
+    actor_facility_id = getattr(user, "facility_id", None)
+    if actor_facility_id is None or actor_facility_id != facility_id:
+        raise ValidationError(_("Aufgabe gehört zu einer anderen Einrichtung."))
 
 
 # Refs #1804 (Konzept §3.6, Z1/Z2/Z4): „Diese Woche" war ein Kalenderwort ueber
@@ -565,10 +584,18 @@ def create_workitem(facility, user, *, client=None, **data):
 
     Art.-18-Gate (Refs #2045): eine neue Aufgabe zu einer eingeschraenkten
     Person ist neue inhaltliche Verarbeitung.
+
+    Eine Person im Papierkorb, deaktiviert oder zusammengefuehrt nimmt keine
+    neue Aufgabe an — entschieden an der eben gesperrten Personenzeile, nicht
+    am Stand der Formularpruefung.
     """
     from core.services.client.restriction import assert_processing_allowed
 
+    facility_id = getattr(facility, "pk", facility)
+    _assert_actor_in_facility(user, facility_id)
     assert_processing_allowed(client, lock=True)
+    if client is not None:
+        _raise_if_clients_revoked([getattr(client, "pk", client)], facility_id)
     workitem = WorkItem(facility=facility, created_by=user, client=client, **data)
     workitem.save()
     log_activity(

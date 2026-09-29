@@ -383,20 +383,27 @@ class WorkItemCreateView(StaffRequiredMixin, IdempotentCreateMixin, View):
                             return confirmation
                         return redirect("core:workitem_inbox")
                 raise
-            # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
-            # merken, damit ein späterer Replay (#1329) hier oben kurzschließt
-            # statt ein zweites WorkItem zu erzeugen. Der Payload-Hash (N14)
-            # macht eine Key-Kollision mit anderem Body erkennbar. No-op ohne
-            # Schlüssel.
-            self.remember_idempotency(request, idem_key, idem_payload_hash, workitem.pk)
-            # Refs #2289: belastbare Erfolgsbestaetigung fuer den
-            # Offline-Replay statt des Redirects (siehe EventCreateView) —
-            # bewusst VOR ``messages.success``.
-            confirmation = saved_confirmation(request, workitem.pk)
-            if confirmation is not None:
-                return confirmation
-            messages.success(request, _("Aufgabe wurde erstellt."))
-            return redirect("core:workitem_inbox")
+            except ValidationError as exc:
+                # Fachliche Absage des Dienstes am gesperrten Stand (etwa eine
+                # Person, die seit der Formularpruefung geloescht wurde): als
+                # Formularfehler zeigen — der Offline-Abgleich bekommt darueber
+                # die 422-Antwort unten, statt dass die Anlage mit 500 endet.
+                form.add_error(None, exc)
+            else:
+                # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
+                # merken, damit ein späterer Replay (#1329) hier oben kurzschließt
+                # statt ein zweites WorkItem zu erzeugen. Der Payload-Hash (N14)
+                # macht eine Key-Kollision mit anderem Body erkennbar. No-op ohne
+                # Schlüssel.
+                self.remember_idempotency(request, idem_key, idem_payload_hash, workitem.pk)
+                # Refs #2289: belastbare Erfolgsbestaetigung fuer den
+                # Offline-Replay statt des Redirects (siehe EventCreateView) —
+                # bewusst VOR ``messages.success``.
+                confirmation = saved_confirmation(request, workitem.pk)
+                if confirmation is not None:
+                    return confirmation
+                messages.success(request, _("Aufgabe wurde erstellt."))
+                return redirect("core:workitem_inbox")
 
         # Formular ungueltig. Refs #1351 Task 8, #1387 (analog #1111/EventCreateView):
         # der Offline-Replay (roher Accept: application/json) darf ein
