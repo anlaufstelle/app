@@ -751,6 +751,9 @@ def soft_delete_event(event, user, *, source=None):
     """
     from core.services.client.restriction import assert_processing_allowed
 
+    # The facility of the acting person comes first — before the person and
+    # event row locks below.
+    _assert_actor_in_facility(user, event.facility_id)
     assert_processing_allowed(event.client_id, lock=True)
     # Reihenfolge tragend (ADR-050 D2): erst Personen-, dann Ereigniszeile
     # sperren, DANN den Hold lesen — sonst bleibt zwischen Lesung und Wirkung
