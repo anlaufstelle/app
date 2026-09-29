@@ -202,12 +202,16 @@ def create_or_get_client_merge_request(source, target, user, reason):
     # entscheiden, schreiben — alles in EINER Transaktion.
     #
     # Davor die Einrichtungsgrenze der antragstellenden Person (fail-closed):
-    # eine fremde Einrichtung sperrt keine der beiden Personenzeilen. Das Ziel
-    # prueft ``_validate_merge`` gegen die Quelle.
+    # Quelle UND Ziel muessen zu ihrer Einrichtung gehoeren, sonst wird keine
+    # der beiden Personenzeilen gesperrt. Die Sperre selbst nimmt nur Zeilen
+    # dieser Einrichtung — ordnet die Datenbank eine Person inzwischen anders
+    # zu als die uebergebene Instanz, kommt sie nicht zurueck.
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != source.facility_id:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
-    source, target = _locked_clients(source, target)
+    if target.facility_id != actor_facility_id:
+        raise ValidationError(_("Beide Personen müssen zur selben Einrichtung gehören."))
+    source, target = _locked_clients(source, target, facility=actor_facility_id)
     existing = get_pending_merge_request(source)
     if existing is not None and existing.merge_into_id == target.pk:
         return existing, False
@@ -364,16 +368,20 @@ def merge_clients(source, target, user):
     frisch gesperrten Zeilen geprueft, damit eine parallele Hoeherstufung das
     Vier-Augen-Gebot nicht unterlaeuft.
 
-    Die Einrichtung der handelnden Leitung wird vor der ersten Sperre gegen die
-    Quelle verglichen (fail-closed); dass das Ziel zur selben Einrichtung
-    gehoert, prueft :func:`_validate_merge` mit eigener Meldung.
+    Die Einrichtung der handelnden Leitung wird vor der ersten Sperre gegen
+    Quelle und Ziel verglichen (fail-closed; ein fremdes Ziel mit der Meldung
+    der Merge-Validierung). Die Sperre nimmt nur Zeilen dieser Einrichtung:
+    ordnet die Datenbank eine Person inzwischen anders zu als die uebergebene
+    Instanz, kommt sie nicht zurueck und nichts wird zusammengefuehrt.
     """
     if not user.is_lead_or_admin:
         raise ValidationError(_("Nur die Leitung darf Personen direkt zusammenführen."))
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != source.facility_id:
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
-    source, target = _locked_clients(source, target)
+    if target.facility_id != actor_facility_id:
+        raise ValidationError(_("Beide Personen müssen zur selben Einrichtung gehören."))
+    source, target = _locked_clients(source, target, facility=actor_facility_id)
     if merge_requires_four_eyes(source, target):
         raise ValidationError(
             _("Für Personen mit Zusatzangaben ist ein Zusammenführungs-Antrag mit Bestätigung nötig.")
@@ -386,12 +394,17 @@ def merge_clients(source, target, user):
 # ---------------------------------------------------------------------------
 
 
-def _locked_clients(source, target):
+def _locked_clients(source, target, *, facility=None):
     """Beide Personen-Zeilen per ``select_for_update`` sperren und frisch laden.
 
     EIN Statement fuer beide Zeilen (kein Deadlock-Fenster zwischen zwei
     Einzel-Locks); die Rueckgabe ersetzt die moeglicherweise stalen Instanzen
     der Aufruferin.
+
+    ``facility`` bindet die Sperre an eine Einrichtung: eine Zeile ausserhalb
+    kommt nicht zurueck und endet in „Person nicht gefunden." Die Einstiege,
+    die die Einrichtung der handelnden Person vorab gegen beide Personen
+    pruefen, geben sie mit; ohne Angabe sperrt der Helfer wie bisher.
     """
     from core.services.client.restriction import assert_processing_allowed
 
@@ -412,10 +425,11 @@ def _locked_clients(source, target):
     # deterministische Reihenfolge koennen zwei gleichzeitige Merges mit
     # vertauschtem Quell-/Zielpaar dieselben zwei Zeilen ueber Kreuz sperren.
     # Sie liegt seit Refs #2268 im gemeinsamen Personen-Sperrhelfer — dieselbe
-    # Ordnung, die auch Fallzuordnung und Art.-18-Gate nehmen. Bewusst OHNE
-    # Einrichtungs-Scope: die Einrichtungsgrenze zieht :func:`_validate_merge`
-    # mit eigener Meldung, ein Scope hier machte daraus ein „nicht gefunden".
-    locked = lock_clients([source.pk, target.pk])
+    # Ordnung, die auch Fallzuordnung und Art.-18-Gate nehmen. Ohne
+    # ``facility`` bewusst OHNE Einrichtungs-Scope: dort zieht
+    # :func:`_validate_merge` die Grenze mit eigener Meldung, ein Scope machte
+    # daraus ein „nicht gefunden".
+    locked = lock_clients([source.pk, target.pk], facility=facility)
     for client in locked.values():
         # Auf der bereits gesperrten, frisch gelesenen Zeile — kein zweiter
         # Lock noetig.

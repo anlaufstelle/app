@@ -220,3 +220,89 @@ class TestZusammenfuehrungsAntragEntscheiden:
         assert pending_merge_request.status != DeletionRequest.Status.PENDING
         assert pending_merge_request.reviewed_by_id == lead_user.pk
         assert abfragen.sperrfolge()[0] == "core_deletionrequest"
+
+
+# ---------------------------------------------------------------------------
+# Beide Personen gehoeren zur Einrichtung der handelnden Person
+# ---------------------------------------------------------------------------
+#
+# Direktes Zusammenfuehren und Antrag vergleichen Quelle UND Ziel mit der
+# Einrichtung der handelnden Person, bevor sie sperren; die gemeinsame Sperre
+# nimmt nur Zeilen dieser Einrichtung. Ein fremdes Ziel wird ohne jede Sperre
+# abgewiesen. Ordnet die Datenbank eine Person inzwischen einer anderen
+# Einrichtung zu als die uebergebene Instanz, kommt sie aus der Sperre nicht
+# zurueck — es wird nichts zusammengefuehrt, nichts beantragt, nichts
+# protokolliert.
+
+_SAME_FACILITY_MESSAGE = "Beide Personen müssen zur selben Einrichtung gehören."
+_NOT_FOUND_MESSAGE = "Person nicht gefunden."
+
+
+def _operation(name, source, target, lead_user, staff_user):
+    if name == "zusammenfuehren":
+        return lambda: merge_clients(source, target, lead_user)
+    return lambda: create_or_get_client_merge_request(source, target, staff_user, "Grenze")
+
+
+@pytest.fixture
+def foreign_target(second_facility, foreign_staff):
+    return Client.objects.create(
+        facility=second_facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Ziel-Fremd",
+        created_by=foreign_staff,
+    )
+
+
+def _nothing_written(source, target, second_facility, audits_before):
+    for pk in (source.pk, target.pk):
+        row = Client.objects.get(pk=pk)
+        assert row.merged_into_id is None
+        assert row.is_deleted is False
+    assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
+    assert AuditLog.objects.filter(facility=second_facility).count() == audits_before
+
+
+@pytest.mark.parametrize("operation", ["zusammenfuehren", "antrag"])
+class TestPersonenpaarInDerEinrichtungDerHandelndenPerson:
+    def test_fremdes_ziel_abgewiesen_vor_jeder_sperre(
+        self, operation, second_facility, source, foreign_target, lead_user, staff_user
+    ):
+        audits_before = AuditLog.objects.filter(facility=second_facility).count()
+
+        messages, abfragen = _refused(_operation(operation, source, foreign_target, lead_user, staff_user))
+
+        assert messages == [_SAME_FACILITY_MESSAGE]
+        assert abfragen.sperrfolge() == []
+        _nothing_written(source, foreign_target, second_facility, audits_before)
+
+    @pytest.mark.parametrize(
+        ("veraltet", "erwartet"),
+        [
+            # Beide Zeilen liegen in der fremden Einrichtung, nur die Quelle
+            # behauptet die eigene: das Ziel verraet die Grenze vor der Sperre.
+            ("quelle", _SAME_FACILITY_MESSAGE),
+            # Beide Instanzen behaupten die eigene Einrichtung.
+            ("beide", _NOT_FOUND_MESSAGE),
+            # Nur das Ziel liegt inzwischen in der fremden Einrichtung.
+            ("ziel", _NOT_FOUND_MESSAGE),
+        ],
+        ids=["quelle", "beide", "ziel"],
+    )
+    def test_abweichender_datenbankstand_bleibt_ausserhalb_der_sperre(
+        self, operation, veraltet, erwartet, facility, second_facility, source, target, lead_user, staff_user
+    ):
+        moved = [target.pk] if veraltet == "ziel" else [source.pk, target.pk]
+        Client.objects.filter(pk__in=moved).update(facility=second_facility)
+        if veraltet == "quelle":
+            target.refresh_from_db()
+        audits_before = AuditLog.objects.filter(facility=second_facility).count()
+
+        messages, abfragen = _refused(_operation(operation, source, target, lead_user, staff_user))
+
+        assert messages == [erwartet]
+        client_locks = abfragen.sperren("core_client")
+        assert all(zugriff.traegt(facility_id=[facility.pk]) for zugriff in client_locks), client_locks
+        if veraltet == "quelle":
+            assert abfragen.sperrfolge() == []
+        _nothing_written(source, target, second_facility, audits_before)
