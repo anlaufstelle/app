@@ -772,9 +772,9 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
     # four-eyes workflow bypasses it through its private context, not through
     # the rows_locked flag.
     assert_processing_allowed(event.client_id, lock=True)
-    # Reihenfolge tragend (ADR-050 D2): erst Personen-, dann Ereigniszeile
-    # sperren, DANN den Hold lesen — sonst bleibt zwischen Lesung und Wirkung
-    # ein Fenster offen.
+    # Order matters (ADR-050 D2): lock the person row, then the event row,
+    # THEN read the hold — otherwise a window stays open between the read and
+    # its effect.
     if not rows_locked:
         original_client_id = event.client_id
         _lock_client_row(original_client_id)

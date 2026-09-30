@@ -183,6 +183,8 @@ class TestZusammenfuehrungsAntragStellen:
 
         assert messages == [_FACILITY_MESSAGE]
         assert abfragen.sperrfolge() == []
+        assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
+        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).exists()
 
     def test_gegenprobe_lokale_fachkraft_stellt_antrag(self, staff_user, source, target):
         with mitschnitt() as abfragen:
