@@ -24,15 +24,11 @@ prueft, zeigt die beobachtete Sperre der Personenzeile, nicht der Aufrufpfad.
 from datetime import timedelta
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Client, WorkItem
-from core.services.case.workitems import (
-    _form_state_unchanged,
-    _locked_client_id,
-    update_workitem,
-    workitem_form_state_token,
-)
+from core.services.case.workitems import update_workitem, workitem_form_state_token
 from tests._row_lock_helpers import mitschnitt
 
 pytestmark = pytest.mark.django_db
@@ -63,6 +59,18 @@ def eigene_und_nachbar(facility, client_identified, andere_person, staff_user):
     eigene = _aufgabe(facility, client_identified, staff_user, alter_tage=5, titel="Eigene")
     nachbar = _aufgabe(facility, andere_person, staff_user, alter_tage=0, titel="Nachbar")
     return eigene, nachbar
+
+
+def _form_rendered_before_parallel_write(workitem, **parallel_changes):
+    """Version token and form fingerprint as rendered, then a parallel write on the row.
+
+    The parallel write always moves ``updated_at``, so ``update_workitem`` runs
+    into the version conflict and decides it through the form fingerprint.
+    """
+    expected_updated_at = workitem.updated_at.isoformat()
+    form_state = workitem_form_state_token(workitem)
+    WorkItem.objects.filter(pk=workitem.pk).update(updated_at=timezone.now() + timedelta(minutes=1), **parallel_changes)
+    return expected_updated_at, form_state
 
 
 class TestUpdateWorkitem:
@@ -98,62 +106,86 @@ class TestUpdateWorkitem:
 
 
 class TestLockedClientId:
-    """``_locked_client_id``: die Aufgabensperre trifft die adressierte Zeile."""
+    """``_locked_client_id`` as ``update_workitem`` uses it: the work item lock hits the addressed row."""
 
-    def test_liefert_die_person_der_adressierten_aufgabe(self, eigene_und_nachbar, client_identified):
-        """x__locked_client_id__mutmut_8: ohne ``pk`` kaeme die Person der
-        neueren Nachbaraufgabe zurueck."""
+    def test_liefert_die_person_der_adressierten_aufgabe(self, eigene_und_nachbar, staff_user, client_identified):
+        """x__locked_client_id__mutmut_8: without ``pk`` the locked read
+        returned the person of the newer neighbouring work item, so
+        ``update_workitem`` refused the edit as a changed person assignment.
+        Observed: the edit that repeats the unchanged person lands, and the
+        work item keeps its person."""
         eigene, _ = eigene_und_nachbar
-        assert _locked_client_id(eigene) == client_identified.pk
+        update_workitem(eigene, staff_user, title="New title", client=client_identified)
+        eigene.refresh_from_db()
+        assert eigene.title == "New title"
+        assert eigene.client_id == client_identified.pk
 
-    def test_aufgabensperre_traegt_pk_und_einrichtung(self, eigene_und_nachbar):
-        """x__locked_client_id__mutmut_8: ``FOR UPDATE`` auf genau die
-        adressierte Aufgabe in ihrer Einrichtung."""
+    def test_aufgabensperre_traegt_pk_und_einrichtung(self, eigene_und_nachbar, staff_user):
+        """x__locked_client_id__mutmut_8: every row lock ``update_workitem``
+        takes on the work item is ``FOR UPDATE`` on its ``pk``; exactly one of
+        them, the work item lock before the person comparison, is also scoped
+        to the facility of the work item (the fingerprint read only runs on a
+        version conflict)."""
         eigene, _ = eigene_und_nachbar
         with mitschnitt() as abfragen:
-            _locked_client_id(eigene)
+            update_workitem(eigene, staff_user, title="New title")
         sperren = abfragen.sperren("core_workitem")
         assert sperren
         assert all(a.sperrart == "UPDATE" for a in sperren)
-        assert all(a.traegt(id=[eigene.pk], facility_id=[eigene.facility_id]) for a in sperren)
+        assert all(a.traegt(id=[eigene.pk]) for a in sperren)
+        scoped = [a for a in sperren if a.traegt(id=[eigene.pk], facility_id=[eigene.facility_id])]
+        assert len(scoped) == 1
 
 
 class TestFormStateUnchanged:
-    """``_form_state_unchanged``: der Fingerabdruck wird an der eigenen Zeile gemessen."""
+    """``_form_state_unchanged`` on the conflict path of ``update_workitem``: the fingerprint reads the own row."""
 
     def test_reiner_versionskonflikt_wird_neben_einer_nachbaraufgabe_gerettet(self, eigene_und_nachbar, staff_user):
-        """x__form_state_unchanged__mutmut_8: parallel aenderte sich nur
-        ``updated_at`` der eigenen Aufgabe; ohne ``pk`` verglich die Rettung
-        gegen die Formularwerte der neueren Nachbaraufgabe und wies ab."""
+        """x__form_state_unchanged__mutmut_8: only ``updated_at`` of the own
+        work item changed in parallel; without ``pk`` the rescue compared
+        against the form values of the newer neighbouring work item and
+        refused the edit."""
         eigene, _ = eigene_und_nachbar
-        stand = eigene.updated_at.isoformat()
-        token = workitem_form_state_token(eigene)
-        WorkItem.objects.filter(pk=eigene.pk).update(updated_at=timezone.now() + timedelta(minutes=1))
-        assert _form_state_unchanged(eigene, token) is True
-        update_workitem(eigene, staff_user, expected_updated_at=stand, expected_form_state=token, title="Neu")
+        rendered_at, form_state = _form_rendered_before_parallel_write(eigene)
+        update_workitem(
+            eigene, staff_user, expected_updated_at=rendered_at, expected_form_state=form_state, title="New title"
+        )
         eigene.refresh_from_db()
-        assert eigene.title == "Neu"
+        assert eigene.title == "New title"
 
     def test_parallele_feldaenderung_bleibt_konflikt_neben_gleichlautender_nachbaraufgabe(
         self, facility, client_identified, staff_user
     ):
-        """x__form_state_unchanged__mutmut_8: die neuere Nachbaraufgabe traegt
-        genau die gerenderten Formularwerte, die eigene wurde parallel
-        umbenannt — ohne ``pk`` galt das als unveraendert und die parallele
-        Aenderung waere still ueberschrieben worden."""
+        """x__form_state_unchanged__mutmut_8: the newer neighbouring work item
+        carries exactly the rendered form values, the own one was renamed in
+        parallel. Without ``pk`` that counted as unchanged and the edit would
+        silently overwrite the parallel change. Observed: the version conflict
+        stands and the parallel title stays."""
         eigene = _aufgabe(facility, client_identified, staff_user, alter_tage=5, titel="Gleich")
         _aufgabe(facility, client_identified, staff_user, alter_tage=0, titel="Gleich")
-        token = workitem_form_state_token(eigene)
-        WorkItem.objects.filter(pk=eigene.pk).update(title="Parallel geaendert")
-        assert _form_state_unchanged(eigene, token) is False
+        rendered_at, form_state = _form_rendered_before_parallel_write(eigene, title="Changed in parallel")
+        with pytest.raises(ValidationError) as exc:
+            update_workitem(
+                eigene, staff_user, expected_updated_at=rendered_at, expected_form_state=form_state, title="New title"
+            )
+        assert exc.value.code == "version_conflict"
+        eigene.refresh_from_db()
+        assert eigene.title == "Changed in parallel"
 
-    def test_fingerabdruck_lesung_traegt_pk_und_einrichtung(self, eigene_und_nachbar):
-        """x__form_state_unchanged__mutmut_8: ``FOR UPDATE`` auf genau die
-        adressierte Aufgabe in ihrer Einrichtung."""
+    def test_fingerabdruck_lesung_traegt_pk_und_einrichtung(self, eigene_und_nachbar, staff_user):
+        """x__form_state_unchanged__mutmut_8: on the version conflict path
+        every row lock on the work item is ``FOR UPDATE`` on its ``pk``;
+        exactly two of them, the work item lock and the fingerprint read, are
+        also scoped to the facility of the work item."""
         eigene, _ = eigene_und_nachbar
+        rendered_at, form_state = _form_rendered_before_parallel_write(eigene)
         with mitschnitt() as abfragen:
-            _form_state_unchanged(eigene, workitem_form_state_token(eigene))
+            update_workitem(
+                eigene, staff_user, expected_updated_at=rendered_at, expected_form_state=form_state, title="New title"
+            )
         sperren = abfragen.sperren("core_workitem")
         assert sperren
         assert all(a.sperrart == "UPDATE" for a in sperren)
-        assert all(a.traegt(id=[eigene.pk], facility_id=[eigene.facility_id]) for a in sperren)
+        assert all(a.traegt(id=[eigene.pk]) for a in sperren)
+        scoped = [a for a in sperren if a.traegt(id=[eigene.pk], facility_id=[eigene.facility_id])]
+        assert len(scoped) == 2
