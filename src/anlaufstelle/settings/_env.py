@@ -44,8 +44,14 @@ def env_bool(name: str, *, default: bool) -> bool:
 
 
 def env_bool_strict(name: str, *, default: bool) -> bool:
-    """Parse a boolean environment variable and reject unknown values."""
+    """Parse a boolean environment variable and reject unknown values.
+
+    A missing, empty, or whitespace-only value uses ``default``. Any other
+    value must be one of the explicitly accepted true or false spellings.
+    """
     raw = os.environ.get(name, "true" if default else "false").strip().lower()
+    if not raw:
+        return default
     if raw in _TRUE_VALUES:
         return True
     if raw in _FALSE_VALUES:

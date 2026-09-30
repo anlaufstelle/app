@@ -66,6 +66,18 @@ def test_prod_reads_email_use_ssl() -> None:
     assert (mailer["use_tls"], mailer["use_ssl"]) == (False, True)
 
 
+@pytest.mark.parametrize("name, default", [("EMAIL_USE_TLS", True), ("EMAIL_USE_SSL", False)])
+@pytest.mark.parametrize("value", ["", "  "])
+def test_prod_treats_blank_email_transport_values_as_unset(name: str, default: bool, value: str) -> None:
+    result = _run_prod_import(
+        {**VALID_ENV, name: value},
+        code=_DUMP_MAILER,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["use_tls" if name == "EMAIL_USE_TLS" else "use_ssl"] is default
+
+
 @pytest.mark.parametrize("name", ["EMAIL_USE_TLS", "EMAIL_USE_SSL"])
 @pytest.mark.parametrize("value", ["ture", "on"])
 def test_prod_rejects_unknown_email_transport_values(name: str, value: str) -> None:

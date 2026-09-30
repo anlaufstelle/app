@@ -62,3 +62,14 @@ def test_web_environment_contains_production_mail_variables(compose_path: Path) 
         pytest.skip(f"{compose_path.name} fehlt im öffentlichen Release-Baum")
     missing = _mail_variables_from_production_settings() - set(_compose_environment(compose_path))
     assert not missing, f"{compose_path.name}: fehlende web-Mailvariablen: {sorted(missing)}"
+
+
+@pytest.mark.parametrize("compose_path", _deployment_compose_paths(), ids=lambda path: path.name)
+@pytest.mark.parametrize("name", ["EMAIL_USE_TLS", "EMAIL_USE_SSL"])
+def test_compose_mail_boolean_values_are_accepted_by_settings_parser(compose_path: Path, name: str) -> None:
+    if not compose_path.exists():
+        pytest.skip(f"{compose_path.name} fehlt im öffentlichen Release-Baum")
+    value = _compose_environment(compose_path)[name]
+    assert value in {"true", "false", "", "${EMAIL_USE_TLS:-true}", "${EMAIL_USE_SSL-}"}, (
+        f"{compose_path.name}: {name} has unsupported value form {value!r}"
+    )
