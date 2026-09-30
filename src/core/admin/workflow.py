@@ -28,6 +28,9 @@ class DeletionRequestAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "facility",
         "target_type",
         "target_id",
+        # The approval merges into the requested target; it must not be
+        # changed between the request and the four-eyes review.
+        "merge_into",
         "reason",
         "status",
         "requested_by",
