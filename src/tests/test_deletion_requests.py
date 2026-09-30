@@ -7,7 +7,8 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, DeletionRequest, Event, EventHistory
+from core.models import AuditLog, Client, DeletionRequest, Event, EventHistory
+from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, restrict_processing
 from core.services.events import (
     approve_deletion,
     reject_deletion,
@@ -153,6 +154,22 @@ class TestApproveDeletion:
         # Person (sie trifft die Loeschentscheidung), nicht die beantragende.
         assert event_qualified.deleted_at is not None
         assert event_qualified.deleted_by == lead_user
+
+    def test_restricted_person_cannot_be_deleted_by_approval(
+        self, pending_request, lead_user, event_qualified, client_qualified
+    ):
+        restrict_processing(client_qualified, lead_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+        audits_before = AuditLog.objects.count()
+
+        with pytest.raises(ValidationError) as excinfo:
+            approve_deletion(pending_request, lead_user)
+
+        assert excinfo.value.messages == [str(PROCESSING_RESTRICTED_MESSAGE)]
+        event_qualified.refresh_from_db()
+        pending_request.refresh_from_db()
+        assert event_qualified.is_deleted is False
+        assert pending_request.status == DeletionRequest.Status.PENDING
+        assert AuditLog.objects.count() == audits_before
 
     def test_creates_event_history_delete(self, pending_request, lead_user, event_qualified):
         approve_deletion(pending_request, lead_user)

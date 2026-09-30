@@ -788,6 +788,9 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
         # avoids acquiring a second lock or issuing another query here.
         if event.facility_id != user.facility_id:
             raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
+        # The person row is already locked by the approval caller; a second
+        # lock here would violate the one-lock-per-row query pin.
+        assert_processing_allowed(event.client_id, lock=False)
     # The deletion state comes from the locked row, not from the instance: a
     # stale instance or a second request that waited on the locks above would
     # otherwise stamp, record and audit the same deletion again.
