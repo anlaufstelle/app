@@ -28,6 +28,12 @@ EXEMPT_URLS = [
     "/logout/",
     "/password-change/",
     "/password-reset/",
+    # Invite and unlock links are handled by their own guard: a signed-in
+    # session gets a notice with the sign-out form there, also while its second
+    # factor is pending, instead of a redirect to /mfa/verify/ (Refs #2391).
+    # Anonymous sessions never reach the redirect below anyway.
+    "/invite/",
+    "/account/recovery/",
     "/static/",
     "/mfa/",
     # Passkey-Ceremony-Endpoints (ADR-032, Refs #1492): die WebAuthn-Assertion

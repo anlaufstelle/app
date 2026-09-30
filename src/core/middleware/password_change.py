@@ -7,6 +7,12 @@ EXEMPT_URLS = [
     "/logout/",
     "/password-change/",
     "/password-reset/",
+    # Invite and unlock links are handled by their own guard: a signed-in
+    # session gets a notice with the sign-out form there, also while it still
+    # has to change its password, instead of a redirect to /password-change/
+    # (Refs #2391). Anonymous sessions never reach the redirect below anyway.
+    "/invite/",
+    "/account/recovery/",
     "/static/",
     # Refs #2025: der Offline-Login-Bootstrap holt den Schluessel-Salt direkt
     # nach dem Login per fetch(). Wuerde der Aufruf auf /password-change/

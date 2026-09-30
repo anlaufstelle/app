@@ -10,7 +10,14 @@ session that is not signed in. A signed-in session gets a notice with the
 regular sign-out form instead: no token is used up, the database context of
 the session keeps pointing at its own account, and nothing is written. Once
 signed out, the same link works as before.
+
+The same notice reaches a signed-in session whose second factor is still
+pending or which has to change its password first: the middlewares that
+enforce those steps leave the link routes to the notice instead of
+redirecting to their own pages, and keep redirecting everywhere else.
 """
+
+from urllib.parse import urlencode
 
 import pytest
 from django.contrib.auth import views as auth_views
@@ -21,7 +28,9 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from core.models import AuditLog, User
+from core.models.mfa import EncryptedTOTPDevice
 from core.services.security import build_recovery_token, generate_backup_codes, invite_token_generator
+from core.services.security.login_lockout import LOCKOUT_THRESHOLD, is_locked
 from tests.test_rls_functional import (  # noqa: F401
     as_rls_role,
     rls_test_role,
@@ -359,3 +368,246 @@ class TestLinkRequestsInSignedInSessionUnderProdRole:
         assert [message.to for message in mailoutbox] == [[target.email]]
         rows = AuditLog.objects.filter(user=target, action=AuditLog.Action.PASSWORD_RESET_REQUESTED)
         assert list(rows.values_list("facility_id", flat=True)) == [target_facility.pk]
+
+
+PENDING_SECOND_FACTOR = "pending_second_factor"
+PENDING_PASSWORD_CHANGE = "pending_password_change"
+
+pending_session_steps = pytest.mark.parametrize(
+    "pending_step",
+    [PENDING_SECOND_FACTOR, PENDING_PASSWORD_CHANGE],
+)
+
+# ``None`` stands for the account the link belongs to.
+pending_step_actors = pytest.mark.parametrize(
+    "actor_fixture",
+    ["staff_user", "super_admin_user", None],
+    ids=["staff_other_facility", "super_admin", "link_account"],
+)
+
+
+def _pending_step_actor(request, actor_fixture, target):
+    return target if actor_fixture is None else request.getfixturevalue(actor_fixture)
+
+
+def _sign_in_with_pending_step(client, user, pending_step):
+    """Sign in the way the login view leaves a session before its next step."""
+    if pending_step == PENDING_SECOND_FACTOR:
+        EncryptedTOTPDevice.objects.create(user=user, name="authenticator", confirmed=True)
+    else:
+        User.objects.filter(pk=user.pk).update(must_change_password=True)
+    client.force_login(user)
+    if pending_step == PENDING_SECOND_FACTOR:
+        session = client.session
+        session["mfa_verified"] = False
+        session.save()
+
+
+def _pending_step_redirect(pending_step, path):
+    if pending_step == PENDING_SECOND_FACTOR:
+        return f"/mfa/verify/?{urlencode({'next': path})}"
+    return reverse("password_change")
+
+
+def _lock(user):
+    for _ in range(LOCKOUT_THRESHOLD):
+        AuditLog.objects.create(
+            user=user,
+            facility=user.facility,
+            action=AuditLog.Action.LOGIN_FAILED,
+            detail={"username": user.username},
+        )
+    assert is_locked(user)
+
+
+def _htmx_post(client, url, data=None):
+    return client.post(url, data or {}, REMOTE_ADDR=REMOTE_ADDR, headers={"HX-Request": "true"})
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestLinksInSessionWithPendingStepUnderProdRole:
+    @link_routes
+    @pending_step_actors
+    @pending_session_steps
+    def test_password_link_shows_the_notice_instead_of_the_pending_step(
+        self,
+        request,
+        client,
+        rls_test_role,  # noqa: F811
+        second_facility,
+        actor_fixture,
+        pending_step,
+        route,
+        token_generator,
+        trigger,
+    ):
+        target = _target_user(second_facility, trigger)
+        actor = _pending_step_actor(request, actor_fixture, target)
+        _sign_in_with_pending_step(client, actor, pending_step)
+        url = _link(route, token_generator, target)
+        set_password_url = _set_password_link(route, target)
+        audit_rows_before = AuditLog.objects.count()
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            opened = client.get(url)
+            submitted = _submit_new_password(client, url)
+            submitted_via_htmx = _htmx_post(
+                client, set_password_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
+            )
+            context_after_submit = _db_context()
+
+        assert context_after_submit == _actor_db_context(actor)
+        for response in (opened, submitted, submitted_via_htmx):
+            _assert_notice(response)
+        assert client.session["_auth_user_id"] == str(actor.pk)
+        assert auth_views.INTERNAL_RESET_SESSION_TOKEN not in client.session
+        target.refresh_from_db()
+        assert target.check_password(OLD_PASSWORD)
+        assert AuditLog.objects.count() == audit_rows_before
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _sign_out(client)
+            reopened = _open_link(client, url)
+            completed = _submit_new_password(client, reopened.redirect_chain[-1][0])
+
+        assert completed.status_code == 302
+        assert completed["Location"] == reverse("password_reset_complete")
+        target.refresh_from_db()
+        assert target.check_password(NEW_PASSWORD)
+
+    @pending_step_actors
+    @pending_session_steps
+    def test_recovery_link_shows_the_notice_and_keeps_the_lock(
+        self,
+        request,
+        client,
+        rls_test_role,  # noqa: F811
+        second_facility,
+        actor_fixture,
+        pending_step,
+    ):
+        target = _target_user(second_facility, "recovery")
+        actor = _pending_step_actor(request, actor_fixture, target)
+        _sign_in_with_pending_step(client, actor, pending_step)
+        _lock(target)
+        url = reverse("core:lockout_recovery_confirm", kwargs={"token": build_recovery_token(target)})
+        audit_rows_before = AuditLog.objects.count()
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            opened = client.get(url)
+            context_after_open = _db_context()
+            submitted = client.post(url, REMOTE_ADDR=REMOTE_ADDR)
+            submitted_via_htmx = _htmx_post(client, url)
+            context_after_submit = _db_context()
+
+        assert context_after_open == _actor_db_context(actor)
+        assert context_after_submit == _actor_db_context(actor)
+        for response in (opened, submitted, submitted_via_htmx):
+            _assert_notice(response)
+        assert client.session["_auth_user_id"] == str(actor.pk)
+        assert is_locked(target)
+        assert AuditLog.objects.count() == audit_rows_before
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _sign_out(client)
+            reopened = client.get(url)
+            completed = client.post(url, REMOTE_ADDR=REMOTE_ADDR)
+
+        assert reopened.status_code == 200
+        assert completed.status_code == 302
+        assert completed["Location"] == "/login/?recovered=1"
+        assert not is_locked(target)
+
+    @pending_step_actors
+    @pending_session_steps
+    def test_backup_code_shows_the_notice_and_is_not_used_up(
+        self,
+        request,
+        client,
+        rls_test_role,  # noqa: F811
+        second_facility,
+        actor_fixture,
+        pending_step,
+    ):
+        target = _target_user(second_facility, "backup-code")
+        actor = _pending_step_actor(request, actor_fixture, target)
+        _sign_in_with_pending_step(client, actor, pending_step)
+        _lock(target)
+        code = generate_backup_codes(target)[0]
+        url = reverse("core:lockout_recovery_backup_code")
+        form = {"username": target.username, "backup_code": code}
+        audit_rows_before = AuditLog.objects.count()
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            opened = client.get(url)
+            submitted = client.post(url, form, REMOTE_ADDR=REMOTE_ADDR)
+            submitted_via_htmx = _htmx_post(client, url, form)
+            context_after_submit = _db_context()
+
+        assert context_after_submit == _actor_db_context(actor)
+        for response in (opened, submitted, submitted_via_htmx):
+            _assert_notice(response)
+        assert client.session["_auth_user_id"] == str(actor.pk)
+        assert is_locked(target)
+        assert AuditLog.objects.count() == audit_rows_before
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _sign_out(client)
+            completed = client.post(url, form, REMOTE_ADDR=REMOTE_ADDR)
+
+        assert completed.status_code == 302
+        assert completed["Location"] == "/login/?recovered=1"
+        assert not is_locked(target)
+
+    @pending_step_actors
+    @pending_session_steps
+    def test_unlock_request_shows_the_notice_and_sends_nothing(
+        self,
+        request,
+        client,
+        mailoutbox,
+        rls_test_role,  # noqa: F811
+        second_facility,
+        actor_fixture,
+        pending_step,
+    ):
+        target = _target_user(second_facility, "unlock-request")
+        actor = _pending_step_actor(request, actor_fixture, target)
+        _sign_in_with_pending_step(client, actor, pending_step)
+        url = reverse("core:lockout_recovery_request")
+        audit_rows_before = AuditLog.objects.count()
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            opened = client.get(url)
+            submitted = client.post(url, {"email": target.email}, REMOTE_ADDR=REMOTE_ADDR)
+            submitted_via_htmx = _htmx_post(client, url, {"email": target.email})
+            context_after_submit = _db_context()
+
+        assert context_after_submit == _actor_db_context(actor)
+        for response in (opened, submitted, submitted_via_htmx):
+            _assert_notice(response)
+        assert client.session["_auth_user_id"] == str(actor.pk)
+        assert mailoutbox == []
+        assert AuditLog.objects.count() == audit_rows_before
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _sign_out(client)
+            requested = client.post(url, {"email": target.email}, REMOTE_ADDR=REMOTE_ADDR)
+
+        assert requested.status_code == 302
+        assert [message.to for message in mailoutbox] == [[target.email]]
+
+
+@pytest.mark.django_db
+class TestPendingStepStillGuardsOrdinaryPages:
+    @pytest.mark.parametrize("route", ["core:account_profile", "core:dashboard"])
+    @pending_session_steps
+    def test_ordinary_page_redirects_to_the_pending_step(self, client, staff_user, pending_step, route):
+        path = reverse(route)
+        _sign_in_with_pending_step(client, staff_user, pending_step)
+
+        response = client.get(path)
+
+        assert response.status_code == 302
+        assert response["Location"] == _pending_step_redirect(pending_step, path)
