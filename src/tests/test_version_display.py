@@ -149,6 +149,9 @@ class TestPublicFooterRendering:
         "auth/lockout_recovery_confirm.html",
         "auth/lockout_recovery_invalid.html",
         "registration/password_reset_confirm.html",
+        # Notice for account links opened in a signed-in session (Refs #2391);
+        # also reached before the second factor, so it never shows a version.
+        "auth/signed_in_link_notice.html",
     )
     # Anonym erreichbar, existiert aber nur bei ``DEMO_MODE`` (Refs #2285):
     # eigener Test mit eingeschaltetem Demo-Modus.

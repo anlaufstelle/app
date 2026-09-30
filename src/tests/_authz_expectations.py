@@ -38,6 +38,9 @@ STAFF_PLUS = frozenset({"facility_admin", "lead", "staff"})
 LEAD_PLUS = frozenset({"facility_admin", "lead"})
 ADMIN_ONLY = frozenset({"facility_admin"})
 SUPER_ONLY = frozenset({"super_admin"})
+# Account links (invite, reset, unlock) are processed only in a session that is
+# not signed in; every signed-in role gets a 403 notice (Refs #2391).
+SIGNED_OUT_ONLY: frozenset[str] = frozenset()
 # Seed-Zustand des Rechts „Löschbestätigung" (Refs #1053).
 CONFIRMER = frozenset({"facility_admin", "lead"})
 
@@ -84,7 +87,7 @@ EXPECTATIONS = (
     E(
         "password_reset_confirm",
         "public",
-        get=ALL_AUTH,
+        get=SIGNED_OUT_ONLY,
         anonymous_ok=True,
         url_kwargs=(("uidb64", "MQ"), ("token", "abc-defghijklmnop")),
         idor_exempt="Token-basierter Flow, kein Objektbezug",
@@ -94,7 +97,7 @@ EXPECTATIONS = (
     E(
         "invite_confirm",
         "public",
-        get=ALL_AUTH,
+        get=SIGNED_OUT_ONLY,
         anonymous_ok=True,
         url_kwargs=(("uidb64", "MQ"), ("token", "abc-defghijklmnop")),
         idor_exempt="Token-basierter Flow, kein Objektbezug",
@@ -105,13 +108,13 @@ EXPECTATIONS = (
     E(
         "core:lockout_recovery_confirm",
         "public",
-        get=ALL_AUTH,
+        get=SIGNED_OUT_ONLY,
         anonymous_ok=True,
         url_kwargs=(("token", "ungueltiges-token"),),
         extra_ok=(404,),
         idor_exempt="Token-basierter Flow, kein Objektbezug",
     ),
-    E("core:lockout_recovery_backup_code", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True),
+    E("core:lockout_recovery_backup_code", "public", get=SIGNED_OUT_ONLY, post=SIGNED_OUT_ONLY, anonymous_ok=True),
     # ---- auth-flow (eingeloggt, alle Rollen) ----------------------------
     E("logout", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
     E("password_change", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),

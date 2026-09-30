@@ -1,0 +1,49 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% trans "Bitte zuerst abmelden" %} — Anlaufstelle</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    {% include "components/_document_head.html" %}
+    {# Refs #2391: standalone, without base.html — the page is also reached by sessions #}
+    {# that have not finished the second factor. The offline modules are loaded so the #}
+    {# sign-out form below runs the same local wipe as the navigation sign-out #}
+    {# (sw-register.js hooks every form posting to the logout URL); order as in login.html. #}
+    <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/url-patterns.js' %}"></script>
+    <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-db.js' %}"></script>
+    <script src="{% static 'js/offline-bundles.js' %}"></script>
+    <script src="{% static 'js/offline-revocations.js' %}"></script>
+    <script src="{% static 'js/offline-store.js' %}"></script>
+</head>
+<body class="min-h-screen bg-canvas flex items-center justify-center p-6"
+      data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
+      data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
+        {% trans "Zum Inhalt springen" %}
+    </a>
+    <main id="main-content" class="w-full max-w-[420px] bg-surface border border-subtle rounded-[10px] p-7"
+          data-testid="signed-in-link-notice">
+        <h1 class="text-2xl font-bold text-ink mb-2">{% trans "Bitte zuerst abmelden" %}</h1>
+        <p class="text-sm text-ink-muted mb-6">
+            {% blocktrans %}Sie sind derzeit angemeldet. Melden Sie sich ab und öffnen Sie den Link danach erneut.{% endblocktrans %}
+        </p>
+        <form method="post" action="{% url 'logout' %}" class="mb-4">
+            {% csrf_token %}
+            <button type="submit" class="px-4 py-2 btn-primary text-sm font-medium" data-testid="signed-in-link-notice-logout">
+                {% trans "Abmelden" %}
+            </button>
+        </form>
+        <a href="/" class="text-[13px] text-ink-muted hover:underline block">
+            {% trans "Zur Startseite" %}
+        </a>
+        {% include "components/_public_footer.html" with footer_compact=True %}
+    </main>
+    <script src="{% static 'js/csrf.js' %}"></script>
+    <script src="{% static 'js/sw-register.js' %}" defer></script>
+</body>
+</html>

@@ -3,7 +3,6 @@
 import logging
 
 from django.conf import settings
-from django.contrib.auth import logout
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -24,6 +23,7 @@ from core.services.security import RevocationReason, invite_token_generator, is_
 from core.services.security.origin import external_link_context
 from core.services.security.session_rotation import rotate_session_after_privilege_gain
 from core.signals.audit import get_client_ip
+from core.views.mixins import anonymous_session_required
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +295,11 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
 # also fuer die Gruppe, fuer die es beide Wege ueberhaupt gibt. ``never_cache``
 # und ``sensitive_post_parameters`` der Elternklasse umschliessen weiterhin den
 # ``super()``-Aufruf und brauchen keine Wiederholung.
+# Refs #2391: the inner decorator wraps the own ``dispatch`` below, so a
+# signed-in session gets its notice before the session token is read, stored
+# or rotated; ``login_not_required`` stays outermost and keeps its marker.
 @method_decorator(login_not_required, name="dispatch")
+@method_decorator(anonymous_session_required, name="dispatch")
 class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     """Password-Reset, der zugleich einen aktiven Account-Lockout aufhebt (Refs #869).
 
@@ -369,15 +373,6 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Refs #2391: the database context of a signed-in request follows the
-        # signed-in account, while the writes below belong to the account of
-        # the link, possibly in another facility. Ending the session first
-        # lets them take the anonymous path, which sets the context to the
-        # target account. The session ends only once the password is stored
-        # (the parent has consumed the reset token by then), so merely
-        # opening a link never signs anyone out.
-        if self.request.user.is_authenticated:
-            logout(self.request)
         user = form.user
         if user is not None and getattr(user, "pk", None):
             revoke_credentials(user, reason=self.revocation_reason, request=self.request)

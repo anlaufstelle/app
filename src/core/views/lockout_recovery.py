@@ -36,6 +36,7 @@ from core.services.security import unlock as unlock_user
 from core.services.security.lockout_recovery import consume_recovery_token
 from core.services.security.origin import build_external_url
 from core.signals.audit import _set_session_vars, get_client_ip
+from core.views.mixins import anonymous_session_required
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,9 @@ class LockoutRecoverySentView(TemplateView):
     template_name = "auth/lockout_recovery_sent.html"
 
 
+# Refs #2391: a valid token switches the database context to the account of
+# the link (already on GET); a signed-in session gets a notice instead.
+@method_decorator(anonymous_session_required, name="dispatch")
 class LockoutRecoveryConfirmView(View):
     """Token-Klick: GET zeigt eine Bestaetigungsseite, POST entsperrt (Refs #1273).
 
@@ -164,6 +168,9 @@ class _BackupCodeForm(forms.Form):
     )
 
 
+# Refs #2391: a valid code switches the database context to the account it
+# belongs to; a signed-in session gets a notice instead.
+@method_decorator(anonymous_session_required, name="dispatch")
 class LockoutRecoveryBackupCodeView(FormView):
     """User + MFA-Backup-Code -> LOGIN_UNLOCK + BACKUP_CODES_USED (Refs #869, Var. C)."""
 

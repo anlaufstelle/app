@@ -128,6 +128,20 @@ def _seed_extra_payload(client) -> None:
     session.save()
 
 
+def _anonymous_session(client) -> str:
+    """Stored session of a visitor who is not signed in → its session ID.
+
+    Invite and reset links are processed only in sessions that are not signed
+    in (Refs #2391). The session exists before the link is opened, so a copy
+    of its cookie is the one that must not inherit the token handover.
+    """
+    _seed_extra_payload(client)
+    key = client.session.session_key
+    assert key
+    assert "_auth_user_id" not in client.session
+    return key
+
+
 def _mark_verified(client) -> None:
     """Session ohne TOTP-Verbrauch auf 2FA-verifiziert setzen.
 
@@ -640,12 +654,9 @@ class TestRotationAtPasswordResetTokenHandover:
         assert response.url.endswith("/set-password/")
         return response.url
 
-    def _assert_handover_rotates(self, client, user, url_name, generator, settings_obj):
-        _with_non_default_timeout(settings_obj)
-        old_key = _login(client, user.username, STAFF_PASSWORD)
-        _seed_extra_payload(client)
+    def _assert_handover_rotates(self, client, user, url_name, generator):
+        old_key = _anonymous_session(client)
         before = dict(client.session.items())
-        assert before["_session_expiry"] == NON_DEFAULT_TIMEOUT_MINUTES * 60
 
         form_url = self._open_link(client, user, url_name, generator)
 
@@ -654,12 +665,8 @@ class TestRotationAtPasswordResetTokenHandover:
         _assert_old_cookie_is_dead(old_key, new_key)
         # (b) Die Reset-Faehigkeit haengt an der NEUEN Sitzung.
         assert client.session.get(RESET_TOKEN_KEY)
-        # (c) Anmeldung und Fristen ueberleben die Rotation.
-        assert client.session["_auth_user_id"] == before["_auth_user_id"]
-        assert client.session[LAST_RENEWAL_KEY] == before[LAST_RENEWAL_KEY]
-        assert client.session[ABSOLUTE_DEADLINE_KEY] == before[ABSOLUTE_DEADLINE_KEY]
-        assert client.session["_session_expiry"] == before["_session_expiry"]
-        assert client.session["_review_probe"] == before["_review_probe"]
+        # (c) The existing session data survives the rotation unchanged.
+        assert {key: value for key, value in client.session.items() if key != RESET_TOKEN_KEY} == before
 
         # (d) Der zweite Client mit dem ALTEN Cookie sieht das Formular nicht …
         stolen = _client_with_stolen_cookie(old_key)
@@ -684,17 +691,36 @@ class TestRotationAtPasswordResetTokenHandover:
         user.refresh_from_db()
         assert user.check_password(NEW_PASSWORD) is True
 
-    def test_password_reset_handover_rotates(self, client, staff_user, settings_obj):
-        self._assert_handover_rotates(
-            client, staff_user, "password_reset_confirm", default_token_generator, settings_obj
-        )
+    def test_password_reset_handover_rotates(self, client, staff_user):
+        self._assert_handover_rotates(client, staff_user, "password_reset_confirm", default_token_generator)
 
-    def test_invite_handover_rotates(self, client, staff_user, settings_obj):
-        self._assert_handover_rotates(client, staff_user, "invite_confirm", invite_token_generator, settings_obj)
+    def test_invite_handover_rotates(self, client, staff_user):
+        self._assert_handover_rotates(client, staff_user, "invite_confirm", invite_token_generator)
+
+    @pytest.mark.parametrize(
+        ("url_name", "generator"),
+        [("password_reset_confirm", default_token_generator), ("invite_confirm", invite_token_generator)],
+        ids=["password_reset", "invite"],
+    )
+    def test_signed_in_session_gets_no_handover_and_keeps_its_id(self, client, staff_user, url_name, generator):
+        """A signed-in session never receives the token, so nothing is rotated (Refs #2391)."""
+        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        _seed_extra_payload(client)
+        before = dict(client.session.items())
+        staff_user.refresh_from_db()
+        token = generator.make_token(staff_user)
+
+        response = client.get(reverse(url_name, kwargs={"uidb64": self._uid(staff_user), "token": token}))
+
+        assert response.status_code == 403
+        assert client.session.session_key == old_key
+        assert _session_row_exists(old_key) is True
+        assert dict(client.session.items()) == before
+        assert RESET_TOKEN_KEY not in client.session
 
     def test_invalid_reset_token_neither_rotates_nor_grants(self, client, staff_user):
         """Fehlschlag: ungueltiges Token → keine Rotation, keine Faehigkeit."""
-        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        old_key = _anonymous_session(client)
 
         response = client.get(
             reverse(
@@ -772,7 +798,7 @@ class TestRotationSurvivesExceptionAfterTokenWrite:
         def _raise_disallowed(*args, **kwargs):
             raise DisallowedRedirect("Unsafe redirect")
 
-        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        old_key = _anonymous_session(client)
         link = self._link(staff_user, "password_reset_confirm", default_token_generator)
         monkeypatch.setattr("django.contrib.auth.views.HttpResponseRedirect", _raise_disallowed)
 
@@ -789,7 +815,7 @@ class TestRotationSurvivesExceptionAfterTokenWrite:
         def _raise_runtime(*args, **kwargs):
             raise RuntimeError("Antwortbau gescheitert")
 
-        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        old_key = _anonymous_session(client)
         link = self._link(staff_user, "invite_confirm", invite_token_generator)
         monkeypatch.setattr("django.contrib.auth.views.HttpResponseRedirect", _raise_runtime)
 
@@ -804,7 +830,7 @@ class TestRotationSurvivesExceptionAfterTokenWrite:
         def _raise_runtime(*args, **kwargs):
             raise RuntimeError("Nutzeraufloesung gescheitert")
 
-        old_key = _login(client, "teststaff", STAFF_PASSWORD)
+        old_key = _anonymous_session(client)
         link = self._link(staff_user, "password_reset_confirm", default_token_generator)
         monkeypatch.setattr(
             "django.contrib.auth.views.PasswordResetConfirmView.get_user",

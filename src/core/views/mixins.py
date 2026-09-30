@@ -1,10 +1,12 @@
 """Role-based access mixins."""
 
 import logging
+from functools import wraps
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db import IntegrityError
 from django.http import HttpResponse
+from django.shortcuts import render
 
 from core.services.events.idempotency import (
     get_idempotent_result,
@@ -129,6 +131,38 @@ class IdempotentCreateMixin:
         remember_idempotent_result(
             self.idempotency_scope, request.user.pk, idem_key, result_pk, payload_hash=idem_payload_hash
         )
+
+
+SIGNED_IN_LINK_NOTICE_TEMPLATE = "auth/signed_in_link_notice.html"
+
+
+def anonymous_session_required(view_func):
+    """Process an account link only in a session that is not signed in (Refs #2391).
+
+    Invite, password reset and unlock links act on the account the link
+    belongs to, and their writes need the database context of that account.
+    A signed-in session carries the context of its own account instead:
+    writing from it violates the row-level security of the audit log, and
+    switching it would point a session that stays signed in at another
+    facility. Signing the session out on the fly is no way out either, because
+    it skips the local clean-up of a regular sign-out.
+
+    A signed-in session therefore gets a notice with the regular sign-out form
+    instead, for GET and POST alike, for every role and also for the account
+    of the link itself. Applied to ``dispatch`` with ``method_decorator``, the
+    check runs before the view reads or uses a token and before anything
+    touches the database context. The notice is a 403: the request is refused
+    in the current session state, as with the other notices that carry a
+    sign-out form (archived or missing facility).
+    """
+
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return render(request, SIGNED_IN_LINK_NOTICE_TEMPLATE, status=403)
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped_view
 
 
 class AssistantOrAboveRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
