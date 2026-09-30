@@ -28,7 +28,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Case, Client
-from core.services.case.deletion import CASE_OTHER_FACILITY_MESSAGE, _move_case_to_trash, soft_delete_case
+from core.services.case.deletion import CASE_OTHER_FACILITY_MESSAGE, soft_delete_case
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE
 from tests._row_lock_helpers import mitschnitt
 
@@ -99,13 +99,21 @@ class TestSoftDeleteCase:
 
 
 class TestMoveCaseToTrash:
-    """``_move_case_to_trash``: die Absage bei fehlender Fallzeile in der Einrichtung."""
+    """``_move_case_to_trash`` behind ``soft_delete_case``: the refusal when the case row left the facility."""
 
     def test_fallzeile_fehlt_in_der_einrichtung(self, case_open, other_facility, staff_user):
-        """x__move_case_to_trash__mutmut_8: ohne Meldungstext verlor die
-        Absage die Einrichtungsgrenze."""
-        case_open.facility_id = other_facility.pk
-        with pytest.raises(ValidationError) as exc:
-            _move_case_to_trash(case_open, staff_user)
+        """x__move_case_to_trash__mutmut_8: without the message text the
+        refusal lost the facility boundary. The case row moves to another
+        facility directly after the person lock of ``soft_delete_case``, that
+        is after its scoped read and before the case lock. Observed: the
+        refusal names the facility boundary and the case stays out of the
+        trash."""
+        with mitschnitt() as queries, pytest.raises(ValidationError) as exc:
+            queries.nach_sperre(
+                "core_client",
+                lambda: Case.objects.filter(pk=case_open.pk).update(facility=other_facility),
+            )
+            soft_delete_case(case_open, staff_user)
         assert exc.value.messages == [str(CASE_OTHER_FACILITY_MESSAGE)]
+        assert queries.offene_schranken() == []
         assert Case.objects.filter(pk=case_open.pk, is_deleted=False).exists()
