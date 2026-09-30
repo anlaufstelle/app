@@ -357,8 +357,14 @@ def approve_client_merge(deletion_request, reviewer):
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
 
-    source = Client.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
-    target = Client.objects.get(pk=deletion_request.merge_into_id, facility=deletion_request.facility)
+    try:
+        source = Client.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
+        target = Client.objects.get(pk=deletion_request.merge_into_id, facility=deletion_request.facility)
+    except Client.DoesNotExist as exc:
+        raise ValidationError(
+            _("Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."),
+            code="version_conflict",
+        ) from exc
     source, target = _locked_clients(source, target)
     target = _execute_merge(source, target, reviewer, deletion_request=deletion_request)
 
@@ -817,7 +823,10 @@ def unmerge_client(source, user):
         raise ValidationError(CLIENT_OTHER_FACILITY_MESSAGE)
     if source.merged_into_id is None:
         raise ValidationError(_("Diese Person ist nicht zusammengeführt."))
-    target = Client.objects.get(pk=source.merged_into_id, facility=source.facility)
+    try:
+        target = Client.objects.get(pk=source.merged_into_id, facility=source.facility)
+    except Client.DoesNotExist as exc:
+        raise ValidationError(_("Diese Person ist nicht zusammengeführt.")) from exc
     source, target = _locked_clients(source, target)
     if source.merged_into_id != target.pk:
         raise ValidationError(_("Diese Person ist nicht zusammengeführt."))

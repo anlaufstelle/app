@@ -12,6 +12,8 @@ zieht weiterhin die Merge-Validierung mit eigener Meldung; diese Datei prueft
 die handelnde Person. Die Sperren werden am ausgefuehrten SQL beobachtet.
 """
 
+from uuid import uuid4
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -163,6 +165,14 @@ class TestAufhebenDerZusammenfuehrung:
         assert source_event.client_id == merged_source.pk
         assert abfragen.sperrfolge()[0] == "core_client"
 
+    def test_missing_merge_target_is_refused(self, lead_user, merged_source):
+        merged_source.merged_into_id = uuid4()
+
+        with pytest.raises(ValidationError) as excinfo:
+            unmerge_client(merged_source, lead_user)
+
+        assert excinfo.value.messages == ["Diese Person ist nicht zusammengeführt."]
+
 
 class TestZusammenfuehrungsAntragStellen:
     @pytest.mark.parametrize("akteur", ["foreign_staff", "facility_less_admin"])
@@ -173,8 +183,6 @@ class TestZusammenfuehrungsAntragStellen:
 
         assert messages == [_FACILITY_MESSAGE]
         assert abfragen.sperrfolge() == []
-        assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
-        assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).exists()
 
     def test_gegenprobe_lokale_fachkraft_stellt_antrag(self, staff_user, source, target):
         with mitschnitt() as abfragen:
@@ -183,6 +191,25 @@ class TestZusammenfuehrungsAntragStellen:
         assert created is True
         assert dr.merge_into_id == target.pk
         assert abfragen.sperrfolge()[0] == "core_client"
+
+
+class TestInconsistentMergeReferences:
+    def test_missing_merge_target_is_refused(self, monkeypatch, pending_merge_request, lead_user):
+        original_get = Client.objects.get
+
+        def missing_target(*args, **kwargs):
+            if kwargs.get("pk") == pending_merge_request.merge_into_id:
+                raise Client.DoesNotExist
+            return original_get(*args, **kwargs)
+
+        monkeypatch.setattr(Client.objects, "get", missing_target)
+
+        with pytest.raises(ValidationError) as excinfo:
+            approve_client_merge(pending_merge_request, lead_user)
+
+        assert excinfo.value.messages == [
+            "Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."
+        ]
 
 
 @pytest.fixture

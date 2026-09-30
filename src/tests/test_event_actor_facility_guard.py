@@ -167,3 +167,16 @@ class TestSoftDeleteEvent:
 
         assert Event.objects.filter(pk=live_event.pk, is_deleted=True, deleted_by=staff_user).exists()
         assert AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_id=str(live_event.pk)).exists()
+
+    def test_in_memory_facility_tampering_is_refused(self, facility, foreign_event, staff_user):
+        event = Event.objects.get(pk=foreign_event.pk)
+        event.facility_id = facility.pk
+        before = _stored(event.pk)
+        audits_before = AuditLog.objects.count()
+
+        with pytest.raises(ValidationError) as excinfo:
+            soft_delete_event(event, staff_user)
+
+        assert excinfo.value.messages == [_EVENT_OTHER_FACILITY]
+        assert _stored(event.pk) == before
+        assert AuditLog.objects.count() == audits_before

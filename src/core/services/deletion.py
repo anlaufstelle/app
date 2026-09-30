@@ -92,9 +92,12 @@ def withdraw_deletion_request(deletion_request, user):
         raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
     # Facility-scoped Lookup wahrt die RLS-Scopung, der Lock haelt die Zeile
     # bis zum Commit dieser Transaktion.
-    dr = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility_id=deletion_request.facility_id
-    )
+    try:
+        dr = DeletionRequest.objects.select_for_update().get(
+            pk=deletion_request.pk, facility_id=deletion_request.facility_id
+        )
+    except DeletionRequest.DoesNotExist as exc:
+        raise ValidationError(WITHDRAW_NOT_PENDING_MESSAGE) from exc
     if dr.requested_by_id is None or dr.requested_by_id != user.pk:
         raise ValidationError(_("Nur die antragstellende Person kann einen Löschantrag zurückziehen."))
     if dr.status != DeletionRequest.Status.PENDING:

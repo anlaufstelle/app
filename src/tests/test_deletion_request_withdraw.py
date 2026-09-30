@@ -21,6 +21,8 @@ Die Guards, die diese Datei pinnt:
   Unique-Index ``unique_pending_deletion_request`` greift bei WITHDRAWN nicht.
 """
 
+from uuid import uuid4
+
 import pytest
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
@@ -75,6 +77,16 @@ def _messages(response):
 
 
 class TestWithdrawService:
+    def test_missing_request_is_refused_as_already_decided(self, own_request, staff_user):
+        own_request.pk = uuid4()
+
+        with pytest.raises(ValidationError) as excinfo:
+            withdraw_deletion_request(own_request, staff_user)
+
+        assert excinfo.value.messages == [
+            "Dieser Löschantrag ist bereits entschieden und kann nicht mehr zurückgezogen werden."
+        ]
+
     def test_sets_withdrawn_status_and_keeps_reviewer_null(self, own_request, staff_user):
         withdraw_deletion_request(own_request, staff_user)
 
