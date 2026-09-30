@@ -29,9 +29,11 @@ from django.utils import timezone
 
 from core.models import Client, WorkItem
 from core.services.case.workitems import update_workitem, workitem_form_state_token
-from tests._row_lock_helpers import mitschnitt
+from tests._row_lock_helpers import Zugriff, mitschnitt
 
 pytestmark = pytest.mark.django_db
+
+WORKITEM_TABLE = "core_workitem"
 
 
 def _aufgabe(facility, client, user, *, alter_tage, titel="Aufgabe"):
@@ -71,6 +73,31 @@ def _form_rendered_before_parallel_write(workitem, **parallel_changes):
     form_state = workitem_form_state_token(workitem)
     WorkItem.objects.filter(pk=workitem.pk).update(updated_at=timezone.now() + timedelta(minutes=1), **parallel_changes)
     return expected_updated_at, form_state
+
+
+def _assert_row_locks_behind_facility_boundary(queries, workitem):
+    """Row locks on the work item table address its row, behind the facility boundary.
+
+    Every lock on the table is ``FOR UPDATE`` on the ``pk`` of the addressed
+    work item. At least one of them also carries its facility, and every read
+    or lock on the table up to that lock carries ``pk`` and facility as well:
+    accesses on the ``pk`` alone (version token check, change diff) only
+    follow it, when the row is locked and known to belong to the facility.
+    How many reads and locks the service issues stays open, so an additional
+    lock on the same row or a merged read remains valid.
+    """
+    scope = {"id": [workitem.pk], "facility_id": [workitem.facility_id]}
+    locks = queries.sperren(WORKITEM_TABLE)
+    assert locks
+    assert all(lock.sperrart == "UPDATE" for lock in locks), locks
+    assert all(lock.traegt(id=[workitem.pk]) for lock in locks), locks
+    accesses = [Zugriff(query, WORKITEM_TABLE) for query in queries if query.liest(WORKITEM_TABLE)]
+    boundary = next(
+        (index for index, access in enumerate(accesses) if access.sperrart == "UPDATE" and access.traegt(**scope)),
+        None,
+    )
+    assert boundary is not None, accesses
+    assert all(access.traegt(**scope) for access in accesses[:boundary]), accesses
 
 
 class TestUpdateWorkitem:
@@ -121,20 +148,18 @@ class TestLockedClientId:
         assert eigene.client_id == client_identified.pk
 
     def test_aufgabensperre_traegt_pk_und_einrichtung(self, eigene_und_nachbar, staff_user):
-        """x__locked_client_id__mutmut_8: every row lock ``update_workitem``
-        takes on the work item is ``FOR UPDATE`` on its ``pk``; exactly one of
-        them, the work item lock before the person comparison, is also scoped
-        to the facility of the work item (the fingerprint read only runs on a
-        version conflict)."""
+        """x__locked_client_id__mutmut_8: without ``pk`` the work item lock
+        reads the newest work item of the facility. Observed on the plain edit
+        (no version conflict, so the fingerprint read does not run): every
+        row lock on the work item addresses its ``pk``, the lock scoped to
+        ``pk`` and facility precedes any access on the ``pk`` alone, and the
+        edit lands."""
         eigene, _ = eigene_und_nachbar
         with mitschnitt() as abfragen:
             update_workitem(eigene, staff_user, title="New title")
-        sperren = abfragen.sperren("core_workitem")
-        assert sperren
-        assert all(a.sperrart == "UPDATE" for a in sperren)
-        assert all(a.traegt(id=[eigene.pk]) for a in sperren)
-        scoped = [a for a in sperren if a.traegt(id=[eigene.pk], facility_id=[eigene.facility_id])]
-        assert len(scoped) == 1
+        _assert_row_locks_behind_facility_boundary(abfragen, eigene)
+        eigene.refresh_from_db()
+        assert eigene.title == "New title"
 
 
 class TestFormStateUnchanged:
@@ -173,19 +198,18 @@ class TestFormStateUnchanged:
         assert eigene.title == "Changed in parallel"
 
     def test_fingerabdruck_lesung_traegt_pk_und_einrichtung(self, eigene_und_nachbar, staff_user):
-        """x__form_state_unchanged__mutmut_8: on the version conflict path
-        every row lock on the work item is ``FOR UPDATE`` on its ``pk``;
-        exactly two of them, the work item lock and the fingerprint read, are
-        also scoped to the facility of the work item."""
+        """x__form_state_unchanged__mutmut_8: without ``pk`` the fingerprint
+        read locks and compares the newest work item of the facility. Observed
+        on the version conflict path: every row lock on the work item, the
+        fingerprint read included, addresses its ``pk``, the lock scoped to
+        ``pk`` and facility precedes any access on the ``pk`` alone, and the
+        rescued edit lands."""
         eigene, _ = eigene_und_nachbar
         rendered_at, form_state = _form_rendered_before_parallel_write(eigene)
         with mitschnitt() as abfragen:
             update_workitem(
                 eigene, staff_user, expected_updated_at=rendered_at, expected_form_state=form_state, title="New title"
             )
-        sperren = abfragen.sperren("core_workitem")
-        assert sperren
-        assert all(a.sperrart == "UPDATE" for a in sperren)
-        assert all(a.traegt(id=[eigene.pk]) for a in sperren)
-        scoped = [a for a in sperren if a.traegt(id=[eigene.pk], facility_id=[eigene.facility_id])]
-        assert len(scoped) == 2
+        _assert_row_locks_behind_facility_boundary(abfragen, eigene)
+        eigene.refresh_from_db()
+        assert eigene.title == "New title"
