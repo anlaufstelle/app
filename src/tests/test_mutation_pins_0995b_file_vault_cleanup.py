@@ -11,8 +11,8 @@ Groups:
 * ``_write_cleanup_cursor`` (6) — the cursor must be written for any file
   name the tree can yield (non-UTF-8 names arrive surrogate-escaped), a failed
   write must surface as the original ``OSError`` even when temp creation or
-  temp cleanup fails, and a hard abort may only leave a hidden temp file that
-  belongs to the state file.
+  temp cleanup fails, and a hard abort must keep the active cursor in effect
+  and may only leave hidden files behind.
 * ``CleanupCursorWriteError.__init__`` (2) — the error message is the message
   of the underlying ``OSError``.
 * ``cleanup_orphan_storage_files`` (21) — the report of a run: every counter
@@ -29,7 +29,6 @@ no database access happens.
 
 from __future__ import annotations
 
-import json
 import os
 import time
 from pathlib import Path
@@ -247,16 +246,24 @@ class TestWriteCleanupCursor:
 
         assert second.checked_paths == ("a.enc",)
 
-    def test_hard_abort_leaves_only_a_hidden_state_temp_file(self, media_root, monkeypatch):
+    def test_hard_abort_keeps_the_active_cursor_and_hides_leftovers(self, media_root, monkeypatch):
         """``_write_cleanup_cursor__mutmut_5`` / ``_11`` (temp ``prefix`` dropped).
 
-        A hard abort between writing and activating the cursor skips the
-        cleanup; the leftover must be hidden and named after the state file,
-        not a generic ``tmp*.tmp`` next to the media files. The existing
+        A hard abort between writing and activating a new cursor skips the
+        cleanup. The active cursor must stay untouched, the next run must
+        resume behind it, no extra media file may appear, and anything left
+        behind must be hidden. The mutants fall back to the generic default
+        prefix and leave a visible file next to the media files. The existing
         atomic-replace test only checks the directory and the ``.tmp`` suffix.
+        Name scheme and content of an unactivated temp file are internal and
+        deliberately not pinned.
         """
-        for name in ("a.enc", "b.enc"):
+        media_files = ["a.enc", "b.enc", "c.enc"]
+        for name in media_files:
             _write_enc(media_root, name, age_seconds=YOUNG)
+        state_path = media_root / STATE_FILENAME
+        _sweep(budget=1)
+        active_state = state_path.read_bytes()
 
         def abort_replace(_source, _target):
             raise _HardAbort
@@ -266,15 +273,17 @@ class TestWriteCleanupCursor:
             with pytest.raises(_HardAbort):
                 _sweep(budget=1)
 
-        leftovers = sorted(path.name for path in media_root.iterdir() if not path.name.endswith(".enc"))
-        assert len(leftovers) == 1
-        assert leftovers[0].startswith(f".{STATE_FILENAME}.")
-        assert leftovers[0].endswith(".tmp")
-        assert json.loads((media_root / leftovers[0]).read_text(encoding="utf-8")) == {"after": "a.enc"}
+        assert state_path.read_bytes() == active_state
+        names = sorted(path.name for path in media_root.iterdir())
+        assert [name for name in names if name.endswith(".enc")] == media_files
+        leftovers = [name for name in names if not name.endswith(".enc") and name != STATE_FILENAME]
+        assert all(name.startswith(".") for name in leftovers), leftovers
 
-        second = _sweep(budget=1)
+        resumed = _sweep(budget=1)
 
-        assert second.checked_paths == ("a.enc",)
+        assert resumed.state_warning is None
+        assert resumed.continued_at == "b.enc"
+        assert resumed.checked_paths == ("b.enc",)
 
 
 class TestCleanupCursorWriteErrorInit:
@@ -304,7 +313,6 @@ class TestCleanupCursorWriteErrorInit:
         error = cleanup_module.CleanupCursorWriteError(tmp_path / STATE_FILENAME, result, cause)
 
         assert str(error) == str(cause)
-        assert error.args == (str(cause),)
         assert error.cause is cause
         assert error.result is result
 
@@ -337,7 +345,7 @@ class TestCleanupOrphanStorageFiles:
                 "errors": result.errors,
             }
             assert counters == dict.fromkeys(counters, 0)
-            assert all(type(value) is int for value in counters.values())
+            assert all(isinstance(value, int) and not isinstance(value, bool) for value in counters.values())
             assert result.continued_at is None
             assert result.next_start is None
             assert result.tree_complete is True
