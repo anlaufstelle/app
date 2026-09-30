@@ -113,14 +113,11 @@ EXEMPTIONS: dict[tuple[str, str, str], str] = {
     ): "SW-vorgecachter Shell an der kanonischen /events/new/-URL (Refs #1322)",
     (
         "login",
-        "core:lockout_recovery_backup_code",
+        "password_reset",
         "*",
-    ): "unlock help for visitors who are not signed in; a signed-in session gets the sign-out notice (Refs #2391)",
-    (
-        "core:lockout_recovery_request",
-        "core:lockout_recovery_backup_code",
-        "*",
-    ): "same as above: unlock help for visitors who are not signed in (Refs #2391)",
+    ): "sign-in help for visitors who are not signed in; a signed-in session gets the sign-out notice (Refs #2391)",
+    ("login", "core:lockout_recovery_request", "*"): "same as above: unlock help for signed-out visitors",
+    ("login", "core:lockout_recovery_backup_code", "*"): "same as above: unlock help for signed-out visitors",
 }
 
 # Refs #1966: Die acht pk-losen In-Place-Shells erben seit dem

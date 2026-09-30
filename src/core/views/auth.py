@@ -235,6 +235,9 @@ class CustomLogoutView(auth_views.LogoutView):
         return response
 
 
+# Refs #2391: the request writes an audit row for the account of the entered
+# address, possibly in another facility; a signed-in session gets a notice.
+@method_decorator(anonymous_session_required, name="dispatch")
 class RateLimitedPasswordResetView(auth_views.PasswordResetView):
     """Password reset with rate limiting and audit logging."""
 

@@ -54,6 +54,9 @@ class _RecoveryEmailForm(forms.Form):
     )
 
 
+# Refs #2391: the request writes an audit row for the account of the entered
+# address, possibly in another facility; a signed-in session gets a notice.
+@method_decorator(anonymous_session_required, name="dispatch")
 class LockoutRecoveryRequestView(FormView):
     """Form: E-Mail eingeben, Recovery-Token-Mail versenden (Anti-Enumeration)."""
 

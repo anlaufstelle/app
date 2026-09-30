@@ -38,8 +38,9 @@ STAFF_PLUS = frozenset({"facility_admin", "lead", "staff"})
 LEAD_PLUS = frozenset({"facility_admin", "lead"})
 ADMIN_ONLY = frozenset({"facility_admin"})
 SUPER_ONLY = frozenset({"super_admin"})
-# Account links (invite, reset, unlock) are processed only in a session that is
-# not signed in; every signed-in role gets a 403 notice (Refs #2391).
+# Account links (invite, reset, unlock) and the forms requesting them are
+# processed only in a session that is not signed in; every signed-in role gets
+# a 403 notice (Refs #2391).
 SIGNED_OUT_ONLY: frozenset[str] = frozenset()
 # Seed-Zustand des Rechts „Löschbestätigung" (Refs #1053).
 CONFIRMER = frozenset({"facility_admin", "lead"})
@@ -82,7 +83,7 @@ EXPECTATIONS = (
     E("demo_scenario_select", "public", get=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
     E("demo_scenario_start", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
     E("set_language", "public", post=ALL_AUTH, anonymous_ok=True),
-    E("password_reset", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True),
+    E("password_reset", "public", get=SIGNED_OUT_ONLY, post=SIGNED_OUT_ONLY, anonymous_ok=True),
     E("password_reset_done", "public", get=ALL_AUTH, anonymous_ok=True),
     E(
         "password_reset_confirm",
@@ -103,7 +104,7 @@ EXPECTATIONS = (
         idor_exempt="Token-basierter Flow, kein Objektbezug",
     ),
     E("password_reset_complete", "public", get=ALL_AUTH, anonymous_ok=True),
-    E("core:lockout_recovery_request", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True),
+    E("core:lockout_recovery_request", "public", get=SIGNED_OUT_ONLY, post=SIGNED_OUT_ONLY, anonymous_ok=True),
     E("core:lockout_recovery_sent", "public", get=ALL_AUTH, anonymous_ok=True),
     E(
         "core:lockout_recovery_confirm",

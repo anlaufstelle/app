@@ -307,3 +307,55 @@ class TestUnlockLinksInSignedInSessionUnderProdRole:
         for action in (AuditLog.Action.LOGIN_UNLOCK, AuditLog.Action.BACKUP_CODES_USED):
             rows = AuditLog.objects.filter(user=target, action=action)
             assert list(rows.values_list("facility_id", flat=True)) == [target_facility.pk]
+
+
+link_requests = pytest.mark.parametrize(
+    ("route", "requested_flow"),
+    [
+        ("password_reset", "password_reset"),
+        ("core:lockout_recovery_request", "lockout_recovery_token"),
+    ],
+    ids=["password_reset", "lockout_recovery"],
+)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.postgres
+class TestLinkRequestsInSignedInSessionUnderProdRole:
+    @link_requests
+    @signed_in_actors
+    def test_requesting_a_link_shows_a_notice_and_sends_nothing(
+        self,
+        client,
+        mailoutbox,
+        rls_test_role,  # noqa: F811
+        actor,
+        target_facility,
+        route,
+        requested_flow,
+    ):
+        target = _target_user(target_facility, requested_flow)
+        url = reverse(route)
+        client.force_login(actor)
+        audit_rows_before = AuditLog.objects.count()
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            opened = client.get(url)
+            submitted = client.post(url, {"email": target.email}, REMOTE_ADDR=REMOTE_ADDR)
+            context_after_submit = _db_context()
+
+        assert context_after_submit == _actor_db_context(actor)
+        _assert_notice(opened)
+        _assert_notice(submitted)
+        assert client.session["_auth_user_id"] == str(actor.pk)
+        assert mailoutbox == []
+        assert AuditLog.objects.count() == audit_rows_before
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _sign_out(client)
+            requested = client.post(url, {"email": target.email}, REMOTE_ADDR=REMOTE_ADDR)
+
+        assert requested.status_code == 302
+        assert [message.to for message in mailoutbox] == [[target.email]]
+        rows = AuditLog.objects.filter(user=target, action=AuditLog.Action.PASSWORD_RESET_REQUESTED)
+        assert list(rows.values_list("facility_id", flat=True)) == [target_facility.pk]
