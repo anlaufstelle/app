@@ -105,7 +105,7 @@ EXPECTATIONS = (
     ),
     E("password_reset_complete", "public", get=ALL_AUTH, anonymous_ok=True),
     E("core:lockout_recovery_request", "public", get=SIGNED_OUT_ONLY, post=SIGNED_OUT_ONLY, anonymous_ok=True),
-    E("core:lockout_recovery_sent", "public", get=ALL_AUTH, anonymous_ok=True),
+    E("core:lockout_recovery_sent", "public", get=SIGNED_OUT_ONLY, anonymous_ok=True),
     E(
         "core:lockout_recovery_confirm",
         "public",

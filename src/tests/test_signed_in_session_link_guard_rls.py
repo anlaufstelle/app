@@ -281,6 +281,16 @@ class TestUnlockLinksInSignedInSessionUnderProdRole:
         assert unlock.facility_id == target_facility.pk
         assert unlock.ip_address == REMOTE_ADDR
 
+    @pytest.mark.parametrize("actor_fixture", ["staff_user", "super_admin_user"])
+    def test_unlock_sent_page_shows_the_notice(
+        self,
+        client,
+        rls_test_role,  # noqa: F811
+        actor,
+    ):
+        client.force_login(actor)
+        _assert_sent_page_shows_the_notice(client, rls_test_role, actor)
+
     @signed_in_actors
     def test_backup_code_is_neither_used_up_nor_unlocks(
         self,
@@ -420,8 +430,38 @@ def _lock(user):
     assert is_locked(user)
 
 
+def _htmx_get(client, url):
+    return client.get(url, headers={"HX-Request": "true"})
+
+
 def _htmx_post(client, url, data=None):
     return client.post(url, data or {}, REMOTE_ADDR=REMOTE_ADDR, headers={"HX-Request": "true"})
+
+
+def _assert_sent_page_shows_the_notice(client, rls_role, actor):
+    """The confirmation after an unlock request is a notice like every other unlock page."""
+    url = reverse("core:lockout_recovery_sent")
+    audit_rows_before = AuditLog.objects.count()
+
+    with as_rls_role(rls_role, facility_id=""):
+        opened = client.get(url)
+        opened_via_htmx = _htmx_get(client, url)
+        submitted = client.post(url, REMOTE_ADDR=REMOTE_ADDR)
+        submitted_via_htmx = _htmx_post(client, url)
+        context_after_submit = _db_context()
+
+    assert context_after_submit == _actor_db_context(actor)
+    for response in (opened, opened_via_htmx, submitted, submitted_via_htmx):
+        _assert_notice(response)
+    assert client.session["_auth_user_id"] == str(actor.pk)
+    assert AuditLog.objects.count() == audit_rows_before
+
+    with as_rls_role(rls_role, facility_id=""):
+        _sign_out(client)
+        reopened = client.get(url)
+
+    assert reopened.status_code == 200
+    assert "auth/lockout_recovery_sent.html" in [template.name for template in reopened.templates]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -451,6 +491,7 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
 
         with as_rls_role(rls_test_role, facility_id=""):
             opened = client.get(url)
+            opened_via_htmx = _htmx_get(client, url)
             submitted = _submit_new_password(client, url)
             submitted_via_htmx = _htmx_post(
                 client, set_password_url, {"new_password1": NEW_PASSWORD, "new_password2": NEW_PASSWORD}
@@ -458,7 +499,7 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
             context_after_submit = _db_context()
 
         assert context_after_submit == _actor_db_context(actor)
-        for response in (opened, submitted, submitted_via_htmx):
+        for response in (opened, opened_via_htmx, submitted, submitted_via_htmx):
             _assert_notice(response)
         assert client.session["_auth_user_id"] == str(actor.pk)
         assert auth_views.INTERNAL_RESET_SESSION_TOKEN not in client.session
@@ -496,6 +537,7 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
 
         with as_rls_role(rls_test_role, facility_id=""):
             opened = client.get(url)
+            opened_via_htmx = _htmx_get(client, url)
             context_after_open = _db_context()
             submitted = client.post(url, REMOTE_ADDR=REMOTE_ADDR)
             submitted_via_htmx = _htmx_post(client, url)
@@ -503,7 +545,7 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
 
         assert context_after_open == _actor_db_context(actor)
         assert context_after_submit == _actor_db_context(actor)
-        for response in (opened, submitted, submitted_via_htmx):
+        for response in (opened, opened_via_htmx, submitted, submitted_via_htmx):
             _assert_notice(response)
         assert client.session["_auth_user_id"] == str(actor.pk)
         assert is_locked(target)
@@ -541,12 +583,13 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
 
         with as_rls_role(rls_test_role, facility_id=""):
             opened = client.get(url)
+            opened_via_htmx = _htmx_get(client, url)
             submitted = client.post(url, form, REMOTE_ADDR=REMOTE_ADDR)
             submitted_via_htmx = _htmx_post(client, url, form)
             context_after_submit = _db_context()
 
         assert context_after_submit == _actor_db_context(actor)
-        for response in (opened, submitted, submitted_via_htmx):
+        for response in (opened, opened_via_htmx, submitted, submitted_via_htmx):
             _assert_notice(response)
         assert client.session["_auth_user_id"] == str(actor.pk)
         assert is_locked(target)
@@ -560,9 +603,10 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
         assert completed["Location"] == "/login/?recovered=1"
         assert not is_locked(target)
 
+    @link_requests
     @pending_step_actors
     @pending_session_steps
-    def test_unlock_request_shows_the_notice_and_sends_nothing(
+    def test_link_request_shows_the_notice_and_sends_nothing(
         self,
         request,
         client,
@@ -571,21 +615,24 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
         second_facility,
         actor_fixture,
         pending_step,
+        route,
+        requested_flow,
     ):
-        target = _target_user(second_facility, "unlock-request")
+        target = _target_user(second_facility, requested_flow)
         actor = _pending_step_actor(request, actor_fixture, target)
         _sign_in_with_pending_step(client, actor, pending_step)
-        url = reverse("core:lockout_recovery_request")
+        url = reverse(route)
         audit_rows_before = AuditLog.objects.count()
 
         with as_rls_role(rls_test_role, facility_id=""):
             opened = client.get(url)
+            opened_via_htmx = _htmx_get(client, url)
             submitted = client.post(url, {"email": target.email}, REMOTE_ADDR=REMOTE_ADDR)
             submitted_via_htmx = _htmx_post(client, url, {"email": target.email})
             context_after_submit = _db_context()
 
         assert context_after_submit == _actor_db_context(actor)
-        for response in (opened, submitted, submitted_via_htmx):
+        for response in (opened, opened_via_htmx, submitted, submitted_via_htmx):
             _assert_notice(response)
         assert client.session["_auth_user_id"] == str(actor.pk)
         assert mailoutbox == []
@@ -597,6 +644,24 @@ class TestLinksInSessionWithPendingStepUnderProdRole:
 
         assert requested.status_code == 302
         assert [message.to for message in mailoutbox] == [[target.email]]
+        rows = AuditLog.objects.filter(user=target, action=AuditLog.Action.PASSWORD_RESET_REQUESTED)
+        assert list(rows.values_list("facility_id", flat=True)) == [second_facility.pk]
+
+    @pending_step_actors
+    @pending_session_steps
+    def test_unlock_sent_page_shows_the_notice(
+        self,
+        request,
+        client,
+        rls_test_role,  # noqa: F811
+        second_facility,
+        actor_fixture,
+        pending_step,
+    ):
+        target = _target_user(second_facility, "unlock-sent")
+        actor = _pending_step_actor(request, actor_fixture, target)
+        _sign_in_with_pending_step(client, actor, pending_step)
+        _assert_sent_page_shows_the_notice(client, rls_test_role, actor)
 
 
 @pytest.mark.django_db
