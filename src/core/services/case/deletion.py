@@ -259,6 +259,43 @@ def soft_delete_case(case, user):
     return _move_case_to_trash(case, user, trigger="direct")
 
 
+def _lock_person_and_case_then_request(deletion_request):
+    """Lock the person row of the target case, the case row, then the request row.
+
+    The anonymisation cascades (``anonymize_client`` and the k-anonymisation
+    bridge of the retention run) lock the person first, then the person's
+    cases, and write the deletion requests of these cases afterwards; the case
+    erasure behind :func:`_lock_case_chain` takes the same order. The retention
+    run also reaches persons outside the trash, so a pending case request can
+    meet it. Taking the request first here could deadlock against them.
+
+    The target and its person are read without a lock. The facility-scoped read
+    of the request keeps the answer for an unknown request (``DoesNotExist``);
+    a target outside the facility locks nothing, and the caller answers as
+    before. The target of a case request is never written after filing, but
+    the person of the case can change (a merge moves the cases of its source).
+    The caller therefore compares the person on the locked case row and
+    refuses instead of locking the new person while it holds the case and the
+    request.
+
+    Returns the locked request and the person id the lock was taken for.
+    """
+    facility_id = deletion_request.facility_id
+    target_id = (
+        DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+        .values_list("target_id", flat=True)
+        .get()
+    )
+    person_id = Case.objects.filter(pk=target_id, facility_id=facility_id).values_list("client_id", flat=True).first()
+    if person_id is not None:
+        Client.objects.filter(pk=person_id, facility_id=facility_id).select_for_update().only("pk").first()
+    Case.objects.filter(pk=target_id, facility_id=facility_id).select_for_update().only("pk").first()
+    locked_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
+    return locked_request, person_id
+
+
 @transaction.atomic
 def approve_case_deletion(deletion_request, reviewer):
     """Genehmigt einen Fall-Loeschantrag und legt den Fall in den Papierkorb.
@@ -271,6 +308,11 @@ def approve_case_deletion(deletion_request, reviewer):
     per ``select_for_update()`` neu geladen und der Status erneut geprueft —
     sonst loesten zwei zeitgleiche Genehmigungen desselben (noch PENDING
     gelesenen) Antrags beide den Soft-Delete aus.
+
+    Lock order: the person of the case first, then the case, then the request
+    (:func:`_lock_person_and_case_then_request`), the same order the
+    anonymisation and the case erasure take. A case that moved to another
+    person while the rows were locked is refused as changed in the meantime.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError(_("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip)."))
@@ -287,13 +329,18 @@ def approve_case_deletion(deletion_request, reviewer):
     if reviewer.facility_id is None or reviewer.facility_id != deletion_request.facility_id:
         raise ValidationError(_("Antrag gehört zu einer anderen Einrichtung."))
 
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
+    # Person, case, then the request (see the helper); all locks hold until
+    # this transaction commits.
+    deletion_request, locked_person_id = _lock_person_and_case_then_request(deletion_request)
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError(_("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend)."))
 
     case = Case.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
+    if case.client_id != locked_person_id:
+        # The case moved to another person between the unlocked read and the
+        # case lock. That person is not locked, and locking it now, behind the
+        # case and the request, would reverse the order.
+        raise ValidationError(_("Der Fall wurde zwischenzeitlich geändert — bitte die Ansicht neu laden."))
     _move_case_to_trash(case, reviewer, deletion_request=str(deletion_request.pk))
 
     deletion_request.status = DeletionRequest.Status.APPROVED
