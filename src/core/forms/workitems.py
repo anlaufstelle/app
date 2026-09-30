@@ -59,22 +59,10 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
             # akzeptiert nur `YYYY-MM-DD`; ohne `format=` nimmt Django den
             # ersten Eintrag aus DATE_INPUT_FORMATS — unter LANGUAGE_CODE=de-DE
             # ist das `%d.%m.%Y`, wodurch der Prefill beim Edit leer bliebe.
-            "due_date": forms.DateInput(
-                format="%Y-%m-%d",
-                attrs={
-                    "type": "date",
-                    "min": min_workitem_date().isoformat(),
-                    "max": max_workitem_date().isoformat(),
-                },
-            ),
-            "remind_at": forms.DateInput(
-                format="%Y-%m-%d",
-                attrs={
-                    "type": "date",
-                    "min": min_workitem_date().isoformat(),
-                    "max": max_workitem_date().isoformat(),
-                },
-            ),
+            # The ``min``/``max`` bounds are set per instance in ``__init__``;
+            # values computed here would freeze at import time (Refs #2380).
+            "due_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "remind_at": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
         }
 
     def __init__(self, *args, facility=None, pinned_client=None, **kwargs):
@@ -110,27 +98,29 @@ class WorkItemForm(TailwindFormMixin, PinnedClientMixin, forms.ModelForm):
         # Recurrence has a DB default (NONE) — allow omitting it in POST.
         self.fields["recurrence"].required = False
 
-        # Refs #1131: Beim Edit eines bereits überfälligen Items das HTML5-
-        # ``min`` auf den Bestandswert absenken. ``clean()`` erlaubt den
-        # unveränderten Vergangenheitswert (``changed_data``-Check), aber das
-        # statische ``min=heute`` der Widget-Definition würde die Browser-
-        # Native-Validation den Prefill verwerfen lassen — das Item ließe sich
-        # in der Oberfläche nicht speichern. Mit ``min == Bestandsdatum`` nimmt
-        # der Browser den unveränderten Wert an und blockiert weiterhin ein
-        # *noch früheres* Datum; das aktive Verschieben auf ein anderes
-        # Vergangenheits-Datum fängt serverseitig ``clean()`` ab.
+        # Refs #2380: the HTML5 bounds are computed when the form is built, so
+        # a long-running server process always offers the range of the current
+        # day instead of the day the module was imported.
+        # Refs #1131: when editing an item that is already overdue, ``min``
+        # drops to the stored date. ``clean()`` accepts the unchanged past
+        # value (``changed_data`` check); with ``min == stored date`` the
+        # browser accepts the prefill and still blocks an even earlier date,
+        # while moving it to another past date is rejected by ``clean()``.
         min_date = min_workitem_date()
+        max_date = max_workitem_date()
         for field_name in ("due_date", "remind_at"):
             existing = getattr(self.instance, field_name, None)
-            if existing and existing < min_date:
-                self.fields[field_name].widget.attrs["min"] = existing.isoformat()
+            field_min = existing if existing and existing < min_date else min_date
+            attrs = self.fields[field_name].widget.attrs
+            attrs["min"] = field_min.isoformat()
+            attrs["max"] = max_date.isoformat()
 
         # Refs #710: Browser-native HTML5-Validation-Tooltips folgen der
         # Browser-Sprache. Wir reichen lokalisierte Custom-Messages als
         # data-Attribute durch, ein DOMContentLoaded-Listener in
         # ``src/static/js/date-input-i18n.js`` (vor #911: ``alpine-components.js``)
         # ruft damit ``setCustomValidity`` auf.
-        max_str = date_format(max_workitem_date(), "DATE_FORMAT")
+        max_str = date_format(max_date, "DATE_FORMAT")
         too_late = _("Das Datum darf höchstens am %(max)s liegen.") % {"max": max_str}
         too_early = _("Das Datum darf nicht in der Vergangenheit liegen.")
         for field_name in ("due_date", "remind_at"):

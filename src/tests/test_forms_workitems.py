@@ -391,6 +391,64 @@ class TestWorkItemForm:
         assert form.fields["due_date"].widget.attrs["min"] == PAST.isoformat()
         assert form.fields["remind_at"].widget.attrs["min"] == min_workitem_date().isoformat()
 
+    # ---------------------------------------------------------------
+    # 9. HTML5 bounds are computed per form instance (Refs #2380):
+    #    a long-running server process must not keep the bounds of the
+    #    day the module was imported.
+    # ---------------------------------------------------------------
+
+    def test_date_bounds_follow_current_day_per_instance(self, facility, monkeypatch):
+        """Two forms built on different days carry the bounds of their own day."""
+        import core.forms.workitems as workitems_module
+
+        first_min, first_max = date(2031, 3, 14), date(2032, 12, 31)
+        monkeypatch.setattr(workitems_module, "min_workitem_date", lambda: first_min)
+        monkeypatch.setattr(workitems_module, "max_workitem_date", lambda: first_max)
+        first_form = WorkItemForm(facility=facility)
+
+        second_min, second_max = date(2033, 1, 1), date(2034, 12, 31)
+        monkeypatch.setattr(workitems_module, "min_workitem_date", lambda: second_min)
+        monkeypatch.setattr(workitems_module, "max_workitem_date", lambda: second_max)
+        second_form = WorkItemForm(facility=facility)
+
+        for field_name in ("due_date", "remind_at"):
+            first_attrs = first_form.fields[field_name].widget.attrs
+            second_attrs = second_form.fields[field_name].widget.attrs
+            assert first_attrs["min"] == first_min.isoformat()
+            assert first_attrs["max"] == first_max.isoformat()
+            assert second_attrs["min"] == second_min.isoformat()
+            assert second_attrs["max"] == second_max.isoformat()
+
+    def test_class_level_date_widgets_carry_no_fixed_bounds(self):
+        """The class-level widgets keep type and format but no import-time bounds."""
+        for field_name in ("due_date", "remind_at"):
+            widget = WorkItemForm.base_fields[field_name].widget
+            assert widget.input_type == "date"
+            assert widget.format == "%Y-%m-%d"
+            assert "min" not in widget.attrs
+            assert "max" not in widget.attrs
+
+    def test_overdue_edit_lowers_per_instance_min(self, facility, client_identified, staff_user, monkeypatch):
+        """The overdue-edit rule compares against the bound of the current call."""
+        import core.forms.workitems as workitems_module
+
+        current_min = date(2031, 3, 14)
+        existing = current_min - timedelta(days=3)
+        monkeypatch.setattr(workitems_module, "min_workitem_date", lambda: current_min)
+        item = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Overdue relative to the patched day",
+            due_date=existing,
+            remind_at=None,
+        )
+        form = WorkItemForm(instance=item, facility=facility)
+        assert form.fields["due_date"].widget.attrs["min"] == existing.isoformat()
+        assert form.fields["remind_at"].widget.attrs["min"] == current_min.isoformat()
+
 
 @pytest.mark.django_db
 class TestWorkItemDueDateNativeInput:
