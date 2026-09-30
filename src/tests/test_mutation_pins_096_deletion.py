@@ -11,10 +11,11 @@ View-Pfad, nicht den Service.
 from __future__ import annotations
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import AuditLog, Client, DeletionRequest, DocumentType, Event
-from core.services.deletion import withdraw_deletion_request
+from core.services.deletion import WITHDRAW_NOT_PENDING_MESSAGE, withdraw_deletion_request
 from core.services.events import request_deletion
 
 pytestmark = pytest.mark.django_db
@@ -92,8 +93,11 @@ class TestWithdrawLockLookup:
         # only the scoped lookup keeps it away from the row of the other one.
         second_facility_user.facility = facility
 
-        with pytest.raises(DeletionRequest.DoesNotExist):
+        # The scoped lookup misses the row; the service turns that into the
+        # domain refusal instead of leaking a bare ``DoesNotExist``.
+        with pytest.raises(ValidationError) as excinfo:
             withdraw_deletion_request(mismatched, second_facility_user)
+        assert excinfo.value.messages == [str(WITHDRAW_NOT_PENDING_MESSAGE)]
 
         foreign_request.refresh_from_db()
         assert foreign_request.status == DeletionRequest.Status.PENDING
