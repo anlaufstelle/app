@@ -33,7 +33,7 @@ def _mail_variables_from_production_settings() -> set[str]:
             function_name = node.func.attr
         else:
             function_name = None
-        if function_name not in {"get", "env_bool", "env_int"}:
+        if function_name not in {"get", "env_bool", "env_bool_strict", "env_int"}:
             continue
         argument = node.args[0]
         if isinstance(argument, ast.Constant) and isinstance(argument.value, str):

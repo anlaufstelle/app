@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Ungültige SMTP-Transportwerte stoppen den Produktionsstart** (#2388) — Ein ungültiger Wert für `EMAIL_USE_TLS` oder `EMAIL_USE_SSL` bricht den Start mit einer klaren Meldung ab, statt still unverschlüsselt zu senden.
+
 ### Erforderliche Betreiber-Aktionen
 
 - **Compose-Logrotation übernehmen** (#1904) — Die aktualisierte Compose-Datei auf den Host übernehmen und `docker compose … up -d` ausführen, damit die Container mit den neuen Loggrenzen neu angelegt werden.

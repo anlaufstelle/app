@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 
@@ -62,6 +64,28 @@ def test_prod_reads_email_use_ssl() -> None:
     assert result.returncode == 0, result.stderr
     mailer = json.loads(result.stdout)
     assert (mailer["use_tls"], mailer["use_ssl"]) == (False, True)
+
+
+@pytest.mark.parametrize("name", ["EMAIL_USE_TLS", "EMAIL_USE_SSL"])
+@pytest.mark.parametrize("value", ["ture", "on"])
+def test_prod_rejects_unknown_email_transport_values(name: str, value: str) -> None:
+    result = _run_prod_import({**VALID_ENV, name: value})
+
+    assert result.returncode != 0
+    assert name in result.stderr
+    assert "true/1/yes" in result.stderr
+    assert "false/0/no" in result.stderr
+
+
+@pytest.mark.parametrize("value, expected", [("true", True), ("False", False), ("1", True), ("0", False)])
+def test_prod_accepts_strict_email_transport_values(value: str, expected: bool) -> None:
+    result = _run_prod_import(
+        {**VALID_ENV, "EMAIL_USE_TLS": value, "EMAIL_USE_SSL": "false"},
+        code=_DUMP_MAILER,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["use_tls"] is expected
 
 
 def test_prod_rejects_tls_and_ssl_together() -> None:

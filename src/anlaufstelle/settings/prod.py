@@ -9,7 +9,7 @@ import warnings
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
-from ._env import env_bool, env_csv, env_int
+from ._env import env_bool, env_bool_strict, env_csv, env_int
 from ._sentry import before_breadcrumb as _sentry_before_breadcrumb
 from ._sentry import before_send as _sentry_before_send
 from ._sentry import before_send_transaction as _sentry_before_send_transaction
@@ -233,8 +233,8 @@ if _file_upload_temp_dir:
 # schliessen sich gegenseitig aus (ImproperlyConfigured). Die
 # *Umgebungsvariablen* sind Projekt-ENV und heissen weiterhin so — eine
 # bestehende Betreiber-.env bleibt unverändert gültig.
-_email_use_tls = env_bool("EMAIL_USE_TLS", default=True)
-_email_use_ssl = env_bool("EMAIL_USE_SSL", default=False)
+_email_use_tls = env_bool_strict("EMAIL_USE_TLS", default=True)
+_email_use_ssl = env_bool_strict("EMAIL_USE_SSL", default=False)
 if _email_use_tls and _email_use_ssl:
     raise ImproperlyConfigured("EMAIL_USE_TLS und EMAIL_USE_SSL duerfen nicht gleichzeitig aktiviert sein.")
 MAILERS = {

@@ -15,10 +15,13 @@ import os
 import re
 from urllib.parse import urlsplit
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Dieselbe Werteliste wie ueberall im Projekt bereits verwendet — case-
 # insensitiv, damit ".env"-Werte wie "True"/"TRUE"/"1"/"yes" gleichermassen
 # als wahr gelten.
 _TRUE_VALUES = ("true", "1", "yes")
+_FALSE_VALUES = ("false", "0", "no")
 
 # Trennzeichen der Caddyfile-Direktiven-Argumente (siehe :func:`env_tokens`).
 # Zeilenumbrueche gehoeren bewusst NICHT dazu: sie beenden in einer Caddyfile
@@ -38,6 +41,17 @@ def env_bool(name: str, *, default: bool) -> bool:
     (``"true"``/``"1"``/``"yes"``, case-insensitiv)."""
     raw = os.environ.get(name, "true" if default else "false")
     return raw.lower() in _TRUE_VALUES
+
+
+def env_bool_strict(name: str, *, default: bool) -> bool:
+    """Parse a boolean environment variable and reject unknown values."""
+    raw = os.environ.get(name, "true" if default else "false").strip().lower()
+    if raw in _TRUE_VALUES:
+        return True
+    if raw in _FALSE_VALUES:
+        return False
+    allowed = "/".join((*_TRUE_VALUES, *_FALSE_VALUES))
+    raise ImproperlyConfigured(f"{name} must be one of: {allowed}.")
 
 
 def env_csv(name: str, default: str = "") -> list[str]:
