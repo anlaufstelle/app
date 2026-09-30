@@ -934,10 +934,6 @@ class TestTenantModelScopeGuard:
             "Koordinationspunkt ADR-050 D2: sperrt die Personenzeile zur ``client_id`` "
             "des bereits gescopten Ereignisses — reine Sperre, liest nur ``pk``."
         ),
-        "events/crud.py:_lock_event_row:Event": (
-            "Koordinationspunkt ADR-050 D2: sperrt die EIGENE Ereigniszeile "
-            "(``pk=event.pk``) vor der Hold-Lesung — reine Sperre, liest nur ``pk``."
-        ),
         "events/crud.py:_assert_current_client_binding:Event": (
             "Revalidierung der Personenzuordnung an der EIGENEN Ereigniszeile nach der "
             "Sperrwartezeit (ADR-050 D2) — ``pk=event.pk``, kein Request-Input."
