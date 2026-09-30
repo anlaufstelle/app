@@ -8,6 +8,7 @@ import yaml
 pytestmark = pytest.mark.architecture
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+BARBARA_COMPOSE = REPO_ROOT / "dev-ops/deploy/barbara/docker-compose.barbara.yml"
 REQUIRED_FILES = {
     "docker-compose.yml",
     "docker-compose.dev.yml",
@@ -60,3 +61,13 @@ def test_every_service_uses_bounded_container_logs(filename: str) -> None:
         assert isinstance(max_file, str) and max_file.isdigit() and int(max_file) >= 1, (
             f"{filename}:{service_name} must store max-file as a positive integer string"
         )
+
+
+def test_barbara_services_use_the_production_log_limits() -> None:
+    production = yaml.safe_load((REPO_ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"))
+    barbara = yaml.safe_load(BARBARA_COMPOSE.read_text(encoding="utf-8"))
+    expected = production["services"]["web"]["logging"]
+
+    assert barbara["x-logging"] == expected
+    for service_name, service in barbara["services"].items():
+        assert service["logging"] == expected, f"Barbara service {service_name} has different log limits"
