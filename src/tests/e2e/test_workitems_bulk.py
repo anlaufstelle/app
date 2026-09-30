@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import pytest
 
@@ -55,12 +55,16 @@ def _csrf_token(page) -> str:
     return token
 
 
-def _post_form(page, base_url, path: str, data: dict) -> dict:
-    """POST mit CSRF aus der aktiven Page-Session, gibt {status, url} zurück.
+def _post_form(page, base_url, path: str, data: dict, *, follow_redirects: bool = True) -> dict:
+    """POST mit CSRF aus der aktiven Page-Session, gibt {status, url, location} zurück.
 
     Serialisiert ``data`` als ``application/x-www-form-urlencoded`` mit
     Unterstützung für Listen-Werte (z.B. mehrere ``workitem_ids``) — das
     ist genau das Format, das Django ``request.POST.getlist()`` erwartet.
+
+    With ``follow_redirects=False`` the raw redirect answer is returned so a
+    test can assert the 302 and its ``Location`` header instead of the page
+    the redirect lands on.
     """
     page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
     token = _csrf_token(page)
@@ -79,8 +83,19 @@ def _post_form(page, base_url, path: str, data: dict) -> dict:
             "Referer": f"{base_url}/workitems/",
             "Content-Type": "application/x-www-form-urlencoded",
         },
+        max_redirects=None if follow_redirects else 0,
     )
-    return {"status": response.status, "url": response.url}
+    return {"status": response.status, "url": response.url, "location": response.headers.get("location", "")}
+
+
+def _assert_refused_into_inbox(page, base_url, result: dict, message: str) -> None:
+    """Bulk refusals answer with a flash message plus redirect into the inbox
+    (ticket #2385) instead of a plain-text 4xx that replaced the page."""
+    assert result["status"] == 302, f"bulk refusal must redirect into the inbox, got {result['status']}"
+    location = result["location"]
+    assert urlparse(location).path == "/workitems/", f"redirect must target the inbox, got {location!r}"
+    page.goto(location if location.startswith("http") else f"{base_url}{location}", wait_until="domcontentloaded")
+    assert message in page.content(), f"inbox must show the refusal {message!r}"
 
 
 class TestBulkPriority:
@@ -104,7 +119,7 @@ class TestBulkPriority:
             content = page.content().lower()
             assert "dringend" in content or "urgent" in content, f"WorkItem {wi} sollte nach Bulk-Update urgent sein."
 
-    def test_bulk_priority_invalid_returns_400(self, staff_page, base_url):
+    def test_bulk_priority_invalid_redirects_into_inbox_with_message(self, staff_page, base_url):
         page = staff_page
         ids = [_create_workitem(page, base_url, f"E2E-Bulk-PI-{uuid.uuid4().hex[:6]}")]
         result = _post_form(
@@ -112,8 +127,9 @@ class TestBulkPriority:
             base_url,
             "/workitems/bulk-priority/",
             {"workitem_ids": ids, "priority": "nonsense"},
+            follow_redirects=False,
         )
-        assert result["status"] == 400, f"Ungültiger Priority-Value muss 400 liefern, ist {result['status']}"
+        _assert_refused_into_inbox(page, base_url, result, "Ungültige Priorität")
 
 
 class TestBulkAssign:
@@ -144,7 +160,7 @@ class TestBulkAssign:
         )
         assert result["status"] == 200, f"Bulk-Assign muss 200 liefern, ist {result['status']}"
 
-    def test_bulk_assign_unknown_user_returns_400(self, staff_page, base_url):
+    def test_bulk_assign_unknown_user_redirects_into_inbox_with_message(self, staff_page, base_url):
         page = staff_page
         ids = [_create_workitem(page, base_url, f"E2E-Bulk-AI-{uuid.uuid4().hex[:6]}")]
         result = _post_form(
@@ -152,8 +168,9 @@ class TestBulkAssign:
             base_url,
             "/workitems/bulk-assign/",
             {"workitem_ids": ids, "assigned_to": str(uuid.uuid4())},
+            follow_redirects=False,
         )
-        assert result["status"] == 400, f"Unbekannte User-ID muss 400 liefern, ist {result['status']}"
+        _assert_refused_into_inbox(page, base_url, result, "Unbekannte Benutzerin/Benutzer")
 
 
 def _distinct_workitem_ids_with_title(page, base_url, title: str) -> set[str]:
