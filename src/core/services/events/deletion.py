@@ -134,7 +134,7 @@ def _lock_person_and_event_then_request(deletion_request):
     person_id = event.client_id if event is not None else None
     if event is not None:
         _lock_client_row(person_id)
-        _lock_event_row(event)
+        _lock_event_row(event, facility_id=deletion_request.facility_id)
     locked_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )

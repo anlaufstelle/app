@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -170,6 +172,26 @@ class TestApproveDeletion:
         assert event_qualified.is_deleted is False
         assert pending_request.status == DeletionRequest.Status.PENDING
         assert AuditLog.objects.count() == audits_before
+
+    def test_approval_event_lock_uses_request_facility_without_lazy_query(
+        self, pending_request, lead_user, monkeypatch
+    ):
+        from core.services.events import deletion as deletion_service
+
+        original_lock = deletion_service._lock_event_row
+        observed = {}
+
+        def lock_event(event, facility_id=None):
+            observed["facility_id"] = facility_id
+            with CaptureQueriesContext(connection) as captured:
+                result = original_lock(event, facility_id=facility_id)
+            observed["queries"] = len(captured.captured_queries)
+            return result
+
+        monkeypatch.setattr(deletion_service, "_lock_event_row", lock_event)
+        approve_deletion(pending_request, lead_user)
+
+        assert observed == {"facility_id": pending_request.facility_id, "queries": 1}
 
     def test_creates_event_history_delete(self, pending_request, lead_user, event_qualified):
         approve_deletion(pending_request, lead_user)
