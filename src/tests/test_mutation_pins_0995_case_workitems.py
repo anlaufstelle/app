@@ -135,7 +135,7 @@ class TestUpdateWorkitem:
 class TestLockedClientId:
     """``_locked_client_id`` as ``update_workitem`` uses it: the work item lock hits the addressed row."""
 
-    def test_liefert_die_person_der_adressierten_aufgabe(self, eigene_und_nachbar, staff_user, client_identified):
+    def test_edit_keeps_the_person_of_the_addressed_work_item(self, eigene_und_nachbar, staff_user, client_identified):
         """x__locked_client_id__mutmut_8: without ``pk`` the locked read
         returned the person of the newer neighbouring work item, so
         ``update_workitem`` refused the edit as a changed person assignment.
@@ -147,7 +147,7 @@ class TestLockedClientId:
         assert eigene.title == "New title"
         assert eigene.client_id == client_identified.pk
 
-    def test_aufgabensperre_traegt_pk_und_einrichtung(self, eigene_und_nachbar, staff_user):
+    def test_work_item_lock_addresses_the_row_behind_the_facility_boundary(self, eigene_und_nachbar, staff_user):
         """x__locked_client_id__mutmut_8: without ``pk`` the work item lock
         reads the newest work item of the facility. Observed on the plain edit
         (no version conflict, so the fingerprint read does not run): every
@@ -197,7 +197,7 @@ class TestFormStateUnchanged:
         eigene.refresh_from_db()
         assert eigene.title == "Changed in parallel"
 
-    def test_fingerabdruck_lesung_traegt_pk_und_einrichtung(self, eigene_und_nachbar, staff_user):
+    def test_fingerprint_read_addresses_the_row_behind_the_facility_boundary(self, eigene_und_nachbar, staff_user):
         """x__form_state_unchanged__mutmut_8: without ``pk`` the fingerprint
         read locks and compares the newest work item of the facility. Observed
         on the version conflict path: every row lock on the work item, the

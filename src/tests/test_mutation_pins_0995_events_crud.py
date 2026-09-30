@@ -191,9 +191,9 @@ class TestEventFormStateUnchanged:
         with django_assert_num_queries(0):
             assert _event_form_state_unchanged(sample_event, form_state) is False
 
-    @pytest.mark.parametrize("fingerabdruck", ["", 123, ["x"]], ids=["leer", "zahl", "liste"])
-    def test_leerer_oder_nicht_textueller_fingerabdruck_fragt_nicht_ab(
-        self, sample_event, staff_user, fingerabdruck, django_assert_num_queries
+    @pytest.mark.parametrize("form_state", ["", 123, ["x"]], ids=["empty", "number", "list"])
+    def test_empty_or_non_text_fingerprint_adds_no_query_to_the_conflict_path(
+        self, sample_event, staff_user, form_state, django_assert_num_queries
     ):
         """x__event_form_state_unchanged__mutmut_1: ``and`` instead of ``or``.
         The version conflict stands either way, but without the early exit
@@ -207,7 +207,5 @@ class TestEventFormStateUnchanged:
             update_event(sample_event, staff_user, {}, expected_updated_at=rendered_at)
         assert baseline.value.code == "version_conflict"
         with django_assert_num_queries(len(without_fingerprint)), pytest.raises(ValidationError) as exc:
-            update_event(
-                sample_event, staff_user, {}, expected_updated_at=rendered_at, expected_form_state=fingerabdruck
-            )
+            update_event(sample_event, staff_user, {}, expected_updated_at=rendered_at, expected_form_state=form_state)
         assert exc.value.code == "version_conflict"
