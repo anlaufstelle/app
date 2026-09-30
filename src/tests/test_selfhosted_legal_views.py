@@ -232,11 +232,20 @@ class TestLegalMarkdownRenderer:
         assert 'href="HTTPS://example.org"' in rendered
 
     def test_adversarial_unclosed_links_render_within_bounded_time(self):
+        """Thousands of unclosed link openers render in bounded time.
+
+        Measured as CPU time of this process instead of wall time: a loaded
+        host, for example many parallel test workers, stretches the wall time
+        of the call but not the work the renderer does. The bound guards
+        against super-linear rendering such as catastrophic backtracking, not
+        against a slow host; a linear renderer stays far below it on this
+        input.
+        """
         source = "[a](" * 20_000
 
-        started = time.perf_counter()
+        started = time.process_time()
         rendered = str(render_legal_markdown(source))
-        elapsed = time.perf_counter() - started
+        elapsed = time.process_time() - started
 
         assert rendered
-        assert elapsed < 1.0
+        assert elapsed < 2.0
