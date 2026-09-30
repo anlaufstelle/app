@@ -65,6 +65,8 @@ def test_every_service_uses_bounded_container_logs(filename: str) -> None:
 
 def test_barbara_services_use_the_production_log_limits() -> None:
     production = yaml.safe_load((REPO_ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8"))
+    if not BARBARA_COMPOSE.exists():
+        pytest.skip("dev-ops/ is stripped from the public snapshot — guard only applies to the development tree")
     barbara = yaml.safe_load(BARBARA_COMPOSE.read_text(encoding="utf-8"))
     expected = production["services"]["web"]["logging"]
 
