@@ -33,6 +33,7 @@ Docstring die gepinnten Mutanten und den Wert, der beim Mutanten abweicht.
 """
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, DocumentTypeField, Event
@@ -109,6 +110,9 @@ def _rejected_rows(deletion_request):
             target_id=str(deletion_request.pk),
         )
     )
+
+
+_CONCURRENT_EDIT_MESSAGE = "Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."
 
 
 class TestFourEyesReloadKeepsItsPrimaryKey:
@@ -206,8 +210,11 @@ class TestMergeLookupsStayInsideTheFacility:
             requested_by=staff_user,
         )
 
-        with pytest.raises(Client.DoesNotExist):
+        # The scoped lookup misses the row; the service turns that into the
+        # domain refusal instead of leaking a bare ``DoesNotExist``.
+        with pytest.raises(ValidationError) as excinfo:
             approve_client_merge(dr, admin_user)
+        assert excinfo.value.messages == [_CONCURRENT_EDIT_MESSAGE]
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING
@@ -236,8 +243,11 @@ class TestMergeLookupsStayInsideTheFacility:
             requested_by=staff_user,
         )
 
-        with pytest.raises(Client.DoesNotExist):
+        # The scoped lookup misses the row; the service turns that into the
+        # domain refusal instead of leaking a bare ``DoesNotExist``.
+        with pytest.raises(ValidationError) as excinfo:
             approve_client_merge(dr, admin_user)
+        assert excinfo.value.messages == [_CONCURRENT_EDIT_MESSAGE]
 
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.PENDING
@@ -261,8 +271,11 @@ class TestMergeLookupsStayInsideTheFacility:
         )
         source.refresh_from_db()
 
-        with pytest.raises(Client.DoesNotExist):
+        # The scoped lookup misses the row; the service turns that into the
+        # domain refusal instead of leaking a bare ``DoesNotExist``.
+        with pytest.raises(ValidationError) as excinfo:
             unmerge_client(source, lead_user)
+        assert excinfo.value.messages == ["Diese Person ist nicht zusammengeführt."]
 
         source.refresh_from_db()
         assert source.merged_into_id == foreign_target.pk
