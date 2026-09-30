@@ -277,9 +277,11 @@ def _lock_persons_then_merge_request(deletion_request):
     facility-scoped read keeps the answer for an unknown request
     (``DoesNotExist``).
 
-    The persons are read without a lock, and the target (``merge_into``) can
-    still be edited. If the locked request names other persons than the ones
-    just locked, the missing person is NOT locked under the held request: the
+    The persons are read without a lock. No path in the application rewrites
+    the target (``merge_into``) after the request was created (the admin form
+    shows it read-only), but the service does not rely on that. If the locked
+    request names other persons than the ones just locked, the missing person
+    is NOT locked under the held request: the
     savepoint is rolled back, which releases the request and person locks of
     this attempt, and the lock starts over on the current persons. After
     ``_MERGE_REQUEST_LOCK_ATTEMPTS`` changed reads the approval is refused as
