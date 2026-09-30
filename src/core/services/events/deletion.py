@@ -21,7 +21,13 @@ from django.utils import timezone
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.audit import audit_event
 from core.services.client.restriction import _deletion_workflow_write
-from core.services.events.crud import _assert_actor_in_facility, soft_delete_event
+from core.services.events.crud import (
+    CLIENT_BINDING_CHANGED_MESSAGE,
+    _assert_actor_in_facility,
+    _lock_client_row,
+    _lock_event_row,
+    soft_delete_event,
+)
 
 
 def get_pending_event_deletion_request(event):
@@ -92,6 +98,49 @@ def create_or_get_event_deletion_request(event, user, reason):
     return dr, True
 
 
+def _lock_person_and_event_then_request(deletion_request):
+    """Lock the person row of the target event, the event row, then the request row.
+
+    The anonymisation cascades (``anonymize_client`` and the k-anonymisation
+    bridge of the retention run) lock the person first, then the person's
+    cases and events, and write the deletion requests of these events
+    afterwards. The bridge also reaches persons outside the trash, so a pending
+    event request can meet it. Taking the request first here, and the person
+    only inside :func:`soft_delete_event`, could deadlock against them.
+
+    The target and its person are read without a lock. The facility-scoped read
+    of the request keeps the answer for an unknown request (``DoesNotExist``);
+    a target outside the facility locks nothing, and the caller answers as
+    before. An event without a person has no person row to lock. The target of
+    an event request is never written after filing, but the person of the
+    event can change (a merge moves the events of its source). The caller
+    therefore compares the person on the locked event row and refuses instead
+    of locking the new person while it holds the event and the request.
+
+    The two row locks are the ones :func:`soft_delete_event` takes on every
+    other path; the caller tells it that both rows are already held.
+
+    Returns the locked request and the person id the lock was taken for.
+    """
+    target_id = (
+        DeletionRequest.objects.for_facility(deletion_request.facility)
+        .filter(pk=deletion_request.pk)
+        .values_list("target_id", flat=True)
+        .get()
+    )
+    event = (
+        Event.objects.for_facility(deletion_request.facility_id).filter(pk=target_id).only("pk", "client_id").first()
+    )
+    person_id = event.client_id if event is not None else None
+    if event is not None:
+        _lock_client_row(person_id)
+        _lock_event_row(event)
+    locked_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
+    return locked_request, person_id
+
+
 @transaction.atomic
 def approve_deletion(deletion_request, reviewer):
     """Approve a deletion request and soft-delete the event.
@@ -115,6 +164,11 @@ def approve_deletion(deletion_request, reviewer):
     analog ``core.services.case.workitems.update_workitem_status``. Der
     zweite (wartende) Aufruf sieht danach den bereits fortgeschrittenen
     Status und bricht sauber mit ``ValidationError`` ab.
+
+    Lock order: the person of the event first, then the event, then the
+    request (:func:`_lock_person_and_event_then_request`), the same order the
+    anonymisation takes. An event that moved to another person while the rows
+    were locked is refused with the existing binding-changed answer.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
@@ -134,21 +188,25 @@ def approve_deletion(deletion_request, reviewer):
     if reviewer.facility_id != deletion_request.facility_id:
         raise ValidationError("Antrag gehört zu einer anderen Einrichtung.")
 
-    # Refs #1376 (I9): facility-scoped Lookup wahrt die RLS-Scopung, der Lock
-    # haelt die Zeile bis zum Commit dieser Transaktion.
-    deletion_request = DeletionRequest.objects.select_for_update().get(
-        pk=deletion_request.pk, facility=deletion_request.facility
-    )
+    # Refs #1376 (I9): facility-scoped lookups keep the RLS scoping. Person,
+    # event, then the request (see the helper); all locks hold until this
+    # transaction commits.
+    deletion_request, locked_person_id = _lock_person_and_event_then_request(deletion_request)
     if deletion_request.status != DeletionRequest.Status.PENDING:
         raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
     event = Event.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
+    if event.client_id != locked_person_id:
+        # The event moved to another person between the unlocked read and the
+        # event lock. That person is not locked, and locking it now, behind the
+        # event and the request, would reverse the order.
+        raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
     # Refs #2045: Der gepruefte Art.-17-Weg bleibt waehrend einer
     # Art.-18-Einschraenkung offen — die Loeschung ist ein Betroffenenrecht.
     # Der Ausstieg ist ein benannter, modul-privater Kontext (kein Argument von
     # ``soft_delete_event``), damit er nicht zum Generalschluessel wird.
     with _deletion_workflow_write():
-        soft_delete_event(event, reviewer)
+        soft_delete_event(event, reviewer, rows_locked=True)
     deletion_request.status = DeletionRequest.Status.APPROVED
     deletion_request.reviewed_by = reviewer
     deletion_request.reviewed_at = timezone.now()

@@ -734,7 +734,7 @@ def _assert_no_active_hold(event, *, client_id, case_id):
 
 
 @transaction.atomic
-def soft_delete_event(event, user, *, source=None):
+def soft_delete_event(event, user, *, source=None, rows_locked=False):
     """Soft-Delete + EventHistory(DELETE) + AuditLog.
 
     Art.-18-Gate (Refs #2045) — seit dem Re-Review IM Service statt ungesperrt
@@ -748,6 +748,12 @@ def soft_delete_event(event, user, *, source=None):
     Einzelentscheidung ohne zweite Person. Der Strichlisten-Undo passiert das
     Gate ohne Kontext, weil seine Ereignisse anonym sind (``client`` ist
     ``None``) und damit nie einen Personenbezug tragen.
+
+    ``rows_locked`` is only for the four-eyes approval: it has already locked
+    the person row of ``event.client_id`` and the event row in this
+    transaction (with the same two helpers, before the request row), so they
+    are not locked a second time here. Every other caller leaves it unset and
+    gets both locks as before.
     """
     from core.services.client.restriction import assert_processing_allowed
 
@@ -760,8 +766,9 @@ def soft_delete_event(event, user, *, source=None):
     # ein Fenster offen. Beide Sperren stehen hier eigenstaendig und nicht als
     # Nebenwirkung des Art.-18-Gates, das der gepruefte Vier-Augen-Weg
     # ueberspringt.
-    _lock_client_row(event.client_id)
-    _lock_event_row(event)
+    if not rows_locked:
+        _lock_client_row(event.client_id)
+        _lock_event_row(event)
     # The deletion state comes from the locked row, not from the instance: a
     # stale instance or a second request that waited on the locks above would
     # otherwise stamp, record and audit the same deletion again.
