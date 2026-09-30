@@ -21,6 +21,11 @@ sees without switching the database role. The role-switching helpers of the
 functional RLS suite are deliberately not imported: that module skips itself
 while a mutant is under test, which would silently disable every pin here.
 
+A freshly synced context is compared by its meaning: the target's facility and
+whether the super_admin bypass is in effect (the policies honour ``'true'``
+only), not by the spelling of the non-bypass value. A context that has to stay
+untouched is compared with exactly what the test put there.
+
 Target users belong to the second facility of the organisation, so a context
 that falls back to the first facility (or to no facility) is distinguishable
 from the expected one.
@@ -58,6 +63,22 @@ def _read_rls_context() -> tuple[str, str]:
         )
         facility_id, is_super_admin = cursor.fetchone()
     return facility_id or "", is_super_admin or ""
+
+
+def _is_super_admin_flag(value: str) -> bool:
+    """Whether ``app.is_super_admin`` grants the installation-wide bypass.
+
+    The RLS policies (migration 0085) compare the setting with ``= 'true'`` and
+    nothing else, so every other value (``''``, ``'false'``, unset) means "no
+    bypass". Pins on a freshly synced context check this meaning, not the
+    spelling of the non-bypass value.
+    """
+    return value == "true"
+
+
+def _effective_context(context: tuple[str, str]) -> tuple[str, bool]:
+    facility_id, is_super_admin = context
+    return facility_id, _is_super_admin_flag(is_super_admin)
 
 
 def _request(user=None):
@@ -101,7 +122,9 @@ class TestAnonymousRequestSyncsTargetContext:
 
         revoke_credentials(second_facility_user, reason=reason, request=_request(AnonymousUser()))
 
-        assert context_at_unlock == [(str(second_facility_user.facility_id), "")]
+        assert [_effective_context(context) for context in context_at_unlock] == [
+            (str(second_facility_user.facility_id), False)
+        ]
         assert _unlock_rows(second_facility_user).get().facility_id == second_facility_user.facility_id
 
     def test_request_without_user_counts_as_anonymous(self, second_facility_user):
@@ -113,7 +136,7 @@ class TestAnonymousRequestSyncsTargetContext:
 
         credentials._sync_rls_context_for_anonymous_request(second_facility_user, _request())
 
-        assert _read_rls_context() == (str(second_facility_user.facility_id), "")
+        assert _effective_context(_read_rls_context()) == (str(second_facility_user.facility_id), False)
 
 
 class TestAuthenticatedRequestKeepsActingContext:
