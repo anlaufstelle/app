@@ -290,6 +290,10 @@ def _nothing_written(source, target, second_facility, audits_before):
         assert row.merged_into_id is None
         assert row.is_deleted is False
     assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
+    assert not AuditLog.objects.filter(
+        action=AuditLog.Action.DELETION_REQUESTED,
+        target_id=str(source.pk),
+    ).exists()
     assert AuditLog.objects.filter(facility=second_facility).count() == audits_before
 
 
