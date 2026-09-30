@@ -768,14 +768,15 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
     # facility value is already present on the supplied instance, so this is
     # an in-memory guard rather than an additional read.
     _assert_actor_in_facility(user, event.facility_id)
+    # The processing gate is mandatory for every caller. The approved
+    # four-eyes workflow bypasses it through its private context, not through
+    # the rows_locked flag.
+    assert_processing_allowed(event.client_id, lock=True)
     # Reihenfolge tragend (ADR-050 D2): erst Personen-, dann Ereigniszeile
     # sperren, DANN den Hold lesen — sonst bleibt zwischen Lesung und Wirkung
-    # ein Fenster offen. Beide Sperren stehen hier eigenstaendig und nicht als
-    # Nebenwirkung des Art.-18-Gates, das der gepruefte Vier-Augen-Weg
-    # ueberspringt.
+    # ein Fenster offen.
     if not rows_locked:
         original_client_id = event.client_id
-        assert_processing_allowed(original_client_id, lock=True)
         _lock_client_row(original_client_id)
         locked_binding = _lock_event_row(event)
         if locked_binding is None:
@@ -788,9 +789,6 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
         # avoids acquiring a second lock or issuing another query here.
         if event.facility_id != user.facility_id:
             raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
-        # The person row is already locked by the approval caller; a second
-        # lock here would violate the one-lock-per-row query pin.
-        assert_processing_allowed(event.client_id, lock=False)
     # The deletion state comes from the locked row, not from the instance: a
     # stale instance or a second request that waited on the locks above would
     # otherwise stamp, record and audit the same deletion again.

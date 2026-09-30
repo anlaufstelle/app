@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.audit import audit_event
-from core.services.client.restriction import _deletion_workflow_write, assert_processing_allowed
+from core.services.client.restriction import _deletion_workflow_write
 from core.services.events.crud import (
     CLIENT_BINDING_CHANGED_MESSAGE,
     _assert_actor_in_facility,
@@ -201,9 +201,6 @@ def approve_deletion(deletion_request, reviewer):
         # event lock. That person is not locked, and locking it now, behind the
         # event and the request, would reverse the order.
         raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
-    # The person row is already locked above; check the restriction before
-    # entering the deletion-workflow exemption used by other write services.
-    assert_processing_allowed(event.client_id, lock=False)
     # Refs #2045: Der gepruefte Art.-17-Weg bleibt waehrend einer
     # Art.-18-Einschraenkung offen — die Loeschung ist ein Betroffenenrecht.
     # Der Ausstieg ist ein benannter, modul-privater Kontext (kein Argument von

@@ -157,20 +157,31 @@ class TestApproveDeletion:
         assert event_qualified.deleted_at is not None
         assert event_qualified.deleted_by == lead_user
 
-    def test_restricted_person_cannot_be_deleted_by_approval(
+    def test_restricted_person_is_deleted_by_approval(
         self, pending_request, lead_user, event_qualified, client_qualified
     ):
+        """Art. 17 remains available through the reviewed four-eyes path."""
         restrict_processing(client_qualified, lead_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+        approve_deletion(pending_request, lead_user)
+
+        event_qualified.refresh_from_db()
+        pending_request.refresh_from_db()
+        assert event_qualified.is_deleted is True
+        assert pending_request.status == DeletionRequest.Status.APPROVED
+
+    def test_rows_locked_direct_call_still_respects_processing_restriction(
+        self, event_qualified, staff_user, client_qualified
+    ):
+        """The rows_locked flag cannot become a public restriction bypass."""
+        restrict_processing(client_qualified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
         audits_before = AuditLog.objects.count()
 
         with pytest.raises(ValidationError) as excinfo:
-            approve_deletion(pending_request, lead_user)
+            soft_delete_event(event_qualified, staff_user, rows_locked=True)
 
         assert excinfo.value.messages == [str(PROCESSING_RESTRICTED_MESSAGE)]
         event_qualified.refresh_from_db()
-        pending_request.refresh_from_db()
         assert event_qualified.is_deleted is False
-        assert pending_request.status == DeletionRequest.Status.PENDING
         assert AuditLog.objects.count() == audits_before
 
     def test_approval_event_lock_uses_request_facility_without_lazy_query(
