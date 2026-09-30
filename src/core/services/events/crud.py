@@ -612,11 +612,6 @@ def _lock_client_row(client_id):
     Client.objects.filter(pk=client_id).select_for_update().only("pk").first()
 
 
-def _event_for_facility(event, facility_id):
-    """Read an event only when its stored facility matches the actor."""
-    return Event.objects.for_facility(facility_id).filter(pk=event.pk).first()
-
-
 def _lock_event_row(event, facility_id=None):
     """Sperrt die Ereigniszeile — der Koordinationspunkt aus ADR-050 D2.
 
@@ -635,7 +630,13 @@ def _lock_event_row(event, facility_id=None):
     -> ``core_event`` -> Hold-Lesung.
     """
     facility_id = event.facility_id if facility_id is None else facility_id
-    return Event.objects.for_facility(facility_id).select_for_update().filter(pk=event.pk).first()
+    return (
+        Event.objects.for_facility(facility_id)
+        .select_for_update()
+        .filter(pk=event.pk)
+        .values_list("pk", "client_id")
+        .first()
+    )
 
 
 #: Meldung, wenn ein paralleler Merge das Ereignis waehrend der Sperrwartezeit
@@ -763,8 +764,9 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
     """
     from core.services.client.restriction import assert_processing_allowed
 
-    # The facility of the acting person comes first — before the person and
-    # event row locks below.
+    # Refuse a plainly foreign event before taking either row lock. The
+    # facility value is already present on the supplied instance, so this is
+    # an in-memory guard rather than an additional read.
     _assert_actor_in_facility(user, event.facility_id)
     # Reihenfolge tragend (ADR-050 D2): erst Personen-, dann Ereigniszeile
     # sperren, DANN den Hold lesen — sonst bleibt zwischen Lesung und Wirkung
@@ -773,17 +775,19 @@ def soft_delete_event(event, user, *, source=None, rows_locked=False):
     # ueberspringt.
     if not rows_locked:
         original_client_id = event.client_id
-        current = _event_for_facility(event, user.facility_id)
-        if current is None:
+        assert_processing_allowed(original_client_id, lock=True)
+        _lock_client_row(original_client_id)
+        locked_binding = _lock_event_row(event)
+        if locked_binding is None:
             raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
-        assert_processing_allowed(current.client_id, lock=True)
-        _lock_client_row(current.client_id)
-        locked_event = _lock_event_row(event)
-        if locked_event is None:
-            raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
-        if locked_event.client_id != original_client_id:
+        if locked_binding[1] != original_client_id:
             raise ValidationError(CLIENT_BINDING_CHANGED_MESSAGE)
-        event = locked_event
+    else:
+        # The approval path already locked and freshly read this row in its
+        # facility-scoped workflow; comparing the instance is sufficient and
+        # avoids acquiring a second lock or issuing another query here.
+        if event.facility_id != user.facility_id:
+            raise ValidationError(_EVENT_OTHER_FACILITY_MESSAGE)
     # The deletion state comes from the locked row, not from the instance: a
     # stale instance or a second request that waited on the locks above would
     # otherwise stamp, record and audit the same deletion again.
