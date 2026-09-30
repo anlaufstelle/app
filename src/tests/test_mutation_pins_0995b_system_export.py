@@ -7,8 +7,14 @@ export issues one extra query per event. The pin compares the number of
 queries of an export with one event against an export with three events of
 three different document types (two persons): a row-independent query count is
 the contract, the absolute number is not pinned.
+
+The export promises CSV data in chunks, not a chunk layout: the pin joins the
+chunks and parses the result, so a generator that groups several rows into one
+chunk (or splits a row) produces the same observation.
 """
 
+import csv
+import io
 from datetime import timedelta
 
 import pytest
@@ -20,6 +26,10 @@ from core.models import Client, DocumentType, Event
 from core.services.system.export import export_events_csv
 
 pytestmark = pytest.mark.django_db
+
+# Static leading columns of every record row (see ``_build_event_row``).
+DOCUMENT_TYPE_COLUMN = 2
+PERSON_COLUMN = 3
 
 
 @pytest.fixture
@@ -44,10 +54,18 @@ def _event(facility, person, doc_type, user, minutes_ago):
 
 
 def _export(facility, user):
+    """Run the export and return ``(query count, header, record rows)`` of the joined CSV."""
     today = timezone.localdate()
     with CaptureQueriesContext(connection) as ctx:
-        chunks = list(export_events_csv(facility, today - timedelta(days=1), today + timedelta(days=1), user=user))
-    return len(ctx.captured_queries), chunks
+        content = "".join(export_events_csv(facility, today - timedelta(days=1), today + timedelta(days=1), user=user))
+    metadata, header, *records = csv.reader(io.StringIO(content))
+    assert metadata[0].startswith("# Export: ")
+    assert all(len(record) == len(header) for record in records)
+    return len(ctx.captured_queries), header, records
+
+
+def _type_and_person(records):
+    return [(record[DOCUMENT_TYPE_COLUMN], record[PERSON_COLUMN]) for record in records]
 
 
 class TestGetEventsQueryset:
@@ -58,15 +76,23 @@ class TestGetEventsQueryset:
     ):
         """x__get_events_queryset__mutmut_20: without the join each row fetches its
         document type separately (three events cost two more queries than one).
+
+        Events are created oldest first, so the newest-first export order is the
+        reverse of the primary key order.
         """
         _event(facility, client_identified, event_types[0], staff_user, minutes_ago=30)
         _export(facility, staff_user)
-        single_count, single_chunks = _export(facility, staff_user)
+        single_count, single_header, single_records = _export(facility, staff_user)
 
         _event(facility, second_person, event_types[1], staff_user, minutes_ago=20)
         _event(facility, client_identified, event_types[2], staff_user, minutes_ago=10)
-        triple_count, triple_chunks = _export(facility, staff_user)
+        triple_count, triple_header, triple_records = _export(facility, staff_user)
 
-        assert len(triple_chunks) == len(single_chunks) + 2
-        assert all(any(dt.name in chunk for chunk in triple_chunks) for dt in event_types)
+        assert _type_and_person(single_records) == [(event_types[0].name, client_identified.pseudonym)]
+        assert triple_header == single_header
+        assert _type_and_person(triple_records) == [
+            (event_types[2].name, client_identified.pseudonym),
+            (event_types[1].name, second_person.pseudonym),
+            (event_types[0].name, client_identified.pseudonym),
+        ]
         assert triple_count == single_count
