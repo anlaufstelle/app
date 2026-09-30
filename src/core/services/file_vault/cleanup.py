@@ -199,7 +199,9 @@ def _read_cleanup_cursor(state_path: Path) -> tuple[str | None, str | None]:
     if not isinstance(cursor, str) or not cursor:
         return None, "Fortsetzungspunkt hat einen ungueltigen Pfad; Start am Anfang."
     cursor_path = Path(cursor)
-    if cursor_path.is_absolute() or "." in cursor_path.parts or ".." in cursor_path.parts:
+    # Only ``..`` components and absolute paths can point outside the media
+    # root; ``pathlib`` already drops ``.`` components from ``parts``.
+    if cursor_path.is_absolute() or ".." in cursor_path.parts:
         return None, "Fortsetzungspunkt hat einen ungueltigen Pfad; Start am Anfang."
     return cursor, None
 
