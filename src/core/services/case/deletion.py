@@ -174,21 +174,27 @@ CASE_OTHER_FACILITY_MESSAGE = _("Fall gehört zu einer anderen Einrichtung.")
 
 
 def _move_case_to_trash(case, user, **detail):
-    """Gemeinsamer Kern beider Loeschwege (direkt und genehmigt).
+    """Shared core of both deletion paths (direct and approved).
 
-    Setzt ``is_deleted`` ueber die Mixin-Methode (die zugleich ``deleted_at``
-    fuellt — ohne das liefe der Fall nie in den Fristablauf), schreibt die
-    ``CASE_SOFT_DELETED``-Zeile und den Zeitstrom-Eintrag.
+    Sets ``is_deleted`` through the mixin method (which also fills
+    ``deleted_at`` -- without it the case would never reach its retention
+    deadline) and writes the ``CASE_SOFT_DELETED`` audit row and the activity
+    stream entry.
 
-    Refs #2373: Der Zustand wird an der FRISCH GESPERRTEN Fallzeile gelesen
-    (mit Einrichtungsfilter), nicht an der mitgegebenen Instanz — die kann aus
-    einem Lesevorgang von vor Minuten stammen. Ein zweiter Soft-Delete setzte
-    sonst ``deleted_at`` neu (die Papierkorb-Frist begaenne von vorn) und
-    schriebe eine zweite Audit-Zeile; ein getilgter Fall (``anonymized_at``)
-    ist endgueltig und wird nicht mehr verschoben. Die Sperrreihenfolge bleibt
-    die bisherige: auch vorher nahm das ``UPDATE`` des Soft-Deletes die
-    Fallzeile an genau dieser Stelle. Beide Aufrufer stehen in einer
-    ``transaction.atomic``.
+    Refs #2373: the state is read on the freshly locked case row (with the
+    facility filter), not on the instance passed in, which can come from a
+    read minutes ago. A second soft delete would otherwise reset
+    ``deleted_at`` (the trash period would start over) and write a second
+    audit row; an anonymised case (``anonymized_at``) is final and is not
+    moved again.
+
+    Lock order: both callers lock the person of the case before this function
+    locks the case row, the order the anonymisation and the case erasure take.
+    The direct path (:func:`soft_delete_case`) locks the person in the
+    processing restriction gate. The approval locks the person, the case and
+    the request beforehand (:func:`_lock_person_and_case_then_request`), so
+    the case lock taken here repeats one its own transaction already holds and
+    does not wait. Both callers run inside ``transaction.atomic``.
     """
     callers_case = case
     case = Case.objects.select_for_update().filter(pk=callers_case.pk, facility_id=callers_case.facility_id).first()
