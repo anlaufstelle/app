@@ -35,6 +35,7 @@ from core.models import Client, Event
 from core.services.case.state_contract import EVENT_WRITE_GONE_MESSAGE
 from core.services.events.crud import (
     EVENT_EDIT_DELETED_MESSAGE,
+    _event_form_state_unchanged,
     lock_event_for_edit,
     update_event,
 )
@@ -173,7 +174,22 @@ class TestLockEventForEditAbgleich:
 
 
 class TestEventFormStateUnchanged:
-    """``_event_form_state_unchanged`` on the version conflict path of ``update_event``: early exit without a query."""
+    """``_event_form_state_unchanged``: early exit without a query, at the helper and through ``update_event``."""
+
+    @pytest.mark.parametrize("form_state", ["", 123, ["x"]], ids=["empty", "number", "list"])
+    def test_empty_or_non_text_fingerprint_exits_without_a_query(
+        self, sample_event, form_state, django_assert_num_queries
+    ):
+        """x__event_form_state_unchanged__mutmut_1: ``and`` instead of ``or``
+        keeps the result ``False`` but drops the early exit, so the locked
+        fingerprint read runs. The promise "no query at all" is only
+        observable at the helper itself: the comparison over ``update_event``
+        below runs both paths through the same helper, and an emptiness or
+        type check moved behind the read would add the same query to both.
+        Hence the private binding here, as the exception next to that
+        comparison."""
+        with django_assert_num_queries(0):
+            assert _event_form_state_unchanged(sample_event, form_state) is False
 
     @pytest.mark.parametrize("fingerabdruck", ["", 123, ["x"]], ids=["leer", "zahl", "liste"])
     def test_leerer_oder_nicht_textueller_fingerabdruck_fragt_nicht_ab(
