@@ -280,7 +280,10 @@ class TestZZOfflineAuthRedirectReplay:
             # (b) Aenderung an dem bereits synchronisierten Ereignis
             page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
             page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
-            edit_input = page.locator("[data-testid^='offline-edit-input-']").first
+            # The seeded event uses the "Kontakt" type, whose free-text field is
+            # "notiz"; address it by slug rather than by position (the first
+            # field of that type is a number input that rejects text).
+            edit_input = page.locator("[data-testid='offline-edit-input-notiz']")
             edit_input.wait_for(state="visible", timeout=10000)
             edit_input.fill("E2E-Offline-Korrektur")
             page.locator("[data-testid='offline-edit-save']").click()
