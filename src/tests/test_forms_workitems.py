@@ -419,14 +419,39 @@ class TestWorkItemForm:
             assert second_attrs["min"] == second_min.isoformat()
             assert second_attrs["max"] == second_max.isoformat()
 
-    def test_class_level_date_widgets_carry_no_fixed_bounds(self):
-        """The class-level widgets keep type and format but no import-time bounds."""
-        for field_name in ("due_date", "remind_at"):
-            widget = WorkItemForm.base_fields[field_name].widget
-            assert widget.input_type == "date"
-            assert widget.format == "%Y-%m-%d"
-            assert "min" not in widget.attrs
-            assert "max" not in widget.attrs
+    def test_edit_form_renders_iso_prefill_and_keeps_existing_date_selectable(
+        self, facility, client_identified, staff_user, monkeypatch
+    ):
+        """Rendered inputs carry stored dates in ISO form and the bounds of the current call."""
+        import core.forms.workitems as workitems_module
+
+        current_min, current_max = date(2031, 3, 14), date(2032, 12, 31)
+        existing_due = current_min - timedelta(days=3)
+        existing_remind = current_min + timedelta(days=5)
+        monkeypatch.setattr(workitems_module, "min_workitem_date", lambda: current_min)
+        monkeypatch.setattr(workitems_module, "max_workitem_date", lambda: current_max)
+        item = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Stored dates around the patched day",
+            due_date=existing_due,
+            remind_at=existing_remind,
+        )
+        form = WorkItemForm(instance=item, facility=facility)
+
+        due_html = str(form["due_date"])
+        remind_html = str(form["remind_at"])
+        assert 'type="date"' in due_html
+        assert f'value="{existing_due.isoformat()}"' in due_html
+        assert f'min="{existing_due.isoformat()}"' in due_html
+        assert f'max="{current_max.isoformat()}"' in due_html
+        assert 'type="date"' in remind_html
+        assert f'value="{existing_remind.isoformat()}"' in remind_html
+        assert f'min="{current_min.isoformat()}"' in remind_html
+        assert f'max="{current_max.isoformat()}"' in remind_html
 
     def test_overdue_edit_lowers_per_instance_min(self, facility, client_identified, staff_user, monkeypatch):
         """The overdue-edit rule compares against the bound of the current call."""
