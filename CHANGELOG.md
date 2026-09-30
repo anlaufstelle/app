@@ -6,10 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Security
-
-- **Ungültige SMTP-Transportwerte stoppen den Produktionsstart** (#2388) — Ein ungültiger Wert für `EMAIL_USE_TLS` oder `EMAIL_USE_SSL` bricht den Start mit einer klaren Meldung ab, statt still unverschlüsselt zu senden.
-
 ### Erforderliche Betreiber-Aktionen
 
 - **Compose-Logrotation übernehmen** (#1904) — Die aktualisierte Compose-Datei auf den Host übernehmen und `docker compose … up -d` ausführen, damit die Container mit den neuen Loggrenzen neu angelegt werden.
@@ -92,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Ungültige SMTP-Transportwerte stoppen den Produktionsstart** (#2388) — Ein ungültiger Wert für `EMAIL_USE_TLS` oder `EMAIL_USE_SSL` bricht den Start mit einer klaren Meldung ab, statt still unverschlüsselt zu senden.
 - **Reload-Pfade prüfen die Logout-Marke unmittelbar vor dem Neuladen** (#2360) — Der Reload nach dem Übertragen ausstehender Offline-Änderungen und der Reload nach einer archivierten Einrichtung lesen die Marke des Schnell-Verlassens jetzt direkt vor dem Neuladen erneut; startet ein Schnell-Verlassen erst während des kurzen Zwischenschritts, überschreibt kein Neuladen mehr die Navigation zur neutralen Seite (der zweite Pfad prüfte die Marke bisher gar nicht).
 - **Backup- und Restore-Prüfpfade begrenzen und Fehlkonfigurationen sichtbar ablehnen** (#2362) — Manifestgröße, Kandidatenzahl und Suchtiefe sind begrenzt; unsichere Anker- und Datenbankpfade werden vor Schreib-/SQL-Zugriff abgewiesen, Zukunftszeitstempel und ankerlose Vorprüfungen sichtbar gemeldet, und die veraltete zweite Backup-Altersableitung entfällt; die Betriebsdoku erklärt zusätzlich den bewusst nachweislosen Restore ankerloser Altsätze.
 - **Erneute Zwei-Faktor-Einrichtung verlangt den bestehenden zweiten Faktor** (#2287) — Eine nur mit dem Passwort angemeldete Sitzung konnte trotz bereits bestätigtem zweiten Faktor (Authenticator oder Passkey) die Einrichtungsseite per Formularabsendung erneut durchlaufen, dabei ein zusätzliches Gerät aktivieren, den vorhandenen Satz Backup-Codes ersetzen und sich damit selbst als zwei-faktor-geprüft markieren. Die Einrichtungsseite prüft die Berechtigung jetzt für alle Zugriffsarten gemeinsam und leitet in diesem Fall auf die Zwei-Faktor-Abfrage; der Abschluss der Einrichtung gilt außerdem nur noch für genau das Gerät, für das der Vorgang gestartet wurde. Die erstmalige Einrichtung einschließlich Backup-Code-Bestätigung bleibt unverändert; eine beim Update bereits laufende, noch nicht quittierte Ersteinrichtung muss einmal neu begonnen werden (die Sitzung wird auf die Einrichtungsseite zurückgeführt).
