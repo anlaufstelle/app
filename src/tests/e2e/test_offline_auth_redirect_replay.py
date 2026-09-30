@@ -89,16 +89,17 @@ def _seed_client_case_and_event(e2e_env):
         f"  pseudonym='E2E-AUTH-{suffix}', created_by=u);"
         f" k = Case.objects.create(facility=f, client=c, title='E2E-Fall-{suffix}',"
         "  status=Case.Status.OPEN, created_by=u);"
-        " dt = DocumentType.objects.filter(facility=f, is_active=True).order_by('name').first();"
+        " dt = DocumentType.objects.get(facility=f, name='Kontakt', is_active=True);"
         " e = Event.objects.create(facility=f, client=c, document_type=dt,"
         "  occurred_at=timezone.now(), data_json={}, created_by=u);"
         " print('CLIENT:' + str(c.pk));"
         " print('CASE:' + str(k.pk));"
-        " print('EVENT:' + str(e.pk))"
+        " print('EVENT:' + str(e.pk));"
+        " print('DOCTYPE:' + str(dt.pk))"
     )
     lines = _shell(e2e_env, script)
     values = {line.split(":", 1)[0]: line.split(":", 1)[1] for line in lines if ":" in line}
-    return values["CLIENT"], values["CASE"], values["EVENT"]
+    return values["CLIENT"], values["CASE"], values["EVENT"], values["DOCTYPE"]
 
 
 def _server_event_count_for_client(e2e_env, client_pk):
@@ -238,7 +239,7 @@ def _purge_offline(page):
 
 class TestZZOfflineAuthRedirectReplay:
     def test_mfa_requirement_during_offline_phase_pauses_the_replay(self, browser, base_url, e2e_env):
-        client_pk, case_pk, event_pk = _seed_client_case_and_event(e2e_env)
+        client_pk, case_pk, event_pk, doctype_pk = _seed_client_case_and_event(e2e_env)
         context = _android_context(browser)
         page = context.new_page()
         page.set_default_timeout(30000)
@@ -262,9 +263,12 @@ class TestZZOfflineAuthRedirectReplay:
             # (a) Neuanlage MIT Fall
             page.locator("[data-testid='offline-new-event-btn']").click()
             page.locator("[data-testid='offline-create-form']").wait_for(state="visible", timeout=10000)
-            # Dokumentationstyp ist Pflicht (saveCreate bricht sonst mit einem
-            # Formularfehler ab); der Katalog kommt aus dem gecachten Bundle.
-            page.locator("[data-testid='offline-create-doctype']").select_option(index=1)
+            # The documentation type is mandatory (saveCreate rejects the form
+            # otherwise); the catalogue comes from the cached bundle. Select the
+            # seeded type by its value: choosing by position would pick up
+            # whichever catalogue entry another spec left behind (a type with a
+            # mandatory field blocks the submit via browser form validation).
+            page.locator("[data-testid='offline-create-doctype']").select_option(value=doctype_pk)
             page.locator("[data-testid='offline-create-case']").select_option(value=case_pk)
             page.locator("[data-testid='offline-create-save']").click()
             create_error = page.locator("[data-testid='offline-create-error']")
