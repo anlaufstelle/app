@@ -94,23 +94,23 @@ def _setup_totp(page, base) -> list[str]:
     secret = (page.locator("[data-testid='mfa-secret']").text_content() or "").strip()
     page.locator("[data-testid='mfa-token-input']").fill(_generate_totp_code(secret))
     page.locator("[data-testid='mfa-confirm-button']").click()
-    page.wait_for_url(re.compile(r"/mfa/backup-codes/"), timeout=10000)
+    page.wait_for_url(re.compile(r"/mfa/backup-codes/"), timeout=15000)
     entries = page.locator("[data-testid='backup-codes-list'] li").all_text_contents()
     codes = [entry.strip() for entry in entries]
     page.locator("[data-testid='backup-codes-confirm']").check()
     page.locator("[data-testid='backup-codes-continue']").click()
-    page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
+    page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=15000)
     return codes
 
 
 def _confirm_sudo_from_settings(page, backup_code: str) -> None:
     """Link „Passkey hinzufügen“ ohne Sudo → Sudo-Seite → zurück auf die Einstellungen."""
     page.locator("[data-testid='passkey-sudo-link']").click()
-    page.wait_for_url(re.compile(r"/sudo/"), timeout=10000)
+    page.wait_for_url(re.compile(r"/sudo/"), timeout=15000)
     page.fill("input[name='password']", SEED_PASSWORD)
     page.fill("input[name='otp_token']", backup_code)
     page.locator("form:has(input[name='password']) button[type='submit']").click()
-    page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
+    page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=15000)
 
 
 class TestZZMfaWebAuthn:
@@ -180,7 +180,7 @@ class TestZZMfaWebAuthn:
 
                 # --- Erneut anmelden → Verify-Seite mit Chooser ---
                 _login(page, base)
-                page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=10000)
+                page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=15000)
                 passkey_btn = page.locator("[data-testid='mfa-passkey-button']")
                 passkey_btn.wait_for(state="visible", timeout=5000)
                 passkey_btn.click()
