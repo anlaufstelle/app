@@ -27,14 +27,16 @@ from datetime import timedelta
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import Client, Event
 from core.services.case.state_contract import EVENT_WRITE_GONE_MESSAGE
 from core.services.events.crud import (
     EVENT_EDIT_DELETED_MESSAGE,
-    _event_form_state_unchanged,
     lock_event_for_edit,
+    update_event,
 )
 from tests._row_lock_helpers import mitschnitt
 
@@ -171,14 +173,25 @@ class TestLockEventForEditAbgleich:
 
 
 class TestEventFormStateUnchanged:
-    """``_event_form_state_unchanged``: Frueh-Ausstieg ohne Abfrage."""
+    """``_event_form_state_unchanged`` on the version conflict path of ``update_event``: early exit without a query."""
 
     @pytest.mark.parametrize("fingerabdruck", ["", 123, ["x"]], ids=["leer", "zahl", "liste"])
     def test_leerer_oder_nicht_textueller_fingerabdruck_fragt_nicht_ab(
-        self, sample_event, fingerabdruck, django_assert_num_queries
+        self, sample_event, staff_user, fingerabdruck, django_assert_num_queries
     ):
-        """x__event_form_state_unchanged__mutmut_1: ``and`` statt ``or`` —
-        das Ergebnis bleibt ``False``, aber ohne Frueh-Ausstieg liefe die
-        gesperrte Fingerabdruck-Lesung."""
-        with django_assert_num_queries(0):
-            assert _event_form_state_unchanged(sample_event, fingerabdruck) is False
+        """x__event_form_state_unchanged__mutmut_1: ``and`` instead of ``or``.
+        The version conflict stands either way, but without the early exit
+        the locked fingerprint read would run. Observed through
+        ``update_event``: the conflict path with such a fingerprint issues
+        exactly as many queries as the same path without a fingerprint, which
+        exits early under both conditions."""
+        rendered_at = sample_event.updated_at.isoformat()
+        Event._base_manager.filter(pk=sample_event.pk).update(updated_at=timezone.now() + timedelta(minutes=1))
+        with CaptureQueriesContext(connection) as without_fingerprint, pytest.raises(ValidationError) as baseline:
+            update_event(sample_event, staff_user, {}, expected_updated_at=rendered_at)
+        assert baseline.value.code == "version_conflict"
+        with django_assert_num_queries(len(without_fingerprint)), pytest.raises(ValidationError) as exc:
+            update_event(
+                sample_event, staff_user, {}, expected_updated_at=rendered_at, expected_form_state=fingerabdruck
+            )
+        assert exc.value.code == "version_conflict"
