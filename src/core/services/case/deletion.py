@@ -282,14 +282,15 @@ def _lock_person_and_case_then_request(deletion_request):
     """
     facility_id = deletion_request.facility_id
     target_id = (
-        DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+        DeletionRequest.objects.for_facility(deletion_request.facility)
+        .filter(pk=deletion_request.pk)
         .values_list("target_id", flat=True)
         .get()
     )
-    person_id = Case.objects.filter(pk=target_id, facility_id=facility_id).values_list("client_id", flat=True).first()
+    person_id = Case.objects.for_facility(facility_id).filter(pk=target_id).values_list("client_id", flat=True).first()
     if person_id is not None:
-        Client.objects.filter(pk=person_id, facility_id=facility_id).select_for_update().only("pk").first()
-    Case.objects.filter(pk=target_id, facility_id=facility_id).select_for_update().only("pk").first()
+        Client.objects.for_facility(facility_id).filter(pk=person_id).select_for_update().only("pk").first()
+    Case.objects.for_facility(facility_id).filter(pk=target_id).select_for_update().only("pk").first()
     locked_request = DeletionRequest.objects.select_for_update().get(
         pk=deletion_request.pk, facility=deletion_request.facility
     )

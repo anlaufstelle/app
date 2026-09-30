@@ -247,7 +247,8 @@ def _lock_client_then_request(rr: RectificationRequest, reviewer: Any, clients) 
     locked row.
     """
     target_client_id = (
-        RectificationRequest.objects.filter(pk=rr.pk, facility=rr.facility)
+        RectificationRequest.objects.for_facility(rr.facility)
+        .filter(pk=rr.pk)
         .values_list("target_client_id", flat=True)
         .get()
     )
@@ -314,7 +315,9 @@ def approve_rectification(rr: RectificationRequest, reviewer: Any, review_note: 
     on its nullable side. Lock order person -> request, the same as the
     anonymisation (see :func:`_lock_client_then_request`).
     """
-    rr, client = _lock_client_then_request(rr, reviewer, Client.objects.select_related("document_type"))
+    rr, client = _lock_client_then_request(
+        rr, reviewer, Client.objects.for_facility(rr.facility).select_related("document_type")
+    )
     if client.is_deleted or not client.is_active:
         # Lazy-Import: ``main`` importiert dieses Modul nicht, aber der
         # Paket-``__init__`` bindet beide — der funktionslokale Import haelt die
@@ -412,7 +415,7 @@ def reject_rectification(rr: RectificationRequest, reviewer: Any, review_note: s
     parallel laufende Anonymisierung nicht zwischen Guard und ``save()`` faellt.
     Lock order person -> request, as in :func:`approve_rectification`.
     """
-    rr, client = _lock_client_then_request(rr, reviewer, Client.objects.all())
+    rr, client = _lock_client_then_request(rr, reviewer, Client.objects.for_facility(rr.facility))
     if client.is_deleted or not client.is_active:
         from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 

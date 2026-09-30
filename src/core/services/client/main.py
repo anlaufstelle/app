@@ -1294,7 +1294,8 @@ def _lock_client_then_deletion_request(deletion_request):
     under the lock it already holds.
     """
     target_id = (
-        DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+        DeletionRequest.objects.for_facility(deletion_request.facility)
+        .filter(pk=deletion_request.pk)
         .values_list("target_id", flat=True)
         .get()
     )

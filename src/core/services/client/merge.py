@@ -287,7 +287,8 @@ def _lock_persons_then_merge_request(deletion_request):
     """
     for _attempt in range(_MERGE_REQUEST_LOCK_ATTEMPTS):
         person_ids = (
-            DeletionRequest.objects.filter(pk=deletion_request.pk, facility=deletion_request.facility)
+            DeletionRequest.objects.for_facility(deletion_request.facility)
+            .filter(pk=deletion_request.pk)
             .values_list("target_id", "merge_into_id")
             .get()
         )
