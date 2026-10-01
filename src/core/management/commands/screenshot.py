@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -262,7 +263,15 @@ class Command(BaseCommand):
                     continue
                 try:
                     page = page_for(shot.role)
-                    response = page.goto(url, timeout=45000)
+                    try:
+                        response = page.goto(url, timeout=45000)
+                    except Exception as goto_exc:
+                        # Refs #2325 (follow-up): aborted navigations on a reused
+                        # page are transient; one retry, anything else counts as a failure.
+                        if "net::ERR_ABORTED" not in str(goto_exc):
+                            raise
+                        time.sleep(1)
+                        response = page.goto(url, timeout=45000)
                     page.wait_for_load_state("domcontentloaded")
                     # Refs #2325: an error status (e.g. a 404 for a missing seed
                     # object) must fail the shot instead of being saved as if it

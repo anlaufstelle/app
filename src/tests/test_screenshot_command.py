@@ -441,6 +441,115 @@ class TestPageForGivesEachRoleItsOwnContext:
         assert len(browser.contexts[0].pages[0].filled) == 2
 
 
+class _FlakyFakePage(_FakePage):
+    """Stand-in whose ``goto`` raises a queued exception before eventually
+    returning the response — Refs #2325 (follow-up): a verification run hit a
+    transient ``net::ERR_ABORTED`` aborting navigation on a page reused from
+    an earlier shot.
+    """
+
+    def __init__(self, response: "_FakeResponse", exceptions: list[Exception]):
+        super().__init__(response)
+        self._exceptions = list(exceptions)
+        self.goto_calls = 0
+
+    def goto(self, url, timeout=None):
+        self.goto_calls += 1
+        if self._exceptions:
+            raise self._exceptions.pop(0)
+        return super().goto(url, timeout=timeout)
+
+
+class _OneShotContext:
+    """Minimal ``BrowserContext`` stand-in that always hands back the same
+    (flaky) page — enough for a single anonymous shot, no login involved."""
+
+    def __init__(self, page):
+        self._page = page
+        self.closed = False
+
+    def new_page(self):
+        return self._page
+
+    def close(self):
+        self.closed = True
+
+
+class _OneShotBrowser:
+    """Minimal ``Browser`` stand-in pairing with ``_OneShotContext`` above."""
+
+    def __init__(self, page):
+        self._page = page
+
+    def new_context(self, **kwargs):
+        return _OneShotContext(self._page)
+
+
+class TestRunLangViewportRetriesOnAbortedNavigation:
+    """Refs #2325 (follow-up): a verification run of ``make docs-screens``
+    against the fix from the first commit still ended red — not on an
+    application error, but on ``Page.goto: net::ERR_ABORTED``, a Chromium
+    navigation abort on a page reused across shots. One retry absorbs that
+    transient abort; any other exception, or a second abort, must still fail
+    the shot.
+    """
+
+    def _anonymous_shot(self) -> Shot:
+        return Shot(name="fake-shot", route="/fake/", role=None, langs=("de",))
+
+    def test_retries_once_after_an_aborted_navigation_and_then_succeeds(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.management.commands.screenshot.time.sleep", lambda *a, **k: None)
+        page = _FlakyFakePage(
+            _FakeResponse(ok=True, status=200),
+            [Exception("Page.goto: net::ERR_ABORTED at http://x/fake/")],
+        )
+        browser = _OneShotBrowser(page)
+        cmd = Command()
+
+        ok, fail = cmd._run_lang_viewport(
+            browser, {}, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82
+        )
+
+        assert (ok, fail) == (1, 0)
+        assert page.goto_calls == 2
+        assert page.screenshot_called is True
+
+    def test_fails_when_the_retried_navigation_also_aborts(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.management.commands.screenshot.time.sleep", lambda *a, **k: None)
+        page = _FlakyFakePage(
+            _FakeResponse(ok=True, status=200),
+            [
+                Exception("Page.goto: net::ERR_ABORTED at http://x/fake/"),
+                Exception("Page.goto: net::ERR_ABORTED at http://x/fake/"),
+            ],
+        )
+        browser = _OneShotBrowser(page)
+        cmd = Command()
+
+        ok, fail = cmd._run_lang_viewport(
+            browser, {}, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82
+        )
+
+        assert (ok, fail) == (0, 1)
+        assert page.goto_calls == 2
+
+    def test_does_not_retry_a_different_navigation_error(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("core.management.commands.screenshot.time.sleep", lambda *a, **k: None)
+        page = _FlakyFakePage(
+            _FakeResponse(ok=True, status=200),
+            [Exception("Page.goto: net::ERR_CONNECTION_REFUSED at http://x/fake/")],
+        )
+        browser = _OneShotBrowser(page)
+        cmd = Command()
+
+        ok, fail = cmd._run_lang_viewport(
+            browser, {}, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82
+        )
+
+        assert (ok, fail) == (0, 1)
+        assert page.goto_calls == 1
+
+
 class _StubPlaywrightContextManager:
     """Minimal stand-in for ``sync_playwright()``'s context manager — enough
     surface for ``handle()`` to drive once ``_run_lang_viewport`` itself is
