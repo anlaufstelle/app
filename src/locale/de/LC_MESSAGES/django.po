@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 19:44+0200\n"
+"POT-Creation-Date: 2026-10-01 10:07+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13077,3 +13077,12 @@ msgstr "öffnet in neuem Tab"
 #: src/templates/core/help/overview.html:43
 msgid "Häufig gestellte Fragen (FAQ)"
 msgstr "Häufig gestellte Fragen (FAQ)"
+
+#: src/templates/auth/signed_in_link_notice.html:8
+#: src/templates/auth/signed_in_link_notice.html:31
+msgid "Bitte zuerst abmelden"
+msgstr "Bitte zuerst abmelden"
+
+#: src/templates/auth/signed_in_link_notice.html:33
+msgid "Sie sind derzeit angemeldet. Melden Sie sich ab und öffnen Sie den Link danach erneut."
+msgstr "Sie sind derzeit angemeldet. Melden Sie sich ab und öffnen Sie den Link danach erneut."
