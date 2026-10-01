@@ -26,12 +26,30 @@ Hold, ``RetentionHoldView`` beim Doppel-Klick-Hold) bleiben ABSICHTLICH
 unverändert — dort ist das Einwechseln laut Kommentar zu #2321 gewollt (die
 veraltete Karte wird durch die aktuelle Meldung ersetzt). Die beiden
 Gegenproben unten sichern das gegen eine versehentliche Umstellung ab.
+
+``TestWorkItemStatusUpdateServiceRejection`` (Refs #2385, Nachtrag aus der
+Nachtest-Phase E-17): ``WorkItemStatusUpdateView.post`` swallowed every
+``ValidationError`` raised by ``update_workitem_status`` — not just a real
+optimistic-locking conflict — into the same 409 JSON body
+(``_workitem_conflict_response``). For the inbox row button (HTMX,
+``hx-swap="outerHTML"``) this JSON text got swapped into the row itself,
+because an HTMX request satisfies ``_wants_json_response`` too. A business
+rejection (Art. 18 processing restriction, a deleted WorkItem, a changed
+client assignment, ...) is not a version conflict for that caller — an HTMX
+row button never sends ``expected_updated_at`` in the first place
+(``wants_raw_json`` is only true for ``Accept: application/json``), so a real
+conflict is impossible on that path. The view now branches on
+``_wants_raw_json_response`` first (unchanged 409 JSON contract for raw-JSON/
+offline-replay clients, including ``missing-token``), then on ``HX-Request``
+(``htmx_absage`` — plain text, ``HX-Reswap: none``, row stays, toast shows the
+message), then falls back to the pre-existing HTML flash+redirect.
 """
 
 import pytest
 from django.urls import reverse
 
-from core.models import RetentionProposal, WorkItem
+from core.models import Client, RetentionProposal, WorkItem
+from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, restrict_processing
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
 _MAX_PLAIN_TEXT_LENGTH = 400  # Refs #2358, static/js/htmx-errors.js
@@ -181,6 +199,71 @@ class TestWorkItemStatusUpdateInvalidStatus:
             {"status": "invalid"},
         )
         _assert_ohne_htmx_unveraendert(response, 400, "Ungültiger Status")
+
+
+@pytest.mark.django_db
+class TestWorkItemStatusUpdateServiceRejection:
+    """``WorkItemStatusUpdateView.post`` — a service-level ``ValidationError``
+    (Art. 18 processing restriction, deleted WorkItem, changed client
+    assignment, ...) swaps into ``#workitem-<pk>`` the same way the invalid-
+    status case above does (Refs #2385)."""
+
+    def test_htmx_rejection_without_swap(self, client, staff_user, workitem_open, client_identified):
+        restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "in_progress"},
+            **HTMX,
+        )
+
+        _assert_absage_ohne_swap(response, 409)
+        assert "application/json" not in response.headers.get("Content-Type", "")
+        assert str(PROCESSING_RESTRICTED_MESSAGE) in response.content.decode()
+        workitem_open.refresh_from_db()
+        assert workitem_open.status == "open"
+
+    def test_raw_json_version_conflict_unchanged(self, client, staff_user, workitem_open):
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "in_progress", "expected_updated_at": "2000-01-01T00:00:00+00:00"},
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 409, response.status_code
+        body = response.json()
+        assert body["error"] == "conflict"
+        assert "server_state" in body
+
+    def test_raw_json_missing_token_unchanged(self, client, staff_user, workitem_open):
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "in_progress"},
+            HTTP_ACCEPT="application/json",
+        )
+
+        assert response.status_code == 409, response.status_code
+        body = response.json()
+        assert body["error"] == "missing-token"
+
+    def test_form_post_without_htmx_keeps_flash_redirect(self, client, staff_user, workitem_open, client_identified):
+        restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+        client.force_login(staff_user)
+
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "in_progress"},
+        )
+
+        assert response.status_code == 302, response.status_code
+        assert response.url == reverse("core:workitem_inbox")
+        workitem_open.refresh_from_db()
+        assert workitem_open.status == "open"
 
 
 @pytest.mark.django_db

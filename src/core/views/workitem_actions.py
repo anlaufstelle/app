@@ -248,13 +248,25 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
             # generischen Queue still als Erfolg oder Dead-Letter
             # klassifiziert zu werden.
             workitem.refresh_from_db()
-            if _wants_json_response(request):
+            if _wants_raw_json_response(request):
                 if getattr(e, "code", None) == "missing_token":
                     return _workitem_conflict_response(workitem, None, error="missing-token")
                 return _workitem_conflict_response(workitem, expected_updated_at)
+            # Refs #2385: every other ``ValidationError`` from the service
+            # (Art. 18 processing restriction, a deleted WorkItem, a changed
+            # client assignment, ...) is a business rejection, not a version
+            # conflict — an HTMX row button never sends
+            # ``expected_updated_at`` in the first place (``wants_raw_json``
+            # above is False for it), so a real conflict is impossible on
+            # this path. Swapping the 409-JSON body into the row
+            # (``_workitem_row.html``, ``hx-swap="outerHTML"``) used to erase
+            # the row and show raw JSON text (error class #2358/#2385)
+            # instead of the usual plain-text toast.
+            if request.headers.get("HX-Request") == "true":
+                return htmx_absage("; ".join(e.messages), status=409)
             # Defensiver HTML-Fallback (praktisch unerreichbar, weil Token/
             # Pflicht nur für Raw-JSON-Clients gesetzt werden).
-            messages.error(request, e.message if hasattr(e, "message") else str(e))
+            messages.error(request, "; ".join(e.messages))
             return redirect("core:workitem_inbox")
 
         self.remember_idempotency(request, idem_key, idem_payload_hash, workitem.pk)
@@ -538,6 +550,15 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                 # "synchronisiert" verworfen zu werden. Normale
                 # Browser-Requests behalten das bisherige
                 # redirect+Flash-Verhalten.
+                # Refs #2385: unlike the inbox row button
+                # (``WorkItemStatusUpdateView``), this branch stays on
+                # ``_wants_json_response`` (HTMX included) — no template
+                # calls ``core:workitem_update`` via ``hx-post``, so there is
+                # no row-swap target that a 409-JSON body could erase, and
+                # the Edit path's 422-invalid/409-conflict contract already
+                # requires the version token for every JSON/HTMX caller
+                # (unlike the status-toggle path, see the class docstring
+                # above). No behavior change here.
                 if wants_json:
                     # Aktuellen Server-Stand nachladen, nicht die
                     # In-Memory-Kopie, mit der diese View gestartet ist.
