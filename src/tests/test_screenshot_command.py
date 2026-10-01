@@ -14,7 +14,7 @@ import pytest
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from core.management.commands.screenshot import LANG_SWITCH_USERNAMES, SHOTS, Command, Shot
+from core.management.commands.screenshot import DESKTOP, LANG_SWITCH_USERNAMES, SHOTS, Command, Shot
 from core.models import Case, Client, User
 
 
@@ -597,3 +597,302 @@ class TestHandleFailsTheRunWhenAnyShotFailed:
 
         cmd = Command()
         cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+
+def _role_route_shot(name: str, role: str | None) -> Shot:
+    """A literal-path shot that needs no reverse()/pk lookup, so it can run
+    against a bare fake database with no seed data."""
+    return Shot(name=name, route=f"/{name}/", role=role, langs=("de",))
+
+
+# Refs #2325 (follow-up review): a module-wide log of every non-login
+# navigation together with the ``sessionid`` cookie the page's own context
+# carried at that moment. The earlier regression test for the per-role
+# context fix asserted a *context contract* (two ``new_context()`` calls,
+# different context identity) rather than observing an actual session
+# leaking across roles, and it called ``_run_lang_viewport`` directly with
+# the new nine-argument signature — that signature does not exist on the
+# pre-fix command, so running it there raised ``TypeError`` instead of
+# failing on the cookie mix-up it was meant to catch. ``handle()`` kept the
+# same signature before and after the fix, so driving it end-to-end through
+# a fake Playwright module is what actually exercises the old shared-context
+# bug and fails for the right reason.
+_NAVIGATION_LOG: list[tuple[str, str | None]] = []
+
+
+class _FakeBrowserLauncher:
+    """Minimal ``sync_playwright()`` stand-in handing back a pre-built fake
+    browser instead of launching a real Chromium."""
+
+    def __init__(self, browser):
+        self._browser = browser
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    @property
+    def chromium(self):
+        return self
+
+    def launch(self):
+        return self._browser
+
+
+class _SessionFakeLocator:
+    """Stand-in for a Playwright ``Locator`` whose ``click()`` performs the
+    fake login: it writes the username last filled on the page into that
+    page's own context's cookie store, mirroring how a real login response
+    sets the session cookie on the browser context that made the request."""
+
+    def __init__(self, page: "_SessionFakePage"):
+        self._page = page
+
+    def click(self):
+        self._page.context.cookies["sessionid"] = self._page.pending_username
+        self._page.url = "http://x/dashboard/"
+
+
+class _SessionFakePage:
+    """Stand-in for a Playwright ``Page`` that knows its own
+    ``BrowserContext`` and records every non-login navigation together with
+    the ``sessionid`` cookie that context carries at that moment — the
+    signal that exposes a session accidentally inherited from another role.
+    """
+
+    def __init__(self, context: "_SessionFakeContext"):
+        self.context = context
+        self.url = "about:blank"
+        self.pending_username: str | None = None
+
+    def goto(self, url, timeout=None):
+        self.url = url
+        if not url.endswith("/login/"):
+            _NAVIGATION_LOG.append((url, self.context.cookies.get("sessionid")))
+        return _FakeResponse(ok=True, status=200)
+
+    def wait_for_load_state(self, *args, **kwargs):
+        pass
+
+    def fill(self, selector, value):
+        if "username" in selector:
+            self.pending_username = value
+
+    def locator(self, selector):
+        return _SessionFakeLocator(self)
+
+    def wait_for_url(self, predicate, timeout=None):
+        pass
+
+    def wait_for_selector(self, *args, **kwargs):
+        pass
+
+    def wait_for_function(self, *args, **kwargs):
+        pass
+
+    def screenshot(self, **kwargs):
+        return _tiny_png_bytes()
+
+
+class _SessionFakeContext:
+    """Stand-in for a Playwright ``BrowserContext`` with its own cookie jar
+    and the exact options it was created with, so a guard can assert every
+    role got identical context options and that every context opened during
+    a run gets closed."""
+
+    def __init__(self, kwargs: dict):
+        self.kwargs = kwargs
+        self.cookies: dict[str, str] = {}
+        self.closed = False
+
+    def new_page(self):
+        return _SessionFakePage(self)
+
+    def close(self):
+        self.closed = True
+
+
+class _SessionFakeBrowser:
+    """Stand-in for a Playwright ``Browser`` recording every
+    ``new_context()`` call — a role-keyed context per role vs. one context
+    shared by every role is exactly what distinguishes the fixed command
+    from the pre-fix one."""
+
+    def __init__(self):
+        self.contexts: list[_SessionFakeContext] = []
+
+    def new_context(self, **kwargs):
+        context = _SessionFakeContext(kwargs)
+        self.contexts.append(context)
+        return context
+
+    def close(self):
+        pass
+
+
+@pytest.mark.django_db
+class TestHandleIsolatesARolesCookieAcrossAnotherRolesLogin:
+    """Refs #2325 (follow-up review): ``handle()`` is the one interface that
+    kept its signature across the fix, so it is driven end-to-end here
+    through a fake Playwright module instead of calling the internal,
+    signature-changed ``_run_lang_viewport`` directly.
+    """
+
+    def test_a_role_revisited_after_another_role_logs_in_keeps_its_own_cookie(self, tmp_path, monkeypatch):
+        _NAVIGATION_LOG.clear()
+        monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+        browser = _SessionFakeBrowser()
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+        shots = [
+            _role_route_shot("shot-a", "emma"),
+            _role_route_shot("shot-b", "emma_1"),
+            _role_route_shot("shot-c", "emma"),
+        ]
+        monkeypatch.setattr("core.management.commands.screenshot.SHOTS", shots)
+
+        cmd = Command()
+        cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+        # The third navigation revisits "emma" after "emma_1" logged in in
+        # between; a context shared across roles would show "emma_1" here
+        # because that role's login overwrote the shared cookie store.
+        assert len(_NAVIGATION_LOG) == 3
+        assert _NAVIGATION_LOG[2] == ("http://x/shot-c/", "emma")
+
+
+@pytest.mark.django_db
+class TestHandleGivesEveryRoleTheSameContextOptions:
+    """Refs #2325 (follow-up review), guard (a): viewport, locale and
+    ``ignore_https_errors`` must be identical across every per-role context
+    created during a single language/viewport run."""
+
+    def test_every_role_context_gets_identical_options(self, tmp_path, monkeypatch):
+        _NAVIGATION_LOG.clear()
+        monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+        browser = _SessionFakeBrowser()
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+        shots = [_role_route_shot("shot-a", "emma"), _role_route_shot("shot-b", "emma_1")]
+        monkeypatch.setattr("core.management.commands.screenshot.SHOTS", shots)
+
+        cmd = Command()
+        cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+        assert len(browser.contexts) == 2
+        expected = {"viewport": DESKTOP, "locale": "de-DE", "ignore_https_errors": True}
+        assert all(context.kwargs == expected for context in browser.contexts)
+
+
+@pytest.mark.django_db
+class TestHandleAppliesLanguageSwitchToSessionUsers:
+    """Refs #2325 (follow-up review), guard (b): ``handle()`` drives the UI
+    language purely through each seeded user's ``preferred_language`` — pin
+    that it still updates every username in ``LANG_SWITCH_USERNAMES`` using
+    real rows, the same verification approach already used throughout this
+    file and the wider suite (e.g. ``TestResolvePksMirrorsDetailViewLiveFilters``
+    above) rather than a reimplemented stand-in for the Django ORM.
+    """
+
+    def test_sets_preferred_language_for_every_lang_switch_username(self, tmp_path, monkeypatch, facility):
+        for username in LANG_SWITCH_USERNAMES:
+            User.objects.create_user(username=username, role=User.Role.LEAD, facility=facility)
+        monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+        browser = _SessionFakeBrowser()
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+        monkeypatch.setattr("core.management.commands.screenshot.SHOTS", [])
+
+        cmd = Command()
+        cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+        # handle() runs "de" then "en" in that order — the final value is
+        # the last language it switched every lang-switch user to.
+        for username in LANG_SWITCH_USERNAMES:
+            assert User.objects.get(username=username).preferred_language == "en"
+
+
+@pytest.mark.django_db
+class TestHandleKeepsAnAnonymousShotIsolatedBetweenRoles:
+    """Refs #2325 (follow-up review), guard (c): an anonymous shot
+    (``role=None``) sitting between two authenticated roles — as the real
+    gallery's public ``login`` shot does — must get its own context with no
+    session cookie and must not disturb either role's own context."""
+
+    def test_anonymous_shot_has_no_cookie_and_leaves_role_contexts_untouched(self, tmp_path, monkeypatch):
+        _NAVIGATION_LOG.clear()
+        monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+        browser = _SessionFakeBrowser()
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+        shots = [
+            _role_route_shot("shot-a", "emma"),
+            _role_route_shot("shot-anon", None),
+            _role_route_shot("shot-b", "emma_1"),
+        ]
+        monkeypatch.setattr("core.management.commands.screenshot.SHOTS", shots)
+
+        cmd = Command()
+        cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+        assert len(browser.contexts) == 3
+        emma_context, anon_context, emma_1_context = browser.contexts
+        assert anon_context.cookies.get("sessionid") is None
+        assert emma_context.cookies.get("sessionid") == "emma"
+        assert emma_1_context.cookies.get("sessionid") == "emma_1"
+
+
+class _FailingSessionFakePage(_SessionFakePage):
+    """Stand-in whose first non-login navigation raises a plain error —
+    Refs #2325 (follow-up review), guard (d): every context opened during a
+    run must still be closed even when a shot's own navigation blows up
+    outright (not just a transient ``net::ERR_ABORTED``, which already has
+    its own retry guard)."""
+
+    def goto(self, url, timeout=None):
+        if not url.endswith("/login/"):
+            raise RuntimeError("boom")
+        return super().goto(url, timeout=timeout)
+
+
+class _FailingSessionFakeContext(_SessionFakeContext):
+    def new_page(self):
+        return _FailingSessionFakePage(self)
+
+
+class _FailOnSecondRoleBrowser(_SessionFakeBrowser):
+    """Variant of ``_SessionFakeBrowser`` whose second ``new_context()``
+    call (the second role logged in during a run) hands back a context whose
+    page blows up on its first real navigation."""
+
+    def new_context(self, **kwargs):
+        context = _FailingSessionFakeContext(kwargs) if len(self.contexts) == 1 else _SessionFakeContext(kwargs)
+        self.contexts.append(context)
+        return context
+
+
+@pytest.mark.django_db
+class TestHandleClosesEveryContextAfterAFailingNavigation:
+    """Refs #2325 (follow-up review), guard (d): a shot whose navigation
+    raises outright (not an aborted-navigation retry) must still count as
+    failed and must not leave any context open, including contexts of roles
+    unrelated to the failure."""
+
+    def test_closes_every_context_and_counts_the_shot_as_failed(self, tmp_path, monkeypatch):
+        _NAVIGATION_LOG.clear()
+        monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+        browser = _FailOnSecondRoleBrowser()
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+        shots = [
+            _role_route_shot("shot-a", "emma"),
+            _role_route_shot("shot-b", "emma_1"),
+            _role_route_shot("shot-c", "emma"),
+        ]
+        monkeypatch.setattr("core.management.commands.screenshot.SHOTS", shots)
+
+        cmd = Command()
+        with pytest.raises(CommandError, match="screenshot"):
+            cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+        # Two contexts: "emma" (reused for shot-a and shot-c) and "emma_1"
+        # (whose only shot raises). Both must be closed regardless.
+        assert len(browser.contexts) == 2
+        assert all(context.closed for context in browser.contexts)
