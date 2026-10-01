@@ -78,6 +78,10 @@ class TestNoLoadPathStaysSilent:
         # Refs #2285: Demo-Bereichsauswahl (Standalone-Dokument, laedt offline-db.js
         # fuer die Warnung vor ungespeicherter Offline-Arbeit).
         "auth/demo_scenario_select.html",
+        # Refs #2391: notice for invite/reset/unlock links opened in a signed-in
+        # session (standalone document); loads offline-db.js so the sign-out
+        # form on the page wipes the local data like the regular logout.
+        "auth/signed_in_link_notice.html",
     )
 
     def test_every_layout_loading_offline_db_is_accounted_for(self):
