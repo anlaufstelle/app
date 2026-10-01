@@ -41,7 +41,9 @@ python-magic>=0.4.27
 # Detailplan dokumentiert (PyYAML als Runtime-Dependency). MIT-Lizenz.
 pyyaml>=6.0
 # Pin transitiver dep wegen CVE-2026-44431 + CVE-2026-44432 (sentry-sdk zieht es ein).
-urllib3>=2.7.0
+# Raised to 2.8.0 for PYSEC-2026-4175/-4176/-4177 (CVE-2026-97687/-97688/-97689:
+# HTTPS proxy TLS config, chunked deflate infinite loop, unbounded chunk-size line).
+urllib3>=2.8.0
 # Pin transitiver dep wegen PYSEC-2026-2253 bis PYSEC-2026-2257 (weasyprint zieht es ein).
 pillow>=12.3.0
 # Pin transitiver dep: WeasyPrint 70 nutzt CSS-Notes-Pseudoelemente (::note-call) in seinem
