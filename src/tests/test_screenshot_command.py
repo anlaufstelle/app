@@ -4,10 +4,18 @@ Playwright/PIL are only imported lazily inside ``Command.handle()`` (see
 ``core/management/commands/screenshot.py``), so the module itself — and its
 ``SHOTS`` config — can be imported and asserted on without a live E2E server.
 
-Refs #1594, #1595.
+Refs #1594, #1595, #2325.
 """
 
-from core.management.commands.screenshot import LANG_SWITCH_USERNAMES, SHOTS
+import io
+import uuid
+
+import pytest
+from django.core.management.base import CommandError
+from django.utils import timezone
+
+from core.management.commands.screenshot import LANG_SWITCH_USERNAMES, SHOTS, Command, Shot
+from core.models import Case, Client, User
 
 
 def _shot(name: str):
@@ -122,3 +130,267 @@ class TestNeueFlaechenV081:
 
         cmd = Command()
         assert cmd._url("http://x", _shot("suche"), {"client": None}) is None
+
+
+@pytest.mark.django_db
+class TestResolvePksMirrorsDetailViewLiveFilters:
+    """Refs #2325: ``_resolve_pks()`` used to pick the lowest-pk case/client
+    per facility with no further filter, while ``CaseDetailView`` only
+    renders cases from ``cases_with_live_client()`` and ``ClientDetailView``
+    refuses a trashed (but not an anonymized) person. A trashed/anonymized
+    seed row at the lowest UUID made ``make docs-screens`` photograph a 404
+    page for ``fallakte``/``fallakte-en`` (and exit 0 regardless, see the
+    other test classes below).
+    """
+
+    def test_skips_a_trashed_case_at_the_lowest_pk(self, facility):
+        emma = User.objects.create_user(username="emma", role=User.Role.LEAD, facility=facility)
+        client = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Live-01",
+            created_by=emma,
+        )
+        trashed_case = Case.objects.create(
+            id=uuid.UUID(int=1),
+            facility=facility,
+            client=client,
+            title="Trashed case",
+            status=Case.Status.OPEN,
+            created_by=emma,
+            is_deleted=True,
+            deleted_at=timezone.now(),
+        )
+        live_case = Case.objects.create(
+            id=uuid.UUID(int=2),
+            facility=facility,
+            client=client,
+            title="Live case",
+            status=Case.Status.OPEN,
+            created_by=emma,
+        )
+        assert trashed_case.pk < live_case.pk  # sanity: the trashed row sorts first by pk
+
+        pks = Command()._resolve_pks()
+
+        assert pks["case"] == live_case
+
+    def test_skips_the_case_of_an_anonymized_client_at_the_lowest_pk(self, facility):
+        """``cases_with_live_client()`` also excludes a case whose person was
+        anonymized (``is_active=False``), not only a trashed case (Refs
+        #1777) — the seed carries exactly such a case ahead of a live one.
+        """
+        emma = User.objects.create_user(username="emma", role=User.Role.LEAD, facility=facility)
+        anonymized_client = Client.objects.create(
+            id=uuid.UUID(int=1),
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Anon-01",
+            created_by=emma,
+            is_active=False,
+        )
+        live_client = Client.objects.create(
+            id=uuid.UUID(int=2),
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Live-01",
+            created_by=emma,
+        )
+        case_of_anonymized_client = Case.objects.create(
+            id=uuid.UUID(int=1),
+            facility=facility,
+            client=anonymized_client,
+            title="Case of an anonymized client",
+            status=Case.Status.OPEN,
+            created_by=emma,
+        )
+        live_case = Case.objects.create(
+            id=uuid.UUID(int=2),
+            facility=facility,
+            client=live_client,
+            title="Live case",
+            status=Case.Status.OPEN,
+            created_by=emma,
+        )
+        assert case_of_anonymized_client.pk < live_case.pk
+
+        pks = Command()._resolve_pks()
+
+        assert pks["case"] == live_case
+
+    def test_skips_a_trashed_client_at_the_lowest_pk(self, facility):
+        emma = User.objects.create_user(username="emma", role=User.Role.LEAD, facility=facility)
+        trashed_client = Client.objects.create(
+            id=uuid.UUID(int=1),
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Trash-01",
+            created_by=emma,
+            is_deleted=True,
+            deleted_at=timezone.now(),
+        )
+        live_client = Client.objects.create(
+            id=uuid.UUID(int=2),
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Live-01",
+            created_by=emma,
+        )
+        assert trashed_client.pk < live_client.pk
+
+        pks = Command()._resolve_pks()
+
+        assert pks["client"] == live_client
+
+    def test_still_picks_an_anonymized_but_not_trashed_client(self, facility):
+        """Boundary pin, not a regression: ``ClientDetailView`` renders an
+        anonymized person directly (Refs #1777) — only the trash bin
+        (``is_deleted``) is off-limits, so the fix must not filter on
+        ``is_active`` for the client and turn every anonymized seed facility
+        into a skipped ``personendetail`` shot. Passes both before and after
+        the fix; included to pin the exact scope of the filter.
+        """
+        emma = User.objects.create_user(username="emma", role=User.Role.LEAD, facility=facility)
+        anonymized_client = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Anon-01",
+            created_by=emma,
+            is_active=False,
+        )
+
+        pks = Command()._resolve_pks()
+
+        assert pks["client"] == anonymized_client
+
+
+def _tiny_png_bytes() -> bytes:
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (2, 2), color="white").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+class _FakeResponse:
+    """Stand-in for a Playwright ``Response`` (Refs #2325)."""
+
+    def __init__(self, *, ok: bool, status: int):
+        self.ok = ok
+        self.status = status
+
+
+class _FakePage:
+    """Stand-in for a Playwright ``Page`` — no browser involved."""
+
+    def __init__(self, response: "_FakeResponse"):
+        self._response = response
+        self.screenshot_called = False
+
+    def goto(self, url, timeout=None):
+        return self._response
+
+    def wait_for_load_state(self, *args, **kwargs):
+        pass
+
+    def wait_for_selector(self, *args, **kwargs):
+        pass
+
+    def wait_for_function(self, *args, **kwargs):
+        pass
+
+    def screenshot(self, **kwargs):
+        self.screenshot_called = True
+        return _tiny_png_bytes()
+
+
+class _FakeContext:
+    """Stand-in for a Playwright ``BrowserContext`` with one fixed page."""
+
+    def __init__(self, page: "_FakePage"):
+        self._page = page
+
+    def new_page(self):
+        return self._page
+
+
+class TestRunLangViewportAbortsOnHttpErrorPage:
+    """Refs #2325: an error-status response must count as a failure instead
+    of being screenshotted as if it were real content — no browser needed,
+    ``_run_lang_viewport`` only calls the ``Page``/``Response`` surface used
+    below.
+    """
+
+    def _anonymous_shot(self) -> Shot:
+        return Shot(name="fake-shot", route="/fake/", role=None, langs=("de",))
+
+    def test_counts_a_404_response_as_a_failure_without_writing_an_image(self, tmp_path):
+        page = _FakePage(_FakeResponse(ok=False, status=404))
+        context = _FakeContext(page)
+        cmd = Command()
+
+        ok, fail = cmd._run_lang_viewport(context, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82)
+
+        assert (ok, fail) == (0, 1)
+        assert page.screenshot_called is False
+        assert list(tmp_path.iterdir()) == []
+
+    def test_counts_a_200_response_as_success_and_writes_an_image(self, tmp_path):
+        page = _FakePage(_FakeResponse(ok=True, status=200))
+        context = _FakeContext(page)
+        cmd = Command()
+
+        ok, fail = cmd._run_lang_viewport(context, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82)
+
+        assert (ok, fail) == (1, 0)
+        assert page.screenshot_called is True
+        assert len(list(tmp_path.iterdir())) == 1
+
+
+class _StubPlaywrightContextManager:
+    """Minimal stand-in for ``sync_playwright()``'s context manager — enough
+    surface for ``handle()`` to drive once ``_run_lang_viewport`` itself is
+    monkeypatched below, so no real browser is launched.
+    """
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    @property
+    def chromium(self):
+        return self
+
+    def launch(self):
+        return self
+
+    def new_context(self, **kwargs):
+        return self
+
+    def close(self):
+        pass
+
+
+@pytest.mark.django_db
+class TestHandleFailsTheRunWhenAnyShotFailed:
+    """Refs #2325: ``handle()`` used to report "N fehlgeschlagen" and still
+    exit 0 — ``make docs-screens`` turned a broken doc screenshot into a
+    silent no-op instead of a red build.
+    """
+
+    def test_raises_command_error_when_a_shot_failed(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _StubPlaywrightContextManager())
+        monkeypatch.setattr(Command, "_run_lang_viewport", lambda self, *a, **k: (0, 1))
+
+        cmd = Command()
+        with pytest.raises(CommandError, match="screenshot"):
+            cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
+
+    def test_does_not_raise_when_every_shot_succeeded(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _StubPlaywrightContextManager())
+        monkeypatch.setattr(Command, "_run_lang_viewport", lambda self, *a, **k: (1, 0))
+
+        cmd = Command()
+        cmd.handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)

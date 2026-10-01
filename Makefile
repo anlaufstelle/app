@@ -136,8 +136,10 @@ docs-screens:
 	$(DSM_E2E) $(PYTHON) -m gunicorn anlaufstelle.wsgi:application \
 		--bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120 & echo $$! > /tmp/docs-screens.pid
 	@sleep 5
-	-$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844
-	-kill $$(cat /tmp/docs-screens.pid) 2>/dev/null || true
+	status=0; \
+	$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844 || status=$$?; \
+	kill $$(cat /tmp/docs-screens.pid) 2>/dev/null || true; \
+	exit $$status
 	@echo "✓ Screenshots in docs/screenshots/"
 
 # CI lokal

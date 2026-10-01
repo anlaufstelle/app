@@ -43,7 +43,8 @@ os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "1")
 from django.core.management.base import BaseCommand, CommandError
 from django.urls import NoReverseMatch, reverse
 
-from core.models import Case, Client, User
+from core.models import Client, User
+from core.services.case import cases_with_live_client
 
 SEED_PASSWORD = "anlaufstelle2026"  # noqa: S105 — seed-only credential (dev/e2e)
 
@@ -171,13 +172,19 @@ class Command(BaseCommand):
             browser.close()
 
         self.stdout.write(self.style.SUCCESS(f"Screenshots erzeugt: {ok} ok / {fail} fehlgeschlagen — siehe {out_dir}"))
+        # Refs #2325: a non-zero exit code is what turns `make docs-screens`
+        # red — without it, a photographed error page passed silently.
+        if fail > 0:
+            raise CommandError(f"{fail} screenshot(s) failed")
 
     def _resolve_pks(self) -> dict:
         """Pick representative objects from the (e2e) DB for detail routes."""
         emma = User.objects.filter(username="emma").first()
         facility = getattr(emma, "facility", None)
-        client = Client.objects.filter(facility=facility).order_by("pk").first() if facility else None
-        case = Case.objects.filter(facility=facility).order_by("pk").first() if facility else None
+        # Refs #2325: mirror the detail views' live-object filters here, or a
+        # trashed/anonymized row at the lowest pk gets screenshotted as a 404.
+        client = Client.objects.active().filter(facility=facility).order_by("pk").first() if facility else None
+        case = cases_with_live_client().filter(facility=facility).order_by("pk").first() if facility else None
         return {"client": client, "case": case}
 
     def _url(self, base_url: str, shot: Shot, pks: dict) -> str | None:
@@ -245,8 +252,13 @@ class Command(BaseCommand):
                 continue
             try:
                 page = page_for(shot.role)
-                page.goto(url, timeout=45000)
+                response = page.goto(url, timeout=45000)
                 page.wait_for_load_state("domcontentloaded")
+                # Refs #2325: an error status (e.g. a 404 for a missing seed
+                # object) must fail the shot instead of being saved as if it
+                # were real content.
+                if response is not None and not response.ok:
+                    raise RuntimeError(f"HTTP {response.status} for {url}")
                 with contextlib.suppress(Exception):
                     page.wait_for_selector(shot.wait, timeout=8000)
                 if shot.wait_js:
