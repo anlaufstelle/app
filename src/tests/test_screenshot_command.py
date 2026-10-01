@@ -280,18 +280,39 @@ class _FakeResponse:
         self.status = status
 
 
+class _FakeLocator:
+    """Stand-in for a Playwright ``Locator`` — only ``click()`` is used."""
+
+    def click(self):
+        pass
+
+
 class _FakePage:
     """Stand-in for a Playwright ``Page`` — no browser involved."""
 
     def __init__(self, response: "_FakeResponse"):
         self._response = response
         self.screenshot_called = False
+        self.filled: list[tuple[str, str]] = []
+        self.url = "about:blank"
+        self.context: _FakeContext | None = None
 
     def goto(self, url, timeout=None):
+        self.url = url
         return self._response
 
     def wait_for_load_state(self, *args, **kwargs):
         pass
+
+    def fill(self, selector, value):
+        self.filled.append((selector, value))
+
+    def locator(self, selector):
+        return _FakeLocator()
+
+    def wait_for_url(self, predicate, timeout=None):
+        # Pretend the login redirect already left ``/login/`` behind.
+        self.url = "http://x/dashboard/"
 
     def wait_for_selector(self, *args, **kwargs):
         pass
@@ -305,13 +326,39 @@ class _FakePage:
 
 
 class _FakeContext:
-    """Stand-in for a Playwright ``BrowserContext`` with one fixed page."""
+    """Stand-in for a Playwright ``BrowserContext`` — tracks every page it
+    creates and whether it was closed (Refs #2325 follow-up: contexts must be
+    per-role, not shared, and must be closed at the end of the run).
+    """
 
-    def __init__(self, page: "_FakePage"):
-        self._page = page
+    def __init__(self, response: "_FakeResponse"):
+        self._response = response
+        self.pages: list[_FakePage] = []
+        self.closed = False
 
     def new_page(self):
-        return self._page
+        page = _FakePage(self._response)
+        page.context = self
+        self.pages.append(page)
+        return page
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeBrowser:
+    """Stand-in for a Playwright ``Browser`` — counts ``new_context()`` calls
+    so tests can assert on a context-per-role policy (Refs #2325 follow-up).
+    """
+
+    def __init__(self, response: "_FakeResponse | None" = None):
+        self._response = response if response is not None else _FakeResponse(ok=True, status=200)
+        self.contexts: list[_FakeContext] = []
+
+    def new_context(self, **kwargs):
+        context = _FakeContext(self._response)
+        self.contexts.append(context)
+        return context
 
 
 class TestRunLangViewportAbortsOnHttpErrorPage:
@@ -325,26 +372,73 @@ class TestRunLangViewportAbortsOnHttpErrorPage:
         return Shot(name="fake-shot", route="/fake/", role=None, langs=("de",))
 
     def test_counts_a_404_response_as_a_failure_without_writing_an_image(self, tmp_path):
-        page = _FakePage(_FakeResponse(ok=False, status=404))
-        context = _FakeContext(page)
+        browser = _FakeBrowser(_FakeResponse(ok=False, status=404))
         cmd = Command()
 
-        ok, fail = cmd._run_lang_viewport(context, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82)
+        ok, fail = cmd._run_lang_viewport(
+            browser, {}, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82
+        )
 
         assert (ok, fail) == (0, 1)
+        page = browser.contexts[0].pages[0]
         assert page.screenshot_called is False
         assert list(tmp_path.iterdir()) == []
 
     def test_counts_a_200_response_as_success_and_writes_an_image(self, tmp_path):
-        page = _FakePage(_FakeResponse(ok=True, status=200))
-        context = _FakeContext(page)
+        browser = _FakeBrowser(_FakeResponse(ok=True, status=200))
         cmd = Command()
 
-        ok, fail = cmd._run_lang_viewport(context, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82)
+        ok, fail = cmd._run_lang_viewport(
+            browser, {}, "http://x", tmp_path, "de", False, [self._anonymous_shot()], {}, 82
+        )
 
         assert (ok, fail) == (1, 0)
+        page = browser.contexts[0].pages[0]
         assert page.screenshot_called is True
         assert len(list(tmp_path.iterdir())) == 1
+
+
+class TestPageForGivesEachRoleItsOwnContext:
+    """Refs #2325 (follow-up): ``page_for()`` used to call ``context.new_page()``
+    on one context shared by every role within a language/viewport run. Pages
+    on the same context share cookies, so a second role's login silently
+    replaced the first role's session cookie: the docs-screens shot right
+    after ``ereignis-anlegen-beratungsstelle`` (role ``emma_1``) rendered the
+    next shot, ``fallakte`` (role ``emma``), under the Nord session and
+    404'd.
+    """
+
+    @staticmethod
+    def _role_shot(name: str, role: str) -> Shot:
+        return Shot(name=name, route=f"/{name}/", role=role, langs=("de",))
+
+    def test_two_different_roles_each_get_their_own_context(self, tmp_path):
+        browser = _FakeBrowser()
+        cmd = Command()
+        shots = [self._role_shot("shot-a", "emma_1"), self._role_shot("shot-b", "emma")]
+
+        ok, fail = cmd._run_lang_viewport(browser, {}, "http://x", tmp_path, "de", False, shots, {}, 82)
+
+        assert (ok, fail) == (2, 0)
+        assert len(browser.contexts) == 2
+        emma_1_page = browser.contexts[0].pages[0]
+        emma_page = browser.contexts[1].pages[0]
+        assert emma_page.context is not emma_1_page.context
+        assert all(context.closed for context in browser.contexts)
+
+    def test_two_shots_of_the_same_role_share_one_context_and_log_in_once(self, tmp_path):
+        browser = _FakeBrowser()
+        cmd = Command()
+        shots = [self._role_shot("shot-a", "emma"), self._role_shot("shot-b", "emma")]
+
+        ok, fail = cmd._run_lang_viewport(browser, {}, "http://x", tmp_path, "de", False, shots, {}, 82)
+
+        assert (ok, fail) == (2, 0)
+        assert len(browser.contexts) == 1
+        assert len(browser.contexts[0].pages) == 1
+        # Username + password filled exactly once — the second shot reuses
+        # the already-logged-in page instead of logging in again.
+        assert len(browser.contexts[0].pages[0].filled) == 2
 
 
 class _StubPlaywrightContextManager:

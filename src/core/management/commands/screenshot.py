@@ -164,11 +164,12 @@ class Command(BaseCommand):
                 User.objects.filter(username__in=LANG_SWITCH_USERNAMES).update(preferred_language=lang)
                 for viewport, is_mobile in ((DESKTOP, False), (MOBILE, True)):
                     locale = "de-DE" if lang == "de" else "en-US"
-                    context = browser.new_context(viewport=viewport, locale=locale, ignore_https_errors=True)
-                    o, f = self._run_lang_viewport(context, base_url, out_dir, lang, is_mobile, shots, pks, quality)
+                    context_kwargs = {"viewport": viewport, "locale": locale, "ignore_https_errors": True}
+                    o, f = self._run_lang_viewport(
+                        browser, context_kwargs, base_url, out_dir, lang, is_mobile, shots, pks, quality
+                    )
                     ok += o
                     fail += f
-                    context.close()
             browser.close()
 
         self.stdout.write(self.style.SUCCESS(f"Screenshots erzeugt: {ok} ok / {fail} fehlgeschlagen — siehe {out_dir}"))
@@ -209,14 +210,22 @@ class Command(BaseCommand):
                 continue
         return None
 
-    def _run_lang_viewport(self, context, base_url, out_dir, lang, is_mobile, shots, pks, quality):
+    def _run_lang_viewport(self, browser, context_kwargs, base_url, out_dir, lang, is_mobile, shots, pks, quality):
         from PIL import Image
 
         ok, fail = 0, 0
         sessions: dict[str | None, object] = {}
+        contexts = []
 
         def page_for(role):
+            # Refs #2325 (follow-up): pages created on the same browser
+            # context share that context's cookies, including the session
+            # cookie. A second role logging in on a page reused from the
+            # first role's context would silently replace the first role's
+            # session, so every role gets its own freshly created context.
             if role not in sessions:
+                context = browser.new_context(**context_kwargs)
+                contexts.append(context)
                 page = context.new_page()
                 if role is not None:
                     # Mirror the e2e ``_login`` helper (src/tests/e2e/conftest.py).
@@ -241,40 +250,47 @@ class Command(BaseCommand):
                 sessions[role] = page
             return sessions[role]
 
-        for shot in shots:
-            if is_mobile and not shot.mobile:
-                continue
-            if lang not in shot.langs:
-                continue
-            url = self._url(base_url, shot, pks)
-            if url is None:
-                self.stdout.write(self.style.WARNING(f"  skip {shot.name} ({lang}, mobile={is_mobile}): keine URL"))
-                continue
-            try:
-                page = page_for(shot.role)
-                response = page.goto(url, timeout=45000)
-                page.wait_for_load_state("domcontentloaded")
-                # Refs #2325: an error status (e.g. a 404 for a missing seed
-                # object) must fail the shot instead of being saved as if it
-                # were real content.
-                if response is not None and not response.ok:
-                    raise RuntimeError(f"HTTP {response.status} for {url}")
-                with contextlib.suppress(Exception):
-                    page.wait_for_selector(shot.wait, timeout=8000)
-                if shot.wait_js:
-                    # Best-effort like the selector wait above: a slow/failed
-                    # async render still produces a (possibly incomplete) shot
-                    # instead of aborting the whole run.
+        try:
+            for shot in shots:
+                if is_mobile and not shot.mobile:
+                    continue
+                if lang not in shot.langs:
+                    continue
+                url = self._url(base_url, shot, pks)
+                if url is None:
+                    self.stdout.write(self.style.WARNING(f"  skip {shot.name} ({lang}, mobile={is_mobile}): keine URL"))
+                    continue
+                try:
+                    page = page_for(shot.role)
+                    response = page.goto(url, timeout=45000)
+                    page.wait_for_load_state("domcontentloaded")
+                    # Refs #2325: an error status (e.g. a 404 for a missing seed
+                    # object) must fail the shot instead of being saved as if it
+                    # were real content.
+                    if response is not None and not response.ok:
+                        raise RuntimeError(f"HTTP {response.status} for {url}")
                     with contextlib.suppress(Exception):
-                        page.wait_for_function(shot.wait_js, timeout=8000)
-                png = page.screenshot(full_page=shot.full_page)
-                path = out_dir / self._filename(shot.name, lang, is_mobile)
-                Image.open(io.BytesIO(png)).convert("RGB").save(path, "WEBP", quality=quality, method=6)
-                self.stdout.write(f"  ✓ {path.name}")
-                ok += 1
-            except Exception as exc:  # noqa: BLE001 — keep going on a single bad shot
-                self.stdout.write(self.style.ERROR(f"  ✗ {shot.name} ({lang}, mobile={is_mobile}): {exc}"))
-                fail += 1
+                        page.wait_for_selector(shot.wait, timeout=8000)
+                    if shot.wait_js:
+                        # Best-effort like the selector wait above: a slow/failed
+                        # async render still produces a (possibly incomplete) shot
+                        # instead of aborting the whole run.
+                        with contextlib.suppress(Exception):
+                            page.wait_for_function(shot.wait_js, timeout=8000)
+                    png = page.screenshot(full_page=shot.full_page)
+                    path = out_dir / self._filename(shot.name, lang, is_mobile)
+                    Image.open(io.BytesIO(png)).convert("RGB").save(path, "WEBP", quality=quality, method=6)
+                    self.stdout.write(f"  ✓ {path.name}")
+                    ok += 1
+                except Exception as exc:  # noqa: BLE001 — keep going on a single bad shot
+                    self.stdout.write(self.style.ERROR(f"  ✗ {shot.name} ({lang}, mobile={is_mobile}): {exc}"))
+                    fail += 1
+        finally:
+            # Refs #2325 (follow-up): close every per-role context created
+            # during this language/viewport run; the caller no longer holds a
+            # single shared context to close itself.
+            for context in contexts:
+                context.close()
         return ok, fail
 
     @staticmethod
