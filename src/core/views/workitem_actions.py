@@ -252,16 +252,19 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, IdempotentCreateMi
                 if getattr(e, "code", None) == "missing_token":
                     return _workitem_conflict_response(workitem, None, error="missing-token")
                 return _workitem_conflict_response(workitem, expected_updated_at)
-            # Refs #2385: every other ``ValidationError`` from the service
-            # (Art. 18 processing restriction, a deleted WorkItem, a changed
-            # client assignment, ...) is a business rejection, not a version
-            # conflict — an HTMX row button never sends
-            # ``expected_updated_at`` in the first place (``wants_raw_json``
-            # above is False for it), so a real conflict is impossible on
-            # this path. Swapping the 409-JSON body into the row
-            # (``_workitem_row.html``, ``hx-swap="outerHTML"``) used to erase
-            # the row and show raw JSON text (error class #2358/#2385)
-            # instead of the usual plain-text toast.
+            # Refs #2385: the view only honours the version token for
+            # raw-JSON clients (``wants_raw_json`` above, true only for
+            # ``Accept: application/json``) — the HTMX row button DOES send
+            # ``expected_updated_at`` (``_workitem_row.html``, ``hx-vals``,
+            # Refs #1419), but the view discards it on this path, so an
+            # optimistic-lock conflict can never be raised here: every other
+            # ``ValidationError`` from the service (Art. 18 processing
+            # restriction, a deleted WorkItem, a changed client assignment,
+            # ...) is a business rejection, not a version conflict. Swapping
+            # the 409-JSON body into the row (``_workitem_row.html``,
+            # ``hx-swap="outerHTML"``) used to erase the row and show raw
+            # JSON text (error class #2358/#2385) instead of the usual
+            # plain-text toast.
             if request.headers.get("HX-Request") == "true":
                 return htmx_absage("; ".join(e.messages), status=409)
             # Defensiver HTML-Fallback (praktisch unerreichbar, weil Token/

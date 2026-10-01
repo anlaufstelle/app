@@ -27,18 +27,19 @@ unverändert — dort ist das Einwechseln laut Kommentar zu #2321 gewollt (die
 veraltete Karte wird durch die aktuelle Meldung ersetzt). Die beiden
 Gegenproben unten sichern das gegen eine versehentliche Umstellung ab.
 
-``TestWorkItemStatusUpdateServiceRejection`` (Refs #2385, Nachtrag aus der
-Nachtest-Phase E-17): ``WorkItemStatusUpdateView.post`` swallowed every
-``ValidationError`` raised by ``update_workitem_status`` — not just a real
-optimistic-locking conflict — into the same 409 JSON body
+``TestWorkItemStatusUpdateServiceRejection`` (Refs #2385): ``WorkItemStatusUpdateView.post``
+swallowed every ``ValidationError`` raised by ``update_workitem_status`` —
+not just a real optimistic-locking conflict — into the same 409 JSON body
 (``_workitem_conflict_response``). For the inbox row button (HTMX,
 ``hx-swap="outerHTML"``) this JSON text got swapped into the row itself,
-because an HTMX request satisfies ``_wants_json_response`` too. A business
-rejection (Art. 18 processing restriction, a deleted WorkItem, a changed
-client assignment, ...) is not a version conflict for that caller — an HTMX
-row button never sends ``expected_updated_at`` in the first place
-(``wants_raw_json`` is only true for ``Accept: application/json``), so a real
-conflict is impossible on that path. The view now branches on
+because an HTMX request satisfies ``_wants_json_response`` too. The view only
+honours the version token for raw-JSON clients (``wants_raw_json``, true only
+for ``Accept: application/json``) — the HTMX row button does send
+``expected_updated_at`` (``_workitem_row.html``, ``hx-vals``, Refs #1419), but
+the view discards it on that path, so an optimistic-lock conflict can never
+be raised there: every ``ValidationError`` reaching that branch (Art. 18
+processing restriction, a deleted WorkItem, a changed client assignment,
+...) is a business rejection. The view now branches on
 ``_wants_raw_json_response`` first (unchanged 409 JSON contract for raw-JSON/
 offline-replay clients, including ``missing-token``), then on ``HX-Request``
 (``htmx_absage`` — plain text, ``HX-Reswap: none``, row stays, toast shows the
@@ -46,9 +47,12 @@ message), then falls back to the pre-existing HTML flash+redirect.
 """
 
 import pytest
+from django.contrib.messages import get_messages
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import Client, RetentionProposal, WorkItem
+from core.services.case.workitems import WORKITEM_DELETED_MESSAGE
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, restrict_processing
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -201,15 +205,47 @@ class TestWorkItemStatusUpdateInvalidStatus:
         _assert_ohne_htmx_unveraendert(response, 400, "Ungültiger Status")
 
 
+def _restrict_person(client_identified, staff_user, workitem_open):
+    """Art. 18 state: processing restricted on the task's person."""
+    restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+    return PROCESSING_RESTRICTED_MESSAGE
+
+
+def _soft_delete_workitem(client_identified, staff_user, workitem_open):
+    """Deleted-task state, same direct-field pattern as
+    ``test_workitem_state_contract_guard.py`` (no dedicated public
+    soft-delete endpoint exists for a single WorkItem)."""
+    WorkItem.objects.filter(pk=workitem_open.pk).update(is_deleted=True, deleted_at=timezone.now())
+    return WORKITEM_DELETED_MESSAGE
+
+
 @pytest.mark.django_db
 class TestWorkItemStatusUpdateServiceRejection:
     """``WorkItemStatusUpdateView.post`` — a service-level ``ValidationError``
     (Art. 18 processing restriction, deleted WorkItem, changed client
     assignment, ...) swaps into ``#workitem-<pk>`` the same way the invalid-
-    status case above does (Refs #2385)."""
+    status case above does (Refs #2385).
 
-    def test_htmx_rejection_without_swap(self, client, staff_user, workitem_open, client_identified):
-        restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
+    Two of the service's rejection states are not reachable through this
+    view's public surface, so they are left out here rather than mocked:
+    the foreign-facility ``ValidationError`` (``workitems.py:71``, via
+    ``_assert_actor_in_facility``) can never fire because the view's own
+    ``get_scoped_object`` call already 404s on a facility mismatch before
+    the service runs (``scoping.py``); the changed-client-assignment
+    ``ValidationError`` (``workitems.py:957-958``) only fires when the
+    row's client changes between the service's unlocked pre-read and its
+    locked re-read inside the same transaction — a genuine concurrent-write
+    race that a single synchronous test client cannot produce without a
+    second real connection.
+    """
+
+    @pytest.mark.parametrize(
+        "arrange",
+        [_restrict_person, _soft_delete_workitem],
+        ids=["processing_restricted", "workitem_deleted"],
+    )
+    def test_htmx_rejection_without_swap(self, client, staff_user, workitem_open, client_identified, arrange):
+        expected_message = arrange(client_identified, staff_user, workitem_open)
         client.force_login(staff_user)
 
         response = client.post(
@@ -220,7 +256,7 @@ class TestWorkItemStatusUpdateServiceRejection:
 
         _assert_absage_ohne_swap(response, 409)
         assert "application/json" not in response.headers.get("Content-Type", "")
-        assert str(PROCESSING_RESTRICTED_MESSAGE) in response.content.decode()
+        assert str(expected_message) in response.content.decode()
         workitem_open.refresh_from_db()
         assert workitem_open.status == "open"
 
@@ -262,6 +298,8 @@ class TestWorkItemStatusUpdateServiceRejection:
 
         assert response.status_code == 302, response.status_code
         assert response.url == reverse("core:workitem_inbox")
+        flash_messages = [str(msg) for msg in get_messages(response.wsgi_request)]
+        assert flash_messages == [str(PROCESSING_RESTRICTED_MESSAGE)]
         workitem_open.refresh_from_db()
         assert workitem_open.status == "open"
 
