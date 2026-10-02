@@ -687,6 +687,6 @@ Before committing: `make verify-fast` (lint, checks, type check, unit tests). Fo
 - [packages.md](../packages.md) — configuration packages (source of the documentation types that reports evaluate)
 
 <!-- translation-source: docs/reporting-plugins.md -->
-<!-- translation-version: v0.99.1 -->
+<!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-07 -->
 <!-- source-hash: ccf1e67447a2de45b76f91813ed43f3f4f228128 -->

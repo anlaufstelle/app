@@ -7,7 +7,7 @@
 
 **Documentation, statistics, and team communication for low-threshold social work — wherever people come without an appointment and without giving their real name. Open source, pseudonymized, free — designed for privacy-compliant operation.**
 
-> ⚠️ **Pre-Release (v0.99.1)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.99.5)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
 ---
 
@@ -231,6 +231,6 @@ For Tailwind watch mode (`docker compose --profile tailwind up tailwind`), local
 </details>
 
 <!-- translation-source: README.md -->
-<!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-22 -->
-<!-- source-hash: edc7f9d225a839cb7c2665d787198bae691e1d1b -->
+<!-- translation-version: v0.99.5 -->
+<!-- translation-date: 2026-10-01 -->
+<!-- source-hash: 4302d3887edee8a794d6ae51c3fbfba47e037d6c -->

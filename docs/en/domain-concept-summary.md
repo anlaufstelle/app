@@ -287,6 +287,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.5 (2026-10-01)
+
+- **Second factor and account access hardened**: backup codes are stored hashed and the plaintext comparison is gone; re-enrolling the second factor, adding a passkey and the backup-code pages require the existing factor; setting a password via invitation or reset no longer ends in a server error; version and health details appear only after a complete login.
+- **Consistent state and facility checks, clearer refusals**: milestones, goals, cases, tasks and further services check facility and current state themselves and never resurrect deleted or anonymised content; business refusals (restricted processing, invalid periods, parallel changes) appear as short hints instead of replacing the page, hint toasts are visible again in the production image, offline views report a revoked change honestly, and empty selects show a German placeholder.
+- **Operations, backup and demo**: backup and restore drills only accept complete, coherent sets including the audit anchor; Compose stacks rotate container logs and keep maintenance mode across container recreation; invalid SMTP transport values stop the production start; the media-tree cleanup runs with a fixed budget; the demo offers a scenario catalogue with area selection instead of credentials; documentation catches up (import wizard, restore runbook, legal-text paths), and the package closes with the dependency batch plus two security bumps (`urllib3` 2.8.0, the Tailwind file watcher without `braces`). The concept document itself is unchanged in this release.
+
 ### v0.99.1 (2026-09-22)
 
 - **Handover notes refresh live and explain roster gaps**: the handover block of the time stream now updates when another person saves a shift note, never overwriting an open draft, and states plainly when no shift is running in a roster gap while the last completed handover stays editable until the end of the following shift.
@@ -305,6 +311,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.1 -->
-<!-- translation-date: 2026-09-18 -->
+<!-- translation-version: v0.99.5 -->
+<!-- translation-date: 2026-10-01 -->
 <!-- source-hash: 99f76d422291fe5571c56e471f34d82e1ab8417d -->
