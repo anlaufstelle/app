@@ -8,6 +8,26 @@ import yaml
 pytestmark = pytest.mark.architecture
 
 WORKFLOW_PATH = Path(".github/workflows/release.yml")
+STEP_NAME = "Verify the image is publicly pullable"
+
+# Stub for curl: answers the anonymous GHCR token request and the manifest probe.
+# MANIFEST_CODES is a space-separated list of HTTP codes returned on successive probes.
+CURL_STUB = """#!/bin/sh
+echo "$*" >> "$CALL_LOG"
+case "$*" in
+  *"/token?"*)
+    [ "$TOKEN_FAILS" = "1" ] && exit 22
+    printf '{"token":"anonymous-test-token"}'
+    ;;
+  *"/manifests/"*)
+    [ "$MANIFEST_CODES" = "network-error" ] && exit 7
+    count=$(grep -c '/manifests/' "$CALL_LOG")
+    code=$(echo "$MANIFEST_CODES" | cut -d' ' -f"$count")
+    [ -n "$code" ] || code=$(echo "$MANIFEST_CODES" | awk '{print $NF}')
+    printf '%s' "$code"
+    ;;
+esac
+"""
 
 
 def _build_job() -> dict[str, object]:
@@ -19,25 +39,34 @@ def _build_job() -> dict[str, object]:
 
 def _visibility_step(job: dict[str, object] | None = None) -> dict[str, object]:
     steps = (job or _build_job())["steps"]
-    return next(step for step in steps if step.get("name") == "Ensure package visibility is public")
+    return next(step for step in steps if step.get("name") == STEP_NAME)
 
 
-def _run_visibility_script(tmp_path: Path, *, token: str, gh_exit: int) -> subprocess.CompletedProcess[str]:
+def _run_visibility_script(
+    tmp_path: Path, *, manifest_codes: str, token_fails: bool = False
+) -> tuple[subprocess.CompletedProcess[str], str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    gh_stub = bin_dir / "gh"
-    gh_stub.write_text(f"#!/bin/sh\nexit {gh_exit}\n", encoding="utf-8")
-    gh_stub.chmod(0o755)
+    (bin_dir / "curl").write_text(CURL_STUB, encoding="utf-8")
+    (bin_dir / "sleep").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    for stub in ("curl", "sleep"):
+        (bin_dir / stub).chmod(0o755)
+    call_log = tmp_path / "calls.log"
+    call_log.touch()
     environment = os.environ.copy()
     environment.update(
         {
-            "GH_TOKEN": token,
             "REPOSITORY": "anlaufstelle/app",
+            "REF_NAME": "v9.9.9",
+            "MANIFEST_CODES": manifest_codes,
+            "TOKEN_FAILS": "1" if token_fails else "0",
+            "CALL_LOG": str(call_log),
             "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
         }
     )
-    return subprocess.run(
-        ["bash", "-c", str(_visibility_step()["run"])],
+    result = subprocess.run(
+        # GitHub Actions runs `run:` blocks with `bash -e -o pipefail`.
+        ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", str(_visibility_step()["run"])],
         cwd=tmp_path,
         env=environment,
         check=False,
@@ -45,32 +74,56 @@ def _run_visibility_script(tmp_path: Path, *, token: str, gh_exit: int) -> subpr
         text=True,
         timeout=30,
     )
+    return result, call_log.read_text(encoding="utf-8")
 
 
-def test_visibility_step_is_last_and_failures_are_not_ignored() -> None:
+def test_check_is_last_step_and_needs_no_secret() -> None:
     job = _build_job()
     step = _visibility_step(job)
 
     assert job["steps"][-1] is step
     assert step.get("continue-on-error", False) is False
+    assert "secrets." not in yaml.safe_dump(step)
+    assert "GHCR_VISIBILITY_TOKEN" not in WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
-def test_missing_visibility_token_fails_with_manual_recovery_path(tmp_path: Path) -> None:
-    result = _run_visibility_script(tmp_path, token="", gh_exit=0)
+def test_publicly_pullable_image_passes(tmp_path: Path) -> None:
+    result, calls = _run_visibility_script(tmp_path, manifest_codes="200")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "scope=repository:anlaufstelle/app:pull" in calls
+    assert "ghcr.io/v2/anlaufstelle/app/manifests/v9.9.9" in calls
+    assert "anonymous-test-token" in calls
+
+
+@pytest.mark.parametrize("code", ["401", "403", "404"])
+def test_image_not_publicly_pullable_fails_with_manual_recovery_path(tmp_path: Path, code: str) -> None:
+    result, _ = _run_visibility_script(tmp_path, manifest_codes=code)
 
     assert result.returncode != 0
     assert "::error::" in result.stdout
-    assert "GHCR_VISIBILITY_TOKEN" in result.stdout
+    assert f"HTTP {code}" in result.stdout
     assert "package settings" in result.stdout.lower()
 
 
-def test_failed_visibility_api_call_fails_the_step(tmp_path: Path) -> None:
-    result = _run_visibility_script(tmp_path, token="available", gh_exit=1)
+def test_failed_anonymous_token_request_fails(tmp_path: Path) -> None:
+    result, _ = _run_visibility_script(tmp_path, manifest_codes="200", token_fails=True)
 
     assert result.returncode != 0
+    assert "::error::" in result.stdout
 
 
-def test_successful_visibility_api_call_succeeds(tmp_path: Path) -> None:
-    result = _run_visibility_script(tmp_path, token="available", gh_exit=0)
+def test_transient_registry_answer_is_retried(tmp_path: Path) -> None:
+    result, calls = _run_visibility_script(tmp_path, manifest_codes="404 200")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls.count("/manifests/") == 2
+
+
+def test_network_error_on_manifest_probe_fails_with_message(tmp_path: Path) -> None:
+    result, calls = _run_visibility_script(tmp_path, manifest_codes="network-error")
+
+    assert result.returncode != 0
+    assert "::error::" in result.stdout
+    assert "HTTP 000" in result.stdout
+    assert calls.count("/manifests/") == 3

@@ -59,27 +59,35 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
           IMAGE: ghcr.io/${{ github.repository }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
-      # Refs #886: GHCR-Pakete sind by-default privat, auch wenn das Source-Repo
-      # public ist. Dieser Step setzt die Package-Visibility nach jedem Push
-      # idempotent auf public — aber nur, wenn das Repo selbst public ist
-      # (so läuft der Step im privaten Dev-Repo anlaufstelle/app nicht
-      # versehentlich). Erfordert Repo-Secret GHCR_VISIBILITY_TOKEN
-      # (PAT classic mit admin:packages-Scope; write:packages reicht nicht).
-      - name: Ensure package visibility is public
-        # The image and signature are already published when this final step
-        # runs; a red step means only that package visibility still needs work.
+      # Refs #886: a GHCR package is private when it is first created, even if the
+      # source repository is public. GitHub's REST API cannot change package
+      # visibility, so this step does not try to; it verifies the result instead:
+      # an anonymous pull token must be able to read the manifest just pushed.
+      # The image and signature are already published when this final step runs;
+      # red means the package still has to be set to public once in its settings.
+      - name: Verify the image is publicly pullable
         if: github.event.repository.private == false
         env:
-          GH_TOKEN: ${{ secrets.GHCR_VISIBILITY_TOKEN }}
           REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::GHCR_VISIBILITY_TOKEN is missing. The image and signature were published; set visibility to public manually in the package settings."
+          token=$(curl -fsS "https://ghcr.io/token?scope=repository:${REPOSITORY}:pull" \
+            | sed -n 's/.*"token":"\([^"]*\)".*/\1/p') || token=""
+          if [ -z "$token" ]; then
+            echo "::error::No anonymous pull token from ghcr.io for ${REPOSITORY}; public pullability could not be verified."
             exit 1
           fi
-          ORG="${REPOSITORY%%/*}"
-          PKG="${REPOSITORY##*/}"
-          gh api -X PATCH \
-            -H "Accept: application/vnd.github+json" \
-            "/orgs/${ORG}/packages/container/${PKG}" \
-            -f visibility=public
+          code=""
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json" \
+              "https://ghcr.io/v2/${REPOSITORY}/manifests/${REF_NAME}") || code="000"
+            if [ "$code" = "200" ]; then
+              echo "ghcr.io/${REPOSITORY}:${REF_NAME} is publicly pullable"
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 10; fi
+          done
+          echo "::error::ghcr.io/${REPOSITORY}:${REF_NAME} is not publicly pullable (HTTP ${code}). The image and signature were published; set the package visibility to public in the package settings, then re-run this job."
+          exit 1
