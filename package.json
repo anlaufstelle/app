@@ -19,5 +19,8 @@
     "jsdom": "29.1.1",
     "tailwindcss": "^4.0.0",
     "vitest": "5.0.1"
+  },
+  "overrides": {
+    "@parcel/watcher": "2.6.0"
   }
 }
