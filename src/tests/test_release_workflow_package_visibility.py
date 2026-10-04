@@ -9,6 +9,9 @@ pytestmark = pytest.mark.architecture
 
 WORKFLOW_PATH = Path(".github/workflows/release.yml")
 STEP_NAME = "Verify the image is publicly pullable"
+OCI_INDEX = "application/vnd.oci.image.index.v1+json"
+DOCKER_MANIFEST_LIST = "application/vnd.docker.distribution.manifest.list.v2+json"
+OCI_MANIFEST = "application/vnd.oci.image.manifest.v1+json"
 
 # Stub for curl: answers the anonymous GHCR token request and the manifest probe.
 # MANIFEST_CODES is a space-separated list of HTTP codes returned on successive probes.
@@ -21,10 +24,10 @@ case "$*" in
     ;;
   *"/manifests/"*)
     [ "$MANIFEST_CODES" = "network-error" ] && exit 7
-    # Like GHCR for a multi-arch image: without an Accept header that admits an
-    # OCI image index, the manifest request is not answered with 200.
+    # Like GHCR: the manifest is only served when the Accept header admits the
+    # media type it is stored as (OCI index, Docker manifest list or OCI manifest).
     case "$*" in
-      *"application/vnd.oci.image.index.v1+json"*) ;;
+      *"$STORED_MEDIA_TYPE"*) ;;
       *) printf '404'; exit 0 ;;
     esac
     count=$(grep -c '/manifests/' "$CALL_LOG")
@@ -50,7 +53,7 @@ def _visibility_step(job: dict[str, object] | None = None) -> dict[str, object]:
 
 
 def _run_visibility_script(
-    tmp_path: Path, *, manifest_codes: str, token_fails: bool = False
+    tmp_path: Path, *, manifest_codes: str, token_fails: bool = False, stored_media_type: str = OCI_INDEX
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -67,6 +70,7 @@ def _run_visibility_script(
             "REF_NAME": "v9.9.9",
             "MANIFEST_CODES": manifest_codes,
             "TOKEN_FAILS": "1" if token_fails else "0",
+            "STORED_MEDIA_TYPE": stored_media_type,
             "CALL_LOG": str(call_log),
             "PATH": f"{bin_dir}{os.pathsep}{environment['PATH']}",
         }
@@ -94,8 +98,9 @@ def test_last_step_is_the_public_pull_check_without_secret() -> None:
     assert "GHCR_VISIBILITY_TOKEN" not in WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
-def test_publicly_pullable_image_passes(tmp_path: Path) -> None:
-    result, calls = _run_visibility_script(tmp_path, manifest_codes="200")
+@pytest.mark.parametrize("stored_media_type", [OCI_INDEX, DOCKER_MANIFEST_LIST, OCI_MANIFEST])
+def test_publicly_pullable_image_passes(tmp_path: Path, stored_media_type: str) -> None:
+    result, calls = _run_visibility_script(tmp_path, manifest_codes="200", stored_media_type=stored_media_type)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "scope=repository:anlaufstelle/app:pull" in calls
