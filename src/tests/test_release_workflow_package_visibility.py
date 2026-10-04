@@ -21,6 +21,12 @@ case "$*" in
     ;;
   *"/manifests/"*)
     [ "$MANIFEST_CODES" = "network-error" ] && exit 7
+    # Like GHCR for a multi-arch image: without an Accept header that admits an
+    # OCI image index, the manifest request is not answered with 200.
+    case "$*" in
+      *"application/vnd.oci.image.index.v1+json"*) ;;
+      *) printf '404'; exit 0 ;;
+    esac
     count=$(grep -c '/manifests/' "$CALL_LOG")
     code=$(echo "$MANIFEST_CODES" | cut -d' ' -f"$count")
     [ -n "$code" ] || code=$(echo "$MANIFEST_CODES" | awk '{print $NF}')
@@ -38,8 +44,9 @@ def _build_job() -> dict[str, object]:
 
 
 def _visibility_step(job: dict[str, object] | None = None) -> dict[str, object]:
-    steps = (job or _build_job())["steps"]
-    return next(step for step in steps if step.get("name") == STEP_NAME)
+    # The check is defined as the final step of the job; behaviour tests run
+    # whatever is last, so a regression in the step itself shows up as behaviour.
+    return (job or _build_job())["steps"][-1]
 
 
 def _run_visibility_script(
@@ -77,11 +84,11 @@ def _run_visibility_script(
     return result, call_log.read_text(encoding="utf-8")
 
 
-def test_check_is_last_step_and_needs_no_secret() -> None:
+def test_last_step_is_the_public_pull_check_without_secret() -> None:
     job = _build_job()
     step = _visibility_step(job)
 
-    assert job["steps"][-1] is step
+    assert step.get("name") == STEP_NAME
     assert step.get("continue-on-error", False) is False
     assert "secrets." not in yaml.safe_dump(step)
     assert "GHCR_VISIBILITY_TOKEN" not in WORKFLOW_PATH.read_text(encoding="utf-8")
