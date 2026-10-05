@@ -8,14 +8,14 @@ Das Paket richtet Anlaufstelle für eine offene Sprechstunde und Sozialberatung 
 
 | Slug | Name | Sensitivität | Strichliste | Mindest-Kontaktstufe | Systemtyp | Berichtsschlüssel |
 |---|---|---|---:|---|---|---|
-| `kontakt` | Kontakt (Sprechstunde) | normal | ja ||| `contact` |
-| `kurzberatung` | Kurzberatung (anonym) | normal | ja ||| `counseling` |
-| `beratungsgespraech` | Beratungsgespräch | erhöht | nein | `identified` || `counseling` |
-| `krisengespraech` | Krisengespräch | erhöht | nein || `crisis` | `crisis` |
-| `begleitung` | Begleitung | normal | nein | `identified` || `accompaniment` |
-| `vermittlung` | Vermittlung | normal | ja ||| `referral` |
-| `notiz` | Notiz | normal | ja ||| `excluded` |
-| `hausverbot` | Hausverbot | erhöht | nein || `ban` | `excluded` |
+| `kontakt` | Kontakt (Sprechstunde) | normal | ja | — | — | `contact` |
+| `kurzberatung` | Kurzberatung (anonym) | normal | ja | — | — | `counseling` |
+| `beratungsgespraech` | Beratungsgespräch | erhöht | nein | `identified` | — | `counseling` |
+| `krisengespraech` | Krisengespräch | erhöht | nein | — | `crisis` | `crisis` |
+| `begleitung` | Begleitung | normal | nein | `identified` | — | `accompaniment` |
+| `vermittlung` | Vermittlung | normal | ja | — | — | `referral` |
+| `notiz` | Notiz | normal | ja | — | — | `excluded` |
+| `hausverbot` | Hausverbot | erhöht | nein | — | `ban` | `excluded` |
 
 ## Felder
 

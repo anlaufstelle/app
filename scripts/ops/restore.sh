@@ -275,7 +275,7 @@ if [[ -n "$MEDIA_FILE" ]]; then
     MEDIA_ROOT_EFFECTIVE=""
     # Ein Sentinel hinter dem Wert verhindert, dass die Kommandosubstitution
     # abschliessende Zeilenumbrueche entfernt und ein abweichender Pfad als
-    # gleich durchgeht (Refs https://github.com/anlaufstelle/app/issues/2024).
+    # gleich durchgeht (Refs #2024).
     # ``< /dev/null``: die Vorpruefung darf eine per Pipe zugefuehrte Bestaetigung
     # nicht aufbrauchen (Refs #2318).
     if ! MEDIA_ROOT_EFFECTIVE=$(timeout 30s docker compose -f "$COMPOSE_FILE" exec -T web \

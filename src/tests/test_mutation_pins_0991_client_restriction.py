@@ -1,7 +1,7 @@
 """Pin-Tests des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
 ``core.services.client.restriction``.
 
-Quelle: Ticket #2322 (https://github.com/anlaufstelle/app/issues/2322),
+Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt
 werden die vier Prio-1-Survivor dieses Moduls: ``assert_processing_allowed_for``
 — das Mehrfach-Personen-Gate (Refs #2268) — hat einen ``lock``-Default, der

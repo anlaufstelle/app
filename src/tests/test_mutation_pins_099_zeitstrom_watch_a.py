@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.zeitstrom_watch`` (Batch ``zeitstrom_watch-a``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@5ceb7f3a (frischer Mutantenbaum), Batch
 ``zeitstrom_watch-a`` (67 Survivor-Mutanten, ausschliesslich

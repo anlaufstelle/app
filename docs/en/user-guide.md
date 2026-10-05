@@ -45,7 +45,7 @@ This guide and the [FAQ](../faq.md) are linked inside the application under "Hel
 
 > **Note:** If you were told to change your password on first login, you will be redirected to the password change page immediately after signing in.
 
-> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts**, your account is automatically locked. You will then see a corresponding notice page and can no longer sign in. On the login page you will find three self-service options ([Refs #869](https://github.com/anlaufstelle/app/issues/869)):
+> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts**, your account is automatically locked. You will then see a corresponding notice page and can no longer sign in. On the login page you will find three self-service options (Refs #869):
 >
 > - **Forgot password?** -- Classic reset by email. Setting a new password automatically unlocks your account.
 > - **Unlock account by email** -- Sends an unlock link to your registered email address, valid for 30 minutes. No new password required.
@@ -169,7 +169,7 @@ The feed combines four sources for the current day:
 | Source | What is shown |
 |--------|---------------|
 | **Contacts** (Events) | Documentation entries with preview fields |
-| **Activities** | System operations (created, edited, deleted...) |
+| **Activities** | System operations (created, edited, deleted ...) |
 | **Tasks** (Work Items) | Hints and tasks with priority and status |
 | **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
 
@@ -303,7 +303,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event (or of the client or the case) and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
 - **Replacing (with version history):** When editing, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the detail view via an expandable accordion. Previous versions are only removed when the record itself is fully deleted. This applies to events, clients, and cases alike.
-- **Removing:** A stored file can be deselected in the form. It disappears from the detail view and can no longer be downloaded; the version chain is kept for traceability until the record itself is deleted. The file remains encrypted on the server and is reported as "removed on..." in an Art. 15 GDPR access request. This is **not a dead end**: a removed file can still be deleted permanently later (see below and [Section 3a](#deleting-permanently)).
+- **Removing:** A stored file can be deselected in the form. It disappears from the detail view and can no longer be downloaded; the version chain is kept for traceability until the record itself is deleted. The file remains encrypted on the server and is reported as "removed on ..." in an Art. 15 GDPR access request. This is **not a dead end**: a removed file can still be deleted permanently later (see below and [Section 3a](#deleting-permanently)).
 - **Deleting permanently:** For genuine mistakes -- wrong file, wrong person -- there is additionally permanent deletion. It physically destroys the encrypted file including all previous versions. This is **irreversible** and therefore restricted to managers and administration. There are **two** entry points: directly at the file in the detail view of the event, the client, or the case (link "delete permanently" next to the filename) and in the [Files overview](#3a-files-overview).
 
 > **Changing the type discards values *and* files:** If you change the documentation type on a client or a case -- or remove it ("— No type —") --, the additional fields of the old type no longer apply. A confirmation prompt before saving names both: how many **field values** will be discarded **and** how many stored **files** will be removed. "Cancel" leaves everything unchanged; only "OK" carries it out.
@@ -462,7 +462,7 @@ If the duplicate already exists:
 What happens:
 
 - **Events, cases, tasks and the recent-visits list move completely** to the target record. For the additional details, the target keeps its values; values from the source only fill empty fields. The contact level rises to the higher of the two -- never the other way around.
-- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into...". Until the trash period expires, the facility admin can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted client; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the facility admin gets a corresponding message.
+- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into ...". Until the trash period expires, the facility admin can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted client; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the facility admin gets a corresponding message.
 - In an **Art. 15 GDPR access record**, the target record states in its "Merges" section which record was merged into it and when; the access record of the dissolved record conversely states "Merged into". The access log of the dissolved record stays with its own dataset -- a request covering the full history of both predecessors is answered with **both** access records.
 
 > **Offline:** Data of the dissolved record cached on devices is discarded at the next sync. If an event for it was **already documented offline** but not yet transmitted, it is not silently rebooked to the target record -- as with a deletion, it goes to the **conflict list** (dead letter) for follow-up, so that nothing is rewritten in the documenting person's name without their knowledge.
@@ -1038,4 +1038,4 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: 511ce5f26ab4fc588ebfbe0324b1a84c65faeed9 -->
+<!-- source-hash: e09e6a34384aa2eed8b50528427ca71d469d2b0c -->

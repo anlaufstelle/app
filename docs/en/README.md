@@ -84,4 +84,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-11 -->
-<!-- source-hash: fb7328952369b6847f664d1246bd0c3e0a49e26d -->
+<!-- source-hash: 8ccd901cff27e3acf28c64f2b7e43a8d0b285042 -->

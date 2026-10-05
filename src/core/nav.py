@@ -29,7 +29,7 @@ Literalen plus vier reine Prädikate); die real drohenden Fehlerklassen
 (Gate-Tippfehler, ``url_name``-Tippfehler, String-statt-Menge) fängt
 ``src/tests/test_nav_registry.py``.
 
-[#1801]: https://github.com/anlaufstelle/app/issues/1801
+[#1801]: #1801
 """
 
 from __future__ import annotations

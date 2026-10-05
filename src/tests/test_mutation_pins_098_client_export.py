@@ -1,6 +1,6 @@
 """Pin-Tests der Welle K (0.98) — Prio-2-Testluecken in ``core.services.client.export``.
 
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2193.
 
 Quelle: Batch ``export-settings`` der Survivor-Triage (``triage-096-merge-2-
 misc.json``). Gepinnt werden zwei Sortier-Mutanten der Art.-15/20-Auskunft —

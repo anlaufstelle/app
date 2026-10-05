@@ -20,14 +20,14 @@ Das ist besonders beim wiederverwendeten Feld `leistungen` wichtig: Die Jugend-O
 
 | Slug | Name | Sensitivität | tally | min_contact_stage | system_type | report_key |
 |---|---|---|:---:|---|---|---|
-| `kontakt` | Kontakt | normal | ja ||| `contact` |
-| `veranstaltungsteilnahme` | Veranstaltung / Angebot | normal | ja ||| `group_activity` |
-| `bezugsarbeit` | Mobile Bezugsarbeit | normal | ja ||| `contact` |
+| `kontakt` | Kontakt | normal | ja | — | — | `contact` |
+| `veranstaltungsteilnahme` | Veranstaltung / Angebot | normal | ja | — | — | `group_activity` |
+| `bezugsarbeit` | Mobile Bezugsarbeit | normal | ja | — | — | `contact` |
 | `krisengespraech-jugend` | Krisengespräch | elevated | nein | `identified` | `crisis` | `crisis` |
-| `beratung-jugend` | Beratung | elevated | nein | `qualified` || `counseling` |
-| `vermittlung` | Vermittlung (Jugendamt/Schule/Hilfe) | normal | ja ||| `referral` |
+| `beratung-jugend` | Beratung | elevated | nein | `qualified` | — | `counseling` |
+| `vermittlung` | Vermittlung (Jugendamt/Schule/Hilfe) | normal | ja | — | — | `referral` |
 | `hausverbot-jugend` | Hausverbot | elevated | nein | `identified` | `ban` | `excluded` |
-| `notiz` | Notiz | normal | ja ||| `excluded` |
+| `notiz` | Notiz | normal | ja | — | — | `excluded` |
 
 ## Felder
 

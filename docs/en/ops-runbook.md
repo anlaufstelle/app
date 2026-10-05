@@ -333,8 +333,8 @@ Column **Where**: `Sidecar` = runs out of the box in the `cron` container ([§3.
 | `create_statistics_snapshots` | Monthly, day 1, 04:00 | Sidecar | Save monthly aggregates before events are deleted |
 | `cleanup_orphan_storage_files` | Daily 04:30 (after snapshots) | Sidecar | Delete orphaned `.enc` files with no `Attachment` **and no open `ImportJob` record** (owner-independent: event, person, and case attachments; CSV import uploads under `<facility>/imports/` are protected via `ImportJob.storage_filename` and count during quota enforcement while the run is open — `commit_import`/`abort_import` clear the field, finished runs do not protect it any longer). By default, each run checks at most 10,000 files; `--budget N` sets a positive custom limit, and the stored continuation point fairly resumes the next run. `--dry-run` only reports deletion candidates and changes neither files nor the continuation point. Output lists checked and separately skipped files, deletion candidates, actual deletions, errors, the continuation location, and either the next start or a complete tree traversal. MUST run as the admin DB role (BYPASSRLS), otherwise fail-loud — without the bypass the run would also see 0 `ImportJob` rows and would delete the open uploads of every facility (Refs #662, #1554, #1738, #1060, #2180, #2376) |
 | `clearsessions` | Daily 05:00 | Sidecar | Delete expired rows from `django_session` (storage limitation under Art. 5(1)(e) GDPR) |
-| `detect_breaches` | Hourly at:30 | Sidecar | Heuristics-based breach detection (failed-login burst / mass export / mass delete) → AuditLog SECURITY_VIOLATION + optional webhook (Refs #685) |
-| `refresh_statistics_view` | Hourly at:15 | Sidecar | Refresh the materialized view `core_statistics_event_flat` (statistics dashboard) |
+| `detect_breaches` | Hourly at :30 | Sidecar | Heuristics-based breach detection (failed-login burst / mass export / mass delete) → AuditLog SECURITY_VIOLATION + optional webhook (Refs #685) |
+| `refresh_statistics_view` | Hourly at :15 | Sidecar | Refresh the materialized view `core_statistics_event_flat` (statistics dashboard) |
 | Invite token audit | Weekly, Sun 05:00 | Host | Track down orphaned invite user accounts (see [10](#10-invite-token-hygiene)); a plain `psql` query — the app container has no psql client |
 | Health check | Every 5 minutes | Host | Check availability (external monitoring, does not belong inside the monitored stack) |
 
@@ -559,9 +559,9 @@ or setups with custom orchestration without our compose file use.
 installs the timers along with it. A one-off, immediate catch-up also works directly:
 
 ```bash
-sudo bash /opt/anlaufstelle/dev-ops/deploy/install-timers.sh # idempotent, as root
-systemctl list-timers "anlaufstelle-*" # 7 timers with a NEXT time
-systemctl start anlaufstelle-mv-refresh.service # trigger once manually
+sudo bash /opt/anlaufstelle/dev-ops/deploy/install-timers.sh  # idempotent, as root
+systemctl list-timers "anlaufstelle-*"                # 7 timers with a NEXT time
+systemctl start anlaufstelle-mv-refresh.service        # trigger once manually
 journalctl -u anlaufstelle-mv-refresh.service -n 20
 ```
 
@@ -623,9 +623,9 @@ docker compose -f docker-compose.prod.yml exec web \
 # via this command — the skipped count therefore does not count as
 # completed file minimization.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
-  purge_orphan_field_data --dry-run # preview
+  purge_orphan_field_data --dry-run   # preview
 docker compose -f docker-compose.prod.yml run --rm maintenance \
-  purge_orphan_field_data # execute
+  purge_orphan_field_data             # execute
 
 # Repair event history rows that carry a redaction timestamp but no redaction
 # marker (Refs #2188, related #2177). Run once after the update if key
@@ -638,9 +638,9 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # legal hold are counted but deferred. MUST run with the admin DB role
 # (BYPASSRLS and table owner) — otherwise fail-loud.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
-  repair_eventhistory_redaction # dry run
+  repair_eventhistory_redaction             # dry run
 docker compose -f docker-compose.prod.yml run --rm maintenance \
-  repair_eventhistory_redaction --apply # repair
+  repair_eventhistory_redaction --apply     # repair
 
 # The same check for events, persons, cases and rectification requests
 # (Refs #2188): up to v0.95.0 the rotation could also write the old values
@@ -657,9 +657,9 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # table it checks, for requests also core_client — otherwise fail-loud
 # before the first read.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
-  repair_eventhistory_redaction --target all # dry run
+  repair_eventhistory_redaction --target all            # dry run
 docker compose -f docker-compose.prod.yml run --rm maintenance \
-  repair_eventhistory_redaction --target all --apply # repair
+  repair_eventhistory_redaction --target all --apply    # repair
 
 # Facility export (Refs #1060, M4 / GDPR Art. 20): a facility's complete domain
 # data as a versioned JSON (schema v1, reference
@@ -672,14 +672,14 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 # delete it securely. Runtime scales with the number of attachments (SHA-256 is
 # streamed over the decrypted contents); --no-file-hashes
 # skips the hashing (sha256: null).
-mkdir -p./exports && chmod 700./exports
+mkdir -p ./exports && chmod 700 ./exports
 docker compose -f docker-compose.prod.yml run --rm \
   -v "$PWD/exports:/exports" maintenance export_facility \
   --facility "Beratungsstelle Nord" --output /exports/facility-export.json --indent 2
 
 # Inventory of report bindings (Refs #1848): for ONE facility, lists
 # which report key sits in which report backend (type and
-# field level) and which document types and field templates carry it
+# field level) and which document types and field templates carry it —
 # or which carry none and therefore appear in no report. Pure
 # information, does not change any data. MUST run with the admin DB role
 # (BYPASSRLS) — otherwise fail-loud (§ 9 DB role model): under the app role
@@ -687,7 +687,7 @@ docker compose -f docker-compose.prod.yml run --rm \
 # flawlessly configured facility.
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   inventory_report_bindings \
-  --facility "Beratungsstelle Nord" # text report to stdout
+  --facility "Beratungsstelle Nord"   # text report to stdout
 docker compose -f docker-compose.prod.yml run --rm \
   -v "$PWD/exports:/exports" maintenance inventory_report_bindings \
   --facility "Beratungsstelle Nord" --format json --output /exports/report-bindings.json
@@ -770,7 +770,7 @@ With `LOG_FORMAT=json` in `.env`, Django emits structured JSON logs:
   "request_id": "abc123",
   "user_id": 42,
   "facility_id": 1,
-  "exception": "Traceback..."
+  "exception": "Traceback ..."
 }
 ```
 
@@ -888,14 +888,14 @@ docker compose -f docker-compose.prod.yml restart web
 docker compose -f docker-compose.prod.yml logs caddy --tail=50
 
 # 2. Common causes:
-# - DNS does not point to the server IP:
+#    - DNS does not point to the server IP:
 nslookup $DOMAIN
 
-# - Ports 80/443 blocked:
+#    - Ports 80/443 blocked:
 curl -v http://$DOMAIN 2>&1 | head -20
 
-# - Let's Encrypt rate limit (max 5/week/domain):
-# → wait 1 week or use the staging CA
+#    - Let's Encrypt rate limit (max 5/week/domain):
+#      → wait 1 week or use the staging CA
 
 # 3. Reset Caddy's TLS data (forces re-issuance)
 docker compose -f docker-compose.prod.yml exec caddy \
@@ -914,10 +914,10 @@ docker compose -f docker-compose.prod.yml exec web \
 # Defaults: GUNICORN_WORKERS=3, GUNICORN_TIMEOUT=30
 
 # 2. Increase the timeout (in .env)
-# GUNICORN_TIMEOUT=60
+#    GUNICORN_TIMEOUT=60
 
 # 3. Adjust the worker count (rule of thumb: 2 * CPU cores + 1)
-# GUNICORN_WORKERS=5
+#    GUNICORN_WORKERS=5
 
 # 4. Restart
 docker compose -f docker-compose.prod.yml restart web
@@ -1016,9 +1016,9 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs web --tail=100
 
 # 2. Common errors
-# "ImproperlyConfigured" → missing env vars in .env
-# "ENCRYPTION_KEY must be set" → ENCRYPTION_KEY missing in .env
-# "connection refused" → DB not ready yet
+#    "ImproperlyConfigured" → missing env vars in .env
+#    "ENCRYPTION_KEY must be set" → ENCRYPTION_KEY missing in .env
+#    "connection refused" → DB not ready yet
 
 # 3. Verify env vars
 docker compose -f docker-compose.prod.yml exec web printenv | sort
@@ -1038,7 +1038,7 @@ Refs #1363 (N10 + review follow-up): Caddy already rejects request bodies above 
 
 ```bash
 # 1. Check the current Caddy value (all four variants: Caddyfile,
-# Caddyfile.dev, Caddyfile.demo, Caddyfile.staging)
+#    Caddyfile.dev, Caddyfile.demo, Caddyfile.staging)
 grep -A2 request_body Caddyfile*
 
 # 2. Check the app-side limit (if overridden via env)
@@ -1173,7 +1173,8 @@ docker compose -f docker-compose.prod.yml exec -T db \
   pg_dump -U $POSTGRES_USER -Fc $POSTGRES_DB \
   > /tmp/emergency_$(date +%Y%m%d_%H%M%S).dump
 
-# Encrypted backup via script./scripts/ops/backup.sh
+# Encrypted backup via script
+./scripts/ops/backup.sh
 ```
 
 ### 6.3 Emergency Database Access
@@ -1242,7 +1243,7 @@ Counterpart to § 6.5b: that section is about a **data breach in an operated ins
 **Precondition:** "Private vulnerability reporting" must be enabled on `anlaufstelle/app` (Repo → *Settings* → *Advanced Security* → *Private vulnerability reporting* → *Enable*, or `gh api -X PUT repos/anlaufstelle/app/private-vulnerability-reporting`). This setting only exists for **public** repositories — the non-public repositories of the release pipeline are therefore out of scope. As long as it's off, the GHSA form link in `SECURITY.md` leads nowhere and **only the email route works** — status check:
 
 ```bash
-gh api repos/anlaufstelle/app/private-vulnerability-reporting # {"enabled": true} expected
+gh api repos/anlaufstelle/app/private-vulnerability-reporting   # {"enabled": true} expected
 ```
 
 | # | Step | Who | Target |
@@ -1369,11 +1370,11 @@ provides no compliance evidence and must not subsequently be marked as proven wi
 The backup files are `0600` and owned by root — therefore run **as root**. Without a flag, the script auto-detects the format; explicitly via `--dev`/`--prod` (or `DRILL_FORMAT=dev|prod`). The prod branch reads `BACKUP_HOST_DIR` exclusively from the `.env` file in the Compose directory; a value of the same name in the `sudo env` prefix is overwritten when that file is loaded and is therefore not an override. If the installation is not under the default `/opt/anlaufstelle`, `COMPOSE_DIR` must point to the directory containing `.env` and `docker-compose.prod.yml`:
 
 ```bash
-sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh # auto-detect the format
-sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000 # select one prod set
-sudo env BACKUP_TIMESTAMP=2026-09-03_020000 bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod # equivalent environment-based set selection
-sudo env COMPOSE_DIR=/srv/anlaufstelle bash /srv/anlaufstelle/scripts/ops/restore-drill.sh --prod # installation outside /opt/anlaufstelle
-sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev # force the dev format (dump-*.pgc.enc)
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # auto-detect the format
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod --timestamp 2026-09-03_020000  # select one prod set
+sudo env BACKUP_TIMESTAMP=2026-09-03_020000 bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod  # equivalent environment-based set selection
+sudo env COMPOSE_DIR=/srv/anlaufstelle bash /srv/anlaufstelle/scripts/ops/restore-drill.sh --prod  # installation outside /opt/anlaufstelle
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev     # force the dev format (dump-*.pgc.enc)
 ```
 
 `--timestamp` and `BACKUP_TIMESTAMP` are valid only when bound to the prod format; the value must use the `YYYY-MM-DD_HHMMSS` format.
@@ -1489,7 +1490,7 @@ the operational file, so retain the off-site original separately and unchanged. 
 ## 7. ClamAV Virus Scanning
 
 Every file upload into the Encrypted File Vault is scanned against a
-ClamAV daemon **before** encryption ([Issue #524](https://github.com/anlaufstelle/app/issues/524)).
+ClamAV daemon **before** encryption (Issue #524).
 The production compose file [`docker-compose.prod.yml`](../../docker-compose.prod.yml)
 starts the scanner automatically with:
 
@@ -1505,10 +1506,10 @@ clamav:
 Env vars (defaults, see [`src/anlaufstelle/settings/base.py`](../../src/anlaufstelle/settings/base.py)):
 
 ```dotenv
-CLAMAV_ENABLED=true # default in prod.py
-CLAMAV_HOST=clamav # service name on the compose network
+CLAMAV_ENABLED=true        # default in prod.py
+CLAMAV_HOST=clamav         # service name on the compose network
 CLAMAV_PORT=3310
-CLAMAV_TIMEOUT=15 # seconds; MUST be < GUNICORN_TIMEOUT (Refs #1283)
+CLAMAV_TIMEOUT=15          # seconds; MUST be < GUNICORN_TIMEOUT (Refs #1283)
 ```
 
 In development/test, the scan is disabled (`CLAMAV_ENABLED=false`), so
@@ -1562,7 +1563,7 @@ signature state remains frozen and the operational status remains open.
 ```bash
 # Is the daemon reachable?
 docker compose -f docker-compose.prod.yml exec web \
-  python manage.py shell -c "from core.services.file_vault.virus_scan import ping; print(ping)"
+  python manage.py shell -c "from core.services.file_vault.virus_scan import ping; print(ping())"
 
 # EICAR test against the running scanner (manual, verification only):
 docker compose -f docker-compose.prod.yml exec clamav \
@@ -1582,13 +1583,13 @@ are generated from them and committed.
 
 ```bash
 # 1. Add the dependency to requirements.in (runtime) or requirements-dev.in
-# (dev/test) — with an open range, e.g. "Django>=5.1,<5.2".
+#    (dev/test) — with an open range, e.g. "Django>=5.1,<5.2".
 
 # 2. Regenerate the lock files (pip-tools must be installed):
 make deps-lock
 
 # 3. Review the diff (which transitive packages were added, which versions were
-# bumped?), check for known breaking changes.
+#    bumped?), check for known breaking changes.
 git diff requirements.txt requirements-dev.txt
 
 # 4. Verify locally
@@ -1860,8 +1861,8 @@ container never turns `healthy` there, and `caddy` does not release the runtime.
 ```bash
 docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
 # expected (role labels are German, from the command's own output):
-# App-Rolle rolsuper=False, rolbypassrls=False
-# Admin-Rolle rolsuper=False, rolbypassrls=True (exit code 0)
+#           App-Rolle   rolsuper=False, rolbypassrls=False
+#           Admin-Rolle rolsuper=False, rolbypassrls=True   (exit code 0)
 ```
 
 On the staging stack via the `maintenance` one-shot (the profile is opt-in, and
@@ -1884,10 +1885,12 @@ half-effective promise, because it gets skipped on every existing volume.
 The canonical, tested way is:
 
 ```bash
-cd /opt/anlaufstelle./scripts/ops/rotate-db-passwords.sh
+cd /opt/anlaufstelle
+./scripts/ops/rotate-db-passwords.sh
 
 # dev/demo use their own compose/env file:
-COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \./scripts/ops/rotate-db-passwords.sh
+COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
+  ./scripts/ops/rotate-db-passwords.sh
 ```
 
 **Prerequisites:** announce a maintenance window; make sure no
@@ -1906,9 +1909,9 @@ image separately before the maintenance window.
 
 ```sql
 BEGIN;
-ALTER ROLE "anlaufstelle" PASSWORD '<new app password>';
+ALTER ROLE "anlaufstelle"       PASSWORD '<new app password>';
 ALTER ROLE "anlaufstelle_admin" PASSWORD '<new admin password>';
-ALTER ROLE "postgres" PASSWORD '<new bootstrap password>';
+ALTER ROLE "postgres"           PASSWORD '<new bootstrap password>';
 COMMIT;
 ```
 
@@ -2000,8 +2003,8 @@ set only for the running transaction:
 BEGIN;
 SET LOCAL app.current_facility_id = '<facility-uuid-or-pk>';
 SELECT count(*) FROM core_client;
---... further queries...
-COMMIT; -- or ROLLBACK, SET LOCAL ends with the transaction
+-- ... further queries ...
+COMMIT;  -- or ROLLBACK, SET LOCAL ends with the transaction
 ```
 
 **Caution:** Never use `SET app.current_facility_id` (without `LOCAL`) in
@@ -2173,8 +2176,8 @@ Operational rules that follow from this:
 
 ```sql
 -- App role (not the owner) -> must fail:
-SET ROLE anlaufstelle; -- POSTGRES_USER
-ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable; -- ERROR: must be owner
+SET ROLE anlaufstelle;      -- POSTGRES_USER
+ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable;  -- ERROR: must be owner
 RESET ROLE;
 -- Trigger dormant state -> 'A' (ENABLE ALWAYS):
 SELECT tgname, tgenabled FROM pg_trigger
@@ -2214,7 +2217,7 @@ SELECT rolname, rolsuper, rolbypassrls, rolcanlogin, rolcreaterole, rolcreatedb
   FROM pg_roles
  WHERE rolname IN (current_user, 'anlaufstelle', 'anlaufstelle_admin');
 -- Who owns the database?
-SELECT pg_get_userbyid(datdba) AS db_owner FROM pg_database WHERE datname = current_database;
+SELECT pg_get_userbyid(datdba) AS db_owner FROM pg_database WHERE datname = current_database();
 -- Which application objects belong to NEITHER app nor admin? (> 0 means the
 -- rebuild is incomplete — exactly what a plain ownership move misses.)
 SELECT pg_get_userbyid(c.relowner) AS owner, count(*)
@@ -2253,7 +2256,7 @@ Procedure as the **bootstrap superuser**, in the application DB:
 -- 0. Before: stop the web service / put it into maintenance (no app writes).
 -- 1. Transfer ownership of the database + all objects to the admin role.
 ALTER DATABASE anlaufstelle OWNER TO anlaufstelle_admin;
-REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin; -- tables/sequences/views
+REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin;   -- tables/sequences/views
 -- 2. App role: ownership gone, only DML left.
 GRANT USAGE ON SCHEMA public TO anlaufstelle;
 ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
@@ -2263,7 +2266,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anlaufstelle;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
 -- 3. Harden triggers (otherwise migration 0107 does it on the next deploy):
--- can be skipped if docker-migrate.sh runs immediately afterward.
+--    can be skipped if docker-migrate.sh runs immediately afterward.
 ```
 
 Then run **§ 9.6.4 first** (green `check_db_roles` before `web` starts again),
@@ -2278,11 +2281,11 @@ Here the app role can be stripped of its privileges in place. As the
 
 ```sql
 -- 0. Before: stop web, cron and maintenance (no app writes).
--- A password change does NOT terminate existing sessions — drop any
--- remaining connections of the old role explicitly:
+--    A password change does NOT terminate existing sessions — drop any
+--    remaining connections of the old role explicitly:
 SELECT pg_terminate_backend(pid) FROM pg_stat_activity
- WHERE datname = current_database AND usename = 'anlaufstelle' AND pid <> pg_backend_pid;
-BEGIN; -- everything below is transactional; nothing is left half-done on error
+ WHERE datname = current_database() AND usename = 'anlaufstelle' AND pid <> pg_backend_pid();
+BEGIN;   -- everything below is transactional; nothing is left half-done on error
 -- 1. Create the missing admin/owner role. Password >= 32 characters.
 CREATE ROLE anlaufstelle_admin WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB
     PASSWORD '<new-admin-password>';
@@ -2324,8 +2327,8 @@ this explicitly (verified on PostgreSQL 18.4):
 
 ```text
 ALTER ROLE anlaufstelle NOSUPERUSER;
-ERROR: permission denied to alter role
-DETAIL: The bootstrap superuser must have the SUPERUSER attribute.
+ERROR:  permission denied to alter role
+DETAIL:  The bootstrap superuser must have the SUPERUSER attribute.
 ```
 
 So `ALTER ROLE … NOSUPERUSER` on the existing app role is **not a viable path**
@@ -2339,8 +2342,8 @@ model: bootstrap and emergency maintenance, **never** runtime.
 >
 > ```text
 > REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin;
-> ERROR: cannot reassign ownership of objects owned by role anlaufstelle
-> because they are required by the database system
+> ERROR:  cannot reassign ownership of objects owned by role anlaufstelle
+>         because they are required by the database system
 > ```
 >
 > The move therefore runs **selectively** via the catalog: application objects
@@ -2355,14 +2358,14 @@ model: bootstrap and emergency maintenance, **never** runtime.
 
 ```sql
 -- 0. Before: stop web, cron and maintenance.
--- A password change does NOT terminate existing sessions — drop any
--- remaining connections of the old bootstrap/app role explicitly:
+--    A password change does NOT terminate existing sessions — drop any
+--    remaining connections of the old bootstrap/app role explicitly:
 SELECT pg_terminate_backend(pid) FROM pg_stat_activity
- WHERE datname = current_database AND usename = 'anlaufstelle' AND pid <> pg_backend_pid;
+ WHERE datname = current_database() AND usename = 'anlaufstelle' AND pid <> pg_backend_pid();
 
 -- Variables. CAUTION: never put a comment after a \set. psql does not treat it
 -- as a comment but as further arguments and appends them to the value — from
--- "anlaufstelle -- old role" you get the role name "anlaufstelle--oldrole",
+-- "anlaufstelle  -- old role" you get the role name "anlaufstelle--oldrole",
 -- and EVERY ownership loop below finds zero objects without anything failing.
 \set ON_ERROR_STOP on
 \set old_role anlaufstelle
@@ -2372,45 +2375,45 @@ SELECT pg_terminate_backend(pid) FROM pg_stat_activity
 
 -- Control output BEFORE the rebuild: exactly the four names must appear here,
 -- with nothing appended. If anything differs, abort.
-\echo 'old_role =[':old_role']'
-\echo 'app_role =[':app_role']'
+\echo 'old_role  =[':old_role']'
+\echo 'app_role  =[':app_role']'
 \echo 'admin_role=[':admin_role']'
-\echo 'dbname =[':dbname']'
+\echo 'dbname    =[':dbname']'
 
 BEGIN;
 
 -- 1. Create the app role if it is missing, then set attributes + password
--- unconditionally. This form is idempotent: it also runs through after an
--- aborted earlier attempt in which the role already exists.
-SELECT format('CREATE ROLE %I',:'app_role')
- WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname =:'app_role')
+--    unconditionally. This form is idempotent: it also runs through after an
+--    aborted earlier attempt in which the role already exists.
+SELECT format('CREATE ROLE %I', :'app_role')
+ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role')
 \gexec
-ALTER ROLE:"app_role" WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB
+ALTER ROLE :"app_role" WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB
     PASSWORD '<new-app-password>';
 
 -- 2. Admin/owner role, same pattern.
-SELECT format('CREATE ROLE %I',:'admin_role')
- WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname =:'admin_role')
+SELECT format('CREATE ROLE %I', :'admin_role')
+ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'admin_role')
 \gexec
-ALTER ROLE:"admin_role" WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB
+ALTER ROLE :"admin_role" WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB
     PASSWORD '<new-admin-password>';
-GRANT ALL ON SCHEMA public TO:"admin_role";
+GRANT ALL ON SCHEMA public TO :"admin_role";
 
 -- 3. Database ownership.
-ALTER DATABASE:"dbname" OWNER TO:"admin_role";
-GRANT ALL PRIVILEGES ON DATABASE:"dbname" TO:"admin_role";
+ALTER DATABASE :"dbname" OWNER TO :"admin_role";
+GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"admin_role";
 
 -- 4. Move object ownership selectively (replacement for REASSIGN OWNED BY).
--- 4a) Relations: tables, sequences, views, materialized views, foreign tables.
+--    4a) Relations: tables, sequences, views, materialized views, foreign tables.
 SELECT format('ALTER %s %I.%I OWNER TO %I',
               CASE c.relkind WHEN 'S' THEN 'SEQUENCE'
                              WHEN 'v' THEN 'VIEW'
                              WHEN 'm' THEN 'MATERIALIZED VIEW'
                              WHEN 'f' THEN 'FOREIGN TABLE'
                              ELSE 'TABLE' END,
-              n.nspname, c.relname,:'admin_role')
+              n.nspname, c.relname, :'admin_role')
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
- WHERE c.relowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+ WHERE c.relowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND c.relkind IN ('r','p','S','v','m','f')
    AND n.nspname NOT IN ('pg_catalog','information_schema')
    AND n.nspname NOT LIKE 'pg\_toast%'
@@ -2418,47 +2421,47 @@ SELECT format('ALTER %s %I.%I OWNER TO %I',
                     WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
  ORDER BY c.relkind DESC
 \gexec
--- 4b) Routines (functions, procedures, aggregates).
+--    4b) Routines (functions, procedures, aggregates).
 SELECT format('ALTER ROUTINE %I.%I(%s) OWNER TO %I',
-              n.nspname, p.proname, pg_get_function_identity_arguments(p.oid),:'admin_role')
+              n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), :'admin_role')
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
- WHERE p.proowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+ WHERE p.proowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND n.nspname NOT IN ('pg_catalog','information_schema')
    AND NOT EXISTS (SELECT 1 FROM pg_depend d
                     WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
 \gexec
--- 4c) Own types and domains (table row types follow their table).
+--    4c) Own types and domains (table row types follow their table).
 SELECT format('ALTER %s %I.%I OWNER TO %I',
               CASE t.typtype WHEN 'd' THEN 'DOMAIN' ELSE 'TYPE' END,
-              n.nspname, t.typname,:'admin_role')
+              n.nspname, t.typname, :'admin_role')
   FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
- WHERE t.typowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+ WHERE t.typowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND t.typtype IN ('e','d','c','r','b') AND t.typrelid = 0 AND t.typelem = 0
    AND n.nspname NOT IN ('pg_catalog','information_schema')
    AND NOT EXISTS (SELECT 1 FROM pg_depend d
                     WHERE d.classid = 'pg_type'::regclass AND d.objid = t.oid AND d.deptype = 'e')
 \gexec
--- 4d) Own schemas. From PG15 on, 'public' belongs to pg_database_owner and
--- therefore follows the new DB owner automatically — nothing to do then.
-SELECT format('ALTER SCHEMA %I OWNER TO %I', n.nspname,:'admin_role')
+--    4d) Own schemas. From PG15 on, 'public' belongs to pg_database_owner and
+--        therefore follows the new DB owner automatically — nothing to do then.
+SELECT format('ALTER SCHEMA %I OWNER TO %I', n.nspname, :'admin_role')
   FROM pg_namespace n
- WHERE n.nspowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+ WHERE n.nspowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
 \gexec
 
 -- 5. New app role: DML only.
-GRANT CONNECT ON DATABASE:"dbname" TO:"app_role";
-GRANT USAGE ON SCHEMA public TO:"app_role";
-ALTER DEFAULT PRIVILEGES FOR ROLE:"admin_role" IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO:"app_role";
-ALTER DEFAULT PRIVILEGES FOR ROLE:"admin_role" IN SCHEMA public
-    GRANT USAGE, SELECT ON SEQUENCES TO:"app_role";
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO:"app_role";
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO:"app_role";
+GRANT CONNECT ON DATABASE :"dbname" TO :"app_role";
+GRANT USAGE ON SCHEMA public TO :"app_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO :"app_role";
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"app_role";
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"app_role";
 
 -- 6. The old bootstrap role is now a pure bootstrap/emergency role:
--- set a fresh, long password and never use it as runtime again.
-ALTER ROLE:"old_role" PASSWORD '<new-bootstrap-password>';
+--    set a fresh, long password and never use it as runtime again.
+ALTER ROLE :"old_role" PASSWORD '<new-bootstrap-password>';
 COMMIT;
 ```
 
@@ -2473,14 +2476,14 @@ SELECT 'relations' AS class, count(*) AS with_old_role
  WHERE n.nspname NOT IN ('pg_catalog','information_schema')
    AND n.nspname NOT LIKE 'pg\_toast%'
    AND c.relkind IN ('r','p','S','v','m','f')
-   AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND NOT EXISTS (SELECT 1 FROM pg_depend d
                     WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
 UNION ALL
 SELECT 'routines', count(*)
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
  WHERE n.nspname NOT IN ('pg_catalog','information_schema')
-   AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND p.proowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND NOT EXISTS (SELECT 1 FROM pg_depend d
                     WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
 UNION ALL
@@ -2488,14 +2491,14 @@ SELECT 'types', count(*)
   FROM pg_type ty JOIN pg_namespace n ON n.oid = ty.typnamespace
  WHERE n.nspname NOT IN ('pg_catalog','information_schema')
    AND ty.typtype IN ('e','d','c','r','b') AND ty.typrelid = 0 AND ty.typelem = 0
-   AND ty.typowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND ty.typowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
    AND NOT EXISTS (SELECT 1 FROM pg_depend d
                     WHERE d.classid = 'pg_type'::regclass AND d.objid = ty.oid AND d.deptype = 'e')
 UNION ALL
 SELECT 'schemas', count(*)
   FROM pg_namespace n
  WHERE n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
-   AND n.nspowner = (SELECT oid FROM pg_roles WHERE rolname =:'old_role')
+   AND n.nspowner = (SELECT oid FROM pg_roles WHERE rolname = :'old_role')
 UNION ALL
 -- Extension members are DELIBERATELY left untouched by the rebuild (see above).
 -- They are listed separately so the inventory does not falsely report
@@ -2503,10 +2506,10 @@ UNION ALL
 SELECT 'extension objects (by design)', count(*)
   FROM pg_depend d
   LEFT JOIN pg_class c ON d.classid = 'pg_class'::regclass AND c.oid = d.objid
-  LEFT JOIN pg_proc p ON d.classid = 'pg_proc'::regclass AND p.oid = d.objid
-  LEFT JOIN pg_type ty ON d.classid = 'pg_type'::regclass AND ty.oid = d.objid
+  LEFT JOIN pg_proc  p ON d.classid = 'pg_proc'::regclass  AND p.oid = d.objid
+  LEFT JOIN pg_type ty ON d.classid = 'pg_type'::regclass  AND ty.oid = d.objid
  WHERE d.deptype = 'e'
-   AND COALESCE(c.relowner, p.proowner, ty.typowner) = (SELECT oid FROM pg_roles WHERE rolname =:'old_role');
+   AND COALESCE(c.relowner, p.proowner, ty.typowner) = (SELECT oid FROM pg_roles WHERE rolname = :'old_role');
 ```
 
 > **What the extension row means for maintenance.** The extension and all its
@@ -2538,9 +2541,9 @@ SELECT 'extension objects (by design)', count(*)
 > `COMMIT`:
 >
 > ```sql
-> ALTER ROLE anlaufstelle NOLOGIN; -- before the main block, own transaction
-> --... main block...
-> ALTER ROLE anlaufstelle LOGIN; -- release again afterwards
+> ALTER ROLE anlaufstelle NOLOGIN;   -- before the main block, own transaction
+> -- ... main block ...
+> ALTER ROLE anlaufstelle LOGIN;     -- release again afterwards
 > ```
 >
 > The inventory above has the final word in any case: if it shows `> 0`
@@ -2604,8 +2607,8 @@ docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 docker compose -f docker-compose.staging.yml --env-file .env.staging \
     run --rm maintenance check_db_roles
 # expected (role labels are German, from the command's own output):
-# App-Rolle rolsuper=False, rolbypassrls=False
-# Admin-Rolle rolsuper=False, rolbypassrls=True (exit code 0)
+#           App-Rolle   rolsuper=False, rolbypassrls=False
+#           Admin-Rolle rolsuper=False, rolbypassrls=True   (exit code 0)
 ```
 
 A non-zero exit means the rebuild is incomplete — do **not** start `web`, work
@@ -2668,8 +2671,8 @@ stay around with an unusable password.
 SELECT id, username, email, date_joined, facility_id
 FROM core_user
 WHERE last_login IS NULL
-  AND NOT (password LIKE 'pbkdf2_%') -- unusable = set_unusable_password
-  AND date_joined < now - interval '7 days'
+  AND NOT (password LIKE 'pbkdf2_%')  -- unusable = set_unusable_password()
+  AND date_joined < now() - interval '7 days'
 ORDER BY date_joined;
 ```
 
@@ -2710,7 +2713,7 @@ consultation with facility leadership does the technical special path remain:
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py shell -c "
 from core.models import User
-User.objects.filter(username='<username>').delete
+User.objects.filter(username='<username>').delete()
 "
 ```
 
@@ -2879,37 +2882,38 @@ Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and th
 docker compose -f docker-compose.prod.yml stop web
 
 # 1. Final encrypted backup (§ 1.1) + an unencrypted working dump.
-# Dump as the admin role (BYPASSRLS) over the container socket — like backup.sh../scripts/ops/backup.sh
+#    Dump as the admin role (BYPASSRLS) over the container socket — like backup.sh.
+./scripts/ops/backup.sh
 docker compose -f docker-compose.prod.yml exec -T db \
     sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
 
 # 2. Stop the DB, pull a volume tarball as a byte-exact rollback anchor
-# (check the volume name: docker volume ls | grep pgdata)
+#    (check the volume name: docker volume ls | grep pgdata)
 docker compose -f docker-compose.prod.yml stop db
 docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
-    tar czf /to/pgdata-pg16.tar.gz -C /from.
+    tar czf /to/pgdata-pg16.tar.gz -C /from .
 
 # 3. Remove the old DB container + volume — only AFTER steps 1+2!
 docker compose -f docker-compose.prod.yml rm -f db
 docker volume rm anlaufstelle_pgdata
 
 # 4. Bring in the new release state (postgres:18-alpine + new mount)
-git pull # or the release package
+git pull   # or the release package
 
 # 5. Bring up only the DB: a fresh initdb (PG 18, checksums on) + the init script
-# creates the app/admin role. The log must be error-free.
+#    creates the app/admin role. The log must be error-free.
 docker compose -f docker-compose.prod.yml up -d db
-docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal' # 0
+docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 0
 
 # 6. Restore as the bootstrap superuser via the container socket (bypasses RLS/FORCE-RLS,
-# like scripts/ops/restore-drill.sh; --clean/--if-exists is safe to rerun)
+#    like scripts/ops/restore-drill.sh; --clean/--if-exists is safe to rerun)
 docker compose -f docker-compose.prod.yml exec -T db \
     sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
 
 # 7. Verify: role gate, RLS active, spot checks
-docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles # exit 0
+docker compose -f docker-compose.prod.yml run --rm -T maintenance check_db_roles  # exit 0
 docker compose -f docker-compose.prod.yml exec -T db sh -c \
-    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"' # > 0
+    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
 
 # 8. Migrations as a one-shot (usually a no-op) + bring up the stack + health (§ 1.2/1.3)
 docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh maintenance
@@ -2921,7 +2925,7 @@ docker compose "${compose_files[@]}" up -d web caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # 9. Turn off maintenance mode. The working dump contains PLAINTEXT data — delete
-# it immediately; discard the tarball after a grace period (e.g. 1 week).
+#    it immediately; discard the tarball after a grace period (e.g. 1 week).
 rm /tmp/upgrade-pg16.dump
 ```
 
@@ -2982,25 +2986,25 @@ This note is deliberately kept brief; the detailed, locally rehearsed procedure 
 ## Quick Reference
 
 ```text
-Create backup./scripts/ops/backup.sh
-Restore backup./scripts/ops/restore.sh <file.sql.gz.enc>
-Health check curl -sf https://$DOMAIN/health/
-Container status docker compose -f docker-compose.prod.yml ps
-Live logs docker compose -f docker-compose.prod.yml logs -f web
-Migration status docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
-Django deploy check docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
-Retention dry run docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
-Snapshot dry run docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
-MV refresh docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
-Check RLS session var psql -c "SELECT current_setting('app.current_facility_id', true);"
-Stop the stack docker compose -f docker-compose.prod.yml down
-Start the stack docker compose "${compose_files[@]}" up -d (file list: § 1.2)
-Regenerate lock files make deps-lock
-Check lock-file drift make deps-check
+Create backup             ./scripts/ops/backup.sh
+Restore backup            ./scripts/ops/restore.sh <file.sql.gz.enc>
+Health check              curl -sf https://$DOMAIN/health/
+Container status          docker compose -f docker-compose.prod.yml ps
+Live logs                 docker compose -f docker-compose.prod.yml logs -f web
+Migration status          docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
+Django deploy check       docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
+Retention dry run         docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
+Snapshot dry run          docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
+MV refresh                docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
+Check RLS session var     psql -c "SELECT current_setting('app.current_facility_id', true);"
+Stop the stack            docker compose -f docker-compose.prod.yml down
+Start the stack           docker compose "${compose_files[@]}" up -d   (file list: § 1.2)
+Regenerate lock files     make deps-lock
+Check lock-file drift     make deps-check
 ```
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: 08aaf045b6403546858847f2555a95f8e3ab1601 -->
+<!-- source-hash: 0b084767ca274fc6ffe2cdd96ffb6e28fa331669 -->
 <!-- translation-date: 2026-09-22 -->

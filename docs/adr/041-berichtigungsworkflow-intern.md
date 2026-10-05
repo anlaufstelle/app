@@ -43,5 +43,5 @@ Die App erhält einen **internen Antrags-/Review-Workflow für Berichtigungen** 
 
 - [ADR-013: DSGVO Art. 16 ohne App-Self-Service](013-dsgvo-art16-no-selfservice.md)
 - [ADR-007: AuditLog append-only](007-auditlog-append-only.md)
-- [#1060 — M4 Datenportabilität](https://github.com/anlaufstelle/app/issues/1060)
+- #1060 — M4 Datenportabilität
 - Lösch-Workflow als Vier-Augen-Präzedenz: Refs #932

@@ -1,7 +1,7 @@
 """Pin-Test des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
 ``core.services.client.locking``.
 
-Quelle: Ticket #2322 (https://github.com/anlaufstelle/app/issues/2322),
+Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt
 werden die drei Prio-2-Survivor dieses Moduls: ``client_pks`` filtert
 ``None``-Werte ueber ``getattr(ref, "pk", ref) is not None`` — fuer eine laut

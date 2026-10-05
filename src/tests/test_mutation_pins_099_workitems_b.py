@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``workitems-b``.
 
-Refs https://github.com/anlaufstelle/app/issues/2174,
-https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174,
+#2193.
 
 Modul ``core.services.case.workitems`` (zweiter Teilbaum, Batch
 ``workitems-b``): ``_locked_workitems``, ``update_workitem_status``,

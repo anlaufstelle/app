@@ -286,8 +286,8 @@ Mehrstufige Ketten (Swap löst den nächsten Request aus) **nicht** in eine Samm
 | `lead_page` | function | Leitung | emma | Statistik, Löschanträge genehmigen |
 | `staff_page` | function | Fachkraft | miriam | CRUD, Facharbeit |
 | `assistant_page` | function | Assistenz | lena | Eingeschränkte Rechte testen |
-| `base_url` | session ||| `http://127.0.0.1:8844` |
-| `admin_url` | session ||| `{base_url}/admin-mgmt` |
+| `base_url` | session | — | — | `http://127.0.0.1:8844` |
+| `admin_url` | session | — | — | `{base_url}/admin-mgmt` |
 
 **Passwort (alle Seed-User):** `anlaufstelle2026`
 
@@ -383,7 +383,7 @@ Dieselbe Scheibe lokal, mit demselben Schnitt:
 make test-e2e-slice-locked SLICES=4 INDEX=3
 ```
 
-Der Schnitt haengt nur am Dateibestand, nicht an Runner oder Reihenfolge
+Der Schnitt haengt nur am Dateibestand, nicht an Runner oder Reihenfolge —
 derselbe Commit ergibt lokal dieselbe Scheibe wie in der CI. Aendert sich der
 Dateibestand (neue Testdatei), verschiebt sich die Verteilung; dann zuerst
 `--summary` gegen den Commit des roten Laufs pruefen. Hintergrund zum

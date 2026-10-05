@@ -37,7 +37,7 @@ Jede Test-Art nutzt eine eigene Datenbank — Dev-Daten bleiben immer unberührt
 
 | Test-Art | Datenbank | Verwaltet durch | Isolation |
 |----------|-----------|-----------------|-----------|
-| Entwicklung | `anlaufstelle` | Manuell (`make seed`) ||
+| Entwicklung | `anlaufstelle` | Manuell (`make seed`) | — |
 | Unit/Integration | `test_anlaufstelle` | pytest-django (automatisch) | Vollständig, transaktional |
 | E2E | `anlaufstelle_e2e` | conftest.py (flush + seed) | Eigene DB, pro Session |
 
@@ -82,7 +82,7 @@ base.py → dev.py → e2e.py
 | Setting | base.py | dev.py | e2e.py | Grund |
 |---------|---------|--------|--------|-------|
 | `DATABASES.NAME` | `anlaufstelle` | geerbt | `anlaufstelle_e2e` | Dev-Daten schützen |
-| `DEBUG` || `True` | geerbt | Dev-Verhalten |
+| `DEBUG` | — | `True` | geerbt | Dev-Verhalten |
 | `PASSWORD_HASHERS` | PBKDF2 (Default) | geerbt | geerbt | **Nicht** MD5 wie in test.py |
 | `RATELIMIT_ENABLE` | `True` | geerbt | `False` | E2E macht viele Logins |
 | `SESSION_SAVE_EVERY_REQUEST` | `False` | geerbt | `False` (redundant) | Reduziert DB-Writes; Inaktivitäts-Fenster liefert die `SessionIdleRefreshMiddleware` (#1858) |
@@ -211,7 +211,7 @@ schief — bei 102 Dateien und 827 Testfunktionen ergibt er 335 gegen 492 Tests
 (+47 %). Der Splitter zaehlt stattdessen per `ast` die Testfunktionen je Datei
 (kein Import, keine Datenbank, kein Playwright noetig) und verteilt die
 schwerste Datei zuerst in die jeweils leichteste Scheibe. Streuung in der
-Praxis: unter einem Prozent. Die Testzahl ist ein **Proxy** fuer Laufzeit
+Praxis: unter einem Prozent. Die Testzahl ist ein **Proxy** fuer Laufzeit —
 genau genug, um Timeouts zu vermeiden, und im Gegensatz zu gemessenen
 Laufzeiten unabhaengig vom Runner und damit reproduzierbar.
 

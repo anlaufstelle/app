@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-24
 - **Deciders:** Tobias Nix
-- **Refs:** #1871, [#1941](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873) (M4-Entscheid E4)
+- **Refs:** #1871, #1941 (M4-Entscheid E4)
 
 ## Context
 

@@ -156,7 +156,7 @@ Nicht betroffen ist die CSSOM-API: `el.style.setProperty(…)` / `el.style.displ
 
 **Status:** Inventarisierung + UI-Warnung umgesetzt; feldweise Encryption deferred bis post-v1.0 (Audit-Item 17).
 
-### Inventar 
+### Inventar
 
 Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Modell der Event-`data_json`-Felder. Klartext liegt facility-gescoped in der DB und im Backup (Backup ist AES-256-CBC verschlüsselt; DB selbst nicht).
 
@@ -323,7 +323,7 @@ Der In-Memory-Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`) ist der Fast-P
 
 ### Kollisionsbewertung
 
-SHA-256s Kollisionswahrscheinlichkeit wird erst im Geburtstagsregime relevant: selbst bei einer für dieses System utopischen Größenordnung von ~2⁶⁴ gehashten Payloads läge die Wahrscheinlichkeit **irgendeiner** Kollision unter allen davon bei nur ~2⁻¹²⁸ (Geburtstagsschranke, ≈ n²/2^(k+1) für n Payloads und einen k-Bit-Hash). Der hier tatsächlich relevante Fall ist aber der **paarweise** Vergleich — `has_idempotency_payload_mismatch()` vergleicht bei jedem Replay genau **einen** neu berechneten Hash gegen **einen** gespeicherten, dessen Kollisionswahrscheinlichkeit bei ~2⁻²⁵⁶ liegt. Beides ist bei den hier realistischen Ereigniszahlen (soziale Einrichtung, nicht Internet-Skala) vernachlässigbar. Selbst eine (praktisch nie eintretende) Kollision hätte ausschließlich eine funktionale Konsequenz innerhalb desselben `(scope, user, idempotency_key)`-Tripels: `has_idempotency_payload_mismatch()` würde einen abweichenden Payload fälschlich als Treffer werten (False Negative der Kollisions-Erkennung selbst) — kein Datenschutz-Vorfall, weil der Vergleich nie gegen fremde, beliebige Angreifer-Payloads läuft, sondern nur innerhalb der eigenen Replay-Kette desselben Nutzers.
+SHA-256s Kollisionswahrscheinlichkeit wird erst im Geburtstagsregime relevant: selbst bei einer für dieses System utopischen Größenordnung von ~2⁶⁴ gehashten Payloads läge die Wahrscheinlichkeit **irgendeiner** Kollision unter allen davon bei nur ~2⁻¹²⁸ (Geburtstagsschranke, ≈ n²/2^(k+1) für n Payloads und einen k-Bit-Hash). Der hier tatsächlich relevante Fall ist aber der **paarweise** Vergleich — `has_idempotency_payload_mismatch()` vergleicht bei jedem Replay genau **einen** neu berechneten Hash gegen **einen** gespeicherten —, dessen Kollisionswahrscheinlichkeit bei ~2⁻²⁵⁶ liegt. Beides ist bei den hier realistischen Ereigniszahlen (soziale Einrichtung, nicht Internet-Skala) vernachlässigbar. Selbst eine (praktisch nie eintretende) Kollision hätte ausschließlich eine funktionale Konsequenz innerhalb desselben `(scope, user, idempotency_key)`-Tripels: `has_idempotency_payload_mismatch()` würde einen abweichenden Payload fälschlich als Treffer werten (False Negative der Kollisions-Erkennung selbst) — kein Datenschutz-Vorfall, weil der Vergleich nie gegen fremde, beliebige Angreifer-Payloads läuft, sondern nur innerhalb der eigenen Replay-Kette desselben Nutzers.
 
 ### Retention-Begründung
 
@@ -333,7 +333,7 @@ Ein zeitbasiertes Leeren (z. B. nach der 72-h-Cache-TTL oder einem sonst gewähl
 
 ### Härtung per HMAC-Pepper (umgesetzt, #1942)
 
-Die zu #1935 nur vorgemerkte dritte Option ist umgesetzt: [`payload_fingerprint()`](../src/core/services/events/idempotency.py) bildet über die kanonische Payload-Form seither ein **HMAC-SHA-256 mit serverseitigem Pepper** statt eines nackten Digests. Der Idempotenz-Zweck bleibt vollständig erhalten — der Vergleich in `has_idempotency_payload_mismatch()` läuft ohnehin nur innerhalb derselben `(scope, user, idempotency_key)`-Kette, nie gegen fremde Payloads, aber die Enumerierbarkeit gegen einen reinen DB-Dump entfällt: ohne Kenntnis des Peppers ist ein Offline-Wörterbuchangriff auf den Hash nicht mehr möglich, auch nicht bei kleinem Feld-Wertebereich. Damit ist auch der Verschlüsselungs-Bypass geschlossen — der Hash trägt den Klartext eines `is_encrypted`-Feldes nicht mehr ungesalzen neben der Fernet-Spalte.
+Die zu #1935 nur vorgemerkte dritte Option ist umgesetzt: [`payload_fingerprint()`](../src/core/services/events/idempotency.py) bildet über die kanonische Payload-Form seither ein **HMAC-SHA-256 mit serverseitigem Pepper** statt eines nackten Digests. Der Idempotenz-Zweck bleibt vollständig erhalten — der Vergleich in `has_idempotency_payload_mismatch()` läuft ohnehin nur innerhalb derselben `(scope, user, idempotency_key)`-Kette, nie gegen fremde Payloads —, aber die Enumerierbarkeit gegen einen reinen DB-Dump entfällt: ohne Kenntnis des Peppers ist ein Offline-Wörterbuchangriff auf den Hash nicht mehr möglich, auch nicht bei kleinem Feld-Wertebereich. Damit ist auch der Verschlüsselungs-Bypass geschlossen — der Hash trägt den Klartext eines `is_encrypted`-Feldes nicht mehr ungesalzen neben der Fernet-Spalte.
 
 Die getroffenen Entscheidungen:
 
@@ -525,13 +525,14 @@ direkte Wiedererkennung in Kontaktläden möglich
 ### Was bereits umgesetzt ist
 
 [`FieldTemplate`-Validator `Sensitivity=HIGH ⇒ is_encrypted=True`](../src/core/models/document_type.py#L243-L256)
-erzwingt seit ,
+erzwingt seit,
 dass HIGH-Felder **immer** encrypted sind. Dieser Teil von Blocker 4 ist
 funktional + per Test verifiziert (siehe [`tests/test_field_template_validator.py`](../src/tests/test_field_template_validator.py)).
 
 ### Was bewusst nicht jetzt umgesetzt wird
 
-`Client.pseudonym` per `EncryptedTextField` + HMAC-Lookup-Index. Das selbst stuft das in **§ B.5 Strukturell** als **Item 51,
+`Client.pseudonym` per `EncryptedTextField` + HMAC-Lookup-Index. Das
+selbst stuft das in **§ B.5 Strukturell** als **Item 51,
 Aufwand L, post-v1.0** ein:
 
 > 51 | `Client.pseudonym`-Verschlüsselung mit HMAC-Lookup-Index | L | hoch
@@ -587,7 +588,7 @@ Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py:266-275`](..
 - `csrf_exempt` (Browser-Reports tragen keinen Token; Endpoint ist write-only ⇒ kein CSRF-Risiko)
 - Eigener Logger-Namespace `security.csp` (außerhalb des `core`-Loggers, damit Sentry-Integration und pytest-caplog beide funktionieren)
 
-**Detection-Pfad:** Primär landen CSP-Violations in der lokalen Log-Datei (Logger `security.csp`, Level `WARNING`, mit allen Feldern `blocked-uri`, `violated-directive`, `source-file`,...) und werden von dort per Caddy/Filebeat/Loki ausgewertet. Ist `SENTRY_DSN` gesetzt ([`prod.py`](../src/anlaufstelle/settings/prod.py)), erzeugen diese WARNINGs **keine eigenen Sentry-Events:** Die Sentry-`LoggingIntegration` ist bewusst nicht mit einem eigenen `event_level` konfiguriert, sodass ihr Default `event_level=ERROR` gilt — WARNINGs erscheinen daher nur als **Breadcrumb** an einem später erfassten Error-Event, nicht als eigenständige Violation-Meldung im Dashboard. Diese Breadcrumbs durchlaufen den `before_send`/`before_send_transaction`-Scrubber ([`_sentry.py`](../src/anlaufstelle/settings/_sentry.py)), bevor sie das Programm verlassen.
+**Detection-Pfad:** Primär landen CSP-Violations in der lokalen Log-Datei (Logger `security.csp`, Level `WARNING`, mit allen Feldern `blocked-uri`, `violated-directive`, `source-file`, ...) und werden von dort per Caddy/Filebeat/Loki ausgewertet. Ist `SENTRY_DSN` gesetzt ([`prod.py`](../src/anlaufstelle/settings/prod.py)), erzeugen diese WARNINGs **keine eigenen Sentry-Events:** Die Sentry-`LoggingIntegration` ist bewusst nicht mit einem eigenen `event_level` konfiguriert, sodass ihr Default `event_level=ERROR` gilt — WARNINGs erscheinen daher nur als **Breadcrumb** an einem später erfassten Error-Event, nicht als eigenständige Violation-Meldung im Dashboard. Diese Breadcrumbs durchlaufen den `before_send`/`before_send_transaction`-Scrubber ([`_sentry.py`](../src/anlaufstelle/settings/_sentry.py)), bevor sie das Programm verlassen.
 
 **Bewusste Entscheidung (Noise-/PII-Abwägung):** Kein explizites `event_level`-Capture für `security.csp`. CSP-Reports sind hochvolumig und teils browser-/angreifer-kontrolliert (`blocked-uri`/`source-file` können URLs mit Query-Strings tragen); sie als eigene Sentry-Events zu erfassen, würde Rauschen erzeugen und die Scrub-Grenze für frei befüllbare Report-Felder unnötig ausreizen. Wer CSP-Violations aktiv im Tracker auswerten will, richtet die Alarmierung stattdessen auf den `security.csp`-Log-Stream ein. In #1949 erneut geprüft und bestätigt — mit einem zusätzlichen technischen Argument: Die `LoggingIntegration` patcht `logging.Logger.callHandlers` **global**, ein `event_level` lässt sich also gar nicht auf `security.*` beschränken, und der SDK-Handler hebt sämtliche `extra`-Felder eines Records ins Event — für `security.csp` also `remote_addr` (Client-IP) und `user_agent` in jedes Event. Der Sink ist seit #1949 auch im [Threat-Model](threat-model.md#tb1--browser--caddydjango) (TB1, CSP-Zeile) benannt.
 
@@ -631,7 +632,7 @@ Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des De
 
 ### Umgesetzt: SHA-Pinning aller Actions
 
-Alle 42 `uses:`-Referenzen über die 7 Workflows zeigen jetzt auf **40-stellige Commit-SHAs** statt auf Major-Tags. Format: `uses: <owner>/<action>@<sha> # vX.Y.Z`. Dependabot ist über das `github-actions`-Ökosystem in `.github/dependabot.yml` (dev-only) bereits konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
+Alle 42 `uses:`-Referenzen über die 7 Workflows zeigen jetzt auf **40-stellige Commit-SHAs** statt auf Major-Tags. Format: `uses: <owner>/<action>@<sha>  # vX.Y.Z`. Dependabot ist über das `github-actions`-Ökosystem in `.github/dependabot.yml` (dev-only) bereits konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
 
 **Warum:** Tags sind mutierbar. Bei einer hypothetischen Action-Repo-Übernahme könnte ein Angreifer einen Tag auf einen bösartigen Commit verschieben — bei Anlaufstelle würde die nächste CI-Run dann den bösartigen Code ausführen. SHA-Pinning blockt diesen Vektor; Dependabot übernimmt das laufende Update.
 
@@ -687,7 +688,7 @@ Versionen vor 0.10.3 betraf. Eine zweite Werkzeugkette im Release-Gate wird daf�
 eingeführt: Die Dependabot-Alerts des Entwicklungs-Repositories dienen als Zweitquelle,
 ergänzt durch den monatlichen manuellen Check aus Punkt 2.
 
-Der Ignore muss **vor Dezember 2027**, also vor dem Ende des Security-Supports der Django-6.1-Linie, durch die [zweite Etappe des LTS-Umstiegs](https://github.com/anlaufstelle/app/issues/1662) abgelöst werden.
+Der Ignore muss **vor Dezember 2027**, also vor dem Ende des Security-Supports der Django-6.1-Linie, durch die zweite Etappe des LTS-Umstiegs #1662 abgelöst werden.
 
 ---
 
@@ -715,28 +716,28 @@ pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/sett
 > hängt am **Bucket-Typ**:
 >
 > * **Personenabgeleitete** Aufschlüsselungen — `by_age_cluster`, `by_contact_stage.identifiziert`,
-> `by_contact_stage.qualifiziert` und `unique_clients` — werden gegen die **DISTINCT-Personenzahl**
-> des Buckets im Berichtszeitraum geprüft, zusätzlich zur Ereigniszahl, und es gilt die strengere der
-> beiden. Eine sichtbare Zelle „Unter 18: 7" bedeutet seither 7 *Kontakte* von **mindestens *k*
-> Personen**; ist die Personenzahl unbekannt (Alt-Snapshot, retention-bereinigter Monat), wird
-> unterdrückt.
+>   `by_contact_stage.qualifiziert` und `unique_clients` — werden gegen die **DISTINCT-Personenzahl**
+>   des Buckets im Berichtszeitraum geprüft, zusätzlich zur Ereigniszahl, und es gilt die strengere der
+>   beiden. Eine sichtbare Zelle „Unter 18: 7" bedeutet seither 7 *Kontakte* von **mindestens *k*
+>   Personen**; ist die Personenzahl unbekannt (Alt-Snapshot, retention-bereinigter Monat), wird
+>   unterdrückt.
 > * **Ausnahme `by_contact_stage.anonym`** — hier ist die Prüfgröße **keine** Personenzahl, sondern
-> „DISTINCT *verknüpfte* Personen **+** Anzahl der *unverknüpften* Ereignisse". Die Stufe ist als
-> „`is_anonymous` ODER `client IS NULL`" definiert; Ereignisse ohne Klienten-FK tragen überhaupt
-> keinen Personenbezug und sind untereinander nicht verknüpfbar, weshalb jedes als eigenes
-> Individuum zählt (`statistics.py`, `persons_by_contact_stage`; gepinnt in
-> `test_statistics.py::TestPersonenzaehlungImZeitraum::test_anonyme_stufe_zaehlt_ereignisse_ohne_personenbezug_je_einzeln`).
-> **Konsequenz, die die Zusicherung einschränkt:** die dahinterliegende Personen-Äquivalenzklasse
-> kann *kleiner* als *k* sein. Konstruktion bei *k* = 5: eine Person mit 12 `is_anonymous`-Ereignissen
-> plus 4 unverknüpfte Ereignisse ergibt Prüfgröße 1 + 4 = 5 ≥ *k* — „anonym: 16" bleibt sichtbar,
-> obwohl nur **eine** identifizierbare Person dahintersteht. Bewusst akzeptiert: die unverknüpften
-> Ereignisse tragen keine identifizierenden Attribute, an denen eine Re-Identifikation ansetzen
-> könnte; die Alternative (unverknüpfte Ereignisse mit 0 Personen bewerten) hätte die Stufe in jeder
-> niedrigschwelligen Einrichtung dauerhaft unterdrückt, ohne jemanden zu schützen. Wer die
-> Zusicherung zitiert, muss diese Stufe ausnehmen.
+>   „DISTINCT *verknüpfte* Personen **+** Anzahl der *unverknüpften* Ereignisse". Die Stufe ist als
+>   „`is_anonymous` ODER `client IS NULL`" definiert; Ereignisse ohne Klienten-FK tragen überhaupt
+>   keinen Personenbezug und sind untereinander nicht verknüpfbar, weshalb jedes als eigenes
+>   Individuum zählt (`statistics.py`, `persons_by_contact_stage`; gepinnt in
+>   `test_statistics.py::TestPersonenzaehlungImZeitraum::test_anonyme_stufe_zaehlt_ereignisse_ohne_personenbezug_je_einzeln`).
+>   **Konsequenz, die die Zusicherung einschränkt:** die dahinterliegende Personen-Äquivalenzklasse
+>   kann *kleiner* als *k* sein. Konstruktion bei *k* = 5: eine Person mit 12 `is_anonymous`-Ereignissen
+>   plus 4 unverknüpfte Ereignisse ergibt Prüfgröße 1 + 4 = 5 ≥ *k* — „anonym: 16" bleibt sichtbar,
+>   obwohl nur **eine** identifizierbare Person dahintersteht. Bewusst akzeptiert: die unverknüpften
+>   Ereignisse tragen keine identifizierenden Attribute, an denen eine Re-Identifikation ansetzen
+>   könnte; die Alternative (unverknüpfte Ereignisse mit 0 Personen bewerten) hätte die Stufe in jeder
+>   niedrigschwelligen Einrichtung dauerhaft unterdrückt, ohne jemanden zu schützen. Wer die
+>   Zusicherung zitiert, muss diese Stufe ausnehmen.
 > * **Ereignisabgeleitete** Aufschlüsselungen (`by_document_type`, `by_category`, `total_contacts`)
-> zählen weiterhin **Ereignisse** (`Count("id")`). Ihre Buckets sind Dokumenttypen, keine
-> Personenmengen — eine Personenschwelle hätte dort keine Äquivalenzklasse, auf die sie sich bezöge.
+>   zählen weiterhin **Ereignisse** (`Count("id")`). Ihre Buckets sind Dokumenttypen, keine
+>   Personenmengen — eine Personenschwelle hätte dort keine Äquivalenzklasse, auf die sie sich bezöge.
 >
 > Frühere Fassungen dieses Abschnitts sprachen pauschal von „weniger als *k* **Personen**"; das galt
 > bis #1770 für **keine** Zelle und gilt jetzt
@@ -890,7 +891,7 @@ Betriebskennzahl.
 | **K1** | Struktur-Kollaps / Residuum bei publizierter Randsumme | teilweise; Rest akzeptieren | M+ | 3 | **mitigiert** (#1770) — Fixpunkt-Guard inkl. der Personen-Randsumme Σ `persons` = `unique_clients` |
 | **K3** | zwei Grundgesamtheiten nebeneinander | teilweise; Ungleichungen akzeptieren | M | 3 | **mitigiert** — A1 + A3 (#1770); A2 = entschieden, Option A / Status quo (#1773) |
 | **K4c** | Lesequellen-Divergenz (Snapshot vs. live) | teilweise (Herkunft stempeln) | S | 4 | **mitigiert** (#1770) |
-| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** || 4 | akzeptiert; Freigabe-Übersicht (#1770) |
+| **K4a** | Zeitraum-Differenz / Partitions-Rückrechnung | **akzeptieren + dokumentieren** | — | 4 | akzeptiert; Freigabe-Übersicht (#1770) |
 
 Alle Verdikte: **bestätigt** (per Enumeration belegt, nicht vermutet). **Reihenfolge:** K5 → K0
 (Fail-safe) → K6 → K2 → K1-Guard → K3 → K4b. K5 zuerst, weil es die Messbasis aller übrigen Kanäle
@@ -909,7 +910,7 @@ senkt und keine Utility kostet.
 
 Sämtliche suppressionsbewehrten Zellen sind `Count("id")` über **Ereignisse**; `_suppress_small`
 vergleicht die Schwelle also gegen eine Ereigniszahl. Die Äquivalenzklasse, die k-Anonymität schützen
-soll (Einrichtung × Zeitraum × Altersgruppe), darf damit Größe 1 haben und wird trotzdem publiziert
+soll (Einrichtung × Zeitraum × Altersgruppe), darf damit Größe 1 haben und wird trotzdem publiziert —
 **ohne** jeden Rückrechnungsschritt. Selbstbeweisend wird der Fall, sobald `unique_clients`
 unterdrückt ist: dann steht im Artefakt, dass die Gesamtpersonenmenge < k ist, während die
 Altersverteilung genau dieser Menge im Klartext danebensteht.
@@ -1046,7 +1047,7 @@ Eingriffspunkt, wirkt automatisch auf alle Templates plus JSON/XML; muss **nach*
 greifen, damit der Snapshot-/Hybrid-Pfad nicht driftet. Gemessen ohne neuen Kanal (numerisch identisch
 zur Basislinie „alles in fester Labelordnung"); Bestandstests bleiben grün; der interne/On-Screen-
 Rohpfad bleibt unberührt (dort ist das Ranking Nutzwert). **Keine Definitionsgrenze:** die Rangordnung
-ist kein publizierter Aggregatwert, sondern ein darstellerisches Nebenprodukt der Query-Sortierung
+ist kein publizierter Aggregatwert, sondern ein darstellerisches Nebenprodukt der Query-Sortierung —
 und sie untergräbt gezielt die Sekundärsuppression, deren einziger Zweck es ist, zwei
 ununterscheidbare Unbekannte zu hinterlassen. **Restrisiko ehrlich ausweisen:** K5 senkt gepinnte
 Zellen um Faktor ~47, eliminiert sie aber nicht — die Restfälle brauchen den Guard.
@@ -1060,9 +1061,9 @@ Reihenfolge, unterdrückte folgen als Block in kanonischer Ordnung (Altersgruppe
 seit [ADR-040](adr/040-documenttype-category-entfernt.md) entfallen); Templates, JSON und XML erben
 das ohne eigene Anpassung. Die Ordnung benennt seit
 #1770 die **Aufrufstelle** über das
-Pflicht-Keyword `order` (die frühere Formheuristik war fail-open)
+Pflicht-Keyword `order` (die frühere Formheuristik war fail-open) —
 `by_category` fällt seit #1770 unter
-`ORDER_CATEGORY` (Namensordnung): die Einfügereihenfolge der Konsolidierung ist **datenabhängig**
+`ORDER_CATEGORY` (Namensordnung): die Einfügereihenfolge der Konsolidierung ist **datenabhängig** —
 eine Kategorie steht dort, wo ihr alphabetisch erster im Zeitraum vorhandener `report_key` steht (bis
 #1849 war die Ordnungsquelle der
 `system_type`). Ohne kanonische Ordnung verriet die Zeilenposition, welcher Berichtsschlüssel hinter
@@ -1100,7 +1101,7 @@ M5 hat die **Zahlen** aus den Vollständigkeitsmeldungen entfernt, wenn sie klei
 Tatsache, **dass** entfernt wurde. `_prepare_issue` entscheidet über eine Disjunktion auf **Rohdaten**
 (`template is None or count < k or complement < k`); beide Zweige sind invertierbar, weil die
 Komplemente an publizierte Größen gekoppelt sind. Tragend ist dabei nicht die Disjunktion, sondern:
-eine **bezifferte** Meldung publiziert implizit „mein Komplement ≥ k", also eine untere Schranke
+eine **bezifferte** Meldung publiziert implizit „mein Komplement ≥ k", also eine untere Schranke —
 selbst wenn *jede* Alterszelle unterdrückt ist. Der Modellfehler sitzt in `_known_terms`: verborgene
 Terme gelten dort als *unbestimmt*, obwohl sie auf ein k-breites Intervall eingegrenzt sind; ein
 Term-**Zähler** kann das prinzipiell nicht abbilden.
@@ -1164,7 +1165,7 @@ gezielt die größte Zelle geopfert wird. Das widerspricht direkt der Zusicherun
 **Produktentscheid**: die Spitzenkategorie verschwindet aus Träger-/Förderberichten. Günstigere
 Variante mit denselben 0 Leaks im geprüften Raum: Audit-Schwelle „Spanne ≥ 2" statt „Spanne ≥ k−1".
 **Restfall:** bei unterdrückter Randsumme (`total < k`, R14) argumentiert das Audit ins Leere; dafür
-braucht es die eigene Regel „Tabellenkörper unterdrücken, wenn die Randsumme selbst unterdrückt ist"
+braucht es die eigene Regel „Tabellenkörper unterdrücken, wenn die Randsumme selbst unterdrückt ist" —
 das ist K1, nicht K2.
 
 *Status: **mitigiert*** (#1770,
@@ -1212,7 +1213,7 @@ Opferregeln leakfrei — sie unterscheiden sich nur noch darin, welche und wie v
 
 **Entschieden: es fällt die kleinste sichtbare Zelle.** Grund ist die Utility: in einem typischen
 Bericht (Randsumme 100, Zeilen 60/30/8/2) verschwände mit „größte fällt" die **60** — die
-Spitzenkategorie aus jedem Träger-/Förderbericht, sobald überhaupt eine Kleinstzelle existiert, mit
+Spitzenkategorie aus jedem Träger-/Förderbericht, sobald überhaupt eine Kleinstzelle existiert —, mit
 „kleinste fällt" nur die 8. Gemessen fällt die Spitzenkategorie damit **halb so oft**; der Preis ist
 etwas mehr Kleinzellen-Suppression (es fallen tendenziell mehr, dafür kleine Zellen). Der
 Bestandstest `test_list_single_suppression_triggers_secondary` („größte bleibt sichtbar") bleibt
@@ -1474,7 +1475,7 @@ feste Zeitraum-Partition; `date_from`/`date_to` sind frei wählbar (nur Spannen-
 
 - **K4a — Zeitraum-Differenz.** Alle Aggregate sind über disjunkte Segmente exakt additiv; für A ⊂ B
   gilt zellenweise B − A = (B\A), inklusive aller Zellen, die ein direkter Bericht über B\A
-  unterdrücken würde. *Beleg (Regelfall des externen Berichtswesens):* 12 Monats-PDFs + 1 Jahres-PDF
+  unterdrücken würde. *Beleg (Regelfall des externen Berichtswesens):* 12 Monats-PDFs + 1 Jahres-PDF —
   eine im März unterdrückte Zelle **inklusive Sekundär-Opfer** ergibt sich aus der Jahressumme minus
   den 11 sichtbaren Monatszellen. Verschärfung bei verschachtelten Zeiträumen (Jan–Mai und Jan–Jun,
   Juni = genau ein Ereignis): in **beiden** Artefakten ist keine einzige Zelle unterdrückt, und die
@@ -1542,7 +1543,7 @@ legitim Vollzugriff auf die Rohdaten hat).
 (`/statistics/reports/releases/`, Rollen-Guard wie das Berichts-Panel) listet die herausgegebenen
 Berichtszeiträume der Einrichtung und warnt bei Überschneidung; Service:
 [`release_log.py`](../src/core/services/dashboard/release_log.py). Sie kann den Kanal **nicht
-schließen** — K4a bleibt die akzeptierte Definitionsgrenze, sie macht ihn sichtbar. Beide Auflagen
+schließen** — K4a bleibt die akzeptierte Definitionsgrenze —, sie macht ihn sichtbar. Beide Auflagen
 der Analyse sind erfüllt:
 
 * **Empfänger-/Zweckfeld.** Beide Felder werden am Export optional erfasst und wandern in das
@@ -1820,7 +1821,7 @@ einem meldungsfreien Lauf entfernen (der Lauf ist idempotent).
 
 ### Verifikation
 
-- [`src/tests/test_totp_secret_at_rest.py`](../src/tests/test_totp_secret_at_rest.py)
+- [`src/tests/test_totp_secret_at_rest.py`](../src/tests/test_totp_secret_at_rest.py) —
   Roh-DB-Wert ohne Klartext-Hex, Verify-Pfad vor/nach Migration, Migration
   idempotent + reversibel, MultiFernet-Rotation, kein Custom-Admin-Leak,
   Rewrap-Concurrency (Verify-`save()` lässt `key` unberührt; `reencrypt_fields`
@@ -1846,7 +1847,7 @@ Stunde lang `429`, unabhängig von korrekten Credentials (Angriffsbild: **geziel
 ### Was bereits umgesetzt ist
 
 Die **Account-Lockout-Achse** — die die harte Sperre (`is_locked`, Refs #612)
-erzeugt — zählt Fehlversuche seit N9 
+erzeugt — zählt Fehlversuche seit N9
 **je Quell-IP**. Fremde Falschpasswörter sperren den Login des Opfers von dessen eigener IP damit
 **nicht** mehr; der frühere *harte* Victim-Lockout ist geschlossen.
 

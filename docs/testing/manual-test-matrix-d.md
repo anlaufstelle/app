@@ -16,7 +16,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Kaskade | admin ||| `test_clients_protect.py` |
+| Klient:innen / Kaskade | admin | — | — | `test_clients_protect.py` |
 
 **Voraussetzung:** Klient:in mit mindestens einem `Case` (Status egal — entscheidend ist die FK-Beziehung).
 
@@ -48,7 +48,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Kaskade | admin ||| `test_cases_cascade.py` |
+| Fälle / Kaskade | admin | — | — | `test_cases_cascade.py` |
 
 **Voraussetzung:** Fall mit ≥ 3 `OutcomeGoal` und je Goal ≥ 2 `Milestone` (Seed oder manuell anlegen).
 
@@ -81,7 +81,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Kaskade | admin ||| `test_cases_cascade.py` |
+| Fälle / Kaskade | admin | — | — | `test_cases_cascade.py` |
 
 **Voraussetzung:** Fall mit ≥ 2 zugeordneten `Event`s (`event.case = <fall>`).
 
@@ -112,7 +112,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DeletionRequests | leitung + fachkraft ||| `test_deletion_approval_audit.py` |
+| DeletionRequests | leitung + fachkraft | — | — | `test_deletion_approval_audit.py` |
 
 **Voraussetzung:** DEL-01 + DEL-03 + DEL-04 durchgeführt.
 
@@ -363,7 +363,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Aufbewahrung | admin (CLI) || ⚪ | `test_retention_dashboard.py` |
+| Aufbewahrung | admin (CLI) | — | ⚪ | `test_retention_dashboard.py` |
 
 **Voraussetzung:** ENT-RET-07/08/09 (mehrere ablaufende Datensätze in DB)
 
@@ -394,7 +394,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Aufbewahrung | admin | C || `test_retention_sensitivity.py` |
+| Aufbewahrung | admin | C | — | `test_retention_sensitivity.py` |
 
 **Voraussetzung:** Zwei Events am gleichen Klienten — eines mit `sensitivity=NORMAL`, eines mit `sensitivity=HIGH` (über DocumentType-Mindeststufe gesteuert).
 
@@ -426,7 +426,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Aufbewahrung | admin (CLI) ||| `test_import_engine.py::TestCleanupStaleImportJobs` |
+| Aufbewahrung | admin (CLI) | — | — | `test_import_engine.py::TestCleanupStaleImportJobs` |
 
 **Voraussetzung:** ein CSV-Import-Lauf im Status `uploaded`/`mapped`/`validated` (nicht abgeschlossen).
 
@@ -461,7 +461,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | admin (CLI) || ⚪ | `test_statistics_snapshot.py` |
+| Statistik | admin (CLI) | — | ⚪ | `test_statistics_snapshot.py` |
 
 **Voraussetzung:** Mindestens 1 Monat Aktivitätshistorie
 
@@ -525,7 +525,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Audit | admin (Shell) || ⚪ | `test_audit_append_only_e2e.py` |
+| Audit | admin (Shell) | — | ⚪ | `test_audit_append_only_e2e.py` |
 
 **Voraussetzung:** mindestens ein AuditLog-Eintrag in der DB.
 
@@ -541,8 +541,8 @@
 6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=...;` → Trigger blockiert (PG-Exception).
 
 **Erwartetes Ergebnis:**
-- Schritt 4: ValueError mit Message wie „AuditLog ist append-only, save nicht erlaubt".
-- Schritt 5: ValueError beim delete.
+- Schritt 4: ValueError mit Message wie „AuditLog ist append-only, save() nicht erlaubt".
+- Schritt 5: ValueError beim delete().
 - Schritt 6: PostgreSQL-Trigger wirft Exception, UPDATE/DELETE rollt zurück.
 
 **DSGVO/Security-Note:**
@@ -595,7 +595,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S || `src/tests/test_k_anonymization.py`, `src/tests/test_anonymize_residue.py` |
+| Compliance | admin | C/F/S | — | `src/tests/test_k_anonymization.py`, `src/tests/test_anonymize_residue.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 17 — Tatsächliche Löschung oder Anonymisierung nach Ablauf der Aufbewahrungsfrist.*
 
@@ -630,7 +630,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S || `test_retention_dashboard.py` |
+| Compliance | leitung | C/F/S | — | `test_retention_dashboard.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 18 — Recht auf Einschränkung der Verarbeitung (z.B. bei Streit um Richtigkeit).*
 
@@ -660,7 +660,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin ||| `src/tests/test_rls.py` |
+| Compliance | admin | — | — | `src/tests/test_rls.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 25 — Datenschutz durch Technik („Privacy by Design").*
 
@@ -693,7 +693,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S || `test_dsgvo_package.py` |
+| Compliance | admin | C/F/S | — | `test_dsgvo_package.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 30 — Verzeichnis von Verarbeitungstätigkeiten.*
 
@@ -730,7 +730,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance |||| `src/tests/test_encryption.py` |
+| Compliance | — | — | — | `src/tests/test_encryption.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Verschlüsselung als TOM.*
 
@@ -759,7 +759,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance || C/F/S || `src/tests/test_auth.py` |
+| Compliance | — | C/F/S | — | `src/tests/test_auth.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Schutz vor Brute-Force und schwachen Passwörtern.*
 
@@ -791,7 +791,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin ||| `src/tests/test_breach_detection.py`, `src/tests/test_breach_webhook_ssrf.py` |
+| Compliance | admin | — | — | `src/tests/test_breach_detection.py`, `src/tests/test_breach_webhook_ssrf.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 33 — Meldung an Aufsichtsbehörde binnen 72h. Art. 34 — Benachrichtigung der Betroffenen bei hohem Risiko.*
 
@@ -823,7 +823,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security |||| `src/tests/test_rls.py` |
+| Security | — | — | — | `src/tests/test_rls.py` |
 
 **Code-Referenz:** `src/core/middleware/facility_scope.py`
 
@@ -845,7 +845,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung (F1) + leitung_2 (F2) | C || `test_rls.py` |
+| Security | leitung (F1) + leitung_2 (F2) | C | — | `test_rls.py` |
 
 **Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `DeletionRequest`.
 
@@ -879,7 +879,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung (F1) + leitung_2 (F2) | C || `test_rectification_model.py::TestRectificationRequestRLSIsolation` |
+| Security | leitung (F1) + leitung_2 (F2) | C | — | `test_rectification_model.py::TestRectificationRequestRLSIsolation` |
 
 **Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `RectificationRequest`.
 
@@ -913,7 +913,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft + admin | C/F/S || `test_mfa_scoping.py` |
+| Security | fachkraft + admin | C/F/S | — | `test_mfa_scoping.py` |
 
 **Schritte:**
 1. Fachkraft hat alle Backup-Codes verloren + TOTP-App weg.
@@ -934,7 +934,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin ||| `src/tests/test_audit_signals.py`, `src/tests/test_audit_trigger.py` |
+| Security | admin | — | — | `src/tests/test_audit_signals.py`, `src/tests/test_audit_trigger.py` |
 
 **Code-Referenz:** `src/core/models/audit.py` (`AuditLog.save()` raises on update, `delete()` raises)
 
@@ -960,7 +960,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin ||| `src/tests/test_audit_service.py` |
+| Security | admin | — | — | `src/tests/test_audit_service.py` |
 
 **Code-Referenz:** `src/core/services/audit_hash.py`
 
@@ -984,7 +984,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin ||| `src/tests/test_encryption.py` |
+| Security | admin | — | — | `src/tests/test_encryption.py` |
 
 **Code-Referenz:**
 - `src/core/services/encryption.py` (MultiFernet-Rotation)
@@ -1013,7 +1013,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security |||| `src/tests/test_security_hardening.py` |
+| Security | — | — | — | `src/tests/test_security_hardening.py` |
 
 **Schritte:**
 1. `curl -sI https://anlaufstelle-prod-mirror.example/` → alle Sicherheits-Header gesetzt.
@@ -1031,7 +1031,7 @@
 
 ### D.OPS
 
-> Refs #903 ( + §4.6): Ops-/Self-Hosting-Härtung. DSGVO-relevant über Art. 5 (Speicherbegrenzung) und Art. 32 (TOM) — werden aus Sektion C verlinkt, leben aber als LOKAL/SSH-Probes hier.
+> Refs #903 (+ §4.6): Ops-/Self-Hosting-Härtung. DSGVO-relevant über Art. 5 (Speicherbegrenzung) und Art. 32 (TOM) — werden aus Sektion C verlinkt, leben aber als LOKAL/SSH-Probes hier.
 
 #### DEV-OPS-01 — DB-Rollen-Check (App NOSUPERUSER, kein BYPASSRLS; Admin BYPASSRLS)
 
@@ -1039,7 +1039,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||||
+| Ops | admin | — | — | — |
 
 **Code-Referenz:**
 - [`docker-compose.dev.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.dev.yml) — Bootstrap/App/Admin-Rollen
@@ -1068,7 +1068,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||||
+| Ops | admin | — | — | — |
 
 **Code-Referenz:** `dev-ops/deploy/backup.sh` (dev-only), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
 
@@ -1093,7 +1093,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||||
+| Ops | admin | — | — | — |
 
 **Code-Referenz:** [`deploy/restore.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/restore.sh) (falls vorhanden), Runbook „Disaster Recovery".
 
@@ -1122,7 +1122,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||||
+| Ops | admin | — | — | — |
 
 **Code-Referenz:** [`docker-compose.prod.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.prod.yml) — Volume-Konfiguration für `src/media/`.
 
@@ -1148,7 +1148,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||||
+| Ops | admin | — | — | — |
 
 **Code-Referenz:** `dev-ops/deploy/deploy-dev.sh` (dev-only) oder Entrypoint im App-Container.
 
@@ -1173,7 +1173,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||| `src/tests/test_migrations.py` (falls vorhanden) |
+| Ops | admin | — | — | `src/tests/test_migrations.py` (falls vorhanden) |
 
 **Schritte:**
 1. SSH: `docker compose exec web python manage.py migrate --check` → Exit-Code 0.
@@ -1194,7 +1194,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||| `src/tests/test_retention_*.py` |
+| Ops | admin | — | — | `src/tests/test_retention_*.py` |
 
 **Code-Referenz:**
 - [`src/core/management/commands/enforce_retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/enforce_retention.py)
@@ -1221,7 +1221,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops |||| `src/tests/test_health_endpoint.py` (falls vorhanden) |
+| Ops | — | — | — | `src/tests/test_health_endpoint.py` (falls vorhanden) |
 
 **Code-Referenz:** Health-View (siehe `ENT-SYS-01`, `ENT-SYS-02`).
 
@@ -1247,7 +1247,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||| `src/tests/test_facility_export.py` |
+| Ops | admin | — | — | `src/tests/test_facility_export.py` |
 
 **Code-Referenz:**
 - [`src/core/management/commands/export_facility.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/export_facility.py)
@@ -1284,7 +1284,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Ops | admin ||| `test_file_vault.py::TestStorageOrphanCleanup`, `test_cleanup_orphan_storage_command.py` |
+| Ops | admin | — | — | `test_file_vault.py::TestStorageOrphanCleanup`, `test_cleanup_orphan_storage_command.py` |
 
 **Code-Referenz:**
 - `src/core/management/commands/cleanup_orphan_storage_files.py`
@@ -1325,7 +1325,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_loader.py` |
+| Konfigurationspakete | admin | — | — | `test_load_package_command.py`, `test_packages_loader.py` |
 
 **Voraussetzung:** Geseedete Einrichtung (`make seed`), Arbeitskopie `/tmp/paket.yaml`. **Rolle:** lokal genügt die Entwicklungs-Rolle (Superuser); im Container-Stack braucht der Aufruf den Admin-Rollen-Override (`-e POSTGRES_USER=$POSTGRES_ADMIN_USER …`, siehe [`docs/packages.md` § 4](../packages.md)) — sonst bricht der Command mit der RLS-Meldung ab.
 
@@ -1354,7 +1354,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_loader.py`, `test_seed.py` |
+| Konfigurationspakete | admin | — | — | `test_load_package_command.py`, `test_packages_loader.py`, `test_seed.py` |
 
 **Voraussetzung:** DEV-PKG-01 durchgeführt (Arbeitskopie mit den beiden geänderten Werten liegt bereit).
 
@@ -1384,7 +1384,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfigurationspakete | admin ||| `test_load_package_command.py`, `test_packages_schema.py`, `test_packages_loader.py` |
+| Konfigurationspakete | admin | — | — | `test_load_package_command.py`, `test_packages_schema.py`, `test_packages_loader.py` |
 
 **Voraussetzung:** DEV-PKG-02 durchgeführt; Anzahl der Dokumentationstypen und Feldvorlagen der Einrichtung vorher notiert.
 
@@ -1419,7 +1419,7 @@
 | AUTH | ✓ | ✓ | ✓ | ⚪ |
 | MFA | ✓ | ✓ | ✓ | ⚪ |
 | ACCT | ✓ | ⚪ | ⚪ | ⚪ |
-| SUDO | ✓ | ⚪ | ⚪ ||
+| SUDO | ✓ | ⚪ | ⚪ | — |
 | PWA | ✓ | ⚪ | ✓ | ✓ |
 | CLIENT | ✓ | ⚪ | ⚪ | ✓ |
 | CASE | ✓ | ⚪ | ⚪ | ⚪ |
@@ -1428,16 +1428,16 @@
 | EVT | ✓ | ✓ | ⚪ | ✓ |
 | ATT | ✓ | ✓ | ⚪ | ✓ |
 | WI | ✓ | ⚪ | ⚪ | ✓ |
-| DEL | ✓ | ⚪ | ⚪ ||
+| DEL | ✓ | ⚪ | ⚪ | — |
 | RET | ✓ | ⚪ | ⚪ | ⚪ |
 | SRCH | ✓ | ⚪ | ⚪ | ✓ |
 | ZS | ✓ | ⚪ | ⚪ | ✓ |
 | HOV | ✓ | ⚪ | ⚪ | ✓ |
 | STAT | ✓ | ⚪ | ⚪ | ⚪ |
-| AUDIT | ✓ | ⚪ | ⚪ ||
-| DSGVO | ✓ | ⚪ | ⚪ ||
+| AUDIT | ✓ | ⚪ | ⚪ | — |
+| DSGVO | ✓ | ⚪ | ⚪ | — |
 | OFFL | ✓ | ⚪ | ✓ | ✓ |
-| SYS | ✓ | ⚪ | ⚪ ||
+| SYS | ✓ | ⚪ | ⚪ | — |
 | HTMX-Toasts (siehe Anhang B) | ✓ | ✓ | ⚪ | ⚪ |
 
 **Konvention:** Jeder Bereich wird **mindestens** in Chromium komplett durchgespielt. Firefox/Safari/Mobile-Stichproben (`⚪`) bedeuten: einmal pro Release prüfen, nicht jeden Test-Lauf.

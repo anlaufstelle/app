@@ -14,13 +14,13 @@
 <details open>
 <summary><strong>🔐 AUTH — Authentifizierung (11 Cases)</strong></summary>
 
-**Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/` 
-**Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`) 
-**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/models/user.py` (`User.ensure_offline_key_salt`) 
-**Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware` 
-**Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py` 
-**Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals) 
-**E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`, `test_security_hardening.py` 
+**Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/`  
+**Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`)  
+**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/models/user.py` (`User.ensure_offline_key_salt`)  
+**Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware`  
+**Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py`  
+**Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals)  
+**E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`, `test_security_hardening.py`  
 **Spezial-Setup:**
 - Login-Lockout-Test braucht 10 sequenzielle Fehlversuche innerhalb von 15 Min — IP-Rate-Limit (5/m) muss vorher umgangen werden (z.B. Cookie-Reset zwischen Bursts oder Limit per Settings hochsetzen).
 - Pwd-Reset-Test braucht den Console-Mailer über `MAILERS` (`MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}` — dev/e2e-Default) oder MailHog für Token-Capture.
@@ -93,7 +93,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C || `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
 
 **Voraussetzung:** IP-Rate-Limit (5/m) vorübergehend deaktiviert ODER `RATELIMIT_ENABLE=False` in Test-Settings.
 
@@ -126,7 +126,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | unauthentifiziert | C || `test_security_hardening.py` |
+| Auth | unauthentifiziert | C | — | `test_security_hardening.py` |
 
 **Voraussetzung:** `django_ratelimit` aktiv (Default in dev/e2e).
 
@@ -156,7 +156,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | unauthentifiziert | C || `test_security_hardening.py` |
+| Auth | unauthentifiziert | C | — | `test_security_hardening.py` |
 
 **Voraussetzung:** mindestens 2 Quell-IPs simulierbar (z.B. via `X-Forwarded-For` mit `TRUSTED_PROXY_HOPS=1`) oder Direkt-Cache-Manipulation.
 
@@ -219,7 +219,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C || `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
 
 **Voraussetzung:** Schnellvariante: `facility.settings.session_timeout_minutes = 1` setzen (Admin → Core → Einstellungen) und neu einloggen — ein globales `SESSION_COOKIE_AGE`-Test-Setting wirkt NICHT, weil der Login es per `set_expiry(facility-Wert)` immer überschreibt.
 
@@ -363,7 +363,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C || — (Unit/Integration: `test_middleware_session_idle.py`) |
+| Auth | fachkraft (`miriam`) | C | — | — (Unit/Integration: `test_middleware_session_idle.py`) |
 
 **Voraussetzung:** Schnellvariante über den Admin — sonst wären es 12 Stunden Wartezeit.
 
@@ -408,12 +408,12 @@
 <details open>
 <summary><strong>🔑 MFA — Zwei-Faktor-Authentifizierung (9 Cases)</strong></summary>
 
-**Routen:** `/mfa/setup/`, `/mfa/verify/`, `/mfa/settings/`, `/mfa/disable/`, `/mfa/backup-codes/`, `/mfa/backup-codes/regenerate/` 
-**Views:** `src/core/views/mfa.py` (`MFASetupView`, `MFAVerifyView`, `MFASettingsView`, `MFADisableView`, `MFABackupCodesView`, `MFARegenerateBackupCodesView`) 
-**Services:** `src/core/services/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`) 
-**Middleware:** `core.middleware.mfa.MFAEnforcementMiddleware` (EXEMPT_URLS für /login/, /logout/, /mfa/, /static/, /sw.js, /manifest.json, /auth/offline-key-salt/, /health/) 
-**Settings:** `OTP_TOTP_ISSUER="Anlaufstelle"`; Apps: `django_otp`, `django_otp.plugins.otp_totp`, `django_otp.plugins.otp_static` 
-**E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`, `test_security_hardening.py` 
+**Routen:** `/mfa/setup/`, `/mfa/verify/`, `/mfa/settings/`, `/mfa/disable/`, `/mfa/backup-codes/`, `/mfa/backup-codes/regenerate/`  
+**Views:** `src/core/views/mfa.py` (`MFASetupView`, `MFAVerifyView`, `MFASettingsView`, `MFADisableView`, `MFABackupCodesView`, `MFARegenerateBackupCodesView`)  
+**Services:** `src/core/services/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`)  
+**Middleware:** `core.middleware.mfa.MFAEnforcementMiddleware` (EXEMPT_URLS für /login/, /logout/, /mfa/, /static/, /sw.js, /manifest.json, /auth/offline-key-salt/, /health/)  
+**Settings:** `OTP_TOTP_ISSUER="Anlaufstelle"`; Apps: `django_otp`, `django_otp.plugins.otp_totp`, `django_otp.plugins.otp_static`  
+**E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`, `test_security_hardening.py`  
 **Spezial-Setup:**
 - TOTP-Code-Generierung im Test: `pyotp` mit gleichem Secret wie QR-Code (Base32-decoded aus `device.bin_key`).
 - Backup-Codes: 22-Zeichen URL-safe Base64 (case-sensitive!) ab Refs #790. Alte Codes im Format `xxxx-xxxx` (8 Hex + Dash) hat die Datenmigration `0181` gehasht (Refs #2327); sie verifizieren weiter über den Hash, auch ohne Bindestrich eingegeben. Eine ungehashte Klartext-Zeile in der Datenbank ist kein gültiger Code.
@@ -514,7 +514,7 @@
 - AuditLog: `BACKUP_CODES_GENERATED` (Setup) bzw. `BACKUP_CODES_REGENERATED` (Regenerate) mit `detail.count=10`.
 
 **DSGVO/Security-Note:**
-- Refs #790 (C-22): DB-Leak != Backup-Code-Kompromittierung (Pre-Image-Angriff gegen 128-Bit-Eingabe = 2^64 Trial, infeasibel).
+- Refs #790 (C-22): DB-Leak !=  Backup-Code-Kompromittierung (Pre-Image-Angriff gegen 128-Bit-Eingabe = 2^64 Trial, infeasibel).
 - Codes werden NUR EINMAL angezeigt — Anzeige-Seite konsumiert `request.session.pop("mfa_backup_codes")`.
 
 **Status:** ☐ Offen
@@ -557,7 +557,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | fachkraft (`miriam`) | C || `test_mfa_backup_codes.py` |
+| MFA | fachkraft (`miriam`) | C | — | `test_mfa_backup_codes.py` |
 
 **Voraussetzung:** ENT-MFA-04; ein Code wurde bereits einmal genutzt und in DB gelöscht.
 
@@ -657,7 +657,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | leitung (`emma`) | C || `test_mfa_setup_flow.py` |
+| MFA | leitung (`emma`) | C | — | `test_mfa_setup_flow.py` |
 
 **Voraussetzung:** `emma` (LEAD), `mfa_required=True` per Admin-UI gesetzt; bisher kein TOTPDevice.
 
@@ -686,7 +686,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | fachkraft (`miriam`), assistenz (`lena`), leitung (`emma`) | C || `test_mfa_setup_flow.py` |
+| MFA | fachkraft (`miriam`), assistenz (`lena`), leitung (`emma`) | C | — | `test_mfa_setup_flow.py` |
 
 **Voraussetzung:** Facility-Settings `mfa_enforced_facility_wide=True` (über Admin-UI oder Shell gesetzt). Keiner der drei Test-User hat ein Device.
 
@@ -718,12 +718,12 @@
 <details open>
 <summary><strong>👤 ACCT — Account & Profil (5 Cases)</strong></summary>
 
-**Routen:** `/account/`, `/i18n/setlang/`, `/auth/offline-key-salt/` 
-**Views:** `src/core/views/account.py` (`AccountProfileView`), `src/core/views/auth.py` (`OfflineKeySaltView`, `set_user_language`) 
-**Mixin:** `AssistantOrAboveRequiredMixin` (Account ist für Assistenz und höher) 
-**Services:** `src/core/models/user.py` (`User.ensure_offline_key_salt`) 
-**Modelfelder:** `User.preferred_language`, `User.phone`, `User.notes`, `User.offline_key_salt` 
-**E2E-Coverage:** `test_account_profile.py` 
+**Routen:** `/account/`, `/i18n/setlang/`, `/auth/offline-key-salt/`  
+**Views:** `src/core/views/account.py` (`AccountProfileView`), `src/core/views/auth.py` (`OfflineKeySaltView`, `set_user_language`)  
+**Mixin:** `AssistantOrAboveRequiredMixin` (Account ist für Assistenz und höher)  
+**Services:** `src/core/models/user.py` (`User.ensure_offline_key_salt`)  
+**Modelfelder:** `User.preferred_language`, `User.phone`, `User.notes`, `User.offline_key_salt`  
+**E2E-Coverage:** `test_account_profile.py`  
 **Spezial-Setup:**
 - Profil-Edit ist (Stand: aktueller Code) READ-ONLY-Dashboard mit Stats-Widget; Stamm-Pflege (Telefon/Notes) läuft über die Admin-UI (`/admin-mgmt/`) — TC-ACCT-03 entsprechend.
 - Sprache wird beim Setlang-Endpoint sowohl in Session/Cookie (Django-Default) ALS AUCH auf `User.preferred_language` persistiert.
@@ -835,7 +835,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Acct | fachkraft (`miriam`) | C || `test_account_profile.py` |
+| Acct | fachkraft (`miriam`) | C | — | `test_account_profile.py` |
 
 **Voraussetzung:** eingeloggt.
 
@@ -873,7 +873,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Acct | fachkraft (`miriam`) | C || `test_account_profile.py` |
+| Acct | fachkraft (`miriam`) | C | — | `test_account_profile.py` |
 
 **Voraussetzung:** ENT-ACCT-04 lief; `miriam.offline_key_salt` enthält einen Wert.
 
@@ -906,12 +906,12 @@
 <details open>
 <summary><strong>🛡️ SUDO — Re-Authentication (4 Cases)</strong></summary>
 
-**Routen:** `/sudo/` 
-**Views:** `src/core/views/sudo_mode.py` (`SudoModeView`) 
-**Services:** `src/core/services/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`) 
-**Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min) 
-**Genutzt von:** `MFADisableView` (LoginRequired+RequireSudoMode); ggf. DSGVO-Export, Pseudonym-Daten-Download (Refs #683) 
-**E2E-Coverage:** `test_security_hardening.py` (indirekt über MFA-Disable-Flow), Unit-Tests in `src/tests/test_sudo_mode.py` 
+**Routen:** `/sudo/`  
+**Views:** `src/core/views/sudo_mode.py` (`SudoModeView`)  
+**Services:** `src/core/services/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`)  
+**Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min)  
+**Genutzt von:** `MFADisableView` (LoginRequired+RequireSudoMode); ggf. DSGVO-Export, Pseudonym-Daten-Download (Refs #683)  
+**E2E-Coverage:** `test_security_hardening.py` (indirekt über MFA-Disable-Flow), Unit-Tests in `src/tests/test_sudo_mode.py`  
 **Spezial-Setup:**
 - In Tests deaktiviert: `settings/test.py` setzt `SUDO_MODE_ENABLED=False`. Für E2E-Tests bleibt es aktiv.
 - AuditAction `SUDO_MODE_ENTERED` existiert; `SUDO_MODE_EXIT` existiert **nicht** im Code (kein expliziter Exit-Audit beim Logout — `clear_sudo` ist still). Entsprechend testen wir nur `SUDO_MODE_ENTERED`.
@@ -957,7 +957,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C || `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
 
 **Voraussetzung:** ENT-SUDO-01; aktive Session mit Sudo-Mode.
 
@@ -1018,7 +1018,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C || `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
 
 **Voraussetzung:** ENT-SUDO-01 lief.
 
@@ -1053,18 +1053,18 @@
 <details open>
 <summary><strong>📲 PWA — Progressive Web App (5 Cases)</strong></summary>
 
-**Routen:** `/sw.js`, `/manifest.json`, `/offline/` 
-**Views:** `src/core/views/pwa.py` (`ServiceWorkerView`, `ManifestView`, `OfflineFallbackView`) 
-**Statisch:** `src/static/manifest.json`, `src/static/js/sw.js`, `src/templates/offline.html` 
-**Cache-Versionierung:** `CACHE_NAME = "anlaufstelle-v9"` in `sw.js` 
-**App-Shell:** `/static/css/styles.css`, Icons (192/512 PNG+SVG), `/offline/` 
+**Routen:** `/sw.js`, `/manifest.json`, `/offline/`  
+**Views:** `src/core/views/pwa.py` (`ServiceWorkerView`, `ManifestView`, `OfflineFallbackView`)  
+**Statisch:** `src/static/manifest.json`, `src/static/js/sw.js`, `src/templates/offline.html`  
+**Cache-Versionierung:** `CACHE_NAME = "anlaufstelle-v9"` in `sw.js`  
+**App-Shell:** `/static/css/styles.css`, Icons (192/512 PNG+SVG), `/offline/`  
 **Strategien (laut sw.js):**
 - Static-Assets: stale-while-revalidate (Refs #618)
 - HTML/HTMX-Navigation: network-first → Cache-Fallback → `/offline/`-Template (Refs #701)
 - POST/PUT auf URL_PATTERNS.QUEUE_PATTERNS bei Netzausfall: IndexedDB-Queue via `requestQueueAck` (Refs #573, #662)
 - Multipart-POST: kein Queue, sofortiger 503 mit „Datei-Upload erfordert Internetverbindung"
 - Attachment-/Export-Downloads: network-only (Refs #751)
-**E2E-Coverage:** `test_pwa_offline.py` 
+**E2E-Coverage:** `test_pwa_offline.py`  
 **Spezial-Setup:**
 - Service-Worker registriert sich nur über HTTPS (oder localhost). E2E-Server auf `https://localhost:8844/` ist OK.
 - Manifest muss von `/manifest.json` (Root-Scope!) geliefert werden, nicht aus `/static/`. Begründung im View-Docstring: Android Chrome akzeptiert sonst Scope `/` nicht.
@@ -1185,7 +1185,7 @@
 |---------|-------|---------|--------|-----|
 | Pwa | fachkraft (`miriam`) | C/F/S | ✓ | `test_pwa_offline.py` |
 
-**Voraussetzung:** SW registriert + aktiviert (siehe ENT-PWA-02); `/offline/` ist im App-Shell-Cache. **Seit #1544/#1499 :** `/offline/` ist kein Einstiegspunkt mehr, sondern nur noch terminaler Fallback — `/clients/`, `/workitems/` und `/` haben eigene Shells (siehe ENT-PWA-06).
+**Voraussetzung:** SW registriert + aktiviert (siehe ENT-PWA-02); `/offline/` ist im App-Shell-Cache. **Seit #1544/#1499:** `/offline/` ist kein Einstiegspunkt mehr, sondern nur noch terminaler Fallback — `/clients/`, `/workitems/` und `/` haben eigene Shells (siehe ENT-PWA-06).
 
 **Vorbereitung:**
 - Login als `miriam`.
@@ -1271,7 +1271,7 @@
 - Schritt 2: SW liefert die pk-lose Zeitstrom-Shell **in-place** an `/` aus. Gerendert wird `listOfflineEventsAggregated()` als chronologische „lokale Chronik" (neueste zuerst) über alle mitgenommenen Personen **plus** anonyme/personlose Einträge (als „Anonym" markiert); deutlicher Hinweis, dass nur die offline verfügbaren Vorgänge gezeigt werden, nicht die vollständige Historie der Einrichtung.
 - Schritt 3: **Online bleibt `/` der echte Zeitstrom-Cockpit** (kein Offline-Shell sichtbar) — der SW-Zweig (`isZeitstromRoot`) greift ausschließlich im `respondWith`-catch (Netzfehler), der Online-Login-Redirect an `/` ist unberührt.
 - Schritt 4: `/reports/` hat keine eigene Shell → Fallback auf `/offline/` (ENT-PWA-04) — die statische Seite „Keine lokale Ansicht verfügbar" mit Links zu `/clients/`, `/workitems/`, `/`.
-- Insgesamt: Mit ENT-PWA-04 (Rückbau) + diesem Test ist das Zielbild „Eine Welt" abgedeckt — Personen (`/clients/`,), Aufgaben (`/workitems/`) und Zeitstrom (`/`) rendern offline in gewohnter Optik an ihrer kanonischen Adresse; `/offline/` ist reiner technischer Fallback ohne Produktpfad.
+- Insgesamt: Mit ENT-PWA-04 (Rückbau) + diesem Test ist das Zielbild „Eine Welt" abgedeckt — Personen (`/clients/`), Aufgaben (`/workitems/`) und Zeitstrom (`/`) rendern offline in gewohnter Optik an ihrer kanonischen Adresse; `/offline/` ist reiner technischer Fallback ohne Produktpfad.
 
 **DSGVO/Security-Note:**
 - Beide Shells sind PII-frei im Markup (Alpine `x-show` auf vorberechneten Booleans, CSP-konform) — die eigentlichen Personendaten kommen ausschließlich client-seitig aus der verschlüsselten IndexedDB, kein Server-Round-Trip.
@@ -1286,10 +1286,10 @@
 <details open>
 <summary><strong>👥 CLIENT — Klient:innen-Management (16 Cases)</strong></summary>
 
-**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/api/clients/autocomplete/` 
-**Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`) 
-**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`) 
-**E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py` 
+**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/api/clients/autocomplete/`  
+**Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`)  
+**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
+**E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py`  
 **Spezial-Setup:** Cross-Facility-Tests benötigen `make seed FACILITIES=2` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_2` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
 
 ---
@@ -1680,7 +1680,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C || `test_clients.py`, `test_rls.py` |
+| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C | — | `test_clients.py`, `test_rls.py` |
 
 **Voraussetzung:** `make seed FACILITIES=2` — zwei parallele Facilities mit getrennten Admins.
 
@@ -1820,10 +1820,10 @@
 <details open>
 <summary><strong>📁 CASE — Fall-Lebenszyklus (12 Cases)</strong></summary>
 
-**Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/api/cases/for-client/` 
-**Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`) 
-**Services:** `src/core/services/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`) 
-**E2E-Coverage:** `test_cases.py` (TestCaseCRUD, TestCasePermissions) 
+**Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/api/cases/for-client/`  
+**Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`)  
+**Services:** `src/core/services/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`)  
+**E2E-Coverage:** `test_cases.py` (TestCaseCRUD, TestCasePermissions)  
 **Spezial-Setup:** Cases sind `Pflichtfeld client` (Refs #748). Schließen/Wiedereröffnen erfordert LEAD+. Assistenz-Rolle hat 0 Zugriff (`StaffRequiredMixin`).
 
 ---
@@ -2106,7 +2106,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / API | fachkraft | C || `test_cases.py` |
+| Fälle / API | fachkraft | C | — | `test_cases.py` |
 
 **Voraussetzung:** Person mit ≥ 2 offenen Fällen
 
@@ -2199,10 +2199,10 @@
 <details open>
 <summary><strong>🔄 EPI — Episoden (5 Cases)</strong></summary>
 
-**Routen:** `/cases/<case_pk>/episodes/new/`, `/cases/<case_pk>/episodes/<pk>/edit/`, `/cases/<case_pk>/episodes/<pk>/close/` 
-**Views:** `src/core/views/case_episodes.py` (`EpisodeCreateView`, `EpisodeUpdateView`, `EpisodeCloseView`) 
-**Services:** `src/core/services/episodes.py` (`create_episode`, `update_episode`, `close_episode`) 
-**E2E-Coverage:** `test_cases.py::TestEpisodes` 
+**Routen:** `/cases/<case_pk>/episodes/new/`, `/cases/<case_pk>/episodes/<pk>/edit/`, `/cases/<case_pk>/episodes/<pk>/close/`  
+**Views:** `src/core/views/case_episodes.py` (`EpisodeCreateView`, `EpisodeUpdateView`, `EpisodeCloseView`)  
+**Services:** `src/core/services/episodes.py` (`create_episode`, `update_episode`, `close_episode`)  
+**E2E-Coverage:** `test_cases.py::TestEpisodes`  
 **Spezial-Setup:** Episoden sind nur für `Case.Status=OPEN` anlegbar. Idempotenz beim Schließen (zweimal close → no-op).
 
 ---
@@ -2304,7 +2304,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Episoden / Permissions | assistenz | C || `test_cases.py::test_assistant_cannot_access_cases` (verwandt) |
+| Episoden / Permissions | assistenz | C | — | `test_cases.py::test_assistant_cannot_access_cases` (verwandt) |
 
 **Voraussetzung:** offener Fall mit bekannter UUID
 
@@ -2364,10 +2364,10 @@
 <details open>
 <summary><strong>🎯 GOAL — Wirkungsziele & Meilensteine (7 Cases)</strong></summary>
 
-**Routen:** `/cases/<case_pk>/goals/new/`, `/cases/<case_pk>/goals/<pk>/edit/`, `/cases/<case_pk>/goals/<pk>/toggle/`, `/cases/<case_pk>/goals/<goal_pk>/milestones/new/`, `/cases/<case_pk>/milestones/<pk>/toggle/`, `/cases/<case_pk>/milestones/<pk>/delete/` 
-**Views:** `src/core/views/case_goals.py` (`GoalCreateView`, `GoalUpdateView`, `GoalToggleView`, `MilestoneCreateView`, `MilestoneToggleView`, `MilestoneDeleteView`) 
-**Services:** `src/core/services/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`) 
-**E2E-Coverage:** `test_cases.py::TestGoalsAndMilestones` 
+**Routen:** `/cases/<case_pk>/goals/new/`, `/cases/<case_pk>/goals/<pk>/edit/`, `/cases/<case_pk>/goals/<pk>/toggle/`, `/cases/<case_pk>/goals/<goal_pk>/milestones/new/`, `/cases/<case_pk>/milestones/<pk>/toggle/`, `/cases/<case_pk>/milestones/<pk>/delete/`  
+**Views:** `src/core/views/case_goals.py` (`GoalCreateView`, `GoalUpdateView`, `GoalToggleView`, `MilestoneCreateView`, `MilestoneToggleView`, `MilestoneDeleteView`)  
+**Services:** `src/core/services/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`)  
+**E2E-Coverage:** `test_cases.py::TestGoalsAndMilestones`  
 **Spezial-Setup:** Alle Endpoints sind HTMX-only und rendern `core/cases/partials/goals_section.html`. Rate-Limit `RATELIMIT_FREQUENT` (60/min/User).
 
 ---
@@ -2581,10 +2581,10 @@
 <details open>
 <summary><strong>📝 EVT — Events / Dokumentation (10 Cases)</strong></summary>
 
-**Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/api/events/fields/` 
-**Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`) 
-**Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/event.py` (Re-Export-Stub Refs #777), `src/core/services/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/quick_templates.py` 
-**E2E-Coverage:** `test_quick_capture.py`, `test_fieldtemplate_default_value.py`, `test_min_contact_stage_anonymous.py` 
+**Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/api/events/fields/`  
+**Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`)  
+**Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/event.py` (Re-Export-Stub Refs #777), `src/core/services/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/quick_templates.py`  
+**E2E-Coverage:** `test_quick_capture.py`, `test_fieldtemplate_default_value.py`, `test_min_contact_stage_anonymous.py`  
 **Spezial-Setup:** Anonyme Events benötigen DocumentType ohne `min_contact_stage`. Sensitivity-Tests benötigen DocumentTypes der Stufen `normal` / `elevated` / `high`. Optimistic-Concurrency-Test braucht zwei parallele Browser-Tabs oder Inkognito-Fenster.
 
 ---
@@ -2900,11 +2900,11 @@
 <details open>
 <summary><strong>📎 ATT — Datei-Anhänge / File-Vault (16 Cases)</strong></summary>
 
-**Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/`, `/clients/<client-uuid>/attachments/<attachment-uuid>/download/`, `/cases/<case-uuid>/attachments/<attachment-uuid>/download/` 
-**Views:** `src/core/views/attachments.py` (`AttachmentListView`, `BaseAttachmentDownloadView` → `AttachmentDownloadView`, `ClientAttachmentDownloadView`, `CaseAttachmentDownloadView`) 
-**Services:** `src/core/services/file_vault/` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan` — alle owner-generisch), `src/core/services/attachments/` (`finalize_staged_files`, `apply_attachment_changes`, `discard_type_switch_file_chains`, `build_attachment_context`, `attachment_download_url`), `src/core/services/compliance` (`get_visible_attachment_for_owner_or_404`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet) 
-**Modell:** `Attachment` (bis M24 `EventAttachment`, Refs #1738) — eigene `facility_id`, genau **ein** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`), direkte RLS-Policy (Migrationen `0129`–`0131`, [ADR-039](../adr/039-owner-generische-dateianhaenge.md)) 
-**E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_attachments_client_case.py`, `test_file_vault.py`, `test_crypto_session.py` 
+**Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/`, `/clients/<client-uuid>/attachments/<attachment-uuid>/download/`, `/cases/<case-uuid>/attachments/<attachment-uuid>/download/`  
+**Views:** `src/core/views/attachments.py` (`AttachmentListView`, `BaseAttachmentDownloadView` → `AttachmentDownloadView`, `ClientAttachmentDownloadView`, `CaseAttachmentDownloadView`)  
+**Services:** `src/core/services/file_vault/` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan` — alle owner-generisch), `src/core/services/attachments/` (`finalize_staged_files`, `apply_attachment_changes`, `discard_type_switch_file_chains`, `build_attachment_context`, `attachment_download_url`), `src/core/services/compliance` (`get_visible_attachment_for_owner_or_404`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet)  
+**Modell:** `Attachment` (bis M24 `EventAttachment`, Refs #1738) — eigene `facility_id`, genau **ein** Owner (`event`/`client`/`case`, `CheckConstraint attachment_exactly_one_owner`), direkte RLS-Policy (Migrationen `0129`–`0131`, [ADR-039](../adr/039-owner-generische-dateianhaenge.md))  
+**E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_attachments_client_case.py`, `test_file_vault.py`, `test_crypto_session.py`  
 **Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). Im **lokalen** Stack läuft der Dienst seit #1062 nur noch auf Anforderung: `docker compose --profile clamav up -d clamav` — ohne Profil zieht `docker compose up` ihn nicht mehr hoch. EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben — seit M24 auch an Typen mit `entity_type` **Person** oder **Fall** (der Seed liefert dort keine mit, Wegwerf-Typen anlegen; Konvention `E2E-M24-*`).
 
 ---
@@ -3124,7 +3124,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft ||| `test_crypto_session.py` |
+| Attachments | fachkraft | — | — | `test_crypto_session.py` |
 
 **Voraussetzung:** `ENCRYPTION_KEYS` mit 2 Keys (Comma-separated).
 
@@ -3252,7 +3252,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft (`miriam`) + leitung (`emma`) | C || `test_attachment_download_owner_routes.py`, `test_compliance_attachment_gate.py` |
+| Attachments | fachkraft (`miriam`) + leitung (`emma`) | C | — | `test_attachment_download_owner_routes.py`, `test_compliance_attachment_gate.py` |
 
 **Voraussetzung:** zwei Personen-Typen — einer mit Sensibilität **hoch** (Typ-Ebene) und ein normaler Typ mit einem Datei-**Feld** der Sensibilität **hoch**. Je eine Person mit Datei anlegen (Upload als `emma`, weil Fachkräfte maximal `elevated` sehen).
 
@@ -3397,10 +3397,10 @@
 <details open>
 <summary><strong>📋 WI — WorkItems / Inbox (10 Cases)</strong></summary>
 
-**Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/api/workitems/<uuid>/status/` 
-**Views:** `src/core/views/workitems.py` (`WorkItemInboxView`, `WorkItemDetailView`), `src/core/views/workitem_actions.py` (`WorkItemCreateView`, `WorkItemUpdateView`, `WorkItemStatusUpdateView`), `src/core/views/workitem_bulk.py` (`WorkItemBulkStatusView`, `WorkItemBulkPriorityView`, `WorkItemBulkAssignView`) 
-**Services:** `src/core/services/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/locking.py` (`check_version_conflict`) 
-**E2E-Coverage:** `test_workitem_ui.py`, `test_workitem_edit.py`, `test_workitem_due_filter.py`, `test_workitems_deletion.py` 
+**Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/api/workitems/<uuid>/status/`  
+**Views:** `src/core/views/workitems.py` (`WorkItemInboxView`, `WorkItemDetailView`), `src/core/views/workitem_actions.py` (`WorkItemCreateView`, `WorkItemUpdateView`, `WorkItemStatusUpdateView`), `src/core/views/workitem_bulk.py` (`WorkItemBulkStatusView`, `WorkItemBulkPriorityView`, `WorkItemBulkAssignView`)  
+**Services:** `src/core/services/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/locking.py` (`check_version_conflict`)  
+**E2E-Coverage:** `test_workitem_ui.py`, `test_workitem_edit.py`, `test_workitem_due_filter.py`, `test_workitems_deletion.py`  
 **Spezial-Setup:** Inbox-Cap = `WORKITEM_INBOX_CAP` (Constants). Mobile-Inbox via Viewport-Resize (Playwright `iPhone 12`).
 
 ---
@@ -3687,10 +3687,10 @@
 <details open>
 <summary><strong>🗑️ DEL — Lösch-Anträge / Vier-Augen (6 Cases)</strong></summary>
 
-**Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/` 
-**Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`) 
-**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`) 
-**E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py` 
+**Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/`  
+**Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`)  
+**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
+**E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`  
 **Spezial-Setup:** Vier-Augen-Test braucht 2 separate Sessions (Antragsteller + Reviewer). DeletionRequest existiert pro `target_type` (Event vs. Client).
 
 ---
@@ -3870,11 +3870,11 @@
 <details open>
 <summary><strong>📦 RET — Aufbewahrungsrichtlinien (2 Cases)</strong></summary>
 
-**Routen:** `/retention/`, `/api/retention/<uuid>/approve/`, `/api/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/` 
-**Views:** `src/core/views/retention.py` 
-**Services:** `src/core/services/retention.py` 
-**Management-Commands:** `enforce_retention`, `reencrypt_fields` 
-**E2E-Coverage:** `test_retention_dashboard.py` 
+**Routen:** `/retention/`, `/api/retention/<uuid>/approve/`, `/api/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/`  
+**Views:** `src/core/views/retention.py`  
+**Services:** `src/core/services/retention.py`  
+**Management-Commands:** `enforce_retention`, `reencrypt_fields`  
+**E2E-Coverage:** `test_retention_dashboard.py`  
 **Spezial-Setup:** Backdate-Daten via SQL (`UPDATE core_event SET created_at = NOW() - INTERVAL '400 days'`); `enforce_retention --simulate-date=` für Trockenlauf.
 
 ---
@@ -3944,9 +3944,9 @@
 <details open>
 <summary><strong>🔎 SRCH — Suche (6 Cases)</strong></summary>
 
-**Routen:** `/search/`, Header-Typeahead via HTMX (`/search/typeahead/`) 
-**Views:** `src/core/views/search.py` 
-**Services:** `src/core/services/search.py` 
+**Routen:** `/search/`, Header-Typeahead via HTMX (`/search/typeahead/`)  
+**Views:** `src/core/views/search.py`  
+**Services:** `src/core/services/search.py`  
 **E2E-Coverage:** `test_clients_search.py`, `test_filters.py`, `test_fuzzy_search.py`
 
 ---
@@ -4131,9 +4131,9 @@
 <details open>
 <summary><strong>📰 ZS — Zeitstrom (5 Cases)</strong></summary>
 
-**Routen:** `/` (Home/Zeitstrom), `/zeitstrom/feed/` (HTMX-Partial) 
-**Views:** `src/core/views/zeitstrom.py` 
-**Services:** `src/core/services/feed.py` 
+**Routen:** `/` (Home/Zeitstrom), `/zeitstrom/feed/` (HTMX-Partial)  
+**Views:** `src/core/views/zeitstrom.py`  
+**Services:** `src/core/services/feed.py`  
 **E2E-Coverage:** `test_zeitstrom_enrichment.py`, `test_zeitstrom_events.py`, `test_zeitstrom_filter_bug.py`
 
 ---
@@ -4285,9 +4285,9 @@
 <details open>
 <summary><strong>🤝 HOV — Übergabe (5 Cases)</strong></summary>
 
-**Routen:** `/uebergabe/`, `/uebergabe/print/` 
-**Views:** `src/core/views/handover.py` 
-**Services:** `src/core/services/handover.py` 
+**Routen:** `/uebergabe/`, `/uebergabe/print/`  
+**Views:** `src/core/views/handover.py`  
+**Services:** `src/core/services/handover.py`  
 **E2E-Coverage:** `test_handover.py`
 
 ---
@@ -4442,10 +4442,10 @@
 <details open>
 <summary><strong>📊 STAT — Statistik (15 Cases)</strong></summary>
 
-**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/sample-report-1/`, `/statistics/reports/panel/`, `/statistics/reports/export/` 
-**Views:** `src/core/views/statistics.py` 
-**Services:** `src/core/services/statistics.py`, `src/core/services/export.py`, `src/core/reporting/` (Registry + Backends) 
-**Management-Commands:** `create_statistics_snapshots` 
+**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/sample-report-1/`, `/statistics/reports/panel/`, `/statistics/reports/export/`  
+**Views:** `src/core/views/statistics.py`  
+**Services:** `src/core/services/statistics.py`, `src/core/services/export.py`, `src/core/reporting/` (Registry + Backends)  
+**Management-Commands:** `create_statistics_snapshots`  
 **E2E-Coverage:** `test_export_statistics.py`, `test_statistics_charts.py`, `test_statistics_dashboard.py`, `test_statistics_snapshot.py`, `test_reporting_backends.py`
 
 ---
@@ -4888,11 +4888,11 @@
 <details open>
 <summary><strong>🔍 AUDIT — Audit-Log (5 Cases)</strong></summary>
 
-**Routen:** `/audit/`, `/audit/<uuid>/` 
-**Views:** `src/core/views/audit.py` (AuditLogListView, AuditLogDetailView) 
-**Services:** `src/core/services/audit.py`, `src/core/services/audit_hash.py` 
-**Models:** `src/core/models/audit.py` (AuditLog, append-only, immutable) 
-**E2E-Coverage:** `test_audit.py`, `test_audit_detail.py` 
+**Routen:** `/audit/`, `/audit/<uuid>/`  
+**Views:** `src/core/views/audit.py` (AuditLogListView, AuditLogDetailView)  
+**Services:** `src/core/services/audit.py`, `src/core/services/audit_hash.py`  
+**Models:** `src/core/models/audit.py` (AuditLog, append-only, immutable)  
+**E2E-Coverage:** `test_audit.py`, `test_audit_detail.py`  
 **Spezial-Setup:** Append-Only-Probe via `python manage.py shell`. HMAC-Key aus Settings (`AUDIT_HMAC_KEY`).
 
 ---
@@ -5061,11 +5061,11 @@
 <details open>
 <summary><strong>📜 DSGVO — DSGVO-Paket (10 Cases)</strong></summary>
 
-**Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/` 
-**Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView) 
-**Services:** `src/core/services/dsgvo_package.py` 
-**Command:** `src/core/management/commands/generate_dsgvo_package.py` 
-**E2E-Coverage:** `test_dsgvo_package.py` 
+**Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/`  
+**Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView)  
+**Services:** `src/core/services/dsgvo_package.py`  
+**Command:** `src/core/management/commands/generate_dsgvo_package.py`  
+**E2E-Coverage:** `test_dsgvo_package.py`  
 **Spezial-Setup:** Sudo-Mode aktiv (Re-Auth innerhalb 15 Min). Markdown-Templates in `src/templates/dsgvo/`.
 
 ---
@@ -5407,10 +5407,10 @@
 <details open>
 <summary><strong>📡 OFFL — Offline & PWA (12 Cases)</strong></summary>
 
-**Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js` 
-**Views:** `src/core/views/offline.py` (OfflineBootstrapView, OfflineBundleView, OfflineClientDetailView, OfflineConflictListView) 
-**Services:** `src/core/services/system/offline.py` 
-**E2E-Coverage:** `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py` 
+**Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js`  
+**Views:** `src/core/views/offline.py` (OfflineBootstrapView, OfflineBundleView, OfflineClientDetailView, OfflineConflictListView)  
+**Services:** `src/core/services/system/offline.py`  
+**E2E-Coverage:** `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py`  
 **Spezial-Setup:** Service Worker im Browser, IndexedDB, DevTools → Application-Tab. Streetwork-Geräte simulieren (mobile Viewport 375x667).
 
 ---
@@ -5849,7 +5849,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Offline | facility_admin + fachkraft | C (2 Profile) |||
+| Offline | facility_admin + fachkraft | C (2 Profile) | — | — |
 
 **Voraussetzung:** fachkraft A mit aktivem Offline-Bundle, `assistenz`-Rolle.
 
@@ -5874,7 +5874,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Offline | fachkraft + admin | C | ✓ ||
+| Offline | fachkraft + admin | C | ✓ | — |
 
 **Voraussetzung:** Lease aktiv, IndexedDB gefüllt.
 
@@ -5901,7 +5901,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Offline | fachkraft + leitung | C (2 Profile) |||
+| Offline | fachkraft + leitung | C (2 Profile) | — | — |
 
 **Schritte:**
 1. fachkraft A: offline gehen.
@@ -5923,7 +5923,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Offline | fachkraft + admin | C |||
+| Offline | fachkraft + admin | C | — | — |
 
 **Schritte:**
 1. fachkraft A: offline mit Event E2 (älter, kurz vor Retention-Frist).
@@ -5946,7 +5946,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Offline | fachkraft + facility_admin | C |||
+| Offline | fachkraft + facility_admin | C | — | — |
 
 **Schritte:**
 1. fachkraft A: offline gehen, Event mit `.docx`-Anhang lokal vorbereiten (Client hat noch `docx` in `allowed_file_types`).
@@ -5967,9 +5967,9 @@
 <details open>
 <summary><strong>⚙️ SYS — System & Operations (6 Cases)</strong></summary>
 
-**Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de` 
-**Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py` 
-**E2E-Coverage:** `test_security_hardening.py` 
+**Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de`  
+**Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py`  
+**E2E-Coverage:** `test_security_hardening.py`  
 **Spezial-Setup:** Health prüft externe Dienste (ClamAV, Redis, Backup-Status). CSP-Report-Endpoint mit Rate-Limit.
 
 ---
@@ -6208,7 +6208,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestDbRoleChecks` |
+| Compliance | super_admin | C | — | `src/tests/test_compliance_service.py::TestDbRoleChecks` |
 
 **Code-Referenz:** [`src/core/services/compliance/db_roles.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/db_roles.py) `_db_role_checks`, ruft `check_db_roles()` aus #902.
 
@@ -6237,7 +6237,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestBackupChecks` |
+| Compliance | super_admin | C | — | `src/tests/test_compliance_service.py::TestBackupChecks` |
 
 **Code-Referenz:** `_backup_checks` + `system_health.last_backup_info()`.
 
@@ -6257,7 +6257,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestClamavChecks` |
+| Compliance | super_admin | C | — | `src/tests/test_compliance_service.py::TestClamavChecks` |
 
 **Code-Referenz:** `_clamav_checks` ruft `virus_scan.ping()` + `virus_scan.signature_info()`.
 
@@ -6280,7 +6280,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestRetentionChecks` |
+| Compliance | super_admin | C | — | `src/tests/test_compliance_service.py::TestRetentionChecks` |
 
 **Code-Referenz:** `_retention_checks` liest neuesten `RETENTION_RUN_COMPLETED`-AuditLog (Refs #919 C2).
 
@@ -6340,7 +6340,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C/F |||
+| Accessibility | fachkraft | C/F | — | — |
 
 **Automatisiert durch:** `src/tests/e2e/test_accessibility.py::TestSkipLink` (Skip-Link ist auf `/`, `/events/new/`, `/clients/` der erste Tab-Stopp und springt nach `#main-content`; Login/Passwort-Reset sind bewusst ausgenommen, siehe Erwartung), `src/tests/test_a11y_semantics.py::TestNavigationDisclosureState` (`Escape` schließt Sidebar-„Neu erstellen" und mobiles „Mehr"), `src/tests/test_a11y_semantics.py::TestOverflowMenuState` (`Escape` schließt das ⋮-Menü **und** bindet den Fokus zurück auf `x-ref="trigger"`).
 
@@ -6366,7 +6366,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C/F/S |||
+| Accessibility | fachkraft | C/F/S | — | — |
 
 **Automatisiert durch:** keine — die tatsächliche Sichtbarkeit eines Fokus-Rings auf einer bestimmten Hintergrundfarbe ist weder per axe noch im Quelltext-Audit prüfbar; laut `docs/accessibility-audit.md` § 4.2 (2.4.7) ist das Kriterium „im Quelltext korrekt angelegt, die Sichtbarkeit auf farbigen Flächen ist aber zu bestätigen" — bleibt reiner Handtest.
 
@@ -6388,7 +6388,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C |||
+| Accessibility | fachkraft | C | — | — |
 
 **Automatisiert durch:** `src/tests/e2e/test_accessibility.py::TestAxeFormularzustaende::test_event_form_with_dynamic_fields` (axe-Lauf auf dem frisch per HTMX geswappten Feldblock, `page_key=event_create_dynamic_fields`), `src/tests/test_a11y_mechanical_templates.py::test_condition_editor_uses_slot_specific_partial_ids` und `::test_condition_board_create_and_edit_forms_have_unique_label_targets` (nachgeladene Felder behalten eindeutige, mit `<label for>` verknüpfte IDs — Voraussetzung für eine sinnvolle Tab-Reihenfolge nach dem Swap).
 
@@ -6411,7 +6411,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C/F |||
+| Accessibility | fachkraft | C/F | — | — |
 
 > **Erwartung korrigiert (B3):** Der ursprüngliche Fall verlangte eine Fokusfalle. Für den einzigen echten Dialog der Anwendung (`components/_inline_create_modal.html`, Inline-Personenanlage im Kontaktformular) ist das laut `docs/accessibility-audit.md` § 4 (A-03) bewusst **nicht** umgesetzt: Rolle und Beschriftung sind korrekt, ein Fokus-Einschluss ist ARIA-Praxisempfehlung statt Erfolgskriterium, und die sichtbare „Abbrechen"-Schaltfläche hält die Tastaturbedienung offen. Geprüft wird deshalb Rolle/Name plus die tatsächlich vorhandene Bedienbarkeit, nicht mehr eine Fokusfalle.
 
@@ -6436,7 +6436,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C |||
+| Accessibility | fachkraft | C | — | — |
 
 **Automatisiert durch:** `src/tests/e2e/test_accessibility.py` (axe-Regeln u. a. `button-name`/`aria-*` über alle 25 Seiten-Zustände der Seiten-Matrix, Bestandsschutz-Baseline), `src/tests/test_a11y_mechanical_templates.py::test_favorite_icon_has_text_alternative` (Favoriten-Stern mit sr-only-Text), `::test_shared_list_controls_have_specific_names` (Listen-Icon-Buttons mit spezifischem Namen), `src/tests/test_a11y_semantics.py::TestOverflowMenuState` (⋮-Icon-Button mit `aria-haspopup`/`aria-expanded`/`aria-controls`).
 
@@ -6457,7 +6457,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C |||
+| Accessibility | fachkraft | C | — | — |
 
 **Automatisiert durch:** `src/tests/e2e/test_accessibility.py::TestAxeFormularzustaende::test_event_form_validation_errors` (axe-Lauf auf der server-gerenderten Fehlerdarstellung, `page_key=event_create_errors`), `src/tests/test_a11y_mechanical_templates.py::test_password_input_supports_error_relationships`, `::test_case_controls_have_accessible_names_and_errors`, `::test_error_free_password_pages_have_no_dangling_describedby`, `src/tests/test_a11y_semantics.py::TestAutocompleteErrorWiring` (optionales wie Pflicht-Personenfeld verknüpfen `aria-invalid`/`aria-describedby` korrekt mit dem Fehlertext).
 
@@ -6481,7 +6481,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C |||
+| Accessibility | fachkraft | C | — | — |
 
 **Automatisiert durch:** `src/tests/e2e/test_accessibility.py` (axe-Regel `color-contrast` über alle 25 Seiten-Zustände, Bestandsschutz-Baseline), `src/tests/test_a11y_mechanical_templates.py::test_colored_action_buttons_use_conforming_backgrounds`, `::test_event_and_handover_low_opacity_text_is_removed`, `::test_handover_highlight_timestamp_uses_conforming_text_token`, `::test_shared_border_token_meets_the_calculated_contrast_target`, `src/tests/test_a11y_semantics.py::TestTimeFilterTabs::test_active_tab_time_span_switches_to_the_readable_colour`.
 
@@ -6503,7 +6503,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C/F |||
+| Accessibility | fachkraft | C/F | — | — |
 
 **Automatisiert durch:** keine — `prefers-reduced-motion` ist nicht Teil des axe-Regelumfangs (`docs/accessibility-audit.md` § 1.2: `wcag2a`/`wcag2aa`/`wcag21a`/`wcag21aa`) und war nicht Gegenstand des Quelltext-Audits; bleibt reiner Handtest.
 
@@ -6545,7 +6545,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | NVDA/VoiceOver |||
+| Accessibility | fachkraft | NVDA/VoiceOver | — | — |
 
 **Automatisiert durch:** keine — Ansagen sind nur mit echtem Screenreader beurteilbar; die zugrundeliegende Semantik wird von `src/tests/test_a11y_semantics.py` (u. a. `TestHistoryEntryDisclosure`, `TestOverflowMenuState`, `TestTimeFilterTabs`) und `src/tests/e2e/test_accessibility.py` (axe je Seiten-Zustand) belegt.
 
@@ -6570,7 +6570,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | NVDA/VoiceOver + C |||
+| Accessibility | fachkraft | NVDA/VoiceOver + C | — | — |
 
 **Automatisiert durch:** `src/tests/test_a11y_semantics.py::TestListResultAnnouncement` (Live-Region liegt außerhalb des Swap-Ziels, trägt `role="status"`/`aria-live="polite"`, `data-hx-no-focus` verhindert die Doppelansage durch `focus-management.js`, die HTMX-Partial-Antwort liefert die Region **nicht** doppelt mit), `tests/js/focus-management.test.mjs` (Abschnitt „Trefferansage (A11Y-035/036)": Ansage feuert trotz `data-hx-no-focus`, auch während laufender Live-Suche, genau einmal auch bei gleicher Trefferzahl).
 
@@ -6594,7 +6594,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C + NVDA/VoiceOver |||
+| Accessibility | fachkraft | C + NVDA/VoiceOver | — | — |
 
 **Automatisiert durch:** `src/tests/test_a11y_semantics.py::TestWorkitemClientAutocomplete` (Refs #1989; `role="combobox"`, `aria-autocomplete="list"`, `aria-controls`, die vier Tastatur-Handler Pfeil-runter/-hoch/Enter/Escape, `role="listbox"`/`role="option"` mit `aria-selected`, optionales Feld ohne `aria-required`), `::TestAutocompleteErrorWiring` (Fehlerverknüpfung bei ungültigem, optionalem Personenfeld).
 
@@ -6619,10 +6619,10 @@
 <details open>
 <summary><strong>🌐 I18N — Sprachen (DE/EN) (5 Cases)</strong></summary>
 
-**Routen:** alle (Sprachdimension) · `/i18n/setlang/` 
-**Views/Middleware:** `src/core/middleware/user_language.py` (`UserLanguageMiddleware`), `src/core/views/auth.py` (`set_user_language`) 
-**Kataloge:** `src/locale/de/LC_MESSAGES/django.po`, `src/locale/en/LC_MESSAGES/django.po` 
-**E2E-Coverage:** `test_i18n_locale.py`, `test_middleware_user_language.py` 
+**Routen:** alle (Sprachdimension) · `/i18n/setlang/`  
+**Views/Middleware:** `src/core/middleware/user_language.py` (`UserLanguageMiddleware`), `src/core/views/auth.py` (`set_user_language`)  
+**Kataloge:** `src/locale/de/LC_MESSAGES/django.po`, `src/locale/en/LC_MESSAGES/django.po`  
+**E2E-Coverage:** `test_i18n_locale.py`, `test_middleware_user_language.py`  
 **Zweck:** systematische Sprach-Cross-Coverage über alle Bereiche — ergänzt das bestehende [ENT-ACCT-02](#tc-id-ent-acct-02--sprache-wechseln-deen-session-cookie--user-pref) (Switch-Mechanik) um Katalog-Vollständigkeit, Persistenz und Lokalisierung. Refs #973.
 
 ### TC-ID: ENT-I18N-01 — DE→EN-Umschaltung persistiert über Navigation & Re-Login
@@ -6651,7 +6651,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| I18N | fachkraft (`miriam`) | C |||
+| I18N | fachkraft (`miriam`) | C | — | — |
 
 **Voraussetzung:** Sprache auf EN, alle Bereiche durchklicken.
 
@@ -6671,7 +6671,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| I18N | anonym | C || `test_middleware_user_language.py` |
+| I18N | anonym | C | — | `test_middleware_user_language.py` |
 
 **Schritte:**
 1. Ausgeloggt `/login/` mit `Accept-Language: en` aufrufen.
@@ -6687,7 +6687,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| I18N | fachkraft (`miriam`) | C/F |||
+| I18N | fachkraft (`miriam`) | C/F | — | — |
 
 **Schritte:**
 1. Event-/Personen-Formular öffnen, Felder teilweise füllen.
@@ -6705,7 +6705,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| I18N | fachkraft (`miriam`) | C |||
+| I18N | fachkraft (`miriam`) | C | — | — |
 
 **Schritte:**
 1. Personen-Liste in DE betrachten (Datum „25. Mai 2026").
@@ -6721,11 +6721,11 @@
 <details open>
 <summary><strong>🧩 CONFIG — Formular-Konfiguration (25 Cases)</strong></summary>
 
-**Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/groups/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/` 
-**Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin` 
-**Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`) 
-**Models:** `DocumentType` (`system_type`, `report_key`), `FieldTemplate` (`slug`, `report_key`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`) 
-**E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py` 
+**Routen:** `/config/document-types/`, `/config/document-types/new/`, `/config/document-types/<uuid>/`, `/config/document-types/<uuid>/edit/`, `/config/document-types/<uuid>/delete/`, `/config/document-types/<uuid>/fields/add/`, `/config/document-types/<uuid>/fields/<uuid>/remove/`, `/config/document-types/<uuid>/groups/new/`, `/config/document-types/<uuid>/groups/<uuid>/edit/`, `/config/document-types/<uuid>/groups/<uuid>/delete/`, `/config/document-types/<uuid>/reorder/groups/`, `/config/document-types/<uuid>/reorder/fields/`, `/config/document-types/<uuid>/reorder/move-field/`, `/config/field-templates/`, `/config/field-templates/new/`, `/config/field-templates/<uuid>/edit/`, `/config/field-templates/<uuid>/delete/`, `/config/field-templates/<uuid>/toggle-active/`  
+**Views:** `src/core/views/config/document_types.py` (`ConfigDocumentType{List,Create,Detail,Update,Delete}View`, `ConfigDocTypeField{Add,Remove}View`), `src/core/views/config/field_templates.py` (`ConfigFieldTemplate{List,Create,Update,Delete,Toggle}View`), `src/core/views/config/field_groups.py` (`ConfigFieldGroup{Create,Update,Delete}View`), `src/core/views/config/reorder.py` (`ConfigReorderGroupsView`, `ConfigReorderFieldsView`, `ConfigMoveFieldView`) — alle `FacilityAdminRequiredMixin`  
+**Services:** `src/core/services/config.py` (`save_document_type`, `delete_document_type`, `save_field_template`, `field_template_delete_blockers` + `field_template_trashed_client_count` (Papierkorb-Anteil), `delete_field_template`, `set_field_template_active`, `save_field_group`, `delete_field_group`, `add_field_to_doctype`, `remove_field_from_doctype`, `reorder_groups`, `reorder_fields`, `move_field`, Exception `ConfigDeleteBlocked`)  
+**Models:** `DocumentType` (`system_type`, `report_key`), `FieldTemplate` (`slug`, `report_key`, `is_active`), `FieldGroup` (transitiv facility-gescoped über `document_type.facility`), `DocumentTypeField` (`sort_order`, `field_group`)  
+**E2E-Coverage:** `test_navigation_config.py`, `test_config_document_types.py`, `test_config_field_templates.py`, `test_config_field_groups.py`, `test_config_reorder.py`, `test_config_service.py`, `test_event_form_groups.py`, `test_seed.py`; Rollen-/IDOR-Vollmatrix generisch über `test_authz_idor.py`; RLS-Transitivität über `test_rls_functional.py`  
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) ist Voraussetzung für alle CRUD-Cases — das Rollen-Gate selbst wird negativ mit `emma` (lead), `miriam` (staff), `lena` (assistant) und `superadmin` getestet.
 - Für die Cross-Facility-/RLS-Cases zusätzlich `admin_2` (Facility 2) — `make seed FACILITIES=2` bzw. `--scale medium`.
@@ -6760,7 +6760,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration | lead/staff/assistant/super_admin | C || `test_config_document_types.py`, `test_authz_idor.py` |
+| Konfiguration | lead/staff/assistant/super_admin | C | — | `test_config_document_types.py`, `test_authz_idor.py` |
 
 **Vorbereitung:**
 - Mit `emma` (lead) eingeloggt.
@@ -7169,7 +7169,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Audit | admin | C || `test_config_service.py`, `test_config_document_types.py` |
+| Konfiguration / Audit | admin | C | — | `test_config_service.py`, `test_config_document_types.py` |
 
 **Vorbereitung:**
 - Mit `admin` eingeloggt, Zugriff auf `/audit/`.
@@ -7193,7 +7193,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / RLS | admin (F1) + admin_2 (F2) | C || `test_authz_idor.py`, `test_rls_functional.py` |
+| Konfiguration / RLS | admin (F1) + admin_2 (F2) | C | — | `test_authz_idor.py`, `test_rls_functional.py` |
 
 **Voraussetzung:** `make seed FACILITIES=2` (zwei Facilities mit je eigenem admin).
 
@@ -7293,12 +7293,12 @@
 <details open>
 <summary><strong>🔀 COND — Bedingte Feldlogik (6 Cases)</strong></summary>
 
-**Routen:** `/config/document-types/<uuid>/` (Abschnitt „Bedingte Sichtbarkeit"), `/config/document-types/<uuid>/conditions/new/`, `/config/document-types/<uuid>/conditions/<uuid>/edit/`, `/config/document-types/<uuid>/conditions/<uuid>/delete/`, `/config/document-types/<uuid>/conditions/value-input/`, `/events/new/` + `/partials/events/fields/` (Live-Sichtbarkeit im Event-Formular) 
-**Views:** `src/core/views/config/conditions.py` (`ConditionCreateView`, `ConditionUpdateView`, `ConditionDeleteView`, `ConditionValueInputView`, alle `FacilityAdminRequiredMixin`); `src/core/views/events.py` (`EventFieldsPartialView`, Event-CRUD-Views mit `DynamicEventDataForm`) 
-**Services:** `src/core/services/config.py` (`create_field_condition`, `update_field_condition`, `delete_field_condition`); `src/core/services/conditions.py` (`evaluate_conditions`, `find_cycle`, `normalize_value`, `build_conditions_payload` — gemeinsamer Evaluator FE/BE, ADR-035) 
-**Models:** `FieldCondition` (`target_field`, `depends_on_field`, `operator`, `value`, `group_index`; kein eigener facility-FK, transitiv über `target_field.document_type.facility`, RLS doppelt-transitiv) 
-**Frontend:** `src/static/js/alpine/conditions.js` (`window.AnlaufstelleConditions`, `Alpine.data("conditionEvaluator"/"conditionalField")`) — CSP-safe (kein `unsafe-eval`), Payload via `json_script` 
-**E2E-Coverage:** `test_field_conditions.py`, `test_condition_parity.py`; Unit-/Modell-/Formularsuiten: `test_conditions_evaluator.py`, `test_field_condition_model.py`, `test_event_form_conditions.py`, `test_config_conditions.py` 
+**Routen:** `/config/document-types/<uuid>/` (Abschnitt „Bedingte Sichtbarkeit"), `/config/document-types/<uuid>/conditions/new/`, `/config/document-types/<uuid>/conditions/<uuid>/edit/`, `/config/document-types/<uuid>/conditions/<uuid>/delete/`, `/config/document-types/<uuid>/conditions/value-input/`, `/events/new/` + `/partials/events/fields/` (Live-Sichtbarkeit im Event-Formular)  
+**Views:** `src/core/views/config/conditions.py` (`ConditionCreateView`, `ConditionUpdateView`, `ConditionDeleteView`, `ConditionValueInputView`, alle `FacilityAdminRequiredMixin`); `src/core/views/events.py` (`EventFieldsPartialView`, Event-CRUD-Views mit `DynamicEventDataForm`)  
+**Services:** `src/core/services/config.py` (`create_field_condition`, `update_field_condition`, `delete_field_condition`); `src/core/services/conditions.py` (`evaluate_conditions`, `find_cycle`, `normalize_value`, `build_conditions_payload` — gemeinsamer Evaluator FE/BE, ADR-035)  
+**Models:** `FieldCondition` (`target_field`, `depends_on_field`, `operator`, `value`, `group_index`; kein eigener facility-FK, transitiv über `target_field.document_type.facility`, RLS doppelt-transitiv)  
+**Frontend:** `src/static/js/alpine/conditions.js` (`window.AnlaufstelleConditions`, `Alpine.data("conditionEvaluator"/"conditionalField")`) — CSP-safe (kein `unsafe-eval`), Payload via `json_script`  
+**E2E-Coverage:** `test_field_conditions.py`, `test_condition_parity.py`; Unit-/Modell-/Formularsuiten: `test_conditions_evaluator.py`, `test_field_condition_model.py`, `test_event_form_conditions.py`, `test_config_conditions.py`  
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) ist Voraussetzung für den Regel-Editor (Config-UI); das Event-Formular selbst nutzt `miriam` (fachkraft) analog zum regulären Dokumentationsfluss.
 - Wegwerf-DocType-Konvention `E2E-Cond-<uuid4>` mit mindestens zwei Feldern (mindestens eine zulässige Quelle) — bewusst kein Seed-DocType mit vorkonfigurierten Bedingungen (Scope-Auslassung E20).
@@ -7334,7 +7334,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C || `test_field_conditions.py`, `test_field_condition_model.py`, `test_config_conditions.py` |
+| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C | — | `test_field_conditions.py`, `test_field_condition_model.py`, `test_config_conditions.py` |
 
 **Vorbereitung:**
 - ENT-COND-01 durchgeführt (Regel „Quelle → Ziel" existiert bereits).
@@ -7402,7 +7402,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Events | admin + fachkraft (`miriam`) | C || `test_event_form_conditions.py`, `test_conditions_evaluator.py` |
+| Konfiguration / Events | admin + fachkraft (`miriam`) | C | — | `test_event_form_conditions.py`, `test_conditions_evaluator.py` |
 
 **Vorbereitung:**
 - Wegwerf-DocType mit drei Feldern: A (Zahl) → B (Text, Pflicht, Bedingung „A ist größer als 10") → C (Text, Pflicht, Bedingung „B ist nicht leer").
@@ -7426,7 +7426,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C || `test_field_conditions.py`, `test_field_condition_model.py`, `test_config_conditions.py` |
+| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C | — | `test_field_conditions.py`, `test_field_condition_model.py`, `test_config_conditions.py` |
 
 **Vorbereitung:**
 - Wegwerf-DocType zusätzlich um ein verschlüsseltes Textfeld und ein `file`-Feld ergänzt.
@@ -7446,13 +7446,13 @@
 <details open>
 <summary><strong>🧩 CLIENT-DYN / CASE-DYN — Dynamische Zusatzfelder an Person und Fall (6 Cases)</strong></summary>
 
-**Routen:** `/clients/new/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/` (Abschnitt „Zusatzfelder"), `/partials/clients/fields/`; `/cases/new/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/`, `/partials/cases/fields/`; Konfiguration unter `/config/document-types/` (Typ mit `entity_type` Person/Fall anlegen) 
-**Views:** `src/core/views/clients.py` (`ClientCreateView`, `ClientUpdateView`, `ClientDetailView`, `ClientFieldsPartialView`); `src/core/views/cases.py` (`CaseCreateView`, `CaseUpdateView`, `CaseDetailView`, `CaseFieldsPartialView`) 
-**Forms:** `src/core/forms/dynamic.py` (`DynamicDataForm` — entity-neutrale Basis, `grouped_fields()`; das Flag `exclude_file_fields` ist mit M24 ersatzlos entfallen); `src/core/forms/clients.py` (`DynamicClientDataForm`, `ClientForm` mit hx-get-Typ-Select); `src/core/forms/cases.py` (Fall-Pendant) 
-**Services:** `src/core/services/dynamic_data.py` (`merge_dynamic_data` — E11-Typwechsel-Policy, `validate_data_json`, `remove_restricted_fields`, `decrypt_dynamic_text_data`); `src/core/services/client/main.py` (`_check_client_document_type`), `src/core/services/case/cases.py` (`_check_case_document_type`) 
-**Models:** `Client.document_type`/`Client.data_json`, `Case.document_type`/`Case.data_json` (Migrationen `0118`/`0119`, `on_delete=PROTECT`); Verschlüsselung über `DynamicDataEncryptionMixin` (Cache an `document_type_id` gebunden) 
-**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über Unit-/View-Suiten `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py`, `test_case_dynamic_data.py`, `test_forms_dynamic.py`, `test_client_export.py` 
-**Hintergrund:** [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) (entity_type, E11-Typwechsel; der dort in §9 beschriebene mehrschichtige FILE-Ausschluss „E8" ist seit M24 abgelöst), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) (Datei-Felder an allen drei Entitäten), [`docs/packages.md`](../packages.md) 
+**Routen:** `/clients/new/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/` (Abschnitt „Zusatzfelder"), `/partials/clients/fields/`; `/cases/new/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/`, `/partials/cases/fields/`; Konfiguration unter `/config/document-types/` (Typ mit `entity_type` Person/Fall anlegen)  
+**Views:** `src/core/views/clients.py` (`ClientCreateView`, `ClientUpdateView`, `ClientDetailView`, `ClientFieldsPartialView`); `src/core/views/cases.py` (`CaseCreateView`, `CaseUpdateView`, `CaseDetailView`, `CaseFieldsPartialView`)  
+**Forms:** `src/core/forms/dynamic.py` (`DynamicDataForm` — entity-neutrale Basis, `grouped_fields()`; das Flag `exclude_file_fields` ist mit M24 ersatzlos entfallen); `src/core/forms/clients.py` (`DynamicClientDataForm`, `ClientForm` mit hx-get-Typ-Select); `src/core/forms/cases.py` (Fall-Pendant)  
+**Services:** `src/core/services/dynamic_data.py` (`merge_dynamic_data` — E11-Typwechsel-Policy, `validate_data_json`, `remove_restricted_fields`, `decrypt_dynamic_text_data`); `src/core/services/client/main.py` (`_check_client_document_type`), `src/core/services/case/cases.py` (`_check_case_document_type`)  
+**Models:** `Client.document_type`/`Client.data_json`, `Case.document_type`/`Case.data_json` (Migrationen `0118`/`0119`, `on_delete=PROTECT`); Verschlüsselung über `DynamicDataEncryptionMixin` (Cache an `document_type_id` gebunden)  
+**E2E-Coverage:** keine eigene E2E-Suite — Abdeckung über Unit-/View-Suiten `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py`, `test_case_dynamic_data.py`, `test_forms_dynamic.py`, `test_client_export.py`  
+**Hintergrund:** [ADR-037](../adr/037-konfigurationspakete-dynamische-felder.md) (entity_type, E11-Typwechsel; der dort in §9 beschriebene mehrschichtige FILE-Ausschluss „E8" ist seit M24 abgelöst), [ADR-039](../adr/039-owner-generische-dateianhaenge.md) (Datei-Felder an allen drei Entitäten), [`docs/packages.md`](../packages.md)  
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) legt die Wegwerf-Typen an, die eigentlichen Fälle laufen als **fachkraft** (`miriam`); für die Sensitivitäts-Probe zusätzlich **assistenz** (`lena`).
 - Wegwerf-Typen nach Konvention `E2E-ClientDyn-<uuid4>` (`entity_type` = Person) und `E2E-CaseDyn-<uuid4>` (`entity_type` = Fall) mit mindestens: einem normalen Textfeld, einem Feld mit Sensibilität **hoch** (verschlüsselt) und — nur für CLIENT-DYN-04 — einem zweiten Person-Typ mit **anderem** Feldset. Für CLIENT-DYN-03 zusätzlich ein **Datei**-Feld (seit M24 zulässig, Refs #1738); die Dateipfade selbst prüft die ATT-Sektion (ENT-ATT-10 ff.).
@@ -7493,7 +7493,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C || `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
+| Klient:innen / Zusatzfelder | fachkraft (`miriam`) + assistenz (`lena`) | C | — | `test_entity_dynamic_ui.py`, `test_client_dynamic_data.py` |
 
 **Vorbereitung:**
 - ENT-CLIENT-DYN-01 durchgeführt; die Person trägt einen Wert im Feld mit Sensibilität **hoch**.
@@ -7521,7 +7521,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Klient:innen | admin (facility_admin) | C || `test_entity_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
+| Konfiguration / Klient:innen | admin (facility_admin) | C | — | `test_entity_dynamic_ui.py`, `test_forms_dynamic.py`, `test_packages_schema.py` |
 
 **Vorbereitung:**
 - Eine Feldvorlage vom Typ **Datei** existiert (der Seed liefert `Anhang` mit).
@@ -7601,7 +7601,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Konfiguration / Fälle | admin (facility_admin) | C || `test_entity_dynamic_ui.py`, `test_config_document_types.py` |
+| Konfiguration / Fälle | admin (facility_admin) | C | — | `test_entity_dynamic_ui.py`, `test_config_document_types.py` |
 
 **Vorbereitung:**
 - ENT-CASE-DYN-01 durchgeführt (mindestens ein Fall trägt den Wegwerf-Typ); analog eine Person mit Person-Typ aus ENT-CLIENT-DYN-01.
@@ -7625,12 +7625,12 @@
 <details open>
 <summary><strong>📥 IMPORT — CSV-Import-Wizard (9 Cases)</strong></summary>
 
-**Routen:** `/import/`, `/import/neu/`, `/import/<uuid>/`, `/import/<uuid>/zuordnung/`, `/import/<uuid>/probelauf/`, `/import/<uuid>/uebernehmen/`, `/import/<uuid>/abbrechen/` 
-**Views:** `src/core/views/import_wizard.py` (`ImportListView`, `ImportCreateView`, `ImportDetailView`, `ImportMappingView`, `ImportPreviewView`, `ImportCommitView`, `ImportAbortView`) — alle mit `FacilityAdminRequiredMixin`, kein Sudo-Mode 
-**Services:** `src/core/services/import_engine.py` (`store_import_upload`, `apply_mapping`, `available_targets`, `run_import`, `commit_import`, `abort_import`, `cleanup_stale_import_jobs`) — schreibt ausschließlich über `create_client`/`create_event` 
-**Forms:** `src/core/forms/import_data.py` (`ImportUploadForm` — Zieltyp, Dokumentationstyp, Datei, Trennzeichen-/Zeichensatz-Auswahl) 
-**Models:** `src/core/models/import_job.py` (`ImportJob` — `Status`: uploaded → mapped → validated → committed/aborted; `storage_filename`, `original_filename_encrypted` nur verschlüsselt) 
-**E2E-Coverage:** `src/tests/e2e/test_import_wizard.py` (Wizard-Roundtrip, Fehlerpfad, `data_json`-Ereignis-Import, Rollen-Gate); ergänzend `test_import_engine.py`, `test_import_views.py`, `test_import_job.py` 
+**Routen:** `/import/`, `/import/neu/`, `/import/<uuid>/`, `/import/<uuid>/zuordnung/`, `/import/<uuid>/probelauf/`, `/import/<uuid>/uebernehmen/`, `/import/<uuid>/abbrechen/`  
+**Views:** `src/core/views/import_wizard.py` (`ImportListView`, `ImportCreateView`, `ImportDetailView`, `ImportMappingView`, `ImportPreviewView`, `ImportCommitView`, `ImportAbortView`) — alle mit `FacilityAdminRequiredMixin`, kein Sudo-Mode  
+**Services:** `src/core/services/import_engine.py` (`store_import_upload`, `apply_mapping`, `available_targets`, `run_import`, `commit_import`, `abort_import`, `cleanup_stale_import_jobs`) — schreibt ausschließlich über `create_client`/`create_event`  
+**Forms:** `src/core/forms/import_data.py` (`ImportUploadForm` — Zieltyp, Dokumentationstyp, Datei, Trennzeichen-/Zeichensatz-Auswahl)  
+**Models:** `src/core/models/import_job.py` (`ImportJob` — `Status`: uploaded → mapped → validated → committed/aborted; `storage_filename`, `original_filename_encrypted` nur verschlüsselt)  
+**E2E-Coverage:** `src/tests/e2e/test_import_wizard.py` (Wizard-Roundtrip, Fehlerpfad, `data_json`-Ereignis-Import, Rollen-Gate); ergänzend `test_import_engine.py`, `test_import_views.py`, `test_import_job.py`  
 **Spezial-Setup:**
 - Rolle **facility_admin** (`admin`) — alle anderen Rollen bekommen 403 (`TestRoleGate`).
 - CSV-Testdateien lokal vorbereiten: eine saubere (0-Fehler-Lauf), eine mit mind. einem defekten Datensatz (Zeilenfehler-Lauf), optional eine cp1252-kodierte (Excel-Export) für ENT-IMPORT-03.
@@ -7692,7 +7692,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `test_import_engine.py::TestParsing` |
+| Datenimport | admin | C | — | `test_import_engine.py::TestParsing` |
 
 **Voraussetzung:** eine CSV-Datei, in Windows-1252 exportiert (z.B. Umlaute aus älterem Excel).
 
@@ -7712,7 +7712,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `src/tests/e2e/test_import_wizard.py::TestImportEventWithDataJson`, `test_import_engine.py::TestAvailableTargets`, `test_import_views.py` |
+| Datenimport | admin | C | — | `src/tests/e2e/test_import_wizard.py::TestImportEventWithDataJson`, `test_import_engine.py::TestAvailableTargets`, `test_import_views.py` |
 
 **Voraussetzung:** Dokumentationstyp mit mind. einem normalen und einem Datei-Feld existiert; Upload mit Spalten, die auf Stammdaten **und** ein dynamisches Feld zeigen sollen.
 
@@ -7737,7 +7737,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `src/tests/e2e/test_import_wizard.py::TestImportErrorPath`, `test_import_engine.py::TestErrorReportIsPiiFree`, `TestSavepointPerRow` |
+| Datenimport | admin | C | — | `src/tests/e2e/test_import_wizard.py::TestImportErrorPath`, `test_import_engine.py::TestErrorReportIsPiiFree`, `TestSavepointPerRow` |
 
 **Voraussetzung:** CSV mit mind. zwei fehlerhaften Zeilen (z.B. eine mit bereits vergebenem Pseudonym, eine mit unbekannter Kontaktstufe).
 
@@ -7790,7 +7790,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `src/tests/e2e/test_import_wizard.py::TestImportErrorPath`, `test_import_engine.py::TestAbortImport` |
+| Datenimport | admin | C | — | `src/tests/e2e/test_import_wizard.py::TestImportErrorPath`, `test_import_engine.py::TestAbortImport` |
 
 **Voraussetzung:** ein Lauf im Status `uploaded` oder `mapped` (noch keine Übernahme).
 
@@ -7812,7 +7812,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin (F1) + admin_1 (F2) | C || `test_import_views.py::TestFacilityScoping` |
+| Datenimport | admin (F1) + admin_1 (F2) | C | — | `test_import_views.py::TestFacilityScoping` |
 
 **Voraussetzung:** ein Import-Lauf in Facility 1, angelegt von `admin`.
 
@@ -7836,7 +7836,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Datenimport | admin | C || `test_import_views.py::TestStateMachineGuards` |
+| Datenimport | admin | C | — | `test_import_views.py::TestStateMachineGuards` |
 
 **Voraussetzung:** ein frisch hochgeladener Lauf ohne Zuordnung (Status `uploaded`).
 
@@ -7856,12 +7856,12 @@
 <details open>
 <summary><strong>✍️ RECT — Art.-16-Berichtigungsworkflow (8 Cases)</strong></summary>
 
-**Routen:** `/clients/<uuid>/rectification/new/`, `/rectification/`, `/rectification/<uuid>/review/` 
-**Views:** `src/core/views/rectification.py` (`RectificationCreateView` — `StaffRequiredMixin`; `RectificationListView`/`RectificationReviewView` — `LeadOrAdminRequiredMixin`) 
-**Services:** `src/core/services/client/rectification.py` (`rectifiable_fields`, `request_rectification`, `approve_rectification`, `reject_rectification`) — Anwendung ausschließlich über `update_client` 
-**Models:** `src/core/models/rectification.py` (`RectificationRequest` — `field_path`, `old_value`/`new_value`/`reason`/`review_note` verschlüsselt, partieller Unique-Index `unique_pending_rectification_request`, Check-Constraint gegen Selbst-Review), Migrationen `0138`/`0139` 
-**Hintergrund:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) — ergänzt, ersetzt aber nicht [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) (kein Klientel-Self-Service) 
-**E2E-Coverage:** `src/tests/e2e/test_rectification.py` (Antrag→Prüfung→Genehmigung, `data_json`-Fall, Selbst-Review-Sperre, Ablehnung mit Pflicht-Prüfvermerk, Rollen-Gate); ergänzend `test_rectification_model.py`, `test_rectification_service.py`, `test_rectification_views.py` 
+**Routen:** `/clients/<uuid>/rectification/new/`, `/rectification/`, `/rectification/<uuid>/review/`  
+**Views:** `src/core/views/rectification.py` (`RectificationCreateView` — `StaffRequiredMixin`; `RectificationListView`/`RectificationReviewView` — `LeadOrAdminRequiredMixin`)  
+**Services:** `src/core/services/client/rectification.py` (`rectifiable_fields`, `request_rectification`, `approve_rectification`, `reject_rectification`) — Anwendung ausschließlich über `update_client`  
+**Models:** `src/core/models/rectification.py` (`RectificationRequest` — `field_path`, `old_value`/`new_value`/`reason`/`review_note` verschlüsselt, partieller Unique-Index `unique_pending_rectification_request`, Check-Constraint gegen Selbst-Review), Migrationen `0138`/`0139`  
+**Hintergrund:** [ADR-041](../adr/041-berichtigungsworkflow-intern.md) — ergänzt, ersetzt aber nicht [ADR-013](../adr/013-dsgvo-art16-no-selfservice.md) (kein Klientel-Self-Service)  
+**E2E-Coverage:** `src/tests/e2e/test_rectification.py` (Antrag→Prüfung→Genehmigung, `data_json`-Fall, Selbst-Review-Sperre, Ablehnung mit Pflicht-Prüfvermerk, Rollen-Gate); ergänzend `test_rectification_model.py`, `test_rectification_service.py`, `test_rectification_views.py`  
 **Spezial-Setup:**
 - Antragstellung als **fachkraft** (`miriam`), Prüfung als **leitung** (`emma`) — Vier-Augen-Prinzip braucht zwei Sessions.
 - Für die Sichtbarkeits-Probe zusätzlich eine sensible dynamische Feldvorlage, für die Widerruf-Probe eine Person, die anschließend in den Papierkorb gelegt bzw. anonymisiert wird.
@@ -7913,7 +7913,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | fachkraft (`miriam`) | C || `test_rectification_model.py::TestPendingUniqueness`, `test_rectification_service.py` |
+| Berichtigungen | fachkraft (`miriam`) | C | — | `test_rectification_model.py::TestPendingUniqueness`, `test_rectification_service.py` |
 
 **Voraussetzung:** ENT-RECT-02 (offener Antrag auf „Pseudonym").
 
@@ -7960,7 +7960,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | leitung (`emma`) | C || `src/tests/e2e/test_rectification.py::TestRejectionRequiresReviewNote`, `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestReject` |
+| Berichtigungen | leitung (`emma`) | C | — | `src/tests/e2e/test_rectification.py::TestRejectionRequiresReviewNote`, `test_rectification_views.py::TestReviewView`, `test_rectification_service.py::TestReject` |
 
 **Voraussetzung:** ein offener Antrag.
 
@@ -7982,7 +7982,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | leitung (`emma`) | C || `src/tests/e2e/test_rectification.py::TestSelfReviewIsBlocked`, `test_rectification_views.py::test_self_review_is_blocked_in_the_view`, `test_rectification_service.py::TestApproveGuards` |
+| Berichtigungen | leitung (`emma`) | C | — | `src/tests/e2e/test_rectification.py::TestSelfReviewIsBlocked`, `test_rectification_views.py::test_self_review_is_blocked_in_the_view`, `test_rectification_service.py::TestApproveGuards` |
 
 **Voraussetzung:** ein Antrag, bei dem `requested_by=emma` (Lead stellt selbst einen Antrag).
 
@@ -8003,7 +8003,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | fachkraft (`miriam`) + leitung (`emma`) | C/F || `test_rectification_service.py::test_conflict_guard_when_value_changed_meanwhile`, `test_rectification_views.py::test_conflict_shows_message_not_500` |
+| Berichtigungen | fachkraft (`miriam`) + leitung (`emma`) | C/F | — | `test_rectification_service.py::test_conflict_guard_when_value_changed_meanwhile`, `test_rectification_views.py::test_conflict_shows_message_not_500` |
 
 **Voraussetzung:** ein offener Antrag auf ein Feld einer Person.
 
@@ -8025,7 +8025,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Berichtigungen | fachkraft (`miriam`) + leitung (`emma`) | C || `test_rectification_views.py::test_anonymized_client_is_not_rectifiable`, `test_closed_request_is_404`, `test_revoked_client_request_is_404` |
+| Berichtigungen | fachkraft (`miriam`) + leitung (`emma`) | C | — | `test_rectification_views.py::test_anonymized_client_is_not_rectifiable`, `test_closed_request_is_404`, `test_revoked_client_request_is_404` |
 
 **Voraussetzung:** ein offener Antrag auf eine Person, die anschließend in den Papierkorb gelegt oder (via Retention/Anonymisierung) anonymisiert wird.
 

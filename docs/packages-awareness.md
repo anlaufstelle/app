@@ -18,13 +18,13 @@ Keiner der sieben Typen verlangt eine Mindest-Kontaktstufe. Auch Gewaltvorfall u
 
 | Slug | Name | Sensitivität | tally | min_contact_stage | system_type | report_key |
 |---|---|---|:---:|---|---|---|
-| `awareness-kontakt` | Awareness-Kontakt | normal | ja ||| `contact` |
-| `versorgung` | Versorgung | normal | ja ||| `supply` |
-| `gewaltvorfall` | Gewaltvorfall | elevated | nein ||| `incident` |
-| `krisensituation` | Krisensituation | elevated | nein || `crisis` | `crisis` |
-| `orga-meldung` | Orga-Meldung (Platzverweis) | elevated | nein || `ban` | `excluded` |
-| `vermittlung` | Vermittlung | normal | ja ||| `referral` |
-| `notiz` | Notiz | normal | ja ||| `excluded` |
+| `awareness-kontakt` | Awareness-Kontakt | normal | ja | — | — | `contact` |
+| `versorgung` | Versorgung | normal | ja | — | — | `supply` |
+| `gewaltvorfall` | Gewaltvorfall | elevated | nein | — | — | `incident` |
+| `krisensituation` | Krisensituation | elevated | nein | — | `crisis` | `crisis` |
+| `orga-meldung` | Orga-Meldung (Platzverweis) | elevated | nein | — | `ban` | `excluded` |
+| `vermittlung` | Vermittlung | normal | ja | — | — | `referral` |
+| `notiz` | Notiz | normal | ja | — | — | `excluded` |
 
 ## Felder
 

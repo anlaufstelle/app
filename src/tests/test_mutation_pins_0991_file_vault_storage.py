@@ -1,7 +1,7 @@
 """Pin-Tests des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
 ``core.services.file_vault.storage``.
 
-Quelle: Ticket #2322 (https://github.com/anlaufstelle/app/issues/2322),
+Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt
 werden die vier Prio-1-Survivor dieses Moduls: ``soft_delete_attachment_chain``
 ruft die kanonische Sperr-Vorlaufordnung

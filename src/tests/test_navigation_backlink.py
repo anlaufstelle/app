@@ -46,7 +46,7 @@ from tests.test_authz_template_links import guard_content, guard_users  # noqa: 
 # Login-/Fehlerseiten die drei vom Service Worker vorgecachten Offline-Shells;
 # deren Rücklink ist ein eigener Fall (Konzept 4.2: statisch und
 # rollenagnostisch) und bewusst NICHT Teil dieses Laufs — nachgezogen in
-# https://github.com/anlaufstelle/app/issues/1844.
+# #1844.
 NON_APP_CATEGORIES = frozenset({"export", "offline-api", "partials-htmx", "public"})
 
 BACK_LINK_MARKER = 'data-testid="back-link"'

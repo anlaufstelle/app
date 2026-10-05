@@ -1,7 +1,7 @@
 """Pin-Tests der Welle K (0.98) — Prio-2-Testluecken in
 ``core.services.dashboard.main``.
 
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2193.
 
 Quelle: Batch ``hubs-dashboard`` der Survivor-Triage (``triage-096-export-
 dashboard.json``). Gepinnt werden fuenf Mutanten-Familien der vier

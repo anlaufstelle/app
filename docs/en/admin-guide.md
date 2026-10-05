@@ -634,7 +634,7 @@ When a location closes, **archiving** is the intended route -- not deletion. Und
 >
 > If you really want to remove a facility entirely, the route is: archive it, let the retention periods expire (see [§ 7.3](#73-retention-periods-and-enforce_retention)), and then take a backup -- not the cascade.
 
-**User offboarding.** Archiving blocks *access* but does not clear the identity data of departed staff (first/last name, display name, email, phone). That second half of the lifecycle is handled separately: [#2051 -- offboarding cleanup for departed staff](https://github.com/anlaufstelle/app/issues/2051). Until then, deactivate the affected accounts under **Administration > Access**; the username and identifier are deliberately retained so the attribution in the audit log stays readable.
+**User offboarding.** Archiving blocks *access* but does not clear the identity data of departed staff (first/last name, display name, email, phone). That second half of the lifecycle is handled separately: #2051 -- offboarding cleanup for departed staff. Until then, deactivate the affected accounts under **Administration > Access**; the username and identifier are deliberately retained so the attribution in the audit log stays readable.
 
 ### 2.3 Settings per Facility
 
@@ -802,7 +802,7 @@ The system type serves **one** purpose: **UI logic**. Accordingly there are exac
 
 > **Note:** Not every documentation type needs a system type -- most do without one. Whether a type lands in a report is answered by the "Appears in …" information in the detail and form views; the system type has nothing to do with it.
 
-> **The list of values is frozen** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), decision of 2026-08-03). **No new system types will be added:** a value belongs here only if it drives application behaviour. Report mappings go through the report key.
+> **The list of values is frozen** (RFC #1748, decision of 2026-08-03). **No new system types will be added:** a value belongs here only if it drives application behaviour. Report mappings go through the report key.
 
 #### Report Key
 
@@ -826,7 +826,7 @@ The choices come from the reports themselves: what a report evaluates is declare
 | **Explicitly belongs in no report** | *(excluded -- and **not** a defect)* |
 | *(empty)* | *(appears in no report -- and is reported as a gap)* |
 
-> The keys **Violent incident**, **Protective measure**, **Group activity** and **Supply (need)** come from the bundled domain packages for awareness work, women's shelters and youth work ([package overview #2133](https://github.com/anlaufstelle/app/issues/2133), German). They are offered to **every** facility, regardless of which package is loaded: the value range comes from the report, not from the catalogue. A new row in the example activity report only appears once a type carrying the matching key has events; the figures of existing reports do not change.
+> The keys **Violent incident**, **Protective measure**, **Group activity** and **Supply (need)** come from the bundled domain packages for awareness work, women's shelters and youth work (package overview #2133, German). They are offered to **every** facility, regardless of which package is loaded: the value range comes from the report, not from the catalogue. A new row in the example activity report only appears once a type carrying the matching key has events; the figures of existing reports do not change.
 
 > **The report key does not affect the overview.** The key figures, charts and tables on the "Overview" tab (contacts over time, documentation types, age groups) count the events in the period **regardless of their report key** -- including events that no report evaluates. A type set to "Explicitly belongs in no report" is therefore omitted from reports that assign data through the report key (such as the example activity report), but it remains visible and continues to count in the overview. The "External report" tab does not use the report key either.
 >
@@ -1145,7 +1145,7 @@ File attachments (photos, scans, documents) on **events, clients and cases** ([A
    - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
    - Virus detected → the upload is discarded and an audit-log entry is written.
 4a. **Content and extension must belong to the same family** (Refs #2128): the magic-bytes check rejects a file whose content is detected as an image but whose extension is not an image extension (`foto.docx`, `scan.odt`). Without that binding it was enough to name a photo `.docx` and declare `image/jpeg` correctly -- metadata stripping **and** decompression-bomb protection would both have waved it through.
-4. **Metadata stripping** for image uploads (Refs #2128): JPEG, PNG, WebP and TIFF are re-encoded and lose their EXIF data (including the **GPS capture location**, device model/serial, capture timestamp, embedded thumbnail), PNG text chunks (`tEXt`/`iTXt`) and XMP/IPTC blocks. **Orientation is preserved** -- it is baked into the pixels, so portrait photos do not flip; the ICC colour profile is kept as well. What counts is the type **detected** in step 4a via magic bytes, not the file extension. Every non-image file (PDF, DOCX, ODT...) stays byte-identical. **Always on, no toggle** -- the application is not a forensic evidence tool. If a file cannot be decoded despite matching magic bytes, the upload is rejected (fail-closed, audit reason `image_undecodable`).
+4. **Metadata stripping** for image uploads (Refs #2128): JPEG, PNG, WebP and TIFF are re-encoded and lose their EXIF data (including the **GPS capture location**, device model/serial, capture timestamp, embedded thumbnail), PNG text chunks (`tEXt`/`iTXt`) and XMP/IPTC blocks. **Orientation is preserved** -- it is baked into the pixels, so portrait photos do not flip; the ICC colour profile is kept as well. What counts is the type **detected** in step 4a via magic bytes, not the file extension. Every non-image file (PDF, DOCX, ODT ...) stays byte-identical. **Always on, no toggle** -- the application is not a forensic evidence tool. If a file cannot be decoded despite matching magic bytes, the upload is rejected (fail-closed, audit reason `image_undecodable`).
 
 > **GIF and BMP are deliberately not cleaned.** This is not an oversight: GIF89a supports both a *comment extension* and an *XMP application extension*, and BMP v5 can embed an ICC profile -- those blocks **are preserved**. A Pillow re-encode would re-quantize the GIF colour palette and change frame timing and disposal behaviour of animated files; that is a visible change to the picture for a metadata channel practice does not use (counselling photos are JPEG or PNG). **Recommendation:** to rule it out, leave `gif` and `bmp` out of `allowed_file_types`.
 5. The payload is encrypted chunk-wise with Fernet (MultiFernet) (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
@@ -2049,7 +2049,7 @@ Deletion requests live in the **"Deletion requests"** tab of the **"Privacy"** a
 | Lead, facility admin | yes | **all** requests of the facility |
 | Holder of the *deletion confirmation* permission (without a lead role) | yes | **all** requests of the facility |
 | Requester with at least one **open** request of their own | yes, while the request is open | **only their own** requests |
-| Everyone else | no ||
+| Everyone else | no | — |
 
 The last case is the **feedback channel**: whoever files a request can find it again via the navigation and via a notice banner on the affected record, and can see its status — without thereby gaining access to other people's reasons and target pseudonyms. Once the request is decided, the tab disappears again — and with it the "Privacy" area entry, unless another tab of that area stays visible.
 
@@ -2374,4 +2374,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-29 -->
-<!-- source-hash: d323432eb4d5c2981b24fc63586c2ff389484509 -->
+<!-- source-hash: 17ad4283f41426fbe6ca8efa9739dc81b1a09505 -->

@@ -1,6 +1,6 @@
 """Pin-Test zum Meilenstein release-0.97 — Prio-1-Survivor in ``core.services.compliance.k_anonymization``.
 
-Quelle: atomic-Messlauf der Welle J (https://github.com/anlaufstelle/app/issues/2149),
+Quelle: atomic-Messlauf der Welle J (#2149),
 Batch ``client``. Gepinnt wird ``x_k_anonymize_client__mutmut_12``: die
 ``update_fields``-Liste des Saves faellt auf ``None``, aus dem gezielten Write
 der sechs Generalisierungs-Spalten wird also ein VOLLER Save.

@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Vollmutation #2174/#2193, Batch ``dynamic-a``.
 
-Refs https://github.com/anlaufstelle/app/issues/2174,
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174,
+Refs #2193.
 
 Modul: ``core.forms.dynamic`` (Familie ``forms``). Batch ``dynamic-a`` deckt
 67 Survivor-Mutanten aus fünf Funktionen ab: ``DynamicDataForm.grouped_fields``,

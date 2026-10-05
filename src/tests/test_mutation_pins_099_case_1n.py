@@ -1,7 +1,7 @@
 """Mutations-Pins Welle L (0.99), Vollmutation #2174, Nacharbeit Batch case-1n.
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Batch ``case-1n`` sammelt zwei Survivor-Mutanten, die in den Batches
 ``deletion-b`` bzw. ``handover_note-c`` zunaechst als Fehlertext-/

@@ -134,12 +134,12 @@ make db
 
 Das startet einen PostgreSQL-18-Container mit folgenden Zugangsdaten:
 
-| Variable | Wert |
+| Variable  | Wert          |
 |-----------|---------------|
-| DB-Name | anlaufstelle |
-| User | anlaufstelle |
-| Passwort | anlaufstelle |
-| Port | 5432 |
+| DB-Name   | anlaufstelle  |
+| User      | anlaufstelle  |
+| Passwort  | anlaufstelle  |
+| Port      | 5432          |
 
 Alternativ kann eine lokal installierte PostgreSQL-Instanz verwendet werden. Die Verbindungs-URL muss dann in der Umgebungsvariable `DATABASE_URL` gesetzt werden.
 
@@ -192,11 +192,11 @@ und ein zweiter Lauf meldet alles als `unverändert`.
 Der Standardkatalog bietet `Kontakt`, `Spritzentausch`, `Vermittlung` und `Notiz` mit `tally_enabled: true` in der Strichliste an. Beim Spritzentausch führt `+1` wegen der beiden Zahlen-Pflichtfelder zur kompakten Eingabe von Ausgabe und Rückgabe; beide Stückzahlen haben im Katalog `min_value: 0`, negative Werte werden in keinem Schreibpfad angenommen. Die übrigen drei Typen haben keine Pflichtwerte und werden direkt gezählt.
 
 > **Katalog ändern:** Werte in `default.yaml` anpassen, nicht in `core/seed/doc_types.py`.
-> Bestehende `slug`-Werte sind **unveränderbar** (Migration 0117/#1710 + DB-Trigger)
+> Bestehende `slug`-Werte sind **unveränderbar** (Migration 0117/#1710 + DB-Trigger) —
 > ein geänderter Slug legt in jeder Bestands-Einrichtung ein Duplikat an statt zu
 > aktualisieren. `system_type` (nur noch `ban`/`crisis`) immer mitführen, wo einer
 > steht, bei `select`/`multi_select` immer den
-> `options`-Schlüssel; **keinen** `conditions`-Schlüssel ergänzen (auch nicht `[]`
+> `options`-Schlüssel; **keinen** `conditions`-Schlüssel ergänzen (auch nicht `[]` —
 > das würde per UI gepflegte Feldbedingungen löschen). Die **letzte** Gruppe eines
 > Dokumentationstyps nie aus dem Katalog entfernen: der Seed räumt verwaiste Gruppen
 > nur bei Typen auf, für die das Paket noch mindestens eine Gruppe deklariert — erst
@@ -218,11 +218,11 @@ Rücksync gegen `default.yaml`. Was das im Betrieb bedeutet:
 | Felder, die eine Einrichtung einem Katalog-Typ **zusätzlich** zugeordnet hat | bleiben unangetastet (der Loader fasst nur an, was im Paket steht) |
 | `retention_days`, `description`, `is_active` (Typ) bzw. `is_active` (Vorlage) | nicht Teil von Schema v1 — werden weder gesetzt noch zurückgesetzt |
 
-Zwei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder-nichts
+Zwei Konfliktfälle brechen den **gesamten** Seed-Lauf ab (fail-loud, Alles-oder-nichts —
 es wird nichts angewendet, auch nicht für die übrigen Typen):
 
 * **Eigene Feldvorlage auf einem Katalog-Slug.** Hat eine Einrichtung z. B. `dauer` selbst
-  als Textfeld angelegt, kollidiert das mit `field_type`/`is_encrypted` aus dem Paket
+  als Textfeld angelegt, kollidiert das mit `field_type`/`is_encrypted` aus dem Paket —
   beide sind nach dem Anlegen unveränderlich. Auflösung: die eigene Vorlage auf einen
   anderen Slug bringen (neu anlegen + Daten migrieren) oder den Katalog-Slug ändern.
 * **Namens-Kollision nach einer Umbenennung.** Wurde „Kontakt" per UI in „Erstkontakt"
@@ -243,12 +243,12 @@ es wird nichts angewendet, auch nicht für die übrigen Typen):
 | Clients / Einrichtung | 7 | 40 | 500 | 18 (Solo: 9) |
 | Events / Einrichtung | 25 | 750 | 10.000 | 120 (Solo: 60) |
 | Cases | 3 | 12 | 50 | 6 (Solo: 4) |
-| Episoden || 20 | 80 | 8 (Solo: 4) |
-| Wirkungsziele || 15 | 60 | 6 (Solo: 3) |
-| Meilensteine / Ziel || 3 | 4 | 3 (Solo: 2) |
+| Episoden | — | 20 | 80 | 8 (Solo: 4) |
+| Wirkungsziele | — | 15 | 60 | 6 (Solo: 3) |
+| Meilensteine / Ziel | — | 3 | 4 | 3 (Solo: 2) |
 | WorkItems | 5 | 25 | 100 | 12 (Solo: 8) |
 | Quick-Vorlagen / Einrichtung | 6 | 6 | 6 | 6 |
-| DeletionRequests || 5 | 15 | 2 (Solo: 1) |
+| DeletionRequests | — | 5 | 15 | 2 (Solo: 1) |
 | RetentionProposals | 4 | 6 | 12 | 3 (Solo: 2) |
 | Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | ~5 (30 %) (Solo: ~3) |
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 270 Tage |
@@ -285,35 +285,35 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 
 ## Make-Targets
 
-| Target | Beschreibung |
+| Target           | Beschreibung                                                      |
 |------------------|-------------------------------------------------------------------|
-| `make db` | PostgreSQL-18-Container starten |
-| `make db-stop` | PostgreSQL-Container stoppen und entfernen |
-| `make migrate` | Django-Migrationen ausführen |
-| `make run` | Dev-Server starten (gunicorn + HTTPS auf `0.0.0.0:8443`) |
-| `make run-http` | Fallback: Django runserver ohne HTTPS (`0.0.0.0:8000`) |
-| `make seed` | Seed-Daten in die Datenbank laden |
-| `make tailwind` | Tailwind CSS im Watch-Modus kompilieren |
-| `make tailwind-build` | Tailwind CSS für Produktion minifiziert kompilieren |
-| `make lint` | Code mit Ruff prüfen und Formatierung kontrollieren |
+| `make db`        | PostgreSQL-18-Container starten                                   |
+| `make db-stop`   | PostgreSQL-Container stoppen und entfernen                        |
+| `make migrate`   | Django-Migrationen ausführen                                      |
+| `make run`       | Dev-Server starten (gunicorn + HTTPS auf `0.0.0.0:8443`)        |
+| `make run-http`  | Fallback: Django runserver ohne HTTPS (`0.0.0.0:8000`)           |
+| `make seed`      | Seed-Daten in die Datenbank laden                                 |
+| `make tailwind`  | Tailwind CSS im Watch-Modus kompilieren                           |
+| `make tailwind-build` | Tailwind CSS für Produktion minifiziert kompilieren          |
+| `make lint`      | Code mit Ruff prüfen und Formatierung kontrollieren               |
 | `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs #741) |
-| `make test` | Unit- und Integrationstests ausführen (ohne E2E) |
-| `make test-js` | Vitest-Suite (JS, `npm test`) deterministisch/non-watch ausführen — Teil von `make ci` (Refs #1932) |
-| `make test-e2e` | End-to-End-Tests mit Playwright ausführen |
+| `make test`      | Unit- und Integrationstests ausführen (ohne E2E)                  |
+| `make test-js`   | Vitest-Suite (JS, `npm test`) deterministisch/non-watch ausführen — Teil von `make ci` (Refs #1932) |
+| `make test-e2e`  | End-to-End-Tests mit Playwright ausführen                         |
 | `make test-e2e-halves` | E2E in zwei seriellen Hälften (RAM-limitierte Hosts, Refs #1787); den Schnitt liefert `scripts/e2e_slice.py` — derselbe Schlüssel wie in der CI-Matrix (Refs #1976) |
 | `make test-e2e-slice-locked SLICES=4 INDEX=3` | Eine einzelne Scheibe des CI-Schnitts lokal nachfahren, unter dem CI-Lock (auch eine Scheibe belegt Port 8844 und `anlaufstelle_e2e`; ungelockt als `make test-e2e-slice`, nur wenn sicher kein anderer E2E-Lauf läuft) — die Nummer stammt aus dem Job-Namen (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` zeigt die Verteilung (Refs #1976) |
-| `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
+| `make check`     | Django-Systemcheck und Migrations-Konsistenz prüfen               |
 | `make i18n-check` | `.po`-Vollabgleich gegen den Quellbaum (neue/entfernte/semantisch geänderte msgids) — Teil von `make ci` (Refs #1933) |
-| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
-| `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast |
-| `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist) |
-| `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar) |
-| `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min) |
-| `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools) |
-| `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion) |
-| `make audit-js` | `npm audit` gegen `package-lock.json` — blockierendes JS-Advisory-Gate ab Schweregrad `AUDIT_LEVEL` (Default `moderate`), Teil von `make ci`; braucht Zugang zur npm-Registry (Refs #1968) |
-| `make dev` | Datenbank starten, migrieren und Server starten (kombiniert) |
-| `make clean` | Generierte Artefakte löschen (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` bleibt unangetastet (Datenverlustrisiko) |
+| `make ci`        | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
+| `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast                         |
+| `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist)            |
+| `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar)     |
+| `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min)                    |
+| `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools)        |
+| `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion)     |
+| `make audit-js`  | `npm audit` gegen `package-lock.json` — blockierendes JS-Advisory-Gate ab Schweregrad `AUDIT_LEVEL` (Default `moderate`), Teil von `make ci`; braucht Zugang zur npm-Registry (Refs #1968) |
+| `make dev`       | Datenbank starten, migrieren und Server starten (kombiniert)      |
+| `make clean`     | Generierte Artefakte löschen (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` bleibt unangetastet (Datenverlustrisiko) |
 
 Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 
@@ -513,15 +513,15 @@ Refs #<issue-nummer>
 
 **Typen:**
 
-| Typ | Verwendung |
+| Typ        | Verwendung                                      |
 |------------|-------------------------------------------------|
-| `feat` | Neues Feature |
-| `fix` | Bugfix |
-| `test` | Tests hinzufügen oder anpassen |
-| `docs` | Dokumentation |
-| `chore` | Wartungsarbeiten, Konfiguration, Dependencies |
-| `refactor` | Refactoring ohne Verhaltensänderung |
-| `style` | Formatierung, kein Logik-Unterschied |
+| `feat`     | Neues Feature                                   |
+| `fix`      | Bugfix                                          |
+| `test`     | Tests hinzufügen oder anpassen                  |
+| `docs`     | Dokumentation                                   |
+| `chore`    | Wartungsarbeiten, Konfiguration, Dependencies   |
+| `refactor` | Refactoring ohne Verhaltensänderung             |
+| `style`    | Formatierung, kein Logik-Unterschied            |
 
 **Beispiele:**
 
@@ -585,7 +585,7 @@ class MeinBackend(DatasetBackend):
 Fünf Punkte, an denen erfahrungsgemäß etwas schiefgeht:
 
 1. **`build_dataset()` ist roh, `prepare_export()` ist der Schutzwall.** Alles, was ausgeliefert
-   wird — Download **und** Panel-Vorschau, läuft vorher durch `prepare_export()`. Wer Zahlen
+   wird — Download **und** Panel-Vorschau —, läuft vorher durch `prepare_export()`. Wer Zahlen
    produziert, die extern zirkulieren, muss diesen Hook implementieren; die zentrale
    Suppressions-Maschinerie ist zu benutzen statt nachzubauen. Der Snapshot-Pfad ruft ihn
    bewusst **nicht** (interner Rohbestand) — `snapshot_enabled` ist damit ein
@@ -674,7 +674,7 @@ Die Gegenrichtung — eine bestehende Einrichtung vollständig als versioniertes
 
 ### Test-Driven Development (Unit/Service)
 
-Die Assertion-Konventionen beschreiben verbindlich, wie Tests Verhalten präzise und mutationsfest prüfen.
+Die [Assertion-Konventionen](docs/testing/assertion-conventions.md) beschreiben verbindlich, wie Tests Verhalten präzise und mutationsfest prüfen.
 
 Seit 2026-05-20 ist Test-Driven Development für die Unit-/Service-Schicht verpflichtend. Reihenfolge **vor** jeder Service-, Form-, Model- oder CBV-Änderung:
 
@@ -684,7 +684,7 @@ Seit 2026-05-20 ist Test-Driven Development für die Unit-/Service-Schicht verpf
 
 **Kein „falsch grün" — Assertion-Stärke schützen** (Refs #1150): Ein roter Test bedeutet im Default, dass die **Root Cause im Code** zu fixen ist — nicht der Test. Eine **bestehende Assertion abzuschwächen** (lockern, entfernen, ans tatsächliche kaputte Verhalten nachziehen) ist ein **harter Review-Stopp**: zulässig nur, wenn sich die *Anforderung* geändert hat (nicht der Code), und dann mit expliziter Begründung im Commit-Body. Bei **Bugfixes** zuerst einen **failing-test-first** schreiben, der den Bug reproduziert, *bevor* der Code angefasst wird (Skill `superpowers:systematic-debugging`). Hintergrund: 96 % Coverage misst *ausgeführte*, nicht *geprüfte* Zeilen — eine abgeschwächte Assertion bleibt grün und fällt erst im Mutation-Run auf.
 
-Beispiel (Service-Schicht, Pseudonym-Hashing aus [Issue #844](https://github.com/anlaufstelle/app/issues/844)):
+Beispiel (Service-Schicht, Pseudonym-Hashing aus Issue #844):
 
 ```python
 # Red — src/tests/test_pseudonym_hashing.py

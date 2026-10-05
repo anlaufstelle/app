@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.compliance.breach_detection`` (Batch ``breach_detection-b``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@8ff3cfa9 (frischer Mutantenbaum), Batch
 ``breach_detection-b`` (36 Survivor-Mutanten in sechs Funktionen:

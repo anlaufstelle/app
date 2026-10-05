@@ -276,7 +276,7 @@ def test_media_root_with_trailing_newline_is_not_treated_as_equal(tmp_path: Path
     Die Kommandosubstitution in der Shell entfernt abschliessende Zeilenumbrueche;
     ohne Schutz wuerde ``/data/media\n`` faelschlich als ``/data/media`` gelten und
     der Restore die Medien am App-Pfad vorbei ablegen (Refs
-    https://github.com/anlaufstelle/app/issues/2024).
+    #2024).
     """
     root, bindir, action_log, db_backup, media_backup = _make_sandbox(tmp_path)
     env = _base_env(root, bindir, action_log)

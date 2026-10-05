@@ -10,10 +10,10 @@ Anlaufstelle verarbeitet sensible Sozialdaten gemäß Art. 9 DSGVO. Sicherheitsm
 
 Sicherheitsupdates werden für die folgende Version bereitgestellt:
 
-| Version | Status |
+| Version   | Status                       |
 |-----------|------------------------------|
-| `0.99.x` | Unterstützt (Pre-Release) |
-| `< 0.99` | Nicht unterstützt |
+| `0.99.x`  | Unterstützt (Pre-Release)    |
+| `< 0.99`  | Nicht unterstützt            |
 
 ### Support- und End-of-Life-Regel
 
@@ -51,12 +51,12 @@ Bei Bedarf unterstützen wir bei einer koordinierten Offenlegung (Coordinated Di
 
 Anlaufstelle wird von einem Solo-Maintainer gepflegt; eine Vertretung ist derzeit nicht benannt (Verantwortliche, Bus-Faktor und Begründung: [MAINTAINERS.md](MAINTAINERS.md); Entscheidungs-/Eskalationsmodell: [GOVERNANCE.md](GOVERNANCE.md)). Die folgenden Zeiten sind **Richtwerte als Best-Effort-Ziel**, keine vertraglich zugesicherten Reaktionszeiten — sobald `1.0` erreicht ist und ein Maintainer-Team etabliert ist, werden sie verbindlicher gefasst:
 
-| Schritt | Zielwert |
+| Schritt                       | Zielwert                       |
 |-------------------------------|--------------------------------|
-| Eingangsbestätigung | ≤ 5 Werktage |
-| Erste Einschätzung | ≤ 10 Werktage |
-| Korrektur (kritisch / hoch) | priorisiert, in der Regel 14–30 Tage |
-| Korrektur (mittel / niedrig) | im nächsten regulären Release |
+| Eingangsbestätigung           | ≤ 5 Werktage                   |
+| Erste Einschätzung            | ≤ 10 Werktage                  |
+| Korrektur (kritisch / hoch)   | priorisiert, in der Regel 14–30 Tage |
+| Korrektur (mittel / niedrig)  | im nächsten regulären Release  |
 | Veröffentlichung des Advisory | nach Patch + 7 Tage Schonfrist |
 
 Wenn ein Zielwert nicht eingehalten werden kann, kommunizieren wir das transparent — bei kritischen Funden zuerst.
@@ -99,10 +99,10 @@ Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports
 
 ## Supported Versions
 
-| Version | Status |
+| Version   | Status                       |
 |-----------|------------------------------|
-| `0.99.x` | Supported (pre-release) |
-| `< 0.99` | Not supported |
+| `0.99.x`  | Supported (pre-release)      |
+| `< 0.99`  | Not supported                |
 
 ### Support and end-of-life rule
 
@@ -140,13 +140,13 @@ We support coordinated disclosure on request.
 
 Anlaufstelle is maintained by a single person; no deputy is currently designated (maintainers, bus factor and rationale: [MAINTAINERS.md](MAINTAINERS.md); decision/escalation model: [GOVERNANCE.md](GOVERNANCE.md)). The targets below are **best-effort goals**, not contractually guaranteed response times — they will be tightened once `1.0` ships and a maintainer team is in place:
 
-| Step | Target |
+| Step                          | Target                                    |
 |-------------------------------|-------------------------------------------|
-| Acknowledgement | ≤ 5 business days |
-| Initial assessment | ≤ 10 business days |
-| Fix for critical / high | prioritized, typically 14–30 days |
-| Fix for medium / low | in the next regular release |
-| Public advisory | patch + 7 days |
+| Acknowledgement               | ≤ 5 business days                         |
+| Initial assessment            | ≤ 10 business days                        |
+| Fix for critical / high       | prioritized, typically 14–30 days         |
+| Fix for medium / low          | in the next regular release               |
+| Public advisory               | patch + 7 days                            |
 
 If a target cannot be met we will communicate transparently — critical findings first.
 

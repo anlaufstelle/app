@@ -2,8 +2,8 @@
 ``core.services.file_vault.audit`` und ``core.services.file_vault.quota``
 (Batch ``file_vault-2``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@5216f473 (frischer Mutantenbaum), Batch
 ``file_vault-2`` (23 Survivor-Mutanten in zwei Modulen: ``audit.py``

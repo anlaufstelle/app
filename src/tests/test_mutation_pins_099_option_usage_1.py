@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``option_usage-1``.
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@c2fae01d (frischer Mutantenbaum), Batch
 ``option_usage-1`` aus ``reports/m-scratch/batch-option_usage-1.json`` — drei

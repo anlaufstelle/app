@@ -187,12 +187,12 @@ docker compose "${compose_files[@]}" up -d --force-recreate web
 |---|---|---|
 | `DJANGO_SECRET_KEY` | — (Pflicht in prod) | Signierung von Sessions/CSRF. Mit `openssl rand -base64 48 \| tr -d '\n'` generieren. |
 | `DJANGO_AUDIT_HASH_KEY` | — (Pflicht in prod) | HMAC-Schlüssel für die Audit-Hashes: pseudonymisierte Einträge (z. B. Passwort-Reset-E-Mails) und die Integritätskette des Audit-Logs. Bewusst separat vom `DJANGO_SECRET_KEY` — ohne eigenen Schlüssel fiele der Audit-Hash sonst still auf `SHA256(SECRET_KEY)` zurück, was ein Secret-Key-Leak rückwirkend ausnutzbar machen würde; daher fail-closed (ohne Wert verweigert die App in Produktion den Start). Separat mit `openssl rand -base64 48 \| tr -d '\n'` generieren. Siehe [`docs/disaster-recovery.md`](https://github.com/anlaufstelle/app/blob/main/docs/disaster-recovery.md). |
-| `DJANGO_SETTINGS_MODULE` || In Produktion `anlaufstelle.settings.prod`. |
+| `DJANGO_SETTINGS_MODULE` | — | In Produktion `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
 | `EXTERNAL_ORIGIN` | abgeleitet aus `ALLOWED_HOSTS` | Feste Basis aller sicherheitsrelevanten Links — Einladungs-Setup-Link, Passwort-Reset-Link und Entsperr-Link. Format `https://host[:port]`, ohne Pfad und ohne abschließenden Schrägstrich; ein Wert mit Pfadanteil oder ohne Schema wird beim Start abgelehnt. Diese Links entstehen dadurch **nicht** mehr aus dem `Host`-Header des eingehenden Requests. Führt `ALLOWED_HOSTS` genau **einen** öffentlichen Hostnamen, leitet die Anwendung `https://<host>` selbst ab und die Variable kann entfallen — `localhost`, `127.0.0.1` und `::1` zählen dabei nicht mit, sie stehen dort nur für den Container-Healthcheck. Bei mehreren öffentlichen Hosts oder ausschließlich Subdomain-Mustern (`.example.de`) ist sie **Pflicht** — sonst verweigert die Anwendung den Start (#1967). |
 | `TRUSTED_PROXY_HOPS` | `1` | Anzahl vertrauenswürdiger Proxies vor der App (X-Forwarded-For-Auswertung). `0` = kein Proxy, `1` = nur Caddy, `2` = CDN + Caddy. Ein Wert über `1` wirkt **nur zusammen mit** `TRUSTED_PROXY_CIDRS` — sonst sieht die Anwendung nie mehr als einen Eintrag und fällt auf die Proxy-IP zurück (#1963). |
 | `TRUSTED_PROXY_CIDRS` | leer | Adressbereiche der Proxys, denen der Reverse-Proxy ein eingehendes `X-Forwarded-For` glauben darf — **nur** durch Leerzeichen getrennt (Kommas sind kein Trennzeichen, Netzmasken keine gültige Schreibweise), als CIDR (`203.0.113.0/24`, `2001:db8::/32`), als einzelne Adresse oder mit dem Schlüsselwort `private_ranges`. Leer lassen, solange Caddy der einzige Proxy ist: Caddy verwirft dann jeden vom Client mitgeschickten Wert und setzt den Header selbst. Vor einem CDN oder Loadbalancer ist die Variable **Voraussetzung** für `TRUSTED_PROXY_HOPS > 1`; derselbe Wert füllt die Caddy-Konfiguration und die Anwendung. Ein unbrauchbarer Bereich bricht den Start ab (#1963). |
-| `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt Monitoring-Caller, die Detailfelder von `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, Backup-Alter, Disk-frei, `stale_jobs`) abzurufen. Ohne Token liefert `/health/` nur `{"status": …}` (siehe [§ 5.1](#51-health-endpoint), #1375). |
+| `DJANGO_HEALTH_DETAIL_TOKEN` | — | Token für den Header `X-Health-Token`; berechtigt Monitoring-Caller, die Detailfelder von `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, Backup-Alter, Disk-frei, `stale_jobs`) abzurufen. Ohne Token liefert `/health/` nur `{"status": …}` (siehe [§ 5.1](#51-health-endpoint), #1375). |
 
 **Datenbank (PostgreSQL — Drei-Rollen-Modell, #902)**
 
@@ -204,8 +204,8 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 | `POSTGRES_USER` | `anlaufstelle` | App-Rolle (Django-Runtime), `NOSUPERUSER NOBYPASSRLS`. |
 | `POSTGRES_PASSWORD` | `anlaufstelle` | Passwort der App-Rolle; in Produktion mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
 | `POSTGRES_ADMIN_USER` | `anlaufstelle_admin` | Admin-Rolle für Migrationen/Seed/Retention, `NOSUPERUSER BYPASSRLS`. |
-| `POSTGRES_ADMIN_PASSWORD` || Passwort der Admin-Rolle; mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
-| `POSTGRES_BOOTSTRAP_PASSWORD` || Passwort des `postgres`-Bootstrap-Superusers (nur initiales Rollen-Setup); mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
+| `POSTGRES_ADMIN_PASSWORD` | — | Passwort der Admin-Rolle; mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
+| `POSTGRES_BOOTSTRAP_PASSWORD` | — | Passwort des `postgres`-Bootstrap-Superusers (nur initiales Rollen-Setup); mindestens 32 Zeichen und kein `change-me`-Platzhalter. |
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB-Host. |
 | `POSTGRES_PORT` | `5432` | DB-Port. |
 
@@ -215,8 +215,8 @@ Anlaufstelle trennt drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Sup
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `ENCRYPTION_KEYS` || Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
-| `ENCRYPTION_KEY` || Einzelschlüssel-Betrieb (Alternative zu `ENCRYPTION_KEYS`); **abgekündigt**, Schlüsselring bevorzugt. Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
+| `ENCRYPTION_KEYS` | — | Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
+| `ENCRYPTION_KEY` | — | Einzelschlüssel-Betrieb (Alternative zu `ENCRYPTION_KEYS`); **abgekündigt**, Schlüsselring bevorzugt. Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
 
 **Einzelschlüssel → Schlüsselring migrieren:** Ist nur `ENCRYPTION_KEY` gesetzt, meldet `python manage.py check --deploy` die Warnung `core.W005` (#2240). Der Einzelschlüssel funktioniert unverändert weiter; nach Version 1.0 entfällt er, dann ist `ENCRYPTION_KEYS` die einzige unterstützte Variable. Umstellen, ohne Daten neu zu verschlüsseln:
 
@@ -245,7 +245,7 @@ Derselbe Schlüssel entschlüsselt danach alle vorhandenen Daten; eine spätere 
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `SENTRY_DSN` || Aktiviert das Error-Tracking (opt-in — ohne DSN verlässt keinerlei Telemetrie die Installation). Gesetzt werden `send_default_pii=False` und `include_local_variables=False`; ein serverseitiger Scrubber entfernt Request-Bodies/Cookies/Query-Strings und maskiert sensible Felder, bevor ein Event die Installation verlässt. Mechanismus **und Grenzen** siehe [§ 5.6 Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung). |
+| `SENTRY_DSN` | — | Aktiviert das Error-Tracking (opt-in — ohne DSN verlässt keinerlei Telemetrie die Installation). Gesetzt werden `send_default_pii=False` und `include_local_variables=False`; ein serverseitiger Scrubber entfernt Request-Bodies/Cookies/Query-Strings und maskiert sensible Felder, bevor ein Event die Installation verlässt. Mechanismus **und Grenzen** siehe [§ 5.6 Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung). |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Sample-Rate für Performance-Traces (0.0–1.0). |
 
 **E-Mail (SMTP, Produktion)**
@@ -254,8 +254,8 @@ Derselbe Schlüssel entschlüsselt danach alle vorhandenen Daten; eine spätere 
 |---|---|---|
 | `EMAIL_HOST` | `localhost` | SMTP-Host für Password-Reset- und Invite-Mails. |
 | `EMAIL_PORT` | `587` | SMTP-Port. |
-| `EMAIL_HOST_USER` || SMTP-Benutzer. |
-| `EMAIL_HOST_PASSWORD` || SMTP-Passwort. |
+| `EMAIL_HOST_USER` | — | SMTP-Benutzer. |
+| `EMAIL_HOST_PASSWORD` | — | SMTP-Passwort. |
 | `EMAIL_USE_TLS` | `True` | STARTTLS auf dem konfigurierten Port aushandeln (typisch Port 587). |
 | `EMAIL_USE_SSL` | `False` | Implizites TLS/SMTPS (typisch Port 465). Schließt `EMAIL_USE_TLS` aus — beide zugleich auf `True` lässt die Anwendung bewusst nicht starten. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Absenderadresse. |
@@ -301,7 +301,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | Name | Default | Beschreibung |
 |---|---|---|
 | `MAINTENANCE_FLAG_FILE` | `/data/anlaufstelle.maintenance` (Prod-Compose) | Beschreibbarer, persistenter Container-Pfad der Flag-Datei; solange sie existiert, antwortet die App mit HTTP 503. Ein eigener Wert in `.env` muss ebenfalls im Container erreichbar sein; bestehende Host-Pfade entfernen oder auf einen persistenten Container-Pfad umstellen. |
-| `MAINTENANCE_ALLOW_IPS` || Komma-separierte IP-Liste für Ops-Zugriff während der Wartung. |
+| `MAINTENANCE_ALLOW_IPS` | — | Komma-separierte IP-Liste für Ops-Zugriff während der Wartung. |
 | `MAINTENANCE_CACHE_TTL` | `5` | Caching-Dauer (Sekunden) der Flag-Datei-Prüfung. |
 | `MAINTENANCE_RETRY_AFTER` | `600` | Wert des `Retry-After`-Headers (Sekunden) bei aktivem Wartungsmodus. |
 
@@ -586,7 +586,7 @@ Schließt ein Standort, ist **Archivieren** der vorgesehene Weg, nicht das Lösc
 >
 > Wollen Sie eine Einrichtung wirklich restlos entfernen, ist der Weg: archivieren, die Aufbewahrungsfristen ablaufen lassen (siehe [§ 7.3](#73-löschfristen-und-enforce_retention)) und anschließend ein Backup ziehen — nicht die Kaskade.
 
-**Nutzer-Offboarding.** Das Archivieren sperrt den *Zugang*, räumt aber die Identitätsdaten ausgeschiedener Mitarbeitender nicht ab (Vor-/Nachname, Anzeigename, E-Mail, Telefon). Diese zweite Hälfte des Lebenszyklus wird gesondert umgesetzt: [#2051 — Offboarding-Bereinigung für ausgeschiedene Mitarbeitende](https://github.com/anlaufstelle/app/issues/2051). Bis dahin deaktivieren Sie die betroffenen Konten unter **Verwaltung → Zugänge**; Benutzername und Kennung bleiben dabei bewusst erhalten, damit die Zuordnung im Audit-Log lesbar bleibt.
+**Nutzer-Offboarding.** Das Archivieren sperrt den *Zugang*, räumt aber die Identitätsdaten ausgeschiedener Mitarbeitender nicht ab (Vor-/Nachname, Anzeigename, E-Mail, Telefon). Diese zweite Hälfte des Lebenszyklus wird gesondert umgesetzt: #2051 — Offboarding-Bereinigung für ausgeschiedene Mitarbeitende. Bis dahin deaktivieren Sie die betroffenen Konten unter **Verwaltung → Zugänge**; Benutzername und Kennung bleiben dabei bewusst erhalten, damit die Zuordnung im Audit-Log lesbar bleibt.
 
 ### 2.3 Einstellungen pro Einrichtung
 
@@ -594,8 +594,8 @@ Im Admin unter **Core → Einstellungen** können Sie unter anderem die folgende
 
 | Feld | Standardwert | Beschreibung |
 |---|---|---|
-| Vollständiger Name || Wird in Berichten angezeigt |
-| Standard-Dokumentationstyp || Vorausgewählter Typ bei neuem Eintrag |
+| Vollständiger Name | – | Wird in Berichten angezeigt |
+| Standard-Dokumentationstyp | – | Vorausgewählter Typ bei neuem Eintrag |
 | Session-Timeout (Minuten) | 30 | Automatischer Logout nach Inaktivität |
 | Maximale Sitzungsdauer (Stunden) | 12 | Obergrenze ab der Anmeldung, unabhängig von der Aktivität: Nach dieser Zeit endet die Sitzung in jedem Fall und es ist eine neue Anmeldung nötig. Zulässig 1–168; muss **größer** sein als das Session-Timeout (in Minuten gerechnet), sonst lehnt das Formular die Eingabe ab. Eine Änderung greift erst beim **nächsten** Login — bereits laufende Sitzungen behalten ihre beim Anmelden festgelegte Frist |
 | Aufbewahrung anonym (Tage) | 90 | Löschfrist für anonyme Kontakte |
@@ -686,7 +686,7 @@ Initialpasswort-Weg als technischer Notfall-Fallback zur Verfügung.
 
 **Technischer Fallback ohne E-Mail:** Die Fach-UI verlangt immer eine E-Mail-Adresse. Nur der Django-Admin kann einen Nutzer **ohne** E-Mail-Adresse anlegen und zeigt dann einmalig ein Klartext-Initialpasswort. Dieser Weg ist **unsicher** und sollte nur als Notlösung verwendet werden — besser: E-Mail nachtragen und Einladung neu versenden.
 
-> **Hinweis:** `must_change_password` wird bei **jeder** Neuanlage im Admin gesetzt. Schließt der Nutzer den Setup-Schritt der Einladung ab — oder später einen Passwort-Reset, wird das Flag dabei automatisch wieder gelöscht (#1969); er hat sein Passwort in diesem Schritt ja selbst gewählt und muss es beim ersten Login nicht sofort erneut ändern. Erzwungen bleibt der Wechsel damit genau dort, wo er gebraucht wird: beim Fallback ohne E-Mail-Adresse, bei dem der Admin das Initialpasswort kennt.
+> **Hinweis:** `must_change_password` wird bei **jeder** Neuanlage im Admin gesetzt. Schließt der Nutzer den Setup-Schritt der Einladung ab — oder später einen Passwort-Reset —, wird das Flag dabei automatisch wieder gelöscht (#1969); er hat sein Passwort in diesem Schritt ja selbst gewählt und muss es beim ersten Login nicht sofort erneut ändern. Erzwungen bleibt der Wechsel damit genau dort, wo er gebraucht wird: beim Fallback ohne E-Mail-Adresse, bei dem der Admin das Initialpasswort kennt.
 
 #### Rollenbeschreibung
 
@@ -755,7 +755,7 @@ Der Systemtyp hat **eine** Funktion: **UI-Logik**. Entsprechend gibt es genau zw
 
 > **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp — die meisten kommen ohne aus. Ob ein Typ in einem Bericht landet, sagt Ihnen die Auskunft „Erscheint in …" in Detail- und Formularansicht; der Systemtyp hat damit nichts zu tun.
 
-> **Die Werteliste ist eingefroren** ([RFC #1748](https://github.com/anlaufstelle/app/issues/1748), Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu: Ein Wert gehört nur dann hierher, wenn er Anwendungsverhalten steuert. Berichts-Zuordnungen laufen über den Berichtsschlüssel.
+> **Die Werteliste ist eingefroren** (RFC #1748, Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu: Ein Wert gehört nur dann hierher, wenn er Anwendungsverhalten steuert. Berichts-Zuordnungen laufen über den Berichtsschlüssel.
 
 #### Berichtsschlüssel
 
@@ -779,7 +779,7 @@ Die Auswahl kommt aus den Berichten selbst: Was ein Bericht auswertet, deklarier
 | **Gehört ausdrücklich in keinen Bericht** | *(ausgeschlossen — und **kein** Mangel)* |
 | *(leer)* | *(erscheint in keinem Bericht — und wird als Lücke gemeldet)* |
 
-> Die Schlüssel **Gewaltvorfall**, **Schutzmaßnahme**, **Gruppenangebot** und **Versorgung (Bedarf)** stammen aus den mitgelieferten Domänen-Paketen für Awareness-Arbeit, Frauenhaus und Jugendarbeit ([Paket-Übersicht #2133](https://github.com/anlaufstelle/app/issues/2133)). Sie stehen **jeder** Einrichtung zur Wahl, unabhängig davon, welches Paket geladen ist: Der Werteraum kommt aus dem Bericht, nicht aus dem Katalog. Neue Zeilen im Beispiel-Sachbericht erscheinen erst, sobald ein Typ mit dem passenden Schlüssel Ereignisse trägt; an den Zahlen bestehender Berichte ändert sich dadurch nichts.
+> Die Schlüssel **Gewaltvorfall**, **Schutzmaßnahme**, **Gruppenangebot** und **Versorgung (Bedarf)** stammen aus den mitgelieferten Domänen-Paketen für Awareness-Arbeit, Frauenhaus und Jugendarbeit (Paket-Übersicht #2133). Sie stehen **jeder** Einrichtung zur Wahl, unabhängig davon, welches Paket geladen ist: Der Werteraum kommt aus dem Bericht, nicht aus dem Katalog. Neue Zeilen im Beispiel-Sachbericht erscheinen erst, sobald ein Typ mit dem passenden Schlüssel Ereignisse trägt; an den Zahlen bestehender Berichte ändert sich dadurch nichts.
 
 > **Der Berichtsschlüssel wirkt nicht auf die Übersicht.** Kennzahlen, Diagramme und Tabellen des Reiters „Übersicht" (Kontakte im Zeitverlauf, Dokumentationstypen, Altersgruppen) zählen die Ereignisse des Zeitraums **unabhängig vom Berichtsschlüssel** — auch solche, die kein Bericht auswertet. Ein Typ mit „Gehört ausdrücklich in keinen Bericht" fällt deshalb aus den Berichten heraus, die über den Berichtsschlüssel zuordnen (etwa dem Beispiel-Sachbericht), bleibt in der Übersicht aber sichtbar und zählt dort weiter mit. Auch der Reiter „Externer Bericht" kennt den Berichtsschlüssel nicht.
 >
@@ -791,7 +791,7 @@ Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein
 
 > **Leer und „ausdrücklich ausgeschlossen" sind zwei verschiedene Dinge.** Der Bericht weist unter „Berichte" aus, wie viele Ereignisse er *nicht* zeigt. Gezählt werden dort **nur** Typen, die gar keine Aussage treffen (Schlüssel leer) — ein Typ mit „Gehört ausdrücklich in keinen Bericht" ist eine vollständige Aussage und erscheint **nicht** im Hinweis (#1819). Bis zum Update zählten Hausverbote und Notizen mit; eine Einrichtung, die Hausverbote dokumentiert, sah den Hinweis dauerhaft, ohne dass etwas falsch konfiguriert war.
 >
-> Einen **dritten** Fall gibt es seither ebenfalls: Trägt ein Typ einen Schlüssel, den kein Bericht (mehr) kennt — etwa aus einem fremden Konfigurationspaket oder nach einem Tippfehler, meldet der Bericht das gesondert. „Ich habe zugeordnet, es passiert nur nichts" ist ein anderer Befund als „ich habe nichts gesagt".
+> Einen **dritten** Fall gibt es seither ebenfalls: Trägt ein Typ einen Schlüssel, den kein Bericht (mehr) kennt — etwa aus einem fremden Konfigurationspaket oder nach einem Tippfehler —, meldet der Bericht das gesondert. „Ich habe zugeordnet, es passiert nur nichts" ist ein anderer Befund als „ich habe nichts gesagt".
 
 > **Nachtragen ja, ändern nein.** Ein leerer Berichtsschlüssel kann **jederzeit nachgetragen** werden — das ist der Reparaturweg, wenn ein Typ versehentlich in keinem Bericht auftauchte. Ein **gesetzter** Schlüssel ist danach fest (auch „Gehört ausdrücklich in keinen Bericht"): Berichte über vergangene Zeiträume sollen nicht rückwirkend andere Zahlen liefern. Das Formular weist beim Nachtragen darauf hin, dass der Schlüssel auf künftig erzeugte Berichte über **alle** Zeiträume wirkt.
 >
@@ -874,7 +874,7 @@ Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werde
 | Ja/Nein | `true` oder `false` | `true` |
 | Auswahl | Slug einer aktiven Option | `beratung` |
 | Mehrfachauswahl | Komma-getrennte Liste aktiver Options-Slugs | `beratung, essen` |
-| Datei | nicht unterstützt ||
+| Datei | nicht unterstützt | — |
 
 Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean()` beim Speichern im Admin abgelehnt.
 
@@ -932,7 +932,7 @@ Bei Feldvorlagen vom Typ **Zahl** lassen sich an derselben Stelle (**Core → Fe
 | `keine Zahl` | Sammelbefund für drei unterscheidbare, aber bewusst gleich gemeldete Fälle: ein leerer **Pflicht**wert, ein nicht-numerisch gespeicherter Wert, oder ein Entschlüsselungsfehler (beschädigtes/fremdes Chiffrat). Ein Entschlüsselungsfehler wird **immer** gemeldet, auch an einem optionalen Feld. |
 | *(kein Eintrag)* | Ein leerer Wert an einem **optionalen** Feld ist kein Fund — „kein Wert" ist dort ein gültiger Zustand, keine Bereichsverletzung. |
 
-Ein Fund ist kein Reparaturauftrag an das Inventar selbst: Es zählt nur, es schreibt nichts. Bereinigen Sie gemeldete Datensätze fachlich — öffnen Sie den betroffenen Datensatz und tragen Sie einen gültigen Wert ein bzw. leeren Sie ein optionales Feld, bevor Sie die Grenze verschärfen.
+Ein Fund ist kein Reparaturauftrag an das Inventar selbst: Es zählt nur, es schreibt nichts. Bereinigen Sie gemeldete Datensätze fachlich — öffnen Sie den betroffenen Datensatz und tragen Sie einen gültigen Wert ein bzw. leeren Sie ein optionales Feld —, bevor Sie die Grenze verschärfen.
 
 #### Speicher-Blockverhalten bei bestehenden Bestandswerten
 
@@ -1523,7 +1523,7 @@ Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird
 - `include_local_variables=False` — Stack-Frame-Locals werden nicht erfasst (ein Frame könnte z. B. eine entschlüsselte Notiz enthalten).
 - Ein serverseitiger `before_send`-Hook entfernt Request-Bodies, Cookies und Query-Strings, maskiert sensible Header und Schlüssel (`Authorization`, Passwörter, Tokens …), zieht Exception- und Log-Messages sowie die aus Log-Zeilen gebauten **Breadcrumbs** durch einen Text-Scrubber (Emails/Tokens werden zu Platzhaltern) und maskiert frei befüllbare `extra`-Werte.
 - Ein `before_send_transaction`-Hook wendet dasselbe Scrubbing auf **Performance-Transactions** an (diese umgehen `before_send` im SDK): Request-Kontext inklusive `query_string` (Suchbegriffe können Klient*innen-Namen sein), Span-Beschreibungen und -Daten sowie der Transaction-Name werden mitbehandelt.
-- **URL-tragende Felder werden strukturell maskiert** (#2198). Betroffen sind `request.url`, die Header `Referer` und `HX-Current-Url`, der Transaction-Name sowie Pfade in Log-Messages, Span-Beschreibungen und Breadcrumb-Daten. Zwei Schritte: Der Query-String fällt weg — dort steht der Suchbegriff, und ein Suchbegriff ist oft ein Klient*innen-Name, der sonst über den `Referer` jeder Folgeseite mitgereist wäre. Und der Pfad wird gegen das Django-Route-Schema aufgelöst: aus `/invite/MTIz…/cx1a2b-…/` wird `/invite/<uidb64>/<token>/`. Die live nutzbaren Einladungs-, Passwort-Reset- und Konto-Wiederherstellungs-Token stehen damit nicht mehr im Tracker, die Route bleibt für die Fehlersuche lesbar. Dabei werden auch eine Subpath-Installation (`SCRIPT_NAME`/`FORCE_SCRIPT_NAME` — der Präfix wird zum Auflösen abgetrennt und danach wieder vorangestellt) und ein fehlender Schrägstrich am Ende berücksichtigt. Löst ein Pfad gar nicht auf (typisch bei `404`), greift eine Heuristik: Pfadsegmente ab 20 Zeichen aus Token-Zeichen werden zu `[scrubbed]`, sofern sie ein Token-Signal tragen — einen langen zusammenhängenden Zeichenlauf (Hash, Base64) oder den Doppelpunkt der signierten Wiederherstellungs-Token. Prozentkodierte Schreibweisen zählen dabei mit: ein Browser schickt den Link im `Referer` so, wie er in der Adresszeile steht (`%3A` statt `:`), deshalb werden Pfadsegmente vor der Prüfung kontrolliert dekodiert — ein kodierter Schrägstrich (`%2F`) bleibt dabei Teil des Segments und wird nicht zum Trenner. Steht eine URL mitten in einer Log-Zeile — etwa in der CSRF-403-Zeile, die Pfad und Referer zusammen protokolliert, wird sie dort genauso behandelt; Satzzeichen um die URL herum bleiben stehen.
+- **URL-tragende Felder werden strukturell maskiert** (#2198). Betroffen sind `request.url`, die Header `Referer` und `HX-Current-Url`, der Transaction-Name sowie Pfade in Log-Messages, Span-Beschreibungen und Breadcrumb-Daten. Zwei Schritte: Der Query-String fällt weg — dort steht der Suchbegriff, und ein Suchbegriff ist oft ein Klient*innen-Name, der sonst über den `Referer` jeder Folgeseite mitgereist wäre. Und der Pfad wird gegen das Django-Route-Schema aufgelöst: aus `/invite/MTIz…/cx1a2b-…/` wird `/invite/<uidb64>/<token>/`. Die live nutzbaren Einladungs-, Passwort-Reset- und Konto-Wiederherstellungs-Token stehen damit nicht mehr im Tracker, die Route bleibt für die Fehlersuche lesbar. Dabei werden auch eine Subpath-Installation (`SCRIPT_NAME`/`FORCE_SCRIPT_NAME` — der Präfix wird zum Auflösen abgetrennt und danach wieder vorangestellt) und ein fehlender Schrägstrich am Ende berücksichtigt. Löst ein Pfad gar nicht auf (typisch bei `404`), greift eine Heuristik: Pfadsegmente ab 20 Zeichen aus Token-Zeichen werden zu `[scrubbed]`, sofern sie ein Token-Signal tragen — einen langen zusammenhängenden Zeichenlauf (Hash, Base64) oder den Doppelpunkt der signierten Wiederherstellungs-Token. Prozentkodierte Schreibweisen zählen dabei mit: ein Browser schickt den Link im `Referer` so, wie er in der Adresszeile steht (`%3A` statt `:`), deshalb werden Pfadsegmente vor der Prüfung kontrolliert dekodiert — ein kodierter Schrägstrich (`%2F`) bleibt dabei Teil des Segments und wird nicht zum Trenner. Steht eine URL mitten in einer Log-Zeile — etwa in der CSRF-403-Zeile, die Pfad und Referer zusammen protokolliert —, wird sie dort genauso behandelt; Satzzeichen um die URL herum bleiben stehen.
 - **Aus Log-Zeilen geht nur das Muster hinaus, nicht der eingesetzte Wert** (#2198). Eine Log-Zeile besteht aus einer Vorlage (`"Backend %s übersprungen (facility=%s)"`) und den eingesetzten Werten. Das SDK überträgt beides — die Vorlage, die fertig zusammengesetzte Zeile und die Roh-Argumente — und baut aus jeder Log-Zeile zusätzlich eine Verlaufsspur (Breadcrumb) an spätere Ereignisse. Ob in einem eingesetzten Wert ein Personen- oder Einrichtungsname steckt, lässt sich einem Text nicht ansehen; deshalb gilt hier die harte Regel statt einer Mustererkennung: **die zusammengesetzte Zeile wird durch die Vorlage ersetzt und die Argumente werden verworfen** — in den Ereignisfeldern ebenso wie in der Verlaufsspur, deren Zusatzdaten auf Logger und Level eingedampft werden. Im Tracker steht dann `"Backend %s übersprungen (facility=%s)"` samt Logger-Namen und Schweregrad: genug, um die Stelle im Code zu finden, ohne einen einzigen eingesetzten Wert mitzunehmen. Auch die Zusatzdaten der Verlaufsspur werden dafür **neu gebaut** statt gefiltert — übernommen wird nur, was das Logging-System selbst vergibt (Logger-Name und Schweregrad); alles, was eine Log-Zeile über `extra` frei mitgeben kann, fällt weg.
 - **Personenbezogene Schlüssel-Wert-Paare in freien Texten** (Fehlermeldungen, Span-Beschreibungen) werden zusätzlich maskiert (#2198): `user=`, `username=`, `login=`, `email=`, `name=` — auch mit Präfix (`facility_name=`), auch mehrwortig, auch in Anführungszeichen oder mit Doppelpunkt (`"user": "Anna Mustermann"`). Der Wert wird bis zum nächsten Trennzeichen oder bis zum nächsten Schlüssel entfernt, Format-Platzhalter (`user=%s`) bleiben stehen. Wortenden wie `superuser=`, `filename=` oder `hostname=` sind nicht betroffen. In strukturierten Feldern werden die Schlüssel `user`, `username`, `login`, `name`, `full_name`, `display_name`, `facility_name` und `pseudonym` **exakt** abgeglichen — die technischen Kennungen `user_id`, `user_pk` und `request_id` bleiben damit lesbar.
 - **Klienten-IP und Proxy-Ketten** werden maskiert (#2198): `remote_addr` aus einem CSP-Verstoßbericht ebenso wie die Header `Forwarded` (RFC 7239), `X-Forwarded-For`, `X-Real-IP`, `True-Client-IP`, `CF-Connecting-IP` und `Via`. Das SDK filtert zwar einige davon selbst, den standardisierten `Forwarded`-Header aber nicht.
@@ -1871,7 +1871,7 @@ Jede Speicherung eines Ereignisses schreibt eine **Historien-Fassung**: wer wann
 
 **Stufe 1 — Redaktion.** Die Fassung bleibt bestehen, ihre *Werte* fallen weg. Was stehen bleibt: Zeitpunkt, handelnde Person, Aktion und die Namen der betroffenen Felder. Was verschwindet: die Inhalte. In der Ereignis-Detailansicht und in der Auskunft nach Art. 15 erscheint an ihrer Stelle „– (redigiert)". Zwei Auslöser:
 
-- **Das Ereignis ist gelöscht.** Sobald ein Ereignis als gelöscht markiert ist — durch die Frist oder von Hand, verlieren beim nächsten Lauf **alle** seine Fassungen ihre Werte. Das braucht keine Einstellung und lässt sich nicht abschalten: es ist die Durchsetzung der Frist, die für das Ereignis ohnehin schon gilt. Es erfasst auch Ereignisse ohne Person (anonyme Kontakte), für die es bisher überhaupt keinen Löschpfad der Historie gab.
+- **Das Ereignis ist gelöscht.** Sobald ein Ereignis als gelöscht markiert ist — durch die Frist oder von Hand —, verlieren beim nächsten Lauf **alle** seine Fassungen ihre Werte. Das braucht keine Einstellung und lässt sich nicht abschalten: es ist die Durchsetzung der Frist, die für das Ereignis ohnehin schon gilt. Es erfasst auch Ereignisse ohne Person (anonyme Kontakte), für die es bisher überhaupt keinen Löschpfad der Historie gab.
 - **Die Fassung ist alt.** Bei noch **lebenden** Ereignissen werden Fassungen redigiert, die älter als `eventhistory_detail_months` sind.
 
 **Stufe 2 — Löschung der Chronologie.** Eine bereits redigierte Fassung wird endgültig gelöscht, wenn ihre Redaktion länger als `eventhistory_chronicle_months` zurückliegt. Gemessen wird ab dem Zeitpunkt der Redaktion, nicht ab der ursprünglichen Änderung — die Frage lautet „wie lange steht diese Zeile schon leer". Zu diesem Zeitpunkt fallen keine Inhalte mehr, nur noch die Chronologie selbst.
@@ -2000,7 +2000,7 @@ Löschanträge liegen als Reiter **„Löschanträge"** im Bereich **„Datensch
 | Leitung, Anwendungsbetreuung | ja | **alle** Anträge der Einrichtung |
 | Träger:in des Rechts *Löschbestätigung* (ohne Leitungsrolle) | ja | **alle** Anträge der Einrichtung |
 | Antragstellende Person mit mindestens einem **offenen** eigenen Antrag | ja, solange der Antrag offen ist | **nur die eigenen** Anträge |
-| Alle übrigen | nein ||
+| Alle übrigen | nein | — |
 
 Der letzte Fall ist der **Rückkanal**: Wer einen Antrag stellt, findet ihn danach über die Navigation und über einen Hinweisbanner am betroffenen Datensatz wieder und sieht seinen Status — ohne dadurch Zugriff auf fremde Begründungen und Ziel-Pseudonyme zu bekommen. Ist der Antrag entschieden, verschwindet der Reiter wieder — und mit ihm der Bereichs-Eintrag „Datenschutz", sofern kein anderer Reiter des Bereichs sichtbar bleibt.
 
@@ -2050,7 +2050,7 @@ Seit [ADR-045](adr/045-personen-merge.md) lassen sich doppelt angelegte Personen
 
 - **Dieselbe Antragsliste, eigene Antragsart.** Ein Zusammenführungs-Antrag läuft über **Datenschutz → Löschanträge**, gestaffelt wie die Löschung: Trägt eine der beiden Personen „Mit Zusatzangaben", entscheidet eine zweite Person mit dem Recht *Löschbestätigung*; sind beide auf „Nur Pseudonym", darf die Leitung direkt zusammenführen. Die Liste weist Merge-Anträge als **Zusammenführung → Ziel** aus; die Prüfseite zeigt beide Akten mit Bestandszahlen. Pro Person läuft immer nur **ein** destruktiver Antrag — Löschung *oder* Zusammenführung.
 - **Der Papierkorb kennt Tombstones.** Die aufgelöste Quelle liegt mit dem Vermerk „zusammengeführt in <Ziel>" unter `/clients/trash/`. Statt „Wiederherstellen" (das der Service abweist — ein bloßes Restore ließe die Akte ohne ihre gewanderten Daten auferstehen) steht dort **Zusammenführung aufheben**: Die gewanderten Ereignisse, Fälle, Aufgaben und übernommenen Anhänge kehren zurück, seit der Zusammenführung neu erfasste Einträge bleiben beim Ziel. Nach Ablauf von `client_trash_days` redigiert der normale Aufbewahrungslauf den Tombstone wie jede Papierkorb-Person; der Verweis auf das Ziel bleibt als Verbleibs-Nachweis stehen, aufheben lässt sich danach nichts mehr.
-- **Grenze: Aufbewahrungssperre.** Besteht ein **aktiver Legal Hold** auf der Zielperson oder auf der Quelle — auch mittelbar über eines ihrer Ereignisse oder einen ihrer Fälle, wird **Zusammenführung aufheben** mit einer Fehlermeldung abgewiesen (Refs #2200), genau wie das Zusammenführen selbst. Grund: beim Aufheben wandern die Ereignisse zur Quelle zurück, während der Hold auf der Zielperson stehen bleibt — er deckte sie danach nicht mehr, obwohl er weiter gilt. Der Hold wird bewusst **nicht** still auf die Quelle gespiegelt: eine Aufbewahrungssperre ist ein bewusster Beweismittel-Akt. Erst Hold aufheben oder ablaufen lassen, dann die Zusammenführung aufheben.
+- **Grenze: Aufbewahrungssperre.** Besteht ein **aktiver Legal Hold** auf der Zielperson oder auf der Quelle — auch mittelbar über eines ihrer Ereignisse oder einen ihrer Fälle —, wird **Zusammenführung aufheben** mit einer Fehlermeldung abgewiesen (Refs #2200), genau wie das Zusammenführen selbst. Grund: beim Aufheben wandern die Ereignisse zur Quelle zurück, während der Hold auf der Zielperson stehen bleibt — er deckte sie danach nicht mehr, obwohl er weiter gilt. Der Hold wird bewusst **nicht** still auf die Quelle gespiegelt: eine Aufbewahrungssperre ist ein bewusster Beweismittel-Akt. Erst Hold aufheben oder ablaufen lassen, dann die Zusammenführung aufheben.
 - **Offline-Geräte purgen die Quelle.** Der Merge widerruft die Offline-Bundles der aufgelösten Akte (personen-genau, wie bei einer Löschung). Offline bereits erfasste, noch nicht übertragene Ereignisse zur Quelle werden bewusst **nicht** automatisch auf das Ziel umgebucht — sie landen in der Dead-Letter-Liste der Offline-Konflikte zur Nachbearbeitung.
 - **Kein Massenlösch-Alarm.** Eine Aufräum-Kampagne über Alt-Duplikate zählt nicht in die Massenlösch-Erkennung (`CLIENT_MERGED` ist eine eigene, nicht gezählte Vorgangsart) — es wird konsolidiert, nicht vernichtet.
 

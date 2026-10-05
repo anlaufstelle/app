@@ -65,5 +65,5 @@ __all__ = [
 ]
 
 # Register the Postgres-only ``__ilike`` lookup when model classes are loaded.
-# Refs https://github.com/anlaufstelle/app/issues/2027
+# Refs #2027
 from . import lookups  # noqa: F401

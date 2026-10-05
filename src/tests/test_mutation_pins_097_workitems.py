@@ -1,6 +1,6 @@
 """Pin-Tests der Welle J (0.97) — Prio-1-Survivors in ``core.services.case.workitems``.
 
-Refs https://github.com/anlaufstelle/app/issues/2149.
+Refs #2149.
 
 Quelle: Survivor-Triage des atomaren Mutations-Messlaufs (Batch ``workitems-a``
 und ``workitems-b``). Gepinnt werden die 29 als ``testluecke_prio1``

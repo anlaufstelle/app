@@ -1,6 +1,6 @@
 # Barrierefreiheits-Audit — Anlaufstelle (WCAG 2.1 Stufe AA)
 
-**Stand 2026-09-06** · Nachweis-Dokument im Rahmen von Meilenstein release-0.94, [https://github.com/anlaufstelle/app/issues/1059](https://github.com/anlaufstelle/app/issues/1059) (Stufe 2 + 3).
+**Stand 2026-09-06** · Nachweis-Dokument im Rahmen von Meilenstein release-0.94, #1059 (Stufe 2 + 3).
 Geprüfter Stand des Hauptzweigs: `378a614b` (Stand main 2026-09-06). Werkzeuge: axe-core 4.13.0 (Regelumfang siehe § 1.2), Gate `make test-a11y` / `src/tests/e2e/test_accessibility.py`, Bestandsschutz-Baseline `src/tests/e2e/a11y_baseline.json`.
 
 Dieses Dokument ist der Nachweis der Barrierefreiheit. § 1 (Scope/Methodik), § 2 (automatisierte Befunde und Korrekturen) und § 4 (bewusste Ausnahmen) sind belegt; § 3 ist ein Prüfprotokoll für den Screenreader-Handtest, dessen Ergebnis offen ist und nachgetragen wird.
@@ -118,7 +118,7 @@ Die automatisierte Prüfung fand **11** dieser Befunde; die übrigen **36** stam
 
 | Seite | Regel | Impact | Knoten | Status |
 |---|---|---|---|---|
-| `event_create_errors` | `listitem` (`<li>` außerhalb `<ul>`/`<ol>`) | serious | 1 | offen — Ursache nicht verortbar, Folge-Ticket [https://github.com/anlaufstelle/app/issues/2154](https://github.com/anlaufstelle/app/issues/2154) |
+| `event_create_errors` | `listitem` (`<li>` außerhalb `<ul>`/`<ol>`) | serious | 1 | offen — Ursache nicht verortbar, Folge-Ticket #2154 |
 
 Der verbleibende Befund stammt aus der Fehlerausgabe „Dieses Feld ist zwingend erforderlich.“ auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler; siehe § 2.5.
 
@@ -153,7 +153,7 @@ Reihenfolge nach Schwere. Status: „behoben" (Fix-Welle B2/B2' — Commit-Berei
 | A11Y-023 | 4.1.3 Statusmeldungen | serious | B2 | behoben — Offline-Speicherfehler als `role="alert"`, Stufenhinweis als Status |
 | A11Y-024 | 1.4.3 Kontrast Text | serious | B2 | behoben — `opacity-80` in der Übergabe-Zusammenfassung entfernt (6,07:1) |
 | A11Y-025 | 1.4.3 Kontrast Text | serious | B2 | behoben — `orange-600`→`orange-700` (3,59:1→5,23:1) |
-| A11Y-026 | 4.1.2 / 1.3.1 | serious | B2' | behoben — Aufgaben-Formular nutzt das gemeinsame Personen-Autocomplete ([https://github.com/anlaufstelle/app/issues/1989](https://github.com/anlaufstelle/app/issues/1989)); Tastaturpfad bleibt Handtest M-10 |
+| A11Y-026 | 4.1.2 / 1.3.1 | serious | B2' | behoben — Aufgaben-Formular nutzt das gemeinsame Personen-Autocomplete (#1989); Tastaturpfad bleibt Handtest M-10 |
 | A11Y-027 | 1.3.1 / 4.1.2 | serious | B2 | behoben — Person-Select der Offline-Aufgabe mit Label verbunden |
 | A11Y-028 | 4.1.2 Name, Rolle, Wert | serious | B2' | behoben — Sidebar-„Neu erstellen“ mit Zustand + Fokus-Rückgabe |
 | A11Y-029 | 4.1.2 Name, Rolle, Wert | serious | B2' | behoben — mobiles „Mehr“/Sucheinblendung mit Zustand + Fokus-Rückgabe |
@@ -224,7 +224,7 @@ Zählweise: je Welle alle Commits auf dem Hauptzweig (main), einschließlich der
 
 ### 2.5 Gelöst in #2154: `role="alert"` überschrieb die Listenrolle
 
-Auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler meldete die automatisierte Prüfung ein Listenelement außerhalb einer Liste (`listitem`, erheblich, ein Element, Text „Dieses Feld ist zwingend erforderlich.“). Sämtliche Fehlerausgaben der beteiligten Vorlagen verwendeten nachweislich einen Listen-Container — die Stelle ließ sich weder im Vorlagen-Audit noch im Rahmen der Korrektur-Wellen im Quelltext bestimmen, weil ein reines Markup-Grep sie nicht sieht: `role="alert"` direkt am `<ul id="id_occurred_at-error" ...>` überschrieb dessen implizite `list`-Rolle; die Kind-`<li>` behielten ihre implizite `listitem`-Rolle, standen dadurch aber ohne Listen-Elternteil im Accessibility-Tree — nur eine Live-DOM-Prüfung wie axe deckt das auf. Gelöst in [https://github.com/anlaufstelle/app/issues/2154](https://github.com/anlaufstelle/app/issues/2154): Die Rolle `alert` sitzt jetzt auf einem umschließenden `<div>`, das `<ul>` bekommt seine Listenrolle über `role="list"` explizit zurück; `id`/`aria-describedby` bleiben unverändert auf dem `<ul>` gerichtet. Dieselbe Fehlerklasse (`<ul ... role="alert">`) fand sich repo-weit an über einem Dutzend weiteren Stellen (Formularfeld-Partial, dynamische Zusatzfelder, Personen-Autocomplete, Aufgaben-/Fall-Formular, mehrere Konfigurations-Partials, Passwort-Formulare) und wurde im selben Zug behoben — Einzelheiten im Umsetzungsbericht zu release-0.96.
+Auf dem Kontaktformular mit ausgelöstem Pflichtfeld-Fehler meldete die automatisierte Prüfung ein Listenelement außerhalb einer Liste (`listitem`, erheblich, ein Element, Text „Dieses Feld ist zwingend erforderlich.“). Sämtliche Fehlerausgaben der beteiligten Vorlagen verwendeten nachweislich einen Listen-Container — die Stelle ließ sich weder im Vorlagen-Audit noch im Rahmen der Korrektur-Wellen im Quelltext bestimmen, weil ein reines Markup-Grep sie nicht sieht: `role="alert"` direkt am `<ul id="id_occurred_at-error" ...>` überschrieb dessen implizite `list`-Rolle; die Kind-`<li>` behielten ihre implizite `listitem`-Rolle, standen dadurch aber ohne Listen-Elternteil im Accessibility-Tree — nur eine Live-DOM-Prüfung wie axe deckt das auf. Gelöst in #2154: Die Rolle `alert` sitzt jetzt auf einem umschließenden `<div>`, das `<ul>` bekommt seine Listenrolle über `role="list"` explizit zurück; `id`/`aria-describedby` bleiben unverändert auf dem `<ul>` gerichtet. Dieselbe Fehlerklasse (`<ul ... role="alert">`) fand sich repo-weit an über einem Dutzend weiteren Stellen (Formularfeld-Partial, dynamische Zusatzfelder, Personen-Autocomplete, Aufgaben-/Fall-Formular, mehrere Konfigurations-Partials, Passwort-Formulare) und wurde im selben Zug behoben — Einzelheiten im Umsetzungsbericht zu release-0.96.
 
 ---
 

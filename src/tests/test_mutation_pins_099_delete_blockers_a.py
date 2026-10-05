@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.config.delete_blockers`` (Batch ``delete_blockers-a``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@ebb52409 (frischer Mutantenbaum), Batch
 ``delete_blockers-a`` (63 Survivor-Mutanten in drei Funktionen:

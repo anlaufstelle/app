@@ -10,7 +10,7 @@ Das Projekt steht vor seiner ersten oeffentlichen Live-Schaltung (`dev.anlaufste
 
 Die Frage war nicht trivial:
 
-- Eine Recherche-Empfehlung aus [Issue #320](https://github.com/anlaufstelle/app/issues/320) (2026-03-23, geschlossen) hatte **Hetzner + Coolify Cloud** vorgeschlagen — wegen PR-Previews, Web-UI fuer Env-Vars und minimalem DevOps-Aufwand. [Issue #554](https://github.com/anlaufstelle/app/issues/554) sollte das umsetzen, wurde aber nie durchgezogen.
+- Eine Recherche-Empfehlung aus Issue #320 (2026-03-23, geschlossen) hatte **Hetzner + Coolify Cloud** vorgeschlagen — wegen PR-Previews, Web-UI fuer Env-Vars und minimalem DevOps-Aufwand. Issue #554 sollte das umsetzen, wurde aber nie durchgezogen.
 - Das ADR-Backlog hat „Deployment-Target" explizit als offen gefuehrt, abhaengig von „Erfahrungen im ersten Pilot-Deployment". Das damalige Pilot-Deployment ist nicht zustande gekommen, die geplante ADR blieb offen.
 - Das **Fachkonzept** ist an mehreren Stellen klar gegenlaeufig:
   - §163: „Anlaufstelle muss mit `docker compose up` installierbar sein."
@@ -48,7 +48,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 - Bei >5 parallelen Feature-Branch-Subdomains wird das manuelle Pattern zaeh; dann waere ein Folge-ADR mit Re-Evaluation faellig.
 - Wir verzichten bewusst auf Komfort-Features, um die Architektur-Konsistenz mit dem Selbsthosting-Versprechen zu wahren.
 
-**Nachtrag (2026-09-10):** Coolify-Pfad entfernt (Refs https://github.com/anlaufstelle/app/issues/2202) — `docs/coolify-deployment.md` wurde nie gegen eine echte Installation verifiziert und widersprach dieser ADR (siehe „Alternatives considered" unten). Plain Docker Compose bleibt der einzige dokumentierte Pfad.
+**Nachtrag (2026-09-10):** Coolify-Pfad entfernt (Refs #2202) — `docs/coolify-deployment.md` wurde nie gegen eine echte Installation verifiziert und widersprach dieser ADR (siehe „Alternatives considered" unten). Plain Docker Compose bleibt der einzige dokumentierte Pfad.
 
 ## Alternatives considered
 

@@ -1,7 +1,7 @@
 
 # Glossar — Anlaufstelle (Deutsch)
 
-> **Deutsches Fachglossar.** Diese Datei führt die domänen-, sicherheits- und datenschutz-spezifischen Begriffe von Anlaufstelle alphabetisch auf und vertieft anschließend die **datenschutz- und compliance-relevanten** Begriffe (K-Anonymität, Retention, Pseudonymisierung, Legal Hold, Offline-Snapshot-Keys …). Die **bilinguale (DE↔EN)** Gesamtliste mit identischer Begriffsmenge steht in [`en/glossary.md`](en/glossary.md); das Domänen-Glossar als Teil des Konzepts in [Fachkonzept §14](fachkonzept-anlaufstelle.md#14-glossar). Zugehöriger DSGVO-Wegweiser: [datenschutz.md](datenschutz.md). Pflege-Audit: [Issue #1071](https://github.com/anlaufstelle/app/issues/1071).
+> **Deutsches Fachglossar.** Diese Datei führt die domänen-, sicherheits- und datenschutz-spezifischen Begriffe von Anlaufstelle alphabetisch auf und vertieft anschließend die **datenschutz- und compliance-relevanten** Begriffe (K-Anonymität, Retention, Pseudonymisierung, Legal Hold, Offline-Snapshot-Keys …). Die **bilinguale (DE↔EN)** Gesamtliste mit identischer Begriffsmenge steht in [`en/glossary.md`](en/glossary.md); das Domänen-Glossar als Teil des Konzepts in [Fachkonzept §14](fachkonzept-anlaufstelle.md#14-glossar). Zugehöriger DSGVO-Wegweiser: [datenschutz.md](datenschutz.md). Pflege-Audit: Issue #1071.
 >
 > **Quelle:** [`docs/fachkonzept-anlaufstelle.md` §14](fachkonzept-anlaufstelle.md#14-glossar) (Domänenbegriffe) + [`en/glossary.md`](en/glossary.md) (Sicherheits-/Technikbegriffe). **Bei Widerspruch gilt der Code.**
 
@@ -92,7 +92,7 @@ unterscheiden lässt — jede Merkmalskombination kommt also **mindestens k-mal*
 
 **Alltagsbeispiel (k = 5):** Eine Statistik gruppiert Kontakte nach *Altersgruppe*
 und *Geschlecht*. Gibt es in einer Einrichtung nur **eine** Person der Kombination
-„unter 18 / divers", würde diese Zeile faktisch eine einzelne Person offenlegen
+„unter 18 / divers", würde diese Zeile faktisch eine einzelne Person offenlegen —
 obwohl die Statistik „anonym" wirkt. Bei k = 5 wird eine solche Gruppe mit weniger
 als 5 Personen **unterdrückt** (kein Zahlenwert, sondern „—" bzw. `suppressed`),
 sodass aus dem Aggregat niemand zurückverfolgt werden kann.

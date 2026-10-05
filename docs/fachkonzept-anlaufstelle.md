@@ -14,7 +14,7 @@ Version: 1.9
 |---|---|---|
 | 1.0 | Dezember 2025 | Erstfassung |
 | 1.1 | Februar 2026 | Schichtkonzept durch benannte Zeitfilter ersetzt. Übergabe-Konzept aufgelöst — abgedeckt durch Arbeitsinfos (Hinweise, Aufgaben). Organisationshierarchie als offene Entscheidung markiert. |
-| 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für–3), Lizenz (AGPL v3). Phasenplan: gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
+| 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für Phase 1–3), Lizenz (AGPL v3). Phasenplan: gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
 | 1.3 | April 2026 | Feld-Level-Sensitivität: Verschlüsselung und Sichtbarkeit entkoppelt (`FieldTemplate.sensitivity`). |
 | 1.4 | April 2026 (2026-04-19) | Mobile-/Offline-Strategie (§ 16) auf Ist-Stand v0.10 aktualisiert; Sicherheitskonzept um 2FA, File Vault, RLS erweitert. |
 | 1.5 | Mai 2026 (2026-05-10) | 5-Rollen-Modell mit `super_admin` als oberster, facility-übergreifender Rolle (Persona Jonas). Bisherige `admin`-Rolle in `facility_admin` umbenannt (UI-Label „Anwendungsbetreuung"). § 5 (Persona Jonas), § 6 (Berechtigungsmodell), § 9 (Role + Organization), § 14 (Glossar), § 18 (DSGVO-Tabelle), § 25 (Monitoring/Backup) entsprechend aktualisiert. Organisation explizit als reine Branding-Hülse formuliert (Variante b1, [ADR-018](adr/018-rollenmodell-superadmin.md)). DSGVO-Rechenschaftspflicht: jeder Cross-Facility-Lese-Zugriff erzeugt `SYSTEM_VIEW`-AuditLog. Refs #867, löst #866. |
@@ -308,7 +308,7 @@ Selin sitzt am PC im Büro. Eine Besucherin kommt herein, nimmt einen Kaffee und
 1. Selin öffnet die Startseite — sie sieht den aktuellen Zeitstrom (gefiltert auf den Zeitraum „Nachtdienst 21:30–09:00", den die Einrichtung als benannten Zeitfilter konfiguriert hat).
 2. Sie klickt „Neuer Kontakt".
 3. Sie tippt das Pseudonym: „Maus". Autocomplete schlägt vor: „Maus (identifiziert, 27+)".
-4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch,...).
+4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch, ...).
 5. Sie wählt „Kurz" und „Aufenthalt, Verpflegung". Klick auf Speichern.
 6. Der Eintrag erscheint sofort in der Übersicht.
 
@@ -344,7 +344,7 @@ Selin möchte nachschauen, wann „Maus" zuletzt da war und was dokumentiert wur
 - 14.03.2026: Kontakt (Aufenthalt, Verpflegung, Spritzentausch)
 - 12.03.2026: Kontakt (Aufenthalt, Krisengespräch — 45 Min.)
 - 08.03.2026: Kontakt (Aufenthalt)
--...
+- ...
 
 Ein Klick auf einen Eintrag zeigt die Details. Verschlüsselte Felder (z.B. Gesprächsinhalte) sind nur für berechtigte Rollen sichtbar.
 
@@ -633,7 +633,7 @@ Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen defi
 
 #### FieldTemplate — Die Feldvorlage
 
-Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean,...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welchen Berichtsschlüssel es trägt (`report_key`).
+Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean, ...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welchen Berichtsschlüssel es trägt (`report_key`).
 
 FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Dauer" ein Zahlenfeld mit dem Berichtsschlüssel „Minuten" ist und als nicht-sensibel eingestuft gilt — der Bericht liest es deshalb, auch wenn die Einrichtung es „Gesprächsdauer" nennt.
 
@@ -863,7 +863,7 @@ Domänenbibliotheken sind keine fest eingebauten Typen. Sie sind Seed-Daten — 
 | **Begleitung** | Leistung | Identifiziert | Mittel | Begleitungen | 36 Monate |
 | **Beratungsgespräch** | Leistung | Qualifiziert | Hoch (verschlüsselt) | Beratungsgespräche | 60 Monate |
 | **Vermittlung** | Leistung | Identifiziert | Mittel | Vermittlungen | 36 Monate |
-| **Hausverbot** | Administration | Identifiziert | Niedrig || 36 Monate |
+| **Hausverbot** | Administration | Identifiziert | Niedrig | — | 36 Monate |
 
 ### Erläuterung der Zuordnungen
 
@@ -985,7 +985,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 **Kein Ersatz für klinische Dokumentation.** Anlaufstelle dokumentiert niedrigschwellige soziale Arbeit, nicht medizinische Behandlung. Für Substitutionsambulanzen, Therapieeinrichtungen oder psychiatrische Dienste gibt es spezialisierte Systeme mit eigenen regulatorischen Anforderungen (z.B. § 630f BGB für Patientendokumentation).
 
-**Kein starres Formular-Framework.** Das Typ-Feld-System ist konfigurierbar, aber es ist kein allgemeiner Formular-Builder wie Google Forms oder Typeform. Die Felder haben Semantik — Sensitivität, Statistik-Zuordnung, Löschfrist, die über reine Formularerfassung hinausgeht. Anlaufstelle baut auf fachlichen Konzepten auf, nicht auf generischer Datensammlung.
+**Kein starres Formular-Framework.** Das Typ-Feld-System ist konfigurierbar, aber es ist kein allgemeiner Formular-Builder wie Google Forms oder Typeform. Die Felder haben Semantik — Sensitivität, Statistik-Zuordnung, Löschfrist —, die über reine Formularerfassung hinausgeht. Anlaufstelle baut auf fachlichen Konzepten auf, nicht auf generischer Datensammlung.
 
 ### Was bewusst nicht im Kern ist
 
@@ -1239,13 +1239,13 @@ Das Hauptdokument beschreibt Datenschutz-Grundlagen im aktuellen Stand (Fundamen
 
 | Maßnahme | Aktueller Stand (Fundament) | Datenschutz-Reife (Stand v0.15) |
 |---|---|---|
-| Rollenbasierte Zugriffskontrolle | ✓ implementiert ||
-| Kontaktstufen-abhängige Sichtbarkeit | ✓ implementiert ||
+| Rollenbasierte Zugriffskontrolle | ✓ implementiert | — |
+| Kontaktstufen-abhängige Sichtbarkeit | ✓ implementiert | — |
 | Audit-Trail (Append-Only-Log) | ✓ implementiert | ✓ + eigene AuditLog-Aufbewahrungsfrist ([ADR-021](adr/021-retention-modell.md), `auditlog_retention_months`) |
 | Verschlüsselung sensibler Felder | ✓ implementiert | ✓ Key-Rotation unterstützt |
-| Pseudonymisierung by Design | ✓ implementiert ||
+| Pseudonymisierung by Design | ✓ implementiert | — |
 | Löschfristen | Konfigurierbar, aber manuelle Ausführung | ✓ Automatisierte Durchsetzung per Cron ([ADR-021](adr/021-retention-modell.md), `enforce_retention`); 4 Soft-Delete-Strategien + Legal Hold |
-| K-Anonymisierung || ✓ Bucket-Suppression im externen Bericht + optionaler K-Anon-Löschpfad ([ADR-023](adr/023-k-anonymization-statistik.md), Freitext-Kaskade #1094) |
+| K-Anonymisierung | — | ✓ Bucket-Suppression im externen Bericht + optionaler K-Anon-Löschpfad ([ADR-023](adr/023-k-anonymization-statistik.md), Freitext-Kaskade #1094) |
 | Betroffenenrechte (Auskunft) | Manuelle Abfrage durch Anwendungsbetreuung (`facility_admin`) | Self-Service-Funktion für Lead-Rolle |
 | Betroffenenrechte (Löschung) | Manuell durch Anwendungsbetreuung (`facility_admin`) | ✓ 4-Augen-Freigabe via RetentionProposal ([ADR-021](adr/021-retention-modell.md)) |
 | Betroffenenrechte (Portabilität) | Nicht verfügbar | JSON/CSV-Export der personenbezogenen Daten (dedizierter Workflow offen) |

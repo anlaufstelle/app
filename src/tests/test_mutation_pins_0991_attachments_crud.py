@@ -1,7 +1,7 @@
 """Pin-Tests des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
 ``core.services.attachments.crud``.
 
-Quelle: Ticket #2322 (https://github.com/anlaufstelle/app/issues/2322),
+Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt
 wird das vollstaendige Prio-1-Set dieses Moduls: 15 bestaetigte Testluecken
 in den Sperr-Vorlaufpfaden ``lock_attachment_batch_before_audit``,

@@ -1,6 +1,6 @@
 """E2E: Mitschauen-Schutz — schnell verlassen, Kuerzel, Sichtblende, offline.
 
-Refs https://github.com/anlaufstelle/app/issues/2136 (Befund N-2).
+Refs #2136 (Befund N-2).
 
 Was hier — und nur hier — belegt wird:
 
@@ -240,7 +240,7 @@ class TestSchnellVerlassen:
     def test_sprung_verraet_dem_sprungziel_die_herkunft_nicht(self, browser, base_url, e2e_env, default_quick_exit):
         """Die Anfrage an das Sprungziel traegt keine ``Referer``-Kopfzeile.
 
-        Refs https://github.com/anlaufstelle/app/issues/2179.
+        Refs #2179.
 
         **Warum das Dokument hier erst eine leckende Politik bekommt:** Der
         E2E-Server erbt von ``settings/dev.py`` und liefert damit Djangos
@@ -307,7 +307,7 @@ class TestSchnellVerlassen:
     def test_spaete_antwort_der_alten_seite_ueberschreibt_die_zielseite_nicht(
         self, browser, base_url, e2e_env, default_quick_exit
     ):
-        """Refs https://github.com/anlaufstelle/app/issues/2352.
+        """Refs #2352.
 
         Ein Poll der Startseite (Zeitstrom) ist beim Schnell-Verlassen noch
         unterwegs. Seine Antwort kommt erst NACH dem serverseitigen Logout —

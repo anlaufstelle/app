@@ -68,7 +68,7 @@ Unveränderlich nach dem Anlegen:
 
 | Objekt | Unveränderlich | Ausnahme |
 |---|---|---|
-| `FieldTemplate` | `field_type`, `is_encrypted` ||
+| `FieldTemplate` | `field_type`, `is_encrypted` | — |
 | `DocumentType` | `entity_type`, `system_type` | `system_type: None → Wert` (Bestand vor M2 hatte keinen) |
 | alle | `slug` | per Definition — der Slug **ist** der Lookup-Key |
 

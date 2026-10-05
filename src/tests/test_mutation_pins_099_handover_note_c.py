@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.case.handover_note`` (Batch ``handover_note-c``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@27a4f481 (frischer Mutantenbaum), Batch
 ``handover_note-c`` (8 Survivor-Mutanten ueber vier Funktionen). Das Modul

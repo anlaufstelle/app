@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Survivor-Triage in ``core.services.case.workitems``.
 
-Refs https://github.com/anlaufstelle/app/issues/2174,
-https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174,
+#2193.
 
 Quelle: atomarer Vollmutations-Messlauf (Batch ``workitems-a``), Funktion
 ``build_inbox_sections`` — der groesste Einzel-Batch der Welle (121

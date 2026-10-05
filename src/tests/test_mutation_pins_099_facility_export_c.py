@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Vollmutation #2174/#2193, Batch ``facility_export-c``.
 
-Refs https://github.com/anlaufstelle/app/issues/2174,
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174,
+Refs #2193.
 
 Modul: ``core.services.system.facility_export`` (Familie ``services.system``).
 Das Modul ist auf vier Batches ``facility_export-a``/``-b``/``-c``/``-d``

@@ -1,6 +1,6 @@
 """Audit-log specific filter helpers.
 
-Refs https://github.com/anlaufstelle/app/issues/2029
+Refs #2029
 """
 
 from datetime import date, datetime, time, timedelta

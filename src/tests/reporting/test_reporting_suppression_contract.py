@@ -1,4 +1,4 @@
-"""Fail-Closed-Vertrag der k-Anon-Suppression (Refs https://github.com/anlaufstelle/app/issues/2069).
+"""Fail-Closed-Vertrag der k-Anon-Suppression (Refs #2069).
 
 Bis #2069 war die
 Suppressionspflicht jedes Backends eine **Konvention mit statischer

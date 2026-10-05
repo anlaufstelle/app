@@ -35,7 +35,7 @@ Dieses Handbuch und die [FAQ](faq.md) sind innerhalb der Anwendung unter „Hilf
 
 > **Hinweis:** Wenn Ihnen beim ersten Login mitgeteilt wurde, dass Sie das Passwort ändern müssen, werden Sie direkt nach der Anmeldung auf die Passwort-Änderungsseite weitergeleitet.
 
-> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen** wird Ihr Konto automatisch gesperrt. Sie sehen dann eine entsprechende Hinweis-Seite und können sich nicht mehr anmelden. Auf der Login-Seite finden Sie drei Selbsthilfe-Wege ([Refs #869](https://github.com/anlaufstelle/app/issues/869)):
+> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen** wird Ihr Konto automatisch gesperrt. Sie sehen dann eine entsprechende Hinweis-Seite und können sich nicht mehr anmelden. Auf der Login-Seite finden Sie drei Selbsthilfe-Wege (Refs #869):
 >
 > - **Passwort vergessen?** — Klassischer Reset per E-Mail. Wenn Sie ein neues Passwort setzen, wird Ihr Konto automatisch entsperrt.
 > - **Konto entsperren per E-Mail** — Schickt Ihnen einen Entsperr-Link an Ihre hinterlegte E-Mail-Adresse, der 30 Minuten gültig ist. Kein neues Passwort nötig.
@@ -296,7 +296,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 - **Entfernen:** Im Formular lässt sich eine hinterlegte Datei abwählen. Sie verschwindet aus der Detailansicht und ist nicht mehr herunterladbar; die Versionskette bleibt für die Nachvollziehbarkeit bestehen, bis der Datensatz selbst gelöscht wird. Die Datei liegt weiterhin verschlüsselt auf dem Server und wird in einer Auskunft nach Art. 15 DSGVO als „entfernt am …" ausgewiesen. Das ist **keine Sackgasse**: Eine entfernte Datei lässt sich später weiterhin endgültig löschen (siehe unten und [Abschnitt 3a](#endgültig-löschen)).
 - **Endgültig löschen:** Für den Irrtumsfall — falsche Datei, falsche Person — gibt es zusätzlich das ersatzlose Löschen. Es vernichtet die verschlüsselte Datei samt aller Vorversionen physisch. Das ist **unwiderruflich** und deshalb Leitungen und der Administration vorbehalten. Der Einstieg steht an **zwei** Stellen: direkt an der Datei in der Detailansicht des Ereignisses, der Person oder des Falls (Link „endgültig löschen" neben dem Dateinamen) und in der [Dateien-Übersicht](#3a-dateien-übersicht).
 
-> **Typwechsel verwirft Werte *und* Dateien:** Wechseln Sie an einer Person oder einem Fall den Dokumentationstyp — oder entfernen ihn („— Kein Typ —"), gelten die Zusatzfelder des alten Typs nicht mehr. Eine Rückfrage vor dem Speichern nennt beides: wie viele **Feldwerte** verworfen werden **und** wie viele hinterlegte **Dateien** entfernt werden. „Abbrechen" lässt alles unverändert stehen; erst „OK" führt es aus.
+> **Typwechsel verwirft Werte *und* Dateien:** Wechseln Sie an einer Person oder einem Fall den Dokumentationstyp — oder entfernen ihn („— Kein Typ —") —, gelten die Zusatzfelder des alten Typs nicht mehr. Eine Rückfrage vor dem Speichern nennt beides: wie viele **Feldwerte** verworfen werden **und** wie viele hinterlegte **Dateien** entfernt werden. „Abbrechen" lässt alles unverändert stehen; erst „OK" führt es aus.
 
 > **Offline-Hinweis:** Ereignisse mit Datei-Anhängen können aktuell **nicht offline** gespeichert werden. Wenn Sie offline arbeiten, erscheint beim Anhängen einer Datei ein deutlicher Hinweis. Siehe [Abschnitt 8](#8-pwa-installieren-und-offline-arbeiten).
 
@@ -439,7 +439,7 @@ Von der Detailseite aus können Sie über **Kontakt dokumentieren** direkt einen
 
 ### Personen zusammenführen (Duplikate)
 
-Wurde dieselbe Person versehentlich zweimal angelegt — etwa unter zwei Schreibweisen des Pseudonyms, lassen sich die beiden Akten nachträglich zusammenführen. Schon beim **Anlegen** hilft ein Hinweis, das zu vermeiden: Sobald Sie ein Pseudonym eintippen, das einer bestehenden Person ähnelt, erscheint unter dem Feld „Ähnliche Person existiert bereits" mit einem Link auf die Akte. Der Hinweis blockiert nichts — Sie können trotzdem speichern.
+Wurde dieselbe Person versehentlich zweimal angelegt — etwa unter zwei Schreibweisen des Pseudonyms —, lassen sich die beiden Akten nachträglich zusammenführen. Schon beim **Anlegen** hilft ein Hinweis, das zu vermeiden: Sobald Sie ein Pseudonym eintippen, das einer bestehenden Person ähnelt, erscheint unter dem Feld „Ähnliche Person existiert bereits" mit einem Link auf die Akte. Der Hinweis blockiert nichts — Sie können trotzdem speichern.
 
 Ist das Duplikat bereits entstanden:
 

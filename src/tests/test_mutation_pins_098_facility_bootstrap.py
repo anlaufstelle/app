@@ -1,6 +1,6 @@
 """Pin-Test der Welle K (0.98) — Prio-2-Testluecke in ``core.services.facility_bootstrap``.
 
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2193.
 
 Quelle: Batch ``export-settings`` der Survivor-Triage (``triage-096-merge-2-
 misc.json``). Gepinnt wird ein Mutant in ``ensure_quick_templates``: fehlt zu

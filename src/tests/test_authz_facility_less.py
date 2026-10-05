@@ -34,7 +34,7 @@ Rollenmenge steht, kennt diese Logik strukturell nicht.
 * alle uebrigen elf Kategorien: 403 oder 404 — der Wurzel-Guard hat den
   Request beendet, bevor eine View einen Facility-Kontext gebraucht haette.
 
-Refs #2090, https://github.com/anlaufstelle/app/issues/2090.
+Refs #2090, #2090.
 """
 
 import pytest

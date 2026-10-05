@@ -23,7 +23,7 @@ den Guard, ``/system/`` und ``/admin-mgmt/`` stehen bewusst NICHT auf der
 Pfad-Whitelist. Sonst kaeme ein einrichtungsloser ``facility_admin`` in den
 Systembereich — dieselbe Doktrin, die ``_is_archived_blocked`` begruendet.
 
-Refs #2090, https://github.com/anlaufstelle/app/issues/2090.
+Refs #2090, #2090.
 """
 
 import re

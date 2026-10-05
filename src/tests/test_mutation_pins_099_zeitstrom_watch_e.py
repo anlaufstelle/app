@@ -2,8 +2,8 @@
 ``core.services.zeitstrom_watch`` (Batch ``zeitstrom_watch-e``, letzter Teil
 des Moduls).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@54b17ef1 (frischer Mutantenbaum), Batch
 ``zeitstrom_watch-e`` (63 Survivor-Mutanten) ueber zehn kleine Helfer-/

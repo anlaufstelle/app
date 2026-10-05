@@ -1,6 +1,6 @@
 """Pin-Tests zum Meilenstein release-0.97 — Survivors in ``core.services.client.restriction``.
 
-Quelle: atomic-Messlauf der Welle J (https://github.com/anlaufstelle/app/issues/2149),
+Quelle: atomic-Messlauf der Welle J (#2149),
 Batch ``client``. Gepinnt werden
 
 * der Prio-1-Survivor ``x_lift_processing_restriction__mutmut_42``: die

@@ -215,7 +215,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | leitung | C/F/S || `test_export_statistics.py`, `test_statistics_dashboard.py` |
+| Tagesablauf | leitung | C/F/S | — | `test_export_statistics.py`, `test_statistics_dashboard.py` |
 
 **Voraussetzung:** SMK-A-VORM-01 (mit `leitung`-Login)
 

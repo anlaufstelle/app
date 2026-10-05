@@ -1,7 +1,7 @@
 # Sprachleitlinie
 
 > **Zweck:** Verbindliche Sprachregel für UI-Texte, Handbuch und Fachkonzept.
-> **Herkunft:** [Issue #604](https://github.com/anlaufstelle/app/issues/604) (RFC adoptiert).
+> **Herkunft:** Issue #604 (RFC adoptiert).
 > **Geltung:** UI-Texte, Handbuch, Fachkonzept; **nicht** Modell-/API-Code (`Client` bleibt intern).
 
 ## Kurzfazit
@@ -103,7 +103,7 @@ Die folgenden Stellen wurden für den Refactor-Sweep per `grep` identifiziert:
 
 ## Zeitwörter: kalendarisch vs. rollierend
 
-> **Quelle:** [Issue #1804](https://github.com/anlaufstelle/app/issues/1804) §3.6 (Maintainer-geprüft 2026-08-11). **Geltung:** app-weit — UI-Etiketten, Query-Werte, Handbuch, Übersetzung.
+> **Quelle:** Issue #1804 §3.6 (Maintainer-geprüft 2026-08-11). **Geltung:** app-weit — UI-Etiketten, Query-Werte, Handbuch, Übersetzung.
 
 Der Anlass war ein arithmetischer, kein kosmetischer Widerspruch: Der Fälligkeitsfilter „Diese Woche" zeigte ein rollierendes Acht-Tage-Fenster, während im selben Screen die Fälligkeits-Badges darunter ISO-kalendarisch rechneten — eine Aufgabe mit dem Badge „Nächste Woche (Mo)" lag im Filter „Diese Woche". In der Statistik hieß ein 31-Tage-Fenster „Monat".
 
@@ -121,9 +121,9 @@ Der Anlass war ein arithmetischer, kein kosmetischer Widerspruch: Der Fälligkei
 |---|---|---|
 | „Monat" / „Quartal" / „Halbjahr" (rollierend) | „Letzte 30 / 90 / 180 Tage" | Statistik-Zeitraumleiste (`?zeitraum=letzte30\|letzte90\|letzte180`) |
 | „Jahr" | „Kalenderjahr" | Statistik (`?zeitraum=jahr`, mit Stepper) |
-|| „Eigener Zeitraum" | Statistik (`?zeitraum=frei`) |
+| — | „Eigener Zeitraum" | Statistik (`?zeitraum=frei`) |
 | „Diese Woche" (rollierend) | „Nächste 7 Tage" | Fälligkeitsfilter der Aufgaben (`?due=next7`) |
-|| „Diese Woche (Do)" bleibt | Fälligkeits-Badges — sie sind ISO-kalendarisch und damit **korrekt** |
+| — | „Diese Woche (Do)" bleibt | Fälligkeits-Badges — sie sind ISO-kalendarisch und damit **korrekt** |
 
 Umbenannte Query-Werte bleiben dauerhaft als stille Aliasse akzeptiert (Bookmarks, `sessionStorage` der Filter-Persistenz); angeboten wird nur die kanonische Schreibweise.
 

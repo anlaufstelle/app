@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.deletion`` (Batch ``deletion-1``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@049bc799 (frischer Mutantenbaum), Batch
 ``deletion-1`` (10 Survivor-Mutanten in zwei Funktionen: ``x_withdraw_deletion_request``

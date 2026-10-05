@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-24
 - **Deciders:** Tobias Nix
-- **Refs:** #1870 (RFC), [#1941 E1](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873) (M4-Zuschnitt), #1984 (Umsetzung in `release-0.85`)
+- **Refs:** #1870 (RFC), #1941 E1 (M4-Zuschnitt), #1984 (Umsetzung in `release-0.85`)
 
 ## Context
 
@@ -109,6 +109,6 @@ Dann wird ein eigenes, minimiertes Notification-/Delivery-Modell entworfen. Zust
 
 ## References
 
-- RFC und Scoping: #1870, [#1941 E1](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873)
+- RFC und Scoping: #1870, #1941 E1
 - Umsetzung: #1984
 - Bestehende Quellen: [`core/nav.py`](../../src/core/nav.py), [`services/dashboard/main.py`](../../src/core/services/dashboard/main.py), [`services/hubs.py`](../../src/core/services/hubs.py), [`models/user.py`](../../src/core/models/user.py)

@@ -90,7 +90,7 @@ Entscheidungen, die im Code bereits sichtbar sind, deren Begründung aber noch n
 
 | Kandidat | Worum es geht | Warum noch keine ADR |
 |----------|---------------|----------------------|
-| _(aktuell keine offenen Kandidaten)_ | Die zuletzt offenen §E-Themen sind verschriftlicht: Slug-IDs ([ADR-024](024-slug-based-identifiers.md)), CSP-Ausnahme ([ADR-025](025-csp-unsafe-eval-admin.md)), Rate-Limiting ([ADR-026](026-rate-limiting.md)), i18n ([ADR-027](027-i18n-strategy.md)); ADR-022 ist seit #1100 `Accepted`. ||
+| _(aktuell keine offenen Kandidaten)_ | Die zuletzt offenen §E-Themen sind verschriftlicht: Slug-IDs ([ADR-024](024-slug-based-identifiers.md)), CSP-Ausnahme ([ADR-025](025-csp-unsafe-eval-admin.md)), Rate-Limiting ([ADR-026](026-rate-limiting.md)), i18n ([ADR-027](027-i18n-strategy.md)); ADR-022 ist seit #1100 `Accepted`. | — |
 
 **Vorgehen:** Wenn eines der Themen sich stabilisiert oder eine echte Entwicklungs­alternative ansteht, wird die nächste freie ADR-Nummer vergeben. Bei Verwerfen einer ADR-Idee bleibt der Eintrag hier kurz mit „verworfen, weil …" stehen, damit die Diskussion nicht verloren geht.
 

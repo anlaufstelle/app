@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.audit`` (Batch ``audit-1``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@1886bb2a (frischer Mutantenbaum), Batch
 ``audit-1`` (60 Survivor-Mutanten in drei Modulen: ``core.services.audit.hash``

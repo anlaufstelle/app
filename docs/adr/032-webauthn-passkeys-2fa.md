@@ -6,7 +6,7 @@
 
 ## Context
 
-[ADR-015](015-mfa-totp.md) hat TOTP + gehashte Backup-Codes als zweiten Faktor etabliert und WebAuthn/FIDO2 bewusst auf eine spätere ADR vertagt („interessant, aber nicht für den Default"). [Issue #1492](https://github.com/anlaufstelle/app/issues/1492) holt das nach — aber eng zugeschnitten. Die Maintainer-Entscheidung (Kommentare 2026-07-10/11) legt **nur Etappe A** fest:
+[ADR-015](015-mfa-totp.md) hat TOTP + gehashte Backup-Codes als zweiten Faktor etabliert und WebAuthn/FIDO2 bewusst auf eine spätere ADR vertagt („interessant, aber nicht für den Default"). Issue #1492 holt das nach — aber eng zugeschnitten. Die Maintainer-Entscheidung (Kommentare 2026-07-10/11) legt **nur Etappe A** fest:
 
 - WebAuthn/FIDO2 (Passkeys, Plattform-Authenticatoren, Security-Keys) als **zusätzliche** zweite MFA-Methode **neben** TOTP — kein Ersatz.
 - Ein GitHub-artiger **Methoden-Chooser** auf `/mfa/verify/`, wenn mehrere Methoden bestätigt sind.
@@ -58,7 +58,7 @@ Konkret:
 
 ## References
 
-- [Issue #1492](https://github.com/anlaufstelle/app/issues/1492) — Passkey/WebAuthn-Support (Etappe A)
+- Issue #1492 — Passkey/WebAuthn-Support (Etappe A)
 - [ADR-015](015-mfa-totp.md) — TOTP + Backup-Codes (referenziert, nicht superseded)
 - [ADR-031](031-totp-secret-at-rest.md) — TOTP-Secret at rest
 - Code: [`src/core/views/mfa_webauthn.py`](../../src/core/views/mfa_webauthn.py), [`src/core/webauthn_urls.py`](../../src/core/webauthn_urls.py), [`src/core/middleware/mfa.py`](../../src/core/middleware/mfa.py), [`src/core/models/user.py`](../../src/core/models/user.py)

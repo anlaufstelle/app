@@ -1,6 +1,6 @@
 """WCAG-2.1-AA-Gate: axe-core ueber die Hauptseiten + Skip-Link-Funktionstest.
 
-Refs https://github.com/anlaufstelle/app/issues/1059 (Stufe 1, „Gate first").
+Refs #1059 (Stufe 1, „Gate first").
 
 Aufbau
 ======

@@ -1,6 +1,6 @@
 """Tests for the custom __ilike lookup used by search paths.
 
-Refs https://github.com/anlaufstelle/app/issues/2027
+Refs #2027
 """
 
 import json

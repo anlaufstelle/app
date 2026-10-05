@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-24
 - **Deciders:** Tobias Nix
-- **Refs:** #1877 (RFC), [#1941](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873) (M4-Entscheid)
+- **Refs:** #1877 (RFC), #1941 (M4-Entscheid)
 
 ## Context
 
@@ -147,4 +147,4 @@ Bis dahin ist „andere Zielgruppe“ allein kein sicherer Migrationsplan.
   [`dashboard/snapshot.py`](../../src/core/services/dashboard/snapshot.py)
 - Bericht: [`reporting/backends/sample_report_1.py`](../../src/core/reporting/backends/sample_report_1.py)
 - RFC/Entscheid: #1877,
-  [#1941](https://github.com/anlaufstelle/app/issues/1941#issuecomment-5385075873)
+  #1941

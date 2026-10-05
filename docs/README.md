@@ -75,11 +75,11 @@ Die Doku beschreibt den **Ist-Stand**. Historie gehört ins [CHANGELOG.md](../CH
 | [reporting-plugins.md](reporting-plugins.md) | Berichts-Backends als Plugin-System: API-Referenz (`DatasetBackend`, `DatasetResult`), „Eigenes Backend in fünf Schritten", Discovery, Snapshot-Vertrag, k-Anonymität, Export-Formate, Test-Checkliste (Refs #1061, [ADR-038](adr/038-reporting-plugin-backends.md)); EN: [en/reporting-plugins.md](en/reporting-plugins.md) | Entwickler |
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
-| testing/assertion-conventions.md | Konventionen für präzise Assertions zu Exceptions, Logs, eingeschränkten Saves und Query-Budgets | Entwickler, QA |
+| [testing/assertion-conventions.md](testing/assertion-conventions.md) | Konventionen für präzise Assertions zu Exceptions, Logs, eingeschränkten Saves und Query-Budgets | Entwickler, QA |
 | testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail im Hub [testing/manual-test-matrix.md](testing/manual-test-matrix.md) (Front-matter + Anhänge) mit Sektions-Dateien `manual-test-matrix-a.md`…`-d.md`, Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
 | testing/release-test-profiles.md | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage run-template.md → testing/runs/ | QA, Release-Manager |
 | testing/abnahme-0.98.md | Gerüst der konsolidierten Abnahmematrix für release-0.98 — Quellenabbildung, Spaltenschema, neue Prüfbereiche seit 0.96 (Refs #2170) | QA, Release-Manager |
-| testing/mutation-survivors-baseline.md | Baseline überlebender Mutanten (Mutation-Testing,) | QA, Entwickler |
+| testing/mutation-survivors-baseline.md | Baseline überlebender Mutanten (Mutation-Testing) | QA, Entwickler |
 | [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen (perf-nightly) | Entwickler, QA |
 | `async-pdf-evaluation.md` (dev-only) | _Historisch_ — Evaluierung asynchroner PDF-Generierung, abgelöst durch [ADR-010](adr/010-sync-pdf-generation.md) | Entwickler, Architekten |
 

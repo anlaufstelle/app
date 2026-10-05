@@ -33,7 +33,7 @@ Rechenwelten:
 Die Doppelungen sollen langfristig sinken, ohne die Trennung zwischen interner
 Rohsicht und extern zirkulierenden, kleinstzellengeschützten Artefakten
 aufzuweichen. Der Maintainer-Entscheid in
-[#1905 § 5.3](https://github.com/anlaufstelle/app/issues/1905) begrenzt den
+#1905 § 5.3 begrenzt den
 1.0-Umfang auf das Festschreiben dieses Zielbilds. Die Umsetzung von D1–D4 und
 K1–K4 verbleibt am Strang #1898
 für post-1.0.

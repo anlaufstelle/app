@@ -24,7 +24,7 @@ Mitgelieferte Pakete liegen flach unter `core/packages/<name>.yaml`. Der technis
 | `frauenhaus` | Schutzwohnung / Gewalt-Fachberatung | 8 | Pseudonyme Dokumentation, hochsensible Gefährdungslage, Schutzmaßnahmen ohne Hausverbotslogik | [Frauenhaus-Paket](packages-frauenhaus.md) |
 | `jugendarbeit` | Mobile und offene Jugendarbeit | 8 | Anonyme Strichlisten, Gruppenangebote und U18-orientierte Fallarbeit | [Jugendarbeit-Paket](packages-jugendarbeit.md) |
 
-Domänen-Pakete: siehe die Zeilen, die die jeweiligen Paket-Issues ergänzen ([#2145 Beratungsstelle](https://github.com/anlaufstelle/app/issues/2145), [#2137 Awareness](https://github.com/anlaufstelle/app/issues/2137), [#2138 Frauenhaus](https://github.com/anlaufstelle/app/issues/2138), [#2139 Jugendarbeit](https://github.com/anlaufstelle/app/issues/2139)).
+Domänen-Pakete: siehe die Zeilen, die die jeweiligen Paket-Issues ergänzen (#2145 Beratungsstelle, #2137 Awareness, #2138 Frauenhaus, #2139 Jugendarbeit).
 
 ---
 
@@ -212,7 +212,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 
 > **Entfallene `system_type`-Werte (#1850):** Die sieben reinen Berichtswerte (`contact`, `medical`, `needle_exchange`, `accompaniment`, `counseling`, `referral`, `note`) sind aus dem Enum entfernt. Ein Paket, das einen davon noch mitführt, **bleibt ladbar** — der Wert entfällt ersatzlos, mit einer **Warnung** im Report (dieselbe Linie wie bei `category`: kein Fehler, aber auch kein stiller Wegfall). Ein *unbekannter* Wert bleibt dagegen ein Fehler: Anders als beim `report_key` ist der Werteraum hier eine feste, eingefrorene Liste (RFC #1748) und kein Fremdvokabular. Die Berichtszuordnung, die die sieben Werte trugen, steht im `report_key`; beim Update hat sie eine Datenmigration übernommen. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
-> **Ignorierter Schlüssel `category` (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** `DocumentType.category` gibt es nicht mehr. Ein Paket darf den Schlüssel weiterhin enthalten — es bleibt gültig und ladbar, es gibt **keine** Schemaversion 2, aber der Wert wird nicht angewendet. Jeder betroffene Typ erscheint mit einer **Warnung** im Report („Diese Schlüssel gibt es im Datenmodell nicht mehr …“), damit die Zeile nicht still verschwindet. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
+> **Ignorierter Schlüssel `category` (#1749, [ADR-040](adr/040-documenttype-category-entfernt.md)):** `DocumentType.category` gibt es nicht mehr. Ein Paket darf den Schlüssel weiterhin enthalten — es bleibt gültig und ladbar, es gibt **keine** Schemaversion 2 —, aber der Wert wird nicht angewendet. Jeder betroffene Typ erscheint mit einer **Warnung** im Report („Diese Schlüssel gibt es im Datenmodell nicht mehr …“), damit die Zeile nicht still verschwindet. Empfehlung: beim nächsten Pflege-Durchgang aus dem Paket entfernen.
 
 ### `groups[]` · `field_refs[]` · `conditions[]`
 
@@ -284,7 +284,7 @@ Weicht einer dieser Werte vom Bestand ab, ist das ein **Fehler** — der Loader 
 |---|---|---|
 | Feldvorlage | `slug`, `field_type`, `is_encrypted`, `report_key` | `report_key: null → Wert`; Schlüssel im Paket weglassen = keine Angabe |
 | Dokumentationstyp | `slug`, `entity_type`, `system_type`, `report_key` | `system_type: null → Wert` (Bestandsdaten vor M2); `report_key: null → Wert`, Weglassen = keine Angabe |
-| Feldgruppe | `slug` ||
+| Feldgruppe | `slug` | — |
 
 `is_encrypted` wird **vor** dieser Prüfung nach oben normalisiert: `field_type: file` und `sensitivity: high` erzwingen `true` (wie im Modell). Ein Paket mit `field_type: file` ohne `is_encrypted: true` bleibt dadurch idempotent. Ein *explizites* `is_encrypted: false` an einem `file`-Feld ist dagegen ein Schema-Fehler.
 
@@ -385,7 +385,7 @@ Diese Punkte sind die häufigsten Fehlerquellen. Sie gelten für den Standardkat
 - **`system_type` immer mitführen**, wo einer existiert (`ban`/`crisis`). Fehlender Schlüssel bedeutet `null`, und `Wert → null` ist ein Fehler, der den ganzen Lauf abbricht. Für die sieben entfallenen Werte gilt das **nicht** mehr: sie sind ersatzlos aus dem Paket zu nehmen (bis dahin entfallen sie beim Laden mit einer Warnung).
 - **`report_key` mitführen**, wo eine Berichtszuordnung gewollt ist. Weglassen ist gefahrlos (der Bestand bleibt unangetastet), aber dann entscheidet allein, was schon in der Einrichtung steht — ein frisch angelegter Typ erscheint in **keinem** Bericht. Ein *abweichender* Wert gegen einen gesetzten Bestandswert bricht dagegen den ganzen Lauf ab.
 - **`entity_type` immer mitführen**, wenn der Typ kein Ereignis-Typ ist. Fehlt der Schlüssel, gilt `event` — bei einem Bestandstyp mit `client`/`case` ist das ein Immutabilitäts-Fehler.
-- **`field_type` (und bei Bedarf `is_encrypted`) immer mitführen.** Fehlt `field_type`, gilt `text`; gegen eine bestehende Vorlage mit einem anderen Typ ist das ein Immutabilitäts-Fehler, der den **gesamten** Lauf abbricht. Kein stiller Footgun — der Fehler ist laut und pfadgenau, aber ein völlig vermeidbarer Abbruch, der beim Weiterreichen eines Pakets erst beim Empfänger auftritt.
+- **`field_type` (und bei Bedarf `is_encrypted`) immer mitführen.** Fehlt `field_type`, gilt `text`; gegen eine bestehende Vorlage mit einem anderen Typ ist das ein Immutabilitäts-Fehler, der den **gesamten** Lauf abbricht. Kein stiller Footgun — der Fehler ist laut und pfadgenau —, aber ein völlig vermeidbarer Abbruch, der beim Weiterreichen eines Pakets erst beim Empfänger auftritt.
 
 **Optionen**
 

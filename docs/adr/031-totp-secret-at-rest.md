@@ -118,7 +118,7 @@ Primärschlüssel um, sodass ein ausrangierter Schlüssel entfernt werden kann.
 - **Restrisiko nur dokumentieren (Variante b, threat-model):** Verworfen — der
   Maintainer-Entscheid verlangt aktive Verschlüsselung; „nur dokumentieren"
   hätte die #790-Inkonsistenz belassen.
-- **Eigenes konkretes Device-Modell + Tabelle + Daten-Umzug:** Verworfen
+- **Eigenes konkretes Device-Modell + Tabelle + Daten-Umzug:** Verworfen —
   hätte alle TOTP-Felder (Throttling/Timestamps/`last_t`) reproduzieren und die
   Daten in eine neue Tabelle umziehen müssen; mehr Fläche für subtile
   Divergenz und ein riskanterer Reverse-Pfad. Das Proxy teilt die erprobte

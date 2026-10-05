@@ -1,6 +1,6 @@
 """Pin-Tests der Welle K (0.98) — Prio-2-Testluecken in ``core.services.system.settings``.
 
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2193.
 
 Quelle: Batch ``export-settings`` der Survivor-Triage (``triage-096-audit-
 settings-forms.json``). Gepinnt werden drei Mutanten-Familien der

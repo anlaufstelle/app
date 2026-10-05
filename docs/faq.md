@@ -103,7 +103,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
 
-**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (Refs [Issue #588](https://github.com/anlaufstelle/app/issues/588)). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
+**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (Refs Issue #588). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
 
 **Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie eine Administratorin, Ihr TOTP-Gerät zurückzusetzen.
 
@@ -212,8 +212,8 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 | Schicht | Zeitraum | Besonderheit |
 |---------|----------|-------------|
-| Frühdienst | 08:00–16:00 ||
-| Spätdienst | 16:00–22:00 ||
+| Frühdienst | 08:00–16:00 | — |
+| Spätdienst | 16:00–22:00 | — |
 | Nachtdienst | 22:00–08:00 | Mitternachts-Wraparound |
 
 **Was zeigt die Seite?**
@@ -318,7 +318,7 @@ Ja — es gibt einen sicheren **Offline-Modus** für Streetwork und mobile Eins�
 
 **Erfassung überall offline (seit, #1499):** Sie können offline auch **ohne vorher geöffnetes Dossier** erfassen — über das **„+"-Menü** („Kontakt dokumentieren"/„Aufgabe erstellen") öffnet sich an der gewohnten Adresse (`/events/new/` / `/workitems/new/`) eine echte Erfassungsmaske. **Kontakte ohne Personenbezug** (anonyme Kontakte) und **Standalone-Aufgaben** lassen sich damit jetzt **auch offline neu beginnen** (Auswahl „— ohne Person —"); erfordert der Dokumentationstyp eine Kontaktstufe, ordnen Sie eine „mitgenommene" Person zu. Die frühere Sackgasse (#1483/#1485) entfällt.
 
-**Kann ich offline auch meine Aufgaben und den Zeitstrom sehen? (seit/3, #1499):** Ja. Neben der Personenliste (`/clients/`,) zeigen jetzt auch die **Aufgabenliste** (`/workitems/`) und der **Zeitstrom** als Startseite (`/`) offline denselben lokalen Ausschnitt wie online — zusammengestellt aus Ihren offline mitgenommenen Personen, dazu **anonyme bzw. personlose Einträge** (Standalone-Aufgaben, Kontakte ohne Personenbezug), klar markiert. Der Zeitstrom ist bewusst als **„lokale Chronik"** gekennzeichnet: Er zeigt nur die offline verfügbaren Vorgänge, nicht die vollständige Historie der Einrichtung. Die Seite **`/offline/`** ist damit **kein Einstiegspunkt mehr**, sondern nur noch ein technischer Fallback („Keine lokale Ansicht verfügbar") — er erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt.
+**Kann ich offline auch meine Aufgaben und den Zeitstrom sehen? (seit/3, #1499):** Ja. Neben der Personenliste (`/clients/`) zeigen jetzt auch die **Aufgabenliste** (`/workitems/`) und der **Zeitstrom** als Startseite (`/`) offline denselben lokalen Ausschnitt wie online — zusammengestellt aus Ihren offline mitgenommenen Personen, dazu **anonyme bzw. personlose Einträge** (Standalone-Aufgaben, Kontakte ohne Personenbezug), klar markiert. Der Zeitstrom ist bewusst als **„lokale Chronik"** gekennzeichnet: Er zeigt nur die offline verfügbaren Vorgänge, nicht die vollständige Historie der Einrichtung. Die Seite **`/offline/`** ist damit **kein Einstiegspunkt mehr**, sondern nur noch ein technischer Fallback („Keine lokale Ansicht verfügbar") — er erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt.
 
 **Einschränkungen:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung. Die Aufgaben-Erfassung ist Fachkräften vorbehalten (Assistenz sieht offline statt der Aufgaben-Maske einen Hinweis). Ist für die Offline-Erfassung noch nichts vorbereitet (Einrichtung nie online geöffnet, leerer Cache, App noch nicht aktualisiert), zeigt die Maske einen kurzen „einmal online öffnen"-Hinweis.
 
@@ -571,7 +571,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 | EventHistory | Neuer Eintrag mit `_redacted: True` |
 | AuditLog | Neuer immutabler Eintrag |
 
-**Dieselbe Staffelung gilt für Fälle** (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md)): Fachkräfte löschen einen Fall aus der Fallakte heraus; steht die Person auf „Mit Zusatzangaben", entsteht ein Löschantrag über dieselbe Löschanträge-Liste, sonst wandert der Fall direkt in den **Fall-Papierkorb** (`/cases/trash/`, Anwendungsbetreuung). Von dort holt ihn „Wiederherstellen" vollständig zurück — mit Episoden, Wirkungszielen und Dateianhängen, bis die Papierkorb-Frist `client_trash_days` abläuft und er automatisch anonymisiert wird (Titel, Beschreibung, Zusatzfelder, Episoden, Ziele und Dateien fallen, die Fall-Zeile bleibt als anonymes Aggregat stehen). Zugeordnete **Kontakte bleiben bei der Person** und blockieren die Löschung nicht; sie verlieren ihre Fallzuordnung erst bei der endgültigen Tilgung.
+**Dieselbe Staffelung gilt für Fälle** (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md)): Fachkräfte löschen einen Fall aus der Fallakte heraus; steht die Person auf „Mit Zusatzangaben", entsteht ein Löschantrag über dieselbe Löschanträge-Liste, sonst wandert der Fall direkt in den **Fall-Papierkorb** (`/cases/trash/`, Anwendungsbetreuung). Von dort holt ihn „Wiederherstellen" vollständig zurück — mit Episoden, Wirkungszielen und Dateianhängen —, bis die Papierkorb-Frist `client_trash_days` abläuft und er automatisch anonymisiert wird (Titel, Beschreibung, Zusatzfelder, Episoden, Ziele und Dateien fallen, die Fall-Zeile bleibt als anonymes Aggregat stehen). Zugeordnete **Kontakte bleiben bei der Person** und blockieren die Löschung nicht; sie verlieren ihre Fallzuordnung erst bei der endgültigen Tilgung.
 
 **Und für Zusammenführungen** (Refs #1876, [ADR-045](adr/045-personen-merge.md)): Doppelt angelegte Personen führt die Akte über **⋮ → Mit Duplikat zusammenführen** zusammen — dieselbe Staffelung: Trägt eine der beiden Personen „Mit Zusatzangaben", entsteht ein Antrag über dieselbe Löschanträge-Liste (dort als eigene Art **Zusammenführung → Ziel** ausgewiesen), sonst führt die Leitung direkt zusammen. Ereignisse, Fälle, Aufgaben und Merkliste wandern zur Ziel-Akte, die Kontaktstufe steigt auf die höhere der beiden; die aufgelöste Akte liegt mit dem Vermerk „zusammengeführt in …" im Personen-Papierkorb und bietet dort **Zusammenführung aufheben** statt „Wiederherstellen" an, bis `client_trash_days` abläuft und der Aufbewahrungslauf sie wie jede gelöschte Person redigiert (der Verweis auf das Ziel bleibt). Die Art.-15-Auskunft weist den Vorgang auf beiden Seiten aus (Abschnitt „Zusammenführungen" bzw. Stammdaten-Zeile „Zusammengeführt in").
 

@@ -20,7 +20,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S || `src/tests/test_audit_signals.py`, `src/tests/test_audit_view.py` |
+| Compliance | admin | C/F/S | — | `src/tests/test_audit_signals.py`, `src/tests/test_audit_view.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. b — Personenbezogene Daten müssen für festgelegte, eindeutige und legitime Zwecke erhoben werden.*
 
@@ -49,7 +49,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft | C/F/S || `src/tests/test_min_contact_stage_anonymous.py`, `src/tests/test_k_anonymization.py` |
+| Compliance | fachkraft | C/F/S | — | `src/tests/test_min_contact_stage_anonymous.py`, `src/tests/test_k_anonymization.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. c — Daten müssen dem Zweck angemessen, erheblich und auf das notwendige Maß beschränkt sein.*
 
@@ -79,7 +79,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S |||
+| Compliance | admin | C/F/S | — | — |
 
 **DSGVO-Artikel-Zitat:** *Art. 7 — Bedingungen für die Einwilligung. Nachweis und Widerruflichkeit müssen sichergestellt sein.*
 
@@ -113,7 +113,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S || `test_client_export.py`, `src/tests/test_client_export.py` |
+| Compliance | leitung | C/F/S | — | `test_client_export.py`, `src/tests/test_client_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 15 — Betroffene Person hat Recht auf Auskunft über alle gespeicherten personenbezogenen Daten.*
 
@@ -148,7 +148,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S || `test_client_export.py` |
+| Compliance | leitung | C/F/S | — | `test_client_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 15 — Auskunft in lesbarer Form.*
 
@@ -175,7 +175,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft | C/F/S || `test_client_edit.py` |
+| Compliance | fachkraft | C/F/S | — | `test_client_edit.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 16 — Recht auf Berichtigung unrichtiger personenbezogener Daten.*
 
@@ -207,7 +207,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft + leitung | C/F/S || `test_rectification_service.py`, `test_rectification_views.py` |
+| Compliance | fachkraft + leitung | C/F/S | — | `test_rectification_service.py`, `test_rectification_views.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 16 — Recht auf Berichtigung. Art. 5 Abs. 2 — Rechenschaftspflicht (Nachweis des Prüfwegs).*
 
@@ -245,7 +245,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft + leitung | C/F/S || `test_client_deletion_workflow.py` |
+| Compliance | fachkraft + leitung | C/F/S | — | `test_client_deletion_workflow.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 17 — Recht auf Löschung („Recht auf Vergessenwerden").*
 
@@ -278,7 +278,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S || `test_client_deletion_workflow.py` |
+| Compliance | admin | C/F/S | — | `test_client_deletion_workflow.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 17 — Löschung muss erfolgen, sofern keine Aufbewahrungspflicht entgegensteht.*
 
@@ -316,7 +316,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S || `test_client_export.py` |
+| Compliance | leitung | C/F/S | — | `test_client_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 20 — Daten in einem strukturierten, gängigen und maschinenlesbaren Format erhalten.*
 
@@ -344,7 +344,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin (Server-Zugriff) ||| `src/tests/test_facility_export.py` |
+| Compliance | admin (Server-Zugriff) | — | — | `src/tests/test_facility_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 20 — Übertragbarkeit des GESAMTEN fachlichen Datenbestands, nicht nur einer einzelnen betroffenen Person.*
 
@@ -384,7 +384,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S || `src/tests/test_mfa_login.py` |
+| Compliance | admin | C/F/S | — | `src/tests/test_mfa_login.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 25 — Voreinstellungen so wählen, dass nur erforderliche Daten verarbeitet werden.*
 
@@ -418,7 +418,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance || C || `src/tests/test_security_hardening.py`, `src/tests/test_csp_report.py` |
+| Compliance | — | C | — | `src/tests/test_security_hardening.py`, `src/tests/test_csp_report.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Geeignete TOMs zur Gewährleistung der Sicherheit (Verschlüsselung, Vertraulichkeit, Integrität, Verfügbarkeit, Belastbarkeit).*
 
@@ -448,7 +448,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance || C |||
+| Compliance | — | C | — | — |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Vertraulichkeit der Übertragung.*
 
@@ -477,7 +477,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S |||
+| Compliance | admin | C/F/S | — | — |
 
 **DSGVO-Artikel-Zitat:** *Art. 34 — Benachrichtigung der betroffenen Person bei hohem Risiko.*
 
@@ -504,7 +504,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S || `test_dsgvo_package.py` |
+| Compliance | admin | C/F/S | — | `test_dsgvo_package.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 35 — Datenschutz-Folgenabschätzung bei voraussichtlich hohem Risiko.*
 
@@ -536,7 +536,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C || `src/tests/test_rls.py`, `src/tests/test_scope.py` |
+| Security | admin + admin_2 | C | — | `src/tests/test_rls.py`, `src/tests/test_scope.py` |
 
 **Code-Referenz:**
 - `src/core/middleware/facility_scope.py`
@@ -562,7 +562,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C || `src/tests/test_rls.py` |
+| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit Case statt Client.
 
@@ -576,7 +576,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C || `src/tests/test_rls.py` |
+| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit Event.
 
@@ -588,7 +588,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C || `src/tests/test_rls.py` |
+| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit WorkItem.
 
@@ -600,7 +600,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_1 | C || `src/tests/test_rls.py` |
+| Security | admin + admin_1 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:**
 1. Als `admin` (Hauptstelle) `/audit/` öffnen → nur eigene-Facility-Einträge.
@@ -618,7 +618,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | emma + emma_1 | C || `src/tests/test_rls.py` |
+| Security | emma + emma_1 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:**
 1. Als `emma` (lead, Hauptstelle) Lösch-Antrag-/Retention-Detail-UUID merken.
@@ -635,7 +635,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | miriam + miriam_1 | C || `src/tests/test_rls.py` |
+| Security | miriam + miriam_1 | C | — | `src/tests/test_rls.py` |
 
 **Schritte:**
 1. Als `miriam` (Hauptstelle) Event-Attachment-Download-URL + Personen-Pseudonym merken.
@@ -652,7 +652,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C || `src/tests/test_security_hardening.py` |
+| Security | fachkraft | C | — | `src/tests/test_security_hardening.py` |
 
 **Schritte:**
 1. Suche-Query mit SQL-Pattern: `'; DROP TABLE core_client;--`.
@@ -670,7 +670,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C/F/S || `test_mfa_backup_codes.py` |
+| Security | fachkraft | C/F/S | — | `test_mfa_backup_codes.py` |
 
 **Code-Referenz:** `src/core/services/mfa.py` (`StaticToken`, One-Time-Use)
 
@@ -694,7 +694,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C/F/S || `test_mfa_lockout.py` |
+| Security | fachkraft | C/F/S | — | `test_mfa_lockout.py` |
 
 **Schritte:**
 1. Aktiviertes MFA, Login mit korrektem Pwd.
@@ -718,7 +718,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin | C/F/S || `src/tests/test_audit_view.py` |
+| Security | admin | C/F/S | — | `src/tests/test_audit_view.py` |
 
 **Code-Referenz:** `src/core/views/auth.py` (`RateLimitedPasswordResetView`)
 
@@ -740,7 +740,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin | C || `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_compliance_fields_are_audited`, `src/tests/test_architecture.py::TestSettingsAuditCompletenessGuard` |
+| Security | facility_admin | C | — | `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_compliance_fields_are_audited`, `src/tests/test_architecture.py::TestSettingsAuditCompletenessGuard` |
 
 **Code-Referenz:** [src/core/services/settings.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/settings.py) (`_AUDIT_FIELDS`, `_AUDIT_EXEMPT`)
 
@@ -769,7 +769,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin | C/F || `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_settings_audit_does_not_leak_values` |
+| Security | facility_admin | C/F | — | `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_settings_audit_does_not_leak_values` |
 
 **Code-Referenz:** Helper-Familie in [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901)
 
@@ -794,7 +794,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | super_admin | C || `src/tests/test_system_views.py` |
+| Security | super_admin | C | — | `src/tests/test_system_views.py` |
 
 **Code-Referenz:** [src/core/views/system.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/system.py) `SystemAuditMixin.dispatch`; nutzt `audit_system_view` aus [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901 S6).
 
@@ -820,7 +820,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin | C || `src/tests/test_sudo_mode.py` |
+| Security | facility_admin | C | — | `src/tests/test_sudo_mode.py` |
 
 **Code-Referenz:** [src/core/services/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/sudo_mode.py), [src/core/views/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py)
 
@@ -844,7 +844,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin + zweiter User | C (2 Browser-Profile) || `test_auth_session_invalidation.py` |
+| Security | facility_admin + zweiter User | C (2 Browser-Profile) | — | `test_auth_session_invalidation.py` |
 
 **Schritte:**
 1. User A: als Fachkraft im Profil 1 (z.B. Chrome) einloggen.
@@ -868,7 +868,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | assistenz vs. leitung | C || `test_client_export_rbac.py` |
+| Security | assistenz vs. leitung | C | — | `test_client_export_rbac.py` |
 
 **Schritte:**
 1. Als `assistenz` einloggen, einen Klient/Case mit `HIGH`-Sensitivity-Events anlegen oder laden.
@@ -891,7 +891,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung | C || `test_export_external_no_pseudonyms.py` |
+| Security | leitung | C | — | `test_export_external_no_pseudonyms.py` |
 
 **Forward-looking:** Feature kommt mit #921 (datenschutzfreundliche externe Berichte). Case-Skelett:
 
@@ -906,7 +906,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung | C || `src/tests/test_export_statistics.py` |
+| Security | leitung | C | — | `src/tests/test_export_statistics.py` |
 
 **Schritte:**
 1. Klient mit Pseudonym `=cmd|' /C calc'!A0` anlegen (Excel-Formula-Injection-Payload).
@@ -931,7 +931,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin | C || `test_import_engine.py::TestErrorReportIsPiiFree` |
+| Security | facility_admin | C | — | `test_import_engine.py::TestErrorReportIsPiiFree` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. c/f — Datenminimierung und Vertraulichkeit auch im Fehlerpfad; ein Fehlerbericht darf kein Seitenkanal für die importierten Rohdaten sein.*
 
@@ -959,7 +959,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin | C || `test_import_engine.py::TestCommitImport`, `TestAbortImport` |
+| Security | facility_admin | C | — | `test_import_engine.py::TestCommitImport`, `TestAbortImport` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. e (Speicherbegrenzung) + Art. 32 (Verschlüsselung ruhender Daten) — die hochgeladene Rohdatei ist eine vollständige Kopie roher, teils sensibler Klientendaten und darf nicht länger als nötig unverschlüsselt oder überhaupt vorliegen.*
 
@@ -997,7 +997,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | unauthentifiziert | C || `src/tests/test_security_hardening.py` |
+| Security | unauthentifiziert | C | — | `src/tests/test_security_hardening.py` |
 
 **Code-Referenz:** `core.views.csp_report` (oder Pendant), CSP-Setting `CONTENT_SECURITY_POLICY_REPORT_ONLY` in `anlaufstelle.settings.base`.
 

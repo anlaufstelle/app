@@ -1,7 +1,7 @@
 """Pin-Test des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
 ``core.services.case.deletion``.
 
-Quelle: Ticket #2322 (https://github.com/anlaufstelle/app/issues/2322),
+Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt
 wird der einzige hier gelistete Survivor: ``x_reject_case_deletion__mutmut_22``
 — laut Ticket ein Urteil aus der Vollmutations-Triage 0.99, dessen Pin dort

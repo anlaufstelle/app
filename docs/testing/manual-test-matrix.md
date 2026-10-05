@@ -1,6 +1,6 @@
 # Manuelle Test-Matrix — Anlaufstelle
 
-**Stand:** 2026-05-09 · **Version:** 1.0 · **Geltungsbereich:** Anlaufstelle ≥ v0.10 
+**Stand:** 2026-05-09 · **Version:** 1.0 · **Geltungsbereich:** Anlaufstelle ≥ v0.10  
 **GitHub-Issue:** #864
 
 > Diese Datei ist die **Single-Source-of-Truth** für manuelles Testen. Sie ist ein **paralleler Artefakt** zur automatisierten E2E-Suite (~280 Tests in `src/tests/e2e/`) — kein Code-Klon. Manuelle Tests sind erforderlich für (a) DSGVO-Audit-Sign-Off, (b) Pilotbetrieb mit echten Sozialarbeiter:innen und (c) Release-Candidate-Verifikation auf Browser-/Mobile-Spezifika.
@@ -402,7 +402,7 @@ make seed
 
 ## Anhang E — Performance-Budgets
 
-> Refs #913 ( §4.8): Richtwerte, ab wann eine Seite als „zu langsam" gilt — auch wenn der Case funktional `✅ Pass` ist. Verletzungen werden im Run-Log unter „Performance-Beobachtungen" als `❌ Performance-Fail` mit Issue-Link festgehalten. Vorlage: `run-template.md` Abschnitt 4.
+> Refs #913 (§4.8): Richtwerte, ab wann eine Seite als „zu langsam" gilt — auch wenn der Case funktional `✅ Pass` ist. Verletzungen werden im Run-Log unter „Performance-Beobachtungen" als `❌ Performance-Fail` mit Issue-Link festgehalten. Vorlage: `run-template.md` Abschnitt 4.
 
 ### Budget-Tabelle
 

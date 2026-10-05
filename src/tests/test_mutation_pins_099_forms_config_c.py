@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Vollmutation #2174/#2193, Batch ``config-c``.
 
-Refs https://github.com/anlaufstelle/app/issues/2174,
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174,
+Refs #2193.
 
 Modul: ``core.forms.config`` (Familie ``forms``). Das Modul ist auf drei
 Batches ``config-a``/``config-b``/``config-c`` verteilt (andere Funktionen,

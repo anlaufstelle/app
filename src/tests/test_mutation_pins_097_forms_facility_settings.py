@@ -1,11 +1,11 @@
 """Pin-Tests der Welle J (0.97) — Checkpoint-Delta der Familie ``forms``.
 
-Refs https://github.com/anlaufstelle/app/issues/2149,
-Refs https://github.com/anlaufstelle/app/issues/2042.
+Refs #2149,
+Refs #2042.
 
 Anlass (R-CP-1): Das Mutations-Delta BASE=v0.96.0 auf ``bb2673e1`` weist der
 Familie ``forms`` 26/41 = 63,4 % aus und reisst damit die Delta-Policy
-(§ 0.5, Refs https://github.com/anlaufstelle/app/issues/1953) von 85 %.
+(§ 0.5, Refs #1953) von 85 %.
 Einziges Delta-Modul der Familie ist ``core.forms.facility_settings`` — eine
 vorangegangene Aenderung hat dort das Feld „Aufbewahrung Uebergabenotizen
 (Tage)" in die Gruppe
@@ -30,7 +30,7 @@ Gepinnt werden die 13 nicht-aequivalenten Survivors in fuenf Familien:
   deaktivierte Dokumentationstypen wieder zur Auswahl.
 * **Nur Ereignis-Typen** (``_15``) — der Mutant streicht
   ``entity_type=EVENT``; Personen- und Fall-Typen (M2, Refs
-  https://github.com/anlaufstelle/app/issues/1058) landen dann in einem
+  #1058) landen dann in einem
   Feld, das ausschliesslich Ereignisse vorbelegt.
 * **Sortierung ``sort_order`` vor ``name``** (``_31``, ``_32``) — der Mutant
   streicht je einen der beiden Schluessel. ``_31`` ist am Ergebnis beobachtbar

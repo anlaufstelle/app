@@ -1,7 +1,7 @@
 """Guard fuer den ``@transaction.atomic``-Patch des Mutationslaufs (Refs #2100).
 
 Maintainer-Entscheid 2026-09-05 zu
-https://github.com/anlaufstelle/app/issues/2100: Option C — mutmut
+#2100: Option C — mutmut
 ueberspringt dekorierte Funktionen strukturell, und
 ``scripts/dev/run_mutmut.py:_patch_mutmut_atomic_decorators`` hebt genau diesen
 Sperrgrund fuer ``@transaction.atomic`` zur Laufzeit auf. Damit werden die 57
@@ -17,7 +17,7 @@ sieht trotzdem gruen aus. Dieser Guard haelt deshalb drei Dinge fest:
   ``mutmut/mutation/file_mutation.py`` sieht aus wie erwartet, und die
   installierte mutmut-Version ist die, gegen die der Patch geprueft wurde. Ein
   Bump ohne Recheck faellt hier auf →
-  https://github.com/anlaufstelle/app/issues/2150.
+  #2150.
 * **Wirkungsnachweis:** eine ``@transaction.atomic``-Probe erzeugt ohne Patch
   null Mutanten und mit Patch mehr als null — rein in-memory, ohne
   ``mutants/``-Baum und ohne Datenbank.
@@ -26,7 +26,7 @@ sieht trotzdem gruen aus. Dieser Guard haelt deshalb drei Dinge fest:
   nicht mehr als unsichtbar (85 -> 28 dekorierte unsichtbare Funktionen).
 
 Der Delta-/Triage-Nachlauf zu den neu sichtbaren Mutanten haengt an
-https://github.com/anlaufstelle/app/issues/2149.
+#2149.
 
 ``pytestmark = architecture``: der Test liest ``scripts/dev/`` und importiert
 mutmut — beides fehlt im ``mutants/``-Tree bzw. gehoert nicht in den
@@ -60,7 +60,7 @@ file_mutation = pytest.importorskip(
 )
 libcst = pytest.importorskip("libcst", reason="libcst kommt mit mutmut")
 
-RECHECK = "https://github.com/anlaufstelle/app/issues/2150"
+RECHECK = "#2150"
 
 #: (Quelltext-Schnipsel, wird der Rumpf mutiert?) — die Vertragstabelle der
 #: Ausnahme. Beide Implementierungen (libcst im Runner, ``ast`` im Report)

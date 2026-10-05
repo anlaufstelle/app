@@ -303,7 +303,7 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # kann in diesen Spalten nicht auftauchen; entsprechend faellt hier auch
     # kein ``known_residue`` an. Dass die Anonymisierung offene/abgeschlossene
     # Antraege nicht abraeumte, war die Luecke aus
-    # https://github.com/anlaufstelle/app/issues/1792 — sie ist
+    # #1792 — sie ist
     # geschlossen: ``_redact_rectification_requests`` leert alle vier Spalten
     # in ``anonymize_client`` UND in der K-Anon-Bridge (Antrags-Meta bleibt als
     # Vier-Augen-Nachweis stehen). Der Sweep selbst kann das per Konstruktion

@@ -1,7 +1,7 @@
 """Pin-Test des Mutations-Delta-Checkpoints der Welle M (release-0.99.1) zu
 ``core.services.client.export``.
 
-Quelle: Ticket #2322 (https://github.com/anlaufstelle/app/issues/2322),
+Quelle: Ticket #2322 (#2322),
 Survivor-Triage des Checkpoint-Deltas ``6435c18e`` (BASE v0.99.0). Gepinnt
 wird der einzige Prio-2-Survivor dieses Moduls: ``_gather_cases`` sortiert
 per Vertrag ``order_by("-created_at", "pk")`` — neuester Fall zuerst. Kein

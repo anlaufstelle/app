@@ -1,8 +1,8 @@
 """Pin-Tests der Welle L (0.99) — Vollmutations-Survivors in
 ``core.services.import_engine`` (Batch ``import_engine-1``).
 
-Refs https://github.com/anlaufstelle/app/issues/2174.
-Refs https://github.com/anlaufstelle/app/issues/2193.
+Refs #2174.
+Refs #2193.
 
 Quelle: Vollmutations-Lauf auf main@7125fb79 (frischer Mutantenbaum), Batch
 ``import_engine-1`` (49 Survivor-Mutanten in ``core.services.import_engine``:

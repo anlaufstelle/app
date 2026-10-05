@@ -6,7 +6,7 @@ but on PostgreSQL it compiles to ``ILIKE '%...%'`` instead of
 on the raw column. On every other backend ``as_sql`` delegates to Django's
 ``IContains``, so the lookup stays usable there (see ``as_sql`` below).
 
-Refs https://github.com/anlaufstelle/app/issues/2027
+Refs #2027
 """
 
 from django.db.models import CharField, TextField

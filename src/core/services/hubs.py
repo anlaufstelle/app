@@ -28,7 +28,7 @@ Audit-Eintrag** — dieselbe Frage („lebt das Protokoll?"), im Rahmen des
 Möglichen beantwortet. Für die Original-Zeile braucht es ein Folgeticket
 (``verify_audit_chain`` schreibt ``AUDIT_CHAIN_VERIFIED``).
 
-[#1801]: https://github.com/anlaufstelle/app/issues/1801
+[#1801]: #1801
 """
 
 from __future__ import annotations
@@ -237,7 +237,7 @@ def verwaltung_metrics(facility: Any) -> list[HubMetric]:
     Kachel (Regel 1 im Modul-Docstring). Ihr Ziel ist die Dateien-Übersicht:
     dort steht, was den Platz belegt.
 
-    [#2129]: https://github.com/anlaufstelle/app/issues/2129
+    [#2129]: #2129
     """
     doctypes = DocumentType.objects.for_facility(facility).aggregate(
         total=Count("pk"),
@@ -297,6 +297,6 @@ def verwaltung_overview(facility: Any, user: Any) -> dict[str, Any]:
     TOTP-Prüfung als ``Exists``-Subquery, die Query-Zahl ist unabhängig von
     der Nutzerzahl der Einrichtung.
 
-    [#1816]: https://github.com/anlaufstelle/app/issues/1816
+    [#1816]: #1816
     """
     return {"metrics": verwaltung_metrics(facility), **facility_admin_dashboard_context(user, facility)}

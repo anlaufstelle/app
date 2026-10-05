@@ -137,12 +137,12 @@ make db
 
 This starts a PostgreSQL 18 container with the following credentials:
 
-| Variable | Value |
+| Variable  | Value         |
 |-----------|---------------|
-| DB name | anlaufstelle |
-| User | anlaufstelle |
-| Password | anlaufstelle |
-| Port | 5432 |
+| DB name   | anlaufstelle  |
+| User      | anlaufstelle  |
+| Password  | anlaufstelle  |
+| Port      | 5432          |
 
 Alternatively, a locally installed PostgreSQL instance can be used. The connection URL must then be set in the `DATABASE_URL` environment variable.
 
@@ -246,12 +246,12 @@ applied, not even for the remaining types):
 | Clients / facility | 7 | 40 | 500 | 18 (solo: 9) |
 | Events / facility | 25 | 750 | 10,000 | 120 (solo: 60) |
 | Cases | 3 | 12 | 50 | 6 (solo: 4) |
-| Episodes || 20 | 80 | 8 (solo: 4) |
-| Impact goals || 15 | 60 | 6 (solo: 3) |
-| Milestones / goal || 3 | 4 | 3 (solo: 2) |
+| Episodes | — | 20 | 80 | 8 (solo: 4) |
+| Impact goals | — | 15 | 60 | 6 (solo: 3) |
+| Milestones / goal | — | 3 | 4 | 3 (solo: 2) |
 | WorkItems | 5 | 25 | 100 | 12 (solo: 8) |
 | Quick Templates / facility | 6 | 6 | 6 | 6 |
-| DeletionRequests || 5 | 15 | 2 (solo: 1) |
+| DeletionRequests | — | 5 | 15 | 2 (solo: 1) |
 | RetentionProposals | 4 | 6 | 12 | 3 (solo: 2) |
 | Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) | ~5 (30 %) (solo: ~3) |
 | Time span | 80 days | 365 days | 3 years | 270 days |
@@ -288,35 +288,35 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 
 ## Make Targets
 
-| Target | Description |
+| Target           | Description                                                       |
 |------------------|-------------------------------------------------------------------|
-| `make db` | Start PostgreSQL 18 container |
-| `make db-stop` | Stop and remove PostgreSQL container |
-| `make migrate` | Run Django migrations |
-| `make run` | Start dev server (gunicorn + HTTPS on `0.0.0.0:8443`) |
-| `make run-http` | Fallback: Django runserver without HTTPS (`0.0.0.0:8000`) |
-| `make seed` | Load seed data into the database |
-| `make tailwind` | Compile Tailwind CSS in watch mode |
-| `make tailwind-build` | Compile minified Tailwind CSS for production |
-| `make lint` | Check code with Ruff and verify formatting |
+| `make db`        | Start PostgreSQL 18 container                                     |
+| `make db-stop`   | Stop and remove PostgreSQL container                              |
+| `make migrate`   | Run Django migrations                                             |
+| `make run`       | Start dev server (gunicorn + HTTPS on `0.0.0.0:8443`)           |
+| `make run-http`  | Fallback: Django runserver without HTTPS (`0.0.0.0:8000`)        |
+| `make seed`      | Load seed data into the database                                  |
+| `make tailwind`  | Compile Tailwind CSS in watch mode                                |
+| `make tailwind-build` | Compile minified Tailwind CSS for production                 |
+| `make lint`      | Check code with Ruff and verify formatting                        |
 | `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs #741) |
-| `make test` | Run unit and integration tests (excluding E2E) |
-| `make test-js` | Run the Vitest suite (JS, `npm test`) deterministically/non-watch — part of `make ci` (Refs #1932) |
-| `make test-e2e` | Run end-to-end tests with Playwright |
+| `make test`      | Run unit and integration tests (excluding E2E)                    |
+| `make test-js`   | Run the Vitest suite (JS, `npm test`) deterministically/non-watch — part of `make ci` (Refs #1932) |
+| `make test-e2e`  | Run end-to-end tests with Playwright                              |
 | `make test-e2e-halves` | E2E in two serial halves (RAM-limited hosts, Refs #1787); the split comes from `scripts/e2e_slice.py` — the same key the CI matrix uses (Refs #1976) |
 | `make test-e2e-slice-locked SLICES=4 INDEX=3` | Re-run a single slice of the CI split locally, under the CI lock (a single slice also occupies port 8844 and `anlaufstelle_e2e`; unlocked as `make test-e2e-slice`, only when no other E2E run is active) — the number comes from the job name (`E2E-Scheibe 3`); `python scripts/e2e_slice.py --slices 4 --summary` shows the distribution (Refs #1976) |
-| `make check` | Run Django system checks and verify migration consistency |
+| `make check`     | Run Django system checks and verify migration consistency         |
 | `make i18n-check` | Full `.po` reconciliation against the source tree (new/removed/semantically changed msgids) — part of `make ci` (Refs #1933) |
-| `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
-| `make test-focus T=<path>` | Single test file with fail-fast |
-| `make test-parallel` | Unit and integration tests in parallel (pytest-xdist) |
-| `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable) |
-| `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min) |
-| `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools) |
-| `make deps-check` | Verify lock files match `.in` (drift detection) |
-| `make audit-js` | `npm audit` against `package-lock.json` — blocking JS advisory gate from severity `AUDIT_LEVEL` (default `moderate`) upwards, part of `make ci`; needs access to the npm registry (Refs #1968) |
-| `make dev` | Start database, run migrations, and start server (combined) |
-| `make clean` | Remove generated artefacts (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` is left untouched (data loss risk) |
+| `make ci`        | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `audit-js` + `i18n-check` + `typecheck` + `test-js` + `test-parallel` |
+| `make test-focus T=<path>` | Single test file with fail-fast                          |
+| `make test-parallel` | Unit and integration tests in parallel (pytest-xdist)         |
+| `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable)   |
+| `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min)                       |
+| `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools)         |
+| `make deps-check` | Verify lock files match `.in` (drift detection)                  |
+| `make audit-js`  | `npm audit` against `package-lock.json` — blocking JS advisory gate from severity `AUDIT_LEVEL` (default `moderate`) upwards, part of `make ci`; needs access to the npm registry (Refs #1968) |
+| `make dev`       | Start database, run migrations, and start server (combined)       |
+| `make clean`     | Remove generated artefacts (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` is left untouched (data loss risk) |
 
 `make ci` should pass locally before every commit.
 
@@ -516,15 +516,15 @@ Refs #<issue-number>
 
 **Types:**
 
-| Type | Usage |
+| Type       | Usage                                           |
 |------------|-------------------------------------------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `test` | Add or update tests |
-| `docs` | Documentation |
-| `chore` | Maintenance, configuration, dependencies |
-| `refactor` | Refactoring without behavior change |
-| `style` | Formatting, no logic change |
+| `feat`     | New feature                                     |
+| `fix`      | Bug fix                                         |
+| `test`     | Add or update tests                             |
+| `docs`     | Documentation                                   |
+| `chore`    | Maintenance, configuration, dependencies        |
+| `refactor` | Refactoring without behavior change             |
+| `style`    | Formatting, no logic change                     |
 
 **Examples:**
 
@@ -586,7 +586,7 @@ class MyBackend(DatasetBackend):
 
 Five points that experience shows tend to go wrong:
 
-1. **`build_dataset()` is raw, `prepare_export()` is the safeguard.** Everything that ships
+1. **`build_dataset()` is raw, `prepare_export()` is the safeguard.** Everything that ships —
    download **and** panel preview — passes through `prepare_export()` first. Anyone producing
    numbers that circulate externally must implement this hook, and must use the central
    suppression machinery instead of rebuilding it. The snapshot path deliberately does **not**
@@ -603,7 +603,7 @@ Five points that experience shows tend to go wrong:
 5. **Mapping runs through `report_key`**, never through a category
    ([ADR-042](docs/adr/042-report-key-berichtszuordnung.md)). There is exactly **one** documented
    exception: `ban-overview` deliberately binds through `system_type`
-   (`TypBindung(bindet="system_type")`) because it is a highly sensitive behavioural report
+   (`TypBindung(bindet="system_type")`) because it is a highly sensitive behavioural report —
    bans must not leak into unrelated analyses through a freely selectable report key. If you
    copy that particular module as your template, switch `bindet` back to `report_key`; otherwise
    the registry lookup ("appears in …") and the key vocabulary silently ignore `system_type`
@@ -673,7 +673,7 @@ The reverse direction — exporting an entire existing facility as versioned JSO
 
 ### Test-Driven Development (Unit/Service)
 
-The assertion conventions define how tests check behaviour precisely and remain effective under mutation testing.
+The [assertion conventions](docs/testing/assertion-conventions.md) define how tests check behaviour precisely and remain effective under mutation testing.
 
 As of 2026-05-20, test-driven development is mandatory for the unit/service layer. The required order **before** any service, form, model, or CBV change:
 
@@ -683,7 +683,7 @@ As of 2026-05-20, test-driven development is mandatory for the unit/service laye
 
 **No "false green" — protect assertion strength** (Refs #1150): By default, a red test means the **root cause is in the code** and must be fixed there — not the test. **Weakening an existing assertion** (loosening it, removing it, or bending it to the actually broken behavior) is a **hard review stop**: permissible only if the *requirement* has changed (not the code), and then only with an explicit justification in the commit body. For **bugfixes**, write a **failing test first** that reproduces the bug *before* touching the code (skill `superpowers:systematic-debugging`). Background: 96 % coverage measures *executed*, not *asserted* lines — a weakened assertion stays green and only surfaces in the mutation run.
 
-Example (service layer, pseudonym hashing from [Issue #844](https://github.com/anlaufstelle/app/issues/844)):
+Example (service layer, pseudonym hashing from Issue #844):
 
 ```python
 # Red — src/tests/test_pseudonym_hashing.py
@@ -1013,4 +1013,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-09-22 -->
-<!-- source-hash: 28ba85dc8f1fee534ef06f9036328d14aeece3b9 -->
+<!-- source-hash: 8cb31bbf4d746323dc94b8be103116091e169827 -->

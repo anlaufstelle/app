@@ -79,7 +79,7 @@ Fernet-Schlüssel und legt ihn mit Mode 0600 in einem benannten Volume ab
 `ENCRYPTION_KEY` gewinnt weiterhin und wird unverändert durchgereicht.
 
 Damit bleibt die Aussage aus #1977 gültig — es gibt kein ausgeliefertes
-Fest-Geheimnis, ohne dass vor dem ersten Start ein Handgriff nötig ist. Die
+Fest-Geheimnis —, ohne dass vor dem ersten Start ein Handgriff nötig ist. Die
 Persistenz ist keine Bequemlichkeit, sondern Bedingung: ein bei jedem Start neu
 erzeugter Schlüssel ließe bereits verschlüsselte Entwicklungsdaten unlesbar
 zurück.
@@ -100,7 +100,7 @@ erben.
 ### 5. Der lokale Webdienst bindet auf Loopback
 
 Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
-`0.0.0.0` wäre das dieselbe Lücke, die #799 für Postgres geschlossen hat
+`0.0.0.0` wäre das dieselbe Lücke, die #799 für Postgres geschlossen hat —
 `web` bindet deshalb wie `db` auf `127.0.0.1`.
 
 ## Consequences
@@ -136,7 +136,7 @@ Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
 - **`docker-migrate.sh` im `init`-Dienst aufrufen** — verworfen: der One-Shot
   trägt zwei Gates für die Drei-Rollen-Topologie der Produktion, die das lokale
   Compose bewusst nicht hat. `check_db_roles` liefe dort bei jedem Start in
-  seine Warnung (Exit 2), `normalize_db_ownership` ist als No-op dokumentiert
+  seine Warnung (Exit 2), `normalize_db_ownership` ist als No-op dokumentiert —
   im Erst-Start-Log eines neuen Mitwirkenden wäre beides nur Rauschen. Zudem
   liegt das Skript im Image auf `/app/docker-migrate.sh` und wird vom
   `./src:/app`-Bind-Mount verdeckt (genau der Befund aus #1977).
@@ -153,7 +153,7 @@ Der Stack fährt mit Konten hoch, deren Passwort dokumentiert ist. Auf
   Wegwerf-Volume.
 - **Den Schlüssel im Startbefehl in die Shell exportieren** — verworfen, weil
   es nur bis PID 1 trägt: `exec`/`run` sehen ihn nicht (siehe Decision § 4).
-- **Seed-Entscheidung im Shell-Skript** (`psql`-Abfrage auf `core_user`)
+- **Seed-Entscheidung im Shell-Skript** (`psql`-Abfrage auf `core_user`) —
   verworfen: ungetestet, außerhalb der Reichweite der Suite und mit einer
   zweiten Datenbankverbindung, die von der des Seeds abweichen kann.
 - **Auto-Seed auch für die Demo-Instanz** — nicht nötig: sie hat mit dem

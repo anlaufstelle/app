@@ -1,7 +1,7 @@
 """Pin-Tests der Welle L (0.99) — Vollmutation #2174, Batch ``dynamic_data-a``.
 
-Quelle: Füllauftrag https://github.com/anlaufstelle/app/issues/2174
-(Refs auch https://github.com/anlaufstelle/app/issues/2193), Batch
+Quelle: Füllauftrag #2174
+(Refs auch #2193), Batch
 ``dynamic_data-a`` aus ``reports/m-scratch/batch-dynamic_data-a.json`` — 70
 Survivor-Mutanten in ``core.services.dynamic_data`` (Teil a der beiden
 Batches a/b des Moduls): ``_display_entry`` (20),

@@ -17,7 +17,7 @@ Der Zustand war kein Versehen, sondern verriegelt: `src/tests/test_cases_trash_i
 
 ## Decision
 
-Fälle bekommen denselben Löschweg wie Personen — Papierkorb, Wiederherstellung, Frist, endgültige Tilgung inklusive fall-eigener Anhänge, mit sechs bewussten Abweichungen (P1–P6 aus #1818).
+Fälle bekommen denselben Löschweg wie Personen — Papierkorb, Wiederherstellung, Frist, endgültige Tilgung inklusive fall-eigener Anhänge —, mit sechs bewussten Abweichungen (P1–P6 aus #1818).
 
 ### 1. Vier-Augen gestaffelt nach `Client.contact_stage` (P1c)
 

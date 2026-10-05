@@ -18,14 +18,14 @@ Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalog
 
 | Slug | Name | Sensitivität | tally | min_contact_stage | system_type | report_key |
 |---|---|---|:---:|---|---|---|
-| `anfrage` | Anfrage (Erstkontakt) | normal | ja | `identified` || `contact` |
-| `beratung` | Beratungsgespräch | elevated | nein | `qualified` || `counseling` |
+| `anfrage` | Anfrage (Erstkontakt) | normal | ja | `identified` | — | `contact` |
+| `beratung` | Beratungsgespräch | elevated | nein | `qualified` | — | `counseling` |
 | `gefaehrdungslage` | Gefährdungslage | **high** | nein | `qualified` | `crisis` | `crisis` |
-| `begleitung` | Begleitung (Behörde/Gericht/Polizei) | normal | nein | `identified` || `accompaniment` |
-| `schutzmassnahme` | Schutzmaßnahme | elevated | nein | `identified` || `protection` |
-| `wohnungswechsel` | Wohnungswechsel/Übergang | normal | nein | `identified` || `contact` |
-| `vermittlung` | Vermittlung | normal | ja | `identified` || `referral` |
-| `notiz` | Notiz | normal | ja ||| `excluded` |
+| `begleitung` | Begleitung (Behörde/Gericht/Polizei) | normal | nein | `identified` | — | `accompaniment` |
+| `schutzmassnahme` | Schutzmaßnahme | elevated | nein | `identified` | — | `protection` |
+| `wohnungswechsel` | Wohnungswechsel/Übergang | normal | nein | `identified` | — | `contact` |
+| `vermittlung` | Vermittlung | normal | ja | `identified` | — | `referral` |
+| `notiz` | Notiz | normal | ja | — | — | `excluded` |
 
 `schutzmassnahme` trägt bewusst **keinen** `system_type`: Die Maßnahme schützt die Person und ist kein Hausverbot gegen sie. Daher speist dieser Typ weder Hausverbots-Banner noch Hausverbots-Übersicht. `gefaehrdungslage` trägt dagegen `system_type: crisis` und erscheint dadurch in den Krisen-Highlights von Zeitstrom und Übergabe. Diese Ansichten filtern nach Rollensichtbarkeit: Eine `staff`-Schicht sieht die Gefährdungslage in der Übergabe nicht; wer sie dort lesen soll, braucht mindestens `lead`.
 

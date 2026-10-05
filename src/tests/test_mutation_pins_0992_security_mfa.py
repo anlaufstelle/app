@@ -1,8 +1,8 @@
 """Pin-Tests der Welle N (release-0.99.2) — Modul ``security/mfa`` + ``views/mfa``.
 
 Gehoeren zu den Fixes fuer
-https://github.com/anlaufstelle/app/issues/2287 und
-https://github.com/anlaufstelle/app/issues/2294. Die Ablehnungsseite
+#2287 und
+#2294. Die Ablehnungsseite
 beider Befunde liegt in den Guard-Dateien
 (``test_mfa_setup_reauth_guard.py``, ``test_mfa_backup_code_format_guard.py``);
 hier stehen die Gegenrichtungen, die ein Mutant sonst kostenlos mitnehmen
