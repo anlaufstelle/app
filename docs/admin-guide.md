@@ -1402,7 +1402,8 @@ Falls nach einem Update Probleme auftreten:
 
 ```bash
 # Auf ein bestimmtes Image-Tag zurückwechseln
-# In docker-compose.prod.yml: image: ghcr.io/anlaufstelle/app:v1.2.3
+# In docker-compose.prod.yml: image: ghcr.io/anlaufstelle/app:vX.Y.Z   (vX.Y.Z = die vorherige Version;
+# ob der Tag pullbar ist: docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)

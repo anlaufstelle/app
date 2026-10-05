@@ -1451,7 +1451,8 @@ If problems occur after an update:
 
 ```bash
 # Revert to a specific image tag
-# In docker-compose.prod.yml: image: ghcr.io/anlaufstelle/app:v1.2.3
+# In docker-compose.prod.yml: image: ghcr.io/anlaufstelle/app:vX.Y.Z   (vX.Y.Z = the previous version;
+# whether the tag is pullable: docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
@@ -2373,5 +2374,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-29 -->
-<!-- source-hash: 17ad4283f41426fbe6ca8efa9739dc81b1a09505 -->
+<!-- translation-date: 2026-10-05 -->
+<!-- source-hash: eed79f5d45e7d8c7334bf363d7f11d94c854e85d -->

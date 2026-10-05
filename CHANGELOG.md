@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Docs
+
+- **Rollback-Beispiele nennen keinen erfundenen Image-Tag mehr** (#2308) — Admin-Guide und Ops-Runbook (DE/EN) zeigten beim Zurückwechseln auf eine frühere Version `ghcr.io/anlaufstelle/app:v1.2.3`, einen nie veröffentlichten Tag. Die Beispiele nutzen jetzt den Platzhalter `vX.Y.Z` und nennen, wie sich mit `docker manifest inspect` prüfen lässt, ob ein Tag abrufbar ist.
+
 ## [0.99.5] - 2026-10-01
 
 Weiterer Release-Kandidat vor 1.0: bündelt die Zwei-Faktor-Härtung (gehashte Backup-Codes, bestehender Faktor bei erneuter Einrichtung, Sudo für Passkeys), den behobenen Serverfehler beim Passwort-Setzen über Einladung und Reset, vollständige Zustands- und Einrichtungsprüfungen in Fallakte und weiteren Diensten, verständliche fachliche Absagen und wieder sichtbare Hinweise in der Oberfläche (auch offline und auf dem Telefon), die Backup-/Restore-, Audit-Anker- und Betriebshärtungen (Mail-Konfiguration, Log-Rotation, Wartungsmodus, Medienbaum-Aufräumung), den Demo-Szenariokatalog mit Bereichsauswahl, die Dokumentations-Nachzüge und den Dependabot-Sammel-Batch samt zwei Sicherheitsanhebungen (`urllib3` 2.8.0, Tailwind-Dateiwächter ohne `braces`).

@@ -148,7 +148,8 @@ Wenn die neue Version Anwendungsfehler hat, aber die Migrationen rueckwaertskomp
 
 ```bash
 # 1. In docker-compose.prod.yml das Image-Tag pinnen
-#    image: ghcr.io/anlaufstelle/app:v1.2.3   (vorherige Version)
+#    image: ghcr.io/anlaufstelle/app:vX.Y.Z   (vorherige Version;
+#    ob der Tag pullbar ist: docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
 
 # Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
 compose_files=(-f docker-compose.prod.yml)

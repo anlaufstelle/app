@@ -180,7 +180,8 @@ If the new version has application bugs but the migrations are backward-compatib
 
 ```bash
 # 1. Pin the image tag in docker-compose.prod.yml
-#    image: ghcr.io/anlaufstelle/app:v1.2.3   (previous version)
+#    image: ghcr.io/anlaufstelle/app:vX.Y.Z   (previous version;
+#    whether the tag is pullable: docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
 
 # Full Compose file list in fixed order (admin-guide § 1).
 compose_files=(-f docker-compose.prod.yml)
@@ -3005,6 +3006,6 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-29 -->
-<!-- source-hash: 0b084767ca274fc6ffe2cdd96ffb6e28fa331669 -->
+<!-- translation-date: 2026-10-05 -->
+<!-- source-hash: 3a61541ab4267c90d9156eb2a03159906abed325 -->
 <!-- translation-date: 2026-09-22 -->
