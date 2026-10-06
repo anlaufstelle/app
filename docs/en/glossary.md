@@ -3,6 +3,7 @@
 > Bilingual glossary of domain-specific terms used in Anlaufstelle.
 > German terms appear in the codebase, database, and German documentation.
 > English terms are used in the UI (when set to English) and English documentation.
+> Synchronization update 2026-10-06: the soft-delete strategy and legal hold entries state the period start per strategy, the daily run without an approval step, and the legal hold as a separate entry (#2425).
 
 ---
 
@@ -47,7 +48,7 @@
 | K-Anonymisierung | K-anonymization | Used two ways: (a) bucket suppression of small aggregates in the external report; (b) the retention path (`retention_use_k_anonymization`) that generalizes the client record instead of hard-deleting it, so statistics stay possible after the retention window. See [ADR-023](../adr/023-k-anonymization-statistik.md). |
 | k-Anon-Retention | k-anon retention | The retention deletion path that k-anonymizes the client record instead of hard-deleting it. Since #1094 the retention bridge also redacts case/episode/work-item free text in this path (same helpers as the hard path); the `k_anonymize_client` primitive itself stays client-only. |
 | Kontaktstufe | Contact stage | How much is known about a person in the system. The data model has two contact stages (`Client.ContactStage`): **Pseudonym only** (value `identified` — only the pseudonym is on file) and **With additional details** (value `qualified` — further personal details, restricted access; opening the detail page is logged, not every access to the details — the edit form shows them without writing an entry). The values stay `identified`/`qualified` and carry the API, exports, and the CSV data contract; only the visible labels were renamed to everyday wording in 2026-08 (Refs #1805). Determines access rights, permitted document types, and retention periods. A purely anonymous contact (count only) is not a contact stage but a person-less event (`Event.is_anonymous`). |
-| Legal Hold | Legal hold | Flag on individual records that excludes them from automated retention deletion. |
+| Legal Hold | Legal hold | Separate entry (not a flag on the record) on an event, client, or case that excludes it -- and, for a client or case, their events -- from automated retention deletion and anonymization ([ADR-021](../adr/021-retention-modell.md)). |
 | Materialized View | Materialized view | Pre-aggregated PostgreSQL view (`core_statistics_event_flat`) that backs the statistics dashboard so reports do not re-scan the entire event table on every request (Refs #544). Refreshed periodically via management command, ideally `CONCURRENTLY` (requires the unique index that the migration provides). |
 | Milestone | Milestone | A concrete step toward an outcome goal. |
 | Offline-Modus (M6A) | Offline mode (M6A) | Client-side encrypted offline capture for streetwork. Uses AES-GCM-256 with a PBKDF2-derived (600 000 iterations, SHA-256) non-extractable `CryptoKey` held in a dedicated IndexedDB (`anlaufstelle-crypto`); the raw key bytes can never be exported. Wiped on logout, password change, role revocation/deactivation (server-side salt rotation), and on session-idle (idle-key-wipe) -- not on tab close. Read, write-queue, **and** in-app offline-**edit** (incl. the conflict/dead-letter view at `/offline/conflicts/`) are the accepted production scope -- the edit entry has been wired and tested since #1111 (no longer deferred). See [ADR-022](../adr/022-offline-snapshot-keys.md). |
@@ -68,7 +69,7 @@
 | Scope | Scope | Visibility boundary. Determines which data is accessible to a user — based on facility, role, and contact level. |
 | Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls which roles may access field values. Configurable per document type and per field (`FieldTemplate.sensitivity`). Independent of field encryption (`is_encrypted`). |
 | Service Worker | Service worker | Browser script coordinating offline caching, queue replay, and PWA behavior. See `src/static/js/sw.js`. |
-| Soft-Delete-Strategie | Soft-delete strategy | One of the four retention strategies used instead of hard delete: `anonymous`, `identified`, `qualified`, `document_type` ([ADR-021](../adr/021-retention-modell.md)). |
+| Soft-Delete-Strategie | Soft-delete strategy | One of the four retention strategies used instead of hard delete, applied per event: `anonymous` and `identified` (period from the event's time), `qualified` (period from the close of the linked case), `document_type` (additional period per documentation type; whichever expires first applies). The daily run deletes without an approval step; deletion proposals (`RetentionProposal`) only come from a separate proposal run ([ADR-021](../adr/021-retention-modell.md)). |
 | Speicherbegrenzung | Storage limitation | GDPR Art. 5(1)(e) principle: do not keep personal data longer than necessary for the purpose. Implemented via the retention model ([ADR-021](../adr/021-retention-modell.md)). |
 | TimeFilter | Time filter | Technical term for a named time filter. Belongs to a facility and defines a time window (start time, end time) with a label. |
 | Token-Einladung | Token invite | Token-based invitation flow that replaces the former plaintext initial password. Admin creates a user, the user receives an email with a one-time link (valid 7 days) and sets their own password. |
@@ -80,5 +81,5 @@
 
 <!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.99.5 -->
-<!-- translation-date: 2026-09-10 -->
-<!-- source-hash: 03eaf2f97b74e7a52b424a12a3169ea18c43fccb -->
+<!-- translation-date: 2026-10-06 -->
+<!-- source-hash: ee79fa4502e5e9c698d9a352440f4ff9fdf91d15 -->

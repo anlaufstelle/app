@@ -130,12 +130,16 @@ als Anonymisierung. Abgrenzung zu **K-Anonymität** siehe oben.
 als für den Zweck erforderlich aufbewahren. In Anlaufstelle über das Retention-Modell ([ADR-021](adr/021-retention-modell.md))
 umgesetzt.
 
-**Soft-Delete-Strategien** — die vier Retention-Strategien statt Hard-Delete:
-`anonymous` (sofort nach Frist), `identified` (Anonymisierung nach Frist),
-`qualified` (Freigabe via RetentionProposal nötig), `document_type` (Frist pro
-Dokumenttyp). Details: [ADR-021](adr/021-retention-modell.md).
+**Soft-Delete-Strategien** — die vier Retention-Strategien statt Hard-Delete, je
+Ereignis: `anonymous` und `identified` (Frist ab dem Zeitpunkt des Ereignisses),
+`qualified` (Frist ab Abschluss des verknüpften Falls), `document_type` (zusätzliche
+Frist pro Dokumenttyp; es gilt die zuerst ablaufende). Der tägliche Lauf löscht
+ohne Freigabeschritt; Löschvorschläge (`RetentionProposal`) entstehen nur in einem
+gesonderten Vorschlagslauf. Die Person wird anonymisiert, sobald alle ihre
+Ereignisse gelöscht sind. Details: [ADR-021](adr/021-retention-modell.md).
 
-**Legal Hold** — Einfrier-Marker pro Entität: hält jede Soft-Delete- und
+**Legal Hold** — Einfrier-Marker pro Entität (eigener Eintrag auf Ereignis, Person
+oder Fall, kein Flag am Datensatz): hält jede Soft-Delete- und
 Anonymisierungs-Pipeline an, solange ein laufendes Verfahren die Daten bindet
 ([ADR-021](adr/021-retention-modell.md)).
 

@@ -557,18 +557,20 @@ class TestPackageVersionStamp:
         assert h_before != h_after, "Backup-Frist muss Fussnoten-Hash aendern (Refs #2050)."
 
 
-def _effect_cell(content: str, first_cell: str) -> str:
-    """Last cell ("Wirkung bei Ablauf") of the table row whose label starts with ``first_cell``.
+def _effect_cell(content: str, label_part: str) -> str:
+    """Last cell ("Wirkung bei Ablauf") of the first table row whose label contains ``label_part``.
 
     Works for both retention tables: the numbered one in dsfa.md § 2.3 and the
     unnumbered one in loeschkonzept.md § 2.
     """
     for line in content.splitlines():
+        if not line.startswith("|"):
+            continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         labels = cells[:2]
-        if any(label.startswith(first_cell) for label in labels):
+        if any(label_part in label for label in labels):
             return cells[-1]
-    raise AssertionError(f"no table row starting with {first_cell!r}")
+    raise AssertionError(f"no table row containing {label_part!r}")
 
 
 @pytest.mark.django_db
@@ -661,3 +663,121 @@ class TestBackupDeletionBoundary:
         for day in days:
             assert f"nach {day}" in local_effect
             assert f"nach {day} Tagen" in vvt_backup
+
+
+@pytest.mark.django_db
+class TestRetentionRunNeedsNoApproval:
+    """Refs #2425: the shipped daily run deletes without a proposal or approval.
+
+    ``deploy/crontab`` calls ``enforce_retention`` without ``--propose``; the
+    regular run ignores the proposal status and only spares legal holds. The
+    templates must not promise an approval step for any contact stage.
+    """
+
+    @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
+    def test_qualified_row_promises_no_approval(self, facility, slug):
+        content, _ = render_document(slug, facility)
+        effect = _effect_cell(content, "Stufe „Mit Zusatzangaben")
+
+        assert "Freigabe" not in effect
+        assert "Prüfung" not in effect
+        assert "Löschvorschlag" not in effect
+        assert "Abschluss" in effect
+
+    @pytest.mark.parametrize("slug", ["dsfa", "loeschkonzept"])
+    def test_templates_separate_regular_run_proposal_run_and_four_eyes(self, facility, slug):
+        content, _ = render_document(slug, facility)
+
+        assert "ohne Freigabe" in content
+        assert "enforce_retention --propose" in content
+        assert "Verwerfen schützt" in content
+        assert "Vier-Augen" in content or "4-Augen" in content
+        assert "für manuelle Löschungen personenbezogener Daten" not in content
+
+    @pytest.mark.parametrize("slug", ["informationspflichten", "verarbeitungsverzeichnis"])
+    def test_period_start_is_named_per_stage(self, facility, slug):
+        content, _ = render_document(slug, facility)
+
+        assert "letztem Kontakt" not in content
+        assert "ab dem jeweiligen Kontakt" in content
+        assert "ab Abschluss des Falls" in content
+
+    def test_information_notice_names_exceptions_of_automatic_deletion(self, facility):
+        content, _ = render_document("informationspflichten", facility)
+
+        assert "Nach Ablauf der Frist werden die Daten automatisch gelöscht." not in content
+        assert "Aufbewahrungssperre" in content
+        assert "Sicherungskopien" in content
+
+    def test_loeschkonzept_names_monthly_snapshots_as_residue(self, facility):
+        content, _ = render_document("loeschkonzept", facility)
+
+        effect = _effect_cell(content, "Monatliche Statistik-Aggregate")
+        assert "bleiben bestehen" in effect.lower()
+        assert "k-Anonymitäts" in content
+
+    def test_vvt_view_names_period_start_per_stage(self):
+        from core.services.compliance import get_activity
+
+        retention = str(get_activity("klienten_stammdaten")["retention_period"])
+
+        assert "letztem Kontakt" not in retention
+        assert "Falllauf-Ende" not in retention
+        assert "ab dem jeweiligen Kontakt" in retention
+        assert "ab Abschluss des zugeordneten Falls" in retention
+
+    def test_rejected_proposal_does_not_keep_the_event(self, facility, client_identified, staff_user):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import DocumentType, Event, RetentionProposal
+        from core.retention.enforcement import process_facility_retention
+        from core.retention.proposals import create_proposal
+
+        doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now() - timedelta(days=400),
+            data_json={},
+            is_anonymous=False,
+            created_by=staff_user,
+        )
+        proposal, _ = create_proposal(facility, "Event", event.pk, timezone.localdate(), {}, "identified")
+        RetentionProposal.objects.filter(pk=proposal.pk).update(status=RetentionProposal.Status.REJECTED)
+
+        process_facility_retention(facility, facility.settings, timezone.now(), dry_run=False)
+
+        event.refresh_from_db()
+        assert event.is_deleted is True
+
+    def test_newer_contact_does_not_extend_older_identified_event(self, facility, client_identified, staff_user):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from core.models import DocumentType, Event
+        from core.retention.enforcement import process_facility_retention
+
+        doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
+        old, recent = (
+            Event.objects.create(
+                facility=facility,
+                client=client_identified,
+                document_type=doc_type,
+                occurred_at=timezone.now() - timedelta(days=days),
+                data_json={},
+                is_anonymous=False,
+                created_by=staff_user,
+            )
+            for days in (400, 1)
+        )
+
+        process_facility_retention(facility, facility.settings, timezone.now(), dry_run=False)
+
+        old.refresh_from_db()
+        recent.refresh_from_db()
+        assert old.is_deleted is True
+        assert recent.is_deleted is False

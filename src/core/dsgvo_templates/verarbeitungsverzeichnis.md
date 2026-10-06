@@ -43,11 +43,19 @@
 Keine.
 
 ### 1.7 Löschfristen
-| Kontaktstufe | Frist nach letztem Kontakt |
-|--------------|---------------------------|
-| Anonym | {{ retention_anonymous_days }} Tage |
-| Nur Pseudonym | {{ retention_identified_days }} Tage |
-| Mit Zusatzangaben | {{ retention_qualified_days }} Tage |
+| Kontaktstufe | Frist | Beginn der Frist |
+|--------------|-------|------------------|
+| Anonym | {{ retention_anonymous_days }} Tage | ab dem jeweiligen Kontakt (Ereignis) |
+| Nur Pseudonym | {{ retention_identified_days }} Tage | ab dem jeweiligen Kontakt (Ereignis) |
+| Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Abschluss des Falls, dem das Ereignis zugeordnet ist |
+
+Die Fristen gelten je Ereignis; ein neuer Kontakt verlängert ältere Ereignisse
+nicht. Eine Frist am Dokumentationstyp gilt zusätzlich (es gilt die zuerst
+ablaufende). Der tägliche Aufbewahrungslauf löscht abgelaufene Ereignisse ohne
+Freigabeschritt; Personen werden anonymisiert, sobald alle ihre Ereignisse
+gelöscht sind. Ausgenommen sind Daten unter einer Aufbewahrungssperre (Legal
+Hold). Weitere Fristen (Aktivitäten, Papierkorb, Audit-Log, Ereignis-Historie,
+Sicherungsstände) und die Statistik-Aggregate nennt das Löschkonzept.
 
 ### 1.8 Technische und organisatorische Maßnahmen
 Siehe separates TOM-Dokument.

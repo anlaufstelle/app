@@ -54,7 +54,7 @@
 **Technische Umsetzung:**
 - [x] Serverseitige Berechtigungsprüfung
 - [x] Template-seitige Sichtbarkeitssteuerung
-- [x] 4-Augen-Prinzip für Löschungen qualifizierter Daten
+- [x] 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“ (der automatische Aufbewahrungslauf löscht ohne Freigabe)
 - [x] Sensitivitätsstufen pro Dokumentationstyp und Feld
 - [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth für alle direkt oder über Beziehungen einrichtungsbezogenen Tabellen; Policies verwenden `app.current_facility_id` und arbeiten ohne gesetzten Kontext fail-closed
 

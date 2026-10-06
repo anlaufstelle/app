@@ -1850,19 +1850,25 @@ Jede Ausführung, die Datensätze löscht, wird automatisch im Audit-Log protoko
 
 #### Retention-Dashboard
 
-Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) steht ein **Retention-Dashboard** bereit, über das Leitung und Admin Löschvorschläge (generiert durch `enforce_retention`) effizient abarbeiten können. Refs #514, #515.
+Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) steht ein **Retention-Dashboard** bereit, über das Leitung und Admin Löschvorschläge abarbeiten. Refs #514, #515, #2425.
 
-| Bulk-Aktion | Wirkung |
+> **Drei getrennte Wege — nur der erste läuft ab Werk:**
+>
+> 1. **Standardlauf** `enforce_retention` (täglich im mitgelieferten `cron`-Sidecar): setzt alle abgelaufenen Ereignisse **unmittelbar** auf gelöscht — für alle Kontaktstufen, ohne Vorschlag und ohne Freigabe. Er liest den Vorschlagsstatus nicht; nur ein aktiver Legal Hold nimmt Daten aus.
+> 2. **Vorschlagslauf** `enforce_retention --propose`: löscht nichts, sondern legt für Ereignisse, deren Frist abgelaufen ist, Löschvorschläge an (je Ereignis höchstens einer) und reaktiviert fällige Zurückstellungen. Der mitgelieferte Cron ruft ihn **nicht** auf — ohne ihn bleibt das Dashboard leer. Wer ihn nutzen will, ruft ihn von Hand auf oder plant ihn selbst ein. Er erfasst dieselben bereits abgelaufenen Ereignisse, die der nächste Standardlauf löscht; zwischen Vorschlag und Löschung bleibt also höchstens die Zeit bis zu diesem Lauf.
+> 3. **Manuelle Löschung** über Löschanträge (§ 7.5): Vier-Augen-Prinzip für Personen sowie für Ereignisse und Fälle der Stufe „Mit Zusatzangaben".
+
+| Aktion im Dashboard | Wirkung |
 |---|---|
-| **Approve** | Vorschlag wird zur Löschung freigegeben. Beim nächsten Retention-Run wird der Datensatz tatsächlich gelöscht (bzw. k-anonymisiert, siehe unten). |
-| **Defer** | Vorschlag wird um eine konfigurierbare Frist zurückgestellt (Default 30 Tage) und erscheint im **nächsten Retention-Run erneut**. Nach Überschreiten von `retention_max_defer_count` (Default 2) wird entweder erzwungen entschieden oder — bei `retention_auto_approve_after_defer=True` — automatisch freigegeben. |
-| **Reject** | Vorschlag wird dauerhaft verworfen (Datensatz bleibt erhalten). |
+| **Approve** | Markiert den Vorschlag als freigegeben. Gelöscht wird beim nächsten Standardlauf — der löscht das abgelaufene Ereignis allerdings auch ohne Freigabe. Steht das Ziel unter einem aktiven Legal Hold, wird die Freigabe abgelehnt. |
+| **Defer** | Stellt den Vorschlag zurück (Default 30 Tage). Nach Ablauf wird er beim nächsten Lauf wieder offen; nach `retention_max_defer_count` Zurückstellungen (Default 2) wird er bei `retention_auto_approve_after_defer=True` automatisch freigegeben, sonst wieder offen. Die Zurückstellung schützt das Ereignis **nicht** vor dem Standardlauf. |
+| **Reject** | Verwirft den Vorschlag. Der Datensatz bleibt dadurch **nicht** erhalten — der Standardlauf löscht ihn trotzdem. Wer einen Datensatz erhalten muss, setzt einen Legal Hold. |
 
 #### Legal Hold
 
-Einzelne Datensätze können per **Legal Hold** vor automatischer Löschung geschützt werden (z. B. bei laufenden Verfahren, Prüfverfahren oder Auskunftsersuchen). Das Flag wird am Datensatz bzw. an einem `LegalHold`-Eintrag geführt und vom Retention-Job respektiert — ein Datensatz mit aktivem Legal Hold wird **nicht** zur Löschung vorgeschlagen, auch wenn die Aufbewahrungsfrist abgelaufen ist.
+Ein **Legal Hold** nimmt Daten von der automatischen Löschung und Anonymisierung aus (z. B. bei laufenden Verfahren, Prüfverfahren oder Auskunftsersuchen). Er ist ein eigener Eintrag (`LegalHold`, siehe [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)), kein Flag am Datensatz, und kann auf ein Ereignis, eine Person oder einen Fall zeigen; ein Hold auf eine Person oder einen Fall schützt auch deren Ereignisse. Der Standardlauf, die Personen-Anonymisierung und die Papierkorb-Anonymisierung respektieren ihn.
 
-Legal Holds werden im Retention-Dashboard sowie im Django-Admin verwaltet (siehe [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)).
+**Bedienweg:** In der Oberfläche setzen Leitung und Admin einen Hold nur auf einer **Vorschlagskarte** im Retention-Dashboard („Hold setzen", mit Begründung und optionalem Ablaufdatum); Ziel ist das Ereignis des Vorschlags. Aufgehoben wird er ebenfalls dort. Die Systemansicht `/system/legal-holds/` zeigt Holds nur an. Im Django-Admin ist `LegalHold` nicht verwaltbar, und Holds auf Personen oder Fälle setzt die Oberfläche nicht. Ohne eingerichteten Vorschlagslauf gibt es damit **keinen** Bedienweg, einen Datensatz vor der automatischen Löschung zu sperren.
 
 > **Abgrenzung zu Art. 18 DSGVO (Refs #2045):** Ein Legal Hold ist **keine** Einschränkung der Verarbeitung im Sinne des Art. 18. Er blockiert die **Löschung** (Art. 17 Abs. 3) und lässt die tägliche Arbeit am Datensatz unberührt. Die Einschränkung nach Art. 18 ist der umgekehrte Fall: Die Daten bleiben gespeichert, aber die inhaltliche Arbeit an der Person ist gesperrt. Dafür gibt es den eigenen **Sperrvermerk** an der Personenakte (§ 7.6). Beide können unabhängig voneinander bestehen.
 

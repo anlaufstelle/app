@@ -22,11 +22,11 @@ Anlaufstelle implementiert ein **mehrstufiges Retention-Modell** mit getrennten 
 - **Fristen pro Entitaet, nicht global.** Events, Cases, Clients, WorkItems und AuditLog haben je eigene Fristen, die in den Einrichtungs-Settings konfigurierbar sind. Default-Werte sind mit den DSGVO-Templates (Verarbeitungs-Verzeichnis, Aufbewahrungs- und Loeschkonzept) abgeglichen — eine Aenderung im Code zwingt zu einem Abgleich der Templates.
 - **Vier Soft-Delete-Strategien** statt Hard-Delete:
   - `anonymous` — datensparsame Eintraege werden sofort nach Frist soft-geloescht;
-  - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py));
-  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe vor Soft-Delete;
+  - `identified` — identifizierte Klient-Eintraege werden nach Frist **anonymisiert** ([`anonymize_clients`](../../src/core/retention/anonymization.py)); *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
+  - `qualified` — fachlich qualifizierte Eintraege verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe vor Soft-Delete; *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
   - `document_type` — pro Dokumenttyp konfigurierbare Frist, ueberschreibt die globale Event-Frist. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
 - **Legal-Hold als Einfrier-Marker.** [`LegalHold`](../../src/core/retention/legal_holds.py) setzt einen Marker pro Entitaet; `has_active_hold(target)` haelt jede Soft-Delete- und Anonymisierungs-Pipeline auf. Hold setzen darf nur Lead/Admin, Aufheben mit AuditLog-Spur.
-- **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung.
+- **`RetentionProposal`-Vorschlagspipeline** fuer qualifizierte Eintraege: Cron erzeugt Vorschlaege, Dashboard ([`build_retention_dashboard_context`](../../src/core/retention/proposals.py)) zeigt sie, Lead/Admin entscheidet `approve`/`defer`/`reject`. Damit bleibt das Pruning bei juristisch sensiblen Datensaetzen eine bewusste menschliche Entscheidung. *(Präzisiert im [Update 2026-10-06](#update-2026-10-06-ist-stand-der-löschwirkung).)*
 - **AuditLog-Pruning auf eigener, laengerer Frist** ([`prune_auditlog`](../../src/core/retention/audit_pruning.py)). Die Frist ist absichtlich laenger als alle Fach-Fristen, damit Forensik nach einem Vorfall noch Spuren findet, wenn die Sachdaten bereits anonymisiert sind. Pruning ist append-only-kompatibel — keine `UPDATE`s, nur `DELETE` strikt nach Frist.
 - **Default-Reihenfolge im Cron:** Backup (02:00) → `enforce_retention` (03:00) → Snapshots (04:00). Backup laeuft **vor** Retention, damit gepruente Daten in einem Backup-Stand wiederherstellbar bleiben (siehe [`docs/ops-runbook.md` § Retention](../ops-runbook.md)).
 
@@ -71,6 +71,24 @@ Die Entscheidung oben und das Update vom 2026-08-03 beschreiben einzelne Punkte 
 ### Dokumentationstyp-Frist ist zusätzlich, kein Override (Refs #2462)
 
 `DocumentType.retention_days` ersetzt die Kontaktstufen-Frist nicht. [`process_facility_retention`](../../src/core/retention/enforcement.py) führt die Strategien `anonymous`, `identified`, `qualified` und `document_type` nacheinander aus; ein Ereignis fällt, sobald die erste greift. Es gilt also die zuerst ablaufende Frist: Eine kürzere Typ-Frist verkürzt, eine längere verlängert nichts. Die Formulierungen „ueberschreibt die globale Event-Frist" (Decision) und „Typ-Override" (Tabelle im Update 2026-08-03) sind in diesem Sinn zu lesen.
+
+### Keine Freigabe im Standardlauf (Refs #2425)
+
+Der ausgelieferte Zeitplan ([`deploy/crontab`](../../deploy/crontab)) ruft `enforce_retention` ohne `--propose` auf. Dieser Standardlauf setzt abgelaufene Ereignisse **aller** Strategien unmittelbar auf gelöscht, auch `qualified` — ohne `RetentionProposal` und ohne Freigabe. Er liest den Vorschlagsstatus nicht; nur ein aktiver Legal Hold (auf Ereignis, Person oder Fall) nimmt Daten aus. Nach der Löschung räumt er lediglich freigegebene Vorschläge der gelöschten Ereignisse auf.
+
+- **Vorschlagslauf** (`enforce_retention --propose`): eigener, nicht eingeplanter Aufruf. Er löscht nichts, sondern legt für die Ereignisse, die die Strategien als abgelaufen erfassen, `RetentionProposal`-Einträge an — für alle vier Strategien, nicht nur `qualified` — und reaktiviert fällige Zurückstellungen.
+- **Dashboard-Entscheidungen** (`approve`/`defer`/`reject`) ändern nur den Vorschlagsstatus. `reject` und `defer` schützen das Ereignis nicht vor dem Standardlauf; schützen kann nur ein Legal Hold, den die Oberfläche auf einer Vorschlagskarte setzt.
+- **Vier-Augen-Prinzip** gilt für **manuelle** Löschungen (`DeletionRequest`): Personen immer, Ereignisse und Fälle bei Personen der Stufe `qualified`. Den Aufbewahrungslauf erfasst es nicht.
+
+Damit sind „verlangen einen `RetentionProposal` mit Lead/Admin-Freigabe" (Decision, `qualified`), „bewusste menschliche Entscheidung" (Vorschlagspipeline) und „`qualified` nur über `RetentionProposal` mit Lead/Admin-Freigabe" (Tabelle im Update 2026-08-03) **nicht** der Ist-Stand. Ob der Standardlauf eine Freigabe verlangen soll, ist eine offene Produktentscheidung.
+
+### Fristbeginn und Wirkung
+
+- `anonymous` und `identified` messen die Frist **je Ereignis** ab `Event.occurred_at`. Ein neuer Kontakt verlängert ältere Ereignisse nicht; „nach letztem Kontakt" ist kein Fristbeginn der Anwendung.
+- `qualified` misst ab `Case.closed_at` des verknüpften, geschlossenen Falls.
+- `identified` löscht die Ereignisse (Soft-Delete), anonymisiert aber nicht unmittelbar die Person: [`anonymize_clients`](../../src/core/retention/anonymization.py) greift erst, wenn **alle** Ereignisse einer Person gelöscht sind (das Update 2026-08-03 beschreibt das in der Client-Zeile).
+- Der Soft-Delete leert Inhalte und Suchtext sofort und löscht die Anhänge; die Ereigniszeile bleibt als gelöscht markiert.
+- Vor der Löschung sichert der Lauf die betroffenen Monate als Statistik-Aggregate (`ensure_snapshots_for_months`). Diese haben keine Frist.
 
 ## References
 

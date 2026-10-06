@@ -63,13 +63,23 @@ Eine Übermittlung in Drittländer findet nicht statt.
 
 ## 7. Speicherdauer
 
-| Kontaktstufe | Aufbewahrung nach letztem Kontakt |
-|--------------|----------------------------------|
-| Anonym | {{ retention_anonymous_days }} Tage |
-| Nur Pseudonym | {{ retention_identified_days }} Tage |
-| Mit Zusatzangaben | {{ retention_qualified_days }} Tage |
+| Kontaktstufe | Aufbewahrung | Beginn der Frist |
+|--------------|--------------|------------------|
+| Anonym | {{ retention_anonymous_days }} Tage | ab dem jeweiligen Kontakt |
+| Nur Pseudonym | {{ retention_identified_days }} Tage | ab dem jeweiligen Kontakt |
+| Mit Zusatzangaben | {{ retention_qualified_days }} Tage | ab Abschluss des Falls, dem der Kontakt zugeordnet ist |
 
-Nach Ablauf der Frist werden die Daten automatisch gelöscht.
+Jeder dokumentierte Kontakt hat seine eigene Frist; ein späterer Kontakt
+verlängert die Frist früherer Kontakte nicht. Für einzelne Arten von Kontakten
+kann die Einrichtung eine kürzere Frist festlegen.
+
+Nach Ablauf der Frist löscht ein täglicher automatischer Lauf die Inhalte des
+Kontakts. Sind alle Kontakte zu Ihrer Person gelöscht, werden auch die Angaben
+zu Ihrer Person anonymisiert. Solange eine Aufbewahrungssperre besteht (etwa
+wegen eines laufenden Verfahrens), werden die betroffenen Daten nicht
+gelöscht. Statistische Zählwerte ohne Bezug zu Ihrer Person bleiben erhalten.
+In Sicherungskopien bleiben Daten bis zu deren Ablauf erhalten; die Fristen
+dafür regelt das Löschkonzept der Einrichtung.
 
 ---
 

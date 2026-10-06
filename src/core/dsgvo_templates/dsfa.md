@@ -49,9 +49,9 @@ Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Alle sieben sin
 
 | # | Frist | Wert | Einstellung | Wirkung bei Ablauf |
 |---|-------|------|-------------|--------------------|
-| 1 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht |
-| 2 | Kontakte der Stufe „Nur Pseudonym“ | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht |
-| 3 | Fälle der Stufe „Mit Zusatzangaben“ (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Löschvorschlag; Soft-Delete erst nach Freigabe im 4-Augen-Prinzip |
+| 1 | Kontakte anonymer Personen | {{ retention_anonymous_days }} Tage | `retention_anonymous_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des Ereignisses) |
+| 2 | Kontakte der Stufe „Nur Pseudonym“ | {{ retention_identified_days }} Tage | `retention_identified_days` | Ereignis wird soft-gelöscht (Frist ab dem Zeitpunkt des jeweiligen Ereignisses; ein neuer Kontakt verlängert ältere Ereignisse nicht) |
+| 3 | Fälle der Stufe „Mit Zusatzangaben“ (nach Fallabschluss) | {{ retention_qualified_days }} Tage | `retention_qualified_days` | Ereignis wird soft-gelöscht (Frist ab Abschluss des verknüpften Falls) |
 | 4 | Abweichende Frist einzelner Dokumentationstypen | {{ retention_document_type_overrides }} | `DocumentType.retention_days` | Zusätzliche Frist für Ereignisse dieses Typs (ab Zeitpunkt des Ereignisses): Es gilt die zuerst ablaufende Frist. Eine längere Typ-Frist verlängert die Fristen 1–3 nicht |
 | 5 | Aktivitäten / Zeitstrom-Einträge | {{ retention_activities_days }} Tage | `retention_activities_days` | **Hart**-Löschung (kein Papierkorb) |
 | 6 | Papierkorb-Frist für gelöschte Personen und Fälle | {{ client_trash_days }} Tage | `client_trash_days` | Person bzw. Fall wird automatisch anonymisiert; bis dahin wiederherstellbar |
@@ -59,12 +59,15 @@ Die Anwendung kennt sieben konfigurierbare Aufbewahrungsfristen. Alle sieben sin
 
 Ergänzende Regeln:
 
-- **Abgeleitete Anonymisierung der Person:** Sobald **alle** Ereignisse einer Person soft-gelöscht sind, wird die Person beim nächsten Aufbewahrungslauf anonymisiert — auch ohne abgelaufene Papierkorb-Frist.
+- **Automatische Löschung ohne Freigabe:** Der tägliche Aufbewahrungslauf (`enforce_retention`) setzt abgelaufene Ereignisse aller Kontaktstufen unmittelbar auf gelöscht — ohne Löschvorschlag und ohne Freigabe durch eine Person. Ausgenommen sind nur Daten unter einer aktiven Aufbewahrungssperre (Legal Hold).
+- **Wirkung des Soft-Delete:** Mit der Löschung werden die Inhalte des Ereignisses (Zusatzfelder, Suchtext) sofort geleert und seine Dateianhänge gelöscht; die Werte seiner früheren Fassungen fallen spätestens mit dem nächsten Aufbewahrungslauf weg. Die Ereigniszeile selbst bleibt als gelöscht markiert bestehen.
+- **Löschvorschläge (optional):** Ein gesonderter Vorschlagslauf (`enforce_retention --propose`) legt für abgelaufene Ereignisse Vorschläge im Löschfristen-Dashboard an; die ausgelieferte Zeitplanung ruft ihn nicht auf. Leitung und Anwendungsbetreuung können einen Vorschlag freigeben, zurückstellen, verwerfen oder dort eine Aufbewahrungssperre setzen. Die Entscheidung hält den täglichen Lauf nicht auf: Er löscht abgelaufene Ereignisse unabhängig vom Vorschlagsstatus. Weder Zurückstellen noch Verwerfen schützt das Ereignis — nur eine Aufbewahrungssperre.
+- **Abgeleitete Anonymisierung der Person:** Sobald **alle** Ereignisse einer Person soft-gelöscht sind, wird die Person beim nächsten Aufbewahrungslauf anonymisiert — auch ohne abgelaufene Papierkorb-Frist. Eine Person, zu der nie ein Ereignis dokumentiert wurde, wird auf diesem Weg nicht anonymisiert.
 - **Fälle: eigener Löschweg, aber keine eigene Frist.** Ein Fall lässt sich einzeln löschen — er wandert in einen Papierkorb und wird nach derselben Frist 6 automatisch anonymisiert (Titel, Beschreibung, Zusatzfelder, Episoden, Wirkungsziele, Meilensteine und fall-eigene Dateien werden dabei getilgt, die Fall-Zeile bleibt als anonymes Statistik-Aggregat stehen). Bewusst **keine** zweite, eigene Frist: Sie beantwortete dieselbe Frage wie Frist 6 („wie lange ist eine Löschung noch umkehrbar") und wäre nur eine zweite Gelegenheit, sie falsch zu setzen. Ob die Löschung eine zweite Person braucht, richtet sich nach der Kontaktstufe der zugehörigen Person; zugeordnete Kontakte bleiben in der Personenakte und verlieren erst bei der Anonymisierung ihre Fallzuordnung.
 - **Kein eigener Löschhorizont für Episoden, Aufgaben, Wirkungsziele und Meilensteine.** Sie hängen am Lebenszyklus ihres Falls bzw. der Person: ihre personenbeziehbaren Freitexte werden bei deren Anonymisierung mitgetilgt.
-- **Aufbewahrungssperren (Legal Hold)** halten jede automatische Löschung und Anonymisierung an, bis die Sperre aufgehoben wird. Rechtsgrundlage ist Art. 17 Abs. 3 DSGVO (Ausnahme von der Löschpflicht) — **nicht** Art. 18.
+- **Aufbewahrungssperren (Legal Hold)** halten jede automatische Löschung und Anonymisierung an, bis die Sperre aufgehoben wird. Eine Sperre auf eine Person oder einen Fall schützt auch deren Ereignisse. In der Oberfläche lässt sich eine Sperre nur auf einem Löschvorschlag setzen, also nur, wenn der Vorschlagslauf eingerichtet ist. Rechtsgrundlage ist Art. 17 Abs. 3 DSGVO (Ausnahme von der Löschpflicht) — **nicht** Art. 18.
 - **Einschränkung der Verarbeitung (Art. 18 DSGVO)** ist das Gegenstück und ein eigener Mechanismus: Ein Sperrvermerk an der Person lässt die Daten gespeichert (Art. 18 Abs. 2), sperrt aber ihre inhaltliche Nutzung und Änderung; ausgenommen ist der Berichtigungsworkflow. Setzen und Aufheben werden protokolliert, das Aufheben verlangt eine zweite berechtigte Person oder die Leitung. Die Unterrichtung der betroffenen Person vor dem Aufheben (Art. 18 Abs. 3) ist organisatorisch zu leisten.
-- **4-Augen-Prinzip** für manuelle Löschungen personenbezogener Daten.
+- **4-Augen-Prinzip für manuelle Löschungen:** Die Löschung einer Person braucht immer die Bestätigung einer zweiten berechtigten Person; die Löschung eines Ereignisses oder Falls nur, wenn die Person auf der Stufe „Mit Zusatzangaben“ steht. Ereignisse und Fälle anderer Stufen löscht eine berechtigte Person direkt. Der automatische Aufbewahrungslauf fällt nicht unter dieses Prinzip.
 - **Restrisiko:** Das Audit-Log ist unveränderlich (Nachweispflicht, Art. 5 Abs. 2) und wird von einer Anonymisierung **nicht** mitredigiert. Vorhandene Einträge verschwinden erst mit Frist 7 — bei `auditlog_retention_months = 0`, bei protokollierten Sicherheitsverstößen oder beim Nachweis herausgegebener Berichtszeiträume gar nicht — Letztere führen die auslösende Person und die Freitextfelder Empfänger/Zweck dauerhaft und unveränderbar mit.
 - Die Fristen werden durch den täglich laufenden Aufbewahrungs-Job durchgesetzt; ist der Job nicht eingerichtet, greift **keine** der sieben Fristen.
 
@@ -114,7 +117,7 @@ Dateien lassen sich nicht nur an einzelnen Ereignissen hinterlegen, sondern auch
 
 ### 4.2 Organisatorische Maßnahmen
 - Rollenbasierte Zugriffskontrolle (4 Stufen)
-- 4-Augen-Prinzip für Löschungen qualifizierter Daten
+- 4-Augen-Prinzip für manuelle Löschungen von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“
 - Audit-Logging aller sicherheitsrelevanten Aktionen
 - Regelmäßige Schulung der Mitarbeitenden
 - Automatische Löschfristen pro Kontaktstufe

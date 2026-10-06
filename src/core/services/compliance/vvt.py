@@ -68,13 +68,20 @@ PROCESSING_ACTIVITIES = [
             _("Anwendungsbetreuung der Einrichtung (Audit, DSGVO-Paket)"),
         ],
         "retention_period": format_lazy(
+            # Refs #2425: the period starts per event (``occurred_at``) or at the
+            # close of the linked case (``closed_at``), see
+            # ``core.retention.enforcement``; a newer contact extends nothing.
             _(
-                "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. "
-                "Erzwungene Standardfristen: Anonyme Kontakte: "
-                "{anonymous_days} Tage; Kontakte der Stufe „Nur Pseudonym“: "
-                "{identified_days} Tage nach letztem Kontakt; Kontakte der "
-                "Stufe „Mit Zusatzangaben“: {qualified_days} Tage nach "
-                "Falllauf-Ende."
+                "Konfigurierbar pro Kontaktstufe; eine Frist am "
+                "Dokumentationstyp gilt zusätzlich (es gilt die zuerst "
+                "ablaufende). Standardfristen je Ereignis: Anonyme Kontakte: "
+                "{anonymous_days} Tage ab dem jeweiligen Kontakt; Kontakte der "
+                "Stufe „Nur Pseudonym“: {identified_days} Tage ab dem "
+                "jeweiligen Kontakt; Kontakte der Stufe „Mit Zusatzangaben“: "
+                "{qualified_days} Tage ab Abschluss des zugeordneten Falls. "
+                "Der tägliche Aufbewahrungslauf löscht ohne Freigabeschritt; "
+                "die Person wird anonymisiert, sobald alle ihre Ereignisse "
+                "gelöscht sind."
             ),
             anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
             identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,
