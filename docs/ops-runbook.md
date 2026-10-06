@@ -112,32 +112,39 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 ### 1.3 Post-Deploy-Verifizierung
 
 ```bash
+cd /opt/anlaufstelle
+
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
 # Container-Status
-docker compose -f docker-compose.prod.yml ps
+docker compose "${compose_files[@]}" ps
 
 # Migrations-Log pruefen
-docker compose -f docker-compose.prod.yml logs web --tail=50
+docker compose "${compose_files[@]}" logs web --tail=50
 
 # Health-Check
 curl -sf https://$DOMAIN/health/
 # Erwartete anonyme Antwort: {"status": "ok"}
 
 # Migrations-Status verifizieren
-docker compose -f docker-compose.prod.yml exec web \
+docker compose "${compose_files[@]}" exec web \
   python manage.py showmigrations | grep '\[ \]'
 # Keine ausstehenden Migrationen → leere Ausgabe
 
 # Django Deployment-Check
-docker compose -f docker-compose.prod.yml exec web \
+docker compose "${compose_files[@]}" exec web \
   python manage.py check --deploy
 
 # web und cron müssen dasselbe Image laufen (gleiche Image-ID in beiden Zeilen)
 docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
-  $(docker compose -f docker-compose.prod.yml ps -q web cron)
+  $(docker compose "${compose_files[@]}" ps -q web cron)
 
 # Lesender Wartungs-Smoke mit der Admin-Rolle (ändert nichts)
-docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
-docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
+docker compose "${compose_files[@]}" run --rm maintenance check_db_roles
+docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dry-run
 ```
 
 ### 1.4 Compose-Stack-Abgleich
@@ -204,16 +211,23 @@ curl -sf https://$DOMAIN/health/
 Wenn eine Migration Daten oder Schema inkompatibel verändert hat. `migrate` läuft im Dienst `maintenance` (Schema-Owner, Admin-Rolle); unter der App-Rolle von `web` bricht der Rollback mit „must be owner of relation …“ ab:
 
 ```bash
+cd /opt/anlaufstelle
+
+# Vollständige Compose-Dateiliste in fester Reihenfolge (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
 # 0. Hintergrundjobs anhalten, solange das Schema nicht zum Code passt
-docker compose -f docker-compose.prod.yml stop cron
+docker compose "${compose_files[@]}" stop cron
 
 # 1. Migrations-Status ansehen
-docker compose -f docker-compose.prod.yml exec web \
+docker compose "${compose_files[@]}" exec web \
   python manage.py showmigrations core
 
 # 2. Auf eine bestimmte Migration zurueckrollen
 #    Beispiel: zurueck auf Migration 0042
-docker compose -f docker-compose.prod.yml run --rm maintenance \
+docker compose "${compose_files[@]}" run --rm maintenance \
   migrate core 0042
 
 # 3. Danach altes Image deployen und cron wieder starten (siehe 2.1)

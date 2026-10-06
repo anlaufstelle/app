@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: the post-deploy verification (§ 1.3) and the migration rollback (§ 2.2) build the complete Compose file list themselves, so that newly created `maintenance` containers honor a configured `compose.override.yml` (#2424).
 > Synchronization update 2026-10-06: the breach scan crontab example in § 6.5b is a single-line entry (crontab has no line continuation) and starts the job through `maintenance` (#2423).
 > Synchronization update 2026-10-06: § 1.2/§ 1.3 start the update with choosing the target version, stop `cron` before the migration, pull and recreate `web`, `cron` and `caddy`, and compare the image IDs of `web` and `cron`; § 2.1–§ 2.3 roll back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env`, recreate `web` and `cron`, and name schema compatibility as a prerequisite; the PostgreSQL migration path stops and restarts `cron` as well (#2424).
 > Synchronization update 2026-10-06: § 2.2, § 3.4, § 3.5, § 9 and § 11.1 run privileged maintenance commands (retention, snapshots, view refresh, `check_db_roles`, migration rollback) through `run --rm maintenance` instead of `exec web`; the dev timer table names the real `maintenance` calls (#2423).
@@ -151,32 +152,39 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 ### 1.3 Post-Deploy Verification
 
 ```bash
+cd /opt/anlaufstelle
+
+# Complete Compose file list in a fixed order (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
 # Container status
-docker compose -f docker-compose.prod.yml ps
+docker compose "${compose_files[@]}" ps
 
 # Check the migration log
-docker compose -f docker-compose.prod.yml logs web --tail=50
+docker compose "${compose_files[@]}" logs web --tail=50
 
 # Health check
 curl -sf https://$DOMAIN/health/
 # Expected anonymous response: {"status": "ok"}
 
 # Verify migration status
-docker compose -f docker-compose.prod.yml exec web \
+docker compose "${compose_files[@]}" exec web \
   python manage.py showmigrations | grep '\[ \]'
 # No pending migrations → empty output
 
 # Django deployment check
-docker compose -f docker-compose.prod.yml exec web \
+docker compose "${compose_files[@]}" exec web \
   python manage.py check --deploy
 
 # web and cron must run the same image (same image ID on both lines)
 docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
-  $(docker compose -f docker-compose.prod.yml ps -q web cron)
+  $(docker compose "${compose_files[@]}" ps -q web cron)
 
 # Read-only maintenance smoke test with the admin role (changes nothing)
-docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
-docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
+docker compose "${compose_files[@]}" run --rm maintenance check_db_roles
+docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dry-run
 ```
 
 ### 1.4 Compose Stack Reconciliation
@@ -242,16 +250,23 @@ curl -sf https://$DOMAIN/health/
 If a migration has changed data or schema in an incompatible way. `migrate` runs in the `maintenance` service (schema owner, admin role); under the app role of `web` the rollback aborts with "must be owner of relation …":
 
 ```bash
+cd /opt/anlaufstelle
+
+# Complete Compose file list in a fixed order (admin-guide.md § 1).
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
 # 0. Stop background jobs while the schema does not match the code
-docker compose -f docker-compose.prod.yml stop cron
+docker compose "${compose_files[@]}" stop cron
 
 # 1. Look at the migration status
-docker compose -f docker-compose.prod.yml exec web \
+docker compose "${compose_files[@]}" exec web \
   python manage.py showmigrations core
 
 # 2. Roll back to a specific migration
 #    Example: back to migration 0042
-docker compose -f docker-compose.prod.yml run --rm maintenance \
+docker compose "${compose_files[@]}" run --rm maintenance \
   migrate core 0042
 
 # 3. Then deploy the old image and start cron again (see 2.1)
@@ -3108,5 +3123,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: c0209eb8145d8ea067e7d0459f4e4d540dba6d6c -->
+<!-- source-hash: 273b65b479f26f2f2c9e49e902093a2da965bfd1 -->
 <!-- translation-date: 2026-09-22 -->

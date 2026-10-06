@@ -1394,27 +1394,23 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 
 `cron` ist ein eigener Dienst mit Anwendungscode aus demselben Image. Ein `up -d web caddy` ersetzt ihn nicht: Retention-, Audit- und Statistikjobs liefen weiter mit altem Code gegen die neue Datenbank. Legen Sie das Update deshalb nicht in die Zeitfenster der Nachtjobs (Backup 02:00, Retention 03:00 bis Session-Bereinigung 05:00; Zeitplan: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs)).
 
-Prüfen Sie anschließend, dass `web` und `cron` dasselbe Image laufen, und führen Sie einen lesenden Wartungs-Smoke aus:
+Prüfen Sie anschließend, dass `web` und `cron` dasselbe Image laufen, führen Sie einen lesenden Wartungs-Smoke aus und prüfen Sie die Logs. Der Block baut den vollständigen Dateisatz selbst auf, damit auch der neu erzeugte `maintenance`-Container eine eingerichtete `compose.override.yml` berücksichtigt:
 
 ```bash
+cd /opt/anlaufstelle
+
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
 # Gleiche Image-ID in beiden Zeilen
 docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
-  $(docker compose -f docker-compose.prod.yml ps -q web cron)
+  $(docker compose "${compose_files[@]}" ps -q web cron)
 
 # Lesend, mit der Admin-Rolle (ändert nichts)
-docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
-docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
-```
+docker compose "${compose_files[@]}" run --rm maintenance check_db_roles
+docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dry-run
 
-Prüfen Sie anschließend die Logs:
-
-```bash
-docker compose -f docker-compose.prod.yml logs web --tail=50
-```
-
-Mit eingerichteter Zusatzdatei verwenden Sie denselben oben aufgebauten vollständigen Dateisatz:
-
-```bash
 docker compose "${compose_files[@]}" logs web --tail=50
 ```
 

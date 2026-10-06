@@ -3,6 +3,7 @@
 > Synchronization update 2026-10-06: § 2.5 the retention period of a documentation type applies in addition to the contact-stage period -- whichever expires first applies, a longer type period extends nothing (#2462).
 > Synchronization update 2026-10-06: § 5.5 states when the “Admin DB role” card keeps showing the previous state (failed write, deploy aborted before `check_db_roles`) and that findings are recorded even without an RLS bypass, only `ok` requires one (#2415).
 > Synchronization update 2026-10-06: § 5.5 and the fresh-install note describe that the “Admin DB role” card reads the latest `check_db_roles` result recorded by the maintenance service (`DB_ROLES_VERIFIED`: `ok` with the check time, `critical` with finding codes, `warning` when incomplete or older than 30 days, `unknown` without an entry) (#2415).
+> Synchronization update 2026-10-06: the checks after an update (§ 4.2) build the complete Compose file list themselves, so that the newly created `maintenance` container honors a configured `compose.override.yml` (#2424).
 > Synchronization update 2026-10-06: the host crontab examples for the breach scan, retention and view refresh are single-line entries, because crontab has no line continuation (#2423).
 > Synchronization update 2026-10-06: § 4.2 starts the update with choosing the target version, stops `cron` before the migration, recreates `web`, `cron` and `caddy`, and compares the image IDs of `web` and `cron`; § 4.4 rolls back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env` and recreates `web` and `cron` (#2424).
 > Synchronization update 2026-10-06: retention, statistics snapshots, view refresh, breach scan, unlock, the inventory reports and `check_db_roles` run through `run --rm maintenance` instead of `exec web`/bare `python manage.py`; the login diagnosis uses the web interface; cron times match the sidecar (retention 03:00, snapshots on the 1st at 04:00) (#2423).
@@ -1450,27 +1451,23 @@ docker compose "${compose_files[@]}" up -d web cron caddy
 
 `cron` is a separate service with application code from the same image. `up -d web caddy` does not replace it: retention, audit and statistics jobs would keep running old code against the new database. Therefore do not schedule the update into the windows of the night jobs (backup 02:00, retention 03:00 through session cleanup 05:00; schedule: [ops runbook § 3](../ops-runbook.md#3-cron-jobs)).
 
-Afterwards check that `web` and `cron` run the same image and run a read-only maintenance smoke test:
+Afterwards check that `web` and `cron` run the same image, run a read-only maintenance smoke test and check the logs. The block builds the complete file set itself, so that the newly created `maintenance` container also honors a configured `compose.override.yml`:
 
 ```bash
+cd /opt/anlaufstelle
+
+compose_files=(-f docker-compose.prod.yml)
+[[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
+[[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+
 # Same image ID on both lines
 docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
-  $(docker compose -f docker-compose.prod.yml ps -q web cron)
+  $(docker compose "${compose_files[@]}" ps -q web cron)
 
 # Read-only, with the admin role (changes nothing)
-docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
-docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
-```
+docker compose "${compose_files[@]}" run --rm maintenance check_db_roles
+docker compose "${compose_files[@]}" run --rm maintenance enforce_retention --dry-run
 
-Check the logs afterwards:
-
-```bash
-docker compose -f docker-compose.prod.yml logs web --tail=50
-```
-
-With an additional file configured, use the same complete file set built above:
-
-```bash
 docker compose "${compose_files[@]}" logs web --tail=50
 ```
 
@@ -2414,5 +2411,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: 5e4fc7ce3e8e8ace6fbae12906157928d98e0488 -->
+<!-- source-hash: dd5c884d9b31dfb63848f177759b6c41ccc5ecfa -->
 <!-- translation-date: 2026-10-05 -->
