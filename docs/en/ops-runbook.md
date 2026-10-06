@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: the German source of § 13.1 uses proper umlauts in the step comments; no change to commands or content.
 > Synchronization update 2026-10-06: the DB password rotation section names the printed file list as `Compose files: …` (the script output is English now) (#2474).
 > Synchronization update 2026-10-06: the PostgreSQL migration path (§ 13.1/§ 13.2) activates maintenance mode and takes the backup while `web` and `cron` are running (`backup.sh` needs both), stops them only afterwards, takes the working dump with the variable `ADMIN_DB_USER` that exists in the `db` container and checks it, waits for the final database server before the restore, and uses the full Compose file list (#2424).
 > Synchronization update 2026-10-06: the post-deploy verification (§ 1.3) and the migration rollback (§ 2.2) build the complete Compose file list themselves, so that newly created `maintenance` containers honor a configured `compose.override.yml` (#2424).
@@ -3145,5 +3146,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 80aa12c136b9feb34fceccc830c4f4cf7539bb23 -->
+<!-- source-hash: cad09da2c3237f1bc5f644ab08cdc8c7b7d84b1e -->
 <!-- translation-date: 2026-09-22 -->

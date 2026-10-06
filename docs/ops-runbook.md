@@ -2979,7 +2979,7 @@ Refs #1039. PostgreSQL-Major-Versionen haben **inkompatible Datenverzeichnisse**
 
 ### 13.1 Prod/Staging — Daten erhalten (Wartungsfenster)
 
-Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020). Fuer Staging gilt das erst ab #2086: davor mountete der Stack `deploy/postgres-init` gar nicht (§ 1.4). Jeder Schritt muss fehlerfrei enden, bevor der nächste beginnt — insbesondere Backup und Arbeits-Dump (Schritte 1–2), bevor Schritt 4 das Volume entfernt; der Block bricht bei einem Fehler nicht von selbst ab.
+Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020). Für Staging gilt das erst ab #2086: davor mountete der Stack `deploy/postgres-init` gar nicht (§ 1.4). Jeder Schritt muss fehlerfrei enden, bevor der nächste beginnt — insbesondere Backup und Arbeits-Dump (Schritte 1–2), bevor Schritt 4 das Volume entfernt; der Block bricht bei einem Fehler nicht von selbst ab.
 
 ```bash
 cd /opt/anlaufstelle
@@ -2994,13 +2994,13 @@ compose_files=(-f docker-compose.prod.yml)
 #    müssen für das Backup laufen.
 docker compose "${compose_files[@]}" exec -T web touch /data/anlaufstelle.maintenance
 
-# 1. Finales verschluesseltes Backup (§ 1.1); db, web und cron muessen laufen.
+# 1. Finales verschlüsseltes Backup (§ 1.1); db, web und cron müssen laufen.
 ./scripts/ops/backup.sh
 
 # 2. Schreibpfade stilllegen (die DB bleibt erreichbar) und danach den
-#    unverschluesselten Arbeits-Dump ziehen. Der Dump laeuft als Admin-Rolle
-#    (BYPASSRLS) ueber den Container-Socket — wie backup.sh; im db-Container
-#    heisst die Variable ADMIN_DB_USER. Erst weitermachen, wenn die Pruefung
+#    unverschlüsselten Arbeits-Dump ziehen. Der Dump läuft als Admin-Rolle
+#    (BYPASSRLS) über den Container-Socket — wie backup.sh; im db-Container
+#    heißt die Variable ADMIN_DB_USER. Erst weitermachen, wenn die Prüfung
 #    ein Inhaltsverzeichnis liefert.
 docker compose "${compose_files[@]}" stop web cron
 umask 077
@@ -3044,8 +3044,8 @@ docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.s
 docker compose "${compose_files[@]}" up -d web cron caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
-# 10. Maintenance-Mode aus. Arbeits-Dump enthaelt KLARTEXT-Daten — sofort loeschen;
-#     Tarball nach Bewaehrungsfrist (z. B. 1 Woche) entsorgen.
+# 10. Maintenance-Mode aus. Arbeits-Dump enthält KLARTEXT-Daten — sofort löschen;
+#     Tarball nach der Aufbewahrungsfrist (z. B. 1 Woche) entsorgen.
 docker compose "${compose_files[@]}" exec -T web rm -f /data/anlaufstelle.maintenance
 rm /tmp/upgrade-pg16.dump
 ```
