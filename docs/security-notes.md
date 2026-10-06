@@ -16,16 +16,16 @@ Das `User`-Model hat einen `facility`-FK (nullable, `on_delete=SET_NULL`) in [`s
 
 Zwei Use-Cases sind auf Cross-Facility-Zugriff angewiesen:
 
-1. **Login-Bootstrap.** Beim Anmelden ist die Session noch nicht an eine Facility gebunden — Django-`auth_login` sucht den User über `username` (oder E-Mail beim Password-Reset) und setzt erst danach die Facility in `request.session`. Eine facility-isolierte `core_user`-Policy würde den Login von **jedem** User scheitern lassen, solange der Session-Variablen-Setzer (die [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py)) nicht schon läuft — klassischer Chicken-and-Egg.
-2. **Cross-Facility-Administration.** Administratoren können User mehrerer Facilities verwalten (Passwort-Reset senden, Rollen anpassen, Token-Invite neu generieren). Das ist explizit gewünscht (siehe [`core.admin.users.UserAdmin`](../src/core/admin/users.py)), und eine facility-isolierte Policy würde diesen Admin-Workflow unterbinden.
+1. **Login-Bootstrap.** Beim Anmelden ist die Session noch nicht an eine Facility gebunden — Django-`auth_login` sucht den User über `username` (oder E-Mail beim Password-Reset) und bindet erst danach die Einrichtung: die [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py) setzt sie je Request als `request.current_facility` und als PostgreSQL-Session-Variable `app.current_facility_id`. Eine facility-isolierte `core_user`-Policy würde den Login von **jedem** User scheitern lassen, solange der Session-Variablen-Setzer (die [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py)) nicht schon läuft — klassischer Chicken-and-Egg.
+2. **Cross-Facility-Administration.** Die Systemadministration (`super_admin`) verwaltet Konten aller Einrichtungen (Passwort-Reset senden, Rollen anpassen, Token-Invite neu generieren). [`core.admin.users.UserAdmin`](../src/core/admin/users.py) erbt `FacilityScopedAdminMixin`; dessen `scope_to_facility` ([`admin_site.py`](../src/core/admin_site.py)) lässt `super_admin` alle Zeilen sehen und begrenzt `facility_admin` auf `request.current_facility`. Eine facility-isolierte Policy würde den installationsweiten Teil unterbinden.
 
 ### Andere Verteidigungslinien
 
 Auch ohne RLS-Isolation auf `core_user` gilt:
 
 - **Facility-Scoping im ORM-Layer:** Alle user-facing Views gehen über [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py), die `request.current_facility` setzt. Queries, die User ausschließlich einer Facility liefern sollen, filtern explizit (z.B. in [`forms/workitems.py`](../src/core/forms/workitems.py): `User.objects.filter(facility=facility, ...)`).
-- **Rollen-Gates:** [`AdminRequiredMixin`](../src/core/views/mixins.py) hält Cross-Facility-User-Management Admin-only.
-- **AuditLog:** User-Role-Changes und Deaktivierungen werden via `post_save`-Signale geloggt (siehe [`signals/audit.py`](../src/core/signals/audit.py)); der handelnde Admin wird dabei über das `actor`-Feld erfasst und tamper-evident in die HMAC-Audit-Kette eingebunden — der Eintrag trägt das Ziel im `user`-Feld und den Verursacher in `actor`, statt beide zu vermengen (#1369).
+- **Rollen-Gates:** In [`views/mixins.py`](../src/core/views/mixins.py) begrenzt `FacilityAdminRequiredMixin` die Einrichtungsverwaltung auf `facility_admin` (an die eigene Einrichtung gebunden), `SuperAdminRequiredMixin` den installationsweiten `/system/`-Bereich auf `super_admin`. Im Django-Admin scopt `FacilityScopedAdminMixin` ([`admin/mixins.py`](../src/core/admin/mixins.py)) die Querysets.
+- **AuditLog:** User-Role-Changes und Deaktivierungen werden via `post_save`-Signale geloggt (siehe [`signals/audit.py`](../src/core/signals/audit.py)); der handelnde Admin wird dabei über das `actor`-Feld erfasst und in die HMAC-Audit-Kette eingebunden — der Eintrag trägt das Ziel im `user`-Feld und den Verursacher in `actor`, statt beide zu vermengen (#1369). Was die Kette nachweist, ist begrenzt: `verify_audit_chain` erkennt genau drei Fälle (Inhalt passt nicht zum `entry_hash`, `prev_hash` passt weder zur Vorgängerzeile noch zu einer authentifizierten Prune-Grenze, fehlender High-Water-Mark-Anker); Zeilen ohne `entry_hash` überspringt sie. Gegen die Owner-Rolle der Tabelle ist die Kette deshalb kein vollständiger Manipulationsnachweis — Details im [ADR-007-Nachtrag (2026-10-06)](adr/007-auditlog-append-only.md#nachtrag-2026-10-06-privilegierter-pfad-hmac-kette-tombstones-und-lockout-recovery-refs-2449).
 
 ### Verifikation
 
@@ -169,19 +169,19 @@ Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Mode
 
 | Feld | Modell | Typische Inhalte | Risiko |
 |---|---|---|---|
-| [`Client.notes`](../src/core/models/client.py#L54-L63) | `Client` | Freie Notizen über die Person | hoch (Klarname-Risiko) |
-| [`Case.description`](../src/core/models/case.py#L37-L46) | `Case` | Fall-Beschreibung | mittel |
-| [`Episode.description`](../src/core/models/episode.py#L21-L29) | `Episode` | Episoden-Verlauf | mittel |
-| [`WorkItem.description`](../src/core/models/workitem.py#L90-L98) | `WorkItem` | Aufgaben-Beschreibung | mittel |
-| [`AuditLog.detail`](../src/core/models/audit.py#L181) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und `username` bei Login-/Rechte-Vorgängen | mittel (Beschäftigten-`username`); seit #1751 **keine** Klienten-PII mehr in neuen Einträgen |
+| [`Client.notes`](../src/core/models/client.py) | `Client` | Freie Notizen über die Person | hoch (Klarname-Risiko) |
+| [`Case.description`](../src/core/models/case.py) | `Case` | Fall-Beschreibung | mittel |
+| [`Episode.description`](../src/core/models/episode.py) | `Episode` | Episoden-Verlauf | mittel |
+| [`WorkItem.description`](../src/core/models/workitem.py) | `WorkItem` | Aufgaben-Beschreibung | mittel |
+| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und `username` bei Login-/Rechte-Vorgängen | mittel (Beschäftigten-`username`); seit #1751 **keine** Klienten-PII mehr in neuen Einträgen |
 
 ### Was bereits umgesetzt ist (Audit-Item 16)
 
-`help_text` aller fünf Felder warnt jetzt explizit: **"Nicht feldverschlüsselt — keine Klarnamen oder Art-9-Daten hier vermerken; sensible Inhalte gehören in ein FieldTemplate mit Sensitivity=HOCH."** Migration `0075_freetext_helptext_warnings` zieht das in alle Forms (Django renders `help_text` automatisch unter Form-Widgets).
+Der `help_text` der vier Freitextfelder (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) warnt, dass das Feld nicht verschlüsselt gespeichert wird, dass dort keine Klarnamen und keine Angaben nach Art. 9 DSGVO stehen sollen und dass solche Angaben in ein verschlüsseltes Zusatzfeld gehören (Wortlaut in den Modellen). `AuditLog.detail` hat keinen `help_text`; es ist kein Formularfeld. Django rendert `help_text` automatisch unter den Form-Widgets.
 
 ### Was bewusst nicht jetzt umgesetzt wird (Audit-Item 17)
 
-Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Felder) ist im als **§ B.5 Item 17, Aufwand M** klassifiziert. Voll-Implementation würde:
+Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Felder) ist im internen Code-Audit (dev-only) als Maßnahme mit mittlerem Aufwand nach v1.0 eingestuft. Voll-Implementation würde:
 - Schema-Migration (TextField → JSONField mit `{"__encrypted__": True, "value": ...}`)
 - Existing-Data-Migration (Bestand verschlüsseln)
 - Search/Sort/Export anpassen — `Client.notes` wird in Detail-Views, Exports und ggf. Volltext-Suche gerendert
@@ -205,7 +205,7 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 
 ### Verifikation
 
-- Migration `0075` zeigt die neuen `help_text`-Werte in allen vier ModelForms (Client/Case/Episode/WorkItem). `make migrate` ohne Fehler.
+- Die `help_text`-Werte stehen an den vier Modellfeldern (`client.py`, `case.py`, `episode.py`, `workitem.py`) und erscheinen in den zugehörigen ModelForms.
 - Threat-Model-Eintrag: [`threat-model.md` § TB2/TB3, Zeile *I Sensitive Felder ohne Encryption*](threat-model.md#tb2tb3--django--postgresql)
 
 ---
@@ -222,7 +222,7 @@ Daraus folgen drei Fälle, in denen personenbeziehbare Restdaten die Löschung �
 
 1. **Bis zum Pruning** — Regelfall: bis zu `Settings.auditlog_retention_months` (Default 24 Monate) nach dem Eintrag.
 2. **Dauerhaft bei `auditlog_retention_months = 0`** — der Wert schaltet das Pruning ab ([`audit_pruning.py`](../src/core/retention/audit_pruning.py): `months <= 0` → No-op). Dann überlebt **jede** Audit-Zeile jede Löschung, unbegrenzt.
-3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED` und `AUDIT_PRUNE_CHECKPOINT` (beide tragen nur System-Metadaten) sowie — seit #1770 — für `EXPORT`-Einträge, die eine **Berichts-Freigabe** sind (`RELEASE_EXPORT_Q`: Berichtszeitraum **und** herausgegebenes Artefakt; Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person, die DSGVO-Dokument-Downloads (beide ohne Zeitraum) und jeder **Bildschirm-Aufruf** des externen Berichts (Zeitraum, aber kein Artefakt) laufen — die alle bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
+3. **Dauerhaft bei `SECURITY_VIOLATION`** — die Aktion steht in `PRUNE_EXEMPT_ACTIONS` und wird nie gepruned, unabhängig von der Frist. Dasselbe gilt für `RETENTION_RUN_COMPLETED`, `AUDIT_PRUNE_CHECKPOINT` und `EVENT_HISTORY_REDACTED` (alle drei in `PRUNE_EXEMPT_ACTIONS`, sie tragen nur System-Metadaten) sowie — seit #1770 — für `EXPORT`-Einträge, die eine **Berichts-Freigabe** sind (`RELEASE_EXPORT_Q`: Berichtszeitraum **und** herausgegebenes Artefakt; Datenbasis der Freigabe-Übersicht, siehe § Disclosure-Analyse K4a). Die Grenze hängt bewusst **nicht** an der Aktion: `EXPORT` ist eine Sammelklasse, unter der auch die Art.-15-Datenauskunft einer Person, die DSGVO-Dokument-Downloads (beide ohne Zeitraum) und jeder **Bildschirm-Aufruf** des externen Berichts (Zeitraum, aber kein Artefakt) laufen — die alle bleiben der Frist unterworfen. Was in der Berichts-Teilmenge dauerhaft stehen bleibt, sind Zeitraum, Format, die Empfänger-/Zweck-**Freitexte** und die handelnde Person; Klientenbezug ist dort nicht vorgesehen, aber die Freitextfelder sind Freitext — ihre Datenminimierung ist eine Betreiber-Obliegenheit (Empfehlung im Admin-Handbuch), keine technische Zusicherung.
 
 ### Was bereits umgesetzt ist (#1751, Punkt 5)
 
@@ -230,7 +230,7 @@ Weil nachträgliche Redaktion strukturell ausgeschlossen ist, ist **Minimierung 
 
 | Schreibstelle | Vorher | Jetzt |
 |---|---|---|
-| File-Vault-Reject (`SECURITY_VIOLATION`) | Original-Dateiname im Klartext (Uploads heißen im Feld regelmäßig nach der betroffenen Person) | `filename_hash` (stabiler HMAC, Wiederholungen bleiben korrelierbar) + `filename_ext` als Typmarker — zentral in [`log_attachment_violation`](../src/core/services/file_vault/audit.py), keine der neun Aufrufstellen kann die Minimierung umgehen |
+| File-Vault-Reject (`SECURITY_VIOLATION`) | Original-Dateiname im Klartext (Uploads heißen im Feld regelmäßig nach der betroffenen Person) | `filename_hash` (stabiler HMAC, Wiederholungen bleiben korrelierbar) + `filename_ext` als Typmarker — zentral in [`log_attachment_violation`](../src/core/services/file_vault/audit.py); die Ablehnungspfade in [`policy.py`](../src/core/services/file_vault/policy.py) rufen sie über `_reject` auf; sie nimmt den Dateinamen als Parameter `filename` entgegen und schreibt davon nur Hash und Endung |
 | `MILESTONE_DELETE` | Meilenstein-`title` (derselbe Freitext, den die Anonymisierung tilgt) | nur `case_id`; Zuordnung über `target_id` |
 | Art.-15-/20-Export | `pseudonym` | nur `format`; Zuordnung über `target_id` |
 
@@ -278,7 +278,7 @@ Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_pol
 
 Das ersatzlose Löschen eines Dateianhangs (`purge_attachment_chain`, Route `core:attachment_delete`) entfernt die Zeilen, die `__files__`-Marker **und** die verschlüsselten `.enc`-Dateien der ganzen Versionskette vom Datenträger. Innerhalb der laufenden Instanz ist der Vorgang damit vollständig und unwiderruflich — es gibt keinen Papierkorb und keinen Wiederherstellungspfad.
 
-**Nicht erfasst sind die Sicherungskopien daneben.** Der Prod-Backup-Pfad ([`scripts/ops/backup.sh`](../scripts/ops/backup.sh)) schreibt neben dem DB-Dump einen Medien-Tarball `*_media.tar.gz.enc` (+ `.hmac`), der über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) zurückspielbar ist (siehe [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-backup-format)). Eine Datei, die heute gelöscht wird, liegt in jedem Backup weiter, das vor der Löschung entstanden ist — bis zum Ablauf der Backup-Aufbewahrung bzw. bis zur Rotation des Off-Site-Ziels. Ein Restore holt sie zurück; die DB-Zeile käme dabei mit, weil der DB-Dump aus demselben Zeitpunkt stammt.
+**Nicht erfasst sind die Sicherungskopien daneben.** Der Prod-Backup-Pfad ([`scripts/ops/backup.sh`](../scripts/ops/backup.sh)) schreibt neben dem DB-Dump einen Medien-Tarball `*_media.tar.gz.enc` (+ `.hmac`), der über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) zurückspielbar ist (siehe [`disaster-recovery.md` §2/§3](disaster-recovery.md#2-backup-format)). Eine Datei, die heute gelöscht wird, liegt in jedem Backup weiter, das vor der Löschung entstanden ist. Lokal entfernt `backup.sh` die Stände nach 7 (täglich), 28 (wöchentlich) und 90 Tagen (monatlich) und setzt diese Rotation aus, solange der Off-Site-Abgleich fehlschlägt. Ist das optionale Off-Site-Ziel (`BACKUP_OFFSITE_TARGET`) gesetzt, überträgt das Skript per `rclone copy`, `aws s3 sync` ohne `--delete` bzw. `scp` und löscht dort nichts: Die Kopien liegen am Ziel, bis eine Aufbewahrungsregel des Betreibers sie entfernt. Ein Restore holt sie zurück; die DB-Zeile käme dabei mit, weil der DB-Dump aus demselben Zeitpunkt stammt.
 
 Für ein Feature, das ausdrücklich als **Datenminimierung** angeboten wird (Anlassfall: falsche Datei, falsche Person, Klarname im Dokument), ist eine unbedingte Zusage „keine Wiederherstellung — auch nicht durch die Administration" gegenüber der betroffenen Person deshalb falsch.
 
@@ -316,7 +316,7 @@ Bei der Klienten-Anonymisierung (`anonymize_client()`, [`client/main.py`](../src
 
 ### Zweck (warum der Hash überhaupt existiert)
 
-Der In-Memory-Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`) ist der Fast-Path; die Spalte ist die Ausfallsicherung dafür — sie greift genau dann, wenn der Cache nicht mehr da ist (Worker-Neustart, Eviction, R5) oder zwei parallele Replays das Get-then-Set-Fenster gleichzeitig passieren (R6). Ohne den persistierten Hash würde ein Cache-Verlust nach #1909 wieder in genau die Lücke zurückfallen, die N14/#1424 geschlossen hat: ein Replay mit demselben (client-frei wählbaren) Schlüssel, aber anderem Payload, würde still den falschen gecachten Treffer zurückliefern, statt als Kollision erkannt zu werden.
+Der Cache-Eintrag (72 h TTL, `IDEMPOTENCY_TTL_SECONDS`; in Produktion Redis oder, ohne `REDIS_URL`, `DatabaseCache` laut `CACHES` in `prod.py`) ist der Fast-Path; die Spalte ist die Ausfallsicherung dafür — sie greift genau dann, wenn der Cache nicht mehr da ist (Worker-Neustart, Eviction, R5) oder zwei parallele Replays das Get-then-Set-Fenster gleichzeitig passieren (R6). Ohne den persistierten Hash würde ein Cache-Verlust nach #1909 wieder in genau die Lücke zurückfallen, die N14/#1424 geschlossen hat: ein Replay mit demselben (client-frei wählbaren) Schlüssel, aber anderem Payload, würde still den falschen gecachten Treffer zurückliefern, statt als Kollision erkannt zu werden.
 
 ### Unlinkability-Bewertung
 
@@ -420,6 +420,8 @@ Diese Bewertung ist an die heutige Auswertungs-Granularität gebunden und **neu 
 3. **Ein neuer Zeitstempel wird an der `Event`-Zeile aufbewahrt** (etwa ein fachlicher „gültig ab"-Wert). Er wäre ein neuer Kanal derselben Timeline und müsste in `_generalize_event_timestamps()` mitlaufen.
 4. **Die k-Anonymitäts-Äquivalenzklasse wird erweitert.** Kämen weitere Quasi-Identifikatoren hinzu, ist erneut zu prüfen, welche davon der Hard-Pfad zerstören muss und welche die Bridge für ihre Zusicherung braucht — die #2047 aufgelöste Asymmetrie darf nicht in neuer Form zurückkehren.
 
+---
+
 ## Offline-Bundles nach Anonymisierung: Revoke-Liste + 48-h-TTL als letzte Linie (Issue #1760)
 
 **Status:** Aktiver Widerrufskanal seit #1760, Reichweite erweitert in #1774 (gequeute Event-Edit-POSTs + Autosave-Entwurf); das Restrisiko „dauerhaft offline gebliebenes Gerät" bleibt akzeptiert und ist durch die Bundle-TTL begrenzt.
@@ -464,7 +466,7 @@ Wer diese Grenze verschieben will, braucht einen fall-genauen Widerrufskanal —
 
 ### Restrisiko (akzeptiert)
 
-**Ein Gerät, das nach der Anonymisierung nie wieder online geht, erhält das Signal nicht.** Für diesen Fall bleibt die **48-h-Bundle-TTL die letzte Verteidigungslinie**: `purgeExpired`/`purgeExpiredBundles` verwerfen den Server-Spiegel rein lokal, sobald `expiresAt` überschritten ist, und der Idle-Wipe entzieht davor bereits den Schlüssel (Session-Dauer, Default 30 Min). Ein Widerruf kann diese Grenze prinzipiell nicht unterschreiten — jede Server→Gerät-Zustellung setzt Konnektivität voraus.
+**Ein Gerät, das nach der Anonymisierung nie wieder online geht, erhält das Signal nicht.** Für diesen Fall bleiben die **48-h-Bundle-TTL** und die Leerlaufprüfung, beide aber erst beim nächsten Öffnen der App nach Ablauf: `purgeExpired`/`purgeExpiredBundles` verwerfen den Server-Spiegel rein lokal, wenn eine Seite der App mit geladenem Schlüssel startet und `expiresAt` überschritten ist; die Leerlaufprüfung (Session-Dauer, Default 30 Min) entzieht beim nächsten Ausführen den Schlüssel und löscht den Bestand nur, wenn keine ungesendete Arbeit vorliegt. Wird das Gerät nie wieder geöffnet, greift keine der beiden Linien. Ein Widerruf kann diese Grenze prinzipiell nicht unterschreiten — jede Server→Gerät-Zustellung setzt Konnektivität voraus.
 
 **Der Widerruf ist ein Best-Effort-Kanal, keine Garantie.** Er ist eine Verbesserung gegenüber „gar kein Signal", ersetzt aber weder die serverseitige Löschung noch die TTL:
 
@@ -520,27 +522,26 @@ Die Bearbeiten-Formulare rendern die gepinnte Person **read-only** (Pseudonym al
 
 ### Beobachtung
 
-[`Client.pseudonym`](../src/core/models/client.py#L35-L39) ist ein
+[`Client.pseudonym`](../src/core/models/client.py) ist ein
 `CharField(max_length=100, db_index=True)` mit zusätzlichem
-[`GinIndex` für `gin_trgm_ops`](../src/core/models/client.py#L89-L95).
+[`GinIndex` für `gin_trgm_ops`](../src/core/models/client.py) (`Client.Meta.indexes`).
 Trigram-Fuzzy-Search läuft über [`src/core/services/dashboard/search.py`](../src/core/services/dashboard/search.py)
 und ist eine zentrale UX-Funktion für Fachkräfte ("Marie" findet auch
 "Maria-23"). Bei einem **Backup-Diebstahl** mit Klartext-Pseudonymen ist
-direkte Wiedererkennung in Kontaktläden möglich
-(Quelle: internes, dev-only).
+direkte Wiedererkennung in Kontaktläden möglich (Quelle: internes Code-Audit,
+dev-only).
 
 ### Was bereits umgesetzt ist
 
-[`FieldTemplate`-Validator `Sensitivity=HIGH ⇒ is_encrypted=True`](../src/core/models/document_type.py#L243-L256)
-erzwingt seit,
-dass HIGH-Felder **immer** encrypted sind. Dieser Teil von Blocker 4 ist
+[`FieldTemplate`-Validator `Sensitivity=HIGH ⇒ is_encrypted=True`](../src/core/models/field_template.py) (`FieldTemplate.clean`)
+erzwingt, dass HIGH-Felder **immer** encrypted sind. Dieser Teil des Befunds ist
 funktional + per Test verifiziert (siehe [`tests/test_field_template_validator.py`](../src/tests/test_field_template_validator.py)).
 
 ### Was bewusst nicht jetzt umgesetzt wird
 
 `Client.pseudonym` per `EncryptedTextField` + HMAC-Lookup-Index. Das
-selbst stuft das in **§ B.5 Strukturell** als **Item 51,
-Aufwand L, post-v1.0** ein:
+interne Code-Audit stuft das als strukturelle Maßnahme mit großem Aufwand
+nach v1.0 ein (Item 51):
 
 > 51 | `Client.pseudonym`-Verschlüsselung mit HMAC-Lookup-Index | L | hoch
 
@@ -549,18 +550,18 @@ Aufwand L, post-v1.0** ein:
 **Wenn jetzt durchgezogen:**
 - Trigram-Fuzzy-Search bricht — entweder UX-Verlust oder HMAC-Bucket-
   Fuzzy mit n-gram HMACs (deutlich teurere Implementierung)
-- Sortierung `ordering=["pseudonym"]` ([client.py:82](../src/core/models/client.py#L82))
+- Sortierung `ordering=["pseudonym"]` (`Client.Meta` in [client.py](../src/core/models/client.py))
   liefert auf encrypted Bytes keine sinnvolle Reihenfolge
 - `unique_facility_pseudonym`-Constraint braucht HMAC-basierten Unique-Index
-- Sämtliche `pseudonym__icontains`-Filter quer durch Views/Forms/Tests
+- Sämtliche `pseudonym__ilike`-Filter (Suche in [`search.py`](../src/core/services/dashboard/search.py)) und ihre Tests
   müssen umgestellt werden
 
 **Aktueller Schutz:**
 - Backup ist AES-256-CBC + PBKDF2-verschlüsselt mit `BACKUP_ENCRYPTION_KEY`
   ([`backup.sh`](../scripts/ops/backup.sh)) — Klartext-Pseudonyme nur bei
   Schlüssel-Kompromittierung exponiert
-- Off-Site-Hook (Refs #738)
-  empfiehlt Object-Lock gegen Ransomware
+- Optionaler Off-Site-Abgleich (`BACKUP_OFFSITE_TARGET`, Refs #738);
+  Object-Lock am Ziel gegen Ransomware richtet der Betreiber ein
 - RLS + Role-Mixin verhindern Pseudonym-Leak via App-Schicht
 - Pseudonyme sind bereits Decoy-Namen, nicht Klarnamen — die Re-
   Identifikations-Hürde ist UX-abhängig (Mitarbeiter müsste den Namen
@@ -587,7 +588,7 @@ Aufwand L, post-v1.0** ein:
 
 **Status:** Aktiv ab v0.11. Detection-Lücke L2 aus einem internen Sicherheitsbericht 2026-04-26 (dev-only) geschlossen.
 
-Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py:266-275`](../src/anlaufstelle/settings/base.py#L266-L275)). Browser POSTen Verstöße als `application/csp-report` (CSP Level 2) oder `application/reports+json` (CSP Level 3) — die View [`CSPReportView`](../src/core/views/csp_report.py) parsed beide Formate, loggt strukturiert als WARNING auf dem `security.csp`-Logger und antwortet `204 No Content`.
+Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py`](../src/anlaufstelle/settings/base.py), `CONTENT_SECURITY_POLICY`). Browser POSTen Verstöße als `application/csp-report` (CSP Level 2) oder `application/reports+json` (CSP Level 3) — die View [`CSPReportView`](../src/core/views/csp_report.py) parsed beide Formate, loggt strukturiert als WARNING auf dem `security.csp`-Logger und antwortet `204 No Content`.
 
 **Härtung:**
 - Rate-Limit `10/m` pro IP gegen Log-Flooding
@@ -607,7 +608,7 @@ Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py:266-275`](..
 
 ## GitHub-Repo-Härtung: Workflow-Permissions, SHA-Pinning, Branch Protection (Issue #888)
 
-**Status:** Permissions + SHA-Pinning umgesetzt; Branch-Protection-Ruleset wartet auf Repo-Public-Switch oder GitHub-Pro.
+**Status:** Minimal-Permissions und SHA-Pinning sind in den Workflow-Dateien umgesetzt. Ein Branch-Protection-Ruleset ist aus dem Repository heraus nicht belegbar und wird hier nicht zugesichert.
 
 ### Hintergrund
 
@@ -617,13 +618,13 @@ Am 11. Mai 2026 veröffentlichte ein Angreifer **84 bösartige Versionen** über
 |---|---|---|
 | [`package-lock.json`](../package-lock.json) | 73 Pakete, alle mit `integrity` | keine |
 | [`requirements.txt`](../requirements.txt) / [`requirements-dev.txt`](../requirements-dev.txt) | Django-/Playwright-Stack | keine |
-| `.github/workflows/*` | kein `pull_request_target`, kein `id-token: write` | nicht ausnutzbar |
+| `.github/workflows/*` | kein `pull_request_target`, kein `workflow_run` | nicht ausnutzbar |
 
-Trotzdem sind die folgenden drei Härtungen als Defense-in-Depth umgesetzt — sie greifen, sobald das Repo öffentlich wird (geplante Demo-Instanz).
+Die folgenden Härtungen sind als Defense-in-Depth umgesetzt.
 
 ### Umgesetzt: Minimal-`permissions:`-Blocks
 
-Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des Default-`GITHUB_TOKEN` mit Schreibrechten läuft jeder Workflow mit dem Minimum:
+Alle Workflows unter `.github/workflows/` haben einen expliziten `permissions:`-Block. Statt des Default-`GITHUB_TOKEN` mit Schreibrechten läuft jeder Workflow mit dem Minimum:
 
 | Workflow | Top-Level / Job | Permissions |
 |---|---|---|
@@ -631,21 +632,22 @@ Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des De
 | `dev-image.yml` (dev-only) | Job | `contents: read`, `packages: write` (GHCR-Push) |
 | [`e2e.yml`](../.github/workflows/e2e.yml) | Top-Level | `contents: read` |
 | [`lint.yml`](../.github/workflows/lint.yml) | Top-Level | `contents: read` |
-| `perf-nightly.yml` | Top-Level | `contents: read`, `issues: write` |
-| [`release.yml`](../.github/workflows/release.yml) | Job | `contents: read`, `packages: write` (GHCR-Push) |
+| `mutation-nightly.yml` (dev-only) | Top-Level | `contents: read` |
+| `perf-nightly.yml` (dev-only) | Top-Level | `contents: read`, `issues: write` |
+| [`release.yml`](../.github/workflows/release.yml) | Job | `contents: read`, `id-token: write` (cosign keyless), `packages: write` (GHCR-Push) |
 | [`test.yml`](../.github/workflows/test.yml) | Top-Level | `contents: read` |
 
-`issues: write` in `perf-nightly` ist nötig, weil [`peter-evans/create-issue-from-file`](https://github.com/peter-evans/create-issue-from-file) bei einer Budget-Regression automatisch ein Issue anlegt.
+`issues: write` in `perf-nightly` ist nötig, weil [`peter-evans/create-issue-from-file`](https://github.com/peter-evans/create-issue-from-file) bei einer Budget-Regression automatisch ein Issue anlegt. `id-token: write` in `release.yml` braucht der Schritt „Sign the pushed image (cosign keyless)“: Cosign holt sich darüber ein OIDC-Token für die schlüssellose Signatur des Image-Digests. Die als dev-only markierten Workflows entfernt der Release-Build aus dem öffentlichen Baum.
 
 ### Umgesetzt: SHA-Pinning aller Actions
 
-Alle 42 `uses:`-Referenzen über die 7 Workflows zeigen jetzt auf **40-stellige Commit-SHAs** statt auf Major-Tags. Format: `uses: <owner>/<action>@<sha>  # vX.Y.Z`. Dependabot ist über das `github-actions`-Ökosystem in `.github/dependabot.yml` (dev-only) bereits konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
+Alle `uses:`-Referenzen in allen Workflows zeigen auf **40-stellige Commit-SHAs** statt auf Tags. Format: `uses: <owner>/<action>@<sha>  # vX.Y.Z`. Für `release.yml` pinnt das `test_all_actions_are_commit_sha_pinned` (`TestReleaseWorkflowSupplyChain` in [`test_architecture_guards_ops.py`](../src/tests/test_architecture_guards_ops.py)); für die übrigen Workflows gilt der Prüfbefehl unter „Verifikation“. Dependabot ist über das `github-actions`-Ökosystem in `.github/dependabot.yml` (dev-only) konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA und Tag-Kommentar bei neuen Versionen.
 
-**Warum:** Tags sind mutierbar. Bei einer hypothetischen Action-Repo-Übernahme könnte ein Angreifer einen Tag auf einen bösartigen Commit verschieben — bei Anlaufstelle würde die nächste CI-Run dann den bösartigen Code ausführen. SHA-Pinning blockt diesen Vektor; Dependabot übernimmt das laufende Update.
+**Warum:** Tags sind mutierbar. Bei einer Übernahme eines Action-Repositorys könnte ein Angreifer einen Tag auf einen bösartigen Commit verschieben — der nächste CI-Lauf würde dann den bösartigen Code ausführen. SHA-Pinning blockt diesen Vektor; Dependabot übernimmt das laufende Update.
 
-### Offen: Branch-Protection-Ruleset für `main`
+### Nicht aus dem Repository belegbar: Branch-Protection-Ruleset
 
-Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** — `gh api repos/anlaufstelle/app/rulesets` liefert `403 Upgrade to GitHub Pro or make this repository public`. Sobald das Repo öffentlich wird (oder vorher per Pro-Upgrade), muss folgendes Ruleset auf `main` aktiv sein:
+Ob für einen Branch ein Ruleset oder Branch-Schutz aktiv ist, steht in den GitHub-Einstellungen des jeweiligen Repositorys, nicht im Code. Dieses Dokument sichert deshalb keinen Branch-Schutz zu. Empfohlene Regeln für den Default-Branch:
 
 | Regel | Wert |
 |---|---|
@@ -657,19 +659,18 @@ Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** �
 | Restrict deletions | aktiv |
 | Bypass-Berechtigte | nur Repo-Admin |
 
-**Verifikation nach Aktivierung:** `gh api repos/<owner>/anlaufstelle/rulesets` zeigt das Ruleset; ein Push mit `--force-with-lease` auf einen Test-Branch muss serverseitig abgelehnt werden (nicht auf `main` testen).
+Prüfen lässt sich ein aktives Ruleset mit `gh api repos/<owner>/<repo>/rulesets` (Einstellungen des jeweiligen Repositorys).
 
 ### Trigger für Re-Evaluation
 
-- **Repo wird öffentlich** oder GitHub-Pro wird gebucht — Ruleset sofort aktivieren.
-- **Erster externer Contributor** öffnet einen Fork-PR — dann zusätzlich `pull_request_target` audit pflicht, `workflow_run`-Trigger meiden.
-- **CodeQL-Findings** zu Workflow-Hygiene — über [GitHub Security-Tab](https://github.com/anlaufstelle/app/security) tracken (CodeQL läuft nur auf dem public App-Repo, siehe [`codeql.yml`](../.github/workflows/codeql.yml) `if`-Bedingung).
+- **Erster externer Contributor** öffnet einen Fork-PR — dann `pull_request_target` und `workflow_run`-Trigger weiter meiden und neue Workflows darauf prüfen.
+- **CodeQL-Findings** zu Workflow-Hygiene — über den [GitHub Security-Tab](https://github.com/anlaufstelle/app/security) verfolgen (CodeQL läuft nur in öffentlichen Repositorys, siehe [`codeql.yml`](../.github/workflows/codeql.yml), Bedingung `github.event.repository.private == false`).
 
 ### Verifikation
 
-- `grep -rE 'uses: [^@]+@v[0-9]+\s*$' .github/workflows/` muss leer sein → kein Tag-Pinning übrig.
-- `grep -L 'permissions:' .github/workflows/*.yml` muss leer sein → jeder Workflow hat irgendwo Permissions (Top-Level oder Job-Level).
-- CHANGELOG-`[Unreleased]`-Eintrag dokumentiert beide Maßnahmen mit Issue-Referenz.
+- `grep -rhE '^\s*-?\s*uses: ' .github/workflows/ | grep -vE '@[0-9a-f]{40}(\s|$)'` muss leer sein → keine Action ohne Commit-SHA.
+- `grep -L 'permissions:' .github/workflows/*.yml` muss leer sein → jeder Workflow hat Permissions (Top-Level oder Job-Level).
+- `test_all_actions_are_commit_sha_pinned` und die Cosign-Prüfung in `TestReleaseWorkflowSupplyChain` ([`test_architecture_guards_ops.py`](../src/tests/test_architecture_guards_ops.py)).
 
 ---
 
@@ -938,7 +939,7 @@ zeitraum-skopierte Variante, und die Snapshot-Payload muss `persons` je Cluster 
 **Nebenwirkung:** nach (b) gilt „unterdrückt ⇒ Wert ≤ k−1" nicht mehr — das entschärft K1, bricht
 aber die Annahme, auf der der Guard aus K1/K2 rechnet. Beide Maßnahmen gemeinsam modellieren.
 
-*Status: **(a) mitigiert***, **(b) offen**
+*Status (a): **mitigiert***
 (#1768). `_drop_person_derived_breakdowns`
 in [`external_report.py`](../src/core/services/dashboard/external_report.py) ist ein einzelner,
 benannter Guard mit **einer** Bedingung (`unique_clients < k`), den alle drei Wrapper aufrufen; er
@@ -1757,9 +1758,10 @@ Zeilenform still unkanonisiert gelassen. Zwei Anker halten den Guard davor, selb
 `test_external_report_service.py::TestPersonenkriteriumInDenWrappern` und
 `test_statistics_hybrid.py::TestSachberichtPdfWeistDenLiveTermAus`.
 
-**(5) Offen:** ein Invarianten-Test, dass `Client.ContactStage` genau zwei Werte hat — die Identität
+**(5) Invarianten-Test:** `test_client_contact_stage_choices` in
+[`test_models.py`](../src/tests/test_models.py) pinnt, dass `Client.ContactStage` genau zwei Werte hat — die Identität
 anonym + identifiziert + qualifiziert = `total_contacts` hängt allein daran, und ein dritter Wert
-bräche sie **still**.
+bräche sie sonst **still**.
 
 ---
 
@@ -1854,7 +1856,7 @@ Stunde lang `429`, unabhängig von korrekten Credentials (Angriffsbild: **geziel
 ### Was bereits umgesetzt ist
 
 Die **Account-Lockout-Achse** — die die harte Sperre (`is_locked`, Refs #612)
-erzeugt — zählt Fehlversuche seit N9
+erzeugt — zählt Fehlversuche
 **je Quell-IP**. Fremde Falschpasswörter sperren den Login des Opfers von dessen eigener IP damit
 **nicht** mehr; der frühere *harte* Victim-Lockout ist geschlossen.
 
@@ -1906,8 +1908,6 @@ abgedeckt: kein hartes Blocking, aber eine forensische Spur plus optionaler Webh
 - `detect_distributed_login_attack`-Tests in [`test_breach_detection.py`](../src/tests/test_breach_detection.py):
   Alarm über Schwelle, kein Alarm knapp darunter, viele Versuche von EINER IP sind kein
   Distributed-Signal, Dedup greift.
-
----
 
 ---
 
@@ -2111,7 +2111,7 @@ Zum selben Schutzgut gehört #2287: Die Einrichtungsseite gatete den erneuten Ei
 
 ## Attachment-Pipeline owner-generisch: direkte RLS-Policy statt Join (Issue #1738)
 
-**Status:** umgesetzt mit Milestone 24 ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Migrationen `0129`–`0131`). Die Facility-Ableitung im Service-Layer bleibt Konvention + Pin-Test, kein DB-Constraint — bewusst, mit eigenem Härtungs-Issue.
+**Status:** umgesetzt mit Milestone 24 ([ADR-039](adr/039-owner-generische-dateianhaenge.md), Migrationen `0129`–`0131`). Die Facility einer Anhang-Zeile sichert zusätzlich ein zusammengesetzter Fremdschlüssel aus Migration `0133` (#1780, siehe Restrisiko).
 
 ### Beobachtung
 
@@ -2220,7 +2220,7 @@ Der zweite denkbare Verursacher — `deriveSessionKey()` stempelt mit `_touchAct
 ### Bewertung
 
 - **PII-frei.** Der Eintrag besteht aus dem Literal `lastActivity` und einer Epoch-Millisekunde. Kein Nutzer-, Einrichtungs- oder Klientenbezug; er unterscheidet nicht einmal, *wer* das Gerät benutzt hat.
-- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`anlaufstelle-v38`, nur App-Shell-Assets) mehrfach redundant selbst führt.
+- **Aussagekraft schwächer als angenommen.** Er belegt nicht „wann zuletzt mit der App gearbeitet wurde", sondern „wann zuletzt eine Seite dieser Herkunft geladen wurde, die `crypto.js` einbindet" — einschließlich `/login/` und `/offline/` ohne jede Anmeldung. Auf einem geteilten Diensthandy bleibt das eine schwache Spur, aber eine, die der Browser mit `history`, HTTP-Cache und dem ohnehin bewusst erhaltenen Precache (`CACHE_NAME` in `sw.js`, nur App-Shell-Assets) mehrfach redundant selbst führt.
 - **Selbstheilend im Zweck.** Der Stempel wird bei jedem Wipe und jedem Passwortwechsel gelöscht und beim nächsten Seitenaufruf neu gesetzt; er wächst nicht und akkumuliert keine Historie.
 
 ### Was bewusst nicht umgesetzt wird
@@ -2230,7 +2230,7 @@ Ein **Stempel-Gate** — den Boot-Zweig nur dann stempeln lassen, wenn tatsächl
 - Der Boot-Stempel ist die Schutzhälfte des Idle-Gates gegen das Gegenteil: ohne ihn hätte ein Bestand ohne Stempel (Alt-Installation vor #1065, erster Lauf nach einem Cache-Wechsel) kein definiertes Idle-Fenster. Jede Änderung an dieser Stelle berührt einen sicherheitskritischen, mehrfach nachgehärteten Pfad (#1065, #1324, #1351/#1383, #1393, #1493).
 - Der Gewinn steht dazu in keinem Verhältnis: eine Epoch-Millisekunde ohne Personenbezug, die dieselbe Information trägt wie ein Eintrag in der Browser-History.
 
-Der **Precache** `anlaufstelle-v38` bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
+Der **Precache** (`CACHE_NAME` in `sw.js`) bleibt aus demselben Ticket-Entscheid ebenfalls bestehen — er enthält ausschließlich App-Shell-Assets und Offline-Hüllen und ist die Grundlage des Offline-Starts.
 
 ### Trigger für Re-Evaluation
 
@@ -2267,8 +2267,8 @@ Die Maintainer-Freigabe vom 23.08.2026 umfasst ausdrücklich zwei Folgen: Art.-9
 ### Verifikation
 
 - [`test_history_diffs.py`](../src/tests/test_history_diffs.py) — vollständige Rollen-/Sensibilitätsmatrix, fail-closed ohne Nutzer, Datei-Marker, korrupter Token, fehlender Schlüssel, redigierter Delete und Fernet-Rauschunterdrückung.
-- Release-Handtest zu #1961 in `dev/hand-checks.md` — sichtbare Rollen-Gegenprobe auf der Ereignis-Detailseite.
-- Serielle Browser-Abdeckung ist als Folge #1983 für `release-0.85` eingeplant; sie wird bewusst nicht parallel zu diesem Security-Commit gestartet.
+- Release-Handtest zu #1961 in `docs/dev/hand-checks.md` (dev-only) — sichtbare Rollen-Gegenprobe auf der Ereignis-Detailseite.
+- Browser-Abdeckung (#1983): `TestEventHistoryRoleVisibility` in [`e2e/test_zeitstrom_events.py`](../src/tests/e2e/test_zeitstrom_events.py).
 
 ---
 
@@ -2322,7 +2322,7 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 ### Verifikation
 
 - [`test_offline_shell_neutrality.py`](../src/tests/offline/test_offline_shell_neutrality.py) — Byte-Gleichheit anonym vs. angemeldet für alle acht Shells, Abwesenheit von Name/Rolle/Einrichtung/`data-user-id`/CSRF-Meta, Vollständigkeit der Skriptkette und ein ableitungsbasierter Vollständigkeits-Check gegen die View-Klassen.
-- [`test_pwa_views.py`](../src/tests/test_pwa_views.py) — Shell-Hash-Guard samt gepinntem `CACHE_NAME` (`anlaufstelle-v38`).
+- [`test_pwa_views.py`](../src/tests/test_pwa_views.py) — Shell-Hash-Guard samt gepinntem `CACHE_NAME` aus [`sw.js`](../src/static/js/sw.js).
 - [`tests/js/sw-boot-purge-gate.test.mjs`](../tests/js/sw-boot-purge-gate.test.mjs) — der Boot-Purge läuft ohne `data-user-id` weiter und bleibt ohne Session-Key aus.
 
 ---
@@ -2342,12 +2342,13 @@ Die Navigation der Shells ist eine **feste** Leiste ([`partials/_offline_navigat
 
 Ein nacktes 403 darf dafür **nicht** als Purge-Signal dienen: seit #1354 ist 403 bewusst kein Invalidierungsgrund, weil echter Rechteentzug den Client als Login-Redirect erreicht und ein 403 sonst CSRF-/Rate-Limit-/Proxy-Rauschen ist — es würde den Außendienst-Cache bei jedem Schluckauf leeren.
 
-Die Archiv-403 trägt deshalb zwei Marker:
+Die Archiv-403 trägt deshalb zwei Marker, ausgewertet über drei Zustellwege:
 
 | Mechanismus | Deckt ab | Grenze |
 |---|---|---|
 | Header `X-Facility-Archived: 1` | `revalidateCachedClient` / `revalidateCachedFacility` purgen gezielt darauf: `crypto_session.wipeOfflineState()` — CryptoKey **und** alle Dexie-Tabellen | greift nur, wenn der Offline-Verbund geladen ist und eine Revalidierung läuft |
-| `Clear-Site-Data: "storage", "cache"` | Navigations-Fall: der Browser räumt IndexedDB, Web Storage, Cache Storage und SW-Registrierungen selbst ab — derselbe Mechanismus wie beim Logout | von Safari nur unvollständig unterstützt; deshalb nie allein |
+| [`facility-archived-purge.js`](../src/static/js/facility-archived-purge.js) | HTMX-Antworten (über `htmx-errors.js` bei gesetztem Marker) und die Sperrseite `auth/facility_archived.html` (startet über das Attribut `data-facility-archived-purge`): ist der Offline-Verbund geladen, zuerst `wipeOfflineState()`, danach `indexedDB.deleteDatabase` für `anlaufstelle-offline` **und** `anlaufstelle-crypto` | braucht ausgeführtes JavaScript auf einer Seite der App; Cache Storage und Web Storage fasst es nicht an |
+| `Clear-Site-Data: "storage", "cache"` | Navigations-Fall: der Browser räumt IndexedDB, Web Storage, Cache Storage und SW-Registrierungen selbst ab — derselbe Mechanismus wie beim Logout | von Safari nur unvollständig unterstützt; für die IndexedDB-Datenbanken deckt das die Sperrseite über das Purge-Modul ab, für Cache Storage bleibt die Grenze |
 
 **Runtime-Cache des Service Workers.** Der separate `RUNTIME_CACHE_NAME` nimmt nur statische Same-Origin-Assets (`/static/...` sowie `/manifest.json`) mit einem Asset-Content-Type entgegen; `text/html`, HTMX-Responses und Antworten mit `Cache-Control: no-store` werden nicht gecacht (Refs #2201). Bei jedem `CACHE_NAME`-Bump wird der Runtime-Cache automatisch neu benannt, und alte Generationen räumt der `activate`-Handler ab. Dennoch ist der Runtime-Cache ein weiterer Klartext-Sink neben IndexedDB: ein dynamischer HTML-Eintrag könnte bis zum nächsten Bump PII enthalten; deshalb die Inhalts-Prüfung vor `cache.put`. Safari-Grenze: `Clear-Site-Data: "storage", "cache"` entfernt auch hier den Cache Storage nur unvollständig.
 
@@ -2365,6 +2366,7 @@ Das ist dieselbe Grenze wie bei jedem anderen Widerrufspfad — die Zustellung s
 
 **Tests:** [`test_facility_lifecycle.py`](../src/tests/test_facility_lifecycle.py) (Login beider Oberflächen, laufende Sitzung, RLS-GUC, Rollen-Abgrenzung, Marker-Header, Sprache) und [`tests/js/facility-archived-purge.test.mjs`](../tests/js/facility-archived-purge.test.mjs) (Purge nur bei gesetztem Marker — beide Richtungen, damit der Fix keine #1354-Regression wird).
 
+---
 
 ## Konten ohne Einrichtung: Wurzel-Guard statt 66 Einzelstellen (Issue #2090)
 
@@ -2393,8 +2395,9 @@ Zwei Formen sind nötig: Präfixe für ganze Teilbäume (`/mfa/`, `/webauthn/`, 
 
 **Grenze.** Der Guard fängt den Zustand ab; er verhindert nicht, dass er entsteht. Die Anlage-Lücke im Django-Admin (`facility` ist dort `blank=True`, erzwungen wird sie nur für Nicht-`super_admin`s) bleibt offen und ist als Folge-Ticket zu führen. Ebenso bleibt die Navigation auf den Whitelist-Seiten vollständig sichtbar — jeder Link führt in die 403 statt zu verschwinden. Beides ist Kosmetik bzw. Prävention, keine Lücke im Guard.
 
-**Tests:** [`test_facility_less_account.py`](../src/tests/test_facility_less_account.py) (Reproduktion beider Fehlerklassen, Sperrseite, RLS-GUC, Abgrenzung zur Archiv-Sperre, Sprache durch die volle Kette, Whitelist-Herleitung in beide Richtungen) und [`test_authz_facility_less.py`](../src/tests/test_authz_facility_less.py) — der systematische Sweep über **alle 257** Methodenzeilen der AuthZ-Tabelle. Weil das Vollständigkeits-Gate `test_every_named_pattern_is_declared` für jeden neuen benannten URL-Pattern einen Eintrag dort erzwingt, wird ein neuer View **automatisch** mitgeprüft, ohne dass eine zweite Liste zu pflegen wäre.
+**Tests:** [`test_facility_less_account.py`](../src/tests/test_facility_less_account.py) (Reproduktion beider Fehlerklassen, Sperrseite, RLS-GUC, Abgrenzung zur Archiv-Sperre, Sprache durch die volle Kette, Whitelist-Herleitung in beide Richtungen) und [`test_authz_facility_less.py`](../src/tests/test_authz_facility_less.py) — der systematische Sweep über **alle** Methodenzeilen der AuthZ-Tabelle (`EXPECTATIONS` in `_authz_expectations.py`). Weil das Vollständigkeits-Gate `test_every_named_pattern_is_declared` für jeden neuen benannten URL-Pattern einen Eintrag dort erzwingt, wird ein neuer View **automatisch** mitgeprüft, ohne dass eine zweite Liste zu pflegen wäre.
 
+---
 
 ## Aufbewahrungssperre auf Merge-Tombstone wird abgewiesen (Issue #2144)
 
@@ -2427,6 +2430,7 @@ Die Reichweite ist heute gering: es gibt keinen UI-Weg für direkte Personen-/Fa
 
 [`test_legal_hold_tombstone_guard.py`](../src/tests/test_legal_hold_tombstone_guard.py): Abweisung nach vollzogenem Merge (kein `LegalHold`, keine `LEGAL_HOLD`-Auditzeile, Zielpseudonym in der Meldung), Positivpfad (der Hold auf die Zielperson nimmt das gewanderte Ereignis aus `collect_doomed_events` und die Zielperson aus `exclude_clients_with_active_holds`), beide Grenzen (Papierkorb und unbekannte `target_id` bleiben zulässig), der `Case`-Zweig sowie ein beobachtender Zwei-Faden-Renn-Nachweis: eine Hold-Anlage, die in einen laufenden Merge hineinläuft, wartet am Personen-Anker und wird danach abgewiesen — statt still auf dem fertigen Tombstone zu landen.
 
+---
 
 ## Fall-Hold hält auch den manuellen Löschpfad und den Historien-Sweep an (Issue #2197)
 
@@ -2458,6 +2462,7 @@ Ausdrücklich entschieden (und hier festgehalten, damit die Frage nicht erneut g
 
 [`test_event_soft_delete_fields.py`](../src/tests/test_event_soft_delete_fields.py) (`TestCaseHoldBlocksTheManualDeletePath`: Nutzdaten, Audit und die verschlüsselte Datei überleben; ein erst nach dem Lesen der Instanz zugeordneter gehaltener Fall hält ebenso an; Gegenproben für einen fremden Fall, ein fallloses Ereignis und eine Zuordnung zu einem **nicht** gehaltenen Fall), [`test_event_deletion_hold.py`](../src/tests/test_event_deletion_hold.py) (Vier-Augen-Weg: der Antrag bleibt offen, kein `DELETION_APPROVED` — auch dann, wenn die Fallzuordnung erst zwischen dem Laden des Ereignisses und der Sperre entsteht), [`test_tally_undo.py`](../src/tests/test_tally_undo.py) (`TestTallyUndoAndLegalHolds`: geerbtes Hold-Gate und die Begründung, warum der Fall-Zweig dort gegenstandslos ist) sowie [`test_eventhistory_retention.py`](../src/tests/test_eventhistory_retention.py) (`TestCaseHoldsAreHardToo`: Sweep stellt zurück, ungehaltener Fall wird weiter redigiert, ein während der Sperrwartezeit in einen gehaltenen Fall umgehängtes Ereignis wird gehalten; `TestBacklogMigrationHonoursHolds`: derselbe Schutz im Altbestand über Migration 0174).
 
+---
 
 ## Aufheben einer Zusammenführung unter aktivem Hold wird abgewiesen (Issue #2200)
 
@@ -2491,5 +2496,5 @@ Auf den beiden bereits gesperrten, frisch gelesenen Personenzeilen (`_locked_cli
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)
-- [docs/ops-runbook.md § 9](ops-runbook.md) — RLS-Runbook, Rollen, Kill-Switch
+- [docs/ops-runbook.md § 9](ops-runbook.md#9-row-level-security-rls) — RLS-Runbook, Rollen
 - Tiefenanalyse-Audit 2026-04-21 (internes Code-Audit, dev-only) — Security-/DSGVO-/Perf-Audit mit zeilengenauer Verifikation
