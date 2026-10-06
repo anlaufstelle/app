@@ -8,7 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
-- Keine.
+- **Audit-Anker-Pfad in `.env` setzen** (#2441) — `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` in die bestehende `.env` übernehmen (Vorlage `.env.example`); ohne den Wert ist der Anker abgeschaltet, der Backup-Satz enthält keine `audit_hwm-*.json`, und die Wiederherstellung kann die Audit-Kette nicht gegen einen Anker prüfen.
+- **SMTP-Transportschalter prüfen** (#2441) — `EMAIL_USE_TLS` und `EMAIL_USE_SSL` in der bestehenden `.env` nur mit `true`/`false` (Groß-/Kleinschreibung egal) belegen und nicht beide aktivieren; ein ungültiger Wert stoppt den Produktionsstart, leere oder fehlende Werte gelten als `EMAIL_USE_TLS=true` und `EMAIL_USE_SSL=false`.
 
 ### Security
 
@@ -36,8 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Compliance-Dashboard zeigt das Ergebnis der DB-Rollenprüfung** (#2415) — `check_db_roles` hinterlegt nach jedem Lauf im Wartungsdienst sein Ergebnis ohne Rollennamen oder Zugangsdaten im Audit-Log, und die Karte „Admin-DB-Rolle“ zeigt es an: nach dem Deploy `ok` mit Prüfzeitpunkt, bei Befunden `critical`, bei unvollständiger oder über 30 Tage alter Prüfung `warning`.
-- **Audit-Anker-Pfad in `.env` setzen** (#2441) — `DJANGO_AUDIT_HWM_PATH=/data/audit_hwm.json` in die bestehende `.env` übernehmen (Vorlage `.env.example`); ohne den Wert ist der Anker abgeschaltet, der Backup-Satz enthält keine `audit_hwm-*.json`, und die Wiederherstellung kann die Audit-Kette nicht gegen einen Anker prüfen.
-- **SMTP-Transportschalter prüfen** (#2441) — `EMAIL_USE_TLS` und `EMAIL_USE_SSL` in der bestehenden `.env` nur mit `true`/`false` (Groß-/Kleinschreibung egal) belegen und nicht beide aktivieren; ein ungültiger Wert stoppt den Produktionsstart, leere oder fehlende Werte gelten als `EMAIL_USE_TLS=true` und `EMAIL_USE_SSL=false`.
 
 ### Docs
 
