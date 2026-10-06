@@ -405,14 +405,25 @@ echo "Zeilenzahl-Manifest mit Satzbindung erstellt: ${MANIFEST_FILE}"
 
 # Weekly-/Monthly-Snapshots werden vor dem Off-Site-Abgleich angelegt, damit
 # alle drei Retention-Stufen im selben Lauf uebertragen werden koennen.
-# check_copy_modes <label> <dir>: the retention copies of the published set carry nothing for others either.
-check_copy_modes() {
-    local label="$1" dir="$2" artifact copies=()
-    for artifact in "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \
-        "$MANIFEST_FILE" "$MANIFEST_FILE_HMAC" ${HWM_FILE:+"$HWM_FILE"}; do
-        copies+=("${dir}/${artifact##*/}")
+# publish_retention_copy <weekly|monthly> <dir>: copies the published set into a
+# staging directory below the work directory, checks its modes there, and only
+# then moves it into <dir> (manifest last). A rejected copy is never published and
+# earlier copies stay untouched; the EXIT trap removes the staging directory.
+publish_retention_copy() {
+    local kind="$1" dir="$2" stage artifact
+    local payload=("$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" ${HWM_FILE:+"$HWM_FILE"})
+    local sealed=("$MANIFEST_FILE_HMAC" "$MANIFEST_FILE")
+    local staged=()
+    stage="${WORK_DIR}/stage-${kind}"
+    mkdir "$stage"
+    cp "${payload[@]}" "${sealed[@]}" "${stage}/"
+    for artifact in "${payload[@]}" "${sealed[@]}"; do
+        staged+=("${stage}/${artifact##*/}")
     done
-    check_file_modes "$label" "${copies[@]}"
+    check_file_modes "${kind} copy" "${staged[@]}"
+    for artifact in "${payload[@]}" "${sealed[@]}"; do
+        mv -f "${stage}/${artifact##*/}" "${dir}/"
+    done
 }
 
 DOW=$(date +%u)  # 1=Montag, 7=Sonntag
@@ -420,24 +431,14 @@ DOM=$(date +%d)  # Tag des Monats
 
 # Sonntags → Weekly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
 if [[ "$DOW" -eq 7 ]]; then
-    cp "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \
-        "$MANIFEST_FILE" "$MANIFEST_FILE_HMAC" "$WEEKLY_DIR/"
-    if [[ -n "$HWM_FILE" ]]; then
-        cp "$HWM_FILE" "$WEEKLY_DIR/"
-    fi
+    publish_retention_copy weekly "$WEEKLY_DIR"
     echo "Weekly-Backup kopiert."
-    check_copy_modes "weekly copy" "$WEEKLY_DIR"
 fi
 
 # Am 1. des Monats → Monthly kopieren (DB + Medien + Manifest + HMAC-Sidecars)
 if [[ "$DOM" -eq "01" ]]; then
-    cp "$BACKUP_FILE" "$BACKUP_FILE_HMAC" "$MEDIA_FILE" "$MEDIA_FILE_HMAC" \
-        "$MANIFEST_FILE" "$MANIFEST_FILE_HMAC" "$MONTHLY_DIR/"
-    if [[ -n "$HWM_FILE" ]]; then
-        cp "$HWM_FILE" "$MONTHLY_DIR/"
-    fi
+    publish_retention_copy monthly "$MONTHLY_DIR"
     echo "Monthly-Backup kopiert."
-    check_copy_modes "monthly copy" "$MONTHLY_DIR"
 fi
 
 # Off-Site-Sync (Refs #738; State-File + Sentry: Refs #797).

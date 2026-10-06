@@ -40,6 +40,10 @@ elif [[ "$*" == *" pg_dump "* ]]; then
 elif [[ "$*" == *" tar -C "* ]]; then
     tar -C "$MEDIA_SOURCE" -cf - media
 elif [[ "$*" == *" exec -T cron cat "* ]]; then
+    if [[ -n "${TEST_CRON_DOWN:-}" ]]; then
+        # The cron sidecar is not running: compose cannot exec into it.
+        exit 1
+    fi
     if [[ -n "${TEST_ANCHOR_MODE:-}" ]]; then
         # Simulates a file system that ignores the umask (for example a default ACL).
         chmod "$TEST_ANCHOR_MODE" /dev/stdout
@@ -93,24 +97,40 @@ SUNDAY_FIRST_OF_MONTH_DATE_STUB = """#!/usr/bin/env bash
 case "$*" in
     "+%u") echo 7 ;;
     "+%d") echo 01 ;;
+    "+%Y-%m-%d_%H%M%S")
+        if [[ -n "${TEST_FIXED_TIMESTAMP:-}" ]]; then echo "$TEST_FIXED_TIMESTAMP"; else exec /usr/bin/date "$@"; fi ;;
     *) exec /usr/bin/date "$@" ;;
 esac
 """
 
+# Simulates a file system that ignores the umask for copies (for example a default ACL).
+CP_STUB = """#!/usr/bin/env bash
+command -p cp "$@" || exit $?
+if [[ -n "${TEST_CP_MODE:-}" ]]; then
+    for copied in "${@: -1}"/*; do
+        chmod "$TEST_CP_MODE" "$copied"
+    done
+fi
+"""
+
 
 def _run_backup(
-    tmp_path: Path, *, retention_day: bool = False, **overrides: str
+    tmp_path: Path, *, retention_day: bool = False, again: bool = False, **overrides: str
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
+    """Run ``backup.sh`` in ``tmp_path``; ``again=True`` reuses the tree of a previous run."""
     root = tmp_path / "root"
-    _install_scripts(root)
     media_source = tmp_path / "media-source"
-    (media_source / "media" / "1").mkdir(parents=True)
-    (media_source / "media" / "1" / "alpha.bin").write_bytes(b"attachment")
-    bindir = _stub_bin(tmp_path, RUN_STUB)
-    if retention_day:
-        date_stub = bindir / "date"
-        date_stub.write_text(SUNDAY_FIRST_OF_MONTH_DATE_STUB, encoding="utf-8")
-        date_stub.chmod(0o755)
+    if again:
+        bindir = tmp_path / "bin"
+    else:
+        _install_scripts(root)
+        (media_source / "media" / "1").mkdir(parents=True)
+        (media_source / "media" / "1" / "alpha.bin").write_bytes(b"attachment")
+        bindir = _stub_bin(tmp_path, RUN_STUB)
+    for name, body in (("cp", CP_STUB), *((("date", SUNDAY_FIRST_OF_MONTH_DATE_STUB),) if retention_day else ())):
+        stub = bindir / name
+        stub.write_text(body, encoding="utf-8")
+        stub.chmod(0o755)
     env = dict(os.environ)
     env.update(
         {
@@ -197,6 +217,68 @@ def test_a_published_set_with_any_right_for_others_fails_the_run_before_publicat
     assert f"unexpected file mode {mode}" in result.stderr
     published = [path.name for path in (backups / "daily").iterdir() if path.is_file()]
     assert published == [], "a set with rights for others must not be published"
+
+
+def _daily_files(backups: Path) -> list[str]:
+    return sorted(path.name for path in (backups / "daily").iterdir() if path.is_file())
+
+
+def test_a_retention_copy_with_rights_for_others_is_not_published_at_all(tmp_path: Path) -> None:
+    result, backups = _run_backup(tmp_path, retention_day=True, TEST_CP_MODE="644")
+
+    assert result.returncode != 0
+    assert "unexpected file mode 644" in result.stderr
+    # Nothing of the rejected copy is visible, not even a staging directory.
+    assert list((backups / "weekly").iterdir()) == []
+    assert list((backups / "monthly").iterdir()) == []
+    # The daily set was checked and published before; it stays.
+    assert len(_daily_files(backups)) == 6
+
+
+def test_a_rejected_retention_copy_leaves_the_earlier_copies_untouched(tmp_path: Path) -> None:
+    first, backups = _run_backup(tmp_path, retention_day=True, TEST_FIXED_TIMESTAMP="2026-09-06_020000")
+    assert first.returncode == 0, first.stderr
+    before = {path.name: path.read_bytes() for path in (backups / "weekly").iterdir()}
+
+    second, _ = _run_backup(
+        tmp_path,
+        retention_day=True,
+        again=True,
+        TEST_FIXED_TIMESTAMP="2026-09-13_020000",
+        TEST_CP_MODE="644",
+    )
+
+    assert second.returncode != 0
+    assert {path.name: path.read_bytes() for path in (backups / "weekly").iterdir()} == before
+
+
+def test_a_repeated_retention_copy_replaces_wide_leftovers_with_owner_group_files(tmp_path: Path) -> None:
+    stamp = "2026-09-06_020000"
+    first, backups = _run_backup(tmp_path, retention_day=True, TEST_FIXED_TIMESTAMP=stamp)
+    assert first.returncode == 0, first.stderr
+    for stage in ("weekly", "monthly"):
+        for path in (backups / stage).iterdir():
+            path.chmod(0o644)
+
+    second, _ = _run_backup(tmp_path, retention_day=True, again=True, TEST_FIXED_TIMESTAMP=stamp)
+
+    assert second.returncode == 0, f"STDOUT:\n{second.stdout}\nSTDERR:\n{second.stderr}"
+    for stage in ("weekly", "monthly"):
+        copies = [path for path in (backups / stage).iterdir()]
+        assert len(copies) == 6
+        assert {oct(_mode(path)) for path in copies} == {"0o640"}
+
+
+def test_without_the_cron_sidecar_the_set_carries_no_audit_anchor(tmp_path: Path) -> None:
+    result, backups = _run_backup(
+        tmp_path,
+        DJANGO_AUDIT_HWM_PATH="/data/audit_hwm.json",
+        TEST_CRON_DOWN="1",
+    )
+
+    assert result.returncode == 0, f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    assert "KEINEN Audit-Anker" in result.stderr
+    assert not [name for name in _daily_files(backups) if name.startswith("audit_hwm-")]
 
 
 def _sign(path: Path) -> None:
