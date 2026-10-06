@@ -72,9 +72,9 @@ Ein Architektur-Guard ([`TestDomainAdminReadOnlyGuard`](../src/tests/test_archit
 
 ### Beobachtung
 
-Die globale CSP setzt `script-src 'self'` (kein `'unsafe-eval'`, kein `'unsafe-inline'`) — alle App-Templates nutzen den `@alpinejs/csp`-Build mit registrierten `Alpine.data()`-Komponenten. Eine Ausnahme bildet die Django-Admin-UI auf `/admin-mgmt/`: das gevendor'te [`django-unfold`-Theme](https://github.com/unfoldadmin/django-unfold) (Version 0.91.0) liefert >20 Templates mit Inline-Function-Calls (`x-data="searchCommand()"`, `x-data="theme(...)"`, `x-data="searchDropdown()"`, `x-data="searchForm()"`) **und** Inline-Object-Expressions (`x-data="{rowOpen: false}"` u.ä.). Beide Patterns scheitern unter dem strikten `@alpinejs/csp`-Build, weil Alpine sie nur mit dynamischer Code-Auswertung parsen kann (klassischer Alpine-Build), die unter `script-src 'self'` ohne `'unsafe-eval'` blockiert ist.
+Die globale CSP setzt `script-src 'self'` (kein `'unsafe-eval'`, kein `'unsafe-inline'`) — alle App-Templates nutzen den `@alpinejs/csp`-Build mit registrierten `Alpine.data()`-Komponenten. Eine Ausnahme bildet die Django-Admin-UI auf `/admin-mgmt/`: das gevendor'te [`django-unfold`-Theme](https://github.com/unfoldadmin/django-unfold) (Version 0.108.0, `requirements.txt`) liefert Templates mit Inline-Function-Calls (`x-data="theme(...)"`, `x-data="searchCommand(...)"`) **und** rund 20 Templates mit Inline-Object-Expressions (`x-data="{rowOpen: false}"` u.ä.). Beide Patterns scheitern unter dem strikten `@alpinejs/csp`-Build, weil Alpine sie nur mit dynamischer Code-Auswertung parsen kann (klassischer Alpine-Build), die unter `script-src 'self'` ohne `'unsafe-eval'` blockiert ist.
 
-[`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) hängt `'unsafe-eval'` per Response-Header-Rewrite **ausschließlich** für Pfade unter `/admin-mgmt/` an. Die globale CSP bleibt unverändert — Login, Klient-CRUD, Zeitstrom, Statistik und alle anderen Routen laufen weiter mit `script-src 'self'`.
+[`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) hängt `'unsafe-eval'` an `script-src` an und baut `style-src` auf `'unsafe-inline'` ohne Hashes um (Abschnitt [Ausnahme `/admin-mgmt/`](#ausnahme-admin-mgmt) unten). Das geschieht per Response-Header-Rewrite für **jede** HTML-Antwort unter `/admin-mgmt/`, unabhängig vom Login, also auch für die anonym erreichbare Admin-Login-Seite `/admin-mgmt/login/` (Unfolds Skeleton braucht `theme()` auch dort, I3-Revert aus #1376). Die Middleware steht in `MIDDLEWARE` **vor** `CSPMiddleware` und schreibt den Header auf dem Rückweg um. In Produktion laufen die App-Login-Seite, Klient-CRUD, Zeitstrom, Statistik und alle anderen Routen weiter mit `script-src 'self'`. Zwei Deployments erweitern die CSP zusätzlich: Auf der Demo gibt [`DemoUmamiCSPRelaxMiddleware`](../src/core/middleware/demo_umami_csp_relax.py) den Umami-Host in `script-src`/`connect-src` frei (nur `DEMO_MODE`, nach dem Login, HTML), und `settings/devlive.py` erweitert beide Direktiven global, sobald `UMAMI_SCRIPT_SRC` gesetzt ist.
 
 ### Trade-off
 
@@ -86,16 +86,21 @@ Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`
 
 **Was wir behalten:**
 - `script-src` bleibt `'self'` — kein Remote-Script-Loading
-- Architektur-Tests verbieten weiterhin `csrf_exempt`, `|safe`, `mark_safe()`, Inline-`<script>`-Blöcke im gesamten Repo (siehe `src/tests/test_architecture_guards_*.py`)
-- `/admin-mgmt/` ist nur fuer Rollen `super_admin` und `facility_admin` erreichbar (Custom `AnlaufstelleAdminSite`, Refs #785). `lead`/`staff`/`assistant` werden geblockt — auch wenn `is_staff=True` gesetzt ist. Sudo-Mode-Pflicht: erster Zugriff redirected zu `/sudo/?next=/admin-mgmt/`. Facility-Scoping in ModelAdmin: `facility_admin` sieht nur Daten der eigenen Facility, `super_admin` sieht alle. Plus AuditLog auf alle Schreib-Aktionen, RLS gegen Cross-Facility-Leaks. MFA-Pflicht ist separates Issue #788.
+- Architektur-Tests für die **eigenen** Templates und den eigenen Python-Code (die gevendorten Unfold-Templates prüft keiner):
+  - [`test_architecture_guards_templates.py`](../src/tests/test_architecture_guards_templates.py): Inline-`<script>`, Inline-Event-Attribute, `javascript:`-URIs, Inline-`x-data`-Objekte, unsichere Alpine-/htmx-Ausdrücke, Inline-Styles.
+  - [`test_architecture_guards_safe_markup.py`](../src/tests/test_architecture_guards_safe_markup.py) (#2468): `|safe`, `|safeseq`, `{% autoescape off %}` und `mark_safe()`/`SafeString` nur mit begründetem Allowlist-Eintrag. Erlaubt sind die zwei Klartext-Mailvorlagen `registration/invite_email.html` und `registration/password_reset_email.html` (Versand ohne HTML-Teil); im Python-Code gibt es keine Ausnahme. `mark_safe` meldet zusätzlich Ruff `S308`.
+  - [`test_architecture_guards_csrf_exempt.py`](../src/tests/test_architecture_guards_csrf_exempt.py) (#2468): `csrf_exempt` nur mit Allowlist-Eintrag. Bewusste Ausnahme ist der CSP-Report-Endpunkt [`CSPReportView`](../src/core/views/csp_report.py): Browser-Reports tragen kein Token, der Endpunkt nimmt nur POST an, loggt bereinigt, ist auf `10/m` je IP limitiert und ändert keinen Anwendungszustand.
+- Hinter dem Login ist `/admin-mgmt/` nur fuer Rollen `super_admin` und `facility_admin` erreichbar (Custom `AnlaufstelleAdminSite`, `_has_admin_role`, Refs #785). `lead`/`staff`/`assistant` werden geblockt — auch wenn `is_staff=True` gesetzt ist. Sudo-Mode-Pflicht: erster Zugriff redirected zu `/sudo/?next=/admin-mgmt/`. Facility-Scoping in ModelAdmin: `facility_admin` sieht nur Daten der eigenen Facility, `super_admin` sieht alle; RLS gegen Cross-Facility-Leaks. MFA: In Produktion müssen beide Admin-Rollen MFA sofort einrichten (`MFA_ENFORCED_ROLES_IMMEDIATE`, Standard `super_admin,facility_admin`; #788 ist umgesetzt).
+- Ratelimit nur am Admin-Login-POST (`5/m` je IP, `10/h` je Benutzername, `AnlaufstelleAdminSite.login`, #2020); die Admin-Change-Views selbst sind nicht limitiert.
+- Audit-Abdeckung im Admin, **nicht** auf alle Schreib-Aktionen: Ins HMAC-verkettete AuditLog schreiben `SettingsAdmin` (`SETTINGS_CHANGE`), Benutzer-Änderungen über `UserAdmin` (Signale in `signals/audit.py`, Admin-Aktionen, Passwort-Reset), das Speichern eines Dokumentationstyps (`CONFIG_CREATE`/`CONFIG_UPDATE`) und das Sammel-Aktivieren/-Deaktivieren von Feldvorlagen. Einzel-Anlegen/-Ändern/-Löschen von Feldvorlagen, das Löschen von Dokumentationstypen und alle Schreibvorgänge an Schnellvorlagen, Zeitfiltern, Organisation und Einrichtung hinterlassen nur Djangos veränderbares `admin.LogEntry`. Fachobjekte sind read-only, einrichtungsübergreifende Lesezugriffe schreiben `SYSTEM_VIEW` (Abschnitt [#1341](#fachobjekte-im-admin-read-only--cross-facility-read-audit-issue-1341) oben).
 
 ### Threat-Model-Bewertung
 
 Wer kann von der CSP-Lockerung profitieren?
 
-1. **Externer Angreifer ohne Session** — kommt nicht auf `/admin-mgmt/`, Login-Lockout + MFA halten ([Threat Model TB1](threat-model.md#tb1--browser--caddydjango))
+1. **Externer Angreifer ohne Session** — erreicht von `/admin-mgmt/` nur die Login-Seite. Sie läuft bereits mit der gelockerten CSP, rendert aber keine Nutzdaten; dahinter halten Rollen-Gate, Sudo, Login-Ratelimit, Account-Lockout und MFA ([Threat Model TB1](threat-model.md#tb1--browser--caddydjango)). Eine Injektionslücke **auf der Login-Seite** fände die gelockerte CSP vor. Die Seite ist ein Unfold-Template; es gilt Djangos Autoescaping, die eigenen Guards prüfen sie aber nicht.
 2. **Externer Angreifer mit valider Admin-Session** — hat ohnehin Vollzugriff; `'unsafe-eval'` ändert sein Schadenspotenzial nicht
-3. **XSS in Admin-Template** — der einzige Pfad mit zusätzlichem Schaden. Heute nicht ausnutzbar, weil Architektur-Tests die typischen Injection-Punkte verbieten
+3. **XSS in Admin-Template** — der einzige Pfad mit zusätzlichem Schaden. Für die eigenen Templates und den eigenen Python-Code sperren die Guards oben die typischen Injection-Punkte (`|safe`, `autoescape off`, `mark_safe`, Inline-Script); Djangos Autoescaping gilt überall sonst. Nicht abgedeckt sind die gevendorten Unfold-Templates und Ausgaben, die Unfold selbst als sicher markiert. Eine Lücke dort fände die gelockerte CSP vor; „nicht ausnutzbar“ ist deshalb nicht belegt, nur die bekannten Einfallstore im eigenen Code sind gesperrt.
 4. **Malicious Insider mit Admin-Rolle** — braucht keinen CSP-Bypass
 
 ### Trigger für Re-Evaluation (dann Option 2 oder Option 4 angehen)
@@ -103,12 +108,14 @@ Wer kann von der CSP-Lockerung profitieren?
 - `django-unfold` liefert upstream einen `@alpinejs/csp`-kompatiblen Build (Wartungs-Tax fällt weg)
 - Externer Audit fordert „strict CSP überall" als verbindliches Akzeptanzkriterium
 - Admin-UI-Surface wächst signifikant (z.B. geplante Custom-Admin-UI) — dann lohnt sich der Override-Pfad ohnehin
-- Architektur-Tests, die die XSS-Vorbedingungen verhindern (`|safe`, `mark_safe`, Inline-`<script>`), würden für Admin-Templates aufgeweicht
+- Architektur-Tests, die die XSS-Vorbedingungen verhindern (`test_architecture_guards_templates.py`, `test_architecture_guards_safe_markup.py`, `test_architecture_guards_csrf_exempt.py`), würden aufgeweicht oder ihre Allowlists um Admin-Ausgaben erweitert
+- Den Abbau der Lockerung plant #2104
 
 ### Verifikation
 
-- Middleware-Logik: [`src/core/middleware/admin_csp_relax.py`](../src/core/middleware/admin_csp_relax.py) (regex-Rewrite nur auf Pfad-Präfix `/admin-mgmt/`)
-- Trade-off-Begründung im Settings-Kommentar: [`base.py:246-266`](../src/anlaufstelle/settings/base.py#L246-L266)
+- Middleware-Logik: [`src/core/middleware/admin_csp_relax.py`](../src/core/middleware/admin_csp_relax.py) (Rewrite nur für `text/html` unter dem Pfad-Präfix `/admin-mgmt/`, auch anonym)
+- Reihenfolge und Policy: `MIDDLEWARE` und `CONTENT_SECURITY_POLICY` in [`settings/base.py`](../src/anlaufstelle/settings/base.py)
+- Guards: [`test_architecture_guards_safe_markup.py`](../src/tests/test_architecture_guards_safe_markup.py), [`test_architecture_guards_csrf_exempt.py`](../src/tests/test_architecture_guards_csrf_exempt.py)
 - Threat-Model-Eintrag: [`threat-model.md` § TB1, Zeile *S Session-Hijack via XSS*](threat-model.md#tb1--browser--caddydjango)
 
 ---
@@ -142,7 +149,7 @@ Nicht betroffen ist die CSSOM-API: `el.style.setProperty(…)` / `el.style.displ
 
 ### Ausnahme `/admin-mgmt/`
 
-[`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) hängt jetzt — analog zu `'unsafe-eval'` in `script-src` (siehe Abschnitt oben / [ADR-025](adr/025-csp-unsafe-eval-admin.md)) — `'unsafe-inline'` in `style-src` an, ausschließlich für HTML-Antworten unter `/admin-mgmt/`. Grund: `unfold/layouts/skeleton.html` rendert einen `<style id="unfold-theme-colors">`-Block, dessen Inhalt aus `UNFOLD["COLORS"]` **dynamisch** zusammengesetzt wird — ein statischer Hash ist prinzipiell unmöglich. Dazu kommen rund ein Dutzend `style=`-Attribute in Unfold-Templates (Progress-Bars, Avatare, Sidebar, Change-List). Ohne die Lockerung verlöre die Admin-UI ihr komplettes Farbschema. Die Trade-off-Bewertung ist dieselbe wie bei `'unsafe-eval'`: MFA-Pflicht, Rollen-Beschränkung, Sudo-Mode, Rate-Limit, AuditLog, RLS. Der Trigger für Re-Evaluation ist ebenfalls derselbe — ein CSP-taugliches Upstream-Unfold.
+[`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) hängt jetzt — analog zu `'unsafe-eval'` in `script-src` (siehe Abschnitt oben / [ADR-025](adr/025-csp-unsafe-eval-admin.md)) — `'unsafe-inline'` in `style-src` an, ausschließlich für HTML-Antworten unter `/admin-mgmt/`. Grund: `unfold/layouts/skeleton.html` rendert einen `<style id="unfold-theme-colors">`-Block, dessen Inhalt aus `UNFOLD["COLORS"]` **dynamisch** zusammengesetzt wird — ein statischer Hash ist prinzipiell unmöglich. Dazu kommen rund ein Dutzend `style=`-Attribute in Unfold-Templates (Progress-Bars, Avatare, Sidebar, Change-List). Ohne die Lockerung verlöre die Admin-UI ihr komplettes Farbschema. Die Trade-off-Bewertung ist dieselbe wie bei `'unsafe-eval'`, mit denselben Grenzen (Abschnitt oben): Die Lockerung gilt auch für die anonyme Admin-Login-Seite; hinter dem Login schützen Rollen-Beschränkung, Sudo-Mode, MFA-Pflicht und RLS; das Ratelimit sitzt nur am Login-POST; das AuditLog deckt nur einen Teil der Admin-Schreibvorgänge ab. Der Trigger für Re-Evaluation ist ebenfalls derselbe — ein CSP-taugliches Upstream-Unfold.
 
 ### Verifikation
 
