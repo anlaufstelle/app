@@ -987,8 +987,8 @@ class TestTenantModelScopeGuard:
             "facility-granular) — deploymentweite Betriebskennzahl."
         ),
         "compliance/db_roles.py:_latest_db_roles_marker:AuditLog": (
-            "Letztes Ergebnis von check_db_roles (Refs #2415) — die DB-Rollen gelten "
-            "fuer die ganze Instanz; gelesen werden nur System-Zeilen (facility IS NULL)."
+            "Latest result of check_db_roles (Refs #2415) — the DB roles apply to the "
+            "whole instance; only system rows (facility IS NULL) are read."
         ),
         "compliance/cron.py:_latest:AuditLog": (
             "Letzter Lauf eines Hintergrundjobs; die Jobs laufen instanzweit, ihre "

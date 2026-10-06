@@ -287,8 +287,8 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     # come from fixed vocabularies in ``core.services.compliance.db_roles``
     # (DB_ROLES_RESULTS / DB_ROLES_PROBLEM_CODES); role names, passwords and
     # DSNs are deliberately never written.
-    "result": "Ergebnis der DB-Rollenpruefung (ok/problems/incomplete) — feste Slugs",
-    "problems": "Befundcodes der DB-Rollenpruefung — feste Slugs, nie Rollennamen oder Zugangsdaten",
+    "result": "Outcome of the DB role check (ok/problems/incomplete) — fixed slugs",
+    "problems": "Finding codes of the DB role check — fixed slugs, never role names or credentials",
     "admin_view": "Django-Admin-Sicht des protokollierten Lesezugriffs (Refs #1341) — feste Slugs",
     "source": "Herkunft einer Ereignis-Loeschung — feste Slugs",
     "document": "Slug des abgerufenen DSGVO-Dokuments — feste Liste",
