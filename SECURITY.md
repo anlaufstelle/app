@@ -76,6 +76,46 @@ Der operative Ablauf inklusive Zuständigkeiten steht in [`docs/ops-runbook.md` 
 
 Wer eine valide Schwachstelle verantwortungsvoll meldet, wird auf Wunsch im Veröffentlichungs-Advisory und in einer kurzen Hall-of-Fame-Sektion in [CHANGELOG.md](CHANGELOG.md) genannt. Bitte gib an, ob und wie du genannt werden möchtest.
 
+## Sicherheits-Header und Middleware-Stack
+
+Die Sicherheits-Header setzt die **Anwendung** selbst, auf jeder Antwort — auch hinter einem fremden Reverse-Proxy. Das mitgelieferte [`Caddyfile`](Caddyfile) setzt nur `X-Robots-Tag`. Fehlt einer der folgenden Header auf einer Antwort der Anwendung, ist das eine gültige Meldung:
+
+| Header | Quelle | Setting |
+|---|---|---|
+| `Strict-Transport-Security` | `SecurityMiddleware` | `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` |
+| `X-Content-Type-Options` | `SecurityMiddleware` | `SECURE_CONTENT_TYPE_NOSNIFF` |
+| `Referrer-Policy` | `SecurityMiddleware` | `SECURE_REFERRER_POLICY` |
+| `Cross-Origin-Opener-Policy` | `SecurityMiddleware` | `SECURE_CROSS_ORIGIN_OPENER_POLICY` |
+| `X-Frame-Options` | `XFrameOptionsMiddleware` | `X_FRAME_OPTIONS` |
+| `Content-Security-Policy` | `CSPMiddleware` (django-csp) | `CONTENT_SECURITY_POLICY`; auf `/admin-mgmt/` und auf der Demo eng gelockert, siehe [`docs/threat-model.md`](docs/threat-model.md) TB1 |
+| `Cache-Control: no-store, private` | `NoStoreCacheMiddleware` | nur für angemeldete Sitzungen |
+
+Die Werte stehen in [`src/anlaufstelle/settings/prod.py`](src/anlaufstelle/settings/prod.py) (CSP in [`settings/base.py`](src/anlaufstelle/settings/base.py)). Der Middleware-Stack (`MIDDLEWARE` in [`settings/base.py`](src/anlaufstelle/settings/base.py), in Produktion unverändert übernommen) läuft für Anfragen von oben nach unten, für Antworten in umgekehrter Reihenfolge:
+
+1. `core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware` — lockert die CSP nur unter `/admin-mgmt/` (Admin-Oberfläche)
+2. `core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware` — gibt nur auf der Demo nach dem Login den Analytics-Host in der CSP frei; sonst wirkungslos
+3. `csp.middleware.CSPMiddleware` — setzt die `Content-Security-Policy`
+4. `django.middleware.security.SecurityMiddleware` — HTTPS-Umleitung, HSTS, `nosniff`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`
+5. `django.middleware.clickjacking.XFrameOptionsMiddleware` — `X-Frame-Options`
+6. `core.middleware.maintenance.MaintenanceModeMiddleware` — antwortet im Wartungsmodus mit 503, vor Session und Anmeldung
+7. `whitenoise.middleware.WhiteNoiseMiddleware` — liefert statische Dateien aus
+8. `django.contrib.sessions.middleware.SessionMiddleware` — Sitzungen
+9. `django.middleware.locale.LocaleMiddleware` — Sprache der Anfrage
+10. `django.middleware.common.CommonMiddleware` — URL-Normalisierung
+11. `django.middleware.csrf.CsrfViewMiddleware` — CSRF-Schutz
+12. `django.contrib.auth.middleware.AuthenticationMiddleware` — angemeldete Person
+13. `core.middleware.no_store_cache.NoStoreCacheMiddleware` — `Cache-Control: no-store` für angemeldete Sitzungen
+14. `core.middleware.session_idle.SessionIdleRefreshMiddleware` — Inaktivitäts-Fenster und absolutes Sitzungs-Maximum
+15. `django_otp.middleware.OTPMiddleware` — Zustand des zweiten Faktors
+16. `core.middleware.htmx_session.HtmxSessionMiddleware` — Sitzungsablauf bei HTMX-Anfragen als `HX-Redirect`
+17. `core.middleware.facility_scope.FacilityScopeMiddleware` — Einrichtung der Anfrage und PostgreSQL-Variable für die Row-Level-Security
+18. `core.middleware.user_language.UserLanguageMiddleware` — Sprache aus dem Profil
+19. `core.middleware.password_change.ForcePasswordChangeMiddleware` — erzwungener Passwortwechsel
+20. `core.middleware.mfa.MFAEnforcementMiddleware` — erzwingt Einrichtung bzw. Bestätigung des zweiten Faktors
+21. `django.contrib.messages.middleware.MessageMiddleware` — Hinweismeldungen
+22. `core.middleware.demo_guard.DemoGuardMiddleware` — sperrt auf der Demo wenige Aktionen, die die Instanz für alle lahmlegen
+23. `django_htmx.middleware.HtmxMiddleware` — HTMX-Anfragedaten
+
 ## Out of Scope
 
 Folgende Punkte werden ohne Rücksprache nicht als Sicherheitslücke akzeptiert:
@@ -84,7 +124,6 @@ Folgende Punkte werden ohne Rücksprache nicht als Sicherheitslücke akzeptiert:
 - Self-XSS, der nur den eigenen Browser betrifft
 - Denial-of-Service-Angriffe gegen den eigenen lokalen Dev-Server
 - Brute-Force-Angriffe auf das Login (Rate-Limit ist aktiv und erwartet)
-- Fehlende Header in Response-Pfaden, die ohnehin durch Caddy gesetzt werden
 - Findings aus automatischen Scannern ohne ausnutzbaren Pfad
 
 ---
@@ -165,6 +204,46 @@ The operational procedure including responsibilities lives in [`docs/en/ops-runb
 
 Reporters of valid issues will, on request, be credited in the published advisory and in a short hall-of-fame section of [CHANGELOG.md](CHANGELOG.md). Please tell us how you would like to be credited.
 
+## Security headers and middleware stack
+
+The **application** sets the security headers itself, on every response — also behind a third-party reverse proxy. The bundled [`Caddyfile`](Caddyfile) only sets `X-Robots-Tag`. If one of the following headers is missing from a response of the application, that is a valid report:
+
+| Header | Source | Setting |
+|---|---|---|
+| `Strict-Transport-Security` | `SecurityMiddleware` | `SECURE_HSTS_SECONDS`, `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` |
+| `X-Content-Type-Options` | `SecurityMiddleware` | `SECURE_CONTENT_TYPE_NOSNIFF` |
+| `Referrer-Policy` | `SecurityMiddleware` | `SECURE_REFERRER_POLICY` |
+| `Cross-Origin-Opener-Policy` | `SecurityMiddleware` | `SECURE_CROSS_ORIGIN_OPENER_POLICY` |
+| `X-Frame-Options` | `XFrameOptionsMiddleware` | `X_FRAME_OPTIONS` |
+| `Content-Security-Policy` | `CSPMiddleware` (django-csp) | `CONTENT_SECURITY_POLICY`; narrowly relaxed under `/admin-mgmt/` and on the demo, see [`docs/threat-model.md`](docs/threat-model.md) TB1 |
+| `Cache-Control: no-store, private` | `NoStoreCacheMiddleware` | authenticated sessions only |
+
+The values live in [`src/anlaufstelle/settings/prod.py`](src/anlaufstelle/settings/prod.py) (CSP in [`settings/base.py`](src/anlaufstelle/settings/base.py)). The middleware stack (`MIDDLEWARE` in [`settings/base.py`](src/anlaufstelle/settings/base.py), used unchanged in production) runs top to bottom for requests and in reverse order for responses:
+
+1. `core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware` — relaxes the CSP only under `/admin-mgmt/` (admin interface)
+2. `core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware` — allows the analytics host in the CSP only on the demo after login; no effect elsewhere
+3. `csp.middleware.CSPMiddleware` — sets the `Content-Security-Policy`
+4. `django.middleware.security.SecurityMiddleware` — HTTPS redirect, HSTS, `nosniff`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`
+5. `django.middleware.clickjacking.XFrameOptionsMiddleware` — `X-Frame-Options`
+6. `core.middleware.maintenance.MaintenanceModeMiddleware` — answers 503 in maintenance mode, before session and authentication
+7. `whitenoise.middleware.WhiteNoiseMiddleware` — serves static files
+8. `django.contrib.sessions.middleware.SessionMiddleware` — sessions
+9. `django.middleware.locale.LocaleMiddleware` — request language
+10. `django.middleware.common.CommonMiddleware` — URL normalisation
+11. `django.middleware.csrf.CsrfViewMiddleware` — CSRF protection
+12. `django.contrib.auth.middleware.AuthenticationMiddleware` — authenticated user
+13. `core.middleware.no_store_cache.NoStoreCacheMiddleware` — `Cache-Control: no-store` for authenticated sessions
+14. `core.middleware.session_idle.SessionIdleRefreshMiddleware` — idle window and absolute session maximum
+15. `django_otp.middleware.OTPMiddleware` — second-factor state
+16. `core.middleware.htmx_session.HtmxSessionMiddleware` — session expiry on HTMX requests as `HX-Redirect`
+17. `core.middleware.facility_scope.FacilityScopeMiddleware` — facility of the request and PostgreSQL variable for row-level security
+18. `core.middleware.user_language.UserLanguageMiddleware` — language from the user profile
+19. `core.middleware.password_change.ForcePasswordChangeMiddleware` — enforced password change
+20. `core.middleware.mfa.MFAEnforcementMiddleware` — enforces second-factor setup or verification
+21. `django.contrib.messages.middleware.MessageMiddleware` — flash messages
+22. `core.middleware.demo_guard.DemoGuardMiddleware` — on the demo, blocks a few actions that would break the instance for everyone
+23. `django_htmx.middleware.HtmxMiddleware` — HTMX request data
+
 ## Out of Scope
 
 The following are typically not accepted as security issues without further context:
@@ -173,5 +252,4 @@ The following are typically not accepted as security issues without further cont
 - Self-XSS that only affects the reporter's own browser
 - Denial-of-service against your own local development server
 - Brute-force attacks on login (rate-limiting is active and expected)
-- Missing headers on response paths that are added by Caddy in production
 - Automatic scanner findings without an exploitable path

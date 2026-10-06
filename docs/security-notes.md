@@ -266,7 +266,7 @@ Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_pol
 - [`test_audit_detail_pii_minimization.py`](../src/tests/test_audit_detail_pii_minimization.py) — pinnt für alle drei Schreibstellen, dass der Klartext **nicht** im `detail` landet.
 - [`test_audit_trigger.py`](../src/tests/test_audit_trigger.py) — Append-only-Trigger (Grund, warum nachträgliche Redaktion ausscheidet).
 - [`test_pii_residue_sweep.py`](../src/tests/test_pii_residue_sweep.py) — Residuen-Sweep über die Redaktionspfade.
-- Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken-verweis-auf-audit-reports)
+- Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken)
 
 ---
 
@@ -374,7 +374,7 @@ Alle Event-Serialisierer arbeiten als **Allowlist** (explizites Feld-Dict, keine
 - [`test_retention_redaction.py::TestSoftDeleteEventRedacts::test_manual_soft_delete_writes_redacted_history`](../src/tests/test_retention_redaction.py) — pinnt, dass der manuelle Soft-Delete-Pfad (`soft_delete_event`) die Spalte nicht anfasst.
 - [`test_client_export.py`](../src/tests/test_client_export.py), [`test_facility_export.py`](../src/tests/test_facility_export.py), [`test_offline_bundle_api.py`](../src/tests/offline/test_offline_bundle_api.py), [`test_events_crud.py`](../src/tests/test_events_crud.py) — pinnen den Exportausschluss/UI-Ausschluss.
 - [`tests/_residue_expectations.py`](../src/tests/_residue_expectations.py) — Klassifikation `non_pii` für `core_event.idempotency_payload_hash`/`idempotency_key`.
-- Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken-verweis-auf-audit-reports)
+- Threat-Model-Eintrag: [`threat-model.md` § 6 Bekannte offene Lücken](threat-model.md#6-bekannte-offene-lücken)
 
 ---
 
