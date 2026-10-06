@@ -3,6 +3,7 @@
 > Synchronization update 2026-10-06: § 2.5 the retention period of a documentation type applies in addition to the contact-stage period -- whichever expires first applies, a longer type period extends nothing (#2462).
 > Synchronization update 2026-10-06: § 5.5 states when the “Admin DB role” card keeps showing the previous state (failed write, deploy aborted before `check_db_roles`) and that findings are recorded even without an RLS bypass, only `ok` requires one (#2415).
 > Synchronization update 2026-10-06: § 5.5 and the fresh-install note describe that the “Admin DB role” card reads the latest `check_db_roles` result recorded by the maintenance service (`DB_ROLES_VERIFIED`: `ok` with the check time, `critical` with finding codes, `warning` when incomplete or older than 30 days, `unknown` without an entry) (#2415).
+> Synchronization update 2026-10-06: the host crontab examples for the breach scan, retention and view refresh are single-line entries, because crontab has no line continuation (#2423).
 > Synchronization update 2026-10-06: § 4.2 starts the update with choosing the target version, stops `cron` before the migration, recreates `web`, `cron` and `caddy`, and compares the image IDs of `web` and `cron`; § 4.4 rolls back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env` and recreates `web` and `cron` (#2424).
 > Synchronization update 2026-10-06: retention, statistics snapshots, view refresh, breach scan, unlock, the inventory reports and `check_db_roles` run through `run --rm maintenance` instead of `exec web`/bare `python manage.py`; the login diagnosis uses the web interface; cron times match the sidecar (retention 03:00, snapshots on the 1st at 04:00) (#2423).
 > Synchronization update 2026-09-29: § 1 adds the `SUPPORT_CONTACT` row and § 6 adds a troubleshooting entry for a server error reported with a reference id (#1904).
@@ -1656,10 +1657,7 @@ The `detect_breaches` management command heuristically analyzes the audit log fo
 **Recommended cron (hourly, at minute 30):**
 
 ```cron
-30 * * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
-  detect_breaches \
-  >> /var/log/anlaufstelle-breach.log 2>&1
+30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
 > **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan, view refresh) is in the [ops runbook § 3](../ops-runbook.md#3-cron-jobs). In the bundled compose stack they run in the `cron` sidecar (`deploy/crontab`); on the dev server they run as systemd timers via `dev-ops/deploy/install-timers.sh` — in both cases the breach scan runs hourly at minute 30.
@@ -1929,9 +1927,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 **Set up as a daily cron job (recommended; 03:00, after the 02:00 backup):**
 
 ```cron
-0 3 * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
-  enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
+0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
 ```
 
 Every execution that deletes records is automatically logged in the audit log.
@@ -2313,10 +2309,7 @@ Implementation: [`src/core/management/commands/refresh_statistics_view.py`](http
 
 ```cron
 # Hourly (near real time) -- for heavily used statistics pages
-0 * * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
-  refresh_statistics_view \
-  >> /var/log/anlaufstelle-statistics.log 2>&1
+0 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-statistics.log 2>&1
 
 # Alternative: once a day at night (for one-off reports) -- pick one
 # 0 1 * * * …
@@ -2421,5 +2414,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-06 -->
-<!-- source-hash: c7da1edceb5c37b09ad80674cca54b143155a2ce -->
+<!-- source-hash: 5e4fc7ce3e8e8ace6fbae12906157928d98e0488 -->
 <!-- translation-date: 2026-10-05 -->

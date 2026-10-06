@@ -1293,10 +1293,7 @@ Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsic
 Cron-Eintrag (siehe § 3 Cron-Jobs):
 
 ```cron
-30 * * * * cd /opt/anlaufstelle && \
-    .venv/bin/python src/manage.py detect_breaches \
-    --settings=anlaufstelle.settings.prod \
-    >> /var/log/anlaufstelle-breach-detection.log 2>&1
+30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach-detection.log 2>&1
 ```
 
 ### 6.5c Security Advisory — Meldung, Bewertung, Veroeffentlichung (Refs #1895)

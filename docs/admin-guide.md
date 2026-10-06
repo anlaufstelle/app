@@ -1601,10 +1601,7 @@ Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf A
 **Empfohlener Cron (stündlich, jeweils zur 30. Minute):**
 
 ```cron
-30 * * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
-  detect_breaches \
-  >> /var/log/anlaufstelle-breach.log 2>&1
+30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
 > **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Im mitgelieferten Compose-Stack laufen sie im `cron`-Sidecar (`deploy/crontab`), auf dem Dev-Server als systemd-Timer via `dev-ops/deploy/install-timers.sh` — in beiden Fällen der Breach-Scan stündlich zur 30. Minute.
@@ -1873,9 +1870,7 @@ docker compose -f docker-compose.prod.yml run --rm maintenance \
 **Als täglicher Cron einrichten (empfohlen; 03:00, nach dem Backup um 02:00):**
 
 ```cron
-0 3 * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
-  enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
+0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
 ```
 
 Jede Ausführung, die Datensätze löscht, wird automatisch im Audit-Log protokolliert.
@@ -2258,10 +2253,7 @@ Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](htt
 
 ```cron
 # Stündlich (nahe-echtzeit) — für stark genutzte Statistik-Seiten
-0 * * * * cd /opt/anlaufstelle && \
-  docker compose -f docker-compose.prod.yml run --rm -T maintenance \
-  refresh_statistics_view \
-  >> /var/log/anlaufstelle-statistics.log 2>&1
+0 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-statistics.log 2>&1
 
 # Alternativ: täglich nachts (für einmalige Berichte) — nur einmal umstellen
 # 0 1 * * * …

@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: the breach scan crontab example in § 6.5b is a single-line entry (crontab has no line continuation) and starts the job through `maintenance` (#2423).
 > Synchronization update 2026-10-06: § 1.2/§ 1.3 start the update with choosing the target version, stop `cron` before the migration, pull and recreate `web`, `cron` and `caddy`, and compare the image IDs of `web` and `cron`; § 2.1–§ 2.3 roll back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env`, recreate `web` and `cron`, and name schema compatibility as a prerequisite; the PostgreSQL migration path stops and restarts `cron` as well (#2424).
 > Synchronization update 2026-10-06: § 2.2, § 3.4, § 3.5, § 9 and § 11.1 run privileged maintenance commands (retention, snapshots, view refresh, `check_db_roles`, migration rollback) through `run --rm maintenance` instead of `exec web`; the dev timer table names the real `maintenance` calls (#2423).
 > Synchronization update 2026-10-06: § 6.2/§ 6.3 run the emergency dump and the emergency query as role `postgres` inside the `db` container, store the dump with `umask 077` outside `/tmp`, and warn that the app role sees 0 rows without facility context (#2472).
@@ -1319,10 +1320,7 @@ Anlaufstelle must report data breaches to the supervisory authority within **72 
 Cron entry (see § 3 Cron Jobs):
 
 ```cron
-30 * * * * cd /opt/anlaufstelle && \
-    .venv/bin/python src/manage.py detect_breaches \
-    --settings=anlaufstelle.settings.prod \
-    >> /var/log/anlaufstelle-breach-detection.log 2>&1
+30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach-detection.log 2>&1
 ```
 
 ### 6.5c Security Advisory — Report, Assessment, Publication (Refs #1895)
@@ -3110,5 +3108,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: d4e5f8fffc1997694f468640acd72d1a4b587048 -->
+<!-- source-hash: c0209eb8145d8ea067e7d0459f4e4d540dba6d6c -->
 <!-- translation-date: 2026-09-22 -->
