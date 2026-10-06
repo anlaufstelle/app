@@ -1979,7 +1979,7 @@ COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
 **Compose-Dateiliste:** Das Skript baut die Dateiliste wie `scripts/initial-setup.sh`
 auf: die Basisdatei (`COMPOSE_FILE`), danach `compose.legal.yml` und
 `compose.override.yml`, soweit sie neben der Basisdatei liegen, und gibt die
-verwendete Liste beim Start aus (`Compose-Dateien: …`). Jeder `stop`-, `up`-
+verwendete Liste beim Start aus (`Compose files: …`). Jeder `stop`-, `up`-
 und `run`-Schritt einschließlich des Rollbacks nutzt dieselbe Liste. Das ist
 nötig, weil Compose `compose.override.yml` nicht mehr selbst lädt, sobald ein
 `-f` gesetzt ist, und weil `compose.legal.yml` Umgebungsvariablen und Volume für

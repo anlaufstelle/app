@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: the DB password rotation section names the printed file list as `Compose files: …` (the script output is English now) (#2474).
 > Synchronization update 2026-10-06: the PostgreSQL migration path (§ 13.1/§ 13.2) activates maintenance mode and takes the backup while `web` and `cron` are running (`backup.sh` needs both), stops them only afterwards, takes the working dump with the variable `ADMIN_DB_USER` that exists in the `db` container and checks it, waits for the final database server before the restore, and uses the full Compose file list (#2424).
 > Synchronization update 2026-10-06: the post-deploy verification (§ 1.3) and the migration rollback (§ 2.2) build the complete Compose file list themselves, so that newly created `maintenance` containers honor a configured `compose.override.yml` (#2424).
 > Synchronization update 2026-10-06: the breach scan crontab example in § 6.5b is a single-line entry (crontab has no line continuation) and starts the job through `maintenance` (#2423).
@@ -2001,7 +2002,7 @@ COMPOSE_FILE=docker-compose.dev.yml ENV_FILE=.env.dev \
 **Compose file list:** The script builds the file list like `scripts/initial-setup.sh`:
 the base file (`COMPOSE_FILE`), then `compose.legal.yml` and
 `compose.override.yml` if they sit next to the base file, and prints the list
-it uses at startup (`Compose-Dateien: …`). Every `stop`, `up` and `run` step,
+it uses at startup (`Compose files: …`). Every `stop`, `up` and `run` step,
 including the rollback, uses the same list. This is necessary because Compose
 no longer loads `compose.override.yml` by itself once a `-f` is set, and because
 `compose.legal.yml` sets the environment variables and the volume for the
@@ -3144,5 +3145,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: d5a68a11edbebbee3a28e150bc9dcfd2e460098f -->
+<!-- source-hash: 80aa12c136b9feb34fceccc830c4f4cf7539bb23 -->
 <!-- translation-date: 2026-09-22 -->

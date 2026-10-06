@@ -211,8 +211,10 @@ def test_every_compose_call_uses_the_full_file_list(tmp_path: Path, extra_files:
     recreates = [line for line in calls if " up -d " in line]
     assert len(recreates) == 2
     # The effective file list is printed so the operator can see what was recreated.
+    listing = next((line for line in result.stdout.splitlines() if "Compose files:" in line), "")
+    assert listing, result.stdout
     for name in ("docker-compose.prod.yml", *extra_files):
-        assert str(tmp_path / name) in result.stdout
+        assert str(tmp_path / name) in listing
 
 
 def test_extra_compose_files_are_ignored_when_missing_next_to_the_base_file(tmp_path: Path) -> None:
