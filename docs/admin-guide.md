@@ -1363,18 +1363,47 @@ Bis zum 1.0-Cut sind neue öffentliche Veröffentlichungen ausgesetzt; die Relea
 Migrationen laufen als separater One-Shot-Job **vor** dem Neustart des `web`-Dienstes — dieser führt beim Start selbst keine Migrationen mehr aus (Refs #802). Details siehe die kanonische Quelle [`docs/ops-runbook.md` § 1.2](ops-runbook.md#12-deploy-schritte).
 
 ```bash
-# 1. Neuestes Image herunterladen
-docker compose -f docker-compose.prod.yml pull web
+cd /opt/anlaufstelle
 
-# 2. Migrationen als One-Shot-Job ausführen
-docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh maintenance
+# 0. Zielstand wählen: Repository auf den Release-Tag der Zielversion bringen und
+#    APP_VERSION (bei Digest-Pinning gemeinsam mit APP_IMAGE_DIGEST) in der .env
+#    setzen; Digest und Signatur vorher prüfen (Ops-Runbook § 8.4a). Ohne neuen
+#    Wert zieht der Pull dasselbe Image erneut.
+git fetch --tags && git checkout vX.Y.Z
+grep -E '^APP_(VERSION|IMAGE_DIGEST)=' .env
 
-# 3. Stack neu starten (web + caddy, DB bleibt; kurze Downtime)
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-docker compose "${compose_files[@]}" up -d web caddy
+
+# 1. Hintergrundjobs anhalten (cron nutzt Anwendungscode und Schema) und prüfen,
+#    dass kein Wartungs-One-Shot mehr läuft (Ausgabe muss leer sein)
+docker compose "${compose_files[@]}" stop cron
+docker compose "${compose_files[@]}" ps --all --format '{{.Name}} {{.Status}}' maintenance
+
+# 2. Neue Images herunterladen (web, cron und maintenance nutzen dasselbe Image)
+docker compose "${compose_files[@]}" pull web cron maintenance
+
+# 3. Migrationen als One-Shot-Job ausführen
+docker compose "${compose_files[@]}" run --rm \
+    --entrypoint=/app/docker-migrate.sh maintenance
+
+# 4. Stack neu starten (web + cron + caddy, DB bleibt; kurze Downtime)
+docker compose "${compose_files[@]}" up -d web cron caddy
+```
+
+`cron` ist ein eigener Dienst mit Anwendungscode aus demselben Image. Ein `up -d web caddy` ersetzt ihn nicht: Retention-, Audit- und Statistikjobs liefen weiter mit altem Code gegen die neue Datenbank. Legen Sie das Update deshalb nicht in die Zeitfenster der Nachtjobs (Backup 02:00, Retention 03:00 bis Session-Bereinigung 05:00; Zeitplan: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs)).
+
+Prüfen Sie anschließend, dass `web` und `cron` dasselbe Image laufen, und führen Sie einen lesenden Wartungs-Smoke aus:
+
+```bash
+# Gleiche Image-ID in beiden Zeilen
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  $(docker compose -f docker-compose.prod.yml ps -q web cron)
+
+# Lesend, mit der Admin-Rolle (ändert nichts)
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
+docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
 ```
 
 Prüfen Sie anschließend die Logs:
@@ -1399,16 +1428,31 @@ docker compose "${compose_files[@]}" logs web --tail=50
 Falls nach einem Update Probleme auftreten:
 
 ```bash
-# Auf ein bestimmtes Image-Tag zurückwechseln
-# In docker-compose.prod.yml: image: ghcr.io/anlaufstelle/app:vX.Y.Z   (vX.Y.Z = die vorherige Version;
-# ob der Tag pullbar ist: docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
+cd /opt/anlaufstelle
+
+# 1. In der .env die vorherige Version eintragen (nicht in docker-compose.prod.yml
+#    editieren: die versionierte Datei kollidiert sonst beim nächsten Update):
+#      APP_VERSION=vX.Y.Z          (vorherige Version; ob der Tag pullbar ist:
+#                                   docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
+#      APP_IMAGE_DIGEST=@sha256:…  (Digest dieser Version) oder Zeile leeren —
+#                                   ein gesetzter Digest wird sonst an den alten Tag gehängt
+#    Wurde das Repository mit ausgecheckt, ebenfalls auf den vorherigen Tag zurück
+#    (git checkout vX.Y.Z), damit Compose-Datei und deploy/crontab zum Image passen.
+
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-docker compose "${compose_files[@]}" up -d
+# 2. web UND cron neu erzeugen
+docker compose "${compose_files[@]}" up -d web cron
+
+# 3. Gleiche Image-ID für web und cron prüfen
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  $(docker compose "${compose_files[@]}" ps -q web cron)
 
 # Datenbank-Backup von vor dem Update einspielen (falls nötig)
 ```
+
+**Voraussetzung: Schema-Kompatibilität.** Der Image-Rollback ändert nur den Code; `web`, `cron` und `maintenance` arbeiten danach mit dem alten Code gegen das Schema der neueren Version. Das ist nur zulässig, wenn die Migrationen rückwärtskompatibel sind (Changelog prüfen); andernfalls Migration zurückrollen oder die Sicherung einspielen ([Ops-Runbook § 2](ops-runbook.md#2-rollback-prozedur)).
 
 ---
 

@@ -1,4 +1,5 @@
 > This is the English translation of [ops-runbook.md](../ops-runbook.md).
+> Synchronization update 2026-10-06: § 1.2/§ 1.3 start the update with choosing the target version, stop `cron` before the migration, pull and recreate `web`, `cron` and `caddy`, and compare the image IDs of `web` and `cron`; § 2.1–§ 2.3 roll back through `APP_VERSION`/`APP_IMAGE_DIGEST` in the `.env`, recreate `web` and `cron`, and name schema compatibility as a prerequisite; the PostgreSQL migration path stops and restarts `cron` as well (#2424).
 > Synchronization update 2026-10-06: § 2.2, § 3.4, § 3.5, § 9 and § 11.1 run privileged maintenance commands (retention, snapshots, view refresh, `check_db_roles`, migration rollback) through `run --rm maintenance` instead of `exec web`; the dev timer table names the real `maintenance` calls (#2423).
 > Synchronization update 2026-10-06: § 6.2/§ 6.3 run the emergency dump and the emergency query as role `postgres` inside the `db` container, store the dump with `umask 077` outside `/tmp`, and warn that the app role sees 0 rows without facility context (#2472).
 > Synchronization update 2026-10-06: § 3.3 escapes the `%` in both invite token audit crontab lines (`\%`) and sets role `postgres` and database `anlaufstelle` explicitly (#2473).
@@ -108,22 +109,39 @@ Refs #802 (C-34): Migrations run as a separate one-shot job **before** the rolli
 > **Initial setup instead of a deploy?** This section describes the *ongoing* deploy. For the **first** installation there is [`scripts/initial-setup.sh`](../../scripts/initial-setup.sh) (Refs #793): start the DB and wait for readiness → migrate one-shot → bring up the stack → `check --deploy` → `check_db_roles` → super-admin bootstrap. Idempotent and fail-loud; instructions in [docs/admin-guide.md § 1 Step 4](admin-guide.md).
 
 ```bash
-# 1. Pull the new image
-docker compose -f docker-compose.prod.yml pull web
+cd /opt/anlaufstelle
 
-# 2. Run migrations as a one-shot job (an advisory lock holds back
-#    parallel jobs; a long-running RunPython does not block any worker).
-docker compose -f docker-compose.prod.yml run --rm \
-    --entrypoint=/app/docker-migrate.sh maintenance
+# 0. Choose the target: bring the repository to the release tag of the target
+#    version and set APP_VERSION (together with APP_IMAGE_DIGEST if you pin the
+#    digest) in the .env accordingly; verify digest and signature first (§ 8.4a).
+#    Without a new value the pull in the next step fetches the same image again.
+git fetch --tags && git checkout vX.Y.Z
+grep -E '^APP_(VERSION|IMAGE_DIGEST)=' .env
 
 # Full Compose file list in fixed order (admin-guide § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-# 3. Restart the stack (web + caddy, DB stays up).
+
+# 1. Stop background jobs (cron uses application code and schema) and check that
+#    no maintenance one-shot is still running (the output must be empty).
+docker compose "${compose_files[@]}" stop cron
+docker compose "${compose_files[@]}" ps --all --format '{{.Name}} {{.Status}}' maintenance
+
+# 2. Pull the new images: web, cron and maintenance use the same app image.
+docker compose "${compose_files[@]}" pull web cron maintenance
+
+# 3. Run migrations as a one-shot job (an advisory lock holds back
+#    parallel jobs; a long-running RunPython does not block any worker).
+docker compose "${compose_files[@]}" run --rm \
+    --entrypoint=/app/docker-migrate.sh maintenance
+
+# 4. Restart the stack (web + cron + caddy, DB stays up).
 #    The entrypoint now only runs collectstatic + gunicorn.
-docker compose "${compose_files[@]}" up -d web caddy
+docker compose "${compose_files[@]}" up -d web cron caddy
 ```
+
+**Background jobs and schema:** `cron` is a separate service with application code from the same image; `up -d web caddy` does not replace it, and it would keep running old code and old environment values against the new database. Therefore `cron` is stopped before the migration (step 1) and started again with the new image (step 4). Do not schedule the update into the windows of the night jobs (sidecar schedule: § 3.2; backup 02:00, retention 03:00 through session cleanup 05:00), because a job that is running when the service is stopped can be interrupted.
 
 **Expected downtime:** ~3-5 seconds (only the Gunicorn restart). Migrations run beforehand in the one-shot job — the web container only comes up once the schema is ready. With several web replicas, none of them wait on the migrate lock anymore.
 
@@ -150,6 +168,14 @@ docker compose -f docker-compose.prod.yml exec web \
 # Django deployment check
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py check --deploy
+
+# web and cron must run the same image (same image ID on both lines)
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  $(docker compose -f docker-compose.prod.yml ps -q web cron)
+
+# Read-only maintenance smoke test with the admin role (changes nothing)
+docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
+docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
 ```
 
 ### 1.4 Compose Stack Reconciliation
@@ -183,26 +209,41 @@ Until #2086, `docker-compose.staging.yml` was the sole exception: no init mount,
 If the new version has application bugs but the migrations are backward-compatible:
 
 ```bash
-# 1. Pin the image tag in docker-compose.prod.yml
-#    image: ghcr.io/anlaufstelle/app:vX.Y.Z   (previous version;
-#    whether the tag is pullable: docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
+cd /opt/anlaufstelle
+
+# 1. Enter the previous version in the .env (do not edit docker-compose.prod.yml:
+#    the versioned file would collide with the next update):
+#      APP_VERSION=vX.Y.Z               (previous version; whether the tag is pullable:
+#                                        docker manifest inspect ghcr.io/anlaufstelle/app:vX.Y.Z)
+#      APP_IMAGE_DIGEST=@sha256:…       (digest of that version) or clear the line;
+#                                        a set digest would otherwise be appended to the old tag
+#    If the repository was checked out as well: go back to the previous tag too
+#    (git checkout vX.Y.Z) so the Compose file and deploy/crontab match the image.
 
 # Full Compose file list in fixed order (admin-guide § 1).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-# 2. Restart the stack
-docker compose "${compose_files[@]}" up -d web
+# 2. Recreate web AND cron (both use the same image; maintenance picks up
+#    the same version on its next call)
+docker compose "${compose_files[@]}" up -d web cron
 
-# 3. Verify
+# 3. Verify: same image ID for web and cron, health
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  $(docker compose "${compose_files[@]}" ps -q web cron)
 curl -sf https://$DOMAIN/health/
 ```
+
+**Prerequisite: schema compatibility.** The image rollback changes only the code. Afterwards `web`, `cron` and `maintenance` run the old code against the schema state left behind by the migrations of the newer version; this is only permitted if the old code can handle that schema (backward compatibility of the migrations, check the changelog). Otherwise use § 2.2 or § 2.3 first.
 
 ### 2.2 Roll Back a Migration
 
 If a migration has changed data or schema in an incompatible way. `migrate` runs in the `maintenance` service (schema owner, admin role); under the app role of `web` the rollback aborts with "must be owner of relation …":
 
 ```bash
+# 0. Stop background jobs while the schema does not match the code
+docker compose -f docker-compose.prod.yml stop cron
+
 # 1. Look at the migration status
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py showmigrations core
@@ -212,7 +253,7 @@ docker compose -f docker-compose.prod.yml exec web \
 docker compose -f docker-compose.prod.yml run --rm maintenance \
   migrate core 0042
 
-# 3. Then deploy the old image (see 2.1)
+# 3. Then deploy the old image and start cron again (see 2.1)
 ```
 
 **Important:** Not all migrations are backward-compatible. `RunPython` operations without `reverse_code` cannot be rolled back. Always check the changelog for irreversible migrations before an update.
@@ -283,7 +324,8 @@ docker compose "${compose_files[@]}" up -d db web
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
-# 3. Set the old image tag in docker-compose.prod.yml
+# 3. Set the previous version in the .env (APP_VERSION, with digest pinning also
+#    APP_IMAGE_DIGEST; see 2.1) -- do not edit docker-compose.prod.yml
 
 # 4. Start the stack (restore.sh leaves web and cron stopped)
 docker compose "${compose_files[@]}" up -d
@@ -2940,8 +2982,8 @@ Refs #1039. PostgreSQL major versions have **incompatible data directories** —
 Staging is identical, using `docker-compose.staging.yml`, `.env.staging`, and the volume `*_pgdata_staging`. The order is safety-critical: **roles before data** — the init script creates the app/admin role in the fresh cluster before the restore re-establishes ownership/grants (ADR-020). For staging this only holds from #2086 onwards: before that the stack did not mount `deploy/postgres-init` at all (§ 1.4).
 
 ```bash
-# 0. Activate maintenance mode (§ 6) + stop web — DB stays reachable for the dump
-docker compose -f docker-compose.prod.yml stop web
+# 0. Activate maintenance mode (§ 6) + stop web and background jobs — DB stays reachable for the dump
+docker compose -f docker-compose.prod.yml stop web cron
 
 # 1. Final encrypted backup (§ 1.1) + an unencrypted working dump.
 #    Dump as the admin role (BYPASSRLS) over the container socket — like backup.sh.
@@ -2983,7 +3025,7 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migr
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
-docker compose "${compose_files[@]}" up -d web caddy
+docker compose "${compose_files[@]}" up -d web cron caddy
 curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # 9. Turn off maintenance mode. The working dump contains PLAINTEXT data — delete
@@ -3068,5 +3110,5 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.5 -->
 <!-- translation-date: 2026-10-05 -->
-<!-- source-hash: 5b6fd2c110489ca28059f11a1ae16a44faacc9b5 -->
+<!-- source-hash: d4e5f8fffc1997694f468640acd72d1a4b587048 -->
 <!-- translation-date: 2026-09-22 -->
