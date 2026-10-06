@@ -866,7 +866,13 @@
 4. Als `emma_1` `/deletion-requests/<F1-dr>/review/` direkt aufrufen (GET), dann per POST Genehmigen versuchen (z. B. das Formular aus Schritt 2 mit `emma_1`-Session und deren CSRF-Token absenden).
 5. Als `emma_1` `/clients/<F1-Person-uuid>/delete/` direkt aufrufen.
 6. Nach Schritt 4: Status des Antrags und AuditLog prüfen (`DeletionRequest.objects.get(pk=<F1-dr>).status`, `AuditLog.objects.filter(target_type="DeletionRequest", target_id="<F1-dr>")`).
-7. Optional in PostgreSQL mit der Laufzeitrolle der App (nicht der Admin-/BYPASSRLS-Rolle): `SET app.current_facility_id = '<F2-uuid>'; SELECT count(*) FROM core_deletionrequest WHERE id = '<F1-dr>';` → `0`; Gegenprobe mit `'<F1-uuid>'` → `1`.
+7. Pflicht — RLS-Probe in PostgreSQL (`psql`) mit einer Rolle ohne Superuser und ohne BYPASSRLS, z. B. der Laufzeitrolle der App (nicht der Admin-/Migrationsrolle); die Webproben aus Schritt 3–5 bleiben auch ohne RLS grün, weil die Views selbst nach Einrichtung filtern. Die Anweisungen der Reihe nach in **einer** Sitzung ausführen:
+   1. Rolle prüfen: `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;` → `f | f`.
+   2. Tabellenflags prüfen: `SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'core_deletionrequest';` → `t | t`.
+   3. F2-Kontext setzen: `SELECT set_config('app.is_super_admin', 'false', false), set_config('app.current_facility_id', '<F2-uuid>', false);`
+   4. F2-Probe: `SELECT count(*) FROM core_deletionrequest WHERE id = '<F1-dr>';` → `0`.
+   5. F1-Kontext setzen: `SELECT set_config('app.is_super_admin', 'false', false), set_config('app.current_facility_id', '<F1-uuid>', false);`
+   6. F1-Positivkontrolle: `SELECT count(*) FROM core_deletionrequest WHERE id = '<F1-dr>';` → `1`.
 
 **Erwartetes Ergebnis:**
 - Schritt 2 (Positivkontrolle): HTTP 200 auf genau derselben Route. **Liefert schon `emma` 404, ist der Testfall ungültig** (Route oder Antrag falsch) — der 404 aus Schritt 4 belegt dann keine Mandantentrennung.
@@ -874,9 +880,9 @@
 - Schritt 4: GET und POST liefern HTTP 404, niemals 200 mit fremden Daten. Liefert die Route für `emma_1` 200 oder zeigt Inhalte des F1-Antrags, ist der Testfall rot.
 - Schritt 5: HTTP 404 (`get_scoped_object(Client, …)`), kein Antragsformular für eine fremde Person.
 - Schritt 6: Status bleibt `pending`; kein `deletion_approved`- oder `deletion_rejected`-Eintrag von `emma_1`.
-- Schritt 7: F2-Kontext sieht die F1-Zeile nicht, F1-Kontext sieht sie. Sieht der F2-Kontext die Zeile, ist der Testfall rot (RLS-Policy fehlt oder die Rolle umgeht RLS).
+- Schritt 7: Rolle `f | f`, Tabellenflags `t | t`, F2-Kontext `0`, F1-Kontext `1`. Sieht der F2-Kontext die Zeile oder ist eines der Tabellenflags `f`, ist der Testfall rot (RLS-Policy fehlt oder ist nicht erzwungen). Liefert die Rollenprüfung nicht `f | f`, liefert die F1-Positivkontrolle nicht `1` oder ist Schritt 7 nicht ausführbar (kein `psql`-Zugang, keine Rolle ohne BYPASSRLS), ist der Testfall „nicht geprüft", nicht bestanden — die Schritte 2–6 allein belegen nur den Einrichtungsfilter der Views.
 
-**Code-Beleg:** Unit-Tests `TestDeletionEdgeCases::test_facility_scoping_prevents_cross_facility_review` (`src/tests/test_deletion_requests.py`, 404 auf `core:deletion_review` für eine Leitung der zweiten Einrichtung), `TestDeletionRequestRLSIsolation::test_deletion_request_invisible_across_facility` (`src/tests/test_rls.py`, RLS unter `rls_test_role`), `test_cross_facility_is_404` (`src/tests/test_deletion_request_withdraw.py`).
+**Code-Beleg:** Unit-Tests `TestDeletionEdgeCases::test_facility_scoping_prevents_cross_facility_review` (`src/tests/test_deletion_requests.py`, 404 auf `core:deletion_review` für eine Leitung der zweiten Einrichtung), `TestDeletionRequestRLSIsolation::test_deletion_request_invisible_across_facility` (`src/tests/test_rls.py`, RLS unter `rls_test_role`), `TestRlsDeletionProbeRunsAsWritten::test_documented_sql_separates_facilities` (`src/tests/test_manual_matrix_rls_probe.py`, führt die SQL-Anweisungen aus Schritt 7 wörtlich unter `rls_test_role` aus), `test_cross_facility_is_404` (`src/tests/test_deletion_request_withdraw.py`).
 
 **DSGVO/Security-Note:**
 - Art. 5 Abs. 1 lit. f (Integrität & Vertraulichkeit) + Art. 32 (TOM). RLS-Layer auf `core_deletionrequest` muss FORCE-aktiv sein, App-Filter zusätzlich.
