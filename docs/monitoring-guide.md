@@ -2,7 +2,7 @@
 
 > **Zweck:** Den `/health/`-Endpoint operativ verstehen — welche Felder er liefert, welche HTTP-Status-Codes er setzt, was jeder Wert bedeutet und wie man Uptime-/Monitoring-Tools anbindet.
 >
-> **Code ist die Wahrheitsquelle.** Alle Feldnamen, Schwellen und Status-Codes sind gegen [`src/core/views/health.py`](../src/core/views/health.py) (View) und [`src/anlaufstelle/urls.py`](../src/anlaufstelle/urls.py) (Route `path("health/", HealthView.as_view(), name="health")`) verifiziert. Stand: v0.14.0-Roadmap (Refs #1071 Block D).
+> **Code ist die Wahrheitsquelle.** Alle Feldnamen, Schwellen und Status-Codes sind gegen [`src/core/views/health.py`](../src/core/views/health.py) (View) und [`src/anlaufstelle/urls.py`](../src/anlaufstelle/urls.py) (Route `path("health/", HealthView.as_view(), name="health")`) verifiziert.
 
 ---
 
@@ -105,19 +105,19 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
 | `encryption_key` | string | `ok` / `error` | Fernet-Encrypt/Decrypt-**Roundtrip** ([`_check_encryption_key`](../src/core/views/health.py)). `error` = Schlüssel passt nicht zu den Daten → keine verschlüsselten Felder lesbar. | `error` → **`error` + HTTP 503** |
 | `db_user_is_superuser` | bool \| null | `false` / `true` / `null` | Ist die DB-Rolle **dieser Verbindung** PostgreSQL-Superuser? ([`_query_runtime_role_posture`](../src/core/views/health.py), Refs #793). `null` = nicht ermittelbar (Nicht-PostgreSQL-Backend, Rolle nicht im Katalog, DB weg). | `true` → **`degraded`** |
 | `db_role_posture` | string | `ok` / `bypasses_rls` / `unknown` | Zusammenfassung derselben Prüfung inkl. `rolbypassrls`: `bypasses_rls` = die Runtime umgeht Row Level Security (Superuser **oder** `BYPASSRLS`), `ok` = beides aus, `unknown` = nicht ermittelbar. | `bypasses_rls` → **`degraded`** |
-| `version` | string | z. B. `v0.14.0` / `dev` | App-Version aus der ENV `APP_VERSION` (Fallback `dev`). | — |
+| `version` | string | z. B. `vX.Y.Z` / `dev` | App-Version aus der ENV `APP_VERSION` (Fallback `dev`). | — |
 | `cache` | object | `{"backend": "...", "status": "ok"\|"error"}` | Aktives Shared-Cache-Backend und Erreichbarkeits-Probe ([`_check_cache`](../src/core/views/health.py)). Refs #795. | siehe unten |
 | `cache.backend` | string | `django.core.cache.backends.redis.RedisCache` / `...db.DatabaseCache` | Welches Backend `settings.CACHES['default']` tatsächlich auflöst. Macht den absichtlichen Rückfall auf den `DatabaseCache` sichtbar (gesetztes `REDIS_URL`, aber kein `redis`-Paket im Image — z. B. altes `APP_VERSION` mit neuem Compose-File). | — |
 | `cache.status` | string | `ok` / `error` | Set/Get-Roundtrip gegen das konfigurierte Backend. `error` = Cache konfiguriert, aber nicht erreichbar → `django-ratelimit` zählt nicht mehr, der Bruteforce-Schutz auf Login/Sudo ist faktisch aus. | `error` → **`degraded`** |
 | `smtp` | object | `{"status": "...", "latency_ms"?: int}` | SMTP-CONNECT-Test ([`_check_smtp`](../src/core/views/health.py) L136–167). | siehe unten |
 | `smtp.status` | string | `ok` / `unreachable` / `disabled` | `disabled` = Console/Locmem-Backend oder leerer Host. Konfigurationsquelle ist seit Django 6.1 `MAILERS['default']` (`BACKEND` und `OPTIONS['host']`/`OPTIONS['port']`), gespeist aus den unveränderten Umgebungsvariablen `EMAIL_HOST`/`EMAIL_PORT`. `unreachable` = Server antwortet nicht (Timeout 2 s) → Token-Invites/Passwort-Reset scheitern lautlos. | `unreachable` → **`degraded`** |
 | `smtp.latency_ms` | int | nur bei `ok` | CONNECT-Latenz in Millisekunden. | — |
-| `last_backup_age_hours` | float \| null | z. B. `12.4` / `null` | Alter der letzten Sicherung in `BACKUP_DIR`, abgeleitet aus [`last_backup_info`](../src/core/services/system/health.py) — **derselben** Funktion, aus der auch die Betriebsansicht `/system/` und die Compliance-Zeile ihren Backup-Zustand ziehen ([`_check_backup_age`](../src/core/views/health.py) rechnet seit Refs #2291 nicht mehr selbst). `null` = kein Backup gefunden, `BACKUP_DIR` fehlt **oder** der Zeitstempel liegt in der Zukunft (dann `backup=future`; ein negatives Alter wird nie ausgeliefert). Im Compose-Stack wird die Host-Ablage read-only nach `BACKUP_DIR` gemountet (`BACKUP_HOST_DIR`, Refs #1872) — ohne diesen Mount bleibt der Wert dauerhaft `null`. | `> 48` → **`degraded`** (`BACKUP_CRITICAL_HOURS` in [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py)); `null` degradiert bei `backup_required=true` |
+| `last_backup_age_hours` | float \| null | z. B. `12.4` / `null` | Alter der letzten Sicherung in `BACKUP_DIR`, abgeleitet aus [`last_backup_info`](../src/core/services/system/health.py) — **derselben** Funktion, aus der auch die Betriebsansicht `/system/` und die Compliance-Zeile ihren Backup-Zustand ziehen ([`_check_backup_signal`](../src/core/views/health.py) rechnet nicht selbst). `null` = kein Backup gefunden, `BACKUP_DIR` fehlt **oder** der Zeitstempel liegt in der Zukunft (dann `backup=future`; ein negatives Alter wird nie ausgeliefert). Im Compose-Stack wird die Host-Ablage read-only nach `BACKUP_DIR` gemountet (`BACKUP_HOST_DIR`, Refs #1872) — ohne diesen Mount bleibt der Wert dauerhaft `null`. | `> 48` → **`degraded`** (`BACKUP_CRITICAL_HOURS` in [`services/ops_thresholds.py`](../src/core/services/ops_thresholds.py)); `null` degradiert bei `backup_required=true` |
 | `backup` | string | `ok` / `stale` / `missing` / `future` | Zusammenfassung des Backup-Signals: jung, älter als 48 Stunden, nicht vorhanden oder mit einem Zeitstempel in der Zukunft. `future` heißt: Das Alter ist **nicht messbar** (Systemuhr, Zeitsynchronisation oder Dateizeitstempel prüfen), `last_backup_age_hours` ist dann `null` (#2342). | `stale` und `future` immer, `missing` bei `backup_required=true` → **`degraded`** |
-| `backup_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_BACKUP_REQUIRED`; Produktion ist standardmäßig `true`, lokale/E2E- und Welt-A-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `backup=missing` |
+| `backup_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_BACKUP_REQUIRED`; Produktion ist standardmäßig `true`, lokale und E2E-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `backup=missing` |
 | `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py)). `null` = Messung nicht möglich (Pfad fehlt oder ist nicht lesbar) und wird als `disk=unknown` zusammengefasst. | `< 10` → `disk=low`; `null` → `disk=unknown` |
 | `disk` | string | `ok` / `low` / `unknown` | Zusammenfassung der Speicherplatzmessung: mindestens 10 % frei, unter 10 % frei oder nicht messbar. | `low` immer, `unknown` bei `disk_required=true` → **`degraded`** |
-| `disk_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_DISK_REQUIRED` (`DJANGO_HEALTH_DISK_REQUIRED`); Produktion ist standardmäßig `true`, lokale/E2E- und Welt-A-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `disk=unknown` |
+| `disk_required` | bool | `true` / `false` | Effektiver Schalter `HEALTH_DISK_REQUIRED` (`DJANGO_HEALTH_DISK_REQUIRED`); Produktion ist standardmäßig `true`, lokale und E2E-Instanzen setzen ihn ausdrücklich auf `false`. | steuert die Degradierung bei `disk=unknown` |
 | `stale_jobs` | array\<string\> | z. B. `[]` / `["breach_scan_last_run"]` | Keys der Hintergrundjobs (Backup, Retention, Audit-Ketten-Prüfung, Snapshots, Breach-Scan, MV-Refresh) mit Status `critical` laut [`cron_job_checks`](../src/core/services/compliance/__init__.py) ([`_check_stale_jobs`](../src/core/views/health.py)). Refs #1335. | nicht-leer → **`degraded`** |
 
 > **Zwei Sichten, bewusst getrennt (Refs #1872):** „Kein Backup gefunden" bleibt im Detailwert `last_backup_age_hours` als `null` erkennbar; in Produktion macht `backup=missing` den Gesamtstatus für Token-/interne Aufrufer jetzt zugleich `degraded`, während der anonyme Liveness-Payload unverändert bleibt. Die **Betriebsansicht** `/system/` bleibt ausführlicher und zeigt denselben Zustand als eigene Warnung mit Handlungshinweis ([`operations_job_checks`](../src/core/services/compliance/__init__.py)).
@@ -126,7 +126,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
 
 > **`db_role_posture` misst die laufende Verbindung, nicht die `.env`.** `manage.py check_db_roles` (Refs #902) verifiziert, dass App- und Admin-Rolle mit dem richtigen Attributprofil im Katalog **existieren** — ob die Django-Runtime auch tatsächlich als die App-Rolle verbindet, sagt es nicht. Genau das prüft dieses Feld (`SELECT rolsuper, rolbypassrls … WHERE rolname = current_user`) und schließt damit die Selbst-Hosting-Falle aus #793: läuft die Runtime als Superuser, werden die RLS-Policies (Migration 0047/0084/0085) **still** umgangen — nichts schlägt fehl, die Facility-Isolation ist aber weg. Der Statuswechsel auf `degraded` ist deshalb auch anonym sichtbar; das konkrete Rollen-Detail steht nur im Token-Payload und im Log (`WARNING` in `core.views.health`). Behebung: [ops-runbook §9](ops-runbook.md) (Rollenmodell) bzw. [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) bei der Erstinbetriebnahme. `unknown` degradet bewusst **nicht** (Fremd-Backends, kurzzeitige DB-Ausfälle sind bereits über `database` abgedeckt).
 
-> **Was als Sicherung zählt, entscheidet `last_backup_info` — an einer Stelle für `/health/` und `/system/` (Refs #2291).** Bis dahin hatte `_check_backup_age` einen eigenen Glob (`*.sql.gz.enc`), sodass beide Anzeigen über dasselbe Verzeichnis unterschiedlich urteilen konnten. Welt-A-Dumps (`dump-*.pgc.enc`, das Format auf `dev.anlaufstelle.app`) sind deshalb kein Sonderfall von `/health/` mehr, sondern folgen derselben Regel wie im Systembereich. Für die zwei Backup-Welten siehe [ops-runbook §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739). Deshalb setzt `devlive.py` `HEALTH_BACKUP_REQUIRED=False`; dort bleibt `backup=missing` sichtbar, degradiert aber nicht. Betreiber anderer Instanzen ohne Welt-B-Backups können entsprechend `DJANGO_HEALTH_BACKUP_REQUIRED=false` setzen.
+> **Was als Sicherung zählt, entscheidet `last_backup_info` — an einer Stelle für `/health/` und `/system/` (Refs #2291).** Gezählt wird ein vollständig veröffentlichter Satz: ein nicht leeres `*.manifest` mit `.hmac`-Sidecar, Satzkennung, Dump-Hash und den Zeilenzahlen der Pflichttabellen, dazu die daneben liegenden Artefakte. Geprüft wird nur ihre **Existenz**, nicht die Signatur und nicht die Hashes (der HMAC-Schlüssel liegt nicht im `web`-Container); Signatur und Hashes prüfen `backup.sh --verify` und `restore.sh`. Eine Dump-Datei ohne Manifest zählt nicht. Für Backup-Format und Restore siehe [ops-runbook §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739). Betreiber von Instanzen ohne Betriebs-Backups können `DJANGO_HEALTH_BACKUP_REQUIRED=false` setzen; `backup=missing` bleibt dann sichtbar, degradiert aber nicht.
 
 ---
 
@@ -153,10 +153,12 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
   "encryption_key": "ok",
   "db_user_is_superuser": false,
   "db_role_posture": "ok",
-  "version": "v0.14.0",
+  "version": "vX.Y.Z",
   "cache": {"backend": "django.core.cache.backends.redis.RedisCache", "status": "ok"},
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
+  "backup": "ok",
+  "backup_required": true,
   "disk_free_pct": 41.3,
   "disk": "ok",
   "disk_required": true,
@@ -175,10 +177,12 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
   "encryption_key": "ok",
   "db_user_is_superuser": false,
   "db_role_posture": "ok",
-  "version": "v0.14.0",
+  "version": "vX.Y.Z",
   "cache": {"backend": "django.core.cache.backends.redis.RedisCache", "status": "ok"},
   "smtp": {"status": "unreachable"},
   "last_backup_age_hours": 73.2,
+  "backup": "stale",
+  "backup_required": true,
   "disk_free_pct": 38.0,
   "disk": "ok",
   "disk_required": true,
@@ -197,10 +201,12 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
   "encryption_key": "ok",
   "db_user_is_superuser": false,
   "db_role_posture": "ok",
-  "version": "v0.14.0",
+  "version": "vX.Y.Z",
   "cache": {"backend": "django.core.cache.backends.redis.RedisCache", "status": "ok"},
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
+  "backup": "ok",
+  "backup_required": true,
   "disk_free_pct": 41.3,
   "disk": "ok",
   "disk_required": true,
@@ -243,20 +249,21 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. DB, Encryption-
 
 ### 7.2 Container-/Compose-Healthcheck
 
-`/health/` ist der natürliche Docker-Healthcheck (siehe [Ops-Runbook § 7](ops-runbook.md#7-clamav-virenscan), Hinweiskasten ClamAV). Beispiel:
+`/health/` ist der natürliche Docker-Healthcheck (zum ClamAV-Anteil siehe [Ops-Runbook § 7.3](ops-runbook.md#73-healthcheck)). Beispiel:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-fsS", "https://localhost/health/"]
+  test: ["CMD-SHELL", "python -c \"import json, urllib.request; ok = json.load(urllib.request.urlopen('http://localhost:8000/health/'))['status'] != 'error'; raise SystemExit(0 if ok else 1)\""]
   interval: 30s
-  timeout: 5s
+  timeout: 10s
   retries: 3
-  start_period: 40s
 ```
 
-`curl -f` failt bei HTTP ≥ 400 → der Container wird bei DB-/Key-Ausfall (503) `unhealthy`. **Achtung:** `degraded` (200) macht den Container **nicht** unhealthy — das ist gewollt (Last-Balancer soll den Pod bei ClamAV-Ausfall nicht rauswerfen), bedeutet aber, dass degraded-Zustände **separat** überwacht werden müssen. Auch [`docker-compose.prod.yml`](../docker-compose.prod.yml) parst den Response-Body: Nur `error` (HTTP 503) macht `web` `unhealthy`, `degraded` nicht.
+Das Image enthält kein `curl`, und Gunicorn spricht im `web`-Container nur HTTP auf Port 8000 (TLS endet in `caddy`); der Check läuft deshalb mit Python gegen `http://localhost:8000/health/`. Bei HTTP ≥ 400 (DB-/Key-Ausfall, 503) löst `urlopen` einen Fehler aus → der Container wird `unhealthy`. **Achtung:** `degraded` (200) macht den Container **nicht** unhealthy — das ist gewollt (Last-Balancer soll den Pod bei ClamAV-Ausfall nicht rauswerfen), bedeutet aber, dass degraded-Zustände **separat** überwacht werden müssen. [`docker-compose.prod.yml`](../docker-compose.prod.yml) wertet denselben Response-Body aus: Nur `error` (HTTP 503) macht `web` `unhealthy`, `degraded` nicht.
 
-> **Ausnahme `docker-compose.dev.yml`:** Dessen `web`-Healthcheck parst den Body und verlangt `status == "ok"` — dort macht **jeder** `degraded`-Zustand den Container `unhealthy`, und `caddy` (`depends_on: service_healthy`) startet nicht. Das ist für die Dev-Instanz beabsichtigt (streng), heißt aber: Bevor eine bestehende Installation mit diesem Compose-File aktualisiert wird, muss `manage.py check_db_roles` Exit `0` liefern — sonst zieht die neue `db_role_posture`-Prüfung (Refs #793) den Status auf `degraded` und der Stack fährt nicht hoch. Auf frisch per [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) initialisierten Clustern ist das automatisch erfüllt.
+Ein **externer** Prüfer (Uptime-Tool, Host-Skript) darf stattdessen `curl -fsS https://$DOMAIN/health/` gegen die öffentliche Adresse nutzen; das Beispiel mit `curl` gehört nicht in den `web`-Container.
+
+> **Ausnahme `docker-compose.dev.yml`:** Dessen `web`-Healthcheck parst den Body und verlangt `status == "ok"` — dort macht **jeder** `degraded`-Zustand den Container `unhealthy`, und `caddy` (`depends_on: service_healthy`) startet nicht. Das ist für die Entwicklungsinstanz beabsichtigt (streng); die `db_role_posture`-Prüfung (Refs #793) setzt dafür voraus, dass `manage.py check_db_roles` Exit `0` liefert. Auf einem per [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) initialisierten Cluster ist das erfüllt.
 
 ### 7.3 Externes Tool mit Body-Matching (empfohlen)
 
@@ -296,6 +303,6 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 
 ## 9. Abgrenzung: `/health/` vs. Compliance-Dashboard
 
-`/health/` ist der **Realtime-Liveness/Komponenten**-Check für Maschinen. Für die **Compliance-/Governance-Sicht** (inkl. eines robusteren Backup-Alters- und Restore-Test-Checks) gibt es das **Compliance-Dashboard** `/system/compliance/` (super_admin, Refs #919): es aggregiert 11 Checks (DB-Rollen, **Backup-Alter**, **Restore-Test-Alter**, ClamAV + Signatur, Retention-Cron, MFA-Quote, Migrationen, Versionen, kritische Audit-Events) mit `ok`/`warning`/`critical`/`unknown` — siehe [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739).
+`/health/` ist der **Realtime-Liveness/Komponenten**-Check für Maschinen. Für die **Compliance-/Governance-Sicht** (inkl. eines robusteren Backup-Alters- und Restore-Test-Checks) gibt es das **Compliance-Dashboard** `/system/compliance/` (super_admin, Refs #919): es aggregiert 15 Prüfgruppen (DB-Rollen, App-Rolle ohne Superuser, **Backup-Alter**, ClamAV + Signatur, Retention-Cron, Retention-Konfiguration, Audit-Ketten-Prüfung, Statistik-Snapshots, Breach-Scan, Statistik-View-Refresh, **Restore-Test-Alter**, MFA-Quote, Migrationen, Versionen, kritische Audit-Events) mit `ok`/`warning`/`critical`/`unknown` — siehe [Ops-Runbook § 6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739).
 
 **Faustregel:** `/health/` für Uptime-/Pager-Alerting (Sekunden/Minuten), `/system/compliance/` für die periodische Betriebs-/Audit-Durchsicht (Tage). Für Totalverlust-Wiederherstellung: [disaster-recovery.md](disaster-recovery.md).
