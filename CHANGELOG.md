@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Source-Map-Verarbeitung gegen blockierende Abschnitts-Offsets gehärtet** ([GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)) — Ein npm-Override hebt source-map-js auf die korrigierte Version 1.2.2.
+
+### Changed
+
+- **JavaScript-Testwerkzeuge aktualisiert** (#2405) — Vitest 5.0.3 mit den erforderlichen Begleitpaketen ist unter Node 20.19.2 geprüft; jsdom bleibt wegen inkompatibler Laufzeitanforderungen auf 29.1.1.
+
 ### Fixed
 
 - **Testmatrix-Links springen zur richtigen GitHub-Überschrift** (#2417) — Der Index verwendet GitHub-konforme Anker mit erhaltenen Umlauten, entfernten Satzzeichen und eindeutigen Suffixen für doppelte Überschriften.
