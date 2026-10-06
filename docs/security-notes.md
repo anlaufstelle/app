@@ -173,7 +173,7 @@ Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Mode
 | [`Case.description`](../src/core/models/case.py) | `Case` | Fall-Beschreibung | mittel |
 | [`Episode.description`](../src/core/models/episode.py) | `Episode` | Episoden-Verlauf | mittel |
 | [`WorkItem.description`](../src/core/models/workitem.py) | `WorkItem` | Aufgaben-Beschreibung | mittel |
-| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und `username` bei Login-/Rechte-Vorgängen | mittel (Beschäftigten-`username`); **keine** Klienten-PII in Einträgen (#1751) |
+| [`AuditLog.detail`](../src/core/models/audit.py) | `AuditLog` | JSON mit `changed_fields` (nur Feldnamen), technischen Metadaten und den in [`AUDIT_DETAIL_KEYS`](../src/core/services/audit/detail_policy.py) zugelassenen Freitext-Schlüsseln `name`, `username`, `actor_username`, `note`, `recipient`, `purpose` (`message` ist eine feste Codekonstante) | mittel: Dateiname, Meilenstein-Titel und Pseudonym schreibt die Anwendung nicht (#1751); den Inhalt der Freitext-Schlüssel prüft sie nicht — ein Klientenname etwa im `purpose` einer Berichts-Freigabe bleibt im Klartext stehen, die Minimierung dort ist Betreiber-Obliegenheit |
 
 ### Was bereits umgesetzt ist (Audit-Item 16)
 
@@ -192,7 +192,7 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 **Aktueller Schutz:**
 - Backup-Encryption AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`
 - RLS + Role-Mixin verhindern Cross-Facility-Reads
-- DSGVO-Anonymize-Cascade (#715) säubert die **vier Fach-Freitexte** (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) — **nicht** `AuditLog.detail`: das Audit-Log ist append-only (DB-Trigger aus Migration `0024` + HMAC-Kette), eine nachträgliche Redaktion ist dort strukturell unmöglich. Der einzige Hebel ist Minimierung **beim Schreiben**; Einträge enthalten deshalb (#1751) keine Klienten-PII mehr (Dateiname → HMAC + Endung, kein Meilenstein-Titel, kein Pseudonym im Export-Eintrag). Bereits geschriebene Zeilen bleiben unverändert stehen — siehe [§ Audit-Log-Restdaten überleben die Art.-17-Löschung](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)
+- DSGVO-Anonymize-Cascade (#715) säubert die **vier Fach-Freitexte** (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`) — **nicht** `AuditLog.detail`: das Audit-Log ist append-only (DB-Trigger aus Migration `0024` + HMAC-Kette), eine nachträgliche Redaktion ist dort strukturell unmöglich. Der einzige Hebel ist Minimierung **beim Schreiben**: Die Schreibstellen für Upload-Dateinamen (HMAC + Endung), Meilensteine (kein Titel) und den Art.-15-/20-Export (kein Pseudonym) schreiben keine Klienten-PII (#1751); die zugelassenen Freitext-Schlüssel (`name`, `username`, `actor_username`, `note`, `recipient`, `purpose`) übernehmen dagegen, was eingegeben wird — siehe [§ Technischer Guard statt Call-Site-Konvention](#technischer-guard-statt-call-site-konvention-1944). Bereits geschriebene Zeilen bleiben unverändert stehen — siehe [§ Audit-Log-Restdaten überleben die Art.-17-Löschung](#audit-log-restdaten-überleben-die-art-17-löschung-issue-1753)
 
 **Wenn jetzt durchgezogen:** ~1–2 Tage Arbeit + Risiko in Search/Export, ohne Live-Feedback aus Pilot zu haben.
 
@@ -226,28 +226,28 @@ Daraus folgen drei Fälle, in denen personenbeziehbare Restdaten die Löschung �
 
 ### Was bereits umgesetzt ist (#1751, Punkt 5)
 
-Weil nachträgliche Redaktion strukturell ausgeschlossen ist, ist **Minimierung beim Schreiben** der einzige Hebel. Alle `detail`-Schreibstellen wurden inventarisiert; drei führten Klienten-PII im Klartext und schreiben sie seither nicht mehr:
+Weil nachträgliche Redaktion strukturell ausgeschlossen ist, ist **Minimierung beim Schreiben** der einzige Hebel. An drei `detail`-Schreibstellen läge Klienten-PII im Klartext nahe; sie schreiben stattdessen nur Hash bzw. Zuordnungs-IDs:
 
-| Schreibstelle | Vorher | Jetzt |
+| Schreibstelle | Naheliegender Klartext | Geschrieben wird |
 |---|---|---|
 | File-Vault-Reject (`SECURITY_VIOLATION`) | Original-Dateiname im Klartext (Uploads heißen im Feld regelmäßig nach der betroffenen Person) | `filename_hash` (stabiler HMAC, Wiederholungen bleiben korrelierbar) + `filename_ext` als Typmarker — zentral in [`log_attachment_violation`](../src/core/services/file_vault/audit.py); die Ablehnungspfade in [`policy.py`](../src/core/services/file_vault/policy.py) rufen sie über `_reject` auf; sie nimmt den Dateinamen als Parameter `filename` entgegen und schreibt davon nur Hash und Endung |
 | `MILESTONE_DELETE` | Meilenstein-`title` (derselbe Freitext, den die Anonymisierung tilgt) | nur `case_id`; Zuordnung über `target_id` |
 | Art.-15-/20-Export | `pseudonym` | nur `format`; Zuordnung über `target_id` |
 
-Der File-Vault-Fall war der schärfste: `SECURITY_VIOLATION` ist prune-exempt, der Klartextname hätte also Frist **und** Anonymisierung überlebt.
+Der File-Vault-Fall ist der schärfste: `SECURITY_VIOLATION` ist prune-exempt, ein Klartextname würde also Frist **und** Anonymisierung überleben.
 
-Bewusst **nicht** umgestellt ist der `username` bei fehlgeschlagenem Login (einziger Nachweis, *was* versucht wurde — bei Angriffen existiert der User nicht, `AuditLog.user` ist `NULL`) und bei Rollenwechsel/Deaktivierung/Löschbestätigung (wegen `on_delete=SET_NULL` die einzige dauerhafte Zuschreibung einer Rechte-Eskalation). Beides sind **Beschäftigten**-, keine Klientendaten.
+Bewusst **im Klartext** geschrieben wird der `username` bei fehlgeschlagenem Login (einziger Nachweis, *was* versucht wurde — bei Angriffen existiert der User nicht, `AuditLog.user` ist `NULL`) und bei Rollenwechsel/Deaktivierung/Löschbestätigung (wegen `on_delete=SET_NULL` die einzige dauerhafte Zuschreibung einer Rechte-Eskalation). Beides sind **Beschäftigten**-, keine Klientendaten.
 
 ### Technischer Guard statt Call-Site-Konvention (#1944)
 
-Die Minimierung aus #1751 war eine Aufräumaktion an drei Stellen, kein Gate: der Architekturtest `TestAuditLogCreationAllowlist` prüft nur, **wo** Audit-Zeilen entstehen dürfen, nie **was** in ihnen steht. Ein neuer Service-Aufruf mit `detail={"pseudonym": …}` — oder mit einem Freitextwert unter einem unverdächtigen Schlüssel — lief durch nichts.
+Die Minimierung an den drei Stellen ist für sich kein Gate: der Architekturtest `TestAuditLogCreationAllowlist` prüft nur, **wo** Audit-Zeilen entstehen dürfen, nie **was** in ihnen steht. Einen neuen Service-Aufruf mit `detail={"pseudonym": …}` — oder mit einem Freitextwert unter einem unverdächtigen Schlüssel — erkennt er nicht.
 
-Seither gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_policy.py`](../src/core/services/audit/detail_policy.py) führt jeden zulässigen `detail`-Schlüssel mit Begründung, warum sein Wert keine Klienten-PII trägt. Bewusst Schlüssel statt Werte-Blacklist — eine Liste verdächtiger Namen (`pseudonym`, `notes`, `email`) fängt genau den Fall nicht, der wehtut: Freitext unter unauffälligem Schlüssel.
+Deshalb gilt eine **Schlüssel-Allowlist**: [`src/core/services/audit/detail_policy.py`](../src/core/services/audit/detail_policy.py) führt jeden zulässigen `detail`-Schlüssel mit Begründung, warum sein Wert keine Klienten-PII tragen soll bzw. warum er als Freitext bleiben muss. Geprüft werden nur die Schlüssel, nicht die Werte. Bewusst Schlüssel statt Werte-Blacklist — eine Liste verdächtiger Namen (`pseudonym`, `notes`, `email`) fängt genau den Fall nicht, der wehtut: Freitext unter unauffälligem Schlüssel.
 
 - **Laufzeit-Prüfung** in `audit_event` / `log_audit_event` (und damit in allen typed Helpern, die darauf aufsetzen) sowie an den beiden allowlisteten Direktschreibern in [`signals/audit.py`](../src/core/signals/audit.py) und [`services/system/settings.py`](../src/core/services/system/settings.py). Sie greift auch dort, wo das `detail` dynamisch entsteht (`**kwargs`, Zähler-Dicts) — rund ein Dutzend Stellen, an denen ein rein statischer Guard blind wäre.
 - **Statisches Gegenstück** `TestAuditDetailKeyInventory` in [`test_architecture_guards_audit.py`](../src/tests/test_architecture_guards_audit.py): liest die literalen `detail={…}`-Dicts unter `src/core` und meldet einen undeklarierten Schlüssel schon ohne Testausführung. Die dynamischen Schreibpunkte sind dort namentlich mit Anzahl geführt.
 - **Fail-Verhalten:** `AUDIT_DETAIL_STRICT` bricht den Schreibvorgang ab — Default `True` in dev/test, `False` im Betrieb (dort ERROR-Meldung, Zeile wird trotzdem geschrieben). Ein **fehlender** Audit-Eintrag wäre schlimmer als ein zu breiter: das Log ist der Rechenschaftsnachweis, und die schärfsten Schreibpunkte (`SECURITY_VIOLATION`, `LOGIN_FAILED`) laufen genau dann, wenn ohnehin etwas schiefgeht. Die Meldung nennt nur Schlüsselnamen, nie Werte.
-- **Bewusst zugelassener Freitext** steht in derselben Liste, jeweils mit Begründung: `name` (Konfigurationsbezeichner, keine Klienten-PII), `username`/`actor_username` (Beschäftigten-Kennung, siehe oben), `note` (Betriebsnotiz), `recipient`/`purpose` (Berichts-Freigabe, Betreiber-Obliegenheit), `message` (feste Codekonstante).
+- **Bewusst zugelassener Freitext** steht in derselben Liste, jeweils mit Begründung: `name` (Konfigurationsbezeichner, keine Klienten-PII), `username`/`actor_username` (Beschäftigten-Kennung, siehe oben), `note` (Betriebsnotiz), `recipient`/`purpose` (Berichts-Freigabe, Betreiber-Obliegenheit), `message` (feste Codekonstante). Ihren Inhalt prüft die Anwendung nicht: [`release_detail`](../src/core/services/dashboard/release_log.py) übernimmt `recipient`/`purpose` nur ohne Leerraum am Rand und auf eine Höchstlänge begrenzt; ein dort eingetragener Klientenname steht im append-only Log.
 
 ### Restfläche (akzeptiert)
 
