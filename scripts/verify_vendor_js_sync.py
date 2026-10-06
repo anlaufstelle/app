@@ -72,7 +72,7 @@ VENDOR_LIBS: tuple[VendorLib, ...] = (
         package="@alpinejs/csp",
         vendored_filename="alpine-csp.min.js",
         version_patterns=(r'version\s*:\s*"(\d+\.\d+\.\d+)"',),
-        license_files=(),
+        license_files=("LICENSE-alpine.txt",),
         table_name="Alpine.js CSP",
     ),
     VendorLib(
@@ -188,19 +188,11 @@ def _is_exact_version(spec: str) -> bool:
     return re.fullmatch(r"\d+\.\d+\.\d+", spec) is not None
 
 
-# Shipped third-party works whose upstream license text is not in the repo yet:
-# neither the installed npm package nor the checked-in build provides it. The
-# entry is a deliberate, visible exception; once a license file exists the guard
-# reports the entry as stale.
-LICENSE_TEXT_PENDING: dict[str, str] = {
-    "@alpinejs/csp": "alpine-csp.min.js",
-    "SortableJS": "vendor/sortable.min.js",
-}
-# Vendored builds outside package.json: (file, version regex, required header marker).
-# SortableJS is listed for its version only (marker "" = no header check).
-UNMANAGED_BUILDS: dict[str, tuple[str, str, str]] = {
-    "SortableJS": ("vendor/sortable.min.js", r"Sortable (\d+\.\d+\.\d+)", ""),
-    "axe-core": ("vendor/axe.min.js", r"axe v(\d+\.\d+\.\d+)", "Mozilla Public"),
+# Vendored builds outside package.json: (file, version regex, required header marker,
+# license texts under src/static/js/licenses/). An empty marker skips the header check.
+UNMANAGED_BUILDS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
+    "SortableJS": ("vendor/sortable.min.js", r"Sortable (\d+\.\d+\.\d+)", "", ("LICENSE-sortablejs.txt",)),
+    "axe-core": ("vendor/axe.min.js", r"axe v(\d+\.\d+\.\d+)", "Mozilla Public", ()),
 }
 
 
@@ -211,7 +203,7 @@ def _nonempty(path: Path) -> bool:
 def check_licenses(pinned: dict[str, str]) -> list[str]:
     """Every shipped third-party work has its license text in the repo and a row in THIRDPARTY-LICENSES.md."""
     errors: list[str] = []
-    registered = {lib.vendored_filename for lib in VENDOR_LIBS} | {f for f, _, _ in UNMANAGED_BUILDS.values()}
+    registered = {lib.vendored_filename for lib in VENDOR_LIBS} | {entry[0] for entry in UNMANAGED_BUILDS.values()}
     shipped = {
         p.relative_to(VENDOR_DIR).as_posix() for d in (VENDOR_DIR, VENDOR_DIR / "vendor") for p in d.glob("*.min.js")
     }
@@ -219,21 +211,19 @@ def check_licenses(pinned: dict[str, str]) -> list[str]:
         errors.append(f"{name}: shipped vendor script is not registered in the license guard")
 
     for lib in VENDOR_LIBS:
-        if not lib.license_files and LICENSE_TEXT_PENDING.get(lib.package) != lib.vendored_filename:
-            errors.append(f"{lib.package}: no license text registered and not marked pending")
+        if not lib.license_files:
+            errors.append(f"{lib.package}: no license text registered")
         for fname in lib.license_files:
             if not _nonempty(LICENSE_DIR / fname):
                 errors.append(
                     f"{lib.package}: license text missing or empty: {(LICENSE_DIR / fname).relative_to(ROOT)}"
                 )
-            if LICENSE_TEXT_PENDING.get(lib.package):
-                errors.append(f"{lib.package}: license text present, remove it from LICENSE_TEXT_PENDING")
-    for name, fname in LICENSE_TEXT_PENDING.items():
-        if not (VENDOR_DIR / fname).is_file():
-            errors.append(f"{name}: pending entry points to missing file {fname}")
 
     versions: dict[str, str] = {lib.table_name: pinned.get(lib.package, "") for lib in VENDOR_LIBS}
-    for name, (fname, pattern, marker) in UNMANAGED_BUILDS.items():
+    for name, (fname, pattern, marker, license_files) in UNMANAGED_BUILDS.items():
+        for lf in license_files:
+            if not _nonempty(LICENSE_DIR / lf):
+                errors.append(f"{name}: license text missing or empty: {(LICENSE_DIR / lf).relative_to(ROOT)}")
         path = VENDOR_DIR / fname
         head = path.read_text(encoding="utf-8")[:2000] if path.is_file() else ""
         match = re.search(pattern, head)

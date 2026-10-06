@@ -231,18 +231,14 @@ def test_missing_thirdparty_row_is_detected(tmp_path: Path) -> None:
     assert "row for Chart.js" in result.stderr
 
 
-def test_stale_pending_entry_is_detected(tmp_path: Path) -> None:
-    """A library listed as pending that gets a license file must leave the pending list."""
+@pytest.mark.parametrize("name", ["LICENSE-alpine.txt", "LICENSE-sortablejs.txt"])
+def test_mit_license_text_missing_is_detected(tmp_path: Path, name: str) -> None:
+    """Alpine.js and SortableJS have no exception: removing their license text fails."""
     mirror = _mirror_repo(tmp_path / "repo")
-    script = mirror / "scripts" / "verify_vendor_js_sync.py"
-    text = script.read_text(encoding="utf-8")
-    marker = 'license_files=(),\n        table_name="Alpine.js CSP"'
-    assert marker in text
-    script.write_text(text.replace(marker, 'license_files=("x.txt",),\n        table_name="Alpine.js CSP"', 1))
-    (mirror / VENDOR_REL / "licenses" / "x.txt").write_text("MIT", encoding="utf-8")
+    (mirror / VENDOR_REL / "licenses" / name).unlink()
     result = _run(mirror)
     assert result.returncode == 1
-    assert "remove it from LICENSE_TEXT_PENDING" in result.stderr
+    assert name in result.stderr
 
 
 def test_runs_without_node_modules(tmp_path: Path) -> None:
