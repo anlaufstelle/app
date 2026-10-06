@@ -358,12 +358,45 @@ def _sentences(text: str) -> list[str]:
     return [sentence for sentence in text.replace("; ", ". ").split(". ") if sentence]
 
 
-def _assert_recovery_claims_name_the_salt(name: str, text: str, phrase: str, salt: str) -> None:
-    """Every sentence promising renewed readability must tie it to the salt."""
+#: Both key derivation inputs must stay unchanged for locked ciphertext to
+#: become readable again (``deriveSessionKey(password, saltB64Url)`` in ``crypto.js``); a
+#: recovery promise naming only one of them overstates what survives.
+RECOVERY_CONDITIONS_DE = ("Passwort", "Offline-Salt", "unverändert")
+RECOVERY_CONDITIONS_EN = ("password", "offline salt", "unchanged")
+
+
+def _assert_recovery_claims_name_both_inputs(name: str, text: str, phrase: str, conditions: tuple[str, ...]) -> None:
+    """Every sentence promising renewed readability names both unchanged derivation inputs."""
     hits = [sentence for sentence in _sentences(text) if phrase in sentence]
     assert hits, (name, phrase)
     for sentence in hits:
-        assert salt in sentence, (name, sentence)
+        for condition in conditions:
+            assert condition in sentence, (name, condition, sentence)
+
+
+class TestRecoveryClaimHelper:
+    """The helper itself rejects a promise that drops one derivation input."""
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "Der Bestand wird nach erneuter Anmeldung nur wieder lesbar, wenn der Offline-Salt unverändert ist.",
+            "Der Bestand wird nach erneuter Anmeldung nur wieder lesbar, wenn das Passwort unverändert ist.",
+            "Der Bestand wird mit Passwort und Offline-Salt wieder lesbar.",
+        ],
+        ids=["salt-only", "password-only", "no-unchanged-condition"],
+    )
+    def test_incomplete_recovery_promise_is_rejected(self, sentence):
+        with pytest.raises(AssertionError):
+            _assert_recovery_claims_name_both_inputs("probe", sentence, "wieder lesbar", RECOVERY_CONDITIONS_DE)
+
+    def test_complete_recovery_promise_passes(self):
+        _assert_recovery_claims_name_both_inputs(
+            "probe",
+            "Er wird nur wieder lesbar, wenn Passwort und Offline-Salt des Kontos unverändert sind.",
+            "wieder lesbar",
+            RECOVERY_CONDITIONS_DE,
+        )
 
 
 def _assert_salt_rotation_triggers_named(name: str, text: str) -> None:
@@ -414,7 +447,7 @@ class TestOfflineRecoveryTemplates:
         for name, text in (("toms", toms), ("dsfa", dsfa)):
             for claim in STALE_RECOVERY_CLAIMS:
                 assert claim not in text, (name, claim)
-            _assert_recovery_claims_name_the_salt(name, text, "wieder lesbar", "Offline-Salt")
+            _assert_recovery_claims_name_both_inputs(name, text, "wieder lesbar", RECOVERY_CONDITIONS_DE)
             _assert_salt_rotation_triggers_named(name, text)
 
 
@@ -424,12 +457,14 @@ class TestOfflineRecoveryDocs:
         text = _flat(DOMAIN_CONCEPT_DE.read_text(encoding="utf-8"))
         for claim in STALE_RECOVERY_CLAIMS:
             assert claim not in text, claim
-        _assert_recovery_claims_name_the_salt("domain concept", text, "wieder lesbar", "Offline-Salt")
+        _assert_recovery_claims_name_both_inputs("domain concept", text, "wieder lesbar", RECOVERY_CONDITIONS_DE)
         _assert_salt_rotation_triggers_named("domain concept", text)
 
     def test_english_summary_current_sections_describe_offline_and_rls_as_built(self):
         text = _flat(DOMAIN_SUMMARY_EN.read_text(encoding="utf-8"))
-        current = text[: text.index("## Version Additions")]
+        # Only the privacy section itself: the synchronization note in the
+        # header paraphrases these claims and must not satisfy the guard.
+        current = _section(text, "## Privacy Architecture", "## Role Model")
         for required in (
             "IndexedDB",
             "does not prevent decryption",
@@ -441,4 +476,4 @@ class TestOfflineRecoveryDocs:
             "the description in this section applies",
         ):
             assert required in current, required
-        _assert_recovery_claims_name_the_salt("en summary", current, "readable again", "offline salt")
+        _assert_recovery_claims_name_both_inputs("en summary", current, "readable again", RECOVERY_CONDITIONS_EN)
